@@ -495,6 +495,7 @@ class WizardVar {
     required this.defaultValue,
     this.wizardUI = 'edit',
     this.options = const [],
+    this.optionsOpen = false,
     this.title = '',
     this.tooltip = '',
     this.section = '',
@@ -514,14 +515,27 @@ class WizardVar {
       type; // bool, int, text, text_list, enum, secret, outbound, dns_servers
   final String defaultValue;
   final String wizardUI; // edit, fix, hidden
-  final List<WizardOption> options; // for enum / text-with-suggestions
+  /// Допустимые значения (TEMPLATE_LANG §2.1): закрытое множество при любом
+  /// `type`, кроме `bool`. `type` и `options` ортогональны (SPEC 143, D-125):
+  /// объектная форма `{title, value}` тип не меняет, `enum` = `text` +
+  /// закрытые `options`, `text_list` + `options` — множественный выбор
+  /// (значение — выбранные строки по одной на строку). Приведение в JSON —
+  /// только по `type` (`coerceVarValue`).
+  final List<WizardOption> options;
+
+  /// `options_open` (§2.1): `true` разрешает значение вне [options] —
+  /// свободный ввод рядом со списком; такое значение проходит то же
+  /// приведение по `type`. Без [options] флаг ничего не значит; по умолчанию
+  /// `false`, и существующие объявления ведут себя как раньше.
+  final bool optionsOpen;
   final String title;
   final String tooltip;
   final String section;
   final String chapter;
 
-  /// Optional-флаг (spec §033). `true` (default) — значение обязательно,
-  /// null запрещён. `false` — в UI появляется пункт "—", юзер может не
+  /// Optional-флаг (spec §033). `true` — значение обязательно, null
+  /// запрещён. В JSON без ключа — `false` (§588, паритет с лаунчером);
+  /// дефолт конструктора остаётся `true` для программных объявлений. `false` — в UI появляется пункт "—", юзер может не
   /// выбирать, фрагменты с unresolved `@name` выкидываются целиком.
   final bool required;
 
@@ -551,6 +565,23 @@ class WizardVar {
   /// которому нужен plain `List<String>` (валидация, sing-box emit).
   List<String> get optionValues =>
       options.map((o) => o.value).toList(growable: false);
+
+  /// Допустимо ли [value] по [options]/[optionsOpen] (§2.1). Движок это не
+  /// enforce'ит — это правило для UI-редактора. Без `options` и при
+  /// `options_open` допустимо любое; у `text_list` каждая непустая строка
+  /// обязана быть из списка (множественный выбор).
+  bool acceptsValue(String value) {
+    if (options.isEmpty || optionsOpen) return true;
+    final allowed = optionValues.toSet();
+    if (type == 'text_list') {
+      return value
+          .split('\n')
+          .map((l) => l.trim())
+          .where((l) => l.isNotEmpty)
+          .every(allowed.contains);
+    }
+    return allowed.contains(value);
+  }
 
   factory WizardVar.fromJson(
     Map<String, dynamic> json, {
@@ -590,11 +621,14 @@ class WizardVar {
               .where((o) => o.value.isNotEmpty)
               .toList() ??
           const [],
+      optionsOpen: json['options_open'] == true,
       title: json['title'] as String? ?? '',
       tooltip: json['tooltip'] as String? ?? '',
       section: section,
       chapter: chapter,
-      required: json['required'] as bool? ?? true,
+      // §588 — нет ключа `required` = false (паритет с лаунчером, решение
+      // владельца 29.09.2026); обязательность объявляется явно.
+      required: json['required'] as bool? ?? false,
       // SPEC 107: канон — помеченный `#on_change`; легаси `on_change`
       // читается бессрочно.
       onChange: (json['#on_change'] ?? json['on_change']) as Map<String, dynamic>?,
@@ -640,6 +674,33 @@ const int kDefaultRuleNum = kUserRuleNumStart;
 /// `CustomRule(kind: preset)` хранит только ссылку `{presetId, varsValues}`,
 /// expansion + merge выполняется в `preset_expand.dart`.
 ///
+/// §578 — `for_each` пресета: тело пресета повторяется для каждого узла
+/// конфига с полем `type` тела, равным [nodeType], под именем [as]; [filter]
+/// — условие языка `#if` (null — истина).
+class PresetForEach {
+  const PresetForEach({
+    required this.nodeType,
+    required this.as,
+    this.filter,
+  });
+
+  final String nodeType;
+  final String as;
+  final Object? filter;
+
+  /// null — ключа нет или обязательные `node_type`/`as` пусты (такой
+  /// `for_each` отвергает загрузка шаблона).
+  static PresetForEach? fromJson(Object? raw) {
+    if (raw is! Map) return null;
+    final type = raw['node_type'];
+    final as = raw['as'];
+    if (type is! String || type.isEmpty || as is! String || as.isEmpty) {
+      return null;
+    }
+    return PresetForEach(nodeType: type, as: as, filter: raw['filter']);
+  }
+}
+
 /// `presetId` обязательный (§067 убрал legacy mode без preset_id).
 class SelectableRule {
   SelectableRule({
@@ -655,10 +716,14 @@ class SelectableRule {
     this.vars = const [],
     dynamic dnsRule,
     this.dnsServers = const [],
+    this.forEach,
   })  : rules = _normalizeRules(rule),
         dnsRules = _normalizeRules(dnsRule);
 
   final String label;
+
+  /// §578 — повтор тела пресета по узлам конфига; null — пресет обычный.
+  final PresetForEach? forEach;
   final String description;
   final bool defaultEnabled;
 
@@ -797,6 +862,7 @@ class SelectableRule {
               ?.map((e) => Map<String, dynamic>.from(e as Map))
               .toList() ??
           const [],
+      forEach: PresetForEach.fromJson(json['for_each']),
     );
   }
 }

@@ -48,6 +48,42 @@ void confirmStop(
   }
 }
 
+/// §528 — нужно ли вообще спрашивать про чужой VPN перед нашим стартом.
+///
+/// Вопрос осмыслен ровно тогда, когда наш старт отнимет системный VPN-слот, то
+/// есть когда `VpnService.prepare()` будет вызван. Тот вызов уже гейтится по
+/// `hasTun` (§192, `VpnPlugin.startVpn` и ещё 5 точек входа): в режиме `proxy`
+/// prepare не зовётся, чужой туннель не отзывается — спрашивать нечего.
+///
+/// Предикат отдельный и принимает `hasTun` параметром именно затем, чтобы два
+/// гейта судили по одному признаку: здесь тот же `VpnModeConfig.hasTun`, что
+/// зеркалится в native (`setNativeHasTun`) и читается там как
+/// `BootReceiver.hasTun`. Новых флагов режима не вводим.
+bool askBeforeOverridingForeignVpn({required bool hasTun}) => hasTun;
+
+/// §528 — гейт ручного старта: спросить про чужой VPN, если наш старт его
+/// перебьёт. Возвращает `true`, когда старт можно продолжать.
+///
+/// Порядок обращений важен: сначала режим (локальное чтение JSON), и лишь при
+/// `hasTun` — native-опрос `isForeignVpnActive`. В proxy-режиме канал не
+/// дёргаем вовсе: это и есть предмет задачи (ср. issue #126 — «asks to turn off
+/// other vpn when it starts in proxy only mode»).
+///
+/// [showDialogFn] подменяем в тестах; по умолчанию — [showForeignVpnDialog].
+Future<bool> confirmForeignVpnOverride({
+  required BuildContext context,
+  required Future<VpnModeConfig> Function() loadVpnMode,
+  required Future<bool> Function() isForeignVpnActive,
+  Future<bool?> Function(BuildContext)? showDialogFn,
+}) async {
+  final cfg = await loadVpnMode();
+  if (!askBeforeOverridingForeignVpn(hasTun: cfg.hasTun)) return true;
+  if (!await isForeignVpnActive()) return true;
+  if (!context.mounted) return false;
+  final ok = await (showDialogFn ?? showForeignVpnDialog)(context);
+  return ok == true;
+}
+
 /// Диалог «активен другой VPN» — показывается перед ручным стартом, если на
 /// устройстве уже работает VPN другого приложения. Старт нашего туннеля молча
 /// отзовёт чужой (onRevoke), поэтому спрашиваем подтверждение. Возвращает `true`

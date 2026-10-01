@@ -1,5 +1,5 @@
 {
-  "note": "§472 шаг 3 — identity-хеши vless-узлов корпуса, снятые СТАРЫМ путём ДО переезда на конвейер (18.09.2026). legacyNodeIdentityHash = sha256 канонической эмиссии без tag/detour. identity: null — ссылка не разбирается вовсе (тоже свойство, которое обязано сохраниться). Сверяет vless_pipeline_invariants_test.dart. || §480 «до переезда» (19.09.2026): кейсы с префиксом `b480:` дописаны тем же способом — прогоном текущего кода. dropped=true — узел сегодня отбраковывается; заведомо неверные тела фиксируются как есть.",
+  "note": "§472 шаг 3 — identity-хеши vless-узлов корпуса, снятые СТАРЫМ путём ДО переезда на конвейер (18.09.2026). legacyNodeIdentityHash = sha256 канонической эмиссии без tag/detour. identity: null — ссылка не разбирается вовсе (тоже свойство, которое обязано сохраниться). Сверяет vless_pipeline_invariants_test.dart. || §480 «до переезда» (19.09.2026): кейсы с префиксом `b480:` дописаны тем же способом — прогоном текущего кода. dropped=true — узел сегодня отбраковывается; заведомо неверные тела фиксируются как есть. || Контракт 1.1.61 (задача 556): REALITY с неявным (D-009) или явным `random` отпечатком получает в теле `chrome` правилом реестра `coerce_when` (код reality_fp_random_pinned) — норма явно сменила тело этих кейсов (корпус uri/vless: 17 кейсов без fp= и alpn_multiply_encoded), хеши 18 кейсов пересняты. Тег (identity) не затронут.",
   "cases": {
     "allowinsecure_lowercase_zero": {
       "uri": "vless://11111111-1111-1111-1111-111111111111@192.0.2.12:52006?security=reality&encryption=none&pbk=mLmBhbVFfNuo2eUgBh6r9-5Koz9mUCn3aSzlR6IejUg&headerType=none&fp=qq&allowinsecure=0&type=tcp&flow=xtls-rprx-vision&sni=example-4.com&sid=d8c6b58bcbb0c323#t",
@@ -7,7 +7,7 @@
     },
     "alpn_multiply_encoded": {
       "uri": "vless://11111111-1111-1111-1111-111111111111@192.0.2.13:8443?security=reality&alpn=http%2525252F1.1&encryption=none&pbk=mLmBhbVFfNuo2eUgBh6r9-5Koz9mUCn3aSzlR6IejUg&headerType=none&fp=random&type=tcp&flow=xtls-rprx-vision&sni=example-5.com&sid=9083951b754b4254#t",
-      "identity": "91fc9b61576dbde4ebb79ae042e8f0593e3b1abc654475f175faa132338d2994"
+      "identity": "c5574afb442f89dc45852d6e76af17f23d356b27b03bf3aaa3438cecea0f3a30"
     },
     "default_port_443": {
       "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com#Test",
@@ -15,7 +15,7 @@
     },
     "ech_ignored_reality_kept": {
       "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?security=reality&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&sid=ab&ech=probe.example-5.com&sni=example-1.com#ech-reality",
-      "identity": "1f06404d5d716ee3a0c198ccb85d6fe485c379c41965163da2b8acc0d37c7c0c"
+      "identity": "0c51772c0482df69a3256538818cf528cee9c44409b45c13cdda98ea387f6d3b"
     },
     "empty_authority_rejected": {
       "uri": "vless://",
@@ -35,11 +35,11 @@
     },
     "flow_deprecated_direct_dropped": {
       "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=tcp&flow=xtls-rprx-direct&security=reality&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&sid=ABCD&sni=w.example.com#flow-direct",
-      "identity": "f67f7538554791507a9beb8110bbffab96566f162c17ccb9b609e3513154359e"
+      "identity": "2c161340176cc73ef70636f6ffd0e4b2016255f12d8c045403d15ba14ce6085b"
     },
     "flow_none_literal_dropped": {
       "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=tcp&flow=none&security=reality&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&sid=ABCD&sni=w.example.com#flow-none",
-      "identity": "f67f7538554791507a9beb8110bbffab96566f162c17ccb9b609e3513154359e"
+      "identity": "2c161340176cc73ef70636f6ffd0e4b2016255f12d8c045403d15ba14ce6085b"
     },
     "flow_udp443_compat": {
       "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?flow=xtls-rprx-vision-udp443&sni=example-1.com&fp=chrome#Germany",
@@ -47,11 +47,11 @@
     },
     "flow_vision_bare_tcp_kept": {
       "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=tcp&flow=xtls-rprx-vision&security=reality&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&sid=ABCD&sni=w.example.com#flow-vision",
-      "identity": "27249e4b9ed4d22560c73a67deae1ce68a3b2125ea4d6f404179e369df93bdd0"
+      "identity": "206602213325159fda80784aebfde888bf1cd5baa43d83115cca68ada0f4f5a8"
     },
     "flow_vision_udp443_xudp": {
       "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=tcp&flow=xtls-rprx-vision-udp443&security=reality&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&sid=ABCD&sni=w.example.com#flow-udp443",
-      "identity": "95939249d2a5cef115a4b5564bdd7b4544a1e9a8a30c636f93ec629da5533a52"
+      "identity": "6917bc86af944fdb6bc0c39582dc25cda405c87ed29c214c9aaa9ce25ef6df2e"
     },
     "flow_vision_ws_suppressed": {
       "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=ws&path=%2Fx&security=tls&sni=example-1.com&flow=xtls-rprx-vision#flow-ws",
@@ -59,7 +59,7 @@
     },
     "flow_vision_xhttp_suppressed": {
       "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=xhttp&host=cdn.example-1.com&security=reality&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&sid=ABCD&sni=w.example.com&flow=xtls-rprx-vision#flow-xhttp",
-      "identity": "9221821bed94e08b2cdf867e07b7762f87969404c4ff2fc868dccd3d78c98c34"
+      "identity": "250b5413834b09faa55ed189675b7217bfd07217404a73d7b9c6c8da79f1dea4"
     },
     "fp_garbage_fallback_warning": {
       "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?security=tls&fp=garbage&sni=x.example.com#fp-junk",
@@ -151,7 +151,7 @@
     },
     "packet_encoding_udp443_quirk_wins": {
       "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=tcp&flow=xtls-rprx-vision-udp443&packetEncoding=none&security=reality&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&sid=ABCD&sni=w.example.com#pe-quirk",
-      "identity": "95939249d2a5cef115a4b5564bdd7b4544a1e9a8a30c636f93ec629da5533a52"
+      "identity": "6917bc86af944fdb6bc0c39582dc25cda405c87ed29c214c9aaa9ce25ef6df2e"
     },
     "packet_encoding_value_case": {
       "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=tcp&security=tls&sni=example-1.com&packetEncoding=PacketAddr#pe-case",
@@ -180,15 +180,15 @@
     },
     "reality_key_share_bad_dropped": {
       "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=tcp&security=reality&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&sid=abcd&key_share=quantum&sni=w.example.com#ks-bad",
-      "identity": "f67f7538554791507a9beb8110bbffab96566f162c17ccb9b609e3513154359e"
+      "identity": "2c161340176cc73ef70636f6ffd0e4b2016255f12d8c045403d15ba14ce6085b"
     },
     "reality_key_share_classical": {
       "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=tcp&security=reality&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&sid=abcd&key_share=Classical&sni=w.example.com#ks-classical",
-      "identity": "44c9b3ddd8e31e4b0c8675503b1100cd324601dbd9157a72b4a2e13063daafb0"
+      "identity": "5e722c0561c70fb411d31a6fb248f56b114e62ae0667aa96f0a15143f976f433"
     },
     "reality_key_share_hybrid": {
       "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=tcp&security=reality&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&sid=abcd&key_share=hybrid&sni=w.example.com#ks-hybrid",
-      "identity": "d6d10ab42622e328d5b58e164d1e75fb14e8c2ef57cb66fa54e2df4bbf656df1"
+      "identity": "0c94bcb40195d0b182383c0fc653c8f4bbe9ea3fb776b8b9696116cd61178575"
     },
     "reality_key_share_without_pbk_ignored": {
       "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=tcp&security=tls&pbk=enabled&key_share=hybrid&sni=w.example.com#ks-no-pbk",
@@ -204,19 +204,19 @@
     },
     "reality_sid_nbsp_sanitized": {
       "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?encryption=none&security=reality&type=tcp&pbk=mLmBhbVFfNuo2eUgBh6r9-5Koz9mUCn3aSzlR6IejUg&sid=48%C2%A0ab12",
-      "identity": "c4fc9373a563d38bd48440631182139dca9ab22e5677c2c14a5f46417a283b18"
+      "identity": "3a0a3d0ab394513329c52861fe6c4827977bf4c4174a5078ed5d3d42a5f3cd61"
     },
     "reality_sid_nonhex_cleaned": {
       "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=tcp&security=reality&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&sid=0x1a2&sni=w.example.com#sid-clean",
-      "identity": "5e190be5d08c044eeebaba4f62f6d300f4e9086e059136ff5c979e24d8f53fe4"
+      "identity": "37238d06c9a00f30ad2e1af87956d514c3d84cd33542bcc9e17a9bc167a02520"
     },
     "reality_sid_odd_dropped": {
       "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=tcp&security=reality&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&sid=abc&sni=w.example.com#sid-odd",
-      "identity": "bcb29faa6d8443a304f23f16375c9dee0af3f5f7be69a948adb9914f51820ba4"
+      "identity": "26d7056c19a8dcab574cef6fea25a495137f3363e4a683c34c19ebfbdd8f29df"
     },
     "reality_sid_too_long_dropped": {
       "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=tcp&security=reality&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&sid=0123456789abcdef0&sni=w.example.com#sid-long",
-      "identity": "bcb29faa6d8443a304f23f16375c9dee0af3f5f7be69a948adb9914f51820ba4"
+      "identity": "26d7056c19a8dcab574cef6fea25a495137f3363e4a683c34c19ebfbdd8f29df"
     },
     "reality_tcp_no_flow": {
       "uri": "vless://11111111-1111-1111-1111-111111111111@192.0.2.11:443?security=reality&type=tcp&fp=firefox&sni=www.example-3.com&pbk=mLmBhbVFfNuo2eUgBh6r9-5Koz9mUCn3aSzlR6IejUg&sid=a887fe19&spx=/#t",
@@ -224,7 +224,7 @@
     },
     "reality_valid_pbk_sid": {
       "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=tcp&security=reality&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&sid=ABCD#pbk-valid",
-      "identity": "e7a90974f0283226b9a23f849a0ba62c36265c94f83cd19d28977e1474c2cb8a"
+      "identity": "659b036aae4b36a3b5c368ed2f621bc74f9ac889d87678d666a0027b68c84297"
     },
     "reality_vision_full": {
       "uri": "vless://11111111-1111-1111-1111-111111111111@192.0.2.10:443?encryption=none&flow=xtls-rprx-vision&security=reality&sni=cdn.example-1.com&fp=chrome&pbk=mLmBhbVFfNuo2eUgBh6r9-5Koz9mUCn3aSzlR6IejUg&sid=48720c&allowInsecure=1&type=tcp&headerType=none#🇦🇪 United Arab Emirates",
@@ -469,7 +469,7 @@
     },
     "b480:pbk_encoded_plus": {
       "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?security=reality&pbk=Awo%2BGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&sid=abcd&sni=example-1.com#pbk-plus-enc",
-      "identity": "df0244c5d77be587aa3a0b684d07be985719526267a1d73f435e3359948ef693",
+      "identity": "bfa53e93f47f80d66c66db927c6f96be12146c10669d3f19f32759b436866d00",
       "tag": "pbk-plus-enc",
       "body": {
         "type": "vless",
@@ -482,7 +482,7 @@
           "server_name": "example-1.com",
           "utls": {
             "enabled": true,
-            "fingerprint": "random"
+            "fingerprint": "chrome"
           },
           "reality": {
             "enabled": true,
@@ -506,7 +506,7 @@
             "server_name": "example-1.com",
             "utls": {
               "enabled": true,
-              "fingerprint": "random"
+              "fingerprint": "chrome"
             },
             "reality": {
               "enabled": true,
@@ -519,7 +519,7 @@
     },
     "b480:pbk_raw_plus": {
       "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?security=reality&pbk=Awo+GB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&sid=abcd&sni=example-1.com#pbk-plus",
-      "identity": "df0244c5d77be587aa3a0b684d07be985719526267a1d73f435e3359948ef693",
+      "identity": "bfa53e93f47f80d66c66db927c6f96be12146c10669d3f19f32759b436866d00",
       "tag": "pbk-plus",
       "body": {
         "type": "vless",
@@ -532,7 +532,7 @@
           "server_name": "example-1.com",
           "utls": {
             "enabled": true,
-            "fingerprint": "random"
+            "fingerprint": "chrome"
           },
           "reality": {
             "enabled": true,

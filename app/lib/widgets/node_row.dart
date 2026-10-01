@@ -5,7 +5,10 @@ import 'package:flutter/material.dart';
 import '../screens/home/special_node_display.dart';
 import '../screens/subscription_detail_screen/widgets/node_warning_row.dart';
 import 'node_view_item.dart';
+import '../services/networks_direction.dart';
 import '../services/l10n/locale_controller.dart';
+// §535 — CcEndpointState: имена состояний endpoint'а приходят из ядра.
+import '../vpn/cc_channel.dart' show CcEndpointState;
 
 /// One row в node list на главной screen'е. Read-only widget от
 /// [NodeViewItem] data + callbacks.
@@ -28,6 +31,7 @@ class NodeRow extends StatelessWidget {
     this.onSelectServer,
     this.onViewPool,
     this.onSickTap,
+    this.onToggleEndpoint,
   });
 
   final NodeViewItem item;
@@ -56,13 +60,53 @@ class NodeRow extends StatelessWidget {
   /// открывает sheet со списком пострадавших. null при isSickRoot=false.
   final VoidCallback? onSickTap;
 
+  /// §557 (ядро SPEC 106) — «Turn off» / «Turn on» в меню. Non-null только
+  /// для WG/AWG-узла (ядро отдало `endpointState`) при живом туннеле; иначе
+  /// пункта нет. Направление переключения — по [NodeViewItem.endpointState].
+  final VoidCallback? onToggleEndpoint;
+
   /// Right-side delay label (или PING… / ERR), цвет по latency.
   ///
   /// §325 — префикс `~` («приблизительно») у замера из другого Направления: число
   /// показано как ориентир, но получено чужим тестом (ping-URL и таймаут
   /// резолвятся per-group, §040). Значок текстовый и однознаковый намеренно —
   /// бейдж узкий и моноширинный, иконка сломала бы выравнивание колонки.
+  /// Задача 579 — строка NETWORKS: узел не выбирается и не замеряется.
+  bool get _isTailnet => item.tailnetState != null;
+
+  /// Задача 579 — подпись состояния узла NETWORKS на месте задержки.
+  String get _tailnetLabel {
+    final st = item.tailnetState;
+    if (st == null) return '';
+    switch (st.kind) {
+      case TailnetStateKind.none:
+        return '';
+      case TailnetStateKind.starting:
+        return getLocalText.s("starting");
+      case TailnetStateKind.running:
+        return getLocalText.s("running");
+      case TailnetStateKind.signInNeeded:
+        return getLocalText.s("sign-in needed");
+      case TailnetStateKind.stopped:
+        return getLocalText.s("stopped");
+      case TailnetStateKind.other:
+        return st.text; // l10n-exempt: core state text as is
+    }
+  }
+
+  Color _tailnetColor(ColorScheme cs) {
+    final st = item.tailnetState;
+    if (st?.kind == TailnetStateKind.running) return Colors.green;
+    if (st != null && st.isWarning) return Colors.orange;
+    return cs.onSurfaceVariant;
+  }
+
   String get _delayLabel {
+    if (_isTailnet) return _tailnetLabel;
+    // §557 — выключенный узел (SPEC 106) отвергает дайлы: провал замера тут
+    // не сбой узла. Вместо пинга, таймаута и PING… — нейтральный прочерк,
+    // слева подпись «off».
+    if (_isDisabled) return '—'; // l10n-exempt: dash placeholder, not text
     if (item.pingBusy) return 'PING…';
     final delay = item.delay;
     if (delay == null) return '';
@@ -70,7 +114,39 @@ class NodeRow extends StatelessWidget {
     return delay < 0 ? '${prefix}ERR' : '$prefix${delay}MS';
   }
 
+  /// §535/§540 (ядро SPEC 097) — однословная подпись состояния WG/AWG-
+  /// endpoint'а: `up` / `sleep` / `down` / `off` (§557, выключен вручную). Детали (полное состояние ядра и
+  /// простой) — в свойствах узла. Узел в `down` — это НЕ таймаут: ядро
+  /// поднимет его на первом дайле за 0,5–1 с. Пусто = узел не endpoint,
+  /// состояние неизвестно или идёт сборка (`building`).
+  bool get _isDisabled => item.endpointState == CcEndpointState.disabled;
+
+  String get _endpointStateLabel {
+    final st = item.endpointState;
+    // §557 — выключен вручную: отдельная подпись, не сон и не «down».
+    if (st == CcEndpointState.disabled) return getLocalText.s("off");
+    if (st == CcEndpointState.up) return getLocalText.s("up");
+    if (st == CcEndpointState.asleep) return getLocalText.s("sleep");
+    if (CcEndpointState.isNotBuilt(st) || st == CcEndpointState.down) {
+      return getLocalText.s("down");
+    }
+    return '';
+  }
+
+  Widget _endpointStateLabelText(String label, Color color) => Text(
+        label,
+        maxLines: 1,
+        softWrap: false,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: 10,
+          fontStyle: FontStyle.italic,
+          color: color,
+        ),
+      );
+
   Color? _delayColor(BuildContext context) {
+    if (_isDisabled) return null; // §557 — прочерк нейтральным цветом
     final delay = item.delay;
     if (delay == null || item.pingBusy) return null;
     final Color base;
@@ -104,12 +180,16 @@ class NodeRow extends StatelessWidget {
         notificationWarnings.isNotEmpty;
     // §201 — у block нет осмысленного delay (всегда ERR): бейдж не рисуем.
     final dl = _isBlock ? '' : _delayLabel;
+    // §535 — подпись «узел не поднят / спит» живёт в левой части строки:
+    // правый бейдж узкий и моноширинный, фраза туда не влезает.
+    final stateLabel = _isBlock ? '' : _endpointStateLabel;
 
     if (!hasActive &&
         !hasArrow &&
         !hasProto &&
         !hasAuto &&
         !hasNotificationBadge &&
+        stateLabel.isEmpty &&
         dl.isEmpty) {
       return const SizedBox.shrink();
     }
@@ -150,6 +230,15 @@ class NodeRow extends StatelessWidget {
           )
         : null;
 
+    // §557 — выключенный узел: «off» оранжевым (тот же оранжевый, что у
+    // пинга 200–500 мс), курсивом, как соседние up/sleep/down.
+    final Widget? endpointStateText = stateLabel.isEmpty
+        ? null
+        : Flexible(
+            child: _endpointStateLabelText(
+                stateLabel, _isDisabled ? Colors.orange : cs.onSurfaceVariant),
+          );
+
     final Widget? proto = (hasProto || hasNotificationBadge)
         ? Row(
             mainAxisSize: MainAxisSize.min,
@@ -185,7 +274,9 @@ class NodeRow extends StatelessWidget {
               fontSize: 11,
               fontWeight: FontWeight.w600,
               letterSpacing: 0.5,
-              color: _delayColor(context) ?? cs.onSurfaceVariant,
+              color: _isTailnet
+                  ? _tailnetColor(cs)
+                  : _delayColor(context) ?? cs.onSurfaceVariant,
             ),
           );
 
@@ -223,6 +314,13 @@ class NodeRow extends StatelessWidget {
                     fit: FlexFit.loose,
                     child: proto,
                   ),
+                // §535 — состояние endpoint'а идёт последним в левой части:
+                // при нехватке ширины уступает протоколу и выбранному серверу.
+                if (endpointStateText != null) ...[
+                  if (proto != null || arrow != null)
+                    const SizedBox(width: 6),
+                  endpointStateText,
+                ],
               ],
             ),
           ),
@@ -274,6 +372,8 @@ class NodeRow extends StatelessWidget {
       context: context,
       position: position,
       items: [
+        // Задача 579 — у строки NETWORKS нет замера и выбора узла.
+        if (!_isTailnet)
         PopupMenuItem<String>(
           value: 'ping',
           enabled: canPing,
@@ -288,6 +388,7 @@ class NodeRow extends StatelessWidget {
             title: Text(getLocalText.s("Ping")),
           ),
         ),
+        if (!_isTailnet)
         PopupMenuItem<String>(
           value: 'activate',
           enabled: canActivate,
@@ -344,6 +445,25 @@ class NodeRow extends StatelessWidget {
               title: Text(getLocalText.s("View pool")),
             ),
           ),
+        if (onToggleEndpoint != null)
+          PopupMenuItem<String>(
+            value: 'toggle_endpoint',
+            enabled: !item.busy,
+            child: ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(
+                _isDisabled
+                    ? Icons.power_settings_new
+                    : Icons.power_off_outlined,
+                size: 20,
+                color: item.busy ? Theme.of(context).disabledColor : null,
+              ),
+              title: Text(_isDisabled
+                  ? getLocalText.s("Turn on")
+                  : getLocalText.s("Turn off")),
+            ),
+          ),
         if (onViewJson != null) const PopupMenuDivider(),
         if (onViewJson != null)
           // §258 — экран стал Overview/JSON, пункт переименован в View
@@ -387,6 +507,8 @@ class NodeRow extends StatelessWidget {
         if (onCopyUri != null) onCopyUri!();
       case 'view_json':
         if (onViewJson != null) onViewJson!();
+      case 'toggle_endpoint':
+        onToggleEndpoint?.call();
     }
   }
 
@@ -465,6 +587,8 @@ class NodeRow extends StatelessWidget {
                   ],
                 ),
               ),
+              // Задача 579 — строка NETWORKS: кнопки выбора узла нет.
+              if (!_isTailnet)
               IconButton(
                 visualDensity: VisualDensity.compact,
                 padding: EdgeInsets.zero,

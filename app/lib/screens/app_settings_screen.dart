@@ -18,6 +18,7 @@ import '../services/wifi_history_listener.dart';
 import '../widgets/wifi_permission_dialog.dart';
 import '../vpn/box_vpn_client.dart';
 import 'app_settings_screen/app_settings_dialogs.dart';
+import 'app_settings_screen/widgets/appearance_tab.dart';
 import 'app_settings_screen/widgets/automation_tab.dart';
 import 'app_settings_screen/widgets/diagnostics_tab.dart';
 import 'app_settings_screen/widgets/general_tab.dart';
@@ -31,7 +32,8 @@ class AppSettingsScreen extends StatefulWidget {
     this.highlightCoreLogs = false,
   });
 
-  /// 0 = General, 1 = Subscriptions, 2 = Diagnostics, 3 = Automation.
+  /// 0 = General, 1 = Appearance (§541), 2 = Subscriptions, 3 = Diagnostics,
+  /// 4 = Automation.
   /// Used by deep-links.
   final int initialTab;
 
@@ -52,6 +54,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
   bool _notificationsEnabled = true;
   bool _backgroundLocationGranted = false;
   bool _nearbyWifiGranted = false;
+  String? _wifiLocationIssue;
   bool _autoPing = true;
   bool _autoUpdateSubs = true;
   bool _autoUpdateDisabledSubs = false;
@@ -59,6 +62,8 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
   bool _autoCheckUpdates = true;
   // §220 — снятие портретной фиксации (default OFF = портрет).
   bool _allowRotation = false;
+  // §541 — две колонки списка узлов на широком окне (default ON).
+  bool _nodeListTwoColumns = true;
   bool _loaded = false;
   // §207 — pprof capture in flight (goroutine dump / CPU profile). Guards
   // both buttons so a double-tap can't spin two servers on the same port.
@@ -99,7 +104,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     _debugPortCtl = TextEditingController();
     unawaited(_loadAutoStart());
     if (widget.highlightCoreLogs) {
-      // Tile живёт в Diagnostics tab (initialTab=2). Tab сам строит
+      // Tile живёт в Diagnostics tab (initialTab=3). Tab сам строит
       // children когда юзер на нём — postFrame этого build'а гарантирует
       // что _coreLogsTileKey.currentContext доступен.
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -149,12 +154,14 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     final notifications = await _vpn.areNotificationsEnabled();
     final bgLocation = await ul.UrlLauncher.checkBackgroundLocationPermission();
     final nearbyWifi = await ul.UrlLauncher.checkNearbyWifiPermission();
+    final wifiLocationIssue = await _readWifiLocationIssue();
     final autoUpdateSubs = await SettingsStorage.getAutoUpdateSubs();
     final autoUpdateDisabledSubs =
         await SettingsStorage.getAutoUpdateDisabledSubs();
     final autoReloadOnChange = await SettingsStorage.getAutoReloadOnChange();
     final autoCheckUpdates = await SettingsStorage.getAutoCheckUpdates();
     final allowRotation = await SettingsStorage.getAllowRotation();
+    final nodeListTwoColumns = await SettingsStorage.getNodeListTwoColumns();
     final debugEnabled = await SettingsStorage.getDebugEnabled();
     final debugToken = await SettingsStorage.getDebugToken();
     final debugPort = await SettingsStorage.getDebugPort();
@@ -195,11 +202,13 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
         _notificationsEnabled = notifications;
         _backgroundLocationGranted = bgLocation;
         _nearbyWifiGranted = nearbyWifi;
+        _wifiLocationIssue = wifiLocationIssue;
         _autoUpdateSubs = autoUpdateSubs;
         _autoUpdateDisabledSubs = autoUpdateDisabledSubs;
         _autoReloadOnChange = autoReloadOnChange;
         _autoCheckUpdates = autoCheckUpdates;
         _allowRotation = allowRotation;
+        _nodeListTwoColumns = nodeListTwoColumns;
         _debugEnabled = debugEnabled;
         _debugToken = debugToken;
         _debugPort = debugPort;
@@ -390,12 +399,14 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     final notifications = await _vpn.areNotificationsEnabled();
     final bgLocation = await ul.UrlLauncher.checkBackgroundLocationPermission();
     final nearbyWifi = await ul.UrlLauncher.checkNearbyWifiPermission();
+    final wifiLocationIssue = await _readWifiLocationIssue();
     if (mounted) {
       setState(() {
         _batteryWhitelisted = battery;
         _notificationsEnabled = notifications;
         _backgroundLocationGranted = bgLocation;
         _nearbyWifiGranted = nearbyWifi;
+        _wifiLocationIssue = wifiLocationIssue;
       });
     }
   }
@@ -421,6 +432,18 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     if (mounted) setState(() => _nearbyWifiGranted = after);
   }
 
+  /// §567 — причина, по которой SSID не читается при выданных
+  /// разрешениях строки «Location (background)»: `fine_location_missing`
+  /// (FINE в списке отсутствующих) или `location_disabled`. Иначе null.
+  Future<String?> _readWifiLocationIssue() async {
+    final r = await ul.UrlLauncher.getCurrentWifiInfo();
+    if (r is! ul.WifiInfoError) return null;
+    if (r.missing.contains('android.permission.ACCESS_FINE_LOCATION')) {
+      return 'fine_location_missing';
+    }
+    return r.reason == 'location_disabled' ? 'location_disabled' : null;
+  }
+
   /// §051 — tap на «Location (background)» row.
   /// - granted → App Permissions screen
   /// - denied  → shared `WifiPermissionDialog` (для BACKGROUND_LOCATION
@@ -430,7 +453,20 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     final granted =
         await ul.UrlLauncher.checkBackgroundLocationPermission();
     if (granted) {
-      await ul.UrlLauncher.openAppSettings();
+      // §567 — BACKGROUND есть, но SSID всё равно не читается: ведём туда,
+      // где чинится конкретная причина.
+      switch (await _readWifiLocationIssue()) {
+        case 'location_disabled':
+          await ul.UrlLauncher.openLocationSettings();
+        case 'fine_location_missing':
+          if (!mounted) return;
+          await WifiPermissionDialog.show(
+            context,
+            missing: const ['android.permission.ACCESS_FINE_LOCATION'],
+          );
+        default:
+          await ul.UrlLauncher.openAppSettings();
+      }
       return;
     }
     if (!mounted) return;
@@ -460,14 +496,15 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
       animation: Listenable.merge([themeNotifier, LocaleController.I]),
       builder: (context, _) {
         return DefaultTabController(
-          length: 4,
-          initialIndex: widget.initialTab.clamp(0, 3),
+          length: 5,
+          initialIndex: widget.initialTab.clamp(0, 4),
           child: Scaffold(
             appBar: AppBar(
               title: Text(getLocalText.s("App Settings")),
               bottom: _FadingTabBar(
                 tabs: [
                   Tab(text: getLocalText.s("General")),
+                  Tab(text: getLocalText.s("Appearance")),
                   Tab(text: getLocalText.s("Subscriptions")),
                   Tab(text: getLocalText.s("Diagnostics")),
                   Tab(text: getLocalText.s("Automation")),
@@ -477,6 +514,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
             body: TabBarView(
               children: [
                 _buildGeneralTab(context),
+                _buildAppearanceTab(context),
                 _buildSubscriptionsTab(context),
                 _buildDiagnosticsTab(context),
                 AutomationTab(padding: _tabPadding(context)),
@@ -649,6 +687,20 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     );
   }
 
+  Widget _buildAppearanceTab(BuildContext context) {
+    return AppearanceTab(
+      loaded: _loaded,
+      allowRotation: _allowRotation,
+      nodeListTwoColumns: _nodeListTwoColumns,
+      padding: _tabPadding(context),
+      onAllowRotationChanged: (val) => unawaited(_toggleAllowRotation(val)),
+      onNodeListTwoColumnsChanged: (val) {
+        setState(() => _nodeListTwoColumns = val);
+        unawaited(SettingsStorage.setNodeListTwoColumns(val));
+      },
+    );
+  }
+
   Widget _buildGeneralTab(BuildContext context) {
     return GeneralTab(
       loaded: _loaded,
@@ -656,7 +708,6 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
       autoCheckUpdates: _autoCheckUpdates,
       autoPing: _autoPing,
       haptic: _haptic,
-      allowRotation: _allowRotation,
       autoReloadOnChange: _autoReloadOnChange, // §338
       padding: _tabPadding(context),
       onAutoStartChanged: (val) {
@@ -665,7 +716,6 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
         unawaited(
             SettingsStorage.setNativeBool(NativePrefsKeys.autoStart, val));
       },
-      onAllowRotationChanged: (val) => unawaited(_toggleAllowRotation(val)),
       // §338 — автоприменение изменений конфига (любой источник, не подписки).
       onAutoReloadOnChangeChanged: (val) {
         setState(() => _autoReloadOnChange = val);
@@ -782,6 +832,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
       notificationsEnabled: _notificationsEnabled,
       backgroundLocationGranted: _backgroundLocationGranted,
       nearbyWifiGranted: _nearbyWifiGranted,
+      wifiLocationIssue: _wifiLocationIssue,
       debugEnabled: _debugEnabled,
       debugPort: _debugPort,
       debugToken: _debugToken,

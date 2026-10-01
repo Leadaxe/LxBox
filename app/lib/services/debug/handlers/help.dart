@@ -51,7 +51,7 @@ Binds to 127.0.0.1, default port 9269. Auth: `Authorization: Bearer <token>`
 
 Access from host: `adb forward tcp:9269 tcp:9269`, then curl 127.0.0.1:9269.
 
-Spec: docs/spec/features/031 debug api/spec.md
+Spec: docs/spec/tasks/031F-debug-api/spec.md
 
 === Health ===
 
@@ -127,7 +127,7 @@ POST /action/check-config[?timeout_ms=N]       Run Libbox.checkConfig — the sa
                                                   without a tunnel. With a request body: checks THAT JSON text;
                                                   without a body: the CURRENTLY BUILT config on disk (not a fresh
                                                   rebuild). → {config_ok:bool, error, ms, bytes}. error is the
-                                                  core's RAW text (what CANON §9 parses). Waits at most timeout_ms
+                                                  core's RAW text (what PARSING_PRINCIPLES §9 parses). Waits at most timeout_ms
                                                   (default 10000, capped by the request timeout) → 409.
 POST /action/stop-vpn                          Stop it
 POST /action/force-stop-vpn                    Hard force-stop (doForceStop): teardown→stopSelf, frees CommandServer
@@ -316,8 +316,8 @@ group). Every mutation response carries
 "healed": {"rules": N, "detours": M, "includes": K, "chain_positions": C,
 "dns_servers": D} — how many references were reset. dns_servers counts
 DNS servers that named the direction — an outbound-type variable of a
-template server, body.detour of a user server (root list and node
-sections): the value degrades to vpn-1 (disable/delete), like a rule target.
+template server, body.detour of a user server: the value degrades to vpn-1
+(disable/delete), like a rule target.
 
 === Chains CRUD (hop chains — third source kind, SPEC 110) ===
 
@@ -396,9 +396,10 @@ WHOLE config). A blocking finding → 400 carrying its machine code:
 tooFewHops (<2 positions) | emptyHop | duplicateHop | selfReference |
 nestedNotFirst (a nested chain is only legal at position 0) |
 forwardChainReference (referencing a chain declared below) |
-realityUtlsStripped | tagEmpty | tagTaken. Non-blocking findings (a
-position that is no longer among the targets, a first hop with its own detour)
-do NOT block the write — same line the form draws.
+tagEmpty | tagTaken. Non-blocking findings (a position that is no longer
+among the targets, a first hop with its own detour, a strip key kept because
+a hop needs it — stripKeptForHop) do NOT block the write — same line the
+form draws.
 
 === Folders CRUD (server folders) ===
 
@@ -658,7 +659,7 @@ curl -H "Authorization: Bearer \$TOKEN" 'http://127.0.0.1:9269/logs?level=error,
 const Map<String, dynamic> _capabilityJson = {
   'server': 'lxbox-debug',
   'docs': {
-    'spec': 'docs/spec/features/031 debug api/spec.md',
+    'spec': 'docs/spec/tasks/031F-debug-api/spec.md',
   },
   'auth': {
     'header': 'Authorization: Bearer <token>',
@@ -699,7 +700,7 @@ const Map<String, dynamic> _capabilityJson = {
     // Actions
     {'method': 'POST', 'path': '/action/start-vpn', 'description': 'Start tunnel (via Activity, may show consent)'},
     {'method': 'POST', 'path': '/action/start-vpn-headless', 'params': {'guard': 'true|false (default false)'}, 'description': 'Start without Activity/consent (needs permission granted) → {started,needs_consent}. guard=true (feature 478): start through the core-reject guard asynchronously with headless real starts → {guard:true, started:true, async:true}; read phase/outcome via GET /core_reject (409 if already running). Queue POST /core_reject/prompt?answer=keep before or while awaiting the round-limit dialog.'},
-    {'method': 'POST', 'path': '/action/check-config', 'params': {'timeout_ms': 'N (default 10000, capped by the request timeout)'}, 'body': 'optional raw sing-box config JSON (checks this text; omit → built config on disk)', 'description': 'Run Libbox.checkConfig — the same check the guard loops on, once, without a tunnel → {config_ok, error, ms, bytes}. error is the core RAW text (what CANON §9 parses). 409 on timeout.'},
+    {'method': 'POST', 'path': '/action/check-config', 'params': {'timeout_ms': 'N (default 10000, capped by the request timeout)'}, 'body': 'optional raw sing-box config JSON (checks this text; omit → built config on disk)', 'description': 'Run Libbox.checkConfig — the same check the guard loops on, once, without a tunnel → {config_ok, error, ms, bytes}. error is the core RAW text (what PARSING_PRINCIPLES §9 parses). 409 on timeout.'},
     {'method': 'POST', 'path': '/action/stop-vpn', 'description': 'Stop tunnel'},
     {'method': 'POST', 'path': '/action/reconnect', 'description': 'Stop→Start under one busy-wrap (start if down)'},
     {'method': 'POST', 'path': '/action/reload-vpn', 'description': 'In-place sing-box reload (no service kill) → {applied}'},
@@ -750,13 +751,13 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/directions/{tag}', 'description': "Single direction (tag = the direction's outbound tag, e.g. vpn-1 or a custom one)"},
     {'method': 'POST', 'path': '/directions', 'params': {'rebuild': 'true|false'}, 'body': 'optional {"label":"...","tag":"..."} + any PATCH field', 'description': 'Create direction. No tag → first free vpn-N; a custom tag is accepted as-is. No cap on the number of directions. Rejected tag → 409 with the machine reason: empty|reserved|duplicate|auto_twin.'},
     {'method': 'PATCH', 'path': '/directions/{tag}', 'params': {'rebuild': 'true|false'}, 'body': 'Any subset: {label,enabled,include_direct,include_block,node_filter,node_filter_invert,default_filter,include,interrupt_exist_connections,auto,detour}', 'description': 'Partial update. auto merges into current urltest options; "auto":null disables the twin. tag immutable; vpn-1 cannot be disabled. detour:true = direction selectable as detour target (stays a valid rule target; include_block allowed); vpn-1+detour → 409; detour:false resets detour references to None. Toggling detour renames the direction: the reserved gear prefix is added to/stripped from the stored label — responses carry the normalized label. Mutation responses carry "healed":{rules,detours,includes,chain_positions,dns_servers}.'},
-    {'method': 'DELETE', 'path': '/directions/{tag}', 'params': {'rebuild': 'true|false'}, 'description': 'Remove direction. vpn-1 not deletable (409). Rule references degrade to vpn-1; detour references reset to None; the tag is stripped from every other direction include[]; outbound-type variables of template DNS servers and rule presets, and body.detour of user DNS servers (root and node sections), degrade to vpn-1. Response carries "healed":{rules,detours,includes,chain_positions,dns_servers}.'},
+    {'method': 'DELETE', 'path': '/directions/{tag}', 'params': {'rebuild': 'true|false'}, 'description': 'Remove direction. vpn-1 not deletable (409). Rule references degrade to vpn-1; detour references reset to None; the tag is stripped from every other direction include[]; outbound-type variables of template DNS servers and rule presets, and body.detour of user DNS servers, degrade to vpn-1. Response carries "healed":{rules,detours,includes,chain_positions,dns_servers}.'},
     {'method': 'POST', 'path': '/directions/reorder', 'params': {'rebuild': 'true|false'}, 'body': '{"order":[tag,...]}', 'description': 'Reorder (exactly the current tags). Order = emit order in config.'},
     // Chains CRUD (hop chains, SPEC 110)
     {'method': 'GET', 'path': '/chains', 'description': 'List hop chains in storage order: tag, label, enabled + source_chain.schema.json canon. The list order is normative: a chain may reference only chains declared above it.'},
     {'method': 'GET', 'path': '/chains/{tag}', 'description': 'Single chain (404 if unknown)'},
     {'method': 'POST', 'path': '/chains', 'params': {'rebuild': 'true|false'}, 'body': 'optional {"tag":"...","label":"..."} + any PATCH field', 'description': 'Create chain → 201. No tag → first free chain-N. Tag is checked against BOTH chains and directions; rejected → 409 with the machine reason: empty|reserved|duplicate|auto_twin. A body without hops creates an empty chain (same as the UI).'},
-    {'method': 'PATCH', 'path': '/chains/{tag}', 'params': {'rebuild': 'true|false'}, 'body': 'Any subset: {label,enabled,hops,idle_timeout,strip_evasion,strip,rewrite}', 'description': 'Partial update. tag is immutable (400). hops = positions in PACKET order ([0] = first hop from the client), each a node link {folder_id?, tag} (a string is read as {tag}). strip_evasion is a tristate: omit = keep, null = core default, bool = explicit. strip replaces the map, keys only tls.fragment|multiplex.padding|xhttp.padding|tls.utls. rewrite = RFC 7396 merge-patch per outbound type, kept verbatim. Writes pass the same gate as the edit form; a blocking finding → 400 with its code: tooFewHops|emptyHop|duplicateHop|selfReference|nestedNotFirst|forwardChainReference|realityUtlsStripped|tagEmpty|tagTaken.'},
+    {'method': 'PATCH', 'path': '/chains/{tag}', 'params': {'rebuild': 'true|false'}, 'body': 'Any subset: {label,enabled,hops,idle_timeout,strip_evasion,strip,rewrite}', 'description': 'Partial update. tag is immutable (400). hops = positions in PACKET order ([0] = first hop from the client), each a node link {folder_id?, tag} (a string is read as {tag}). strip_evasion is a tristate: omit = keep, null = core default, bool = explicit. strip replaces the map, keys only from the contract strip catalogue (tls.fragment|multiplex.padding|xhttp.padding|tls.utls at contract 1.1.70). rewrite = RFC 7396 merge-patch per outbound type, kept verbatim. Writes pass the same gate as the edit form; a blocking finding → 400 with its code: tooFewHops|emptyHop|duplicateHop|selfReference|nestedNotFirst|forwardChainReference|tagEmpty|tagTaken.'},
     {'method': 'DELETE', 'path': '/chains/{tag}', 'params': {'rebuild': 'true|false'}, 'description': 'Remove chain. Positions of other chains pointing at it are NOT cleaned (the build degrades such a chain as a whole, "chain_hop_missing"); the response lists them in "dangling_refs".'},
     {'method': 'GET', 'path': '/chains/{tag}/probe', 'params': {'url': 'probe URL (default: global ping_options)', 'timeout_ms': 'per-layer budget (default: global ping_options)'}, 'description': 'Layer-by-layer probe: measures PREFIXES of the route (layer k = path from the client through position k) via the tag the core registers for it, "<chain>#<k>" — the same scheme as the launcher (config.ChainLayerTag). A hop price is the difference of neighbouring layers, never a measurement of its own. Needs a running VPN (409 otherwise): those tags exist only in the running core. Positions come from the BUILT config; 409 if the chain is not in it (disabled, degraded, never built). Sequential — worst case positions × timeout_ms. Response: layers[{pos, tag, probe_tag, cumulative_ms?, delta_ms?, error?, not_reached?}]; the first failing layer carries the core text and everything behind it is not_reached.'},
     // Folders CRUD (server folders)

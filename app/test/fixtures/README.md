@@ -1,6 +1,6 @@
 # Parser v2 fixtures
 
-Тестовые входы для Parser v2 (спека [`026`](../../../docs/spec/features/026%20parser%20v2/spec.md)).
+Тестовые входы для Parser v2 (спека [`026`](../../../docs/spec/tasks/026F-parser-v2/spec.md)).
 
 ## Структура
 

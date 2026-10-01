@@ -59,7 +59,7 @@ class AppCoreRejectHost implements CoreRejectHost {
   Future<RebuiltConfig?> rebuild() async {
     final json = await rebuildAndSave();
     if (json == null || json.isEmpty) return null;
-    // Теги — из обратной карты той же сборки (CANON §9.3): против них
+    // Теги — из обратной карты той же сборки (PARSING_PRINCIPLES §9.3): против них
     // проверяются кандидаты разбора строки ошибки.
     return RebuiltConfig(
       configJson: json,

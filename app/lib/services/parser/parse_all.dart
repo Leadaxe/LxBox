@@ -2,6 +2,8 @@ import '../../models/node_spec.dart';
 import '../../models/node_warning.dart';
 import '../contract/parse_warnings.dart';
 import '../contract/registry.dart';
+import '../node_hash.dart';
+import 'authored_scope.dart';
 import 'body_decoder.dart';
 import 'engine/document.dart';
 import 'ini_parser.dart';
@@ -26,7 +28,7 @@ import 'uri_parsers.dart';
 /// подписка вырождается в пустую, причина не доезжает и до
 /// `nodes.first.warnings`. Параметр не меняет поведения ни одного текущего
 /// вызывающего (все передают его `null`) и нужен конформанс-раннеру корпуса:
-/// конверт контракта несёт `dropped[]` наравне с `nodes[]`.
+/// результат разбора контракта несёт `dropped[]` наравне с `nodes[]`.
 ///
 /// §460 W2a — узкая общая воронка разбора: ЧЕРЕЗ НЕЁ проходят все входы
 /// (тела подписок, URI-строки, sing-box/Xray JSON, INI, серверы и члены
@@ -53,12 +55,53 @@ import 'uri_parsers.dart';
 /// Поскольку разбор идёт заново при каждой загрузке узла из хранения (узел
 /// хранится текстом `rawSource`), предупреждения переживают перезагрузку по
 /// построению: их никто не сериализует, они каждый раз считаются заново.
+///
+/// §576 п.5 — [own]: текст — источник своего сервера или члена папки. Вход
+/// `singbox` (исключения реестра по входу) получает только такое тело с видом
+/// источника `singbox_outbound`; тело подписки — вход `other`
+/// (`authored_scope.dart`).
 List<NodeSpec> parseAll(
   DecodedBody decoded, {
   String? nameHint,
   List<NodeWarning>? dropped,
+  bool own = false,
 }) {
+  final authored = own &&
+      decoded is JsonConfig &&
+      decoded.source.kind == SourceKind.singboxOutbound;
+  return withOwnSource(
+      own,
+      () => withAuthoredBody(
+          authored, () => _parseAllAnnotated(decoded, nameHint, dropped)));
+}
+
+/// §585 — вставка sing-box JSON, которая не дала узлов обычным разбором,
+/// даёт ровно один узел незнакомого приложению типа разбором как свой
+/// источник. Тогда вставка становится своей записью с этим узлом; иначе
+/// `null` — отказ прежний. Общий гейт импорта (`addFromInput`) и превью
+/// буфера обмена.
+List<NodeSpec>? acceptsOwnUnknownType(DecodedBody decoded) {
+  if (decoded is! JsonConfig || decoded.source.mapper != 'singbox') {
+    return null;
+  }
+  final own = parseAll(decoded, own: true);
+  if (own.length != 1 || own.single is! UnknownTypeSpec) return null;
+  return own;
+}
+
+List<NodeSpec> _parseAllAnnotated(
+  DecodedBody decoded,
+  String? nameHint,
+  List<NodeWarning>? dropped,
+) {
   final nodes = _parseAll(decoded, nameHint: nameHint, dropped: dropped);
+  // §589 — где кончаются коды РАЗБОРА у каждого узла: код схлопывания встаёт
+  // в их конец, перед кодами санитайзера (контракт §99 п. 4), а санитайзер по
+  // дословной карте дописывает свои раньше, чем дойдёт до дедупа.
+  final parseEnd = Map<NodeSpec, int>.identity();
+  for (final n in nodes) {
+    parseEnd[n] = n.warnings.length;
+  }
 
   // §477 — проход по дословной карте выносит и ВЕРДИКТ О ЗАПИСИ, а не только
   // коды полей: `on_invalid: drop_node` значит, что ядро эту запись не примет
@@ -68,7 +111,7 @@ List<NodeSpec> parseAll(
   // чтобы быть снятым там, а до тех пор стоял бы в списке рабочим.
   //
   // Где это делается — тут, а не внутри прохода: `dropped[]` принадлежит
-  // `parseAll`, и конверт контракта (D-088) различает «запись отвергли» и
+  // `parseAll`, и результат разбора контракта (D-088) различает «запись отвергли» и
   // «тело не распознано» именно этим списком.
   final byRegistry = annotateAllFromRawBody(nodes);
   if (byRegistry.isNotEmpty) {
@@ -79,8 +122,144 @@ List<NodeSpec> parseAll(
     dropped?.addAll(byRegistry.map(_dropReasonOf));
   }
 
+  // §538 — повторы снимаются ПОСЛЕ вердикта реестра: дословные карты двух
+  // форм одного узла разные (`amneziawg://` и `vpn://`), и отбраковка могла
+  // задеть только одну. Дедуп раньше неё оставил бы первую форму и потерял
+  // годную вторую.
+  _collapseDuplicates(nodes, parseEnd);
+
   annotateAllWithRegistry(nodes);
   return nodes;
+}
+
+/// §538 — СХЛОПЫВАНИЕ ПОВТОРОВ ВНУТРИ ОДНОГО ТЕЛА.
+///
+/// Живой случай — подписка rrtrg: один и тот же AWG-узел приезжает дважды,
+/// строкой `amneziawg://` (§512) и сжатым контейнером `vpn://` (§450). Формы
+/// разные, узел один, и в списке он стоял дважды.
+///
+/// Ключ — [nodeDedupSignature] (§404 / контракт D-086): отпечаток содержимого
+/// узла (каноническая эмиссия без `tag` и `detour`) плюс подпись пути
+/// дозвона. Второй ключ не заводится намеренно: это ТОТ ЖЕ механизм, которым
+/// §480 сравнивает узлы между обновлениями подписки, и разойдись они —
+/// «схлопнулось при разборе» и «тот же узел, что вчера» стали бы разными
+/// вопросами. Грубый `nodeIdentityKey` (четвёрка подключения) здесь не
+/// годится: он не видит ни транспорта, ни TLS, и один сервер под двумя SNI
+/// схлопнулся бы в один узел — потеря записи, которую провайдер прислал
+/// намеренно.
+///
+/// Первая запись остаётся (порядок разбора = порядок тела: автор ставит
+/// осмысленную форму раньше), каждая следующая с тем же ключом схлопывается
+/// в неё. §589 (контракт 1.1.102, §99) — след схлопывания живёт на ВЫЖИВШЕМ
+/// узле кодом реестра `duplicates_collapsed` ([duplicatesCollapsedWarning]):
+/// человек видит, какие имена слились в этот узел. В `dropped[]` схлопнутые
+/// записи не попадают — они не отвергнуты, их сервер в списке есть.
+///
+/// Область — ОДНО ТЕЛО, один импорт: `parseAll` дальше своего входа не видит
+/// по построению. Между подписками и с ручными узлами повторы не схлопываются
+/// — там разные `tag_prefix`/`detour_policy`, и одинаковое содержимое ещё не
+/// значит одну запись (та же граница, что у дедупа Xray-документа §404).
+///
+/// Узлы без подписи (группы §322 — у них нет тела) в дедупе не участвуют:
+/// `emit()` группы описывает состав, а не сервер, и две группы с одинаковым
+/// составом это две разные группы.
+void _collapseDuplicates(
+    List<NodeSpec> nodes, Map<NodeSpec, int> parseEnd) {
+  if (nodes.length < 2) return;
+  final seen = <String, NodeSpec>{};
+  final dupes = <NodeSpec>[];
+  // Выживший → имена схлопнутых в него записей, в порядке тела.
+  final collapsed = Map<NodeSpec, List<String>>.identity();
+  for (final node in nodes) {
+    if (node.isGroup) continue;
+    final String sig;
+    try {
+      sig = nodeDedupSignature(node);
+    } catch (_) {
+      // Подпись считается эмиссией, а эмиссия узла теоретически может бросить.
+      // Узел без подписи просто не дедупится — потерять его здесь нельзя.
+      continue;
+    }
+    final winner = seen[sig];
+    if (winner == null) {
+      seen[sig] = node;
+      continue;
+    }
+    dupes.add(node);
+    (collapsed[winner] ??= <String>[]).add(node.tag);
+  }
+  // Снятие ПО ССЫЛКЕ: `NodeSpec.==` сравнивает `id`+`tag`, а у дубля с
+  // выжившим совпадает ровно это — `removeWhere(dupes.contains)` снёс бы
+  // обоих (тот же довод, по которому `sourceNodeIdentities` держит
+  // `Map.identity`).
+  if (dupes.isEmpty) return;
+  nodes.removeWhere((n) => dupes.any((d) => identical(d, n)));
+  collapsed.forEach((survivor, names) {
+    markDuplicatesCollapsed(survivor, names, at: parseEnd[survivor]);
+  });
+}
+
+/// §589 — код реестра, которым узел помнит схлопнутые в него записи.
+const kDuplicatesCollapsedCode = 'duplicates_collapsed';
+
+/// §589 — сколько имён схлопнутых записей называет код; дальше `", …"`,
+/// полное число — в `count` (контракт §99 п. 2).
+const kMaxCollapsedNames = 10;
+
+/// §589 (контракт 1.1.102, §99) — код `duplicates_collapsed` для выжившего
+/// узла с именем [ownName], в который схлопнуты записи [collapsed] (их имена
+/// в порядке тела).
+///
+/// `count` — сколько записей схлопнуто; `names` — их имена через `", "`: без
+/// пустых, без повторов, без имени выжившего, не больше
+/// [kMaxCollapsedNames], дальше `", …"`. Если называть некого (все повторы
+/// под тем же именем) — имя выжившего.
+RegistryWarning duplicatesCollapsedWarning(
+    String ownName, List<String> collapsed) {
+  final own = ownName.trim();
+  final seen = <String>{own};
+  final names = <String>[];
+  for (final raw in collapsed) {
+    final name = raw.trim();
+    if (name.isEmpty || !seen.add(name)) continue;
+    names.add(name);
+  }
+  if (names.isEmpty) names.add(own);
+  var joined = names.take(kMaxCollapsedNames).join(', ');
+  if (names.length > kMaxCollapsedNames) joined += ', …';
+  return RegistryWarning(
+    code: kDuplicatesCollapsedCode,
+    params: {'count': '${collapsed.length}', 'names': joined},
+  );
+}
+
+/// §589 — итог схлопывания по узлам источника для сводки: [merged] —
+/// сумма `count` кодов `duplicates_collapsed`, [into] — число узлов с кодом.
+({int merged, int into}) duplicatesMergedOf(Iterable<NodeSpec> nodes) {
+  var merged = 0;
+  var into = 0;
+  for (final n in nodes) {
+    for (final w in n.warnings) {
+      if (w is! RegistryWarning || w.code != kDuplicatesCollapsedCode) continue;
+      merged += int.tryParse(w.params['count'] ?? '') ?? 0;
+      into++;
+      break;
+    }
+  }
+  return (merged: merged, into: into);
+}
+
+/// §589 — поставить [survivor] код схлопывания. [at] — конец кодов разбора
+/// (перед кодами санитайзера); `null` — в конец списка. Прежний код с узла
+/// снимается: свежий разбор источника его заменяет.
+void markDuplicatesCollapsed(NodeSpec survivor, List<String> collapsed,
+    {int? at}) {
+  if (collapsed.isEmpty) return;
+  final w = duplicatesCollapsedWarning(survivor.tag, collapsed);
+  final ws = survivor.warnings;
+  ws.removeWhere((x) => x is RegistryWarning && x.code == w.code);
+  final i = at == null ? ws.length : at.clamp(0, ws.length);
+  ws.insert(i, w);
 }
 
 /// §477 — причина отбраковки узла реестром: код `error`, который проход по
@@ -149,6 +328,20 @@ List<NodeSpec> _decodeFailed(String reason, List<NodeWarning>? dropped) {
 List<NodeSpec> _parseUriLines(List<String> lines, List<NodeWarning>? dropped) {
   final nodes = <NodeSpec>[];
   for (final l in lines) {
+    // §570 / контракт 1.1.80 — строка-контейнер профиля даёт все контейнеры.
+    final verdicts = <XrayDropVerdict>[];
+    final all = parseContainerLineAll(l, verdicts: verdicts);
+    if (all != null) {
+      nodes.addAll(all);
+      for (var k = 0; k < verdicts.length; k++) {
+        final r = verdicts[k].reason;
+        if (r == null) continue;
+        // §570 — владелец: строка списка и номер контейнера в ней.
+        dropped?.add(withDropOwner(
+            r, verdicts.length > 1 ? '${l.trim()} #${k + 1}' : l.trim()));
+      }
+      continue;
+    }
     final verdict = XrayDropVerdict();
     final n = parseUri(l, dropped: verdict);
     if (n != null) {
@@ -159,19 +352,25 @@ List<NodeSpec> _parseUriLines(List<String> lines, List<NodeWarning>? dropped) {
       // построчных). Без этого отбраковка называлась именем класса
       // предупреждения, и кейс `uri_list/service_scheme_routing_ignored`
       // сверить было нечем.
-      final r = verdict.reason!;
-      dropped?.add(r.ownerTag.isEmpty
-          ? RegistryWarning(
-              code: r.code,
-              path: r.path,
-              value: r.value,
-              params: r.params,
-              ownerTag: l.trim(),
-            )
-          : r);
+      dropped?.add(withDropOwner(verdict.reason!, l.trim()));
     }
   }
   return nodes;
+}
+
+/// §570 — запись отбраковки с владельцем [owner], если своего у неё нет.
+/// Владелец есть только у [RegistryWarning] (прочие классы несут его сами).
+NodeWarning withDropOwner(NodeWarning w, String owner) {
+  if (owner.isEmpty || w.ownerTag.isNotEmpty || w is! RegistryWarning) {
+    return w;
+  }
+  return RegistryWarning(
+    code: w.code,
+    path: w.path,
+    value: w.value,
+    params: w.params,
+    ownerTag: owner,
+  );
 }
 
 List<NodeSpec> _parseIniConfigs(
@@ -188,7 +387,10 @@ List<NodeSpec> _parseIniConfigs(
     if (n != null) {
       nodes.add(n);
     } else if (verdict.reason != null) {
-      dropped?.add(verdict.reason!);
+      // §570 — запись отбраковки называет запись источника: имя контейнера
+      // (подсказка с индексом), без имени — его номер в теле.
+      dropped?.add(withDropOwner(
+          verdict.reason!, hint ?? (texts.length > 1 ? '#${i + 1}' : '')));
     }
   }
   return nodes;
@@ -243,7 +445,7 @@ List<NodeSpec> _parseJson(JsonConfig j, List<NodeWarning>? out) {
 
   return mapper == 'xray'
       ? _parseXrayDocument(groups, out)
-      : parseSingboxConfigs(groups);
+      : parseSingboxConfigs(groups, dropped: out);
 }
 
 /// §310/§321/§342/§404 — СБОРКА ДОКУМЕНТА Xray из его элементов.
@@ -269,10 +471,10 @@ List<NodeSpec> _parseXrayDocument(
       // СЕРВЕР, а не конкретную запись подписки, и подпись §404 (которая
       // разводит два SNI одного сервера) растащила бы состав пула.
       final synonyms = <String, String>{};
-      // §404 / D-085 — причины отбраковки узлов с недостижимым релеем, которым
-      // не нашлось носителя внутри своего элемента (в элементе не выжил
-      // никто). Вешаем их на первый узел подписки: причина обязана дойти до
-      // пользователя, иначе узел исчезает молча.
+      // §404 / D-085 / §561 — причины отбраковки записей элементов
+      // (недостижимый релей, непрочитанная запись, вердикт реестра). Едут
+      // наружу в `dropped[]` результата разбора и только туда: на узлы подписки они не
+      // вешаются, сводка источника показывает их отдельно.
       final dropped = <NodeWarning>[];
 
       // §342 — ДВА прохода: «кто даёт узлу имя» и «в каком порядке узлы идут»
@@ -303,13 +505,35 @@ List<NodeSpec> _parseXrayDocument(
         });
       final priming = [for (final e in indexed) e.value];
       final owner = <String, Map<String, dynamic>>{};
+      // §322 — подпись → тег узла у владельца: группа, чей член схлопнут
+      // владением, ссылается на выжившего (паритет с лаунчером).
+      final ownerTagOf = <String, String>{};
       for (final e in priming) {
         final before = seen.toSet();
-        parseXrayElement(e, seen: seen, synonyms: synonyms);
+        parseXrayElement(e, seen: seen, synonyms: synonyms,
+            onCollapse: (sig, node, {required kept}) {
+          if (kept) {
+            // §101 (1.1.104) — член группы = label выжившего, без замен.
+            ownerTagOf.putIfAbsent(
+                sig, () => node.label.isNotEmpty ? node.label : node.tag);
+          }
+        });
         for (final id in seen.difference(before)) {
           owner[id] = e;
         }
       }
+      // §589 — схлопнутые правилом владения записи: выживший по подписи и
+      // имена выброшенных в порядке файла (боевой проход идёт по нему).
+      final survivorOf = <String, NodeSpec>{};
+      final collapsed = <String, List<String>>{};
+      void onCollapse(String sig, NodeSpec node, {required bool kept}) {
+        if (kept) {
+          survivorOf.putIfAbsent(sig, () => node);
+        } else {
+          (collapsed[sig] ??= <String>[]).add(node.tag);
+        }
+      }
+
       final nodes = elements
           .expand((e) => parseXrayElement(
                 e,
@@ -320,21 +544,20 @@ List<NodeSpec> _parseXrayDocument(
                 synonyms: synonyms,
                 ownedBy: (sig) => identical(owner[sig], e),
                 dropped: dropped,
+                onCollapse: onCollapse,
+                survivorTag: (sig) => ownerTagOf[sig],
               ))
           .toList();
-      // §404 P3 — то, что осталось в `dropped`, носителя в своём элементе не
-      // нашло. Последний носитель — первый узел подписки; если и его нет,
-      // подписка пустая и сообщать некому (та же документированная дыра, что
-      // у §321 P5).
-      // D-088 — отбраковка едет наружу ЦЕЛИКОМ, независимо от того, нашёлся ли
-      // ей носитель среди узлов: конверт контракта различает «запись отвергли»
-      // и «тело не распознано», а `nodes.first.warnings` этого различия не
-      // несёт и на пустой подписке пропадает совсем.
+      // Узлы здесь несут только коды разбора: санитайзер идёт позже, в
+      // `_parseAllAnnotated`, — код встаёт в конец, как велит контракт §99.
+      collapsed.forEach((sig, names) {
+        final survivor = survivorOf[sig];
+        if (survivor != null) markDuplicatesCollapsed(survivor, names);
+      });
+      // D-088 / §561 — отбраковка едет наружу ЦЕЛИКОМ: результат разбора контракта
+      // различает «запись отвергли» и «тело не распознано». Прежний перенос
+      // остатка на первый узел подписки (§404 P3) снят — чужая ошибка на
+      // рабочем узле.
       out?.addAll(dropped);
-      if (dropped.isNotEmpty && nodes.isNotEmpty) {
-        for (final w in dropped) {
-          if (!nodes.first.warnings.contains(w)) nodes.first.warnings.add(w);
-        }
-      }
       return nodes;
 }

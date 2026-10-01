@@ -30,9 +30,9 @@ At runtime the builder (`app/lib/services/builder/build_config.dart`) merges:
 wizard_template.json
 │
 ├─ parser_config                   object{2 keys}
-│   ├─ version                     int           the parser pipeline's schema (§026)
+│   ├─ version                     int           read, nothing depends on it (no template migrations)
 │   └─ parser                      object{1 keys}
-│       └─ reload                  duration      auto-refresh subscriptions interval (Go-style "12h")
+│       └─ reload                  duration      not used by the app (Go-style "12h")
 │
 ├─ dns_options                     object{2 keys}       the default DNS shape for the builder
 │   ├─ servers[]                   list          template-level DNS servers (7 defaults)
@@ -105,11 +105,13 @@ wizard_template.json
 │   ├─ log                         object{2 keys}
 │   │   ├─ level                   "@log_level"
 │   │   └─ timestamp               bool
-│   ├─ dns                         object{4 keys}       an empty shell, filled in by the builder
+│   ├─ dns                         object{6 keys}       an empty shell, filled in by the builder
 │   │   ├─ servers[]               list          [] — filled in from the storage dns.servers plus selectable_rules
 │   │   ├─ rules[]                 list          [] — the same
 │   │   ├─ final                   "@dns_final"
-│   │   └─ strategy                "@dns_strategy"
+│   │   ├─ strategy                "@dns_strategy"
+│   │   ├─ cache_capacity          "@dns_cache_capacity"   §580 — entries, 1024..65535
+│   │   └─ optimistic              "@dns_optimistic"       §580 — serve stale answers
 │   ├─ inbounds[]                  list[1]       tun definition
 │   │   └─ <SingboxTunInbound>     object
 │   │       ├─ type                "tun"
@@ -137,7 +139,8 @@ wizard_template.json
 │   │   ├─ final                   tag           default selector ("vpn-1")
 │   │   └─ auto_detect_interface   "@auto_detect_interface"
 │   └─ experimental                object{1 keys}
-│       └─ cache_file              object          {enabled:true, path:"cache.db"}
+│       └─ cache_file              object          {enabled:true, path:"cache.db", store_fakeip:true,
+│                                                   store_dns:"@dns_store_cache"}  §580
 │                                                  (clash_api was REMOVED in §122 — the block in a custom template
 │                                                   kills the core's startup: "clash api is not included in this build")
 │
@@ -210,8 +213,8 @@ Every key is described in detail in the sections below.
 
 | Key | Type | Purpose |
 |---|---|---|
-| `version` | int | The parser pipeline's version ([§026]). It is bumped on breaking parser changes. |
-| `parser.reload` | a duration string | The periodic auto-refresh interval for subscriptions ([§027]). Go style: `12h`, `30m`, and so on. It is overridden per subscription. |
+| `version` | int | Read into the model, but nothing depends on it: the template has no migration mechanism of its own, its version is the app build; a breaking change of the template form is served by the storage form (owner decision 2026-09-29, audit [591](spec/tasks/591-spec-kit-revision-audit.md)). |
+| `parser.reload` | a duration string | Not used by the app. Subscriptions refresh by their own per-subscription interval and the auto-update triggers; refreshing by this interval on Start (§010F) is not planned (audit [591](spec/tasks/591-spec-kit-revision-audit.md)). |
 
 ---
 
@@ -588,6 +591,24 @@ top-level rule_set form is our convention.
 The full normative specification is `contract/docs/TEMPLATE_LANG.md`; both apps
 are verified against the shared corpus `contract/corpus/template/`.
 
+### DNS cache variables (§580)
+
+Three vars of the `dns` section, shown on the DNS screen next to Clear DNS
+cache (`wizard_ui: fix`); the norm is `TEMPLATE_LANG.md` §6.8, the names and
+defaults are the same in the launcher.
+
+| Var | Type | Default | Allowed | Config field |
+|---|---|---|---|---|
+| `dns_cache_capacity` | `int` | `4000` | 1024..65535 | `dns.cache_capacity` |
+| `dns_optimistic` | `bool` | `true` | | `dns.optimistic` |
+| `dns_store_cache` | `bool` | `true` | | `experimental.cache_file.store_dns` |
+
+The DNS screen does not save a size outside the bounds; a stored value outside
+them (a hand-edited file, an import) is not substituted, the default applies
+(`kVarIntBounds` in `build_config.dart`). State without these vars gets the
+defaults. `optimistic` is only a bool: the object form of the core is not used,
+the stale-answer lifetime is the core's.
+
 ### `on_change` — a var's declarative side effect (§232 / §266)
 
 Toggling a var can set derived vars. The syntax reuses the existing `#if` (value/else),
@@ -721,7 +742,9 @@ The base of the final sing-box config. It carries `@var` placeholders; the subst
     "servers":  [],                              // empty; filled in from the storage dns.servers plus selectable_rules[].dns_servers
     "rules":    [],                              // empty; filled in from the storage dns.rules plus selectable_rules[].dns_rules
     "final":    "@dns_final",
-    "strategy": "@dns_strategy"
+    "strategy": "@dns_strategy",
+    "cache_capacity": "@dns_cache_capacity",      // §580
+    "optimistic":     "@dns_optimistic"           // §580
   },
   "inbounds": [
     {"type": "tun", "tag": "tun-in", "interface_name": "...", "address": "...", "mtu": ..., "auto_route": ..., "strict_route": ..., "stack": "..."}
@@ -752,7 +775,7 @@ The base of the final sing-box config. It carries `@var` placeholders; the subst
     // the libbox CommandClient, not an HTTP Clash API. The core is built WITHOUT
     // with_clash_api: an experimental.clash_api block in a custom template is a FATAL
     // startup failure ("clash api is not included in this build"). Do not add it.
-    "cache_file": {"enabled": true, "path": "..."}
+    "cache_file": {"enabled": true, "path": "...", "store_fakeip": true, "store_dns": "@dns_store_cache"}
   }
 }
 ```
@@ -827,6 +850,7 @@ the base sniff/hijack-dns/resolve rules.
 | `bittorrent` | true | — | — | ✓ (outbound) | — | ✓ (`protocol: bittorrent` → `@outbound`) | — | — |
 | `private-ip` | (false) | — | — | ✓ (outbound) | — | ✓ (`ip_is_private` → `@outbound`) | — | — |
 | `unknown-traffic` | false | — | — | ✓ (`outbound`=reject) | ✓ (inline `unknown-apps`, invert `package_name_regex: "^"`) | ✓ (`@outbound`) | — | — |
+| `tailscale` (§578) | true | — | 945 | ✓ (dns_enable) | — | ✓ per node: `[resolve → <node>-dns #if @dns_enable, preferred_by → @node]` | ✓ per node (`preferred_by` → `<node>-dns`, #if @dns_enable) | ✓ per node (type `tailscale`, `endpoint: @node`, #if @dns_enable) |
 
 **`traffic-processing` (§264/§370)** is a locked, unsortable preset and the FIRST in `selectable_rules`. It carries the base route rules `sniff`, `hijack-dns` and `resolve`, which before §264 lived directly in `config.route.rules` (now empty). `num:0` plus `isSortable:false` guarantee its rules come first.
 
@@ -857,8 +881,9 @@ In the UI a ref-var **is rendered** in the rule editor (`preset_params_tab.dart`
 > subtitle showed `resolve_enabled: true` while the global was already `false`).
 > `stripRefVarsFromVarsValues` (`rule_order.dart`) clears the ref keys out of `varsValues`
 > when the Routing screen loads; every reader of `varsValues` by var name **must** skip
-> `v.isRef` (the subtitle, the Debug serializer, the rule_set.enabled gate — see
-> `366beec`).
+> `v.isRef` (the subtitle, the Debug serializer, the rule_set gate — see
+> `366beec`; since §534 the Routing screen and the downloader read `#enable` and
+> legacy `enabled` through the builder's `fragmentGateSatisfied` + `presetVarsMap`).
 
 **§264 — the new vars of the `traffic-processing` preset.** `sniff_timeout` (an enum of 100ms/300ms/500ms/1s/3s) replaced the hardcoded `timeout:"1s"` on the sniff rule. `hijack_dns_enabled` (a bool) toggles the hijack-dns rule; ⚠ its tooltip warns that turning it off lets DNS out past the tunnel.
 
@@ -947,6 +972,69 @@ The array form supports an **array-element `#if`** (the §246 mechanism): an `#i
 The vars declared in a preset are **visible only while the preset is enabled**. The UI renders them on the Routing screen.
 
 The universal `outbound` override (spec [§033], Expansion §5): when `varsValues['outbound']` holds a non-empty value, it replaces the rule's outbound.
+
+### `for_each` — one body per node (§578)
+
+A preset with `for_each` repeats its body (`rules`, `dns_servers`, `dns_rules`)
+for every config node that matches. The shipped example is the `tailscale`
+preset.
+
+```jsonc
+"for_each": {
+  "node_type": "tailscale",                    // required: the `type` field of the node body
+  "as": "node",                                // required: the name the node goes by in the body
+  "filter": { "#not": "@node.skip_presets" }   // optional: a condition in the `#if` language
+}
+```
+
+A node is served when all of these hold: its body `type` equals `node_type`,
+the node is enabled, it made it into the config (not dropped by the registry
+gate, the core gate or a degradation), and `filter` is true. The container
+does not matter: a user server, a folder member and a subscription node are all
+served. Repeats follow the order of the nodes in the config; no nodes means the
+preset emits nothing. A preset without `for_each` works as before.
+
+**Node access** (`node` here is the `as` name):
+
+| Reference | Value |
+|---|---|
+| `@node` | the node's final tag in the config |
+| `@node.<field>` | a field of the node's storage record; the closed list today is `skip_presets` |
+| `@node.body.<path>` | a field of the node body, a dot path |
+
+A missing field yields the empty value: false in a condition, and the key or
+element is dropped from the body, as with an optional var. A subscription node
+has no record, so `@node.skip_presets` is always false for it.
+
+**`#tpl`** builds a string from pieces: `{"#tpl": "@{node}-dns"}`. It is allowed
+in a value position (an object field, an array element, inside `#value`), not
+in keys and not in a var's `default_value`. `@{name}` and `@{name.path}` insert
+a value any number of times; a bare `@name` inside the string is a literal. An
+unknown name or an empty value drops the whole value. An object carrying `#tpl`
+next to other keys is a template error.
+
+**Tags.** The tags of a `for_each` preset are not namespaced
+(`<preset_id>:<tag>`, §103 C7): the node tag already makes them unique, so the
+DNS server of `tailscale` is `<node tag>-dns`. Its storage record keeps `ref`
+equal to the tag and carries no `preset_id` (otherwise `DnsServerPreset` would
+rebuild the tag as `tailscale:<tag>-dns`). The DNS screen learns the owner from
+the expanded body instead.
+
+**Screens.** The routing and DNS screens and the rule editor's View tab expand
+the preset over the nodes of the sources (`presetNodesForView`): the tag is the
+final tag of the last build when the node was in it, otherwise the display tag.
+The preset row lists the served tags, comma separated, or says there are no
+matching nodes. The probe does not expand presets at all.
+
+**The `tailscale` preset.** For every Tailscale node: a `resolve` rule and a
+DNS rule pointing at the node's own DNS server `<node>-dns` (`type: tailscale`,
+`endpoint: @node`), and a route rule `preferred_by: [@node] → @node`. The DNS
+part follows the `dns_enable` var. `preferred_by` asks the node whether an
+address or name is its own; Tailscale answers from the live tailnet state, so
+the preset carries no fixed subnets. A node opts out with the record field
+`skip_presets` (the **Skip presets** switch on the node screen, see
+[STORAGE.md](STORAGE.md)). Existing installs get the preset once through
+`SettingsStorage.seedLateDefaultPresets` (the `late_presets_seeded` key).
 
 ---
 
@@ -1141,9 +1229,12 @@ and swaps in the translation keyed by that text.
   key (a `template_check` failure) and the new English key is missing (a warning; a failure
   under strict). The workflow is identical to a UI string: rename the key and revisit the translation.
 
-**The traversal schema** (the full table is in [the §279 spec, §3.2](./spec/features/279%20localization/spec.md)):
+**The traversal schema** (the full table is in [the §279 spec, §3.2](./spec/tasks/279F-localization/spec.md)):
 the applier visits the display fields of sections, of global and rule-local vars, of magic nodes,
-of directions, of DNS servers and of the ping and speed presets. Not visited (the applier's
+of directions, of DNS servers and of the ping and speed presets. An element of a preset's
+`dns_servers[]` wrapped in `#if` is unwrapped: the display fields come from `#value` and, when
+present, `#else` (§578); a `#tpl` tag does not break the walk, since the overlay is keyed by the
+English text rather than by the tag. Not visited (the applier's
 whitelist): everything under `config` and `parser_config`, plus `name`, `tag`, `value`,
 `default_value`, `preset_id`, bare-string enum options and `dns_options.rules[].name` (a latent
 identity key) — so those strings never reach an overlay.
@@ -1209,12 +1300,12 @@ on both pseudo-vars (`rule_enable` AND `dns_enable`), so it fires along either p
 
 - [`STORAGE.md`](./STORAGE.md) — the user state in `lxbox_settings.json` (what the user changes, including the directions)
 - [§058 config generator v1 (superseded)](./spec/tasks/058-config-generator-wizard-v1-superseded/spec.md) — substitution and expansion (formerly feature §005x, superseded by §026)
-- [§026 parser v2](./spec/features/026%20parser%20v2/spec.md) — `parser_config.version`
-- [§033 preset bundles](./spec/features/033%20preset%20bundles/spec.md) — `selectable_rules[]` and expansion
-- [§030 custom routing rules](./spec/features/030%20custom%20routing%20rules/spec.md) — `selectable_rules[*].rule` shape, order matters
+- [§026 parser v2](./spec/tasks/026F-parser-v2/spec.md) — `parser_config.version`
+- [§033 preset bundles](./spec/tasks/033F-preset-bundles/spec.md) — `selectable_rules[]` and expansion
+- [§030 custom routing rules](./spec/tasks/030F-custom-routing-rules/spec.md) — `selectable_rules[*].rule` shape, order matters
 - [§061 dns rules refactor](./spec/tasks/061-dns-rules-refactor/spec.md) — `dns_options.rules[]` (formerly feature §041)
 - [§043 dns servers refs by kind](./spec/tasks/043-dns-servers-refs-by-kind.md) plus [§044 clean schema](./spec/tasks/044-dns-servers-clean-schema.md) — `dns_options.servers[]` and the template-versus-storage relationship
 - [§040 per-group ping settings](./spec/tasks/040-per-group-ping-test-settings.md) — `ping_options`
-- [§015 speed test](./spec/features/015%20speed%20test/spec.md) — `speed_test_options`
-- [§022 app settings](./spec/features/022%20app%20settings/spec.md) — the Wizard UI and `sections[]`
-- [§279 localization](./spec/features/279%20localization/spec.md) — the l10n overlay of the template's display text; the overlay key is the English text itself (the same principle as the `ui/` dictionary, the `{value}` format, with no addresses and no `src` hash — §285); the translator guide is [`l10n.md`](./l10n.md)
+- [§015 speed test](./spec/tasks/015F-speed-test/spec.md) — `speed_test_options`
+- [§022 app settings](./spec/tasks/022F-app-settings/spec.md) — the Wizard UI and `sections[]`
+- [§279 localization](./spec/tasks/279F-localization/spec.md) — the l10n overlay of the template's display text; the overlay key is the English text itself (the same principle as the `ui/` dictionary, the `{value}` format, with no addresses and no `src` hash — §285); the translator guide is [`l10n.md`](./l10n.md)

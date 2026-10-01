@@ -9,8 +9,8 @@ import 'dns_server_edit/edit_controller.dart';
 // §312 — опция пикера членов группы нужна caller'у (dns_settings_screen).
 export 'dns_server_edit/edit_controller.dart' show DnsMemberOption;
 // §435 — опция пикера endpoint у сервера tailscale (тот же caller).
-export '../services/dns/node_dns_records.dart' show TailscaleEndpointOption;
-import '../services/dns/node_dns_records.dart' show TailscaleEndpointOption;
+export '../services/dns/tailscale_endpoint_options.dart' show TailscaleEndpointOption;
+import '../services/dns/tailscale_endpoint_options.dart' show TailscaleEndpointOption;
 import 'dns_server_edit/tabs/json_tab.dart';
 import 'dns_server_edit/tabs/params_tab.dart';
 import 'dns_settings_screen/resolved_server.dart';

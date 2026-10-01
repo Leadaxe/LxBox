@@ -447,18 +447,18 @@ void main() {
       // Выбор выходного написания принадлежит СХЕМЕ: `allowInsecure` читают
       // все Xray-клиенты, `insecure` читают не все.
       expect(_emit(section({'insecure': 'allowInsecure'}), body),
-          'x://h:1?allowInsecure=1');
+          'x://h:1?allowInsecure=true');
     });
 
     test('без объявления — канон записи (первое в aliases)', () {
-      expect(_emit(section({}), body), 'x://h:1?insecure=1');
+      expect(_emit(section({}), body), 'x://h:1?insecure=true');
     });
 
     test('написание, которого запись НЕ читает, отвергается', () {
       // Пиши мы имя вне набора — своя же ссылка обратно не разобралась бы.
       // Эмит молча откатывается к канону, а вслух об этом говорит линтер.
       expect(_emit(section({'insecure': 'skipVerify'}), body),
-          'x://h:1?insecure=1');
+          'x://h:1?insecure=true');
     });
 
     test('readableNames — имя, алиасы и query-написания source', () {
@@ -469,19 +469,22 @@ void main() {
   });
 
   group('§480 · синк 1.1.37 · написание булева объявляет ЗАПИСЬ, не тип', () {
-    // Контракт 1.1.36 снял у xhttp-булевых объявление `emit_as: raw`, и
-    // соблазн вывести написание из типа (`bool_spelled` → слово) здесь
-    // разбирается вслух, потому что он НЕВЕРЕН в обе стороны:
+    // ТИП написания не решает — решает ЗАПИСЬ, и это верно в обе стороны:
+    // `bool` и `bool_spelled` на выходе неразличимы (у лаунчера — одна ветка
+    // exec.go, у нас — одна ветка `_serializeValue`).
     //
-    // - у лаунчера `bool` и `bool_spelled` на выходе неразличимы (exec.go,
-    //   одна ветка), а СЛОВОМ он пишет любой необъявленный булев — цифру
-    //   даёт только явный `emit_as: bool01`;
-    // - у нас умолчание обратное (цифра), и словом пишет только явный
-    //   `emit_as: raw`.
+    // §532 дефект 4 — УМОЛЧАНИЕ СВЕДЕНО С ЭТАЛОНОМ: необъявленный булев
+    // пишется СЛОВОМ, цифру даёт только явный `emit_as: bool01`. Прежде у нас
+    // умолчание было обратным (цифра), и словом писал только явный
+    // `emit_as: raw` — расхождение вида ссылки на ровном месте: Go-движок на
+    // том же теле собирает `reduce_rtt=true` (прогон
+    // TestEngineEmitVsSnapshot на origin/develop лаунчера). Смена умолчания
+    // поменяла вид трёх ссылок tuic; они названы в `allowed` стража вида
+    // (`engine_emit_shape_test`).
     //
-    // Привязка к типу сменила бы вид ссылок tuic: `reduce_rtt` объявлен
-    // `bool_spelled`, а наши ссылки несут `reduce_rtt=1` с самого начала.
-    // Поэтому у xhttp-записей `emit_as: raw` остаётся НАШИМ оверлеем.
+    // `emit_as: raw` у трёх записей xhttp при этом ОСТАЁТСЯ оверлеем до
+    // задачи 533: `raw` пишет значение как есть, и с новым умолчанием он
+    // совпадает — конфликта нет, а снятие оверлея идёт вместе с синком.
     Map<String, dynamic> sectionOf(String type, {String? emitAs}) => {
           'emit': {'form': 'url', 'param_order': 'alphabetical'},
           'params': {
@@ -501,15 +504,22 @@ void main() {
       'transport': {'flag': true},
     };
 
-    test('bool_spelled БЕЗ объявления — цифра: тип написания не решает', () {
-      expect(_emit(sectionOf('bool_spelled'), body), 'x://h:1?flag=1');
+    test('bool_spelled БЕЗ объявления — СЛОВО: тип написания не решает', () {
+      expect(_emit(sectionOf('bool_spelled'), body), 'x://h:1?flag=true');
     });
 
-    test('bool без объявления — та же цифра', () {
-      expect(_emit(sectionOf('bool'), body), 'x://h:1?flag=1');
+    test('bool без объявления — то же слово', () {
+      expect(_emit(sectionOf('bool'), body), 'x://h:1?flag=true');
     });
 
-    test('emit_as: raw — слово, и это ЕДИНСТВЕННЫЙ способ его получить', () {
+    test('emit_as: bool01 — ЕДИНСТВЕННЫЙ способ получить цифру', () {
+      expect(_emit(sectionOf('bool_spelled', emitAs: 'bool01'), body),
+          'x://h:1?flag=1');
+      expect(_emit(sectionOf('bool', emitAs: 'bool01'), body),
+          'x://h:1?flag=1');
+    });
+
+    test('emit_as: raw — то же слово, что и умолчание', () {
       expect(_emit(sectionOf('bool_spelled', emitAs: 'raw'), body),
           'x://h:1?flag=true');
       expect(_emit(sectionOf('bool', emitAs: 'raw'), body),
@@ -524,6 +534,7 @@ void main() {
       };
       expect(_emit(sectionOf('bool_spelled'), off), 'x://h:1');
       expect(_emit(sectionOf('bool_spelled', emitAs: 'raw'), off), 'x://h:1');
+      expect(_emit(sectionOf('bool_spelled', emitAs: 'bool01'), off), 'x://h:1');
     });
   });
 }

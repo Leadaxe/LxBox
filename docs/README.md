@@ -15,8 +15,8 @@ depends on who is in control and from where:
 
 > **The Clash API is gone (§122).** The UI and diagnostics go through the libbox
 > CommandClient (push streams out of the core); the core is built without
-> `with_clash_api`, and `experimental.clash_api` in a config kills the start. See
-> the historical note in [api/clash-api-reference.md](api/clash-api-reference.md).
+> `with_clash_api`, and `experimental.clash_api` in a config kills the start
+> (see [task 122F](spec/tasks/122F-commandclient-migration/spec.md)).
 
 The difference in one line: **Public Intent** is “the phone automates itself” from
 events; **Debug API** is “I drive the phone from outside with a script or by
@@ -31,6 +31,7 @@ hand”. Both describe the same operations from opposite sides.
 | [TEMPLATE.md](TEMPLATE.md) | The `wizard_template.json` schema (presets/vars/sections) plus the var substitution syntax |
 | [PROTOCOLS.md](PROTOCOLS.md) | VPN protocol details (vless/vmess/trojan/…): URI formats, parameters, sing-box mapping |
 | [KERNEL.md](KERNEL.md) | The sing-box-lx fork: build tags, the gotchas of a version bump, rc history |
+| [../SECURITY.md](../SECURITY.md) | Security policy — how to report a vulnerability privately, scope, supported versions |
 | [SECURITY.md](SECURITY.md) · [RU](SECURITY.ru.md) | Threat model — protection against traffic leaks, the local attack surface, on-device secrets |
 | [PRIVACY_POLICY.md](PRIVACY_POLICY.md) · [RU](PRIVACY_POLICY.ru.md) | What the app stores, which requests it makes on its own, and which permissions it needs |
 
@@ -39,6 +40,8 @@ hand”. Both describe the same operations from opposite sides.
 | Document | Description |
 |---|---|
 | [DEVELOPMENT_GUIDE.md](DEVELOPMENT_GUIDE.md) | Philosophy, principles, critical gotchas, how specs are organised |
+| [SUBAGENT_BRIEF.md](SUBAGENT_BRIEF.md) | Brief for a sub-agent executing a task brief: files not to touch, checks, l10n and naming traps |
+| [CONTRACT.md](CONTRACT.md) | The launcher contract: what it is, where the copy and mirrors live, sync tests, corpus, overrides, syncing |
 | [BUILD.md](BUILD.md) | flutter build commands, CI, signing, the local-build marker |
 | [RELEASE_PROCESS.md](RELEASE_PROCESS.md) | Versions, tags, GitHub Releases, post-flight |
 | [FDROID.md](FDROID.md) | Publishing in the F-Droid catalogue: metadata, reproducible builds, the versionCode scheme |
@@ -65,13 +68,12 @@ hand”. Both describe the same operations from opposite sides.
 | Document | Description |
 |---|---|
 | [api/debug-api-reference.md](api/debug-api-reference.md) | Debug API — the full endpoint list (mirrors the live `GET /help`) |
-| [api/clash-api-reference.md](api/clash-api-reference.md) | Clash API — **removed in §122**, kept as a historical note on the sing-box clash-api |
 
 ## Specifications
 
 | Kind | Where |
 |---|---|
-| **Features** (large concepts, sections of the app) | [spec/features/](spec/features/) — folders named `NNN name/spec.md` |
+| **Features** (black-box: purpose, promises, boundaries; no code) | [spec/features/](spec/features/) — folders named `NNN-NAME/FEATURE.md` (+ `FUNCTIONS/`). Legacy feature specs: [spec/tasks/F-INDEX.md](spec/tasks/F-INDEX.md) |
 | **Tasks** (small changes, bug fixes, cleanups) | [spec/tasks/](spec/tasks/) — `NNN-name.md` |
 | **Processes** (night work and the like) | [spec/processes/](spec/processes/) |
 | **Conventions** for writing specs | [spec/README.md](spec/README.md) |
@@ -81,7 +83,5 @@ hand”. Both describe the same operations from opposite sides.
 | Directory | Contents |
 |---|---|
 | [releases/](releases/) | Per-version release notes (EN + RU) |
-| [features/](features/) | Deep-dive notes on individual features (per-app-trace, wifi-aware-routing) |
 | [research/](research/) | Research (code audit, audience, 4pda feedback) |
-| [examples/](examples/) | Example configs (`minimal_local_test.json`) |
 | [DEVELOPMENT_REPORT.md](DEVELOPMENT_REPORT.md) | A historical chronicle of development (up to v1.9.0) — no longer maintained |

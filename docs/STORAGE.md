@@ -40,15 +40,14 @@ lxbox_settings.json                          # SettingsStorage (Dart), the main 
 │       ├─ id, tag, enabled
 │       ├─ origin                object        {kind: uri|wg_ini|json, raw} — the original text, re-parsed on load
 │       ├─ detour                NodeLink?     personal detour of the server
-│       ├─ sections              object?       §435 — node sections
 │       ├─ detour_policy         object?       LxBox: flags, only when not default
 │       ├─ tag_policy            object?       LxBox: {prefix}, only when set
 │       │                        — folder (FolderServers, §234) —
 │       ├─ id, name, enabled, tag_policy?, detour?
 │       ├─ detour_policy?, ping_url?, ping_timeout_ms?, created_at    LxBox
 │       ├─ nodes[]               list          members in UI order:
-│       │   ├─ kind: server      {tag, enabled, origin, detour?, sections?}
-│       │   ├─ kind: unsupported {enabled, origin, reason, detour?, sections?} — text that does not parse
+│       │   ├─ kind: server      {tag, enabled, origin, detour?}
+│       │   ├─ kind: unsupported {enabled, origin, reason, detour?} — text that does not parse
 │       │   └─ kind: auto        {tag, enabled, group{group_type, members[]?, strategy, members_rule?, pool_badge?}}
 │       │                        — chain (SourceChain, §393 C) —
 │       ├─ tag, enabled
@@ -80,7 +79,7 @@ lxbox_settings.json                          # SettingsStorage (Dart), the main 
 │       └─ <groupTag>            object          {url?, timeout_ms?}
 │
 ├─ route_final                   string        override sing-box route.final
-├─ route_idle_suspend            string        §215/§128 — idle-suspend threshold (route.lx_idle_suspend);
+├─ route_idle_suspend            string        §215/§128 — idle-suspend threshold (lx.wg.idle_suspend);
 │                                                a duration ("30s"/"5m"), default "30s" (ENABLED), "" = off; config-significant
 ├─ enabled_groups[]              list          §125 DEPRECATED — read only by the directions[] migration. Safe debris.
 ├─ directions[]                  list          §125 — routing directions (template→storage). See below.
@@ -106,6 +105,7 @@ lxbox_settings.json                          # SettingsStorage (Dart), the main 
 ├─ directions_migrated           bool          §125/§393 — the guard for the one-shot directions migration
 ├─ last_global_update            ISO-8601      the timestamp of the last auto-refresh
 ├─ presets_migrated              bool          §159 — the "default presets have been seeded" guard (fresh-install seed)
+├─ late_presets_seeded           List<String>  §578 — late default presets already seeded once (e.g. tailscale)
 ├─ interrupt_connections_on_switch  bool       §143 — tear down the switched group's connections when the node changes (default false, NOT config-significant)
 ├─ node_sort_mode                string        §100 — the chosen node sort mode ('' means the template default)
 ├─ node_manual_order[]           list          §100 — the manual order of node tags (for mode=manual)
@@ -207,6 +207,7 @@ Android SharedPreferences:
   "directions_migrated": true,     // §125/§393 — the guard for the one-shot directions migration
   "last_global_update": "ISO-8601",// the last auto-refresh of subscriptions
   "presets_migrated":   true,      // §159 — the "defaults seeded" guard (fresh-install seed)
+  "late_presets_seeded": [ "tailscale" ], // §578 — late default presets seeded once
   "interrupt_connections_on_switch": false, // §143 — tear down the group's conns on a node switch (NOT config-significant)
   "node_sort_mode":     "",        // §100
   "node_manual_order":  [ … ],     // §100
@@ -451,6 +452,27 @@ folders and chains interleaved (see [`sources[]` — `kind: chain`](#chains--kin
 Before §439 the same data lived under `server_lists` (sealed on `type`) and `chains`;
 the migration converts them once (see [Storage form and migration](#storage-form-and-migration-439)).
 
+**§524 — ONE reader, ONE writer.** The file form has NOT changed; what changed is
+above it. `settings_storage/sources_rules.dart` holds `_sourceEntriesOf(doc)` — the
+single read of the array — and `_writeEntries(entries)` — the single writer.
+`getServerLists()` and `getChains()` are *slices* of that read
+(`whereType<ContainerEntry>` / `whereType<ChainEntry>`), not independent passes.
+In memory the list is one ordered `List<SourceEntry>` (`models/source_entry.dart`,
+members `ContainerEntry` / `ChainEntry` / `OpaqueEntry`).
+
+Before §524 there were TWO writers over this one array — one for the records
+without chains, one for the chain records — and each had to splice its own genus
+into a context it could not see. Recovering that lost information cost a
+key-matched slot algorithm (`_spliceSourceKind`), which produced §511 M1
+(deleting shifted same-genus neighbours) and §511 M2 (one unreadable record
+vetoed every drag). Both are impossible by construction now: the writer is handed
+the whole list. `saveServerLists` / `setChains` survive as facades (they receive
+half a list) and are the only callers that still match slots by key.
+
+A record the codec cannot read (§141 P1.8c — a foreign or future `kind`, broken
+JSON) is an `OpaqueEntry`: a full member of the list that keeps its slot and is
+written back byte for byte, including keys no model holds.
+
 The discriminator is `kind`. The record is read by `sourceFromRecord` /
 `chainFromRecord` (`lib/models/codec/`). Reading is tolerant: a link given as a
 string is a root link, a record with `body` and no `origin` (the launcher's form) is
@@ -604,7 +626,7 @@ The `nodes` of a subscription are **not stored**: they are re-parsed from `sub_c
                                               // the text: a JSON object → json, a WG INI → wg_ini,
                                               // anything else → uri. The node is re-parsed from raw on load.
   "detour":        { "tag": "vpn-2" },        // personal detour, a NodeLink; absent = none
-  "sections":      { … },                     // §435 — optional, see “Node sections” below
+  "skip_presets":  true,                      // §578 — optional, only `true` is written; see below
   "detour_policy": { … },                     // LxBox, only when a flag is not default
   "tag_policy":    { "prefix": "Home " }      // LxBox, only when set. The prefix is part of the
                                               // server's root address: changing it rewrites the
@@ -623,7 +645,8 @@ applied on read (the node is parsed with it as its name). Records made before
 such; there is no migration, since the original file was never stored for them.
 
 **`origin.kind: json` is a build mode (§455).** A server (or folder member)
-whose source is a JSON object goes into the config **verbatim**: the source
+whose source is a bare sing-box body (source kind `singbox_outbound`, §576)
+goes into the config **verbatim**: the source
 object itself, not the model's re-emission — the same rule the launcher applies
 to a manual object. The model still parses it for the form, the list, the
 identity and the warnings, but its gates do not run; the gate is the core
@@ -634,48 +657,41 @@ imported backup is ignored and the node is re-parsed from `origin.raw`
 source with a JSON object (the editor's "Edit JSON" button) is what switches
 the mode, and pasting a link back switches it off.
 
-#### Node sections (§435, contract ## 13)
+**The source of an own server and a folder member is the node only (§576).**
+The allowed source kinds of such a record are `singbox_outbound` (a bare body),
+`uri_lines` (a link), `wireguard_conf` (INI) and `amnezia_link`. A sing-box
+document or array is an input form, not a storage form: the node editor keeps
+the first node that is neither a service outbound (`direct`, `block`, `dns`)
+nor a group (`selector`, `urltest`), or the first element of an array; the
+import of an own node keeps that node's body. A record written earlier with
+`singbox_config`, `singbox_config_array` or `singbox_outbound_array` gets the
+body of its node on read (`bareNodeSourceOf`, `codec/source_record.dart`) and
+is written in the new form on the next save; the storage form version does not
+change. The node's body, tag and identity stay as they were. Only a bare body
+goes to the core verbatim (the §455 build mode above).
 
-A free node (a `kind: server` record or a folder member) may carry the config fragment it
-needs — route rules and DNS records — in `sections`. The record form is the contract's
-form (ONE_NAMESPACE.md §2): **record = app metadata + `body` = the sing-box object
-as is**, the same records as the root `rules[]` and `dns{}`. The `@self` / `@{self}`
-placeholders stay in storage verbatim; the final node tag is substituted at build time
-and when displayed.
+**`skip_presets` (§578).** A record field of a server and of a folder member:
+the node is not served by presets with `for_each` whose `filter` reads the
+field (the shipped `tailscale` preset does). Only `true` is written; a missing
+field means the node is served. The field travels in a backup: on import a node
+matched by its body takes `true` from the file, and a missing field does not
+reset the local value (only `true` is stored, so absence cannot be told from
+`false`). A subscription node has no record and is always served. The UI is the
+**Skip presets** switch on the node screen, shown when the template has a
+`for_each` preset for the node's type; the Debug API returns the field in the
+node record.
 
-```jsonc
-"sections": {
-  "rules": [                                   // only kind inline | srs
-    { "kind": "inline", "id": "<uuid>", "name": "@{self} network", "enabled": true, "num": 945,
-      "body": { "domain_suffix": [".ts.net"],
-                "ip_cidr": ["100.64.0.0/10", "fd7a:115c:a1e0::/48"], "outbound": "@self" },
-      "resolve": { "only": false, "serverTag": "@{self}-dns" } }
-  ],
-  "dns": {
-    "servers": [                               // only kind user (tag in metadata, body without tag)
-      { "kind": "user", "tag": "@{self}-dns", "enabled": true,
-        "body": { "type": "tailscale", "endpoint": "@self" } }
-    ],
-    "rules": [                                 // only kind user
-      { "kind": "user", "name": "", "enabled": true,
-        "body": { "domain_suffix": [".ts.net"], "server": "@{self}-dns" } }
-    ]
-  }
-}
-```
+#### Node sections — removed (§575)
 
-`resolve` (§437) is app metadata, not part of `body`: at build time it emits a
-non-terminal `action: resolve` rule with the node's own DNS server right before the route
-rule, so a name resolved to a FakeIP address still reaches the node and a UDP flow gets an
-address before routing.
-
-Empty sections are not written. A foreign `kind` inside a section is dropped on read
-(the rest of the records survive). `lib/models/node_sections.dart` holds the model. The
-LX Backup (contract 1.0, `lx_backup: 2`, [§438]) carries them as `sources[].sections` of
-the node, in this same form. On import, records the section may not hold are dropped
-with `backup_section_record_dropped`, and a node matched by body takes the file's
-`sections` wholesale when the field is present. A legacy 0.12 file's `servers[].sections`
-is ignored silently.
+A free node no longer carries a config fragment of its own: the `sections` key
+(route rules and DNS records a node used to hold, contract ## 13, [§435])
+is gone from the model. A stored record with a non-empty `sections` key is
+still read without error — the key is dropped and one line goes to the app
+log (`node sections dropped: <tag>`) — and the key is not written back on the
+next save. The Tailscale bundle (route rule, DNS server, DNS rule) that used
+to travel with the node now comes from the `tailscale` template preset
+(§578), not from storage. LX Backup import drops a non-empty `sections` field
+the same way, with `backup_section_record_dropped` (§575, contract 1.1.85).
 
 ### `kind: "folder"` — `FolderServers` (§234)
 
@@ -697,7 +713,8 @@ detour. A subscription cannot be put into a folder, and there is no nesting.
   "nodes": [                                    // the order here is the order in the UI
     { "kind": "server", "tag": "Alpha", "enabled": true,
       "origin": { "kind": "uri", "raw": "vless://…#Alpha" },
-      "detour": { "folder_id": "<this folder id>", "tag": "Jump" } },  // §237 — personal detour
+      "detour": { "folder_id": "<this folder id>", "tag": "Jump" },    // §237 — personal detour
+      "skip_presets": true },                                          // §578 — as on a server
     { "kind": "server", "tag": "Beta", "enabled": false,
       "origin": { "kind": "wg_ini", "raw": "[Interface]\n…" },
       "warnings": [ { "code": "core_rejected",
@@ -709,8 +726,7 @@ detour. A subscription cannot be put into a folder, and there is no nesting.
       "origin": { "kind": "uri", "raw": "foo://…" },
       "reason": "the member text does not parse into a node" },         // visible in the UI, editable
     { "kind": "server", "tag": "ts", "enabled": true,
-      "origin": { "kind": "json", "raw": "{\"type\":\"tailscale\",…}" },
-      "sections": { … } },                                               // §435 — node sections
+      "origin": { "kind": "json", "raw": "{\"type\":\"tailscale\",…}" } },
     { "kind": "auto", "tag": "Auto", "enabled": true,                    // §322 — autoselect node
       "group": {
         "group_type": "urltest",
@@ -768,7 +784,7 @@ A folder member of `kind: chain` is not supported and is dropped with a note.
 Written only when a flag differs from the default. The detour target itself is the
 record's `detour` (a NodeLink), the model field `DetourPolicy.overrideDetour`.
 
-### `warnings` (shared) — the core's verdict (feature 478, CANON §9.4)
+### `warnings` (shared) — the core's verdict (feature 478, PARSING_PRINCIPLES §9.4)
 
 A node's warnings are **not stored**: they are recomputed on every parse
 (`NodeSpec.warnings`), and a subscription's nodes are not stored at all — only
@@ -1066,7 +1082,7 @@ the model's own words (`inline`, `rule`, `presetId`, `varValues`) and a dead `ru
 ```
 
 - `template` — a reference to a server from the template ([§117]: a `{vars, server}` wrapper, with the tag in `server.tag`). The user can override `enabled` and `description` and choose var values (`vars`: the `outbound` direction, the IP profile, the domain resolver — see TEMPLATE.md); the body is resolved from the template by substituting the `@var`s (`resolveTemplateDnsServerBody`).
-- `preset` — a server declared by a template preset. The identity is `ref` = `<preset_id>:<tag inside the preset>`, split on the first `:`; that string is also the server's config tag (the builder namespaces preset tags, `namespacePresetTags`) and the model's `tag`, so `ref` and tag are one string. Auto-discovery fills the preset id when the server is added; a `ref` without `:` (the preset was not found) is the tag, and orphan cleanup follows. A repeated namespace written by early 2.23.3 builds (`ru-direct:ru-direct:dns_ru`) is read as `ru-direct:dns_ru` and never written.
+- `preset` — a server declared by a template preset. The identity is `ref` = `<preset_id>:<tag inside the preset>`, split on the first `:`; a server of a `for_each` preset (§578) is the exception: its tag is not namespaced (`<node tag>-dns`), so `ref` is the bare tag and no preset id is stored — the DNS screen takes the owner from the expanded preset body; that string is also the server's config tag (the builder namespaces preset tags, `namespacePresetTags`) and the model's `tag`, so `ref` and tag are one string. Auto-discovery fills the preset id when the server is added; a `ref` without `:` (the preset was not found) is the tag, and orphan cleanup follows. A repeated namespace written by early 2.23.3 builds (`ru-direct:ru-direct:dns_ru`) is read as `ru-direct:dns_ru` and never written.
 - `user` — a user-defined server (the model's `inline`). `body` is required.
 
 The tag lives **only** at the record level; the builder synthesizes `body.tag` back when assembling the config. **Render order in the UI:** `template` → `preset` → `user`.
@@ -1276,7 +1292,7 @@ The cached registered Cloudflare WARP account (the “Get WARP” button). The p
 
 **`reserved`.** The `client_id` (base64, 3 bytes) is carried to the sing-box endpoint as a per-peer `reserved: [b0,b1,b2]`. Without it WARP drops the traffic.
 
-CRUD: `getWarpAccount()` / `setWarpAccount(account?)` (null clears it). See [features/025](spec/features/025%20warp%20integration/spec.md).
+CRUD: `getWarpAccount()` / `setWarpAccount(account?)` (null clears it). See [features/025](spec/tasks/025F-warp-integration/spec.md).
 
 ---
 
@@ -1514,7 +1530,7 @@ After the migration the set of directions lives in `directions[]` and is edited 
   node of a container and is never a direction (D-112), so healing leaves it alone. A backup restore does not
   re-run healing (the degradations are accepted — the builder collapses danglers at build
   time). Legacy `✨auto` references fall under the same rule. Details:
-  [`spec/features/248 detour-channels/`](spec/features/248%20detour-channels/).
+  [`spec/tasks/248F-detour-channels/`](spec/tasks/248F-detour-channels/).
 - CRUD: `getDirections` / `setDirections` / `addDirection` / `updateDirection` /
   `deleteDirection` (throws for vpn-1) / `migrateDirectionsIfNeeded`.
 - ⚠ **Mutate through `services/direction_mutations.dart`**, never directly (§275):
@@ -1525,8 +1541,8 @@ After the migration the set of directions lives in `directions[]` and is edited 
   service is an analyze error. `setDirections` is a raw bulk overwrite with no healing
   (for persisting the whole list).
 
-Specs: [`docs/spec/features/125 configurable-channels/`](spec/features/125%20configurable-channels/),
-[`docs/spec/features/248 detour-channels/`](spec/features/248%20detour-channels/)
+Specs: [`docs/spec/tasks/125F-configurable-channels/`](spec/tasks/125F-configurable-channels/),
+[`docs/spec/tasks/248F-detour-channels/`](spec/tasks/248F-detour-channels/)
 (the detour layer).
 
 ---
@@ -1554,7 +1570,15 @@ Chain records sit in `sources[]` among subscriptions, servers and folders, in
 the user's list order (BACKUP §4: the record order is normative). There is no
 separate key and no position field: before §439 the list was `chains[]` with an `order`
 index into the common source list, and the migration placed the records by that order
-(at the tail). §509 stopped collapsing a later save back to that tail.
+(at the tail). §509 stopped collapsing a later save back to that tail. §524 removed
+the last reason it could come back: a chain is an ordinary member of the one
+in-memory list (`ChainEntry`), so a save writes the array whole, in list order.
+
+**A chain is a source, the same genus of thing as a standalone or auto server**
+(owner, 24.09.2026). In a backup export it therefore rides the **Server lists**
+category, not Routing (`services/backup_service.dart`). Reading an
+older archive that was exported under Routing is unchanged: the chains live in
+the same `sources[]` key either way.
 
 - `tag` — the future outbound's tag, and the record's id. **Immutable** after
   creation, like `Direction.tag`: direction filters, `route_final` and the
@@ -1622,15 +1646,18 @@ with a warning. A legacy 0.12 file carries a root `chains[]` section (contract 0
 | Key | Type | Purpose |
 |---|---|---|
 | `route_final` | `String` | An override of `route.final` on top of the template (the chosen default outbound). `''` means the template default. A dangling reference (a deleted direction, or the legacy ✨auto) becomes `vpn-1` at build time (§125). |
-| `route_idle_suspend` | `String` | §215/§128 — the idle-suspend threshold (`route.lx_idle_suspend`, kernel SPEC 020). A duration string (`'30s'` / `'5m'`), **default `'30s'`** (enabled since v2.8.2); `''` means off (the field is not emitted into route). **Config-significant** (`markConfigDirty`). CRUD: `getIdleSuspend` / `saveIdleSuspend`. |
+| `route_idle_suspend` | `String` | §215/§128 — the idle-suspend threshold (`lx.wg.idle_suspend`, kernel SPEC 020; the key lived at `route.lx_idle_suspend` until the `v1.14.2-lx.1` pin — §535). A duration string (`'30s'` / `'5m'`), **default `'30s'`** (enabled since v2.8.2); `''` means off (the `lx` block is not emitted at all). **Config-significant** (`markConfigDirty`). CRUD: `getIdleSuspend` / `saveIdleSuspend`. |
 | `enabled_groups` | `List<String>` | §125, **DEPRECATED** — replaced by `directions[]`. Read only by the one-shot migration; on disk it is harmless debris. |
 | `last_global_update` | `String` (ISO-8601) | The timestamp of the last successful auto-refresh of all subscriptions. |
 | `presets_migrated` | `bool` | §159 — the “default presets have been seeded” guard (the fresh-install seed). The key's name is historical (it used to drive a legacy migration) and was reused so that users who had already migrated would not be seeded twice. `RoutingScreen._seedDefaultPresets` sets it to true. |
+| `late_presets_seeded` | `List<String>` | §578 — the ids from `kLateDefaultPresetIds` (today `tailscale`) for which the one-time step `SettingsStorage.seedLateDefaultPresets` has run. The step adds a preset the template declares `default: true` to an install that already had its defaults seeded (`presets_migrated`), enabled and with the template's `num`, then records the id here: a preset the user deleted does not come back. A fresh install marks every late id as done in its first seed. The step runs before the build reads the rules and on the Routing screen. |
 | `interrupt_connections_on_switch` | `bool` | §143 — tear down the switched group's active connections when the node changes (default `false`, NOT config-significant). See `getInterruptOnSwitch` / `setInterruptOnSwitch`. |
 | `node_sort_mode` | `String` | §100 — the chosen node sort mode. `''` means the template default. CRUD: `getNodeSort` / `setNodeSort` (written as a pair with `node_manual_order`). |
 | `node_manual_order` | `List<String>` | §100 — the manual order of node tags (relevant in manual mode). Written together with `node_sort_mode`. |
 | `profiler_retention_sec` | `int` | §044 — the retention window of the profiler's live journal (the rolling buffer), in seconds. Default `600` (10 minutes), the UI offers 60/600/3600, and valid values are `> 0`. **NOT** config-significant. CRUD: `getProfilerRetentionSec` / `setProfilerRetentionSec`. |
-| `route_idle_suspend_reachable` | `String` | §272 — the reachable idle window (`route.lx_idle_suspend_reachable`). A duration string, default `'5m'`. **Config-significant** (`markConfigDirty`). CRUD: `getIdleSuspendReachable` / `saveIdleSuspendReachable`. |
+| `route_idle_suspend_reachable` | `String` | §272 — the reachable idle window (`lx.wg.idle_suspend_reachable`, §535). A duration string, default `'5m'`. **Config-significant** (`markConfigDirty`). CRUD: `getIdleSuspendReachable` / `saveIdleSuspendReachable`. |
+| `wg_build_max` | `int` | §542 — the WG/AWG build budget (`lx.wg.build_max`, core SPEC 097): how many endpoints stay built at once. Default `5`, `0` = no cap; the UI offers 0/3/5/8/12. Written to the config only together with `idle_suspend`. **Config-significant**. CRUD: `getWgBuildMax` / `saveWgBuildMax`. |
+| `wg_lazy_build` | `bool` | §542 — lazy WG/AWG build (`lx.wg.lazy_build`, core SPEC 097). Default `true`. `false` → neither `lazy_build` nor `build_max` is written. Written only together with `idle_suspend`. **Config-significant**. CRUD: `getWgLazyBuild` / `saveWgLazyBuild`. |
 | `urltest_passive_check` | `bool` | §272 — passive health checking (`urltest.passive_check`): skip probes while live traffic already proves the node is alive. Default `true`. **Config-significant**. CRUD: `getPassiveCheck` / `setPassiveCheck`. |
 
 > The structural keys have their own sections above: [`tun_apps`](#tun_apps--046), [`vpn_mode`](#vpn_mode--119), [`warp_account`](#warp_account--025), [`masque_account`](#masque_account--130). Together with this table that is the exhaustive list of current top-level keys in `lxbox_settings.json`. The registry that must match it is `SettingsStorage.allowedTopLevelKeys` (§159 — the allowlist filter for backup import): **a new key belongs in both**, or it survives an export and is silently dropped on restore.
@@ -1739,31 +1766,31 @@ The scrubber only handles the `vars` and `sources` keys; everything else (`meta.
 
 ---
 
-[§011]: ./spec/features/011%20local%20ruleset%20cache/spec.md
-[§027]: ./spec/features/027%20subscription%20auto%20update/spec.md
+[§011]: ./spec/tasks/011F-local-ruleset-cache/spec.md
+[§027]: ./spec/tasks/027F-subscription-auto-update/spec.md
 [§414]: ./spec/tasks/414-config-dirty-check-files-dir.md
-[§029]: ./spec/features/029%20haptic%20feedback/spec.md
-[§030]: ./spec/features/030%20custom%20routing%20rules/spec.md
-[§031]: ./spec/features/031%20debug%20api/spec.md
-[§033]: ./spec/features/033%20preset%20bundles/spec.md
-[§036]: ./spec/features/036%20update%20check/spec.md
+[§029]: ./spec/tasks/029F-haptic-feedback/spec.md
+[§030]: ./spec/tasks/030F-custom-routing-rules/spec.md
+[§031]: ./spec/tasks/031F-debug-api/spec.md
+[§033]: ./spec/tasks/033F-preset-bundles/spec.md
+[§036]: ./spec/tasks/036F-update-check/spec.md
 [§037]: ./spec/tasks/037-debug-api-write-config-and-lock-rebuild.md
-[§038]: ./spec/features/038%20crash%20diagnostics/spec.md
+[§038]: ./spec/tasks/038F-crash-diagnostics/spec.md
 [§040]: ./spec/tasks/040-per-group-ping-test-settings.md
 [§408]: ./spec/tasks/408-ping-options-groups-heal.md
 [§061]: ./spec/tasks/061-dns-rules-refactor/spec.md
 [§044]: ./spec/tasks/044-dns-servers-clean-schema.md
-[§046]: ./spec/features/046%20tunnel%20apps%20split-tunneling/spec.md
-[§117]: ./spec/features/117%20dns-rework/spec.md
+[§046]: ./spec/tasks/046F-tunnel-apps-split-tunneling/spec.md
+[§117]: ./spec/tasks/117F-dns-rework/spec.md
 [§189]: ./spec/tasks/189-native-prefs-mirror-in-json.md
 [§192]: ./spec/tasks/192-proxy-mode-prepare-revokes-foreign-vpn.md
-[§279]: ./spec/features/279%20localization/spec.md
+[§279]: ./spec/tasks/279F-localization/spec.md
 [§220]: ./spec/tasks/220-allow-rotation-setting.md
-[043-applog]: ./spec/features/043%20applog%20per-source%20quotas/spec.md
+[043-applog]: ./spec/tasks/043F-applog-per-source-quotas/spec.md
 [043-dns]: ./spec/tasks/043-dns-servers-refs-by-kind.md
 [§438]: ./spec/tasks/438-lx-backup-1-0-read-write.md
-[§439]: ./spec/features/439%20storage-contract-1-0/spec.md
+[§439]: ./spec/tasks/439F-storage-contract-1-0/spec.md
 [§370]: ./spec/tasks/370-rule-order-num-axis.md
 [§434]: ./spec/tasks/434-srs-rule-multiple-rule-sets.md
-[§435]: ./spec/features/435%20node-sections-tailscale/spec.md
+[§435]: ./spec/tasks/435-node-sections-tailscale.md
 [§445]: ./spec/tasks/445-tailscale-state-dir-lifecycle.md

@@ -4,7 +4,7 @@
 |---|---|
 | Статус | ✅ Реализовано (DEVICE-PENDING) |
 | Дата | 2026-08-02 |
-| Связанные | [`027 subscriptions`](../features/027%20subscriptions/spec.md), [`323 on-update action`](323-subscription-on-update-action.md), [`331 blue banner`](331-blue-banner-and-manual-refresh-reaction.md) |
+| Связанные | [`027 subscriptions`](027F-subscription-auto-update/spec.md), [`323 on-update action`](323-subscription-on-update-action.md), [`331 blue banner`](331-blue-banner-and-manual-refresh-reaction.md) |
 
 ## Проблема
 

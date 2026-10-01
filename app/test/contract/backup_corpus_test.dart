@@ -9,9 +9,9 @@ import 'package:lxbox/models/direction.dart';
 import 'package:lxbox/models/dns_ref.dart';
 import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/record_codec.dart';
-import 'package:lxbox/models/node_sections.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/server_list.dart';
+import 'package:lxbox/models/codec/source_replace_record.dart';
 import 'package:lxbox/models/source_chain.dart';
 import 'package:lxbox/services/json_clone.dart';
 import 'package:lxbox/services/lx_backup.dart';
@@ -35,7 +35,8 @@ import '../parser/engine_test_setup.dart';
 /// Кейсы, которые сторона пока не проходит по известной причине: имя кейса →
 /// причина пропуска. Ожидание кейса не подгоняется — запись снимается вместе
 /// с работой, которая его закрывает.
-const Map<String, String> _pendingCases = {};
+const Map<String, String> _pendingCases = {
+};
 
 
 void main() {
@@ -69,7 +70,7 @@ void main() {
   group('contract corpus: LX Backup', () {
     for (final base in cases) {
       final name = base.substring(root.path.length + 1);
-      test(name, skip: _pendingCases[name], () {
+      test(name, skip: _pendingCases[name], () async {
         final raw = File('$base.backup.json').readAsStringSync();
         // Кейс формата новее ЧИТАЕМОГО (`lx_backup` выше
         // kLxBackupVersion) сторона ПРОПУСКАЕТ по маркеру, как чужой
@@ -183,11 +184,18 @@ void main() {
         }
 
         _checkDns(state, expected);
-        _checkSections(state, expected);
 
-        // `replace_tags` не сверяется: свёртки источника в группу у LxBox нет
-        // (BACKUP.md §2, `fold`/`fold_tag` — поля лаунчера; класс различия A
-        // в `replace_tag_index.expected.lxbox.json`).
+        // §576 (контракт 1.1.87) — источник своего сервера и члена папки
+        // после импорта: голое тело узла. Документ и массив в источник не
+        // попадают. Сравнение по значению; `tag` несёт запись, он не
+        // сравнивается.
+        _checkOriginRaw(state, expected);
+
+        // Фича 565 фаза B (§74) — свёртка `replace` в состоянии и в
+        // повторном экспорте. `replace_tags` (дериватив legacy `fold`) не
+        // сверяется: legacy-форма у LxBox не читается (решение владельца
+        // 26.09.2026, контракт 1.1.79).
+        await _checkReplaces(state, expected);
 
         // §401 — упразднённый механизм `extensions` (схема 0.10.x): импортёр
         // обязан отбросить его и назвать ОДНИМ warning'ом на файл, а не
@@ -267,21 +275,10 @@ class _State {
     }
     return file;
   }
-
-  /// Носители секций: корневые узлы (по имени записи) и члены папок (по тегу
-  /// узла) — у члена папки свой путь слияния.
-  Map<String, NodeSections> get sections => {
-        for (final l in lists)
-          if (l is UserServer && l.sections != null) l.name: l.sections!,
-        for (final l in lists)
-          if (l is FolderServers)
-            for (final m in l.members)
-              if (m.sections != null && m.node != null) m.node!.tag: m.sections!,
-      };
 }
 
 /// §438 — причины у кодов, где причина нормирована перечнем
-/// (`backup_section_record_dropped`: `kind` | `rule_set` | `not_allowed`).
+/// (`backup_section_record_dropped`: с контракта 1.1.85 только `not_allowed`).
 /// Множество кодов их не различает, и сторона, отбросившая запись «не по той
 /// причине», показала бы пользователю неверное объяснение потери.
 void _checkWarningReasons(LxBackupFile file, Map<String, dynamic> expected) {
@@ -301,10 +298,8 @@ void _checkWarningReasons(LxBackupFile file, Map<String, dynamic> expected) {
   }
 }
 
-/// ОСЬ ПОРЯДКА целиком: корневые правила и правила, которые узлы носят с
-/// собой (NODE_SECTIONS.md §5). Проверять её половинами нельзя: узловое
-/// правило встаёт МЕЖДУ корневыми по относительному порядку номеров, и
-/// список одних корневых этого не покажет.
+/// ОСЬ ПОРЯДКА корневых правил. §575 — правил узла больше нет (контракт
+/// 1.1.85, секции упразднены).
 void _checkRules(_State state, Map<String, dynamic> expected) {
   final wantRules =
       ((expected['rules'] as List?) ?? const []).cast<Map<String, dynamic>>();
@@ -312,11 +307,6 @@ void _checkRules(_State state, Map<String, dynamic> expected) {
   var seq = 0;
   for (final r in state.rules) {
     indexed.add((r.orderNum ?? 1 << 30, seq++, r));
-  }
-  for (final s in state.sections.values) {
-    for (final r in s.rules) {
-      indexed.add((r.orderNum ?? kNodeRuleDefaultNum, seq++, r));
-    }
   }
   indexed.sort((a, b) {
     final byNum = a.$1.compareTo(b.$1);
@@ -540,8 +530,8 @@ void _checkDetours(_State state, Map<String, dynamic> expected) {
 /// Контракт 1.0.1 — `groups`: тег провайдерской группы (`kind: auto` в папке)
 /// → `members` по порядку и `default`. Карта ИСЧЕРПЫВАЮЩАЯ, как `detours`.
 /// Член без `folder_id` внутри папки — член этой папки (NODE_LINK §5.1 № 8);
-/// группа по правилу явного состава не несёт — `members: []`. `default` у
-/// urltest-группы LxBox нет: ожидание с ключом `default` расходится.
+/// группа по правилу явного состава не несёт — `members: []`. `default` —
+/// тег выбранного члена (§565), сверяется как ссылка на члена папки.
 void _checkGroups(_State state, Map<String, dynamic> expected) {
   final want = (expected['groups'] as Map?)?.cast<String, dynamic>();
   if (want == null) return;
@@ -563,6 +553,17 @@ void _checkGroups(_State state, Map<String, dynamic> expected) {
               RuleMembers() => const <String>[],
             },
   };
+  final gotDefault = <String, String?>{
+    for (final l in state.lists)
+      if (l is FolderServers)
+        for (final m in l.members)
+          if (m.node case final AutoSelectSpec g)
+            g.tag: g.manualDefault.isEmpty
+                ? null
+                : _resolveHop(NodeLink(folderId: l.id, tag: g.manualDefault),
+                        state.lists)
+                    .view,
+  };
   expect(got.keys.toSet(), want.keys.toSet(), reason: 'набор групп');
   for (final entry in want.entries) {
     final w = (entry.value as Map).cast<String, dynamic>();
@@ -574,8 +575,12 @@ void _checkGroups(_State state, Map<String, dynamic> expected) {
       ],
       reason: '${entry.key}: члены группы',
     );
-    expect(w.containsKey('default'), isFalse,
-        reason: '${entry.key}: default у urltest-группы LxBox не хранится');
+    // §565 фаза A — род `selector` исполняется: `default` хранится тегом
+    // члена ([AutoSelectSpec.manualDefault]) и обязан совпасть с ожиданием.
+    expect(gotDefault[entry.key], w.containsKey('default')
+        ? _wantLinkView((w['default'] as Map).cast<String, dynamic>())
+        : null,
+        reason: '${entry.key}: default группы');
   }
 }
 
@@ -715,31 +720,6 @@ void _checkDns(
   }
 }
 
-/// §438 — секции узлов после импорта, по тегу носителя (корневой узел и член
-/// папки). Узел с секциями, которых нет в ожиданиях, — тоже расхождение.
-void _checkSections(_State state, Map<String, dynamic> expected) {
-  final want = (expected['sections'] as Map?)?.cast<String, dynamic>();
-  if (want == null) return;
-  final have = state.sections;
-  expect(have.keys.toSet(), want.keys.toSet(), reason: 'носители секций');
-  for (final entry in want.entries) {
-    final got = have[entry.key]!;
-    final w = (entry.value as Map).cast<String, dynamic>();
-    final wantRules = ((w['rules'] as List?) ?? const []).cast<Map<String, dynamic>>();
-    expect([for (final r in got.rules) '${r.name}:${r.enabled}'],
-        [for (final r in wantRules) '${r['name']}:${r['enabled']}'],
-        reason: '${entry.key}: правила связки');
-    final wantServers = (w['dns_servers'] as List?)?.cast<String>();
-    if (wantServers != null) {
-      expect([for (final s in got.dnsServers) s.tag], wantServers,
-          reason: '${entry.key}: DNS-серверы связки');
-    }
-    if (w['dns_rules'] is num) {
-      expect(got.dnsRules, hasLength((w['dns_rules'] as num).toInt()),
-          reason: '${entry.key}: число DNS-правил связки');
-    }
-  }
-}
 
 /// Канон цепочки (`schema/source_chain.schema.json`) из мобильной модели —
 /// ровно поля маршрута, без идентичности записи (`tag`/`label`/`enabled`),
@@ -751,3 +731,88 @@ Map<String, dynamic> _canonOf(SourceChain c) => c.toCanonJson();
 /// «пусто»). `equals` для вложенных Map/List этого не даёт.
 Matcher _deepEqualsJson(Object? want) =>
     predicate<Object?>((got) => deepEqualsJson(got, want), 'deep-equals $want');
+
+/// Фича 565 фаза B (§74) — `replaces`: ключ — имя папки или адрес подписки,
+/// значение — объект `replace` как в файле, `null` — свёртки нет (§76). Сверяется модель после импорта и
+/// запись повторного экспорта. `auto` — по ключам ожидания: LxBox пишет форму
+/// целиком (умолчания [DirectionAuto] тоже), лишние ключи — не расхождение.
+Future<void> _checkReplaces(_State state, Map<String, dynamic> expected) async {
+  final want = (expected['replaces'] as Map?)?.cast<String, dynamic>();
+  if (want == null) return;
+  String keyOf(ServerList l) => switch (l) {
+        SubscriptionServers s => s.url,
+        _ => l.name,
+      };
+  final got = <String, Map<String, dynamic>>{
+    for (final l in state.lists)
+      if (l.replace case final r?) keyOf(l): sourceReplaceToRecord(r),
+  };
+  final out = await buildLxBackup(
+      lists: state.lists, rules: const [], vars: const {});
+  final exported = <String, Map<String, dynamic>>{
+    for (final raw in (jsonDecode(out.json)['sources'] as List))
+      if (raw is Map && raw['replace'] is Map)
+        (raw['url'] is String ? raw['url'] as String : raw['name'] as String):
+            (raw['replace'] as Map).cast<String, dynamic>(),
+  };
+  void compare(String where, Map<String, Map<String, dynamic>> side) {
+    // `null` у ключа — источник не свёрнут (контракт 1.1.79 §76).
+    expect(side.keys.toSet(), {
+      for (final e in want.entries)
+        if (e.value != null) e.key,
+    }, reason: '$where: набор свёрнутых источников');
+    for (final e in want.entries) {
+      if (e.value == null) continue;
+      final w = (e.value as Map).cast<String, dynamic>();
+      final g = side[e.key]!;
+      expect(g['mode'], w['mode'], reason: '$where ${e.key}: mode');
+      expect(g['tag'], w['tag'], reason: '$where ${e.key}: tag');
+      final wAuto = (w['auto'] as Map?)?.cast<String, dynamic>();
+      final gAuto = (g['auto'] as Map?)?.cast<String, dynamic>();
+      if (wAuto == null) {
+        expect(gAuto, isNull, reason: '$where ${e.key}: auto у manual');
+        continue;
+      }
+      expect(gAuto, isNotNull, reason: '$where ${e.key}: auto');
+      for (final a in wAuto.entries) {
+        expect(gAuto![a.key], a.value, reason: '$where ${e.key}: auto.${a.key}');
+      }
+    }
+  }
+
+  compare('состояние', got);
+  compare('повторный экспорт', exported);
+}
+
+/// §576 — `origin_raw`: «тег» (корневой сервер) или «имя папки/тег» (член)
+/// → JSON источника записи.
+void _checkOriginRaw(_State state, Map<String, dynamic> expected) {
+  final want = (expected['origin_raw'] as Map?)?.cast<String, dynamic>();
+  if (want == null) return;
+  want.forEach((key, wantBody) {
+    final slash = key.indexOf('/');
+    String? raw;
+    if (slash < 0) {
+      for (final l in state.lists) {
+        if (l is UserServer &&
+            (l.name == key || (l.nodes.isNotEmpty && l.nodes.first.tag == key))) {
+          raw = l.rawBody;
+          break;
+        }
+      }
+    } else {
+      final folder = key.substring(0, slash);
+      final tag = key.substring(slash + 1);
+      for (final l in state.lists) {
+        if (l is! FolderServers || l.name != folder) continue;
+        for (final m in l.members) {
+          if (m.node?.tag == tag) raw = m.raw;
+        }
+      }
+    }
+    expect(raw, isNotNull, reason: 'origin_raw: нет записи $key');
+    final got = (jsonDecode(raw!) as Map).cast<String, dynamic>()
+      ..remove('tag');
+    expect(got, wantBody, reason: 'origin_raw $key: источник — тело узла');
+  });
+}

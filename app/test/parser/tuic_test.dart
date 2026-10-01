@@ -7,6 +7,7 @@ import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/parser/engine/section_loader.dart';
 import 'package:lxbox/services/parser/mappers/draft_sections.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
+import 'parse_link_as.dart';
 
 /// §472 шаг 5 — заглушки `u` и `aaaa-bbbb` в ссылках заменены настоящими
 /// UUID. Причина та же, по которой их заменил у себя корпус контракта (SPEC
@@ -37,7 +38,7 @@ void main() {
 
   group('TUIC v5 — new in v2', () {
     test('basic URI → TuicSpec with BBR + native UDP', () {
-      final spec = parseTuic(
+      final spec = parseLinkAs<TuicSpec>(
         'tuic://11111111-2222-3333-4444-555555555555:testpass123@example.com:443?congestion_control=bbr&udp_relay_mode=native&alpn=h3&sni=example.com#TUIC',
       );
       expect(spec, isNotNull);
@@ -50,7 +51,7 @@ void main() {
     });
 
     test('cubic + quic relay + alpn CSV', () {
-      final spec = parseTuic(
+      final spec = parseLinkAs<TuicSpec>(
         'tuic://11111111-2222-3333-4444-555555555555:p@h.example:8443?congestion_control=cubic'
         '&udp_relay_mode=quic&alpn=h3,h3-29&allow_insecure=1',
       );
@@ -61,7 +62,7 @@ void main() {
     });
 
     test('emit produces sing-box outbound with required keys', () {
-      final spec = parseTuic(
+      final spec = parseLinkAs<TuicSpec>(
         'tuic://11111111-2222-3333-4444-555555555555:p@h:443?congestion_control=bbr&alpn=h3&sni=h&reduce_rtt=1',
       );
       final entry = spec!.emit(TemplateVars.empty);
@@ -75,7 +76,7 @@ void main() {
     });
 
     test('round-trip parseUri(toUri()) preserves structure', () {
-      final spec = parseTuic(
+      final spec = parseLinkAs<TuicSpec>(
         'tuic://11111111-2222-3333-4444-555555555555:secret@srv:443?congestion_control=bbr'
         '&udp_relay_mode=native&alpn=h3&sni=srv',
       );
@@ -97,7 +98,7 @@ void main() {
     // tuic/unknown_congestion_dropped (node_parser_tuic_test.go:70), где
     // конфиг вообще не содержит `congestion_control`.
     test('invalid congestion_control → not set (omitted on emit)', () {
-      final spec = parseTuic(
+      final spec = parseLinkAs<TuicSpec>(
         'tuic://11111111-2222-3333-4444-555555555555:p@h:443?congestion_control=bogus',
       );
       expect(spec!.congestionControl, isNull);

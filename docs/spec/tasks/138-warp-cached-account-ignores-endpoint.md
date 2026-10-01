@@ -5,7 +5,7 @@
 | Status | Fixed |
 | Started | 2026-06-16 |
 | Trigger | Жалоба юзера (v2.3.2): «созданный конфиг не сохраняет настройки из Advanced — выбираю любой endpoint, в сохранённой конфигурации остаётся вариант от обычного WARP». §135 чинил `register`, но баг остался — корень глубже. |
-| Related | [§135](135-warp-custom-endpoint-not-overwritten.md) (endpoint не затирается ответом Cloudflare — но только в `register`); [§136](136-warp-quic-i1-generator.md) (рандом endpoint); [§025](../features/025%20warp%20integration/spec.md) |
+| Related | [§135](135-warp-custom-endpoint-not-overwritten.md) (endpoint не затирается ответом Cloudflare — но только в `register`); [§136](136-warp-quic-i1-generator.md) (рандом endpoint); [§025](../tasks/025F-warp-integration/spec.md) |
 | Files touched | `controllers/subscription_controller.dart` (`addWarp` — резолв+применение endpoint), `test/services/warp_obfuscation_test.dart` (+регресс) |
 
 ## Корень

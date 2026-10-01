@@ -3,11 +3,11 @@
 | Поле | Значение |
 |------|----------|
 | Статус | Reference |
-| Дата | 2026-07-04 |
-| Версия API | совместим со [`spec 031`](../spec/features/031%20debug%20api/spec.md) |
-| Парный doc | [`clash-api-reference.md`](clash-api-reference.md) — **deprecated**: `/clash/*` proxy выпилен в §122 (Clash API dropped, переход на CommandClient) |
+| Дата | 2026-09-29 |
+| Версия API | совместим со [`spec 031`](../spec/tasks/031F-debug-api/spec.md) |
+| Clash API | удалён в §122 (переход на CommandClient); роутов `/clash/*` и `/state/clash` нет — `404 not_found` |
 
-Compact curl-ready reference для **Debug API** — HTTP-сервера L×Box на `127.0.0.1:9269`, который пробрасывается через `adb forward`. Полные объяснения полей/middleware/архитектуры — в [spec 031](../spec/features/031%20debug%20api/spec.md); здесь — «что послать чтобы получить нужное».
+Compact curl-ready reference для **Debug API** — HTTP-сервера L×Box на `127.0.0.1:9269`, который пробрасывается через `adb forward`. Полные объяснения полей/middleware/архитектуры — в [spec 031](../spec/tasks/031F-debug-api/spec.md); здесь — «что послать чтобы получить нужное».
 
 ## Setup (one-time)
 
@@ -94,6 +94,7 @@ auth), а не факт, что за границей всё открыто.
 - [Support feed — `/support/*`](#support-feed--support)
 - [Profiler — `/profiler/*`](#profiler--profiler)
 - [Common errors](#common-errors)
+- [Синхронизация с `/help`](#синхронизация-с-help)
 
 ---
 
@@ -104,17 +105,19 @@ auth), а не факт, что за границей всё открыто.
 | `GET /ping` | `{pong,server,uptime_seconds}` — **без auth** |
 | `GET /help` | `?format=text\|json` — самодокументируемая карта всей поверхности API. **Без auth** (второй no-auth endpoint). `json` — для auto-tooling, `text` (default) — human-readable cheatsheet. |
 | `GET /state` | full HomeState: tunnel/busy/config_length/**running_config_length** (§311: null = снапшота ядра нет; вместе с `config_length` показывает расхождение running↔saved)/active_in_group/selected_group/last_delay/ping_busy/traffic/… **§250** — `last_start_error` + `last_start_error_at` (ISO-8601 / null): last VPN start/stop failure reason; cleared only by a successful start; in-memory (empty after process restart). В отличие от `last_error` не затирается UI-consume (`clearError`) — живёт до следующего успешного старта. |
-| `GET /state/subs` | массив подписок, `?reveal=true` показывает clear URLs |
-| `GET /state/rules` | массив custom rules с `srs_cached/srs_mtime` |
+| `GET /state` (поле `tailscale`) | **§581** — узлы Tailscale: `тег → {backend_state, devices}` (состояние узла из `SubscribeTailscaleStatus` и число устройств сети). Имён устройств, адресов, имени сети, владельцев и ссылки входа нет (раздел 9 спеки 581). Пусто — VPN выключен или подписка не поднята (нет узла NETWORKS и не открыта вкладка Network). |
+| `GET /state` (поле `endpoint_states`) | **§535** (ядро SPEC 097) — карта `тег → состояние` WG/AWG-endpoint'ов: `never_built` / `building` / `up` / `asleep` / `torn_down` / `down`. Снимается unary-pull'ом `GetOutbounds` на heartbeat-тике (5 с) — единственный путь, где ядро эти поля заполняет (поток `SubscribeOutbounds` и дерево групп их не несут). Пусто = туннель down, ядро не отдало, либо endpoint'ов в конфиге нет. |
+| `GET /state/subs` | массив подписок (без цепочек — §524, весь список у `GET /subs`), `?reveal=true` показывает clear URLs |
+| `GET /state/rules` | массив custom rules (форма — как у `GET /rules`); у `kind=srs` вложенный `srs:{cached,path,mtime}` |
 | `GET /state/storage` | весь `SettingsStorage._cache` в форме хранения 1.0 (§439: `storage_version`, `sources[]`, `rules[]`, `dns{}`) со scrubber'ом: `vars.debug_token` → `***`, `url` подписки — маской, `origin.raw` сервера → `origin.raw_bytes`, `nodes[]` папки → `nodes_count`. Ключей `server_lists` / `custom_rules` / `dns_options` / `chains` больше нет — [STORAGE.md](../STORAGE.md#storage-form-and-migration-439) |
 | `GET /state/vpn` | `{auto_start,keep_on_exit,allow_bypass,current_session_allow_bypass,background_mode,is_ignoring_battery_optimizations}`. **§069** — `current_session_allow_bypass` это **runtime applied** значение (snapshot из последнего `VpnService.Builder.allowBypass()` в `establish()`); может отличаться от persisted `allow_bypass` если юзер поменял toggle без VPN reload. `false` пока VPN never started или после `stop`. |
 | `GET /state/config_locked` | `{locked: bool}` — §037 текущее состояние auto-rebuild lock'а |
-| `GET /device` | Android version, model, ABI, app version + build, core version (libbox / sing-box-lx), VPN permission, network type, uptime |
+| `GET /device` | `{android_version, sdk_int, manufacturer, model, device, abi, app_version, app_build, core_version, package_name, locale, timezone, is_ignoring_battery_optimizations, network_type, uptime_seconds}` |
 
 ```bash
 curl -s -H "$HDR" "$BASE/state" | jq '{tunnel,active_in_group,nodes_count,groups}'
 curl -s -H "$HDR" "$BASE/state/subs" | jq 'map({id,title,enabled,nodes_count})'
-curl -s -H "$HDR" "$BASE/state/storage?reveal=true" | jq '.vars | keys'
+curl -s -H "$HDR" "$BASE/state/storage" | jq '.vars | keys'   # маскирование всегда, `reveal` не поддерживается
 # Форма хранения и источники (§439/§509): цепочки в sources[] в порядке списка
 curl -s -H "$HDR" "$BASE/state/storage" | \
   jq '{v: .storage_version, sources: [.sources[] | {kind, id, name, tag}], rules: (.rules | length)}'
@@ -230,7 +233,7 @@ curl -X POST -H "$HDR" "$BASE/logs/clear?source=core"
 | `POST /action/set-group` | `group=<tag>` | смена активной группы |
 | `POST /action/start-vpn` | — | `runCoreRejectGuard(guard=false)` → прежний `home.start()` через Activity (может показать consent-диалог), **без** цикла страховки. Публичный Intent API (§047) этот путь не зовёт — native `LxBoxIntentReceiver` идёт в `BoxVpnService.start` напрямую |
 | `POST /action/start-vpn-headless` | `guard=true` | §165 — старт VPN **без** Activity/consent, прямо через `BoxVpnService.start()`. Работает только если VPN-разрешение уже выдано (`VpnService.prepare()==null`). Для self-test/automation. → `{"ok":true,"action":"start-vpn-headless","started":<bool>,"needs_consent":<bool>}`. **Фича 478**, `guard=true` — старт **через страховку** асинхронно: тот же автомат, что на кнопке Start, но реальные старты — headless (`startVpnHeadless`, не Activity) → `{guard:true, started:true, async:true}` сразу; фазу/исход читать через `GET /core_reject` (409 если прогон уже идёт). Диалога предела на экране нет — `POST /core_reject/prompt?answer=keep` можно заранее или пока висит вопрос. Без флага — прежний путь |
-| `POST /action/check-config` | `timeout_ms=<N>` | **Фича 478** — `Libbox.checkConfig`: с телом запроса проверяет **этот** JSON; без тела — **текущий собранный** конфиг на диске (не пересобранный на лету). Та же проверка, которой страховка крутит тихий цикл, но одним выстрелом и без туннеля. → `{config_ok:<bool>, error, ms, bytes}`, где `error` — **сырой** текст ядра (его и разбирает CANON §9). Сервер однопоточный, поэтому ждём с потолком: `timeout_ms` по умолчанию 10000, не больше таймаута запроса; не успели — 409 |
+| `POST /action/check-config` | `timeout_ms=<N>` | **Фича 478** — `Libbox.checkConfig`: с телом запроса проверяет **этот** JSON; без тела — **текущий собранный** конфиг на диске (не пересобранный на лету). Та же проверка, которой страховка крутит тихий цикл, но одним выстрелом и без туннеля. → `{config_ok:<bool>, error, ms, bytes}`, где `error` — **сырой** текст ядра (его и разбирает PARSING_PRINCIPLES §9). Сервер однопоточный, поэтому ждём с потолком: `timeout_ms` по умолчанию 10000, не больше таймаута запроса; не успели — 409 |
 | `POST /action/stop-vpn` | — | `BoxVpnService.stop()` (кооперативный, ждёт Stopped от ядра). Идущий прогон страховки (фича 478) гасится, как `POST /core_reject/cancel`: исход `stopped_by_user`, финального старта нет. Так же действуют кнопка Stop, плитка QS, Intent API и Locale |
 | `POST /action/reconnect` | — | §163 — Stop→Start одной командой под общим busy-wrap. Если туннель down — делегирует в `start()`. → `{"ok":true,"action":"reconnect"}` |
 | `POST /action/reload-vpn` | — | §163 — in-place reload sing-box runtime **без** убийства Android-сервиса (cooldown-gated через `canReload`; туннель дропается ~3с). `applied:false` если reload недоступен (не connected / в cooldown). → `{"ok":true,"action":"reload-vpn","applied":<bool>}` |
@@ -252,7 +255,7 @@ curl -X POST -H "$HDR" "$BASE/logs/clear?source=core"
 # Типичный flow диагностики
 curl -X POST -H "$HDR" "$BASE/action/refresh-subs?force=true"
 curl -X POST -H "$HDR" "$BASE/action/rebuild-config"
-curl -X POST -H "$HDR" "$BASE/action/urltest?group=✨auto"
+curl -X POST -H "$HDR" "$BASE/action/urltest?group=vpn-1-auto"   # urltest-двойник Направления: `<tag>-auto`; тег с не-ASCII — URL-энкодить (см. Tips)
 curl -s -H "$HDR" "$BASE/state" | jq '{active:.active_in_group,err:.last_error}'
 
 # Sanity что трогаешь правильный девайс
@@ -288,7 +291,7 @@ curl -X POST -H "$HDR" -H "Content-Type: application/json" \
     "enabled":true,
     "kind":"inline",
     "domain_suffixes":["app-measurement.com","firebase.io","googleanalytics.com"],
-    "target":"reject"
+    "outbound":"reject"
   }' \
   "$BASE/rules?rebuild=true"
 # → {"id":"abc-123","name":"No telemetry",...,"rebuilt":true,"config_bytes":72559}
@@ -325,7 +328,8 @@ Rules матчатся **first-wins** сверху вниз, так что reord
 {
   "name": "string",                 // required, non-empty
   "enabled": true,
-  "kind": "inline|srs|preset",
+  "kind": "inline|srs|preset|json", // default inline; json — сырое тело route.rule в поле "json" (§225)
+  "num": 42,                        // только в ответе (§370, ось порядка; null — ещё не размечено); двигать — /rules/move
   "preset_id": "<id>",              // required при kind=preset
   "vars_values": {"var":"val"},     // preset-only: overrides шаблонных vars
   "dns": {"enabled": true, "server_tag": "<tag>", "force_ipv4": false}, // inline/srs DNS-опция: dedicated server + Force IPv4 (drop AAAA); поля независимы, server_tag обязателен лишь при enabled=true
@@ -339,23 +343,65 @@ Rules матчатся **first-wins** сверху вниз, так что reord
   "protocols": ["tls","quic"],      // subset of sing-box known (tls/quic/http/...)
   "network": ["tcp","udp"],         // L4 transport, subset of tcp/udp/icmp
   "ip_is_private": false,
-  "srs_url": "https://...rule-set.srs",
-  "target": "vpn-1|direct-out|reject"
+  "source_ip_cidrs": ["192.168.1.0/24"], // inline/srs: source-ось
+  "source_ip_is_private": false,
+  "inbounds": ["tun-in"],           // inline/srs: матч по inbound
+  "wifi_ssids": ["HomeWiFi"],       // inline/srs (§051), нужны location-permissions
+  "wifi_bssids": ["aa:bb:cc:dd:ee:ff"], // формат валидируется, нормализуется в lower-case
+  "srs_url": "https://...rule-set.srs", // srs: первый набор
+  "srs_urls": ["https://a.srs","https://b.srs"], // srs: все наборы по порядку; главнее srs_url
+  "resolve": {"only": false, "strategy": "ipv4_only", "server_tag": "<tag>", "timeout": "5s"}, // inline/srs (§247); null — снять
+  "outbound": "vpn-1|direct-out|reject" // inline/srs; default direct-out
 }
 ```
 
+В ответе у `kind=srs` дополнительно `srs:{cached,path,mtime}`; у `kind=preset`
+вместо `outbound` — `effective_outbound`, плюс `preset:{…}` и `ready`.
+Пустые массивы и выключенные флаги в ответе не эмитятся.
+
 **Quirks:**
 - PATCH с wrong type (`{"enabled":"yes"}`) → 400 `bad_request`.
-- `target: "reject"` — sentinel, маппится на `{action:"reject"}` в routing rules.
+- `outbound: "reject"` — sentinel, маппится на `{action:"reject"}` в routing rules.
 - Массивы PATCH'ятся **replace**-семантикой, не append.
 
 ---
 
 ## Subscriptions CRUD — `/subs/*`
 
-Подписки + inline user-servers. Shape в GET — как `/state/subs`. §435 — у
-записи `kind: UserServer` есть `sections` (секции узла как хранятся, с
-плейсхолдерами `@self`; `null` — нет); read-only, PATCH его не принимает.
+Подписки + inline user-servers. §575 — поля `sections` в ответе нет: секции
+узла упразднены.
+
+§578 — у `UserServer` и у члена папки (`GET /folders/{id}`) есть поле записи
+`skip_presets` (bool): `true` — узел не обслуживают пресеты с `for_each`
+(пресет `tailscale`). Read-only, PATCH его не принимает; меняется переключателем
+Skip presets на экране узла.
+
+```bash
+# узлы с отметкой «пропустить пресеты»
+curl -s -H "$HDR" "$BASE/subs" \
+  | jq '.[] | select(.kind=="UserServer") | {id, skip_presets}'
+```
+
+**§524 — `GET /subs` отдаёт ВЕСЬ список источников** в порядке `sources[]`, тот
+же, что видит пользователь на экране Servers: подписки, серверы, папки **и
+цепочки** одним массивом. До §524 ответ нёс только контейнеры, а цепочки жили в
+отдельном `/chains` — смешанный порядок диска этим API нельзя было ни прочитать,
+ни выразить.
+
+Каждая запись несёт `source_key` — ключ её места в списке: `id:<uuid>` у
+контейнера, `chain:<tag>` у цепочки. Его принимает `POST /subs/reorder`.
+
+| `kind` | Что это | Поля |
+|---|---|---|
+| `SubscriptionServers` / `UserServer` / `FolderServers` | контейнер узлов | полный shape записи (как `/state/subs`) |
+| `SourceChain` | цепочка (§524 — такая же запись списка) | `id` = тег, `title`, `enabled`, `nodes_count` = `hops_count` = число позиций |
+| `Unreadable` | запись, которую кодек не читает (§141 P1.8c) | `record_kind` — её `kind` с диска, `enabled: false` |
+
+Маршрут цепочки (позиции, `strip`, `rewrite`) здесь НЕ разворачивается: его
+читает и правит `/chains/{tag}` — `/subs` отвечает за состав и порядок списка.
+
+`GET /state/subs` цепочек НЕ включает: это снимок состояния контроллера
+подписок (fetch-состояние, счётчики узлов), а не список источников.
 
 | Endpoint | Метод | Body |
 |---|---|---|
@@ -365,7 +411,7 @@ Rules матчатся **first-wins** сверху вниз, так что reord
 | `/subs/{id}` | PATCH | subset: name/enabled/tag_prefix/update_interval_hours/override_detour/register_detour_{servers,in_auto}/use_detour_servers/replace_detour_chain/url + **§346**: on_update_action/import_rules_enabled/identity. **§439:** `override_detour` — ссылка на узел `{folder_id?, tag}`, `null` снимает |
 | `/subs/{id}` | DELETE | — |
 | `/subs/{id}/refresh` | POST | trigger fetch. 409 для UserServer |
-| `/subs/reorder` | POST | `{"order":[id1,...]}` |
+| `/subs/reorder` | POST | **§524** `{"order":[source_key,...]}` — ключи ЛЮБОГО рода (`id:<uuid>` / `chain:<tag>`), состав обязан совпасть с текущим списком. Голый uuid тоже принимается (форма до §524). Одна запись на диск |
 
 ### Фича 478 — `reveal` и `warnings` у одной записи
 
@@ -389,13 +435,34 @@ credentials, поэтому симметрично папке: только по
         "severity": "warning",
         "path": "tls.utls.fingerprint",
         "value": "safari",
+        "applied": true,
         "title_en": "…", "text_en": "…"
       }
     ],
-    "Tokyo": []
+    "Tokyo": [],
+    "Tokyo-2": []
   }
 }
 ```
+
+**Ключ — сырой тег узла в контейнере** (`containerRawTags`, NODE_LINK §2.2) — тот же
+адрес, по которому узел виден в `nodes[]`, `GET /nodes/link?tag=` и
+`POST /action/switch-node?tag=`. У тёзок провайдера (§310 — все узлы зовутся
+`proxy`; дубль `vpn://`↔`amneziawg://` под одним именем) ключи различаются
+так же, как в списке узлов: `X`, `X-2`, `X-3`.
+
+§520 — раньше карта ключевалась СЫРЫМ `NodeSpec.tag` и у тёзок теряла
+записи last-write-wins: у 12 узлов ответ отдавал 8 ключей, а `nodes_count`
+оставался верен — счётчик расходился со списком. Форма ответа не менялась
+(тот же объект «тег → список»), и у записи без тёзок ключи дословно те же,
+что и до §520. Инвариант: **`warnings.length == nodes_count`**.
+
+У члена папки адрес — тег как есть (NODE_LINK §2.2, у ссылки побеждает
+первый), поэтому тёзки-члены получают суффикс с **индексом узла** (`X#3`), а
+безымянный узел — ключ `#<индекс>`. Индекс тот же, которым член папки
+адресуется в `/folders/*` (поле `index`), так что узел в ответе не только
+присутствует, но и находится; ключ при этом не притворяется тегом, по
+которому его можно позвать в `switch-node`.
 
 Все узлы присутствуют; у узла без предупреждений — пустой список. Тексты — **пиненный
 английский**: ответ не должен зависеть от локали устройства, а проверять надо
@@ -404,6 +471,12 @@ credentials, поэтому симметрично папке: только по
 — `null`, а `text_en` есть всегда (`NodeWarning.renderEn()`). По мере
 перевода классов на `RegistryWarning` форма ответа не меняется — у кода
 просто появляются `path`/`value`.
+
+§577 — `applied` (bool) есть у каждой записи: `false` — правило реестра не
+применено, потому что тело узла авторское (свой сервер или член папки с
+голым sing-box JSON, §576) и правило мягкое; тело ушло в ядро как написано.
+У классов приложения и у применённых кодов — `true`. В отчёте сборки
+(`emitWarnings`) такая строка кончается пометкой `(not applied)`.
 
 По умолчанию выключено: на 500 узлах это лишний вес.
 
@@ -485,7 +558,7 @@ curl -s -H "$HDR" "$BASE/state/subs" | jq '.[] | select(.id=="<id>") | {title, n
 ### §439 — `override_detour` ссылкой на узел (NodeLink)
 
 С 2.23.3 detour источника — не финальный тег конфига, а ссылка
-`{folder_id?, tag}` (D-112, `contract/docs/NODE_LINK.md`). Та же форма в ответах
+`{folder_id?, tag}` (D-112, [STORAGE.md → Node references](../STORAGE.md#node-references--nodelink-439-d-112)). Та же форма в ответах
 `/subs` и `/state/subs` (`override_detour` и `detour_policy.override_detour`,
 `null` — detour нет).
 
@@ -825,8 +898,14 @@ Write'ы проходят **тот же гейт, что и форма реда�
 | `selfReference` | цепочка ссылается на себя |
 | `nestedNotFirst` | вложенная цепочка не на позиции 0 |
 | `forwardChainReference` | ссылка на цепочку, объявленную ниже по списку |
-| `realityUtlsStripped` | `strip tls.utls` на reality-узле |
 | `tagEmpty` / `tagTaken` | тег пустой / занят |
+
+Предупреждения и справки формы write **не** блокируют (та же граница, что у
+кнопки «сохранить»): `stripKeptForHop` — цепочка снимает strip-ключ, который
+звено требует (`on_hop_required` реестра, напр. `tls.utls` на reality; сборка
+снимет ключ с патча), `detourAtEntry`, `detourIgnoredOnLink`, `missingHops`,
+`masqueFixedH3OnLink`, `wgBehindTcpHop`. Бывший блокирующий
+`realityUtlsStripped` снят (задача 556).
 
 Этот класс ошибок `sing-box check` **пропускает**, а `run` роняет, — поэтому
 гейт стоит на записи, а не на сборке.
@@ -923,7 +1002,7 @@ credentials (URI/ключи) → по умолчанию скрыт, `?reveal=tr
 | `/folders/{id}` | GET | — |
 | `/folders/{id}` | DELETE | `?keep_servers=true` — вынести членов одиночными серверами (default false — удалить совсем) |
 | `/folders/{id}/members` | POST | ровно одно из: `{"input":"<uri\|WG-ini\|JSON>","name_fallback"?}` (paste) или `{"url":"..."}` (одноразовый снапшот: URL не хранится, авто-обновления нет) |
-| `/folders/{id}/members/{idx}` | PATCH | subset `{raw,enabled,detour}` — §435: `sections` члена в GET read-only, PATCH не принимает |
+| `/folders/{id}/members/{idx}` | PATCH | subset `{raw,enabled,detour}` — §578: `skip_presets` в GET read-only, PATCH не принимает |
 | `/folders/{id}/members/{idx}` | DELETE | — |
 | `/folders/{id}/members/reorder` | POST | `{"order":[старые индексы в новом порядке]}` — полная перестановка |
 | `/folders/{id}/members/{idx}/ungroup` | POST | член → одиночный сервер сразу после папки |
@@ -1094,7 +1173,7 @@ curl -X POST -H "$HDR" "$BASE/core_reject/banner/dismiss"
 
 ## WARP — `/warp`
 
-§147 — регистрация Cloudflare WARP-ноды (тот же путь, что кнопка **Get WARP** в UP). Приватный ключ X25519 генерится на устройстве, регистрация уходит в Cloudflare, готовая нода добавляется в подписки автоматически.
+§147 — регистрация Cloudflare WARP-ноды (тот же путь, что кнопка **Get WARP** в UI). Приватный ключ X25519 генерится на устройстве, регистрация уходит в Cloudflare, готовая нода добавляется в подписки автоматически.
 
 | Endpoint | Метод | Body |
 |---|---|---|
@@ -1373,10 +1452,10 @@ Read-only file access.
 |---|---|
 | `GET /files/srs` | `ruleId=<id>` → octet-stream .srs |
 | `GET /files/srs/list` | — |
-| `GET /files/local` | `name=<name>` (whitelist: `cache.db`, `stderr.log`, `CrashReport-lxbox.log`, `CrashReport-lxbox.log.old`) |
+| `GET /files/local` | `name=<name>` (whitelist: `cache.db`, `CrashReport-lxbox.log`, `CrashReport-lxbox.log.old`, legacy `stderr.log` — ядро после libbox 1.14 его не пишет) |
 | `GET /files/external` | legacy alias for `/files/local`, ради обратной совместимости |
-| `GET /files/crash/list` | §316 — архив краш-репортов ядра: `[{name, size, mtime}]`, новые первыми; `[]` если крашей не было |
-| `GET /files/crash` | §316 — `name=<file>` → тело архивного репорта |
+| `GET /files/crash/list` | §316 — архив краш-репортов ядра: `[{name, size, mtime, core_version?, kind?}]`, новые первыми; `kind:"dir"` — репорт-каталог `<таймстамп>/{go.log,metadata.json,configuration.json}` (`size` — размер `go.log`); `[]` если крашей не было |
+| `GET /files/crash` | §316 — `name=<repo>` → тело архивного репорта; у каталога — `&file=go.log\|metadata.json\|configuration.json` (default `go.log`, только basename) |
 | `GET /files/oom/list` | OOM-снапшоты ядра: `[{name, size, mtime, memory_usage, ...}]`, новые первыми |
 | `GET /files/oom` | `name=<snapshot>` → файл снапшота; по умолчанию `metadata.json`, иначе `&file=heap.pb\|allocs.pb\|goroutine.pb\|go.log\|configuration.json\|connections.json` (клиент передаёт только basename) |
 
@@ -1384,8 +1463,8 @@ Read-only file access.
 curl -s -H "$HDR" "$BASE/files/srs/list" | jq
 curl -s -H "$HDR" "$BASE/files/srs?ruleId=abc-123" > /tmp/rule.srs
 
-# Native stderr log (sing-box core, internal app-scoped storage)
-curl -s -H "$HDR" "$BASE/files/local?name=stderr.log" | tail -30
+# Текущий краш-репорт ядра (Go-stderr, internal app-scoped storage)
+curl -s -H "$HDR" "$BASE/files/local?name=CrashReport-lxbox.log" | tail -30
 
 # OOM-снапшот: сначала список, потом heap-профиль конкретного
 curl -s -H "$HDR" "$BASE/files/oom/list" | jq
@@ -1396,7 +1475,7 @@ curl -s -H "$HDR" "$BASE/files/oom?name=<snapshot>&file=heap.pb" > /tmp/heap.pb
 
 ## Backup — `/backup/*`
 
-Symmetric с UI `BackupScreen` (см. [§040 spec](../spec/features/040%20backup%20restore%20ui/spec.md)). Wire-format — single, без `version` поля в конверте; форму блока `storage` задаёт его `storage_version` (§439). Legacy `{vars, server_lists}` на корне конверта не поддерживается. Это внутренний бэкап LxBox, не LX Backup 1.0 для лаунчера.
+Symmetric с UI `BackupScreen` (см. [§040 spec](../spec/tasks/040F-backup-restore-ui/spec.md)). Wire-format — single, без `version` поля в конверте; форму блока `storage` задаёт его `storage_version` (§439). Legacy `{vars, server_lists}` на корне конверта не поддерживается. Это внутренний бэкап LxBox, не LX Backup 1.0 для лаунчера.
 
 | Endpoint | Что отдаёт / принимает |
 |---|---|
@@ -1480,7 +1559,7 @@ curl -s -H "$HDR" "$BASE/backup/export?include=storage&from=v0_bak" > /tmp/lxbox
 | `GET /diag/dump` | Полный JSON-pack от `DumpBuilder.build()` (то же что UI ⤴ Share) |
 | `GET /diag/exit-info` | `ApplicationExitInfo` (5 последних экзитов; API 30+, иначе `[]`) |
 | `GET /diag/logcat?count=N&level=L` | Logcat tail нашего процесса (N=50..5000, level=V/D/I/W/E/F, default E) |
-| `GET /diag/stderr` | Содержимое `filesDir/stderr.log` (Go panic stacktrace) |
+| `GET /diag/stderr` | Текущий краш-репорт ядра `filesDir/CrashReport-lxbox.log` (Go panic stacktrace, через `StderrReader`); пустое тело — паник в текущей сессии не было. Архив прошлых — `/files/crash/list` |
 | `GET /diag/applog?prev=true\|false\|all` | AppLog entries с фильтром по `fromPreviousSession` |
 | `GET /diag/pprof?profile=P&query=Q` | §207 — pprof-снапшот через libbox PProfServer (туннель должен быть up). `P` = `goroutine\|profile\|heap\|allocs\|block\|mutex\|threadcreate` (default `goroutine`); `query` — сырой pprof-query без `?` (напр. `gc=1`/`debug=2`/`seconds=10`), дефолт зависит от профиля (`goroutine→debug=2`, `profile→seconds=10`, `heap→gc=1`). `goroutine?debug=*` отдаёт `text/plain`, остальное — `.pb` для `go tool pprof`. |
 
@@ -1545,9 +1624,9 @@ Traffic profiler — **system-wide** rolling buffer (§048, вкладка Profi
 > `404`. Живые роуты профайлера — только `/profiler/live*` (ниже). Разбор
 > трафика конкретного приложения делается фильтром по приложениям на вкладке
 > Profiler. Историческая справка по атрибуции §168/§180 —
-> [`../features/per-app-trace.md`](../features/per-app-trace.md).
+> [`../spec/tasks/044F-per-app-traffic-profiler/per-app-trace.md`](../spec/tasks/044F-per-app-traffic-profiler/per-app-trace.md).
 
-**Confidence levels** в каждом event: `verified` (router-package matched target) / `secondary` (matched secondary_packages) / `inferred` (post-DNS process inference, 10s window) / `unattributed` (нет owner). UI показывает легенду; для post-mortem analysis фильтровать по `confidence`.
+**Confidence levels** в каждом event: `verified` (sing-box назвал package владельца) / `unattributed` (нет owner). `inferred` — dormant (§219: больше не присваивается, значение оставлено для десериализации старых JSON). UI показывает легенду; для post-mortem analysis фильтровать по `confidence`.
 
 ### System-wide (§048 Profiler tab)
 
@@ -1580,20 +1659,13 @@ curl -s -H "$HDR" "$BASE/profiler/live/unattributed" | jq '.recent_count_30s, .b
 curl -X POST -H "$HDR" "$BASE/profiler/live/stop"
 ```
 
-**Когда что использовать:**
-- Per-app session — root cause «почему именно app X не открывает Y»: get domain chain, IP, chain'ы, port-test history.
-- System-wide live — discovery «что вообще происходит на устройстве сейчас»: DNS sniff, leakage detection (трафик мимо ожидаемых rules), unattributed events banner.
+**Когда использовать:** system-wide live — discovery «что вообще происходит на устройстве сейчас»: DNS sniff, leakage detection (трафик мимо ожидаемых rules), unattributed events banner.
 
 ---
 
 ## Clash API proxy — `/clash/*` (removed in §122)
 
-**Удалено.** `/clash/*` proxy и роут `GET /state/clash` выпилены в §122 (commit `2711f5b` — выпил Clash-моста). UI и весь runtime-контроль (proxies, group-delay, connections snapshot) переехали на libbox **CommandClient**:
-
-- proxies / switch selector / group urltest → CommandClient unary-RPC + `/action/urltest` / `/action/switch-node` / `/action/set-group`.
-- connections snapshot / live → CommandClient connections-push, см. [Profiler](#profiler--profiler) (`/profiler/live*`).
-
-Старый `clash-api-reference.md` сохранён как историческая справка по поведению sing-box clash-api, но соответствующих роутов в Debug API больше **нет** — запрос на `/clash/*` или `/state/clash` вернёт `404 not_found`.
+Удалено в §122: `/clash/*` и `GET /state/clash` → `404 not_found`. Замена — libbox CommandClient: `/action/urltest` / `/action/switch-node` / `/action/set-group` и [Profiler](#profiler--profiler) (`/profiler/live*`).
 
 ---
 
@@ -1677,8 +1749,8 @@ enc() { python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1
 TAG="BL: 🇫🇷 France, Paris | [BL]"
 curl -X POST -H "$HDR" "$BASE/action/switch-node?tag=$(enc "$TAG")"
 
-# URLTest группы с эмодзи в имени
-GROUP="✨auto"
+# URLTest группы: urltest-двойник Направления `<tag>-auto` (enc безвреден и для ASCII)
+GROUP="vpn-1-auto"
 curl -X POST -H "$HDR" "$BASE/action/urltest?group=$(enc "$GROUP")"
 ```
 
@@ -1686,10 +1758,22 @@ curl -X POST -H "$HDR" "$BASE/action/urltest?group=$(enc "$GROUP")"
 
 ```bash
 # Backup
-curl -s -H "$HDR" "$BASE/state/storage?reveal=true" > /tmp/storage.backup.json
+curl -s -H "$HDR" "$BASE/state/storage" > /tmp/storage.backup.json   # замаскированный дамп; полный — /backup/export?include=storage
 curl -s -H "$HDR" "$BASE/state/subs?reveal=true" > /tmp/subs.backup.json
 curl -s -H "$HDR" "$BASE/state/rules" > /tmp/rules.backup.json
 curl -s -H "$HDR" "$BASE/config" > /tmp/config.backup.json
 ```
 
-Восстановление через API не полное (restore полной storage нет), но `PUT /config` позволяет восстановить sing-box side. Для storage — через UI или ADB-бэкап shared_prefs.
+Для полного снапшота storage используй `GET /backup/export?include=storage`, восстановление — `POST /backup/import` (см. [Backup](#backup--backup)); sing-box side — `PUT /config`.
+
+---
+
+## Синхронизация с `/help`
+
+`GET /help` (text и `?format=json`) пишется руками в `handlers/help.dart` —
+генератора из роутера или из этого документа нет. `/help` намеренно короче:
+карта путей и параметров. Источник примеров и семантики — этот документ; при
+расхождении смотреть код (`handlers/*.dart`, `serializers/*.dart`).
+Известные расхождения `/help` с кодом и тест паритета «каждый `path` из
+`/help?format=json` есть здесь» — задача
+[592](../spec/tasks/592-debug-api-help-parity.md).

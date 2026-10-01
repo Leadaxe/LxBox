@@ -1,7 +1,7 @@
 # §123 — Имя сервера в шторке (foreground notification)
 
 **Статус:** Done (проверено на устройстве 2026-06-14)
-**Тип:** task (UX-улучшение существующей фичи [`012 native vpn service`](../features/012%20native%20vpn%20service/spec.md))
+**Тип:** task (UX-улучшение существующей фичи [`012 native vpn service`](../tasks/012F-native-vpn-service/spec.md))
 **Дата:** 2026-06-14
 
 ## Хотелка

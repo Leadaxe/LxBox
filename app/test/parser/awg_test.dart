@@ -11,6 +11,7 @@ import 'package:lxbox/services/parser/mappers/draft_sections.dart';
 import 'package:lxbox/services/parser/ini_parser.dart';
 import 'package:lxbox/services/parser/json_parsers.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
+import 'parse_link_as.dart';
 
 /// §097 Phase 1 — AmneziaWG2 (AWG) сквозной проход: URI/JSON/INI → Awg → emit →
 /// round-trip. По образцу singbox-launcher SPEC 073 (Фазы 1-4, 6).
@@ -62,7 +63,7 @@ void main() {
         '?publickey=$_testPub&address=10.0.0.2/32$extra#n';
 
     test('AWG с mtu=1420 заклампится потолком реестра', () {
-      final spec = parseWireguardUri(wg('&jc=4&mtu=1420'))!;
+      final spec = parseLinkAs<WireguardSpec>(wg('&jc=4&mtu=1420'))!;
       expect(spec.mtu, kAwgMtuFallback,
           reason: 'без потолка узел уехал бы в ядро с 1420: туннель '
               'поднимается, данные не идут');
@@ -73,21 +74,21 @@ void main() {
     });
 
     test('AWG без mtu получает потолок дефолтом реестра, кодов нет', () {
-      final spec = parseWireguardUri(wg('&jc=4'))!;
+      final spec = parseLinkAs<WireguardSpec>(wg('&jc=4'))!;
       expect(spec.mtu, kAwgMtuFallback);
       expect(spec.warnings, isEmpty, reason: 'подстановка — не замена');
     });
 
     test('обычный WG потолка не получает вовсе', () {
-      expect(parseWireguardUri(wg('&mtu=1420'))!.mtu, 1420);
-      expect(parseWireguardUri(wg(''))!.mtu, isNull,
+      expect(parseLinkAs<WireguardSpec>(wg('&mtu=1420'))!.mtu, 1420);
+      expect(parseLinkAs<WireguardSpec>(wg(''))!.mtu, isNull,
           reason: 'ядро берёт свой 1408; наш дефолт ломал бы identity');
     });
   });
 
   group('Фаза 1 — parse URI', () {
     test('все AWG-поля: числа int, i* регистр сохранён, i2/i4/i5 отсутствуют', () {
-      final awg = parseWireguardUri(fullUri)!.awg!;
+      final awg = parseLinkAs<WireguardSpec>(fullUri)!.awg!;
       expect(awg.fields['jc'], 10);
       expect(awg.fields['jc'], isA<int>());
       expect(awg.fields['jmax'], 100);
@@ -100,7 +101,7 @@ void main() {
     });
 
     test('обычный WG (без AWG) → spec.awg == null', () {
-      final spec = parseWireguardUri(
+      final spec = parseLinkAs<WireguardSpec>(
           'wireguard://$_testPriv@h:51820?publickey=$_testPub&address=10.0.0.2/32')!;
       expect(spec.awg, isNull);
     });
@@ -111,7 +112,7 @@ void main() {
       // отсутствующий `jmax` ядро читает как 0 и валит ВЕСЬ конфиг
       // («amneziawg: jmin (50) must be <= jmax (0)»). Раньше `jmin=50`
       // оставался в теле и ронял всё.
-      final spec = parseWireguardUri(
+      final spec = parseLinkAs<WireguardSpec>(
           'wireguard://$_testPriv@h:51820?publickey=$_testPub&address=10.0.0.2/32&jc=abc&jmin=50')!;
       expect(spec.awg, isNull, reason: 'оба AWG-поля сняты — набор пуст');
       // Узел при этом остаётся AmneziaWG: ссылка просила AWG, и кламп MTU
@@ -120,7 +121,7 @@ void main() {
     });
 
     test('пара jmin+jmax переживает разбор (§24.6 — requires выполнен)', () {
-      final spec = parseWireguardUri(
+      final spec = parseLinkAs<WireguardSpec>(
           'wireguard://$_testPriv@h:51820?publickey=$_testPub&address=10.0.0.2/32&jmin=50&jmax=100')!;
       expect(spec.awg!.fields['jmin'], 50);
       expect(spec.awg!.fields['jmax'], 100);
@@ -139,7 +140,7 @@ void main() {
 
   group('Фаза 3 — emit (числа как JSON number)', () {
     test('endpoint root содержит AWG; jc — number, i1 — string', () {
-      final spec = parseWireguardUri(fullUri)!;
+      final spec = parseLinkAs<WireguardSpec>(fullUri)!;
       final map = spec.emit(TemplateVars.empty).map;
       expect(map['jc'], 10);
       expect(map['i1'], i1);
@@ -153,7 +154,7 @@ void main() {
     });
 
     test('обычный WG emit без AWG-ключей', () {
-      final spec = parseWireguardUri(
+      final spec = parseLinkAs<WireguardSpec>(
           'wireguard://$_testPriv@h:51820?publickey=$_testPub&address=10.0.0.2/32')!;
       final map = spec.emit(TemplateVars.empty).map;
       expect(map.keys.any(Awg.numKeys.contains), false);
@@ -163,17 +164,17 @@ void main() {
 
   group('Фаза 4 — round-trip share-URI', () {
     test('URI→spec→toUri→spec сохраняет AWG (включая регистр i*)', () {
-      final s1 = parseWireguardUri(fullUri)!;
-      final s2 = parseWireguardUri(s1.toUri())!;
+      final s1 = parseLinkAs<WireguardSpec>(fullUri)!;
+      final s2 = parseLinkAs<WireguardSpec>(s1.toUri())!;
       expect(s2.awg!.fields, s1.awg!.fields);
       expect(s2.awg!.fields['i1'], i1);
     });
 
     test('jc=0 (junk off) — явный ноль переживает round-trip', () {
-      final s1 = parseWireguardUri(
+      final s1 = parseLinkAs<WireguardSpec>(
           'wireguard://$_testPriv@h:51820?publickey=$_testPub&address=10.0.0.2/32&jc=0')!;
       expect(s1.awg!.fields['jc'], 0);
-      final s2 = parseWireguardUri(s1.toUri())!;
+      final s2 = parseLinkAs<WireguardSpec>(s1.toUri())!;
       expect(s2.awg!.fields['jc'], 0);
     });
   });
@@ -183,23 +184,23 @@ void main() {
         'wireguard://$_testPriv@h:51820?publickey=$_testPub&address=10.0.0.2/32';
 
     test('AWG без mtu → 1280 (вместо WG-дефолта)', () {
-      final spec = parseWireguardUri('$base&jc=10')!;
+      final spec = parseLinkAs<WireguardSpec>('$base&jc=10')!;
       expect(spec.mtu, 1280);
       expect(spec.emit(TemplateVars.empty).map['mtu'], 1280);
     });
 
     test('AWG mtu=1420 → кламп до 1280', () {
-      final spec = parseWireguardUri('$base&jc=10&mtu=1420')!;
+      final spec = parseLinkAs<WireguardSpec>('$base&jc=10&mtu=1420')!;
       expect(spec.mtu, 1280);
     });
 
     test('AWG mtu=1200 (явно ниже) → уважаем', () {
-      final spec = parseWireguardUri('$base&jc=10&mtu=1200')!;
+      final spec = parseLinkAs<WireguardSpec>('$base&jc=10&mtu=1200')!;
       expect(spec.mtu, 1200);
     });
 
     test('AWG mtu=1280 (граница) → без изменений', () {
-      final spec = parseWireguardUri('$base&jc=10&mtu=1280')!;
+      final spec = parseLinkAs<WireguardSpec>('$base&jc=10&mtu=1280')!;
       expect(spec.mtu, 1280);
     });
 
@@ -207,8 +208,8 @@ void main() {
     // вовсе (ядро само ставит 1408). Было закреплено, что plain WG дефолтит
     // 1408 в самой модели — неканоничное поведение, тест обновлён.
     test('plain WG не трогаем: без mtu → не задан, mtu=1420 → 1420', () {
-      expect(parseWireguardUri(base)!.mtu, isNull);
-      expect(parseWireguardUri('$base&mtu=1420')!.mtu, 1420);
+      expect(parseLinkAs<WireguardSpec>(base)!.mtu, isNull);
+      expect(parseLinkAs<WireguardSpec>('$base&mtu=1420')!.mtu, 1420);
     });
 
     // §219/D-026 — plain WG без mtu НЕ дефолтит 1408 в модели (ядро само
@@ -322,7 +323,7 @@ void main() {
 
     test('URI: h1=N-M → String, одиночный h2 → int', () {
       final awg =
-          parseWireguardUri('$base&h1=43613244-384550127&h2=826869626')!.awg!;
+          parseLinkAs<WireguardSpec>('$base&h1=43613244-384550127&h2=826869626')!.awg!;
       expect(awg.fields['h1'], '43613244-384550127');
       expect(awg.fields['h1'], isA<String>());
       expect(awg.fields['h2'], 826869626);
@@ -337,7 +338,7 @@ void main() {
     // понимает и поле не заводит. Наблюдаемый итог тот же, что был: заголовков
     // в узле нет, `jc` цел, парс не падает.
     test('битые формы (10-, a-b, -5, 1-2-3) → поля нет, парс не падает', () {
-      final awg = parseWireguardUri(
+      final awg = parseLinkAs<WireguardSpec>(
           '$base&h1=10-&h2=a-b&h3=-5&h4=1-2-3&jc=4')!.awg!;
       expect(awg.fields.keys.where(Awg.headerKeys.contains), isEmpty);
       expect(awg.fields['jc'], 4);
@@ -368,7 +369,7 @@ void main() {
     });
 
     test('emit: диапазон → JSON string, одиночное → number', () {
-      final spec = parseWireguardUri('$base&h1=10-20&h2=30')!;
+      final spec = parseLinkAs<WireguardSpec>('$base&h1=10-20&h2=30')!;
       final json = jsonEncode(spec.emit(TemplateVars.empty).map);
       expect(json, contains('"h1":"10-20"'));
       expect(json, contains('"h2":30'));
@@ -376,8 +377,8 @@ void main() {
     });
 
     test('round-trip share-URI с диапазоном', () {
-      final s1 = parseWireguardUri('$base&h1=10-20&h2=30&jc=4')!;
-      final s2 = parseWireguardUri(s1.toUri())!;
+      final s1 = parseLinkAs<WireguardSpec>('$base&h1=10-20&h2=30&jc=4')!;
+      final s2 = parseLinkAs<WireguardSpec>(s1.toUri())!;
       expect(s2.awg!.fields, s1.awg!.fields);
       expect(s2.awg!.fields['h1'], '10-20');
     });
@@ -464,7 +465,7 @@ void main() {
 
     test('полный набор: диапазоны строкой, одиночное числом, булевы true, '
         'keepalive "25-35", MTU 1376 клампится до 1280', () {
-      final spec = parseWireguardUri(uri(
+      final spec = parseLinkAs<WireguardSpec>(uri(
           '&mtu=1376&keepalive=25-35&jc=4&jmin=10&jmax=50$s&h1=1&h2=2&h3=3&h4=4'
           '&headerprotectionkey=$hkQ&contentpaddingaddition=10-100'
           '&rekeyaftertime=100-120&rekeytimeout=3-7&rejectaftertime=150-180'
@@ -495,27 +496,27 @@ void main() {
     });
 
     test('ключ защиты с сырым "+" в query переживает разбор (не пробел)', () {
-      final spec = parseWireguardUri(uri('$s&headerprotectionkey=$hk'))!;
+      final spec = parseLinkAs<WireguardSpec>(uri('$s&headerprotectionkey=$hk'))!;
       expect(spec.awg!.fields['header_protection_key'], hk);
     });
 
     test('url-safe/без паддинга ключ нормализуется к std base64', () {
       final urlSafe = hk.replaceAll('+', '-').replaceAll('/', '_')
           .replaceAll('=', '');
-      final spec = parseWireguardUri(uri('$s&headerprotectionkey=$urlSafe'))!;
+      final spec = parseLinkAs<WireguardSpec>(uri('$s&headerprotectionkey=$urlSafe'))!;
       expect(spec.awg!.fields['header_protection_key'], hk);
     });
 
     test('булевы off/false/0/пусто → ключа нет; on/true/1 → true', () {
       for (final v in ['off', 'false', '0', '']) {
-        final spec = parseWireguardUri(uri('$s&randomtrailers=$v'))!;
+        final spec = parseLinkAs<WireguardSpec>(uri('$s&randomtrailers=$v'))!;
         expect(spec.awg!.fields.containsKey('random_trailers'), false,
             reason: 'randomtrailers=$v');
         expect(spec.emit(TemplateVars.empty).map.containsKey('random_trailers'),
             false);
       }
       for (final v in ['on', 'true', '1', 'On']) {
-        final spec = parseWireguardUri(uri('$s&disablecookies=$v'))!;
+        final spec = parseLinkAs<WireguardSpec>(uri('$s&disablecookies=$v'))!;
         expect(spec.awg!.fields['disable_cookies'], true, reason: v);
       }
     });
@@ -546,7 +547,7 @@ void main() {
         'disablecookies': 'yes',
       };
       cases.forEach((param, value) {
-        final spec = parseWireguardUri(uri('$s&$param=$value'))!;
+        final spec = parseLinkAs<WireguardSpec>(uri('$s&$param=$value'))!;
         final json = Awg.awg3ParamToJson[param]!;
         expect(spec.awg!.fields.containsKey(json), false,
             reason: '$param=$value должно быть снято');
@@ -556,7 +557,7 @@ void main() {
     });
 
     test('h1–h4 перевёрнутый диапазон по-прежнему свопается (контраст)', () {
-      final spec = parseWireguardUri(uri('$s&h1=300-200'))!;
+      final spec = parseLinkAs<WireguardSpec>(uri('$s&h1=300-200'))!;
       expect(spec.awg!.fields['h1'], '200-300');
     });
 
@@ -572,7 +573,7 @@ void main() {
     test('битый ключ защиты роняет узел правилом реестра', () {
       const zero = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
       for (final bad in ['not-base64!', 'AQIDBAUGBwgJCgsMDQ4PEA==', zero]) {
-        expect(parseWireguardUri(uri('$s&headerprotectionkey=$bad')), isNull,
+        expect(parseLinkAs<WireguardSpec>(uri('$s&headerprotectionkey=$bad')), isNull,
             reason: bad);
       }
     });
@@ -580,16 +581,16 @@ void main() {
     test('короткий паддинг при ключе защиты роняет узел; без ключа он легален '
         '(AWG2-поведение)', () {
       expect(
-          parseWireguardUri(
+          parseLinkAs<WireguardSpec>(
               uri('&s1=55&s2=42&s3=40&s4=11&headerprotectionkey=$hkQ')),
           isNull,
           reason: 'nonce шифра заголовка берётся из первых 12 байт паддинга');
-      expect(parseWireguardUri(uri('&s1=5&s4=0')), isNotNull,
+      expect(parseLinkAs<WireguardSpec>(uri('&s1=5&s4=0')), isNotNull,
           reason: 'без ключа защиты короткий паддинг — обычный AWG2');
     });
 
     test('random_trailers + широкий диапазон h: поля на месте', () {
-      final spec = parseWireguardUri(
+      final spec = parseLinkAs<WireguardSpec>(
           uri('$s&h1=1000-70000&randomtrailers=on'))!;
       expect(spec.awg!.fields['h1'], '1000-70000');
       expect(spec.awg!.fields['random_trailers'], true);
@@ -600,34 +601,34 @@ void main() {
       // не судит вовсе, а правило поверх пары полей умеет объявлять только
       // реестр, и сегодня он его не объявляет: запись — запрос к лаунчеру
       // (`body.fields`, условие по паре). До неё кода нет ни у одной стороны.
-      final narrow = parseWireguardUri(
+      final narrow = parseLinkAs<WireguardSpec>(
           uri('$s&h1=1000-2000&randomtrailers=on'))!;
       expect(narrow.warnings, isEmpty);
     });
 
     test('keepalive: мусор пропускается; один диапазонный keepalive = '
         'маркер AWG3 (узел AWG даже без AWG2-полей → кламп 1280)', () {
-      final junk = parseWireguardUri(uri('&keepalive=abc'))!;
+      final junk = parseLinkAs<WireguardSpec>(uri('&keepalive=abc'))!;
       expect(junk.peers.single.persistentKeepalive, isNull);
       expect(junk.mtu, isNull); // plain WG без mtu — поле не эмитим
-      final ranged = parseWireguardUri(uri('&mtu=1376&keepalive=25-35'))!;
+      final ranged = parseLinkAs<WireguardSpec>(uri('&mtu=1376&keepalive=25-35'))!;
       expect(ranged.awg, isNull);
       expect(ranged.peers.single.persistentKeepalive, '25-35');
       expect(ranged.mtu, 1280);
       // Явно ниже 1280 — уважаем, как у AWG2.
-      expect(parseWireguardUri(uri('&mtu=1200&keepalive=25-35'))!.mtu, 1200);
+      expect(parseLinkAs<WireguardSpec>(uri('&mtu=1200&keepalive=25-35'))!.mtu, 1200);
     });
 
     test('AWG2 без AWG3-маркеров клампится как раньше', () {
-      final spec = parseWireguardUri(uri('&mtu=1376&jc=4$s'))!;
+      final spec = parseLinkAs<WireguardSpec>(uri('&mtu=1376&jc=4$s'))!;
       expect(spec.mtu, 1280);
     });
 
     test('round-trip share-URI: spec → toUri → parse сохраняет AWG3-набор', () {
-      final spec = parseWireguardUri(uri(
+      final spec = parseLinkAs<WireguardSpec>(uri(
           '&mtu=1200&keepalive=25-35&jc=4$s&h1=1&headerprotectionkey=$hkQ'
           '&rekeytimeout=3-7&randomtrailers=on&disablecookies=on'))!;
-      final again = parseWireguardUri(spec.toUri())!;
+      final again = parseLinkAs<WireguardSpec>(spec.toUri())!;
       expect(again.awg!.fields, spec.awg!.fields);
       expect(again.mtu, 1200);
       expect(again.peers.single.persistentKeepalive, '25-35');

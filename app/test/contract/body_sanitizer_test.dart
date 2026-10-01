@@ -58,7 +58,7 @@ void main() {
       expect(r.body!['uuid'], '11111111-1111-1111-1111-111111111111');
     });
 
-    // §470 — `unknown_key` несёт и СНЯТОЕ ЗНАЧЕНИЕ: конверт корпуса называет
+    // §470 — `unknown_key` несёт и СНЯТОЕ ЗНАЧЕНИЕ: результат разбора корпуса называет
     // его (`body/singbox/manual_object_junk`), и лаунчер печатает `src[name]`
     // (`nodeflow/sanitize.go`). Без `value` человек узнавал, что ключ снят,
     // но не ЧТО снято, а body-раннер расходился с контрактом молча — ровно
@@ -68,7 +68,7 @@ void main() {
       expect(_byCode(r, 'unknown_key').value, 'whatever');
     });
 
-    // Форма `value` нормативна (CANON §6): объект — `map[k:v k:v]` с ключами
+    // Форма `value` нормативна (PARSING_PRINCIPLES §6): объект — `map[k:v k:v]` с ключами
     // по алфавиту, и у снятого ключа она та же, что у прочих кодов.
     test('unknown_key печатает объект по канону корпуса', () {
       final r = _san(_vless({
@@ -494,7 +494,7 @@ void main() {
           ['type', 'tag', 'server', 'server_port', 'uuid']);
     });
 
-    test('дефолты не материализуются (CANON §2.4)', () {
+    test('дефолты не материализуются (PARSING_PRINCIPLES §2.4)', () {
       final r = _san(_vless());
       // packet_encoding, flow, network в теле не заданы — и не появляются.
       expect(r.body!.containsKey('packet_encoding'), isFalse);
@@ -559,12 +559,12 @@ void main() {
   // §464 — выражения реестра, приехавшие с W2d лаунчера. По кейсу на
   // выражение: реестр нормативен для обеих сторон, и «санитайзер молча не
   // знает правила» неотличимо от «правила нет».
-  // §470 — форма `value` нормативна для ВСЕХ реализаций (CANON §6, лаунчер
+  // §470 — форма `value` нормативна для ВСЕХ реализаций (PARSING_PRINCIPLES §6, лаунчер
   // `8068f7a0`): корпус сверяет её побайтно, и своего смысла у неё нет —
   // это Go-печать `%v`, которую не-Go сторона воспроизводит сама. Кейс на
   // каждое правило текста канона: скаляр, объект, массив, вложенность,
   // обрезка по рунам, `secret`.
-  group('renderWarningValue — CANON §6', () {
+  group('renderWarningValue — PARSING_PRINCIPLES §6', () {
     test('скаляр — как есть, без кавычек', () {
       expect(RegistrySanitizer.renderWarningValue(true), 'true');
       expect(RegistrySanitizer.renderWarningValue(443), '443');
@@ -911,7 +911,7 @@ void main() {
       expect(_codes(awg), isEmpty, reason: 'дефолт — не замена, кода нет');
 
       // Обычному WireGuard поля не достаётся: ядро берёт свой 1408, и наш
-      // дефолт спорил бы с ним и ломал identity-хеш (CANON §2.4).
+      // дефолт спорил бы с ним и ломал identity-хеш (PARSING_PRINCIPLES §2.4).
       final plain = _san(wg(), scheme: 'wireguard');
       expect(plain.body!.containsKey('mtu'), isFalse);
       expect(_codes(plain), isEmpty);
@@ -968,13 +968,7 @@ void main() {
       expect(low.warnings, isEmpty);
     });
 
-    test('§473 any_set судит НАЛИЧИЕ ключа, а не заданность значения', () {
-      // Пара к §467: `conflicts`/`requires` судят значение, и `jc: 0` для них
-      // «не задано». Здесь ровно наоборот — `jc: 0` значит «мусорные пакеты
-      // выключены» у настоящего AmneziaWG, и потолок обязан остаться.
-      // Смешай предикаты — туннель молча перестал бы нести данные.
-      for (final marker in const [0, false, '', <String>[]]) {
-        final r = RegistrySanitizer.sanitize({
+    Map<String, dynamic> awgBody(Object marker) => {
           'type': 'wireguard',
           'tag': 'wg',
           'mtu': 1420,
@@ -989,11 +983,35 @@ void main() {
               'allowed_ips': ['0.0.0.0/0'],
             },
           ],
-        }, scheme: 'wireguard', coreVersion: _core);
+        };
+
+    test('§473 any_set судит НАЛИЧИЕ ключа, а не заданность значения', () {
+      // Пара к §467: `conflicts`/`requires` судят значение, и `jc: 0` для них
+      // «не задано». Здесь ровно наоборот — `jc: 0` значит «мусорные пакеты
+      // выключены» у настоящего AmneziaWG, и потолок обязан остаться.
+      // Смешай предикаты — туннель молча перестал бы нести данные.
+      //
+      // §552 — пустая строка из списка ушла: с контракта 1.1.56 она не
+      // выполняет `any_set` (норма 3 §547), см. тест ниже.
+      for (final marker in const [0, false, <String>[]]) {
+        final r = RegistrySanitizer.sanitize(awgBody(marker),
+            scheme: 'wireguard', coreVersion: _core);
         expect(r.body!['mtu'], 1280, reason: 'jc=$marker — ключ есть');
         expect(r.warnings.map((w) => w.code), contains('awg_mtu_clamped'),
             reason: 'jc=$marker');
       }
+    });
+
+    test('§552 any_set: пустая строка — не наличие ключа (контракт 1.1.56)',
+        () {
+      // Норма 3 §547: пустая строка не выполняет `any_set`, для ядра это
+      // отсутствие ключа; число 0 — значение (тест выше). `jc: ""` снимается
+      // молча, узел остаётся обычным WireGuard, потолка AWG нет.
+      final r = RegistrySanitizer.sanitize(awgBody(''),
+          scheme: 'wireguard', coreVersion: _core);
+      expect(r.body!['mtu'], 1420);
+      expect(r.body!.containsKey('jc'), isFalse);
+      expect(r.warnings.map((w) => w.code), isNot(contains('awg_mtu_clamped')));
     });
 
     test('grpc service_name: нормализации нет — значение как есть', () {
@@ -1197,7 +1215,7 @@ void main() {
       expect(_codes(r), contains('wg_key_invalid'));
     });
 
-    // ───── §481 (контракт 1.1.12, CANON §6.1) — `absent_when` ─────
+    // ───── §481 (контракт 1.1.12, PARSING_PRINCIPLES §6.1) — `absent_when` ─────
 
     test('absent_when: tls{enabled:false} снимается ЦЕЛИКОМ и ТИХО', () {
       final r = _san(_vless({
@@ -1312,6 +1330,119 @@ void main() {
       expect(coreAtLeast('1.14.2', '1.14.1-lx.1'), isTrue);
       // Версия неизвестна — гейт не применяем.
       expect(coreAtLeast('', '1.14.1-lx.4'), isTrue);
+    });
+  });
+
+  // §556 (контракт 1.1.57) — `on_invalid: unwrap`, общий обход атрибута.
+  group('on_invalid unwrap', () {
+    Map<String, dynamic> hy(Object obfs) => {
+          'type': 'hysteria',
+          'tag': 'h',
+          'server': 'example.com',
+          'server_port': 443,
+          'up_mbps': 10,
+          'down_mbps': 50,
+          'tls': {'enabled': true, 'server_name': 'example.com'},
+          'obfs': obfs,
+        };
+
+    test('объект с годным членом → член и код', () {
+      final r = RegistrySanitizer.sanitize(hy({'type': 'salamander', 'password': 'pw'}),
+          scheme: 'hysteria', coreVersion: '9.9.9');
+      expect(r.body!['obfs'], 'pw');
+      expect(r.warnings.map((w) => w.code), contains('obfs_object_flattened'));
+    });
+
+    test('объект без члена → поле снято, else_code с параметром type', () {
+      final r = RegistrySanitizer.sanitize(hy({'type': 'salamander'}),
+          scheme: 'hysteria', coreVersion: '9.9.9');
+      expect(r.body!.containsKey('obfs'), isFalse);
+      final w = r.warnings.singleWhere((w) => w.code == 'obfs_password_missing');
+      expect(w.params['type'], 'salamander');
+    });
+
+    test('не объект и не строка → type_invalid', () {
+      final r = RegistrySanitizer.sanitize(hy([1, 2]),
+          scheme: 'hysteria', coreVersion: '9.9.9');
+      expect(r.body!.containsKey('obfs'), isFalse);
+      expect(r.warnings.map((w) => w.code), contains('type_invalid'));
+    });
+  });
+
+  // §574 (контракт 1.1.84, §81).
+  group('RegistrySanitizer — фрагментация TLS: detour и системный движок', () {
+    test('fragment + record_fragment при engine apple — сняты, движок остаётся',
+        () {
+      final r = _san(_vless({
+        'tls': {
+          'enabled': true,
+          'server_name': 'example.com',
+          'engine': 'apple',
+          'fragment': true,
+          'record_fragment': true,
+        },
+      }));
+      final tls = r.body!['tls'] as Map;
+      expect(tls['engine'], 'apple');
+      expect(tls.containsKey('fragment'), isFalse);
+      expect(tls.containsKey('record_fragment'), isFalse);
+      expect(
+          r.warnings
+              .where((w) => w.code == 'tls_fragment_system_engine')
+              .map((w) => w.path),
+          ['tls.fragment', 'tls.record_fragment']);
+      expect(_byCode(r, 'tls_fragment_system_engine').params['with'],
+          'tls.engine');
+    });
+
+    test('engine go — фрагментация остаётся', () {
+      final r = _san(_vless({
+        'tls': {
+          'enabled': true,
+          'server_name': 'example.com',
+          'engine': 'go',
+          'fragment': true,
+        },
+      }));
+      expect((r.body!['tls'] as Map)['fragment'], true);
+      expect(_codes(r), isNot(contains('tls_fragment_system_engine')));
+    });
+
+    test('detour во входе для связей соседей отсутствует — fragment остаётся',
+        () {
+      final r = _san(_vless({
+        'detour': 'other',
+        'tls': {
+          'enabled': true,
+          'server_name': 'example.com',
+          'fragment': true,
+        },
+      }));
+      expect((r.body!['tls'] as Map)['fragment'], true);
+      expect(_codes(r), isNot(contains('detour_with_tls_fragment')));
+    });
+
+    test('fieldAllowedOn: при engine windows фрагментацию не дописывать', () {
+      final body = _vless({
+        'tls': {'enabled': true, 'engine': 'windows'},
+      });
+      expect(fieldAllowedOn(body, 'tls.fragment'), isFalse);
+      expect(fieldAllowedOn(body, 'tls.record_fragment'), isFalse);
+    });
+
+    test('yieldToManaged: fragment уступает detour, record_fragment — нет', () {
+      final body = _vless({
+        'detour': 'hop',
+        'tls': {'enabled': true, 'fragment': true, 'record_fragment': true},
+      });
+      final ws = yieldToManaged(body, 'detour');
+      expect(ws.map((w) => w.code), ['detour_with_tls_fragment']);
+      expect(ws.single.path, 'tls.fragment');
+      expect(ws.single.params['tag'], 'n1');
+      expect(ws.single.params['target'], 'hop');
+      final tls = body['tls'] as Map;
+      expect(tls.containsKey('fragment'), isFalse);
+      expect(tls['record_fragment'], true);
     });
   });
 }

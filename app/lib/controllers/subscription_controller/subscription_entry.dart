@@ -79,6 +79,22 @@ class SubscriptionEntry extends ChangeNotifier {
       ? (_list as SubscriptionServers).onUpdateAction
       : SubscriptionOnUpdateAction.rebuild;
 
+  /// §561 — отбраковка последнего разбора тела подписки (`dropped[]`), для
+  /// сводки источника. Пусто для не-подписок.
+  List<NodeWarning> get dropped => _list is SubscriptionServers
+      ? (_list as SubscriptionServers).dropped
+      : const [];
+
+  /// §589 — схлопнутые повторы тела подписки: [merged] — сколько записей
+  /// схлопнуто, [into] — в сколько узлов. Считается по коду
+  /// `duplicates_collapsed` на узлах; нули — повторов не было или это не
+  /// подписка. Сводка показывает строку отдельно от `dropped` — схлопнутое
+  /// не отброшено, подробности на самих узлах.
+  ({int merged, int into}) get duplicatesMerged {
+    if (_list is! SubscriptionServers) return (merged: 0, into: 0);
+    return duplicatesMergedOf(_list.nodes);
+  }
+
   /// §289 — per-subscription слепок идентичности фетча. `null` = режим Default
   /// (глобальная идентичность). Пусто для не-подписок.
   SubscriptionIdentityOverride? get identity => _list is SubscriptionServers
@@ -249,6 +265,17 @@ class SubscriptionEntry extends ChangeNotifier {
       _replaceList(_copy(detourPolicy: detourPolicy.copyWith(overrideDetour: v)));
   set replaceDetourChain(bool v) =>
       _replaceList(_copy(detourPolicy: detourPolicy.copyWith(replaceDetourChain: v)));
+
+  /// Фича 565 фаза B — свёртка папки или подписки в группу (§74); `null` —
+  /// не свёрнута. У одиночного сервера свёртки нет — no-op.
+  SourceReplace? get replace => _list.replace;
+  set replace(SourceReplace? v) => switch (_list) {
+        final SubscriptionServers s =>
+          _replaceList(s.copyWith(replace: v, clearReplace: v == null)),
+        final FolderServers f =>
+          _replaceList(f.copyWith(replace: v, clearReplace: v == null)),
+        UserServer() => null,
+      };
 
   ServerList _copy({
     String? name,

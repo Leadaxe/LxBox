@@ -18,6 +18,7 @@ class DiagnosticsTab extends StatelessWidget {
     required this.notificationsEnabled,
     required this.backgroundLocationGranted,
     required this.nearbyWifiGranted,
+    this.wifiLocationIssue,
     required this.debugEnabled,
     required this.debugPort,
     required this.debugToken,
@@ -51,6 +52,11 @@ class DiagnosticsTab extends StatelessWidget {
   final bool backgroundLocationGranted;
   final bool nearbyWifiGranted;
 
+  /// §567 — причина, по которой SSID не читается при выданном BACKGROUND:
+  /// `fine_location_missing` (не выбрано «точное местоположение») или
+  /// `location_disabled` (системный тумблер). null — проблем нет.
+  final String? wifiLocationIssue;
+
   final bool debugEnabled;
   final int debugPort;
   final String debugToken;
@@ -80,6 +86,7 @@ class DiagnosticsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final locationOk = backgroundLocationGranted && wifiLocationIssue == null;
     return ListView(
       padding: padding,
       children: [
@@ -122,17 +129,23 @@ class DiagnosticsTab extends StatelessWidget {
         // `<unknown ssid>`). См. spec/050 findings + spec/051.
         ListTile(
           leading: Icon(
-            backgroundLocationGranted
+            locationOk
                 ? Icons.location_on_outlined
                 : Icons.location_off_outlined,
-            color: backgroundLocationGranted
+            color: locationOk
                 ? Colors.green
                 : Theme.of(context).colorScheme.error,
           ),
           title: Text(getLocalText.s("Location (background)")),
-          subtitle: Text(backgroundLocationGranted
-              ? getLocalText.s("Granted — sing-box can read Wi-Fi state for routing rules")
-              : getLocalText.s("Required for Wi-Fi-based routing rules. Tap to grant.")),
+          subtitle: Text(!backgroundLocationGranted
+              ? getLocalText.s("Required for Wi-Fi-based routing rules. Tap to grant.")
+              : switch (wifiLocationIssue) {
+                  'fine_location_missing' =>
+                    getLocalText.s("Precise location permission missing"),
+                  'location_disabled' =>
+                    getLocalText.s("Location is turned off"),
+                  _ => getLocalText.s("Granted — sing-box can read Wi-Fi state for routing rules"),
+                }),
           trailing: const Icon(Icons.chevron_right, size: 18),
           onTap: onBackgroundLocationTap,
         ),

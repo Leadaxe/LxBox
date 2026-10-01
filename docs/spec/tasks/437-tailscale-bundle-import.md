@@ -5,7 +5,7 @@
 | Статус | **Released в v2.24.0** (15.09.2026, ядро `v1.14.0-lx.39`). Done — реализовано 14.09.2026 (device-verify не делался: живого tailnet на стенде нет, ключа нет) |
 | Дата старта | 2026-09-14 |
 | Триггер | Отчёт пользователя Cultsonfire (Telegram, 14.09): «устройства tailnet видны, связи с ними нет; exit node игнорируется; непонятен формат exit_node». Подтверждённых данных о LxBox в отчёте нет (дамп — 2.23.1 на ядре lx.34, Tailscale там не поддерживается; скриншоты — другой клиент на sing-box 1.15.0-alpha.3). Разбор по исходникам нашёл три реальных пробела §435, которые дают ровно такой симптом |
-| Связанные | [§435](../features/435%20node-sections-tailscale/spec.md) (узел Tailscale и секции), контракт `app/contract/docs/NODE_SECTIONS.md` §6, [docs/PROTOCOLS.md](../../PROTOCOLS.md) §9.7 |
+| Связанные | [§435](435-node-sections-tailscale.md) (узел Tailscale и секции), контракт `app/contract/docs/NODE_SECTIONS.md` §6, [docs/PROTOCOLS.md](../../PROTOCOLS.md) §9.7 |
 | Коммиты | `0b989a15` — код и тесты; `docs(437)` — спеки, PROTOCOLS §9.7, STORAGE «Node sections», CHANGELOG |
 
 ## Что нашлось (проверено по исходникам ядра lx.38, tailscale 1.102.1-mod.4 и LxBox, перекрёстно опровергнуть не удалось)

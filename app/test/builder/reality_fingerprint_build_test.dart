@@ -117,7 +117,7 @@ void main() {
     }
   });
 
-  test('REALITY + пустой fp (sing-box JSON) → chrome', () async {
+  test('REALITY + пустой fp (sing-box JSON) → uTLS без отпечатка', () async {
     final node = parseSingboxEntry({
       'type': 'vless',
       'tag': 'empty-fp',
@@ -132,17 +132,23 @@ void main() {
       },
     })!;
     final b = await build([node]);
-    expect(b.utls['fingerprint'], 'chrome');
+    // Контракт 1.1.61: пустой отпечаток под REALITY остаётся пустым (ядро =
+    // chrome), uTLS включён.
+    expect(b.utls['enabled'], true);
+    expect(b.utls.containsKey('fingerprint'), isFalse);
     expect(codes(b.node), isNot(contains('reality_fp_not_chrome')));
   });
 
-  test('vless REALITY без fp и с fp= → chrome (дефолт random не уходит)',
+  test('vless REALITY без fp и с fp= → chrome с кодом (контракт 1.1.61)',
       () async {
     for (final q in ['', '&fp=']) {
       final b = await buildUri(reality(q));
-      expect((b.node as VlessSpec).tls.fingerprint, 'random',
-          reason: 'entry по D-009 не меняется, q="$q"');
+      // Контракт 1.1.61: неявный random (D-009) под REALITY правило
+      // `coerce_when` меняет на chrome уже в теле узла, с кодом.
+      expect((b.node as VlessSpec).tls.fingerprint, 'chrome',
+          reason: 'q="$q"');
       expect(b.utls['fingerprint'], 'chrome', reason: 'q="$q"');
+      expect(codes(b.node), contains('reality_fp_random_pinned'));
       expect(codes(b.node), isNot(contains('reality_fp_not_chrome')));
     }
   });

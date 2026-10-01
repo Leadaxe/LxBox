@@ -3,6 +3,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/codec/source_record.dart';
 import 'package:lxbox/controllers/subscription_controller.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/server_list.dart';
@@ -147,7 +148,9 @@ void main() {
     const proxy2 = '{"type":"trojan","tag":"NL","server":"nl.example",'
         '"server_port":443,"password":"p-nl"}';
 
-    test('endpoint + прокси → два UserServer, связка у ts', () async {
+    // §575 — секции узла упразднены: ни извлечённой, ни канонической связки
+    // узел не получает, её даёт пресет шаблона `tailscale` (§578).
+    test('endpoint + прокси → два UserServer, секций нет', () async {
       final c = SubscriptionController();
       await c.addFromInput(
           '{"endpoints":[$tsEndpoint],"outbounds":[$proxy],'
@@ -157,17 +160,17 @@ void main() {
 
       final tsEntry = c.entries.firstWhere(
           (e) => e.list.nodes.single is TailscaleSpec);
-      final tsList = tsEntry.list as UserServer;
-      // Связка канонична: ссылок на тег в конфиге не было.
-      expect(tsList.sections!.recordCount, 3);
-      expect(tsList.sections!.rules.single.name, '@{self} network');
-      expect(tsList.sections!.rules.single.domainSuffixes, ['.ts.net']);
+      expect(tsEntry.list, isA<UserServer>());
 
       // Остаток — один узел, значит свой UserServer, а не файловая подписка.
       final rest = c.entries.firstWhere((e) => e != tsEntry);
       expect(rest.list, isA<UserServer>());
-      expect(rest.list.nodes.single.label, 'DE');
-      expect((rest.list as UserServer).sections, isNull);
+      // §576 п.2 — в источнике голое тело узла, и дефолтный эмодзи ставится
+      // ему так же, как вставленному голому телу (у документа тег лежал не в
+      // корне, и эмодзи не доезжал).
+      expect(rest.list.nodes.single.label, '⚡ DE');
+      expect(sourceKindOf((rest.list as UserServer).rawBody),
+          'singbox_outbound');
     });
 
     test('endpoint + два прокси → UserServer (ts) + файловая подписка без ts '
@@ -183,7 +186,6 @@ void main() {
           .whereType<UserServer>()
           .single;
       expect(tsList.nodes.single, isA<TailscaleSpec>());
-      expect(tsList.sections!.recordCount, 3);
 
       final sub = c.entries
           .map((e) => e.list)
@@ -206,10 +208,9 @@ void main() {
       expect(c.lastError, isNull);
       final list = c.entries.single.list as UserServer;
       expect(list.nodes.single, isA<TailscaleSpec>());
-      expect(list.sections!.recordCount, 3);
     });
 
-    test('многоузловой конфиг со ссылками: у ts извлечённая связка', () async {
+    test('многоузловой конфиг со ссылками: связка не извлекается', () async {
       final c = SubscriptionController();
       await c.addFromInput('''
 {
@@ -228,46 +229,37 @@ void main() {
           .map((e) => e.list)
           .whereType<UserServer>()
           .firstWhere((l) => l.nodes.single is TailscaleSpec);
-      // Извлечённое сильнее канонического: имя провайдера, один CIDR.
-      expect(tsList.sections!.rules.single.name, '@{self} rule 1');
-      expect(tsList.sections!.rules.single.ipCidrs, ['100.64.0.0/10']);
-      expect(tsList.sections!.dnsServers.single.tag, '@{self}-ts-dns');
+      expect(tsList.nodes.single, isA<TailscaleSpec>());
     });
 
-    test('голое тело → каноническая связка', () async {
+    test('голое тело → узел без секций', () async {
       final c = SubscriptionController();
       await c.addFromInput(tsEndpoint);
       expect(c.lastError, isNull);
       final list = c.entries.single.list as UserServer;
-      expect(list.sections!.recordCount, 3);
-      expect(list.sections!.rules.single.ipCidrs,
-          ['100.64.0.0/10', 'fd7a:115c:a1e0::/48']);
+      expect(list.nodes.single, isA<TailscaleSpec>());
     });
 
-    test('конфиг с одним ts без ссылок → каноническая связка', () async {
+    test('конфиг с одним ts и route → узел без секций', () async {
       final c = SubscriptionController();
       await c.addFromInput('{"endpoints":[$tsEndpoint],'
           '"route":{"rules":[{"domain":["x"],"outbound":"direct"}]}}');
       expect(c.lastError, isNull);
-      final list = c.entries.single.list as UserServer;
-      expect(list.sections!.recordCount, 3);
-      expect(list.sections!.rules.single.name, '@{self} network');
+      expect(c.entries.single.list, isA<UserServer>());
     });
 
-    test('папка: голое тело членом → каноническая связка', () async {
+    test('папка: голое тело членом → секций нет', () async {
       final c = SubscriptionController();
       await c.addFolder('tailnet');
       expect(await c.addMembersToFolder(0, tsEndpoint), isNull);
       final folder = c.entries.single.list as FolderServers;
-      expect(folder.members.single.sections!.recordCount, 3);
-      expect(folder.members.single.sections!.rules.single.name,
-          '@{self} network');
+      expect(folder.members.single.node, isA<TailscaleSpec>());
     });
 
     test('не-Tailscale узел секций по умолчанию не получает', () async {
       final c = SubscriptionController();
       await c.addFromInput(singleOutbound);
-      expect((c.entries.single.list as UserServer).sections, isNull);
+      expect(c.entries.single.list, isA<UserServer>());
     });
   });
 }

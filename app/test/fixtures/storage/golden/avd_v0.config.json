@@ -89,7 +89,8 @@
           "google_dot",
           "cloudflare_dot",
           "opendns_doh",
-          "quad9_doh"
+          "quad9_doh",
+          "yandex_dot"
         ],
         "mode": "fastest",
         "error_ttl": "5m",
@@ -125,6 +126,16 @@
           "enabled": true,
           "server_name": "dns.opendns.com"
         }
+      },
+      {
+        "type": "tls",
+        "tag": "yandex_dot",
+        "server_port": 853,
+        "server": "77.88.8.8",
+        "tls": {
+          "enabled": true,
+          "server_name": "common.dot.dns.yandex.net"
+        }
       }
     ],
     "rules": [
@@ -146,7 +157,9 @@
       }
     ],
     "final": "dns_shield",
-    "strategy": "ipv4_only"
+    "strategy": "ipv4_only",
+    "cache_capacity": 4000,
+    "optimistic": true
   },
   "inbounds": [
     {
@@ -528,20 +541,27 @@
     ],
     "final": "vpn-1",
     "auto_detect_interface": true,
-    "rule_set": [],
-    "lx_idle_suspend": "30s",
-    "lx_idle_suspend_reachable": "5m"
+    "rule_set": []
   },
   "experimental": {
     "cache_file": {
       "enabled": true,
       "path": "cache.db",
-      "store_fakeip": true
+      "store_fakeip": true,
+      "store_dns": true
     }
   },
   "services": [
     {
       "type": "oom-killer"
     }
-  ]
+  ],
+  "lx": {
+    "wg": {
+      "idle_suspend": "30s",
+      "idle_suspend_reachable": "5m",
+      "lazy_build": true,
+      "build_max": 5
+    }
+  }
 }

@@ -24,18 +24,10 @@ import 'package:lxbox/services/builder/if_engine.dart';
 
 /// Корень скопированного контракта — кладёт tool/sync_contract.sh.
 
-/// Коды warning'ов движка шаблонов (contract/registry/warnings.json).
-const _warnVarUndeclared = 'template_var_undeclared';
-const _warnIntClamped = 'template_int_clamped';
-const _warnIntInvalid = 'template_int_invalid';
-
-/// Накопитель warning'ов кейса: список кодов без дублей, отсортированный —
-/// порядок warning'ов контрактом не нормируется.
-class _Warnings {
-  final Set<String> _codes = {};
-  void add(String code) => _codes.add(code);
-  List<String> toSorted() => _codes.toList()..sort();
-}
+// Warning'и кейса собирает накопитель движка ([TemplateWarnings]): коды с
+// параметрами и дедупом. Корпус сравнивает только коды — без параметров, без
+// дублей, по алфавиту ([TemplateWarnings.codes]); порядок контрактом не
+// нормируется.
 
 /// Разобранная тройка файлов кейса.
 class _Case {
@@ -88,19 +80,16 @@ _Case _loadCase(String base) {
 }
 
 /// Резолвер по канону §5.2, поверх [makeResolver]:
-///   • имя НЕ объявлено → null (walk оставит плейсхолдер) + warning;
+///   • имя НЕ объявлено → null (walk оставит плейсхолдер и сам поставит
+///     template_var_undeclared);
 ///   • имя объявлено, значения нет → Dropped-каскад;
-///   • иначе — типизированное значение.
-///
-/// Warning'и на int-коэрцию снимаются здесь же: coerceVarValue клампит и
-/// возвращает строку на не-число молча, а контракт требует кода.
-VarResolver _canonResolver(_Case c, _Warnings warns) {
+///   • иначе — типизированное значение (int-коды ставит coerceVarValue).
+VarResolver _canonResolver(_Case c) {
   final nodes = {for (final v in c.vars) v.name: v};
   final declared = nodes.keys.toSet();
 
   return (String name) {
     if (!declared.contains(name)) {
-      warns.add(_warnVarUndeclared);
       return null; // плейсхолдер остаётся видимым (§5.2)
     }
     final raw = c.varValues[name];
@@ -111,30 +100,15 @@ VarResolver _canonResolver(_Case c, _Warnings warns) {
         return Dropped.instance;
       }
       if (fallback.isEmpty) return Dropped.instance;
-      return _coerceWithWarnings(fallback, nodes[name]!.type, warns);
+      return coerceVarValue(fallback, nodes[name]!.type, name: name);
     }
-    return _coerceWithWarnings(raw, nodes[name]!.type, warns);
+    return coerceVarValue(raw, nodes[name]!.type, name: name);
   };
-}
-
-/// Обёртка coerceVarValue, поднимающая коды warning'ов (§2.2).
-dynamic _coerceWithWarnings(String raw, String type, _Warnings warns) {
-  if (type == 'int') {
-    final n = int.tryParse(raw.trim());
-    if (n == null) {
-      warns.add(_warnIntInvalid);
-    } else if (n < 0 || n > 65535) {
-      warns.add(_warnIntClamped);
-    }
-  }
-  return coerceVarValue(raw, type);
 }
 
 /// Прогоняет кейс и возвращает фактический результат в форме expected.
 Map<String, dynamic> _runCase(_Case c) {
-  final warns = _Warnings();
-  // Движок отдаёт свои warning'и (неизвестная директива) через глобальный хук.
-  onTemplateWarning = warns.add;
+  final warns = TemplateWarnings();
 
   // Состояние переменных: null-значения не попадают (их отсутствие и есть
   // сигнал Dropped), остальные — как есть.
@@ -146,7 +120,8 @@ Map<String, dynamic> _runCase(_Case c) {
   // on_change (§4.6) применяется ДО подстановки, в контексте нового значения
   // изменённой переменной — как это делает UI при переключении.
   if (c.changed.isNotEmpty) {
-    _applyOnChange(c.changed, c.vars, state);
+    collectTemplateWarnings(
+        warns, () => _applyOnChange(c.changed, c.vars, state));
   }
 
   final caseWithState = _Case(
@@ -162,16 +137,15 @@ Map<String, dynamic> _runCase(_Case c) {
     expected: c.expected,
   );
 
-  final resolved = walk(
-    _deepCopy(c.config),
-    _canonResolver(caseWithState, warns),
+  // Накопитель живёт в зоне вызова — в другие тесты не течёт.
+  final resolved = collectTemplateWarnings(
+    warns,
+    () => walk(_deepCopy(c.config), _canonResolver(caseWithState)),
   );
-
-  onTemplateWarning = null; // хук глобальный — снимаем, чтобы не текло в другие тесты
 
   final out = <String, dynamic>{
     'config': identical(resolved, Dropped.instance) ? {} : resolved,
-    'warnings': warns.toSorted(),
+    'warnings': warns.codes,
   };
   if (c.changed.isNotEmpty) out['vars_after'] = state;
   return out;
@@ -209,7 +183,7 @@ void _applyOnChange(
 
 dynamic _deepCopy(dynamic node) => jsonDecode(jsonEncode(node));
 
-/// Сравнение JSON-деревьев по значению, не по байтам (CANON §7).
+/// Сравнение JSON-деревьев по значению, не по байтам (PARSING_PRINCIPLES §7).
 bool _jsonEqual(dynamic a, dynamic b) =>
     const DeepCollectionEquality().equals(a, b);
 

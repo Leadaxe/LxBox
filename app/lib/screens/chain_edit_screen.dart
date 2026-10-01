@@ -30,6 +30,8 @@ import '../models/server_list.dart';
 import '../models/source_chain.dart';
 import '../services/builder/node_link_pool.dart';
 import '../services/builder/node_link_resolve.dart';
+import '../services/contract/chain_strip.dart';
+import '../services/contract/registry_warning.dart';
 import '../services/l10n/locale_controller.dart';
 import '../services/ui_helpers.dart';
 import '../widgets/reorder_grab_strip.dart';
@@ -553,6 +555,18 @@ class _ChainEditScreenState extends State<ChainEditScreen> with SnackHelper {
   }
 
   Widget _advancedSection(ColorScheme cs) {
+    // §57 — ключи, которые сборка снимет с патча ради звена: считает движок
+    // реестра по тем же телам, что и валидация формы.
+    final state = ChainFormState.of(_snapshot(),
+        pool: widget.pool, lists: widget.lists);
+    final keptByHop = {
+      for (final u in chainHopUnstrips(
+        stripEvasion: state.stripEvasion,
+        patch: state.strip,
+        hops: [for (final h in state.hops) (h, _lookup[h]?.body)],
+      ))
+        u.key,
+    };
     return Theme(
       data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
       child: ExpansionTile(
@@ -593,7 +607,8 @@ class _ChainEditScreenState extends State<ChainEditScreen> with SnackHelper {
           const SizedBox(height: 4),
           Text(getLocalText.s("Per-key overrides"),
               style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
-          for (final key in kChainStripKeys) _stripTile(key, cs),
+          for (final key in chainStripCatalog())
+            _stripTile(key, cs, kept: keptByHop),
         ],
       ),
     );
@@ -604,10 +619,16 @@ class _ChainEditScreenState extends State<ChainEditScreen> with SnackHelper {
   /// уезжает в `strip` явным ключом. Двузначная галка не отличила бы «как
   /// сейчас у ядра» от «я так решил» и молча меняла бы смысл при смене
   /// умолчания ядра.
-  Widget _stripTile(String key, ColorScheme cs) {
+  ///
+  /// Каталог, умолчания и описания — из реестра (`chain.json`). [kept] —
+  /// ключи, которые сборка снимет с патча ради звена (`on_hop_required`):
+  /// у них действующее значение «kept», что бы ни стояло в галке.
+  Widget _stripTile(ChainStripKey entry, ColorScheme cs,
+      {Set<String> kept = const {}}) {
+    final key = entry.key;
     final explicit = _strip[key];
-    final effective = explicit ??
-        ((_stripEvasion ?? true) && (kChainStripDefault[key] ?? false));
+    final effective = !kept.contains(key) &&
+        chainStripsKey(entry, stripEvasion: _stripEvasion, patch: _strip);
     return CheckboxListTile(
       dense: true,
       contentPadding: EdgeInsets.zero,
@@ -616,7 +637,9 @@ class _ChainEditScreenState extends State<ChainEditScreen> with SnackHelper {
       tristate: true,
       title: Text(key,
           style: const TextStyle(fontSize: 13, fontFamily: 'monospace')),
-      subtitle: Text(_stripHint(key),
+      subtitle: Text(
+          entry.description(
+              registryLangForTag(LocaleController.I.effectiveTag)),
           style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
       // null = «не тронуто»: действующее значение показано подписью справа.
       value: explicit,
@@ -636,17 +659,6 @@ class _ChainEditScreenState extends State<ChainEditScreen> with SnackHelper {
           style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
     );
   }
-
-  /// Расшифровка ключа каталога: сами ключи ядра непрозрачны, а выбор без
-  /// понимания последствий — не выбор.
-  static String _stripHint(String key) => switch (key) {
-        kChainStripTlsFragment => getLocalText.s("ClientHello fragmentation"),
-        kChainStripMultiplexPadding => getLocalText.s("multiplex padding"),
-        kChainStripXhttpPadding => getLocalText.s("XHTTP padding"),
-        kChainStripTlsUtls => getLocalText.s(
-            "ClientHello fingerprint — must not be stripped on reality nodes"),
-        _ => '',
-      };
 
 }
 

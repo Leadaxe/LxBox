@@ -31,7 +31,7 @@ enum BackupRecord {
   folderNode,
   chain,
 
-  /// Правило маршрута — корневое и в секциях узла.
+  /// Правило маршрута.
   rule,
   dnsServer,
   dnsRule,
@@ -85,10 +85,11 @@ const List<BackupField> kBackupFields = [
   BackupField(BackupRecord.subscription, 'identity', _c),
   BackupField(BackupRecord.subscription, 'update', _c),
   BackupField(BackupRecord.subscription, 'disabled', _c),
-  // Фича 478 / CANON §9.4 — ключ в allowlist хранения; в бэкап вердикт
+  // Фича 478 / PARSING_PRINCIPLES §9.4 — ключ в allowlist хранения; в бэкап вердикт
   // страховки не едет (§489, решение 19.09.2026).
   BackupField(BackupRecord.subscription, 'warnings', _c),
   BackupField(BackupRecord.subscription, 'detour', _c),
+  BackupField(BackupRecord.subscription, 'replace', _c),
   BackupField(BackupRecord.subscription, 'detour_policy', _s, declared: true),
   BackupField(BackupRecord.subscription, 'import_rules', _s, declared: true),
   BackupField(BackupRecord.subscription, 'import_rules_enabled', _s,
@@ -102,6 +103,10 @@ const List<BackupField> kBackupFields = [
   BackupField(BackupRecord.subscription, 'last_update_status', _r),
   BackupField(BackupRecord.subscription, 'last_node_count', _r),
   BackupField(BackupRecord.subscription, 'consecutive_fails', _r),
+  // §565 / задача 570 — выбор члена групп ручного рода подписки: у
+  // `sourceSubscription` схемы поля нет; выбор — рантайм машины (как выбор
+  // селектора в ядре), срезается молча.
+  BackupField(BackupRecord.subscription, 'group_defaults', _r),
 
   // ── одиночный сервер ─────────────────────────────────────────────────────
   BackupField(BackupRecord.server, 'kind', _c),
@@ -114,7 +119,11 @@ const List<BackupField> kBackupFields = [
   // Хранение `body` не пишет; экспорт дописывает его JSON-исходнику (§4.1).
   BackupField(BackupRecord.server, 'body', _c),
   BackupField(BackupRecord.server, 'detour', _c),
-  BackupField(BackupRecord.server, 'sections', _c),
+  // §575 — секции узла упразднены (контракт 1.1.85): ключ ещё может лежать
+  // в записи хранения, в файл он не едет и не называется.
+  BackupField(BackupRecord.server, 'sections', _r),
+  // §578 — поле записи узла (запрос в контракт): едет в файл как есть.
+  BackupField(BackupRecord.server, 'skip_presets', _c),
   BackupField(BackupRecord.server, 'detour_policy', _s, declared: true),
   BackupField(BackupRecord.server, 'tag_policy', _s, declared: true),
 
@@ -125,6 +134,7 @@ const List<BackupField> kBackupFields = [
   BackupField(BackupRecord.folder, 'enabled', _c),
   BackupField(BackupRecord.folder, 'tag_policy', _c),
   BackupField(BackupRecord.folder, 'detour', _c),
+  BackupField(BackupRecord.folder, 'replace', _c),
   BackupField(BackupRecord.folder, 'detour_policy', _s, declared: true),
   BackupField(BackupRecord.folder, 'ping_url', _s, declared: true),
   BackupField(BackupRecord.folder, 'ping_timeout_ms', _s, declared: true),
@@ -141,7 +151,8 @@ const List<BackupField> kBackupFields = [
   BackupField(BackupRecord.folderNode, 'body', _c),
   BackupField(BackupRecord.folderNode, 'detour', _c),
   BackupField(BackupRecord.folderNode, 'reason', _c),
-  BackupField(BackupRecord.folderNode, 'sections', _c),
+  BackupField(BackupRecord.folderNode, 'sections', _r), // §575
+  BackupField(BackupRecord.folderNode, 'skip_presets', _c),
   // Член-группа `kind: auto` (§439 N2): состав и стратегия — `group`; поля
   // стороны LxBox `members_rule` и `pool_badge` лежат внутри `group`
   // (контракт 1.0.1) и едут вместе с ним.
@@ -231,9 +242,8 @@ typedef BackupSlice = ({Map<String, dynamic>? record, List<String> dropped});
 
 /// Экспорт: запись хранения → запись файла по [kBackupFields].
 ///
-/// Порядок ключей — порядок записи хранения. Секции узла и члены папки
-/// срезаются той же таблицей; их потери называются путём
-/// (`sections.dns.servers[<тег>].description`, `nodes[<тег>].…`).
+/// Порядок ключей — порядок записи хранения. Члены папки срезаются той же
+/// таблицей; их потери называются путём (`nodes[<тег>].…`).
 BackupSlice sliceBackupRecord(
   BackupRecord record,
   Map<String, dynamic> stored,
@@ -265,8 +275,6 @@ BackupSlice sliceBackupRecord(
       continue;
     }
     out[e.key] = switch (e.key) {
-      'sections' when e.value is Map && _carriesSections(record) =>
-        _sliceSections((e.value as Map).cast<String, dynamic>(), dropped),
       'nodes' when e.value is List && record == BackupRecord.folder =>
         _sliceNodes(e.value as List, dropped),
       _ => e.value,
@@ -276,7 +284,7 @@ BackupSlice sliceBackupRecord(
 }
 
 /// Импорт: приехавшая запись без полей LxBox, которых контракт не объявил, —
-/// вглубь секций узла и членов папки. Прочее не трогается.
+/// вглубь членов папки. Прочее не трогается.
 Map<String, dynamic> stripUndeclaredBackupFields(
   BackupRecord record,
   Map<String, dynamic> incoming,
@@ -287,9 +295,6 @@ Map<String, dynamic> stripUndeclaredBackupFields(
     final field = fields[e.key];
     if (field != null && !field.travels) continue;
     out[e.key] = switch (e.key) {
-      'sections' when e.value is Map && _carriesSections(record) =>
-        _mapSections((e.value as Map).cast<String, dynamic>(),
-            (kind, r) => stripUndeclaredBackupFields(kind, r)),
       'nodes' when e.value is List && record == BackupRecord.folder => [
           for (final n in e.value as List)
             n is Map
@@ -302,9 +307,6 @@ Map<String, dynamic> stripUndeclaredBackupFields(
   }
   return out;
 }
-
-bool _carriesSections(BackupRecord record) =>
-    record == BackupRecord.server || record == BackupRecord.folderNode;
 
 /// Поле настройки со значением «ничего не задано» потерей не называется.
 ///
@@ -332,26 +334,8 @@ List<dynamic> _sliceNodes(List<dynamic> nodes, List<String> dropped) => [
           nodes[i],
     ];
 
-Map<String, dynamic> _sliceSections(
-  Map<String, dynamic> sections,
-  List<String> dropped,
-) {
-  final counters = <String, int>{};
-  return _mapSections(sections, (kind, record) {
-    final list = switch (kind) {
-      BackupRecord.rule => 'rules',
-      BackupRecord.dnsServer => 'dns.servers',
-      _ => 'dns.rules',
-    };
-    final i = counters.update(list, (n) => n + 1, ifAbsent: () => 0);
-    final label = _label(record, kind == BackupRecord.dnsServer ? 'tag' : 'name', i);
-    return _sliceNested(kind, record, 'sections.$list[$label]', dropped);
-  });
-}
-
 /// Срез вложенной записи; её потери — путём от записи-носителя. Вид записи,
-/// который не пишется, в секциях узла не встречается (там только `user`), и
-/// запись остаётся как есть.
+/// который не пишется, остаётся как есть.
 Map<String, dynamic> _sliceNested(
   BackupRecord kind,
   Map<String, dynamic> record,
@@ -361,40 +345,6 @@ Map<String, dynamic> _sliceNested(
   final slice = sliceBackupRecord(kind, record);
   dropped.addAll(slice.dropped.map((k) => '$path.$k'));
   return slice.record ?? record;
-}
-
-/// Секции узла с записями, пропущенными через [each] по виду записи.
-Map<String, dynamic> _mapSections(
-  Map<String, dynamic> sections,
-  Map<String, dynamic> Function(BackupRecord, Map<String, dynamic>) each,
-) {
-  List<dynamic> records(Object? list, BackupRecord kind) => [
-        for (final r in list is List ? list : const [])
-          r is Map ? each(kind, r.cast<String, dynamic>()) : r,
-      ];
-
-  final out = <String, dynamic>{};
-  for (final e in sections.entries) {
-    switch (e.key) {
-      case 'rules' when e.value is List:
-        out['rules'] = records(e.value, BackupRecord.rule);
-      case 'dns' when e.value is Map:
-        final dns = (e.value as Map).cast<String, dynamic>();
-        out['dns'] = {
-          for (final d in dns.entries)
-            d.key: switch (d.key) {
-              'servers' when d.value is List =>
-                records(d.value, BackupRecord.dnsServer),
-              'rules' when d.value is List =>
-                records(d.value, BackupRecord.dnsRule),
-              _ => d.value,
-            },
-        };
-      default:
-        out[e.key] = e.value;
-    }
-  }
-  return out;
 }
 
 String _label(Map<dynamic, dynamic> record, String key, int index) {

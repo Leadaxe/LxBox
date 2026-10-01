@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/direction.dart';
 import '../services/ui_helpers.dart';
 import 'home/filter_widgets.dart' show NegateToggle;
+import '../models/source_replace.dart';
 import '../services/l10n/locale_controller.dart';
 import '../widgets/safe_bottom.dart';
 import '../widgets/urltest_idle_hint.dart';
@@ -21,6 +22,7 @@ class DirectionEditScreen extends StatefulWidget {
     required this.canDelete,
     required this.allNodeTags,
     this.directionsAbove = const [],
+    this.foldCandidates = const [],
   });
 
   final Direction initial;
@@ -37,6 +39,12 @@ class DirectionEditScreen extends StatefulWidget {
   /// `tagsAbove` лаунчера). У самого верхнего список пуст, и секция не
   /// рисуется.
   final List<Direction> directionsAbove;
+
+  /// §568 / задача 570 — свёртки источников в группу (§74): их `tag` тоже
+  /// законная опция Направления (`include`), сборка разворачивает его в
+  /// группу свёртки. Циклов свёртка не даёт — она на Направления не
+  /// ссылается, поэтому ограничения «только выше» у неё нет.
+  final List<FoldCandidate> foldCandidates;
 
   @override
   State<DirectionEditScreen> createState() => _DirectionEditScreenState();
@@ -146,10 +154,7 @@ class _DirectionEditScreenState extends State<DirectionEditScreen> {
       // §393 A3 — сохраняем ТОЛЬКО живых кандидатов сверху: галка снятая
       // потому, что Направление уехало вниз, честно уходит из данных, а не
       // висит битой ссылкой. Порядок — по списку кандидатов.
-      include: [
-        for (final d in widget.directionsAbove)
-          if (_include.contains(d.tag)) d.tag,
-      ],
+      include: _includeSnapshot(),
       isDetour: _isDetour,
       nodeFilter: _nodeFilterCtrl.text.trim(),
       nodeFilterInvert: _nodeFilterInvert,
@@ -182,6 +187,27 @@ class _DirectionEditScreenState extends State<DirectionEditScreen> {
             )
           : null,
     );
+  }
+
+  /// §393 A3 + §568 — опции: сохраняем ТОЛЬКО живых кандидатов (Направления
+  /// выше и свёртки): галка, снятая потому, что кандидат ушёл, честно
+  /// уходит из данных, а не висит битой ссылкой. Порядок сохранённых —
+  /// прежний (порядок опций в селекторе значим), новые — в порядке
+  /// кандидатов после них.
+  List<String> _includeSnapshot() {
+    final candidates = [
+      for (final d in widget.directionsAbove) d.tag,
+      for (final f in widget.foldCandidates) f.tag,
+    ];
+    final live = candidates.toSet();
+    final out = <String>[
+      for (final t in widget.initial.include)
+        if (live.contains(t) && _include.contains(t)) t,
+    ];
+    for (final t in candidates) {
+      if (_include.contains(t) && !out.contains(t)) out.add(t);
+    }
+    return out;
   }
 
   bool _isDirty() {
@@ -217,8 +243,11 @@ class _DirectionEditScreenState extends State<DirectionEditScreen> {
   /// нет вовсе, вместе с разделителем и заголовком (у самого верхнего
   /// включать нечего, и заголовок над пустотой только сбивал бы с толку).
   List<Widget> _includeSection(ColorScheme cs) {
-    if (widget.directionsAbove.isEmpty) return const [];
+    if (widget.directionsAbove.isEmpty && widget.foldCandidates.isEmpty) {
+      return const [];
+    }
     return [
+      if (widget.directionsAbove.isNotEmpty) ...[
       const Divider(height: 20),
       Text(getLocalText.s("Other directions"),
           style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
@@ -238,16 +267,37 @@ class _DirectionEditScreenState extends State<DirectionEditScreen> {
                   fontFamily: 'monospace',
                   color: cs.onSurfaceVariant)),
           value: _include.contains(d.tag),
-          onChanged: (v) => setState(() {
-            if (v ?? false) {
-              _include.add(d.tag);
-            } else {
-              _include.remove(d.tag);
-            }
-          }),
+          onChanged: (v) => _toggleInclude(d.tag, v ?? false),
         ),
+      ],
+      // §568 / задача 570 — группы свёрток источников.
+      if (widget.foldCandidates.isNotEmpty) ...[
+        const Divider(height: 20),
+        Text(getLocalText.s("Replace groups"),
+            style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+        Text(getLocalText.s("a folder or subscription replaced with one group"),
+            style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+        const SizedBox(height: 4),
+        for (final f in widget.foldCandidates)
+          CheckboxListTile(
+            key: ValueKey('direction-include-fold-${f.tag}'),
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            controlAffinity: ListTileControlAffinity.leading,
+            visualDensity: VisualDensity.compact,
+            title: Text(f.tag, style: const TextStyle(fontSize: 14)),
+            subtitle: Text(f.source,
+                style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+            value: _include.contains(f.tag),
+            onChanged: (v) => _toggleInclude(f.tag, v ?? false),
+          ),
+      ],
     ];
   }
+
+  void _toggleInclude(String tag, bool on) => setState(() {
+        on ? _include.add(tag) : _include.remove(tag);
+      });
 
   /// §393 A3 — равенство include-наборов (порядок детерминирован снапшотом,
   /// но сравниваем как последовательности: порядок опций в селекторе значим).
@@ -875,6 +925,7 @@ Future<DirectionEditResult?> openDirectionEditor(
   required bool canDelete,
   required List<String> allNodeTags,
   List<Direction> directionsAbove = const [],
+  List<FoldCandidate> foldCandidates = const [],
 }) =>
     Navigator.push<DirectionEditResult>(
       context,
@@ -884,6 +935,20 @@ Future<DirectionEditResult?> openDirectionEditor(
           canDelete: canDelete,
           allNodeTags: allNodeTags,
           directionsAbove: directionsAbove,
+          foldCandidates: foldCandidates,
         ),
       ),
     );
+
+/// §568 / задача 570 — кандидат `include` из свёртки источника: имя группы
+/// и имя источника (подпись).
+typedef FoldCandidate = ({String tag, String source});
+
+/// Свёртки источников с непустым именем, в порядке списка источников.
+List<FoldCandidate> foldCandidatesOf(
+        Iterable<({String name, SourceReplace? replace})> sources) =>
+    [
+      for (final s in sources)
+        if (s.replace != null && s.replace!.tag.trim().isNotEmpty)
+          (tag: s.replace!.tag, source: s.name),
+    ];

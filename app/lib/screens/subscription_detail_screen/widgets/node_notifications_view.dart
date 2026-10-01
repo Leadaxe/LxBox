@@ -36,9 +36,14 @@ class NodeNotificationsView extends StatelessWidget {
     // Подзаголовок нужен, только когда уровней несколько: над единственной
     // группой он повторял бы шапку со счётчиком.
     final single = present.length == 1;
-    // Единственное уведомление разворачиваем сразу: лишний тап ради одной
-    // записи на телефоне не окупается.
-    final soleEntry = warnings.length == 1;
+    // §572 — внутри уровня записи одного кода сворачиваются в группу.
+    final items = {
+      for (final e in present) e.key: groupWarningsByCode(e.value),
+    };
+    // Единственную плитку разворачиваем сразу: лишний тап ради одной
+    // записи (или одной группы) на телефоне не окупается.
+    final soleTile =
+        items.values.fold<int>(0, (n, level) => n + level.length) == 1;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -46,6 +51,8 @@ class NodeNotificationsView extends StatelessWidget {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+          // §572 — счётчики считают записи, а не группы: число совпадает со
+          // значками в списках узлов.
           child: _Counters(byLevel),
         ),
         for (final entry in present) ...[
@@ -54,13 +61,77 @@ class NodeNotificationsView extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 2),
               child: _LevelHeader(entry.key),
             ),
-          for (final w in entry.value)
-            _NotificationTile(w, initiallyExpanded: soleEntry),
+          for (final item in items[entry.key]!)
+            item.length == 1
+                ? _NotificationTile(item.single, initiallyExpanded: soleTile)
+                : _NotificationGroupTile(item, initiallyExpanded: soleTile),
         ],
         const SizedBox(height: 4),
       ],
     );
   }
+}
+
+/// §572 — записи одного уровня, собранные по коду (`warningCodeOf`).
+///
+/// Код, встреченный дважды и больше, даёт одну группу; одиночный код и
+/// рукописный класс без кода остаются отдельными элементами. Порядок — по
+/// первому вхождению кода, внутри группы — исходный: список уведомлений
+/// повторяет порядок разбора, и группировка его не перемешивает.
+List<List<NodeWarning>> groupWarningsByCode(List<NodeWarning> level) {
+  final out = <List<NodeWarning>>[];
+  final byCode = <String, List<NodeWarning>>{};
+  for (final w in level) {
+    final code = warningCodeOf(w);
+    if (code == null) {
+      out.add([w]);
+      continue;
+    }
+    final known = byCode[code];
+    if (known != null) {
+      known.add(w);
+      continue;
+    }
+    final fresh = [w];
+    byCode[code] = fresh;
+    out.add(fresh);
+  }
+  return out;
+}
+
+/// §572 — подстановка, которая у записей группы расходится.
+const groupDiffersMark = '…'; // l10n-exempt: знак «значения разные», не текст
+
+/// §572 — подстановки для текстов группы одним [RegistryWarning].
+///
+/// Значение (`path`, `value`, каждый ключ `params`) идёт как есть, если оно
+/// одинаково у всех записей группы, и [groupDiffersMark], если различается:
+/// разбор один на группу и не должен приписывать ей имя одного случайного
+/// поля. Сборка в [RegistryWarning] — чтобы текст собрали те же
+/// `message()` / `registryText` / `registryCause` / `registryFix`, что и у
+/// одиночной плитки, а не второй шаблонизатор.
+///
+/// Записи уже замаскированы (§511). `null` — в группе нет ни одного
+/// [RegistryWarning]: подстановок нет и у одиночной плитки такого класса.
+RegistryWarning? mergeGroupSubstitutions(List<NodeWarning> group) {
+  final subs = group.whereType<RegistryWarning>().toList();
+  if (subs.isEmpty) return null;
+  String? common(Iterable<String?> values) {
+    final first = values.first;
+    return values.every((v) => v == first) ? first : groupDiffersMark;
+  }
+
+  final keys = {for (final r in subs) ...r.params.keys};
+  return RegistryWarning(
+    code: subs.first.code,
+    path: common(subs.map((r) => r.path)),
+    value: common(subs.map((r) => r.value)),
+    params: {
+      for (final k in keys)
+        // Ключ, которого у части записей нет, — тоже расхождение.
+        k: common(subs.map((r) => r.params[k])) ?? groupDiffersMark,
+    },
+  );
 }
 
 /// Предупреждения по уровням, старшее первым. Порядок ключей — порядок
@@ -163,15 +234,6 @@ class _NotificationTile extends StatelessWidget {
     final (color, icon) = warningSeverityStyle(context, warning.severity);
 
     final code = warningCodeOf(warning);
-    // Код есть у класса, а текстов может не быть: реестр не синхронизирован,
-    // либо код в нём рукописный без описания. Ссылку даём только когда
-    // страница про этот код действительно есть — то есть реестр его знает.
-    final known = code != null && ContractRegistry.I.textFor(code) != null;
-    final lang = registryLangForTag(LocaleController.I.effectiveTag);
-    // Подстановки несёт только RegistryWarning: у рукописного класса свои
-    // поля, и текст он собрал сам. Тексты реестра для его кода при этом
-    // остаются осмысленными — они про код, а не про конкретное значение.
-    //
     // §511 l1 — значение секретного поля (атрибут `secret` реестра) маскируется
     // здесь, в общем компоненте: карточку открывают список подписки, Servers,
     // Diagnostics и главный экран, а не только лист отказа ввода.
@@ -181,18 +243,6 @@ class _NotificationTile extends StatelessWidget {
     };
     final subst = w is RegistryWarning ? w : null;
     final path = subst?.path;
-    final detail = known
-        ? registryText(code, lang,
-            path: path, value: subst?.value, params: subst?.params ?? const {})
-        : '';
-    final cause = known
-        ? registryCause(code, lang,
-            path: path, value: subst?.value, params: subst?.params ?? const {})
-        : null;
-    final fix = known
-        ? registryFix(code, lang,
-            path: path, value: subst?.value, params: subst?.params ?? const {})
-        : const <String>[];
 
     return ExpansionTile(
       initiallyExpanded: initiallyExpanded,
@@ -207,67 +257,215 @@ class _NotificationTile extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         style: theme.textTheme.bodyMedium?.copyWith(color: color),
       ),
+      // §561 / задача 570 — отбраковка называет свою запись источника.
+      subtitle: warning.ownerTag.isEmpty
+          ? null
+          : Text(
+              getLocalText.s("Entry: %s", warning.ownerTag),
+              key: ValueKey('notification-owner-${warning.ownerTag}'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall,
+            ),
       children: [
         if (path != null && path.isNotEmpty)
           Align(
             alignment: Alignment.centerLeft,
             child: Text(
               path, // l10n-exempt: путь поля в теле узла, wire-имя
-              style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+              style: _monospace,
             ),
           ),
-        if (detail.isNotEmpty)
-          _Block(
-            title: getLocalText.s("What happened"),
-            child: Text(detail, style: theme.textTheme.bodySmall),
-          ),
-        if (cause != null)
-          _Block(
-            title: getLocalText.s("Why it happens"),
-            child: Text(cause, style: theme.textTheme.bodySmall),
-          ),
-        if (fix.isNotEmpty)
-          _Block(
-            title: getLocalText.s("What you can do"),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (final step in fix)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 2),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // l10n-exempt: маркер списка, не текст
-                        Text('•  ', style: theme.textTheme.bodySmall),
-                        Expanded(
-                          child:
-                              Text(step, style: theme.textTheme.bodySmall),
-                        ),
-                      ],
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        if (known)
+        // §585 — у рукописного класса без кода реестра свой текст.
+        if (warning case final UnknownNodeTypeWarning u)
           Align(
             alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                minimumSize: const Size(0, 32),
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              icon: const Icon(Icons.open_in_new, size: 16),
-              onPressed: () =>
-                  ul.UrlLauncher.open(contractWarningDocUrl(code)),
-              label: Text(getLocalText.s("Details")),
-            ),
+            child: Text(u.detailWith(getLocalText),
+                style: theme.textTheme.bodySmall),
           ),
+        ..._breakdown(context, code, subst, notApplied: !warning.applied),
       ],
     );
   }
+}
+
+/// §572 — несколько записей одного кода в одном уровне: одна плитка.
+///
+/// Заголовок — заголовок кода, справа число записей; в раскрытии — строка на
+/// запись (что именно у неё случилось) и разбор один раз на всю группу.
+/// Узел из Xray-JSON иначе давал семь плиток `json_field_unknown` подряд с
+/// одним и тем же разбором под каждой.
+class _NotificationGroupTile extends StatelessWidget {
+  const _NotificationGroupTile(this.group, {required this.initiallyExpanded});
+
+  final List<NodeWarning> group;
+  final bool initiallyExpanded;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final first = group.first;
+    final (color, icon) = warningSeverityStyle(context, first.severity);
+    final code = warningCodeOf(first)!;
+    final known = ContractRegistry.I.textFor(code) != null;
+    // §511 — маска до всего остального: значение уходит и в строку записи,
+    // и в подстановки текстов группы.
+    final entries = [
+      for (final w in group)
+        switch (w) {
+          final RegistryWarning r => r.withSecretValueMasked(),
+          final other => other,
+        },
+    ];
+    final subst = mergeGroupSubstitutions(entries);
+    // Текстов кода нет (реестр не синхронизирован) — заголовком остаётся
+    // `message()` первой записи, как у одиночной плитки без текстов.
+    final title =
+        known && subst != null ? subst.message() : entries.first.message();
+    final keyBase = '${first.severity.name}-$code';
+
+    return ExpansionTile(
+      initiallyExpanded: initiallyExpanded,
+      dense: true,
+      leading: Icon(icon, size: 18, color: color),
+      tilePadding: const EdgeInsets.symmetric(horizontal: 16),
+      childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      expandedCrossAxisAlignment: CrossAxisAlignment.start,
+      title: Row(
+        children: [
+          Expanded(
+            child: Text(
+              title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodyMedium?.copyWith(color: color),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            '${group.length}', // l10n-exempt: число записей группы
+            key: ValueKey('notification-group-count-$keyBase'),
+            style: theme.textTheme.bodySmall?.copyWith(color: color),
+          ),
+        ],
+      ),
+      children: [
+        for (var i = 0; i < entries.length; i++)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              _groupRowText(entries[i]),
+              key: ValueKey('notification-group-row-$keyBase-$i'),
+              style: _monospace,
+            ),
+          ),
+        ..._breakdown(context, code, subst,
+            notApplied: group.every((w) => !w.applied)),
+      ],
+    );
+  }
+}
+
+/// §572 — строка записи в группе: путь поля (с `= value`, если значение
+/// есть), иначе запись источника (§561 / задача 570 — у отбраковок разных
+/// записей подзаголовка `Entry:` у группы нет, запись называет строка),
+/// иначе собственный текст записи.
+String _groupRowText(NodeWarning w) {
+  if (w is RegistryWarning) {
+    final path = w.path;
+    if (path != null && path.isNotEmpty) {
+      final value = w.value;
+      return value == null || value.isEmpty
+          ? path // l10n-exempt: путь поля в теле узла, wire-имя
+          : '$path = $value'; // l10n-exempt: путь и значение поля, wire
+    }
+  }
+  if (w.ownerTag.isNotEmpty) return getLocalText.s("Entry: %s", w.ownerTag);
+  return w.message();
+}
+
+const _monospace = TextStyle(fontSize: 12, fontFamily: 'monospace');
+
+/// Разбор кода: `What happened` / `Why it happens` / `What you can do` и
+/// ссылка `Details`. Общий у одиночной плитки и группы (§572): у группы
+/// [subst] — подстановки после [mergeGroupSubstitutions].
+///
+/// Подстановки несёт только RegistryWarning: у рукописного класса свои
+/// поля, и текст он собрал сам. Тексты реестра для его кода при этом
+/// остаются осмысленными — они про код, а не про конкретное значение.
+///
+/// §577 — [notApplied]: правило реестра не применено к авторскому телу.
+/// Текст реестра «что произошло» утверждает, что поле изменено, поэтому
+/// вместо него — общая строка; причина и что делать — из реестра.
+List<Widget> _breakdown(
+    BuildContext context, String? code, RegistryWarning? subst,
+    {bool notApplied = false}) {
+  final theme = Theme.of(context);
+  // Код есть у класса, а текстов может не быть: реестр не синхронизирован,
+  // либо код в нём рукописный без описания. Ссылку даём только когда
+  // страница про этот код действительно есть — то есть реестр его знает.
+  if (code == null || ContractRegistry.I.textFor(code) == null) {
+    return const [];
+  }
+  final lang = registryLangForTag(LocaleController.I.effectiveTag);
+  final path = subst?.path;
+  final value = subst?.value;
+  final params = subst?.params ?? const <String, String>{};
+  final detail = notApplied
+      ? getLocalText
+          .s("The node is written by hand, so the app changed nothing in it.")
+      : registryText(code, lang, path: path, value: value, params: params);
+  final cause =
+      registryCause(code, lang, path: path, value: value, params: params);
+  final fix = registryFix(code, lang, path: path, value: value, params: params);
+  return [
+    if (detail.isNotEmpty)
+      _Block(
+        title: getLocalText.s("What happened"),
+        child: Text(detail, style: theme.textTheme.bodySmall),
+      ),
+    if (cause != null)
+      _Block(
+        title: getLocalText.s("Why it happens"),
+        child: Text(cause, style: theme.textTheme.bodySmall),
+      ),
+    if (fix.isNotEmpty)
+      _Block(
+        title: getLocalText.s("What you can do"),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final step in fix)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 2),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // l10n-exempt: маркер списка, не текст
+                    Text('•  ', style: theme.textTheme.bodySmall),
+                    Expanded(
+                      child: Text(step, style: theme.textTheme.bodySmall),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    Align(
+      alignment: Alignment.centerLeft,
+      child: TextButton.icon(
+        style: TextButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          minimumSize: const Size(0, 32),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+        icon: const Icon(Icons.open_in_new, size: 16),
+        onPressed: () => ul.UrlLauncher.open(contractWarningDocUrl(code)),
+        label: Text(getLocalText.s("Details")),
+      ),
+    ),
+  ];
 }
 
 class _Block extends StatelessWidget {

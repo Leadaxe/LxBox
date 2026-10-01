@@ -4,6 +4,8 @@ import '../../../controllers/subscription_controller.dart';
 import '../../../models/direction.dart';
 import '../../../models/node_link.dart';
 import '../../../models/server_list.dart';
+import '../../../models/source_replace.dart';
+import '../../source_replace_screen.dart';
 import '../../../services/subscription/input_helpers.dart';
 import '../../../services/subscription/user_agent.dart';
 import '../../../widgets/detour_target_picker.dart' show detourLinkDisplay;
@@ -47,7 +49,16 @@ class SubscriptionSettingsTab extends StatelessWidget {
     this.onEditIdentityDeviceOs,
     this.onEditIdentityVerOs,
     this.onEditIdentityDeviceModel,
+    this.onReplaceChanged,
+    this.otherSources = const [],
   });
+
+  /// Фича 565 фаза B — свёртка источника в группу сохранена (`null` — снята).
+  /// Нет колбэка — секция не рисуется.
+  final Future<void> Function(SourceReplace? replace)? onReplaceChanged;
+
+  /// §568 / задача 570 — все источники (для занятых имён группы свёртки).
+  final List<ServerList> otherSources;
 
   final SubscriptionEntry entry;
 
@@ -123,6 +134,53 @@ class SubscriptionSettingsTab extends StatelessWidget {
     return hops.join(' → ');
   }
 
+  /// Фича 565 фаза B (§74) — строка свёртки: режим и имя группы, тап —
+  /// редактор.
+  Widget _replaceTile(BuildContext context, ThemeData theme) {
+    final r = entry.replace;
+    final mode = switch (r?.mode) {
+      null => '',
+      ReplaceMode.manual => getLocalText.s("Manual"),
+      ReplaceMode.auto => getLocalText.s("Auto"),
+      ReplaceMode.both => getLocalText.s("Both"),
+    };
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(getLocalText.s("Replace with a group"),
+            style: theme.textTheme.titleSmall?.copyWith(
+              color: theme.colorScheme.primary,
+              fontWeight: FontWeight.bold,
+            )),
+        const Divider(),
+        ListTile(
+          key: const ValueKey('source-replace-tile'),
+          contentPadding: EdgeInsets.zero,
+          title: Text(r == null ? getLocalText.s("Off") : r.tag),
+          subtitle: Text(r == null
+              ? getLocalText.s(
+                  "Directions and rules see one group instead of every server")
+              : mode),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () async {
+            final res = await openSourceReplaceEditor(
+              context,
+              initial: r,
+              defaultTag: entry.displayName,
+              // §568 / задача 570 — предупреждение о занятом имени.
+              takenTags: replaceTagOwnersOf(
+                sources: otherSources,
+                selfId: entry.list.id,
+                directions: directions,
+              ),
+            );
+            if (res != null) await onReplaceChanged!(res.replace);
+          },
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -167,6 +225,10 @@ class SubscriptionSettingsTab extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 24),
+        if (onReplaceChanged != null && entry.list is! UserServer) ...[
+          _replaceTile(context, theme),
+          const SizedBox(height: 24),
+        ],
         if (hasDetour) ...[
           Text(getLocalText.s("Detour servers"), style: theme.textTheme.titleSmall?.copyWith(
             color: theme.colorScheme.primary,

@@ -4,12 +4,12 @@ import '../../models/direction.dart';
 import '../../models/custom_rule.dart';
 import '../../models/dns_ref.dart';
 import '../../models/emit_context.dart';
-import '../../models/node_sections.dart';
 import '../../models/node_spec.dart' show NodeSpec;
 import '../../models/node_warning.dart';
 import '../../models/parser_config.dart';
 import '../../models/server_list.dart';
 import '../../models/source_chain.dart';
+import '../contract/group_genus.dart';
 import '../../models/singbox_entry.dart';
 import '../../models/template_vars.dart';
 import '../../config/consts.dart';
@@ -28,9 +28,11 @@ import 'if_engine.dart';
 import 'node_link_resolve.dart';
 import 'rule_order.dart';
 import 'post_steps.dart';
+import 'preset_expand.dart' show PresetNode;
 import 'registry_gate.dart';
 import 'rule_set_registry.dart';
 import 'server_list_build.dart';
+import 'source_replace_build.dart';
 import 'validator.dart';
 
 /// Результат сборки — готовый JSON + валидация + warnings + generated-vars
@@ -49,7 +51,7 @@ class BuildResult {
   /// SnackBar; фактический исход — в тексте [emitWarnings]/AppLog.
   final List<String> directionsWithoutNodes;
 
-  /// Фича 478 / CANON §9.3 — обратное отображение «финальный тег собранного
+  /// Фича 478 / PARSING_PRINCIPLES §9.3 — обратное отображение «финальный тег собранного
   /// конфига → исходный узел». Строит его та же сборка, которая теги и
   /// выдала, поэтому производные записи (хоп цепочки, узел папки, префикс
   /// подписки, WARP) ведут к своему ИСХОДНОМУ узлу.
@@ -63,6 +65,17 @@ class BuildResult {
   /// §505 — предупреждения сборки (гард реестра) по финальному config-тегу.
   final Map<String, List<NodeWarning>> nodeBuildWarningsByEmittedTag;
 
+  /// §555 — предупреждения движка шаблона за эту сборку (вид
+  /// `template_degraded` контракта 1.1.69/1.1.70): код реестра с параметрами,
+  /// без дублей по (код, параметры), в порядке первого появления. Их
+  /// EN-строки стоят ПЕРВЫМИ в [emitWarnings]; сохранение они не блокируют.
+  final List<TemplateWarning> templateWarnings;
+
+  /// Контракт 1.1.80 — коды реестра уровня сборки с параметрами
+  /// (`replace_tag_conflict`, `replace_group_empty`). Их EN-строки идут в
+  /// [emitWarnings]; список — для сверки кодов и поверхностей UI.
+  final List<RegistryWarning> buildCodes;
+
   const BuildResult({
     required this.configJson,
     required this.config,
@@ -72,6 +85,8 @@ class BuildResult {
     this.directionsWithoutNodes = const [],
     this.nodeByEmittedTag = const {},
     this.nodeBuildWarningsByEmittedTag = const {},
+    this.templateWarnings = const [],
+    this.buildCodes = const [],
   });
 }
 
@@ -101,6 +116,12 @@ class BuildSettings {
   /// `core_chain_capability.dart`).
   final String coreVersion;
 
+  /// Контракт 1.1.60 (§56) — теги сборки ядра для узлового гейта реестра
+  /// (`build_tag` + `on_core_unsupported`). Дефолт — теги встроенного AAR
+  /// ([kCoreBuildTags]); `null` — теги неизвестны, гейт по тегу не
+  /// применяется.
+  final Set<String>? coreBuildTags;
+
   /// §046: OS-level split-tunneling apps list. `null` = pipeline возьмёт
   /// дефолт (mode=off — все apps через tun, sing-box обычное поведение).
   final TunAppsConfig? tunApps;
@@ -110,16 +131,31 @@ class BuildSettings {
   final VpnModeConfig? vpnMode;
 
   /// §215: порог простоя для idle-suspend недостижимых WG/AWG эндпоинтов
-  /// (ядро SPEC 020, `route.lx_idle_suspend`). Duration-строка (`"5m"`,
-  /// `"30s"`). Пусто = фича выключена (поле не пишется, дефолт ядра =
-  /// idle-тик не запускается).
+  /// (ядро SPEC 020, `lx.wg.idle_suspend` — §535, до пина v1.14.2-lx.1 ключ
+  /// звался `route.lx_idle_suspend`). Duration-строка (`"5m"`, `"30s"`).
+  /// Пусто = фича выключена (поле не пишется, дефолт ядра = idle-тик
+  /// не запускается).
   final String idleSuspend;
 
   /// §272: второе, длинное окно простоя для ДОСТИЖИМЫХ эндпоинтов
-  /// (ядро SPEC 020 rev. 2026-07-15, `route.lx_idle_suspend_reachable`).
+  /// (ядро SPEC 020 rev. 2026-07-15, `lx.wg.idle_suspend_reachable` — §535).
   /// Пусто = достижимые не засыпают. Эмитится ТОЛЬКО при непустом
   /// [idleSuspend] — ядро отвергает reachable без базового порога.
   final String idleSuspendReachable;
+
+  /// §542 — `lx.wg.build_max` (ядро SPEC 097): сколько WG/AWG эндпоинтов
+  /// держать собранными одновременно; сверх лимита самый давний разбирается.
+  /// `0` = без потолка (пишется как `0`, ядро это допускает). Было константой
+  /// §536 (5), теперь настройка `wg_build_max`. Эмитится только вместе с
+  /// [idleSuspend]. `build_overflow` не пишем — дефолт ядра `wait`.
+  final int wgBuildMax;
+
+  /// §542 — `lx.wg.lazy_build` (ядро SPEC 097): WG/AWG эндпоинт собирается
+  /// при первом дайле, а не на старте. Было константой §536 (`true`), теперь
+  /// настройка `wg_lazy_build`. `false` → не пишем ни `lazy_build`, ни
+  /// `build_max` (бюджет в UI гаснет вместе с тумблером; ядро `build_max`
+  /// без `lazy_build` принимает, но выключенный пункт не должен действовать).
+  final bool wgLazyBuild;
 
   /// §272: passive health check (ядро SPEC 019, `urltest.passive_check`) —
   /// пишется в urltest-двойники Направлений. Пока свежий успешный TCP-дайл
@@ -147,10 +183,13 @@ class BuildSettings {
     this.directions = const [],
     this.chains = const [],
     this.coreVersion = '',
+    this.coreBuildTags = kCoreBuildTags,
     this.tunApps,
     this.vpnMode,
     this.idleSuspend = '',
     this.idleSuspendReachable = '',
+    this.wgBuildMax = 5,
+    this.wgLazyBuild = true,
     this.passiveCheck = false,
     this.tailscaleStateRoot = '',
     this.tailscaleStateDirs,
@@ -173,10 +212,53 @@ class BuildSettings {
 /// 6. Applied selectable rules, app rules, route final.
 /// 7. Post-steps: tls_fragment, custom DNS.
 /// 8. Validate → вернуть BuildResult с готовым `configJson`.
+///
+/// §555 — вся сборка идёт в зоне накопителя [TemplateWarnings]: коды движка
+/// шаблона (главный конфиг, тела пресетов, шаблонные DNS-серверы) собираются
+/// с параметрами и дедупом и уходят в [BuildResult.templateWarnings].
 Future<BuildResult> buildConfig({
   required List<ServerList> lists,
   BuildSettings settings = const BuildSettings(),
   WizardTemplate? template,
+}) {
+  final templateWarnings = TemplateWarnings();
+  return collectTemplateWarnings(
+    templateWarnings,
+    () => _buildConfig(
+      lists: lists,
+      settings: settings,
+      template: template,
+      templateWarnings: templateWarnings,
+    ),
+  );
+}
+
+/// EN-строка предупреждения шаблона для [BuildResult.emitWarnings]: заголовок
+/// кода из реестра с подстановкой параметров.
+String _renderTemplateWarning(TemplateWarning w) =>
+    'Template: ${RegistryWarning(code: w.code, params: w.params).renderEn()}';
+
+/// §580 — границы int-переменных шаблона, у которых они есть
+/// (TEMPLATE_LANG §6.8). Экран не сохраняет значение вне границ, сборка его
+/// не подставляет.
+const Map<String, (int, int)> kVarIntBounds = {
+  'dns_cache_capacity': (1024, 65535),
+};
+
+/// Значение [raw] переменной [name] — целое в её границах (переменная без
+/// границ — всегда да).
+bool varIntInBounds(String name, String raw) {
+  final b = kVarIntBounds[name];
+  if (b == null) return true;
+  final n = int.tryParse(raw.trim());
+  return n != null && n >= b.$1 && n <= b.$2;
+}
+
+Future<BuildResult> _buildConfig({
+  required List<ServerList> lists,
+  required BuildSettings settings,
+  required WizardTemplate? template,
+  required TemplateWarnings templateWarnings,
 }) async {
   template ??= await TemplateLoader.load();
 
@@ -198,6 +280,14 @@ Future<BuildResult> buildConfig({
             ? v.defaultValue
             : raw;
     byName[v.name] = v;
+  }
+  // §580 (TEMPLATE_LANG §6.8) — сохранённое вне границ (правка файла руками,
+  // импорт) в конфиг не уходит: действует значение по умолчанию шаблона.
+  for (final e in kVarIntBounds.entries) {
+    final v = byName[e.key];
+    final raw = vars[e.key];
+    if (v == null || raw == null) continue;
+    if (!varIntInBounds(e.key, raw)) vars[e.key] = v.defaultValue;
   }
   // Также пропускаем user-override'ы, которые могут прийти вне template.vars
   // (например, clash_api/secret, сохранённые раньше).
@@ -301,19 +391,44 @@ Future<BuildResult> buildConfig({
   for (final list in lists) {
     if (list is! UserServer) linkTargets.noteContainer(list.id, list.name);
   }
+  // Фича 565 фаза B (§74 п.5) — имена свёрток заняты: узел-тёзка получает
+  // суффикс штатным путём, как у тегов Направлений.
+  final replaceNames = sourceReplaceNames(lists);
+  // §77 п.5 (контракт 1.1.80) — тег свёртки, совпавший с Направлением (или
+  // его двойником), со свёрткой выше по списку или с тегом шаблона: свёртка
+  // не собирается, источник идёт несвёрнутым, код в отчёте сборки.
+  final replaceConflicts = findReplaceTagConflicts(
+    lists,
+    directionNames: {for (final c in directions) ...[c.tag, c.autoTag]},
+    systemNames: {
+      ...kReservedDirectionTags,
+      for (final raw in (config['outbounds'] as List<dynamic>? ?? const []))
+        if (raw is Map && raw['tag'] is String) raw['tag'] as String,
+    },
+  );
   final ctx = _BuildCtx(
     tvars,
     ruleSets,
     passiveCheck: settings.passiveCheck, // §322
     reservedTags: [
       for (final c in directions) ...[c.tag, c.autoTag],
+      ...replaceNames,
     ],
-    coreVersion: settings.coreVersion, // §435 — гейт tailscale
+    coreVersion: settings.coreVersion,
     linkTargets: linkTargets,
+    blockedReplaces: {for (final c in replaceConflicts) c.listId},
   );
   for (final list in lists) {
     list.build(ctx);
   }
+  // Фича 565 фаза B — имя свёртки, у которой на сборке есть члены, —
+  // корневая цель ссылок (detour `{tag}`). Свёртка без членов группы не даст,
+  // и ссылка на неё обязана не разрешиться (fail-closed), а не уйти напрямую.
+  linkTargets.addRootNames([
+    for (final p in ctx.replacePlans)
+      if (p.selectorMembers.isNotEmpty || p.autoMembers.isNotEmpty)
+        ...p.replace.names,
+  ]);
   // §439 — второй проход: detour-ссылки → финальные теги. Fail-closed:
   // носитель, чья ссылка не разрешилась (и каскадом — кто ходил через него,
   // кольцо — все участники), выпадает из конфига, а не уходит напрямую.
@@ -329,19 +444,54 @@ Future<BuildResult> buildConfig({
   final registryReport = applyRegistryGate(
     [...ctx.outbounds, ...ctx.endpoints],
     coreVersion: settings.coreVersion,
-    // §473 — записи с дословным JSON-телом (§455) идут в ядро как написаны:
-    // правило условного потолка (`max_when`) им значение не подменяет.
-    verbatim: ctx.verbatimEntries,
+    coreBuildTags: settings.coreBuildTags,
   );
   ctx.dropRegistryEntries(registryReport.dropped);
 
+  // Фича 565 фаза B (§74 п.2–4) — свёртки источников в группы: члены — узлы,
+  // пережившие отбраковки выше; группа без членов не пишется.
+  final buildCodes = <RegistryWarning>[
+    for (final c in replaceConflicts) c.warning,
+  ];
+  final replaceBuild = materializeReplaceGroups(
+    ctx.replacePlans,
+    alive: {
+      for (final e in ctx.outbounds) e.tag,
+      for (final e in ctx.endpoints) e.tag,
+    },
+    passiveCheck: settings.passiveCheck,
+    warn: ctx.warn,
+    code: buildCodes.add,
+    // `@имя` в параметрах автовыбора — переменная шаблона, как у Направления.
+    resolveVar: resolve,
+  );
+  // Выключенный источник плана не даёт: его имена тоже не написаны.
+  // Свёртка в конфликте имён (§77 п.5) имя не занимает — оно владельца.
+  final conflictNames = {
+    for (final c in replaceConflicts) c.warning.params['tag'],
+  };
+  replaceBuild.dropped.addAll(replaceNames.where((n) =>
+      !replaceBuild.emitted.contains(n) && !conflictNames.contains(n)));
+
+  // §74 п.4 — detour на свёртку, опустевшую только ПОСЛЕ отбраковок (ссылка
+  // разрешилась корневым именем, а группа не написана): носитель выпадает
+  // (fail-closed), каскадом — кто ходил через него; напрямую он не идёт.
+  final foldDetourLines = _dropCarriersOfDroppedReplaces(
+      ctx, replaceBuild.dropped, linkTargets);
+
   // Warnings собираем отдельно прямым обходом (ctx их не знает).
-  // §435 — кроме строк, которые `ServerList.build` отдал через `ctx.warn`
-  // (гейт ядра `tailscale_core_unsupported`).
+  // §435 — кроме строк, которые `ServerList.build` отдал через `ctx.warn`.
+  // Узловой гейт ядра (`tailscale_core_unsupported` и др., §56) — в
+  // `registryReport.warnings`.
   final emitWarnings = <String>[
     ...ctx.warnings,
     ...detourReport.warnings,
     ...registryReport.warnings,
+    // Контракт 1.1.80 — коды свёрток (`replace_tag_conflict`,
+    // `replace_group_empty`) строкой по тексту реестра; сами коды — в
+    // [BuildResult.buildCodes].
+    for (final w in buildCodes) w.renderEn(),
+    ...foldDetourLines,
   ];
   for (final list in lists) {
     if (!list.enabled) continue;
@@ -392,18 +542,28 @@ Future<BuildResult> buildConfig({
     settings.chains,
     knownTags: knownChainTargets,
     targets: linkTargets,
+    hopBodies: {
+      for (final e in ctx.outbounds) e.tag: e.map,
+      for (final e in ctx.endpoints) e.tag: e.map,
+    },
     coreVersion: settings.coreVersion,
   );
   for (final d in chainResolution.degraded) {
     emitWarnings.add(d.reason);
+  }
+  for (final n in chainResolution.notes) {
+    emitWarnings.add(n.line);
   }
 
   // §393 C3 — цепочка идёт в пул отбора Направлений последней, ПОСЛЕ узлов
   // подписок: порядок пула = порядок конфига, а цепочки эмитятся после всех
   // источников (корпус `chain_is_a_node_in_directions` нормирует именно
   // `[…узлы, hop-chain]`).
+  // Фича 565 фаза B (§74 п.5) — свёрнутый источник даёт пулу ОДНОГО
+  // кандидата (`tag`) вместо своих узлов.
   final selectorTags = <String>[
     ...ctx.selectorEntries.map((e) => e.tag),
+    ...replaceBuild.candidates,
     ...chainResolution.tags,
   ];
 
@@ -414,6 +574,8 @@ Future<BuildResult> buildConfig({
   final nodeEntries = <Map<String, dynamic>>[
     for (final e in ctx.outbounds) e.map,
     for (final e in ctx.endpoints) e.map,
+    // Группы свёрток: двойник Направления их в состав не берёт.
+    ...replaceBuild.groups,
   ];
 
   final directionsWithoutNodes = <String>[]; // §274 — для SnackBar на Home
@@ -427,6 +589,8 @@ Future<BuildResult> buildConfig({
     // §393 C4/T9 — карта позиций для «Направление не берёт цепочку, идущую
     // через него самого» (транзитивно).
     chainHops: chainHopsByTag(chainResolution.nodes),
+    // Фича 565 фаза B — имена свёрток — законные опции `include`.
+    includeTargets: replaceBuild.emitted,
   );
 
   final baseOutbounds = config['outbounds'] as List<dynamic>? ?? const [];
@@ -436,6 +600,8 @@ Future<BuildResult> buildConfig({
     // §393 C3 — цепочки ПЕРЕД группами Направлений: они узлы, а группы их
     // отбирают (порядок нормативен, корпус `chain_packet_order`).
     ...chainResolution.nodes,
+    // Фича 565 фаза B (§74 п.3) — группы свёрток после узлов, до Направлений.
+    ...replaceBuild.groups,
     ...presetOutbounds,
   ];
 
@@ -475,13 +641,9 @@ Future<BuildResult> buildConfig({
     ];
   }
 
-  // §435 / контракт ## 13 — секции узлов (NODE_SECTIONS.md §3): записи
-  // свободных узлов, эмитированных выше, после подстановки `@self` → финальный
-  // тег дописываются к общим спискам. Правила — на ту же ось `num`, что и
-  // корень с якорями пресетов (без `num` → 945); DNS — в конец. Выключенный,
-  // снятый гейтом или не разобранный узел в `emittedTagByNode` отсутствует и
-  // ничего не даёт. Инвариант: без узлов с секциями конфиг байт-в-байт прежний.
-  final injected = _collectNodeSections(lists, ctx.emittedTagByNode);
+  // §578 — узлы для пресетов с `for_each`: состав окончателен (снятия
+  // detour-прохода, гейта реестра и ядра уже применены), теги финальные.
+  final presetNodes = _collectPresetNodes(lists, ctx);
 
   // §370 — нормализация порядка по оси `num`: seed обязательного пресета
   // (traffic-processing) + разметка неразмеченных + сортировка. Гарантирует,
@@ -490,7 +652,7 @@ Future<BuildResult> buildConfig({
   // первым). Одноразово здесь → все нижеследующие проходы видят нормализованный
   // список.
   final customRules = normalizeRuleOrder(
-    [...settings.customRules, ...injected.rules],
+    [...settings.customRules],
     template.selectableRules,
     template,
   );
@@ -578,6 +740,7 @@ Future<BuildResult> buildConfig({
     srsPaths: srsPaths,
     presetSrsPaths: presetSrsPaths,
     globalVars: vars, // §265 — ref-vars резолвятся из flat global vars
+    presetNodes: presetNodes, // §578
   );
   emitWarnings.addAll(unifiedApply.warnings);
 
@@ -589,17 +752,38 @@ Future<BuildResult> buildConfig({
 
   // §215 — idle-suspend недостижимых WG/AWG эндпоинтов (ядро SPEC 020).
   // Пишем поле только когда порог задан (непустой), чтобы сохранить
-  // omitempty-семантику ядра: отсутствие/пусто = фича выключена (idle-тик
+  // omitempty-семантику ядра: отсутствие/пусто = фича выключена (идл-тик
   // не запускается — безопасный kill-switch).
+  //
+  // §535 — ключи сна переехали из `route` в корневой блок `lx.wg`
+  // (ядро SPEC 098, пин v1.14.2-lx.1). Старые `route.lx_idle_*` ядро ещё
+  // принимает, но пишет WARN на каждый ключ, поэтому эмитим ТОЛЬКО новые
+  // имена: одно место записи, без дублей (значение в обоих местах = WARN,
+  // разное значение = ядро не стартует).
   final idle = settings.idleSuspend.trim();
   if (idle.isNotEmpty) {
-    route['lx_idle_suspend'] = idle;
+    final wg = <String, dynamic>{'idle_suspend': idle};
     // §272 — reachable-окно валидно ТОЛЬКО при включённом базовом пороге
-    // (ядро: "lx_idle_suspend_reachable requires lx_idle_suspend").
+    // (ядро: "lx.wg.idle_suspend_reachable requires lx.wg.idle_suspend").
     final reachable = settings.idleSuspendReachable.trim();
     if (reachable.isNotEmpty) {
-      route['lx_idle_suspend_reachable'] = reachable;
+      wg['idle_suspend_reachable'] = reachable;
     }
+    // §536 — ленивая сборка WG/AWG эндпоинтов (ядро SPEC 097). Решение
+    // владельца 24.09.2026: включаем всегда рядом с порогом сна. Ядро
+    // требует `lazy_build` вместе с `idle_suspend`, поэтому оба ключа живут
+    // в этой же ветке: нет порога сна — нет и блока `lx`.
+    // `build_overflow` НЕ пишем (дефолт ядра `wait` нас устраивает),
+    // `lx.masque.idle_timeout` тоже: у WARP MASQUE-узлов свой idle_timeout
+    // внутри самого узла.
+    // §542 — оба значения из настроек. Тумблер lazy выключен → ни
+    // `lazy_build`, ни `build_max`; `0` в build_max пишется как есть (ядро:
+    // без потолка).
+    if (settings.wgLazyBuild) {
+      wg['lazy_build'] = true;
+      wg['build_max'] = settings.wgBuildMax < 0 ? 0 : settings.wgBuildMax;
+    }
+    config['lx'] = <String, dynamic>{'wg': wg};
   }
 
   // §125 — деградация dangling route_final → vpn-1. Ссылка на удалённое Направление
@@ -618,6 +802,7 @@ Future<BuildResult> buildConfig({
       kBlockOutboundTag, // §201 — block системный outbound, валидная route_final-мишень
       for (final o in presetOutbounds)
         if (o['tag'] is String) o['tag'] as String,
+      ...replaceBuild.emitted, // фича 565 фаза B — корневые имена свёрток
     };
     var finalTag = settings.routeFinal;
     if (!validFinals.contains(finalTag)) {
@@ -628,6 +813,43 @@ Future<BuildResult> buildConfig({
     route['final'] = finalTag;
   }
 
+  // Фича 565 фаза B (§74 п.4) — правило на свёртку, чья группа не написана
+  // (ноль узлов): цель подменяется на `route.final`, если он жив, иначе
+  // правило снимается. Включённое правило с целью в никуда роняет конфиг.
+  if (replaceBuild.dropped.isNotEmpty) {
+    emitWarnings.addAll(retargetRulesOffDroppedReplaces(
+      route,
+      replaceBuild.dropped,
+      liveFinals: {
+        kDirectOutboundTag,
+        kBlockOutboundTag,
+        for (final o in presetOutbounds)
+          if (o['tag'] is String) o['tag'] as String,
+        ...replaceBuild.emitted,
+      },
+    ));
+  }
+
+  // Контракт 1.1.65 — поля, уступающие дописанному сборкой `detour`
+  // (`listen_port` WireGuard), снимаются кодом связи реестра. Контракт 1.1.84
+  // — туда же `tls.fragment` (`detour_with_tls_fragment`). Код ложится и в
+  // предупреждения узла по его config-тегу — рядом с кодами гарда реестра.
+  // §577 — тела авторских записей (identity: карты тел и есть элементы
+  // `outbounds[]`/`endpoints[]` конфига).
+  final authoredBodies = Set<Map<String, dynamic>>.identity()
+    ..addAll([
+      for (final e in <SingboxEntry>[...ctx.outbounds, ...ctx.endpoints])
+        if (e.authored) e.map,
+    ]);
+  for (final w in applyDetourYields(config, authored: authoredBodies)) {
+    emitWarnings
+        .add(w.applied ? w.renderEn() : '${w.renderEn()} (not applied)');
+    if (w.ownerTag.isNotEmpty) {
+      registryReport.warningsByEmittedTag
+          .putIfAbsent(w.ownerTag, () => [])
+          .add(w);
+    }
+  }
   applyTlsFragment(config, vars);
   applyMixedCaseSni(config, vars);
 
@@ -649,9 +871,8 @@ Future<BuildResult> buildConfig({
     dnsSrsCachedPaths: dnsSrsCachedPaths,
     dnsMirrors: unifiedApply.dnsMirrors,
     warningsOut: emitWarnings, // §312 — дропы членов DNS-групп
-    nodeServers: injected.dnsServers, // §435 — DNS-записи узлов в конец
-    nodeRules: injected.dnsRules,
     resolverDefaults: resolverDefaults, // §441 — Н10
+    globalVars: vars, // §555/§570 — тела шаблонных серверов видят весь шаблон
   );
 
   // §119/§120: VPN-mode (tun-in/mixed-in/route-rules) теперь декларативен —
@@ -720,7 +941,8 @@ Future<BuildResult> buildConfig({
   // («unknown uTLS fingerprint») — конфиг не встаёт целиком. Парсер уже
   // канонизирует на входе (xray-псевдонимы hellochrome_* → chrome, мусор →
   // chrome); этот post-step — страховка для путей мимо парсера.
-  final healedFingerprints = healUnknownUtlsFingerprints(config);
+  final healedFingerprints = healUnknownUtlsFingerprints(config,
+      authored: authoredBodies);
   for (final h in healedFingerprints) {
     emitWarnings.add(
         'Fingerprint replaced: outbound "${h.owner}" had unknown uTLS '
@@ -732,7 +954,7 @@ Future<BuildResult> buildConfig({
   // (§169/§343), этот post-step — страховка для путей мимо парсера (raw
   // JSON, §302 import rules, vars). Битое значение отбрасывается, нода
   // деградирует — VPN стартует.
-  final healedReality = healInvalidReality(config);
+  final healedReality = healInvalidReality(config, authored: authoredBodies);
   for (final h in healedReality) {
     emitWarnings.add(h.field == 'short_id'
         ? 'REALITY short_id cleared: outbound "${h.owner}" had invalid '
@@ -756,11 +978,18 @@ Future<BuildResult> buildConfig({
   ));
 
   final validation = validateConfig(config);
+  // §555 — записи template_degraded идут первыми (паритет с «Итогом» desktop).
+  final templateItems = templateWarnings.items;
   return BuildResult(
     configJson: jsonEncode(config),
     config: config,
     validation: validation,
-    emitWarnings: emitWarnings,
+    emitWarnings: [
+      for (final w in templateItems) _renderTemplateWarning(w),
+      ...emitWarnings,
+    ],
+    templateWarnings: templateItems,
+    buildCodes: buildCodes,
     generatedVars: generatedVars,
     directionsWithoutNodes: directionsWithoutNodes,
     nodeByEmittedTag: {
@@ -771,59 +1000,34 @@ Future<BuildResult> buildConfig({
   );
 }
 
-/// §435 — секции узлов после подстановки `@self`, готовые к инъекции:
-/// правила — на общую ось; DNS — тела с `tag` (серверы) и тела правил.
-class _NodeSectionsInjection {
-  final rules = <CustomRule>[];
-  final dnsServers = <Map<String, dynamic>>[];
-  final dnsRules = <Map<String, dynamic>>[];
-}
-
-/// §435 — обход свободных узлов с секциями (`UserServer.sections`,
-/// `FolderMember.sections`; NODE_SECTIONS.md §1: у подписок и цепочек поля
-/// нет). Узел без финального тега в [emittedTagByNode] пропускается —
-/// выключен, снят гейтом ядра или не разобран. Записи с `enabled: false`
-/// отсеиваются здесь же (§3 п. 3–4).
-_NodeSectionsInjection _collectNodeSections(
-  List<ServerList> lists,
-  Map<NodeSpec, String> emittedTagByNode,
-) {
-  final out = _NodeSectionsInjection();
-  void add(NodeSections? sections, NodeSpec? node) {
-    if (sections == null || sections.isEmpty || node == null) return;
-    final tag = emittedTagByNode[node];
-    if (tag == null || tag.isEmpty) return;
-    final s = sections.substituteSelf(tag);
-    for (final r in s.rules) {
-      if (!r.enabled) continue;
-      r.orderNum ??= kNodeRuleDefaultNum;
-      out.rules.add(r);
-    }
-    for (final srv in s.dnsServers) {
-      if (!srv.enabled) continue;
-      out.dnsServers.add(<String, dynamic>{...srv.body, 'tag': srv.tag});
-    }
-    for (final r in s.dnsRules) {
-      if (!r.enabled) continue;
-      out.dnsRules.add(Map<String, dynamic>.of(r.rule));
-    }
-  }
-
+/// §578 — узлы конфига для `for_each` в порядке конфига (`outbounds`, затем
+/// `endpoints`). Берутся только записи узлов из источников, у которых есть
+/// финальный тег в `emittedTagByNode`: выключенный, снятый гейтом реестра,
+/// ядра или detour-проходом узел туда не попадает. `skip_presets` — поле
+/// записи своего сервера или члена папки; у узла подписки записи нет.
+List<PresetNode> _collectPresetNodes(List<ServerList> lists, _BuildCtx ctx) {
+  final skip = <NodeSpec>{};
   for (final list in lists) {
-    if (!list.enabled) continue;
     switch (list) {
       case UserServer u:
-        add(u.sections, u.nodes.isEmpty ? null : u.nodes.first);
+        if (u.skipPresets) skip.addAll(u.nodes);
       case FolderServers f:
         for (final m in f.members) {
-          if (!m.enabled) continue;
-          add(m.sections, m.node);
+          final node = m.node;
+          if (m.skipPresets && node != null) skip.add(node);
         }
       case SubscriptionServers():
         break;
     }
   }
-  return out;
+  final nodeByTag = <String, NodeSpec>{
+    for (final e in ctx.emittedTagByNode.entries) e.value: e.key,
+  };
+  return [
+    for (final e in <SingboxEntry>[...ctx.outbounds, ...ctx.endpoints])
+      if (nodeByTag[e.tag] case final NodeSpec node)
+        PresetNode(tag: e.tag, body: e.map, skipPresets: skip.contains(node)),
+  ];
 }
 
 /// Реализация `EmitContext`: vars + аллокатор уникальных тегов +
@@ -836,10 +1040,17 @@ class _BuildCtx implements EmitContext {
     Iterable<String> reservedTags = const [],
     String coreVersion = '',
     this.linkTargets,
+    Set<String> blockedReplaces = const {},
   })  : _passiveCheck = passiveCheck,
-        _coreVersion = coreVersion {
+        _coreVersion = coreVersion,
+        _blockedReplaces = blockedReplaces {
     _taken.addAll(reservedTags); // §351 — теги Направлений, эмитятся мимо аллокатора
   }
+
+  final Set<String> _blockedReplaces;
+
+  @override
+  bool isReplaceBlocked(String listId) => _blockedReplaces.contains(listId);
 
   @override
   final NodeLinkTargets? linkTargets;
@@ -864,9 +1075,12 @@ class _BuildCtx implements EmitContext {
   }
 
   /// §460 — убрать записи, снятые гардом реестра (`drop_node`): их тело ядро
-  /// не примет, а конфиг падает целиком, не одним узлом. Из `emittedTagByNode`
-  /// ничего не чистим: карта адресуется узлом, а гард работает уже над
-  /// эмитированными телами и исходный `NodeSpec` не знает.
+  /// не примет, а конфиг падает целиком, не одним узлом.
+  ///
+  /// §56 (контракт 1.1.60) — из `emittedTagByNode`/`emittedTagAliases` снятое
+  /// чистится по финальному тегу записи: секции узла (NODE_SECTIONS.md —
+  /// DNS-сервер `tailscale` со ссылкой на endpoint) без самого узла ядро
+  /// отвергло бы вместе со всем конфигом.
   void dropRegistryEntries(List<SingboxEntry> dropped) {
     if (dropped.isEmpty) return;
     bool gone(SingboxEntry e) => dropped.contains(e);
@@ -874,6 +1088,9 @@ class _BuildCtx implements EmitContext {
     endpoints.removeWhere(gone);
     selectorEntries.removeWhere(gone);
     autoEntries.removeWhere(gone);
+    final tags = {for (final e in dropped) e.tag};
+    emittedTagByNode.removeWhere((_, tag) => tags.contains(tag));
+    emittedTagAliases.removeWhere((tag, _) => tags.contains(tag));
   }
   final TemplateVars _vars;
   final RuleSetRegistry _ruleSets;
@@ -886,18 +1103,17 @@ class _BuildCtx implements EmitContext {
   final selectorEntries = <SingboxEntry>[];
   final autoEntries = <SingboxEntry>[];
 
+  /// Фича 565 фаза B — планы свёрнутых источников в порядке источников.
+  final replacePlans = <ReplacePlan>[];
+
+  @override
+  void addReplacePlan(ReplacePlan plan) => replacePlans.add(plan);
+
   /// §435 — узел → финальный тег (после префикса и `allocateTag`).
   final emittedTagByNode = <NodeSpec, String>{};
 
   /// Фича 478 — финальный тег хопа цепочки → владелец узла (main outbound).
   final emittedTagAliases = <String, NodeSpec>{};
-
-  /// §473 — записи с дословным JSON-телом (§455): их вход — `singbox`.
-  ///
-  /// Identity-множество (`identityHashCode`), а не по равенству: тело
-  /// переписывается на месте и ключом карты быть не может, а две записи с
-  /// одинаковым телом — всё равно разные записи.
-  final verbatimEntries = <SingboxEntry>{};
 
   /// §435 — строки отчёта из `ServerList.build` (гейт ядра).
   final warnings = <String>[];
@@ -912,9 +1128,6 @@ class _BuildCtx implements EmitContext {
   bool get passiveCheck => _passiveCheck; // §272/§322
 
   @override
-  bool get coreSupportsTailscale => coreVersionSupportsTailscale(_coreVersion);
-
-  @override
   String get coreVersion => _coreVersion;
 
   @override
@@ -925,11 +1138,6 @@ class _BuildCtx implements EmitContext {
   @override
   void noteEmittedAlias(String finalTag, NodeSpec owner) {
     emittedTagAliases[finalTag] = owner;
-  }
-
-  @override
-  void noteVerbatim(SingboxEntry entry) {
-    verbatimEntries.add(entry);
   }
 
   @override
@@ -991,6 +1199,9 @@ List<Map<String, dynamic>> _buildDirectionGroups({
   // §393 C4 — «тег цепочки → её позиции». Пусто = цепочек нет, и весь блок
   // T9 схлопывается в no-op: конфиги без цепочек собираются как раньше.
   Map<String, List<String>> chainHops = const {},
+  // Фича 565 фаза B (§74 п.5) — эмитированные имена свёрток: опции `include`
+  // наравне с Направлениями выше по списку.
+  Set<String> includeTargets = const {},
 }) {
   // §125 — единственный слой фильтрации нод теперь per-direction regex
   // (node_filter). Глобальный excluded_nodes (§048) удалён.
@@ -1038,9 +1249,10 @@ List<Map<String, dynamic>> _buildDirectionGroups({
   // §322 — узел автовыбора в urltest-двойник Направления не идёт: urltest внутри
   // urltest мерил бы уже выбранный внутренней группой узел, а не сервер.
   // Тип берём из эмитированных entry (там же, откуда его читает AWG-advisory).
+  // §565 — оба рода: selector внутри urltest мерил бы выбранного вручную.
   final groupTags = {
     for (final e in nodeEntries)
-      if (e['type'] == 'urltest') e['tag'] as String,
+      if (GroupGenus.isKnown('${e['type']}')) e['tag'] as String,
   };
   final autoSets = [
     for (final ms in memberSets)
@@ -1076,7 +1288,7 @@ List<Map<String, dynamic>> _buildDirectionGroups({
     // не лежит (кладём его в конце итерации).
     final includeTags = <String>[];
     for (final t in c.include) {
-      if (emittedAbove.contains(t)) {
+      if (emittedAbove.contains(t) || includeTargets.contains(t)) {
         if (!includeTags.contains(t)) includeTags.add(t);
         continue;
       }
@@ -1113,7 +1325,9 @@ List<Map<String, dynamic>> _buildDirectionGroups({
       if (c.includeDirect) kDirectOutboundTag,
       if (c.includeBlock) kBlockOutboundTag, // §274 — совместим с detour
       ...includeTags,
-      ...nodes,
+      // Кандидат-свёртка, уже взятая опцией `include`, второй раз не идёт.
+      for (final t in nodes)
+        if (!includeTags.contains(t)) t,
     ];
     // §201/§274 — пустой набор (regex не матчит / нет нод) → fallback на
     // [block, direct-out] с default=block для ВСЕХ Направлений (безопаснее
@@ -1213,46 +1427,16 @@ List<Map<String, dynamic>> _buildDirectionGroups({
 
     // urltest-двойник: ТОЛЬКО ноды Направления (без direct/auto). Не эмитим при
     // пустом наборе (urltest без нод недопустим).
+    // §272 passive_check, §208 round_robin (`mode` + `balancer{}` только у
+    // round_robin, пустой sticky_hash → sentinel ["none"]) — одна форма с
+    // автовыбором свёртки (`buildAutoGroup`).
     if (emitAuto) {
-      final a = c.auto!;
-      final urltest = <String, dynamic>{
-        'tag': c.autoTag,
-        'type': 'urltest',
-        'outbounds': autoNodes,
-        'url': a.url,
-        'interval': a.interval,
-        'tolerance': a.tolerance,
-        'idle_timeout': a.idleTimeout,
-        'interrupt_exist_connections': a.interruptExistConnections,
-      };
-      // §272 — passive health check (ядро SPEC 019): пока свежий успешный
-      // TCP-дайл подтверждает узел, периодические пробы пропускаются —
-      // активная группа не будит спящие узлы. Эмитим только при true
-      // (omitempty-семантика: отсутствие = false = апстрим-поведение).
-      if (passiveCheck) {
-        urltest['passive_check'] = true;
-      }
-      // §208 — round_robin: дописываем `mode` + `balancer{}` (ядро SPEC 019).
-      // least_test → НИЧЕГО не пишем (бит-в-бит апстрим, нулевой diff). `balancer`
-      // без round_robin роняет старт ядра, поэтому только под round_robin.
-      //
-      // sticky_hash (контракт ядра rc.15): пустой набор НЕ выключает липкость —
-      // ядро ре-маршалит конфиг (badjson) и схлопывает `[]`→nil, неотличимо от
-      // «поле опущено» → дефолт ["process","domain"]. Чтобы ВЫКЛЮЧИТЬ липкость,
-      // нужен sentinel ["none"]. Поэтому: пусто (юзер снял все чипы) → ["none"];
-      // непусто → компоненты.
-      if (a.mode == UrltestMode.roundRobin) {
-        urltest['mode'] = a.mode.wire;
-        final sticky = a.stickyHash.isEmpty
-            ? const ['none'] // sentinel: липкость выключена (чистая ротация)
-            : a.stickyHash.map((k) => k.wire).toList();
-        urltest['balancer'] = <String, dynamic>{
-          'pool': a.pool,
-          'pool_tolerance': a.poolTolerance,
-          'sticky_hash': sticky,
-        };
-      }
-      result.add(urltest);
+      result.add(buildAutoGroup(
+        tag: c.autoTag,
+        outbounds: autoNodes,
+        a: c.auto!,
+        passiveCheck: passiveCheck,
+      ));
     }
     // §393 A5 — ПОРЯДОК ЭМИССИИ нормативен (corpus/direction/README.md:
     // «сначала auto-группа, потом само Направление»), поэтому селектор
@@ -1340,4 +1524,53 @@ String? _firstMatch(List<String> tags, RegExp re) {
 /// типизированный walk-движок.
 void _substituteVars(dynamic obj, VarResolver resolve) {
   walk(obj, resolve);
+}
+
+/// §74 п.4 — носители, чей `detour` (уже разрешённый в финальный тег)
+/// указывает на имя свёртки из [dropped]: группа не написана, и узел обязан
+/// выпасть, а не пойти напрямую (fail-closed). Каскад до неподвижной точки:
+/// кто ходил через выпавшего носителя, выпадает сам. Выпавшие теги
+/// помечаются в [targets] — позиции цепочек на них не разрешатся.
+/// Возвращает строки отчёта сборки, по одной на свёртку.
+List<String> _dropCarriersOfDroppedReplaces(
+  _BuildCtx ctx,
+  Set<String> dropped,
+  NodeLinkTargets targets,
+) {
+  if (dropped.isEmpty) return const [];
+  targets.markDropped(dropped);
+  final entries = <SingboxEntry>[...ctx.outbounds, ...ctx.endpoints];
+  final gone = <String>{...dropped};
+  final carriersBy = <String, List<String>>{};
+  final removed = <SingboxEntry>[];
+  var changed = true;
+  while (changed) {
+    changed = false;
+    for (final e in entries) {
+      if (removed.contains(e)) continue;
+      final d = e.map['detour'];
+      if (d is! String || !gone.contains(d)) continue;
+      removed.add(e);
+      gone.add(e.tag);
+      // Корень причины — имя свёртки: каскад пишется под той же строкой.
+      final root = dropped.contains(d)
+          ? d
+          : carriersBy.entries
+                  .firstWhere((c) => c.value.contains(d),
+                      orElse: () => MapEntry(d, const []))
+                  .key;
+      carriersBy.putIfAbsent(root, () => []).add(e.tag);
+      changed = true;
+    }
+  }
+  if (removed.isEmpty) return const [];
+  ctx.dropRegistryEntries(removed);
+  targets.markDropped(removed.map((e) => e.tag));
+  return [
+    for (final c in carriersBy.entries)
+      '${c.value.length == 1 ? 'Node "${c.value.single}" was' : '${c.value.length} nodes (${c.value.take(5).map((t) => '"$t"').join(', ')}${c.value.length > 5 ? ', and ${c.value.length - 5} more' : ''}) were'} '
+          'skipped: the detour goes through replace group "${c.key}", which '
+          'was not built. A node whose detour does not resolve is not '
+          'emitted, so its traffic never goes direct.',
+  ];
 }

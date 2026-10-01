@@ -5,6 +5,7 @@ import 'package:lxbox/services/parser/mappers/draft_sections.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
+import 'parse_link_as.dart';
 
 /// Отброшенные пары `extra-headers` на узле: текст кода живёт в реестре
 /// (`warnings.json`), предупреждение — обычный [RegistryWarning].
@@ -27,7 +28,7 @@ void main() {
 
   group('NaïveProxy URI parser (spec 037)', () {
     test('canonical with user+pass+port+label', () {
-      final spec = parseNaive(
+      final spec = parseLinkAs<NaiveSpec>(
         'naive+https://user:pass@server.example.com:443/?padding=false#JP-01',
       );
       expect(spec, isNotNull);
@@ -47,13 +48,13 @@ void main() {
     });
 
     test('default port 443 when omitted', () {
-      final spec = parseNaive('naive+https://user:pass@host.example.com');
+      final spec = parseLinkAs<NaiveSpec>('naive+https://user:pass@host.example.com');
       expect(spec, isNotNull);
       expect(spec!.port, 443);
     });
 
     test('custom port preserved', () {
-      final spec = parseNaive('naive+https://server.example.com:8443');
+      final spec = parseLinkAs<NaiveSpec>('naive+https://server.example.com:8443');
       expect(spec, isNotNull);
       expect(spec!.port, 8443);
       expect(spec.username, '');
@@ -65,7 +66,7 @@ void main() {
     // отменено обеими сторонами: оно расходилось с эмиттерами, которые пишут
     // пароль в user-слот (DuckSoft/hysteria2), и узел не авторизовался.
     test('password-only userinfo (no colon)', () {
-      final spec = parseNaive('naive+https://onlypass@server.example.com');
+      final spec = parseLinkAs<NaiveSpec>('naive+https://onlypass@server.example.com');
       expect(spec, isNotNull);
       expect(spec!.username, '');
       expect(spec.password, 'onlypass');
@@ -73,21 +74,21 @@ void main() {
 
     // Двоеточие и отличает «только имя» от «только пароль».
     test('username-only userinfo keeps the colon (user:)', () {
-      final spec = parseNaive('naive+https://onlyuser:@server.example.com');
+      final spec = parseLinkAs<NaiveSpec>('naive+https://onlyuser:@server.example.com');
       expect(spec, isNotNull);
       expect(spec!.username, 'onlyuser');
       expect(spec.password, '');
     });
 
     test('anonymous (no userinfo)', () {
-      final spec = parseNaive('naive+https://server.example.com:443');
+      final spec = parseLinkAs<NaiveSpec>('naive+https://server.example.com:443');
       expect(spec, isNotNull);
       expect(spec!.username, '');
       expect(spec.password, '');
     });
 
     test('extra-headers parsed and exposed in map', () {
-      final spec = parseNaive(
+      final spec = parseLinkAs<NaiveSpec>(
         'naive+https://u:p@host?extra-headers=X-User%3Aalice%0D%0AX-Token%3Axyz',
       );
       expect(spec, isNotNull);
@@ -96,7 +97,7 @@ void main() {
 
     test('extra-headers with values containing spaces and colons in value', () {
       // RFC: split по первому `:`. Значение может содержать `:`.
-      final spec = parseNaive(
+      final spec = parseLinkAs<NaiveSpec>(
         'naive+https://u:p@host?extra-headers=X-Trace%3A%20id%3A123',
       );
       expect(spec!.extraHeaders, {'X-Trace': 'id:123'});
@@ -104,7 +105,7 @@ void main() {
 
     test('extra-headers with invalid header name dropped', () {
       // "X User" — пробел не в charset — drop, остальные сохраняются.
-      final spec = parseNaive(
+      final spec = parseLinkAs<NaiveSpec>(
         'naive+https://u:p@host?extra-headers=X%20User%3Abad%0D%0AX-Good%3Aok',
       );
       expect(spec!.extraHeaders, {'X-Good': 'ok'});
@@ -115,7 +116,7 @@ void main() {
     });
 
     test('padding query is silently ignored (no field set)', () {
-      final spec = parseNaive(
+      final spec = parseLinkAs<NaiveSpec>(
         'naive+https://u:p@host:443?padding=true',
       );
       expect(spec, isNotNull);
@@ -124,7 +125,7 @@ void main() {
     });
 
     test('unknown query keys ignored, not failing', () {
-      final spec = parseNaive(
+      final spec = parseLinkAs<NaiveSpec>(
         'naive+https://u:p@host?unknown=42&also_unknown=foo',
       );
       expect(spec, isNotNull);
@@ -133,7 +134,7 @@ void main() {
     });
 
     test('UTF-8 fragment decoded', () {
-      final spec = parseNaive(
+      final spec = parseLinkAs<NaiveSpec>(
         'naive+https://u:p@host:443?#%E2%9C%85%20DE',
       );
       expect(spec!.label, '✅ DE');
@@ -149,7 +150,7 @@ void main() {
       // из подписки оставлял человека без VPN целиком. Корпус
       // (contract/corpus/uri/naive/empty_host_rejected) нормирует отбраковку
       // с W2c лаунчера.
-      expect(parseNaive('naive+https://'), isNull);
+      expect(parseLinkAs<NaiveSpec>('naive+https://'), isNull);
     });
 
     test('dispatcher handles naive+https via parseUri', () {
@@ -164,7 +165,7 @@ void main() {
     });
 
     test('IPv6 host', () {
-      final spec = parseNaive('naive+https://u:p@[2001:db8::1]:8443');
+      final spec = parseLinkAs<NaiveSpec>('naive+https://u:p@[2001:db8::1]:8443');
       expect(spec, isNotNull);
       expect(spec!.server, '2001:db8::1');
       expect(spec.port, 8443);
@@ -173,7 +174,7 @@ void main() {
 
   group('D-105 naive_extra_headers_invalid', () {
     test('валидные пары → warning нет', () {
-      final spec = parseNaive(
+      final spec = parseLinkAs<NaiveSpec>(
         'naive+https://u:p@host?extra-headers=X-User%3Aalice%0D%0AX-Token%3Axyz',
       );
       expect(_extraHeaderWarnings(spec!), isEmpty);
@@ -181,43 +182,15 @@ void main() {
 
     test('две отброшенные пары → ОДИН warning, с первой парой', () {
       // "no-colon" (нет `:`) и "X User" (пробел в имени); X-Good цел.
-      final spec = parseNaive(
+      final spec = parseLinkAs<NaiveSpec>(
         'naive+https://u:p@host?extra-headers=no-colon%0D%0AX%20User%3Abad%0D%0AX-Good%3Aok',
       );
       expect(spec!.extraHeaders, {'X-Good': 'ok'});
       expect(_extraHeaderWarnings(spec).single.value, 'no-colon');
     });
-
-    test('helper без аккумулятора — молча (http/https headers)', () {
-      expect(parseNaiveExtraHeaders('X User: bad\r\nX-Good: ok'),
-          {'X-Good': 'ok'});
-    });
   });
 
-  group('parseNaiveExtraHeaders helper', () {
-    test('empty input → empty map', () {
-      expect(parseNaiveExtraHeaders(''), isEmpty);
-    });
-
-    test('multi-line CRLF split', () {
-      expect(
-        parseNaiveExtraHeaders('A: 1\r\nB: 2\r\nC: 3'),
-        {'A': '1', 'B': '2', 'C': '3'},
-      );
-    });
-
-    test('skips lines without colon', () {
-      expect(
-        parseNaiveExtraHeaders('valid: yes\r\nnocolon\r\nB: ok'),
-        {'valid': 'yes', 'B': 'ok'},
-      );
-    });
-
-    test('trims whitespace around name and value', () {
-      expect(
-        parseNaiveExtraHeaders('   X-Foo  :   bar   '),
-        {'X-Foo': 'bar'},
-      );
-    });
-  });
+  // §566 — рукописный разбор `extra-headers` снят вместе с обёрткой: пары
+  // отсеивает правило реестра (`extract` + `on_item_invalid`), его
+  // проверяют кейсы группы D-105 выше.
 }

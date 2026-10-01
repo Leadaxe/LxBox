@@ -4,7 +4,7 @@
 |---|---|
 | Статус | ✅ Реализовано (device-pending) |
 | Дата | 2026-08-01 |
-| Связанные | [`302 import-rules`](302-subscription-import-rewrite-rules.md), [`307 rules non-incremental`](307-import-rules-prefix-accumulation.md), [`283 node-disable`](../features/283%20subscription-node-disable/spec.md), [`331 blue banner`](331-blue-banner-and-manual-refresh-reaction.md) |
+| Связанные | [`302 import-rules`](302-subscription-import-rewrite-rules.md), [`307 rules non-incremental`](307-import-rules-prefix-accumulation.md), [`283 node-disable`](../tasks/283F-subscription-node-disable/spec.md), [`331 blue banner`](331-blue-banner-and-manual-refresh-reaction.md) |
 
 ## Проблема
 

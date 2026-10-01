@@ -6,7 +6,7 @@
 | Дата старта | 2026-04-25 |
 | Дата завершения | 2026-04-25 |
 | Коммиты | `86de2f4` feat(§037): NaïveProxy outbound — parser, emit, share-URI · `0b4db37` docs(§037): NaïveProxy в PROTOCOLS, READMEs, CHANGELOG, releases · `1d39e25` chore(§037): close #2 |
-| Связанные spec'ы | [`037 naive proxy`](../features/037%20naive%20proxy/spec.md) |
+| Связанные spec'ы | [`037 naive proxy`](../tasks/037F-naive-proxy/spec.md) |
 | Связанные issue | [#2 add naive proxy support](https://github.com/Leadaxe/LxBox/issues/2) |
 
 ## Проблема
@@ -82,7 +82,7 @@ DuckSoft de-facto spec — `naive+https://[user[:pass]@]host[:port]/[?params][#l
 | Файл | Что |
 |------|-----|
 | [`docs/PROTOCOLS.md` §5.5 NaïveProxy](../../PROTOCOLS.md) | URI-формат, поля, ограничения TLS, build-tag note, ссылки на DuckSoft spec и sing-box outbound docs. |
-| [`docs/spec/features/037 naive proxy/spec.md`](../features/037%20naive%20proxy/spec.md) | Полная спека — задача, build-tag verification, URI-формат, маппинг, defensive `NaiveBuildTagWarning`, тесты, out-of-scope. |
+| [`docs/spec/tasks/037F-naive-proxy/spec.md`](../tasks/037F-naive-proxy/spec.md) | Полная спека — задача, build-tag verification, URI-формат, маппинг, defensive `NaiveBuildTagWarning`, тесты, out-of-scope. |
 | `README.md` / `README_RU.md` / `RELEASE_NOTES.md` / `docs/releases/v1.6.0.md` / `CHANGELOG.md` | NaïveProxy упомянут как 10-й типизированный протокол, без APK-size impact (Cronet уже в bundled libbox). |
 
 ## Риски и edge cases

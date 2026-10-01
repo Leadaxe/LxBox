@@ -8,17 +8,21 @@ import '../controllers/subscription_controller.dart';
 import '../models/codec/source_record.dart';
 import '../vpn/box_vpn_client.dart';
 import '../services/error_format.dart';
+import '../services/preset_nodes_view.dart';
 import '../services/settings_storage.dart';
+import '../services/template_loader.dart';
 import '../models/direction.dart';
 import '../models/node_link.dart';
-import '../models/node_sections.dart';
 import '../models/node_spec.dart';
 import '../models/node_warning.dart';
 import '../models/server_list.dart';
 import '../models/template_vars.dart';
 import '../widgets/detour_target_picker.dart';
 import '../widgets/emoji_picker_button.dart';
+import '../widgets/lx_code_editor.dart';
 import '../widgets/node_diagnostics_tab.dart';
+import '../widgets/tailscale_network_tab.dart';
+import '../services/tailscale_network.dart';
 import '../services/l10n/locale_controller.dart';
 import 'node_settings/node_document.dart';
 import 'subscriptions_screen/entry_warnings.dart';
@@ -59,7 +63,9 @@ class NodeSettingsScreen extends StatefulWidget {
   /// §498/§501 — начальная вкладка (страховка открывает Diagnostics = 3).
   final int initialTab;
 
-  /// Индекс вкладки Diagnostics: Settings, Source, JSON, Diagnostics.
+  /// Индекс вкладки Diagnostics: Settings, Source, JSON, Diagnostics. У узла
+  /// Tailscale перед Diagnostics стоит Network (§581) — экран сдвигает индекс
+  /// сам.
   static const diagnosticsTabIndex = 3;
 
   @override
@@ -99,17 +105,29 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
   /// Notifications во вкладке Diagnostics.
   List<NodeWarning> _notifications = const [];
 
+  /// §578 — переключатель `Skip presets` виден: в шаблоне есть пресет с
+  /// `for_each` под тип этого узла (см. [skipPresetsToggleVisible]).
+  bool _skipPresetsVisible = false;
+
+  /// §581 — узел Tailscale: есть вкладка Network.
+  bool _isTailscale = false;
+
   @override
   void initState() {
     super.initState();
     _tagCtrl = TextEditingController();
     _jsonCtrl = TextEditingController();
     _sourceCtrl = TextEditingController();
-    _tabs = TabController(
-      length: 4,
-      vsync: this,
-      initialIndex: widget.initialTab.clamp(0, 3),
-    );
+    // §581 — у узла Tailscale вкладка Network перед Diagnostics.
+    final first = _member?.node ??
+        (widget.entry.list.nodes.isEmpty ? null : widget.entry.list.nodes.first);
+    _isTailscale = first is TailscaleSpec;
+    final count = _isTailscale ? 5 : 4;
+    var initial = widget.initialTab.clamp(0, 3);
+    if (_isTailscale && initial == NodeSettingsScreen.diagnosticsTabIndex) {
+      initial = 4;
+    }
+    _tabs = TabController(length: count, vsync: this, initialIndex: initial);
     unawaited(_load());
   }
 
@@ -202,6 +220,19 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     // §248 — Направления для подписи «⚙ <label>» сохранённого Направления detour
     // (_pickDetour перечитывает свежий список перед показом пикера).
     _directions = await SettingsStorage.getDirections();
+
+    // §578 — видимость `Skip presets`: пресеты с `for_each` из шаблона.
+    try {
+      final template = await TemplateLoader.load();
+      _skipPresetsVisible = skipPresetsToggleVisible(
+        list: widget.entry.list,
+        isMember: member != null,
+        nodeType: node.protocol,
+        presets: template.selectableRules,
+      );
+    } catch (_) {
+      _skipPresetsVisible = false; // шаблон не загрузился — без переключателя
+    }
 
     // §239 — кандидаты живут в общем пикере (showDetourTargetPicker):
     // «свободные» одиночки + члены СВОЕЙ папки (для member-режима).
@@ -297,16 +328,6 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     setState(() {});
   }
 
-  /// §435 — секции узла, как хранит контейнер (одиночный — `UserServer`,
-  /// член — `FolderMember`). Читается при каждом build: контроллер подменяет
-  /// `entry.list` на месте.
-  NodeSections? get _sections {
-    final member = _member;
-    if (member != null) return member.sections;
-    final list = widget.entry.list;
-    return list is UserServer ? list.sections : null;
-  }
-
   /// §455 — Save вкладки Source: текст источника уходит в запись как есть.
   /// JSON — тег из поля Tag в тело (§435, `prepareNodeDocumentForSave`) и
   /// ворота ядра (`CheckConfig`): такой узел идёт в конфиг дословно, гейты
@@ -318,15 +339,20 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
       return;
     }
     final String toStore;
+    var droppedExtras = false;
+    var commentsRemoved = false;
     if (text.startsWith('{') || text.startsWith('[')) {
-      // §435 — три вида входа (голое тело / документ с `sections` / sing-box-
-      // документ с `dns`+`route`); тег из поля Tag уходит в тело узла.
+      // §435 — голое тело или документ; тег из поля Tag уходит в тело узла.
+      // §575 — `dns`/`route`/`sections` документа не сохраняются.
       final prep = prepareNodeDocumentForSave(text, _tagCtrl.text);
       if (prep is NodeDocumentRejected) {
         _snack(prep.message);
         return;
       }
-      toStore = (prep as NodeDocumentReady).text;
+      final ready = prep as NodeDocumentReady;
+      toStore = ready.text;
+      droppedExtras = ready.droppedExtras;
+      commentsRemoved = ready.commentsRemoved;
       final payload = checkPayloadFor(toStore);
       if (payload != null) {
         final check = await BoxVpnClient.I.checkConfig(payload);
@@ -343,10 +369,34 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     } else {
       // §456 — INI: текст как есть, имя — полем записи (`nameHint`).
       await _store(text,
-          nameHint: _tagCtrl.text.trim(), savedMessage: _savedMessage);
+          nameHint: _tagCtrl.text.trim(),
+          savedMessage: () => getLocalText.s("Saved"));
       return;
     }
-    await _store(toStore, savedMessage: _savedMessage);
+    await _store(toStore,
+        savedMessage: () => droppedExtras
+            ? getLocalText.s(
+                "Only the node is saved. The rest of the input is not kept.")
+            : commentsRemoved
+                ? getLocalText.s("Comments were removed.")
+                : getLocalText.s("Saved"));
+  }
+
+  /// §581 — Save choice вкладки Network: `exit_node` = [value] (`null` —
+  /// поле убирается) в теле узла, дальше тем же путём, что Save вкладки
+  /// Source (тег из поля Tag, проверка ядром, запись, пересборка).
+  Future<void> _saveExitNode(String? value) async {
+    final raw = _containerRaw.trim();
+    final base = raw.startsWith('{') ? raw : _jsonCtrl.text;
+    final String text;
+    try {
+      text = withExitNode(base, value);
+    } on FormatException catch (e) {
+      _snack(getLocalText.s("Invalid JSON: %s", e.message));
+      return;
+    }
+    _sourceCtrl.text = text;
+    await _saveSource();
   }
 
   /// Записать [raw] источником узла (одиночный — `updateConnectionAt`, член
@@ -370,7 +420,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
         if (!mounted) return;
       }
       // Перечитать узел: Source показывает записанный текст, JSON — тело,
-      // блок Sections и предупреждения — свежие.
+      // предупреждения — свежие.
       await _load();
       if (!mounted) return;
       _snack(savedMessage());
@@ -415,56 +465,6 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     _tabs.animateTo(_kSourceTab);
   }
 
-  /// §435 — «Saved», а отброшенные при разборе документа записи секций —
-  /// одной строкой следом (NODE_SECTIONS.md §7; подробности — в строке
-  /// предупреждений вкладки Settings).
-  String _savedMessage() {
-    final dropped = _node?.warnings
-            .whereType<SectionsRecordDroppedWarning>()
-            .length ??
-        0;
-    if (dropped == 0) return getLocalText.s("Saved");
-    return getLocalText.plural("Saved · %d section records dropped", dropped);
-  }
-
-  /// §435 — снять секции узла целиком (кнопка «Clear sections»).
-  Future<void> _clearSections() async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(getLocalText.s("Clear sections?")),
-        content: Text(getLocalText.s(
-            "The node's rules and DNS records will be removed. The node itself stays.")),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(getLocalText.s("Cancel")),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(getLocalText.s("Clear")),
-          ),
-        ],
-      ),
-    );
-    if (ok != true || !mounted) return;
-    final mi = widget.memberIndex;
-    if (mi != null) {
-      final err =
-          await widget.subController.setMemberSections(widget.index, mi, null);
-      if (!mounted) return;
-      if (err != null) {
-        _snack(err.render());
-        return;
-      }
-    } else {
-      await widget.subController.setUserServerSections(widget.index, null);
-      if (!mounted) return;
-    }
-    setState(() {});
-    _snack(getLocalText.s("Sections cleared"));
-  }
-
   void _snack(String text) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
@@ -494,6 +494,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
               Tab(text: getLocalText.s("Source")),
               // l10n-exempt: format name, locale-invariant
               const Tab(text: 'JSON'),
+              if (_isTailscale) Tab(text: getLocalText.s("Network")),
               NodeDiagnosticsTabLabel(warnings: _notifications),
             ],
           ),
@@ -506,6 +507,15 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
                   _buildSettingsTab(theme),
                   _buildSourceTab(theme),
                   _buildJsonTab(theme),
+                  if (_isTailscale)
+                    TailscaleNetworkTab(
+                      liveTag: TagResolver.displayTag(
+                          widget.entry.list.tagPrefix, _originalTag),
+                      body: _node is TailscaleSpec
+                          ? (_node as TailscaleSpec).body
+                          : const {},
+                      onSaveExitNode: _saveExitNode,
+                    ),
                   // §392/§501 — диагностика + уведомления узла.
                   NodeDiagnosticsTab(
                     node: _node,
@@ -588,80 +598,48 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
         ),
         ], // §322 — конец гейта detour-блока
         const SizedBox(height: 16),
-        ..._buildSectionsBlock(theme),
+        ..._buildSkipPresetsBlock(theme),
       ],
     );
   }
 
-  /// §435 — блок «Sections» (NODE_SECTIONS.md §7): счётчик записей,
-  /// раскрывающийся read-only JSON в форме хранения (§2 ONE_NAMESPACE, с
-  /// плейсхолдерами как есть) и «Clear sections». Без секций — подсказка,
-  /// как их приложить через JSON-вкладку.
-  List<Widget> _buildSectionsBlock(ThemeData theme) {
-    final sections = _sections;
-    final muted = theme.colorScheme.onSurfaceVariant;
+  /// §578 — поле записи `skip_presets`, как хранит контейнер (одиночный —
+  /// `UserServer`, член — `FolderMember`). Читается при каждом build.
+  bool get _skipPresets {
+    final member = _member;
+    if (member != null) return member.skipPresets;
+    final list = widget.entry.list;
+    return list is UserServer && list.skipPresets;
+  }
+
+  /// §578 — переключатель `Skip presets`: узел не обслуживается пресетами с
+  /// `for_each`.
+  List<Widget> _buildSkipPresetsBlock(ThemeData theme) {
+    if (!_skipPresetsVisible) return const [];
     return [
-      _sectionHeader(getLocalText.s("Sections"),
-          getLocalText.s("Rules and DNS records this node carries"), theme),
-      if (sections == null)
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          child: Text(
-            getLocalText.s(
-                "Paste a sing-box config with dns/route or a document with \"sections\" on the JSON tab to attach the node's rules."),
-            style: theme.textTheme.bodySmall?.copyWith(color: muted),
-          ),
-        )
-      else ...[
-        ListTile(
-          leading: const Icon(Icons.account_tree_outlined, size: 20),
-          title: Text(_sectionsSummary(sections)),
-          subtitle: Text(
-            getLocalText.s("Shown in Routing and DNS with the node's tag"),
-            style: theme.textTheme.bodySmall?.copyWith(color: muted),
-          ),
-        ),
-        ExpansionTile(
-          leading: const Icon(Icons.data_object, size: 20),
-          title: Text(getLocalText.s("Stored JSON")),
-          tilePadding: const EdgeInsets.symmetric(horizontal: 16),
-          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-          children: [
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                border: Border.all(color: theme.dividerColor),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: SelectableText(
-                const JsonEncoder.withIndent('  ').convert(sections.toJson()),
-                style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
-              ),
-            ),
-          ],
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              icon: const Icon(Icons.delete_outline, size: 18),
-              label: Text(getLocalText.s("Clear sections")),
-              onPressed: () => unawaited(_clearSections()),
-            ),
-          ),
-        ),
-      ],
+      SwitchListTile(
+        key: const ValueKey('node-skip-presets'),
+        secondary: const Icon(Icons.rule_folder_outlined, size: 20),
+        title: Text(getLocalText.s("Skip presets")),
+        subtitle: Text(getLocalText
+            .s("Presets will not add routing or DNS rules for this node.")),
+        value: _skipPresets,
+        onChanged: (v) => unawaited(_setSkipPresets(v)),
+      ),
+      const SizedBox(height: 16),
     ];
   }
 
-  /// «2 rules · 1 DNS servers · 1 DNS rules» — три счётчика через plural.
-  String _sectionsSummary(NodeSections s) => [
-        getLocalText.plural("%d rules", s.rules.length),
-        getLocalText.plural("%d DNS servers", s.dnsServers.length),
-        getLocalText.plural("%d DNS rules", s.dnsRules.length),
-      ].join(' · ');
+  Future<void> _setSkipPresets(bool value) async {
+    final err = await widget.subController
+        .setSkipPresets(widget.index, widget.memberIndex, value);
+    if (!mounted) return;
+    if (err != null) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(err.render())));
+    }
+    setState(() {});
+  }
 
   /// §455 — вкладка Source: `origin.raw` как есть, единственное место правки.
   Widget _buildSourceTab(ThemeData theme) {
@@ -717,18 +695,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: Stack(
             children: [
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.fromLTRB(12, 12, 40, 12),
-                decoration: BoxDecoration(
-                  border: Border.all(color: theme.dividerColor),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: SelectableText(
-                  _jsonCtrl.text,
-                  style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
-                ),
-              ),
+              LxJsonView(text: _jsonCtrl.text, height: 420),
               Positioned(
                 top: 4,
                 right: 4,

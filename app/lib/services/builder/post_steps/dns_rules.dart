@@ -46,16 +46,13 @@ Future<void> applyCustomDns(
   Map<String, String> dnsSrsCachedPaths = const {},
   List<DnsMirrorEntry> dnsMirrors = const [],
   List<String>? warningsOut, // §312 — дропы членов DNS-групп → emitWarnings
-  // §435 — DNS-записи узлов (NODE_SECTIONS.md §3 п. 4) после подстановки
-  // `@self`: серверы — тела с `tag`, в конец `dns.servers`; правила — тела,
-  // в конец `dns.rules`. `enabled: false` отсеян вызывающим.
-  List<Map<String, dynamic>> nodeServers = const [],
-  List<Map<String, dynamic>> nodeRules = const [],
   // §441/§443 (SPEC 129 Н10) — умолчания шаблона; вторая линия читает
   // `dns_default_domain_resolver` — замену резолверов на сервер, выпавший из-за
   // висячего detour ([healDetourDroppedDnsRefs]). `dns.final` на такой сервер
   // не заменяется, а снимается с заглушкой `reject`.
   Map<String, String> resolverDefaults = const {},
+  // §555/§570 (§66) — переменные шаблона для тел шаблонных DNS-серверов.
+  Map<String, String> globalVars = const {},
 }) async {
   final dns = (config['dns'] as Map<String, dynamic>?) ?? <String, dynamic>{};
 
@@ -115,9 +112,9 @@ Future<void> applyCustomDns(
     knownOutboundTags: knownOutboundTags,
     ruleReferencedTags: ruleReferencedTags,
     warningsOut: warningsOut,
-    nodeServers: nodeServers, // §435
     tailscaleEndpointTags: tailscaleEndpointTags, // §435
     detourDroppedOut: detourDropped, // §441
+    globalVars: globalVars, // §555/§570
   );
   dns['servers'] = serverBodies;
 
@@ -181,6 +178,24 @@ Future<void> applyCustomDns(
     }
   }
 
+  // §588 (контракт 1.1.101) — теги наборов, попавших в конфиг: итоговый
+  // `route.rule_set` плюс наборы srs-правил этого шага (включённых, с
+  // сервером и скачанным файлом). По ним чистятся ссылки `rule_set` своих
+  // DNS-правил.
+  final liveRuleSetTags = <String>{
+    for (final rs in ((config['route'] as Map<String, dynamic>?)?['rule_set']
+            as List<dynamic>? ??
+        const []))
+      if (rs is Map && rs['tag'] is String) rs['tag'] as String,
+    for (final e in resolved)
+      if (e is DnsRuleSrs &&
+          e.enabled &&
+          dnsSrsCachedPaths[e.id] != null &&
+          ((e.server ?? e.body?['server']) is String) &&
+          ((e.server ?? e.body?['server']) as String).isNotEmpty)
+        e.name.isNotEmpty ? e.name : 'dns_srs_${e.id}',
+  };
+
   for (final entry in resolved) {
     if (entry is DnsRulePreset) {
       if (dnsMirrors.isNotEmpty) {
@@ -206,8 +221,18 @@ Future<void> applyCustomDns(
     }
     if (!entry.enabled) continue;
     switch (entry) {
-      case DnsRuleInline(:final rule):
-        outRules.add(rule);
+      case DnsRuleInline(:final rule, :final name):
+        // §588 (контракт 1.1.101) — висячие ссылки `rule_set` (набор
+        // выключен, не скачан, нет в конфиге): имя рядом с живыми убирается;
+        // не осталось ни одного — правило выпадает с кодом, а не остаётся
+        // «весь DNS на server».
+        final kept = cleanDanglingDnsRuleSet(rule, liveRuleSetTags);
+        if (kept == null) {
+          reportFragmentDropped(
+              name.isNotEmpty ? name : 'dns_options', 'dns.rules', 'rule_set');
+          continue;
+        }
+        outRules.add(kept);
       case DnsRuleTemplate(:final name):
         final t = templateRulesByName[name];
         if (t != null) {
@@ -232,7 +257,13 @@ Future<void> applyCustomDns(
         final rule = legacyRule ?? body;
         if (server == null || server.isEmpty) continue;
         final path = dnsSrsCachedPaths[id];
-        if (path == null) continue; // no cache → skip silently
+        if (path == null) {
+          // §588 (контракт 1.1.101) — файл набора не скачан: набор не попал
+          // в конфиг, правило выпадает с кодом (раньше — молча).
+          reportFragmentDropped(
+              name.isNotEmpty ? name : 'dns_options', 'dns.rules', 'rule_set');
+          continue;
+        }
         final tag = name.isNotEmpty ? name : 'dns_srs_$id';
         extraDnsSrsRuleSets.add({
           'type': 'local',
@@ -258,20 +289,6 @@ Future<void> applyCustomDns(
   }
   // §117: якоря не нашлось (нет preset/template записей) → группа в конец.
   if (dnsMirrors.isNotEmpty) emitMirrorGroup();
-  // §435 — DNS-правила узлов в конец, после пользовательских и mirror-группы
-  // (NODE_SECTIONS.md §3 п. 4). Правило на сервер, который не доехал до
-  // `dns.servers` (висячий `endpoint`, дубль тега, гейт ядра), выбрасывается:
-  // DNS-правило без действующего `server` ядро отвергает. Правила только с
-  // `action` живут.
-  for (final r in nodeRules) {
-    final srv = r['server'];
-    if (srv is String && srv.isNotEmpty && !emittedServerTags.contains(srv)) {
-      warningsOut?.add(
-          'Node DNS rule dropped: its server "$srv" is not in dns.servers.');
-      continue;
-    }
-    outRules.add(Map<String, dynamic>.of(r));
-  }
   if (outRules.isNotEmpty) dns['rules'] = outRules;
   config['dns'] = dns;
   // §441/§443 (SPEC 129 Н10) — правила, `dns.final` и резолверы на серверы,
@@ -304,6 +321,35 @@ Future<void> applyCustomDns(
   }
 
   config['dns'] = dns;
+}
+
+/// §588 (контракт 1.1.101, TEMPLATE_LANG §5.1) — ссылки `rule_set` своего
+/// DNS-правила против тегов наборов [live], попавших в конфиг.
+///
+/// - ссылок нет (ключа нет, пустая строка, пустой список, не строка/список)
+///   или все живые → [rule] как есть;
+/// - часть висячих → копия правила со списком уцелевших (форма списка
+///   сохраняется);
+/// - висячие ВСЕ → `null`: правило выпадает целиком, ссылку не снимаем с
+///   сохранением правила по `server`.
+///
+/// Живой считается и локальный тег, однозначно принадлежащий одному
+/// префиксованному `<preset_id>:<tag>`: его позже перепишет
+/// [healPresetTagPrefix] (§103 C7).
+Map<String, dynamic>? cleanDanglingDnsRuleSet(
+    Map<String, dynamic> rule, Set<String> live) {
+  bool isLive(String ref) {
+    if (live.contains(ref)) return true;
+    var matches = 0;
+    for (final t in live) {
+      final sep = t.indexOf(':');
+      if (sep > 0 && t.substring(sep + 1) == ref) matches++;
+    }
+    return matches == 1;
+  }
+
+  // §104 (контракт 1.1.107) — то же в под-правилах логического правила.
+  return cleanRuleSetRefsDeep(rule, isLive);
 }
 
 /// §061 + §033: разрешает текущий список DNS-правил из storage.

@@ -6,7 +6,7 @@
 | Дата старта | 2026-04-21 |
 | Дата завершения | 2026-04-21 |
 | Коммиты | см. ниже (ещё не закоммичено на момент написания отчёта) |
-| Связанные spec'ы | [`003 home screen`](../features/003%20home%20screen/spec.md), deep review [008](./008-deep-code-review-perf-refactor.md) §A |
+| Связанные spec'ы | [`003 home screen`](../tasks/003F-home-screen/spec.md), deep review [008](./008-deep-code-review-perf-refactor.md) §A |
 
 ## Проблема
 

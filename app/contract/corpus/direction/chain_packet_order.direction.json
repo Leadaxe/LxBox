@@ -1,0 +1,11 @@
+{
+  "_": "Цепочка попадает в конфиг УЗЛОМ типа chain; позиции сохраняют порядок пакета — первая ближе к клиенту, последняя видна цели.",
+  "chains": [
+    { "tag": "double-hop", "hops": ["vpn-1", "🇳🇱 Amsterdam"] }
+  ],
+  "directions": [
+    { "tag": "vpn-1", "filter": "Frankfurt" }
+  ],
+  "node_tags": ["🇩🇪 Frankfurt", "🇳🇱 Amsterdam"],
+  "magic": { "direct": "direct-out", "block": "block-out" }
+}

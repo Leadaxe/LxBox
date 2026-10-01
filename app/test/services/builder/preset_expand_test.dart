@@ -8,7 +8,15 @@ import 'package:lxbox/models/dns_ref.dart';
 import 'package:lxbox/models/parser_config.dart';
 import 'package:lxbox/services/builder/post_steps.dart'
     show resolveDnsServersBodies;
+import 'package:lxbox/services/builder/if_engine.dart'
+    show
+        TemplateWarnings,
+        collectTemplateWarnings,
+        templateWarnFragmentDropped,
+        templateWarnRuleUnconditional;
 import 'package:lxbox/services/builder/preset_expand.dart';
+
+import '../../contract_paths.dart' show loadTestRegistry;
 
 void main() {
   group('expandPreset (spec §033)', () {
@@ -285,17 +293,183 @@ void main() {
       );
       final rule = CustomRulePreset(name: 'Block Ads', presetId: 'block-ads');
 
-      final f = expandPreset(rule, preset); // srsPaths: {}
+      final tw = TemplateWarnings();
+      final f = collectTemplateWarnings(
+          tw, () => expandPreset(rule, preset)); // srsPaths: {}
 
       expect(f.ruleSets, isEmpty,
           reason: 'без кэша remote rule_set не попадает в конфиг');
       expect(f.routingRules, isEmpty,
           reason: 'rule без своего rule_set → drop, иначе sing-box падает '
               'с "rule-set not found"');
-      expect(f.warnings.length, 2,
-          reason: 'один warning про rule_set skip, второй про routing_rule skip');
-      expect(f.warnings.any((w) => w.contains('no cached file')), isTrue);
-      expect(f.warnings.any((w) => w.contains('missing rule_set')), isTrue);
+      // §570 — строка одна (набор без кэша, с подсказкой скачать); выпавшее
+      // правило называется кодом, без второй строки.
+      expect(f.warnings, hasLength(1));
+      expect(f.warnings.single, contains('no cached file'));
+      expect([for (final w in tw.items) (w.code, w.params['reason'])],
+          [(templateWarnFragmentDropped, 'rule_set')]);
+    });
+
+    test('§571/§588: правило без полей-условий реестра по замыслу автора '
+        'идёт в конфиг с template_rule_unconditional; action условием не '
+        'считается; логическое без условий в под-правилах — тоже', () async {
+      await loadTestRegistry();
+      final preset = SelectableRule(
+        label: 'Conditions',
+        presetId: 'conds',
+        rule: const [
+          {'action': 'sniff'},
+          {'domain_suffix': ['example.com'], 'outbound': 'direct-out'},
+          {
+            'type': 'logical',
+            'mode': 'or',
+            'rules': [
+              <String, dynamic>{},
+              {'invert': true},
+            ],
+            'outbound': 'direct-out',
+          },
+        ],
+        dnsRule: const [
+          {'action': 'predefined', 'rcode': 'NOERROR'},
+          {'query_type': ['HTTPS'], 'action': 'predefined', 'rcode': 'NOERROR'},
+        ],
+      );
+      final rule = CustomRulePreset(name: 'Conditions', presetId: 'conds');
+
+      final tw = TemplateWarnings();
+      final f = collectTemplateWarnings(tw, () => expandPreset(rule, preset));
+
+      expect(f.routingRules, hasLength(3));
+      expect(f.dnsRules, hasLength(2));
+      expect([for (final w in tw.items) (w.code, w.params['kind'])], [
+        (templateWarnRuleUnconditional, 'dns.rules'),
+        // Два route-правила без условий дают одинаковые параметры —
+        // накопитель схлопывает повтор в одну запись.
+        (templateWarnRuleUnconditional, 'route.rules'),
+      ]);
+    });
+
+    test('§104: логическое правило судится по под-правилам — пустое '
+        'под-правило при сбое снимает всё правило, по замыслу автора — '
+        'unconditional; висячий rule_set под-правила снимает правило, '
+        'висячее имя рядом с живым убирается', () async {
+      await loadTestRegistry();
+      final preset = SelectableRule(
+        label: 'Logical',
+        presetId: 'lg',
+        vars: [
+          WizardVar(name: 'd', type: 'text', defaultValue: '', required: false),
+        ],
+        ruleSets: const [
+          {
+            'tag': 'live',
+            'type': 'inline',
+            'rules': [
+              {'domain_suffix': ['a.example']}
+            ],
+          },
+        ],
+        rule: const [
+          {
+            'type': 'logical',
+            'mode': 'or',
+            'rules': [
+              {'domain_suffix': '@d'},
+              {'rule_set': ['live']},
+            ],
+            'outbound': 'direct-out',
+          },
+          {
+            'type': 'logical',
+            'mode': 'and',
+            'rules': [
+              {'network': 'udp'},
+              <String, dynamic>{},
+            ],
+            'outbound': 'direct-out',
+          },
+          {
+            'type': 'logical',
+            'mode': 'and',
+            'rules': [
+              {'network': 'udp'},
+              {'rule_set': ['ghost']},
+            ],
+            'outbound': 'direct-out',
+          },
+          {
+            'type': 'logical',
+            'mode': 'and',
+            'rules': [
+              {'network': 'udp'},
+              {
+                'type': 'logical',
+                'mode': 'or',
+                'rules': [
+                  {'rule_set': ['live', 'ghost']},
+                ],
+              },
+            ],
+            'outbound': 'direct-out',
+          },
+        ],
+      );
+      final rule = CustomRulePreset(name: 'Logical', presetId: 'lg');
+
+      final tw = TemplateWarnings();
+      final f = collectTemplateWarnings(tw, () => expandPreset(rule, preset));
+
+      expect(f.routingRules, hasLength(2));
+      expect(f.routingRules[0]['rules'], [
+        {'network': 'udp'},
+        <String, dynamic>{},
+      ]);
+      final nested = ((f.routingRules[1]['rules'] as List)[1] as Map)['rules']
+          as List;
+      // Ссылка под-правила на набор пресета префиксуется, как и ссылка
+      // верхнего уровня.
+      expect(nested.single, {
+        'rule_set': ['lg:live']
+      });
+      expect([for (final w in tw.items) (w.code, w.params['reason'])], [
+        (templateWarnFragmentDropped, 'rule_set'),
+        (templateWarnRuleUnconditional, null),
+      ]);
+    });
+
+    test('§588: условия сняла пустая переменная — правило выпадает с '
+        'template_fragment_dropped; литерал без значения — в конфиг', () async {
+      await loadTestRegistry();
+      final preset = SelectableRule(
+        label: 'Lost',
+        presetId: 'lost',
+        vars: [
+          WizardVar(
+              name: 'text_a', type: 'text', defaultValue: '', required: false),
+        ],
+        rule: const [
+          {'domain_suffix': '@text_a', 'outbound': 'direct-out'},
+          {'domain_suffix': <String>[], 'outbound': 'direct-out'},
+        ],
+        dnsRule: const [
+          {'domain_suffix': '@text_a', 'server': 'dns-a'},
+        ],
+      );
+      final rule = CustomRulePreset(name: 'Lost', presetId: 'lost');
+
+      final tw = TemplateWarnings();
+      final f = collectTemplateWarnings(tw, () => expandPreset(rule, preset));
+
+      expect(f.routingRules, [
+        {'domain_suffix': <String>[], 'outbound': 'direct-out'}
+      ]);
+      expect(f.dnsRules, isEmpty);
+      expect([for (final w in tw.items) (w.code, w.params['kind'])], [
+        (templateWarnFragmentDropped, 'dns.rules'),
+        (templateWarnFragmentDropped, 'route.rules'),
+        (templateWarnRuleUnconditional, 'route.rules'),
+      ]);
     });
 
     // ─── §045: GeoIP fallback layer ────────────────────────────────────
@@ -446,11 +620,14 @@ void main() {
         ],
         rule: const {'rule_set': ['a', 'b'], 'outbound': 'direct-out'},
       );
-      final f = expandPreset(CustomRulePreset(name: 'X', presetId: 'x'), preset);
+      final tw = TemplateWarnings();
+      final f = collectTemplateWarnings(
+          tw, () => expandPreset(CustomRulePreset(name: 'X', presetId: 'x'), preset));
       expect(f.ruleSets, isEmpty);
       expect(f.routingRules, isEmpty);
-      expect(f.warnings.any((w) => w.contains('none of') && w.contains('a') && w.contains('b')),
-          isTrue);
+      // §570 — выпавшее правило называется кодом; строки — у наборов без кэша.
+      expect(tw.items.single.params['reason'], 'rule_set');
+      expect(f.warnings.where((w) => w.contains('no cached file')), hasLength(2));
     });
 
     // Universal outbound override (spec §033 §5 / task 011) — `varsValues['outbound']`
@@ -882,17 +1059,20 @@ void main() {
           {'rule_set': 'a', 'outbound': 'direct-out'},
         ],
       );
-      final f = expandPreset(
-        CustomRulePreset(name: 'X', presetId: 'x'),
-        preset,
+      final tw = TemplateWarnings();
+      final f = collectTemplateWarnings(
+        tw,
+        () => expandPreset(
+          CustomRulePreset(name: 'X', presetId: 'x'),
+          preset,
+        ),
       );
 
       expect(f.routingRules.single,
           {'rule_set': 'x:a', 'outbound': 'direct-out'});
-      expect(
-        f.warnings.any((w) => w.contains('missing rule_set "missing"')),
-        isTrue,
-      );
+      expect(tw.items.single.params,
+          {'owner': 'x', 'kind': 'route.rules', 'reason': 'rule_set'});
+      expect(f.warnings, isEmpty, reason: 'без второй строки (§570)');
     });
 
     test('force_ipv4=false → resolve-элемент выпадает, остаётся только route',
@@ -1225,13 +1405,20 @@ void main() {
     // `package_name: json: unknown field "package_name"`.
     // Сужение (И) в sing-box выражается ТОЛЬКО вложенностью — поэтому
     // `gms_only` добавляет ВЕТВЬ во внешний `and`, а не поле в правило.
-    test('fcm-push (дефолты) → and из одной ветви, без package_name', () {
-      final f = expandPreset(
-        CustomRulePreset(name: 'FCM', presetId: 'fcm-push'),
-        realPreset('fcm-push'),
-      );
+    test('fcm-push (дефолты) → and из одной ветви, без package_name', () async {
+      // §104 — гейт «без условий» судит под-правила (реестр загружен):
+      // выпавшая `#if`-ветвь пустого под-правила не оставляет.
+      await loadTestRegistry();
+      final tw = TemplateWarnings();
+      final f = collectTemplateWarnings(
+          tw,
+          () => expandPreset(
+                CustomRulePreset(name: 'FCM', presetId: 'fcm-push'),
+                realPreset('fcm-push'),
+              ));
 
       expect(f.warnings, isEmpty);
+      expect(tw.items, isEmpty);
       expect(f.routingRules.length, 1);
 
       final r = f.routingRules.single;
@@ -1269,15 +1456,20 @@ void main() {
     });
 
     test('fcm-push: gms_only=true → package_name отдельной ветвью and, '
-        'вложенный or не тронут', () {
-      final f = expandPreset(
-        CustomRulePreset(
-          name: 'FCM',
-          presetId: 'fcm-push',
-          varsValues: {'gms_only': 'true'},
-        ),
-        realPreset('fcm-push'),
-      );
+        'вложенный or не тронут', () async {
+      await loadTestRegistry();
+      final tw = TemplateWarnings();
+      final f = collectTemplateWarnings(
+          tw,
+          () => expandPreset(
+                CustomRulePreset(
+                  name: 'FCM',
+                  presetId: 'fcm-push',
+                  varsValues: {'gms_only': 'true'},
+                ),
+                realPreset('fcm-push'),
+              ));
+      expect(tw.items, isEmpty);
 
       final r = f.routingRules.single;
       expect(r['mode'], 'and', reason: 'сужение = И, а И = вложенность');
@@ -1347,7 +1539,12 @@ void main() {
         label: 'X',
         presetId: 'x',
         dnsRule: const [
-          {'rule_set': 42, 'action': 'predefined', 'rcode': 'NOERROR'},
+          {
+            'rule_set': 42,
+            'query_type': ['A'],
+            'action': 'predefined',
+            'rcode': 'NOERROR',
+          },
         ],
       );
       final f = expandPreset(
@@ -1383,13 +1580,19 @@ void main() {
           },
         ],
       );
-      final f = expandPreset(
-        CustomRulePreset(name: 'X', presetId: 'x'),
-        preset,
+      final tw = TemplateWarnings();
+      final f = collectTemplateWarnings(
+        tw,
+        () => expandPreset(
+          CustomRulePreset(name: 'X', presetId: 'x'),
+          preset,
+        ),
       );
       expect(f.dnsRules.length, 1);
       expect(f.dnsRules.single['rule_set'], 'x:cached');
-      expect(f.warnings.any((w) => w.contains('missing-srs')), isTrue);
+      // §570 — код вместо второй строки.
+      expect(tw.items.single.params,
+          {'owner': 'x', 'kind': 'dns.rules', 'reason': 'rule_set'});
     });
 
     test('SelectableRule: dns_rules (List) из JSON нормализуется; '

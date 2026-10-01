@@ -150,9 +150,16 @@ void main() {
       // собственной записью, перекрывающей блочную: перечислять `fp` среди
       // запрещённых значило бы запретить сам примитив переопределения,
       // которым блок и задуман пользоваться.
+      //
+      // Единственное исключение — `security` у hysteria2: схема не подключает
+      // `tls#uri_security` (его ветка `none` сняла бы обязательный TLS) и
+      // объявляет свою запись — маркер 3x-ui без записи в тело (контракт
+      // 1.1.54). Это не копия блока.
+      const allowed = {'hysteria2.security'};
       for (final e in uriSections.entries) {
         final params = (section(e.value, 'uri')['params'] as Map).cast<String, dynamic>();
         for (final dup in const ['security', 'alpn', 'pbk', 'sid']) {
+          if (allowed.contains('${e.key}.$dup')) continue;
           expect(params.containsKey(dup), isFalse, reason: '${e.key}.$dup');
         }
       }
@@ -235,7 +242,7 @@ void main() {
     });
 
     test('masque материализует дефолты profile/vhttp/mtu: default реестра в '
-        'тело не едет (CANON §2.4), а identity живых узлов на них стоит', () {
+        'тело не едет (PARSING_PRINCIPLES §2.4), а identity живых узлов на них стоит', () {
       final p = (section(uriSections['masque']!, 'uri')['params'] as Map)
           .cast<String, dynamic>();
       for (final f in const ['profile', 'vhttp', 'mtu']) {
@@ -289,7 +296,12 @@ void main() {
         final all = src is List ? src : [src];
         for (final s in all) {
           expect(s, isA<String>(), reason: p.key);
-          expect((s as String).startsWith('ini.'), isTrue, reason: p.key);
+          // Контракт 1.1.63 — источник `context.<путь>` (значение от
+          // распаковщика контейнера: `mtu_container`) текста .conf не
+          // адресует и пространству INI не подчиняется.
+          final str = s as String;
+          expect(str.startsWith('ini.') || str.startsWith('context.'), isTrue,
+              reason: p.key);
         }
       }
     });

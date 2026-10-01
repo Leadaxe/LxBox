@@ -6,7 +6,7 @@
 | Дата старта | 2026-09-03 |
 | Дата завершения | 2026-09-03 |
 | Коммиты | см. ветку задачи |
-| Связанные spec'ы | [tasks/159](159-backup-allowlist-strict-filter.md), [tasks/221](221-backup-export-allowlist-asymmetry.md), [features/031 debug api](../features/031%20debug%20api/spec.md) |
+| Связанные spec'ы | [tasks/159](159-backup-allowlist-strict-filter.md), [tasks/221](221-backup-export-allowlist-asymmetry.md), [tasks/031F-debug-api](../tasks/031F-debug-api/spec.md) |
 
 ## Что было
 

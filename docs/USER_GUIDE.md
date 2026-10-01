@@ -527,7 +527,7 @@ of its own.
   - **your own** — the **Add user rule** button (the rule is written as a
     sing-box `dns.rules` JSON fragment — an advanced-level tool);
   - **from presets** — an enabled routing preset brings its own DNS rules (for
-    instance, "Russian domains & IPs" resolves ru domains through its own
+    instance, "Ru internet segment" resolves ru domains through its own
     `dns_ru` group of three independent paths: UDP via the preset's direction, DoT
     via `vpn-1`, DoH direct — so a dead node in one path doesn't hang ru sites);
   - **from the template** — the baseline configuration rules;

@@ -4,24 +4,28 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/models/tls_spec.dart';
 import 'package:lxbox/services/parser/json_parsers.dart';
+import 'package:lxbox/services/parser/singbox_config.dart';
+
+import 'engine_test_setup.dart';
 
 /// §454 / issue #140 — TLS-поля тела узла проходят разбор → эмит по
 /// allowlist'у `OutboundTLSOptions` ядра (норма контракта TASKS_LXBOX §22).
 void main() {
-  const pem = '-----BEGIN CERTIFICATE-----\nMII…c=\n-----END CERTIFICATE-----\n';
+  const pem =
+      '-----BEGIN CERTIFICATE-----\nMII…c=\n-----END CERTIFICATE-----\n';
 
   Map<String, dynamic> emitOf(Map<String, dynamic> entry) =>
       parseSingboxEntry(entry)!.emit(TemplateVars.empty).map;
 
   Map<String, dynamic> naive({Map<String, dynamic> tls = const {}}) => {
-        'type': 'naive',
-        'tag': 'naive-out',
-        'server': '1.2.3.4',
-        'server_port': 443,
-        'username': 'user',
-        'password': 'password',
-        'tls': {'enabled': true, 'server_name': 'server.com', ...tls},
-      };
+    'type': 'naive',
+    'tag': 'naive-out',
+    'server': '1.2.3.4',
+    'server_port': 443,
+    'username': 'user',
+    'password': 'password',
+    'tls': {'enabled': true, 'server_name': 'server.com', ...tls},
+  };
 
   group('naive (#140)', () {
     test('certificate строкой переживает round-trip строкой', () {
@@ -33,25 +37,42 @@ void main() {
     });
 
     test('certificate массивом — массивом; certificate_path — как есть', () {
-      final m = emitOf(naive(tls: {
-        'certificate': [pem, pem],
-        'certificate_path': '/sdcard/ca.pem',
-      }));
+      final m = emitOf(
+        naive(
+          tls: {
+            'certificate': [pem, pem],
+            'certificate_path': '/sdcard/ca.pem',
+          },
+        ),
+      );
       final tls = m['tls'] as Map;
       expect(tls['certificate'], [pem, pem]);
       expect(tls['certificate_path'], '/sdcard/ca.pem');
     });
 
-    test('§459 naive принимает ech-объект (outbound.go читает блок целиком)',
-        () {
-      final m = emitOf(naive(tls: {
-        'ech': {'enabled': true, 'config': ['pem'], 'query_server_name': 'ip.gs'},
-      }));
-      final tls = m['tls'] as Map;
-      expect(tls['ech'],
-          {'enabled': true, 'config': ['pem'], 'query_server_name': 'ip.gs'});
-      expect(tls.keys.toList(), ['enabled', 'server_name', 'ech']);
-    });
+    test(
+      '§459 naive принимает ech-объект (outbound.go читает блок целиком)',
+      () {
+        final m = emitOf(
+          naive(
+            tls: {
+              'ech': {
+                'enabled': true,
+                'config': ['pem'],
+                'query_server_name': 'ip.gs',
+              },
+            },
+          ),
+        );
+        final tls = m['tls'] as Map;
+        expect(tls['ech'], {
+          'enabled': true,
+          'config': ['pem'],
+          'query_server_name': 'ip.gs',
+        });
+        expect(tls.keys.toList(), ['enabled', 'server_name', 'ech']);
+      },
+    );
 
     test('§459 naive: ech не-объект отброшен', () {
       final tls = emitOf(naive(tls: {'ech': 'x'}))['tls'] as Map;
@@ -59,18 +80,22 @@ void main() {
     });
 
     test('мусорные TLS-поля naive срезаны (ядро отвергает фаталом)', () {
-      final m = emitOf(naive(tls: {
-        'certificate': pem,
-        'insecure': true,
-        'alpn': ['h2'],
-        'min_version': '1.3',
-        'disable_sni': true,
-        'fragment': true,
-        'kernel_tx': true,
-        'certificate_public_key_sha256': ['abc'],
-        'utls': {'enabled': true, 'fingerprint': 'chrome'},
-        'client_certificate': pem,
-      }));
+      final m = emitOf(
+        naive(
+          tls: {
+            'certificate': pem,
+            'insecure': true,
+            'alpn': ['h2'],
+            'min_version': '1.3',
+            'disable_sni': true,
+            'fragment': true,
+            'kernel_tx': true,
+            'certificate_public_key_sha256': ['abc'],
+            'utls': {'enabled': true, 'fingerprint': 'chrome'},
+            'client_certificate': pem,
+          },
+        ),
+      );
       final tls = m['tls'] as Map;
       expect(tls.keys.toList(), ['enabled', 'server_name', 'certificate']);
     });
@@ -84,13 +109,13 @@ void main() {
 
   group('общий allowlist', () {
     Map<String, dynamic> vless(Map<String, dynamic> tls) => {
-          'type': 'vless',
-          'tag': 'v',
-          'server': 'h.example.com',
-          'server_port': 443,
-          'uuid': '5c8c9a1e-1c7a-4f3d-9d6b-2b1a1c3d4e5f',
-          'tls': {'enabled': true, 'server_name': 'h.example.com', ...tls},
-        };
+      'type': 'vless',
+      'tag': 'v',
+      'server': 'h.example.com',
+      'server_port': 443,
+      'uuid': '5c8c9a1e-1c7a-4f3d-9d6b-2b1a1c3d4e5f',
+      'tls': {'enabled': true, 'server_name': 'h.example.com', ...tls},
+    };
 
     test('все сквозные ключи vless сохраняются, порядок = структура ядра', () {
       final input = <String, dynamic>{
@@ -147,14 +172,18 @@ void main() {
     });
 
     test('значение не того типа — поле отброшено, узел жив', () {
-      final tls = emitOf(vless({
-        'certificate': 42,
-        'certificate_path': ['x'],
-        'min_version': 1.3,
-        'disable_sni': 'yes',
-        'fragment': false,
-        'cipher_suites': [1, '', 'TLS_AES_256_GCM_SHA384'],
-      }))['tls'] as Map;
+      final tls =
+          emitOf(
+                vless({
+                  'certificate': 42,
+                  'certificate_path': ['x'],
+                  'min_version': 1.3,
+                  'disable_sni': 'yes',
+                  'fragment': false,
+                  'cipher_suites': [1, '', 'TLS_AES_256_GCM_SHA384'],
+                }),
+              )['tls']
+              as Map;
       expect(tls.containsKey('certificate'), isFalse);
       expect(tls.containsKey('certificate_path'), isFalse);
       expect(tls.containsKey('min_version'), isFalse);
@@ -164,15 +193,19 @@ void main() {
     });
 
     test('§459 ech-объект проходит как есть, неизвестные ключи — нет', () {
-      final tls = emitOf(vless({
-        'ech': {
-          'enabled': true,
-          'config': ['x'],
-          'config_path': '/etc/ech.pem',
-          'query_server_name': 'ip.gs',
-        },
-        'foo': 'bar',
-      }))['tls'] as Map;
+      final tls =
+          emitOf(
+                vless({
+                  'ech': {
+                    'enabled': true,
+                    'config': ['x'],
+                    'config_path': '/etc/ech.pem',
+                    'query_server_name': 'ip.gs',
+                  },
+                  'foo': 'bar',
+                }),
+              )['tls']
+              as Map;
       expect(tls['ech'], {
         'enabled': true,
         'config': ['x'],
@@ -183,55 +216,88 @@ void main() {
     });
 
     test('§459 ech не-объект отброшен молча', () {
-      for (final bad in <dynamic>['x', 1, true, ['a']]) {
+      for (final bad in <dynamic>[
+        'x',
+        1,
+        true,
+        ['a'],
+      ]) {
         final tls = emitOf(vless({'ech': bad}))['tls'] as Map;
         expect(tls.containsKey('ech'), isFalse, reason: 'bad=$bad');
       }
     });
 
     test('§459 ech стоит между kernel_rx и utls (порядок структуры ядра)', () {
-      final tls = emitOf(vless({
-        'kernel_rx': true,
-        'ech': {'enabled': true},
-        'utls': {'enabled': true, 'fingerprint': 'chrome'},
-      }))['tls'] as Map;
+      final tls =
+          emitOf(
+                vless({
+                  'kernel_rx': true,
+                  'ech': {'enabled': true},
+                  'utls': {'enabled': true, 'fingerprint': 'chrome'},
+                }),
+              )['tls']
+              as Map;
       final keys = tls.keys.toList();
       expect(keys.indexOf('kernel_rx') < keys.indexOf('ech'), isTrue);
       expect(keys.indexOf('ech') < keys.indexOf('utls'), isTrue);
     });
 
     test('alpn строкой (Listable ядра) остаётся строкой, узел жив (§460)', () {
-      final tls = emitOf(vless({'alpn': 'h3', 'disable_sni': true}))['tls'] as Map;
+      final tls =
+          emitOf(vless({'alpn': 'h3', 'disable_sni': true}))['tls'] as Map;
       expect(tls['alpn'], 'h3');
       expect(tls['disable_sni'], true);
-      expect(tls.keys.toList(), ['enabled', 'server_name', 'alpn', 'disable_sni']);
+      expect(tls.keys.toList(), [
+        'enabled',
+        'server_name',
+        'alpn',
+        'disable_sni',
+      ]);
     });
 
     test('без сквозных ключей эмит прежний байт в байт (parity)', () {
-      final tls = emitOf(vless({
-        'alpn': ['h2'],
-        'insecure': true,
-        'utls': {'enabled': true, 'fingerprint': 'chrome'},
-      }))['tls'] as Map;
-      expect(jsonEncode(tls),
-          '{"enabled":true,"server_name":"h.example.com","alpn":["h2"],'
-          '"insecure":true,"utls":{"enabled":true,"fingerprint":"chrome"}}');
+      final tls =
+          emitOf(
+                vless({
+                  'alpn': ['h2'],
+                  'insecure': true,
+                  'utls': {'enabled': true, 'fingerprint': 'chrome'},
+                }),
+              )['tls']
+              as Map;
+      expect(
+        jsonEncode(tls),
+        '{"enabled":true,"server_name":"h.example.com","alpn":["h2"],'
+        '"insecure":true,"utls":{"enabled":true,"fingerprint":"chrome"}}',
+      );
     });
 
-    test('hysteria2 (QUIC): certificate проходит, utls срезан', () {
-      final tls = emitOf({
-        'type': 'hysteria2',
-        'tag': 'hy',
-        'server': 'h.example.com',
-        'server_port': 443,
-        'password': 'p',
-        'tls': {
-          'enabled': true,
-          'server_name': 'h.example.com',
-          'certificate': pem,
-          'utls': {'enabled': true, 'fingerprint': 'chrome'},
+    // §546 — utls на QUIC снимает реестр (`tls.json` `forbidden_for`) при
+    // разборе, эмиттер его не судит. Поэтому узел идёт полным путём
+    // JSON-входа, через санитайзер.
+    test('hysteria2 (QUIC): certificate проходит, utls срезан', () async {
+      await loadEngineSections();
+      addTearDown(unloadEngineSections);
+      final node = parseSingboxConfigs([
+        {
+          'outbounds': [
+            {
+              'type': 'hysteria2',
+              'tag': 'hy',
+              'server': 'h.example.com',
+              'server_port': 443,
+              'password': 'p',
+              'tls': {
+                'enabled': true,
+                'server_name': 'h.example.com',
+                'certificate': pem,
+                'utls': {'enabled': true, 'fingerprint': 'chrome'},
+              },
+            },
+          ],
         },
-      })['tls'] as Map;
+      ]).single;
+      final tls = node.emit(TemplateVars.empty).map['tls'] as Map;
       expect(tls['certificate'], pem);
       expect(tls.containsKey('utls'), isFalse);
     });
@@ -245,7 +311,10 @@ void main() {
       expect(a == b, isFalse);
       expect(a == c, isFalse);
       expect(b == a.copyWith(passthrough: {'certificate': pem}), isTrue);
-      expect(b.hashCode, a.copyWith(passthrough: {'certificate': pem}).hashCode);
+      expect(
+        b.hashCode,
+        a.copyWith(passthrough: {'certificate': pem}).hashCode,
+      );
     });
   });
 }

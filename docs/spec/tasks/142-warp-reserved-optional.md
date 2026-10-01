@@ -5,7 +5,7 @@
 | Status | Done (released v2.3.3) |
 | Started | 2026-06-16 |
 | Trigger | Жалоба Iliya (Крым): WARP-узел из приложения НЕ подключается, ручные конфиги от warp-generator/WireSock — работают. Декодирование: наш i1 валиден (1250б QUIC Initial, GCM-тег ок, SNI внутри), endpoint не важен (дефолтный engage:2408 работает), один рабочий конфиг вообще БЕЗ i1. **Единственное отличие нашего узла от ВСЕХ 4 рабочих конфигов Ильи — `reserved` (client_id).** Все рабочие — БЕЗ reserved. |
-| Related | [§025 warp integration](../features/025%20warp%20integration/spec.md) (reserved=client_id); [§126](126-warp-amneziawg-obfuscation.md)/[§136](136-warp-quic-i1-generator.md) (обфускация, i1-генератор); [[project_warp_integration]], [[project_warp_quic_sni_dpi]] |
+| Related | [§025 warp integration](../tasks/025F-warp-integration/spec.md) (reserved=client_id); [§126](126-warp-amneziawg-obfuscation.md)/[§136](136-warp-quic-i1-generator.md) (обфускация, i1-генератор); [[project_warp_integration]], [[project_warp_quic_sni_dpi]] |
 | Files touched | `services/warp/warp_account.dart`, `controllers/subscription_controller.dart`, `screens/warp_wizard_screen.dart`, `assets/warp_endpoints.json` |
 
 ## Часть A — reserved (client_id) опционален [РЕАЛИЗУЕМ СЕЙЧАС]

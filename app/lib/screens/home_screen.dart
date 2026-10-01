@@ -55,6 +55,8 @@ import '../services/subscription/auto_updater.dart';
 import '../services/update_checker.dart';
 import '../vpn/box_vpn_client.dart';
 import '../services/l10n/locale_controller.dart';
+import 'home/widgets/template_warnings_snack.dart';
+import '../widgets/double_back_to_exit.dart';
 import '../services/probe/probe_lifecycle.dart';
 import '../services/workspaces/workspace_controller.dart';
 import 'home/widgets/workspace_menu.dart';
@@ -244,6 +246,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     // SnackBar (паттерн §166: всплывашка снизу, не баннер).
     _prevNoNodesStamp = _subController.directionsWithoutNodesStamp;
     _subController.addListener(_onDirectionsWithoutNodes);
+    // §555 — предупреждения шаблона после сборки: снек со счётчиком.
+    _prevTemplateStamp = _subController.templateWarningsStamp;
+    _subController.addListener(_onTemplateWarnings);
+    // §565 / задача 570 — выбор члена selector-группы (главный экран, экран
+    // узла) запоминается у своей группы папки или подписки.
+    _controller.onMemberSelected = (group, node) => unawaited(
+        _subController.rememberGroupMember(group, node, live: true));
     // §076: global home-return observer триггерит auto-rebuild когда
     // юзер возвращается на home с любого settings screen'а.
     homeReturnObserver.setHandler(_onReturnToHome);
@@ -314,6 +323,23 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 5),
       ));
+    });
+  }
+
+  /// §555 / задача 570 — предупреждения движка шаблона (`template_degraded`)
+  /// за сборку: короткий снек «Template: N warnings» с переходом в шторку
+  /// кодов (тексты реестра). Сохранение конфига они не блокируют; дедуп по
+  /// stamp — один показ на сборку.
+  int _prevTemplateStamp = 0;
+  void _onTemplateWarnings() {
+    final stamp = _subController.templateWarningsStamp;
+    if (stamp == _prevTemplateStamp) return;
+    _prevTemplateStamp = stamp;
+    final items = _subController.templateWarnings;
+    if (items.isEmpty) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      showTemplateWarningsSnack(context, items);
     });
   }
 
@@ -533,6 +559,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     _filter.dispose();
     _controller.removeListener(_onControllerChange);
     _subController.removeListener(_onDirectionsWithoutNodes);
+    _subController.removeListener(_onTemplateWarnings);
+    _controller.onMemberSelected = null;
     WidgetsBinding.instance.removeObserver(this);
     homeReturnObserver.clearHandler();
     _autoUpdater.dispose();
@@ -711,9 +739,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       case 'app-settings':
         return AppSettingsScreen(
           initialTab: switch (tab) {
-            'subscriptions' => 1,
-            'diagnostics' => 2,
-            'automation' => 3,
+            'appearance' => 1,
+            'subscriptions' => 2,
+            'diagnostics' => 3,
+            'automation' => 4,
             _ => 0,
           },
         );
@@ -865,97 +894,105 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
           anyServerNodes: _subController.entries
               .any((e) => e.nodeCount > 0 || e.list.nodes.isNotEmpty),
         );
-        return Scaffold(
-          appBar: AppBar(
-            // l10n-exempt: brand name, идентичен во всех локалях
-            title: const Text('L×Box'),
-            // §417 — имя текущего workspace + попап Load / Save as.
-            actions: [
-              WorkspaceMenuButton(stopVpn: _stopForWorkspaceSwitch),
-              const SizedBox(width: 4),
-            ],
-          ),
-          drawer: HomeDrawer(
-            controller: _controller,
-            subController: _subController,
-            autoUpdater: _autoUpdater,
-          ),
-          body: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Empty state (§328 — нет серверов, не «нет конфига») → guide +
-              // CTA берёт на себя весь экран; controls/header не рисуем,
-              // чтобы disabled-кнопка не путала первого пользователя.
-              if (state.configRaw.isNotEmpty && !showEmptyGuide) ...[
-                HomeControls(
-                  controller: _controller,
-                  subController: _subController,
-                  presenter: _nodeList,
-                  autoApplying: _autoApplying, // §338
-
-                  connectingAnimChild: StatusChip(
-                    state: state,
-                    isRevoked: state.tunnel == TunnelStatus.revoked,
-                    isConnecting: state.tunnel == TunnelStatus.connecting,
-                    connectingAnim: _connectingAnim,
-                  ),
-                  state: state,
-                  startActive: startActive,
-                  startEnabled: startEnabled,
-                  stopEnabled: stopEnabled,
-                  needsRestart: _needsRestart,
-                  // §116 — таймер теперь в BannerStack; здесь только clear.
-                  errorTimerOnDismiss: _controller.clearError,
-                  onStartWithAutoRefresh: () =>
-                      unawaited(_startWithAutoRefresh()),
-                  onRebuildAndClearDirty: _rebuildAndClearDirty,
-                  onRebuildAndReconnect: _rebuildAndReconnect,
-                  onRebuildAndStart: _rebuildAndStart,
-                ),
-                // §095 Filter mode — при открытой фильтр-панели прячем
-                // стат-полосу + Nodes-хедер, освобождая зону под ноды.
-                if (state.tunnelUp && !_filter.panelExpanded)
-                  TrafficBar(
-                    state: state,
-                    controller: _controller,
-                    subController: _subController,
-                  ),
-                if (_subController.busy &&
-                    _subController.progressMessage != null)
-                  ProgressBanner(
-                      message:
-                          _subController.progressMessage!.render()),
-                // §095 — NODES-строка только когда подключено И фильтр закрыт.
-                // STOP-режим: нод нет → фильтровать нечего → строку прячем.
-                if (state.tunnelUp && !_filter.panelExpanded) ...[
-                  const SizedBox(height: 12),
-                  NodesHeader(
-                    controller: _controller,
-                    subController: _subController,
-                    filter: _filter,
-                    onSortLongPress: () =>
-                        showSortOptionsMenu(context, _controller),
-                  ),
-                  const SizedBox(height: 4),
+        // Задача 583 — выход по двойному «назад».
+        return DoubleBackToExit(
+          builder: (_, onDrawerChanged) => Scaffold(
+              appBar: AppBar(
+                // l10n-exempt: brand name, идентичен во всех локалях
+                title: const Text('L×Box'),
+                // §417 — имя текущего workspace + попап Load / Save as.
+                actions: [
+                  WorkspaceMenuButton(stopVpn: _stopForWorkspaceSwitch),
+                  const SizedBox(width: 4),
                 ],
-              ],
-              HomeNodeList(
+              ),
+              onDrawerChanged: onDrawerChanged,
+              drawer: HomeDrawer(
                 controller: _controller,
                 subController: _subController,
                 autoUpdater: _autoUpdater,
-                filter: _filter,
-                presenter: _nodeList,
-                state: state,
-                showEmptyGuide: showEmptyGuide,
-                onRestoreFromBackup: () =>
-                    restoreFromBackup(context, _subController, _autoUpdater),
-                onTapToConnect: () => unawaited(_startWithAutoRefresh()),
-                rowKeyFor: _nodeRowKey, // §203
-                onSelectServer: _scrollToNode, // §203
-                onViewPool: _showPool, // §208
               ),
-            ],
-          ),
+              body: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Empty state (§328 — нет серверов, не «нет конфига») → guide +
+                  // CTA берёт на себя весь экран; controls/header не рисуем,
+                  // чтобы disabled-кнопка не путала первого пользователя.
+                  if (state.configRaw.isNotEmpty && !showEmptyGuide) ...[
+                    HomeControls(
+                      controller: _controller,
+                      subController: _subController,
+                      presenter: _nodeList,
+                      autoApplying: _autoApplying, // §338
+
+                      connectingAnimChild: StatusChip(
+                        state: state,
+                        isRevoked: state.tunnel == TunnelStatus.revoked,
+                        isConnecting: state.tunnel == TunnelStatus.connecting,
+                        connectingAnim: _connectingAnim,
+                      ),
+                      state: state,
+                      startActive: startActive,
+                      startEnabled: startEnabled,
+                      stopEnabled: stopEnabled,
+                      needsRestart: _needsRestart,
+                      // §116 — таймер теперь в BannerStack; здесь только clear.
+                      errorTimerOnDismiss: _controller.clearError,
+                      onStartWithAutoRefresh: () =>
+                          unawaited(_startWithAutoRefresh()),
+                      onRebuildAndClearDirty: _rebuildAndClearDirty,
+                      onRebuildAndReconnect: _rebuildAndReconnect,
+                      onRebuildAndStart: _rebuildAndStart,
+                    ),
+                    // §095 Filter mode — при открытой фильтр-панели прячем
+                    // стат-полосу + Nodes-хедер, освобождая зону под ноды.
+                    if (state.tunnelUp &&
+                        (!_filter.panelExpanded || state.showingNetworks))
+                      TrafficBar(
+                        state: state,
+                        controller: _controller,
+                        subController: _subController,
+                      ),
+                    if (_subController.busy &&
+                        _subController.progressMessage != null)
+                      ProgressBanner(
+                          message:
+                              _subController.progressMessage!.render()),
+                    // §095 — NODES-строка только когда подключено И фильтр закрыт.
+                    // STOP-режим: нод нет → фильтровать нечего → строку прячем.
+                    // Задача 579: у NETWORKS панели фильтров нет — заголовок
+                    // виден и при открытой панели.
+                    if (state.tunnelUp &&
+                        (!_filter.panelExpanded || state.showingNetworks)) ...[
+                      const SizedBox(height: 12),
+                      NodesHeader(
+                        controller: _controller,
+                        subController: _subController,
+                        filter: _filter,
+                        onSortLongPress: () =>
+                            showSortOptionsMenu(context, _controller),
+                      ),
+                      const SizedBox(height: 4),
+                    ],
+                  ],
+                  HomeNodeList(
+                    controller: _controller,
+                    subController: _subController,
+                    autoUpdater: _autoUpdater,
+                    filter: _filter,
+                    presenter: _nodeList,
+                    state: state,
+                    showEmptyGuide: showEmptyGuide,
+                    onRestoreFromBackup: () =>
+                        restoreFromBackup(context, _subController, _autoUpdater),
+                    onTapToConnect: () => unawaited(_startWithAutoRefresh()),
+                    rowKeyFor: _nodeRowKey, // §203
+                    onSelectServer: _scrollToNode, // §203
+                    onViewPool: _showPool, // §208
+                  ),
+                ],
+              ),
+            ),
         );
       },
       ),
@@ -1027,11 +1064,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     // Если уже активен VPN другого приложения — наш старт молча отзовёт его
     // (onRevoke). Спросим подтверждение перед перебиванием чужого туннеля.
     // Только для ручного старта из UI; фоновые точки (tile/automation) не трогаем.
-    if (await _vpn.isForeignVpnActive()) {
-      if (!mounted) return;
-      final ok = await showForeignVpnDialog(context);
-      if (ok != true) return;
+    // §528 — в proxy-режиме (без TUN) наш старт чужой туннель не трогает: там
+    // `VpnService.prepare()` не зовётся (§192). Гейт и сам опрос native живут
+    // в `confirmForeignVpnOverride` — один признак `hasTun` на оба гейта.
+    if (!await confirmForeignVpnOverride(
+      context: context,
+      loadVpnMode: SettingsStorage.getVpnMode,
+      isForeignVpnActive: _vpn.isForeignVpnActive,
+    )) {
+      return;
     }
+    if (!mounted) return;
     // §107 гейт: pending-изменения или пересборка в полёте — сначала довести
     // конфиг на диске до актуального, потом стартовать. При ошибке сборки
     // (configDirty остаётся true) стартуем со старым конфигом — banner
@@ -1039,7 +1082,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     // стартуем с pinned-конфигом.
     final inFlight = _rebuildInFlight;
     if (inFlight != null) await inFlight;
-    if (_subController.configDirty) await _rebuildAndClearDirty();
+    // §565 / задача 570 — выбор члена ручной группы, сделанный вживую, лежит
+    // в состоянии, а не в конфиге на диске: старт пересобирает и его.
+    if (_subController.configDirty || _subController.groupDefaultsPending) {
+      await _rebuildAndClearDirty();
+    }
     if (!mounted) return;
     // §254 — detour-цикл в свежей пересборке → sheet + отмена старта (см.
     // _rebuildAndStart).

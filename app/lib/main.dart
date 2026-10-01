@@ -179,6 +179,13 @@ void main() async {
   // §220 — ориентация: default портрет (как всегда было), toggle «Allow
   // rotation» в App Settings → General снимает фиксацию. Планшетный фидбэк.
   await applyAllowRotationSetting();
+  // §541 — тумблер двух колонок списка узлов: поднять в notifier до первого
+  // кадра, чтобы главный экран не мигал раскладкой по умолчанию.
+  try {
+    await SettingsStorage.getNodeListTwoColumns();
+  } catch (_) {
+    // Storage недоступен — остаётся дефолт (true).
+  }
   runApp(const LxBoxApp());
 }
 

@@ -1,5 +1,7 @@
+import '../services/builder/preset_expand.dart'
+    show fragmentGateSatisfied, presetVarsMap;
 import 'custom_rule.dart' show CustomRulePreset, kDefaultSrsTtlHours;
-import 'parser_config.dart' show SelectableRule, WizardVar;
+import 'parser_config.dart' show SelectableRule;
 
 /// Remote `rule_set` пресета (type=remote + url).
 ///
@@ -52,63 +54,108 @@ int parseUpdateIntervalHours(dynamic raw) {
 /// Список remote `rule_set` пресета (type=remote + url). Пустой если
 /// пресет только inline или без rule_set'ов.
 ///
-/// `rule` опционален — если передан, фильтруются rule_set'ы выключенные
-/// через `enabled: "@var"` гейтинг (§045). Без `rule` — все remote
-/// rule_set'ы (для cleanup-операций когда хотим тронуть все cached files).
+/// `rule` опционален — если передан, выключенные гейтом наборы отфильтрованы
+/// (см. [isRuleSetEnabledFor]: `#enable` §107 и легаси `enabled` §045).
+/// Без `rule` — все remote rule_set'ы (для cleanup-операций, когда хотим
+/// тронуть все cached files).
+///
+/// `globalVars` — глобальный userVars (`SettingsStorage.getAllVars()`), нужен
+/// гейту на ref-переменной (§265); без `rule` не используется.
 ///
 /// §366 — переехало из `RoutingHelpers` (осталось там реэкспортом): нужно
 /// headless-сервису авто-обновления, зависимости от UI у функции нет.
 List<PresetRemoteRuleSet> remoteRuleSetsOfPreset(
   SelectableRule preset, [
   CustomRulePreset? rule,
+  Map<String, String> globalVars = const {},
 ]) {
   final out = <PresetRemoteRuleSet>[];
   for (final rs in preset.ruleSets) {
-    if (rs['type'] != 'remote') continue;
-    final tag = rs['tag'];
-    final url = rs['url'];
-    if (tag is! String || tag.isEmpty) continue;
-    if (url is! String || url.isEmpty) continue;
-    if (rule != null && !isRuleSetEnabledFor(rs, preset, rule)) continue;
-    out.add(PresetRemoteRuleSet(
-      tag: tag,
-      url: url,
-      updateIntervalHours: parseUpdateIntervalHours(rs['update_interval']),
-    ));
+    final remote = _asRemote(rs);
+    if (remote == null) continue;
+    if (rule != null &&
+        !isRuleSetEnabledFor(rs, preset, rule, globalVars: globalVars)) {
+      continue;
+    }
+    out.add(remote);
   }
   return out;
 }
 
-/// Резолв `rule_set.enabled` (§045). Поле может быть string substitution
-/// (`"@varname"`), bool literal, или отсутствовать (= always-on).
+/// Remote `rule_set` шаблона (type=remote + непустые tag/url) → описание для
+/// скачивания; иначе `null`.
+PresetRemoteRuleSet? _asRemote(Map<String, dynamic> rs) {
+  if (rs['type'] != 'remote') return null;
+  final tag = rs['tag'];
+  final url = rs['url'];
+  if (tag is! String || tag.isEmpty) return null;
+  if (url is! String || url.isEmpty) return null;
+  return PresetRemoteRuleSet(
+    tag: tag,
+    url: url,
+    updateIntervalHours: parseUpdateIntervalHours(rs['update_interval']),
+  );
+}
+
+/// §534 — remote-наборы пресета, которые включает bool-переменная `varName`:
+/// гейт набора ложен при `varName = false` и истинен при `varName = true`,
+/// остальные переменные — как в `rule`. Нужен редактору правила: включение
+/// галки докачивает именно эти наборы.
+///
+/// Обе формы гейта (`#enable` §107, легаси `enabled` §045) — через
+/// [isRuleSetEnabledFor], без синтаксического поиска `"@varName"`. Составной
+/// гейт, которому одной `varName` мало (`["@x", "@y"]` при `y = false`), в
+/// список не попадает: включением `x` его не включить, качать нечего. Набор
+/// без гейта или с гейтом на другую переменную тоже не попадает — его
+/// состояние от `varName` не зависит.
+List<PresetRemoteRuleSet> ruleSetsEnabledByVar(
+  SelectableRule preset,
+  CustomRulePreset rule,
+  String varName, {
+  Map<String, String> globalVars = const {},
+}) {
+  CustomRulePreset withVar(String value) => CustomRulePreset(
+        name: rule.name,
+        presetId: rule.presetId,
+        varsValues: {...rule.varsValues, varName: value},
+      );
+  final off = withVar('false');
+  final on = withVar('true');
+  final out = <PresetRemoteRuleSet>[];
+  for (final rs in preset.ruleSets) {
+    final remote = _asRemote(rs);
+    if (remote == null) continue;
+    if (isRuleSetEnabledFor(rs, preset, off, globalVars: globalVars)) continue;
+    if (!isRuleSetEnabledFor(rs, preset, on, globalVars: globalVars)) continue;
+    out.add(remote);
+  }
+  return out;
+}
+
+/// Включён ли гейтом `rule_set` пресета для правила `rule`.
+///
+/// Гейт — обе формы, как у билдера: канонический `#enable` (§107, условие
+/// через `evalCond`) и легаси `enabled` (§045: строка `"@var"` или bool).
+/// Обе присутствуют → and. Ни одной → always-on.
+///
+/// §534 — одна семантика с билдером: тот же предикат
+/// (`fragmentGateSatisfied`) на том же словаре переменных (`presetVarsMap`:
+/// vars пресета, ref-vars из `globalVars` §265, `globalVars` как fallback
+/// §264). До §534 хелпер сам разбирал только `enabled: "@var"`, `#enable` не
+/// видел — путь скачивания и экран Routing считали такой набор всегда
+/// включённым. Легаси `"@var"` с необъявленной переменной теперь «выключен»,
+/// как у билдера (было «включён»): набор, который в конфиг не попадёт,
+/// качать незачем.
+///
+/// Ошибка словаря (не заполнена required-переменная) игнорируется: билдер
+/// такой пресет не выпустит вовсе, гейт вычисляется на частичном словаре.
 bool isRuleSetEnabledFor(
   Map<String, dynamic> rs,
   SelectableRule preset,
-  CustomRulePreset rule,
-) {
-  final raw = rs['enabled'];
-  if (raw == null) return true;
-  if (raw is bool) return raw;
-  if (raw is String) {
-    String resolved = raw;
-    if (raw.startsWith('@')) {
-      final varName = raw.substring(1);
-      final v = preset.vars.firstWhere(
-        (x) => x.name == varName,
-        orElse: () => WizardVar(name: '', type: '', defaultValue: 'true'),
-      );
-      final def = v.defaultValue.isNotEmpty ? v.defaultValue : 'true';
-      // §265 — ref-var: значение в глобальном userVars, не в varsValues.
-      // Pure-хелпер userVars не читает → fallback на default (defensive:
-      // rule_set.enabled-гейты используют dns_enable-паттерн, не ref).
-      if (v.isRef) {
-        resolved = def;
-      } else {
-        final stored = rule.varsValues[varName];
-        resolved = (stored != null && stored.isNotEmpty) ? stored : def;
-      }
-    }
-    return resolved.toLowerCase() == 'true';
-  }
-  return true;
-}
+  CustomRulePreset rule, {
+  Map<String, String> globalVars = const {},
+}) =>
+    fragmentGateSatisfied(
+      rs,
+      presetVarsMap(rule, preset, globalVars: globalVars).vars,
+    );

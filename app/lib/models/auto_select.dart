@@ -211,3 +211,10 @@ bool ruleAccepts(Iterable<String> names, RegExp? include, RegExp? exclude) {
   if (!hit) return false;
   return !(exclude != null && names.any(exclude.hasMatch));
 }
+
+/// Контракт 1.1.106 — ключ синонима Xray-пула ([AutoSelectSpec.tagSynonyms])
+/// для записи, которую `selector` назвать не может: `NUL` + номер записи.
+/// Повторённый `tag` получает ключ `tag` + `NUL` + номер — префикс `selector`
+/// его ловит. Сборка считает запись с таким ключом членом пула элемента.
+const kXrayUntaggedSynonymMark = '\u0000';
+

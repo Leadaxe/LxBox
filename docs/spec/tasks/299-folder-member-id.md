@@ -1,6 +1,6 @@
 # §299 — FolderMember стабильный id вместо позиционных индексов (DEFER, RISKY)
 
-**Тип:** structural refactor (фича [§291](../features/291%20layered-architecture-facades/spec.md)) · **Статус:** spec — **отложено** · **Размер:** L · **Риск:** высокий blast-radius
+**Тип:** structural refactor (фича [§291](../tasks/291F-layered-architecture-facades/spec.md)) · **Статус:** spec — **отложено** · **Размер:** L · **Риск:** высокий blast-radius
 
 `FolderMember` не имеет id — каждый мутатор контроллера принимает `int index`,
 экраны пересчитывают `entries.indexOf()` перед каждым вызовом, индексы съезжают

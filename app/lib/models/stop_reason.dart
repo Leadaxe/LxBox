@@ -94,6 +94,31 @@ final class StopPermissionLocation extends StopReason {
   String messageWith(GetLocalText t) => t.s("Stopped: %s", raw);
 }
 
+/// §519 — принудительный стоп по истечении safety-таймаута фазы `connecting`
+/// (`HomeController._armTransientTimeout`). Причина СИНТЕЗИРУЕТСЯ приложением:
+/// native/ядро при этом молчат, `errorReason` пустой — до §519 из-за этого
+/// `lastStartError` оставался пустым, и снаружи (Debug API, дамп, поддержка)
+/// остановка выглядела «молча не соединяется».
+///
+/// [seconds] — сам порог (он ПЕРЕМЕННЫЙ: база плюс надбавка за endpoint'ы),
+/// [endpoints] — число wireguard/AWG-endpoint'ов, из которого порог выведен:
+/// без него не отличить «ядро зависло» от «endpoint'ов больше, чем бюджета».
+final class StopStartTimeout extends StopReason {
+  final int seconds;
+  final int endpoints;
+
+  const StopStartTimeout({required this.seconds, required this.endpoints});
+
+  @override
+  List<Object?> get props => [seconds, endpoints];
+
+  @override
+  String messageWith(GetLocalText t) => t.s(
+      "Start timed out after %1\$d s (post-start did not finish, %2\$d endpoints)",
+      seconds,
+      endpoints);
+}
+
 /// Прочие причины стопа — диагностический passthrough native/kernel-строки.
 final class StopError extends StopReason {
   final String detail;

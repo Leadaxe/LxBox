@@ -33,8 +33,9 @@ final TemplateVars _emptyVars = TemplateVars.empty;
 ///     `UserServer`, через `subController.addUserServer(...)`.
 ///   - URI / JSON tabs → text идёт в `subController.addFromInput(...)`
 ///     (тот же путь что у tap-«+»).
-///   - Tailscale tab (§435) → `TailscaleSpec` + `UserServer` с канонической
-///     связкой секций (`tailscale_bundle.dart`), через `addUserServer`.
+///   - Tailscale tab (§435) → `TailscaleSpec` + `UserServer`, через
+///     `addUserServer`. Связку tailnet (маршрут, MagicDNS) даёт пресет
+///     шаблона `tailscale` (§578), не узел (§575).
 ///
 /// После successful add → callback [onAdded] (regenerate config + save +
 /// snackbar в parent screen).
@@ -163,12 +164,12 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
     }
   }
 
-  /// §435 — узел Tailscale: `TailscaleSpec` с телом из полей формы и
-  /// `UserServer` с канонической связкой (маршрут `100.64.0.0/10` → узел,
-  /// DNS-сервер `@{self}-dns`, правило `.ts.net`). `rawBody` = `toUri()` —
-  /// компактный JSON endpoint'а с `tag`: `UserServer.fromJson` ре-парсит его
-  /// как `singboxOutbound`, tag переживает рестарт. Без `exit_node` узел не
-  /// кандидат Направлений (это делает сборка), но связка работает.
+  /// §435 — узел Tailscale: `TailscaleSpec` с телом из полей формы и голый
+  /// `UserServer`. Маршрут и DNS даёт пресет шаблона `tailscale` (§578), не
+  /// узел. `rawBody` = `toUri()` — компактный JSON endpoint'а с `tag`:
+  /// `UserServer.fromJson` ре-парсит его как `singboxOutbound`, tag
+  /// переживает рестарт. Без `exit_node` узел не кандидат Направлений (это
+  /// делает сборка).
   Future<void> _submitTailscale() async {
     if (!(_tsFormKey.currentState?.validate() ?? false)) return;
     final tagInput = _tsTag.text.trim();
@@ -200,7 +201,6 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
       origin: UserSource.manual,
       rawBody: spec.toUri(),
       nodes: [spec],
-      sections: canonicalTailscaleSections(),
     );
     await widget.subController.addUserServer(us);
     await _afterAdd(addedTag: tag);
@@ -328,9 +328,12 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
     }
     await widget.onAdded();
     if (!mounted) return;
-    final msg = addedTag != null && addedTag.isNotEmpty
-        ? getLocalText.s("Added: %s", addedTag)
-        : getLocalText.s("Added");
+    // §585 — комментарии вставки убраны: одно сообщение вместо «Added».
+    final msg = widget.subController.lastCommentsRemoved
+        ? getLocalText.s("Comments were removed.")
+        : addedTag != null && addedTag.isNotEmpty
+            ? getLocalText.s("Added: %s", addedTag)
+            : getLocalText.s("Added");
     showSnack(msg);
     Navigator.of(context).pop();
   }
@@ -716,6 +719,7 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
               controller: _jsonCtrl,
               fontSize: 13,
               hint: '{"type": "vless", "tag": "…", …}',
+              language: LxCodeLanguage.json,
             ),
           ),
           const SizedBox(height: 8),

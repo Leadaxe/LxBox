@@ -11,7 +11,7 @@ import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/parser/engine/section_loader.dart';
 import 'package:lxbox/services/parser/mappers/draft_sections.dart';
 import 'package:lxbox/services/node_hash.dart';
-import 'package:lxbox/services/parser/json_parsers.dart';
+import 'package:lxbox/services/parser/singbox_config.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
 /// §472 шаг 5, раздел 3 спеки — инварианты переезда tuic на конвейер.
@@ -60,6 +60,15 @@ List<String> _corpusUris() {
 
 List<RegistryWarning> _registry(NodeSpec n) =>
     n.warnings.whereType<RegistryWarning>().toList();
+
+/// Узел, пришедший sing-box JSON полным путём входа: `parseSingboxConfigs`
+/// строит модель по карте санитайзера реестра (§545). Блоки utls/reality на
+/// QUIC снимает он, а не эмиттер (§546).
+NodeSpec _viaSingboxJson(Map<String, dynamic> entry) => parseSingboxConfigs([
+      {
+        'outbounds': [entry],
+      },
+    ]).single;
 
 void main() {
   // Корпус живёт только в вендоренной копии — на CI его нет.
@@ -178,7 +187,7 @@ void main() {
     const uuid = '11111111-1111-1111-1111-111111111111';
 
     test('запрещённый на QUIC блок utls судит САНИТАЙЗЕР', () {
-      // Прежде блок срезал ЭМИТТЕР (`toSingboxForQuic`), то есть раньше
+      // Прежде блок срезал ЭМИТТЕР (`toSingboxForQuic`, снят §546), то есть раньше
       // судьи, и код ставил рукописный проход `forbiddenTlsBlockWarnings`
       // (§469) — причём `fp` у tuic до 1.1.4 не читался вовсе.
       final spec = parseUri('tuic://$uuid:pass123@tuic.example-1.com:443/'
@@ -196,7 +205,7 @@ void main() {
     test('ссылка и тело дают РАВНЫЕ коды (парный кейс корпуса)', () {
       final fromUri = parseUri('tuic://$uuid:pass123@tuic.example-1.com:443/'
           '?congestion_control=bbr&fp=firefox&sni=tuic.example-1.com#n')!;
-      final fromBody = parseSingboxEntry({
+      final fromBody = _viaSingboxJson({
         'type': 'tuic',
         'tag': 'n',
         'server': 'tuic.example-1.com',
@@ -209,7 +218,7 @@ void main() {
           'server_name': 'tuic.example-1.com',
           'utls': {'enabled': true, 'fingerprint': 'firefox'},
         },
-      })!;
+      });
       annotateAllFromRawBody([fromBody]);
       String codes(NodeSpec n) => _registry(n)
           .where((w) => w.code == 'tls_not_applicable_quic')

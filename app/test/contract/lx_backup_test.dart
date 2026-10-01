@@ -1884,6 +1884,43 @@ void main() {
       expect(second.applied, 0);
     });
 
+    // §578/§83 — `skip_presets: true` держит своё значение, даже когда
+    // импорт находит узел с совпадающим телом, а во входящей записи флаг
+    // ложный/отсутствует: поле записывается только `true` (source_record),
+    // и merge не должен молча сбрасывать его на `false`.
+    test('одиночный узел: skip_presets=true своей записи не сбрасывается '
+        'при импорте совпавшего по телу узла без флага', () {
+      const uri = 'vless://skip@h:443';
+      final withFlag = mergeBackupServers(
+          const [], const [LxServer(uri: uri, skipPresets: true)]);
+      expect((withFlag.lists.single as UserServer).skipPresets, isTrue);
+
+      // Тот же импорт без skip_presets в файле — своя запись сильнее.
+      final second =
+          mergeBackupServers(withFlag.lists, const [LxServer(uri: uri)]);
+      expect((second.lists.single as UserServer).skipPresets, isTrue,
+          reason: 'приехавшая запись без флага не должна снимать true');
+    });
+
+    test('член папки: skip_presets=true не сбрасывается при повторном '
+        'импорте совпавшего по телу члена без флага', () {
+      const uri = 'vless://skip-folder@h:443';
+      final withFlag = mergeBackupServers(const [], const [
+        LxServer(uri: uri, folder: 'DE', skipPresets: true),
+      ]);
+      expect(
+          (withFlag.lists.single as FolderServers).members.single.skipPresets,
+          isTrue);
+
+      final second = mergeBackupServers(withFlag.lists, const [
+        LxServer(uri: uri, folder: 'DE'),
+      ]);
+      expect(
+          (second.lists.single as FolderServers).members.single.skipPresets,
+          isTrue,
+          reason: 'приехавшая запись без флага не должна снимать true');
+    });
+
     test('новое тело в существующей папке доливается', () {
       const a = 'vless://a@h:443';
       const b = 'vless://b@h:443';

@@ -1,0 +1,1 @@
+{"load": "reject", "config": {"tun": {"type": "tun"}}, "warnings": ["template_unknown_directive"]}

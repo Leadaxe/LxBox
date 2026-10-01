@@ -3,12 +3,17 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/codec/chain_record.dart';
 import 'package:lxbox/models/codec/source_record.dart';
+import 'package:lxbox/models/direction.dart';
 import 'package:lxbox/models/import_rule.dart';
 import 'package:lxbox/models/node_link.dart';
-import 'package:lxbox/models/node_sections.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/source_chain.dart';
+import 'package:lxbox/models/source_replace.dart';
 import 'package:lxbox/models/subscription_meta.dart';
+import 'package:lxbox/services/builder/verbatim_body.dart';
+import 'package:lxbox/services/node_hash.dart';
+import 'package:lxbox/services/parser/body_decoder.dart';
+import 'package:lxbox/services/parser/parse_all.dart';
 
 import '../parser/engine_test_setup.dart';
 
@@ -47,22 +52,6 @@ SourceChain _chainRoundTrip(SourceChain c) {
   expect(read.unknownKeys, isEmpty);
   return read.value!;
 }
-
-NodeSections _sections() => NodeSections.fromJson({
-      'rules': [
-        {
-          'kind': 'inline',
-          'id': 'r1',
-          'name': '@{self} network',
-          'enabled': true,
-          'num': 945,
-          'body': {
-            'ip_cidr': ['100.64.0.0/10'],
-            'outbound': '@self',
-          },
-        },
-      ],
-    })!;
 
 SubscriptionServers _richSubscription() => SubscriptionServers(
       id: 'sub-1',
@@ -164,7 +153,7 @@ void main() {
       expect(_sourceRoundTrip(s), s);
     });
 
-    test('сервер с sections, detour и флагами политики', () {
+    test('сервер с detour и флагами политики', () {
       final u = UserServer(
         id: 'srv-1',
         name: '',
@@ -175,12 +164,36 @@ void main() {
           useDetourServers: false,
         ),
         rawBody: _jsonOutbound,
-        sections: _sections(),
       );
       final back = _sourceRoundTrip(u) as UserServer;
       expect(back, u);
-      expect(back.sections!.toJson(), u.sections!.toJson());
       expect(back.nodes.single.tag, 'ts');
+    });
+
+    test('запись с ключом sections читается, узел без секций, запись '
+        'ключа не пишет', () {
+      final read = sourceFromRecord(_viaFile({
+        'kind': 'server',
+        'id': 'srv-legacy',
+        'origin': {'raw': _jsonOutbound},
+        'sections': {
+          'rules': [
+            {
+              'kind': 'inline',
+              'name': '@{self} network',
+              'enabled': true,
+              'body': {
+                'ip_cidr': ['100.64.0.0/10'],
+                'outbound': '@self',
+              },
+            },
+          ],
+        },
+      }));
+      expect(read.dropped, isNull);
+      final u = read.value! as UserServer;
+      expect(u.nodes.single.tag, 'ts');
+      expect(sourceToRecord(u).containsKey('sections'), isFalse);
     });
 
     test('сервер из нескольких узлов остаётся одной записью', () {
@@ -201,7 +214,7 @@ void main() {
       expect(back.nodes.map((n) => n.tag), ['Alpha', 'Beta']);
     });
 
-    test('папка: unsupported-член, личный detour, секции члена, префикс с '
+    test('папка: unsupported-член, личный detour, префикс с '
         'пробелом, ping, created_at', () {
       final f = FolderServers(
         id: 'fold-1',
@@ -218,7 +231,7 @@ void main() {
           FolderMember(raw: _uriAlpha, detour: NodeLink(tag: 'Beta')),
           FolderMember(raw: _uriBeta, enabled: false),
           FolderMember(raw: 'foo://not-a-node'),
-          FolderMember(raw: _jsonOutbound, sections: _sections()),
+          FolderMember(raw: _jsonOutbound),
           // §456 — тег INI-члена живёт в записи и возвращается nameHint'ом.
           FolderMember(raw: _wgIni, nameHint: 'WireGuard'),
         ],
@@ -247,7 +260,7 @@ void main() {
         hops: [NodeLink(tag: 'PR NL-1'), NodeLink(tag: 'Tokyo'), NodeLink(tag: 'vpn-1')],
         idleTimeout: '5m',
         stripEvasion: false,
-        strip: {kChainStripTlsUtls: true, kChainStripTlsFragment: false},
+        strip: {'tls.utls': true, 'tls.fragment': false},
         rewrite: {
           'vless': {'flow': null, 'packet_encoding': 'xudp'},
         },
@@ -555,6 +568,167 @@ void main() {
       }).value! as FolderServers;
       expect(f.members.single.nameHint, 'Home WG');
       expect(f.members.single.node!.tag, 'Home WG');
+    });
+  });
+
+  // Фича 565 фаза B (§74) — свёртка `replace {mode, tag, auto}` у папки и
+  // подписки: одна форма в хранении и в бэкапе.
+  group('replace', () {
+    test('папка both с auto и подписка manual переживают перечитывание', () {
+      final folder = FolderServers(
+        id: 'f-rep',
+        name: 'Proton',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        createdAt: DateTime.utc(2026, 9, 26),
+        replace: const SourceReplace(
+          mode: ReplaceMode.both,
+          tag: 'Proton',
+          auto: DirectionAuto(interval: '15m', tolerance: 50),
+        ),
+      );
+      expect(_sourceRoundTrip(folder), folder);
+      final sub = SubscriptionServers(
+        id: 's-rep',
+        name: 'Provider',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        url: 'https://example-1.com/sub',
+        replace: const SourceReplace(mode: ReplaceMode.manual, tag: 'Sub-pick'),
+      );
+      final rec = sourceToRecord(sub);
+      expect(rec['replace'], {'mode': 'manual', 'tag': 'Sub-pick'});
+      expect(_sourceRoundTrip(sub), sub);
+    });
+
+    test('неизвестный mode — manual, auto у manual не читается', () {
+      final read = sourceFromRecord({
+        'kind': 'subscription',
+        'id': 's-x',
+        'url': 'https://example-1.com/x',
+        'replace': {
+          'mode': 'weird',
+          'tag': 'X',
+          'auto': {'mode': 'least_test'},
+          'extra': 1,
+        },
+      });
+      final r = (read.value! as SubscriptionServers).replace!;
+      expect(r.mode, ReplaceMode.manual);
+      expect(r.auto, isNull);
+      expect(read.unknownKeys, ['replace.extra']);
+    });
+
+    test('без объекта свёртки нет; fold не читается', () {
+      final read = sourceFromRecord({
+        'kind': 'folder',
+        'id': 'f-x',
+        'name': 'F',
+        'fold': {'mode': 'select'},
+        'fold_tag': 'F',
+      });
+      expect((read.value! as FolderServers).replace, isNull);
+      expect(read.unknownKeys, ['fold', 'fold_tag']);
+    });
+  });
+
+  // §576 п.3 — старые записи своего сервера и члена папки с документом или
+  // массивом в источнике при чтении получают голое тело узла записи. Тег,
+  // identity и тело для ядра не сдвигаются.
+  group('§576 — старый источник сводится к телу узла', () {
+    const trojan = {
+      'type': 'trojan',
+      'tag': 'tj',
+      'server': '198.51.100.7',
+      'server_port': 443,
+      'password': 'testpass576',
+      'extra_key': 1,
+    };
+    final forms = <String, String>{
+      'singbox_config': jsonEncode({
+        'outbounds': [
+          {'type': 'direct', 'tag': 'direct'},
+          trojan,
+          {'type': 'selector', 'tag': 'sel', 'outbounds': ['tj']},
+        ],
+        'route': {'final': 'sel'},
+      }),
+      'singbox_config_array': jsonEncode([
+        {
+          'outbounds': [trojan],
+        },
+      ]),
+      'singbox_outbound_array': jsonEncode([
+        trojan,
+        {...trojan, 'tag': 'tj2', 'server': '198.51.100.8'},
+      ]),
+    };
+
+    for (final e in forms.entries) {
+      test('${e.key}: сервер', () {
+        expect(sourceKindOf(e.value), e.key, reason: 'фикстура того вида');
+        final before = parseAll(decode(e.value)).firstWhere((n) => !n.isGroup);
+        final u = sourceFromRecord(_viaFile({
+          'kind': 'server',
+          'id': 'srv-${e.key}',
+          'origin': {'kind': 'json', 'raw': e.value},
+        })).value! as UserServer;
+        expect(sourceKindOf(u.rawBody), 'singbox_outbound');
+        final after = u.nodes.single;
+        expect(after.tag, before.tag);
+        expect(nodeDedupSignature(after), nodeDedupSignature(before),
+            reason: 'identity узла не сдвигается');
+        final body = verbatimBodyOf(u.rawBody, after)!;
+        expect(body, {...trojan}, reason: 'в ядро то же тело, что и раньше');
+        // Запись пишется в новом виде при сохранении состояния.
+        final rec = sourceToRecord(u);
+        expect(sourceKindOf((rec['origin'] as Map)['raw'] as String),
+            'singbox_outbound');
+      });
+
+      test('${e.key}: член папки', () {
+        final f = sourceFromRecord(_viaFile({
+          'kind': 'folder',
+          'id': 'f-${e.key}',
+          'nodes': [
+            {
+              'kind': 'server',
+              'origin': {'kind': 'json', 'raw': e.value},
+            },
+          ],
+        })).value! as FolderServers;
+        final m = f.members.single;
+        expect(sourceKindOf(m.raw), 'singbox_outbound');
+        expect(m.node!.tag, 'tj');
+        expect(verbatimBodyOf(m.raw, m.node!), {...trojan});
+      });
+    }
+
+    test('голое тело читается байт в байт', () {
+      const raw = '{ "type": "trojan", "tag": "tj",\n'
+          '  "server": "198.51.100.7", "server_port": 443,'
+          ' "password": "testpass576" }';
+      final u = sourceFromRecord(_viaFile({
+        'kind': 'server',
+        'id': 'srv-bare',
+        'origin': {'kind': 'json', 'raw': raw},
+      })).value! as UserServer;
+      expect(u.rawBody, raw);
+    });
+
+    test('тело без тега получает тег узла', () {
+      final raw = jsonEncode({
+        'outbounds': [
+          {...trojan}..remove('tag'),
+        ],
+      });
+      final before = parseAll(decode(raw)).single;
+      final bare = bareNodeSourceOf(raw);
+      expect(sourceKindOf(bare), 'singbox_outbound');
+      expect((jsonDecode(bare) as Map)['tag'], before.tag);
+      expect(parseAll(decode(bare)).single.tag, before.tag);
     });
   });
 }

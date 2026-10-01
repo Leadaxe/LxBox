@@ -61,6 +61,11 @@ class BoxApplication : Application() {
         // app init если flag true; toggle в Diagnostics дёргает на лету.
         wifiObserver = WifiNetworkObserver(this)
 
+        // §569 — кэш Wi-Fi для API 31+ (NetworkCallback с
+        // FLAG_INCLUDE_LOCATION_INFO). Колбэк регистрируется лениво, при
+        // первом WifiInfoReader.read с пройденным preflight.
+        wifiStateCache = WifiStateCache(this)
+
         // libbox setup async в IO. К моменту start VPN setup завершён.
         // `libboxReady` — sync-барьер для VPN auto-start / QS-tile сразу
         // после boot (там race возможна).
@@ -172,6 +177,15 @@ class BoxApplication : Application() {
          *  Init в onCreate (lifecycle = process). */
         @Volatile
         internal lateinit var wifiObserver: WifiNetworkObserver
+
+        /** §569 — singleton WifiStateCache (API 31+; ниже — no-op).
+         *  Init в onCreate, колбэк регистрирует WifiInfoReader.read. */
+        @Volatile
+        internal lateinit var wifiStateCache: WifiStateCache
+
+        /** §569 — null, если onCreate ещё не отработал (read без кэша). */
+        internal val wifiStateCacheOrNull: WifiStateCache?
+            get() = if (::wifiStateCache.isInitialized) wifiStateCache else null
 
         // -------------------------------------------------------------------
         // Backward-compat API — callsite'ы `BoxApplication.X` работают через

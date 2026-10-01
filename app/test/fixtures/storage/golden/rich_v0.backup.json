@@ -193,61 +193,6 @@
         "auth_key": "tskey-auth-000000000000",
         "hostname": "lxbox-test",
         "accept_routes": true
-      },
-      "sections": {
-        "rules": [
-          {
-            "kind": "inline",
-            "id": "sec-ts-rule",
-            "name": "@{self} network",
-            "enabled": true,
-            "num": 945,
-            "body": {
-              "ip_cidr": [
-                "100.64.0.0/10"
-              ],
-              "outbound": "@self"
-            }
-          },
-          {
-            "kind": "inline",
-            "id": "sec-ts-off",
-            "name": "@{self} off",
-            "enabled": false,
-            "body": {
-              "domain_suffix": [
-                ".off.ts.net"
-              ],
-              "outbound": "@self"
-            }
-          }
-        ],
-        "dns": {
-          "servers": [
-            {
-              "kind": "user",
-              "tag": "@{self}-dns",
-              "enabled": true,
-              "body": {
-                "type": "tailscale",
-                "endpoint": "@self"
-              }
-            }
-          ],
-          "rules": [
-            {
-              "kind": "user",
-              "name": "",
-              "enabled": true,
-              "body": {
-                "domain_suffix": [
-                  ".ts.net"
-                ],
-                "server": "@{self}-dns"
-              }
-            }
-          ]
-        }
       }
     },
     {
@@ -316,51 +261,6 @@
             "tls": {
               "enabled": true,
               "server_name": "example-41.com"
-            }
-          },
-          "sections": {
-            "rules": [
-              {
-                "kind": "inline",
-                "id": "sec-de-rule",
-                "name": "@{self} office",
-                "enabled": true,
-                "num": 1500,
-                "body": {
-                  "domain_suffix": [
-                    ".office.example-40.com"
-                  ],
-                  "outbound": "@self"
-                }
-              }
-            ],
-            "dns": {
-              "servers": [
-                {
-                  "kind": "user",
-                  "tag": "@{self}-dns",
-                  "enabled": true,
-                  "body": {
-                    "type": "udp",
-                    "server": "10.8.0.1",
-                    "detour": "@self"
-                  },
-                  "description": "office dns"
-                }
-              ],
-              "rules": [
-                {
-                  "kind": "user",
-                  "name": "office",
-                  "enabled": true,
-                  "body": {
-                    "domain_suffix": [
-                      ".office.example-40.com"
-                    ],
-                    "server": "@{self}-dns"
-                  }
-                }
-              ]
             }
           }
         },

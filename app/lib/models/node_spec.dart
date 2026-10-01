@@ -1,7 +1,9 @@
+import '../services/contract/group_genus.dart';
+import '../services/contract/registry.dart';
 import 'auto_select.dart';
+import 'body_delta.dart';
 import 'emit_context.dart';
 import 'node_entries.dart';
-import 'node_sections.dart';
 import 'node_spec_emit.dart' as e;
 import 'node_warning.dart';
 import 'singbox_entry.dart';
@@ -82,17 +84,16 @@ sealed class NodeSpec {
   /// на каждом импорте/регидрации, храниться этому незачем.
   Map<String, dynamic>? patchedJson;
 
+  /// §560 — ключи тела, которых типизированная модель не держит (или держит
+  /// лишними): см. [BodyDelta]. Ставит разбор, накладывает [emit]. Mutable и
+  /// не сериализуется, как [patchedJson]: узел хранится текстом источника и
+  /// разбирается заново, дельта считается вместе с ним.
+  BodyDelta? bodyDelta;
+
   /// §302 — следы замен для UI («tls.utls.fingerprint: hello… → chrome»).
   /// Непустой ⇔ [patchedJson] != null; на нём значок «modified» и диалог
   /// «View replacements» в списке нод.
   List<String> ruleTrail = const [];
-
-  /// §435 — связка узла, извлечённая парсером из целого sing-box-конфига с
-  /// одним узлом (NODE_SECTIONS.md §6) или прочитанная из документа с
-  /// `sections`. Mutable и не сериализуется, как `sourceExtended`: хозяин
-  /// секций — контейнер (`UserServer.sections` / `FolderMember.sections`),
-  /// контроллер переносит её туда при добавлении узла и только тогда.
-  NodeSections? importedSections;
 
   /// §435 — узел без адреса: группа §322 или Tailscale (tsnet сам входит в
   /// tailnet). Инвариант `isAddressless ⇔ server.isEmpty && port == 0`.
@@ -126,6 +127,8 @@ sealed class NodeSpec {
   /// пострадает. Отдача по ссылке накапливала префикс билдера в теге.
   SingboxEntry emit(TemplateVars vars) {
     final raw = emitRaw(vars);
+    final delta = bodyDelta;
+    if (delta != null) delta.applyTo(raw.map, deepCopyJson);
     final patch = patchedJson;
     if (patch == null) return raw;
     final copy = deepCopyJson(patch) as Map<String, dynamic>;
@@ -144,19 +147,6 @@ sealed class NodeSpec {
 
   /// Тип протокола — для UI иконок и дебага.
   String get protocol;
-
-  /// §466 — [toUri] этого узла несёт приватный ключ владельца.
-  ///
-  /// Признак для экрана, а не для эмиттера: `toUri()` у нас одновременно и
-  /// форма хранения (инвариант `parseUri(spec.toUri()) ≈ spec`), вырезать из
-  /// неё ключ нельзя — он потерялся бы при перезагрузке узла. Но ссылку
-  /// пересылают, и это другая граница доверия, чем локальное хранение:
-  /// «Copy URI» у такого узла спрашивает подтверждение (§466 заменил отказ
-  /// §463).
-  ///
-  /// Пароли, UUID и PSK признаком НЕ считаются: это секрет доступа к конкретному
-  /// прокси, а не ключ, которым владелец опознаётся где-то ещё.
-  bool get linkCarriesPrivateKey => false;
 
   /// §322 — узел-группа (пул автовыбора), а не соединение. У такого нет
   /// адреса: `server`/`port` пусты, пинг берётся у выбранного члена. Гейт для
@@ -409,10 +399,10 @@ final class ShadowsocksSpec extends NodeSpec {
 final class Hysteria2Spec extends NodeSpec {
   final String password;
 
-  /// §358 — `'' | 'salamander' | 'gecko'` ([kHysteria2ObfsTypes]). Значение
-  /// нормализуют парсеры: тип вне словаря ядра или без пароля роняет ВЕСЬ
-  /// конфиг (`Hysteria2Obfs.MarshalJSON` → «unknown obfs type», outbound.go
-  /// → «missing obfs password»), поэтому в спеку он не попадает.
+  /// §358 — `'' | 'salamander' | 'gecko'`. Значение судит реестр
+  /// (`hysteria2.obfs`, §547): тип вне словаря ядра или без пароля роняет
+  /// ВЕСЬ конфиг (`Hysteria2Obfs.MarshalJSON` → «unknown obfs type»,
+  /// outbound.go → «missing obfs password»), поэтому в спеку он не попадает.
   final String obfs;
   final String obfsPassword;
 
@@ -600,11 +590,6 @@ final class SshSpec extends NodeSpec {
 
   @override
   String toUri() => e.uriViaEngineRequired(this);
-
-  /// §466 — `toUriSsh` пишет `private_key` в query только когда ключ непустой;
-  /// узел с одним паролем ключа в ссылке не несёт.
-  @override
-  bool get linkCarriesPrivateKey => privateKey.isNotEmpty;
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1048,11 +1033,6 @@ final class WireguardSpec extends NodeSpec {
 
   @override
   String toUri() => e.uriViaEngineRequired(this);
-
-  /// §466 — приватный ключ интерфейса уходит в userinfo ссылки. AWG (`awg`
-  /// != null) — тот же класс, тот же эмиттер, потому отдельной ветки нет.
-  @override
-  bool get linkCarriesPrivateKey => privateKey.isNotEmpty;
 }
 
 /// §130 — MASQUE (CONNECT-IP over HTTP/3/HTTP-2) для Cloudflare WARP.
@@ -1097,12 +1077,17 @@ final class MasqueSpec extends NodeSpec {
   final int? mtu;
 
   /// idle-suspend туннеля (Go-duration, напр. `5m`). Пусто = дефолт ядра (5m);
-  /// отрицательное (`-1s`) = выключить. См. [§128](../128%20idle-suspend/).
+  /// отрицательное (`-1s`) = выключить. См. §128F (docs/spec/tasks/128F-idle-suspend/spec.md).
   final String idleTimeout;
 
   /// QUIC keepalive-период (Go-duration, напр. `30s`). Пусто = дефолт (30s);
   /// отрицательное = выключить. Только для `vhttp=h3`.
   final String keepAlive;
+
+  /// §556 (контракт 1.1.64) — прочие ключи `tls{}` тела (фрагментация и
+  /// т.п.), пережившие санитайзер: едут как есть. Какие из них годятся masque
+  /// при каком `vhttp`, решает реестр, не модель.
+  final Map<String, Object> tlsExtra;
 
   MasqueSpec({
     required super.id,
@@ -1121,6 +1106,7 @@ final class MasqueSpec extends NodeSpec {
     this.mtu,
     this.idleTimeout = '',
     this.keepAlive = '',
+    this.tlsExtra = const {},
     super.chained,
     super.warnings,
   });
@@ -1133,11 +1119,6 @@ final class MasqueSpec extends NodeSpec {
 
   @override
   String toUri() => e.uriViaEngineRequired(this);
-
-  /// §466 — `toUriMasque` кладёт [privateKeyDer] (SEC1 DER нашего ECDSA) в
-  /// userinfo ссылки.
-  @override
-  bool get linkCarriesPrivateKey => privateKeyDer.isNotEmpty;
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1182,33 +1163,52 @@ final class AutoSelectSpec extends NodeSpec {
     this.tagSynonyms = const {},
     this.poolBadge = kDefaultPoolBadge,
     this.manualDefault = '',
+    String? genus,
+    this.sourceParamKeys,
+    this.sourceMemberTags = const [],
     super.warnings,
     // §454 — у группы из sing-box-конфига источник — её объект; у групп,
     // собранных приложением (§208, папки), источника нет.
     super.rawSource = '',
-  }) : super(server: '', port: 0);
+  })  : genus = genus ?? GroupGenus.auto,
+        super(server: '', port: 0);
 
-  /// **`default` группы-selector — СКВОЗНОЕ поле** (контракт 1.1.50, D133-53,
-  /// решение владельца 24.09.2026).
+  /// §565 — род группы: значение `entry.type` из `genus.values` реестра
+  /// (PARSING_PRINCIPLES §5). Не задан — род автовыбора ([GroupGenus.auto]):
+  /// так рождаются группы, которые собирает само приложение.
+  final String genus;
+
+  /// Род ручного выбора: член выбирается [manualDefault], параметров
+  /// замера у группы нет.
+  bool get isManual => genus == GroupGenus.manual;
+
+  /// §565 — поля параметров, которые источник объявил сам (`url`,
+  /// `interval`, …). Тело результата разбора несёт только их (сторона не
+  /// дописывает свои умолчания в то, что пришло от провайдера); полные
+  /// параметры добавляет сборка ([coreEntry]). `null` — группа собрана
+  /// приложением, тело несёт все параметры.
+  final Set<String>? sourceParamKeys;
+
+  /// §565 — теги членов, которые источник назвал явно, но которые не
+  /// выражены ссылками состава: пул Xray-балансировщика (`selector`
+  /// префиксами) держится правилом, а тело разбора обязано назвать членов
+  /// сразу. Производное от тела подписки, в хранение не идёт.
+  final List<String> sourceMemberTags;
+
+  /// **`default` группы ручного рода** — сырой тег выбранного члена (§565).
   ///
-  /// Имя члена, выбранного ВРУЧНУЮ. Ручного рода у нас нет: обе формы
-  /// приводятся к `urltest` с кодом `selector_as_auto`, — но приведение РОДА и
-  /// потеря ПОЛЯ разные вещи. Прежде `default` исчезал безвозвратно, и круг
-  /// «импорт → бэкап → импорт» терял выбор пользователя МОЛЧА, без кода и без
-  /// возможности восстановления. Сохранение стоит ничего и возвращает полю
-  /// обратимость.
+  /// У рода [isManual] поле активное: идёт в тело (`default`), сборка
+  /// переводит его в итоговый тег члена. У рода автовыбора поле только
+  /// сохраняется сквозным (контракт 1.1.50, `preserve_unexecuted`) — для
+  /// старых записей, где selector был сведён к urltest: в тело ядра оно НЕ
+  /// идёт, ядро декодирует с `DisallowUnknownFields`, и `default` при
+  /// `type: urltest` роняет весь конфиг. Страж — `golden_config`.
   ///
-  /// **В ТЕЛО ЯДРА НЕ ИДЁТ.** Ядро декодирует с `DisallowUnknownFields`, и
-  /// `default`, дописанный к телу с `type: urltest`, роняет ВЕСЬ конфиг —
-  /// значит хранить его можно только ВНЕ тела (модель и бэкап), не подмешивая
-  /// к эмиту. Отсюда и имя нормы: preserve, а не map. Страж — `golden_config`.
-  ///
-  /// Не интерпретируется: значение едет строкой как пришло. Пустая строка —
-  /// «поля не было».
+  /// Пустая строка — «поля не было».
   final String manualDefault;
 
   @override
-  String get protocol => 'urltest';
+  String get protocol => genus;
 
   @override
   bool get isGroup => true;
@@ -1216,17 +1216,61 @@ final class AutoSelectSpec extends NodeSpec {
   @override
   bool get isAddressless => true;
 
-  /// Эмиссия у этого узла особая: состав пула известен только билдеру (теги
-  /// членов присваиваются `allocateTag` уже после `getEntries`), поэтому
-  /// собственный `emitRaw` отдаёт заготовку БЕЗ `outbounds` — билдер
-  /// дописывает их сам (см. `auto_select_build.dart`).
+  /// §565 — тело группы по роду.
+  ///
+  /// `outbounds` — состав, названный источником: ссылки явного состава
+  /// (сырые теги) или [sourceMemberTags]; у группы-правила папки — пусто,
+  /// состав знает только сборка (итоговые теги присваивает `allocateTag`),
+  /// она же перезаписывает `outbounds` (`server_list_build.dart`).
+  ///
+  /// Ручной род несёт `default`; автовыбор — параметры замера, у группы из
+  /// источника только объявленные им ([sourceParamKeys]).
   @override
-  SingboxEntry emitRaw(TemplateVars vars) => Outbound({
-        'tag': tag,
-        'type': 'urltest',
-        'outbounds': <String>[],
-        ...params.toJson(),
-      });
+  SingboxEntry emitRaw(TemplateVars vars) {
+    final m = membership;
+    final members = m is ExplicitMembers
+        ? [for (final l in m.members) l.tag]
+        : sourceMemberTags.toList();
+    final all = params.toJson();
+    final keys = sourceParamKeys;
+    return Outbound({
+      'tag': tag,
+      'type': genus,
+      'outbounds': members,
+      if (isManual) ...{
+        if (keys != null
+            ? keys.contains(kInterruptKey)
+            : params.interruptExistConnections)
+          kInterruptKey: params.interruptExistConnections,
+        if (manualDefault.isNotEmpty) 'default': manualDefault,
+      } else
+        for (final e in all.entries)
+          if (keys == null || keys.contains(e.key)) e.key: e.value,
+    });
+  }
+
+  /// Ключ `interrupt_exist_connections` — общий у обоих родов sing-box.
+  static const String kInterruptKey = 'interrupt_exist_connections';
+
+  /// §565 — тело для ядра: тело разбора [emitted], дополненное параметрами
+  /// замера, которых источник не объявил (у автовыбора умолчания LxBox, а не
+  /// ядра: `url`/`interval` у сторон разные). Порядок ключей — прежний
+  /// полный эмит. У ручного рода дополнять нечего.
+  SingboxEntry coreEntry(SingboxEntry emitted) {
+    if (isManual || sourceParamKeys == null) return emitted;
+    final map = emitted.map;
+    final full = <String, dynamic>{
+      'tag': map['tag'],
+      'type': map['type'],
+      'outbounds': map['outbounds'],
+      ...params.toJson(),
+      ...map,
+    };
+    return switch (emitted) {
+      Outbound() => Outbound(full),
+      Endpoint() => Endpoint(full),
+    };
+  }
 
   /// URI-формы у группы нет: в папке она хранится записью `kind: auto`
   /// (§439, кодек `codec/auto_group_record.dart`), в подписке производна от
@@ -1243,7 +1287,8 @@ final class AutoSelectSpec extends NodeSpec {
       membership == other.membership &&
       params == other.params &&
       poolBadge == other.poolBadge &&
-      manualDefault == other.manualDefault;
+      manualDefault == other.manualDefault &&
+      genus == other.genus;
 
   AutoSelectSpec copyWith({
     String? tag,
@@ -1253,6 +1298,7 @@ final class AutoSelectSpec extends NodeSpec {
     Map<String, String>? tagSynonyms,
     String? poolBadge,
     String? manualDefault,
+    String? genus,
   }) =>
       AutoSelectSpec(
         id: id,
@@ -1263,6 +1309,9 @@ final class AutoSelectSpec extends NodeSpec {
         tagSynonyms: tagSynonyms ?? this.tagSynonyms,
         poolBadge: poolBadge ?? this.poolBadge,
         manualDefault: manualDefault ?? this.manualDefault,
+        genus: genus ?? this.genus,
+        sourceParamKeys: sourceParamKeys,
+        sourceMemberTags: sourceMemberTags,
         warnings: warnings,
         rawSource: rawSource,
       );
@@ -1312,14 +1361,6 @@ final class TailscaleSpec extends NodeSpec {
   @override
   bool get isAddressless => true;
 
-  /// Непустой `exit_node` — узел выпускает в интернет и годится в
-  /// Направления; без него он только даёт доступ в tailnet (NODE_SECTIONS.md
-  /// §6): в пул Направлений не идёт, но законен как `detour` и `outbound`.
-  bool get hasExitNode {
-    final v = body['exit_node'];
-    return v is String && v.trim().isNotEmpty;
-  }
-
   @override
   SingboxEntry emitRaw(TemplateVars vars) => e.emitTailscale(this, vars);
 
@@ -1357,8 +1398,81 @@ final class TailscaleSpec extends NodeSpec {
 ///
 /// Группа цепочку не несёт (`AutoSelectSpec` без `chained`) — возвращаем как
 /// есть; вызывающий такую ссылку отсеивает раньше, с warning'ом (§4 P5).
-NodeSpec withChained(NodeSpec spec, NodeSpec chained) => switch (spec) {
+// ════════════════════════════════════════════════════════════════════════════
+// Незнакомый приложению тип (§585)
+// ════════════════════════════════════════════════════════════════════════════
+
+/// §585/§586 — узел sing-box, у чьего `type` нет своей модели в приложении.
+/// Два случая: тип известен реестру без описания полей (`openvpn-client`,
+/// `body.fields_unchecked`, §586) — узел приходит из любого источника, в том
+/// числе из подписки, без предупреждений; тип вне реестра (§585) — только из
+/// своего источника (свой сервер, член папки, редактор узла), с
+/// предупреждением. В обоих случаях тело в ядро уходит как написано,
+/// приложение его не проверяет. [body] — объект записи целиком.
+final class UnknownTypeSpec extends NodeSpec {
+  /// Значение поля `type` записи.
+  final String type;
+
+  /// Тело записи как написано (с `type`, без правок).
+  final Map<String, dynamic> body;
+
+  UnknownTypeSpec({
+    required super.id,
+    required super.tag,
+    required super.label,
+    required this.type,
+    required this.body,
+    super.server = '',
+    super.port = 0,
+    super.rawSource = '',
+    super.chained,
+    super.warnings,
+  });
+
+  @override
+  String get protocol => type;
+
+  @override
+  bool get isAddressless => server.isEmpty;
+
+  @override
+  SingboxEntry emitRaw(TemplateVars vars) {
+    final map = <String, dynamic>{
+      ...deepCopyJson(body) as Map<String, dynamic>,
+      'type': type,
+      'tag': tag,
+    }..remove('detour');
+    // §586 — место в конфиге задаёт `kind` записи реестра; тип вне реестра
+    // пишется в `outbounds[]`.
+    return ContractRegistry.I.isEndpointType(type)
+        ? Endpoint(map)
+        : Outbound(map);
+  }
+
+  @override
+  String toUri() => rawSource;
+
+  UnknownTypeSpec copyWith({String? tag, String? label, NodeSpec? chained}) =>
+      UnknownTypeSpec(
+        id: id,
+        tag: tag ?? this.tag,
+        label: label ?? this.label,
+        type: type,
+        body: body,
+        server: server,
+        port: port,
+        rawSource: rawSource,
+        chained: chained ?? this.chained,
+        warnings: warnings,
+      );
+}
+
+NodeSpec withChained(NodeSpec spec, NodeSpec chained) =>
+    _withChainedTyped(spec, chained)..bodyDelta = spec.bodyDelta;
+
+NodeSpec _withChainedTyped(NodeSpec spec, NodeSpec chained) => switch (spec) {
       TailscaleSpec s => s.copyWith(chained: chained),
+      UnknownTypeSpec s => s.copyWith(chained: chained),
       VlessSpec s => VlessSpec(
           id: s.id,
           tag: s.tag,
@@ -1566,6 +1680,7 @@ NodeSpec withChained(NodeSpec spec, NodeSpec chained) => switch (spec) {
           mtu: s.mtu,
           idleTimeout: s.idleTimeout,
           keepAlive: s.keepAlive,
+          tlsExtra: s.tlsExtra,
           chained: chained,
           warnings: s.warnings,
         ),

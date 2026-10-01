@@ -1,6 +1,7 @@
 import '../../config/consts.dart' show kDirectOutboundTag;
 import '../../models/custom_rule.dart';
 import '../../models/parser_config.dart';
+import '../contract/registry.dart';
 import '../json_clone.dart';
 import 'if_engine.dart';
 
@@ -47,6 +48,182 @@ const _kIntermediateActions = {'resolve', 'sniff', 'route-options'};
 /// у ядра `route` И `evaluate` без server = fatal на старте, а неизвестный
 /// action = decode error; опечатка в шаблоне не должна доезжать до ядра.
 const _kServerlessDnsActions = {'predefined', 'reject', 'route-options'};
+
+/// §555 (контракт 1.1.70): типы DNS-серверов sing-box, у которых адрес
+/// (`server`) обязателен. Это схема ядра, а не имена переменных шаблона.
+const _kAddressDnsServerTypes = {'udp', 'tcp', 'tls', 'https', 'quic', 'h3'};
+
+/// §555 — DNS-сервер адресного типа без `server` после подстановки (пустая
+/// переменная дала Dropped ключа). Ядро такой сервер не примет. Легаси-форма
+/// без `type` сюда не попадает.
+bool dnsServerMissingAddress(Map<String, dynamic> server) {
+  final type = server['type'];
+  if (type is! String || !_kAddressDnsServerTypes.contains(type)) return false;
+  final address = server['server'];
+  return address is! String || address.trim().isEmpty;
+}
+
+/// §555 — источник набора правил по его `type` (remote — `url`, local —
+/// `path`, inline — ключ `rules` со списком, в т.ч. пустым). Возвращает недостающее поле или null, если
+/// источник на месте. Тип не распознан — `url/path`.
+String? ruleSetMissingSource(Map<String, dynamic> rs) {
+  bool has(String k) {
+    final v = rs[k];
+    if (v is String) return v.trim().isNotEmpty;
+    if (v is List) return v.isNotEmpty;
+    return v != null;
+  }
+
+  return switch (rs['type']) {
+    'remote' => has('url') ? null : 'url',
+    'local' => has('path') ? null : 'path',
+    // Источник inline-набора — сам ключ `rules` со списком; пустой список
+    // ядро принимает, это не «нет источника».
+    'inline' => rs['rules'] is List ? null : 'rules',
+    _ => 'url/path',
+  };
+}
+
+/// §555 — фрагмент выпал гейтом валидности после Dropped-каскада: код
+/// `template_fragment_dropped {owner, kind, reason}` в накопитель сборки.
+/// Фрагмент, целиком снятый `#if`/`#enable` автора, сюда не приходит.
+void reportFragmentDropped(String owner, String kind, String reason) =>
+    reportTemplateWarning(templateWarnFragmentDropped,
+        {'owner': owner, 'kind': kind, 'reason': reason});
+
+/// §571 — имена списков полей-условий в `registry/allowlists.json`
+/// (контракт 1.1.81, TEMPLATE_LANG §5.1).
+const _kRouteRuleConditions = 'route_rule_conditions';
+const _kDnsRuleConditions = 'dns_rule_conditions';
+
+/// §571/§104 — в правиле после Dropped-каскада осталось хоть одно поле-условие
+/// из списка реестра [list]. Правило без условий матчило бы весь трафик
+/// (все запросы), поэтому выпадает; `action` в списки не входит.
+///
+/// Значение-условие считается, если оно не `null` и не пустой список (ядро
+/// пустой список условием не считает). Список объектов — под-правила
+/// логического правила (контракт 1.1.107, TEMPLATE_LANG §5.1): условие есть,
+/// только если оно есть у КАЖДОГО из них (по тому же списку, рекурсивно, при
+/// `and` и `or` одинаково) — под-правило без условий делает «без условий» всё
+/// правило (у `or` оно ловило бы весь трафик, у `and` молча ослабляло бы
+/// условие). Прежняя норма §571 («хоть у одного») заменена. Реестр не загружен или списка нет —
+/// гейт не срабатывает (правило остаётся как написано), как у Go
+/// `hasRuleCondition`.
+bool hasRuleCondition(Map<String, dynamic> rule, String list) {
+  final conds = ContractRegistry.I.allowlistValues(list);
+  if (conds == null || conds.isEmpty) return true;
+  return _hasCondition(rule, conds);
+}
+
+bool _hasCondition(Map<dynamic, dynamic> rule, Set<String> conds) {
+  for (final e in rule.entries) {
+    if (!conds.contains(e.key)) continue;
+    final v = e.value;
+    // §588 — нулевое значение JSON (`null`, `""`, `[]`, `{}`, `false`, `0`)
+    // условием не считается (TEMPLATE_LANG §5.1, контракт 1.1.82).
+    if (isZeroJsonValue(v)) continue;
+    if (v is List) {
+      final subRules = v.whereType<Map>().toList();
+      if (subRules.isEmpty) return true;
+      if (subRules.every((m) => _hasCondition(m, conds))) return true;
+      return false;
+    }
+    return true;
+  }
+  return false;
+}
+
+/// §104 (контракт 1.1.101/1.1.107, TEMPLATE_LANG §5.1) — ссылки `rule_set`
+/// правила и его под-правил (`type: logical`, `rules`, на любой глубине)
+/// против живых тегов ([isLive]).
+///
+/// - висячие ВСЕ ссылки правила или любого под-правила → `null`: выпадает
+///   всё правило (ссылку не снимаем с сохранением остальных полей);
+/// - висячее имя рядом с живыми убирается из списка (форма списка
+///   сохраняется);
+/// - ссылок нет / все живые → [rule] как есть (тот же объект).
+///
+/// [self] = false — ссылки верхнего уровня не трогать (у вызывающего свой
+/// гейт), только под-правила.
+Map<String, dynamic>? cleanRuleSetRefsDeep(
+    Map<String, dynamic> rule, bool Function(String) isLive,
+    {bool self = true}) {
+  var out = rule;
+  if (self) {
+    final ref = rule['rule_set'];
+    if (ref is String) {
+      if (ref.isNotEmpty && !isLive(ref)) return null;
+    } else if (ref is List) {
+      final refs = ref.whereType<String>().where((r) => r.isNotEmpty).toList();
+      if (refs.isNotEmpty) {
+        final present = refs.where(isLive).toList();
+        if (present.isEmpty) return null;
+        if (present.length != ref.length) out = {...out, 'rule_set': present};
+      }
+    }
+  }
+  final subs = rule['rules'];
+  if (rule['type'] == 'logical' && subs is List) {
+    final next = <dynamic>[];
+    var changed = false;
+    for (final s in subs) {
+      if (s is! Map) {
+        next.add(s);
+        continue;
+      }
+      final m = s is Map<String, dynamic> ? s : Map<String, dynamic>.from(s);
+      final c = cleanRuleSetRefsDeep(m, isLive);
+      if (c == null) return null;
+      if (!identical(c, s)) changed = true;
+      next.add(c);
+    }
+    if (changed) out = {...out, 'rules': next};
+  }
+  return out;
+}
+
+/// §588 — подстановка списка правил пресета с признаком «ссылка без
+/// значения» на каждое правило (контракт 1.1.100, TEMPLATE_LANG §5.1).
+///
+/// Обход поэлементный, но каждый элемент идёт через тот же List-обход, что и
+/// массив целиком (`[элемент]`): array-element `#if` и сплайс работают как
+/// раньше (§246), а элементы массива `_walkList` и так обходит независимо.
+/// Признак ставится на всё, что дал исходный элемент.
+List<({Map<String, dynamic> rule, bool emptyRef})> substituteRulesTracked(
+  List<dynamic> rules,
+  Map<String, dynamic> vars, {
+  VarResolver? extra,
+}) {
+  final out = <({Map<String, dynamic> rule, bool emptyRef})>[];
+  for (final r in rules) {
+    final before = templateEmptyRefCount;
+    final walked =
+        substituteVars(<dynamic>[deepCopyJson(r)], vars, extra: extra);
+    final emptyRef = templateEmptyRefCount != before;
+    for (final item in (walked is List ? walked : const [])) {
+      if (item is Map<String, dynamic>) {
+        out.add((rule: item, emptyRef: emptyRef));
+      }
+    }
+  }
+  return out;
+}
+
+/// §588 — гейт «правило без условий» (контракт 1.1.100): условия снял сбой
+/// (хоть одна ссылка без значения) → выпадение с `template_fragment_dropped`
+/// и `false`; так написал автор → `template_rule_unconditional` и `true`
+/// (правило идёт в конфиг). Правило с условием → `true` без кода.
+bool _unconditionalGate(Map<String, dynamic> rule, bool emptyRef,
+    {required String list, required String owner, required String kind}) {
+  if (hasRuleCondition(rule, list)) return true;
+  if (emptyRef) {
+    reportFragmentDropped(owner, kind, 'rule_set');
+    return false;
+  }
+  reportTemplateWarning(
+      templateWarnRuleUnconditional, {'owner': owner, 'kind': kind});
+  return true;
+}
 
 /// Результат merge всех preset-фрагментов от разных CustomRule'ов.
 class BundleMerge {
@@ -95,88 +272,168 @@ class BundleMerge {
 /// (spec §011 compliance). Если path нет, remote-rule_set пропускается +
 /// warning: правило не активно до первого download'а через UI (spec §033,
 /// task 011).
+///
+/// §578 — пресет с `for_each`: тело повторяется для каждого узла из [nodes]
+/// (порядок конфига), у которого `type` тела равен `node_type` и `filter`
+/// истинен; узел виден телу под именем `as` ([presetNodeResolver]). Фрагменты
+/// повторов склеиваются подряд. Нет подходящих узлов — пресет пуст. Теги
+/// такого пресета не неймспейсятся: их уникальность даёт тег узла (`@{node}-dns`),
+/// а ссылки пользователя на `<тег>-dns` остаются рабочими.
 PresetFragments expandPreset(
   CustomRulePreset rule,
   SelectableRule preset, {
   Map<String, String> srsPaths = const {},
   Map<String, String> globalVars = const {},
+  List<PresetNode> nodes = const [],
+}) {
+  final forEach = preset.forEach;
+  if (forEach == null) {
+    return _expandPresetBody(rule, preset,
+        srsPaths: srsPaths, globalVars: globalVars);
+  }
+  final resolvedVars = presetVarsMap(rule, preset, globalVars: globalVars);
+  if (resolvedVars.error != null) {
+    return PresetFragments(warnings: [resolvedVars.error!]);
+  }
+  final parts = <PresetFragments>[
+    for (final node in _forEachMatches(forEach, nodes, resolvedVars.vars))
+      _expandPresetBody(rule, preset,
+          srsPaths: srsPaths,
+          globalVars: globalVars,
+          nodeVars: presetNodeResolver(forEach.as, node),
+          namespace: false),
+  ];
+  return PresetFragments(
+    dnsServers: [for (final p in parts) ...p.dnsServers],
+    dnsRules: [for (final p in parts) ...p.dnsRules],
+    ruleSets: [for (final p in parts) ...p.ruleSets],
+    routingRules: [for (final p in parts) ...p.routingRules],
+    // Одна и та же строка от каждого повтора — одна запись.
+    warnings: {for (final p in parts) ...p.warnings}.toList(),
+  );
+}
+
+/// §578 — узлы, которые обслуживает пресет с `for_each`: `type` тела равен
+/// `node_type`, `filter` истинен. Порядок — порядок [nodes]. Пресет без
+/// `for_each` или с ошибкой переменных — пусто. Та же выборка, что у
+/// [expandPreset]: экраны маршрутов и DNS показывают по ней, какие узлы
+/// обслуживает пресет.
+List<PresetNode> presetForEachNodes(
+  CustomRulePreset rule,
+  SelectableRule preset,
+  List<PresetNode> nodes, {
+  Map<String, String> globalVars = const {},
+}) {
+  final forEach = preset.forEach;
+  if (forEach == null) return const [];
+  final resolvedVars = presetVarsMap(rule, preset, globalVars: globalVars);
+  if (resolvedVars.error != null) return const [];
+  return _forEachMatches(forEach, nodes, resolvedVars.vars).toList();
+}
+
+Iterable<PresetNode> _forEachMatches(
+  PresetForEach forEach,
+  List<PresetNode> nodes,
+  Map<String, dynamic> varsMap,
+) sync* {
+  for (final node in nodes) {
+    if (node.body['type'] != forEach.nodeType) continue;
+    final filter = forEach.filter;
+    if (filter != null) {
+      final nodeVars = presetNodeResolver(forEach.as, node);
+      final ok = evalCond(deepCloneJson(filter), (name) {
+        final v = nodeVars(name);
+        if (v != null) return v;
+        if (!varsMap.containsKey(name)) return null;
+        return varsMap[name] ?? Dropped.instance;
+      });
+      if (!ok) continue;
+    }
+    yield node;
+  }
+}
+
+/// §578 — узел конфига для `for_each`: финальный тег, тело записи в конфиге
+/// и поле записи `skip_presets` (у узла подписки записи нет — `false`).
+class PresetNode {
+  const PresetNode({
+    required this.tag,
+    required this.body,
+    this.skipPresets = false,
+  });
+
+  final String tag;
+  final Map<String, dynamic> body;
+  final bool skipPresets;
+}
+
+/// §578 — поля записи узла, видимые пресету. Перечень закрытый, расширяется
+/// контрактом.
+const Set<String> kPresetNodeRecordFields = {'skip_presets'};
+
+/// §578 — резолвер имён узла под именем [as]:
+/// - `@<as>` — финальный тег;
+/// - `@<as>.<поле записи>` — поле из [kPresetNodeRecordFields];
+/// - `@<as>.body.<путь>` — поле тела, путь через точку.
+///
+/// Отсутствующее или пустое поле — [Dropped] (в условии ложь, в теле ключ
+/// или элемент снимается). Имя вне неймспейса узла — null (решает словарь
+/// переменных пресета).
+VarResolver presetNodeResolver(String as, PresetNode node) {
+  final prefix = '$as.';
+  return (String name) {
+    if (name == as) return node.tag;
+    if (!name.startsWith(prefix)) return null;
+    final field = name.substring(prefix.length);
+    if (field == 'skip_presets') return node.skipPresets;
+    if (!field.startsWith('body.')) return Dropped.instance;
+    Object? cur = node.body;
+    for (final part in field.substring('body.'.length).split('.')) {
+      if (cur is! Map || !cur.containsKey(part)) return Dropped.instance;
+      cur = cur[part];
+    }
+    if (cur == null) return Dropped.instance;
+    if (cur is String && cur.isEmpty) return Dropped.instance;
+    return deepCloneJson(cur);
+  };
+}
+
+PresetFragments _expandPresetBody(
+  CustomRulePreset rule,
+  SelectableRule preset, {
+  Map<String, String> srsPaths = const {},
+  Map<String, String> globalVars = const {},
+  VarResolver? nodeVars,
+  bool namespace = true,
 }) {
   final warnings = <String>[];
 
-  final varsMap = <String, dynamic>{};
-  for (final v in preset.vars) {
-    // §265 — ref-var: значение НЕ в rule.varsValues (оно в глобальном
-    // userVars). Локальный varsMap пресета его не несёт: `@<ref>` в правилах
-    // пресета резолвится позже из flat-vars build_config'а (globalVars,
-    // передаются отдельно — см. параметр globalVars ниже).
-    if (v.isRef) continue;
-    // Семантика (spec §033):
-    // - varsValues содержит ключ → юзер явно выбрал значение (включая "")
-    //     - непустое → используется
-    //     - пустое → "explicit none" (только для optional; required валидация
-    //       не даст дойти сюда через UI)
-    // - varsValues НЕ содержит ключ → юзер не трогал → применяется
-    //   `default_value` (если пустой + required → error; пустой + optional
-    //   → null = фрагменты с `@name` dropped)
-    final hasExplicit = rule.varsValues.containsKey(v.name);
-    final explicit = rule.varsValues[v.name];
-    if (hasExplicit) {
-      if (explicit == null || explicit.isEmpty) {
-        if (v.required) {
-          warnings.add(
-            'preset "${preset.presetId}": required var "${v.name}" set to empty',
-          );
-          return PresetFragments(warnings: warnings);
-        }
-        varsMap[v.name] = null;
-      } else {
-        varsMap[v.name] = explicit;
-      }
-    } else if (v.defaultValue.isNotEmpty) {
-      varsMap[v.name] = v.defaultValue;
-    } else if (v.required) {
-      warnings.add(
-        'preset "${preset.presetId}": required var "${v.name}" unset',
-      );
-      return PresetFragments(warnings: warnings);
-    } else {
-      varsMap[v.name] = null;
-    }
+  // §534 — словарь переменных собирает [presetVarsMap]: тот же, по которому
+  // путь скачивания/UI (`isRuleSetEnabledFor`) решает гейт наборов.
+  final resolvedVars = presetVarsMap(rule, preset, globalVars: globalVars);
+  final varsError = resolvedVars.error;
+  if (varsError != null) {
+    warnings.add(varsError);
+    return PresetFragments(warnings: warnings);
   }
-
-  // §265 — ref-vars: подмешиваем значение из глобального userVars по имени
-  // (globalVars) в локальный varsMap, чтобы `@<ref>` в правилах пресета
-  // резолвился глобальным значением (напр. `@resolve_strategy` в route-resolve
-  // = та же настройка, что и `config.dns.strategy`). Пустое/отсутствующее →
-  // null (фрагмент с `@ref` выпадет, как optional-var).
-  for (final v in preset.vars) {
-    if (!v.isRef) continue;
-    final gv = globalVars[v.ref];
-    varsMap[v.name] = (gv != null && gv.isNotEmpty) ? gv : null;
-  }
-
-  // §264 — глобальные vars как FALLBACK: правила пресета могут содержать
-  // глобальные плейсхолдеры, не объявленные среди preset.vars — прежде всего
-  // `@vpn_mode` в `#if`-гейте inbound (`tun-in`/`mixed-in`). Раньше эти правила
-  // жили в `config.route.rules` (глобальный substitute, где vpn_mode есть);
-  // переехав в пресет traffic-processing (§264), они потеряли бы доступ →
-  // `#if @vpn_mode` не резолвится → inbound[] пустеет. Подмешиваем globalVars,
-  // НЕ перетирая локальные preset-vars (putIfAbsent).
-  for (final e in globalVars.entries) {
-    varsMap.putIfAbsent(e.key, () => e.value);
-  }
+  final varsMap = resolvedVars.vars;
 
   final expandedRuleSets = <Map<String, dynamic>>[];
   for (final rs in preset.ruleSets) {
     // SPEC 107: гейт фрагмента — #enable (канон) либо легаси
     // `enabled: "@var"` (§045). Отсутствие обоих = always-on.
-    if (!fragmentGateSatisfied(rs, varsMap)) continue;
+    if (!fragmentGateSatisfied(rs, varsMap, extra: nodeVars)) continue;
 
     final copy = deepCopyJson(rs);
-    final result = substituteVars(copy, varsMap);
+    final result = substituteVars(copy, varsMap, extra: nodeVars);
     if (result is! Map<String, dynamic>) continue;
     if (result['tag'] is! String) continue;
-    if (result['type'] is! String) continue;
+    // §555 — набор без источника по `type` не выпадает молча.
+    final missingSource = ruleSetMissingSource(result);
+    if (missingSource != null) {
+      reportFragmentDropped(preset.presetId, 'route.rule_set', missingSource);
+      continue;
+    }
     // Служебные ключи гейта — прочь из результата. ВАЖНО: `enabled` снимается
     // ТОЛЬКО в строковой форме "@var" (наша мета-конвенция). Булев `enabled`
     // — настоящее поле sing-box (`tls.enabled`, `cache_file.enabled`), его
@@ -219,12 +476,13 @@ PresetFragments expandPreset(
   // else → элемент выпадает из массива).
   final dnsRules = <Map<String, dynamic>>[];
   {
-    final copy = <dynamic>[for (final r in preset.dnsRules) deepCopyJson(r)];
-    final substituted = substituteVars(copy, varsMap);
-    final items = substituted is List ? substituted : const [];
-    for (final item in items) {
-      if (item is! Map<String, dynamic>) continue;
-      final result = item;
+    // §588 — поэлементно, с признаком «ссылка без значения» на правило.
+    for (final t in substituteRulesTracked(preset.dnsRules, varsMap,
+        extra: nodeVars)) {
+      final result = t.rule;
+      // §588 — правило целиком снято ложным `#if` (map-spread): выключил
+      // автор, не деградация — без кода (паритет с Go `len(m) == 0`).
+      if (result.isEmpty) continue;
       // Валидность элемента: `server` (route-семантика) ИЛИ serverless
       // action из закрытого списка. Ни того ни другого (optional-var
       // выпал / кривой шаблон / опечатка в action) → drop silently
@@ -232,19 +490,34 @@ PresetFragments expandPreset(
       final action = result['action'];
       final serverless =
           action is String && _kServerlessDnsActions.contains(action);
-      if (result['server'] is! String && !serverless) continue;
+      if (result['server'] is! String && !serverless) {
+        reportFragmentDropped(preset.presetId, 'dns.rules', 'server/action');
+        continue;
+      }
 
       // Dangling-rule_set guard — паритет с route-правилами (§011/§045):
       // DNS-правило со ссылкой на незарегистрированный tag уронило бы ядро
       // на старте (у legacy single-формы guard'а не было — повезло, что
       // ru-direct ссылается только на inline-set'ы).
+      // §104 (контракт 1.1.107) — ссылки `rule_set` под-правил логического
+      // правила: висячие все у любого под-правила (набор не объявлен или
+      // remote `.srs` не скачан) → выпадает всё правило; висячее имя рядом
+      // с живыми убирается.
+      {
+        final deep = cleanRuleSetRefsDeep(result, expandedTags.contains,
+            self: false);
+        if (deep == null) {
+          reportFragmentDropped(preset.presetId, 'dns.rules', 'rule_set');
+          continue;
+        }
+        if (!identical(deep, result)) result['rules'] = deep['rules'];
+      }
       final refTag = result['rule_set'];
       if (refTag is String && refTag.isNotEmpty) {
         if (!expandedTags.contains(refTag)) {
-          warnings.add(
-            'preset "${preset.presetId}": DNS rule skipped — references '
-            'missing rule_set "$refTag" (download SRS first)',
-          );
+          // §570 — одна запись: код (подсказка про скачивание — строка набора
+          // правил выше, «no cached file»), без второй строки.
+          reportFragmentDropped(preset.presetId, 'dns.rules', 'rule_set');
           continue;
         }
       } else if (refTag is List) {
@@ -253,10 +526,9 @@ PresetFragments expandPreset(
             .where(expandedTags.contains)
             .toList();
         if (present.isEmpty) {
-          warnings.add(
-            'preset "${preset.presetId}": DNS rule skipped — none of '
-            '[${refTag.join(", ")}] available in expanded rule_sets',
-          );
+          // §570 — одна запись: код (подсказка про скачивание — строка набора
+          // правил выше, «no cached file»), без второй строки.
+          reportFragmentDropped(preset.presetId, 'dns.rules', 'rule_set');
           continue;
         }
         result['rule_set'] = present.length == 1 ? present.first : present;
@@ -269,6 +541,15 @@ PresetFragments expandPreset(
           'preset "${preset.presetId}": DNS rule rule_set has invalid '
           'value (${refTag.runtimeType}) — reference dropped',
         );
+      }
+      // §571/§588 — ни одного поля-условия (реестр, dns_rule_conditions):
+      // правило перехватывало бы все запросы. Сбой (ссылка без значения) →
+      // выпадает; так написал автор → в конфиг с предупреждением.
+      if (!_unconditionalGate(result, t.emptyRef,
+          list: _kDnsRuleConditions,
+          owner: preset.presetId,
+          kind: 'dns.rules')) {
+        continue;
       }
       dnsRules.add(result);
     }
@@ -283,15 +564,18 @@ PresetFragments expandPreset(
     // мержится map-spread'ом (false → пустой Map), а не выпадает.
     // <dynamic>: if_engine._walkList мутирует список in-place через
     // addAll(List<dynamic>) — типизированный List<Map> тут упадёт на cast.
-    final copy = <dynamic>[for (final r in preset.rules) deepCopyJson(r)];
-    final substituted = substituteVars(copy, varsMap);
-    final items = substituted is List ? substituted : const [];
-    for (final item in items) {
-      if (item is! Map<String, dynamic>) continue;
-      final result = item;
+    //
+    // §588 — поэлементно ([substituteRulesTracked]): каждый элемент идёт тем
+    // же List-обходом, семантика `#if` элемента прежняя.
+    for (final t in substituteRulesTracked(preset.rules, varsMap,
+        extra: nodeVars)) {
+      final result = t.rule;
+      // §588 — правило целиком снято ложным `#if` (map-spread): без кода.
+      if (result.isEmpty) continue;
       if (result['outbound'] is! String && result['action'] is! String) {
         // После substitute нет ни outbound, ни action (optional-var
-        // выпал / кривой шаблон) → элемент дропается silently (§033).
+        // выпал / кривой шаблон) → элемент выпадает с кодом (§033, §555).
+        reportFragmentDropped(preset.presetId, 'route.rules', 'outbound/action');
         continue;
       }
 
@@ -363,15 +647,26 @@ PresetFragments expandPreset(
       // Поддерживаются обе формы: String (один tag) и List<String> (массив,
       // OR-семантика sing-box'а). Из массива выживший один tag даунгрейдим
       // до String — идиоматичнее.
+      // §104 (контракт 1.1.107) — ссылки `rule_set` под-правил логического
+      // правила: висячие все у любого под-правила (набор не объявлен или
+      // remote `.srs` не скачан) → выпадает всё правило; висячее имя рядом
+      // с живыми убирается.
+      {
+        final deep = cleanRuleSetRefsDeep(result, expandedTags.contains,
+            self: false);
+        if (deep == null) {
+          reportFragmentDropped(preset.presetId, 'route.rules', 'rule_set');
+          continue;
+        }
+        if (!identical(deep, result)) result['rules'] = deep['rules'];
+      }
       final refTag = result['rule_set'];
       if (refTag is String && refTag.isNotEmpty) {
         if (!expandedTags.contains(refTag)) {
-          warnings.add(
-            'preset "${preset.presetId}": routing rule skipped — references '
-            'missing rule_set "$refTag" (download SRS first)',
-          );
-        } else {
-          routingRules.add(result);
+          // §570 — одна запись: код (подсказка про скачивание — строка набора
+          // правил выше, «no cached file»), без второй строки.
+          reportFragmentDropped(preset.presetId, 'route.rules', 'rule_set');
+          continue;
         }
       } else if (refTag is List) {
         final present = refTag
@@ -379,20 +674,14 @@ PresetFragments expandPreset(
             .where(expandedTags.contains)
             .toList();
         if (present.isEmpty) {
-          warnings.add(
-            'preset "${preset.presetId}": routing rule skipped — none of '
-            '[${refTag.join(", ")}] available in expanded rule_sets',
-          );
-        } else {
-          // Один остался → даунгрейд до string. >1 → оставляем массив.
-          result['rule_set'] = present.length == 1 ? present.first : present;
-          routingRules.add(result);
+          // §570 — одна запись: код (подсказка про скачивание — строка набора
+          // правил выше, «no cached file»), без второй строки.
+          reportFragmentDropped(preset.presetId, 'route.rules', 'rule_set');
+          continue;
         }
-      } else if (refTag == null) {
-        // Легитимно: правило без `rule_set` матчит по другим полям
-        // (domain/protocol/port/…). Оставляем как есть.
-        routingRules.add(result);
-      } else {
+        // Один остался → даунгрейд до string. >1 → оставляем массив.
+        result['rule_set'] = present.length == 1 ? present.first : present;
+      } else if (refTag != null) {
         // §219 — refTag не null, но и не валидная форма: пустая String либо
         // непредусмотренный тип (int/bool/Map из кривого шаблона). Раньше
         // молча проходило как валидное правило; теперь — drop + warning
@@ -402,8 +691,18 @@ PresetFragments expandPreset(
           'preset "${preset.presetId}": routing rule rule_set has invalid '
           'value (${refTag.runtimeType}) — reference dropped',
         );
-        routingRules.add(result);
       }
+      // Без `rule_set` правило матчит по другим полям (domain/protocol/
+      // port/…). §571/§588 — если не осталось ни одного поля-условия (реестр,
+      // route_rule_conditions), правило матчит весь трафик: сбой (ссылка без
+      // значения) → выпадает; так написал автор → в конфиг с предупреждением.
+      if (!_unconditionalGate(result, t.emptyRef,
+          list: _kRouteRuleConditions,
+          owner: preset.presetId,
+          kind: 'route.rules')) {
+        continue;
+      }
+      routingRules.add(result);
     }
   }
 
@@ -442,23 +741,29 @@ PresetFragments expandPreset(
   for (final s in preset.dnsServers) {
     if (wanted != null && !wanted.contains(s['tag'])) continue;
     final copy = deepCopyJson(s);
-    final result = substituteVars(copy, varsMap);
+    final result = substituteVars(copy, varsMap, extra: nodeVars);
     if (result is! Map<String, dynamic>) continue;
     if (result['tag'] is! String) continue;
+    // §555 — адресный сервер без адреса ядро не примет: выпадает с кодом,
+    // правила на него отсеет фильтр эмитированных тегов (dns_rules).
+    if (dnsServerMissingAddress(result)) {
+      reportFragmentDropped(preset.presetId, 'dns.servers', 'server');
+      continue;
+    }
     normalizeDnsDetour(result);
     dnsServers.add(result);
   }
 
-  return namespacePresetTags(
-    preset.presetId,
-    PresetFragments(
-      dnsServers: dnsServers,
-      dnsRules: dnsRules,
-      ruleSets: expandedRuleSets,
-      routingRules: routingRules,
-      warnings: warnings,
-    ),
+  final fragments = PresetFragments(
+    dnsServers: dnsServers,
+    dnsRules: dnsRules,
+    ruleSets: expandedRuleSets,
+    routingRules: routingRules,
+    warnings: warnings,
   );
+  return namespace
+      ? namespacePresetTags(preset.presetId, fragments)
+      : fragments;
 }
 
 /// §103 C7 (D-012) — неймспейс тегов пресета: `<preset_id>:<tag>`.
@@ -512,10 +817,30 @@ PresetFragments namespacePresetTags(String presetId, PresetFragments f) {
     for (final rs in f.ruleSets) {...rs, 'tag': qualify(rs['tag'] as String)},
   ];
 
+  // §104 — ссылки `rule_set` под-правил логического правила (любая
+  // глубина) префиксуются так же, как ссылки верхнего уровня.
+  Object? mapSubRules(Object? rules) {
+    if (rules is! List) return rules;
+    return [
+      for (final s in rules)
+        if (s is Map)
+          {
+            ...s,
+            if (s['rule_set'] != null)
+              'rule_set': mapRef(s['rule_set'], localRuleSetTags),
+            if (s['rules'] != null) 'rules': mapSubRules(s['rules']),
+          }
+        else
+          s,
+    ];
+  }
+
   final dnsRules = [
     for (final r in f.dnsRules)
       {
         ...r,
+        if (r['type'] == 'logical' && r['rules'] != null)
+          'rules': mapSubRules(r['rules']),
         if (r['server'] != null) 'server': mapRef(r['server'], localDnsTags),
         if (r['rule_set'] != null)
           'rule_set': mapRef(r['rule_set'], localRuleSetTags),
@@ -526,6 +851,8 @@ PresetFragments namespacePresetTags(String presetId, PresetFragments f) {
     for (final r in f.routingRules)
       {
         ...r,
+        if (r['type'] == 'logical' && r['rules'] != null)
+          'rules': mapSubRules(r['rules']),
         if (r['rule_set'] != null)
           'rule_set': mapRef(r['rule_set'], localRuleSetTags),
         // Route-правило с `action: resolve` несёт `server` — ссылку на
@@ -663,8 +990,17 @@ String? normalizeDnsDetour(
 /// - `@name`, имя в `vars`, значение null → [Dropped] (родитель удаляет);
 /// - `@name`, имени нет в `vars` → оставить плейсхолдер (legacy/section-var);
 /// - не-`@` строка → как есть.
-dynamic substituteVars(dynamic obj, Map<String, dynamic> vars) {
+///
+/// §578 — [extra] (имена узла `for_each`) спрашивается первым; null от него —
+/// имя не его, решает [vars].
+dynamic substituteVars(
+  dynamic obj,
+  Map<String, dynamic> vars, {
+  VarResolver? extra,
+}) {
   return walk(obj, (name) {
+    final own = extra?.call(name);
+    if (own != null) return own;
     if (!vars.containsKey(name)) return null; // unknown → keep placeholder
     final v = vars[name];
     if (v == null) return Dropped.instance; // optional-var §033 → drop
@@ -674,6 +1010,93 @@ dynamic substituteVars(dynamic obj, Map<String, dynamic> vars) {
 
 
 
+/// §534 — единый словарь переменных пресета: по нему и сборка
+/// ([expandPreset]), и гейт наборов на пути скачивания/UI
+/// (`isRuleSetEnabledFor` в `models/preset_rule_set.dart`). Одна сборка
+/// словаря — одна семантика гейта; до §534 путь скачивания разбирал `@var`
+/// сам и расходился с билдером.
+///
+/// Порядок и источники значений (spec §033, §264, §265):
+/// 1. Обычные vars пресета: `rule.varsValues[name]` — явный выбор юзера
+///    (пустая строка = «explicit none» → `null`, фрагменты с `@name`
+///    выпадают); ключа нет → `default_value`; пустой дефолт → `null`.
+/// 2. Ref-vars (§265): значение не в `varsValues`, а в глобальном userVars —
+///    `globalVars[v.ref]`; пустое/отсутствующее → `null`.
+/// 3. `globalVars` как fallback (§264): глобальные плейсхолдеры, не
+///    объявленные среди `preset.vars` (напр. `@vpn_mode`), без перетирания
+///    переменных пресета.
+///
+/// Required-var без значения (пустой явный выбор или пустой дефолт) →
+/// `error` с тем же текстом, что [expandPreset] пишет в warnings; первая
+/// такая ошибка побеждает. Словарь при этом всё равно собирается целиком
+/// (у сломанной переменной — `null`): [expandPreset] на ошибке ничего не
+/// выпускает и словарём не пользуется, а гейт пути скачивания вычисляется на
+/// частичном словаре.
+({Map<String, dynamic> vars, String? error}) presetVarsMap(
+  CustomRulePreset rule,
+  SelectableRule preset, {
+  Map<String, String> globalVars = const {},
+}) {
+  final varsMap = <String, dynamic>{};
+  String? error;
+  for (final v in preset.vars) {
+    // §265 — ref-var: значение НЕ в rule.varsValues (оно в глобальном
+    // userVars) — подмешивается вторым проходом ниже из globalVars.
+    if (v.isRef) continue;
+    // Семантика (spec §033):
+    // - varsValues содержит ключ → юзер явно выбрал значение (включая "")
+    //     - непустое → используется
+    //     - пустое → "explicit none" (только для optional; required валидация
+    //       не даст дойти сюда через UI)
+    // - varsValues НЕ содержит ключ → юзер не трогал → применяется
+    //   `default_value` (если пустой + required → error; пустой + optional
+    //   → null = фрагменты с `@name` dropped)
+    final hasExplicit = rule.varsValues.containsKey(v.name);
+    final explicit = rule.varsValues[v.name];
+    if (hasExplicit) {
+      if (explicit == null || explicit.isEmpty) {
+        if (v.required) {
+          error ??=
+              'preset "${preset.presetId}": required var "${v.name}" set to empty';
+        }
+        varsMap[v.name] = null;
+      } else {
+        varsMap[v.name] = explicit;
+      }
+    } else if (v.defaultValue.isNotEmpty) {
+      varsMap[v.name] = v.defaultValue;
+    } else {
+      if (v.required) {
+        error ??= 'preset "${preset.presetId}": required var "${v.name}" unset';
+      }
+      varsMap[v.name] = null;
+    }
+  }
+
+  // §265 — ref-vars: подмешиваем значение из глобального userVars по имени
+  // (globalVars) в локальный varsMap, чтобы `@<ref>` в правилах пресета
+  // резолвился глобальным значением (напр. `@resolve_strategy` в route-resolve
+  // = та же настройка, что и `config.dns.strategy`). Пустое/отсутствующее →
+  // null (фрагмент с `@ref` выпадет, как optional-var).
+  for (final v in preset.vars) {
+    if (!v.isRef) continue;
+    final gv = globalVars[v.ref];
+    varsMap[v.name] = (gv != null && gv.isNotEmpty) ? gv : null;
+  }
+
+  // §264 — глобальные vars как FALLBACK: правила пресета могут содержать
+  // глобальные плейсхолдеры, не объявленные среди preset.vars — прежде всего
+  // `@vpn_mode` в `#if`-гейте inbound (`tun-in`/`mixed-in`). Раньше эти правила
+  // жили в `config.route.rules` (глобальный substitute, где vpn_mode есть);
+  // переехав в пресет traffic-processing (§264), они потеряли бы доступ →
+  // `#if @vpn_mode` не резолвится → inbound[] пустеет. Подмешиваем globalVars,
+  // НЕ перетирая локальные preset-vars (putIfAbsent).
+  for (final e in globalVars.entries) {
+    varsMap.putIfAbsent(e.key, () => e.value);
+  }
+  return (vars: varsMap, error: error);
+}
+
 /// SPEC 107 — гейт фрагмента пресета: `#enable` (канон) плюс легаси
 /// `enabled: "@var"` (§045). Оба присутствуют → and.
 ///
@@ -681,11 +1104,12 @@ dynamic substituteVars(dynamic obj, Map<String, dynamic> vars) {
 /// на переменные пресета, которых нет в глобальном резолвере.
 bool fragmentGateSatisfied(
   Map<String, dynamic> fragment,
-  Map<String, dynamic> varsMap,
-) {
+  Map<String, dynamic> varsMap, {
+  VarResolver? extra,
+}) {
   final legacy = fragment['enabled'];
   if (legacy is String) {
-    final substituted = substituteVars(legacy, varsMap);
+    final substituted = substituteVars(legacy, varsMap, extra: extra);
     if (substituted is! String || substituted.trim().toLowerCase() != 'true') {
       return false;
     }
@@ -698,6 +1122,8 @@ bool fragmentGateSatisfied(
   final gate = fragment[enableKey];
   if (gate == null) return true;
   Object? resolve(String name) {
+    final own = extra?.call(name);
+    if (own != null) return own;
     final v = varsMap[name];
     if (v == null) return null;
     return v is String ? coerceVarValue(v, _gateVarType(v)) : v;

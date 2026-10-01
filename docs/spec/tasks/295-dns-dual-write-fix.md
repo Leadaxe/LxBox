@@ -1,6 +1,6 @@
 # §295 — DNS dual-write фикс: убрать half-stage/half-write в экране
 
-**Тип:** structural refactor (Шаг 2b фичи [§291](../features/291%20layered-architecture-facades/spec.md)) · **Статус:** device-required (не делать вслепую) · **Размер:** M · **Зависит от:** [§294](294-dns-typed-model.md)
+**Тип:** structural refactor (Шаг 2b фичи [§291](../tasks/291F-layered-architecture-facades/spec.md)) · **Статус:** device-required (не делать вслепую) · **Размер:** M · **Зависит от:** [§294](294-dns-typed-model.md)
 
 > **Оценка при реализации (почему device-required):** 4 `unawaited
 > saveCustomRules` — НЕ «забыли завернуть в staging». `custom_rules` — чужой

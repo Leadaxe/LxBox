@@ -39,6 +39,12 @@ class CcChannel {
   static const EventChannel _dnsChannel = EventChannel(
     PlatformChannels.ccDns,
   ); // §180
+  static const EventChannel _tailscaleChannel = EventChannel(
+    PlatformChannels.ccTailscale,
+  ); // §579
+  static const EventChannel _tailscalePingChannel = EventChannel(
+    PlatformChannels.ccTailscalePing,
+  ); // §581
 
   // ─────────────────────────── Streams ───────────────────────────
   //
@@ -97,6 +103,29 @@ class CcChannel {
   /// §180 — DNS-журнал из ядра (SPEC 018): батч `CcDnsQuery` на резолв(ы).
   /// Структурная замена текстового парсинга core-лога. Потребитель — профайлер.
   Stream<List<CcDnsQuery>> get dnsQueries => _dnsQueriesStream;
+
+  // §579 — состояние узлов Tailscale: снапшот списком на каждое обновление.
+  late final Stream<List<CcTailscaleStatus>> _tailscaleStream =
+      _sharedStream<List<CcTailscaleStatus>>(
+        _tailscaleChannel,
+        CcTailscaleStatus.listFrom,
+      );
+
+  /// §579 — поток ядра `SubscribeTailscaleStatus`: записи endpoint'ов
+  /// Tailscale (тег, `BackendState`, `StateText`). Подписку в ядре держат
+  /// [startTailscaleStatus]/[stopTailscaleStatus]; слушать до старта.
+  Stream<List<CcTailscaleStatus>> get tailscaleStatus => _tailscaleStream;
+
+  // §581 — ответы проверки устройства: по одному событию на ответ. Без кэша
+  // последнего значения (новая проверка не должна увидеть ответ прежней);
+  // потребитель один — лист проверки.
+  late final Stream<CcTailscalePingResult> _tailscalePingStream =
+      _tailscalePingChannel.receiveBroadcastStream().map(
+            (e) => CcTailscalePingResult.fromMap(_asMap(e)),
+          );
+
+  /// §581 — поток ответов [startTailscalePing]. Слушать до старта.
+  Stream<CcTailscalePingResult> get tailscalePing => _tailscalePingStream;
 
   /// §122 — shared-стрим с КЭШЕМ последнего снапшота.
   ///
@@ -200,6 +229,67 @@ class CcChannel {
   /// per-call ctx in-flight URLTest'ов (не дожидаясь TCPTimeout), не задевая
   /// status/screen/profiler-стримы. Следующий urlTestOutbound поднимет свежий.
   Future<void> cancelPing() => _invoke('ccCancelPing');
+
+  /// §579 — поднять / снять подписку ядра на состояние узлов Tailscale.
+  Future<void> startTailscaleStatus() => _invoke('ccStartTailscaleStatus');
+  Future<void> stopTailscaleStatus() => _invoke('ccStopTailscaleStatus');
+
+  /// §581 — подписку ядра держат несколько потребителей (главный экран для
+  /// NETWORKS, вкладка Network узла): поднимается на 0→1, снимается на 1→0.
+  int _tailscaleRefs = 0;
+  Future<void> acquireTailscaleStatus() async {
+    _tailscaleRefs++;
+    if (_tailscaleRefs == 1) await startTailscaleStatus();
+  }
+
+  Future<void> releaseTailscaleStatus() async {
+    if (_tailscaleRefs == 0) return;
+    _tailscaleRefs--;
+    if (_tailscaleRefs == 0) await stopTailscaleStatus();
+  }
+
+  /// Переподнять подписку, если её кто-то держит (reload ядра).
+  Future<void> restartTailscaleStatus() async {
+    if (_tailscaleRefs > 0) await startTailscaleStatus();
+  }
+
+  /// §581 — выбор exit node на ходу (`stableId`; пусто — снять). Тело узла
+  /// не меняется. `null` — успех, иначе текст ошибки ядра.
+  Future<String?> setTailscaleExitNode(String tag, String stableId) =>
+      _invokeError('ccSetTailscaleExitNode', {
+        'tag': tag,
+        'stable_id': stableId,
+      });
+
+  /// §581 — выход узла из аккаунта. `null` — успех, иначе текст ошибки.
+  Future<String?> tailscaleLogout(String tag) =>
+      _invokeError('ccTailscaleLogout', {'tag': tag});
+
+  /// §581 — проверка устройства: ответы идут в [tailscalePing].
+  Future<void> startTailscalePing(String tag, String peerIp) async {
+    try {
+      await _methods.invokeMethod<void>('ccStartTailscalePing', {
+        'tag': tag,
+        'peer_ip': peerIp,
+      });
+    } on PlatformException {
+      // сервис не поднят — ответов не будет
+    } on MissingPluginException {
+      // юнит-тест / native не готов
+    }
+  }
+
+  Future<void> stopTailscalePing() => _invoke('ccStopTailscalePing');
+
+  Future<String?> _invokeError(String method, Map<String, Object> args) async {
+    try {
+      return await _methods.invokeMethod<String>(method, args);
+    } on PlatformException catch (e) {
+      return e.message ?? e.code;
+    } on MissingPluginException {
+      return 'not available';
+    }
+  }
 
   // §164 — энергомодель CC-клиентов.
   /// FAST (0.1с) — Stats открыт (плавность); NORMAL (0.5с) — главный экран.
@@ -328,6 +418,17 @@ class CcChannel {
     return r.map((m) => CcGroup.fromMap(_asMap(m))).toList();
   }
 
+  /// §535 (ядро SPEC 097) — unary pull плоского списка outbound'ов и
+  /// endpoint'ов. ЕДИНСТВЕННЫЙ источник `endpointState`/`idleSinceSeconds`:
+  /// ядро заполняет их только в ответе `GetOutbounds`, поток `outbounds` и
+  /// дерево `groups` их не несут. `null` = не смогли прочитать (не-STARTED /
+  /// нет клиента), `[]` = список пуст — caller различает, как в [getGroups].
+  Future<List<CcOutbound>?> getOutbounds() async {
+    final r = await _methods.invokeMethod<List<dynamic>>('ccGetOutbounds');
+    if (r == null) return null;
+    return r.map((m) => CcOutbound.fromMap(_asMap(m))).toList();
+  }
+
   /// §311 — unary снапшот конфига РАБОТАЮЩЕГО ядра (kernel SPEC 036
   /// `GetRunningConfig`; javap rc.3: `String getRunningConfig() throws`).
   /// Захвачен ядром один раз на старте, отдача — копия строки.
@@ -392,6 +493,18 @@ class CcChannel {
       }) ??
       false;
 
+  /// §557 (ядро SPEC 106) — вкл/выкл WG/AWG-endpoint'а на лету. Возвращает
+  /// состояние узла после вызова (строки [CcEndpointState]). Отказ ядра —
+  /// [PlatformException] с кодом `not_found` / `invalid_argument` /
+  /// `failed_precondition` / `unavailable` / `error`. Ядро выключатель не
+  /// сохраняет: reload стартует все узлы включёнными.
+  Future<String> setEndpointEnabled(String tag, bool enabled) async =>
+      await _methods.invokeMethod<String>('ccSetEndpointEnabled', {
+        'tag': tag,
+        'enabled': enabled,
+      }) ??
+      '';
+
   Future<bool> closeConnection(String id) async =>
       await _methods.invokeMethod<bool>('ccCloseConnection', {'id': id}) ??
       false;
@@ -420,6 +533,199 @@ class CcChannel {
 }
 
 // ═══════════════════════════ Models ═══════════════════════════
+
+/// §579/§581 — запись `TailscaleEndpointStatus` ядра: тег endpoint'а,
+/// `BackendState` (`Running`, `NeedsLogin`, `Stopped`, …), `StateText` и
+/// (§581) полное состояние для вкладки Network.
+///
+/// Имена устройств, адреса, имя сети и ссылка входа — данные пользователя: в
+/// журнал, дамп поддержки и Debug API не попадают (§581 раздел 9).
+class CcTailscaleStatus {
+  const CcTailscaleStatus({
+    required this.tag,
+    required this.backendState,
+    required this.stateText,
+    this.authUrl = '',
+    this.networkName = '',
+    this.magicDnsSuffix = '',
+    this.keyAuth = false,
+    this.self,
+    this.exitNode,
+    this.userGroups = const [],
+  });
+
+  final String tag;
+  final String backendState;
+  final String stateText;
+  final String authUrl;
+  final String networkName;
+  final String magicDnsSuffix;
+  final bool keyAuth;
+
+  /// Свой узел.
+  final CcTailscalePeer? self;
+
+  /// Действующий exit node; `null` — выхода нет.
+  final CcTailscalePeer? exitNode;
+
+  /// Устройства сети по владельцам (свой узел сюда не входит).
+  final List<CcTailscaleUserGroup> userGroups;
+
+  /// Все устройства сети без своего узла.
+  List<CcTailscalePeer> get peers => [
+        for (final g in userGroups) ...g.peers,
+      ];
+
+  factory CcTailscaleStatus.fromMap(Map<String, dynamic> m) {
+    final self = m['self'];
+    final exit = m['exit_node'];
+    return CcTailscaleStatus(
+      tag: '${m['tag'] ?? ''}',
+      backendState: '${m['backend_state'] ?? ''}',
+      stateText: '${m['state_text'] ?? ''}',
+      authUrl: '${m['auth_url'] ?? ''}',
+      networkName: '${m['network_name'] ?? ''}',
+      magicDnsSuffix: '${m['magic_dns_suffix'] ?? ''}',
+      keyAuth: m['key_auth'] == true,
+      self: self is Map ? CcTailscalePeer.fromMap(CcChannel._asMap(self)) : null,
+      exitNode:
+          exit is Map ? CcTailscalePeer.fromMap(CcChannel._asMap(exit)) : null,
+      userGroups: [
+        for (final g in CcChannel._asList(m['user_groups']))
+          if (g is Map) CcTailscaleUserGroup.fromMap(CcChannel._asMap(g)),
+      ],
+    );
+  }
+
+  /// Сообщение канала — список map'ов; всё прочее и записи без тега
+  /// отбрасываются.
+  static List<CcTailscaleStatus> listFrom(Object? e) => [
+        for (final m in CcChannel._asList(e))
+          if (m is Map)
+            CcTailscaleStatus.fromMap(CcChannel._asMap(m)),
+      ].where((s) => s.tag.isNotEmpty).toList();
+}
+
+/// §581 — устройство сети Tailscale (`TailscalePeer` ядра). Времена —
+/// Unix-секунды ядра, 0 — значения нет.
+class CcTailscalePeer {
+  const CcTailscalePeer({
+    this.stableId = '',
+    this.hostName = '',
+    this.dnsName = '',
+    this.os = '',
+    this.online = false,
+    this.exitNode = false,
+    this.exitNodeOption = false,
+    this.shareeNode = false,
+    this.expired = false,
+    this.keyExpiry = 0,
+    this.lastSeen = 0,
+    this.ips = const [],
+  });
+
+  final String stableId;
+  final String hostName;
+  final String dnsName;
+  final String os;
+  final bool online;
+
+  /// Устройство — действующий exit node этого узла.
+  final bool exitNode;
+
+  /// Устройство предлагает себя как exit node.
+  final bool exitNodeOption;
+  final bool shareeNode;
+  final bool expired;
+  final int keyExpiry;
+  final int lastSeen;
+  final List<String> ips;
+
+  /// MagicDNS-имя без точки в конце.
+  String get dnsNameClean =>
+      dnsName.endsWith('.') ? dnsName.substring(0, dnsName.length - 1) : dnsName;
+
+  /// Первый адрес (IPv4 идёт первым у ядра); пусто — адресов нет.
+  String get firstIp => ips.isEmpty ? '' : ips.first;
+
+  static int _int(Object? v) => v is num ? v.toInt() : 0;
+
+  factory CcTailscalePeer.fromMap(Map<String, dynamic> m) => CcTailscalePeer(
+        stableId: '${m['stable_id'] ?? ''}',
+        hostName: '${m['host_name'] ?? ''}',
+        dnsName: '${m['dns_name'] ?? ''}',
+        os: '${m['os'] ?? ''}',
+        online: m['online'] == true,
+        exitNode: m['exit_node'] == true,
+        exitNodeOption: m['exit_node_option'] == true,
+        shareeNode: m['sharee_node'] == true,
+        expired: m['expired'] == true,
+        keyExpiry: _int(m['key_expiry']),
+        lastSeen: _int(m['last_seen']),
+        ips: [
+          for (final ip in CcChannel._asList(m['ips']))
+            if (ip != null && '$ip'.isNotEmpty) '$ip',
+        ],
+      );
+}
+
+/// §581 — владелец устройств сети (`TailscaleUserGroup` ядра).
+class CcTailscaleUserGroup {
+  const CcTailscaleUserGroup({
+    this.userId = 0,
+    this.loginName = '',
+    this.displayName = '',
+    this.peers = const [],
+  });
+
+  final int userId;
+  final String loginName;
+  final String displayName;
+  final List<CcTailscalePeer> peers;
+
+  /// Заголовок группы: `DisplayName`, при пустом — `LoginName`.
+  String get title => displayName.isNotEmpty ? displayName : loginName;
+
+  factory CcTailscaleUserGroup.fromMap(Map<String, dynamic> m) =>
+      CcTailscaleUserGroup(
+        userId: CcTailscalePeer._int(m['user_id']),
+        loginName: '${m['login_name'] ?? ''}',
+        displayName: '${m['display_name'] ?? ''}',
+        peers: [
+          for (final p in CcChannel._asList(m['peers']))
+            if (p is Map) CcTailscalePeer.fromMap(CcChannel._asMap(p)),
+        ],
+      );
+}
+
+/// §581 — ответ проверки устройства (`TailscalePingResult` ядра). Непустой
+/// [error] — ответа нет.
+class CcTailscalePingResult {
+  const CcTailscalePingResult({
+    this.latencyMs = 0,
+    this.isDirect = false,
+    this.endpoint = '',
+    this.derpRegionCode = '',
+    this.error = '',
+  });
+
+  final double latencyMs;
+  final bool isDirect;
+  final String endpoint;
+  final String derpRegionCode;
+  final String error;
+
+  factory CcTailscalePingResult.fromMap(Map<String, dynamic> m) =>
+      CcTailscalePingResult(
+        latencyMs: m['latency_ms'] is num
+            ? (m['latency_ms'] as num).toDouble()
+            : 0,
+        isDirect: m['is_direct'] == true,
+        endpoint: '${m['endpoint'] ?? ''}',
+        derpRegionCode: '${m['derp_region_code'] ?? ''}',
+        error: '${m['error'] ?? ''}',
+      );
+}
 
 /// §3.1 — статус от `writeStatus`. `uplink`/`downlink` — байтовая дельта за
 /// интервал (B/s при interval=1s); `*Total` — накопленный объём.
@@ -467,6 +773,8 @@ class CcOutbound {
     required this.type,
     required this.urlTestDelay,
     required this.urlTestTime,
+    this.endpointState = '',
+    this.idleSinceSeconds = 0,
   });
 
   final String tag;
@@ -478,12 +786,56 @@ class CcOutbound {
   /// Unix-время последнего теста (0 = не тестирован).
   final int urlTestTime;
 
+  /// §535 (ядро SPEC 097) — состояние WG/AWG-endpoint'а:
+  /// `never_built` / `building` / `up` / `asleep` / `torn_down` / `down`.
+  ///
+  /// Пусто у всего остального И на любом пути, кроме `getOutbounds()`: поток
+  /// `writeOutbounds` и дерево групп поле не несут (ядро заполняет его только
+  /// в ответе `GetOutbounds`). Пусто = «состояние неизвестно», не ошибка.
+  final String endpointState;
+
+  /// §535 — секунд с последнего дайла через endpoint (0 вне `getOutbounds()`).
+  final int idleSinceSeconds;
+
   factory CcOutbound.fromMap(Map<String, dynamic> m) => CcOutbound(
     tag: m['tag']?.toString() ?? '',
     type: m['type']?.toString() ?? '',
     urlTestDelay: _int(m['urlTestDelay']),
     urlTestTime: _int(m['urlTestTime']),
+    // no-throw: старое ядро/поток без ключей → '' и 0 (состояние неизвестно).
+    endpointState: m['endpointState']?.toString() ?? '',
+    idleSinceSeconds: _int(m['idleSinceSeconds']),
   );
+}
+
+/// §535 — состояния WG/AWG-endpoint'а из `CcOutbound.endpointState`
+/// (ядро SPEC 097). Строки ядра, не переводятся и в UI не показываются.
+abstract final class CcEndpointState {
+  /// Ленивый endpoint, дайлов ещё не было.
+  static const neverBuilt = 'never_built';
+
+  /// Идёт сборка (включая ожидание бюджета).
+  static const building = 'building';
+
+  /// Устройство собрано и бодрствует.
+  static const up = 'up';
+
+  /// Устройство собрано, уведено в Down.
+  static const asleep = 'asleep';
+
+  /// Устройство освобождено (разборка по idle_teardown или бюджетом).
+  static const tornDown = 'torn_down';
+
+  /// Ещё не стартовал или закрыт.
+  static const down = 'down';
+
+  /// §557 (SPEC 106) — выключен вручную: дайлы отвергаются, ничто его не
+  /// будит до включения. Не «соберётся при дайле», поэтому не [isNotBuilt].
+  static const disabled = 'disabled';
+
+  /// Узел не поднят: ядро соберёт его при первом дайле (0,5–1 с).
+  /// Это состояние, а не сбой, — UI не показывает тут таймаут.
+  static bool isNotBuilt(String s) => s == neverBuilt || s == tornDown;
 }
 
 /// §2.4 — группа из `writeGroups` (дерево). `selectable` заменяет `type=='Selector'`,

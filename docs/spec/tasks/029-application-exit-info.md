@@ -4,7 +4,7 @@
 |------|----------|
 | Статус | Done |
 | Дата | 2026-04-29 |
-| Связанные spec'ы | [`038 crash diagnostics`](../features/038%20crash%20diagnostics/spec.md) |
+| Связанные spec'ы | [`038 crash diagnostics`](../tasks/038F-crash-diagnostics/spec.md) |
 
 ## Проблема
 
@@ -14,7 +14,7 @@
 
 - **Native MethodChannel `getApplicationExitInfo`** в [`VpnPlugin.kt`](../../../app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/VpnPlugin.kt) → `ActivityManager.getHistoricalProcessExitReasons(pkg, 0, 5)` с маппингом `REASON_*` → читаемые имена (`CRASH | CRASH_NATIVE | ANR | LOW_MEMORY | SIGNALED | …`). На API <30 — пустой список. Каждая запись: `{timestamp, reason, description, importance, pss, rss, status, trace}`. `trace` читается из `traceInputStream` (mini-tombstone для NATIVE_CRASH).
 - **Dart-сервис** [`ExitInfoReader.read()`](../../../app/lib/services/exit_info_reader.dart) — обёртка над MethodChannel; на исключения возвращает пустой список.
-- **Интеграция**: поле `exit_info` в [`DumpBuilder.build()`](../../../app/lib/services/dump_builder.dart). Также доступно через `GET /diag/exit-info` ([§031](../features/031%20debug%20api/spec.md)).
+- **Интеграция**: поле `exit_info` в [`DumpBuilder.build()`](../../../app/lib/services/dump_builder.dart). Также доступно через `GET /diag/exit-info` ([§031](../tasks/031F-debug-api/spec.md)).
 
 ## Почему lazy в DumpBuilder
 

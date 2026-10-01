@@ -1,7 +1,4 @@
 {
-  "\"selector\" was imported as an auto-select group: the fastest member is picked by latency tests instead of manually.": {
-    "value": "«selector» импортирован как группа автовыбора: самый быстрый узел выбирается по замерам, а не вручную."
-  },
   "%1$d +%2$d⚙ nodes": {
     "value": {
       "one": "%1$d узел +%2$d⚙",
@@ -12,6 +9,14 @@
   },
   "%1$d active / %2$d total": {
     "value": "Активных: %1$d / всего: %2$d"
+  },
+  "%1$d duplicates merged into %2$d nodes": {
+    "value": {
+      "one": "%1$d повтор объединён (узлов: %2$d)",
+      "few": "%1$d повтора объединено (узлов: %2$d)",
+      "many": "%1$d повторов объединено (узлов: %2$d)",
+      "other": "%1$d повтора объединено (узлов: %2$d)"
+    }
   },
   "%1$d of %2$d nodes match": {
     "value": "Совпадений: %1$d из %2$d узлов"
@@ -76,22 +81,6 @@
       "few": "%d в цепочке",
       "many": "%d в цепочке",
       "other": "%d в цепочке"
-    }
-  },
-  "%d DNS rules": {
-    "value": {
-      "one": "%d DNS-правило",
-      "few": "%d DNS-правила",
-      "many": "%d DNS-правил",
-      "other": "%d DNS-правил"
-    }
-  },
-  "%d DNS servers": {
-    "value": {
-      "one": "%d DNS-сервер",
-      "few": "%d DNS-сервера",
-      "many": "%d DNS-серверов",
-      "other": "%d DNS-серверов"
     }
   },
   "%d elements": {
@@ -196,12 +185,28 @@
       "other": "%d домена"
     }
   },
+  "%d dropped": {
+    "value": {
+      "one": "отброшено: %d",
+      "few": "отброшено: %d",
+      "many": "отброшено: %d",
+      "other": "отброшено: %d"
+    }
+  },
   "%d entries copied": {
     "value": {
       "one": "%d запись скопирована",
       "few": "%d записи скопировано",
       "many": "%d записей скопировано",
       "other": "%d записи скопировано"
+    }
+  },
+  "%d entries dropped": {
+    "value": {
+      "one": "%d запись отброшена",
+      "few": "%d записи отброшено",
+      "many": "%d записей отброшено",
+      "other": "%d записи отброшено"
     }
   },
   "%d err": {
@@ -371,14 +376,6 @@
       "few": "%d протокола",
       "many": "%d протоколов",
       "other": "%d протокола"
-    }
-  },
-  "%d rules": {
-    "value": {
-      "one": "%d правило",
-      "few": "%d правила",
-      "many": "%d правил",
-      "other": "%d правил"
     }
   },
   "%d seconds": {
@@ -888,6 +885,9 @@
   "Android 13+ requires this for SSID. Tap to grant.": {
     "value": "Android 13+ требует это разрешение для SSID. Нажмите, чтобы выдать."
   },
+  "Android did not report the network name. Check that Location permission is set to \"Precise\" and \"Allow all the time\".": {
+    "value": "Android не сообщил имя сети. Проверьте, что для разрешения «Местоположение» выбраны «Точное» и «Разрешить в любом режиме»."
+  },
   "Android restricts background activity to save battery. Without an exception, the VPN tunnel may be killed when the screen turns off — your connection drops until you reopen L×Box.\n\nOpen system settings and choose \"Unrestricted\" / \"Not optimized\".": {
     "value": "Android ограничивает фоновую активность ради экономии батареи. Без исключения туннель VPN может быть закрыт при выключении экрана — связь пропадёт, пока вы снова не откроете L×Box.\n\nОткройте системные настройки и выберите «Без ограничений» / «Не оптимизировать»."
   },
@@ -1038,6 +1038,9 @@
   "A–Z": {
     "value": "А–Я"
   },
+  "Background location missing": {
+    "value": "Нет доступа к местоположению в фоне"
+  },
   "BSSID (optional)": {
     "value": "BSSID (необязательно)"
   },
@@ -1091,9 +1094,6 @@
   },
   "Cancel": {
     "value": "Отмена"
-  },
-  "Cannot read Wi-Fi info — try toggling Wi-Fi off/on.": {
-    "value": "Не удалось прочитать данные Wi-Fi — выключите и включите Wi-Fi."
   },
   "Cannot read the selected file": {
     "value": "Не удалось прочитать выбранный файл"
@@ -1201,23 +1201,8 @@
   "Clear cached files": {
     "value": "Удалить кэшированные файлы"
   },
-  "Clear sections": {
-    "value": "Очистить секции"
-  },
-  "Clear sections?": {
-    "value": "Очистить секции?"
-  },
   "Client subnet": {
     "value": "Подсеть клиента"
-  },
-  "ClientHello fingerprint is stripped, but these positions are reality nodes that need it: %s. The core will not start — untick tls.utls.": {
-    "value": "Отпечаток ClientHello снят, но эти позиции — reality-узлы, которым он нужен: %s. Ядро не стартует — снимите галку tls.utls."
-  },
-  "ClientHello fingerprint — must not be stripped on reality nodes": {
-    "value": "Отпечаток ClientHello — на reality-узлах снимать нельзя"
-  },
-  "ClientHello fragmentation": {
-    "value": "фрагментация ClientHello"
   },
   "Clipboard is empty": {
     "value": "Буфер обмена пуст"
@@ -2086,6 +2071,9 @@
   "Fastest": {
     "value": "Самый быстрый"
   },
+  "Manual": {
+    "value": "Вручную"
+  },
   "Fastest — race, then stick to the winner": "Fastest — гонка, затем липнет к победителю",
   "Feedback": {
     "value": "Отклик"
@@ -2194,9 +2182,6 @@
   "From %s %s": {
     "value": "Из %s %s"
   },
-  "From nodes · read-only, edited in the node": {
-    "value": "Из узлов · только чтение, правятся в узле"
-  },
   "From routing rules · ordered as in Routing": {
     "value": "Из правил маршрутизации · порядок как в «Маршрутизации»"
   },
@@ -2275,9 +2260,6 @@
   },
   "Haptic feedback": {
     "value": "Виброотклик"
-  },
-  "Has node sections": {
-    "value": "Есть секции узла"
   },
   "Headers copied": {
     "value": "Заголовки скопированы"
@@ -2707,6 +2689,12 @@
   "Location (background)": {
     "value": "Местоположение (в фоне)"
   },
+  "Location is turned off": {
+    "value": "Геолокация выключена"
+  },
+  "Location is turned off. Turn it on in system settings.": {
+    "value": "Геолокация выключена. Включите её в системных настройках."
+  },
   "Lock config (debug)": {
     "value": "Блокировать конфиг (debug)"
   },
@@ -2810,6 +2798,9 @@
   "My DNS": {
     "value": "Мой DNS"
   },
+  "Nearby Wi-Fi permission missing": {
+    "value": "Нет разрешения «Устройства Wi-Fi поблизости»"
+  },
   "NETWORK & PROTOCOL": {
     "value": "СЕТЬ И ПРОТОКОЛ"
   },
@@ -2845,9 +2836,6 @@
   },
   "Nearby Wi-Fi devices": {
     "value": "Устройства Wi-Fi поблизости"
-  },
-  "Needs Location + Nearby Wi-Fi permissions. Tap to manage.": {
-    "value": "Нужны разрешения «Местоположение» и «Устройства Wi-Fi поблизости». Нажмите, чтобы настроить."
   },
   "Networks where you stay ≥ 5 minutes appear in routing rule editor → Pick saved.": {
     "value": "Сети, где вы находитесь ≥ 5 минут, появляются в редакторе правила маршрутизации → «Pick saved»."
@@ -3033,8 +3021,29 @@
   "No valid outbounds in JSON": {
     "value": "В JSON нет валидных outbound-объектов"
   },
-  "Node": {
-    "value": "Узел"
+  "down": {
+    "value": "down"
+  },
+  "Layout": {
+    "value": "Компоновка"
+  },
+  "Precise location is required. Open Settings → Permissions → Location and enable \"Use precise location\".": {
+    "value": "Нужно точное местоположение. Откройте Настройки → Разрешения → Местоположение и включите «Точное местоположение»."
+  },
+  "Precise location permission missing": {
+    "value": "Нет разрешения на точное местоположение"
+  },
+  "Show the node list in two columns when the window is at least 600 dp wide (tablets, landscape, split-screen).": {
+    "value": "Показывать список узлов в две колонки, когда ширина окна не меньше 600 dp (планшеты, альбомная ориентация, разделённый экран)."
+  },
+  "sleep": {
+    "value": "sleep"
+  },
+  "Two columns on wide screens": {
+    "value": "Две колонки на широком экране"
+  },
+  "up": {
+    "value": "up"
   },
   "Node \"%1$s\" was dropped: its relay \"%2$s\" is missing, unusable or loops. Connecting directly would have bypassed the relay.": {
     "value": "Узел «%1$s» отброшен: релей «%2$s» отсутствует, непригоден или зациклен. Прямое подключение прошло бы мимо релея."
@@ -3047,9 +3056,6 @@
   },
   "Node info copied": {
     "value": "Данные узла скопированы"
-  },
-  "Node section record dropped: %s": {
-    "value": "Запись секции узла отброшена: %s"
   },
   "Node — direct detour": {
     "value": "Узел — прямой detour"
@@ -3197,6 +3203,9 @@
   "Only single servers can be moved": {
     "value": "Переносить можно только одиночные серверы"
   },
+  "Only the node is saved. The rest of the input is not kept.": {
+    "value": "Сохранён только узел. Остальное содержимое не сохранено."
+  },
   "Open": {
     "value": "Открыть"
   },
@@ -3287,9 +3296,6 @@
   },
   "Paste a proxy URL": {
     "value": "Вставьте proxy-ссылку"
-  },
-  "Paste a sing-box config with dns/route or a document with \"sections\" on the JSON tab to attach the node's rules.": {
-    "value": "Чтобы приложить правила узла, вставьте на вкладке JSON конфиг sing-box с dns/route или документ с «sections»."
   },
   "Paste a sing-box outbound JSON": {
     "value": "Вставьте JSON исходящего канала sing-box"
@@ -3431,6 +3437,9 @@
   },
   "Preferences, ping options, auto-update, wifi history": {
     "value": "Предпочтения, параметры пинга, автообновление, история Wi-Fi"
+  },
+  "Press back again to exit": {
+    "value": "Нажмите «назад» ещё раз для выхода"
   },
   "Prefix": {
     "value": "Префикс"
@@ -3870,9 +3879,6 @@
   "Rules": {
     "value": "Правила"
   },
-  "Rules and DNS records this node carries": {
-    "value": "Правила и DNS-записи, которые узел носит с собой"
-  },
   "Rules changed. Refresh the subscription to apply them.": {
     "value": "Правила изменены. Обновите подписку, чтобы применить их."
   },
@@ -3960,14 +3966,6 @@
   "Saved to Downloads: %s (%d bytes)": {
     "value": "Сохранено в «Загрузки»: %s (%d байт)"
   },
-  "Saved · %d section records dropped": {
-    "value": {
-      "one": "Сохранено · %d запись секций отброшена",
-      "few": "Сохранено · %d записи секций отброшены",
-      "many": "Сохранено · %d записей секций отброшено",
-      "other": "Сохранено · %d записей секций отброшено"
-    }
-  },
   "Saved. Force-stop & reopen app to apply.": {
     "value": "Сохранено. Полностью закройте и снова откройте приложение, чтобы применить."
   },
@@ -3983,11 +3981,14 @@
   "Search domain / IP / app": {
     "value": "Поиск: домен / IP / приложение"
   },
-  "Sections": {
-    "value": "Секции"
+  "Skip presets": {
+    "value": "Пропускать пресеты"
   },
-  "Sections cleared": {
-    "value": "Секции очищены"
+  "Presets will not add routing or DNS rules for this node.": {
+    "value": "Пресеты не будут добавлять правила маршрутизации и DNS для этого узла."
+  },
+  "No matching nodes": {
+    "value": "Нет подходящих узлов"
   },
   "Select a %s file": {
     "value": "Выберите файл %s"
@@ -4149,9 +4150,6 @@
   "Shown as the server title in the Servers list. If empty, \"%s\" is used.": {
     "value": "Показывается как заголовок сервера в списке «Серверы». Если пусто, используется «%s»."
   },
-  "Shown in Routing and DNS with the node's tag": {
-    "value": "Показываются в Routing и DNS с тегом узла"
-  },
   "Single object or array of outbounds. WireGuard routes to endpoints[] automatically.": {
     "value": "Один объект или массив исходящих каналов. WireGuard автоматически направляется в endpoints[]."
   },
@@ -4225,6 +4223,9 @@
   "Start the VPN to probe this chain — its hops exist only in the running core.": {
     "value": "Включите VPN, чтобы замерить эту цепочку: её хопы существуют только в работающем ядре."
   },
+  "Start timed out after %1$d s (post-start did not finish, %2$d endpoints)": {
+    "value": "Start timed out after %1$d s (post-start did not finish, %2$d endpoints)"
+  },
   "State": {
     "value": "Состояние"
   },
@@ -4263,9 +4264,6 @@
   },
   "Stopping…": {
     "value": "Остановка…"
-  },
-  "Stored JSON": {
-    "value": "JSON как хранится"
   },
   "Stored locally only. Existing entries persist when you turn this off — remove individually in Pick saved (long-press chip → Remove).": {
     "value": "Хранится только на устройстве. При выключении записи не удаляются — убирайте их по одной в «Pick saved» (долгое нажатие на чип → Remove)."
@@ -4337,6 +4335,21 @@
   },
   "Suspend idle tunnels": {
     "value": "Усыплять неактивные туннели"
+  },
+  "Lazy tunnel build": {
+    "value": "Ленивая сборка туннелей"
+  },
+  "Build a WireGuard tunnel only on first use instead of at start. Saves memory with many nodes; the first connection to a node takes a moment longer.": {
+    "value": "Собирать туннель WireGuard при первом использовании, а не при запуске. Экономит память, когда узлов много; первое подключение к узлу чуть дольше."
+  },
+  "Built tunnels limit": {
+    "value": "Лимит собранных туннелей"
+  },
+  "Keep at most this many WireGuard tunnels built at once; the rest are torn down and rebuilt on demand. 0 = no limit.": {
+    "value": "Сколько туннелей WireGuard держать собранными одновременно; остальные разбираются и собираются заново по требованию. 0 — без ограничения."
+  },
+  "0 (no limit)": {
+    "value": "0 (без ограничения)"
   },
   "Switch": {
     "value": "Переключиться"
@@ -4502,14 +4515,11 @@
   "The current workspace cannot be deleted": {
     "value": "Текущее рабочее пространство удалить нельзя"
   },
+  "The document has no node to save.": {
+    "value": "В документе нет узла для сохранения."
+  },
   "The device is removed from the tailnet when it goes offline": {
     "value": "Устройство удаляется из tailnet, когда уходит в офлайн"
-  },
-  "The document carries both \"sections\" and \"dns\"/\"route\" — keep only one of them": {
-    "value": "Документ несёт и «sections», и «dns»/«route» — оставьте что-то одно"
-  },
-  "The document carries both \"sections\" and \"dns\"/\"route\": \"sections\" was taken, the rest was ignored.": {
-    "value": "Документ несёт и «sections», и «dns»/«route»: взяты «sections», остальное проигнорировано."
   },
   "The first position (%s) dials through its own detour — the real path is longer than shown: one more hop precedes it that is not in this list.": {
     "value": "Первая позиция (%s) ходит через свой detour — реальный путь длиннее показанного: перед ней есть ещё один хоп, которого нет в списке."
@@ -4519,9 +4529,6 @@
   },
   "The node's original text. Save writes it as is.": {
     "value": "Исходный текст узла. Save записывает его как есть."
-  },
-  "The node's rules and DNS records will be removed. The node itself stays.": {
-    "value": "Правила и DNS-записи узла будут удалены. Сам узел останется."
   },
   "The servers it selects from stay in the folder.": {
     "value": "Серверы, из которых он выбирает, останутся в папке."
@@ -4940,9 +4947,6 @@
   "XHTTP mode was set to \"packet-up\": the link asks for header uplink data placement, which the core accepts only in that mode (the config would otherwise fail to load).": {
     "value": "Режим XHTTP установлен в «packet-up»: ссылка требует передавать данные восходящего потока в заголовке, а ядро принимает это только в таком режиме (иначе конфиг не загрузился бы)."
   },
-  "XHTTP padding": {
-    "value": "набивка XHTTP"
-  },
   "Xray config": {
     "value": "Конфиг Xray"
   },
@@ -5069,9 +5073,6 @@
   "first matching node becomes default": {
     "value": "первый совпавший узел станет узлом по умолчанию"
   },
-  "from node %s": {
-    "value": "из узла %s"
-  },
   "group": {
     "value": "группа"
   },
@@ -5111,9 +5112,6 @@
   "matches only domains in the rule-set": {
     "value": "совпадает только с доменами из rule-set"
   },
-  "multiplex padding": {
-    "value": "набивка мультиплекса"
-  },
   "never": {
     "value": "никогда"
   },
@@ -5122,9 +5120,6 @@
   },
   "node": {
     "value": "узел"
-  },
-  "node is disabled": {
-    "value": "узел выключен"
   },
   "not found": {
     "value": "не найдено"
@@ -5199,6 +5194,12 @@
   },
   "single best server by latency": {
     "value": "один лучший сервер по задержке"
+  },
+  "Selected server": {
+    "value": "Выбранный сервер"
+  },
+  "you pick the server, no latency tests": {
+    "value": "сервер выбираете вы, без замеров задержки"
   },
   "slot %d": {
     "value": "слот %d"
@@ -5276,43 +5277,248 @@
   "✳ Resolve only%s": {
     "value": "✳ Только резолв%s"
   },
-  "Close interface": {
-    "value": "Закрытие интерфейса"
+  "off": {
+    "value": "off"
   },
-  "How the timer works": {
-    "value": "Как работает таймер"
+  "Turn on": {
+    "value": "Включить"
   },
-  "• The timer starts after leaving the app with the Back button or gesture.\n• When ‘Timer on minimize’ is enabled, it also starts when the app goes to the background.\n• Returning to the app before the countdown ends cancels the timer.\n• When the timer expires, the app closes completely.": {
-    "value": "• Таймер отсчитывается после выхода из приложения кнопкой или жестом «Назад».\n• При включённой настройке «Таймер при сворачивании» отсчёт также начинается, когда приложение уходит в фон.\n• Если вернуться в приложение до окончания отсчёта, таймер отменяется.\n• По окончании таймера приложение закрывается полностью."
+  "Turn off": {
+    "value": "Выключить"
   },
-  "Timer on minimize": {
-    "value": "Таймер при сворачивании"
+  "Node enabled": {
+    "value": "Узел включён"
   },
-  "Hours": {
-    "value": "Часы"
+  "Stays off until you turn it on or stop the VPN.": {
+    "value": "Остаётся выключенным, пока вы не включите его или не остановите VPN."
   },
-  "Minutes": {
-    "value": "Минуты"
+  "The running config has no node %s.": {
+    "value": "В работающем конфиге нет узла %s."
   },
-  "No timer": {
-    "value": "Без таймера"
+  "Only WireGuard and AmneziaWG nodes can be turned off.": {
+    "value": "Выключить можно только узлы WireGuard и AmneziaWG."
   },
-  "Enter hours from 0 to 99.": {
-    "value": "Введите часы от 0 до 99."
+  "VPN is not running or is restarting. Try again.": {
+    "value": "VPN не запущен или перезапускается. Повторите попытку."
   },
-  "Minutes must be from 0 to 59.": {
-    "value": "Минуты должны быть от 0 до 59."
+  "The node did not wake up. The next connection through it will retry.": {
+    "value": "Узел не проснулся. Следующее соединение через него попробует снова."
   },
-  "Set a time greater than 00:00.": {
-    "value": "Укажите время больше 00:00."
+  "Could not turn the node on.": {
+    "value": "Не удалось включить узел."
   },
-  "Keep interface on exit": {
-    "value": "Сохранять интерфейс при выходе"
+  "Could not turn the node off.": {
+    "value": "Не удалось выключить узел."
   },
-  "The Back button/gesture minimizes the app instead of closing its interface.": {
-    "value": "Кнопка/жест «Назад» сворачивает приложение вместо закрытия интерфейса."
+  "Replace with a group": {
+    "value": "Заменить группой"
   },
-  "Timer": {
-    "value": "Таймер"
+  "Directions and rules see one group instead of every server": {
+    "value": "Направления и правила видят одну группу вместо каждого сервера"
+  },
+  "Group name": {
+    "value": "Имя группы"
+  },
+  "Both": {
+    "value": "Оба"
+  },
+  "You pick the server in the group": {
+    "value": "Сервер в группе выбираете вы"
+  },
+  "The group picks a server by latency": {
+    "value": "Группа выбирает сервер по задержке"
+  },
+  "You pick the server; the first option picks by latency": {
+    "value": "Сервер выбираете вы; первый вариант выбирает по задержке"
+  },
+  "Other values, one per line": {
+    "value": "Свои значения, по одному на строку"
+  },
+  "Template: %d warnings": {
+    "value": {
+      "one": "Шаблон: %d предупреждение",
+      "few": "Шаблон: %d предупреждения",
+      "many": "Шаблон: %d предупреждений",
+      "other": "Шаблон: %d предупреждения"
+    }
+  },
+  "Could not select this server": {
+    "value": "Не удалось выбрать этот сервер"
+  },
+  "Replace groups": {
+    "value": "Группы замены"
+  },
+  "a folder or subscription replaced with one group": {
+    "value": "папка или подписка, заменённая одной группой"
+  },
+  "A server already has this name — it will get a numeric suffix.": {
+    "value": "Это имя уже носит сервер — ему добавится числовой суффикс."
+  },
+  "Another replace group already has this name.": {
+    "value": "Это имя уже носит другая группа замены."
+  },
+  "A direction already has this name.": {
+    "value": "Это имя уже носит Направление."
+  },
+  "Entry: %s": {
+    "value": "Запись: %s"
+  },
+  "%d entries will be skipped": {
+    "value": {
+      "one": "%d запись будет пропущена",
+      "few": "%d записи будут пропущены",
+      "many": "%d записей будут пропущены",
+      "other": "%d записи будут пропущены"
+    }
+  },
+  "The node is written by hand, so the app changed nothing in it.": {
+    "value": "Узел написан вручную, поэтому приложение ничего в нём не изменило."
+  },
+  "starting": {
+    "value": "запуск"
+  },
+  "running": {
+    "value": "работает"
+  },
+  "sign-in needed": {
+    "value": "нужен вход"
+  },
+  "stopped": {
+    "value": "остановлен"
+  },
+  "Start VPN to see the network.": {
+    "value": "Запустите VPN, чтобы увидеть сеть."
+  },
+  "The node is not in the running config.": {
+    "value": "Узла нет в работающем конфиге."
+  },
+  "Devices": {
+    "value": "Устройства"
+  },
+  "No devices": {
+    "value": "Устройств нет"
+  },
+  "Status": {
+    "value": "Состояние"
+  },
+  "signed in with a key": {
+    "value": "вход по ключу"
+  },
+  "Sign in": {
+    "value": "Войти"
+  },
+  "Log out": {
+    "value": "Выйти"
+  },
+  "Log out?": {
+    "value": "Выйти?"
+  },
+  "The node leaves the network. The node has a sign-in key, so it signs in again on the next start.": {
+    "value": "Узел выйдет из сети. В узле записан ключ входа, поэтому при следующем запуске он войдёт снова."
+  },
+  "The node leaves the network. To join again, sign in from this tab.": {
+    "value": "Узел выйдет из сети. Чтобы вернуться, войдите с этой вкладки."
+  },
+  "Failed: %s": {
+    "value": "Не удалось: %s"
+  },
+  "This device": {
+    "value": "Это устройство"
+  },
+  "MagicDNS name": {
+    "value": "Имя MagicDNS"
+  },
+  "Address": {
+    "value": "Адрес"
+  },
+  "Key expiry": {
+    "value": "Срок ключа"
+  },
+  "Exit node": {
+    "value": "Exit node"
+  },
+  "None": {
+    "value": "Нет"
+  },
+  "offline": {
+    "value": "не в сети"
+  },
+  "Save choice": {
+    "value": "Записать выбор"
+  },
+  "online": {
+    "value": "в сети"
+  },
+  "last seen %s": {
+    "value": "был в сети %s"
+  },
+  "key expired": {
+    "value": "ключ истёк"
+  },
+  "shared": {
+    "value": "общий"
+  },
+  "exit node": {
+    "value": "exit node"
+  },
+  "Copy name": {
+    "value": "Копировать имя"
+  },
+  "Copy address": {
+    "value": "Копировать адрес"
+  },
+  "No reply: %s": {
+    "value": "Нет ответа: %s"
+  },
+  "%s ms, direct": {
+    "value": "%s мс, напрямую"
+  },
+  "%s ms, direct, %s": {
+    "value": "%s мс, напрямую, %s"
+  },
+  "%s ms, relay": {
+    "value": "%s мс, через ретранслятор"
+  },
+  "%s ms, relay %s": {
+    "value": "%s мс, через ретранслятор %s"
+  },
+  "Network": {
+    "value": "Сеть"
+  },
+  "Not saved. Traffic is not routed through this node until you save the choice.": {
+    "value": "Не записано. Трафик не направляется в этот узел, пока выбор не записан."
+  },
+  "Not saved. The node stays in the lists, but has no exit until you save the choice.": {
+    "value": "Не записано. Узел остаётся в списках, но без выхода, пока выбор не записан."
+  },
+  "Not saved. The choice is lost after restart.": {
+    "value": "Не записано. После перезапуска выбор пропадёт."
+  },
+  "This node has no exit. Check devices on the Network tab.": {
+    "value": "У этого узла нет выхода. Проверяйте устройства на вкладке «Сеть»."
+  },
+  "DNS cache size": {
+    "value": "Размер кэша DNS"
+  },
+  "Number of cached answers.": {
+    "value": "Число ответов в кэше."
+  },
+  "Serve stale answers": {
+    "value": "Отдавать устаревшие ответы"
+  },
+  "Answer from cache at once and refresh in the background.": {
+    "value": "Сразу отвечать из кэша и обновлять запись в фоне."
+  },
+  "Keep DNS cache after restart": {
+    "value": "Сохранять кэш DNS после перезапуска"
+  },
+  "Unknown node type": {
+    "value": "Незнакомый тип узла"
+  },
+  "The app does not know this node type and does not check it. The node goes to the core as written.": {
+    "value": "Приложение не знает этот тип узла и не проверяет его. Узел уходит в ядро как написан."
+  },
+  "Comments were removed.": {
+    "value": "Комментарии убраны."
   }
 }

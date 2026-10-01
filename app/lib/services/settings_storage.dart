@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart' show visibleForTesting;
+import 'package:flutter/foundation.dart' show ValueNotifier, visibleForTesting;
 import 'package:path_provider/path_provider.dart';
 
 import '../models/background_mode.dart';
@@ -12,6 +12,7 @@ import '../models/codec/source_record.dart';
 import '../models/direction.dart';
 import '../models/dns_ref.dart';
 import '../models/source_chain.dart';
+import '../models/source_entry.dart';
 import '../models/memory_limit_setting.dart';
 import '../models/custom_rule.dart';
 import '../models/parser_config.dart';
@@ -21,6 +22,7 @@ import 'app_log.dart';
 import 'config_dirty_check.dart';
 import 'l10n/app_language_reconcile.dart';
 import 'record_vars.dart';
+import 'selectable_to_custom.dart';
 import 'settings_storage_keys.dart';
 import 'storage_migration/migrate_storage.dart';
 import 'subscription/http_cache.dart';
@@ -115,8 +117,11 @@ class SettingsStorage {
   /// из этих var через `setVar` → авто-dirty.
   static const _configVarKeys = <String>{
     'auto_detect_interface',
+    'dns_cache_capacity',
     'dns_default_domain_resolver',
     'dns_final',
+    'dns_optimistic',
+    'dns_store_cache',
     'dns_strategy',
     'log_level',
     'resolve_strategy',
@@ -148,8 +153,10 @@ class SettingsStorage {
     kDnsKey,
     'ping_options',
     'route_final',
-    'route_idle_suspend', // §215 — idle-suspend threshold (route.lx_idle_suspend)
-    'route_idle_suspend_reachable', // §272 — reachable idle window (route.lx_idle_suspend_reachable)
+    'route_idle_suspend', // §215 — idle-suspend threshold (lx.wg.idle_suspend)
+    'route_idle_suspend_reachable', // §272 — reachable idle window (lx.wg.idle_suspend_reachable)
+    'wg_build_max', // §542 — WG/AWG build budget (lx.wg.build_max)
+    'wg_lazy_build', // §542 — WG/AWG lazy build (lx.wg.lazy_build)
     'urltest_passive_check', // §272 — passive health check (urltest.passive_check)
     'enabled_groups', // §125 — DEPRECATED (читается только миграцией; safe-мусор)
     'directions', // §125/§393 — Направления роутинга (template→storage)
@@ -164,6 +171,7 @@ class SettingsStorage {
     //                   allowlist → терялся при restore (default-deny)
     'last_global_update',
     'presets_migrated', // §159 — переиспользуется как «дефолты засеяны» (seed guard)
+    'late_presets_seeded', // §578 — guard разового seed поздних дефолтных пресетов
     'interrupt_connections_on_switch',
     'node_sort_mode',
     'node_manual_order',
@@ -221,6 +229,7 @@ class SettingsStorage {
     'haptic_enabled', // §029 — НЕ в SharedPreferences (вопреки старому STORAGE.md)
     'notif_perm_prompted_v1', // §128 — promt уведомлений показан
     'allow_rotation', // §220 — снятие портретной фиксации
+    'node_list_two_columns', // §541 — две колонки списка узлов на широком окне
     'app_language', // §279 — язык приложения (system|en|ru); НЕ config-var
     'region', // §425 — регион использования (auto|none|<cc>); НЕ config-var
   };
@@ -293,21 +302,45 @@ class SettingsStorage {
   static Future<void> removeVar(String name) => _removeVar(name);
 
   // ---------------------------------------------------------------------------
-  // Источники — записи `sources[]` без цепочек (§439).
+  // §439/§524 — источники: ОДИН упорядоченный список всех родов
+  // (`subscription`/`server`/`folder`/`chain`) записями `sources[]`.
+  // Супертип — `models/source_entry.dart`.
   // ---------------------------------------------------------------------------
+
+  /// §524 — весь список источников в порядке `sources[]`: подписки, серверы,
+  /// папки и цепочки одним рядом. Нечитаемая запись едет [OpaqueEntry]'ем и
+  /// своего места не теряет.
+  static Future<List<SourceEntry>> getSourceEntries() => _getSourceEntries();
+
+  /// §524 — записать список источников ЦЕЛИКОМ, в порядке [entries].
+  /// ЕДИНСТВЕННЫЙ писатель массива: перестановка, удаление и toggle любого
+  /// рода — одна запись на операцию, сопоставлять слоты не нужно.
+  static Future<void> saveSourceEntries(List<SourceEntry> entries,
+          {bool flush = true}) =>
+      _saveSourceEntries(entries, flush: flush);
+
+  /// §524 — источники документа хранения [doc] (снимок [dumpCache], блок
+  /// `storage` бэкапа) тем же чтением, что [getSourceEntries].
+  static List<SourceEntry> sourceEntriesOf(
+    Map<String, dynamic> doc, {
+    void Function(Object error)? onCorrupt,
+  }) =>
+      _sourceEntriesOf(doc, onCorrupt: onCorrupt);
 
   static Future<List<ServerList>> getServerLists() => _getServerLists();
 
-  /// Переписывает источники-контейнеры; слоты цепочек в `sources[]`
-  /// сохраняются (§509).
+  /// Переписывает источники-контейнеры; места цепочек и нечитаемых записей в
+  /// `sources[]` сохраняются (§509/§524).
   static Future<void> saveServerLists(List<ServerList> lists) =>
       _saveServerLists(lists);
 
   /// Ключ записи подписки/сервера/папки в общем порядке `sources[]`.
-  static String sourceKeyForId(String id) => 'id:$id';
+  /// §524 — реализация в `models/source_entry.dart`; здесь делегат, чтобы
+  /// существующие вызовы не менялись.
+  static String sourceKeyForId(String id) => sourceKeyForIdOf(id);
 
   /// Ключ записи цепочки в общем порядке `sources[]`.
-  static String sourceKeyForChain(String tag) => 'chain:$tag';
+  static String sourceKeyForChain(String tag) => sourceKeyForChainOf(tag);
 
   /// Порядок `sources[]`: `id:<uuid>` и `chain:<tag>` в том виде, как
   /// лежит массив.
@@ -503,6 +536,12 @@ class SettingsStorage {
 
   static Future<void> markDefaultsSeeded() => _markDefaultsSeeded();
 
+  /// §578 — разовое добавление пресетов с `default: true`, появившихся в
+  /// шаблоне после первой установки ([kLateDefaultPresetIds]). `true` — список
+  /// правил изменился.
+  static Future<bool> seedLateDefaultPresets([WizardTemplate? template]) =>
+      _seedLateDefaultPresets(template);
+
   // ---------------------------------------------------------------------------
   // Route final outbound
   // ---------------------------------------------------------------------------
@@ -513,20 +552,34 @@ class SettingsStorage {
   static Future<void> saveRouteFinal(String outbound, {bool flush = true}) =>
       _saveRouteFinal(outbound, flush: flush);
 
-  // §215 — idle-suspend threshold (route.lx_idle_suspend, kernel SPEC 020)
+  // §215 — idle-suspend threshold (lx.wg.idle_suspend, kernel SPEC 020)
 
   static Future<String> getIdleSuspend() => _getIdleSuspend();
 
   static Future<void> saveIdleSuspend(String threshold, {bool flush = true}) =>
       _saveIdleSuspend(threshold, flush: flush);
 
-  // §272 — reachable idle window (route.lx_idle_suspend_reachable, SPEC 020)
+  // §272 — reachable idle window (lx.wg.idle_suspend_reachable, SPEC 020)
 
   static Future<String> getIdleSuspendReachable() => _getIdleSuspendReachable();
 
   static Future<void> saveIdleSuspendReachable(String threshold,
           {bool flush = true}) =>
       _saveIdleSuspendReachable(threshold, flush: flush);
+
+  // §542 — WG/AWG build budget (lx.wg.build_max, SPEC 097); 0 = no cap
+
+  static Future<int> getWgBuildMax() => _getWgBuildMax();
+
+  static Future<void> saveWgBuildMax(int value, {bool flush = true}) =>
+      _saveWgBuildMax(value, flush: flush);
+
+  // §542 — WG/AWG lazy build (lx.wg.lazy_build, SPEC 097); default true
+
+  static Future<bool> getWgLazyBuild() => _getWgLazyBuild();
+
+  static Future<void> saveWgLazyBuild(bool enabled, {bool flush = true}) =>
+      _saveWgLazyBuild(enabled, flush: flush);
 
   // §272 — passive health check (urltest.passive_check, SPEC 019)
 
@@ -738,6 +791,23 @@ class SettingsStorage {
 
   static Future<void> setAllowRotation(bool enabled) =>
       setVar('allow_rotation', enabled ? 'true' : 'false');
+
+  /// §541 — две колонки списка узлов при ширине ≥ 600 dp (§537). Default
+  /// true. Toggle в App Settings → Appearance → Node list. [nodeListTwoColumns]
+  /// — живое значение для списка на главном экране: смена применяется без
+  /// перезапуска; геттер синхронизирует его с хранилищем (старт, restore).
+  static final ValueNotifier<bool> nodeListTwoColumns = ValueNotifier<bool>(true);
+
+  static Future<bool> getNodeListTwoColumns() async {
+    final v = (await getVar('node_list_two_columns', 'true')) != 'false';
+    nodeListTwoColumns.value = v;
+    return v;
+  }
+
+  static Future<void> setNodeListTwoColumns(bool enabled) {
+    nodeListTwoColumns.value = enabled;
+    return setVar('node_list_two_columns', enabled ? 'true' : 'false');
+  }
 
   /// §279 — допустимые значения `app_language`. Неизвестное (hand-edited
   /// бэкап, будущие языки) → 'system'.

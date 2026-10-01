@@ -3,9 +3,9 @@ import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/models/tls_spec.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
-import 'package:lxbox/services/parser/uri_utils.dart';
 
 import '../parser/engine_test_setup.dart';
+import '../parser/parse_link_as.dart';
 
 void main() {
   // §480 W7 — `toUri()` этой схемы собирает ДВИЖОК по секции реестра, как и
@@ -101,14 +101,18 @@ void main() {
   });
 
   group('NaïveProxy toUri (spec 037 §5)', () {
-    test('omits :443 default port', () {
+    // §533 / контракт 1.1.53 (§49 п.12) — ПОРТ ПИШЕТСЯ ВСЕГДА. Оверлей
+    // `emit.omit_port: 443` снят: реестр порт пишет, и у лаунчера `hostPort`
+    // писал его всегда. Ссылка БЕЗ порта по-прежнему читается — дефолт
+    // разбора 443 объявлен секцией (кейсы round-trip ниже это держат).
+    test('пишет :443 — порт больше не опускается', () {
       final s = NaiveSpec(
         id: 'id', tag: 't', label: 't',
         server: 'h.example.com', port: 443, rawSource: '',
         username: 'u', password: 'p',
         tls: const TlsSpec(enabled: true, serverName: 'h.example.com'),
       );
-      expect(s.toUri(), 'naive+https://u:p@h.example.com#t');
+      expect(s.toUri(), 'naive+https://u:p@h.example.com:443#t');
     });
 
     test('keeps non-default port', () {
@@ -131,7 +135,7 @@ void main() {
         username: 'u',
         tls: const TlsSpec(enabled: true, serverName: 'h'),
       );
-      expect(s.toUri(), 'naive+https://u:@h#t');
+      expect(s.toUri(), 'naive+https://u:@h:443#t');
     });
 
     test('anonymous → no userinfo in URI', () {
@@ -140,7 +144,7 @@ void main() {
         server: 'h', port: 443, rawSource: '',
         tls: const TlsSpec(enabled: true, serverName: 'h'),
       );
-      expect(s.toUri(), 'naive+https://h#t');
+      expect(s.toUri(), 'naive+https://h:443#t');
     });
 
     test('serializes extra-headers sorted, CRLF-encoded', () {
@@ -183,19 +187,11 @@ void main() {
       expect(uri.contains('X%20Bad'), false, reason: uri);
     });
 
-    test('isValidNaiveHeaderName charset', () {
-      expect(isValidNaiveHeaderName('X-Foo'), true);
-      expect(isValidNaiveHeaderName('X_Foo'), true);
-      expect(isValidNaiveHeaderName('Content-Type'), true);
-      expect(isValidNaiveHeaderName('X Foo'), false); // space
-      expect(isValidNaiveHeaderName('X:Foo'), false); // colon
-      expect(isValidNaiveHeaderName(''), false);
-    });
   });
 
   group('NaïveProxy round-trip', () {
     test('parseUri(toUri()) preserves user, pass, host, port, label', () {
-      final original = parseNaive(
+      final original = parseLinkAs<NaiveSpec>(
         'naive+https://user:pass@server.example.com:8443?#JP-01',
       )!;
       final s2 = parseUri(original.toUri()) as NaiveSpec;
@@ -210,7 +206,7 @@ void main() {
     // `parseUri(toUri(spec)) ≈ spec`. Раньше форма «только пароль» после
     // своего же эмита возвращалась именем пользователя.
     test('round-trip preserves password-only auth (no colon)', () {
-      final original = parseNaive('naive+https://onlypass@host.example.com')!;
+      final original = parseLinkAs<NaiveSpec>('naive+https://onlypass@host.example.com')!;
       expect(original.username, '');
       expect(original.password, 'onlypass');
       final s2 = parseUri(original.toUri()) as NaiveSpec;
@@ -219,24 +215,26 @@ void main() {
     });
 
     test('round-trip preserves username-only auth (user:)', () {
-      final original = parseNaive('naive+https://onlyuser:@host.example.com')!;
+      final original = parseLinkAs<NaiveSpec>('naive+https://onlyuser:@host.example.com')!;
       expect(original.username, 'onlyuser');
       expect(original.password, '');
-      expect(original.toUri(), 'naive+https://onlyuser:@host.example.com');
+      // Вход БЕЗ порта, выход С портом (§49 п.12): дефолт разбора 443
+      // подставляется секцией, и круг сходится по ТЕЛУ, а не по строке.
+      expect(original.toUri(), 'naive+https://onlyuser:@host.example.com:443');
       final s2 = parseUri(original.toUri()) as NaiveSpec;
       expect(s2.username, 'onlyuser');
       expect(s2.password, '');
     });
 
     test('round-trip preserves user+pass', () {
-      final original = parseNaive('naive+https://u:p@host.example.com')!;
+      final original = parseLinkAs<NaiveSpec>('naive+https://u:p@host.example.com')!;
       final s2 = parseUri(original.toUri()) as NaiveSpec;
       expect(s2.username, 'u');
       expect(s2.password, 'p');
     });
 
     test('round-trip preserves extra-headers (sorted)', () {
-      final original = parseNaive(
+      final original = parseLinkAs<NaiveSpec>(
         'naive+https://u:p@host?extra-headers=B-Two%3A%202%0D%0AA-One%3A%201',
       )!;
       final s2 = parseUri(original.toUri()) as NaiveSpec;
@@ -244,7 +242,7 @@ void main() {
     });
 
     test('round-trip drops padding (by design)', () {
-      final original = parseNaive(
+      final original = parseLinkAs<NaiveSpec>(
         'naive+https://u:p@host:443?padding=true#X',
       )!;
       // toUri() не пишет padding обратно; повторный парсинг — тоже без padding.
@@ -252,7 +250,7 @@ void main() {
     });
 
     test('toUri stable on second round', () {
-      final s = parseNaive(
+      final s = parseLinkAs<NaiveSpec>(
         'naive+https://u:p@host:8443?extra-headers=A%3A1%0D%0AB%3A2#L',
       )!;
       final once = s.toUri();

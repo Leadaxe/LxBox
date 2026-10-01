@@ -148,7 +148,7 @@
   `serviceName`, заметки Hysteria2.
 - `CHANGELOG.md` → Unreleased: Changed (синк W2d, полоса hysteria2, gRPC),
   Fixed (мусорный `pbk`, gecko-размеры).
-- `docs/spec/features/460 contract-registry-bundle/spec.md` → раздел 7:
+- `docs/spec/tasks/460F-contract-registry-bundle/spec.md` → раздел 7:
   таблица выражений реестра с файлом и строкой.
 
 ## Коммиты

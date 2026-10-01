@@ -56,6 +56,13 @@ class HomeController extends ChangeNotifier
   StreamSubscription<CcStatus>? _ccStatusSub;
   StreamSubscription<List<CcGroup>>? _ccGroupsSub;
 
+  /// Задача 579 — подписка на состояние узлов Tailscale (NETWORKS). Dart-слушатель
+  /// ставится один раз при первой надобности; подписку ядра держит
+  /// [_syncTailnetStatus]. [_tailnetKey] — состав узлов и снапшот конфига ядра,
+  /// под которые она поднята; `null` — подписки нет.
+  StreamSubscription<List<CcTailscaleStatus>>? _tailnetSub;
+  String? _tailnetKey;
+
   /// §193 — resyncForReopen (§185 cold-start) делаем ОДИН раз за жизнь движка.
   /// На реконнектах refcount валиден (тот же движок) → resync только рвал бы
   /// connections-доставку (single-shot, без pull). false на свежем движке.
@@ -316,6 +323,8 @@ class HomeController extends ChangeNotifier
     _ccStatusSub?.cancel();
     _ccGroupsSub?.cancel();
     _groupsPullTimer?.cancel();
+    _tailnetSub?.cancel();
+    if (_tailnetKey != null) unawaited(_cc.releaseTailscaleStatus());
     super.dispose();
   }
 
@@ -333,6 +342,60 @@ class HomeController extends ChangeNotifier
     if (_disposed) return;
     _state = next;
     notifyListeners();
+    _syncTailnetStatus();
+  }
+
+  /// Задача 579 — подписка ядра `SubscribeTailscaleStatus` живёт, пока VPN
+  /// включён и в конфиге есть узел NETWORKS. Смена состава узлов или снапшота
+  /// конфига ядра (перезагрузка) переподнимает её: после reload ядра прежний
+  /// стрим может закончиться молча.
+  void _syncTailnetStatus() {
+    final s = _state;
+    final nodes = s.tunnelUp ? s.networksNodes : const <String>[];
+    final key = nodes.isEmpty
+        ? null
+        : '${nodes.join('\n')}|${s.runningConfigRaw?.hashCode}';
+    if (key == _tailnetKey) return;
+    final wasActive = _tailnetKey != null;
+    _tailnetKey = key;
+    if (key == null) {
+      // §581 — подписку держат и вкладки Network: снимается по счётчику.
+      unawaited(_cc.releaseTailscaleStatus());
+      if (s.tailscaleStatus.isNotEmpty) {
+        _emit(s.copyWith(tailscaleStatus: const <String, CcTailscaleStatus>{}));
+      }
+      return;
+    }
+    // §122 — Dart-слушатель ДО старта подписки: иначе первый снапшот ядра
+    // придёт при пустом native sink и потеряется.
+    _tailnetSub ??= _cc.tailscaleStatus.listen((list) {
+      if (_tailnetKey == null) return;
+      // §581 — поток несёт и устройства сети; главному экрану нужны состояние
+      // узла и число устройств (Debug API), перерисовка — только при их смене.
+      final prev = _state.tailscaleStatus;
+      final same = prev.length == list.length &&
+          list.every((e) =>
+              prev[e.tag]?.backendState == e.backendState &&
+              prev[e.tag]?.stateText == e.stateText &&
+              prev[e.tag]?.peers.length == e.peers.length);
+      if (same) return;
+      _emit(_state.copyWith(tailscaleStatus: {for (final e in list) e.tag: e}));
+    }, onError: (Object e) {
+      _addDebug(DebugSource.app, 'cc tailscale stream error: $e');
+    });
+    if (wasActive) {
+      _addDebug(DebugSource.app, 'Tailscale status: resubscribe');
+      unawaited(_cc.restartTailscaleStatus());
+    } else {
+      unawaited(_cc.acquireTailscaleStatus());
+    }
+  }
+
+  /// Задача 579 — показать псевдо-направление NETWORKS. Выбранное настоящее
+  /// направление и выход трафика не меняются.
+  void openNetworks() {
+    if (_state.networksOpen) return;
+    _emit(_state.copyWith(networksOpen: true));
   }
 
   @override
@@ -492,7 +555,7 @@ class HomeController extends ChangeNotifier
       final reasonEn = stopReason?.renderEn() ?? '';
       // Фича 478 — отказ ядра: отдать его текст ждущей страховке. Берём
       // ДОСЛОВНЫЙ текст native-события, а не отрендеренную строку: разбор
-      // CANON §9 работает по формату ядра, а не по обёртке приложения.
+      // PARSING_PRINCIPLES §9 работает по формату ядра, а не по обёртке приложения.
       //
       // Д-1 — сначала `coreError`: это сырой `t.message` ядра, без единой
       // обёртки. `errorReason` рядом с ним — локализованный шаблон
@@ -501,6 +564,8 @@ class HomeController extends ChangeNotifier
       // этого поля: разбор грамматику §9 находит в нём по вхождению, а не с
       // начала строки.
       _settleStartOutcome(event.coreError ?? event.errorReason ?? '');
+      // §557 — VPN опущен: выключатели узлов живут только в сеансе (А1).
+      _disabledEndpoints.clear();
       _emit(
         _state.copyWith(
           tunnel: tunnel,
@@ -525,6 +590,9 @@ class HomeController extends ChangeNotifier
           connectedSince: null,
           configChangedNeedRestart: false,
           runningConfigRaw: _invalidateRunningConfig(), // §311 — running перестал существовать
+          // §557 — без ядра состояний узлов нет; «off» не должен пережить сеанс.
+          endpointStates: const <String, String>{},
+          endpointIdleSince: const <String, int>{},
         ),
       );
       // Haptic — на революд/краш тяжёлый, на user-инициированный stop лёгкий.
@@ -569,15 +637,79 @@ class HomeController extends ChangeNotifier
     _transientTimeoutTimer = null;
   }
 
+  /// §519 — надбавка к порогу `connecting` за КАЖДЫЙ wireguard/AWG-endpoint в
+  /// конфиге. Пост-старт ядра стартует endpoint'ы СТРОГО ПОСЛЕДОВАТЕЛЬНО
+  /// (`adapter/endpoint/manager.go` — цикл `for _, endpoint := range
+  /// m.endpoints` под `m.access`), и стоимость одного на устройстве — 6.8–9.3с
+  /// (замер на эмуляторе, demo 24.09.2026: `post-start endpoint/wireguard[…]
+  /// completed (6.84s)`, суммарно `post-start manager completed (21.48s)`).
+  /// Фиксированный порог 15с поэтому упирался НЕ в зависон, а в арифметику:
+  /// живой старт с двумя endpoint'ами его уже не проходил.
+  ///
+  /// 10с — верхняя граница замера с запасом на телефон под нагрузкой. Порог
+  /// РАСТЁТ линейно с N, потому что линейна и сама работа ядра.
+  static const _connectingTimeoutPerEndpoint = Duration(seconds: 10);
+
+  /// §519 — жёсткий потолок для `connecting`, чтобы конфиг на сотню
+  /// endpoint'ов не превратил safety-timer в «никогда». 4 мин — тот порядок,
+  /// на котором демо поднималось стабильно через Debug-override (240000мс).
+  static const _connectingTimeoutCap = Duration(minutes: 4);
+
+  /// §519 — сколько wireguard/AWG-endpoint'ов ядру придётся поднять на этом
+  /// старте. Считаем по сохранённому конфигу (`kind == 'endpoint'`): это ровно
+  /// та секция, которую перебирает endpoint-manager ядра. Прочие протоколы
+  /// (vless/hysteria2/…) живут в `outbounds` и в пост-старте не блокируют.
+  int get _configEndpointCount =>
+      _state.configModel.nodes.where((n) => n.kind == 'endpoint').length;
+
+  /// §519 — порог для фазы `connecting`: база (защита от «ядро молчит») плюс
+  /// надбавка за каждый endpoint, но не выше потолка. Debug-override
+  /// (`set-transient-timeout`) СОХРАНЯЕТ приоритет и отменяет масштабирование:
+  /// он задаёт точное значение для on-device теста force-stop'а (§140).
+  Duration get _effectiveConnectingTimeout {
+    if (_connectingTimeout != _defaultConnectingTimeout) {
+      return _connectingTimeout; // §140 — debug-override берём дословно
+    }
+    final scaled = _connectingTimeout +
+        _connectingTimeoutPerEndpoint * _configEndpointCount;
+    return scaled > _connectingTimeoutCap ? _connectingTimeoutCap : scaled;
+  }
+
+  /// §519 — visible for testing / Debug API: действующий порог `connecting` в мс
+  /// вместе с числом endpoint'ов, из которого он выведен.
+  ({int connectingMs, int endpoints}) get debugEffectiveConnectingTimeout => (
+        connectingMs: _effectiveConnectingTimeout.inMilliseconds,
+        endpoints: _configEndpointCount,
+      );
+
+  /// §519 — visible for testing: положить `configRaw` в state напрямую, минуя
+  /// `saveParsedConfig` (тот идёт через native `saveConfig` и парс в изоляте —
+  /// в unit-тесте это стенд, а не предмет проверки). Порог `connecting`
+  /// выводится ровно из этого поля, поэтому тесту нужен именно он.
+  @visibleForTesting
+  void debugSetConfigRaw(String raw) =>
+      _emit(_state.copyWith(configRaw: raw));
+
   /// Перезапускает safety-timer на transient-фазу. Cancel'ит предыдущий
   /// (защита от спама `Future.delayed` при множественных stopping/
   /// connecting подряд) и стартует новый. §140 — порог зависит от фазы:
   /// `connecting` (медленный старт) — длиннее, `stopping` (реальный зависон) — 3с (§287).
+  /// §519 — порог `connecting` ещё и масштабируется числом endpoint'ов.
   void _armTransientTimeout(TunnelStatus expected) {
     _transientTimeoutTimer?.cancel();
     final timeout = expected == TunnelStatus.connecting
-        ? _connectingTimeout
+        ? _effectiveConnectingTimeout
         : _stoppingTimeout;
+    // §519 — снимок числа endpoint'ов на момент постановки: конфиг может быть
+    // перезаписан за время ожидания, а причина должна называть то N, из
+    // которого выведен ИМЕННО этот порог.
+    final endpointsAtArm = _configEndpointCount;
+    if (expected == TunnelStatus.connecting) {
+      _addDebug(
+          DebugSource.app,
+          '[vpn] connecting timeout armed: ${timeout.inMilliseconds}ms '
+          '(endpoints=$endpointsAtArm)');
+    }
     _transientTimeoutTimer = Timer(timeout, () async {
       if (_state.tunnel != expected) return;
       _addDebug(
@@ -596,9 +728,32 @@ class HomeController extends ChangeNotifier
       // §251 — синтезированный tunnel-down: настоящий Stopped потом проглотит
       // stale-terminal guard, его clearSelected недостижим — чистим здесь.
       SelectorInfo.I.clearSelected();
+      // §519 — таймаут ОБЯЗАН оставить причину. Раньше писался только
+      // `lastError` (UI-строка, живёт до первого `clearError`), а
+      // `lastStartError`/`stopReason` оставались пустыми: снаружи остановка
+      // выглядела «молча не соединяется» при пустых `last_error`/
+      // `last_start_error` и `core_reject: idle`. Для `connecting` причина
+      // типизированная (`StopStartTimeout` — порог и число endpoint'ов в
+      // тексте); для `stopping` оставляем прежний `connectionTimedOut`:
+      // там причина «ядро не отдало Stopped», а не арифметика пост-старта.
+      final timedOutStart = expected == TunnelStatus.connecting;
+      final reason = timedOutStart
+          ? StopStartTimeout(
+              seconds: timeout.inSeconds, endpoints: endpointsAtArm)
+          : null;
+      if (reason != null) {
+        _addDebug(DebugSource.app, reason.renderEn());
+      }
+      _disabledEndpoints.clear(); // §557 — сеанс VPN кончился (А1)
       _emit(_state.copyWith(
         tunnel: TunnelStatus.disconnected,
-        lastError: const ErrMsg(ErrKey.connectionTimedOut),
+        lastError: reason != null
+            ? StopReasonMsg(reason)
+            : const ErrMsg(ErrKey.connectionTimedOut),
+        stopReason: reason ?? _state.stopReason,
+        // §250 — машинный дубль для Debug API/дампа: всегда English.
+        lastStartError: reason?.renderEn() ?? _state.lastStartError,
+        lastStartErrorAt: reason != null ? DateTime.now() : _state.lastStartErrorAt,
         ccGroups: const <CcGroup>[],
         groups: <String>[],
         nodes: <String>[],
@@ -606,7 +761,13 @@ class HomeController extends ChangeNotifier
         connectedSince: null,
         configChangedNeedRestart: false,
         runningConfigRaw: _invalidateRunningConfig(), // §311 — синтезированный down
+        // §557 — без ядра состояний узлов нет; «off» не должен пережить сеанс.
+        endpointStates: const <String, String>{},
+        endpointIdleSince: const <String, int>{},
       ));
+      // Фича 478 — страховка ждёт вердикта старта; таймаут — тоже вердикт.
+      // Без этого completer висел до своих 45с, а узел не выключался.
+      if (timedOutStart) _settleStartOutcome(reason!.renderEn());
     });
   }
 
@@ -711,7 +872,7 @@ class HomeController extends ChangeNotifier
   }
 
   /// Фича 478 — реальный старт ядра с ожиданием вердикта. `null` — принято;
-  /// строка — текст отказа ядра (её разбирает CANON §9). Таймаут отдаёт
+  /// строка — текст отказа ядра (её разбирает PARSING_PRINCIPLES §9). Таймаут отдаёт
   /// пустую строку: ответить нечем, страховка деградирует консервативно.
   Future<String?> startAndAwaitVerdict({
     Duration timeout = const Duration(seconds: 45),
@@ -1115,6 +1276,7 @@ class HomeController extends ChangeNotifier
           _emit(_state.copyWith(runningConfigRaw: raw));
           _addDebug(DebugSource.app,
               '[cc] running config captured (${raw.length} bytes)');
+          _reapplyDisabledEndpoints(); // §557 — новый box стартовал
           return;
         }
         // null = ядро ещё не STARTED; == staleRaw = box ещё не подменён.
@@ -1131,6 +1293,7 @@ class HomeController extends ChangeNotifier
         _emit(_state.copyWith(runningConfigRaw: echoedRaw));
         _addDebug(DebugSource.app,
             '[cc] running config unchanged after reload (${echoedRaw.length} bytes)');
+        _reapplyDisabledEndpoints(); // §557 — новый box стартовал
       } else if (!_disposed) {
         _addDebug(DebugSource.app,
             '[cc] running config unavailable after $_groupsPullMaxAttempts attempts');
@@ -1176,6 +1339,124 @@ class HomeController extends ChangeNotifier
           '[cc] getGroups pull → ${groups.length} groups');
       _applyGroups(groups);
     });
+  }
+
+  /// §535 (ядро SPEC 097) — снять состояния WG/AWG-endpoint'ов unary-pull'ом.
+  ///
+  /// Единственный путь: `endpointState`/`idleSinceSeconds` ядро заполняет
+  /// только в ответе `GetOutbounds`; поток `outbounds` и дерево групп их не
+  /// несут. Зовётся с heartbeat-тика (5 с) при живом туннеле.
+  ///
+  /// no-throw и не трогает state зря: `null` (ядро не-STARTED / нет клиента)
+  /// оставляет прошлую карту — «неизвестно» не должно стирать показанное.
+  /// Узлы без состояния (не endpoint'ы) в карту не кладём.
+  @override
+  Future<void> _refreshEndpointStates() async {
+    final list = await _cc.getOutbounds();
+    if (_disposed || !_state.tunnelUp) return; // §219 — ушли за await
+    if (list == null) return; // недоступно — прошлую карту не трогаем
+    final next = <String, String>{};
+    final idle = <String, int>{};
+    for (final o in list) {
+      if (o.endpointState.isEmpty) continue;
+      next[o.tag] = o.endpointState;
+      // §540 — простой нужен только спящим (свойства узла: «idle for N s»).
+      if (o.endpointState == CcEndpointState.asleep) {
+        idle[o.tag] = o.idleSinceSeconds;
+      }
+    }
+    // §557 — страховка решения А1: ядро не хранит выключатель, и узел из
+    // множества, который ядро видит включённым, значит, что старт/reload
+    // прошёл мимо переприменения. Гасим его снова с этого же тика.
+    final drifted = [
+      for (final t in _disabledEndpoints)
+        if (next[t] != null && next[t] != CcEndpointState.disabled) t,
+    ];
+    if (drifted.isNotEmpty) unawaited(_disableEndpoints(drifted));
+    // Ровно те же карты — не будим UI лишним emit'ом (тик идёт каждые 5 с).
+    final prev = _state.endpointStates;
+    final prevIdle = _state.endpointIdleSince;
+    if (next.length == prev.length &&
+        next.entries.every((e) => prev[e.key] == e.value) &&
+        idle.length == prevIdle.length &&
+        idle.entries.every((e) => prevIdle[e.key] == e.value)) {
+      return;
+    }
+    _emit(_state.copyWith(endpointStates: next, endpointIdleSince: idle));
+  }
+
+  /// §557 (ядро SPEC 106) — теги WG/AWG-узлов, выключенных пользователем в
+  /// этом сеансе VPN. Ядро выключатель не хранит (reload/apply стартует все
+  /// узлы включёнными), поэтому множество переприменяется после каждого
+  /// старта ядра в сеансе и сбрасывается, когда туннель опускается (решение А1).
+  final Set<String> _disabledEndpoints = <String>{};
+
+  /// §557 — выключить/включить WG/AWG-узел на лету. `null` — успех, иначе
+  /// код отказа (`not_found` / `invalid_argument` / `failed_precondition` /
+  /// `unavailable` / `error`); текст для юзера строит UI. Узел, выбранный
+  /// сейчас в selector, выключать можно: трафик через него просто встанет,
+  /// как у мёртвого узла (решение Б1).
+  Future<String?> setEndpointEnabled(String tag, bool enabled) async {
+    if (!_state.tunnelUp) return 'failed_precondition';
+    // Включение убирает тег из множества ДО вызова: тик heartbeat'а между
+    // вызовом и ответом не должен погасить узел обратно.
+    if (enabled) _disabledEndpoints.remove(tag);
+    final String st;
+    try {
+      st = await _cc.setEndpointEnabled(tag, enabled);
+    } on PlatformException catch (e) {
+      if (enabled && e.code != 'not_found') _disabledEndpoints.add(tag);
+      _addDebug(DebugSource.app,
+          '[cc] setEndpointEnabled($tag, $enabled) → ${e.code}: ${e.message}');
+      return e.code;
+    } on MissingPluginException {
+      if (enabled) _disabledEndpoints.add(tag);
+      return 'error';
+    }
+    if (_disposed) return null;
+    if (!enabled) _disabledEndpoints.add(tag);
+    _addDebug(DebugSource.app, '[cc] setEndpointEnabled($tag, $enabled) → $st');
+    _patchEndpointState(tag, st);
+    return null;
+  }
+
+  /// §557 — состояние из ответа выключателя сразу в карту, не дожидаясь тика.
+  void _patchEndpointState(String tag, String st) {
+    if (st.isEmpty || !_state.tunnelUp) return;
+    final next = Map<String, String>.of(_state.endpointStates)..[tag] = st;
+    final idle = Map<String, int>.of(_state.endpointIdleSince);
+    if (st != CcEndpointState.asleep) idle.remove(tag);
+    _emit(_state.copyWith(endpointStates: next, endpointIdleSince: idle));
+  }
+
+  /// §557 — переприменить множество выключенных после старта/reload'а ядра.
+  /// Зовётся по факту захвата снапшота новой сессии (§311), то есть когда
+  /// новый box уже STARTED. Тег, которого в конфиге больше нет (или он
+  /// перестал быть WG/AWG), выкидывается молча.
+  void _reapplyDisabledEndpoints() {
+    if (_disabledEndpoints.isEmpty) return;
+    unawaited(_disableEndpoints(_disabledEndpoints.toList()));
+  }
+
+  Future<void> _disableEndpoints(List<String> tags) async {
+    final epoch = _runningConfigEpoch;
+    for (final tag in tags) {
+      if (_disposed || !_state.tunnelUp || epoch != _runningConfigEpoch) return;
+      if (!_disabledEndpoints.contains(tag)) continue; // успели включить
+      try {
+        final st = await _cc.setEndpointEnabled(tag, false);
+        if (_disposed || !_disabledEndpoints.contains(tag)) continue;
+        _patchEndpointState(tag, st);
+      } on PlatformException catch (e) {
+        if (e.code == 'not_found' || e.code == 'invalid_argument') {
+          _disabledEndpoints.remove(tag);
+        }
+        _addDebug(DebugSource.app,
+            '[cc] re-disable $tag → ${e.code}: ${e.message}');
+      } on MissingPluginException {
+        return;
+      }
+    }
   }
 
   /// Отменить подписки + опустить `screenClient`. Зовётся на disconnect/dead.
@@ -1441,6 +1722,35 @@ class HomeController extends ChangeNotifier
     await _pushNotificationLabels();
   }
 
+  /// §565 / задача 570 — наблюдатель выбора члена selector-группы (главный
+  /// экран и экран узла): Home передаёт его в `SubscriptionController`,
+  /// который запоминает выбор у своей группы (папки или подписки), чтобы он
+  /// пережил перезапуск. Зовётся только после принятого ядром выбора.
+  void Function(String group, String node)? onMemberSelected;
+
+  /// §565 / задача 570 — выбрать члена [nodeTag] в selector-группе [group]
+  /// вживую, не делая её выбранной группой главного экрана (экран узла).
+  /// `false` — туннеля нет или ядро выбор отвергло.
+  Future<bool> selectInGroup(String group, String nodeTag) async {
+    if (group == _state.selectedGroup) {
+      await switchNode(nodeTag);
+      return _state.activeInGroup == nodeTag;
+    }
+    if (!_state.tunnelUp) return false;
+    try {
+      final ok = await _cc.selectOutbound(group, nodeTag);
+      if (!ok) return false;
+      final fresh = await _cc.getGroups();
+      if (fresh != null) _applyGroups(fresh);
+      _addDebug(DebugSource.app, 'Node selected in $group: $nodeTag');
+      onMemberSelected?.call(group, nodeTag);
+      return true;
+    } catch (e) {
+      _addDebug(DebugSource.app, 'Node switch error: $e');
+      return false;
+    }
+  }
+
   Future<void> switchNode(String nodeTag) async {
     final group = _state.selectedGroup;
     if (group == null || !_state.tunnelUp) return;
@@ -1495,6 +1805,7 @@ class HomeController extends ChangeNotifier
         _emit(_state.copyWith(activeInGroup: nodeTag));
       }
       _addDebug(DebugSource.app, 'Node selected: $nodeTag');
+      onMemberSelected?.call(group, nodeTag);
       // §047 — outgoing state event (gated, default OFF). reason=user: явный
       // выбор ноды (через UI или automation SWITCH_NODE — оба идут сюда).
       AutomationEventEmitter.I
@@ -1546,9 +1857,11 @@ class HomeController extends ChangeNotifier
   void setSelectedGroup(String? group) {
     final prevGroup = _state.selectedGroup;
     // §070: bump cache gen — group switch = новый pool, sort заново.
+    // Задача 579 — выбор настоящего направления уводит с NETWORKS.
     _emit(_state.copyWith(
       selectedGroup: group,
       pingBatchGen: _state.pingBatchGen + 1,
+      networksOpen: false,
     ));
     // §047 — outgoing state event (gated, default OFF). Эмитим только на
     // реальную смену группы (не повторный select той же).

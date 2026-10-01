@@ -1,13 +1,12 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lxbox/models/node_sections.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/lx_backup.dart';
 
-/// §435 / контракт ## 13 — `servers[].sections` в бэкапе 0.12: объявлено
-/// схемой (сторона launcher) → игнорируется МОЛЧА. §438 — экспорт 1.0 пишет
-/// секции узла как есть.
+/// §435 — `servers[].sections` в бэкапе 0.12 игнорируется МОЛЧА. §575
+/// (контракт 1.1.85) — секции узла упразднены: экспорт 1.0 их не пишет ни у
+/// одной записи, импорт снимает с `backup_section_record_dropped`.
 void main() {
   group('§435 импорт 0.12 с sections', () {
     test('sections у servers[] не даёт backup_unknown_field, узел читается', () {
@@ -35,59 +34,62 @@ void main() {
     });
   });
 
-  group('§438 экспорт 1.0 с sections', () {
-    UserServer user({NodeSections? sections}) => UserServer(
-          id: 'u1',
-          name: 'home-ts',
-          enabled: true,
-          tagPrefix: '',
-          detourPolicy: DetourPolicy.defaults,
-          origin: UserSource.manual,
-          rawBody: '{"type":"tailscale","tag":"home-ts","auth_key":"k"}',
-          sections: sections,
-        );
-
-    final sections = NodeSections.fromJson({
-      'rules': [
-        {'kind': 'inline', 'name': '@{self} network', 'body': {'ip_cidr': ['100.64.0.0/10'], 'outbound': '@self'}},
-      ],
-    });
-
-    List<Map<String, dynamic>> sourcesOf(String raw) =>
-        ((jsonDecode(raw) as Map)['sources'] as List).cast<Map<String, dynamic>>();
-
-    test('узел с секциями: поле пишется как есть, потерь нет', () async {
-      final out = await buildLxBackup(lists: [user(sections: sections)], rules: const [], vars: const {});
-      final server = sourcesOf(out.json).single;
-      expect(server['tag'], 'home-ts');
-      expect(server['sections'], sections!.toJson());
-      expect(out.warnings, isEmpty);
-    });
-
-    test('узел без секций — поля нет', () async {
-      final out = await buildLxBackup(lists: [user()], rules: const [], vars: const {});
-      expect(sourcesOf(out.json).single.containsKey('sections'), isFalse);
-      expect(out.warnings, isEmpty);
-    });
-
-    test('члены папки носят свои секции внутри nodes[]', () async {
-      final folder = FolderServers(
-        id: 'f',
-        name: 'F',
+  group('§575 экспорт 1.0: секции не пишутся', () {
+    // §575 — поля `sections` у модели больше нет (ни у `UserServer`, ни у
+    // `FolderMember`): экспорт не может его написать по построению. Тест
+    // сведён к одной проверке — ключа `sections` в записи нет.
+    test('запись сервера не содержит ключа sections', () async {
+      final user = UserServer(
+        id: 'u1',
+        name: 'home-ts',
         enabled: true,
         tagPrefix: '',
         detourPolicy: DetourPolicy.defaults,
-        members: [
-          FolderMember(raw: '{"type":"tailscale","tag":"a","auth_key":"k"}', sections: sections),
-          FolderMember(raw: '{"type":"tailscale","tag":"b","auth_key":"k"}'),
-        ],
+        origin: UserSource.manual,
+        rawBody: '{"type":"tailscale","tag":"home-ts","auth_key":"k"}',
       );
-      final out = await buildLxBackup(lists: [folder], rules: const [], vars: const {});
-      final nodes = (sourcesOf(out.json).single['nodes'] as List).cast<Map<String, dynamic>>();
-      expect(nodes.map((n) => n['tag']), ['a', 'b']);
-      expect(nodes[0]['sections'], sections!.toJson());
-      expect(nodes[1].containsKey('sections'), isFalse);
+      final out = await buildLxBackup(lists: [user], rules: const [], vars: const {});
+      final sources = ((jsonDecode(out.json) as Map)['sources'] as List)
+          .cast<Map<String, dynamic>>();
+      final server = sources.single;
+      expect(server['tag'], 'home-ts');
+      expect(server.containsKey('sections'), isFalse);
       expect(out.warnings, isEmpty);
+    });
+  });
+  group('§575 импорт 1.0: секции сняты', () {
+    test('свой сервер с секциями: узел на месте, предупреждение not_allowed',
+        () {
+      final raw = jsonEncode({
+        'lx_backup': 2,
+        'exported_by': {'app': 'launcher', 'version': '0'},
+        'sources': [
+          {
+            'kind': 'server',
+            'tag': 'home-ts',
+            'enabled': true,
+            'origin': {
+              'kind': 'json',
+              'raw': '{"type":"tailscale","tag":"home-ts","auth_key":"k"}',
+            },
+            'sections': {
+              'rules': [
+                {'kind': 'inline', 'name': 'n', 'enabled': true,
+                 'body': {'ip_cidr': ['100.64.0.0/10']}},
+              ],
+            },
+          },
+        ],
+      });
+      final file = parseLxBackup(raw);
+      final w = file.warnings.single;
+      expect(w.code, kWarnSectionRecordDropped);
+      expect(w.reason, kSectionDropReasonNotAllowed);
+      expect(w.kind, 'server');
+      expect(file.servers.single.name, 'home-ts');
+      final merged = mergeBackupServers(const [], file.servers).lists;
+      final server = merged.single as UserServer;
+      expect(server.rawBody, contains('"auth_key":"k"'));
     });
   });
 }

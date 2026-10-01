@@ -5,6 +5,8 @@ import 'package:lxbox/models/codec/chain_record.dart';
 import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/source_chain.dart';
 
+import '../contract_paths.dart';
+
 // §393 C1 — модель источника-цепочки (SPEC 110), канон
 // `contract/schema/source_chain.schema.json`.
 
@@ -17,6 +19,9 @@ Map<String, dynamic> _body(SourceChain c) =>
     chainToRecord(c)['body'] as Map<String, dynamic>;
 
 void main() {
+  // Каталог strip — данные реестра (chain.json).
+  setUpAll(loadTestRegistry);
+
   group('SourceChain: запись sources[] round-trip', () {
     test('минимальная цепочка: hops переживают запись и чтение В ПОРЯДКЕ ПАКЕТА',
         () {
@@ -47,7 +52,7 @@ void main() {
         hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b'), NodeLink(tag: 'c')],
         idleTimeout: '10m',
         stripEvasion: false,
-        strip: {kChainStripTlsUtls: true, kChainStripTlsFragment: false},
+        strip: {'tls.utls': true, 'tls.fragment': false},
         rewrite: {
           'vless': {'flow': 'xtls-rprx-vision'},
         },
@@ -56,7 +61,7 @@ void main() {
       expect(back, c);
       expect(back.idleTimeout, '10m');
       expect(back.stripEvasion, isFalse);
-      expect(back.strip, {kChainStripTlsFragment: false, kChainStripTlsUtls: true});
+      expect(back.strip, {'tls.fragment': false, 'tls.utls': true});
       expect(back.rewrite, {
         'vless': {'flow': 'xtls-rprx-vision'},
       });
@@ -126,7 +131,7 @@ void main() {
       expect(read.unknownKeys,
           ['body.strip.nonsense', 'body.strip.tls.fragment']);
       // Неизвестный ключ отсеян на чтении — ядро на нём не стартует.
-      expect(back.strip, {kChainStripTlsUtls: true});
+      expect(back.strip, {'tls.utls': true});
     });
 
     test('copyWith не трогает tag и умеет снять strip_evasion в «умолчание»',
@@ -143,22 +148,6 @@ void main() {
       expect(const SourceChain(tag: 'chain-1').displayLabel, 'chain-1');
       expect(const SourceChain(tag: 'chain-1', label: 'Двойной').displayLabel,
           'Двойной');
-    });
-  });
-
-  group('каталог strip', () {
-    test('ровно четыре ключа, tls.utls последний и не снимается по умолчанию',
-        () {
-      // Список ЗАКРЫТ: неизвестный ключ ядро считает ошибкой старта.
-      expect(kChainStripKeys, [
-        'tls.fragment',
-        'multiplex.padding',
-        'xhttp.padding',
-        'tls.utls',
-      ]);
-      expect(kChainStripDefault[kChainStripTlsUtls], isFalse);
-      expect(
-          kChainStripKeys.where((k) => kChainStripDefault[k] == true).length, 3);
     });
   });
 
@@ -215,7 +204,7 @@ void main() {
         tag: 'c',
         hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')],
         // Намеренно обратный каталогу порядок.
-        strip: {kChainStripTlsUtls: true, kChainStripTlsFragment: false},
+        strip: {'tls.utls': true, 'tls.fragment': false},
       ), const ['a', 'b']);
       expect((ob['strip'] as Map).keys.toList(), ['tls.fragment', 'tls.utls']);
     });

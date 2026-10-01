@@ -4,7 +4,7 @@
 |------|----------|
 | Статус | ✅ Реализовано (позже) — `CustomRulePreset` + `expandPreset`/`mergeFragments`; bundle `ru-direct` в wizard_template.json. Шапка «In progress» устарела. |
 | Дата старта | 2026-04-21 |
-| Связанный spec | [`033 preset bundles`](../features/033%20preset%20bundles/spec.md) |
+| Связанный spec | [`033 preset bundles`](../tasks/033F-preset-bundles/spec.md) |
 | Лэндинг | v1.5.0 |
 
 ## Контекст
@@ -19,7 +19,7 @@
 
 `CustomRule(kind: preset)` = тонкая ссылка `{presetId, varsValues}`. Пресет в шаблоне становится self-contained bundle'ом (`rule_set` + `dns_rule` + `rule` + `dns_servers`) с типизированными переменными (`@out`, `@dns_server`). Expansion — pure function в builder post-step.
 
-Полный дизайн → [`033 preset bundles/spec.md`](../features/033%20preset%20bundles/spec.md).
+Полный дизайн → [`033 preset bundles/spec.md`](../tasks/033F-preset-bundles/spec.md).
 
 ## План
 

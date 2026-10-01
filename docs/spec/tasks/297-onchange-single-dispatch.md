@@ -1,6 +1,6 @@
 # §297 — onChange single-dispatch: убрать ручную развязку каскада
 
-**Тип:** cross-cutting refactor (Шаг 4 фичи [§291](../features/291%20layered-architecture-facades/spec.md)) · **Статус:** дедуп РЕАЛИЗОВАН; «не-UI писатели» — открыто · **Размер:** факт. S · **После:** [§294](294-dns-typed-model.md)
+**Тип:** cross-cutting refactor (Шаг 4 фичи [§291](../tasks/291F-layered-architecture-facades/spec.md)) · **Статус:** дедуп РЕАЛИЗОВАН; «не-UI писатели» — открыто · **Размер:** факт. S · **После:** [§294](294-dns-typed-model.md)
 
 > **Уточнение диагноза (при реализации):** «`applyPresetOnChange` руками в 4
 > местах» — неточно. Логика **уже** в одной функции `preset_on_change.dart`;

@@ -13,6 +13,7 @@ import 'package:lxbox/services/node_hash.dart';
 import 'package:lxbox/services/parser/json_parsers.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 import 'package:lxbox/services/warp/masque_account.dart';
+import 'parse_link_as.dart';
 
 /// §472 шаг 7, раздел 3 спеки — инварианты переезда masque на конвейер.
 /// §480 W4 — РЕЕСТР из ЗЕРКАЛА: вендоренной копии на CI нет, и под её гейтом
@@ -112,7 +113,7 @@ void main() {
       // `MasqueAccount.toMasqueUri` — тот же вход, что у ручной вставки.
       final before = _identityBefore();
       for (final vhttp in const ['h3', 'h2', 'auto']) {
-        final spec = parseMasqueUri(_warpAccount().toMasqueUri(vhttp: vhttp))!;
+        final spec = parseLinkAs<MasqueSpec>(_warpAccount().toMasqueUri(vhttp: vhttp))!;
         expect(legacyNodeIdentityHash(spec), before['warp:$vhttp']!['identity'],
             reason: 'identity WARP-узла vhttp=$vhttp');
         expect(spec.emit(TemplateVars.empty).map['vhttp'], vhttp);
@@ -217,7 +218,7 @@ void main() {
     });
 
     test('profile и mtu — дефолты ССЫЛКИ, пишутся явно', () {
-      // Реестр объявляет их `default`, но `default` по CANON §2.4 в тело не
+      // Реестр объявляет их `default`, но `default` по PARSING_PRINCIPLES §2.4 в тело не
       // материализуется; корпус их присутствия ждёт, и на них стоит identity.
       final body = parseUri(bare)!.emit(TemplateVars.empty).map;
       expect(body['profile'], 'cloudflare');

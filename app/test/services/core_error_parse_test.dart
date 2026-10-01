@@ -1,10 +1,10 @@
-// Фича 478 — разбор строки отказа ядра, CANON §9.1–§9.2.
+// Фича 478 — разбор строки отказа ядра, PARSING_PRINCIPLES §9.1–§9.2.
 // Таблица примеров §9.2 взята дословно.
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/services/core_reject/core_error_parse.dart';
 
 void main() {
-  group('CANON §9.2 — таблица примеров дословно', () {
+  group('PARSING_PRINCIPLES §9.2 — таблица примеров дословно', () {
     test('эмодзи в теге, `: ` в тексте', () {
       final r = parseCoreRejection(
         'initialize outbound[3] vless[🇩🇪 Frankfurt]: parse encryption: bad',

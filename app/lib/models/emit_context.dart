@@ -1,5 +1,6 @@
 import '../services/builder/node_link_resolve.dart';
 import '../services/builder/rule_set_registry.dart';
+import '../services/builder/source_replace_build.dart' show ReplacePlan;
 import 'node_spec.dart';
 import 'singbox_entry.dart';
 import 'template_vars.dart';
@@ -46,32 +47,29 @@ abstract class EmitContext {
   RuleSetRegistry get ruleSets;
 
   /// §435 — финальный тег эмитированного узла (после префикса контейнера и
-  /// `allocateTag`). По нему `buildConfig` инжектит секции узла
-  /// (`@self` → этот тег); узел, которого здесь нет, секций не даёт.
+  /// `allocateTag`). По нему `buildConfig` собирает узлы для `for_each`
+  /// пресетов (§578) и адресный индекс; узла, которого здесь нет, в конфиге
+  /// нет.
   void noteEmitted(NodeSpec node, String finalTag) {}
 
-  /// Фича 478 / CANON §9.3 — дополнительный outbound (хоп родной цепочки)
+  /// Фича 478 / PARSING_PRINCIPLES §9.3 — дополнительный outbound (хоп родной цепочки)
   /// ведёт к [owner], а не к своему звену. При коллизии с main-тегом того же
   /// узла побеждает [noteEmitted].
   void noteEmittedAlias(String finalTag, NodeSpec owner) {}
-
-  /// §473 — запись, чьё тело взято ДОСЛОВНО из JSON-источника (§455,
-  /// `verbatimBodyOf`), а не собрано `emit()` модели.
-  ///
-  /// Нужно гарду реестра на сборке: у такой записи вход — `singbox`, и
-  /// правило `max_when.except_sources` оставляет ей значение, которое на
-  /// прочих входах заменило бы потолком. Гард работает над `SingboxEntry`, а
-  /// он источника не знает и знать не может — карту ведёт тот, кто тело
-  /// подставил.
-  void noteVerbatim(SingboxEntry entry) {}
 
   /// §435 — предупреждение сборки из `ServerList.build` (гейт ядра и т.п.):
   /// уходит в `emitWarnings` наравне с остальными строками отчёта.
   void warn(String line) {}
 
-  /// §435 — умеет ли установленное ядро endpoint `tailscale`
-  /// (`coreSupportsTailscale`). Дефолт fail-open — как у гейта `chain`.
-  bool get coreSupportsTailscale => true;
+  /// Фича 565 фаза B (§74) — свёрнутый источник отдаёт узлы не в пул
+  /// Направлений, а плану свёртки; группы разворачивает сборка после
+  /// отбраковок узлов (`source_replace_build.dart`).
+  void addReplacePlan(ReplacePlan plan) {}
+
+  /// §77 п.5 (контракт 1.1.80) — свёртка источника [listId] не собирается:
+  /// её тег занят другим объявленным именем (`replace_tag_conflict`), и
+  /// источник идёт несвёрнутым.
+  bool isReplaceBlocked(String listId) => false;
 
   /// §435 — строка версии ядра для текста предупреждения гейта.
   String get coreVersion => '';

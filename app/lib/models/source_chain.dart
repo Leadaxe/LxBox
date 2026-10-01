@@ -18,6 +18,8 @@
 
 import 'package:collection/collection.dart';
 
+import '../services/contract/chain_strip.dart'
+    show chainStripKeyKnown, chainStripKeys, orderedChainStrip;
 import '../services/json_clone.dart' show deepCloneJson;
 import 'codec/node_link_record.dart' show nodeLinkToRecord;
 import 'node_link.dart';
@@ -28,40 +30,9 @@ const String kChainOutboundType = 'chain';
 
 // ── каталог strip ───────────────────────────────────────────────────────────
 //
-// Ключи каталога ядра (`protocol/chain/transform.go:24-27`). Список ЗАКРЫТ:
-// неизвестный ключ ядро считает ошибкой старта, а не опечаткой, которую можно
-// пропустить, — поэтому «на всякий случай» сюда добавлять нечего, новый ключ
-// появляется только вместе с новой версией ядра.
-
-const String kChainStripTlsFragment = 'tls.fragment';
-const String kChainStripMultiplexPadding = 'multiplex.padding';
-const String kChainStripXhttpPadding = 'xhttp.padding';
-const String kChainStripTlsUtls = 'tls.utls';
-
-/// Каталог `strip` В ПОРЯДКЕ ПОКАЗА В ФОРМЕ (эталон
-/// `configtypes.ChainStripKeys`). Снимаемые по умолчанию идут первыми,
-/// `tls.utls` — последним: он единственный не снимается по умолчанию и
-/// единственный, снятие которого ломает reality-узлы (SPEC 110 T4).
-///
-/// Порядок нормативен и для ЭМИССИИ: объект `strip` обходится по этому
-/// списку, а не по порядку ключей Map, — конфиг должен читаться одинаково
-/// на обеих платформах.
-const List<String> kChainStripKeys = [
-  kChainStripTlsFragment,
-  kChainStripMultiplexPadding,
-  kChainStripXhttpPadding,
-  kChainStripTlsUtls,
-];
-
-/// Снимается ли ключ при включённом `strip_evasion` — копия каталога ядра
-/// (эталон `configtypes.ChainStripDefault`). Форма показывает по нему
-/// исходное состояние галок.
-const Map<String, bool> kChainStripDefault = {
-  kChainStripTlsFragment: true,
-  kChainStripMultiplexPadding: true,
-  kChainStripXhttpPadding: true,
-  kChainStripTlsUtls: false,
-};
+// Каталог ключей `strip` (имена, порядок показа и эмиссии, умолчания) — данные
+// реестра (`chain.json`, контракт 1.1.58), см. `services/contract/chain_strip.dart`.
+// Своей копии здесь нет.
 
 /// Источник-цепочка: маршрут через несколько позиций подряд.
 ///
@@ -131,7 +102,7 @@ class SourceChain {
   final bool? stripEvasion;
 
   /// Точечный патч поверх [stripEvasion]: `false` — не снимать, `true` —
-  /// снимать дополнительно. Ключи ТОЛЬКО из [kChainStripKeys].
+  /// снимать дополнительно. Ключи ТОЛЬКО из каталога реестра ([chainStripKeys]).
   final Map<String, bool> strip;
 
   /// JSON merge-patch (RFC 7396) поверх опций узла, ключ — тип outbound'а.
@@ -182,11 +153,7 @@ class SourceChain {
         'hops': [for (final h in hops) nodeLinkToRecord(h)],
         if (idleTimeout.isNotEmpty) 'idle_timeout': idleTimeout,
         if (stripEvasion != null) 'strip_evasion': stripEvasion,
-        if (strip.isNotEmpty)
-          'strip': {
-            for (final key in kChainStripKeys)
-              if (strip.containsKey(key)) key: strip[key],
-          },
+        if (strip.isNotEmpty) 'strip': orderedChainStrip(strip),
         if (rewrite.isNotEmpty) 'rewrite': deepCloneJson(rewrite),
       };
 
@@ -300,9 +267,9 @@ String chainEmitError(SourceChain c) {
     if (typeName.trim().isEmpty) return 'rewrite: empty outbound type name';
   }
   for (final key in c.strip.keys) {
-    if (!kChainStripDefault.containsKey(key)) {
+    if (!chainStripKeyKnown(key)) {
       return 'strip: unknown key "$key" '
-          '(allowed: ${kChainStripKeys.join(', ')})';
+          '(allowed: ${chainStripKeys().join(', ')})';
     }
   }
   return '';
@@ -325,12 +292,9 @@ Map<String, dynamic> chainOutboundObject(SourceChain c, List<String> hopTags) =>
       if (c.idleTimeout.trim().isNotEmpty) 'idle_timeout': c.idleTimeout.trim(),
       if (c.stripEvasion != null) 'strip_evasion': c.stripEvasion,
       if (c.strip.isNotEmpty)
-        'strip': {
-          // По каталогу, а не по порядку ключей Map: для ядра он не важен,
-          // а для читаемости конфига и сверки с лаунчером — важен.
-          for (final key in kChainStripKeys)
-            if (c.strip.containsKey(key)) key: c.strip[key],
-        },
+        // По каталогу, а не по порядку ключей Map: для ядра он не важен,
+        // а для читаемости конфига и сверки с лаунчером — важен.
+        'strip': orderedChainStrip(c.strip),
       if (c.rewrite.isNotEmpty) 'rewrite': deepCloneJson(c.rewrite),
     };
 

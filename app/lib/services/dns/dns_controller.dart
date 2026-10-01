@@ -21,12 +21,12 @@ import '../../models/parser_config.dart';
 // Перенос в services/ — отдельный шаг, не расширяем scope D1.
 import '../../screens/dns_settings_screen/dns_server_resolver.dart';
 import '../../widgets/outbound_picker.dart' show OutboundOption;
+import '../builder/build_config.dart' show varIntInBounds;
 import '../builder/post_steps.dart';
 import '../builder/preset_expand.dart';
 import '../builder/rule_set_registry.dart';
 import '../settings_storage.dart';
 import '../template_loader.dart';
-import 'node_dns_records.dart';
 
 /// §300 — типизированный снимок всего, что нужно экрану DNS-настроек. Заменяет
 /// разрозненные `setState`-присвоения `_load()`: одно значение, поля 1:1 с
@@ -48,9 +48,10 @@ class DnsSettingsSnapshot {
     required this.dnsFinal,
     required this.defaultResolver,
     required this.resolverReset,
-    this.nodeServers = const [],
-    this.nodeRules = const [],
-    this.tailscaleEndpoints = const [],
+    this.presetServedTagsByPresetId = const {},
+    this.cacheCapacity = '',
+    this.optimistic = true,
+    this.storeCache = true,
   });
 
   final List<DnsServerRef> servers;
@@ -72,16 +73,16 @@ class DnsSettingsSnapshot {
   /// `markDirty()` (persist битого ref не должен дожить до билда).
   final bool resolverReset;
 
-  /// §435 — DNS-серверы/правила узлов (секции, спека §9.2) после
-  /// подстановки `@self`: read-only строки внизу списков. Производные, как
-  /// preset-серверы: в [servers]/[rules] не входят и не персистятся.
-  final List<NodeDnsServerRecord> nodeServers;
-  final List<NodeDnsRuleRecord> nodeRules;
+  /// §578 — пресет с `for_each` → теги узлов, которые он обслуживает
+  /// (подпись строки пресета). Пресета без `for_each` здесь нет.
+  final Map<String, List<String>> presetServedTagsByPresetId;
 
-  /// §435 — опции `endpoint` для формы DNS-сервера `tailscale` (спека §9.4):
-  /// display-теги узлов Tailscale. В опции членов групп и резолверов
-  /// узловые серверы на этой волне не входят.
-  final List<TailscaleEndpointOption> tailscaleEndpoints;
+  /// §580 — кэш DNS: `dns_cache_capacity` (строкой, как в storage),
+  /// `dns_optimistic`, `dns_store_cache`. Не задано или вне границ — значение
+  /// по умолчанию шаблона.
+  final String cacheCapacity;
+  final bool optimistic;
+  final bool storeCache;
 }
 
 class DnsController {
@@ -92,7 +93,12 @@ class DnsController {
   /// строит превью-mirror'ы и считает §121 resolver-autoreset. Чистый
   /// read+derive. Возвращает [DnsSettingsSnapshot].
   ///
-  static Future<DnsSettingsSnapshot> load() async {
+  /// §578 — [presetNodes]: узлы источников для пресетов с `for_each`
+  /// (`presetNodesForView`); без них такой пресет не даёт ни серверов, ни
+  /// правил, и сохранённые ссылки на его серверы ушли бы как сироты.
+  static Future<DnsSettingsSnapshot> load({
+    List<PresetNode> presetNodes = const [],
+  }) async {
     final template = await TemplateLoader.load();
     final vars = await SettingsStorage.getAllVars();
 
@@ -135,6 +141,14 @@ class DnsController {
     // §439 — тег сервера → `preset_id` пресета, внёсшего его первым (как
     // дедуп серверов сборки).
     final presetIdByServerTag = <String, String>{};
+    // §578 — `preset_id` для записи хранения: только серверы в пространстве
+    // пресета (`<preset_id>:<тег>`), как у сборки (`custom_rules.dart`). Тег
+    // сервера пресета с `for_each` (`<тег узла>-dns`) пространства не имеет:
+    // с `preset_id` модель `DnsServerPreset` достроила бы его до
+    // `tailscale:<тег>-dns`. Владелец такого сервера на экране — из пометок
+    // `_preset_id`/`_preset_label` тела (карта выше), не из хранения.
+    final storedPresetIdByTag = <String, String>{};
+    final presetServedTagsByPresetId = <String, List<String>>{};
     final activeRules = await SettingsStorage.getCustomRules();
     final allPresets = template.selectableRules;
     final activePresetIdsWithDnsRule = <String>{};
@@ -157,7 +171,12 @@ class DnsController {
       if (match.vars.any((v) => v.name == 'dns_enable')) {
         presetDnsEnable[cr.presetId] = presetDnsEnableVar(cr, match);
       }
-      final fragments = expandPreset(cr, match);
+      final fragments = expandPreset(cr, match, nodes: presetNodes);
+      if (match.forEach != null) {
+        presetServedTagsByPresetId[cr.presetId] = [
+          for (final n in presetForEachNodes(cr, match, presetNodes)) n.tag,
+        ];
+      }
       if (match.dnsRules.isNotEmpty) {
         presetRulesByPresetId[cr.presetId] = fragments.dnsRules;
       }
@@ -166,6 +185,9 @@ class DnsController {
         final tag = s['tag'];
         if (tag is String && tag.isNotEmpty) {
           presetIdByServerTag.putIfAbsent(tag, () => cr.presetId);
+          if (tag.startsWith('${cr.presetId}:')) {
+            storedPresetIdByTag.putIfAbsent(tag, () => cr.presetId);
+          }
         }
         final annotated = Map<String, dynamic>.from(s)
           ..['_preset_label'] = match.label;
@@ -193,7 +215,7 @@ class DnsController {
     final resolvedServers = await resolveDnsServersList(
       templateServers: templateServersRaw,
       presetServersByTag: presetServersByTag,
-      presetIdByTag: presetIdByServerTag,
+      presetIdByTag: storedPresetIdByTag,
     );
 
     // §117: реальные тела DNS-mirror'ов (rule-источники) для превью.
@@ -268,9 +290,19 @@ class DnsController {
       resolverReset = true;
     }
 
-    // §435 — DNS-записи узлов (секции) и узлы Tailscale для пикера endpoint:
-    // производные из списков источников, в `_servers`/`_rules` не кладутся.
-    final nodeDns = collectNodeDnsRecords(await SettingsStorage.getServerLists());
+    // §580 — кэш DNS. Переменные новые: у сохранённого состояния без них
+    // действует значение по умолчанию шаблона; сохранённое вне границ — тоже.
+    String varOrDefault(String name) {
+      final v = vars[name] ?? '';
+      return v.trim().isNotEmpty ? v.trim() : defaultOf(name);
+    }
+
+    bool boolVar(String name) =>
+        varOrDefault(name).toLowerCase() == 'true';
+    var cacheCapacity = varOrDefault('dns_cache_capacity');
+    if (!varIntInBounds('dns_cache_capacity', cacheCapacity)) {
+      cacheCapacity = defaultOf('dns_cache_capacity');
+    }
 
     return DnsSettingsSnapshot(
       servers: resolvedServers,
@@ -291,17 +323,12 @@ class DnsController {
       dnsFinal: dnsFinal,
       defaultResolver: defaultResolver,
       resolverReset: resolverReset,
-      nodeServers: nodeDns.servers,
-      nodeRules: nodeDns.rules,
-      tailscaleEndpoints: nodeDns.tailscaleEndpoints,
+      presetServedTagsByPresetId: presetServedTagsByPresetId,
+      cacheCapacity: cacheCapacity,
+      optimistic: boolVar('dns_optimistic'),
+      storeCache: boolVar('dns_store_cache'),
     );
   }
-
-  /// §435 — перечитать только узловые записи (экран слушает
-  /// `SubscriptionController`: правка узла при открытом DNS-экране обновляет
-  /// read-only строки и опции endpoint без полного [load]).
-  static Future<NodeDnsRecords> loadNodeRecords() async =>
-      collectNodeDnsRecords(await SettingsStorage.getServerLists());
 
   /// §300 D3 — staged-запись DNS-секции (servers/rules/dns-vars). custom_rules
   /// НЕ входит — это §295 (device-required). Всегда `flush: false` — дисковый
@@ -314,6 +341,9 @@ class DnsController {
     required String strategy,
     required String dnsFinal,
     required String defaultResolver,
+    String? cacheCapacity,
+    bool? optimistic,
+    bool? storeCache,
   }) async {
     await SettingsStorage.saveDnsServers(servers, flush: false);
     final cleaned = cleanDnsRulesForPersist(
@@ -327,5 +357,19 @@ class DnsController {
     await SettingsStorage.setVar(
         'dns_default_domain_resolver', defaultResolver,
         flush: false);
+    // §580 — кэш DNS; значение вне границ экран не передаёт.
+    if (cacheCapacity != null &&
+        varIntInBounds('dns_cache_capacity', cacheCapacity)) {
+      await SettingsStorage.setVar('dns_cache_capacity', cacheCapacity,
+          flush: false);
+    }
+    if (optimistic != null) {
+      await SettingsStorage.setVar('dns_optimistic', '$optimistic',
+          flush: false);
+    }
+    if (storeCache != null) {
+      await SettingsStorage.setVar('dns_store_cache', '$storeCache',
+          flush: false);
+    }
   }
 }

@@ -32,6 +32,11 @@ class CommunityManifest {
 class CommunityServersLoader {
   CommunityServersLoader._();
 
+  /// §587 — экран публичных подборок выключен: пункт меню и кнопка на пустом
+  /// экране Servers не показываются, манифест не запрашивается. Для включения
+  /// вернуть `public-servers-manifest.json` в `main`.
+  static const enabled = false;
+
   static const manifestUrl =
       'https://raw.githubusercontent.com/Leadaxe/LxBox/main/public-servers-manifest.json';
   static const _timeout = Duration(seconds: 5);

@@ -630,6 +630,15 @@ final class MapperParam {
   /// ОДНОМ месте — `emitter.dart`, через [EmitNames].
   final Map<String, dynamic> raw;
 
+  /// Контракт 1.1.63 — `deref {key, as}`: значение записи есть ссылка на
+  /// соседа по документу (исполняет движок, см. `_applyDeref`).
+  Map<String, dynamic>? get deref => (raw['deref'] as Map?)?.cast<String, dynamic>();
+
+  /// Контракт 1.1.63 — `substitute {sep, join, tokens}`: подстановка
+  /// плейсхолдеров значения из источников.
+  Map<String, dynamic>? get substitute =>
+      (raw['substitute'] as Map?)?.cast<String, dynamic>();
+
   /// Служебная запись (DRAFT `$`-префикс): у неё нет `maps_to`, и параметром
   /// источника она не считается.
   bool get isService => name.startsWith(DraftNames.serviceParamPrefix);

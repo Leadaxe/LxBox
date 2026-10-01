@@ -3,10 +3,10 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/template_vars.dart';
-import 'package:lxbox/services/parser/uri_parsers/wireguard_parser.dart';
 import 'package:lxbox/services/parser/uri_utils.dart';
 
 import '../parser/engine_test_setup.dart';
+import '../parser/parse_link_as.dart';
 
 /// §025 — WireGuard `reserved` (Cloudflare WARP client_id): parse, emit, и
 /// round-trip URI ⇄ spec ⇄ endpoint-JSON.
@@ -38,7 +38,7 @@ void main() {
 
   group('parseWireguardUri — reserved', () {
     test('reserved=b0,b1,b2 попадает в peer', () {
-      final spec = parseWireguardUri(
+      final spec = parseLinkAs<WireguardSpec>(
           'wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@engage.cloudflareclient.com:2408'
           '?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=172.16.0.2/32&reserved=12,34,56#WARP');
       expect(spec, isNotNull);
@@ -46,14 +46,14 @@ void main() {
     });
 
     test('без reserved → null в peer (обычный WG не ломается)', () {
-      final spec = parseWireguardUri(
+      final spec = parseLinkAs<WireguardSpec>(
           'wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@h.example:51820?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=10.0.0.2/32');
       expect(spec!.peers.first.reserved, isNull);
     });
 
     test('client_id (base64) как alias reserved', () {
       final b64 = base64.encode([9, 9, 9]);
-      final spec = parseWireguardUri(
+      final spec = parseLinkAs<WireguardSpec>(
           'wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@h.example:2408?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=1.1.1.1/32'
           '&client_id=$b64');
       expect(spec!.peers.first.reserved, [9, 9, 9]);
@@ -112,9 +112,9 @@ void main() {
   test('URI round-trip: parse → toUri → parse сохраняет reserved', () {
     const uri = 'wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@engage.cloudflareclient.com:2408'
         '?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=172.16.0.2/32&reserved=12,34,56#WARP';
-    final spec1 = parseWireguardUri(uri)!;
+    final spec1 = parseLinkAs<WireguardSpec>(uri)!;
     final back = spec1.toUri();
-    final spec2 = parseWireguardUri(back)!;
+    final spec2 = parseLinkAs<WireguardSpec>(back)!;
     expect(spec2.peers.first.reserved, [12, 34, 56]);
   });
 }

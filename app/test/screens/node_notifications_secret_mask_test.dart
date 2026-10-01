@@ -97,4 +97,28 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.textContaining('h.example'), findsWidgets);
   });
+
+  testWidgets('§572 — группа: секрет замаскирован и в строке записи, и в '
+      'текстах группы', (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: SingleChildScrollView(
+          child: NodeNotificationsView(const [
+            RegistryWarning(code: _probeCode, path: 'password', value: _secret),
+            RegistryWarning(
+                code: _probeCode, path: 'password', value: 'other-secret'),
+          ]),
+        ),
+      ),
+    ));
+    // Единственная плитка (группа) развёрнута сразу.
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining(_secret), findsNothing);
+    expect(find.textContaining('other-secret'), findsNothing);
+    const row0 = ValueKey('notification-group-row-warning-$_probeCode-0');
+    expect(tester.widget<Text>(find.byKey(row0)).data, 'password = ***');
+    // После маски значения совпали — подстановка обычная, не «…».
+    expect(find.text('Value *** was replaced'), findsOneWidget);
+  });
 }

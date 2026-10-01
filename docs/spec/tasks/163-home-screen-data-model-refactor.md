@@ -4,7 +4,7 @@
 |------|----------|
 | Тип | Task (рефакторинг модели данных существующей feature — главный экран) |
 | Статус | Реализовано |
-| Связано | [feature 122 commandclient-migration](../features/122%20commandclient-migration/spec.md) §14.4, ядровой SPEC 015 (getGroups/getOutbounds) |
+| Связано | [feature 122 commandclient-migration](../tasks/122F-commandclient-migration/spec.md) §14.4, ядровой SPEC 015 (getGroups/getOutbounds) |
 
 Фиксирует **финальную модель данных главного экрана** после миграции на CommandClient: какие источники питают какие части UI, каким механизмом (push/pull/событие), и почему именно так. Цель — единый референс, чтобы решения не пересматривались вслепую.
 

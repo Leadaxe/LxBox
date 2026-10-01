@@ -4,7 +4,7 @@
 |---|---|
 | Статус | Реализовано |
 | Дата | 2026-08-02 |
-| Связанные | §296 (общий probe над ServerList), [`236 folder-server-testing`](../features/236%20folder-server-testing), [`336 probe-skips-group-nodes`](336-probe-skips-group-nodes.md), [`283 node-disable`](283-subscription-node-disable.md), §326 (ключи результатов) |
+| Связанные | §296 (общий probe над ServerList), [`236 folder-server-testing`](../tasks/236F-folder-server-testing), [`336 probe-skips-group-nodes`](336-probe-skips-group-nodes.md), [`283 node-disable`](283-subscription-node-disable.md), §326 (ключи результатов) |
 
 ## Проблема
 

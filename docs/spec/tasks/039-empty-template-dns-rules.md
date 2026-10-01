@@ -4,7 +4,7 @@
 |------|----------|
 | Статус | Implemented |
 | Дата | 2026-05-06 |
-| Связанные spec'ы | [`tasks/061-dns-rules-refactor`](061-dns-rules-refactor/spec.md), [`033 preset bundles`](../features/033%20preset%20bundles/spec.md), [`038 ru-direct-dns-defaults`](./038-ru-direct-dns-defaults.md) |
+| Связанные spec'ы | [`tasks/061-dns-rules-refactor`](061-dns-rules-refactor/spec.md), [`033 preset bundles`](../tasks/033F-preset-bundles/spec.md), [`038 ru-direct-dns-defaults`](./038-ru-direct-dns-defaults.md) |
 | Файл изменений | `app/assets/wizard_template.json`, `app/lib/screens/dns_settings_screen.dart` |
 | Inline-rename | tag `direct_dns_resolver` → `google_udp` (3 места в template: server tag + 2 `domain_resolver` refs от google_doh / google_doh_vpn). Симметрия с `cloudflare_udp` именованием. Existing-юзеры с saved DNS-серверами не затрагиваются (их `_servers` storage independent от template); юзеры с template-defaults на следующем rebuild получат новый tag. Saved sing-box config независим от template — продолжает работать со старым tag'ом до явного rebuild'а. |
 
@@ -35,7 +35,7 @@
 |---|---|
 | Сменить catch-all на `cloudflare_udp` (1.1.1.1 UDP/53) | в РФ 1.1.1.1 чаще DPI-режется чем 8.8 / system |
 | Сменить на `google_udp` (8.8.8.8 UDP/53) | глобально OK, но через VPN-tunnel может маршрутизироваться неоптимально + некоторые ISP режут |
-| Сделать **несколько** template default'ов с приоритетом | sing-box DNS не поддерживает rule-level fallback chain; первый match завершает поиск, дальше не идёт. См. [§043 C-discussion](../features/043%20applog%20per-source%20quotas/spec.md) — сделать через external reactor (§042 watchdog), не через config-only. |
+| Сделать **несколько** template default'ов с приоритетом | sing-box DNS не поддерживает rule-level fallback chain; первый match завершает поиск, дальше не идёт. См. [§043 C-discussion](../tasks/043F-applog-per-source-quotas/spec.md) — сделать через external reactor (§042 watchdog), не через config-only. |
 | Auto-fallback DoH→UDP на runtime (`fallback_servers`) | sing-box 1.13 не имеет такого field'а в стандартном build'е |
 
 ## Эффект на existing users

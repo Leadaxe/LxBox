@@ -4,7 +4,7 @@
 |---|---|
 | **Статус** | **Released в v2.25.0** (20.09.2026, ядро `v1.14.1-lx.8`). Реализовано |
 | **Дата** | 2026-09-19 |
-| **Источник** | `contract/TASKS_LXBOX.md` §33, QUIRKS Q133-70…75 (лаунчер `48b33781`); `docs/contract/docs/CANON.md` §0.6 |
+| **Источник** | `contract/TASKS_LXBOX.md` §33, QUIRKS Q133-70…75 (лаунчер `48b33781`); `docs/contract/docs/PARSING_PRINCIPLES.md` §0.6 |
 | **Связанные** | фича 480 (движок-маппер), §492 |
 
 ## Проблема

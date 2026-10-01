@@ -213,7 +213,7 @@ class _DebugScreenState extends State<DebugScreen> with SnackHelper {
   void _openDiagnosticsSettings() {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => const AppSettingsScreen(initialTab: 2),
+        builder: (_) => const AppSettingsScreen(initialTab: 3),
       ),
     );
   }

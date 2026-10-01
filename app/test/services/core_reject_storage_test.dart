@@ -1,4 +1,4 @@
-// Фича 478 — хранение вердикта и его снятие (CANON §9.4). Переезд в бэкап — §489.
+// Фича 478 — хранение вердикта и его снятие (PARSING_PRINCIPLES §9.4). Переезд в бэкап — §489.
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -203,7 +203,7 @@ void main() {
     });
   });
 
-  group('снятие вердикта по телу узла (CANON §9.4 п. 1)', () {
+  group('снятие вердикта по телу узла (PARSING_PRINCIPLES §9.4 п. 1)', () {
     const id = 'A';
     final disabled = {id: DateTime.utc(2026, 9, 19)};
     final warnings = {
@@ -280,7 +280,7 @@ void main() {
     });
   });
 
-  group('снятие вердикта ручной правкой узла (CANON §9.4 п. 1)', () {
+  group('снятие вердикта ручной правкой узла (PARSING_PRINCIPLES §9.4 п. 1)', () {
     final verdict = [StoredWarning.coreRejected('bad')];
     // `late`: разбор обязан случиться ПОСЛЕ загрузки секций, а объявление
     // группы исполняется до `setUpAll`.

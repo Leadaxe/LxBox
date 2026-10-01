@@ -17,7 +17,7 @@
     "$.route.rules[2→2].inbound[1→]: \"mixed-in\" → <absent>",
     "$.route.rule_set[tag=ds-geo]: {\"type\":\"local\",\"tag\":\"ds-geo\",\"format\":\"binary\",\"path\":\"<sandbox>/docs/rule_sets/ds_geo1.srs\"} → <absent>",
     "$.route.rule_set[tag=ds-model]: {\"type\":\"local\",\"tag\":\"ds-model\",\"format\":\"binary\",\"path\":\"<sandbox>/docs/rule_sets/ds_model1.srs\"} → <absent>",
-    "$.route.lx_idle_suspend: \"1m\" → \"30s\"",
-    "$.route.lx_idle_suspend_reachable: \"10m\" → \"5m\""
+    "$.lx.wg.idle_suspend: \"1m\" → \"30s\"",
+    "$.lx.wg.idle_suspend_reachable: \"10m\" → \"5m\""
   ]
 }

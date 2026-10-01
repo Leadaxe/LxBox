@@ -7,8 +7,8 @@ import '../../models/node_spec.dart';
 import '../../models/node_warning.dart';
 import '../../models/server_list.dart';
 import '../../models/subscription_meta.dart';
-import '../app_log.dart';
 import '../parser/body_decoder.dart';
+import '../parser/engine/decoders.dart' show decodeUtf8Lenient;
 import '../parser/parse_all.dart';
 import 'subscription_identity.dart';
 import 'user_agent.dart';
@@ -120,24 +120,6 @@ Future<ParseResult> parseFromSource(SubscriptionSource source,
     // §506 — причины собираются и на прод-пути: см. [ParseResult.dropped].
     final dropped = <NodeWarning>[];
     final nodes = parseAll(decoded, dropped: dropped);
-    // §435 / контракт ## 13 (норма E1, 14.09.2026) — секции у узлов подписки
-    // не сохраняются: поле есть только у свободных узлов. Сторона сообщает
-    // уровнем info без кода контракта: связка, извлечённая парсером из тела
-    // провайдера, дальше никуда не идёт.
-    // §437 — узлу Tailscale это стоит связи с tailnet целиком, поэтому
-    // говорим прямо и всегда, а не только когда провайдер дал записи.
-    for (final n in nodes) {
-      if (n is TailscaleSpec) {
-        AppLog.I.info(
-            'Subscription node "${n.tag}" is a Tailscale endpoint: its tailnet '
-            'route and MagicDNS records apply to free nodes only — add it as a '
-            'server to get them');
-      } else if (n.importedSections != null) {
-        AppLog.I.info(
-            'Subscription node "${n.tag}" carries sections (route/dns) — '
-            'ignored, sections apply to free nodes only');
-      }
-    }
     return ParseResult(
         nodes, decoded, meta, fetch.body, fetch.headers, dropped);
   } finally {
@@ -299,7 +281,7 @@ String? _decodeBase64Title(String? raw) {
   if (!raw.startsWith(prefix)) return raw;
   try {
     final bytes = base64.decode(raw.substring(prefix.length));
-    return utf8.decode(bytes, allowMalformed: true);
+    return decodeUtf8Lenient(bytes);
   } catch (_) {
     return raw;
   }

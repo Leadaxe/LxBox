@@ -4,8 +4,11 @@ import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/direction.dart';
 import '../models/server_list.dart';
+import '../models/source_chain.dart';
+import '../services/l10n/locale_controller.dart';
 import '../services/runtime_chain.dart';
 import '../services/settings_storage.dart';
+import 'chain_edit/chain_edit_flow.dart';
 import 'folder_detail_screen.dart';
 import 'home/source_lookup.dart';
 import 'node_settings_screen.dart';
@@ -18,6 +21,7 @@ import 'subscription_detail_screen.dart';
 ///   папка                → FolderDetailScreen + подсветка члена;
 ///   подписка             → SubscriptionDetailScreen (Settings-таб);
 ///   одиночный сервер     → NodeSettingsScreen;
+///   цепочка (§558)       → редактор цепочки, после правки — пересборка;
 ///   не найден            → [onOwnerNotFound] (fallback вызывающего:
 ///                          detour-cycle sheet — список Servers, View-экран
 ///                          ноды — SnackBar).
@@ -27,13 +31,14 @@ import 'subscription_detail_screen.dart';
 /// «нода с именем vpn-N при выключенном Направлении» см. spec 258).
 ///
 /// [directions] — предзагруженный список (View-экран уже держит его для
-/// цепочки); null → грузим из storage.
+/// цепочки); null → грузим из storage. [chains] — так же.
 Future<void> openTagOwner(
   BuildContext context,
   String tag, {
   required SubscriptionController subController,
   required HomeController homeController,
   List<Direction>? directions,
+  List<SourceChain>? chains,
   required VoidCallback onOwnerNotFound,
 }) async {
   final chs = directions ?? await SettingsStorage.getDirections();
@@ -51,6 +56,17 @@ Future<void> openTagOwner(
         ),
       ),
     );
+    return;
+  }
+
+  // §558 — цепочка не живёт в `entries` (отдельные записи `kind: chain`),
+  // а в конфиге выходит outbound'ом ровно с тегом `SourceChain.tag`.
+  final allChains = chains ?? await SettingsStorage.getChains();
+  if (!context.mounted) return;
+  final chain = allChains.where((c) => c.tag == tag).firstOrNull;
+  if (chain != null) {
+    await _editChainFromOwnerLink(context, chain,
+        subController: subController, homeController: homeController);
     return;
   }
 
@@ -86,4 +102,25 @@ Future<void> openTagOwner(
       },
     ),
   );
+}
+
+/// §558 — правка цепочки вне Servers: записать, сообщить о снятых позициях,
+/// пересобрать конфиг (правка маршрута обязана доехать до сборки).
+Future<void> _editChainFromOwnerLink(
+  BuildContext context,
+  SourceChain chain, {
+  required SubscriptionController subController,
+  required HomeController homeController,
+}) async {
+  final outcome = await editChainAndPersist(context, chain,
+      subController: subController, homeController: homeController);
+  if (outcome == null || !context.mounted) return;
+  final messenger = ScaffoldMessenger.of(context);
+  if (outcome.positionsRemoved > 0) {
+    messenger.showSnackBar(SnackBar(
+      content: Text(getLocalText.s(
+          '%s chain position(s) removed', '${outcome.positionsRemoved}')),
+    ));
+  }
+  await regenerateSourcesConfig(subController, homeController);
 }

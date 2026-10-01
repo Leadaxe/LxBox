@@ -125,8 +125,8 @@ class DirectionMutations {
           getLocalText.s(
               '%s chain position(s) removed', '${healed.chainPositions}'),
         // §441 — пятый род: DNS-сервер называл Направление (переменная типа
-        // `outbound` у template, `body.detour` у user, в том числе в секциях
-        // узлов). Сервер переведён на vpn-1, а не выпал на сборке.
+        // `outbound` у template, `body.detour` у user). Сервер переведён на
+        // vpn-1, а не выпал на сборке.
         if (healed.dnsServers > 0)
           getLocalText.s(
               '%s DNS server(s) switched to vpn-1', '${healed.dnsServers}'),
@@ -141,10 +141,5 @@ class DirectionMutations {
     SubscriptionController? sub,
   ) {
     if (healed.detours > 0) sub?.syncDetourDirectionRefsCleared(tag);
-    // §441 — detour DNS-серверов в секциях узлов живёт в тех же `_entries`.
-    // Счётчик ненулевой только на disable/delete — ровно там, где storage
-    // переписал секции; корневые DNS-серверы контроллер не держит, и ресинк
-    // для них ничего не найдёт.
-    if (healed.dnsServers > 0) sub?.syncSectionsDnsDetourRefsHealed(tag);
   }
 }

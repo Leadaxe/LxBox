@@ -49,6 +49,8 @@ String? nodeIdentityKeyRaw(NodeSpec node) {
     AutoSelectSpec() => '',
     // §435 — адреса нет, ключа пула нет: `server.isEmpty` выше вернул null.
     TailscaleSpec() => '',
+    // §585 — тип приложению незнаком: полей модели нет, учётка из тела.
+    UnknownTypeSpec s => s.body['username']?.toString() ?? '',
   };
   return '${node.protocol}|${node.server}|${node.port}|$cred';
 }

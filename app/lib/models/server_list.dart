@@ -3,11 +3,11 @@ import 'package:collection/collection.dart';
 import '../services/parser/body_decoder.dart';
 import '../services/parser/parse_all.dart';
 import 'core_reject_verdict.dart';
-import 'dns_ref.dart';
 import 'import_rule.dart';
 import 'node_link.dart';
-import 'node_sections.dart';
 import 'node_spec.dart';
+import 'node_warning.dart';
+import 'source_replace.dart';
 import 'subscription_meta.dart';
 
 /// Контейнер узлов (§1 спеки 026). Sealed: `SubscriptionServers` (fetch по
@@ -32,7 +32,21 @@ sealed class ServerList {
   }) : nodes = nodes ?? <NodeSpec>[];
 
   String get type;
+
+  /// Фича 565 фаза B — свёртка источника в группу (§74). Бывает у папки и
+  /// подписки; у одиночного сервера её нет.
+  SourceReplace? get replace => null;
 }
+
+/// Фича 565 фаза B (§74 п.5) — корневые имена свёрток источников [lists]:
+/// `tag` и у `both` двойник `<tag>-auto`, в порядке источников. Имена заняты
+/// для Направлений и объявлены целями правил, `route.final` и опций
+/// Направлений независимо от того, включён ли источник: выпавшую на сборке
+/// группу снимают механизмы сборки, а не список целей.
+List<String> sourceReplaceNames(Iterable<ServerList> lists) => [
+      for (final l in lists)
+        if (l.replace case final r?) ...r.names,
+    ];
 
 /// Статус последней попытки auto-update подписки.
 enum UpdateStatus { never, ok, failed, inProgress }
@@ -175,7 +189,7 @@ final class SubscriptionServers extends ServerList {
   /// кодеке записи и в copyWith — поле без чтения молча терялось бы.
   final Map<String, DateTime> disabledHashes;
 
-  /// Фича 478 / CANON §9.4 — оверлей ХРАНИМЫХ предупреждений узлов тем же
+  /// Фича 478 / PARSING_PRINCIPLES §9.4 — оверлей ХРАНИМЫХ предупреждений узлов тем же
   /// ключом, что и [disabledHashes]: тег-идентичность → записи
   /// `{code, params}`. Сегодня здесь живёт ровно `core_rejected` — вердикт
   /// ядра, который пересчётом по телу не воспроизводится; прочие
@@ -206,6 +220,29 @@ final class SubscriptionServers extends ServerList {
   /// и copyWith (как §283 `disabledHashes`).
   final SubscriptionOnUpdateAction onUpdateAction;
 
+  /// §561 — `dropped[]` ПОСЛЕДНЕГО разбора тела (D-088): записи, не ставшие
+  /// узлами, с причиной. Показывается в сводке источника; на узлы подписки
+  /// эти причины не вешаются. Живёт рядом с [nodes] и так же производно:
+  /// кэш выдачи, в кодек записи и в бэкап не едет, в равенство не входит.
+  /// После перезапуска восстанавливается разбором кэшированного тела
+  /// (регидрация), на каждом новом разборе заменяется целиком.
+  final List<NodeWarning> dropped;
+
+  /// Фича 565 фаза B — свёртка подписки в группу; `null` — не свёрнута.
+  @override
+  final SourceReplace? replace;
+
+  /// §565 / задача 570 — выбор члена у групп ручного рода (`selector`) этой
+  /// подписки: сырой тег группы → сырой тег выбранного члена (адрес тот же,
+  /// что у `default` группы папки, `auto_group_record.dart`). Группа подписки
+  /// производна от тела, и её `default` провайдерский; выбор человека живёт
+  /// здесь, рядом с записью источника, и переживает обновление тела и
+  /// перезапуск. Сборка берёт его вместо провайдерского `default`
+  /// ([withGroupDefaultsApplied]). Ключ записи `group_defaults`; в бэкап не
+  /// едет (у `sourceSubscription` схемы поля для него нет — рантайм машины,
+  /// как выбор селектора в ядре).
+  final Map<String, String> groupDefaults;
+
   SubscriptionServers({
     required super.id,
     required super.name,
@@ -226,8 +263,30 @@ final class SubscriptionServers extends ServerList {
     this.importRules = const [],
     this.importRulesEnabled = true,
     this.onUpdateAction = SubscriptionOnUpdateAction.rebuild,
+    this.dropped = const [],
+    this.replace,
+    this.groupDefaults = const {},
     super.nodes,
   });
+
+  /// §565 / задача 570 — копия со [groupDefaults], наложенными на группы
+  /// ручного рода: `manualDefault` группы — выбор человека. Без выбора —
+  /// `this`. Оригиналы узлов не меняются (разбор их перезапишет).
+  SubscriptionServers withGroupDefaultsApplied() {
+    if (groupDefaults.isEmpty) return this;
+    var changed = false;
+    final next = <NodeSpec>[];
+    for (final n in nodes) {
+      final want = n is AutoSelectSpec && n.isManual ? groupDefaults[n.tag] : null;
+      if (n is AutoSelectSpec && want != null && want != n.manualDefault) {
+        next.add(n.copyWith(manualDefault: want));
+        changed = true;
+      } else {
+        next.add(n);
+      }
+    }
+    return changed ? copyWith(nodes: next) : this;
+  }
 
   /// §302 — правила, реально применяемые на импорте: набор включён + правило
   /// включено + паттерн валиден. Пусто → тело подписки не трогается.
@@ -258,6 +317,10 @@ final class SubscriptionServers extends ServerList {
     bool? importRulesEnabled,
     SubscriptionOnUpdateAction? onUpdateAction,
     List<NodeSpec>? nodes,
+    List<NodeWarning>? dropped,
+    SourceReplace? replace,
+    bool clearReplace = false,
+    Map<String, String>? groupDefaults,
   }) =>
       SubscriptionServers(
         id: id,
@@ -281,6 +344,9 @@ final class SubscriptionServers extends ServerList {
         importRules: importRules ?? this.importRules,
         importRulesEnabled: importRulesEnabled ?? this.importRulesEnabled,
         onUpdateAction: onUpdateAction ?? this.onUpdateAction,
+        dropped: dropped ?? this.dropped,
+        replace: clearReplace ? null : (replace ?? this.replace),
+        groupDefaults: groupDefaults ?? this.groupDefaults,
         nodes: nodes ?? this.nodes,
       );
 
@@ -309,10 +375,12 @@ final class SubscriptionServers extends ServerList {
           identity == other.identity &&
           _eq.equals(importRules, other.importRules) &&
           importRulesEnabled == other.importRulesEnabled &&
-          onUpdateAction == other.onUpdateAction);
+          onUpdateAction == other.onUpdateAction &&
+          replace == other.replace &&
+          _eq.equals(groupDefaults, other.groupDefaults));
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
         id,
         name,
         enabled,
@@ -332,7 +400,9 @@ final class SubscriptionServers extends ServerList {
         _eq.hash(importRules),
         importRulesEnabled,
         onUpdateAction,
-      );
+        replace,
+        _eq.hash(groupDefaults),
+      ]);
 }
 
 /// §219 — origin: write-only диагностические метаданные (пишутся в JSON /
@@ -351,17 +421,14 @@ final class UserServer extends ServerList {
 
   final String rawBody; // оригинал paste'а для reparse в случае багов
 
-  /// §435 — секции узла (контракт ## 13): правила маршрута и DNS-записи,
-  /// которые узел носит с собой. Форма хранения — ONE_NAMESPACE §2, с
-  /// плейсхолдерами `@self` как есть. `null` = поля нет (пустые секции не
-  /// пишутся). Истина — это поле; `importedSections` узла, найденные при
-  /// перечитывании `raw_body`, на старте игнорируются.
-  final NodeSections? sections;
-
-  /// Фича 478 / CANON §9.4 — хранимые предупреждения ручного сервера:
+  /// Фича 478 / PARSING_PRINCIPLES §9.4 — хранимые предупреждения ручного сервера:
   /// сегодня ровно `core_rejected`. Персистится рядом с `enabled` (ключ
   /// `warnings` записи источника). В бэкап вердикт страховки не едет (§489).
   final List<StoredWarning> warnings;
+
+  /// §578 — поле записи `skip_presets`: узел не обслуживается пресетами с
+  /// `for_each`, чей `filter` читает поле. Хранится только `true`.
+  final bool skipPresets;
 
   UserServer({
     required super.id,
@@ -372,9 +439,9 @@ final class UserServer extends ServerList {
     this.origin = UserSource.manual,
     this.rawBody = '',
     this.warnings = const [],
-    NodeSections? sections,
+    this.skipPresets = false,
     super.nodes,
-  }) : sections = (sections == null || sections.isEmpty) ? null : sections;
+  });
 
   @override
   String get type => 'user';
@@ -388,10 +455,7 @@ final class UserServer extends ServerList {
     String? rawBody,
     List<StoredWarning>? warnings,
     List<NodeSpec>? nodes,
-    NodeSections? sections,
-    // §435 — `sections ?? this.sections` не позволяет обнулить: явный флаг
-    // (паттерн `clearDns` у правил).
-    bool clearSections = false,
+    bool? skipPresets,
   }) =>
       UserServer(
         id: id,
@@ -402,7 +466,7 @@ final class UserServer extends ServerList {
         origin: origin ?? this.origin,
         rawBody: rawBody ?? this.rawBody,
         warnings: warnings ?? this.warnings,
-        sections: clearSections ? null : (sections ?? this.sections),
+        skipPresets: skipPresets ?? this.skipPresets,
         nodes: nodes ?? this.nodes,
       );
 
@@ -418,11 +482,11 @@ final class UserServer extends ServerList {
           detourPolicy == other.detourPolicy &&
           rawBody == other.rawBody &&
           _eq.equals(warnings, other.warnings) &&
-          sections == other.sections);
+          skipPresets == other.skipPresets);
 
   @override
-  int get hashCode => Object.hash(
-      id, enabled, tagPrefix, detourPolicy, rawBody, _eq.hash(warnings), sections);
+  int get hashCode => Object.hash(id, enabled, tagPrefix, detourPolicy,
+      rawBody, _eq.hash(warnings), skipPresets);
 }
 
 /// §234 — член папки: самодостаточный парсируемый фрагмент (URI-строка,
@@ -433,7 +497,7 @@ final class FolderMember {
   final String raw;
   final bool enabled;
 
-  /// Фича 478 / CANON §9.4 — хранимые предупреждения члена: сегодня ровно
+  /// Фича 478 / PARSING_PRINCIPLES §9.4 — хранимые предупреждения члена: сегодня ровно
   /// `core_rejected`. Персистится рядом с [enabled] (ключ `warnings`
   /// записи члена). В бэкап вердикт страховки не едет (§489).
   final List<StoredWarning> warnings;
@@ -448,8 +512,8 @@ final class FolderMember {
   /// server_list_build). Сосед по папке — пара с `id` этой папки.
   final NodeLink detour;
 
-  /// §435 — секции узла-члена (контракт ## 13), как у `UserServer.sections`.
-  final NodeSections? sections;
+  /// §578 — поле записи `skip_presets`, как у `UserServer.skipPresets`.
+  final bool skipPresets;
 
   /// Распарсенная нода фрагмента; null = битый raw (member виден в UI как
   /// нечитаемый, юзер может отредактировать/удалить).
@@ -461,21 +525,25 @@ final class FolderMember {
     this.warnings = const [],
     this.detour = NodeLink.none,
     this.nameHint = '',
-    NodeSections? sections,
+    this.skipPresets = false,
     NodeSpec? node,
-  })  : sections = (sections == null || sections.isEmpty) ? null : sections,
-        node = node ?? _parseFirst(raw, nameHint);
+  }) : node = node ?? _parseFirst(raw, nameHint);
 
   /// §439 — член-группа (запись `kind: auto`, `codec/auto_group_record.dart`):
   /// текста нет, узел — сама группа. detour и секций у группы не бывает.
-  FolderMember.auto(AutoSelectSpec group, {bool enabled = true})
-      : this(raw: '', enabled: enabled, node: group);
+  ///
+  /// Контракт 1.1.66 — у группы тела нет, и её `warnings` (например
+  /// `group_member_missing`) пересчитать нечем: они едут как есть.
+  FolderMember.auto(AutoSelectSpec group,
+      {bool enabled = true, List<StoredWarning> warnings = const []})
+      : this(raw: '', enabled: enabled, node: group, warnings: warnings);
 
   static NodeSpec? _parseFirst(String raw, String nameHint) {
     if (raw.trim().isEmpty) return null;
     try {
       final nodes =
-          parseAll(decode(raw), nameHint: nameHint.isEmpty ? null : nameHint);
+          parseAll(decode(raw),
+          nameHint: nameHint.isEmpty ? null : nameHint, own: true);
       return nodes.isEmpty ? null : nodes.first;
     } catch (_) {
       return null;
@@ -488,8 +556,7 @@ final class FolderMember {
     List<StoredWarning>? warnings,
     NodeLink? detour,
     String? nameHint,
-    NodeSections? sections,
-    bool clearSections = false,
+    bool? skipPresets,
   }) =>
       FolderMember(
         raw: raw ?? this.raw,
@@ -497,7 +564,7 @@ final class FolderMember {
         warnings: warnings ?? this.warnings,
         detour: detour ?? this.detour,
         nameHint: nameHint ?? this.nameHint,
-        sections: clearSections ? null : (sections ?? this.sections),
+        skipPresets: skipPresets ?? this.skipPresets,
         // Смена raw или имени → re-parse в конструкторе; иначе нода та же.
         node: raw == null && nameHint == null ? node : null,
       );
@@ -513,7 +580,7 @@ final class FolderMember {
           _eq.equals(warnings, other.warnings) &&
           detour == other.detour &&
           nameHint == other.nameHint &&
-          sections == other.sections &&
+          skipPresets == other.skipPresets &&
           _sameGroup(node, other.node));
 
   static bool _sameGroup(NodeSpec? a, NodeSpec? b) => a is AutoSelectSpec
@@ -521,8 +588,8 @@ final class FolderMember {
       : b is! AutoSelectSpec;
 
   @override
-  int get hashCode =>
-      Object.hash(raw, enabled, _eq.hash(warnings), detour, nameHint, sections);
+  int get hashCode => Object.hash(
+      raw, enabled, _eq.hash(warnings), detour, nameHint, skipPresets);
 }
 
 /// §234 — папка ручных серверов: контейнер членов с общим toggle,
@@ -541,6 +608,10 @@ final class FolderServers extends ServerList {
   final String? pingUrl;
   final int? pingTimeoutMs;
 
+  /// Фича 565 фаза B — свёртка папки в группу; `null` — не свёрнута.
+  @override
+  final SourceReplace? replace;
+
   FolderServers({
     required super.id,
     required super.name,
@@ -551,6 +622,7 @@ final class FolderServers extends ServerList {
     DateTime? createdAt,
     this.pingUrl,
     this.pingTimeoutMs,
+    this.replace,
   })  : members = members ?? <FolderMember>[],
         createdAt = createdAt ?? DateTime.now(),
         super(nodes: [
@@ -588,6 +660,8 @@ final class FolderServers extends ServerList {
     String? pingUrl,
     int? pingTimeoutMs,
     bool clearPing = false,
+    SourceReplace? replace,
+    bool clearReplace = false,
   }) =>
       FolderServers(
         id: id,
@@ -599,6 +673,7 @@ final class FolderServers extends ServerList {
         members: members ?? this.members,
         pingUrl: clearPing ? null : (pingUrl ?? this.pingUrl),
         pingTimeoutMs: clearPing ? null : (pingTimeoutMs ?? this.pingTimeoutMs),
+        replace: clearReplace ? null : (replace ?? this.replace),
       );
 
   /// Равенство записи (§439): `nodes` выводятся из [members].
@@ -614,11 +689,12 @@ final class FolderServers extends ServerList {
           _eq.equals(members, other.members) &&
           createdAt == other.createdAt &&
           pingUrl == other.pingUrl &&
-          pingTimeoutMs == other.pingTimeoutMs);
+          pingTimeoutMs == other.pingTimeoutMs &&
+          replace == other.replace);
 
   @override
   int get hashCode => Object.hash(id, name, enabled, tagPrefix, detourPolicy,
-      _eq.hash(members), createdAt, pingUrl, pingTimeoutMs);
+      _eq.hash(members), createdAt, pingUrl, pingTimeoutMs, replace);
 }
 
 /// §248 — сброс detour-ссылок на Направление [tag] (или его auto-двойник
@@ -659,55 +735,6 @@ final class FolderServers extends ServerList {
     if (membersChanged) next = next.copyWith(members: ms);
   }
   return (healed: count > 0 ? next : null, count: count);
-}
-
-/// §441 (SPEC 129 §6, D-114) — `body.detour` DNS-серверов в секциях узлов
-/// списка [l] (одиночный сервер, члены папки) по [retarget]
-/// ([retargetDnsServerDetour]). Возвращает копию (null — нечего лечить) и
-/// число переписанных серверов.
-///
-/// Общее ядро: storage-heal (`_healDnsServerDirectionRefs`) и in-memory
-/// ресинк `SubscriptionController.syncSectionsDnsDetourRefsHealed` обязаны
-/// переписывать одинаково, иначе следующий `_persist()` воскресит ссылку.
-({ServerList? healed, int count}) retargetSectionsDnsDetours(
-  ServerList l,
-  Map<String, String> retarget,
-) {
-  var count = 0;
-  NodeSections? heal(NodeSections? sections) {
-    if (sections == null || sections.dnsServers.isEmpty) return null;
-    var changed = false;
-    final servers = <DnsServerInline>[];
-    for (final d in sections.dnsServers) {
-      final next = retargetDnsServerDetour(d, retarget);
-      if (!identical(next, d)) {
-        changed = true;
-        count++;
-      }
-      servers.add(next);
-    }
-    return changed ? sections.copyWith(dnsServers: servers) : null;
-  }
-
-  switch (l) {
-    case UserServer u:
-      final s = heal(u.sections);
-      return (healed: s == null ? null : u.copyWith(sections: s), count: count);
-    case FolderServers f:
-      var changed = false;
-      final members = <FolderMember>[];
-      for (final m in f.members) {
-        final s = heal(m.sections);
-        if (s != null) changed = true;
-        members.add(s == null ? m : m.copyWith(sections: s));
-      }
-      return (
-        healed: changed ? f.copyWith(members: members) : null,
-        count: count,
-      );
-    case SubscriptionServers():
-      return (healed: null, count: 0);
-  }
 }
 
 /// Политика применения detour-серверов (§1.3 спеки 026, перенесено из 018).

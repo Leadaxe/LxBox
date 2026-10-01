@@ -12,10 +12,15 @@
 /// зависит (24.1.6). Разбор-время ⚠ — волна W2.
 library;
 
+import 'dart:convert' show jsonDecode, jsonEncode;
+
 import '../../models/node_warning.dart';
 import '../../models/singbox_entry.dart';
+import '../contract/body_edit.dart';
 import '../contract/body_sanitizer.dart';
+import '../contract/node_core_gate.dart';
 import '../contract/registry.dart';
+import 'core_chain_capability.dart' show kCoreBuildTags;
 
 /// Результат прогона гарда по одной сборке.
 final class RegistryGateReport {
@@ -41,19 +46,25 @@ final class RegistryGateReport {
 /// (`direct`/`block`/`dns`) и группы Направлений (`selector`/`urltest`) сюда
 /// не приходят — они не тело узла (спека §2.4).
 ///
-/// §473 — [verbatim] называет записи, чьё тело взято ДОСЛОВНО из
-/// JSON-источника (§455, `verbatimBodyOf`): их вход — `singbox`, и правило
-/// `max_when.except_sources` оставляет им значение, которое на прочих входах
-/// заменило бы потолком. Без этой метки гард переписал бы `mtu: 1420`
-/// AmneziaWG-узлу на сборке — то есть ровно то, чего §455 не позволяет:
-/// узел sing-box-источника идёт в ядро дословно. Пустое множество —
-/// поведение как прежде.
+/// §577 — авторское тело ([SingboxEntry.authored]): вход `singbox` (правило
+/// `max_when.except_sources` оставляет значение), а правки санитайзера идут
+/// через точку правки (`contract/body_edit.dart`): мягкое правило тело не
+/// меняет и даёт код с `applied: false`, жёсткое (`core_rejects`, `type`,
+/// узловой гейт ядра) применяется. Строка отчёта у неприменённого кода
+/// получает пометку `(not applied)`.
+///
+/// §56 (контракт 1.1.60) — до санитайзера каждую запись судит узловой гейт
+/// ядра реестра ([nodeCoreRefusal]): протокол, поле или форма-диапазон с
+/// `on_core_unsupported: drop_node`, чьё требование (`build_tag` — по
+/// [coreBuildTags], `min_core` — по [coreVersion]) ядро не выполняет, снимает
+/// запись целиком с кодом реестра. [coreBuildTags] `null` — теги неизвестны,
+/// гейт по тегу не применяется.
 ///
 /// Реестр не загружен — no-op: приложение работает как до §460.
 RegistryGateReport applyRegistryGate(
   List<SingboxEntry> entries, {
   required String coreVersion,
-  Set<SingboxEntry> verbatim = const {},
+  Set<String>? coreBuildTags = kCoreBuildTags,
 }) {
   final warnings = <String>[];
   final dropped = <SingboxEntry>[];
@@ -94,27 +105,56 @@ RegistryGateReport applyRegistryGate(
     );
   }
 
+  final core = CoreInfo(version: coreVersion, tags: coreBuildTags);
   for (final entry in entries) {
     final type = entry.map['type'];
     if (type is! String || type.isEmpty) continue;
     final tag = entry.tag;
 
-    final res = RegistrySanitizer.sanitize(
-      Map<String, dynamic>.from(entry.map),
-      scheme: type,
-      coreVersion: coreVersion,
-      source:
-          verbatim.contains(entry) ? BodySource.singbox : BodySource.other,
+    // §56 — узловой гейт ядра: узел, который ядру не по силам, конфиг не
+    // собирает вовсе (ядро отвергло бы его целиком), поэтому снимается до
+    // санитайзера и его кодов.
+    final refusal = nodeCoreRefusal(type, entry.map, core);
+    if (refusal != null) {
+      final w = RegistryWarning(
+        code: refusal.code,
+        path: refusal.path,
+        params: {'reason': refusal.reason},
+        ownerTag: tag,
+      );
+      final where = refusal.path == null ? '' : ' [${refusal.path}]';
+      final line = '$tag: ${w.message()}$where';
+      if (!warnings.contains(line)) warnings.add(line);
+      warningsByEmittedTag.putIfAbsent(tag, () => []).add(w);
+      dropped.add(entry);
+      continue;
+    }
+
+    // Санитайзер переписывает и вложенные карты: авторскому телу нужен
+    // нетронутый снимок, из него точка правки соберёт итог.
+    final original = entry.authored
+        ? (jsonDecode(jsonEncode(entry.map)) as Map).cast<String, dynamic>()
+        : entry.map;
+    final raw = Map<String, dynamic>.from(entry.authored
+        ? (jsonDecode(jsonEncode(entry.map)) as Map).cast<String, dynamic>()
+        : entry.map);
+    final res = settleSanitized(
+      type,
+      original,
+      RegistrySanitizer.sanitize(
+        raw,
+        scheme: type,
+        coreVersion: coreVersion,
+        source: entry.authored ? BodySource.singbox : BodySource.other,
+      ),
+      authored: entry.authored,
     );
     if (res.warnings.isEmpty && res.body == null) continue;
 
     for (final w in res.warnings) {
       // Текст реестра на языке UI + машинный хвост с путём и значением:
       // строка уходит и в отчёт пользователю, и в Debug API.
-      final where = w.path == null
-          ? ''
-          : ' [${w.path}${w.value == null ? '' : '=${w.value}'}]';
-      final line = '$tag: ${w.message()}$where';
+      final line = '$tag: ${reportLineOf(w)}';
       if (!warnings.contains(line)) warnings.add(line);
       warningsByEmittedTag.putIfAbsent(tag, () => []).add(w);
     }
@@ -126,9 +166,13 @@ RegistryGateReport applyRegistryGate(
     // Тело переписывается НА МЕСТЕ: те же map-объекты уже разошлись по
     // аккумуляторам сборки (пулы Направлений, ctx.outbounds), и подменить
     // ссылку значило бы оставить половину из них со старым телом.
-    entry.map
-      ..clear()
-      ..addAll(res.body!);
+    applyRegistryEdits(
+      entry.map,
+      scheme: type,
+      authored: false,
+      edited: res.body!,
+      warnings: const [],
+    );
   }
 
   return RegistryGateReport(
@@ -136,4 +180,14 @@ RegistryGateReport applyRegistryGate(
     dropped,
     warningsByEmittedTag: warningsByEmittedTag,
   );
+}
+
+/// §577 — строка отчёта сборки для кода реестра: текст, машинный хвост с
+/// путём и значением, у неприменённого правила — пометка `(not applied)`.
+String reportLineOf(RegistryWarning w) {
+  final where = w.path == null
+      ? ''
+      : ' [${w.path}${w.value == null ? '' : '=${w.value}'}]';
+  final mark = w.applied ? '' : ' (not applied)';
+  return '${w.message()}$where$mark';
 }

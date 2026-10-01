@@ -138,6 +138,7 @@ List<String> _applyPresetSingle(
   _PresetSharedState state, {
   Map<String, String> presetSrsPaths = const {},
   Map<String, String> globalVars = const {},
+  List<PresetNode> presetNodes = const [],
 }) {
   final warnings = <String>[];
   if (cr.presetId.isEmpty) return warnings;
@@ -176,7 +177,8 @@ List<String> _applyPresetSingle(
     }
   }
 
-  final raw = expandPreset(cr, match, srsPaths: srsSubset, globalVars: globalVars);
+  final raw = expandPreset(cr, match,
+      srsPaths: srsSubset, globalVars: globalVars, nodes: presetNodes);
   warnings.addAll(raw.warnings);
 
   // Rule sets — identical-skip / first-wins через registry.
@@ -225,7 +227,13 @@ List<String> _applyPresetSingle(
       final existing = state.dnsServerByTag[tag];
       if (existing == null) {
         state.dnsServerByTag[tag] = s;
-        state.dnsServerPresetIdByTag[tag] = cr.presetId;
+        // §578 — у пресета с `for_each` тег сервера без пространства пресета
+        // (`<тег узла>-dns`): запись хранения DNS держит его как `ref` = тег.
+        // С `preset_id` модель достроила бы тег до `tailscale:<тег>-dns`, и
+        // сервер разошёлся бы с правилами, которые на него ссылаются.
+        if (tag.startsWith('${cr.presetId}:')) {
+          state.dnsServerPresetIdByTag[tag] = cr.presetId;
+        }
         state.dnsServers.add(s);
       } else if (!const DeepCollectionEquality().equals(existing, s)) {
         warnings
@@ -607,6 +615,8 @@ UnifiedApplyResult applyAllCustomRules(
   Map<String, String> srsPaths = const {},
   Map<String, String> presetSrsPaths = const {},
   Map<String, String> globalVars = const {},
+  // §578 — узлы конфига для пресетов с `for_each` (порядок конфига).
+  List<PresetNode> presetNodes = const [],
 }) {
   final state = _PresetSharedState();
   final warnings = <String>[];
@@ -624,6 +634,7 @@ UnifiedApplyResult applyAllCustomRules(
           state,
           presetSrsPaths: presetSrsPaths,
           globalVars: globalVars,
+          presetNodes: presetNodes,
         ));
       case CustomRuleInline():
         if (!cr.enabled) continue;

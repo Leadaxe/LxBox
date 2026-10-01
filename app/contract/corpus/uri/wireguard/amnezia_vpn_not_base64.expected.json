@@ -1,0 +1,12 @@
+{
+  "dropped": [
+    {
+      "code": "form_unrecognized",
+      "index": 0,
+      "reason": "parse_error",
+      "ref": "vpn://%%%not-base64%%%"
+    }
+  ],
+  "nodes": [],
+  "v": 1
+}

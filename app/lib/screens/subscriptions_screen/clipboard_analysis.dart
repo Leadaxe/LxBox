@@ -1,5 +1,7 @@
+import '../../models/node_warning.dart';
 import '../../services/l10n/locale_controller.dart';
 import '../../services/parser/body_decoder.dart';
+import '../../services/parser/json_comments.dart';
 import '../../services/parser/parse_all.dart';
 import '../../services/subscription/input_helpers.dart';
 
@@ -10,10 +12,26 @@ class ClipboardAnalysis {
     required this.title,
     required this.subtitle,
     this.notImported = const [],
+    this.dropped = const [],
   });
   final String type;
   final String title;
   final String subtitle;
+
+  /// §561 / задача 570 — записи вставки, которые не станут узлами, с
+  /// причиной (`dropped[]` того же разбора, что сделает импорт). Пусто —
+  /// отбраковок нет. Диалог показывает счётчик и шторку причин.
+  final List<NodeWarning> dropped;
+
+  ClipboardAnalysis withDropped(List<NodeWarning> d) => d.isEmpty
+      ? this
+      : ClipboardAnalysis(
+          type: type,
+          title: title,
+          subtitle: subtitle,
+          notImported: notImported,
+          dropped: d,
+        );
 
   /// §368 §8 — секции конфига, которые мы не переносим (`route`, `dns`,
   /// `inbounds`). Только фактически присутствовавшие: в конфиге без `dns`
@@ -24,6 +42,23 @@ class ClipboardAnalysis {
 /// §368 — верхнеуровневые секции, которые импорт не переносит: наша модель
 /// генерирует их сама из своих настроек (§6).
 const _kIgnoredConfigSections = ['route', 'dns', 'inbounds'];
+
+/// §561 / задача 570 — отбраковки сухого разбора вставки (тот же вход, что
+/// у импорта). Сбой разбора — не отбраковка: пусто, дальше решает импорт.
+List<NodeWarning> _droppedOf(DecodedBody decoded) {
+  final dropped = <NodeWarning>[];
+  try {
+    final nodes = parseAll(decoded, dropped: dropped);
+    // §585 — узел незнакомого типа импорт принимает своей записью
+    // (`acceptsOwnUnknownType`); превью обязано сказать то же.
+    if (nodes.isEmpty && acceptsOwnUnknownType(decoded) != null) {
+      return const [];
+    }
+  } catch (_) {
+    return const [];
+  }
+  return dropped;
+}
 
 ClipboardAnalysis analyzeClipboard(String text) {
   if (isSubscriptionUrl(text)) {
@@ -75,17 +110,19 @@ ClipboardAnalysis analyzeClipboard(String text) {
       type: 'direct',
       title: getLocalText.s("%s link", scheme),
       subtitle: '${label.isNotEmpty ? "$label\n" : ""}$server',
-    );
+    ).withDropped(_droppedOf(decode(text)));
   }
 
   // §368 §7.2 — JSON-формы: превью читает ТОТ ЖЕ результат, что и импорт.
   // Раньше здесь была своя эвристика (`startsWith('{') && contains('"type"')`),
   // третья по счёту, и она разошлась с гейтом контроллера: превью обещало
   // «Outbound JSON» там, где импорт отказывал.
-  final decoded = decode(text);
+  // §585 — комментарии `//` и `/* */` снимаются тем же правилом, что у
+  // импорта (`addFromInput`).
+  final decoded = decode(uncommentedJson(text) ?? text);
   if (decoded is JsonConfig) {
     final analysis = _analyzeJson(decoded);
-    if (analysis != null) return analysis;
+    if (analysis != null) return analysis.withDropped(_droppedOf(decoded));
   }
 
   return ClipboardAnalysis(type: 'unknown', title: getLocalText.s("Unknown"), subtitle: '');

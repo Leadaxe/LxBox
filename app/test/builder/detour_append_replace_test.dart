@@ -1,10 +1,15 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/config/consts.dart';
 import 'package:lxbox/models/codec/source_record.dart';
 import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/parser_config.dart';
 import 'package:lxbox/models/server_list.dart';
+import 'package:lxbox/models/node_spec.dart';
+import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/services/builder/build_config.dart';
+import 'package:lxbox/services/parser/json_parsers.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
 import '../parser/engine_test_setup.dart';
@@ -362,6 +367,157 @@ void main() {
       // его предложил, был бы dangling. Picker теперь его skip'ает.
       expect(outs.map((o) => o['tag']).toSet().contains('Home WG'), false,
           reason: 'disabled UserServer не эмитит outbound');
+    });
+  });
+
+  // §574 (контракт 1.1.84, §81) — `tls.fragment` уступает `detour`,
+  // назначенному сборкой: снимается с кодом `detour_with_tls_fragment`,
+  // код виден в предупреждениях узла. `record_fragment` связи с detour не
+  // имеет.
+  group('§574 — tls.fragment под detour сборки', () {
+    NodeSpec xrayFragmentNode() => parseXrayElement({
+          'remarks': 'X',
+          'outbounds': [
+            {
+              'tag': 'proxy',
+              'protocol': 'vless',
+              'settings': {
+                'vnext': [
+                  {
+                    'address': 'example-1.com',
+                    'port': 443,
+                    'users': [
+                      {
+                        'id': '11111111-1111-1111-1111-111111111111',
+                        'encryption': 'none',
+                      },
+                    ],
+                  },
+                ],
+              },
+              'streamSettings': {
+                'network': 'tcp',
+                'security': 'tls',
+                'tlsSettings': {'serverName': 'example-1.com'},
+                'finalmask': {
+                  'tcp': [
+                    {
+                      'type': 'fragment',
+                      'settings': {'packets': 'tlshello'},
+                    },
+                  ],
+                },
+              },
+            },
+          ],
+        }).single;
+
+    NodeSpec singboxNode(Map<String, dynamic> tls) {
+      final raw = jsonEncode({
+        'type': 'vless',
+        'tag': 'S',
+        'server': 'example-1.com',
+        'server_port': 443,
+        'uuid': '11111111-1111-1111-1111-111111111111',
+        'tls': tls,
+      });
+      return parseSingboxEntry(
+        jsonDecode(raw) as Map<String, dynamic>,
+        rawSource: raw,
+      )!;
+    }
+
+    Future<(Map, BuildResult)> buildMain(NodeSpec spec,
+        {required bool detour}) async {
+      final list = UserServer(
+        id: 'u1',
+        name: 'Test',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: detour
+            ? const DetourPolicy(overrideDetour: NodeLink(tag: 'jump-out'))
+            : const DetourPolicy(),
+        origin: UserSource.paste,
+        nodes: [spec],
+      );
+      final result = await buildConfig(
+        lists: [list],
+        template: template,
+        settings: const BuildSettings(
+          userVars: {'clash_api': '127.0.0.1:9090'},
+          enabledGroups: {'vpn-1', kAutoOutboundTag},
+        ),
+      );
+      expect(result.validation.isOk, true,
+          reason: result.validation.issues.join('\n'));
+      final outs = result.config['outbounds'] as List;
+      final main =
+          outs.firstWhere((o) => (o as Map)['tag'] == spec.tag) as Map;
+      return (main, result);
+    }
+
+    List<String> codesOf(BuildResult r, String tag) => [
+          for (final w in r.nodeBuildWarningsByEmittedTag[tag] ?? const [])
+            if (w is RegistryWarning) w.code,
+        ];
+
+    test('Xray finalmask + override_detour → fragment снят, код у узла',
+        () async {
+      final (main, r) = await buildMain(xrayFragmentNode(), detour: true);
+      expect(main['detour'], 'jump-out');
+      final tls = main['tls'] as Map;
+      expect(tls['enabled'], true);
+      expect(tls.containsKey('fragment'), isFalse);
+      expect(tls.containsKey('fragment_fallback_delay'), isFalse);
+      expect(codesOf(r, main['tag'] as String),
+          contains('detour_with_tls_fragment'));
+      final w = r.nodeBuildWarningsByEmittedTag[main['tag']]!
+          .whereType<RegistryWarning>()
+          .firstWhere((w) => w.code == 'detour_with_tls_fragment');
+      expect(w.params['tag'], main['tag']);
+      expect(w.params['target'], 'jump-out');
+    });
+
+    test('тот же узел без detour — fragment на месте, кода нет', () async {
+      final (main, r) = await buildMain(xrayFragmentNode(), detour: false);
+      expect(main.containsKey('detour'), isFalse);
+      expect((main['tls'] as Map)['fragment'], true);
+      expect(codesOf(r, main['tag'] as String),
+          isNot(contains('detour_with_tls_fragment')));
+    });
+
+    test('явный record_fragment под detour остаётся, fragment снят',
+        () async {
+      final (main, r) = await buildMain(
+        singboxNode({
+          'enabled': true,
+          'server_name': 'example-1.com',
+          'fragment': true,
+          'record_fragment': true,
+          'fragment_fallback_delay': '300ms',
+        }),
+        detour: true,
+      );
+      expect(main['detour'], 'jump-out');
+      final tls = main['tls'] as Map;
+      expect(tls.containsKey('fragment'), isFalse);
+      expect(tls['record_fragment'], true);
+      expect(tls['fragment_fallback_delay'], '300ms');
+      expect(codesOf(r, 'S'), ['detour_with_tls_fragment']);
+    });
+
+    test('только record_fragment под detour — тело не трогается', () async {
+      final (main, r) = await buildMain(
+        singboxNode({
+          'enabled': true,
+          'server_name': 'example-1.com',
+          'record_fragment': true,
+        }),
+        detour: true,
+      );
+      expect(main['detour'], 'jump-out');
+      expect((main['tls'] as Map)['record_fragment'], true);
+      expect(codesOf(r, 'S'), isEmpty);
     });
   });
 

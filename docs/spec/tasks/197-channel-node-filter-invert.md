@@ -1,6 +1,6 @@
 # §197 — Инверсия node_filter канала (исключающий фильтр)
 
-> **СТАТУС: РЕАЛИЗОВАНО (28.06.2026).** Расширение [§125](../features/125%20configurable-channels/spec.md).
+> **СТАТУС: РЕАЛИЗОВАНО (28.06.2026).** Расширение [§125](../tasks/125F-configurable-channels/spec.md).
 > Ветка `feat/configurable-channels-125`.
 
 ## Контекст
@@ -62,6 +62,6 @@ invert)` — главный фильтр (`f.regexInvert`) → `nodeFilterInvert
 
 ## Связанные
 
-- [§125 configurable-channels](../features/125%20configurable-channels/spec.md) — node_filter.
+- [§125 configurable-channels](../tasks/125F-configurable-channels/spec.md) — node_filter.
 - [§195 save-home-filter-to-channel](195-save-home-filter-to-channel.md) — проброс инверсии.
-- [§048 home-node-filters](../features/048%20home-node-filters/spec.md) — эталон NegateToggle.
+- [§048 home-node-filters](../tasks/048F-home-node-filters/spec.md) — эталон NegateToggle.

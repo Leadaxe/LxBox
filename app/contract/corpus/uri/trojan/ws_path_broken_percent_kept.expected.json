@@ -1,0 +1,33 @@
+{
+  "nodes": [
+    {
+      "entry": {
+        "password": "pass123",
+        "server": "example-1.com",
+        "server_port": 443,
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        },
+        "transport": {
+          "headers": {
+            "Host": "example-1.com"
+          },
+          "type": "ws"
+        },
+        "type": "trojan"
+      },
+      "kind": "outbound",
+      "label": "pct-broken",
+      "scheme": "trojan",
+      "warnings": [
+        {
+          "code": "type_invalid",
+          "path": "transport.path",
+          "value": "/x%zz"
+        }
+      ]
+    }
+  ],
+  "v": 1
+}

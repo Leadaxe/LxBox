@@ -9,6 +9,9 @@ L×Box parses proxy URIs from subscriptions and converts them into [sing-box](ht
 - [`app/lib/services/parser/ini_parser.dart`](../app/lib/services/parser/ini_parser.dart) — WireGuard INI
 - [`app/lib/services/parser/parse_all.dart`](../app/lib/services/parser/parse_all.dart) — orchestrator
 - [`app/lib/models/node_spec.dart`](../app/lib/models/node_spec.dart), [`node_spec_emit.dart`](../app/lib/models/node_spec_emit.dart) — sealed `NodeSpec` + `emit()` / `toUri()`. `toUri()` is **not** implemented per variant: every variant delegates to `uriViaEngineRequired`, which writes the link through the section engine (the emit rules live in the registry). Tailscale is the one exception — `toUriTailscale`, because the node has no link form of its own
+- `openvpn-client` (task 586, contract 1.1.99): a registry type without described fields (`body.fields_unchecked`). It is pasted as sing-box JSON only — no form, no `.ovpn` import, no links. Accepted from any source (own record, a document with other types, a subscription) as `UnknownTypeSpec` without warnings; the body goes to the core as written, into `endpoints[]`. On a core without `with_openvpn` the build drops it with `openvpn_core_unsupported`
+- Config section of every type — the `kind` of its registry record (`ContractRegistry.isEndpointType`); the app keeps no list of endpoint types (task 586)
+- Types outside the registry (e.g. `future-proto`): accepted only from an own source (own server, folder member, node editor) as `UnknownTypeSpec` with an info warning «Unknown node type»; the body goes to the core as written, into `outbounds[]`; in a subscription such an entry is still dropped (task 585)
 
 **Sanitisers and guards.** Every place where a value is dropped, normalised,
 defaulted or degraded so the core does not fail — the full registry with
@@ -24,7 +27,7 @@ reference lives outside this repo and is vendored into `app/contract/` by
 - `contract/registry/protocols/<scheme>.json` — per-scheme query parameters,
   aliases, allowlists and degradation rules. Where this document and the
   registry disagree, the registry wins.
-- `contract/docs/CANON.md`, `IDENTITY.md` — how a parsed node is canonicalized
+- `contract/docs/PARSING_PRINCIPLES.md`, `IDENTITY.md` — how a parsed node is canonicalized
   and how its identity hash is computed. Both projects must agree, otherwise the
   same subscription yields different nodes on phone and desktop.
 - `contract/corpus/uri/` — conformance fixtures run by
@@ -43,6 +46,7 @@ reference lives outside this repo and is vendored into `app/contract/` by
 5. [Shadowsocks](#4-shadowsocks)
 6. [Hysteria2](#5-hysteria2)
 7. [NaïveProxy](#55-naïveproxy)
+7a. [AnyTLS](#56-anytls)
 8. [SSH](#6-ssh)
 9. [SOCKS](#7-socks)
 10. [HTTP(S) proxy](#75-https-proxy)
@@ -124,7 +128,7 @@ Parsing lives in [`app/lib/services/subscription/sources.dart`](../app/lib/servi
 - `SubscriptionMeta.{totalBytes, uploadBytes, downloadBytes, expireTimestamp}` ← `subscription-userinfo`
 - `SubscriptionMeta.supportUrl` ← `support-url`
 - `SubscriptionMeta.webPageUrl` ← `profile-web-page-url`
-- `SubscriptionServers.updateIntervalHours` ← `profile-update-interval` (used by [spec 027](./spec/features/027%20subscription%20auto%20update/spec.md))
+- `SubscriptionServers.updateIntervalHours` ← `profile-update-interval` (used by [spec 027](./spec/tasks/027F-subscription-auto-update/spec.md))
 
 The User-Agent of HTTP requests is `LxBox-android/<appVersion>` (for example `LxBox-android/2.9.0`; the brand token since §114, previously `LxBox Android subscription client` / `SubscriptionParserClient`). It can be overridden per request through App Settings → Subscriptions → Custom User-Agent (§118). Panels route the response body by the `LxBox` substring in the UA (`user_agent.dart`, `resolveSubscriptionUserAgent`).
 
@@ -682,13 +686,13 @@ naive+https://u:p@host:443/?extra-headers=X-Forwarded-Proto%3Ahttps#%E2%9C%85%20
 
 ### Build-tag Requirement
 
-NaïveProxy outbound is gated behind the sing-box build tag `with_naive_outbound`. Since §097/§104 L×Box bundles its own fork core `sing-box-lx` (local `app/android/libbox.aar`, pin in [`app/android/libbox.version`](../app/android/libbox.version); the old Maven `com.github.singbox-android:libbox` dependency is gone), built **with** this tag — see [spec 037 §2](spec/features/037%20naive%20proxy/spec.md#2-build-tag-в-libbox--проверено) for verification details. If a future core build ever ships without naive, `BoxVpnClient` surfaces a `NaiveBuildTagWarning` per node when sing-box returns the upstream error string `naive outbound is not included in this build, rebuild with -tags with_naive_outbound`.
+NaïveProxy outbound is gated behind the sing-box build tag `with_naive_outbound`. Since §097/§104 L×Box bundles its own fork core `sing-box-lx` (local `app/android/libbox.aar`, pin in [`app/android/libbox.version`](../app/android/libbox.version); the old Maven `com.github.singbox-android:libbox` dependency is gone), built **with** this tag — see [spec 037 §2](spec/tasks/037F-naive-proxy/spec.md#2-build-tag-в-libbox--проверено) for verification details. If a future core build ever ships without naive, `BoxVpnClient` surfaces a `NaiveBuildTagWarning` per node when sing-box returns the upstream error string `naive outbound is not included in this build, rebuild with -tags with_naive_outbound`.
 
 ### Reference
 
 - sing-box outbound: https://sing-box.sagernet.org/configuration/outbound/naive/
 - DuckSoft URI spec: https://gist.github.com/DuckSoft/ca03913b0a26fc77a1da4d01cc6ab2f1
-- LxBox spec: [`docs/spec/features/037 naive proxy/spec.md`](spec/features/037%20naive%20proxy/spec.md)
+- LxBox spec: [`docs/spec/tasks/037F-naive-proxy/spec.md`](spec/tasks/037F-naive-proxy/spec.md)
 
 ---
 
@@ -832,9 +836,10 @@ Default port: **1080**.
 **The scheme carries the protocol version.** A SOCKS link has no query
 parameter for the version in any dialect, so the scheme itself is the
 discriminator — the way the `proxy-https://` suffix discriminates TLS for the
-HTTP proxy. One table serves both ends, the link mapper and the share-URI
-emitter (`socksSchemeForVersion`, `uri_utils.dart`): a node parsed from
-`socks4://` is emitted back as `socks4://`.
+HTTP proxy. Both ends read the same registry entry (`socks.json`): the link
+mapper's `scheme_sets` (scheme → `version`) and the emitter's `emit.form_from`
+(`version` → scheme), so a node parsed from `socks4://` is emitted back as
+`socks4://`. There is no copy of the table in Dart (§562).
 
 | Scheme | `version` in the body |
 |---|---|
@@ -956,6 +961,30 @@ The private key is URL-encoded in the userinfo position. Default port: **51820**
 
 Scheme aliases: `wireguard://`, `wg://`, `awg://` and `amneziawg://` — all four are parsed by the same endpoint logic (§097; `amneziawg://` is the protocol's full name, added by contract 1.1.48 and picked up from the registry rather than from a literal, §512). Panels (rrtrg and neighbours) write the full name, and before 1.1.48 such a link was rejected as an unsupported scheme even though the section could already read every one of its fields. The presence of AWG fields in the query (under any of the schemes) makes the node an AmneziaWG one — see [section 8.5](#85-amneziawg-awg-awg2).
 
+### Second form: a whole `.conf` in base64
+
+Under any of the four schemes the authority may be, instead of `key@host:port`, a base64 blob holding an **entire wg-quick file**:
+
+```
+awg://<base64 of the whole .conf>#label
+amneziawg://<base64 of the whole .conf>#label
+```
+
+AmneziaWG 3.x panels hand out links in this shape (contract 1.1.23, L×Box 2.24.1 §450; `amneziawg://` joined the alias list in 2.25.2 §512). The registry declares it as the form `conf_b64` of the `wireguard` section (`registry/protocols/wireguard.json`), beside the ordinary `url` form.
+
+**What marks the form** (both conditions, judged on the authority):
+
+1. there is **no `@`** — the `key@host` form always has one;
+2. the whole authority is base64 (`^[A-Za-z0-9+/=_-]+$`) — `wireguard://host:port?privatekey=…`, which also has no `@`, carries `:` and `?`, bytes outside that alphabet.
+
+Both must hold: an authority without `@` is legal for a link that keeps the key in the query, so `@` alone does not decide.
+
+**How it is read.** The authority is base64-decoded (std and url-safe, padded and unpadded alike), and the result is parsed as **INI, by the same rules as section 9** — `[Interface]` / `[Peer]`, the same field spellings, the same AWG and AWG 3.x keys, the same MTU clamp. There is one set of value rules for the two inputs, not two. Every parameter of the section names its source per form, so `privatekey`, for one, comes from the userinfo in the `url` form and from `Interface.PrivateKey` in `conf_b64`.
+
+**The fragment is a label and is optional.** With no fragment the name falls back, in order, to the first `=`-less comment under `[Peer]` (where Proton and friends write the server name), then an import hint, then the peer address. The hint link is optional and L×Box passes none, so here the chain ends at the peer address — `awg://<blob>` with no fragment is named after the `Endpoint` host, not the literal `WireGuard`. The node's `rawSource` stays the original `awg://` link, not a `wireguard://` URI synthesised while parsing: the identity hash and the exported source are built from it.
+
+One link is one node. A blob holding several `[Interface]` blocks is not an error and is not split — the first block is taken.
+
 ### Parsed Parameters
 
 | Parameter | Query key | Description |
@@ -1008,7 +1037,7 @@ Scheme aliases: `wireguard://`, `wg://`, `awg://` and `amneziawg://` — all fou
 
 ## 8.5 AmneziaWG (AWG, AWG2)
 
-Added in §097 (the [`097`](./spec/features/097%20awg2-amneziawg2/spec.md) spec) together with the switch of the bundled core to the [`sing-box-lx`](https://github.com/Leadaxe/sing-box-lx) fork (the `with_awg` build tag, `option.AmneziaWGOptions`; the version pin is `app/android/libbox.version`). AmneziaWG is WireGuard plus obfuscation: the same keys, peers and handshake, plus a set of parameters that disguise WG traffic from DPI.
+Added in §097 (the [`097`](./spec/tasks/097F-awg2-amneziawg2/spec.md) spec) together with the switch of the bundled core to the [`sing-box-lx`](https://github.com/Leadaxe/sing-box-lx) fork (the `with_awg` build tag, `option.AmneziaWGOptions`; the version pin is `app/android/libbox.version`). AmneziaWG is WireGuard plus obfuscation: the same keys, peers and handshake, plus a set of parameters that disguise WG traffic from DPI.
 
 Every field is **config-only** — nothing is negotiated over the wire, and the values **must match on the client and the server**. A mismatch fails silently: the handshake may succeed while no data flows.
 
@@ -1019,6 +1048,8 @@ awg://PRIVATE_KEY@host:port?publickey=...&address=...&jc=4&jmin=40&jmax=70&s1=0&
 ```
 
 `awg://` and its full-name form `amneziawg://` are scheme aliases for the same endpoint logic as `wireguard://` / `wg://` (section 8). AWG fields are recognised in the query of **any** of the four schemes: with at least one field present the node is AmneziaWG (`WireguardSpec.awg != null`), and with none it is ordinary WG (backward compatible, with unchanged behaviour).
+
+AmneziaWG 3.x panels more often hand out the other form — `awg://<base64 of the whole .conf>#label`, with the AWG 3.x fields written as INI keys rather than query keys. The shape, how the form is told apart and where the label comes from are in [section 8](#8-wireguard) under “Second form”; the field spellings are the same as for a pasted `.conf` (section 9).
 
 ### Fields
 
@@ -1184,6 +1215,8 @@ PersistentKeepalive = 25
 
 Auto-detected when input contains both `[Interface]` and `[Peer]` sections.
 
+The same text also arrives base64-encoded inside a link — `awg://<base64 of the whole .conf>#label`, see [section 8](#8-wireguard) under “Second form”. Once decoded it is read by the rules of this section, so the two inputs share one set of field spellings and value rules.
+
 ### Conversion
 
 The INI text **is** the node's source (§456): it is stored as is, byte for byte,
@@ -1227,6 +1260,7 @@ vpn://<base64url( bare wg-quick / AWG .conf )>   # a bare .conf (contract 1.1.48
 - **A bare `.conf` under `vpn://`** (the `bare_conf` payload form, contract 1.1.48 / §506): panels put the config itself under the wrapper, with no profile bundle around it. The form is judged by the same predicate as a `.conf` file — the first non-comment section is `[Interface]` — and the body then travels the ordinary wg-quick/AWG path, so the node is identical to the one the same `.conf` produces when pasted directly. Previously such a payload went to the qCompress branch, where the first four bytes of the INI were read as a declared length, and the user got zero nodes with a diagnosis about zlib that pointed at the wrong thing.
 - Inside the JSON: `containers[]` → the `awg` / `wireguard` sub-objects → `last_config` (a JSON string; we defensively accept an object too) → `config`, a ready-made WG/AWG INI (section 9). The `$PRIMARY_DNS` / `$SECONDARY_DNS` placeholders are filled in from the root-level `dns1` / `dns2`.
 - AWG 3.x exports (§421: the `amnezia-awg2` container with `protocol_version: "3.1"`) keep the MTU **outside** the INI — in `last_config.mtu` (the string `"1376"`) next to `config`. When `[Interface]` has no `MTU`, an `MTU = N` line is appended to the INI before the INI → URI conversion (one conversion point; an explicit `MTU` in `[Interface]` wins). The AWG 3.x keys themselves travel inside the INI (section 9).
+- **One node in two forms inside one subscription** (§538): panels such as rrtrg send each AWG node twice — as an `amneziawg://` line and as a `vpn://` container. `parseAll` keeps the first record and moves every later record with the same `nodeDedupSignature` (the §480 identity: canonical emit without `tag`/`detour`, plus the dial path) to `dropped[]` with the app-only code `duplicate` ("Duplicate of <name>" when the names differ). Only within one body — never across subscriptions or against manual nodes.
 
 ### Detection / Flow
 
@@ -1241,7 +1275,7 @@ Step 0 in `decode()` ([body_decoder.dart](../app/lib/services/parser/body_decode
 
 ## 9.5 TUIC v5
 
-Added in Parser v2 (the [`026`](./spec/features/026%20parser%20v2/spec.md) spec). v1 had no TUIC parsing at all.
+Added in Parser v2 (the [`026`](./spec/tasks/026F-parser-v2/spec.md) spec). v1 had no TUIC parsing at all.
 
 ### URI format
 
@@ -1397,19 +1431,26 @@ when `vhttp: h2`: with h3 there is nothing to fragment (QUIC does not carry TLS
 over TCP), the core ignores such fields with a warning, and the builder skips h3
 nodes silently.
 
+**Fragmentation yields** (§574, contract 1.1.84). A node flag `tls.fragment`
+is removed when the build gives the node a `detour` (code
+`detour_with_tls_fragment`, info); `record_fragment` stays, it is the core's
+own default under `detour`. With `tls.engine` `apple`/`windows` both flags go
+(`tls_fragment_system_engine`): the system engine cannot fragment, and the core
+would not start.
+
 ### Reference
 
 - RFC 9484 (CONNECT-IP over MASQUE)
-- §130 spec: [docs/spec/features/130 masque-warp-transport/spec.md](spec/features/130%20masque-warp-transport/spec.md)
+- §130 spec: [docs/spec/tasks/130F-masque-warp-transport/spec.md](spec/tasks/130F-masque-warp-transport/spec.md)
 - §393 (the schema migration): [docs/spec/tasks/393-masque-config-schema-migration.md](spec/tasks/393-masque-config-schema-migration.md)
 - The sing-box-lx core: SPEC 021 (`type: masque`), SPEC 062 (the config schema)
-- [WARP integration (§025)](spec/features/025%20warp%20integration/spec.md)
+- [WARP integration (§025)](spec/tasks/025F-warp-integration/spec.md)
 
 ---
 
 ## 9.7 Tailscale (endpoint)
 
-§435 / contract ## 13 (`contract/docs/NODE_SECTIONS.md` §6, registry `protocols/tailscale.json`).
+§435 (historical, node sections removed by §575) / §578 (registry `protocols/tailscale.json`).
 A sing-box ≥ 1.12 **endpoint** (`type: tailscale`): tsnet runs in user space and joins the
 tailnet by `auth_key`; the node has **no address** (`server`/`server_port` are empty) and
 **no URI form** — it arrives only from sing-box JSON (`outbounds[]` or `endpoints[]`) or from
@@ -1427,31 +1468,63 @@ the Add Server Wizard's Tailscale mode.
   `tailscale_core_unsupported` warning line; the rest of the config builds. The node stays in
   storage — it survives a core update and a backup from a desktop.
 - **Directions:** a node without a non-empty `exit_node` is **not** a Direction candidate (it
-  does not reach the internet) and therefore is not listed on Home (Home lists the selector's
-  members); it lives in Servers, the detour picker and chain positions. With `exit_node` it is
-  a candidate like any other node.
+  does not reach the internet), so no selector lists it; it lives in Servers, the detour picker
+  and chain positions. With `exit_node` it is a candidate like any other node.
+- **Home, NETWORKS (task 579):** a node in `endpoints[]` of the built config, type `tailscale`,
+  that the registry does not count as an exit (`exit_capable_when` false) is listed on Home
+  under the pseudo-direction `NETWORKS`, the last entry of the Direction list, while the
+  VPN is on. NETWORKS is not in the config or in storage. Its rows have no delay test and no
+  node selection: a tap opens the node screen (View details), and the delay slot shows the
+  node state from the core stream `SubscribeTailscaleStatus` (`BackendState`: `Running` →
+  `running`, `NeedsLogin` → `sign-in needed`, `Stopped` → `stopped`, no record yet →
+  `starting`, anything else → the core's `StateText`).
+- **Network tab (task 581):** the node screens `node_settings_screen` and
+  `node_inspect_screen` of a `tailscale` node have a Network tab before Diagnostics. It
+  shows the node state, the network name, Sign in (`AuthURL`) and Log out
+  (`TailscaleLogout`), this device (name, MagicDNS name, addresses, key expiry), the exit
+  node list and the network's devices (online first, then by name; grouped by owner when
+  there are several owners; tap → Copy name, Copy address, Ping via `StartTailscalePing`).
+  VPN off → a hint; no record for the tag → “not in the running config”.
+- **Exit node (task 581):** picking a list entry calls `SetTailscaleExitNode(tag, StableID)`
+  and switches the exit on the fly; the node body does not change. When the saved
+  `exit_node` and the active exit differ, the block shows a warning sign and Save choice
+  (hidden on a subscription node). Save choice writes the active exit's Tailscale address
+  (IPv4 first) into `exit_node` of the node source (None removes the field) and saves the
+  node the way Save on the Source tab does. The core accepts in `exit_node` an address or
+  a device name (base name or MagicDNS name), not a `StableID`; an address also resolves at
+  start, before the peer list arrives. A choice made on the fly lives in the node's state
+  directory (`ExitNodeID` in the tailscaled prefs) and survives a restart while the config
+  has no `exit_node`; with `exit_node` in the config the config value wins at start.
+- **Diagnostics (task 581):** a Tailscale node with no active exit hides the external-URL
+  check and says so; with an active exit the check is as for any node (VPN off: the saved
+  `exit_node` decides).
+- **Privacy (task 581):** device names, addresses, the network name, owner names and the
+  sign-in link are not written to the app log, the support dump or the Debug API; `GET
+  /state` carries only `tailscale: {tag: {backend_state, devices}}`.
 - **Probe:** not tested (no address; a probe config would have to join the tailnet) — “—” instead
   of a delay.
-- **Companion records (sections):** a Tailscale node carries a DNS server
-  `{type: tailscale, endpoint: @self}`, a DNS rule for `.ts.net` and a route rule matching
-  `.ts.net` **or** the tailnet subnets (`100.64.0.0/10`, `fd7a:115c:a1e0::/48`) → `@self`, with a
-  non-terminal `resolve` through that DNS server emitted right before it — see STORAGE.md
-  “Node sections”. The domain match and the `resolve` are what make the node reachable under
-  FakeIP (a name without an address never matches `ip_cidr`) and over UDP (the core drops a
-  flow to an endpoint that has no address yet). A node created without records — a bare body,
-  or a config that never references its tag — gets this bundle by default; Clear sections
-  removes it. The DNS server type accepts at most one server per endpoint; a dangling
-  `endpoint` drops the server and the rules on it at build.
-- **Whole config as source:** a sing-box config with exactly one payload node yields the node
-  **with** its sections: DNS servers whose `detour`/`endpoint` is the node's tag, DNS rules on
-  those servers, route rules whose `outbound` is the node's tag (rule names — `body.name` or
-  `@{self} rule N`). In a **multi-node** config (an endpoint next to proxies) the same records
-  are extracted for each `tailscale` node by the explicit reference to its tag, and those nodes
-  become servers of their own — sections live on free nodes only, so inside a subscription the
-  tailnet route would be lost. The remaining nodes take the usual path (one → a server, several
-  → a file subscription) from the text with the `tailscale` entries removed.
-- **Inside a subscription:** a `tailscale` node from a URL subscription gets no sections — the
-  log says so; “add it as a server” is the fix.
+- **Companion records (preset, §578):** the template preset `tailscale` (on by default,
+  `ui.num` 945) serves every Tailscale node in the config through `for_each` (see
+  TEMPLATE.md): for each node a route rule `preferred_by: [<node>] → <node>`, a DNS server
+  `{type: tailscale, tag: <node>-dns, endpoint: <node>}`, a DNS rule
+  `preferred_by: [<node>-dns] → <node>-dns` (in a DNS rule the core looks `preferred_by` up
+  among DNS servers, so it names the server, not the node) and a non-terminal `resolve` through that server
+  right before the route rule. The DNS part follows the preset's `dns_enable` switch. The
+  condition `preferred_by` asks the endpoint whether an address or a name is its own, and
+  Tailscale answers from the live tailnet state (machine names, machine addresses, accepted
+  subnets with `accept_routes`), so the preset carries no fixed subnets and no `.ts.net`
+  suffix (launcher decision D-120). It matches only once the tailnet is up; until then the
+  traffic follows the other rules. Two nodes in one tailnet claim the same machines, and the
+  first by config order wins. A subscription node is served too. A server or a folder
+  member opts out with the record field `skip_presets` (the **Skip presets** switch on the
+  node screen, STORAGE.md). The DNS server tag stays `<node>-dns`, so user references to it
+  keep working. The preset replaces the node's own bundle, which §575 removed: a node no
+  longer carries route rules or DNS records of its own (see STORAGE.md “Node sections —
+  removed”), and import no longer extracts any such bundle from a config — a config with a
+  `tailscale` endpoint imports the node only, whatever route/DNS blocks sit next to it in the
+  file are dropped like any other config's `route`/`dns` (§10 below).
+- **Inside a subscription:** a `tailscale` node from a URL subscription gets the same preset
+  bundle as any other node — no per-node exception any more.
 
 ## 10. JSON Outbound
 
@@ -1735,6 +1808,7 @@ When `streamSettings.sockopt.dialerProxy` references another outbound tag:
 - `security: "reality"` -> `tls.reality.enabled: true` with `realitySettings` mapped to `public_key`, `short_id`. REALITY is only built when the public key is a valid X25519 key (base64/base64url → 32 bytes); an invalid key degrades to plain TLS with a warning (§169).
 - `security: "tls"` -> standard TLS from `tlsSettings` (`serverName`, `fingerprint`, `allowInsecure`)
 - `flow` is taken verbatim from `users[0].flow`; it is **not** auto-derived from REALITY (§115). As in the URI path, Vision with a transport is dropped with a warning.
+- ClientHello fragmentation -> `tls.fragment: true` on a node with TLS, from either of two Xray forms: `sockopt.dialerProxy` pointing at a `freedom` with `settings.fragment` (§488), or an element with `type: fragment` in `streamSettings.finalmask.tcp[]` (§573, contract 1.1.83; the element is found by type, not position). Xray's `packets`/`length`/`delay`/`maxSplit` are dropped without a code — the core splits by SNI labels itself. No flag when the node dials through a proxy hop or runs over UDP (hysteria/hysteria2); a `dialerProxy` to any `freedom` is not a hop.
 
 **Transport (from `streamSettings.network`):**
 - `ws` -> `wsSettings` mapped to `{"type": "ws", "path": ..., "headers": {"Host": ...}}`

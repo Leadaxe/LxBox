@@ -5,7 +5,7 @@
 | Тип | bugfix (залипшее состояние, мёртвая кнопка Stop) |
 | Статус | ✅ Исправлено — device-verified на эмуляторе |
 | Дата | 2026-08-03 |
-| Связанные | [`122 commandclient-migration`](../features/122%20commandclient-migration/spec.md) (дедуп `setStatus` — закрывает обратный случай, запоздавший `Stopped` после `Started`), [`140`](140-force-stop-port-race-and-connecting-timeout.md) (`forceStopScope` переживает `onDestroy`; тот же force-stop-путь), [`002`](002-blocking-stopvpn-intent-reset.md) (блокирующий `stopVPN` и его таймаут) |
+| Связанные | [`122 commandclient-migration`](../tasks/122F-commandclient-migration/spec.md) (дедуп `setStatus` — закрывает обратный случай, запоздавший `Stopped` после `Started`), [`140`](140-force-stop-port-race-and-connecting-timeout.md) (`forceStopScope` переживает `onDestroy`; тот же force-stop-путь), [`002`](002-blocking-stopvpn-intent-reset.md) (блокирующий `stopVPN` и его таймаут) |
 
 ## Симптом
 

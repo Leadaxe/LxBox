@@ -6,7 +6,7 @@
 | Дата старта | 2026-04-29 |
 | Дата завершения | 2026-04-29 |
 | Коммиты | `68bd006` fix lateinit · `dfb470c` dynamic shortcuts · `0eac2f2` tile polish |
-| Связанные spec'ы | [`032 quick connect`](../features/032%20quick%20connect/spec.md) |
+| Связанные spec'ы | [`032 quick connect`](../tasks/032F-quick-connect/spec.md) |
 | Связанные tasks | [014 — §032 MVP](014-quick-connect-tile-shortcut.md) |
 | Связанные issue | [#1](https://github.com/Leadaxe/LxBox/issues/1) |
 

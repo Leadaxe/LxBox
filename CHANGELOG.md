@@ -8,6 +8,804 @@
 
 ## [Unreleased]
 
+---
+
+## [2.25.9] — 2026-09-29
+
+### Changed
+
+- **Core `v1.14.2-lx.11`.** Tailscale: a node with a direct UDP path to a peer
+  passes traffic to it again (before, TCP connections to the peer timed out;
+  SPEC 112, lx.10); the channel to the coordination server always uses HTTPS
+  on port 443, so DPI that freezes port 80 no longer cuts the node off the
+  coordination server for ~15 minutes after start (SPEC 111, lx.9).
+  Sync with sing-box `stable` (lx.11): stricter bounds checks of incoming
+  protocol data, UDP checksum 0 written as `0xffff` by the TUN stack.
+
+- **Repeated servers in a subscription ([task 589](docs/spec/tasks/589-duplicates-collapsed-on-survivor.md)).**
+  Merged repeats of one server no longer go to `dropped[]` with the per-app
+  code `duplicate`: the node that stays gets the registry code
+  `duplicates_collapsed` (info, `count`, `names`), both for body dedup and for
+  server ownership in an Xray array. The subscription summary shows
+  «M duplicates merged into K nodes» separately from «entries dropped».
+  Contract 1.1.102.
+
+- **Preset rules without conditions ([task 588](docs/spec/tasks/588-preset-rule-unconditional-and-dangling-dns-rule-set.md)).**
+  A preset rule written without conditions goes into the config with
+  `template_rule_unconditional`; a rule whose conditions were removed by a
+  failure (a variable without a value or an undeclared name, all `rule_set`
+  references dangling) is dropped with `template_fragment_dropped`. Sub-rules
+  of a logical rule are judged the same way at any depth. Your own DNS rule
+  with every `rule_set` dangling is dropped with `template_fragment_dropped`;
+  an `.srs` DNS rule without a cached file is reported instead of skipped.
+  Contract 1.1.100, 1.1.101, 1.1.103, 1.1.107.
+
+- **`required` of a preset variable defaults to `false`**, as in the launcher;
+  the template's 54 required variables say `true` explicitly.
+
+- **Xray JSON arrays with a balancer (§322).** Servers of a pool are named
+  `remarks tag`, a taken name gets the server's number in the pool; pool
+  members are chosen by the balancer's `selector` (tag prefix), servers it does
+  not pick stay separate nodes; group members in the parse result are labels;
+  `leastLoad` without `expected` maps to fastest selection; a group points to
+  the surviving node after ownership merge. Contract 1.1.104–1.1.107.
+
+- **The contract copy `app/contract/` is committed**, so CI runs the parsing
+  corpus and the schema checks.
+
+---
+
+## [2.25.8] — 2026-09-28
+
+### Added
+
+- **OpenVPN endpoints as sing-box JSON ([task 586](docs/spec/tasks/586-endpoint-types-from-registry.md)).**
+  A node of type `openvpn-client` is now a known type: it is accepted as your
+  own record, inside a document with other nodes and from a subscription,
+  without the «Unknown node type» notice. The body goes to the core as
+  written into `endpoints[]`; the app does not check its fields. There is no
+  form and no `.ovpn` import. Which types are endpoints now comes from the
+  contract registry (1.1.99), not from a list in the app.
+
+- **Nodes of a type the app does not know ([task 585](docs/spec/tasks/585-unknown-node-type-accepted.md)).**
+  A sing-box node of a type the app has no model and the registry has no
+  record for is accepted when added by hand (Add server, paste, file,
+  folder member, node editor). It goes to the core as written and gets one
+  info notice «Unknown node type»; subscriptions still drop such entries.
+  Pasted JSON with `//` and `/* */` comments is accepted too: the comments are
+  removed from the saved source, and the app says «Comments were removed.»
+
+- **Home: press back twice to exit ([task 583](docs/spec/tasks/583-home-back-press-twice-to-exit.md)).**
+  On Home the first back press shows «Press back again to exit»; a second
+  press within 2 seconds closes the app as before. An open side menu, dialog
+  or sheet is closed by back as before. On Android 13+ the predictive back
+  gesture no longer plays the closing animation on the first press.
+- **Tailscale node: Network tab ([task 581](docs/spec/tasks/581-tailscale-network-tab.md)).**
+  The screen of a Tailscale node gets a Network tab: node state, sign in and
+  log out, this device, the network's devices with a ping, and the exit node
+  list. Picking an exit node switches it on the fly without touching the
+  node; Save choice writes it into the node. Diagnostics no longer offers the
+  external-URL check on a node without an exit.
+
+- **DNS cache settings ([task 580](docs/spec/tasks/580-dns-cache-settings.md)).**
+  The DNS screen gets three settings next to Clear DNS cache: `DNS cache size`
+  (entries, 1024..65535, default 4000), `Serve stale answers` (answer from cache
+  at once and refresh in the background, on by default) and `Keep DNS cache
+  after restart` (the cache is stored in `cache.db`, on by default). The config
+  gets `dns.cache_capacity`, `dns.optimistic` and
+  `experimental.cache_file.store_dns`. Existing installs get the defaults; the
+  three settings travel in backups. Contract 1.1.97.
+
+- **NETWORKS on Home ([task 579](docs/spec/tasks/579-networks-pseudo-direction.md)).**
+  A Tailscale node without an exit node is in no Direction, so Home did not show it.
+  While the VPN is on, such nodes are now listed under `NETWORKS`, the last entry of
+  the Direction list. A tap opens the node screen; instead of a delay the row shows the
+  node state from the core: `running`, `sign-in needed`, `stopped` or `starting`.
+  The config does not change.
+- **Tailscale preset ([§578](docs/spec/tasks/578-tailscale-preset-template-for-each.md)).**
+  The new routing preset `Tailscale networks`, on by default, serves every
+  Tailscale node in the config, subscription nodes included: tailnet names go
+  to the node's own DNS, and addresses and names the node claims as its own
+  (`preferred_by`) go through the node. Existing installs get the preset once;
+  deleting it keeps it deleted. The preset row on the Routing and DNS screens
+  lists the nodes it serves.
+- **Skip presets on a node ([§578](docs/spec/tasks/578-tailscale-preset-template-for-each.md)).**
+  A server or a folder member can opt out of presets that serve nodes one by
+  one: the `Skip presets` switch on the node screen, stored as `skip_presets`
+  in the record and in backups. The switch shows up only when the template has
+  such a preset for the node's type.
+- **Template language: `for_each`, `@node`, `#tpl` ([§578](docs/spec/tasks/578-tailscale-preset-template-for-each.md)).**
+  A preset can repeat its rules and DNS servers for every matching node, read
+  the node's tag, record and body, and build strings such as `<node>-dns`.
+
+### Changed
+
+- **Core `v1.14.2-lx.8`.** Synced with sing-box `stable`: idle connections of
+  nodes and DNS servers nothing refers to any more are closed; WireGuard,
+  AmneziaWG and MASQUE inside another tunnel really allow fragmentation of the
+  outer UDP datagram on Android (the kernel kept DF and dropped oversized
+  datagrams); Hysteria, Hysteria2 and TUIC no longer allow it by default.
+  MASQUE no longer hangs without an error: `vhttp: auto` goes back to h3 when
+  the remembered h2 stops working, closing an h2 tunnel does not wait for a
+  stalled write, and an h3 endpoint that never answers no longer holds the
+  dial. From lx.6: an XHTTP node without an `xmux` section (or with
+  an empty one) now keeps at most three connections to the server and shares
+  them between streams; before, every stream opened a new TLS connection,
+  dozens to hundreds of parallel connections to one IP on a phone, the
+  pattern reported to be cut on mobile networks in Russia (sing-box-lx#32,
+  follows the Xray-core default). An `xmux` section with at least one field
+  set is taken as written, as before. The core's `sing-box schema` command
+  works again (sing-box-lx#30); the app does not use it.
+- **Default emoji of a Tailscale node is 🕸️.** It was 🪢. New nodes get the new
+  emoji; tags of existing nodes do not change.
+
+- **A hand-written node the core would reject is dropped ([task 582](docs/spec/tasks/582-authored-body-go-dart-parity.md)).**
+  A TUIC node whose `uuid` is not a UUID, or a WireGuard node with invalid peer
+  `allowed_ips`, is now dropped when parsed, with the reason in the list of
+  dropped nodes. A REALITY `short_id` longer than 16 characters is removed.
+  A MASQUE body without keys is now read instead of being rejected as unsupported.
+  A hand-written REALITY block with an invalid `public_key` is removed whole, as on a
+  subscription body, with a single `reality_pbk_invalid` warning.
+- **A node written by hand goes to the core as written ([§577](docs/spec/tasks/577-authored-json-registry-reports-only.md)).**
+  A sing-box JSON node saved as an own server or a folder member is no longer
+  fixed by the app's rules: an extra key, an AmneziaWG `mtu` above 1280, a
+  `tls.fragment` next to a detour stay as written. The node card still lists
+  each rule, says the app changed nothing, and gives the cause and what to do.
+  Rules the core cannot start with (an unsupported `flow`, an invalid port,
+  TLS fields `naive` does not take) are still applied. The build report marks
+  such lines `not applied`; the Debug API gives `applied` on each warning.
+- **A node's source keeps the node only ([§576](docs/spec/tasks/576-node-source-is-bare-body.md)).**
+  Saving a sing-box document or an array in the node editor keeps the first
+  node (not a service outbound and not a group) or the first element, and says
+  once that the rest of the input is not kept. A document with no such node is
+  refused. Records saved earlier with a document or an array are read as the
+  node's body; the config stays the same. The same sing-box JSON inside a
+  subscription no longer keeps an AmneziaWG `mtu` above 1280: the exemption is
+  for bodies written by hand as an own server or a folder member.
+- **Internal.** Contract synced to 1.1.99.
+
+### Removed
+
+- **Node sections ([§575](docs/spec/tasks/575-remove-node-sections.md)).**
+  A node no longer carries route rules or DNS records of its own. The
+  Tailscale bundle a node used to carry is now served by the `Tailscale
+  networks` preset instead ([§578](docs/spec/tasks/578-tailscale-preset-template-for-each.md)).
+  A stored record or a backup with a leftover `sections` field is read
+  without error and the field is dropped.
+
+---
+
+## [2.25.7] — 2026-09-27
+
+### Added
+
+- **TLS fragmentation from Xray `finalmask.tcp` ([§573](docs/spec/tasks/573-xray-finalmask-tcp-fragment.md)).**
+  An Xray node that sets ClientHello fragmentation in
+  `streamSettings.finalmask.tcp` (an item with `type: fragment`) now gets the
+  core's `tls.fragment`. These fields used to be ignored, and the node went out
+  without fragmentation. The Xray parameters (`length`, `delay`, `maxSplit`)
+  are not carried over: the core splits the ClientHello at the domain labels
+  of the SNI. The older form (a `freedom` outbound through `dialerProxy`,
+  [§488](docs/spec/tasks/488-xray-dialer-proxy-freedom-fragment.md)) worked
+  before and is unchanged. Contract 1.1.83.
+
+### Changed
+
+- **TLS fragmentation yields to a hop ([§574](docs/spec/tasks/574-tls-fragment-yields-to-detour.md)).**
+  When the build sends a node through another node (a chain, or a
+  subscription's detour), `tls.fragment` is removed from it, together with an
+  orphaned `fragment_fallback_delay`, and the node gets the info notice
+  `detour_with_tls_fragment`. Under a hop the core cannot wait for a segment's
+  ACK and sleeps 500 ms after each one, and the explicit flag turns off the
+  core's own `record_fragment` default. This also applies to nodes whose
+  sing-box JSON sets `tls.fragment`. A `detour` written in the sing-box input itself does not
+  count: it never reaches the core. The same rule runs in probe configs.
+  Contract 1.1.84.
+- **TLS fragmentation with a system TLS engine ([§574](docs/spec/tasks/574-tls-fragment-yields-to-detour.md)).**
+  With `tls.engine` set to `apple` or `windows`, `fragment` and
+  `record_fragment` are removed with the warning `tls_fragment_system_engine`
+  instead of the config failing to start. The engine stays. These engines are
+  not used on Android.
+- **Node notifications are grouped by code ([§572](docs/spec/tasks/572-notifications-group-by-code.md)).**
+  Within a level, notifications that share a code become one entry with a
+  count, the list of fields and a single explanation. A code that occurs once
+  and notifications without a code are shown as before.
+- **Internal.** Contract synced to 1.1.84. GitHub Actions moved to Node 24
+  (`upload-artifact`/`download-artifact` v7, `setup-java` v6,
+  `action-gh-release` v3). No behaviour change.
+
+### Fixed
+
+- **Fewer "field not read" notifications on Xray nodes ([§573](docs/spec/tasks/573-xray-finalmask-tcp-fragment.md)).**
+  An empty `tcpSettings` object and `mode` / `path` / `host` inside
+  `xhttpSettings.extra` (and `splithttpSettings.extra`) no longer produce
+  `json_field_unknown`. Xray always overrides those three with the outer
+  values, so they are read and dropped without a code.
+
+## [2.25.6] — 2026-09-26
+
+### Added
+
+- **Rules left without conditions are dropped ([§571](docs/spec/tasks/571-rule-conditions-allowlist.md)).**
+  A preset route or DNS rule that has no matching condition left after variable
+  substitution (only an `action`, or a logical rule with empty sub-rules) is left
+  out with `template_fragment_dropped` instead of matching all traffic. The list of
+  condition fields comes from the contract registry.
+- **Closing the parser and build tails ([§570](docs/spec/tasks/570-close-open-tails.md), wave A).**
+  A `vpn://` line inside a subscription list now gives every WireGuard/AmneziaWG
+  container of the profile, not only the default one. An `sni` that is a label
+  gives way to `servername` before falling back to the server address. A replace
+  group whose name is taken by a direction is not built, the source goes
+  unfolded, and the build report says so; an empty replace group is reported
+  once. A node whose detour goes through a replace group that ended up empty is
+  left out instead of going direct. Template DNS servers see every template
+  variable. Empty subscription updates keep their skip reasons in the source
+  summary, and repeated reasons are shown once.
+
+- **Closing the selector, replace and template tails ([§570](docs/spec/tasks/570-close-open-tails.md), wave B).**
+  Template variables with a list of values: a `text_list` with options is a
+  multi-select of chips, `options_open` lets you type your own value next to
+  the list (an `int` is still clamped), and a `text` with a closed list is a
+  dropdown. After a config build with template warnings, Home shows
+  "Template: N warnings" with a button that opens the codes. On the node
+  screen of a manual (`selector`) group, tap the circle next to a member to
+  pick it: live through the core when the VPN is up, otherwise on the next
+  build. The pick of a subscription's group is kept next to the subscription
+  and survives updates and restarts. The direction editor offers replace
+  groups as options; the replace editor warns when the group name is already
+  taken by a server, another replace group or a direction. The notification
+  sheet names the dropped entry, and the paste dialog shows how many entries
+  will be skipped and why.
+
+- **Turn a WireGuard/AmneziaWG node off without restarting the tunnel ([§557](docs/spec/tasks/557-kernel-lx4-wg-endpoint-toggle.md)).**
+  Core `v1.14.2-lx.4`. A node's menu has Turn off / Turn on, and the node screen has
+  a Node enabled switch. A node that is off drops its connections and refuses new
+  ones; the rest of the tunnel keeps running. It stays off through config reloads
+  and subscription updates until you turn it on or stop the VPN. In the list it
+  shows an orange `off` and a dash instead of a ping.
+
+- **Selector groups keep their kind ([§565](docs/spec/tasks/565F-selector-group-genus/spec.md)).**
+  A `selector` group from a sing-box subscription or a backup is no longer
+  turned into an auto (latency) group: it stays manual, keeps its chosen
+  server and goes to the core as `selector`. In a folder, the group screen has
+  a Manual mode with the member list: pick a server there and the config is
+  rebuilt with it. The folder list shows the group kind and the chosen server;
+  the node screen marks the chosen member.
+
+- **Replace a folder or subscription with a group ([§568](docs/spec/tasks/568-source-replace-fold.md)).**
+  Settings of a folder or a subscription have Replace with a group: Manual
+  (you pick the server), Auto (picked by latency) or Both (a manual group whose
+  first option and default is the auto one, `<name>-auto`). Directions then
+  offer that one group instead of every server of the source, and rules and
+  the default route can point at it. The setting travels in backups as
+  `replace` (contract 1.1.78). The old launcher form `fold`/`fold_tag` is not
+  read: import names it as an unknown field.
+
+### Changed
+
+- **Internal: no protocol names left in link parsing code ([§566](docs/spec/tasks/566-scheme-literals-outside-dispatcher.md)).**
+  The list of protocol files now comes from the contract directory, per-protocol link parser wrappers are gone,
+  and input recognition reads the contract; no behaviour change.
+
+- **Docs only: contract doc `CANON.md` renamed to `PARSING_PRINCIPLES.md` (§72).**
+  Internal comments and doc links updated to match; no behaviour change.
+
+- **Node names with broken bytes and old-style VMess links match the desktop app ([§563](docs/spec/tasks/563-form-redetect-and-utf8-series.md)).**
+  A run of invalid bytes in a node name (for example cp1251 text in a link label)
+  now shows as a single `�` instead of one per byte, so the node tag is the same on
+  both sides. Old-style `vmess://` links with `method:uuid@host:port` under base64
+  are recognised by what is inside the base64, as on desktop.
+
+- **Dropped subscription entries show in the subscription summary, not on a working node ([§561](docs/spec/tasks/561-dropped-only-in-source-summary.md)).**
+  An entry the parser could not turn into a node (unknown protocol, broken fields,
+  unreachable relay) used to leave its error on a neighbouring node that had nothing
+  wrong with it. Now working nodes stay clean. The subscription screen shows
+  `N entries dropped`; tap it to see each reason. The subscription card in the list
+  shows the count. A subscription with no nodes at all still shows the error under
+  the input field.
+
+- **Chains with a REALITY hop no longer refuse to save when uTLS is stripped ([§556](docs/spec/tasks/556-registry-debt-1157-1170.md)).**
+  If a chain strips `tls.utls` and a later hop runs REALITY, the editor shows a warning
+  instead of locking the Save button, the strip row reads `kept`, and the build keeps
+  uTLS on all hops and assembles the chain. The strip options, their defaults and
+  descriptions now come from the contract. The AmneziaWG level next to the protocol
+  in the node list (`awg2`, `awg1.5+`, …) is read from the contract as well. A member
+  of an Auto group that no longer resolves to a node is logged as
+  `group_member_dropped`, one line per member.
+
+- **Node sanitizer catches up with contract 1.1.57–1.1.67 ([§556](docs/spec/tasks/556-registry-debt-1157-1170.md)).**
+  REALITY without uTLS now gets uTLS switched on instead of losing REALITY, and a
+  `random` fingerprint under REALITY becomes `chrome`, both with a code on the node;
+  the build no longer patches this silently. MASQUE keeps `tls.fragment` and
+  `tls.record_fragment` on `h2`/`auto` and drops them on `h3`; a body without `vhttp`
+  stays without it. AmneziaWG `jmin > jmax` drops both bounds with a code, Tailscale
+  `advertise_routes` masks host bits and drops default routes with a code, and an
+  object sent where a string is expected (hysteria v1 `obfs`) is unwrapped by rule.
+  In an Xray chain, TLS fragmentation from a `freedom` dialer goes to the hop that
+  actually dials out, and such a chain is no longer dropped. The global TLS fragment
+  toggle asks the registry per node, so MASQUE without `vhttp` gets it too. A
+  WireGuard `listen_port` yields to a detour added by the build, with a code in the
+  build report. Backups carry an Auto group's warnings as they are; a node disabled
+  after a core rejection stays disabled on import, without the verdict.
+  A node the core cannot run is now dropped at build time by the registry's
+  build-tag and version requirements (Tailscale without `with_tailscale`, AmneziaWG
+  3.x fields or a keepalive range on an older core), with its code in the build
+  report; the Tailscale gate no longer goes by core version.
+- **Template language parity with contract 1.1.68–1.1.70 ([§555](docs/spec/tasks/555-template-lang-spec143-parity.md)).**
+  A list-valued `#if` branch inside an array now splices one level into the parent,
+  `@runtime.platform/arch/target` drop their key instead of leaking into the config,
+  variables accept `options_open`, and template warnings (undeclared variable, unknown
+  directive, clamped or invalid number, dropped preset fragment) carry their parameters,
+  are deduplicated and come first in the build report without blocking save. A preset
+  or template DNS server of an address type left without `server` is now dropped with
+  a warning.
+- **Link schemes are recognised from the contract registry only ([§562](docs/spec/tasks/562-uri-scheme-dispatch-from-registry.md)).**
+  Internal: the parser's own scheme lists and the SOCKS version ↔ scheme table are gone;
+  the registry's scheme and alias declarations decide which links are accepted. Nodes and
+  their tags are unchanged.
+
+### Fixed
+
+- **Wi-Fi rules: the app says why it cannot read the network name ([§567](docs/spec/tasks/567-wifi-ssid-read-preflight-and-diagnostics.md)).**
+  Android hides the Wi-Fi name without an error when location is set to
+  "Approximate" instead of "Precise" or the system Location toggle is off, so
+  `wifi_ssid` rules stopped matching and Add current suggested toggling Wi-Fi.
+  Add current now opens the permission dialog with a precise-location note, or
+  offers the Location settings when Location is off. The Wi-Fi section of the
+  rule editor shows a hint only when something is actually missing, and the
+  Diagnostics location row reports precise location and the Location toggle. The
+  reason is written to logcat under the `WifiInfoReader` tag.
+
+- **Wi-Fi rules read the network name the way Android 12+ expects ([§569](docs/spec/tasks/569-wifi-ssid-transport-info-api31.md)).**
+  On Android 12 and newer the Wi-Fi name and BSSID now come from a network
+  callback registered with location info, which replaces the deprecated
+  `getConnectionInfo()`; the old call stays as a fallback and is the only path on
+  Android 11 and older. Permissions are the same. With Wi-Fi off, Add current
+  says "Not connected to Wi-Fi." instead of blaming location permissions. Logcat
+  shows which path answered (`source=cache` / `source=legacy`).
+
+- **Imported nodes keep what the provider sent ([§560](docs/spec/tasks/560-xray-body-parse-gaps.md)).**
+  Fields the node model had no place for were dropped on import: `multiplex`,
+  `udp_over_tcp`, dial options (`connect_timeout`, `network_strategy`, `fallback_delay`
+  and others), WireGuard `workers` and `listen_port`, QUIC tuning, extra transport
+  fields. They now reach the config as written. Xray nodes no longer get a
+  `server_name` the provider did not set, sing-box `socks` bodies no longer gain
+  `version`, a VMess link with `aid=0` no longer writes `alter_id: 0`. An Xray
+  `socks` outbound becomes a node, and an Xray outbound nobody can read is reported
+  as rejected instead of disappearing.
+
+- **Links to a chain open the chain ([§558](docs/spec/tasks/558-chain-owner-navigation.md)).**
+  Tapping a chain on a node's screen, or a chain named in the detour-loop sheet, used
+  to show "Source not found in your lists". It now opens the chain editor, and a saved
+  change rebuilds the config and applies it to a running tunnel, same as in Servers.
+
+## [2.25.5] — 2026-09-25
+
+Патч поверх [v2.25.4](docs/releases/v2.25.4.md): ядро `v1.14.2-lx.3` (VLESS
+Vision поверх VLESS-шифрования на любом транспорте, XHTTP выбирает версию
+HTTP по `alpn`), ссылки hysteria2 из 3x-ui с gecko без потерь, `flow` у
+VLESS с шифрованием больше не снимается, XHTTP с `uplinkDataPlacement`
+`body`/`auto` не теряет настройку, узлы sing-box JSON и проверка задержки
+проходят через реестр протоколов, разбор подписок и гард реестра примерно
+вдвое быстрее, подсветка синтаксиса JSON в редакторе конфига и на экранах
+просмотра JSON. Контракт 1.1.56.
+
+### Added
+
+- **Подсветка синтаксиса JSON ([§554](docs/spec/tasks/554F-schema-driven-node-editor/spec.md)).**
+  Редактор конфига и JSON-поле мастера добавления сервера подсвечивают
+  ключи, строки, числа и скобки; тема светлая или тёмная по теме приложения.
+  Вкладка JSON в настройках узла, экран просмотра узла и инспектор узлов
+  подписки показывают JSON тем же просмотрщиком с подсветкой (только
+  чтение). Библиотека подсветки — `re_highlight`.
+
+### Fixed
+
+- **Ссылки hysteria2 из 3x-ui с gecko больше не теряют размеры пакетов ([§543](docs/spec/tasks/543-hysteria2-3xui-gecko-aliases.md)).**
+  3x-ui пишет диапазон gecko-обфускации парой `minPacketSize`/`maxPacketSize`
+  (написание v2rayN) и `security=tls` в каждой ссылке. Раньше все три
+  параметра шли в «не прочитан», узел поднимался с gecko, но размеры из панели
+  терялись и ядро брало свой дефолт. Теперь размеры доезжают до `obfs`,
+  `security=tls` принимается молча, иное значение `security` узел не ломает и
+  отмечается предупреждением. Контракт 1.1.54.
+- **VLESS с Vision и VLESS Encryption поверх xhttp больше не теряет `flow` ([§544](docs/spec/tasks/544-vless-vision-xhttp-with-encryption.md)).**
+  Узел с `flow=xtls-rprx-vision`, транспортом (xhttp и др.) и постквантовым
+  `encryption` приезжал без `flow`, и сервер с Vision рвал соединение. С
+  шифрованием Vision работает поверх его слоя, и транспорт ему не мешает;
+  теперь `flow` у таких узлов остаётся, без шифрования гасится по-прежнему.
+  Нужно ядро с поддержкой Vision поверх шифрования (sing-box-lx#29). Контракт
+  1.1.55.
+
+- **Узлы из sing-box JSON строятся по очищенной реестром записи ([§545](docs/spec/tasks/545-singbox-json-entries-through-registry-sanitizer.md)).**
+  Ссылки и Xray-конфиги давно проходили через санитайзер реестра протоколов,
+  а узлы sing-box JSON (подписка, редактор JSON, Smart-Paste, звенья detour)
+  строились по записи как есть, и связи полей за реестр досуживал эмиттер.
+  Теперь JSON-узел строится по записи, которую очистил реестр: недопустимое
+  значение снимается на разборе, а не протаскивается в модель. Исходный
+  объект сохраняется дословно — у сервера из JSON в ядро по-прежнему идёт
+  то, что прислал автор, бэкап и повторный разбор видят оригинал. У узла с
+  мусорным полем может смениться подпись дедупа; эталон публичных подписок
+  не сдвинулся.
+- **Проверка задержки идёт через гард реестра, как боевой конфиг ([§546](docs/spec/tasks/546-emitters-drop-registry-rule-copies.md)).**
+  Раньше probe-конфиг (ping / URL-тест, диагностика узла) собирался мимо
+  гарда реестра, и узел с недопустимой комбинацией полей мог уронить
+  проверку целого батча. Теперь запись, которую снял бы гард сборки,
+  снимается и в probe: такой узел помечается как невалидный с кодами
+  реестра, остальные проверяются; узел со снятым detour не проверяется.
+
+- **XHTTP с `uplinkDataPlacement=body`/`auto` больше не теряет настройку ([§547](docs/spec/tasks/547-last-registry-rule-copies.md)).**
+  Ядро требует режим `packet-up` только для `header`/`cookie`, а правило
+  судило любое значение: узлу с `body`/`auto` дописывался `packet-up`, а при
+  явном `stream-one`/`stream-up` placement снимался с ложным предупреждением
+  «параметр XHTTP сброшен». Теперь `body`/`auto` доезжают как есть при любом
+  режиме, на всех входах (ссылка, Xray, sing-box JSON). Правило для
+  `header`/`cookie` и снятие `plugin_opts` у shadowsocks без `plugin` судит
+  реестр протоколов, а не код сборки. Контракт 1.1.56.
+- **Узел без адреса сервера снимается на всех входах ([§552](docs/spec/tasks/552-develop-red-after-547.md), [§553](docs/spec/tasks/553-registry-expand-refs.md)).**
+  Раньше пустой `server` снимал узел, а отсутствующий ключ `server`
+  проходил: обязательность поля жила в общей схеме `dialer.common`, и
+  ссылка на неё в схеме протокола её не несла. Теперь реестр разворачивает
+  именованные ссылки при загрузке, как лаунчер, и узел без `server` (ключа
+  нет или `""`) снимается с `field_missing` — на разборе, в гарде сборки и в
+  проверке задержки.
+
+### Changed
+
+- **Разбор подписок и гард реестра быстрее ([§549](docs/spec/tasks/549-registry-sanitizer-hot-paths.md), [§551](docs/spec/tasks/551-parse-route-cache.md), [§553](docs/spec/tasks/553-registry-expand-refs.md)).**
+  Гард реестра (сборка конфига и probe-батчей): ~63 → ~31 мкс на узел —
+  схема и связи полей разбираются один раз, ключ base64 декодируется один
+  раз. Разбор ссылки: ~395 → ~147 мкс на смешанном корпусе — маршрут схемы
+  и набор объявленных имён считаются один раз на состав секций, а не на
+  каждой строке подписки; outbound Xray сериализуется один раз. Замеры на
+  хосте (JIT), телефон не мерили; поведение не меняется.
+
+- **Эмиттеры sing-box больше не держат копий правил реестра ([§546](docs/spec/tasks/546-emitters-drop-registry-rule-copies.md)).**
+  Фильтры значений (`flow` у VLESS, тип `obfs` и размеры пакета у
+  hysteria2, enum-поля XHTTP) и срез uTLS/Reality на QUIC судит теперь
+  только реестр — на разборе и в гарде сборки; эмиттер лишь раскладывает
+  модель по ключам ядра. Поведение на штатных входах не меняется, но
+  правка реестра теперь доходит до результата без правки кода. Последние
+  две связи (`uplink_data_placement`↔`mode` у XHTTP, `plugin_opts`↔`plugin`
+  у Shadowsocks) сняты из кода в §547 фазе B — их судит реестр 1.1.56.
+- **Разбор больше не держит своих копий правил реестра ([§547](docs/spec/tasks/547-last-registry-rule-copies.md), фаза A).**
+  `key_share` у Reality, `obfs` у hysteria2 и `encryption=none` у VLESS
+  судит только реестр. Поведение не меняется; текст предупреждения про
+  `obfs` у узла из sing-box JSON теперь берётся из каталога реестра — тот
+  же, что у ссылки.
+
+- **Ядро `v1.14.2-lx.3`.** VLESS-узлы с Vision и VLESS-шифрованием
+  одновременно подключаются на любом транспорте, включая XHTTP (раньше
+  каждый такой узел падал с `vision: not a valid supported TLS connection`;
+  sing-box-lx#29). XHTTP выбирает HTTP/1.1, HTTP/2 или HTTP/3 по `tls.alpn`,
+  как Xray: серверы только с h3 работают, а `alpn`, который раньше у
+  XHTTP-узла молча игнорировался, теперь меняет версию HTTP.
+
+## [2.25.4] — 2026-09-24
+
+Патч поверх [v2.25.3](docs/releases/v2.25.3.md): ядро `v1.14.2-lx.1` (смена
+сети без лишних сбросов, GSO-шум AWG ушёл из лога), ленивая сборка узлов
+WireGuard/AmneziaWG с потолком собранных туннелей и настройками в VPN Settings,
+российские приложения по имени пакета в пресете «Ru internet segment», две
+колонки списка узлов на широком экране, вкладка Appearance, дедуп повторов
+узла в одной подписке. Контракт 1.1.53.
+
+### Added
+
+- **Ленивая сборка и лимит туннелей WireGuard в настройках ([§542](docs/spec/tasks/542-build-max-setting.md)).**
+  VPN Settings → System → WireGuard connections: тумблер «Lazy tunnel build»
+  (туннель собирается при первом использовании, по умолчанию включён) и
+  «Built tunnels limit» — сколько туннелей WireGuard/AmneziaWG держать
+  собранными одновременно (0 — без ограничения, 3, 5, 8, 12; по умолчанию 5,
+  как раньше). Оба пункта недоступны, пока выключено «Suspend idle tunnels»,
+  лимит — ещё и при выключенной ленивой сборке. Применяется при следующем
+  подключении.
+
+- **Сводка per-app в логе в режиме отладки ([§539](docs/spec/tasks/539-perapp-debug-log.md)).**
+  При включённом Verbose (TRACE/DEBUG) на вкладке Diagnostics при каждом
+  подъёме туннеля в Logs пишется одна строка `per-app:`: режим белого или
+  чёрного списка, `allow_bypass`, какие пакеты применены и какие не установлены
+  на устройстве. Без Verbose ничего не меняется.
+
+- **Вкладка Appearance в настройках приложения и тумблер двух колонок ([§541](docs/spec/tasks/541-appearance-tab-two-columns-toggle.md)).**
+  Тема, язык и «Allow rotation» переехали из General в новую вкладку
+  Appearance, вторую по счёту. Там же тумблер «Two columns on wide screens»:
+  по умолчанию включён, выключенный оставляет список узлов в одну колонку на
+  любой ширине. Переключение применяется сразу, без перезапуска; настройка
+  попадает в бэкап вместе с остальными.
+
+- **Список узлов в две колонки на планшете ([§537](docs/spec/tasks/537-nodes-two-columns-wide.md), #134).**
+  При ширине окна от 600 dp узлы на главном экране идут в две колонки,
+  построчно слева направо; уже — одна, как раньше. Раскладка меняется на лету
+  при повороте и split-screen, прокрутка сохраняется. В ручной сортировке список
+  остаётся в одну колонку: перетаскивание работает только в ней.
+
+- **Российские приложения идут напрямую по имени пакета (§531).** В пресет
+  российского сегмента добавлен четвёртый набор правил — список российских
+  приложений `ru-app-list` (автор legiz-ru, ~4 КБ), который сопоставляет
+  соединение не с доменом, а с именем Android-пакета. Раньше приложение уходило
+  напрямую только если его домен попадал в наборы доменов или его адрес — в
+  российские диапазоны IP; банковские и государственные приложения, которые
+  работают через сторонние CDN или по IP, промахивались мимо обоих наборов и
+  уезжали в туннель. Теперь они опознаются по самому приложению, независимо от
+  того, куда оно обращается. Набор включается галкой «Russian apps by package»
+  (по умолчанию включена) и скачивается при первом включении, как набор
+  GeoIP-диапазонов рядом; снятая галка отключает его целиком, не задевая домены
+  и IP. Просили кнопку «отметить российские приложения» в пикере приложений —
+  сделано маршрутизацией: список обновляется сам, вместе с набором, а не
+  застывает в отметках. Подробности —
+  [спека §531](docs/spec/tasks/531-ru-app-list-ruleset-in-ru-preset.md)
+  ([#116](https://github.com/Leadaxe/LxBox/issues/116)).
+
+### Changed
+
+- **Состояние WG/AWG-узла в списке — одним словом ([§540](docs/spec/tasks/540-endpoint-state-short-label-node-properties.md)).**
+  Вместо «Node asleep» / «Node not built yet» строка узла пишет `up`, `sleep`
+  или `down` (не собран, разобран или остановлен — ядро поднимет его на первом
+  соединении). Полное состояние ядра и время простоя спящего узла — в строке
+  Endpoint state на экране Details из меню узла.
+
+- **Ядро обновлено до v1.14.2-lx.1 (§535).** Смена сети (Wi-Fi ↔ мобильная)
+  больше не дёргает туннель впустую: ядро сбрасывает сетевое состояние только
+  при настоящей смене интерфейса, а не на каждом системном оповещении, — на
+  телефоне это меньше разрывов на ходу и в лифте. Ключи засыпания
+  WireGuard/AmneziaWG переехали в отдельный блок настроек ядра: снаружи ничего
+  не поменялось, пороги из Settings работают как раньше, но старое место ядро
+  теперь считает устаревшим и на каждый ключ пишет предупреждение в лог —
+  приложение пишет сразу в новое. В ядро также приехали ленивая сборка
+  WG-узлов и потолок одновременно собранных устройств — они включены отдельно
+  (см. следующий пункт). Подробности —
+  [спека §535](docs/spec/tasks/535-kernel-1-14-2-lx1-pin-lx-wg-keys-endpoint-state.md).
+
+- **Узлы WireGuard/AmneziaWG больше не занимают память, пока через них не
+  пошёл трафик (§536).** Раньше при запуске туннеля ядро поднимало устройство
+  каждого WG/AWG-узла в хранении сразу — около 17,5 МБ приёмных буферов на
+  узел, независимо от того, пойдёт ли через него хоть один пакет; на десятке
+  узлов это десятки мегабайт ради одного работающего. Теперь узел стартует
+  разобранным и собирается при первом обращении к нему, а одновременно
+  собранными держатся максимум пять — лишние разбираются. На стенде с
+  одиннадцатью AWG-узлами живая память ядра после пары минут работы упала
+  со 113 до 53 МБ. Плата — полсекунды-секунда на первом переключении на
+  узел. Оговорка: группа Auto при старте проверяет всех своих членов и этим
+  собирает их, так что экономию в ней даёт потолок, а не ленивая сборка.
+  Настройки у этого нет: поведение включается вместе с порогом засыпания из
+  Settings, пустой порог по-прежнему отключает всю подсистему целиком.
+  Подробности — [спека §536](docs/spec/tasks/536-lx-wg-lazy-build-build-max.md).
+
+- **Ссылки Copy link приведены к общему формату схем (§533).** Вместе с
+  контрактом 1.1.53 владелец утвердил, каким именно должен быть вид ссылки у
+  нескольких схем, и приложение к нему приведено. У VLESS в ссылку теперь
+  всегда попадает `security` — в том числе `security=reality`: у чужих
+  Xray-клиентов отсутствие этого параметра означает «без шифрования», и
+  reality-узел, отданный без него, открывался у соседа незащищённым
+  соединением. У NaiveProxy порт `443` больше не опускается: получатель,
+  который дефолта не знает, теперь читает адрес целиком. У AnyTLS флаг «не
+  проверять сертификат» пишется каноническим для sing-box именем `insecure`
+  вместо `allowInsecure`. У Shadowsocks ссылка окончательно закреплена без
+  хвостовых `=` — так её пишет эталон SIP002. У VLESS отпечаток браузера
+  `fp=random` больше не уезжает в ссылку: это значение по умолчанию, и
+  называть его явно незачем, а любой другой отпечаток (`fp=chrome` и прочие)
+  доезжает как прежде. **Чтение не изменилось ни у одной схемы**: все прежние
+  написания читаются по-прежнему, так что ссылки, сохранённые раньше или
+  присланные другими клиентами, разбираются как раньше.
+
+- **Пресет «Russian domains & IPs» переименован в «Ru internet segment»
+  (§531).** Старое имя перечисляло состав, а состав перестал им
+  исчерпываться: кроме доменов и диапазонов IP пресет теперь ведёт и российские
+  приложения по имени пакета. Идентификатор пресета не менялся — сохранённые
+  правила разворачиваются как раньше, поменялась только надпись на экране
+  Routing.
+
+### Fixed
+
+- **Повтор узла в одной подписке схлопывается (§538).** Подписка присылала
+  один и тот же AWG-узел дважды — строкой `amneziawg://` и сжатой ссылкой
+  `vpn://`, и в списке стояли два одинаковых узла. Теперь из записей с
+  одинаковым содержимым узла (без имени) остаётся первая, остальные уходят в
+  отброшенные с кодом `duplicate` и пояснением «Duplicate of <имя>». Сравнение
+  идёт только внутри одной подписки или одного импорта. В корпусе публичных
+  подписок так снимается 13 064 записи из 73 938: агрегаторы повторяют один
+  сервер под разными именами.
+
+- **Лог узла AWG больше не завален строками про GSO (§535).** Было: у
+  AmneziaWG-узлов ядро на каждую неудачную отправку писало
+  `failed to send handshake initiation: disabled UDP GSO`, и лог узла, который
+  при этом нормально работал, состоял из этих строк — в поддержку приходили
+  дампы, где за шумом не видно настоящей причины. Стало: сообщение отнесено к
+  штатному пути (ядро SPEC 101), лог узла читается. На связь это не влияло ни
+  раньше, ни теперь — менялась только читаемость лога
+  ([#95](https://github.com/Leadaxe/LxBox/issues/95)).
+
+- **Подписки Xray разбираются точнее: лишние поля больше не сочиняются, а
+  нужные не теряются (§533).** Приложение годами держало поверх общего реестра
+  протоколов набор собственных поправок, и часть из них успела разойтись с
+  реестром. Было: у узла WebSocket из конфига Xray читались поля `ed` и `eh`,
+  которых Xray в этом месте не объявляет вовсе, и узлу приписывалась настройка
+  ранних данных, которой у него не было; адрес прокси подставлялся в имя
+  сервера TLS там, где автор конфига имя не писал; имя хоста WebSocket читалось
+  только из заголовков и терялось, если автор написал его отдельным полем;
+  настройка keep-alive с отрицательным интервалом понималась как «выключить»
+  даже рядом с заданным временем простоя, и наоборот — одинокий отрицательный
+  интервал не понимался никак. Стало: каждый из этих случаев разбирается так
+  же, как у эталона. Заодно починена сборка ссылки VMess: узел без транспорта
+  уезжал по Copy link **без адреса сервера** — такой ссылкой нельзя было
+  поделиться. Подробности —
+  [спека §533](docs/spec/tasks/533-contract-1-1-53-sync-overlays-body-runner.md).
+
+- **HTTPS-прокси с `security=none` больше не тянет за собой лишний TLS
+  (§533).** У прокси, записанного как `proxy-https://…?security=none`, автор
+  явно отключает шифрование, но приложение оставляло узлу блок TLS от
+  написания схемы. Теперь параметр снимает его, как и задумано, и такой узел
+  уезжает обычным HTTP-прокси — в том числе по Copy link.
+
+- **Движок реестра разбирает ссылки и конфиги по той же семантике, что эталон
+  (§532).** Реестр протоколов у нас общий с лаунчером и доезжает байт в байт, а
+  исполнялся по-разному — три примитива работали не так, как в эталоне. Было:
+  признак «ключа нет» не исполнялся вовсе и считался истиной, поэтому элемент
+  Xray с чужой версией протокола (`version: 3`) уезжал в секцию первой версии и
+  давал узел, которого провайдер не присылал; признак «тип значения по пути»
+  срабатывал и когда пути нет вовсе, из-за чего движок перестал отличать битую
+  запись от законного отсутствия транспорта; булево поле без явного объявления
+  уезжало в ссылку цифрой (`=1`), тогда как эталон пишет его словом. Стало: все
+  три примитива сведены с эталоном — чужая версия ни одной ветке не достаётся,
+  форма значения судится только там, где значение есть, а булево без объявления
+  пишется словом (цифру теперь даёт только явное объявление). Заодно снято наше
+  локальное отступление в опознании Xray-элементов vless и trojan: оно требовало
+  у элемента блок транспорта и с новой строгой проверкой отняло бы разбор у
+  узлов, где транспорта нет вовсе (plain-TCP) — такие узлы разбираются как
+  прежде. Тела и подписи
+  (identity) узлов не изменились; из видимого сменилось написание одного
+  параметра в ссылках TUIC — `reduce_rtt=true` вместо `reduce_rtt=1`, ровно как
+  у эталона (обе формы читаются по-прежнему). Подробности —
+  [спека §532](docs/spec/tasks/532-registry-engine-primitives-parity.md),
+  основание — ревизия зеркала реестра от 24.09.2026 (§3 п.1–3).
+
+- **В режиме Proxy приложение больше не спрашивает про другой активный VPN
+  (§528).** Было: в режиме Proxy (только локальный порт, без туннеля) нажатие
+  Start показывало вопрос «Another VPN is active. Switch to L×Box?» — хотя
+  соседний VPN в этом режиме не отзывается и выключать его незачем. Вопрос
+  сбивал с толку: его читали как предупреждение и либо отменяли запуск, либо
+  выключали второй VPN руками. Стало: вопрос задаётся только когда туннель
+  действительно поднимается — в режимах VPN и VPN+Proxy, где системный
+  VPN-слот один и соседний туннель правда будет отозван. В режиме Proxy запуск
+  идёт сразу. Сам вопрос, его текст и кнопки, включая «VPN settings», не
+  менялись; поведение при отмене тоже
+  ([#126](https://github.com/Leadaxe/LxBox/issues/126)).
+
+- **Снятая галка набора в пресете «Ru internet segment» больше не выключает
+  всё правило (§534).** Было: галки «GeoIP IP-range fallback» и «Russian apps
+  by package» слушала только сборка конфига, а экран Routing, кнопка
+  скачивания и фоновое обновление наборов их не видели. Набор со снятой галкой
+  всё равно скачивался и обновлялся, у правила висела иконка ☁ ради набора,
+  который в конфиг не попадает, а если файла этого набора не было — при
+  открытии Routing выключалось всё правило пресета, хотя галку сняли как раз
+  чтобы обойтись без набора. Стало: экран Routing, скачивание и автообновление
+  решают, включён ли набор, тем же правилом, что и сборка конфига; выключенный
+  галкой набор не качается, не требуется в кэше, и правило из-за него не
+  гаснет. Файл набора при снятой галке остаётся в кэше, и при возврате галки
+  качать его заново не нужно; если файла не было, редактор правила скачает его
+  сразу при включении галки. Правило, которое прежнее поведение уже выключило,
+  само не включится — его достаточно один раз включить переключателем.
+  Подробности —
+  [спека §534](docs/spec/tasks/534-rule-set-enable-gate-download-path.md);
+  дефект найден при работе над
+  [§531](docs/spec/tasks/531-ru-app-list-ruleset-in-ru-preset.md).
+
+## [2.25.3] — 2026-09-24
+
+Патч поверх [v2.25.2](docs/releases/v2.25.2.md): ядро `v1.14.1-lx.10` (синк с
+апстримом sing-box, Диагностика naive без падения, доменные WireGuard/AmneziaWG
+за секунду вместо пяти), единый список записей на экране Servers, порог ожидания
+старта по числу WireGuard-endpoint'ов, меню редактора конфига и пресет
+`dns_shield`. Контракт 1.1.52 — без изменений.
+
+### Added
+
+- **Разбор подписок теперь проверяется на корпусе реальных публичных списков
+  (§525).** В репозиторий положены снимки 68 публичных подписок — около 74 000
+  узлов текстом, ровно в том виде, в каком их отдают источники, — и механизм
+  прогона разбора по ним. Каждое изменение реестра протоколов теперь сверяется
+  с эталоном: если число разобранных узлов упало или сменились коды отбраковки,
+  это видно сразу и по конкретной подписке, а не после жалобы. Прогон только
+  читает текст: ни один сервер из корпуса не подключается и не проверяется на
+  доступность, конфиг не собирается, ядро не запускается. На поведение
+  приложения изменение не влияет — это внутренняя мера качества разбора.
+
+### Changed
+
+- **Цепочки стоят в списке серверов наравне с остальными записями, а в бэкапе
+  едут в серверах (§524).** Раньше цепочка была отдельным механизмом внутри
+  приложения: список на экране Servers собирался из трёх разных мест на каждый
+  кадр, одно перетаскивание записывало настройки дважды, а в экспорте бэкапа
+  цепочки отмечались галкой Routing — вместе с правилами маршрутизации, а не
+  вместе с серверами, хотя в списке они стоят рядом с серверами. Теперь список
+  один: подписки, серверы, папки и цепочки — записи одного рода, в одном
+  порядке; перетаскивание сохраняется одной записью; в бэкапе цепочки едут
+  галкой «Server lists». Старые архивы, где цепочки экспортировались как
+  Routing, читаются по-прежнему — восстанавливать их надо галкой серверов.
+  Заодно Debug API `GET /subs` впервые показывает тот же список, что видит
+  пользователь, включая цепочки. Файл настроек, формат бэкапа и сами настройки
+  не менялись; узлы, маршруты и порядок списка остаются как были.
+
+- **Ядро обновлено до `v1.14.1-lx.10`: Диагностика узла NaiveProxy больше не
+  закрывает приложение, а серверы WireGuard/AmneziaWG с адресом по имени
+  подключаются быстрее (§526).** Диагностика узла `naive` при живом туннеле
+  закрывала приложение сразу же: ядро читало адрес соединения, которого у
+  соединения этого типа нет. Теперь Диагностика такого узла отдаёт статус,
+  ответ и время, как у любого другого, а поле адреса остаётся пустым — так и
+  должно быть. Трафик через такие узлы и проверка задержки не страдали и
+  раньше. Отдельно: у серверов WireGuard и AmneziaWG, чей адрес задан именем,
+  а не IP, первое рукопожатие проходит с первой попытки — раньше первая попытка
+  терялась и подключение к такому серверу занимало лишние пять секунд. Вместе с
+  этим ядро синхронизировано с апстримом sing-box: правки по DNS, IPv6 и
+  завершению работы. Схема конфига, набор полей и поведение остальных узлов не
+  менялись.
+
+- **Ядро обновлено до `v1.14.1-lx.9`: XHTTP-соединения больше не считаются
+  сбойными при переключении серверов (§522).** Когда вы меняли сервер или ядро
+  само закрывало уже ненужное XHTTP-соединение, оно принимало собственное
+  закрытие за обрыв со стороны сервера: в лог на каждый запрос падала строка
+  `ERROR connection download closed: http2: response body closed`, а рабочая
+  XMUX-сессия помечалась негодной и пересобиралась заново. Исправлено в ядре:
+  локальная отмена теперь распознаётся и не считается сбоем — лог рабочего
+  XHTTP-узла чистый, а переключение сервера не обходится лишней пересборкой
+  сессии. Настоящий обрыв на стороне сервера сообщается как раньше.
+  Схема конфига, набор полей и поведение узлов не менялись
+  ([#148](https://github.com/Leadaxe/LxBox/issues/148)).
+
+### Fixed
+
+- **DNS-пресет Shield: сервер Яндекса по DoT реально участвует в группе
+  (§527).** Раньше он молча выпадал: в группе он был записан, но самой записи
+  сервера в шаблоне не было — при каждой сборке конфига участник исчезал с
+  предупреждением, и «щит» опрашивал пять провайдеров вместо шести. Заметно это
+  было тем, у кого доступ ограничен белыми списками: Яндекс в такой сети
+  отвечает, а остальные участники группы — нет, и резолв не работал вовсе.
+  Теперь сервер объявлен: Яндекс по DNS-over-TLS, напрямую, без туннеля — то
+  есть работает и когда туннель не поднялся, а запросы всё равно идут
+  шифрованными, без утечки в открытый UDP. Существующие конфиги не
+  мигрируются: состав группы берётся из шаблона при следующей сборке конфига.
+
+- **Проверка на всех серверах больше не падает на списках с несколькими
+  WireGuard/AmneziaWG-узлами (§523).** Проверка поднимает ядро, а оно заранее
+  резервирует буферы под каждый WireGuard-узел конфига, а не только под тот,
+  который меряется в данный момент: около 17 МБ на узел, то есть под 200 МБ на
+  десятке. Лимит памяти проверка пробивала — и приложение закрывалось вместо
+  того, чтобы показать задержки. Теперь такие узлы проверяются порциями по
+  четыре: между порциями ядро перезапускается и буферы освобождаются.
+  Все узлы по-прежнему меряются, порядок списка не меняется, проверка просто
+  идёт чуть дольше. Списки без WireGuard-узлов работают как раньше.
+
+- **Меню Cut/Copy/Paste в редакторе конфига больше не размножается и не висит
+  после снятия выделения (§521).** На экране могло оказаться сразу несколько
+  меню — два-три экземпляра друг поверх друга, последний ещё и обрезанный
+  краем экрана, — а снятие выделения тапом по пустому месту их не убирало.
+  Причина была не в самом меню: редактор заново создавал его управляющий
+  объект при каждой перерисовке экрана (индикатор загрузки, баннер о размере
+  файла, любое поле в мастере добавления сервера), и уже показанное меню
+  оставалось без хозяина — закрыть его было некому. Теперь у редактора один
+  такой объект на всё время жизни экрана, а меню закрывается и по снятию
+  выделения, и по тапу мимо, и при скролле, и при уходе с экрана. Тап по самим
+  кнопкам меню по-прежнему выделение не сбрасывает: копируется ровно то, что
+  выделено.
+- **Диагностический отчёт о проблемах узлов больше не пропускает узлы с
+  одинаковыми именами (§520).** Провайдеры нередко зовут все узлы одинаково —
+  например, просто `proxy`, — а один и тот же сервер может прийти дважды под
+  разными протоколами с общим именем. В отчёте о проблемах разбора такие узлы
+  накладывались друг на друга: оставался только последний, а замечания к
+  остальным исчезали. Заметить это было нельзя, потому что число узлов рядом
+  показывалось верное: двенадцать узлов — восемь строк замечаний. Теперь
+  узлы-тёзки различаются так же, как в списке узлов, и ни одно замечание не
+  теряется.
+- **VPN с несколькими WireGuard/AmneziaWG-узлами больше не отключается сам через
+  15 секунд (§519).** Ядро поднимает такие узлы по одному, 7–9 секунд на каждый,
+  а страховка от зависшего старта ждала фиксированные 15 секунд на любой конфиг.
+  На четырёх и более узлах она успевала прибить уже установленное соединение:
+  рукопожатие состоялось, туннель поднят — и тут же погашен. Причины при этом
+  видно не было, снаружи это выглядело как «нажал Connect, ничего не произошло».
+  Теперь запас времени растёт вместе с числом таких узлов, а если страховка всё
+  же срабатывает — она называет причину и порог, вместо того чтобы молча
+  отключиться. Для конфигов без WireGuard-узлов порог прежний.
+
 ## [2.25.2] — 2026-09-24
 
 Патч поверх [v2.25.1](docs/releases/v2.25.1.md): основной корпус изменений
@@ -274,7 +1072,7 @@
   ([§498](docs/spec/tasks/498-core-reject-list-navigation.md),
   [§501](docs/spec/tasks/501-diagnostics-notifications-merge.md),
   [§503](docs/spec/tasks/503-core-reject-list-disabled-node-navigation.md),
-  [фича 478](docs/spec/features/478%20core-rejected-node-auto-disable/spec.md)).**
+  [фича 478](docs/spec/tasks/478F-core-rejected-node-auto-disable/spec.md)).**
   Раньше тап по строке открывал вторую шторку с одним уведомлением. Теперь —
   тот же экран деталей, что при тапе по узлу в списке, сразу на вкладке
   Diagnostics (секция уведомлений снизу, под Check/Run; при переходе из листа —
@@ -293,7 +1091,7 @@
 
 - **Зеркало реестра контракта обновлено до 1.1.46
   ([§493](docs/spec/tasks/493-contract-sync-11146.md),
-  [фича 480](docs/spec/features/480%20registry-driven-mapper/spec.md)).**
+  [фича 480](docs/spec/tasks/480F-registry-driven-mapper/spec.md)).**
   Синк с лаунчера `7e2945bf`: нормы merge-append и двойной base64-обёртки
   (1.1.43), стражи CIDR/дробных портов (1.1.44), dialerProxy→freedom fragment
   без предупреждений (1.1.45–46). Двадцать пять оверлеев, совпавших с
@@ -304,7 +1102,7 @@
   прогона.
 
 - **Элемент Xray-подписки без порта больше не становится узлом
-  ([фича 480](docs/spec/features/480%20registry-driven-mapper/spec.md),
+  ([фича 480](docs/spec/tasks/480F-registry-driven-mapper/spec.md),
   дельта `vless_default_port`).** Раньше приложение само подставляло такому
   элементу порт 443 (socks — 1080) и показывало узел, которого провайдер не
   присылал. Арбитром стали исходники Xray-core: умолчания порта там нет ни у
@@ -323,7 +1121,7 @@
 
 - **Узел TUIC с пустым паролем принимается — с предупреждением, а не
   отбраковкой
-  ([фича 480](docs/spec/features/480%20registry-driven-mapper/spec.md),
+  ([фича 480](docs/spec/tasks/480F-registry-driven-mapper/spec.md),
   дельта `delta480-7`).** Ссылка вида `tuic://uuid:@host` или
   `tuic://uuid@host` — законный узел: пароль в TUIC v5 участвует в
   рукопожатии контекстом, и пустой контекст соединению не мешает. Прежде
@@ -334,7 +1132,7 @@
 
 - **Шесть предупреждений узла читают текст из реестра контракта, а не из
   кода ([§482](docs/spec/tasks/482-warnings-text-from-registry.md),
-  [фича 480](docs/spec/features/480%20registry-driven-mapper/spec.md)).**
+  [фича 480](docs/spec/tasks/480F-registry-driven-mapper/spec.md)).**
   `ech_ignored`, `ws_early_data_converted`, `naive_padding_ignored`,
   `naive_extra_headers_invalid` и два кода AmneziaWG
   (`awg_header_invalid`, `awg3_field_invalid`) держали свой текст в
@@ -348,7 +1146,7 @@
   ждёт AmneziaWG, рукопожатие может не сойтись.
 
 - **Разбор и сборка ссылок идут от реестра контракта
-  ([фича 480](docs/spec/features/480%20registry-driven-mapper/spec.md)).**
+  ([фича 480](docs/spec/tasks/480F-registry-driven-mapper/spec.md)).**
   Тринадцать рукописных разборщиков ссылок, отдельный разборщик Xray, отдельный
   разборщик конфигураций WireGuard и отдельная рукописная сборка ссылки
   заменены одним движком, который исполняет таблицы реестра. Имён протоколов в
@@ -411,7 +1209,7 @@
 - **Узлы trojan, vless, vmess, shadowsocks, hysteria2, tuic, anytls, naive,
   http(s)-прокси, socks и ssh из ссылок разбираются общим конвейером, и
   предупреждений у них стало больше — с адресом поля
-  ([§472](docs/spec/features/472%20unified-parse-pipeline/spec.md), шаги 2–6).**
+  ([§472](docs/spec/tasks/472F-unified-parse-pipeline/spec.md), шаги 2–6).**
   Внутренняя перестройка: ссылка теперь переводится в карту sing-box
   («маппер»), а годность значений судит реестр контракта — там же, где её
   судит импорт JSON. Раньше правила жили в самом парсере, своей копией.
@@ -440,7 +1238,7 @@
 
 - **WireGuard, AmneziaWG и MASQUE — включая файлы `.conf` и профили Amnezia —
   разбираются тем же общим конвейером
-  ([§472](docs/spec/features/472%20unified-parse-pipeline/spec.md), шаг 7).**
+  ([§472](docs/spec/tasks/472F-unified-parse-pipeline/spec.md), шаг 7).**
   Последние три входа узла переехали на единый источник правил. Для MASQUE
   это видно в шторке Warnings: сообщение о версии HTTP, которой ядро не знает
   (`vhttp=tcp`), теперь называет поле и написанное значение, и приходит оно
@@ -458,7 +1256,7 @@
 
 - **Подписки в формате Xray разбираются тем же общим конвейером, и
   предупреждений у таких узлов стало больше — с адресом поля
-  ([§472](docs/spec/features/472%20unified-parse-pipeline/spec.md), шаг 8).**
+  ([§472](docs/spec/tasks/472F-unified-parse-pipeline/spec.md), шаг 8).**
   Последний вход узла переехал на единый источник правил: Xray-конфиг сначала
   переводится в карту sing-box, а годность значений судит реестр контракта —
   там же, где её судит ссылка. Видно это в шторке Warnings, и разница здесь
@@ -473,7 +1271,7 @@
   изменились — выбор узла, отключения и цепочки на месте.
 
 - **TUIC-узел с идентификатором не в форме UUID больше не принимается
-  ([§472](docs/spec/features/472%20unified-parse-pipeline/spec.md) шаг 5).**
+  ([§472](docs/spec/tasks/472F-unified-parse-pipeline/spec.md) шаг 5).**
   Было: ссылка с коротким `uuid` (заглушка вроде `u`, обрезанный ключ)
   разбиралась и уезжала в ядро, а ядро отвечало «invalid uuid» и не запускало
   ВЕСЬ конфиг — вместе со всеми остальными узлами. Понять, какой из них
@@ -535,7 +1333,7 @@
   уведомлений секции нет. Тап по значку в списке не изменился.
 
 - **Конфигурация `.conf` (wg-quick) больше не теряет ничего молча
-  ([фича 480](docs/spec/features/480%20registry-driven-mapper/spec.md),
+  ([фича 480](docs/spec/tasks/480F-registry-driven-mapper/spec.md),
   контракт 1.1.30–1.1.32).** Три случая, в которых файл читался наполовину и
   человек об этом не узнавал:
   - **Вторая секция `[Peer]`.** Узел — это один пир, и второй в него не
@@ -553,7 +1351,7 @@
 
 - **Вердикт страховки от ядра не переносится бэкапом
   ([§489](docs/spec/tasks/489-core-reject-verdict-not-backup.md),
-  [фича 478](docs/spec/features/478%20core-rejected-node-auto-disable/spec.md)).**
+  [фича 478](docs/spec/tasks/478F-core-rejected-node-auto-disable/spec.md)).**
   Раньше отметка `core_rejected` и выключение, поставленное автоматом, уезжали
   в файл вместе с ручными настройками — на другой машине узел оставался
   выключенным без повторной проверки ядром. Теперь в бэкап идут только
@@ -563,7 +1361,7 @@
   «выключено N» после перезапуска не восстанавливается.
 
 - **Сервер, который не принимает ядро, выключается сам, и VPN поднимается на
-  остальных ([фича 478](docs/spec/features/478%20core-rejected-node-auto-disable/spec.md),
+  остальных ([фича 478](docs/spec/tasks/478F-core-rejected-node-auto-disable/spec.md),
   [#147](https://github.com/Leadaxe/LxBox/issues/147)).** Было: ядро проверяет
   конфигурацию целиком и отказывается стартовать на первом же сервере, который
   не может принять. Один негодный сервер в подписке из пятисот — и VPN не
@@ -607,7 +1405,7 @@
   ссылок и INI не изменились, добавились только предупреждения.
 
 - **Узел из JSON показывает мусор в своём теле сразу, а не после сборки
-  ([§472](docs/spec/features/472%20unified-parse-pipeline/spec.md) шаг 1).**
+  ([§472](docs/spec/tasks/472F-unified-parse-pipeline/spec.md) шаг 1).**
   Было: узел, пришедший телом подписки или вставленный JSON-объектом, в списке
   выглядел здоровым, даже если в нём лежал ключ вне схемы, устаревший `flow`
   или TLS-поле, которого протокол не принимает. Про такие поля сообщал только
@@ -620,7 +1418,7 @@
   Узлы из ссылок и из Xray-JSON ведут себя как раньше.
 
 - **Тап по ⚠ под узлом открывает карточку: почему так вышло и что сделать
-  ([§460](docs/spec/features/460%20contract-registry-bundle/spec.md) W2b).**
+  ([§460](docs/spec/tasks/460F-contract-registry-bundle/spec.md) W2b).**
   Было: строка под узлом показывала одно предупреждение и счётчик «+N more».
   Остальные было не прочитать вовсе, а у прочитанного — ни причины, ни того,
   что с ним делать.
@@ -636,7 +1434,7 @@
   китайский) — английские: в реестре два языка.
 
 - **Копия документации контракта в репозитории
-  ([§460](docs/spec/features/460%20contract-registry-bundle/spec.md) W2b).**
+  ([§460](docs/spec/tasks/460F-contract-registry-bundle/spec.md) W2b).**
   `app/tool/sync_contract.sh` кладёт страницы `contract/docs/generated/**`
   байт в байт в `docs/contract/` — туда ведёт **Details** с карточки. Своего
   генератора не заводили: страницы собирает генератор лаунчера по реестру, а
@@ -646,7 +1444,7 @@
   якорь.
 
 - **Предупреждения реестра контракта появляются на узле сразу при разборе
-  ([§460](docs/spec/features/460%20contract-registry-bundle/spec.md) W2a).**
+  ([§460](docs/spec/tasks/460F-contract-registry-bundle/spec.md) W2a).**
   Было: санитайзер реестра работал только на сборке конфига. Про поле, которое
   ядро не примет, пользователь узнавал из отчёта сборки, а строка узла в списке
   подписки молчала — узел выглядел здоровым до попытки подключиться.
@@ -671,7 +1469,7 @@
 
 - **Вердикт страховки снова виден в списке источников
   ([§499](docs/spec/tasks/499-core-reject-source-list-indicators.md),
-  [фича 478](docs/spec/features/478%20core-rejected-node-auto-disable/spec.md)).**
+  [фича 478](docs/spec/tasks/478F-core-rejected-node-auto-disable/spec.md)).**
   Одиночный сервер, выключенный страховкой, показывал только выключенный
   переключатель — без значка и без причины от ядра. Теперь в строке тот же
   значок уровня, что у узлов подписки, подпись протокола заменяется дословной
@@ -689,7 +1487,7 @@
   поддерживает).
 
 - **Негодный CIDR у WireGuard больше не роняет весь VPN
-  ([фича 480](docs/spec/features/480%20registry-driven-mapper/spec.md)).**
+  ([фича 480](docs/spec/tasks/480F-registry-driven-mapper/spec.md)).**
   Адрес туннеля вроде `1.2.3.4/64` или мусорный IPv6 проходил проверку и
   попадал в конфиг, а ядро отказывалось загружать его целиком — без связи
   оказывались все серверы, не только этот. Теперь адрес проверяется как
@@ -698,7 +1496,7 @@
   дописывается маской хоста.
 
 - **Ссылка WireGuard с несколькими пирами больше не выдаёт только первого
-  ([фича 480](docs/spec/features/480%20registry-driven-mapper/spec.md)).**
+  ([фича 480](docs/spec/tasks/480F-registry-driven-mapper/spec.md)).**
   Формат ссылки несёт один удалённый сервер, а эмиттер отдавал первого пира
   и молчал о потере остальных: скопированная ссылка выглядела рабочей, а
   повторный разбор навсегда терял маршрут. Теперь при нескольких пирах
@@ -706,7 +1504,7 @@
   которого переносимой формы нет.
 
 - **Дробный порт в JSON больше не подменяется целым
-  ([фича 480](docs/spec/features/480%20registry-driven-mapper/spec.md)).**
+  ([фича 480](docs/spec/tasks/480F-registry-driven-mapper/spec.md)).**
   В контейнере v2rayN `"port":443.9` приезжал числом с дробной частью, и
   разбор усекал его до 443: узел выглядел обычным, а адрес подключения был
   уже не тот, что прислал провайдер. Теперь нецелое число не годится как
@@ -715,7 +1513,7 @@
 
 - **Сервер, добавленный одним Xray-объектом, больше не оставляет без связи
   весь конфиг ([§455](docs/spec/tasks/455-node-editor-source-json-tabs.md),
-  [фича 480](docs/spec/features/480%20registry-driven-mapper/spec.md)).**
+  [фича 480](docs/spec/tasks/480F-registry-driven-mapper/spec.md)).**
   Правило «JSON уходит в ядро как есть» задумывалось для объекта, написанного
   в форме самого ядра, но срабатывало на любом JSON — в том числе на
   outbound'е из Xray. Такой объект уезжал в конфигурацию чужим диалектом,
@@ -735,7 +1533,7 @@
   предупреждение выглядело по-разному в двух соседних полях ответа.
 
 - **Ссылка с `type=splithttp` снова получает транспорт
-  ([фича 480](docs/spec/features/480%20registry-driven-mapper/spec.md),
+  ([фича 480](docs/spec/tasks/480F-registry-driven-mapper/spec.md),
   дельта `delta480-8`).** `splithttp` — прежнее имя транспорта `xhttp`, и
   ссылки с ним ходят до сих пор. Узел из такой ссылки собирался БЕЗ
   транспорта вовсе — голое TCP-соединение на порт, который ждёт HTTP, — и
@@ -745,7 +1543,7 @@
 
 - **Публичный ключ REALITY в обычном base64 больше не роняет всю
   конфигурацию
-  ([фича 480](docs/spec/features/480%20registry-driven-mapper/spec.md)).**
+  ([фича 480](docs/spec/tasks/480F-registry-driven-mapper/spec.md)).**
   Панели выдают `pbk` то в одном алфавите base64, то в другом. Ядро читает
   только один и на чужом написании отказывается стартовать целиком:
   подписка разбиралась, узлы были на месте, а VPN не поднимался ни на одном
@@ -755,7 +1553,7 @@
 
 - **Hysteria2 с диапазоном портов и адресом в `mport` больше не уносит с
   собой весь VPN
-  ([фича 480](docs/spec/features/480%20registry-driven-mapper/spec.md)).**
+  ([фича 480](docs/spec/tasks/480F-registry-driven-mapper/spec.md)).**
   В списке портов узла оказывался не диапазон, а адрес сервера, и ядро
   отвечало фаталом «bad port range» — падала вся конфигурация, а не один
   узел. Теперь элементом списка портов принимается только пара чисел;
@@ -763,20 +1561,20 @@
   затронуты.
 
 - **Подписка в base64 принимается вставкой из буфера, а не только по ссылке
-  ([фича 480](docs/spec/features/480%20registry-driven-mapper/spec.md)).**
+  ([фича 480](docs/spec/tasks/480F-registry-driven-mapper/spec.md)).**
   Тот же самый текст по ссылке читался штатно, а вставленный отвечал «Input
   is not a subscription URL, proxy link, or outbound JSON». Теперь оболочка
   снимается и при вставке.
 
 - **Конфигурация Xray вставляется в любой из трёх форм
-  ([фича 480](docs/spec/features/480%20registry-driven-mapper/spec.md)).**
+  ([фича 480](docs/spec/tasks/480F-registry-driven-mapper/spec.md)).**
   Вставка отвечала «No valid outbounds in JSON» на одиночном outbound'е, на
   полной конфигурации с `outbounds` и на массиве outbound'ов — распознавался
   только массив конфигураций. Теперь понятны все четыре формы, и превью в
   буфере показывает настоящее число узлов, а не ноль.
 
 - **Сырой `+` в ключах больше не ломает узел
-  ([фича 480](docs/spec/features/480%20registry-driven-mapper/spec.md)).**
+  ([фича 480](docs/spec/tasks/480F-registry-driven-mapper/spec.md)).**
   Ссылка, в которой base64-ключ приехал с нормальным `+`, а не с `%2B`,
   разбиралась по правилам веб-формы: `+` превращался в пробел. У MASQUE от
   этого ключ терял первый символ, а у WireGuard узел пропадал целиком. Теперь
@@ -784,28 +1582,28 @@
   четырёх именах ключей.
 
 - **Имена параметров ссылки читаются в любом регистре
-  ([фича 480](docs/spec/features/480%20registry-driven-mapper/spec.md)).**
+  ([фича 480](docs/spec/tasks/480F-registry-driven-mapper/spec.md)).**
   `SNI=`, `AllowInsecure=`, `Type=`, `ALPN=`, `Fp=` — панели пишут их
   по-разному, и всё, что отличалось регистром от ожидаемого написания, просто
   не читалось.
 
 - **`pinSHA256` со списком отпечатков больше не пропадает
-  ([фича 480](docs/spec/features/480%20registry-driven-mapper/spec.md)).**
+  ([фича 480](docs/spec/tasks/480F-registry-driven-mapper/spec.md)).**
   `pinSHA256=a,b` давал пусто: значение с запятой не читалось вовсе. Теперь
   это список.
 
 - **`insecure` понимается во всех девяти написаниях
-  ([фича 480](docs/spec/features/480%20registry-driven-mapper/spec.md)).**
+  ([фича 480](docs/spec/tasks/480F-registry-driven-mapper/spec.md)).**
   Раньше их знали четыре, и у hysteria2, TUIC и MASQUE флаг то срабатывал, то
   нет в зависимости от того, какая панель выдала ссылку.
 
 - **`preshared_key` в `[Peer]` конфигурации WireGuard больше не теряется
-  молча ([фича 480](docs/spec/features/480%20registry-driven-mapper/spec.md)).**
+  молча ([фича 480](docs/spec/tasks/480F-registry-driven-mapper/spec.md)).**
   Читалось только написание `PresharedKey`; соседнее уходило в никуда без
   единого слова.
 
 - **Копирование ссылки перестало терять поля
-  ([фича 480](docs/spec/features/480%20registry-driven-mapper/spec.md)).**
+  ([фича 480](docs/spec/tasks/480F-registry-driven-mapper/spec.md)).**
   Сборка ссылки шла отдельным рукописным списком полей, и то, что разбор
   прочитал, копия не всегда возвращала: `mport` и `pinSHA256` у hysteria2,
   `plugin` у Shadowsocks, открытый метод SS2022, дополнительные заголовки
@@ -823,7 +1621,7 @@
   своим выключателем — снимается на общих правилах, молча и на любом входе.
 
 - **Битый путь транспорта из Xray-подписки больше не уносит с собой весь VPN
-  ([§472](docs/spec/features/472%20unified-parse-pipeline/spec.md), шаг 8).**
+  ([§472](docs/spec/tasks/472F-unified-parse-pipeline/spec.md), шаг 8).**
   Было: узел из Xray-конфига с испорченным percent-кодированием в пути
   WebSocket (`/x%zz`) уезжал в ядро как есть, а ядро отвергало на нём ВЕСЬ
   config.json — VPN не поднимался ни на одном узле, и понять, какой из них
@@ -834,7 +1632,7 @@
 - **Узел из Xray-подписки с негодным `encryption` пропадает при разборе, а не
   стоит в списке рабочим
   ([§477](docs/spec/tasks/477-vless-encryption-grammar.md),
-  [§472](docs/spec/features/472%20unified-parse-pipeline/spec.md) шаг 8).**
+  [§472](docs/spec/tasks/472F-unified-parse-pipeline/spec.md) шаг 8).**
   Было: проверка формы у такого узла срабатывала, и в ядро он не уезжал, но в
   списке подписки стоял как обычный — человек выбирал его и не понимал, почему
   соединения нет. Стало: узел снимается там же, где узел из ссылки, — при
@@ -885,7 +1683,7 @@
   `tls.certificate` в #140 и пять потерь, найденных по ходу §472.
 
 - **naive-узел на QUIC больше не возвращается к HTTP/2 после пересохранения
-  ([§472](docs/spec/features/472%20unified-parse-pipeline/spec.md) шаг 6).**
+  ([§472](docs/spec/tasks/472F-unified-parse-pipeline/spec.md) шаг 6).**
   Было: узел из ссылки `naive+quic://` работал, но стоило сохранить его через
   вкладку JSON или перечитать из сохранённого тела — транспорт QUIC молча
   пропадал, и узел переставал соединяться. Приложение писало настройку в тело
@@ -894,7 +1692,7 @@
   способом и по той же причине.
 
 - **AnyTLS-узел с нечисловым `min_idle_session` больше не исчезает без следа
-  ([§472](docs/spec/features/472%20unified-parse-pipeline/spec.md) шаг 6).**
+  ([§472](docs/spec/tasks/472F-unified-parse-pipeline/spec.md) шаг 6).**
   Было: подписка присылала число простаивающих сессий строкой (`"3"` вместо
   `3` — обычное дело у агрегаторов) или мусором, и узел пропадал из списка
   целиком, молча: разбор падал на этом поле и отдавал «узла нет». Стало: поле
@@ -902,7 +1700,7 @@
   узел остаётся на месте и работает на умолчании ядра.
 
 - **Узел с обфускацией без пароля больше не пропадает целиком
-  ([§472](docs/spec/features/472%20unified-parse-pipeline/spec.md) шаг 5).**
+  ([§472](docs/spec/tasks/472F-unified-parse-pipeline/spec.md) шаг 5).**
   Было: hysteria2-ссылка с `obfs=`, но без `obfs-password=`, роняла ВЕСЬ узел —
   вместе с рабочим сервером, до которого обфускация не имеет отношения. Тот же
   разбор снимал и узел с REALITY без ключа, хотя такому положено деградировать
@@ -915,7 +1713,7 @@
 
 - **Постквантовый `encryption` у vless больше не теряется при импорте
   sing-box-объекта ([§335](docs/PROTOCOLS.md),
-  [§472](docs/spec/features/472%20unified-parse-pipeline/spec.md) шаг 3).**
+  [§472](docs/spec/tasks/472F-unified-parse-pipeline/spec.md) шаг 3).**
   Было: поле читалось только из ссылки и из Xray-JSON; узел, вставленный
   sing-box-объектом или отредактированный во вкладке JSON, уезжал в ядро без
   постквантового слоя и не поднимался. Стало: читается на всех входах.
@@ -929,7 +1727,7 @@
 
 - **Плагин shadowsocks (SIP003) больше не теряется при импорте
   sing-box-объекта
-  ([§472](docs/spec/features/472%20unified-parse-pipeline/spec.md) шаг 4).**
+  ([§472](docs/spec/tasks/472F-unified-parse-pipeline/spec.md) шаг 4).**
   Было: `plugin` и `plugin_opts` читались только из ссылки; узел, вставленный
   sing-box-объектом или отредактированный во вкладке JSON, уезжал в ядро без
   плагина и соединения не поднимал, хотя в конфиг эти поля пишутся. Стало:
@@ -1235,7 +2033,7 @@
 
 ### Added
 
-- **Реестр контракта в приложении: схема тела узла и тексты предупреждений едут в APK ([§460](docs/spec/features/460%20contract-registry-bundle/spec.md), волна W1).**
+- **Реестр контракта в приложении: схема тела узла и тексты предупреждений едут в APK ([§460](docs/spec/tasks/460F-contract-registry-bundle/spec.md), волна W1).**
   Контракт 1.1.0 вынес схему тела 384 полей из структур ядра `1.14.1-lx.4` в
   реестр. Раньше правила «какое поле у какого протокола допустимо и что делать
   с мусором» были написаны руками по протоколу и расходились с ядром на каждом
@@ -1445,7 +2243,7 @@
 
 ### Added
 
-- **LX Backup формата 1.0: запись и чтение ([§438](docs/spec/tasks/438-lx-backup-1-0-read-write.md), [§439](docs/spec/features/439%20storage-contract-1-0/spec.md)).**
+- **LX Backup формата 1.0: запись и чтение ([§438](docs/spec/tasks/438-lx-backup-1-0-read-write.md), [§439](docs/spec/tasks/439F-storage-contract-1-0/spec.md)).**
   Было: перенос в десктопный лаунчер писал формат 0.12, а файл лаунчера
   формата 1.0 (`lx_backup: 2`) отвергался как «новее поддерживаемого». Стало:
   экспорт пишет только 1.0, импорт читает 1.0 и старые файлы 0.12 одним
@@ -1484,7 +2282,7 @@
 
 ### Changed
 
-- **Хранение настроек в форме контракта 1.0 ([§439](docs/spec/features/439%20storage-contract-1-0/spec.md)).**
+- **Хранение настроек в форме контракта 1.0 ([§439](docs/spec/tasks/439F-storage-contract-1-0/spec.md)).**
   `lxbox_settings.json` хранит источники, цепочки, правила и DNS теми же
   записями, что файл LX Backup 1.0 и состояние десктопного лаунчера 1.6.0.
   Модели и экраны не менялись; конфиг, собранный из одного состояния до и
@@ -1518,7 +2316,7 @@
   и файл правил `format: 2` она отвергает. Бэкапы 2.23.2 и файлы лаунчера до
   1.6.0 читаются. Для стендов — `GET /backup/export?include=storage&from=v0_bak`.
 
-- **Ссылки на узлы — `{folder_id, tag}` ([§439](docs/spec/features/439%20storage-contract-1-0/spec.md), D-112/113/114).**
+- **Ссылки на узлы — `{folder_id, tag}` ([§439](docs/spec/tasks/439F-storage-contract-1-0/spec.md), D-112/113/114).**
   detour подписки, сервера и папки, личный detour члена папки, позиции
   цепочек и состав узла автовыбора хранят ссылку «контейнер + сырой тег», а
   не финальный тег конфига. Финальный тег считает только сборка.
@@ -1544,7 +2342,7 @@
   JSON-объект; для массива редактор просит завести объекты отдельными
   правилами.
 
-- **Debug API ([§439](docs/spec/features/439%20storage-contract-1-0/spec.md), [справка](docs/api/debug-api-reference.md)).**
+- **Debug API ([§439](docs/spec/tasks/439F-storage-contract-1-0/spec.md), [справка](docs/api/debug-api-reference.md)).**
 
   | Эндпоинт | Было | Стало |
   |---|---|---|
@@ -1624,11 +2422,11 @@
   машины-пира, анонсирующей exit node) и то, что интернет через него идёт при
   выборе узла Направлением.
 
-- **Импорт бэкапа выключал правила с целью `direct-out` ([§439](docs/spec/features/439%20storage-contract-1-0/spec.md) §6.5).**
+- **Импорт бэкапа выключал правила с целью `direct-out` ([§439](docs/spec/tasks/439F-storage-contract-1-0/spec.md) §6.5).**
   Служебный `direct-out` шаблона не считался известной целью, и правило
   приезжало выключенным с `backup_unknown_outbound`. Ошибка была и в 2.23.2.
 
-- **DNS-правила, записанные моделью, не попадали в конфиг ([§439](docs/spec/features/439%20storage-contract-1-0/spec.md) §6.5).**
+- **DNS-правила, записанные моделью, не попадали в конфиг ([§439](docs/spec/tasks/439F-storage-contract-1-0/spec.md) §6.5).**
   Пользовательское правило без ключа `enabled` (так его пишут импорт бэкапа и
   Debug API) сборка пропускала; srs-правило с телом в `body` в конфиг не
   попадало никогда. Сборка читает правила через модели.
@@ -1652,7 +2450,7 @@
   какого значения поднимется idle timeout; та же подсказка — в редакторе узла
   автовыбора.
 
-- **Ошибки сборок 2.24.0 до выпуска, найденные проверкой на эмуляторе поверх 2.23.2 ([§439](docs/spec/features/439%20storage-contract-1-0/spec.md) §5.3).**
+- **Ошибки сборок 2.24.0 до выпуска, найденные проверкой на эмуляторе поверх 2.23.2 ([§439](docs/spec/tasks/439F-storage-contract-1-0/spec.md) §5.3).**
   В 2.23.2 их не было.
 
   | Было | Стало |
@@ -1681,7 +2479,7 @@
 
 ### Added
 
-- **Узел Tailscale и «секции узла» ([§435](docs/spec/features/435%20node-sections-tailscale/spec.md), контракт ## 13).**
+- **Узел Tailscale и «секции узла» ([§435](docs/spec/tasks/435-node-sections-tailscale.md), контракт ## 13).**
   Узел `type: tailscale` из sing-box JSON принимается без адреса и собирается в
   `endpoints[]` со своим каталогом состояния; на ядре без Tailscale он хранится,
   а при сборке пропускается с предупреждением. Свободный узел (одиночный или в
@@ -1877,7 +2675,7 @@
   Контракт с лаунчером: корпус `awg3_full_params`, `amnezia_vpn_awg3`,
   `awg3_header_key_short_dropped` зелёный.
 
-- **Workspaces — именованные наборы настроек ([§417](docs/spec/features/417%20workspaces/spec.md)).**
+- **Workspaces — именованные наборы настроек ([§417](docs/spec/tasks/417F-workspaces/spec.md)).**
   Кнопка справа от «L×Box» на главном экране: список сохранённых наборов,
   «Сохранить как…», управление. Набор — копия всего состояния: подписки с
   кэшем узлов, Направления, цепочки, правила, DNS, приложения туннеля, режим
@@ -4942,7 +5740,7 @@ Android-AAR при этом едет с 1.26.x вниз на ту же 1.25.x, �
 
 ### Added
 
-- **§130 — MASQUE-транспорт для Cloudflare WARP** ([feature spec](docs/spec/features/130%20masque-warp-transport/spec.md), [masque_keys.dart](app/lib/services/warp/masque_keys.dart) · [masque_account.dart](app/lib/services/warp/masque_account.dart) · [warp_wizard_screen.dart](app/lib/screens/warp_wizard_screen.dart)). WARP — это сервис Cloudflare, а **транспорт** к нему теперь на выбор: привычный **WireGuard** или новый **MASQUE** (CONNECT-IP / RFC 9484 поверх QUIC-HTTP/3, с fallback на HTTP/2 там, где режут UDP). MASQUE даёт другой набор выходных нод (часто иностранные IP) и выглядит для DPI как обычный HTTPS к Cloudflare. Регистрация MASQUE-устройства идёт на телефоне (генерируется ECDSA P-256 keypair, приватник не покидает устройство; двухшаговый enroll в Cloudflare), ключи сериализуются в DER байт-в-байт под парсер ядра. В визарде **Get WARP** — переключатель **WireGuard ↔ MASQUE**; для MASQUE доступны: **Transport** (HTTP/3 QUIC / HTTP/2 TCP), **SNI** (combo-box из пула легитимных доменов + свободный ввод + кубик, по умолчанию — случайный домен), **Idle timeout** и **Keep-alive**. Ключевой материал MASQUE кешируется отдельно от WireGuard-аккаунта и попадает в бэкап.
+- **§130 — MASQUE-транспорт для Cloudflare WARP** ([feature spec](docs/spec/tasks/130F-masque-warp-transport/spec.md), [masque_keys.dart](app/lib/services/warp/masque_keys.dart) · [masque_account.dart](app/lib/services/warp/masque_account.dart) · [warp_wizard_screen.dart](app/lib/screens/warp_wizard_screen.dart)). WARP — это сервис Cloudflare, а **транспорт** к нему теперь на выбор: привычный **WireGuard** или новый **MASQUE** (CONNECT-IP / RFC 9484 поверх QUIC-HTTP/3, с fallback на HTTP/2 там, где режут UDP). MASQUE даёт другой набор выходных нод (часто иностранные IP) и выглядит для DPI как обычный HTTPS к Cloudflare. Регистрация MASQUE-устройства идёт на телефоне (генерируется ECDSA P-256 keypair, приватник не покидает устройство; двухшаговый enroll в Cloudflare), ключи сериализуются в DER байт-в-байт под парсер ядра. В визарде **Get WARP** — переключатель **WireGuard ↔ MASQUE**; для MASQUE доступны: **Transport** (HTTP/3 QUIC / HTTP/2 TCP), **SNI** (combo-box из пула легитимных доменов + свободный ввод + кубик, по умолчанию — случайный домен), **Idle timeout** и **Keep-alive**. Ключевой материал MASQUE кешируется отдельно от WireGuard-аккаунта и попадает в бэкап.
 
 ### Changed
 
@@ -4966,7 +5764,7 @@ idle-suspend теперь включён по умолчанию. Ядро — r
 
 ### Added
 
-- **§129 — Подписка из файла + редактируемый источник** ([feature spec](docs/spec/features/129%20file-subscription/spec.md), [subscription_controller.dart](app/lib/controllers/subscription_controller.dart) + [entry_context_menu.dart](app/lib/screens/subscriptions_screen/entry_context_menu.dart)). **Import from file…** с файлом, где **больше одной** ноды, создаёт **файловую подписку**: тело файла сохраняется снапшотом в кэш подписок, подписка живёт из него как обычная (re-hydrate при старте, бейдж **file** в списке). Файл с одной нодой — старое поведение (одиночный сервер). Ноды берутся из файла тем же парсером, что и онлайн-подписка: списки `vless://`/`vmess://`/…, base64, clash-yaml, JSON-outbounds, **WireGuard/AmneziaWG-конфиг** (`[Interface]`), плюс `#profile-title:`-заголовки. Авто-обновление файловую **не читает** (доступ к файлу между сессиями не хранится) → она не слетает при массовом апдейте онлайн-подписок; ноды остаются из кэша. Новый пункт **Edit source…** (long-press на подписке) — попап со сменой источника: **Online URL** (текстовое поле) ↔ **Local file** (выбор файла). Закрывает и давнюю просьбу — **редактируемый URL** подписки (сменился домен провайдера / опечатка) без пересоздания и потери настроек (`id` стабилен). Смена источника **транзакционна**: старый источник сбрасывается **только после успешной загрузки нового** (> 0 нод) — если новый URL/файл не отдал ноды, всё откатывается, подписка остаётся на прежнем источнике (не остаться без нод). +7 тестов.
+- **§129 — Подписка из файла + редактируемый источник** ([feature spec](docs/spec/tasks/129F-file-subscription/spec.md), [subscription_controller.dart](app/lib/controllers/subscription_controller.dart) + [entry_context_menu.dart](app/lib/screens/subscriptions_screen/entry_context_menu.dart)). **Import from file…** с файлом, где **больше одной** ноды, создаёт **файловую подписку**: тело файла сохраняется снапшотом в кэш подписок, подписка живёт из него как обычная (re-hydrate при старте, бейдж **file** в списке). Файл с одной нодой — старое поведение (одиночный сервер). Ноды берутся из файла тем же парсером, что и онлайн-подписка: списки `vless://`/`vmess://`/…, base64, clash-yaml, JSON-outbounds, **WireGuard/AmneziaWG-конфиг** (`[Interface]`), плюс `#profile-title:`-заголовки. Авто-обновление файловую **не читает** (доступ к файлу между сессиями не хранится) → она не слетает при массовом апдейте онлайн-подписок; ноды остаются из кэша. Новый пункт **Edit source…** (long-press на подписке) — попап со сменой источника: **Online URL** (текстовое поле) ↔ **Local file** (выбор файла). Закрывает и давнюю просьбу — **редактируемый URL** подписки (сменился домен провайдера / опечатка) без пересоздания и потери настроек (`id` стабилен). Смена источника **транзакционна**: старый источник сбрасывается **только после успешной загрузки нового** (> 0 нод) — если новый URL/файл не отдал ноды, всё откатывается, подписка остаётся на прежнем источнике (не остаться без нод). +7 тестов.
 
 ### Changed
 
@@ -4990,7 +5788,7 @@ idle-suspend теперь включён по умолчанию. Ядро — r
 
 ### Added
 
-- **§128/§215 — Suspend idle tunnels** ([feature spec](docs/spec/features/128%20idle-suspend/spec.md), [task spec](docs/spec/tasks/215-libbox-rc18-idle-suspend.md), [settings_screen.dart](app/lib/screens/settings_screen.dart) + [build_config.dart](app/lib/services/builder/build_config.dart)). Новая настройка в **VPN Settings → System → Optimization**: порог простоя (Off / 30s / 2m / 5m), после которого ядро гасит (`device.Down()`) любой WG/AWG-эндпоинт, который одновременно **недостижим** из активного маршрута И **простаивает** дольше порога. Пробуждение — мгновенное, на следующем дайле. Прокидывается в `route.lx_idle_suspend` (пусто = выкл, kill-switch). Зачем: каждый живой WG-туннель держит recv-воркеры со своими буферами (~8 МБ/воркер при `BatchSize=128`), и GC постоянно их сканирует — при подписке с многими WG это главный держатель RAM и нагрева CPU, даже когда трафик идёт лишь через одну ноду. Device-verified на реальной подписке (11 WG): при включении освобождается **~134–155 МБ** буферов, а доля GC в CPU падает с ~56 % почти до нуля. Backend (storage/builder) и +2 теста.
+- **§128/§215 — Suspend idle tunnels** ([feature spec](docs/spec/tasks/128F-idle-suspend/spec.md), [task spec](docs/spec/tasks/215-libbox-rc18-idle-suspend.md), [settings_screen.dart](app/lib/screens/settings_screen.dart) + [build_config.dart](app/lib/services/builder/build_config.dart)). Новая настройка в **VPN Settings → System → Optimization**: порог простоя (Off / 30s / 2m / 5m), после которого ядро гасит (`device.Down()`) любой WG/AWG-эндпоинт, который одновременно **недостижим** из активного маршрута И **простаивает** дольше порога. Пробуждение — мгновенное, на следующем дайле. Прокидывается в `route.lx_idle_suspend` (пусто = выкл, kill-switch). Зачем: каждый живой WG-туннель держит recv-воркеры со своими буферами (~8 МБ/воркер при `BatchSize=128`), и GC постоянно их сканирует — при подписке с многими WG это главный держатель RAM и нагрева CPU, даже когда трафик идёт лишь через одну ноду. Device-verified на реальной подписке (11 WG): при включении освобождается **~134–155 МБ** буферов, а доля GC в CPU падает с ~56 % почти до нуля. Backend (storage/builder) и +2 теста.
 
 ### Changed
 
@@ -5009,9 +5807,9 @@ idle-suspend теперь включён по умолчанию. Ядро — r
 
 ### Added
 
-- **§127 — Полный XHTTP (Xray splithttp): все клиентские параметры из ссылки** ([feature spec](docs/spec/features/127%20xhttp-full-url-params/spec.md), [transport_spec.dart](app/lib/models/transport_spec.dart) + [transport.dart](app/lib/services/parser/transport.dart)). Парсер ссылок `vless://…type=xhttp` расширен с 6 полей (v1, §097) до **полной клиентской поддержки SPEC 002 v2**: настраиваемые placement'ы session/seq/uplink (path/query/header/cookie), ключи, метод upload, **X-Padding obfs-режим** (`repeat-x`/`tokenish`), packet-up tuning (`sc_max_each_post_bytes`/`sc_min_posts_interval_ms`). Два источника полей в URL: плоские query-параметры **и** параметр `extra` (URL-encoded JSON) — `extra` декодируется и вливается в transport (битый/обрезанный `extra` игнорируется, ссылка остаётся рабочей на плоских параметрах). Ключи читаются в обеих формах: camelCase (Xray) и snake_case (sing-box); `path` с `?`-хвостом обрезается; числовые `sc*` приводятся к строке (`30.0` → `"30"`). При экспорте (`toUri`) пишутся только не-дефолтные поля — URI не раздувается, round-trip сохраняется. Верифицировано против ядра: `sing-box check -c` (`with_xhttp`) на выхлопе парсера из golden-ссылки → проходит; на реальной подписке xhttp-ноды поднимают коннект. +8 тестов + golden-fixture.
+- **§127 — Полный XHTTP (Xray splithttp): все клиентские параметры из ссылки** ([feature spec](docs/spec/tasks/127F-xhttp-full-url-params/spec.md), [transport_spec.dart](app/lib/models/transport_spec.dart) + [transport.dart](app/lib/services/parser/transport.dart)). Парсер ссылок `vless://…type=xhttp` расширен с 6 полей (v1, §097) до **полной клиентской поддержки SPEC 002 v2**: настраиваемые placement'ы session/seq/uplink (path/query/header/cookie), ключи, метод upload, **X-Padding obfs-режим** (`repeat-x`/`tokenish`), packet-up tuning (`sc_max_each_post_bytes`/`sc_min_posts_interval_ms`). Два источника полей в URL: плоские query-параметры **и** параметр `extra` (URL-encoded JSON) — `extra` декодируется и вливается в transport (битый/обрезанный `extra` игнорируется, ссылка остаётся рабочей на плоских параметрах). Ключи читаются в обеих формах: camelCase (Xray) и snake_case (sing-box); `path` с `?`-хвостом обрезается; числовые `sc*` приводятся к строке (`30.0` → `"30"`). При экспорте (`toUri`) пишутся только не-дефолтные поля — URI не раздувается, round-trip сохраняется. Верифицировано против ядра: `sing-box check -c` (`with_xhttp`) на выхлопе парсера из golden-ссылки → проходит; на реальной подписке xhttp-ноды поднимают коннект. +8 тестов + golden-fixture.
 
-- **§126 — Стартовый визард первого запуска** ([feature spec](docs/spec/features/126%20first-run-wizard/spec.md), [startup_wizard.dart](app/lib/screens/home/startup_wizard.dart)). Онбординг-промпты (разрешение на уведомления → battery optimization → добавить QS-плитку) сведены в **единый последовательный движок**: следующий шаг показывается только после закрытия предыдущего. Раньше они запускались параллельно и наезжали друг на друга. Добавлять/править/переупорядочивать онбординг-вопросы — в одном месте. Новый шаг — промпт «добавить плитку в быстрые настройки» (Android 13+); battery-промпт теперь показывается один раз.
+- **§126 — Стартовый визард первого запуска** ([feature spec](docs/spec/tasks/126F-first-run-wizard/spec.md), [startup_wizard.dart](app/lib/screens/home/startup_wizard.dart)). Онбординг-промпты (разрешение на уведомления → battery optimization → добавить QS-плитку) сведены в **единый последовательный движок**: следующий шаг показывается только после закрытия предыдущего. Раньше они запускались параллельно и наезжали друг на друга. Добавлять/править/переупорядочивать онбординг-вопросы — в одном месте. Новый шаг — промпт «добавить плитку в быстрые настройки» (Android 13+); battery-промпт теперь показывается один раз.
 
 - **§212 — Long-press на QS-плитке открывает приложение** ([task spec](docs/spec/tasks/212-tile-longpress-open-app.md), [AndroidManifest.xml](app/android/app/src/main/AndroidManifest.xml)). Долгое нажатие на плитку L×Box в шторке быстрых настроек открывает приложение (`QS_TILE_PREFERENCES` intent-filter). Короткий тап по-прежнему переключает VPN.
 
@@ -5088,7 +5886,7 @@ block-outbound с защитой от бессмысленного пинга, �
 
 ### Added
 
-- **§125 — настраиваемые каналы (configurable channels)** ([feature spec](docs/spec/features/125%20configurable-channels/), [channel.dart](app/lib/models/channel.dart) + [channels.dart](app/lib/services/settings_storage/channels.dart) + [channel_edit_screen.dart](app/lib/screens/channel_edit_screen.dart)). Каналы роутинга (`vpn-1..vpn-4` + `✨auto`) были статичны: юзер мог только включить/выключить их тоглом. Теперь — полноценно настраиваемые объекты с CRUD. Каналы переехали из `wizard_template.json` (`preset_groups[]`) в storage (`channels[]`); template стал seed'ом на первый запуск (one-shot миграция `enabled_groups[]` → `channels[]`). Возможности:
+- **§125 — настраиваемые каналы (configurable channels)** ([feature spec](docs/spec/tasks/125F-configurable-channels/), [channel.dart](app/lib/models/channel.dart) + [channels.dart](app/lib/services/settings_storage/channels.dart) + [channel_edit_screen.dart](app/lib/screens/channel_edit_screen.dart)). Каналы роутинга (`vpn-1..vpn-4` + `✨auto`) были статичны: юзер мог только включить/выключить их тоглом. Теперь — полноценно настраиваемые объекты с CRUD. Каналы переехали из `wizard_template.json` (`preset_groups[]`) в storage (`channels[]`); template стал seed'ом на первый запуск (one-shot миграция `enabled_groups[]` → `channels[]`). Возможности:
   - **CRUD** — создавать (до 10 каналов) и удалять (кроме `vpn-1`). Удаление переводит ссылки на удалённый канал (`route_final` / custom-rule outbound) на `vpn-1`.
   - **Title** — менять отображаемое имя канала («Моя Германия» вместо «vpn-1»); видно в home-dropdown и роутинг-пикерах.
   - **Galки селектора** — `include direct-out`, `include block` (§201), `interrupt connections on switch`.
@@ -5163,24 +5961,24 @@ VPN-настройки приведены к единому источнику �
 
 ### Added
 
-- **§122 — нативный канал `BoxCommandClient` на libbox CommandClient** ([feature spec](docs/spec/features/122%20commandclient-migration/spec.md)). Три CommandClient'а с разной ролью: `statusClient` (always-on), `screenClient` (per-screen, ref-counted), `profilerClient` (per-recording). 11 handler-колбэков каждый в fail-safe try/catch (контракт JNI-no-throw §050/§151). Нативный аккумулятор Connections (`applyEvents`/`filterState`/`getReset`), 4 троттлящих эмиттера (coalesce-снапшот + null-sink guard + main-Handler), императивы `urlTestOutbound`/`getRules`/`selectOutbound`/`closeConnection`, generation-gate + reconnect-backoff. ([BoxCommandClient.kt](app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BoxCommandClient.kt), [BoxVpnService.kt](app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BoxVpnService.kt), [VpnPlugin.kt](app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/VpnPlugin.kt))
+- **§122 — нативный канал `BoxCommandClient` на libbox CommandClient** ([feature spec](docs/spec/tasks/122F-commandclient-migration/spec.md)). Три CommandClient'а с разной ролью: `statusClient` (always-on), `screenClient` (per-screen, ref-counted), `profilerClient` (per-recording). 11 handler-колбэков каждый в fail-safe try/catch (контракт JNI-no-throw §050/§151). Нативный аккумулятор Connections (`applyEvents`/`filterState`/`getReset`), 4 троттлящих эмиттера (coalesce-снапшот + null-sink guard + main-Handler), императивы `urlTestOutbound`/`getRules`/`selectOutbound`/`closeConnection`, generation-gate + reconnect-backoff. ([BoxCommandClient.kt](app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BoxCommandClient.kt), [BoxVpnService.kt](app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BoxVpnService.kt), [VpnPlugin.kt](app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/VpnPlugin.kt))
 - **§122 — Dart-слой `cc_channel`** ([cc_channel.dart](app/lib/vpn/cc_channel.dart)). Push-стримы `status`/`outbounds`/`groups`/`connections` поверх EventChannel `lxbox/cc/*`; императивы `urlTestOutbound` (`CcDelayResult`, инвариант `error` vs `delay==0`), `getRules`, `selectOutbound`, `closeConnection`; lifecycle `connectScreen`/`connectProfiler`. Типизированные модели `CcStatus`/`CcOutbound`/`CcGroup`/`CcConnection`/`CcDelayResult`/`CcRule`.
 - **§122 — unary-pull `getGroups` (ядро SPEC 015)** ([home_controller.dart](app/lib/controllers/home_controller.dart), [cc_channel.dart](app/lib/vpn/cc_channel.dart)). Детерминированный lifeline там, где push дырявый: `getGroups(): List<CcGroup>?` (`null` = ядро не STARTED, `[]` = нет групп, непустой = снапшот); общий `serializeGroup` для push+pull → единый парсер `CcGroup.fromMap`. `_startGroupsPull` — retry 400мс×12 до STARTED.
 - **§180 — DNS-журнал из ядра (`subscribeDNSQueries`, ядро SPEC 018, rc.7)** ([task spec](docs/spec/tasks/180-dns-query-stream.md), [BoxCommandClient.kt](app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BoxCommandClient.kt), [cc_channel.dart](app/lib/vpn/cc_channel.dart), [traffic_profiler.dart](app/lib/services/traffic_profiler.dart)). Профайлер перешёл с текстового парсинга core-лога (`_dnsRe`/`_handleDnsLine` + `_DnsAccumulator` по conn_id) на структурный стрим. Новый канал `lxbox/cc/dns`: `DnsQueryHandler.onQuery(DnsQuery)` → `CcDnsQuery{domain, queryType, rcode, source, failed, error, packageName, answers[]}` → `_ingestDnsQueries`. Три выигрыша: **атрибуция к приложению ИЗ ЯДРА** (`processInfo`, не сшивка по connId — бьёт корень §177-баннера); **cnameChain одним событием** (`answers[]` с type==CNAME, не построчная аккумуляция); **провалы структурно** (`failed`/`error`/`rcode=-1`). Грабли SPEC 018: `rcode` signed (`-1`=нет ответа, мапить до `.toUInt()`); событийный `EventEmitter` (НЕ coalesce — DNS-резолвы дискретны). Подписка на `profilerClient` (`includeAnswers=true`), `DnsQuerySubscription.close()` в teardown. Текстовый DNS-путь выпилен начисто (вариант A, fallback нет). 39 профайлер-тестов зелёных. **rc.10:** ядро добавило в `DnsQuery` поля `dnsServer`/`dnsServerType` (какой DNS-сервер резолвил — на всех путях, включая провалы) + `outbound()` (канал сервера, селектор развёрнут в активный узел server-side, пусто на cached). Клиент читает их (javap-сверка: имена `getDNSServer`/`getDNSServerType` с DNS заглавными, `outbound()` → `StringIterator` как chain/detour) → `CcDnsQuery.{dnsServer,dnsServerType,outbound}` → профайлер кладёт `outbound` в `outboundChain` (routingLine показывает «через какой сервер пошёл DNS»), сервер/тип — в detail-sheet (строка «DNS server»).
-- **§044/new-profiler — редизайн профайлера: одна control-строка + фильтр-окно** ([feature spec](docs/spec/features/044%20per-app%20traffic%20profiler/new-profiler.md)). Управление `TraceExplorer` свёрнуто с трёх рядов в одну строку (пауза · retention · группировка-меню · фильтр-окно); запись и export — в хедере. Live-вкладка переименована в **Profiler**. **Фильтр вынесен в окно** (`ProfilerFilterSheet`, паттерн `filter_panel` главного): 2 вкладки — **Protocol** (DNS/TCP/UDP чипы) и **App** (галочки замеченных в трафике пакетов + «потеряшки»/unattributed + кнопка пикера полного списка); жёлтый бейдж «фильтр выбран» + счётчик. `ProfilerFilter` (ChangeNotifier) — единая фильтр-модель, оси app/тип ортогональны. **Live retention настраиваемо** (было жёстко 60s): `SettingsStorage.profiler_retention_sec`, опции 1m/10m/1h, default 10мин, hard cap буфера 3000→20000. Export видимого списка событий (`eventsToJson`). Иконка фильтра на главном унифицирована (`tune`→`filter_list`). ([trace_explorer.dart](app/lib/screens/stats_screen/trace_explorer.dart), [profiler_filter.dart](app/lib/screens/stats_screen/profiler_filter.dart), [profiler_filter_sheet.dart](app/lib/screens/stats_screen/profiler_filter_sheet.dart))
+- **§044/new-profiler — редизайн профайлера: одна control-строка + фильтр-окно** ([feature spec](docs/spec/tasks/044F-per-app-traffic-profiler/new-profiler.md)). Управление `TraceExplorer` свёрнуто с трёх рядов в одну строку (пауза · retention · группировка-меню · фильтр-окно); запись и export — в хедере. Live-вкладка переименована в **Profiler**. **Фильтр вынесен в окно** (`ProfilerFilterSheet`, паттерн `filter_panel` главного): 2 вкладки — **Protocol** (DNS/TCP/UDP чипы) и **App** (галочки замеченных в трафике пакетов + «потеряшки»/unattributed + кнопка пикера полного списка); жёлтый бейдж «фильтр выбран» + счётчик. `ProfilerFilter` (ChangeNotifier) — единая фильтр-модель, оси app/тип ортогональны. **Live retention настраиваемо** (было жёстко 60s): `SettingsStorage.profiler_retention_sec`, опции 1m/10m/1h, default 10мин, hard cap буфера 3000→20000. Export видимого списка событий (`eventsToJson`). Иконка фильтра на главном унифицирована (`tune`→`filter_list`). ([trace_explorer.dart](app/lib/screens/stats_screen/trace_explorer.dart), [profiler_filter.dart](app/lib/screens/stats_screen/profiler_filter.dart), [profiler_filter_sheet.dart](app/lib/screens/stats_screen/profiler_filter_sheet.dart))
 - **§178 — detour-хвост в цепочке соединения** ([task spec](docs/spec/tasks/178-detour-tail-in-connection-chain.md), ядро SPEC 017). `Connection.detour()` (proto field 23) даёт физический хвост финального outbound (`node → WARP`) отдельно от роутинг-`chains`. Клиент читает `detours: List<String>`; профайлер несёт `detourChain` отдельной осью. Forward-compat: код готовился до выхода rc.6, активирован после javap-сверки `Connection.detour()` в AAR.
 - **§181 — секция ROUTING: единая «цепочка решения»** ([task spec](docs/spec/tasks/181-routing-section-three-axes.md)). Плоский список из 4 элементов → человекочитаемая трассировка `routingLine`: `[tcp] процесс ⇒ rule ⇒ группа ⇒ auto : сервер → detour → domain · 930ms`. Разделители кодируют тип перехода (`⇒` внутри роутинга, `:` выход к серверу, `→` снаружи/detour). Оси `outboundChain` (маршрут) и `detourChain` (транспорт) разделены. detail-sheet: Route-строка + сырые Chain/Detour для копирования + явная строка Rule; раздел Process → **App** (иконка приложения + читаемое имя).
-- **§164 — энергомодель CC-клиентов** ([task spec](docs/spec/tasks/164-cc-clients-energy-model.md), [feature spec](docs/spec/features/123%20subscription-model/spec.md)). Адаптивная частота `statusClient`: `NORMAL` 0.5с (главный экран) / `FAST` 0.1с (открыт Stats); смена интервала = пересоздание клиента (`setStatusInterval`), не live-mutation. Сон в фоне (`onAppPaused`): `pauseStatus`+`pauseScreen` обнуляют тики, `profilerClient` не паузится (recording живёт свёрнутым). Resume (`onAppResumed`) с ресинком, гейтится если туннель упал в фоне. VPN-off в фоне ловит нативный `BROADCAST_STATUS` (не CC) → сон не теряет видимость туннеля. Эффект: главный экран 2 тика/с (было 10), фон 0 (было 10). ([BoxCommandClient.kt](app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BoxCommandClient.kt), [VpnPlugin.kt](app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/VpnPlugin.kt))
+- **§164 — энергомодель CC-клиентов** ([task spec](docs/spec/tasks/164-cc-clients-energy-model.md), [feature spec](docs/spec/tasks/123F-subscription-model/spec.md)). Адаптивная частота `statusClient`: `NORMAL` 0.5с (главный экран) / `FAST` 0.1с (открыт Stats); смена интервала = пересоздание клиента (`setStatusInterval`), не live-mutation. Сон в фоне (`onAppPaused`): `pauseStatus`+`pauseScreen` обнуляют тики, `profilerClient` не паузится (recording живёт свёрнутым). Resume (`onAppResumed`) с ресинком, гейтится если туннель упал в фоне. VPN-off в фоне ловит нативный `BROADCAST_STATUS` (не CC) → сон не теряет видимость туннеля. Эффект: главный экран 2 тика/с (было 10), фон 0 (было 10). ([BoxCommandClient.kt](app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BoxCommandClient.kt), [VpnPlugin.kt](app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/VpnPlugin.kt))
 - **§165 — справочник имён правил `RuleNameResolver`** ([rule_name_resolver.dart](app/lib/services/rule_name_resolver.dart), [task spec](docs/spec/tasks/165-rule-name-registry.md)). Ядро в `connection.rule` отдаёт условия без имени и обрезает списки >3 многоточием — парсить строку ненадёжно. Резолвер строит эталонные строки условий из `custom_rules` (где известны и `name`, и условия), матчит нормализованную `c.rule` через `indexOf` (обрезанная ядровая строка ⊂ полной) → title. Кэш `c.rule→title` (включая промахи) — без него фриз при `FAST` ×10/сек; сброс на stop VPN.
 - **Debug API — 9 новых роутов + headless-старт** ([action.dart](app/lib/services/debug/handlers/action.dart), [settings.dart](app/lib/services/debug/handlers/settings.dart), [subs.dart](app/lib/services/debug/handlers/subs.dart)). Action: `POST /action/reconnect`, `POST /action/reload-vpn`, `POST /action/clear-error`, `POST /action/urltest?cancel=1`. Settings (top-level ключи мимо `/settings/vars`): `GET|PUT /settings/interrupt_on_switch`, `/settings/node_sort`, `/settings/enabled_groups`, `/settings/vpn_mode`. Флаг `replace_detour_chain` в `PATCH /subs/{id}`. `POST /action/start-vpn-headless` — старт VPN без consent-диалога, если разрешение уже выдано (`VpnService.prepare()==null`); иначе `needs_consent:true`.
-- **§030 — custom-правила: `source_ip_cidr` / `source_ip_is_private` / `inbound`** ([new_fields spec](docs/spec/features/030%20custom%20routing%20rules/new_fields.md), [custom_rule.dart](app/lib/models/custom_rule.dart), [custom_rules.dart](app/lib/services/builder/post_steps/custom_rules.dart)). Народ просил правила с inbound/source-полями (§030 закрывал как YAGNI). Контекст изменился: §119 дал два inbound'а (`tun-in`/`mixed-in`) → `inbound` стал осмысленным (отделить трафик локального прокси от VpnService); `source_ip_cidr` симметричен `ip_cidr` (фильтр по источнику). Сверено с ядром `v1.14.0-lx.1-rc.9` (`option/rule_set.go` + `rule.go`): `source_ip_cidr` → headless rule_set (1.14 принимает), `source_ip_is_private`/`inbound` → routing-rule level (headless их не имеет). Для srs — всё route-level (своего headless match нет). DNS-mirror (§117): `inbound`/`source_ip_cidr` прокидываются в dns-rule (1.14 принимает). UI: раскрывающаяся секция **INBOUND** (галочки `TUN — system interface`/`Proxy interface`, `mixed-in` гейтится по vpn_mode через `VpnModeConfig.hasMixed`); **Source IP CIDR** + `Private source IP` в секции MATCH. Debug API `/rules` (GET/POST/PATCH) подхватывает новые поля. Backward-compat: старые правила без полей → пусто.
+- **§030 — custom-правила: `source_ip_cidr` / `source_ip_is_private` / `inbound`** ([new_fields spec](docs/spec/tasks/030F-custom-routing-rules/new_fields.md), [custom_rule.dart](app/lib/models/custom_rule.dart), [custom_rules.dart](app/lib/services/builder/post_steps/custom_rules.dart)). Народ просил правила с inbound/source-полями (§030 закрывал как YAGNI). Контекст изменился: §119 дал два inbound'а (`tun-in`/`mixed-in`) → `inbound` стал осмысленным (отделить трафик локального прокси от VpnService); `source_ip_cidr` симметричен `ip_cidr` (фильтр по источнику). Сверено с ядром `v1.14.0-lx.1-rc.9` (`option/rule_set.go` + `rule.go`): `source_ip_cidr` → headless rule_set (1.14 принимает), `source_ip_is_private`/`inbound` → routing-rule level (headless их не имеет). Для srs — всё route-level (своего headless match нет). DNS-mirror (§117): `inbound`/`source_ip_cidr` прокидываются в dns-rule (1.14 принимает). UI: раскрывающаяся секция **INBOUND** (галочки `TUN — system interface`/`Proxy interface`, `mixed-in` гейтится по vpn_mode через `VpnModeConfig.hasMixed`); **Source IP CIDR** + `Private source IP` в секции MATCH. Debug API `/rules` (GET/POST/PATCH) подхватывает новые поля. Backward-compat: старые правила без полей → пусто.
 - **§030 — кнопка `Presets ▾` в CIDR-полях** ([items_field.dart](app/lib/screens/custom_rule_edit/widgets/items_field.dart), [match_section.dart](app/lib/screens/custom_rule_edit/sections/match_section.dart)). Quick-вставки в `IP CIDR` / `Source IP CIDR` (append с новой строки, как Paste): **Localhost** (`127.0.0.0/8` + `::1/128`), **Wi-Fi subnet** (`192.168.0.0/16`), **All (IPv4 + IPv6)** (`0.0.0.0/0` + `::/0`). `Localhost`/`All` дают обе IP-семьи одной вставкой. `ItemsField` получил опциональный `presets`-параметр (`FieldPreset` + `showMenu`); кнопка рисуется только при непустом списке — domain/port-поля её не получают. Порядок action-row: `Paste · Presets · Clear`.
 - **§182 — кнопки Stop / Reconnect в постоянном уведомлении** (фидбэк #180 llava, #261 iliyal; [task spec](docs/spec/tasks/182-notification-action-buttons.md)). Раньше в foreground-уведомлении была только кнопка-тап «открыть приложение» — теперь две action-кнопки прямо в шторке. **Stop** шлёт `ACTION_STOP` → `doStop()` (та же механика, что Stop в приложении). **Reconnect** — новый **native-side** примитив `BoxVpnService.reconnect()` (`ACTION_RECONNECT`): `stopAwait()` (дождаться полного `Stopped`) → `start()` на companion-level `reconnectScope`. Через `stopAwait`, а не «`doStop`+сразу `start`», — ранний старт попал бы в `onStartCommand` guard и молча провалился (тот же race, что §002 закрыл для Dart). Работает **с убитым UI-движком** (путь полностью native, не зависит от Flutter). Stop-фаза с `withTimeout(6с)` → abort при таймауте; `reconnecting`-guard от двойного тапа; кнопки шлют explicit broadcast (`setPackage`) на `RECEIVER_NOT_EXPORTED`-ресивер → извне не дёрнуть. Dart-слой не менялся — UI пересинхронится по broadcast'у статуса. ([BoxVpnService.kt](app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BoxVpnService.kt), [BoxService.kt](app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BoxService.kt), [ServiceNotification.kt](app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/ServiceNotification.kt))
 - **§184 — четвёртый канал роутинга `vpn-4` (VPN ④)** ([task spec](docs/spec/tasks/184-add-vpn4-channel.md)). Добавлен 4-й selector-канал по образцу `vpn-3` (`default_enabled: false`, `default: direct-out`). Каналы динамические из `wizard_template.json` — основное изменение одна запись в `preset_groups[]` + `'vpn-4'` в `groupTags` (`node_filter_screen.dart`, иначе группа = фейк-нода). 1275 тестов зелёные.
 
 ### Changed
 
-- **§121 — Kotlin-обвязка мигрирована на libbox 1.14 API** ([feature spec](docs/spec/features/121%20libbox-1.14-adoption/spec.md)). `PlatformInterface` получил 11 новых обязательных методов (Tailscale/SSH-сервер, на Android не используются) как fail-safe no-throw заглушки: `registerMyInterface`, `usePlatformShell`→`false`, `lookupUser`→пустой `PlatformUser()`, `tailscaleHostname`→`""`, `openShellSession`→`UnsupportedOperationException`, `startNeighborMonitor`/`closeNeighborMonitor`→no-op и др. `CommandServerHandler` получил `connectSSHAgent()` и `triggerNativeCrash()`. ([PlatformInterfaceWrapper.kt](app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/PlatformInterfaceWrapper.kt), [BoxService.kt](app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BoxService.kt))
+- **§121 — Kotlin-обвязка мигрирована на libbox 1.14 API** ([feature spec](docs/spec/tasks/121F-libbox-1.14-adoption/spec.md)). `PlatformInterface` получил 11 новых обязательных методов (Tailscale/SSH-сервер, на Android не используются) как fail-safe no-throw заглушки: `registerMyInterface`, `usePlatformShell`→`false`, `lookupUser`→пустой `PlatformUser()`, `tailscaleHostname`→`""`, `openShellSession`→`UnsupportedOperationException`, `startNeighborMonitor`/`closeNeighborMonitor`→no-op и др. `CommandServerHandler` получил `connectSSHAgent()` и `triggerNativeCrash()`. ([PlatformInterfaceWrapper.kt](app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/PlatformInterfaceWrapper.kt), [BoxService.kt](app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BoxService.kt))
 - **§121 — `setLocale` стал строгим в 1.14** ([BoxApplication.kt](app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BoxApplication.kt)). `golang.org/x/text/language` бросает на нестандартной локали (`ru_IL` = русский язык + регион Израиль) → краш в `onCreate` до старта ядра. Обёрнуто `runCatching{...}.recoverCatching{ setLocale(language) }` — деградация до голого языка, затем дефолт ядра.
 - **§121 — `dnsServerAddress` стал `StringIterator`** ([BoxVpnService.kt](app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BoxVpnService.kt)). Было одиночное `OptionalString` (`.value`) → теперь итерируется, `addDnsServer` на каждый непустой DNS-сервер, объявленный ядром.
 - **§121 — `Libbox.setMemoryLimit`/`redirectStderr` удалены в 1.14** ([BoxService.kt](app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BoxService.kt), [BoxApplication.kt](app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BoxApplication.kt)). Императивные вызовы убраны; OOM-killer и stderr/crash-канал в 1.14 конфигурируются декларативно через `SetupOptions` (фактическая настройка полей — §173).
@@ -5246,7 +6044,7 @@ Hotfix: с включённым Auto Proxy ядро не стартовало �
 
 ### Changed
 
-- **§120 — typed template engine + `#if`** ([feature spec](docs/spec/features/120%20template-engine-typed-vars-and-if/spec.md)). Подстановка `@var` теперь коэрсит значение **строго по объявленному `WizardVar.type`**, а не угадыванием по содержимому: `bool`/`int` — типизируются, `secret`/`text`/`enum`/`outbound`/`dns_servers` — остаются строкой (пароль `1234` больше не становится int). Введён явный тип `int`; `tun_mtu` переведён `text`→`int`. Общее ядро подстановки и условных конструкций — новый `app/lib/services/builder/if_engine.dart` (`coerceVarValue`/`walk`/predicates/`Dropped`/RegExp-кэш), используется обоими движками (`build_config._substituteVars` + `preset_expand.substituteVars`).
+- **§120 — typed template engine + `#if`** ([feature spec](docs/spec/tasks/120F-template-engine-typed-vars-and-if/spec.md)). Подстановка `@var` теперь коэрсит значение **строго по объявленному `WizardVar.type`**, а не угадыванием по содержимому: `bool`/`int` — типизируются, `secret`/`text`/`enum`/`outbound`/`dns_servers` — остаются строкой (пароль `1234` больше не становится int). Введён явный тип `int`; `tun_mtu` переведён `text`→`int`. Общее ядро подстановки и условных конструкций — новый `app/lib/services/builder/if_engine.dart` (`coerceVarValue`/`walk`/predicates/`Dropped`/RegExp-кэш), используется обоими движками (`build_config._substituteVars` + `preset_expand.substituteVars`).
 - **§120 — `#if`-конструкт в шаблоне** (map-spread + array-element; предикаты `and`/`or`/`#in`/`#notIn`/`#notEmpty`/`#isEmpty`/`#matches`/`#not`). Декларативная условность прямо в `config`/preset-телах; поглощает прежний `enabled:"@var"`-гейт (§045). Дизайн заимствован у десктопного лаунчера (SPEC 067), без `params[]` и `@runtime.*`.
 - **§120/§119 — VPN-mode стал декларативным; `applyVpnMode` удалён.** `tun-in`/`mixed-in` в `inbounds[]` и `inbound` в route-rules собираются `#if`-walker'ом по `@vpn_mode` (`vpn`/`proxy`/`vpn_proxy`); `users` внутри `mixed-in` — map-spread `#if` по `@proxy_auth`. Локальный socks/http прокси (mixed-in) теперь живёт в `wizard_template.json`, а не строится императивно в коде. `inbound` в route-rules — `Listable[string]`-массив (тождественно скаляру для sing-box). Защита от broken-auth сохранена: пустой пароль при включённом auth (в т.ч. форс на `0.0.0.0`) → `users` отсутствует, не `[{"":""}]`.
 - **§120 — template-load валидация `#if`** ([if_engine.dart](app/lib/services/builder/if_engine.dart) `validateIfConstructs`). Кривой `#if` в шаблоне (оба `and`+`or`, нет `value`, предикат на необъявленную var, type-mismatch, неизвестный оператор, битый regexp) → `TemplateIfError` на загрузке, а не молча битый конфиг.
@@ -5260,7 +6058,7 @@ Per-app trace переделан (§160): 4 саб-таба → тогл Live/Ag
 
 ### Changed
 
-- **§160 — per-app trace redesign** ([task](docs/spec/tasks/160-perapp-trace-live-aggregated-redesign.md), [feature spec](docs/spec/features/044%20per-app%20traffic%20profiler/spec.md)). 4 саб-таба Live/Domains/IPs/Connections → тогл **Live / Aggregated** (`SegmentedButton`) + ось by Domain/by IP. Connections удалён (дубль Live), Domains+IPs слиты в `AggregatedView`. Общий фильтр сверху (поиск + чипы типа события) на оба режима + пауза Live. **Drill-down по тапу** в обоих режимах: `traffic_event_detail_sheet` (событие) и `aggregate_detail_sheet` (свод + список соединений → событие); host/IP/process внутри sheet кликабельны → в общий поиск.
+- **§160 — per-app trace redesign** ([task](docs/spec/tasks/160-perapp-trace-live-aggregated-redesign.md), [feature spec](docs/spec/tasks/044F-per-app-traffic-profiler/spec.md)). 4 саб-таба Live/Domains/IPs/Connections → тогл **Live / Aggregated** (`SegmentedButton`) + ось by Domain/by IP. Connections удалён (дубль Live), Domains+IPs слиты в `AggregatedView`. Общий фильтр сверху (поиск + чипы типа события) на оба режима + пауза Live. **Drill-down по тапу** в обоих режимах: `traffic_event_detail_sheet` (событие) и `aggregate_detail_sheet` (свод + список соединений → событие); host/IP/process внутри sheet кликабельны → в общий поиск.
 - **§160 — единый движок `TraceExplorer`** ([trace_explorer.dart](app/lib/screens/stats_screen/trace_explorer.dart)) — тогл/фильтр/детали/пауза вынесены в общий виджет; per-app trace и Stats→Live — тонкие обёртки над ним (без дубля логики). `computeTraceAggregates` вынесен из `Session._recompute`; sheet'ы и `AggregatedView` развязаны от `Session`. Live получил Aggregated+детали+паузу «бесплатно».
 - **§160 — счётчик соединений в агрегате = активные/всего** (`0/5 conns`), активные = `max(0, open − close)` по ключу. (`15da916`)
 
@@ -5274,7 +6072,7 @@ Public Intent API (§047) — управление L×Box из Tasker/MacroDroid
 
 ### Added
 
-- **§047 — Public Intent API (automation)** ([docs/AUTOMATION.md](docs/AUTOMATION.md), [feature spec](docs/spec/features/047%20public%20intent%20api/spec.md)). Управление L×Box из автоматизаторов двумя способами: **Plugin** (L×Box виден в Tasker/Locale как Action + State, команда выбирается мышкой через нативный экран) и **raw broadcast** (`am broadcast` с action-строкой для shell/ADB/не-plugin). 9 actions (`START_VPN`/`STOP_VPN`/`TOGGLE_VPN`, `SWITCH_NODE`, `SET_GROUP`, `URLTEST_GROUP`, `REFRESH_SUBS`, `REBUILD_CONFIG`, `RESET_NETWORK`), исходящие события (`VPN_CONNECTED`/`DISCONNECTED`/`ERROR`/`REVOKED`, `ACTIVE_NODE`/`GROUP_CHANGED`, `SUB_REFRESHED`/`FAILED`, `UPDATE_AVAILABLE`, `PERMISSION_NEEDED`). Opt-in: по умолчанию выключено, включается в App Settings → Automation. (`77fd71a`, `8b4b410`, `544ef40`)
+- **§047 — Public Intent API (automation)** ([docs/AUTOMATION.md](docs/AUTOMATION.md), [feature spec](docs/spec/tasks/047F-public-intent-api/spec.md)). Управление L×Box из автоматизаторов двумя способами: **Plugin** (L×Box виден в Tasker/Locale как Action + State, команда выбирается мышкой через нативный экран) и **raw broadcast** (`am broadcast` с action-строкой для shell/ADB/не-plugin). 9 actions (`START_VPN`/`STOP_VPN`/`TOGGLE_VPN`, `SWITCH_NODE`, `SET_GROUP`, `URLTEST_GROUP`, `REFRESH_SUBS`, `REBUILD_CONFIG`, `RESET_NETWORK`), исходящие события (`VPN_CONNECTED`/`DISCONNECTED`/`ERROR`/`REVOKED`, `ACTIVE_NODE`/`GROUP_CHANGED`, `SUB_REFRESHED`/`FAILED`, `UPDATE_AVAILABLE`, `PERMISSION_NEEDED`). Opt-in: по умолчанию выключено, включается в App Settings → Automation. (`77fd71a`, `8b4b410`, `544ef40`)
 - **§152 — Conns: детальный bottom sheet по тапу** ([connection_detail_sheet.dart](app/lib/screens/connections_screen/connection_detail_sheet.dart), [task](docs/spec/tasks/152-conn-detail-sheet.md)). Тайл соединения tappable → полная инфа (host, chain, process, rule, byte-счётчики, длительность) без обрезки `ellipsis`.
 - **§153 — Conns: подсветка зависших однобоких TCP** ([connections_screen.dart](app/lib/screens/connections_screen.dart), [task](docs/spec/tasks/153-oneway-conn-highlight.md)). Соединения с сигнатурой залипания (напр. `↑517 ↓0`) подсвечиваются розовым.
 - **§154 — Conns: иконка приложения в строке** ([task](docs/spec/tasks/154-conn-app-icon-and-i18n.md)). Launcher-иконка приложения-владельца соединения рядом с `processPath`.
@@ -5375,7 +6173,7 @@ Public Intent API (§047) — управление L×Box из Tasker/MacroDroid
 
 ### Added
 
-- **features/025 — Get WARP: регистрация Cloudflare WARP в один тап** ([warp_client.dart](app/lib/services/warp/warp_client.dart), [warp_account.dart](app/lib/services/warp/warp_account.dart), [warp_wizard_screen.dart](app/lib/screens/warp_wizard_screen.dart), [settings_storage/warp.dart](app/lib/services/settings_storage/warp.dart), [feature spec](docs/spec/features/025%20warp%20integration/spec.md)). Новый пункт **Get WARP** в overflow-меню Servers → полноэкранный визард → регистрирует устройство в Cloudflare и добавляет готовый WireGuard-узел. **Приватный ключ X25519 генерится на устройстве и НЕ покидает его** — в Cloudflare (`api.cloudflareclient.com`) уходит только публичный ключ; чужие воркеры-генераторы не используются. **WARP+** (опционально, под Advanced): license key → `PATCH account` (Argo Smart Routing); пусто = free WARP; битый ключ не ломает регистрацию (узел добавляется как free). **Идемпотентность**: повторный Get WARP переиспользует закешированный аккаунт (`warp_account` в storage), не плодя регистрации; *Re-register* форсит новый. Custom endpoint под Advanced (рабочий `IP:port`, если дефолтный заблокирован). WARP-узел помечается эмодзи 🔥☁️ и официальным логотипом-облаком Cloudflare на экране визарда.
+- **features/025 — Get WARP: регистрация Cloudflare WARP в один тап** ([warp_client.dart](app/lib/services/warp/warp_client.dart), [warp_account.dart](app/lib/services/warp/warp_account.dart), [warp_wizard_screen.dart](app/lib/screens/warp_wizard_screen.dart), [settings_storage/warp.dart](app/lib/services/settings_storage/warp.dart), [feature spec](docs/spec/tasks/025F-warp-integration/spec.md)). Новый пункт **Get WARP** в overflow-меню Servers → полноэкранный визард → регистрирует устройство в Cloudflare и добавляет готовый WireGuard-узел. **Приватный ключ X25519 генерится на устройстве и НЕ покидает его** — в Cloudflare (`api.cloudflareclient.com`) уходит только публичный ключ; чужие воркеры-генераторы не используются. **WARP+** (опционально, под Advanced): license key → `PATCH account` (Argo Smart Routing); пусто = free WARP; битый ключ не ломает регистрацию (узел добавляется как free). **Идемпотентность**: повторный Get WARP переиспользует закешированный аккаунт (`warp_account` в storage), не плодя регистрации; *Re-register* форсит новый. Custom endpoint под Advanced (рабочий `IP:port`, если дефолтный заблокирован). WARP-узел помечается эмодзи 🔥☁️ и официальным логотипом-облаком Cloudflare на экране визарда.
 - **§025 — WireGuard `reserved` (Cloudflare client_id)** ([node_spec.dart](app/lib/models/node_spec.dart), [node_spec_emit.dart](app/lib/models/node_spec_emit.dart), [wireguard_parser.dart](app/lib/services/parser/uri_parsers/wireguard_parser.dart), [uri_utils.dart](app/lib/services/parser/uri_utils.dart)). Добавлена поддержка per-peer `reserved: [b0,b1,b2]` (base64 client_id → 3 байта) — без него WARP-handshake проходит, но трафик не идёт. Парсинг (`reserved=`/`client_id=`, десятичный или base64), emit в endpoint-JSON и URI round-trip. Полезно для любого WARP-источника, не только Get WARP. +тесты.
 
 ### Fixed
@@ -5387,7 +6185,7 @@ Public Intent API (§047) — управление L×Box из Tasker/MacroDroid
 
 ### Added
 
-- **features/119 — Режим работы VPN: Proxy / VPN / VPN+Proxy** ([vpn_mode_tab.dart](app/lib/screens/vpn_mode_tab.dart), [post_steps/vpn_mode.dart](app/lib/services/builder/post_steps/vpn_mode.dart), [settings_storage/vpn_mode.dart](app/lib/services/settings_storage/vpn_mode.dart), [feature spec](docs/spec/features/119%20vpn-mode/spec.md)). Новый раздел настроек (3-я вкладка «Mode» в VPN Settings) с выбором того, как ядро ловит трафик: **VPN** — системный туннель через TUN (текущее поведение, default); **Proxy** — локальный прокси-порт без TUN (приложения настраиваются вручную, нет иконки ключа VPN); **VPN+Proxy** — туннель и локальный порт одновременно. Локальный прокси: выбор протокола **Mixed** (HTTP+SOCKS5 на одном порту), **HTTP** или **SOCKS5**; порт (default 2080); listen-адрес `127.0.0.1` (только это устройство) или `0.0.0.0` (LAN); авторизация логин/пароль с автогенерацией пароля (на `0.0.0.0` обязательна — снять нельзя). Реализовано чисто конфигом (sing-box `mixed`/`http`/`socks` inbound + трансформация `route.rules`), изменений в native Kotlin не потребовалось — libbox не вызывает `openTun` при отсутствии tun-inbound. Backward-compat: existing юзеры получают `mode=vpn` (байт-в-байт прежний конфиг).
+- **features/119 — Режим работы VPN: Proxy / VPN / VPN+Proxy** ([vpn_mode_tab.dart](app/lib/screens/vpn_mode_tab.dart), [post_steps/vpn_mode.dart](app/lib/services/builder/post_steps/vpn_mode.dart), [settings_storage/vpn_mode.dart](app/lib/services/settings_storage/vpn_mode.dart), [feature spec](docs/spec/tasks/119F-vpn-mode/spec.md)). Новый раздел настроек (3-я вкладка «Mode» в VPN Settings) с выбором того, как ядро ловит трафик: **VPN** — системный туннель через TUN (текущее поведение, default); **Proxy** — локальный прокси-порт без TUN (приложения настраиваются вручную, нет иконки ключа VPN); **VPN+Proxy** — туннель и локальный порт одновременно. Локальный прокси: выбор протокола **Mixed** (HTTP+SOCKS5 на одном порту), **HTTP** или **SOCKS5**; порт (default 2080); listen-адрес `127.0.0.1` (только это устройство) или `0.0.0.0` (LAN); авторизация логин/пароль с автогенерацией пароля (на `0.0.0.0` обязательна — снять нельзя). Реализовано чисто конфигом (sing-box `mixed`/`http`/`socks` inbound + трансформация `route.rules`), изменений в native Kotlin не потребовалось — libbox не вызывает `openTun` при отсутствии tun-inbound. Backward-compat: existing юзеры получают `mode=vpn` (байт-в-байт прежний конфиг).
 
 ## [2.1.0] — 2026-06-14
 
@@ -5409,19 +6207,19 @@ Public Intent API (§047) — управление L×Box из Tasker/MacroDroid
 
 ### Added
 
-- **§118 — Идентичность фетча подписок: кастомный User-Agent + HWID** ([spec](docs/spec/features/118%20subscription-fetch-identity/spec.md), [subscription_identity.dart](app/lib/services/subscription/subscription_identity.dart), [sources.dart](app/lib/services/subscription/sources.dart), [subscriptions_tab.dart](app/lib/screens/app_settings_screen/widgets/subscriptions_tab.dart)). Новый таб **App Settings → Subscriptions** (между General и Diagnostics; авто-обновление переехало сюда из General). (1) **Custom User-Agent** — override дефолтного `LxBox-android/<ver>` на каждый GET подписки (с предупреждением: панели маршрутизируют конфиг по подстроке в UA — без токена `LxBox` можно получить неподдерживаемый формат, §114; per-source UA имеет приоритет). (2) **Send HWID** (off по умолчанию) — Remnawave-заголовки `x-hwid` (UUIDv4, генерится один раз при включении, Regenerate ↻) + device-meta `x-device-os`/`x-ver-os`/`x-device-model`; **все четыре переписываемые** (override > device-дефолт, пусто = дефолт). Var'ы `subscription_*` не config-significant (только фетч, не sing-box-конфиг). +7 тестов.
+- **§118 — Идентичность фетча подписок: кастомный User-Agent + HWID** ([spec](docs/spec/tasks/118F-subscription-fetch-identity/spec.md), [subscription_identity.dart](app/lib/services/subscription/subscription_identity.dart), [sources.dart](app/lib/services/subscription/sources.dart), [subscriptions_tab.dart](app/lib/screens/app_settings_screen/widgets/subscriptions_tab.dart)). Новый таб **App Settings → Subscriptions** (между General и Diagnostics; авто-обновление переехало сюда из General). (1) **Custom User-Agent** — override дефолтного `LxBox-android/<ver>` на каждый GET подписки (с предупреждением: панели маршрутизируют конфиг по подстроке в UA — без токена `LxBox` можно получить неподдерживаемый формат, §114; per-source UA имеет приоритет). (2) **Send HWID** (off по умолчанию) — Remnawave-заголовки `x-hwid` (UUIDv4, генерится один раз при включении, Regenerate ↻) + device-meta `x-device-os`/`x-ver-os`/`x-device-model`; **все четыре переписываемые** (override > device-дефолт, пусто = дефолт). Var'ы `subscription_*` не config-significant (только фетч, не sing-box-конфиг). +7 тестов.
 
 - **§117 (задача 4b) — Форма создания DNS-сервера: UDP / DoT / DoH** ([server_form_section.dart](app/lib/screens/dns_server_edit/sections/server_form_section.dart), [edit_controller.dart](app/lib/screens/dns_server_edit/edit_controller.dart)). Создание своего сервера требовало писать sing-box JSON руками — не экран создания. Теперь Params inline-сервера — структурная форма: переключатель режима **UDP / DoT / DoH** (порт-дефолты 53/853/443 — ключ `server_port` пишется только для нестандартных), адрес (для DoH принимает и URL-вставку `https://host/path` — разбирается на server+path), для DoH — path, для DoT/DoH — TLS SNI, для доменного адреса — автоматический **Domain resolver** (дропдаун существующих серверов, дефолт google_udp — решение №4; IP-адрес снимает ключ). Поля и JSON-вкладка редактируют одно тело с двусторонней синхронизацией; `tag` теперь виден в JSON как часть sing-box-тела (в new-режиме редактируется и там и в Params, при edit залочен с понятной ошибкой). Нераспознанный `type` (local, h3, …) — пометка «use JSON tab», форма не мешает. +10 тестов.
 
-- **§117 (задача 4) — Полноэкранный редактор DNS-сервера (+ inline-detour)** ([feature spec](docs/spec/features/117%20dns-rework/spec.md), [dns_server_edit_screen.dart](app/lib/screens/dns_server_edit_screen.dart), [merged_server_tile.dart](app/lib/screens/dns_settings_screen/widgets/merged_server_tile.dart)). UX DNS-серверов был фрагментирован: инлайн-тюнер на тайле + read-only диалог тела по тапу + боттом-шит редактирования + иконки edit/reset/delete. Теперь как у правил (`CustomRuleEditScreen`, паттерн 1:1): тап по тайлу → полноэкранный редактор с табами **Params** (Description/Enabled; template → var-редакторы, перенос тюнера; inline → Tag + пикер **Outbound (detour)**; preset → locked-пометка) и **JSON** (inline — редактируемое тело, источник правды; template/preset — read-only превью отрезолвленного тела + storage-shape + Copy). AppBar: back-guard Save/Keep/Discard, Reset-to-canonical (↺ для overridden), Delete (user-only, не locked), Save с dirty-подсветкой. Заодно закрыт **inline-detour**: у пользовательского сервера канал выбирается пикером и живёт в `body['detour']` (направление «канал исчез → ключ тихо не пишется» наследуется от задачи 2 даром). Тайл ужат до switch + title/badge; `server_editor_sheet`/server-body-диалог удалены. Модель/сторадж/эмиссия не тронуты. +11 тестов ([edit_controller_test.dart](app/test/screens/dns_server_edit/edit_controller_test.dart)).
+- **§117 (задача 4) — Полноэкранный редактор DNS-сервера (+ inline-detour)** ([feature spec](docs/spec/tasks/117F-dns-rework/spec.md), [dns_server_edit_screen.dart](app/lib/screens/dns_server_edit_screen.dart), [merged_server_tile.dart](app/lib/screens/dns_settings_screen/widgets/merged_server_tile.dart)). UX DNS-серверов был фрагментирован: инлайн-тюнер на тайле + read-only диалог тела по тапу + боттом-шит редактирования + иконки edit/reset/delete. Теперь как у правил (`CustomRuleEditScreen`, паттерн 1:1): тап по тайлу → полноэкранный редактор с табами **Params** (Description/Enabled; template → var-редакторы, перенос тюнера; inline → Tag + пикер **Outbound (detour)**; preset → locked-пометка) и **JSON** (inline — редактируемое тело, источник правды; template/preset — read-only превью отрезолвленного тела + storage-shape + Copy). AppBar: back-guard Save/Keep/Discard, Reset-to-canonical (↺ для overridden), Delete (user-only, не locked), Save с dirty-подсветкой. Заодно закрыт **inline-detour**: у пользовательского сервера канал выбирается пикером и живёт в `body['detour']` (направление «канал исчез → ключ тихо не пишется» наследуется от задачи 2 даром). Тайл ужат до switch + title/badge; `server_editor_sheet`/server-body-диалог удалены. Модель/сторадж/эмиссия не тронуты. +11 тестов ([edit_controller_test.dart](app/test/screens/dns_server_edit/edit_controller_test.dart)).
 
 ### Added
 
 - **§117 — Debug API: поле `dns` у `/rules` CRUD** ([rules.dart](app/lib/services/debug/handlers/rules.dart)). Задача 3 добавила DNS-опцию в модель правила, но Debug API write-side её не знал — строгий парсер POST молча ронял поле. Теперь POST/PUT принимают `dns: {enabled, server_tag}` (`"dns": null` в PUT очищает), GET отдаёт ту же форму. Найдено на девайс-смоке §117.
 
-- **§117 (задача 3) — Опция DNS у правила («DNS follows the rule»)** ([feature spec](docs/spec/features/117%20dns-rework/spec.md), [custom_rule.dart](app/lib/models/custom_rule.dart), [custom_rules.dart](app/lib/services/builder/post_steps/custom_rules.dart), [dns_section.dart](app/lib/screens/custom_rule_edit/sections/dns_section.dart)). Финал переработки DNS: routing-правило само регистрирует DNS-правило на выбранный сервер — не нужно руками собирать тройку «routing-правило + DNS-сервер + DNS-правило». Модель: ортогональное поле `dns: {enabled, serverTag}` у inline/srs правил (типы правил не меняются, выбор сервера — из существующих по tag; backward-compat: нет поля → старое поведение). Эмиссия: **inline+dns** шарит свой headless rule_set между route- и DNS-правилом (no split); **srs+dns** ссылается на тот же `.srs`-тег + DNS-безопасные доп-фильтры; пропавший сервер → mirror тихо не эмитится (решение №3). Гейт: чекбокс серый при ports/protocols (headless их не выразит, порт/протокол неизвестны в момент DNS-запроса) — продублирован в build. Ордеринг (решение №6): DNS-mirror'ы эмитятся атомарной группой в порядке routing-правил, в DNS-настройках группа — одна карточка «From routing rules» (двигается целиком, внутрь не реордерится). Lifecycle (locked №7) расширен на правила: сервер, реферимый правилом с DNS — замок «used by <правило>», build force-include. Проверено `sing-box check` (lx.6): inline+dns и srs+dns конфиги валидны. +13 тестов ([rule_dns_mirror_test.dart](app/test/services/builder/rule_dns_mirror_test.dart)).
+- **§117 (задача 3) — Опция DNS у правила («DNS follows the rule»)** ([feature spec](docs/spec/tasks/117F-dns-rework/spec.md), [custom_rule.dart](app/lib/models/custom_rule.dart), [custom_rules.dart](app/lib/services/builder/post_steps/custom_rules.dart), [dns_section.dart](app/lib/screens/custom_rule_edit/sections/dns_section.dart)). Финал переработки DNS: routing-правило само регистрирует DNS-правило на выбранный сервер — не нужно руками собирать тройку «routing-правило + DNS-сервер + DNS-правило». Модель: ортогональное поле `dns: {enabled, serverTag}` у inline/srs правил (типы правил не меняются, выбор сервера — из существующих по tag; backward-compat: нет поля → старое поведение). Эмиссия: **inline+dns** шарит свой headless rule_set между route- и DNS-правилом (no split); **srs+dns** ссылается на тот же `.srs`-тег + DNS-безопасные доп-фильтры; пропавший сервер → mirror тихо не эмитится (решение №3). Гейт: чекбокс серый при ports/protocols (headless их не выразит, порт/протокол неизвестны в момент DNS-запроса) — продублирован в build. Ордеринг (решение №6): DNS-mirror'ы эмитятся атомарной группой в порядке routing-правил, в DNS-настройках группа — одна карточка «From routing rules» (двигается целиком, внутрь не реордерится). Lifecycle (locked №7) расширен на правила: сервер, реферимый правилом с DNS — замок «used by <правило>», build force-include. Проверено `sing-box check` (lx.6): inline+dns и srs+dns конфиги валидны. +13 тестов ([rule_dns_mirror_test.dart](app/test/services/builder/rule_dns_mirror_test.dart)).
 
-- **§117 (задачи 1+2) — Переменные у DNS-серверов: per-server detour/IP-профиль в UI** ([feature spec](docs/spec/features/117%20dns-rework/spec.md), [wizard_template.json](app/assets/wizard_template.json), [dns_servers.dart](app/lib/services/builder/post_steps/dns_servers.dart), [merged_server_tile.dart](app/lib/screens/dns_settings_screen/widgets/merged_server_tile.dart)). Field report (4PDA, Pixel 7): DNS-запросы «нужных» приложений должны ходить **через VPN-канал**, но detour у DNS-сервера в UI не управлялся — собиралось вручную из трёх кусков. Теперь: (1) **формат шаблона** — каждый сервер в `dns_options.servers` это обёртка `{description, enabled, vars, server}` с `@var`-плейсхолдерами в body (tag в `server.tag`); консолидация Quad9+AdGuard+AdGuard Family → один «Safe DNS» с `safe_profile`-enum, IPv4/IPv6 варианты через `dns_ip`-enum, доменные серверы получили `domain_resolver: "@dom_resolver"` (var `type: dns_servers`, default `google_udp`); (2) **build** — `resolveTemplateDnsServerBody` подставляет vars значениями юзера (storage-ref расширен `varValues`) или дефолтами; `detour` нормализуется: `direct-out` / исчезнувший канал → ключ **не пишется** (вместо dangling-ссылки), правило применяется ко всем серверам включая inline; (3) **UI** — у template-сервера разворачиваемая секция параметров (`TemplateVarListView` + новые типы `outbound` — пикер «Direct + активные каналы», и `dns_servers` — дропдаун тегов). Кейс репортёра: у adguard-сервера выбрать Outbound=VPN-канал → `detour: "<канал>"` → DNS уходит через туннель. Бонус-фикс жизненного цикла (pre-§117 баг): DNS-сервер, реферимый активным пресетом, больше нельзя выключить под DNS-правилом пресета (битый конфиг) — UI-замок «used by <пресет>» + build force-include. Миграции нет — kind-ref'ы + орфан-чистка + дефолты vars покрывают старое состояние. Проверено `sing-box check` (lx.6). +13 тестов ([dns_servers_resolver_test.dart](app/test/services/builder/dns_servers_resolver_test.dart)). Задача 3 (опция DNS у routing-правила) — отдельно.
+- **§117 (задачи 1+2) — Переменные у DNS-серверов: per-server detour/IP-профиль в UI** ([feature spec](docs/spec/tasks/117F-dns-rework/spec.md), [wizard_template.json](app/assets/wizard_template.json), [dns_servers.dart](app/lib/services/builder/post_steps/dns_servers.dart), [merged_server_tile.dart](app/lib/screens/dns_settings_screen/widgets/merged_server_tile.dart)). Field report (4PDA, Pixel 7): DNS-запросы «нужных» приложений должны ходить **через VPN-канал**, но detour у DNS-сервера в UI не управлялся — собиралось вручную из трёх кусков. Теперь: (1) **формат шаблона** — каждый сервер в `dns_options.servers` это обёртка `{description, enabled, vars, server}` с `@var`-плейсхолдерами в body (tag в `server.tag`); консолидация Quad9+AdGuard+AdGuard Family → один «Safe DNS» с `safe_profile`-enum, IPv4/IPv6 варианты через `dns_ip`-enum, доменные серверы получили `domain_resolver: "@dom_resolver"` (var `type: dns_servers`, default `google_udp`); (2) **build** — `resolveTemplateDnsServerBody` подставляет vars значениями юзера (storage-ref расширен `varValues`) или дефолтами; `detour` нормализуется: `direct-out` / исчезнувший канал → ключ **не пишется** (вместо dangling-ссылки), правило применяется ко всем серверам включая inline; (3) **UI** — у template-сервера разворачиваемая секция параметров (`TemplateVarListView` + новые типы `outbound` — пикер «Direct + активные каналы», и `dns_servers` — дропдаун тегов). Кейс репортёра: у adguard-сервера выбрать Outbound=VPN-канал → `detour: "<канал>"` → DNS уходит через туннель. Бонус-фикс жизненного цикла (pre-§117 баг): DNS-сервер, реферимый активным пресетом, больше нельзя выключить под DNS-правилом пресета (битый конфиг) — UI-замок «used by <пресет>» + build force-include. Миграции нет — kind-ref'ы + орфан-чистка + дефолты vars покрывают старое состояние. Проверено `sing-box check` (lx.6). +13 тестов ([dns_servers_resolver_test.dart](app/test/services/builder/dns_servers_resolver_test.dart)). Задача 3 (опция DNS у routing-правила) — отдельно.
 
 ### Fixed
 
@@ -5499,9 +6297,9 @@ Release notes: [docs/releases/v2.0.0.md](docs/releases/v2.0.0.md).
 
 ### Added
 
-- **§105 — Support message («поддержи автора», remote-managed)** ([feature spec](docs/spec/features/105%20support-message/spec.md), [support_message.dart](app/lib/services/support/support_message.dart)). При открытии HOME — когда туннель активен ≥5 мин (пользователь реально пользуется) и суммарно отработал ≥3 часов — приложение показывает диалог с просьбой поддержать проект (звёзды GitHub-репам, 4PDA, донат). Контент — `docs/support.json` через raw.githubusercontent (паттерн §036): текст/ссылки/пороги правятся без релиза; смена `id` = новая кампания. Удачный fetch кэшируется (офлайн-показ); «Позже» → повтор через +10ч **активного** времени, «Не показывать» → навсегда для кампании. Состояние — отдельный `support_state.json` (не `lxbox_settings.json` — минутные флаши счётчика не дирявят §076 configDirty). +11 тестов.
+- **§105 — Support message («поддержи автора», remote-managed)** ([feature spec](docs/spec/tasks/105F-support-message/spec.md), [support_message.dart](app/lib/services/support/support_message.dart)). При открытии HOME — когда туннель активен ≥5 мин (пользователь реально пользуется) и суммарно отработал ≥3 часов — приложение показывает диалог с просьбой поддержать проект (звёзды GitHub-репам, 4PDA, донат). Контент — `docs/support.json` через raw.githubusercontent (паттерн §036): текст/ссылки/пороги правятся без релиза; смена `id` = новая кампания. Удачный fetch кэшируется (офлайн-показ); «Позже» → повтор через +10ч **активного** времени, «Не показывать» → навсегда для кампании. Состояние — отдельный `support_state.json` (не `lxbox_settings.json` — минутные флаши счётчика не дирявят §076 configDirty). +11 тестов.
 
-- **§097 — AmneziaWG / AWG2 + нативный XHTTP (ядро `sing-box-lx`)** ([feature spec](docs/spec/features/097%20awg2-amneziawg2/spec.md), [node_spec.dart](app/lib/models/node_spec.dart), [transport_spec.dart](app/lib/models/transport_spec.dart)). Сквозная поддержка fork-ядра [`Leadaxe/sing-box-lx`](https://github.com/Leadaxe/sing-box-lx) (база sing-box 1.13.13, build-теги `with_awg` + `with_xhttp`):
+- **§097 — AmneziaWG / AWG2 + нативный XHTTP (ядро `sing-box-lx`)** ([feature spec](docs/spec/tasks/097F-awg2-amneziawg2/spec.md), [node_spec.dart](app/lib/models/node_spec.dart), [transport_spec.dart](app/lib/models/transport_spec.dart)). Сквозная поддержка fork-ядра [`Leadaxe/sing-box-lx`](https://github.com/Leadaxe/sing-box-lx) (база sing-box 1.13.13, build-теги `with_awg` + `with_xhttp`):
   - **AWG / AWG2 (AmneziaWG 2.0) end-to-end**: endpoint-level поля обфускации WireGuard — `jc`/`jmin`/`jmax` (jitter), `s1`–`s4` (packet split), `h1`–`h4` (magic headers), `i1`–`i5` (CPS decoy, v2.0) — парсятся из всех трёх входов (`wireguard://` URI query, INI `[Interface]`, sing-box JSON endpoint), хранятся в `WireguardSpec.awg` (`null` = plain WG) и round-trip'ятся через emit (config + share-URI). Числа эмитятся как JSON numbers (type-fidelity), регистр `i*`-строк сохраняется; битое число в URI (`jc=abc`) → поле пропущено, парс не падает. +10 тестов [awg_test.dart](app/test/parser/awg_test.dart).
   - **Алиас `awg://`** — распознаётся и парсером (dispatcher → WG-путь), и `isDirectLink` (input-detect в Subscriptions «+»).
   - **MTU-кламп 1280 для AWG-нод** (parse-time, helper `awgClampMtu` в [uri_utils.dart](app/lib/services/parser/uri_utils.dart)): нет `mtu` → 1280 (вместо WG-дефолта 1408); `mtu>1280` → кламп + debug-лог; явно меньший — уважаем. 1280 = рекомендованный клиентский MTU самой AmneziaWG и минимальный IPv6 MTU — безопасно на любом пути; завышение даёт тихий облом «handshake есть, данных нет». **Plain WG не затронут** (1408/1420 как раньше). Persisted-ноды накрыты автоматически (`UserServer.fromJson` re-parse'ит из rawBody).
@@ -5593,7 +6391,7 @@ Release notes: [docs/releases/v2.0.0.md](docs/releases/v2.0.0.md).
 
 ### Added
 
-- **§076 — Settings and config lifecycle (write-on-exit + lazy rebuild + universal NavigatorObserver)** ([feature spec](docs/spec/features/076%20settings-and-config-lifecycle/spec.md)). Унификация UI настроек, storage (`lxbox_settings.json`), saved config (`singbox_config.json`) и running tunnel в один прозрачный lifecycle. Два паттерна как design choice:
+- **§076 — Settings and config lifecycle (write-on-exit + lazy rebuild + universal NavigatorObserver)** ([feature spec](docs/spec/tasks/076F-settings-and-config-lifecycle/spec.md)). Унификация UI настроек, storage (`lxbox_settings.json`), saved config (`singbox_config.json`) и running tunnel в один прозрачный lifecycle. Два паттерна как design choice:
   - **Lazy (write-on-exit)** для toggle-flood editing screens (`tun_apps_tab`, `routing_screen`, `dns_settings_screen`, `settings_screen` Core VPN tab): mutations только in-memory + sync `_markDirty` (configDirty=true), storage flush на `dispose()` + `AppLifecycleState.paused`, rebuild lazy на возврат к home. **1 settings write + 1 config write per editing session** независимо от количества toggle'ов.
   - **Eager (immediate-write)** для discrete-event screens (`subscriptions_screen`, `app_settings_screen`, `custom_rule_edit_screen`, `node_filter_screen`): immediate save + snackbar feedback. Подходит для add/remove/Save button workflows.
   - **Global `HomeReturnObserver`** ([home_return_observer.dart](app/lib/services/nav/home_return_observer.dart)): универсальный `NavigatorObserver` зарегистрирован в `MaterialApp.navigatorObservers`. Срабатывает на любой `didPop` когда home (root route) становится top. Покрывает все навигационные пути (drawer, long-press, system back, swipe, programmatic pop, cross-navigation между settings screens). Раньше rebuild trigger был в `_pushRoute.then()` callback — терялся при опен через long-press на Nodes header.
@@ -5603,7 +6401,7 @@ Release notes: [docs/releases/v2.0.0.md](docs/releases/v2.0.0.md).
   - **Rename**: `HomeState.configStaleSinceStart` → `configChangedNeedRestart` (in 5 files). Debug API `/state` JSON key `config_stale_since_start` → `config_changed_need_restart` — **breaking** для external consumers. Добавлен computed `config_dirty: bool` для диагностики.
   - **Race fixes**: `_markDirty` синхронно set'ит `configDirty=true` (race-safe для observer handler'а который читает сразу после dispose). `_persist` НЕ set'ит `configDirty` после await'ов (исправлен blink pink→blue после rebuild).
 
-- **§074 — Add server wizard (SOCKS5 form + Paste URI + Paste JSON)** ([feature spec](docs/spec/features/074%20add-server-wizard/spec.md), [add_server_wizard_screen.dart](app/lib/screens/add_server_wizard_screen.dart), [subscription_controller.dart](app/lib/controllers/subscription_controller.dart), [subscriptions_screen.dart](app/lib/screens/subscriptions_screen.dart)). Long-press на «+» в Subscriptions screen → full-screen route с 3 tabs:
+- **§074 — Add server wizard (SOCKS5 form + Paste URI + Paste JSON)** ([feature spec](docs/spec/tasks/074F-add-server-wizard/spec.md), [add_server_wizard_screen.dart](app/lib/screens/add_server_wizard_screen.dart), [subscription_controller.dart](app/lib/controllers/subscription_controller.dart), [subscriptions_screen.dart](app/lib/screens/subscriptions_screen.dart)). Long-press на «+» в Subscriptions screen → full-screen route с 3 tabs:
   - **SOCKS5** — структурированная форма: tag (default `local-socks5-out`), host (`127.0.0.1`), port (`1080`), username/password (optional), display name (optional → `UserServer.name`, отображается как entry title в Subscriptions list). Form validation (port 1..65535, host non-empty). Default values заточены под locally hosted SOCKS5 / DPI bypass tooling. Submit → constructs `SocksSpec(label = tag)` directly, persisted **как sing-box outbound JSON** в `rawBody` (не URI — URI fragment round-trip ломает tag т.к. `parseSocks` derive'ит tag из label-fragment'а), wraps в `UserServer(origin: manual)`, добавляется через новый `subController.addUserServer(...)` helper. Regression test: `socks_wizard_roundtrip_test.dart`.
   - **Paste URI** — multiline text area для `vless://…` / `vmess://…` / `trojan://…` / `socks5://…` / `wireguard://…` etc. Routes через существующий `addFromInput` (тот же путь что у tap-«+»).
   - **Paste JSON** — multiline outbound JSON ({type:vless,…}). Single object или array. WireGuard auto-routes в `endpoints[]` через builder pipeline.
@@ -5631,7 +6429,7 @@ Release notes: [docs/releases/v2.0.0.md](docs/releases/v2.0.0.md).
 
 ### Added
 
-- **§070 — Sort options long-press menu** ([feature spec](docs/spec/features/070%20sort-options/spec.md), [home_state.dart](app/lib/models/home_state.dart), [home_controller.dart](app/lib/controllers/home_controller.dart), [home_screen.dart](app/lib/screens/home_screen.dart)). На главной у sort-кнопки в node header добавлен long-press → popup `CheckedPopupMenuItem`×3:
+- **§070 — Sort options long-press menu** ([feature spec](docs/spec/tasks/070F-sort-options/spec.md), [home_state.dart](app/lib/models/home_state.dart), [home_controller.dart](app/lib/controllers/home_controller.dart), [home_screen.dart](app/lib/screens/home_screen.dart)). На главной у sort-кнопки в node header добавлен long-press → popup `CheckedPopupMenuItem`×3:
   - **Pin DIRECT to top** (default ON) — `direct-out` в pinned section.
   - **Pin AUTO to top** (default ON) — `✨auto` в pinned section.
   - **Re-sort on manual ping** (default ON) — пересчитывать порядок при `runNodeUrltest(tag)` (single ping). OFF → manual ping обновляет число, но **ряд не прыгает**; UI-cache (`_viewSortedNodes`) держит frozen sort до `state.pingBatchGen` bump.
@@ -5640,7 +6438,7 @@ Release notes: [docs/releases/v2.0.0.md](docs/releases/v2.0.0.md).
   - Toggles per-session in-memory (consistency с §048 filter state), не persist'ятся.
   - Default behaviour bit-exact: все 3 toggle = ON → старый sort.
 
-- **§071 — Manual node reorder via drag** ([feature spec](docs/spec/features/071%20manual-node-reorder/spec.md), [home_state.dart](app/lib/models/home_state.dart), [home_controller.dart](app/lib/controllers/home_controller.dart), [home_screen.dart](app/lib/screens/home_screen.dart)). Четвёртый sort mode `NodeSortMode.manual` (icon `⠿ Icons.drag_indicator`), активируется **только** через drag — в `cycleSortMode` не входит (`NodeSortMode.next` обходит manual: default → ping → A-Z → default).
+- **§071 — Manual node reorder via drag** ([feature spec](docs/spec/tasks/071F-manual-node-reorder/spec.md), [home_state.dart](app/lib/models/home_state.dart), [home_controller.dart](app/lib/controllers/home_controller.dart), [home_screen.dart](app/lib/screens/home_screen.dart)). Четвёртый sort mode `NodeSortMode.manual` (icon `⠿ Icons.drag_indicator`), активируется **только** через drag — в `cycleSortMode` не входит (`NodeSortMode.next` обходит manual: default → ping → A-Z → default).
   - **8% от ширины row, transparent strip** на левом крае каждого non-pinned ряда (Stack + Positioned overlay) с `ReorderableDragStartListener` — long-press + drag начинает reorder. Текст и иконки внутри `NodeRow` не сдвигаются.
   - Drag → `commitManualReorder` переключает sortMode в `manual` + сохраняет порядок в `state.manualOrder`. Per-session in-memory.
   - **Exit:** короткий tap по sort-кнопке (cycle) выходит из `manual` → `defaultOrder`, `manualOrder` **сбрасывается**. Юзер опять начал drag → manual mode re-enter с fresh порядком.
@@ -5648,7 +6446,7 @@ Release notes: [docs/releases/v2.0.0.md](docs/releases/v2.0.0.md).
   - **Новые ноды** (subscription update / add server) → в конец manual order. Удалённые → автоматически отфильтрованы.
   - +18 unit tests (`home_state_sort_test.dart`): `next` cycle exit, pin toggles в `latencyAsc`/`nameAsc`, manual order applied, новые в конец, удалённые отфильтрованы, pinDirect ON/OFF под manual, copyWith new fields.
 
-- **§048 — Home node filters: regex + emoji + protocol + subscription + test (ping)** ([feature spec](docs/spec/features/048%20home-node-filters/spec.md), [node_filter.dart](app/lib/screens/home/node_filter.dart), [filter_widgets.dart](app/lib/screens/home/filter_widgets.dart), [home_screen.dart](app/lib/screens/home_screen.dart)). На главной у списка нод есть icon-кнопка `Icons.tune` справа в header (раньше открывала popup с одним пунктом «Show detour servers» — теперь expand toggle для filter panel). Panel содержит:
+- **§048 — Home node filters: regex + emoji + protocol + subscription + test (ping)** ([feature spec](docs/spec/tasks/048F-home-node-filters/spec.md), [node_filter.dart](app/lib/screens/home/node_filter.dart), [filter_widgets.dart](app/lib/screens/home/filter_widgets.dart), [home_screen.dart](app/lib/screens/home_screen.dart)). На главной у списка нод есть icon-кнопка `Icons.tune` справа в header (раньше открывала popup с одним пунктом «Show detour servers» — теперь expand toggle для filter panel). Panel содержит:
   - **Regex** text field с двумя toggle: левый checkbox — on/off filter без потери pattern (auto-on при вводе валидного pattern); `[!]` внутри suffix перед `✕` — invert/NOT (`!regex.hasMatch(tag)`, OR-семантика alternations сохраняется — `!(a|b)`). Debounce 300ms; invalid pattern → red `Invalid regex` hint.
   - **Emoji chips** в горизонтальной полоске — extracted из всех node tags (включая detour), отсортированы по частоте + alphabetical tiebreak. Tap chip → emoji appended в regex field как OR-pattern (`🇷🇺` потом `🇺🇸` → `🇷🇺|🇺🇸`).
   - **Protocol chips** (multi-select FilterChip, horizontal scroll row) — unique protocols из current pool (vless / vmess / trojan / shadowsocks / hysteria2 / ...). Empty selection = all allowed.
@@ -5767,7 +6565,7 @@ Hotfix для v1.8.0: hardcoded UI-версия не была поднята п�
 
 ### Changed
 
-- **Backup format переписан под полный snapshot — single-format, no legacy support** ([§040 spec](docs/spec/features/040%20backup%20restore%20ui/spec.md), [backup_service.dart](app/lib/services/backup_service.dart), [debug/handlers/backup.dart](app/lib/services/debug/handlers/backup.dart), [settings_storage.dart](app/lib/services/settings_storage.dart)). Старый формат `{vars, server_lists}` на корне **не сохранял большую часть пользовательских данных** — `custom_rules`, `tun_apps`, `enabled_groups`, `enabled_rules`, `route_final`, `rule_outbounds`, `dns_options` живут как top-level ключи `lxbox_settings.json`, а export'ил только `data['vars']`. Inline rule_set'ы вида «Ru Apps» (57 пакетов через `CustomRule.inline`) **исчезали при restore**.
+- **Backup format переписан под полный snapshot — single-format, no legacy support** ([§040 spec](docs/spec/tasks/040F-backup-restore-ui/spec.md), [backup_service.dart](app/lib/services/backup_service.dart), [debug/handlers/backup.dart](app/lib/services/debug/handlers/backup.dart), [settings_storage.dart](app/lib/services/settings_storage.dart)). Старый формат `{vars, server_lists}` на корне **не сохранял большую часть пользовательских данных** — `custom_rules`, `tun_apps`, `enabled_groups`, `enabled_rules`, `route_final`, `rule_outbounds`, `dns_options` живут как top-level ключи `lxbox_settings.json`, а export'ил только `data['vars']`. Inline rule_set'ы вида «Ru Apps» (57 пакетов через `CustomRule.inline`) **исчезали при restore**.
   - Новый wire-format: `{app, kind, created_at, source_app_version, storage: <lxbox_settings.json целиком>, vpn_settings: {auto_start, keep_on_exit, background_mode, core_logs_enabled, allow_bypass}}`. `version` поле убрано — single-format, файлы старого образца reject'ятся с message «Unsupported backup format. Re-export from a recent app version.»
   - **`storage` блок** = deep-clone всего `lxbox_settings.json` через новый `SettingsStorage.exportRaw()`. Restore — через `SettingsStorage.replaceRaw(map, merge: bool)`: при `merge=false` overwrite целиком, при `merge=true` top-level merge с recursive vars upsert.
   - **`vpn_settings` блок** — отдельный native-side state из `boxvpn_boot` SharedPreferences (BootReceiver читает at boot-time когда Flutter ещё не запущен; не перенесён в `lxbox_settings.json` ради simplicity). 5 toggles read через `BoxVpnClient` getters / write через сеттеры.
@@ -5781,7 +6579,7 @@ Hotfix для v1.8.0: hardcoded UI-версия не была поднята п�
 
 - **`docs/ARCHITECTURE.md` Feature Specs map синхронизирован с реоргом** + **`CHANGELOG.md` chronological order** ([commit `24558a5`](https://github.com/Leadaxe/LxBox/commit/24558a5)). В ARCHITECTURE убраны 7 демотированных из live-таблицы, добавлена явная "Демотированные через §054" секция с маппингом старый→новый. В CHANGELOG: блок `[1.2.0]` ошибочно стоял между `[1.4.0]` и `[1.3.1]` — переставлен в правильный newest-first порядок.
 
-- **§047 — Public Intent API spec расширен** ([§047 spec](docs/spec/features/047%20public%20intent%20api/spec.md)). Outgoing events (broadcast intents от LxBox в эфир: `VPN_STATE_CHANGED`, `CONFIG_RELOAD`, `RULE_FIRED` опционально) + 2 incoming actions (`SET_RULE_ENABLED`, `SWITCH_PRESET_GROUP`) + symmetric input/output pattern. Status остаётся **Draft** — не имплементировано.
+- **§047 — Public Intent API spec расширен** ([§047 spec](docs/spec/tasks/047F-public-intent-api/spec.md)). Outgoing events (broadcast intents от LxBox в эфир: `VPN_STATE_CHANGED`, `CONFIG_RELOAD`, `RULE_FIRED` опционально) + 2 incoming actions (`SET_RULE_ENABLED`, `SWITCH_PRESET_GROUP`) + symmetric input/output pattern. Status остаётся **Draft** — не имплементировано.
 
 ---
 
@@ -5934,7 +6732,7 @@ Hotfix для v1.8.0: hardcoded UI-версия не была поднята п�
   - **Streaming primary, polling supplement** — polling interval 2s → 5s. Каждый `inbound packet connection` log line == event сразу; polling только enrich'ит open conn'ы (bytes / state) и эмитит close events.
   - **Debug API расширен**: `GET /profiler/live?seconds=60` (snapshot global rolling buffer), `GET /profiler/live/stream` (SSE без session filter'а), `GET /profiler/live/unattributed` (recent unattributed + banner state), `PATCH /profiler/secondary-packages` (live mutation), `POST /profiler/start { secondary_packages }` (initial set).
   - **API contract**: TrafficEvent JSON теперь включает `confidence`, `matched_via`, `shown_because`, `dns_record_type`, `backfilled` поля.
-- **Tunnel apps — OS-level split-tunneling** ([§046 spec](docs/spec/features/046%20tunnel%20apps%20split-tunneling/spec.md)). Четвёртая вкладка в `Routing` для управления стандартным Android-механизмом split-tunneling: какие apps идут через VPN-tun, а какие — direct по cellular/wifi (минуя sing-box полностью).
+- **Tunnel apps — OS-level split-tunneling** ([§046 spec](docs/spec/tasks/046F-tunnel-apps-split-tunneling/spec.md)). Четвёртая вкладка в `Routing` для управления стандартным Android-механизмом split-tunneling: какие apps идут через VPN-tun, а какие — direct по cellular/wifi (минуя sing-box полностью).
   - **3 mode'а через SegmentedButton**: `Off` (все apps через tun, default) / `Allow-list` (только перечисленные через tun) / `Deny-list` (все КРОМЕ перечисленных). Mutually exclusive, как требует Android `VpnService.Builder` API.
   - **Storage** `tun_apps: {mode, packages}` в `lxbox_settings.json`. Default для existing юзеров: `{mode: "off", packages: []}` — backward-compat. Migration unconditional one-shot на первом load.
   - **Builder** `applyTunPackages()` в `post_steps.dart` (последний step pipeline'а): `mode: allow` → `inbound[tun].include_package`, `mode: deny` → `exclude_package`, `mode: off` → ничего не пишем.
@@ -5959,7 +6757,7 @@ Hotfix для v1.8.0: hardcoded UI-версия не была поднята п�
 
 ### Added
 
-- **Per-app traffic profiler** ([§044 spec](docs/spec/features/044%20per-app%20traffic%20profiler/spec.md), [user guide](docs/features/per-app-trace.md)). Третий tab в Statistics: pick app → record → see DNS resolves (с CNAME chain'ом), connections (хост, IP, порт, outbound chain, bytes) и connection-issue markers ⚠ (DNS timeout, TCP RST early — locale-агностичные).
+- **Per-app traffic profiler** ([§044 spec](docs/spec/tasks/044F-per-app-traffic-profiler/spec.md), [user guide](docs/features/per-app-trace.md)). Третий tab в Statistics: pick app → record → see DNS resolves (с CNAME chain'ом), connections (хост, IP, порт, outbound chain, bytes) и connection-issue markers ⚠ (DNS timeout, TCP RST early — locale-агностичные).
   - 4 sub-tab'а: **Live** (newest-first stream), **Domains** (aggregated, expandable с CNAME/IPs/outbound/issues), **IPs** (per-IP stats, ↗ jump к Domains), **Connections** (timeline с inline-expand).
   - In-memory only — никакого persist'а. 3h sliding window + 50k events count fallback. Ring-buffer 5 завершённых sessions.
   - **Recording indicator** ⚡: chip в `_buildTrafficBar` на HomeScreen с short package name, плюс ⚡ возле «Per-app» tab title в StatsScreen. Tap всей строки на Home → `StatsScreen(initialTab: perApp)`.
@@ -6047,12 +6845,12 @@ DNS-серверы перевели на kind-discriminated refs (симметр
 
 ### Added
 
-- **Backup & restore UI** ([§040 backup spec](docs/spec/features/040%20backup%20restore%20ui/spec.md), commit b332b21). Новый экран — экспорт/импорт пользовательских данных (server lists / routing rules / app settings / debug config) в JSON. 4 toggleable категории, dry-run preview перед применением, merge vs replace mode. Экспорт через `share_plus`, импорт через `file_picker`. Debug API: `GET /backup/export?include=...`, `POST /backup/import?merge=...`.
+- **Backup & restore UI** ([§040 backup spec](docs/spec/tasks/040F-backup-restore-ui/spec.md), commit b332b21). Новый экран — экспорт/импорт пользовательских данных (server lists / routing rules / app settings / debug config) в JSON. 4 toggleable категории, dry-run preview перед применением, merge vs replace mode. Экспорт через `share_plus`, импорт через `file_picker`. Debug API: `GET /backup/export?include=...`, `POST /backup/import?merge=...`.
 - **Reload-кнопка в AppBar** (commits 3f4cac7 / d5c709e / 23ff55b). Default tap = light reload core (`commandServer.startOrReloadService`) вместо полного reconnect — TUN не закрывается, in-place restart sing-box runtime'а с тем же config'ом. В long-press menu — отдельный пункт Reload как первый, recovery-фокус. Cooldown 3s между нажатиями (`canReload` getter в HomeController).
 - **`/action/reset-network` Debug API** ([§031](docs/spec/tasks/031-reset-network-api.md)). Light recovery — `commandServer.resetNetwork()` без recreate'а box runtime / Service / TUN. Делает `connectionManager.CloseAll()` + DNS cache flush (`r.ClearCache()` + `transports.Reset()`) + interface refresh у inbound/outbound/endpoints. Spec обновлена с разбором по строкам исходника sing-box v1.13.11 (изначальная гипотеза «БЕЗ drop'а in-flight TCP» опровергнута — в реале all connections рвутся, но Service/TUN остаются стабильны).
 - **Per-group ping/test settings + persist** ([§040](docs/spec/tasks/040-per-group-ping-test-settings.md)). Каждая VPN-группа может иметь свои `url` + `timeout_ms` для ping / mass-URLTest / group URLTest. Storage shape `ping_options: {url?, timeout_ms?, groups: {<groupTag>: {url?, timeout_ms?}}}` симметричен template'у. Resolve chain: per-group override → global storage → template default. Global `pingUrl`/`pingTimeout` теперь тоже **persist'ятся** (раньше жили только в памяти controller'а — на restart сбрасывались). UI dialog «Ping settings» с SegmentedButton «All groups | <currentGroup>» + Reset-to-global. Debug API endpoints: `GET/PUT /settings/ping_options`, `GET/PUT/DELETE /settings/ping_options/groups/{tag}`. Use-case: VPN-1 (foreign-routed) — gstatic 204; VPN-2 (РФ-direct) — ya.ru.
-- **Sing-box internal logs в Debug API** ([§043](docs/spec/features/043%20applog%20per-source%20quotas/spec.md)). `GET /logs/core` показывает router/dns/inbound/outbound события sing-box'а — для диагностики bug-репортов («после wake direct/auto не работает» и т.п.). Source delivery: `PlatformInterface.writeDebugMessage` → `EventChannel("lxbox/coreLog")` → `ClashLogPump` (новый `lib/services/clash_log_pump.dart`) → `AppLog` как `DebugSource.core`. Уровень парсится regex'ом (`\bWARN\b`/`\bERROR\b` etc.) — TRACE/DEBUG отбрасываются на native (volume reduction). ANSI escape codes стрипаются. **Toggle:** `PUT /settings/core_logs_enabled {"enabled":true}` (default false; storage в SharedPreferences `boxvpn_boot.core_logs_enabled` потому что `Libbox.setup` читает значение до Flutter engine; изменение применяется только после force-stop приложения). UI-toggle единственный — App Settings → Diagnostics. Shortcut в DebugScreen: ⋮ menu → "Diagnostics settings".
-- **AppLog per-source quotas** ([§043](docs/spec/features/043%20applog%20per-source%20quotas/spec.md)). Раньше единый ring-buffer на 500 entries — sing-box (verbose, сотни строк/мин) вытеснял app-сообщения за минуты. Теперь `Map<DebugSource, List>`: `app=300`, `core=500`, независимые ring-buffer'ы. K-way merge на чтении (insert O(1) amortized), `entriesForSource(s)` direct lookup. Persistent split: `applog.txt` + `corelog.txt`, по 200 lines / 64KB каждый — `initPersistent()` грузит оба. Debug API: `GET /logs/app`, `GET /logs/core` aliases; `POST /logs/clear?source=app|core` per-source clear.
+- **Sing-box internal logs в Debug API** ([§043](docs/spec/tasks/043F-applog-per-source-quotas/spec.md)). `GET /logs/core` показывает router/dns/inbound/outbound события sing-box'а — для диагностики bug-репортов («после wake direct/auto не работает» и т.п.). Source delivery: `PlatformInterface.writeDebugMessage` → `EventChannel("lxbox/coreLog")` → `ClashLogPump` (новый `lib/services/clash_log_pump.dart`) → `AppLog` как `DebugSource.core`. Уровень парсится regex'ом (`\bWARN\b`/`\bERROR\b` etc.) — TRACE/DEBUG отбрасываются на native (volume reduction). ANSI escape codes стрипаются. **Toggle:** `PUT /settings/core_logs_enabled {"enabled":true}` (default false; storage в SharedPreferences `boxvpn_boot.core_logs_enabled` потому что `Libbox.setup` читает значение до Flutter engine; изменение применяется только после force-stop приложения). UI-toggle единственный — App Settings → Diagnostics. Shortcut в DebugScreen: ⋮ menu → "Diagnostics settings".
+- **AppLog per-source quotas** ([§043](docs/spec/tasks/043F-applog-per-source-quotas/spec.md)). Раньше единый ring-buffer на 500 entries — sing-box (verbose, сотни строк/мин) вытеснял app-сообщения за минуты. Теперь `Map<DebugSource, List>`: `app=300`, `core=500`, независимые ring-buffer'ы. K-way merge на чтении (insert O(1) amortized), `entriesForSource(s)` direct lookup. Persistent split: `applog.txt` + `corelog.txt`, по 200 lines / 64KB каждый — `initPersistent()` грузит оба. Debug API: `GET /logs/app`, `GET /logs/core` aliases; `POST /logs/clear?source=app|core` per-source clear.
 - **Debug API: write `config.json` direct + lockable rebuild** ([§037](docs/spec/tasks/037-debug-api-write-config-and-lock-rebuild.md)). `PUT /config` с raw sing-box JSON — sing-box reload'ится. `PUT /settings/config_locked {"locked": true}` — pin'ит config от UI-rebuild'ов (`SubscriptionController.generateConfig()` возвращает null silently пока lock держится). Use-case: тестировать sing-box фичи которые наш parser/builder не понимает (Tailscale outbound и т.п.). Endpoints: `PUT /config`, `GET /state/config_locked`, `PUT /settings/config_locked`. Storage: `config_locked_for_debug`, default false.
 - **Core version в About** (commit 3f4cac7). About dialog показывает версию sing-box core (`commandServer.coreVersion()`) рядом с app version — сразу видно какой libbox прошит.
 - **Universal error format helper** ([§041](docs/spec/tasks/041-user-error-format-helper.md)). Новый `lib/services/error_format.dart` с `formatUserError(Object e)` — превращает Dart exception toString'ы в человекочитаемый текст. Поддерживает `TimeoutException` → `timeout Ns`, `SocketException`/`FileSystemException` → `osError.message`, `FormatException` → `e.message`, `ClashHttpException` → `HTTP <code>`, `PlatformException` → `e.message ?? "platform error: <code>"`, fallback strip+truncate. Применено в 7 user-visible callsite'ах HomeController (file pick, start/stop/reconnect VPN, Clash API refresh, switch node) + snackbar'ах 6 экранов. 12 unit-тестов. Примеры:
@@ -6107,15 +6905,15 @@ DNS-серверы перевели на kind-discriminated refs (симметр
 
 ### Added
 
-- **NaïveProxy** ([§037](docs/spec/features/037%20naive%20proxy/spec.md), [#2](https://github.com/Leadaxe/LxBox/issues/2)) — парсер `naive+https://` URIs (DuckSoft), генератор sing-box `type: "naive"` outbound'а, share-URI round-trip. 10-й протокол в Parser v2. Cronet/`with_naive_outbound` уже в `libbox.aar` — без APK-size impact. +36 тестов; suite 373 → 409 ✓.
-- **Quick Connect: QS tile + home-screen shortcut** ([§032](docs/spec/features/032%20quick%20connect/spec.md), [#1](https://github.com/Leadaxe/LxBox/issues/1)) — две точки toggle VPN без открытия app'а. Tile синхронизирован с `BoxVpnService.currentStatus`, shortcut на launcher-иконке. Первый раз app коротко открывается ради `VpnService.prepare(...)` consent — Android API ограничение. См. [task 014](docs/spec/tasks/014-quick-connect-tile-shortcut.md).
-- **Crash diagnostics** ([§038](docs/spec/features/038%20crash%20diagnostics/spec.md)) — четыре независимых канала post-mortem диагностики:
+- **NaïveProxy** ([§037](docs/spec/tasks/037F-naive-proxy/spec.md), [#2](https://github.com/Leadaxe/LxBox/issues/2)) — парсер `naive+https://` URIs (DuckSoft), генератор sing-box `type: "naive"` outbound'а, share-URI round-trip. 10-й протокол в Parser v2. Cronet/`with_naive_outbound` уже в `libbox.aar` — без APK-size impact. +36 тестов; suite 373 → 409 ✓.
+- **Quick Connect: QS tile + home-screen shortcut** ([§032](docs/spec/tasks/032F-quick-connect/spec.md), [#1](https://github.com/Leadaxe/LxBox/issues/1)) — две точки toggle VPN без открытия app'а. Tile синхронизирован с `BoxVpnService.currentStatus`, shortcut на launcher-иконке. Первый раз app коротко открывается ради `VpnService.prepare(...)` consent — Android API ограничение. См. [task 014](docs/spec/tasks/014-quick-connect-tile-shortcut.md).
+- **Crash diagnostics** ([§038](docs/spec/tasks/038F-crash-diagnostics/spec.md)) — четыре независимых канала post-mortem диагностики:
   - **A. stderr-redirect** — `Libbox.redirectStderr` пишет Go panic-stacktrace в `filesDir/stderr.log` до SIGABRT'а. Условная вкладка `stderr` в Debug-экране (только если файл непустой), кнопка Share. [task 018](docs/spec/tasks/018-stderr-viewer-debug-tab.md).
   - **B. ApplicationExitInfo** (API 30+) — `getHistoricalProcessExitReasons` lazy-читается в `DumpBuilder`. Reason + tombstone (для CRASH_NATIVE) или JVM stacktrace (для CRASH). [task 029](docs/spec/tasks/029-application-exit-info.md).
   - **C. Persistent AppLog** — `warning` + `error` уровни пишутся в `filesDir/applog.txt` (ring-buffer 200 строк / 64KB). На старте `main()` подгружаются с `fromPreviousSession=true`. Pre-crash JVM-events переживают рестарт. [task 028](docs/spec/tasks/028-persistent-applog.md).
   - **D. Logcat tail** — `Runtime.exec("logcat", "-d", "-t", 1000, "*:E")` через `ProcessBuilder` (без `READ_LOGS` permission, logd UID-фильтрует сам). Ловит `AndroidRuntime FATAL EXCEPTION`, `libc`/`DEBUG`/`tombstoned`, `art`/`linker` — особенно когда AEI не приложил trace (Samsung One UI quirk на REASON_CRASH). [task 022](docs/spec/tasks/022-logcat-tail-in-dump.md).
   - `DumpBuilder` отдаёт все 4 канала одним JSON-pack'ом (поля `stderr_log`, `exit_info`, `logcat_tail`, plus `debug_log` с persistent-маркером).
-- **Debug API: `/diag/*` endpoints group** ([§031](docs/spec/features/031%20debug%20api/spec.md)) — `/diag/dump`, `/diag/exit-info`, `/diag/logcat`, `/diag/stderr`, `/diag/applog`. Всё что отдаётся в UI ⤴ Share, доступно через HTTP без UI.
+- **Debug API: `/diag/*` endpoints group** ([§031](docs/spec/tasks/031F-debug-api/spec.md)) — `/diag/dump`, `/diag/exit-info`, `/diag/logcat`, `/diag/stderr`, `/diag/applog`. Всё что отдаётся в UI ⤴ Share, доступно через HTTP без UI.
 - **Debug API: `/backup/*` group** ([task 026](docs/spec/tasks/026-backup-export-import.md)) — `GET /backup/export?include=config,vars,subs` и симметричный `POST /backup/import?merge=&rebuild=`. Pure-data snapshot (без diag-шума), совместим с форматом `/diag/dump`. Кеши (cache.db, stderr.log, SRS, runtime nodes) не входят — restore их пересоздаст из подписок.
 - **Debug API: `POST /action/preview-empty-state?on=true|false`** ([task 025](docs/spec/tasks/025-preview-empty-state.md)) — UI-only override: `HomeScreen` рендерит empty-state как при чистой инсталляции, реальные данные не трогаются. Полезно для скриншотов / regression-теста UX без `pm clear`.
 
@@ -6152,7 +6950,7 @@ DNS-серверы перевели на kind-discriminated refs (симметр
 - **Battery-optimization попап на старте** — если `isIgnoringBatteryOptimizations == false`, HomeScreen показывает AlertDialog «Разрешите работу в фоне» с кнопкой перехода в системные настройки. Rate-limit: не чаще 1 раза в 24 часа (`battery_opt_last_prompt_ms` в SettingsStorage). Реализация: [home_screen.dart](app/lib/screens/home_screen.dart).
 - **Notifications-status индикатор** в App Settings → Background. Если нотификации запрещены — красная иконка + tap открывает per-app notification settings. Важно для Android 13+ где `POST_NOTIFICATIONS` runtime-permission: без неё foreground service работает, но notification не рендерится → OS охотнее throttle'ит FGS. Native API: `NotificationManagerCompat.areNotificationsEnabled()` + `Settings.ACTION_APP_NOTIFICATION_SETTINGS`.
 
-- **Update check on launch** ([§036](docs/spec/features/036%20update%20check/spec.md)) — `UpdateChecker` сервис: через 5s после старта app'а пингует `api.github.com/repos/Leadaxe/LxBox/releases/latest` (24h cap, default ON, single-line disclosure). Если новый релиз → `SnackBar` в HomeScreen с кнопками **View** (открывает release page в браузере) / **Not now** (dismiss per-tag). Sideload flow без in-app installer. About screen: блок «Latest available» с manual `[Check now]`. App Settings → General → Updates: toggle + last-check + manual button.
+- **Update check on launch** ([§036](docs/spec/tasks/036F-update-check/spec.md)) — `UpdateChecker` сервис: через 5s после старта app'а пингует `api.github.com/repos/Leadaxe/LxBox/releases/latest` (24h cap, default ON, single-line disclosure). Если новый релиз → `SnackBar` в HomeScreen с кнопками **View** (открывает release page в браузере) / **Not now** (dismiss per-tag). Sideload flow без in-app installer. About screen: блок «Latest available» с manual `[Check now]`. App Settings → General → Updates: toggle + last-check + manual button.
 
 #### Debug API
 
@@ -6161,7 +6959,7 @@ DNS-серверы перевели на kind-discriminated refs (симметр
 #### Process
 
 - **Night-work autonomous process** (`docs/spec/processes/night-work/`) — canonical spec, startup-prompt, report-template, morning-review, scripts/session-start.sh. Anti-pattern'ы из 2026-04-22 retro зашиты в spec (no silent pivot, no megacommit WIP rescue, no hallucinated marketer stats).
-- **MCP server design** ([§035](docs/spec/features/035%20mcp%20server/spec.md), draft) — план обёртки Debug API в MCP server (stdio, TS+Node, tools/resources/prompts). Implementation отложена до момента когда Claude Desktop станет primary tooling surface.
+- **MCP server design** ([§035](docs/spec/tasks/035F-mcp-server/spec.md), draft) — план обёртки Debug API в MCP server (stdio, TS+Node, tools/resources/prompts). Implementation отложена до момента когда Claude Desktop станет primary tooling surface.
 
 #### Tests
 
@@ -6179,7 +6977,7 @@ DNS-серверы перевели на kind-discriminated refs (симметр
 
 ### Design
 
-- **Новая иконка приложения** — W1 "routing cross" вместо generic Flutter-иконки. Android (adaptive foreground/background + themed mono для Android 13+), iOS, macOS, web favicon, Windows — все платформы единовременно. Концепт отражает метафору маршрутизации по правилам. Источники SVG в `docs/design/icon/W1_pack/` (см. [spec 034](docs/spec/features/034%20app%20icon/spec.md)).
+- **Новая иконка приложения** — W1 "routing cross" вместо generic Flutter-иконки. Android (adaptive foreground/background + themed mono для Android 13+), iOS, macOS, web favicon, Windows — все платформы единовременно. Концепт отражает метафору маршрутизации по правилам. Источники SVG в `docs/design/icon/W1_pack/` (см. [spec 034](docs/spec/tasks/034F-app-icon/spec.md)).
 
 ### Cleanup
 

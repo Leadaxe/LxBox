@@ -1,0 +1,31 @@
+{
+  "nodes": [
+    {
+      "entry": {
+        "password": "pass123",
+        "server": "example-1.com",
+        "server_port": 443,
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        },
+        "type": "anytls"
+      },
+      "kind": "outbound",
+      "label": "at-bad-idle",
+      "scheme": "anytls",
+      "warnings": [
+        {
+          "code": "anytls_min_idle_invalid",
+          "path": "min_idle_session",
+          "value": "abc"
+        }
+      ]
+    }
+  ],
+  "v": 1
+}

@@ -6,7 +6,7 @@
 | Дата старта | 2026-04-20 |
 | Дата завершения | 2026-04-20 |
 | Коммиты | — (только документация) |
-| Связанные spec'ы | [`003 home screen`](../features/003%20home%20screen/spec.md), [005](./005-optimization-pass.md), [007](./007-peer-review-tasks-001-006.md), [009](./009-p0-correctness-fixes.md) |
+| Связанные spec'ы | [`003 home screen`](../tasks/003F-home-screen/spec.md), [005](./005-optimization-pass.md), [007](./007-peer-review-tasks-001-006.md), [009](./009-p0-correctness-fixes.md) |
 | Объём ревью | Пошаговое чтение целых горячих модулей: `home_screen.dart` (drawer/build/list), `home_controller.dart` (init/heartbeat/reload/mass ping), `subscription_controller.dart` (init/rehydrate/fetch/generate/persist), `clash_api_client.dart` (+ `TrafficSnapshot`), `clash_endpoint.dart`, `build_config.dart` (deep copy), `settings_storage.dart` (кэш/save), `app_log.dart`; Kotlin не разбирался |
 
 ## Статус выполнения (2026-04-21)

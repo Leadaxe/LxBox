@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../../services/dns/node_dns_records.dart'
+import '../../../services/dns/tailscale_endpoint_options.dart'
     show TailscaleEndpointOption;
 import '../edit_controller.dart';
 import '../../../services/l10n/locale_controller.dart';

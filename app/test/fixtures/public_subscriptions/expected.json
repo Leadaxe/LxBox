@@ -1,0 +1,916 @@
+{
+  "note": "эталон §525; обновлять только с объявленной причиной, см. docs/testing/PUBLIC_SUBSCRIPTIONS_CORPUS.md",
+  "contract_version": "1.1.102",
+  "subscriptions": {
+    "01-github-vless-universal": {
+      "nodes_total": 95,
+      "dropped": {},
+      "warnings": {
+        "duplicates_collapsed": 2,
+        "field_conflict": 1,
+        "reality_fp_not_chrome": 5
+      }
+    },
+    "02-github-vless-lite": {
+      "nodes_total": 95,
+      "dropped": {
+        "provider_banner_link": 4
+      },
+      "warnings": {
+        "duplicates_collapsed": 2,
+        "field_conflict": 1,
+        "reality_fp_not_chrome": 5
+      }
+    },
+    "03-github-vless": {
+      "nodes_total": 0,
+      "dropped": {
+        "provider_banner_link": 3
+      },
+      "warnings": {}
+    },
+    "04-github-vless-reality-white-lists-rus-mobile": {
+      "nodes_total": 25,
+      "dropped": {},
+      "warnings": {
+        "duplicates_collapsed": 2,
+        "reality_fp_not_chrome": 7,
+        "reality_fp_random_pinned": 1,
+        "tls_not_applicable_quic": 1
+      }
+    },
+    "05-github-white-cidr-ru-checked": {
+      "nodes_total": 5,
+      "dropped": {},
+      "warnings": {}
+    },
+    "06-github-black-vless-rus-mobile": {
+      "nodes_total": 132,
+      "dropped": {},
+      "warnings": {
+        "duplicates_collapsed": 10,
+        "reality_fp_not_chrome": 14,
+        "reality_fp_random_pinned": 4,
+        "tls_insecure": 5,
+        "tls_not_applicable_quic": 5,
+        "unknown_key": 2,
+        "uri_param_unknown": 5
+      }
+    },
+    "07-github-byewhitelists2": {
+      "nodes_total": 485,
+      "dropped": {},
+      "warnings": {
+        "duplicates_collapsed": 134,
+        "reality_fp_not_chrome": 215,
+        "reality_fp_random_pinned": 50
+      }
+    },
+    "08-github-whitelist": {
+      "nodes_total": 24,
+      "dropped": {},
+      "warnings": {
+        "duplicates_collapsed": 13,
+        "reality_fp_random_pinned": 1,
+        "tls_insecure": 1,
+        "uri_param_unknown": 1
+      }
+    },
+    "09-github-26": {
+      "nodes_total": 4669,
+      "dropped": {
+        "field_missing": 95,
+        "provider_banner_link": 5,
+        "ss_method_invalid": 7,
+        "transport_header_unsupported": 1
+      },
+      "warnings": {
+        "field_conflict": 1,
+        "field_missing": 41,
+        "reality_fp_not_chrome": 485,
+        "reality_fp_random_pinned": 586,
+        "ss_method_legacy": 4,
+        "tls_alpn_item_invalid": 14,
+        "unknown_key": 5,
+        "uri_param_unknown": 427,
+        "ws_early_data_converted": 5
+      }
+    },
+    "10-github-whitelist": {
+      "nodes_total": 56,
+      "dropped": {},
+      "warnings": {
+        "duplicates_collapsed": 7,
+        "reality_fp_random_pinned": 26,
+        "tls_insecure": 14,
+        "tls_not_applicable_quic": 2
+      }
+    },
+    "11-github-blacklist": {
+      "nodes_total": 2865,
+      "dropped": {
+        "form_unrecognized": 12
+      },
+      "warnings": {
+        "duplicates_collapsed": 183,
+        "ech_ignored": 3,
+        "reality_fp_random_pinned": 119,
+        "tls_insecure": 27,
+        "tls_not_applicable_quic": 6
+      }
+    },
+    "12-github-kizyakbeta7": {
+      "nodes_total": 73,
+      "dropped": {
+        "service_record_ignored": 1
+      },
+      "warnings": {
+        "duplicates_collapsed": 18,
+        "field_conflict": 1,
+        "reality_fp_not_chrome": 8,
+        "tls_insecure": 5,
+        "utls_fp_unknown": 1
+      }
+    },
+    "13-github-kizyakbeta6": {
+      "nodes_total": 30,
+      "dropped": {},
+      "warnings": {
+        "duplicates_collapsed": 1,
+        "reality_fp_not_chrome": 13,
+        "reality_fp_random_pinned": 3,
+        "tls_not_applicable_quic": 1
+      }
+    },
+    "14-github-kizyakbeta6bl": {
+      "nodes_total": 33,
+      "dropped": {},
+      "warnings": {
+        "duplicates_collapsed": 1,
+        "tls_insecure": 16,
+        "tls_not_applicable_quic": 5,
+        "unknown_key": 2,
+        "uri_param_unknown": 5
+      }
+    },
+    "15-github-rkn-white-list": {
+      "nodes_total": 97,
+      "dropped": {},
+      "warnings": {
+        "duplicates_collapsed": 4,
+        "field_conflict": 1,
+        "reality_fp_not_chrome": 6,
+        "reality_fp_random_pinned": 1
+      }
+    },
+    "16-github-aetrisvpn": {
+      "nodes_total": 114,
+      "dropped": {},
+      "warnings": {
+        "field_conflict": 1,
+        "reality_fp_not_chrome": 3,
+        "reality_fp_random_pinned": 19,
+        "ss_method_legacy": 3,
+        "tls_insecure": 2,
+        "unknown_key": 28,
+        "uri_param_unknown": 32
+      }
+    },
+    "17-github-configs": {
+      "nodes_total": 206,
+      "dropped": {},
+      "warnings": {
+        "duplicates_collapsed": 11,
+        "reality_fp_not_chrome": 6,
+        "reality_fp_random_pinned": 5,
+        "tls_insecure": 3,
+        "unknown_key": 5,
+        "uri_param_unknown": 6,
+        "ws_early_data_converted": 1
+      }
+    },
+    "18-github-whitelist-all": {
+      "nodes_total": 188,
+      "dropped": {
+        "vless_encryption_invalid": 2
+      },
+      "warnings": {
+        "duplicates_collapsed": 47,
+        "reality_fp_not_chrome": 25,
+        "reality_fp_random_pinned": 22,
+        "tls_alpn_item_invalid": 4,
+        "uri_param_unknown": 1
+      }
+    },
+    "19-github-bypass-all": {
+      "nodes_total": 621,
+      "dropped": {},
+      "warnings": {
+        "duplicates_collapsed": 66,
+        "reality_fp_not_chrome": 42,
+        "reality_fp_random_pinned": 17,
+        "tls_insecure": 1,
+        "unknown_key": 75,
+        "uri_param_unknown": 132,
+        "utls_fp_unknown": 71,
+        "ws_early_data_converted": 36
+      }
+    },
+    "20-github-bypass-1": {
+      "nodes_total": 286,
+      "dropped": {},
+      "warnings": {
+        "duplicates_collapsed": 13,
+        "reality_fp_not_chrome": 10,
+        "reality_fp_random_pinned": 6,
+        "unknown_key": 5,
+        "uri_param_unknown": 14,
+        "utls_fp_unknown": 29,
+        "ws_early_data_converted": 20
+      }
+    },
+    "21-github-bypass-2": {
+      "nodes_total": 262,
+      "dropped": {},
+      "warnings": {
+        "duplicates_collapsed": 32,
+        "reality_fp_not_chrome": 28,
+        "reality_fp_random_pinned": 10,
+        "tls_insecure": 1,
+        "unknown_key": 70,
+        "uri_param_unknown": 88,
+        "utls_fp_unknown": 2,
+        "ws_early_data_converted": 10
+      }
+    },
+    "22-github-bypass-3": {
+      "nodes_total": 277,
+      "dropped": {
+        "form_unrecognized": 1
+      },
+      "warnings": {
+        "duplicates_collapsed": 19,
+        "reality_fp_not_chrome": 31,
+        "reality_fp_random_pinned": 6,
+        "unknown_key": 34,
+        "uri_param_unknown": 78,
+        "utls_fp_unknown": 50,
+        "ws_early_data_converted": 29
+      }
+    },
+    "23-github-bypass-4": {
+      "nodes_total": 281,
+      "dropped": {},
+      "warnings": {
+        "duplicates_collapsed": 19,
+        "reality_fp_not_chrome": 14,
+        "reality_fp_random_pinned": 5,
+        "tls_insecure": 1,
+        "unknown_key": 3,
+        "uri_param_unknown": 37,
+        "utls_fp_unknown": 50,
+        "ws_early_data_converted": 30
+      }
+    },
+    "24-github-bypass-5": {
+      "nodes_total": 25,
+      "dropped": {},
+      "warnings": {
+        "duplicates_collapsed": 10,
+        "reality_fp_not_chrome": 6,
+        "uri_param_unknown": 23
+      }
+    },
+    "25-github-bypass-6": {
+      "nodes_total": 279,
+      "dropped": {},
+      "warnings": {
+        "duplicates_collapsed": 13,
+        "reality_fp_not_chrome": 30,
+        "reality_fp_random_pinned": 6,
+        "tls_insecure": 4,
+        "unknown_key": 45,
+        "uri_param_unknown": 60,
+        "utls_fp_unknown": 1
+      }
+    },
+    "26-github-russia-whitelist": {
+      "nodes_total": 2107,
+      "dropped": {
+        "transport_header_unsupported": 79
+      },
+      "warnings": {
+        "ech_ignored": 14,
+        "field_conflict": 1,
+        "field_missing": 10,
+        "reality_fp_not_chrome": 86,
+        "reality_fp_random_pinned": 78,
+        "tls_alpn_item_invalid": 1,
+        "tls_insecure": 40,
+        "uri_param_unknown": 314,
+        "utls_fp_unknown": 2,
+        "ws_early_data_converted": 50
+      }
+    },
+    "27-github-ru-white-all-white": {
+      "nodes_total": 4025,
+      "dropped": {
+        "field_missing": 2,
+        "ss_method_invalid": 1,
+        "transport_header_unsupported": 56,
+        "vless_encryption_invalid": 2
+      },
+      "warnings": {
+        "duplicates_collapsed": 1007,
+        "field_missing": 22,
+        "reality_fp_not_chrome": 399,
+        "reality_fp_random_pinned": 219,
+        "ss_method_legacy": 14,
+        "tls_alpn_item_invalid": 2,
+        "tls_insecure": 118,
+        "uri_param_unknown": 248,
+        "utls_fp_unknown": 1,
+        "ws_early_data_converted": 13,
+        "xhttp_param_reset": 1
+      }
+    },
+    "28-github-whitelist": {
+      "nodes_total": 191,
+      "dropped": {},
+      "warnings": {
+        "duplicates_collapsed": 76,
+        "reality_fp_not_chrome": 18,
+        "reality_fp_random_pinned": 15,
+        "unknown_key": 7,
+        "uri_param_unknown": 9
+      }
+    },
+    "29-github-blacklist": {
+      "nodes_total": 106,
+      "dropped": {},
+      "warnings": {
+        "duplicates_collapsed": 3
+      }
+    },
+    "30-github-non-ru": {
+      "nodes_total": 45,
+      "dropped": {},
+      "warnings": {
+        "reality_fp_random_pinned": 4
+      }
+    },
+    "31-github-ping-tested": {
+      "nodes_total": 117,
+      "dropped": {},
+      "warnings": {
+        "reality_fp_not_chrome": 3,
+        "reality_fp_random_pinned": 10
+      }
+    },
+    "32-github-top-600": {
+      "nodes_total": 49,
+      "dropped": {},
+      "warnings": {
+        "reality_fp_random_pinned": 4
+      }
+    },
+    "33-github-229": {
+      "nodes_total": 70,
+      "dropped": {},
+      "warnings": {
+        "duplicates_collapsed": 42,
+        "reality_fp_not_chrome": 11,
+        "ss_method_legacy": 3,
+        "unknown_key": 28,
+        "uri_param_unknown": 32
+      }
+    },
+    "34-github-antinet": {
+      "nodes_total": 642,
+      "dropped": {
+        "form_unrecognized": 7,
+        "scheme_unsupported": 14,
+        "transport_header_unsupported": 1
+      },
+      "warnings": {
+        "awg_mtu_clamped": 1,
+        "duplicates_collapsed": 225,
+        "reality_fp_not_chrome": 38,
+        "reality_fp_random_pinned": 9,
+        "ss_method_legacy": 2,
+        "tls_insecure": 14,
+        "unknown_key": 78,
+        "uri_param_unknown": 126,
+        "wgconf_dns_ignored": 1,
+        "ws_early_data_converted": 46
+      }
+    },
+    "35-github-premium": {
+      "nodes_total": 153,
+      "dropped": {},
+      "warnings": {
+        "duplicates_collapsed": 28,
+        "reality_fp_not_chrome": 14,
+        "reality_fp_random_pinned": 11,
+        "ss_method_legacy": 3,
+        "tls_alpn_item_invalid": 3,
+        "tls_insecure": 6,
+        "uri_param_unknown": 2
+      }
+    },
+    "36-github-alive-full": {
+      "nodes_total": 595,
+      "dropped": {
+        "transport_header_unsupported": 9
+      },
+      "warnings": {
+        "duplicates_collapsed": 118,
+        "field_missing": 3,
+        "reality_fp_not_chrome": 35,
+        "reality_fp_random_pinned": 53,
+        "reality_short_id_invalid": 2,
+        "tls_insecure": 4,
+        "unknown_key": 69,
+        "uri_param_unknown": 98
+      }
+    },
+    "37-github-sub": {
+      "nodes_total": 2891,
+      "dropped": {
+        "field_missing": 103,
+        "form_unrecognized": 2,
+        "provider_banner_link": 2,
+        "ss_method_invalid": 18,
+        "transport_header_unsupported": 59
+      },
+      "warnings": {
+        "duplicates_collapsed": 575,
+        "ech_ignored": 10,
+        "field_missing": 59,
+        "reality_fp_not_chrome": 144,
+        "reality_fp_random_pinned": 70,
+        "ss_method_legacy": 13,
+        "tls_alpn_item_invalid": 1,
+        "tls_insecure": 59,
+        "unknown_key": 294,
+        "uri_param_unknown": 2140,
+        "utls_fp_unknown": 48,
+        "ws_early_data_converted": 67
+      }
+    },
+    "38-codeberg-vless-universal": {
+      "nodes_total": 95,
+      "dropped": {},
+      "warnings": {
+        "duplicates_collapsed": 2,
+        "field_conflict": 1,
+        "reality_fp_not_chrome": 5
+      }
+    },
+    "39-moshub-list-universal": {
+      "nodes_total": 95,
+      "dropped": {},
+      "warnings": {
+        "duplicates_collapsed": 2,
+        "field_conflict": 1,
+        "reality_fp_not_chrome": 5
+      }
+    },
+    "40-gitverse-list-universal": {
+      "nodes_total": 95,
+      "dropped": {},
+      "warnings": {
+        "duplicates_collapsed": 2,
+        "field_conflict": 1,
+        "reality_fp_not_chrome": 5
+      }
+    },
+    "41-gitlab-vless-reality-white-lists-rus-mobile": {
+      "nodes_total": 25,
+      "dropped": {},
+      "warnings": {
+        "duplicates_collapsed": 2,
+        "reality_fp_not_chrome": 7,
+        "reality_fp_random_pinned": 1,
+        "tls_not_applicable_quic": 1
+      }
+    },
+    "42-bitbucket-vless-reality-white-lists-rus-mobile": {
+      "nodes_total": 25,
+      "dropped": {},
+      "warnings": {
+        "duplicates_collapsed": 2,
+        "reality_fp_not_chrome": 7,
+        "reality_fp_random_pinned": 1,
+        "tls_not_applicable_quic": 1
+      }
+    },
+    "47-domain-whitelist": {
+      "nodes_total": 95,
+      "dropped": {
+        "provider_banner_link": 1
+      },
+      "warnings": {
+        "duplicates_collapsed": 31,
+        "reality_fp_not_chrome": 4,
+        "reality_fp_random_pinned": 1,
+        "tls_insecure": 3
+      }
+    },
+    "48-domain-1": {
+      "nodes_total": 3678,
+      "dropped": {
+        "form_unrecognized": 431,
+        "provider_banner_link": 2,
+        "scheme_unsupported": 1,
+        "transport_header_unsupported": 1
+      },
+      "warnings": {
+        "duplicates_collapsed": 623,
+        "ech_ignored": 5,
+        "reality_fp_not_chrome": 71,
+        "reality_fp_random_pinned": 32,
+        "ss_method_legacy": 91,
+        "tls_insecure": 112,
+        "tls_not_applicable_quic": 7,
+        "tuic_udp_relay_mode_invalid": 2,
+        "uri_param_unknown": 20,
+        "utls_fp_unknown": 13
+      }
+    },
+    "49-domain-2": {
+      "nodes_total": 3678,
+      "dropped": {
+        "form_unrecognized": 431,
+        "provider_banner_link": 2,
+        "scheme_unsupported": 1,
+        "transport_header_unsupported": 1
+      },
+      "warnings": {
+        "duplicates_collapsed": 623,
+        "ech_ignored": 5,
+        "reality_fp_not_chrome": 71,
+        "reality_fp_random_pinned": 32,
+        "ss_method_legacy": 91,
+        "tls_insecure": 112,
+        "tls_not_applicable_quic": 7,
+        "tuic_udp_relay_mode_invalid": 2,
+        "uri_param_unknown": 20,
+        "utls_fp_unknown": 13
+      }
+    },
+    "50-domain-whitelist": {
+      "nodes_total": 95,
+      "dropped": {
+        "provider_banner_link": 1
+      },
+      "warnings": {
+        "duplicates_collapsed": 31,
+        "reality_fp_not_chrome": 4,
+        "reality_fp_random_pinned": 1,
+        "tls_insecure": 3
+      }
+    },
+    "51-domain-other": {
+      "nodes_total": 3583,
+      "dropped": {
+        "form_unrecognized": 431,
+        "provider_banner_link": 2,
+        "scheme_unsupported": 1,
+        "transport_header_unsupported": 1
+      },
+      "warnings": {
+        "duplicates_collapsed": 592,
+        "ech_ignored": 5,
+        "reality_fp_not_chrome": 67,
+        "reality_fp_random_pinned": 31,
+        "ss_method_legacy": 91,
+        "tls_insecure": 109,
+        "tls_not_applicable_quic": 7,
+        "tuic_udp_relay_mode_invalid": 2,
+        "uri_param_unknown": 20,
+        "utls_fp_unknown": 13
+      }
+    },
+    "52-domain-1": {
+      "nodes_total": 3678,
+      "dropped": {
+        "form_unrecognized": 431,
+        "provider_banner_link": 2,
+        "scheme_unsupported": 1,
+        "transport_header_unsupported": 1
+      },
+      "warnings": {
+        "duplicates_collapsed": 623,
+        "ech_ignored": 5,
+        "reality_fp_not_chrome": 71,
+        "reality_fp_random_pinned": 32,
+        "ss_method_legacy": 91,
+        "tls_insecure": 112,
+        "tls_not_applicable_quic": 7,
+        "tuic_udp_relay_mode_invalid": 2,
+        "uri_param_unknown": 20,
+        "utls_fp_unknown": 13
+      }
+    },
+    "53-domain-2": {
+      "nodes_total": 3678,
+      "dropped": {
+        "form_unrecognized": 431,
+        "provider_banner_link": 2,
+        "scheme_unsupported": 1,
+        "transport_header_unsupported": 1
+      },
+      "warnings": {
+        "duplicates_collapsed": 623,
+        "ech_ignored": 5,
+        "reality_fp_not_chrome": 71,
+        "reality_fp_random_pinned": 32,
+        "ss_method_legacy": 91,
+        "tls_insecure": 112,
+        "tls_not_applicable_quic": 7,
+        "tuic_udp_relay_mode_invalid": 2,
+        "uri_param_unknown": 20,
+        "utls_fp_unknown": 13
+      }
+    },
+    "54-gitverse-whitelist": {
+      "nodes_total": 112,
+      "dropped": {
+        "provider_banner_link": 1,
+        "transport_header_unsupported": 7
+      },
+      "warnings": {
+        "duplicates_collapsed": 10,
+        "reality_fp_not_chrome": 15,
+        "reality_fp_random_pinned": 10,
+        "uri_param_unknown": 1
+      }
+    },
+    "55-gitverse-other": {
+      "nodes_total": 818,
+      "dropped": {
+        "provider_banner_link": 1,
+        "transport_header_unsupported": 13
+      },
+      "warnings": {
+        "duplicates_collapsed": 201,
+        "field_missing": 12,
+        "reality_fp_not_chrome": 21,
+        "reality_fp_random_pinned": 58,
+        "ss_method_legacy": 1,
+        "tls_insecure": 16,
+        "uri_param_unknown": 46
+      }
+    },
+    "56-gitverse-1": {
+      "nodes_total": 922,
+      "dropped": {
+        "provider_banner_link": 1,
+        "transport_header_unsupported": 20
+      },
+      "warnings": {
+        "duplicates_collapsed": 208,
+        "field_missing": 12,
+        "reality_fp_not_chrome": 36,
+        "reality_fp_random_pinned": 67,
+        "ss_method_legacy": 1,
+        "tls_insecure": 16,
+        "uri_param_unknown": 47
+      }
+    },
+    "57-gitverse-2": {
+      "nodes_total": 922,
+      "dropped": {
+        "provider_banner_link": 1,
+        "transport_header_unsupported": 20
+      },
+      "warnings": {
+        "duplicates_collapsed": 208,
+        "field_missing": 12,
+        "reality_fp_not_chrome": 36,
+        "reality_fp_random_pinned": 67,
+        "ss_method_legacy": 1,
+        "tls_insecure": 16,
+        "uri_param_unknown": 47
+      }
+    },
+    "58-domain-whitelist": {
+      "nodes_total": 95,
+      "dropped": {
+        "provider_banner_link": 1
+      },
+      "warnings": {
+        "duplicates_collapsed": 31,
+        "reality_fp_not_chrome": 4,
+        "reality_fp_random_pinned": 1,
+        "tls_insecure": 3
+      }
+    },
+    "59-domain-other": {
+      "nodes_total": 3583,
+      "dropped": {
+        "form_unrecognized": 431,
+        "provider_banner_link": 2,
+        "scheme_unsupported": 1,
+        "transport_header_unsupported": 1
+      },
+      "warnings": {
+        "duplicates_collapsed": 592,
+        "ech_ignored": 5,
+        "reality_fp_not_chrome": 67,
+        "reality_fp_random_pinned": 31,
+        "ss_method_legacy": 91,
+        "tls_insecure": 109,
+        "tls_not_applicable_quic": 7,
+        "tuic_udp_relay_mode_invalid": 2,
+        "uri_param_unknown": 20,
+        "utls_fp_unknown": 13
+      }
+    },
+    "60-domain-1": {
+      "nodes_total": 3678,
+      "dropped": {
+        "form_unrecognized": 431,
+        "provider_banner_link": 2,
+        "scheme_unsupported": 1,
+        "transport_header_unsupported": 1
+      },
+      "warnings": {
+        "duplicates_collapsed": 623,
+        "ech_ignored": 5,
+        "reality_fp_not_chrome": 71,
+        "reality_fp_random_pinned": 32,
+        "ss_method_legacy": 91,
+        "tls_insecure": 112,
+        "tls_not_applicable_quic": 7,
+        "tuic_udp_relay_mode_invalid": 2,
+        "uri_param_unknown": 20,
+        "utls_fp_unknown": 13
+      }
+    },
+    "61-domain-2": {
+      "nodes_total": 3678,
+      "dropped": {
+        "form_unrecognized": 431,
+        "provider_banner_link": 2,
+        "scheme_unsupported": 1,
+        "transport_header_unsupported": 1
+      },
+      "warnings": {
+        "duplicates_collapsed": 623,
+        "ech_ignored": 5,
+        "reality_fp_not_chrome": 71,
+        "reality_fp_random_pinned": 32,
+        "ss_method_legacy": 91,
+        "tls_insecure": 112,
+        "tls_not_applicable_quic": 7,
+        "tuic_udp_relay_mode_invalid": 2,
+        "uri_param_unknown": 20,
+        "utls_fp_unknown": 13
+      }
+    },
+    "62-domain-whitelist-etoneya-baby": {
+      "nodes_total": 95,
+      "dropped": {
+        "provider_banner_link": 1
+      },
+      "warnings": {
+        "duplicates_collapsed": 31,
+        "reality_fp_not_chrome": 4,
+        "reality_fp_random_pinned": 1,
+        "tls_insecure": 3
+      }
+    },
+    "63-domain-whitelist": {
+      "nodes_total": 95,
+      "dropped": {
+        "provider_banner_link": 1
+      },
+      "warnings": {
+        "duplicates_collapsed": 31,
+        "reality_fp_not_chrome": 4,
+        "reality_fp_random_pinned": 1,
+        "tls_insecure": 3
+      }
+    },
+    "64-domain-gen": {
+      "nodes_total": 193,
+      "dropped": {
+        "provider_banner_link": 1
+      },
+      "warnings": {
+        "duplicates_collapsed": 46,
+        "reality_fp_not_chrome": 17,
+        "reality_fp_random_pinned": 16,
+        "tls_insecure": 1,
+        "tls_not_applicable_quic": 4
+      }
+    },
+    "65-codeberg-sub": {
+      "nodes_total": 28,
+      "dropped": {},
+      "warnings": {
+        "duplicates_collapsed": 15,
+        "reality_fp_not_chrome": 7
+      }
+    },
+    "66-gitverse-wl": {
+      "nodes_total": 1588,
+      "dropped": {
+        "field_missing": 9,
+        "ss_method_invalid": 2
+      },
+      "warnings": {
+        "duplicates_collapsed": 71,
+        "field_missing": 12,
+        "reality_fp_not_chrome": 274,
+        "reality_fp_random_pinned": 370,
+        "ss_method_legacy": 4,
+        "tls_insecure": 7,
+        "unknown_key": 5,
+        "uri_param_unknown": 14,
+        "ws_early_data_converted": 2
+      }
+    },
+    "67-domain-working-configs": {
+      "nodes_total": 132,
+      "dropped": {
+        "service_record_ignored": 1
+      },
+      "warnings": {
+        "field_missing": 2,
+        "reality_fp_not_chrome": 7,
+        "reality_fp_random_pinned": 3,
+        "tls_insecure": 2,
+        "unknown_key": 7,
+        "uri_param_unknown": 18
+      }
+    },
+    "68-gitverse-outlinevpn-outlinevpn": {
+      "nodes_total": 165,
+      "dropped": {},
+      "warnings": {
+        "duplicates_collapsed": 60,
+        "ech_ignored": 2,
+        "reality_fp_not_chrome": 17,
+        "reality_fp_random_pinned": 2,
+        "tls_alpn_item_invalid": 1,
+        "tls_insecure": 1,
+        "uri_param_unknown": 2,
+        "ws_early_data_converted": 9
+      }
+    },
+    "69-domain-api-php": {
+      "nodes_total": 0,
+      "dropped": {},
+      "warnings": {}
+    },
+    "70-gitverse-flux-bypass-all-782661": {
+      "nodes_total": 1302,
+      "dropped": {
+        "field_missing": 67,
+        "provider_banner_link": 1,
+        "ss_method_invalid": 15
+      },
+      "warnings": {
+        "field_missing": 59,
+        "reality_fp_not_chrome": 72,
+        "reality_fp_random_pinned": 89,
+        "type_invalid": 2,
+        "uri_param_unknown": 746
+      }
+    },
+    "71-domain-bypass-all": {
+      "nodes_total": 1302,
+      "dropped": {
+        "field_missing": 67,
+        "provider_banner_link": 1,
+        "ss_method_invalid": 15
+      },
+      "warnings": {
+        "field_missing": 59,
+        "reality_fp_not_chrome": 72,
+        "reality_fp_random_pinned": 89,
+        "type_invalid": 2,
+        "uri_param_unknown": 746
+      }
+    },
+    "72-gitverse-alive-full": {
+      "nodes_total": 595,
+      "dropped": {
+        "transport_header_unsupported": 9
+      },
+      "warnings": {
+        "duplicates_collapsed": 118,
+        "field_missing": 3,
+        "reality_fp_not_chrome": 35,
+        "reality_fp_random_pinned": 53,
+        "reality_short_id_invalid": 2,
+        "tls_insecure": 4,
+        "unknown_key": 69,
+        "uri_param_unknown": 98
+      }
+    }
+  }
+}

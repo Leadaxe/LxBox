@@ -1,6 +1,6 @@
 # 285 — Миграция на getLocalText (natural keys, снос ARB)
 
-Реализация [ревизии getLocalText](../features/279%20localization/getlocaltext.md)
+Реализация [ревизии getLocalText](../tasks/279F-localization/getlocaltext.md)
 фичи 279. Цель: убрать искусственные ARB-ключи (`commonCancel` и ~1167 других)
 из кода — вместо `context.l.commonCancel` писать `getLocalText.s("Cancel")`.
 

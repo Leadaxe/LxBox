@@ -30,7 +30,7 @@ Map<String, dynamic> _write(AutoSelectSpec g, {bool enabled = true}) =>
             FolderMember.auto(g, enabled: enabled), g, 'f1')))
         as Map<String, dynamic>;
 
-({AutoSelectSpec group, bool enabled, bool fromSelector, List<String> notes,
+({AutoSelectSpec group, bool enabled, List<String> notes,
     List<String> unknown}) _read(Map<String, dynamic> j) {
   final notes = <String>[];
   final unknown = <String>[];
@@ -39,7 +39,6 @@ Map<String, dynamic> _write(AutoSelectSpec g, {bool enabled = true}) =>
   return (
     group: r.member.node! as AutoSelectSpec,
     enabled: r.member.enabled,
-    fromSelector: r.fromSelector,
     notes: notes,
     unknown: unknown,
   );
@@ -139,12 +138,8 @@ void main() {
       expect(back.notes.single, contains('group.members[2] is not a link'));
     });
 
-    test('selector с default строкой — urltest, default СОХРАНЁН сквозным', () {
-      // §514 / контракт 1.1.50 (D133-53), решение владельца 24.09.2026.
-      // Прежде здесь ожидалась нота «default … is not kept»: поле исчезало, и
-      // круг «импорт → бэкап → импорт» у selector'а терял выбор пользователя
-      // МОЛЧА. Приведение РОДА (selector → urltest) остаётся и по-прежнему
-      // названо нотой; ПОЛЕ теперь доживает, не интерпретируясь.
+    test('§565 selector с default строкой — род selector, default — член', () {
+      // Род исполняется: ни ноты о приведении, ни потери поля.
       final back = _read({
         'kind': 'auto',
         'tag': 'Pick',
@@ -157,9 +152,8 @@ void main() {
           ],
         },
       });
-      expect(back.fromSelector, isTrue);
-      expect(back.notes, [contains('selector group is read as urltest')],
-          reason: 'потери больше нет — сообщать о ней нечего');
+      expect(back.group.genus, 'selector');
+      expect(back.notes, isEmpty, reason: 'род прочитан как записан');
       expect(back.group.manualDefault, 'de-2');
       expect((back.group.membership as ExplicitMembers).members, hasLength(2));
     });
@@ -179,12 +173,48 @@ void main() {
           ],
         },
       });
-      final again = _read(autoGroupMemberToRecord(
+      final rec = autoGroupMemberToRecord(
         FolderMember.auto(back.group, enabled: true),
         back.group,
         'f1',
-      ));
+      );
+      final group = rec['group'] as Map<String, dynamic>;
+      // §565 — писатель пишет род как есть и `default` объектом NodeLink,
+      // параметров замера у ручного рода нет.
+      expect(group['group_type'], 'selector');
+      expect(group['default'], {'folder_id': 'f1', 'tag': 'de-2'});
+      expect(group.containsKey('strategy'), isFalse);
+      final again = _read(jsonDecode(jsonEncode(rec)) as Map<String, dynamic>);
       expect(again.group.manualDefault, 'de-2');
+      expect(again.group.genus, 'selector');
+      expect(again.group.sameGroupAs(back.group), isTrue);
+    });
+
+    test('§565 запись без рода и urltest с default — автовыбор, поле сквозное',
+        () {
+      final old = _read({
+        'kind': 'auto',
+        'tag': 'Old',
+        'group': {
+          'group_type': 'urltest',
+          'default': 'de-1',
+          'members': [
+            {'folder_id': 'f1', 'tag': 'de-1'},
+          ],
+        },
+      });
+      expect(old.group.genus, 'urltest');
+      expect(old.group.manualDefault, 'de-1');
+      final rec = _write(old.group);
+      expect((rec['group'] as Map)['default'], 'de-1',
+          reason: 'preserve_unexecuted: строкой как пришло');
+      final noGenus = _read({
+        'kind': 'auto',
+        'tag': 'NoGenus',
+        'group': <String, dynamic>{},
+      });
+      expect(noGenus.group.genus, 'urltest');
+      expect(noGenus.notes, isEmpty);
     });
 
     test('поля стороны LxBox на уровне узла (dev-форма до 1.0.1) читаются '

@@ -6,7 +6,7 @@ here and bring the rest into line.
 
 Related documents:
 - **`.github/workflows/ci.yml`** — the CI mechanics: triggers, jobs, versioning, publishing the release and `docs/latest.json`.
-- **`AGENTS.md`** — the agent's general scope and the rules for working with git and branches.
+- **`DEVELOPMENT_GUIDE.md`** — the rules for working with git and branches (“Commits and push”, “Branches”); `AGENTS.md` is the agent's router and lists what needs the operator's explicit command.
 - **`RELEASE_NOTES.md`** — the release body (in the repo root) that CI uploads as `body_path` for the GitHub Release.
 - **`docs/releases/vX.Y.Z.md`** — the archive of per-version release notes.
 - **[`FDROID.md`](FDROID.md)** — publishing on F-Droid: the catalogue picks up new tags on its own; fastlane (changelogs, screenshots, descriptions) is read from the tag's commit, not from the branch, so it must be in place **before** the tag.
@@ -119,7 +119,7 @@ After every release, `main` is merged back into `develop` (§2.6); otherwise the
    - `CHANGELOG.md` — a `## vX.Y.Z` entry has been added.
    - `docs/ARCHITECTURE.md`, `docs/DEVELOPMENT_REPORT.md` — if affected.
    - `README.md`, `README.ru.md` — if user-visible features changed.
-   - Task specs (`docs/spec/features/NNN*/spec.md`) — `status: released`.
+   - Task specs (`docs/spec/tasks/NNN*`) — `status: released`.
    - `docs/releases/vX.Y.Z.md` — a draft of the per-version archive (it can be prepared as development goes).
    - `fastlane/metadata/android/{en-US,ru}/changelogs/<versionCode>.txt` — see §2.3 step 4.
 4. **A local smoke test of the release APK** (recommended before tagging):

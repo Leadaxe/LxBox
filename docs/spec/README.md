@@ -1,45 +1,55 @@
-# Спецификации (L×Box)
+[English](README.md) · [Русский](README.ru.md)
 
-Каталог для требований, архитектурных заметок, планов и журнала рабочих циклов.
+# Specifications (L×Box)
 
-## Структура
+The requirements catalog: features (the contract with the user) and tasks (a log of work cycles).
 
-| Папка | Что внутри |
+## Structure
+
+Two levels, modeled on the core's Spec Kit
+([sing-box-lx/SPECS](https://github.com/Leadaxe/sing-box-lx/tree/lx/SPECS)):
+
+| Folder | Level | What is inside |
+|---|---|---|
+| [`features/`](features/) | **Features** | A black box: why the feature exists, what it promises the user, which principles it protects, boundaries. **No code and no platform** — the folder moves to another platform whole. `NNN-NAME/FEATURE.md` + `FUNCTIONS/<function>.md`. Being written anew, see [`features/README.md`](features/README.md). |
+| [`tasks/`](tasks/) | **Tasks (revisions)** | A unit of work: problem → diagnosis → solution → verification. This is where the **implementation** lives: files, control flow, platform. `NNN-title.md` or a folder `NNN-title/`. More — [`tasks/README.md`](tasks/README.md). |
+| [`processes/`](processes/) | **Processes** | Recurring procedures (for example, night work). Each folder has a README + templates. |
+
+Feature → functions → revisions. A function (a file in `FUNCTIONS/`) holds a revision table —
+links to the tasks that changed it. A task carries a back link to the feature/function.
+
+## Conventions
+
+- **Features** — `NNN-NAME` (UPPER_SNAKE), running numbering from `001`, the number is a stable
+  anchor. One `FEATURE.md` per feature, the current state on top, no chronology.
+  The "what, not how" rule: there are no names of files, classes, code functions or platform
+  mechanisms in `features/`. Template and index — [`features/README.md`](features/README.md).
+- **Tasks** — `NNN-short-kebab-title.md` (or a folder `NNN-name/spec.md` for
+  multi-file tasks). Numbers are monotonic and not reused. Historical/superseded specs are
+  demoted here as well.
+- **The `F` index** — old feature specs (from before the move to Spec Kit) were moved to `tasks/`
+  as `NNNF-name/` keeping their number: `003F-home-screen/spec.md`. `F` resolves
+  collisions with tasks of the same number (`003-revoke-ux.md`); the reference `§003F` means
+  the old feature, `§003` — the task. New tasks **do not get** the `F` index. The index of
+  old features — [`tasks/F-INDEX.md`](tasks/F-INDEX.md).
+- Free numbers (for example 001, 002, 004, 005, 013, 039, 041 after the §054 spec reorg) **are not reused** — this is normal, archive links are preserved. See [`tasks/054-spec-reorg-features-vs-tasks.md`](tasks/054-spec-reorg-features-vs-tasks.md).
+- A task starts with a header: context, goals and non-goals, related features/functions.
+
+## Documentation update map
+
+Every spec (feature or task) **must explicitly list** which of these files
+are updated together with the code. The spec section is `## Docs to update` or equivalent,
+with a list of specific entries of what goes where.
+
+| File | When it is updated |
 |---|---|
-| [`features/`](features/) | **Фичи** — большие концепты, разделы приложения. Каждая фича — отдельная папка `NNN name/spec.md`. Полный список с описаниями — в [`docs/ARCHITECTURE.md → Feature Specs`](../ARCHITECTURE.md#feature-specs). |
-| [`tasks/`](tasks/) | **Задачи** — журнал рабочих циклов: баг с нетривиальным root cause, refactoring-pass, schema cleanup. Один markdown-файл на задачу: `NNN-short-kebab-title.md`. Подробнее — [`tasks/README.md`](tasks/README.md). |
-| [`processes/`](processes/) | **Процессы** — повторяющиеся регламенты (например, ночная работа). Каждая папка с README + шаблонами. |
+| [`docs/api/debug-api-reference.md`](../api/debug-api-reference.md) | Any change to Debug API endpoints (new routes, changed query params, semantic shift). Required — bash examples of use cases. |
+| [`CHANGELOG.md`](../../CHANGELOG.md) | Any user-visible or public-API change. An entry in the `Unreleased` section (moved later on the version bump). |
+| [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) | Structural changes: new data flows, contracts between modules, new subsystems / directories. Optional for a cosmetic refactor. |
+| [`RELEASE_NOTES.md`](../../RELEASE_NOTES.md) + [`docs/releases/vX.Y.Z.md`](../releases/) | On a version bump. The entry — what the user will see in the new release. |
+| [`pubspec.yaml`](../../app/pubspec.yaml) `version:` | On a version bump. Patch (1.6.0 → 1.6.1) for a fix/small feature, minor (1.6.0 → 1.7.0) for a large one. |
+| [`docs/DEVELOPMENT_REPORT.md`](../DEVELOPMENT_REPORT.md) | As significant changes accumulate (optional, for a long narrative across development cycles). |
 
-## Внутри папки фичи
+**Rule:** the implementation phase of a spec **is not considered complete** until the corresponding docs updates are done. If a spec is only planned and is not in the release scope — `## Docs to update` is marked `[deferred till release]`.
 
-| Файл | Назначение |
-|------|------------|
-| `spec.md` | Спецификация: что строим, поведение, критерии приёмки |
-| `plan.md` | План реализации (при необходимости) |
-| `tasks.md` | Задачи: декомпозиция, чеклисты, статус |
-
-## Соглашения
-
-- **Фичи** — имя папки: префикс номера (`001`, `002`, …), пробел, короткое название (несколько слов через пробел или через дефис, напр. `097 awg2-amneziawg2`). Основной файл — `spec.md`. В `features/` лежат **только живые** продуктовые / архитектурные концепции (см. [`features/README.md`](features/README.md)).
-- **Задачи** — имя файла: `NNN-short-kebab-title.md` (либо папка `NNN-name/spec.md` для multi-file задач). Номера монотонные, не переиспользуются. Сюда же демотируются исторические/superseded спеки.
-- Свободные номера (например 001, 002, 004, 005, 013, 039, 041 после §054 spec reorg) **не переиспользуются** — это нормально, archive-ссылки сохраняются. См. [`tasks/054-spec-reorg-features-vs-tasks.md`](tasks/054-spec-reorg-features-vs-tasks.md).
-- В начале `spec.md` — краткий контекст, цели и нецели.
-
-## Карта обновления документации
-
-Каждая спека (фича или задача) **должна явно перечислять** какие из этих файлов
-обновляются вместе с кодом. Раздел спеки — `## Docs to update` или эквивалент,
-со списком конкретных entries что куда.
-
-| Файл | Когда обновляется |
-|---|---|
-| [`docs/api/debug-api-reference.md`](../api/debug-api-reference.md) | Любое изменение Debug API endpoints (новые routes, изменение query params, semantic shift). Обязательно — bash-примеры use-case'ов. |
-| [`CHANGELOG.md`](../../CHANGELOG.md) | Любое user-visible или public-API изменение. Entry в секцию `Unreleased` (потом перенесётся при bump'е версии). |
-| [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) | Структурные изменения: новые data flows, контракты между модулями, новые подсистемы / каталоги. Опционально для cosmetic refactor. |
-| [`RELEASE_NOTES.md`](../../RELEASE_NOTES.md) + [`docs/releases/vX.Y.Z.md`](../releases/) | На bump версии. Entry — что юзер увидит в новом релизе. |
-| [`pubspec.yaml`](../../app/pubspec.yaml) `version:` | На bump версии. Patch (1.6.0 → 1.6.1) для фикса/мелкой фичи, minor (1.6.0 → 1.7.0) для крупной. |
-| [`docs/DEVELOPMENT_REPORT.md`](../DEVELOPMENT_REPORT.md) | По мере накопления значимых изменений (опционально, для длинного нарратива по циклам разработки). |
-
-**Правило:** имплементационная фаза спеки **не считается завершённой** пока соответствующие docs-обновления не сделаны. Если спека только задумана и не в скопе релиза — `## Docs to update` помечается как `[deferred till release]`.
-
-Для маленьких задач (typo-fix, тривиальный refactor) docs-update может быть `none` — но это **указывается явно**, не молча.
+For small tasks (typo fix, trivial refactor) the docs update may be `none` — but this **is stated explicitly**, not silently.

@@ -10,6 +10,7 @@ import 'package:lxbox/services/builder/server_list_build.dart';
 import 'package:lxbox/services/node_hash.dart';
 import 'package:lxbox/services/parser/body_decoder.dart';
 import 'package:lxbox/services/parser/parse_all.dart';
+import 'package:lxbox/services/parser/json_parsers.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
 import 'engine_test_setup.dart';
@@ -139,7 +140,9 @@ void main() {
       ]).whereType<AutoSelectSpec>().single;
       final m = a.emitRaw(const TemplateVars()).map;
       expect(m['type'], 'urltest');
-      expect(m['outbounds'], isEmpty); // состав дописывает билдер
+      // §565 — состав, названный `selector`, тело разбора несёт сразу;
+      // итоговые теги дописывает билдер.
+      expect(m['outbounds'], ['Авто proxy-1']);
     });
   });
 
@@ -287,10 +290,10 @@ void main() {
       expect(build(settings: {'expected': 7}).params.pool, 7);
     });
 
-    test('leastLoad без expected → round_robin (пул по умолчанию)', () {
-      final p = build(type: 'leastLoad').params;
-      expect(p.mode, UrltestMode.roundRobin);
-      expect(p.pool, const AutoSelectParams().pool);
+    test('leastLoad без expected → least_test (спека 322 §4, как лаунчер)',
+        () {
+      // Xray без expected выбирает один лучший узел — пула нет.
+      expect(build(type: 'leastLoad').params.mode, UrltestMode.leastTest);
     });
 
     test('maxRTT → pool_tolerance (1:1, семантика расходится)', () {
@@ -375,15 +378,15 @@ void main() {
       expect(a.params.pool, 7);
     });
 
-    test('burstObservatory не объект → дефолтные url/interval', () {
+    test('burstObservatory не объект → умолчания Xray url/interval', () {
       final a = parse([
         {
           ...withBalancer('A', [vless('1.1.1.1', tag: 'proxy-1')]),
           'burstObservatory': 7,
         }
       ]).whereType<AutoSelectSpec>().single;
-      expect(a.params.url, const AutoSelectParams().url);
-      expect(a.params.interval, const AutoSelectParams().interval);
+      expect(a.params.url, kXrayBalancerDefaultUrl);
+      expect(a.params.interval, kXrayBalancerDefaultInterval);
     });
   });
 
@@ -518,7 +521,7 @@ void main() {
               rawTags: sourceNodeRawTags(nodes),
               warn: warnings.add),
           ['L: A']);
-      expect(warnings, [contains('member "gone" was dropped')]);
+      expect(warnings, ['Group auto: gone left the group [group_member_dropped]']);
     });
 
     test('член чужого контейнера в группу не входит (§322 §2)', () {
@@ -540,7 +543,7 @@ void main() {
               rawTags: sourceNodeRawTags(nodes),
               warn: warnings.add),
           isEmpty);
-      expect(warnings, [contains('not a node of this container')]);
+      expect(warnings, [contains('[group_member_dropped]')]);
     });
   });
 

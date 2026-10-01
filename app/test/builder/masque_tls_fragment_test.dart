@@ -2,6 +2,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:lxbox/services/builder/post_steps.dart';
 
+import '../contract_paths.dart';
+
 /// §393 — глобальный `tls_fragment` и masque-outbound'ы.
 ///
 /// До миграции схемы у masque не было блока `tls{}`, и post-step проходил мимо.
@@ -25,6 +27,9 @@ const _on = {
 };
 
 void main() {
+  // Контракт 1.1.64 — годность поля судит реестр по телу (fieldAllowedOn).
+  setUpAll(loadTestRegistry);
+
   test('h2 получает fragment во вложенном tls{}', () {
     final ob = _masque(vhttp: 'h2');
     applyTlsFragment(_config([ob]), _on);
@@ -62,10 +67,22 @@ void main() {
     expect((ob['tls'] as Map)['fragment'], isTrue);
   });
 
-  test('vhttp не задан → дефолт ядра h3 → пропуск', () {
+  test('vhttp не задан → у ядра auto (есть h2-плечо) → фрагментируется', () {
+    // Контракт 1.1.64: связь masque_tls_fragment_h3 действует только при
+    // vhttp = h3; пустой vhttp у ядра — auto.
     final ob = _masque();
     applyTlsFragment(_config([ob]), _on);
-    expect(ob.containsKey('tls'), isFalse);
+    expect((ob['tls'] as Map)['fragment'], isTrue);
+  });
+
+  test('naive — поле запрещено схемой (forbidden_for) → пропуск', () {
+    final ob = <String, dynamic>{
+      'tag': 'n',
+      'type': 'naive',
+      'tls': <String, dynamic>{'enabled': true},
+    };
+    applyTlsFragment(_config([ob]), _on);
+    expect((ob['tls'] as Map).containsKey('fragment'), isFalse);
   });
 
   test('masque под detour не трогаем (inner hop уже в туннеле)', () {

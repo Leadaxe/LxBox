@@ -4,10 +4,62 @@ import '../../../models/codec/source_record.dart';
 import '../../../models/import_rule.dart';
 import '../../../models/node_warning.dart';
 import '../../../models/server_list.dart';
+import '../../../models/source_chain.dart';
+import '../../../models/source_entry.dart';
 import '../../contract/registry_warning.dart';
+import '../../node_link_address.dart';
 import '../../url_mask.dart';
 
 export '../../url_mask.dart' show maskSubscriptionUrl;
+
+/// §524 — ЗАПИСЬ ОБЩЕГО СПИСКА для `GET /subs`: контейнер, цепочка или
+/// нечитаемая запись — в порядке `sources[]`, том же, что видит пользователь.
+///
+/// До §524 `/subs` отдавал только контейнеры, и смешанный порядок диска этим
+/// API нельзя было ни прочитать, ни выразить: цепочки жили в отдельном
+/// `/chains`. Теперь список один — `/chains` остался для ПРАВКИ маршрута
+/// (позиции, strip, rewrite), а состав и порядок видны здесь.
+///
+/// Ключ порядка — `source_key` (`id:<uuid>` / `chain:<tag>`): его принимает
+/// `POST /subs/reorder`. Цепочка несёт `kind: "SourceChain"` — рядом с
+/// `SubscriptionServers`/`UserServer`/`FolderServers`, потому что род записи
+/// читается одним полем.
+Map<String, Object?> serializeSourceEntry(
+  SourceEntry entry, {
+  required bool reveal,
+  SubscriptionEntry? liveEntry,
+}) =>
+    switch (entry) {
+      ContainerEntry() => {
+          'source_key': entry.sourceKey,
+          ...serializeSubEntry(liveEntry!, reveal: reveal),
+        },
+      ChainEntry(:final chain) => _serializeChainAsSource(entry, chain),
+      OpaqueEntry() => {
+          'source_key': entry.sourceKey,
+          'kind': 'Unreadable',
+          // §141 P1.8c — запись, которую кодек не читает: показываем только
+          // то, что есть. Её `kind` с диска — единственная зацепка.
+          'record_kind': entry.kind,
+          'enabled': false,
+        },
+    };
+
+/// Цепочка как запись общего списка. Маршрут (позиции, strip, rewrite) здесь
+/// НЕ разворачивается — это `/chains/{tag}`; `/subs` отвечает за состав и
+/// порядок списка.
+Map<String, Object?> _serializeChainAsSource(
+        ChainEntry entry, SourceChain chain) =>
+    {
+      'source_key': entry.sourceKey,
+      'id': chain.tag, // у цепочки идентичность — тег (§509)
+      'kind': 'SourceChain',
+      'title': chain.displayLabel,
+      'enabled': chain.enabled,
+      // §520 — счётчик узлов записи: у цепочки это её позиции.
+      'nodes_count': chain.hops.length,
+      'hops_count': chain.hops.length,
+    };
 
 /// Одна запись подписки / пользовательского сервера для `/state/subs`.
 Map<String, Object?> serializeSubEntry(
@@ -46,9 +98,8 @@ Map<String, Object?> serializeSubEntry(
     // §346 — настройки, живущие только у SubscriptionServers. У UserServer /
     // FolderServers полей нет (их никто не фетчит) — ключи не кладём вовсе,
     // чтобы `null` не читался как «Default identity» у записи, где режима нет.
-    // §435 — секции одиночного узла (контракт ## 13), read-only, как
-    // хранятся (с плейсхолдерами `@self`). У подписки/папки ключа нет.
-    if (list is UserServer) 'sections': list.sections?.toJson(),
+    // §578 — поле записи «пропустить пресеты», read-only.
+    if (list is UserServer) 'skip_presets': list.skipPresets,
     // Фича 478 — `raw` одиночного узла под `reveal=true`. Раньше сырое тело
     // отдавал только член папки (`serializeFolderMember`), и проверить, что
     // именно лежит у одиночной записи, снаружи было нечем — при разборе
@@ -104,6 +155,9 @@ Map<String, Object?> serializeNodeWarning(NodeWarning w) {
     'path': reg?.path,
     'value': reg?.value,
     if (reg != null && reg.params.isNotEmpty) 'params': {...reg.params},
+    // §577 — правка по правилу реестра применена к телу; `false` — тело
+    // авторское, правило мягкое, тело не изменено.
+    'applied': w.applied,
     // Заголовок есть только у кодов реестра — у классов приложения его нет,
     // и выдумывать его из текста нельзя.
     //
@@ -148,10 +202,59 @@ String entryRawText(SubscriptionEntry e) {
 
 /// Фича 478 / §494 — предупреждения по узлам записи: `tag` → список.
 /// Все узлы присутствуют; у узла без предупреждений — пустой список.
+///
+/// §520 — ключ это СЫРОЙ ТЕГ УЗЛА В КОНТЕЙНЕРЕ ([containerRawTags],
+/// NODE_LINK §2.2), а не `NodeSpec.tag`. Провайдер вправе звать узлы
+/// одинаково (§310 — все `proxy`; дубль `vpn://`↔`amneziawg://` под одним
+/// именем), и на сыром `n.tag` карта схлопывалась last-write-wins: у 12
+/// узлов-тёзок ответ отдавал 8 записей, предупреждения ранних дублей молча
+/// пропадали, а `nodes_count` при этом оставался верен — счётчик расходился
+/// со списком, хотя комментарий обещал «все узлы присутствуют».
+///
+/// Источник истины выбран [containerRawTags], а не уникализатор сборки
+/// (`build_config.dart` `allocateTag`, суффиксы `-1`/`-2`): адрес сборки
+/// живёт только внутри конфига, знает про `tag_prefix` и меняется от состава
+/// остальных источников, тогда как `containerRawTags` — тот же модуль
+/// адресов, которым уже ключуются `nodeWarnings` в хранении
+/// (`sourceNodeIdentities`), экран деталей записи, probe и ссылки
+/// `{folder_id?, tag}`. Значит ключ этого ответа совпадает с тем, чем узел
+/// адресуют `nodes[]`, `/nodes/link?tag=` и `switch-node`, а не расходится
+/// с ними на суффиксе.
+///
+/// Форма ответа не двигается: тот же JSON-объект «тег → список». У записи
+/// без тёзок каждый ключ дословно равен прежнему `n.tag`; различаются только
+/// тёзки — ровно как в списке узлов (`X`, `X-2`, `X-3`).
+///
+/// Безымянный узел адреса не имеет ([containerRawTags] его не отдаёт) — под
+/// пустой ключ такие узлы схлопнулись бы обратно, поэтому им выдаётся
+/// позиционный ключ `#<index>`: узел в ответе присутствует, но ключ не
+/// притворяется адресом, по которому его можно позвать.
+///
+/// Состав узлов оставлен прежним — `e.list.nodes`, тот же список, что считает
+/// `nodes_count`. Брать здесь [containerNodes] нельзя: у папки он включает
+/// выключенных членов, которых `nodes` (фильтр `enabled && parsed`) не видит,
+/// и ответ стал бы шире счётчика — ровно та расходимость, которую §520
+/// закрывает. Карта адресов ключуется по ссылке узла, поэтому шире своего
+/// входа она безвредна.
 Map<String, Object?> serializeEntryWarnings(SubscriptionEntry e) {
+  final rawTags = containerRawTags(e.list);
   final byTag = <String, Object?>{};
-  for (final n in e.list.nodes) {
-    byTag[n.tag] = [for (final w in n.warnings) serializeNodeWarning(w)];
+  final nodes = e.list.nodes;
+  for (var i = 0; i < nodes.length; i++) {
+    final n = nodes[i];
+    // У подписки [containerRawTags] уникализирует сам, и этот виток не
+    // срабатывает. У ПАПКИ адрес члена — тег как есть, и тёзкам его делить
+    // норма (NODE_LINK §2.2, у ссылки побеждает первый), так что ключ пришлось
+    // бы схлопнуть — а это та же потеря. Суффикс ставим ТОЛЬКО на фактической
+    // коллизии, и это ИНДЕКС УЗЛА в списке (`X#3`), а не порядковый номер
+    // тёзки: индекс адресует член папки в `/folders/*` (`serializeFolderMember`
+    // отдаёт его полем `index`), поэтому по такому ключу узел ещё и находится.
+    // Разделитель `#` тот же, что у безымянного, и в уникализации источника
+    // (`-2`/`-3`) не встречается — ключ-адрес от ключа-заплатки отличим.
+    final key = rawTags[n] ?? '#$i';
+    byTag[byTag.containsKey(key) ? '$key#$i' : key] = [
+      for (final w in n.warnings) serializeNodeWarning(w),
+    ];
   }
   return byTag;
 }
@@ -206,5 +309,5 @@ Map<String, Object?> serializeFolderMember(
       'protocol': m.node?.protocol,
       'broken': m.node == null,
       if (reveal) 'raw': m.raw,
-      'sections': m.sections?.toJson(), // §435 — read-only
+      'skip_presets': m.skipPresets, // §578 — read-only
     };

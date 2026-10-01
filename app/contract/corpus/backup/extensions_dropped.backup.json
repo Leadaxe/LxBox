@@ -1,0 +1,31 @@
+{
+  "lx_backup": 1,
+  "exported_by": {
+    "app": "lxbox",
+    "version": "2.0.0"
+  },
+  "exported_at": "2026-08-22T00:00:00Z",
+  "extensions": {
+    "lxbox": {
+      "folders": [
+        "work",
+        "home"
+      ],
+      "channels": [
+        {
+          "id": 3,
+          "name": "vpn-3"
+        }
+      ]
+    },
+    "launcher": {
+      "state_version": 6,
+      "skip": [
+        {
+          "field": "tag",
+          "contains": "trial"
+        }
+      ]
+    }
+  }
+}

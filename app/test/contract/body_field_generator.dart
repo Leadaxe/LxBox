@@ -131,20 +131,15 @@ void _collectPaths(
     if (f.raw['skip'] != null) continue;
     final path = prefix.isEmpty ? key : '$prefix.$key';
     out.add(path);
-    final ref = f.ref;
-    if (f.type == 'ref' && ref != null) {
-      if (ref == 'transports') {
-        for (final t in _kTransportTypes) {
-          final v = ContractRegistry.I.transportVariant(t);
-          if (v == null) continue;
-          _collectPaths(v.order, v.fields, '$path.$t', out);
-        }
-        continue;
+    // Объект с вариантами (`transport`): поля варианта лежат под его именем.
+    final variants = f.variants;
+    if (variants != null) {
+      for (final t in _kTransportTypes) {
+        final v = variants[t];
+        final vf = v?.fields;
+        if (vf == null) continue;
+        _collectPaths(v!.order ?? vf.keys.toList(), vf, '$path.$t', out);
       }
-      if (ref == 'dialer.common' || ref.startsWith('dialer.common.')) continue;
-      final shared = ContractRegistry.I.sharedSchema(ref);
-      if (shared == null) continue;
-      _collectPaths(shared.order, shared.fields, path, out);
       continue;
     }
     final sub = f.fields;
@@ -164,19 +159,22 @@ bool forbiddenByRegistry(String scheme, String path) {
   final schema = ContractRegistry.I.schemaFor(scheme);
   if (schema == null) return false;
   Map<String, FieldSchema>? fields = schema.fields;
+  Map<String, FieldSchema>? variants;
   for (final seg in path.split('.')) {
+    // Звено после объекта с вариантами — имя варианта (`transport.ws`).
+    if (variants != null) {
+      fields = variants[seg]?.fields;
+      variants = null;
+      continue;
+    }
     final f = fields?[seg];
     if (f == null) return false;
     final forbidden = f.forbiddenFor;
     if (forbidden != null && forbidden.contains(scheme)) return true;
     final allowed = f.allowedFor;
     if (allowed != null && !allowed.contains(scheme)) return true;
-    final ref = f.ref;
-    if (f.type == 'ref' && ref != null && ref != 'transports') {
-      fields = ContractRegistry.I.sharedSchema(ref)?.fields;
-    } else {
-      fields = f.fields;
-    }
+    variants = f.variants;
+    fields = f.fields;
   }
   return false;
 }
@@ -290,7 +288,8 @@ final class _Generator {
         if (prefix.isNotEmpty && f.conflicts.isNotEmpty) {
           final rivals = [
             for (final r in f.conflicts)
-              if (r['with'] is String) r['with'] as String,
+              if (r['with'] is String && _rivalExists(r['with'] as String, prefix))
+                r['with'] as String,
           ];
           // Соперник-сосед по тому же объекту: его снимет ось.
           if (rivals.any((r) => r.split('.').last != key)) out.add(path);
@@ -473,6 +472,9 @@ final class _Generator {
       for (final rel in f.conflicts) {
         final with0 = rel['with'] as String?;
         if (with0 == null) continue;
+        // Контракт 1.1.84 — связь с `when` (`tls.fragment` ↔ `tls.engine`
+        // только при apple/windows) судится на значениях этого тела.
+        if (!_relationWhenHolds(rel['when'], f, path, ctx)) continue;
         if (_willBePresent(with0, ctx)) return true;
       }
     }
@@ -482,9 +484,46 @@ final class _Generator {
       if (!rel.containsKey('equals')) continue;
       final target = rel['path'] as String?;
       if (target == null) continue;
+      // §552 — контракт 1.1.56: `relation.when` включает связь по условию
+      // (`transport.uplink_data_placement` требует `mode: packet-up` только
+      // при header/cookie). Условие не выполнено на значениях этого тела —
+      // связи нет, поле остаётся.
+      if (!_relationWhenHolds(rel['when'], f, path, ctx)) continue;
       if (ctx.equalsValueFor(target) != rel['equals']) return true;
     }
     return false;
+  }
+
+  /// §552 — условие `relation.when` на значениях, которые генератор кладёт в
+  /// это тело. Грамматика — как у санитайзера (контракт 1.1.56): скаляр —
+  /// равенство, `{in: […]}` / `{not_in: […]}`; пустая строка — «не задано».
+  /// Путь, чьё последнее звено — само поле, берёт его значение в этом теле;
+  /// прочие — значение дискриминатора ([_BuildCtx.equalsValueFor]).
+  bool _relationWhenHolds(
+      Object? when, FieldSchema f, String path, _BuildCtx ctx) {
+    if (when is! Map) return true;
+    final own = path.split('.').last;
+    for (final e in when.entries) {
+      final key = '${e.key}';
+      if (key == 'any_set' || key == 'source_kind') continue;
+      final Object? got = key.split('.').last == own
+          ? (ctx.equalsForcedValue(path) ??
+              (f.values == null ? null : _firstUsable(f.values!)))
+          : ctx.equalsValueFor(key);
+      final present = got != null && !(got is String && got.isEmpty);
+      final want = e.value;
+      bool holds;
+      if (want is Map && want['in'] is List) {
+        holds = present && (want['in'] as List).any((v) => '$v' == '$got');
+      } else if (want is Map && want['not_in'] is List) {
+        holds =
+            !present || !(want['not_in'] as List).any((v) => '$v' == '$got');
+      } else {
+        holds = present && '$want' == '$got';
+      }
+      if (!holds) return false;
+    }
+    return true;
   }
 
   /// Будет ли сосед в этом теле — по осям совместимости. Точности хватает
@@ -495,7 +534,28 @@ final class _Generator {
   /// (`tls.ech.enabled` ↔ `tls.reality.enabled`), и без этого обе стороны
   /// считались бы присутствующими всегда — оба флага уступали бы друг другу и
   /// не попадали ни в одно тело.
+  /// Контракт 1.1.64 — сосед связи без точки ищется в своём объекте, иначе
+  /// в корне (`tls.fragment` ↔ `vhttp`); у схемы без такого поля связь не
+  /// срабатывает никогда.
+  bool _rivalExists(String with0, String prefix) {
+    if (with0.contains('.') || prefix.isEmpty) return true;
+    final root = ContractRegistry.I.schemaFor(scheme)?.fields;
+    Map<String, FieldSchema>? cur = root;
+    for (final seg in prefix.split('.')) {
+      cur = cur?[seg]?.fields;
+    }
+    if (cur != null && cur.containsKey(with0)) return true;
+    return root?.containsKey(with0) ?? false;
+  }
+
   bool _willBePresent(String path, _BuildCtx ctx) {
+    if (!path.contains('.') &&
+        !_kBuildManaged.contains(path) &&
+        path != 'transport' &&
+        !(ContractRegistry.I.schemaFor(scheme)?.fields.containsKey(path) ??
+            true)) {
+      return false;
+    }
     // Ключи, которые тело автора не несёт вовсе (`detour` ставит сборка):
     // конфликт с ними не срабатывает никогда, и поле остаётся.
     if (_kBuildManaged.contains(path)) return false;
@@ -519,36 +579,19 @@ final class _Generator {
   }
 
   Object? _value(FieldSchema f, String path, _BuildCtx ctx) {
-    final ref = f.ref;
-    if (f.type == 'ref' && ref != null) {
-      if (ref == 'transports') {
-        final t = ctx.transport;
-        if (t == null) return _kOmit;
-        final variant = ContractRegistry.I.transportVariant(t);
-        if (variant == null) return _kOmit;
-        final inner = _object(variant.order, variant.fields, '$path.$t', ctx);
-        return <String, dynamic>{'type': t, ...inner};
-      }
-      // `dialer.common` — правило значения ОДНОГО скаляра, лежащего плоско.
-      // Имя поля берётся из самого `ref`, когда он его называет
-      // (`dialer.common.network` у masque: поле зовётся `network_list`, а
-      // правило у него сетевое), иначе — по последнему сегменту пути.
-      if (ref == 'dialer.common' || ref.startsWith('dialer.common.')) {
-        final shared = ContractRegistry.I.sharedSchema('dialer.common');
-        final named = ref.startsWith('dialer.common.')
-            ? ref.substring('dialer.common.'.length)
-            : path.split('.').last;
-        final sub = shared?.fields[named];
-        if (sub == null) return _kOmit;
-        return _value(sub, path, ctx);
-      }
-      final shared = ContractRegistry.I.sharedSchema(ref);
-      if (shared == null) return _kOmit;
-      return _object(shared.order, shared.fields, path, ctx);
-    }
-
     switch (f.type) {
       case 'object':
+        // Объект с вариантами (`transport`): вариант — по оси тела.
+        final variants = f.variants;
+        if (variants != null) {
+          final t = ctx.transport;
+          if (t == null) return _kOmit;
+          final v = variants[t];
+          final vf = v?.fields;
+          if (vf == null) return _kOmit;
+          final inner = _object(v!.order ?? vf.keys.toList(), vf, '$path.$t', ctx);
+          return <String, dynamic>{f.discriminator ?? 'type': t, ...inner};
+        }
         final sub = f.fields;
         // Объект без `fields` — свободная карта (`transport.headers`):
         // состав задаёт не реестр, кладём образец из одной пары.

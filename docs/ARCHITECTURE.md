@@ -2,7 +2,7 @@
 
 This document describes the structure of the L×Box Flutter application, the boundaries of responsibility, the data flows and the native side.
 
-The current parser and builder version is **v2** (spec 026, phase 5 completed in v1.3.0). Details are in [spec/features/026 parser v2](./spec/features/026%20parser%20v2/spec.md).
+The current parser and builder version is **v2** (spec 026, phase 5 completed in v1.3.0). Details are in [spec/tasks/026F-parser-v2](./spec/tasks/026F-parser-v2/spec.md).
 
 ---
 
@@ -128,7 +128,7 @@ the thresholds, the ping and the pure decisions, plus the `probeNodesOf` adapter
 snapshot plus `stage()` over the DNS section, leaving the screen thin), and
 `VpnSettingsFacade` (`services/vpn_settings/` — `applyVpnMode` carries the password-gen,
 auth-force and `has_tun`-mirror invariants for the UI **and** for Debug). The typed storage models are the sealed `DnsServerRef` and `DnsRuleRef` (§294).
-The full invariant plus the strangler plan is in `docs/spec/features/291 layered-architecture-facades/`.
+The full invariant plus the strangler plan is in `docs/spec/tasks/291F-layered-architecture-facades/`.
 
 **The event brokers (push, bottom-up):** §122 moved the UI's control channel onto the
 libbox **CommandClient** (a server-stream push instead of Timer polling). The push channels:
@@ -209,6 +209,18 @@ parseFromSource(source)  ─┐
   │ HTTP fetch (UrlSource)│  → ParseResult{ nodes, meta, rawBody, headers }
   │ body_decoder + parsers│
   └───────────────────────┘
+  ▼
+SourceEntry (sealed, §524)  —  ContainerEntry | ChainEntry | OpaqueEntry
+  │  ONE ordered list of `sources[]` records in memory, all genera together:
+  │  subscriptions, servers, folders and chains, in the order the user sees.
+  │  `sourceKey` = `id:<uuid>` (container) / `chain:<tag>` (chain); identity is
+  │  unchanged — the key only covers both. OpaqueEntry carries a record the codec
+  │  cannot read (§141 P1.8c) verbatim and keeps its slot. The order IS the data:
+  │  chain acyclicity ("a hop may only point UP") is read off this list.
+  │
+  ├─ ContainerEntry → ServerList (sealed)
+  │                     SubscriptionServers | UserServer | FolderServers
+  └─ ChainEntry     → SourceChain (the chain outbound, SPEC 110)
   ▼
 ServerList (sealed)  —  SubscriptionServers | UserServer | FolderServers
   │ .build(ctx: EmitContext)
@@ -325,6 +337,16 @@ sing-box body ──► (already a sing-box map: the step-1 pass judges it verba
 - **Sanitizer** (`contract/body_sanitizer.dart`) is the single judge of values.
   Core gates (`min_core`, `platform`) are off at parse time: they depend on the
   running core, the node does not.
+- **Edit point** (`contract/body_edit.dart`, §577) is the single place a
+  registry rule edits a node body. A build entry carries `authored`
+  (`SingboxEntry.authored`, set by `ServerListBuild` where `verbatimBodyOf`
+  put the body; the four conditions of §576), parsing reads the same property
+  as `parsingAuthoredBody`. On an authored body only hard rules edit (no
+  string `type`, the node core gate, a registry rule or relation with
+  `core_rejects`); every other rule leaves the body as written and gives its
+  code with `applied: false`. The registry gate, the detour yields and the
+  uTLS / REALITY heals go through it; global TLS settings do not (they are the
+  user's settings, not registry rules).
 - **`parseSingboxEntry`** is the only "map → model" route. It is fed the
   **clean** map, so the model is a typed view of what will reach the core.
   It is also, by construction, **the list of body keys LxBox can read** — it
@@ -362,12 +384,19 @@ sing-box body ──► (already a sing-box map: the step-1 pass judges it verba
 
 Migrated so far: **trojan**, **vless**, **vmess**, **shadowsocks**,
 **hysteria2**, **tuic**, **anytls**, **naive**, **http(s) proxy**, **socks**
-and **ssh** (`kPipelineSchemes`). The set lists every spelling the dispatcher
-routes by, because a scheme name can carry more than a spelling: `hy2` is a
-plain alias of `hysteria2`, but `naive+quic` differs from `naive+https` by the
-body it produces (`quic: true`), and `proxy-https` differs from `proxy-http` by
-whether the body has a `tls` block at all. Aliases that change nothing —
-`socks5` for `socks`, the `proxy+…` plus-forms of §268 — share one mapper.
+and **ssh**. Since §562 the dispatcher holds no scheme names: `parseUri` maps
+the link's spelling to a body type through `registrySchemeType`
+(`mappers/uri_pipeline.dart`), a map built once per registry load from the
+`detect.scheme_in` of every `mappers.uri` section plus the `aliases` of those
+protocols (`wg` lives only there). A spelling can carry more than a name —
+`naive+quic` differs from `naive+https` by `quic: true`, `proxy-https` from
+`proxy-http` by the `tls` block, `socks4` from `socks` by `version` — and that
+difference is the section's `scheme_sets` on the way in and `emit.form_from` on
+the way out, not the dispatcher's. A section whose `forms[]` include a form the
+link engine cannot run (`space: ini`, the base64 `.conf` link) is routed to its
+own parser by that form, and the `vpn://` container and provider service lines
+are recognised by `source_kinds.json`. Without a loaded registry no link is
+parsed; `engine_no_scheme_names_test` forbids scheme literals in the dispatcher.
 
 Step 7 brought over the last two schemes — **masque** and **wireguard/AWG** —
 and with them the **second input of the same scheme, the INI text**
@@ -387,8 +416,8 @@ carried its own value rules. It is the one input whose source dialect is an
 **object**, not text: the mapper takes a `Map`, so it has its own pair of types
 and its own entry point (`parseXrayViaPipeline`) while the pipeline body stays
 shared. After §480 the per-scheme table is the registry section for the `xray`
-source kind (`registry/protocols/<scheme>.json` → `mappers.xray`, our
-divergences in the overlays `contract_draft/xray/<scheme>.json`), executed
+source kind (`registry/protocols/<scheme>.json` → `mappers.xray`; the xray
+overlays were removed in §533, so the registry is the only source), executed
 through the bridge `engine/engine_mapper.dart` → `mapJsonViaEngine`; the
 section's own `detect` picks the record, so there is no dispatcher by protocol
 name left in the code. Three things differ, all of them from the shape of the
@@ -595,8 +624,7 @@ node_spec.dart               # the sealed NodeSpec (11 variants: Vless/Vmess/Tro
 node_spec_emit.dart          # emit() per variant (NodeSpec → SingboxEntry); toUri() goes through the engine emitter
                              #   (uriViaEngineRequired, registry mapper sections) — hand-written only toUriTailscale
 singbox_entry.dart           # sealed SingboxEntry = Outbound | Endpoint (WireGuard, Tailscale → Endpoint)
-node_sections.dart           # §435 — NodeSections (rules / dns.servers / dns.rules of a free node), @self substitution
-record_codec.dart            # §435/§439 — re-exports codec/: the contract 1.0 record codec of storage, backup, rules file, Debug API
+record_codec.dart            # §439 — re-exports codec/: the contract 1.0 record codec of storage, backup, rules file, Debug API
 codec/                       # §439 — model ↔ record, pure functions, tolerant read
   source_record.dart         #   subscription / server / folder with nodes[] (server, unsupported)
   chain_record.dart          #   kind: chain — body{type: chain, …} + hops[] links
@@ -617,6 +645,8 @@ validation.dart              # sealed ValidationIssue + ValidationResult (dangli
 parser_config.dart           # the wizard_template.json models: WizardTemplate/PresetGroup/SelectableRule/WizardVar
 custom_rule.dart             # the sealed CustomRule = Inline|Srs|Preset (routing rules; →§090, see the Overview)
 server_list.dart             # sealed ServerList = SubscriptionServers | UserServer | FolderServers; DetourPolicy.overrideDetour
+source_entry.dart            # §524 sealed SourceEntry = ContainerEntry | ChainEntry | OpaqueEntry — ONE list
+                             #   record over sources[]; sourceKey/kind/enabled; the supertype the order lives on
                              #   and FolderMember.detour are NodeLinks (§439)
 subscription_meta.dart       # SubscriptionMeta — the userinfo headers (traffic/expire/title/update-interval)
 app_info.dart                # AppInfo — the metadata of installed applications (fetched natively)
@@ -751,7 +781,7 @@ contract/                    # §460 the contract registry inside the app (contr
   body_sanitizer.dart        #   RegistrySanitizer.sanitize(body, scheme, coreVersion, platform) → SanitizeResult:
                              #   unknown_key, type/enum/format/bounds, on_invalid (drop/coerce/drop_node),
                              #   conflicts/requires, forbidden_for, min_core, platform, advisory, all_or_nothing.
-                             #   Defaults are NOT materialised (CANON §2.4), key order stays as it came in
+                             #   Defaults are NOT materialised (PARSING_PRINCIPLES §2.4), key order stays as it came in
                              #   (`order` governs the emitter — that is wave W2), `tag`/`detour`/`type` untouched
   registry_warning.dart      #   the render side of RegistryWarning (the class itself lives in models/node_warning.dart,
                              #   because NodeWarning is sealed): title_<lang>/text_<lang> from the registry, ru for a
@@ -787,8 +817,16 @@ builder/                     # NodeSpec + template → sing-box config
   build_config.dart          #   buildConfig() orchestrator → BuildResult; _BuildCtx (EmitContext + tag allocator)
   registry_gate.dart         #   §460 applyRegistryGate — the registry sanitiser over every node entry after
                              #   list.build(ctx) and before the post-steps; warnings → emitWarnings with the
-                             #   registry text, drop_node removes the entry. Registry not loaded → no-op
+                             #   registry text, drop_node removes the entry. Registry not loaded → no-op.
+                             #   §577: an authored entry is edited only by hard rules (contract/body_edit.dart);
+                             #   a soft code keeps the body and reports `(not applied)`
   server_list_build.dart     #   the per-subscription emit: the detour policy, tag allocation, selector/auto registration
+  verbatim_body.dart         #   §455/§576 verbatimBodyOf — a node goes to the core VERBATIM (its rawSource, detour
+                             #   stripped, an empty tag filled with the model tag) when all four hold: (1) the
+                             #   container is an own server or a folder member; (2) the node is not an auto-select
+                             #   group; (3) the record's source kind is exactly `singbox_outbound`; (4) the node's
+                             #   text parses as a JSON object. Everything else, subscriptions included, goes
+                             #   through the model
   if_engine.dart             #   the §120 typed template engine: var substitution plus the #if construct
   preset_expand.dart         #   expandPreset (CustomRulePreset → fragments, @var) + mergeFragments (§033);
                              #   §265: the globalVars parameter — ref-vars {"ref":…} take their value from the global scope
@@ -821,8 +859,10 @@ settings_storage.dart        # the facade over lxbox_settings.json — thin dele
 settings_storage/io.dart            #   the atomic load/save/recovery (main→.bak→{}, §072); §439 the storage migration
                                     #   inside _load() with the one-time lxbox_settings.json.v0.bak copy
 settings_storage/vars.dart          #   the vars domain plus the Wi-Fi history (§051)
-settings_storage/sources_rules.dart #   sources[] without chains (ServerList records), rules[] (§439)
-settings_storage/chains.dart        #   §393 C/§439/§509 chain records in sources[]
+settings_storage/sources_rules.dart #   §524 the ONE reader (_sourceEntriesOf) and the ONE writer (_writeEntries)
+                                    #   of sources[]; getServerLists/getChains are slices of it. rules[] (§439)
+settings_storage/chains.dart        #   §393 C/§439/§509 chain records in sources[] — §524: a FACADE by genus
+                                    #   (chain tag gate, hop heal); _spliceSourceKind is gone
 settings_storage/node_link_registry.dart # §439 (D-113/D-114) rewrite links on rename/move, clear them on delete
 settings_storage/network.dart       #   route_final/dns{} models (DnsServerRef/DnsRuleRef)/ping_options (§040/§061/§439)
 settings_storage/backup_tun.dart    #   the snapshot (§031) plus the tun-apps split tunnel (§046)
@@ -941,7 +981,7 @@ vpn/BoxVpnService.kt         # the Android VpnService plus the PlatformInterface
                              #   The foreground/protect/override paths are tun-agnostic, so proxy mode is config-only and Kotlin is untouched
 vpn/BoxService.kt            # CommandServerHandler — it owns the libbox runtime (fileDescriptor/commandServer)
                              #   AtomicReference, serviceScope); startSingbox/doStop/serviceReload; setStatus broadcast
-vpn/BoxApplication.kt        # Application: async Libbox.setup (libboxReady barrier); singleton wifiObserver
+vpn/BoxApplication.kt        # Application: async Libbox.setup (libboxReady barrier); singletons wifiObserver, wifiStateCache
 vpn/CrashRecovery.kt         # §334 — “the previous run crashed” (a non-empty CrashReport-lxbox.log in
                              #   tempPath). The detection must run STRICTLY before Libbox.setup, which archives it
 vpn/PlatformInterfaceWrapper.kt # libbox PlatformInterface: localDNS→LocalResolver, findConnectionOwner, readWIFIState
@@ -957,6 +997,7 @@ vpn/LxBoxTileService.kt      # the QS tile toggle (§032) with optimistic render
 vpn/QuickShortcuts.kt        # dynamic launcher shortcuts (Connect/Disconnect)
 vpn/LxBoxIntentReceiver.kt   # the §047 raw broadcast API: nine incoming actions, an optional permission gate, setEnabled
 vpn/WifiInfoReader.kt        # §051 the single source of the Wi-Fi SSID/BSSID (a permission preflight, a sealed Result)
+vpn/WifiStateCache.kt        # §569 API 31+: NetworkCallback(FLAG_INCLUDE_LOCATION_INFO) → cached SSID/BSSID for WifiInfoReader
 vpn/WifiNetworkObserver.kt   # §051 auto-record: NetworkCallback → WifiHistoryBridge → Dart onWifiSeen
 vpn/PermissionUtils.kt · Extensions.kt  # the SDK-gated permission check; small Kotlin extensions
 
@@ -1039,14 +1080,14 @@ Start
 Two real core starts per press, signalling and final; everything between them
 is `Libbox.checkConfig` with no tunnel and no service. The loop is finite by
 construction — each round switches one node off, and a round with nothing to
-switch off breaks out (CANON §9.5).
+switch off breaks out (PARSING_PRINCIPLES §9.5).
 
 The automaton (`services/core_reject/core_reject_guard.dart`) is pure: the
 core, the config build and the storage reach it through the `CoreRejectHost`
 interface, implemented over the controllers in
 `screens/home/core_reject_host.dart`. The core's error arrives asynchronously
 on the status event, so the real start is awaited through a completer
-(`HomeController.startAndAwaitVerdict`). The error string is parsed by CANON
+(`HomeController.startAndAwaitVerdict`). The error string is parsed by PARSING_PRINCIPLES
 §9.1–§9.2 (`core_error_parse.dart`) and the tag is resolved to its source node
 through `BuildResult.nodeByEmittedTag`, the reverse map the same build
 produced (§9.3) — so a derived entry (a chain hop, a folder member, WARP, a
@@ -1285,7 +1326,7 @@ Sensitive fields are filtered on `GET /state/storage` by the denylist scrubber i
 ### 6.5. Traffic profiler (§044 / §048)
 
 `TrafficProfiler` is a singleton ChangeNotifier holding a system-wide
-rolling buffer of events. Everything is in memory; persistence is deliberately absent. Spec: [`docs/spec/features/044 per-app traffic profiler/spec.md`](./spec/features/044%20per-app%20traffic%20profiler/spec.md).
+rolling buffer of events. Everything is in memory; persistence is deliberately absent. Spec: [`docs/spec/tasks/044F-per-app-traffic-profiler/spec.md`](./spec/tasks/044F-per-app-traffic-profiler/spec.md).
 
 ```
               ┌────────────────────────────────────────┐
@@ -1498,6 +1539,7 @@ In the §049 audit we ported the pattern from the SagerNet reference (`bg/BoxSer
 │  • Libbox.setup(SetupOptions) async     │  │                                    │
 │  • libboxReady : CompletableDeferred    │  │                                    │
 │  • Singleton WifiNetworkObserver        │  │                                    │
+│  • Singleton WifiStateCache (§569)      │  │                                    │
 └─────────────────────────────────────────┘  └────────────────────────────────────┘
                                                            │ start/stop intent
                                                            ▼
@@ -1728,7 +1770,7 @@ Two patterns: a **contextual banner** (a state-dependent hint) and an **overflow
 
 - **Statistics → Live and Per-app → the contextual `CoreLogsHintBanner`** ([core_logs_hint_banner.dart](../app/lib/widgets/core_logs_hint_banner.dart))
 - **Routing → Tunnel apps → ⋮ → “VPN settings (Core)”** → `SettingsScreen(initialTab: 1)`. State-independent. |
-- **Drawer → Debug → ⋮ → “Diagnostics settings”** → `AppSettingsScreen(initialTab: 1)` — a fast path. |
+- **Drawer → Debug → ⋮ → “Diagnostics settings”** → `AppSettingsScreen(initialTab: 3)` — a fast path (tabs: 0 General, 1 Appearance, 2 Subscriptions, 3 Diagnostics, 4 Automation; §541). |
 
 ---
 
@@ -1742,7 +1784,7 @@ The core emits changes and the UI subscribes. The old flow of three pollers is g
 
 ### The native clients (`BoxCommandClient.kt`)
 
-Four independent `CommandClient`s decouple the update rates and the lifecycles.
+Five independent `CommandClient`s decouple the update rates and the lifecycles.
 
 | Client | Commands | Lifecycle |
 |---|---|---|
@@ -1750,6 +1792,7 @@ Four independent `CommandClient`s decouple the update rates and the lifecycles.
 | `screenClient` | `CommandOutbounds` + `CommandGroup` + `CommandConnections` | Raised by `connectScreen`, paused in the background |
 | `profilerClient` | `CommandConnections` + `subscribeDNSQueries` (SPEC 018, §180) | Raised for recording and kept alive in the background |
 | `pingClient` | A bare `PingHandler` with no subscriptions — unary RPC only | §175/§209 — lifecycle-independent |
+| `tailscaleClient` | A bare client plus `subscribeTailscaleStatus` (task 579) | Raised by `ccStartTailscaleStatus` while the VPN is on and the config has a NETWORKS node; closed by `ccStopTailscaleStatus` and `shutdownAll` |
 
 A subscription in the gomobile facade is `CommandClientOptions.addCommand(int)` plus the `CommandClientHandler` callbacks.
 
@@ -1764,6 +1807,7 @@ Push streams over the `lxbox/cc/*` EventChannel (`status` · `outbounds` · `gro
 | `groups` | a push `Stream<List<CcGroup>>` | the selector and urltest groups plus selected/active |
 | `connections` | a push `Stream<List<CcConnection>>` | the active TCP/UDP connections plus bytes and packageName/processPath |
 | `dnsQueries` | a push `Stream<List<CcDnsQuery>>` | §180 (SPEC 018) — the DNS queries from the core (domain, rcode, latency) |
+| `tailscaleStatus` | a push `Stream<List<CcTailscaleStatus>>` (`lxbox/cc/tailscale`) | task 579 — per Tailscale endpoint: tag, `BackendState`, `StateText`; a full snapshot per core update. `startTailscaleStatus()` / `stopTailscaleStatus()` hold the core subscription |
 | `getGroups()` | a unary pull returning `List<CcGroup>?` | a deterministic snapshot of the groups |
 | `getRules()` | a unary pull returning `List<CcRule>` | a snapshot of the route and DNS rules (for diagnostics) |
 | `getPool(tag)` | a unary pull returning `List<CcPoolSlot>?` | §208/§209 — a snapshot of a round_robin group's pool |
@@ -1778,6 +1822,27 @@ The lifecycle signals (`connectScreen`/`disconnectScreen`, `connectProfiler`/`di
 ### Wiring
 
 On a `connected` event `HomeController` subscribes to the `status` and `groups` streams.
+
+### The NETWORKS pseudo-direction (task 579)
+
+Home's Direction list ends with `NETWORKS` when the VPN is on and the config the core runs
+(`HomeState.activeModel`) has at least one node that meets all of:
+
+1. its record is in `endpoints[]`;
+2. its type is `tailscale`;
+3. the registry does not count it as an exit (`exitCapableByRegistry` false: no `exit_node`).
+
+Such a node is in no `selector` or `urltest` group. NETWORKS is a view only: it is not written
+to the config or to storage, the dropdown value is a sentinel (`kNetworksDirectionValue`),
+not a tag, so a user Direction tagged `NETWORKS` does not clash, and `selectedGroup` (the
+real exit) does not change when NETWORKS is picked (`HomeState.networksOpen`). Automation
+and the Debug API switch Directions by tag and never reach it. The list shows NETWORKS
+instead of the Direction's nodes when it is picked, or when there are no real Directions;
+once the nodes are gone the selected real Direction shows again. The rows have no delay test
+and no selection; a tap opens `outbound_view_screen` (View details); the delay slot shows the
+node state from `CcChannel.tailscaleStatus`. `HomeController._syncTailnetStatus` holds the
+core subscription while the VPN is on and a NETWORKS node exists, and re-subscribes when the
+node set or the core's config snapshot changes. Code: `services/networks_direction.dart`.
 
 ### Gotchas
 
@@ -1800,8 +1865,8 @@ one is under the CI gates as soon as its files exist.
 Switching at runtime needs no app restart, including the native surfaces on a
 live VPN service. Since §285 the UI strings are localized through **natural keys**
 (the English call-site text IS the key; ARB and gen_l10n are gone). The full
-architecture is in [the §279 spec](spec/features/279%20localization/spec.md) plus
-[the getLocalText review](spec/features/279%20localization/getlocaltext.md);
+architecture is in [the §279 spec](spec/tasks/279F-localization/spec.md) plus
+[the getLocalText review](spec/tasks/279F-localization/getlocaltext.md);
 translator-guide — [`l10n.md`](l10n.md).
 
 | Component | Role |
@@ -1851,7 +1916,7 @@ user data, and the OS/core payloads (the `RawMsg.detail` passthrough). The units
 | Controller | Responsibility |
 |-----------|---------------|
 | `HomeController` | VPN lifecycle, CommandClient (groups/status/connections), nodes, ping (10 concurrent — `_pingConcurrency`), heartbeat, traffic, configChangedNeedRestart, autoUpdater wiring, haptic on transitions |
-| `SubscriptionController` | CRUD entries (`sources[]` records), `refreshEntry`/persist, node-link registry calls on rename/move/delete (§439), `generateConfig` (no HTTP), `bindAutoUpdater`, init sweep (inProgress→failed) |
+| `SubscriptionController` | CRUD entries (`sources[]` records), `refreshEntry`/persist, node-link registry calls on rename/move/delete (§439), `generateConfig` (no HTTP), `bindAutoUpdater`, init sweep (inProgress→failed). **§524** — `sourceEntries()` returns the WHOLE list (every genus, disk order); `applySourceOrder(keys)` writes the order ONCE, for keys of any genus |
 | `ThemeNotifier` | Theme mode, SharedPreferences persistence |
 | `HapticService` (singleton) | Event-based haptic with 100 ms throttle, respects system setting (spec 029) |
 | `AutoUpdater` | Owned by HomeScreen; wraps SubscriptionController for 4-trigger auto-update with spam gates (spec 027) |
@@ -1976,96 +2041,15 @@ A full round trip would require a sing-box JSON → state parser covering everyt
 
 ## Feature Specs
 
-They live in [`docs/spec/features/`](./spec/features/). Each feature is a `NNN name/spec.md` folder.
+The black-box feature catalogue lives in [`docs/spec/features/`](./spec/features/README.md):
+one `NNN-NAME/FEATURE.md` per feature (purpose, promises, parameters, boundaries) plus
+`FUNCTIONS/<function>.md` per user-facing function with its revision table. That folder
+carries no code or platform detail and is the source of truth for *what* the app promises.
 
-| # | Feature |
-|---|---------|
-| 003 | Home screen |
-| 006 | Servers UI |
-| 007 | Config editor |
-| 008 | Ping and node management |
-| 009 | UX and theme |
-| 010 | Quick start and offline |
-| 011 | Local ruleset cache |
-| 012 | Native VPN service |
-| 014 | DNS settings |
-| 015 | Speed test |
-| 016 | Statistics and connections |
-| 017 | Custom nodes and node settings |
-| 018 | Detour server management |
-| 019 | WireGuard endpoint |
-| 020 | Security and DPI bypass (TLS fragment) |
-| 021 | CI/CD pipeline |
-| 022 | App settings |
-| 023 | Debug and logging |
-| 024 | Load balance — *Released* (§208 round-robin balancer, v2.7.0) |
-| 025 | WARP integration — *Released* (v2.3.0; the §130 MASQUE transport) |
-| **026** | **Parser v2** (sealed NodeSpec, 3-layer pipeline) |
-| **027** | **Subscription auto-update** (4 triggers, spam gates) |
-| **028** | **AntiDPI: mixed-case SNI** |
-| **029** | **Haptic feedback** |
-| 030 | Custom routing rules (unified `CustomRule` model: inline + local-only SRS) |
-| 031 | The Debug API (a localhost HTTP server for dev introspection) |
-| 032 | Quick Connect (QS tile + home shortcut) |
-| 033 | Preset bundles (selectable rules with a `preset_id`, expansion plus merge) |
-| 034 | App icon |
-| 035 | MCP server — *Draft* |
-| 036 | Update check (GitHub Releases polling, sideload-flow) |
-| 037 | Naive proxy support |
-| 038 | Crash diagnostics (`getHistoricalProcessExitReasons`) |
-| 040 | Backup & restore UI (4 toggleable categories) |
-| 042 | Health watchdog (heartbeat metrics + auto-recovery) |
-| 043 | AppLog per-source quotas + diagnostics platform (Debug API + AppLog + Crash diagnostics) |
-| **044** | **Per-app traffic profiler** (recording per-app DNS/connections/routing chain — Live/Domains/IPs/Connections sub-tabs, connection-issue detection, Debug API + SSE) |
-| 045 | TLS ECH (Encrypted Client Hello) — an anti-DPI extension that hides the SNI entirely — *Draft* |
-| 046 | Tunnel apps split tunneling (a per-app include/exclude through VpnService.Builder) |
-| 047 | The Public Intent API (Tasker / MacroDroid automation through Android broadcast intents) — *Draft* |
-| 048 | The home node filters (a two-phase pool/match model — the foundation of Filter mode) |
-| 070 | Sort options (the node sorting menu) |
-| 071 | Manual node reordering (drag; §100 — manual in the carousel, with persistence) |
-| 074 | Add server wizard |
-| 076 | Settings & config lifecycle (lazy/eager persist, HomeReturnObserver, mtime-bootstrap) |
-| **097** | **AWG2 (AmneziaWG 2.0) plus the move to the `sing-box-lx` core** (`with_awg` / `with_xhttp`) |
-| 105 | The support message (the support and web URLs in a subscription's meta) |
-| 117 | DNS rework |
-| 118 | Subscription fetch identity (User-Agent / identity headers) |
-| 120 | The template engine — typed vars plus `if` (the shared substitution core, §120) |
-| 119 | VPN mode (vpn / vpn_proxy / proxy — §119, has_tun) |
-| **121** | **libbox 1.14 adoption** (migrating the bindings to the 1.14 core) |
-| **122** | **The CommandClient migration** (dropping the Clash HTTP API entirely for the libbox CommandClient) |
-| 123 | The subscription model (three CC clients: status/screen/profiler; the §123/§164 power model) |
-| 124 | Background mode — tunnel sleep (the tunnel's Doze behaviour) |
-| **125** | **Configurable directions** (CRUD directions over directions[]; enabled_groups is DEPRECATED) |
-| 126 | First-run wizard |
-| **127** | **XHTTP full URL params** (native XHTTP: mode/x_padding_bytes/no_grpc_header) |
-| **128** | **Idle-suspend** (`route.lx_idle_suspend`, the core's SPEC 020; default `30s`) |
-| **129** | **File subscriptions** (url=file:<uuid>, an HttpCache snapshot, a transactional source switch) |
-| **130** | **The MASQUE WARP transport** (the flagship of v2.9.0 — MasqueSpec, Cloudflare QUIC/CONNECT-IP) |
-| **234** | **Server folders** (folders of manual servers: FolderMember plus a per-member toggle and tag_prefix) |
-| 236 | Folder server testing (a headless probe of the folder's members) |
-| **248** | **Detour directions** (directions as detour targets; §254 turns cycles into a fatal with the culprit named) |
-| **279** | **Localization** (en plus ru and zh: the dictionary, the template overlay and values-<lang>; §280 phases 0–7, §452 zh) |
-| **283** | **Subscription node disable** (a per-node toggle in a subscription, keyed by the node's identity hash) |
-| **393** | **Directions** (the Channel→Direction rename: arbitrary tags, no cap, include[]; the storage key channels→directions with a one-shot migration) plus **hop chains** (SPEC 110: a chain as a third source kind, `type: chain`, a layered probe) |
-| 417 | Workspaces (named copies of the whole state — settings + subscription bodies + .srs; Load = auto-save current → copy → re-read in place → rebuild → VPN back up; Save as; the working paths never move) |
-| **435** | **Node sections + Tailscale** (contract ## 13: a free node carries its route rules and DNS records in `sections` in the contract 1.0 record form; `@self` = the final tag, substituted at build; `TailscaleSpec` endpoint without an address, core gate by AAR version, `state_directory` per node) |
-| **439** | **Storage in the contract 1.0 form** (`lxbox_settings.json` keeps `sources[]` / `rules[]` / `dns{}` records with `storage_version: 1`; the 2.23.2 form is migrated inside `_load()` with a `.v0.bak` copy; node references are NodeLinks `{folder_id, tag}` resolved at build, fail-closed; the LX Backup 1.0 export is a slice of storage through the same codec) |
-
-**Demoted (through §054) — now in `tasks/`:**
-
-| Was | Now |
-|-----|--------|
-| ~~001~~ Mobile stack | [`tasks/055-mobile-stack-decision/`](./spec/tasks/055-mobile-stack-decision/spec.md) — historical architectural decision |
-| ~~002~~ MVP scope | [`tasks/056-mvp-scope-historical/`](./spec/tasks/056-mvp-scope-historical/spec.md) — historical milestone |
-| ~~004x~~ Subscription parser | [`tasks/057-subscription-parser-v1-superseded/`](./spec/tasks/057-subscription-parser-v1-superseded/spec.md) — superseded by §026 |
-| ~~005x~~ Config generator | [`tasks/058-config-generator-wizard-v1-superseded/`](./spec/tasks/058-config-generator-wizard-v1-superseded/spec.md) — superseded by §026 |
-| ~~013~~ Routing | [`tasks/059-routing-v1-superseded/`](./spec/tasks/059-routing-v1-superseded/spec.md) — superseded by §030 |
-| ~~039~~ libbox 1.13 migration | [`tasks/060-libbox-1-13-migration/`](./spec/tasks/060-libbox-1-13-migration/spec.md) — one-shot migration (Done) |
-| ~~041~~ DNS rules refactor | [`tasks/061-dns-rules-refactor/`](./spec/tasks/061-dns-rules-refactor/spec.md) — refactor, live spec — §014 |
-
-The freed numbers (001, 002, 004, 005, 013, 039, 041) are **never reused**.
-
-In addition there is a chronicle of individual work cycles (bugs, refactors) in `tasks/`.
+Implementation history lives in [`docs/spec/tasks/`](./spec/tasks/README.md). The specs
+written before the Spec Kit (`NNN name/spec.md`) were moved there as `NNNF-name/` with the
+`F` index (legacy index: [`F-INDEX.md`](./spec/tasks/F-INDEX.md)); each new feature lists
+the legacy specs it absorbed in its header.
 
 ---
 

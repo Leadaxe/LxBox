@@ -101,8 +101,8 @@ suspended-эндпоинты (SPEC 020). Mass-ping в этот хелпер не
 
 ## Docs to update
 
-- [x] `docs/spec/features/122 commandclient-migration/spec.md` — §4.1: строка Group URLTest (отметка об отклонении + фикс §308)
-- [x] `docs/spec/features/008 ping and node management/spec.md` — раздел «Run URLTest (группа)»
+- [x] `docs/spec/tasks/122F-commandclient-migration/spec.md` — §4.1: строка Group URLTest (отметка об отклонении + фикс §308)
+- [x] `docs/spec/tasks/008F-ping-and-node-management/spec.md` — раздел «Run URLTest (группа)»
 - [x] `docs/api/debug-api-reference.md` — `POST /action/urltest?group=` (новая семантика)
 - [x] `CHANGELOG.md` — Unreleased → Fixed
 

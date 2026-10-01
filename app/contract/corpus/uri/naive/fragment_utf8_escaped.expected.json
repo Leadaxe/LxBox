@@ -1,0 +1,27 @@
+{
+  "nodes": [
+    {
+      "entry": {
+        "password": "p",
+        "server": "naive.example-9.com",
+        "server_port": 443,
+        "tls": {
+          "enabled": true,
+          "server_name": "naive.example-9.com"
+        },
+        "type": "naive",
+        "username": "u"
+      },
+      "kind": "outbound",
+      "label": "✅ JP-01",
+      "scheme": "naive",
+      "warnings": [
+        {
+          "code": "naive_padding_ignored",
+          "path": "padding"
+        }
+      ]
+    }
+  ],
+  "v": 1
+}

@@ -14,15 +14,17 @@ library;
 import 'dart:convert';
 
 import '../../models/auto_select.dart';
-import '../../models/custom_rule.dart';
-import '../../models/dns_ref.dart';
 import '../../models/node_link.dart';
-import '../../models/node_sections.dart';
 import '../../models/node_spec.dart';
 import '../../models/node_warning.dart';
-import '../../models/record_codec.dart';
 import '../node_hash.dart';
+import '../contract/body_edit.dart' show settleSanitized;
+import '../contract/body_sanitizer.dart';
+import '../contract/group_genus.dart';
+import '../contract/registry.dart';
 import '../node_identity.dart';
+import 'authored_scope.dart'
+    show parsingAuthoredBody, parsingOwnSource, singboxBodySource;
 import 'json_parsers.dart';
 import 'uri_utils.dart';
 
@@ -39,9 +41,9 @@ export 'uri_utils.dart' show kMaxDetourDepth;
 /// в 1.11, но встречаются в конфигах, которые пользователь переносит.
 const _kSingboxServiceTypes = {'direct', 'block', 'dns'};
 
-/// §368 §3.1 — типы-группы: узлом-сервером не становятся, приезжают как
-/// `AutoSelectSpec` (§5).
-const _kSingboxGroupTypes = {'selector', 'urltest'};
+/// §368 §3.1 / §565 — типы-группы (род, `genus.values` реестра): узлом-
+/// сервером не становятся, приезжают как `AutoSelectSpec` (§5).
+bool _isGroupType(String type) => GroupGenus.isKnown(type);
 
 /// Разбор массива sing-box конфигов в список узлов.
 ///
@@ -51,7 +53,12 @@ const _kSingboxGroupTypes = {'selector', 'urltest'};
 ///
 /// Не бросает: битая форма отдельного outbound'а гасится на его гранулярности,
 /// соседи и остальная подписка живут (§3.5).
-List<NodeSpec> parseSingboxConfigs(List<Map<String, dynamic>> configs) {
+///
+/// §561 — [dropped] (необязательный) собирает причины отбраковки записей
+/// боевого прохода: тип вне ядра, битая форма. Только туда — на соседний
+/// узел они не вешаются.
+List<NodeSpec> parseSingboxConfigs(List<Map<String, dynamic>> configs,
+    {List<NodeWarning>? dropped}) {
   if (configs.isEmpty) return const [];
 
   // §321 P4 / §404 D-086 — накопитель ПОДПИСЕЙ дедупа на всю подписку. Между
@@ -104,6 +111,7 @@ List<NodeSpec> parseSingboxConfigs(List<Map<String, dynamic>> configs) {
       synonyms: synonyms,
       ownedBy: (sig) => identical(owner[sig], cfg),
       pendingGroups: groups,
+      dropped: dropped,
     ));
   }
   return _bindGroupMembers(result, groups);
@@ -111,7 +119,10 @@ List<NodeSpec> parseSingboxConfigs(List<Map<String, dynamic>> configs) {
 
 /// §439 — члены группы до связывания: узел этого конфига или ключ пула
 /// соседнего элемента (§3.6), плюс число потерянных на разборе.
-typedef _GroupRefs = ({List<Object> refs, int lost});
+///
+/// §565 — [def] — член, которого называет `default` selector'а (узел или
+/// ключ пула), чтобы связывание перевело его в тот же сырой тег, что состав.
+typedef _GroupRefs = ({List<Object> refs, int lost, Object? def});
 
 /// §439 — состав групп → ссылки на СЫРЫЕ теги членов (NODE_LINK §2.2).
 ///
@@ -155,8 +166,18 @@ List<NodeSpec> _bindGroupMembers(
     if (lost > 0) n.warnings.add(GroupMemberMissingWarning(lost));
     // §5.1 — пустой urltest роняет старт ядра: группу без членов не выпускаем.
     if (links.isEmpty) continue;
-    out.add(n.copyWith(membership: ExplicitMembers(links))
-      ..sourceExtended = n.sourceExtended);
+    // §565 — `default` называет члена тем же сырым тегом, что и состав;
+    // член, не давший узла, — прежняя строка (сборка отпустит её к первому
+    // живому члену).
+    final defRef = pending.def;
+    final defNode = defRef is NodeSpec
+        ? defRef
+        : (defRef == null ? null : byKey[defRef]);
+    final defRaw = defNode == null ? null : rawTags[defNode];
+    out.add(n.copyWith(
+      membership: ExplicitMembers(links),
+      manualDefault: defRaw ?? n.manualDefault,
+    )..sourceExtended = n.sourceExtended);
   }
   return out;
 }
@@ -168,7 +189,7 @@ int _payloadCount(Map<String, dynamic> config) {
   for (final o in _allEntries(config)) {
     final type = o['type']?.toString() ?? '';
     if (_kSingboxServiceTypes.contains(type)) continue;
-    if (_kSingboxGroupTypes.contains(type)) continue;
+    if (_isGroupType(type)) continue;
     n++;
   }
   return n;
@@ -195,6 +216,7 @@ List<NodeSpec> _parseOne(
   required Map<String, String> synonyms,
   required Map<AutoSelectSpec, _GroupRefs> pendingGroups,
   bool Function(String signature)? ownedBy,
+  List<NodeWarning>? dropped,
 }) {
   final entries = _allEntries(config);
   if (entries.isEmpty) return const [];
@@ -229,11 +251,10 @@ List<NodeSpec> _parseOne(
   // Кандидаты в узлы: payload, не служебные, не группы, не цели detour.
   final candidates = <Map<String, dynamic>>[];
   final groups = <Map<String, dynamic>>[];
-  final unsupported = <String>{};
   for (final e in entries) {
     final type = e['type']?.toString() ?? '';
     if (_kSingboxServiceTypes.contains(type)) continue;
-    if (_kSingboxGroupTypes.contains(type)) {
+    if (_isGroupType(type)) {
       groups.add(e);
       continue;
     }
@@ -262,13 +283,22 @@ List<NodeSpec> _parseOne(
     try {
       // §454 — источник узла = оригинальный outbound (до подмены тега лейблом).
       final compact = _prettyJson(ob);
+      final label = _entryLabel(tag: rawTag, index: i, tagUses: tagUses);
       final spec = parseSingboxEntry(
-        _withLabel(ob, _entryLabel(tag: rawTag, index: i, tagUses: tagUses)),
-        rawSource: compact,
-      );
+            _sanitizedEntry(_withLabel(ob, label)),
+            rawSource: compact,
+            sanitizedFrom: BodySource.singbox,
+          ) ??
+          _ownUnknownTypeNode(ob, label: label, rawSource: compact);
       if (spec == null) {
+        // §561 — тип, которого ядро не ведёт: причина в `dropped[]` с тегом
+        // записи (D-088), параметр `scheme` — значение поля `type`.
         final type = ob['type']?.toString() ?? '';
-        if (type.isNotEmpty) unsupported.add(type);
+        dropped?.add(RegistryWarning(
+          code: 'protocol_unsupported',
+          params: {if (type.isNotEmpty) 'scheme': type},
+          ownerTag: rawTag,
+        ));
         continue;
       }
 
@@ -306,19 +336,10 @@ List<NodeSpec> _parseOne(
     } catch (_) {
       // §321 — «битые формы не роняют разбор целиком» на гранулярности УЗЛА:
       // мусорный тип поля бросает TypeError внутри конвертера, пропускаем этот
-      // outbound. Пропажа не молчаливая — тип уходит в P5-warning.
-      final type = ob['type']?.toString() ?? '';
-      unsupported.add(type.isEmpty ? 'malformed' : type);
-    }
-  }
-
-  // §3.5 — по одному warning на тип, на первом узле конфига (не на каждом —
-  // иначе N копий одного сообщения). Носителя без узла не существует: конфиг,
-  // не давший ни одного узла, теряется молча — компенсируется счётчиком
-  // «skipped» в диалоге импорта (§8).
-  if (unsupported.isNotEmpty && result.isNotEmpty) {
-    for (final type in unsupported) {
-      result.first.warnings.add(UnsupportedProtocolWarning(type));
+      // outbound. §561 — пропажа не молчаливая: форма не прочитана
+      // (PARSING_PRINCIPLES §4.1), запись — в `dropped[]`, не на соседа.
+      dropped?.add(
+          RegistryWarning(code: 'form_unrecognized', ownerTag: rawTag));
     }
   }
 
@@ -329,165 +350,48 @@ List<NodeSpec> _parseOne(
     if (spec != null) result.add(spec..sourceExtended = extended);
   }
 
-  // §435 / контракт ## 13 (NODE_SECTIONS.md §6, §7) — целый конфиг как
-  // источник связки: если конфиг дал РОВНО ОДИН не-групповой узел, его
-  // DNS-серверы, DNS-правила и правила маршрута извлекаются в
-  // `importedSections`; документ с явным `sections` читается кодеком. Хозяин
-  // секций — контейнер: контроллер переносит их в `UserServer`/`FolderMember`
-  // при добавлении, у подписок они не применяются.
-  final payload = [for (final n in result) if (!n.isGroup) n];
-  if (payload.length == 1) {
-    final node = payload.single;
-    final explicit = config['sections'];
-    if (explicit is Map) {
-      final dropped = <String>[];
-      node.importedSections =
-          NodeSections.fromJson(explicit, dropped: dropped);
-      for (final d in dropped) {
-        node.warnings.add(SectionsRecordDroppedWarning(d));
-      }
-      if (config['dns'] is Map || config['route'] is Map) {
-        node.warnings.add(const SectionsConflictWarning());
-      }
-    } else {
-      _extractInto(node, config, nodeByTag);
-    }
-  } else if (payload.length > 1 && config['sections'] is! Map) {
-    // §437 — многоузловой конфиг («рабочий конфиг из другого клиента»:
-    // endpoint + прокси + `final` на прокси). Узлу Tailscale связка нужна
-    // так же, как одиночному: без неё трафик к 100.x уходит в `route.final`.
-    // Берём только записи с ЯВНОЙ ссылкой на тег узла — при нескольких узлах
-    // это однозначно и чужих правил не утащит. Прочие узлы — как раньше, без
-    // секций: их связка не опознаётся по ссылке (правило на прокси есть у
-    // любого конфига).
-    for (final node in payload.whereType<TailscaleSpec>()) {
-      _extractInto(node, config, nodeByTag);
-    }
-  }
-
+  // §575 — из документа берутся только узлы: `dns`, `route` и `sections`
+  // документа отбрасываются (секции узла упразднены, контракт 1.1.85).
   return result;
 }
 
-/// §435/§437 — извлечь связку [node] из [config] по его тегу в [nodeByTag]
-/// и разложить отброшенные записи в предупреждения узла. Узел без тега в
-/// карте (не попал в неё — тега не было) остаётся без секций.
-void _extractInto(
-  NodeSpec node,
-  Map<String, dynamic> config,
-  Map<String, NodeSpec> nodeByTag,
-) {
-  var rawTag = '';
-  for (final e in nodeByTag.entries) {
-    if (identical(e.value, node)) {
-      rawTag = e.key;
-      break;
-    }
-  }
-  if (rawTag.isEmpty) return;
-  final dropped = <String>[];
-  node.importedSections = extractNodeSections(config, rawTag, dropped: dropped);
-  for (final d in dropped) {
-    node.warnings.add(SectionsRecordDroppedWarning(d));
-  }
-}
-
-/// §435 (NODE_SECTIONS.md §6) — связка узла [nodeTag] из целого конфига:
-/// DNS-серверы, у которых `detour` или `endpoint` равны тегу узла (или уже
-/// `@self`); DNS-правила, чей `server` — один из взятых серверов; правила
-/// маршрута, чей `outbound` равен тегу узла. Ссылки на тег переписываются в
-/// `@self`, теги серверов — в `@{self}-<тег>`. Всё остальное в `dns`/`route`
-/// игнорируется, как раньше.
+/// §585/§586 — запись с типом без своей модели в приложении: узел с телом
+/// как написано; у типа вне реестра — предупреждение [UnknownNodeTypeWarning].
 ///
-/// Имя извлечённого правила — `name` из тела, если провайдер его дал (в
-/// sing-box такого поля нет, но лаунчер его читает так же), иначе
-/// `@{self} rule N` (N — порядковый среди правил этого узла, с 1); `num` —
-/// `945 + i` в порядке извлечения (паритет с лаунчером, ответ 14.09.2026).
-/// Незнакомые кодеку ключи тела (`rule_set` на набор конфига и т.п.)
-/// теряются: кодек их не хранит.
-NodeSections? extractNodeSections(
-  Map<String, dynamic> config,
-  String nodeTag, {
-  List<String>? dropped,
+/// `null` — правило не действует, запись отбрасывается прежним путём. Оно
+/// действует, когда выполнены все условия: (1) `type` записи — строка, не
+/// пустая; (2) у типа нет своей модели ([isAppKnownSingboxType]): тип с
+/// моделью и негодной формой (нет `server`) по-прежнему отбрасывается;
+/// (3) разбор своего источника ([parsingOwnSource]) — ЛИБО тип известен
+/// реестру без описания полей ([ContractRegistry.isUncheckedType], §586:
+/// тогда и тело подписки, и без предупреждения).
+/// Служебные типы и группы сюда не доходят — их отсеивает `_parseOne` раньше.
+NodeSpec? _ownUnknownTypeNode(
+  Map<String, dynamic> ob, {
+  required String label,
+  required String rawSource,
 }) {
-  bool refersNode(Object? v) => v == nodeTag || v == kSelfPlaceholder;
-
-  final servers = <DnsServerInline>[];
-  final renamed = <String, String>{}; // тег из конфига → @{self}-тег
-  final dns = config['dns'];
-  if (dns is Map) {
-    final rawServers = dns['servers'];
-    if (rawServers is List) {
-      for (final s in rawServers.whereType<Map>()) {
-        final tag = s['tag']?.toString() ?? '';
-        if (tag.isEmpty) continue;
-        if (!refersNode(s['detour']) && !refersNode(s['endpoint'])) continue;
-        final body = Map<String, dynamic>.of(s.cast<String, dynamic>())
-          ..remove('tag');
-        if (refersNode(body['detour'])) body['detour'] = kSelfPlaceholder;
-        if (refersNode(body['endpoint'])) body['endpoint'] = kSelfPlaceholder;
-        final newTag = '$kSelfInlinePlaceholder-$tag';
-        renamed[tag] = newTag;
-        servers.add(DnsServerInline(enabled: true, tag: newTag, body: body));
-      }
-    }
-  }
-
-  final dnsRules = <DnsRuleInline>[];
-  if (dns is Map && renamed.isNotEmpty) {
-    final rawRules = dns['rules'];
-    if (rawRules is List) {
-      for (final r in rawRules.whereType<Map>()) {
-        final srv = r['server'];
-        if (srv is! String || !renamed.containsKey(srv)) continue;
-        final body = Map<String, dynamic>.of(r.cast<String, dynamic>());
-        body['server'] = renamed[srv];
-        dnsRules.add(DnsRuleInline(name: '', rule: body, enabled: true));
-      }
-    }
-  }
-
-  final rules = <CustomRule>[];
-  final route = config['route'];
-  if (route is Map) {
-    final rawRules = route['rules'];
-    if (rawRules is List) {
-      var n = 0;
-      for (final r in rawRules.whereType<Map>()) {
-        if (!refersNode(r['outbound'])) continue;
-        final body = Map<String, dynamic>.of(r.cast<String, dynamic>());
-        body['outbound'] = kSelfPlaceholder;
-        final givenName = body.remove('name');
-        final name = givenName is String && givenName.trim().isNotEmpty
-            ? givenName.trim()
-            : '$kSelfInlinePlaceholder rule ${n + 1}';
-        final read = ruleFromRecord({
-          'kind': 'inline',
-          'name': name,
-          'enabled': true,
-          'num': kNodeRuleDefaultNum + n,
-          'body': body,
-        });
-        final rule = read.value;
-        if (rule == null) {
-          dropped?.add('route.rules: ${read.dropped}');
-          continue;
-        }
-        // Норма B3: `rule_set` конфига и любой незнакомый матчер не
-        // переносятся; вырезать ключ молча нельзя (правило стало бы
-        // match-all на узел) — запись отбрасывается целиком.
-        if (read.unknownKeys.isNotEmpty) {
-          dropped?.add(
-              'route.rules → "$name": body keys not supported here: ${read.unknownKeys.join(', ')}');
-          continue;
-        }
-        rules.add(rule);
-        n++;
-      }
-    }
-  }
-
-  final out = NodeSections(rules: rules, dnsServers: servers, dnsRules: dnsRules);
-  return out.isEmpty ? null : out;
+  final type = ob['type'];
+  if (type is! String || type.trim().isEmpty) return null;
+  if (isAppKnownSingboxType(type)) return null;
+  // §586 — тип известен реестру без описания полей (`openvpn-client`):
+  // принимается из любого источника, без предупреждения.
+  final known = ContractRegistry.I.isUncheckedType(type);
+  if (!known && !parsingOwnSource) return null;
+  final tag = label.isNotEmpty ? label : type;
+  final server = ob['server'];
+  final port = ob['server_port'];
+  return UnknownTypeSpec(
+    id: newUuidV4(),
+    tag: tag,
+    label: tag,
+    type: type,
+    body: ob,
+    server: server is String ? server : '',
+    port: port is num ? port.toInt() : 0,
+    rawSource: rawSource,
+    warnings: known ? [] : [UnknownNodeTypeWarning(type)],
+  );
 }
 
 /// §368 §3.3 — имя узла.
@@ -605,7 +509,7 @@ NodeSpec? _buildChain(
     // §4 P5 — цепочка на группу: типово выразима, семантически не поддержана
     // (getEntries развернёт группу в detour-список без её членов).
     final type = target['type']?.toString() ?? '';
-    if (_kSingboxGroupTypes.contains(type)) {
+    if (_isGroupType(type)) {
       warnings.add(DetourToGroupWarning(raw));
       return null;
     }
@@ -618,7 +522,11 @@ NodeSpec? _buildChain(
     visited.add(raw);
     final NodeSpec? spec;
     try {
-      spec = parseSingboxEntry(target);
+      spec = parseSingboxEntry(
+        _sanitizedEntry(target),
+        rawSource: _prettyJson(target),
+        sanitizedFrom: BodySource.singbox,
+      );
     } catch (_) {
       // Битое звено: узел-владелец важнее цепочки.
       warnings.add(DetourTargetMissingWarning(raw));
@@ -652,9 +560,9 @@ AutoSelectSpec? _groupToSpec(
   final warnings = <NodeWarning>[];
   final type = group['type']?.toString() ?? '';
 
-  // §5.1 — ручной выбор своим типом узла у нас не представлен. Терять состав,
-  // собранный руками, хуже, чем сменить режим отбора.
-  if (type == 'selector') warnings.add(const SelectorAsAutoWarning());
+  // §565 — род несёт сам тип (`genus.by_source.singbox` = `$as_is`):
+  // selector остаётся selector'ом, urltest — urltest'ом.
+  final genus = GroupGenus.resolve(kGenusSourceSingbox, type) ?? GroupGenus.auto;
 
   // §5.2 — состав по ТОЧНЫМ идентичностям, а не regex'ом (как §322 для Xray):
   // тег внутри конфига ведёт ровно к одному outbound'у, который мы уже
@@ -667,6 +575,8 @@ AutoSelectSpec? _groupToSpec(
   final keys = <String>[];
   final refs = <Object>[];
   var lost = 0;
+  final rawDefault = group['default']?.toString() ?? '';
+  Object? def;
   for (final tag in memberTags) {
     // Свой узел этого конфига — приоритет; иначе тег соседнего элемента через
     // таблицу синонимов (§3.6).
@@ -678,6 +588,7 @@ AutoSelectSpec? _groupToSpec(
       lost++;
       continue;
     }
+    if (tag == rawDefault) def ??= node ?? key;
     if (keys.contains(key)) continue;
     keys.add(key);
     refs.add(node ?? key);
@@ -712,15 +623,19 @@ AutoSelectSpec? _groupToSpec(
     // — они ограничивают пул правила (§321 P6).
     membership: const ExplicitMembers([]),
     params: params,
-    // §514 / контракт 1.1.50 (D133-53) — `default` СОХРАНЯЕТСЯ сквозным, не
-    // интерпретируясь. Прежде круг «импорт → бэкап → импорт» у selector'а
-    // терял выбор пользователя молча. В тело ядра поле не идёт (эмит urltest
-    // его не пишет — ядро декодирует с DisallowUnknownFields).
+    genus: genus,
+    // §565 — тело разбора несёт только то, что объявил источник.
+    sourceParamKeys: {
+      for (final k in params.toJson().keys)
+        if (group.containsKey(k)) k,
+    },
+    // §565 — у selector'а `default` — выбранный член, у urltest поле чужое:
+    // сохраняется сквозным (контракт 1.1.50) и в тело не идёт.
     manualDefault: group['default']?.toString() ?? '',
     warnings: warnings,
     rawSource: _prettyJson(group), // §454 — источник группы = её объект
   );
-  groups[spec] = (refs: refs, lost: lost);
+  groups[spec] = (refs: refs, lost: lost, def: def);
   return spec;
 }
 
@@ -730,6 +645,50 @@ int? _asInt(Object? v) => switch (v) {
       final String s => int.tryParse(s.trim()),
       _ => null,
     };
+
+/// §545 — карта, по которой строится модель JSON-узла: entry, очищенный
+/// санитайзером реестра. Связи полей (`conflicts`, `requires`,
+/// `forbidden_for`) судит реестр, как у ссылки (`mappers/uri_pipeline.dart`),
+/// и рукописных копий правил в эмиттере не нужно.
+///
+/// Вход `singbox` — только у авторского тела (§576 п.5: свой сервер или член
+/// папки, вид источника `singbox_outbound`): `max_when` с `except_sources`
+/// написанное автором не подменяет (§473). Тело подписки — вход `other`. Как у прохода
+/// по дословной карте (`annotateFromRawBody`) и гарда сборки. Коды здесь не
+/// собираются: их ставит тот проход, по той же карте и с тем же входом.
+///
+/// Санитайзер переписывает и вложенные карты, поэтому ему идёт глубокая
+/// копия: исходный entry нужен дальше (`rawSource` по §454, резолв detour).
+/// Тела нет (`drop_node`, снято обязательное поле) — модель строится по
+/// сырой карте, как до §545: снимать такой узел при разборе решает §477, а не
+/// этот шаг.
+Map<String, dynamic> _sanitizedEntry(Map<String, dynamic> entry) {
+  if (!ContractRegistry.I.isLoaded) return entry;
+  final type = entry['type'];
+  if (type is! String || type.isEmpty) return entry;
+  final Map<String, dynamic> copy;
+  try {
+    copy = (jsonDecode(jsonEncode(entry)) as Map).cast<String, dynamic>();
+  } catch (_) {
+    return entry;
+  }
+  // §577 — модель авторского узла строится по его телу как написано, с
+  // правками только жёстких правил (та же точка правки, что у сборки).
+  final res = settleSanitized(
+    type,
+    entry,
+    RegistrySanitizer.sanitize(
+      copy,
+      scheme: type,
+      coreVersion: '0.0.0',
+      applyCoreGates: false,
+      // §576 п.5 — `singbox` только у авторского тела; подписка — `other`.
+      source: singboxBodySource,
+    ),
+    authored: parsingAuthoredBody,
+  );
+  return res.body ?? entry;
+}
 
 /// §302 — стабильный отступ для показа фрагмента конфига пользователю.
 String _prettyJson(Object? value) {

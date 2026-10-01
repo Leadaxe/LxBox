@@ -1,0 +1,33 @@
+{
+  "meta": {
+    "body_kind": "singbox-config"
+  },
+  "nodes": [
+    {
+      "entry": {
+        "advertise_routes": [
+          "192.168.10.0/24",
+          "10.1.2.3/32",
+          "fd00::/64"
+        ],
+        "type": "tailscale"
+      },
+      "kind": "endpoint",
+      "label": "ts-routes",
+      "scheme": "tailscale",
+      "warnings": [
+        {
+          "code": "tailscale_default_route_advertised",
+          "path": "advertise_routes[2]",
+          "value": "0.0.0.0/0"
+        },
+        {
+          "code": "tailscale_default_route_advertised",
+          "path": "advertise_routes[4]",
+          "value": "::/0"
+        }
+      ]
+    }
+  ],
+  "v": 1
+}

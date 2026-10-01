@@ -1,0 +1,15 @@
+{
+  "rules": [
+    { "name": "Before the node",     "enabled": true, "outbound": "proxy" },
+    { "name": "After the node",      "enabled": true, "outbound": "proxy" },
+    { "name": "Last on the axis",    "enabled": true, "outbound": "proxy" }
+  ],
+  "warnings": ["backup_section_record_dropped"],
+  "warning_reasons": {
+    "backup_section_record_dropped": ["not_allowed"]
+  },
+  "root_servers": ["home-ts", "bare-srv"],
+  "folders": {
+    "Carriers": ["fm-ts"]
+  }
+}

@@ -1,6 +1,6 @@
 # §225 — Raw-JSON тип кастомного правила маршрутизации (GitHub #17)
 
-**Тип:** feature-изменение фичи [030 custom routing rules](../features/030%20custom%20routing%20rules/spec.md)
+**Тип:** feature-изменение фичи [030 custom routing rules](../tasks/030F-custom-routing-rules/spec.md)
 **Статус:** ✅ Реализовано (unit-тесты зелёные, analyze чист; device-verify pending)
 **Приоритет:** Medium (power-user; закрывает #17 одним механизмом)
 **Связано:** §030 (custom rules), §033 (preset), #17 (FR: полный набор route actions),

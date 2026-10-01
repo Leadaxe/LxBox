@@ -6,6 +6,7 @@ import '../../../models/node_warning.dart';
 import '../../../models/ui_msg.dart';
 import '../../../models/codec/node_link_record.dart';
 import '../../../models/server_list.dart';
+import '../../../models/source_entry.dart';
 import '../../node_link_address.dart';
 import '../context.dart';
 import '../contract/errors.dart';
@@ -23,7 +24,8 @@ import '_shared.dart';
 /// Routes:
 /// - `GET    /subs`               → list (alias для /state/subs)
 /// - `POST   /subs`               → create (body: `{"input":"<url|URI|WG|JSON>"}`)
-/// - `POST   /subs/reorder`       → reorder (body: `{"order":[id,...]}`)
+/// - `POST   /subs/reorder`       → reorder (body: `{"order":[source_key,...]}`,
+///   §524 — ключи любого рода: `id:<uuid>` / `chain:<tag>`; голый uuid тоже)
 /// - `GET    /subs/{id}`          → single
 /// - `PATCH  /subs/{id}`          → update meta (enabled/name/url/identity/...)
 /// - `DELETE /subs/{id}`          → remove
@@ -118,11 +120,21 @@ Future<DebugResponse> subsHandler(DebugRequest req, DebugContext ctx) async {
   throw NotFound('subs path: $path');
 }
 
+/// §524 — ВЕСЬ список источников в порядке `sources[]`: подписки, серверы,
+/// папки и цепочки одним массивом, как их видит пользователь. До §524 ответ
+/// нёс только контейнеры, и смешанный порядок диска этим API нельзя было ни
+/// прочитать, ни выразить.
 Future<DebugResponse> _list(DebugContext ctx, DebugRequest req) async {
   final sub = ctx.requireSub();
   final reveal = req.qBool('reveal');
-  final entries = sub.entries.map((e) => serializeSubEntry(e, reveal: reveal)).toList();
-  return JsonResponse(entries);
+  final live = {for (final e in sub.entries) sourceKeyForIdOf(e.id): e};
+  final out = <Map<String, Object?>>[];
+  for (final e in await sub.sourceEntries()) {
+    final liveEntry = live[e.sourceKey];
+    if (e is ContainerEntry && liveEntry == null) continue;
+    out.add(serializeSourceEntry(e, reveal: reveal, liveEntry: liveEntry));
+  }
+  return JsonResponse(out);
 }
 
 Future<DebugResponse> _single(String id, DebugContext ctx, DebugRequest req) async {
@@ -387,32 +399,35 @@ Future<DebugResponse> _reorder(DebugRequest req, DebugContext ctx) async {
     throw const BadRequest('body must contain "order": [id, ...]');
   }
   final sub = ctx.requireSub();
-  final current = sub.entries.map((e) => e.id).toList();
-  if (order.length != current.length) {
+  // §524 — порядок ОБЩЕГО списка: элементами могут быть ключи любого рода
+  // (`id:<uuid>` / `chain:<tag>`, поле `source_key` ответа `GET /subs`). Голый
+  // uuid тоже принимается — так звали этот API до §524, и клиенты его знают.
+  final entries = await sub.sourceEntries();
+  final keys = [
+    for (final raw in order)
+      raw.contains(':') ? raw : sourceKeyForIdOf(raw),
+  ];
+  final current = [for (final e in entries) e.sourceKey];
+  if (keys.length != current.length) {
     throw BadRequest(
-      'order length ${order.length} != current sub count ${current.length}',
+      'order length ${keys.length} != current source count ${current.length}',
     );
   }
-  final missing = current.toSet().difference(order.toSet());
-  final extra = order.toSet().difference(current.toSet());
+  final missing = current.toSet().difference(keys.toSet());
+  final extra = keys.toSet().difference(current.toSet());
   if (missing.isNotEmpty || extra.isNotEmpty) {
     throw BadRequest(
-      'order must contain exactly the current sub IDs '
+      'order must contain exactly the current source keys '
       '(missing: $missing, extra: $extra)',
     );
   }
-  // moveEntry by-one от текущей позиции до target'а. O(n²) но n обычно ≤10.
-  for (var targetIdx = 0; targetIdx < order.length; targetIdx++) {
-    final id = order[targetIdx];
-    final curIdx = sub.entries.indexWhere((e) => e.id == id);
-    if (curIdx != targetIdx) {
-      await sub.moveEntry(curIdx, targetIdx);
-    }
+  if (!await sub.applySourceOrder(keys)) {
+    throw const BadRequest('reorder rejected (see app log)');
   }
   return JsonResponse({
     'ok': true,
     'action': 'subs-reorder',
-    'count': order.length,
+    'count': keys.length,
   });
 }
 

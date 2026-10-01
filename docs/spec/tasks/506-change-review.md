@@ -5,7 +5,7 @@
 | **Статус** | **Released в v2.25.2** (24.09.2026). Готово (отчёт; код не правился). Ноты и архив v2.25.0 приведены к пререлизу; приёмка на эмуляторе — владелец 20.09.2026. Тег не ставился. |
 | **Дата** | 2026-09-20 |
 | **Источник** | сверка `develop` с тегом v2.24.4 перед v2.25.0 |
-| **Связанные** | фичи [460](../features/460%20contract-registry-bundle/spec.md), [472](../features/472%20unified-parse-pipeline/spec.md), [478](../features/478%20core-rejected-node-auto-disable/spec.md), [480](../features/480%20registry-driven-mapper/spec.md); задачи 479, 489–505; §291 |
+| **Связанные** | фичи [460](../tasks/460F-contract-registry-bundle/spec.md), [472](../tasks/472F-unified-parse-pipeline/spec.md), [478](../tasks/478F-core-rejected-node-auto-disable/spec.md), [480](../tasks/480F-registry-driven-mapper/spec.md); задачи 479, 489–505; §291 |
 | **База** | тег `v2.24.4` (`1961b20a`, 2026-09-17 23:24) |
 | **Голова на момент сверки** | `develop` `6d3fe599` (`v2.24.4-dev.267`) |
 
@@ -17,7 +17,7 @@ v2.25.0 не ставился.
 
 - эта задача (отчёт): D1 — вердикт владельца 20.09.2026 (не чинить);
   D17 — недоработка кеша `body` / `warnings` (владелец, 20.09.2026)
-- [478](../features/478%20core-rejected-node-auto-disable/spec.md) — норма
+- [478](../tasks/478F-core-rejected-node-auto-disable/spec.md) — норма
   «автомат = кнопка Start», Kotlin/прочий Dart не оборачивать
 
 ---

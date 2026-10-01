@@ -5,7 +5,7 @@
 | Статус | Released в v1.9.0 (выполнен **внутри PR §048** при срабатывании trigger'а) |
 | Дата | 2026-05-12 |
 | Зависимости | Нет. Pure refactor. |
-| Связанные | [`features/048 home-node-filters`](../features/048%20home-node-filters/spec.md) — extract делается внутри этого PR если itemBuilder раздулся или появился второй call-site `NodeRow`. |
+| Связанные | [`tasks/048F-home-node-filters`](../tasks/048F-home-node-filters/spec.md) — extract делается внутри этого PR если itemBuilder раздулся или появился второй call-site `NodeRow`. |
 | Триггер | `NodeRow` widget принимает 14+ параметров через конструктор (`tag`, `active`, `delay`, `pingBusy`, `tunnelUp`, `busy`, callbacks, `urltestNow`, `hasDetour`, `protocolLabel` …). Это **partial view-model** в форме arguments-bag. При расширении (filter feature добавляет `matches: bool`) — список параметров растёт, чище упаковать в named class. |
 
 ## Когда extract имеет смысл

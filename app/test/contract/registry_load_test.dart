@@ -20,9 +20,13 @@ void main() {
   group('ContractRegistry', () {
     setUpAll(loadTestRegistry);
 
-    test('реестр 1.1.52 грузится', () {
+    // Версия — из VERSION зеркала, литерал устаревал бы на каждом бампе.
+    final assetsVersion =
+        File('assets/contract/VERSION').readAsStringSync().trim();
+
+    test('реестр грузится с версией из VERSION', () {
       expect(ContractRegistry.I.isLoaded, isTrue);
-      expect(ContractRegistry.I.version, '1.1.52');
+      expect(ContractRegistry.I.version, assetsVersion);
     });
 
     // §468 (контракт 1.1.2) — severity кода живёт в реестре, а рукописный
@@ -40,10 +44,22 @@ void main() {
       expect(schema, isNotNull, reason: 'у vless обязана быть секция body');
       expect(schema!.core, '1.14.1-lx.4');
 
-      // Поля-ссылки остаются ссылками — санитайзер спускается в них сам.
-      expect(schema.fields['tls']!.ref, 'tls');
-      expect(schema.fields['transport']!.ref, 'transports');
-      expect(schema.fields['multiplex']!.ref, 'multiplex');
+      // §553 — ссылки развёрнуты в поля-объекты с вложенной схемой и
+      // пометкой происхождения; транспорт — с вариантами по `type`.
+      final tls = schema.fields['tls']!;
+      expect(tls.type, 'object');
+      expect(tls.originRef, 'tls');
+      expect(tls.order!.first, 'enabled');
+      expect(tls.fields!['reality']!.fields!['public_key'], isNotNull);
+      // `absent_when` секции переехал в поле.
+      expect(tls.absentWhen, {'enabled': false});
+      final transport = schema.fields['transport']!;
+      expect(transport.originRef, 'transports');
+      expect(transport.discriminator, 'type');
+      expect(transport.variants!['ws']!.fields!['path'], isNotNull);
+      expect(transport.variants!['xhttp']!.order, contains('mode'));
+      expect(schema.fields['multiplex']!.originRef, 'multiplex');
+      expect(schema.fields['multiplex']!.fields, isNotEmpty);
 
       // `__dialer` влился плоско: слота в порядке нет, а поля dialer есть,
       // причём ровно на его месте — в хвосте, как в структуре ядра.
@@ -53,9 +69,65 @@ void main() {
       expect(schema.order.indexOf('bind_interface'),
           greaterThan(schema.order.indexOf('transport')));
 
-      // Скаляры dialer.common доступны по своим именам.
-      expect(schema.fields['server']!.ref, 'dialer.common');
-      expect(schema.fields['server_port']!.ref, 'dialer.common');
+      // Скаляры dialer.common развёрнуты в поля суб-схемы (§553).
+      expect(schema.fields['server']!.originRef, 'dialer.common');
+      expect(schema.fields['server_port']!.originRef, 'dialer.common');
+    });
+
+    // §553 — ссылки развёрнуты при загрузке, как у лаунчера (`registry.go`,
+    // `resolveSection`): читатель схемы не видит обёрток `type: ref`.
+    // Не разрешённая ссылка при загрузке остаётся обёрткой — здесь она и
+    // ловится.
+    test('§553 каждая ссылка бандла разрешена', () {
+      final unresolved = <String>[];
+      void walk(Map<String, FieldSchema>? fields, String prefix) {
+        if (fields == null) return;
+        for (final e in fields.entries) {
+          final path = '$prefix.${e.key}';
+          if (e.value.type == 'ref') {
+            unresolved.add('$path → ${e.value.ref}');
+          }
+          walk(e.value.fields, path);
+          for (final v in (e.value.variants ?? const {}).entries) {
+            walk(v.value.fields, '$path.${v.key}');
+          }
+        }
+      }
+
+      for (final type in ContractRegistry.I.protocolNames) {
+        walk(ContractRegistry.I.schemaFor(type)?.fields, type);
+      }
+      expect(unresolved, isEmpty);
+    });
+
+    test('§553 именованная ссылка несёт правило суб-схемы', () {
+      for (final type in ContractRegistry.I.protocolNames) {
+        final server = ContractRegistry.I.schemaFor(type)?.fields['server'];
+        if (server == null) continue;
+        expect(server.required, isTrue, reason: '$type.server');
+        expect(server.onInvalid?['action'], 'drop_node',
+            reason: '$type.server');
+        expect(server.format, 'host', reason: '$type.server');
+      }
+      // masque.network_list → dialer.common.network: правило сетевое, имя
+      // поля своё, описание — обёртки.
+      final nl =
+          ContractRegistry.I.schemaFor('masque')!.fields['network_list']!;
+      expect(nl.originRef, 'dialer.common');
+      expect(nl.type, 'listable_string');
+      expect(nl.values, containsAll(['tcp', 'udp']));
+      expect(nl.normalize, 'trim_lower');
+      expect(nl.onInvalid?['code'], 'type_invalid');
+      expect(nl.raw['impl'], contains('masque'));
+    });
+
+    test('§553 обёртка ужесточает required объектной ссылки', () {
+      // У суб-схемы tls обязательности нет, у hysteria2 её задаёт обёртка.
+      final h2 = ContractRegistry.I.schemaFor('hysteria2')!.fields['tls']!;
+      expect(h2.required, isTrue);
+      expect(h2.originRef, 'tls');
+      final vless = ContractRegistry.I.schemaFor('vless')!.fields['tls']!;
+      expect(vless.required, isFalse);
     });
 
     test('транспорт выбирается по дискриминатору transport.type', () {
@@ -93,26 +165,38 @@ void main() {
       expect(w.params, contains('value'));
     });
 
-    test('каждый файл protocols/ прочитан — состав списка не разошёлся', () {
-      // Список файлов в registry.dart перечислен поимённо (rootBundle каталог
-      // не листает). Бамп контракта, добавивший протокол, обязан попасть и
-      // туда — иначе схема новой записи молча не нашлась бы.
+    test('§566 каждый файл protocols/ прочитан — состав из каталога', () {
+      // Состав протоколов берётся листингом каталога (на диске) или
+      // манифестом ассетов (бандл), а не списком в коде: протокол, приехавший
+      // бампом контракта, обязан загрузиться без правки Dart.
       final onDisk = Directory('$kRegistryRoot/registry/protocols')
           .listSync()
           .whereType<File>()
           .where((f) => f.path.endsWith('.json'))
           .length;
-      var loaded = 0;
-      for (final type in const [
-        'anytls', 'chain', 'http', 'hysteria', 'hysteria2', 'masque', 'naive',
-        'shadowsocks', 'socks', 'ssh', 'tailscale', 'trojan', 'tuic', 'vless',
-        'vmess', 'wireguard',
-      ]) {
-        if (ContractRegistry.I.schemaFor(type) != null) loaded++;
-      }
-      // group.json схемы тела не несёт (selector|urltest) — отсюда −1.
-      expect(loaded, onDisk - 1,
-          reason: 'список _kProtocolFiles разошёлся с registry/protocols/');
+      // Ключ записи — `singbox_type`, у всех файлов он свой.
+      expect(ContractRegistry.I.protocolNames.length, onDisk);
+    });
+
+    test('§566 load() берёт состав protocols/ из манифеста', () async {
+      // Манифест бандла подменяется листингом зеркала: ровно то, что прод
+      // получил бы от `AssetManifest`, плюс посторонний путь, который в
+      // состав попадать не должен.
+      const root = 'assets/contract';
+      final paths = [
+        for (final f in Directory('$root/registry/protocols')
+            .listSync()
+            .whereType<File>())
+          '$root/registry/protocols/${f.uri.pathSegments.last}',
+        '$root/registry/tls.json',
+      ];
+      final before = ContractRegistry.I.protocolNames.toSet();
+      ContractRegistry.I.resetForTesting();
+      await ContractRegistry.I.load(
+        loader: (p) => File(p).readAsString(),
+        lister: () async => paths,
+      );
+      expect(ContractRegistry.I.protocolNames.toSet(), before);
     });
 
     test('зеркало assets совпадает с копией контракта', () async {
@@ -120,7 +204,7 @@ void main() {
       // check_contract_lock; здесь при наличии вендоренной копии сверяем
       // версию с ней. Без копии (CI, чистый worktree) кейс не скипается:
       // зеркало уже проверено тестами выше.
-      expect(ContractRegistry.I.version, '1.1.52');
+      expect(ContractRegistry.I.version, assetsVersion);
       expect(ContractRegistry.I.schemaFor('vless'), isNotNull);
       if (!hasVendorContract) return;
       final mirrorVersion = ContractRegistry.I.version;

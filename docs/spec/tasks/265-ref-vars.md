@@ -93,7 +93,7 @@ Ref-var несёт только имя. Метаданные для UI/коэр�
 
 - **docs/TEMPLATE.md** — раздел про vars/`selectable_rules`: описать синтаксис `{"ref": ...}`,
   семантику (глобальный storage, метаданные из целевой var), отличие от собственной preset-var.
-- **docs/spec/features/120 template-engine-typed-vars-and-if/spec.md** — добавить раздел
+- **docs/spec/tasks/120F-template-engine-typed-vars-and-if/spec.md** — добавить раздел
   «Ref-vars» рядом с описанием типов var.
 
 ## 8. Тесты

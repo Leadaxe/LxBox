@@ -5,9 +5,9 @@
 | Статус | Реализовано, тесты на временной ФС зелёные. Device-verify не проводился |
 | Дата | 2026-09-15 |
 | Коммиты | `docs(445)` 71b45697 — решение; `feat(445)` c22d7d28 — сервис, сборка, реестр, Workspaces; `test(445)` f0d2b297; `docs(445)` — итог в §435 §9.8, STORAGE, CHANGELOG |
-| Норма | [§435](../features/435%20node-sections-tailscale/spec.md) §9.8 (согласована с лаунчером 14.09, NODE_SECTIONS.md §6) |
+| Норма | [§435](435-node-sections-tailscale.md) §9.8 (согласована с лаунчером 14.09, NODE_SECTIONS.md §6) |
 | Решение владельца | «Workspaces продумать; удалять папки при удалении узла; переименовывать; всё сделать» |
-| Связанные | §435 (узел Tailscale, `state_directory`), [§439](../features/439%20storage-contract-1-0/spec.md) (адреса узлов, реестр ссылок, слои §2.5), [§417](../features/417%20workspaces/spec.md) (Workspaces), [§437](437-tailscale-bundle-import.md) (узлы Tailscale из вставки) |
+| Связанные | §435 (узел Tailscale, `state_directory`), [§439](../tasks/439F-storage-contract-1-0/spec.md) (адреса узлов, реестр ссылок, слои §2.5), [§417](../tasks/417F-workspaces/spec.md) (Workspaces), [§437](437-tailscale-bundle-import.md) (узлы Tailscale из вставки) |
 
 ## Проблема
 

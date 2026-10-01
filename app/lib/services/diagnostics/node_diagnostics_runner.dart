@@ -2,6 +2,7 @@ import '../../models/node_spec.dart';
 import '../../models/tunnel_status.dart';
 import '../../vpn/box_vpn_client.dart';
 import '../../vpn/cc_channel.dart';
+import '../builder/core_chain_capability.dart';
 import '../probe/probe_config.dart';
 import '../probe/probe_lifecycle.dart';
 
@@ -117,7 +118,9 @@ class NodeDiagnosticsRunner {
     NodeSpec node, {
     required String url,
   }) async {
-    final cfg = buildProbeConfig([node]);
+    // §546 — версия ядра для гарда реестра — та же, что у боевой сборки.
+    final coreVersion = await CoreVersionCache.ensure(_vpn.getCoreVersion);
+    final cfg = buildProbeConfig([node], coreVersion: coreVersion);
     final tag = cfg.tagByIndex[0];
     if (cfg.configJson == null || tag == null) {
       // Узел-группа (§322/§336) или несобираемый emit — ядро на таком конфиге

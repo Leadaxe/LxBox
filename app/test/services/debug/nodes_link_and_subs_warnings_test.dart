@@ -8,7 +8,9 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/controllers/subscription_controller.dart';
+import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
+import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/debug/context.dart';
 import 'package:lxbox/services/debug/contract/errors.dart';
 import 'package:lxbox/services/debug/debug_registry.dart';
@@ -200,6 +202,139 @@ void main() {
 
   });
 
+  // §520 — карта `warnings` ключевалась СЫРЫМ `NodeSpec.tag`, и у
+  // узлов-тёзок (§310 — провайдер зовёт все узлы `proxy`; дубль
+  // `vpn://`↔`amneziawg://` под одним именем) записи затирали друг друга
+  // last-write-wins: предупреждения ранних дублей молча пропадали, ответ
+  // отдавал меньше ключей, чем `nodes_count`. Ключ — сырой тег узла в
+  // контейнере (`containerRawTags`, NODE_LINK §2.2): тот же адрес, что у
+  // `nodes[]`, `/nodes/link?tag=` и `switch-node`.
+  group('serializeEntryWarnings — тёзки не затирают друг друга (§520)', () {
+    // Синтетика, а не URI-конвейер: через какой ввод разбор выдаст ИМЕННО
+    // трёх тёзок с разными кодами — вопрос конвейера, а пиним мы здесь
+    // ключевание ответа.
+    VlessSpec node(String id, String tag, List<NodeWarning> warnings) =>
+        VlessSpec(
+          id: id,
+          tag: tag,
+          label: tag,
+          server: '$id.example',
+          port: 443,
+          rawSource: 'vless://u@$id.example:443#$tag',
+          uuid: 'ffffffff-ffff-ffff-ffff-ffffffffffff',
+          warnings: warnings,
+        );
+
+    test('3 узла с одним сырым тегом → 3 ключа, все предупреждения на месте',
+        () {
+      final entry = SubscriptionEntry(
+        list: SubscriptionServers(
+          id: 'sub-520',
+          name: 'Twins',
+          enabled: true,
+          tagPrefix: '',
+          detourPolicy: const DetourPolicy(),
+          url: 'https://provider.example/sub',
+          nodes: [
+            node('n1', 'proxy', const [
+              RegistryWarning(
+                  code: 'reality_fp_not_chrome',
+                  path: 'tls.utls.fingerprint',
+                  value: 'safari'),
+            ]),
+            node('n2', 'proxy', const [
+              RegistryWarning(code: 'awg_header_invalid', path: 'h1', value: 'abc'),
+            ]),
+            node('n3', 'proxy', const [UnknownNodeTypeWarning('openvpn-client')]),
+          ],
+        ),
+      );
+
+      final map = serializeEntryWarnings(entry);
+
+      // Раньше здесь был ОДИН ключ `proxy` с предупреждениями последнего узла.
+      expect(map.length, 3);
+      // Первый тёзка держит дословный тег, следующие — уникализация источника
+      // (`X`, `X-2`, `X-3`), ровно как в `nodes[]` и у `switch-node`.
+      expect(map.keys.toList(), ['proxy', 'proxy-2', 'proxy-3']);
+
+      List<Map<String, Object?>> at(String key) =>
+          (map[key] as List).cast<Map<String, Object?>>();
+
+      expect(at('proxy').single['code'], 'reality_fp_not_chrome');
+      expect(at('proxy-2').single['code'], 'awg_header_invalid');
+      // Класс приложения: кода нет, текст есть.
+      expect(at('proxy-3').single['code'], isNull);
+      expect(at('proxy-3').single['text_en'], contains('Unknown node type'));
+    });
+
+    test('nodes_count == warnings.length при тёзках (вход с 2 тёзками)', () {
+      // Вход с двумя тёзками: 4 узла, из них двое зовутся одинаково.
+      final entry = SubscriptionEntry(
+        list: SubscriptionServers(
+          id: 'sub-520-d',
+          name: 'Entry D',
+          enabled: true,
+          tagPrefix: '',
+          detourPolicy: const DetourPolicy(),
+          url: 'https://provider.example/d',
+          nodes: [
+            node('d1', 'Frankfurt', const []),
+            node('d2', 'Tokyo', const [
+              RegistryWarning(code: 'awg_header_invalid', path: 'h2', value: 'x'),
+            ]),
+            node('d3', 'Tokyo', const [UnknownNodeTypeWarning('openvpn-client')]),
+            node('d4', 'Amsterdam', const []),
+          ],
+        ),
+        // Как его ставит контроллер на разборе выдачи
+        // (`entry.nodeCount = nodes.length`): по умолчанию у подписки
+        // счётчик берётся из `lastNodeCount` хранения, а не из тела.
+        nodeCount: 4,
+      );
+
+      final body = {
+        ...serializeSubEntry(entry, reveal: false),
+        'warnings': serializeEntryWarnings(entry),
+      };
+      final map = body['warnings'] as Map<String, Object?>;
+
+      // Счётчик и список больше не расходятся — это и был симптом §520.
+      expect(body['nodes_count'], 4);
+      expect(map.length, 4);
+      expect(map.keys.toList(),
+          ['Frankfurt', 'Tokyo', 'Tokyo-2', 'Amsterdam']);
+      // Узел без предупреждений всё ещё присутствует пустым списком.
+      expect(map['Frankfurt'], isEmpty);
+      expect(map['Amsterdam'], isEmpty);
+      // Оба тёзки сохранили СВОИ предупреждения.
+      expect((map['Tokyo'] as List).single, isA<Map<String, Object?>>());
+      expect(((map['Tokyo'] as List).single as Map)['code'],
+          'awg_header_invalid');
+      expect(((map['Tokyo-2'] as List).single as Map)['code'], isNull);
+    });
+
+    test('запись без тёзок: ключи дословно равны сырым тегам', () {
+      final entry = SubscriptionEntry(
+        list: SubscriptionServers(
+          id: 'sub-520-uniq',
+          name: 'Uniq',
+          enabled: true,
+          tagPrefix: '',
+          detourPolicy: const DetourPolicy(),
+          url: 'https://provider.example/u',
+          nodes: [
+            node('u1', '🇩🇪 Frankfurt', const []),
+            node('u2', 'Tokyo', const []),
+          ],
+        ),
+      );
+      // Обратная совместимость формы: без тёзок ответ не двигается вовсе.
+      expect(serializeEntryWarnings(entry).keys.toList(),
+          ['🇩🇪 Frankfurt', 'Tokyo']);
+    });
+  });
+
   // Форма записи пинится прямо на сериализаторе: через какой URI разбор
   // выдаст предупреждение — вопрос конвейера, а проверяем мы здесь ответ.
   // Оба вида идут через общий интерфейс NodeWarning, поэтому перевод классов
@@ -218,6 +353,19 @@ void main() {
       expect(j['title_en'], isA<String>());
       expect(j['text_en'], isA<String>());
       expect(j['text_en'] as String, isNotEmpty);
+      expect(j['applied'], isTrue);
+    });
+
+    // §577 — признак «не применено» у кода авторского тела.
+    test('applied: false у неприменённого правила', () {
+      final j = serializeNodeWarning(const RegistryWarning(
+        code: 'unknown_key',
+        path: 'foo',
+        value: 'bar',
+        applied: false,
+      ));
+      expect(j['applied'], isFalse);
+      expect(j['code'], 'unknown_key');
     });
 
     // Д-2 (эмулятор 19.09.2026) — заголовок зовёт `{path}`, а сериализатор
@@ -236,14 +384,14 @@ void main() {
     });
 
     test('класс приложения: кода нет, text_en есть', () {
-      final j = serializeNodeWarning(const SectionsConflictWarning());
+      final j = serializeNodeWarning(const UnknownNodeTypeWarning('openvpn-client'));
       expect(j['code'], isNull);
       expect(j['path'], isNull);
       expect(j['value'], isNull);
       expect(j['title_en'], isNull);
       // Пиненный английский самого класса — ответ не зависит от локали.
-      expect(j['text_en'], contains('sections'));
-      expect(j['severity'], 'warning');
+      expect(j['text_en'], contains('Unknown node type'));
+      expect(j['severity'], 'info');
     });
   });
 }

@@ -15,13 +15,13 @@ part of '../settings_storage.dart';
 // источников, место — индекс записи (BACKUP §4: порядок записей нормативен).
 // Отдельного ключа и поля позиции нет.
 //
-// Модели при этом разные: `ServerList` — sealed-тип «контейнер узлов», и
-// цепочка вошла бы в него вырожденным членом, которого каждый сайт разбора
-// обязан пропускать. Поэтому два репозитория над одним массивом:
-// `sources_rules.dart` читает и переписывает часть без цепочек, этот файл —
-// часть цепочек. Каждый писатель вставляет свой род в СУЩЕСТВУЮЩИЕ слоты
-// (`_spliceSourceKind`), не склеивая «сначала узлы, потом цепочки». Полная
-// перестановка общего списка — `reorderSources`.
+// §524 — и МОДЕЛЬ теперь одна: супертип `SourceEntry` накрывает контейнеры
+// (`ServerList`) и цепочки (`SourceChain`), единый писатель массива живёт в
+// `sources_rules.dart` (`_writeEntries`). Этот файл остался ФАСАДОМ по роду
+// цепочек: у цепочки своя идентичность (тег, а не uuid), свой гейт тега и свой
+// heal позиций — CRUD-операции по цепочкам осмысленны сами по себе. Двух
+// писателей над одним массивом больше нет, и `_spliceSourceKind` вместе с ними
+// удалён: фасад читает список ЦЕЛИКОМ и отдаёт его целиком.
 //
 // Инвариант «позиция вправе сослаться только на цепочку ВЫШЕ» считается по
 // взаимному порядку цепочек: сервер или подписка между двумя цепочками
@@ -39,48 +39,34 @@ Future<List<SourceChain>> _getChains() async => _chainsOf(
     );
 
 /// Цепочки документа хранения [doc] (живой файл, снимок, блок `storage`
-/// бэкапа). Запись без тега не адресуема — причина уходит в [onCorrupt];
-/// прочитанное не дословно — строками в [onNote].
+/// бэкапа) — срез единого чтения [_sourceEntriesOf] (§524). Запись без тега
+/// не адресуема: причина уходит в [onCorrupt], сама запись остаётся в списке
+/// непрозрачной.
 List<SourceChain> _chainsOf(
   Map<String, dynamic> doc, {
   void Function(Object error)? onCorrupt,
   void Function(String note)? onNote,
-}) {
-  final out = <SourceChain>[];
-  for (final r in _recordsAt(doc[kSourcesKey])) {
-    if (!_isChainRecord(r)) continue;
-    final notes = <String>[];
-    final read = chainFromRecord(r, notes: notes);
-    final chain = read.value;
-    if (chain == null) {
-      onCorrupt?.call(read.dropped!);
-      continue;
-    }
-    if (onNote != null) {
-      notes.forEach(onNote);
-      if (read.unknownKeys.isNotEmpty) {
-        onNote('chain "${chain.tag}": keys not kept by the model: '
-            '${read.unknownKeys.join(', ')}');
-      }
-    }
-    out.add(chain);
-  }
-  return out;
-}
+}) =>
+    [
+      for (final e
+          in _sourceEntriesOf(doc, onCorrupt: onCorrupt, onNote: onNote))
+        if (e is ChainEntry) e.chain,
+    ];
 
-/// Записать цепочки в порядке [chains], не трогая слоты прочих источников.
-/// Новая цепочка, которой не хватило слота, встаёт в конец массива.
-Future<void> _setChains(List<SourceChain> chains, {bool flush = true}) async {
-  final data = await _load();
-  data[kSourcesKey] = _spliceSourceKind(
-    existing: _recordsAt(data[kSourcesKey]),
-    ours: [for (final c in chains) chainToRecord(c)],
-    isOurs: _isChainRecord,
-  );
-  SettingsStorage._cache = data;
-  SettingsStorage.markConfigDirty(); // §113 — config-significant
-  if (flush) await _save();
-}
+/// Записать цепочки в порядке [chains], не двигая места прочих источников.
+/// Новая цепочка, которой не хватило места, встаёт в конец списка.
+///
+/// §524 — фасад над единым писателем [_writeEntries]: список читается целиком,
+/// род `chain` заменяется составом [chains] ([_replaceKind]). Сопоставления
+/// слотов по ключу больше нет — чужие записи писатель держит на руках.
+Future<void> _setChains(List<SourceChain> chains, {bool flush = true}) async =>
+    _saveSourceEntries(
+      _replaceKind<ChainEntry>(
+        await _getSourceEntries(),
+        [for (final c in chains) ChainEntry(c)],
+      ),
+      flush: flush,
+    );
 
 /// Создать цепочку. [tag] — по умолчанию первый свободный `chain-N`
 /// ([nextChainTag]).

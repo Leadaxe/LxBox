@@ -9,12 +9,12 @@ import '../models/auto_select.dart';
 import '../models/core_reject_verdict.dart';
 import '../models/import_rule.dart';
 import '../models/node_link.dart';
-import '../models/node_sections.dart';
 import '../models/node_spec.dart';
 import '../models/node_warning.dart';
 import '../models/codec/source_record.dart';
 import '../models/server_list.dart';
-import '../models/tailscale_bundle.dart';
+import '../models/source_replace.dart';
+import '../models/source_entry.dart';
 import '../models/ui_msg.dart';
 import '../models/subscription_meta.dart';
 import '../models/tunnel_status.dart';
@@ -26,7 +26,6 @@ import '../services/automation/event_emitter.dart';
 import '../services/config_dirty_check.dart';
 import '../services/error_humanize.dart';
 import '../services/parse_hints.dart';
-import '../services/record_vars.dart';
 import '../services/relative_time.dart';
 import '../services/node_emoji.dart';
 import '../services/node_hash.dart';
@@ -37,10 +36,12 @@ import '../services/tailscale_state/state_keys.dart';
 import '../services/tailscale_state/state_store.dart';
 import '../services/url_mask.dart';
 import '../services/builder/build_config.dart';
+import '../services/builder/if_engine.dart' show TemplateWarning;
 import '../services/builder/core_chain_capability.dart';
 import '../vpn/box_vpn_client.dart';
 import '../services/parser/body_decoder.dart';
 import '../services/parser/ini_parser.dart';
+import '../services/parser/json_comments.dart';
 import '../services/parser/parse_all.dart';
 import '../services/parser/tailscale_split.dart';
 import '../services/parser/uri_parsers.dart';
@@ -79,8 +80,8 @@ enum _JsonAdd { added, empty, notJson }
 class SubscriptionController extends ChangeNotifier {
   /// §515 — поколение Workspaces, в котором контроллер родился. Сцена на диске
   /// принадлежит ровно одному слоту, а `_persist()` переписывает весь набор
-  /// не-цепочек целиком (`sources_rules.dart` → `_spliceSourceKind`) — без
-  /// привязки к слоту. Пересоздание экрана (`main.dart`, ключ по
+  /// контейнеров целиком (§524 — `sources_rules.dart` → `_writeEntries` через
+  /// фасад `saveServerLists`) — без привязки к слоту. Пересоздание экрана (`main.dart`, ключ по
   /// `WorkspaceController.generation`) даёт новый контроллер, но асинхронные
   /// хвосты старого (летящий HTTP подписки, 10-секундная пауза апдейтера между
   /// подписками, `toggleAt` из ещё живого обработчика) продолжают жить и
@@ -88,7 +89,7 @@ class SubscriptionController extends ChangeNotifier {
   /// НОВОМУ. Ближайший `load`/`saveAs` копирует испорченную сцену в папку
   /// слота — подмена закрепляется на диске.
   ///
-  /// Барьер стоит на уровне контроллера, а не в `saveServerLists`: там под
+  /// Барьер стоит на уровне контроллера, а не в писателе хранения: там под
   /// него попали бы легитимные писатели, не принадлежащие `HomeScreen`
   /// (импорт бэкапа, Debug API, шаги `_reloadStateFromDisk`), и их записи
   /// молча терялись бы.
@@ -178,6 +179,12 @@ class SubscriptionController extends ChangeNotifier {
   /// §279 Phase 4 — хранимая ошибка = [UiMsg] (рендер в build). null = нет.
   UiMsg? get lastError => _lastError;
 
+  /// §585 — последняя вставка sing-box JSON шла с комментариями `//` или
+  /// `/* */`, и они убраны из источника записи. Экран говорит об этом одной
+  /// строкой («Comments were removed.»).
+  bool get lastCommentsRemoved => _lastCommentsRemoved;
+  bool _lastCommentsRemoved = false;
+
   /// §254 — структурный дубль [lastError]: fatal-issues последней генерации.
   /// UI различает по типу (DetourCycle → bottom sheet со списком виновников
   /// вместо плоского SnackBar). Очищается на входе в generateConfig,
@@ -186,7 +193,7 @@ class SubscriptionController extends ChangeNotifier {
   List<ValidationIssue> get lastFatalIssues => _lastFatalIssues;
 
   /// Фича 478 — обратная карта последней сборки «финальный тег → исходный
-  /// узел» (CANON §9.3). Живёт ровно до следующей сборки: страховка
+  /// узел» (PARSING_PRINCIPLES §9.3). Живёт ровно до следующей сборки: страховка
   /// пересобирает конфиг перед каждым кругом и читает карту сразу.
   Map<String, NodeSpec> _lastTagMap = const {};
   Map<String, NodeSpec> get lastEmittedTagMap => _lastTagMap;
@@ -216,6 +223,23 @@ class SubscriptionController extends ChangeNotifier {
   List<String> get directionsWithoutNodes => _directionsWithoutNodes;
   int _directionsWithoutNodesStamp = 0;
   int get directionsWithoutNodesStamp => _directionsWithoutNodesStamp;
+
+  /// §555 / задача 570 — предупреждения движка шаблона последней успешной
+  /// сборки (`template_degraded`): Home показывает их коротким снеком
+  /// «Template: N warnings» с переходом в шторку кодов. Сохранение они не
+  /// блокируют. Stamp растёт на каждую сборку с непустым списком — один
+  /// показ на сборку.
+  /// §565 / задача 570 — выбор члена ручной группы записан в состояние при
+  /// живом туннеле, а конфиг на диске не пересобран (ядро уже переключено
+  /// вживую). Старт VPN обязан пересобрать конфиг, иначе следующий запуск
+  /// взял бы прежний `default`. Сбрасывается любой сборкой.
+  bool _groupDefaultsPending = false;
+  bool get groupDefaultsPending => _groupDefaultsPending;
+
+  List<TemplateWarning> _templateWarnings = const [];
+  List<TemplateWarning> get templateWarnings => _templateWarnings;
+  int _templateWarningsStamp = 0;
+  int get templateWarningsStamp => _templateWarningsStamp;
 
   UiMsg? _progressMessage;
   UiMsg? get progressMessage => _progressMessage;
@@ -297,7 +321,10 @@ class SubscriptionController extends ChangeNotifier {
         if (body == null || body.isEmpty) continue;
         try {
           final decoded = decode(body);
-          final nodes = parseAll(decoded);
+          // §561 — `dropped[]` сводки источника восстанавливается тем же
+          // разбором кэша, что и узлы: в кодек записи он не пишется.
+          final dropped = <NodeWarning>[];
+          final nodes = parseAll(decoded, dropped: dropped);
           // §302 — применяем те же import-rules к кэшу: иначе после рестарта
           // узлы вернулись бы в ДОзаменном виде, их nodeIdentityHash не совпал
           // бы с персистентными DISABLE-хешами → выключение слетело бы до
@@ -341,6 +368,7 @@ class SubscriptionController extends ChangeNotifier {
             nodes: nodes,
             lastNodeCount: nodes.length,
             disabledHashes: migrated,
+            dropped: summaryDropped(dropped),
           );
           entry._replaceList(next);
           // Результат миграции обязан лечь на диск: иначе legacy-ключи
@@ -666,7 +694,8 @@ class SubscriptionController extends ChangeNotifier {
   /// §130 — MASQUE-узел через `masque://` URI (аналог [_addWarpPlain]).
   Future<void> _addMasqueNode(MasqueAccount account, String tag,
       {String vhttp = 'h3'}) async {
-    final spec = parseMasqueUri(account.toMasqueUri(vhttp: vhttp));
+    final spec =
+        parseLinkViaPipeline(account.toMasqueUri(vhttp: vhttp)) as MasqueSpec?;
     if (spec == null) {
       _lastError = const ErrMsg(ErrKey.invalidMasqueConfig);
       return;
@@ -688,8 +717,9 @@ class SubscriptionController extends ChangeNotifier {
       mtu: spec.mtu,
       idleTimeout: spec.idleTimeout,
       keepAlive: spec.keepAlive,
+      tlsExtra: spec.tlsExtra,
       warnings: spec.warnings,
-    );
+    )..bodyDelta = spec.bodyDelta; // §560/§570 — поля тела вне модели
     _entries.add(SubscriptionEntry(
       list: UserServer(
         id: newUuidV4(),
@@ -760,7 +790,7 @@ class SubscriptionController extends ChangeNotifier {
       mtu: spec.mtu,
       awg: spec.awg,
       warnings: spec.warnings,
-    );
+    )..bodyDelta = spec.bodyDelta; // §560/§570 — поля тела вне модели
     // rawBody = toUri() (с тегом во фрагменте) → тег переживает reload/re-parse.
     _entries.add(SubscriptionEntry(
       list: UserServer(
@@ -783,9 +813,9 @@ class SubscriptionController extends ChangeNotifier {
   Future<void> _addWarpPlain(
       WarpAccount account, String tag, bool includeReserved,
       {int? persistentKeepalive}) async {
-    final spec = parseWireguardUri(account.toWireguardUri(
+    final spec = parseLinkViaPipeline(account.toWireguardUri(
         includeReserved: includeReserved,
-        persistentKeepalive: persistentKeepalive));
+        persistentKeepalive: persistentKeepalive)) as WireguardSpec?;
     if (spec == null) {
       _lastError = const ErrMsg(ErrKey.invalidWarpConfig);
       return;
@@ -803,7 +833,7 @@ class SubscriptionController extends ChangeNotifier {
       mtu: spec.mtu,
       awg: spec.awg,
       warnings: spec.warnings,
-    );
+    )..bodyDelta = spec.bodyDelta; // §560/§570 — поля тела вне модели
     _entries.add(SubscriptionEntry(
       list: UserServer(
         id: newUuidV4(),
@@ -829,7 +859,7 @@ class SubscriptionController extends ChangeNotifier {
     final newRaw = withDefaultEmoji(us.rawBody, us.nodes.first);
     if (newRaw == us.rawBody) return us;
     try {
-      final newNodes = parseAll(decode(newRaw));
+      final newNodes = parseAll(decode(newRaw), own: true);
       return newNodes.isEmpty ? us : us.copyWith(rawBody: newRaw, nodes: newNodes);
     } catch (_) {
       return us;
@@ -873,6 +903,7 @@ class SubscriptionController extends ChangeNotifier {
 
     _busy = true;
     _lastError = null;
+    _lastCommentsRemoved = false;
     notifyListeners();
     // Input может быть URL подписки (с токеном), direct-link (vless://user@host),
     // JSON-outbound. Маскируем, если detect'им URL — иначе только kind.
@@ -926,7 +957,7 @@ class SubscriptionController extends ChangeNotifier {
             mtu: spec.mtu,
             awg: spec.awg,
             warnings: spec.warnings,
-          );
+          )..bodyDelta = spec.bodyDelta; // §560 — поля тела вне модели
         }
         final wgServer = UserServer(
           id: newUuidV4(),
@@ -985,8 +1016,12 @@ class SubscriptionController extends ChangeNotifier {
             list: dlServer, nodeCount: dlServer.nodes.length));
         await _persist();
       } else {
-        switch (await _addJsonNodes(trimmed, origin: origin)) {
+        // §585 — комментарии `//` и `/* */` снимаются до разбора: в источник
+        // записи уходит текст без них.
+        final uncommented = uncommentedJson(trimmed);
+        switch (await _addJsonNodes(uncommented ?? trimmed, origin: origin)) {
           case _JsonAdd.added:
+            _lastCommentsRemoved = uncommented != null;
             await _persist();
           case _JsonAdd.empty:
             // Форму опознали, узлов не собралось — ошибку уже выставил
@@ -1038,7 +1073,10 @@ class SubscriptionController extends ChangeNotifier {
     if (decoded.source.mapper == null) return _JsonAdd.notJson;
 
     final dropped = <NodeWarning>[];
-    final nodes = parseAll(decoded, dropped: dropped);
+    var nodes = parseAll(decoded, dropped: dropped);
+    // §585 — узел незнакомого приложению типа принимается только своей
+    // записью: ровно один узел (свой сервер, а не файловая подписка).
+    if (nodes.isEmpty) nodes = acceptsOwnUnknownType(decoded) ?? nodes;
     if (nodes.isEmpty) {
       _setParseInputReject(ErrKey.noValidOutboundsInJson, text,
           dropped: dropped);
@@ -1063,7 +1101,6 @@ class SubscriptionController extends ChangeNotifier {
           detourPolicy: DetourPolicy.defaults,
           origin: origin,
           rawBody: n.toUri(),
-          sections: sectionsForNewNode(n),
           nodes: [n],
         ));
         _entries.add(SubscriptionEntry(list: srv, nodeCount: 1));
@@ -1101,12 +1138,31 @@ class SubscriptionController extends ChangeNotifier {
         lastUpdateStatus: UpdateStatus.ok,
         lastNodeCount: nodes.length,
         updateIntervalHours: -1, // §129 — файловая: авто-обновления нет
+        dropped: summaryDropped(dropped),
         nodes: nodes,
       );
       _entries.add(SubscriptionEntry(list: list, nodeCount: nodes.length));
       return _JsonAdd.added;
     }
 
+    // §576 п.2 — у своего сервера в источнике голое тело узла; документ и
+    // массив sing-box в источник не попадают.
+    var serverRaw = text;
+    var serverNodes = nodes;
+    if (decoded.source.kind == SourceKind.singboxOutbound) {
+      // Голое тело — байт в байт; разбор заново как авторского тела.
+      final own = parseAll(decoded, own: true);
+      if (own.isNotEmpty) serverNodes = own;
+    } else if (decoded.source.mapper == 'singbox') {
+      final bare = bareBodyTextOf(nodes.first);
+      if (bare != null) {
+        final reparsed = parseAll(decode(bare), own: true);
+        if (reparsed.isNotEmpty) {
+          serverRaw = bare;
+          serverNodes = reparsed;
+        }
+      }
+    }
     final jsonServer = _autoEmoji(UserServer(
       id: newUuidV4(),
       name: '',
@@ -1114,12 +1170,8 @@ class SubscriptionController extends ChangeNotifier {
       tagPrefix: '',
       detourPolicy: DetourPolicy.defaults,
       origin: origin,
-      rawBody: text,
-      // §435 — связка из целого конфига с одним узлом / документа с
-      // `sections` (NODE_SECTIONS.md §6): хозяин секций — контейнер. §437 —
-      // узел Tailscale без извлечённых записей получает каноническую связку.
-      sections: sectionsForNewNode(nodes.first),
-      nodes: nodes,
+      rawBody: serverRaw,
+      nodes: serverNodes,
     ));
     _entries.add(SubscriptionEntry(
         list: jsonServer, nodeCount: jsonServer.nodes.length));
@@ -1164,6 +1216,7 @@ class SubscriptionController extends ChangeNotifier {
           lastUpdateStatus: UpdateStatus.ok,
           lastNodeCount: nodes.length,
           updateIntervalHours: -1, // §129 — файловая: авто-обновления нет
+          dropped: summaryDropped(dropped),
           nodes: nodes,
         ),
         nodeCount: nodes.length,
@@ -1179,7 +1232,6 @@ class SubscriptionController extends ChangeNotifier {
       detourPolicy: DetourPolicy.defaults,
       origin: origin,
       rawBody: text,
-      sections: sectionsForNewNode(nodes.first),
       nodes: nodes,
     ));
     _entries.add(SubscriptionEntry(list: srv, nodeCount: srv.nodes.length));
@@ -1329,6 +1381,7 @@ class SubscriptionController extends ChangeNotifier {
       lastUpdateStatus: UpdateStatus.ok,
       lastNodeCount: result.nodes.length,
       updateIntervalHours: -1, // §129 — файловая: никогда не обновлять авто (-1)
+      dropped: summaryDropped(result.dropped),
       nodes: result.nodes,
     );
     final entry = SubscriptionEntry(list: list, nodeCount: result.nodes.length);
@@ -1395,6 +1448,7 @@ class SubscriptionController extends ChangeNotifier {
         lastNodeCount: result.nodes.length,
         consecutiveFails: 0,
         updateIntervalHours: nextInterval,
+        dropped: summaryDropped(result.dropped),
         nodes: result.nodes,
       );
       entry._replaceList(next);
@@ -1536,7 +1590,7 @@ class SubscriptionController extends ChangeNotifier {
         // Узел тот же объект: реестр ссылок узнаёт в нём бывшего члена.
         origin: UserSource.manual,
         rawBody: m.raw,
-        sections: m.sections, // §435
+        skipPresets: m.skipPresets, // §578
         nodes: [if (m.node != null) m.node!],
       );
 
@@ -1767,13 +1821,7 @@ class SubscriptionController extends ChangeNotifier {
         }
         raw = rawWithName(raw, candidate);
       }
-      // §435 — секции из целого конфига / документа с `sections` едут в
-      // члена папки вместе с телом; §437 — узел Tailscale без них получает
-      // каноническую связку.
-      added.add(FolderMember(
-          raw: raw,
-          nameHint: memberNameHintFor(n),
-          sections: sectionsForNewNode(n)));
+      added.add(FolderMember(raw: raw, nameHint: memberNameHintFor(n)));
     }
     added.setAll(0, _bindAutoMembers(added, nodes, folder.id));
     entry._replaceList(folder.copyWith(members: [...folder.members, ...added]));
@@ -1816,8 +1864,7 @@ class SubscriptionController extends ChangeNotifier {
           result.nodes
               .map((n) => FolderMember(
                   raw: n.rawSource,
-                  nameHint: memberNameHintFor(n),
-                  sections: sectionsForNewNode(n)))
+                  nameHint: memberNameHintFor(n)))
               .toList(),
           result.nodes,
           cur.id);
@@ -1858,7 +1905,7 @@ class SubscriptionController extends ChangeNotifier {
     } else {
       next[hash] = DateTime.now();
     }
-    // Фича 478 / CANON §9.4 — человек включил узел обратно: вердикт ядра
+    // Фича 478 / PARSING_PRINCIPLES §9.4 — человек включил узел обратно: вердикт ядра
     // стирается, следующий старт проверит узел заново. Выключение рукой
     // вердикта не ставит (его ставит только страховка).
     var nextList = list.copyWith(disabledHashes: next);
@@ -1973,7 +2020,8 @@ class SubscriptionController extends ChangeNotifier {
     if (memberIndex < 0 || memberIndex >= folder.members.length) {
       return const ErrMsg(ErrKey.serverNotFound);
     }
-    final trimmed = newRaw.trim();
+    // §576 п.1 — источник члена папки: только тело узла.
+    final trimmed = bareNodeSourceOf(newRaw.trim());
     final hint = nameHint ?? folder.members[memberIndex].nameHint;
     final probe = FolderMember(raw: trimmed, nameHint: hint);
     if (probe.node == null) {
@@ -1981,17 +2029,15 @@ class SubscriptionController extends ChangeNotifier {
     }
     final before = _lists();
     final members = [...folder.members];
-    // §435 — голое тело секции не трогает; документ с `sections` или с
-    // `dns`/`route` (извлечение) замещает их целиком (NODE_SECTIONS.md §7).
-    final imported = probe.node!.importedSections;
+    // §575 — секции из документа в запись не пишутся; прежние секции
+    // записи остаются как были.
     final previous = members[memberIndex].node;
     members[memberIndex] = members[memberIndex].copyWith(
       raw: trimmed,
       nameHint: hint,
-      sections: imported,
     );
     var current = members[memberIndex].node;
-    // Фича 478 / CANON §9.4 п. 1 — человек правил тело в редакторе: вердикт
+    // Фича 478 / PARSING_PRINCIPLES §9.4 п. 1 — человек правил тело в редакторе: вердикт
     // ядра привязан к ТЕЛУ, и на изменённом теле он недействителен. Запись
     // стирается И узел включается обратно — тем же составом полей, что у
     // ручного включения (`toggleMemberAt`). Тело то же (правка имени, пробелы)
@@ -2321,7 +2367,8 @@ class SubscriptionController extends ChangeNotifier {
             FolderMember(
                 raw: server.rawBody,
                 enabled: server.enabled,
-                detour: personalDetour),
+                detour: personalDetour,
+                skipPresets: server.skipPresets), // §578
           ]
         : _bindAutoMembers([
             for (final n in server.nodes)
@@ -2330,10 +2377,8 @@ class SubscriptionController extends ChangeNotifier {
                   nameHint: memberNameHintFor(n),
                   enabled: server.enabled,
                   detour: personalDetour,
-                  // §435 — секции одиночного едут с его (единственным) узлом.
-                  sections: identical(n, server.nodes.first)
-                      ? server.sections
-                      : null),
+                  // §578 — «пропустить пресеты» — поле записи, едет с узлами.
+                  skipPresets: server.skipPresets),
           ], server.nodes, folder.id);
     folderEntry._replaceList(
         folder.copyWith(members: [...folder.members, ...added]));
@@ -2389,9 +2434,73 @@ class SubscriptionController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// §509 — взаимный порядок контейнеров после drag в общем `sources[]`.
-  /// Состав [ids] обязан совпасть с текущими записями; слоты цепочек
-  /// [SettingsStorage.saveServerLists] не двигает.
+  /// §524 — ВЕСЬ список источников в порядке `sources[]`: подписки, серверы,
+  /// папки и цепочки одним рядом. Один упорядоченный список — единственный
+  /// источник истины о порядке; до §524 порядок жил `List<String>` в state
+  /// одного экрана, а контроллер держал только половину записей.
+  ///
+  /// Контейнеры берутся из [entries] (живой состав с fetch-состоянием),
+  /// цепочки и нечитаемые записи — с диска: цепочка написана пользователем
+  /// руками и переживает и обновление подписки, и её удаление.
+  Future<List<SourceEntry>> sourceEntries() async {
+    final disk = await SettingsStorage.getSourceEntries();
+    final live = {for (final e in _entries) sourceKeyForIdOf(e.id): e.list};
+    final seen = <String>{};
+    final out = <SourceEntry>[];
+    for (final e in disk) {
+      final k = e.sourceKey;
+      if (e is ContainerEntry) {
+        final l = live[k];
+        // Запись, которой в контроллере уже нет (удалена, но диск ещё не
+        // перечитан), в список не попадает: состав задаёт контроллер.
+        if (l == null) continue;
+        out.add(ContainerEntry(l));
+      } else {
+        out.add(e);
+      }
+      seen.add(k);
+    }
+    // Записи контроллера, которых на диске ещё нет (только что добавленные и
+    // не долетевший `_persist`) — в конец, как встают новые записи.
+    for (final e in _entries) {
+      if (seen.add(sourceKeyForIdOf(e.id))) out.add(ContainerEntry(e.list));
+    }
+    return out;
+  }
+
+  /// §524 — применить порядок общего списка ОДНОЙ записью на диск.
+  ///
+  /// [keys] — новый порядок ключей любого рода ([SourceEntry.sourceKey]):
+  /// `id:<uuid>` у контейнера, `chain:<tag>` у цепочки. До §524 экран делал
+  /// на один drag ДВЕ независимо падающие записи (`reorderSources` +
+  /// `applyEntryOrder`); здесь запись одна, и `_entries` синхронизируется с
+  /// ней в памяти, без второго `_persist`.
+  ///
+  /// `false` — перестановка отвергнута (состав не совпал), порядок не тронут;
+  /// причина в AppLog (§511 m4: раньше отказ был тихим).
+  Future<bool> applySourceOrder(List<String> keys) async {
+    if (stale) return false; // §515 — чужая сцена, писать нечего
+    final ok = await SettingsStorage.reorderSources(keys);
+    if (!ok) return false;
+    final rank = <String, int>{
+      for (var i = 0; i < keys.length; i++) keys[i]: i,
+    };
+    // Взаимный порядок контейнеров зеркалим в `_entries`: без этого
+    // следующий `_persist()` (toggle, rename, авто-refresh) вернул бы на диск
+    // прежний порядок контейнеров.
+    _entries.sort((a, b) =>
+        (rank[sourceKeyForIdOf(a.id)] ?? rank.length)
+            .compareTo(rank[sourceKeyForIdOf(b.id)] ?? rank.length));
+    configDirty = true;
+    notifyListeners();
+    return true;
+  }
+
+  /// §509/§524 — взаимный порядок контейнеров. Состав [ids] обязан совпасть с
+  /// текущими записями; места цепочек и нечитаемых записей не двигаются.
+  ///
+  /// Перестановка ОБЩЕГО списка (drag на Servers) идёт через
+  /// [applySourceOrder]: одна запись на жест вместо двух.
   ///
   /// `false` — состав не совпал, порядок не тронут; причина в AppLog
   /// (§511 m4: раньше отказ был тихим).
@@ -2413,7 +2522,69 @@ class SubscriptionController extends ChangeNotifier {
   /// Замена `entry.list` на новый ServerList (для экранов, меняющих политику
   /// или tagPrefix). Сам ServerList immutable; вызывающий строит новый через
   /// `copyWith` на subscription/user-обёртке.
-  /// Фича 478 / CANON §9.3 — выключить узел, названный ядром, и записать
+  /// §565 / задача 570 — запомнить выбранного члена группы ручного рода
+  /// (`selector`). [groupTag] и [memberTag] — ФИНАЛЬНЫЕ теги собранного
+  /// конфига; узлы ищутся обратной картой последней сборки. Группа папки —
+  /// её `manualDefault` (как в редакторе группы); группа подписки —
+  /// [SubscriptionServers.groupDefaults] рядом с записью источника.
+  ///
+  /// [live] — ядро уже переключено вживую (`selectOutbound`): конфиг на диске
+  /// тогда не помечается устаревшим (плашка и автоперезапуск были бы
+  /// шумом), но следующий старт VPN его пересоберёт
+  /// ([groupDefaultsPending]). Без туннеля — обычная правка: конфиг
+  /// устарел. `false` — группа не своя (Направление, свёртка) или член не
+  /// из неё: выбор живёт только в ядре.
+  Future<bool> rememberGroupMember(String groupTag, String memberTag,
+      {required bool live}) async {
+    final group = _lastTagMap[groupTag];
+    final member = _lastTagMap[memberTag];
+    if (group is! AutoSelectSpec || !group.isManual || member == null) {
+      return false;
+    }
+    for (final e in _entries) {
+      final list = e.list;
+      ServerList? next;
+      switch (list) {
+        case SubscriptionServers():
+          if (!list.nodes.contains(group) || !list.nodes.contains(member)) {
+            continue;
+          }
+          if (list.groupDefaults[group.tag] == member.tag) return true;
+          next = list.copyWith(
+              groupDefaults: {...list.groupDefaults, group.tag: member.tag});
+        case FolderServers():
+          final i = list.members.indexWhere((m) => m.node == group);
+          if (i < 0) continue;
+          final raw = list.members.firstWhere((m) => m.node == member,
+              orElse: () => FolderMember(raw: ''));
+          if (raw.node == null) return false;
+          final m = list.members[i];
+          final members = [...list.members];
+          final chosen = group.copyWith(manualDefault: raw.node!.tag);
+          members[i] = FolderMember.auto(chosen,
+              enabled: m.enabled, warnings: m.warnings);
+          next = list.copyWith(members: members);
+          // Узел группы сменился (равенство включает `manualDefault`):
+          // карта сборки ведёт к новому, иначе следующий выбор до
+          // пересборки его не нашёл бы.
+          _lastTagMap = {..._lastTagMap, groupTag: chosen};
+        case UserServer():
+          continue;
+      }
+      e._replaceList(next);
+      if (live) {
+        _groupDefaultsPending = true;
+        await _persist(keepDirtyFlag: true);
+      } else {
+        await _persist();
+      }
+      notifyListeners();
+      return true;
+    }
+    return false;
+  }
+
+  /// Фича 478 / PARSING_PRINCIPLES §9.3 — выключить узел, названный ядром, и записать
   /// рядом вердикт. [tag] — ФИНАЛЬНЫЙ тег собранного конфига; узел ищется
   /// обратной картой последней сборки ([lastEmittedTagMap]), которую выдала
   /// та же сборка. Производные записи (хоп цепочки, узел папки, префикс
@@ -2692,38 +2863,29 @@ class SubscriptionController extends ChangeNotifier {
     return '';
   }
 
-  /// §435 — секции одиночного узла (контракт ## 13): экран Routing пишет
-  /// `enabled`/`num` записи, редактор узла — весь набор или очистку.
-  /// `null` = снять поле.
-  Future<void> setUserServerSections(int index, NodeSections? sections) async {
-    if (index < 0 || index >= _entries.length) return;
-    final list = _entries[index].list;
-    if (list is! UserServer) return;
-    _entries[index]._replaceList(sections == null || sections.isEmpty
-        ? list.copyWith(clearSections: true)
-        : list.copyWith(sections: sections));
-    await _persist();
-    notifyListeners();
-  }
-
-  /// §435 — секции члена папки, симметрично [setUserServerSections].
-  Future<UiMsg?> setMemberSections(
-      int index, int memberIndex, NodeSections? sections) async {
+  /// §578 — поле записи `skip_presets` своего сервера ([memberIndex] null)
+  /// или члена папки. Хранится только `true`; правка помечает конфиг
+  /// грязным через [_persist], как соседние правки записи.
+  Future<UiMsg?> setSkipPresets(int index, int? memberIndex, bool value) async {
     if (index < 0 || index >= _entries.length) {
-      return const ErrMsg(ErrKey.folderNotFound);
-    }
-    final entry = _entries[index];
-    final folder = entry.list;
-    if (folder is! FolderServers) return const ErrMsg(ErrKey.notAFolder);
-    if (memberIndex < 0 || memberIndex >= folder.members.length) {
       return const ErrMsg(ErrKey.serverNotFound);
     }
-    final members = [...folder.members];
-    members[memberIndex] = sections == null || sections.isEmpty
-        ? members[memberIndex].copyWith(clearSections: true)
-        : members[memberIndex].copyWith(sections: sections);
-    entry._replaceList(folder.copyWith(members: members));
-    entry.nodeCount = entry.list.nodes.length;
+    final entry = _entries[index];
+    final list = entry.list;
+    if (memberIndex == null) {
+      if (list is! UserServer) return const ErrMsg(ErrKey.serverNotFound);
+      if (list.skipPresets == value) return null;
+      entry._replaceList(list.copyWith(skipPresets: value));
+    } else {
+      if (list is! FolderServers) return const ErrMsg(ErrKey.notAFolder);
+      if (memberIndex < 0 || memberIndex >= list.members.length) {
+        return const ErrMsg(ErrKey.serverNotFound);
+      }
+      final members = [...list.members];
+      if (members[memberIndex].skipPresets == value) return null;
+      members[memberIndex] = members[memberIndex].copyWith(skipPresets: value);
+      entry._replaceList(list.copyWith(members: members));
+    }
     await _persist();
     notifyListeners();
     return null;
@@ -2734,10 +2896,31 @@ class SubscriptionController extends ChangeNotifier {
     _progressMessage = const SubStatusBuildingConfig();
     notifyListeners();
 
-    final lists = _entries.map((e) => e.list).toList();
+    // §565 / задача 570 — выбор члена групп ручного рода подписки
+    // (`groupDefaults`) накладывается на копии узлов только для сборки.
+    // Обратная карта сборки ниже возвращается к узлам-оригиналам: по ней
+    // экраны и страховка ищут узел в `_entries` равенством.
+    final originals = Map<NodeSpec, NodeSpec>.identity();
+    final lists = <ServerList>[];
+    for (final e in _entries) {
+      final l = e.list;
+      if (l is SubscriptionServers && l.groupDefaults.isNotEmpty) {
+        final applied = l.withGroupDefaultsApplied();
+        for (var k = 0; k < l.nodes.length; k++) {
+          originals[applied.nodes[k]] = l.nodes[k];
+        }
+        lists.add(applied);
+      } else {
+        lists.add(l);
+      }
+    }
     // §435 — корень `state_directory` узлов Tailscale: native filesDir
     // (кэш на процесс, как у §316; без канала — пусто, поле не пишется).
     final tailscaleStateRoot = await _tailscaleStateRoot();
+
+    // §578 — разовый шаг: поздний дефолтный пресет (`tailscale`) у
+    // пользователя с уже засеянными дефолтами.
+    await SettingsStorage.seedLateDefaultPresets();
 
     final settings = BuildSettings(
       userVars: await SettingsStorage.getAllVars(),
@@ -2758,6 +2941,8 @@ class SubscriptionController extends ChangeNotifier {
       idleSuspend: await SettingsStorage.getIdleSuspend(), // §215
       idleSuspendReachable:
           await SettingsStorage.getIdleSuspendReachable(), // §272
+      wgBuildMax: await SettingsStorage.getWgBuildMax(), // §542
+      wgLazyBuild: await SettingsStorage.getWgLazyBuild(), // §542
       passiveCheck: await SettingsStorage.getPassiveCheck(), // §272
       tailscaleStateRoot: tailscaleStateRoot,
       // §445 — имена каталогов из индекса (стабильны при переименовании).
@@ -2766,7 +2951,13 @@ class SubscriptionController extends ChangeNotifier {
     );
 
     final result = await buildConfig(lists: lists, settings: settings);
-    _lastTagMap = result.nodeByEmittedTag;
+    _lastTagMap = originals.isEmpty
+        ? result.nodeByEmittedTag
+        : {
+            for (final e in result.nodeByEmittedTag.entries)
+              e.key: originals[e.value] ?? e.value,
+          };
+    _groupDefaultsPending = false;
     _lastBuildWarningsByTag = result.nodeBuildWarningsByEmittedTag;
 
     // Записываем обратно то, что buildConfig сгенерил (clash_api/secret на
@@ -2801,6 +2992,11 @@ class SubscriptionController extends ChangeNotifier {
     _directionsWithoutNodes = result.directionsWithoutNodes;
     if (_directionsWithoutNodes.isNotEmpty) {
       _directionsWithoutNodesStamp++;
+      notifyListeners();
+    }
+    _templateWarnings = result.templateWarnings;
+    if (_templateWarnings.isNotEmpty) {
+      _templateWarningsStamp++;
       notifyListeners();
     }
     return result.configJson;
@@ -2910,6 +3106,11 @@ class SubscriptionController extends ChangeNotifier {
           lastUpdateAttempt: attemptAt,
           lastUpdateStatus: UpdateStatus.failed,
           consecutiveFails: current.consecutiveFails + 1,
+          // §561/§570 — сводка держит причины ПОСЛЕДНЕГО разбора: пустой
+          // ответ объясняет себя там же, где и удачный (узлы остаются от
+          // прошлого, кэш тела не перезаписан — после перезапуска сводку
+          // восстановит разбор кэша).
+          dropped: summaryDropped(result.dropped),
         ));
         try {
           // §331 (ревью) — keepDirtyFlag: фейл-статус — метаданные, состав
@@ -3003,7 +3204,7 @@ class SubscriptionController extends ChangeNotifier {
         disable: ruleMarks.disable,
         now: ruleNow,
       );
-      // Фича 478 / CANON §9.4 — вердикт привязан к ТЕЛУ узла: здесь старое и
+      // Фича 478 / PARSING_PRINCIPLES §9.4 — вердикт привязан к ТЕЛУ узла: здесь старое и
       // новое тела доступны одновременно. Тело то же → вердикт держится;
       // тело изменилось ИЛИ старого тела нет (кэш пуст) → вердикт снимается
       // И узел включается обратно. Обновление ядра вердикты НЕ сбрасывает.
@@ -3032,6 +3233,7 @@ class SubscriptionController extends ChangeNotifier {
         updateIntervalHours: nextInterval,
         disabledHashes: verdicts.disabled,
         nodeWarnings: verdicts.warnings,
+        dropped: summaryDropped(result.dropped),
         nodes: result.nodes,
       );
       entry._replaceList(next);
@@ -3152,13 +3354,16 @@ class SubscriptionController extends ChangeNotifier {
     final list = _entries[index].list;
     if (list is! UserServer) return;
 
+    // §576 п.1 — источник своего сервера: только тело узла. Документ и
+    // массив (форма ввода, а не хранения) сводятся к телу первого узла.
+    final sources = [for (final c in connections) bareNodeSourceOf(c)];
     final nodes = <NodeSpec>[];
-    for (final c in connections) {
+    for (final c in sources) {
       final decoded = decode(c);
-      nodes.addAll(parseAll(decoded, nameHint: nameHint));
+      nodes.addAll(parseAll(decoded, nameHint: nameHint, own: true));
     }
     final before = _lists();
-    // Фича 478 / CANON §9.4 п. 1 — человек правил тело ручного сервера:
+    // Фича 478 / PARSING_PRINCIPLES §9.4 п. 1 — человек правил тело ручного сервера:
     // вердикт ядра привязан к ТЕЛУ и на изменённом теле недействителен.
     // Запись стирается И узел включается обратно — тем же составом полей,
     // что у ручного включения (`enableNodeByCoreTag`). У `UserServer` узел
@@ -3172,13 +3377,12 @@ class SubscriptionController extends ChangeNotifier {
       // §243 — displayName у UserServer name игнорирует (legacy v2.11.0 мог
       // записать туда имя файла); при пересохранении затираем совсем.
       name: '',
-      rawBody: connections.join('\n'),
+      rawBody: sources.join('\n'),
       nodes: nodes,
       enabled: dropVerdictByEdit ? true : null,
       warnings: dropVerdictByEdit ? dropVerdict(list.warnings) : null,
-      // §435 — голое тело секции не трогает; документ с `sections` или с
-      // `dns`/`route` замещает их целиком (NODE_SECTIONS.md §7).
-      sections: nodes.isEmpty ? null : nodes.first.importedSections,
+      // §575 — секции из документа в запись не пишутся; прежние секции
+      // записи остаются как были.
     );
     _entries[index]._replaceList(next);
     _entries[index].nodeCount = nodes.length;
@@ -3283,7 +3487,7 @@ class SubscriptionController extends ChangeNotifier {
   /// §515 — первая строка: барьер поколения. Контроллер, переживший
   /// переключение пространства (или уже disposed'нутый), НЕ пишет: сцена на
   /// диске принадлежит другому слоту, а запись здесь заменяет весь набор
-  /// не-цепочек составом ЭТОГО контроллера. Один барьер в одной точке
+  /// контейнеров составом ЭТОГО контроллера. Один барьер в одной точке
   /// закрывает и летящий фетч, и `toggleAt`, и регидрацию кэша, и любую
   /// будущую мутацию. `configDirty` тоже не поднимаем — флаг глобальный, он
   /// заставил бы новый слот пересобирать конфиг из-за чужого хвоста.
@@ -3310,23 +3514,6 @@ class SubscriptionController extends ChangeNotifier {
     var changed = false;
     for (final e in _entries) {
       final r = clearDetourDirectionRefs(e.list, tag);
-      if (r.healed != null) {
-        e._replaceList(r.healed!);
-        changed = true;
-      }
-    }
-    if (changed) notifyListeners();
-  }
-
-  /// §441 — ресинк `_entries` после storage-heal `body.detour` DNS-серверов
-  /// секций узлов на выключенное или удалённое Направление [tag] (→ vpn-1),
-  /// по той же причине, что [syncDetourDirectionRefsCleared]. Ядро общее —
-  /// [retargetSectionsDnsDetours].
-  void syncSectionsDnsDetourRefsHealed(String tag) {
-    final retarget = directionRefRetarget(tag, 'vpn-1');
-    var changed = false;
-    for (final e in _entries) {
-      final r = retargetSectionsDnsDetours(e.list, retarget);
       if (r.healed != null) {
         e._replaceList(r.healed!);
         changed = true;

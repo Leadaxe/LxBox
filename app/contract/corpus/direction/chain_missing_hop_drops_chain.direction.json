@@ -1,0 +1,9 @@
+{
+  "_": "Позиция, которой нет ни среди узлов, ни среди Направлений, убирает цепочку целиком: маршрут без хопа — это другой маршрут, а ссылка в никуда не даёт ядру стартовать.",
+  "chains": [
+    { "tag": "broken-chain", "hops": ["🇩🇪 Frankfurt", "🇸🇬 Singapore"] }
+  ],
+  "directions": [],
+  "node_tags": ["🇩🇪 Frankfurt", "🇳🇱 Amsterdam"],
+  "magic": { "direct": "direct-out", "block": "block-out" }
+}

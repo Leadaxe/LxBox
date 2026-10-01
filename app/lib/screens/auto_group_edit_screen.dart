@@ -4,6 +4,7 @@ import '../models/auto_select.dart';
 import '../models/direction.dart';
 import '../models/node_link.dart';
 import '../models/node_spec.dart';
+import '../services/contract/group_genus.dart';
 import '../services/l10n/locale_controller.dart';
 import '../services/parser/uri_utils.dart';
 import '../services/safe_regex.dart';
@@ -58,6 +59,9 @@ final class AutoGroupDeleted extends AutoGroupEditResult {
 
 enum _MembershipMode { all, rule, explicit }
 
+/// §565 — выбор режима группы: два вида автовыбора и ручной род.
+enum _Kind { fastest, balance, manual }
+
 class _AutoGroupEditScreenState extends State<AutoGroupEditScreen> {
   late final TextEditingController _labelCtrl;
   late final TextEditingController _includeCtrl;
@@ -75,6 +79,8 @@ class _AutoGroupEditScreenState extends State<AutoGroupEditScreen> {
   late UrltestMode _urlMode;
   late Set<StickyHashKey> _sticky;
   late bool _interrupt; // §208 — рвать соединения при смене узла
+  late bool _manual; // §565 — род selector: член выбирается вручную
+  late String _default; // §565 — сырой тег выбранного члена
   bool _advanced = false;
 
   late final AutoSelectSpec _initial; // снимок для сравнения «грязно ли»
@@ -119,6 +125,8 @@ class _AutoGroupEditScreenState extends State<AutoGroupEditScreen> {
     _urlMode = p.mode;
     _sticky = p.stickyHash.toSet();
     _interrupt = p.interruptExistConnections;
+    _manual = s?.isManual ?? false;
+    _default = s?.manualDefault ?? '';
     _initial = _snapshot();
   }
 
@@ -179,6 +187,10 @@ class _AutoGroupEditScreenState extends State<AutoGroupEditScreen> {
       // приехавшей из подписки сохраняем как есть (правка их не меняет).
       tagSynonyms: widget.initial?.tagSynonyms ?? const {},
       poolBadge: _badgeCtrl.text.trim(),
+      // §565 — род и выбранный член. У автовыбора `default` доживает
+      // сквозным, как пришёл (контракт 1.1.50).
+      genus: _manual ? GroupGenus.manual : GroupGenus.auto,
+      manualDefault: _default,
     );
   }
 
@@ -390,37 +402,58 @@ class _AutoGroupEditScreenState extends State<AutoGroupEditScreen> {
             Text(getLocalText.s("Mode"),
                 style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
             const SizedBox(height: 6),
-            SegmentedButton<UrltestMode>(
+            SegmentedButton<_Kind>(
               segments: [
                 ButtonSegment(
-                  value: UrltestMode.leastTest,
+                  value: _Kind.fastest,
                   label: Text(getLocalText.s("Fastest")),
                   icon: const Icon(Icons.bolt, size: 16),
                 ),
                 ButtonSegment(
-                  value: UrltestMode.roundRobin,
+                  value: _Kind.balance,
                   label: Text(getLocalText.s("Load balance")),
                   icon: const Icon(Icons.hub_outlined, size: 16),
                 ),
+                ButtonSegment(
+                  value: _Kind.manual,
+                  label: Text(getLocalText.s("Manual")),
+                  icon: const Icon(Icons.touch_app_outlined, size: 16),
+                ),
               ],
-              selected: {_urlMode},
+              selected: {_kind},
               showSelectedIcon: false,
               style: const ButtonStyle(
                 visualDensity: VisualDensity.compact,
                 textStyle: WidgetStatePropertyAll(TextStyle(fontSize: 12)),
               ),
-              onSelectionChanged: (s) => setState(() => _urlMode = s.first),
+              onSelectionChanged: (s) => setState(() {
+                switch (s.first) {
+                  case _Kind.manual:
+                    _manual = true;
+                  case _Kind.fastest:
+                    _manual = false;
+                    _urlMode = UrltestMode.leastTest;
+                  case _Kind.balance:
+                    _manual = false;
+                    _urlMode = UrltestMode.roundRobin;
+                }
+              }),
             ),
             const SizedBox(height: 4),
             _previewLine(
               cs,
-              _urlMode == UrltestMode.leastTest
-                  ? getLocalText.s("single best server by latency")
-                  : getLocalText
-                      .s("spread connections across a pool of servers"),
+              switch (_kind) {
+                _Kind.fastest =>
+                  getLocalText.s("single best server by latency"),
+                _Kind.balance => getLocalText
+                    .s("spread connections across a pool of servers"),
+                _Kind.manual =>
+                  getLocalText.s("you pick the server, no latency tests"),
+              },
             ),
 
-            if (_urlMode == UrltestMode.roundRobin) ..._balancerControls(cs),
+            if (_kind == _Kind.balance) ..._balancerControls(cs),
+            if (_kind == _Kind.manual) ..._manualControls(cs, matched),
 
             const Divider(height: 28),
 
@@ -449,6 +482,45 @@ class _AutoGroupEditScreenState extends State<AutoGroupEditScreen> {
         ),
       ),
     );
+  }
+
+  _Kind get _kind => _manual
+      ? _Kind.manual
+      : (_urlMode == UrltestMode.roundRobin ? _Kind.balance : _Kind.fastest);
+
+  /// §565 — род selector: выбранный член пула. Отметка — текущий `default`;
+  /// без него (или если член выпал из пула) ядро берёт первого.
+  List<Widget> _manualControls(
+      ColorScheme cs, List<({NodeLink key, String label})> matched) {
+    if (matched.isEmpty) return const [];
+    final current = matched.any((c) => c.key.tag == _default)
+        ? _default
+        : matched.first.key.tag;
+    return [
+      const SizedBox(height: 10),
+      Text(getLocalText.s("Selected server"),
+          style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+      const SizedBox(height: 4),
+      RadioGroup<String>(
+        groupValue: current,
+        onChanged: (v) => setState(() => _default = v ?? ''),
+        child: Column(
+          children: [
+            for (final c in matched)
+              RadioListTile<String>(
+                key: ValueKey('auto-group-default-${c.key.tag}'),
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                visualDensity: VisualDensity.compact,
+                value: c.key.tag,
+                title: Text(c.label,
+                    style: const TextStyle(fontSize: 13),
+                    overflow: TextOverflow.ellipsis),
+              ),
+          ],
+        ),
+      ),
+    ];
   }
 
   Widget _previewLine(ColorScheme cs, String text) => Text(
@@ -595,6 +667,57 @@ class _AutoGroupEditScreenState extends State<AutoGroupEditScreen> {
   }
 
   List<Widget> _advancedControls(ColorScheme cs) => [
+        // §565 — у ручного рода замеров нет: их поля не показываем.
+        if (!_manual) ..._probeControls(),
+        const SizedBox(height: 4),
+        CheckboxListTile(
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          controlAffinity: ListTileControlAffinity.leading,
+          visualDensity: VisualDensity.compact,
+          title: Text(getLocalText.s("Interrupt connections on switch"),
+              style: const TextStyle(fontSize: 14)),
+          subtitle: Text(
+              getLocalText.s(
+                  "off: open connections finish on the old server"),
+              style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+          value: _interrupt,
+          onChanged: (v) => setState(() => _interrupt = v ?? false),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _badgeCtrl,
+          decoration: InputDecoration(
+            labelText: getLocalText.s("Badge in list (regex)"),
+            border: const OutlineInputBorder(),
+            isDense: true,
+            helperText: getLocalText.s(
+                "taken from member names; empty = no badges. Display only — not sent to the core"),
+            helperMaxLines: 3,
+            helperStyle: const TextStyle(fontSize: 10),
+          ),
+          style: const TextStyle(fontSize: 13),
+        ),
+        if (!_manual) ...[
+          const SizedBox(height: 10),
+          TextField(
+            controller: _toleranceCtrl,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(
+              labelText: getLocalText.s("Switch tolerance (ms)"),
+              border: const OutlineInputBorder(),
+              isDense: true,
+              helperText:
+                  getLocalText.s("how much faster a rival must be to win"),
+              helperStyle: const TextStyle(fontSize: 10),
+            ),
+            style: const TextStyle(fontSize: 13),
+          ),
+        ],
+      ];
+
+  /// Параметры замера автовыбора: адрес, период, простой.
+  List<Widget> _probeControls() => [
         const SizedBox(height: 8),
         TextField(
           controller: _urlCtrl,
@@ -648,49 +771,6 @@ class _AutoGroupEditScreenState extends State<AutoGroupEditScreen> {
             target: target,
           ),
         ],
-        const SizedBox(height: 4),
-        CheckboxListTile(
-          dense: true,
-          contentPadding: EdgeInsets.zero,
-          controlAffinity: ListTileControlAffinity.leading,
-          visualDensity: VisualDensity.compact,
-          title: Text(getLocalText.s("Interrupt connections on switch"),
-              style: const TextStyle(fontSize: 14)),
-          subtitle: Text(
-              getLocalText.s(
-                  "off: open connections finish on the old server"),
-              style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
-          value: _interrupt,
-          onChanged: (v) => setState(() => _interrupt = v ?? false),
-        ),
-        const SizedBox(height: 10),
-        TextField(
-          controller: _badgeCtrl,
-          decoration: InputDecoration(
-            labelText: getLocalText.s("Badge in list (regex)"),
-            border: const OutlineInputBorder(),
-            isDense: true,
-            helperText: getLocalText.s(
-                "taken from member names; empty = no badges. Display only — not sent to the core"),
-            helperMaxLines: 3,
-            helperStyle: const TextStyle(fontSize: 10),
-          ),
-          style: const TextStyle(fontSize: 13),
-        ),
-        const SizedBox(height: 10),
-        TextField(
-          controller: _toleranceCtrl,
-          keyboardType: TextInputType.number,
-          decoration: InputDecoration(
-            labelText: getLocalText.s("Switch tolerance (ms)"),
-            border: const OutlineInputBorder(),
-            isDense: true,
-            helperText:
-                getLocalText.s("how much faster a rival must be to win"),
-            helperStyle: const TextStyle(fontSize: 10),
-          ),
-          style: const TextStyle(fontSize: 13),
-        ),
       ];
 
   // Названия ключей — как в §208-редакторе Направления: технические термины

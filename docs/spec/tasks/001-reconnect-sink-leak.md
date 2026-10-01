@@ -6,7 +6,7 @@
 | Дата старта | 2026-04-20 |
 | Дата завершения | 2026-04-20 |
 | Коммиты | `cd39ca9` diag logging · `95650fa` shared broadcast stream · `75c8538` rename [DIAG]→[vpn] + kDebugMode guard |
-| Связанные spec'ы | [`003 home screen §8a`](../features/003%20home%20screen/spec.md), [`012 native vpn service`](../features/012%20native%20vpn%20service/spec.md) |
+| Связанные spec'ы | [`003 home screen §8a`](../tasks/003F-home-screen/spec.md), [`012 native vpn service`](../tasks/012F-native-vpn-service/spec.md) |
 
 ## Проблема
 

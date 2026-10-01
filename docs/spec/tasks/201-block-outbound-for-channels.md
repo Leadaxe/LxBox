@@ -1,6 +1,6 @@
 # §201 — block-outbound для каналов + route-final
 
-> **СТАТУС: РЕАЛИЗОВАНО (28.06.2026).** Расширение [§125](../features/125%20configurable-channels/spec.md).
+> **СТАТУС: РЕАЛИЗОВАНО (28.06.2026).** Расширение [§125](../tasks/125F-configurable-channels/spec.md).
 > Ветка `feat/configurable-channels-125`. Покрыто тестами (channel/sort/
 > special_node_display/channel_groups).
 
@@ -75,6 +75,6 @@
 
 ## Связанные
 
-- [§125 configurable-channels](../features/125%20configurable-channels/spec.md) — include_direct (образец).
+- [§125 configurable-channels](../tasks/125F-configurable-channels/spec.md) — include_direct (образец).
 - [§200] (этот же файл tasks) — warning пустого канала (текст меняется на blocked).
 - [§199] — отображение служебных нод по типу (specialNodeDisplayForType).

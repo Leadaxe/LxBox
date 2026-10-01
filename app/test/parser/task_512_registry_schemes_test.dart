@@ -1,13 +1,18 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/parser/body_decoder.dart';
+import 'package:lxbox/services/parser/engine/section_loader.dart';
 import 'package:lxbox/services/parser/mappers/uri_pipeline.dart';
 import 'package:lxbox/services/parser/parse_all.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 import 'package:lxbox/services/subscription/input_helpers.dart';
 
+import '../contract_paths.dart';
 import 'engine_test_setup.dart';
 
 /// §512 — СПИСОК СХЕМ ИЗ РЕЕСТРА и исполнение контракта 1.1.49.
@@ -44,6 +49,16 @@ String _awgLink(String scheme,
     '&publickey=$_publicKey'
     '&s1=57&s2=105&s3=52&s4=12#DE-example-awg';
 
+/// Написания схемы, которые приложение принимало до §562 (прежний
+/// литеральный набор диспетчера). Диспетчер теперь строится из реестра, и
+/// этот снимок стережёт, что ни одно из них не потерялось.
+const _kLegacySchemes = <String>{
+  'trojan', 'vless', 'vmess', 'ss', 'hysteria2', 'hy2', 'tuic', 'anytls',
+  'naive+https', 'naive+quic', 'proxy-http', 'proxy-https', 'proxy+http',
+  'proxy+https', 'socks', 'socks5', 'socks4', 'socks4a', 'ssh', 'masque',
+  'wireguard', 'wg', 'awg',
+};
+
 void main() {
   setUpAll(loadEngineSections);
 
@@ -65,18 +80,18 @@ void main() {
     });
 
     test('рабочий набор ШИРЕ каждой из сторон: реестр добавляет, не отнимает', () {
-      // Реестр `scheme_in` НЕ объявляет `wg://` намеренно: написание знает
-      // только Dart (`wireguard.json` → note, разрыв с Go IsDirectLink).
-      // Поэтому объединение, а не замена — иначе синк молча снял бы живое
-      // написание, и это выглядело бы следствием контракта, а не решением.
+      // С контракта 1.1.81 (§78) `wg` объявлен в `scheme_in` секции
+      // wireguard, а не только в `aliases` протокола. §562: диспетчер читает
+      // оба поля реестра, литерального набора в Dart больше нет.
       final working = pipelineSchemes();
-      expect(working, containsAll(kPipelineSchemes),
+      expect(working, containsAll(_kLegacySchemes),
           reason: 'ни одно живое написание не теряется при живом реестре');
       expect(working, contains('amneziawg'),
           reason: 'а новое из реестра добавляется без правки кода');
-      expect(registryUriSchemes(), isNot(contains('wg')),
-          reason: 'снимок разрыва: `wg` держат литералы, и это НЕ опечатка — '
-              'уедет вместе с решением владельца, а не попутно');
+      expect(registryUriSchemes(), contains('wg'),
+          reason: 'контракт 1.1.81: `wg` в `scheme_in` секции wireguard');
+      expect(registrySchemeType('wg'), 'wireguard',
+          reason: 'алиас протокола ведёт в тот же тип тела');
     });
 
     test('классификатор вставки берёт тот же набор', () {
@@ -249,6 +264,44 @@ void main() {
         ['service_record_ignored'],
         reason: 'ни одной МОЛЧАЛИВОЙ потери и ни одной ложной ошибки',
       );
+    });
+  });
+
+  // §551 — маршрут схем кешируется на состав секций: сброс обязан случаться
+  // при перезагрузке черновиков и реестра, иначе схема, приехавшая
+  // контрактом, не видна до перезапуска приложения.
+  group('§551 — кеш маршрута схем сбрасывается при перезагрузке', () {
+    tearDown(loadEngineSections);
+
+    test('новая схема черновика видна после loadDrafts', () async {
+      expect(pipelineSchemes(), isNot(contains('zz551')));
+      expect(registrySchemeType('zz551'), isNull);
+      final dir = Directory.systemTemp.createTempSync('lx551');
+      addTearDown(() => dir.deleteSync(recursive: true));
+      Directory('${dir.path}/uri').createSync();
+      File('${dir.path}/uri/zz551proto.json').writeAsStringSync(jsonEncode({
+        'mappers': {
+          'uri': {
+            'detect': {
+              'scheme_in': ['zz551'],
+            },
+            'params': <String, dynamic>{},
+          },
+        },
+      }));
+      await MapperSections.I
+          .loadDrafts(dir: dir.path, files: const ['uri/zz551proto']);
+      expect(pipelineSchemes(), contains('zz551'));
+      expect(registryUriSchemes(), contains('zz551'));
+      expect(registrySchemeType('ZZ551'), 'zz551proto');
+    });
+
+    test('перезагрузка реестра даёт новый состав секций', () async {
+      final before = MapperSections.I.typesFor('uri');
+      expect(identical(MapperSections.I.typesFor('uri'), before), isTrue);
+      await ContractRegistry.I.loadFromDirectory(kRegistryRoot);
+      expect(identical(MapperSections.I.typesFor('uri'), before), isFalse);
+      expect(MapperSections.I.typesFor('uri'), before);
     });
   });
 }

@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import '../contract_paths.dart';
 import 'package:lxbox/services/lx_backup.dart';
-import 'package:lxbox/services/parser/hysteria2_obfs.dart';
 import 'package:lxbox/services/parser/uri_utils.dart'
     show kMaxDetourDepth, maxAmneziaLinkLength, maxURILength;
 import 'package:lxbox/services/parser/utls_fingerprint.dart';
@@ -54,8 +53,6 @@ const _launcherOnlyBackupCodes = <String>{
   'backup_tag_mask_dropped',
   // Локальные Направления ИСТОЧНИКА — упразднённый класс лаунчера.
   'backup_local_direction_dropped',
-  // side: export — явный тег замены папки/подписки; свёртки у мобилы нет.
-  'backup_replace_tag_derived',
   // Контракт 1.0.1, ответ LxBox 5 (TASKS_LXBOX.md §17.8): неизвестную строку
   // include LxBox хранит и на импорте молчит, предупреждает сборка (кейс
   // v10_direction_include.expected.lxbox.json).
@@ -107,9 +104,8 @@ void main() {
       _checkAllowlist('utls_fingerprints', kUtlsFingerprints, allowlists);
     });
 
-    test('hysteria2_obfs', () {
-      _checkAllowlist('hysteria2_obfs', kHysteria2ObfsTypes, allowlists);
-    });
+    // §547 A2 — allowlist `hysteria2_obfs` в коде больше не зеркалится:
+    // `kHysteria2ObfsTypes` снят, obfs судит enum реестра.
 
     // §401 — словарь кодов LX Backup. Сверка ДВУСТОРОННЯЯ: односторонняя
     // ловила бы только «код есть в коде, но нет в реестре» и молчала бы о
@@ -156,7 +152,6 @@ void main() {
 
     // Значение вне словаря обязано отвергаться — иначе allowlist декоративен.
     test('значения вне словаря отвергаются', () {
-      expect(kHysteria2ObfsTypes.contains('nonsense'), isFalse);
       expect(normalizeUtlsFingerprintValue('garbage').junk, isTrue);
     });
 

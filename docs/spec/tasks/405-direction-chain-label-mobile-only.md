@@ -6,7 +6,7 @@
 | Дата старта | 2026-09-02 |
 | Дата завершения | 2026-09-02 |
 | Коммиты | см. ветку задачи |
-| Связанные spec'ы | [tasks/402](402-direction-chain-label-removed.md), [tasks/401](401-backup-state-serialization.md), [features/125 configurable-directions](../features/125%20configurable-directions/spec.md) |
+| Связанные spec'ы | [tasks/402](402-direction-chain-label-removed.md), [tasks/401](401-backup-state-serialization.md), [features/125 configurable-directions](125F-configurable-channels/spec.md) |
 
 Зеркало контракта singbox-launcher **0.12.4**, решение **D-094**.
 

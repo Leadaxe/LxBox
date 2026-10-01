@@ -122,6 +122,41 @@ void main() {
     }
   });
 
+  test('§527 каждый член dns_shield объявлен в БАЗОВЫХ dns_options.servers',
+      () {
+    // Страж от повторения дефекта §527. Теги, объявленные пресетом
+    // (`selectable_rules[].dns_servers[]`), при сборке получают неймспейс
+    // `<preset_id>:<tag>` (§103 C7, `namespacePresetTags`) — база на них
+    // сослаться НЕ может: bare-тег не резолвится ни при включённом пресете,
+    // ни при выключенном. Именно так `yandex_dot` молча выпадал из группы в
+    // ОБОИХ состояниях (golden'ы rich_v0/avd_v0 несли предупреждение
+    // `member 'yandex_dot' dropped (unknown)` и группу из 5 членов).
+    // Поэтому проверять надо по базе, а НЕ по объединению с пресетами.
+    final base = baseServersByTag(template());
+    final members = (base['dns_shield']!['servers'] as List).cast<String>();
+    final undeclared = members.where((t) => !base.containsKey(t)).toList();
+    expect(undeclared, isEmpty,
+        reason: 'член группы объявлен только в пресете — при сборке его тег '
+            'получит префикс preset_id и bare-ссылка выпадет (unknown): '
+            '$undeclared');
+  });
+
+  test('§527 yandex_dot — прямой DoT без detour', () {
+    final s = baseServersByTag(template())['yandex_dot'];
+    expect(s, isNotNull, reason: 'базовая запись yandex_dot исчезла');
+    expect(s!['type'], 'tls');
+    expect(s['server'], '77.88.8.8');
+    expect(s['server_port'], 853);
+    expect((s['tls'] as Map)['enabled'], true);
+    // Нефильтрующий профиль Яндекса: 77.88.8.8 ↔ common.dot.dns.yandex.net
+    // (safe.dot.dns.yandex.net — это 77.88.8.88, фильтрующий).
+    expect((s['tls'] as Map)['server_name'], 'common.dot.dns.yandex.net');
+    // Главное: под белыми списками туннель может не подняться, а резолв
+    // обязан работать — поэтому прямой, без detour.
+    expect(s.containsKey('detour'), isFalse,
+        reason: 'detour у члена «щита» вернёт зависимость от туннеля');
+  });
+
   test('quad9_doh сохраняет detour vpn-1 (§517: намеренно не трогаем)', () {
     // Единственный член группы с детуром. При mode=fastest это значит, что
     // члены идут разными путями и состав победителей зависит от того, поднят

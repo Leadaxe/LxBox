@@ -7,9 +7,13 @@ import '../../controllers/home_controller.dart';
 import '../../controllers/subscription_controller.dart';
 import '../../models/home_state.dart';
 import '../../models/node_spec.dart';
+import '../../models/template_vars.dart';
+import '../../services/contract/body_sanitizer.dart'
+    show carriesPrivateKeyByRegistry;
 import '../../services/tag_resolver.dart';
 import '../outbound_view_screen.dart';
 import '../../services/l10n/locale_controller.dart';
+import '../../vpn/cc_channel.dart' show CcEndpointState;
 
 /// Node long-press action helpers.
 /// Все принимают `context` явно (раньше использовали `mounted`/`context`
@@ -34,6 +38,7 @@ void viewOutboundJson(
   required SubscriptionController subController,
   required HomeController homeController,
   bool openDependents = false, // §355 — сразу вкладка Dependents (⚠-тап)
+  bool openNetwork = false, // задача 581 — сразу вкладка Network (NETWORKS)
 }) {
   // §311 — конфига нет вовсе (ни файла, ни снапшота): молча выходить нельзя
   // (§277/§278) — сообщение то же, причина для юзера одна «данных по тегу нет».
@@ -64,6 +69,7 @@ void viewOutboundJson(
       subController: subController,
       homeController: homeController,
       openDependents: openDependents, // §355
+      openNetwork: openNetwork,
       // §099 — copy-варианты JSON перенесены из контекстного меню сюда.
       onCopy: (mode) => copyNodeJson(context, tag, state, mode),
     ),
@@ -199,7 +205,7 @@ Future<void> copyNodeUri(BuildContext context, String tag,
   // молча вырезать ключ из неё нельзя — он потерялся бы при перезагрузке
   // узла. Отказ же ломал перенос своего узла между своими устройствами и был
   // непоследователен: у SSH ключ не отдавался вовсе, у WireGuard уезжал молча.
-  if (node.linkCarriesPrivateKey) {
+  if (carriesPrivateKeyByRegistry(node.emit(TemplateVars.empty).map)) {
     if (!context.mounted) return;
     final ok = await _confirmPrivateKeyInLink(context);
     if (!ok) return;
@@ -212,4 +218,28 @@ Future<void> copyNodeUri(BuildContext context, String tag,
       SnackBar(content: Text(getLocalText.s("URI copied"))),
     );
   }
+}
+
+/// §557 (ядро SPEC 106) — «Turn off» / «Turn on» WG/AWG-узла на лету: вызов
+/// контроллера и snackbar при отказе ядра. Направление — по текущему
+/// состоянию узла: выключенный включаем, остальные выключаем.
+Future<void> toggleEndpoint(
+    BuildContext context, HomeController controller, String tag) async {
+  final enable =
+      controller.state.endpointStates[tag] == CcEndpointState.disabled;
+  final code = await controller.setEndpointEnabled(tag, enable);
+  if (code == null || !context.mounted) return;
+  final text = switch (code) {
+    'not_found' => getLocalText.s("The running config has no node %s.", tag),
+    'invalid_argument' =>
+      getLocalText.s("Only WireGuard and AmneziaWG nodes can be turned off."),
+    'failed_precondition' =>
+      getLocalText.s("VPN is not running or is restarting. Try again."),
+    'unavailable' => getLocalText.s(
+        "The node did not wake up. The next connection through it will retry."),
+    _ => enable
+        ? getLocalText.s("Could not turn the node on.")
+        : getLocalText.s("Could not turn the node off."),
+  };
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
 }

@@ -99,6 +99,17 @@ sealed class NodeWarning {
 
   WarningSeverity get severity;
 
+  /// §561 / задача 570 — тег (имя) записи источника, к которой относится
+  /// отбраковка (`dropped[]`); пусто — не отбраковка или запись без имени.
+  /// Заполняет разбор; шторка показывает его строкой под заголовком. Вне
+  /// [props]: говорит «с какой записью», а не «что случилось».
+  String get ownerTag => '';
+
+  /// §577 — правка по правилу реестра применена к телу узла. `false` — тело
+  /// авторское, правило мягкое, и приложение тело НЕ меняло (реестр только
+  /// сообщает, PARSING_PRINCIPLES §10). Уровень от признака не зависит.
+  bool get applied => true;
+
   /// Поля данных подкласса для равенства/hashCode. Dedup — по runtimeType +
   /// данным, НЕ по отрендеренной строке (§279: строка locale-зависима,
   /// равенство по ней ломало бы dedup при смене языка).
@@ -146,6 +157,24 @@ List<NodeWarning> maskSecretDropWarnings(List<NodeWarning> dropped) {
     for (final w in dropped)
       if (w is RegistryWarning) w.withSecretValueMasked() else w,
   ];
+}
+
+/// §561 — `dropped[]` разбора в том виде, в каком его держит сводка
+/// источника: по старшему уровню, секретные значения скрыты.
+///
+/// §570 — одинаковые записи РАЗНЫХ элементов (тот же код с теми же
+/// параметрами у той же записи-источника, [NodeWarning.ownerTag]) сводятся в
+/// одну: сводка называет причины, а не повторяет их. Записи разных владельцев
+/// остаются порознь — это разные записи источника.
+List<NodeWarning> summaryDropped(List<NodeWarning> dropped) {
+  if (dropped.isEmpty) return const [];
+  final seen = <(NodeWarning, String)>{};
+  final unique = [
+    for (final w in dropped)
+      if (seen.add((w, w.ownerTag))) w,
+  ];
+  return List.unmodifiable(
+      maskSecretDropWarnings(sortedDropWarnings(unique)));
 }
 
 // `transport_unsupported` — текст в реестре (`transports.json` → fallback
@@ -473,6 +502,7 @@ final class DialerProxyUnusableWarning extends NodeWarning {
 
   /// Тег отвергнутого outbound'а — `dropped[].ref` контракта. Пусто, если
   /// провайдер тега не дал: тогда опознать запись можно только по label.
+  @override
   final String ownerTag;
 
   const DialerProxyUnusableWarning(this.label, this.target,
@@ -489,20 +519,6 @@ final class DialerProxyUnusableWarning extends NodeWarning {
 
   @override
   WarningSeverity get severity => WarningSeverity.error;
-}
-
-/// §368 §5.1 — `type: selector` (ручной выбор) импортирован как автовыбор:
-/// своего типа узла у нас нет, а терять собранный руками состав хуже, чем
-/// сменить режим отбора.
-final class SelectorAsAutoWarning extends NodeWarning {
-  const SelectorAsAutoWarning();
-
-  @override
-  String messageWith(GetLocalText t) => t.s(
-      "\"selector\" was imported as an auto-select group: the fastest member is picked by latency tests instead of manually.");
-
-  @override
-  WarningSeverity get severity => WarningSeverity.info;
 }
 
 /// §368 §5.3 — член группы не доехал: тег не дал узла (служебный/битый
@@ -554,38 +570,31 @@ final class GroupMemberMissingWarning extends NodeWarning {
 // `extra-headers` пропускается, остальные живут, код ставится ОДИН раз на
 // узел. Собственный `headers` у http/https-прокси под код не попадает.
 
-/// §435 — запись секции узла отброшена при разборе документа
-/// (`{ endpoints: [тело], sections: {…} }`): чужой `kind` или битая форма.
-/// Остальные записи живут (NODE_SECTIONS.md §1). Кода контракта нет — UI.
-final class SectionsRecordDroppedWarning extends NodeWarning {
-  /// Путь и причина: `rules[1]: kind "preset" is not allowed in node sections`.
-  final String detail;
+/// §585 — узел своего источника с типом, которого приложение не знает
+/// (`openvpn-client` и прочие типы ядра вне модели). Узел принят, тело
+/// уходит в ядро как написано, приложение его не проверяет.
+///
+/// Кода контракта нет — код `unknown_node_type` НАШ, per-app
+/// (`kWarningCodes`): ближайший код реестра
+/// `protocol_unsupported` — уровня `error` и говорит «узел отброшен».
+final class UnknownNodeTypeWarning extends NodeWarning {
+  /// Значение поля `type` записи.
+  final String type;
 
-  const SectionsRecordDroppedWarning(this.detail);
+  const UnknownNodeTypeWarning(this.type);
 
   @override
-  List<Object?> get props => [detail];
+  List<Object?> get props => [type];
 
   @override
-  String messageWith(GetLocalText t) =>
-      t.s("Node section record dropped: %s", detail);
+  String messageWith(GetLocalText t) => t.s("Unknown node type");
+
+  /// Текст карточки уведомления.
+  String detailWith(GetLocalText t) => t.s(
+      "The app does not know this node type and does not check it. The node goes to the core as written.");
 
   @override
   WarningSeverity get severity => WarningSeverity.info;
-}
-
-/// §435 — документ узла несёт и `sections`, и `dns`/`route` (NODE_SECTIONS.md
-/// §7: оба вида в одном документе — ошибка). Парсер подписки берёт `sections`,
-/// редактор узла такой документ не сохраняет. Кода контракта нет — UI.
-final class SectionsConflictWarning extends NodeWarning {
-  const SectionsConflictWarning();
-
-  @override
-  String messageWith(GetLocalText t) => t.s(
-      "The document carries both \"sections\" and \"dns\"/\"route\": \"sections\" was taken, the rest was ignored.");
-
-  @override
-  WarningSeverity get severity => WarningSeverity.warning;
 }
 
 // §472 шаг 9 — `TuicCongestionInvalidWarning` снят: `congestion_control` вне
@@ -716,9 +725,10 @@ final class RegistryWarning extends NodeWarning {
     this.value,
     this.params = const {},
     this.ownerTag = '',
+    this.applied = true,
   });
 
-  /// Код из `registry/warnings.json` — он же код конформанса (CANON §6).
+  /// Код из `registry/warnings.json` — он же код конформанса (PARSING_PRINCIPLES §6).
   final String code;
 
   /// Путь поля в теле узла (`tls.reality.key_share`); `null` у кодов уровня
@@ -740,7 +750,25 @@ final class RegistryWarning extends NodeWarning {
   /// идёт дедуп (§279). Тег же говорит не «что случилось», а «с какой
   /// записью», и включение его в идентичность развело бы на два сообщения
   /// один и тот же код об одном и том же поле у соседних узлов.
+  @override
   final String ownerTag;
+
+  /// §577 — см. [NodeWarning.applied]. В идентичность ([props]) входит
+  /// только `false`: применённая запись равна прежней записи без признака.
+  @override
+  final bool applied;
+
+  /// §577 — та же запись с признаком «не применено».
+  RegistryWarning notApplied() => applied
+      ? RegistryWarning(
+          code: code,
+          path: path,
+          value: value,
+          params: params,
+          ownerTag: ownerTag,
+          applied: false,
+        )
+      : this;
 
   /// §500 — копия с `value: ***`, если путь — секретное поле реестра.
   RegistryWarning withSecretValueMasked() {
@@ -752,12 +780,18 @@ final class RegistryWarning extends NodeWarning {
       value: masked,
       params: params,
       ownerTag: ownerTag,
+      applied: applied,
     );
   }
 
   @override
-  List<Object?> get props =>
-      [code, path, value, ...params.entries.map((e) => '${e.key}=${e.value}')];
+  List<Object?> get props => [
+        code,
+        path,
+        value,
+        ...params.entries.map((e) => '${e.key}=${e.value}'),
+        if (!applied) 'applied=false',
+      ];
 
   /// Строка узла — `title_<lang>` реестра. Язык: `ru` при русском UI, иначе
   /// `en` (`zh` падает в `en`, пока лаунчер не добавит третий набор).

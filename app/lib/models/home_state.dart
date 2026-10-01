@@ -9,6 +9,7 @@ import 'traffic_snapshot.dart';
 import 'tunnel_status.dart';
 import 'ui_msg.dart';
 import '../services/l10n/locale_controller.dart';
+import '../services/networks_direction.dart';
 
 export 'config_node.dart';
 export 'dependency_graph.dart';
@@ -69,6 +70,8 @@ class HomeState {
     this.highlightedNode,
     this.delayByDirection = const <String, Map<String, int>>{},
     this.pingBusy = const <String, String>{},
+    this.endpointStates = const <String, String>{},
+    this.endpointIdleSince = const <String, int>{},
     this.sickRoots = const <String, List<DependentRef>>{},
     this.debugEvents = const <DebugEntry>[],
     this.sortMode = NodeSortMode.latencyAsc,
@@ -88,6 +91,8 @@ class HomeState {
     this.configLoadError = false,
     this.lastStartError = '',
     this.lastStartErrorAt,
+    this.networksOpen = false,
+    this.tailscaleStatus = const <String, CcTailscaleStatus>{},
   })  : configModel = configModel ?? ParsedConfig.parse(configRaw),
         runningModel = runningModel ??
             (runningConfigRaw != null
@@ -182,6 +187,20 @@ class HomeState {
   final Map<String, Map<String, int>> delayByDirection;
   final Map<String, String> pingBusy;
 
+  /// §535 (ядро SPEC 097) — состояние WG/AWG-endpoint'а по тегу узла
+  /// (`never_built` / `building` / `up` / `asleep` / `torn_down` / `down`),
+  /// снятое unary-pull'ом `CcChannel.getOutbounds`. Тега нет в карте = узел не
+  /// endpoint, либо ядро состояния не дало: «неизвестно», а не «сломан».
+  ///
+  /// Глобально на endpoint, а не per-Направление (в отличие от
+  /// [delayByDirection]): одно устройство обслуживает все Направления сразу.
+  final Map<String, String> endpointStates;
+
+  /// §540 — сколько секунд endpoint простаивает (`idleSinceSeconds` ядра),
+  /// только для узлов в `asleep`. Тот же pull, что и [endpointStates];
+  /// показывается в свойствах узла («idle for N s»).
+  final Map<String, int> endpointIdleSince;
+
   /// §355 — «корни беды»: мёртвая нода → её транзитивные пострадавшие (DNS и
   /// ноды, зависящие через detour/Направления). Пересчитывается HomeController'ом
   /// на замерах пинга и смене выбора групп ([DependencyGraph.computeSick]);
@@ -266,6 +285,28 @@ class HomeState {
   final DateTime? lastStartErrorAt;
 
   bool get tunnelUp => tunnel.isUp;
+
+  /// Задача 579 — пользователь выбрал псевдо-направление NETWORKS в перечне
+  /// направлений. Только вид: [selectedGroup] (настоящее направление, выход
+  /// трафика) не меняется. Показ — см. [showingNetworks].
+  final bool networksOpen;
+
+  /// Задача 579 — записи потока ядра `SubscribeTailscaleStatus` по тегу
+  /// endpoint'а. Пусто, пока VPN выключен или подписки нет.
+  final Map<String, CcTailscaleStatus> tailscaleStatus;
+
+  /// Задача 579 — узлы NETWORKS из конфига, по которому работает ядро
+  /// ([activeModel]; при выключенном VPN — последний собранный).
+  List<String> get networksNodes => networksNodeTags(activeModel);
+
+  /// Задача 579 — список узлов показывает NETWORKS вместо узлов направления:
+  /// VPN включён, узлы есть, и выбран NETWORKS либо настоящих направлений нет.
+  /// Узлы пропали (узел удалён или стал выходом) — снова видно выбранное
+  /// настоящее направление.
+  bool get showingNetworks =>
+      tunnelUp &&
+      (networksOpen || groups.isEmpty) &&
+      networksNodes.isNotEmpty;
 
   // ─────────────── §122 — типизированный доступ к ccGroups ───────────────
   // Чистые методы на нативных CommandClient-моделях (заменили статические
@@ -470,6 +511,8 @@ class HomeState {
     Object? highlightedNode = _unset,
     Map<String, Map<String, int>>? delayByDirection,
     Map<String, String>? pingBusy,
+    Map<String, String>? endpointStates,
+    Map<String, int>? endpointIdleSince,
     Map<String, List<DependentRef>>? sickRoots,
     List<DebugEntry>? debugEvents,
     NodeSortMode? sortMode,
@@ -484,6 +527,8 @@ class HomeState {
     bool? configLoadError,
     String? lastStartError,
     Object? lastStartErrorAt = _unset,
+    bool? networksOpen,
+    Map<String, CcTailscaleStatus>? tailscaleStatus,
   }) {
     return HomeState(
       configRaw: configRaw ?? this.configRaw,
@@ -528,6 +573,8 @@ class HomeState {
           : highlightedNode as String?,
       delayByDirection: delayByDirection ?? this.delayByDirection,
       pingBusy: pingBusy ?? this.pingBusy,
+      endpointStates: endpointStates ?? this.endpointStates,
+      endpointIdleSince: endpointIdleSince ?? this.endpointIdleSince,
       sickRoots: sickRoots ?? this.sickRoots,
       debugEvents: debugEvents ?? this.debugEvents,
       sortMode: sortMode ?? this.sortMode,
@@ -546,6 +593,8 @@ class HomeState {
       lastStartErrorAt: identical(lastStartErrorAt, _unset)
           ? this.lastStartErrorAt
           : lastStartErrorAt as DateTime?,
+      networksOpen: networksOpen ?? this.networksOpen,
+      tailscaleStatus: tailscaleStatus ?? this.tailscaleStatus,
     );
   }
 }

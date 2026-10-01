@@ -6,7 +6,7 @@
 | Дата старта | 2026-04-20 |
 | Дата завершения | 2026-04-20 |
 | Коммиты | `82b5b49` feat(vpn): revoke UX + lifecycle resume re-sync |
-| Связанные spec'ы | [`003 home screen`](../features/003%20home%20screen/spec.md) |
+| Связанные spec'ы | [`003 home screen`](../tasks/003F-home-screen/spec.md) |
 
 ## Проблема
 

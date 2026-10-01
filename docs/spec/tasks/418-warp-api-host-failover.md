@@ -6,7 +6,7 @@
 | Дата старта | 2026-09-04 |
 | Дата завершения | 2026-09-04 |
 | Коммиты | см. ветку задачи |
-| Связанные spec'ы | [features/025](../features/025%20warp%20integration/spec.md), [features/130](../features/130%20masque-warp-transport/spec.md), [tasks/305](305-masque-endpoint-h2-pool-and-override.md), [tasks/386](386-warp-endpoint-preset-combobox.md) |
+| Связанные spec'ы | [features/025](../tasks/025F-warp-integration/spec.md), [features/130](../tasks/130F-masque-warp-transport/spec.md), [tasks/305](305-masque-endpoint-h2-pool-and-override.md), [tasks/386](386-warp-endpoint-preset-combobox.md) |
 
 Повод — [PR #101](https://github.com/Leadaxe/LxBox/pull/101) от [@eleutherifer](https://github.com/eleutherifer), форк [eleutherifer/LxBox](https://github.com/eleutherifer/LxBox) (закрыт автором без обсуждения): среди прочего менял
 `WarpApi.base` на `api.devices.cloudflare.com` с комментарием «незабаненная
@@ -135,4 +135,4 @@ MASQUE-edge. Edge `162.159.198.2:443` с этим SNI доводит TLS до з
 - [x] `CHANGELOG.md` — Unreleased / Changed
 - [x] `README.md`, `README.ru.md` — хост регистрации
 - [x] `docs/PRIVACY_POLICY.md`, `docs/PRIVACY_POLICY.ru.md` — куда уходит публичный ключ
-- [x] `docs/spec/features/025 warp integration/spec.md` — примечание про хосты, риск, acceptance
+- [x] `docs/spec/tasks/025F-warp-integration/spec.md` — примечание про хосты, риск, acceptance

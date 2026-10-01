@@ -104,7 +104,7 @@ void main() {
       expect(byTag['node-a']!.kind, ChainHopKind.node);
     });
 
-    test('reality и detour приезжают из собранного outbound\'а', () {
+    test('тело и detour приезжают из собранного outbound\'а', () {
       final cands = collectChainHopTargets(
         config: _config([
           {
@@ -123,8 +123,9 @@ void main() {
         selfTag: 'chain-1',
       );
       final byTag = chainHopLookup(cands);
-      expect(byTag['reality-node']!.reality, isTrue);
-      expect(byTag['relay']!.reality, isFalse);
+      // Тело узла — для суда реестра (on_hop_required), §57.
+      expect(byTag['reality-node']!.body?['tls'], isNotNull);
+      expect(byTag['relay']!.body?['type'], 'vless');
       expect(byTag['detoured']!.detour, isTrue);
       expect(byTag['relay']!.detour, isFalse);
     });

@@ -6,7 +6,7 @@
 | Дата старта | 2026-09-03 |
 | Дата завершения | 2026-09-03 |
 | Коммиты | см. ветку задачи |
-| Связанные spec'ы | [features/117 dns-rework](../features/117%20dns-rework/spec.md), [features/312 DNS-группы](../features/312%20dns-group/spec.md) |
+| Связанные spec'ы | [tasks/117F-dns-rework](../tasks/117F-dns-rework/spec.md), [features/312 DNS-группы](../tasks/312F-dns-group/spec.md) |
 
 4PDA #1767…#1770 (curse127, ark.sergo): «нет типа DNS DoQ». Ядро
 (sing-box 1.14, `constant/dns.go`) знает `quic` (DNS-over-QUIC) и `h3`

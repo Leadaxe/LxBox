@@ -98,7 +98,7 @@ TransportSpec? parseTransport(
         hosts: host.isNotEmpty ? [host] : const [],
       );
     case 'h2':
-      // SPEC 103 CANON — `h2` разрешён ТОЛЬКО когда пришёл из VMess `net`
+      // SPEC 103 PARSING_PRINCIPLES — `h2` разрешён ТОЛЬКО когда пришёл из VMess `net`
       // ([networkOverride], node_parser_vmess.go: net=h2 маппится в
       // transport type=http с фолбэком host на sni/server,
       // node_parser_core.go:679-694). Голый `type=h2` в query VLESS/Trojan
@@ -251,7 +251,7 @@ XhttpTransport xhttpFromMap(
 }) {
   // path: срезать `?…`-хвост (реальные ноды: path=/x?ed=2048 — хвост не путь).
   // §303 — общий хелпер; early data у xhttp нет, значение отбрасываем.
-  // SPEC 103 CANON §2.4 — без query-параметра path не эмитим дефолт '/'
+  // SPEC 103 PARSING_PRINCIPLES §2.4 — без query-параметра path не эмитим дефолт '/'
   // (Go: xhttpCleanPath, node_parser_transport.go) — только явный path=
   // доходит до конфига, включая явный path=%2F → "/". splitEarlyDataPath
   // сама нормализует '' → '/' (для случая, когда путь стал пустым ПОСЛЕ

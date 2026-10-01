@@ -1,96 +1,153 @@
-# Фичи
+[English](README.md) · [Русский](README.ru.md)
 
-Спецификации функциональности: пользовательские сценарии, поведение UI/ядра, ограничения, критерии готовности.
+# L×Box features — what the Android VPN client can do
 
-**Имя папки:** `NNN <название с пробелами>` — см. [`../README.md`](../README.md). Внутри — `spec.md`, при необходимости `plan.md` и `tasks.md`.
+L×Box is an Android VPN client built on the sing-box-lx core. This catalogue
+lists every capability of the app — subscriptions and node import, routing and
+DNS, hop chains, split tunneling, Cloudflare WARP, DPI bypass, diagnostics,
+backup — as black-box specifications: what each feature promises, how it is
+controlled and where it stops. The structure follows the core's Spec Kit
+([sing-box-lx/SPECS/FEATURES](https://github.com/Leadaxe/sing-box-lx/tree/lx/SPECS/FEATURES)).
 
-**Правила (см. [`../README.md`](../README.md) и [`../tasks/054-spec-reorg-features-vs-tasks.md`](../tasks/054-spec-reorg-features-vs-tasks.md)):**
-- В `features/` лежат **только живые продуктовые / архитектурные** концепции.
-- Исторические решения (MVP scope, начальный стек), миграции, рефакторы, superseded спеки — в [`../tasks/`](../tasks/).
-- Номера монотонные «вперёд». Освобождённые номера (001, 002, 004, 005, 013, 039, 041) — **не переиспользуются**, чтобы archive-ссылки не ломались.
+A feature describes **the current state** of a whole domain area as a
+**black box**: why it exists, what it promises the user, which principles it
+protects, what controls it, what it takes and what it gives, where its
+boundaries are. The implementation (files, classes, control flow, platform)
+lives in tasks — [`../tasks/`](../tasks/README.md); old feature specs are tasks
+with the `F` index ([`../tasks/F-INDEX.md`](../tasks/F-INDEX.md)).
 
-## Индекс
+**Portability criterion:** if the app is rewritten from scratch on another
+platform, the `features/` folder moves over whole and does not change until the
+behavior for the user changes.
 
-| # | Папка | Кратко | Статус |
-|---|-------|--------|--------|
-| 003 | [`003 home screen/`](003%20home%20screen/) | Главный экран: группы, узлы, контекст-меню, traffic bar, сортировка, node filter | Реализовано |
-| 006 | [`006 servers ui/`](006%20servers%20ui/) | UI подписок: detail view, toggles, context menu, paste dialog | Реализовано |
-| 007 | [`007 config editor/`](007%20config%20editor/) | Форматирование JSON в редакторе конфига | Реализовано |
-| 008 | [`008 ping and node management/`](008%20ping%20and%20node%20management/) | Mass ping, ping settings, URLTest config, цветовая индикация | Реализовано |
-| 009 | [`009 ux and theme/`](009%20ux%20and%20theme/) | Dark theme, pull-to-refresh, autosave | Реализовано |
-| 010 | [`010 quick start and offline/`](010%20quick%20start%20and%20offline/) | Quick Start, auto-refresh, subscription caching | Реализовано |
-| 011 | [`011 local ruleset cache/`](011%20local%20ruleset%20cache/) | Локальный кэш remote .srs rule set файлов | Реализовано |
-| 012 | [`012 native vpn service/`](012%20native%20vpn%20service/) | Нативный VPN-сервис, auto-connect on boot | Реализовано |
-| 014 | [`014 dns settings/`](014%20dns%20settings/) | DNS серверы, правила, strategy, presets | Реализовано |
-| 015 | [`015 speed test/`](015%20speed%20test/) | Built-in speed test: ping, download, upload | Реализовано |
-| 016 | [`016 statistics and connections/`](016%20statistics%20and%20connections/) | Statistics by outbound, live connections | Реализовано |
-| 017 | [`017 custom nodes and node settings/`](017%20custom%20nodes%20and%20node%20settings/) | Custom nodes, overrides, node settings (tag, detour) | Реализовано |
-| 018 | [`018 detour server management/`](018%20detour%20server%20management/) | Multi-hop chains, jump server naming & visibility | Реализовано |
-| 019 | [`019 wireguard endpoint/`](019%20wireguard%20endpoint/) | WireGuard URI + INI → sing-box endpoint | Реализовано |
-| 020 | [`020 security and dpi bypass/`](020%20security%20and%20dpi%20bypass/) | Security hardening, TLS fragment | Частично |
-| 021 | [`021 ci cd pipeline/`](021%20ci%20cd%20pipeline/) | GitHub Actions: checks, build, release | Реализовано |
-| 022 | [`022 app settings/`](022%20app%20settings/) | Theme, auto-start on boot, keep VPN on exit | Реализовано |
-| 023 | [`023 debug and logging/`](023%20debug%20and%20logging/) | Debug screen, log level, sing-box log viewer | Частично |
-| 024 | [`024 load balance/`](024%20load%20balance/) | Load Balance через PuerNya fork | Спека |
-| 025 | [`025 warp integration/`](025%20warp%20integration/) | Cloudflare WARP регистрация и интеграция (one-tap Get WARP) | Реализовано |
-| 026 | [`026 parser v2/`](026%20parser%20v2/) | Sealed `NodeSpec` + 3-слойный pipeline parser/builder | Реализовано |
-| 027 | [`027 subscription auto update/`](027%20subscription%20auto%20update/) | Auto-refresh подписок: 4 триггера + spam-gates | Реализовано |
-| 028 | [`028 antidpi sni obfuscation/`](028%20antidpi%20sni%20obfuscation/) | Mixed-case SNI как post-step | Реализовано |
-| 029 | [`029 haptic feedback/`](029%20haptic%20feedback/) | Тактильный отклик на ключевых действиях | Реализовано |
-| 030 | [`030 custom routing rules/`](030%20custom%20routing%20rules/) | Unified `CustomRule` + inline и SRS-rules | Реализовано |
-| 031 | [`031 debug api/`](031%20debug%20api/) | Localhost HTTP-сервер для интроспекции | Реализовано |
-| 032 | [`032 quick connect/`](032%20quick%20connect/) | QS-tile + home shortcut | Реализовано |
-| 033 | [`033 preset bundles/`](033%20preset%20bundles/) | Селектор preset-бандлов | Реализовано |
-| 034 | [`034 app icon/`](034%20app%20icon/) | Финальная иконка приложения | Реализовано |
-| 035 | [`035 mcp server/`](035%20mcp%20server/) | MCP-обёртка над Debug API | Спека |
-| 036 | [`036 update check/`](036%20update%20check/) | Проверка обновлений на launch + manual | Реализовано |
-| 037 | [`037 naive proxy/`](037%20naive%20proxy/) | NaïveProxy outbound: parser + emit + share-URI | Реализовано |
-| 038 | [`038 crash diagnostics/`](038%20crash%20diagnostics/) | Crash diagnostics (merged into §043 diagnostics platform) | Реализовано |
-| 040 | [`040 backup restore ui/`](040%20backup%20restore%20ui/) | Backup & restore UI | Реализовано |
-| 042 | [`042 health watchdog/`](042%20health%20watchdog/) | Health watchdog (heartbeat metrics + auto-recovery) | Реализовано |
-| 043 | [`043 applog per-source quotas/`](043%20applog%20per-source%20quotas/) | Diagnostics platform (Debug API + AppLog + Crash diagnostics) | Реализовано |
-| 044 | [`044 per-app traffic profiler/`](044%20per-app%20traffic%20profiler/) | Per-app traffic profiler | Реализовано (v1.7.0) |
-| 045 | [`045 tls ech/`](045%20tls%20ech/) | TLS ECH (Encrypted Client Hello) | Спека |
-| 046 | [`046 tunnel apps split-tunneling/`](046%20tunnel%20apps%20split-tunneling/) | Tunnel apps: OS-level split-tunneling | Реализовано (v1.7.1) |
-| 047 | [`047 public intent api/`](047%20public%20intent%20api/) | Public Intent API (Tasker / automation) | Спека |
-| 048 | [`048 home-node-filters/`](048%20home-node-filters/) | Фильтры узлов на главном экране (`NodeFilter`) | Реализовано |
-| 070 | [`070 sort-options/`](070%20sort-options/) | Опции сортировки узлов | Реализовано |
-| 071 | [`071 manual-node-reorder/`](071%20manual-node-reorder/) | Ручной порядок узлов (drag-reorder) | Реализовано |
-| 074 | [`074 add-server-wizard/`](074%20add-server-wizard/) | Мастер добавления сервера | Реализовано |
-| 076 | [`076 settings-and-config-lifecycle/`](076%20settings-and-config-lifecycle/) | Жизненный цикл настроек и сборки конфига | Реализовано |
-| 097 | [`097 awg2-amneziawg2/`](097%20awg2-amneziawg2/) | AmneziaWG / AWG2 + XHTTP (core-swap на sing-box-lx) | Реализовано (v2.0.0) |
-| 105 | [`105 support-message/`](105%20support-message/) | Сообщение поддержки | Реализовано (v2.0.0) |
-| 117 | [`117 dns-rework/`](117%20dns-rework/) | DNS-rework под sing-box 1.14 | Реализовано (v2.0.6) |
-| 118 | [`118 subscription-fetch-identity/`](118%20subscription-fetch-identity/) | Идентичность fetch'а подписок (User-Agent и пр.) | Реализовано (v2.0.6) |
-| 119 | [`119 vpn-mode/`](119%20vpn-mode/) | VPN Mode (vpn / proxy / vpn_proxy), data-driven вкладка | Реализовано |
-| 120 | [`120 template-engine-typed-vars-and-if/`](120%20template-engine-typed-vars-and-if/) | Типизированный движок шаблона + декларативный `#if` | Реализовано |
-| 121 | [`121 libbox-1.14-adoption/`](121%20libbox-1.14-adoption/) | Адаптация на ядро sing-box 1.14 (libbox 1.14 API) | Реализовано |
-| 122 | [`122 commandclient-migration/`](122%20commandclient-migration/) | Переход управляющего канала на libbox CommandClient (отказ от Clash API) | Реализовано |
-| 123 | [`123 subscription-model/`](123%20subscription-model/) | Модель подписок BoxService / CommandClient (три клиента, энергомодель) | Реализовано |
-| 124 | [`124 background-mode-tunnel-sleep/`](124%20background-mode-tunnel-sleep/) | Tunnel sleep mode (`never`/`lazy`/`always`): pause/wake туннеля ради батареи; инвариант «нет утечки на паузе» | Реализовано |
-| 125 | [`125 configurable-channels/`](125%20configurable-channels/) | Настраиваемые каналы роутинга (CRUD ≤10, node_filter, auto-двойник) | Реализовано (v2.6.0) |
-| 126 | [`126 first-run-wizard/`](126%20first-run-wizard/) | Мастер первого запуска | Реализовано (v2.8.0) |
-| 127 | [`127 xhttp-full-url-params/`](127%20xhttp-full-url-params/) | Полный XHTTP: URL-параметры транспорта | Реализовано (v2.8.0) |
-| 128 | [`128 idle-suspend/`](128%20idle-suspend/) | Idle-suspend туннеля (`route.lx_idle_suspend`, kernel SPEC 020) | Реализовано (v2.8.2) |
-| 129 | [`129 file-subscription/`](129%20file-subscription/) | Подписка из файла (`file:<uuid>`) + редактируемый источник online↔file | Реализовано (v2.8.2) |
-| 130 | [`130 masque-warp-transport/`](130%20masque-warp-transport/) | MASQUE-транспорт для WARP (QUIC/CONNECT-IP) | Реализовано (v2.9.0) |
-| 234 | [`234 server-folders/`](234%20server-folders/) | Папки серверов (folder): контейнер ручных серверов, per-member toggle, перенос между папками | Реализовано |
-| 236 | [`236 folder-server-testing/`](236%20folder-server-testing/) | Test servers в папке: headless probe (CommandServer без tun), пороги шкалы, disable slow / delete unreachable / sort by ping | Реализовано |
-| 248 | [`248 detour-channels/`](248%20detour-channels/) | Detour-каналы: канал §125 с галкой «Use as detour» как переключаемая прослойка для detour серверов/папок/подписок (⚙; галка = разрешение, целью правил канал остаётся — §274; циклы ловит fatal-детектор §254) | Реализовано |
-| 392 | [`392 node-diagnostics/`](392%20node-diagnostics/) | Diagnostics на экране узла: GET через узел по тегу (kernel SPEC 058 `GetURLViaOutbound`) с показом сырого ответа — exit-IP/гео/`warp=`; ветка probe (VPN off) ↔ боевое ядро (VPN on) | DEVICE-PENDING |
-| 393 | [`393 directions/`](393%20directions/) | Directions: рефакторинг каналов, бэкап v1.1, цепочки, паритет с лаунчером | ТЗ |
-| 435 | [`435 node-sections-tailscale/`](435%20node-sections-tailscale/) | Секции узла (контракт ## 13, форма ONE_NAMESPACE §2) + узел Tailscale: инъекция при сборке, гейт ядра, мастер, Routing/DNS/редактор узла | Released v2.23.2 (ядро lx.38) |
-| 439 | [`439 storage-contract-1-0/`](439%20storage-contract-1-0/) | Хранение `lxbox_settings.json` в форме записей контракта 1.0 (`sources[]`, `rules[]`, `dns{}`), миграция при загрузке с копией `.v0.bak`, ссылки на узлы `{folder_id, tag}` (NodeLink), экспорт LX Backup — срез хранения | Реализовано, DEVICE-PENDING (2.23.3) |
-| 417 | [`417 workspaces/`](417%20workspaces/) | Workspaces: именованные копии состояния (настройки + кэш подписок + .srs); Load = автосохранение текущего → копия → перечитать без рестарта → пересборка → VPN; Save as; без переезда файлов | DEVICE-PENDING |
+## Languages
 
-## Демотированные / superseded (теперь в `../tasks/`)
+The primary language of long-lived documentation is **English**; the Russian
+version sits next to it with the `.ru.md` suffix (`FEATURE.md` + `FEATURE.ru.md`,
+`FUNCTIONS/<name>.md` + `FUNCTIONS/<name>.ru.md`). The first line of every
+document is a switcher: `[English](X.md) · [Русский](X.ru.md)`. Both versions
+are required and are edited together; tasks in `tasks/` may be in Russian only.
 
-| Старый № | Что было | Куда переехало |
-|----------|----------|----------------|
-| 001 | Mobile stack decision | [`../tasks/055-mobile-stack-decision/`](../tasks/055-mobile-stack-decision/) |
-| 002 | MVP scope | [`../tasks/056-mvp-scope-historical/`](../tasks/056-mvp-scope-historical/) |
-| 004x | Subscription parser v1 (superseded by §026) | [`../tasks/057-subscription-parser-v1-superseded/`](../tasks/057-subscription-parser-v1-superseded/) |
-| 005x | Config generator v1 (superseded by §026) | [`../tasks/058-config-generator-wizard-v1-superseded/`](../tasks/058-config-generator-wizard-v1-superseded/) |
-| 013 | Routing v1 (superseded by §030) | [`../tasks/059-routing-v1-superseded/`](../tasks/059-routing-v1-superseded/) |
-| 039 | libbox 1.13 migration (one-shot) | [`../tasks/060-libbox-1-13-migration/`](../tasks/060-libbox-1-13-migration/) |
-| 041 | DNS rules refactor (live spec → §014) | [`../tasks/061-dns-rules-refactor/`](../tasks/061-dns-rules-refactor/) |
+## Three levels
+
+```
+Feature    features/NNN-NAME/FEATURE.md          why, promises, parameters, boundaries, list of functions
+Function   features/NNN-NAME/FUNCTIONS/<name>.md one capability of the feature: what it does, its own parameters,
+                                                 invariants, revision table
+Revision   tasks/NNN-title.md | tasks/NNNF-name/  a work cycle that changed a function (implementation)
+```
+
+A function is something the user or a neighboring subsystem can name on its own
+("OpenVPN profile import", "subscription auto-update"), not a code layer and not
+a screen. One task may be listed as a revision of several functions.
+
+## Product
+
+| # | Feature | What it gives | Absorbed (`F`) | State |
+|---|---------|---------------|----------------|-------|
+| [001-SUBSCRIPTIONS](001-SUBSCRIPTIONS/FEATURE.md) | Node sources: subscription by URL, file, paste; request identity; auto-update; disabling nodes | 006 010 027 118 129 283 | ✅ 2026-09-28 |
+| [002-NODE_IMPORT](002-NODE_IMPORT/FEATURE.md) | Parsing links and configs of all protocols into a single node model: share-URI, Xray JSON, sing-box JSON, WireGuard INI, AmneziaWG, OpenVPN, NaïveProxy | 019 026 037 097 321 368 460 472 480 584 | ✅ 2026-09-28 |
+| [003-CONFIG_BUILD](003-CONFIG_BUILD/FEATURE.md) | Building the core config from nodes and settings: template, typed variables, settings lifecycle, pre-start validation | 076 120 | ✅ 2026-09-28 |
+| [004-ROUTING](004-ROUTING/FEATURE.md) | Routing rules: custom rules, presets, rule-set cache, directions | 011 030 033 393 | ✅ 2026-09-28 |
+| [005-DNS](005-DNS/FEATURE.md) | DNS: servers, rules, strategy, groups, FakeIP | 014 117 312 | ✅ 2026-09-28 |
+| [006-DETOUR_AND_BALANCE](006-DETOUR_AND_BALANCE/FEATURE.md) | Node chains, detour channels, load balancer | 018 024 248 322 | ✅ 2026-09-28 |
+| [007-NODE_LIST](007-NODE_LIST/FEATURE.md) | Home screen: groups, filters, sorting, folders, manual order, active node selection | 003 048 070 071 234 236 565 | ✅ 2026-09-28 |
+| [008-NODE_EDITOR](008-NODE_EDITOR/FEATURE.md) | Custom nodes, node settings, protocol-schema editor, add-server wizard | 017 074 554 | ✅ 2026-09-28 |
+| [009-NODE_HEALTH](009-NODE_HEALTH/FEATURE.md) | Ping and URLTest, node diagnostics, auto-disabling core-rejected nodes, speed test | 008 015 392 478 | ✅ 2026-09-28 |
+| [010-VPN_SERVICE](010-VPN_SERVICE/FEATURE.md) | Tunnel: start/stop, VPN/Proxy modes, auto-start, watchdog, background sleep, idle-suspend, reaction to network changes | 012 042 119 124 128 | ✅ 2026-09-28 |
+| [011-SPLIT_TUNNELING](011-SPLIT_TUNNELING/FEATURE.md) | Which apps go through the tunnel and which bypass it | 046 | ✅ 2026-09-28 |
+| [012-LIVE_STATE](012-LIVE_STATE/FEATURE.md) | Live core state: status, connections, statistics, per-app traffic | 016 122 123 | ✅ 2026-09-28 |
+| [013-DIAGNOSTICS](013-DIAGNOSTICS/FEATURE.md) | Diagnostics: app log, core log, crash report, Debug API, live events | 023 038 043 | ✅ 2026-09-28 |
+| [014-AUTOMATION](014-AUTOMATION/FEATURE.md) | External control: quick connect, public Intent API, integration with automation apps | 032 047 | ✅ 2026-09-28 |
+| [015-WARP](015-WARP/FEATURE.md) | Cloudflare WARP: one-tap registration, MASQUE transport | 025 130 | ✅ 2026-09-28 |
+| [016-DPI_HARDENING](016-DPI_HARDENING/FEATURE.md) | DPI circumvention: TLS fragmentation, SNI obfuscation, ECH, XHTTP parameters | 020 028 045 127 | ✅ 2026-09-28 |
+| [017-BACKUP_AND_STORAGE](017-BACKUP_AND_STORAGE/FEATURE.md) | Backup and restore, storage contract, migrations | 040 439 | ✅ 2026-09-29 |
+| [018-WORKSPACES](018-WORKSPACES/FEATURE.md) | Named settings sets | 417 | ✅ 2026-09-28 |
+| [019-CONFIG_EDITOR](019-CONFIG_EDITOR/FEATURE.md) | Viewing and editing the final config | 007 | ✅ 2026-09-28 |
+| [020-APP_SHELL](020-APP_SHELL/FEATURE.md) | App shell: settings, theme, haptic feedback, icon, localization, first launch, support, update check | 009 022 029 034 036 105 126 | ✅ 2026-09-28 |
+| [024-TEMPLATE](024-TEMPLATE/FEATURE.md) | The config template, its language (`#if`, `for_each`, `#tpl`, typed variables) and the preset language; how the client is extended through the template | 120 (functions) 033 (language) | ✅ 2026-09-29 |
+| [025-CONTRACT_REGISTRY](025-CONTRACT_REGISTRY/FEATURE.md) | The contract registry: protocol schemas, the mapper → sanitizer → model pipeline, the build gate for the pinned core, warning codes, sync and guards | 460 472 480 (registry parts) | ✅ 2026-09-29 |
+| [026-DIRECTIONS](026-DIRECTIONS/FEATURE.md) | Directions — the routing targets `vpn-N`, `direct-out`, `block`: model, groups in the config, selection, detour role, health | 125 248 393 (direction parts) | ✅ 2026-09-29 |
+| [027-DEBUG_API](027-DEBUG_API/FEATURE.md) | Debug API — the local HTTP control surface: access and security, route map, `/help`, write operations, automation recipes | 031 | ✅ 2026-09-29 |
+| [028-TRAFFIC_PROFILER](028-TRAFFIC_PROFILER/FEATURE.md) | Traffic profiler — per-app connection log, attribution, filters and views, DNS trace | 044 | ✅ 2026-09-29 |
+| [029-LOCALIZATION](029-LOCALIZATION/FEATURE.md) | Localization — languages, the English-as-key model, translation workflow, native and core strings | 279 | ✅ 2026-09-29 |
+| [030-TAILSCALE](030-TAILSCALE/FEATURE.md) | Tailscale — the phone as a node of your tailnet: node, device identity and state, tailnet DNS and routes, Network tab | 435 (former feature) | ✅ 2026-09-29 |
+
+## Process
+
+| # | Feature | What it gives | Absorbed (`F`) | State |
+|---|---------|---------------|----------------|-------|
+| [021-CORE_CONTRACT](021-CORE_CONTRACT/FEATURE.md) | The boundary with the sing-box-lx core: versions, libbox contract, feedback to the core | 121 · `docs/CONTRACT.md` · `docs/contract/` | ✅ 2026-09-29 |
+| [022-ARCHITECTURE](022-ARCHITECTURE/FEATURE.md) | Code structure principles: layers, facades, "cohesion over line count" | 291 | ✅ 2026-09-29 |
+| [023-BUILD_CI_RELEASE](023-BUILD_CI_RELEASE/FEATURE.md) | Build, checks, release, stores | 021 · `docs/RELEASE_PROCESS.md` | ✅ 2026-09-29 |
+
+State: `—` not written · `✍` in progress · `✅` written from code · `D` confirmed by the owner.
+
+Not carried over: `035F mcp server` (spec only, no code) — the owner's decision.
+
+## Feature template — `NNN-NAME/FEATURE.md`
+
+Header table: Type (product/process), Absorbed (`§NNNF …`), State.
+Then sections in this order:
+
+1. **Purpose** — what it gives the user, why it exists, which principle it protects.
+2. **Promises** — `P1..Pn`, each with: a statement of observable behavior,
+   a **Witness** (a test named by behavior, or a reproducible manual check),
+   a **Mutation** (what should break the promise). A promise without a witness is
+   marked `no witness` — it is a candidate for a revision, not a decoration.
+3. **Controlled parameters** — all knobs: user settings (values, default), core
+   config keys the feature emits (this is the contract with the core).
+4. **Inputs / Outputs** — what the box takes (links, files, OS events, core
+   responses) and what it gives (config, state, notifications, behavior).
+5. **Data flow** — the path of data through stages, from input to output. Stages,
+   not files.
+6. **Rules and guarantees** — invariants, mutual exclusions, what is validated and
+   when.
+7. **Boundaries** — what the feature intentionally does not do; what depends on OS
+   capabilities.
+8. **Functions** — a table: function · what it does · which promises it holds ·
+   file in `FUNCTIONS/`.
+9. **Related features** — sibling and neighboring features, the functions and
+   promises in them: a link + one line on why they are related (a boundary, a
+   shared contract, a dependency).
+10. **Maintenance notes** — behavioral pitfalls that are expensive.
+
+A reference to another feature's promise is written as `005-DNS · P2`, linked to
+that feature's promises section: `[005-DNS · P2](../005-DNS/FEATURE.md#promises)`
+(in the Russian version the anchor is `#обещания`). Promise numbers inside a
+feature are stable: a withdrawn promise is marked "withdrawn", and its number is
+not reused.
+
+⚠️ **No names of files, classes, code functions, widgets or platform mechanisms.**
+Check: the implementation was rewritten from scratch — `FEATURE.md` did not change.
+What remains: settings and their values, core config keys, core RPC names, link
+and file formats (these are contracts with the user and the core).
+
+## Function template — `NNN-NAME/FUNCTIONS/<name>.md`
+
+Header: Feature, Promises (which `P` it holds), State. Sections:
+
+1. **What it does** — one capability, in the user's terms.
+2. **Parameters** — only the knobs that relate to this function.
+3. **Inputs / Outputs**.
+4. **Rules and invariants** — including error handling: what the user sees.
+5. **Boundaries**.
+6. **Revisions** — a table `# · Revision · Status · Summary`, links to
+   `../../tasks/NNN…`. A revision is the history of requirements, not of the
+   implementation: a one-line summary, no files.
+
+## Conventions
+
+- **A feature folder is `NNN-NAME`**, UPPER_SNAKE, a running number from `001` — a
+  stable anchor that does not change once assigned. A new feature gets the next
+  free number.
+- **One feature — one `FEATURE.md`**, the current state on top, no chronology.
+  Chronology lives in revisions.
+- **A feature is written from code and tests**; old `F` specs and tasks are a source
+  of revisions and hints, not the truth. A mismatch between code and expectation is
+  a new task, not smoothing over.
+- **Link to a feature or a function, not to a task.** Link to a task when a specific
+  analysis is needed.
+- **Behavior changes — the feature is edited.** `FEATURE.md` and `FUNCTIONS/` are a
+  living design, not an archive: a task that changes behavior updates them and adds
+  itself to the revisions.

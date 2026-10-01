@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import '../../models/node_spec.dart';
+import '../../vpn/box_vpn_client.dart';
 import '../../vpn/cc_channel.dart';
 import '../app_log.dart';
+import '../builder/core_chain_capability.dart';
 import 'probe_config.dart';
 import 'probe_lifecycle.dart';
 
@@ -81,19 +83,26 @@ class ProbeRunner {
     // прекратится, даже если экран деталей папки не в фокусе. Снимаем в finally.
     final canceller = ProbeLifecycle.I.register(cancel);
     try {
-      // §518 — конфигов может быть несколько: naive-узлы гейтятся по
-      // kProbeMaxNaivePerConfig (каждый поднимает Chromium-движок, десяток в
-      // одном конфиге = OOM всего процесса). Батчи прогоняются
+      // §518/§523 — конфигов может быть несколько: дорогие по памяти узлы
+      // гейтятся по kProbeMaxNaivePerConfig (naive — Chromium-движок на узел)
+      // и kProbeMaxWireguardPerConfig (WG/AWG — ≈17.5 МБ предвыделенных пулов
+      // на endpoint; проба = дайл, ядро будит ВСЕ endpoint'ы конфига). Десяток
+      // в одном конфиге = OOM всего процесса. Батчи прогоняются
       // ПОСЛЕДОВАТЕЛЬНО, каждый своей probe-сессией: `ProbeSession.start`
-      // поверх живой сессии — рестарт, так что движки предыдущего батча
-      // освобождаются до старта следующего. Без naive батч один, и прогон
+      // поверх живой сессии — рестарт (`ProbeSession.kt`), а `probeStop` ниже
+      // зовётся после каждого батча, так что движки/пулы предыдущего батча
+      // освобождаются до старта следующего. Без naive и WG батч один, и прогон
       // дословно как до §518.
-      final batches = buildProbeBatches(nodes);
+      // §546 — гард реестра в probe судит `min_core` по той же версии ядра,
+      // что и боевая сборка (`CoreVersionCache`, кэш на сессию).
+      final coreVersion = await CoreVersionCache.ensure(
+          () => BoxVpnClient().getCoreVersion());
+      final batches = buildProbeBatches(nodes, coreVersion: coreVersion);
 
       // Битые/несобираемые/группы — вердикт сразу, без ядра. Вердикты лежат
       // в первом батче (§518 `_assemble`), покрывают весь список целиком.
       final broken = batches.isEmpty
-          ? buildProbeConfig(nodes).brokenByIndex
+          ? buildProbeConfig(nodes, coreVersion: coreVersion).brokenByIndex
           : batches.first.brokenByIndex;
       broken.forEach((i, why) {
         onResult(
@@ -130,8 +139,8 @@ class ProbeRunner {
           );
         } finally {
           // Сессию гасим ПОСЛЕ каждого батча, а не в конце прогона: иначе
-          // движки naive-узлов предыдущего батча жили бы до конца sweep'а и
-          // гейт не давал бы ничего.
+          // движки naive-узлов и WG-пулы (§523) предыдущего батча жили бы до
+          // конца sweep'а и гейт не давал бы ничего.
           await _cc.probeStop();
         }
       }

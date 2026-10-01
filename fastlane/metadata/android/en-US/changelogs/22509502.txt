@@ -1,0 +1,1 @@
+Core 1.14.2-lx.11: Tailscale traffic to peers over a direct path works again; the coordination server is reached over port 443 from the start. Repeats of one server in a subscription are merged with a note on the node that stays. Preset rules written without conditions are kept, rules that lost their conditions are dropped. Xray JSON balancers pool servers by selector.

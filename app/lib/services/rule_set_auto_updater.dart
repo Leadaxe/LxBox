@@ -216,6 +216,9 @@ class RuleSetAutoUpdater {
     final out = <_Candidate>[];
 
     WizardTemplate? template;
+    // §534 — userVars для гейта наборов на ref-переменной (§265); читаем
+    // лениво вместе с шаблоном, один раз на проход.
+    Map<String, String>? userVars;
     for (final r in rules) {
       if (!r.enabled) continue;
 
@@ -242,6 +245,7 @@ class RuleSetAutoUpdater {
         // Шаблон грузим лениво — у юзера может не быть ни одного пресета
         // с remote-рулсетами.
         template ??= await TemplateLoader.load();
+        userVars ??= await SettingsStorage.getAllVars();
         SelectableRule? preset;
         for (final sr in template.selectableRules) {
           if (sr.presetId == r.presetId) {
@@ -250,9 +254,10 @@ class RuleSetAutoUpdater {
           }
         }
         if (preset == null) continue; // пресета нет в шаблоне
-        // С `rule` — уважаем §045-гейтинг: выключенный var'ом rule_set в
-        // конфиг не попадает.
-        for (final rs in remoteRuleSetsOfPreset(preset, r)) {
+        // С `rule` — уважаем гейт набора (`#enable` §107, легаси `enabled`
+        // §045; семантика билдера — §534): выключенный rule_set в конфиг не
+        // попадает, обновлять его незачем.
+        for (final rs in remoteRuleSetsOfPreset(preset, r, userVars)) {
           final meta =
               await RuleSetDownloader.readMetaForPreset(r.presetId, rs.tag);
           if (!shouldUpdatePure(

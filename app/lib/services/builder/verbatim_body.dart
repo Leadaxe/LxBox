@@ -23,7 +23,12 @@ import '../../models/node_spec.dart';
 /// (§454) — его оригинальный outbound и для голого тела, и для документа с
 /// `sections`, и для целого конфига с одним узлом.
 ///
-/// `null` — узел идёт через модель: источник не sing-box (ссылка, INI, Xray),
+/// §576 п.4 — дословно, когда выполнены все четыре условия: (1) контейнер —
+/// свой сервер или член папки (вызывающий передаёт только их); (2) узел не
+/// группа автовыбора; (3) вид источника записи ровно `singbox_outbound`;
+/// (4) `rawSource` узла разбирается как JSON-объект.
+///
+/// `null` — узел идёт через модель: источник не голое тело sing-box,
 /// группа, или объект не собрался (не должно случаться: `rawSource` пишет
 /// парсер).
 ///
@@ -32,7 +37,9 @@ import '../../models/node_spec.dart';
 /// тег модели; дальше префикс контейнера и `allocateTag`, как у всех.
 Map<String, dynamic>? verbatimBodyOf(String containerRaw, NodeSpec node) {
   if (node is AutoSelectSpec) return null;
-  if (!sourceIsSingbox(containerRaw)) return null;
+  // §576 п.4 — вид источника записи ровно `singbox_outbound`; документ и
+  // массив (старые записи сводятся к телу при чтении) идут через модель.
+  if (!isAuthoredNodeSource(containerRaw)) return null;
   final src = node.rawSource.trim();
   if (!src.startsWith('{')) return null;
   final Object? decoded;

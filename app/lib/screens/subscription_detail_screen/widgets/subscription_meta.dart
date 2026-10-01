@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../../../controllers/subscription_controller.dart';
 import '../subscription_detail_format.dart';
 import '../../../services/l10n/locale_controller.dart';
+import 'node_warnings_sheet.dart';
 
 /// Header/meta block on the Nodes tab: url + copy, last-updated, node counts,
 /// traffic quota bar, expiry, support/web-page chips. Extracted verbatim from
@@ -93,6 +94,18 @@ class SubscriptionMeta extends StatelessWidget {
               ),
             ],
           ),
+          // §561 — записи тела, не ставшие узлами (`dropped[]` последнего
+          // разбора): причины — в той же шторке уведомлений, что у узла.
+          if (entry.dropped.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            _DroppedRow(entry: entry),
+          ],
+          // §589 — повторы одного сервера схлопнуты в узлы: строка отдельно
+          // от «dropped» (ничего не отброшено), имена — на самих узлах.
+          if (entry.duplicatesMerged.merged > 0) ...[
+            const SizedBox(height: 4),
+            _MergedRow(merged: entry.duplicatesMerged),
+          ],
           // Traffic quota
           if (entry.totalBytes > 0) ...[
             const SizedBox(height: 8),
@@ -159,6 +172,70 @@ class SubscriptionMeta extends StatelessWidget {
           style: theme.textTheme.bodySmall,
         ),
       ],
+    );
+  }
+}
+
+/// §561 — строка сводки «N entries dropped»; тап открывает шторку причин.
+class _DroppedRow extends StatelessWidget {
+  const _DroppedRow({required this.entry});
+
+  final SubscriptionEntry entry;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final dropped = entry.dropped;
+    final color = theme.colorScheme.error;
+    return InkWell(
+      borderRadius: BorderRadius.circular(4),
+      onTap: () => showNodeWarningsSheet(context, dropped),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Row(
+          children: [
+            Icon(Icons.error_outline, size: 14, color: color),
+            const SizedBox(width: 4),
+            Expanded(
+              child: Text(
+                getLocalText.plural("%d entries dropped", dropped.length),
+                style: theme.textTheme.bodySmall?.copyWith(color: color),
+              ),
+            ),
+            Icon(Icons.chevron_right, size: 16, color: color),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// §589 — строка сводки «M duplicates merged into K nodes». Справочная
+/// (info): какие имена слились в узел, видно на самом узле.
+class _MergedRow extends StatelessWidget {
+  const _MergedRow({required this.merged});
+
+  final ({int merged, int into}) merged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = theme.colorScheme.onSurfaceVariant;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          Icon(Icons.merge_type, size: 14, color: color),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Text(
+              getLocalText.plural("%1\$d duplicates merged into %2\$d nodes",
+                  merged.merged, merged.into),
+              style: theme.textTheme.bodySmall?.copyWith(color: color),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
