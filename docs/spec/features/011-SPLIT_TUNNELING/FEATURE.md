@@ -58,8 +58,8 @@ The feature protects two principles:
   Off/Allow/Deny does not erase the list; "Clear all" does not change the mode;
   the setting survives leaving the screen, a restart and the backup.
   **Witness**: units "staged tun_apps + flushToDisk → round-trip from disk",
-  "round-trip: export → reset → import → bytewise equal"; preservation on a
-  mode change — `no witness`. **Mutation**: a mode change resets the list.
+  "round-trip: export → reset → import → bytewise equal", "смена mode не
+  стирает packages (P5)". **Mutation**: a mode change resets the list.
 - **P6. A list edit is carried through to the core.** Any change of the mode or
   the list marks the config "rebuild needed"; with the tunnel up — a banner or
   an auto-restart per 003. **Witness**: unit "config-significant savers raise
@@ -148,8 +148,8 @@ user choice / Debug API / backup
 ## Boundaries
 
 - Proxy mode: split tunneling does not apply — there is no tunnel, and an app
-  goes to the local port by its own proxy setting. The tab does not warn about
-  this in that mode.
+  goes to the local port by its own proxy setting. The tab's help text says
+  so; there is no mode-aware banner.
 - "Allow VPN bypass" is a different mechanism (the app itself decides to go
   around the tunnel), owner — [010-VPN_SERVICE](../010-VPN_SERVICE/FEATURE.md),
   function "Operating modes".

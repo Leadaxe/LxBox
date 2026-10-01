@@ -21,7 +21,6 @@ void main() {
   setUpAll(loadEngineSections);
 
   final template = WizardTemplate(
-    parserConfig: ParserConfigBlock(),
     groupTemplates: GroupTemplates(
       direction: DirectionTemplate(
         include: const ['direct', 'auto'],

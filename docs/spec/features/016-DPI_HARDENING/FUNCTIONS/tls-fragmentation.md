@@ -48,7 +48,9 @@ the node's notifications; a build warning line.
 ## Rules and invariants
 
 - The global checkboxes write flags only to outbounds without `detour` and
-  with `tls.enabled: true`. The delay is written when any checkbox is on.
+  with `tls.enabled: true`. The delay is written when any checkbox is on; a
+  value the core cannot parse as a duration (`500`, `fast`) is replaced with
+  `500ms`.
 - Whether the field suits the node is asked of the registry by the body:
   naive — forbidden (the core fails with "fragment is not supported on naive
   outbound"); MASQUE `vhttp: h3` — a conflict, skipped silently; MASQUE
@@ -78,9 +80,10 @@ the node's notifications; a build warning line.
 
 ## Boundaries
 
-- Node ping and probe build their own config: the global checkboxes are not
-  applied to it (the node's `tls.fragment` under the probe's `detour` is
-  removed the same way, but without a code).
+- Node ping and probe build their own config, but apply the same global
+  checkboxes and the same delay as the tunnel, so the ping checks the path the
+  traffic takes; the node's `tls.fragment` under the probe's `detour` is
+  removed the same way, but without a code.
 
 - Skipping chain links and `strip_evasion` —
   [006-DETOUR_AND_BALANCE](../../006-DETOUR_AND_BALANCE/FEATURE.md).
@@ -100,3 +103,5 @@ the node's notifications; a build warning line.
 | 4 | [488](../../../tasks/488-xray-dialer-proxy-freedom-fragment.md) | Released v2.25.0 | `dialerProxy` → `freedom` with fragment → `tls.fragment` |
 | 5 | [573](../../../tasks/573-xray-finalmask-tcp-fragment.md) | Released v2.25.7 | `finalmask.tcp` fragment → `tls.fragment` |
 | 6 | [574](../../../tasks/574-tls-fragment-yields-to-detour.md) | Released v2.25.7 | `tls.fragment` yields to the build's `detour` and to the system engine |
+| 7 | [606](../../../tasks/606-audit-591-export-list-tun-warp-dpi-bugs.md) | Done | An invalid fallback delay is replaced with `500ms` |
+| 8 | [606](../../../tasks/606-audit-591-export-list-tun-warp-dpi-bugs.md) | Done | Ping and probe apply the global fragmentation like the tunnel |

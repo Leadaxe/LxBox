@@ -130,11 +130,11 @@ class AutomationEventEmitter {
         throttleKey: 'SUB_REFRESH_FAILED:$subId',
       );
 
-  // ─── Health (future — §042 watchdog) ────────────────────────────────────────
+  // ─── Health (reserved) ──────────────────────────────────────────────────────
   //
-  // Namespace зарезервирован спекой §047; источники появятся вместе с §042
-  // health watchdog. Gate `_healthEnabled` уже есть в UI — эти методы дают
-  // §042 готовую точку входа без новых toggle'ов.
+  // Namespace зарезервирован спекой §047; источника нет (042F won't-fix).
+  // §605 — тумблера в UI нет, гейт `_healthEnabled` читается из хранилища
+  // (старые бэкапы с ключом не ломаются).
 
   void emitHeartbeatFailed(int consecutiveFails) =>
       _emit('HEARTBEAT_FAILED', {'fails': consecutiveFails}, _healthEnabled);

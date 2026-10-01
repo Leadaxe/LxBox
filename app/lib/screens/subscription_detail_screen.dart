@@ -9,6 +9,7 @@ import '../models/import_rule.dart'; // §388 — ImportRuleAction для вар
 import '../models/node_link.dart';
 import '../models/node_spec.dart';
 import '../models/server_list.dart';
+import 'subscriptions_screen/entry_delete_title.dart';
 import '../models/ui_msg.dart';
 import '../services/error_humanize.dart';
 import '../services/node_hash.dart';
@@ -610,8 +611,9 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
     });
     try {
       // §289 — сырой ответ отражает реальную идентичность фетча (per-sub/глоб.).
-      final r = await fetchRaw(
-          UrlSource(widget.entry.url, identity: widget.entry.identity));
+      // §603 — файловая: снапшот из кэша, без HTTP к `file:…`.
+      final r = await fetchSourceSnapshot(widget.entry.url,
+          identity: widget.entry.identity);
       if (!mounted) return;
       setState(() {
         _rawSource = r.body;
@@ -658,7 +660,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(getLocalText.s("Delete subscription?")),
+        title: Text(deleteEntryTitle(widget.entry.list)), // §603
         content: Text(getLocalText.s("Remove \"%s\"?", widget.entry.displayName)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(getLocalText.s("Cancel"))),

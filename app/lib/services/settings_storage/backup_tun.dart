@@ -32,9 +32,15 @@ Future<Map<String, dynamic>> _dumpCache() async {
 /// «сбросить». Ключ, который в файле есть, по-прежнему побеждает. §447 — так
 /// же переносятся флаги стартовых промптов
 /// ([SettingsStorage.startupPromptVarKeys]).
+///
+/// §599 — замена по категориям: [keepTopLevel] / [keepVar] — ключи, которые
+/// замена НЕ трогает (у получателя остаются его значения, из снимка не
+/// берутся). null — замена всего документа (Debug API без категорий).
 Future<List<String>> _replaceRaw(
   Map<String, dynamic> snapshot, {
   bool merge = false,
+  bool Function(String key)? keepTopLevel,
+  bool Function(String varKey)? keepVar,
 }) async {
   // Allowlist для vars: кодовые флаги ∪ имена vars из локального template
   // (template в бэкап не входит — резолвим против зашитого в APK, §159).
@@ -70,6 +76,9 @@ Future<List<String>> _replaceRaw(
   for (final entry in clean.entries) {
     final key = entry.key;
     final value = entry.value;
+    // §607 — зеркало тумблеров VPN не применяется из снимка и неизвестным
+    // не считается.
+    if (key == SettingsStorage.nativePrefsKey) continue;
     if (!SettingsStorage.allowedTopLevelKeys.contains(key)) {
       dropped.add(key);
       continue;
@@ -80,7 +89,9 @@ Future<List<String>> _replaceRaw(
         final vk = v.key.toString();
         if (allowedVars.contains(vk)) {
           outVars[vk] = v.value;
-        } else {
+        } else if (!SettingsStorage.startupPromptVarKeys.contains(vk)) {
+          // §600 — флаги стартовых промптов (свойство устройства, §447) из
+          // файла не применяются и неизвестными не считаются.
           dropped.add('vars.$vk');
         }
       }
@@ -91,10 +102,32 @@ Future<List<String>> _replaceRaw(
   }
 
   if (!merge) {
-    // §413 — Debug API устройства переживает полную замену, если файл
-    // о нём молчит.
     final current = await _load();
     final currentVars = current['vars'];
+    // §599 — неотмеченные категории не трогаются: их ключи и подключи `vars`
+    // берутся у получателя, снимок для них не читается.
+    if (keepTopLevel != null) {
+      filtered.removeWhere((k, _) => k != 'vars' && keepTopLevel(k));
+      for (final entry in current.entries) {
+        if (entry.key != 'vars' && keepTopLevel(entry.key)) {
+          filtered[entry.key] = entry.value;
+        }
+      }
+    }
+    if (keepVar != null) {
+      final outVars = (filtered['vars'] as Map<String, dynamic>?) ??
+          <String, dynamic>{};
+      outVars.removeWhere((k, _) => keepVar(k));
+      if (currentVars is Map) {
+        for (final v in currentVars.entries) {
+          final vk = v.key.toString();
+          if (keepVar(vk)) outVars[vk] = v.value;
+        }
+      }
+      if (outVars.isNotEmpty) filtered['vars'] = outVars;
+    }
+    // §413 — Debug API устройства переживает замену, если файл о нём молчит
+    // (в том числе при отмеченной категории Debug config без этих ключей).
     if (currentVars is Map) {
       final outVars = (filtered['vars'] as Map<String, dynamic>?) ??
           <String, dynamic>{};
@@ -107,6 +140,14 @@ Future<List<String>> _replaceRaw(
         }
       }
       if (outVars.isNotEmpty) filtered['vars'] = outVars;
+    }
+    // §607 — зеркало тумблеров VPN получателя переживает замену: без него
+    // экраны до рестарта видели дефолты, а первая запись тумблера создавала
+    // секцию из одного ключа (остальные при старте уезжали в native
+    // дефолтами).
+    final nativePrefs = current[SettingsStorage.nativePrefsKey];
+    if (nativePrefs != null) {
+      filtered[SettingsStorage.nativePrefsKey] = nativePrefs;
     }
     SettingsStorage._cache = filtered;
     await _save();

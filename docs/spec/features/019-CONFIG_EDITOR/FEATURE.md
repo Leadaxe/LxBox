@@ -60,13 +60,20 @@ The feature protects three principles:
   without pinning.
 - **P6. A pinned config is not overwritten.** While pinned, rebuilds triggered
   by UI actions are silently skipped; an explicit rebuild through the Debug
-  API answers 409. **Witness:** manual check through the Debug API (`PUT
-  /settings/config_locked {"locked":true}`, `POST /action/rebuild-config` →
-  409; no autotest). **Mutation:** a rebuild while pinned.
+  API answers 409. **Witness:** unit "locked=true → actionRebuildConfig
+  бросает Conflict до requireSub/Home", "locked=false → gate пропускает,
+  падает дальше на requireSub (не на lock)", "PUT /settings/config_locked
+  {"locked":true} → GET /state/config_locked отдаёт true", "PUT
+  /settings/config_locked {"locked":false} снимает лок" — **покрыто
+  2026-09-30:** `test/services/debug/config_locked_rebuild_gate_test.dart`.
+  UI side (rebuilds triggered by UI actions silently skipped) — manual check,
+  no autotest. **Mutation:** remove the lock check from
+  `automation.actionRebuildConfig` — a rebuild while pinned goes through.
 - **P7. The pin is never orphaned.** The toggle is visible only when the Debug
   API is enabled; turning the Debug API off in settings removes the pin.
-  **Witness:** manual check (no autotest). **Mutation:** the lock stays with the
-  API turned off.
+  **Witness:** manual check (no autotest) — `_toggleDebugApi` in
+  `app_settings_screen.dart` is widget `State` logic with no pure-Dart seam.
+  **Mutation:** the lock stays with the API turned off.
 - **P8. The selection menu works with what is selected.** Long tap — Cut / Copy
   / Paste / Select all menu, the selection does not collapse. **Witness:** units
   "long tap: menu shown, selection not collapsed", "tap Copy puts the selected

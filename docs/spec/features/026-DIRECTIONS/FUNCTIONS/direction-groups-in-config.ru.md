@@ -32,13 +32,13 @@
 | Test URL / Interval / Tolerance (ms) / Idle timeout | — | `cp.cloudflare.com/generate_204` / `15m` / 50 / `30m` | `url`, `interval`, `tolerance`, `idle_timeout` |
 | Interrupt connections (двойник) | вкл/выкл | выкл | `urltest.interrupt_exist_connections` |
 | Mode: Fastest · Load balance | — | Fastest | `mode: round_robin` + `balancer{}` только для Load balance |
-| Pool size / Pool tolerance (ms) / Sticky session by | ≥ 1 / 0–65535 / набор | 3 / 0 / process + domain | `balancer.pool`, `pool_tolerance`, `sticky_hash` |
+| Pool size / Pool tolerance (ms) / Sticky session by | ≥ 1 / 0–15000 / набор | 3 / 0 / process + domain | `balancer.pool`, `pool_tolerance`, `sticky_hash` |
 | Default traffic | `direct` · Направление · `block` | `vpn-1` | `route.final` |
 
-`tolerance` и `pool_tolerance` клэмпятся в 0–65535 при чтении, сохранении и в редакторе;
-`pool` — в ≥ 1. «Passive health check» из Settings попадает в каждый двойник как
-`passive_check`. Сохранённое Направление без `interval` читается как `5m`, новое получает
-`15m` (272).
+`tolerance` клэмпится в 0–65535, `pool_tolerance` — в 0–15000 (предел ядра) при чтении,
+сохранении, в редакторе и при эмиссии; `pool` — в ≥ 1. «Passive health check» из Settings
+попадает в каждый двойник как `passive_check`. Пустой или отсутствующий `interval` — `15m`
+(272, 604).
 
 ## Входы / Выходы
 
@@ -87,8 +87,6 @@
 - Параметры замера двойника, массовый пинг и переселект —
   [direction-health.md](direction-health.ru.md); режимы балансировки, detour-кольца —
   [006-DETOUR_AND_BALANCE](../../006-DETOUR_AND_BALANCE/FEATURE.ru.md).
-- Приложение клэмпит `pool_tolerance` в 65535, а ядро отвергает значения выше 15000 — такой
-  конфиг не стартует (591).
 - Свёртки источников и группы подписок — группы другого рода —
   [007-NODE_LIST](../../007-NODE_LIST/FEATURE.ru.md).
 
@@ -105,3 +103,4 @@
 | 7 | [301](../../../tasks/301-regex-filter-case-insensitive.md) | ✅ реализовано | Фильтры регистронезависимы |
 | 8 | [393F](../../../tasks/393F-directions/spec.md) | released v2.21.0 | `include`, нормативный порядок, двойник как умолчание, цепочки через Направление |
 | 9 | [442](../../../tasks/442-urltest-interval-idle-pair.md) | Released v2.24.0 | Пара `interval`/`idle_timeout`, подсказка в редакторе |
+| 10 | [604](../../../tasks/604-dns-build-health-directions-bugs.md) | Done | `pool_tolerance` клэмпится по пределу ядра 15000, как у узла; одно умолчание `interval` |

@@ -76,3 +76,4 @@ health check.
 | 4 | [408](../../../tasks/408-ping-options-groups-heal.md) | Done | Осиротевшие ping-переопределения Направлений снимаются |
 | 5 | [409](../../../tasks/409-direction-ping-options-backup.md) | Done | Переопределения Направлений в бэкапе |
 | 6 | [442](../../../tasks/442-urltest-interval-idle-pair.md) | Released v2.24.0 | Пара `interval`/`idle_timeout` |
+| 7 | [604](../../../tasks/604-dns-build-health-directions-bugs.md) | Done | Одно умолчание для пустого и отсутствующего значения: URL `generate_204`, интервал `15m` |

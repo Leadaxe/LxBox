@@ -82,8 +82,8 @@ AdGuard Family), `opendns_udp`, `opendns_doh`, `quad9_doh` (через `vpn-1`),
 
 - Переменные пресетных серверов и сам пресет — [004-ROUTING](../../004-ROUTING/FEATURE.ru.md).
 - Узлы Tailscale — вне фичи ([030-TAILSCALE](../../030-TAILSCALE/FEATURE.ru.md)); здесь только тип сервера.
-- Поля `tls`, кроме SNI (ALPN, сертификаты, `insecure`), — только JSON; SNI
-  из формы перезаписывает весь `tls` (дефект §530).
+- Поля `tls`, кроме SNI (ALPN, сертификаты, `insecure`), — только JSON;
+  правка SNI в форме меняет только `tls.server_name`, прочие поля остаются.
 - Разового теста латентности серверов нет (§365).
 
 ## Ревизии
@@ -106,6 +106,6 @@ AdGuard Family), `opendns_udp`, `opendns_doh`, `quad9_doh` (через `vpn-1`),
 | 14 | [441](../../../tasks/441-template-preset-vars-in-record.md) | Released | Значения переменных в записи сервера; необъявленное имя выпадает |
 | 15 | [443](../../../tasks/443-contract-1-0-2-spec129.md) | Released | Висячий detour → сервер выпадает, политика отказа |
 | 16 | [458](../../../tasks/458-dns-server-json-tab-storage-record.md) | Готово к выпуску | JSON-вкладка шаблонного/пресетного сервера не падает |
-| 17 | [530](../../../tasks/530-dns-server-raw-json-tls-preserved.md) | Spec | SNI из формы не должен затирать прочий `tls` |
+| 17 | [530](../../../tasks/530-dns-server-raw-json-tls-preserved.md) | Done (604) | SNI из формы не должен затирать прочий `tls` |
 | 18 | [555](../../../tasks/555-template-lang-spec143-parity.md) | Сделано | Телам шаблонных серверов видны переменные шаблона; без адреса — выпадает |
 | 19 | [578](../../../tasks/578-tailscale-preset-template-for-each.md) | Spec | Серверы пресета по узлам (`for_each`) без пространства пресета |

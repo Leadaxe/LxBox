@@ -60,7 +60,7 @@ Functionality specifications: user scenarios, UI/core behavior, constraints, def
 | 044 | [`044 per-app traffic profiler/`](044F-per-app-traffic-profiler/) | Per-app traffic profiler | Implemented (v1.7.0) |
 | 045 | [`045 tls ech/`](045F-tls-ech/) | TLS ECH (Encrypted Client Hello) | Spec |
 | 046 | [`046 tunnel apps split-tunneling/`](046F-tunnel-apps-split-tunneling/) | Tunnel apps: OS-level split-tunneling | Implemented (v1.7.1) |
-| 047 | [`047 public intent api/`](047F-public-intent-api/) | Public Intent API (Tasker / automation) | Spec |
+| 047 | [`047 public intent api/`](047F-public-intent-api/) | Public Intent API (Tasker / automation) | Implemented |
 | 048 | [`048 home-node-filters/`](048F-home-node-filters/) | Node filters on the home screen (`NodeFilter`) | Implemented |
 | 070 | [`070 sort-options/`](070F-sort-options/) | Node sort options | Implemented |
 | 071 | [`071 manual-node-reorder/`](071F-manual-node-reorder/) | Manual node order (drag-reorder) | Implemented |

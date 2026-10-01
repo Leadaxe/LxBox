@@ -223,6 +223,43 @@ void main() {
           reason: 'DNS-правило пресета не эмитится');
       expect(result.dnsMirrors, isEmpty, reason: 'mirror-lock не создаётся');
     });
+
+    test('§601 — включённые правила без скачанного файла: сборка без ошибки, '
+        'ни правила, ни rule_set в конфиге', () {
+      final remoteOnly = SelectableRule(
+        label: 'Remote only',
+        presetId: 'remote-only',
+        vars: [
+          WizardVar(
+              name: 'outbound', type: 'outbound', defaultValue: 'direct-out'),
+        ],
+        ruleSets: const [
+          {
+            'tag': 'geo',
+            'type': 'remote',
+            'format': 'binary',
+            'url': 'https://example.invalid/geo.srs',
+          }
+        ],
+        rule: const {'rule_set': 'geo', 'outbound': '@outbound'},
+      );
+      final rules = <CustomRule>[
+        CustomRuleSrs(
+          id: 'srs-waiting',
+          name: 'srs-waiting',
+          srsUrl: 'https://example.invalid/rs.srs',
+          outbound: 'vpn-1',
+        ),
+        CustomRulePreset(name: 'R', presetId: 'remote-only'),
+      ];
+      final reg = RuleSetRegistry();
+
+      final result = applyAllCustomRules(reg, rules, [remoteOnly]);
+
+      expect(reg.getRules(), isEmpty);
+      expect(reg.getRuleSets(), isEmpty);
+      expect(result.warnings.join('\n'), contains('no cached file'));
+    });
   });
 }
 

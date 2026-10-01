@@ -59,7 +59,6 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
 
   bool _forceNew = false;
   bool _busy = false;
-  WarpAccount? _result;
 
   // §130 — транспорт WARP: 'wireguard' (дефолт) | 'masque'. MASQUE использует
   // ECDSA-регистрацию и Outbound type:masque (другой пул выходных нод).
@@ -345,6 +344,11 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
       final endpoint = _endpoint.text.trim().isEmpty
           ? WarpAccount.defaultEndpoint
           : _endpoint.text.trim();
+      // §606 — форма host:port проверяется до запроса (обещание 025F).
+      if (!WarpAccount.isValidEndpoint(endpoint)) {
+        showSnack(getLocalText.s("Endpoint must be host:port"));
+        return;
+      }
       final license = _license.text.trim();
 
       final account = await widget.subController.addWarp(
@@ -366,7 +370,6 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
             : getLocalText.s("WARP registration failed"));
         return;
       }
-      setState(() => _result = account);
       await widget.onAdded();
       if (!mounted) return;
       showSnack(account.warpPlus
@@ -707,7 +710,7 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        getLocalText.s("Idle timeout suspends the tunnel after inactivity to save battery (default 5 min). Keep-alive pings the QUIC link (default 30 sec, HTTP/3 only). Leave empty for defaults."),
+                        getLocalText.s("Idle timeout suspends the tunnel after inactivity to save battery; empty = never suspended (the core's default). Keep-alive pings the QUIC link (default 30 sec, HTTP/3 only). Leave empty for defaults."),
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: cs.onSurfaceVariant,
                             ),
@@ -1046,10 +1049,6 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                   ? getLocalText.s("Registering…")
                   : getLocalText.s("Register")),
             ),
-            if (_result != null) ...[
-              const SizedBox(height: 16),
-              _StatusCard(account: _result!),
-            ],
           ],
         ),
       ),
@@ -1084,50 +1083,6 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
           isDense: true,
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-        ),
-      );
-}
-
-class _StatusCard extends StatelessWidget {
-  const _StatusCard({required this.account});
-  final WarpAccount account;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-                account.warpPlus
-                    ? getLocalText.s("Registered: WARP+")
-                    : getLocalText.s("Registered: WARP"),
-                style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            _row('Account', account.accountId),
-            _row('Device', account.deviceId),
-            _row('Address', account.clientV4),
-            _row('Endpoint', account.endpoint),
-            if (account.awg != null) _row('Obfuscation', 'Amnezia 1.5'),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _row(String k, String v) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Row(
-          children: [
-            SizedBox(width: 80, child: Text(k)),
-            Expanded(
-              child: Text(v,
-                  style: const TextStyle(
-                      fontFamily: 'monospace', fontSize: 12)),
-            ),
-          ],
         ),
       );
 }

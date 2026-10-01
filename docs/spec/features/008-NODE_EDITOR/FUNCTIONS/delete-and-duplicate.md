@@ -21,7 +21,7 @@ referencing emptiness, and reports who was affected. Node duplication
 
 | What is deleted | Where | Confirmation |
 |---|---|---|
-| a custom standalone server | long press on the record in the source list → "Delete" | dialog "Delete subscription?" / "Remove "<tag>"?" |
+| a custom standalone server | long press on the record in the source list → "Delete" | dialog "Delete server?" / "Remove "<tag>"?" |
 | a folder member | folder screen ([007-NODE_LIST](../../007-NODE_LIST/FEATURE.md)) | see [007-NODE_LIST](../../007-NODE_LIST/FEATURE.md) |
 | a folder | long press on the folder → "Delete…" | choice: delete the folder with its servers or keep the servers |
 
@@ -71,3 +71,4 @@ notification counting the affected ones; a config rebuild.
 | 2 | [172](../../../tasks/172-heal-dangling-detour.md) | Implemented | Dangling detour after the target is deleted |
 | 3 | [234F](../../../tasks/234F-server-folders/spec.md) | IMPLEMENTED, device-verified | Folder deletion with a choice of the servers' fate |
 | 4 | [439F](../../../tasks/439F-storage-contract-1-0/spec.md) | Released in v2.24.0 | Reference registry: deletion clears references with a notification |
+| 5 | [603](../../../tasks/603-subscription-and-own-server-bugs.md) | Implemented | Deleting a standalone server asks "Delete server?" |

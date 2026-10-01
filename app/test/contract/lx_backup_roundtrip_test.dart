@@ -272,7 +272,7 @@ _State _source() {
           'server': 'my-doh',
         },
       ),
-      DnsRulePreset(presetId: 'ru-direct', enabled: true),
+      DnsRulePreset(presetId: 'ru-direct'),
     ],
   )
     ..dnsFinal = 'my-doh'
@@ -440,7 +440,6 @@ void main() {
       state.chains = const [
         SourceChain(
             tag: 'c',
-            label: 'Named',
             hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]),
       ];
       state.rules = [CustomRuleJson(name: 'Broken', json: 'not json')];
@@ -450,7 +449,7 @@ void main() {
       ];
       final out = await _export(state);
       // Контракт 1.0.1 (BACKUP.md §2 «Поля стороны LxBox»): detour_policy,
-      // on_update_action, ping_url и label цепочки едут, потерей не
+      // on_update_action и ping_url едут, потерей не
       // называются; json-правило без тела — потеря.
       expect(
         out.warnings.map((w) => '${w.code} ${w.detail}').toList(),
@@ -469,7 +468,9 @@ void main() {
       expect(provider['on_update_action'], 'reload');
       expect(sources.firstWhere((s) => s['id'] == 'fold-a')['ping_url'],
           'https://example-1.com/204');
-      expect(sources.firstWhere((s) => s['tag'] == 'c')['label'], 'Named');
+      // §594 — у цепочки одно имя, тег: `label` не пишется.
+      expect(sources.firstWhere((s) => s['tag'] == 'c').containsKey('label'),
+          isFalse);
       final dnsWarnings = <LxBackupWarning>[];
       final dns = dnsToBackup(
         servers: state.dnsServers,

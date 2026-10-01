@@ -57,8 +57,8 @@ snackbars and errors on screen.
 - **Tunnel up.** Saving does not restart the core; if the config differs from
   the running one — the "config changed" flag.
 - **Selection menu** (shared by all JSON fields of the app): long tap — Cut /
-  Copy / Paste / Select all over the live selection; the action, then the
-  menu is removed. There is one menu; it is removed by a tap on empty space
+  Copy / Paste / Select all over the live selection (a read-only field offers
+  only Copy / Select all, §607); the action, then the menu is removed. There is one menu; it is removed by a tap on empty space
   (the selection collapses), a scroll, or leaving the screen; a screen redraw
   does not spawn copies.
 - A file picking error or a missing file manager — a clear text, not a
@@ -84,3 +84,4 @@ snackbars and errors on screen.
 | 7 | [517](../../../tasks/517-editor-selection-and-dns-shield-udp.md) | Released in v2.25.2 | The selection menu does not collapse the selection |
 | 8 | [521](../../../tasks/521-editor-menu-hide-and-single-overlay.md) | Released in v2.25.3 | One menu, explicit removal triggers |
 | 9 | [554F](../../../tasks/554F-schema-driven-node-editor/spec.md) | Idea; only highlighting done | JSON syntax highlighting |
+| 10 | [607](../../../tasks/607-l10n-backup-shell-bugs-from-591.md) | Done | A read-only field's selection menu has no Cut / Paste |

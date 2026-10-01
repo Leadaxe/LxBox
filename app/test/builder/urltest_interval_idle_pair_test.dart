@@ -148,7 +148,6 @@ void main() {
 
   group('через buildConfig', () {
     WizardTemplate template() => WizardTemplate(
-          parserConfig: ParserConfigBlock(),
           groupTemplates: GroupTemplates(),
           vars: const [],
           varSections: const [],

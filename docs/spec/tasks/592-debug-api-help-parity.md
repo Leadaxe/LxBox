@@ -57,6 +57,11 @@
   текущий краш-репорт ядра `CrashReport-lxbox.log` (через `StderrReader`,
   `app/lib/services/stderr_reader.dart`); `stderr.log` в белом списке
   `/files/local` — legacy, ядро после libbox 1.14 его не пишет.
+- Bool-параметры (`rebuild`, `reveal`, `merge`, `keep_servers`, …): `qBool`
+  (`transport/request.dart`) принимает `true`/`1`/`yes` без учёта регистра, всё
+  остальное (в том числе `on`) — false; в `/help` (text и JSON) это нигде не
+  сказано — добавить одной строкой в шапку (аудит 591; в фиче 027 →
+  write-operations уже записано).
 
 ### Вёрстка text-формы
 

@@ -15,7 +15,6 @@ void main() {
   setUpAll(loadEngineSections);
 
   final template = WizardTemplate(
-    parserConfig: ParserConfigBlock(),
     // §267 — group_templates: vpn-1 Направление (direct+auto), auto-подгруппа.
     groupTemplates: GroupTemplates(
       direction: DirectionTemplate(

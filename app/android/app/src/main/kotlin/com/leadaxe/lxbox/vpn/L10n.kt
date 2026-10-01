@@ -110,7 +110,7 @@ object L10n {
         val s = setting(base)
         runCatching {
             if (s == SETTING_SYSTEM) {
-                // Как в BoxApplication.onCreate: libbox 1.14 строг к
+                // libbox 1.14 строг к
                 // комбинации язык+регион → fallback на голый язык.
                 runCatching {
                     Libbox.setLocale(

@@ -18,6 +18,7 @@ const String kNetworksLabel = 'NETWORKS'; // l10n-exempt: fixed name
 const String kNetworksDirectionValue = '\u0001networks';
 
 final Expando<List<String>> _cache = Expando<List<String>>('networks579');
+final Expando<List<String>> _allCache = Expando<List<String>>('tailscale608');
 
 /// Теги узлов NETWORKS в порядке конфига. Пусто — псевдо-направления нет.
 /// Результат кешируется на экземпляр [model] (он неизменяем, §091).
@@ -28,6 +29,14 @@ List<String> networksNodeTags(ParsedConfig model) =>
             n.type == 'tailscale' &&
             !exitCapableByRegistry(n.raw))
           n.tag,
+    ]);
+
+/// §608 — все Tailscale-endpoint'ы конфига: узлы NETWORKS и узлы с exit
+/// node. По ним держится подписка на поток статуса главного экрана.
+List<String> tailscaleNodeTags(ParsedConfig model) =>
+    _allCache[model] ??= List.unmodifiable([
+      for (final n in model.nodes)
+        if (n.kind == 'endpoint' && n.type == 'tailscale') n.tag,
     ]);
 
 /// Что показать в строке узла NETWORKS на месте задержки.
@@ -96,4 +105,73 @@ TailnetRowState tailnetRowState({
     TailnetStateKind.other,
     s.stateText.isNotEmpty ? s.stateText : s.backendState,
   );
+}
+
+/// §608 — имя действующего exit node для метки `via` в строке узла: первое
+/// непустое из `hostName`, первой метки MagicDNS-имени, первого адреса.
+/// `null` — записи ядра нет или exit node не выбран.
+String? tailnetExitName(CcTailscaleStatus? s) {
+  final e = s?.exitNode;
+  if (e == null) return null;
+  if (e.hostName.isNotEmpty) return e.hostName;
+  final dns = e.dnsNameClean;
+  if (dns.isNotEmpty) return dns.split('.').first;
+  return e.firstIp.isEmpty ? null : e.firstIp;
+}
+
+/// §608 — предупреждение в строке Tailscale-узла.
+enum TailnetNoteKind {
+  /// Действующий exit node офлайн.
+  exitOffline,
+
+  /// Ключ устройства истекает меньше чем через [kTailnetKeyWarnDays] суток.
+  keyExpires,
+
+  /// Срок ключа прошёл.
+  keyExpired,
+}
+
+/// §608 — за сколько суток до истечения ключа строка начинает предупреждать.
+const int kTailnetKeyWarnDays = 7;
+
+class TailnetNote {
+  const TailnetNote(this.kind, [this.days = 0]);
+
+  final TailnetNoteKind kind;
+
+  /// Для [TailnetNoteKind.keyExpires]: целые сутки до истечения (вниз);
+  /// `0` — меньше суток.
+  final int days;
+
+  @override
+  bool operator ==(Object other) =>
+      other is TailnetNote && other.kind == kind && other.days == days;
+
+  @override
+  int get hashCode => Object.hash(kind, days);
+
+  @override
+  String toString() => 'TailnetNote($kind, $days)';
+}
+
+/// §608 — предупреждение строки узла по записи ядра [s]. `null` — VPN
+/// выключен, записи нет или предупреждать не о чем. [withExit] — строка
+/// узла с exit node: офлайн-выход важнее срока ключа. `keyExpiry == 0` —
+/// истечение ключа отключено, метки нет.
+TailnetNote? tailnetRowNote({
+  required bool tunnelUp,
+  required CcTailscaleStatus? s,
+  required DateTime now,
+  required bool withExit,
+}) {
+  if (!tunnelUp || s == null) return null;
+  if (withExit && s.exitNode != null && !s.exitNode!.online) {
+    return const TailnetNote(TailnetNoteKind.exitOffline);
+  }
+  final expiry = s.self?.keyExpiry ?? 0;
+  if (expiry <= 0) return null;
+  final left = DateTime.fromMillisecondsSinceEpoch(expiry * 1000).difference(now);
+  if (left <= Duration.zero) return const TailnetNote(TailnetNoteKind.keyExpired);
+  if (left >= const Duration(days: kTailnetKeyWarnDays)) return null;
+  return TailnetNote(TailnetNoteKind.keyExpires, left.inDays);
 }

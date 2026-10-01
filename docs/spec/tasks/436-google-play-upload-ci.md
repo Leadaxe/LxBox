@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | In progress — job добавлен. Решение владельца 14.09.2026: полный цикл сразу, `PLAY_RELEASE_STATUS=completed` выставлен до первого прогона (черновик не нужен, ручную отправку на проверку он уже проходил). Done после первого зелёного прогона на теге |
+| Статус | Done — job `google-play` зелёный на тегах с v2.25.9 (run 36618100571, 2026-09-29). Решение владельца 14.09.2026: полный цикл сразу, `PLAY_RELEASE_STATUS=completed` выставлен до первого прогона (черновик не нужен, ручную отправку на проверку он уже проходил) |
 | Дата старта | 2026-09-14 |
 | Триггер | Вопрос владельца: релиз на GitHub должен сам уезжать в Play и F-Droid. F-Droid уже автоматический (`AutoUpdateMode: Version` + `UpdateCheckMode: Tags` в рецепте, см. [FDROID.md](../../FDROID.md)); в Play AAB заливался руками из артефакта прогона |
 | Связанные | [§379](379-version-code-from-version.md) (versionCode из версии), [§390](390-install-source-aware-update-notice.md) (канал установки, define только у AAB), [§219](219-deep-audit-2026-07.md) (перезапуск release-режима на теге), [GOOGLE_PLAY.md](../../GOOGLE_PLAY.md), [RELEASE_PROCESS.md](../../RELEASE_PROCESS.md) §2 «Google Play (AAB)» |
@@ -110,8 +110,8 @@ Action делает ровно одно: AAB + notes на трек. Пин по 
 ## Верификация
 
 - [x] YAML валиден (`python3 -c yaml.safe_load`), job виден в графе.
-- [ ] Первый тег после мержа: job `google-play` зелёный; в консоли на `production`
-  черновик с versionCode = universal-код тега и notes en-US / ru-RU.
+- [x] Первый тег после мержа: job `google-play` зелёный (v2.25.9, run 36618100571);
+  переменная уже `completed`, поэтому выпуск уходит на проверку, а не в черновик.
 - [x] `PLAY_RELEASE_STATUS=completed` — выставлен 14.09.2026 по слову владельца, без
   этапа черновика. Fallback в YAML остаётся `draft`: если переменную удалить,
   job вернётся к черновику, а не к автопубликации.

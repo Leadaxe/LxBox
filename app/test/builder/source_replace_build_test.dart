@@ -21,7 +21,6 @@ void main() {
   setUpAll(loadEngineSections);
 
   WizardTemplate template() => WizardTemplate(
-        parserConfig: ParserConfigBlock(),
         groupTemplates: GroupTemplates(),
         vars: const [],
         varSections: const [],

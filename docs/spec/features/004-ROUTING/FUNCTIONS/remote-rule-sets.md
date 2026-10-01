@@ -57,9 +57,12 @@ per set and one route rule with the list of tags.
 - **A preset set** without a file drops out by itself, the rest of the preset rule
   lives; a set disabled by a preset variable (for example the GeoIP layer) is not
   required, but its file is kept — if the checkbox comes back, no need to download again.
-- **The Routing screen on opening** disables a rule that lacks the needed
-  files; the list switch of such a rule first downloads, and enables only on
-  full success. In the editor the switch of an `.srs` rule is unavailable until the download.
+- **The Routing screen never turns a rule off by itself** (§601): an enabled rule
+  without the needed files stays enabled and is shown as "Waiting for download"
+  (dimmed switch, ☁); auto-update downloads it, and an open screen updates the
+  row. The list switch of a disabled rule without files first downloads, and
+  enables only on full success. In the editor the switch of an `.srs` rule is
+  unavailable until the download.
 - A rule added from the catalog with external sets arrives
   disabled: "Added … — tap ☁ to download, then enable".
 - Changing a rule's URL or kind wipes the old files and disables the rule;
@@ -92,3 +95,4 @@ per set and one route rule with the list of tags.
 | 5 | [434](../../../tasks/434-srs-rule-multiple-rule-sets.md) | Done | Several sets in one rule |
 | 6 | [531](../../../tasks/531-ru-app-list-ruleset-in-ru-preset.md) | Done | The set of Russian apps in Ru internet segment |
 | 7 | [534](../../../tasks/534-rule-set-enable-gate-download-path.md) | Done | The set gate is the same for download, the screen and the build |
+| 8 | [601](../../../tasks/601-routing-missing-srs-keeps-enabled.md) | Done | The screen does not turn off a rule without a downloaded set |

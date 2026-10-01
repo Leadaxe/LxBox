@@ -637,7 +637,7 @@ void main() {
 }''';
       final c = parseLxBackup(raw).chains.single;
       expect(c.enabled, isTrue, reason: 'отсутствие ключа = true по схеме');
-      expect(c.label, 'Мой маршрут');
+      expect(c.tag, isNotEmpty); // §594 — `label` цепочки отброшен молча
       expect(c.hops, const [NodeLink(tag: 'a'), NodeLink(tag: 'b')]);
       expect(c.idleTimeout, '0s');
       // Трёхзначность: явный false НЕ должен слипаться с «ключа не было».
@@ -711,7 +711,6 @@ void main() {
     test('round-trip: канон переживает экспорт→импорт дословно', () async {
       const source = SourceChain(
         tag: 'chain-1',
-        label: 'Мой маршрут',
         hops: [NodeLink(tag: 'warp'), NodeLink(tag: 'vpn ②')],
         idleTimeout: '0s',
         stripEvasion: false,
@@ -785,26 +784,24 @@ void main() {
       );
     });
 
-    test('§439 — имя цепочки едет полем стороны LxBox (контракт 1.0.1), потерей не названо',
+    test('§594 — у цепочки одно имя (тег): `label` не пишется, потерей не названо',
         () async {
       final built = await buildLxBackup(
         lists: const [],
         rules: const [],
         vars: const {},
         chains: const [
-          SourceChain(tag: 'chain-1', label: 'chain-1', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]),
-          SourceChain(tag: 'chain-2', label: '', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]),
-          SourceChain(tag: 'chain-3', label: 'Мой маршрут', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]),
+          SourceChain(tag: 'chain-1', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]),
+          SourceChain(tag: 'chain-2', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]),
         ],
       );
-      // Запись хранения как есть: пустое имя не пишется.
       expect([for (final e in _sourcesOf(built.json, 'chain')) e['label']],
-          ['chain-1', null, 'Мой маршрут']);
+          [null, null]);
       expect(built.warnings.where((w) => w.code == kWarnLocalOnlyDropped),
           isEmpty);
     });
 
-    test('§405 — имя Направления и цепочки переживает круг экспорт→импорт',
+    test('§405 — имя Направления переживает круг экспорт→импорт',
         () async {
       final out = (await buildLxBackup(
         lists: const [],
@@ -814,14 +811,13 @@ void main() {
           Direction(tag: 'de', label: 'Германия'),
         ],
         chains: const [
-          SourceChain(tag: 'chain-1', label: 'Мой маршрут', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]),
+          SourceChain(tag: 'chain-1', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]),
         ],
       )).json;
 
       final back = parseLxBackup(out, knownOutbounds: {'a', 'b'});
       expect(back.directions.single.label, 'Германия');
-      // Контракт 1.0.1 — `label` цепочки объявлен полем стороны LxBox.
-      expect(back.chains.single.label, 'Мой маршрут');
+      expect(back.chains.single.tag, 'chain-1');
       expect(back.warnings, isEmpty,
           reason: 'поле наше — ни unknown_field, ни label_dropped');
     });
@@ -1556,9 +1552,9 @@ void main() {
             reason: 'ни unknown_field, ни label_dropped: поле своё');
       });
 
-      test('label цепочки ПРИМЕНЯЕТСЯ и warning не поднимает', () {
-        // §405 отменил §401-поведение «разошёлся с тегом → label_dropped»:
-        // у цепочки LxBox имя есть, и приехавшее применяется.
+      test('label цепочки отбрасывается молча, warning не поднимает', () {
+        // §594 — у цепочки одно имя, тег: подпись старого файла не
+        // применяется и потерей не называется.
         final raw = jsonEncode({
           'lx_backup': 1,
           'chains': [
@@ -1572,7 +1568,7 @@ void main() {
           ],
         });
         final file = parseLxBackup(raw);
-        expect(file.chains.single.label, 'Мой маршрут');
+        expect(file.chains.single.tag, 'relay');
         expect(file.warnings, isEmpty);
       });
     });

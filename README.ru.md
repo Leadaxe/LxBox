@@ -13,7 +13,32 @@ Android-клиент на ядре [sing-box-lx](https://github.com/Leadaxe/sing
   <a href="https://github.com/Leadaxe/LxBox"><img src="docs/badges/get-it-on-github.png" alt="Get it on GitHub" height="80"></a>
 </p>
 
-**[Скачать последний релиз](https://github.com/Leadaxe/LxBox/releases/latest)** | **[English README](README.md)** | **[Руководство пользователя](docs/USER_GUIDE.ru.md)** | **[Поддержать проект](docs/DONATE.ru.md)**
+**[Скачать последний релиз](https://github.com/Leadaxe/LxBox/releases/latest)** | **[English README](README.md)** | **[Руководство пользователя](docs/USER_GUIDE.ru.md)** | **[Поддержать проект](docs/DONATE.ru.md)** | **[Реестр публичных серверов](docs/PUBLIC_SOURCES.ru.md)**
+
+---
+
+## Для чего L×Box
+
+- **VLESS, WARP и Tailscale одновременно.** Android разрешает только один активный `VpnService`, поэтому приложение VLESS, приложение Cloudflare WARP и приложение Tailscale вместе не работают: кто стартовал последним, тот и забирает туннель. L×Box запускает все три как исходящие и endpoint'ы внутри одного ядра, а правила маршрутизации решают, куда идёт трафик.
+- **Прокси через WARP.** Трафик выходит через ваш сервер VLESS, а затем через Cloudflare WARP, и сайт назначения не видит адрес VPS. Собирается как **цепочка** (явный многохоповый маршрут в интерфейсе) или как **detour** (один узел идёт через другой). Оба варианта проверяются до сборки конфига: детектор циклов и задержка по каждому хопу.
+- **Tailnet с телефона без приложения Tailscale.** Endpoint `tailscale` работает внутри ядра: MagicDNS, exit node и пинг устройств.
+- **Обход DPI.** REALITY, XHTTP, фрагментация TLS, ECH, отпечатки uTLS, обфускация AmneziaWG 1.x/2.0 и MASQUE поверх QUIC — настраивается на каждом узле.
+- **Много подписок.** Импорт по URL, из файла, по QR или вставленной ссылке; схлопывание повторов, выключение отдельных серверов, переписывание правилами фильтра, автообновление по шести триггерам с защитой от лишних запросов.
+- **Беречь батарею.** Ядро приостанавливает недоступные туннели вместо повторных попыток в цикле, а автообновление подписок не шлёт запросы пачкой.
+
+## Частые вопросы
+
+**L×Box бесплатный?** Да — свободный и открытый, лицензия GPL-3.0, без рекламы, трекеров, аналитики и без учётной записи.
+
+**Чем отличается от sing-box for Android (SFA)?** SFA — эталонный клиент команды SagerNet: ему отдают сырой JSON. У L×Box полный интерфейс для подписок, узлов, маршрутизации, DNS и диагностики и своё ядро (`sing-box-lx`): AmneziaWG 2.0, нативный XHTTP, исходящий MASQUE, round-robin-балансировщик и idle-suspend простаивающих туннелей. Сырой JSON тоже работает — есть редактор конфига и закрепление конфига.
+
+**Чем отличается от Hiddify, NekoBox или Karing?** Это оболочки над обычным ядром sing-box или mihomo. L×Box поставляет свой форк ядра, поэтому на клиенте есть транспорты, которых в обычном ядре нет: XHTTP из Xray, AmneziaWG 2.0 и постквантовый VLESS (`mlkem768x25519plus`).
+
+**Нужен root?** Нет.
+
+**Есть Cloudflare WARP?** Да — одно нажатие «Получить WARP» регистрирует учётную запись и создаёт ключи WireGuard или MASQUE на устройстве. Приватный ключ не покидает телефон. Ключи лицензии WARP+ поддерживаются.
+
+**Где скачать?** [GitHub Releases](https://github.com/Leadaxe/LxBox/releases/latest), [F-Droid](https://f-droid.org/ru/packages/com.leadaxe.lxbox/) и [Google Play](https://play.google.com/store/apps/details?id=com.leadaxe.lxbox).
 
 ---
 
@@ -87,7 +112,7 @@ Android-клиент на ядре [sing-box-lx](https://github.com/Leadaxe/sing
 
 Добавляйте серверы по URL подписки, прямой ссылке, WireGuard URI/INI, Amnezia `vpn://`-ссылке, raw sing-box JSON — отдельным outbound'ом или **конфигом целиком**, из которого приезжают узлы, группы автовыбора и цепочки detour (§368) — или через **Import from file…** (локальный `.txt`/`.json`; файл более чем с одной нодой становится файловой подпиской, §129). Умный диалог вставки определяет формат автоматически и показывает превью. Включение/отключение подписок без удаления. Офлайн-rehydrate — ноды восстанавливаются из кеша тела при старте приложения.
 
-- **13 протоколов**: VLESS (вкл. постквантовое шифрование ML-KEM-768, §335), VMess, Trojan, Shadowsocks, Hysteria2, **TUIC v5**, **NaïveProxy**, **AnyTLS** (§269), SSH, SOCKS, WireGuard (вкл. **AmneziaWG / AWG 2.0** — `awg://` URI, AmneziaWG `.conf`, **Amnezia `vpn://`-ссылки**, JSON), **MASQUE** (Cloudflare WARP — `masque://`, QUIC/HTTP-3), **Tailscale** (endpoint sing-box, который сам входит в ваш tailnet; узел носит с собой DNS-сервер, правило `.ts.net` и маршрут `100.64.0.0/10` — §435)
+- **13 протоколов**: VLESS (вкл. постквантовое шифрование ML-KEM-768, §335), VMess, Trojan, Shadowsocks, Hysteria2, **TUIC v5**, **NaïveProxy**, **AnyTLS** (§269), SSH, SOCKS, WireGuard (вкл. **AmneziaWG / AWG 2.0** — `awg://` URI, AmneziaWG `.conf`, **Amnezia `vpn://`-ссылки**, JSON), **MASQUE** (Cloudflare WARP — `masque://`, QUIC/HTTP-3), **Tailscale** (endpoint sing-box, который сам входит в ваш tailnet; пресет Tailscale даёт каждому узлу его MagicDNS-сервер и ведёт трафик tailnet к нему через `preferred_by`, без жёстких правил `.ts.net` и маршрутов `100.64.0.0/10` — §578)
 - Форматы: Base64, Xray JSON Array (вкл. цепочки dialerProxy и все протоколы массива, §321), plain text, sing-box JSON — outbound, массив, конфиг целиком или массив конфигов, с группами и цепочками `detour` (§368)
 - **Дедупликация узлов** (§321) — один сервер, перечисленный в подписке несколько раз, становится одним узлом
 - **Авто-узлы** (§322) — провайдерский пункт «Авто | Лучший сервер» приезжает одним узлом с пулом внутри: в строке виден режим и состав (`🔀 [15/7]` — балансировка, `🎯 [3]` — один быстрейший). Свой авто-узел можно собрать в папке: «Add auto node…» — членство по regex-правилу, списку галочками или «все серверы папки»

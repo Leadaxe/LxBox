@@ -179,8 +179,26 @@ void main() {
   });
 
   group('восстановление архива 2.23.2', () {
-    test('replace только Routing: правила и DNS; ни источников, ни цепочек '
-        '(§524)', () async {
+    // §599 — replace заменяет только отмеченные категории: неотмеченная
+    // Server lists (источники и цепочки, §524) остаётся у получателя. До §599
+    // replace перезаписывал весь документ, и `sources[]` получателя стирался.
+    test('replace только Routing: правила и DNS из файла; источники и цепочки '
+        'получателя на месте (§524, §599)', () async {
+      await SettingsStorage.saveServerLists([
+        UserServer(
+          id: 'keep',
+          name: '',
+          enabled: true,
+          tagPrefix: '',
+          detourPolicy: DetourPolicy.defaults,
+          rawBody: 'vless://33333333-3333-3333-3333-333333333333'
+              '@198.51.100.3:443?type=ws&security=tls#Keep',
+        ),
+      ]);
+      await SettingsStorage.setChains(const [
+        SourceChain(tag: 'mine', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')])
+      ]);
+
       final svc = const BackupService();
       final contents = await svc.parseImport(envelope(legacyStorage()));
       final result = await svc.applyImport(contents,
@@ -189,8 +207,10 @@ void main() {
       expect(result.droppedKeys, isEmpty);
       expect(result.routingApplied, 1);
 
-      expect(await SettingsStorage.getServerLists(), isEmpty);
-      expect(await SettingsStorage.getChains(), isEmpty,
+      expect((await SettingsStorage.getServerLists()).map((l) => l.id),
+          ['keep'],
+          reason: '§599 — неотмеченная Server lists не трогается');
+      expect((await SettingsStorage.getChains()).map((c) => c.tag), ['mine'],
           reason: '§524 — цепочки едут категорией Server lists');
       expect((await SettingsStorage.getCustomRules()).single.name, 'Ads');
       expect((await SettingsStorage.getDnsServers()).single,

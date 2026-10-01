@@ -97,12 +97,16 @@ class ProbeRunner {
       // что и боевая сборка (`CoreVersionCache`, кэш на сессию).
       final coreVersion = await CoreVersionCache.ensure(
           () => BoxVpnClient().getCoreVersion());
-      final batches = buildProbeBatches(nodes, coreVersion: coreVersion);
+      // §606 — anti-DPI туннеля (фрагментация, mixed-case SNI) и в пробе.
+      final vars = await loadProbeVars();
+      final batches =
+          buildProbeBatches(nodes, coreVersion: coreVersion, vars: vars);
 
       // Битые/несобираемые/группы — вердикт сразу, без ядра. Вердикты лежат
       // в первом батче (§518 `_assemble`), покрывают весь список целиком.
       final broken = batches.isEmpty
-          ? buildProbeConfig(nodes, coreVersion: coreVersion).brokenByIndex
+          ? buildProbeConfig(nodes, coreVersion: coreVersion, vars: vars)
+              .brokenByIndex
           : batches.first.brokenByIndex;
       broken.forEach((i, why) {
         onResult(

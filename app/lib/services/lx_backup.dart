@@ -1493,12 +1493,8 @@ const Set<String> _chainKeys = {
   ..._sourceRefKeys,
   'id',
   'tag',
-  // §405 — `label` цепочки объявлен в схеме, и применяет его ТОЛЬКО LxBox
-  // (колонка «Поддержка» `docs/BACKUP.md` §2, D-094): у нас цепочка носит
-  // собственное имя рядом с тегом-ссылкой, лаунчер не применяет и провозит
-  // молча.
-  // Отсюда: читаем в модель, [kWarnLabelDropped] на нём НЕ поднимаем — терять
-  // нечего, поле наше.
+  // §594 — `label` цепочки объявлен в схеме, но у цепочки одно имя — тег:
+  // ключ знаем (без предупреждения), в модель не читаем и не пишем.
   'label',
   'enabled',
   'chain',
@@ -2173,7 +2169,7 @@ DnsRuleRef? _dnsRule0x(Map<String, dynamic> e, String kind) {
       );
     case 'preset':
       final ref = _str(e['ref']);
-      return ref.isEmpty ? null : DnsRulePreset(presetId: ref, enabled: enabled);
+      return ref.isEmpty ? null : DnsRulePreset(presetId: ref);
     default:
       return name.isEmpty
           ? null
@@ -2310,11 +2306,8 @@ Map<String, dynamic> _directionToJson(Direction d, LxDirectionPing? ping) => {
 /// один — сборка конфига (`chain_hop_missing`). Эталон —
 /// `core/backup/import.go:importChain`.
 ///
-/// §405 — `label` читается В МОДЕЛЬ: поле применяет LxBox (колонка
-/// «Поддержка» `docs/BACKUP.md` §2, D-094). [kWarnLabelDropped] не
-/// поднимается —
-/// предупреждать не о чем, ничего не теряется. Отсутствие ключа — пустое имя,
-/// показан будет тег.
+/// §594 — `label` у цепочки упразднён: ключ игнорируется молча, без
+/// [kWarnLabelDropped], — имя цепочки её тег.
 SourceChain _chainFromCanon(Map<String, dynamic> j, String tag) {
   final canon =
       (j['chain'] as Map?)?.cast<String, dynamic>() ??
@@ -2322,12 +2315,10 @@ SourceChain _chainFromCanon(Map<String, dynamic> j, String tag) {
   // Канон разбирается кодеком цепочки: второй разбор тех же полей разошёлся
   // бы с ним на первой же правке (трёхзначный `strip_evasion`, порядок
   // каталога `strip`, `null` внутри `rewrite`). Позиции 0.12 — строки.
-  final label = j['label'];
   final enabled = j['enabled'];
   return chainFromRecord({
     'kind': kSourceKindChain,
     'tag': tag,
-    if (label is String) 'label': label,
     // Отсутствие ключа = true (`enabled.default` схемы). В ожиданиях корпуса
     // ключа нет вовсе, и читать его отсутствие как false значило бы
     // импортировать выключенными все цепочки лаунчера.

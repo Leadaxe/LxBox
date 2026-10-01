@@ -71,8 +71,9 @@ profiler recording; core events.
 
 - Reconnecting a subscription is the client's duty: the core does not restore
   broken subscriptions.
-- The profiler channel does not reconnect by itself: a recording started with
-  the tunnel down or one that survived its stop receives no events.
+- The core tears the profiler channel down with the tunnel; while the channel
+  has a holder, each tunnel start brings it up again
+  ([605](../../../tasks/605-service-live-automation-workspaces-bugs.md)).
 - Depends on OS capabilities: "foreground / background" events, process
   survival in the background.
 
@@ -90,3 +91,4 @@ profiler recording; core events.
 | 8 | [193](../../../tasks/193-connections-reemit-on-subscribe.md) | ✅ Implemented, device-verify pending | What has accumulated is given to a new subscriber |
 | 9 | [209](../../../tasks/209-unary-cc-via-pingclient.md) | Implemented | One-off calls through the non-sleeping channel |
 | 10 | [261](../../../tasks/261-dns-stream-to-command-multiplex.md) | Open (in the header) | The DNS stream — a command in the profiler channel |
+| 11 | [605](../../../tasks/605-service-live-automation-workspaces-bugs.md) | Implemented | The profiler channel is brought up again on each tunnel start |

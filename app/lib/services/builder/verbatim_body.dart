@@ -49,7 +49,10 @@ Map<String, dynamic>? verbatimBodyOf(String containerRaw, NodeSpec node) {
     return null;
   }
   if (decoded is! Map) return null;
-  final body = Map<String, dynamic>.from(decoded);
+  // §595 — дословное тело минует `emit`, поэтому целое-дробью (`0.0`) здесь
+  // приводится тем же правилом: ядро на int-полях дробь не принимает.
+  final body = Map<String, dynamic>.from(
+      integralDoublesToInt(decoded) as Map<dynamic, dynamic>);
   body.remove('detour');
   final tag = body['tag'];
   if (tag is! String || tag.isEmpty) body['tag'] = node.tag;

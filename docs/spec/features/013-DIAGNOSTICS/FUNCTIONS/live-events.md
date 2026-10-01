@@ -48,8 +48,7 @@ the core's connection stream and DNS query stream.
 - export "Share N events (JSON)" / "Copy JSON to clipboard";
 - banners "N unattributed events / 30s …", "N% of DNS queries failing while
   the connection is alive — tap to fix" (a hint sheet with "Open DNS settings"
-  and "Enable FakeIP"), "DNS / router events off" while core log forwarding is
-  off;
+  and "Enable FakeIP");
 - Debug API: `/profiler/live?seconds=N` (default 60), `/profiler/live/state`,
   `/profiler/live/stream` (SSE), `/profiler/live/unattributed`.
 
@@ -61,9 +60,10 @@ the core's connection stream and DNS query stream.
   until STOP or process death.
 - The retention window changes on the fly and is persisted; old events are
   trimmed at the next cleanup. A buffer over the ceiling loses the oldest.
-- Each event carries a confidence level for the owner (`verified`,
-  `secondary`, `inferred`, `unattributed`) and a routing chain
-  (`routingLine`, `outboundChain`, `detourChain`).
+- Each event carries a confidence level for the owner — `verified` or
+  `unattributed` in the current code; `secondary` and `inferred` are dormant
+  values kept to read old exports ([028 → attribution](../../028-TRAFFIC_PROFILER/FUNCTIONS/attribution.md)) —
+  and a routing chain (`routingLine`, `outboundChain`, `detourChain`).
 - Successful DNS answers without an owner do not light the "no owner" banner —
   only failures and connections without an owner do.
 - "DNS failing" does not light up when idle: without connection activity in

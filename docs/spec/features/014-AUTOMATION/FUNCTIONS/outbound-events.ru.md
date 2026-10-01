@@ -24,7 +24,6 @@
 | Lifecycle | выкл |
 | State | выкл |
 | Subscription | выкл |
-| Health | выкл |
 
 Первое включение любой категории — через пояснительный диалог (один раз).
 
@@ -34,7 +33,7 @@
 |---------|--------|-----------|-------|
 | `VPN_CONNECTED` | — | Lifecycle | туннель поднялся |
 | `VPN_DISCONNECTED` | `reason`: `user` / `error` / `revoked` | Lifecycle | туннель опустился |
-| `VPN_ERROR` | `code`, `message` | Lifecycle | туннель упал (`tunnel_error`) или команда провалилась (`bad_request`, `conflict`, `not_found`, …, `error`) |
+| `VPN_ERROR` | `code`, `message` | Lifecycle | туннель упал (`tunnel_error`) или команда провалилась (`bad_request`, `conflict`, `not_found`, `switch_failed`, …, `error`) |
 | `VPN_REVOKED` | — | Lifecycle | слот VPN забрало другое приложение |
 | `UPDATE_AVAILABLE` | `version`, `url` | Lifecycle | найдена новая версия |
 | `ACTIVE_NODE_CHANGED` | `old_tag`, `new_tag`, `group`, `reason` | State | узел выбран явно (в приложении или командой) |
@@ -79,8 +78,8 @@
 - Смена узла автоматикой группы (URL-тест, fallback) события не даёт — только
   явный выбор.
 - Health (`HEARTBEAT_FAILED`, `LATENCY_DEGRADED`, `UNATTRIBUTED_BURST`) и
-  `PERMISSION_NEEDED` — зарезервированы, источника нет; переключатель Health
-  ничего не включает.
+  `PERMISSION_NEEDED` — зарезервированы, источника нет; тумблера категории
+  Health нет.
 - События отправляет интерфейс приложения; пока он не загружен, события не
   уходят, даже если туннель меняет статус.
 - Зависит от возможностей ОС: доставка широковещательных событий подписчику.
@@ -95,3 +94,4 @@
 | 4 | [042F](../../../tasks/042F-health-watchdog/spec.md) | 🚫 Won't-fix | Health-события остаются зарезервированными без источника |
 | 5 | [219](../../../tasks/219-deep-audit-2026-07.md) | Done (аудит) | Юнит ограничения частоты не проверяет ровно минутную границу |
 | 6 | [290](../../../tasks/290-automation-node-switch-gaps.md) | complete | `NODE_ALREADY_ACTIVE`, `VPN_ERROR` на провал команды, подсказка «включите обе категории» |
+| 7 | [605](../../../tasks/605-service-live-automation-workspaces-bugs.md) | Реализовано | Мёртвый тумблер Health убран; код `switch_failed` |

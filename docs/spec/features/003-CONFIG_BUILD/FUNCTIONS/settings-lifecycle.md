@@ -42,8 +42,10 @@ the snackbar "Config rebuilt: N nodes" on a build triggered by a user action.
 
 ## Rules and invariants
 
-- **The "stale" flag** is raised by editing a config-relevant setting and cleared
-  only by a successful build. The build clears it only if the source composition did not
+- **The "stale" flag** is raised by editing a config-relevant setting (any
+  variable declared in the template's sections counts, whoever writes it — the
+  screen, the Debug API, a preset's `on_change`) and cleared only by a
+  successful build. The build clears it only if the source composition did not
   change under it; if the file was not saved — the flag comes back.
 - The flag is not raised by: the fetch attempt mark, a failed fetch, a fetch with the same
   composition, a fetch of a disabled subscription, app settings, service
@@ -100,3 +102,4 @@ the snackbar "Config rebuilt: N nodes" on a build triggered by a user action.
 | 9 | [360](../../../tasks/360-config-dirty-lost-during-rebuild.md) | DEVICE-VERIFIED | A mutation during a build does not lose the flag |
 | 10 | [414](../../../tasks/414-config-dirty-check-files-dir.md) | Done | The config is looked up where the native part stores it |
 | 11 | [515](../../../tasks/515-workspace-switch-stale-controller-persist.md) | — | Switching the set does not drag in a write of the old set |
+| 12 | [604](../../../tasks/604-dns-build-health-directions-bugs.md) | Done | Every template variable raises the flag, not only 16 |

@@ -133,18 +133,21 @@ logcat/дамп. Клиент при этом не патчит поведени
 | 9 | [522](../../tasks/522-kernel-lx9-xmux-local-cancel.md) · [526](../../tasks/526-kernel-lx10-upstream-sync-naive-addr.md) | Released v2.25.3 | 1.14.1-lx.9, lx.10 |
 | 10 | [535](../../tasks/535-kernel-1-14-2-lx1-pin-lx-wg-keys-endpoint-state.md) | Реализовано | 1.14.2-lx.1: блок `lx`, `endpointState` |
 | 11 | [557](../../tasks/557-kernel-lx4-wg-endpoint-toggle.md) | Реализовано | 1.14.2-lx.4: вкл/выкл WG/AWG на лету |
+| 12 | без задачи — [KERNEL.md → Version history](../../../KERNEL.md#version-history-the-lxbox-relevant-parts), [CHANGELOG 2.25.8](../../../../CHANGELOG.md) | Выпущено v2.25.8 | 1.14.2-lx.5…lx.8: синк `stable`, три зависания MASQUE, XHTTP `max_connections 3` без `xmux` (lx.6); клиент не менялся, задача не заводилась — бамп записан пином, KERNEL.md и changelog |
+| 13 | без задачи — KERNEL.md, [CHANGELOG 2.25.9](../../../../CHANGELOG.md) | Выпущено v2.25.9 | 1.14.2-lx.9…lx.11: канал управления Tailscale по HTTPS (SPEC 111), прямой UDP-путь (SPEC 112), ещё один синк `stable`; Java-поверхность идентична lx.8 |
 
 Ревизии реестра (460F, синки контракта, 486, 491, 529) перенесены в
 [025-CONTRACT_REGISTRY](../025-CONTRACT_REGISTRY/FEATURE.ru.md).
 
 ## Следить за
 
-- **Бампы `v1.14.2-lx.5…lx.8` без своей задачи.** Они есть в KERNEL.md и
-  CHANGELOG, но не в `tasks/` — ревизии этой фичи для них нет.
-- **Зеркало тегов сборки** в приложении — ручная копия; страж сверяет только
-  пин версии, а не сам набор.
-- **Противоречивые списки тегов в KERNEL.md:** `with_openvpn`/`with_openconnect`
-  есть в списке тегов AAR и одновременно названы «намеренно исключёнными».
+- **Бамп ядра без изменения клиента задачи не получает** (строки 12–13):
+  запись — пин, история версий в KERNEL.md и changelog. Бамп, меняющий
+  Java-поверхность или контракт конфига, задачу получает.
+- **Зеркало тегов сборки** в приложении (`kCoreBuildTags`) — ручная копия;
+  страж `node_core_gate_test` сверяет только равенство `kCoreBuildTagsPin` и
+  `app/android/libbox.version`, а не сам набор — при бампе список тегов в
+  `build_libbox` перечитывается руками.
 - **Апстримные изменения строгости** (как `format` в inline rule_set на 1.14):
   каждое «ядро стало строже» — кандидат на санитайзер при импорте.
 

@@ -48,7 +48,6 @@ void main() {
     test('полная цепочка: idle_timeout / strip / rewrite доезжают дословно', () {
       const c = SourceChain(
         tag: 'tuned',
-        label: 'Tuned',
         hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b'), NodeLink(tag: 'c')],
         idleTimeout: '10m',
         stripEvasion: false,
@@ -65,7 +64,6 @@ void main() {
       expect(back.rewrite, {
         'vless': {'flow': 'xtls-rprx-vision'},
       });
-      expect(back.label, 'Tuned');
     });
 
     test('rewrite с null-значением (RFC 7396 «удалить ключ») не теряется', () {
@@ -137,17 +135,28 @@ void main() {
     test('copyWith не трогает tag и умеет снять strip_evasion в «умолчание»',
         () {
       const c = SourceChain(tag: 'c', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')], stripEvasion: false);
-      final off = c.copyWith(label: 'X');
+      final off = c.copyWith(enabled: false);
       expect(off.tag, 'c');
-      expect(off.label, 'X');
+      expect(off.enabled, isFalse);
       expect(off.stripEvasion, isFalse);
       expect(c.copyWith(clearStripEvasion: true).stripEvasion, isNull);
     });
 
-    test('displayLabel: пустое имя показывает тег', () {
-      expect(const SourceChain(tag: 'chain-1').displayLabel, 'chain-1');
-      expect(const SourceChain(tag: 'chain-1', label: 'Двойной').displayLabel,
-          'Двойной');
+    test('§594: старый `label` читается молча и не пишется', () {
+      final read = chainFromRecord({
+        'kind': 'chain',
+        'tag': 'warp',
+        'enabled': true,
+        'label': 'warp chain-1',
+        'body': {'type': 'chain'},
+        'hops': [
+          {'tag': 'a'},
+          {'tag': 'b'},
+        ],
+      });
+      expect(read.value?.tag, 'warp');
+      expect(read.unknownKeys, isEmpty);
+      expect(chainToRecord(read.value!).containsKey('label'), isFalse);
     });
   });
 

@@ -225,6 +225,14 @@ class CcChannel {
     if (_profilerRefs == 0) await disconnectProfiler();
   }
 
+  /// §605 — переподнять profilerClient на свежий движок, если его держит хоть
+  /// один потребитель. Native `shutdownAll` рвёт клиента на каждой остановке
+  /// туннеля, а счётчик в Dart остаётся >0 → без повтора запись «горит» без
+  /// событий. Зовётся на каждом `connected`; при 0 держателей — no-op.
+  Future<void> restartProfiler() async {
+    if (_profilerRefs > 0) await connectProfiler();
+  }
+
   /// §175 — отмена масс-пинга: disconnect отдельного pingClient → ядро рвёт
   /// per-call ctx in-flight URLTest'ов (не дожидаясь TCPTimeout), не задевая
   /// status/screen/profiler-стримы. Следующий urlTestOutbound поднимет свежий.

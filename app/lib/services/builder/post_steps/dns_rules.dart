@@ -192,7 +192,7 @@ Future<void> applyCustomDns(
           e.enabled &&
           dnsSrsCachedPaths[e.id] != null &&
           ((e.server ?? e.body?['server']) is String) &&
-          ((e.server ?? e.body?['server']) as String).isNotEmpty)
+          emittedServerTags.contains(e.server ?? e.body?['server']))
         e.name.isNotEmpty ? e.name : 'dns_srs_${e.id}',
   };
 
@@ -201,15 +201,16 @@ Future<void> applyCustomDns(
       if (dnsMirrors.isNotEmpty) {
         // §117: запись — позиционный якорь группы; тела preset-правил живут
         // в mirror-группе (порядок routing-правил), per-preset тумблер уже
-        // учтён при её сборке (§257: магическая var dns_enable; поле
-        // `enabled` этой записи — мёртвое, билдер его не читает).
+        // учтён при её сборке (§257: магическая var dns_enable; своего
+        // `enabled` у записи нет, §593).
         emitMirrorGroup();
         continue;
       }
       // Legacy-ветка (вызовы без dnsMirrors — shim'ы/старые тесты):
       // позиционная эмиссия тел по записи, как до §117 (§253: правил
-      // может быть несколько — порядок шаблона).
-      if (!entry.enabled) continue;
+      // может быть несколько — порядок шаблона). В сборке ветка тел не
+      // получает: `extraDnsRulesByPresetId` непуст только вместе с
+      // `dnsMirrors` (custom_rules.dart, §117).
       final bodies = extraDnsRulesByPresetId[entry.presetId];
       if (bodies != null) outRules.addAll(bodies);
       continue;
@@ -230,6 +231,17 @@ Future<void> applyCustomDns(
         if (kept == null) {
           reportFragmentDropped(
               name.isNotEmpty ? name : 'dns_options', 'dns.rules', 'rule_set');
+          continue;
+        }
+        // §604 — `server` на сервер, которого нет в `dns.servers` (удалён,
+        // выключен, выпал): ядро отвечало бы «DNS server not found» на каждый
+        // запрос. Правило выпадает с кодом. Serverless-действия (без `server`)
+        // не проверяются; выпавшие по detour (§441) входят в
+        // [emittedServerTags] — их лечит [healDetourDroppedDnsRefs].
+        final ruleServer = kept['server'];
+        if (ruleServer is String && !emittedServerTags.contains(ruleServer)) {
+          reportFragmentDropped(
+              name.isNotEmpty ? name : 'dns_options', 'dns.rules', 'server');
           continue;
         }
         outRules.add(kept);
@@ -255,7 +267,13 @@ Future<void> applyCustomDns(
         final server =
             legacyServer ?? (bodyServer is String ? bodyServer : null);
         final rule = legacyRule ?? body;
-        if (server == null || server.isEmpty) continue;
+        // §604 — без `server` или со `server` на отсутствующий сервер правило
+        // выпадает с кодом (раньше — молча).
+        if (server == null || !emittedServerTags.contains(server)) {
+          reportFragmentDropped(
+              name.isNotEmpty ? name : 'dns_options', 'dns.rules', 'server');
+          continue;
+        }
         final path = dnsSrsCachedPaths[id];
         if (path == null) {
           // §588 (контракт 1.1.101) — файл набора не скачан: набор не попал
@@ -425,7 +443,7 @@ Future<List<DnsRuleRef>> resolveDnsRulesList({
   for (final pid in activePresetIdsWithDnsRule) {
     if (seenPresetIds.contains(pid)) continue;
     result.insert(
-        templateBlockStart, DnsRulePreset(presetId: pid, enabled: true));
+        templateBlockStart, DnsRulePreset(presetId: pid));
     templateBlockStart++;
   }
 

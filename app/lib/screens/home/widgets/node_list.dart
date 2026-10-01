@@ -19,6 +19,7 @@ import '../node_actions.dart';
 import '../node_filter_view_model.dart';
 import '../../../models/auto_select.dart';
 import '../../../models/node_spec.dart';
+import '../manual_reorder.dart';
 import '../node_list_presenter.dart';
 import '../special_node_display.dart';
 import 'add_server_cta.dart';
@@ -331,6 +332,13 @@ class HomeNodeList extends StatelessWidget {
                     tag: tag,
                     byTag: state.tailscaleStatus,
                   ),
+                  // §608 — срок ключа на месте `running`.
+                  tailnetNote: tailnetRowNote(
+                    tunnelUp: state.tunnelUp,
+                    s: state.tailscaleStatus[tag],
+                    now: DateTime.now(),
+                    withExit: false,
+                  ),
                 ),
                 onHighlight: () => openDetails(tag),
                 // Выбора узла нет: пункт и кнопка скрыты в NodeRow.
@@ -398,7 +406,18 @@ class HomeNodeList extends StatelessWidget {
         final restNew = newIndex - pinnedCount;
         final moved = restOnly.removeAt(restOld);
         restOnly.insert(restNew, moved);
-        controller.commitManualReorder(restOnly);
+        // §606 — видимый список неполон (фильтр, скрытые detour): порядок
+        // собирается из ПОЛНОГО, двигается только перетащенный узел — иначе
+        // скрытые выпадали из ручного порядка и уезжали в хвост.
+        final fullOrder = presenter
+            .viewSortedNodes(state)
+            .where((t) => !pinnedTags.contains(t))
+            .toList();
+        controller.commitManualReorder(mergeManualReorder(
+          fullOrder: fullOrder,
+          visibleReordered: restOnly,
+          moved: moved,
+        ));
       },
       itemBuilder: (ctx, i) {
         final tag = displayList[i];
@@ -559,6 +578,12 @@ class HomeNodeList extends StatelessWidget {
     final transport = protoSrcNode?.transportLabel;
     final security = protoSrcNode?.securityLabel;
     final outboundType = cache[tag]?.type;
+    // §608 — Tailscale-узел с exit node: через какое устройство идёт трафик,
+    // живо ли оно и не истекает ли ключ. Записи ядра нет — строка как была.
+    final tailnet = outboundType == 'tailscale' && state.tunnelUp
+        ? state.tailscaleStatus[tag]
+        : null;
+    final exitName = tailnetExitName(tailnet);
     final notificationWarnings = _notificationWarningsForRow(
       outboundType: outboundType,
       isDirectionAuto: isDirectionAuto,
@@ -607,7 +632,14 @@ class HomeNodeList extends StatelessWidget {
                   protoLabel(protoType),
                   ?transport,
                   ?security,
+                  if (exitName != null) getLocalText.s("via %s", exitName),
                 ].join('·'),
+          tailnetNote: tailnetRowNote(
+            tunnelUp: state.tunnelUp,
+            s: tailnet,
+            now: DateTime.now(),
+            withExit: true,
+          ),
           matches: matchingSet.contains(tag),
           // §355 — мёртвая нода с зависимыми (DNS/ноды через detour):
           // ⚠-метка, тап по ней — sheet со списком пострадавших.

@@ -95,7 +95,9 @@ and traffic — [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.md).
   does not erase the order; new nodes go to the end, vanished ones drop out;
   the mode and the order are restored after a restart and do not mark the
   config as changed. **Witness:** units "new node → end", "deleted node
-  filtered out", "non-config savers (sort/ping) do NOT raise the flag";
+  filtered out" (`test/models/home_state_sort_test.dart`); "setSortMode/
+  cycleSortMode/commitManualReorder do NOT raise configChangedNeedRestart" —
+  **покрыто 2026-09-30:** `test/controllers/node_sort_no_dirty_test.dart`;
   surviving a restart — manual check (Custom, drag, kill the app, open — the
   order is the same). **Mutation:** reset the order on cycle.
 - **P10. Two columns only on a wide screen and not in manual mode.** ≥ 600 dp

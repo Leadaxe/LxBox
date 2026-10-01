@@ -42,14 +42,19 @@ The feature keeps four principles:
   not accumulate. **Witness:** unit "recording off → events ignored".
   **Mutation:** auto-start of recording.
 - **P2. START clears the previous log, STOP freezes it.** After STOP the list
-  stays until the next START, which begins from zero. `no witness`.
+  stays until the next START, which begins from zero: a connection of the
+  previous session gives no event in the new log. **Witness:** unit
+  "после STOP→START в буфере только новая сессия" (605). **Mutation:** START
+  keeps the connection snapshots.
 - **P3. The retention window is selectable and remembered.** 1 min / 10 min /
   1 h, default 10 min, survives a restart. **Witness:** unit "profiler
   retention — default + round-trip + persist". **Mutation:** the window is a
   hard-coded constant.
 - **P4. Buffer quotas.** Events older than the window are purged every 15 s;
   beyond 20,000 the oldest are evicted; the ring of unowned events holds 50.
-  `no witness`.
+  **Witness:** units "hard cap 20000 evicts the oldest event immediately on
+  append", "unattributed ring caps at 50 independent of the main buffer".
+  **Mutation:** raise or remove the cap.
 - **P5. A short connection is seen whole and once.** A connection opened and
   closed between ticks gives both phases; a closed one that keeps arriving in
   snapshots for another 5 min is closed exactly once. **Witness:** units
@@ -124,7 +129,12 @@ The feature keeps four principles:
   activity gate removed.
 - **P17. The Debug API sees what the screen sees.** The `/profiler/live*`
   routes read the same log, start and stop the same recording, and an event
-  in JSON carries the server, the source and the group trace. `no witness`.
+  in JSON carries the server, the source and the group trace. **Witness:**
+  units "/profiler/live/start and /stop drive the same singleton as the
+  screen", "/profiler/live reads the same log the screen shows, with server,
+  source and group trace in the event JSON", "/profiler/live/state mirrors
+  the screen recording state and count". **Mutation:** a separate buffer or
+  state for the Debug API.
 
 ## Controlled parameters
 
@@ -245,8 +255,5 @@ STOP ──► unsubscribe; the log is frozen until the next START
   2000-01-01 are "no data" sentinels, not dates (§353).
 - The event's `extra` must serialise to JSON, otherwise the Debug API loses the
   server, the source and the group trace that the screen shows (§315).
-- The "DNS / router events off" hint above the log is a leftover of core log
-  parsing; since §180 DNS comes as a structured stream and does not depend on
-  "Forward sing-box logs" (task candidate, 591).
 - Export uploads the whole log, not the filtered list, although the serialiser
   is meant for the filtered one (task candidate, 591).

@@ -58,7 +58,8 @@ password. `route.final` does not depend on the mode.
   that reaches it by another route yields an open port, by design.
 - An invalid port (outside 1024..65535) or an invalid IPv4 — an error under the
   field, the value is not saved. The Debug API rejects an invalid port and
-  protocol.
+  protocol. A port outside the range read from storage or a backup is replaced
+  with 2080.
 - A numeric password stays a string in the config (no conversion to a number).
 - A mode change sets the "has tunnel" flag, which decides whether the system
   VPN permission request is needed (see [foreign-vpn](foreign-vpn.md)).
@@ -87,3 +88,4 @@ password. `route.final` does not depend on the mode.
 | 4 | [188](../../../tasks/188-tun-toggles-to-mode-tab.md) | ✅ DEVICE-VERIFIED | Tunnel toggles on the mode screen; keep-alive on by default |
 | 5 | [292](../../../tasks/292-quick-invariant-holes.md) | implemented (device-pending) | Port and protocol validation at the inputs |
 | 6 | [293](../../../tasks/293-vpn-settings-facade.md) | dedup implemented; facade pending | A single point of applying the mode for the screen and the Debug API |
+| 7 | [604](../../../tasks/604-dns-build-health-directions-bugs.md) | Done | A port outside 1024..65535 from storage or a backup → 2080 |

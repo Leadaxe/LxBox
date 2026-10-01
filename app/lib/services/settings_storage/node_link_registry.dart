@@ -248,7 +248,7 @@ NodeLinkChange _mapLinks(
       outChains.add(c);
       continue;
     }
-    touched.add(c.displayLabel);
+    touched.add(c.tag);
     outChains.add(c.copyWith(hops: hops));
   }
 

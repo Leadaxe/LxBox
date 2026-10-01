@@ -44,6 +44,9 @@ WireGuard — транспорт мастера «Get WARP» по умолчан
   (тот всегда отдаёт `engage…:2408`), и endpoint из кэша регистрации.
   Дефолт без обфускации — хост из ответа Cloudflare; дефолт с обфускацией —
   случайный `ip:port` (см. обфускацию). Применённый endpoint пишется в кэш.
+  Непустое поле проверяется до запроса: `host:port` (имя, IPv4 или IPv6 в
+  скобках; порт 1–65535), иначе снэкбар «Endpoint must be host:port» и
+  регистрации нет.
 - **Пресеты.** Список Endpoint берётся из `wireguard.endpoints_preset` пула;
   пункт, равный `recommended_endpoint`, помечен «(recommended)» только в меню —
   в поле и в узел уходит чистое значение.
@@ -60,7 +63,6 @@ WireGuard — транспорт мастера «Get WARP» по умолчан
 ## Границы
 
 - Разбор ссылки и INI — 002-NODE_IMPORT; правка узла потом — 008-NODE_EDITOR.
-- Формат `host:port` перед регистрацией не проверяется.
 - v6-endpoint подставляется только рандомом и только при включённом IPv6.
 
 ## Ревизии
@@ -75,3 +77,5 @@ WireGuard — транспорт мастера «Get WARP» по умолчан
 | 6 | [304](../../../tasks/304-warp-persistent-keepalive.md) | — | Keepalive 25 с при ручной регистрации |
 | 7 | [386](../../../tasks/386-warp-endpoint-preset-combobox.md) | — | Список пресетов у поля Endpoint |
 | 8 | [424](../../../tasks/424-warp-preset-recommended-mark-leak.md) | Implemented (unit + widget test) | Пометка «(recommended)» не утекает в значение |
+| 9 | [606](../../../tasks/606-audit-591-export-list-tun-warp-dpi-bugs.md) | Done | Свой endpoint проверяется на `host:port` до регистрации |
+| 10 | [606](../../../tasks/606-audit-591-export-list-tun-warp-dpi-bugs.md) | Done | Неиспользуемая карточка статуса регистрации удалена; мастер закрывается при успехе |

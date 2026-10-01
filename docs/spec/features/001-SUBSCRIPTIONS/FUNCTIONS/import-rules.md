@@ -57,8 +57,9 @@ the patched node JSON (goes into the config); traces of replacements "path: was 
   marked "invalid pattern — skipped"; the editor does not let it be saved.
 - Changing rules does not recompute existing nodes: shown is
   "Rules changed. Refresh the subscription to apply them." with an Apply button
-  that updates the subscription over the network; the result — how many nodes came and how many
-  were disabled.
+  that updates the subscription over the network (a file subscription —
+  from its snapshot); the result — how many nodes came and how many of them
+  are disabled (only nodes of the current list count).
 - Rehydration at start applies Replace to nodes from the cache; the
   Disable/Enable marks are recomputed only on a successful network update.
 - The editor's "Matches" tab previews matches on the current nodes.
@@ -77,3 +78,4 @@ the patched node JSON (goes into the config); traces of replacements "path: was 
 | 3 | [332](../../../tasks/332-import-rules-enable-and-bulk-toggle.md) | ✅ device-pending | Enable action, "the last one wins" |
 | 4 | [400](../../../tasks/400-identity-tag-mirror.md) | Implemented, DEVICE-PENDING | Replace no longer breaks the mark |
 | 5 | [346](../../../tasks/346-subs-full-crud-debug-api.md) | — | CRUD of rules via the Debug API |
+| 6 | [603](../../../tasks/603-subscription-and-own-server-bugs.md) | Implemented | Apply counts disabled nodes of the current list; rules apply to a file subscription |

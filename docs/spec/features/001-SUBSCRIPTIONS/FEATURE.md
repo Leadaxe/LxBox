@@ -99,9 +99,11 @@ on the main screen — [007-NODE_LIST](../007-NODE_LIST/FEATURE.md).
 - **P10. Dormant marks expire by TTL.** The mark of a node that has been absent
   from the subscription longer than `clamp(3 × interval, 24 h, 30 days)` is
   removed — but only on a successful network update. **Witness:** unit tests "threshold
-  table", "absent longer than the threshold → removed", "threshold not expired → kept". The
-  "only on a successful network update" part is `no witness` (failure, rehydration and file
-  subscription are not checked). **Mutation:** clean marks on rehydration from cache.
+  table", "absent longer than the threshold → removed", "threshold not expired → kept"
+  (`test/services/node_hash_test.dart`); the "only on a successful network update" part —
+  `test/subscription/stuck_updating_and_ttl_gc_test.dart` "failed fetch не чистит просроченную
+  отметку; следующий успех чистит как обычно" (rehydration and file subscription still
+  `no witness`). **Mutation:** clean marks on rehydration from cache.
 - **P11. A reaction only to a real change.** A rebuild/reload of the core
   after an update happens only if the node composition of an enabled subscription
   changed; one reaction per pass, `reload` beats `rebuild`.
@@ -130,7 +132,10 @@ on the main screen — [007-NODE_LIST](../007-NODE_LIST/FEATURE.md).
 - **P15. A stuck "updating" does not block a subscription forever.** If the process
   is killed during a request, on the next start the status becomes "error", and
   the 15 min window counts from that attempt. Pressing "update" again while
-  the request is running does not make a second request. `no witness`.
+  the request is running does not make a second request. **Witness:**
+  `test/subscription/stuck_updating_and_ttl_gc_test.dart` "init sweep: inProgress → failed,
+  lastUpdateAttempt сохраняется (min-retry 15 мин считает от него)", "повторный \"update\"
+  во время идущего запроса не шлёт второй HTTP".
 
 ## Controlled parameters
 

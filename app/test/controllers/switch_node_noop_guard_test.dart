@@ -120,6 +120,32 @@ void main() {
     expect(methodCalls, isNot(contains('ccSelectOutbound')));
   });
 
+  test('§605 actionSwitchNode: ядро отвергло выбор → VPN_ERROR switch_failed',
+      () async {
+    messenger.setMockMethodCallHandler(methods, (call) async {
+      methodCalls.add(call.method);
+      if (call.method == 'ccSelectOutbound') return false;
+      return null;
+    });
+    AutomationEventEmitter.I.debugConfigureForTest(
+      lifecycle: true,
+      state: true,
+      onSend: (a, e) => emitted.add((a, e)),
+    );
+    controller.debugSeedNodeState(group: 'vpn-1', activeNode: '🇫🇮node');
+
+    await automation.actionSwitchNode('🇩🇪other', ctx());
+    // switchNode запущен без ожидания — ждём событие, а не таймер.
+    for (var i = 0; i < 100 && emitted.isEmpty; i++) {
+      await pumpEventQueue();
+    }
+
+    expect(methodCalls, contains('ccSelectOutbound'));
+    expect(emitted.map((e) => e.$1), ['VPN_ERROR']);
+    expect(emitted.single.$2['code'], 'switch_failed');
+    expect(emitted.single.$2['message'], contains('🇩🇪other'));
+  });
+
   test('actionSetGroup: несуществующая группа → NotFound (без ложного события)',
       () async {
     controller.debugSeedNodeState(

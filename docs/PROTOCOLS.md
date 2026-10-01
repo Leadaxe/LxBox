@@ -1366,7 +1366,7 @@ raw `/` inside the base64 is escaped (§106). The default port is `443`.
 | `sni` | The TLS SNI; empty means the core's default (`www.cloudflare.com` since lx.25-rc.4) |
 | `disable_sni` | `1`/`true` produces a ClientHello with no SNI. NOT a synonym for an empty `sni` (which is replaced by the profile's default). §393 |
 | `mtu` | int, default `1280` |
-| `idle_timeout` | A Go duration for the tunnel's idle-suspend (empty means the core's default of `5m`; a negative value disables it, §128) |
+| `idle_timeout` | A Go duration for the tunnel's idle-suspend. Empty = the key is not written and the tunnel is never suspended: the core's default is off, and the global `lx.masque.idle_timeout` (fork SPEC 098) is not written by LxBox; an explicit `0` or a negative value keeps the tunnel up whatever the global default (§128) |
 | `keep_alive` | A Go duration for the QUIC keepalive (empty means `30s`; `vhttp=h3` only) |
 
 **§393 — two generations of names.** The emitter writes only the new ones
@@ -1463,8 +1463,9 @@ the Add Server Wizard's Tailscale mode.
 - **Emission:** always into `endpoints[]`. If the body has no `state_directory`, the builder
   writes `<filesDir>/tailscale/<final tag>` (tag sanitized to `[A-Za-z0-9._-]`, the rest → `_`)
   at emission only — the stored body never gets a path (it is machine-specific).
-- **Core gate:** the AAR must carry `with_tailscale` (fork `v1.14.0-lx.38` or newer,
-  `kTailscaleMinCoreVersion`). On an older core the node is **skipped at build** with the
+- **Core gate:** the AAR must carry `with_tailscale` (fork `v1.14.0-lx.38` or newer; the
+  gate is the registry node gate (contract §56): `build_tag` against the tag mirror `kCoreBuildTags` — there is
+  no version constant). On an older core the node is **skipped at build** with the
   `tailscale_core_unsupported` warning line; the rest of the config builds. The node stays in
   storage — it survives a core update and a backup from a desktop.
 - **Directions:** a node without a non-empty `exit_node` is **not** a Direction candidate (it

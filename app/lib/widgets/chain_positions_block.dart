@@ -1,4 +1,4 @@
-// §394 — блок «Chain positions» во вкладке Diagnostics узла типа `chain`.
+// §393F — блок «Chain positions» во вкладке Diagnostics узла типа `chain`.
 //
 // Паритет с окном Info лаунчера (`ui/servers_node_info_chain.go`): строка на
 // позицию, справа НАКОПИТЕЛЬНАЯ задержка и цена хопа «(+X)», под списком —

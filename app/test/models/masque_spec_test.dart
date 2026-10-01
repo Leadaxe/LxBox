@@ -4,6 +4,7 @@ import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/singbox_entry.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
+import 'package:lxbox/services/warp/masque_account.dart';
 
 import '../parser/engine_test_setup.dart';
 import '../parser/parse_link_as.dart';
@@ -189,6 +190,65 @@ void main() {
           parseLinkAs<MasqueSpec>(spec().toUri().replaceAll('vhttp=h3', 'vhttp=h2'))!
               .vhttp,
           'h2');
+    });
+  });
+
+  // Контракт 1.1.108 (ядро >= 1.14.1-lx.13): нет ключа `idle_timeout` у узла —
+  // действует глобальный `lx.masque.idle_timeout`; явный 0 выключает idle
+  // только у этого узла. Значит «не задано» обязано давать ОТСУТСТВИЕ ключа,
+  // а не 0 / "" / "0s": иначе узел молча перестаёт слушать глобальную настройку.
+  group('idle_timeout: не задано — ключа нет', () {
+    void expectNoIdle(Map<String, dynamic> m) {
+      expect(m.containsKey('idle_timeout'), isFalse,
+          reason: 'idle_timeout записан: ${m['idle_timeout']}');
+    }
+
+    const base = 'masque://PRIVDER%3D%3D@162.159.198.1:443'
+        '?publickey=PUBDER%3D%3D&address=172.16.0.2%2F32'
+        '&profile=cloudflare&vhttp=h3';
+
+    test('MasqueSpec без idleTimeout', () {
+      final s = MasqueSpec(
+        id: 'id1',
+        tag: 't',
+        label: 't',
+        server: '162.159.198.1',
+        port: 443,
+        rawSource: '',
+        privateKeyDer: 'PRIVDER==',
+        publicKeyDer: 'PUBDER==',
+        localAddresses: ['172.16.0.2/32'],
+        vhttp: 'h3',
+      );
+      expectNoIdle(s.emit(TemplateVars.empty).map);
+      expect(s.toUri(), isNot(contains('idle_timeout')));
+    });
+
+    test('ссылка без idle_timeout и с пустым idle_timeout=', () {
+      for (final link in ['$base#n', '$base&idle_timeout=#n']) {
+        final parsed = parseLinkAs<MasqueSpec>(link);
+        expect(parsed, isNotNull, reason: link);
+        expectNoIdle(parsed!.emit(TemplateVars.empty).map);
+      }
+    });
+
+    test('WARP MasqueAccount без idleTimeout: ссылка и outbound', () {
+      const acc = MasqueAccount(
+        privKeyDer: 'PRIVDER==',
+        serverPubDer: 'PUBDER==',
+        clientV4: '172.16.0.2',
+        clientV6: '',
+        server: '162.159.198.1',
+        port: 443,
+        deviceId: 'd',
+        token: 't',
+        createdAt: '',
+      );
+      final uri = acc.toMasqueUri();
+      expect(uri, isNot(contains('idle_timeout')));
+      final parsed = parseLinkAs<MasqueSpec>(uri);
+      expect(parsed, isNotNull);
+      expectNoIdle(parsed!.emit(TemplateVars.empty).map);
     });
   });
 }

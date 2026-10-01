@@ -172,6 +172,42 @@ void main() {
       c.dispose();
     });
 
+    test('§604: правка SNI не трогает прочие поля tls', () {
+      final c = makeNew();
+      c.onBodyTextChanged(
+          '{"type":"tls","server":"9.9.9.9","tls":{"enabled":true,'
+          '"server_name":"old.example","insecure":true,"alpn":["dot"]}}');
+      c.onSniChanged('dns.example');
+      expect(bodyOf(c)['tls'], {
+        'enabled': true,
+        'server_name': 'dns.example',
+        'insecure': true,
+        'alpn': ['dot'],
+      });
+      c.onSniChanged('');
+      expect(bodyOf(c)['tls'], {
+        'enabled': true,
+        'insecure': true,
+        'alpn': ['dot'],
+      });
+      c.onBodyTextChanged('{"type":"tls","server":"9.9.9.9",'
+          '"tls":{"enabled":true,"server_name":"x.example"}}');
+      c.onSniChanged('');
+      expect(bodyOf(c).containsKey('tls'), false,
+          reason: 'кроме enabled ничего — блок уходит целиком');
+      // tls не объект — прежняя замена, без исключения; видимый JSON в синхроне.
+      c.onBodyTextChanged(
+          '{"type":"tls","server":"9.9.9.9","tls":true}');
+      c.onSniChanged('z.example');
+      expect(bodyOf(c)['tls'], {'enabled': true, 'server_name': 'z.example'});
+      c.onBodyTextChanged('{"type":"tls","server":"9.9.9.9",'
+          '"tls":{"enabled":false,"alpn":["dot"]}}');
+      c.onSniChanged('w.example');
+      expect(c.bodyCtrl.text, contains('"alpn"'));
+      expect(bodyOf(c)['tls']['enabled'], true);
+      c.dispose();
+    });
+
     test('DoH URL-вставка: https://host/path → server+path+режим', () {
       final c = makeNew(tags: ['google_udp', 'cloudflare_udp']);
       c.onAddressChanged('https://dns.quad9.net/dns-query');

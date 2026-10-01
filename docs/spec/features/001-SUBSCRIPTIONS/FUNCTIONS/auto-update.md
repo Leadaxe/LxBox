@@ -59,10 +59,14 @@ The "is it time" decision for an automatic trigger, in order:
 7. No success yet → yes; otherwise — yes if ≥ interval has passed since the success.
 
 - Passes do not run in parallel: a new trigger during a pass is skipped.
-  Within a pass subscriptions go sequentially. Two entries with the same URL
-  are both requested, one after the other.
+  Within a pass subscriptions go sequentially. A URL is requested once per
+  pass: other entries with the same URL take the first successful response
+  (each parsed with its own rules, no pause before them); if that request
+  failed, they are skipped in this pass.
 - The server `profile-update-interval` changes the subscription interval with `0` and
-  `N>0`; with `-1` it is ignored.
+  `N>0`; with `-1` it is ignored. A negative or non-numeric header value is
+  ignored; a negative interval once accepted from a server (below `-1`) is
+  replaced on the next success by the server value or 24 h.
 - The failure cap lives in memory: it is reset by a restart, a manual
   update of the subscription, "Reset fail count & retry" and "Update all".
   The consecutive-failure count for display ("(N fails)") is stored separately and
@@ -75,14 +79,17 @@ The "is it time" decision for an automatic trigger, in order:
 - Haptic feedback and snackbars — only for manual updates; automatic ones are
   silent.
 - After "Update all" the config is rebuilt and saved, snackbar "Config
-  generated: N nodes".
+  generated: N nodes". If a pass is already running, "Update all" does
+  nothing and says "Subscriptions are already updating. Try again later."
+  (no rebuild, no success snackbar).
 
 ## Boundaries
 
 - No update of an unloaded app; how long the process lives minimized
   depends on OS capabilities. Return from background closes this gap.
 - There is no exponential backoff between passes — the cap of 5 plays that role.
-- A file subscription is not requested in a pass.
+- A file subscription is not requested over the network in a pass (its
+  snapshot is parsed again, see [file subscription](file-subscription.md)).
 
 ## Revisions
 
@@ -95,3 +102,4 @@ The "is it time" decision for an automatic trigger, in order:
 | 5 | [337](../../../tasks/337-auto-update-disabled-subscriptions.md) | ✅ DEVICE-PENDING | "Update disabled" checkbox, gate above force |
 | 6 | [515](../../../tasks/515-workspace-switch-stale-controller-persist.md) | Released v2.25.2 | Stopping the pass on a workspace switch |
 | 7 | [219](../../../tasks/219-deep-audit-2026-07.md) | Done / findings in progress | Audit: closing the HTTP client, index order on reorder |
+| 8 | [603](../../../tasks/603-subscription-and-own-server-bugs.md) | Implemented | One request per URL per pass; server interval validation; "Update all" during a pass |

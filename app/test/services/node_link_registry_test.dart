@@ -334,7 +334,6 @@ void main() {
 }
 
 WizardTemplate _template() => WizardTemplate(
-      parserConfig: ParserConfigBlock(),
       groupTemplates: GroupTemplates(),
       vars: const [],
       varSections: const [],

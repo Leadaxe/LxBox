@@ -31,7 +31,8 @@ Widget poolSlotRow(
   VoidCallback? onTap,
 }) {
   final cs = Theme.of(context).colorScheme;
-  final delayText = slot.delay > 0 ? '${slot.delay} ms' : '—';
+  final delayText =
+      slot.delay > 0 ? '${slot.delay} ms' : '—'; // l10n-exempt: unit
   final row = Padding(
     padding: const EdgeInsets.symmetric(vertical: 5),
     child: Row(

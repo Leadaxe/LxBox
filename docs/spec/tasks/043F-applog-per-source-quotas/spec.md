@@ -777,7 +777,7 @@ Toggle в `app_settings_screen.dart` Developer section: enable Debug API, port i
 Toggle on → генерируется токен (32-hex через `Random.secure()`), сохраняется в `SettingsStorage`, `DebugServer.start()`. Токен никуда, кроме storage, не пишется.
 Toggle off → `stop()`. Токен остаётся в storage.
 Regenerate → новый токен, все сохранённые curl-команды идут в 401.
-Port change → валидируется (1024–65535), сохраняется в `debug_port`; если сервер сейчас запущен → restart на новом порту.
+Port change → валидируется (1024–49151 с §141 P2.4d, `SettingsStorage.debugPortMin/Max`; здесь было 1024–65535), сохраняется в `debug_port`; если сервер сейчас запущен → restart на новом порту.
 
 ## A.18 Storage keys
 

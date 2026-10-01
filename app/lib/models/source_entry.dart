@@ -89,7 +89,7 @@ final class ChainEntry extends SourceEntry {
   bool get enabled => chain.enabled;
 
   @override
-  String get displayLabel => chain.displayLabel;
+  String get displayLabel => chain.tag;
 }
 
 /// Запись, которую кодек не прочитал. Держится дословно и на своём месте.

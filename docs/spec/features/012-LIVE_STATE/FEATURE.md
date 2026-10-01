@@ -48,7 +48,12 @@ The feature protects four principles:
   "Disconnected". **Mutation**: the tunnel status is derived from the data
   channel's connect events.
 - **P2. Frequency is cut at the source.** Status tick: home 0.5 s, Statistics
-  open 0.1 s, background — 0. `no witness` (one-off check §164).
+  open 0.1 s, background — 0. **Witness**: unit
+  `test/vpn/cc_status_fast_test.dart` (Dart-side contract only —
+  `CcChannel.setStatusFast` calls `ccSetStatusFast{fast}`, called by
+  `StatsScreen.initState`/`dispose`; the native interval switch itself is
+  device-only, one-off check §164). **Mutation**: `setStatusFast` stops
+  sending `fast` as an argument or uses the wrong key/method.
 - **P3. Only profiler recording lives in the background.** Status and
   groups/connections go to sleep on backgrounding and wake on return; a
   profiler recording already started continues. **Witness**: manual check —
@@ -58,7 +63,13 @@ The feature protects four principles:
 - **P4. Connection counters are consistent.** On the home screen — separately
   "app connections" and "connections to servers"; the first equals the number
   on the Connections card in statistics and the "active" number in the Conns
-  tab. `no witness`.
+  tab. **Witness**: unit
+  `test/controllers/connection_counters_consistency_test.dart` — pins that
+  `HomeController._onCcStatus` copies `CcStatus.connectionsIn/Out` 1:1 into
+  `HomeState.traffic` (the same field Stats reads verbatim), with
+  `activeConnections` as their sum, not an independent count. **Mutation**:
+  `_onCcStatus` swaps or stops copying `connectionsIn`/`connectionsOut`
+  1:1.
 - **P5. Reopening does not lose data.** Re-entering statistics, reconnecting the
   tunnel and returning after swiping from recents show the current groups and
   connections, not an empty screen. **Witness**: manual check — swipe the app
@@ -112,7 +123,12 @@ The feature protects four principles:
   to the session.
 - **P22. Breaking on node switch — only the switched group.** With "Interrupt
   connections on switch" the live connections with that group in the chain are
-  closed; in Conns they become closed. `no witness`.
+  closed; in Conns they become closed. **Witness**: unit
+  `test/controllers/interrupt_on_switch_test.dart` — with the toggle on,
+  `switchNode` closes only live connections whose `chains` contains the
+  switched group (not closed ones, not other groups' connections); with the
+  toggle off, nothing closes. **Mutation**: `_connectionIdsInGroup` stops
+  filtering by `chains.contains(group)` (e.g. closes all live connections).
 
 ## Controlled parameters
 

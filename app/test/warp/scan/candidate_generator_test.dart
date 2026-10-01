@@ -132,14 +132,4 @@ void main() {
       expect(protos.every((p) => p.isMasque), isTrue);
     });
   });
-
-  group('variations (фаза 2)', () {
-    test('покрывает все доступные протоколы для одного IP и держит лимит', () {
-      final g = CandidateGenerator(fullPool(), rng: Random(9));
-      final v = g.variations('162.159.198.7', limit: 12);
-      expect(v.length, lessThanOrEqualTo(12));
-      expect(v.map((c) => c.protocol).toSet(), containsAll(ScanProtocol.values));
-      expect(v.every((c) => c.ip == '162.159.198.7'), isTrue);
-    });
-  });
 }

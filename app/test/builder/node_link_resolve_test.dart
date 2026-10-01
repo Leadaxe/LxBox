@@ -75,7 +75,6 @@ Future<BuildResult> _build(
     buildConfig(
       lists: lists,
       template: WizardTemplate(
-        parserConfig: ParserConfigBlock(),
         groupTemplates: GroupTemplates(),
         vars: const [],
         varSections: const [],

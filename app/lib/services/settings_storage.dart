@@ -115,16 +115,37 @@ class SettingsStorage {
   /// (`wizard_template.json`), минус машинно-генерируемые `clash_api`/
   /// `clash_secret` (выходы сборки, не пользовательский ввод). Запись любого
   /// из этих var через `setVar` → авто-dirty.
+  ///
+  /// §604 — ВСЕ переменные секций шаблона (`sections[].vars[].name`), не только
+  /// подставляемые в `config` через `@var`: `tls_fragment*`, `urltest_*` и
+  /// прочие сборка читает сама. Гард `settings_storage_config_vars_test`
+  /// сверяет список с шаблоном.
+  @visibleForTesting
+  static const configVarKeys = _configVarKeys;
   static const _configVarKeys = <String>{
     'auto_detect_interface',
+    'certificate_store',
     'dns_cache_capacity',
     'dns_default_domain_resolver',
     'dns_final',
     'dns_optimistic',
     'dns_store_cache',
     'dns_strategy',
+    'ipv6_enabled',
     'log_level',
+    'proxy_auth',
+    'proxy_listen',
+    'proxy_pass',
+    'proxy_port',
+    'proxy_type',
+    'proxy_user',
+    'resolve_enabled',
     'resolve_strategy',
+    'route_address_enable',
+    'tls_fragment',
+    'tls_fragment_fallback_delay',
+    'tls_mixed_case_sni',
+    'tls_record_fragment',
     'tun_address',
     'tun_address6',
     'tun_auto_route',
@@ -132,6 +153,10 @@ class SettingsStorage {
     'tun_name',
     'tun_stack',
     'tun_strict_route',
+    'urltest_interval',
+    'urltest_tolerance',
+    'urltest_url',
+    'vpn_mode',
   };
 
   // ---------------------------------------------------------------------------
@@ -169,7 +194,8 @@ class SettingsStorage {
     'warp_account',
     'masque_account', // §130/§219 — MASQUE-WARP аккаунт; был в бэкапе, но не в
     //                   allowlist → терялся при restore (default-deny)
-    'last_global_update',
+    'last_global_update', // §593 — LEGACY (§010F снят): не пишется и не читается;
+    //                        известен, чтобы старый бэкап не дал «unknown keys»
     'presets_migrated', // §159 — переиспользуется как «дефолты засеяны» (seed guard)
     'late_presets_seeded', // §578 — guard разового seed поздних дефолтных пресетов
     'interrupt_connections_on_switch',
@@ -227,7 +253,9 @@ class SettingsStorage {
     'subscription_device_model',
     // Прочие UI/one-shot флаги
     'haptic_enabled', // §029 — НЕ в SharedPreferences (вопреки старому STORAGE.md)
-    'notif_perm_prompted_v1', // §128 — promt уведомлений показан
+    // §600 — флаги стартовых промптов ([startupPromptVarKeys], вкл.
+    // `notif_perm_prompted_v1`) здесь НЕ перечислены: из файла не применяются,
+    // но и в отброшенные не попадают (см. `_replaceRaw`).
     'allow_rotation', // §220 — снятие портретной фиксации
     'node_list_two_columns', // §541 — две колонки списка узлов на широком окне
     'app_language', // §279 — язык приложения (system|en|ru); НЕ config-var
@@ -459,8 +487,8 @@ class SettingsStorage {
   /// Добавить цепочку. [tag] опционален (по умолчанию первый свободный
   /// `chain-N`, [nextChainTag]); throws [StateError] на конфликте тега с
   /// другой цепочкой или Направлением.
-  static Future<SourceChain> addChain({String? label, String? tag}) =>
-      _addChain(label: label, tag: tag);
+  static Future<SourceChain> addChain({String? tag}) =>
+      _addChain(tag: tag);
 
   /// §393 D3 — создать цепочку ЦЕЛИКОМ, одной записью на диск.
   ///
@@ -489,23 +517,6 @@ class SettingsStorage {
   /// Обновление подписки сюда НЕ входит — см. `_healChainHops`.
   static Future<ChainHealResult> healChainHops(String tag, {bool flush = true}) =>
       _healChainHops(tag, flush: flush);
-
-  // ---------------------------------------------------------------------------
-  // Last global update timestamp
-  // ---------------------------------------------------------------------------
-
-  static Future<DateTime?> getLastGlobalUpdate() => _getLastGlobalUpdate();
-
-  static Future<void> setLastGlobalUpdate(DateTime dt) =>
-      _setLastGlobalUpdate(dt);
-
-  /// Parses a Go-style duration string like "4h", "12h", "30m" into a [Duration].
-  static Duration? parseReloadInterval(String reload) =>
-      _parseReloadInterval(reload);
-
-  /// Returns true if subscriptions should be refreshed based on the reload interval.
-  static Future<bool> shouldRefreshSubscriptions(String reloadInterval) =>
-      _shouldRefreshSubscriptions(reloadInterval);
 
   // §159 — getRuleOutbounds/saveRuleOutbounds удалены (legacy-миграция снята).
 
@@ -1018,21 +1029,34 @@ class SettingsStorage {
       _subscriptionBodiesForMigration(doc);
 
   /// §413 — подключи `vars` Debug API: секрет и адрес сервера конкретного
-  /// устройства. Экспорт их по умолчанию не включает; полная замена
+  /// устройства. Экспорт их по умолчанию не включает; замена
   /// ([replaceRaw], `merge=false`) переносит их из текущего стораджа, если
   /// во входящем снимке их нет.
+  ///
+  /// §607 — сюда же закрепление конфига (§037): без Debug API его не снять,
+  /// поэтому оно едет категорией Debug API config вместе с ним, а не App
+  /// settings (иначе restore App settings привозил замок без Debug API и
+  /// пересборка вставала).
   static const Set<String> debugApiVarKeys = {
     'debug_enabled',
     'debug_token',
     'debug_port',
+    'config_locked_for_debug',
   };
+
+  /// §607 — зеркало тумблеров VPN (§189): свойство устройства, как флаги
+  /// [startupPromptVarKeys]. Из снимка [replaceRaw] не берётся (тумблеры
+  /// восстанавливает блок `vpn_settings`), в отброшенные не попадает, замена
+  /// оставляет секцию получателя.
+  static const String nativePrefsKey = 'native_prefs';
 
   /// §447 — одноразовые флаги стартовых промптов («уже спрашивали»): свойство
   /// устройства, а не настройка. Полная замена ([replaceRaw], `merge=false`)
   /// переносит их из текущего стораджа, как [debugApiVarKeys], если во
   /// входящем снимке их нет: иначе после restore на холодном старте заново
-  /// всплывали «Add tile» и «Check for updates?». `wizard_*` в allowlist
-  /// импорта нет — из файла они не приходят вовсе.
+  /// всплывали «Add tile» и «Check for updates?». В allowlist импорта их нет —
+  /// из файла они не приходят вовсе; §600 — при этом импорт пропускает их
+  /// молча, не записывая в отброшенные «неизвестные» ключи.
   static const String batteryPromptVar = 'wizard_battery_v1';
   static const String addTilePromptVar = 'wizard_addtile_v1';
   static const String updateCheckPromptVar = 'wizard_update_check_v1';
@@ -1052,11 +1076,18 @@ class SettingsStorage {
   /// §159 — применяет default-deny allowlist (см. [allowedTopLevelKeys] /
   /// [allowedVarKeys]). Возвращает список **отброшенных** ключей (top-level имена
   /// + `vars.<key>` для подключей) — caller логирует в applog и показывает юзеру.
+  ///
+  /// §599 — [keepTopLevel] / [keepVar] (только при `merge=false`): ключи
+  /// верхнего уровня и подключи `vars`, которые замена оставляет получателю
+  /// (неотмеченные категории бэкапа). null — замена всего документа.
   static Future<List<String>> replaceRaw(
     Map<String, dynamic> snapshot, {
     bool merge = false,
+    bool Function(String key)? keepTopLevel,
+    bool Function(String varKey)? keepVar,
   }) =>
-      _replaceRaw(snapshot, merge: merge);
+      _replaceRaw(snapshot,
+          merge: merge, keepTopLevel: keepTopLevel, keepVar: keepVar);
 
   // ---------------------------------------------------------------------------
   // Tunnel apps — OS-level split-tunneling (§046)

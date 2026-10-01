@@ -32,6 +32,9 @@
   "%1$d selected · %2$d shown": {
     "value": "%1$d выбрано · %2$d показано"
   },
+  "%1$d server lists (%2$d subs, %3$d custom)": {
+    "value": "Списков серверов: %1$d (подписок: %2$d, своих: %3$d)"
+  },
   "%1$d servers · %2$d off": {
     "value": {
       "one": "%1$d сервер · %2$d выкл.",
@@ -75,6 +78,22 @@
   "%1$s · %2$d events": {
     "value": "%1$s · %2$d соб."
   },
+  "%d app settings": {
+    "value": {
+      "one": "%d настройка приложения",
+      "few": "%d настройки приложения",
+      "many": "%d настроек приложения",
+      "other": "%d настройки приложения"
+    }
+  },
+  "%d apps selected — tap to edit": {
+    "value": {
+      "one": "Выбрано %d приложение — нажмите, чтобы изменить",
+      "few": "Выбрано %d приложения — нажмите, чтобы изменить",
+      "many": "Выбрано %d приложений — нажмите, чтобы изменить",
+      "other": "Выбрано %d приложения — нажмите, чтобы изменить"
+    }
+  },
   "%d chained": {
     "value": {
       "one": "%d в цепочке",
@@ -89,6 +108,14 @@
       "few": "%d элемента",
       "many": "%d элементов",
       "other": "%d элемента"
+    }
+  },
+  "%d errors": {
+    "value": {
+      "one": "%d ошибка",
+      "few": "%d ошибки",
+      "many": "%d ошибок",
+      "other": "%d ошибки"
     }
   },
   "%d groups": {
@@ -386,6 +413,14 @@
       "other": "%d секунды"
     }
   },
+  "%d server lists": {
+    "value": {
+      "one": "%d список серверов",
+      "few": "%d списка серверов",
+      "many": "%d списков серверов",
+      "other": "%d списка серверов"
+    }
+  },
   "%d servers": {
     "value": {
       "one": "%d сервер",
@@ -402,8 +437,41 @@
       "other": "Удалено %d сервера"
     }
   },
+  "%d unknown keys skipped": {
+    "value": {
+      "one": "%d неизвестный ключ пропущен",
+      "few": "%d неизвестных ключа пропущено",
+      "many": "%d неизвестных ключей пропущено",
+      "other": "%d неизвестного ключа пропущено"
+    }
+  },
+  "%d VPN settings": {
+    "value": {
+      "one": "%d настройка VPN",
+      "few": "%d настройки VPN",
+      "many": "%d настроек VPN",
+      "other": "%d настройки VPN"
+    }
+  },
+  "%d VPN system toggles": {
+    "value": {
+      "one": "%d системный переключатель VPN",
+      "few": "%d системных переключателя VPN",
+      "many": "%d системных переключателей VPN",
+      "other": "%d системного переключателя VPN"
+    }
+  },
   "%s link": {
     "value": "Ссылка %s"
+  },
+  "%s · (optional)": {
+    "value": "%s · (необязательно)"
+  },
+  "(optional)": {
+    "value": "(необязательно)"
+  },
+  "1 app selected — tap to edit": {
+    "value": "Выбрано 1 приложение — нажмите, чтобы изменить"
   },
   "1 server disabled": {
     "value": "Отключено серверов: 1"
@@ -538,12 +606,14 @@
   "%s · current session": {
     "value": "%s · текущая сессия"
   },
-  "%s · disabled — will be skipped": "%s · выключен — будет пропущен",
+  "%s · disabled — will be skipped": {
+    "value": "%s · выключен — будет пропущен"
+  },
   "%s — tap to edit": {
     "value": "%s — нажмите, чтобы изменить"
   },
-  "%s — uninstalled, auto-skipped": {
-    "value": "%s — удалено, пропускается автоматически"
+  "%s — not installed; the system ignores it": {
+    "value": "%s — не установлено; система его игнорирует"
   },
   "%s: empty file": {
     "value": "%s: пустой файл"
@@ -668,6 +738,9 @@
   },
   "ACTIVE": {
     "value": "АКТИВЕН"
+  },
+  "Add tile dismissed.": {
+    "value": "Добавление плитки отменено."
   },
   "Amnezia VPN config": {
     "value": "Конфиг Amnezia VPN"
@@ -870,8 +943,8 @@
   "Already on this device": {
     "value": "Уже есть на этом устройстве"
   },
-  "Also put tunnels on the active route (pool members, the selected node) to sleep after a long quiet period — e.g. overnight. The first connection after sleep adds ~1 round trip. Keep this at or above the directions' idle timeout (30 min by default). Requires \"Suspend idle tunnels\" to be on.": {
-    "value": "Усыплять и туннели активного маршрута (члены пула, выбранный узел) после долгого затишья — например, за ночь. Первое соединение после сна будет дольше примерно на один RTT. Держите значение не меньше тайм-аута простоя Направлений (по умолчанию 30 минут). Требует включённой настройки «Усыплять неактивные туннели»."
+  "Also put tunnels on the active route (pool members, the selected node) to sleep after a long quiet period — e.g. overnight. The first connection after sleep adds ~1 round trip. Default 5 min. Below the directions' idle timeout (30 min by default) a group probe can wake a sleeping tunnel for one handshake — the price of sleeping sooner. Requires \"Suspend idle tunnels\" to be on.": {
+    "value": "Усыплять и туннели активного маршрута (члены пула, выбранный узел) после долгого затишья — например, за ночь. Первое соединение после сна будет дольше примерно на один RTT. По умолчанию 5 минут. Если значение меньше тайм-аута простоя Направлений (по умолчанию 30 минут), проба группы может разбудить спящий туннель на одно рукопожатие — цена более раннего сна. Требует включённой настройки «Усыплять неактивные туннели»."
   },
   "AmneziaWG 3 header protection key is not a 32-byte base64 key, so the node was skipped: the handshake cannot succeed and the core would reject the whole config.": {
     "value": "Ключ защиты заголовка AmneziaWG 3 — не 32-байтный ключ base64, поэтому узел пропущен: рукопожатие невозможно, а ядро отвергло бы весь конфиг."
@@ -1077,8 +1150,23 @@
   "Building config...": {
     "value": "Сборка конфига…"
   },
+  "by Domain": {
+    "value": "по домену"
+  },
+  "by IP": {
+    "value": "по IP"
+  },
   "By routing rule": {
     "value": "По правилам маршрутизации"
+  },
+  "Cannot show prompt right now — try again.": {
+    "value": "Сейчас не удаётся показать запрос — попробуйте ещё раз."
+  },
+  "Check skipped: %s": {
+    "value": "Проверка пропущена: %s"
+  },
+  "Connect": {
+    "value": "Подключить"
   },
   "CONNECTIONS (%d)": {
     "value": "СОЕДИНЕНИЯ (%d)"
@@ -1331,8 +1419,8 @@
       "other": "Конфиг пересобран: %d узла"
     }
   },
-  "Config saved": {
-    "value": "Конфиг сохранён"
+  "Config saved. The next rebuild overwrites it; to keep it, lock the config in App Settings → Diagnostics (Debug API on).": {
+    "value": "Конфиг сохранён. Следующая пересборка его перезапишет; чтобы сохранить, закрепите конфиг в App Settings → Diagnostics (при включённом Debug API)."
   },
   "Config unlocked. Next UI action will rebuild from settings.": {
     "value": "Конфиг разблокирован. Следующее действие в UI пересоберёт его из настроек."
@@ -1346,8 +1434,8 @@
   "Connect a subscription or add a node manually to get started.": {
     "value": "Подключите подписку или добавьте узел вручную, чтобы начать."
   },
-  "Connect to the proxy over TLS. Advanced TLS options (SNI, ALPN) can be edited later via node JSON.": {
-    "value": "Подключаться к прокси по TLS. Тонкие настройки TLS (SNI, ALPN) можно изменить позже через JSON узла."
+  "Connect to the proxy over TLS; Host is used as the SNI. ALPN, insecure and the other TLS options can be set later on the node's JSON tab (Edit JSON).": {
+    "value": "Подключаться к прокси по TLS; Host используется как SNI. ALPN, insecure и прочие настройки TLS можно задать позже на вкладке JSON узла (кнопка правки JSON)."
   },
   "Connected": {
     "value": "Подключено"
@@ -1393,6 +1481,12 @@
   },
   "Copy JSON to clipboard": {
     "value": "Копировать JSON в буфер обмена"
+  },
+  "Copy server + detour": {
+    "value": "Копировать сервер + detour"
+  },
+  "Copy server + detours(%d)": {
+    "value": "Копировать сервер + detour'ы (%d)"
   },
   "Copy URI": {
     "value": "Копировать URI"
@@ -1451,6 +1545,9 @@
   "Could not read file.": {
     "value": "Не удалось прочитать файл."
   },
+  "Could not request tile add (%s). Pull down the status bar → edit tiles → drag L×Box manually.": {
+    "value": "Не удалось запросить добавление плитки (%s). Опустите шторку → изменить плитки → перетащите L×Box вручную."
+  },
   "Couldn't load new source — keeping current subscription": {
     "value": "Не удалось загрузить новый источник — текущая подписка сохранена"
   },
@@ -1493,8 +1590,26 @@
   "Cut": {
     "value": "Вырезать"
   },
-  "DNS / router events off": {
-    "value": "События DNS и роутера выключены"
+  "Dark": {
+    "value": "Тёмная"
+  },
+  "Data received (↓), nothing sent (↑0) — the stream looks stuck.": {
+    "value": "Данные получены (↓), ничего не отправлено (↑0) — похоже, поток завис."
+  },
+  "Data sent (↑), no reply (↓0) — the stream looks stuck.": {
+    "value": "Данные отправлены (↑), ответа нет (↓0) — похоже, поток завис."
+  },
+  "Debug API config (sensitive — token included)": {
+    "value": "Конфигурация Debug API (секретно — включая токен)"
+  },
+  "debug config": {
+    "value": "конфигурация Debug API"
+  },
+  "Detour copied": {
+    "value": "Detour скопирован"
+  },
+  "DNS exchange failed: %s": {
+    "value": "Сбой DNS-запроса: %s"
   },
   "DNS Final": {
     "value": "Финальный DNS"
@@ -1517,9 +1632,15 @@
   "DNS entries: %d": {
     "value": "DNS-записей: %d"
   },
-  "DNS group \"%1$s\": member \"%2$s\" of type \"%3$s\" is not allowed in a group.": "DNS-группа «%1$s»: член «%2$s» типа «%3$s» недопустим в группе.",
-  "DNS group \"%s\" has no usable members — enable or add at least one server.": "DNS-группа «%s» осталась без рабочих членов — включите или добавьте хотя бы один сервер.",
-  "DNS group loop: %s — fix group membership to start the VPN.": "Цикл DNS-групп: %s — исправьте состав групп, чтобы запустить VPN.",
+  "DNS group \"%1$s\": member \"%2$s\" of type \"%3$s\" is not allowed in a group.": {
+    "value": "DNS-группа «%1$s»: член «%2$s» типа «%3$s» недопустим в группе."
+  },
+  "DNS group \"%s\" has no usable members — enable or add at least one server.": {
+    "value": "DNS-группа «%s» осталась без рабочих членов — включите или добавьте хотя бы один сервер."
+  },
+  "DNS group loop: %s — fix group membership to start the VPN.": {
+    "value": "Цикл DNS-групп: %s — исправьте состав групп, чтобы запустить VPN."
+  },
   "DNS queries are failing": {
     "value": "DNS-запросы не проходят"
   },
@@ -1919,6 +2040,9 @@
   "Endpoint IP": {
     "value": "Endpoint IP"
   },
+  "Endpoint must be host:port": {
+    "value": "Endpoint должен быть в виде host:port"
+  },
   "Endpoint pool (JSON) — IP blocks, ports and SNI the generator draws from. Edit to test your own ranges.": {
     "value": "Пул эндпоинтов (JSON) — блоки IP, порты и SNI, из которых генератор берёт узлы. Правьте, чтобы протестировать свои диапазоны."
   },
@@ -1931,7 +2055,9 @@
   "Error": {
     "value": "Ошибка"
   },
-  "Error TTL": "TTL ошибки",
+  "Error TTL": {
+    "value": "TTL ошибки"
+  },
   "Error: %s": {
     "value": "Ошибка: %s"
   },
@@ -2071,10 +2197,24 @@
   "Fastest": {
     "value": "Самый быстрый"
   },
+  "fetching subscriptions…": {
+    "value": "загрузка подписок…"
+  },
+  "Imported: %s": {
+    "value": "Импортировано: %s"
+  },
+  "Light": {
+    "value": "Светлая"
+  },
+  "Loading…": {
+    "value": "Загрузка…"
+  },
   "Manual": {
     "value": "Вручную"
   },
-  "Fastest — race, then stick to the winner": "Fastest — гонка, затем липнет к победителю",
+  "Fastest — race, then stick to the winner": {
+    "value": "Fastest — гонка, затем липнет к победителю"
+  },
   "Feedback": {
     "value": "Отклик"
   },
@@ -2239,7 +2379,9 @@
   "Green up to, ms": {
     "value": "Зелёный до, мс"
   },
-  "Group": "Группа",
+  "Group": {
+    "value": "Группа"
+  },
   "Grouping": {
     "value": "Группировка"
   },
@@ -2263,9 +2405,6 @@
   },
   "Headers copied": {
     "value": "Заголовки скопированы"
-  },
-  "Health": {
-    "value": "Работоспособность"
   },
   "Heap allocated": {
     "value": "Выделено в куче"
@@ -2345,8 +2484,8 @@
   "Idle timeout (min)": {
     "value": "Тайм-аут простоя (мин)"
   },
-  "Idle timeout suspends the tunnel after inactivity to save battery (default 5 min). Keep-alive pings the QUIC link (default 30 sec, HTTP/3 only). Leave empty for defaults.": {
-    "value": "Тайм-аут простоя приостанавливает туннель при неактивности ради экономии батареи (по умолчанию 5 мин). Keep-alive пингует QUIC-соединение (по умолчанию 30 сек, только HTTP/3). Оставьте поля пустыми для значений по умолчанию."
+  "Idle timeout suspends the tunnel after inactivity to save battery; empty = never suspended (the core's default). Keep-alive pings the QUIC link (default 30 sec, HTTP/3 only). Leave empty for defaults.": {
+    "value": "Тайм-аут простоя приостанавливает туннель при неактивности ради экономии батареи; пусто = не приостанавливать (умолчание ядра). Keep-alive пингует QUIC-соединение (по умолчанию 30 сек, только HTTP/3). Оставьте поля пустыми для значений по умолчанию."
   },
   "Idle timeout will be raised to %s when the config is built": {
     "value": "При сборке idle timeout будет поднят до %s"
@@ -2529,7 +2668,9 @@
   "Invalid backup": {
     "value": "Некорректная резервная копия"
   },
-  "Invalid duration (e.g. 2m, 90s)": "Неверная длительность (напр. 2m, 90s)",
+  "Invalid duration (e.g. 2m, 90s)": {
+    "value": "Неверная длительность (напр. 2m, 90s)"
+  },
   "Invalid pool JSON — check the structure.": {
     "value": "Некорректный JSON пула — проверьте структуру."
   },
@@ -2608,8 +2749,8 @@
   "Larger values save battery": {
     "value": "Большие значения экономят батарею"
   },
-  "Last 100 events": {
-    "value": "Последние 100 событий"
+  "App and core logs, crashes, profiling": {
+    "value": "Логи приложения и ядра, крэши, профилирование"
   },
   "Last GC": {
     "value": "Последний GC"
@@ -2743,7 +2884,9 @@
   "Measuring…": {
     "value": "Замеряю…"
   },
-  "Members": "Члены группы",
+  "Members": {
+    "value": "Члены группы"
+  },
   "Members connect through their personal detours": {
     "value": "Члены папки подключаются через свои личные detour"
   },
@@ -2966,7 +3109,9 @@
   "No nodes match. Check the path against a node's JSON.": {
     "value": "Совпадений нет. Сверьте путь с JSON узла."
   },
-  "No other DNS servers to add — create them first": "Других DNS-серверов нет — сначала создайте их",
+  "No other DNS servers to add — create them first": {
+    "value": "Других DNS-серверов нет — сначала создайте их"
+  },
   "No other servers in this folder": {
     "value": "В этой папке нет других серверов"
   },
@@ -3021,6 +3166,71 @@
   "No valid outbounds in JSON": {
     "value": "В JSON нет валидных outbound-объектов"
   },
+  "Nothing imported": {
+    "value": "Ничего не импортировано"
+  },
+  "Rebuild config + connect": {
+    "value": "Пересобрать конфиг + подключить"
+  },
+  "Rebuild config + reconnect": {
+    "value": "Пересобрать конфиг + переподключить"
+  },
+  "Reconnect": {
+    "value": "Переподключить"
+  },
+  "routing (%d rules)": {
+    "value": {
+      "one": "маршрутизация (%d правило)",
+      "few": "маршрутизация (%d правила)",
+      "many": "маршрутизация (%d правил)",
+      "other": "маршрутизация (%d правила)"
+    }
+  },
+  "Routing — %1$d rules, final: %2$s": {
+    "value": {
+      "one": "Маршрутизация — %1$d правило, final: %2$s",
+      "few": "Маршрутизация — %1$d правила, final: %2$s",
+      "many": "Маршрутизация — %1$d правил, final: %2$s",
+      "other": "Маршрутизация — %1$d правила, final: %2$s"
+    }
+  },
+  "Routing — %d rules": {
+    "value": {
+      "one": "Маршрутизация — %d правило",
+      "few": "Маршрутизация — %d правила",
+      "many": "Маршрутизация — %d правил",
+      "other": "Маршрутизация — %d правила"
+    }
+  },
+  "Select apps…": {
+    "value": "Выбрать приложения…"
+  },
+  "Server + %d detours copied": {
+    "value": {
+      "one": "Сервер + %d detour скопированы",
+      "few": "Сервер + %d detour'а скопированы",
+      "many": "Сервер + %d detour'ов скопированы",
+      "other": "Сервер + %d detour'а скопированы"
+    }
+  },
+  "Server + 1 detour copied": {
+    "value": "Сервер + 1 detour скопированы"
+  },
+  "Server copied": {
+    "value": "Сервер скопирован"
+  },
+  "sing-box %s · via libbox": {
+    "value": "sing-box %s · через libbox"
+  },
+  "sing-box (version unknown)": {
+    "value": "sing-box (версия неизвестна)"
+  },
+  "Stream": {
+    "value": "Поток"
+  },
+  "This node cannot be shared as a link.": {
+    "value": "Этим узлом нельзя поделиться ссылкой."
+  },
   "down": {
     "value": "down"
   },
@@ -3039,8 +3249,17 @@
   "sleep": {
     "value": "sleep"
   },
+  "Tile added to Quick Settings.": {
+    "value": "Плитка добавлена в быстрые настройки."
+  },
+  "Tile is already in Quick Settings.": {
+    "value": "Плитка уже есть в быстрых настройках."
+  },
   "Two columns on wide screens": {
     "value": "Две колонки на широком экране"
+  },
+  "unknown error": {
+    "value": "неизвестная ошибка"
   },
   "up": {
     "value": "up"
@@ -3272,7 +3491,9 @@
   "Packet encoding \"%s\" is not one the core knows (xudp, packetaddr), so it was dropped — keeping it would crash the core.": {
     "value": "Упаковка пакетов «%s» ядру неизвестна (оно знает xudp и packetaddr), поэтому отброшена: иначе ядро аварийно завершилось бы."
   },
-  "Parallel — race every query": "Parallel — каждый запрос гонкой",
+  "Parallel — race every query": {
+    "value": "Parallel — каждый запрос гонкой"
+  },
   "Params": {
     "value": "Параметры"
   },
@@ -3639,12 +3860,6 @@
   "Registered by preset \"%s\". Parameters are edited in the preset rule (Routing → Rules).": {
     "value": "Зарегистрирован пресетом «%s». Параметры редактируются в правиле пресета (Маршрутизация → Правила)."
   },
-  "Registered: WARP": {
-    "value": "Зарегистрировано: WARP"
-  },
-  "Registered: WARP+": {
-    "value": "Зарегистрировано: WARP+"
-  },
   "Registering…": {
     "value": "Регистрация…"
   },
@@ -4005,7 +4220,9 @@
   "Select server": {
     "value": "Показать выбранный сервер"
   },
-  "Selection mode": "Режим выбора",
+  "Selection mode": {
+    "value": "Режим выбора"
+  },
   "Selector \"%1$s\" default \"%2$s\" is not in the options list.": {
     "value": "У селектора «%1$s» значение по умолчанию «%2$s» отсутствует в списке вариантов."
   },
@@ -4051,7 +4268,9 @@
   "Server not found": {
     "value": "Сервер не найден"
   },
-  "Server type": "Тип сервера",
+  "Server type": {
+    "value": "Тип сервера"
+  },
   "Servers": {
     "value": "Серверы"
   },
@@ -4085,7 +4304,9 @@
   "Settings changed — tap to rebuild config": {
     "value": "Настройки изменены — нажмите, чтобы пересобрать конфиг"
   },
-  "Several servers behind one tag — survives a member failure": "Несколько серверов под одним тегом — переживает сбой члена",
+  "Several servers behind one tag — survives a member failure": {
+    "value": "Несколько серверов под одним тегом — переживает сбой члена"
+  },
   "Share": {
     "value": "Поделиться"
   },
@@ -4111,6 +4332,9 @@
   },
   "Share the crash report": {
     "value": "Поделиться отчётом о падении"
+  },
+  "Global target; this folder tests with its own URL and timeout": {
+    "value": "Глобальная цель; у этой папки свой URL и тайм-аут теста"
   },
   "Shared with the home screen ping": {
     "value": "Общие с пингом на главном экране"
@@ -4198,7 +4422,9 @@
   "Speed Test": {
     "value": "Тест скорости"
   },
-  "Stable — stick to one until it fails": "Stable — держится за один, пока тот не сбоит",
+  "Stable — stick to one until it fails": {
+    "value": "Stable — держится за один, пока тот не сбоит"
+  },
   "Stack in use": {
     "value": "Стек занят"
   },
@@ -4311,6 +4537,9 @@
   },
   "Subscriptions and custom servers": {
     "value": "Подписки и собственные серверы"
+  },
+  "Subscriptions are already updating. Try again later.": {
+    "value": "Подписки уже обновляются. Попробуйте позже."
   },
   "Subscriptions: %d": {
     "value": "Подписок: %d"
@@ -4539,8 +4768,8 @@
   "The whole element as the provider sent it": {
     "value": "Элемент целиком, как прислал провайдер"
   },
-  "Theme, appearance": {
-    "value": "Тема и внешний вид"
+  "General, appearance, diagnostics, automation": {
+    "value": "Общие, внешний вид, диагностика, автоматизация"
   },
   "These depend on dead node \"%1$s\" and are not working:": {
     "value": "Они зависят от мёртвого узла \"%1$s\" и не работают:"
@@ -4569,8 +4798,8 @@
   "This frees %s. Memory profiles cannot be recovered afterwards.": {
     "value": "Освободится %s. Восстановить профили памяти после удаления нельзя."
   },
-  "This is OS-level split-tunneling. It controls which apps see the VPN tunnel at all — packets from excluded apps go directly via cellular/wifi without entering sing-box.\n\n• Off — every app uses the VPN (default)\n• Allow-list — ONLY listed apps go through VPN; everything else bypasses\n• Deny-list — listed apps bypass VPN; everything else goes through\n\nNote: apps in the Allow-list still go through your normal routing rules. Apps that bypass the tunnel are not visible to sing-box at all — your custom rules with package_name will not match them.\n\nChanges require a full VPN restart to apply (Android creates the tun interface only at start).": {
-    "value": "Это разделение туннеля на уровне ОС: оно определяет, какие приложения вообще видят VPN-туннель — пакеты исключённых приложений идут напрямую через мобильную сеть или Wi-Fi, минуя sing-box.\n\n• Выключено — все приложения используют VPN (по умолчанию)\n• Белый список — через VPN идут ТОЛЬКО перечисленные приложения, остальные в обход\n• Чёрный список — перечисленные приложения идут в обход VPN, остальные через туннель\n\nВажно: приложения из белого списка по-прежнему проходят через обычные правила маршрутизации. Приложения в обход туннеля для sing-box невидимы — правила с package_name их не поймают.\n\nИзменения требуют полного перезапуска VPN (Android создаёт tun-интерфейс только при старте)."
+  "This is OS-level split-tunneling. It controls which apps see the VPN tunnel at all — packets from excluded apps go directly via cellular/wifi without entering sing-box.\n\n• Off — every app uses the VPN (default)\n• Allow-list — ONLY listed apps go through VPN; everything else bypasses\n• Deny-list — listed apps bypass VPN; everything else goes through\n\nNote: apps in the Allow-list still go through your normal routing rules. Apps that bypass the tunnel are not visible to sing-box at all — your custom rules with package_name will not match them.\n\nChanges apply when the tunnel is created next — restart or reload the core from the home screen banner (Android reads the list only while creating the tun interface).\n\nIn Proxy mode there is no tun interface, so this list has no effect.": {
+    "value": "Это разделение туннеля на уровне ОС: оно определяет, какие приложения вообще видят VPN-туннель — пакеты исключённых приложений идут напрямую через мобильную сеть или Wi-Fi, минуя sing-box.\n\n• Выключено — все приложения используют VPN (по умолчанию)\n• Белый список — через VPN идут ТОЛЬКО перечисленные приложения, остальные в обход\n• Чёрный список — перечисленные приложения идут в обход VPN, остальные через туннель\n\nВажно: приложения из белого списка по-прежнему проходят через обычные правила маршрутизации. Приложения в обход туннеля для sing-box невидимы — правила с package_name их не поймают.\n\nИзменения вступают в силу при следующем создании туннеля — перезапустите или перезагрузите ядро из баннера на главном экране (Android читает список только при создании tun-интерфейса).\n\nВ режиме Proxy tun-интерфейса нет, и этот список не действует."
   },
   "This is an auto-select node — it has no connection of its own. Open a member to diagnose it.": {
     "value": "Это узел автовыбора — своего соединения у него нет. Откройте участника, чтобы проверить его."
@@ -4862,6 +5091,9 @@
   "WARP+ adds Argo Smart Routing (lower latency). Privacy is the same as free. Leave empty for free WARP.": {
     "value": "WARP+ добавляет Argo Smart Routing (меньше задержка). Приватность та же, что и у бесплатного. Оставьте пустым для бесплатного WARP."
   },
+  "Waiting for download": {
+    "value": "Ожидает скачивания"
+  },
   "Warnings": {
     "value": "Предупреждения"
   },
@@ -4913,7 +5145,9 @@
   "Will be enabled": {
     "value": "Будет включён"
   },
-  "Win TTL": "TTL победы",
+  "Win TTL": {
+    "value": "TTL победы"
+  },
   "Wipes existing data in selected categories.": {
     "value": "Стирает текущие данные в выбранных категориях."
   },
@@ -5231,7 +5465,9 @@
   "unknown": {
     "value": "неизвестно"
   },
-  "unknown server — will be skipped": "неизвестный сервер — будет пропущен",
+  "unknown server — will be skipped": {
+    "value": "неизвестный сервер — будет пропущен"
+  },
   "used by %s": {
     "value": "используется: %s"
   },
@@ -5253,14 +5489,14 @@
   "yesterday": {
     "value": "вчера"
   },
+  "Your Android version doesn't support an in-app prompt. Pull down the status bar → edit tiles → drag L×Box to active tiles.": {
+    "value": "Ваша версия Android не поддерживает запрос из приложения. Опустите шторку → изменить плитки → перетащите L×Box в активные."
+  },
   "— (default DNS)": {
     "value": "— (DNS по умолчанию)"
   },
   "— (none)": {
     "value": "— (нет)"
-  },
-  "— turn on 'Forward sing-box logs'": {
-    "value": "— включите пересылку логов sing-box"
   },
   "→ in: %s": {
     "value": "→ в: %s"
@@ -5520,5 +5756,17 @@
   },
   "Comments were removed.": {
     "value": "Комментарии убраны."
+  },
+  "via %s": {
+    "value": "через %s"
+  },
+  "exit offline": {
+    "value": "выход офлайн"
+  },
+  "key expires <1d": {
+    "value": "ключ истекает <1 д"
+  },
+  "key expires %sd": {
+    "value": "ключ истекает через %s д"
   }
 }

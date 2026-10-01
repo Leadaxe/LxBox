@@ -11,10 +11,10 @@ The current parser and builder version is **v2** (spec 026, phase 5 completed in
 | Parameter | Value |
 |----------|----------|
 | Android minSdk | **24** (Android 7.0) |
-| Android targetSdk | `flutter.targetSdkVersion` (the current target, usually API 34/35) |
-| Android compileSdk | `flutter.compileSdkVersion` |
+| Android targetSdk | `flutter.targetSdkVersion` — set by the pinned Flutter (`app/android/flutter.version`, 3.47.1 → API 36); not overridden in `build.gradle.kts` |
+| Android compileSdk | `flutter.compileSdkVersion` — same source (3.47.1 → API 36) |
 | JVM | Java 17 |
-| NDK | 28.2.13676358 |
+| NDK | `flutter.ndkVersion` — the NDK the pinned Flutter asks for; not hardcoded in `build.gradle.kts` |
 
 ### Support tiers
 
@@ -167,11 +167,20 @@ Large files are decomposed through `part` or `mixin` (the same library, so libra
 access is preserved) or by extracting widget subtrees. The documented large exceptions
 (where a split would add risk without benefit):
 
-| File | Lines | Why it stays whole |
+| File | Lines (2026-09-30) | Why it stays whole |
 |---|---|---|
-| `services/traffic_profiler.dart` | 1243 | A monolithic stateful singleton: receiving the CC connections and DNS streams, diffing snapshots, confidence and the dual SSE fan-out — all through shared private state and one `ChangeNotifier` contract. |
-| `models/custom_rule.dart` | 618 | Already sealed into `Inline`/`Srs`/`Preset`; the size is inherent to three structurally different kinds. |
-| `android/.../VpnPlugin.kt` | 1084 | One `MethodCallHandler` contract; splitting it would scatter the channel contract across files. |
+| `services/traffic_profiler.dart` (+ `traffic_profiler/internal.dart`, `models.dart`) | 873 | A stateful singleton: receiving the CC connections and DNS streams, diffing snapshots, confidence and the dual SSE fan-out — all through shared private state and one `ChangeNotifier` contract; the models and internals are already split out. |
+| `models/custom_rule.dart` | 1232 | Sealed into `Inline`/`Srs`/`Preset`; the size is inherent to three structurally different kinds. |
+| `android/.../VpnPlugin.kt` | 1561 | One `MethodCallHandler` contract; splitting it would scatter the channel contract across files. |
+
+The list above is the set of *reviewed* exceptions, not the set of large files.
+Nothing enforces the principle: as of 2026-09-30, 23 Dart files under `app/lib`
+exceed 1000 lines (`find app/lib -name '*.dart' | xargs wc -l | sort -rn`), the
+largest being `services/lx_backup.dart` (4493), `services/parser/engine/interpreter.dart`
+(4181), `controllers/subscription_controller.dart` (3582),
+`services/contract/body_sanitizer.dart` (2831), `controllers/home_controller.dart`
+(2037) and `services/parser/engine/emitter.dart` (2012). None of them has been
+reviewed against the principle; they are debt, not documented exceptions.
 
 ### ConfigNode / ParsedConfig (§091 — implemented)
 
@@ -470,7 +479,7 @@ An asset template read once through `TemplateLoader.load()` (a singleton, deep-c
 
 | Section | Role | Example / where it is used |
 |---|---|---|
-| `parser_config` | The sing-box `version` plus the reload interval | Emitted straight into the root |
+| `parser_config` | A legacy block (`version`, `parser.reload`); the app does not read it (§593) | Stays in the template for its shape only |
 | `dns_options.servers` | The canonical DNS servers (system/google/cloudflare/quad9/adguard). Storage keeps `dns.servers[]` records (§439). | Resolved into bodies by `resolveDnsServersBodies` |
 | `dns_options.rules` | The default DNS rules. Storage keeps `dns.rules[]` records (§061 dns-rules-refactor, formerly feature §041; §439). | Resolved by `resolveDnsRulesList` |
 | `ping_options`, `speed_test_options` | UI features (HomeScreen, SpeedTest) | Never reach the sing-box config |
@@ -636,7 +645,7 @@ codec/                       # §439 — model ↔ record, pure functions, toler
 node_link.dart               # §439 (D-112) NodeLink {folderId, tag} — a reference to a node; empty folderId = root
 node_entries.dart            # NodeEntries{main, detours} — the result of getEntries
 emit_context.dart            # the abstract EmitContext: allocateTag/addEntry plus selector and auto registration
-template_vars.dart           # TemplateVars — the global emit flags (tls_fragment/mux/sniOverride)
+template_vars.dart           # TemplateVars — the emit parameter, no fields since §593
 tls_spec.dart                # TlsSpec + RealitySpec (utls/reality/alpn) → toSingbox()
 transport_spec.dart          # the sealed TransportSpec (Ws/Grpc/Http/HttpUpgrade/Xhttp); XHTTP is a native
                              #   emit (§097, the core's with_xhttp: mode/x_padding_bytes/no_grpc_header)
@@ -1177,7 +1186,7 @@ L×Box's state lives in two places with different semantics:
 
 ```
 app/assets/wizard_template.json     # rootBundle.loadString(), template_loader.dart
-├── parser_config           # §026 — version + reload interval
+├── parser_config           # §026 — legacy, not read by the app (§593)
 ├── dns_options             # §043+§044 — default DNS servers + rules
 ├── ping_options            # §040 — default URL + presets
 ├── speed_test_options      # §015 — speed-test endpoints
@@ -1241,7 +1250,7 @@ the README names the version that ships in the APK.
 │                           #   storage_version (§439) / vars / sources[] (subscriptions, servers,
 │                           #   folders, then chains) / rules[] / dns{} / ping_options /
 │                           #   route_final / directions[] (§125/§393, replaces enabled_groups) /
-│                           #   last_global_update / presets_migrated / directions_migrated
+│                           #   last_global_update (legacy, §593) / presets_migrated / directions_migrated
 ├── lxbox_settings.json.v0.bak  # §439 — the 2.23.2-form original, copied once before the migration
 ├── rule_sets/              # §011 — the cache of binary .srs files (+ §366 .meta.json sidecars)
 │   └── <ruleId>.srs

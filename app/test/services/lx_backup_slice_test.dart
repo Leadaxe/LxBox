@@ -95,7 +95,7 @@ SubscriptionServers _subscription({
           members: [FolderMember(raw: _memberUri)],
         ),
       ],
-      chains: const [SourceChain(tag: 'relay', label: 'Relay', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')])],
+      chains: const [SourceChain(tag: 'relay', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')])],
       rules: [
         CustomRuleSrs(
           id: 'r-geo',
@@ -186,7 +186,6 @@ void main() {
             'import_rules_enabled, on_update_action',
         '$kWarnLocalOnlyDropped Tokyo: detour_policy, tag_policy',
         '$kWarnLocalOnlyDropped EU: detour_policy, ping_url, ping_timeout_ms',
-        '$kWarnLocalOnlyDropped relay: label',
         '$kWarnLocalOnlyDropped Geo: update_interval_hours',
       ]);
       final sub = _source(out.json, 'subscription');
@@ -243,12 +242,23 @@ void main() {
       expect(rule['body'], {'action': 'sniff'});
     });
 
-    test('имя цепочки, равное тегу, и пустое — не потеря', () async {
+    test('§594: chains[].label не пишется, приехавший — молча отбрасывается',
+        () async {
       final out = await _export(const [], chains: const [
-        SourceChain(tag: 'a', label: 'a', hops: [NodeLink(tag: 'x'), NodeLink(tag: 'y')]),
-        SourceChain(tag: 'b', hops: [NodeLink(tag: 'x'), NodeLink(tag: 'y')]),
+        SourceChain(tag: 'warp', hops: [NodeLink(tag: 'x'), NodeLink(tag: 'y')]),
       ]);
       expect(out.warnings, isEmpty);
+      final doc = jsonDecode(out.json) as Map<String, dynamic>;
+      final chain = (doc['sources'] as List)
+          .cast<Map<String, dynamic>>()
+          .singleWhere((r) => r['kind'] == 'chain');
+      expect(chain.containsKey('label'), isFalse);
+
+      // Файл старой версии: у цепочки есть подпись.
+      chain['label'] = 'warp chain-1';
+      final got = _import(const [], jsonEncode(doc));
+      expect(got.file.warnings, isEmpty);
+      expect(got.chains.single.tag, 'warp');
     });
 
     test('ключ записи вне таблицы срезается с названием', () {
@@ -302,7 +312,6 @@ void main() {
           BackupRecord.chain,
           chainToRecord(const SourceChain(
             tag: 'c',
-            label: 'L',
             enabled: false,
             hops: [NodeLink(tag: 'x')],
             idleTimeout: '1m',
@@ -333,7 +342,7 @@ void main() {
       }
       for (final r in const <DnsRuleRef>[
         DnsRuleInline(name: 'n', rule: {'server': 'x'}, enabled: false),
-        DnsRulePreset(presetId: 'ru', enabled: true),
+        DnsRulePreset(presetId: 'ru'),
       ]) {
         covered(BackupRecord.dnsRule, dnsRuleToRecord(r));
       }
@@ -438,7 +447,7 @@ void main() {
       expect(sub['import_rules'], hasLength(1));
       expect(_source(out.json, 'server')['tag_policy'], {'prefix': 'JP '});
       expect(_source(out.json, 'folder')['ping_timeout_ms'], 2500);
-      expect(_source(out.json, 'chain')['label'], 'Relay');
+      expect(_source(out.json, 'chain').containsKey('label'), isFalse);
       final doc = jsonDecode(out.json) as Map;
       expect(((doc['rules'] as List).single as Map)['update_interval_hours'], 720);
       final dns = doc['dns'] as Map;
@@ -470,7 +479,7 @@ void main() {
       expect(folder.pingUrl, 'https://example-4.com/204');
       expect(folder.pingTimeoutMs, 2500);
 
-      expect(got.chains.single.label, 'Relay');
+      expect(got.chains.single.tag, 'relay');
       expect((got.file.rules.single as CustomRuleSrs).updateIntervalHours, 720);
       expect(got.file.dns!.servers, s.dnsServers);
     });

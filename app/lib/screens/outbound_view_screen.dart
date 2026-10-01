@@ -116,7 +116,7 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
     return def is String && def.isNotEmpty ? def : null;
   }
 
-  /// §394 — позиции цепочки из СОБРАННОГО конфига (`null` = узел не цепочка).
+  /// §393F — позиции цепочки из СОБРАННОГО конфига (`null` = узел не цепочка).
   /// Оттуда, а не из списка источников: ядро запустило именно собранное, и
   /// послойная проба обязана мерить работающий маршрут.
   List<String>? get _chainHops =>
@@ -241,8 +241,8 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
   Widget build(BuildContext context) {
     // §099 — лейбл «both»: единственное «detour» или «detours(N)» при N>1.
     final bothLabel = widget.detourCount > 1
-        ? 'Copy server + detours(${widget.detourCount})'
-        : 'Copy server + detour';
+        ? getLocalText.s("Copy server + detours(%d)", widget.detourCount)
+        : getLocalText.s("Copy server + detour");
     // §355 — вкладка Dependents: sick-срез (транзитивные жертвы мёртвого
     // корня) приоритетнее статического «кто через меня ходит». Пусто → нет
     // вкладки (не показываем пустую).
@@ -349,7 +349,7 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
               // §392 — экран знает узел ТОЛЬКО по тегу собранного конфига
               // (NodeSpec тут нет), поэтому probe-ветка недоступна: при
               // выключенном VPN вкладка объяснит, откуда проверять.
-              // §394 — у цепочки сверху свой блок: послойная проба.
+              // §393F — у цепочки сверху свой блок: послойная проба.
               NodeDiagnosticsTab(
                 liveTag: widget.tag,
                 warnings: warnings,

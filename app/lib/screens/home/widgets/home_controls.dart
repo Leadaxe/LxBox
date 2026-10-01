@@ -372,9 +372,12 @@ class HomeControls extends StatelessWidget {
       overlay.size.width - pos.dx - size.width,
       overlay.size.height - pos.dy,
     );
-    final reconnectLabel = state.tunnelUp ? 'Reconnect' : 'Connect';
-    final rebuildReconnectLabel =
-        state.tunnelUp ? 'Rebuild config + reconnect' : 'Rebuild config + connect';
+    final reconnectLabel = state.tunnelUp
+        ? getLocalText.s("Reconnect")
+        : getLocalText.s("Connect");
+    final rebuildReconnectLabel = state.tunnelUp
+        ? getLocalText.s("Rebuild config + reconnect")
+        : getLocalText.s("Rebuild config + connect");
     final choice = await showMenu<String>(
       context: anchorCtx,
       position: rect,

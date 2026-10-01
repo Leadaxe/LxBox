@@ -315,7 +315,14 @@ UiValidation validateUiKeys({
   // 4. Форма/арность по каждому присутствующему ключу.
   for (final k in (allKeys.toList()..sort())) {
     final entry = dict[k];
-    if (entry is! Map) continue; // missing уже зарепорчен
+    if (entry == null) continue; // missing уже зарепорчен
+    if (entry is! Map) {
+      // §607 — плоская строка `"key": "перевод"` вместо `{"value": …}`:
+      // движок её не читает (`_lookupValue` → null) и печатает английский.
+      v.findings.add(UiFinding(UiFindingKind.shape,
+          'key "$k": entry must be an object {"value": …}, not a bare value'));
+      continue;
+    }
 
     final wantsPlural = asPlural.contains(k);
     final wantsString = asS.contains(k);

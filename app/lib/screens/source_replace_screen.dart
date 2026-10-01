@@ -180,7 +180,7 @@ class _SourceReplaceScreenState extends State<SourceReplaceScreen> {
         interruptExistConnections: _interrupt,
         mode: _autoMode,
         pool: clampDirectionPool(int.tryParse(_poolCtrl.text.trim()) ?? 3),
-        poolTolerance: clampDirectionTolerance(
+        poolTolerance: clampDirectionPoolTolerance(
             int.tryParse(_poolToleranceCtrl.text.trim()) ?? 0),
         stickyHash: StickyHashKey.values.where(_sticky.contains).toList(),
       ),

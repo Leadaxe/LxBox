@@ -64,6 +64,7 @@ Stop / Reconnect buttons.
 - The start waits for the core to be ready; an empty config, a core that is not
   ready, a core rejection → a stop with a reason text. Rules with Wi-Fi
   conditions without the location permission → a dialog leading to settings.
+  The reason text stays in a separate notification after the service stops.
 - The notification caption is updated on a node change and on a language
   change without reconnecting.
 
@@ -98,3 +99,4 @@ Stop / Reconnect buttons.
 | 16 | [387](../../../tasks/387-zombie-started-after-force-stop.md) | Done, DEVICE-PENDING | Zombie "Started" after an emergency stop |
 | 17 | [415](../../../tasks/415-stop-timeout-budget.md) | Done | Stop budget ladder 9 < 10 < 12 s |
 | 18 | [519](../../../tasks/519-connecting-timeout-post-start.md) | Released v2.25.3 | The connecting deadline grows with the number of WG/AWG nodes |
+| 19 | [605](../../../tasks/605-service-live-automation-workspaces-bugs.md) | Implemented | The start error notification is not removed together with the persistent one |

@@ -346,12 +346,13 @@ class HomeController extends ChangeNotifier
   }
 
   /// Задача 579 — подписка ядра `SubscribeTailscaleStatus` живёт, пока VPN
-  /// включён и в конфиге есть узел NETWORKS. Смена состава узлов или снапшота
+  /// включён и в конфиге есть Tailscale-узел (§608: NETWORKS или с exit
+  /// node). Смена состава узлов или снапшота
   /// конфига ядра (перезагрузка) переподнимает её: после reload ядра прежний
   /// стрим может закончиться молча.
   void _syncTailnetStatus() {
     final s = _state;
-    final nodes = s.tunnelUp ? s.networksNodes : const <String>[];
+    final nodes = s.tunnelUp ? s.tailscaleNodes : const <String>[];
     final key = nodes.isEmpty
         ? null
         : '${nodes.join('\n')}|${s.runningConfigRaw?.hashCode}';
@@ -372,12 +373,20 @@ class HomeController extends ChangeNotifier
       if (_tailnetKey == null) return;
       // §581 — поток несёт и устройства сети; главному экрану нужны состояние
       // узла и число устройств (Debug API), перерисовка — только при их смене.
+      // §608 — плюс exit node (имя, доступность) и срок ключа для строки узла.
       final prev = _state.tailscaleStatus;
       final same = prev.length == list.length &&
-          list.every((e) =>
-              prev[e.tag]?.backendState == e.backendState &&
-              prev[e.tag]?.stateText == e.stateText &&
-              prev[e.tag]?.peers.length == e.peers.length);
+          list.every((e) {
+            final p = prev[e.tag];
+            return p != null &&
+                p.backendState == e.backendState &&
+                p.stateText == e.stateText &&
+                p.peers.length == e.peers.length &&
+                p.exitNode?.stableId == e.exitNode?.stableId &&
+                p.exitNode?.hostName == e.exitNode?.hostName &&
+                p.exitNode?.online == e.exitNode?.online &&
+                p.self?.keyExpiry == e.self?.keyExpiry;
+          });
       if (same) return;
       _emit(_state.copyWith(tailscaleStatus: {for (final e in list) e.tag: e}));
     }, onError: (Object e) {
@@ -655,6 +664,13 @@ class HomeController extends ChangeNotifier
   /// на котором демо поднималось стабильно через Debug-override (240000мс).
   static const _connectingTimeoutCap = Duration(minutes: 4);
 
+  /// §596 — надбавка к базе за КАЖДЫЙ узел сохранённого конфига (outbounds и
+  /// endpoints узлов). Ядро инициализирует каждый узел на старте, и на
+  /// подписке в ~230 узлов на слабом устройстве `Started` приходил ровно на
+  /// 15с — таймаут убивал уже поднятый туннель. Решение владельца 30.09.2026:
+  /// 0,1с на узел, 240 узлов → 24с; до 150 узлов действует база 15с.
+  static const _connectingTimeoutPerNode = Duration(milliseconds: 100);
+
   /// §519 — сколько wireguard/AWG-endpoint'ов ядру придётся поднять на этом
   /// старте. Считаем по сохранённому конфигу (`kind == 'endpoint'`): это ровно
   /// та секция, которую перебирает endpoint-manager ядра. Прочие протоколы
@@ -662,25 +678,48 @@ class HomeController extends ChangeNotifier
   int get _configEndpointCount =>
       _state.configModel.nodes.where((n) => n.kind == 'endpoint').length;
 
-  /// §519 — порог для фазы `connecting`: база (защита от «ядро молчит») плюс
-  /// надбавка за каждый endpoint, но не выше потолка. Debug-override
-  /// (`set-transient-timeout`) СОХРАНЯЕТ приоритет и отменяет масштабирование:
-  /// он задаёт точное значение для on-device теста force-stop'а (§140).
+  /// §596 — сколько узлов ядру придётся инициализировать: все узлы
+  /// сохранённого конфига (`configModel.nodes`, outbounds и endpoints).
+  int get _configNodeCount => _state.configModel.nodes.length;
+
+  /// §519/§596 — порог для фазы `connecting`:
+  /// `max(15с, 0,1с × узлы) + 10с × endpoint'ы`, но не выше потолка 4 мин.
+  /// База 15с — защита от «ядро молчит»; узловая часть растёт с размером
+  /// подписки (§596), endpoint'ная — с последовательным пост-стартом WG/AWG
+  /// (§519). Debug-override (`set-transient-timeout`) СОХРАНЯЕТ приоритет и
+  /// отменяет масштабирование: он задаёт точное значение для on-device теста
+  /// force-stop'а (§140).
   Duration get _effectiveConnectingTimeout {
     if (_connectingTimeout != _defaultConnectingTimeout) {
       return _connectingTimeout; // §140 — debug-override берём дословно
     }
-    final scaled = _connectingTimeout +
-        _connectingTimeoutPerEndpoint * _configEndpointCount;
+    final byNodes = _connectingTimeoutPerNode * _configNodeCount;
+    final base = byNodes > _connectingTimeout ? byNodes : _connectingTimeout;
+    final scaled =
+        base + _connectingTimeoutPerEndpoint * _configEndpointCount;
     return scaled > _connectingTimeoutCap ? _connectingTimeoutCap : scaled;
   }
 
-  /// §519 — visible for testing / Debug API: действующий порог `connecting` в мс
-  /// вместе с числом endpoint'ов, из которого он выведен.
-  ({int connectingMs, int endpoints}) get debugEffectiveConnectingTimeout => (
-        connectingMs: _effectiveConnectingTimeout.inMilliseconds,
-        endpoints: _configEndpointCount,
-      );
+  /// §519/§596 — visible for testing / Debug API: действующий порог
+  /// `connecting` в мс вместе с числом узлов и endpoint'ов, из которых он
+  /// выведен.
+  ({int connectingMs, int nodes, int endpoints})
+      get debugEffectiveConnectingTimeout => (
+            connectingMs: _effectiveConnectingTimeout.inMilliseconds,
+            nodes: _configNodeCount,
+            endpoints: _configEndpointCount,
+          );
+
+  /// §596 — ожидание вердикта страховки (фича 478) не короче порога
+  /// `connecting`: иначе на большой подписке страховка бросила бы ждать
+  /// ('' = «ответить нечем») раньше, чем safety-timer вынесет свой вердикт.
+  /// 45с — прежнее значение, запас 5с — на доставку события Stopped.
+  Duration get _startVerdictTimeout {
+    final byConnecting =
+        _effectiveConnectingTimeout + const Duration(seconds: 5);
+    const floor = Duration(seconds: 45);
+    return byConnecting > floor ? byConnecting : floor;
+  }
 
   /// §519 — visible for testing: положить `configRaw` в state напрямую, минуя
   /// `saveParsedConfig` (тот идёт через native `saveConfig` и парс в изоляте —
@@ -708,7 +747,7 @@ class HomeController extends ChangeNotifier
       _addDebug(
           DebugSource.app,
           '[vpn] connecting timeout armed: ${timeout.inMilliseconds}ms '
-          '(endpoints=$endpointsAtArm)');
+          '(nodes=$_configNodeCount endpoints=$endpointsAtArm)');
     }
     _transientTimeoutTimer = Timer(timeout, () async {
       if (_state.tunnel != expected) return;
@@ -875,11 +914,12 @@ class HomeController extends ChangeNotifier
   /// строка — текст отказа ядра (её разбирает PARSING_PRINCIPLES §9). Таймаут отдаёт
   /// пустую строку: ответить нечем, страховка деградирует консервативно.
   Future<String?> startAndAwaitVerdict({
-    Duration timeout = const Duration(seconds: 45),
+    Duration? timeout,
   }) async {
+    final effectiveTimeout = timeout ?? _startVerdictTimeout;
     final existing = _startOutcome;
     if (existing != null && !existing.isCompleted) {
-      return existing.future.timeout(timeout, onTimeout: () => '');
+      return existing.future.timeout(effectiveTimeout, onTimeout: () => '');
     }
     final c = Completer<String?>();
     _startOutcome = c;
@@ -888,14 +928,14 @@ class HomeController extends ChangeNotifier
       _settleStartOutcome(null);
       return null;
     }
-    // Старт не дошёл до ядра (startVPN отказал / нет Activity) — не ждём 45 с.
+    // Старт не дошёл до ядра (startVPN отказал / нет Activity) — вердикта не ждём.
     if (!c.isCompleted &&
         _state.tunnel == TunnelStatus.disconnected &&
         _state.lastError != null) {
       _settleStartOutcome(_state.lastError!.renderEn());
       return c.future;
     }
-    return c.future.timeout(timeout, onTimeout: () {
+    return c.future.timeout(effectiveTimeout, onTimeout: () {
       // Завершаем ИМЕННО этот completer: иначе join-ожидающий висит, а
       // поздний Stopped не выключит узел; чужой (новый) _startOutcome не трогаем.
       if (!c.isCompleted) {
@@ -910,11 +950,12 @@ class HomeController extends ChangeNotifier
   /// completer, что [startAndAwaitVerdict], но без Activity: для
   /// `POST /action/start-vpn-headless?guard=true`.
   Future<String?> startAndAwaitVerdictHeadless({
-    Duration timeout = const Duration(seconds: 45),
+    Duration? timeout,
   }) async {
+    final effectiveTimeout = timeout ?? _startVerdictTimeout;
     final existing = _startOutcome;
     if (existing != null && !existing.isCompleted) {
-      return existing.future.timeout(timeout, onTimeout: () => '');
+      return existing.future.timeout(effectiveTimeout, onTimeout: () => '');
     }
     final c = Completer<String?>();
     _startOutcome = c;
@@ -929,7 +970,7 @@ class HomeController extends ChangeNotifier
       _settleStartOutcome(null);
       return null;
     }
-    return c.future.timeout(timeout, onTimeout: () {
+    return c.future.timeout(effectiveTimeout, onTimeout: () {
       if (!c.isCompleted) {
         if (_startOutcome == c) _startOutcome = null;
         c.complete('');
@@ -1188,6 +1229,9 @@ class HomeController extends ChangeNotifier
     }
     // §2.8 — теперь sink'и стоят + refcount чист → поднимаем screenClient.
     unawaited(_cc.connectScreen());
+    // §605 — profilerClient (запись Live, dns-детектор) пережил остановку
+    // туннеля только в Dart-счётчике: native его порвал. Переподнимаем.
+    unawaited(_cc.restartProfiler());
     // §122/SPEC015 — детерминированный pull стартового снапшота групп. Раньше
     // тут был watchdog, пересоздававший весь screenClient (`refreshScreen`) —
     // он НЕ заставлял ядро переслать снапшот (device-факт: 2 ретрая впустую).
@@ -1751,9 +1795,12 @@ class HomeController extends ChangeNotifier
     }
   }
 
-  Future<void> switchNode(String nodeTag) async {
+  /// §605 — `false` только когда ядро отвергло выбор (пойманная ошибка):
+  /// automation-мост по нему шлёт `VPN_ERROR`. Ранний выход и уже активная
+  /// нода — `true` (менять нечего, это не отказ).
+  Future<bool> switchNode(String nodeTag) async {
     final group = _state.selectedGroup;
-    if (group == null || !_state.tunnelUp) return;
+    if (group == null || !_state.tunnelUp) return true;
     final prevNode = _state.activeInGroup;
     // §290 — уже активна: не делать re-select и не рвать соединения группы
     // (interrupt-on-switch §143) на ровном месте. Общий путь UI + automation:
@@ -1762,7 +1809,7 @@ class HomeController extends ChangeNotifier
     // timeout — смены нет, поэтому НЕ ACTIVE_NODE_CHANGED.
     if (prevNode == nodeTag) {
       AutomationEventEmitter.I.emitNodeAlreadyActive(nodeTag, group);
-      return;
+      return true;
     }
     _emit(_state.copyWith(busy: true, highlightedNode: nodeTag));
     try {
@@ -1812,10 +1859,12 @@ class HomeController extends ChangeNotifier
           .emitNodeChanged(prevNode, nodeTag, group, 'user');
       // §047 Шаг 2 — mirror в native-кеш для Locale condition-плагина.
       BoxVpnClient.I.setAutomationActiveState(node: nodeTag, group: group);
+      return true;
     } catch (e) {
       _emit(_state.copyWith(
           lastError: PrefixedMsg(ErrPrefix.switchFailed, formatUserError(e))));
       _addDebug(DebugSource.app, 'Node switch error: $e');
+      return false;
     } finally {
       _emit(_state.copyWith(busy: false));
     }

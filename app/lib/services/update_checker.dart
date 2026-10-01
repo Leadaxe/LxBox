@@ -46,11 +46,14 @@ class UpdateChecker {
   /// «younger» и UpdateChecker предложит «v1.8.3 available» сразу после
   /// `flutter run`. Skip для всех dev-версий — manual «Check now» из UI
   /// в любом случае работает.
-  bool _isDevBuild(String version) =>
+  ///
+  /// §605 — публичная и статическая: first-run вопрос об автопроверке
+  /// (`home_dialogs.dart`) проверяет dev-сборку тем же правилом.
+  static bool isDevBuild(String version) =>
       version.contains('-dev') || version.startsWith('0.0.0');
 
   Future<void> hydrate({required String localVersion}) async {
-    if (_isDevBuild(localVersion)) return;
+    if (isDevBuild(localVersion)) return;
     final tag = await SettingsStorage.getLastKnownVersion();
     if (tag.isEmpty) return;
     final dismissed = await SettingsStorage.getDismissedUpdateVersion();
@@ -71,7 +74,7 @@ class UpdateChecker {
   /// - сеть недоступна / GitHub вернул не-200
   Future<void> maybeCheck({required String localVersion}) async {
     if (_inFlight) return;
-    if (_isDevBuild(localVersion)) return;
+    if (isDevBuild(localVersion)) return;
     final enabled = await SettingsStorage.getAutoCheckUpdates();
     if (!enabled) return;
     final last = await SettingsStorage.getLastUpdateCheck();

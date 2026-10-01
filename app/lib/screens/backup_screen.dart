@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../services/automation/automation_sync.dart';
 import '../services/backup_service.dart';
 import '../services/dns/dns_backup.dart';
 import '../services/lx_backup.dart';
@@ -23,6 +24,7 @@ import 'backup_screen/export_card.dart';
 import 'backup_screen/import_card.dart';
 import 'backup_screen/import_preview_dialog.dart';
 import 'backup_screen/lx_transfer_card.dart';
+import 'backup_screen/restore_summary.dart';
 import '../services/utf8_decode.dart';
 import '../services/file_export.dart';
 import '../services/file_import.dart';
@@ -227,36 +229,12 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       // §279 — restore мог привезти другой app_language: применить через
       // владеющий пайплайн (LocaleController), не дожидаясь рестарта.
       await LocaleController.I.reloadFromStorage();
+      // §605 — бэкап мог привезти другой тумблер приёма команд и emit-гейты.
+      await syncAutomationFromStorage();
       if (!mounted) return;
-      final summary = StringBuffer('Imported');
-      final parts = <String>[];
-      if (apply.serverListsApplied > 0) {
-        parts.add('${apply.serverListsApplied} server lists');
-      }
-      if (apply.routingApplied > 0) {
-        parts.add('routing (${apply.routingApplied} rules)');
-      }
-      if (apply.appSettingsApplied > 0) {
-        parts.add('${apply.appSettingsApplied} app settings');
-      }
-      if (apply.debugConfigApplied > 0) {
-        parts.add('debug config');
-      }
-      if (apply.vpnSettingsApplied > 0) {
-        parts.add('${apply.vpnSettingsApplied} VPN settings');
-      }
-      if (parts.isEmpty) {
-        summary.write(' nothing (all categories deselected)');
-      } else {
-        summary.write(': ${parts.join(', ')}');
-      }
-      if (apply.hasErrors) {
-        summary.write(' (${apply.errors.length} errors)');
-      }
-      // §159 — allowlist отбросил неизвестные/чужеродные ключи.
-      if (apply.droppedKeys.isNotEmpty) {
-        summary.write(' · ${apply.droppedKeys.length} unknown keys skipped');
-      }
+      // §607 — общий с главным экраном локализованный итог.
+      final summary = restoreSummaryText(apply);
+      final appliedAnything = restoreAppliedAnything(apply);
       // applyImport пишет в SettingsStorage, но controllers (Subscription /
       // Home / Routing screen state) держат in-memory snapshot — UI остаётся
       // stale. Restart-кнопка вызывает quitApp(); юзер сам тапает иконку,
@@ -264,9 +242,9 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(summary.toString()),
+            content: Text(summary),
             duration: const Duration(seconds: 6),
-            action: parts.isEmpty
+            action: !appliedAnything
                 ? null
                 : SnackBarAction(
                     label: getLocalText.s("Restart now"),

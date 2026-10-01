@@ -14,6 +14,8 @@
 
 import '../config/consts.dart'
     show kDetourTagPrefix, kDirectOutboundTag, kBlockOutboundTag;
+import '../services/safe_regex.dart';
+import 'auto_select.dart' show kMaxPoolTolerance;
 import 'parser_config.dart' show DirectionTemplate, DefaultDirection;
 
 /// §393 A3 — верхняя граница ДЕФОЛТНЫХ имён «VPN ①..VPN ⑩» (Unicode-блок
@@ -72,9 +74,15 @@ String defaultLabelForTag(String tag) {
 /// uint16 верхняя граница для `tolerance` (§161 — вне диапазона роняет ядро).
 const int _kToleranceMax = 65535;
 
-/// §161 — клэмп tolerance/pool_tolerance в uint16 [0, 65535]. §219/§221 —
+/// §161 — клэмп tolerance в uint16 [0, 65535] (pool_tolerance — §604 ниже). §219/§221 —
 /// публичная (direction_edit клэмпит в снапшоте, симметрично clampDirectionPool).
 int clampDirectionTolerance(int v) => v < 0 ? 0 : (v > _kToleranceMax ? _kToleranceMax : v);
+
+/// §604 — `balancer.pool_tolerance` Направления и свёртки: предел узла
+/// [kMaxPoolTolerance] (15000 мс), а не uint16. Ядро отвергает > 15000
+/// («must be <= 15000»), проверено на эмуляторе 2026-09-30.
+int clampDirectionPoolTolerance(int v) =>
+    v < 0 ? 0 : (v > kMaxPoolTolerance ? kMaxPoolTolerance : v);
 
 /// §208 — режим выбора узла в auto-группе (urltest, ядро SPEC 019 V2).
 /// `leastTest` — апстрим: один лучший по delay (как было всегда).
@@ -130,13 +138,18 @@ int clampDirectionPool(int v) => v < 1 ? 1 : v;
 /// [Direction.auto] == null означает «галка auto ВЫКЛ, двойник не эмитится».
 /// `tag` двойника НЕ хранится — производный (`direction.autoTag`).
 class DirectionAuto {
+  /// §604 — умолчания одни на конструктор, чтение записи без ключа и пустое
+  /// поле редактора (раньше `fromJson` и редактор давали `5m`).
+  static const String defaultUrl = 'https://cp.cloudflare.com/generate_204';
+  static const String defaultInterval = '15m';
+
   const DirectionAuto({
-    this.url = 'https://cp.cloudflare.com/generate_204',
+    this.url = defaultUrl,
     // §272 — 15m вместо 5m: на mobile каждый цикл проб дайлит узлы (будит
     // спящие, SPEC 020); с passive_check пробы при живом трафике и так
     // пропускаются, interval задаёт лишь скорость реакции на смерть узла.
     // Существующие Направления хранят своё значение в JSON — их это не меняет.
-    this.interval = '15m',
+    this.interval = defaultInterval,
     this.tolerance = 50,
     this.idleTimeout = '30m',
     this.interruptExistConnections = false,
@@ -188,7 +201,7 @@ class DirectionAuto {
         mode: mode ?? this.mode,
         pool: pool == null ? this.pool : clampDirectionPool(pool),
         poolTolerance:
-            poolTolerance == null ? this.poolTolerance : clampDirectionTolerance(poolTolerance),
+            poolTolerance == null ? this.poolTolerance : clampDirectionPoolTolerance(poolTolerance),
         stickyHash: stickyHash ?? this.stickyHash,
       );
 
@@ -205,8 +218,8 @@ class DirectionAuto {
             .toList()
         : kDefaultStickyHash;
     return DirectionAuto(
-      url: json['url'] as String? ?? 'https://cp.cloudflare.com/generate_204',
-      interval: json['interval'] as String? ?? '5m',
+      url: json['url'] as String? ?? defaultUrl,
+      interval: json['interval'] as String? ?? defaultInterval,
       tolerance: clampDirectionTolerance((json['tolerance'] as num?)?.toInt() ?? 50),
       idleTimeout: json['idle_timeout'] as String? ?? '30m',
       interruptExistConnections:
@@ -214,7 +227,7 @@ class DirectionAuto {
       mode: UrltestMode.fromWire(json['mode'] as String?),
       pool: clampDirectionPool((balMap['pool'] as num?)?.toInt() ?? 3),
       poolTolerance:
-          clampDirectionTolerance((balMap['pool_tolerance'] as num?)?.toInt() ?? 0),
+          clampDirectionPoolTolerance((balMap['pool_tolerance'] as num?)?.toInt() ?? 0),
       // rawSticky == null (нет balancer) → дефолт; явный [] остаётся пустым.
       stickyHash: rawSticky is List
           ? sticky // (включая пустой [] = выкл)
@@ -233,7 +246,7 @@ class DirectionAuto {
         'mode': mode.wire,
         'balancer': {
           'pool': clampDirectionPool(pool),
-          'pool_tolerance': clampDirectionTolerance(poolTolerance),
+          'pool_tolerance': clampDirectionPoolTolerance(poolTolerance),
           'sticky_hash': stickyHash.map((k) => k.wire).toList(),
         },
       };
@@ -469,6 +482,16 @@ class Direction {
   /// vpn-1 — продуктово-привилегированный: всегда enabled, неудаляемый,
   /// дефолт route_final. Намеренный хардкод (продуктовое решение).
   bool get isRequired => tag == 'vpn-1';
+
+  /// §604 — узлы Направления после [nodeFilter]: регистронезависимо (§301),
+  /// пустой или битый regex → все [tags], [nodeFilterInvert] оставляет
+  /// НЕ совпавшие (§197). Один фильтр на сборку и счётчик экрана Routing.
+  List<String> filterNodeTags(List<String> tags) {
+    if (nodeFilter.isEmpty) return tags;
+    final re = tryCompileRegex(nodeFilter, caseSensitive: false);
+    if (re == null) return tags;
+    return tags.where((t) => re.hasMatch(t) != nodeFilterInvert).toList();
+  }
 
   Direction copyWith({
     String? label,

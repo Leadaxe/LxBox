@@ -112,6 +112,25 @@ void main() {
       expect(cfg.mode, 'allow');
       expect(cfg.packages, ['com.a']);
     });
+
+    test('смена mode не стирает packages (P5)', () async {
+      // allow + список → смена mode на deny (copyWith, как в tun_apps_tab.dart)
+      // не должна затронуть packages.
+      const withPackages = TunAppsConfig(
+        mode: 'allow',
+        packages: ['com.a', 'com.b'],
+      );
+      await SettingsStorage.setTunApps(withPackages, flush: false);
+
+      final switched = withPackages.copyWith(mode: 'deny');
+      await SettingsStorage.setTunApps(switched, flush: false);
+      await SettingsStorage.flushToDisk();
+      SettingsStorage.resetCacheForTesting();
+
+      final cfg = await SettingsStorage.getTunApps();
+      expect(cfg.mode, 'deny');
+      expect(cfg.packages, ['com.a', 'com.b']);
+    });
   });
 
   group('§159 — DENY-очистка в _save() удалена', () {

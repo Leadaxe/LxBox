@@ -11,7 +11,7 @@ import 'screens/home_screen.dart';
 import 'services/app_log.dart';
 import 'services/l10n/locale_controller.dart';
 import 'services/automation/automation_dispatcher.dart';
-import 'services/automation/event_emitter.dart';
+import 'services/automation/automation_sync.dart';
 import 'services/clash_log_pump.dart';
 import 'services/contract/registry.dart';
 import 'services/parser/engine/section_loader.dart';
@@ -152,7 +152,9 @@ void main() async {
     // LxBoxIntentReceiver → этот handler → shared action-handlers). Пассивен
     // пока receiver disabled. Подгружаем emit-gates из storage (default OFF).
     registerAutomationBridge();
-    unawaited(AutomationEventEmitter.I.reload());
+    // §605 — вместе с гейтами выставляем receiver'ы по сохранённому тумблеру:
+    // бэкап/набор прошлых версий могли развести их с системой.
+    unawaited(syncAutomationFromStorage());
     // §316 — краш-репорты ядра. Ротация архива (ядро только докладывает
     // файлы и размер папки не ограничивает) + проверка «падало ли в прошлый
     // раз» для плашки на главном. Не блокируем старт: обе операции —

@@ -185,12 +185,16 @@ _bump_contract() {
       echo "sync_contract: репозиторий лаунчера не найден: $launcher_repo" >&2
       exit 1
     fi
+    # В lock — полный sha: короткий `--to 1aa45ab7` резолвится в коммит.
+    source_sha="$(git -C "$launcher_repo" rev-parse --verify "$BUMP_SHA^{commit}")" || {
+      echo "sync_contract: не коммит лаунчера: $BUMP_SHA" >&2
+      exit 1
+    }
     local tmp
     tmp="$(mktemp -d)"
     SYNC_TMP="$tmp"
-    git -C "$launcher_repo" archive "$BUMP_SHA" contract | tar -x -C "$tmp"
+    git -C "$launcher_repo" archive "$source_sha" contract | tar -x -C "$tmp"
     contract_src="$tmp/contract"
-    source_sha="$BUMP_SHA"
   else
     contract_src="${LX_CONTRACT_SRC:-$DEFAULT_LAUNCHER_REPO/contract}"
     if [[ ! -d "$contract_src" ]]; then

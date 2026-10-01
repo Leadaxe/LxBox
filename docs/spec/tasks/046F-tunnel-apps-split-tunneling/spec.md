@@ -1,5 +1,12 @@
 # 046 — Tunnel apps (OS-level split-tunneling)
 
+> **2026-09-30 — устарело про перезапуск.** Списки применяются в `builder.establish()`,
+> а ядро зовёт `openTun` при каждом старте box-инстанса; reload
+> (`startOrReloadService`) пересобирает инстанс, поэтому хватает лёгкой
+> перезагрузки, не только full restart (баннер «Apply / Restart» на Home, §076).
+> На устройстве не сверено. Живое описание — [011-SPLIT_TUNNELING](../../features/011-SPLIT_TUNNELING/FEATURE.ru.md).
+
+
 | Поле | Значение |
 |------|----------|
 | Статус | Implemented (targeting v1.7.1) |

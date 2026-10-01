@@ -9,6 +9,7 @@ import '../../models/server_list.dart';
 import '../../models/ui_msg.dart';
 import '../../services/subscription/auto_updater.dart';
 import '../../services/subscription/input_helpers.dart';
+import 'entry_delete_title.dart';
 import 'folder_picker.dart';
 import '../../services/l10n/locale_controller.dart';
 import '../../services/file_import.dart';
@@ -134,7 +135,7 @@ void showEntryContextMenu(
               final confirmed = await showDialog<bool>(
                 context: context,
                 builder: (dCtx) => AlertDialog(
-                  title: Text(getLocalText.s("Delete subscription?")),
+                  title: Text(deleteEntryTitle(entry.list)), // §603
                   content: Text(getLocalText.s("Remove \"%s\"?", entry.displayName)),
                   actions: [
                     TextButton(onPressed: () => Navigator.pop(dCtx, false), child: Text(getLocalText.s("Cancel"))),

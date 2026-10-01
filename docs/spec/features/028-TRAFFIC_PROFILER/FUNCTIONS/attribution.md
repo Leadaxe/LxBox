@@ -76,9 +76,9 @@ tab title.
   — a loss of precision, not a breakage. Depends on OS capabilities.
 - Secondary packages (WebView) and owner inference from a recent DNS address
   no longer exist (§044, §288).
-- The hint "DNS / router events off — turn on 'Forward sing-box logs'" above
-  the log does not affect attribution: since §180 the owner arrives as a
-  structured stream ([591](../../../tasks/591-spec-kit-revision-audit.md)).
+- Attribution does not depend on "Forward sing-box logs": since §180 the owner
+  arrives as a structured stream; the old "DNS / router events off" hint is
+  removed ([605](../../../tasks/605-service-live-automation-workspaces-bugs.md)).
 
 ## Revisions
 

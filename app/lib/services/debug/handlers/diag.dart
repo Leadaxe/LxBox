@@ -48,7 +48,8 @@ Future<DebugResponse> _logcat(DebugRequest req) async {
   return BytesResponse(utf8.encode(text), contentType: 'text/plain; charset=utf-8');
 }
 
-/// `stderr.log` content — канал A §038. Alias на `/files/local?name=stderr.log`.
+/// Текущий краш-репорт ядра (`CrashReport-lxbox.log` через `StderrReader`) —
+/// канал A §038. Имя `stderr.log` — из схемы до libbox 1.14, ядро его не пишет.
 Future<DebugResponse> _stderr() async {
   final text = await StderrReader.read() ?? '';
   return BytesResponse(utf8.encode(text), contentType: 'text/plain; charset=utf-8');

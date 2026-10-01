@@ -15,7 +15,6 @@ import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/parser_config.dart'
     show
         WizardTemplate,
-        ParserConfigBlock,
         GroupTemplates,
         DirectionTemplate,
         AutoTemplate,
@@ -29,7 +28,6 @@ import 'package:lxbox/services/parser/uri_parsers.dart';
 import '../parser/engine_test_setup.dart';
 
 final _template = WizardTemplate(
-  parserConfig: ParserConfigBlock(),
   groupTemplates: GroupTemplates(
     direction: DirectionTemplate(
       include: const ['direct', 'auto'],

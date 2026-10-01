@@ -1663,7 +1663,6 @@
       "kind": "chain",
       "tag": "chain-1",
       "enabled": false,
-      "label": "chain-1",
       "body": {
         "type": "chain"
       },

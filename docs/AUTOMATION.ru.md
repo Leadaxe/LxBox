@@ -30,7 +30,7 @@ Intent API) — двумя способами:
    `enabled=false` — команды не принимаются вообще. Это и есть барьер приёма
    (отдельного per-app пропуска нет — см. §157).
 2. Включить нужные **Emit**-категории, если хотите получать события L×Box
-   наружу (Lifecycle / State / Subscription / Health).
+   наружу (Lifecycle / State / Subscription).
 3. В host-приложении выбрать L×Box:
    - **Plugin** (проще): Action / State → **Plugin → L×Box** → выбрать команду;
    - **Raw**: **Send Intent** → Action = одна из команд ниже, Target =
@@ -71,7 +71,7 @@ Raw-actions (Шаг 1) работают **откуда угодно** — Termux
 |---|---|
 | **L×Box: Start VPN** | one-tap — выбрал, готово, без экрана |
 | **L×Box: Stop VPN** | one-tap |
-| **L×Box: Toggle VPN** | one-tap |
+| **L×Box: Toggle VPN** | one-tap; без разрешения VPN открывает приложение за согласием (как плитка) |
 | **L×Box: Custom…** | открывает экран выбора остальных команд |
 
 «Custom…» — список команд (Switch node · Set group · URL-test group · Refresh
@@ -91,8 +91,8 @@ Host → State / Condition → Plugin → **L×Box** → выбрать пров
 | Условие | Значение |
 |---|---|
 | **VPN is up** | — |
-| **Active node =** | выбрать ноду |
-| **Active group =** | выбрать группу |
+| **Active node =** | ввести тег ноды точно как в приложении (текстовое поле, списка нет) |
+| **Active group =** | ввести тег группы |
 
 Profile активируется, пока условие истинно. Host опрашивает периодически.
 
@@ -105,7 +105,8 @@ Profile активируется, пока условие истинно. Host �
 
 > Под капотом plugin использует стандарт
 > `com.twofortyfouram.locale.intent.action.FIRE_SETTING` / `QUERY_CONDITION` и
-> те же команды, что raw-actions ниже. UI плагина — на английском.
+> те же команды, что raw-actions ниже. Подписи и экраны плагина — на языке
+> приложения; строки команд и проверок, которые хранит host, остаются английскими.
 
 ---
 
@@ -140,7 +141,7 @@ Profile активируется, пока условие истинно. Host �
 |---|---|---|---|
 | `VPN_CONNECTED` | — | Lifecycle | Туннель поднят |
 | `VPN_DISCONNECTED` | `reason` (`user`/`error`/`revoked`) | Lifecycle | Туннель упал |
-| `VPN_ERROR` | `code`, `message` | Lifecycle | Любой error path / провал automation-команды. `code` = `tunnel_error` (аварийный обрыв туннеля) либо `conflict`/`bad_request`/`not_found`/… (провал команды) |
+| `VPN_ERROR` | `code`, `message` | Lifecycle | Любой error path / провал automation-команды. `code` = `tunnel_error` (аварийный обрыв туннеля) либо `conflict`/`bad_request`/`not_found`/`switch_failed`/… (провал команды; `switch_failed` — ядро отвергло принятый `SWITCH_NODE`) |
 | `VPN_REVOKED` | — | Lifecycle | Другая VPN-app перехватила туннель |
 | `UPDATE_AVAILABLE` | `version`, `url` | Lifecycle | Найдена новая версия |
 | `ACTIVE_NODE_CHANGED` | `old_tag`, `new_tag`, `group`, `reason` | State | Сменилась активная нода |
@@ -152,7 +153,8 @@ Profile активируется, пока условие истинно. Host �
 ### Зарезервированные (namespace есть, источника пока нет)
 
 - `HEARTBEAT_FAILED` · `LATENCY_DEGRADED` · `UNATTRIBUTED_BURST` (категория
-  **Health**) — появятся вместе с §042 health watchdog. Категория в UI уже есть.
+  **Health**) — имена зарезервированы, источника нет (health watchdog не
+  планируется), тумблера в UI нет.
 - `PERMISSION_NEEDED` (`permission`, категория **Lifecycle**) — зарезервировано
   под runtime-permission промпты; источника эмиссии пока нет.
 
@@ -174,8 +176,9 @@ Task "Switch to Russia with confirmation":
      If timeout              → Notify "⚠️ нет ответа"
 ```
 
-При провале команды (нет группы, tunnel down, несуществующая нода/группа и т.п.)
-L×Box эмитит `VPN_ERROR` с `code` (`conflict` / `bad_request` / `not_found` / …)
+При провале команды (нет группы, tunnel down, несуществующая нода/группа, ядро
+отвергло ноду и т.п.) L×Box эмитит `VPN_ERROR` с `code` (`conflict` /
+`bad_request` / `not_found` / `switch_failed` / …)
 и `message` — ждущий Tasker узнаёт о провале вместо тихого fire-and-forget.
 
 > **Важно: для request-response включите обе категории — `Lifecycle` и

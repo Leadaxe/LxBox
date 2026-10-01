@@ -70,3 +70,5 @@ http://stabratni4.temp.swtest.ru/api.php?type=normal
 https://gitverse.ru/api/repos/RUVIPIEN/russian-white-bolt_fix/raw/branch/master/VPNMIRRORS/nekobox/Flux_bypass_all_782661.txt
 http://fsub.flux.2bd.net/githubmirror/bypass/bypass-all.txt
 https://gitverse.ru/api/repos/bikinitw22/apelsintel/raw/branch/main/alive_full.txt
+https://raw.githubusercontent.com/OVI-vpn/bs/refs/heads/main/full.txt
+https://raw.githubusercontent.com/arshiacomplus/v2rayExtractor/refs/heads/main/mix/sub.html

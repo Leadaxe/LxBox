@@ -243,8 +243,9 @@ class HomeState {
       !_ownDelays.containsKey(tag) && delayOf(tag) != null;
   final List<DebugEntry> debugEvents;
   final NodeSortMode sortMode;
-  /// §070 — pin direct/auto в pinned section при non-default sort.
-  /// `defaultOrder` mode игнорирует pin (см. `_computeSortedNodes`).
+  /// §070 — pin direct/auto в pinned section. Действует при ЛЮБОМ sortMode,
+  /// включая `defaultOrder`: режим сортировки решает только порядок `rest`
+  /// (см. `_computeSortedNodes`, тест `home_state_sort_test`).
   final bool pinDirect;
   final bool pinAuto;
   /// §070 — pересчитывать sort при manual `runNodeUrltest` (single tag delay
@@ -298,6 +299,10 @@ class HomeState {
   /// Задача 579 — узлы NETWORKS из конфига, по которому работает ядро
   /// ([activeModel]; при выключенном VPN — последний собранный).
   List<String> get networksNodes => networksNodeTags(activeModel);
+
+  /// §608 — все Tailscale-endpoint'ы работающего конфига (NETWORKS и узлы с
+  /// exit node): по ним держится подписка на поток статуса.
+  List<String> get tailscaleNodes => tailscaleNodeTags(activeModel);
 
   /// Задача 579 — список узлов показывает NETWORKS вместо узлов направления:
   /// VPN включён, узлы есть, и выбран NETWORKS либо настоящих направлений нет.

@@ -44,9 +44,9 @@ class AppearanceTab extends StatelessWidget {
           child: Column(
             children: ThemeMode.values.map((mode) {
               final label = switch (mode) {
-                ThemeMode.system => 'System',
-                ThemeMode.light => 'Light',
-                ThemeMode.dark => 'Dark',
+                ThemeMode.system => getLocalText.s("System"),
+                ThemeMode.light => getLocalText.s("Light"),
+                ThemeMode.dark => getLocalText.s("Dark"),
               };
               final icon = switch (mode) {
                 ThemeMode.system => Icons.brightness_auto,

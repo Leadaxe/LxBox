@@ -4,7 +4,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | **Implemented** (v1.7.0) — backend + UI + Debug API in production |
+| Статус | **Implemented** (v1.7.0); **вкладка `per_app_trace_tab.dart` и её сервисный слой удалены в [§288](../288-remove-per-app-trace-tab.md)** — живое описание профайлера: [028-TRAFFIC_PROFILER](../../features/028-TRAFFIC_PROFILER/FEATURE.ru.md) |
 | Дата | 2026-05-08 |
 | Связанные spec'ы | [`043 applog per-source quotas`](../043F-applog-per-source-quotas/spec.md) — переиспользует core-log stream; [`030 custom routing rules`](../030F-custom-routing-rules/spec.md) — feedback loop "trace → make rule"; [`031 debug api`](../031F-debug-api/spec.md) — экспонирует API для внешних клиентов; [`040 per-group ping settings`](../../tasks/040-per-group-ping-test-settings.md) — паттерн in-memory state via ChangeNotifier |
 | Затронутые файлы | `app/lib/services/traffic_profiler.dart` (новый), `app/lib/screens/per_app_trace_tab.dart` (новый), `app/lib/screens/stats_screen.dart`, `app/lib/screens/home_screen.dart`, `app/lib/services/debug/handlers/profiler.dart` (новый), `app/lib/services/debug/transport/response.dart` (`SseResponse`), `app/lib/services/app_info_cache.dart` (`loadAllApps()` + smart `ensure`), тесты `app/test/services/traffic_profiler_test.dart` |
@@ -18,6 +18,10 @@
 Что реально оказалось важным во время имплементации (нашлось через диагностику на живом устройстве, не было предсказуемо из спеки):
 
 ### 1. UID suffix в `metadata.process`/`processPath`
+
+> Устарело: текущий профайлер (CommandClient, §122) суффикс **не срезает** — строка
+> берётся как есть, а сопоставление терпит `(10999)` и списки «package, package»
+> ([028 → attribution](../../features/028-TRAFFIC_PROFILER/FUNCTIONS/attribution.ru.md)).
 Sing-box `find_process: true` возвращает в Clash API `metadata.processPath` (и иногда `metadata.process`) строки вида `"ru.tinkoff.investing (10364)"` — package name + UID в скобках. AppPicker в UI отдаёт чистый package, поэтому без strip'а ни одна conn'ция не атрибутируется к target session'у. Решено: `_stripUid()` snimает суффикс перед сравнением (тот же паттерн, что в `clash_api_client.dart::_extractPackage` для `byApp` агрегации).
 
 В реальных данных `metadata.process` чаще `null` — actual package в `metadata.processPath`. Профайлер пробует оба поля.

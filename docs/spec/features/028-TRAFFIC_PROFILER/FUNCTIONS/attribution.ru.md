@@ -70,9 +70,9 @@ detect the owner package for some DNS/TCP traffic» и ⚠ в названии �
   деградация точности, не поломка. Зависит от возможностей ОС.
 - Дополнительных пакетов (WebView) и вывода владельца по недавнему DNS-адресу
   больше нет (§044, §288).
-- Подсказка «DNS / router events off — turn on 'Forward sing-box logs'» над
-  журналом на атрибуцию не влияет: после §180 владелец приходит структурным
-  потоком ([591](../../../tasks/591-spec-kit-revision-audit.md)).
+- Атрибуция от «Forward sing-box logs» не зависит: после §180 владелец
+  приходит структурным потоком; прежняя подсказка «DNS / router events off»
+  удалена ([605](../../../tasks/605-service-live-automation-workspaces-bugs.md)).
 
 ## Ревизии
 

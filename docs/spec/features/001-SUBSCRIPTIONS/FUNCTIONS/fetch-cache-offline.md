@@ -52,6 +52,9 @@ updated, "Last success · Last attempt · N nodes", "Refresh now" button.
   summary ("N entries dropped") — both on success and on an empty response.
 - The cache is written atomically (temporary file → rename): a killed process will not
   leave a truncated body. A cache write failure does not break the update.
+- The cache is keyed by the SHA-256 of the subscription URL. Files under the
+  old key (32-bit string hash) are moved to the new key on first access — a
+  file subscription has no other copy of its data.
 - **Rehydration at start:** subscriptions without nodes are restored from the cache, with the same
   import rules. A user edit made during rehydration
   (reordering, renaming, deleting) is not overwritten. Node marks
@@ -84,3 +87,4 @@ updated, "Last success · Last attempt · N nodes", "Refresh now" button.
 | 6 | [506](../../../tasks/506-silent-parse-loss-reasons.md) | — | Rejection reasons are collected on the subscription path too |
 | 7 | [561](../../../tasks/561-dropped-only-in-source-summary.md) | Done | Rejections live in the subscription summary, restored from cache |
 | 8 | [515](../../../tasks/515-workspace-switch-stale-controller-persist.md) | Released v2.25.2 | A response after a workspace switch is not written |
+| 9 | [603](../../../tasks/603-subscription-and-own-server-bugs.md) | Implemented | Cache key = SHA-256 of the URL, one-time move of old-key files |

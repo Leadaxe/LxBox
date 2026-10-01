@@ -180,6 +180,12 @@ class TrafficProfiler extends ChangeNotifier {
     // записано в этой recording-сессии. Если хочешь preserve — убери clear.
     _globalRollingBuffer.clear();
     _globalUnattributedEvents.clear();
+    // §605 — снимки соединений прошлой сессии тоже сбрасываем: иначе на первом
+    // снапшоте после STOP→START id, которого уже нет у ядра, diff-блок
+    // принимает за «закрылся» и кладёт ложный tcpClose в новый буфер.
+    // `_closedHandled` не трогаем: ядро держит закрытые conn'ы до 5 мин, и
+    // без него старые закрытия всплыли бы в новой сессии.
+    _connSnapshots.clear();
     _ensureGcTimerStarted();
     // §168 — system-wide recording слушает CommandClient connections-стрим
     // (open/close + per-app). Без этого в Live видны только DNS-строки из

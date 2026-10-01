@@ -10,6 +10,10 @@
 > push-стримы), закрытие — RPC `CcChannel.closeConnection(id)`/`closeConnections()`.
 > Файла `lib/services/clash_api_client.dart` нет. Ниже упоминания `/connections`,
 > `/proxies`, `DELETE` — исторические; читать как соответствующие CommandClient-вызовы.
+>
+> **§288** — вкладка Per-app trace и её сервисный слой удалены; per-app трафик
+> читается в профайлере ([028-TRAFFIC_PROFILER](../../features/028-TRAFFIC_PROFILER/FEATURE.ru.md)).
+> Живое описание статистики и соединений — [012-LIVE_STATE](../../features/012-LIVE_STATE/FEATURE.ru.md).
 
 ## Контекст
 

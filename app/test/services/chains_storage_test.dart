@@ -99,16 +99,16 @@ void main() {
     });
 
     test('update пишет по тегу; неизвестный тег — StateError', () async {
-      await SettingsStorage.addChain(tag: 'via-de', label: 'DE');
+      await SettingsStorage.addChain(tag: 'via-de');
       await SettingsStorage.updateChain(const SourceChain(
         tag: 'via-de',
-        label: 'Германия',
+        enabled: false,
         hops: [NodeLink(tag: 'home'), NodeLink(tag: 'de-exit')],
         idleTimeout: '10m',
         stripEvasion: false,
       ));
       final got = (await SettingsStorage.getChains()).single;
-      expect(got.label, 'Германия');
+      expect(got.enabled, isFalse);
       expect(got.hops, const [NodeLink(tag: 'home'), NodeLink(tag: 'de-exit')]);
       expect(got.idleTimeout, '10m');
       expect(got.stripEvasion, isFalse);
@@ -185,7 +185,6 @@ void main() {
     test('round-trip через файл: полная запись доезжает без потерь', () async {
       const c = SourceChain(
         tag: 'tuned',
-        label: 'Tuned',
         hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')],
         idleTimeout: '0s',
         stripEvasion: false,
@@ -500,7 +499,7 @@ void main() {
     // владельца 24.09).
     test('цепочки переживают export→restore в категории серверов', () async {
       await SettingsStorage.setChains(const [
-        SourceChain(tag: 'via-de', label: 'DE', hops: [NodeLink(tag: 'home'), NodeLink(tag: 'de')]),
+        SourceChain(tag: 'via-de', hops: [NodeLink(tag: 'home'), NodeLink(tag: 'de')]),
       ]);
       final raw = await readFile();
 

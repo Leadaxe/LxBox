@@ -112,7 +112,7 @@ void copyNodeJson(
         return;
       }
       toCopy = Map<String, dynamic>.from(detour)..remove('detour');
-      label = 'Detour copied';
+      label = getLocalText.s("Detour copied");
     case 'both':
       // §099 — server + ВСЯ цепочка detour'ов (не только первый hop), каждый
       // без своего detour-указателя (standalone outbounds для вставки).
@@ -120,16 +120,18 @@ void copyNodeJson(
       final n = chain.length - 1;
       if (n <= 0) {
         toCopy = Map<String, dynamic>.from(server)..remove('detour');
-        label = 'Server copied';
+        label = getLocalText.s("Server copied");
       } else {
         toCopy = [
           for (final m in chain) Map<String, dynamic>.from(m)..remove('detour'),
         ];
-        label = 'Server + $n detour${n > 1 ? "s" : ""} copied';
+        label = n == 1
+            ? getLocalText.s("Server + 1 detour copied")
+            : getLocalText.plural("Server + %d detours copied", n);
       }
     default: // 'server'
       toCopy = Map<String, dynamic>.from(server)..remove('detour');
-      label = 'Server copied';
+      label = getLocalText.s("Server copied");
   }
 
   final json = const JsonEncoder.withIndent('  ').convert(toCopy);
@@ -205,13 +207,24 @@ Future<void> copyNodeUri(BuildContext context, String tag,
   // молча вырезать ключ из неё нельзя — он потерялся бы при перезагрузке
   // узла. Отказ же ломал перенос своего узла между своими устройствами и был
   // непоследователен: у SSH ключ не отдавался вовсе, у WireGuard уезжал молча.
+  //
+  // §606 — ссылка строится ДО диалога: реестр отказывает формату (WireGuard с
+  // несколькими `peers`) пустой строкой, и без сообщения «Copy link» молчал —
+  // да ещё после вопроса про ключ, которого в буфер всё равно не отдать.
+  final uri = node.toUri();
+  if (uri.isEmpty) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content:
+              Text(getLocalText.s("This node cannot be shared as a link."))));
+    }
+    return;
+  }
   if (carriesPrivateKeyByRegistry(node.emit(TemplateVars.empty).map)) {
     if (!context.mounted) return;
     final ok = await _confirmPrivateKeyInLink(context);
     if (!ok) return;
   }
-  final uri = node.toUri();
-  if (uri.isEmpty) return;
   await Clipboard.setData(ClipboardData(text: uri));
   if (context.mounted) {
     ScaffoldMessenger.of(context).showSnackBar(

@@ -1,4 +1,10 @@
+// ignore_for_file: depend_on_referenced_packages
+
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
+import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'package:lxbox/models/codec/rule_record.dart';
 import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/parser_config.dart';
@@ -202,4 +208,49 @@ void main() {
       expect(rs, isEmpty);
     });
   });
+
+  group('§601 кандидаты прохода', () {
+    late Directory tempDir;
+
+    setUp(() async {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      tempDir = await Directory.systemTemp.createTemp('rsau_test_');
+      PathProviderPlatform.instance = _FakePathProvider(tempDir.path);
+      RuleSetDownloader.resetCacheForTesting();
+    });
+
+    tearDown(() async {
+      if (await tempDir.exists()) await tempDir.delete(recursive: true);
+    });
+
+    CustomRuleSrs srs(String id, {required bool enabled}) => CustomRuleSrs(
+          id: id,
+          name: id,
+          srsUrl: 'https://example.invalid/$id.srs',
+          outbound: 'direct-out',
+          enabled: enabled,
+        );
+
+    test('включённое правило без файла берётся в работу, выключенное — нет',
+        () async {
+      final waiting = srs('waiting', enabled: true);
+      final off = srs('off', enabled: false);
+      expect(await RuleSetDownloader.isCached(waiting.cacheIds.single),
+          isFalse);
+
+      final ids = await RuleSetAutoUpdater.candidateCacheIdsFor(
+          [waiting, off],
+          userVars: const {});
+
+      expect(ids, [waiting.cacheIds.single]);
+    });
+  });
+}
+
+class _FakePathProvider extends PathProviderPlatform
+    with MockPlatformInterfaceMixin {
+  _FakePathProvider(this.tempRoot);
+  final String tempRoot;
+  @override
+  Future<String?> getApplicationDocumentsPath() async => tempRoot;
 }

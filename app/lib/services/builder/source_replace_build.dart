@@ -165,7 +165,8 @@ Map<String, dynamic> buildAutoGroup({
     group['mode'] = a.mode.wire;
     group['balancer'] = <String, dynamic>{
       'pool': a.pool,
-      'pool_tolerance': a.poolTolerance,
+      // §604 — последний рубеж: прямой конструктор DirectionAuto не клэмпит.
+      'pool_tolerance': clampDirectionPoolTolerance(a.poolTolerance),
       // Пустой набор ядро схлопывает в умолчание; выключение — ["none"].
       'sticky_hash': a.stickyHash.isEmpty
           ? const ['none']

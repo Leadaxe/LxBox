@@ -54,7 +54,11 @@ The feature protects three principles:
   the shade.
 - **P4. A failure of the quick toggles does not break the tunnel.** An error
   updating the tile or the icon menu (old OS versions, vendor firmwares) does
-  not hinder start and stop. `no witness`.
+  not hinder start and stop. `no witness` — **только на устройстве
+  2026-09-30:** проверить на старой прошивке/OS, что ошибка обновления
+  `LxBoxTileService`/иконки-меню (`app/android/.../LxBoxTileService.kt`) не
+  мешает старту/остановке туннеля; логика нативная (Kotlin), юнит-тестом
+  Dart не воспроизводится.
 - **P5. External commands are off by default.** While "Accept automation
   commands" is off, neither a direct command nor an automation plugin is
   executed. **Witness:** manual check — `am broadcast -a
@@ -79,7 +83,7 @@ The feature protects three principles:
   active node — no-op + NODE_ALREADY_ACTIVE". **Mutation:** re-selecting the
   node again.
 - **P9. Events go out only for enabled categories.** Lifecycle, State,
-  Subscription, Health are enabled independently; all are off by default.
+  Subscription are enabled independently; all are off by default.
   **Witness:** units "all OFF — emit no-op", "lifecycle gate independent of
   state/subs", "state gate emits node/group only". **Mutation:** a shared
   gate for all categories.
@@ -99,14 +103,19 @@ The feature protects three principles:
   manual check — a condition in MacroDroid/Tasker with the app closed.
   **Mutation:** the answer waits for the UI to start.
 - **P13. Events carry no secrets.** Only labels: node tags, group names,
-  status, the masked subscription host. `no witness`.
+  status, the masked subscription host. **Witness:** unit "SUB_REFRESHED /
+  SUB_REFRESH_FAILED — sub_id masked, no token" — **покрыто 2026-09-30:**
+  `test/subscription/automation_event_masking_test` «успешный fetch:
+  SUB_REFRESHED.sub_id замаскирован», «провал fetch:
+  SUB_REFRESH_FAILED.sub_id замаскирован». **Mutation:** the raw
+  subscription URL is passed as `sub_id` instead of the masked host.
 
 ## Controlled parameters
 
 | Setting | Values | Default |
 |---------|--------|---------|
 | Accept automation commands | on/off; turning on — via a warning dialog | off |
-| Emit: Lifecycle / State / Subscription / Health | on/off each; first enable — via an explanation | all off |
+| Emit: Lifecycle / State / Subscription | on/off each; first enable — via an explanation | all off |
 | Quick Settings tile → Add | system request to add the tile (Android 13+) | — |
 | First run: offer to add the tile | shown once, where the OS supports it | — |
 
@@ -161,7 +170,7 @@ tile touch / menu item / command / plugin
   "trusted" senders.
 - Health events (`HEARTBEAT_FAILED`, `LATENCY_DEGRADED`, `UNATTRIBUTED_BURST`)
   and `PERMISSION_NEEDED` — the names are reserved, there is no source; the
-  Health category exists in the settings but sends nothing.
+  Health category has no toggle in the settings.
 - Commands other than start/stop/toggle, and all events, require a live app;
   with the UI unloaded the command is skipped without an answer.
 - `ACTIVE_NODE_CHANGED` comes only on an explicit node choice, `reason` is

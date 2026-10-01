@@ -331,7 +331,6 @@ Direction _toDirection(Map<String, dynamic> c) {
 /// Канон (`schema/source_chain.schema.json`) + `tag` корпуса → модель LxBox.
 SourceChain _toChain(Map<String, dynamic> c) => SourceChain(
       tag: c['tag'] as String? ?? '',
-      label: c['label'] as String? ?? '',
       hops: [
         for (final h in (c['hops'] as List?) ?? const []) ?nodeLinkFromRecord(h),
       ],
@@ -378,7 +377,6 @@ DirectionAuto _toAuto(Map<String, dynamic> a) {
 /// граф-санитайзера (§393 A4) призрак, ровно как и для `validator.dart`,
 /// который строит `allTags` по фактическим outbounds/endpoints.
 WizardTemplate _template() => WizardTemplate(
-      parserConfig: ParserConfigBlock(),
       groupTemplates: GroupTemplates(),
       // Переменные автовыбора шаблона лаунчера: кейс
       // `fold_auto_inherits_template_vars` проверяет, что `@urltest_*` в

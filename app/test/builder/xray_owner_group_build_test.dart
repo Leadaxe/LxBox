@@ -43,7 +43,6 @@ void main() {
         ),
       ],
       template: WizardTemplate(
-        parserConfig: ParserConfigBlock(),
         groupTemplates: GroupTemplates(),
         vars: const [],
         varSections: const [],

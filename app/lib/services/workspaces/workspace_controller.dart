@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../app_log.dart';
-import '../automation/event_emitter.dart';
+import '../automation/automation_sync.dart';
 import '../l10n/locale_controller.dart';
 import '../settings_storage.dart';
 import '../template_loader.dart';
@@ -137,7 +137,8 @@ class WorkspaceController extends ChangeNotifier {
         varDefaults: {for (final v in t.vars) v.name: v.defaultValue},
       );
     });
-    await _step('automation gates', AutomationEventEmitter.I.reload);
+    // §605 — гейты + receiver'ы: набор мог принести другой тумблер приёма.
+    await _step('automation', syncAutomationFromStorage);
   }
 
   static Future<void> _step(String what, Future<void> Function() f) async {

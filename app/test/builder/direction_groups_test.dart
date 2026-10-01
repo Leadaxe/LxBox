@@ -29,7 +29,6 @@ void main() {
   // записи — ровно как `validator.dart` (`allTags`), — и такой `block`
   // законно вылетал из состава как призрак.
   WizardTemplate template() => WizardTemplate(
-        parserConfig: ParserConfigBlock(),
         groupTemplates: GroupTemplates(),
         vars: const [],
         varSections: const [],

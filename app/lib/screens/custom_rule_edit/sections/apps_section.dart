@@ -21,9 +21,11 @@ class AppsSection extends StatelessWidget {
     final t = Theme.of(context);
     final empty = packages.isEmpty;
     final label = empty
-        ? 'Select apps…'
-        : '${packages.length} ${packages.length == 1 ? 'app' : 'apps'} '
-            'selected — tap to edit';
+        ? getLocalText.s("Select apps…")
+        : packages.length == 1
+            ? getLocalText.s("1 app selected — tap to edit")
+            : getLocalText.plural(
+                "%d apps selected — tap to edit", packages.length);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

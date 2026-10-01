@@ -13,8 +13,9 @@ import '../../widgets/var_values_model.dart';
 import '../dns_settings_screen/resolved_server.dart';
 
 /// §117 задача 4b — режимы формы создания/редактирования inline-сервера.
-/// Значение = sing-box `type`. Прочие типы (`local`, `h3`, …) формой не
-/// выражаются — редактируются на JSON-вкладке.
+/// Значение = sing-box `type`. Прочие типы (`local`, `tcp`, `fakeip`,
+/// `hosts`, `dhcp`, …) формой не выражаются — редактируются на JSON-вкладке.
+/// §411 — `h3` (DoH3) в форме есть.
 /// §312 — `group` (kernel SPEC 033): группа DNS-серверов с резервированием.
 /// §435 — `tailscale` (NODE_SECTIONS.md §6): MagicDNS через узел tailnet,
 /// вместо адреса — `endpoint` (тег узла), без `detour`.
@@ -612,13 +613,26 @@ class DnsServerEditController extends ChangeNotifier {
   }
 
   /// TLS SNI (DoT/DoH с IP-адресом — каким именем проверять сертификат).
-  /// Пусто → tls-блок уходит.
+  /// §530/§604 — меняется только `tls.server_name`: прочие поля `tls` (`insecure`,
+  /// `alpn`, `utls`… с JSON-вкладки) живут. Пусто → снимается `server_name`;
+  /// tls-блок уходит, только если в нём не осталось ничего, кроме `enabled`.
   void onSniChanged(String raw) {
     final sni = raw.trim();
+    final cur = _body['tls'];
+    final tls = cur is Map
+        ? Map<String, dynamic>.from(cur)
+        : <String, dynamic>{};
     if (sni.isEmpty) {
-      _body.remove('tls');
+      tls.remove('server_name');
+      if (tls.keys.every((k) => k == 'enabled')) {
+        _body.remove('tls');
+      } else {
+        _body['tls'] = tls;
+      }
     } else {
-      _body['tls'] = {'enabled': true, 'server_name': sni};
+      tls['enabled'] = true; // §530: чужое false при заданном SNI не держим
+      tls['server_name'] = sni;
+      _body['tls'] = tls;
     }
     _syncJsonFromBody();
     notifyListeners();

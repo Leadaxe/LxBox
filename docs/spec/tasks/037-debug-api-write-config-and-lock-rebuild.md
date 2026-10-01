@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | ✅ Реализовано (позже) — `PUT /config` (saveParsedConfig), `GET/PUT /state|settings/config_locked`. Шапка «Draft» устарела. |
+| Статус | ✅ Реализовано — `PUT /config` (saveParsedConfig), `GET/PUT /state|settings/config_locked`; в UI закрепление — App Settings → Diagnostics «Lock config (debug)», видно при включённом Debug API |
 | Дата | 2026-05-06 |
 | Связанные | [`031 debug api`](../tasks/031F-debug-api/spec.md), [`036 sendNotification`](036-send-notification-clickable-url.md) |
 

@@ -83,7 +83,7 @@ DirectionAuto directionAutoFromRecord(Map<String, dynamic> j) {
         j['interrupt_exist_connections'] as bool? ??
         fallback.interruptExistConnections,
     pool: clampDirectionPool((j['pool'] as num?)?.toInt() ?? fallback.pool),
-    poolTolerance: clampDirectionTolerance(
+    poolTolerance: clampDirectionPoolTolerance(
       (j['pool_tolerance'] as num?)?.toInt() ?? fallback.poolTolerance,
     ),
     stickyHash: sticky,
@@ -103,7 +103,7 @@ Map<String, dynamic> directionAutoToRecord(DirectionAuto a) => {
   // отличит от осознанной настройки.
   if (a.mode == UrltestMode.roundRobin) ...{
     'pool': clampDirectionPool(a.pool),
-    'pool_tolerance': clampDirectionTolerance(a.poolTolerance),
+    'pool_tolerance': clampDirectionPoolTolerance(a.poolTolerance),
     // Пустой список у мобилы = липкость выключена; канон выражает
     // выключение явным ["none"], а пустой список схлопнул бы в умолчание.
     'sticky_hash': a.stickyHash.isEmpty

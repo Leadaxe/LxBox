@@ -189,7 +189,9 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     _originalTag = node.tag;
     // §130 — protocol у WG и AWG одинаков ('wireguard'); для AWG уточняем
     // подпись «AmneziaWG (wireguard)», чтобы юзер видел, что это AWG-разновидность.
-    _scheme = _isAwg ? 'AmneziaWG (wireguard)' : node.protocol;
+    _scheme = _isAwg
+        ? 'AmneziaWG (wireguard)' // l10n-exempt: protocol name
+        : node.protocol;
     // §435 — у безадресного узла нет «server:port»: Tailscale входит в
     // tailnet сам (tsnet), группа §322 — правило выбора. «:0» не показываем.
     _serverInfo = node is TailscaleSpec
@@ -341,7 +343,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     final String toStore;
     var droppedExtras = false;
     var commentsRemoved = false;
-    if (text.startsWith('{') || text.startsWith('[')) {
+    if (isJsonSourceText(text)) {
       // §435 — голое тело или документ; тег из поля Tag уходит в тело узла.
       // §575 — `dns`/`route`/`sections` документа не сохраняются.
       final prep = prepareNodeDocumentForSave(text, _tagCtrl.text);
@@ -405,19 +407,17 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
       {String? nameHint, required String Function() savedMessage}) async {
     try {
       final mi = widget.memberIndex;
-      if (mi != null) {
-        // §237 — член папки: транзакционная правка raw (битый → откат).
-        final err = await widget.subController
-            .updateMemberAt(widget.index, mi, raw, nameHint: nameHint);
-        if (!mounted) return;
-        if (err != null) {
-          _snack(err.render());
-          return;
-        }
-      } else {
-        await widget.subController
-            .updateConnectionAt(widget.index, [raw], nameHint: nameHint);
-        if (!mounted) return;
+      // §237 — член папки: транзакционная правка raw (битый → откат).
+      // §603 — одиночный сервер так же: битый источник не пишется.
+      final err = mi != null
+          ? await widget.subController
+              .updateMemberAt(widget.index, mi, raw, nameHint: nameHint)
+          : await widget.subController
+              .updateConnectionAt(widget.index, [raw], nameHint: nameHint);
+      if (!mounted) return;
+      if (err != null) {
+        _snack(err.render());
+        return;
       }
       // Перечитать узел: Source показывает записанный текст, JSON — тело,
       // предупреждения — свежие.

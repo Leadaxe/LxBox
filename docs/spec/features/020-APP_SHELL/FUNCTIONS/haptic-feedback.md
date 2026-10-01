@@ -67,3 +67,4 @@ subscription update.
 |---|----------|--------|---------|
 | 1 | [029F](../../../tasks/029F-haptic-feedback/spec.md) | Implemented and in production | Feedback on connect, disconnect and failures; toggle; throttling |
 | 2 | [022F](../../../tasks/022F-app-settings/spec.md) | Implemented (v1.4.0) | Toggle in the Feedback section |
+| 3 | [605](../../../tasks/605-service-live-automation-workspaces-bugs.md) | Implemented | Unused node-select and preset-apply events removed (per the boundaries) |

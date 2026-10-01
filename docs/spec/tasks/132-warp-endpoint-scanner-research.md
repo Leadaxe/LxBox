@@ -2,7 +2,7 @@
 
 | Field | Value |
 |------|----------|
-| Status | Research done — implementation NOT started |
+| Status | Research done; implemented as the WARP endpoint generator (§284 in code: `services/warp/scan/candidate_generator.dart`, `scan_pool`, `scan_node_builder`; tests `test/warp/scan/*`) — no task file of its own, the function is described in [015-WARP](../features/015-WARP/FEATURE.md) |
 | Started | 2026-06-16 |
 | Trigger | Сторонние «WARP-генераторы» выдают endpoint вида `Endpoint = 8.47.69.3:7156` (живой Cloudflare-IP из менее известного блока на нестандартном порту). При блокировке дефолта `engage.cloudflareclient.com:2408` юзеру негде взять рабочий `IP:port` внутри приложения — приходится тащить чужой конфиг. Нужно понять, как генераторы подбирают живой endpoint, прежде чем встраивать свой сканер (в §025 он явно вынесен «вне итерации»). |
 | Related | [§025 warp integration](../tasks/025F-warp-integration/spec.md) (base WARP, дефолтный endpoint, кастомный endpoint в Advanced); [§126](126-warp-amneziawg-obfuscation.md) (AWG-обфускация поверх WARP — паддит handshake, см. caveat ниже); [§127](127-pseudo-name-domain-generator.md) (pseudo-gen, переиспользуем для junk) |

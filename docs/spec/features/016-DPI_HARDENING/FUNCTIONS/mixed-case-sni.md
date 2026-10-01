@@ -56,9 +56,8 @@ useless — the setting's hint says so directly.
 
 - Transport headers (`host` of ws/httpupgrade/xhttp, `:authority`) do not
   change — only the TLS SNI.
-- Node ping and probe are built by a separate path: their SNI is the
-  original. Hence "ping works but the VPN does not" is the first sign that it
-  is the global technique that hinders the node.
+- Node ping and probe are built by a separate path but get the same
+  mixed-case SNI as the tunnel: a node the technique breaks fails the ping too.
 - Rotation on every handshake, ClientHello padding, replacing the SNI with
   another domain — not done.
 - Inner hops (`detour`) are not visible to local DPI and are not touched.
@@ -69,3 +68,4 @@ useless — the setting's hint says so directly.
 |---|---|---|---|
 | 1 | [028F](../../../tasks/028F-antidpi-sni-obfuscation/spec.md) | Implemented and in production | Mixed-case SNI checkbox, first hop, Punycode and IP untouched |
 | 2 | [363](../../../tasks/363-mixed-case-sni-breaks-reality.md) | ✅ DEVICE-VERIFIED | REALITY nodes are skipped, SNI byte for byte |
+| 3 | [606](../../../tasks/606-audit-591-export-list-tun-warp-dpi-bugs.md) | Done | Ping and probe get mixed-case SNI like the tunnel |

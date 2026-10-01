@@ -400,7 +400,6 @@ Map<String, dynamic>? _byTag(BuildResult r, String tag) {
 /// Минимальный шаблон: служебные outbound'ы + пустой route. Направления
 /// приходят целиком из настроек, поэтому `groupTemplates` пуст.
 WizardTemplate _template() => WizardTemplate(
-      parserConfig: ParserConfigBlock(),
       groupTemplates: GroupTemplates(),
       vars: const [],
       varSections: const [],

@@ -76,9 +76,9 @@ tab."; the `Live` chip on the home screen.
 
 ## Boundaries
 
-- The profiler channel does not reconnect by itself: a recording started with
-  the tunnel down or one that survived its restart receives no events while
-  the `Live` chip stays lit. Returning after a swipe from recents stops the
+- A recording started with the tunnel down or one that survived its restart
+  gets its channel back on the next tunnel start
+  ([605](../../../tasks/605-service-live-automation-workspaces-bugs.md)). Returning after a swipe from recents stops the
   orphaned channel, the buffer is lost
   ([591](../../../tasks/591-spec-kit-revision-audit.md)).
 - Owner and route attribution — [attribution](attribution.md); the DNS part
@@ -97,3 +97,4 @@ tab."; the `Live` chip on the home screen.
 | 6 | [219](../../../tasks/219-deep-audit-2026-07.md) | — | Ceiling 20,000, cleanup every 15 s |
 | 7 | [288](../../../tasks/288-remove-per-app-trace-tab.md) | complete | The App tab and per-app sessions removed |
 | 8 | [353](../../../tasks/353-profiler-kernel-timestamps.md) | ✅ Released v2.19.3 | Duration by the core's clock |
+| 9 | [605](../../../tasks/605-service-live-automation-workspaces-bugs.md) | Implemented | Recording gets its channel back after a tunnel restart |

@@ -14,6 +14,7 @@ import '../../models/node_spec.dart';
 import '../../models/server_list.dart';
 import '../node_hash.dart';
 import '../settings_storage.dart';
+import '../template_loader.dart';
 import 'probe_runner.dart';
 
 class ProbeController {
@@ -97,12 +98,23 @@ class ProbeController {
   /// Разрешает (url, timeoutMs) для теста: per-list override поверх глобальных
   /// `ping_options`. Папка передаёт `folder.pingUrl/pingTimeoutMs`; подписка/
   /// сервер — null → чистый глобал. Дефолт timeout — 3000мс.
+  ///
+  /// §604 — пустой URL (ни override, ни глобального) → `ping_options.url`
+  /// шаблона, как у главного пинга (storage → шаблон), а не умолчание ядра.
   static Future<({String url, int timeoutMs})> resolvePingOptions({
     String? overrideUrl,
     int? overrideTimeoutMs,
   }) async {
     final ping = await SettingsStorage.getPingOptions();
-    final url = (overrideUrl ?? (ping['url'] as String?))?.trim() ?? '';
+    var url = overrideUrl?.trim() ?? '';
+    if (url.isEmpty) url = (ping['url'] as String?)?.trim() ?? '';
+    if (url.isEmpty) {
+      try {
+        url = (await TemplateLoader.load()).pingOptionsModel.defaultUrl.trim();
+      } catch (_) {
+        // Шаблон не загрузился — остаётся умолчание ядра.
+      }
+    }
     final timeoutMs = overrideTimeoutMs ??
         (ping['timeout_ms'] as num?)?.toInt() ??
         3000;

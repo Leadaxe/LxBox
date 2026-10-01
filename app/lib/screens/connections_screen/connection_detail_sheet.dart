@@ -233,8 +233,10 @@ class _ConnectionDetailSheet extends StatelessWidget {
   Widget _oneWayBanner(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final detail = conn.uplink > 0 && conn.downlink == 0
-        ? 'Data sent (↑), no reply (↓0) — the stream looks stuck.'
-        : 'Data received (↓), nothing sent (↑0) — the stream looks stuck.';
+        ? getLocalText.s(
+            "Data sent (↑), no reply (↓0) — the stream looks stuck.")
+        : getLocalText.s(
+            "Data received (↓), nothing sent (↑0) — the stream looks stuck.");
     return Container(
       margin: const EdgeInsets.only(top: 8),
       padding: const EdgeInsets.all(10),

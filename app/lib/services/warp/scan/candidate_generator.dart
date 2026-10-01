@@ -1,6 +1,6 @@
 // §284 — генератор случайных кандидатов (Монте-Карло по {IP × port × protocol
-// × SNI}). Ни один протокол не привилегирован. Фаза 2 — вариации вокруг живого
-// IP (метод [variations]). Кандидаты затем собираются в узлы папки «SCAN WARP».
+// × SNI}). Ни один протокол не привилегирован. Кандидаты затем собираются в
+// узлы папки «SCAN WARP».
 
 import 'dart:math';
 
@@ -113,32 +113,4 @@ class CandidateGenerator {
   }
 
   T _pick<T>(List<T> xs) => xs[_rng.nextInt(xs.length)];
-
-  /// Фаза 2 — вариации вокруг одного живого IP: по одной пробе на каждый
-  /// доступный протокол, добор случайными комбинациями (protocol × SNI) до
-  /// [limit]. Повторы допустимы (заодно проверка стабильности).
-  List<ScanCandidate> variations(String ip, {int limit = 12}) {
-    final protos = _protocols();
-    if (protos.isEmpty) return const [];
-    final out = <ScanCandidate>[];
-    for (final p in protos) {
-      out.add(_variationOne(ip, p));
-    }
-    while (out.length < limit) {
-      out.add(_variationOne(ip, protos[_rng.nextInt(protos.length)]));
-    }
-    return out.take(limit).toList();
-  }
-
-  ScanCandidate _variationOne(String ip, ScanProtocol p) {
-    final isWg = p == ScanProtocol.awg;
-    final sniPool = isWg ? _pool.wgSniPool : _pool.masqueSniPool;
-    return ScanCandidate(
-      ip: ip,
-      port: isWg ? _pickWgPort() : _pickMasquePort(p),
-      protocol: p,
-      sni: sniPool.isEmpty ? '' : _pick(sniPool),
-      awgParams: isWg ? _randomAwg() : null,
-    );
-  }
 }

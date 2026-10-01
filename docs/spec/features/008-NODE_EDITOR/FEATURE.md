@@ -133,8 +133,11 @@ the node list, folders and order — [007-NODE_LIST](../007-NODE_LIST/FEATURE.md
   node": the JSON/Source tabs are read-only, there are no write buttons.
   **Mutation:** open the custom node screen for a subscription node.
 - **P15. Proxy forms do not accept an invalid address.** Host non-empty, Port
-  1..65535, otherwise Add does not work. `no witness` (there are no tests for
-  the SOCKS5/HTTP validator).
+  1..65535, otherwise Add does not work. **Witness** —
+  `test/screens/add_server_wizard_p15_validation_test.dart`: empty Host and
+  out-of-range Port (0, 65536) on both the SOCKS5 and HTTP forms block Add,
+  no entry is added. **Mutation:** make the Host/Port `validator` return
+  `null` unconditionally.
 
 ## Controlled parameters
 

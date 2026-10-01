@@ -178,7 +178,8 @@ Map<String, dynamic> dnsRuleToRecord(DnsRuleRef r) => switch (r) {
       DnsRulePreset() => {
           'kind': 'preset',
           'ref': r.presetId,
-          'enabled': r.enabled,
+          // §593 — форма записи контракта: `enabled` у пресета всегда true.
+          'enabled': true,
         },
       DnsRuleTemplate() => {
           'kind': 'template',
@@ -227,8 +228,8 @@ RecordRead<DnsRuleRef> dnsRuleFromRecord(Map<String, dynamic> j) {
       if (ref == null) {
         return const RecordRead.drop('dns rule: preset without ref');
       }
-      return RecordRead.ok(
-          DnsRulePreset(presetId: ref, enabled: j['enabled'] != false));
+      // §593 — `enabled` записи пресета не читается (DNS пресета — `dns_enable`).
+      return RecordRead.ok(DnsRulePreset(presetId: ref));
     case 'template':
       if (name.isEmpty) {
         return const RecordRead.drop('dns rule: template without name');

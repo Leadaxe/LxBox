@@ -5,7 +5,7 @@ import 'package:lxbox/services/app_info_cache.dart';
 /// §109 — семантика AppInfoCache: «подтверждённый not-found» vs
 /// «проверка сорвалась». Регрессия, которую ловим: timeout/ошибка канала
 /// кэшировались как null → UI красил установленное приложение
-/// «uninstalled, auto-skipped» до конца сессии (field report, 4PDA).
+/// «not installed; the system ignores it» до конца сессии (field report, 4PDA).
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 

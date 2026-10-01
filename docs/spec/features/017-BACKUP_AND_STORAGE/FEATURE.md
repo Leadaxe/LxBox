@@ -42,6 +42,8 @@ entry); **the input is default-deny**; **a failure does not wipe settings**
 
 - **P1. A secret does not leave by accident.** "Debug API config" on export
   is off by default; without it Debug API keys are not written to the file.
+  The config pin (`config_locked_for_debug`, §037) belongs to this category:
+  restoring App settings never brings a pin without the Debug API (§607).
   **Witness:** unit tests "without Debug API config the Debug API keys are
   stripped from vars", "only Debug API config — only Debug API keys".
   **Mutation:** Debug keys travel with "App settings".
@@ -59,25 +61,37 @@ entry); **the input is default-deny**; **a failure does not wipe settings**
   unit tests "not JSON — rejected", "no app/kind markers — rejected", "old
   format without storage — rejected". **Mutation:** partial parsing.
 - **P5. The input is default-deny.** Unknown top-level keys and vars are
-  dropped in both modes and counted ("N unknown keys skipped").
+  dropped in both modes and counted ("N unknown keys skipped"). The
+  "already asked" flags of startup prompts (`wizard_*`,
+  `notif_perm_prompted_v1`) are known-ignored: they travel in the export,
+  import does not apply them and does not count them as unknown (§600).
   **Witness:** unit tests "foreign key dropped", "foreign var dropped, known
-  ones kept", "merge filters too". **Mutation:** filtering only in replace
-  mode.
+  ones kept", "merge filters too", "§600 — flags not in droppedKeys, foreign
+  key next to them dropped". **Mutation:** filtering only in replace mode.
 - **P6. Merge deletes nothing.** Sources are appended by `id`, vars by key,
   whatever is absent in the file stays. **Witness:** unit tests "merge keeps
   untouched keys", "sources are appended by id". **Mutation:** merging
   sources by replacing the list.
-- **P7. Replace replaces the whole settings document.** "Replace all" writes
-  only the selected categories of the file; unselected categories of the
-  current settings are not kept. **Witness:** unit test "replace only
-  Routing: rules and DNS; neither sources nor chains". **Mutation:** replace
-  per category.
+- **P7. Replace replaces the selected categories; unselected categories keep
+  the receiver's values.** A selected category is replaced wholesale by the
+  file's content: a key of the category absent in the file is removed. An
+  unselected category is not touched. All categories selected — the whole
+  document is replaced. **Witness:** unit tests "replace only Routing: rules
+  and DNS from the file; sources and chains of the receiver stay", "only
+  Server lists: sources[] from the file, receiver's rules stay", "all
+  categories: the same document as a whole replace" (§599). **Mutation:**
+  replace of the whole document.
 - **P8. Device properties survive replace.** If the file is silent about the
   Debug API and about the "already asked" flags of startup prompts, the
-  current values stay; a key from the file wins; `wizard_*` flags are never
-  accepted from the file. **Witness:** unit tests "replace keeps the Debug
+  current values stay; a Debug API key from the file wins; startup prompt
+  flags (all four, `notif_perm_prompted_v1` included) are never accepted from
+  the file and are not reported as unknown (§600). The VPN toggles mirror
+  (`native_prefs`) is never taken from the settings document and replace keeps
+  the receiver's mirror; the toggles are restored only by the VPN block
+  (§607). **Witness:** unit tests "replace keeps the Debug
   API absent in the snapshot", "keys from the snapshot win", "replace keeps
-  startup prompt flags". **Mutation:** replacing vars wholesale.
+  startup prompt flags", "replace keeps the receiver's native_prefs, does not
+  take it from the snapshot" (§607). **Mutation:** replacing vars wholesale.
 - **P9. An old backup restores.** A 2.23.2-form block migrates before the
   category filter; the preview counts the migrated block; the core config
   = golden. **Witness:** unit tests "block migrates: preview counts by
@@ -279,10 +293,8 @@ Start: document → old form? → migration → copy of the original → write
 - A new settings key goes both into the import allowlist and into an export
   category: the asymmetry already lost Directions (§221), auto-ping (§349),
   MASQUE (§219). The guard is P2. The reverse asymmetry is not caught by a
-  test: `wizard_*` flags travel in the backup and give "unknown keys
-  skipped" on your own backup.
-- The replace caption "Wipes existing data in selected categories" does not
-  match P7: unselected categories go too.
+  test. Startup prompt flags travel in the backup on purpose and are
+  skipped silently on import (§600).
 - After a restore from "Backup & restore" the screens keep the old snapshot
   until restart — hence "Restart now"; from the home screen the sources are
   re-read automatically.

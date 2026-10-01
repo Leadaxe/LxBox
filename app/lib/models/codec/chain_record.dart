@@ -36,7 +36,6 @@ Map<String, dynamic> chainToRecord(SourceChain c) => {
       'kind': kSourceKindChain,
       'tag': c.tag,
       'enabled': c.enabled,
-      if (c.label.isNotEmpty) 'label': c.label,
       'body': {
         'type': kChainOutboundType,
         if (c.idleTimeout.isNotEmpty) 'idle_timeout': c.idleTimeout,
@@ -111,12 +110,10 @@ RecordRead<SourceChain> chainFromRecord(
   final rawRewrite = body['rewrite'];
   final idleTimeout = body['idle_timeout'];
   final stripEvasion = body['strip_evasion'];
-  final label = j['label'];
   final enabled = j['enabled'];
   return RecordRead.ok(
     SourceChain(
       tag: tag,
-      label: label is String ? label : '',
       enabled: enabled is bool ? enabled : true,
       hops: hops,
       idleTimeout: idleTimeout is String ? idleTimeout : '',

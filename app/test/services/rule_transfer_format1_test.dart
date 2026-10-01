@@ -292,7 +292,7 @@ void main() {
       expect(_dnsRule(c.rawDnsRules[0], c.format).item,
           const DnsRuleInline(name: 'corp', rule: {'server': 'office-dns'}, enabled: false));
       expect(_dnsRule(c.rawDnsRules[1], c.format).item,
-          const DnsRulePreset(presetId: 'block-ads', enabled: true));
+          const DnsRulePreset(presetId: 'block-ads'));
       final srs = _dnsRule(c.rawDnsRules[2], c.format).item! as DnsRuleSrs;
       expect(srs.srsUrl, 'https://example-2.com/geo.srs');
       expect(srs.server, 'office-dns');

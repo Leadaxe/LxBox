@@ -1,0 +1,1 @@
+Tailscale exit node shown in the node row (via <device>, exit offline, key-expiry warning); a catalogue of public subscription sources linked from the README. A round of fixes: subscriptions and own servers, DNS and config build, backup, routing, WARP, anti-DPI, localisation and shell. Core unchanged, v1.14.2-lx.11.

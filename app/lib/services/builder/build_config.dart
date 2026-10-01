@@ -332,10 +332,7 @@ Future<BuildResult> _buildConfig({
   // §120: sniff-rule теперь обёрнут #if @sniff_enabled в шаблоне — отдельный
   // removal-шаг не нужен (walker дропает array-element при false).
 
-  final tvars = TemplateVars(
-    tlsFragment: vars['tls_fragment'] == 'true',
-    tlsRecordFragment: vars['tls_record_fragment'] == 'true',
-  );
+  const tvars = TemplateVars.empty;
 
   // Реестр rule_set/rules инициализируется из template — template может
   // содержать built-in inline rule_set (например `ru-domains`). Реестр
@@ -1211,14 +1208,7 @@ List<Map<String, dynamic>> _buildDirectionGroups({
 
   /// Ноды Направления после regex-фильтра. Пустой/битый regex → все baseNodes.
   /// §197 — nodeFilterInvert инвертирует смысл: true → ноды, чей tag НЕ матчит.
-  List<String> nodesFor(Direction c) {
-    if (c.nodeFilter.isEmpty) return baseNodes;
-    final re = tryCompileRegex(c.nodeFilter, caseSensitive: false);
-    if (re == null) return baseNodes;
-    return baseNodes
-        .where((t) => re.hasMatch(t) != c.nodeFilterInvert)
-        .toList();
-  }
+  List<String> nodesFor(Direction c) => c.filterNodeTags(baseNodes);
 
   // §248 — member-set'ы считаем один раз: их делят selector и auto-двойник.
   // §254 — детур-циклы билдер больше НЕ рвёт: детекция и минимальный набор

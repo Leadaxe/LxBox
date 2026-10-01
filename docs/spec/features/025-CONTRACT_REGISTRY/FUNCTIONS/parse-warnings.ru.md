@@ -60,11 +60,13 @@
 
 Характерные коды разбора: `scheme_unsupported`, `protocol_unsupported`,
 `form_unrecognized`, `field_missing`, `type_invalid`, `uri_too_long`,
-`core_rejected`, `duplicate`, `provider_banner_link`, `unknown_key`,
+`core_rejected`, `duplicates_collapsed`, `provider_banner_link`, `unknown_key`,
 `flow_deprecated`, `tls_not_applicable_quic`, `obfs_unknown`, `awg_mtu_clamped`,
 `awg_mtu_high`, `wgconf_dns_ignored`, `detour_*`, `dialer_proxy_unusable`,
-`unknown_node_type`. Полный словарь — `docs/contract/warnings.md`; `duplicate` и
-`unknown_node_type` — коды приложения, в общем словаре их нет.
+`unknown_node_type`. Полный словарь — `docs/contract/warnings.md`;
+`unknown_node_type` — единственный собственный код приложения, в общем словаре его
+нет (прежний собственный `duplicate` стал словарным `duplicates_collapsed`,
+контракт 1.1.102, задача 589).
 
 ## Границы
 

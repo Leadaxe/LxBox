@@ -7,7 +7,7 @@ import 'template_vars.dart';
 
 /// Контекст одного вызова `buildConfig`. `ServerList.build(ctx)` использует
 /// его, чтобы:
-///  - взять глобальные флаги (tls_fragment и пр.) — `vars`;
+///  - передать `vars` в `emit` узла (сейчас без полей, §593);
 ///  - зарезервировать уникальный тег — `allocateTag(base)`;
 ///  - положить entry в итоговый `outbounds[]` / `endpoints[]` — `addEntry(e)`
 ///    (sealed-switch внутри ctx по типу);

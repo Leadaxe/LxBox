@@ -834,7 +834,7 @@ removed from the template and the fallback in `SelectableRule.fromJson` is gone 
 | `num` | int? | §370 — the position on the **sparse rule ordering axis**. |
 | `isSortable` | bool? | §370 — whether the rule can be dragged. `false` pins the position. |
 
-### The field matrix of the current eight presets
+### The field matrix of the current eleven presets
 
 The metadata comes from `ui.*` (§264/§370): `default`, `locked`, `num`, `isSortable`.
 `traffic-processing` comes first in the catalog (locked, num:0, isSortable:false) and carries
@@ -851,6 +851,8 @@ the base sniff/hijack-dns/resolve rules.
 | `private-ip` | (false) | — | — | ✓ (outbound) | — | ✓ (`ip_is_private` → `@outbound`) | — | — |
 | `unknown-traffic` | false | — | — | ✓ (`outbound`=reject) | ✓ (inline `unknown-apps`, invert `package_name_regex: "^"`) | ✓ (`@outbound`) | — | — |
 | `tailscale` (§578) | true | — | 945 | ✓ (dns_enable) | — | ✓ per node: `[resolve → <node>-dns #if @dns_enable, preferred_by → @node]` | ✓ per node (`preferred_by` → `<node>-dns`, #if @dns_enable) | ✓ per node (type `tailscale`, `endpoint: @node`, #if @dns_enable) |
+| `fcm-push` (§364) | false | — | 970 | ✓ (outbound=direct-out, gms_only) | — | ✓ one logical `and` rule: `[package_name gms #if @gms_only, or(domain mtalk/android.apis, domain_suffix firebase…)]` → `@outbound` | — | — |
+| `vowifi` (§371) | true | — | 990 | ✓ (outbound=direct-out, ike_ports) | ✓ (inline `vowifi-epdg`: `domain_suffix pub.3gppnetwork.org`) | ✓ an array: `[rule_set vowifi-epdg → @outbound, udp 500/4500 → @outbound #if @ike_ports]` | — | — |
 
 **`traffic-processing` (§264/§370)** is a locked, unsortable preset and the FIRST in `selectable_rules`. It carries the base route rules `sniff`, `hijack-dns` and `resolve`, which before §264 lived directly in `config.route.rules` (now empty). `num:0` plus `isSortable:false` guarantee its rules come first.
 
@@ -1056,22 +1058,24 @@ See the implementation in `app/lib/services/builder/build_config.dart` and `pres
 
 ## The `#if` construct (§120)
 
-Declarative conditionals right inside the `config` and preset bodies. They are resolved during the substitution phase.
+Declarative conditionals right inside the `config` and preset bodies. They are resolved during the substitution phase. The language as a whole (constructs, predicates, `#enable`, `#on_change`, `for_each`, `#tpl`) is specified in [024-TEMPLATE → template-language](./spec/features/024-TEMPLATE/FUNCTIONS/template-language.md); this section is the schema-level view of `#if`.
 
 ```jsonc
 "#if": {
-  "and":   [<predicate>, ...],   // mutually exclusive with or; all must be true
-  "or":    [<predicate>, ...],   // at least one must be true
-  "value": <any JSON>,           // the then branch (required)
-  "else":  <any JSON>            // the else branch (optional)
+  "#and":   [<predicate>, ...],  // mutually exclusive with #or; all must be true
+  "#or":    [<predicate>, ...],  // at least one must be true
+  "#value": <any JSON>,          // the then branch (required)
+  "#else":  <any JSON>           // the else branch (optional)
 }
 ```
+
+The legacy spellings without `#` (`and`, `or`, `value`, `else`, and `enabled: "@var"` for `#enable`) are still read and will stay readable; new template text uses the `#` forms.
 
 **Two modes:**
 - **map-spread** — `#if` as a key of an object: when true, the fields of `value` (an object) are merged into the parent;
 - **array-element** — `#if` as the only key of an array element: when true the element becomes `value`, and when false with no else it is dropped.
 
-**Predicates:** `"@var"` (a bool), `{"@var":"literal"}` (equality), `{"@var":"#notEmpty"/"#isEmpty"}`, `{"@var":{"#in":[...]}}`.
+**Predicates:** `"@var"` (a bool), `{"@var":"literal"}` (equality), `{"@var":"#notEmpty"/"#isEmpty"}`, `{"@var":{"#in":[...]}}` / `{"@var":{"#notIn":[...]}}`, `{"@var":{"#matches":"<regex>"}}`, `{"#not": <predicate>}`; predicates nest to any depth. A sibling construct, `"#enable": <predicate>`, keeps or drops the whole node without evaluating its contents.
 
 **Naming:** `#` marks a construct or predicate, `@` marks a var reference, and bare names are the inner keys of an `#if` body. An unknown key is an error.
 
@@ -1298,6 +1302,7 @@ on both pseudo-vars (`rule_enable` AND `dns_enable`), so it fires along either p
 
 ## Related documents
 
+- [024-TEMPLATE](./spec/features/024-TEMPLATE/FEATURE.md) — the feature: the template language (`#if`, `#enable`, `for_each`, `#tpl`, typed variables) and the preset language; this file is the schema reference for `wizard_template.json`
 - [`STORAGE.md`](./STORAGE.md) — the user state in `lxbox_settings.json` (what the user changes, including the directions)
 - [§058 config generator v1 (superseded)](./spec/tasks/058-config-generator-wizard-v1-superseded/spec.md) — substitution and expansion (formerly feature §005x, superseded by §026)
 - [§026 parser v2](./spec/tasks/026F-parser-v2/spec.md) — `parser_config.version`

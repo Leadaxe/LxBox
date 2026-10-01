@@ -45,14 +45,18 @@ status OK; the snapshot of the previous source is deleted.
   changes, message "Couldn't load new source — keeping current".
 - Changing the URL to the same one does not delete the cache; every change to a file creates a new
   internal key `file:<uuid>`.
-- On switching to a new URL its response is not written to the cache — the cache will appear on
-  the next successful update; until then an offline start of this subscription will not
-  restore its nodes — a known defect, a task candidate.
+- On switching to a new URL its response is written to the cache, the old
+  address's cache is deleted (unless another entry uses it). A URL change
+  without a request (Debug API) moves the cache to the new address: the
+  previous nodes live until the first successful update by the new URL.
 - On a URL change the subscription's Custom identity is kept — the new address
   is requested with it.
 - Marks of disabled nodes survive the source change (same entry).
-- A file subscription is created with interval `-1`; automatic and manual
-  "update" do nothing for it and do not change the status.
+- A file subscription is created with interval `-1`. "Update" / "Apply"
+  parse its snapshot again (the file is not re-read, no network): import
+  rules changed on the Filters tab take effect; "updated" time does not move.
+  No snapshot → nothing changes. The Source tab shows the snapshot instead of
+  a live request.
 - After a restart the file subscription's nodes are restored from its snapshot.
 - TTL cleanup of marks is not performed for a file subscription — there is no external
   signal that a node is gone.
@@ -75,3 +79,4 @@ status OK; the snapshot of the previous source is deleted.
 | 2 | [101](../../../tasks/101-rehydrate-bootstrap-race.md) | DONE | The "keep the previous on failure" principle, applied to source change |
 | 3 | [283F](../../../tasks/283F-subscription-node-disable/spec.md) | Implemented (device-pending) | TTL cleanup of marks is disabled for a file subscription |
 | 4 | [289](../../../tasks/289-per-subscription-fetch-identity.md) | — | A URL change keeps the Custom identity |
+| 5 | [603](../../../tasks/603-subscription-and-own-server-bugs.md) | Implemented | Update re-parses the snapshot with rules; Source tab without HTTP; cache kept on URL change |

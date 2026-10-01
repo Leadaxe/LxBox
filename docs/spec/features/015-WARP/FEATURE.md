@@ -110,7 +110,8 @@ The feature protects five principles:
   HTTP version in the registration cache.
 - **P11. A manual MASQUE IP:port — only into the node.** The cache keeps the
   server from the registration; an empty IP field — the registration server.
-  **Witness:** `no witness`. **Mutation:** the override is written to the cache
+  **Witness:** unit "manual IP:port override не попадает в кеш аккаунта"
+  (`test/warp/masque_manual_override_test.dart`). **Mutation:** the override is written to the cache
   and goes into all future nodes.
 - **P12. h3 is not offered where it is dead.** Randomisation and the host list
   for `h3` — only the pool's h3 hosts; for `h2`/`auto` — the common hosts and

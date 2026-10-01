@@ -220,7 +220,6 @@ void main() {
           if (s['kind'] == 'chain') chainFromRecord(s).value!,
       ];
       expect(chains.map((c) => c.tag), ['early', 'late', 'no-order']);
-      expect(chains.first.label, 'E');
       expect(chains[1].hops, const [NodeLink(tag: 'early'), NodeLink(tag: 'vpn-1')]);
       expect(_records(r.doc['sources']).every((s) => !s.containsKey('order')),
           isTrue);

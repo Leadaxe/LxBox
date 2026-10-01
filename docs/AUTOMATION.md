@@ -32,7 +32,7 @@ sent out. Turn it on in **App Settings → Automation**.
    `enabled=false` and no command is accepted at all. That toggle is the
    admission barrier — there is no separate per-app pass (see §157).
 2. Enable the **Emit** categories you want if you would like L×Box to send events
-   out (Lifecycle / State / Subscription / Health).
+   out (Lifecycle / State / Subscription).
 3. In the host application, pick L×Box:
    - **Plugin** (simpler): Action / State → **Plugin → L×Box** → choose a command;
    - **Raw**: **Send Intent** → Action = one of the commands below, Target =
@@ -75,7 +75,7 @@ In the host's plugin list L×Box offers **four entries**:
 |---|---|
 | **L×Box: Start VPN** | one tap — select it and you are done, no screen |
 | **L×Box: Stop VPN** | one tap |
-| **L×Box: Toggle VPN** | one tap |
+| **L×Box: Toggle VPN** | one tap; without the VPN permission it opens the app for consent (same as the tile) |
 | **L×Box: Custom…** | opens a screen for choosing the remaining commands |
 
 “Custom…” lists the commands (Switch node · Set group · URL-test group · Refresh
@@ -95,8 +95,8 @@ Host → State / Condition → Plugin → **L×Box** → pick a check:
 | Condition | Value |
 |---|---|
 | **VPN is up** | — |
-| **Active node =** | choose a node |
-| **Active group =** | choose a group |
+| **Active node =** | type the node tag exactly as the app shows it (a text field, no list) |
+| **Active group =** | type the group tag |
 
 The profile stays active while the condition holds. The host polls periodically.
 
@@ -110,7 +110,9 @@ The profile stays active while the condition holds. The host polls periodically.
 
 > Under the hood the plugin uses the standard
 > `com.twofortyfouram.locale.intent.action.FIRE_SETTING` / `QUERY_CONDITION` and
-> the same commands as the raw actions below. The plugin's UI is in English.
+> the same commands as the raw actions below. The plugin's labels and screens
+> follow the app language; the command and check strings stored in the host
+> stay English.
 
 ---
 
@@ -145,7 +147,7 @@ corresponding category is enabled in the Emit settings.
 |---|---|---|---|
 | `VPN_CONNECTED` | — | Lifecycle | The tunnel came up |
 | `VPN_DISCONNECTED` | `reason` (`user`/`error`/`revoked`) | Lifecycle | The tunnel went down |
-| `VPN_ERROR` | `code`, `message` | Lifecycle | Any error path, or a failed automation command. `code` is `tunnel_error` (the tunnel dropped) or `conflict`/`bad_request`/`not_found`/… (the command failed) |
+| `VPN_ERROR` | `code`, `message` | Lifecycle | Any error path, or a failed automation command. `code` is `tunnel_error` (the tunnel dropped) or `conflict`/`bad_request`/`not_found`/`switch_failed`/… (the command failed; `switch_failed` — the core rejected an accepted `SWITCH_NODE`) |
 | `VPN_REVOKED` | — | Lifecycle | Another VPN app took over the tunnel |
 | `UPDATE_AVAILABLE` | `version`, `url` | Lifecycle | A newer version was found |
 | `ACTIVE_NODE_CHANGED` | `old_tag`, `new_tag`, `group`, `reason` | State | The active node changed |
@@ -157,8 +159,8 @@ corresponding category is enabled in the Emit settings.
 ### Reserved (the namespace exists, the source does not yet)
 
 - `HEARTBEAT_FAILED` · `LATENCY_DEGRADED` · `UNATTRIBUTED_BURST` (category
-  **Health**) — these arrive together with the §042 health watchdog. The category
-  is already present in the UI.
+  **Health**) — the names are reserved, there is no source (the health watchdog
+  is not planned) and no toggle in the UI.
 - `PERMISSION_NEEDED` (`permission`, category **Lifecycle**) — reserved for
   runtime-permission prompts; nothing emits it yet.
 
@@ -181,8 +183,8 @@ Task "Switch to Russia with confirmation":
 ```
 
 When a command fails (no such group, the tunnel is down, a non-existent node or
-group, and so on) L×Box emits `VPN_ERROR` with a `code`
-(`conflict` / `bad_request` / `not_found` / …) and a `message` — so a waiting
+group, the core rejected the node, and so on) L×Box emits `VPN_ERROR` with a
+`code` (`conflict` / `bad_request` / `not_found` / `switch_failed` / …) and a `message` — so a waiting
 Tasker learns about the failure instead of a silent fire-and-forget.
 
 > **Important: enable both `Lifecycle` and `State` for request-response.** A

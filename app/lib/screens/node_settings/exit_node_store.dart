@@ -105,7 +105,8 @@ Future<String?> storeExitNodeChoice(SubscriptionController sub,
     final err = await sub.updateMemberAt(target.entryIndex, mi, toStore);
     if (err != null) return err.render();
   } else {
-    await sub.updateConnectionAt(target.entryIndex, [toStore]);
+    final err = await sub.updateConnectionAt(target.entryIndex, [toStore]);
+    if (err != null) return err.render();
   }
   return null;
 }

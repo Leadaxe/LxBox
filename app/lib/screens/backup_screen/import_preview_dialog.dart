@@ -54,9 +54,11 @@ Future<ImportDialogResult?> showImportPreview(
                 if (available.contains(BackupCategory.serverLists))
                   _previewCheckbox(
                     ctx,
-                    label:
-                        '${c.countFor(BackupCategory.serverLists)} server lists '
-                        '(${servers.subs} subs, ${servers.custom} custom)',
+                    label: getLocalText.s(
+                        "%1\$d server lists (%2\$d subs, %3\$d custom)",
+                        c.countFor(BackupCategory.serverLists),
+                        servers.subs,
+                        servers.custom),
                     checked: include.contains(BackupCategory.serverLists),
                     onChanged: (v) => set(() {
                       if (v == true) {
@@ -69,9 +71,13 @@ Future<ImportDialogResult?> showImportPreview(
                 if (available.contains(BackupCategory.routing))
                   _previewCheckbox(
                     ctx,
-                    label: 'Routing — '
-                        '${c.countFor(BackupCategory.routing)} rules'
-                        '${c.routingFinalOutbound != null && c.routingFinalOutbound!.isNotEmpty ? ', final: ${c.routingFinalOutbound}' : ''}',
+                    label: (c.routingFinalOutbound ?? '').isEmpty
+                        ? getLocalText.plural("Routing — %d rules",
+                            c.countFor(BackupCategory.routing))
+                        : getLocalText.plural(
+                            "Routing — %1\$d rules, final: %2\$s",
+                            c.countFor(BackupCategory.routing),
+                            c.routingFinalOutbound),
                     checked: include.contains(BackupCategory.routing),
                     onChanged: (v) => set(() {
                       if (v == true) {
@@ -84,8 +90,8 @@ Future<ImportDialogResult?> showImportPreview(
                 if (available.contains(BackupCategory.appSettings))
                   _previewCheckbox(
                     ctx,
-                    label:
-                        '${c.countFor(BackupCategory.appSettings)} app settings',
+                    label: getLocalText.plural("%d app settings",
+                        c.countFor(BackupCategory.appSettings)),
                     checked: include.contains(BackupCategory.appSettings),
                     onChanged: (v) => set(() {
                       if (v == true) {
@@ -98,8 +104,8 @@ Future<ImportDialogResult?> showImportPreview(
                 if (available.contains(BackupCategory.vpnSettings))
                   _previewCheckbox(
                     ctx,
-                    label:
-                        '${c.countFor(BackupCategory.vpnSettings)} VPN system toggles',
+                    label: getLocalText.plural("%d VPN system toggles",
+                        c.countFor(BackupCategory.vpnSettings)),
                     checked: include.contains(BackupCategory.vpnSettings),
                     onChanged: (v) => set(() {
                       if (v == true) {
@@ -112,7 +118,8 @@ Future<ImportDialogResult?> showImportPreview(
                 if (available.contains(BackupCategory.debugConfig))
                   _previewCheckbox(
                     ctx,
-                    label: 'Debug API config (sensitive — token included)',
+                    label: getLocalText
+                        .s("Debug API config (sensitive — token included)"),
                     checked: include.contains(BackupCategory.debugConfig),
                     onChanged: (v) => set(() {
                       if (v == true) {

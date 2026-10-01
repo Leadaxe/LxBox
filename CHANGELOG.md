@@ -10,6 +10,82 @@
 
 ---
 
+## [2.25.10] — 2026-10-01
+
+### Added
+
+- **Tailscale in the node row ([task 608](docs/spec/tasks/608-tailscale-exit-node-in-node-row.md)).**
+  With the VPN on, a node with an exit node reads `tailscale·via <device>`;
+  an offline exit device shows `exit offline` in orange instead of the
+  endpoint state. Less than 7 days before the device key expires, the row
+  warns `key expires Nd` / `key expired` (on a NETWORKS row — instead of
+  `running`). Direct vs relay stays in the Network tab: the core's status
+  carries no path ([#155](https://github.com/Leadaxe/LxBox/issues/155)).
+- **Catalogue of public subscription sources ([task 602](docs/spec/tasks/602-public-sources-catalog.md)),**
+  EN+RU, linked from the README.
+
+### Changed
+
+- **A hop chain has one name, its tag ([task 594](docs/spec/tasks/594-chain-label-removed-tag-only.md)).**
+  The separate label is gone: the Direction filter and the editor title use
+  the same name the user sees.
+- **The `connecting` timeout grows with the node count ([task 596](docs/spec/tasks/596-connecting-timeout-scales-with-nodes.md)):**
+  `max(15 s, 0.1 s × N)` plus a margin for endpoints. A subscription of
+  ~230 nodes no longer has its tunnel killed right after the core started it.
+- **Ping and probe apply TLS fragmentation and mixed-case SNI** the same way
+  the tunnel does ([task 606](docs/spec/tasks/606-audit-591-export-list-tun-warp-dpi-bugs.md)).
+
+### Fixed
+
+- **Nodes and parsing.** Saving an INI source (WireGuard/AWG) is no longer
+  taken for a JSON array ([594](docs/spec/tasks/594-ini-source-save-invalid-json.md));
+  a whole number written as `0.0` is emitted as an integer ([595](docs/spec/tasks/595-integral-float-emitted-as-int.md));
+  `max_concurrency: "0"` counts as unset and raises no `field_conflict` ([597](docs/spec/tasks/597-xmux-conflict-false-on-zero-string.md));
+  empty fields of a v2rayN container count as absent keys ([598](docs/spec/tasks/598-vmess-empty-fields-no-warnings.md)).
+- **Backup.** «Replace all» replaces only the selected categories instead of
+  the whole settings document ([599](docs/spec/tasks/599-backup-replace-per-category.md));
+  startup-prompt flags are not reported as unknown keys ([600](docs/spec/tasks/600-backup-startup-prompt-flags-not-unknown.md));
+  replacing a backup keeps the VPN toggle mirror ([607](docs/spec/tasks/607-l10n-backup-shell-bugs-from-591.md)).
+- **Routing.** A rule whose rule set is not downloaded yet stays on ([601](docs/spec/tasks/601-routing-missing-srs-keeps-enabled.md)).
+- **Subscriptions and own servers ([task 603](docs/spec/tasks/603-subscription-and-own-server-bugs.md)).**
+  Changing a subscription URL keeps nodes and cache until the first
+  successful update; a file subscription applies import rules to its
+  snapshot and its Source tab reads the cache; a broken own-server source is
+  not saved; deleting an own server asks «Delete server?»; a negative
+  `profile-update-interval` from the server is rejected; one request per URL
+  per pass.
+- **DNS and config build ([task 604](docs/spec/tasks/604-dns-build-health-directions-bugs.md)).**
+  Editing SNI of a DNS server keeps the other `tls` fields; a custom DNS rule
+  pointing to a missing server is dropped with a code; the proxy port is
+  checked on load from storage and backup; «config outdated» fires for every
+  template variable; Direction `pool_tolerance` is clamped to the core
+  limit 15000.
+- **Service, automation, profiler ([task 605](docs/spec/tasks/605-service-live-automation-workspaces-bugs.md)).**
+  A start error gets its own notification; a core failure after an accepted
+  `SWITCH_NODE` reports `VPN_ERROR(switch_failed)`; automation commands
+  resync with storage on start, after a backup and on a workspace switch;
+  the profiler reconnects on every tunnel start, START clears connection
+  snapshots (no false `tcpClose`), the «DNS / router events off» banner is
+  gone.
+- **Node list, WARP, anti-DPI ([task 606](docs/spec/tasks/606-audit-591-export-list-tun-warp-dpi-bugs.md)).**
+  «Copy link» on a node without a link says so instead of doing nothing;
+  dragging under a filter keeps hidden nodes in place; a custom WARP
+  endpoint is checked as `host:port` before registration; an invalid TLS
+  fragmentation pause is replaced with 500 ms.
+- **Localisation and shell ([task 607](docs/spec/tasks/607-l10n-backup-shell-bugs-from-591.md)).**
+  More strings go through translation (node copy, theme, About, Add tile,
+  restore summary); the core locale follows the saved app language from
+  process start; the read-only code editor offers no Cut/Paste.
+
+### Internal
+
+- Contract 1.1.108 (registry texts only); `sync_contract --to` writes the
+  full commit sha to the lock.
+- Dead code found by audit 591 removed ([task 593](docs/spec/tasks/593-remove-dead-code-after-audit-591.md));
+  no user-visible change.
+
+---
+
 ## [2.25.9] — 2026-09-29
 
 ### Changed

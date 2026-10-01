@@ -46,8 +46,7 @@
 - экспорт «Share N events (JSON)» / «Copy JSON to clipboard»;
 - плашки «N unattributed events / 30s …», «N% of DNS queries failing while the
   connection is alive — tap to fix» (лист-подсказка с «Open DNS settings» и
-  «Enable FakeIP»), «DNS / router events off» при выключенной пересылке журнала
-  ядра;
+  «Enable FakeIP»);
 - Debug API: `/profiler/live?seconds=N` (по умолчанию 60), `/profiler/live/state`,
   `/profiler/live/stream` (SSE), `/profiler/live/unattributed`.
 
@@ -59,9 +58,10 @@
   смерти процесса.
 - Окно хранения меняется на лету и сохраняется; старые события подрезаются
   при следующей чистке. Буфер сверх потолка теряет старейшие.
-- Каждое событие несёт уровень уверенности в владельце (`verified`,
-  `secondary`, `inferred`, `unattributed`) и цепочку маршрутизации
-  (`routingLine`, `outboundChain`, `detourChain`).
+- Каждое событие несёт уровень уверенности в владельце — в текущем коде
+  `verified` или `unattributed`; `secondary` и `inferred` — спящие значения,
+  оставленные для чтения старых экспортов ([028 → attribution](../../028-TRAFFIC_PROFILER/FUNCTIONS/attribution.ru.md)) —
+  и цепочку маршрутизации (`routingLine`, `outboundChain`, `detourChain`).
 - Успешные DNS-ответы без владельца плашку «без владельца» не зажигают — только
   отказы и соединения без владельца.
 - «DNS failing» не зажигается при простое: без активности соединений в окне

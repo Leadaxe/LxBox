@@ -24,7 +24,6 @@ import 'package:share_plus/share_plus.dart';
 import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
 import '../services/traffic_profiler.dart';
-import '../widgets/core_logs_hint_banner.dart';
 import 'live_events_tab/dns_health_banner.dart';
 import 'live_events_tab/recording_header.dart';
 import 'live_events_tab/unattributed_banner.dart';
@@ -205,7 +204,6 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
           onExport: _exportEvents,
         ),
         const Divider(height: 1),
-        const CoreLogsHintBanner(),
         if (TrafficProfiler.I.unattributedBannerActive)
           const UnattributedBanner(),
         // §262 — деградация DNS при живой связи: тап открывает лист-подсказку.

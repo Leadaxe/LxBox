@@ -54,8 +54,7 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
 
     // Выставляем `_template` ДО `_refreshSrsCache` — он через `_presetFor`
     // ищет `SelectableRule` в `_template.selectableRules`, иначе получит
-    // null и проскочит auto-disable для preset-правил с uncached
-    // remote rule_set'ами (task 011).
+    // null и не увидит кэш preset-правил с remote rule_set'ами (task 011).
     _template = template;
 
     await _seedDefaultPresets(template);
@@ -112,79 +111,26 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
     // переставляем тут — race с home return observer (banner blink).
   }
 
-  /// Обновить `_srsCached` + принудительно **отключить** правила у которых
-  /// нет нужного кэша (task 011): без локального `.srs` правило не может
-  /// работать, sing-box просто пропустит соответствующий rule_set при
-  /// expansion (см. preset_expand.dart), а enabled-switch visually обманывал
-  /// бы — «вкл.», но ничего не матчит. Выключаем явно → юзер видит OFF и
-  /// понимает, что надо тапнуть ☁ для download'а.
+  /// Обновить `_srsCached` по дисковому кэшу ([RoutingHelpers.scanSrsCache]).
   ///
-  /// Проверяется:
-  /// - `CustomRuleSrs` — один файл по `id`.
-  /// - `CustomRulePreset` — remote rule_set'ы пресета
-  ///   (`preset__<presetId>__<tag>`), включённые гейтом (§534: `#enable` и
-  ///   легаси `enabled`, семантика билдера). Выключенный гейтом набор не
-  ///   требуется в кэше и правило из-за него не гаснет, но его файл от
-  ///   `pruneOrphans` защищён ([RoutingHelpers.presetCachePlan]).
+  /// §601 — правила НЕ переписываются: `enabled` — только намерение
+  /// пользователя. Включённое правило без файла показывается «ждёт
+  /// скачивания» (приглушённый свич + ☁), набора без файла в конфиге нет,
+  /// файл скачивает автообновление. Раньше (task 011) здесь писалось
+  /// `enabled=false`, и автообновление такое правило больше не качало —
+  /// дефолтный пресет гас навсегда.
   Future<void> _refreshSrsCache() async {
     // §534 — свежий снимок userVars до пересчёта: гейт набора на
     // ref-переменной (§265) читает значение из глобального словаря.
     _userVars = await SettingsStorage.getAllVars();
-    _srsCached.clear();
-    var changed = false;
-    // Set известных disk-cache ID'шников. Нужен для `pruneOrphans`
-    // ниже — disk-ID отличается от `_srsCached` композитного ключа
-    // (`_presetSrsKey` использует `rule.id|tag`, а файл лежит под
-    // `preset__<presetId>__<tag>`).
-    final activeDiskIds = <String>{};
-    for (var i = 0; i < _customRules.length; i++) {
-      final r = _customRules[i];
-      if (r is CustomRuleSrs) {
-        // Srs-правило резервирует свой id в disk-namespace'е независимо от
-        // того, скачан файл или нет — чтобы prune не удалил ещё-не-скачанный.
-        activeDiskIds.add(r.id);
-        // ## 12 — по файлу на набор; правило «скачано», когда есть ВСЕ.
-        activeDiskIds.addAll(r.cacheIds);
-        var cached = r.cacheIds.isNotEmpty;
-        for (final cacheId in r.cacheIds) {
-          if (!await RuleSetDownloader.isCached(cacheId)) cached = false;
-        }
-        if (cached) _srsCached.add(r.id);
-        if (!cached && r.enabled) {
-          _customRules[i] = r.withEnabled(false);
-          changed = true;
-        }
-      } else if (r is CustomRulePreset) {
-        final preset = _presetFor(r.presetId);
-        if (preset == null) continue;
-        // §534 — файл выключенного гейтом набора не сирота: вернут галку —
-        // качать заново не придётся; свежесть при возврате обеспечит
-        // автообновление по TTL. Требуются только включённые гейтом.
-        final plan = RoutingHelpers.presetCachePlan(r, preset,
-            globalVars: _userVars);
-        activeDiskIds.addAll(plan.keepCacheIds);
-        final remotes = plan.required;
-        var allCached = true;
-        for (final rs in remotes) {
-          final cached = await RuleSetDownloader.cachedPathForPreset(
-                  r.presetId, rs.tag) !=
-              null;
-          if (cached) {
-            _srsCached.add(_presetSrsKey(r, rs.tag));
-          } else {
-            allCached = false;
-          }
-        }
-        if (remotes.isNotEmpty && !allCached && r.enabled) {
-          _customRules[i] = r.withEnabled(false);
-          changed = true;
-        }
-      }
-    }
+    final scan = await RoutingHelpers.scanSrsCache(_customRules,
+        presetFor: _presetFor, globalVars: _userVars);
+    _srsCached
+      ..clear()
+      ..addAll(scan.cached);
     // Fire-and-forget: удалить orphan'ов (файлы без соответствующего правила).
     // Не критично по времени, не влияет на UI — unawaited'им.
-    unawaited(RuleSetDownloader.pruneOrphans(activeDiskIds));
-    if (changed) _markDirty();
+    unawaited(RuleSetDownloader.pruneOrphans(scan.activeDiskIds));
   }
 
   /// §264 — совпадают ли два списка правил по порядку и составу (по `id`).

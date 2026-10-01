@@ -143,24 +143,23 @@ Android TV — best-effort (§372): манифест совместим, отд�
 | 6 | [233](../../tasks/233-minsdk-24.md) | — | minSdk 26 → 24 |
 | 7 | [379](../../tasks/379-version-code-from-version.md) | Реализовано (v2.20.0) | код из версии, отказ от `--split-per-abi`, реальная версия на merge в `main` |
 | 8 | [390](../../tasks/390-install-source-aware-update-notice.md) | Done | канал установки, define только у AAB |
-| 9 | [436](../../tasks/436-google-play-upload-ci.md) | In progress | заливка AAB в Play из CI, rc не публикуется |
+| 9 | [436](../../tasks/436-google-play-upload-ci.md) | Done (первый зелёный прогон тега v2.25.9) | заливка AAB в Play из CI с `PLAY_RELEASE_STATUS=completed`, rc не публикуется |
 | 10 | [486](../../tasks/486-ci-registry-tests.md) | Released v2.25.0 | реестровые тесты не скипаются на CI |
 
 ## Следить за
 
-- **Устаревшие описания CI:** 021F (черновой релиз, один APK
-  `L×Box-vX.Y.Z.apk`, push только в `main`); таблица CI в BUILD.md без
-  `google-play`, `PublicSubsCorpus` и правил rc; «Versions» в BUILD.md называет
-  ядро `v1.14.0-lx.28-rc.1` при пине `v1.14.2-lx.8`.
-- **Противоречие о подписи F-Droid:** RELEASE_PROCESS.md — «F-Droid's key»,
-  FDROID.md — публикация нашего APK под нашей подписью.
-- **Противоречие о канале Play:** GOOGLE_PLAY.md — «без build-time define»,
-  фактически AAB собирается с `LXBOX_DISTRIBUTION=play`, и приложение его читает.
-- **Чек-лист RELEASE_PROCESS.md** требует «`gh run watch` is green», тогда как
-  тот же документ и DEVELOPMENT_GUIDE запрещают верить `gh run watch`.
-- **Play отстаёт от GitHub** при статусе `draft` (заметки v2.25.8: в Play
-  последней была v2.25.5); §436 ещё In progress — актуальное значение
-  `PLAY_RELEASE_STATUS` сверять в настройках репозитория.
+- **021F — летопись**, а не описание сегодняшнего CI (черновой релиз, один
+  APK `L×Box-vX.Y.Z.apk`, push только в `main`); живое описание — BUILD.md → CI
+  и RELEASE_PROCESS.md.
+- **Версия ядра в BUILD.md → Versions — датированный снимок**; источник —
+  `app/android/libbox.version`, бамп обязан править и эту строку.
+- **Подписи:** GitHub и F-Droid отдают одни и те же байты под нашим ключом,
+  Play переподписывает — единственное место, где это сказано, RELEASE_PROCESS.md →
+  «Three channels, two signatures»; FDROID.md и GOOGLE_PLAY.md ссылаются туда.
+- **Зелёный гейт — `gh api` по `head_sha`**, никогда `gh run list`/`gh run
+  watch` — и для предполётной проверки, и для прогона тега.
+- **`PLAY_RELEASE_STATUS` в репозитории = `completed`**; fallback в YAML —
+  `draft`. Если Play снова отстанет от GitHub, первой сверять переменную.
 - `(?m)^version:` в регулярках F-Droid ещё не заякорен (закомментированная
   строка в pubspec может совпасть первой); статус MR с `'%c + 4'` в FDROID.md
   мог устареть.

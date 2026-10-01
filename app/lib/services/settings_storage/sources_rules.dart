@@ -272,46 +272,6 @@ Future<void> _saveEnabledGroups(Set<String> groups,
   if (flush) await _save();
 }
 
-// ---------------------------------------------------------------------------
-// Last global update timestamp
-// ---------------------------------------------------------------------------
-
-Future<DateTime?> _getLastGlobalUpdate() async {
-  final data = await _load();
-  final raw = data['last_global_update'] as String?;
-  if (raw == null) return null;
-  return DateTime.tryParse(raw);
-}
-
-Future<void> _setLastGlobalUpdate(DateTime dt) async {
-  final data = await _load();
-  data['last_global_update'] = dt.toIso8601String();
-  SettingsStorage._cache = data;
-  await _save();
-}
-
-Duration? _parseReloadInterval(String reload) {
-  final trimmed = reload.trim().toLowerCase();
-  if (trimmed.isEmpty) return null;
-  final match = RegExp(r'^(\d+)\s*(h|m|s)$').firstMatch(trimmed);
-  if (match == null) return null;
-  final value = int.parse(match.group(1)!);
-  return switch (match.group(2)) {
-    'h' => Duration(hours: value),
-    'm' => Duration(minutes: value),
-    's' => Duration(seconds: value),
-    _ => null,
-  };
-}
-
-Future<bool> _shouldRefreshSubscriptions(String reloadInterval) async {
-  final interval = SettingsStorage.parseReloadInterval(reloadInterval);
-  if (interval == null) return false;
-  final lastUpdate = await SettingsStorage.getLastGlobalUpdate();
-  if (lastUpdate == null) return true;
-  return DateTime.now().difference(lastUpdate) >= interval;
-}
-
 // §159 — `rule_outbounds` API удалён (legacy-миграция в `custom_rules` снята).
 
 // ---------------------------------------------------------------------------

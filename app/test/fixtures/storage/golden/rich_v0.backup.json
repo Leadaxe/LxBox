@@ -360,7 +360,6 @@
       "kind": "chain",
       "tag": "chain-1",
       "enabled": true,
-      "label": "Work",
       "body": {
         "type": "chain",
         "idle_timeout": "5m",
@@ -390,7 +389,6 @@
       "kind": "chain",
       "tag": "chain-2",
       "enabled": true,
-      "label": "chain-2",
       "body": {
         "type": "chain"
       },
@@ -407,7 +405,6 @@
       "kind": "chain",
       "tag": "chain-off",
       "enabled": false,
-      "label": "Disabled",
       "body": {
         "type": "chain"
       },

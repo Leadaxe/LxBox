@@ -1429,11 +1429,15 @@ class SubscriptionController extends ChangeNotifier {
       }
 
       // 3. Коммит: снапшот нового + чистка старого кэша + подмена url/nodes.
+      // §603 — онлайн-источник тоже: без снапшота нового ответа офлайн-старт
+      // давал 0 узлов до следующего успешного обновления.
       if (isFileSubscription(newUrl)) {
         await HttpCache.save(newUrl, fileBody!, const {});
+      } else {
+        await HttpCache.save(newUrl, result.rawBody, result.headers);
       }
       if (old.url != newUrl) {
-        await HttpCache.remove(old.url); // осиротевший ключ старого источника
+        await _removeCacheIfOrphan(old.url, except: entry);
       }
       // §129 — file → interval -1 (никогда авто, сервера нет); online → если был
       // ≤0 (пришли с файла / «не обновлять»), вернуть дефолт 24, иначе текущий.
@@ -2408,8 +2412,11 @@ class SubscriptionController extends ChangeNotifier {
   /// часовом тике. Ручной путь (⟳ → `_fetchEntryByRef`) гейтится тем же
   /// `sameComposition` внутри.
   Future<bool> refreshEntry(SubscriptionEntry entry,
-      {UpdateTrigger? trigger}) =>
-      _fetchEntryByRef(entry, trigger: trigger);
+          {UpdateTrigger? trigger,
+          FetchResult? prefetched,
+          void Function(FetchResult fetched)? onFetched}) =>
+      _fetchEntryByRef(entry,
+          trigger: trigger, prefetched: prefetched, onFetched: onFetched);
 
   Future<void> toggleAt(int index) async {
     if (index < 0 || index >= _entries.length) return;
@@ -2724,9 +2731,31 @@ class SubscriptionController extends ChangeNotifier {
 
   Future<void> replaceList(int index, ServerList next) async {
     if (index < 0 || index >= _entries.length) return;
+    final prev = _entries[index].list;
+    // §603 (вопрос 5 аудита §591, решение A) — смена адреса без фетча (Debug
+    // API `PUT /subs/{id}`): прежние узлы и кэш живут до первого успешного
+    // обновления по новому адресу. Кэш адресован URL — переносим его под
+    // новый, иначе после перезапуска регидрации не из чего поднять узлы.
+    if (prev is SubscriptionServers &&
+        next is SubscriptionServers &&
+        prev.url != next.url) {
+      await HttpCache.copy(prev.url, next.url);
+      await _removeCacheIfOrphan(prev.url, except: _entries[index]);
+    }
     _entries[index]._replaceList(next);
     await _persist();
     notifyListeners();
+  }
+
+  /// §603 — кэш адресован URL, и две записи с одним URL делят его: удаляем,
+  /// только если адрес больше никому не нужен.
+  Future<void> _removeCacheIfOrphan(String url,
+      {required SubscriptionEntry except}) async {
+    final used = _entries.any((e) =>
+        !identical(e, except) &&
+        e.list is SubscriptionServers &&
+        (e.list as SubscriptionServers).url == url);
+    if (!used) await HttpCache.remove(url);
   }
 
   Future<String?> generateConfig() async {
@@ -3018,20 +3047,36 @@ class SubscriptionController extends ChangeNotifier {
   /// §331 (ревью) — возвращает «состав узлов изменился»: true ТОЛЬКО при
   /// успешном фетче с новым составом (см. `_compositionKey`). Скипы, фейлы и
   /// «тот же список» → false. Контракт для гейта реакции в AutoUpdater.
+  ///
+  /// §603 — [prefetched]: готовый ответ (тело + заголовки) вместо сетевого
+  /// запроса; кэш тела тогда не перезаписывается. [onFetched] получает ответ
+  /// успешного сетевого фетча (> 0 узлов) — AutoUpdater отдаёт его записям с
+  /// тем же URL в том же проходе.
   Future<bool> _fetchEntryByRef(SubscriptionEntry entry,
-      {UpdateTrigger? trigger}) async {
+      {UpdateTrigger? trigger,
+      FetchResult? prefetched,
+      void Function(FetchResult fetched)? onFetched}) async {
     final list = entry.list;
     if (list is! SubscriptionServers) return false;
 
     // §129 — файловая подписка: источник локальный, снапшот живёт в HttpCache.
     // Автоматически перечитать файл нельзя (Вариант Б: доступ между сессиями не
-    // храним). Поэтому fetch/auto-update = keep-previous: ноды остаются из кэша,
-    // подписка НЕ слетает при массовом апдейте онлайн-подписок. Обновление
-    // файловой — только вручную через Edit source → Choose file (updateSourceAt).
-    if (isFileSubscription(list.url)) {
-      AppLog.I.debug('Skip fetch (file subscription): keeping cached nodes');
-      return false;
+    // храним). Обновление файловой — повторный разбор снапшота (§603: иначе
+    // import-правила, изменённые на вкладке Filters, до перезапуска не
+    // применялись); файл не перечитывается, снапшота нет → keep-previous.
+    // Новый файл — только через Edit source → Choose file (updateSourceAt).
+    final isFile = isFileSubscription(list.url);
+    if (isFile && prefetched == null) {
+      final body = await HttpCache.loadBody(list.url);
+      if (body == null || body.isEmpty) {
+        AppLog.I.debug('Skip fetch (file subscription): no cached snapshot');
+        return false;
+      }
+      prefetched =
+          FetchResult(body, null, await HttpCache.loadHeaders(list.url) ?? {});
     }
+    final pre = prefetched;
+    final local = pre != null;
 
     // Дедупликация: если предыдущий fetch этой же подписки ещё идёт
     // (ручной refresh нажали 2 раза подряд, или manual + триггер совпали),
@@ -3073,9 +3118,11 @@ class SubscriptionController extends ChangeNotifier {
       // §289 — per-subscription идентичность (null → глобальная).
       // §302 — import-rules здесь не участвуют: применяются ниже, к уже
       // разобранным узлам.
-      final result = await parseFromSource(
-          UrlSource(list.url, identity: list.identity),
-          client: httpClientForTesting);
+      final result = pre != null
+          ? parseFetched(pre)
+          : await parseFromSource(
+              UrlSource(list.url, identity: list.identity),
+              client: httpClientForTesting);
       // §515 — сетевые секунды это окно, в котором пользователь успевает
       // переключить пространство. Выходим до разбора результата: писать в
       // чужую сцену нечего (барьер в `_persist` поймал бы и так, но тогда
@@ -3136,9 +3183,15 @@ class SubscriptionController extends ChangeNotifier {
       // Кешируем сырое тело и заголовки на диск для офлайн-реактивации после
       // перезапуска (см. `_rehydrateFromCache`) и для Source-вкладки (fallback).
       // §219 — трекаем future для детерминированного await в тестах.
-      final saveFuture = HttpCache.save(list.url, result.rawBody, result.headers);
-      lastCacheSaveForTesting = saveFuture;
-      unawaited(saveFuture);
+      // §603 — готовый ответ (снапшот файловой / ответ того же URL в проходе)
+      // уже лежит в кэше под этим URL: перезаписывать нечем.
+      if (!local) {
+        final saveFuture =
+            HttpCache.save(list.url, result.rawBody, result.headers);
+        lastCacheSaveForTesting = saveFuture;
+        unawaited(saveFuture);
+        onFetched?.call(FetchResult(result.rawBody, null, result.headers));
+      }
       final warnNodes = result.nodes.where((n) => n.warnings.isNotEmpty).length;
       if (warnNodes > 0) {
         AppLog.I.warning('$warnNodes nodes with warnings (XHTTP fallback etc.)');
@@ -3157,9 +3210,9 @@ class SubscriptionController extends ChangeNotifier {
       //    0 = «Never (respect server)» — сами не по расписанию, но серверный
       //        заголовок ПРИНИМАЕМ (станет реальным числом → авто по нему);
       //   >0 = обновлять раз в N часов (сервер тоже может переопределить).
-      final nextInterval = current.updateIntervalHours < 0
-          ? current.updateIntervalHours // -1: жёстко, сервер не переубедит
-          : (result.meta?.updateIntervalHours ?? current.updateIntervalHours);
+      //   §603 — правило целиком в [nextUpdateIntervalHours].
+      final nextInterval = nextUpdateIntervalHours(
+          current.updateIntervalHours, result.meta?.updateIntervalHours);
       // §302 — import-rules применяем к УЖЕ РАЗОБРАННЫМ узлам (их emit-JSON):
       // REPLACE патчит узел (`patchedJson` → уходит в конфиг), DISABLE даёт
       // identity-хеши для §283. Делаем это ДО GC ниже, чтобы GC (now -
@@ -3184,11 +3237,12 @@ class SubscriptionController extends ChangeNotifier {
 
       // §283 — GC отметок disable ТОЛЬКО здесь (успешный сетевой fetch =
       // единственный сигнал «нода ушла из подписки»; failed fetch и
-      // регидрация из кэша состав не проясняют, file:-подписки сюда не
-      // доходят — guard выше). Хеш свежих нод считаем лишь когда есть что
-      // чистить.
+      // регидрация из кэша состав не проясняют; §603 — повторный разбор
+      // снапшота file:-подписки тоже, GC для неё пропускаем). Хеш свежих нод
+      // считаем лишь когда есть что чистить.
       final freshIdentities = sourceNodeIdentities(result.nodes).values.toSet();
-      final baseDisabled = migrated.isEmpty && ruleMarks.disable.isEmpty
+      final baseDisabled =
+          isFile || (migrated.isEmpty && ruleMarks.disable.isEmpty)
           ? migrated
           : gcDisabledHashes(
               migrated,
@@ -3225,7 +3279,8 @@ class SubscriptionController extends ChangeNotifier {
       final next = current.copyWith(
         name: nextName,
         meta: result.meta,
-        lastUpdated: DateTime.now(),
+        // §603 — файловая: источник не перечитывался, «обновлено» не сдвигаем.
+        lastUpdated: isFile ? current.lastUpdated : DateTime.now(),
         lastUpdateAttempt: attemptAt,
         lastUpdateStatus: UpdateStatus.ok,
         lastNodeCount: result.nodes.length,
@@ -3348,11 +3403,17 @@ class SubscriptionController extends ChangeNotifier {
   /// Обновляет inline-узлы `UserServer` из нового списка URI/JSON строк.
   /// §456 — [nameHint]: имя для INI-текста (тег из поля Tag редактора);
   /// ссылка и JSON несут имя сами, им hint не нужен.
-  Future<void> updateConnectionAt(int index, List<String> connections,
+  ///
+  /// §603 — источник, из которого не разобрался ни один узел, не пишется:
+  /// запись остаётся прежней, возвращается ошибка (как у члена папки,
+  /// [updateMemberAt]). `null` — записано.
+  Future<UiMsg?> updateConnectionAt(int index, List<String> connections,
       {String? nameHint}) async {
-    if (index < 0 || index >= _entries.length) return;
+    if (index < 0 || index >= _entries.length) {
+      return const ErrMsg(ErrKey.serverNotFound);
+    }
     final list = _entries[index].list;
-    if (list is! UserServer) return;
+    if (list is! UserServer) return const ErrMsg(ErrKey.serverNotFound);
 
     // §576 п.1 — источник своего сервера: только тело узла. Документ и
     // массив (форма ввода, а не хранения) сводятся к телу первого узла.
@@ -3362,6 +3423,7 @@ class SubscriptionController extends ChangeNotifier {
       final decoded = decode(c);
       nodes.addAll(parseAll(decoded, nameHint: nameHint, own: true));
     }
+    if (nodes.isEmpty) return const ErrMsg(ErrKey.memberParseKeepCurrent);
     final before = _lists();
     // Фича 478 / PARSING_PRINCIPLES §9.4 п. 1 — человек правил тело ручного сервера:
     // вердикт ядра привязан к ТЕЛУ и на изменённом теле недействителен.
@@ -3395,6 +3457,7 @@ class SubscriptionController extends ChangeNotifier {
     });
     await _persist();
     notifyListeners();
+    return null;
   }
 
   /// §331 — отпечаток «состава» подписки: то и только то, от чего зависит

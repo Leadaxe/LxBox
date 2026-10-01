@@ -77,4 +77,39 @@ void main() {
       expect(await HttpCache.loadBody('http://x/'), 'body');
     });
   });
+
+  group('§603 — ключ sha256 и перенос старого ключа', () {
+    test('ключ = sha256(url) hex, не hashCode', () {
+      expect(HttpCache.keyFor('abc'),
+          'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
+      expect(HttpCache.keyFor('https://x/sub'),
+          isNot(HttpCache.legacyKeyFor('https://x/sub')));
+    });
+
+    test('файлы старого ключа читаются и переезжают под новый', () async {
+      const url = 'https://old.example/sub';
+      final dir = Directory('${tempDir.path}/sub_cache')
+        ..createSync(recursive: true);
+      final legacy = HttpCache.legacyKeyFor(url);
+      File('${dir.path}/$legacy').writeAsStringSync('old-body');
+      File('${dir.path}/$legacy.headers').writeAsStringSync('{"a":"b"}');
+
+      expect(await HttpCache.loadBody(url), 'old-body');
+      expect(await HttpCache.loadHeaders(url), {'a': 'b'});
+      expect(File('${dir.path}/$legacy').existsSync(), isFalse);
+      expect(File('${dir.path}/$legacy.headers').existsSync(), isFalse);
+      expect(File('${dir.path}/${HttpCache.keyFor(url)}').readAsStringSync(),
+          'old-body');
+    });
+
+    test('remove чистит и старый ключ', () async {
+      const url = 'https://old.example/sub';
+      final dir = Directory('${tempDir.path}/sub_cache')
+        ..createSync(recursive: true);
+      File('${dir.path}/${HttpCache.legacyKeyFor(url)}')
+          .writeAsStringSync('old-body');
+      await HttpCache.remove(url);
+      expect(dir.listSync(), isEmpty);
+    });
+  });
 }

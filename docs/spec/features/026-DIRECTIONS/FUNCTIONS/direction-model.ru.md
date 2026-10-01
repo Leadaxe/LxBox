@@ -100,8 +100,8 @@ Debug API: `GET/POST /directions`, `GET/PATCH/DELETE /directions/{tag}`,
 - Состав, двойник `-auto` и `route.final` в конфиге —
   [direction-groups-in-config.md](direction-groups-in-config.ru.md); выбор на главном экране
   — [direction-selection.md](direction-selection.ru.md).
-- Число узлов в строке не учитывает «Exclude matching»: считаются совпадения, даже когда
-  Направление берёт остальное. Перестановка Направлений есть только в Debug API.
+- Число узлов в строке считается тем же фильтром, что у сборки, с учётом «Exclude
+  matching». Перестановка Направлений есть только в Debug API.
 - DNS-сторона вылеченного сервера (fail-closed по каналу, исчезнувшему на сборке, 419) —
   [005-DNS · P2](../../005-DNS/FEATURE.ru.md#обещания).
 - Лечение висячей цели при импорте правил — [004-ROUTING · P19](../../004-ROUTING/FEATURE.ru.md#обещания).
@@ -123,3 +123,4 @@ Debug API: `GET/POST /directions`, `GET/PATCH/DELETE /directions/{tag}`,
 | 11 | [408](../../../tasks/408-ping-options-groups-heal.md) | Done | Ping-переопределение снимается вместе с Направлением |
 | 12 | [439F](../../../tasks/439F-storage-contract-1-0/spec.md) | Released v2.24.0 | Хранение в форме контракта; `channels` переименовывается в `directions` при чтении |
 | 13 | [441](../../../tasks/441-template-preset-vars-in-record.md) | Released v2.24.0 | Лечение цели в переменных пресетов и DNS-серверов → `vpn-1` |
+| 14 | [604](../../../tasks/604-dns-build-health-directions-bugs.md) | Done | Число узлов в строке учитывает «Exclude matching» |

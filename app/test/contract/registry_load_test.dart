@@ -42,7 +42,7 @@ void main() {
     test('схема vless раскрывает tls / transports / dialer', () {
       final schema = ContractRegistry.I.schemaFor('vless');
       expect(schema, isNotNull, reason: 'у vless обязана быть секция body');
-      expect(schema!.core, '1.14.1-lx.4');
+      expect(schema!.core, '1.14.2-lx.11');
 
       // §553 — ссылки развёрнуты в поля-объекты с вложенной схемой и
       // пометкой происхождения; транспорт — с вариантами по `type`.

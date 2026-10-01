@@ -158,7 +158,7 @@ void main() {
     controller.debugSetEntries([first, second]);
     controller.scene = [
       ContainerEntry(first.list),
-      ChainEntry(const SourceChain(tag: 'c1', label: 'Via', hops: _hops)),
+      ChainEntry(const SourceChain(tag: 'c1', hops: _hops)),
       ContainerEntry(second.list),
     ];
   });
@@ -184,12 +184,12 @@ void main() {
     // Контроллер держит только контейнеры; экран рисует ВСЕ записи.
     expect(controller.entries.map((e) => e.id), ['u1', 'u2']);
     expect(find.text('First'), findsOneWidget);
-    expect(find.text('Via'), findsOneWidget);
+    expect(find.text('c1'), findsOneWidget);
     expect(find.text('Second'), findsOneWidget);
 
     // Порядок на экране — порядок `sources[]`, а не «сначала контейнеры».
     final yFirst = tester.getCenter(find.text('First')).dy;
-    final yVia = tester.getCenter(find.text('Via')).dy;
+    final yVia = tester.getCenter(find.text('c1')).dy;
     final ySecond = tester.getCenter(find.text('Second')).dy;
     expect(yFirst, lessThan(yVia));
     expect(yVia, lessThan(ySecond));
@@ -233,7 +233,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 200));
 
-    expect(find.text('Via'), findsNothing);
+    expect(find.text('c1'), findsNothing);
     expect(find.text('First'), findsOneWidget);
     expect(find.text('Second'), findsOneWidget);
     expect(tester.getCenter(find.text('First')).dy,

@@ -352,31 +352,32 @@ class DnsRuleSrs extends DnsRuleRef {
 }
 
 class DnsRulePreset extends DnsRuleRef {
-  const DnsRulePreset({required this.presetId, this.enabled = true});
+  const DnsRulePreset({required this.presetId});
   final String presetId;
 
-  /// §033 — «мёртвое» для активного preset'а, но позиционный anchor
-  /// mirror-группы в build_config; сохраняется как есть, не чистится.
+  /// §257/§593 — у записи пресета своего тумблера нет: DNS пресета включает
+  /// var `dns_enable` пресета, запись — позиционный якорь mirror-группы
+  /// (§117). Всегда `true`; кодек пишет `"enabled": true` (форма записи
+  /// контракта) и значение из файла не читает.
   @override
-  final bool enabled;
+  bool get enabled => true;
 
   @override
   String get kind => 'preset';
 
+  /// Тумблера нет — та же запись.
   @override
-  DnsRulePreset withEnabled(bool enabled) => copyWith(enabled: enabled);
+  DnsRulePreset withEnabled(bool enabled) => this;
 
-  DnsRulePreset copyWith({String? presetId, bool? enabled}) => DnsRulePreset(
-      presetId: presetId ?? this.presetId, enabled: enabled ?? this.enabled);
+  DnsRulePreset copyWith({String? presetId}) =>
+      DnsRulePreset(presetId: presetId ?? this.presetId);
 
   @override
   bool operator ==(Object other) =>
-      other is DnsRulePreset &&
-      other.presetId == presetId &&
-      other.enabled == enabled;
+      other is DnsRulePreset && other.presetId == presetId;
 
   @override
-  int get hashCode => Object.hash('preset', presetId, enabled);
+  int get hashCode => Object.hash('preset', presetId);
 }
 
 class DnsRuleTemplate extends DnsRuleRef {

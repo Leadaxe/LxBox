@@ -137,7 +137,7 @@ void main() {
     });
     test('preset и template с enabled: true', () {
       expect(readLegacyDnsRule({'kind': 'preset', 'presetId': 'p1', 'enabled': true}),
-          const DnsRulePreset(presetId: 'p1', enabled: true));
+          const DnsRulePreset(presetId: 'p1'));
       expect(
           readLegacyDnsRule(
               {'kind': 'template', 'name': 'ru-direct', 'enabled': true}),
@@ -157,11 +157,19 @@ void main() {
       expect(readLegacyDnsRule({'kind': 'srs', 'name': 'x', 'id': 'i'})!.enabled,
           isTrue);
     });
-    test('template и preset → выключено', () {
+    test('template → выключено', () {
       expect(readLegacyDnsRule({'kind': 'template', 'name': 'x'})!.enabled,
           isFalse);
+    });
+    // §593 — у записи пресета своего тумблера нет: `enabled` не читается.
+    test('preset → enabled не читается, всегда true', () {
       expect(readLegacyDnsRule({'kind': 'preset', 'presetId': 'p'})!.enabled,
-          isFalse);
+          isTrue);
+      expect(
+          readLegacyDnsRule(
+                  {'kind': 'preset', 'presetId': 'p', 'enabled': false})!
+              .enabled,
+          isTrue);
     });
     test('inline с enabled: false → выключено', () {
       expect(

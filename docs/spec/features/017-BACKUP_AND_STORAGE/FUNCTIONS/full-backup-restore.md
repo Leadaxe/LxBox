@@ -46,12 +46,14 @@ the home screen — "… · fetching subscriptions…".
   the preview and the filter; the migration result and losses go to the log.
 - **Replace** is confirmed separately: "Replace all data?" — "This will
   overwrite your current data in the selected categories. This cannot be
-  undone." In fact the whole settings document is replaced: unselected
-  categories are not kept (P7).
+  undone." A selected category is replaced wholesale by the file's content
+  (a key of the category absent in the file is removed); an unselected
+  category keeps the receiver's values (P7, §599).
 - **What survives replace** if the file is silent about it: enabling, port
   and token of the Debug API (§413); "already asked" flags of startup
-  prompts (battery, tile, update check, notifications). A key from the file
-  wins; `wizard_*` flags are never accepted from the file. With the
+  prompts (battery, tile, update check, notifications). A Debug API key
+  from the file wins; the four startup prompt flags are never accepted from
+  the file in either mode and are not counted as unknown keys (§600). With the
   category deselected, VPN toggles stay at the device values.
 - **Merge:** sources are appended by `id` (an existing `id` is not touched);
   the archive's chains, if any, replace the current ones wholesale, an
@@ -95,3 +97,6 @@ the home screen — "… · fetching subscriptions…".
 | 8 | [439F](../../../tasks/439F-storage-contract-1-0/spec.md) | Released v2.24.0 | An old-form block migrates before the preview and the filter |
 | 9 | [447](../../../tasks/447-v2-24-0-avd-findings.md) | Fixed | Replace does not reset startup prompt flags |
 | 10 | [524](../../../tasks/524-unified-source-entries.md) | Released v2.25.3 | Old archives with chains are read with the Server lists checkbox |
+| 11 | [600](../../../tasks/600-backup-startup-prompt-flags-not-unknown.md) | Done | Startup prompt flags in a backup are not "unknown keys" |
+| 12 | [599](../../../tasks/599-backup-replace-per-category.md) | Done | Replace replaces only the selected categories |
+| 13 | [607](../../../tasks/607-l10n-backup-shell-bugs-from-591.md) | Done | Config pin in Debug API config; replace keeps the VPN toggles mirror; one localized summary with the error count for both restore paths, home restore applies the language |

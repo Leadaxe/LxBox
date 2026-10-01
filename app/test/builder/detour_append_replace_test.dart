@@ -27,7 +27,6 @@ void main() {
   setUpAll(loadEngineSections);
 
   final template = WizardTemplate(
-    parserConfig: ParserConfigBlock(),
     // §267 — group_templates: vpn-1 Направление (direct+auto), auto-подгруппа.
     // ('jump-out' был в старом addOutbounds, но seed-логика его не читала —
     // мёртвый элемент; в новой схеме отсутствует.)

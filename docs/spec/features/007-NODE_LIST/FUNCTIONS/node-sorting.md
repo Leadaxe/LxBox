@@ -54,7 +54,9 @@ mode and manual order (they do not mark the config as changed).
   Directions.
 - **Dragging** in Custom mode — by the visible handle on the left,
   immediately; in other modes — by a long press at the left edge of the row;
-  any completed drag switches the mode to Custom and saves the visible order.
+  any completed drag switches the mode to Custom and saves the order. Only
+  the dragged node moves: under an active filter it lands right after its
+  visible neighbour above; hidden nodes keep their places.
   Pinned rows do not move, a row cannot be dropped into the pinned section.
 - Leaving Custom (by tap or by choice) does **not erase** the order: going
   back to Custom restores it.
@@ -87,3 +89,4 @@ mode and manual order (they do not mark the config as changed).
 | 9 | [446](../../../tasks/446-large-node-list-performance.md) | Waves 1–3 in develop | Large lists without lag when sorting |
 | 10 | [537](../../../tasks/537-nodes-two-columns-wide.md) | Done | Two columns on a wide screen |
 | 11 | [541](../../../tasks/541-appearance-tab-two-columns-toggle.md) | Done | Two-column toggle in Appearance |
+| 12 | [606](../../../tasks/606-audit-591-export-list-tun-warp-dpi-bugs.md) | Done | A drag under a filter no longer pushes hidden nodes to the end |

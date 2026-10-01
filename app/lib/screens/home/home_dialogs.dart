@@ -410,16 +410,17 @@ Future<void> maybeShowAddTilePrompt(BuildContext context, BoxVpnClient vpn) asyn
 /// (замечание linsui, 14.08). Явный вопрос закрывает это раз и навсегда:
 /// согласие есть — слежки нет, откуда бы приложение ни пришло.
 ///
-/// Канал установки остаётся, но только как **подсказка для дефолта**: из
-/// каталога первой стоит «Skip», у sideload — «Enable». Ошибка в определении
-/// канала теперь безобидна, последнее слово за пользователем.
+/// Канал установки остаётся, но только как **дефолт при закрытии «назад»**:
+/// из каталога — выкл, у sideload — вкл. Порядок кнопок фиксированный
+/// (Skip / Enable, спеки 395 и 020 first-run). Ошибка в определении канала
+/// теперь безобидна, последнее слово за пользователем.
 const _updatePromptKey = SettingsStorage.updateCheckPromptVar;
 
 Future<void> maybeShowUpdateCheckPrompt(BuildContext context) async {
   final asked = await SettingsStorage.getVar(_updatePromptKey, '0');
   if (asked == '1') return;
   // dev-сборка: чекер и так молчит (`_isDevBuild`), вопрос был бы шумом.
-  if (VersionInfo.I.version.contains('-dev.')) return;
+  if (UpdateChecker.isDevBuild(VersionInfo.I.version)) return;
   await SettingsStorage.setVar(_updatePromptKey, '1');
   if (!context.mounted) return;
 

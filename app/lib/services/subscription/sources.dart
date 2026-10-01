@@ -10,6 +10,8 @@ import '../../models/subscription_meta.dart';
 import '../parser/body_decoder.dart';
 import '../parser/engine/decoders.dart' show decodeUtf8Lenient;
 import '../parser/parse_all.dart';
+import 'http_cache.dart';
+import 'input_helpers.dart' show isFileSubscription;
 import 'subscription_identity.dart';
 import 'user_agent.dart';
 
@@ -22,15 +24,6 @@ sealed class SubscriptionSource {
 final class UrlSource extends SubscriptionSource {
   final String url;
 
-  /// Кастомный UA. `null` (дефолт) → `_fetch` резолвит брендированный
-  /// `LxBox-android/<ver>` (см. [user_agent.dart]).
-  ///
-  /// Некоторые провайдеры выбирают формат тела по UA: неопознанному клиенту
-  /// отдают JSON-конфиг/заглушку, опознанному — base64 URI-list (который ест
-  /// парсер v2). Бренд-токен `LxBox-android` опознаётся панелями
-  /// (Remnawave/Marzban); голого `singbox` в UA нет.
-  final String? userAgent;
-
   /// §289 — per-subscription слепок идентичности. `null` → фетч использует
   /// глобальный `SubscriptionIdentity` (режим Default). Не-null → ТОЛЬКО эти
   /// значения (режим Custom), глобальные игнорируются.
@@ -39,7 +32,6 @@ final class UrlSource extends SubscriptionSource {
   final Duration timeout;
   const UrlSource(
     this.url, {
-    this.userAgent,
     this.identity,
     // Короткий таймаут на попытку. Fetch делает 3 попытки с exp backoff
     // (1s, 3s): 9+1+9+3+9 ≈ 31s worst case (см. `_fetch`).
@@ -107,24 +99,32 @@ Future<ParseResult> parseFromSource(SubscriptionSource source,
   final owned = client == null;
   final c = client ?? http.Client();
   try {
-    final fetch = await _fetch(source, c);
-    final inline = _inlineHeaders(fetch.body);
-    // inline под капотом, HTTP поверх — HTTP первичны.
-    final merged = <String, String>{...inline, ...fetch.headers};
-    final meta = _metaFromHeaders(merged);
-    final decoded = decode(fetch.body);
-    // §302 — import-rules здесь НЕ применяются: они работают над готовым
-    // JSON узла (`NodeSpec.emit`), а не над текстом тела, и применяются в
-    // контроллере уже после парсинга. Так одно правило работает для всех
-    // форматов подписки (URI-строки / Xray-JSON / INI).
-    // §506 — причины собираются и на прод-пути: см. [ParseResult.dropped].
-    final dropped = <NodeWarning>[];
-    final nodes = parseAll(decoded, dropped: dropped);
-    return ParseResult(
-        nodes, decoded, meta, fetch.body, fetch.headers, dropped);
+    return parseFetched(await _fetch(source, c));
   } finally {
     if (owned) c.close();
   }
+}
+
+/// §603 — разбор уже полученного ответа (тело + HTTP-заголовки) без сети.
+/// Для повторного разбора снапшота файловой подписки и для записей с тем же
+/// URL в одном проходе автообновления: ответ первого фетча разбирается для
+/// каждой записи заново (свои import-правила). [FetchResult.meta] не читается
+/// — метаданные заново собираются из заголовков.
+ParseResult parseFetched(FetchResult fetch) {
+  final inline = _inlineHeaders(fetch.body);
+  // inline под капотом, HTTP поверх — HTTP первичны.
+  final merged = <String, String>{...inline, ...fetch.headers};
+  final meta = _metaFromHeaders(merged);
+  final decoded = decode(fetch.body);
+  // §302 — import-rules здесь НЕ применяются: они работают над готовым
+  // JSON узла (`NodeSpec.emit`), а не над текстом тела, и применяются в
+  // контроллере уже после парсинга. Так одно правило работает для всех
+  // форматов подписки (URI-строки / Xray-JSON / INI).
+  // §506 — причины собираются и на прод-пути: см. [ParseResult.dropped].
+  final dropped = <NodeWarning>[];
+  final nodes = parseAll(decoded, dropped: dropped);
+  return ParseResult(
+      nodes, decoded, meta, fetch.body, fetch.headers, dropped);
 }
 
 // §219 — паттерны на module-level: раньше `_commentPrefixRe` компилился на
@@ -193,16 +193,27 @@ Future<FetchResult> fetchRaw(SubscriptionSource source,
   }
 }
 
+/// §603 — ответ источника подписки для вкладки Source. Онлайн — живой GET
+/// ([fetchRaw]); файловая (`file:`) — снапшот из [HttpCache]: адреса для
+/// запроса у неё нет. Снапшота нет → пустое тело.
+Future<FetchResult> fetchSourceSnapshot(String url,
+    {SubscriptionIdentityOverride? identity, http.Client? client}) async {
+  if (isFileSubscription(url)) {
+    return FetchResult(await HttpCache.loadBody(url) ?? '', null,
+        await HttpCache.loadHeaders(url) ?? const {});
+  }
+  return fetchRaw(UrlSource(url, identity: identity), client: client);
+}
+
 Future<FetchResult> _fetch(SubscriptionSource source, http.Client client) async {
   switch (source) {
     case UrlSource(
         url: final u,
-        userAgent: final ua,
         identity: final id,
         timeout: final t
       ):
-      // §289 — режим Default (id == null): UA = per-source > глобальный override
-      // > брендированный; HWID-заголовки из глобального SubscriptionIdentity.
+      // §289 — режим Default (id == null): UA = глобальный override >
+      // брендированный; HWID-заголовки из глобального SubscriptionIdentity.
       // Режим Custom (id != null): UA и HWID-заголовки ТОЛЬКО из слепка;
       // глобальные игнорируются. Пустой UA в слепке → брендированный дефолт.
       final String effectiveUa;
@@ -220,8 +231,8 @@ Future<FetchResult> _fetch(SubscriptionSource source, http.Client client) async 
         );
       } else {
         final override = SubscriptionIdentity.userAgentOverride;
-        effectiveUa = ua ??
-            (override.isNotEmpty ? override : resolveSubscriptionUserAgent());
+        effectiveUa =
+            override.isNotEmpty ? override : resolveSubscriptionUserAgent();
         idHeaders = SubscriptionIdentity.fetchHeaders();
       }
       final reqHeaders = <String, String>{
@@ -332,6 +343,24 @@ String? _parseContentDispositionFilename(String? header) {
   return out.isEmpty ? null : out;
 }
 
+/// §603 — `profile-update-interval`: целое ≥ 0 (часы), иначе `null`
+/// (заголовок игнорируется). 0 — «по серверу», состояние обратимое.
+int? parseUpdateIntervalHeader(String? raw) {
+  final n = int.tryParse((raw ?? '').trim());
+  return n == null || n < 0 ? null : n;
+}
+
+/// §129/§603 — интервал подписки после успешного фетча.
+///   -1 = «Don't auto-update» пользователя: сервер не переубедит;
+///   < -1 пользователь выставить не может — это отрицательное значение,
+///        принятое от сервера до §603; лечим: серверное (валидное) или 24;
+///   ≥ 0 — серверное значение, если есть, иначе текущее.
+int nextUpdateIntervalHours(int current, int? server) {
+  if (current == -1) return current;
+  if (current < -1) return server ?? 24;
+  return server ?? current;
+}
+
 SubscriptionMeta? _metaFromHeaders(Map<String, String> h) {
   // §219 — строим lower-map ОДИН раз: раньше get() линейно сканировал h.keys
   // с .toLowerCase() на каждом, и звался 6 раз → O(n×6). Ключи выше по стеку
@@ -385,7 +414,9 @@ SubscriptionMeta? _metaFromHeaders(Map<String, String> h) {
       }
     }
   }
-  final updateHours = int.tryParse((updateIntervalRaw ?? '').trim());
+  // §603 — отрицательное значение сервера не принимаем: в контроллере `< 0`
+  // означает «не обновлять» и сервер его больше не переубедил бы.
+  final updateHours = parseUpdateIntervalHeader(updateIntervalRaw);
 
   return SubscriptionMeta(
     uploadBytes: upload,

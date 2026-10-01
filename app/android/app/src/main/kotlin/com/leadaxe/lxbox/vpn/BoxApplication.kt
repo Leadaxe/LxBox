@@ -12,7 +12,6 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
-import java.util.Locale
 
 /**
  * §049 — Application class зарегистрирован в AndroidManifest как
@@ -45,13 +44,11 @@ class BoxApplication : Application() {
         // не запускается вовсе. Локаль влияет лишь на язык error-строк ядра —
         // fail-safe: при отказе пробуем голый язык (`ru`), затем молча
         // пропускаем (ядро возьмёт дефолтную локаль).
-        runCatching {
-            Libbox.setLocale(Locale.getDefault().toLanguageTag().replace("-", "_"))
-        }.recoverCatching {
-            Libbox.setLocale(Locale.getDefault().language)
-        }.onFailure {
-            android.util.Log.w(TAG, "setLocale failed, using core default: ${it.message}")
-        }
+        //
+        // §607 — язык из сохранённой настройки приложения, а не устройства:
+        // headless-старт (загрузка, QS-плитка, Intent API) Dart не поднимает,
+        // и пере-пуша языка из Dart там нет. "system" → локаль устройства.
+        L10n.applyLibboxLocale(this)
 
         runCatching { QuickShortcuts.refresh(this) }
             .onFailure { android.util.Log.w(TAG, "QuickShortcuts.refresh failed: ${it.message}") }

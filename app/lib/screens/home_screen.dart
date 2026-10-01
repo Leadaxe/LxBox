@@ -506,7 +506,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
           // удалась (dirty остался) — на чужом конфиге не стартуем.
           if (autoConnect && mounted) {
             if (!_subController.configDirty) {
-              await _controller.start();
+              // §605 — тот же путь, что у кнопки Start: страховка отказа ядра
+              // (фича 478), иначе набор с отвергаемым узлом не поднимался.
+              await _runWithCoreRejectGuard();
             } else {
               AppLog.I.warning(
                   'workspaces: auto-connect skipped — config still dirty');
@@ -618,7 +620,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   // §105/§356 — состояние показа support-ленты (за процесс).
   AppLifecycleState _lifecycle = AppLifecycleState.resumed;
   SupportFeed? _supportFeed;
-  DateTime? _supportNextFetchAt;
+  bool _supportFetched = false;
   bool _supportShown = false;
   bool _supportInFlight = false;
 
@@ -640,15 +642,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     if (since == null) return; // туннель не активен — гейт «пользуется сейчас»
     _supportInFlight = true;
     try {
-      // §356 — fetch до первого успеха, с бэкоффом 30с. Одна попытка за
-      // процесс сгорала бы ровно в самый ненадёжный момент: первый тик
-      // connected, когда туннель поднят, но нода ещё не пропускает трафик
-      // (device-verified на эмуляторе) — и лента молчала до перезапуска.
-      if (_supportFeed == null) {
-        final next = _supportNextFetchAt;
-        if (next != null && DateTime.now().isBefore(next)) return;
-        _supportNextFetchAt =
-            DateTime.now().add(const Duration(seconds: 30));
+      // §593 — одна загрузка за процесс. После §422 при неудаче сети
+      // fetchOrCached отдаёт кэш или копию из сборки, так что повторять
+      // нечего; флаг не даёт звать загрузку каждую секунду при пустом
+      // ответе (битый ассет).
+      if (!_supportFetched) {
+        _supportFetched = true;
         _supportFeed = await SupportMessageService.I.fetchOrCached();
       }
       final feed = _supportFeed;

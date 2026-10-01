@@ -680,6 +680,59 @@ void main() {
       ]);
       expect(TrafficProfiler.I.globalRollingBuffer, isEmpty);
     });
+
+    // §048/§219 P4 (028) — hard cap 20000 эвикшн старых сразу при append.
+    test('hard cap 20000 evicts the oldest event immediately on append',
+        () async {
+      TrafficProfiler.I.startGlobalRecording();
+      const over = 5;
+      TrafficProfiler.I.ingestForTest([
+        for (var i = 0; i < 20000 + over; i++)
+          CcConnection(
+            id: 'cap$i',
+            network: 'tcp',
+            domain: 'd$i.example',
+            destination: '3.3.3.3:443',
+            rule: '',
+            uplink: 0,
+            downlink: 0,
+            outbound: 'direct',
+            packageName: 'com.app.cap',
+            createdAt: 0,
+            closedAt: 0,
+          ),
+      ]);
+      final buf = TrafficProfiler.I.globalRollingBuffer;
+      expect(buf.length, 20000, reason: 'кап держит ровно 20000');
+      // Первые `over` событий (d0..d{over-1}) вытеснены — самое старое
+      // оставшееся — d{over}.
+      expect(buf.first.domain, 'd$over.example',
+          reason: 'эвикшн старейших по FIFO, не случайных');
+      TrafficProfiler.I.stopGlobalRecording();
+    });
+
+    // §048/§219 P4 (028) — unattributed ring ограничен 50 (отдельно от hard cap).
+    test('unattributed ring caps at 50 independent of the main buffer',
+        () async {
+      TrafficProfiler.I.startGlobalRecording();
+      TrafficProfiler.I.ingestDnsForTest([
+        for (var i = 0; i < 60; i++)
+          CcDnsQuery(
+            domain: 'u$i.test',
+            queryType: 1,
+            rcode: -1,
+            failed: true,
+            error: 'timeout',
+            // packageName пуст → unattributed.
+          ),
+      ]);
+      expect(TrafficProfiler.I.globalUnattributedEvents.length, 50,
+          reason: 'ring эвиктит старые при переполнении 50');
+      expect(TrafficProfiler.I.globalUnattributedEvents.first.domain,
+          'u10.test',
+          reason: 'первые 10 (u0..u9) вытеснены по FIFO');
+      TrafficProfiler.I.stopGlobalRecording();
+    });
   });
 
   // ───── §181: оси РАЗДЕЛЬНО (outboundChain=маршрут, detourChain=транспорт) ──
@@ -795,6 +848,39 @@ void main() {
       expect(ev.outboundChain, ['direct-out'],
           reason: 'fallback на [outbound]');
       expect(ev.detourChain, isEmpty);
+    });
+  });
+
+  // §605 / 028 P2 — START начинает с нуля: сессия до STOP не даёт ложный
+  // tcpClose в новом буфере.
+  group('TrafficProfiler — STOP→START', () {
+    CcConnection conn(String id, String domain) => CcConnection(
+          id: id,
+          network: 'tcp',
+          domain: domain,
+          destination: '1.2.3.4:443',
+          rule: '',
+          uplink: 0,
+          downlink: 0,
+          outbound: 'direct',
+          packageName: 'com.example',
+          createdAt: 0,
+          closedAt: 0,
+        );
+
+    test('после STOP→START в буфере только новая сессия', () {
+      final p = TrafficProfiler.I;
+      p.startGlobalRecording();
+      p.ingestForTest([conn('p2-a', 'a.example')]);
+      p.stopGlobalRecording();
+      p.startGlobalRecording();
+
+      p.ingestForTest([conn('p2-b', 'b.example')]);
+
+      final buf = p.globalRollingBuffer;
+      expect(buf.map((e) => e.domain), ['b.example']);
+      expect(buf.where((e) => e.kind == TrafficEventKind.tcpClose), isEmpty);
+      p.stopGlobalRecording();
     });
   });
 }

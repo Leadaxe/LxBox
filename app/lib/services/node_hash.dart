@@ -66,6 +66,17 @@ Duration disabledHashTtl(int updateIntervalHours) {
 Map<NodeSpec, String> sourceNodeIdentities(List<NodeSpec> nodes) =>
     _sourceRawTags(nodes, withGroups: false);
 
+/// §603 — сколько узлов ТЕКУЩЕГО списка выключено отметками [disabled].
+/// Не `disabled.length`: карта с TTL (§283) держит и отметки узлов, которых в
+/// источнике уже нет.
+int disabledNodeCount(List<NodeSpec> nodes, Map<String, DateTime> disabled) {
+  if (disabled.isEmpty) return 0;
+  return sourceNodeIdentities(nodes)
+      .values
+      .where(disabled.containsKey)
+      .length;
+}
+
 /// Сырые теги ВСЕХ узлов одного источника, включая группы (§439, решение
 /// 15.09: группы уникализируются общим счётчиком с узлами подписки до
 /// `tag_policy`). Адрес члена в ссылке `{folder_id, tag}` (NODE_LINK §2.2).
