@@ -577,7 +577,7 @@ jobs:
 
       - name: Download AAB
         if: steps.gate.outputs.enabled == 'true'
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: android-aab-release
           path: play
@@ -648,7 +648,7 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - name: Download APKs
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: android-apks-release
           path: release-artifacts
