@@ -8,6 +8,10 @@
 
 ## [Unreleased]
 
+---
+
+## [2.25.10] — 2026-10-01
+
 ### Added
 
 - **Tailscale in the node row ([task 608](docs/spec/tasks/608-tailscale-exit-node-in-node-row.md)).**
