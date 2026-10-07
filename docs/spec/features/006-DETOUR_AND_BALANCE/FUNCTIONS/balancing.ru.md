@@ -39,8 +39,9 @@ Load Balance (бывший план отдельного outbound'а `loadbalanc
 | Узел автовыбора: Members | All · Rule (Include/Exclude regex по тегу и синонимам) · Pick (галочки) | All | `outbounds` |
 | Узел автовыбора: Badge in list (regex) | значок пула | первый флаг-эмодзи | — |
 
-Глобальный «Passive health check» добавляет `passive_check: true` всем
-`urltest` (не ручному роду).
+`passive_check` больше не пишется: ядро v1.14.2-lx.12 удалило ключ
+([611](../../../tasks/611-drop-passive-check-kernel-lx12.md)); замена — режим
+`failover` (§612).
 
 ## Входы / Выходы
 
@@ -92,3 +93,4 @@ the live pool»).
 | 7 | [442](../../../tasks/442-urltest-interval-idle-pair.md) | Released v2.24.0 | `idle_timeout` поднимается до `interval` |
 | 8 | [565F](../../../tasks/565F-selector-group-genus/spec.md) | Фаза A влита | Ручной род (`selector`) узла автовыбора |
 | 9 | [568](../../../tasks/568-source-replace-fold.md) | Реализовано | «Replace with a group» у папки и подписки |
+| 10 | [611](../../../tasks/611-drop-passive-check-kernel-lx12.md) | Реализовано | `passive_check` снят (ядро lx.12) |

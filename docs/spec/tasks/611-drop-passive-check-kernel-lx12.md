@@ -3,7 +3,7 @@
 | Поле | Значение |
 |------|----------|
 | Тип | F (доработка) + бамп ядра |
-| Статус | P (в работе) |
+| Статус | D (done; эмулятор — после волны §611–§614) |
 | Фича | [006-DETOUR_AND_BALANCE](../features/006-DETOUR_AND_BALANCE/FEATURE.md), `docs/KERNEL.md` |
 | Дата | 2026-10-08 |
 | Связанные | §272 (passive_check введён), §273 (энергоаудит), §612 (режим `failover`, миграция), §613 (пиры WG, путь Tailscale) |
@@ -100,6 +100,32 @@
 - Эмулятор: отдельный прогон после волны §611–§614 (запуск VPN с авто-группой
   из синтетических WG-эндпоинтов, старт ядра без ошибки «unknown key»).
 
+## Итог
+
+- Эмиттер: `passive_check` не пишется ни в двойники Направлений, ни в свёртки
+  (`buildAutoGroup`), ни в узлы автовыбора папок; `passiveCheck` снят из
+  `BuildSettings`, `_BuildCtx`, `EmitContext`, `materializeReplaceGroups`,
+  `_buildDirectionGroups`.
+- Настройка «Passive health check» снята с экрана Optimization вместе со
+  строками `ru`/`zh` (EN-ключи жили только в коде).
+- Сторадж: `savePassiveCheck` удалён, `getPassiveCheck` — `@Deprecated`
+  (читатель — миграция §612). Ключ выведен из import-allowlist
+  (`allowedTopLevelKeys`, это и был «список settings_storage.dart:185») и из
+  экспорта бэкапа; заведён `SettingsStorage.retiredTopLevelKeys`: при импорте
+  старого бэкапа ключ молча пропускается (в `droppedKeys` не попадает), при
+  замене (`merge=false`) значение получателя переносится — §612 его прочтёт.
+- Ядро: `libbox.version` и `kCoreBuildTagsPin` → `v1.14.2-lx.12`; javap
+  lx.11 → lx.12 — только добавления (254 → 258 классов), записано в
+  `docs/KERNEL.md`.
+- Эталоны `avd_v0.config.json` и `rich_v0.backup_roundtrip.json`
+  перезаписаны (`UPDATE_GOLDEN=1`): ушли только строки `passive_check`.
+- Доки: кроме фичи 006 поправлены текущие описания в 009 (urltest-group,
+  FEATURE), 026 (direction-health, direction-groups-in-config) и STORAGE.md.
+
 ## Нерешённое / хвосты
 
-- (заполняет исполнитель)
+- `test/contract/direction_corpus_test.dart` держит `passive_check` в
+  `_templateOnlyKeys` — безвредно (в корпусе контракта ключа нет); снять при
+  синке контракта в §612.
+- Секция Optimization сохранила описание «Health checks, memory and VPN
+  lifecycle» — проверка здоровья вернётся туда режимом `failover` (§612).

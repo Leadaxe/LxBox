@@ -10,6 +10,16 @@
 
 ### Changed
 
+- **Core v1.14.2-lx.12; the Passive health check setting is gone ([task 611](docs/spec/tasks/611-drop-passive-check-kernel-lx12.md)).**
+  The new core removed `urltest.passive_check`: a config with it no longer
+  starts, so auto groups stop carrying the key and the switch leaves
+  Settings → Optimization. Its replacement, the `failover` mode of auto groups
+  (one probe of the held node per interval), comes in a follow-up release. An
+  older backup with this setting imports without a warning.
+  (RU: ядро v1.14.2-lx.12; настройка Passive health check убрана — новое ядро
+  удалило `urltest.passive_check`, и конфиг с ним не стартует. Замена — режим
+  авто-групп `failover`, следующим релизом. Старый бэкап с этой настройкой
+  импортируется без предупреждения.)
 - **Custom User-Agent offers popular-client presets ([task 610](docs/spec/tasks/610-user-agent-presets.md))**
   (Happ, v2RayTun, Streisand, Karing, v2rayNG, Hiddify, sing-box) for panels that
   send full configs only to specific apps; the hint under the field now says so.

@@ -36,8 +36,8 @@
 | Default traffic | `direct` · Направление · `block` | `vpn-1` | `route.final` |
 
 `tolerance` клэмпится в 0–65535, `pool_tolerance` — в 0–15000 (предел ядра) при чтении,
-сохранении, в редакторе и при эмиссии; `pool` — в ≥ 1. «Passive health check» из Settings
-попадает в каждый двойник как `passive_check`. Пустой или отсутствующий `interval` — `15m`
+сохранении, в редакторе и при эмиссии; `pool` — в ≥ 1. `passive_check` не пишется (ядро lx.12
+удалило ключ, [611](../../../tasks/611-drop-passive-check-kernel-lx12.md)). Пустой или отсутствующий `interval` — `15m`
 (272, 604).
 
 ## Входы / Выходы

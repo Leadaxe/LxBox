@@ -36,8 +36,8 @@ source folds) enter the selector only. Default traffic is written as `route.fina
 | Default traffic | `direct` · Direction · `block` | `vpn-1` | `route.final` |
 
 `tolerance` is clamped to 0–65535, `pool_tolerance` to 0–15000 (the core's limit), on read,
-save, in the editor and at emission; `pool` to ≥ 1. "Passive health check" from Settings goes
-into every twin as `passive_check`. An empty or missing `interval` is `15m` (272, 604).
+save, in the editor and at emission; `pool` to ≥ 1. `passive_check` is not written (core lx.12
+removed it, [611](../../../tasks/611-drop-passive-check-kernel-lx12.md)). An empty or missing `interval` is `15m` (272, 604).
 
 ## Inputs / Outputs
 

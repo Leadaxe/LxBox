@@ -39,8 +39,9 @@ Load Balance (formerly planned as a separate `loadbalance` outbound) is the
 | Auto-select node: Members | All · Rule (Include/Exclude regex over the tag and synonyms) · Pick (checkboxes) | All | `outbounds` |
 | Auto-select node: Badge in list (regex) | pool badge | first flag emoji | — |
 
-The global "Passive health check" adds `passive_check: true` to all
-`urltest` groups (not to the manual genus).
+`passive_check` is no longer written: core v1.14.2-lx.12 removed the key
+([611](../../../tasks/611-drop-passive-check-kernel-lx12.md)); its replacement
+is the `failover` mode (§612).
 
 ## Inputs / Outputs
 
@@ -94,3 +95,4 @@ The global "Passive health check" adds `passive_check: true` to all
 | 7 | [442](../../../tasks/442-urltest-interval-idle-pair.md) | Released v2.24.0 | `idle_timeout` is raised to `interval` |
 | 8 | [565F](../../../tasks/565F-selector-group-genus/spec.md) | Phase A merged | Manual genus (`selector`) of an auto-select node |
 | 9 | [568](../../../tasks/568-source-replace-fold.md) | Implemented | "Replace with a group" for a folder and a subscription |
+| 10 | [611](../../../tasks/611-drop-passive-check-kernel-lx12.md) | Implemented | `passive_check` removed (core lx.12) |

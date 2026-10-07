@@ -33,10 +33,9 @@ itself is owned by [009-NODE_HEALTH](../../009-NODE_HEALTH/FEATURE.md).
 
 ## Inputs / Outputs
 
-**Inputs:** the twin's fields from the editor; the global and per-Direction ping settings;
-Passive health check.
-**Outputs:** `url`, `interval`, `tolerance`, `idle_timeout`, `interrupt_exist_connections`
-and `passive_check` in the `<tag>-auto` group; the ping map of the selected Direction;
+**Inputs:** the twin's fields from the editor; the global and per-Direction ping settings.
+**Outputs:** `url`, `interval`, `tolerance`, `idle_timeout` and `interrupt_exist_connections`
+in the `<tag>-auto` group (`passive_check` removed in [611](../../../tasks/611-drop-passive-check-kernel-lx12.md)); the ping map of the selected Direction;
 the group's selected node in the home-screen row ("→ node").
 
 ## Rules and invariants

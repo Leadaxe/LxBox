@@ -159,7 +159,7 @@ VPN не стартует после обновления подписки. Фи
 ### Ключи конфига ядра (группа `urltest`)
 
 `url`, `interval`, `tolerance` (целое, 0…65535), `idle_timeout`,
-`interrupt_exist_connections`, `passive_check`, `mode` (`least_test` ·
+`interrupt_exist_connections`, `mode` (`least_test` ·
 `round_robin`), `balancer.pool`, `balancer.pool_tolerance`,
 `balancer.sticky_hash` (`process`, `domain`, `source_ip`, `dest_ip`,
 `dest_port`; выключение — `["none"]`). Семантика — фича ядра 007-URLTEST_BALANCE.

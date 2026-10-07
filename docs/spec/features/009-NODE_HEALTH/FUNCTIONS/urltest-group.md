@@ -29,7 +29,6 @@ node manually — via the "Run URLTest" item in the group menu.
 | Tolerance, ms | `tolerance` | 30 (presets 10…200) | 50 |
 | Idle timeout | `idle_timeout` | — (core default `30m`) | `30m` |
 | Break live connections on switch | `interrupt_exist_connections` | on | off |
-| Passive health check | `passive_check` | — | on (one setting for all Direction groups) |
 | Mode | `mode` | `least_test` | `least_test` · `round_robin` |
 | Pool size | `balancer.pool` | — | 3, at least 1 |
 | Pool threshold, ms | `balancer.pool_tolerance` | — | 0 |
