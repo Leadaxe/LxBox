@@ -5,7 +5,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/controllers/subscription_controller.dart';
 import 'package:lxbox/models/codec/chain_record.dart';
+import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/direction.dart';
+import 'package:lxbox/models/dns_ref.dart';
 import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/source_chain.dart';
@@ -491,6 +493,98 @@ void main() {
           .cast<Map<String, dynamic>>();
       expect(records.map((r) => r['kind']),
           ['server', 'chain', 'chain', 'chain']);
+    });
+  });
+
+  // §609 — тег цепочки редактируется: место и ссылки переезжают на новый тег.
+  group('renameChain', () {
+    const hops = [NodeLink(tag: 'a'), NodeLink(tag: 'b')];
+
+    test('место в sources[] и все ссылки переезжают на новый тег', () async {
+      await SettingsStorage.setChains(const [
+        SourceChain(tag: 'c1', hops: hops),
+        SourceChain(
+            tag: 'c2', hops: [NodeLink(tag: 'c1'), NodeLink(tag: 'b')]),
+      ]);
+      await SettingsStorage.saveServerLists([
+        UserServer(
+          id: 'u1',
+          name: '',
+          enabled: true,
+          tagPrefix: '',
+          detourPolicy:
+              const DetourPolicy(overrideDetour: NodeLink(tag: 'c1')),
+          rawBody: 'vless://11111111-1111-1111-1111-111111111111'
+              '@198.51.100.1:443#S1',
+        ),
+      ]);
+      await SettingsStorage.reorderSources([
+        SettingsStorage.sourceKeyForChain('c1'),
+        SettingsStorage.sourceKeyForId('u1'),
+        SettingsStorage.sourceKeyForChain('c2'),
+      ]);
+      await SettingsStorage.saveCustomRules([
+        CustomRuleInline(
+          id: 'r1',
+          name: 'R',
+          domainSuffixes: const ['.example-1.com'],
+          outbound: 'c1',
+          orderNum: 0,
+        ),
+      ]);
+      await SettingsStorage.saveRouteFinal('c1');
+      await SettingsStorage.saveDnsServers(const [
+        DnsServerInline(
+          enabled: true,
+          tag: 'my-doh',
+          body: {'type': 'https', 'server': 'example-4.com', 'detour': 'c1'},
+        ),
+      ]);
+
+      final saved = await SettingsStorage.renameChain(
+          'c1', const SourceChain(tag: ' via-de ', hops: hops));
+      expect(saved.tag, 'via-de');
+
+      SettingsStorage.resetCacheForTesting();
+      final sources = ((await readFile())['sources'] as List)
+          .cast<Map<String, dynamic>>();
+      expect([for (final r in sources) '${r['id'] ?? r['tag']}'],
+          ['via-de', 'u1', 'c2']);
+      final chains = await SettingsStorage.getChains();
+      expect(chains.map((c) => c.tag), ['via-de', 'c2']);
+      expect(chains[1].hops.first, const NodeLink(tag: 'via-de'));
+      expect((await SettingsStorage.getCustomRules()).single.outbound,
+          'via-de');
+      expect(await SettingsStorage.getRouteFinal(), 'via-de');
+      final u1 = (await SettingsStorage.getServerLists()).single;
+      expect(u1.detourPolicy.overrideDetour, const NodeLink(tag: 'via-de'));
+      final dns =
+          (await SettingsStorage.getDnsServers()).single as DnsServerInline;
+      expect(dns.body['detour'], 'via-de');
+    });
+
+    test('занятый тег (цепочка или Направление) отвергается, свой свободен',
+        () async {
+      await SettingsStorage.setDirections(
+          const [Direction(tag: 'vpn-1', label: 'VPN ①')]);
+      await SettingsStorage.setChains(const [
+        SourceChain(tag: 'c1', hops: hops),
+        SourceChain(tag: 'c2', hops: hops),
+      ]);
+      await expectLater(
+          SettingsStorage.renameChain(
+              'c1', const SourceChain(tag: 'c2', hops: hops)),
+          throwsA(isA<StateError>()));
+      await expectLater(
+          SettingsStorage.renameChain(
+              'c1', const SourceChain(tag: 'vpn-1', hops: hops)),
+          throwsA(isA<StateError>()));
+      final same = await SettingsStorage.renameChain(
+          'c1', const SourceChain(tag: 'c1', enabled: false, hops: hops));
+      expect(same.tag, 'c1');
+      final chains = await SettingsStorage.getChains();
+      expect(chains.map((c) => c.tag), ['c1', 'c2']);
+      expect(chains.first.enabled, isFalse);
     });
   });
 

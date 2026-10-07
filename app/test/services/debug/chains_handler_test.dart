@@ -219,12 +219,29 @@ void main() {
       expect(asMap(r)['hops'], [{'tag': 'direct-out'}, {'tag': 'vpn-1'}]);
     });
 
-    test('тег immutable → 400', () async {
+    test('§609 PATCH tag переименовывает → 200, GET по новому тегу', () async {
+      final r = await chainsHandler(
+          req('PATCH', '/chains/chain-1', body: {'tag': 'other'}), ctx());
+      expect(r.status, 200);
+      expect(asMap(r)['tag'], 'other');
+      final got = await chainsHandler(req('GET', '/chains/other'), ctx());
+      expect(asMap(got)['hops'], [{'tag': 'direct-out'}, {'tag': 'vpn-1'}]);
       await expectLater(
-        chainsHandler(
-            req('PATCH', '/chains/chain-1', body: {'tag': 'other'}), ctx()),
-        throwsA(isA<BadRequest>()),
+        chainsHandler(req('GET', '/chains/chain-1'), ctx()),
+        throwsA(isA<NotFound>()),
       );
+    });
+
+    test('§609 PATCH tag: пустой или занятый другой цепочкой → 400', () async {
+      await chainsHandler(
+          req('POST', '/chains', body: {'tag': 'taken'}), ctx());
+      for (final bad in ['', 'taken']) {
+        await expectLater(
+          chainsHandler(
+              req('PATCH', '/chains/chain-1', body: {'tag': bad}), ctx()),
+          throwsA(isA<BadRequest>()),
+        );
+      }
     });
 
     test('404 на неизвестный тег', () async {
