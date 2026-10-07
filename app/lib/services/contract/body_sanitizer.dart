@@ -733,10 +733,21 @@ final class _Ctx {
         // подключается без обфускации»), и он адресуется полем: ожидание
         // корпуса называет `path: obfs.password`, а `params` у него свои
         // (`type` — какую обфускацию сняли).
+        // §612 (контракт 1.1.110, PARSING_PRINCIPLES §6.3) — условная
+        // обязательность: `required_unless` снимает её с отсутствующего поля
+        // (пир WireGuard без адреса при `listen_port` — входящий). Примитив
+        // общий, не ветка протокола.
+        if (f.required && _requiredLifted(f, src, kept, prefix, key)) {
+          continue;
+        }
         if (f.required) {
           final own = f.code;
           if (own == null) {
-            warn('field_missing', params: {'field': _join(prefix, key)});
+            // §612 — путь у кода есть всегда, как у Go (`requiredFailed`):
+            // результат разбора адресует запись полем (`peers[0].address`).
+            warn('field_missing',
+                path: _join(prefix, key),
+                params: {'field': _join(prefix, key)});
           } else {
             warn(own, path: _join(prefix, key), params: _requiredParams(src));
           }
@@ -1001,6 +1012,11 @@ final class _Ctx {
         if (dropObject) {
           dropObject = false;
           dropNode = true;
+          // §612 (контракт 1.1.110) — снятие ЯВНОЕ: у подписки пир без
+          // обязательного поля снимается, и узел без пиров выпадает при
+          // разборе (`dropped[]`, корпус
+          // `body/singbox/endpoints_wg_peer_no_endpoint`), как у Go.
+          explicitDropNode = true;
           return const _Value.drop();
         }
         out.add(cleaned);
@@ -2137,6 +2153,69 @@ final class _Ctx {
       if (p is String && _presentInSource(p, siblings, prefix)) return true;
     }
     return false;
+  }
+
+  /// §612 (контракт 1.1.110, PARSING_PRINCIPLES §6.3) — снимает ли
+  /// `required_unless` обязательность отсутствующего поля [key] объекта
+  /// [prefix]. Снято, если задан любой путь из `set` (от корня тела,
+  /// наличие — по §6.2) ИЛИ в том же объекте не задан любой сосед из
+  /// `absent`. Снятие с `code` ставит этот код на путь поля, тело не
+  /// меняется; без `code` — молча.
+  bool _requiredLifted(FieldSchema f, Map<String, dynamic> src,
+      Map<String, Object?> kept, String prefix, String key) {
+    final ru = f.requiredUnless;
+    if (ru == null) return false;
+    var lifted = false;
+    final set = ru['set'];
+    if (set is List) {
+      for (final p in set) {
+        if (p is String && _presentFromRoot(p)) {
+          lifted = true;
+          break;
+        }
+      }
+    }
+    final absent = ru['absent'];
+    if (!lifted && absent is List) {
+      for (final n in absent) {
+        if (n is String && !_siblingPresent(n, src, kept, prefix)) {
+          lifted = true;
+          break;
+        }
+      }
+    }
+    if (!lifted) return false;
+    final code = ru['code'];
+    if (code is String && code.isNotEmpty) {
+      warn(code, path: _join(prefix, key));
+    }
+    return true;
+  }
+
+  /// Задан ли путь [path] от корня тела — по снимку санитайзера, а у ещё не
+  /// обойдённого — по исходному телу (снятое правилом поле отсутствует, §6.2).
+  bool _presentFromRoot(String path) {
+    if (_managedAt(path)) return false;
+    if (explainedDrops.contains(path)) return false;
+    if (_switchedOff(path)) return false;
+    if (sanitized.containsKey(path)) return _meaningful(sanitized[path]);
+    final i = path.lastIndexOf('.');
+    if (i > 0) {
+      final parent = path.substring(0, i);
+      if (sanitized.containsKey(parent) || _branchDone(parent)) return false;
+    }
+    return _meaningful(_rawAt(path));
+  }
+
+  /// Задан ли сосед [name] в объекте [prefix]: уже обойдённый — по чистой
+  /// карте [kept], иначе по исходной [src], если его не сняло правило.
+  bool _siblingPresent(String name, Map<String, dynamic> src,
+      Map<String, Object?> kept, String prefix) {
+    if (kept.containsKey(name)) return _meaningful(kept[name]);
+    final abs = _join(prefix, name);
+    if (explainedDrops.contains(abs) || _switchedOff(abs)) return false;
+    if (!src.containsKey(name)) return false;
+    return _meaningful(src[name]);
   }
 
   /// Снят ли [path] (или объект над ним) как выключатель — см. [switchedOff].
