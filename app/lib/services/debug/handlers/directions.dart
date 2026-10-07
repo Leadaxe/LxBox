@@ -240,6 +240,9 @@ Direction? _applyPatch(Direction ch, Map<String, dynamic> body,
   // auto: null (ключ присутствует) = снять галку; object = merge в текущий
   // (или дефолтный) DirectionAuto — PATCH одним полем не должен сбрасывать
   // остальные urltest-опции в дефолты. balancer{} мержится одним уровнем.
+  // §612 — авто включается впервые (POST или PATCH Направления без auto) =
+  // новый автовыбор: режим без `mode` в body — [kNewAutoMode], как в форме.
+  // Сохранённая запись без `mode` по-прежнему читается least_test (кодек).
   var clearAuto = false;
   DirectionAuto? auto;
   if (body.containsKey('auto')) {
@@ -247,7 +250,8 @@ Direction? _applyPatch(Direction ch, Map<String, dynamic> body,
     if (rawAuto == null) {
       clearAuto = true;
     } else if (rawAuto is Map<String, dynamic>) {
-      final base = (ch.auto ?? const DirectionAuto()).toJson();
+      final base =
+          (ch.auto ?? const DirectionAuto(mode: kNewAutoMode)).toJson();
       final baseBal = base['balancer'] as Map<String, dynamic>;
       final patchBal = rawAuto['balancer'];
       if (patchBal != null && patchBal is! Map<String, dynamic>) {

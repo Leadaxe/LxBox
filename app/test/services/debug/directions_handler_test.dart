@@ -104,6 +104,8 @@ void main() {
       expect((body['auto'] as Map)['interval'], '3m');
       // Немодифицированные auto-поля — дефолты, не null.
       expect((body['auto'] as Map)['tolerance'], 50);
+      // §612 — новый автовыбор без `mode` в body получает kNewAutoMode.
+      expect((body['auto'] as Map)['mode'], kNewAutoMode.wire);
 
       final stored = await SettingsStorage.getDirections();
       expect(stored.map((c) => c.tag), ['vpn-1', 'vpn-2']);
@@ -219,6 +221,8 @@ void main() {
       expect(auto1['url'], 'https://ping.example/gen204');
       expect(auto1['interval'], '9m');
       expect(auto1['tolerance'], 100);
+      // §612 — режим из создания (kNewAutoMode) переживает merge-PATCH.
+      expect(auto1['mode'], kNewAutoMode.wire);
 
       // Вложенный balancer тоже мержится.
       final r2 = await directionsHandler(
