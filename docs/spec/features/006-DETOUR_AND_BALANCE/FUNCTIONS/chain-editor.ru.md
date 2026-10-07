@@ -22,7 +22,7 @@
 
 | Элемент | Поведение |
 |---|---|
-| Tag (при создании) | «System id, cannot be changed later»; пустой, служебный, занятый, `<tag>-auto`-коллизия — отказ с причиной |
+| Tag | Задаётся при создании и правится в редакторе (иконка метки, эмодзи-пикер; заголовок следует полю); пустой или занятый другой цепочкой, Направлением или узлом — сохранение заперто с причиной; при сохранении цепочка остаётся на месте, ссылки на старый тег (позиции других цепочек, правила, final, detour, DNS) переходят на новый |
 | Enabled | «A disabled chain is not built and cannot be used as a position» |
 | Positions | подпись «In packet order: the first position is the hop closest to you, the last one is what the destination sees.»; у позиции — вид (node, group, direction, chain, built-in, loading…, not found) |
 | Add position | пикер: секции **Directions** (только с «Use as detour») и **Servers** (узлы собранного конфига по алфавиту, `TYPE · server:port`); уже занятые исключены; нечего добавить — «Nothing left to add…» |

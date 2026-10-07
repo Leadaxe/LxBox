@@ -8,6 +8,16 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **A hop chain's tag is editable ([task 609](docs/spec/tasks/609-chain-tag-editable.md)),**
+  like a node's: a Tag field with the emoji picker in the chain editor and
+  `tag` in Debug API PATCH. The chain keeps its place in the source list;
+  other chains' positions, rules, final, detours and DNS servers that named
+  the old tag follow the new one.
+  (RU: тег цепочки редактируется, как у узла; место в списке сохраняется,
+  ссылки на старый тег переходят на новый.)
+
 ---
 
 ## [2.25.10] — 2026-10-01

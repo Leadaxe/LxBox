@@ -152,7 +152,7 @@ are hidden from node selection.
 | same | Test URL / Interval / Tolerance / Idle timeout / Interrupt | — | cp.cloudflare.com/generate_204 / 15m / 50 / 30m / off | `url` … `interrupt_exist_connections` |
 | Auto-select node | Members: All · Rule (Include/Exclude regex) · Pick; Mode: Fastest · Load balance · Manual; Badge in list (regex) | — | All · Fastest · flag emoji | `urltest` / `selector` + `default` |
 | Subscription / folder | Replace with a group: Manual · Auto · Both, Group name | — | not folded | `selector` / `urltest` |
-| Chain | Tag (`chain-N`, immutable), Title, Enabled | — | first free, empty, on | `tag` |
+| Chain | Tag (`chain-N`), Enabled | — | first free, empty, on | `tag` |
 | Chain | Positions | ≥2, in packet order | — | `outbounds` |
 | Chain → Advanced | Idle timeout · Strip evasion tricks from links · Per-key overrides (three-state) | empty = core (5m) · on · untouched | — | `idle_timeout`, `strip_evasion`, `strip` |
 | Chain | rewrite | JSON merge-patch by node type, not editable in the form | `{}` | `rewrite` |

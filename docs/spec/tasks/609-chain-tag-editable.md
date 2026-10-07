@@ -3,7 +3,7 @@
 | Поле | Значение |
 |------|----------|
 | Тип | F (доработка) |
-| Статус | S (spec) |
+| Статус | D (done) |
 | Фича | [006-DETOUR_AND_BALANCE](../features/006-DETOUR_AND_BALANCE/FEATURE.md) (hop-chains, chain-editor) |
 | Дата | 2026-10-07 |
 | Связанные | [594](594-chain-label-removed-tag-only.md) (label снят, тег оставлен неизменяемым), [008-NODE_EDITOR/name-is-tag](../features/008-NODE_EDITOR/FUNCTIONS/name-is-tag.md) |
@@ -89,4 +89,34 @@ immutable. Он идёт через ту же операцию переимен�
 
 ## Итог
 
-_(заполняется по завершении)_
+- **Экран.** В `chain_edit_screen.dart` поле Tag тем же виджетом, что у узла
+  (иконка метки, `EmojiPickerButton`, подсказка «Display name in node list»
+  уже переведена); заголовок «Hop chain · %s» берётся из поля; тег входит в
+  `_snapshot`/`_isDirty`; валидация — готовые `tagEmpty`/`tagTaken` против
+  `originalTag`. `SourceChain.copyWith` получил `tag`.
+- **Хранилище.** `SettingsStorage.renameChain(oldTag, chain)`
+  (`settings_storage/chains.dart`): одна запись `sources[]` целиком, слот
+  `chain:<old>` получает новый ключ на месте; в той же записи переписываются
+  позиции других цепочек (`retargetChainHopRefs`, `source_chain.dart`),
+  корневые `overrideDetour`/`FolderMember.detour` (`retargetDetourRefs`,
+  `server_list.dart`), правила, переменные `outbound` пресетов, `route_final`
+  и DNS. Для последних общий помощник `_retargetOutboundRefs` вынесен из
+  `_healDirectionRefs` (`directions.dart`), удаление Направления ходит через
+  него же. Тег не изменился — `_updateChain` как раньше.
+- **In-memory зеркало.** `SubscriptionController.syncDetourRefsRetargeted`
+  повторяет перепись detour-ссылок в контроллере, иначе следующий
+  `_persist()` вернул бы старый тег. Зовут `editChainAndPersist` и Debug API.
+- **Debug API.** PATCH `tag` идёт через `renameChain`; рубеж формы
+  (`originalTag` = старый тег, тёзка нового тега среди цепочек и узлов
+  конфига — занят); пустой тег — 400. Help и `docs/api`, `027` обновлены.
+- **Отклонение.** Строка «System id, cannot be changed later» убрана только из
+  диалога цепочки: её же показывает `new_direction_dialog.dart` (тег
+  Направления неизменяем), поэтому переводы в `assets/l10n/{ru,zh}` живые и
+  оставлены.
+- **Проверка.** Новые юниты в `test/services/chains_storage_test.dart`
+  (группа `renameChain`) и `test/services/debug/chains_handler_test.dart`
+  (PATCH `tag` → 200, GET по новому; пустой/занятый → 400) зелёные; прогнаны
+  по одному также `chain_edit_screen_smoke_test`,
+  `owner_navigation_chain_test`, `detour_direction_resync_test`,
+  `direction_heal_refs_test`, `detour_direction_heal_test`. `flutter analyze`
+  чистый, `hardcoded_check --strict` 0/0. На устройстве не проверено.

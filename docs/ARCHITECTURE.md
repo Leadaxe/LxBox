@@ -899,7 +899,7 @@ debug/                       # localhost HTTP Debug API (§031)
                              #     /chains + /chains/{tag}/probe (§393 C — CRUD plus the layered probe)
                              #     /folders (§238) /pool (§208) (plus the _shared CRUD helpers)
   serializers/               #   home_state · storage (the denylist scrubber over sources[] records) · rules · subs (URL masking)
-                             #   · chains (tag/label/enabled + source_chain canon)
+                             #   · chains (tag/enabled + source_chain canon)
 warp/                        # §025/§130 WARP plus the MASQUE transport (it feeds warp_wizard_screen)
   warp_client.dart           #   registration with Cloudflare (POST /reg): the X25519 private key never leaves the device
   warp_account.dart          #   the WARP account (client_id→reserved, the keys)

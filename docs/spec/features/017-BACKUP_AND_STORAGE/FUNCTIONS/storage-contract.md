@@ -50,7 +50,7 @@ separate block.
 | `subscription` | `id`, `name`, `enabled`, `url`, `tag_policy{prefix}`, `identity`, `update{interval_hours}`, `disabled{node: unix seconds}` + LxBox fields |
 | `server` | `id`, `tag`, `enabled`, `origin{kind: uri\|wg_ini\|json, raw}`, `detour` (node address) + LxBox fields; the former `sections` field is read and removed with a note |
 | `folder` | `id`, `name`, `enabled`, `tag_policy`, `nodes[]` (`server` / `unsupported` with `reason` / `auto`) |
-| `chain` | `tag`, `enabled`, `label`, `body{type: chain, …}`, `hops[]` (node addresses) |
+| `chain` | `tag`, `enabled`, `body{type: chain, …}`, `hops[]` (node addresses) |
 
 Rules — `rules[]` with `kind: inline|srs|preset`, matchers in `body` with
 sing-box keys; DNS servers — `user|preset|template`.

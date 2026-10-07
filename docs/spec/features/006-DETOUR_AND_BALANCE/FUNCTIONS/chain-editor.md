@@ -24,7 +24,7 @@ much each hop costs.
 
 | Element | Behaviour |
 |---|---|
-| Tag (on creation) | "System id, cannot be changed later"; empty, reserved, occupied, `<tag>-auto` collision — refusal with a reason |
+| Tag | Set on creation and editable in the editor (label icon, emoji picker; the title follows the field); empty or taken by another chain, Direction or node — saving is blocked with a reason; on save the chain keeps its place and references to the old tag (other chains' positions, rules, final, detours, DNS) move to the new one |
 | Enabled | "A disabled chain is not built and cannot be used as a position" |
 | Positions | caption "In packet order: the first position is the hop closest to you, the last one is what the destination sees."; each position shows its kind (node, group, direction, chain, built-in, loading…, not found) |
 | Add position | picker: sections **Directions** (only with "Use as detour") and **Servers** (nodes of the built config alphabetically, `TYPE · server:port`); those already used are excluded; nothing to add — "Nothing left to add…" |

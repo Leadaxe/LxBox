@@ -51,7 +51,7 @@ idle-suspend, бюджет сборки WG, пассивная проверка,
 | `subscription` | `id`, `name`, `enabled`, `url`, `tag_policy{prefix}`, `identity`, `update{interval_hours}`, `disabled{узел: unix-секунды}` + поля LxBox |
 | `server` | `id`, `tag`, `enabled`, `origin{kind: uri\|wg_ini\|json, raw}`, `detour` (адрес узла) + поля LxBox; прежнее поле `sections` читается и снимается с отметкой |
 | `folder` | `id`, `name`, `enabled`, `tag_policy`, `nodes[]` (`server` / `unsupported` с `reason` / `auto`) |
-| `chain` | `tag`, `enabled`, `label`, `body{type: chain, …}`, `hops[]` (адреса узлов) |
+| `chain` | `tag`, `enabled`, `body{type: chain, …}`, `hops[]` (адреса узлов) |
 
 Правила — `rules[]` с `kind: inline|srs|preset`, матчеры в `body` ключами
 sing-box; DNS-серверы — `user|preset|template`.

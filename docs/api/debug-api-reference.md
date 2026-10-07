@@ -879,7 +879,7 @@ POST/PATCH не читается, как любое неизвестное по�
 | `/chains` | GET | — |
 | `/chains/{tag}` | GET | 404, если тега нет |
 | `/chains` | POST | опц. `{"tag":"..."}` + любые PATCH-поля; без `tag` — первый свободный `chain-N`, 201 |
-| `/chains/{tag}` | PATCH | subset: `enabled,hops,idle_timeout,strip_evasion,strip,rewrite` |
+| `/chains/{tag}` | PATCH | subset: `tag,enabled,hops,idle_timeout,strip_evasion,strip,rewrite`; `tag` переименовывает на месте, ссылки на старый тег переписываются, ответ — с новым тегом |
 | `/chains/{tag}` | DELETE | — |
 | `/chains/{tag}/probe` | GET | `?url=&timeout_ms=` — послойная проба |
 
