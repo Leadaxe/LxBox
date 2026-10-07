@@ -144,19 +144,29 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
     return _storeExitNode;
   }
 
-  Future<void> _storeExitNode(String? value) async {
+  Future<void> _storeExitNode(String? value) => _storeTailscaleFields({
+        'exit_node': value == null || value.isEmpty ? null : value,
+      });
+
+  /// §613 — переключатели Settings вкладки Network пишут тем же путём.
+  Future<void> Function(Map<String, Object?>)? get _saveTailscaleFields =>
+      _saveExitNode == null ? null : _storeTailscaleFields;
+
+  Future<void> _storeTailscaleFields(Map<String, Object?> fields) async {
     final target =
         exitNodeTargetForTag(widget.tag, widget.subController.entries);
     if (target == null) return;
     final err =
-        await storeExitNodeChoice(widget.subController, target, value);
+        await storeTailscaleFields(widget.subController, target, fields);
     if (!mounted) return;
     if (err == null) {
       final body = Map<String, dynamic>.of(_networkBody);
-      if (value == null || value.isEmpty) {
-        body.remove('exit_node');
-      } else {
-        body['exit_node'] = value;
+      for (final f in fields.entries) {
+        if (f.value == null) {
+          body.remove(f.key);
+        } else {
+          body[f.key] = f.value;
+        }
       }
       setState(() => _tailscaleBody = body);
     }
@@ -346,6 +356,7 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
                   liveTag: widget.tag,
                   body: _networkBody,
                   onSaveExitNode: _saveExitNode,
+                  onSaveFields: _saveTailscaleFields,
                 ),
               // §392 — экран знает узел ТОЛЬКО по тегу собранного конфига
               // (NodeSpec тут нет), поэтому probe-ветка недоступна: при

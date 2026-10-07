@@ -52,6 +52,7 @@ void main() {
     List<CcTailscaleStatus>? data,
     Map<String, dynamic> body = const {},
     Future<void> Function(String?)? onSave,
+    Future<void> Function(Map<String, Object?>)? onSaveFields,
     TailscaleNetworkActions actions = const TailscaleNetworkActions(),
   }) async {
     final ctrl = StreamController<List<CcTailscaleStatus>>();
@@ -62,6 +63,7 @@ void main() {
           liveTag: 'ts',
           body: body,
           onSaveExitNode: onSave,
+          onSaveFields: onSaveFields,
           statusSource: ctrl.stream,
           vpnUp: vpnUp,
           actions: actions,
@@ -209,6 +211,8 @@ void main() {
 
   group('§613', () {
     final health = find.byKey(const ValueKey('tailscale-health'));
+    SwitchListTile tile(WidgetTester tester, String key) =>
+        tester.widget<SwitchListTile>(find.byKey(ValueKey(key)));
 
     testWidgets('health пуст — блока нет', (tester) async {
       await pump(tester, data: [_status()]);
@@ -236,6 +240,39 @@ void main() {
       // Единственная плитка с именем — пункт Exit node (RadioListTile
       // строится на ListTile); в Devices строки нет.
       expect(find.widgetWithText(ListTile, 'gw'), findsOneWidget);
+    });
+
+    testWidgets('Settings без выхода: LAN неактивен, advertise пишется',
+        (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 2400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final saved = <Map<String, Object?>>[];
+      await pump(tester,
+          data: [_status()], onSaveFields: (f) async => saved.add(f));
+      expect(tile(tester, 'tailscale-exit-lan').onChanged, isNull);
+      await tester.tap(find.byKey(const ValueKey('tailscale-advertise-exit')));
+      await tester.pump();
+      expect(saved, [
+        {'advertise_exit_node': true},
+      ]);
+    });
+
+    testWidgets('Settings с записанным выходом: advertise заблокирован',
+        (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 2400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await pump(tester,
+          data: [_status()],
+          body: const {'exit_node': 'gw'},
+          onSaveFields: (f) async {});
+      expect(tile(tester, 'tailscale-advertise-exit').onChanged, isNull);
+      expect(tile(tester, 'tailscale-exit-lan').onChanged, isNotNull);
+    });
+
+    testWidgets('узел подписки — блока Settings нет', (tester) async {
+      await pump(tester, data: [_status()]);
+      expect(
+          find.byKey(const ValueKey('tailscale-advertise-exit')), findsNothing);
     });
   });
 }

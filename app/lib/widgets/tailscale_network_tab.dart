@@ -44,6 +44,7 @@ class TailscaleNetworkTab extends StatefulWidget {
     required this.liveTag,
     required this.body,
     this.onSaveExitNode,
+    this.onSaveFields,
     this.statusSource,
     this.vpnUp,
     this.actions = const TailscaleNetworkActions(),
@@ -53,6 +54,9 @@ class TailscaleNetworkTab extends StatefulWidget {
   final Map<String, dynamic> body;
   final Future<void> Function(String? value)? onSaveExitNode;
 
+  /// §613 — запись полей тела узла (значение `null` убирает поле) тем же
+  /// путём, что Save choice; `null` — блока Settings нет (узел подписки).
+  final Future<void> Function(Map<String, Object?> fields)? onSaveFields;
 
   /// Тесты: поток состояния вместо [CcChannel.tailscaleStatus] (подписка ядра
   /// тогда не поднимается).
@@ -178,6 +182,7 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab> {
       _statusBlock(context, s),
       if (s.self != null) _thisDeviceBlock(context, s.self!),
       _exitNodeBlock(context, s),
+      if (widget.onSaveFields != null) _settingsBlock(context),
       _header(context, getLocalText.s("Devices")),
       if (devices.isEmpty)
         ListTile(dense: true, title: Text(getLocalText.s("No devices"))),
@@ -453,6 +458,61 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab> {
       if (active != null && active.stableId == p.stableId) _pathLine(active),
     ].where((v) => v.isNotEmpty);
     return lines.isEmpty ? null : Text(lines.join(' · '));
+  }
+
+  // ── Settings ──
+
+  /// §613 — `advertise_exit_node` и `exit_node_allow_lan_access` тела узла.
+  /// Первый ядро не совмещает с `exit_node` (реестр: `field_conflict`) — при
+  /// записанном выходе его можно только снять; второй без записанного
+  /// `exit_node` реестр снимает (`field_requires`) — переключатель неактивен.
+  Widget _settingsBlock(BuildContext context) {
+    final body = widget.body;
+    final hasExit = recordedExitNode(body) != null;
+    final advertise = body['advertise_exit_node'] == true;
+    final lan = body['exit_node_allow_lan_access'] == true;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _header(context, getLocalText.s("Settings")),
+        SwitchListTile(
+          key: const ValueKey('tailscale-advertise-exit'),
+          dense: true,
+          title: Text(getLocalText.s("Advertise this device as exit node")),
+          subtitle: hasExit && !advertise
+              ? Text(getLocalText.s("Not available while an exit node is used."))
+              : null,
+          value: advertise,
+          onChanged: _busy || (hasExit && !advertise)
+              ? null
+              : (v) => unawaited(_saveField('advertise_exit_node', v)),
+        ),
+        SwitchListTile(
+          key: const ValueKey('tailscale-exit-lan'),
+          dense: true,
+          title: Text(getLocalText.s("Allow LAN access while using exit node")),
+          subtitle: hasExit
+              ? null
+              : Text(getLocalText.s("Needs a saved exit node.")),
+          value: lan,
+          onChanged: _busy || !hasExit
+              ? null
+              : (v) => unawaited(_saveField('exit_node_allow_lan_access', v)),
+        ),
+      ],
+    );
+  }
+
+  /// Выключенное значение — поле убирается (по умолчанию `false`).
+  Future<void> _saveField(String key, bool value) async {
+    final save = widget.onSaveFields;
+    if (save == null) return;
+    setState(() => _busy = true);
+    try {
+      await save({key: value ? true : null});
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   // ── Health ──

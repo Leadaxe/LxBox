@@ -5549,5 +5549,17 @@
   },
   "handshake %s": {
     "value": "握手 %s"
+  },
+  "Advertise this device as exit node": {
+    "value": "将此设备公布为出口节点"
+  },
+  "Allow LAN access while using exit node": {
+    "value": "使用出口节点时允许访问局域网"
+  },
+  "Not available while an exit node is used.": {
+    "value": "使用出口节点时不可用。"
+  },
+  "Needs a saved exit node.": {
+    "value": "需要已保存的出口节点。"
   }
 }

@@ -99,7 +99,16 @@ String exitNodeConfigValue(CcTailscalePeer peer) {
 /// убирается). Источник — JSON-объект тела узла; порядок прочих ключей
 /// сохраняется, запись — JSON с отступом в два пробела. Не объект —
 /// [FormatException].
-String withExitNode(String source, String? value) {
+String withExitNode(String source, String? value) =>
+    withBodyFields(source, {
+      'exit_node': value == null || value.isEmpty ? null : value,
+    });
+
+/// §613 — текст источника узла с полями [fields]: значение `null` убирает
+/// поле, прочее записывается как есть. Порядок прочих ключей сохраняется,
+/// новые идут в конец; запись — JSON с отступом в два пробела. Не объект —
+/// [FormatException].
+String withBodyFields(String source, Map<String, Object?> fields) {
   final decoded = jsonDecode(source);
   if (decoded is! Map) {
     throw const FormatException('node source is not a JSON object');
@@ -107,10 +116,12 @@ String withExitNode(String source, String? value) {
   final body = <String, dynamic>{
     for (final e in decoded.entries) '${e.key}': e.value,
   };
-  if (value == null || value.isEmpty) {
-    body.remove('exit_node');
-  } else {
-    body['exit_node'] = value;
+  for (final f in fields.entries) {
+    if (f.value == null) {
+      body.remove(f.key);
+    } else {
+      body[f.key] = f.value;
+    }
   }
   return const JsonEncoder.withIndent('  ').convert(body);
 }

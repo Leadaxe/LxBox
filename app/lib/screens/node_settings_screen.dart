@@ -387,12 +387,18 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
   /// §581 — Save choice вкладки Network: `exit_node` = [value] (`null` —
   /// поле убирается) в теле узла, дальше тем же путём, что Save вкладки
   /// Source (тег из поля Tag, проверка ядром, запись, пересборка).
-  Future<void> _saveExitNode(String? value) async {
+  Future<void> _saveExitNode(String? value) => _saveTailscaleFields({
+        'exit_node': value == null || value.isEmpty ? null : value,
+      });
+
+  /// §613 — поля тела узла с вкладки Network (Save choice, переключатели
+  /// Settings): `null` убирает поле; запись — как Save вкладки Source.
+  Future<void> _saveTailscaleFields(Map<String, Object?> fields) async {
     final raw = _containerRaw.trim();
     final base = raw.startsWith('{') ? raw : _jsonCtrl.text;
     final String text;
     try {
-      text = withExitNode(base, value);
+      text = withBodyFields(base, fields);
     } on FormatException catch (e) {
       _snack(getLocalText.s("Invalid JSON: %s", e.message));
       return;
@@ -515,6 +521,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
                           ? (_node as TailscaleSpec).body
                           : const {},
                       onSaveExitNode: _saveExitNode,
+                      onSaveFields: _saveTailscaleFields,
                     ),
                   // §392/§501 — диагностика + уведомления узла.
                   NodeDiagnosticsTab(
