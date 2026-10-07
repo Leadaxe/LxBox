@@ -354,8 +354,8 @@ final class _Emit {
 
     final host = _wrapIpv6(_str(_readSourcePath('host')) ?? '');
     // §612 (контракт 1.1.109) — ссылка без хоста при объявленном источнике
-    // хоста — не ссылка: входящий пир WireGuard адреса не несёт, и
-    // `wireguard://key@?…` обратно не разобралась бы. Отказ — пустая строка,
+    // хоста — не ссылка: у входящего пира адреса нет, и ссылка без хоста
+    // обратно не разобралась бы. Отказ — пустая строка,
     // как у `refuse_when` («This node cannot be shared as a link»).
     if (host.isEmpty && _declaresSource('host')) {
       return EmitResult(uri: '', lost: _lost);
