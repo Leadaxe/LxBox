@@ -43,6 +43,7 @@ String protoLabel(String type) => type == GroupGenus.manual
 String autoModeLabel(String mode) => switch (mode) {
       'least_test' => 'Fastest',
       'round_robin' => 'Pool',
+      'failover' => 'Hold', // §612
       _ => mode,
     };
 
@@ -53,7 +54,8 @@ String autoModeLabel(String mode) => switch (mode) {
 /// режим и состав:
 ///
 /// - `🎯 [3]` — least_test: выбирает одного быстрейшего из 3;
-/// - `🔀 [15/7]` — round_robin: всего 15 узлов, в работе пул из 7.
+/// - `🔀 [15/7]` — round_robin: всего 15 узлов, в работе пул из 7;
+/// - `📌 [3]` — failover (§612): держит выбранного из 3 до его отказа.
 ///
 /// `null` — не urltest-группа либо outbound не найден.
 /// §322 — значки живого пула: `🇩🇪, 🇳🇱[2], 🇫🇮` из имён его членов.
@@ -98,6 +100,8 @@ String? autoGroupLabel(Map<String, dynamic>? raw) {
   if (raw == null || raw['type'] != 'urltest') return null;
   final members = (raw['outbounds'] as List?)?.length ?? 0;
   // `balancer{}` эмитится только под round_robin (§208 / §4.1 спеки 322).
+  // §612 — failover: `mode` эмитится, `balancer` нет.
+  if (raw['mode'] == 'failover') return '📌 [$members]';
   final balancer = raw['balancer'];
   if (balancer is! Map) return '🎯 [$members]';
   // Пул больше состава — ядро схлопывает до доступных; показываем как есть.
@@ -166,6 +170,8 @@ class NodeListPresenter {
   /// что у [autoGroupLabel]), поэтому его наличие и есть признак режима.
   String autoModeOf(String tag, HomeState state) {
     final raw = state.activeModel[tag]?.raw;
+    // §612 — failover эмитит `mode` без `balancer`.
+    if (raw?['mode'] == 'failover') return 'failover';
     return (raw?['balancer'] is Map) ? 'round_robin' : 'least_test';
   }
 
@@ -201,7 +207,7 @@ class NodeListPresenter {
     'TLS', 'TLS+Vision', 'Reality', 'Reality+Vision',
     'awg', 'awg1.5', 'awg2', 'awg3', 'awg3.1',
     // §359 — режимы узла автовыбора (§322): свой transport-слот, в конец ряда.
-    'least_test', 'round_robin',
+    'least_test', 'round_robin', 'failover',
   ];
 
   static int _variantRank(String v) {

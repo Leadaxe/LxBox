@@ -174,9 +174,12 @@ class AutoSelectParams {
   Map<String, dynamic> toJson() => {
         'url': url,
         'interval': interval,
-        'tolerance': tolerance,
+        // §612 (контракт 1.1.111) — у failover `tolerance` не действует и
+        // не эмитится; `balancer` у него — отказ старта ядра.
+        if (mode != UrltestMode.failover) 'tolerance': tolerance,
         'idle_timeout': idleTimeout,
         'interrupt_exist_connections': interruptExistConnections,
+        if (mode == UrltestMode.failover) 'mode': mode.wire,
         if (mode == UrltestMode.roundRobin) ...{
           'mode': mode.wire,
           'balancer': <String, dynamic>{

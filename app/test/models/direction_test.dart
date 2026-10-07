@@ -482,4 +482,48 @@ void main() {
       expect(c.includeDirect, false); // include пуст
     });
   });
+
+  // §612 (контракт 1.1.111) — режим failover: удержание узла до отказа.
+  group('§612 — UrltestMode.failover', () {
+    test('wire и чтение', () {
+      expect(UrltestMode.failover.wire, 'failover');
+      expect(UrltestMode.fromWire('failover'), UrltestMode.failover);
+      // Запись без mode — умолчание схемы, least_test.
+      expect(UrltestMode.fromWire(null), UrltestMode.leastTest);
+    });
+
+    test('Direction auto: круг JSON хранения и записи бэкапа', () {
+      const a = DirectionAuto(mode: UrltestMode.failover, tolerance: 80);
+      expect(DirectionAuto.fromJson(a.toJson()).mode, UrltestMode.failover);
+      final rec = directionAutoToRecord(a);
+      expect(rec['mode'], 'failover');
+      expect(rec.containsKey('pool'), isFalse);
+      expect(directionAutoFromRecord(rec).mode, UrltestMode.failover);
+    });
+
+    test('эмит двойника: mode без tolerance и balancer', () {
+      final g = buildAutoGroup(
+        tag: 'vpn-1-auto',
+        outbounds: const ['a', 'b'],
+        a: const DirectionAuto(mode: UrltestMode.failover, tolerance: 50),
+      );
+      expect(g['mode'], 'failover');
+      expect(g.containsKey('tolerance'), isFalse);
+      expect(g.containsKey('balancer'), isFalse);
+    });
+
+    test('least_test по-прежнему без mode, с tolerance', () {
+      final g = buildAutoGroup(
+        tag: 'vpn-1-auto',
+        outbounds: const ['a'],
+        a: const DirectionAuto(tolerance: 50),
+      );
+      expect(g.containsKey('mode'), isFalse);
+      expect(g['tolerance'], 50);
+    });
+
+    test('новый автовыбор формы — failover', () {
+      expect(kNewAutoMode, UrltestMode.failover);
+    });
+  });
 }

@@ -2457,6 +2457,9 @@
   "Hides matching nodes from routing. They stay visible, struck through.": {
     "value": "Скрывает подходящие узлы из маршрутизации. Они остаются видимыми, зачёркнутыми."
   },
+  "Hold until failure": {
+    "value": "Держать до отказа"
+  },
   "Home-screen shortcut": {
     "value": "Ярлык на главном экране"
   },
@@ -5342,6 +5345,9 @@
   },
   "just now": {
     "value": "только что"
+  },
+  "keep the fastest server until it fails": {
+    "value": "держит самый быстрый сервер, пока он не откажет"
   },
   "kept": {
     "value": "остаётся"

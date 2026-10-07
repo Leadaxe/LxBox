@@ -2223,6 +2223,9 @@
   "Hides matching nodes from routing. They stay visible, struck through.": {
     "value": "让匹配的节点不参与路由。它们仍然可见，但会加删除线。"
   },
+  "Hold until failure": {
+    "value": "保持至故障"
+  },
   "Home-screen shortcut": {
     "value": "主屏快捷方式"
   },
@@ -5072,6 +5075,9 @@
   },
   "just now": {
     "value": "刚刚"
+  },
+  "keep the fastest server until it fails": {
+    "value": "保持最快的服务器，直到它失效"
   },
   "kept": {
     "value": "保留"

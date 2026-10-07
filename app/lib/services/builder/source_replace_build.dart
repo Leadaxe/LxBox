@@ -142,8 +142,9 @@ class ReplaceBuild {
 
 /// Автовыбор с параметрами [a] — одна форма у двойника Направления и у
 /// свёртки (§74 п.2 `buildTwin`). Ключи и порядок — как у двойника
-/// Направления: `balancer` только у `round_robin`. `passive_check` снят в
-/// §611 (ядро lx.12 удалило ключ), замена — режим failover (§612).
+/// Направления: `balancer` только у `round_robin`; `failover` — `mode` без
+/// `tolerance` и `balancer` (§612, контракт 1.1.111). `passive_check` снят в
+/// §611 (ядро lx.12 удалило ключ), замена — режим failover.
 Map<String, dynamic> buildAutoGroup({
   required String tag,
   required List<String> outbounds,
@@ -155,10 +156,13 @@ Map<String, dynamic> buildAutoGroup({
     'outbounds': outbounds,
     'url': a.url,
     'interval': a.interval,
-    'tolerance': a.tolerance,
+    // §612 (контракт 1.1.111) — у failover `tolerance` не действует и в
+    // тело не эмитится, даже если задан у Направления.
+    if (a.mode != UrltestMode.failover) 'tolerance': a.tolerance,
     'idle_timeout': a.idleTimeout,
     'interrupt_exist_connections': a.interruptExistConnections,
   };
+  if (a.mode == UrltestMode.failover) group['mode'] = a.mode.wire;
   if (a.mode == UrltestMode.roundRobin) {
     group['mode'] = a.mode.wire;
     group['balancer'] = <String, dynamic>{
