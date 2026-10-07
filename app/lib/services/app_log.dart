@@ -68,6 +68,26 @@ class AppLog extends ChangeNotifier {
     for (final s in DebugSource.values) s: ListQueue<DebugEntry>(),
   };
 
+  // ─── §614 — счётчик ошибок для строки «Errors (N)» на главном ───
+
+  /// Число live-записей уровня error (оба источника) за время жизни
+  /// процесса. Записи прошлой сессии (`initPersistent`) не считаются.
+  int _errorsTotal = 0;
+
+  /// Значение `_errorsTotal` на момент последнего открытия журнала.
+  /// Только память процесса: после перезапуска счёт идёт с нуля.
+  int _errorsSeenAt = 0;
+
+  /// Ошибки с момента последнего открытия журнала (или с запуска).
+  int get errorsSinceSeen => _errorsTotal - _errorsSeenAt;
+
+  /// Журнал открыт — счётчик обнуляется.
+  void markErrorsSeen() {
+    if (_errorsSeenAt == _errorsTotal) return;
+    _errorsSeenAt = _errorsTotal;
+    notifyListeners();
+  }
+
   bool _persistInitialized = false;
   // Per-source dirty flags для persist write. Если только app-level warn —
   // не нужно перепаковывать corelog.txt и наоборот.
@@ -195,6 +215,7 @@ class AppLog extends ChangeNotifier {
     while (queue.length > cap) {
       queue.removeLast();
     }
+    if (level == DebugLevel.error) _errorsTotal++;
     if (kDebugMode) {
       // ignore: avoid_print
       print('[${source.name}/${level.name}] $line');

@@ -2067,6 +2067,9 @@
   "Errors": {
     "value": "Ошибки"
   },
+  "Errors (%d)": {
+    "value": "Ошибки (%d)"
+  },
   "Events with no owning app": {
     "value": "События, у которых не определено приложение"
   },
