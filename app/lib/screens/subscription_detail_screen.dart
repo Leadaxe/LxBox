@@ -20,6 +20,7 @@ import '../services/settings_storage.dart';
 import '../services/subscription/sources.dart';
 import '../services/subscription/subscription_identity.dart'; // §289 — generateUuidV4
 import '../widgets/detour_target_picker.dart';
+import '../widgets/user_agent_dialog.dart';
 import '../services/url_launcher.dart';
 import 'probe_gate_mixin.dart';
 import 'subscriptions_screen/entry_context_menu.dart' show showEditSourceDialog;
@@ -915,15 +916,19 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
     );
   }
 
-  /// §289 — правка UA слепка: пусто = дефолт (брендированный UA), поэтому trim
-  /// без hint-подстановки; общий диалог с [_editIdentityField].
-  Future<void> _editIdentityUserAgent() => _editIdentityField(
-        // §292 — человекочитаемый заголовок диалога (в отличие от HWID/
-        // x-device-* — те буквальные имена заголовков, перевод бессмыслен).
-        title: getLocalText.s('Custom User-Agent'),
-        initial: widget.entry.identity?.userAgent ?? '',
-        apply: (id, v) => id.copyWith(userAgent: v.trim()),
-      );
+  /// §289 — правка UA слепка: пусто = дефолт (брендированный UA). §610 —
+  /// общий диалог с пресетами популярных клиентов (см. [showUserAgentDialog]).
+  Future<void> _editIdentityUserAgent() async {
+    final v = await showUserAgentDialog(
+      context,
+      initial: widget.entry.identity?.userAgent ?? '',
+    );
+    if (v == null || !mounted) return;
+    final id = widget.entry.identity;
+    if (id == null) return;
+    setState(() => widget.entry.updateIdentity(id.copyWith(userAgent: v)));
+    await widget.controller.persistSources();
+  }
 
   /// §289 — общий edit-диалог одного поля слепка идентичности (зеркало
   /// глобального `_editIdentityText`). Открывает однострочный ввод, применяет

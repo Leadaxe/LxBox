@@ -1289,6 +1289,9 @@
   "Clear cached files": {
     "value": "Удалить кэшированные файлы"
   },
+  "Client presets": {
+    "value": "Пресеты клиентов"
+  },
   "Client subnet": {
     "value": "Подсеть клиента"
   },
@@ -2845,6 +2848,9 @@
   "Long-press the L×Box icon on your home screen → choose \"Toggle VPN\".": {
     "value": "Долгое нажатие на иконку L×Box на главном экране → выберите «Toggle VPN»."
   },
+  "LxBox (default)": {
+    "value": "LxBox (по умолчанию)"
+  },
   "L×Box %1$s available (you have v%2$s)": {
     "value": "Доступна L×Box %1$s (у вас v%2$s)"
   },
@@ -4386,8 +4392,8 @@
   "Slower than, ms": {
     "value": "Медленнее чем, мс"
   },
-  "Some panels return the config by a substring in the User-Agent — a custom UA without the \"LxBox\" token may yield an unsupported format and break the update. Change only if you know why.": {
-    "value": "Некоторые панели выбирают формат конфига по подстроке в User-Agent — свой UA без токена «LxBox» может вернуть неподдерживаемый формат и сломать обновление. Меняйте, только если понимаете зачем."
+  "Some panels pick the format by User-Agent. If a subscription loads but nodes fail, try another client's UA (for example Happ) — some panels send full configs only to specific apps.": {
+    "value": "Некоторые панели выбирают формат по User-Agent. Если подписка загружается, а узлы не подключаются, попробуйте UA другого клиента (например, Happ) — некоторые панели отдают полный конфиг только определённым приложениям."
   },
   "Something went wrong in this section.\nCheck Debug → Logs.": {
     "value": "В этом разделе произошла ошибка.\nПодробности: Отладка → Логи."

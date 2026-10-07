@@ -61,3 +61,31 @@ String _sanitizeToken(String raw, {required String fallback}) {
 /// до `runApp`). Синхронно — runtime-источников за пределами версии больше нет.
 String resolveSubscriptionUserAgent() =>
     buildSubscriptionUserAgent(appVersion: VersionInfo.I.version);
+
+/// Готовая строка User-Agent популярного клиента для поля Custom User-Agent
+/// (§610). Часть панелей отдаёт полный формат (xray-JSON) только «своим»
+/// клиентам, а остальным — урезанные ссылки или отказ. Пресет — лишь
+/// подстановка строки в поле: какой пресет выбран, не хранится.
+class UserAgentPreset {
+  const UserAgentPreset(this.label, this.value);
+
+  /// Подпись в списке (имя клиента). Пустой [value] — дефолтный UA LxBox.
+  final String label;
+
+  /// Строка UA; пустая = вернуть дефолт ([resolveSubscriptionUserAgent]).
+  final String value;
+}
+
+/// Пресеты UA (§610). Первый — дефолт LxBox (пустая строка). Версии
+/// зафиксированы: панели узнают клиента по имени. Клиентов семейства Clash
+/// нет — Clash YAML мы не разбираем.
+const kUserAgentPresets = <UserAgentPreset>[
+  UserAgentPreset('LxBox (default)', ''),
+  UserAgentPreset('Happ', 'Happ/3.5.0'),
+  UserAgentPreset('v2RayTun', 'v2raytun/android'),
+  UserAgentPreset('Streisand', 'Streisand'),
+  UserAgentPreset('Karing', 'Karing/1.1'),
+  UserAgentPreset('v2rayNG', 'v2rayNG/1.10.0'),
+  UserAgentPreset('Hiddify', 'Hiddify/2.5.7'),
+  UserAgentPreset('sing-box', 'sing-box/1.12.0'),
+];

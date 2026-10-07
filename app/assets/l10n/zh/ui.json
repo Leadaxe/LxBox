@@ -1094,6 +1094,9 @@
   "Clear cached files": {
     "value": "删除缓存文件"
   },
+  "Client presets": {
+    "value": "客户端预设"
+  },
   "Client subnet": {
     "value": "客户端子网"
   },
@@ -2601,6 +2604,9 @@
   },
   "Long-press the L×Box icon on your home screen → choose \"Toggle VPN\".": {
     "value": "长按桌面上的 L×Box 图标 → 选择「Toggle VPN」。"
+  },
+  "LxBox (default)": {
+    "value": "LxBox（默认）"
   },
   "L×Box %1$s available (you have v%2$s)": {
     "value": "有 L×Box %1$s 可用（当前 v%2$s）"
@@ -4119,8 +4125,8 @@
   "Slower than, ms": {
     "value": "慢于此值，ms"
   },
-  "Some panels return the config by a substring in the User-Agent — a custom UA without the \"LxBox\" token may yield an unsupported format and break the update. Change only if you know why.": {
-    "value": "部分面板依据 User-Agent 中的子串决定返回的配置格式——自定义 UA 若缺少「LxBox」标识，可能返回不支持的格式并导致更新失败。除非你清楚原因，否则不要修改。"
+  "Some panels pick the format by User-Agent. If a subscription loads but nodes fail, try another client's UA (for example Happ) — some panels send full configs only to specific apps.": {
+    "value": "部分面板依据 User-Agent 选择返回格式。如果订阅能加载但节点无法连接，请尝试其他客户端的 UA（例如 Happ）——部分面板只向特定应用发送完整配置。"
   },
   "Something went wrong in this section.\nCheck Debug → Logs.": {
     "value": "此部分出错了。\n请查看 调试 → 日志。"

@@ -10,6 +10,11 @@
 
 ### Changed
 
+- **Custom User-Agent offers popular-client presets ([task 610](docs/spec/tasks/610-user-agent-presets.md))**
+  (Happ, v2RayTun, Streisand, Karing, v2rayNG, Hiddify, sing-box) for panels that
+  send full configs only to specific apps; the hint under the field now says so.
+  (RU: в поле Custom User-Agent — пресеты популярных клиентов для панелей, которые
+  отдают полный конфиг только «своим» приложениям; подсказка под полем переписана.)
 - **A hop chain's tag is editable ([task 609](docs/spec/tasks/609-chain-tag-editable.md)),**
   like a node's: a Tag field with the emoji picker in the chain editor and
   `tag` in Debug API PATCH. The chain keeps its place in the source list;

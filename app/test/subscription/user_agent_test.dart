@@ -45,4 +45,28 @@ void main() {
       expect(ua.contains('singbox'), isFalse, reason: ua);
     });
   });
+
+  // §610 — пресеты UA популярных клиентов для поля Custom User-Agent.
+  group('kUserAgentPresets', () {
+    test('первый пресет — дефолт LxBox (пустая строка)', () {
+      expect(kUserAgentPresets.first.value, isEmpty);
+      expect(kUserAgentPresets.skip(1).every((p) => p.value.isNotEmpty),
+          isTrue);
+    });
+
+    test('строки и подписи уникальны', () {
+      final values = kUserAgentPresets.map((p) => p.value).toList();
+      final labels = kUserAgentPresets.map((p) => p.label).toList();
+      expect(values.toSet().length, values.length);
+      expect(labels.toSet().length, labels.length);
+    });
+
+    test('без переводов строк, управляющих символов и краевых пробелов', () {
+      final ctrl = RegExp(r'[\x00-\x1F\x7F]');
+      for (final p in kUserAgentPresets) {
+        expect(ctrl.hasMatch(p.value), isFalse, reason: p.label);
+        expect(p.value, p.value.trim(), reason: p.label);
+      }
+    });
+  });
 }

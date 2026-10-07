@@ -16,6 +16,7 @@ import '../services/usage_region.dart';
 import '../services/warp/warp_endpoint_picker.dart';
 import '../services/wifi_history_listener.dart';
 import '../widgets/wifi_permission_dialog.dart';
+import '../widgets/user_agent_dialog.dart';
 import '../vpn/box_vpn_client.dart';
 import 'app_settings_screen/app_settings_dialogs.dart';
 import 'app_settings_screen/widgets/appearance_tab.dart';
@@ -575,13 +576,9 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
   }
 
   Future<void> _editUserAgent() async {
-    final v = await _editIdentityText(
-      title: 'Custom User-Agent',
-      initial: _userAgent,
-      hint: resolveSubscriptionUserAgent(),
-    );
-    if (v == null) return;
-    final trimmed = v.trim();
+    // §610 — общий диалог с пресетами популярных клиентов.
+    final trimmed = await showUserAgentDialog(context, initial: _userAgent);
+    if (trimmed == null || !mounted) return;
     setState(() => _userAgent = trimmed);
     await SettingsStorage.setVar(SubscriptionIdentity.varUserAgent, trimmed);
     SubscriptionIdentity.apply(userAgentOverride: trimmed);

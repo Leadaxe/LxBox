@@ -3,7 +3,7 @@
 | Поле | Значение |
 |------|----------|
 | Тип | F (доработка) |
-| Статус | P (в работе) |
+| Статус | D (done) |
 | Фича | [001-SUBSCRIPTIONS](../features/001-SUBSCRIPTIONS/FEATURE.md) → [fetch-identity](../features/001-SUBSCRIPTIONS/FUNCTIONS/fetch-identity.md) |
 | Дата | 2026-10-07 |
 | Связанные | §118 (глобальная идентичность), §289 (идентичность подписки), §292 |
