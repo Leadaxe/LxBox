@@ -2206,6 +2206,9 @@
   "fetching subscriptions…": {
     "value": "загрузка подписок…"
   },
+  "Find": {
+    "value": "Найти"
+  },
   "Imported: %s": {
     "value": "Импортировано: %s"
   },
@@ -3034,6 +3037,9 @@
   "Next GC at": {
     "value": "Следующий GC при"
   },
+  "Next match": {
+    "value": "Следующее совпадение"
+  },
   "No DNS rules. Add user rules manually, or enable presets / template defaults.": {
     "value": "DNS-правил нет. Добавьте свои правила вручную или включите пресеты / шаблонные правила."
   },
@@ -3177,6 +3183,9 @@
   },
   "Nothing imported": {
     "value": "Ничего не импортировано"
+  },
+  "Previous match": {
+    "value": "Предыдущее совпадение"
   },
   "Rebuild config + connect": {
     "value": "Пересобрать конфиг + подключить"

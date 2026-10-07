@@ -29,6 +29,9 @@ class LxCodeEditor extends StatefulWidget {
     this.wordWrap = true,
     this.language,
     this.autofocus,
+    this.folding,
+    this.find,
+    this.actions = const [],
   });
 
   final CodeLineEditingController controller;
@@ -48,6 +51,22 @@ class LxCodeEditor extends StatefulWidget {
   /// Просмотрщик ([LxJsonView]) передаёт `false`: без этого вкладка JSON
   /// забирает фокус и запускает мигание курсора в тексте только для чтения.
   final bool? autofocus;
+
+  /// §614 — свёртка блоков `{}`/`[]` (индикаторы в gutter). `null` — как
+  /// [showLineNumbers]: где есть номера строк, там есть и свёртка.
+  final bool? folding;
+
+  /// §614 — поиск по тексту: иконка в правом верхнем углу поля открывает
+  /// панель поиска над текстом. `null` — как [showLineNumbers].
+  final bool? find;
+
+  /// §614 — свои кнопки поля (например, Copy конфига) в правом верхнем
+  /// углу рядом с иконкой поиска; на время открытой панели поиска прячутся,
+  /// чтобы не лечь поверх неё.
+  final List<Widget> actions;
+
+  bool get _folding => folding ?? showLineNumbers;
+  bool get _find => find ?? showLineNumbers;
 
   @override
   State<LxCodeEditor> createState() => _LxCodeEditorState();
@@ -82,11 +101,16 @@ class _LxCodeEditorState extends State<LxCodeEditor> {
   /// нода в дереве после очередного `build`.
   late final FocusNode _focusNode;
 
+  /// §614 — контроллер поиска свой: иконка открытия живёт снаружи
+  /// `CodeEditor` и должна видеть, открыта ли панель.
+  late CodeFindController _findController;
+
   @override
   void initState() {
     super.initState();
     _toolbar = LxSelectionToolbarController()..readOnly = widget.readOnly;
     _focusNode = FocusNode(debugLabel: 'LxCodeEditor');
+    _findController = CodeFindController(widget.controller);
     widget.controller.addListener(_onSelectionChanged);
   }
 
@@ -98,6 +122,11 @@ class _LxCodeEditorState extends State<LxCodeEditor> {
       oldWidget.controller.removeListener(_onSelectionChanged);
       widget.controller.addListener(_onSelectionChanged);
       _toolbar.hide(context);
+      // Пакет сам переподписывается на смену findController в своём
+      // didUpdateWidget; старый — наш, его и закрываем.
+      final old = _findController;
+      _findController = CodeFindController(widget.controller);
+      WidgetsBinding.instance.addPostFrameCallback((_) => old.dispose());
     }
   }
 
@@ -128,6 +157,7 @@ class _LxCodeEditorState extends State<LxCodeEditor> {
     widget.controller.removeListener(_onSelectionChanged);
     _toolbar.dispose();
     _focusNode.dispose();
+    _findController.dispose();
     super.dispose();
   }
 
@@ -142,10 +172,20 @@ class _LxCodeEditorState extends State<LxCodeEditor> {
     // (`_code_editable.dart:266-269`), а потеря фокуса зовёт `hideToolbar`
     // (`:318-331`). Нам нужно снять оверлей даже если фокус в этот момент
     // принадлежит не нам.
-    return CodeEditorTapRegion(
+    final folding = widget._folding;
+    final find = widget._find;
+    final editor = CodeEditorTapRegion(
       onTapOutside: (_) => _toolbar.hide(context),
       child: CodeEditor(
         controller: widget.controller,
+        findController: _findController,
+        findBuilder: find
+            ? (context, controller, readOnly) =>
+                _LxFindPanel(controller: controller)
+            : null,
+        chunkAnalyzer: folding
+            ? const DefaultCodeChunkAnalyzer()
+            : const NonCodeChunkAnalyzer(),
         focusNode: _focusNode,
         autofocus: widget.autofocus,
         readOnly: widget.readOnly,
@@ -164,13 +204,137 @@ class _LxCodeEditorState extends State<LxCodeEditor> {
               : _highlightTheme(widget.language!, Theme.of(context).brightness),
         ),
         toolbarController: _toolbar,
-        indicatorBuilder: widget.showLineNumbers
-            ? (context, editingController, chunkController, notifier) =>
-                DefaultCodeLineNumber(
-                  controller: editingController,
-                  notifier: notifier,
+        indicatorBuilder: widget.showLineNumbers || folding
+            ? (context, editingController, chunkController, notifier) => Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (widget.showLineNumbers)
+                      DefaultCodeLineNumber(
+                        controller: editingController,
+                        notifier: notifier,
+                      ),
+                    if (folding)
+                      DefaultCodeChunkIndicator(
+                        width: 16,
+                        controller: chunkController,
+                        notifier: notifier,
+                      ),
+                  ],
                 )
             : null,
+      ),
+    );
+    if (!find && widget.actions.isEmpty) return editor;
+    // Иконка поиска — в правом верхнем углу поля, пока панель закрыта.
+    // Панель встаёт в верх поля (её высоту пакет добавляет к отступу
+    // текста), поэтому экранная клавиатура её не перекрывает.
+    return Stack(
+      fit: StackFit.passthrough,
+      children: [
+        editor,
+        Positioned(
+          top: 2,
+          right: 2,
+          child: ListenableBuilder(
+            listenable: _findController,
+            builder: (context, _) => _findController.value != null
+                ? const SizedBox.shrink()
+                : CodeEditorTapRegion(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (find)
+                          IconButton(
+                            key: const ValueKey('lx-code-editor-find'),
+                            icon: const Icon(Icons.search, size: 18),
+                            tooltip: getLocalText.s("Find"),
+                            visualDensity: VisualDensity.compact,
+                            onPressed: _findController.findMode,
+                          ),
+                        ...widget.actions,
+                      ],
+                    ),
+                  ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// §614 — панель поиска над текстом редактора: поле, счёт совпадений,
+/// предыдущее/следующее, закрыть. Свой виджет, а не панель из примера
+/// пакета: та шириной 360 и с заменой, на телефоне не помещается.
+class _LxFindPanel extends StatelessWidget implements PreferredSizeWidget {
+  const _LxFindPanel({required this.controller});
+
+  final CodeFindController controller;
+
+  static const double _height = 40;
+
+  @override
+  Size get preferredSize =>
+      Size(double.infinity, controller.value == null ? 0 : _height);
+
+  @override
+  Widget build(BuildContext context) {
+    final value = controller.value;
+    if (value == null) return const SizedBox.shrink();
+    final cs = Theme.of(context).colorScheme;
+    final result = value.result;
+    final count = result == null || result.matches.isEmpty
+        ? '0/0' // l10n-exempt: счёт совпадений
+        : '${result.index + 1}/${result.matches.length}';
+    return CodeEditorTapRegion(
+      child: Container(
+        key: const ValueKey('lx-code-editor-find-panel'),
+        height: _height,
+        padding: const EdgeInsets.fromLTRB(8, 2, 2, 2),
+        decoration: BoxDecoration(
+          color: cs.surfaceContainerHigh,
+          border: Border(bottom: BorderSide(color: cs.outlineVariant)),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: controller.findInputController,
+                focusNode: controller.findInputFocusNode,
+                style: const TextStyle(fontSize: 13),
+                textInputAction: TextInputAction.search,
+                onSubmitted: (_) {
+                  controller.nextMatch();
+                  controller.focusOnFindInput();
+                },
+                decoration: InputDecoration(
+                  isDense: true,
+                  border: InputBorder.none,
+                  hintText: getLocalText.s("Find"),
+                ),
+              ),
+            ),
+            Text(count, style: Theme.of(context).textTheme.bodySmall),
+            IconButton(
+              icon: const Icon(Icons.keyboard_arrow_up, size: 18),
+              tooltip: getLocalText.s("Previous match"),
+              visualDensity: VisualDensity.compact,
+              onPressed: controller.previousMatch,
+            ),
+            IconButton(
+              icon: const Icon(Icons.keyboard_arrow_down, size: 18),
+              tooltip: getLocalText.s("Next match"),
+              visualDensity: VisualDensity.compact,
+              onPressed: controller.nextMatch,
+            ),
+            IconButton(
+              key: const ValueKey('lx-code-editor-find-close'),
+              icon: const Icon(Icons.close, size: 18),
+              tooltip: getLocalText.s("Close"),
+              visualDensity: VisualDensity.compact,
+              onPressed: controller.close,
+            ),
+          ],
+        ),
       ),
     );
   }
