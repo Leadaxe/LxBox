@@ -1839,6 +1839,9 @@
   "Errors": {
     "value": "错误"
   },
+  "Errors (%d)": {
+    "value": "错误（%d）"
+  },
   "Events with no owning app": {
     "value": "无归属应用的事件"
   },
@@ -1971,6 +1974,9 @@
   },
   "fetching subscriptions…": {
     "value": "正在获取订阅…"
+  },
+  "Find": {
+    "value": "查找"
   },
   "Imported: %s": {
     "value": "已导入：%s"
@@ -2788,6 +2794,9 @@
   "Next GC at": {
     "value": "下次 GC 时间"
   },
+  "Next match": {
+    "value": "下一个匹配"
+  },
   "No DNS rules. Add user rules manually, or enable presets / template defaults.": {
     "value": "没有 DNS 规则。可手动添加自定义规则，或启用预设/模板默认规则。"
   },
@@ -2931,6 +2940,9 @@
   },
   "Nothing imported": {
     "value": "未导入任何内容"
+  },
+  "Previous match": {
+    "value": "上一个匹配"
   },
   "Rebuild config + connect": {
     "value": "重建配置并连接"
