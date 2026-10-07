@@ -518,14 +518,17 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
     final pool = balancer is Map ? balancer['pool'] : null;
     final poolTolerance =
         balancer is Map ? balancer['pool_tolerance'] : null;
+    // §614 — тип, транспорт и защита одной строкой (как в лаунчере),
+    // пустые части опускаются; адрес — отдельной строкой.
+    final kindLine = [
+      typeLabel,
+      if (node.transportLabel case final t? when t.isNotEmpty) t,
+      if (node.securityLabel case final sec? when sec.isNotEmpty) sec,
+    ].join(' · ');
     return [
-      _kvRow(context, 'Type', typeLabel),
+      _kvRow(context, 'Type', kindLine),
       if (server is String && server.isNotEmpty)
         _kvRow(context, 'Server', port == null ? server : '$server:$port'),
-      if (node.transportLabel != null)
-        _kvRow(context, 'Transport', node.transportLabel!),
-      if (node.securityLabel != null)
-        _kvRow(context, 'Security', node.securityLabel!),
       if (_isGroupNode)
         _kvRow(
             context,
@@ -731,8 +734,9 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
             child: Text(k,
                 style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant)),
           ),
+          // §614 — значение выделяется (скопировать адрес, тип).
           Expanded(
-            child: Text(v,
+            child: SelectableText(v,
                 style:
                     const TextStyle(fontSize: 13, fontFamily: 'monospace')),
           ),
