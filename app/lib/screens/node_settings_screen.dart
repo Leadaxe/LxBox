@@ -673,16 +673,21 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: TextField(
-            controller: _sourceCtrl,
-            maxLines: null,
-            minLines: 12,
-            style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
-              isDense: true,
-              contentPadding: EdgeInsets.all(12),
-            ),
+          // §614 — редактор с подсветкой: язык по виду источника на лету
+          // (вставили JSON — подсветка включилась). Недописанный объект
+          // `originKindOf` ещё не признаёт JSON — по `{` подсветку держим.
+          child: ListenableBuilder(
+            listenable: _sourceCtrl,
+            builder: (context, _) {
+              final t = _sourceCtrl.text.trimLeft();
+              final json = t.startsWith('{') || originKindOf(t) == 'json';
+              return LxTextCodeField(
+                key: const ValueKey('node-source-editor'),
+                controller: _sourceCtrl,
+                minLines: 12,
+                language: json ? LxCodeLanguage.json : null,
+              );
+            },
           ),
         ),
       ],

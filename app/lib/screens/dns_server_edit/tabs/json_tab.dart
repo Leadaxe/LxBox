@@ -10,6 +10,7 @@ import '../../../services/builder/preset_expand.dart' show normalizeDnsDetour;
 import '../../dns_settings_screen/resolved_server.dart';
 import '../edit_controller.dart';
 import '../../../services/l10n/locale_controller.dart';
+import '../../../widgets/lx_code_editor.dart';
 
 /// §117 задача 4 — JSON tab редактора DNS-сервера (locked decision №9):
 ///
@@ -50,18 +51,11 @@ class _InlineBodyEditor extends StatelessWidget {
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),
           const SizedBox(height: 6),
+          // §614 — редактор JSON с подсветкой, свёрткой и поиском.
           Expanded(
-            child: TextField(
+            child: LxTextCodeField(
               controller: c.bodyCtrl,
-              maxLines: null,
-              expands: true,
-              textAlignVertical: TextAlignVertical.top,
-              style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
-              decoration: InputDecoration(
-                border: const OutlineInputBorder(),
-                isDense: true,
-                errorText: c.jsonError,
-              ),
+              errorText: c.jsonError,
               onChanged: c.onBodyTextChanged,
             ),
           ),

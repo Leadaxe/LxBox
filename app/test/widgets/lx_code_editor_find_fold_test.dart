@@ -75,4 +75,42 @@ void main() {
     expect(find.byKey(findPanel), findsNothing);
     expect(find.byKey(findIcon), findsOneWidget);
   });
+
+  testWidgets('LxTextCodeField: синхронизация с TextEditingController', (
+    tester,
+  ) async {
+    final text = TextEditingController(text: '{"a": 1}');
+    addTearDown(text.dispose);
+    final changes = <String>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 400,
+            child: LxTextCodeField(
+              controller: text,
+              minLines: 6,
+              onChanged: changes.add,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 400));
+    CodeLineEditingController code() =>
+        tester.widget<LxCodeEditor>(find.byType(LxCodeEditor)).controller;
+    expect(code().text, '{"a": 1}');
+
+    // Запись из кода в TextEditingController → поле, без onChanged.
+    text.text = '{"b": 2}';
+    await tester.pump();
+    expect(code().text, '{"b": 2}');
+    expect(changes, isEmpty);
+
+    // Правка в поле → TextEditingController и onChanged.
+    code().text = '{"c": 3}';
+    await tester.pump();
+    expect(text.text, '{"c": 3}');
+    expect(changes, ['{"c": 3}']);
+  });
 }

@@ -6,6 +6,7 @@ import '../../models/dns_ref.dart';
 import '../../services/error_format.dart';
 import '../../services/l10n/locale_controller.dart';
 import '../../widgets/app_bottom_sheet.dart';
+import '../../widgets/lx_code_editor.dart';
 
 /// Bottom-sheet editor for an inline user DNS rule ([DnsRuleInline]).
 ///
@@ -49,20 +50,11 @@ void showUserRuleEditor(
             ),
           ),
           const SizedBox(height: 12),
-          SizedBox(
+          // §614 — редактор JSON с подсветкой, высота прежняя.
+          LxTextCodeField(
+            controller: bodyCtrl,
             height: 180,
-            child: TextField(
-              controller: bodyCtrl,
-              maxLines: null,
-              expands: true,
-              style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
-              decoration: InputDecoration(
-                labelText: getLocalText.s("Rule body (JSON)"),
-                border: const OutlineInputBorder(),
-                isDense: true,
-                alignLabelWithHint: true,
-              ),
-            ),
+            label: getLocalText.s("Rule body (JSON)"),
           ),
           const SizedBox(height: 8),
           const Text(
