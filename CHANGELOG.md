@@ -8,6 +8,21 @@
 
 ## [Unreleased]
 
+### Added
+
+- **WireGuard/AmneziaWG peers and the Tailscale path ([task 613](docs/spec/tasks/613-wg-peers-tailscale-path-health.md)).**
+  The details screen of a WG/AWG node lists its peers while the VPN is on:
+  address, handshake age, traffic and a verdict (`connected`, `no active
+  session`, `never connected`); polling stops when the screen closes and never
+  wakes a sleeping node. The Tailscale Network tab shows the path to each
+  device (`direct <ip:port>`, `peer relay`, `relay <region>`), backend warnings
+  on top, no longer repeats the exit device under Devices, and gets two
+  switches: Advertise this device as exit node, Allow LAN access while using
+  exit node. The node row adds the path after `via <device>`.
+  (RU: в окне WG/AWG-узла — пиры с адресом, возрастом хендшейка, трафиком и
+  вердиктом; у Tailscale — путь до устройств, предупреждения бэкенда, путь до
+  выхода в строке узла и переключатели advertise / доступа в LAN.)
+
 ### Changed
 
 - **Core v1.14.2-lx.12; the Passive health check setting is gone ([task 611](docs/spec/tasks/611-drop-passive-check-kernel-lx12.md)).**

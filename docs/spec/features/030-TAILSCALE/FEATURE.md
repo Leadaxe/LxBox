@@ -203,13 +203,20 @@ lives in the core until "Save choice" writes it into the node.
 | Preset "Tailscale networks" (`tailscale`) | on/off, sortable, `num` 945; variable "DNS" (`dns_enable`) | on · DNS on |
 | DNS server of type `tailscale` | `endpoint` (a Tailscale node, required), `accept_default_resolvers` | — |
 | Network tab → Exit node | a peer with `ExitNodeOption` or None; "Save choice" | from the body |
+| Network tab → Settings: Advertise this device as exit node, Allow LAN access while using exit node | two switches; the first is locked while an `exit_node` is saved, the second needs one | from the body (off) |
 | Network tab → Log out | after confirmation | — |
 
 Core config keys the feature emits: `endpoints[]` entry `{type: tailscale, tag,
 …body, state_directory}`; from the preset — `route.rules` entries with
 `preferred_by`, `action: resolve`, `server`, `outbound`; `dns.servers` entry
 `{type: tailscale, tag: <node>-dns, endpoint: <node>}`; `dns.rules` entry with
-`preferred_by` and `server`. Save choice writes `exit_node` into the node body.
+`preferred_by` and `server`. Save choice writes `exit_node` into the node body,
+the Settings switches — `advertise_exit_node` / `exit_node_allow_lan_access`
+(a switch turned off removes its key). Since core lx.12 the status stream
+carries the path to each device (`direct <ip:port>` / `peer relay` /
+`relay <region>`) and backend `health` warnings: the Network tab shows the
+path under each device and under the active exit, the warnings as an orange
+block on top, and the node row adds the path to the exit after `via` (§613).
 Core RPC: `SubscribeTailscaleStatus`, `SetTailscaleExitNode`, `TailscaleLogout`,
 `StartTailscalePing`. Data files: `tailscale/<name>/` (the core's state of one
 node), `tailscale_state.json` (the index slot → node key → directory name).
@@ -294,9 +301,13 @@ Delete node / Workspace delete → index record removed → directory removed wh
   the identity from its state directory; the config is built the same way in
   both modes (`no witness`).
 - The wizard has no `exit_node_allow_lan_access`, `advertise_routes`,
-  `advertise_exit_node` or SSH fields; they are edited on the JSON tab, and
-  the registry checks them (a default route in `advertise_routes` is dropped
-  with a code, `exit_node` conflicts with `advertise_exit_node`).
+  `advertise_exit_node` or SSH fields. `advertise_exit_node` and
+  `exit_node_allow_lan_access` are switches in the Settings block of the
+  Network tab (own server or folder member; written into the body like Save
+  choice); `advertise_routes` and SSH stay JSON-only. The registry checks them
+  all (a default route in `advertise_routes` is dropped with a code,
+  `exit_node` conflicts with `advertise_exit_node`, the LAN switch requires a
+  saved `exit_node`).
 - Subnets behind peers (`accept_routes`) are matched by the same `preferred_by`
   condition; a subnet that collides with the home LAN is the user's call
   (position 945 comes before "Private IPs" at 950).

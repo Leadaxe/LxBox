@@ -74,8 +74,12 @@ nothing removed or changed**. New classes: `WireGuardEndpointStatus`,
 `Libbox$proxyPeerStatusIterator`). New methods: `CommandClient.getWireGuardStatus(String)`,
 `CommandClient.getTailscaleStatus(String)`, `TailscaleEndpointStatus.health()`,
 `TailscalePeer.get/setPath`, `get/setEndpoint`, `get/setPeerRelay`,
-`get/setDERPRegionCode`, `get/setLastHandshake` (long). LxBox does not call the
-new methods yet (§613). **LxBox depends on this pin for §611**: rolling the core
+`get/setDERPRegionCode`, `get/setLastHandshake` (long). Since §613 LxBox calls
+`getWireGuardStatus` (method channel `ccGetWireGuardStatus`, the peers section
+of a WG/AWG node; the gRPC `Unimplemented` maps to the code `unimplemented`
+and hides the section), reads the new `TailscalePeer` fields and
+`TailscaleEndpointStatus.health()` from the `subscribeTailscaleStatus` stream;
+`getTailscaleStatus` stays unbound — the stream is enough. **LxBox depends on this pin for §611**: rolling the core
 back below lx.12 is harmless for the config (no `passive_check` is written any
 more), but loses `failover` and the status calls once §612/§613 land.
 

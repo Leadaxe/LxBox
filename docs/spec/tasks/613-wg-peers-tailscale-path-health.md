@@ -3,7 +3,7 @@
 | Поле | Значение |
 |------|----------|
 | Тип | F (доработка), наблюдаемость от ядра lx.12 |
-| Статус | P (в работе) |
+| Статус | D (done), эмулятор — после волны §611–§614 |
 | Фича | [030-TAILSCALE](../features/030-TAILSCALE/FEATURE.md), [006 OBSERVABILITY ядра] |
 | Дата | 2026-10-08 |
 | Связанные | §611 (ядро lx.12), §392 (три экрана узла), §557 (вкл/выкл endpoint), §579/§581/§608 (Tailscale Network) |
@@ -103,6 +103,30 @@ Ping, health нет, в строке узла §608 путь сознатель�
   тест-файлы по одному.
 - Эмулятор — отдельный прогон после волны (§611–§614): WG-узел с синтетическим
   пиром в TEST-NET показывает секцию Peers с «never connected» и растущим ↑.
+
+## Реализация
+
+- Java по javap lx.12: `CommandClient.getWireGuardStatus(String)` →
+  `WireGuardEndpointStatus` (`getEndpointState`, `getIdleSinceSeconds`,
+  `peers()` → `PeerStatusIterator` из `PeerStatus`: `getPublicKey`,
+  `getEndpoint`, `getLastHandshakeUnix`, `getRxBytes`, `getTxBytes`);
+  `TailscalePeer.getPath/getEndpoint/getPeerRelay/getDERPRegionCode/getLastHandshake`;
+  `TailscaleEndpointStatus.health()` → `StringIterator`.
+- Канал: `ccGetWireGuardStatus` → `CcChannel.getWireGuardStatus` →
+  `CcWireGuardStatus`; отказ — `PlatformException` с кодом из
+  `CcStatusError` (`unimplemented` отдельно от прочих). Вердикт и порог —
+  `services/wg_peer_status.dart`, секция — `widgets/wg_peers_section.dart`
+  (опрос 2 с, стоп в фоне и при dispose; `unimplemented` / `not_found` /
+  `invalid_argument` прекращают опрос, секция молча скрыта).
+- Имён пиров в конфиге WG/AWG нет (у `peers[]` sing-box нет поля имени), поэтому
+  строка пира всегда показывает ключ сокращённо (п. 4).
+- П. 12: `advertise_exit_node` реестр не совмещает с `exit_node`
+  (`field_conflict`) — при записанном выходе переключатель можно только
+  выключить. Выключенный переключатель убирает ключ из тела (по умолчанию
+  `false`). Блок Settings есть только там, где есть Save choice (свой сервер,
+  член папки).
+- Точка активности устройства Tailscale по-прежнему по `online`: поле
+  `active` в канал не выводилось и в п. 7 не входит.
 
 ## Нерешённое / хвосты
 
