@@ -3,7 +3,7 @@
 | Поле | Значение |
 |------|----------|
 | Тип | F (доработка) + синк контракта |
-| Статус | P (в работе) |
+| Статус | D (done; эмулятор — после волны §611–§614) |
 | Фича | [006-DETOUR_AND_BALANCE](../features/006-DETOUR_AND_BALANCE/FEATURE.md), `docs/CONTRACT.md` |
 | Дата | 2026-10-08 |
 | Связанные | §611 (ядро lx.12, `passive_check` снят), §272, §254/§255 (кольца detour), §591 (аудит текстов 1.1.108) |
@@ -87,6 +87,62 @@ LxBox на контракте 1.1.108, лаунчер — 1.1.113. Постан�
   затронутые файлы**, не каталог.
 - CI — отдельный дежурный.
 
+## Итог
+
+1. Синк ровно на `a85af771`: `VERSION` 1.1.113, `contract.lock`
+   `source_sha` = `a85af771…`, зеркала `app/assets/contract/` и
+   `docs/contract/` — тем же скриптом, отдельным коммитом.
+2. `required_unless` — примитив санитайзера (`_requiredLifted` в
+   `body_sanitizer.dart`, геттер `FieldSchema.requiredUnless`): `set` — по
+   снимку санитайзера, у не обойдённого — по исходному телу (§6.2); `absent`
+   — сосед по чистой карте объекта или по исходной. `field_missing` теперь
+   несёт `path` (как Go `requiredFailed`); пир без обязательного поля снимает
+   узел ЯВНО (`explicitDropNode`) — подписка роняет его при разборе
+   (`dropped[]`). Разбор sing-box-JSON больше не отбрасывает пир без адреса
+   кодом `protocol_unsupported`; эмит не пишет пустые `address`/`port` пира;
+   ссылка с пустым хостом не строится (эмиттер движка: объявлен источник
+   `host`, а он пуст → пустая строка, «This node cannot be shared as a link»).
+3. Авторское тело: info-код без правки идёт без `applied: false`
+   (`body_edit.dart`, `_infoWithoutEdit`). Исключение — `max_when.note_code`
+   (`awg_mtu_high`): правка была, её отменило `except_sources`, корпус ждёт
+   `applied: false`.
+4. `UrltestMode.failover`; кодеки — через `fromWire`/`wire`; эмит двойника,
+   свёртки и узла автовыбора — `mode: failover` без `tolerance` и
+   `balancer`. Формы: третий пункт «Hold until failure» (у узла автовыбора —
+   рядом с Manual), Tolerance скрыт; подзаголовок группы `📌 [N]`, чип
+   фильтра `Hold`. Новый автовыбор формы — `kNewAutoMode` (= failover);
+   запись без `mode` читается `least_test` (умолчание схемы).
+5. Миграция `SettingsStorage.migrateUrltestModeIfNeeded` в `main.dart` после
+   seed Направлений и до первого билда; маркер `urltest_mode_migrated`
+   (allowlist + экспорт с Routing, как `directions_migrated`). Геттер
+   `getPassiveCheck` удалён.
+6. `group_default_dropped` — запись на группу (ручной род в
+   `server_list_build.dart` и правило 3 граф-санитайзера),
+   `node_detour_through_group` — запись на пару (источник, группа) из пар
+   правила 4. Строка отчёта — заголовок реестра + `[code]`, запись — в
+   `BuildResult.buildCodes` и в `lastBuildWarningsByTag` адресата.
+   Граф-санитайзер без колбэков пишет прежние строки (его юнит-тесты не
+   менялись). Эталон `rich_v0.config_warnings.json` перезаписан.
+7. MASQUE: эмит пишет `idle_timeout` только при непустом значении узла;
+   разбор JSON и ссылки без ключа дают пустое; мастер WARP переводит `≤0` в
+   «нет ключа». Правки не потребовалось.
+
 ## Нерешённое / хвосты
 
-- (заполняет исполнитель)
+- Адресат `node_detour_through_group` — источник, но отдельного канала
+  предупреждений источника в UI нет: запись ложится на карточку каждого
+  выброшенного узла (по его config-тегу) и в отчёт сборки; значок строки
+  источника её не учитывает.
+- Группы urltest из тела подписки режим по-прежнему не переносят
+  (`singbox_config.dart`, «режим — наше расширение»): `mode: failover` от
+  провайдера читается `least_test`. Миграция их не касается — они не
+  хранятся.
+- Бэкап, сделанный до §612, восстанавливается без маркера: при следующем
+  старте его группы `least_test` мигрируют (значение `passive_check` из
+  такого бэкапа не берётся — §611).
+- Для лаунчера: `authored/soft_awg_mtu_high_kept` ждёт `applied: false` у
+  info-кода, хотя значение по пути в сыром и чистом теле одинаково (1420);
+  у Go это даёт `reflect.DeepEqual(float64, int)` в `samePathValue`, а не
+  правило §6.3. У нас — явное исключение `max_when.note_code`; стоит
+  записать его в §6.3.
+

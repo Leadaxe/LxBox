@@ -30,7 +30,7 @@ Load Balance (бывший план отдельного outbound'а `loadbalanc
 
 | Ручка | Значения | Умолчание | Ключ ядра |
 |---|---|---|---|
-| Mode | Fastest («single best server by latency») · Load balance («spread connections across a pool of servers») · Manual (узел автовыбора, свёртка) | Fastest | `mode: round_robin` только у Load balance |
+| Mode | Fastest («single best server by latency») · Load balance («spread connections across a pool of servers») · Hold until failure («keep the fastest server until it fails») · Manual (узел автовыбора, свёртка) | Hold until failure у новой группы и автовыбора Направления; запись без `mode` читается Fastest | `mode: round_robin` у Load balance, `mode: failover` у Hold until failure; Fastest `mode` не пишет |
 | Pool size | ≥1 | 3 | `balancer.pool` |
 | Pool tolerance (ms) | 0 = держать весь живой пул; >0 — отбор лучших; у узла автовыбора ≤15000 | 0 | `balancer.pool_tolerance` |
 | Sticky session by | process · domain · source ip · dest ip · dest port; пусто = «no stickiness» | process + domain | `balancer.sticky_hash`, пусто → `["none"]` |
@@ -41,20 +41,27 @@ Load Balance (бывший план отдельного outbound'а `loadbalanc
 
 `passive_check` больше не пишется: ядро v1.14.2-lx.12 удалило ключ
 ([611](../../../tasks/611-drop-passive-check-kernel-lx12.md)); замена — режим
-`failover` (§612).
+Hold until failure (`failover`, [612](../../../tasks/612-contract-1-1-113-failover.md)):
+самый быстрый на момент выбора узел держится до своего отказа, и каждый
+interval пробуется только он. Задержки остальных членов стареют; ручной тест
+группы перевыбирает самого быстрого. При первом запуске после обновления
+группы в Fastest становятся Hold until failure, если пассивная проверка не
+была выключена.
 
 ## Входы / Выходы
 
 **Входы:** узлы Направления / контейнера; Xray `routing.balancers` и
 `burstObservatory`; глобальные настройки пинга.
 **Выходы:** группы в конфиге; метка в списке узлов `🎯 [N]` (Fastest) /
-`🔀 [N/pool]` (Load balance); живой пул работающего ядра («connect to see
-the live pool»).
+`🔀 [N/pool]` (Load balance) / `📌 [N]` (Hold until failure); живой пул
+работающего ядра («connect to see the live pool»).
 
 ## Правила и инварианты
 
-- `balancer{}` и `mode` пишутся только при Load balance: ядро отвергает
-  `balancer` без `round_robin` и плоские `pool` (P13).
+- `balancer{}` пишется только при Load balance: ядро отвергает `balancer`
+  без `round_robin` и плоские `pool` (P13). `failover` пишется без
+  `balancer` и без `tolerance`, даже если tolerance задан у Направления
+  (контракт 1.1.111); поле Tolerance при нём скрыто.
 - Пустой `urltest` не эмитится: двойник Направления без узлов, узел
   автовыбора с пустым пулом (явный состав без единого члена — с
   предупреждением «Auto node "…" was skipped…»), свёртка без узлов —
@@ -94,3 +101,4 @@ the live pool»).
 | 8 | [565F](../../../tasks/565F-selector-group-genus/spec.md) | Фаза A влита | Ручной род (`selector`) узла автовыбора |
 | 9 | [568](../../../tasks/568-source-replace-fold.md) | Реализовано | «Replace with a group» у папки и подписки |
 | 10 | [611](../../../tasks/611-drop-passive-check-kernel-lx12.md) | Реализовано | `passive_check` снят (ядро lx.12) |
+| 11 | [612](../../../tasks/612-contract-1-1-113-failover.md) | Реализовано | Hold until failure (`failover`), миграция от `passive_check` |

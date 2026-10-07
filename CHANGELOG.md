@@ -22,9 +22,39 @@
   (RU: в окне WG/AWG-узла — пиры с адресом, возрастом хендшейка, трафиком и
   вердиктом; у Tailscale — путь до устройств, предупреждения бэкенда, путь до
   выхода в строке узла и переключатели advertise / доступа в LAN.)
+- **Hold until failure, a third auto-select mode ([task 612](docs/spec/tasks/612-contract-1-1-113-failover.md)),**
+  next to Fastest and Load balance in the Direction editor, the auto node
+  editor and "Replace with a group": the fastest server at the moment of
+  choice is kept until it fails, and only it is probed each interval. The
+  Tolerance field hides in this mode; the list shows the group as `📌 [N]`.
+  New auto groups and Directions start in this mode. On the first launch
+  after the update, groups in Fastest move to it unless Passive health check
+  had been switched off; Load balance groups stay as they are.
+  (RU: третий режим автовыбора Hold until failure — самый быстрый на момент
+  выбора сервер держится до своего отказа, проба каждый interval только у
+  него; поле Tolerance скрыто, в списке группа — `📌 [N]`; новые группы и
+  Направления создаются в нём; при первом запуске после обновления группы
+  в Fastest переходят в него, если пассивная проверка не была выключена.)
+- **A WireGuard node whose peer has no address is accepted when it has a listen port**
+  (contract 1.1.109–1.1.110): the node waits for the peer to connect and says
+  so with an info note. Without both the address and the listen port the
+  node is dropped from a subscription and marked with an error when written
+  by hand. Such a node cannot be copied as a link.
+  (RU: узел WireGuard с пиром без адреса принимается, если у него есть
+  listen_port, — он ждёт входящего подключения и говорит об этом заметкой;
+  без адреса и без listen_port узел подписки отбрасывается, свой — с
+  ошибкой; ссылкой такой узел не копируется.)
+- **The build report names two more cases by code:** a group's default server
+  dropped because it left the group (`group_default_dropped`), and nodes left
+  out of a group they dial through (`node_detour_through_group`, one entry per
+  source and group). Both also show on the node's notifications.
+  (RU: отчёт сборки называет кодом снятое умолчание группы и узлы, не
+  взятые в группу, через которую они сами ходят; обе записи видны и в
+  уведомлениях узла.)
 
 ### Changed
 
+- **Contract 1.1.113** (from 1.1.108).
 - **Core v1.14.2-lx.12; the Passive health check setting is gone ([task 611](docs/spec/tasks/611-drop-passive-check-kernel-lx12.md)).**
   The new core removed `urltest.passive_check`: a config with it no longer
   starts, so auto groups stop carrying the key and the switch leaves
