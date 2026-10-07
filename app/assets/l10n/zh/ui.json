@@ -5531,5 +5531,23 @@
   },
   "Copy row": {
     "value": "复制此行"
+  },
+  "direct": {
+    "value": "直连"
+  },
+  "direct %s": {
+    "value": "直连 %s"
+  },
+  "peer relay": {
+    "value": "对端中继"
+  },
+  "relay": {
+    "value": "中继"
+  },
+  "relay %s": {
+    "value": "中继 %s"
+  },
+  "handshake %s": {
+    "value": "握手 %s"
   }
 }

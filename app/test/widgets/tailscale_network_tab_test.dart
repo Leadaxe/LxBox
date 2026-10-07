@@ -206,4 +206,36 @@ void main() {
       expect(find.text('Check'), findsOneWidget);
     });
   });
+
+  group('§613', () {
+    final health = find.byKey(const ValueKey('tailscale-health'));
+
+    testWidgets('health пуст — блока нет', (tester) async {
+      await pump(tester, data: [_status()]);
+      expect(health, findsNothing);
+    });
+
+    testWidgets('health — блок вверху, по строке на запись', (tester) async {
+      await pump(tester, data: const [
+        CcTailscaleStatus(
+          tag: 'ts',
+          backendState: 'Running',
+          stateText: '',
+          health: ['no home relay'],
+        ),
+      ]);
+      expect(health, findsOneWidget);
+      expect(find.text('no home relay'), findsOneWidget);
+    });
+
+    testWidgets('выход не дублируется в Devices', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 2400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await pump(tester, data: [_status(exit: _gw)]);
+      expect(find.widgetWithText(RadioListTile<String>, 'gw'), findsOneWidget);
+      // Единственная плитка с именем — пункт Exit node (RadioListTile
+      // строится на ListTile); в Devices строки нет.
+      expect(find.widgetWithText(ListTile, 'gw'), findsOneWidget);
+    });
+  });
 }

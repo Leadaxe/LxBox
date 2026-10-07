@@ -7,6 +7,7 @@ import '../models/tunnel_status.dart';
 import '../services/l10n/locale_controller.dart';
 import '../services/tailscale_network.dart';
 import '../services/url_launcher.dart';
+import '../services/wg_peer_status.dart' show wgAgeLabel;
 import '../vpn/box_vpn_client.dart';
 import '../vpn/cc_channel.dart';
 import 'app_bottom_sheet.dart';
@@ -51,6 +52,7 @@ class TailscaleNetworkTab extends StatefulWidget {
   final String liveTag;
   final Map<String, dynamic> body;
   final Future<void> Function(String? value)? onSaveExitNode;
+
 
   /// Тесты: поток состояния вместо [CcChannel.tailscaleStatus] (подписка ядра
   /// тогда не поднимается).
@@ -168,9 +170,11 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab> {
         getLocalText.s("The node is not in the running config."),
       );
     }
-    final devices = sortDevices(s.peers);
+    // §613 — действующий выход показан в блоке Exit node, в Devices его нет.
+    final devices = sortDevices(withoutActiveExit(s.peers, s));
     final grouped = showOwnerGroups(s);
     final children = <Widget>[
+      if (s.health.isNotEmpty) _healthBlock(context, s.health),
       _statusBlock(context, s),
       if (s.self != null) _thisDeviceBlock(context, s.self!),
       _exitNodeBlock(context, s),
@@ -182,9 +186,10 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab> {
     final rows = <Object>[];
     if (grouped) {
       for (final g in s.userGroups) {
-        if (g.peers.isEmpty) continue;
+        final peers = withoutActiveExit(g.peers, s);
+        if (peers.isEmpty) continue;
         rows.add(g.title);
-        rows.addAll(sortDevices(g.peers));
+        rows.addAll(sortDevices(peers));
       }
     } else {
       rows.addAll(devices);
@@ -385,7 +390,7 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab> {
                   dense: true,
                   value: p.stableId,
                   title: Text(p.hostName),
-                  subtitle: p.online ? null : Text(getLocalText.s("offline")),
+                  subtitle: _exitSubtitle(p, active),
                 ),
             ],
           ),
@@ -431,6 +436,63 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab> {
     }
   }
 
+  /// §613 — строка пути устройства: путь и возраст хендшейка (`0` — без
+  /// возраста). `NONE` — пусто, строка не рисуется.
+  static String _pathLine(CcTailscalePeer p) {
+    final path = tailscalePathLabel(p);
+    if (path.isEmpty) return '';
+    if (p.lastHandshake <= 0) return path;
+    final age = DateTime.now().millisecondsSinceEpoch ~/ 1000 - p.lastHandshake;
+    return '$path · ${getLocalText.s("handshake %s", wgAgeLabel(age))}';
+  }
+
+  /// §613 — подпись пункта Exit node: у действующего выхода — путь до него.
+  Widget? _exitSubtitle(CcTailscalePeer p, CcTailscalePeer? active) {
+    final lines = [
+      if (!p.online) getLocalText.s("offline"),
+      if (active != null && active.stableId == p.stableId) _pathLine(active),
+    ].where((v) => v.isNotEmpty);
+    return lines.isEmpty ? null : Text(lines.join(' · '));
+  }
+
+  // ── Health ──
+
+  /// §613 (ядро SPEC 115) — предупреждения бэкенда, по строке на запись.
+  /// Текст ядра, не переводится.
+  Widget _healthBlock(BuildContext context, List<String> health) {
+    final theme = Theme.of(context);
+    const color = Colors.orange;
+    return Container(
+      key: const ValueKey('tailscale-health'),
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.5)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.warning_amber_rounded, color: color, size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final h in health)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 2),
+                    child: Text(h, style: theme.textTheme.bodySmall),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ── Devices ──
 
   Widget _deviceRow(
@@ -457,6 +519,7 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab> {
         [
           second.join(' · '),
           marks.join(' · '),
+          _pathLine(p),
         ].where((v) => v.isNotEmpty).join('\n'),
         style: theme.textTheme.bodySmall,
       ),

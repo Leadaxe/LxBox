@@ -1,6 +1,7 @@
 import '../models/config_node.dart';
 import '../vpn/cc_channel.dart' show CcTailscaleStatus;
 import 'contract/body_sanitizer.dart' show exitCapableByRegistry;
+import 'tailscale_network.dart' show tailscalePathLabel;
 
 /// Задача 579 — псевдо-направление NETWORKS главного экрана.
 ///
@@ -117,6 +118,16 @@ String? tailnetExitName(CcTailscaleStatus? s) {
   final dns = e.dnsNameClean;
   if (dns.isNotEmpty) return dns.split('.').first;
   return e.firstIp.isEmpty ? null : e.firstIp;
+}
+
+/// §613 — путь до действующего exit node для строки узла (`direct
+/// 1.2.3.4:41641`, `peer relay`, `relay fra`). `null` — выхода нет или путь
+/// `NONE` / ядро старше lx.12: строка как в §608.
+String? tailnetExitPath(CcTailscaleStatus? s) {
+  final e = s?.exitNode;
+  if (e == null) return null;
+  final label = tailscalePathLabel(e);
+  return label.isEmpty ? null : label;
 }
 
 /// §608 — предупреждение в строке Tailscale-узла.
