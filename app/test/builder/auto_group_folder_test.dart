@@ -17,12 +17,6 @@ import '../parser/engine_test_setup.dart';
 /// (§439 N2, `codec/auto_group_record.dart`), а на билде превращается в
 /// `urltest` по членам ЭТОЙ же папки.
 class _FakeCtx extends EmitContext {
-  _FakeCtx({this.passiveCheck = false});
-
-  /// §272/§322 — глобальная настройка приложения, доходит до групп через ctx.
-  @override
-  final bool passiveCheck;
-
   final entries = <SingboxEntry>[];
   final warnings = <String>[];
   final selectorTags = <String>[];
@@ -266,21 +260,13 @@ void main() {
       }
     });
 
-    test('§272 — passive_check из глобальных настроек', () {
-      final on = _FakeCtx(passiveCheck: true);
+    test('§611 — passive_check не эмитится (ядро lx.12 удалило ключ)', () {
+      final ctx = _FakeCtx();
       folder([
         vless('u1', '1.1.1.1', 'A'),
         AutoSelectSpec(id: 'a', tag: 'G', label: 'G'),
-      ]).build(on);
-      expect(urltests(on).single['passive_check'], isTrue);
-
-      // Выключено → ключа нет вовсе (omitempty = апстрим-поведение).
-      final off = _FakeCtx();
-      folder([
-        vless('u1', '1.1.1.1', 'A'),
-        AutoSelectSpec(id: 'a', tag: 'G', label: 'G'),
-      ]).build(off);
-      expect(urltests(off).single.containsKey('passive_check'), isFalse);
+      ]).build(ctx);
+      expect(urltests(ctx).single.containsKey('passive_check'), isFalse);
     });
 
     test('выключенная папка не эмитит ничего', () {
@@ -376,7 +362,7 @@ void main() {
         .singleWhere((m) => m['tag'] == 'F: Pick');
 
     test('тело ядра: type selector, состав и default итоговыми тегами', () {
-      final ctx = _FakeCtx(passiveCheck: true);
+      final ctx = _FakeCtx();
       folder([
         vless('u1', '1.1.1.1', 'A'),
         vless('u2', '2.2.2.2', 'B'),

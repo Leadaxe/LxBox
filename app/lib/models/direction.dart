@@ -146,8 +146,9 @@ class DirectionAuto {
   const DirectionAuto({
     this.url = defaultUrl,
     // §272 — 15m вместо 5m: на mobile каждый цикл проб дайлит узлы (будит
-    // спящие, SPEC 020); с passive_check пробы при живом трафике и так
-    // пропускаются, interval задаёт лишь скорость реакции на смерть узла.
+    // спящие, SPEC 020). passive_check снят в §611 (ядро lx.12 удалило ключ),
+    // замена — режим failover (§612); interval задаёт скорость реакции на
+    // смерть узла.
     // Существующие Направления хранят своё значение в JSON — их это не меняет.
     this.interval = defaultInterval,
     this.tolerance = 50,

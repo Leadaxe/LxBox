@@ -2972,7 +2972,6 @@ class SubscriptionController extends ChangeNotifier {
           await SettingsStorage.getIdleSuspendReachable(), // §272
       wgBuildMax: await SettingsStorage.getWgBuildMax(), // §542
       wgLazyBuild: await SettingsStorage.getWgLazyBuild(), // §542
-      passiveCheck: await SettingsStorage.getPassiveCheck(), // §272
       tailscaleStateRoot: tailscaleStateRoot,
       // §445 — имена каталогов из индекса (стабильны при переименовании).
       tailscaleStateDirs:

@@ -222,7 +222,6 @@ Future<GoldenBuild> buildGoldenConfig(StorageSandbox box) async {
     idleSuspendReachable: await SettingsStorage.getIdleSuspendReachable(),
     wgBuildMax: await SettingsStorage.getWgBuildMax(),
     wgLazyBuild: await SettingsStorage.getWgLazyBuild(),
-    passiveCheck: await SettingsStorage.getPassiveCheck(),
     tailscaleStateRoot: kGoldenTailscaleStateRoot,
   );
   final lists = controller.entries.map((e) => e.list).toList();

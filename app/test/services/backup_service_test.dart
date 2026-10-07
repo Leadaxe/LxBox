@@ -231,6 +231,53 @@ void main() {
     }
   });
 
+  // §611 — ядро lx.12 удалило `urltest.passive_check`: ключ стораджа
+  // `urltest_passive_check` в бэкап не пишется, из старого бэкапа молча
+  // игнорируется (не в droppedKeys), значение получателя живёт до миграции §612.
+  group('§611 — снятый urltest_passive_check', () {
+    const all = {
+      BackupCategory.serverLists,
+      BackupCategory.routing,
+      BackupCategory.appSettings,
+      BackupCategory.debugConfig,
+    };
+
+    Future<void> seedWithPassiveCheck(bool value) async {
+      await seedStorage(sampleSnapshot());
+      final raw = await SettingsStorage.exportRaw()
+        ..['urltest_passive_check'] = value;
+      File('${tmp.path}/lxbox_settings.json')
+          .writeAsStringSync(jsonEncode(raw));
+      SettingsStorage.resetCacheForTesting();
+      expect((await SettingsStorage.exportRaw())['urltest_passive_check'],
+          value,
+          reason: 'посев получателя');
+    }
+
+    for (final merge in [false, true]) {
+      test('старый бэкап с ключом: импорт успешен, ключ молча мимо '
+          '(merge=$merge)', () async {
+        await seedWithPassiveCheck(false);
+        final svc = const BackupService();
+        final exported = await svc.buildExport(include: all);
+        final doc = jsonDecode(exported) as Map<String, dynamic>;
+        final storage = doc['storage'] as Map<String, dynamic>;
+        expect(storage.containsKey('urltest_passive_check'), isFalse,
+            reason: 'в экспорт снятый ключ не едет');
+        storage['urltest_passive_check'] = true; // как в бэкапе до §611
+        final apply = await svc.applyImport(
+            await svc.parseImport(jsonEncode(doc)),
+            merge: merge,
+            include: all);
+        expect(apply.errors, isEmpty);
+        expect(apply.droppedKeys, isEmpty);
+        // Значение из файла не взято, своё у получателя сохранилось (§612).
+        expect((await SettingsStorage.exportRaw())['urltest_passive_check'],
+            isFalse);
+      });
+    }
+  });
+
   test('replaceRaw with merge=true preserves untouched keys', () async {
     await seedStorage(sampleSnapshot());
     await SettingsStorage.replaceRaw(

@@ -79,6 +79,8 @@ Future<List<String>> _replaceRaw(
     // §607 — зеркало тумблеров VPN не применяется из снимка и неизвестным
     // не считается.
     if (key == SettingsStorage.nativePrefsKey) continue;
+    // §611 — снятый ключ старого бэкапа: молча мимо, без предупреждения.
+    if (SettingsStorage.retiredTopLevelKeys.contains(key)) continue;
     if (!SettingsStorage.allowedTopLevelKeys.contains(key)) {
       dropped.add(key);
       continue;
@@ -148,6 +150,10 @@ Future<List<String>> _replaceRaw(
     final nativePrefs = current[SettingsStorage.nativePrefsKey];
     if (nativePrefs != null) {
       filtered[SettingsStorage.nativePrefsKey] = nativePrefs;
+    }
+    // §611 — снятые ключи получателя переживают замену (их читает §612).
+    for (final k in SettingsStorage.retiredTopLevelKeys) {
+      if (current.containsKey(k)) filtered[k] = current[k];
     }
     SettingsStorage._cache = filtered;
     await _save();

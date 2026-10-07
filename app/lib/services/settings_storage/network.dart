@@ -117,26 +117,16 @@ Future<void> _saveWgLazyBuild(bool enabled, {bool flush = true}) async {
 }
 
 // ---------------------------------------------------------------------------
-// §272 — passive health check (urltest.passive_check, kernel SPEC 019)
+// §272 — бывший passive health check (urltest.passive_check, kernel SPEC 019)
 //
-// Успешный TCP-дайл через узел = доказательство живости; пока оно свежо
-// (< interval), периодические пробы группы пропускаются — активная группа
-// перестаёт будить спящие узлы. Пишется в urltest-двойники Направлений.
-// Дефолт true (энергоэкономия из коробки). ⚠ Требует ядра с ревизией SPEC 019
-// 2026-07-15 — на старом ядре незнакомое поле роняет конфиг (KERNEL.md #2).
+// Ядро v1.14.2-lx.12 удалило ключ (§611): эмиттер его не пишет, UI не
+// показывает, сторадж больше не записывает. Чтение оставлено для миграции
+// §612 (true/отсутствует → режим `failover`); §612 снимет и его, и ключ.
 // ---------------------------------------------------------------------------
 
 Future<bool> _getPassiveCheck() async {
   final data = await _load();
   return (data['urltest_passive_check'] as bool?) ?? true;
-}
-
-Future<void> _savePassiveCheck(bool enabled, {bool flush = true}) async {
-  final data = await _load();
-  data['urltest_passive_check'] = enabled;
-  SettingsStorage._cache = data;
-  SettingsStorage.markConfigDirty(); // §113
-  if (flush) await _save();
 }
 
 // ---------------------------------------------------------------------------

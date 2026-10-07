@@ -167,6 +167,13 @@ class SettingsStorage {
   // DENY-`.remove()` и one-shot миграции удалены (см. spec/tasks/159).
   // ---------------------------------------------------------------------------
 
+  /// §611 — снятые top-level ключи: в бэкап не пишутся, при импорте старого
+  /// бэкапа молча пропускаются (не считаются неизвестными, в `dropped` не
+  /// идут). Значение в сторадже получателя переживает и замену — его читает
+  /// миграция §612 (`urltest_passive_check` → режим авто-групп) и сама же
+  /// снимает ключ.
+  static const retiredTopLevelKeys = <String>{'urltest_passive_check'};
+
   /// Валидные top-level ключи `lxbox_settings.json`. Полный закрытый список —
   /// все имена известны. `vars` — контейнер, его содержимое фильтруется
   /// отдельно через [allowedVarKeys]. Источник правды: STORAGE.md.
@@ -182,7 +189,6 @@ class SettingsStorage {
     'route_idle_suspend_reachable', // §272 — reachable idle window (lx.wg.idle_suspend_reachable)
     'wg_build_max', // §542 — WG/AWG build budget (lx.wg.build_max)
     'wg_lazy_build', // §542 — WG/AWG lazy build (lx.wg.lazy_build)
-    'urltest_passive_check', // §272 — passive health check (urltest.passive_check)
     'enabled_groups', // §125 — DEPRECATED (читается только миграцией; safe-мусор)
     'directions', // §125/§393 — Направления роутинга (template→storage)
     'directions_migrated', // §125/§393 — guard one-shot миграции
@@ -599,12 +605,13 @@ class SettingsStorage {
   static Future<void> saveWgLazyBuild(bool enabled, {bool flush = true}) =>
       _saveWgLazyBuild(enabled, flush: flush);
 
-  // §272 — passive health check (urltest.passive_check, SPEC 019)
+  // §272 — бывший passive health check (urltest.passive_check). Ядро lx.12
+  // удалило ключ, эмиттер и UI его сняли (§611); значение только читается.
 
+  /// §612 снимет: единственный читатель — миграция режима авто-групп
+  /// (true/отсутствует → `failover`), после неё ключ удаляется.
+  @Deprecated('§611: passive_check снят; читает только миграция §612')
   static Future<bool> getPassiveCheck() => _getPassiveCheck();
-
-  static Future<void> savePassiveCheck(bool enabled, {bool flush = true}) =>
-      _savePassiveCheck(enabled, flush: flush);
 
   // §125-cleanup — excluded_nodes (§048 глобальный фильтр) удалён; ключ снимает
   // миграция §439.

@@ -3506,9 +3506,6 @@
   "Partial: %1$d ok, %2$d failed for \"%3$s\"": {
     "value": "Частично: %1$d успешно, %2$d с ошибкой для «%3$s»"
   },
-  "Passive health check": {
-    "value": "Пассивная проверка работоспособности"
-  },
   "Password (optional)": {
     "value": "Пароль (необязательно)"
   },
@@ -4385,9 +4382,6 @@
   },
   "Skip": {
     "value": "Пропустить"
-  },
-  "Skip periodic server probes while your own traffic already proves the connection works. Fewer wakeups and less battery; ping numbers refresh less often.": {
-    "value": "Не опрашивать серверы, пока ваш собственный трафик и так подтверждает, что соединение работает. Меньше пробуждений и расхода батареи; значения пинга обновляются реже."
   },
   "Slower than, ms": {
     "value": "Медленнее чем, мс"

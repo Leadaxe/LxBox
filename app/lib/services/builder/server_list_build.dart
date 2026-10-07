@@ -279,14 +279,8 @@ extension ServerListBuild on ServerList {
 
       // §565 — тело разбора + параметры замера, которых источник не объявил.
       final entry = spec.coreEntry(spec.emit(ctx.vars));
-      // §272/§322 — глобальный «Passive health check»: пропускаем пробу, пока
-      // узел и так подтверждён своим трафиком. Для пула из 15 узлов это
-      // главная статья расхода батареи. Эмитим только при true (omitempty:
-      // отсутствие = false = апстрим), как Направление в build_config.
-      // У ручного рода пробы нет — и поля тоже (ядро: unknown field).
-      if (ctx.passiveCheck && !spec.isManual) {
-        entry.map['passive_check'] = true;
-      }
+      // passive_check снят в §611 (ядро lx.12 удалило ключ), замена — режим
+      // failover (§612).
       entry.map['tag'] =
           ctx.allocateTag(TagResolver.displayTag(tagPrefix, spec.tag));
       noteAddress(spec, spec.tag, entry.tag, group: true);

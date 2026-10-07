@@ -157,12 +157,6 @@ class BuildSettings {
   /// без `lazy_build` принимает, но выключенный пункт не должен действовать).
   final bool wgLazyBuild;
 
-  /// §272: passive health check (ядро SPEC 019, `urltest.passive_check`) —
-  /// пишется в urltest-двойники Направлений. Пока свежий успешный TCP-дайл
-  /// подтверждает узел, периодические пробы группы пропускаются.
-  /// ⚠ Требует ядра >= ревизии 2026-07-15 (незнакомое поле роняет конфиг).
-  final bool passiveCheck;
-
   /// §435 — корень для `state_directory` узлов Tailscale: native
   /// `Context.filesDir` (тот же канал, что у §316). Каталог узла —
   /// `<корень>/tailscale/<имя>` подставляется при эмиссии, если в теле поля
@@ -190,7 +184,6 @@ class BuildSettings {
     this.idleSuspendReachable = '',
     this.wgBuildMax = 5,
     this.wgLazyBuild = true,
-    this.passiveCheck = false,
     this.tailscaleStateRoot = '',
     this.tailscaleStateDirs,
   });
@@ -406,7 +399,6 @@ Future<BuildResult> _buildConfig({
   final ctx = _BuildCtx(
     tvars,
     ruleSets,
-    passiveCheck: settings.passiveCheck, // §322
     reservedTags: [
       for (final c in directions) ...[c.tag, c.autoTag],
       ...replaceNames,
@@ -456,7 +448,6 @@ Future<BuildResult> _buildConfig({
       for (final e in ctx.outbounds) e.tag,
       for (final e in ctx.endpoints) e.tag,
     },
-    passiveCheck: settings.passiveCheck,
     warn: ctx.warn,
     code: buildCodes.add,
     // `@имя` в параметрах автовыбора — переменная шаблона, как у Направления.
@@ -582,7 +573,6 @@ Future<BuildResult> _buildConfig({
     nodeEntries: nodeEntries,
     emitWarnings: emitWarnings,
     directionsWithoutNodes: directionsWithoutNodes,
-    passiveCheck: settings.passiveCheck, // §272
     // §393 C4/T9 — карта позиций для «Направление не берёт цепочку, идущую
     // через него самого» (транзитивно).
     chainHops: chainHopsByTag(chainResolution.nodes),
@@ -1033,13 +1023,11 @@ class _BuildCtx implements EmitContext {
   _BuildCtx(
     this._vars,
     this._ruleSets, {
-    bool passiveCheck = false,
     Iterable<String> reservedTags = const [],
     String coreVersion = '',
     this.linkTargets,
     Set<String> blockedReplaces = const {},
-  })  : _passiveCheck = passiveCheck,
-        _coreVersion = coreVersion,
+  })  : _coreVersion = coreVersion,
         _blockedReplaces = blockedReplaces {
     _taken.addAll(reservedTags); // §351 — теги Направлений, эмитятся мимо аллокатора
   }
@@ -1091,7 +1079,6 @@ class _BuildCtx implements EmitContext {
   }
   final TemplateVars _vars;
   final RuleSetRegistry _ruleSets;
-  final bool _passiveCheck;
   final String _coreVersion;
   final _taken = <String>{kDirectOutboundTag, 'dns-out', 'block-out'};
 
@@ -1120,9 +1107,6 @@ class _BuildCtx implements EmitContext {
 
   @override
   RuleSetRegistry get ruleSets => _ruleSets;
-
-  @override
-  bool get passiveCheck => _passiveCheck; // §272/§322
 
   @override
   String get coreVersion => _coreVersion;
@@ -1192,7 +1176,6 @@ List<Map<String, dynamic>> _buildDirectionGroups({
   required List<Map<String, dynamic>> nodeEntries,
   required List<String> emitWarnings,
   required List<String> directionsWithoutNodes, // §274 — display-имена, out-параметр
-  bool passiveCheck = false, // §272 — urltest.passive_check в auto-двойники
   // §393 C4 — «тег цепочки → её позиции». Пусто = цепочек нет, и весь блок
   // T9 схлопывается в no-op: конфиги без цепочек собираются как раньше.
   Map<String, List<String>> chainHops = const {},
@@ -1417,7 +1400,8 @@ List<Map<String, dynamic>> _buildDirectionGroups({
 
     // urltest-двойник: ТОЛЬКО ноды Направления (без direct/auto). Не эмитим при
     // пустом наборе (urltest без нод недопустим).
-    // §272 passive_check, §208 round_robin (`mode` + `balancer{}` только у
+    // passive_check снят в §611 (ядро lx.12 удалило ключ), замена — режим
+    // failover (§612). §208 round_robin (`mode` + `balancer{}` только у
     // round_robin, пустой sticky_hash → sentinel ["none"]) — одна форма с
     // автовыбором свёртки (`buildAutoGroup`).
     if (emitAuto) {
@@ -1425,7 +1409,6 @@ List<Map<String, dynamic>> _buildDirectionGroups({
         tag: c.autoTag,
         outbounds: autoNodes,
         a: c.auto!,
-        passiveCheck: passiveCheck,
       ));
     }
     // §393 A5 — ПОРЯДОК ЭМИССИИ нормативен (corpus/direction/README.md:

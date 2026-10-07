@@ -94,7 +94,6 @@ class _SettingsScreenState extends State<SettingsScreen>
   String _idleSuspendReachable = '';
   int _wgBuildMax = 5; // §542 — lx.wg.build_max (0 = no cap)
   bool _wgLazyBuild = true; // §542 — lx.wg.lazy_build
-  bool _passiveCheck = true; // §272 — urltest.passive_check
   // §271 — memory limit ядра (native_prefs, wire-значения MemoryLimitSetting).
   String _memoryLimit = MemoryLimitSetting.auto;
 
@@ -175,7 +174,6 @@ class _SettingsScreenState extends State<SettingsScreen>
         await SettingsStorage.getIdleSuspendReachable(); // §272
     final wgBuildMax = await SettingsStorage.getWgBuildMax(); // §542
     final wgLazyBuild = await SettingsStorage.getWgLazyBuild(); // §542
-    final passiveCheck = await SettingsStorage.getPassiveCheck(); // §272
     final memoryLimit = await SettingsStorage.getNativeMemoryLimit(); // §271
     setState(() {
       _template = template;
@@ -185,7 +183,6 @@ class _SettingsScreenState extends State<SettingsScreen>
       _idleSuspendReachable = idleSuspendReachable;
       _wgBuildMax = wgBuildMax;
       _wgLazyBuild = wgLazyBuild;
-      _passiveCheck = passiveCheck;
       _memoryLimit = memoryLimit;
       _vpnLoaded = true;
       _loading = false;
@@ -276,21 +273,6 @@ class _SettingsScreenState extends State<SettingsScreen>
     if (value == _idleSuspendReachable) return;
     setState(() => _idleSuspendReachable = value);
     await SettingsStorage.saveIdleSuspendReachable(value);
-    widget.subController.configDirty = true;
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(getLocalText.s("Applies on next connect.")),
-        duration: const Duration(seconds: 3),
-      ),
-    );
-  }
-
-  /// §272 — passive health check (urltest.passive_check). Config-significant.
-  Future<void> _applyPassiveCheck(bool value) async {
-    if (value == _passiveCheck) return;
-    setState(() => _passiveCheck = value);
-    await SettingsStorage.savePassiveCheck(value);
     widget.subController.configDirty = true;
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -602,16 +584,6 @@ class _SettingsScreenState extends State<SettingsScreen>
         const TemplateSectionHeader(
           title: 'Optimization',
           description: 'Health checks, memory and VPN lifecycle',
-        ),
-        // §272 — passive health check (urltest.passive_check).
-        SwitchListTile(
-          value: _passiveCheck,
-          onChanged: (bool v) {
-            if (!_vpnLoaded) return;
-            unawaited(_applyPassiveCheck(v));
-          },
-          title: Text(getLocalText.s("Passive health check")),
-          subtitle: Text(getLocalText.s("Skip periodic server probes while your own traffic already proves the connection works. Fewer wakeups and less battery; ping numbers refresh less often.")),
         ),
         // §271 — memory limit ядра. Применяется к работающему ядру сразу.
         Padding(

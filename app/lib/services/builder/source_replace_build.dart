@@ -142,13 +142,12 @@ class ReplaceBuild {
 
 /// Автовыбор с параметрами [a] — одна форма у двойника Направления и у
 /// свёртки (§74 п.2 `buildTwin`). Ключи и порядок — как у двойника
-/// Направления: `balancer` только у `round_robin`, `passive_check` — только
-/// `true` (omitempty ядра).
+/// Направления: `balancer` только у `round_robin`. `passive_check` снят в
+/// §611 (ядро lx.12 удалило ключ), замена — режим failover (§612).
 Map<String, dynamic> buildAutoGroup({
   required String tag,
   required List<String> outbounds,
   required DirectionAuto a,
-  bool passiveCheck = false,
 }) {
   final group = <String, dynamic>{
     'tag': tag,
@@ -160,7 +159,6 @@ Map<String, dynamic> buildAutoGroup({
     'idle_timeout': a.idleTimeout,
     'interrupt_exist_connections': a.interruptExistConnections,
   };
-  if (passiveCheck) group['passive_check'] = true;
   if (a.mode == UrltestMode.roundRobin) {
     group['mode'] = a.mode.wire;
     group['balancer'] = <String, dynamic>{
@@ -184,7 +182,6 @@ Map<String, dynamic> buildAutoGroup({
 ReplaceBuild materializeReplaceGroups(
   List<ReplacePlan> plans, {
   required Set<String> alive,
-  bool passiveCheck = false,
   void Function(String line)? warn,
   void Function(RegistryWarning w)? code,
   Object? Function(String name)? resolveVar,
@@ -211,7 +208,6 @@ ReplaceBuild materializeReplaceGroups(
           tag: autoTag,
           outbounds: autoMembers,
           a: resolveAutoVars(r.autoOrDefault, resolveVar),
-          passiveCheck: passiveCheck,
         ));
         out.emitted.add(autoTag);
       }

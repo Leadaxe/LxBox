@@ -3251,9 +3251,6 @@
   "Partial: %1$d ok, %2$d failed for \"%3$s\"": {
     "value": "部分成功：%1$d 成功，%2$d 失败（「%3$s」）"
   },
-  "Passive health check": {
-    "value": "被动健康检查"
-  },
   "Password (optional)": {
     "value": "密码（可选）"
   },
@@ -4118,9 +4115,6 @@
   },
   "Skip": {
     "value": "跳过"
-  },
-  "Skip periodic server probes while your own traffic already proves the connection works. Fewer wakeups and less battery; ping numbers refresh less often.": {
-    "value": "当你的实际流量已证明连接可用时，跳过周期性服务器探测。唤醒更少、更省电；延迟数值刷新频率更低。"
   },
   "Slower than, ms": {
     "value": "慢于此值，ms"

@@ -145,9 +145,6 @@ class _PoolCtx implements EmitContext {
   RuleSetRegistry get ruleSets => _ruleSets;
 
   @override
-  bool get passiveCheck => false;
-
-  @override
   String get coreVersion => '';
 
   @override

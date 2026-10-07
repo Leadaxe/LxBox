@@ -18,10 +18,6 @@ import '../parser/engine_test_setup.dart';
 /// следующий build (старт/рестарт VPN в рамках сессии) клеил префикс поверх:
 /// «xxx xxx 0004 - …». Фикс — `emit` отдаёт глубокую копию патча.
 class _FakeCtx extends EmitContext {
-  // §272/§322 — глобальный passive_check; этим тестам он не важен.
-  @override
-  bool get passiveCheck => false;
-
   final entries = <SingboxEntry>[];
   final selectorTags = <String>[];
   final autoTags = <String>[];

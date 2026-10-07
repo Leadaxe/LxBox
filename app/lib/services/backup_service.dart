@@ -42,7 +42,6 @@ const _topLevelRoutingKeys = {
   'route_idle_suspend_reachable', // §272 — reachable idle window
   'wg_build_max', // §542 — WG/AWG build budget (lx.wg.build_max)
   'wg_lazy_build', // §542 — WG/AWG lazy build (lx.wg.lazy_build)
-  'urltest_passive_check', // §272 — passive health check
   'enabled_groups', // §125 — DEPRECATED (legacy, читается только миграцией)
   'tun_apps',
   'vpn_mode',

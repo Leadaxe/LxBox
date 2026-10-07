@@ -103,11 +103,6 @@ void main() {
             await SettingsStorage.getIdleSuspendReachable(),
             flush: false);
       }
-      if (raw.containsKey('urltest_passive_check')) {
-        await SettingsStorage.savePassiveCheck(
-            await SettingsStorage.getPassiveCheck(),
-            flush: false);
-      }
       if (raw.containsKey('tun_apps')) {
         await SettingsStorage.setTunApps(await SettingsStorage.getTunApps(),
             flush: false);

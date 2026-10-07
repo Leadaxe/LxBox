@@ -84,12 +84,12 @@ void main() {
     );
   }
 
-  Future<List<Map<String, dynamic>>> build(List<Direction> directions,
-      {bool passiveCheck = false}) async {
+  Future<List<Map<String, dynamic>>> build(
+      List<Direction> directions) async {
     final r = await buildConfig(
       lists: [await nodes()],
       template: template(),
-      settings: BuildSettings(directions: directions, passiveCheck: passiveCheck),
+      settings: BuildSettings(directions: directions),
     );
     expect(r.validation.isOk, true, reason: r.validation.issues.join('\n'));
     return (r.config['outbounds'] as List).cast<Map<String, dynamic>>();
@@ -220,18 +220,9 @@ void main() {
       expect(outs.any((o) => o['tag'] == 'vpn-1-auto'), false);
     });
 
-    // §272 — passive_check (ядро SPEC 019): пишется в auto-двойник только при
-    // включённой настройке; выключено → поля нет (апстрим-поведение, и старое
-    // ядро без поля не падает на unknown field).
-    test('§272 passiveCheck=true → passive_check в auto-двойнике', () async {
-      final outs = await build(
-        [const Direction(tag: 'vpn-1', label: 'X', auto: DirectionAuto())],
-        passiveCheck: true,
-      );
-      expect(byTag(outs, 'vpn-1-auto')['passive_check'], true);
-    });
-
-    test('§272 passiveCheck=false (дефолт) → поля нет', () async {
+    // §611 — ядро lx.12 удалило `urltest.passive_check` (незнакомый ключ
+    // роняет конфиг): в auto-двойник поле не пишется никогда.
+    test('§611 passive_check в auto-двойнике не пишется', () async {
       final outs = await build(
         [const Direction(tag: 'vpn-1', label: 'X', auto: DirectionAuto())],
       );
