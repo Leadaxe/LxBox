@@ -83,12 +83,22 @@ part of '../post_steps.dart';
 /// его исчезновение сделало бы висячими `route.rules[].outbound`).
 /// [blockTag]/[directTag] — теги служебных outbound'ов для fallback.
 ///
+/// §612 (контракт 1.1.112–1.1.113) — правила 3 и 4 говорят КОДАМИ отчёта
+/// сборки, когда вызывающий их принимает: [onDefaultDropped] получает
+/// `group_default_dropped` (правило 3, одна запись на группу), а
+/// [onDetourThroughGroup] — пары «узел, группа» правила 4 (агрегат
+/// `node_detour_through_group` по источнику строит сборка: источник узла
+/// знает она, а не граф). Строки этих правил тогда не пишутся. Без колбэков
+/// — прежние EN-строки.
+///
 /// Возвращает список EN-строк для `emitWarnings`. Пустой = граф был чист.
 List<String> sanitizeOutboundGraph(
   Map<String, dynamic> config, {
   Set<String> directionTags = const {},
   String blockTag = kBlockOutboundTag,
   String directTag = kDirectOutboundTag,
+  void Function(RegistryWarning w)? onDefaultDropped,
+  void Function(String node, String group)? onDetourThroughGroup,
 }) {
   final outbounds = (config['outbounds'] as List<dynamic>? ?? const [])
       .whereType<Map<String, dynamic>>()
@@ -171,6 +181,7 @@ List<String> sanitizeOutboundGraph(
         directionTags: directionTags,
         blockTag: blockTag,
         directTag: directTag,
+        onDefaultDropped: onDefaultDropped,
       )) {
         changed = true;
       }
@@ -222,7 +233,13 @@ List<String> sanitizeOutboundGraph(
   }
 
   for (final e in cyclicMemberGroups.entries) {
-    warnings.add(_detourGroupCycleLine(e.key, e.value));
+    if (onDetourThroughGroup != null) {
+      for (final g in e.value) {
+        onDetourThroughGroup(e.key, g);
+      }
+    } else {
+      warnings.add(_detourGroupCycleLine(e.key, e.value));
+    }
   }
   for (final e in danglingDetourOwners.entries) {
     warnings.add(_detourRemovedLine(e.key, e.value));
@@ -295,6 +312,7 @@ bool _sanitizeEntryRefs(
   required Set<String> directionTags,
   required String blockTag,
   required String directTag,
+  void Function(RegistryWarning w)? onDefaultDropped,
 }) {
   var changed = false;
   final tag = _tagOf(e);
@@ -438,9 +456,14 @@ bool _sanitizeEntryRefs(
   // поставил block-fallback выше/`_buildDirectionGroups`: он в составе.
   final def = e['default'];
   if (def is String && def.isNotEmpty && !kept.contains(def)) {
-    warnings.add(
-        'Group "$tag": default "$def" is not among its members — replaced '
-        'with "${kept.first}".');
+    if (onDefaultDropped != null) {
+      // §612 — `group_default_dropped`: группа стартует с первого члена.
+      onDefaultDropped(groupDefaultDropped(tag, def));
+    } else {
+      warnings.add(
+          'Group "$tag": default "$def" is not among its members — replaced '
+          'with "${kept.first}".');
+    }
     e['default'] = kept.first;
     changed = true;
   }

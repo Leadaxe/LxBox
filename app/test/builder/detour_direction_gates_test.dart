@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/direction.dart';
 import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/node_link.dart';
+import 'package:lxbox/models/node_warning.dart' show RegistryWarning;
 import 'package:lxbox/models/parser_config.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/validation.dart';
@@ -245,11 +246,11 @@ void main() {
       expect(cyclesOf(r), isEmpty, reason: '§254-fatal больше не нужен');
       expect(byTag(r, 'Relay Berlin')['detour'], 'vpn-2',
           reason: 'fail-open: detour пользователя сохранён');
+      // §612 (контракт 1.1.113) — код `node_detour_through_group`.
       expect(
           r.emitWarnings,
           contains(contains(
-              'Outbound "Relay Berlin" detours through group "vpn-2" it '
-              'belongs to')));
+              'left out of vpn-2: Relay Berlin [node_detour_through_group]')));
       // Единственный член ушёл → Направление в block-fallback (§201/§274).
       expect(byTag(r, 'vpn-2')['outbounds'], ['block', 'direct-out']);
       expect(byTag(r, 'vpn-2')['default'], 'block');
@@ -366,8 +367,7 @@ void main() {
       expect(
           r.emitWarnings,
           contains(contains(
-              'Outbound "Node X" detours through group "vpn-2" it belongs '
-              'to')));
+              'left out of vpn-2: Node X [node_detour_through_group]')));
       expect(byTag(r, 'Node X')['detour'], 'vpn-2');
     });
 
@@ -394,16 +394,23 @@ void main() {
       expect(cyclesOf(r), isEmpty);
       // Виновник — только relay (единственный ЧЛЕН Направления); клиенты в
       // состав не входили и ничего не потеряли.
-      // §393 A4 фикс 4 — агрегация правила 4 по УЗЛУ: relay выброшен и из
-      // селектора Направления, и из его auto-двойника, но warning ОДИН, со
-      // списком обеих групп (а не два одинаковых про одну ноду).
+      // §612 (контракт 1.1.113) — `node_detour_through_group`: одна запись
+      // на пару (источник, группа). Relay выброшен и из селектора
+      // Направления, и из его auto-двойника — две группы, две записи; узлы
+      // клиентов в них не названы.
       final cyclicLines = r.emitWarnings
-          .where((w) => w.contains('it belongs to — excluded'))
+          .where((w) => w.contains('[node_detour_through_group]'))
           .toList();
-      expect(cyclicLines, hasLength(1));
-      expect(cyclicLines.single, contains('"Relay Berlin"'));
-      expect(cyclicLines.single, contains('"vpn-2"'));
-      expect(cyclicLines.single, contains('"vpn-2-auto"'));
+      expect(cyclicLines, hasLength(2));
+      expect(cyclicLines, everyElement(contains(': Relay Berlin [')));
+      expect(cyclicLines.join('\n'), contains('left out of vpn-2:'));
+      expect(cyclicLines.join('\n'), contains('left out of vpn-2-auto:'));
+      expect(
+          r.nodeBuildWarningsByEmittedTag['Relay Berlin']
+              ?.whereType<RegistryWarning>()
+              .where((w) => w.code == 'node_detour_through_group'),
+          hasLength(2),
+          reason: 'запись ложится в предупреждения узла (карточка)');
       for (final tag in ['Relay Berlin', 'Client A', 'Client B']) {
         expect(byTag(r, tag)['detour'], 'vpn-2', reason: '$tag: detour цел');
       }
@@ -483,7 +490,7 @@ void main() {
       expect(byTag(r, 'OUT Warp')['detour'], 'vpn-3');
       expect(r.emitWarnings, isNot(contains(contains('Dependency cycle'))));
       expect(r.emitWarnings,
-          isNot(contains(contains('it belongs to — excluded'))));
+          isNot(contains(contains('[node_detour_through_group]'))));
     });
 
     test('два независимых кольца → два разрыва, по одному на кольцо', () async {
@@ -509,12 +516,15 @@ void main() {
       expect(r.validation.isOk, isTrue, reason: r.validation.issues.join('\n'));
       expect(cyclesOf(r), isEmpty);
       // По одному разрыву на кольцо — оба узла названы, ни один не пропущен.
+      // §612 — запись на пару (источник, группа): узел каждого кольца назван
+      // только в записях своей группы.
       final degraded = r.emitWarnings
-          .where((w) => w.contains('it belongs to — excluded'))
+          .where((w) => w.contains('[node_detour_through_group]'))
           .toList();
-      expect(degraded, hasLength(2));
-      expect(degraded.join('\n'), contains('"Node X"'));
-      expect(degraded.join('\n'), contains('"Node Y"'));
+      expect(degraded.where((w) => w.contains(': Node X [')), isNotEmpty);
+      expect(degraded.where((w) => w.contains(': Node Y [')), isNotEmpty);
+      expect(degraded.where((w) => w.contains('Node X') && w.contains('Node Y')),
+          isEmpty);
       // Оба Направления опустели → block-fallback, оба уцелели как цели правил.
       for (final tag in ['vpn-2', 'vpn-3']) {
         expect(byTag(r, tag)['outbounds'], ['block', 'direct-out']);

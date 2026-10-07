@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/auto_select.dart';
 import 'package:lxbox/models/codec/source_record.dart';
 import 'package:lxbox/models/emit_context.dart';
+import 'package:lxbox/models/node_warning.dart' show RegistryWarning;
 import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/server_list.dart';
@@ -41,6 +42,12 @@ class _FakeCtx extends EmitContext {
 
   @override
   void warn(String line) => warnings.add(line);
+
+  /// §612 — коды отчёта сборки (`group_default_dropped`).
+  final codes = <RegistryWarning>[];
+
+  @override
+  void code(RegistryWarning w) => codes.add(w);
 
   @override
   void addToSelectorTagList(SingboxEntry entry) => selectorTags.add(entry.tag);
@@ -390,6 +397,8 @@ void main() {
       expect(m.containsKey('default'), isFalse);
       expect(ctx.warnings.where((w) => w.contains('group_member_dropped')),
           hasLength(1));
+      // §612 (контракт 1.1.112) — снятие умолчания называет свой код.
+      expect(ctx.codes.map((w) => w.code), ['group_default_dropped']);
     });
 
     test('default вне состава назван кодом', () {
@@ -400,7 +409,13 @@ void main() {
         manual(def: 'Z'),
       ]).build(ctx);
       expect(selectorOf(ctx).containsKey('default'), isFalse);
-      expect(ctx.warnings.single, contains('group_member_dropped'));
+      // §612 (контракт 1.1.112) — `group_default_dropped {tag, default}`,
+      // адресат — группа.
+      expect(ctx.warnings, isEmpty);
+      final w = ctx.codes.single;
+      expect(w.code, 'group_default_dropped');
+      expect(w.params, {'tag': selectorOf(ctx)['tag'], 'default': 'Z'});
+      expect(w.ownerTag, selectorOf(ctx)['tag']);
     });
 
     test('urltest из источника: тело разбора — объявленное, ядру — полное',

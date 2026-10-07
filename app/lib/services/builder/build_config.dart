@@ -959,10 +959,44 @@ Future<BuildResult> _buildConfig({
   // члены-призраки групп, `default` вне состава (L1 — иначе ядро отвергает
   // конфиг целиком) и кольца зависимостей — ДО валидатора, чей §254-fatal
   // остаётся последним рубежом на неразруленное.
+  final graphCodes = <RegistryWarning>[];
+  final detourThroughGroup = <(String, String)>[];
   emitWarnings.addAll(sanitizeOutboundGraph(
     config,
     directionTags: {for (final c in directions) c.tag},
+    onDefaultDropped: graphCodes.add,
+    onDetourThroughGroup: (node, group) =>
+        detourThroughGroup.add((node, group)),
   ));
+  // §612 (контракт 1.1.113) — `node_detour_through_group`: одна запись на
+  // пару (источник, группа), адресат — источник узла; запись ложится и в
+  // предупреждения каждого выброшенного из состава узла.
+  final detourCodes = _nodeDetourThroughGroupCodes(
+    detourThroughGroup,
+    sourceOfTag: {
+      for (final list in lists)
+        for (final n in list.nodes)
+          if (ctx.emittedTagByNode[n] case final t?) t: list,
+    },
+  );
+  // §612 — коды отчёта сборки уровня группы/источника: строка по тексту
+  // реестра в `emitWarnings`, запись в [BuildResult.buildCodes] и в
+  // предупреждения адресата по финальному тегу (карточка узла).
+  final addressed = <(RegistryWarning, List<String>)>[
+    for (final w in ctx.codes) (w, [w.ownerTag]),
+    for (final w in graphCodes) (w, [w.ownerTag]),
+    ...detourCodes,
+  ];
+  for (final (w, _) in addressed) {
+    buildCodes.add(w);
+    emitWarnings.add(_buildCodeLine(w));
+  }
+  for (final (w, targets) in addressed) {
+    for (final t in targets) {
+      if (t.isEmpty) continue;
+      registryReport.warningsByEmittedTag.putIfAbsent(t, () => []).add(w);
+    }
+  }
 
   final validation = validateConfig(config);
   // §555 — записи template_degraded идут первыми (паритет с «Итогом» desktop).
@@ -1019,6 +1053,55 @@ List<PresetNode> _collectPresetNodes(List<ServerList> lists, _BuildCtx ctx) {
 
 /// Реализация `EmitContext`: vars + аллокатор уникальных тегов +
 /// аккумуляторы entries + RuleSetRegistry.
+/// §612 (контракт 1.1.113) — код записи: группа не взяла в состав узлы,
+/// которые своим detour ходят через неё же (правило 4 граф-санитайзера).
+const kNodeDetourThroughGroupCode = 'node_detour_through_group';
+
+/// §612 — строка отчёта сборки для кода [w]: заголовок реестра, узлы (у
+/// `node_detour_through_group` — его `tags`) и код в скобках, по которому
+/// запись ищется в логе (как у `group_member_dropped`).
+String _buildCodeLine(RegistryWarning w) {
+  final tags = w.code == kNodeDetourThroughGroupCode ? w.params['tags'] : null;
+  return '${w.renderEn()}${tags == null ? '' : ': $tags'} [${w.code}]';
+}
+
+/// §612 — пары «узел, группа» правила 4 → записи
+/// [kNodeDetourThroughGroupCode], одна на пару (источник, группа), вместе с
+/// финальными тегами её узлов. Источник узла — по [sourceOfTag] (финальный
+/// тег → источник), его имя — [RegistryWarning.ownerTag]; у узла без
+/// источника — запись без адреса. Порядок — первого появления пары.
+List<(RegistryWarning, List<String>)> _nodeDetourThroughGroupCodes(
+  List<(String, String)> pairs, {
+  required Map<String, ServerList> sourceOfTag,
+}) {
+  final byKey = <(String, String), List<String>>{};
+  final ownerOf = <(String, String), String>{};
+  for (final (node, group) in pairs) {
+    final src = sourceOfTag[node];
+    final key = (src?.id ?? '', group);
+    final tags = byKey.putIfAbsent(key, () => []);
+    if (!tags.contains(node)) tags.add(node);
+    ownerOf[key] = src == null
+        ? ''
+        : (src.name.isNotEmpty ? src.name : src.id);
+  }
+  return [
+    for (final e in byKey.entries)
+      (
+        RegistryWarning(
+          code: kNodeDetourThroughGroupCode,
+          params: {
+            'group': e.key.$2,
+            'count': '${e.value.length}',
+            'tags': e.value.join(', '),
+          },
+          ownerTag: ownerOf[e.key] ?? '',
+        ),
+        e.value,
+      ),
+  ];
+}
+
 class _BuildCtx implements EmitContext {
   _BuildCtx(
     this._vars,
@@ -1125,6 +1208,22 @@ class _BuildCtx implements EmitContext {
   void warn(String line) {
     if (!warnings.contains(line)) warnings.add(line);
   }
+
+  /// §612 — коды отчёта из `ServerList.build`, без дублей.
+  final codes = <RegistryWarning>[];
+
+  @override
+  void code(RegistryWarning w) {
+    if (!codes.any((c) =>
+        c.code == w.code &&
+        c.ownerTag == w.ownerTag &&
+        _sameParams(c.params, w.params))) {
+      codes.add(w);
+    }
+  }
+
+  static bool _sameParams(Map<String, String> a, Map<String, String> b) =>
+      a.length == b.length && a.entries.every((e) => b[e.key] == e.value);
 
   @override
   String allocateTag(String baseTag) {
