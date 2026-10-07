@@ -976,7 +976,7 @@ Future<BuildResult> _buildConfig({
     sourceOfTag: {
       for (final list in lists)
         for (final n in list.nodes)
-          if (ctx.emittedTagByNode[n] case final t?) t: list,
+          ?ctx.emittedTagByNode[n]: list,
     },
   );
   // §612 — коды отчёта сборки уровня группы/источника: строка по тексту
