@@ -502,6 +502,13 @@ class SettingsStorage {
   /// Позиция в общем списке источников не меняется.
   static Future<void> updateChain(SourceChain chain) => _updateChain(chain);
 
+  /// §609 — обновить цепочку [oldTag] с переименованием в `chain.tag`: место
+  /// в списке источников сохраняется, ссылки на старый тег переписываются в
+  /// той же записи. Throws [StateError] на неизвестном [oldTag] или занятом
+  /// теге.
+  static Future<SourceChain> renameChain(String oldTag, SourceChain chain) =>
+      _renameChain(oldTag, chain);
+
   /// Переставить цепочки в их взаимном порядке, не двигая чужие слоты.
   /// Смешение с подписками и серверами — [reorderSources].
   static Future<void> reorderChains(List<SourceChain> chains) =>

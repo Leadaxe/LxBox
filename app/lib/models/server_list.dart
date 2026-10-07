@@ -737,6 +737,44 @@ final class FolderServers extends ServerList {
   return (healed: count > 0 ? next : null, count: count);
 }
 
+/// §609 — переписать корневые detour-ссылки списка [l] по [retarget]
+/// (старый тег → новый): `detourPolicy.overrideDetour` + личные
+/// `FolderMember.detour`. Пара (узел контейнера) не трогается. Общее ядро
+/// storage-переименования цепочки и in-memory ресинка контроллера.
+({ServerList? healed, int count}) retargetDetourRefs(
+    ServerList l, Map<String, String> retarget) {
+  NodeLink? to(NodeLink v) {
+    if (!v.isRoot) return null;
+    final t = retarget[v.tag];
+    return t == null ? null : NodeLink(tag: t);
+  }
+
+  var count = 0;
+  ServerList next = l;
+  final override = to(l.detourPolicy.overrideDetour);
+  if (override != null) {
+    final p = l.detourPolicy.copyWith(overrideDetour: override);
+    next = switch (l) {
+      SubscriptionServers s => s.copyWith(detourPolicy: p),
+      UserServer u => u.copyWith(detourPolicy: p),
+      FolderServers f => f.copyWith(detourPolicy: p),
+    };
+    count++;
+  }
+  if (next is FolderServers) {
+    var membersChanged = false;
+    final ms = next.members.map((m) {
+      final d = to(m.detour);
+      if (d == null) return m;
+      membersChanged = true;
+      count++;
+      return m.copyWith(detour: d);
+    }).toList();
+    if (membersChanged) next = next.copyWith(members: ms);
+  }
+  return (healed: count > 0 ? next : null, count: count);
+}
+
 /// Политика применения detour-серверов (§1.3 спеки 026, перенесено из 018).
 /// Хранится на `ServerList`, применяется inline в `buildConfig`.
 class DetourPolicy {

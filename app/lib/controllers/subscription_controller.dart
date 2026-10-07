@@ -3585,6 +3585,21 @@ class SubscriptionController extends ChangeNotifier {
     if (changed) notifyListeners();
   }
 
+  /// §609 — in-memory зеркало переписи detour-ссылок при переименовании
+  /// цепочки (`SettingsStorage.renameChain`): тот же [retargetDetourRefs],
+  /// что у storage, иначе следующий `_persist()` вернул бы старый тег.
+  void syncDetourRefsRetargeted(Map<String, String> retarget) {
+    var changed = false;
+    for (final e in _entries) {
+      final r = retargetDetourRefs(e.list, retarget);
+      if (r.healed != null) {
+        e._replaceList(r.healed!);
+        changed = true;
+      }
+    }
+    if (changed) notifyListeners();
+  }
+
   ServerList _renameList(ServerList l, String name) => switch (l) {
         SubscriptionServers() => l.copyWith(name: name),
         UserServer() => l.copyWith(name: name),

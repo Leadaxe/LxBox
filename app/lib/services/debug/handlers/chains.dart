@@ -44,10 +44,10 @@ import '_shared.dart';
 ///                                поля источника + канон
 ///                                `source_chain.schema.json`)
 /// - `POST   /chains`            → create (body: `{"tag":"..."}`
-///                                + опционально любые PATCH-поля; `tag`
-///                                только при создании)
+///                                + опционально любые PATCH-поля)
 /// - `GET    /chains/{tag}`      → single
-/// - `PATCH  /chains/{tag}`      → partial update
+/// - `PATCH  /chains/{tag}`      → partial update; `tag` переименовывает
+///                                (§609, [SettingsStorage.renameChain])
 /// - `DELETE /chains/{tag}`      → remove
 ///
 /// Все write'ы принимают `?rebuild=true`: цепочка — узел конфига, правка
@@ -253,16 +253,25 @@ Future<DebugResponse> _update(String tag, DebugRequest req, DebugContext ctx) as
   if (chain == null) throw NotFound('chain: $tag');
 
   final next = _applyPatch(chain, body) ?? chain;
+  // §609 — пустой тег запирает форму (tagEmpty) и при пустом маршруте тоже:
+  // рубеж ниже на 0 позиций не зовётся.
+  if (next.tag.trim().isEmpty) {
+    throw const BadRequest('field "tag" must not be empty');
+  }
   // Пустая цепочка (0 позиций) — законное промежуточное состояние, как в UI:
   // запись создана, маршрут ещё не набран. Всё остальное — через рубеж.
-  if (next.hops.isNotEmpty) await _requireValid(next, ctx);
+  if (next.hops.isNotEmpty) await _requireValid(next, ctx, originalTag: tag);
+  final SourceChain saved;
   try {
-    await SettingsStorage.updateChain(next);
+    // §609 — тот же путь, что у формы: переименование на месте с
+    // переписью ссылок; тег не менялся — обычный update.
+    saved = await SettingsStorage.renameChain(tag, next);
   } on StateError catch (e) {
     throw Conflict(e.message);
   }
+  if (saved.tag != tag) ctx.sub?.syncDetourRefsRetargeted({tag: saved.tag});
   final extras = await maybeRebuild(req, ctx);
-  return JsonResponse({...serializeChain(next), ...extras});
+  return JsonResponse({...serializeChain(saved), ...extras});
 }
 
 Future<DebugResponse> _delete(String tag, DebugRequest req, DebugContext ctx) async {
@@ -296,7 +305,10 @@ Future<void> _requireValid(
   SourceChain chain,
   DebugContext ctx, {
   bool isNew = false,
+  String? originalTag,
 }) async {
+  // §609 — при переименовании своя запись на диске ещё под старым тегом.
+  final selfTag = originalTag ?? chain.tag;
   final chains = await SettingsStorage.getChains();
   final directions = await SettingsStorage.getDirections();
   // Список цепочек с ПОДСТАВЛЕННЫМ кандидатом: порядок нормативен (ссылка
@@ -311,7 +323,7 @@ Future<void> _requireValid(
       ? [...chains, chain]
       : [
           for (final c in chains)
-            if (c.tag == chain.tag) chain else c,
+            if (c.tag == selfTag) chain else c,
         ];
   final config = ctx.home?.state.configModel ?? const ParsedConfig.empty();
   // §439 — пул ссылок: позиция-ссылка сверяется с кандидатами финальным тегом.
@@ -335,12 +347,14 @@ Future<void> _requireValid(
       // конфига. Свой тег не считается — цепочка занимает своё же имя.
       takenTags: {
         for (final d in directions) d.tag,
+        // §609 — «свой» = сама запись (по ссылке, тег у неё мог смениться)
+        // и её прежний тег в конфиге; тёзка нового тега — чужой.
         for (final c in ordered)
-          if (c.tag != chain.tag) c.tag,
+          if (!identical(c, chain)) c.tag,
         for (final t in config.byTag.keys)
-          if (t != chain.tag) t,
+          if (t != selfTag) t,
       },
-      originalTag: chain.tag,
+      originalTag: selfTag,
     ),
   );
   final blocker = issues.where((i) => i.blocks).firstOrNull;
@@ -355,13 +369,10 @@ Future<void> _requireValid(
 /// значения.
 SourceChain? _applyPatch(SourceChain c, Map<String, dynamic> body,
     {bool tagConsumed = false}) {
-  // POST принимает `tag` (пожелание для СОЗДАНИЯ, уже применён выше); PATCH —
-  // нет: после создания тег immutable, на него ссылаются фильтры Направлений,
-  // `route_final` и позиции других цепочек.
-  if (!tagConsumed && body.containsKey('tag')) {
-    throw const BadRequest(
-        'field "tag" is immutable (outbound id)');
-  }
+  // POST применяет `tag` выше (пожелание для СОЗДАНИЯ); PATCH — здесь: §609,
+  // тег редактируется, ссылки на старый переписывает storage
+  // ([SettingsStorage.renameChain]).
+  final tag = tagConsumed ? null : fieldString(body, 'tag')?.trim();
 
   // §594 — `label` у цепочки упразднён: ключ не читается, как любое
   // неизвестное поле.
@@ -433,7 +444,8 @@ SourceChain? _applyPatch(SourceChain c, Map<String, dynamic> body,
     }
   }
 
-  final changed = enabled != null ||
+  final changed = tag != null ||
+      enabled != null ||
       hops != null ||
       idleTimeout != null ||
       stripEvasion != null ||
@@ -443,6 +455,7 @@ SourceChain? _applyPatch(SourceChain c, Map<String, dynamic> body,
   if (!changed) return null;
 
   return c.copyWith(
+    tag: tag,
     enabled: enabled,
     hops: hops,
     idleTimeout: idleTimeout,

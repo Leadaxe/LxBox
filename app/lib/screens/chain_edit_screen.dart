@@ -34,6 +34,7 @@ import '../services/contract/chain_strip.dart';
 import '../services/contract/registry_warning.dart';
 import '../services/l10n/locale_controller.dart';
 import '../services/ui_helpers.dart';
+import '../widgets/emoji_picker_button.dart';
 import '../widgets/reorder_grab_strip.dart';
 import 'chain_edit/chain_form_validation.dart';
 import 'chain_edit/chain_hop_candidate.dart';
@@ -113,6 +114,10 @@ class ChainEditScreen extends StatefulWidget {
 class _ChainEditScreenState extends State<ChainEditScreen> with SnackHelper {
   late final TextEditingController _idleCtrl;
 
+  /// §609 — тег редактируется, как у узла; ссылки на старый тег переписывает
+  /// storage при сохранении (`SettingsStorage.renameChain`).
+  late final TextEditingController _tagCtrl;
+
   /// Позиции ссылками (§439); показ и проверка — финальными тегами
   /// ([_shown]).
   late List<NodeLink> _hops;
@@ -133,6 +138,7 @@ class _ChainEditScreenState extends State<ChainEditScreen> with SnackHelper {
     final c = widget.initial;
     _idleCtrl = TextEditingController(text: c.idleTimeout)
       ..addListener(_onChange);
+    _tagCtrl = TextEditingController(text: c.tag)..addListener(_onChange);
     _hops = [...c.hops];
     _enabled = c.enabled;
     _stripEvasion = c.stripEvasion;
@@ -154,12 +160,28 @@ class _ChainEditScreenState extends State<ChainEditScreen> with SnackHelper {
   @override
   void dispose() {
     _idleCtrl.dispose();
+    _tagCtrl.dispose();
     super.dispose();
   }
 
   void _onChange() => setState(() {});
 
+  /// Эмодзи-пикер поля Tag: вставка в курсор, как у узла.
+  void _insertEmoji(String emoji) {
+    final text = _tagCtrl.text;
+    final sel = _tagCtrl.selection;
+    final start =
+        (sel.start >= 0 && sel.start <= text.length) ? sel.start : text.length;
+    final end = (sel.end >= 0 && sel.end <= text.length) ? sel.end : start;
+    final insert = '$emoji ';
+    _tagCtrl.value = TextEditingValue(
+      text: text.replaceRange(start, end, insert),
+      selection: TextSelection.collapsed(offset: start + insert.length),
+    );
+  }
+
   SourceChain _snapshot() => widget.initial.copyWith(
+        tag: _tagCtrl.text.trim(),
         enabled: _enabled,
         hops: _hops,
         idleTimeout: _idleCtrl.text.trim(),
@@ -171,7 +193,8 @@ class _ChainEditScreenState extends State<ChainEditScreen> with SnackHelper {
   bool _isDirty() {
     final s = _snapshot();
     final i = widget.initial;
-    return s.enabled != i.enabled ||
+    return s.tag != i.tag ||
+        s.enabled != i.enabled ||
         s.idleTimeout != i.idleTimeout ||
         s.stripEvasion != i.stripEvasion ||
         !_sameHops(s.hops, i.hops) ||
@@ -200,11 +223,8 @@ class _ChainEditScreenState extends State<ChainEditScreen> with SnackHelper {
         ChainFormContext(
           candidates: _lookup,
           targetsKnown: chainTargetsKnown(widget.config),
-          // Тег цепочки immutable (форма его не правит), но занятым он мог
-          // стать ПОСЛЕ создания — вторым источником мутаций (Debug API,
-          // restore из бэкапа), пока окно открыто. Тогда сборка деградирует
-          // цепочку с «имя уже занято», и узнать об этом здесь дешевле, чем
-          // по факту пропавшего маршрута.
+          // §609 — тег правится в форме: пустой или занятый другим
+          // запирает сохранение. Свой исходный тег свободен ([originalTag]).
           takenTags: _takenTags(),
           originalTag: widget.initial.tag,
         ),
@@ -335,7 +355,6 @@ class _ChainEditScreenState extends State<ChainEditScreen> with SnackHelper {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final c = widget.initial;
     final issues = _issues();
     final canSave = chainFormCanSave(issues);
     final dirty = _isDirty();
@@ -347,7 +366,7 @@ class _ChainEditScreenState extends State<ChainEditScreen> with SnackHelper {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: Text(getLocalText.s("Hop chain · %s", c.tag)),
+          title: Text(getLocalText.s("Hop chain · %s", _tagCtrl.text)),
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),
             onPressed: _handleBack,
@@ -372,6 +391,18 @@ class _ChainEditScreenState extends State<ChainEditScreen> with SnackHelper {
           padding: EdgeInsets.fromLTRB(
               16, 12, 16, MediaQuery.of(context).padding.bottom + 32),
           children: [
+            TextField(
+              controller: _tagCtrl,
+              decoration: InputDecoration(
+                border: const OutlineInputBorder(),
+                labelText: getLocalText.s("Tag"),
+                hintText: getLocalText.s("Display name in node list"),
+                isDense: true,
+                prefixIcon: const Icon(Icons.label_outline, size: 18),
+                suffixIcon: EmojiPickerButton(onPick: _insertEmoji),
+              ),
+            ),
+            const SizedBox(height: 8),
             SwitchListTile(
               dense: true,
               contentPadding: EdgeInsets.zero,

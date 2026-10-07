@@ -212,32 +212,43 @@ Future<void> _healPingOptionsGroupRefs(String deletedTag) async {
 /// пользовательского сервера, корневого и в секциях узлов, — туда же.
 /// `rules` — правила (одно на правило), `dnsServers` — DNS-серверы.
 Future<({int rules, int dnsServers})> _healDirectionRefs(
-    String deletedTag) async {
-  final autoTag = '$deletedTag-auto';
-  final retarget = directionRefRetarget(deletedTag, 'vpn-1');
+        String deletedTag) async =>
+    _retargetOutboundRefs(directionRefRetarget(deletedTag, 'vpn-1'));
+
+/// Перенацелить ссылки-по-имени на outbound по [retarget] (старый тег →
+/// новый): `route_final`, правила (поле `outbound` у inline/srs, переменные
+/// типа `outbound` у пресета, §441) и DNS-серверы
+/// ([_healDnsServerDirectionRefs]). Общее ядро удаления Направления
+/// ([_healDirectionRefs], всё → vpn-1) и §609 переименования цепочки.
+/// `rules` считает и `route_final`. flush:false — атомарный `_save()` на
+/// вызывающем.
+Future<({int rules, int dnsServers})> _retargetOutboundRefs(
+    Map<String, String> retarget) async {
   final decls = await loadRecordVarDecls();
   var count = 0;
   // route_final
   final routeFinal = await SettingsStorage.getRouteFinal();
-  if (routeFinal == deletedTag || routeFinal == autoTag) {
-    await SettingsStorage.saveRouteFinal('vpn-1', flush: false);
+  final finalTo = retarget[routeFinal];
+  if (finalTo != null) {
+    await SettingsStorage.saveRouteFinal(finalTo, flush: false);
     count++;
   }
   // custom-rule outbounds: inline/srs — поле `outbound`; preset — переменные
   // типа `outbound` в `varsValues` (§033 Expansion §5, §441), без heal они
   // уезжали в expandPreset dangling-тегом → fatal DanglingOutboundRef, VPN не
-  // стартует; json — '' (deletedTag всегда непустой, не сматчит).
-  // reject/direct-out — не direction-tag'и, под deletedTag не подпадут.
+  // стартует; json — '' (ключи retarget всегда непустые, не сматчит).
+  // reject/direct-out — не теги Направлений/цепочек, под retarget не подпадут.
   // Build-time страховки для rule-outbound НЕТ (healDanglingDetours §172 чинит
   // только detour-поля, валидатор §141 P0.1 блокирует, не лечит) —
   // storage-heal здесь единственное самолечение.
   final rules = await SettingsStorage.getCustomRules();
   var changed = false;
   final healed = rules.map((r) {
+    final ruleTo = retarget[r.outbound];
     final next = r is CustomRulePreset
         ? retargetPresetOutboundVars(r, decls, retarget)
-        : (r.outbound == deletedTag || r.outbound == autoTag)
-            ? r.withOutbound('vpn-1')
+        : ruleTo != null
+            ? r.withOutbound(ruleTo)
             : r;
     if (!identical(next, r)) {
       changed = true;
