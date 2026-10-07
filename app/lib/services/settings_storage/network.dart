@@ -117,16 +117,86 @@ Future<void> _saveWgLazyBuild(bool enabled, {bool flush = true}) async {
 }
 
 // ---------------------------------------------------------------------------
-// §272 — бывший passive health check (urltest.passive_check, kernel SPEC 019)
+// §612 — миграция от passive_check (§611) к режиму `failover`
 //
-// Ядро v1.14.2-lx.12 удалило ключ (§611): эмиттер его не пишет, UI не
-// показывает, сторадж больше не записывает. Чтение оставлено для миграции
-// §612 (true/отсутствует → режим `failover`); §612 снимет и его, и ключ.
+// Ядро lx.12 удалило `urltest.passive_check` и назвало `failover` его явной
+// заменой (одна проба в `interval` вместо N, энергетический эффект §272/§273
+// сохраняется). Один раз при первом запуске после обновления, до первой
+// сборки конфига:
+// - сырой `urltest_passive_check` равен `true` или отсутствует (прежнее
+//   умолчание — true) → автовыбор Направлений, автовыбор свёрток и узлы
+//   автовыбора папок с режимом `least_test` (или без `mode`) переходят в
+//   `failover`;
+// - `false` → режимы не меняются;
+// - `round_robin` не трогается ни при каком значении; ручной род
+//   (`group_type: selector`) — тоже;
+// - ключ `urltest_passive_check` удаляется, ставится маркер
+//   `urltest_mode_migrated` (повторно миграция не идёт: отсутствие ключа само
+//   по себе значит «true», маркером служить не может).
 // ---------------------------------------------------------------------------
 
-Future<bool> _getPassiveCheck() async {
+const String _kPassiveCheckKey = 'urltest_passive_check';
+
+Future<void> _migrateUrltestModeIfNeeded() async {
   final data = await _load();
-  return (data['urltest_passive_check'] as bool?) ?? true;
+  if (data[kUrltestModeMigratedKey] == true) return;
+  final passive = data[_kPassiveCheckKey];
+  final toFailover = passive is! bool || passive;
+  var changed = 0;
+  if (toFailover) changed = _migrateLeastTestToFailover(data);
+  data.remove(_kPassiveCheckKey);
+  data[kUrltestModeMigratedKey] = true;
+  SettingsStorage._cache = data;
+  if (changed > 0) SettingsStorage.markConfigDirty();
+  await _save();
+  AppLog.I.info('SettingsStorage: urltest mode migration (§612): '
+      'passive_check=${passive is bool ? passive : 'absent'}, '
+      '$changed group(s) moved to failover');
+}
+
+/// §612 — перевод автовыбора с `least_test` (или без `mode`) на `failover` в
+/// документе хранения [doc], на месте. Возвращает число переведённых групп.
+int _migrateLeastTestToFailover(Map<String, dynamic> doc) {
+  var n = 0;
+  bool fix(Object? auto) {
+    if (auto is! Map) return false;
+    final mode = auto['mode'];
+    if (mode != null && mode != UrltestMode.leastTest.wire) return false;
+    auto['mode'] = UrltestMode.failover.wire;
+    return true;
+  }
+
+  final directions = doc['directions'];
+  if (directions is List) {
+    for (final d in directions) {
+      if (d is Map && fix(d['auto'])) n++;
+    }
+  }
+  final sources = doc[kSourcesKey];
+  if (sources is List) {
+    for (final src in sources) {
+      if (src is! Map) continue;
+      final replace = src['replace'];
+      if (replace is Map && fix(replace['auto'])) n++;
+      final nodes = src['nodes'];
+      if (nodes is! List) continue;
+      for (final node in nodes) {
+        if (node is! Map || node['kind'] != 'auto') continue;
+        final group = node['group'];
+        if (group is! Map || group['group_type'] == 'selector') continue;
+        final strategy = group['strategy'];
+        if (strategy == null) {
+          group['strategy'] = <String, dynamic>{
+            'mode': UrltestMode.failover.wire,
+          };
+          n++;
+        } else if (fix(strategy)) {
+          n++;
+        }
+      }
+    }
+  }
+  return n;
 }
 
 // ---------------------------------------------------------------------------

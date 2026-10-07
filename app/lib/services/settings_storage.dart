@@ -169,9 +169,8 @@ class SettingsStorage {
 
   /// §611 — снятые top-level ключи: в бэкап не пишутся, при импорте старого
   /// бэкапа молча пропускаются (не считаются неизвестными, в `dropped` не
-  /// идут). Значение в сторадже получателя переживает и замену — его читает
-  /// миграция §612 (`urltest_passive_check` → режим авто-групп) и сама же
-  /// снимает ключ.
+  /// идут). Значение в сторадже получателя переживает и замену; миграция
+  /// §612 (`urltest_passive_check` → режим авто-групп) его читает и снимает.
   static const retiredTopLevelKeys = <String>{'urltest_passive_check'};
 
   /// Валидные top-level ключи `lxbox_settings.json`. Полный закрытый список —
@@ -192,6 +191,7 @@ class SettingsStorage {
     'enabled_groups', // §125 — DEPRECATED (читается только миграцией; safe-мусор)
     'directions', // §125/§393 — Направления роутинга (template→storage)
     'directions_migrated', // §125/§393 — guard one-shot миграции
+    kUrltestModeMigratedKey, // §612 — guard миграции least_test → failover
     // §393 A2 — легаси-пары `channels`/`channels_migrated` в allowlist НЕТ
     // намеренно: её переименовывает миграция формы (§439, `migrateStorageDoc`)
     // и в файле на диске, и в снимке `replaceRaw` до allowlist'а.
@@ -605,13 +605,11 @@ class SettingsStorage {
   static Future<void> saveWgLazyBuild(bool enabled, {bool flush = true}) =>
       _saveWgLazyBuild(enabled, flush: flush);
 
-  // §272 — бывший passive health check (urltest.passive_check). Ядро lx.12
-  // удалило ключ, эмиттер и UI его сняли (§611); значение только читается.
-
-  /// §612 снимет: единственный читатель — миграция режима авто-групп
-  /// (true/отсутствует → `failover`), после неё ключ удаляется.
-  @Deprecated('§611: passive_check снят; читает только миграция §612')
-  static Future<bool> getPassiveCheck() => _getPassiveCheck();
+  /// §612 — один раз до первой сборки: `urltest_passive_check` (§611)
+  /// true/отсутствует → автовыбор `least_test` становится `failover`; ключ
+  /// снимается, ставится маркер `urltest_mode_migrated`. Идемпотентна.
+  static Future<void> migrateUrltestModeIfNeeded() =>
+      _migrateUrltestModeIfNeeded();
 
   // §125-cleanup — excluded_nodes (§048 глобальный фильтр) удалён; ключ снимает
   // миграция §439.
