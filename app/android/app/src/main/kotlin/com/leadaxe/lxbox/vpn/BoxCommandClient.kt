@@ -419,6 +419,11 @@ class BoxCommandClient {
                     e.self?.let { m["self"] = tailscalePeerMap(it) }
                     e.exitNode?.let { m["exit_node"] = tailscalePeerMap(it) }
                     m["user_groups"] = groups
+                    // §613 (ядро SPEC 115, lx.12) — предупреждения бэкенда.
+                    val health = ArrayList<String>()
+                    val hi = e.health()
+                    while (hi != null && hi.hasNext()) hi.next()?.let { health.add(it) }
+                    m["health"] = health
                     out.add(m)
                 }
                 tailscaleEmitter.offer(out)
@@ -449,6 +454,13 @@ class BoxCommandClient {
             "key_expiry" to p.keyExpiry,
             "last_seen" to p.lastSeen,
             "ips" to ips,
+            // §613 (ядро SPEC 115, lx.12) — путь до пира: DIRECT / PEER_RELAY /
+            // DERP / NONE; `last_handshake` — Unix-секунды, 0 = не было.
+            "path" to (p.path ?: ""),
+            "endpoint" to (p.endpoint ?: ""),
+            "peer_relay" to (p.peerRelay ?: ""),
+            "derp_region_code" to (p.derpRegionCode ?: ""),
+            "last_handshake" to p.lastHandshake,
         )
     }
 
@@ -922,6 +934,49 @@ class BoxCommandClient {
             "Unavailable" -> "unavailable"
             else -> "error"
         }
+
+    /// §613 — коды как у [endpointToggleErrorCode] плюс `unimplemented`.
+    private fun wgStatusErrorCode(message: String): String =
+        if (Regex("""code = Unimplemented\b""").containsMatchIn(message)) "unimplemented"
+        else endpointToggleErrorCode(message)
+
+    /// §613 (ядро SPEC 114, lx.12) — статус WG/AWG-endpoint'а и его пиров по
+    /// тегу. Только чтение: спящий узел не будится. No-throw: успех →
+    /// `{"endpoint_state", "idle_since_seconds", "peers": [...]}`, отказ →
+    /// `{"error": <код>, "message": <текст>}` с кодами как у
+    /// [setEndpointEnabled] плюс `unimplemented` (ядро без `with_lx_command`
+    /// или старше lx.12).
+    /// `last_handshake_unix` — Unix-секунды, 0 = хендшейка не было.
+    fun getWireGuardStatus(tag: String): Map<String, Any> {
+        val client = ensurePingClient() ?: return mapOf(
+            "error" to "error", "message" to "no command client")
+        return runCatching {
+            val st = client.getWireGuardStatus(tag)
+                ?: return@runCatching mapOf<String, Any>("error" to "error", "message" to "empty status")
+            val peers = ArrayList<Map<String, Any>>()
+            val pi = st.peers()
+            while (pi != null && pi.hasNext()) {
+                val p = pi.next() ?: continue
+                peers.add(mapOf(
+                    "public_key" to (p.publicKey ?: ""),
+                    "endpoint" to (p.endpoint ?: ""),
+                    "last_handshake_unix" to p.lastHandshakeUnix,
+                    "rx_bytes" to p.rxBytes,
+                    "tx_bytes" to p.txBytes,
+                ))
+            }
+            mapOf(
+                "endpoint_state" to (st.endpointState ?: ""),
+                "idle_since_seconds" to st.idleSinceSeconds,
+                "peers" to peers,
+            )
+        }.getOrElse {
+            val msg = it.message ?: it.toString()
+            val code = wgStatusErrorCode(msg)
+            Log.w(TAG, "getWireGuardStatus failed: $code")
+            mapOf("error" to code, "message" to msg)
+        }
+    }
 
     fun closeConnection(id: String): Boolean {
         val client = ensurePingClient() ?: run {

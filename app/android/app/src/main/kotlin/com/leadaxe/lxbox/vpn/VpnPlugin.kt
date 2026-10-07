@@ -1071,6 +1071,26 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                     }
                 }
             }
+            // §613 (ядро SPEC 114) — статус WG/AWG-узла и его пиров. Успех →
+            // map состояния; отказ ядра → PlatformException с кодом
+            // (not_found / invalid_argument / failed_precondition /
+            // unavailable / unimplemented / error).
+            "ccGetWireGuardStatus" -> {
+                val cc = BoxService.commandClient
+                val tag = call.argument<String>("tag") ?: ""
+                pluginScope.launch {
+                    val r = withContext(Dispatchers.IO) {
+                        cc?.getWireGuardStatus(tag)
+                            ?: mapOf("error" to "error", "message" to "no command client")
+                    }
+                    val err = r["error"]
+                    if (err != null) {
+                        result.error(err.toString(), r["message"]?.toString(), null)
+                    } else {
+                        result.success(r)
+                    }
+                }
+            }
             "ccCloseConnection" -> {
                 val cc = BoxService.commandClient
                 val id = call.argument<String>("id") ?: ""

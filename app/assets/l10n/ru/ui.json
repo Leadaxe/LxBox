@@ -5768,5 +5768,47 @@
   },
   "key expires %sd": {
     "value": "ключ истекает через %s д"
+  },
+  "%s s ago": {
+    "value": "%s с назад"
+  },
+  "%s min ago": {
+    "value": "%s мин назад"
+  },
+  "%s h ago": {
+    "value": "%s ч назад"
+  },
+  "connected": {
+    "value": "на связи"
+  },
+  "never connected": {
+    "value": "ещё не подключался"
+  },
+  "no active session (last handshake %s)": {
+    "value": "нет активной сессии (последний хендшейк %s)"
+  },
+  "asleep": {
+    "value": "спит"
+  },
+  "turned off manually": {
+    "value": "выключен вручную"
+  },
+  "not started": {
+    "value": "не поднят"
+  },
+  "No peers": {
+    "value": "Пиров нет"
+  },
+  "Peers": {
+    "value": "Пиры"
+  },
+  "Copy endpoint": {
+    "value": "Копировать адрес"
+  },
+  "Copy public key": {
+    "value": "Копировать публичный ключ"
+  },
+  "Copy row": {
+    "value": "Копировать строку"
   }
 }

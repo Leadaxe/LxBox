@@ -5489,5 +5489,47 @@
   },
   "key expires %sd": {
     "value": "密钥 %s 天后过期"
+  },
+  "%s s ago": {
+    "value": "%s 秒前"
+  },
+  "%s min ago": {
+    "value": "%s 分钟前"
+  },
+  "%s h ago": {
+    "value": "%s 小时前"
+  },
+  "connected": {
+    "value": "已连接"
+  },
+  "never connected": {
+    "value": "从未连接"
+  },
+  "no active session (last handshake %s)": {
+    "value": "无活动会话（上次握手 %s）"
+  },
+  "asleep": {
+    "value": "休眠"
+  },
+  "turned off manually": {
+    "value": "已手动关闭"
+  },
+  "not started": {
+    "value": "未启动"
+  },
+  "No peers": {
+    "value": "无对端"
+  },
+  "Peers": {
+    "value": "对端"
+  },
+  "Copy endpoint": {
+    "value": "复制地址"
+  },
+  "Copy public key": {
+    "value": "复制公钥"
+  },
+  "Copy row": {
+    "value": "复制此行"
   }
 }

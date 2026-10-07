@@ -17,6 +17,7 @@ import '../widgets/lx_code_editor.dart';
 import '../widgets/node_diagnostics_tab.dart';
 import '../widgets/pool_view_dialog.dart';
 import '../widgets/tailscale_network_tab.dart';
+import '../widgets/wg_peers_section.dart';
 import 'home/node_actions.dart' show toggleEndpoint;
 import 'node_settings/exit_node_store.dart';
 import 'owner_navigation.dart';
@@ -562,6 +563,13 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
                 ? null
                 : (_) => unawaited(_toggleEndpoint()),
           ),
+        // §613 (ядро SPEC 114) — пиры узла: свой опрос статуса, пока
+        // секция на экране; без туннеля секции нет.
+        WgPeersSection(
+          tag: widget.tag,
+          tunnelUp: hs.tunnelUp,
+          body: widget.config[widget.tag]?.raw,
+        ),
       ],
     );
   }
