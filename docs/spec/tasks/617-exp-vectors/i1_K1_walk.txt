@@ -1,0 +1,7 @@
+K1 = Chrome 133 QUIC ClientHello (uTLS HelloChrome_133, X25519MLKEM768/Kyber вырезаны, ALPN h3, ECH GREASE), ОДИН Initial 1250 байт, pn 0, один CRYPTO off=0, дальше PADDING. Только i1, без i2. Пресет AWG как у A/B/C.
+K1 wartune.mail.ru: ch=549 dcid=32f70b8fca377669
+  i1: pkt=1250 pn=0 frames: CRYPTO[off=0 len=549] PAD×662
+K1 apteka.ru: ch=447 dcid=016e87be62bd3473
+  i1: pkt=1250 pn=0 frames: CRYPTO[off=0 len=447] PAD×764
+
+Нативно с Мака 08.10.2026: K1 PASS 3/3 на каждом из wartune.mail.ru, apteka.ru, wartune2.mail.ru, ozon.ru при P FAIL (results в M-native/matrix позже).
