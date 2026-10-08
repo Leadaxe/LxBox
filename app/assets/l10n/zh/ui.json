@@ -2875,6 +2875,9 @@
   "No nodes found": {
     "value": "未找到节点"
   },
+  "Nodes are not loaded. Update the subscription to see them": {
+    "value": "节点未加载。更新订阅以查看节点"
+  },
   "No nodes in this direction.\nTry another one.": {
     "value": "该方向下没有节点。\n换一个试试。"
   },

@@ -95,6 +95,16 @@ class HttpCache {
     }
   }
 
+  /// §615 — путь файла тела [url] в кэше (для лога, когда его нет).
+  static Future<String> bodyPath(String url) async {
+    try {
+      final root = await getApplicationSupportDirectory();
+      return '${root.path}/sub_cache/${_hash(url)}';
+    } catch (_) {
+      return 'sub_cache/${_hash(url)}';
+    }
+  }
+
   static Future<String?> loadBody(String url) async {
     try {
       final dir = await _dir();

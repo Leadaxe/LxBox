@@ -329,7 +329,20 @@ class SubscriptionController extends ChangeNotifier {
         // §515 — регидрация стартует `unawaited` из `_initBody`: контроллер
         // прежнего слота может дожить до неё уже после переключения.
         if (stale) return;
-        if (body == null || body.isEmpty) continue;
+        if (body == null || body.isEmpty) {
+          // §615 — раньше пропуск молчал: вкладка Nodes писала «No nodes
+          // found» при живом `last_node_count`.
+          if (list.lastNodeCount > 0 || list.lastUpdated != null) {
+            final path = await HttpCache.bodyPath(list.url);
+            if (stale) return;
+            AppLog.I.warning(
+                'Re-hydrate: no cached body for "${list.name}" '
+                '(${maskSubscriptionUrl(list.url)}), expected $path — '
+                'nodes not loaded until the next update');
+          }
+          entry._markBodyCacheMissing();
+          continue;
+        }
         try {
           final decoded = decode(body);
           // §561 — `dropped[]` сводки источника восстанавливается тем же

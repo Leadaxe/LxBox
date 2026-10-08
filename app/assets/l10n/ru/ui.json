@@ -3118,6 +3118,9 @@
   "No nodes found": {
     "value": "Узлы не найдены"
   },
+  "Nodes are not loaded. Update the subscription to see them": {
+    "value": "Узлы не загружены. Обновите подписку, чтобы их увидеть"
+  },
   "No nodes in this direction.\nTry another one.": {
     "value": "В этом Направлении нет узлов.\nПопробуйте другое."
   },

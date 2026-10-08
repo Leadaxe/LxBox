@@ -790,6 +790,9 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
                   // §392 — экран разбора адресует узел display-тегом, когда
                   // диагностика идёт через боевое ядро.
                   tagPrefix: entry.tagPrefix,
+                  // §615 — тела в кэше нет: Update вместо «No nodes found».
+                  notLoaded: entry.nodesNotLoaded,
+                  onUpdate: _refreshNow,
                 ),
               ),
             ],

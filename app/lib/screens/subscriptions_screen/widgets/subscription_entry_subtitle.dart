@@ -66,7 +66,13 @@ Widget? buildSubscriptionEntrySubtitle(
         entry.nodeCount > 0 ? getLocalText.plural("%d nodes", entry.nodeCount) : '';
   }
   if (statusText.isNotEmpty) {
-    parts.add(Text(statusText, style: textStyle));
+    // §615 — узлы не загружены (тела в кэше нет): число — с прошлого
+    // обновления, показываем его серым как устаревшее.
+    parts.add(entry.nodesNotLoaded
+        ? Text(statusText,
+            key: const ValueKey('entry-node-count-stale'),
+            style: textStyle.copyWith(color: scheme.outline))
+        : Text(statusText, style: textStyle));
   }
 
   if (entry.list is SubscriptionServers) {

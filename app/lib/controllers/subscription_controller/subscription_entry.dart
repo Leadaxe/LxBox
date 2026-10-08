@@ -177,6 +177,33 @@ class SubscriptionEntry extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// §615 — при старте тела подписки не нашлось в кэше (`sub_cache/`):
+  /// узлы не восстановлены. Признак живёт в памяти процесса, в хранилище не
+  /// пишется (§291); его гасит первая регидрация/обновление с узлами — см.
+  /// [nodesNotLoaded].
+  bool _bodyCacheMissing = false;
+
+  void _markBodyCacheMissing() {
+    if (_bodyCacheMissing) return;
+    _bodyCacheMissing = true;
+    notifyListeners();
+  }
+
+  /// §615 — узлы подписки не загружены, а не отсутствуют: тела в кэше на
+  /// старте не было, узлов нет, а прошлое обновление их видело
+  /// (`last_node_count > 0`). Вкладка Nodes предлагает Update, счётчик в
+  /// строке списка — серый.
+  bool get nodesNotLoaded {
+    final l = _list;
+    return _bodyCacheMissing &&
+        l is SubscriptionServers &&
+        l.nodes.isEmpty &&
+        l.lastNodeCount > 0;
+  }
+
+  @visibleForTesting
+  void debugMarkBodyCacheMissing() => _markBodyCacheMissing();
+
   // ─── UI-facing mutable setters (persist via controller.persistSources) ───
   //
   // Каждый setter мутирует обёрнутый ServerList через `copyWith` по типу.
