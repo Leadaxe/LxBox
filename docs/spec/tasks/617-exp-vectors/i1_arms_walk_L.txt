@@ -1,0 +1,4 @@
+L_linear_one_crypto: pkt=1250 ch=294 CRYPTO[off=0 len=294] PING×0 PAD×917
+Lp_linear_one_crypto_pings: pkt=1250 ch=294 CRYPTO[off=0 len=294] PING×2 PAD×915
+L_linear_one_crypto_wartune: pkt=1250 ch=294 CRYPTO[off=0 len=294] PING×0 PAD×917
+Lp_linear_one_crypto_pings_wartune: pkt=1250 ch=294 CRYPTO[off=0 len=294] PING×2 PAD×915
