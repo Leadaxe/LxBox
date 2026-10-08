@@ -1,6 +1,0 @@
-M apteka.ru: ch=1701 (Chrome 133 uTLS, X25519MLKEM768 kept, ALPN h3) dcid=e453958ba30f59c9
-  i1: pkt=1250 pn=0 frames: CRYPTO[off=0 len=1211]
-  i2: pkt=1250 pn=1 frames: CRYPTO[off=1211 len=490] PAD×720
-M wartune.mail.ru: ch=1707 (Chrome 133 uTLS, X25519MLKEM768 kept, ALPN h3) dcid=4533589425d05c8d
-  i1: pkt=1250 pn=0 frames: CRYPTO[off=0 len=1211]
-  i2: pkt=1250 pn=1 frames: CRYPTO[off=1211 len=496] PAD×714

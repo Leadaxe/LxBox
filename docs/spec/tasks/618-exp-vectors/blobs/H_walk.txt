@@ -1,3 +1,0 @@
-H wartune.mail.ru: ch=1707 pkt=1200 dcid=07873b82d4463c06
-  i1: CRYPTO[off=0 len=1161]
-  i2: CRYPTO[off=1161 len=546] PAD×614

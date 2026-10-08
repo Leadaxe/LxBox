@@ -1,8 +1,0 @@
-G2 wartune.apteka.ru: ch=294 dcid=f4fc326d8eb80e7e
-  i1: CRYPTO[off=0 len=147] PAD×1064
-  i2: CRYPTO[off=147 len=147] PAD×1063
-K1 wartune.apteka.ru: ch=455 dcid=d5e0e7e3081600a2
-  i1: CRYPTO[off=0 len=455] PAD×756
-M wartune.apteka.ru: ch=1773 dcid=f2a7eed8918a2413
-  i1: CRYPTO[off=0 len=1211]
-  i2: CRYPTO[off=1211 len=562] PAD×648
