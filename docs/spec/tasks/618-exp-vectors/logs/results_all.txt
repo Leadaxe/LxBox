@@ -1,0 +1,21 @@
+# 618 — сырые строки RESULT всех серий (Мак, 08.10.2026)
+
+## Матрица G2/K1/M по 4 доменам (раунд 1, оборван после #14)
+START 20:53:31
+RESULT #1 P_plain FAIL 114ms
+RESULT #2 C_wartune warp=on 504ms
+RESULT #3 G2_wartune_mail_ru FAIL 12031ms
+RESULT #4 K1_wartune_mail_ru warp=on 69ms
+RESULT #5 M_wartune_mail_ru FAIL 12028ms
+RESULT #6 G2_apteka_ru warp=on 1315ms
+RESULT #7 K1_apteka_ru warp=on 67ms
+RESULT #8 M_apteka_ru warp=on 74ms
+RESULT #9 G2_wartune2_mail_ru FAIL 12022ms
+RESULT #10 K1_wartune2_mail_ru warp=on 4167ms
+RESULT #11 M_wartune2_mail_ru FAIL 12098ms
+RESULT #12 G2_ozon_ru FAIL 12028ms
+RESULT #13 K1_ozon_ru warp=on 70ms
+RESULT #14 M_ozon_ru warp=on 69ms
+
+## Остальные серии (из транскрипта, по номерам #N)
+см. 618-md таблицу результатов; per-process debug-логи — logs/*.txt при необходимости

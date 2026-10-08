@@ -1,0 +1,16 @@
+G2 zxqv.ru: ch=294 dcid=d227a705abeac574
+  i1: CRYPTO[off=0 len=147] PAD×1064
+  i2: CRYPTO[off=147 len=147] PAD×1063
+K1 zxqv.ru: ch=477 dcid=24d5bff5c955fc49
+  i1: CRYPTO[off=0 len=477] PAD×734
+M zxqv.ru: ch=1731 dcid=b688e0d61350c94e
+  i1: CRYPTO[off=0 len=1211]
+  i2: CRYPTO[off=1211 len=520] PAD×690
+G2 passport.yandex.ru: ch=294 dcid=f5950178bff5761b
+  i1: CRYPTO[off=0 len=147] PAD×1064
+  i2: CRYPTO[off=147 len=147] PAD×1063
+K1 passport.yandex.ru: ch=456 dcid=1874f0e81c25c184
+  i1: CRYPTO[off=0 len=456] PAD×755
+M passport.yandex.ru: ch=1678 dcid=5bc4abbb9e36e397
+  i1: CRYPTO[off=0 len=1211]
+  i2: CRYPTO[off=1211 len=467] PAD×743

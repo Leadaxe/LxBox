@@ -1,0 +1,3 @@
+R wartune.mail.ru: ch=1739 sni@90 frames=3 packets=2 dcid=784890d36c177e86
+  i1: CRYPTO[off=0 len=98] CRYPTO[off=98 len=5] CRYPTO[off=103 len=1095] PAD×4
+  i2: CRYPTO[off=1198 len=541] PAD×669

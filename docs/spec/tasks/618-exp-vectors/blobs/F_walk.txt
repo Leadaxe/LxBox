@@ -1,0 +1,4 @@
+F wartune.mail.ru: ch=1771 pkt=1900 dcid=d23f338881b768be
+  i1: CRYPTO[off=0 len=1771] PAD×90
+F apteka.ru: ch=1765 pkt=1900 dcid=b2cdd3b7eb3d2beb
+  i1: CRYPTO[off=0 len=1765] PAD×96

@@ -1,0 +1,97 @@
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: uapi: updating private key
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: routine: decryption worker 4 - started
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: uapi: updating listen port
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: routine: event worker - started
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: interface up requested
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: routine: decryption worker 1 - started
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: routine: encryption worker 7 - started
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: routine: encryption worker 3 - started
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: routine: encryption worker 4 - started
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: routine: decryption worker 8 - started
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: routine: handshake worker 1 - started
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: routine: decryption worker 7 - started
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: routine: encryption worker 6 - started
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: routine: handshake worker 7 - started
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: routine: decryption worker 5 - started
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: routine: handshake worker 5 - started
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: routine: encryption worker 8 - started
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: routine: handshake worker 2 - started
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: routine: handshake worker 8 - started
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: routine: tun reader - started
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: routine: encryption worker 5 - started
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: routine: handshake worker 4 - started
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: routine: decryption worker 6 - started
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: routine: handshake worker 6 - started
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: routine: encryption worker 2 - started
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: routine: encryption worker 1 - started
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: routine: handshake worker 3 - started
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: routine: decryption worker 2 - started
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: routine: decryption worker 3 - started
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: udp bind has been updated
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: routine: receive incoming makeReceiveMsgX - started
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: routine: receive incoming makeReceiveMsgX - started
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: routine: receive incoming makeReceiveMsgX - stopped
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: routine: receive incoming makeReceiveMsgX - stopped
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: udp bind has been updated
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: uapi: updating junk count
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: uapi: updating junk min
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: uapi: updating junk max
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: routine: receive incoming makeReceiveMsgX - started
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: routine: receive incoming makeReceiveMsgX - started
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: peer(bmXO…fgyo) - uapi: created
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: peer(bmXO…fgyo) - uapi: updating endpoint
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: peer(bmXO…fgyo) - uapi: Adding allowedip
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: peer(bmXO…fgyo) - uapi: Adding allowedip
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: peer(bmXO…fgyo) - uapi: updating persistent keepalive interval
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: uapi: updating h1-h4 magic headers
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: uapi: updating s1-s4 paddings
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: uapi: updating header protection key
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: peer(bmXO…fgyo) - starting
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: peer(bmXO…fgyo) - sending keepalive packet
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: peer(bmXO…fgyo) - sending handshake initiation
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: peer(bmXO…fgyo) - routine: sequential sender - started
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: peer(bmXO…fgyo) - routine: sequential receiver - started
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: interface state was Down, requested Up, now Up
+[36mINFO[0m[0000] inbound/mixed[in]: tcp server started at 127.0.0.1:18493
+[36mINFO[0m[0000] network: updated default interface en0, index 14
+[36mINFO[0m[0000] network: updated network environment: gateway 192.168.11.1, gateway_mac 26:0f:5e:01:82:df
+[36mINFO[0m[0000] sing-box started (0.00s)
+[37mDEBUG[0m[0000] endpoint/wireguard[wg]: peer(bmXO…fgyo) - received handshake response
+[36mINFO[0m[0001] [[38;5;84m528631443[0m 0ms] inbound/mixed[in]: inbound connection from 127.0.0.1:54519
+[36mINFO[0m[0001] [[38;5;84m528631443[0m 4ms] inbound/mixed[in]: inbound connection to 1.1.1.1:443
+[36mINFO[0m[0001] [[38;5;84m528631443[0m 4ms] endpoint/wireguard[wg]: outbound connection to 1.1.1.1:443
+[37mDEBUG[0m[0013] [[38;5;84m528631443[0m 12.0s] connection: connection upload finished
+[37mDEBUG[0m[0013] endpoint/wireguard[wg]: routine: receive incoming makeReceiveMsgX - stopped
+[37mDEBUG[0m[0013] endpoint/wireguard[wg]: routine: receive incoming makeReceiveMsgX - stopped
+[37mDEBUG[0m[0013] endpoint/wireguard[wg]: peer(bmXO…fgyo) - stopping
+[37mDEBUG[0m[0013] endpoint/wireguard[wg]: peer(bmXO…fgyo) - routine: sequential sender - stopped
+[37mDEBUG[0m[0013] endpoint/wireguard[wg]: peer(bmXO…fgyo) - routine: sequential receiver - stopped
+[37mDEBUG[0m[0013] endpoint/wireguard[wg]: interface state was Up, requested Down, now Down
+[37mDEBUG[0m[0013] endpoint/wireguard[wg]: device closing
+[37mDEBUG[0m[0013] endpoint/wireguard[wg]: routine: event worker - stopped
+[37mDEBUG[0m[0013] endpoint/wireguard[wg]: routine: tun reader - stopped
+[37mDEBUG[0m[0013] endpoint/wireguard[wg]: device closed
+[37mDEBUG[0m[0013] endpoint/wireguard[wg]: routine: handshake worker 2 - stopped
+[37mDEBUG[0m[0013] endpoint/wireguard[wg]: routine: decryption worker 5 - stopped
+[37mDEBUG[0m[0013] endpoint/wireguard[wg]: routine: decryption worker 7 - stopped
+[37mDEBUG[0m[0013] endpoint/wireguard[wg]: routine: decryption worker 3 - stopped
+[37mDEBUG[0m[0013] endpoint/wireguard[wg]: routine: decryption worker 4 - stopped
+[37mDEBUG[0m[0013] endpoint/wireguard[wg]: routine: decryption worker 2 - stopped
+[37mDEBUG[0m[0013] endpoint/wireguard[wg]: routine: decryption worker 1 - stopped
+[37mDEBUG[0m[0013] endpoint/wireguard[wg]: routine: handshake worker 4 - stopped
+[37mDEBUG[0m[0013] endpoint/wireguard[wg]: routine: handshake worker 3 - stopped
+[37mDEBUG[0m[0013] endpoint/wireguard[wg]: routine: handshake worker 1 - stopped
+[37mDEBUG[0m[0013] endpoint/wireguard[wg]: routine: handshake worker 6 - stopped
+[37mDEBUG[0m[0013] endpoint/wireguard[wg]: routine: handshake worker 8 - stopped
+[37mDEBUG[0m[0013] endpoint/wireguard[wg]: routine: handshake worker 5 - stopped
+[37mDEBUG[0m[0013] endpoint/wireguard[wg]: routine: handshake worker 7 - stopped
+[37mDEBUG[0m[0013] endpoint/wireguard[wg]: routine: encryption worker 7 - stopped
+[37mDEBUG[0m[0013] endpoint/wireguard[wg]: routine: decryption worker 8 - stopped
+[37mDEBUG[0m[0013] endpoint/wireguard[wg]: routine: encryption worker 8 - stopped
+[37mDEBUG[0m[0013] endpoint/wireguard[wg]: routine: encryption worker 2 - stopped
+[37mDEBUG[0m[0013] endpoint/wireguard[wg]: routine: decryption worker 6 - stopped
+[37mDEBUG[0m[0013] endpoint/wireguard[wg]: routine: encryption worker 1 - stopped
+[37mDEBUG[0m[0013] endpoint/wireguard[wg]: routine: encryption worker 6 - stopped
+[37mDEBUG[0m[0013] endpoint/wireguard[wg]: routine: encryption worker 4 - stopped
+[37mDEBUG[0m[0013] endpoint/wireguard[wg]: routine: encryption worker 3 - stopped
+[37mDEBUG[0m[0013] endpoint/wireguard[wg]: routine: encryption worker 5 - stopped
