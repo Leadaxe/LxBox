@@ -143,7 +143,7 @@ on the main screen — [007-NODE_LIST](../007-NODE_LIST/FEATURE.md).
 |---|---|---|---|
 | Auto-update subscriptions | Settings → Subscriptions; duplicated in the sources screen menu | on/off | on |
 | Update disabled subscriptions | same place; active only with auto-update enabled | on/off | off |
-| Custom User-Agent (global) | Settings → Subscriptions | string; empty = `LxBox-android/<version>` | empty |
+| Custom User-Agent (global) | Settings → Subscriptions | string or a client preset; empty = `LxBox-android/<version>` | empty |
 | Send HWID | Settings → Subscriptions | on/off | off |
 | HWID · `x-hwid` | same place, Regenerate button | UUIDv4, generated on first display | — |
 | `x-device-os` / `x-ver-os` / `x-device-model` | same place | string; empty = the device value | `android` / OS version / model |
@@ -273,7 +273,9 @@ app start: read sources → "updating" → failed
   not part of it; otherwise the blue "Settings changed" banner would appear once an hour.
 - **The attempt mark is written before the network** — without it, app restarts would
   hit the provider on every start.
-- **A UA without the brand token** breaks some panels (they return a format that
-  parses worse); this warning is shown next to the field but does not block.
+- **The UA decides the response format.** A UA without the brand token may get
+  a format that parses worse; some panels, the other way round, send the full
+  format only to specific clients, hence the client presets in the field. The
+  hint next to the field explains this and does not block.
 - **Switching the workspace** (Workspaces) must stop the updater before
   the scene changes: the pause between subscriptions is interrupted within ~¼ s.

@@ -2,6 +2,7 @@ import '../services/builder/node_link_resolve.dart';
 import '../services/builder/rule_set_registry.dart';
 import '../services/builder/source_replace_build.dart' show ReplacePlan;
 import 'node_spec.dart';
+import 'node_warning.dart' show RegistryWarning;
 import 'singbox_entry.dart';
 import 'template_vars.dart';
 
@@ -34,13 +35,6 @@ abstract class EmitContext {
   /// Пометить, что этот entry попадает в auto-proxy-out (urltest).
   void addToAutoList(SingboxEntry entry);
 
-  /// §272/§322 — глобальная настройка «Passive health check»: пока свежий
-  /// успешный дайл подтверждает узел, периодическая проба пропускается.
-  /// Направления получают её напрямую в `buildConfig`; узлам автовыбора (§322)
-  /// она нужна здесь — их эмитит `ServerList.build`, куда настройки не
-  /// доходят. Дефолт `false` — апстрим-поведение, как omitempty у ядра.
-  bool get passiveCheck => false;
-
   /// Общий реестр для `route.rule_set` / `route.rules` секций. Живёт один
   /// на весь `buildConfig`, доступен post-steps и ServerList.build'у.
   /// Flush в `config.route` делает сам `buildConfig` в конце.
@@ -60,6 +54,12 @@ abstract class EmitContext {
   /// §435 — предупреждение сборки из `ServerList.build` (гейт ядра и т.п.):
   /// уходит в `emitWarnings` наравне с остальными строками отчёта.
   void warn(String line) {}
+
+  /// §612 (контракт 1.1.112–1.1.113) — запись отчёта сборки КОДОМ реестра
+  /// (`group_default_dropped`): строку для `emitWarnings` рендерит сборка по
+  /// тексту реестра, запись ложится в предупреждения адресата
+  /// ([RegistryWarning.ownerTag] — финальный тег).
+  void code(RegistryWarning w) {}
 
   /// Фича 565 фаза B (§74) — свёрнутый источник отдаёт узлы не в пул
   /// Направлений, а плану свёртки; группы разворачивает сборка после

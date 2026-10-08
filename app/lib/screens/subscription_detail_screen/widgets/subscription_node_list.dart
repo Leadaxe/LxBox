@@ -28,7 +28,16 @@ class SubscriptionNodeList extends StatelessWidget {
     this.probe = const {},
     this.probeThresholds = ProbeThresholds.defaults,
     this.tagPrefix = '',
+    this.notLoaded = false,
+    this.onUpdate,
   });
+
+  /// §615 — узлы не загружены (тела в кэше не было на старте, а прошлое
+  /// обновление узлы видело): вместо «No nodes found» — подсказка и Update.
+  final bool notLoaded;
+
+  /// §615 — ручное обновление подписки (тот же путь, что Refresh now).
+  final VoidCallback? onUpdate;
 
   /// §392 — префикс тегов контейнера, нужен экрану разбора: диагностика при
   /// включённом VPN адресует узел его display-тегом из боевого конфига.
@@ -101,6 +110,31 @@ class SubscriptionNodeList extends StatelessWidget {
 
     if (nodes == null || nodes.isEmpty) {
       if (loading) return const SizedBox.shrink();
+      if (notLoaded) {
+        return Center(
+          key: const ValueKey('nodes-not-loaded'),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  getLocalText.s(
+                      "Nodes are not loaded. Update the subscription to see them"),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                FilledButton.tonalIcon(
+                  key: const ValueKey('nodes-not-loaded-update'),
+                  onPressed: onUpdate,
+                  icon: const Icon(Icons.refresh, size: 18),
+                  label: Text(getLocalText.s("Update")),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),

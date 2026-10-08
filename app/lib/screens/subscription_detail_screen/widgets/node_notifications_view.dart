@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../models/node_warning.dart';
 import '../../../services/contract/contract_docs.dart';
@@ -283,7 +284,13 @@ class _NotificationTile extends StatelessWidget {
             child: Text(u.detailWith(getLocalText),
                 style: theme.textTheme.bodySmall),
           ),
-        ..._breakdown(context, code, subst, notApplied: !warning.applied),
+        ..._breakdown(context, code, subst,
+            notApplied: !warning.applied,
+            title: w.message(),
+            extraDetail: switch (warning) {
+              final UnknownNodeTypeWarning u => u.detailWith(getLocalText),
+              _ => null,
+            }),
       ],
     );
   }
@@ -360,7 +367,7 @@ class _NotificationGroupTile extends StatelessWidget {
             ),
           ),
         ..._breakdown(context, code, subst,
-            notApplied: group.every((w) => !w.applied)),
+            notApplied: group.every((w) => !w.applied), title: title),
       ],
     );
   }
@@ -397,20 +404,32 @@ const _monospace = TextStyle(fontSize: 12, fontFamily: 'monospace');
 /// §577 — [notApplied]: правило реестра не применено к авторскому телу.
 /// Текст реестра «что произошло» утверждает, что поле изменено, поэтому
 /// вместо него — общая строка; причина и что делать — из реестра.
+///
+/// §614 — [title] и [extraDetail] (свой текст рукописного класса) идут
+/// только в буфер кнопки копирования; на экране они стоят выше разбора.
 List<Widget> _breakdown(
     BuildContext context, String? code, RegistryWarning? subst,
-    {bool notApplied = false}) {
+    {bool notApplied = false, required String title, String? extraDetail}) {
   final theme = Theme.of(context);
+  final path = subst?.path;
+  final value = subst?.value;
+  final params = subst?.params ?? const <String, String>{};
   // Код есть у класса, а текстов может не быть: реестр не синхронизирован,
   // либо код в нём рукописный без описания. Ссылку даём только когда
   // страница про этот код действительно есть — то есть реестр его знает.
   if (code == null || ContractRegistry.I.textFor(code) == null) {
-    return const [];
+    return [
+      _CopyButton(notificationCopyText(
+        code: code,
+        title: title,
+        detail: extraDetail ?? '',
+        path: path,
+        value: value,
+        params: params,
+      )),
+    ];
   }
   final lang = registryLangForTag(LocaleController.I.effectiveTag);
-  final path = subst?.path;
-  final value = subst?.value;
-  final params = subst?.params ?? const <String, String>{};
   final detail = notApplied
       ? getLocalText
           .s("The node is written by hand, so the app changed nothing in it.")
@@ -452,20 +471,96 @@ List<Widget> _breakdown(
           ],
         ),
       ),
-    Align(
-      alignment: Alignment.centerLeft,
-      child: TextButton.icon(
-        style: TextButton.styleFrom(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          minimumSize: const Size(0, 32),
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    Row(
+      children: [
+        TextButton.icon(
+          style: TextButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            minimumSize: const Size(0, 32),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          icon: const Icon(Icons.open_in_new, size: 16),
+          onPressed: () => ul.UrlLauncher.open(contractWarningDocUrl(code)),
+          label: Text(getLocalText.s("Details")),
         ),
-        icon: const Icon(Icons.open_in_new, size: 16),
-        onPressed: () => ul.UrlLauncher.open(contractWarningDocUrl(code)),
-        label: Text(getLocalText.s("Details")),
-      ),
+        _CopyButton(notificationCopyText(
+          code: code,
+          title: title,
+          detail: [
+            if (extraDetail != null && extraDetail.isNotEmpty) extraDetail,
+            if (detail.isNotEmpty) detail,
+          ].join('\n'),
+          cause: cause,
+          fix: fix,
+          path: path,
+          value: value,
+          params: params,
+        )),
+      ],
     ),
   ];
+}
+
+/// §614 — plain text уведомления для буфера: код, заголовок, три секции
+/// разбора и параметры записи. Пустые части опускаются. Значение секретного
+/// поля сюда приходит уже замаскированным (§511).
+String notificationCopyText({
+  String? code,
+  required String title,
+  String detail = '',
+  String? cause,
+  List<String> fix = const [],
+  String? path,
+  String? value,
+  Map<String, String> params = const {},
+}) {
+  final sections = <String>[
+    [if (code != null && code.isNotEmpty) code, title].join('\n'),
+    if (detail.isNotEmpty) '${getLocalText.s("What happened")}:\n$detail',
+    if (cause != null && cause.isNotEmpty)
+      '${getLocalText.s("Why it happens")}:\n$cause',
+    if (fix.isNotEmpty)
+      '${getLocalText.s("What you can do")}:\n'
+          '${fix.map((step) => '- $step').join('\n')}',
+  ];
+  // l10n-exempt: имена параметров — wire-ключи реестра
+  final paramLines = <String>[
+    if (path != null && path.isNotEmpty) 'path = $path',
+    if (value != null && value.isNotEmpty) 'value = $value',
+    for (final e in params.entries) '${e.key} = ${e.value}',
+  ];
+  if (paramLines.isNotEmpty) {
+    sections.add('${getLocalText.s("Params")}:\n${paramLines.join('\n')}');
+  }
+  return sections.join('\n\n');
+}
+
+/// §614 — копирование уведомления в буфер (тот же механизм, что у кнопок
+/// Copy в остальном приложении: `Clipboard.setData` + снек «Copied»).
+class _CopyButton extends StatelessWidget {
+  const _CopyButton(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextButton.icon(
+      key: const ValueKey('notification-copy'),
+      style: TextButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        minimumSize: const Size(0, 32),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      icon: const Icon(Icons.copy, size: 16),
+      onPressed: () async {
+        await Clipboard.setData(ClipboardData(text: text));
+        if (!context.mounted) return;
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+            SnackBar(content: Text(getLocalText.s("Copied"))));
+      },
+      label: Text(getLocalText.s("Copy")),
+    );
+  }
 }
 
 class _Block extends StatelessWidget {

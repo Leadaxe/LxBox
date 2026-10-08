@@ -101,6 +101,14 @@ final class FieldSchema {
 
   bool get required => raw['required'] == true;
 
+  /// §612 (контракт 1.1.110, PARSING_PRINCIPLES §6.3) — когда снимается
+  /// обязательность ОТСУТСТВУЮЩЕГО поля: `{set, absent, code}`. `null` —
+  /// атрибута нет.
+  Map<String, dynamic>? get requiredUnless {
+    final v = raw['required_unless'];
+    return v is Map ? v.cast<String, dynamic>() : null;
+  }
+
   bool get secret => raw['secret'] == true;
 
   bool get allOrNothing => raw['all_or_nothing'] == true;

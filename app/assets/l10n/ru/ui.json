@@ -1289,6 +1289,9 @@
   "Clear cached files": {
     "value": "Удалить кэшированные файлы"
   },
+  "Client presets": {
+    "value": "Пресеты клиентов"
+  },
   "Client subnet": {
     "value": "Подсеть клиента"
   },
@@ -2064,6 +2067,9 @@
   "Errors": {
     "value": "Ошибки"
   },
+  "Errors (%d)": {
+    "value": "Ошибки (%d)"
+  },
   "Events with no owning app": {
     "value": "События, у которых не определено приложение"
   },
@@ -2199,6 +2205,9 @@
   },
   "fetching subscriptions…": {
     "value": "загрузка подписок…"
+  },
+  "Find": {
+    "value": "Найти"
   },
   "Imported: %s": {
     "value": "Импортировано: %s"
@@ -2447,6 +2456,9 @@
   },
   "Hides matching nodes from routing. They stay visible, struck through.": {
     "value": "Скрывает подходящие узлы из маршрутизации. Они остаются видимыми, зачёркнутыми."
+  },
+  "Hold until failure": {
+    "value": "Держать до отказа"
   },
   "Home-screen shortcut": {
     "value": "Ярлык на главном экране"
@@ -2845,6 +2857,9 @@
   "Long-press the L×Box icon on your home screen → choose \"Toggle VPN\".": {
     "value": "Долгое нажатие на иконку L×Box на главном экране → выберите «Toggle VPN»."
   },
+  "LxBox (default)": {
+    "value": "LxBox (по умолчанию)"
+  },
   "L×Box %1$s available (you have v%2$s)": {
     "value": "Доступна L×Box %1$s (у вас v%2$s)"
   },
@@ -3025,6 +3040,9 @@
   "Next GC at": {
     "value": "Следующий GC при"
   },
+  "Next match": {
+    "value": "Следующее совпадение"
+  },
   "No DNS rules. Add user rules manually, or enable presets / template defaults.": {
     "value": "DNS-правил нет. Добавьте свои правила вручную или включите пресеты / шаблонные правила."
   },
@@ -3100,6 +3118,9 @@
   "No nodes found": {
     "value": "Узлы не найдены"
   },
+  "Nodes are not loaded. Update the subscription to see them": {
+    "value": "Узлы не загружены. Обновите подписку, чтобы их увидеть"
+  },
   "No nodes in this direction.\nTry another one.": {
     "value": "В этом Направлении нет узлов.\nПопробуйте другое."
   },
@@ -3168,6 +3189,9 @@
   },
   "Nothing imported": {
     "value": "Ничего не импортировано"
+  },
+  "Previous match": {
+    "value": "Предыдущее совпадение"
   },
   "Rebuild config + connect": {
     "value": "Пересобрать конфиг + подключить"
@@ -3499,9 +3523,6 @@
   },
   "Partial: %1$d ok, %2$d failed for \"%3$s\"": {
     "value": "Частично: %1$d успешно, %2$d с ошибкой для «%3$s»"
-  },
-  "Passive health check": {
-    "value": "Пассивная проверка работоспособности"
   },
   "Password (optional)": {
     "value": "Пароль (необязательно)"
@@ -4380,14 +4401,11 @@
   "Skip": {
     "value": "Пропустить"
   },
-  "Skip periodic server probes while your own traffic already proves the connection works. Fewer wakeups and less battery; ping numbers refresh less often.": {
-    "value": "Не опрашивать серверы, пока ваш собственный трафик и так подтверждает, что соединение работает. Меньше пробуждений и расхода батареи; значения пинга обновляются реже."
-  },
   "Slower than, ms": {
     "value": "Медленнее чем, мс"
   },
-  "Some panels return the config by a substring in the User-Agent — a custom UA without the \"LxBox\" token may yield an unsupported format and break the update. Change only if you know why.": {
-    "value": "Некоторые панели выбирают формат конфига по подстроке в User-Agent — свой UA без токена «LxBox» может вернуть неподдерживаемый формат и сломать обновление. Меняйте, только если понимаете зачем."
+  "Some panels pick the format by User-Agent. If a subscription loads but nodes fail, try another client's UA (for example Happ) — some panels send full configs only to specific apps.": {
+    "value": "Некоторые панели выбирают формат по User-Agent. Если подписка загружается, а узлы не подключаются, попробуйте UA другого клиента (например, Happ) — некоторые панели отдают полный конфиг только определённым приложениям."
   },
   "Something went wrong in this section.\nCheck Debug → Logs.": {
     "value": "В этом разделе произошла ошибка.\nПодробности: Отладка → Логи."
@@ -5331,6 +5349,9 @@
   "just now": {
     "value": "только что"
   },
+  "keep the fastest server until it fails": {
+    "value": "держит самый быстрый сервер, пока он не откажет"
+  },
   "kept": {
     "value": "остаётся"
   },
@@ -5768,5 +5789,77 @@
   },
   "key expires %sd": {
     "value": "ключ истекает через %s д"
+  },
+  "%s s ago": {
+    "value": "%s с назад"
+  },
+  "%s min ago": {
+    "value": "%s мин назад"
+  },
+  "%s h ago": {
+    "value": "%s ч назад"
+  },
+  "connected": {
+    "value": "на связи"
+  },
+  "never connected": {
+    "value": "ещё не подключался"
+  },
+  "no active session (last handshake %s)": {
+    "value": "нет активной сессии (последний хендшейк %s)"
+  },
+  "asleep": {
+    "value": "спит"
+  },
+  "turned off manually": {
+    "value": "выключен вручную"
+  },
+  "not started": {
+    "value": "не поднят"
+  },
+  "No peers": {
+    "value": "Пиров нет"
+  },
+  "Peers": {
+    "value": "Пиры"
+  },
+  "Copy endpoint": {
+    "value": "Копировать адрес"
+  },
+  "Copy public key": {
+    "value": "Копировать публичный ключ"
+  },
+  "Copy row": {
+    "value": "Копировать строку"
+  },
+  "direct": {
+    "value": "напрямую"
+  },
+  "direct %s": {
+    "value": "напрямую %s"
+  },
+  "peer relay": {
+    "value": "через пир-ретранслятор"
+  },
+  "relay": {
+    "value": "через ретранслятор"
+  },
+  "relay %s": {
+    "value": "через ретранслятор %s"
+  },
+  "handshake %s": {
+    "value": "хендшейк %s"
+  },
+  "Advertise this device as exit node": {
+    "value": "Предлагать это устройство как выходной узел"
+  },
+  "Allow LAN access while using exit node": {
+    "value": "Доступ в локальную сеть при выходном узле"
+  },
+  "Not available while an exit node is used.": {
+    "value": "Недоступно, пока используется выходной узел."
+  },
+  "Needs a saved exit node.": {
+    "value": "Нужен сохранённый выходной узел."
   }
 }

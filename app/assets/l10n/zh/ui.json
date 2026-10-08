@@ -1094,6 +1094,9 @@
   "Clear cached files": {
     "value": "删除缓存文件"
   },
+  "Client presets": {
+    "value": "客户端预设"
+  },
   "Client subnet": {
     "value": "客户端子网"
   },
@@ -1836,6 +1839,9 @@
   "Errors": {
     "value": "错误"
   },
+  "Errors (%d)": {
+    "value": "错误（%d）"
+  },
   "Events with no owning app": {
     "value": "无归属应用的事件"
   },
@@ -1968,6 +1974,9 @@
   },
   "fetching subscriptions…": {
     "value": "正在获取订阅…"
+  },
+  "Find": {
+    "value": "查找"
   },
   "Imported: %s": {
     "value": "已导入：%s"
@@ -2213,6 +2222,9 @@
   },
   "Hides matching nodes from routing. They stay visible, struck through.": {
     "value": "让匹配的节点不参与路由。它们仍然可见，但会加删除线。"
+  },
+  "Hold until failure": {
+    "value": "保持至故障"
   },
   "Home-screen shortcut": {
     "value": "主屏快捷方式"
@@ -2602,6 +2614,9 @@
   "Long-press the L×Box icon on your home screen → choose \"Toggle VPN\".": {
     "value": "长按桌面上的 L×Box 图标 → 选择「Toggle VPN」。"
   },
+  "LxBox (default)": {
+    "value": "LxBox（默认）"
+  },
   "L×Box %1$s available (you have v%2$s)": {
     "value": "有 L×Box %1$s 可用（当前 v%2$s）"
   },
@@ -2782,6 +2797,9 @@
   "Next GC at": {
     "value": "下次 GC 时间"
   },
+  "Next match": {
+    "value": "下一个匹配"
+  },
   "No DNS rules. Add user rules manually, or enable presets / template defaults.": {
     "value": "没有 DNS 规则。可手动添加自定义规则，或启用预设/模板默认规则。"
   },
@@ -2857,6 +2875,9 @@
   "No nodes found": {
     "value": "未找到节点"
   },
+  "Nodes are not loaded. Update the subscription to see them": {
+    "value": "节点未加载。更新订阅以查看节点"
+  },
   "No nodes in this direction.\nTry another one.": {
     "value": "该方向下没有节点。\n换一个试试。"
   },
@@ -2925,6 +2946,9 @@
   },
   "Nothing imported": {
     "value": "未导入任何内容"
+  },
+  "Previous match": {
+    "value": "上一个匹配"
   },
   "Rebuild config + connect": {
     "value": "重建配置并连接"
@@ -3244,9 +3268,6 @@
   },
   "Partial: %1$d ok, %2$d failed for \"%3$s\"": {
     "value": "部分成功：%1$d 成功，%2$d 失败（「%3$s」）"
-  },
-  "Passive health check": {
-    "value": "被动健康检查"
   },
   "Password (optional)": {
     "value": "密码（可选）"
@@ -4113,14 +4134,11 @@
   "Skip": {
     "value": "跳过"
   },
-  "Skip periodic server probes while your own traffic already proves the connection works. Fewer wakeups and less battery; ping numbers refresh less often.": {
-    "value": "当你的实际流量已证明连接可用时，跳过周期性服务器探测。唤醒更少、更省电；延迟数值刷新频率更低。"
-  },
   "Slower than, ms": {
     "value": "慢于此值，ms"
   },
-  "Some panels return the config by a substring in the User-Agent — a custom UA without the \"LxBox\" token may yield an unsupported format and break the update. Change only if you know why.": {
-    "value": "部分面板依据 User-Agent 中的子串决定返回的配置格式——自定义 UA 若缺少「LxBox」标识，可能返回不支持的格式并导致更新失败。除非你清楚原因，否则不要修改。"
+  "Some panels pick the format by User-Agent. If a subscription loads but nodes fail, try another client's UA (for example Happ) — some panels send full configs only to specific apps.": {
+    "value": "部分面板依据 User-Agent 选择返回格式。如果订阅能加载但节点无法连接，请尝试其他客户端的 UA（例如 Happ）——部分面板只向特定应用发送完整配置。"
   },
   "Something went wrong in this section.\nCheck Debug → Logs.": {
     "value": "此部分出错了。\n请查看 调试 → 日志。"
@@ -5061,6 +5079,9 @@
   "just now": {
     "value": "刚刚"
   },
+  "keep the fastest server until it fails": {
+    "value": "保持最快的服务器，直到它失效"
+  },
   "kept": {
     "value": "保留"
   },
@@ -5489,5 +5510,77 @@
   },
   "key expires %sd": {
     "value": "密钥 %s 天后过期"
+  },
+  "%s s ago": {
+    "value": "%s 秒前"
+  },
+  "%s min ago": {
+    "value": "%s 分钟前"
+  },
+  "%s h ago": {
+    "value": "%s 小时前"
+  },
+  "connected": {
+    "value": "已连接"
+  },
+  "never connected": {
+    "value": "从未连接"
+  },
+  "no active session (last handshake %s)": {
+    "value": "无活动会话（上次握手 %s）"
+  },
+  "asleep": {
+    "value": "休眠"
+  },
+  "turned off manually": {
+    "value": "已手动关闭"
+  },
+  "not started": {
+    "value": "未启动"
+  },
+  "No peers": {
+    "value": "无对端"
+  },
+  "Peers": {
+    "value": "对端"
+  },
+  "Copy endpoint": {
+    "value": "复制地址"
+  },
+  "Copy public key": {
+    "value": "复制公钥"
+  },
+  "Copy row": {
+    "value": "复制此行"
+  },
+  "direct": {
+    "value": "直连"
+  },
+  "direct %s": {
+    "value": "直连 %s"
+  },
+  "peer relay": {
+    "value": "对端中继"
+  },
+  "relay": {
+    "value": "中继"
+  },
+  "relay %s": {
+    "value": "中继 %s"
+  },
+  "handshake %s": {
+    "value": "握手 %s"
+  },
+  "Advertise this device as exit node": {
+    "value": "将此设备公布为出口节点"
+  },
+  "Allow LAN access while using exit node": {
+    "value": "使用出口节点时允许访问局域网"
+  },
+  "Not available while an exit node is used.": {
+    "value": "使用出口节点时不可用。"
+  },
+  "Needs a saved exit node.": {
+    "value": "需要已保存的出口节点。"
   }
 }

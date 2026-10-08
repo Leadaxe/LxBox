@@ -139,6 +139,10 @@ void main() async {
         for (final v in directionsTemplate.vars) v.name: v.defaultValue,
       },
     );
+    // §612 — one-shot: passive_check (§611) true/отсутствует → автовыбор
+    // least_test становится failover. ПОСЛЕ seed Направлений (чистая
+    // установка получает failover и у засеянных) и ДО первого билда.
+    await SettingsStorage.migrateUrltestModeIfNeeded();
     // §229 — вызов one-shot ремапа preset_id (§228) убран: миграция удалена,
     // отработала у всех, кто обновлялся начиная с v2.10.0.
     // §043 — pump sing-box logs из Kotlin EventChannel "lxbox/coreLog" в

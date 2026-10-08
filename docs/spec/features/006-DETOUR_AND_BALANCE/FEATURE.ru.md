@@ -144,7 +144,7 @@ sing-box `detour`), Направления как переключаемый ups
 | то же | Test URL / Interval / Tolerance / Idle timeout / Interrupt | — | cp.cloudflare.com/generate_204 / 15m / 50 / 30m / выкл | `url` … `interrupt_exist_connections` |
 | Узел автовыбора | Members: All · Rule (Include/Exclude regex) · Pick; Mode: Fastest · Load balance · Manual; Badge in list (regex) | — | All · Fastest · флаг-эмодзи | `urltest` / `selector` + `default` |
 | Подписка / папка | Replace with a group: Manual · Auto · Both, Group name | — | не свёрнута | `selector` / `urltest` |
-| Цепочка | Tag (`chain-N`, неизменяем), Title, Enabled | — | первый свободный, пусто, вкл | `tag` |
+| Цепочка | Tag (`chain-N`), Enabled | — | первый свободный, пусто, вкл | `tag` |
 | Цепочка | Positions | ≥2, в порядке пакета | — | `outbounds` |
 | Цепочка → Advanced | Idle timeout · Strip evasion tricks from links · Per-key overrides (трёхзначные) | пусто = ядро (5m) · вкл · не тронуто | — | `idle_timeout`, `strip_evasion`, `strip` |
 | Цепочка | rewrite | JSON merge-patch по типу узла, формой не правится | `{}` | `rewrite` |

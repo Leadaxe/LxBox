@@ -12,6 +12,10 @@ const String kStorageVersionKey = 'storage_version';
 /// Текущая форма: записи `sources[]`, `rules[]`, `dns{}` контракта 1.0.
 const int kStorageVersion = 1;
 
+/// §612 — маркер one-shot миграции режима автовыбора от `passive_check`
+/// (`least_test` → `failover`). Guard, как `directions_migrated`.
+const String kUrltestModeMigratedKey = 'urltest_mode_migrated';
+
 /// Источники: подписка, сервер, папка, цепочка — в порядке списка (§509).
 const String kSourcesKey = 'sources';
 

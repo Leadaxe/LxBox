@@ -17,6 +17,7 @@ import '../widgets/lx_code_editor.dart';
 import '../widgets/node_diagnostics_tab.dart';
 import '../widgets/pool_view_dialog.dart';
 import '../widgets/tailscale_network_tab.dart';
+import '../widgets/wg_peers_section.dart';
 import 'home/node_actions.dart' show toggleEndpoint;
 import 'node_settings/exit_node_store.dart';
 import 'owner_navigation.dart';
@@ -143,19 +144,29 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
     return _storeExitNode;
   }
 
-  Future<void> _storeExitNode(String? value) async {
+  Future<void> _storeExitNode(String? value) => _storeTailscaleFields({
+        'exit_node': value == null || value.isEmpty ? null : value,
+      });
+
+  /// §613 — переключатели Settings вкладки Network пишут тем же путём.
+  Future<void> Function(Map<String, Object?>)? get _saveTailscaleFields =>
+      _saveExitNode == null ? null : _storeTailscaleFields;
+
+  Future<void> _storeTailscaleFields(Map<String, Object?> fields) async {
     final target =
         exitNodeTargetForTag(widget.tag, widget.subController.entries);
     if (target == null) return;
     final err =
-        await storeExitNodeChoice(widget.subController, target, value);
+        await storeTailscaleFields(widget.subController, target, fields);
     if (!mounted) return;
     if (err == null) {
       final body = Map<String, dynamic>.of(_networkBody);
-      if (value == null || value.isEmpty) {
-        body.remove('exit_node');
-      } else {
-        body['exit_node'] = value;
+      for (final f in fields.entries) {
+        if (f.value == null) {
+          body.remove(f.key);
+        } else {
+          body[f.key] = f.value;
+        }
       }
       setState(() => _tailscaleBody = body);
     }
@@ -345,6 +356,7 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
                   liveTag: widget.tag,
                   body: _networkBody,
                   onSaveExitNode: _saveExitNode,
+                  onSaveFields: _saveTailscaleFields,
                 ),
               // §392 — экран знает узел ТОЛЬКО по тегу собранного конфига
               // (NodeSpec тут нет), поэтому probe-ветка недоступна: при
@@ -506,14 +518,17 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
     final pool = balancer is Map ? balancer['pool'] : null;
     final poolTolerance =
         balancer is Map ? balancer['pool_tolerance'] : null;
+    // §614 — тип, транспорт и защита одной строкой (как в лаунчере),
+    // пустые части опускаются; адрес — отдельной строкой.
+    final kindLine = [
+      typeLabel,
+      if (node.transportLabel case final t? when t.isNotEmpty) t,
+      if (node.securityLabel case final sec? when sec.isNotEmpty) sec,
+    ].join(' · ');
     return [
-      _kvRow(context, 'Type', typeLabel),
+      _kvRow(context, 'Type', kindLine),
       if (server is String && server.isNotEmpty)
         _kvRow(context, 'Server', port == null ? server : '$server:$port'),
-      if (node.transportLabel != null)
-        _kvRow(context, 'Transport', node.transportLabel!),
-      if (node.securityLabel != null)
-        _kvRow(context, 'Security', node.securityLabel!),
       if (_isGroupNode)
         _kvRow(
             context,
@@ -562,6 +577,13 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
                 ? null
                 : (_) => unawaited(_toggleEndpoint()),
           ),
+        // §613 (ядро SPEC 114) — пиры узла: свой опрос статуса, пока
+        // секция на экране; без туннеля секции нет.
+        WgPeersSection(
+          tag: widget.tag,
+          tunnelUp: hs.tunnelUp,
+          body: widget.config[widget.tag]?.raw,
+        ),
       ],
     );
   }
@@ -712,8 +734,9 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
             child: Text(k,
                 style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant)),
           ),
+          // §614 — значение выделяется (скопировать адрес, тип).
           Expanded(
-            child: Text(v,
+            child: SelectableText(v,
                 style:
                     const TextStyle(fontSize: 13, fontFamily: 'monospace')),
           ),

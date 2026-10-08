@@ -25,7 +25,7 @@ filters select it, it can be chosen on the main screen.
 
 | Field | Values | Default | Core key |
 |---|---|---|---|
-| Tag | `chain-N` (first free) or custom; immutable | `chain-N` | `tag` |
+| Tag | `chain-N` (first free) or custom; editable — references to the old tag are rewritten | `chain-N` | `tag` |
 | Enabled | on/off | on | a disabled one is not emitted |
 | Positions | ≥2, in packet order; a position is a node, a subscription group, a Direction, `direct-out`, a chain higher in the list (first position only) | — | `outbounds` |
 | Idle timeout | duration, `0s` = live until stop | empty = core default 5m | `idle_timeout` |
@@ -96,3 +96,4 @@ Direction groups; the chain tag in Direction pools; warnings with codes
 | 6 | [439F](../../../tasks/439F-storage-contract-1-0/spec.md) | Released v2.24.0 | A position is a node address `{folder_id?, tag}` |
 | 7 | [524](../../../tasks/524-unified-source-entries.md) | Released v2.25.3 | A chain is a row of the shared source list |
 | 8 | [594](../../../tasks/594-chain-label-removed-tag-only.md) | Done | The chain name (label) removed again: the tag is the one name |
+| 9 | [609](../../../tasks/609-chain-tag-editable.md) | Done | The tag is editable, like a node's: the place in the list stays, references follow the new tag |

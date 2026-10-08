@@ -28,7 +28,6 @@ URLTest» в меню группы.
 | Tolerance, мс | `tolerance` | 30 (пресеты 10…200) | 50 |
 | Idle timeout | `idle_timeout` | — (дефолт ядра `30m`) | `30m` |
 | Рвать живые соединения при смене | `interrupt_exist_connections` | вкл | выкл |
-| Passive health check | `passive_check` | — | вкл (одна настройка на все группы Направлений) |
 | Режим | `mode` | `least_test` | `least_test` · `round_robin` |
 | Размер пула | `balancer.pool` | — | 3, не меньше 1 |
 | Порог пула, мс | `balancer.pool_tolerance` | — | 0 |

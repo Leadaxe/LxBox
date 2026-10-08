@@ -29,10 +29,6 @@ import '../parser/engine_test_setup.dart';
 /// переименовало бы следующего тёзку (`X-2` → `X`) и сняло отметку уже с
 /// него.
 class _FakeCtx extends EmitContext {
-  // §272/§322 — глобальный passive_check; этим тестам он не важен.
-  @override
-  bool get passiveCheck => false;
-
   final entries = <SingboxEntry>[];
   final selectorTags = <String>[];
   final autoTags = <String>[];

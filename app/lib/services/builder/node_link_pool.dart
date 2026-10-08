@@ -13,6 +13,7 @@ import '../../config/consts.dart';
 import '../../models/direction.dart';
 import '../../models/emit_context.dart';
 import '../../models/node_link.dart';
+import '../../models/node_warning.dart' show RegistryWarning;
 import '../../models/server_list.dart';
 import '../../models/singbox_entry.dart';
 import '../../models/template_vars.dart';
@@ -145,9 +146,6 @@ class _PoolCtx implements EmitContext {
   RuleSetRegistry get ruleSets => _ruleSets;
 
   @override
-  bool get passiveCheck => false;
-
-  @override
   String get coreVersion => '';
 
   @override
@@ -183,6 +181,9 @@ class _PoolCtx implements EmitContext {
 
   @override
   void warn(String line) {}
+
+  @override
+  void code(RegistryWarning w) {}
 
   @override
   void deferDetour(DeferredDetour detour) {}

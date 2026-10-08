@@ -252,4 +252,58 @@ void main() {
       expect(json.contains(secret), isFalse, reason: secret);
     }
   });
+
+  group('§613 — путь, Devices без выхода, поля тела', () {
+    const gw = CcTailscalePeer(stableId: 'n2', hostName: 'gw');
+    const nas = CcTailscalePeer(stableId: 'n3', hostName: 'nas');
+
+    test('путь NONE и ядро без пути — пусто, прочие — строка', () {
+      expect(tailscalePathLabel(const CcTailscalePeer(path: 'NONE')), isEmpty);
+      expect(tailscalePathLabel(const CcTailscalePeer()), isEmpty);
+      for (final path in ['DIRECT', 'PEER_RELAY', 'DERP']) {
+        expect(tailscalePathLabel(CcTailscalePeer(path: path)), isNotEmpty);
+      }
+      expect(
+        tailscalePathLabel(const CcTailscalePeer(
+            path: 'DIRECT', endpoint: '198.51.100.7:41641')),
+        contains('198.51.100.7:41641'),
+      );
+    });
+
+    test('действующий выход в Devices не повторяется', () {
+      const s = CcTailscaleStatus(
+        tag: 'ts',
+        backendState: 'Running',
+        stateText: '',
+        exitNode: gw,
+        userGroups: [
+          CcTailscaleUserGroup(peers: [gw, nas]),
+        ],
+      );
+      expect(withoutActiveExit(s.peers, s).map((p) => p.stableId), ['n3']);
+      const none = CcTailscaleStatus(
+        tag: 'ts',
+        backendState: 'Running',
+        stateText: '',
+        userGroups: [
+          CcTailscaleUserGroup(peers: [gw, nas]),
+        ],
+      );
+      expect(withoutActiveExit(none.peers, none), hasLength(2));
+    });
+
+    test('поля тела: запись и снятие, порядок ключей', () {
+      const src = '{"type": "tailscale", "exit_node": "gw"}';
+      final on = jsonDecode(withBodyFields(src, {
+        'exit_node_allow_lan_access': true,
+      })) as Map;
+      expect(on.keys.toList(), ['type', 'exit_node', 'exit_node_allow_lan_access']);
+      expect(on['exit_node_allow_lan_access'], true);
+      final off = jsonDecode(withBodyFields(jsonEncode(on), {
+        'exit_node_allow_lan_access': null,
+      })) as Map;
+      expect(off.containsKey('exit_node_allow_lan_access'), isFalse);
+      expect(() => withBodyFields('[1]', const {}), throwsFormatException);
+    });
+  });
 }

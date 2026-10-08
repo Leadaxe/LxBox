@@ -1,10 +1,9 @@
 // §393 C7 — диалог создания цепочки: тег. Он же единственное имя цепочки
 // (§594: отдельной подписи нет).
 //
-// Идиома — `showNewDirectionDialog` (§393 A3). Тег спрашивается ЗДЕСЬ и
-// только здесь: после создания он immutable (на него ссылаются фильтры
-// Направлений, `route_final` и позиции ДРУГИХ цепочек), и узнать о конфликте
-// после создания было бы поздно.
+// Идиома — `showNewDirectionDialog` (§393 A3). §609 — после создания тег
+// правится в редакторе цепочки (ссылки переписывает storage), здесь —
+// только начальное имя.
 //
 // Проверка — тот же [directionTagConflict], что зовёт storage (`_addChain`):
 // единственный источник правды. Занятые теги приходят ОБОИХ видов сразу —
@@ -95,8 +94,6 @@ class _NewChainDialogState extends State<_NewChainDialog> {
             autofocus: true,
             decoration: InputDecoration(
               labelText: getLocalText.s("Tag"),
-              helperText: getLocalText.s("System id, cannot be changed later"),
-              helperMaxLines: 2,
               errorText: error,
               errorMaxLines: 2,
               border: const OutlineInputBorder(),

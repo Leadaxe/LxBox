@@ -152,6 +152,68 @@ Future<void> _updateChain(SourceChain chain) async {
   await _setChains(chains);
 }
 
+/// §609 — обновить цепочку, записанную под [oldTag], с переименованием в
+/// [SourceChain.tag] у [chain]. Тег не изменился — ровно [_updateChain].
+///
+/// Запись меняется НА МЕСТЕ: слот `chain:<old>` в `sources[]` получает ключ
+/// `chain:<new>`. Через [_setChains] нельзя: [_replaceKind] сопоставляет
+/// места по ключу, новый ключ уехал бы в конец списка, и цепочки, которые
+/// ссылаются на переименованную, оказались бы выше неё (`chain_hop_missing`).
+///
+/// Гейт тега — [_requireFreeChainTag] против цепочек (кроме самой) и
+/// Направлений: свой старый тег свободен. В ТОЙ ЖЕ записи на диск ссылки со
+/// старого тега переписываются на новый:
+///   1. корневые позиции других цепочек;
+///   2. `CustomRule.outbound`, переменные типа `outbound` пресета,
+///      `route_final`;
+///   3. корневые `overrideDetour` / `FolderMember.detour`;
+///   4. DNS: `body.detour`, `vars.outbound`.
+/// 2–4 из UI цепочку не выбирают, но через Debug API и бэкап могут её
+/// содержать. In-memory зеркало detour-ссылок (п. 3) у контроллера ресинкает
+/// вызывающий (`SubscriptionController.syncDetourRefsRetargeted`).
+///
+/// Возвращает записанную цепочку (тег — после trim).
+Future<SourceChain> _renameChain(String oldTag, SourceChain chain) async {
+  if (chain.tag == oldTag) {
+    await _updateChain(chain);
+    return chain;
+  }
+  final entries = await _getSourceEntries();
+  final chains = [
+    for (final e in entries)
+      if (e is ChainEntry) e.chain,
+  ];
+  if (!chains.any((c) => c.tag == oldTag)) {
+    throw StateError('chain not found: $oldTag');
+  }
+  final wanted = await _requireFreeChainTag(chain.tag, [
+    for (final c in chains)
+      if (c.tag != oldTag) c,
+  ]);
+  final renamed = chain.copyWith(tag: wanted);
+  if (wanted == oldTag) {
+    await _updateChain(renamed);
+    return renamed;
+  }
+  final retarget = {oldTag: wanted};
+  final out = <SourceEntry>[
+    for (final e in entries)
+      switch (e) {
+        ChainEntry(:final chain) when chain.tag == oldTag =>
+          ChainEntry(retargetChainHopRefs([renamed], retarget).single),
+        ChainEntry(:final chain) =>
+          ChainEntry(retargetChainHopRefs([chain], retarget).single),
+        ContainerEntry(:final list) =>
+          ContainerEntry(retargetDetourRefs(list, retarget).healed ?? list),
+        OpaqueEntry() => e,
+      },
+  ];
+  await _saveSourceEntries(out, flush: false);
+  await _retargetOutboundRefs(retarget);
+  await _save();
+  return renamed;
+}
+
 /// §393 D1 — переставить цепочки в их взаимном порядке, не двигая чужие
 /// слоты. Смешение с подписками и серверами — [SettingsStorage.reorderSources].
 Future<void> _reorderChains(List<SourceChain> chains) => _setChains(chains);

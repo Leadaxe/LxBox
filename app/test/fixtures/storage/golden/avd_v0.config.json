@@ -387,8 +387,7 @@
       "interval": "5m",
       "tolerance": 50,
       "idle_timeout": "30m",
-      "interrupt_exist_connections": true,
-      "passive_check": true
+      "interrupt_exist_connections": true
     },
     {
       "tag": "vpn-1",
@@ -421,8 +420,7 @@
       "interval": "15m",
       "tolerance": 50,
       "idle_timeout": "30m",
-      "interrupt_exist_connections": true,
-      "passive_check": true
+      "interrupt_exist_connections": true
     },
     {
       "tag": "vpn-2",
@@ -452,8 +450,7 @@
       "interval": "5m",
       "tolerance": 50,
       "idle_timeout": "30m",
-      "interrupt_exist_connections": true,
-      "passive_check": true
+      "interrupt_exist_connections": true
     },
     {
       "tag": "vpn-4",

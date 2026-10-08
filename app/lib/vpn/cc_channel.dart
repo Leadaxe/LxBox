@@ -513,6 +513,15 @@ class CcChannel {
       }) ??
       '';
 
+  /// §613 (ядро SPEC 114, lx.12) — статус WG/AWG-узла и его пиров по тегу.
+  /// Только чтение: спящий узел не будится, несобранный не собирается.
+  /// Отказ ядра — [PlatformException] с кодом из [CcStatusError].
+  Future<CcWireGuardStatus> getWireGuardStatus(String tag) async {
+    final r = await _methods.invokeMethod<Map<dynamic, dynamic>>(
+        'ccGetWireGuardStatus', {'tag': tag});
+    return CcWireGuardStatus.fromMap(_asMap(r));
+  }
+
   Future<bool> closeConnection(String id) async =>
       await _methods.invokeMethod<bool>('ccCloseConnection', {'id': id}) ??
       false;
@@ -560,6 +569,7 @@ class CcTailscaleStatus {
     this.self,
     this.exitNode,
     this.userGroups = const [],
+    this.health = const [],
   });
 
   final String tag;
@@ -578,6 +588,10 @@ class CcTailscaleStatus {
 
   /// Устройства сети по владельцам (свой узел сюда не входит).
   final List<CcTailscaleUserGroup> userGroups;
+
+  /// §613 (ядро SPEC 115) — предупреждения бэкенда (нет DERP, exit node
+  /// офлайн и т.п.), текст ядра; пусто — предупреждать не о чем.
+  final List<String> health;
 
   /// Все устройства сети без своего узла.
   List<CcTailscalePeer> get peers => [
@@ -601,6 +615,10 @@ class CcTailscaleStatus {
       userGroups: [
         for (final g in CcChannel._asList(m['user_groups']))
           if (g is Map) CcTailscaleUserGroup.fromMap(CcChannel._asMap(g)),
+      ],
+      health: [
+        for (final h in CcChannel._asList(m['health']))
+          if (h != null && '$h'.isNotEmpty) '$h',
       ],
     );
   }
@@ -630,6 +648,11 @@ class CcTailscalePeer {
     this.keyExpiry = 0,
     this.lastSeen = 0,
     this.ips = const [],
+    this.path = '',
+    this.endpoint = '',
+    this.peerRelay = '',
+    this.derpRegionCode = '',
+    this.lastHandshake = 0,
   });
 
   final String stableId;
@@ -648,6 +671,22 @@ class CcTailscalePeer {
   final int keyExpiry;
   final int lastSeen;
   final List<String> ips;
+
+  /// §613 (ядро SPEC 115) — путь до устройства: [CcTailscalePath]; пусто —
+  /// ядро старше lx.12.
+  final String path;
+
+  /// Адрес `ip:port` прямого пути.
+  final String endpoint;
+
+  /// Устройство-ретранслятор пути `PEER_RELAY`.
+  final String peerRelay;
+
+  /// Регион DERP (`fra`): путь `DERP` или домашний регион.
+  final String derpRegionCode;
+
+  /// Unix-секунды последнего хендшейка, 0 — не было.
+  final int lastHandshake;
 
   /// MagicDNS-имя без точки в конце.
   String get dnsNameClean =>
@@ -674,7 +713,22 @@ class CcTailscalePeer {
           for (final ip in CcChannel._asList(m['ips']))
             if (ip != null && '$ip'.isNotEmpty) '$ip',
         ],
+        path: '${m['path'] ?? ''}',
+        endpoint: '${m['endpoint'] ?? ''}',
+        peerRelay: '${m['peer_relay'] ?? ''}',
+        derpRegionCode: '${m['derp_region_code'] ?? ''}',
+        lastHandshake: _int(m['last_handshake']),
       );
+}
+
+/// §613 (ядро SPEC 115) — значения `TailscalePeer.path`. Строки ядра.
+abstract final class CcTailscalePath {
+  static const direct = 'DIRECT';
+  static const peerRelay = 'PEER_RELAY';
+  static const derp = 'DERP';
+
+  /// Узел ни разу не слал устройству.
+  static const none = 'NONE';
 }
 
 /// §581 — владелец устройств сети (`TailscaleUserGroup` ядра).
@@ -844,6 +898,82 @@ abstract final class CcEndpointState {
   /// Узел не поднят: ядро соберёт его при первом дайле (0,5–1 с).
   /// Это состояние, а не сбой, — UI не показывает тут таймаут.
   static bool isNotBuilt(String s) => s == neverBuilt || s == tornDown;
+}
+
+/// §613 — коды отказа `getWireGuardStatus` ([PlatformException.code]).
+abstract final class CcStatusError {
+  /// Тега нет в работающем конфиге.
+  static const notFound = 'not_found';
+
+  /// Узел не WG/AWG.
+  static const invalidArgument = 'invalid_argument';
+
+  /// Сервис или узел не запущен.
+  static const failedPrecondition = 'failed_precondition';
+
+  static const unavailable = 'unavailable';
+
+  /// Ядро без `with_lx_command` или старше lx.12: статуса пиров нет.
+  static const unimplemented = 'unimplemented';
+
+  /// Прочее: нет клиента, транспорт.
+  static const error = 'error';
+}
+
+/// §613 (ядро SPEC 114) — ответ `GetWireGuardStatus`: состояние узла
+/// (строки [CcEndpointState]), простой и пиры в порядке конфига.
+class CcWireGuardStatus {
+  const CcWireGuardStatus({
+    this.endpointState = '',
+    this.idleSinceSeconds = 0,
+    this.peers = const [],
+  });
+
+  final String endpointState;
+  final int idleSinceSeconds;
+  final List<CcWireGuardPeer> peers;
+
+  factory CcWireGuardStatus.fromMap(Map<String, dynamic> m) =>
+      CcWireGuardStatus(
+        endpointState: '${m['endpoint_state'] ?? ''}',
+        idleSinceSeconds: CcTailscalePeer._int(m['idle_since_seconds']),
+        peers: [
+          for (final p in CcChannel._asList(m['peers']))
+            if (p is Map) CcWireGuardPeer.fromMap(CcChannel._asMap(p)),
+        ],
+      );
+}
+
+/// §613 — пир WG/AWG-узла (`PeerStatus` ядра). `lastHandshakeUnix` —
+/// Unix-секунды, 0 — хендшейка не было; счётчики — накопленные байты
+/// устройства, обнуляются при пересборке.
+class CcWireGuardPeer {
+  const CcWireGuardPeer({
+    required this.publicKey,
+    this.endpoint = '',
+    this.lastHandshakeUnix = 0,
+    this.rxBytes = 0,
+    this.txBytes = 0,
+  });
+
+  final String publicKey;
+  final String endpoint;
+  final int lastHandshakeUnix;
+  final int rxBytes;
+  final int txBytes;
+
+  /// Ключ сокращённо, как в логе ядра: символы 0–3 и 39–42 base64.
+  String get shortKey => publicKey.length < 43
+      ? publicKey
+      : '${publicKey.substring(0, 4)}…${publicKey.substring(39, 43)}';
+
+  factory CcWireGuardPeer.fromMap(Map<String, dynamic> m) => CcWireGuardPeer(
+        publicKey: '${m['public_key'] ?? ''}',
+        endpoint: '${m['endpoint'] ?? ''}',
+        lastHandshakeUnix: CcTailscalePeer._int(m['last_handshake_unix']),
+        rxBytes: CcTailscalePeer._int(m['rx_bytes']),
+        txBytes: CcTailscalePeer._int(m['tx_bytes']),
+      );
 }
 
 /// §2.4 — группа из `writeGroups` (дерево). `selectable` заменяет `type=='Selector'`,

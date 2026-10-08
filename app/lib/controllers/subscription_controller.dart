@@ -214,6 +214,17 @@ class SubscriptionController extends ChangeNotifier {
     _lastBuildWarningsByTag = map;
   }
 
+  /// §615 — коды последней сборки, адресованные источнику целиком, по `id`
+  /// источника (`node_detour_through_group`): счётчик строки подписки/папки.
+  Map<String, List<RegistryWarning>> _lastSourceBuildCodes = const {};
+  Map<String, List<RegistryWarning>> get lastSourceBuildCodes =>
+      _lastSourceBuildCodes;
+
+  @visibleForTesting
+  void debugSetLastSourceBuildCodes(Map<String, List<RegistryWarning>> map) {
+    _lastSourceBuildCodes = map;
+  }
+
   /// §274 — Направления, чей node_filter отсёк все ноды в последней УСПЕШНОЙ
   /// сборке (display-имена; Направление схлопнулось в block-fallback). [stamp]
   /// монотонно растёт на каждой сборке с непустым списком — Home дедупит
@@ -318,7 +329,20 @@ class SubscriptionController extends ChangeNotifier {
         // §515 — регидрация стартует `unawaited` из `_initBody`: контроллер
         // прежнего слота может дожить до неё уже после переключения.
         if (stale) return;
-        if (body == null || body.isEmpty) continue;
+        if (body == null || body.isEmpty) {
+          // §615 — раньше пропуск молчал: вкладка Nodes писала «No nodes
+          // found» при живом `last_node_count`.
+          if (list.lastNodeCount > 0 || list.lastUpdated != null) {
+            final path = await HttpCache.bodyPath(list.url);
+            if (stale) return;
+            AppLog.I.warning(
+                'Re-hydrate: no cached body for "${list.name}" '
+                '(${maskSubscriptionUrl(list.url)}), expected $path — '
+                'nodes not loaded until the next update');
+          }
+          entry._markBodyCacheMissing();
+          continue;
+        }
         try {
           final decoded = decode(body);
           // §561 — `dropped[]` сводки источника восстанавливается тем же
@@ -2972,7 +2996,6 @@ class SubscriptionController extends ChangeNotifier {
           await SettingsStorage.getIdleSuspendReachable(), // §272
       wgBuildMax: await SettingsStorage.getWgBuildMax(), // §542
       wgLazyBuild: await SettingsStorage.getWgLazyBuild(), // §542
-      passiveCheck: await SettingsStorage.getPassiveCheck(), // §272
       tailscaleStateRoot: tailscaleStateRoot,
       // §445 — имена каталогов из индекса (стабильны при переименовании).
       tailscaleStateDirs:
@@ -2988,6 +3011,7 @@ class SubscriptionController extends ChangeNotifier {
           };
     _groupDefaultsPending = false;
     _lastBuildWarningsByTag = result.nodeBuildWarningsByEmittedTag;
+    _lastSourceBuildCodes = result.sourceBuildCodes;
 
     // Записываем обратно то, что buildConfig сгенерил (clash_api/secret на
     // первом запуске). GUI не обязано знать про этот механизм — достаточно
@@ -3577,6 +3601,21 @@ class SubscriptionController extends ChangeNotifier {
     var changed = false;
     for (final e in _entries) {
       final r = clearDetourDirectionRefs(e.list, tag);
+      if (r.healed != null) {
+        e._replaceList(r.healed!);
+        changed = true;
+      }
+    }
+    if (changed) notifyListeners();
+  }
+
+  /// §609 — in-memory зеркало переписи detour-ссылок при переименовании
+  /// цепочки (`SettingsStorage.renameChain`): тот же [retargetDetourRefs],
+  /// что у storage, иначе следующий `_persist()` вернул бы старый тег.
+  void syncDetourRefsRetargeted(Map<String, String> retarget) {
+    var changed = false;
+    for (final e in _entries) {
+      final r = retargetDetourRefs(e.list, retarget);
       if (r.healed != null) {
         e._replaceList(r.healed!);
         changed = true;

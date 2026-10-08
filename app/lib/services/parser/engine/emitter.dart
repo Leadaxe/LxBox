@@ -353,6 +353,13 @@ final class _Emit {
     }
 
     final host = _wrapIpv6(_str(_readSourcePath('host')) ?? '');
+    // §612 (контракт 1.1.109) — ссылка без хоста при объявленном источнике
+    // хоста — не ссылка: у входящего пира адреса нет, и ссылка без хоста
+    // обратно не разобралась бы. Отказ — пустая строка,
+    // как у `refuse_when` («This node cannot be shared as a link»).
+    if (host.isEmpty && _declaresSource('host')) {
+      return EmitResult(uri: '', lost: _lost);
+    }
     final portPart = _portPart();
     final qs = _serializeQuery();
     final frag = label.isEmpty ? '' : '#${_encodeFragment(label)}';
@@ -488,6 +495,18 @@ final class _Emit {
   ///
   /// Записи перебираются в порядке объявления; берётся первая, чьё значение
   /// тело несёт.
+  /// Объявлен ли у секции источник [place] хоть у одной записи с `maps_to`.
+  bool _declaresSource(String place) {
+    for (final p in section.params.values) {
+      if (p.isService || p.mapsTo == null) continue;
+      if (p.source.contains(place)) return true;
+      for (final v in p.sourceByForm.values) {
+        if (v.contains(place)) return true;
+      }
+    }
+    return false;
+  }
+
   dynamic _readSourcePath(String place) {
     for (final p in section.params.values) {
       if (p.isService) continue;

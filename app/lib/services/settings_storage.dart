@@ -167,6 +167,12 @@ class SettingsStorage {
   // DENY-`.remove()` и one-shot миграции удалены (см. spec/tasks/159).
   // ---------------------------------------------------------------------------
 
+  /// §611 — снятые top-level ключи: в бэкап не пишутся, при импорте старого
+  /// бэкапа молча пропускаются (не считаются неизвестными, в `dropped` не
+  /// идут). Значение в сторадже получателя переживает и замену; миграция
+  /// §612 (`urltest_passive_check` → режим авто-групп) его читает и снимает.
+  static const retiredTopLevelKeys = <String>{'urltest_passive_check'};
+
   /// Валидные top-level ключи `lxbox_settings.json`. Полный закрытый список —
   /// все имена известны. `vars` — контейнер, его содержимое фильтруется
   /// отдельно через [allowedVarKeys]. Источник правды: STORAGE.md.
@@ -182,10 +188,10 @@ class SettingsStorage {
     'route_idle_suspend_reachable', // §272 — reachable idle window (lx.wg.idle_suspend_reachable)
     'wg_build_max', // §542 — WG/AWG build budget (lx.wg.build_max)
     'wg_lazy_build', // §542 — WG/AWG lazy build (lx.wg.lazy_build)
-    'urltest_passive_check', // §272 — passive health check (urltest.passive_check)
     'enabled_groups', // §125 — DEPRECATED (читается только миграцией; safe-мусор)
     'directions', // §125/§393 — Направления роутинга (template→storage)
     'directions_migrated', // §125/§393 — guard one-shot миграции
+    kUrltestModeMigratedKey, // §612 — guard миграции least_test → failover
     // §393 A2 — легаси-пары `channels`/`channels_migrated` в allowlist НЕТ
     // намеренно: её переименовывает миграция формы (§439, `migrateStorageDoc`)
     // и в файле на диске, и в снимке `replaceRaw` до allowlist'а.
@@ -502,6 +508,13 @@ class SettingsStorage {
   /// Позиция в общем списке источников не меняется.
   static Future<void> updateChain(SourceChain chain) => _updateChain(chain);
 
+  /// §609 — обновить цепочку [oldTag] с переименованием в `chain.tag`: место
+  /// в списке источников сохраняется, ссылки на старый тег переписываются в
+  /// той же записи. Throws [StateError] на неизвестном [oldTag] или занятом
+  /// теге.
+  static Future<SourceChain> renameChain(String oldTag, SourceChain chain) =>
+      _renameChain(oldTag, chain);
+
   /// Переставить цепочки в их взаимном порядке, не двигая чужие слоты.
   /// Смешение с подписками и серверами — [reorderSources].
   static Future<void> reorderChains(List<SourceChain> chains) =>
@@ -592,12 +605,11 @@ class SettingsStorage {
   static Future<void> saveWgLazyBuild(bool enabled, {bool flush = true}) =>
       _saveWgLazyBuild(enabled, flush: flush);
 
-  // §272 — passive health check (urltest.passive_check, SPEC 019)
-
-  static Future<bool> getPassiveCheck() => _getPassiveCheck();
-
-  static Future<void> savePassiveCheck(bool enabled, {bool flush = true}) =>
-      _savePassiveCheck(enabled, flush: flush);
+  /// §612 — один раз до первой сборки: `urltest_passive_check` (§611)
+  /// true/отсутствует → автовыбор `least_test` становится `failover`; ключ
+  /// снимается, ставится маркер `urltest_mode_migrated`. Идемпотентна.
+  static Future<void> migrateUrltestModeIfNeeded() =>
+      _migrateUrltestModeIfNeeded();
 
   // §125-cleanup — excluded_nodes (§048 глобальный фильтр) удалён; ключ снимает
   // миграция §439.

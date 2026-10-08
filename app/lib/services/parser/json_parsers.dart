@@ -1291,7 +1291,11 @@ NodeSpec? _parseSingboxEntryTyped(
       final p = peers.first;
       final peerServer = p['address']?.toString() ?? server;
       final peerPort = (p['port'] as num?)?.toInt() ?? port;
-      if (peerServer.isEmpty) return null;
+      // §612 (контракт 1.1.109/1.1.110) — пир без адреса не повод снимать
+      // запись здесь: входящий пир (узел слушает `listen_port`) законен, а
+      // мёртвый (нет ни адреса, ни `listen_port`) снимает санитайзер кодом
+      // `field_missing` (`required_unless`). Прежде такое тело уходило кодом
+      // `protocol_unsupported`.
       final allowedIps =
           (p['allowed_ips'] as List?)
               ?.map((e) => ensureCidr(e.toString()))

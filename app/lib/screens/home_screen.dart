@@ -27,6 +27,7 @@ import 'settings_screen.dart';
 import 'speed_test_screen.dart';
 import 'stats_screen.dart';
 import 'home/widgets/detour_cycle_sheet.dart';
+import 'home/widgets/errors_counter_row.dart';
 import 'home/widgets/traffic_bar.dart';
 import 'owner_navigation.dart';
 import 'subscriptions_screen.dart';
@@ -904,6 +905,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                     onSelectServer: _scrollToNode, // §203
                     onViewPool: _showPool, // §208
                   ),
+                  // §614 — фоновые ошибки: «Errors (N)» → журнал.
+                  const ErrorsCounterRow(),
                 ],
               ),
             ),

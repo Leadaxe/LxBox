@@ -29,6 +29,9 @@ class LxCodeEditor extends StatefulWidget {
     this.wordWrap = true,
     this.language,
     this.autofocus,
+    this.folding,
+    this.find,
+    this.actions = const [],
   });
 
   final CodeLineEditingController controller;
@@ -48,6 +51,22 @@ class LxCodeEditor extends StatefulWidget {
   /// Просмотрщик ([LxJsonView]) передаёт `false`: без этого вкладка JSON
   /// забирает фокус и запускает мигание курсора в тексте только для чтения.
   final bool? autofocus;
+
+  /// §614 — свёртка блоков `{}`/`[]` (индикаторы в gutter). `null` — как
+  /// [showLineNumbers]: где есть номера строк, там есть и свёртка.
+  final bool? folding;
+
+  /// §614 — поиск по тексту: иконка в правом верхнем углу поля открывает
+  /// панель поиска над текстом. `null` — как [showLineNumbers].
+  final bool? find;
+
+  /// §614 — свои кнопки поля (например, Copy конфига) в правом верхнем
+  /// углу рядом с иконкой поиска; на время открытой панели поиска прячутся,
+  /// чтобы не лечь поверх неё.
+  final List<Widget> actions;
+
+  bool get _folding => folding ?? showLineNumbers;
+  bool get _find => find ?? showLineNumbers;
 
   @override
   State<LxCodeEditor> createState() => _LxCodeEditorState();
@@ -82,11 +101,16 @@ class _LxCodeEditorState extends State<LxCodeEditor> {
   /// нода в дереве после очередного `build`.
   late final FocusNode _focusNode;
 
+  /// §614 — контроллер поиска свой: иконка открытия живёт снаружи
+  /// `CodeEditor` и должна видеть, открыта ли панель.
+  late CodeFindController _findController;
+
   @override
   void initState() {
     super.initState();
     _toolbar = LxSelectionToolbarController()..readOnly = widget.readOnly;
     _focusNode = FocusNode(debugLabel: 'LxCodeEditor');
+    _findController = CodeFindController(widget.controller);
     widget.controller.addListener(_onSelectionChanged);
   }
 
@@ -98,6 +122,11 @@ class _LxCodeEditorState extends State<LxCodeEditor> {
       oldWidget.controller.removeListener(_onSelectionChanged);
       widget.controller.addListener(_onSelectionChanged);
       _toolbar.hide(context);
+      // Пакет сам переподписывается на смену findController в своём
+      // didUpdateWidget; старый — наш, его и закрываем.
+      final old = _findController;
+      _findController = CodeFindController(widget.controller);
+      WidgetsBinding.instance.addPostFrameCallback((_) => old.dispose());
     }
   }
 
@@ -128,6 +157,7 @@ class _LxCodeEditorState extends State<LxCodeEditor> {
     widget.controller.removeListener(_onSelectionChanged);
     _toolbar.dispose();
     _focusNode.dispose();
+    _findController.dispose();
     super.dispose();
   }
 
@@ -142,10 +172,20 @@ class _LxCodeEditorState extends State<LxCodeEditor> {
     // (`_code_editable.dart:266-269`), а потеря фокуса зовёт `hideToolbar`
     // (`:318-331`). Нам нужно снять оверлей даже если фокус в этот момент
     // принадлежит не нам.
-    return CodeEditorTapRegion(
+    final folding = widget._folding;
+    final find = widget._find;
+    final editor = CodeEditorTapRegion(
       onTapOutside: (_) => _toolbar.hide(context),
       child: CodeEditor(
         controller: widget.controller,
+        findController: _findController,
+        findBuilder: find
+            ? (context, controller, readOnly) =>
+                _LxFindPanel(controller: controller)
+            : null,
+        chunkAnalyzer: folding
+            ? const DefaultCodeChunkAnalyzer()
+            : const NonCodeChunkAnalyzer(),
         focusNode: _focusNode,
         autofocus: widget.autofocus,
         readOnly: widget.readOnly,
@@ -164,13 +204,137 @@ class _LxCodeEditorState extends State<LxCodeEditor> {
               : _highlightTheme(widget.language!, Theme.of(context).brightness),
         ),
         toolbarController: _toolbar,
-        indicatorBuilder: widget.showLineNumbers
-            ? (context, editingController, chunkController, notifier) =>
-                DefaultCodeLineNumber(
-                  controller: editingController,
-                  notifier: notifier,
+        indicatorBuilder: widget.showLineNumbers || folding
+            ? (context, editingController, chunkController, notifier) => Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (widget.showLineNumbers)
+                      DefaultCodeLineNumber(
+                        controller: editingController,
+                        notifier: notifier,
+                      ),
+                    if (folding)
+                      DefaultCodeChunkIndicator(
+                        width: 16,
+                        controller: chunkController,
+                        notifier: notifier,
+                      ),
+                  ],
                 )
             : null,
+      ),
+    );
+    if (!find && widget.actions.isEmpty) return editor;
+    // Иконка поиска — в правом верхнем углу поля, пока панель закрыта.
+    // Панель встаёт в верх поля (её высоту пакет добавляет к отступу
+    // текста), поэтому экранная клавиатура её не перекрывает.
+    return Stack(
+      fit: StackFit.passthrough,
+      children: [
+        editor,
+        Positioned(
+          top: 2,
+          right: 2,
+          child: ListenableBuilder(
+            listenable: _findController,
+            builder: (context, _) => _findController.value != null
+                ? const SizedBox.shrink()
+                : CodeEditorTapRegion(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (find)
+                          IconButton(
+                            key: const ValueKey('lx-code-editor-find'),
+                            icon: const Icon(Icons.search, size: 18),
+                            tooltip: getLocalText.s("Find"),
+                            visualDensity: VisualDensity.compact,
+                            onPressed: _findController.findMode,
+                          ),
+                        ...widget.actions,
+                      ],
+                    ),
+                  ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// §614 — панель поиска над текстом редактора: поле, счёт совпадений,
+/// предыдущее/следующее, закрыть. Свой виджет, а не панель из примера
+/// пакета: та шириной 360 и с заменой, на телефоне не помещается.
+class _LxFindPanel extends StatelessWidget implements PreferredSizeWidget {
+  const _LxFindPanel({required this.controller});
+
+  final CodeFindController controller;
+
+  static const double _height = 40;
+
+  @override
+  Size get preferredSize =>
+      Size(double.infinity, controller.value == null ? 0 : _height);
+
+  @override
+  Widget build(BuildContext context) {
+    final value = controller.value;
+    if (value == null) return const SizedBox.shrink();
+    final cs = Theme.of(context).colorScheme;
+    final result = value.result;
+    final count = result == null || result.matches.isEmpty
+        ? '0/0' // l10n-exempt: счёт совпадений
+        : '${result.index + 1}/${result.matches.length}';
+    return CodeEditorTapRegion(
+      child: Container(
+        key: const ValueKey('lx-code-editor-find-panel'),
+        height: _height,
+        padding: const EdgeInsets.fromLTRB(8, 2, 2, 2),
+        decoration: BoxDecoration(
+          color: cs.surfaceContainerHigh,
+          border: Border(bottom: BorderSide(color: cs.outlineVariant)),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: controller.findInputController,
+                focusNode: controller.findInputFocusNode,
+                style: const TextStyle(fontSize: 13),
+                textInputAction: TextInputAction.search,
+                onSubmitted: (_) {
+                  controller.nextMatch();
+                  controller.focusOnFindInput();
+                },
+                decoration: InputDecoration(
+                  isDense: true,
+                  border: InputBorder.none,
+                  hintText: getLocalText.s("Find"),
+                ),
+              ),
+            ),
+            Text(count, style: Theme.of(context).textTheme.bodySmall),
+            IconButton(
+              icon: const Icon(Icons.keyboard_arrow_up, size: 18),
+              tooltip: getLocalText.s("Previous match"),
+              visualDensity: VisualDensity.compact,
+              onPressed: controller.previousMatch,
+            ),
+            IconButton(
+              icon: const Icon(Icons.keyboard_arrow_down, size: 18),
+              tooltip: getLocalText.s("Next match"),
+              visualDensity: VisualDensity.compact,
+              onPressed: controller.nextMatch,
+            ),
+            IconButton(
+              key: const ValueKey('lx-code-editor-find-close'),
+              icon: const Icon(Icons.close, size: 18),
+              tooltip: getLocalText.s("Close"),
+              visualDensity: VisualDensity.compact,
+              onPressed: controller.close,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -373,12 +537,16 @@ class LxJsonView extends StatefulWidget {
     this.height,
     this.fontSize = 12,
     this.showLineNumbers = false,
+    this.language = LxCodeLanguage.json,
   });
 
   final String text;
   final double? height;
   final double fontSize;
   final bool showLineNumbers;
+
+  /// §614 — `null` — без подсветки (тело подписки не-JSON: base64, ссылки).
+  final LxCodeLanguage? language;
 
   @override
   State<LxJsonView> createState() => _LxJsonViewState();
@@ -411,9 +579,190 @@ class _LxJsonViewState extends State<LxJsonView> {
       autofocus: false,
       fontSize: widget.fontSize,
       showLineNumbers: widget.showLineNumbers,
-      language: LxCodeLanguage.json,
+      language: widget.language,
     );
     final h = widget.height;
     return h == null ? editor : SizedBox(height: h, child: editor);
+  }
+}
+
+/// §614 — [LxCodeEditor] поверх обычного `TextEditingController`.
+///
+/// Поля форм (Source узла, DNS-сервер, правила) держат текст в
+/// `TextEditingController`, и на нём же их валидация и сохранение. Менять
+/// это ради подсветки незачем: виджет заводит свой
+/// `CodeLineEditingController` и синхронизирует его с [controller] в обе
+/// стороны. [onChanged] — как у `TextField`: только на правку в поле, не на
+/// запись в [controller] из кода.
+///
+/// Высота, как у полей до перевода:
+/// - [height] — фиксированная;
+/// - [minLines] (и [maxLines]) — растёт по числу строк, как `TextField`
+///   с `minLines`, но не выше [maxLines] (дальше прокрутка внутри);
+/// - ничего — заполняет ограниченного родителя (`Expanded`).
+class LxTextCodeField extends StatefulWidget {
+  const LxTextCodeField({
+    super.key,
+    required this.controller,
+    this.language = LxCodeLanguage.json,
+    this.onChanged,
+    this.height,
+    this.minLines,
+    this.maxLines,
+    this.fontSize = 12,
+    this.showLineNumbers = true,
+    this.hint,
+    this.label,
+    this.errorText,
+    this.readOnly = false,
+    this.autofocus = false,
+  });
+
+  final TextEditingController controller;
+
+  /// `null` — без подсветки (ссылка, WireGuard INI).
+  final LxCodeLanguage? language;
+  final ValueChanged<String>? onChanged;
+  final double? height;
+  final int? minLines;
+  final int? maxLines;
+  final double fontSize;
+  final bool showLineNumbers;
+  final String? hint;
+
+  /// Подпись над полем (у `TextField` была `labelText`).
+  final String? label;
+
+  /// Ошибка под полем (у `TextField` была `errorText`).
+  final String? errorText;
+  final bool readOnly;
+
+  /// Фокус при открытии (у `TextField` диалога был `autofocus: true`).
+  final bool autofocus;
+
+  @override
+  State<LxTextCodeField> createState() => _LxTextCodeFieldState();
+}
+
+class _LxTextCodeFieldState extends State<LxTextCodeField> {
+  late CodeLineEditingController _code;
+  bool _syncing = false;
+  int _lines = 1;
+
+  @override
+  void initState() {
+    super.initState();
+    _code = CodeLineEditingController.fromText(widget.controller.text);
+    _lines = _code.lineCount;
+    _code.addListener(_fromCode);
+    widget.controller.addListener(_fromText);
+  }
+
+  @override
+  void didUpdateWidget(LxTextCodeField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.removeListener(_fromText);
+      widget.controller.addListener(_fromText);
+      _fromText();
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_fromText);
+    _code.removeListener(_fromCode);
+    _code.dispose();
+    super.dispose();
+  }
+
+  /// Правка в поле → [LxTextCodeField.controller] и [onChanged].
+  void _fromCode() {
+    if (_syncing) return;
+    _updateLines();
+    final text = _code.text;
+    if (text == widget.controller.text) return;
+    _syncing = true;
+    widget.controller.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+    _syncing = false;
+    widget.onChanged?.call(text);
+  }
+
+  /// Запись в контроллер из кода (загрузка, подстановка) → поле.
+  void _fromText() {
+    if (_syncing) return;
+    final text = widget.controller.text;
+    if (text == _code.text) return;
+    _syncing = true;
+    _code.text = text;
+    _syncing = false;
+    _updateLines();
+  }
+
+  void _updateLines() {
+    if (widget.minLines == null) return;
+    final n = _code.lineCount;
+    if (n != _lines && mounted) setState(() => _lines = n);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final editor = LxCodeEditor(
+      controller: _code,
+      autofocus: widget.autofocus,
+      readOnly: widget.readOnly,
+      fontSize: widget.fontSize,
+      showLineNumbers: widget.showLineNumbers,
+      language: widget.language,
+      hint: widget.hint,
+    );
+    final error = widget.errorText;
+    final min = widget.minLines;
+    final double? height;
+    if (widget.height != null) {
+      height = widget.height;
+    } else if (min != null) {
+      final max = widget.maxLines ?? (min > 24 ? min : 24);
+      final lines = _lines.clamp(min, max);
+      // Высота строки — `fontHeight` пакета (1.4) + отступы LxCodeEditor
+      // (12 сверху и снизу) + рамка.
+      height = lines * widget.fontSize * 1.4 + 24 + 2;
+    } else {
+      height = null;
+    }
+    final label = widget.label;
+    final children = <Widget>[
+      if (label != null)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: Text(label,
+              style: theme.textTheme.labelSmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+        ),
+      if (height == null)
+        Expanded(child: editor)
+      else
+        SizedBox(width: double.infinity, height: height, child: editor),
+      if (error != null)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+          child: Text(
+            error,
+            maxLines: 4,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.error),
+          ),
+        ),
+    ];
+    return Column(
+      mainAxisSize: height == null ? MainAxisSize.max : MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: children,
+    );
   }
 }

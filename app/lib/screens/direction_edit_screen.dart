@@ -99,8 +99,9 @@ class _DirectionEditScreenState extends State<DirectionEditScreen> {
     _autoToleranceCtrl = TextEditingController(text: a.tolerance.toString());
     _autoIdleCtrl = TextEditingController(text: a.idleTimeout);
     _autoInterrupt = a.interruptExistConnections;
-    // §208 — balancer
-    _autoMode = a.mode;
+    // §208 — balancer. §612 — автовыбор, которого у Направления ещё нет,
+    // предлагается в режиме failover.
+    _autoMode = c.auto?.mode ?? kNewAutoMode;
     _autoPoolCtrl = TextEditingController(text: a.pool.toString());
     _autoPoolToleranceCtrl =
         TextEditingController(text: a.poolTolerance.toString());
@@ -648,6 +649,9 @@ class _DirectionEditScreenState extends State<DirectionEditScreen> {
                       style: const TextStyle(fontSize: 13),
                     ),
                   ),
+                  // §612 — у failover tolerance не действует и не эмитится:
+                  // поле скрыто.
+                  if (_autoMode != UrltestMode.failover) ...[
                   const SizedBox(width: 8),
                   Expanded(
                     child: TextField(
@@ -668,6 +672,7 @@ class _DirectionEditScreenState extends State<DirectionEditScreen> {
                       style: const TextStyle(fontSize: 13),
                     ),
                   ),
+                  ],
                 ],
               ),
               const SizedBox(height: 8),
@@ -713,6 +718,12 @@ class _DirectionEditScreenState extends State<DirectionEditScreen> {
                     label: Text(getLocalText.s("Load balance")),
                     icon: const Icon(Icons.hub_outlined, size: 16),
                   ),
+                  // §612 (контракт 1.1.111) — удержание узла до отказа.
+                  ButtonSegment(
+                    value: UrltestMode.failover,
+                    label: Text(getLocalText.s("Hold until failure")),
+                    icon: const Icon(Icons.push_pin_outlined, size: 16),
+                  ),
                 ],
                 selected: {_autoMode},
                 showSelectedIcon: false,
@@ -726,9 +737,14 @@ class _DirectionEditScreenState extends State<DirectionEditScreen> {
               const SizedBox(height: 4),
               _previewLine(
                 cs,
-                _autoMode == UrltestMode.leastTest
-                    ? 'single best server by latency'
-                    : 'spread connections across a pool of servers',
+                switch (_autoMode) {
+                  UrltestMode.leastTest =>
+                    getLocalText.s("single best server by latency"),
+                  UrltestMode.roundRobin => getLocalText
+                      .s("spread connections across a pool of servers"),
+                  UrltestMode.failover =>
+                    getLocalText.s("keep the fastest server until it fails"),
+                },
               ),
               if (_autoMode == UrltestMode.roundRobin) ..._balancerControls(cs),
               const SizedBox(height: 4),

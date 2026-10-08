@@ -53,9 +53,9 @@ class SourceChain {
 
   /// Тег будущего outbound'а — он же id записи и ЕДИНСТВЕННОЕ имя цепочки
   /// (§594: отдельной подписи нет — фильтр Направления видит то же имя, что
-  /// пользователь). Immutable после создания, как
-  /// [Direction.tag]: на него ссылаются фильтры Направлений, `route_final` и
-  /// позиции ДРУГИХ цепочек.
+  /// пользователь). §609 — редактируется, как тег узла: ссылки на старый тег
+  /// (позиции ДРУГИХ цепочек, правила, `route_final`, detour, DNS)
+  /// переписывает `SettingsStorage.renameChain`.
   final String tag;
 
   /// Выключенная цепочка не эмитится и не попадает в пул — как выключенная
@@ -116,6 +116,7 @@ class SourceChain {
   bool get stripEvasionEnabled => stripEvasion ?? true;
 
   SourceChain copyWith({
+    String? tag,
     bool? enabled,
     List<NodeLink>? hops,
     String? idleTimeout,
@@ -125,7 +126,9 @@ class SourceChain {
     Map<String, dynamic>? rewrite,
   }) =>
       SourceChain(
-        tag: tag, // immutable — не параметр copyWith (как у Direction)
+        // §609 — тег редактируется (как у узлов); ссылки на старый тег
+        // переписывает `SettingsStorage.renameChain`, не copyWith.
+        tag: tag ?? this.tag,
         enabled: enabled ?? this.enabled,
         hops: hops ?? this.hops,
         idleTimeout: idleTimeout ?? this.idleTimeout,
@@ -228,6 +231,26 @@ ChainHealResult clearChainHopRefs(
   }
   return (chains: out, positions: positions, touched: touched);
 }
+
+/// §609 — переписать корневые позиции-ссылки цепочек по [retarget]
+/// (старый тег → новый). Не совпало — тот же экземпляр цепочки.
+List<SourceChain> retargetChainHopRefs(
+  List<SourceChain> chains,
+  Map<String, String> retarget,
+) =>
+    [
+      for (final c in chains)
+        if (c.hops.any((h) => h.isRoot && retarget.containsKey(h.tag)))
+          c.copyWith(hops: [
+            for (final h in c.hops)
+              if (h.isRoot && retarget.containsKey(h.tag))
+                NodeLink(tag: retarget[h.tag]!)
+              else
+                h,
+          ])
+        else
+          c,
+    ];
 
 /// §393 C1 — почему цепочку [c] нельзя выпустить в конфиг; пусто = можно.
 /// Порт `ChainEmitError` лаунчера (`core/config/chain_generator.go:54`,

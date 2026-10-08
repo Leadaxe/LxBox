@@ -286,4 +286,23 @@ void main() {
       ]);
     });
   });
+
+  // §612 (контракт 1.1.111) — режим failover узла автовыбора.
+  group('§612 — failover', () {
+    test('strategy: круг записи', () {
+      const p = AutoSelectParams(mode: UrltestMode.failover);
+      final st = autoSelectParamsToStrategy(p);
+      expect(st['mode'], 'failover');
+      expect(autoSelectParamsFromStrategy(st).mode, UrltestMode.failover);
+    });
+
+    test('эмит: mode без tolerance и balancer', () {
+      final j =
+          const AutoSelectParams(mode: UrltestMode.failover, tolerance: 70)
+              .toJson();
+      expect(j['mode'], 'failover');
+      expect(j.containsKey('tolerance'), isFalse);
+      expect(j.containsKey('balancer'), isFalse);
+    });
+  });
 }

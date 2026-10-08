@@ -30,7 +30,7 @@ Load Balance (formerly planned as a separate `loadbalance` outbound) is the
 
 | Knob | Values | Default | Core key |
 |---|---|---|---|
-| Mode | Fastest ("single best server by latency") · Load balance ("spread connections across a pool of servers") · Manual (auto-select node, fold) | Fastest | `mode: round_robin` only with Load balance |
+| Mode | Fastest ("single best server by latency") · Load balance ("spread connections across a pool of servers") · Hold until failure ("keep the fastest server until it fails") · Manual (auto-select node, fold) | Hold until failure for a new group or Direction auto-select; a record without `mode` reads as Fastest | `mode: round_robin` with Load balance, `mode: failover` with Hold until failure; Fastest writes no `mode` |
 | Pool size | ≥1 | 3 | `balancer.pool` |
 | Pool tolerance (ms) | 0 = keep the whole live pool; >0 — pick the best; for an auto-select node ≤15000 | 0 | `balancer.pool_tolerance` |
 | Sticky session by | process · domain · source ip · dest ip · dest port; empty = "no stickiness" | process + domain | `balancer.sticky_hash`, empty → `["none"]` |
@@ -39,21 +39,29 @@ Load Balance (formerly planned as a separate `loadbalance` outbound) is the
 | Auto-select node: Members | All · Rule (Include/Exclude regex over the tag and synonyms) · Pick (checkboxes) | All | `outbounds` |
 | Auto-select node: Badge in list (regex) | pool badge | first flag emoji | — |
 
-The global "Passive health check" adds `passive_check: true` to all
-`urltest` groups (not to the manual genus).
+`passive_check` is no longer written: core v1.14.2-lx.12 removed the key
+([611](../../../tasks/611-drop-passive-check-kernel-lx12.md)); its replacement
+is Hold until failure (`failover`, [612](../../../tasks/612-contract-1-1-113-failover.md)):
+the fastest server at the moment of choice is held until it fails, and only it
+is probed each interval. The other members' latencies age; a manual group test
+re-picks the fastest. On the first launch after the update, groups in Fastest
+become Hold until failure unless passive checking had been switched off.
 
 ## Inputs / Outputs
 
 **Inputs:** nodes of the Direction / container; Xray `routing.balancers` and
 `burstObservatory`; global ping settings.
 **Outputs:** groups in the config; a label in the node list `🎯 [N]`
-(Fastest) / `🔀 [N/pool]` (Load balance); the live pool of the running core
+(Fastest) / `🔀 [N/pool]` (Load balance) / `📌 [N]` (Hold until failure); the
+live pool of the running core
 ("connect to see the live pool").
 
 ## Rules and invariants
 
-- `balancer{}` and `mode` are written only with Load balance: the core
-  rejects `balancer` without `round_robin` and flat `pool` (P13).
+- `balancer{}` is written only with Load balance: the core rejects
+  `balancer` without `round_robin` and flat `pool` (P13). `failover` is
+  written without `balancer` and without `tolerance`, even when the Direction
+  sets a tolerance (contract 1.1.111); its Tolerance field is hidden.
 - An empty `urltest` is not emitted: a Direction twin without nodes, an
   auto-select node with an empty pool (an explicit membership without a
   single member — with the warning "Auto node "…" was skipped…"), a fold
@@ -94,3 +102,5 @@ The global "Passive health check" adds `passive_check: true` to all
 | 7 | [442](../../../tasks/442-urltest-interval-idle-pair.md) | Released v2.24.0 | `idle_timeout` is raised to `interval` |
 | 8 | [565F](../../../tasks/565F-selector-group-genus/spec.md) | Phase A merged | Manual genus (`selector`) of an auto-select node |
 | 9 | [568](../../../tasks/568-source-replace-fold.md) | Implemented | "Replace with a group" for a folder and a subscription |
+| 10 | [611](../../../tasks/611-drop-passive-check-kernel-lx12.md) | Implemented | `passive_check` removed (core lx.12) |
+| 11 | [612](../../../tasks/612-contract-1-1-113-failover.md) | Implemented | Hold until failure (`failover`), migration from `passive_check` |

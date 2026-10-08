@@ -38,11 +38,13 @@ const _topLevelRoutingKeys = {
   // one-shot миграция не пере-сработала поверх восстановленных Направлений.
   'directions',
   'directions_migrated',
+  // §612 — guard миграции режима автовыбора едет с Направлениями: архив без
+  // него (до §612) после восстановления мигрирует заново.
+  kUrltestModeMigratedKey,
   'route_idle_suspend', // §215 — idle-suspend threshold (lx.wg.idle_suspend)
   'route_idle_suspend_reachable', // §272 — reachable idle window
   'wg_build_max', // §542 — WG/AWG build budget (lx.wg.build_max)
   'wg_lazy_build', // §542 — WG/AWG lazy build (lx.wg.lazy_build)
-  'urltest_passive_check', // §272 — passive health check
   'enabled_groups', // §125 — DEPRECATED (legacy, читается только миграцией)
   'tun_apps',
   'vpn_mode',

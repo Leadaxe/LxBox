@@ -77,7 +77,15 @@ ExitNodeTarget? exitNodeTargetForTag(
 /// (`updateMemberAt` / `updateConnectionAt`). Тег узла не меняется.
 /// Возвращает `null` при успехе, иначе текст ошибки для пользователя.
 Future<String?> storeExitNodeChoice(SubscriptionController sub,
-    ExitNodeTarget target, String? value) async {
+        ExitNodeTarget target, String? value) =>
+    storeTailscaleFields(sub, target, {
+      'exit_node': value == null || value.isEmpty ? null : value,
+    });
+
+/// §613 — то же для любых полей тела узла Tailscale (переключатели Settings
+/// вкладки Network): `null` убирает поле. Путь записи — как у Save choice.
+Future<String?> storeTailscaleFields(SubscriptionController sub,
+    ExitNodeTarget target, Map<String, Object?> fields) async {
   final raw = target.raw.trim();
   final base = raw.startsWith('{')
       ? raw
@@ -85,7 +93,7 @@ Future<String?> storeExitNodeChoice(SubscriptionController sub,
           .convert(target.node.emit(TemplateVars.empty).map);
   final String text;
   try {
-    text = withExitNode(base, value);
+    text = withBodyFields(base, fields);
   } on FormatException catch (e) {
     return getLocalText.s("Invalid JSON: %s", e.message);
   }

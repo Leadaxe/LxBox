@@ -55,7 +55,12 @@ Future<ChainEditOutcome?> editChainAndPersist(
     return ChainEditOutcome(deleted: true, positionsRemoved: healed.positions);
   }
   if (result.saved == null) return null;
-  await SettingsStorage.updateChain(result.saved!);
+  // §609 — тег редактируется: переименование переписывает ссылки на старый
+  // тег в storage, контроллер зеркалит detour-ссылки.
+  final saved = await SettingsStorage.renameChain(chain.tag, result.saved!);
+  if (saved.tag != chain.tag) {
+    subController.syncDetourRefsRetargeted({chain.tag: saved.tag});
+  }
   return const ChainEditOutcome(deleted: false);
 }
 

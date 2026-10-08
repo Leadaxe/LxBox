@@ -39,8 +39,12 @@ class SubscriptionEntryTile extends StatelessWidget {
   Widget? _buildTrailing(BuildContext context, SubscriptionEntry entry) {
     // §499 — счётчик только у подписки/папки. У одиночного сервера значок
     // живёт в [NodeWarningRow] подписи, иначе он задвоился бы в trailing.
-    final summary =
-        entry.list is UserServer ? null : entryWarningSummary(entry);
+    final summary = entry.list is UserServer
+        ? null
+        : entryWarningSummary(
+            entry,
+            sourceBuildCodes: subController.lastSourceBuildCodes,
+          );
     final typeIcon = entry.list is FolderServers
         ? Icon(Icons.folder_outlined,
             size: 20, color: Theme.of(context).colorScheme.onSurfaceVariant)

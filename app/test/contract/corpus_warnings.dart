@@ -50,7 +50,7 @@ String? _legacyWarningValue(NodeWarning w) => switch (w) {
       _ => null,
     };
 
-/// Запись `warnings[]` результата разбора: `{code, path?, value?, params?}` (PARSING_PRINCIPLES §6).
+/// Запись `warnings[]` результата разбора: `{code, path?, value?}` (PARSING_PRINCIPLES §6).
 ///
 /// Пустые поля не пишутся — их отсутствие нормативно, а `null` в результате разбора
 /// схема не допускает. Класса без кода в реестре в результате разбора нет вовсе:
@@ -61,24 +61,24 @@ Map<String, dynamic>? warningRecordOf(NodeWarning w) {
 
   final String? path;
   final String? value;
-  final Map<String, String> params;
   if (w is RegistryWarning) {
     // Санитайзер реестра уже знает и путь, и значение (у `secret`-полей —
     // `***`, 24.1.4), выдумывать здесь нечего.
     path = w.path;
     value = w.value;
-    params = w.params;
   } else {
     path = _legacyWarningPath(w);
     value = _legacyWarningValue(w);
-    params = const {};
   }
 
   return <String, dynamic>{
     'code': code,
     if (path != null && path.isNotEmpty) 'path': path,
     if (value != null && value.isNotEmpty) 'value': value,
-    if (params.isNotEmpty) 'params': params,
+    // §612 — `params` результат разбора не пишет: Go-раннер их не выводит
+    // (`contract_canon_test.go`, `{code, path?, value?}`), и в корпусе их нет
+    // ни в одном ожидании; строгая сверка авторских тел иначе падала бы на
+    // `field_missing.params.field`, дублирующем путь.
     // §577 — контракт 1.1.87: пишется только `false`.
     if (!w.applied) 'applied': false,
   };

@@ -381,8 +381,10 @@ Outbound emitHttp(HttpSpec s, TemplateVars vars) {
 Endpoint emitWireguard(WireguardSpec s, TemplateVars vars) {
   final peers = s.peers
       .map((p) => <String, dynamic>{
-            'address': p.endpointHost,
-            'port': p.endpointPort,
+            // §612 (контракт 1.1.109) — входящий пир: адреса нет, и ключи
+            // не пишутся (ядро ставит endpoint только при годном адресе).
+            if (p.endpointHost.isNotEmpty) 'address': p.endpointHost,
+            if (p.endpointPort != 0) 'port': p.endpointPort,
             'public_key': p.publicKey,
             // §025 — WARP client_id → reserved (3 байта). Перед public_ key/
             // allowed_ips порядок не важен (JSON-объект), но кладём рядом.

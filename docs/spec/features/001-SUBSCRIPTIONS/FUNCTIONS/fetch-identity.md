@@ -24,7 +24,7 @@ Global (Settings → Subscriptions → Fetch identity):
 
 | Parameter | Values | Default |
 |---|---|---|
-| Custom User-Agent | string, surrounding whitespace is trimmed | empty = `LxBox-android/<version>` |
+| Custom User-Agent | string, surrounding whitespace is trimmed; free input or a client preset | empty = `LxBox-android/<version>` |
 | Send HWID | on/off | off |
 | HWID · `x-hwid` | string; Regenerate gives a new UUIDv4 | UUIDv4, generated on first display |
 | `x-device-os` | string | `android` |
@@ -53,8 +53,17 @@ already filled in); disabling discards the snapshot.
 - Branded UA: `LxBox-android/<version>`; a leading `v`, brackets, `;` and
   spaces are cut from the version; with an empty version — `unknown`. It never contains the
   `singbox` substring (on it some panels return a JSON config).
-- The UA field carries a warning: without the `LxBox` token the panel may return an
-  unsupported format. It does not block.
+- The UA field has a list of popular-client presets: LxBox (default, clears the
+  field), Happ, v2RayTun, Streisand, Karing, v2rayNG, Hiddify, sing-box. A preset
+  only fills the field and can be edited further; which preset was picked is not
+  stored, only the string. Presets exist for panels that send the full format
+  (for example xray JSON with ws `path` and headers) only to "their" clients and
+  give everyone else stripped links or a refusal. Clash-family clients are not
+  offered: Clash YAML is not parsed. The default never changes on its own: a
+  foreign UA is a disguise, and a panel with an HWID gate may answer it with a stub.
+- The hint under the field says the format depends on User-Agent and suggests
+  another client's UA (for example Happ) when the subscription loads but nodes fail.
+  It does not block.
 - Regenerate HWID = a new device for the panel; the old one may occupy a limit
   slot. There is no warning.
 - The live response view in the subscription's Source tab uses the same
@@ -74,3 +83,4 @@ already filled in); disabling discards the snapshot.
 | 2 | [118F](../../../tasks/118F-subscription-fetch-identity/spec.md) | Released v2.0.6 | Global custom UA and opt-in HWID with device-meta, all overridable |
 | 3 | [289](../../../tasks/289-per-subscription-fetch-identity.md) | — | Default / Custom identity on the subscription, snapshot from the global values |
 | 4 | [346](../../../tasks/346-subs-full-crud-debug-api.md) | — | The subscription identity is also configurable via the Debug API |
+| 5 | [610](../../../tasks/610-user-agent-presets.md) | — | Popular-client presets in the Custom User-Agent field, new hint under the field |

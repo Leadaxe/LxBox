@@ -89,7 +89,12 @@ int clampDirectionPoolTolerance(int v) =>
 /// `roundRobin` — балансировка по пулу (читает [Direction.auto] balancer-поля).
 enum UrltestMode {
   leastTest('least_test'),
-  roundRobin('round_robin');
+  roundRobin('round_robin'),
+
+  /// §612 (контракт 1.1.111, ядро SPEC 116, lx.12) — самый быстрый на момент
+  /// выбора удерживается до своего отказа, пробуется только он. Эмит — без
+  /// `tolerance` (не действует) и без `balancer` (ядро не стартует).
+  failover('failover');
 
   const UrltestMode(this.wire);
 
@@ -100,6 +105,11 @@ enum UrltestMode {
       UrltestMode.values.firstWhere((m) => m.wire == s,
           orElse: () => UrltestMode.leastTest);
 }
+
+/// §612 — режим НОВЫХ авто-групп, свёрток и автовыбора Направлений (форма
+/// создания). Запись без `mode` по-прежнему читается `least_test` (умолчание
+/// схемы контракта): это про то, что предлагает форма, а не про чтение.
+const UrltestMode kNewAutoMode = UrltestMode.failover;
 
 /// §208 — компонент ключа sticky-сессии (round_robin, `balancer.sticky_hash`).
 enum StickyHashKey {
@@ -146,8 +156,9 @@ class DirectionAuto {
   const DirectionAuto({
     this.url = defaultUrl,
     // §272 — 15m вместо 5m: на mobile каждый цикл проб дайлит узлы (будит
-    // спящие, SPEC 020); с passive_check пробы при живом трафике и так
-    // пропускаются, interval задаёт лишь скорость реакции на смерть узла.
+    // спящие, SPEC 020). passive_check снят в §611 (ядро lx.12 удалило ключ),
+    // замена — режим failover (§612); interval задаёт скорость реакции на
+    // смерть узла.
     // Существующие Направления хранят своё значение в JSON — их это не меняет.
     this.interval = defaultInterval,
     this.tolerance = 50,
@@ -165,8 +176,8 @@ class DirectionAuto {
   final String idleTimeout; // duration ("30m")
   final bool interruptExistConnections; // urltest.interrupt_exist_connections
 
-  /// §208 — режим выбора узла (least_test ⇄ round_robin). Только round_robin
-  /// эмитит `balancer{}` в config.
+  /// §208 — режим выбора узла (least_test / round_robin / §612 failover).
+  /// Только round_robin эмитит `balancer{}` в config.
   final UrltestMode mode;
 
   /// §208 — `balancer.pool`: размер пула round_robin. clamp ≥1 (см. clampDirectionPool).

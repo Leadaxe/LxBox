@@ -33,10 +33,9 @@
 
 ## Входы / Выходы
 
-**Входы:** поля двойника из редактора; глобальные и per-Direction настройки пинга; Passive
-health check.
-**Выходы:** `url`, `interval`, `tolerance`, `idle_timeout`, `interrupt_exist_connections` и
-`passive_check` в группе `<tag>-auto`; карта пинга выбранного Направления; выбранный
+**Входы:** поля двойника из редактора; глобальные и per-Direction настройки пинга.
+**Выходы:** `url`, `interval`, `tolerance`, `idle_timeout` и `interrupt_exist_connections`
+в группе `<tag>-auto` (`passive_check` снят в [611](../../../tasks/611-drop-passive-check-kernel-lx12.md)); карта пинга выбранного Направления; выбранный
 группой узел в строке главного экрана («→ узел»).
 
 ## Правила и инварианты

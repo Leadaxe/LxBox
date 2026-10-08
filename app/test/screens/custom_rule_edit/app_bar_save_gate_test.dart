@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/screens/custom_rule_edit_screen.dart';
+import 'package:lxbox/widgets/lx_code_editor.dart';
+import 'package:re_editor/re_editor.dart';
 
 // §447 — Save в AppBar редактора правила идёт через ту же проверку, что Save
 // формы: массив или невалидный JSON не сохраняются, набранный текст остаётся
@@ -46,12 +48,17 @@ Finder get _appBarSave => find.descendant(
       matching: find.widgetWithIcon(IconButton, Icons.save),
     );
 
-Finder get _jsonField => find.byWidgetPredicate(
-      (w) => w is TextField && w.maxLines == 20,
-    );
+// §614 — поле тела правила теперь LxTextCodeField (под ним LxCodeEditor):
+// правка пользователя = запись в контроллер редактора.
+CodeLineEditingController _code(WidgetTester tester) =>
+    tester.widget<LxCodeEditor>(find.byType(LxCodeEditor)).controller;
 
-String _fieldText(WidgetTester tester) =>
-    tester.widget<TextField>(_jsonField).controller!.text;
+Future<void> _type(WidgetTester tester, String text) async {
+  _code(tester).text = text;
+  await tester.pump();
+}
+
+String _fieldText(WidgetTester tester) => _code(tester).text;
 
 void main() {
   const valid = '{"domain":"a.test","action":"reject"}';
@@ -66,7 +73,7 @@ void main() {
       final host = await _open(
           tester, CustomRuleJson(id: 'r1', name: 'Rule 2', json: valid));
 
-      await tester.enterText(_jsonField, body);
+      await _type(tester, body);
       await tester.pump();
 
       expect(tester.widget<IconButton>(_appBarSave).onPressed, isNull,
@@ -84,7 +91,7 @@ void main() {
       final host = await _open(
           tester, CustomRuleJson(id: 'r1', name: 'Rule 2', json: valid));
 
-      await tester.enterText(_jsonField, body);
+      await _type(tester, body);
       await tester.pump();
 
       await tester.tap(find.descendant(
@@ -110,7 +117,7 @@ void main() {
         tester, CustomRuleJson(id: 'r1', name: 'Rule 2', json: valid));
 
     const edited = '{"domain":"d.test","action":"reject"}';
-    await tester.enterText(_jsonField, edited);
+    await _type(tester, edited);
     await tester.pump();
 
     expect(tester.widget<IconButton>(_appBarSave).onPressed, isNotNull);

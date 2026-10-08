@@ -113,7 +113,8 @@ class _SourceReplaceScreenState extends State<SourceReplaceScreen> {
     _idleCtrl = TextEditingController(text: a.idleTimeout);
     _poolCtrl = TextEditingController(text: '${a.pool}');
     _poolToleranceCtrl = TextEditingController(text: '${a.poolTolerance}');
-    _autoMode = a.mode;
+    // §612 — автовыбор, которого у свёртки ещё нет, предлагается failover.
+    _autoMode = r?.auto?.mode ?? kNewAutoMode;
     _interrupt = a.interruptExistConnections;
     _sticky = a.stickyHash.toSet();
     for (final c in _ctrls) {
@@ -297,15 +298,19 @@ class _SourceReplaceScreenState extends State<SourceReplaceScreen> {
                   helper: getLocalText.s("Larger values save battery")),
             ),
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: TextField(
-              controller: _toleranceCtrl,
-              keyboardType: TextInputType.number,
-              enabled: _autoMode == UrltestMode.leastTest,
-              decoration: deco(getLocalText.s("Tolerance (ms)")),
+          // §612 — у failover tolerance не действует и не эмитится: поле
+          // скрыто.
+          if (_autoMode != UrltestMode.failover) ...[
+            const SizedBox(width: 8),
+            Expanded(
+              child: TextField(
+                controller: _toleranceCtrl,
+                keyboardType: TextInputType.number,
+                enabled: _autoMode == UrltestMode.leastTest,
+                decoration: deco(getLocalText.s("Tolerance (ms)")),
+              ),
             ),
-          ),
+          ],
         ],
       ),
       const SizedBox(height: 8),
@@ -332,6 +337,11 @@ class _SourceReplaceScreenState extends State<SourceReplaceScreen> {
               value: UrltestMode.roundRobin,
               label: Text(getLocalText.s("Load balance")),
               icon: const Icon(Icons.hub_outlined, size: 16)),
+          // §612 (контракт 1.1.111) — удержание узла до отказа.
+          ButtonSegment(
+              value: UrltestMode.failover,
+              label: Text(getLocalText.s("Hold until failure")),
+              icon: const Icon(Icons.push_pin_outlined, size: 16)),
         ],
         selected: {_autoMode},
         showSelectedIcon: false,

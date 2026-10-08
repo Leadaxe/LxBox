@@ -100,9 +100,10 @@ lxbox_settings.json                          # SettingsStorage (Dart), the main 
 │           ├─ tolerance         int           ms, uint16 (§161 — clamp 0..65535)
 │           ├─ idle_timeout      string        duration ("30m")
 │           ├─ interrupt_exist_connections  bool  urltest.interrupt_exist_connections
-│           ├─ mode              string        §208 — 'least_test' (default) | 'round_robin'
+│           ├─ mode              string        §208 — 'least_test' (default when absent) | 'round_robin' | §612 'failover'
 │           └─ balancer          object{3 keys}  §208 — {pool, pool_tolerance, sticky_hash[]}
 ├─ directions_migrated           bool          §125/§393 — the guard for the one-shot directions migration
+├─ urltest_mode_migrated         bool          §612 — the guard for the one-shot passive_check → failover migration
 ├─ last_global_update            ISO-8601      LEGACY (§593) — neither written nor read; kept known for old files
 ├─ presets_migrated              bool          §159 — the "default presets have been seeded" guard (fresh-install seed)
 ├─ late_presets_seeded           List<String>  §578 — late default presets already seeded once (e.g. tailscale)
@@ -205,6 +206,7 @@ Android SharedPreferences:
   "enabled_groups":     [ … ],     // §125 DEPRECATED (read only by the directions[] migration)
   "directions":         [ … ],     // §125 — routing directions (template→storage)
   "directions_migrated": true,     // §125/§393 — the guard for the one-shot directions migration
+  "urltest_mode_migrated": true,   // §612 — the guard for the passive_check → failover migration
   "last_global_update": "ISO-8601",// LEGACY (§593) — present only in old files
   "presets_migrated":   true,      // §159 — the "defaults seeded" guard (fresh-install seed)
   "late_presets_seeded": [ "tailscale" ], // §578 — late default presets seeded once
@@ -1658,7 +1660,8 @@ with a warning. A legacy 0.12 file carries a root `chains[]` section (contract 0
 | `route_idle_suspend_reachable` | `String` | §272 — the reachable idle window (`lx.wg.idle_suspend_reachable`, §535). A duration string, default `'5m'`. **Config-significant** (`markConfigDirty`). CRUD: `getIdleSuspendReachable` / `saveIdleSuspendReachable`. |
 | `wg_build_max` | `int` | §542 — the WG/AWG build budget (`lx.wg.build_max`, core SPEC 097): how many endpoints stay built at once. Default `5`, `0` = no cap; the UI offers 0/3/5/8/12. Written to the config only together with `idle_suspend`. **Config-significant**. CRUD: `getWgBuildMax` / `saveWgBuildMax`. |
 | `wg_lazy_build` | `bool` | §542 — lazy WG/AWG build (`lx.wg.lazy_build`, core SPEC 097). Default `true`. `false` → neither `lazy_build` nor `build_max` is written. Written only together with `idle_suspend`. **Config-significant**. CRUD: `getWgLazyBuild` / `saveWgLazyBuild`. |
-| `urltest_passive_check` | `bool` | §272 — passive health checking (`urltest.passive_check`): skip probes while live traffic already proves the node is alive. Default `true`. **Config-significant**. CRUD: `getPassiveCheck` / `setPassiveCheck`. |
+| `urltest_passive_check` | `bool` | **Retired (§611)** — was §272 passive health checking (`urltest.passive_check`); core lx.12 removed the key. No longer written, emitted or exported to a backup; an old backup's value is skipped silently on import (`retiredTopLevelKeys`). Read once by the §612 migration (`SettingsStorage.migrateUrltestModeIfNeeded`, before the first build), which then deletes it. |
+| `urltest_mode_migrated` | `bool` | §612 — the guard for the one-shot migration from `passive_check` to the `failover` mode. The raw `urltest_passive_check` `true` or absent (the old default) → the Directions' `auto`, the folds' `replace.auto` and the folders' `kind: auto` members (`group.strategy`, not `group_type: selector`) with `least_test` or no `mode` become `failover`; `false` → nothing changes; `round_robin` is never touched. Then `urltest_passive_check` is deleted and this key set to `true`. Exported with Routing (as `directions_migrated`): a backup made before §612 restores without it, and the next start migrates its groups. |
 
 > The structural keys have their own sections above: [`tun_apps`](#tun_apps--046), [`vpn_mode`](#vpn_mode--119), [`warp_account`](#warp_account--025), [`masque_account`](#masque_account--130). Together with this table that is the exhaustive list of current top-level keys in `lxbox_settings.json`. The registry that must match it is `SettingsStorage.allowedTopLevelKeys` (§159 — the allowlist filter for backup import): **a new key belongs in both**, or it survives an export and is silently dropped on restore.
 

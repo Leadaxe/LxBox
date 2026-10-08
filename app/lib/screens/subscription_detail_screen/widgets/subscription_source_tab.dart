@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import '../../../models/ui_msg.dart';
 
 import '../../../services/l10n/locale_controller.dart';
-import '../../../widgets/big_text_view.dart';
+import '../../../widgets/lx_code_editor.dart';
 import '../../../widgets/safe_bottom.dart';
 
 /// Source tab: live HTTP response headers (important + collapsible "others")
@@ -208,16 +208,32 @@ class SubscriptionSourceTab extends StatelessWidget {
             ),
           ),
         ),
+        // §614 — тело в редакторе только для чтения: номера строк, свёртка,
+        // поиск; подсветка JSON — когда тело и есть JSON (base64 и списки
+        // ссылок — без подсветки). Редактор построчный, огромные тела ему
+        // по силам (§333); высота фиксированная — прокрутка внутри.
         if (rawSource.isNotEmpty)
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 12).withSafeBottom(context),
-            sliver: BigTextSliver(
-              text: rawSource,
-              style: const TextStyle(fontSize: 11, fontFamily: 'monospace'),
+            sliver: SliverToBoxAdapter(
+              child: LxJsonView(
+                key: const ValueKey('subscription-raw-source'),
+                text: rawSource,
+                height: (MediaQuery.sizeOf(context).height * 0.6)
+                    .clamp(320.0, double.infinity),
+                fontSize: 11,
+                showLineNumbers: true,
+                language: _looksLikeJson(rawSource) ? LxCodeLanguage.json : null,
+              ),
             ),
           ),
       ],
     );
+  }
+
+  static bool _looksLikeJson(String text) {
+    final t = text.trimLeft();
+    return t.startsWith('{') || t.startsWith('[');
   }
 
   Widget _headerRow(String name, String value, ThemeData theme) {

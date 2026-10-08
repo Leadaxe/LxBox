@@ -16,12 +16,16 @@ import 'debug/profiling_tab.dart';
 import '../services/l10n/locale_controller.dart';
 
 class DebugScreen extends StatefulWidget {
-  const DebugScreen({super.key, this.initialTab = 0});
+  const DebugScreen({super.key, this.initialTab = 0, this.errorsOnly = false});
 
   /// §357 — стартовая вкладка (0 Log · 1 Crashes · 2 OOM · 3 Profiling),
   /// паттерн `AppSettingsScreen.initialTab`. Используется lxbox-навигацией
   /// support-ленты (`route:debug/<tab>`, `route:profiler`).
   final int initialTab;
+
+  /// §614 — открыть журнал с фильтром уровня «только error» (переход со
+  /// строки «Errors (N)» главного экрана).
+  final bool errorsOnly;
 
   @override
   State<DebugScreen> createState() => _DebugScreenState();
@@ -38,8 +42,24 @@ class _DebugScreenState extends State<DebugScreen> with SnackHelper {
   final _searchController = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    if (widget.errorsOnly) {
+      _levels
+        ..clear()
+        ..add(DebugLevel.error);
+    }
+    // §614 — журнал открыт: счётчик «Errors (N)» на главном обнуляется.
+    // После кадра, чтобы не дёргать слушателей главного во время build.
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => AppLog.I.markErrorsSeen());
+  }
+
+  @override
   void dispose() {
     _searchController.dispose();
+    // Ошибки, пришедшие при открытом журнале, тоже увидены.
+    scheduleMicrotask(AppLog.I.markErrorsSeen);
     super.dispose();
   }
 

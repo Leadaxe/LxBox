@@ -212,33 +212,28 @@ class _ConfigScreenState extends State<ConfigScreen> {
                   ),
                 if (_loading) const LinearProgressIndicator(),
                 Expanded(
-                  child: Stack(
-                    children: [
-                      LxCodeEditor(
-                        controller: _textController,
-                        readOnly: _readOnly,
-                        hint: getLocalText.s("JSON or JSON5 (// and /* */ comments)"),
-                        showLineNumbers: true,
-                        language: LxCodeLanguage.json,
-                      ),
-                      Positioned(
-                        top: 4,
-                        right: 4,
-                        child: IconButton(
-                          icon: const Icon(Icons.copy, size: 16),
-                          tooltip: getLocalText.s("Copy"),
-                          visualDensity: VisualDensity.compact,
-                          onPressed: () async {
-                            // §219 — await + mounted перед snackbar (как _copy():40),
-                            // иначе гонка Future/context.
-                            await Clipboard.setData(
-                                ClipboardData(text: _textController.text));
-                            if (!context.mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(getLocalText.s("Config copied"))),
-                            );
-                          },
-                        ),
+                  // §614 — Copy теперь кнопка самого поля, рядом с поиском.
+                  child: LxCodeEditor(
+                    controller: _textController,
+                    readOnly: _readOnly,
+                    hint: getLocalText.s("JSON or JSON5 (// and /* */ comments)"),
+                    showLineNumbers: true,
+                    language: LxCodeLanguage.json,
+                    actions: [
+                      IconButton(
+                        icon: const Icon(Icons.copy, size: 16),
+                        tooltip: getLocalText.s("Copy"),
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () async {
+                          // §219 — await + mounted перед snackbar (как _copy():40),
+                          // иначе гонка Future/context.
+                          await Clipboard.setData(
+                              ClipboardData(text: _textController.text));
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(getLocalText.s("Config copied"))),
+                          );
+                        },
                       ),
                     ],
                   ),

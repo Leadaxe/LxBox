@@ -20,6 +20,7 @@ import 'detour_yields.dart' show yieldToBuildDetour;
 import 'if_engine.dart' show Dropped, walk;
 import 'preset_expand.dart';
 import 'rule_set_registry.dart';
+import 'server_list_build.dart' show groupDefaultDropped;
 
 // Barrel stitching the post-step part files into one library via `part`/`part of`.
 // Каждый part = один шаг sing-box config post-processing'а.

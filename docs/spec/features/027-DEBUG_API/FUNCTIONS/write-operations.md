@@ -50,7 +50,7 @@ top-level `dropped[]` with the parse reasons.
 
 | Status | Code | When |
 |--------|------|------|
-| 400 | `bad_request` | missing or wrong query, malformed JSON, wrong field type, a validation finding (chain `tooFewHops`, an immutable `tag`, a bad regex), unsupported method |
+| 400 | `bad_request` | missing or wrong query, malformed JSON, wrong field type, a validation finding (chain `tooFewHops`, an immutable Direction `tag`, a chain `tagEmpty`/`tagTaken`, a bad regex), unsupported method |
 | 404 | `not_found` | unknown sub-path, id, tag or index |
 | 409 | `conflict` | a precondition is missing: tunnel down, a guard run in flight, `vpn-1` disable or delete, a taken or reserved tag, a protected `debug_*` var, rebuild while Lock config is on |
 | 413 | `payload_too_large` | body over 1 MiB |
@@ -65,6 +65,10 @@ top-level `dropped[]` with the parse reasons.
   reference is 400 and the list is unchanged; a DNS record in the old form is
   400 and storage is untouched; a folder member whose new `raw` does not parse
   keeps the old one.
+- **A chain rename rewrites references.** PATCH `/chains/{tag}` with `tag`
+  keeps the chain's place in the source list and moves references to the old
+  tag (other chains' positions, rules, `route_final`, detours, DNS) to the new
+  one in the same write.
 - **Writes go through the owners.** Sources through the subscription owner
   (fetch state machine, UI notify), Directions and chains through the
   Directions owner (live entries are re-synced, `healed` reports reset

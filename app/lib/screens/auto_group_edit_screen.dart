@@ -59,8 +59,9 @@ final class AutoGroupDeleted extends AutoGroupEditResult {
 
 enum _MembershipMode { all, rule, explicit }
 
-/// §565 — выбор режима группы: два вида автовыбора и ручной род.
-enum _Kind { fastest, balance, manual }
+/// §565 — выбор режима группы: три вида автовыбора (§612 — удержание до
+/// отказа) и ручной род.
+enum _Kind { fastest, balance, hold, manual }
 
 class _AutoGroupEditScreenState extends State<AutoGroupEditScreen> {
   late final TextEditingController _labelCtrl;
@@ -122,7 +123,8 @@ class _AutoGroupEditScreenState extends State<AutoGroupEditScreen> {
       RuleMembers() => _MembershipMode.rule,
     };
     _picked = m is ExplicitMembers ? m.members.toSet() : <NodeLink>{};
-    _urlMode = p.mode;
+    // §612 — новая группа предлагается в режиме failover.
+    _urlMode = s == null ? kNewAutoMode : p.mode;
     _sticky = p.stickyHash.toSet();
     _interrupt = p.interruptExistConnections;
     _manual = s?.isManual ?? false;
@@ -414,6 +416,12 @@ class _AutoGroupEditScreenState extends State<AutoGroupEditScreen> {
                   label: Text(getLocalText.s("Load balance")),
                   icon: const Icon(Icons.hub_outlined, size: 16),
                 ),
+                // §612 (контракт 1.1.111) — удержание узла до отказа.
+                ButtonSegment(
+                  value: _Kind.hold,
+                  label: Text(getLocalText.s("Hold until failure")),
+                  icon: const Icon(Icons.push_pin_outlined, size: 16),
+                ),
                 ButtonSegment(
                   value: _Kind.manual,
                   label: Text(getLocalText.s("Manual")),
@@ -436,6 +444,9 @@ class _AutoGroupEditScreenState extends State<AutoGroupEditScreen> {
                   case _Kind.balance:
                     _manual = false;
                     _urlMode = UrltestMode.roundRobin;
+                  case _Kind.hold:
+                    _manual = false;
+                    _urlMode = UrltestMode.failover;
                 }
               }),
             ),
@@ -447,6 +458,8 @@ class _AutoGroupEditScreenState extends State<AutoGroupEditScreen> {
                   getLocalText.s("single best server by latency"),
                 _Kind.balance => getLocalText
                     .s("spread connections across a pool of servers"),
+                _Kind.hold =>
+                  getLocalText.s("keep the fastest server until it fails"),
                 _Kind.manual =>
                   getLocalText.s("you pick the server, no latency tests"),
               },
@@ -486,7 +499,11 @@ class _AutoGroupEditScreenState extends State<AutoGroupEditScreen> {
 
   _Kind get _kind => _manual
       ? _Kind.manual
-      : (_urlMode == UrltestMode.roundRobin ? _Kind.balance : _Kind.fastest);
+      : switch (_urlMode) {
+          UrltestMode.roundRobin => _Kind.balance,
+          UrltestMode.failover => _Kind.hold,
+          UrltestMode.leastTest => _Kind.fastest,
+        };
 
   /// §565 — род selector: выбранный член пула. Отметка — текущий `default`;
   /// без него (или если член выпал из пула) ядро берёт первого.
@@ -698,7 +715,8 @@ class _AutoGroupEditScreenState extends State<AutoGroupEditScreen> {
           ),
           style: const TextStyle(fontSize: 13),
         ),
-        if (!_manual) ...[
+        // §612 — у failover tolerance не действует и не эмитится: поле скрыто.
+        if (!_manual && _urlMode != UrltestMode.failover) ...[
           const SizedBox(height: 10),
           TextField(
             controller: _toleranceCtrl,

@@ -6,5 +6,5 @@
   "preset \"ru-direct\": remote rule_set \"geoip-ru\" skipped — no cached file (download first)",
   "preset \"ru-direct\": remote rule_set \"ru-apps\" skipped — no cached file (download first)",
   "DNS group 'dns-group': member 'off-dns' dropped (disabled)",
-  "Outbound \"VLESS Reality\" detours through group \"vpn-3\" it belongs to — excluded from it (its detour is kept; otherwise the kernel would not start: dependency cycle)."
+  "1 node(s) left out of vpn-3: VLESS Reality [node_detour_through_group]"
 ]

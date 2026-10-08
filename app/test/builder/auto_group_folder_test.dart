@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/auto_select.dart';
 import 'package:lxbox/models/codec/source_record.dart';
 import 'package:lxbox/models/emit_context.dart';
+import 'package:lxbox/models/node_warning.dart' show RegistryWarning;
 import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/server_list.dart';
@@ -17,12 +18,6 @@ import '../parser/engine_test_setup.dart';
 /// (§439 N2, `codec/auto_group_record.dart`), а на билде превращается в
 /// `urltest` по членам ЭТОЙ же папки.
 class _FakeCtx extends EmitContext {
-  _FakeCtx({this.passiveCheck = false});
-
-  /// §272/§322 — глобальная настройка приложения, доходит до групп через ctx.
-  @override
-  final bool passiveCheck;
-
   final entries = <SingboxEntry>[];
   final warnings = <String>[];
   final selectorTags = <String>[];
@@ -47,6 +42,12 @@ class _FakeCtx extends EmitContext {
 
   @override
   void warn(String line) => warnings.add(line);
+
+  /// §612 — коды отчёта сборки (`group_default_dropped`).
+  final codes = <RegistryWarning>[];
+
+  @override
+  void code(RegistryWarning w) => codes.add(w);
 
   @override
   void addToSelectorTagList(SingboxEntry entry) => selectorTags.add(entry.tag);
@@ -266,21 +267,13 @@ void main() {
       }
     });
 
-    test('§272 — passive_check из глобальных настроек', () {
-      final on = _FakeCtx(passiveCheck: true);
+    test('§611 — passive_check не эмитится (ядро lx.12 удалило ключ)', () {
+      final ctx = _FakeCtx();
       folder([
         vless('u1', '1.1.1.1', 'A'),
         AutoSelectSpec(id: 'a', tag: 'G', label: 'G'),
-      ]).build(on);
-      expect(urltests(on).single['passive_check'], isTrue);
-
-      // Выключено → ключа нет вовсе (omitempty = апстрим-поведение).
-      final off = _FakeCtx();
-      folder([
-        vless('u1', '1.1.1.1', 'A'),
-        AutoSelectSpec(id: 'a', tag: 'G', label: 'G'),
-      ]).build(off);
-      expect(urltests(off).single.containsKey('passive_check'), isFalse);
+      ]).build(ctx);
+      expect(urltests(ctx).single.containsKey('passive_check'), isFalse);
     });
 
     test('выключенная папка не эмитит ничего', () {
@@ -376,7 +369,7 @@ void main() {
         .singleWhere((m) => m['tag'] == 'F: Pick');
 
     test('тело ядра: type selector, состав и default итоговыми тегами', () {
-      final ctx = _FakeCtx(passiveCheck: true);
+      final ctx = _FakeCtx();
       folder([
         vless('u1', '1.1.1.1', 'A'),
         vless('u2', '2.2.2.2', 'B'),
@@ -404,6 +397,8 @@ void main() {
       expect(m.containsKey('default'), isFalse);
       expect(ctx.warnings.where((w) => w.contains('group_member_dropped')),
           hasLength(1));
+      // §612 (контракт 1.1.112) — снятие умолчания называет свой код.
+      expect(ctx.codes.map((w) => w.code), ['group_default_dropped']);
     });
 
     test('default вне состава назван кодом', () {
@@ -414,7 +409,13 @@ void main() {
         manual(def: 'Z'),
       ]).build(ctx);
       expect(selectorOf(ctx).containsKey('default'), isFalse);
-      expect(ctx.warnings.single, contains('group_member_dropped'));
+      // §612 (контракт 1.1.112) — `group_default_dropped {tag, default}`,
+      // адресат — группа.
+      expect(ctx.warnings, isEmpty);
+      final w = ctx.codes.single;
+      expect(w.code, 'group_default_dropped');
+      expect(w.params, {'tag': selectorOf(ctx)['tag'], 'default': 'Z'});
+      expect(w.ownerTag, selectorOf(ctx)['tag']);
     });
 
     test('urltest из источника: тело разбора — объявленное, ядру — полное',

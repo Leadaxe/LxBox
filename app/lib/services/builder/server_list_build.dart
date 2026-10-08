@@ -279,22 +279,17 @@ extension ServerListBuild on ServerList {
 
       // §565 — тело разбора + параметры замера, которых источник не объявил.
       final entry = spec.coreEntry(spec.emit(ctx.vars));
-      // §272/§322 — глобальный «Passive health check»: пропускаем пробу, пока
-      // узел и так подтверждён своим трафиком. Для пула из 15 узлов это
-      // главная статья расхода батареи. Эмитим только при true (omitempty:
-      // отсутствие = false = апстрим), как Направление в build_config.
-      // У ручного рода пробы нет — и поля тоже (ядро: unknown field).
-      if (ctx.passiveCheck && !spec.isManual) {
-        entry.map['passive_check'] = true;
-      }
+      // passive_check снят в §611 (ядро lx.12 удалило ключ), замена — режим
+      // failover (§612).
       entry.map['tag'] =
           ctx.allocateTag(TagResolver.displayTag(tagPrefix, spec.tag));
       noteAddress(spec, spec.tag, entry.tag, group: true);
       entry.map['outbounds'] = members;
       // §565 — `default` ручного рода: сырой тег члена → итоговый. Член не
-      // разрешился — поле снимается, ядро берёт первого живого члена;
-      // выпавшего члена явного состава отчёт уже назвал
-      // (`group_member_dropped`), иначе называем здесь.
+      // разрешился — поле снимается, ядро берёт первого живого члена.
+      // §612 (контракт 1.1.112) — о снятии говорит код
+      // `group_default_dropped`, один на группу; выпавшего члена явного
+      // состава отчёт называет ещё и своим `group_member_dropped`.
       if (spec.isManual) {
         entry.map.remove('default');
         final def = resolveAutoSelectDefault(
@@ -306,9 +301,8 @@ extension ServerListBuild on ServerList {
         );
         if (def != null) {
           entry.map['default'] = def;
-        } else if (spec.manualDefault.isNotEmpty &&
-            !_isExplicitMember(spec, spec.manualDefault)) {
-          ctx.warn(groupMemberDroppedLine(shown, spec.manualDefault));
+        } else if (spec.manualDefault.isNotEmpty) {
+          ctx.code(groupDefaultDropped(entry.tag, spec.manualDefault));
         }
       }
       ctx.addEntry(entry);
@@ -439,10 +433,17 @@ String? resolveAutoSelectDefault(
   return members.contains(want) ? want : null;
 }
 
-bool _isExplicitMember(AutoSelectSpec spec, String rawTag) {
-  final m = spec.membership;
-  return m is ExplicitMembers && m.members.any((l) => l.tag == rawTag);
-}
+/// §612 (контракт 1.1.112) — код записи отчёта сборки: `default`
+/// selector-группы не вошёл в её состав и снят, группа стартует с первого
+/// члена. Одна запись на группу, адресат — группа (её финальный тег).
+const kGroupDefaultDroppedCode = 'group_default_dropped';
+
+/// Запись [kGroupDefaultDroppedCode] группы [tag] с умолчанием [def].
+RegistryWarning groupDefaultDropped(String tag, String def) => RegistryWarning(
+      code: kGroupDefaultDroppedCode,
+      params: {'tag': tag, 'default': def},
+      ownerTag: tag,
+    );
 
 /// Контракт 1.1.67 (§63) — код записи отчёта сборки о члене Auto-группы,
 /// не разрешившемся в узел.

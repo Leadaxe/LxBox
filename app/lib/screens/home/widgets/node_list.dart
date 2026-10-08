@@ -584,6 +584,8 @@ class HomeNodeList extends StatelessWidget {
         ? state.tailscaleStatus[tag]
         : null;
     final exitName = tailnetExitName(tailnet);
+    // §613 — ядро lx.12 отдаёт путь до exit-пира в потоке состояния.
+    final exitPath = exitName == null ? null : tailnetExitPath(tailnet);
     final notificationWarnings = _notificationWarningsForRow(
       outboundType: outboundType,
       isDirectionAuto: isDirectionAuto,
@@ -633,6 +635,7 @@ class HomeNodeList extends StatelessWidget {
                   ?transport,
                   ?security,
                   if (exitName != null) getLocalText.s("via %s", exitName),
+                  ?exitPath,
                 ].join('·'),
           tailnetNote: tailnetRowNote(
             tunnelUp: state.tunnelUp,

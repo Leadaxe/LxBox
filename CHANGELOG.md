@@ -10,6 +10,116 @@
 
 ---
 
+## [2.25.11] — 2026-10-08
+
+### Added
+
+- **WireGuard/AmneziaWG peers and the Tailscale path ([task 613](docs/spec/tasks/613-wg-peers-tailscale-path-health.md)).**
+  The details screen of a WG/AWG node lists its peers while the VPN is on:
+  address, handshake age, traffic and a verdict (`connected`, `no active
+  session`, `never connected`); polling stops when the screen closes and never
+  wakes a sleeping node. The Tailscale Network tab shows the path to each
+  device (`direct <ip:port>`, `peer relay`, `relay <region>`), backend warnings
+  on top, no longer repeats the exit device under Devices, and gets two
+  switches: Advertise this device as exit node, Allow LAN access while using
+  exit node. The node row adds the path after `via <device>`.
+  (RU: в окне WG/AWG-узла — пиры с адресом, возрастом хендшейка, трафиком и
+  вердиктом; у Tailscale — путь до устройств, предупреждения бэкенда, путь до
+  выхода в строке узла и переключатели advertise / доступа в LAN.)
+- **Hold until failure, a third auto-select mode ([task 612](docs/spec/tasks/612-contract-1-1-113-failover.md)),**
+  next to Fastest and Load balance in the Direction editor, the auto node
+  editor and "Replace with a group": the fastest server at the moment of
+  choice is kept until it fails, and only it is probed each interval. The
+  Tolerance field hides in this mode; the list shows the group as `📌 [N]`.
+  New auto groups and Directions start in this mode. On the first launch
+  after the update, groups in Fastest move to it unless Passive health check
+  had been switched off; Load balance groups stay as they are.
+  (RU: третий режим автовыбора Hold until failure — самый быстрый на момент
+  выбора сервер держится до своего отказа, проба каждый interval только у
+  него; поле Tolerance скрыто, в списке группа — `📌 [N]`; новые группы и
+  Направления создаются в нём; при первом запуске после обновления группы
+  в Fastest переходят в него, если пассивная проверка не была выключена.)
+- **A WireGuard node whose peer has no address is accepted when it has a listen port**
+  (contract 1.1.109–1.1.110): the node waits for the peer to connect and says
+  so with an info note. Without both the address and the listen port the
+  node is dropped from a subscription and marked with an error when written
+  by hand. Such a node cannot be copied as a link.
+  (RU: узел WireGuard с пиром без адреса принимается, если у него есть
+  listen_port, — он ждёт входящего подключения и говорит об этом заметкой;
+  без адреса и без listen_port узел подписки отбрасывается, свой — с
+  ошибкой; ссылкой такой узел не копируется.)
+- **The build report names two more cases by code:** a group's default server
+  dropped because it left the group (`group_default_dropped`), and nodes left
+  out of a group they dial through (`node_detour_through_group`, one entry per
+  source and group). Both also show on the node's notifications.
+  A subscription with such nodes gets a badge in the subscription list, one
+  entry per group with the node count ([task 615](docs/spec/tasks/615-detour-badge-folder-editor-nodes-not-loaded.md)).
+  (RU: отчёт сборки называет кодом снятое умолчание группы и узлы, не
+  взятые в группу, через которую они сами ходят; обе записи видны и в
+  уведомлениях узла, а подписка с такими узлами получает бейдж в списке —
+  одна запись на группу с числом узлов.)
+- **Errors (N) under the node list ([task 614](docs/spec/tasks/614-ui-parity-errors-journal-editor.md)).**
+  A red line counts error entries in the app and core logs since the log was
+  last opened (or since launch); a tap opens the Debug screen filtered to
+  errors and resets the count. The error SnackBar stays.
+  (RU: под списком узлов — красная строка Errors (N), число ошибок журнала
+  приложения и ядра с последнего открытия журнала; тап открывает Debug с
+  фильтром ошибок и обнуляет счётчик.)
+- **Copy on a notification card ([task 614](docs/spec/tasks/614-ui-parity-errors-journal-editor.md)):**
+  code, title, What happened / Why / What you can do and params go to the
+  clipboard as plain text.
+  (RU: кнопка Copy у карточки уведомления — код, заголовок, три раздела и
+  params в буфер обычным текстом.)
+- **The JSON editor folds blocks and searches ([task 614](docs/spec/tasks/614-ui-parity-errors-journal-editor.md)),**
+  and it now backs more fields: a node's Source (JSON highlighted, a link or
+  WireGuard INI shown as plain text), DNS server, route rule, DNS rule,
+  subscription body and the folder's Edit server dialog ([task 615](docs/spec/tasks/615-detour-badge-folder-editor-nodes-not-loaded.md)).
+  The config's Copy moved into the field's buttons.
+  (RU: редактор JSON сворачивает блоки и ищет по тексту; на нём теперь Source
+  узла, DNS-сервер, правило маршрута, DNS-правило, тело подписки и диалог
+  Edit server в папке. Copy конфига переехал в кнопки поля.)
+- **A subscription without a cached body says so ([task 615](docs/spec/tasks/615-detour-badge-folder-editor-nodes-not-loaded.md)).**
+  When the body file is missing after a restart (a restored slot or backup,
+  a disabled subscription), the Nodes tab reads "Nodes are not loaded.
+  Update the subscription to see them" with an Update button instead of
+  "No nodes found", the node count in the list turns grey, and the app log
+  gets a warning with the expected cache path.
+  (RU: подписка без тела в кэше: вкладка Nodes пишет «Nodes are not loaded…»
+  с кнопкой Update вместо «No nodes found», счётчик узлов в списке серый,
+  в журнале — предупреждение с ожидаемым путём кэша.)
+
+### Changed
+
+- **Contract 1.1.114** (from 1.1.108).
+- **Core v1.14.2-lx.12; the Passive health check setting is gone ([task 611](docs/spec/tasks/611-drop-passive-check-kernel-lx12.md)).**
+  The new core removed `urltest.passive_check`: a config with it no longer
+  starts, so auto groups stop carrying the key and the switch leaves
+  Settings → Optimization. Its replacement is the Hold until failure mode
+  (`failover`, above). An older backup with this setting imports without a
+  warning.
+  (RU: ядро v1.14.2-lx.12; настройка Passive health check убрана — новое ядро
+  удалило `urltest.passive_check`, и конфиг с ним не стартует. Замена — режим
+  Hold until failure (`failover`, выше). Старый бэкап с этой настройкой
+  импортируется без предупреждения.)
+- **Custom User-Agent offers popular-client presets ([task 610](docs/spec/tasks/610-user-agent-presets.md))**
+  (Happ, v2RayTun, Streisand, Karing, v2rayNG, Hiddify, sing-box) for panels that
+  send full configs only to specific apps; the hint under the field now says so.
+  (RU: в поле Custom User-Agent — пресеты популярных клиентов для панелей, которые
+  отдают полный конфиг только «своим» приложениям; подсказка под полем переписана.)
+- **A hop chain's tag is editable ([task 609](docs/spec/tasks/609-chain-tag-editable.md)),**
+  like a node's: a Tag field with the emoji picker in the chain editor and
+  `tag` in Debug API PATCH. The chain keeps its place in the source list;
+  other chains' positions, rules, final, detours and DNS servers that named
+  the old tag follow the new one.
+  (RU: тег цепочки редактируется, как у узла; место в списке сохраняется,
+  ссылки на старый тег переходят на новый.)
+- **Node details show `type · transport · security` on one line ([task 614](docs/spec/tasks/614-ui-parity-errors-journal-editor.md)),**
+  Server on its own line; the values can be selected.
+  (RU: окно узла — тип · транспорт · защита одной строкой, Server отдельно;
+  значения выделяются.)
+
+---
+
 ## [2.25.10] — 2026-10-01
 
 ### Added

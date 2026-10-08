@@ -193,13 +193,21 @@ tailnet выглядит с телефона.
 | Пресет «Tailscale networks» (`tailscale`) | вкл/выкл, сортируемый, `num` 945; переменная «DNS» (`dns_enable`) | вкл · DNS вкл |
 | DNS-сервер типа `tailscale` | `endpoint` (узел Tailscale, обязателен), `accept_default_resolvers` | — |
 | Вкладка Network → Exit node | пир с `ExitNodeOption` или None; «Save choice» | из тела |
+| Вкладка Network → Settings: Advertise this device as exit node, Allow LAN access while using exit node | два переключателя; первый заблокирован при записанном `exit_node`, второму он нужен | из тела (выкл) |
 | Вкладка Network → Log out | после подтверждения | — |
 
 Ключи конфига ядра, которые фича отдаёт: запись `endpoints[]` `{type:
 tailscale, tag, …тело, state_directory}`; от пресета — записи `route.rules` с
 `preferred_by`, `action: resolve`, `server`, `outbound`; запись `dns.servers`
 `{type: tailscale, tag: <узел>-dns, endpoint: <узел>}`; запись `dns.rules` с
-`preferred_by` и `server`. Save choice пишет `exit_node` в тело узла. RPC ядра:
+`preferred_by` и `server`. Save choice пишет `exit_node` в тело узла,
+переключатели Settings — `advertise_exit_node` / `exit_node_allow_lan_access`
+(выключенный переключатель убирает ключ). С ядра lx.12 поток состояния несёт
+путь до каждого устройства (`direct <ip:port>` / `peer relay` /
+`relay <регион>`) и предупреждения бэкенда `health`: вкладка Network
+показывает путь под устройством и под действующим выходом, предупреждения —
+оранжевым блоком сверху, строка узла дописывает путь до выхода после `via`
+(§613). RPC ядра:
 `SubscribeTailscaleStatus`, `SetTailscaleExitNode`, `TailscaleLogout`,
 `StartTailscalePing`. Файлы данных: `tailscale/<имя>/` (состояние одного узла у
 ядра), `tailscale_state.json` (индекс слот → ключ узла → имя каталога). Код
@@ -284,9 +292,13 @@ tailscale, tag, …тело, state_directory}`; от пресета — запи
   личностью из каталога состояния; конфиг в обоих режимах собирается
   одинаково (`без свидетеля`).
 - В мастере нет полей `exit_node_allow_lan_access`, `advertise_routes`,
-  `advertise_exit_node` и SSH; они правятся на вкладке JSON, и их проверяет
-  реестр (маршрут по умолчанию в `advertise_routes` снимается с кодом,
-  `exit_node` конфликтует с `advertise_exit_node`).
+  `advertise_exit_node` и SSH. `advertise_exit_node` и
+  `exit_node_allow_lan_access` — переключатели блока Settings вкладки Network
+  (свой сервер или член папки; пишутся в тело так же, как Save choice);
+  `advertise_routes` и SSH — по-прежнему только JSON. Все их проверяет реестр
+  (маршрут по умолчанию в `advertise_routes` снимается с кодом, `exit_node`
+  конфликтует с `advertise_exit_node`, переключатель LAN требует записанного
+  `exit_node`).
 - Подсети за пирами (`accept_routes`) матчатся тем же условием
   `preferred_by`; подсеть, совпавшая с домашней, — решение пользователя
   (позиция 945 стоит раньше «Private IPs» на 950).
