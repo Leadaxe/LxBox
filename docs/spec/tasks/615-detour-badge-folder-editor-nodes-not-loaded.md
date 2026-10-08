@@ -3,7 +3,7 @@
 | Поле | Значение |
 |------|----------|
 | Тип | F (доработка) |
-| Статус | P (в работе) |
+| Статус | D (сделано) |
 | Фича | [001-SUBSCRIPTIONS](../features/001-SUBSCRIPTIONS/FEATURE.md), [006-DETOUR_AND_BALANCE](../features/006-DETOUR_AND_BALANCE/FEATURE.md) |
 | Дата | 2026-10-08 |
 | Связанные | §612 (код `node_detour_through_group`), §614 (редактор `LxCodeEditor`), §101 (`last_node_count`), §603 (кэш тела подписки), §291 (форму хранилища не менять) |
@@ -78,4 +78,20 @@ Notifications внутри экрана подписки, если он счит
 
 ## Нерешённое / хвосты
 
-- (заполняет исполнитель)
+- **A.** `BuildResult.sourceBuildCodes` (id источника → записи
+  `node_detour_through_group`), контроллер держит `lastSourceBuildCodes`
+  до следующей сборки; `entryWarningSummary` считает каждую запись единицей
+  счётчика строки (подписка и папка). Отдельного счётчика Notifications у
+  экрана подписки нет — там уведомления только по узлам, не трогали.
+- **B.** «Edit server» папки — `LxTextCodeField` (minLines 3 / maxLines 8,
+  в диалоге ширина задана явно из-за IntrinsicWidth AlertDialog); у обёртки
+  добавлен `autofocus`, чтобы поведение поля не поменялось. Других полей с
+  outbound/sing-box JSON на `TextField` grep не нашёл: мастер добавления
+  сервера уже на `LxCodeEditor`, поля Направления — не JSON. JSON пула
+  эндпоинтов в WARP-эксперименте (`warp_experiment_screen.dart`) — не
+  sing-box JSON, оставлен на `TextField`.
+- **C.** Признак `nodesNotLoaded` у `SubscriptionEntry` (в памяти): тела
+  нет на старте, узлов нет, `last_node_count > 0`. Warning в `AppLog`
+  пишется, если подписка уже обновлялась (`last_node_count > 0` или есть
+  `last_updated`): у свежедобавленной тела и не должно быть. Update на
+  вкладке — `updateAt`, как Refresh now; у выключенной подписки работает.
