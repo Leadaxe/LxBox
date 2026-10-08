@@ -8,6 +8,19 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **Direct connect timeout for `direct-out` ([task 616](docs/spec/tasks/616-direct-connect-timeout.md)).**
+  The connect timeout of the direct outbound is a setting now: Traffic
+  Processing → Params → Direct connect timeout, presets 5s–2m or any duration.
+  The default is 15s instead of the core's 5s, so apps on networks that lose
+  SYN packets (e.g. T-Bank over Tele2) no longer get their connections cut.
+  Proxy nodes and auto groups are unchanged.
+  (RU: Прямой выход (direct-out): таймаут соединения вынесен в настройку
+  Traffic Processing → Params (Direct connect timeout), дефолт 15 с вместо
+  5 с ядра — приложения на сетях с потерей SYN (например, Т‑Банк через Tele2)
+  больше не обрываются.)
+
 ---
 
 ## [2.25.11] — 2026-10-08

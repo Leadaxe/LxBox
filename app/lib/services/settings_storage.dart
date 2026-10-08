@@ -125,6 +125,7 @@ class SettingsStorage {
   static const _configVarKeys = <String>{
     'auto_detect_interface',
     'certificate_store',
+    'direct_connect_timeout',
     'dns_cache_capacity',
     'dns_default_domain_resolver',
     'dns_final',

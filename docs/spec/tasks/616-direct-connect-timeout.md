@@ -3,7 +3,7 @@
 | Поле | Значение |
 |------|----------|
 | Тип | F (доработка) |
-| Статус | A (в работе) |
+| Статус | D (сделано) |
 | Фича | [122-CONFIG_BUILD](../features/122-CONFIG_BUILD/FEATURE.md) (Traffic Processing, переменные шаблона) |
 | Дата | 2026-10-08 |
 | Связанные | §573/§574 (ручки ядра в пресете), §311 (running config), §031 (Debug API) |
@@ -120,4 +120,44 @@ connection: open connection to 178.130.128.21:443 using outbound/selector[vpn-2]
 
 ## Implementation notes
 
-_(заполняет исполнитель)_
+Сделано 08.10.2026.
+
+**Файлы.**
+
+- `app/assets/wizard_template.json` — переменная `direct_connect_timeout` в
+  секции `network` после `auto_detect_interface` (как в Solution п. 1);
+  у `direct-out` поле `"connect_timeout": "@direct_connect_timeout"`. В конец
+  тултипа дописано `Format: 15s, 1m, 1m30s.` (п. 3: валидации у
+  `text`-переменных шаблона нет, у `urltest_interval` тоже — не изобреталась).
+- `app/assets/l10n/ru/template.json`, `app/assets/l10n/zh/template.json` —
+  переводы заголовка и тултипа (`template_check --strict`: 0 / 0).
+- `app/lib/services/settings_storage.dart` — `direct_connect_timeout` в
+  `_configVarKeys` (§604: список всех переменных секций шаблона, сверяется
+  гардом `settings_storage_config_vars_test`; запись переменной ставит
+  конфиг грязным).
+- `app/test/fixtures/storage/golden/{avd_v0,rich_v0}.config.json` — у
+  `direct-out` добавлено `"connect_timeout": "15s"` (точечно, руками).
+
+**Бэкап (п. 4).** `kLxPortableVars` в `lx_backup.dart` — ручной список, но
+это зеркало `registry/vars.json` контракта, его сверяет
+`test/contract/lx_backup_test.dart` («совпадает с реестром»). В реестре
+контракта переменной нет, `app/contract/**` только для чтения — в список
+не добавлена. Пока контракт её не объявит `portable: true`, значение в
+бэкап LX не едет (при импорте получатель возьмёт дефолт 15s). Это запрос
+лаунчеру: добавить `direct_connect_timeout` (`type: text`, `in: mobile`
+или `both`) в `registry/vars.json`, после чего дописать имя в
+`kLxPortableVars`.
+
+**Тесты.**
+
+- Новый `app/test/builder/direct_connect_timeout_test.dart`: объявление в
+  секции `network` (тип, `options_open`, дефолт `15s`, options ровно
+  `5s…2m`); сборка при дефолтах → `15s`; `2m` → `2m`; значение вне
+  пресетов `1m30s` проходит; у прочих outbound'ов поля нет.
+- Прогнаны по одному файлу, зелёные: новый тест,
+  `services/settings_storage_config_vars_test`,
+  `storage_migration/golden_config_test`, `builder/registry_gate_test`,
+  `storage_migration/golden_backup_test`,
+  `services/backup_service_legacy_test`, `contract/lx_backup_test`.
+- Тест на мусорное значение не писался: валидации на стороне приложения
+  нет, мусор отвергает ядро на `check-config`.

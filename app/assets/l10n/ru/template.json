@@ -155,6 +155,9 @@
   "Detect protocol and domain from packets for accurate routing.\n⚠️ WARNING: turning this off stops protocol matching (e.g. BitTorrent, TLS, QUIC), and domain matching too unless FakeIP is on.": {
     "value": "Определять протокол и домен из пакетов для точной маршрутизации.\n⚠️ ВНИМАНИЕ: выключение прекращает сопоставление по протоколу (например BitTorrent, TLS, QUIC), а без включённого FakeIP — и по домену."
   },
+  "Direct connect timeout": {
+    "value": "Таймаут прямого соединения"
+  },
   "Direct": {
     "value": "Напрямую"
   },
@@ -247,6 +250,9 @@
   },
   "Hostkey (New York)": {
     "value": "Hostkey (Нью-Йорк)"
+  },
+  "How long the core waits for a direct TCP connect before giving up. sing-box default is 5s; mobile networks that lose SYN packets need more. Android itself retries for about 2 minutes, apps usually wait 10-30s. Format: 15s, 1m, 1m30s.": {
+    "value": "Сколько ядро ждёт установки прямого TCP-соединения, прежде чем сдаться. По умолчанию в sing-box 5 с; мобильным сетям, где теряются SYN-пакеты, нужно больше. Сам Android повторяет попытки около 2 минут, приложения обычно ждут 10–30 с. Формат: 15s, 1m, 1m30s."
   },
   "How long to wait for the domain to appear in the packet before giving up.": {
     "value": "Сколько ждать появления домена в пакете, прежде чем прекратить попытки."

@@ -265,7 +265,8 @@
   "outbounds": [
     {
       "type": "direct",
-      "tag": "direct-out"
+      "tag": "direct-out",
+      "connect_timeout": "15s"
     },
     {
       "type": "block",
