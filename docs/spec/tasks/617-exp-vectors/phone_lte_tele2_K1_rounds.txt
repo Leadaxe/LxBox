@@ -1,0 +1,35 @@
+21:17:15 START tunnel_before=connected
+21:17:15 stop-vpn 200 {"ok":true,"action":"stop-vpn"}
+21:17:17 after stop tunnel=disconnected
+21:17:17 ADD K1 folder=3e18f6bb-44fe-4aca-b08c-2ad37c55787d code=201 resp={"ok":true,"action":"folder-members-add","added":1,"folder":{"id":"3e18f6bb-44fe-4aca-b08c-2ad37c55787d","kind":"FolderServers","url":"","title":"EXP-617 K1","enabled":true,"tag_prefix":"","nodes_count":1,"last_update_at":null,"last_update_status":"never","consecutive_fails":0,"update_interval_hours":0,"override_detour":null,"detour_policy":{"register_detour_servers":false,"register_detour_in_auto
+21:17:17 ADD K1w folder=44aeda87-e514-4171-b4c7-fd270af4d90f code=201 resp={"ok":true,"action":"folder-members-add","added":1,"folder":{"id":"44aeda87-e514-4171-b4c7-fd270af4d90f","kind":"FolderServers","url":"","title":"EXP-617 K1w","enabled":true,"tag_prefix":"","nodes_count":1,"last_update_at":null,"last_update_status":"never","consecutive_fails":0,"update_interval_hours":0,"override_detour":null,"detour_policy":{"register_detour_servers":false,"register_detour_in_aut
+21:17:30 R1 #01 P http=200 status=failed delay_ms=None wall=12.5s msg=context deadline exceeded tunnel=disconnected
+21:17:46 R1 #02 K1 http=200 status=ok delay_ms=571 wall=1.2s msg= tunnel=disconnected
+21:18:14 R1 #03 P http=200 status=failed delay_ms=None wall=12.7s msg=context deadline exceeded tunnel=disconnected
+21:18:30 R1 #04 K1w http=200 status=ok delay_ms=601 wall=1.1s msg= tunnel=disconnected
+21:18:58 R1 #05 P http=200 status=failed delay_ms=None wall=12.7s msg=context deadline exceeded tunnel=disconnected
+21:19:14 R1 #06 K1 http=200 status=ok delay_ms=232 wall=1.0s msg= tunnel=disconnected
+21:19:41 R1 #07 P http=200 status=failed delay_ms=None wall=12.5s msg=context deadline exceeded tunnel=disconnected
+21:19:57 R1 #08 K1w http=200 status=ok delay_ms=207 wall=0.9s msg= tunnel=disconnected
+21:19:57 R1 COUNTED (1/3)
+21:20:25 R2 #01 P http=200 status=failed delay_ms=None wall=12.6s msg=context deadline exceeded tunnel=disconnected
+21:20:40 R2 #02 K1 http=200 status=ok delay_ms=161 wall=0.7s msg= tunnel=disconnected
+21:21:08 R2 #03 P http=200 status=failed delay_ms=None wall=12.8s msg=context deadline exceeded tunnel=disconnected
+21:21:24 R2 #04 K1w http=200 status=ok delay_ms=164 wall=0.7s msg= tunnel=disconnected
+21:21:52 R2 #05 P http=200 status=failed delay_ms=None wall=12.6s msg=context deadline exceeded tunnel=disconnected
+21:22:08 R2 #06 K1 http=200 status=ok delay_ms=237 wall=1.1s msg= tunnel=disconnected
+21:22:35 R2 #07 P http=200 status=failed delay_ms=None wall=12.5s msg=context deadline exceeded tunnel=disconnected
+21:22:51 R2 #08 K1w http=200 status=ok delay_ms=174 wall=0.8s msg= tunnel=disconnected
+21:22:51 R2 COUNTED (2/3)
+21:23:19 R3 #01 P http=200 status=failed delay_ms=None wall=12.8s msg=context deadline exceeded tunnel=disconnected
+21:23:35 R3 #02 K1 http=200 status=ok delay_ms=164 wall=0.7s msg= tunnel=disconnected
+21:24:02 R3 #03 P http=200 status=failed delay_ms=None wall=12.7s msg=context deadline exceeded tunnel=disconnected
+21:24:18 R3 #04 K1w http=200 status=ok delay_ms=265 wall=0.9s msg= tunnel=disconnected
+21:24:46 R3 #05 P http=200 status=failed delay_ms=None wall=12.6s msg=context deadline exceeded tunnel=disconnected
+21:25:02 R3 #06 K1 http=200 status=ok delay_ms=212 wall=1.1s msg= tunnel=disconnected
+21:25:30 R3 #07 P http=200 status=failed delay_ms=None wall=12.6s msg=context deadline exceeded tunnel=disconnected
+21:25:45 R3 #08 K1w http=200 status=ok delay_ms=185 wall=0.8s msg= tunnel=disconnected
+21:25:45 R3 COUNTED (3/3)
+21:26:01 start-vpn 200 {"ok":true,"action":"start-vpn"}
+21:26:19 END tunnel_after=connected
+21:26:19 DONE

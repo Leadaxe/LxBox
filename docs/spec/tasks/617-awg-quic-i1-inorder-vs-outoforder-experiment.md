@@ -2,7 +2,7 @@
 
 | Field | Value |
 |------|----------|
-| Status | ✅ Прогнано 08.10.2026 на трёх стендах, включая LTE Tele2 (стенд §146). **Вывод: порядок CRYPTO-фреймов не несёт нагрузки.** In-order i1 с читаемым SNI проходит LTE-DPI так же, как out-of-order; чистый WG и junk без i1 режутся. Объяснение «DPI парсит мусор и fail-open» в коде и доках опровергнуто. |
+| Status | ✅ Прогнано 08.10.2026 на трёх стендах, включая LTE Tele2 (стенд §146). **Вывод: порядок CRYPTO-фреймов не несёт нагрузки; K1 (один Initial, браузерный CH без MLKEM) подтверждён на LTE 12/12 при P 0/12.** In-order i1 с читаемым SNI проходит LTE-DPI так же, как out-of-order; чистый WG и junk без i1 режутся. Объяснение «DPI парсит мусор и fail-open» в коде и доках опровергнуто. |
 | Started | 2026-10-08 |
 | Trigger | Сомнение владельца в объяснении §146: «если DPI пропускает то, что не смог разобрать, он пропустил бы и шум». Предложение: резать ClientHello как штатный `fragment` (по порядку), чтобы пакет и прошёл, и остался читаемым. |
 | Related | [§146](146-warp-quic-initial-fragmented-i1.md) (A/B 17.06, out-of-order PASS); [§143](143-warp-masquerade-id-ip-ib.md); ядро: `sing-box-lx/SPECS/TASKS/009-WIRESOCK_MASQUERADE_PROFILES` §3.1, §8 (гипотезы H1–H3); `transport/wireguard/quic_initial_awg.go` |
@@ -243,6 +243,21 @@ Initial по порядку; **M** как выше. Домены: wartune.mail.r
 Вывод агента ядра: кандидат на замену C — K1 (один полный Initial с браузерным ClientHello без
 постквантового key share), не L и не M. Блобы и логи будут в `617-exp-vectors/M-native/matrix/`.
 На LTE не проверено; телефонные раунды ждут слова владельца.
+
+## K1 на LTE-стенде §146 — 08.10.2026 21:17–21:26, три засчитанных раунда подряд
+
+По слову владельца гонялись только P и K1. Раунд `P, K1, P, K1w, P, K1, P, K1w`, пауза 15 с, свои
+аккаунты, контроль P в каждом раунде (`617-exp-vectors/phone_lte_tele2_K1_rounds.txt`):
+
+| Раунд | P | K1 apteka.ru | K1w wartune.mail.ru |
+|---|---|---|---|
+| R1 | fail ×4 | ok 571, 232 | ok 601, 207 |
+| R2 | fail ×4 | ok 161, 237 | ok 164, 174 |
+| R3 | fail ×4 | ok 164, 212 | ok 265, 185 |
+
+Брака нет, P 0/12, K1 12/12. **K1 подтверждён на LTE**: один Initial с полным браузерным ClientHello
+(Chrome 133 без постквантового key share, 447/549 байт CRYPTO offset 0 + PADDING), без перемешивания,
+без PING, без второго пакета, проходит тот же DPI, который режет голый WireGuard.
 
 ## Unresolved / follow-up
 
