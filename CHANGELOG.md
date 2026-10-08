@@ -8,6 +8,10 @@
 
 ## [Unreleased]
 
+---
+
+## [2.25.11] — 2026-10-08
+
 ### Added
 
 - **WireGuard/AmneziaWG peers and the Tailscale path ([task 613](docs/spec/tasks/613-wg-peers-tailscale-path-health.md)).**
@@ -48,9 +52,41 @@
   dropped because it left the group (`group_default_dropped`), and nodes left
   out of a group they dial through (`node_detour_through_group`, one entry per
   source and group). Both also show on the node's notifications.
+  A subscription with such nodes gets a badge in the subscription list, one
+  entry per group with the node count ([task 615](docs/spec/tasks/615-detour-badge-folder-editor-nodes-not-loaded.md)).
   (RU: отчёт сборки называет кодом снятое умолчание группы и узлы, не
   взятые в группу, через которую они сами ходят; обе записи видны и в
-  уведомлениях узла.)
+  уведомлениях узла, а подписка с такими узлами получает бейдж в списке —
+  одна запись на группу с числом узлов.)
+- **Errors (N) under the node list ([task 614](docs/spec/tasks/614-ui-parity-errors-journal-editor.md)).**
+  A red line counts error entries in the app and core logs since the log was
+  last opened (or since launch); a tap opens the Debug screen filtered to
+  errors and resets the count. The error SnackBar stays.
+  (RU: под списком узлов — красная строка Errors (N), число ошибок журнала
+  приложения и ядра с последнего открытия журнала; тап открывает Debug с
+  фильтром ошибок и обнуляет счётчик.)
+- **Copy on a notification card ([task 614](docs/spec/tasks/614-ui-parity-errors-journal-editor.md)):**
+  code, title, What happened / Why / What you can do and params go to the
+  clipboard as plain text.
+  (RU: кнопка Copy у карточки уведомления — код, заголовок, три раздела и
+  params в буфер обычным текстом.)
+- **The JSON editor folds blocks and searches ([task 614](docs/spec/tasks/614-ui-parity-errors-journal-editor.md)),**
+  and it now backs more fields: a node's Source (JSON highlighted, a link or
+  WireGuard INI shown as plain text), DNS server, route rule, DNS rule,
+  subscription body and the folder's Edit server dialog ([task 615](docs/spec/tasks/615-detour-badge-folder-editor-nodes-not-loaded.md)).
+  The config's Copy moved into the field's buttons.
+  (RU: редактор JSON сворачивает блоки и ищет по тексту; на нём теперь Source
+  узла, DNS-сервер, правило маршрута, DNS-правило, тело подписки и диалог
+  Edit server в папке. Copy конфига переехал в кнопки поля.)
+- **A subscription without a cached body says so ([task 615](docs/spec/tasks/615-detour-badge-folder-editor-nodes-not-loaded.md)).**
+  When the body file is missing after a restart (a restored slot or backup,
+  a disabled subscription), the Nodes tab reads "Nodes are not loaded.
+  Update the subscription to see them" with an Update button instead of
+  "No nodes found", the node count in the list turns grey, and the app log
+  gets a warning with the expected cache path.
+  (RU: подписка без тела в кэше: вкладка Nodes пишет «Nodes are not loaded…»
+  с кнопкой Update вместо «No nodes found», счётчик узлов в списке серый,
+  в журнале — предупреждение с ожидаемым путём кэша.)
 
 ### Changed
 
@@ -58,12 +94,12 @@
 - **Core v1.14.2-lx.12; the Passive health check setting is gone ([task 611](docs/spec/tasks/611-drop-passive-check-kernel-lx12.md)).**
   The new core removed `urltest.passive_check`: a config with it no longer
   starts, so auto groups stop carrying the key and the switch leaves
-  Settings → Optimization. Its replacement, the `failover` mode of auto groups
-  (one probe of the held node per interval), comes in a follow-up release. An
-  older backup with this setting imports without a warning.
+  Settings → Optimization. Its replacement is the Hold until failure mode
+  (`failover`, above). An older backup with this setting imports without a
+  warning.
   (RU: ядро v1.14.2-lx.12; настройка Passive health check убрана — новое ядро
   удалило `urltest.passive_check`, и конфиг с ним не стартует. Замена — режим
-  авто-групп `failover`, следующим релизом. Старый бэкап с этой настройкой
+  Hold until failure (`failover`, выше). Старый бэкап с этой настройкой
   импортируется без предупреждения.)
 - **Custom User-Agent offers popular-client presets ([task 610](docs/spec/tasks/610-user-agent-presets.md))**
   (Happ, v2RayTun, Streisand, Karing, v2rayNG, Hiddify, sing-box) for panels that
@@ -77,6 +113,10 @@
   the old tag follow the new one.
   (RU: тег цепочки редактируется, как у узла; место в списке сохраняется,
   ссылки на старый тег переходят на новый.)
+- **Node details show `type · transport · security` on one line ([task 614](docs/spec/tasks/614-ui-parity-errors-journal-editor.md)),**
+  Server on its own line; the values can be selected.
+  (RU: окно узла — тип · транспорт · защита одной строкой, Server отдельно;
+  значения выделяются.)
 
 ---
 
