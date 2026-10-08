@@ -214,6 +214,17 @@ class SubscriptionController extends ChangeNotifier {
     _lastBuildWarningsByTag = map;
   }
 
+  /// §615 — коды последней сборки, адресованные источнику целиком, по `id`
+  /// источника (`node_detour_through_group`): счётчик строки подписки/папки.
+  Map<String, List<RegistryWarning>> _lastSourceBuildCodes = const {};
+  Map<String, List<RegistryWarning>> get lastSourceBuildCodes =>
+      _lastSourceBuildCodes;
+
+  @visibleForTesting
+  void debugSetLastSourceBuildCodes(Map<String, List<RegistryWarning>> map) {
+    _lastSourceBuildCodes = map;
+  }
+
   /// §274 — Направления, чей node_filter отсёк все ноды в последней УСПЕШНОЙ
   /// сборке (display-имена; Направление схлопнулось в block-fallback). [stamp]
   /// монотонно растёт на каждой сборке с непустым списком — Home дедупит
@@ -2987,6 +2998,7 @@ class SubscriptionController extends ChangeNotifier {
           };
     _groupDefaultsPending = false;
     _lastBuildWarningsByTag = result.nodeBuildWarningsByEmittedTag;
+    _lastSourceBuildCodes = result.sourceBuildCodes;
 
     // Записываем обратно то, что buildConfig сгенерил (clash_api/secret на
     // первом запуске). GUI не обязано знать про этот механизм — достаточно

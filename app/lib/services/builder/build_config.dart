@@ -76,6 +76,11 @@ class BuildResult {
   /// [emitWarnings]; список — для сверки кодов и поверхностей UI.
   final List<RegistryWarning> buildCodes;
 
+  /// §615 — коды отчёта сборки, адресованные источнику целиком, по `id`
+  /// источника (сейчас — `node_detour_through_group`, одна запись на пару
+  /// источник × группа). Счётчик предупреждений строки подписки/папки.
+  final Map<String, List<RegistryWarning>> sourceBuildCodes;
+
   const BuildResult({
     required this.configJson,
     required this.config,
@@ -87,6 +92,7 @@ class BuildResult {
     this.nodeBuildWarningsByEmittedTag = const {},
     this.templateWarnings = const [],
     this.buildCodes = const [],
+    this.sourceBuildCodes = const {},
   });
 }
 
@@ -971,14 +977,21 @@ Future<BuildResult> _buildConfig({
   // §612 (контракт 1.1.113) — `node_detour_through_group`: одна запись на
   // пару (источник, группа), адресат — источник узла; запись ложится и в
   // предупреждения каждого выброшенного из состава узла.
+  final sourceOfTag = <String, ServerList>{
+    for (final list in lists)
+      for (final n in list.nodes) ?ctx.emittedTagByNode[n]: list,
+  };
   final detourCodes = _nodeDetourThroughGroupCodes(
     detourThroughGroup,
-    sourceOfTag: {
-      for (final list in lists)
-        for (final n in list.nodes)
-          ?ctx.emittedTagByNode[n]: list,
-    },
+    sourceOfTag: sourceOfTag,
   );
+  // §615 — те же записи по `id` источника: бейдж строки подписки/папки.
+  final sourceBuildCodes = <String, List<RegistryWarning>>{};
+  for (final (w, tags) in detourCodes) {
+    final src = tags.isEmpty ? null : sourceOfTag[tags.first];
+    if (src == null) continue;
+    sourceBuildCodes.putIfAbsent(src.id, () => []).add(w);
+  }
   // §612 — коды отчёта сборки уровня группы/источника: строка по тексту
   // реестра в `emitWarnings`, запись в [BuildResult.buildCodes] и в
   // предупреждения адресата по финальному тегу (карточка узла).
@@ -1011,6 +1024,7 @@ Future<BuildResult> _buildConfig({
     ],
     templateWarnings: templateItems,
     buildCodes: buildCodes,
+    sourceBuildCodes: sourceBuildCodes,
     generatedVars: generatedVars,
     directionsWithoutNodes: directionsWithoutNodes,
     nodeByEmittedTag: {

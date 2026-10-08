@@ -124,7 +124,15 @@ List<NodeWarning> userServerWarnings(
 }
 
 /// Сводка actionable-предупреждений по записи (подписка / папка / одиночный).
-EntryWarningSummary? entryWarningSummary(SubscriptionEntry entry) {
+///
+/// §615 — [sourceBuildCodes] (коды последней сборки по `id` источника,
+/// `SubscriptionController.lastSourceBuildCodes`): каждая запись — ещё одна
+/// единица счётчика (у `node_detour_through_group` — одна на пару
+/// источник × группа, как у лаунчера).
+EntryWarningSummary? entryWarningSummary(
+  SubscriptionEntry entry, {
+  Map<String, List<RegistryWarning>> sourceBuildCodes = const {},
+}) {
   var actionable = 0;
   WarningSeverity? top;
 
@@ -155,6 +163,9 @@ EntryWarningSummary? entryWarningSummary(SubscriptionEntry entry) {
       }
     case UserServer us:
       consider(userServerWarnings(us, [entry]));
+  }
+  for (final w in sourceBuildCodes[entry.id] ?? const <RegistryWarning>[]) {
+    consider([w]);
   }
 
   if (actionable == 0 || top == null) return null;

@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/controllers/subscription_controller.dart'
+    show SubscriptionEntry;
 import 'package:lxbox/models/direction.dart';
 import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/node_link.dart';
@@ -6,6 +8,7 @@ import 'package:lxbox/models/node_warning.dart' show RegistryWarning;
 import 'package:lxbox/models/parser_config.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/validation.dart';
+import 'package:lxbox/screens/subscriptions_screen/entry_warnings.dart';
 import 'package:lxbox/services/builder/build_config.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
@@ -254,6 +257,44 @@ void main() {
       // Единственный член ушёл → Направление в block-fallback (§201/§274).
       expect(byTag(r, 'vpn-2')['outbounds'], ['block', 'direct-out']);
       expect(byTag(r, 'vpn-2')['default'], 'block');
+    });
+
+    test('§615: кольцо узел→группа даёт запись у подписки (бейдж строки)',
+        () async {
+      final sub = SubscriptionServers(
+        id: 'sub-1',
+        name: 'Main',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: const DetourPolicy(overrideDetour: NodeLink(tag: 'vpn-2')),
+        url: 'https://example.com/sub',
+        lastNodeCount: 2,
+        nodes: [
+          parseUri('vless://u-a@h-a.com:443?type=ws&security=tls#Relay A')!,
+          parseUri('vless://u-b@h-b.com:443?type=ws&security=tls#Relay B')!,
+        ],
+      );
+      final r = await buildRaw([
+        sub,
+      ], [
+        const Direction(tag: 'vpn-1', label: 'Main'),
+        const Direction(
+            tag: 'vpn-2', label: 'Relay', isDetour: true, nodeFilter: 'Relay'),
+      ]);
+      expect(r.validation.isOk, isTrue, reason: r.validation.issues.join('\n'));
+      final codes = r.sourceBuildCodes['sub-1'];
+      expect(codes, hasLength(1), reason: 'одна запись на пару источник × группа');
+      expect(codes!.single.code, kNodeDetourThroughGroupCode);
+      expect(codes.single.params['group'], 'vpn-2');
+      expect(codes.single.params['count'], '2');
+
+      final entry = SubscriptionEntry(list: sub);
+      expect(entryWarningSummary(entry), isNull,
+          reason: 'без кодов сборки у подписки нет уведомлений');
+      final summary =
+          entryWarningSummary(entry, sourceBuildCodes: r.sourceBuildCodes);
+      expect(summary, isNotNull);
+      expect(summary!.actionableCount, 1);
     });
 
     test('цикл через auto-двойник (detour=<tag>-auto) — тот же разрыв',
