@@ -21,9 +21,9 @@
 /// карту тела в них запрещена (`test/builder/body_edit_point_test.dart`).
 library;
 
-import 'dart:convert' show jsonEncode;
 
 import '../../models/node_warning.dart';
+import '../json_clone.dart';
 import 'body_sanitizer.dart';
 import 'registry.dart';
 
@@ -106,7 +106,7 @@ List<RegistryWarning> applyRegistryEdits(
     // §612 (контракт 1.1.110, PARSING_PRINCIPLES §6.3) — info-код, которому
     // нечего было менять (значение по пути одинаково в сыром и чистом теле),
     // идёт без `applied: false`: «правило не применено» было бы неправдой.
-    out.add(!apply && _infoWithoutEdit(scheme, w, body, edited) ? w : w2);
+    out.add(!apply && _infoWithoutEdit(w, body, edited) ? w : w2);
   }
   for (final p in hardPaths) {
     _patchFrom(body, edited, p);
@@ -117,26 +117,26 @@ List<RegistryWarning> applyRegistryEdits(
 /// §612 — код [w] уровня `info`, у которого значение по его пути одинаково
 /// в теле [body] и в чистом теле [edited] (оба без пути — тоже одинаково).
 ///
-/// Исключение — `max_when.note_code` (`awg_mtu_high`): правка была, её
-/// отменило исключение по входу (`except_sources`), и значение одинаково
-/// именно потому, что правило не применено; корпус
-/// `authored/soft_awg_mtu_high_kept` ждёт у него `applied: false`.
-bool _infoWithoutEdit(String scheme, RegistryWarning w,
+/// Сравнение — по смыслу JSON ([deepEqualsJson], контракт 1.1.114): числа по
+/// величине при любом типе (`1420` и `1420.0` — одно значение), объекты и
+/// массивы вглубь, строка и число — разные. Особых кодов нет: `awg_mtu_high`
+/// у авторского тела с `mtu` 1420 идёт без `applied: false` по общей норме.
+bool _infoWithoutEdit(RegistryWarning w,
     Map<String, dynamic> body, Map<String, dynamic> edited) {
   if (ContractRegistry.I.textFor(w.code)?.severity != 'info') return false;
   final path = w.path;
   if (path == null || path.isEmpty) return false;
   final parts = _pathParts(path);
-  final schema = ContractRegistry.I.schemaFor(scheme);
-  for (final f in _fieldsAt(schema?.fields, parts)) {
-    final mw = f.raw['max_when'];
-    if (mw is Map && mw['note_code'] == w.code) return false;
-  }
   final (fa, a) = _lookup(body, parts);
   final (fb, b) = _lookup(edited, parts);
   if (fa != fb) return false;
-  return !fa || jsonEncode(a) == jsonEncode(b);
+  return !fa || sameJsonValue(a, b);
 }
+
+/// §616 — одно ли значение JSON [a] и [b] по пути: числа по величине
+/// (int и double с равным значением совпадают), объекты и массивы вглубь,
+/// строка и число — разные.
+bool sameJsonValue(Object? a, Object? b) => deepEqualsJson(a, b);
 
 /// Итог санитайзера [res] для тела [raw] через точку правки.
 ///

@@ -54,7 +54,7 @@
 
 ### Changed
 
-- **Contract 1.1.113** (from 1.1.108).
+- **Contract 1.1.114** (from 1.1.108).
 - **Core v1.14.2-lx.12; the Passive health check setting is gone ([task 611](docs/spec/tasks/611-drop-passive-check-kernel-lx12.md)).**
   The new core removed `urltest.passive_check`: a config with it no longer
   starts, so auto groups stop carrying the key and the switch leaves
