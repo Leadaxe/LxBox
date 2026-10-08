@@ -1,0 +1,1 @@
+[31mERROR[0m[0013] [[38;5;219m3141869259[0m 12.6s] connection: open connection to 1.1.1.1:443 using outbound/wireguard[wg]: context canceled

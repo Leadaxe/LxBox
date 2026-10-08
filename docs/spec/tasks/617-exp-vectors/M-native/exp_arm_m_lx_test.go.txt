@@ -1,0 +1,389 @@
+//go:build with_awg && with_utls
+
+// TEMPORARY — experiment §617 arm M (LxBox): Chrome 133 QUIC ClientHello WITH
+// the X25519MLKEM768 hybrid key share (~1.7 KB), carried by TWO QUIC Initials in
+// order, exactly as a current Chrome does when the ClientHello does not fit one
+// Initial: packet #0 = CRYPTO[off=0] filling the datagram, packet #1 =
+// CRYPTO[off=N] + PADDING to 1250. Same DCID, packet numbers 0 and 1.
+//
+// Not part of the product. Run with:
+//
+//	EXP_OUT=<dir> go test -tags with_awg,with_utls -ldflags=-checklinkname=0 \
+//	    -run TestExpArmM ./transport/wireguard/
+//
+// Writes i1_M_<sni>.cps / i2_M_<sni>.cps (CPS <b 0x…> blobs for the i1 / i2
+// endpoint fields) and i1i2_M_walk.txt into EXP_OUT. Delete this file after.
+package wireguard
+
+import (
+	"bytes"
+	"context"
+	"crypto/aes"
+	"crypto/rand"
+	"encoding/binary"
+	"encoding/hex"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	utls "github.com/metacubex/utls"
+
+	"github.com/stretchr/testify/require"
+)
+
+// expChromePQClientHello builds the Chrome 133 QUIC ClientHello via uTLS, keeping
+// the post-quantum key share (unlike buildBrowserClientHello, which strips it).
+func expChromePQClientHello(t *testing.T, sni string) []byte {
+	t.Helper()
+	spec, err := utls.UTLSIdToSpec(utls.HelloChrome_133)
+	require.NoError(t, err)
+	spec.TLSVersMin = utls.VersionTLS13
+	spec.TLSVersMax = utls.VersionTLS13
+	for _, ext := range spec.Extensions {
+		switch e := ext.(type) {
+		case *utls.ALPNExtension:
+			e.AlpnProtocols = []string{"h3"}
+		case *utls.ApplicationSettingsExtensionNew:
+			e.SupportedProtocols = []string{"h3"}
+		case *utls.SupportedVersionsExtension:
+			e.Versions = []uint16{utls.VersionTLS13}
+		}
+	}
+	cfg := &utls.Config{ServerName: sni, MinVersion: utls.VersionTLS13}
+	q := utls.UQUICClient(&utls.QUICConfig{TLSConfig: cfg}, utls.HelloCustom)
+	defer q.Close()
+	require.NoError(t, q.ApplyPreset(&spec))
+	q.SetTransportParameters(quicDecoyTransportParams())
+	require.NoError(t, q.Start(context.Background()))
+	var hello []byte
+	for {
+		ev := q.NextEvent()
+		if ev.Kind == utls.QUICNoEvent {
+			break
+		}
+		if ev.Kind == utls.QUICWriteData && ev.Level == utls.QUICEncryptionLevelInitial {
+			hello = append(hello, ev.Data...)
+		}
+	}
+	require.NotEmpty(t, hello)
+	require.Equal(t, byte(0x01), hello[0])
+	return hello
+}
+
+// expBuildInitial assembles ONE Initial: header(dcid, pn) ‖ CRYPTO[off] ‖ PADDING
+// to totalLen. Returns the packet and how many ClientHello bytes it consumed.
+func expBuildInitial(t *testing.T, dcid []byte, pn uint64, ch []byte, off int, totalLen int) ([]byte, int) {
+	t.Helper()
+	const headerFixed = 1 + 4 + 1 + 1 + 1
+	const lenFieldVarintWidth = 2
+	headerLen := headerFixed + quicDCIDLen + lenFieldVarintWidth + quicPacketNumberLen
+	payloadLen := totalLen - headerLen - quicAEADTagLen
+	lengthField := quicPacketNumberLen + payloadLen + quicAEADTagLen
+	require.True(t, lengthField >= 1<<6 && lengthField < 1<<14)
+
+	rest := ch[off:]
+	// CRYPTO frame overhead: type(1) + varint(off) + varint(len). len varint is
+	// 2 bytes for anything ≥64, which every slice here is.
+	maxData := payloadLen - (1 + varintLen(uint64(off)) + 2)
+	n := len(rest)
+	if n > maxData {
+		n = maxData
+	}
+	frag := cryptoFragment{offset: uint64(off), data: rest[:n]}
+	payload := appendCryptoFrame(make([]byte, 0, payloadLen), frag)
+	for len(payload) < payloadLen {
+		payload = append(payload, 0x00)
+	}
+	require.Equal(t, payloadLen, len(payload))
+
+	header := make([]byte, 0, headerLen)
+	header = append(header, 0xC0|byte(quicPacketNumberLen-1))
+	header = binary.BigEndian.AppendUint32(header, quicVersion1)
+	header = append(header, byte(quicDCIDLen))
+	header = append(header, dcid...)
+	header = append(header, 0x00, 0x00)
+	header = appendQUICVarint(header, uint64(lengthField))
+	pnOffset := len(header)
+	for i := 0; i < quicPacketNumberLen; i++ {
+		header = append(header, byte(pn>>(8*(quicPacketNumberLen-1-i))))
+	}
+	key, iv, hp := deriveInitialKeys(dcid)
+	pkt, err := encryptInitial(header, payload, key, iv, hp, pnOffset, pn)
+	require.NoError(t, err)
+	require.Equal(t, totalLen, len(pkt))
+	return pkt, n
+}
+
+// expDecrypt reverse-parses an Initial without requiring the CRYPTO data to
+// start at offset 0 (decryptInitial does). Returns pn, frame walk, CRYPTO frags.
+func expDecrypt(t *testing.T, packet []byte) (uint64, string, []cryptoFragment) {
+	t.Helper()
+	r := bytes.NewReader(packet)
+	first, _ := r.ReadByte()
+	require.Equal(t, byte(0xC0), first&0xF0)
+	var version uint32
+	require.NoError(t, binary.Read(r, binary.BigEndian, &version))
+	require.Equal(t, quicVersion1, version)
+	dcidLen, _ := r.ReadByte()
+	dcid := make([]byte, dcidLen)
+	_, err := io.ReadFull(r, dcid)
+	require.NoError(t, err)
+	scidLen, _ := r.ReadByte()
+	require.Equal(t, byte(0), scidLen)
+	tokenLen, _ := r.ReadByte()
+	require.Equal(t, byte(0), tokenLen)
+	lengthField := readVarint(t, r)
+	hdrLen := len(packet) - r.Len()
+
+	key, iv, hp := deriveInitialKeys(dcid)
+	block, err := aes.NewCipher(hp)
+	require.NoError(t, err)
+	mask := make([]byte, aes.BlockSize)
+	block.Encrypt(mask, packet[hdrLen+4:hdrLen+4+aes.BlockSize])
+	un := append([]byte(nil), packet...)
+	un[0] ^= mask[0] & 0x0f
+	pnLen := int(un[0]&0x03) + 1
+	var pn uint64
+	for i := 0; i < pnLen; i++ {
+		un[hdrLen+i] ^= mask[1+i]
+		pn = pn<<8 | uint64(un[hdrLen+i])
+	}
+	aad := un[:hdrLen+pnLen]
+	ct := un[hdrLen+pnLen : hdrLen+int(lengthField)]
+	cipher := quicAEADAESGCMTLS13(key, iv)
+	nonce := make([]byte, cipher.NonceSize())
+	binary.BigEndian.PutUint64(nonce[cipher.NonceSize()-8:], pn)
+	dec, err := cipher.Open(nil, nonce, ct, aad)
+	require.NoError(t, err, "AEAD open")
+
+	var walk []string
+	var frags []cryptoFragment
+	fr := bytes.NewReader(dec)
+	pad := 0
+	flushPad := func() {
+		if pad > 0 {
+			walk = append(walk, fmt.Sprintf("PAD×%d", pad))
+			pad = 0
+		}
+	}
+	for {
+		ft, err := fr.ReadByte()
+		if err == io.EOF {
+			break
+		}
+		switch ft {
+		case 0x00:
+			pad++
+		case 0x01:
+			flushPad()
+			walk = append(walk, "PING")
+		case 0x06:
+			flushPad()
+			off := readVarint(t, fr)
+			ln := readVarint(t, fr)
+			idx := len(dec) - fr.Len()
+			frags = append(frags, cryptoFragment{offset: off, data: append([]byte(nil), dec[idx:idx+int(ln)]...)})
+			_, _ = fr.Seek(int64(ln), io.SeekCurrent)
+			walk = append(walk, fmt.Sprintf("CRYPTO[off=%d len=%d]", off, ln))
+		default:
+			t.Fatalf("unexpected frame 0x%02x", ft)
+		}
+	}
+	flushPad()
+	return pn, strings.Join(walk, " "), frags
+}
+
+// expHasMLKEMKeyShare scans the ClientHello's key_share extension for group 4588.
+func expHasMLKEMKeyShare(t *testing.T, ch []byte) bool {
+	t.Helper()
+	r := bytes.NewReader(ch[4:])
+	skip(t, r, 2+32)
+	sid := readU8(t, r)
+	skip(t, r, int(sid))
+	cs := readU16(t, r)
+	skip(t, r, int(cs))
+	comp := readU8(t, r)
+	skip(t, r, int(comp))
+	extTotal := readU16(t, r)
+	end := r.Len() - int(extTotal)
+	for r.Len() > end {
+		et := readU16(t, r)
+		el := readU16(t, r)
+		body := make([]byte, el)
+		_, err := io.ReadFull(r, body)
+		require.NoError(t, err)
+		if et != 0x0033 {
+			continue
+		}
+		br := bytes.NewReader(body)
+		listLen := readU16(t, br)
+		lend := br.Len() - int(listLen)
+		for br.Len() > lend {
+			g := readU16(t, br)
+			l := readU16(t, br)
+			skip(t, br, int(l))
+			if g == uint16(utls.X25519MLKEM768) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func TestExpArmM(t *testing.T) {
+	out := os.Getenv("EXP_OUT")
+	if out == "" {
+		t.Skip("EXP_OUT not set")
+	}
+	require.NoError(t, os.MkdirAll(out, 0o755))
+	var walkLog strings.Builder
+
+	for _, sni := range []string{"apteka.ru", "wartune.mail.ru"} {
+		ch := expChromePQClientHello(t, sni)
+		require.True(t, expHasMLKEMKeyShare(t, ch), "ClientHello must carry X25519MLKEM768 key share")
+
+		dcid := make([]byte, quicDCIDLen)
+		_, err := rand.Read(dcid)
+		require.NoError(t, err)
+
+		p0, n0 := expBuildInitial(t, dcid, 0, ch, 0, quicInitialTotalLen)
+		require.Less(t, n0, len(ch), "arm M needs a ClientHello that does NOT fit one Initial")
+		p1, n1 := expBuildInitial(t, dcid, 1, ch, n0, quicInitialTotalLen)
+		require.Equal(t, len(ch), n0+n1, "two Initials must carry the whole ClientHello")
+
+		// Reverse-check both packets and the cross-packet reassembly.
+		pn0, w0, f0 := expDecrypt(t, p0)
+		pn1, w1, f1 := expDecrypt(t, p1)
+		require.Equal(t, uint64(0), pn0)
+		require.Equal(t, uint64(1), pn1)
+		require.Len(t, f0, 1)
+		require.Len(t, f1, 1)
+		require.Equal(t, uint64(0), f0[0].offset)
+		require.Equal(t, uint64(n0), f1[0].offset)
+		re := reassemble(t, append(f0, f1...))
+		require.Equal(t, ch, re)
+		require.Equal(t, sni, extractSNI(t, re))
+
+		tag := strings.ReplaceAll(sni, ".", "_")
+		require.NoError(t, os.WriteFile(filepath.Join(out, "i1_M_"+tag+".cps"), []byte("<b 0x"+hex.EncodeToString(p0)+">"), 0o644))
+		require.NoError(t, os.WriteFile(filepath.Join(out, "i2_M_"+tag+".cps"), []byte("<b 0x"+hex.EncodeToString(p1)+">"), 0o644))
+		fmt.Fprintf(&walkLog, "M %s: ch=%d (Chrome 133 uTLS, X25519MLKEM768 kept, ALPN h3) dcid=%x\n", sni, len(ch), dcid)
+		fmt.Fprintf(&walkLog, "  i1: pkt=%d pn=0 frames: %s\n", len(p0), w0)
+		fmt.Fprintf(&walkLog, "  i2: pkt=%d pn=1 frames: %s\n", len(p1), w1)
+	}
+	require.NoError(t, os.WriteFile(filepath.Join(out, "i1i2_M_walk.txt"), []byte(walkLog.String()), 0o644))
+	t.Log("\n" + walkLog.String())
+}
+
+// TestExpArmMInspect decrypts i1/i2 CPS blobs from EXP_IN (space-separated list
+// of "label:i1path:i2path") and prints the ClientHello extension map against
+// the packet-1 boundary (which bytes travel in which Initial).
+func TestExpArmMInspect(t *testing.T) {
+	in := os.Getenv("EXP_IN")
+	if in == "" {
+		t.Skip("EXP_IN not set")
+	}
+	for _, item := range strings.Fields(in) {
+		parts := strings.Split(item, ":")
+		require.Len(t, parts, 3)
+		load := func(p string) []byte {
+			raw, err := os.ReadFile(p)
+			require.NoError(t, err)
+			s := strings.TrimSpace(string(raw))
+			s = strings.TrimPrefix(s, "<b 0x")
+			s = strings.TrimSuffix(s, ">")
+			b, err := hex.DecodeString(s)
+			require.NoError(t, err)
+			return b
+		}
+		_, _, f0 := expDecrypt(t, load(parts[1]))
+		_, _, f1 := expDecrypt(t, load(parts[2]))
+		ch := reassemble(t, append(f0, f1...))
+		boundary := len(f0[0].data)
+		// Walk extensions with absolute offsets inside ch.
+		r := bytes.NewReader(ch[4:])
+		skip(t, r, 2+32)
+		sid := readU8(t, r)
+		skip(t, r, int(sid))
+		cs := readU16(t, r)
+		skip(t, r, int(cs))
+		comp := readU8(t, r)
+		skip(t, r, int(comp))
+		_ = readU16(t, r)
+		var sb strings.Builder
+		fmt.Fprintf(&sb, "%s ch=%d boundary=%d sni=%s ext:", parts[0], len(ch), boundary, extractSNI(t, ch))
+		for r.Len() > 0 {
+			start := len(ch) - r.Len()
+			et := readU16(t, r)
+			el := readU16(t, r)
+			skip(t, r, int(el))
+			end := len(ch) - r.Len()
+			where := "p1"
+			if start >= boundary {
+				where = "p2"
+			} else if end > boundary {
+				where = "SPLIT"
+			}
+			name := fmt.Sprintf("0x%04x", et)
+			switch et {
+			case 0x0000:
+				name = "SNI"
+			case 0x0033:
+				name = "key_share"
+			case 0x0039:
+				name = "quic_tp"
+			case 0x0010:
+				name = "alpn"
+			case 0xfe0d:
+				name = "ech"
+			case 0x002b:
+				name = "versions"
+			case 0x000a:
+				name = "groups"
+			}
+			if et&0x0f0f == 0x0a0a {
+				name = "GREASE"
+			}
+			fmt.Fprintf(&sb, " %s[%d-%d %s]", name, start, end, where)
+		}
+		t.Log(sb.String())
+	}
+}
+
+// TestExpArmMRepack re-packs an existing i1/i2 pair (EXP_REPACK="label:i1:i2:outdir")
+// with a fresh DCID but the IDENTICAL ClientHello bytes, writing i1_<label>.cps /
+// i2_<label>.cps into outdir. Isolates "DCID matters" from "ClientHello matters".
+func TestExpArmMRepack(t *testing.T) {
+	in := os.Getenv("EXP_REPACK")
+	if in == "" {
+		t.Skip("EXP_REPACK not set")
+	}
+	for _, item := range strings.Fields(in) {
+		parts := strings.Split(item, ":")
+		require.Len(t, parts, 4)
+		load := func(p string) []byte {
+			raw, err := os.ReadFile(p)
+			require.NoError(t, err)
+			s := strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(string(raw)), "<b 0x"), ">")
+			b, err := hex.DecodeString(s)
+			require.NoError(t, err)
+			return b
+		}
+		_, _, f0 := expDecrypt(t, load(parts[1]))
+		_, _, f1 := expDecrypt(t, load(parts[2]))
+		ch := reassemble(t, append(f0, f1...))
+		dcid := make([]byte, quicDCIDLen)
+		_, err := rand.Read(dcid)
+		require.NoError(t, err)
+		p0, n0 := expBuildInitial(t, dcid, 0, ch, 0, quicInitialTotalLen)
+		p1, n1 := expBuildInitial(t, dcid, 1, ch, n0, quicInitialTotalLen)
+		require.Equal(t, len(ch), n0+n1)
+		require.NoError(t, os.MkdirAll(parts[3], 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(parts[3], "i1_"+parts[0]+".cps"), []byte("<b 0x"+hex.EncodeToString(p0)+">"), 0o644))
+		require.NoError(t, os.WriteFile(filepath.Join(parts[3], "i2_"+parts[0]+".cps"), []byte("<b 0x"+hex.EncodeToString(p1)+">"), 0o644))
+		t.Logf("%s repacked ch=%d new dcid=%x", parts[0], len(ch), dcid)
+	}
+}

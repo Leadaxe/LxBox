@@ -1,0 +1,19 @@
+START 20:33:58
+RESULT #1 P_plain FAIL 12021ms
+RESULT #2 C_apteka PASS 83ms colo=HEL warp=on 
+RESULT #3 M_apteka PASS 332ms colo=HEL warp=on 
+RESULT #4 C_wartune PASS 67ms colo=HEL warp=on 
+RESULT #5 M_wartune FAIL 12028ms
+RESULT #6 P_plain FAIL 12038ms
+RESULT #7 C_apteka PASS 70ms colo=HEL warp=on 
+RESULT #8 M_apteka PASS 66ms colo=HEL warp=on 
+RESULT #9 C_wartune PASS 66ms colo=HEL warp=on 
+RESULT #10 M_wartune FAIL 12031ms
+RESULT #11 P_plain FAIL 12024ms
+RESULT #12 C_apteka PASS 76ms colo=HEL warp=on 
+RESULT #13 M_apteka PASS 69ms colo=HEL warp=on 
+RESULT #14 C_wartune PASS 74ms colo=HEL warp=on 
+RESULT #15 M_wartune FAIL 12034ms
+RESULT #16 M_apteka PASS 497ms colo=HEL warp=on 
+RESULT #17 M_wartune FAIL 12029ms
+END 20:37:15
