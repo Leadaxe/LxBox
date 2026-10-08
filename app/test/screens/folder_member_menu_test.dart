@@ -6,8 +6,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/controllers/subscription_controller.dart';
 import 'package:lxbox/models/node_spec.dart';
+import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/screens/folder_detail_screen.dart';
 import 'package:lxbox/services/settings_storage.dart';
+import 'package:lxbox/widgets/lx_code_editor.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
@@ -85,6 +87,48 @@ void main() {
     await openMenu('Fast');
     expect(find.text('Move out of folder'), findsNothing);
     await closeMenu();
+  });
+
+  // §615 — «Edit server» члена папки: поле на LxCodeEditor (как §614),
+  // подсветка JSON по `{` на лету, сохранение — прежним путём.
+  testWidgets('Edit server: редактор с подсветкой, Save пишет новое тело',
+      (tester) async {
+    final c = SubscriptionController();
+    await tester.runAsync(() async {
+      await c.init();
+      await c.addFolder('F');
+      await c.addMembersToFolder(
+          0, 'vless://u1@h1.example:443?type=ws&security=tls#Alpha');
+    });
+    await tester.pumpWidget(MaterialApp(
+      home: FolderDetailScreen(entry: c.entries.single, controller: c),
+    ));
+    await tester.pumpAndSettle();
+    await tester.longPress(find.text('Alpha').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Edit…'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(TextField), findsNothing);
+    LxCodeEditor editor() =>
+        tester.widget<LxCodeEditor>(find.byType(LxCodeEditor));
+    expect(editor().controller.text, contains('vless://u1@h1.example'));
+    expect(editor().language, isNull, reason: 'ссылка — без подсветки');
+
+    editor().controller.text = '{"type": "direct"';
+    await tester.pump();
+    expect(editor().language, LxCodeLanguage.json,
+        reason: 'недописанный JSON — подсветка по `{`');
+
+    const next = 'vless://u2@h2.example:443?type=ws&security=tls#Beta';
+    editor().controller.text = next;
+    await tester.pump();
+    expect(editor().language, isNull);
+    await tester.tap(find.text('Save'));
+    await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 300)));
+    await tester.pumpAndSettle();
+    expect((c.entries.single.list as FolderServers).members.single.raw, next);
   });
 
   /// Подтверждение удаления папки называет авто-узлы; папке из одних

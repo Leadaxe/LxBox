@@ -27,6 +27,7 @@ import 'subscription_detail_screen/tag_prefix_cascade.dart';
 import 'subscription_detail_screen/widgets/subscription_settings_tab.dart';
 import 'subscriptions_screen/folder_picker.dart';
 import '../widgets/detour_target_picker.dart';
+import '../widgets/lx_code_editor.dart';
 import '../widgets/probe_badge.dart';
 import 'subscription_detail_screen/widgets/node_warning_row.dart';
 import 'subscriptions_screen/entry_warnings.dart';
@@ -923,15 +924,24 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(getLocalText.s("Edit server")),
-        content: TextField(
-          controller: ctl,
-          autofocus: true,
-          maxLines: 8,
-          minLines: 3,
-          style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
-          decoration: InputDecoration(
-            border: const OutlineInputBorder(),
-            hintText: getLocalText.s("Proxy link, WireGuard config or outbound JSON"),
+        // §615 — редактор с подсветкой, как Source узла (§614): JSON —
+        // по `{` на лету, ссылка и WireGuard INI — без подсветки. Ширина
+        // задана явно: AlertDialog меряет содержимое через IntrinsicWidth.
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListenableBuilder(
+            listenable: ctl,
+            builder: (context, _) => LxTextCodeField(
+              key: const ValueKey('folder-member-editor'),
+              controller: ctl,
+              autofocus: true,
+              minLines: 3,
+              maxLines: 8,
+              hint: getLocalText.s("Proxy link, WireGuard config or outbound JSON"),
+              language: ctl.text.trimLeft().startsWith('{')
+                  ? LxCodeLanguage.json
+                  : null,
+            ),
           ),
         ),
         actions: [

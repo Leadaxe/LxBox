@@ -615,6 +615,7 @@ class LxTextCodeField extends StatefulWidget {
     this.label,
     this.errorText,
     this.readOnly = false,
+    this.autofocus = false,
   });
 
   final TextEditingController controller;
@@ -635,6 +636,9 @@ class LxTextCodeField extends StatefulWidget {
   /// Ошибка под полем (у `TextField` была `errorText`).
   final String? errorText;
   final bool readOnly;
+
+  /// Фокус при открытии (у `TextField` диалога был `autofocus: true`).
+  final bool autofocus;
 
   @override
   State<LxTextCodeField> createState() => _LxTextCodeFieldState();
@@ -709,7 +713,7 @@ class _LxTextCodeFieldState extends State<LxTextCodeField> {
     final theme = Theme.of(context);
     final editor = LxCodeEditor(
       controller: _code,
-      autofocus: false,
+      autofocus: widget.autofocus,
       readOnly: widget.readOnly,
       fontSize: widget.fontSize,
       showLineNumbers: widget.showLineNumbers,
