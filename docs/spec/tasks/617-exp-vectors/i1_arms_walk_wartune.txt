@@ -1,3 +1,0 @@
-A_inorder_randomcuts_wartune: pkt=1250 ch=294 frames: CRYPTO[off=0 len=36] PAD×833 CRYPTO[off=36 len=168] CRYPTO[off=204 len=18] CRYPTO[off=222 len=7] CRYPTO[off=229 len=32] PAD×43 CRYPTO[off=261 len=33] PING PING PAD×20
-B_inorder_sni_in_first_wartune: pkt=1250 ch=294 frames: CRYPTO[off=0 len=103] PAD×826 CRYPTO[off=103 len=38] CRYPTO[off=141 len=38] PAD×55 CRYPTO[off=179 len=38] PING CRYPTO[off=217 len=38] CRYPTO[off=255 len=39] PING PAD×14
-C_control_outoforder_wartune: pkt=1250 ch=294 frames: CRYPTO[off=62 len=26] CRYPTO[off=0 len=47] PING PAD×17 CRYPTO[off=287 len=7] PAD×38 CRYPTO[off=207 len=80] PAD×33 CRYPTO[off=47 len=15] CRYPTO[off=88 len=119] PING PAD×808

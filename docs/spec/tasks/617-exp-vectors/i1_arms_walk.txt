@@ -1,3 +1,0 @@
-A_inorder_randomcuts: pkt=1250 ch=294 frames: CRYPTO[off=0 len=48] PAD×36 CRYPTO[off=48 len=11] PAD×40 CRYPTO[off=59 len=19] PAD×820 CRYPTO[off=78 len=10] CRYPTO[off=88 len=102] PING CRYPTO[off=190 len=104] PING
-B_inorder_sni_in_first: pkt=1250 ch=294 frames: CRYPTO[off=0 len=97] PAD×832 CRYPTO[off=97 len=39] CRYPTO[off=136 len=39] PAD×16 CRYPTO[off=175 len=39] PAD×36 CRYPTO[off=214 len=39] PING CRYPTO[off=253 len=41] PING PAD×11
-C_control_outoforder: pkt=1250 ch=294 frames: CRYPTO[off=24 len=30] PING PAD×16 CRYPTO[off=0 len=9] PAD×25 CRYPTO[off=54 len=105] CRYPTO[off=200 len=94] PING CRYPTO[off=159 len=41] PAD×856 CRYPTO[off=9 len=15]
