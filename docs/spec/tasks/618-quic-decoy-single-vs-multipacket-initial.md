@@ -74,7 +74,7 @@ ClientHello без постквантового key_share) проходит LTE 
   должен проходить — подтверждают, что стенд в это окно различает.
 - Генерация всех плеч — временный Go-тест `transport/wireguard/exp_arm_m_lx_test.go` (теги
   `with_awg,with_utls`), в ядро не добавлялся. Снимок — `618-exp-vectors/exp_generator.go.txt`.
-- Блобы (приманки, секретов не содержат) — `618-exp-vectors/blobs/`. Захваты — `618-exp-vectors/capture/`.
+- Блобы (приманки, секретов не содержат) — `618-exp-vectors/blobs/`. Захваты трафика не хранятся (удалены по решению владельца).
 
 ## Плечи
 
@@ -144,11 +144,11 @@ ClientHello без постквантового key_share) проходит LTE 
   `received handshake response`), а TCP через туннель до таймаута не отвечает. Та же сигнатура, что
   у плеча J (только junk) в §617.
 - Разбор того, ЧТО и на ЧЬЕЙ стороне давит поток, в этом исследовании не велся (см. Scope-note).
-  Захват `618-exp-vectors/capture/warp_m_2026-10-08.pcap` оставлен для будущего анализа.
+  Захваты трафика по решению владельца не хранятся (удалены вместе с pcap).
 
 ## Что делает настоящий Chrome 133 (живой захват)
 
-Снят `tcpdump` системного Chrome на HTTP/3 к Google (`618-exp-vectors/capture/chrome_quic_2026-10-08.pcap`),
+Снят `tcpdump` системного Chrome на HTTP/3 к Google (pcap не хранится),
 первый бросок, три исходящих Initial по 1250 байт за 13 мкс, один dcid, token 70 байт в каждом,
 pn 1/2/3, ClientHello 2501 байт. Карта CRYPTO-фреймов (reverse-decode нашим же декодером):
 
@@ -187,7 +187,7 @@ www.google.com, чужой DCID, token 70 — всё родное) и отпра
 Чтобы снять вопрос «давит провайдерский DPI или сторона назначения», три QUIC Initial отправлены
 ПРЯМЫМ UDP-сокетом (без WireGuard, без ядра) на host:443 и подсчитаны ответы. Ответ сервера
 доказывает, что форма валидна И путь её не рубит. Скрипт — `618-exp-vectors/socket_probe.py`,
-блобы — `618-exp-vectors/blobs/{K1,C133}_*.cps` (SNI cloudflare.com / www.google.com).
+блобы — `618-exp-vectors/blobs/{K1,C133}_*.cps` (SNI cloudflare.com / www.google.com). Захваты не хранятся.
 
 | Адресат :443 | K1 (1 пакет) | C133 (3 пакета) |
 |---|---|---|
