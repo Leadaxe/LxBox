@@ -8,6 +8,17 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Tailscale Network tab: the exit device is back under Devices
+  ([task 613](docs/spec/tasks/613-wg-peers-tailscale-path-health.md)).**
+  In v2.25.11 the chosen exit node was shown only in the Exit node block, which
+  has no row menu, so it could not be pinged or copied. It is listed under
+  Devices again with its status and path.
+  (RU: Вкладка Network у Tailscale: выбранный exit node снова есть в Devices —
+  в v2.25.11 он остался только в блоке Exit node, где нет меню, и пинговать
+  его было нельзя.)
+
 ### Changed
 
 - **Direct connect timeout for `direct-out` ([task 616](docs/spec/tasks/616-direct-connect-timeout.md)).**
