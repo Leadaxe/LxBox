@@ -20,6 +20,22 @@
   Traffic Processing → Params (Direct connect timeout), дефолт 15 с вместо
   5 с ядра — приложения на сетях с потерей SYN (например, Т‑Банк через Tele2)
   больше не обрываются.)
+- **Core `v1.14.2-lx.12` → `v1.14.2-lx.13-rc.1` (core release candidate,
+  [docs/KERNEL.md](docs/KERNEL.md)).** AWG masquerade `ip=quic`: the decoy is
+  generated fresh before every handshake instead of one fixed `i1` for the
+  endpoint's lifetime; `ib=chrome` / `ib=firefox` are real QUIC ClientHellos
+  now (before, a TCP ClientHello sat inside the Initial), calibrated against
+  Chrome 147/155 and Firefox 149 captures; `ip=sip` sends only INVITE,
+  `ip=dns` sends EDNS without options. The new core value `ib=chrome-full` is
+  not offered yet: the app still drops it with a warning.
+  (RU: ядро `v1.14.2-lx.13-rc.1`: decoy `ip=quic` свежий на каждом
+  хендшейке, `ib=chrome`/`firefox` — настоящие QUIC ClientHello, формы
+  `ip=sip` и `ip=dns` исправлены; `ib=chrome-full` пока не поддержан.)
+
+### Internal
+
+- Release candidates go to Google Play Open testing (beta track)
+  ([task 619](docs/spec/tasks/619-rc-to-play-open-testing.md)).
 
 ---
 

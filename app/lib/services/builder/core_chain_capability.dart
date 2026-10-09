@@ -134,7 +134,7 @@ bool coreSupportsChain(String coreVersion) {
 /// `test/contract/node_core_gate_test.dart`: он падает, пока [kCoreBuildTagsPin]
 /// не совпадёт с `app/android/libbox.version`, но сам набор тегов не сверяет
 /// (биндингу его негде взять). Бамп ядра обязан перечитать список руками.
-const String kCoreBuildTagsPin = 'v1.14.2-lx.12';
+const String kCoreBuildTagsPin = 'v1.14.2-lx.13-rc.1';
 
 const Set<String> kCoreBuildTags = {
   'with_gvisor',
