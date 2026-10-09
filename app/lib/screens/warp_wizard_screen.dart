@@ -892,7 +892,6 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                               ip: _masqIp,
                               ib: _masqIb,
                               domain: _sni,
-                              allowOff: false,
                               enabled: !_busy,
                               domainPool: _sniPool,
                               onRandomDomain: _fillRandomSni,

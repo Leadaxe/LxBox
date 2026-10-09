@@ -72,6 +72,20 @@ class Masquerade {
 
   bool get isOff => ip == null && id == null && ib == null;
 
+  /// Смена протокола на [protocol] (`''` = Off) — ревизия 1 §623:
+  ///
+  /// - `Off` снимает всё;
+  /// - `quic`: домен прежний, пустой — [randomDomain] (пул визарда; пустая
+  ///   строка — домена нет, запись ещё невалидна); `ib` прежний;
+  /// - `dns` / `sip`: домен прежний, `ib` снят (уход с `quic`);
+  /// - `stun`: сняты `id` и `ib`.
+  Masquerade withProtocol(String protocol, {String Function()? randomDomain}) {
+    final p = protocol.trim().toLowerCase();
+    var domain = id ?? '';
+    if (p == 'quic' && domain.isEmpty) domain = randomDomain?.call() ?? '';
+    return Masquerade.fromForm(p, domain, p == 'quic' ? ib ?? '' : '');
+  }
+
   @override
   bool operator ==(Object other) =>
       other is Masquerade && other.ip == ip && other.id == id && other.ib == ib;

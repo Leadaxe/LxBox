@@ -423,12 +423,16 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     await _saveSource();
   }
 
-  /// §623 — Save секции Masquerade: ключи `ip`/`id`/`ib` в текст источника
-  /// (вид источника сохраняется, в отличие от Tailscale), дальше — как Save
-  /// вкладки Source.
+  /// §623 — выбор в секции Masquerade пишется сразу (как detour): ключи
+  /// `ip`/`id`/`ib` в текст сохранённого источника (вид источника
+  /// сохраняется, в отличие от Tailscale), дальше — как Save вкладки Source.
+  /// Отказ (ядро, разбор) — Source возвращается к сохранённому тексту, строки
+  /// секции остаются прежними.
   Future<void> _saveMasquerade(Masquerade m) async {
-    _sourceCtrl.text = withMasquerade(_containerRaw, m);
+    final before = _containerRaw;
+    _sourceCtrl.text = withMasquerade(before, m);
     await _saveSource();
+    if (mounted && _containerRaw == before) _sourceCtrl.text = before;
   }
 
   /// §623 — секция Masquerade узла WireGuard/AmneziaWG. Явный `i1`
@@ -458,13 +462,15 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     return ListenableBuilder(
       listenable: _sourceCtrl,
       builder: (context, _) => MasqueradeSection(
-        initial: Masquerade.fromFields(fields),
+        value: Masquerade.fromFields(fields),
         unavailableReason: reason,
         sipBlocked: fields?['i2'] != null,
         sourceDirty: _sourceCtrl.text != raw,
+        onSourceDirty: () =>
+            _snack(getLocalText.s("Source has unsaved changes.")),
         domainPool: picker?.sniPool ?? const [],
         randomDomain: picker?.randomSni,
-        onSave: _saveMasquerade,
+        onChanged: _saveMasquerade,
       ),
     );
   }
@@ -639,6 +645,9 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
         ),
         if (_node case final WireguardSpec wg) ...[
           const SizedBox(height: 16),
+          _sectionHeader(getLocalText.s("Masquerade"),
+              getLocalText.s("Decoy packets before the WireGuard handshake"),
+              theme),
           _buildMasqueradeSection(wg),
         ],
         // §322 — у узла автовыбора detour'а нет: он не соединение, а правило

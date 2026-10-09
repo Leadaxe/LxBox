@@ -237,6 +237,45 @@ void main() {
     });
   });
 
+  group('protocol transitions (revision 1)', () {
+    const q = Masquerade(ip: 'quic', id: 'a.example', ib: 'chrome');
+    String pool() => 'pool.example';
+
+    test('QUIC with an empty domain gets one from the pool', () {
+      expect(
+        Masquerade.off.withProtocol('quic', randomDomain: pool),
+        const Masquerade(ip: 'quic', id: 'pool.example'),
+      );
+      expect(
+        const Masquerade(ip: 'stun').withProtocol('quic'),
+        const Masquerade(ip: 'quic'),
+      );
+      expect(
+        const Masquerade(
+          ip: 'dns',
+          id: 'd.example',
+        ).withProtocol('quic', randomDomain: pool),
+        const Masquerade(ip: 'quic', id: 'd.example'),
+      );
+    });
+
+    test('leaving QUIC drops ib', () {
+      expect(
+        q.withProtocol('dns'),
+        const Masquerade(ip: 'dns', id: 'a.example'),
+      );
+      expect(
+        q.withProtocol('sip'),
+        const Masquerade(ip: 'sip', id: 'a.example'),
+      );
+    });
+
+    test('STUN drops id, Off drops everything', () {
+      expect(q.withProtocol('stun'), const Masquerade(ip: 'stun'));
+      expect(q.withProtocol(''), Masquerade.off);
+    });
+  });
+
   group('form and domain checks', () {
     test('fromForm drops keys the form does not show', () {
       expect(
