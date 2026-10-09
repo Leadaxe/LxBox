@@ -48,17 +48,26 @@
   Traffic Processing → Params (Direct connect timeout), дефолт 15 с вместо
   5 с ядра — приложения на сетях с потерей SYN (например, Т‑Банк через Tele2)
   больше не обрываются.)
-- **Core `v1.14.2-lx.12` → `v1.14.2-lx.13-rc.1` (core release candidate,
-  [docs/KERNEL.md](docs/KERNEL.md)).** AWG masquerade `ip=quic`: the decoy is
+- **Core `v1.14.2-lx.12` → `v1.14.3-lx.14` (upstream base sing-box 1.14.3,
+  [docs/KERNEL.md](docs/KERNEL.md); v2.25.12-rc.1 shipped the release
+  candidate `v1.14.2-lx.13-rc.1`).** AWG masquerade `ip=quic`: the decoy is
   generated fresh before every handshake instead of one fixed `i1` for the
   endpoint's lifetime; `ib=chrome` / `ib=firefox` are real QUIC ClientHellos
   now (before, a TCP ClientHello sat inside the Initial), calibrated against
   Chrome 147/155 and Firefox 149 captures; `ip=sip` sends only INVITE,
-  `ip=dns` sends EDNS without options. The new core value `ib=chrome-full` is
-  not offered yet: the app still drops it with a warning.
-  (RU: ядро `v1.14.2-lx.13-rc.1`: decoy `ip=quic` свежий на каждом
-  хендшейке, `ib=chrome`/`firefox` — настоящие QUIC ClientHello, формы
-  `ip=sip` и `ip=dns` исправлены; `ib=chrome-full` пока не поддержан.)
+  `ip=dns` sends EDNS without options. The core value `ib=chrome-full` is
+  experimental and not offered: the app drops it with a warning. XHTTP sends
+  the `?…` part of `path` as the request query (SPEC 119, see task 620 above).
+  Hysteria2 / TUIC / WireGuard over a MASQUE (WARP) or another IP tunnel get a
+  packet size that fits the tunnel (core key `lx.mtu_align`, default `clamp`;
+  the app does not write it), so hysteria2 over WARP to an IPv6 server works.
+  MASQUE `vhttp: auto` no longer stays on h2 until restart after one quick h3
+  failure.
+  (RU: ядро `v1.14.3-lx.14`: decoy `ip=quic` свежий на каждом хендшейке,
+  `ib=chrome`/`firefox` — настоящие QUIC ClientHello, формы `ip=sip` и
+  `ip=dns` исправлены; query в `path` XHTTP уходит query запроса; размер
+  пакета hysteria2/TUIC/WireGuard поверх WARP подгоняется под туннель;
+  `vhttp: auto` не залипает на h2.)
 
 ### Internal
 
