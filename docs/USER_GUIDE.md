@@ -232,9 +232,10 @@ A WireGuard or AmneziaWG server of your own has a **Masquerade** section on the
 Settings tab of its screen: before the handshake the client sends decoy
 packets that look like QUIC, DNS, STUN or SIP. For QUIC the domain is required
 — it becomes the SNI of the decoy ClientHello; for DNS and SIP the domain is
-visible on the wire, and left empty, the core makes one up. Save writes the
-`ip`/`id`/`ib` keys into the server's source (link, `.conf` or JSON), the rest
-of the text stays as it was. A plain WireGuard server drops the decoys, so
+visible on the wire, and left empty, the core makes one up. As with the detour
+server, a choice is saved at once: the `ip`/`id`/`ib` keys go into the
+server's source (link, `.conf` or JSON), the rest of the text stays as it
+was. A plain WireGuard server drops the decoys, so
 masquerade does not break it; the node is then labelled AmneziaWG. If the
 source sets `I1` itself, the section is off: `I1` takes priority.
 

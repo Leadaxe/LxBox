@@ -140,16 +140,18 @@ the node list, folders and order — [007-NODE_LIST](../007-NODE_LIST/FEATURE.md
   `null` unconditionally.
 - **P16. The Masquerade section writes `ip`/`id`/`ib` into the source; an
   explicit `i1` wins.** A WireGuard/AmneziaWG node's Settings tab has a
-  Masquerade section (protocol, domain, browser). Save puts the keys into the
-  source text in its own form (link query, INI `[Interface]`, sing-box body)
-  and leaves every other byte alone; keys the form does not show are removed.
-  QUIC without a domain or an invalid domain does not let Save through. A node
+  Masquerade section (protocol, domain, browser rows, like Detour). A choice
+  is written at once — the keys go into the source text in its own form (link
+  query, INI `[Interface]`, sing-box body), every other byte stays; keys the
+  rows do not show are removed. QUIC gets a random domain if it has none; the
+  domain dialog does not accept an invalid domain. A node
   with an explicit `i1`, a packed link (`awg://` base64, `vpn://`) or an Xray
   source gets the section disabled with the reason. **Witness:**
   `test/services/masquerade_source_test.dart` (three forms, raw `+` and
   `\r\n` kept, round trip through the parser on corpus samples),
-  `test/widgets/masquerade_section_test.dart` (`i1` → no Save, `i2` → `sip`
-  disabled, QUIC without a domain → Save disabled). **Mutation:** rebuild the
+  `test/widgets/masquerade_section_test.dart` (no Save button, `i1` → rows
+  disabled, `i2` → `SIP` disabled, the domain dialog blocks OK on an error).
+  **Mutation:** rebuild the
   link through `Uri.queryParameters`; drop the `i1` check.
 
 ## Controlled parameters
