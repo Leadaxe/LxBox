@@ -15,6 +15,8 @@ import 'folder_detail_screen.dart';
 import 'warp_experiment_screen.dart';
 import '../services/l10n/locale_controller.dart';
 import '../widgets/safe_bottom.dart';
+import '../widgets/masquerade_fields.dart';
+import '../services/wireguard/masquerade_source.dart';
 
 /// §025 — Full-screen визард «Get WARP». Открывается из overflow-меню
 /// Subscriptions. Один тап «Register» для free; license/endpoint опциональны
@@ -880,127 +882,30 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                         // §143 — masquerade id/ip/ib (ядро 009 генерит i1).
                         if (_obfuscate) ...[
                           const SizedBox(height: 16),
-                          // ip — протокол маскировки.
-                          Row(
-                            children: [
-                              _label('Masquerade protocol'),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: DropdownButtonFormField<String>(
-                                  initialValue: _masqIp,
-                                  isDense: true,
-                                  decoration: const InputDecoration(
-                                    isDense: true,
-                                    border: OutlineInputBorder(),
-                                    contentPadding: EdgeInsets.symmetric(
-                                        horizontal: 12, vertical: 8),
-                                  ),
-                                  items: const [
-                                    DropdownMenuItem(
-                                        // l10n-exempt: protocol name
-                                        value: 'quic', child: Text('QUIC')),
-                                    DropdownMenuItem(
-                                        // l10n-exempt: protocol name
-                                        value: 'dns', child: Text('DNS')),
-                                    DropdownMenuItem(
-                                        // l10n-exempt: protocol name
-                                        value: 'stun', child: Text('STUN')),
-                                    DropdownMenuItem(
-                                        // l10n-exempt: protocol name
-                                        value: 'sip', child: Text('SIP')),
-                                  ],
-                                  onChanged: _busy
-                                      ? null
-                                      : (v) => setState(
-                                          () => _masqIp = v ?? 'quic'),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            _masqIp == 'dns' || _masqIp == 'sip'
-                                // Имена полей протокола (wire-термины) —
-                                // подставляются как payload, не переводятся.
-                                ? getLocalText.s("Domain (below) is visible on the wire as the %s.", _masqIp == 'dns' ? 'DNS QNAME' : 'SIP host')
-                                : getLocalText.s("QUIC/STUN decoy carries no hostname — the domain below is cosmetic for this protocol."),
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodySmall
-                                ?.copyWith(color: cs.onSurfaceVariant),
-                          ),
-                          const SizedBox(height: 12),
-                          _label('Masquerade domain (id)'),
-                          // combo-box (пункты из sni_pool + свободный ввод) +
-                          // свой кубик: реролл случайного домена из пула.
-                          // Cloudflare-доменов тут НЕТ намеренно: SNI живёт
+                          // §623 — общий виджет с секцией Masquerade узла.
+                          // Cloudflare-доменов в пуле НЕТ намеренно: SNI живёт
                           // внутри junk-приманки (не TLS), и на замере они
                           // резались — в отличие от MASQUE-пула, см. §136.
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              Expanded(
-                                child: LayoutBuilder(
-                                  builder: (ctx, c) => DropdownMenu<String>(
-                                    controller: _sni,
-                                    enabled: !_busy,
-                                    width: c.maxWidth,
-                                    requestFocusOnTap: true,
-                                    menuHeight: 280,
-                                    dropdownMenuEntries: [
-                                      for (final s in _sniPool)
-                                        DropdownMenuEntry(value: s, label: s),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.casino_outlined),
-                                tooltip: getLocalText.s("Pick another random domain"),
-                                onPressed: _busy ? null : _fillRandomSni,
-                              ),
-                            ],
-                          ),
-                          // ib — браузер (только при quic).
-                          if (_masqIp == 'quic') ...[
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                _label('Browser (ib)'),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: DropdownButtonFormField<String>(
-                                    initialValue: _masqIb,
-                                    isDense: true,
-                                    decoration: const InputDecoration(
-                                      isDense: true,
-                                      border: OutlineInputBorder(),
-                                      contentPadding: EdgeInsets.symmetric(
-                                          horizontal: 12, vertical: 8),
-                                    ),
-                                    items: const [
-                                      DropdownMenuItem(
-                                          value: 'chrome',
-                                          // l10n-exempt: brand name
-                                          child: Text('Chrome')),
-                                      DropdownMenuItem(
-                                          value: 'firefox',
-                                          // l10n-exempt: brand name
-                                          child: Text('Firefox')),
-                                      DropdownMenuItem(
-                                          value: 'curl',
-                                          // l10n-exempt: brand name
-                                          child: Text('cURL')),
-                                    ],
-                                    onChanged: _busy
-                                        ? null
-                                        : (v) => setState(
-                                            () => _masqIb = v ?? 'chrome'),
-                                  ),
-                                ),
-                              ],
+                          ListenableBuilder(
+                            listenable: _sni,
+                            builder: (context, _) => MasqueradeFields(
+                              ip: _masqIp,
+                              ib: _masqIb,
+                              domain: _sni,
+                              allowOff: false,
+                              enabled: !_busy,
+                              domainPool: _sniPool,
+                              onRandomDomain: _fillRandomSni,
+                              // Пустой домен у quic визард заполняет сам.
+                              domainError: masqueradeDomainErrorText(
+                                  masqueradeDomainError(_masqIp, _sni.text,
+                                      emptyAllowed: true)),
+                              onIpChanged: (v) => setState(
+                                  () => _masqIp = v.isEmpty ? 'quic' : v),
+                              onIbChanged: (v) => setState(
+                                  () => _masqIb = v.isEmpty ? 'chrome' : v),
                             ),
-                          ],
+                          ),
                           const SizedBox(height: 12),
                           Row(
                             children: [

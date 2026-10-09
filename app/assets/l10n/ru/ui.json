@@ -1147,8 +1147,62 @@
   "Blocked — Android may throttle the VPN service. Tap to allow.": {
     "value": "Заблокированы — Android может ограничивать VPN-сервис. Нажмите, чтобы разрешить."
   },
+  "Browser": {
+    "value": "Браузер"
+  },
   "Building config...": {
     "value": "Сборка конфига…"
+  },
+  "Decoy packets before the WireGuard handshake": {
+    "value": "Пакеты-приманки перед рукопожатием WireGuard"
+  },
+  "Domain is required for QUIC.": {
+    "value": "Для QUIC домен обязателен."
+  },
+  "Masquerade": {
+    "value": "Маскировка"
+  },
+  "Masquerade domain": {
+    "value": "Домен маскировки"
+  },
+  "Masquerade is not supported for this source format.": {
+    "value": "Для этого формата источника маскировка не поддерживается."
+  },
+  "Masquerade is off: the node sets I1 explicitly, and I1 takes priority. Without I1 in Source this section becomes available.": {
+    "value": "Маскировка выключена: узел задаёт I1 явно, а I1 приоритетнее. Без I1 в источнике секция станет доступна."
+  },
+  "Masquerade protocol": {
+    "value": "Протокол маскировки"
+  },
+  "No decoy packets before the handshake.": {
+    "value": "Пакетов-приманок перед рукопожатием нет."
+  },
+  "Not a valid domain name.": {
+    "value": "Недопустимое доменное имя."
+  },
+  "Not available: the node sets I2 explicitly.": {
+    "value": "Недоступно: узел задаёт I2 явно."
+  },
+  "Source has unsaved changes.": {
+    "value": "В источнике есть несохранённая правка."
+  },
+  "The STUN decoy carries no domain.": {
+    "value": "Приманка STUN домена не несёт."
+  },
+  "The domain goes into the SNI of the decoy QUIC ClientHello. Required.": {
+    "value": "Домен уходит в SNI ClientHello приманки QUIC. Обязателен."
+  },
+  "The domain is the DNS query name, visible on the wire. Empty: the core makes up a name.": {
+    "value": "Домен — имя в DNS-запросе, виден на проводе. Пусто — имя придумывает ядро."
+  },
+  "The domain is the SIP request host, visible on the wire. Empty: the core makes up a name.": {
+    "value": "Домен — host SIP-запроса, виден на проводе. Пусто — имя придумывает ядро."
+  },
+  "The masquerade keys in Source are ignored.": {
+    "value": "Ключи маскировки в источнике не учитываются."
+  },
+  "This source is a packed link. Masquerade can be changed after Edit JSON turns the node into JSON.": {
+    "value": "Источник — упакованная ссылка. Маскировку можно менять, когда кнопка «Изменить» на вкладке JSON переведёт узел в JSON."
   },
   "by Domain": {
     "value": "по домену"
@@ -1920,9 +1974,6 @@
   },
   "Domain": {
     "value": "Домен"
-  },
-  "Domain (below) is visible on the wire as the %s.": {
-    "value": "Домен (ниже) виден в трафике как %s."
   },
   "Domain resolver": {
     "value": "Резолвер домена"
@@ -3760,9 +3811,6 @@
   },
   "Put unreachable WireGuard tunnels to sleep after they sit idle, freeing memory and saving battery. They wake instantly on use. Only affects tunnels not on the active route.": {
     "value": "Усыплять недоступные туннели WireGuard после простоя — это освобождает память и экономит батарею. При обращении туннель просыпается мгновенно. Касается только туннелей вне активного маршрута."
-  },
-  "QUIC/STUN decoy carries no hostname — the domain below is cosmetic for this protocol.": {
-    "value": "Приманка QUIC/STUN не содержит имени хоста — домен ниже для этого протокола чисто косметический."
   },
   "Query timeout": {
     "value": "Тайм-аут запроса"

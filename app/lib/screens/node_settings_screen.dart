@@ -24,6 +24,9 @@ import '../widgets/node_diagnostics_tab.dart';
 import '../widgets/tailscale_network_tab.dart';
 import '../services/tailscale_network.dart';
 import '../services/l10n/locale_controller.dart';
+import '../services/warp/warp_endpoint_picker.dart';
+import '../services/wireguard/masquerade_source.dart';
+import '../widgets/masquerade_fields.dart';
 import 'node_settings/node_document.dart';
 import 'subscriptions_screen/entry_warnings.dart';
 
@@ -111,6 +114,10 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
 
   /// §581 — узел Tailscale: есть вкладка Network.
   bool _isTailscale = false;
+
+  /// §623 — пул доменов маскировки (тот же, что у визарда WARP) для поля
+  /// домена секции Masquerade узла WireGuard/AmneziaWG.
+  WarpEndpointPicker? _picker;
 
   @override
   void initState() {
@@ -238,6 +245,15 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
 
     // §239 — кандидаты живут в общем пикере (showDetourTargetPicker):
     // «свободные» одиночки + члены СВОЕЙ папки (для member-режима).
+
+    // §623 — пул доменов маскировки; не загрузился — поле без подсказок.
+    if (node is WireguardSpec && _picker == null) {
+      try {
+        _picker = await WarpEndpointPicker.load();
+      } catch (_) {
+        _picker = null;
+      }
+    }
 
     if (mounted) setState(() {});
   }
@@ -405,6 +421,52 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     }
     _sourceCtrl.text = text;
     await _saveSource();
+  }
+
+  /// §623 — Save секции Masquerade: ключи `ip`/`id`/`ib` в текст источника
+  /// (вид источника сохраняется, в отличие от Tailscale), дальше — как Save
+  /// вкладки Source.
+  Future<void> _saveMasquerade(Masquerade m) async {
+    _sourceCtrl.text = withMasquerade(_containerRaw, m);
+    await _saveSource();
+  }
+
+  /// §623 — секция Masquerade узла WireGuard/AmneziaWG. Явный `i1`
+  /// приоритетнее: тогда секция недоступна; так же — у упакованной ссылки и
+  /// у источника, в который писать не умеем.
+  Widget _buildMasqueradeSection(WireguardSpec node) {
+    final fields = node.awg?.fields;
+    final raw = _containerRaw;
+    final String? reason;
+    if (fields?['i1'] != null) {
+      final ignored = masqueradeKeysPresent(raw);
+      reason = [
+        getLocalText.s(
+            "Masquerade is off: the node sets I1 explicitly, and I1 takes priority. Without I1 in Source this section becomes available."),
+        if (ignored) getLocalText.s("The masquerade keys in Source are ignored."),
+      ].join(' ');
+    } else {
+      reason = switch (masqueradeWritability(raw)) {
+        MasqueradeWritability.writable => null,
+        MasqueradeWritability.packedLink => getLocalText.s(
+            "This source is a packed link. Masquerade can be changed after Edit JSON turns the node into JSON."),
+        MasqueradeWritability.unsupportedFormat =>
+          getLocalText.s("Masquerade is not supported for this source format."),
+      };
+    }
+    final picker = _picker;
+    return ListenableBuilder(
+      listenable: _sourceCtrl,
+      builder: (context, _) => MasqueradeSection(
+        initial: Masquerade.fromFields(fields),
+        unavailableReason: reason,
+        sipBlocked: fields?['i2'] != null,
+        sourceDirty: _sourceCtrl.text != raw,
+        domainPool: picker?.sniPool ?? const [],
+        randomDomain: picker?.randomSni,
+        onSave: _saveMasquerade,
+      ),
+    );
   }
 
   /// Записать [raw] источником узла (одиночный — `updateConnectionAt`, член
@@ -575,6 +637,10 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
             ),
           ),
         ),
+        if (_node case final WireguardSpec wg) ...[
+          const SizedBox(height: 16),
+          _buildMasqueradeSection(wg),
+        ],
         // §322 — у узла автовыбора detour'а нет: он не соединение, а правило
         // выбора среди членов. Блок не рисуем вовсе (не «серым»).
         if (_member?.node?.isGroup != true) ...[

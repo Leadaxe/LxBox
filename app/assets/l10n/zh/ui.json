@@ -958,8 +958,62 @@
   "Blocked — Android may throttle the VPN service. Tap to allow.": {
     "value": "已阻止——Android 可能限制 VPN 服务。点击允许。"
   },
+  "Browser": {
+    "value": "浏览器"
+  },
   "Building config...": {
     "value": "正在构建配置…"
+  },
+  "Decoy packets before the WireGuard handshake": {
+    "value": "WireGuard 握手前的诱饵包"
+  },
+  "Domain is required for QUIC.": {
+    "value": "QUIC 必须填写域名。"
+  },
+  "Masquerade": {
+    "value": "伪装"
+  },
+  "Masquerade domain": {
+    "value": "伪装域名"
+  },
+  "Masquerade is not supported for this source format.": {
+    "value": "此来源格式不支持伪装。"
+  },
+  "Masquerade is off: the node sets I1 explicitly, and I1 takes priority. Without I1 in Source this section becomes available.": {
+    "value": "伪装已关闭：节点显式设置了 I1，I1 优先。来源中去掉 I1 后此部分可用。"
+  },
+  "Masquerade protocol": {
+    "value": "伪装协议"
+  },
+  "No decoy packets before the handshake.": {
+    "value": "握手前不发送诱饵包。"
+  },
+  "Not a valid domain name.": {
+    "value": "域名无效。"
+  },
+  "Not available: the node sets I2 explicitly.": {
+    "value": "不可用：节点显式设置了 I2。"
+  },
+  "Source has unsaved changes.": {
+    "value": "来源有未保存的修改。"
+  },
+  "The STUN decoy carries no domain.": {
+    "value": "STUN 诱饵不携带域名。"
+  },
+  "The domain goes into the SNI of the decoy QUIC ClientHello. Required.": {
+    "value": "域名写入诱饵 QUIC ClientHello 的 SNI。必填。"
+  },
+  "The domain is the DNS query name, visible on the wire. Empty: the core makes up a name.": {
+    "value": "域名即 DNS 查询名，在线路上可见。留空则由内核生成名称。"
+  },
+  "The domain is the SIP request host, visible on the wire. Empty: the core makes up a name.": {
+    "value": "域名即 SIP 请求的 host，在线路上可见。留空则由内核生成名称。"
+  },
+  "The masquerade keys in Source are ignored.": {
+    "value": "来源中的伪装键被忽略。"
+  },
+  "This source is a packed link. Masquerade can be changed after Edit JSON turns the node into JSON.": {
+    "value": "此来源是打包链接。通过 JSON 标签页的“编辑”将节点转为 JSON 后可修改伪装。"
   },
   "by Domain": {
     "value": "按域名"
@@ -1695,9 +1749,6 @@
   },
   "Domain": {
     "value": "域名"
-  },
-  "Domain (below) is visible on the wire as the %s.": {
-    "value": "域名（下方）在传输中显示为 %s。"
   },
   "Domain resolver": {
     "value": "域名解析器"
@@ -3505,9 +3556,6 @@
   },
   "Put unreachable WireGuard tunnels to sleep after they sit idle, freeing memory and saving battery. They wake instantly on use. Only affects tunnels not on the active route.": {
     "value": "让不可达的 WireGuard 隧道在空闲后休眠，释放内存并省电。使用时立即唤醒。只影响不在当前路由上的隧道。"
-  },
-  "QUIC/STUN decoy carries no hostname — the domain below is cosmetic for this protocol.": {
-    "value": "QUIC/STUN 伪装不携带主机名——对该协议来说，下方的域名只是摆设。"
   },
   "Query timeout": {
     "value": "查询超时"
