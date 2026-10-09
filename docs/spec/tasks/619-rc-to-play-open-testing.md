@@ -2,9 +2,10 @@
 
 | Field | Value |
 |------|----------|
-| Status | In progress |
+| Status | Done |
 | Start date | 2026-10-09 |
-| Commits | — |
+| End date | 2026-10-09 |
+| Commits | `8e3bcbcd` spec, `2fe64af1` beta вместо internal, `5c06e176` ci(619), `f6e88994` первый rc v2.25.12-rc.1 |
 | Related | §436 (заливка в Play из CI, pre-release для rc), §379 (формула versionCode), `docs/RELEASE_PROCESS.md`, `docs/GOOGLE_PLAY.md` |
 
 ## Problem
@@ -99,9 +100,11 @@ production (предупреждает, но принимает).
 
 - `actionlint`/синтаксис YAML не ломаем; локальных прогонов нет (CI).
 - Ревью диффа: условие джоба, значения по умолчанию, фоллбэк changelog.
-- Боевая проверка — на следующем `vX.Y.Z-rc.1`: в логе джоба
-  `track=beta status=completed`, выпуск появляется в Open testing на
-  проверке.
+- Боевая проверка — `v2.25.12-rc.1` (run 37870824729, 2026-10-09): job
+  GooglePlay зелёный, в логе `track=beta status=completed`, AAB с кодом
+  22512010 загружен (edit 05711370668354225280); changelog взят фоллбэком из
+  `22512502.txt` (EN 434 / RU 413 символов). GitHub-релиз `prerelease=true`,
+  четыре APK; `publish-manifest` пропущен.
 
 ## Unresolved / follow-up
 
