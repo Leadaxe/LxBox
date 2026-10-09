@@ -669,6 +669,12 @@ the usual mistake:
 | You are saying | "this route goes through these servers, in this order" | "this server goes through that one" |
 | Where you edit it | in the chain's own editor | on the server / subscription / folder |
 | Reach for it when | the route itself is the thing you're building | a single server needs a relay in front of it |
+| The last server must never be reached directly | **no** — its positions stay standalone servers, and a direction with an empty filter offers them on their own | **yes** — the relay belongs to the server itself, no direct path to it remains |
+
+The last row is where the two really differ. If the point of the route is that
+the final server never sees your IP (WARP behind Proton, for example), use a
+detour — see the recipe
+[Double hop: the last server never sees your IP](#double-hop-the-last-server-never-sees-your-ip).
 
 ### Positions
 
@@ -1014,6 +1020,38 @@ Caveats:
 - **Any** local proxy on the phone connects the same way (another service's own
   SOCKS5/HTTP client): a `socks://` or `socks5://` link to its address, plus the
   deny-list so the traffic isn't looped.
+
+### Double hop: the last server never sees your IP
+
+The task: `you → server A → server B → internet`, and B must never be reached
+from your own IP. The usual case: Proton, Mullvad or your own VPS as A, WARP
+as B — Cloudflare should see A's exit IP, never yours.
+
+The relay goes **on B itself**. Every server in the pool is an exit in its own
+right: a chain or a direction adds a route to it but doesn't remove the direct
+one. A chain `[A, B]` leaves B a standalone server, and a direction with an
+empty filter offers it on its own — picking it by hand, the auto twin's test,
+a ping in the server list all reach B directly. A detour changes B itself, so
+the config has no direct path to it at all.
+
+1. **Detour on B.** Servers → tap B → **Settings** → **Detour** → pick A →
+   Save. If A is missing from the picker, B is AmneziaWG and A is plain
+   WireGuard: the core can't carry that pair (see Detour → Limitations). For
+   WARP, re-create it in **Get WARP** with **Add Amnezia obfuscation** off —
+   inside A's tunnel the obfuscation gives nothing anyway.
+2. **The direction holds only B.** Routing → Directions → `vpn-1` → **Node filter** — a
+   pattern that matches B's name and nothing else (`WARP`, for example; see
+   [Regular expressions](#regular-expressions-regex)). Turn **Include auto
+   (urltest)** off: with one server there is nothing to choose. Without the
+   filter A lands in the direction as well — not a leak, but traffic may leave
+   from A instead of B.
+3. **Default traffic = VPN.** DNS servers whose outbound is `vpn-1` take the
+   same route.
+4. **Check.** VPN on → **Statistics** → any connection → the **Detour** line
+   lists both A and B.
+
+If a chain `[A, B]` already exists, delete it: it adds nothing to the detour
+and keeps the standalone B in sight.
 
 ---
 
