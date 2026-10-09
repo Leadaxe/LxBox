@@ -27,8 +27,9 @@ will not install.
    break installing one build over another in both directions.
 3. **Green CI is the only test gate.** The full test suite is not run locally;
    the verdict is taken by `head_sha` through the API, not from "the latest run".
-4. **A candidate never reaches users.** `-rc.N` is only a GitHub pre-release for
-   testers: not Latest, not in `docs/latest.json`, not in Play, not in F-Droid.
+4. **A candidate never reaches stable users.** `-rc.N` is a GitHub pre-release for
+   testers and an Open testing release in Play: not Latest, not in
+   `docs/latest.json`, not on the Play production track, not in F-Droid.
 5. **The build is byte-reproducible**, otherwise F-Droid will not publish the
    release under our signature.
 
@@ -39,7 +40,7 @@ One workflow `CI`; concurrent runs on the same branch cancel each other.
 | Event | What runs |
 |---------|-----------------|
 | push of a `vX.Y.Z` / `vX.Y.Z-hotfixN` tag | `meta` → `checks` → `android` → `release` + `google-play` + `publish-manifest` |
-| push of a `vX.Y.Z-rc.N` tag | the same, but `release` is a pre-release; `google-play` and `publish-manifest` are skipped |
+| push of a `vX.Y.Z-rc.N` tag | the same, but `release` is a pre-release, `google-play` uploads to Open testing (`PLAY_RC_TRACK`, default `beta`); `publish-manifest` is skipped |
 | push to `develop` / `main`, PR into them | `checks` + `PublicSubsCorpus` |
 | `workflow_dispatch`, `run_mode=checks` | `checks` (with `test_path` / `test_name` — a pinpoint run without analyze) |
 | `workflow_dispatch`, `run_mode=build` | + `android`: APKs in artifacts, version `X.Y.Z-dev.N` from the last tag |
@@ -52,7 +53,7 @@ One workflow `CI`; concurrent runs on the same branch cancel each other.
 | `PublicSubsCorpus` | parsing of the public subscriptions corpus (no core, no network), report as an artifact | `continue-on-error`: the reference is updated by a human |
 | `android` | core fetch by the pin; version and base code into pubspec; signing from secrets; **four APKs** in separate runs (universal, `armeabi-v7a`, `arm64-v8a`, `x86_64`) with the core's native libraries narrowed; AAB | `--split-per-abi` is not used; `LXBOX_DISTRIBUTION=play` — **only** on the AAB |
 | `release` | GitHub Release: `LxBox-vX.Y.Z-{arm64-v8a,armeabi-v7a,x86_64,universal}.apk`, body — `RELEASE_NOTES.md` | does not depend on `google-play` |
-| `google-play` | AAB to the Play Console; "what's new" — from the fastlane changelogs (`en-US`, `ru` → `ru-RU`) | without the `PLAY_SERVICE_ACCOUNT_JSON` secret — a warning and a skip; track `PLAY_TRACK` (default `production`), status `PLAY_RELEASE_STATUS` (default `draft` — a human presses Publish) |
+| `google-play` | AAB to the Play Console; "what's new" — from the fastlane changelogs (`en-US`, `ru` → `ru-RU`) | without the `PLAY_SERVICE_ACCOUNT_JSON` secret — a warning and a skip; track `PLAY_TRACK` (default `production`), status `PLAY_RELEASE_STATUS` (default `draft` — a human presses Publish); a candidate — `PLAY_RC_TRACK` (default `beta`) and `PLAY_RC_RELEASE_STATUS` (default `completed`) |
 | `publish-manifest` | rewrites `docs/latest.json` in `main` with a `[skip ci]` bot commit | the only automatic commit in `main` |
 
 ## Registry: version and build code

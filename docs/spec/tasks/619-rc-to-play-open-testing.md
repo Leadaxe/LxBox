@@ -57,6 +57,29 @@ production (предупреждает, но принимает).
    «Which tags», переменные). Везде: rc уходит в Play в открытое
    тестирование (трек `beta`), проходит проверку Google.
 
+### Реализация (где лежит)
+
+- `.github/workflows/ci.yml`, job `google-play` (`name: GooglePlay`, ~стр. 537):
+  `if: needs.meta.outputs.is_release == 'true'` (~стр. 543); шапка джоба —
+  таблица `PLAY_TRACK` / `PLAY_RELEASE_STATUS` / `PLAY_RC_TRACK` /
+  `PLAY_RC_RELEASE_STATUS`.
+- Шаг «Play track and status» (`id: target`, ~стр. 585, после `gate`):
+  `vars.*` через `env:`, выбор по `IS_PRERELEASE`, в `GITHUB_OUTPUT` —
+  `track`/`status`, в лог — `track=… status=…`.
+- Шаг «Release notes» (~стр. 614): `RBASE` = `version-code.sh "${VERSION%%-rc.*}"
+  universal` только для `-rc.`; второй проход суффиксов 0 2 1 4 по `RBASE`,
+  в логе — какой файл взят; warning перечисляет оба диапазона.
+- Шаг «Upload to Google Play»: `track:`/`status:` из `steps.target.outputs.*`
+  (~стр. 677–678).
+- Комментарий §436 в job `meta` (~стр. 114) переформулирован; логика
+  `is_prerelease`, GitHub pre-release и пропуск `publish-manifest` не менялись.
+- Доки: `docs/RELEASE_PROCESS.md` (таблица триггеров, абзац про rc, раздел
+  «Google Play (AAB)»), `docs/GOOGLE_PLAY.md` (CI upload: Track, Which tags,
+  Release candidate status, Release notes),
+  `docs/spec/features/023-BUILD_CI_RELEASE/FEATURE{,.ru}.md` (принцип 4,
+  таблица триггеров, строка `google-play`).
+- `actionlint .github/workflows/ci.yml` — чисто.
+
 ## Risks and edge cases
 
 - Открытое тестирование должно быть создано в консоли (страница Open

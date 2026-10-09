@@ -20,7 +20,7 @@ CI (`.github/workflows/ci.yml`) triggers on:
 | Event | What runs |
 |---|---|
 | push of a `v*` tag | `meta` + `checks` + `android` + `release` + `google-play` + `publish-manifest` (a full release) |
-| push of a `vX.Y.Z-rc.N` tag | `meta` + `checks` + `android` + `release` as a **pre-release**; `google-play` and `publish-manifest` are skipped |
+| push of a `vX.Y.Z-rc.N` tag | `meta` + `checks` + `android` + `release` as a **pre-release** + `google-play` to **Open testing** (track `beta`, §619); `publish-manifest` is skipped |
 | push to `develop` / `main` | `checks` (analyze and tests only) |
 | PR into `develop` / `main` | `checks` |
 | `workflow_dispatch` + `run_mode=checks` | `checks` |
@@ -35,11 +35,13 @@ After the release the bot step `publish-manifest` pushes a
 `chore(release): update docs/latest.json ... [skip ci]` commit to `main`. That is
 the only automatic commit allowed in `main` besides the release merge commits.
 
-A release candidate (`vX.Y.Z-rc.N`, §436) does not reach users. The GitHub
-release is marked pre-release, so it never becomes Latest and
+A release candidate (`vX.Y.Z-rc.N`, §436) does not reach stable users. The
+GitHub release is marked pre-release, so it never becomes Latest and
 `/releases/latest`, which UpdateChecker polls, keeps returning the previous
-stable. `docs/latest.json` is not updated, and nothing goes to Google Play.
-The APKs are on the release page for testers. A hotfix `vX.Y.Z-hotfixN` is a
+stable. `docs/latest.json` is not updated. In Google Play the candidate goes to
+Open testing (track `beta`, §619), not to production: it passes Google's review
+and is then offered only to those who joined the open test. The APKs are on the
+release page for testers. A hotfix `vX.Y.Z-hotfixN` is a
 full release.
 
 ---
@@ -360,9 +362,9 @@ curl -sL https://raw.githubusercontent.com/Leadaxe/LxBox/main/docs/latest.json |
 ### Google Play (AAB)
 
 For every release CI builds an `.aab` (the “Build AAB (Google Play)” step),
-keeps it in the run's artifacts, and on every tag except a release candidate
-(`vX.Y.Z-rc.N`) the `google-play` job (shown as “GooglePlay”) uploads it to the Play
-Console through the Google Play Developer API (§436, see
+keeps it in the run's artifacts, and on every tag the `google-play` job (shown
+as “GooglePlay”) uploads it to the Play Console through the Google Play
+Developer API (§436, see
 [`GOOGLE_PLAY.md`](GOOGLE_PLAY.md#ci-upload)). The job needs the
 `PLAY_SERVICE_ACCOUNT_JSON` secret; without it it logs a warning and skips, so
 forks build as before. Track and release status come from repository
@@ -370,10 +372,17 @@ variables: `PLAY_TRACK` (YAML fallback `production`) and `PLAY_RELEASE_STATUS`
 (YAML fallback `draft` — the release lands in the console as a draft and a human
 presses Publish; `completed` sends it to review by itself). **The repository
 is set to `completed`** (§436, owner's decision 2026-09-14): a stable tag goes to
-Google's review on its own, nothing to press. Release notes come
+Google's review on its own, nothing to press. A release candidate
+(`vX.Y.Z-rc.N`, §619) reads its own pair: track `PLAY_RC_TRACK` (YAML fallback
+`beta`, Open testing) and status `PLAY_RC_RELEASE_STATUS` (YAML fallback
+`completed`); the job's `target` step picks the pair and logs
+`track=… status=…`. Open testing goes through Google's review like production,
+and its page must exist in the console. Release notes come
 from `fastlane/metadata/android/<locale>/changelogs/` — the same files F-Droid
 reads; a file over 500 characters fails the `checks` job on push, before any
-tag. `release` and `publish-manifest` do not depend on `google-play`: a failed upload
+tag. A candidate rarely has files under its own code, so the job falls back
+to the release code of the same version (`X.Y.Z`, PRE=50). `release` and
+`publish-manifest` do not depend on `google-play`: a failed upload
 leaves the GitHub release intact, and the AAB stays in the `android-aab-release`
 artifact for a manual upload.
 

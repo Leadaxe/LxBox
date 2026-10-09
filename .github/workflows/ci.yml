@@ -111,11 +111,12 @@ jobs:
             echo "tag=" >> "$GITHUB_OUTPUT"
             echo "is_release=false" >> "$GITHUB_OUTPUT"
           fi
-          # §436 — релиз-кандидат (vX.Y.Z-rc.N) до пользователей не доходит:
-          # GitHub-релиз помечается pre-release (/releases/latest, куда ходит
-          # UpdateChecker, его не видит), docs/latest.json не обновляется, в
-          # Google Play не уходит. Hotfix (vX.Y.Z-hotfixN) — полноценный релиз,
-          # флаг false.
+          # §436 — релиз-кандидат (vX.Y.Z-rc.N) до пользователей stable не
+          # доходит: GitHub-релиз помечается pre-release (/releases/latest, куда
+          # ходит UpdateChecker, его не видит), docs/latest.json не обновляется.
+          # §619 — в Google Play rc уходит, но в открытое тестирование (трек
+          # beta), не в production: выбор трека — шаг target job google-play.
+          # Hotfix (vX.Y.Z-hotfixN) — полноценный релиз, флаг false.
           # Других суффиксов не бывает: version-code.sh падает на неизвестном.
           if [[ "$VERSION" == *-rc.* ]]; then
             echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
@@ -537,8 +538,9 @@ jobs:
     name: GooglePlay
     needs: [meta, android]
     runs-on: ubuntu-latest
-    # Релиз-кандидаты (-rc.N) в Play не идут: job пропускается (skipped).
-    if: needs.meta.outputs.is_release == 'true' && needs.meta.outputs.is_prerelease != 'true'
+    # §619 — релиз-кандидаты (-rc.N) тоже идут в Play, но на свой трек
+    # (открытое тестирование), см. шаг target.
+    if: needs.meta.outputs.is_release == 'true'
     # §436 — AAB из job android уезжает в Play Console через Google Play
     # Developer API от имени сервисного аккаунта (секрет
     # PLAY_SERVICE_ACCOUNT_JSON = JSON-ключ целиком; права в Play Console —
@@ -548,11 +550,16 @@ jobs:
     # Параллелен release и publish-manifest, они от него НЕ зависят: провал
     # заливки в Play не должен снимать GitHub-релиз.
     #
-    # Трек и статус — repo variables, переключаются без коммита:
-    #   PLAY_TRACK           production | internal | alpha | beta   (default production)
-    #   PLAY_RELEASE_STATUS  draft | completed                       (default draft)
+    # Трек и статус — repo variables, переключаются без коммита. Релиз и
+    # hotfix читают PLAY_*, релиз-кандидат — PLAY_RC_*:
+    #   PLAY_TRACK              production | internal | alpha | beta   (default production)
+    #   PLAY_RELEASE_STATUS     draft | completed                       (default draft)
+    #   PLAY_RC_TRACK           production | internal | alpha | beta   (default beta = открытое тестирование)
+    #   PLAY_RC_RELEASE_STATUS  draft | completed                       (default completed)
     # draft: выпуск ложится в консоль черновиком, Publish жмёт человек.
-    # completed: уходит на проверку Google сам.
+    # completed: уходит на проверку Google сам. Открытое тестирование
+    # проходит проверку Google так же, как production; страница Open testing
+    # должна быть заведена в консоли, иначе API отвергнет трек.
     #   gh variable set PLAY_RELEASE_STATUS -b completed
     steps:
       - name: Checkout (changelogs + version-code.sh)
@@ -575,6 +582,28 @@ jobs:
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Play track and status
+        id: target
+        if: steps.gate.outputs.enabled == 'true'
+        shell: bash
+        env:
+          IS_PRERELEASE: ${{ needs.meta.outputs.is_prerelease }}
+          RC_TRACK: ${{ vars.PLAY_RC_TRACK || 'beta' }}
+          RC_STATUS: ${{ vars.PLAY_RC_RELEASE_STATUS || 'completed' }}
+          REL_TRACK: ${{ vars.PLAY_TRACK || 'production' }}
+          REL_STATUS: ${{ vars.PLAY_RELEASE_STATUS || 'draft' }}
+        run: |
+          set -euo pipefail
+          # §619 — rc в открытое тестирование, релиз/hotfix — как раньше.
+          if [ "$IS_PRERELEASE" = "true" ]; then
+            TRACK="$RC_TRACK"; STATUS="$RC_STATUS"
+          else
+            TRACK="$REL_TRACK"; STATUS="$REL_STATUS"
+          fi
+          echo "track=$TRACK" >> "$GITHUB_OUTPUT"
+          echo "status=$STATUS" >> "$GITHUB_OUTPUT"
+          echo "track=$TRACK status=$STATUS"
+
       - name: Download AAB
         if: steps.gate.outputs.enabled == 'true'
         uses: actions/download-artifact@v7
@@ -592,6 +621,11 @@ jobs:
           # Тот же код, что зашит в AAB (шаг Build AAB: universal, ABI=0).
           BASE=$(scripts/version-code.sh "$VERSION" universal)
           echo "versionCode (AAB) = $BASE"
+          RBASE=""
+          if [[ "$VERSION" == *-rc.* ]]; then
+            RBASE=$(scripts/version-code.sh "${VERSION%%-rc.*}" universal)
+            echo "versionCode релиза той же версии (фоллбэк changelog) = $RBASE"
+          fi
           mkdir -p play/whatsnew
           # Каталог fastlane `ru` — соглашение F-Droid; Play ждёт ru-RU.
           for PAIR in en-US:en-US ru:ru-RU; do
@@ -605,8 +639,19 @@ jobs:
               CAND="$DIR/$((BASE + SUFFIX)).txt"
               if [ -f "$CAND" ]; then FILE="$CAND"; break; fi
             done
+            # §619 — у кандидата своих файлов обычно нет: заметки пишутся
+            # заранее под код финального релиза той же версии (PRE=50).
+            if [ -z "$FILE" ] && [ -n "$RBASE" ]; then
+              for SUFFIX in 0 2 1 4; do
+                CAND="$DIR/$((RBASE + SUFFIX)).txt"
+                if [ -f "$CAND" ]; then FILE="$CAND"; break; fi
+              done
+              if [ -n "$FILE" ]; then
+                echo "$SRC: нет changelog под кодом кандидата, взят файл релиза $FILE"
+              fi
+            fi
             if [ -z "$FILE" ]; then
-              echo "::warning::Нет changelog для $SRC (коды $BASE…$((BASE + 4))) — выпуск в Play уйдёт без описания для $LOCALE; допишите его в консоли."
+              echo "::warning::Нет changelog для $SRC (коды $BASE…$((BASE + 4))${RBASE:+, $RBASE…$((RBASE + 4))}) — выпуск в Play уйдёт без описания для $LOCALE; допишите его в консоли."
               continue
             fi
             # Лимит 500 уже проверен в job checks на каждом файле; здесь
@@ -629,8 +674,8 @@ jobs:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: com.leadaxe.lxbox
           releaseFiles: play/app-release.aab
-          track: ${{ vars.PLAY_TRACK || 'production' }}
-          status: ${{ vars.PLAY_RELEASE_STATUS || 'draft' }}
+          track: ${{ steps.target.outputs.track }}
+          status: ${{ steps.target.outputs.status }}
           whatsNewDirectory: play/whatsnew
 
   release:
