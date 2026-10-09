@@ -228,6 +228,16 @@ A single server. You added it by pasting a link (`vless://…`, `vmess://…`,
 `wg://…`, a QR code and so on) or from a file. There is nothing to update — it's
 a static entry. Fits the "I just have one config from a friend/provider" case.
 
+A WireGuard or AmneziaWG server of your own has a **Masquerade** section on the
+Settings tab of its screen: before the handshake the client sends decoy
+packets that look like QUIC, DNS, STUN or SIP. For QUIC the domain is required
+— it becomes the SNI of the decoy ClientHello; for DNS and SIP the domain is
+visible on the wire, and left empty, the core makes one up. Save writes the
+`ip`/`id`/`ib` keys into the server's source (link, `.conf` or JSON), the rest
+of the text stays as it was. A plain WireGuard server drops the decoys, so
+masquerade does not break it; the node is then labelled AmneziaWG. If the
+source sets `I1` itself, the section is off: `I1` takes priority.
+
 ### Subscription
 
 A link from a VPN provider hiding **a whole list of servers** behind it. L×Box:

@@ -8,6 +8,24 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Masquerade section for your own WireGuard/AmneziaWG node
+  ([task 623](docs/spec/tasks/623-node-masquerade-section.md)).**
+  The node's Settings tab has Masquerade: protocol (Off, QUIC, DNS, STUN,
+  SIP), domain and browser. Save writes `ip`/`id`/`ib` into the node's source
+  — a link, a `.conf` or a sing-box body — and leaves the rest of the text as
+  it was. QUIC needs a domain: it becomes the SNI of the decoy ClientHello. A
+  node that sets `I1` itself keeps it: the section is off and says why. Packed
+  links (`awg://` base64, `vpn://`) and Xray sources are not written to. The
+  WARP wizard uses the same fields; its QUIC hint no longer calls the domain
+  cosmetic.
+  (RU: Секция Masquerade у своего узла WireGuard/AmneziaWG на вкладке
+  Settings: протокол, домен, браузер; Save пишет `ip`/`id`/`ib` в источник,
+  остальной текст не трогает; у QUIC домен обязателен (SNI ClientHello);
+  явный `I1` приоритетнее — секция выключена с причиной; подсказка QUIC в
+  визарде WARP исправлена.)
+
 ### Fixed
 
 - **Tailscale Network tab: the exit device is back under Devices

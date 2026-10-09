@@ -127,6 +127,19 @@ detour и цепочки — [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/
 - **P15. Формы прокси не пускают негодный адрес.** Host непустой, Port 1..65535,
   иначе Add не срабатывает. `без свидетеля` (тестов на валидатор
   SOCKS5/HTTP нет).
+- **P16. Секция Masquerade пишет `ip`/`id`/`ib` в источник, явный `i1`
+  приоритетнее.** На вкладке Settings узла WireGuard/AmneziaWG — секция
+  Masquerade (протокол, домен, браузер). Save кладёт ключи в текст источника
+  в его же форме (query ссылки, `[Interface]` INI, тело sing-box), прочие
+  байты не трогает; ключи, которых форма не показывает, убирает. QUIC без
+  домена или негодный домен Save не пропускают. У узла с явным `i1`, у
+  упакованной ссылки (`awg://` base64, `vpn://`) и у Xray-источника секция
+  выключена, причина написана. Свидетель:
+  `test/services/masquerade_source_test.dart` (три формы, сырой `+` и `\r\n`
+  целы, круг через разбор на образцах корпуса),
+  `test/widgets/masquerade_section_test.dart` (`i1` → нет Save, `i2` → `sip`
+  выключен, QUIC без домена → Save выключен). Мутация: пересобрать ссылку
+  через `Uri.queryParameters`; убрать проверку `i1`.
 
 ## Контролируемые параметры
 
@@ -139,6 +152,7 @@ detour и цепочки — [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/
 | Tag | Узел → Settings | строка + палитра из 14 эмодзи | тег узла |
 | Detour server | Узел → Settings | см. [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.ru.md) | None (direct) |
 | Skip presets | Узел → Settings; виден, если в шаблоне есть пресет `for_each` под тип узла | вкл/выкл | выкл |
+| Masquerade: протокол · домен · браузер | Узел WireGuard/AmneziaWG → Settings → Masquerade | Off · `quic` · `dns` · `stun` · `sip`; LDH-имя ≤ 253 байт; `chrome` · `firefox` · `curl` · Default | из узла (`ip`/`id`/`ib`) |
 | Source | Узел → Source | текст источника | как сохранён |
 | Exit node | Узел Tailscale → Network → Save choice | узел tailnet / None | из тела |
 
@@ -206,6 +220,9 @@ kept.», «Comments were removed.», «The core rejected the node: …».
   протокола, форму TLS.
 - Не планируется (решение владельца 2026-09-29, аудит [591](../../tasks/591-spec-kit-revision-audit.md)): дублирование узла; отдельная
   форма WireGuard/AmneziaWG (`097F` Phase 2b) — такие узлы правятся текстом.
+  Единственное исключение — секция Masquerade (`ip`/`id`/`ib`, задача
+  [623](../../tasks/623-node-masquerade-section.md), P16); `jc`, `h1`–`h4`,
+  `i1`–`i5` и поля AWG 3.x — по-прежнему только текстом.
 - Камера и выбор файла — зависят от возможностей ОС
   ([001-SUBSCRIPTIONS](../001-SUBSCRIPTIONS/FEATURE.ru.md)).
 
@@ -218,7 +235,7 @@ kept.», «Comments were removed.», «The core rejected the node: …».
 | Правка источника | Сохраняет источник по его виду (ссылка, INI или JSON), оставляет только тело узла, проверяет JSON ядром и по запросу превращает ссылку в JSON. | P5 P6 P7 P8 P9 P10 P12 | [source-editing.ru.md](FUNCTIONS/source-editing.ru.md) |
 | Имя равно тегу | Делает тег узла единственным именем своего сервера: умолчания, автоматический эмодзи, суффиксы при коллизии и перезапись ссылок при переименовании. | P2 P3 P4 P11 | [name-is-tag.ru.md](FUNCTIONS/name-is-tag.ru.md) |
 | JSON и схема протокола | Показывает sing-box JSON узла с подсветкой, сохраняет неизвестные приложению поля и фиксирует, чего не хватает редактору по схеме, включая ловушку «замены всего `tls`». | P6 P8 | [json-and-schema.ru.md](FUNCTIONS/json-and-schema.ru.md) |
-| Правка WireGuard / AmneziaWG | Правит узлы WireGuard и AmneziaWG через их источник (INI, ссылка или JSON), поля обфускации AWG — простым текстом. | P9 | [wireguard-awg-editing.ru.md](FUNCTIONS/wireguard-awg-editing.ru.md) |
+| Правка WireGuard / AmneziaWG | Правит узлы WireGuard и AmneziaWG через их источник (INI, ссылка или JSON), поля обфускации AWG — простым текстом, маскировка — своей секцией на Settings. | P9 P16 | [wireguard-awg-editing.ru.md](FUNCTIONS/wireguard-awg-editing.ru.md) |
 | Узел подписки | Показывает узел подписки только для чтения, без индивидуальных overrides, и перечисляет, что переживает обновление подписки. | P14 | [subscription-node.ru.md](FUNCTIONS/subscription-node.ru.md) |
 | Удаление и дублирование узла | Удаляет свой сервер, очищает ссылки на него из detour, групп и цепочек и считает затронутых; дублирования нет. | P11 | [delete-and-duplicate.ru.md](FUNCTIONS/delete-and-duplicate.ru.md) |
 

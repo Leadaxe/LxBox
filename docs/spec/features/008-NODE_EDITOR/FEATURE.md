@@ -138,6 +138,19 @@ the node list, folders and order — [007-NODE_LIST](../007-NODE_LIST/FEATURE.md
   out-of-range Port (0, 65536) on both the SOCKS5 and HTTP forms block Add,
   no entry is added. **Mutation:** make the Host/Port `validator` return
   `null` unconditionally.
+- **P16. The Masquerade section writes `ip`/`id`/`ib` into the source; an
+  explicit `i1` wins.** A WireGuard/AmneziaWG node's Settings tab has a
+  Masquerade section (protocol, domain, browser). Save puts the keys into the
+  source text in its own form (link query, INI `[Interface]`, sing-box body)
+  and leaves every other byte alone; keys the form does not show are removed.
+  QUIC without a domain or an invalid domain does not let Save through. A node
+  with an explicit `i1`, a packed link (`awg://` base64, `vpn://`) or an Xray
+  source gets the section disabled with the reason. **Witness:**
+  `test/services/masquerade_source_test.dart` (three forms, raw `+` and
+  `\r\n` kept, round trip through the parser on corpus samples),
+  `test/widgets/masquerade_section_test.dart` (`i1` → no Save, `i2` → `sip`
+  disabled, QUIC without a domain → Save disabled). **Mutation:** rebuild the
+  link through `Uri.queryParameters`; drop the `i1` check.
 
 ## Controlled parameters
 
@@ -150,6 +163,7 @@ the node list, folders and order — [007-NODE_LIST](../007-NODE_LIST/FEATURE.md
 | Tag | Node → Settings | string + a palette of 14 emoji | node tag |
 | Detour server | Node → Settings | see [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.md) | None (direct) |
 | Skip presets | Node → Settings; visible if the template has a `for_each` preset for the node type | on/off | off |
+| Masquerade: protocol · domain · browser | WireGuard/AmneziaWG node → Settings → Masquerade | Off · `quic` · `dns` · `stun` · `sip`; LDH name ≤ 253 bytes; `chrome` · `firefox` · `curl` · Default | from the node (`ip`/`id`/`ib`) |
 | Source | Node → Source | source text | as saved |
 | Exit node | Tailscale node → Network → Save choice | tailnet node / None | from the body |
 
@@ -222,6 +236,9 @@ build: custom JSON source ─► body verbatim (without detour) ; otherwise ─�
   a TLS form.
 - Not planned (owner decision 2026-09-29, audit [591](../../tasks/591-spec-kit-revision-audit.md)): node duplication; a separate
   WireGuard/AmneziaWG form (`097F` Phase 2b) — such nodes are edited as text.
+  The one exception is the Masquerade section (`ip`/`id`/`ib`, task
+  [623](../../tasks/623-node-masquerade-section.md), P16); `jc`, `h1`–`h4`,
+  `i1`–`i5` and the AWG 3.x fields stay text-only.
 - Camera and file picking — depend on OS capabilities
   ([001-SUBSCRIPTIONS](../001-SUBSCRIPTIONS/FEATURE.md)).
 
@@ -234,7 +251,7 @@ build: custom JSON source ─► body verbatim (without detour) ; otherwise ─�
 | Source editing | Saves the source by its kind (link, INI or JSON), keeps only the node body, checks JSON with the core and converts a link to JSON on request. | P5 P6 P7 P8 P9 P10 P12 | [source-editing.md](FUNCTIONS/source-editing.md) |
 | The name is the tag | Makes the node tag the only name of a custom server, with defaults, an automatic emoji, collision suffixes and reference rewriting on rename. | P2 P3 P4 P11 | [name-is-tag.md](FUNCTIONS/name-is-tag.md) |
 | JSON and protocol schema | Shows the node's sing-box JSON with highlighting, keeps fields unknown to the app and records what the schema-aware editor still lacks, including the "replace the whole `tls`" trap. | P6 P8 | [json-and-schema.md](FUNCTIONS/json-and-schema.md) |
-| WireGuard / AmneziaWG editing | Edits WireGuard and AmneziaWG nodes through their INI, link or JSON source, with AWG obfuscation fields as plain text. | P9 | [wireguard-awg-editing.md](FUNCTIONS/wireguard-awg-editing.md) |
+| WireGuard / AmneziaWG editing | Edits WireGuard and AmneziaWG nodes through their INI, link or JSON source, with AWG obfuscation fields as plain text and masquerade through its own Settings section. | P9 P16 | [wireguard-awg-editing.md](FUNCTIONS/wireguard-awg-editing.md) |
 | Subscription node | Shows a subscription node read-only, without individual overrides, and lists what survives a subscription update. | P14 | [subscription-node.md](FUNCTIONS/subscription-node.md) |
 | Node deletion and duplication | Deletes a custom server, clears detour, group and chain references to it and counts the affected ones; there is no duplication. | P11 | [delete-and-duplicate.md](FUNCTIONS/delete-and-duplicate.md) |
 
