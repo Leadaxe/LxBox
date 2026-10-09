@@ -18,9 +18,26 @@
   (RU: Вкладка Network у Tailscale: выбранный exit node снова есть в Devices —
   в v2.25.11 он остался только в блоке Exit node, где нет меню, и пинговать
   его было нельзя.)
+- **XHTTP: the query part of `path` is kept
+  ([task 620](docs/spec/tasks/620-xhttp-path-query-verbatim.md)).**
+  A path like `/?proxyip=149.56.109.62` (Cloudflare Worker relays) lost its
+  `?…` tail on import, so the relay never got its parameter and sites behind
+  Cloudflare failed with 502. The path now goes to the core verbatim, as in
+  Xray; the core sends the tail as the request query (sing-box-lx SPEC 119).
+  Applies to share links, Xray JSON and sing-box JSON (contract 1.1.115).
+  Nodes of one server that differ only in the path query (relay variants with
+  different `proxyip`) are no longer merged into one. Nodes with such a tail
+  get a new content hash, so their config is marked changed once; node
+  selection and disabled marks are kept. Needs a core with SPEC 119: an
+  older core puts the tail into the path and Xray servers answer 404.
+  (RU: XHTTP: query в `path` больше не срезается — релеи Cloudflare Worker
+  с `/?proxyip=…` получают свой параметр; узлы, различные только query пути,
+  больше не схлопываются; конфиг таких узлов один раз помечается
+  изменившимся; нужно ядро с SPEC 119.)
 
 ### Changed
 
+- **Contract 1.1.115** (from 1.1.114).
 - **Direct connect timeout for `direct-out` ([task 616](docs/spec/tasks/616-direct-connect-timeout.md)).**
   The connect timeout of the direct outbound is a setting now: Traffic
   Processing → Params → Direct connect timeout, presets 5s–2m or any duration.

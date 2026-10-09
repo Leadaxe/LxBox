@@ -55,8 +55,13 @@ that differ from the default, without `extra`.
   `extra` does not override the flat one; `host`, `path`, `mode` are not read
   from `extra` at all (that is what Xray does). `xmux` as a nested object in
   `extra` or JSON unfolds into the same fields as the flat keys.
-- `path`: a `?…` tail (`/x?ed=2048`) is cut off; without the `path`
-  parameter the key is not emitted; an explicit `path=%2F` → `/`.
+- `path` is passed verbatim, including `?…`: per the Xray contract,
+  everything after the first `?` is the request query (relays read their
+  parameters from it, `/?proxyip=…`); `?ed=N` means no early data for
+  xhttp. Without the `path` parameter the key is not emitted; an explicit
+  `path=%2F` → `/`. Same for links, Xray JSON and sing-box JSON (contract
+  1.1.115, [§620](../../../tasks/620-xhttp-path-query-verbatim.md)). In an exported
+  link the path's `?` and `&` are encoded inside `path=`.
 - `host` — only from an explicit `host=`, without substituting the SNI.
 - Numbers: `30.0` → `"30"`, without exponent; a `"N-N"` range is kept;
   `sc_max_buffered_posts` and `h_keep_alive_period` — integers, `0` is
@@ -97,3 +102,4 @@ that differ from the default, without `extra`.
 | 8 | [508](../../../tasks/508-xhttp-sessionid-aliases.md) | Released v2.25.1 | Aliases `sessionIDPlacement`/`sessionIDKey` |
 | 9 | [522](../../../tasks/522-kernel-lx9-xmux-local-cancel.md) | Released v2.25.3 | Core: the XMUX breaker does not count a local cancel as a failure |
 | 10 | [573](../../../tasks/573-xray-finalmask-tcp-fragment.md) | Released v2.25.7 | `extra.mode`/`path`/`host` are read without a code |
+| 11 | [620](../../../tasks/620-xhttp-path-query-verbatim.md) | Implemented | `?query` in `path` verbatim (Xray contract, core SPEC 119); the §127F cut is removed |

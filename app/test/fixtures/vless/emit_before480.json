@@ -1748,7 +1748,7 @@
         }
       }
     },
-    "xhttp_path_ed_tail_stripped": {
+    "xhttp_path_ed_tail_kept": {
       "body": null,
       "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=random&path=%2FGaMeOpTiMiZeR&security=tls&sni=example-1.com&type=xhttp#xhttp-ed-tail",
       "body_of_old_uri": {
@@ -1771,7 +1771,7 @@
         }
       }
     },
-    "xhttp_path_query_tail_trimmed": {
+    "xhttp_path_query_tail_kept": {
       "body": null,
       "uri_before": "vless://11111111-1111-1111-1111-111111111111@h.example-1.com:443?fp=random&path=%2FGaMeOpTiMiZeR&security=tls&sni=h.example-1.com&type=xhttp#t",
       "body_of_old_uri": {

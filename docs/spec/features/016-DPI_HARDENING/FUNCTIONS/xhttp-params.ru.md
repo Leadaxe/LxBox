@@ -54,8 +54,12 @@ camelCase-поля, отличные от дефолта, без `extra`.
   `extra` плоское не перекрывает; `host`, `path`, `mode` из `extra` не
   читаются вовсе (так делает Xray). `xmux` вложенным объектом в `extra`
   или JSON разворачивается в те же поля, что плоские ключи.
-- `path`: хвост `?…` (`/x?ed=2048`) срезается; без параметра `path`
-  ключ не эмитится; явный `path=%2F` → `/`.
+- `path` уходит дословно, вместе с `?…`: по контракту Xray всё после
+  первого `?` — query запроса (релеи читают оттуда свои параметры,
+  `/?proxyip=…`); `?ed=N` у xhttp early data не значит. Без параметра
+  `path` ключ не эмитится; явный `path=%2F` → `/`. Так же у ссылки, Xray-JSON
+  и sing-box JSON (контракт 1.1.115, [§620](../../../tasks/620-xhttp-path-query-verbatim.md)).
+  В экспортируемой ссылке `?` и `&` пути кодируются внутри `path=`.
 - `host` — только из явного `host=`, без подстановки SNI.
 - Числа: `30.0` → `"30"`, без экспоненты; диапазон `"N-N"` сохраняется;
   `sc_max_buffered_posts` и `h_keep_alive_period` — целые, `0` значим и
@@ -93,3 +97,4 @@ camelCase-поля, отличные от дефолта, без `extra`.
 | 8 | [508](../../../tasks/508-xhttp-sessionid-aliases.md) | Released v2.25.1 | Алиасы `sessionIDPlacement`/`sessionIDKey` |
 | 9 | [522](../../../tasks/522-kernel-lx9-xmux-local-cancel.md) | Released v2.25.3 | Ядро: брейкер XMUX не считает сбоем локальную отмену |
 | 10 | [573](../../../tasks/573-xray-finalmask-tcp-fragment.md) | Released v2.25.7 | `extra.mode`/`path`/`host` читаются без кода |
+| 11 | [620](../../../tasks/620-xhttp-path-query-verbatim.md) | Implemented | `?query` в `path` дословно (контракт Xray, ядро SPEC 119); срез §127F снят |
