@@ -381,3 +381,8 @@ server):
 3. **Откуда пул** (вопрос владельца): `assets/warp_endpoints.json`,
    `wireguard.sni_pool` + региональная добавка `loc.<cc>.wireguard.sni_pool`
    (§136, §425). Состав этой задачей не меняется.
+
+4. **Заголовок секции называет уровень AWG** (владелец). Заголовок —
+   «Masquerade», описание под ним — «AmneziaWG 1.5 parameters: decoy packets
+   before the WireGuard handshake.» (уровень `awg1.5`, как метка в списке
+   узлов, §148). Старое описание — из словарей убрать, новое — в `ru`/`zh`.
