@@ -5582,5 +5582,32 @@
   },
   "Needs a saved exit node.": {
     "value": "需要已保存的出口节点。"
+  },
+  "Endpoint scanner": {
+    "value": "端点扫描器"
+  },
+  "Scan endpoints by country": {
+    "value": "按国家扫描端点"
+  },
+  "Rescan": {
+    "value": "重新扫描"
+  },
+  "Use selected (%1$s endpoints)": {
+    "value": "使用所选（端点 %1$s）"
+  },
+  "Phase 1: probing %1$s endpoints…": {
+    "value": "阶段 1：探测端点 %1$s…"
+  },
+  "Phase 2: determining country of %1$s endpoints…": {
+    "value": "阶段 2：确定端点 %1$s 的国家…"
+  },
+  "%1$s found · %2$s valid": {
+    "value": "找到 %1$s · 有效 %2$s"
+  },
+  "No endpoints found. All UDP is likely blocked on this network — try MASQUE (TCP) or a different network.": {
+    "value": "未找到端点。此网络可能屏蔽了全部 UDP —— 请尝试 MASQUE (TCP) 或其他网络。"
+  },
+  "UDP blocked — using TCP fallback (443/8443)": {
+    "value": "UDP 被封 —— 使用 TCP 回退 (443/8443)"
   }
 }
