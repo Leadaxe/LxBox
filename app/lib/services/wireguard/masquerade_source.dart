@@ -72,18 +72,23 @@ class Masquerade {
 
   bool get isOff => ip == null && id == null && ib == null;
 
-  /// Смена протокола на [protocol] (`''` = Off) — ревизия 1 §623:
+  /// Смена протокола на [protocol] (`''` = Off) — ревизии 1 и 2 §623:
   ///
   /// - `Off` снимает всё;
-  /// - `quic`: домен прежний, пустой — [randomDomain] (пул визарда; пустая
-  ///   строка — домена нет, запись ещё невалидна); `ib` прежний;
-  /// - `dns` / `sip`: домен прежний, `ib` снят (уход с `quic`);
+  /// - `quic`, `dns`, `sip`: домен прежний, пустой — [randomDomain]
+  ///   (случайный из пула выбирает вызывающий; пусто — домена нет, у `quic`
+  ///   запись ещё невалидна);
+  /// - `quic`: `ib` прежний, пустой — [kMasqueradeDefaultBrowser]; уход с
+  ///   `quic` `ib` снимает;
   /// - `stun`: сняты `id` и `ib`.
-  Masquerade withProtocol(String protocol, {String Function()? randomDomain}) {
+  Masquerade withProtocol(String protocol, {String? randomDomain}) {
     final p = protocol.trim().toLowerCase();
-    var domain = id ?? '';
-    if (p == 'quic' && domain.isEmpty) domain = randomDomain?.call() ?? '';
-    return Masquerade.fromForm(p, domain, p == 'quic' ? ib ?? '' : '');
+    final domain = id ?? randomDomain ?? '';
+    return Masquerade.fromForm(
+      p,
+      domain,
+      p == 'quic' ? ib ?? kMasqueradeDefaultBrowser : '',
+    );
   }
 
   @override
@@ -96,6 +101,9 @@ class Masquerade {
   @override
   String toString() => 'Masquerade(ip: $ip, id: $id, ib: $ib)';
 }
+
+/// Профиль клиента `quic` по умолчанию (ревизия 2 §623).
+const kMasqueradeDefaultBrowser = 'chrome';
 
 /// Можно ли писать маскировку в источник.
 enum MasqueradeWritability {

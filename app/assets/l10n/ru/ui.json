@@ -946,6 +946,9 @@
   "Also put tunnels on the active route (pool members, the selected node) to sleep after a long quiet period — e.g. overnight. The first connection after sleep adds ~1 round trip. Default 5 min. Below the directions' idle timeout (30 min by default) a group probe can wake a sleeping tunnel for one handshake — the price of sleeping sooner. Requires \"Suspend idle tunnels\" to be on.": {
     "value": "Усыплять и туннели активного маршрута (члены пула, выбранный узел) после долгого затишья — например, за ночь. Первое соединение после сна будет дольше примерно на один RTT. По умолчанию 5 минут. Если значение меньше тайм-аута простоя Направлений (по умолчанию 30 минут), проба группы может разбудить спящий туннель на одно рукопожатие — цена более раннего сна. Требует включённой настройки «Усыплять неактивные туннели»."
   },
+  "AmneziaWG 1.5 parameters: decoy packets before the WireGuard handshake.": {
+    "value": "Параметры AmneziaWG 1.5: пакеты-приманки перед рукопожатием WireGuard."
+  },
   "AmneziaWG 3 header protection key is not a 32-byte base64 key, so the node was skipped: the handshake cannot succeed and the core would reject the whole config.": {
     "value": "Ключ защиты заголовка AmneziaWG 3 — не 32-байтный ключ base64, поэтому узел пропущен: рукопожатие невозможно, а ядро отвергло бы весь конфиг."
   },
@@ -1152,9 +1155,6 @@
   },
   "Building config...": {
     "value": "Сборка конфига…"
-  },
-  "Decoy packets before the WireGuard handshake": {
-    "value": "Пакеты-приманки перед рукопожатием WireGuard"
   },
   "Domain is required for QUIC.": {
     "value": "Для QUIC домен обязателен."

@@ -143,7 +143,7 @@ the node list, folders and order — [007-NODE_LIST](../007-NODE_LIST/FEATURE.md
   Masquerade section (protocol, domain, browser rows, like Detour). A choice
   is written at once — the keys go into the source text in its own form (link
   query, INI `[Interface]`, sing-box body), every other byte stays; keys the
-  rows do not show are removed. QUIC gets a random domain if it has none; the
+  rows do not show are removed. QUIC, DNS and SIP get a random pool domain if they have none, QUIC — Chrome; the
   domain dialog does not accept an invalid domain. A node
   with an explicit `i1`, a packed link (`awg://` base64, `vpn://`) or an Xray
   source gets the section disabled with the reason. **Witness:**

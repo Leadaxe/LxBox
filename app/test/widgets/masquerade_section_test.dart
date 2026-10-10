@@ -18,6 +18,7 @@ void main() {
     bool sipBlocked = false,
     bool sourceDirty = false,
     String Function()? randomDomain,
+    List<String> pool = const [],
   }) async {
     written.clear();
     dirtyTaps = 0;
@@ -32,6 +33,7 @@ void main() {
               sourceDirty: sourceDirty,
               onSourceDirty: () => dirtyTaps++,
               randomDomain: randomDomain,
+              domainPool: pool,
               onChanged: (m) async => written.add(m),
             ),
           ),
@@ -101,16 +103,90 @@ void main() {
     expect(dns.enabled, isNot(false));
   });
 
-  testWidgets('pick → written at once; QUIC gets a random domain', (
+  Finder domainInput() => find.descendant(
+    of: find.byKey(const ValueKey('masquerade-domain-input')),
+    matching: find.byType(TextField),
+  );
+
+  Future<void> pickProtocol(WidgetTester tester, String v) async {
+    await tapAndSettle(tester, protocolRow);
+    await tapAndSettle(tester, find.byKey(ValueKey('masquerade-option-$v')));
+  }
+
+  testWidgets('QUIC: random pool domain and Chrome, written at once', (
     tester,
   ) async {
     await pump(tester, randomDomain: () => 'pool.example');
-    await tapAndSettle(tester, protocolRow);
+    await pickProtocol(tester, 'quic');
+    expect(written, [
+      const Masquerade(ip: 'quic', id: 'pool.example', ib: 'chrome'),
+    ]);
+  });
+
+  testWidgets('DNS: an empty domain gets a random one', (tester) async {
+    await pump(tester, randomDomain: () => 'pool.example');
+    await pickProtocol(tester, 'dns');
+    expect(written, [const Masquerade(ip: 'dns', id: 'pool.example')]);
+  });
+
+  testWidgets('empty pool: the domain dialog opens before the write', (
+    tester,
+  ) async {
+    await pump(tester, randomDomain: () => '');
+    await pickProtocol(tester, 'quic');
+    expect(written, isEmpty);
+    expect(find.byType(AlertDialog), findsOneWidget);
+    await tester.enterText(domainInput(), 'own.example');
+    await tester.pump();
     await tapAndSettle(
       tester,
-      find.byKey(const ValueKey('masquerade-option-quic')),
+      find.byKey(const ValueKey('masquerade-domain-ok')),
     );
-    expect(written, [const Masquerade(ip: 'quic', id: 'pool.example')]);
+    expect(written, [
+      const Masquerade(ip: 'quic', id: 'own.example', ib: 'chrome'),
+    ]);
+  });
+
+  testWidgets('domain field: the arrow opens the whole pool without typing, '
+      'an entry and the dice set the field', (tester) async {
+    await pump(
+      tester,
+      value: const Masquerade(ip: 'quic', id: 'zzz.example'),
+      pool: const ['a.example', 'b.example', 'c.example'],
+      randomDomain: () => 'b.example',
+    );
+    await tapAndSettle(tester, domainRow);
+    expect(find.byType(MenuItemButton), findsNothing);
+
+    // Текст не совпадает ни с одним пунктом — меню всё равно целое.
+    await tapAndSettle(
+      tester,
+      find.byKey(const ValueKey('masquerade-domain-arrow')),
+    );
+    expect(find.byType(MenuItemButton), findsNWidgets(3));
+    await tapAndSettle(
+      tester,
+      find.widgetWithText(MenuItemButton, 'c.example'),
+    );
+    expect(
+      tester.widget<TextField>(domainInput()).controller!.text,
+      'c.example',
+    );
+
+    await tapAndSettle(
+      tester,
+      find.byKey(const ValueKey('masquerade-domain-dice')),
+    );
+    expect(
+      tester.widget<TextField>(domainInput()).controller!.text,
+      'b.example',
+    );
+
+    await tapAndSettle(
+      tester,
+      find.byKey(const ValueKey('masquerade-domain-ok')),
+    );
+    expect(written, [const Masquerade(ip: 'quic', id: 'b.example')]);
   });
 
   testWidgets('domain dialog does not let OK through on an error', (
@@ -121,7 +197,7 @@ void main() {
       value: const Masquerade(ip: 'quic', id: 'a.example'),
     );
     await tapAndSettle(tester, domainRow);
-    final input = find.byKey(const ValueKey('masquerade-domain-input'));
+    final input = domainInput();
     final ok = find.byKey(const ValueKey('masquerade-domain-ok'));
 
     await tester.enterText(input, 'bad domain');

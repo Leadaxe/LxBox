@@ -237,26 +237,40 @@ void main() {
     });
   });
 
-  group('protocol transitions (revision 1)', () {
-    const q = Masquerade(ip: 'quic', id: 'a.example', ib: 'chrome');
-    String pool() => 'pool.example';
+  group('protocol transitions (revisions 1, 2)', () {
+    const q = Masquerade(ip: 'quic', id: 'a.example', ib: 'firefox');
 
-    test('QUIC with an empty domain gets one from the pool', () {
+    test('QUIC/DNS/SIP: an empty domain takes the given random one', () {
       expect(
-        Masquerade.off.withProtocol('quic', randomDomain: pool),
-        const Masquerade(ip: 'quic', id: 'pool.example'),
+        Masquerade.off.withProtocol('quic', randomDomain: 'pool.example'),
+        const Masquerade(ip: 'quic', id: 'pool.example', ib: 'chrome'),
       );
       expect(
-        const Masquerade(ip: 'stun').withProtocol('quic'),
-        const Masquerade(ip: 'quic'),
+        const Masquerade(
+          ip: 'stun',
+        ).withProtocol('dns', randomDomain: 'p.example'),
+        const Masquerade(ip: 'dns', id: 'p.example'),
       );
+      expect(
+        Masquerade.off.withProtocol('sip', randomDomain: 'p.example'),
+        const Masquerade(ip: 'sip', id: 'p.example'),
+      );
+      // Пул пуст — домена нет.
+      expect(
+        Masquerade.off.withProtocol('quic', randomDomain: ''),
+        const Masquerade(ip: 'quic', ib: 'chrome'),
+      );
+    });
+
+    test('a set domain and browser are kept', () {
       expect(
         const Masquerade(
           ip: 'dns',
           id: 'd.example',
-        ).withProtocol('quic', randomDomain: pool),
-        const Masquerade(ip: 'quic', id: 'd.example'),
+        ).withProtocol('quic', randomDomain: 'p.example'),
+        const Masquerade(ip: 'quic', id: 'd.example', ib: 'chrome'),
       );
+      expect(q.withProtocol('quic', randomDomain: 'p.example'), q);
     });
 
     test('leaving QUIC drops ib', () {
@@ -271,7 +285,10 @@ void main() {
     });
 
     test('STUN drops id, Off drops everything', () {
-      expect(q.withProtocol('stun'), const Masquerade(ip: 'stun'));
+      expect(
+        q.withProtocol('stun', randomDomain: 'p.example'),
+        const Masquerade(ip: 'stun'),
+      );
       expect(q.withProtocol(''), Masquerade.off);
     });
   });

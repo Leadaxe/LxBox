@@ -646,7 +646,8 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
         if (_node case final WireguardSpec wg) ...[
           const SizedBox(height: 16),
           _sectionHeader(getLocalText.s("Masquerade"),
-              getLocalText.s("Decoy packets before the WireGuard handshake"),
+              getLocalText.s(
+                "AmneziaWG 1.5 parameters: decoy packets before the WireGuard handshake."),
               theme),
           _buildMasqueradeSection(wg),
         ],

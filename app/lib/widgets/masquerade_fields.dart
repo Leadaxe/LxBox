@@ -62,6 +62,86 @@ String? masqueradeDomainErrorText(MasqueradeDomainError? e) => switch (e) {
   null => null,
 };
 
+/// Поле домена маскировки (ревизия 2 §623): одна рамка с подписью, в ней
+/// кубик (случайный домен из пула) и стрелка — меню со ВСЕМ пулом независимо
+/// от текста; выбор пункта ставит домен в поле, свой домен вписывается
+/// руками. Общее у диалога домена экрана узла и визарда WARP.
+class MasqueradeDomainField extends StatelessWidget {
+  const MasqueradeDomainField({
+    super.key,
+    required this.controller,
+    this.pool = const [],
+    this.onRandom,
+    this.enabled = true,
+    this.helperText,
+    this.errorText,
+  });
+
+  final TextEditingController controller;
+  final List<String> pool;
+
+  /// Кубик; `null` или пустой пул — кубика нет.
+  final VoidCallback? onRandom;
+  final bool enabled;
+  final String? helperText;
+  final String? errorText;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasPool = pool.isNotEmpty;
+    return TextField(
+      controller: controller,
+      enabled: enabled,
+      keyboardType: TextInputType.url,
+      autocorrect: false,
+      decoration: InputDecoration(
+        labelText: getLocalText.s("Masquerade domain"),
+        helperText: helperText,
+        helperMaxLines: 3,
+        errorText: errorText,
+        errorMaxLines: 2,
+        isDense: true,
+        border: const OutlineInputBorder(),
+        suffixIcon: hasPool
+            ? Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (onRandom != null)
+                    IconButton(
+                      key: const ValueKey('masquerade-domain-dice'),
+                      icon: const Icon(Icons.casino_outlined),
+                      tooltip: getLocalText.s("Pick another random domain"),
+                      onPressed: enabled ? onRandom : null,
+                    ),
+                  MenuAnchor(
+                    style: const MenuStyle(
+                      maximumSize: WidgetStatePropertyAll(
+                        Size(double.infinity, 280),
+                      ),
+                    ),
+                    menuChildren: [
+                      for (final d in pool)
+                        MenuItemButton(
+                          onPressed: () => controller.text = d,
+                          child: Text(d),
+                        ),
+                    ],
+                    builder: (ctx, menu, _) => IconButton(
+                      key: const ValueKey('masquerade-domain-arrow'),
+                      icon: const Icon(Icons.arrow_drop_down),
+                      onPressed: enabled
+                          ? () => menu.isOpen ? menu.close() : menu.open()
+                          : null,
+                    ),
+                  ),
+                ],
+              )
+            : null,
+      ),
+    );
+  }
+}
+
 /// Форма маскировки визарда WARP: три поля с подписью в рамке. Состояние
 /// держит визард: [ip], [ib], контроллер домена [domain].
 class MasqueradeFields extends StatelessWidget {
@@ -129,38 +209,13 @@ class MasqueradeFields extends StatelessWidget {
         ),
         if (showDomain) ...[
           const SizedBox(height: 12),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: LayoutBuilder(
-                  builder: (ctx, c) => DropdownMenu<String>(
-                    key: const ValueKey('masquerade-domain'),
-                    controller: domain,
-                    enabled: enabled,
-                    width: c.maxWidth,
-                    requestFocusOnTap: true,
-                    menuHeight: 280,
-                    label: Text(getLocalText.s("Masquerade domain")),
-                    errorText: domainError,
-                    inputDecorationTheme: const InputDecorationTheme(
-                      isDense: true,
-                      border: OutlineInputBorder(),
-                    ),
-                    dropdownMenuEntries: [
-                      for (final s in domainPool)
-                        DropdownMenuEntry(value: s, label: s),
-                    ],
-                  ),
-                ),
-              ),
-              if (onRandomDomain != null)
-                IconButton(
-                  icon: const Icon(Icons.casino_outlined),
-                  tooltip: getLocalText.s("Pick another random domain"),
-                  onPressed: enabled ? onRandomDomain : null,
-                ),
-            ],
+          MasqueradeDomainField(
+            key: const ValueKey('masquerade-domain'),
+            controller: domain,
+            enabled: enabled,
+            pool: domainPool,
+            onRandom: onRandomDomain,
+            errorText: domainError,
           ),
         ],
         if (ipValue == 'quic') ...[
@@ -305,12 +360,12 @@ class MasqueradeSection extends StatelessWidget {
           : null,
     );
     if (picked == null || picked == current || !context.mounted) return;
-    var next = value.withProtocol(picked, randomDomain: randomDomain);
-    // QUIC без домена невалиден, а пул пуст: домен вводится сразу.
-    if (next.ip == 'quic' && next.id == null) {
+    var next = value.withProtocol(picked, randomDomain: randomDomain?.call());
+    // Пул пуст, а протокол с доменом: домен вводится до записи.
+    if (next.id == null && const {'quic', 'dns', 'sip'}.contains(next.ip)) {
       final domain = await _domainDialog(context, next);
       if (domain == null) return;
-      next = Masquerade.fromForm('quic', domain, next.ib ?? '');
+      next = Masquerade.fromForm(next.ip!, domain, next.ib ?? '');
     }
     await onChanged(next);
   }
@@ -407,71 +462,42 @@ class _DomainDialogState extends State<_DomainDialog> {
   late final _ctrl = TextEditingController(text: widget.initial);
 
   @override
+  void initState() {
+    super.initState();
+    _ctrl.addListener(_onText);
+  }
+
+  @override
   void dispose() {
+    _ctrl.removeListener(_onText);
     _ctrl.dispose();
     super.dispose();
+  }
+
+  void _onText() {
+    if (mounted) setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
     final error = masqueradeDomainError(widget.ip, _ctrl.text);
-    final q = _ctrl.text.trim().toLowerCase();
-    final hints = [
-      for (final s in widget.pool)
-        if (s != _ctrl.text.trim() &&
-            (q.isEmpty || s.toLowerCase().contains(q)))
-          s,
-    ];
     final random = widget.randomDomain;
     return AlertDialog(
       title: Text(getLocalText.s("Masquerade domain")),
       content: SizedBox(
         width: double.maxFinite,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            TextField(
-              key: const ValueKey('masquerade-domain-input'),
-              controller: _ctrl,
-              autofocus: true,
-              keyboardType: TextInputType.url,
-              onChanged: (_) => setState(() {}),
-              decoration: InputDecoration(
-                border: const OutlineInputBorder(),
-                isDense: true,
-                helperText: masqueradeProtocolHint(widget.ip),
-                helperMaxLines: 3,
-                errorText: masqueradeDomainErrorText(error),
-                errorMaxLines: 2,
-                suffixIcon: random == null || widget.pool.isEmpty
-                    ? null
-                    : IconButton(
-                        icon: const Icon(Icons.casino_outlined),
-                        tooltip: getLocalText.s("Pick another random domain"),
-                        onPressed: () {
-                          final d = random();
-                          if (d.isNotEmpty) setState(() => _ctrl.text = d);
-                        },
-                      ),
-              ),
-            ),
-            if (hints.isNotEmpty)
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 200),
-                child: ListView(
-                  shrinkWrap: true,
-                  children: [
-                    for (final s in hints)
-                      ListTile(
-                        dense: true,
-                        title: Text(s),
-                        onTap: () => setState(() => _ctrl.text = s),
-                      ),
-                  ],
-                ),
-              ),
-          ],
+        child: MasqueradeDomainField(
+          key: const ValueKey('masquerade-domain-input'),
+          controller: _ctrl,
+          pool: widget.pool,
+          onRandom: random == null
+              ? null
+              : () {
+                  final d = random();
+                  if (d.isNotEmpty) _ctrl.text = d;
+                },
+          helperText: masqueradeProtocolHint(widget.ip),
+          errorText: masqueradeDomainErrorText(error),
         ),
       ),
       actions: [
