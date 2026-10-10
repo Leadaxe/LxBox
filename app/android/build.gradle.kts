@@ -20,6 +20,36 @@ subprojects {
     project.evaluationDependsOn(":app")
 }
 
+// §834 — глобальный ABI-фильтр для CMake-плагинов (flutter_zxing, jni):
+// при `LXBOX_ABI_FILTER` они собирают НАТИВНЫЕ библиотеки для всех 3 ABI,
+// что на некоторых ФС/песочницах падает на лишних (armeabi-v7a). Сужаем
+// abiFilters библиотечных модулей (не :app — у него своя логика выше).
+fun applyAbiFilterToSubproject(p: Project): Boolean {
+    val keep = System.getenv("LXBOX_ABI_FILTER")?.takeIf { it.isNotBlank() } ?: return false
+    if (p.name == "app") return false // у :app своя конфигурация
+    try {
+        p.extensions.findByName("android")?.let { ext ->
+            val clazz = ext.javaClass
+            val defaultConfig = clazz.getMethod("getDefaultConfig").invoke(ext)
+            val ndkMethod = defaultConfig.javaClass.getMethod("getNdk")
+            val ndk = ndkMethod.invoke(defaultConfig)
+            val abiFiltersField = ndk.javaClass.getMethod("getAbiFilters")
+            val abiFilters = abiFiltersField.invoke(ndk) as MutableSet<String>
+            abiFilters.clear()
+            abiFilters.addAll(keep.split(",").map { it.trim() }.filter { it.isNotEmpty() })
+        }
+        return true
+    } catch (t: Throwable) {
+        println("applyAbiFilterToSubproject: ${p.name}: ${t.message}")
+        return false
+    }
+}
+subprojects {
+    if (applyAbiFilterToSubproject(this)) {
+        println("LXBOX_ABI_FILTER applied to subproject: ${this.name}")
+    }
+}
+
 // §380 — build-id нативных .so отключён ради воспроизводимости.
 //
 // NDK по умолчанию передаёт `-Wl,--build-id=sha1` всем CMake-сборкам

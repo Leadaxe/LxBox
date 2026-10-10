@@ -172,6 +172,44 @@ class ScanPool {
     return wgOk || masqueV4Cidr.isNotEmpty || masqueH3Hosts.isNotEmpty;
   }
 
+  /// §834 — пул из отсканированных эндпоинтов (выбранных стран).
+  /// Каждый эндпоинт становится /32-записью в wgV4Cidr (для WG) и h2-блоке
+  /// (для MASQUE h2). Общие SNI/порты берутся из [base] (обычно bundled asset).
+  /// Если [base] нет — дефолты. Возвращает null, если нет ни одного эндпоинта.
+  static ScanPool? fromEndpoints(List<String> endpoints, {ScanPool? base}) {
+    if (endpoints.isEmpty) return null;
+    final seen = <String>{};
+    final cidrs = <String>[
+      for (final e in endpoints)
+        if (seen.add(e.trim()) && e.trim().isNotEmpty)
+          '${e.trim().split(':').first}/32',
+    ];
+    if (cidrs.isEmpty) return null;
+    return ScanPool(
+      wgV4Cidr: cidrs,
+      wgV6Cidr: base?.wgV6Cidr ?? const [],
+      wgEndpointsPreset: endpoints,
+      wgRecommendedEndpoint: base?.wgRecommendedEndpoint ?? '',
+      wgPorts: base?.wgPorts ?? const [2408, 500, 1701, 4500],
+      wgPortsExtra: base?.wgPortsExtra ?? const [],
+      wgSniPool: base?.wgSniPool ?? const ['www.google.com'],
+      utlsFpPool:
+          base?.utlsFpPool ?? const ['chrome', 'firefox', 'safari', 'edge'],
+      wgKeepalive: base?.wgKeepalive ?? 0,
+      masqueHostsPreset: endpoints,
+      masqueRecommendedHost: base?.masqueRecommendedHost ?? '',
+      masqueV4Cidr: cidrs,
+      masqueH3HostsExtra: base?.masqueH3HostsExtra ?? const [],
+      masqueH2Exclude: base?.masqueH2Exclude ?? const [],
+      masquePortsH3: base?.masquePortsH3 ?? const [443, 4443, 8095],
+      masquePortsH2: base?.masquePortsH2 ?? const [500, 4500, 8443],
+      masqueSniPool:
+          base?.masqueSniPool ?? const ['consumer-masque.cloudflareclient.com'],
+      masqueRecommendedSni: base?.masqueRecommendedSni ?? '',
+      apiHosts: base?.apiHosts ?? const [],
+    );
+  }
+
   /// §305 — порты для транспорта: `h2` → h2-набор, иначе h3-набор.
   List<int> masquePortsFor(String network) =>
       network == 'h2' ? masquePortsH2 : masquePortsH3;
@@ -183,8 +221,10 @@ class ScanPool {
   /// §425 — [region]: код страны (нижний регистр); секция `loc.<region>`
   /// накладывается поверх корня через [applyRegion]. Пусто/неизвестный код →
   /// корень как есть.
-  static ScanPool? fromFullJson(Map<String, dynamic>? json,
-      {String region = ''}) {
+  static ScanPool? fromFullJson(
+    Map<String, dynamic>? json, {
+    String region = '',
+  }) {
     if (json == null) return null;
     if (region.isNotEmpty) json = applyRegion(json, region);
     final wg = (json['wireguard'] as Map?)?.cast<String, dynamic>() ?? const {};
@@ -213,14 +253,17 @@ class ScanPool {
     final h3 = (mq['h3'] as Map?)?.cast<String, dynamic>() ?? const {};
     final h2 = (mq['h2'] as Map?)?.cast<String, dynamic>() ?? const {};
     final hostsPreset = strs(mq, 'hosts_preset');
-    final h2Cidr = h2.containsKey('v4_cidr') ? strs(h2, 'v4_cidr') : strs(mq, 'v4_cidr');
+    final h2Cidr = h2.containsKey('v4_cidr')
+        ? strs(h2, 'v4_cidr')
+        : strs(mq, 'v4_cidr');
     final List<String> h3Extra;
     if (h3.containsKey('hosts_extra')) {
       h3Extra = strs(h3, 'hosts_extra');
     } else {
       h3Extra = [
         for (final c in strs(mq, 'h3_v4_cidr'))
-          if (c.endsWith('/32') && !hostsPreset.contains(c.substring(0, c.length - 3)))
+          if (c.endsWith('/32') &&
+              !hostsPreset.contains(c.substring(0, c.length - 3)))
             c.substring(0, c.length - 3),
       ];
     }
@@ -240,8 +283,12 @@ class ScanPool {
       masqueV4Cidr: h2Cidr,
       masqueH3HostsExtra: h3Extra,
       masqueH2Exclude: strs(h2, 'exclude'),
-      masquePortsH3: h3.containsKey('ports') ? ints(h3, 'ports') : ints(mq, 'ports_h3'),
-      masquePortsH2: h2.containsKey('ports') ? ints(h2, 'ports') : ints(mq, 'ports_h2'),
+      masquePortsH3: h3.containsKey('ports')
+          ? ints(h3, 'ports')
+          : ints(mq, 'ports_h3'),
+      masquePortsH2: h2.containsKey('ports')
+          ? ints(h2, 'ports')
+          : ints(mq, 'ports_h2'),
       masqueSniPool: strs(mq, 'sni_pool'),
       masqueRecommendedSni: (mq['recommended_sni'] as String?) ?? '',
       // Пустые/не-строки отбрасываем; хвостовой `/` снимаем — URL клеится
@@ -276,7 +323,9 @@ class ScanPool {
   /// (один переход, без цепочек). Неизвестный регион / нет `loc` → корень
   /// без изменений. Сам ключ `loc` из результата снимается.
   static Map<String, dynamic> applyRegion(
-      Map<String, dynamic> json, String region) {
+    Map<String, dynamic> json,
+    String region,
+  ) {
     final loc = json[locKey];
     final base = Map<String, dynamic>.from(json)..remove(locKey);
     if (loc is! Map) return base;
@@ -294,14 +343,18 @@ class ScanPool {
   /// Рекурсивное слияние Map: ключи [over] побеждают; вложенные Map сливаются,
   /// остальные значения заменяются целиком.
   static Map<String, dynamic> deepMerge(
-      Map<String, dynamic> base, Map<String, dynamic> over) {
+    Map<String, dynamic> base,
+    Map<String, dynamic> over,
+  ) {
     final out = Map<String, dynamic>.from(base);
     for (final e in over.entries) {
       final b = out[e.key];
       final o = e.value;
       if (b is Map && o is Map) {
         out[e.key] = deepMerge(
-            b.cast<String, dynamic>(), o.cast<String, dynamic>());
+          b.cast<String, dynamic>(),
+          o.cast<String, dynamic>(),
+        );
       } else {
         out[e.key] = o;
       }
@@ -329,8 +382,9 @@ String randomIpInCidr(String cidr, Random rng) {
     value = (value << 8) | BigInt.from(b);
   }
   final full = (BigInt.one << totalBits) - BigInt.one;
-  final hostMask =
-      hostBits == 0 ? BigInt.zero : (BigInt.one << hostBits) - BigInt.one;
+  final hostMask = hostBits == 0
+      ? BigInt.zero
+      : (BigInt.one << hostBits) - BigInt.one;
   final network = value & (full ^ hostMask);
   final offset = _randomBigInt(hostBits, rng) & hostMask;
   final result = network | offset;

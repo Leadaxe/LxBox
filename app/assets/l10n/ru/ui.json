@@ -5861,5 +5861,32 @@
   },
   "Needs a saved exit node.": {
     "value": "Нужен сохранённый выходной узел."
+  },
+  "Endpoint scanner": {
+    "value": "Сканер эндпоинтов"
+  },
+  "Scan endpoints by country": {
+    "value": "Сканировать эндпоинты по странам"
+  },
+  "Rescan": {
+    "value": "Пересканировать"
+  },
+  "Use selected (%1$s endpoints)": {
+    "value": "Использовать выбранные (эндпоинтов: %1$s)"
+  },
+  "Phase 1: probing %1$s endpoints…": {
+    "value": "Фаза 1: проверка эндпоинтов %1$s…"
+  },
+  "Phase 2: determining country of %1$s endpoints…": {
+    "value": "Фаза 2: определение страны эндпоинтов %1$s…"
+  },
+  "%1$s found · %2$s valid": {
+    "value": "найдено: %1$s · валидных: %2$s"
+  },
+  "No endpoints found. All UDP is likely blocked on this network — try MASQUE (TCP) or a different network.": {
+    "value": "Эндпоинты не найдены. Скорее всего в этой сети заблокирован весь UDP — попробуйте MASQUE (TCP) или другую сеть."
+  },
+  "UDP blocked — using TCP fallback (443/8443)": {
+    "value": "UDP заблокирован — используется TCP-fallback (443/8443)"
   }
 }
