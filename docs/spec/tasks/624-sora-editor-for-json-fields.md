@@ -463,6 +463,40 @@ D-pad; AVD API 24; `dumpsys meminfo` на утечки.
 5. **Подсветка INI и URI** — входит в эту задачу (см. «Подсветка по виду
    текста»).
 
+## Итоги проверки на эмуляторах (11.10.2026)
+
+Найдено и исправлено:
+
+- **Поиск: запрос печатался в конфиг.** Две причины. `autofocus` поля
+  запроса не срабатывает, если в области фокуса уже есть фокус (узел
+  platform view при фокусе в редакторе), поэтому поле берёт фокус явно
+  (`FocusNode.requestFocus` после кадра). Next/Previous зовут
+  `EditorSearcher.gotoNext` → `setSelectionRegion` → `requestFocus()`:
+  на время перехода редактор фокус не принимает (`suppressFocus`), если
+  его не было. Search на клавиатуре переходит к следующему совпадению и
+  оставляет фокус в поле.
+- **Стрелки сворачивали клавиатуру** (аппаратные, с Shift и без, и от IME
+  через `sendKeyEvent`). `FlutterView.dispatchKeyEvent` сначала отдаёт
+  клавишу фреймворку, а там `Shortcuts` приложения: `DirectionalFocusIntent`
+  уводил фокус с узла platform view. Обёртка `Focus` вокруг view отвечает
+  `skipRemainingHandlers` — клавиша возвращается в натив. Исключения:
+  Escape и простые ↑/↓ в первой/последней экранной строке (`atTop` /
+  `atBottom` в сообщении `cursor`) — они уводят фокус к соседнему виджету.
+- **D-pad (ТВ):** фокус Flutter на узле view переводится в нативный
+  (`focus`), у поля рамка фокуса цвета акцента, DPAD_CENTER открывает
+  клавиатуру.
+- **Кнопки поля перекрывали первую строку** — текст сдвинут вниз на их
+  высоту.
+- **API 24/25:** language-textmate зовёт `java.time.Duration` — включён core
+  library desugaring (`desugar_jdk_libs`, Google Maven).
+- **StackOverflowError (API 28, ТВ):** `ColorSchemeUpdateEvent` от каждого
+  `setColor` темы повторно звал `applyColors()`. Свои события пропускаются,
+  чужие сводятся в один отложенный повтор.
+
+Не воспроизвелось: пустая область под последней строкой после Undo большой
+вставки (три попытки: Select all → Paste → Undo, замена одним символом →
+Undo/Redo).
+
 ## Docs to update
 
 - `features/019-CONFIG_EDITOR/FUNCTIONS/config-editor(.ru).md` — меню
