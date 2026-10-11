@@ -70,8 +70,10 @@ import '../../settings_storage.dart';
 import '../masque_account.dart';
 import '../warp_account.dart';
 import '../warp_client.dart';
+import 'scan_awg_probe.dart';
 import 'scan_models.dart';
 import 'scan_log.dart';
+import 'scan_i1.dart';
 import 'scan_node_builder.dart';
 import 'scan_pool.dart';
 import 'scan_wg_probe.dart';
@@ -500,35 +502,84 @@ class EndpointScanner {
     final aliveTransport = <String, EndpointTransport>{};
     final failed = <String>[];
 
+    // §841 — КОРЕНЬ «нет живых» на фильтрующих сетях (МегаФон/Орёл):
+    //   1) фаза 1 слала ГОЛЫЙ WG-init со СЛУЧАЙНЫМ ключом. WARP-эндпоинт
+    //      отвечает на handshake только от ЗАРЕГИСТРИРОВАННОГО пира: со
+    //      случайным ключом сервер молчит (проверено: аккаунтный ключ → 92 Б
+    //      type-2, случайный → timeout).
+    //   2) DPI режет одиночный WG-init по сигнатуре; пробивает только
+    //      обфусцированный залп AmneziaWG: [I1] + [junk × jc] + [init].
+    //      Замер на той же сети: голый init → timeout, junk+init → 92 Б
+    //      type-2, I1+junk+init → 92 Б type-2.
+    // Поэтому ключ аккаунта достаём ДО скана (кеш → регистрация), а пробу
+    // шлём залпом. Если аккаунта нет и зарегистрировать не удалось —
+    // деградируем к прежнему голому WG-зонду (лучше, чем ничего).
+    List<int>? warpPrivRaw;
+    try {
+      var acc = await SettingsStorage.getWarpAccount();
+      if (acc == null) {
+        log?.i('p1', 'WARP-аккаунта нет — регистрирую для пробы живости…');
+        final regClient = _injectedWarp ?? WarpClient();
+        try {
+          acc = await regClient.register(
+            endpoint: WarpAccount.defaultEndpoint,
+            nowIso8601: DateTime.now().toUtc().toIso8601String(),
+          );
+          await SettingsStorage.setWarpAccount(acc);
+        } finally {
+          if (_injectedWarp == null) regClient.close();
+        }
+      }
+      warpPrivRaw = base64Decode(acc.privKey);
+      log?.i(
+        'p1',
+        'обфускация AWG: I1(${renderI1Chain(kI1DefaultChain).length}Б)'
+        '+junk(jc=6,j10..50)+init, ключ аккаунта ок (${warpPrivRaw.length}Б)',
+      );
+    } catch (e) {
+      log?.w('p1', 'аккаунт для пробы недоступен ($e) — голый WG-init');
+    }
+
     Future<void> wgPass(List<int> ports) async {
       final cand = <String>[
         for (final ip in wgCandidates)
           for (final p in ports) ip.contains(':') ? ip : '$ip:$p',
       ];
+      void onP1(String ep, WgProbeResult r) {
+        log?.add(
+          r.alive ? ScanLogLevel.info : ScanLogLevel.debug,
+          'p1',
+          '$ep → ${r.kind.name} rtt=${r.rttMs}мс ${r.detail}',
+        );
+        emit(ScanEndpointStatus(
+          endpoint: ep,
+          phase: 1,
+          verdict: r.alive
+              ? (r.kind == WgProbeKind.cookie ? 'cookie' : 'alive')
+              : r.kind.name,
+          rttMs: r.rttMs,
+          detail: r.detail,
+        ));
+      }
       log?.i('p1', 'UDP WG-проба: ${cand.length} адресов, порты=$ports');
-      final batch = await scanWgBatch(
-        endpoints: cand,
-        concurrency: concurrency,
-        timeout: timeout,
-        onProgress: onProgressPhase1,
-        onProbe: (ep, r) {
-          log?.add(
-            r.alive ? ScanLogLevel.info : ScanLogLevel.debug,
-            'p1',
-            '$ep → ${r.kind.name} rtt=${r.rttMs}мс ${r.detail}',
-          );
-          emit(ScanEndpointStatus(
-            endpoint: ep,
-            phase: 1,
-            verdict: r.alive
-                ? (r.kind == WgProbeKind.cookie ? 'cookie' : 'alive')
-                : r.kind.name,
-            rttMs: r.rttMs,
-            detail: r.detail,
-          ));
-        },
-        cancelled: () => _cancelled,
-      );
+      final batch = await (warpPrivRaw != null
+          ? scanAwgBatch(
+              endpoints: cand,
+              staticPrivRaw: warpPrivRaw,
+              concurrency: concurrency,
+              timeout: timeout,
+              onProgress: onProgressPhase1,
+              onProbe: onP1,
+              cancelled: () => _cancelled,
+            )
+          : scanWgBatch(
+              endpoints: cand,
+              concurrency: concurrency,
+              timeout: timeout,
+              onProgress: onProgressPhase1,
+              onProbe: onP1,
+              cancelled: () => _cancelled,
+            ));
       batch.forEach((ep, r) {
         if (r.alive) {
           alive[ep] = r;
