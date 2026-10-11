@@ -19,6 +19,7 @@ import 'package:lxbox/services/warp/scan/endpoint_scanner.dart';
 import 'package:lxbox/services/warp/scan/scan_log.dart';
 import 'package:lxbox/services/warp/scan/scan_models.dart';
 import 'package:lxbox/services/warp/scan/scan_wg_probe.dart';
+import 'package:lxbox/vpn/cc_channel.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -176,9 +177,34 @@ void main() {
     expect(pool.first, contains('consumer-masque'));
   });
 
-  // §839 — тот же батч в реальном скане: SNI виден в журнале по каждому
-  // кандидату. В песочнице аккаунт MASQUE не регистрируется (HTTP 400), поэтому
-  // строки сборки могут отсутствовать — проверяем инвариант «нет молчания».
+  // §840 — повторные попытки по не ответившим адресам: классификатор одной
+  // попытки «получено ли гео» — чистая функция, покрываю её напрямую.
+  test('§840: probeGeoAttempt — ошибка, пустота и нет loc= = «не удалось»', () {
+    const trace = 'ip=1.1.1.1\nloc=RU\ncolo=LED\n';
+    // Нормальный ответ с гео → успех, контент сохраняется.
+    expect(
+      probeGeoAttempt(const CcGetUrlResult(
+        status: 200, content: trace, truncated: false, contentType: 'text/plain',
+        remoteAddr: '1.1.1.1:443', elapsedMs: 42, error: '')),
+      (ok: true, content: trace),
+    );
+    // Ошибка транспорта (err) → неудача, повтор нужен.
+    expect(
+      probeGeoAttempt(const CcGetUrlResult(
+        status: 0, content: '', truncated: false, contentType: '',
+        remoteAddr: '', elapsedMs: 0, error: 'context deadline exceeded')),
+      (ok: false, content: ''),
+    );
+    // Ответ БЕЗ loc=/colo= (CF не знает страну / не trace) → тоже неудача.
+    expect(
+      probeGeoAttempt(const CcGetUrlResult(
+        status: 200, content: '<html>warp is on</html>', truncated: true,
+        contentType: 'text/html', remoteAddr: 'x:443', elapsedMs: 5,
+        error: '')),
+      (ok: false, content: ''),
+    );
+  });
+
   test('§839: скан не теряет h2-кандидатов молча', () async {
     try {
       await rootBundle.loadString('assets/warp_endpoints.json');

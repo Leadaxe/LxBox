@@ -41,6 +41,14 @@
 //     узлам стартовать в одном probe-конфиге и задушить друг друга (в журнале
 //     это выглядело как 31 × `context deadline exceeded`).
 //
+// §840 — повторные попытки по не ответившим MASQUE-адресам. Замер рабочего
+// эталона (warpscout `masqueDefaultAttempts = 3`) на фильтрующей сети: одна
+// попытка дала 1–3 живых из 14, три — 11–13. То есть одна неудача не значит
+// ничего: адрес «флапает» (QUIC-хендшейк проходит, а CONNECT-IP/GET не
+// отвечает, и наоборот). Без повторов скан массово даёт ложно-мёртвые адреса —
+// «живых 0» при живых 11. Повтор дешёвый (ещё один probeGetUrl в уже поднятой
+// сессии) и прозрачный (в журнале видна попытка).
+//
 // Результат — список живых эндпоинтов с (страна, нода, RTT), готовый к
 // группировке по странам (UI с чекбоксами) и к генерации конфигов.
 
@@ -255,6 +263,45 @@ enum EndpointTransport { wg, masqueH3, masqueH2 }
 String rotateMasqueSni(List<String> pool, int index) {
   if (pool.isEmpty) return '';
   return pool[index % pool.length];
+}
+
+/// §840 — сколько раз перепроверять НЕ ответивший MASQUE-адрес, прежде чем
+/// объявить его мёртвым.
+///
+/// Замер рабочей реализации ([warpscout] `masqueDefaultAttempts = 3`) на
+/// фильтрующей сети, ОДНИ И ТЕ ЖЕ адреса и тот же SNI: одна попытка дала 1–3
+/// живых из 14, три попытки — 11–13. То есть одна неудача не значит ничего:
+/// адрес «флапает» (QUIC-хендшейк проходит, а CONNECT-IP/GET не отвечает — и
+/// наоборот). Без повторов скан массово даёт ложно-мёртвые адреса, что и
+/// выглядит как «живых 0». Повтор дешёвый: адрес уже в поднятой probe-сессии,
+/// это ещё один probeGetUrl (3 с вместо 8 с).
+const kScanMasqueAttempts = 3;
+
+/// §840 — одна попытка GET'а по узлу, приведённая к тому, что решает скан:
+/// «получено ли гео». Ошибка (`err`) и ответ без `loc=`/`colo=` одинаково
+/// означают «этот заход не удался» — их и стоит повторить. Ветку `loc=`
+/// разбирает вызывающий ([parseCloudflareTrace]) и только для успешных
+/// заходов, поэтому здесь она лишь передаётся наружу как есть.
+({bool ok, String content}) probeGeoAttempt(CcGetUrlResult r) {
+  final parsed = r.ok && r.content.isNotEmpty
+      ? parseCloudflareTrace(r.content)
+      : null;
+  final hasGeo =
+      parsed != null && (parsed.country.isNotEmpty || parsed.colo.isNotEmpty);
+  return (ok: hasGeo, content: hasGeo ? r.content : '');
+}
+
+/// Результат серии повторов по одному узлу.
+class GeoAttemptResult {
+  const GeoAttemptResult({
+    required this.result,
+    required this.attempts,
+  });
+
+  /// ПОСЛЕДНИЙ ответ сервера (для журнала важен он: именно его увидит
+  /// разработчик). null — попыток не было.
+  final CcGetUrlResult? result;
+  final int attempts;
 }
 
 /// Движок сканера. Не хранит состояние UI; отдаёт результаты по мере готовности.
@@ -922,29 +969,43 @@ class EndpointScanner {
           if (_cancelled) break;
           final ep = eps[entry.key];
           try {
-            final r = await _cc.probeGetUrl(
-              entry.value,
-              link: _trace(),
-              timeoutMs: 8000,
-              maxBytes: 4096,
-            );
-            final hasGeo = r.ok && r.content.isNotEmpty;
-            final parsed = hasGeo ? parseCloudflareTrace(r.content) : null;
-            if (parsed != null &&
-                (parsed.country.isNotEmpty || parsed.colo.isNotEmpty)) {
-              out[ep] = parsed;
+            // §840 — MASQUE «флапает»: одна неудача не значит ничего (замер
+            // эталона: 1 попытка → 1–3 из 14 живых, 3 попытки → 11–13).
+            // Повторяем GET до kScanMasqueAttempts раз, пока не придёт гео.
+            CcGetUrlResult? last;
+            var attempt = 0;
+            for (; attempt < kScanMasqueAttempts; attempt++) {
+              if (_cancelled) break;
+              last = await _cc.probeGetUrl(
+                entry.value,
+                link: _trace(),
+                timeoutMs: 8000,
+                maxBytes: 4096,
+              );
+              if (probeGeoAttempt(last).ok) break;
+            }
+            final first = attempt == 1;
+            final r = last!;
+            final parsed = probeGeoAttempt(r);
+            if (parsed.ok) {
+              final geo = parseCloudflareTrace(parsed.content);
+              out[ep] = geo;
               log?.i(
                 'p2',
-                '$ep GET ${r.status} loc=${parsed.country} colo=${parsed.colo} '
-                'remote=${r.remoteAddr} ${r.elapsedMs}мс',
+                '$ep GET ${r.status} loc=${geo.country} colo=${geo.colo} '
+                'remote=${r.remoteAddr} ${r.elapsedMs}мс'
+                '${first ? '' : ' (попытка $attempt из $kScanMasqueAttempts)'}',
               );
-              onGeo?.call(ep, parsed, 'HTTP ${r.status} ${r.remoteAddr}');
+              onGeo?.call(ep, geo, 'HTTP ${r.status} ${r.remoteAddr}');
             } else {
               final why = r.error.isNotEmpty
                   ? 'err=${r.error}'
                   : 'HTTP ${r.status} без loc/colo';
-              log?.w('p2', '$ep GET не дал гео: $why '
-                  'remote=${r.remoteAddr}');
+              log?.w(
+                'p2',
+                '$ep GET не дал гео за $attempt/$kScanMasqueAttempts попыток: '
+                '$why remote=${r.remoteAddr}',
+              );
               onGeo?.call(ep, null, why);
             }
           } catch (e) {
