@@ -38,6 +38,24 @@
   (RU: Интент `URLTEST_ALL` без extras перепроверяет auto-группы всех
   Направлений по очереди, ядро в каждой переселектит на живой узел; та же
   команда `urltest-all` есть в плагине Tasker/Locale и в Debug API.)
+- **Format button for JSON fields; field buttons above the field
+  ([task 624](docs/spec/tasks/624-sora-editor-for-json-fields.md)).**
+  Editable JSON fields (node Source, Edit server in a folder, DNS server
+  JSON, rule JSON, the DNS rule sheet, the wizard's JSON field) have a Format
+  button: it parses the text as JSON5, like Save on Config, and lays it out
+  with a two-space indent. Undo reverts it. A parse error shows the position
+  and leaves the text alone; if the text has comments, a dialog warns that
+  they will be removed. Find, Copy and Format now sit in a row above the
+  field instead of over the text, next to the field's caption. A field that
+  grows with its text now counts wrapped lines, so a one-line compact JSON
+  grows to the field's limit, and wrapped fields no longer shade the whole
+  field as the current line.
+  (RU: Кнопка Format у редактируемых JSON-полей: разбор JSON5, как Save
+  конфига, отступ два пробела, отменяется undo; ошибка — с позицией, текст
+  не меняется; при комментариях — предупреждение. Поиск, Copy и Format —
+  строкой над полем, рядом с подписью, а не поверх текста. Растущее поле
+  учитывает перенос строк, поле с переносом больше не заливается подсветкой
+  текущей строки.)
 
 ### Fixed
 

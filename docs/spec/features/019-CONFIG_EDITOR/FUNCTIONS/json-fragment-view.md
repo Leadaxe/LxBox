@@ -25,7 +25,7 @@ scrolling.
 
 | Place | Action | What is copied |
 |-------|--------|----------------|
-| Node without detour | "Copy JSON" icon | the node's outbound without the `detour` field |
+| Node without detour | "Copy JSON" icon in the row above the field | the node's outbound without the `detour` field |
 | Node with detour | "Copy server JSON" | the node's outbound without `detour` |
 | — | "Copy detour" | the first detour hop without `detour`; no hop — "No detour for this node" |
 | — | "Copy server + detour" / "+ detours(N)" | an array: the node and the whole hop chain, each without `detour` |
@@ -46,6 +46,9 @@ data for the tag".
   from the saved one; no tag — a message, not silence.
 - **The node's JSON tab** shows the outbound itself, and with a detour — the
   "node + hops" array.
+- **The Copy button sits above the field, on the right** (node JSON tab,
+  subscription node inspector), not over the text, like the buttons of the
+  editable fields. A read-only view has no Format.
 - **Copies are self-contained:** the `detour` field is removed from every
   element so that a paste does not refer to a missing tag.
 - **The rule preview does not filter by `enabled`:** a disabled rule shows

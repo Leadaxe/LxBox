@@ -25,7 +25,7 @@ file, copy it, share it and save it to the core.
 | Save | AppBar | JSON5 parse → canonical JSON → save; snackbar "Config saved" |
 | Paste from clipboard | ⋮ menu | clipboard text, formatted, into the editor; empty clipboard — "Clipboard is empty" |
 | Load from file | ⋮ menu | file text (UTF-8), formatted, into the editor |
-| Copy to clipboard / Copy icon | ⋮ menu / editor corner | the whole editor text to the clipboard |
+| Copy to clipboard / Copy icon | ⋮ menu / button row above the field | the whole editor text to the clipboard |
 | Share | ⋮ menu | `lxbox_config.json` file with the editor text |
 | Read-only threshold | — | above 1 048 576 characters |
 
@@ -70,8 +70,27 @@ snackbars and errors on screen.
 - **Selection menu** — the editor's native menu in the app language: Cut /
   Copy / Paste / Select all over the live selection (a read-only field offers
   only Copy / Select all, §607).
-- **Find** — the icon in the field corner opens a panel: query, match count,
-  previous / next; an empty query clears the match highlight.
+- **Field buttons sit above the frame, on the right** (Find, Copy, Format),
+  never inside it: the text starts at the normal inset. A field with a
+  caption (the node Source note, the DNS server JSON note) keeps the caption
+  on the left of the same row; it wraps in the width the buttons leave.
+- **Find** — the search button opens a panel in place of the button row:
+  query, match count, previous / next; an empty query clears the match
+  highlight.
+- **Format** (editable JSON fields other than this screen: node Source, Edit
+  server in a folder, DNS server JSON, route rule JSON, DNS rule sheet, the
+  wizard's JSON field) — shown when the text looks like JSON. It parses the
+  text as JSON5, the same way Save does, and replaces it with JSON indented by
+  two spaces. It is an ordinary edit: undo reverts it and the screen counts it
+  as unsaved. A parse error shows "Failed to parse JSON: …" with the position
+  and leaves the text alone. JSON5 comments do not survive: if the text has
+  `//` or `/*` outside strings, the dialog "Comments will be removed" asks
+  first (Format / Cancel). This screen has no Format: it formats the config
+  when it opens.
+- **Growing fields** (node Source, rule JSON, Edit server) grow by screen
+  rows, wrapped lines included, up to their limit; past it the text scrolls
+  inside. Fields that wrap lines do not highlight the cursor line (one
+  compact JSON line would paint the whole field).
 - **Sticky headers.** While scrolling, up to three lines of the enclosing
   blocks stay pinned at the top (`"outbounds": [` → `{` → …). The editor draws
   them only without line wrapping, so this screen does not wrap: long lines
