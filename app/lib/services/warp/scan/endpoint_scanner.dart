@@ -24,6 +24,23 @@
 // «сканер 4 минуты молчит и не находит живых». Живой порт подбирается по пулу
 // (443 → 500 → … → 8095): если 443 зарезан, а 8443 нет, кандидат переезжает.
 //
+// §839 — четыре правки по аудиту (все подтверждены на коде и тестах):
+//  1. закрытый TCP ≠ выброшенный адрес: h2-кандидат уходит на h3/QUIC.
+//     Живое доказательство из журнала: ответ `http3: parsing frame failed:
+//     PROTOCOL_VIOLATION (remote)` означает, что UDP-пакеты до Cloudflare
+//     ДОШЛИ — путь жив, и терять его нельзя (раньше такие адреса молча
+//     «пропускались»);
+//  2. переезд на другой порт ЗАМЕНЯЕТ кандидата на месте, а не добавляет дубль,
+//     и переносит уже измеренный RTT;
+//  3. отмена скана прерывает и preflight (иначе кнопка «Отмена» ждала все
+//     таймауты — до 7 портов × 3с на адрес);
+//  4. MASQUE-SNI ротируется по пулу (`rotateMasqueSni`): пул начинается с
+//     родного `consumer-masque.cloudflareclient.com`, и до §839 ВСЕ кандидаты до
+//     32 шли под этим доменом — одна узнаваемая подпись на весь батч. Плюс
+//     гейт `kProbeMaxMasquePerConfig` (probe_config.dart) не даёт 32 MASQUE-
+//     узлам стартовать в одном probe-конфиге и задушить друг друга (в журнале
+//     это выглядело как 31 × `context deadline exceeded`).
+//
 // Результат — список живых эндпоинтов с (страна, нода, RTT), готовый к
 // группировке по странам (UI с чекбоксами) и к генерации конфигов.
 
@@ -224,6 +241,20 @@ enum EndpointTransport { wg, masqueH3, masqueH2 }
   // считаем неопределённой.
   if (country.length != 2) country = '';
   return (country: country, colo: colo);
+}
+
+/// §839 — SNI для i-го MASQUE-кандидата: РОТАЦИЯ по пулу, а не всегда первый.
+///
+/// Пул начинается с родного `consumer-masque.cloudflareclient.com` (он же
+/// `recommended_sni` в `assets/warp_endpoints.json`): до §839 сканер брал
+/// `masqueSniPool.first` на ВСЕ узлы батча, то есть до 32 кандидатов шли с одним
+/// и тем же доменом. DPI, знающий эту подпись, режет по ней весь батч сразу —
+/// и скан отдаёт «живых 0», хотя адреса могут быть живы. Ротация разносит
+/// кандидатов по пулу (10 доменов: родной + приманки), так что батч проверяет
+/// не одну подпись, а десять.
+String rotateMasqueSni(List<String> pool, int index) {
+  if (pool.isEmpty) return '';
+  return pool[index % pool.length];
 }
 
 /// Движок сканера. Не хранит состояние UI; отдаёт результаты по мере готовности.
@@ -532,6 +563,11 @@ class EndpointScanner {
         final probes = await Future.wait(h2.map((ep) async {
           final ip = ep.contains(':') ? ep.split(':').first : ep;
           for (final p in ports) {
+            // §839 — отмена должна прерывать и preflight: иначе «Отмена»
+            // ждёт все таймауты (до 7 портов × 3с) по всем адресам.
+            if (_cancelled) {
+              return (ep: ep, ip: ip, port: 0, detail: 'отменено');
+            }
             final r = await probeTcpOpen(
               ip,
               p,
@@ -541,37 +577,51 @@ class EndpointScanner {
           }
           return (ep: ep, ip: ip, port: 0, detail: 'tcp: порты $ports закрыты');
         }));
-        final drop = <String>{};
         for (final r in probes) {
           if (_cancelled) break;
           if (r.port == 0) {
-            drop.add(r.ep);
-            log?.w('p2', '${r.ep} ${r.detail} → пропускаю (TCP зарезан)');
+            // §839 — TCP закрыт, НО UDP:443 (QUIC) может проходить: у РФ-операторов
+            // это частый случай. Не выбрасываем адрес, а пробуем его же через
+            // MASQUE-h3. Прямое доказательство из журнала пользователя: ответ
+            // `http3: parsing frame failed: PROTOCOL_VIOLATION (remote)` означает,
+            // что QUIC-пакеты до Cloudflare ДОШЛИ и сервер ответил — то есть путь
+            // существует, и отбрасывать его нельзя.
+            byTransport[r.ep] = EndpointTransport.masqueH3;
+            log?.w(
+              'p2',
+              '${r.ep} ${r.detail} → fallback на MASQUE-h3 (QUIC/UDP:443)',
+            );
             emit(ScanEndpointStatus(
               endpoint: r.ep,
               phase: 2,
               verdict: 'tcp-closed',
-              detail: r.detail,
+              detail: '${r.detail} → пробую h3/QUIC',
             ));
             continue;
           }
           final key = '${r.ip}:${r.port}';
           if (key != r.ep) {
-            // 443 не открылся, а другой порт пула — да: переезжаем на него.
-            drop.add(r.ep);
+            // 443 не открылся, а другой порт пула — да: переезжаем на него,
+            // ЗАМЕНЯЯ кандидата на месте (не добавляя дубль) и перенося RTT.
+            final idx = ordered.indexOf(r.ep);
+            if (idx >= 0) {
+              ordered[idx] = key;
+            } else {
+              ordered.add(key);
+            }
+            final prev = alive.remove(r.ep);
+            if (prev != null) alive[key] = prev;
             byTransport[key] = EndpointTransport.masqueH2;
-            if (!ordered.contains(key)) ordered.add(key);
-            effective.add(key);
+            final ei = effective.indexOf(r.ep);
+            if (ei >= 0) {
+              effective[ei] = key;
+            } else {
+              effective.add(key);
+            }
             log?.i('p2', '${r.ep} ${r.detail} → кандидат на $key');
           } else {
             log?.i('p2', '${r.ep} ${r.detail} → TCP открыт, подтверждаю');
           }
-        }
-        if (drop.isNotEmpty) {
-          effective = [
-            for (final ep in effective)
-              if (!drop.contains(ep)) ep,
-          ];
         }
         log?.i(
           'p2',
@@ -807,15 +857,29 @@ class EndpointScanner {
     // Узлы строятся в порядке [eps] (null — не собирается; индекс сохраняется,
     // `buildProbeBatches` вернёт его в `brokenByIndex`).
     final nodes = <NodeSpec?>[];
-    for (final ep in eps) {
+    for (var i = 0; i < eps.length; i++) {
+      final ep = eps[i];
       final transport = byTransport[ep] ?? EndpointTransport.wg;
-      final node = _buildNodeFor(ep, transport, builder, pool);
+      // §839 — SNI ротируется по кандидатам, а не берётся всегда первым.
+      // Раньше ВСЕ MASQUE-узлы шли с `masqueSniPool.first` (родной
+      // `consumer-masque.cloudflareclient.com`): один «паливный» домен на весь
+      // батч — DPI режет по нему всё сразу. Теперь кандидаты распределяются по
+      // пулу, а выбранный SNI виден в журнале.
+      final isWg = transport == EndpointTransport.wg;
+      final sniPool = isWg
+          ? (pool?.wgSniPool ?? const <String>[])
+          : (pool?.masqueSniPool ?? const <String>[]);
+      final sni = isWg ? (sniPool.isEmpty ? '' : sniPool.first)
+          : rotateMasqueSni(sniPool, i);
+      final node = _buildNodeFor(ep, transport, builder, pool, sni);
       if (node == null) {
         log?.w(
           'p2',
           '$ep (${transport.name}): узел не собрался (нет аккаунта/кред)',
         );
         onGeo?.call(ep, null, 'node build failed: no account');
+      } else {
+        log?.d('p2', '$ep (${transport.name}) sni=$sni → узел собран');
       }
       nodes.add(node);
     }
@@ -900,11 +964,14 @@ class EndpointScanner {
   }
 
   /// Строит узел-кандидат для probe-сессии под конкретный эндпоинт.
+  /// [sni] (§839) выбирает вызывающий: SNI ротируется по кандидатам, чтобы весь
+  /// батч не шёл с одним «паливным» доменом.
   NodeSpec? _buildNodeFor(
     String ep,
     EndpointTransport transport,
     ScanNodeBuilder builder,
     ScanPool? pool,
+    String sni,
   ) {
     final parts = ep.split(':');
     final ip = parts[0];
@@ -916,9 +983,7 @@ class EndpointScanner {
           ip: ip,
           port: explicitPort ?? 2408,
           protocol: ScanProtocol.awg,
-          sni: (pool?.wgSniPool.isNotEmpty ?? false)
-              ? pool!.wgSniPool.first
-              : '',
+          sni: sni,
           awgParams: const AwgParams(ip: 'quic', jc: 4, jmin: 40, jmax: 70),
         );
         final uri = builder.uriFor(c);
@@ -932,9 +997,7 @@ class EndpointScanner {
           port: explicitPort ??
               ((ports?.isNotEmpty ?? false) ? ports!.first : 443),
           protocol: isH3 ? ScanProtocol.masqueH3 : ScanProtocol.masqueH2,
-          sni: (pool?.masqueSniPool.isNotEmpty ?? false)
-              ? pool!.masqueSniPool.first
-              : '',
+          sni: sni,
         );
         final uri = builder.uriFor(c);
         return uri == null ? null : parseLinkViaPipeline(uri);

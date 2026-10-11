@@ -10,6 +10,7 @@
 // (2) скан реально прогоняет preflight по h2-кандидатам и отчитывается в
 // журнале — то есть механизм подключён, а не только объявлен.
 
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/services.dart' show rootBundle;
@@ -90,5 +91,130 @@ void main() {
       isTrue,
       reason: 'preflight должен дать вердикт по адресу, а не промолчать',
     );
+  });
+
+  // §839 (аудит Jules) — закрытый TCP у h2-кандидата БОЛЬШЕ НЕ выбрасывает
+  // адрес. Живое доказательство из журнала пользователя: ответ
+  // `http3: parsing frame failed: PROTOCOL_VIOLATION (remote)` означает, что
+  // QUIC-пакеты до Cloudflare ДОШЛИ. Значит, путь закрыт только по TCP, и
+  // такой адрес обязан уйти на проверку как MASQUE-h3, а не пропасть.
+  test('§839: h2-кандидат с закрытым TCP уходит в h3, а не выбрасывается',
+      () async {
+    try {
+      await rootBundle.loadString('assets/warp_endpoints.json');
+    } catch (_) {}
+
+    final log = ScanLog();
+    final statuses = <ScanEndpointStatus>[];
+    await EndpointScanner().scan(
+      endpoints: const ['162.159.198.1', '162.159.198.2'],
+      concurrency: 4,
+      timeout: const Duration(milliseconds: 300),
+      maxGeoLookups: 4,
+      log: log,
+      onStatus: statuses.add,
+    );
+    final text = log.text;
+    // ignore: avoid_print
+    print(text);
+
+    // Старого поведения быть не должно: «пропускаю» = потеря живого адреса.
+    expect(
+      text,
+      isNot(contains('пропускаю (TCP зарезан)')),
+      reason: '§839: адрес с закрытым TCP не выбрасывается',
+    );
+    // Адрес, у которого TCP закрыт, обязан получить вердикт И уйти в h3.
+    for (final s in statuses.where((s) => s.verdict == 'tcp-closed')) {
+      expect(
+        text,
+        contains('fallback на MASQUE-h3'),
+        reason: '§839: ${s.endpoint} — закрытый TCP ⇒ fallback на h3/QUIC',
+      );
+    }
+    // Худший случай (сеть режет и TCP, и уводит всё в h3) — тоже валиден:
+    // главное, что ни один h2-кандидат не потерян молча.
+    expect(
+      text.contains('→ кандидат на') ||
+          text.contains('TCP открыт, подтверждаю') ||
+          text.contains('fallback на MASQUE-h3'),
+      isTrue,
+      reason: 'preflight обязан вынести вердикт по каждому h2-адресу',
+    );
+  });
+
+  // §839 — SNI ротируется по кандидатам. До правки ВСЕ MASQUE-узлы шли с
+  // `masqueSniPool.first`, а это ровно родной `consumer-masque.cloudflareclient.com`
+  // (он же `recommended_sni`): один «паливный» домен на весь батч, и DPI режет
+  // по нему всё разом. Проверяем саму ротацию (чистая функция — не требует ни
+  // ядра, ни аккаунта) и то, что настоящий пул снабжён приманками.
+  test('§839: rotateMasqueSni разносит кандидатов по пулу, не повторяя первый',
+      () {
+    expect(rotateMasqueSni(const [], 0), '');
+    expect(rotateMasqueSni(const ['a'], 0), 'a');
+    expect(rotateMasqueSni(const ['a'], 7), 'a');
+    // Ротация: индекс идёт по кругу — 10 кандидатов на пул из 3 дают a,b,c,a…
+    const pool = ['a', 'b', 'c'];
+    expect(
+      [for (var i = 0; i < 10; i++) rotateMasqueSni(pool, i)],
+      ['a', 'b', 'c', 'a', 'b', 'c', 'a', 'b', 'c', 'a'],
+    );
+    // Ключевое свойство §839: соседние кандидаты идут с РАЗНЫМИ SNI (до правки
+    // все до одного получали pool[0]).
+    expect(rotateMasqueSni(pool, 1), isNot(rotateMasqueSni(pool, 0)));
+  });
+
+  test('§839: родной SNI лежит в пуле первым — значит нужна ротация', () async {
+    final raw = await rootBundle.loadString('assets/warp_endpoints.json');
+    final json = jsonDecode(raw) as Map<String, dynamic>;
+    final mq = json['masque'] as Map<String, dynamic>;
+    final pool = (mq['sni_pool'] as List).cast<String>();
+    expect(pool.length, greaterThan(1), reason: 'в пуле есть приманки');
+    // Именно поэтому §839 обязателен: без ротации весь батч шёл под родным
+    // доменом (легко узнаваемая подпись MASQUE-подключения к Cloudflare).
+    expect(pool.first, mq['recommended_sni']);
+    expect(pool.first, contains('consumer-masque'));
+  });
+
+  // §839 — тот же батч в реальном скане: SNI виден в журнале по каждому
+  // кандидату. В песочнице аккаунт MASQUE не регистрируется (HTTP 400), поэтому
+  // строки сборки могут отсутствовать — проверяем инвариант «нет молчания».
+  test('§839: скан не теряет h2-кандидатов молча', () async {
+    try {
+      await rootBundle.loadString('assets/warp_endpoints.json');
+    } catch (_) {}
+
+    final log = ScanLog();
+    await EndpointScanner().scan(
+      endpoints: const [
+        '162.159.198.1',
+        '162.159.198.2',
+        '162.159.199.1',
+        '162.159.199.2',
+      ],
+      concurrency: 4,
+      timeout: const Duration(milliseconds: 300),
+      maxGeoLookups: 8,
+      log: log,
+      onStatus: (_) {},
+    );
+    final text = log.text;
+    // ignore: avoid_print
+    print(text);
+
+    // Каждый h2-кандидат получает вердикт preflight — либо подтверждён, либо
+    // переехал на другой порт, либо ушёл в h3. Молча выброшенных нет.
+    final h2Candidates = const ['162.159.198.2', '162.159.199.2'];
+    for (final ep in h2Candidates) {
+      expect(
+        text.contains('$ep ') &&
+            (text.contains('$ep:443') ||
+                text.contains('$ep tcp') ||
+                text.contains('$ep →')),
+        isTrue,
+        reason: '§839: $ep обязан получить вердикт preflight',
+      );
+    }
+    expect(text, isNot(contains('пропускаю (TCP зарезан)')));
   });
 }

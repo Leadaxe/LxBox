@@ -118,6 +118,22 @@ const kProbeMaxWireguardPerConfig = 4;
 /// конфиг и тоже может быть WG.
 const _wireguardEndpointType = 'wireguard';
 
+/// §839 — ключ протокола MASQUE в эмитированной записи: `emitMasque`
+/// (`node_spec_emit.dart`) пишет `'type': 'masque'`. По нему гейтится
+/// [kProbeMaxMasquePerConfig].
+const _masqueOutboundType = 'masque';
+
+/// §839 — сколько MASQUE-узлов допустимо в ОДНОМ probe-конфиге.
+///
+/// Старт MASQUE-сессии дороже WG-эндпоинта (мультиплексирование, TLS, а в h3 —
+/// QUIC-хендшейк поверх UDP). Сканер подставляет до 32 MASQUE-кандидатов, и в
+/// одном probe-конфиге они поднимаются ОДНОВРЕМЕННО, конкурируя за сеть: в
+/// журнале пользователя это дало 31 × `context deadline exceeded` — узлы
+/// «душили» друг друга по таймауту, хотя часть адресов была жива. Раскладываем
+/// по 4 (как WG, §523): цена — несколько `probeStart`, выигрыш — каждый узел
+/// действительно проверяется, а не падает от конкуренции соседей.
+const kProbeMaxMasquePerConfig = 4;
+
 /// §518/§523 — probe-конфиг строится батчами: см. [kProbeMaxNaivePerConfig] и
 /// [kProbeMaxWireguardPerConfig]. Совместимость: единственный батч, когда
 /// дорогих узлов не больше лимитов — поведение до §518 дословно.
@@ -141,12 +157,13 @@ ProbeConfig buildProbeConfig(
       brokenByIndex: _brokenOf(nodes, coreVersion),
     );
 
-/// §518/§523 — раскладывает [nodes] на probe-конфиги так, чтобы в каждом было
-/// не более [kProbeMaxNaivePerConfig] naive-записей И не более
-/// [kProbeMaxWireguardPerConfig] WG/AWG-endpoint'ов. Узлы без того и другого
-/// целиком лежат в ПЕРВОМ батче (как до §518 — один конфиг на весь список);
-/// «дорогие» узлы набиваются в батч, пока выдерживают ОБА лимита, иначе
-/// открывается следующий — смешанные батчи допустимы (4 WG и 1 naive в одном).
+/// §518/§523/§839 — раскладывает [nodes] на probe-конфиги так, чтобы в каждом
+/// было не более [kProbeMaxNaivePerConfig] naive-записей, не более
+/// [kProbeMaxWireguardPerConfig] WG/AWG-endpoint'ов и не более
+/// [kProbeMaxMasquePerConfig] MASQUE-записей. Узлы без всего этого целиком
+/// лежат в ПЕРВОМ батче (как до §518 — один конфиг на весь список); «дорогие»
+/// узлы набиваются в батч, пока выдерживают ВСЕ лимиты, иначе открывается
+/// следующий — смешанные батчи допустимы (4 WG и 1 naive в одном).
 /// Порядок и полнота сохраняются: индексы узлов — исходные, объединение
 /// `tagByIndex` всех батчей плюс `brokenByIndex` покрывает весь [nodes].
 ///
@@ -182,22 +199,29 @@ List<ProbeConfig> buildProbeBatches(
   final costly = <int>[];
   for (final i in built.keys) {
     final b = built[i]!;
-    ((b.naiveCount > 0 || b.wireguardCount > 0) ? costly : plain).add(i);
+    ((b.naiveCount > 0 || b.wireguardCount > 0 || b.masqueCount > 0)
+            ? costly
+            : plain)
+        .add(i);
   }
   var naiveInCurrent = 0;
   var wireguardInCurrent = 0;
+  var masqueInCurrent = 0;
   for (final i in costly) {
     final b = built[i]!;
     final overflow = naiveInCurrent + b.naiveCount > kProbeMaxNaivePerConfig ||
-        wireguardInCurrent + b.wireguardCount > kProbeMaxWireguardPerConfig;
+        wireguardInCurrent + b.wireguardCount > kProbeMaxWireguardPerConfig ||
+        masqueInCurrent + b.masqueCount > kProbeMaxMasquePerConfig;
     if (groups.isEmpty || overflow) {
       groups.add(<int>[]);
       naiveInCurrent = 0;
       wireguardInCurrent = 0;
+      masqueInCurrent = 0;
     }
     groups.last.add(i);
     naiveInCurrent += b.naiveCount;
     wireguardInCurrent += b.wireguardCount;
+    masqueInCurrent += b.masqueCount;
   }
   if (plain.isNotEmpty) {
     // Не-naive/не-WG идут первым батчем; если дорогие батчи уже есть —
@@ -240,6 +264,7 @@ class _Built {
     this.detourCount,
     this.naiveCount,
     this.wireguardCount,
+    this.masqueCount,
   );
 
   final List<SingboxEntry> entries; // [detours…, main]
@@ -253,6 +278,10 @@ class _Built {
   /// WG-детур уезжает в тот же батч вместе со своим endpoint'ом, поэтому
   /// считается по всей цепочке, а не по типу самого узла.
   final int wireguardCount;
+
+  /// §839 — сколько MASQUE-записей несёт узел (сам + детуры). Как и у WG,
+  /// считается по всей цепочке: детур-цепочка уходит в тот же конфиг.
+  final int masqueCount;
 }
 
 /// Собирает записи одного узла. Возвращает [_Built] или строку-вердикт.
@@ -288,6 +317,7 @@ Object _buildOne(NodeSpec? node, String coreVersion) {
     if (gate.dropped.isNotEmpty) return 'invalid: ${_dropReason(gate)}';
     var naive = 0;
     var wireguard = 0;
+    var masque = 0;
     for (final e in entries) {
       // §518 — снимаем insecure_concurrency ТОЛЬКО в пробе: в замере задержки
       // пул изолированных сессий не нужен, а Chromium-движки он множит
@@ -303,6 +333,11 @@ Object _buildOne(NodeSpec? node, String coreVersion) {
       if (e is Endpoint && e.map['type'] == _wireguardEndpointType) {
         wireguard++;
       }
+      // §839 — MASQUE: outbound с `type: masque` (`emitMasque`). Вид записи
+      // сверяем так же, чтобы случайный `type` у чужой map не попал в гейт.
+      if (e is Outbound && e.map['type'] == _masqueOutboundType) {
+        masque++;
+      }
     }
     return _Built(
       entries,
@@ -310,6 +345,7 @@ Object _buildOne(NodeSpec? node, String coreVersion) {
       raw.detours.length,
       naive,
       wireguard,
+      masque,
     );
   } catch (e) {
     return 'invalid: $e';

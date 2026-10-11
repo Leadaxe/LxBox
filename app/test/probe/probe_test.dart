@@ -419,6 +419,79 @@ void main() {
       });
     });
 
+    // ═══ §839 — MASQUE-кандидаты и конкуренция в probe-сессии ══════════════
+    //
+    // Сканер подставляет в фазу 2 до 32 MASQUE-адресов, и до §839 все они
+    // уезжали в ОДИН probe-конфиг: старт MASQUE дороже WG (мультиплексирование,
+    // TLS, в h3 — QUIC-хендшейк), кандидаты поднимаются одновременно и давят
+    // друг друга по таймауту. В журнале пользователя это выглядело как
+    // 31 × `context deadline exceeded` при 32 кандидатах. Гейт: не больше
+    // kProbeMaxMasquePerConfig MASQUE-записей на конфиг.
+    group('§839 MASQUE-гейт probe-конфига', () {
+      MasqueSpec mq(int i) => MasqueSpec(
+            id: 'm$i',
+            tag: 'MQ$i',
+            label: 'MQ$i',
+            server: '162.159.198.$i',
+            port: 443,
+            rawSource: '',
+            privateKeyDer: 'PRIVDER==',
+            publicKeyDer: 'PUBDER==',
+            localAddresses: const ['172.16.0.2/32'],
+            vhttp: 'h3',
+            mtu: 1280,
+          );
+
+      List<Map<String, dynamic>> outboundsOf(ProbeConfig c) =>
+          ((jsonDecode(c.configJson!) as Map)['outbounds'] as List)
+              .cast<Map<String, dynamic>>();
+
+      int masqueCountOf(ProbeConfig c) =>
+          outboundsOf(c).where((o) => o['type'] == 'masque').length;
+
+      test('MASQUE эмитится как outbound `type: masque` — по нему и гейт', () {
+        // Детект обязан идти по ЭМИТИРОВАННОЙ записи (её видит ядро), а не по
+        // имени класса или поля узла. `emitMasque` → Outbound с `type: masque`.
+        final cfg = buildProbeConfig(<NodeSpec?>[mq(1)]);
+        expect(masqueCountOf(cfg), 1);
+      });
+
+      test('6 MASQUE: не больше $kProbeMaxMasquePerConfig на конфиг, '
+          'все 6 индексов проверены ровно раз', () {
+        final nodes = <NodeSpec?>[for (var i = 1; i <= 6; i++) mq(i)];
+        final batches = buildProbeBatches(nodes);
+        expect(
+          batches.length,
+          (6 / kProbeMaxMasquePerConfig).ceil(),
+          reason: 'MASQUE-узлы обязаны раскладываться по батчам',
+        );
+        for (final b in batches) {
+          expect(
+            masqueCountOf(b),
+            lessThanOrEqualTo(kProbeMaxMasquePerConfig),
+            reason: 'MASQUE не больше $kProbeMaxMasquePerConfig на конфиг',
+          );
+        }
+        final seen = <int>[];
+        for (final b in batches) {
+          seen.addAll(b.tagByIndex.keys);
+        }
+        expect(seen..sort(), [for (var i = 0; i < 6; i++) i],
+            reason: 'батчирование не теряет и не дублирует узлы');
+      });
+
+      test('смешанный батч допустим: MASQUE и vless делят конфиг', () {
+        final batches = buildProbeBatches(<NodeSpec?>[
+          mq(1),
+          mq(2),
+          FolderMember(raw: uriA).node,
+          FolderMember(raw: uriB).node,
+        ]);
+        expect(batches.length, 1);
+        expect(masqueCountOf(batches.single), 2);
+      });
+    });
+
     test('коллизия тегов членов уникализируется', () {
       final cfg = cfgOf(folder(members: [
         FolderMember(raw: uriA),
