@@ -48,6 +48,13 @@ snackbars and errors on screen.
   config does not change.
 - **Substitution ≠ saving.** Paste and Load from file change only the editor
   text.
+- **Leaving with unsaved edits** — as on the other edit screens. An edit is
+  editor text that differs from the text the screen opened with or last
+  saved by Save; Paste and Load from file count. Back (system, gesture, AppBar
+  arrow) with an edit shows the shared "Unsaved changes" dialog: Save — same
+  as the Save button (on a parse error the screen stays open with the error);
+  Discard — leave without saving; Keep or dismiss — stay. No edit, read-only
+  or still loading — leave without the dialog.
 - **Read-only** for a config that is too large: banner "File is too large to
   edit on device. Share it, edit externally, then load it back.", Save is
   disabled.

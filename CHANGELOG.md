@@ -41,6 +41,15 @@
 
 ### Fixed
 
+- **Config asks before dropping unsaved edits
+  ([task 624](docs/spec/tasks/624-sora-editor-for-json-fields.md)).**
+  Back on the Config screen with an unsaved edit (typed, pasted or loaded
+  from a file) used to lose it silently. Now it shows the same "Unsaved
+  changes" dialog as the other edit screens: Save, Discard or Keep. Save
+  works like the Save button: a parse error keeps the screen open.
+  (RU: Back на экране Config с несохранённой правкой больше не теряет её
+  молча: тот же диалог «Unsaved changes», что на соседних экранах правки —
+  Save, Discard, Keep; при ошибке разбора Save оставляет экран открытым.)
 - **JSON fields type like a regular text field
   ([task 624](docs/spec/tasks/624-sora-editor-for-json-fields.md)).**
   The config editor and every JSON field (node Source and JSON, rules, DNS,
