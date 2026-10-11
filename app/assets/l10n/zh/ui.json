@@ -1428,9 +1428,6 @@
   "Custom server type \"%s\" — edit it on the JSON tab. The form supports UDP / DoT / DoH / DoQ / DoH3 / Group / Tailscale.": {
     "value": "自定义服务器类型「%s」——请在 JSON 标签页编辑。表单支持 UDP / DoT / DoH / DoQ / DoH3 / Group / Tailscale。"
   },
-  "Cut": {
-    "value": "剪切"
-  },
   "Dark": {
     "value": "深色"
   },

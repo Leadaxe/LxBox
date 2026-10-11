@@ -1,0 +1,70 @@
+{
+  "name": "URI",
+  "scopeName": "source.lxuri",
+  "comment": "LxBox: proxy links (vless://, ss://, wg://, ...), one per line. Colors the parts it recognizes, never validates.",
+  "patterns": [
+    {
+      "include": "#link"
+    }
+  ],
+  "repository": {
+    "link": {
+      "begin": "([a-zA-Z][a-zA-Z0-9+.\\-]*)(://)(?:([^@/?#\\s]*)(@))?(\\[[0-9a-fA-F:.]*\\]|[^:/?#\\s\\[\\]]*)(?:(:)([0-9]+))?",
+      "beginCaptures": {
+        "1": {
+          "name": "keyword.other.scheme.uri"
+        },
+        "2": {
+          "name": "keyword.other.scheme.uri"
+        },
+        "3": {
+          "name": "string.other.userinfo.uri"
+        },
+        "4": {
+          "name": "punctuation.separator.userinfo.uri"
+        },
+        "5": {
+          "name": "entity.name.host.uri"
+        },
+        "6": {
+          "name": "punctuation.separator.port.uri"
+        },
+        "7": {
+          "name": "constant.numeric.port.uri"
+        }
+      },
+      "end": "(?=\\s)|$",
+      "patterns": [
+        {
+          "match": "(#)(\\S*)",
+          "captures": {
+            "1": {
+              "name": "comment.line.fragment.uri"
+            },
+            "2": {
+              "name": "comment.line.fragment.uri"
+            }
+          }
+        },
+        {
+          "match": "[?&]",
+          "name": "punctuation.separator.query.uri"
+        },
+        {
+          "match": "([^=&#?\\s/]+)(=)([^&#\\s]*)",
+          "captures": {
+            "1": {
+              "name": "support.type.property-name.uri"
+            },
+            "2": {
+              "name": "punctuation.separator.key-value.uri"
+            },
+            "3": {
+              "name": "string.unquoted.value.uri"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

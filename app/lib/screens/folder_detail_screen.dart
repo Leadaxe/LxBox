@@ -924,8 +924,8 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(getLocalText.s("Edit server")),
-        // §615 — редактор с подсветкой, как Source узла (§614): JSON —
-        // по `{` на лету, ссылка и WireGuard INI — без подсветки. Ширина
+        // §615 — редактор с подсветкой, как Source узла (§614): язык по
+        // виду текста на лету (§624: JSON / INI / ссылка). Ширина
         // задана явно: AlertDialog меряет содержимое через IntrinsicWidth.
         content: SizedBox(
           width: double.maxFinite,
@@ -938,9 +938,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
               minLines: 3,
               maxLines: 8,
               hint: getLocalText.s("Proxy link, WireGuard config or outbound JSON"),
-              language: ctl.text.trimLeft().startsWith('{')
-                  ? LxCodeLanguage.json
-                  : null,
+              language: detectCodeLanguage(ctl.text),
             ),
           ),
         ),
@@ -955,7 +953,10 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
         ],
       ),
     );
-    ctl.dispose();
+    // §624 — `ctl` не освобождаем: `showDialog` возвращается в начале
+    // анимации закрытия, а поле в уходящем диалоге ещё читает контроллер
+    // (и нативный редактор присылает в него финальный текст при dispose).
+    // Слушателей у него нет — уйдёт со сборкой мусора.
     if (newRaw == null || !mounted) return;
     final idx = _index;
     if (idx < 0) return;

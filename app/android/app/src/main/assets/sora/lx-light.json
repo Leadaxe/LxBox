@@ -13,13 +13,87 @@
     "editorIndentGuide.activeBackground": "#9AA0A6"
   },
   "tokenColors": [
-    { "settings": { "foreground": "#1F1F1F", "background": "#FFFFFF" } },
-    { "scope": ["support.type.property-name.json"], "settings": { "foreground": "#0451A5" } },
-    { "scope": ["string.quoted.double.json", "string"], "settings": { "foreground": "#A31515" } },
-    { "scope": ["constant.numeric"], "settings": { "foreground": "#098658" } },
-    { "scope": ["constant.language"], "settings": { "foreground": "#0000FF" } },
-    { "scope": ["comment", "punctuation.definition.comment"], "settings": { "foreground": "#008000", "fontStyle": "italic" } },
-    { "scope": ["punctuation"], "settings": { "foreground": "#5F6368" } },
-    { "scope": ["invalid"], "settings": { "foreground": "#E05252" } }
+    {
+      "settings": {
+        "foreground": "#1F1F1F",
+        "background": "#FFFFFF"
+      }
+    },
+    {
+      "scope": [
+        "support.type.property-name",
+        "variable",
+        "keyword.other.definition.ini"
+      ],
+      "settings": {
+        "foreground": "#0451A5"
+      }
+    },
+    {
+      "scope": [
+        "string"
+      ],
+      "settings": {
+        "foreground": "#A31515"
+      }
+    },
+    {
+      "scope": [
+        "constant.numeric"
+      ],
+      "settings": {
+        "foreground": "#098658"
+      }
+    },
+    {
+      "scope": [
+        "constant.language"
+      ],
+      "settings": {
+        "foreground": "#0000FF"
+      }
+    },
+    {
+      "scope": [
+        "keyword"
+      ],
+      "settings": {
+        "foreground": "#AF00DB"
+      }
+    },
+    {
+      "scope": [
+        "entity.name"
+      ],
+      "settings": {
+        "foreground": "#795E26"
+      }
+    },
+    {
+      "scope": [
+        "comment",
+        "punctuation.definition.comment"
+      ],
+      "settings": {
+        "foreground": "#008000",
+        "fontStyle": "italic"
+      }
+    },
+    {
+      "scope": [
+        "punctuation"
+      ],
+      "settings": {
+        "foreground": "#5F6368"
+      }
+    },
+    {
+      "scope": [
+        "invalid"
+      ],
+      "settings": {
+        "foreground": "#E05252"
+      }
+    }
   ]
 }

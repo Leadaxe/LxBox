@@ -56,4 +56,8 @@
     <string name="automation_value_label">Значение (%1$s):</string>
     <string name="automation_value_plain">Значение:</string>
     <string name="automation_save">Сохранить</string>
+    <!-- §624 — строки sora-editor (своего RU у библиотеки нет; Cut/Copy/
+         Paste/Select all — системные @android:string, их переводит Android). -->
+    <string name="sora_editor_long_select">Выделение</string>
+    <string name="sora_editor_clip_text_length_too_large">Текст слишком большой для копирования</string>
 </resources>

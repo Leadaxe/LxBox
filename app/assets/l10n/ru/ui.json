@@ -1647,9 +1647,6 @@
   "Custom server type \"%s\" — edit it on the JSON tab. The form supports UDP / DoT / DoH / DoQ / DoH3 / Group / Tailscale.": {
     "value": "Нестандартный тип сервера «%s» — правьте его на вкладке JSON. Форма поддерживает UDP / DoT / DoH / DoQ / DoH3 / Group / Tailscale."
   },
-  "Cut": {
-    "value": "Вырезать"
-  },
   "Dark": {
     "value": "Тёмная"
   },

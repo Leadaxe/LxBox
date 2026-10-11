@@ -3,7 +3,6 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:re_editor/re_editor.dart';
 
 import '../controllers/subscription_controller.dart';
 import '../models/node_spec.dart';
@@ -87,10 +86,10 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
 
   // Paste URI tab controller (multi-line text area). §333 — построчный
   // редактор: сюда вставляют и простыни на тысячи ссылок.
-  final _uriCtrl = CodeLineEditingController();
+  final _uriCtrl = TextEditingController();
 
   // Paste JSON tab controller.
-  final _jsonCtrl = CodeLineEditingController();
+  final _jsonCtrl = TextEditingController();
 
   // §435 — Tailscale tab (NODE_SECTIONS.md §6 «конструктор»). Тело
   // endpoint'а собирается из полей как есть: пустые не пишутся, булевы —
@@ -688,11 +687,17 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
         children: [
           _label(getLocalText.s("Paste a proxy URL")),
           Expanded(
-            child: LxCodeEditor(
-              controller: _uriCtrl,
-              fontSize: 13,
-              hint:
-                  'vless://… / vmess://… / trojan://… / socks5://… / proxy-http://… / wireguard://…',
+            // §624 — сюда вставляют и ссылку, и `.conf`, и JSON: подсветка
+            // по виду текста, на лету.
+            child: ListenableBuilder(
+              listenable: _uriCtrl,
+              builder: (context, _) => LxCodeEditor(
+                controller: _uriCtrl,
+                fontSize: 13,
+                language: detectCodeLanguage(_uriCtrl.text),
+                hint:
+                    'vless://… / vmess://… / trojan://… / socks5://… / proxy-http://… / wireguard://…',
+              ),
             ),
           ),
           const SizedBox(height: 8),

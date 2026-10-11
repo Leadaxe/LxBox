@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/screens/custom_rule_edit_screen.dart';
-import 'package:lxbox/widgets/lx_native_code_editor.dart';
+import 'package:lxbox/widgets/lx_code_editor.dart';
 
 // §447 — Save в AppBar редактора правила идёт через ту же проверку, что Save
 // формы: массив или невалидный JSON не сохраняются, набранный текст остаётся
@@ -47,14 +47,18 @@ Finder get _appBarSave => find.descendant(
       matching: find.widgetWithIcon(IconButton, Icons.save),
     );
 
-// Прототип sora: поле тела правила — LxNativeTextCodeField (нативный view);
-// правка пользователя = запись в его TextEditingController.
-TextEditingController _code(WidgetTester tester) => tester
-    .widget<LxNativeTextCodeField>(find.byType(LxNativeTextCodeField))
-    .controller;
+// §614/§624 — поле тела правила — LxTextCodeField (под ним LxCodeEditor);
+// под `flutter test` это заглушка на TextField: правка пользователя — ввод
+// в неё.
+TextEditingController _code(WidgetTester tester) =>
+    tester.widget<LxCodeEditor>(find.byType(LxCodeEditor)).controller;
 
 Future<void> _type(WidgetTester tester, String text) async {
-  _code(tester).text = text;
+  await tester.enterText(
+    find.descendant(
+        of: find.byType(LxCodeEditor), matching: find.byType(EditableText)),
+    text,
+  );
   await tester.pump();
 }
 

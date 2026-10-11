@@ -109,11 +109,16 @@ void main() {
     await tester.tap(find.text('Edit…'));
     await tester.pumpAndSettle();
 
-    expect(find.byType(TextField), findsNothing);
+    // §624 — под `flutter test` поле — заглушка на TextField внутри
+    // LxCodeEditor; отдельного TextField диалога нет.
+    expect(
+        find.descendant(
+            of: find.byType(AlertDialog), matching: find.byType(TextField)),
+        findsOneWidget);
     LxCodeEditor editor() =>
         tester.widget<LxCodeEditor>(find.byType(LxCodeEditor));
     expect(editor().controller.text, contains('vless://u1@h1.example'));
-    expect(editor().language, isNull, reason: 'ссылка — без подсветки');
+    expect(editor().language, LxCodeLanguage.uri, reason: 'ссылка — URI');
 
     editor().controller.text = '{"type": "direct"';
     await tester.pump();
@@ -123,7 +128,7 @@ void main() {
     const next = 'vless://u2@h2.example:443?type=ws&security=tls#Beta';
     editor().controller.text = next;
     await tester.pump();
-    expect(editor().language, isNull);
+    expect(editor().language, LxCodeLanguage.uri);
     await tester.tap(find.text('Save'));
     await tester.runAsync(
         () => Future<void>.delayed(const Duration(milliseconds: 300)));

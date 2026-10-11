@@ -1,4 +1,4 @@
-# Прототип нативного редактора конфига (sora-editor + TextMate).
+# §624 — нативный редактор JSON-полей (sora-editor + TextMate).
 # jcodings/joni ищут кодировки и таблицы по имени класса, tm4e — модели
 # грамматик/тем через рефлексию; R8 их переименовывает, clinit падает с NPE.
 -keep class org.jcodings.** { *; }
