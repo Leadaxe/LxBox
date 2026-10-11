@@ -82,6 +82,11 @@ bool get _nativeEditor => !kIsWeb && Platform.isAndroid;
 const _viewType = 'lxbox/sora_editor';
 const double _pad = 6;
 
+/// Отступ текста сверху под кнопки поля (поиск, свои действия): компактная
+/// `IconButton` 40 + отступ 2 от края минус внутренний отступ поля — иначе
+/// кнопки наезжают на первую строку.
+const double _buttonsInset = 40 + 2 - (_pad + 1);
+
 /// Как поле занимает место по вертикали.
 enum _Fit {
   /// Заполняет ограниченного родителя (`Expanded`, экран Config).
@@ -242,11 +247,17 @@ class LxCodeEditorState extends State<LxCodeEditor>
   bool _focused = false;
   Rect? _cursorRect;
 
+  /// Каретка в первой / последней экранной строке (из `cursor`): стрелка
+  /// вверх / вниз отсюда отдаёт фокус соседнему виджету.
+  bool _atTop = true;
+  bool _atBottom = true;
+
   bool _dark = false;
   Map<String, int> _colors = const {};
 
   bool _findOpen = false;
   final _findCtrl = TextEditingController();
+  final _findFocus = FocusNode(debugLabel: 'lx-code-editor-find');
   int _matchIndex = -1;
   int _matchCount = 0;
 
@@ -309,6 +320,7 @@ class LxCodeEditorState extends State<LxCodeEditor>
     widget.controller.removeListener(_onController);
     _link?.detach();
     _findCtrl.dispose();
+    _findFocus.dispose();
     super.dispose();
   }
 
@@ -386,7 +398,10 @@ class LxCodeEditorState extends State<LxCodeEditor>
           setState(() {});
         }
       case 'cursor':
-        _focused = args['focused'] as bool? ?? false;
+        final focused = args['focused'] as bool? ?? false;
+        if (focused != _focused) setState(() => _focused = focused);
+        _atTop = args['atTop'] as bool? ?? true;
+        _atBottom = args['atBottom'] as bool? ?? true;
         final rowH = ((args['rowHeight'] as num?) ?? 0) / dpr;
         final y = ((args['y'] as num?) ?? 0) / dpr;
         _cursorRect = Rect.fromLTWH(0, y, 1, rowH);
@@ -477,7 +492,14 @@ class LxCodeEditorState extends State<LxCodeEditor>
 
   void _toggleFind(bool open) {
     setState(() => _findOpen = open);
-    if (!open) {
+    if (open) {
+      // Не `autofocus`: он не срабатывает, если в области фокуса уже есть
+      // фокус — а он есть, когда открыт редактор (узел platform view), и
+      // запрос уходил в текст.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _findOpen) _findFocus.requestFocus();
+      });
+    } else {
       _findCtrl.clear();
       _matchIndex = -1;
       _matchCount = 0;
@@ -489,6 +511,8 @@ class LxCodeEditorState extends State<LxCodeEditor>
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final w = widget;
+    final buttons = !_findOpen && (w._find || w.actions.isNotEmpty);
+    final inset = _nativeEditor && buttons ? _buttonsInset : 0.0;
     double? height;
     var scrollable = true;
     switch (w._fit) {
@@ -496,12 +520,12 @@ class LxCodeEditorState extends State<LxCodeEditor>
         height = null;
       case _Fit.fixed:
         height = w._height;
-        scrollable = _rows * _rowHeight + 2 * _pad + 2 > height!;
+        scrollable = _rows * _rowHeight + 2 * _pad + 2 + inset > height!;
       case _Fit.grow:
         final min = w._minLines ?? 1;
         final max = w._maxLines ?? (min > 24 ? min : 24);
         final shown = _rows.clamp(min, max < min ? min : max);
-        height = shown * _rowHeight + 2 * _pad + 2;
+        height = shown * _rowHeight + 2 * _pad + 2 + inset;
         scrollable = _rows > shown;
     }
 
@@ -510,11 +534,17 @@ class LxCodeEditorState extends State<LxCodeEditor>
       field = DecoratedBox(
         decoration: BoxDecoration(
           color: Color(_colors['background'] ?? 0),
-          border: Border.all(color: cs.outline),
+          // Фокус в поле — рамка цвета акцента (на ТВ это единственный
+          // признак, что D-pad привёл фокус сюда).
+          border: _focused
+              ? Border.all(color: cs.primary, width: 2)
+              : Border.all(color: cs.outline),
           borderRadius: BorderRadius.circular(4),
         ),
         child: Padding(
-          padding: const EdgeInsets.all(_pad + 1),
+          padding: _focused
+              ? EdgeInsets.fromLTRB(_pad, _pad + inset, _pad, _pad)
+              : EdgeInsets.fromLTRB(_pad + 1, _pad + 1 + inset, _pad + 1, _pad + 1),
           child: ClipRect(child: field),
         ),
       );
@@ -524,7 +554,7 @@ class LxCodeEditorState extends State<LxCodeEditor>
       if (_nativeEditor && hint != null && widget.controller.text.isEmpty)
         Positioned(
           left: _pad + 1 + _textOffsetX,
-          top: _pad + 1,
+          top: _pad + 1 + inset,
           right: _pad + 1,
           child: IgnorePointer(
             child: SizedBox(
@@ -546,7 +576,7 @@ class LxCodeEditorState extends State<LxCodeEditor>
             ),
           ),
         ),
-      if (!_findOpen && (w._find || w.actions.isNotEmpty))
+      if (buttons)
         Positioned(
           top: 2,
           right: 2,
@@ -578,6 +608,7 @@ class LxCodeEditorState extends State<LxCodeEditor>
         children: [
           _LxFindPanel(
             controller: _findCtrl,
+            focusNode: _findFocus,
             index: _matchIndex,
             count: _matchCount,
             onQuery: (q) => unawaited(_invoke('search', {'query': q})),
@@ -622,7 +653,6 @@ class LxCodeEditorState extends State<LxCodeEditor>
   }
 
   Widget _buildNative(bool scrollable) {
-    final w = widget;
     // Текст помещается — вертикальные свайпы уходят странице; нет — их
     // забирает редактор. Тап, долгий тап, горизонтальный свайп — редактору.
     final recognizers = <Factory<OneSequenceGestureRecognizer>>{
@@ -635,6 +665,45 @@ class LxCodeEditorState extends State<LxCodeEditor>
             LongPressGestureRecognizer.new),
       ],
     };
+    return Focus(
+      canRequestFocus: false,
+      skipTraversal: true,
+      onFocusChange: (has) {
+        // Фокус пришёл обходом Flutter (D-pad на ТВ, Tab) — нативный view
+        // сам его не берёт.
+        if (has && !_focused) unawaited(_invoke('focus'));
+      },
+      onKeyEvent: _onKey,
+      child: _buildView(recognizers),
+    );
+  }
+
+  /// Клавиши при фокусе в редакторе — натив, мимо `Shortcuts` приложения:
+  /// иначе стрелки (с модификаторами и без, от аппаратной клавиатуры и от
+  /// IME через `sendKeyEvent`) забирал `DirectionalFocusIntent`, фокус
+  /// уходил из view и клавиатура сворачивалась. Исключения — Escape
+  /// (закрыть диалог / шторку) и простые ↑/↓ на первой / последней строке:
+  /// они уводят фокус к соседнему виджету (D-pad на ТВ).
+  KeyEventResult _onKey(FocusNode node, KeyEvent e) {
+    final key = e.logicalKey;
+    if (key == LogicalKeyboardKey.escape) return KeyEventResult.ignored;
+    if (e is! KeyUpEvent) {
+      final hk = HardwareKeyboard.instance;
+      final plain = !hk.isShiftPressed &&
+          !hk.isControlPressed &&
+          !hk.isAltPressed &&
+          !hk.isMetaPressed;
+      if (plain &&
+          ((key == LogicalKeyboardKey.arrowUp && _atTop) ||
+              (key == LogicalKeyboardKey.arrowDown && _atBottom))) {
+        return KeyEventResult.ignored;
+      }
+    }
+    return KeyEventResult.skipRemainingHandlers;
+  }
+
+  Widget _buildView(Set<Factory<OneSequenceGestureRecognizer>> recognizers) {
+    final w = widget;
     return PlatformViewLink(
       key: _viewKey,
       viewType: _viewType,
@@ -692,6 +761,7 @@ class LxCodeEditorState extends State<LxCodeEditor>
 class _LxFindPanel extends StatelessWidget {
   const _LxFindPanel({
     required this.controller,
+    required this.focusNode,
     required this.index,
     required this.count,
     required this.onQuery,
@@ -701,6 +771,7 @@ class _LxFindPanel extends StatelessWidget {
   });
 
   final TextEditingController controller;
+  final FocusNode focusNode;
   final int index;
   final int count;
   final ValueChanged<String> onQuery;
@@ -728,11 +799,14 @@ class _LxFindPanel extends StatelessWidget {
           Expanded(
             child: TextField(
               controller: controller,
-              autofocus: true,
+              focusNode: focusNode,
               style: const TextStyle(fontSize: 13),
               textInputAction: TextInputAction.search,
               onChanged: onQuery,
               onSubmitted: (_) => onNext(),
+              // Search на клавиатуре — к следующему совпадению, фокус и
+              // клавиатура остаются в поле запроса.
+              onEditingComplete: () {},
               decoration: InputDecoration(
                 isDense: true,
                 border: InputBorder.none,

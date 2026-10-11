@@ -26,6 +26,9 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // §624 — sora-editor (language-textmate) зовёт java.time.Duration,
+        // которого нет до API 26; minSdk 24 — без desugaring падает на 7.x.
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlin {
@@ -155,6 +158,8 @@ dependencies {
     implementation(platform("io.github.Rosemoe.sora-editor:bom:0.23.6"))
     implementation("io.github.Rosemoe.sora-editor:editor")
     implementation("io.github.Rosemoe.sora-editor:language-textmate")
+    // java.time и пр. для API < 26 (Google Maven; см. compileOptions).
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 }
 
 flutter {

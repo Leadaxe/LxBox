@@ -3,11 +3,13 @@ package com.leadaxe.lxbox.editor
 import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Color
+import android.graphics.Rect
 import android.graphics.Typeface
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.ContextThemeWrapper
+import android.view.KeyEvent
 import android.view.View
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodCall
@@ -132,6 +134,26 @@ private fun localized(context: Context, tag: String?): Context {
     }
 }
 
+/// `CodeEditor` с двумя поправками под встраивание во Flutter:
+///  - [suppressFocus]: переход поиска (`gotoNext`) зовёт `setSelectionRegion`,
+///    а тот — `requestFocus()`; фокус и клавиатура уходили из поля запроса
+///    панели поиска в редактор, следующая буква ложилась в текст;
+///  - DPAD_CENTER (пульт ТВ) открывает клавиатуру.
+private class LxSoraEditor(context: Context) : CodeEditor(context) {
+    var suppressFocus = false
+
+    override fun requestFocus(direction: Int, previouslyFocusedRect: Rect?): Boolean =
+        if (suppressFocus) false else super.requestFocus(direction, previouslyFocusedRect)
+
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER && isEditable) {
+            showSoftInput()
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+}
+
 class SoraEditorPlatformView(
     context: Context,
     id: Int,
@@ -139,7 +161,7 @@ class SoraEditorPlatformView(
     args: Map<*, *>?,
 ) : PlatformView, MethodChannel.MethodCallHandler {
 
-    private val editor = CodeEditor(localized(context, args?.get("locale") as? String))
+    private val editor = LxSoraEditor(localized(context, args?.get("locale") as? String))
     private val channel = MethodChannel(messenger, "com.leadaxe.lxbox/sora_editor_$id")
     private val main = Handler(Looper.getMainLooper())
     private val density = context.resources.displayMetrics.density
@@ -151,6 +173,9 @@ class SoraEditorPlatformView(
     /// Длинный текст правился, Dart его ещё не получил.
     private var pending = false
     private val flushChanged = Runnable { flushPending() }
+    /// Свои цвета ставим мы — события об этом не наши.
+    private var applyingColors = false
+    private var colorsPosted = false
 
     init {
         val t0 = System.nanoTime()
@@ -229,7 +254,18 @@ class SoraEditorPlatformView(
             if (editor.searcher.hasQuery()) sendSearchResult()
         }
         editor.subscribeAlways(PublishSearchResultEvent::class.java) { sendSearchResult() }
-        editor.subscribeAlways(ColorSchemeUpdateEvent::class.java) { applyColors() }
+        // Не синхронно: тема (`applyDefault`) ставит цвета по одному, и
+        // каждый setColor шлёт событие — повтор из обработчика рекурсивно
+        // уходил в StackOverflowError (API 28, ТВ). Свои события пропускаем,
+        // чужие сводим в один повтор после текущего кадра.
+        editor.subscribeAlways(ColorSchemeUpdateEvent::class.java) {
+            if (applyingColors || colorsPosted) return@subscribeAlways
+            colorsPosted = true
+            editor.post {
+                colorsPosted = false
+                if (!editor.isReleased) applyColors()
+            }
+        }
         editor.setOnFocusChangeListener { _, focused ->
             if (!focused) flushPending()
             sendCursor()
@@ -290,16 +326,22 @@ class SoraEditorPlatformView(
     /// Цвета из `ColorScheme` приложения поверх темы токенов; в режиме только
     /// чтения — без каретки и подсветки текущей строки. Тема (ре)применяет
     /// свои цвета при смене — поэтому повтор на ColorSchemeUpdateEvent
-    /// (setColor с тем же значением событие не шлёт — рекурсии нет).
+    /// (отложенный, см. подписку в init).
     private fun applyColors() {
-        val scheme = editor.colorScheme
-        for ((key, value) in colors) scheme.setColor(key, value)
-        // Парная скобка у каретки: цвет каретки без фона — тема токенов
-        // в тёмном режиме красила её в цвет фона, скобка пропадала.
-        scheme.setColor(EditorColorScheme.HIGHLIGHTED_DELIMITERS_BACKGROUND, Color.TRANSPARENT)
-        if (readOnly) {
-            scheme.setColor(EditorColorScheme.SELECTION_INSERT, Color.TRANSPARENT)
-            scheme.setColor(EditorColorScheme.CURRENT_LINE, Color.TRANSPARENT)
+        if (applyingColors) return
+        applyingColors = true
+        try {
+            val scheme = editor.colorScheme
+            for ((key, value) in colors) scheme.setColor(key, value)
+            // Парная скобка у каретки: цвет каретки без фона — тема токенов
+            // в тёмном режиме красила её в цвет фона, скобка пропадала.
+            scheme.setColor(EditorColorScheme.HIGHLIGHTED_DELIMITERS_BACKGROUND, Color.TRANSPARENT)
+            if (readOnly) {
+                scheme.setColor(EditorColorScheme.SELECTION_INSERT, Color.TRANSPARENT)
+                scheme.setColor(EditorColorScheme.CURRENT_LINE, Color.TRANSPARENT)
+            }
+        } finally {
+            applyingColors = false
         }
     }
 
@@ -345,15 +387,25 @@ class SoraEditorPlatformView(
         if (editor.isReleased) return
         val c = editor.cursor
         // Низ строки каретки в координатах документа (с учётом переноса).
+        val rowH = editor.rowHeight
         val bottom = runCatching {
             editor.layout.getCharLayoutOffset(c.leftLine, c.leftColumn)[0]
-        }.getOrDefault(((c.leftLine + 1) * editor.rowHeight).toFloat())
+        }.getOrDefault(((c.leftLine + 1) * rowH).toFloat())
+        val rightBottom = runCatching {
+            editor.layout.getCharLayoutOffset(c.rightLine, c.rightColumn)[0]
+        }.getOrDefault(((c.rightLine + 1) * rowH).toFloat())
+        val layoutH = runCatching { editor.layout.layoutHeight.toFloat() }
+            .getOrDefault((editor.text.lineCount * rowH).toFloat())
         channel.invokeMethod(
             "cursor",
             hashMapOf(
-                "y" to (bottom - editor.rowHeight - editor.offsetY).toDouble(),
-                "rowHeight" to editor.rowHeight,
+                "y" to (bottom - rowH - editor.offsetY).toDouble(),
+                "rowHeight" to rowH,
                 "focused" to editor.hasFocus(),
+                // Каретка в первой / последней экранной строке: стрелка
+                // вверх / вниз отсюда уводит фокус из поля (D-pad, §624).
+                "atTop" to (bottom <= rowH * 1.5f),
+                "atBottom" to (rightBottom >= layoutH - rowH * 0.5f),
             ),
         )
     }
@@ -371,6 +423,17 @@ class SoraEditorPlatformView(
                 "count" to if (has) s.matchedPositionCount else 0,
             ),
         )
+    }
+
+    /// Переход по совпадениям из панели поиска не забирает фокус у её поля.
+    private inline fun withoutFocusSteal(block: () -> Unit) {
+        if (editor.hasFocus()) return block()
+        editor.suppressFocus = true
+        try {
+            block()
+        } finally {
+            editor.suppressFocus = false
+        }
     }
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
@@ -414,11 +477,18 @@ class SoraEditorPlatformView(
                 result.success(null)
             }
             "searchNext" -> {
-                if (editor.searcher.hasQuery()) editor.searcher.gotoNext()
+                if (editor.searcher.hasQuery()) withoutFocusSteal { editor.searcher.gotoNext() }
                 result.success(null)
             }
             "searchPrevious" -> {
-                if (editor.searcher.hasQuery()) editor.searcher.gotoPrevious()
+                if (editor.searcher.hasQuery()) withoutFocusSteal { editor.searcher.gotoPrevious() }
+                result.success(null)
+            }
+            "focus" -> {
+                // Фокус пришёл со стороны Flutter (D-pad, обход фокуса):
+                // нативный view его сам не берёт. Клавиатуру не открываем —
+                // её открывает DPAD_CENTER или тап.
+                if (!editor.isReleased && !editor.hasFocus()) editor.requestFocus()
                 result.success(null)
             }
             else -> result.notImplemented()
