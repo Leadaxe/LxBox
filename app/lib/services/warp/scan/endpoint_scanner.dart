@@ -17,6 +17,13 @@
 // probe-сессию — открытый TCP 443 сам по себе «живостью» НЕ считается (CF-edge
 // отвечает на 443 почти всегда, это ложный сигнал).
 //
+// §838 — ПЕРЕД probe-сессией h2-кандидаты проходят дешёвый TCP-preflight
+// (системный стек Dart, без ядра): адрес/порт, до которого TCP зарезан,
+// отсекается за секунды с ЯВНЫМ вердиктом в журнале (`tcp-closed`), а не висит
+// 8с × N кандидатов в `context deadline exceeded` — снаружи это выглядело как
+// «сканер 4 минуты молчит и не находит живых». Живой порт подбирается по пулу
+// (443 → 500 → … → 8095): если 443 зарезан, а 8443 нет, кандидат переезжает.
+//
 // Результат — список живых эндпоинтов с (страна, нода, RTT), готовый к
 // группировке по странам (UI с чекбоксами) и к генерации конфигов.
 
@@ -499,10 +506,85 @@ class EndpointScanner {
       'из ${ordered.length} (лимит $maxGeoLookups)',
     );
 
-    if (!_cancelled && geoList.isNotEmpty) {
+    // ── §838 — TCP-preflight MASQUE-h2 ────────────────────────────────────
+    // В сетях РФ оператор часто режет не только UDP/WG, но и ТСР до
+    // MASQUE-адресов. Probe-сессия ядра на мёртвом адресе висит ~8с и отдаёт
+    // `context deadline exceeded`: 32 таких подряд = 4+ минуты «молчания», а
+    // пользователь видит «живых 0» без причины. Дешёвая TCP-проверка
+    // (системный стек Dart, БЕЗ ядра) за секунды отделяет «адрес/порт закрыт»
+    // от «ядро не смогло» и даёт в журнал ЯВНЫЙ вердикт. У выживших порты
+    // пула пробуются по очереди: 443 зарезан, а 8443 нет — кандидат
+    // переезжает на рабочий порт. h3 (QUIC/UDP) preflight не подлежит.
+    var effective = [...geoList];
+    if (!_cancelled) {
+      final h2 = <String>[
+        for (final ep in geoList)
+          if (byTransport[ep] == EndpointTransport.masqueH2) ep,
+      ];
+      if (h2.isNotEmpty) {
+        final ports = pool.masquePortsH2.isNotEmpty
+            ? pool.masquePortsH2
+            : const <int>[443, 8443];
+        log?.i(
+          'p2',
+          'TCP-preflight MASQUE-h2: ${h2.length} адресов, порты=$ports',
+        );
+        final probes = await Future.wait(h2.map((ep) async {
+          final ip = ep.contains(':') ? ep.split(':').first : ep;
+          for (final p in ports) {
+            final r = await probeTcpOpen(
+              ip,
+              p,
+              timeout: const Duration(seconds: 3),
+            );
+            if (r.open) return (ep: ep, ip: ip, port: p, detail: r.detail);
+          }
+          return (ep: ep, ip: ip, port: 0, detail: 'tcp: порты $ports закрыты');
+        }));
+        final drop = <String>{};
+        for (final r in probes) {
+          if (_cancelled) break;
+          if (r.port == 0) {
+            drop.add(r.ep);
+            log?.w('p2', '${r.ep} ${r.detail} → пропускаю (TCP зарезан)');
+            emit(ScanEndpointStatus(
+              endpoint: r.ep,
+              phase: 2,
+              verdict: 'tcp-closed',
+              detail: r.detail,
+            ));
+            continue;
+          }
+          final key = '${r.ip}:${r.port}';
+          if (key != r.ep) {
+            // 443 не открылся, а другой порт пула — да: переезжаем на него.
+            drop.add(r.ep);
+            byTransport[key] = EndpointTransport.masqueH2;
+            if (!ordered.contains(key)) ordered.add(key);
+            effective.add(key);
+            log?.i('p2', '${r.ep} ${r.detail} → кандидат на $key');
+          } else {
+            log?.i('p2', '${r.ep} ${r.detail} → TCP открыт, подтверждаю');
+          }
+        }
+        if (drop.isNotEmpty) {
+          effective = [
+            for (final ep in effective)
+              if (!drop.contains(ep)) ep,
+          ];
+        }
+        log?.i(
+          'p2',
+          'после preflight: к подтверждению ${effective.length} '
+          'из ${geoList.length}',
+        );
+      }
+    }
+
+    if (!_cancelled && effective.isNotEmpty) {
       try {
         final res = await _probeGeo(
-          geoList,
+          effective,
           byTransport: byTransport,
           pool: pool,
           onProgress: onProgressPhase2,
@@ -521,7 +603,7 @@ class EndpointScanner {
         );
         geoMeta.addAll(res.meta);
         // MASQUE-кандидаты, прошедшие GET, становятся живыми эндпоинтами.
-        for (final ep in geoList) {
+        for (final ep in effective) {
           if (res.meta.containsKey(ep) && !alive.containsKey(ep)) {
             alive[ep] = const WgProbeResult(WgProbeKind.response,
                 rttMs: 0); // подтверждён probe-GET (MASQUE)

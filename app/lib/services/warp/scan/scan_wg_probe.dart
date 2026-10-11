@@ -173,6 +173,30 @@ Future<({bool reachable, String detail})> probeTcpReachable(
   }
 }
 
+/// §838 — TCP-порт ОТКРЫТ (соединение установлено). В отличие от
+/// [probeTcpReachable] «connection refused» здесь = `open: false`: для
+/// MASQUE-h2 нужен именно слушающий порт, refused — это закрытый порт, туннель
+/// на нём не встанет. Исключений не бросает.
+Future<({bool open, String detail})> probeTcpOpen(
+  String host,
+  int port, {
+  Duration timeout = const Duration(seconds: 3),
+}) async {
+  final sw = Stopwatch()..start();
+  try {
+    final s = await Socket.connect(host, port, timeout: timeout);
+    final ms = sw.elapsedMilliseconds;
+    try {
+      s.destroy();
+    } catch (_) {}
+    return (open: true, detail: 'tcp $host:$port open in ${ms}ms');
+  } on SocketException catch (e) {
+    return (open: false, detail: 'tcp $host:$port ${e.message}');
+  } catch (e) {
+    return (open: false, detail: 'tcp $host:$port $e');
+  }
+}
+
 /// Разбивает CIDR v4 на список IP (все адреса диапазона). Для /32 — один IP.
 /// Широкие блоки (/25 и больше) не разворачиваем — их обрабатывает
 /// [expandCidrV4] вызывающих уровней (см. limit по хостам).
