@@ -130,13 +130,13 @@ class LxCodeEditor extends StatefulWidget {
     this.language,
     this.autofocus = false,
     this.stickyHeaders = false,
+    this.wordWrap = true,
   })  : find = null,
         _fit = fit,
         _height = height,
         _minLines = minLines,
         _maxLines = maxLines,
         _onEdited = onEdited,
-        wordWrap = true,
         actions = const [];
 
   /// Текст поля. Запись из кода (Paste, Load from file) уходит в натив,
@@ -163,6 +163,10 @@ class LxCodeEditor extends StatefulWidget {
 
   /// Липкие заголовки: при прокрутке сверху закреплены до трёх строк
   /// объемлющих блоков (`"outbounds": [` → `{` → …). Вместо свёртки §614.
+  ///
+  /// sora-editor 0.23.6 рисует их только без переноса строк
+  /// (`EditorRenderer.getStuckCodeBlocks` при `isWordwrap` возвращает
+  /// пусто): при [wordWrap] параметр ни на что не влияет.
   final bool stickyHeaders;
 
   /// Свои кнопки поля (Copy конфига) в правом верхнем углу рядом с поиском;
@@ -806,10 +810,14 @@ class _LxJsonViewState extends State<LxJsonView> {
   @override
   Widget build(BuildContext context) {
     final h = widget.height;
+    // Липкие заголовки sora рисует только без переноса строк; в
+    // просмотрщике JSON прокрутка вбок допустима, перенос уступает им.
+    final sticky = widget.stickyHeaders && widget.language == LxCodeLanguage.json;
     return LxCodeEditor._sized(
       controller: _ctrl,
       fit: h == null ? _Fit.fill : _Fit.fixed,
       height: h,
+      wordWrap: !sticky,
       readOnly: true,
       fontSize: widget.fontSize,
       showLineNumbers: widget.showLineNumbers,
