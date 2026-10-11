@@ -11,6 +11,7 @@ import '../services/error_format.dart';
 import '../services/preset_nodes_view.dart';
 import '../services/settings_storage.dart';
 import '../services/template_loader.dart';
+import '../services/ui_helpers.dart';
 import '../models/direction.dart';
 import '../models/node_link.dart';
 import '../models/node_spec.dart';
@@ -350,11 +351,13 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
   /// JSON — тег из поля Tag в тело (§435, `prepareNodeDocumentForSave`) и
   /// ворота ядра (`CheckConfig`): такой узел идёт в конфиг дословно, гейты
   /// модели его не проверяют. Ссылка — тег во фрагмент. INI — как есть.
-  Future<void> _saveSource() async {
+  /// true — записано (§626: Save диалога Unsaved changes закрывает экран
+  /// только при успехе).
+  Future<bool> _saveSource() async {
     final text = _sourceCtrl.text.trim();
     if (text.isEmpty) {
       _snack(getLocalText.s("Source is empty"));
-      return;
+      return false;
     }
     final String toStore;
     var droppedExtras = false;
@@ -365,7 +368,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
       final prep = prepareNodeDocumentForSave(text, _tagCtrl.text);
       if (prep is NodeDocumentRejected) {
         _snack(prep.message);
-        return;
+        return false;
       }
       final ready = prep as NodeDocumentReady;
       toStore = ready.text;
@@ -374,24 +377,23 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
       final payload = checkPayloadFor(toStore);
       if (payload != null) {
         final check = await BoxVpnClient.I.checkConfig(payload);
-        if (!mounted) return;
+        if (!mounted) return false;
         // null — мост недоступен (юнит-тест, старый native): проверять нечем,
         // сохранение не блокируем.
         if (check != null && !check.ok) {
           _snack(getLocalText.s("The core rejected the node: %s", check.error));
-          return;
+          return false;
         }
       }
     } else if (!text.contains('\n') && text.contains('://')) {
       toStore = SubscriptionController.rawWithName(text, _tagCtrl.text.trim());
     } else {
       // §456 — INI: текст как есть, имя — полем записи (`nameHint`).
-      await _store(text,
+      return _store(text,
           nameHint: _tagCtrl.text.trim(),
           savedMessage: () => getLocalText.s("Saved"));
-      return;
     }
-    await _store(toStore,
+    return _store(toStore,
         savedMessage: () => droppedExtras
             ? getLocalText.s(
                 "Only the node is saved. The rest of the input is not kept.")
@@ -477,7 +479,8 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
 
   /// Записать [raw] источником узла (одиночный — `updateConnectionAt`, член
   /// папки — `updateMemberAt`) и перечитать экран.
-  Future<void> _store(String raw,
+  /// true — записано.
+  Future<bool> _store(String raw,
       {String? nameHint, required String Function() savedMessage}) async {
     try {
       final mi = widget.memberIndex;
@@ -488,20 +491,22 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
               .updateMemberAt(widget.index, mi, raw, nameHint: nameHint)
           : await widget.subController
               .updateConnectionAt(widget.index, [raw], nameHint: nameHint);
-      if (!mounted) return;
+      if (!mounted) return err == null;
       if (err != null) {
         _snack(err.render());
-        return;
+        return false;
       }
       // Перечитать узел: Source показывает записанный текст, JSON — тело,
       // предупреждения — свежие.
       await _load();
-      if (!mounted) return;
+      if (!mounted) return true;
       _snack(savedMessage());
+      return true;
     } catch (e) {
       if (mounted) {
         _snack(getLocalText.s("Invalid JSON: %s", formatUserError(e).render()));
       }
+      return false;
     }
   }
 
@@ -544,10 +549,54 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
 
+  bool _saving = false;
+
+  /// §626 — несохранённые правки: поле Tag (Settings) и текст Source
+  /// отличаются от записанного. Detour, Masquerade, Skip presets и поля
+  /// вкладки Network пишутся сразу и правкой не считаются.
+  bool get _dirty =>
+      _originalTag.isNotEmpty &&
+      (_tagCtrl.text != _originalTag || _sourceCtrl.text != _containerRaw);
+
+  /// Save в AppBar и в диалоге Unsaved changes.
+  Future<bool> _save() async {
+    if (_saving) return false;
+    _saving = true;
+    try {
+      return await _saveSource();
+    } finally {
+      _saving = false;
+    }
+  }
+
+  /// §626 — Back (системный, жест, стрелка AppBar): при правках общий
+  /// диалог Discard / Keep / Save (§219). Загрузка и запись — без диалога.
+  Future<void> _handleBack() async {
+    if (_saving) return;
+    if (!_dirty) {
+      Navigator.pop(context);
+      return;
+    }
+    final action = await showUnsavedChangesDialog(context); // §219
+    if (!mounted) return;
+    if (action == 'save') {
+      if (await _save() && mounted) Navigator.pop(context);
+    } else if (action == 'discard') {
+      Navigator.pop(context);
+    }
+    // 'keep' / null (dismiss) — остаёмся.
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        unawaited(_handleBack());
+      },
+      child: Scaffold(
         appBar: AppBar(
           title: Text(_tagCtrl.text.isNotEmpty
               ? _tagCtrl.text
@@ -556,7 +605,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
             IconButton(
               tooltip: getLocalText.s("Save"),
               icon: const Icon(Icons.save),
-              onPressed: () => unawaited(_saveSource()),
+              onPressed: () => unawaited(_save()),
             ),
           ],
           bottom: TabBar(
@@ -602,6 +651,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
                   ),
                 ],
               ),
+      ),
     );
   }
 
