@@ -106,7 +106,7 @@ subprojects {
 // нельзя, пока остальные плагины (camera_android_camerax, device_info_plus,
 // share_plus, …) применяют KGP сами — с ним они конфликтуют. Поэтому KGP
 // таким плагинам подключаем отсюда. Снять, когда включим встроенный Kotlin.
-val pluginsNeedingKgp = setOf("file_picker")
+val pluginsNeedingKgp = setOf("file_picker", "device_info_plus", "package_info_plus", "share_plus")
 subprojects {
     if (name !in pluginsNeedingKgp) return@subprojects
     plugins.withId("com.android.library") {
