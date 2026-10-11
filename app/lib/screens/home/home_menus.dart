@@ -6,7 +6,6 @@ import '../../services/settings_storage.dart';
 import '../../services/template_loader.dart';
 import '../../services/l10n/locale_controller.dart';
 import '../../widgets/app_bottom_sheet.dart';
-import '../../widgets/unsaved_changes_sheet.dart';
 
 /// §070 — modal bottom sheet опций сортировки нод (long-press по sort-кнопке
 /// в [NodesHeader]). Sheet остаётся открытым — можно тоггнуть несколько опций
@@ -133,41 +132,13 @@ Future<void> showPingSettings(
   final urlCtrl = TextEditingController(text: initialUrl);
   final timeoutCtrl = TextEditingController(text: '$initialTimeout');
 
-  // §626 — правки шторки (поля и область применения) против открытия.
-  bool dirty() =>
-      urlCtrl.text != initialUrl ||
-      timeoutCtrl.text != '$initialTimeout' ||
-      applyToGroup != hasGroupOverride;
-
-  Future<void> save(BuildContext ctx) async {
-    final url = urlCtrl.text.trim();
-    final timeout = int.tryParse(timeoutCtrl.text) ?? 5000;
-    if (applyToGroup && currentGroup.isNotEmpty) {
-      await SettingsStorage.setGroupPing(
-        currentGroup,
-        url: url,
-        timeoutMs: timeout,
-      );
-    } else {
-      await SettingsStorage.setGlobalPingUrl(url);
-      await SettingsStorage.setGlobalPingTimeout(timeout);
-    }
-    await controller.reloadPingOptions();
-    if (ctx.mounted) Navigator.pop(ctx);
-  }
-
   await showAppBottomSheet<void>(
     context: context,
     isScrollControlled: true,
-    // §626 — смахивание ведёт [UnsavedChangesSheet] (едет за пальцем, при правках — диалог).
-    enableDrag: false,
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, setSheetState) {
         final canApplyToGroup = currentGroup.isNotEmpty;
-        return UnsavedChangesSheet(
-          isDirty: dirty,
-          onSave: () => save(ctx),
-          child: Padding(
+        return Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -247,7 +218,22 @@ Future<void> showPingSettings(
                     const SizedBox(width: 8),
                   Expanded(
                     child: FilledButton(
-                      onPressed: () => save(ctx),
+                      onPressed: () async {
+                        final url = urlCtrl.text.trim();
+                        final timeout = int.tryParse(timeoutCtrl.text) ?? 5000;
+                        if (applyToGroup && currentGroup.isNotEmpty) {
+                          await SettingsStorage.setGroupPing(
+                            currentGroup,
+                            url: url,
+                            timeoutMs: timeout,
+                          );
+                        } else {
+                          await SettingsStorage.setGlobalPingUrl(url);
+                          await SettingsStorage.setGlobalPingTimeout(timeout);
+                        }
+                        await controller.reloadPingOptions();
+                        if (ctx.mounted) Navigator.pop(ctx);
+                      },
                       child: Text(getLocalText.s("Save")),
                     ),
                   ),
@@ -255,13 +241,10 @@ Future<void> showPingSettings(
               ),
             ],
           ),
-          ),
         );
       },
     ),
   );
-  // §626 — контроллеры не освобождаем: шторка возвращается в начале
-  // анимации закрытия, а поля уходящей шторки ещё перестраиваются (после
-  // Save из диалога Unsaved changes — assert «used after being disposed»).
-  // Слушателей у них нет — уйдут со сборкой мусора (как Edit server, §624).
+  urlCtrl.dispose();
+  timeoutCtrl.dispose();
 }

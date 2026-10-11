@@ -121,8 +121,8 @@ Ping Settings — тесты §626 сняты, поведение rc.2. Эмул
 | `folder_detail_screen.dart`, переименование в AppBar | добавлен | открытое поле имени с новым именем |
 | `subscription_detail_screen.dart`, переименование в AppBar | добавлен | то же |
 | `subscription_filters_tab.dart`, редактор правила | добавлен | правило против исходного; крестик AppBar тоже спрашивает; Save при блокировке — снек с причиной, экран остаётся |
-| `dns_settings_screen/user_rule_editor_sheet.dart` | добавлен | имя и JSON; Back, фон, смахивание |
-| `home/home_menus.dart`, шторка Ping Settings | добавлен | URL, timeout, область (все / Направление); контроллеры больше не освобождаются сразу после закрытия (assert «used after being disposed» на анимации закрытия) |
+| `dns_settings_screen/user_rule_edit_screen.dart` | добавлен (ревизия 2: экран вместо шторки) | имя и JSON |
+| `home/home_menus.dart`, шторка Ping Settings | возвращено к v2.25.12-rc.2 (ревизия 2) | Save и Reset как были, штатное смахивание, без диалога |
 | `config_screen.dart` | уже был | §624 |
 | `custom_rule_edit_screen.dart` (+ `params_tab`, `preset_params_tab`) | уже был | §219 |
 | `direction_edit_screen.dart`, `dns_server_edit_screen.dart` (+ `params_tab`) | уже был | §219 |
@@ -131,3 +131,27 @@ Ping Settings — тесты §626 сняты, поведение rc.2. Эмул
 | диалоги ввода одного значения: `workspace_menu`, `folder_picker`, `entry_context_menu` (Edit source), identity-поля подписки, Test URL и пороги пинга папки | не нужен | диалог с явным Cancel и коротким полем, не экран и не шторка |
 | `home/filter_widgets.dart` | не нужен | иконка сохранения regex-фильтра в строке поиска, не выход с экрана |
 | `backup_screen/export_card.dart` | не нужен | Save — экспорт файла, терять нечего |
+
+## Реализация ревизии 2 (12.10.2026)
+
+- DNS-правило: `dns_settings_screen/user_rule_edit_screen.dart`
+  (`UserRuleEditScreen`, `openUserRuleEditor`) — Scaffold-маршрут по образцу
+  `dns_server_edit_screen.dart`: AppBar с заголовком Add/Edit DNS Rule, Back
+  и иконкой Save (подсвечена при правке), поле Name, `LxTextCodeField` без
+  высоты (на всю оставшуюся высоту, кнопки поиска и Format над рамкой,
+  подпись «Rule body (JSON)» слева), под ним прежняя подсказка о форме
+  правила. Валидация и результат те же, что у шторки (пустое имя — «Name is
+  required», не JSON-объект — «Invalid JSON: …» снеком, `enabled` правила
+  сохраняется); insert/replace по-прежнему делает `dns_settings_screen.dart`
+  по результату маршрута. `PopScope(canPop: false)` + `_handleBack` →
+  `showUnsavedChangesDialog`. Шторка `user_rule_editor_sheet.dart` удалена.
+- Ping Settings: пункт 2 ревизии отменён владельцем («меня полностью
+  устраивало как было») — шторка возвращена к коду тега v2.25.12-rc.2:
+  Save, Reset to global, вкладки «All directions» / Направление, штатный
+  `showAppBottomSheet` со смахиванием, без диалога; правка `dispose`
+  контроллеров тоже снята (лечила assert, возможный только после Save из
+  диалога). Тест `ping_settings_unsaved_changes_test.dart` удалён.
+- `widgets/unsaved_changes_sheet.dart` удалён; ссылок в коде и тестах нет.
+- Тест: `test/screens/dns_settings_screen/user_rule_edit_screen_test.dart`
+  (новое правило, правка с сохранением `enabled`, битый JSON, пустое имя,
+  Back без правки, Back с правкой → Keep/Discard/Save).

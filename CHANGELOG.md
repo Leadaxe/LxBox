@@ -72,19 +72,19 @@
   ([task 626](docs/spec/tasks/626-unsaved-changes-everywhere.md)).**
   Node settings (Tag and Source), the replace-with-group editor, Edit server
   in a folder, renaming a folder or a subscription, the subscription filter
-  rule editor, the DNS rule sheet and Ping Settings used to drop edits on
-  Back without a word. Now they show the same "Unsaved changes" dialog:
-  Save, Discard or Keep. Sheets still follow the finger on a swipe down;
-  with edits they slide back into place and ask, and a tap outside asks too.
-  Save works like the screen's Save button: if the save is refused, the
-  screen stays open with the message. Changing a field back to what it was
-  is not an edit.
+  rule editor and the custom DNS rule editor used to drop edits on Back
+  without a word. Now they show the same "Unsaved changes" dialog: Save,
+  Discard or Keep. The custom DNS rule editor is now a full-screen editor
+  like the DNS server editor, with the JSON body taking the rest of the
+  screen. Save works like the screen's Save button: if the save is refused,
+  the screen stays open with the message. Changing a field back to what it
+  was is not an edit.
   (RU: Настройки узла (Tag и Source), редактор свёртки, Edit server в папке,
-  переименование папки и подписки, редактор правила фильтров подписки,
-  шторка DNS-правила и Ping Settings больше не теряют правки молча: тот же
-  диалог «Unsaved changes» — Save, Discard, Keep; шторка по-прежнему едет
-  за пальцем, а с правками при смахивании возвращается на место и спрашивает,
-  как и при тапе по фону; отклонённый Save оставляет экран открытым.)
+  переименование папки и подписки, редактор правила фильтров подписки и
+  редактор своего DNS-правила больше не теряют правки молча: тот же диалог
+  «Unsaved changes» — Save, Discard, Keep; своё DNS-правило теперь правится
+  на полноэкранном редакторе, как DNS-сервер, с JSON-телом на всю высоту;
+  отклонённый Save оставляет экран открытым.)
 - **JSON fields type like a regular text field
   ([task 624](docs/spec/tasks/624-sora-editor-for-json-fields.md)).**
   The config editor and every JSON field (node Source and JSON, rules, DNS,
