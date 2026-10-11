@@ -19,12 +19,15 @@
   node that sets `I1` itself keeps it: the section is off and says why. Packed
   links (`awg://` base64, `vpn://`) and Xray sources are not written to. The
   WARP wizard uses the same fields; its QUIC hint no longer calls the domain
-  cosmetic.
+  cosmetic. Turning on QUIC, DNS or SIP fills a random domain from the pool
+  (the dice picks another, the arrow lists the pool); QUIC defaults to the
+  Chrome profile.
   (RU: Секция Masquerade у своего узла WireGuard/AmneziaWG на вкладке
   Settings: протокол, домен, браузер — строками, как Detour; выбор сразу
   пишет `ip`/`id`/`ib` в источник, остальной текст не трогает; у QUIC домен обязателен (SNI ClientHello);
   явный `I1` приоритетнее — секция выключена с причиной; подсказка QUIC в
-  визарде WARP исправлена.)
+  визарде WARP исправлена; при включении QUIC/DNS/SIP подставляется
+  случайный домен из пула, у QUIC по умолчанию профиль Chrome.)
 - **One intent re-tests every Direction
   ([task 625](docs/spec/tasks/625-urltest-all-intent.md)).**
   `com.leadaxe.lxbox.URLTEST_ALL` takes no extras and runs the group URL test
@@ -51,14 +54,16 @@
   that the config editor no longer wraps long lines (they scroll sideways). Fields
   that take anything highlight WireGuard `.conf` and links as well as JSON.
   The config editor and the add-server wizard no longer open the keyboard on
-  their own.
+  their own. On a TV the D-pad moves into the field and OK opens the keyboard.
+  The editor works on Android 7 as well.
   (RU: Конфиг и все JSON-поля — на нативном редакторе Android: клавиатура не
   закрывает строку с курсором, стрелки Unexpected/Hacker's Keyboard двигают
   курсор, Copy клавиатуры копирует всё выделение; меню выделения на языке
   приложения; вместо свёртки блоков — до трёх закреплённых строк блоков при
   прокрутке конфига, JSON узла и JSON-Source подписки (в конфиге поэтому
   без переноса строк — длинные строки прокручиваются вбок); подсветка `.conf` и ссылок; Config и мастер не открывают
-  клавиатуру сами.)
+  клавиатуру сами; на ТВ D-pad заходит в поле, OK открывает клавиатуру;
+  редактор работает и на Android 7.)
 
 - **Tailscale Network tab: the exit device is back under Devices
   ([task 613](docs/spec/tasks/613-wg-peers-tailscale-path-health.md)).**
@@ -132,6 +137,8 @@
 
 - Release candidates go to Google Play Open testing (beta track)
   ([task 619](docs/spec/tasks/619-rc-to-play-open-testing.md)).
+- CI: `actions/checkout` v5 → v7, `actions/download-artifact` v7 → v8;
+  Dependabot updates for GitHub Actions target `develop`.
 
 ---
 
