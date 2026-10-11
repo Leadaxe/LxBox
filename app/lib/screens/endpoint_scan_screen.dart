@@ -20,15 +20,17 @@ class EndpointScanScreen extends StatefulWidget {
     this.concurrency = 16,
     this.timeout = const Duration(seconds: 3),
     this.perCountryLimit = 200,
-    this.excludeColos = const {'DME'},
+    this.excludeColos = const {},
   });
 
   final int concurrency;
   final Duration timeout;
   final int perCountryLimit;
 
-  /// IATA-коды узлов, исключаемые из результатов (по умолчанию DME —
-  /// московский узел с фильтрацией WARP; как `-exclude-node` в warpscout).
+  /// IATA-коды узлов, исключаемые из результатов. По умолчанию ПУСТО: для
+  /// пользователя в РФ ближайший узел почти всегда московский (DME), и
+  /// исключение DME прятало бы именно те эндпоинты, что работают («ничего не
+  /// найдено»). Параметр оставлен для точечных экспериментов.
   final Set<String> excludeColos;
 
   @override
