@@ -199,6 +199,18 @@ class SoraEditorPlatformView(
         colors = parseColors(args?.get("colors"))
         editor.colorScheme = TextMateColorScheme.create(ThemeRegistry.getInstance())
         setLanguage(args?.get("language") as? String)
+        // Перенос строк (`WordwrapLayout`) меряет строку целым run advance,
+        // а текст рисуется с хинтингом, где каждый глиф округлён: 43 символа
+        // строки uuid в раскладке 800 px, на экране 817 px (12 dp, 420 dpi).
+        // Строка в раскладке выходила шире поля, последний символ уходил за
+        // правый край (uuid терял символ при переносе). Без хинтинга и с
+        // линейной метрикой меры совпадают. До шрифта и размера: их установка
+        // сбрасывает кеш ширин символов.
+        editor.textPaint.apply {
+            isSubpixelText = true
+            isLinearText = true
+            hinting = android.graphics.Paint.HINTING_OFF
+        }
         editor.typefaceText = Typeface.MONOSPACE
         editor.typefaceLineNumber = Typeface.MONOSPACE
         // Логические пиксели Flutter × density, без fontScale — как
