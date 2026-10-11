@@ -76,11 +76,26 @@ cd app
 # поэтому сужаем native libs из AAR через LXBOX_ABI_FILTER (иначе gradle тянет
 # libbox под все 3 ABI и APK раздувается до ~76 MB). `--target-platform`
 # сужает flutter engine + Dart AOT.
-LXBOX_ABI_FILTER=arm64-v8a \
-  flutter build apk --release --target-platform android-arm64 "$@"
+#
+# §834 — ABI выбирается переменной LXBOX_ABI (по умолчанию arm64-v8a).
+# Иначе v7-сборка невозможна: фильтр и target платформы были жёстко на arm64,
+# и `LXBOX_ABI_FILTER=armeabi-v7a flutter build ...` давал конфликт.
+ABI="${LXBOX_ABI:-arm64-v8a}"
+case "$ABI" in
+  arm64-v8a)   TARGET=android-arm64 ;;
+  armeabi-v7a) TARGET=android-arm ;;
+  *)
+    echo "build-local: неизвестный LXBOX_ABI='$ABI' (arm64-v8a | armeabi-v7a)" >&2
+    exit 2
+    ;;
+esac
+echo "build-local: ABI=$ABI (--target-platform $TARGET)"
+
+LXBOX_ABI_FILTER="$ABI" \
+  flutter build apk --release --target-platform "$TARGET" "$@"
 
 # Без сплита Flutter пишет `app-release.apk`. Переименовываем в привычное
 # per-ABI имя — на него смотрят scripts/install-apk.sh и мышечная память.
 OUT=build/app/outputs/flutter-apk
-mv "$OUT/app-release.apk" "$OUT/app-arm64-v8a-release.apk"
-echo "build-local: $OUT/app-arm64-v8a-release.apk"
+mv "$OUT/app-release.apk" "$OUT/app-$ABI-release.apk"
+echo "build-local: $OUT/app-$ABI-release.apk"

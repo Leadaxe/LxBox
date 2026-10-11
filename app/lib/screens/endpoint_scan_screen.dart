@@ -11,6 +11,7 @@ import 'package:flutter/services.dart' show rootBundle;
 import '../services/l10n/locale_controller.dart';
 import '../services/warp/scan/endpoint_scanner.dart';
 import '../services/warp/scan/scan_pool.dart';
+import '../widgets/safe_bottom.dart';
 
 /// Возвращает выбранные эндпоинты через [Navigator.pop] или null (отмена).
 class EndpointScanScreen extends StatefulWidget {
@@ -254,7 +255,7 @@ class _EndpointScanScreenState extends State<EndpointScanScreen> {
       );
     }
     return ListView(
-      padding: const EdgeInsets.all(8),
+      padding: const EdgeInsets.all(8).withSafeBottom(context),
       children: [
         for (final g in r.groups)
           CheckboxListTile(

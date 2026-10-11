@@ -37,18 +37,7 @@
     ],
     "sni_pool": [
       "www.google.com", "www.microsoft.com", "www.bing.com", "www.apple.com",
-      "www.wikipedia.org", "cdn.jsdelivr.net", "aws.amazon.com", "deepseek.com",
-      "ya.ru", "yandex.ru", "yandex.net", "mail.ru", "vk.com", "vkvideo.ru",
-      "ok.ru", "rutube.ru", "gosuslugi.ru", "sberbank.ru", "sber.ru",
-      "mos.ru", "nalog.ru", "avito.ru", "ozon.ru", "wildberries.ru",
-      "dns-shop.ru", "citilink.ru", "rbc.ru", "lenta.ru", "kommersant.ru",
-      "tass.ru", "ria.ru", "vedomosti.ru", "1tv.ru", "iz.ru",
-      "hh.ru", "superjob.ru", "rt.ru", "mts.ru", "megafon.ru",
-      "beeline.ru", "tele2.ru", "yota.ru", "selectel.ru", "timeweb.ru",
-      "reg.ru", "beget.ru", "vscale.io", "msk.ru", "spb.ru",
-      "rzd.ru", "aeroflot.ru", "s7.ru", "pobeda.aero", "stepik.org",
-      "uchi.ru", "yaklass.ru", "kp.ru", "mk.ru", "gazeta.ru",
-      "fontanka.ru", "news.ru", "life.ru", "russian.rt.com", "sputniknews.ru"
+      "www.wikipedia.org", "cdn.jsdelivr.net", "aws.amazon.com", "deepseek.com"
     ],
     "utls_fp_pool": ["chrome", "firefox", "safari", "edge", "random"]
   },
@@ -68,18 +57,7 @@
     "sni_pool": [
       "consumer-masque.cloudflareclient.com", "www.cloudflare.com", "www.google.com",
       "www.microsoft.com", "www.bing.com", "www.apple.com", "www.wikipedia.org",
-      "cdn.jsdelivr.net", "aws.amazon.com", "deepseek.com",
-      "ya.ru", "yandex.ru", "yandex.net", "mail.ru", "vk.com", "vkvideo.ru",
-      "ok.ru", "rutube.ru", "gosuslugi.ru", "sberbank.ru", "sber.ru",
-      "mos.ru", "nalog.ru", "avito.ru", "ozon.ru", "wildberries.ru",
-      "dns-shop.ru", "citilink.ru", "rbc.ru", "lenta.ru", "kommersant.ru",
-      "tass.ru", "ria.ru", "vedomosti.ru", "1tv.ru", "iz.ru",
-      "hh.ru", "superjob.ru", "rt.ru", "mts.ru", "megafon.ru",
-      "beeline.ru", "tele2.ru", "yota.ru", "selectel.ru", "timeweb.ru",
-      "reg.ru", "beget.ru", "vscale.io", "msk.ru", "spb.ru",
-      "rzd.ru", "aeroflot.ru", "s7.ru", "pobeda.aero", "stepik.org",
-      "uchi.ru", "yaklass.ru", "kp.ru", "mk.ru", "gazeta.ru",
-      "fontanka.ru", "news.ru", "life.ru", "russian.rt.com", "sputniknews.ru"
+      "cdn.jsdelivr.net", "aws.amazon.com", "deepseek.com"
     ]
   },
   "loc": {

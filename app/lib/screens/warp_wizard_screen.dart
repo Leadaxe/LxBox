@@ -491,12 +491,7 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
         ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(
-          16,
-          24,
-          16,
-          32,
-        ).withSafeBottom(context),
+        padding: const EdgeInsets.fromLTRB(16, 24, 16, 32).withSafeBottom(context),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
