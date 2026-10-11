@@ -19,7 +19,7 @@ import '../models/server_list.dart';
 import '../models/template_vars.dart';
 import '../widgets/detour_target_picker.dart';
 import '../widgets/emoji_picker_button.dart';
-import '../widgets/lx_code_editor.dart';
+import '../widgets/lx_native_code_editor.dart';
 import '../widgets/node_diagnostics_tab.dart';
 import '../widgets/tailscale_network_tab.dart';
 import '../services/tailscale_network.dart';
@@ -749,21 +749,12 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          // §614 — редактор с подсветкой: язык по виду источника на лету
-          // (вставили JSON — подсветка включилась). Недописанный объект
-          // `originKindOf` ещё не признаёт JSON — по `{` подсветку держим.
-          child: ListenableBuilder(
-            listenable: _sourceCtrl,
-            builder: (context, _) {
-              final t = _sourceCtrl.text.trimLeft();
-              final json = t.startsWith('{') || originKindOf(t) == 'json';
-              return LxTextCodeField(
-                key: const ValueKey('node-source-editor'),
-                controller: _sourceCtrl,
-                minLines: 12,
-                language: json ? LxCodeLanguage.json : null,
-              );
-            },
+          // Прототип sora: подсветка всегда JSON (язык по виду источника
+          // не переключается — URI/INI подсвечиваются как JSON).
+          child: LxNativeTextCodeField(
+            key: const ValueKey('node-source-editor'),
+            controller: _sourceCtrl,
+            minLines: 12,
           ),
         ),
       ],
@@ -783,7 +774,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: Stack(
             children: [
-              LxJsonView(text: _jsonCtrl.text, height: 420),
+              LxNativeJsonView(text: _jsonCtrl.text, height: 420),
               Positioned(
                 top: 4,
                 right: 4,

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../widgets/lx_code_editor.dart';
+import '../../../widgets/lx_native_code_editor.dart';
 import '../widgets/section_header.dart';
 
 /// §225 (#17) — секция для raw-JSON правила (kind == json). Один monospace
@@ -24,9 +24,6 @@ class JsonSection extends StatelessWidget {
 
   final VoidCallback onChanged;
 
-  static const String _placeholder =
-      '{ "protocol": "dns", "action": "hijack-dns" }'; // l10n-exempt: JSON sample
-
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -41,13 +38,12 @@ class JsonSection extends StatelessWidget {
         const SizedBox(height: 8),
         // §614 — редактор JSON с подсветкой; высота растёт от 6 до 20
         // строк, как у прежнего поля.
-        LxTextCodeField(
+        LxNativeTextCodeField(
           controller: controller,
           onChanged: (_) => onChanged(),
           minLines: 6,
           maxLines: 20,
           fontSize: 13,
-          hint: _placeholder,
           errorText: errorText,
         ),
       ],
