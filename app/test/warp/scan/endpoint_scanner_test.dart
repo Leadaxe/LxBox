@@ -1,5 +1,6 @@
 // §834 — юнит-тест движка сканера: группировка по странам, счётчики,
-// сортировка, отмена. Сеть/ядро не трогаем — проверяем чистую логику.
+// сортировка, парсер cdn-cgi/trace, выборка IP по блокам. Сеть/ядро не
+// трогаем — проверяем чистую логику.
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/services/warp/scan/endpoint_scanner.dart';
@@ -9,8 +10,41 @@ void main() {
   test('country names resolve to Russian where known', () {
     expect(countryName('DE'), 'Германия');
     expect(countryName('RU'), 'Россия');
-    expect(countryName('??'), '??');
+    expect(countryName(''), '');
     expect(countryName('zz'), 'ZZ');
+  });
+
+  group('parseCloudflareTrace', () {
+    test('extracts loc and colo (uppercased)', () {
+      const body = 'fl=123abc\n'
+          'h=1.1.1.1\n'
+          'ip=203.0.113.7\n'
+          'loc=DE\n'
+          'colo=FRA\n'
+          'warp=on\n'
+          'ts=1700000000.000\n';
+      final r = parseCloudflareTrace(body);
+      expect(r.country, 'DE');
+      expect(r.colo, 'FRA');
+    });
+
+    test('lowercase values are normalised', () {
+      final r = parseCloudflareTrace('loc=de\ncolo=fra\n');
+      expect(r.country, 'DE');
+      expect(r.colo, 'FRA');
+    });
+
+    test('missing loc → empty country, junk tolerated', () {
+      final r = parseCloudflareTrace('ip=1.2.3.4\ncolo=AMS\nnot-a-pair\n');
+      expect(r.country, '');
+      expect(r.colo, 'AMS');
+    });
+
+    test('empty body → empty', () {
+      final r = parseCloudflareTrace('');
+      expect(r.country, '');
+      expect(r.colo, '');
+    });
   });
 
   test('groups sort by valid count desc and count found/valid', () {
@@ -61,6 +95,43 @@ void main() {
     );
     expect(result.totalFound, 3);
     expect(result.totalValid, 2);
+  });
+
+  test('unknown-country group is flagged and sorted last', () {
+    const known = EndpointCountryGroup(
+      code: 'DE',
+      name: 'Германия',
+      endpoints: [
+        EndpointResult(
+          endpoint: 'a:2408',
+          country: 'DE',
+          colo: 'FRA',
+          rttMs: 10,
+          alive: true,
+        ),
+      ],
+    );
+    const unknown = EndpointCountryGroup(
+      code: '',
+      name: '',
+      endpoints: [
+        EndpointResult(
+          endpoint: 'z:2408',
+          country: '',
+          colo: '',
+          rttMs: 0,
+          alive: true,
+        ),
+      ],
+    );
+    expect(unknown.isUnknown, isTrue);
+    expect(known.isUnknown, isFalse);
+    final sorted = [unknown, known]..sort((a, b) {
+        if (a.isUnknown != b.isUnknown) return a.isUnknown ? 1 : -1;
+        return b.valid.compareTo(a.valid);
+      });
+    expect(sorted.first.code, 'DE');
+    expect(sorted.last.isUnknown, isTrue);
   });
 
   test('classifyWgResponse treats junk as not alive', () {

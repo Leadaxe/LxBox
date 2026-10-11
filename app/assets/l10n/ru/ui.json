@@ -5888,5 +5888,11 @@
   },
   "UDP blocked — using TCP fallback (443/8443)": {
     "value": "UDP заблокирован — используется TCP-fallback (443/8443)"
+  },
+  "Country not determined": {
+    "value": "Страна не определена"
+  },
+  "VPN active — geo phase skipped": {
+    "value": "VPN активен — гео-фаза пропущена"
   }
 }

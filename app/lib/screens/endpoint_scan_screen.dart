@@ -41,8 +41,9 @@ class _EndpointScanScreenState extends State<EndpointScanScreen> {
   bool _scanning = false;
   bool _viaTcp = false;
   EndpointScanResult? _result;
-  final _selected = <String>{}; // коды стран
+  final _selected = <String>{}; // коды стран ('' = «не определена»)
   String? _error;
+  String _note = '';
   int _phase1Done = 0;
   int _phase1Total = 0;
   int _phase2Done = 0;
@@ -98,12 +99,14 @@ class _EndpointScanScreenState extends State<EndpointScanScreen> {
           _phase2Done = d;
           _phase2Total = t;
         },
+        onNote: (n) => _note = n,
       );
       if (!mounted) return;
       setState(() {
         _scanning = false;
         _result = result;
         _viaTcp = result.tcpFallbackUsed;
+        _note = result.note;
       });
     } catch (e) {
       if (!mounted) return;
@@ -170,6 +173,14 @@ class _EndpointScanScreenState extends State<EndpointScanScreen> {
             Padding(
               padding: const EdgeInsets.all(12),
               child: Text(_error!, style: TextStyle(color: cs.error)),
+            ),
+          if (!_scanning && _note.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              child: Text(
+                _note,
+                style: TextStyle(color: cs.tertiary, fontSize: 12),
+              ),
             ),
           if (_scanning)
             Padding(
@@ -267,7 +278,11 @@ class _EndpointScanScreenState extends State<EndpointScanScreen> {
                 _selected.remove(g.code);
               }
             }),
-            title: Text('${g.name} (${g.code})'),
+            title: Text(
+              g.isUnknown
+                  ? getLocalText.s("Country not determined")
+                  : '${g.name} (${g.code})',
+            ),
             subtitle: Text(
               getLocalText.s(
                 "%1\$s found · %2\$s valid",

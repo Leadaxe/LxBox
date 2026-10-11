@@ -5609,5 +5609,11 @@
   },
   "UDP blocked — using TCP fallback (443/8443)": {
     "value": "UDP 被封 —— 使用 TCP 回退 (443/8443)"
+  },
+  "Country not determined": {
+    "value": "国家未确定"
+  },
+  "VPN active — geo phase skipped": {
+    "value": "VPN 已连接 — 地理阶段跳过"
   }
 }
