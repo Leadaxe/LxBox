@@ -46,6 +46,7 @@
     <string name="automation_cmd_switch_node">Переключить узел</string>
     <string name="automation_cmd_set_group">Задать группу</string>
     <string name="automation_cmd_urltest_group">URL-тест группы</string>
+    <string name="automation_cmd_urltest_all">URL-тест всех Направлений</string>
     <string name="automation_cmd_refresh_subs">Обновить подписки</string>
     <string name="automation_cmd_rebuild_config">Пересобрать конфиг</string>
     <string name="automation_cmd_reset_network">Сбросить сеть</string>

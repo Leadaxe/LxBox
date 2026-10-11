@@ -37,6 +37,7 @@ class LocaleSettingEditActivity : Activity() {
         Cmd("switch-node", R.string.automation_cmd_switch_node, "tag", Source.NODES),
         Cmd("set-group", R.string.automation_cmd_set_group, "group", Source.GROUPS),
         Cmd("urltest-group", R.string.automation_cmd_urltest_group, "group", Source.GROUPS),
+        Cmd("urltest-all", R.string.automation_cmd_urltest_all, null, Source.NONE),
         Cmd("refresh-subs", R.string.automation_cmd_refresh_subs, null, Source.NONE),
         Cmd("rebuild-config", R.string.automation_cmd_rebuild_config, null, Source.NONE),
         Cmd("reset-network", R.string.automation_cmd_reset_network, null, Source.NONE),

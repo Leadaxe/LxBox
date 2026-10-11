@@ -48,6 +48,7 @@
     <string name="automation_cmd_switch_node">切换节点</string>
     <string name="automation_cmd_set_group">设置分组</string>
     <string name="automation_cmd_urltest_group">延迟测试分组</string>
+    <string name="automation_cmd_urltest_all">延迟测试所有分组</string>
     <string name="automation_cmd_refresh_subs">刷新订阅</string>
     <string name="automation_cmd_rebuild_config">重建配置</string>
     <string name="automation_cmd_reset_network">重置网络</string>

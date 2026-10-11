@@ -189,6 +189,7 @@
                 <action android:name="com.leadaxe.lxbox.REFRESH_SUBS" />
                 <action android:name="com.leadaxe.lxbox.RESET_NETWORK" />
                 <action android:name="com.leadaxe.lxbox.URLTEST_GROUP" />
+                <action android:name="com.leadaxe.lxbox.URLTEST_ALL" />
             </intent-filter>
         </receiver>
 

@@ -44,6 +44,7 @@ class _AutomationTabState extends State<AutomationTab> {
     ('com.leadaxe.lxbox.REFRESH_SUBS', 'extra: force'),
     ('com.leadaxe.lxbox.RESET_NETWORK', ''),
     ('com.leadaxe.lxbox.URLTEST_GROUP', 'extra: group'),
+    ('com.leadaxe.lxbox.URLTEST_ALL', ''),
   ];
 
   bool _loaded = false;

@@ -50,6 +50,7 @@
     <string name="automation_cmd_switch_node">Switch node</string>
     <string name="automation_cmd_set_group">Set group</string>
     <string name="automation_cmd_urltest_group">URL-test group</string>
+    <string name="automation_cmd_urltest_all">URL-test all directions</string>
     <string name="automation_cmd_refresh_subs">Refresh subscriptions</string>
     <string name="automation_cmd_rebuild_config">Rebuild config</string>
     <string name="automation_cmd_reset_network">Reset network</string>
