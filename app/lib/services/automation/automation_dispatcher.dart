@@ -61,6 +61,8 @@ void _dispatch(String name, Map<String, dynamic> args) {
         await handlers.actionResetNetwork(ctx);
       case 'urltest-group':
         await handlers.actionUrltestGroup(_str(args, 'group'), ctx);
+      case 'urltest-all':
+        await handlers.actionUrltestAll(ctx);
       default:
         AppLog.I.warning('[automation] unknown action "$name"');
         return;
