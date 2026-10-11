@@ -47,7 +47,7 @@
   closing the keyboard, and the keyboard's Copy takes the whole multi-line
   selection. The selection menu follows the app language. Block folding is
   gone; instead, up to three lines of the enclosing blocks stay pinned while
-  scrolling the config, the node JSON and the subscription Source. Fields
+  scrolling the node JSON and a JSON subscription Source. Fields
   that take anything highlight WireGuard `.conf` and links as well as JSON.
   The config editor and the add-server wizard no longer open the keyboard on
   their own.
@@ -55,7 +55,7 @@
   закрывает строку с курсором, стрелки Unexpected/Hacker's Keyboard двигают
   курсор, Copy клавиатуры копирует всё выделение; меню выделения на языке
   приложения; вместо свёртки блоков — до трёх закреплённых строк блоков при
-  прокрутке; подсветка `.conf` и ссылок; Config и мастер не открывают
+  прокрутке JSON узла и JSON-Source подписки; подсветка `.conf` и ссылок; Config и мастер не открывают
   клавиатуру сами.)
 
 - **Tailscale Network tab: the exit device is back under Devices
