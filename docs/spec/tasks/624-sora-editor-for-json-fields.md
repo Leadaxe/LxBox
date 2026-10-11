@@ -93,7 +93,8 @@
 ### API виджетов после замены
 
 Все три виджета живут в `app/lib/widgets/lx_code_editor.dart`; `enum
-LxCodeLanguage { json }` остаётся (`null` = без подсветки).
+LxCodeLanguage { json, ini, uri }` (`null` = без подсветки), плюс
+`detectCodeLanguage` — см. «Подсветка по виду текста».
 
 | Параметр | `LxCodeEditor` | `LxTextCodeField` | `LxJsonView` | Судьба |
 |---|---|---|---|---|
@@ -133,9 +134,10 @@ platform view. Заглушка — единственный тестовый п
   (**hybrid composition** — без неё клавиатура в platform view не работает).
 - Зависимость: `implementation(platform("io.github.Rosemoe.sora-editor:bom:0.23.6"))`
   + `editor` + `language-textmate`; версия пинится точно, без диапазонов.
-- Подсветка JSON — TextMate-грамматика `json.tmLanguage.json` (MIT, из
-  microsoft/vscode; лицензия `LICENSE-vscode.txt` и README с источниками в
-  `assets/sora/`). TextMate-реестры sora — глобальные синглтоны: грузятся один
+- Подсветка — TextMate-грамматики в `assets/sora/`: `json.tmLanguage.json`
+  и `ini.tmLanguage.json` (обе MIT, из microsoft/vscode; лицензия
+  `LICENSE-vscode.txt` и README с источниками), `uri.tmLanguage.json` —
+  своя (см. «Подсветка по виду текста»). TextMate-реестры sora — глобальные синглтоны: грузятся один
   раз на процесс (`SoraTextMate.ensure`), общие для всех view на экране.
 - Тема: два файла `lx-light.json` / `lx-dark.json` (формат тем VS Code) дают
   **цвета токенов**; фон, цвет текста, номеров строк, выделения и каретки
@@ -171,7 +173,7 @@ platform view. Заглушка — единственный тестовый п
 
 | Направление | Сообщение | Аргументы | Когда |
 |---|---|---|---|
-| Dart → натив | creation params | `text`, `readOnly`, `dark`, `lineNumbers`, `fontSize`, `wordWrap` (новое), `language` (новое: `"json"` / `null`), `locale` (новое), `colors` (новое: map ключ→ARGB из `ColorScheme`), `autofocus` (новое) | создание view |
+| Dart → натив | creation params | `text`, `readOnly`, `dark`, `lineNumbers`, `fontSize`, `wordWrap` (новое), `language` (новое: `"json"` / `"ini"` / `"uri"` / `null`), `locale` (новое), `colors` (новое: map ключ→ARGB из `ColorScheme`), `autofocus` (новое) | создание view |
 | Dart → натив | `setText {text}` | | внешняя запись в контроллер (Paste, Load from file, подстановка). Натив ставит флаг `applyingFromDart`, чтобы не отразить текст обратно `changed` |
 | Dart → натив | `getText` → `String` | | перед Save / Copy / Share на экране Config (см. «Задержка») |
 | Dart → натив | `setReadOnly {value}`, `setDark {dark}` + `colors` | | смена порога / темы без пересоздания view |
@@ -266,12 +268,62 @@ gutter.
 
 ### Подсветка по виду текста
 
-Язык выбирают экраны, не виджет: Source узла (`node_settings_screen.dart`) и
-Edit server в папке (`folder_detail_screen.dart`) передают `language: json`
-только когда текст начинается с `{` (§615), Source подписки — по
-`_looksLikeJson`. Виджеты это сохраняют: `language: null` → в sora
-`EmptyLanguage` (голый текст без подсветки), смена на лету — `setLanguage`,
-без пересоздания view. Прототип подсвечивал всё как JSON — так не оставлять.
+`LxCodeLanguage` = `json` | `ini` | `uri`; `null` — голый текст
+(`EmptyLanguage` в sora). Смена на лету — `setLanguage`, без пересоздания
+view. Прототип подсвечивал всё как JSON — так не оставлять.
+
+**Язык выбирает экран, не виджет**, но по одной общей функции
+`detectCodeLanguage(String text)` (рядом с виджетами), а не тремя разными
+проверками, как сейчас (`{` в `node_settings_screen.dart` и
+`folder_detail_screen.dart`, `_looksLikeJson` в `subscription_source_tab.dart`).
+Правило по первой непустой строке без ведущих пробелов:
+
+| Первая непустая строка | Язык |
+|---|---|
+| начинается с `{` или `[` и **не** похожа на заголовок секции INI | `json` |
+| `[Interface]`, `[Peer]` или другая `[Имя]` во всю строку, либо `#`/`;`-комментарий, за которым идут строки `Ключ = значение` | `ini` |
+| `схема://…` (схема `[a-zA-Z][a-zA-Z0-9+.-]*`) | `uri` |
+| иное (base64-подписка, YAML и т.п.) | `null` |
+
+`[` неоднозначна: JSON-массив против секции INI. Различаем так: строка
+целиком `[Слово]` (буквы, цифры, `_`, `-`, пробел) — INI; иначе JSON.
+Функция покрывается unit-тестом на таблицу выше плюс пограничные случаи
+(пустой текст, текст из пробелов, `[]`, `[ {`, `[Interface]` с BOM).
+
+Где применяется:
+
+| Место | Сейчас | После |
+|---|---|---|
+| Source узла (`node_settings_screen.dart`) | `{` → json, иначе без подсветки | `detectCodeLanguage` на каждую правку |
+| Edit server в папке (`folder_detail_screen.dart`) | `{` → json | `detectCodeLanguage` |
+| Source подписки (`subscription_source_tab.dart`) | `_looksLikeJson` | `detectCodeLanguage`; список ссылок построчно — `uri` |
+| Поле URI мастера (`add_server_wizard_screen.dart`) | без подсветки | `detectCodeLanguage` (туда вставляют и ссылку, и `.conf`, и JSON) |
+| Остальные поля | `json` | `json`, как было |
+
+**INI** — грамматика VS Code `ini.tmLanguage.json`: заголовок секции, ключ,
+`=`, значение, комментарии `#` и `;`. Значения не разбираются (ключи,
+адреса, списки через запятую — одним цветом значения).
+
+**URI** — своя маленькая грамматика `uri.tmLanguage.json` (одна ссылка на
+строку, строк может быть много — список подписки):
+
+| Часть | Пример | Scope (цвет темы) |
+|---|---|---|
+| схема с `://` | `vless://` | `keyword` |
+| userinfo до `@` | `uuid@`, `user:pass@` | `string` |
+| хост | `example.com`, `[2001:db8::1]` | `entity.name` |
+| `:порт` | `:443` | `constant.numeric` |
+| путь | `/path` | обычный текст |
+| `?` `&` `=` | | `punctuation` |
+| имя параметра | `security`, `sni` | `variable` / `support` (как ключ в JSON) |
+| значение параметра | `reality`, `%2F` | `string` |
+| `#имя` | `#Node%20name` | `comment` |
+
+Грамматика не валидирует: кривую ссылку красит тем, что совпало, и не
+падает. Строки без `://` внутри URI-текста (пустые, комментарии) — обычный
+текст. Цвета берутся из тех же `lx-light/lx-dark.json`, отдельной темы не
+нужно; scope'ы выбрать из уже покрытых темой, при нехватке — добавить токен
+в обе темы.
 
 ### Порог только-чтения
 
@@ -288,9 +340,11 @@ Edit server в папке (`folder_detail_screen.dart`) передают `langua
 | `app/android/app/src/main/kotlin/com/leadaxe/lxbox/editor/SoraEditorPlatformView.kt` | нативный view + канал (из прототипа, плюс `setLanguage`, `wordWrap`, `colors`, `locale`, `autofocus`, `textOffsetX`, сброс задержки в `dispose`) |
 | `app/android/app/src/main/kotlin/com/leadaxe/lxbox/MainActivity.kt` | регистрация фабрики |
 | `app/android/app/build.gradle.kts`, `app/android/app/proguard-sora.pro` | зависимость, R8 |
-| `app/android/app/src/main/assets/sora/` | грамматика, темы токенов, `LICENSE-vscode.txt`, README с источниками |
+| `app/android/app/src/main/assets/sora/` | грамматики JSON, INI (VS Code) и URI (своя), темы токенов, `LICENSE-vscode.txt`, README с источниками |
 | `app/lib/screens/config_screen.dart`, `add_server_wizard_screen.dart` | `CodeLineEditingController` → `TextEditingController`; в Config — `flush()` перед Save / Copy / Share |
-| остальные 9 экранов из таблицы «Места использования» | без правок, если сигнатуры сохранены |
+| `node_settings_screen.dart`, `folder_detail_screen.dart`, `subscription_source_tab.dart`, поле URI в `add_server_wizard_screen.dart` | своя проверка языка → `detectCodeLanguage` |
+| остальные экраны из таблицы «Места использования» | без правок, если сигнатуры сохранены |
+| `app/test/widgets/detect_code_language_test.dart` (новый) | таблица правил и пограничные случаи |
 | `app/pubspec.yaml` | − `re_editor`, − `re_highlight` (других пользователей нет) |
 | `app/test/widgets/lx_code_editor_find_fold_test.dart` | тесты свёртки и re_editor-поиска удаляются; тест «LxTextCodeField: синхронизация с TextEditingController» переписывается на заглушку |
 | `app/test/widgets/lx_code_editor_readonly_menu_test.dart`, `lx_code_editor_toolbar_test.dart` | удаляются целиком (меню — нативное) |
@@ -338,7 +392,7 @@ Edit server в папке (`folder_detail_screen.dart`) передают `langua
 - **Утечки.** `editor.release()` в `dispose()` обязателен (sora держит
   потоки анализа и `Handler`); проверить `dumpsys meminfo` после 10 входов и
   выходов из настроек узла — число `View`/`Activity`-утечек не растёт.
-- **Не покрыто:** автодополнение, подсветка URI/INI, подъём порога 1 МБ,
+- **Не покрыто:** автодополнение, подсветка YAML/base64-подписок, подъём порога 1 МБ,
   поиск с заменой.
 
 ## Проверка
@@ -364,8 +418,9 @@ Edit server в папке (`folder_detail_screen.dart`) передают `langua
 5. Config ~1 МБ: открытие, прокрутка, ввод, правка и сразу Back — после
    возврата правка на месте.
 6. Настройки узла: Source + JSON на одной странице, прокрутка по полю,
-   клиппинг под AppBar/TabBar; вставить URI в Source — подсветка выключилась,
-   вставить `{` — включилась.
+   клиппинг под AppBar/TabBar; вставить в Source по очереди ссылку `vless://`,
+   WireGuard `.conf` и JSON — подсветка переключается URI → INI → JSON на
+   лету; Source подписки со списком ссылок — каждая строка подсвечена как URI.
 7. Шторка DNS-правила с клавиатурой.
 8. Растущее поле (правило маршрута): 40+ Enter; пустое поле показывает hint с
    отступом под номера строк.
