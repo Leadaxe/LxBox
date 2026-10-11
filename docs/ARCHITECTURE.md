@@ -975,6 +975,8 @@ wifi_entry.dart · wifi_manual_add_dialog.dart · wifi_permission_dialog.dart ·
 ```
 MainActivity.kt              # a FlutterActivity: it registers VpnPlugin; the /utils and /wifi_history channels
                              #   VPN-consent flow; QS-tile/shortcut quick actions
+editor/SoraEditorPlatformView.kt # §624 — the native code editor (sora-editor) as a platform view behind
+                             #   every JSON field; the factory is registered in MainActivity; see “Native code editor”
 vpn/VpnPlugin.kt             # the Flutter plugin (1084 lines, see the Overview): the MethodCallHandler for every /method;
                              #   the status and coreLog EventChannel sinks; the §122 cc methods (ccConnectScreen/
                              #   ccUrlTestOutbound/ccGetGroups/…) + lxbox/cc/* EventChannel sinks;
@@ -1647,6 +1649,48 @@ The three Flutter–Android channels live in `VpnPlugin.kt`:
 **The `coreLog` EventChannel** carries the sing-box log lines, one line per event. The filter skips TRACE and DEBUG.
 
 ---
+
+### Native code editor (sora-editor, §624)
+
+Every JSON field of the app (`LxCodeEditor`, `LxTextCodeField`, `LxJsonView` in
+[`lx_code_editor.dart`](../app/lib/widgets/lx_code_editor.dart)) is a native
+`io.github.rosemoe.sora.widget.CodeEditor` (sora-editor 0.23.6, LGPL-2.1, Maven
+Central) shown through a platform view in **hybrid composition**
+(`initExpensiveAndroidView`; without it the keyboard does not work in the view).
+It replaced `re_editor`, which gave the IME only the cursor line: custom
+keyboards' arrows closed the keyboard, the keyboard's Copy took one line, the
+cursor line stayed under the keyboard. The native view has a full
+`InputConnection` like `EditText` and still lays out only the visible lines
+(§333: configs of hundreds of KB).
+
+| Side | What |
+|---|---|
+| Kotlin | [`SoraEditorPlatformView.kt`](../app/android/app/src/main/kotlin/com/leadaxe/lxbox/editor/SoraEditorPlatformView.kt): view type `lxbox/sora_editor`, a `MethodChannel` per view `com.leadaxe.lxbox/sora_editor_<id>` |
+| Assets | `app/android/app/src/main/assets/sora/`: TextMate grammars JSON, INI (VS Code, MIT) and URI (own), token themes `lx-light/lx-dark.json`; TextMate registries are process singletons |
+| R8 | [`proguard-sora.pro`](../app/android/app/proguard-sora.pro): keep for jcodings/joni/tm4e/sora — the TextMate engine loads classes by name |
+| Not Android | `flutter test` and desktop draw a `TextField` stub with the same layout (gate `Platform.isAndroid`, not `defaultTargetPlatform`) |
+
+Channel: Dart → native `setText`, `getText`, `setReadOnly`, `setDark` (+ the
+`ColorScheme` colors), `setLanguage`, `search*`; native → Dart `changed`
+{text?, lines, rowHeight, textOffsetX}, `cursor` {y, rowHeight, focused},
+`searchResult`, `disposed`. Creation params also carry `wordWrap`, `language`,
+`locale` (the app language — the native selection menu takes its strings from
+the view context), `autofocus`, `stickyHeaders`.
+
+The text's source of truth is the Dart `TextEditingController`: a recreated view
+(leaving a tab, theme change) gets the current text in the creation params. Text
+over 256 KB reaches Dart 300 ms after the last edit; the delayed text is flushed
+on focus loss, on `getText` and in the native `dispose` (before the channel is
+removed — the channel holder outlives the `State` for that final `changed`). The
+Config screen calls `LxCodeEditorState.flush()` before Save / Copy / Share.
+
+Layout: the field color, text, line numbers, selection and caret come from the
+app `ColorScheme` (the background — the nearest `Material` surface, so the field
+blends with a screen, a sheet or a dialog); the token colors — from the themes.
+The highlight language is picked by the screen through `detectCodeLanguage`
+(JSON / INI / URI / none). A field that fits its text gives vertical swipes to
+the page; otherwise the editor takes them. The caret line is kept above the
+keyboard: the native side reports `cursor`, Dart calls `showOnScreen`.
 
 ### Permissions (Manifest + runtime)
 

@@ -86,6 +86,12 @@ not show the Servers screen (personal subscriptions); use servers from
 
 Both core patches are one `sed` over `cmd/internal/build_libbox/main.go`.
 
+Maven dependencies need nothing in the recipe: the native code editor
+(`io.github.Rosemoe.sora-editor` 0.23.6, LGPL-2.1, with tm4e / joni / jcodings)
+comes from Maven Central as pure JVM artifacts — no prebuilt `.so`, no JitPack —
+and `dependenciesInfo.includeInApk = false` is already set (§624). To be
+confirmed by the next buildserver run.
+
 ### Buildserver
 
 1. `make.bash` needs a bootstrap Go: `apt-get install golang-go` and `GOROOT_BOOTSTRAP`.

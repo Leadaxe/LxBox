@@ -38,6 +38,26 @@
 
 ### Fixed
 
+- **JSON fields type like a regular text field
+  ([task 624](docs/spec/tasks/624-sora-editor-for-json-fields.md)).**
+  The config editor and every JSON field (node Source and JSON, rules, DNS,
+  the add-server wizard, subscription Source) now use a native Android
+  editor. The keyboard no longer covers the line with the cursor, the arrows
+  of Unexpected Keyboard and Hacker's Keyboard move the cursor instead of
+  closing the keyboard, and the keyboard's Copy takes the whole multi-line
+  selection. The selection menu follows the app language. Block folding is
+  gone; instead, up to three lines of the enclosing blocks stay pinned while
+  scrolling the config, the node JSON and the subscription Source. Fields
+  that take anything highlight WireGuard `.conf` and links as well as JSON.
+  The config editor and the add-server wizard no longer open the keyboard on
+  their own.
+  (RU: Конфиг и все JSON-поля — на нативном редакторе Android: клавиатура не
+  закрывает строку с курсором, стрелки Unexpected/Hacker's Keyboard двигают
+  курсор, Copy клавиатуры копирует всё выделение; меню выделения на языке
+  приложения; вместо свёртки блоков — до трёх закреплённых строк блоков при
+  прокрутке; подсветка `.conf` и ссылок; Config и мастер не открывают
+  клавиатуру сами.)
+
 - **Tailscale Network tab: the exit device is back under Devices
   ([task 613](docs/spec/tasks/613-wg-peers-tailscale-path-health.md)).**
   In v2.25.11 the chosen exit node was shown only in the Exit node block, which

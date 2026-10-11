@@ -56,11 +56,20 @@ snackbars and errors on screen.
   ([config-pin.md](config-pin.md)).
 - **Tunnel up.** Saving does not restart the core; if the config differs from
   the running one — the "config changed" flag.
-- **Selection menu** (shared by all JSON fields of the app): long tap — Cut /
+- **Input works like a regular system text field** (shared by all JSON fields
+  of the app): the keyboard sees the whole text, its arrows move the cursor,
+  its Copy copies the whole selection; the cursor line stays above the
+  keyboard.
+- **Selection menu** — the editor's native menu in the app language: Cut /
   Copy / Paste / Select all over the live selection (a read-only field offers
-  only Copy / Select all, §607); the action, then the menu is removed. There is one menu; it is removed by a tap on empty space
-  (the selection collapses), a scroll, or leaving the screen; a screen redraw
-  does not spawn copies.
+  only Copy / Select all, §607).
+- **Find** — the icon in the field corner opens a panel: query, match count,
+  previous / next; an empty query clears the match highlight.
+- **Sticky headers.** While scrolling, up to three lines of the enclosing
+  blocks stay pinned at the top (`"outbounds": [` → `{` → …). There is no
+  block folding.
+- **Highlighting** of JSON; in fields that take anything — by the look of the
+  text: JSON, WireGuard INI, links (`scheme://…`) or none.
 - A file picking error or a missing file manager — a clear text, not a
   technical exception.
 
@@ -85,3 +94,4 @@ snackbars and errors on screen.
 | 8 | [521](../../../tasks/521-editor-menu-hide-and-single-overlay.md) | Released in v2.25.3 | One menu, explicit removal triggers |
 | 9 | [554F](../../../tasks/554F-schema-driven-node-editor/spec.md) | Idea; only highlighting done | JSON syntax highlighting |
 | 10 | [607](../../../tasks/607-l10n-backup-shell-bugs-from-591.md) | Done | A read-only field's selection menu has no Cut / Paste |
+| 11 | [624](../../../tasks/624-sora-editor-for-json-fields.md) | Implemented | Native editor: input and keyboard like a system field, sticky headers instead of folding, JSON / INI / URI highlighting |

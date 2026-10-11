@@ -17,7 +17,9 @@ detour chain.
 Shows a piece of the final config where it is needed: the JSON tab on the node
 details screen (with copying of the node and its detour chain) and the View
 tab of the custom rule editor (how the rule will land in the config). The view
-is read-only, with highlighting and the same selection menu as the editor.
+is read-only, with highlighting and the same selection menu as the editor; in
+the node JSON up to three lines of the enclosing blocks stay pinned while
+scrolling.
 
 ## Parameters
 
@@ -68,3 +70,4 @@ data for the tag".
 | 3 | [258](../../../tasks/258-outbound-view-tabs-runtime-chain.md) | done | Node screen with Overview and JSON tabs |
 | 4 | [311](../../../tasks/311-running-config-from-kernel.md) | implemented | Node JSON from a snapshot of the running core; the editor — from the file |
 | 5 | [554F](../../../tasks/554F-schema-driven-node-editor/spec.md) | Idea; only highlighting done | Highlighted JSON view instead of plain text |
+| 6 | [624](../../../tasks/624-sora-editor-for-json-fields.md) | Implemented | Native viewer, sticky headers in the node JSON |
