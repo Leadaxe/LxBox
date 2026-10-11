@@ -17,6 +17,7 @@ import '../services/parser/body_decoder.dart';
 import '../services/probe/probe_controller.dart';
 import '../services/probe/probe_runner.dart';
 import '../services/settings_storage.dart';
+import '../services/ui_helpers.dart';
 import '../services/subscription/sources.dart';
 import '../services/subscription/subscription_identity.dart'; // §289 — generateUuidV4
 import '../widgets/detour_target_picker.dart';
@@ -705,12 +706,39 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
     setState(() => _editing = !_editing);
   }
 
+  /// §626 — Back (системный, жест, стрелка AppBar) при открытом
+  /// переименовании с изменённым именем: общий диалог Discard / Keep / Save
+  /// (§219). Остальные правки экрана пишутся сразу.
+  Future<void> _handleBack() async {
+    final dirty =
+        _editing && _nameCtrl.text.trim() != widget.entry.name.trim();
+    if (!dirty) {
+      Navigator.pop(context);
+      return;
+    }
+    final action = await showUnsavedChangesDialog(context); // §219
+    if (!mounted) return;
+    if (action == 'save') {
+      _toggleEdit();
+      Navigator.pop(context);
+    } else if (action == 'discard') {
+      Navigator.pop(context);
+    }
+    // 'keep' / null (dismiss) — остаёмся.
+  }
+
   @override
   Widget build(BuildContext context) {
     final entry = widget.entry;
     final theme = Theme.of(context);
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        unawaited(_handleBack());
+      },
+      child: Scaffold(
       appBar: AppBar(
         title: _editing
             ? TextField(
@@ -807,6 +835,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
             controller: widget.controller,
           ),
         ],
+      ),
       ),
     );
   }

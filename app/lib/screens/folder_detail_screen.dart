@@ -34,6 +34,7 @@ import 'subscriptions_screen/entry_warnings.dart';
 import '../widgets/reorder_grab_strip.dart';
 import '../services/l10n/locale_controller.dart';
 import '../services/file_import.dart';
+import '../services/ui_helpers.dart';
 import '../widgets/app_bottom_sheet.dart';
 
 /// §234 — экран папки серверов. Зеркалит SubscriptionDetailScreen: вкладка
@@ -665,6 +666,27 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     setState(() => _editing = !_editing);
   }
 
+  /// §626 — Back (системный, жест, стрелка AppBar) при открытом
+  /// переименовании с изменённым именем: общий диалог Discard / Keep / Save
+  /// (§219). Остальные правки экрана пишутся сразу.
+  Future<void> _handleBack() async {
+    final dirty =
+        _editing && _nameCtrl.text.trim() != widget.entry.name.trim();
+    if (!dirty) {
+      Navigator.pop(context);
+      return;
+    }
+    final action = await showUnsavedChangesDialog(context); // §219
+    if (!mounted) return;
+    if (action == 'save') {
+      _toggleEdit();
+      Navigator.pop(context);
+    } else if (action == 'discard') {
+      Navigator.pop(context);
+    }
+    // 'keep' / null (dismiss) — остаёмся.
+  }
+
   Future<void> _delete() async {
     // Три исхода: cancel / вынести серверы одиночными / удалить всё.
     final choice =
@@ -922,7 +944,25 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     final ctl = TextEditingController(text: member.raw);
     final newRaw = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      // §626 — Back и тап по фону с правкой спрашивают общий диалог
+      // Unsaved changes (§219); Save — тот же путь, что кнопка Save.
+      builder: (ctx) => PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, _) async {
+          if (didPop) return;
+          if (ctl.text == member.raw) {
+            Navigator.pop(ctx);
+            return;
+          }
+          final action = await showUnsavedChangesDialog(ctx);
+          if (!ctx.mounted) return;
+          if (action == 'save') {
+            Navigator.pop(ctx, ctl.text);
+          } else if (action == 'discard') {
+            Navigator.pop(ctx);
+          }
+        },
+        child: AlertDialog(
         title: Text(getLocalText.s("Edit server")),
         // §615 — редактор с подсветкой, как Source узла (§614): язык по
         // виду текста на лету (§624: JSON / INI / ссылка). Ширина
@@ -951,6 +991,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
             child: Text(getLocalText.s("Save")),
           ),
         ],
+      ),
       ),
     );
     // §624 — `ctl` не освобождаем: `showDialog` возвращается в начале
@@ -1092,7 +1133,13 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return AnimatedBuilder(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        unawaited(_handleBack());
+      },
+      child: AnimatedBuilder(
       animation: widget.entry,
       builder: (context, _) => Scaffold(
         appBar: AppBar(
@@ -1172,6 +1219,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
             _buildSettingsTab(theme),
           ],
         ),
+      ),
       ),
     );
   }
