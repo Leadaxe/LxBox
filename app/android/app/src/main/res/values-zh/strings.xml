@@ -58,4 +58,6 @@
     <string name="automation_value_label">值（%1$s）：</string>
     <string name="automation_value_plain">值：</string>
     <string name="automation_save">保存</string>
+    <string name="sora_editor_long_select">长选择</string>
+    <string name="sora_editor_clip_text_length_too_large">文本过大，无法复制</string>
 </resources>

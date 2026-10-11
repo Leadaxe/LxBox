@@ -60,4 +60,8 @@
     <string name="automation_value_label">Value (%1$s):</string>
     <string name="automation_value_plain">Value:</string>
     <string name="automation_save">Save</string>
+    <!-- §624 — строки sora-editor, перекрыты здесь, чтобы у переводов был
+         en-ключ; текст тот же, что в библиотеке. -->
+    <string name="sora_editor_long_select">Long Select</string>
+    <string name="sora_editor_clip_text_length_too_large">Text is too large to copy</string>
 </resources>
