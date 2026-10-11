@@ -42,24 +42,17 @@ class _InlineBodyEditor extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.fromLTRB(
           12, 12, 12, MediaQuery.of(context).padding.bottom + 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            c.isNew ? getLocalText.s("sing-box server JSON — tag editable here or in Params; description/enabled live on the list entry") : getLocalText.s("sing-box server JSON — tag locked while editing; description/enabled live on the list entry"),
-            style: theme.textTheme.labelSmall
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-          ),
-          const SizedBox(height: 6),
-          // §614 — редактор JSON с подсветкой, свёрткой и поиском.
-          Expanded(
-            child: LxTextCodeField(
-              controller: c.bodyCtrl,
-              errorText: c.jsonError,
-              onChanged: c.onBodyTextChanged,
-            ),
-          ),
-        ],
+      // §614/§624 — редактор JSON с подсветкой и поиском; подпись — слева
+      // в строке кнопок поля (поиск, Format).
+      child: LxTextCodeField(
+        controller: c.bodyCtrl,
+        errorText: c.jsonError,
+        onChanged: c.onBodyTextChanged,
+        header: Text(
+          c.isNew ? getLocalText.s("sing-box server JSON — tag editable here or in Params; description/enabled live on the list entry") : getLocalText.s("sing-box server JSON — tag locked while editing; description/enabled live on the list entry"),
+          style: theme.textTheme.labelSmall
+              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+        ),
       ),
     );
   }

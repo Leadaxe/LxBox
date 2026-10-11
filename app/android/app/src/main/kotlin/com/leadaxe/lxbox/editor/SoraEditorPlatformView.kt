@@ -47,7 +47,8 @@ import java.util.Locale
 ///
 /// Протокол канала `com.leadaxe.lxbox/sora_editor_<id>`:
 ///  Dart → натив: setText, getText, setReadOnly, setDark (+colors),
-///  setLanguage, search / searchNext / searchPrevious.
+///  setLanguage, search / searchNext / searchPrevious, replaceAll (Format:
+///  замена всего текста правкой — в undo, с `changed`).
 ///  Натив → Dart: `changed` {text?, lines, rowHeight, textOffsetX} на каждую
 ///  правку (текст ≤ [SYNC_LIMIT] — сразу, длиннее — с задержкой
 ///  [SYNC_DEBOUNCE_MS], в промежуточных событиях без текста); `cursor`
@@ -138,9 +139,19 @@ private fun localized(context: Context, tag: String?): Context {
 ///  - [suppressFocus]: переход поиска (`gotoNext`) зовёт `setSelectionRegion`,
 ///    а тот — `requestFocus()`; фокус и клавиатура уходили из поля запроса
 ///    панели поиска в редактор, следующая буква ложилась в текст;
-///  - DPAD_CENTER (пульт ТВ) открывает клавиатуру.
+///  - DPAD_CENTER (пульт ТВ) открывает клавиатуру;
+///  - [onLayoutReady]: раскладка строк с переносом (`WordwrapLayout`)
+///    считается в фоне и заканчивается `setLayoutBusy(false)` на главном
+///    потоке — только после этого `layout.rowCount` верен (смена текста,
+///    ширины, шрифта, переноса).
 private class LxSoraEditor(context: Context) : CodeEditor(context) {
     var suppressFocus = false
+    var onLayoutReady: (() -> Unit)? = null
+
+    override fun setLayoutBusy(busy: Boolean) {
+        super.setLayoutBusy(busy)
+        if (!busy) onLayoutReady?.invoke()
+    }
 
     override fun requestFocus(direction: Int, previouslyFocusedRect: Rect?): Boolean =
         if (suppressFocus) false else super.requestFocus(direction, previouslyFocusedRect)
@@ -176,6 +187,10 @@ class SoraEditorPlatformView(
     /// Свои цвета ставим мы — события об этом не наши.
     private var applyingColors = false
     private var colorsPosted = false
+    /// Format заменяет текст: промежуточные события (удаление, вставка) не шлём.
+    private var replacing = false
+    /// Последнее отправленное число экранных строк.
+    private var sentRows = -1
 
     init {
         val t0 = System.nanoTime()
@@ -190,7 +205,11 @@ class SoraEditorPlatformView(
         // Flutter-текст с textScaler по умолчанию.
         editor.setTextSizePx(((args?.get("fontSize") as? Number)?.toFloat() ?: 12f) * density)
         editor.isLineNumberEnabled = args?.get("lineNumbers") as? Boolean ?: true
-        editor.isWordwrap = args?.get("wordWrap") as? Boolean ?: true
+        val wordWrap = args?.get("wordWrap") as? Boolean ?: true
+        editor.isWordwrap = wordWrap
+        // С переносом логическая строка бывает на весь экран (компактный
+        // JSON) — подсветка текущей строки заливала всё поле.
+        editor.isHighlightCurrentLine = !wordWrap
         editor.setScalable(false)
         // Линии блоков (направляющие от `{` до `}`) — выключены (владелец).
         editor.isBlockLineEnabled = false
@@ -236,8 +255,11 @@ class SoraEditorPlatformView(
                 }
             }
         }
+        // Растущее поле: высоту в Dart задаёт число экранных строк, а с
+        // переносом оно известно только после фоновой раскладки.
+        editor.onLayoutReady = { editor.post { sendChanged(withText = false) } }
         editor.subscribeAlways(ContentChangeEvent::class.java) {
-            if (applyingFromDart) return@subscribeAlways
+            if (applyingFromDart || replacing) return@subscribeAlways
             if (editor.text.length <= SYNC_LIMIT) {
                 main.removeCallbacks(flushChanged)
                 pending = false
@@ -248,6 +270,8 @@ class SoraEditorPlatformView(
                 main.removeCallbacks(flushChanged)
                 main.postDelayed(flushChanged, SYNC_DEBOUNCE_MS)
             }
+            // Перенос пересчитан после события — число строк догоняем.
+            editor.post { if (!editor.isReleased && rows() != sentRows) sendChanged(withText = false) }
         }
         editor.subscribeAlways(SelectionChangeEvent::class.java) {
             sendCursor()
@@ -377,7 +401,9 @@ class SoraEditorPlatformView(
         if (editor.isReleased) return
         val args = HashMap<String, Any>()
         if (withText) args["text"] = editor.text.toString()
-        args["lines"] = rows()
+        val n = rows()
+        sentRows = n
+        args["lines"] = n
         args["rowHeight"] = editor.rowHeight
         args["textOffsetX"] = editor.measureTextRegionOffset().toDouble()
         channel.invokeMethod("changed", args)
@@ -443,6 +469,22 @@ class SoraEditorPlatformView(
                 val text = call.argument<String>("text") ?: ""
                 setTextFromDart(text)
                 Log.d(TAG, "setText ${text.length} chars in ${(System.nanoTime() - t0) / 1_000_000} ms")
+                result.success(null)
+            }
+            "replaceAll" -> {
+                val text = call.argument<String>("text") ?: ""
+                main.removeCallbacks(flushChanged)
+                pending = false
+                replacing = true
+                try {
+                    val content = editor.text
+                    content.replace(0, content.length, text)
+                } finally {
+                    replacing = false
+                }
+                editor.setSelection(0, 0)
+                sendChanged(withText = true)
+                editor.post { sendChanged(withText = false) }
                 result.success(null)
             }
             "getText" -> {

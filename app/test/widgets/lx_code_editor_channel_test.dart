@@ -157,4 +157,25 @@ void main() {
     expect(c.text, 'after');
     await fromNative(tester, 'disposed');
   });
+
+  testWidgets('Format с нативом: replaceAll (правка в undo), текст — из '
+      'ответного changed', (tester) async {
+    final c = TextEditingController(text: '{"a":1}');
+    addTearDown(c.dispose);
+    final changes = <String>[];
+    await tester.pumpWidget(field(c, changes: changes));
+    await attach(tester);
+    nativeText = '{"a":1}';
+
+    await tester.tap(find.byKey(const ValueKey('lx-code-editor-format')));
+    await tester.pumpAndSettle();
+    final replace = calls.where((e) => e.method == 'replaceAll').single;
+    expect((replace.arguments as Map)['text'], '{\n  "a": 1\n}');
+    expect(c.text, '{"a":1}', reason: 'контроллер ждёт changed натива');
+
+    await fromNative(tester, 'changed',
+        {'text': '{\n  "a": 1\n}', 'lines': 3, 'rowHeight': 48, 'textOffsetX': 0});
+    expect(c.text, '{\n  "a": 1\n}');
+    expect(changes, ['{\n  "a": 1\n}']);
+  });
 }

@@ -725,6 +725,7 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
               fontSize: 13,
               hint: '{"type": "vless", "tag": "…", …}',
               language: LxCodeLanguage.json,
+              format: true,
             ),
           ),
           const SizedBox(height: 8),

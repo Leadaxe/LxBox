@@ -740,17 +740,10 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
         _sectionHeader(getLocalText.s("Source"),
             getLocalText.s("The node's original text. Save writes it as is."), theme),
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-          child: Text(
-            kindNote,
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
           // §614/§624 — редактор с подсветкой: язык по виду источника на
           // лету (вставили ссылку, `.conf` или JSON — подсветка сменилась).
+          // Подпись — слева в строке кнопок поля (поиск, Format).
           child: ListenableBuilder(
             listenable: _sourceCtrl,
             builder: (context, _) => LxTextCodeField(
@@ -758,6 +751,11 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
               controller: _sourceCtrl,
               minLines: 12,
               language: detectCodeLanguage(_sourceCtrl.text),
+              header: Text(
+                kindNote,
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              ),
             ),
           ),
         ),
@@ -776,24 +774,22 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
             getLocalText.s("What the core receives. Read-only: edit the source instead."), theme),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Stack(
-            children: [
-              LxJsonView(
-                  text: _jsonCtrl.text, height: 420, stickyHeaders: true),
-              Positioned(
-                top: 4,
-                right: 4,
-                child: IconButton(
-                  icon: const Icon(Icons.copy, size: 16),
-                  tooltip: getLocalText.s("Copy JSON"),
-                  visualDensity: VisualDensity.compact,
-                  onPressed: () {
-                    Clipboard.setData(ClipboardData(text: _jsonCtrl.text));
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(getLocalText.s("JSON copied"))),
-                    );
-                  },
-                ),
+          // §624 — Copy в строке кнопок над рамкой, не поверх текста.
+          child: LxJsonView(
+            text: _jsonCtrl.text,
+            height: 420,
+            stickyHeaders: true,
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.copy, size: 16),
+                tooltip: getLocalText.s("Copy JSON"),
+                visualDensity: VisualDensity.compact,
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: _jsonCtrl.text));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(getLocalText.s("JSON copied"))),
+                  );
+                },
               ),
             ],
           ),

@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
+import '../config/config_parse.dart';
 import '../services/l10n/locale_controller.dart';
 
 /// §624 — JSON-поля приложения на нативном редакторе sora-editor (Android
@@ -82,11 +83,6 @@ bool get _nativeEditor => !kIsWeb && Platform.isAndroid;
 const _viewType = 'lxbox/sora_editor';
 const double _pad = 6;
 
-/// Отступ текста сверху под кнопки поля (поиск, свои действия): компактная
-/// `IconButton` 40 + отступ 2 от края минус внутренний отступ поля — иначе
-/// кнопки наезжают на первую строку.
-const double _buttonsInset = 40 + 2 - (_pad + 1);
-
 /// Как поле занимает место по вертикали.
 enum _Fit {
   /// Заполняет ограниченного родителя (`Expanded`, экран Config).
@@ -115,6 +111,8 @@ class LxCodeEditor extends StatefulWidget {
     this.find,
     this.stickyHeaders = false,
     this.actions = const [],
+    this.header,
+    this.format = false,
   })  : _fit = _Fit.fill,
         _height = null,
         _minLines = null,
@@ -136,13 +134,15 @@ class LxCodeEditor extends StatefulWidget {
     this.autofocus = false,
     this.stickyHeaders = false,
     this.wordWrap = true,
+    this.actions = const [],
+    this.header,
+    this.format = false,
   })  : find = null,
         _fit = fit,
         _height = height,
         _minLines = minLines,
         _maxLines = maxLines,
-        _onEdited = onEdited,
-        actions = const [];
+        _onEdited = onEdited;
 
   /// Текст поля. Запись из кода (Paste, Load from file) уходит в натив,
   /// правка в поле — сюда.
@@ -174,9 +174,18 @@ class LxCodeEditor extends StatefulWidget {
   /// пусто): при [wordWrap] параметр ни на что не влияет.
   final bool stickyHeaders;
 
-  /// Свои кнопки поля (Copy конфига) в правом верхнем углу рядом с поиском;
-  /// на время панели поиска прячутся.
+  /// Свои кнопки поля (Copy конфига) — в строке кнопок над рамкой, справа,
+  /// рядом с поиском; на время панели поиска прячутся.
   final List<Widget> actions;
+
+  /// Подпись слева в строке кнопок над рамкой (Source узла: «sing-box JSON:
+  /// sent to the core as is…»): переносится в ширине, оставшейся от кнопок.
+  final Widget? header;
+
+  /// Кнопка Format в строке кнопок: видна, когда поле редактируемое и текст
+  /// — JSON ([detectCodeLanguage]). Разбор JSON5, отступ 2 пробела; правка
+  /// обычная — в undo и в `onChanged`.
+  final bool format;
 
   final _Fit _fit;
   final double? _height;
@@ -261,7 +270,20 @@ class LxCodeEditorState extends State<LxCodeEditor>
   int _matchIndex = -1;
   int _matchCount = 0;
 
+  /// Кнопка Format видна (см. [LxCodeEditor.format]).
+  bool _canFormat = false;
+
   MethodChannel? get _channel => _link?.channel;
+
+  bool _computeCanFormat() =>
+      widget.format &&
+      !widget.readOnly &&
+      detectCodeLanguage(widget.controller.text) == LxCodeLanguage.json;
+
+  void _refreshFormat() {
+    final v = _computeCanFormat();
+    if (v != _canFormat && mounted) setState(() => _canFormat = v);
+  }
 
   @override
   void initState() {
@@ -269,6 +291,7 @@ class LxCodeEditorState extends State<LxCodeEditor>
     WidgetsBinding.instance.addObserver(this);
     _nativeText = widget.controller.text;
     _rows = _countLines(_nativeText);
+    _canFormat = _computeCanFormat();
     widget.controller.addListener(_onController);
   }
 
@@ -303,6 +326,7 @@ class LxCodeEditorState extends State<LxCodeEditor>
     if (oldWidget.language != widget.language) {
       unawaited(_invoke('setLanguage', {'language': widget.language?.name}));
     }
+    _canFormat = _computeCanFormat();
   }
 
   @override
@@ -349,6 +373,7 @@ class LxCodeEditorState extends State<LxCodeEditor>
   /// Запись в контроллер из кода → натив.
   void _onController() {
     if (_syncing) return;
+    _refreshFormat();
     final t = widget.controller.text;
     if (t == _nativeText) return;
     _nativeText = t;
@@ -373,7 +398,67 @@ class LxCodeEditorState extends State<LxCodeEditor>
     } finally {
       _syncing = false;
     }
+    _refreshFormat();
     widget._onEdited?.call(text);
+  }
+
+  /// Format: JSON5 → JSON с отступом 2 пробела (как Config при открытии).
+  /// Правка обычная: натив кладёт её в undo и шлёт `changed`, экран видит
+  /// несохранённые правки. Битый текст — снек, текст не меняется;
+  /// комментарии теряются — сперва диалог.
+  Future<void> _format() async {
+    await flush();
+    if (!mounted) return;
+    final text = widget.controller.text;
+    final String formatted;
+    try {
+      formatted = formatJson5(text);
+    } on FormatException catch (e) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(
+        content: Text(getLocalText.s("Failed to parse JSON: %s", e.message)),
+      ));
+      return;
+    }
+    if (formatted == text) return;
+    if (hasJson5Comments(text)) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(getLocalText.s("Comments will be removed")),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(getLocalText.s("Cancel")),
+            ),
+            FilledButton(
+              key: const ValueKey('lx-code-editor-format-confirm'),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(getLocalText.s("Format")),
+            ),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+    }
+    if (_channel != null) {
+      // Натив заменяет текст правкой (undo) и присылает `changed`.
+      await _invoke('replaceAll', {'text': formatted});
+      return;
+    }
+    _nativeText = formatted;
+    _syncing = true;
+    try {
+      widget.controller.value = TextEditingValue(
+        text: formatted,
+        selection: const TextSelection.collapsed(offset: 0),
+      );
+    } finally {
+      _syncing = false;
+    }
+    final n = _countLines(formatted);
+    if (n != _rows) setState(() => _rows = n);
+    _refreshFormat();
+    widget._onEdited?.call(formatted);
   }
 
   Future<Object?> _onNativeCall(MethodCall call) async {
@@ -511,8 +596,6 @@ class LxCodeEditorState extends State<LxCodeEditor>
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final w = widget;
-    final buttons = !_findOpen && (w._find || w.actions.isNotEmpty);
-    final inset = _nativeEditor && buttons ? _buttonsInset : 0.0;
     double? height;
     var scrollable = true;
     switch (w._fit) {
@@ -520,12 +603,12 @@ class LxCodeEditorState extends State<LxCodeEditor>
         height = null;
       case _Fit.fixed:
         height = w._height;
-        scrollable = _rows * _rowHeight + 2 * _pad + 2 + inset > height!;
+        scrollable = _rows * _rowHeight + 2 * _pad + 2 > height!;
       case _Fit.grow:
         final min = w._minLines ?? 1;
         final max = w._maxLines ?? (min > 24 ? min : 24);
         final shown = _rows.clamp(min, max < min ? min : max);
-        height = shown * _rowHeight + 2 * _pad + 2 + inset;
+        height = shown * _rowHeight + 2 * _pad + 2;
         scrollable = _rows > shown;
     }
 
@@ -542,87 +625,103 @@ class LxCodeEditorState extends State<LxCodeEditor>
           borderRadius: BorderRadius.circular(4),
         ),
         child: Padding(
-          padding: _focused
-              ? EdgeInsets.fromLTRB(_pad, _pad + inset, _pad, _pad)
-              : EdgeInsets.fromLTRB(_pad + 1, _pad + 1 + inset, _pad + 1, _pad + 1),
+          padding: EdgeInsets.all(_focused ? _pad : _pad + 1),
           child: ClipRect(child: field),
         ),
       );
     }
     final hint = w.hint;
-    final overlays = <Widget>[
-      if (_nativeEditor && hint != null && widget.controller.text.isEmpty)
-        Positioned(
-          left: _pad + 1 + _textOffsetX,
-          top: _pad + 1 + inset,
-          right: _pad + 1,
-          child: IgnorePointer(
-            child: SizedBox(
-              height: _rowHeight,
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  hint,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textScaler: TextScaler.noScaling,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        fontFamily: 'monospace',
-                        fontSize: w.fontSize,
-                        color: cs.onSurfaceVariant,
-                      ),
+    if (_nativeEditor && hint != null && widget.controller.text.isEmpty) {
+      field = Stack(
+        fit: StackFit.passthrough,
+        children: [
+          field,
+          Positioned(
+            left: _pad + 1 + _textOffsetX,
+            top: _pad + 1,
+            right: _pad + 1,
+            child: IgnorePointer(
+              child: SizedBox(
+                height: _rowHeight,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    hint,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textScaler: TextScaler.noScaling,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontFamily: 'monospace',
+                          fontSize: w.fontSize,
+                          color: cs.onSurfaceVariant,
+                        ),
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-      if (buttons)
-        Positioned(
-          top: 2,
-          right: 2,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (w._find)
-                IconButton(
-                  key: const ValueKey('lx-code-editor-find'),
-                  icon: const Icon(Icons.search, size: 18),
-                  tooltip: getLocalText.s("Find"),
-                  visualDensity: VisualDensity.compact,
-                  onPressed: () => _toggleFind(true),
-                ),
-              ...w.actions,
-            ],
-          ),
-        ),
-    ];
-    if (overlays.isNotEmpty) {
-      field = Stack(
-        fit: StackFit.passthrough,
-        children: [field, ...overlays],
-      );
-    }
-    if (_findOpen) {
-      field = Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _LxFindPanel(
-            controller: _findCtrl,
-            focusNode: _findFocus,
-            index: _matchIndex,
-            count: _matchCount,
-            onQuery: (q) => unawaited(_invoke('search', {'query': q})),
-            onNext: () => unawaited(_invoke('searchNext')),
-            onPrevious: () => unawaited(_invoke('searchPrevious')),
-            onClose: () => _toggleFind(false),
-          ),
-          Expanded(child: field),
         ],
       );
     }
-    return height == null
-        ? field
-        : SizedBox(width: double.infinity, height: height, child: field);
+    if (height != null) {
+      field = SizedBox(width: double.infinity, height: height, child: field);
+    }
+
+    // Кнопки поля — строкой над рамкой, справа; слева подпись [header].
+    // Внутри рамки кнопок нет: текст с обычного отступа.
+    final header = w.header;
+    final buttons = <Widget>[
+      if (w._find)
+        IconButton(
+          key: const ValueKey('lx-code-editor-find'),
+          icon: const Icon(Icons.search, size: 18),
+          tooltip: getLocalText.s("Find"),
+          visualDensity: VisualDensity.compact,
+          onPressed: () => _toggleFind(true),
+        ),
+      if (_canFormat)
+        IconButton(
+          key: const ValueKey('lx-code-editor-format'),
+          icon: const Icon(Icons.format_indent_increase, size: 18),
+          tooltip: getLocalText.s("Format"),
+          visualDensity: VisualDensity.compact,
+          onPressed: () => unawaited(_format()),
+        ),
+      ...w.actions,
+    ];
+    final top = <Widget>[
+      if (!_findOpen && (header != null || buttons.isNotEmpty))
+        Row(
+          key: const ValueKey('lx-code-editor-bar'),
+          children: [
+            Expanded(child: header ?? const SizedBox.shrink()),
+            ...buttons,
+          ],
+        ),
+      // Панель поиска заменяет строку кнопок; подпись остаётся над ней.
+      if (_findOpen && header != null)
+        Padding(padding: const EdgeInsets.only(bottom: 4), child: header),
+      if (_findOpen)
+        _LxFindPanel(
+          controller: _findCtrl,
+          focusNode: _findFocus,
+          index: _matchIndex,
+          count: _matchCount,
+          onQuery: (q) => unawaited(_invoke('search', {'query': q})),
+          onNext: () => unawaited(_invoke('searchNext')),
+          onPrevious: () => unawaited(_invoke('searchPrevious')),
+          onClose: () => _toggleFind(false),
+        ),
+    ];
+    if (top.isEmpty) return field;
+    return Column(
+      mainAxisSize: height == null ? MainAxisSize.max : MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ...top,
+        if (height == null) Expanded(child: field) else field,
+      ],
+    );
   }
 
   /// Заглушка вне Android: обычный `TextField` с той же раскладкой.
@@ -851,6 +950,8 @@ class LxJsonView extends StatefulWidget {
     this.showLineNumbers = false,
     this.language = LxCodeLanguage.json,
     this.stickyHeaders = false,
+    this.actions = const [],
+    this.header,
   });
 
   final String text;
@@ -861,6 +962,11 @@ class LxJsonView extends StatefulWidget {
   /// `null` — без подсветки (тело подписки не-JSON: base64, ссылки).
   final LxCodeLanguage? language;
   final bool stickyHeaders;
+
+  /// Кнопки (Copy) и подпись над рамкой — см. [LxCodeEditor.actions],
+  /// [LxCodeEditor.header].
+  final List<Widget> actions;
+  final Widget? header;
 
   @override
   State<LxJsonView> createState() => _LxJsonViewState();
@@ -897,6 +1003,8 @@ class _LxJsonViewState extends State<LxJsonView> {
       showLineNumbers: widget.showLineNumbers,
       language: widget.language,
       stickyHeaders: widget.stickyHeaders,
+      actions: widget.actions,
+      header: widget.header,
     );
   }
 }
@@ -926,6 +1034,8 @@ class LxTextCodeField extends StatelessWidget {
     this.errorText,
     this.readOnly = false,
     this.autofocus = false,
+    this.header,
+    this.format = true,
   });
 
   final TextEditingController controller;
@@ -940,8 +1050,14 @@ class LxTextCodeField extends StatelessWidget {
   final bool showLineNumbers;
   final String? hint;
 
-  /// Подпись над полем.
+  /// Подпись над полем — слева в строке кнопок (как [header]).
   final String? label;
+
+  /// Подпись-виджет слева в строке кнопок над рамкой; важнее [label].
+  final Widget? header;
+
+  /// Кнопка Format (см. [LxCodeEditor.format]).
+  final bool format;
 
   /// Ошибка под полем.
   final String? errorText;
@@ -953,6 +1069,7 @@ class LxTextCodeField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final label = this.label;
     final fit = height != null
         ? _Fit.fixed
         : minLines != null
@@ -971,20 +1088,19 @@ class LxTextCodeField extends StatelessWidget {
       showLineNumbers: showLineNumbers,
       language: language,
       autofocus: autofocus,
+      format: format,
+      header: header ??
+          (label == null
+              ? null
+              : Text(label,
+                  style: theme.textTheme.labelSmall
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant))),
     );
     final error = errorText;
-    final label = this.label;
     return Column(
       mainAxisSize: fit == _Fit.fill ? MainAxisSize.max : MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (label != null)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 4),
-            child: Text(label,
-                style: theme.textTheme.labelSmall
-                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-          ),
         if (fit == _Fit.fill) Expanded(child: editor) else editor,
         if (error != null)
           Padding(
