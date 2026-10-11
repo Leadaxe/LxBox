@@ -228,6 +228,9 @@ class _ConfigScreenState extends State<ConfigScreen> {
                     showLineNumbers: true,
                     language: LxCodeLanguage.json,
                     stickyHeaders: true,
+                    // §624 — липкие заголовки sora рисует только без переноса
+                    // строк (решение владельца 11.10: перенос на Config выключен).
+                    wordWrap: false,
                     actions: [
                       IconButton(
                         icon: const Icon(Icons.copy, size: 16),

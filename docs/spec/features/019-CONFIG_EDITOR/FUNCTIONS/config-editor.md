@@ -66,9 +66,9 @@ snackbars and errors on screen.
 - **Find** — the icon in the field corner opens a panel: query, match count,
   previous / next; an empty query clears the match highlight.
 - **Sticky headers.** While scrolling, up to three lines of the enclosing
-  blocks stay pinned at the top (`"outbounds": [` → `{` → …) — only without
-  line wrapping (an editor limitation), so on this screen, which wraps lines,
-  they do not show; the node JSON and a JSON subscription Source have them.
+  blocks stay pinned at the top (`"outbounds": [` → `{` → …). The editor draws
+  them only without line wrapping, so this screen does not wrap: long lines
+  scroll sideways. The node JSON and a JSON subscription Source have them too.
   There is no block folding.
 - **Highlighting** of JSON; in fields that take anything — by the look of the
   text: JSON, WireGuard INI, links (`scheme://…`) or none.

@@ -1675,7 +1675,9 @@ Channel: Dart → native `setText`, `getText`, `setReadOnly`, `setDark` (+ the
 {text?, lines, rowHeight, textOffsetX}, `cursor` {y, rowHeight, focused},
 `searchResult`, `disposed`. Creation params also carry `wordWrap`, `language`,
 `locale` (the app language — the native selection menu takes its strings from
-the view context), `autofocus`, `stickyHeaders`.
+the view context), `autofocus`, `stickyHeaders`. sora-editor draws sticky
+headers only without line wrapping, so the fields that have them (Config, the
+node JSON, a JSON subscription Source) do not wrap.
 
 The text's source of truth is the Dart `TextEditingController`: a recreated view
 (leaving a tab, theme change) gets the current text in the creation params. Text
