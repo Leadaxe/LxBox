@@ -99,6 +99,12 @@ class MainActivity : FlutterActivity() {
         )
         WifiHistoryBridge.attach(wifiHistoryChannel)
 
+        // Прототип: нативный редактор конфига (sora-editor) как platform view.
+        flutterEngine.platformViewsController.registry.registerViewFactory(
+            com.leadaxe.lxbox.editor.SORA_EDITOR_VIEW_TYPE,
+            com.leadaxe.lxbox.editor.SoraEditorFactory(flutterEngine.dartExecutor.binaryMessenger),
+        )
+
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.leadaxe.lxbox/utils")
             .setMethodCallHandler { call, result ->
                 when (call.method) {

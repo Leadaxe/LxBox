@@ -4,14 +4,13 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:re_editor/re_editor.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../config/config_parse.dart';
 import '../controllers/home_controller.dart';
 import '../services/error_format.dart';
 import '../services/l10n/locale_controller.dart';
-import '../widgets/lx_code_editor.dart';
+import '../widgets/lx_native_code_editor.dart';
 import '../services/file_import.dart';
 import '../widgets/safe_bottom.dart';
 
@@ -34,7 +33,8 @@ class ConfigScreen extends StatefulWidget {
 }
 
 class _ConfigScreenState extends State<ConfigScreen> {
-  final CodeLineEditingController _textController = CodeLineEditingController();
+  final LxNativeCodeEditorController _textController =
+      LxNativeCodeEditorController();
   late final bool _readOnly;
   bool _loading = true;
 
@@ -51,18 +51,13 @@ class _ConfigScreenState extends State<ConfigScreen> {
   Future<void> _initLoad(String raw) async {
     final pretty = await prettyJsonForDisplayAsync(raw);
     if (!mounted) return;
-    _textController.textAsync = pretty;
+    await _textController.setText(pretty);
+    if (!mounted) return;
     setState(() => _loading = false);
   }
 
-  @override
-  void dispose() {
-    _textController.dispose();
-    super.dispose();
-  }
-
   Future<void> _copy() async {
-    await Clipboard.setData(ClipboardData(text: _textController.text));
+    await Clipboard.setData(ClipboardData(text: await _textController.getText()));
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(getLocalText.s("Copied to clipboard"))),
@@ -70,7 +65,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
   }
 
   Future<void> _share() async {
-    final text = _textController.text.trim();
+    final text = (await _textController.getText()).trim();
     if (text.isEmpty) return;
     try {
       final dir = await getTemporaryDirectory();
@@ -101,7 +96,8 @@ class _ConfigScreenState extends State<ConfigScreen> {
     }
     final pretty = await prettyJsonForDisplayAsync(text);
     if (!mounted) return;
-    _textController.text = pretty;
+    await _textController.setText(pretty);
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(getLocalText.s("Pasted from clipboard"))),
     );
@@ -125,7 +121,8 @@ class _ConfigScreenState extends State<ConfigScreen> {
       final text = file.text;
       final pretty = await prettyJsonForDisplayAsync(text.trim());
       if (!mounted) return;
-      _textController.text = pretty;
+      await _textController.setText(pretty);
+    if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(getLocalText.s("Loaded from file"))),
       );
@@ -141,7 +138,8 @@ class _ConfigScreenState extends State<ConfigScreen> {
   }
 
   Future<void> _save() async {
-    final ok = await widget.controller.saveConfigRaw(_textController.text);
+    final ok = await widget.controller
+        .saveConfigRaw(await _textController.getText());
     if (!mounted) return;
     if (ok) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -212,30 +210,11 @@ class _ConfigScreenState extends State<ConfigScreen> {
                   ),
                 if (_loading) const LinearProgressIndicator(),
                 Expanded(
-                  // §614 — Copy теперь кнопка самого поля, рядом с поиском.
-                  child: LxCodeEditor(
+                  // Прототип: нативный sora-editor вместо LxCodeEditor
+                  // (re_editor отдаёт IME одну строку). Copy — в меню AppBar.
+                  child: LxNativeCodeEditor(
                     controller: _textController,
                     readOnly: _readOnly,
-                    hint: getLocalText.s("JSON or JSON5 (// and /* */ comments)"),
-                    showLineNumbers: true,
-                    language: LxCodeLanguage.json,
-                    actions: [
-                      IconButton(
-                        icon: const Icon(Icons.copy, size: 16),
-                        tooltip: getLocalText.s("Copy"),
-                        visualDensity: VisualDensity.compact,
-                        onPressed: () async {
-                          // §219 — await + mounted перед snackbar (как _copy():40),
-                          // иначе гонка Future/context.
-                          await Clipboard.setData(
-                              ClipboardData(text: _textController.text));
-                          if (!context.mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text(getLocalText.s("Config copied"))),
-                          );
-                        },
-                      ),
-                    ],
                   ),
                 ),
               ],

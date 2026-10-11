@@ -130,6 +130,8 @@ android {
                 } else {
                     signingConfigs.getByName("debug")
                 }
+            // Прототип sora-editor: jcodings/joni/tm4e ищут классы по имени.
+            proguardFiles("proguard-sora.pro")
         }
     }
 
@@ -147,6 +149,10 @@ dependencies {
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+    // Прототип: нативный редактор конфига (sora-editor, LGPL-2.1, Maven Central).
+    implementation(platform("io.github.Rosemoe.sora-editor:bom:0.23.6"))
+    implementation("io.github.Rosemoe.sora-editor:editor")
+    implementation("io.github.Rosemoe.sora-editor:language-textmate")
 }
 
 flutter {
