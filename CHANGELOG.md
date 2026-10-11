@@ -98,7 +98,7 @@
   Traffic Processing → Params (Direct connect timeout), дефолт 15 с вместо
   5 с ядра — приложения на сетях с потерей SYN (например, Т‑Банк через Tele2)
   больше не обрываются.)
-- **Core `v1.14.2-lx.12` → `v1.14.3-lx.14` (upstream base sing-box 1.14.3,
+- **Core `v1.14.2-lx.12` → `v1.14.3-lx.15` (upstream base sing-box 1.14.3,
   [docs/KERNEL.md](docs/KERNEL.md); v2.25.12-rc.1 shipped the release
   candidate `v1.14.2-lx.13-rc.1`).** AWG masquerade `ip=quic`: the decoy is
   generated fresh before every handshake instead of one fixed `i1` for the
@@ -112,12 +112,21 @@
   packet size that fits the tunnel (core key `lx.mtu_align`, default `clamp`;
   the app does not write it), so hysteria2 over WARP to an IPv6 server works.
   MASQUE `vhttp: auto` no longer stays on h2 until restart after one quick h3
-  failure.
-  (RU: ядро `v1.14.3-lx.14`: decoy `ip=quic` свежий на каждом хендшейке,
+  failure. lx.15: auto groups test on every `interval` (before, a node was
+  probed once per two intervals); Hold until failure also leaves a node that
+  answers but is more than twice as slow as the others; `fingerprint:
+  random` / `randomized` no longer leave REALITY nodes on Xray ≥ v26.9.8 dead
+  until restart; uTLS/REALITY connections hold 18–25 KB less memory; gRPC
+  updated for a critical advisory.
+  (RU: ядро `v1.14.3-lx.15`: decoy `ip=quic` свежий на каждом хендшейке,
   `ib=chrome`/`firefox` — настоящие QUIC ClientHello, формы `ip=sip` и
   `ip=dns` исправлены; query в `path` XHTTP уходит query запроса; размер
   пакета hysteria2/TUIC/WireGuard поверх WARP подгоняется под туннель;
-  `vhttp: auto` не залипает на h2.)
+  `vhttp: auto` не залипает на h2; lx.15: авто-группы проверяют узлы каждый
+  `interval`, а не раз в два, Hold until failure уходит и с узла, который
+  вдвое медленнее остальных, `fingerprint: random`/`randomized` больше не
+  глушат узлы REALITY к Xray ≥ v26.9.8, uTLS/REALITY-соединения держат на
+  18–25 КБ меньше памяти, gRPC обновлён по критической уязвимости.)
 
 ### Internal
 
