@@ -159,7 +159,7 @@ Future<void> showPingSettings(
   await showAppBottomSheet<void>(
     context: context,
     isScrollControlled: true,
-    // §626 — смахивание ведёт [UnsavedChangesSheet].
+    // §626 — смахивание ведёт [UnsavedChangesSheet] (едет за пальцем, при правках — диалог).
     enableDrag: false,
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, setSheetState) {

@@ -95,6 +95,18 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  /// Медленная протяжка вниз на 70% высоты шторки (без рывка).
+  Future<void> slowDrag(WidgetTester tester) async {
+    final dy = tester.getRect(find.byType(BottomSheet)).height * 0.7;
+    final g = await tester.startGesture(tester.getCenter(find.text('Ping Settings')));
+    for (var i = 0; i < 20; i++) {
+      await g.moveBy(Offset(0, dy / 20));
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    await g.up();
+    await tester.pumpAndSettle();
+  }
+
   Future<void> choose(WidgetTester tester, String label) async {
     await tester.tap(find.descendant(
         of: find.ancestor(of: unsaved(), matching: find.byType(AlertDialog)),
@@ -118,6 +130,24 @@ void main() {
     await choose(tester, 'Discard');
     expect(sheetOpen(), isFalse);
     expect(home.reloads, 0);
+  });
+
+  testWidgets('протяжка ниже середины: без правок закрыта, с правкой — '
+      'шторка на месте и диалог', (tester) async {
+    await open(tester);
+    await slowDrag(tester);
+    expect(unsaved(), findsNothing);
+    expect(sheetOpen(), isFalse);
+
+    await open(tester);
+    final top = tester.getRect(find.byType(BottomSheet)).top;
+    await editTimeout(tester);
+    await slowDrag(tester);
+    expect(unsaved(), findsOneWidget);
+    expect(tester.getRect(find.byType(BottomSheet)).top, closeTo(top, 0.5));
+    await choose(tester, 'Keep');
+    expect(sheetOpen(), isTrue);
+    expect(find.widgetWithText(TextField, '1234'), findsOneWidget);
   });
 
   testWidgets('Keep — шторка остаётся, правка на месте', (tester) async {

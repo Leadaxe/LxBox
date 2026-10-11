@@ -6,6 +6,8 @@ import 'package:lxbox/widgets/lx_code_editor.dart';
 
 // §626 — шторка DNS-правила: с правкой Back, тап по фону и смахивание вниз
 // спрашивают общий диалог Unsaved changes; без правок шторка закрывается.
+// Протяжка ведёт шторку за пальцем, как штатная; с правкой шторка ниже
+// середины возвращается на место и показывает диалог.
 
 void main() {
   late List<DnsRuleInline> saved;
@@ -57,6 +59,21 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  Rect sheetRect(WidgetTester tester) =>
+      tester.getRect(find.byType(BottomSheet));
+
+  /// Медленная протяжка вниз на [part] высоты шторки (без рывка).
+  Future<void> slowDrag(WidgetTester tester, double part) async {
+    final dy = sheetRect(tester).height * part;
+    final g = await tester.startGesture(tester.getCenter(find.text('Edit DNS Rule')));
+    for (var i = 0; i < 20; i++) {
+      await g.moveBy(Offset(0, dy / 20));
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    await g.up();
+    await tester.pumpAndSettle();
+  }
+
   Future<void> tapBarrier(WidgetTester tester) async {
     await tester.tapAt(const Offset(10, 300));
     await tester.pumpAndSettle();
@@ -90,6 +107,47 @@ void main() {
       expect(sheetOpen(), isFalse);
     }
     expect(saved, isEmpty);
+  });
+
+  testWidgets('протяжка — шторка едет за пальцем', (tester) async {
+    await open(tester);
+    final top = sheetRect(tester).top;
+    final g = await tester.startGesture(tester.getCenter(find.text('Edit DNS Rule')));
+    await g.moveBy(const Offset(0, 20));
+    await g.moveBy(const Offset(0, 80));
+    await tester.pump();
+    expect(sheetRect(tester).top, closeTo(top + 100, 2));
+    await g.up();
+    await tester.pumpAndSettle();
+    expect(sheetRect(tester).top, closeTo(top, 0.5));
+  });
+
+  testWidgets('без правок — протяжка ниже середины закрывает, выше — возвращает',
+      (tester) async {
+    await open(tester);
+    await slowDrag(tester, 0.3);
+    expect(sheetOpen(), isTrue);
+    await slowDrag(tester, 0.7);
+    expect(dialog(), findsNothing);
+    expect(sheetOpen(), isFalse);
+  });
+
+  testWidgets('с правкой — протяжка ниже середины: шторка на месте и диалог',
+      (tester) async {
+    await open(tester);
+    final top = sheetRect(tester).top;
+    await edit(tester);
+    await slowDrag(tester, 0.3);
+    expect(dialog(), findsNothing);
+    await slowDrag(tester, 0.7);
+    expect(dialog(), findsOneWidget);
+    expect(sheetRect(tester).top, closeTo(top, 0.5));
+    await choose(tester, 'Keep');
+    expect(sheetOpen(), isTrue);
+    await slowDrag(tester, 0.7);
+    await choose(tester, 'Save');
+    expect(sheetOpen(), isFalse);
+    expect(saved.single.name, 'ru2');
   });
 
   testWidgets('Keep — шторка остаётся, правка на месте', (tester) async {

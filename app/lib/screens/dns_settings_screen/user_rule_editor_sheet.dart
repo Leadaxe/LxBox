@@ -26,7 +26,7 @@ void showUserRuleEditor(
   showAppBottomSheet(
     context: context,
     isScrollControlled: true,
-    // §626 — смахивание ведёт [UnsavedChangesSheet].
+    // §626 — смахивание ведёт [UnsavedChangesSheet] (едет за пальцем, при правках — диалог).
     enableDrag: false,
     builder: (ctx) => _UserRuleEditor(
       screenContext: context,
