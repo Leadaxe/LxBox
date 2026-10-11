@@ -281,6 +281,8 @@ class SoraEditorPlatformView(
         readOnly = value
         editor.isEditable = !value
         editor.isSoftKeyboardEnabled = !value
+        // Без каретки подсветка пары скобок в начале текста бессмысленна.
+        editor.setHighlightBracketPair(!value)
         if (value) editor.hideSoftInput()
         applyColors()
     }
@@ -292,6 +294,9 @@ class SoraEditorPlatformView(
     private fun applyColors() {
         val scheme = editor.colorScheme
         for ((key, value) in colors) scheme.setColor(key, value)
+        // Парная скобка у каретки: цвет каретки без фона — тема токенов
+        // в тёмном режиме красила её в цвет фона, скобка пропадала.
+        scheme.setColor(EditorColorScheme.HIGHLIGHTED_DELIMITERS_BACKGROUND, Color.TRANSPARENT)
         if (readOnly) {
             scheme.setColor(EditorColorScheme.SELECTION_INSERT, Color.TRANSPARENT)
             scheme.setColor(EditorColorScheme.CURRENT_LINE, Color.TRANSPARENT)
@@ -311,7 +316,9 @@ class SoraEditorPlatformView(
         put("lineNumber", EditorColorScheme.LINE_NUMBER)
         put("divider", EditorColorScheme.LINE_DIVIDER, EditorColorScheme.STICKY_SCROLL_DIVIDER)
         put("selection", EditorColorScheme.SELECTED_TEXT_BACKGROUND)
-        put("caret", EditorColorScheme.SELECTION_INSERT, EditorColorScheme.SELECTION_HANDLE)
+        put("caret", EditorColorScheme.SELECTION_INSERT, EditorColorScheme.SELECTION_HANDLE,
+            EditorColorScheme.HIGHLIGHTED_DELIMITERS_FOREGROUND,
+            EditorColorScheme.HIGHLIGHTED_DELIMITERS_UNDERLINE)
         put("currentLine", EditorColorScheme.CURRENT_LINE)
         put("match", EditorColorScheme.MATCHED_TEXT_BACKGROUND)
         put("menuBackground", EditorColorScheme.TEXT_ACTION_WINDOW_BACKGROUND)
