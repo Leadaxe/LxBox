@@ -1,6 +1,6 @@
 // §834 — WireGuard handshake-initiation probe, порт логики cf-scanner/warpscout
 // (реальный WG Init-пакет по UDP; живой WARP-эндпоинт отвечает 92-байтным
-// type-4 сообщением, либо 64-байтным cookie-reply type-3).
+// type-2 (92 Б), либо 64-байтным cookie-reply type-3).
 //
 // Зачем: TCP/443 доступен почти везде, но WARP по UDP отдаёт данные только
 // тому, кто прислал валидный (криптографически корректный) WG-handshake —
@@ -35,7 +35,7 @@ final warpServerPubRaw = _b64('bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=');
 
 /// Результат одиночной WG-пробы.
 enum WgProbeKind {
-  /// 92-байтный type-4 response — эндпоинт жив и принял handshake.
+  /// 92-байтный type-2 handshake response — эндпоинт жив и принял handshake.
   response,
 
   /// 64-байтный type-3 cookie reply — сервер под rate-limit, но ЖИВ.
@@ -58,7 +58,7 @@ class WgProbeResult {
   final int rttMs;
 
   /// §835 — человекочитаемая деталь ответа/сбоя для журнала скана:
-  /// `type4 92B`, `type3 cookie 64B`, `timeout 3000ms`, `junk 17B type=9`,
+  /// `type2 handshake-response 92B`, `type3 cookie 64B`, `timeout 3000ms`,
   /// `bind: …`, `send: …`. Пусто — деталь не собиралась.
   final String detail;
 
@@ -193,16 +193,27 @@ Future<Uint8List> buildWgInitiation({
 
 /// Классификация ответа эндпоинта. Пустой/короткий ответ, чужой type — junk.
 /// [rttMs] подставляется вызывающим (мы измеряем его в сокете).
+///
+/// §837 — типы сообщений WireGuard (проверено по спецификации,
+/// https://www.wireguard.com/protocol/):
+///   1 — Handshake Initiation  (148 Б) — это мы и отправляем;
+///   2 — Handshake Response    ( 92 Б) ← ТАК отвечает живой сервер;
+///   3 — Cookie Reply          ( 64 Б) — сервер под нагрузкой, но ЖИВ;
+///   4 — Transport Data        (32+ Б) — транзитный трафик, НЕ ответ на init.
+///
+/// Раньше 92-байтный ответ принимался только при `type == 4`, то есть живой
+/// ответ (type 2) уходил в junk → скан не находил НИ ОДНОГО рабочего
+/// эндпоинта. Это и была причина «сканер не находит рабочие».
 WgProbeResult classifyWgResponse(List<int>? data, {int rttMs = 0}) {
   if (data == null || data.isEmpty) {
     return WgProbeResult(WgProbeKind.timeout, rttMs: rttMs, detail: 'empty');
   }
   final type = data[0];
-  if (data.length == 92 && type == 4) {
+  if (data.length == 92 && type == 2) {
     return WgProbeResult(
       WgProbeKind.response,
       rttMs: rttMs,
-      detail: 'type4 response 92B',
+      detail: 'type2 handshake-response 92B',
     );
   }
   if (data.length == 64 && type == 3) {
@@ -212,10 +223,18 @@ WgProbeResult classifyWgResponse(List<int>? data, {int rttMs = 0}) {
       detail: 'type3 cookie 64B',
     );
   }
+  // Диагностика: для «почти ответа» показываем, что именно пришло, чтобы
+  // в журнале было видно (148 Б = наше же эхо, 92 Б с чужим type и т.п.).
+  final hint = switch ((data.length, type)) {
+    (92, _) => ' (92B but type=$type, ждали type=2)',
+    (64, _) => ' (64B but type=$type, ждали type=3)',
+    (148, 1) => ' (echo нашей же initiation)',
+    _ => '',
+  };
   return WgProbeResult(
     WgProbeKind.junk,
     rttMs: rttMs,
-    detail: 'junk ${data.length}B type=$type',
+    detail: 'junk ${data.length}B type=$type$hint',
   );
 }
 

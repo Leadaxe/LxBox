@@ -148,7 +148,7 @@ void main() {
 
   test('classifyWgResponse treats junk as not alive', () {
     expect(classifyWgResponse([1, 2, 3]).alive, isFalse);
-    expect(classifyWgResponse([4, ...List.filled(91, 0)]).alive, isTrue);
+    expect(classifyWgResponse([2, ...List.filled(91, 0)]).alive, isTrue);
     expect(classifyWgResponse([3, ...List.filled(63, 0)]).alive, isTrue);
   });
 

@@ -1,5 +1,5 @@
 // §835 — сквозная проверка ФАЗЫ 1 сканера (без ядра): локальный UDP-сервер на
-// loopback:2408 отвечает валидным WG type-4 (92 Б), и сканер обязан отметить
+// loopback:2408 отвечает валидным WG type-2 (92 Б), и сканер обязан отметить
 // адрес живым. Внешняя сеть песочницей режется, поэтому «эндпоинт» эмулируется
 // на loopback — проверяется вся оркестрация: кандидаты → проба → классификация
 // → статусы → группировка → счётчики.
@@ -15,13 +15,13 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test('scan: живой WG-ответ даёт alive-статус и группу', () async {
-    // Сервер на каноническом WG-порту отвечает 92-байтным type-4.
+    // Сервер на каноническом WG-порту отвечает 92-байтным type-2.
     final server = await RawDatagramSocket.bind(InternetAddress.loopbackIPv4, 2408);
     final sub = server.listen((e) {
       if (e == RawSocketEvent.read) {
         final d = server.receive();
         if (d != null) {
-          server.send(<int>[4, ...List<int>.filled(91, 0)], d.address, d.port);
+          server.send(<int>[2, ...List<int>.filled(91, 0)], d.address, d.port);
         }
       }
     });

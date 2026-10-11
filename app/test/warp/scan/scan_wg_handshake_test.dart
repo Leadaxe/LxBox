@@ -52,19 +52,65 @@ void main() {
     expect(classifyWgResponse(null).kind, WgProbeKind.timeout);
     expect(classifyWgResponse(<int>[]).kind, WgProbeKind.timeout);
     expect(
-      classifyWgResponse([4, ...List.filled(91, 0)]).kind,
+      classifyWgResponse([2, ...List.filled(91, 0)]).kind,
       WgProbeKind.response,
     );
-    expect(classifyWgResponse([4, ...List.filled(91, 0)]).alive, isTrue);
+    expect(classifyWgResponse([2, ...List.filled(91, 0)]).alive, isTrue);
     expect(
       classifyWgResponse([3, ...List.filled(63, 0)]).kind,
       WgProbeKind.cookie,
     );
     expect(classifyWgResponse([1, 2, 3]).kind, WgProbeKind.junk);
-    // 92 байта, но не type-4 — не принимаем за response.
+    // 92 байта, но не type-2 — не принимаем за response.
     expect(
       classifyWgResponse([9, ...List.filled(91, 0)]).kind,
       WgProbeKind.junk,
     );
+  });
+
+  // §837 — РЕГРЕССИЯ на реальную причину «сканер не находит рабочие»:
+  // живой сервер отвечает на handshake initiation типом 2 (Handshake Response,
+  // 92 Б), а НЕ типом 4 (Transport Data). Старый код требовал type == 4,
+  // поэтому все живые ответы уходили в junk и валидных было ноль.
+  group('§837 типы сообщений WireGuard (спецификация)', () {
+    test('type 2 (Handshake Response, 92 Б) — эндпоинт ЖИВОЙ', () {
+      final r = classifyWgResponse([2, ...List.filled(91, 0)], rttMs: 42);
+      expect(r.kind, WgProbeKind.response);
+      expect(r.alive, isTrue);
+      expect(r.strict, isTrue, reason: 'это полноценный handshake response');
+      expect(r.rttMs, 42);
+      expect(r.detail, contains('type2'));
+      expect(r.detail, contains('92B'));
+    });
+
+    test('type 4 (Transport Data, 92 Б) — НЕ ответ на handshake → junk', () {
+      final r = classifyWgResponse([4, ...List.filled(91, 0)]);
+      expect(r.kind, WgProbeKind.junk);
+      expect(r.alive, isFalse,
+          reason: 'сервер не может слать transport data до handshake');
+      expect(r.detail, contains('type=4'));
+      expect(r.detail, contains('ждали type=2'),
+          reason: 'журнал должен объяснять, чего не хватило');
+    });
+
+    test('type 1 (наше же эхо, 148 Б) — junk с подсказкой про эхо', () {
+      final r = classifyWgResponse([1, ...List.filled(147, 0)]);
+      expect(r.kind, WgProbeKind.junk);
+      expect(r.detail, contains('echo'));
+    });
+
+    test('type 3 (Cookie Reply, 64 Б) — сервер под нагрузкой, но ЖИВОЙ', () {
+      final r = classifyWgResponse([3, ...List.filled(63, 0)]);
+      expect(r.kind, WgProbeKind.cookie);
+      expect(r.alive, isTrue);
+      expect(r.strict, isFalse);
+    });
+
+    test('правильный тип, но неверная длина — junk', () {
+      expect(classifyWgResponse([2, ...List.filled(50, 0)]).kind,
+          WgProbeKind.junk);
+      expect(classifyWgResponse([3, ...List.filled(91, 0)]).kind,
+          WgProbeKind.junk);
+    });
   });
 }
