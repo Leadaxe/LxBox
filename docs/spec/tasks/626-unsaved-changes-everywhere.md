@@ -3,7 +3,7 @@
 | Поле | Значение |
 |------|----------|
 | Тип | Доработка UI (несколько фич: 008-NODE_EDITOR, 019-CONFIG_EDITOR, подписки, DNS) |
-| Статус | Спека |
+| Статус | Реализовано, эмулятор — не проверен |
 | Дата | 2026-10-11 |
 | Связанные | §219 (общий `showUnsavedChangesDialog`), §624 (диалог на Config, доработка после rc.2) |
 
@@ -66,3 +66,33 @@ Source, Back → диалог; шторка DNS-правила — смахив�
 - `features/008-NODE_EDITOR` (функция настроек узла), функции подписок и DNS,
   где описан выход из экрана.
 - `CHANGELOG.md` (EN + RU).
+
+## Реализация (11.10.2026)
+
+Механика везде одна: `PopScope(canPop: false)` + `_handleBack` → общий
+`showUnsavedChangesDialog`. Шторки открываются с `enableDrag: false` и
+оборачиваются в `UnsavedChangesSheet` (`app/lib/widgets/unsaved_changes_sheet.dart`):
+штатное смахивание `BottomSheet` закрывает через `Navigator.pop` мимо
+`PopScope`, поэтому жест ведёт обёртка и закрывает через `maybePop`
+(рывок вниз или треть высоты). Тап по фону идёт через `maybePop` штатно.
+Текст полей формы `flush()` не требует: задержка натива — только у текста
+длиннее 256 КБ, а ключа к состоянию редактора у `LxTextCodeField` нет.
+
+| Экран | Итог | Правка |
+|---|---|---|
+| `node_settings_screen.dart` | добавлен | Tag и Source против записанного; Detour, Masquerade, Skip presets, вкладка Network пишутся сразу |
+| `source_replace_screen.dart` | добавлен | снимок свёртки против исходного (тот же признак, что гасит Save) |
+| `folder_detail_screen.dart`, диалог Edit server | добавлен | текст против `member.raw`; Back и тап по фону; Cancel — явная отмена без вопроса |
+| `folder_detail_screen.dart`, переименование в AppBar | добавлен | открытое поле имени с новым именем |
+| `subscription_detail_screen.dart`, переименование в AppBar | добавлен | то же |
+| `subscription_filters_tab.dart`, редактор правила | добавлен | правило против исходного; крестик AppBar тоже спрашивает; Save при блокировке — снек с причиной, экран остаётся |
+| `dns_settings_screen/user_rule_editor_sheet.dart` | добавлен | имя и JSON; Back, фон, смахивание |
+| `home/home_menus.dart`, шторка Ping Settings | добавлен | URL, timeout, область (все / Направление); контроллеры больше не освобождаются сразу после закрытия (assert «used after being disposed» на анимации закрытия) |
+| `config_screen.dart` | уже был | §624 |
+| `custom_rule_edit_screen.dart` (+ `params_tab`, `preset_params_tab`) | уже был | §219 |
+| `direction_edit_screen.dart`, `dns_server_edit_screen.dart` (+ `params_tab`) | уже был | §219 |
+| `chain_edit_screen.dart`, `auto_group_edit_screen.dart` | уже был | §219 |
+| `app_settings_screen.dart` | не нужен | автосохранение; Save — только в коротких диалогах ввода одного значения |
+| диалоги ввода одного значения: `workspace_menu`, `folder_picker`, `entry_context_menu` (Edit source), identity-поля подписки, Test URL и пороги пинга папки | не нужен | диалог с явным Cancel и коротким полем, не экран и не шторка |
+| `home/filter_widgets.dart` | не нужен | иконка сохранения regex-фильтра в строке поиска, не выход с экрана |
+| `backup_screen/export_card.dart` | не нужен | Save — экспорт файла, терять нечего |
