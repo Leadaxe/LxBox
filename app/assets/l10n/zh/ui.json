@@ -5615,5 +5615,23 @@
   },
   "VPN active — geo phase skipped": {
     "value": "VPN 已连接 — 地理阶段跳过"
+  },
+  "Scan log": {
+    "value": "扫描日志"
+  },
+  "Log is empty": {
+    "value": "日志为空"
+  },
+  "Log copied to clipboard": {
+    "value": "日志已复制到剪贴板"
+  },
+  "Probed %1$s · alive %2$s": {
+    "value": "已探测 %1$s · 存活 %2$s"
+  },
+  "By country": {
+    "value": "按国家"
+  },
+  "All probed endpoints": {
+    "value": "所有已探测地址"
   }
 }

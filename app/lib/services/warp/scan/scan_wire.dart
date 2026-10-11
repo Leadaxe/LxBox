@@ -52,10 +52,15 @@ enum WgProbeKind {
 }
 
 class WgProbeResult {
-  const WgProbeResult(this.kind, {this.rttMs = 0});
+  const WgProbeResult(this.kind, {this.rttMs = 0, this.detail = ''});
 
   final WgProbeKind kind;
   final int rttMs;
+
+  /// §835 — человекочитаемая деталь ответа/сбоя для журнала скана:
+  /// `type4 92B`, `type3 cookie 64B`, `timeout 3000ms`, `junk 17B type=9`,
+  /// `bind: …`, `send: …`. Пусто — деталь не собиралась.
+  final String detail;
 
   /// Эндпоинт признан живым (response, cookie или TCP-открыт).
   bool get alive =>
@@ -190,16 +195,28 @@ Future<Uint8List> buildWgInitiation({
 /// [rttMs] подставляется вызывающим (мы измеряем его в сокете).
 WgProbeResult classifyWgResponse(List<int>? data, {int rttMs = 0}) {
   if (data == null || data.isEmpty) {
-    return WgProbeResult(WgProbeKind.timeout, rttMs: rttMs);
+    return WgProbeResult(WgProbeKind.timeout, rttMs: rttMs, detail: 'empty');
   }
   final type = data[0];
   if (data.length == 92 && type == 4) {
-    return WgProbeResult(WgProbeKind.response, rttMs: rttMs);
+    return WgProbeResult(
+      WgProbeKind.response,
+      rttMs: rttMs,
+      detail: 'type4 response 92B',
+    );
   }
   if (data.length == 64 && type == 3) {
-    return WgProbeResult(WgProbeKind.cookie, rttMs: rttMs);
+    return WgProbeResult(
+      WgProbeKind.cookie,
+      rttMs: rttMs,
+      detail: 'type3 cookie 64B',
+    );
   }
-  return WgProbeResult(WgProbeKind.junk, rttMs: rttMs);
+  return WgProbeResult(
+    WgProbeKind.junk,
+    rttMs: rttMs,
+    detail: 'junk ${data.length}B type=$type',
+  );
 }
 
 List<int> _u32le(int v) => [

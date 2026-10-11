@@ -78,3 +78,53 @@ class ScanCandidate {
           '🔥🎭 WARP MASQUE (h2${sni.isEmpty ? '' : ': $sni'})',
       };
 }
+
+/// §835 — вердикт по одному эндпоинту для ЖИВОГО списка на экране сканера.
+/// Показывает и живые, и мёртвые адреса по мере проверки (не только итог).
+class ScanEndpointStatus {
+  ScanEndpointStatus({
+    required this.endpoint,
+    required this.phase,
+    required this.verdict,
+    this.rttMs = 0,
+    this.country = '',
+    this.colo = '',
+    this.detail = '',
+  });
+
+  /// `ip:port` (WG) или `ip` (MASQUE).
+  final String endpoint;
+
+  /// 1 — UDP WG-проба, 2 — подтверждение/гео через ядро.
+  final int phase;
+
+  /// `pending` | `alive` | `cookie` | `junk` | `timeout` | `geo-ok` |
+  /// `geo-fail` | `error`.
+  final String verdict;
+
+  final int rttMs;
+  final String country;
+  final String colo;
+  final String detail;
+
+  bool get alive => verdict == 'alive' || verdict == 'cookie' ||
+      verdict == 'geo-ok';
+
+  ScanEndpointStatus copyWith({
+    int? phase,
+    String? verdict,
+    int? rttMs,
+    String? country,
+    String? colo,
+    String? detail,
+  }) =>
+      ScanEndpointStatus(
+        endpoint: endpoint,
+        phase: phase ?? this.phase,
+        verdict: verdict ?? this.verdict,
+        rttMs: rttMs ?? this.rttMs,
+        country: country ?? this.country,
+        colo: colo ?? this.colo,
+        detail: detail ?? this.detail,
+      );
+}

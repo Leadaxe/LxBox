@@ -39,6 +39,7 @@ import '../masque_account.dart';
 import '../warp_account.dart';
 import '../warp_client.dart';
 import 'scan_models.dart';
+import 'scan_log.dart';
 import 'scan_node_builder.dart';
 import 'scan_pool.dart';
 import 'scan_wg_probe.dart';
@@ -93,6 +94,7 @@ class EndpointScanResult {
     required this.failedCount,
     this.tcpFallbackUsed = false,
     this.note = '',
+    this.statuses = const [],
   });
 
   final List<EndpointCountryGroup> groups;
@@ -106,8 +108,18 @@ class EndpointScanResult {
   /// §834 — замечание для UI (напр. почему гео-фаза не отработала).
   final String note;
 
+  /// §835 — вердикт по КАЖДОМУ проверенному адресу (и живым, и мёртвым).
+  /// UI показывает его живым списком; сводные счётчики — из [groups].
+  final List<ScanEndpointStatus> statuses;
+
   int get totalFound => groups.fold(0, (s, g) => s + g.endpoints.length);
   int get totalValid => groups.fold(0, (s, g) => s + g.valid);
+
+  /// §835 — сколько адресов реально проверено (для строки «проверено N»).
+  int get totalProbed => statuses.length;
+
+  /// §835 — сколько из проверенных оказались живыми на уровне живости.
+  int get totalAlive => statuses.where((s) => s.alive).length;
 }
 
 /// Статический справочник стран (ISO 3166-1 alpha-2 → русские имена).
@@ -240,9 +252,12 @@ class EndpointScanner {
 
   /// Источники адресов: официальные CF-блоки WARP (WG) + MASQUE-пулы из asset.
   /// Возвращает `ip` (порт подставляется фазой) и `ip:port` (MASQUE).
+  ///
+  /// §835 — asset не прочитан → берётся встроенный [_fallbackScanPool]:
+  /// раньше отсутствие asset'а оставляло только 12 WG-адресов и ВЫКЛЮЧАЛО
+  /// MASQUE-путь — а он единственный рабочий в сетях, режущих UDP (РФ).
   Future<List<String>> loadPools() async {
-    final pool = await loadPool();
-    if (pool == null) return _fallbackPools();
+    final pool = await loadPool() ?? _fallbackScanPool();
     // v4-блоки WG (v6-разворот здесь не делаем: expandCidrV4 работает по v4).
     final wg = _sampleIps(pool.wgV4Cidr, maxCandidates);
     final out = <String>[...wg];
@@ -257,6 +272,40 @@ class EndpointScanner {
     }
     return out.isEmpty ? _fallbackPools() : out;
   }
+
+  /// §835 — встроенный резервный пул (asset недоступен/битый). Держит и
+  /// WG-блоки, и MASQUE-хосты/блок, чтобы скан не терял второй транспорт.
+  /// Структура статична и валидна → null здесь невозможен.
+  static ScanPool _fallbackScanPool() =>
+      ScanPool.fromFullJson(_fallbackJson)!;
+
+  static const Map<String, dynamic> _fallbackJson = {
+    'wireguard': {
+      'v4_cidr': [
+        '162.159.192.0/24',
+        '162.159.193.0/24',
+        '162.159.195.0/24',
+        '188.114.96.0/22',
+      ],
+      'v6_cidr': ['2606:4700:d0::/64', '2606:4700:d1::/64'],
+      'ports': [2408, 500, 1701, 4500],
+      'keepalive': 25,
+      'sni_pool': ['www.google.com', 'www.microsoft.com', 'www.bing.com'],
+    },
+    'masque': {
+      'hosts_preset': ['162.159.198.2', '162.159.199.2'],
+      'h3': {
+        'hosts_extra': ['162.159.198.1', '162.159.199.1'],
+        'ports': [443, 8443, 8095],
+      },
+      'h2': {
+        'v4_cidr': ['162.159.198.0/24', '162.159.199.0/24'],
+        'exclude': ['162.159.198.1', '162.159.199.1'],
+        'ports': [443, 8443, 8095],
+      },
+      'sni_pool': ['consumer-masque.cloudflareclient.com', 'www.google.com'],
+    },
+  };
 
   /// Пул из bundled asset (root-секция; регион здесь не важен — сканируем
   /// физические адреса CF, а не региональные списки SNI).
@@ -300,19 +349,51 @@ class EndpointScanner {
     void Function(int done, int total)? onProgressPhase1,
     void Function(int done, int total)? onProgressPhase2,
     void Function(String note)? onNote,
+    ScanLog? log,
+    void Function(ScanEndpointStatus status)? onStatus,
   }) async {
     _cancelled = false;
     final sw = Stopwatch()..start();
     var note = '';
+    final statuses = <String, ScanEndpointStatus>{};
+    void emit(ScanEndpointStatus s) {
+      statuses[s.endpoint] = s;
+      onStatus?.call(s);
+    }
+
+    log?.i(
+      'scan',
+      'старт: адресов=${endpoints.length} потоков=$concurrency '
+      'таймаут=${timeout.inMilliseconds}мс максимум-гео=$maxGeoLookups '
+      'MASQUE-фолбэк=$tcpFallback',
+    );
+
+    // §835 — самопроверка сети: на телефоне UDP наружу может быть зарезан
+    // целиком, и в журнале надо отличить «нет интернета» от «режут UDP».
+    unawaited(_netSelfCheck(log));
 
     // ── Phase 1 — UDP WG-проба ────────────────────────────────────────────
     // Кандидаты WG — те, у кого нет не-WG порта; MASQUE-адреса (h3-хосты и
     // h2-блок) в WG-фазу не идут: они не отвечают на WG-handshake.
-    final pool = await loadPool();
+    final loadedPool = await loadPool();
+    final pool = loadedPool ?? _fallbackScanPool();
     final wgPorts = <int>{
       2408,
-      ...?pool?.wgPorts,
+      ...pool.wgPorts,
     }.toList();
+    if (loadedPool == null) {
+      log?.w(
+        'pool',
+        'asset не прочитан → встроенный резервный пул (WG + MASQUE); '
+        'проверьте assets/warp_endpoints.json',
+      );
+    } else {
+      log?.i(
+        'pool',
+        'asset ок: wgV4=${pool.wgV4Cidr} порты=$wgPorts '
+        'masqueH3=${pool.masqueH3Hosts} masqueH2=${pool.masqueV4Cidr}',
+      );
+    }
 
     final byTransport = <String, EndpointTransport>{};
     final wgCandidates = <String>[];
@@ -325,6 +406,10 @@ class EndpointScanner {
         wgCandidates.add(ep);
       }
     }
+    log?.i(
+      'plan',
+      'раскладка: WG=${wgCandidates.length} MASQUE=${masqueCandidates.length}',
+    );
 
     final alive = <String, WgProbeResult>{};
     final aliveTransport = <String, EndpointTransport>{};
@@ -335,11 +420,28 @@ class EndpointScanner {
         for (final ip in wgCandidates)
           for (final p in ports) ip.contains(':') ? ip : '$ip:$p',
       ];
+      log?.i('p1', 'UDP WG-проба: ${cand.length} адресов, порты=$ports');
       final batch = await scanWgBatch(
         endpoints: cand,
         concurrency: concurrency,
         timeout: timeout,
         onProgress: onProgressPhase1,
+        onProbe: (ep, r) {
+          log?.add(
+            r.alive ? ScanLogLevel.info : ScanLogLevel.debug,
+            'p1',
+            '$ep → ${r.kind.name} rtt=${r.rttMs}мс ${r.detail}',
+          );
+          emit(ScanEndpointStatus(
+            endpoint: ep,
+            phase: 1,
+            verdict: r.alive
+                ? (r.kind == WgProbeKind.cookie ? 'cookie' : 'alive')
+                : r.kind.name,
+            rttMs: r.rttMs,
+            detail: r.detail,
+          ));
+        },
         cancelled: () => _cancelled,
       );
       batch.forEach((ep, r) {
@@ -355,12 +457,20 @@ class EndpointScanner {
       // Другие WG-порты — только если канонический ничего не дал: операторы
       // режут 2408, но пропускают 500/1701/4500.
       if (!_cancelled && alive.isEmpty && wgPorts.isNotEmpty) {
-        await wgPass(wgPorts.where((p) => p != 2408).toList());
+        final rest = wgPorts.where((p) => p != 2408).toList();
+        if (rest.isNotEmpty) {
+          log?.i('p1', 'порт 2408 молчит — пробуем другие WG-порты: $rest');
+          await wgPass(rest);
+        }
       }
     }
     failed.addAll(wgCandidates.where((ip) => !alive.keys.any(
           (a) => a == ip || a.startsWith('$ip:'),
         )));
+    log?.i(
+      'p1',
+      'итог фазы 1: живых=${alive.length} без ответа=${failed.length}',
+    );
 
     // ── Phase 1b — MASQUE-путь, если UDP не дал живых ─────────────────────
     // Открытый TCP 443 НЕ считаем живостью (CF-edge отвечает почти всегда):
@@ -368,6 +478,7 @@ class EndpointScanner {
     var usedMasque = false;
     if (tcpFallback && !_cancelled && alive.isEmpty && masqueCandidates.isNotEmpty) {
       usedMasque = true;
+      log?.w('p1b', 'UDP не дал живых → идём MASQUE-путём (h2/TCP 443)');
     }
 
     // ── Phase 2 — подтверждение + гео через probe-сессию ядра ─────────────
@@ -382,6 +493,12 @@ class EndpointScanner {
           (alive[a]?.rttMs ?? 1 << 30).compareTo(alive[b]?.rttMs ?? 1 << 30));
     final geoList = orderedSorted.take(maxGeoLookups).toList();
 
+    log?.i(
+      'p2',
+      'фаза 2 (гео через ядро): кандидатов=${geoList.length} '
+      'из ${ordered.length} (лимит $maxGeoLookups)',
+    );
+
     if (!_cancelled && geoList.isNotEmpty) {
       try {
         final res = await _probeGeo(
@@ -389,6 +506,18 @@ class EndpointScanner {
           byTransport: byTransport,
           pool: pool,
           onProgress: onProgressPhase2,
+          log: log,
+          onGeo: (ep, meta, detail) {
+            emit(ScanEndpointStatus(
+              endpoint: ep,
+              phase: 2,
+              verdict: meta != null ? 'geo-ok' : 'geo-fail',
+              rttMs: alive[ep]?.rttMs ?? 0,
+              country: meta?.country ?? '',
+              colo: meta?.colo ?? '',
+              detail: detail,
+            ));
+          },
         );
         geoMeta.addAll(res.meta);
         // MASQUE-кандидаты, прошедшие GET, становятся живыми эндпоинтами.
@@ -399,9 +528,13 @@ class EndpointScanner {
             aliveTransport[ep] = byTransport[ep] ?? EndpointTransport.masqueH3;
           }
         }
-        if (res.error != null && res.error!.isNotEmpty) note = res.error!;
+        if (res.error != null && res.error!.isNotEmpty) {
+          note = res.error!;
+          log?.e('p2', 'ошибка фазы 2: ${res.error}');
+        }
       } catch (e) {
         note = 'probe: $e';
+        log?.e('p2', 'исключение фазы 2: $e');
       }
     }
 
@@ -412,7 +545,10 @@ class EndpointScanner {
       final meta = geoMeta[ep];
       final country = meta?.country ?? '';
       final colo = meta?.colo ?? '';
-      if (colo.isNotEmpty && excludeColos.contains(colo)) continue;
+      if (colo.isNotEmpty && excludeColos.contains(colo)) {
+        log?.i('build', '$ep исключён по узлу $colo');
+        continue;
+      }
       final r = EndpointResult(
         endpoint: ep,
         country: country,
@@ -436,6 +572,12 @@ class EndpointScanner {
         return b.valid.compareTo(a.valid);
       });
 
+    log?.i(
+      'done',
+      'финиш: групп=${groups.length} живых=${alive.length} '
+      'без ответа=${failed.length} за ${sw.elapsedMilliseconds}мс',
+    );
+
     return EndpointScanResult(
       groups: groups,
       scanAt: DateTime.now().toUtc(),
@@ -443,7 +585,25 @@ class EndpointScanner {
       failedCount: failed.length,
       tcpFallbackUsed: usedMasque && groups.isNotEmpty,
       note: note,
+      statuses: statuses.values.toList(),
     );
+  }
+
+  /// §835 — самопроверка сети для журнала: TCP-коннект к `1.1.1.1:443`.
+  /// Отличает «нет интернета» (пользователю надо чинить сеть) от «интернет
+  /// есть, но режут UDP/WG» (тогда скан обязан идти MASQUE-путём).
+  Future<void> _netSelfCheck(ScanLog? log) async {
+    if (log == null) return;
+    try {
+      final r = await probeTcpReachable('1.1.1.1', 443);
+      if (r.reachable) {
+        log.i('net', 'интернет есть: ${r.detail}');
+      } else {
+        log.w('net', 'интернет НЕ подтверждён: ${r.detail}');
+      }
+    } catch (e) {
+      log.w('net', 'самопроверка сети не удалась: $e');
+    }
   }
 
   /// MASQUE-ли это адрес (h3-хост блока или адрес h2-блока).
@@ -477,6 +637,12 @@ class EndpointScanner {
     required Map<String, EndpointTransport> byTransport,
     required ScanPool? pool,
     void Function(int done, int total)? onProgress,
+    ScanLog? log,
+    void Function(
+      String endpoint,
+      ({String country, String colo})? meta,
+      String detail,
+    )? onGeo,
   }) async {
     final out = <String, ({String country, String colo})>{};
     if (eps.isEmpty) return (meta: out, error: null);
@@ -485,14 +651,21 @@ class EndpointScanner {
     // невозможны, §236). Скан от этого не рушится: живость из фазы 1 остаётся.
     try {
       final status = await _vpn.getVpnStatus();
+      log?.i('p2', 'статус VPN: $status');
       if (status != TunnelStatus.disconnected) {
+        log?.w(
+          'p2',
+          'VPN включён → probe-сессию поднять нельзя, гео пропущено. '
+          'Выключите VPN и перезапустите скан.',
+        );
         return (
           meta: out,
           error: getLocalText.s('VPN active — geo phase skipped'),
         );
       }
-    } catch (_) {
+    } catch (e) {
       // Состояние VPN не спросилось — пробуем всё равно.
+      log?.w('p2', 'статус VPN не спросился ($e) — пробуем поднять сессию');
     }
 
     // Аккаунты: кеш → регистрация. Для WG нужен WarpAccount, для MASQUE —
@@ -505,27 +678,38 @@ class EndpointScanner {
       final now = DateTime.now().toUtc().toIso8601String();
       warpAcc = await SettingsStorage.getWarpAccount();
       masqueAcc = await SettingsStorage.getMasqueAccount();
+      log?.i(
+        'p2',
+        'аккаунты: WARP=${warpAcc != null ? 'есть' : 'нет'} '
+        'MASQUE=${masqueAcc != null ? 'есть' : 'нет'}',
+      );
       if (eps.any((e) => (byTransport[e] ?? EndpointTransport.wg) ==
               EndpointTransport.wg) &&
           warpAcc == null) {
         try {
+          log?.i('p2', 'регистрирую WARP-аккаунт…');
           warpAcc = await client.register(
             endpoint: WarpAccount.defaultEndpoint,
             nowIso8601: now,
           );
           await SettingsStorage.setWarpAccount(warpAcc);
+          log?.i('p2', 'WARP-аккаунт зарегистрирован');
         } catch (e) {
           regError ??= 'WARP register failed: $e';
+          log?.e('p2', 'WARP register failed: $e');
         }
       }
       if (eps.any((e) => (byTransport[e] ?? EndpointTransport.wg) !=
               EndpointTransport.wg) &&
           masqueAcc == null) {
         try {
+          log?.i('p2', 'регистрирую MASQUE-аккаунт…');
           masqueAcc = await client.registerMasque(nowIso8601: now);
           await SettingsStorage.setMasqueAccount(masqueAcc);
+          log?.i('p2', 'MASQUE-аккаунт зарегистрирован');
         } catch (e) {
           regError ??= 'MASQUE register failed: $e';
+          log?.e('p2', 'MASQUE register failed: $e');
         }
       }
     } finally {
@@ -540,10 +724,19 @@ class EndpointScanner {
 
     // Узлы строятся в порядке [eps] (null — не собирается; индекс сохраняется,
     // `buildProbeBatches` вернёт его в `brokenByIndex`).
-    final nodes = <NodeSpec?>[
-      for (final ep in eps)
-        _buildNodeFor(ep, byTransport[ep] ?? EndpointTransport.wg, builder, pool),
-    ];
+    final nodes = <NodeSpec?>[];
+    for (final ep in eps) {
+      final transport = byTransport[ep] ?? EndpointTransport.wg;
+      final node = _buildNodeFor(ep, transport, builder, pool);
+      if (node == null) {
+        log?.w(
+          'p2',
+          '$ep (${transport.name}): узел не собрался (нет аккаунта/кред)',
+        );
+        onGeo?.call(ep, null, 'node build failed: no account');
+      }
+      nodes.add(node);
+    }
 
     final coreVersion = await CoreVersionCache.ensure(
       () => _vpn.getCoreVersion(),
@@ -554,15 +747,30 @@ class EndpointScanner {
       coreVersion: coreVersion,
       vars: vars,
     );
+    log?.i(
+      'p2',
+      'probe-конфигов=${batches.length} ядро=$coreVersion '
+      'собрано узлов=${nodes.whereType<NodeSpec>().length}/${eps.length}',
+    );
 
     var done = 0;
     for (final cfg in batches) {
       if (_cancelled) break;
-      if (cfg.configJson == null) continue;
+      if (cfg.configJson == null) {
+        log?.w('p2', 'батч пуст (нет тестируемых узлов)');
+        continue;
+      }
+      log?.i(
+        'p2',
+        'probeStart: тегов=${cfg.tagByIndex.length} '
+        'конфиг=${cfg.configJson!.length}B битых=${cfg.brokenByIndex.length}',
+      );
       final err = await _cc.probeStart(cfg.configJson!);
       if (err.isNotEmpty) {
+        log?.e('p2', 'probeStart не поднялся: $err');
         return (meta: out, error: err);
       }
+      log?.i('p2', 'probe-сессия ядра поднята');
       try {
         for (final entry in cfg.tagByIndex.entries) {
           if (_cancelled) break;
@@ -574,20 +782,36 @@ class EndpointScanner {
               timeoutMs: 8000,
               maxBytes: 4096,
             );
-            if (r.ok && r.content.isNotEmpty) {
-              final parsed = parseCloudflareTrace(r.content);
-              if (parsed.country.isNotEmpty || parsed.colo.isNotEmpty) {
-                out[ep] = parsed;
-              }
+            final hasGeo = r.ok && r.content.isNotEmpty;
+            final parsed = hasGeo ? parseCloudflareTrace(r.content) : null;
+            if (parsed != null &&
+                (parsed.country.isNotEmpty || parsed.colo.isNotEmpty)) {
+              out[ep] = parsed;
+              log?.i(
+                'p2',
+                '$ep GET ${r.status} loc=${parsed.country} colo=${parsed.colo} '
+                'remote=${r.remoteAddr} ${r.elapsedMs}мс',
+              );
+              onGeo?.call(ep, parsed, 'HTTP ${r.status} ${r.remoteAddr}');
+            } else {
+              final why = r.error.isNotEmpty
+                  ? 'err=${r.error}'
+                  : 'HTTP ${r.status} без loc/colo';
+              log?.w('p2', '$ep GET не дал гео: $why '
+                  'remote=${r.remoteAddr}');
+              onGeo?.call(ep, null, why);
             }
-          } catch (_) {
+          } catch (e) {
             // Один узел не ответил — не валим весь батч.
+            log?.w('p2', '$ep probeGetUrl исключение: $e');
+            onGeo?.call(ep, null, 'exception: $e');
           }
           done++;
           onProgress?.call(done, eps.length);
         }
       } finally {
         await _cc.probeStop();
+        log?.i('p2', 'probe-сессия ядра погашена');
       }
     }
     return (meta: out, error: regError);

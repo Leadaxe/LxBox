@@ -5894,5 +5894,23 @@
   },
   "VPN active — geo phase skipped": {
     "value": "VPN активен — гео-фаза пропущена"
+  },
+  "Scan log": {
+    "value": "Журнал скана"
+  },
+  "Log is empty": {
+    "value": "Журнал пуст"
+  },
+  "Log copied to clipboard": {
+    "value": "Журнал скопирован в буфер обмена"
+  },
+  "Probed %1$s · alive %2$s": {
+    "value": "Проверено %1$s · живых %2$s"
+  },
+  "By country": {
+    "value": "По странам"
+  },
+  "All probed endpoints": {
+    "value": "Все проверенные адреса"
   }
 }

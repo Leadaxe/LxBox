@@ -2,6 +2,12 @@
 // Логика первого хода (крипта) — в scan_wire.dart, здесь сокетная часть:
 // параллельные UDP-пробы на пул адресов, замер RTT, таймауты, отмена.
 //
+// §835 — проба больше НЕ бросает наружу: любая ошибка сокета (`bind`, `send`,
+// невалидный адрес) возвращается как [WgProbeResult] с `detail`, а не роняет
+// весь проход. Раньше `RawDatagramSocket.bind` стоял ВНЕ try, и одна сетевая
+// ошибка убивала `Future.wait` всего батча — снаружи это выглядело как «скан
+// молча не работает».
+//
 // Отдельно от probe-сессии ядра: UDP-пробу можно слать когда угодно (даже при
 // поднятом VPN-туннеле — она идёт мимо ядра, из системного стека Dart). Это
 // позволяет «доверять» живости эндпоинта по wire-level до того, как гонять
@@ -13,7 +19,8 @@ import 'dart:io';
 
 import 'scan_wire.dart';
 
-/// Один UDP-probe к `ip:port`. Возвращает [WgProbeResult].
+/// Один UDP-probe к `ip:port`. Возвращает [WgProbeResult]. Не бросает: ошибка
+/// сокета/сборки пакета → `timeout` с `detail`.
 Future<WgProbeResult> probeWgEndpoint(
   String ip,
   int port, {
@@ -22,57 +29,86 @@ Future<WgProbeResult> probeWgEndpoint(
 }) async {
   final raws = <int>[];
   try {
-    final pkt = await buildWgInitiation(serverPubRaw: serverPubRaw);
-    raws.addAll(pkt);
-  } catch (_) {
-    return const WgProbeResult(WgProbeKind.timeout);
+    raws.addAll(await buildWgInitiation(serverPubRaw: serverPubRaw));
+  } catch (e) {
+    return WgProbeResult(WgProbeKind.timeout, detail: 'build: $e');
   }
 
-  final socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
+  RawDatagramSocket? socket;
+  try {
+    socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
+  } catch (e) {
+    return WgProbeResult(WgProbeKind.timeout, detail: 'bind: $e');
+  }
+
   final sw = Stopwatch()..start();
+  final completer = Completer<WgProbeResult>();
+  StreamSubscription<RawSocketEvent>? sub;
+  Timer? timer;
   try {
     socket.broadcastEnabled = false;
     socket.writeEventsEnabled = false;
     final addr = InternetAddress(ip);
-    socket.send(raws, addr, port);
+    final sent = socket.send(raws, addr, port);
+    if (sent != raws.length) {
+      return WgProbeResult(
+        WgProbeKind.timeout,
+        detail: 'send short $sent/${raws.length}',
+      );
+    }
 
-    final completer = Completer<WgProbeResult>();
-    late final StreamSubscription<RawSocketEvent> sub;
-    final timer = Timer(timeout, () {
+    timer = Timer(timeout, () {
       if (!completer.isCompleted) {
-        completer.complete(const WgProbeResult(WgProbeKind.timeout));
+        completer.complete(
+          WgProbeResult(
+            WgProbeKind.timeout,
+            detail: 'timeout ${timeout.inMilliseconds}ms (no reply)',
+          ),
+        );
       }
     });
     sub = socket.listen((event) {
       if (event == RawSocketEvent.read) {
-        final dm = socket.receive();
+        final dm = socket!.receive();
         if (dm == null) return;
         final elapsed = sw.elapsedMilliseconds;
         final res = classifyWgResponse(dm.data, rttMs: elapsed);
-        if (res.kind != WgProbeKind.junk && !completer.isCompleted) {
-          completer.complete(res);
+        if (res.kind == WgProbeKind.junk) {
+          // Мусор/чужой протокол — «ответ есть, но не WARP», не живость.
+          if (!completer.isCompleted) {
+            completer.complete(res);
+          }
+          return;
         }
+        if (!completer.isCompleted) completer.complete(res);
       }
     });
-    try {
-      return await completer.future;
-    } finally {
-      timer.cancel();
-      await sub.cancel();
-    }
+    return await completer.future;
+  } catch (e) {
+    return WgProbeResult(WgProbeKind.timeout, detail: 'send: $e');
   } finally {
-    socket.close();
+    timer?.cancel();
+    if (sub != null) {
+      try {
+        await sub.cancel();
+      } catch (_) {}
+    }
+    try {
+      socket.close();
+    } catch (_) {}
   }
 }
 
 /// Прогон UDP-пробы по пулу адресов с ограничением конкурентности.
 /// [onProgress] зовётся после каждого завершённого адреса.
-/// Возвращает `Map<endpoint, жива ли проба>`. [cancelled] — внешний флаг отмены.
+/// [onProbe] — по каждому адресу (для журнала/живого списка), ДО агрегации.
+/// Возвращает `Map<endpoint, WgProbeResult>`. [cancelled] — внешний флаг отмены.
 Future<Map<String, WgProbeResult>> scanWgBatch({
   required List<String> endpoints,
   int concurrency = 16,
   Duration timeout = const Duration(seconds: 3),
   void Function(int done, int total)? onProgress,
+  void Function(String endpoint, WgProbeResult result)? onProbe,
   bool Function()? cancelled,
 }) async {
   final results = <String, WgProbeResult>{};
@@ -88,15 +124,53 @@ Future<Map<String, WgProbeResult>> scanWgBatch({
       final parts = ep.split(':');
       final ip = parts[0];
       final port = int.tryParse(parts.length > 1 ? parts[1] : '') ?? 2408;
-      final r = await probeWgEndpoint(ip, port, timeout: timeout);
+      WgProbeResult r;
+      try {
+        r = await probeWgEndpoint(ip, port, timeout: timeout);
+      } catch (e) {
+        // Страховка: probeWgEndpoint задуман no-throw, но батч не должен
+        // падать даже если внутри что-то проскочит.
+        r = WgProbeResult(WgProbeKind.timeout, detail: 'probe: $e');
+      }
       results[ep] = r;
       done++;
+      onProbe?.call(ep, r);
       onProgress?.call(done, queue.length);
     }
   }
 
   await Future.wait([for (var i = 0; i < concurrency; i++) worker()]);
   return results;
+}
+
+/// §835 — TCP-проверка достижимости адреса (порт открыт или соединение
+/// отвергнуто = хост жив). Используется для самопроверки сети в журнале скана:
+/// отличает «UDP/WG зарезан, но интернет есть» от «нет сети вовсе».
+/// Возвращает `(reachable, detail)`; исключений не бросает.
+Future<({bool reachable, String detail})> probeTcpReachable(
+  String host,
+  int port, {
+  Duration timeout = const Duration(seconds: 4),
+}) async {
+  final sw = Stopwatch()..start();
+  try {
+    final s = await Socket.connect(host, port, timeout: timeout);
+    final ms = sw.elapsedMilliseconds;
+    try {
+      s.destroy();
+    } catch (_) {}
+    return (reachable: true, detail: 'tcp $host:$port open in ${ms}ms');
+  } on SocketException catch (e) {
+    // «Connection refused» = хост ответил RST → сеть ЕСТЬ.
+    final refused = e.osError?.errorCode == 111 ||
+        (e.message.toLowerCase().contains('refused'));
+    return (
+      reachable: refused,
+      detail: 'tcp $host:$port ${refused ? 'refused (host up)' : e.message}',
+    );
+  } catch (e) {
+    return (reachable: false, detail: 'tcp $host:$port $e');
+  }
 }
 
 /// Разбивает CIDR v4 на список IP (все адреса диапазона). Для /32 — один IP.
