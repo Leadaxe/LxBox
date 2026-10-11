@@ -36,6 +36,7 @@ Tasker «Send Intent», цель — Broadcast Receiver) и исполняет �
 | `REFRESH_SUBS` | `force` (Bool) | обновить подписки | обновлятель готов |
 | `RESET_NETWORK` | — | сброс соединений, DNS, переподключение сокетов | туннель поднят |
 | `URLTEST_GROUP` | `group` (String) | URL-тест группы | туннель поднят |
+| `URLTEST_ALL` | — | URL-тест каждой urltest-группы по очереди (без выбора группы; extras игнорируются) | туннель поднят |
 
 ## Входы / Выходы
 

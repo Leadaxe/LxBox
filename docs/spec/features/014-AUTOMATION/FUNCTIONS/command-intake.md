@@ -36,6 +36,7 @@ Commands (prefix `com.leadaxe.lxbox.`):
 | `REFRESH_SUBS` | `force` (Bool) | update subscriptions | the updater is ready |
 | `RESET_NETWORK` | — | reset connections, DNS, reconnect sockets | tunnel up |
 | `URLTEST_GROUP` | `group` (String) | URL test of a group | tunnel up |
+| `URLTEST_ALL` | — | URL test of every urltest group in turn (no group selection; extras ignored) | tunnel up |
 
 ## Inputs / Outputs
 

@@ -25,6 +25,16 @@
   пишет `ip`/`id`/`ib` в источник, остальной текст не трогает; у QUIC домен обязателен (SNI ClientHello);
   явный `I1` приоритетнее — секция выключена с причиной; подсказка QUIC в
   визарде WARP исправлена.)
+- **One intent re-tests every Direction
+  ([task 625](docs/spec/tasks/625-urltest-all-intent.md)).**
+  `com.leadaxe.lxbox.URLTEST_ALL` takes no extras and runs the group URL test
+  of every Direction's auto group in turn; the core re-selects a live node in
+  each. The same command is `urltest-all` in the Tasker/Locale plugin and
+  `POST /action/urltest-all` in the Debug API. Handy on a MacroDroid shake
+  gesture when the network goes stale. `URLTEST_GROUP` is unchanged.
+  (RU: Интент `URLTEST_ALL` без extras перепроверяет auto-группы всех
+  Направлений по очереди, ядро в каждой переселектит на живой узел; та же
+  команда `urltest-all` есть в плагине Tasker/Locale и в Debug API.)
 
 ### Fixed
 

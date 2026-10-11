@@ -38,7 +38,7 @@ Format of the saved setting (stored by the automation app, a public
 contract): one JSON string under the key `com.leadaxe.lxbox.plugin.CONFIG` —
 action `{"v":1,"cmd":"<command>","args":{…}}`, where the command is
 `start-vpn`, `stop-vpn`, `toggle-vpn`, `switch-node` (`tag`), `set-group`
-(`group`), `urltest-group` (`group`), `refresh-subs`, `rebuild-config`,
+(`group`), `urltest-group` (`group`), `urltest-all`, `refresh-subs`, `rebuild-config`,
 `reset-network`; condition
 `{"v":1,"check":"vpn-up|active-node|active-group","equals":"…"}`.
 

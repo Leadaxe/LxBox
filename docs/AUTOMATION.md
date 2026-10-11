@@ -131,6 +131,7 @@ All of them are broadcast intents. The prefix is `com.leadaxe.lxbox.`.
 | `REFRESH_SUBS` | `force` (Bool) | Refresh subscriptions |
 | `RESET_NETWORK` | — | closeAll + DNS flush + dialer rebind (requires the tunnel up) |
 | `URLTEST_GROUP` | `group` (String) | Force a URL test of the group (requires the tunnel up) |
+| `URLTEST_ALL` | — | Force a URL test of every Direction's auto group, one after another; the core re-selects a live node in each (requires the tunnel up; extras are ignored) |
 
 > **The first `START_VPN`** needs the system VPN consent, which can only be given
 > from the UI. Press Connect in the app once; after that automation works without
@@ -252,6 +253,9 @@ Wait Event.
 ### 6. Automatic reset-network on high ping
 - Profile: Variable `%CURR_PING > 1000` (set externally)
 - Task: Send Intent `RESET_NETWORK`
+
+### 6a. Shake to re-test all Directions (MacroDroid)
+- Trigger: Shake Device; Action: Send Intent `URLTEST_ALL`
 
 ### 7. Watch notification when the VPN drops
 - Profile: Event Received `com.leadaxe.lxbox.event.VPN_ERROR`

@@ -3,7 +3,7 @@
 | Поле | Значение |
 |------|----------|
 | Тип | Доработка фичи [014-AUTOMATION](../features/014-AUTOMATION/FEATURE.ru.md) (функции [command-intake](../features/014-AUTOMATION/FUNCTIONS/command-intake.ru.md), [automation-plugin](../features/014-AUTOMATION/FUNCTIONS/automation-plugin.ru.md)); опирается на [009-NODE_HEALTH/urltest-group](../features/009-NODE_HEALTH/FUNCTIONS/urltest-group.ru.md) |
-| Статус | Спека, 2026-10-11 |
+| Статус | Реализовано, 2026-10-11 |
 | Дата | 2026-10-11 |
 | Связанные | §047 (публичный Intent API), §308 (групповой URLTest ядра с переселектом), §290 (общий обработчик Automation/Debug API), §322 (auto-двойники `vpn-N-auto`) |
 
