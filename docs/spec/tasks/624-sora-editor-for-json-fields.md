@@ -3,9 +3,9 @@
 | Поле | Значение |
 |------|----------|
 | Тип | Доработка фичи [019-CONFIG_EDITOR](../features/019-CONFIG_EDITOR/FEATURE.ru.md) (функции [config-editor](../features/019-CONFIG_EDITOR/FUNCTIONS/config-editor.ru.md), [json-fragment-view](../features/019-CONFIG_EDITOR/FUNCTIONS/json-fragment-view.ru.md)) |
-| Статус | Спека. Прототип: ветка `worktree-agent-a0e6c763717a1a9b8`, коммиты `b7cba591`, `c620c0c8` (не влиты) |
+| Статус | Спека (ревью 11.10.2026). Прототип: ветка `worktree-agent-a0e6c763717a1a9b8`, коммиты `b7cba591`, `c620c0c8` (не влиты) |
 | Дата | 2026-10-11 |
-| Связанные | §333 (почему ушли с `TextField` на re_editor: большие тексты), §517/§521/§607 (меню выделения re_editor), §554 (подсветка), §614/§615 (re_editor разнесён по всем JSON-полям), §372 (Android TV, D-pad), §429 (нижний отступ, шторки) |
+| Связанные | §333 (почему ушли с `TextField` на re_editor: большие тексты), §517/§521/§607 (меню выделения re_editor), §554 (подсветка), §614/§615 (re_editor разнесён по всем JSON-полям; язык по виду текста), §372 (Android TV, D-pad), §429 (нижний отступ, шторки), §285 (язык интерфейса переключает приложение) |
 
 ## Проблема
 
@@ -46,7 +46,8 @@
 | CodeMirror 6 в WebView | Рабочий запасной вариант; новая зависимость `webview_flutter`, JS-мост. Не понадобился |
 | **sora-editor** (Rosemoe, нативный Android View, LGPL 2.1, Maven Central) | Полноценный `InputConnection` как у `EditText`. **Выбран** (владелец, 11.10.2026) |
 
-**Прототип на эмуляторе** (sora-editor 0.23.6, hybrid composition):
+**Прототип на эмуляторе** (sora-editor 0.23.6, hybrid composition, без
+переноса строк — `isWordwrap = false`):
 
 | Проверка | re_editor | sora-editor |
 |---|---|---|
@@ -61,61 +62,169 @@
 | Пересоздание view (уход с вкладки, смена темы) | — | ✅ несохранённые правки на месте |
 | APK | — | **+2,0 МБ** |
 
+Чего в прототипе **нет** (дописывается по этой спеке): `hint`, `wordWrap`,
+`language: null` и смена языка на лету, `showLineNumbers`/`language` у
+просмотрщика, `autofocus`, цвета из `ColorScheme`, сброс задержки `changed`
+при уходе с экрана, заглушка для `flutter test`, кнопки поля (`actions`).
+
 ## Решение (владелец, 11.10.2026)
 
 **Все JSON-поля приложения — на sora-editor, re_editor удаляется целиком.**
 Один компонент с одним поведением везде, а не два редактора. Публичные
-виджеты остаются с прежними именами и, где можно, прежними параметрами,
-чтобы экраны менялись минимально.
+виджеты остаются с прежними именами и прежними параметрами (кроме
+перечисленных ниже), чтобы экраны менялись минимально.
 
-### Виджеты
+### Места использования (12, по `grep -rn "LxCodeEditor(\|LxTextCodeField(\|LxJsonView(" app/lib`)
 
-| Виджет | Где | Режим |
+| Виджет | Где (файл) | Что передаёт сейчас |
 |---|---|---|
-| `LxCodeEditor` | экран Config, два поля мастера добавления сервера (URI, JSON) | во всю отведённую высоту, правка, номера строк, поиск, свёртка — по параметрам |
-| `LxTextCodeField` | Source узла, Edit server в папке, JSON-вкладка DNS-сервера, JSON правила маршрута, шторка DNS-правила | фиксированная высота **или** рост по строкам `minLines`…`maxLines`; label / hint / errorText как у поля формы |
-| `LxJsonView` | JSON узла (высота 420 в прокручиваемом экране), outbound, инспектор узла подписки, Source-вкладка подписки | только чтение: без клавиатуры, без каретки, выделение и Copy работают |
+| `LxCodeEditor` ×3 | `config_screen.dart` | `readOnly` (порог 1 МБ), `hint`, `showLineNumbers: true`, `language: json`, `actions: [Copy]` |
+| | `add_server_wizard_screen.dart` — поля URI и JSON | `fontSize: 13`, `hint`; у JSON — `language: json`, у URI — без подсветки |
+| `LxTextCodeField` ×5 | `node_settings_screen.dart` — Source узла | `minLines: 12`, `language` по виду текста (`{` → json, иначе `null`), пересчитывается `ListenableBuilder` на каждую правку |
+| | `folder_detail_screen.dart` — Edit server в папке (диалог) | `autofocus: true`, `minLines: 3`, `maxLines: 8`, `hint`, `language` по `{` |
+| | `dns_server_edit/tabs/json_tab.dart` — JSON-вкладка DNS-сервера | `errorText`, `onChanged`; высоты нет — заполняет `Expanded` |
+| | `custom_rule_edit/sections/json_section.dart` — JSON правила маршрута | `minLines: 6`, `maxLines: 20`, `fontSize: 13`, `hint`, `errorText`, `onChanged` |
+| | `dns_settings_screen/user_rule_editor_sheet.dart` — шторка DNS-правила | `height: 180`, `label` |
+| `LxJsonView` ×4 | `node_settings_screen.dart` — JSON узла | `height: 420`, кнопка Copy Flutter-виджетом поверх (Stack) |
+| | `outbound_view_screen.dart` — outbound | без высоты (заполняет родителя) |
+| | `subscription_detail_screen/node_inspect_screen.dart` — инспектор узла подписки | без высоты, кнопка Copy поверх |
+| | `subscription_detail_screen/widgets/subscription_source_tab.dart` — Source подписки | `height` = 0,6 экрана, `fontSize: 11`, `showLineNumbers: true`, `language` по виду текста |
 
-**Контроллер.** `LxCodeEditor` сейчас принимает `CodeLineEditingController`
-(тип re_editor) — он уходит. Все три виджета работают с
-`TextEditingController` Flutter: экраны читают и пишут `controller.text`, как
-делали до §333. Текст — истина на стороне Dart (см. ниже).
+### API виджетов после замены
 
-**Платформы.** Приложение только Android; на прочих платформах (в т.ч.
-`flutter test`) виджеты рисуют простой `TextField` с той же раскладкой — это
-и есть тестовый путь (см. «Тесты»).
+Все три виджета живут в `app/lib/widgets/lx_code_editor.dart`; `enum
+LxCodeLanguage { json }` остаётся (`null` = без подсветки).
+
+| Параметр | `LxCodeEditor` | `LxTextCodeField` | `LxJsonView` | Судьба |
+|---|---|---|---|---|
+| `controller` | **`TextEditingController`** (было `CodeLineEditingController`) | `TextEditingController` | — (`text: String`) | тип меняется только у `LxCodeEditor` |
+| `readOnly` | да | да | всегда `true` | остаётся |
+| `showLineNumbers` | да (умолч. `false`) | да (умолч. `true`) | да (умолч. `false`) | остаётся → creation param `lineNumbers` |
+| `language` | да | да (умолч. `json`) | да (умолч. `json`) | остаётся; меняется на лету через `setLanguage` |
+| `fontSize` | да (12) | да (12) | да (12) | остаётся → `setTextSize` в sp-эквиваленте: Dart передаёт логические пиксели, натив умножает на `density` **без** `fontScale` (как Flutter-текст с `textScaler` по умолчанию) |
+| `wordWrap` | да (умолч. `true`) | — (всегда `true`, как сейчас) | — (`true`) | остаётся → `isWordwrap`; прототип мерил без переноса |
+| `hint` | да | да | — | остаётся (см. «Hint») |
+| `autofocus` | `bool?` → **`bool`**, умолч. `false` | `bool`, умолч. `false` | — | см. «Фокус» |
+| `find` | да (`null` = как `showLineNumbers`) | — | — | остаётся |
+| `folding` | да | — | — | **удаляется** (открытый вопрос 1) |
+| `actions` | да | — | — | остаётся: Flutter-виджеты поверх view в правом верхнем углу, на время панели поиска прячутся (как §614) |
+| `height`, `minLines`, `maxLines` | — | да | `height` | остаются; `height == null && minLines == null` — заполняет ограниченного родителя |
+| `label`, `errorText` | — | да | — | остаются Flutter-текстом над/под полем, как сейчас |
+| `onChanged` | — | да | — | остаётся: только на правку в поле, не на запись в контроллер из кода |
+
+Экраны по-прежнему читают и пишут `controller.text`; `LxCodeEditor` слушает
+контроллер и при внешней записи (Paste, Load from file, форматирование) шлёт
+`setText`. Запись в контроллер из `changed` помечается флагом `_syncing`, чтобы
+не уйти обратно в натив (как сейчас в `_LxTextCodeFieldState`).
+
+**Платформы.** Приложение только Android; на прочих платформах виджеты
+рисуют заглушку — `TextField` с той же раскладкой (`label`, `hint`,
+`errorText`, высота, `readOnly`), без подсветки. Гейт — `!kIsWeb &&
+Platform.isAndroid` из `dart:io`. **Не** `defaultTargetPlatform`: под
+`flutter test` он возвращает `TargetPlatform.android`, и тесты полезут в
+platform view. Заглушка — единственный тестовый путь (см. «Проверка»).
 
 ### Нативная сторона
 
-- `SoraEditorPlatformView` (Kotlin), фабрика регистрируется в `MainActivity`.
+- `SoraEditorPlatformView` (Kotlin, `app/android/app/src/main/kotlin/com/leadaxe/lxbox/editor/`),
+  фабрика `SoraEditorFactory` регистрируется в `MainActivity`
+  (`platformViewsController.registry.registerViewFactory("lxbox/sora_editor", …)`).
 - Dart: `PlatformViewLink` + `PlatformViewsService.initExpensiveAndroidView`
   (**hybrid composition** — без неё клавиатура в platform view не работает).
-- Зависимость: BOM `io.github.Rosemoe.sora-editor` + `editor` +
-  `language-textmate`, версия пинится точно.
-- Подсветка JSON — TextMate-грамматика `json.tmLanguage.json` (MIT, источник
-  и лицензия рядом в `assets/sora/README.md`), темы светлая / тёмная из
-  `ColorScheme` приложения, смена темы на лету.
+- Зависимость: `implementation(platform("io.github.Rosemoe.sora-editor:bom:0.23.6"))`
+  + `editor` + `language-textmate`; версия пинится точно, без диапазонов.
+- Подсветка JSON — TextMate-грамматика `json.tmLanguage.json` (MIT, из
+  microsoft/vscode; лицензия `LICENSE-vscode.txt` и README с источниками в
+  `assets/sora/`). TextMate-реестры sora — глобальные синглтоны: грузятся один
+  раз на процесс (`SoraTextMate.ensure`), общие для всех view на экране.
+- Тема: два файла `lx-light.json` / `lx-dark.json` (формат тем VS Code) дают
+  **цвета токенов**; фон, цвет текста, номеров строк, выделения и каретки
+  берутся из `ColorScheme` приложения и приходят в creation params /
+  `setTheme` (ключи `EditorColorScheme.WHOLE_BACKGROUND`, `TEXT_NORMAL`,
+  `LINE_NUMBER`, `LINE_NUMBER_BACKGROUND`, `SELECTED_TEXT_BACKGROUND`,
+  `SELECTION_INSERT`, `CURRENT_LINE`). Иначе фон поля отличается от фона
+  экрана (сейчас re_editor рисуется на фоне экрана — ключ `root` темы вырезан).
+  Прототип этого не делает: его `editor.background` зашит в JSON темы.
+- Шрифт: `Typeface.MONOSPACE` (сейчас у re_editor `fontFamily: 'monospace'` —
+  тот же системный шрифт).
+- Режим только чтения: `editor.editable = false`, каретка и подсветка текущей
+  строки прозрачные (`SELECTION_INSERT`, `CURRENT_LINE`), клавиатура не
+  вызывается; выделение и меню Copy / Select all работают.
 - `isDisableSoftKbdIfHardKbdAvailable = false` — иначе при подключённой
   аппаратной клавиатуре (BT, эмулятор) экранная не появляется.
 - **R8:** keep-правила `proguard-sora.pro` для `org.jcodings`, `org.joni`,
   `org.eclipse.tm4e`, `io.github.rosemoe.sora` и `-dontwarn
   kotlin.Cloneable$DefaultImpls`. Без них release-сборка падает при открытии
   редактора (TextMate-движок грузит классы по имени, R8 их вырезает).
+- **Локаль нативного меню.** Строки меню выделения (Cut / Copy / Paste /
+  Select all) — ресурсы sora, язык берётся из `Configuration` контекста.
+  На API 33+ приложение пушит язык через `LocaleManager` (`vpn/L10n.kt`), на
+  API 24–32 контекст Activity остаётся на системном языке и меню может не
+  совпадать с языком приложения. Поэтому view создаётся на
+  `context.createConfigurationContext(config)` с локалью из creation param
+  `locale` (BCP-47 тег текущего языка приложения; пустая строка = системный).
 
 ### Канал Dart ↔ натив
 
-| Направление | Сообщение | Смысл |
-|---|---|---|
-| Dart → натив | creation params | текст, readOnly, тема, номера строк, язык, режим скролла |
-| Dart → натив | `setText` | подстановка (Paste, Load from file, внешняя правка контроллера) |
-| Dart → натив | `setReadOnly`, `setDark`, `find*` | режим, тема, поиск |
-| натив → Dart | `changed` | новый текст после правки; текст > 256 КБ — с задержкой 300 мс, последняя правка не теряется (сброс задержки при потере фокуса и при `getText`) |
-| натив → Dart | `metrics` | число строк и высота строки — для растущего поля |
-| натив → Dart | `caret` | экранная координата каретки — Dart докручивает её над клавиатурой |
+Канал на view: `MethodChannel("com.leadaxe.lxbox/sora_editor_<viewId>")`.
+Имена — как в прототипе, новые помечены.
+
+| Направление | Сообщение | Аргументы | Когда |
+|---|---|---|---|
+| Dart → натив | creation params | `text`, `readOnly`, `dark`, `lineNumbers`, `fontSize`, `wordWrap` (новое), `language` (новое: `"json"` / `null`), `locale` (новое), `colors` (новое: map ключ→ARGB из `ColorScheme`), `autofocus` (новое) | создание view |
+| Dart → натив | `setText {text}` | | внешняя запись в контроллер (Paste, Load from file, подстановка). Натив ставит флаг `applyingFromDart`, чтобы не отразить текст обратно `changed` |
+| Dart → натив | `getText` → `String` | | перед Save / Copy / Share на экране Config (см. «Задержка») |
+| Dart → натив | `setReadOnly {value}`, `setDark {dark}` + `colors` | | смена порога / темы без пересоздания view |
+| Dart → натив | `setLanguage {language}` (новое) | | `didUpdateWidget`: Source узла переключает подсветку по виду текста |
+| Dart → натив | `search {query}`, `searchNext`, `searchPrevious` | | панель поиска; пустой `query` = `stopSearch()` |
+| натив → Dart | `changed {text?, lines, rowHeight, textOffsetX}` | `text` отсутствует в промежуточных событиях длинного текста; `rowHeight` и `textOffsetX` (`measureTextRegionOffset()`, новое) — в физических пикселях, Dart делит на `devicePixelRatio` | каждая правка; после `setText` — без `text` |
+| натив → Dart | `cursor {y, rowHeight, focused}` | `y` — верх строки каретки относительно view, физические пиксели | смена выделения, фокуса, уменьшение view (клавиатура) |
+
+**Задержка `changed`.** Текст ≤ 256 КБ (`SYNC_LIMIT`) уходит в `changed`
+сразу. Длиннее — промежуточные `changed` без текста (только метрики), полный
+текст — через 300 мс после последней правки (`SYNC_DEBOUNCE_MS`). Задержанный
+текст **обязательно** сбрасывается немедленно: при потере фокуса view, при
+`getText`, в `dispose()` натива (перед `setMethodCallHandler(null)`). Прототип
+в `dispose()` правку **терял** (`removeCallbacks` без сброса) — исправить.
 
 **Истина текста — Dart.** Пересозданный view (уход с вкладки, смена темы,
-возврат на экран) получает в creation params актуальный текст контроллера,
-не исходный. Save / Copy / Share экрана читают `controller.text`.
+возврат на экран) получает в creation params актуальный текст контроллера.
+Save / Copy / Share экрана читают `controller.text`; на экране Config перед
+ними — `await` метода `flush()` виджета (через `GlobalKey<LxCodeEditorState>`),
+который вызывает `getText` и пишет результат в контроллер. Остальные поля
+держат тексты узлов и правил — порог 256 КБ там недостижим.
+
+**Dispose без утечек.** Обработчик канала на стороне Dart принадлежит не
+`State`, а объекту-держателю, который живёт до прихода финального `changed`
+после `dispose` натива (иначе финальный текст некуда положить); натив в
+`dispose()`: сброс задержки → `setMethodCallHandler(null)` →
+`editor.release()`. `WidgetsBindingObserver` снимается в `dispose` `State`.
+
+### Фокус и autofocus
+
+- Фокус внутри view нативный; Flutter узнаёт о нём через
+  `onFocus: () => params.onFocusChanged(true)` — так `FocusManager` не держит
+  фокус на Flutter-поле одновременно с клавиатурой нативного.
+- `autofocus: true` → натив после `setText` вызывает `editor.requestFocus()` и
+  показывает клавиатуру (`showSoftInput`). Сейчас у re_editor `autofocus`
+  по умолчанию `true` (`code_editor.dart:503`): экран Config и мастер
+  открываются с фокусом в поле. Новое умолчание `false` для всех трёх виджетов
+  (открытый вопрос 3); диалог Edit server в папке передаёт `true` явно.
+- Внешних `FocusNode` у виджетов нет и не появляется: ни один из 12 экранов
+  не вызывает `unfocus()` для этих полей. Клавиатуру при уходе с экрана
+  закрывает Android вместе с окном фокуса.
+- Android TV (§372): D-pad-стрелки внутри view двигают каретку, Back отдаёт
+  фокус Flutter. Фокус не должен застревать: после Back D-pad ходит по
+  остальным элементам экрана (ручная проверка).
+
+### Hint
+
+Sora не рисует placeholder. `hint` — Flutter-`Text` поверх view
+(`IgnorePointer`, стиль `bodyMedium` цвета `onSurfaceVariant`, моноширинный,
+тот же `fontSize`), показывается, пока текст контроллера пуст; левый отступ —
+`textOffsetX` из последнего `changed` (учитывает ширину gutter с номерами
+строк), верхний — как у первой строки. До первого `changed` — отступ без
+gutter.
 
 ### Поведение в странице
 
@@ -123,86 +232,128 @@
   уходят странице (страница скроллится и по полю). Если не помещается —
   вертикаль забирает редактор. Тап, долгий тап, горизонтальный свайп — всегда
   редактору.
-- **Горизонтальный свайп по полю не листает вкладки** — он прокручивает
-  длинные строки (при `wordWrap: false`). Листать вкладки — вне поля. Это
+- **Горизонтальный свайп по полю не листает вкладки** — при `wordWrap: false`
+  он прокручивает длинные строки; при `wordWrap: true` sora не скроллит по
+  горизонтали, но жест всё равно его. Листать вкладки — вне поля. Это
   принимаемое ограничение.
-- **Курсор над клавиатурой.** По `caret` Dart вызывает докрутку ближайшего
-  `Scrollable` так, чтобы строка с кареткой была над клавиатурой; повтор при
-  изменении `viewInsets`. Полноэкранный редактор (Config) докручивается внутри
-  себя.
-- **Растущее поле.** Высота = `clamp(lines, minLines, maxLines) × lineHeight
-  + отступы`. Пока текст помещается, внутренний скролл сброшен в начало
-  (иначе после роста первая строка остаётся скрытой).
+- **Курсор над клавиатурой.** По `cursor` Dart строит прямоугольник строки
+  каретки и вызывает `RenderObject.showOnScreen` — ближайший `Scrollable`
+  докручивает её над клавиатурой; повтор при изменении `viewInsets`
+  (`didChangeMetrics`). Полноэкранный редактор (Config) докручивается внутри
+  себя (`ensureSelectionVisible` при уменьшении view).
+- **Растущее поле.** Высота = `clamp(lines, minLines, maxLines) × rowHeight
+  + отступы`; `maxLines == null` → `max(minLines, 24)`, как сейчас. Пока
+  текст помещается, внутренний скролл сброшен в начало (иначе после роста
+  первая строка остаётся скрытой).
+- **Несколько view на экране.** Настройки узла держат два (Source + JSON),
+  подписка — один на вкладке. Каждый hybrid-composition view — отдельная
+  Android-поверхность; на API 24–28 это самая тяжёлая конфигурация (см. риски).
 
 ### Меню выделения и кнопки поля
 
 - Меню выделения — нативное меню sora (Cut / Copy / Paste / Select all; в
   режиме только чтения — Copy / Select all, как §607). Свой
-  `LxSelectionToolbarController` (§517/§521) удаляется вместе с re_editor.
+  `LxSelectionToolbarController` и `_LxToolbarOverlay` (§517/§521) удаляются
+  вместе с re_editor.
 - Кнопки поля (`actions` у `LxCodeEditor`: Copy на экране Config, поиск)
   остаются Flutter-виджетами поверх view в правом верхнем углу, как сейчас.
-  Прототип убрал Copy в меню — **вернуть**.
+  Прототип убрал Copy в меню — **вернуть**. Кнопки Copy над `LxJsonView`
+  (JSON узла, инспектор подписки) остаются в своих экранах как есть.
 - Поиск: штатный `EditorSearcher` sora; панель поиска — Flutter-виджет над
-  редактором (как `_LxFindPanel`), команды — через канал.
+  редактором (как `_LxFindPanel`), команды — через канал; пустой запрос
+  снимает подсветку совпадений.
 - Свёртка блоков (§614): если в sora нет штатной — **снимается** (решение ниже).
 
 ### Подсветка по виду текста
 
-`LxTextCodeField` сейчас включает подсветку JSON, только если текст
-начинается с `{` (§615). Сохранить: URI и INI в Source подсвечиваются как
-обычный текст, не JSON.
+Язык выбирают экраны, не виджет: Source узла (`node_settings_screen.dart`) и
+Edit server в папке (`folder_detail_screen.dart`) передают `language: json`
+только когда текст начинается с `{` (§615), Source подписки — по
+`_looksLikeJson`. Виджеты это сохраняют: `language: null` → в sora
+`EmptyLanguage` (голый текст без подсветки), смена на лету — `setLanguage`,
+без пересоздания view. Прототип подсвечивал всё как JSON — так не оставлять.
 
 ### Порог только-чтения
 
-Порог `kConfigEditMaxChars = 1 МБ` (§333) **не меняется** в этой задаче:
-sora открыл 926 КБ за 40 мс, но поднимать порог — отдельное решение после
-замера на телефоне.
+Порог `kConfigEditMaxChars = 1 МБ` (`config_screen.dart:23`, §333) **не
+меняется** в этой задаче: sora открыл 926 КБ за 40 мс, но поднимать порог —
+отдельное решение после замера на телефоне.
 
 ## Затрагиваемые файлы
 
 | Файл | Изменение |
 |---|---|
-| `app/lib/widgets/lx_code_editor.dart` | три публичных виджета переписаны на platform view; re_editor-код, `LxSelectionToolbarController`, `_highlightTheme` удаляются |
+| `app/lib/widgets/lx_code_editor.dart` | три публичных виджета переписаны на platform view + заглушка; re_editor-код, `LxSelectionToolbarController`, `_LxToolbarOverlay`, `_highlightTheme` удаляются |
 | `app/lib/widgets/lx_native_code_editor.dart` (прототип) | сливается в `lx_code_editor.dart` или остаётся внутренним файлом; публичных `LxNative*` не остаётся |
-| `app/android/.../editor/SoraEditorPlatformView.kt` | нативный view + канал |
-| `app/android/app/build.gradle.kts`, `proguard-sora.pro` | зависимость, R8 |
-| `app/android/app/src/main/assets/sora/` | грамматика, темы, README с лицензиями |
-| `app/lib/screens/config_screen.dart`, `add_server_wizard_screen.dart` | `CodeLineEditingController` → `TextEditingController` |
-| остальные 9 экранов из таблицы «Виджеты» | только если меняется сигнатура |
-| `app/pubspec.yaml` | − `re_editor`, − `re_highlight` (если больше не нужен) |
-| `test/widgets/lx_code_editor_*_test.dart` | тесты re_editor-меню/поиска/свёртки удаляются; новые — по разделу «Тесты» |
-| F-Droid метаданные | новая Maven-зависимость (LGPL 2.1) — проверить, что сборка F-Droid её тянет |
+| `app/android/app/src/main/kotlin/com/leadaxe/lxbox/editor/SoraEditorPlatformView.kt` | нативный view + канал (из прототипа, плюс `setLanguage`, `wordWrap`, `colors`, `locale`, `autofocus`, `textOffsetX`, сброс задержки в `dispose`) |
+| `app/android/app/src/main/kotlin/com/leadaxe/lxbox/MainActivity.kt` | регистрация фабрики |
+| `app/android/app/build.gradle.kts`, `app/android/app/proguard-sora.pro` | зависимость, R8 |
+| `app/android/app/src/main/assets/sora/` | грамматика, темы токенов, `LICENSE-vscode.txt`, README с источниками |
+| `app/lib/screens/config_screen.dart`, `add_server_wizard_screen.dart` | `CodeLineEditingController` → `TextEditingController`; в Config — `flush()` перед Save / Copy / Share |
+| остальные 9 экранов из таблицы «Места использования» | без правок, если сигнатуры сохранены |
+| `app/pubspec.yaml` | − `re_editor`, − `re_highlight` (других пользователей нет) |
+| `app/test/widgets/lx_code_editor_find_fold_test.dart` | тесты свёртки и re_editor-поиска удаляются; тест «LxTextCodeField: синхронизация с TextEditingController» переписывается на заглушку |
+| `app/test/widgets/lx_code_editor_readonly_menu_test.dart`, `lx_code_editor_toolbar_test.dart` | удаляются целиком (меню — нативное) |
+| `app/test/screens/custom_rule_edit/app_bar_save_gate_test.dart`, `app/test/screens/folder_member_menu_test.dart` | читают `TextEditingController` вместо `CodeLineEditingController` через `LxCodeEditor`; в прототипе `app_bar_save_gate_test` уже так |
+| `docs/FDROID.md` | Maven-зависимость (LGPL 2.1) — проверить, что сборка F-Droid её тянет |
 
 ## Риски и граничные случаи
 
-- **Потеря правок при пересоздании view** — закрыто истиной на стороне Dart;
-  отдельно проверить задержку 300 мс для длинного текста (уход с экрана сразу
-  после правки).
-- **Android 7–9 (minSdk 24):** hybrid composition на версиях до 10 медленнее
-  (известное ограничение Flutter). Проверить прокрутку страницы с полем на
-  AVD API 24/28.
+- **Потеря правок при пересоздании view** — закрыто истиной на стороне Dart и
+  обязательным сбросом задержки в `dispose`; отдельно проверить уход с экрана
+  сразу после правки текста > 256 КБ.
+- **Android 7–9 (minSdk 24, `build.gradle.kts:69`):** hybrid composition на
+  версиях до 10 медленнее (известное ограничение Flutter). Проверить
+  прокрутку страницы настроек узла (два view) на AVD API 24/28.
 - **Android TV (§372):** D-pad по полю — фокус входит и выходит из view,
-  не застревает внутри.
+  не застревает внутри; leanback-образ без сенсорного экрана.
+- **Доступность (TalkBack).** Нативный view участвует в дереве доступности
+  Android сам по себе, но `label` и `errorText` — Flutter-текст рядом, не
+  `contentDescription` поля. Проверить на эмуляторе, что TalkBack читает
+  текст поля и подпись; если нет — `contentDescription = label` через
+  creation params. Сейчас у re_editor семантики тоже нет, хуже не станет.
+- **Тема и фон.** Если цвета из `ColorScheme` не прокинуть, поле выглядит
+  инородно (прототип). Смена темы на лету — `setDark` + `colors`, без
+  пересоздания; `ColorSchemeUpdateEvent` переприменяет прозрачные цвета
+  режима только чтения.
+- **Язык нативного меню** на API < 33 — см. «Локаль нативного меню»: без
+  `createConfigurationContext` меню идёт на системном языке, а не на языке
+  приложения. Проверить RU-локаль приложения при EN-системе на AVD API 28.
 - **Шторка самопроизвольно закрылась** один раз в прототипе после Home +
   Shift+↓ через adb — не воспроизвелось; повторить вручную.
 - **Стрелки ↑/↓ кастомной клавиатуры** не проверены автоматически — ручная
   проверка (scrcpy на эмуляторе или rc у пожаловавшегося пользователя).
 - **`uiautomator dump` зависает** при открытом sora (мигающая каретка) —
   сценарии UI-проверки строить на скриншотах и логах, не на дампе.
-- **Лицензия:** LGPL 2.1 при динамической линковке AAR совместима с лицензией
-  приложения; отметить в списке зависимостей / About, если там перечисляются.
-- **Не покрыто:** автодополнение, подсветка URI/INI, подъём порога 1 МБ.
+- **F-Droid.** `sora-editor`, tm4e, joni, jcodings — чистые JVM-артефакты с
+  Maven Central, без прекомпилированных `.so` и без JitPack; `fdroid scanner`
+  к Maven-зависимостям претензий не имеет. `dependenciesInfo.includeInApk =
+  false` уже стоит. Проверить сборкой по рецепту `docs/FDROID.md`.
+- **Размер:** +2,0 МБ к APK (измерено на прототипе); `re_editor`/`re_highlight`
+  уходят — чистый прирост чуть меньше. В CHANGELOG не выносить.
+- **Лицензия:** sora-editor LGPL 2.1 как динамически линкуемый AAR внутри
+  приложения GPL-3.0 (`LICENSE`) — совместимо; добавить в перечень
+  зависимостей, если такой есть на экране About (`about_screen.dart`) или в
+  README.
+- **Утечки.** `editor.release()` в `dispose()` обязателен (sora держит
+  потоки анализа и `Handler`); проверить `dumpsys meminfo` после 10 входов и
+  выходов из настроек узла — число `View`/`Activity`-утечек не растёт.
+- **Не покрыто:** автодополнение, подсветка URI/INI, подъём порога 1 МБ,
+  поиск с заменой.
 
 ## Проверка
 
-**Тесты (`flutter test`, не Android):** виджеты на не-Android рисуют
-`TextField`-заглушку; тестируется Dart-логика — контроллер ↔ виджет, рост
-поля по `metrics` (фейковый канал), докрутка по `caret`, гейт readOnly,
-обработка `changed` с задержкой. Экранные тесты (`app_bar_save_gate_test`,
-`folder_member_menu_test`) переводятся на `TextEditingController`.
+**Тесты (`flutter test`, не Android):** виджеты рисуют `TextField`-заглушку
+(гейт `Platform.isAndroid`); тестируется Dart-логика — контроллер ↔ виджет,
+`onChanged` только на правку, рост поля по метрикам (фейковый канал через
+`TestDefaultBinaryMessengerBinding`), докрутка по `cursor`, гейт readOnly,
+обработка `changed` без текста и с задержкой, сброс задержки на `flush()`.
+Экранные тесты (`app_bar_save_gate_test`, `folder_member_menu_test`)
+переводятся на `TextEditingController`. Один файл за прогон (правило CI).
 
 **CI:** release-сборка проходит с R8; APK из CI открывает экран Config без
-падения (smoke на эмуляторе).
+падения (smoke на эмуляторе). Автотесты на CI нативный view не поднимают —
+только заглушку; всё нативное проверяется вручную по сценарию ниже.
 
 **Эмулятор (сценарий для проверяющего):**
 1. Config: тап в последнюю строку — строка над клавиатурой.
@@ -210,31 +361,47 @@ sora открыл 926 КБ за 40 мс, но поднимать порог — 
 3. Стрелки ←/→ Unexpected Keyboard в начале строки — курсор двигается, текст
    не меняется, клавиатура на месте.
 4. Ввод, Enter, Backspace, Paste, Save; повторное открытие — правка на месте.
-5. Config ~1 МБ: открытие, прокрутка, ввод.
+5. Config ~1 МБ: открытие, прокрутка, ввод, правка и сразу Back — после
+   возврата правка на месте.
 6. Настройки узла: Source + JSON на одной странице, прокрутка по полю,
-   клиппинг под AppBar/TabBar.
+   клиппинг под AppBar/TabBar; вставить URI в Source — подсветка выключилась,
+   вставить `{` — включилась.
 7. Шторка DNS-правила с клавиатурой.
-8. Растущее поле: 40+ Enter.
-9. Уход с вкладки / смена темы с несохранёнными правками — правки на месте.
-10. Поиск на Config; кнопка Copy в углу поля.
-11. Мастер добавления сервера: поля URI и JSON.
+8. Растущее поле (правило маршрута): 40+ Enter; пустое поле показывает hint с
+   отступом под номера строк.
+9. Уход с вкладки / смена темы с несохранёнными правками — правки на месте;
+   фон поля = фон экрана в обеих темах.
+10. Поиск на Config; кнопка Copy в углу поля; пустой запрос снимает подсветку.
+11. Мастер добавления сервера: поля URI и JSON, hint, без автофокуса.
+12. Язык приложения RU на AVD API 28: меню выделения — на языке приложения.
+13. TalkBack: фокус на поле — читается текст; на `label` — подпись.
 
 **Вручную (владелец / rc):** стрелки ↑/↓ кастомной клавиатуры; Android TV
-D-pad; AVD API 24.
+D-pad; AVD API 24; `dumpsys meminfo` на утечки.
 
 ## Открытые вопросы владельцу
 
 1. **Свёртка блоков (§614).** Если у sora нет штатной свёртки — снимаем
-   (рекомендация: да, на мобильном почти не используется) или пишем свою?
+   (рекомендация: да, на мобильном почти не используется, параметр `folding`
+   удаляется) или пишем свою?
 2. **Меню выделения** — нативное меню sora вместо нашего (рекомендация: да,
-   оно ведёт себя как системное и не требует §517/§521-костылей).
+   оно ведёт себя как системное и не требует §517/§521-костылей). Строки
+   меню — ресурсы sora на языке приложения, а не наши `getLocalText`.
+3. **Автофокус на Config и в мастере.** Сейчас re_editor берёт фокус при
+   открытии (умолчание пакета), клавиатура выезжает сразу. Рекомендация:
+   умолчание `autofocus: false` везде, `true` только в диалоге Edit server в
+   папке, где так и передаётся; пользователь сначала видит текст, потом тапает.
+4. **Перенос строк на Config.** Сейчас `wordWrap: true` (длинные строки
+   переносятся); прототип мерил без переноса. Рекомендация: оставить перенос
+   как есть, `wordWrap` остаётся параметром.
 
 ## Docs to update
 
 - `features/019-CONFIG_EDITOR/FUNCTIONS/config-editor(.ru).md` — меню
   выделения, поиск, свёртка, курсор над клавиатурой.
 - `features/019-CONFIG_EDITOR/FUNCTIONS/json-fragment-view(.ru).md` — просмотрщик.
-- `docs/ARCHITECTURE.md` — нативный редактор, platform view, канал.
+- `docs/ARCHITECTURE.md` — раздел «Редактируемое: `re_editor` вместо
+  `TextField`» переписать: нативный редактор, platform view, канал.
 - `docs/BUILD.md` / `docs/FDROID.md` — Maven-зависимость, R8-правила.
 - `tasks/333-large-text-virtualization.md` — пометка: re_editor заменён §624.
 - `CHANGELOG.md` (EN + RU).
