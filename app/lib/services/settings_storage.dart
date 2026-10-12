@@ -810,7 +810,7 @@ class SettingsStorage {
 
   /// §220 — разрешить поворот UI (landscape). Default false — жёсткий портрет,
   /// как было всегда; поведение телефонов не меняется. Toggle в App Settings →
-  /// General → Behavior; применяется сразу через `applyAllowRotationSetting()`
+  /// Appearance; применяется сразу через `applyAllowRotationSetting()`
   /// (main.dart), без рестарта.
   static Future<bool> getAllowRotation() async =>
       (await getVar('allow_rotation', 'false')) == 'true';
