@@ -425,7 +425,14 @@ void main() {
             if (f.fate == BackupFieldFate.setting && !f.travels)
               '${f.record.name}.${f.key}',
         ],
-        ['dnsRule.kind:srs'],
+        [
+          // §636 — TLS-политика: контракт поле не объявил.
+          'subscription.tls',
+          'server.tls',
+          'folder.tls',
+          'folderNode.tls',
+          'dnsRule.kind:srs',
+        ],
       );
     });
 

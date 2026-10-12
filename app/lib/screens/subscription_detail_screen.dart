@@ -304,6 +304,8 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
     _probeRunner = runner;
     final err = await runner.run(
       nodes,
+      // §636 — проба фрагментирует так же, как туннель.
+      tlsByIndex: ProbeController.probeTlsOf(widget.entry.list),
       url: url,
       timeoutMs: timeoutMs,
       onResult: (i, r) {

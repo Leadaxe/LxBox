@@ -17,6 +17,7 @@ import '../models/source_replace.dart';
 import '../models/source_entry.dart';
 import '../models/ui_msg.dart';
 import '../models/subscription_meta.dart';
+import '../models/tls_policy.dart';
 import '../models/tunnel_status.dart';
 import '../models/validation.dart';
 import '../services/app_log.dart';
@@ -2248,6 +2249,27 @@ class SubscriptionController extends ChangeNotifier {
 
     final members = [...folder.members];
     members[memberIndex] = members[memberIndex].copyWith(detour: detour);
+    entry._replaceList(folder.copyWith(members: members));
+    await _persist();
+    notifyListeners();
+    return null;
+  }
+
+  /// §636 — узловая TLS-политика члена папки. Возвращает null при успехе,
+  /// иначе ошибку.
+  Future<UiMsg?> setMemberTls(int index, int memberIndex, TlsPolicy tls) async {
+    if (index < 0 || index >= _entries.length) {
+      return const ErrMsg(ErrKey.folderNotFound);
+    }
+    final entry = _entries[index];
+    final folder = entry.list;
+    if (folder is! FolderServers) return const ErrMsg(ErrKey.notAFolder);
+    if (memberIndex < 0 || memberIndex >= folder.members.length) {
+      return const ErrMsg(ErrKey.serverNotFound);
+    }
+    if (folder.members[memberIndex].tls == tls) return null;
+    final members = [...folder.members];
+    members[memberIndex] = members[memberIndex].copyWith(tls: tls);
     entry._replaceList(folder.copyWith(members: members));
     await _persist();
     notifyListeners();

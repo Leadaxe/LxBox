@@ -2,6 +2,7 @@ import '../../../controllers/subscription_controller.dart';
 import '../../../models/codec/node_link_record.dart';
 import '../../../models/server_list.dart';
 import '../../node_link_address.dart';
+import '../../probe/probe_controller.dart' show ProbeController;
 import '../../probe/probe_runner.dart';
 import '../../settings_storage.dart';
 import '../context.dart';
@@ -424,6 +425,7 @@ Future<DebugResponse> _probe(String id, DebugRequest req, DebugContext ctx) asyn
   // ответ строится по тем же folder.members[i]).
   final err = await ProbeRunner().run(
     [for (final m in folder.members) m.node],
+    tlsByIndex: ProbeController.probeTlsOf(folder), // §636
     url: url,
     timeoutMs: timeoutMs,
     onResult: (i, r) => results[i] = r,

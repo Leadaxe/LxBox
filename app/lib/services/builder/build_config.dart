@@ -9,6 +9,7 @@ import '../../models/node_warning.dart';
 import '../../models/parser_config.dart';
 import '../../models/server_list.dart';
 import '../../models/source_chain.dart';
+import '../../models/tls_policy.dart';
 import '../contract/group_genus.dart';
 import '../../models/singbox_entry.dart';
 import '../../models/template_vars.dart';
@@ -850,8 +851,9 @@ Future<BuildResult> _buildConfig({
           .add(w);
     }
   }
-  applyTlsFragment(config, vars);
-  applyMixedCaseSni(config, vars);
+  // §636 — уровни узла и источника поверх глобальных `vars`.
+  applyTlsFragment(config, vars, byTag: ctx.tlsByTag);
+  applyMixedCaseSni(config, vars, byTag: ctx.tlsByTag);
 
   // §419 / §441 — умолчания шаблона резолверов DNS: замены битых ссылок
   // (сервер пресета ушёл — [healDanglingDnsResolvers]; сервер выпал из-за
@@ -1205,6 +1207,14 @@ class _BuildCtx implements EmitContext {
 
   /// §435 — строки отчёта из `ServerList.build` (гейт ядра).
   final warnings = <String>[];
+
+  /// §636 — итоговый тег → уровни TLS-политики (узел, источник).
+  final tlsByTag = <String, TlsLayers>{};
+
+  @override
+  void noteTls(String finalTag, TlsLayers layers) {
+    if (!layers.isEmpty) tlsByTag[finalTag] = layers;
+  }
 
   @override
   TemplateVars get vars => _vars;

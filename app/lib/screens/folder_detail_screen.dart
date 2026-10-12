@@ -317,6 +317,8 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     // отфильтрован до enabled+parsed).
     final err = await runner.run(
       [for (final m in _folder.members) m.node],
+      // §636 — проба фрагментирует так же, как туннель.
+      tlsByIndex: ProbeController.probeTlsOf(_folder),
       url: url,
       timeoutMs: timeoutMs,
       onResult: (i, r) {
