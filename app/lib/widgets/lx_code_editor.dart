@@ -61,8 +61,9 @@ LxCodeLanguage? detectCodeLanguage(String text) {
   if (i == lines.length) return null;
   final first = clean(lines[i]);
   if (_iniSection.hasMatch(first)) return LxCodeLanguage.ini;
-  if (first.startsWith('{') || first.startsWith('['))
+  if (first.startsWith('{') || first.startsWith('[')) {
     return LxCodeLanguage.json;
+  }
   if (first.startsWith('#') || first.startsWith(';')) {
     for (var j = i + 1; j < lines.length; j++) {
       final l = clean(lines[j]);
