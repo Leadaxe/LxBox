@@ -6,6 +6,28 @@
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **TLS options per server, folder and subscription
+  ([task 636](docs/spec/tasks/636-tls-settings-per-node-folder-subscription.md)).**
+  The four TLS Fragmentation options (TLS Fragment, TLS Record Fragment,
+  Fallback delay, Mixed-case SNI) get a **TLS** section on a server's Settings
+  tab and on a subscription's or folder's settings tab. Each option resolves
+  server → subscription/folder → global; Default inherits, Off below beats On
+  above. A checkbox set on a REALITY server itself fragments it; bulk levels
+  still skip REALITY. Ping and the node test use the same levels. The
+  per-server/source policy does not go into the backup file yet (the export
+  names it); on merge local settings stay.
+  (RU: Четыре опции TLS Fragmentation получили секцию **TLS** на экране
+  сервера и на вкладке настроек подписки или папки. Опция решается
+  сервер → подписка/папка → глобально; Default наследует, Off ниже бьёт On
+  выше. Галка на самом сервере REALITY его фрагментирует, массовые уровни
+  REALITY пропускают. Пинг и тест узла учитывают те же уровни. В файл
+  бэкапа политика пока не едет — экспорт называет её; при слиянии своя
+  остаётся.)
+
 ## [2.25.13] — 2026-10-13
 
 ### Added

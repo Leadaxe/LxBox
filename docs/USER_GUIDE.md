@@ -1428,6 +1428,17 @@ classifier does not see their TLS. Exceptions:
 The app chooses the letter case for Mixed-case SNI once, when it builds the
 config, and keeps it while the tunnel runs.
 
+The section sets the default for all servers. The same four options can be
+overridden for one subscription or folder (its settings tab, **TLS** section)
+and for one server (the server's Settings tab, **TLS** section, between
+Detour and Skip presets). Each option is resolved on its own: server, then
+subscription or folder, then the global section; **Default** takes the value
+from the level above, and the row shows which one. **Off** on a server turns
+the option off for it even when it is on globally. A checkbox set on a REALITY
+server itself does fragment it; the global and subscription/folder levels
+still skip REALITY. A server behind a detour gets nothing — its section says
+so.
+
 ### Mode selects the operating mode and tunnel options
 
 The **Mode** tab sets how traffic reaches L×Box. Where: VPN Settings → Mode.

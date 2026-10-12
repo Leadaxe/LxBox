@@ -23,7 +23,7 @@
 
 | Вкладка | Содержимое |
 |---|---|
-| Settings | Protocol, Server (только чтение); Tag с палитрой эмодзи; Detour server с превью пути; Skip presets |
+| Settings | Protocol, Server (только чтение); Tag с палитрой эмодзи; Detour server с превью пути; TLS (узловое переопределение ручек TLS Fragmentation, пишется сразу); Skip presets |
 | Source | текст источника, редактируемый; подпись о виде источника |
 | JSON | тело, которое получит ядро, только чтение, подсветка; Copy JSON; Edit JSON |
 | Network | только у узла Tailscale — устройства tailnet, выбор Exit node |
@@ -94,3 +94,4 @@
 | 9 | [578](../../../tasks/578-tailscale-preset-template-for-each.md) | Spec, реализация запущена | Переключатель Skip presets |
 | 10 | [581](../../../tasks/581-tailscale-network-tab.md) | Implemented | Вкладка Network узла Tailscale |
 | 11 | [626](../../../tasks/626-unsaved-changes-everywhere.md) | Implemented | Диалог «Unsaved changes» при выходе с правкой Tag или Source |
+| 12 | [636](../../../tasks/636-tls-settings-per-node-folder-subscription.md) | Implemented | Секция TLS между Detour и Skip presets |
