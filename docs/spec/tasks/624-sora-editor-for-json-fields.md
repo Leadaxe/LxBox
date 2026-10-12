@@ -3,7 +3,7 @@
 | Поле | Значение |
 |------|----------|
 | Тип | Доработка фичи [019-CONFIG_EDITOR](../features/019-CONFIG_EDITOR/FEATURE.ru.md) (функции [config-editor](../features/019-CONFIG_EDITOR/FUNCTIONS/config-editor.ru.md), [json-fragment-view](../features/019-CONFIG_EDITOR/FUNCTIONS/json-fragment-view.ru.md)) |
-| Статус | Спека (ревью 11.10.2026). Прототип: ветка `worktree-agent-a0e6c763717a1a9b8`, коммиты `b7cba591`, `c620c0c8` (не влиты) |
+| Статус | D (done), выпущено в v2.25.12; владелец на rc.2 (12.10.2026) — ОК |
 | Дата | 2026-10-11 |
 | Связанные | §333 (почему ушли с `TextField` на re_editor: большие тексты), §517/§521/§607 (меню выделения re_editor), §554 (подсветка), §614/§615 (re_editor разнесён по всем JSON-полям; язык по виду текста), §372 (Android TV, D-pad), §429 (нижний отступ, шторки), §285 (язык интерфейса переключает приложение) |
 

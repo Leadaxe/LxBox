@@ -3,7 +3,7 @@
 | Поле | Значение |
 |------|----------|
 | Тип | Доработка фичи [008-NODE_EDITOR](../features/008-NODE_EDITOR/FEATURE.ru.md) |
-| Статус | Реализовано (3a824296), ревизия 1 — см. «Реализация» |
+| Статус | D (done), выпущено в v2.25.12 |
 | Дата | 2026-10-09 |
 | Связанные | §143-warp ([143-warp-masquerade-id-ip-ib.md](143-warp-masquerade-id-ip-ib.md), сахар `ip`/`id`/`ib` и форма в визарде WARP); §581/§613 (поля тела с вкладки Network у Tailscale — прецедент «форма пишет в источник»); §617 (QUIC-приманка несёт целый ClientHello с SNI = `id`); §450 (`awg://` с base64 `.conf`); §455/§456 (источник как есть, INI байт в байт); §421 (`Uri.queryParameters` ест сырой `+`); ядро `sing-box-lx/SPECS/009-F-O-WIRESOCK_MASQUERADE_PROFILES` |
 
