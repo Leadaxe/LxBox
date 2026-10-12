@@ -86,6 +86,7 @@ LxBackupFile _import(_State s, String raw) {
       lists: s.lists,
       directions: s.directions,
       chains: s.chains,
+      rules: s.rules,
     ),
   );
   final file = plan.file;
@@ -419,10 +420,12 @@ void main() {
       final before = _snapshot(state);
 
       final again = _import(state, out.json);
+      // §640 — свой экспорт несёт ключ `rules`, и правила приёмника
+      // замещаются: это названо `backup_rules_replaced` (BACKUP.md §9 п. 7).
       expect(again.warnings.map((w) => w.code).toSet(),
-          {kWarnChainExists, kWarnDirectionExists},
+          {kWarnChainExists, kWarnDirectionExists, kWarnRulesReplaced},
           reason: 'своя цепочка и своё Направление под тем же тегом сильнее — '
-              'и названы');
+              'и названы; замещение правил названо');
       expect(_snapshot(state), _deepEquals(before),
           reason: 'папки-тёзки, узлы, DNS и правила не задвоились');
       expect(state.lists.whereType<FolderServers>().map((f) => f.members.length), [3, 1]);
