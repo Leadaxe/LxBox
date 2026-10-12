@@ -20,6 +20,10 @@
 
 ### Fixed
 
+- **JSON on the rule's View tab and the DNS server's JSON preview is
+  highlighted ([task 631](docs/spec/tasks/631-rule-view-tab-json-highlight.md)).**
+  The storage record and the sing-box preview use the same viewer as the
+  other JSON fields: syntax colors, the caption and Copy above the frame.
 - **Selection handles in the JSON editor work again
   ([task 628](docs/spec/tasks/628-editor-selection-handles-gestures.md), #167).**
   Dragging a selection handle in a short JSON field no longer swipes the tab

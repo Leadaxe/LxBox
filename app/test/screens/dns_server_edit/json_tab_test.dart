@@ -5,6 +5,7 @@ import 'package:lxbox/models/dns_ref.dart';
 import 'package:lxbox/screens/dns_server_edit/edit_controller.dart';
 import 'package:lxbox/screens/dns_server_edit/tabs/json_tab.dart';
 import 'package:lxbox/screens/dns_settings_screen/resolved_server.dart';
+import 'package:lxbox/widgets/lx_code_editor.dart';
 
 /// #143 / §458 — read-only JSON-вкладка редактора template/preset-сервера.
 /// После §439 у [DnsServerRef] нет `toJson`; вкладка кодировала снимок
@@ -54,8 +55,8 @@ void main() {
     expect(find.byType(DnsServerJsonTab), findsOneWidget);
 
     final texts = tester
-        .widgetList<SelectableText>(find.byType(SelectableText))
-        .map((w) => w.data ?? '')
+        .widgetList<LxJsonView>(find.byType(LxJsonView))
+        .map((w) => w.text)
         .toList();
     expect(texts, hasLength(2));
     final storage = texts.first;
@@ -91,8 +92,8 @@ void main() {
     expect(tester.takeException(), isNull);
 
     final texts = tester
-        .widgetList<SelectableText>(find.byType(SelectableText))
-        .map((w) => w.data ?? '')
+        .widgetList<LxJsonView>(find.byType(LxJsonView))
+        .map((w) => w.text)
         .toList();
     expect(texts, hasLength(2));
     expect(texts.first, contains('"kind": "preset"'));

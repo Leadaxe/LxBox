@@ -97,59 +97,25 @@ class _ReadOnlyPreview extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // ─── Storage shape ───
-          Row(
-            children: [
-              Expanded(
-                child: Text(getLocalText.s("storage shape (lxbox_settings.json)"),
-                    style: theme.textTheme.labelSmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant)),
-              ),
-              _CopyButton(text: storageJson),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            constraints: const BoxConstraints(maxHeight: 180),
-            child: SingleChildScrollView(
-              child: SelectableText(
-                storageJson,
-                style:
-                    const TextStyle(fontFamily: 'monospace', fontSize: 12),
-              ),
-            ),
+          // Подпись и Copy — в строке над рамкой просмотрщика; JSON с
+          // подсветкой, как у остальных JSON-полей (§624).
+          LxJsonView(
+            text: storageJson,
+            height: 180,
+            header: Text(getLocalText.s("storage shape (lxbox_settings.json)"),
+                style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant)),
+            actions: [_CopyButton(text: storageJson)],
           ),
           const SizedBox(height: 12),
           // ─── Resolved sing-box body ───
-          Row(
-            children: [
-              Expanded(
-                child: Text(getLocalText.s("sing-box server preview (read-only)"),
-                    style: theme.textTheme.labelSmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant)),
-              ),
-              _CopyButton(text: resolvedJson),
-            ],
-          ),
-          const SizedBox(height: 4),
           Expanded(
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: SingleChildScrollView(
-                child: SelectableText(
-                  resolvedJson,
-                  style: const TextStyle(
-                      fontFamily: 'monospace', fontSize: 12),
-                ),
-              ),
+            child: LxJsonView(
+              text: resolvedJson,
+              header: Text(getLocalText.s("sing-box server preview (read-only)"),
+                  style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant)),
+              actions: [_CopyButton(text: resolvedJson)],
             ),
           ),
         ],
