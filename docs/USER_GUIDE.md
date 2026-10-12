@@ -140,7 +140,7 @@ how in **VPN Settings → Mode**:
 
 - **VPN** (default) — a system-wide tunnel: L×Box takes the Android VPN slot and
   captures app traffic wholesale. The rest of this guide describes this mode.
-- **Local proxy** — no tunnel at all (and no key icon either): a local
+- **Proxy** — no tunnel at all (and no key icon either): a local
   HTTP+SOCKS proxy is started, and only the traffic of apps you point at that
   proxy reaches L×Box. The Android VPN slot stays free, so this mode coexists
   with another VPN app.
@@ -293,8 +293,8 @@ selection** between them. It appears in two ways:
   7 in use (load-balance mode), or `🎯 [3]` — "single fastest" out of three.
 - **Your own, in a folder.** Folder menu → **Add auto node…** — an auto node
   built from that folder's servers. Membership is defined in three ways: all
-  servers in the folder, a rule (include/exclude regex with a live preview) or an
-  explicit checkbox list. Test interval, mode and session stickiness are under
+  servers in the folder (**All**), a rule (**Rule** — include/exclude regex with a live
+  preview) or a hand-picked list (**Pick**). Test interval, mode and session stickiness are under
   Advanced. The "Interrupt connections on switch" box there is one of three
   switches with that name — which one fires when is explained in
   [Directions](#interrupt-connections-on-switch--three-switches-three-events).
@@ -319,22 +319,24 @@ first add a subscription/folder/server → then a direction picks them up.
 
 ### The subscription screen — what's inside
 
-Tapping a subscription opens its screen with these tabs:
+Tapping a subscription opens its screen with four tabs — Nodes, Settings, Source,
+Filters:
 
 - **Nodes** — the node list. Every node has a switch: an unwanted node can be
   **disabled** without touching the subscription itself (disabled ones are shown
   struck through and never reach the config; the choice survives subscription
-  updates and provider-side renames). The "Enable all / Disable all" button
-  clears accumulated state at once. A short tap on a node opens its
-  **breakdown**: the JSON tab — how the node goes into the config, and the
-  Source tab — the original subscription fragment it was built from.
+  updates and provider-side renames). The master switch at the left of the bar
+  above the list turns every node on or off at once. A short tap on a node opens its
+  **breakdown**: the JSON tab — how the node goes into the config, the Source
+  tab — the original subscription fragment it was built from, and, when import
+  rules changed the node, a Replacements tab with what they changed.
 - **A mark under a node** means the app found something in it worth telling you
   about: a field the core does not know, a value outside the allowed range, a
   setting that was cleaned up or dropped. Three levels, told apart by colour:
   red ✖ — an error, the node will most likely not work as it came; yellow ⚠ —
   something was cleaned up or substituted, worth a look; blue ⓘ — information
   only, nothing to do. In the node list only red and yellow get text — a short
-  headline of the topmost one plus a "+N" counter that counts red and yellow
+  headline of the topmost one plus a "(+N more)" counter that counts red and yellow
   alone — because the lines that do need attention drown otherwise. Information
   is a grey ⓘ with no text: at the start of the protocol line when that is all
   the node has, and at the end of the warning line when the node also has a
@@ -364,7 +366,7 @@ Tapping a subscription opens its screen with these tabs:
   by any of this.
 - **Filters** — node processing rules; applied on import and on every update. A
   rule = conditions + an action. A condition is `path operator value` (contains
-  / equals / regex, Not and Case-sensitive checkboxes, several conditions
+  / equals / matches, i.e. regex; Not and Case-sensitive checkboxes, several conditions
   combined by AND/OR; an empty path means "search the whole node"). Actions:
   **Disable** — hide matching nodes from routing; **Enable** — bring them back
   (it also clears manual disabling; rules are applied in order and the last one
@@ -378,17 +380,17 @@ Tapping a subscription opens its screen with these tabs:
   **Decode base64** checkbox expands it into the same form the parser works with.
 - **Settings** — tag prefix, detour, update interval, plus:
   - **On update** — what to do when an update brought a new set of nodes:
-    *Rebuild the config* (the default — you apply it yourself), *Rebuild and
-    reload the core* (applied immediately, connections drop for a few seconds)
+    *Rebuild config* (the default — you apply it yourself), *Rebuild and
+    reload core* (applied immediately, connections drop for a few seconds)
     or *Do nothing*.
   - **Fetch identity** — how to introduce yourself to the provider when
-    downloading: Default — the global User-Agent / HWID / device headers;
-    Custom — a set of its own for this subscription only (handy when you have
+    downloading. The **Custom identity** switch: off — the global User-Agent /
+    HWID / device headers; on — a set of its own for this subscription only (handy when you have
     several panels, each with its own HWID limit or User-Agent-dependent
     response format).
-- The **Test servers** button — ping the subscription's nodes without starting
-  the VPN (while the VPN is running you'll be asked whether to stop and test, or
-  cancel — measuring through a live tunnel isn't possible and the results would
+- The gauge icon in the bar above the node list — ping the subscription's nodes
+  without starting the VPN (while the VPN is running a dialog offers **Stop VPN**
+  or **Cancel** — measuring through a live tunnel isn't possible and the results would
   lie).
 
 > **Got a single node saying "App not supported"?** Nothing is broken: the
@@ -424,11 +426,14 @@ or **Direct**. It applies to captured traffic that no rule matched.
 
 **Automatic node selection.** A VPN direction can have an auto twin
 (`<direction>-auto`) that picks a node from the group by itself. The direction editor
-offers two modes:
+offers three modes:
 
 - **Fastest** — all traffic goes to the single fastest node (by latency).
 - **Load balance** — traffic is spread across a pool of several live nodes;
-  sessions stick to their node so connections aren't broken by rotation.
+  by default sessions stick to their node so connections aren't broken by
+  rotation (**Sticky session by** can turn this off).
+- **Hold until failure** — keep the current node until it stops working, then
+  move to the next live one.
 
 **How a direction collects servers (the filter).** A direction doesn't store servers
 inside itself — it **selects** them from the common pool (all your subscriptions
@@ -478,7 +483,7 @@ one answers a different event.
 | Where | What it reacts to | What it is |
 |---|---|---|
 | **Settings** → Interrupt connections on switch | **You** tap a node on the home screen | The app itself closes the open connections of the group you just switched. Nothing is written to the config; switches made by the core are not covered. |
-| **Direction editor** → checkbox under the name | The direction's choice changes **from any source** — a tap, Quick connect, an automation action, the API | Written into the direction's selector in the config; the core drops the connections. |
+| **Direction editor** → Behavior section (on by default) | The direction's choice changes **from any source** — a tap, Quick connect, an automation action, the API | Written into the direction's selector in the config; the core drops the connections. |
 | **Direction editor → Auto section**, and the same box in an [auto node](#auto-nodes--one-entry-a-pool-inside) | The **auto group changes node by itself** — a faster node appeared, or the current one died in failover mode | Written into the auto group in the config; the core drops the connections. |
 
 So:
@@ -506,12 +511,12 @@ grouped into sections:
 | Section | What it matches |
 |---|---|
 | **Match** | domains (exact name / suffix / substring), IP subnets (CIDR), "Private IP" (destination on the local network), "Private source IP" (source is a local address) |
-| **Ports** | ports and port ranges |
+| **Port** | ports and port ranges |
 | **Apps** | specific applications (per-app) |
 | **Network & Protocol** | traffic type **TCP / UDP / ICMP** and the application protocol detected by sniffing (tls, quic, bittorrent, dns, …) |
 | **Inbound** | which entrance the packet came through: the VPN tunnel or the local proxy (visible in proxy modes) |
-| **Wi-Fi** | the name (SSID) or BSSID of the current Wi-Fi network — "at home → direct" |
-| **Rule set** | an external domain/IP list in `.srs` format (downloaded by the app, used locally; re-checked on its own expiry, see the rule editor) |
+| **Wi-Fi network** | the name (SSID) or BSSID of the current Wi-Fi network — "at home → direct" |
+| **Rule-set URL** | an external domain/IP list in `.srs` format (or an inline list) (downloaded by the app, used locally; re-checked on its own expiry, see the rule editor) |
 
 Within one category it's OR, across categories it's AND (as in sing-box): a rule
 "app Chrome AND domain `*.youtube.com` AND network UDP" fires only when all three
@@ -562,7 +567,7 @@ never match DNS queries).
   will go into the config.
 
 > **Presets** are a read-only catalog of ready-made rules. They don't apply by
-> themselves: you copy the one you need into Rules (Copy to Rules), and from
+> themselves: you copy the one you need into Rules (Add to Rules), and from
 > then on it's your rule.
 
 > **Traffic Processing** is a pinned preset at the top of the rule list. It holds
@@ -578,12 +583,12 @@ never match DNS queries).
 **Responsible for:** turning a site name into an IP. A separate layer with rules
 of its own.
 
-- **DNS servers** — a catalog (Cloudflare/Google/Yandex/Quad9/AdGuard/OpenDNS,
+- **DNS servers** — a catalog (Google, Cloudflare, OpenDNS, Quad9, Yandex;
   UDP/DoT/DoH). For each you choose which direction it travels through
-  (**Outbound/detour**) and its IP/profile. If you want the DNS of "important"
+  (**Outbound (detour)**) and its IP/profile. If you want the DNS of "important"
   apps to go through the tunnel (so a foreign resolver sees the server's IP
   rather than your provider's), set that server's Outbound to your VPN direction.
-- **DNS groups** — several servers under one tag. The group decides who answers,
+- **Group** (a DNS server type) — several servers under one tag. The group decides who answers,
   using one of three strategies: **Stable** — stick to a working server until it
   fails; **Fastest** — race, then stick to the winner; **Parallel** — race on
   every query. Members are never "dead" forever: errors are remembered for a
@@ -591,22 +596,22 @@ of its own.
   anywhere a single server can: as the default resolver, as the target of a DNS
   rule.
 
-  **Building your own group is simple**: in the DNS server editor, next to the
-  UDP / TLS / HTTPS types there is a fourth one — **Group**. Instead of an
-  address you get checkboxes for members (any of your DNS servers), a strategy
+  **Building your own group is simple**: in the DNS server editor, alongside
+  UDP / DoT / DoH / DoQ / DoH3 / Tailscale there is a **Group** type. Instead of an
+  address you get checkboxes for members (any of your DNS servers), a **Selection mode**
   picker, and how long errors and wins are remembered (**Error TTL** / **Win
   TTL**; the latter is only shown for Fastest). A disabled or deleted member
-  doesn't break the group: it is simply skipped at config build time with a
-  warning, and when you re-enable it, it returns on its own. In the server list a
-  group carries a `GROUP · mode · member count` badge, and with the tunnel up you
+  doesn't break the group: the editor marks it as skipped, and when you re-enable
+  it, it returns on its own. In the server list a
+  group carries a `group · mode · member count` badge, and with the tunnel up you
   see the current target and each member's state (errors, RTT).
 - **Shield DNS** — the ready-made `dns_shield` group; on a fresh install it is
   the default for both DNS Final and Default Domain Resolver. Inside are Google,
-  Cloudflare, OpenDNS, Quad9 and Yandex at once, across three transports
-  (UDP / DoT / DoH) and two paths (direct and through the VPN). The point: no
+  Cloudflare, OpenDNS, Quad9 and Yandex at once, over encrypted transports only
+  (DoT / DoH) and two paths (direct and through the VPN). The point: no
   single failure takes resolution down — a provider goes down, the others work;
-  UDP:53 gets throttled, DoT/DoH work; the tunnel drops, the direct paths work;
-  direct access is blocked, the tunnelled ones work.
+  the tunnel drops, the direct paths work; direct access is blocked, the
+  tunnelled ones work.
 - **DNS Final** — the default resolver for app queries when no DNS rule matched.
   On a fresh install it is `dns_shield` (installs upgraded from older versions
   may still have the former `cloudflare_udp` — you can select the group
@@ -716,9 +721,6 @@ rules and route final (it is marked with ⚙ in the pickers).
 
 ### Limitations
 
-- **You cannot chain AmneziaWG into plain WireGuard** — it hangs the core, so
-  such targets simply aren't offered in the picker, and a previously saved choice
-  that became invalid is reset to None.
 - A detour **is not OS-level VPN-over-VPN** — the whole chain lives inside a
   single L×Box tunnel, which is cheaper in resources.
 
@@ -742,6 +744,8 @@ like "the internet died for no reason".
 ---
 
 ## Chains of hops — a route you build yourself
+
+In the app this is a **Hop chain** (Servers → **Add hop chain…**).
 
 **What it is.** A chain is a **source**, on the same footing as a subscription
 or a standalone server, and it holds an explicit route:
@@ -826,8 +830,8 @@ running — the per-hop measuring points only exist inside a live core.
 
 ### What to watch out for in practice
 
-- **Core version.** Chains need core **sing-box-lx v1.14.0-lx.27** or newer
-  (v2.21.0 ships `v1.14.0-lx.28-rc.1`). On an older core they aren't built.
+- **Core version.** Chains need core **sing-box-lx v1.14.0-lx.27-rc.5** or newer
+  (current builds ship `v1.14.3-lx.15`). On an older core they aren't built.
 - **MASQUE after a TCP hop needs `vhttp: auto`.** With the fixed `h3` setting,
   a MASQUE hop placed behind a TCP hop sends its QUIC datagrams with no
   handshake budget and reliably times out. `Auto (h3 → h2)` gives HTTP/3 a
@@ -853,7 +857,7 @@ There are several IPv6-related settings, scattered across different places:
 |---|---|---|
 | **Enable IPv6** | VPN Settings → Core → TUN | Gives the tunnel an IPv6 address. The main switch. |
 | **IPv6 address** | same place | The tunnel's IPv6 address. Only applies when Enable IPv6 is on. |
-| **Preferred IP version** | VPN Settings → Core → DNS | Which addresses to prefer when resolving (`ipv4_only` / `prefer_ipv4` / …). |
+| **Strategy** | DNS Settings (main menu) | Which addresses to prefer when resolving (`ipv4_only` / `prefer_ipv4` / …). |
 | **Resolve strategy** | VPN Settings → Core → Network | The same, but for resolving domains inside routing rules. |
 | **Force IPv4** | a checkbox inside some presets (Routing → Presets, the ones that resolve domains) and on user rules (the **Action & Resolve** gear next to Action) | Resolve those domains to IPv4 only. Where present, on by default. |
 
@@ -932,11 +936,6 @@ from another country's IP, to punch through a block on the server itself, or to
 take a double hop. It is set on the server/subscription/folder in their settings.
 The default value is None (no detour).
 
-**"I picked a server as a detour target and it vanished / reset to None."**
-The target is most likely plain WireGuard while the source server is AmneziaWG:
-the core can't carry such a chain, so the choice isn't available. Pick a non-WG
-server or a direction as the target.
-
 **"I enabled IPv6 and sites stopped opening."**
 The signature of a network with broken IPv6: a domain resolves to an IPv6 address
 and the connection hangs. Turn **Enable IPv6** off (VPN Settings → Core → TUN)
@@ -993,13 +992,13 @@ The tools, from simplest to deepest:
     "which direction did this request take", "where does this app go". For DNS
     events you also see how DNS groups behaved: which member answered and which
     stayed silent.
-- **Debug** (side menu) — the app and core log (the Log tab; the verbose switch
-  lifts the debug-message filter on the fly), core crash reports (Crashes),
+- **Debug** (side menu) — the app and core log (the Log tab; the **Verbose (TRACE/DEBUG)**
+  switch is in App Settings → Diagnostics, with a shortcut from the Log tab), core crash reports (Crashes),
   snapshots from its memory watchdog (OOM) and pprof profiles for the developer
   (Profiling).
 - **The phone gets hot or eats memory** — VPN Settings → System → Optimization →
-  **Memory limit**: in Auto mode the limit is chosen by the device's RAM; the
-  settings for suspending idle WireGuard tunnels live there too.
+  **Memory limit**: in Auto mode the limit is chosen by the device's RAM. Suspending
+  idle WireGuard tunnels is under System → **WireGuard connections**.
 
 ---
 
@@ -1043,7 +1042,7 @@ client of their own — just a proxy configured in their Wi-Fi settings.
 **On the phone with L×Box:**
 
 1. **VPN Settings → Mode** → **VPN + Proxy** (the tunnel works as usual, plus a
-   proxy port appears) or **Local proxy** (no tunnel, leaving the Android VPN
+   proxy port appears) or **Proxy** (no tunnel, leaving the Android VPN
    slot free — suitable if another VPN is already running on the phone).
 2. In the **Local proxy** block:
    - **Protocol** — **Mixed** (HTTP + SOCKS5 on one port): works both for Android
@@ -1139,10 +1138,7 @@ a ping in the server list all reach B directly. A detour changes B itself, so
 the config has no direct path to it at all.
 
 1. **Detour on B.** Servers → tap B → **Settings** → **Detour** → pick A →
-   Save. If A is missing from the picker, B is AmneziaWG and A is plain
-   WireGuard: the core can't carry that pair (see Detour → Limitations). For
-   WARP, re-create it in **Get WARP** with **Add Amnezia obfuscation** off —
-   inside A's tunnel the obfuscation gives nothing anyway.
+   Save.
 2. **The direction holds only B.** Routing → Directions → `vpn-1` → **Node filter** — a
    pattern that matches B's name and nothing else (`WARP`, for example; see
    [Regular expressions](#regular-expressions-regex)). Turn **Include auto
@@ -1169,13 +1165,14 @@ better where plain WireGuard is throttled.
 
 If WARP's standard address is blocked or barely alive on your network:
 
-- under *Advanced* in the wizard you can set **your own endpoint** (`IP:port`),
-  and for MASQUE pick a port from the known-working list;
-- the **Make experiment** button in the same wizard creates the **SCAN WARP**
-  experiment folder: it generates a batch of WARP variants (WireGuard / AWG /
-  MASQUE) across Cloudflare's address ranges and pings them — the live ones stay
-  in the folder, the dead ones disable themselves. That's how you find a working
-  endpoint on your particular network without trying them by hand.
+- for WireGuard, *Advanced* in the wizard lets you set **your own endpoint**
+  (`IP:port`); for MASQUE the **Endpoint IP** and **Port** picker sit in the
+  MASQUE block itself;
+- the **Make experiment** button in the same wizard creates the **WARP
+  GENERATOR** folder: it generates a batch of WARP variants (WireGuard / AWG /
+  MASQUE) across Cloudflare's address ranges. It does not test them — run
+  **Test** in that folder yourself; the ones that answer are your working
+  endpoints on this network.
 
 ---
 
@@ -1185,7 +1182,7 @@ If WARP's standard address is blocked or barely alive on your network:
 one (by name/regex) and chips by subscription, protocol and transport. To the
 left of the text field is the **`!`** toggle — it inverts the filter (show
 everything that does **not** match); the chips have the same toggle. Filter
-settings are remembered separately for each direction. Pattern syntax — see
+settings are kept separately for each direction while the app is running. Pattern syntax — see
 [Regular expressions](#regular-expressions-regex).
 
 **Emoji labels.** A server carries an emoji label in its tag. You can change it
@@ -1356,8 +1353,8 @@ Read it as: the 🇫🇮 flag, and nowhere later in the name is there a hash sig
 
 ### What to know about the behaviour
 
-- **Case is ignored.** `warp`, `WARP` and `Warp` all match the same way — in all
-  four places. The `(?i)` prefix **does not work** (Dart doesn't support it) and
+- **Case is ignored.** `warp`, `WARP` and `Warp` all match the same way — in three
+  of the four places; the auto node's membership rule is case-sensitive. The `(?i)` prefix **does not work** (Dart doesn't support it) and
   will simply break the pattern — it isn't needed, since case is ignored anyway.
   The exception is subscription processing rules: there a condition has its own
   **Case-sensitive** checkbox that enables case matching.
@@ -1377,8 +1374,10 @@ Read it as: the 🇫🇮 flag, and nowhere later in the name is there a hash sig
   has nothing to do with it: it isn't applied to them.
 - Under the field in the direction editor there is a **live preview**:
   `matched: 12 / 37 nodes` — how many servers the pattern caught, before you save
-  (with `!` on, the line starts with `excluded →`). The auto node's membership
-  rule has the same preview. If the preview says "No node snapshot", the server
+  (with `!` on, the line starts with `excluded →`). The auto node's membership rule
+  (**Include (regex)** / **Exclude (regex)**, exclude applied after include) has
+  its own preview, `12 of 37 servers`; negation there is the Exclude field, not
+  a `!` toggle. If the preview says "No node snapshot", the server
   list hasn't been loaded yet — connect to see the numbers.
 
 ---
@@ -1388,9 +1387,10 @@ Read it as: the 🇫🇮 flag, and nowhere later in the name is there a hash sig
 You don't have to open the app to turn the VPN on:
 
 - **Quick Settings tile.** Add the L×Box tile to the quick settings panel (shade
-  → pencil/edit tiles). A tap turns the VPN on/off with the last used profile.
-- **Home-screen shortcut.** The quick-connect shortcut toggles the VPN with a
-  single tap as well, without opening the main screen.
+  → pencil/edit tiles). A tap turns the VPN on/off with the current configuration; the first
+  time it opens the app for the Android VPN permission.
+- **Home-screen shortcut.** Long-press the app icon: a **Connect** or
+  **Disconnect** shortcut appears depending on the current state.
 
 While connected, the notification has **Stop** and **Reconnect** buttons — you
 can reconnect straight from the shade.
@@ -1421,7 +1421,7 @@ server and so on).
 
 ## App language
 
-**App Settings → General → Language**: System default / English / Русский (the
+**App Settings → Appearance → Language**: System default / English / Русский / 中文（简体） (the
 default is the system language, falling back to English). It switches instantly,
 without restarting the app or the VPN; native surfaces are translated too — the
 notification with Stop/Reconnect buttons, the Quick Settings tile, the shortcuts.
