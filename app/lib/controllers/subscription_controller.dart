@@ -1620,6 +1620,7 @@ class SubscriptionController extends ChangeNotifier {
         origin: UserSource.manual,
         rawBody: m.raw,
         skipPresets: m.skipPresets, // §578
+        tls: m.tls, // §636 — узловая политика едет с узлом
         nodes: [if (m.node != null) m.node!],
       );
 
@@ -2418,7 +2419,8 @@ class SubscriptionController extends ChangeNotifier {
                 raw: server.rawBody,
                 enabled: server.enabled,
                 detour: personalDetour,
-                skipPresets: server.skipPresets), // §578
+                skipPresets: server.skipPresets, // §578
+                tls: server.tls), // §636
           ]
         : _bindAutoMembers([
             for (final n in server.nodes)
@@ -2428,7 +2430,8 @@ class SubscriptionController extends ChangeNotifier {
                   enabled: server.enabled,
                   detour: personalDetour,
                   // §578 — «пропустить пресеты» — поле записи, едет с узлами.
-                  skipPresets: server.skipPresets),
+                  skipPresets: server.skipPresets,
+                  tls: server.tls), // §636
           ], server.nodes, folder.id);
     folderEntry._replaceList(
         folder.copyWith(members: [...folder.members, ...added]));
