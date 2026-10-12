@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 
 import 'package:lxbox/services/settings_storage.dart';
 import 'package:lxbox/services/update_checker.dart';
@@ -181,6 +183,76 @@ void main() {
       // перезаписал last_update_check текущим временем; timestamp должен
       // остаться нетронутым ("recent").
       expect(await SettingsStorage.getLastUpdateCheck(), recent);
+    });
+
+    // P12/P13 — сеть подменяется зонным клиентом (`http.runWithClient`):
+    // `UpdateChecker` зовёт верхнеуровневый `http.get`, а он берёт клиент
+    // текущей зоны. Счётчик запросов — свидетель «пошёл ли в сеть».
+    Future<T> withNet<T>(
+      Future<T> Function() body, {
+      required List<Uri> log,
+      int status = 200,
+    }) =>
+        http.runWithClient(body, () => MockClient((req) async {
+              log.add(req.url);
+              if (status != 200) return http.Response('', status);
+              final primary = req.url.host == 'api.github.com';
+              return http.Response(
+                primary
+                    ? '{"tag_name":"v9.9.9","name":"v9.9.9",'
+                        '"html_url":"https://example.invalid/r"}'
+                    : '{"tag":"v9.9.9","name":"v9.9.9"}',
+                200,
+              );
+            }));
+
+    test('P12: по умолчанию автопроверка не делает ни одного запроса',
+        () async {
+      final log = <Uri>[];
+      await withNet(() => UpdateChecker.I.maybeCheck(localVersion: '1.0.0'),
+          log: log);
+      expect(log, isEmpty);
+    });
+
+    test('P13: неудачная попытка не сдвигает суточный порог', () async {
+      await SettingsStorage.setAutoCheckUpdates(true);
+      final log = <Uri>[];
+      await withNet(() => UpdateChecker.I.maybeCheck(localVersion: '1.0.0'),
+          log: log, status: 503);
+      expect(log, isNotEmpty, reason: 'первая попытка пошла в сеть');
+      expect(await SettingsStorage.getLastUpdateCheck(), isNull,
+          reason: 'порог считается от успеха, не от попытки');
+
+      final before = log.length;
+      await withNet(() => UpdateChecker.I.maybeCheck(localVersion: '1.0.0'),
+          log: log, status: 503);
+      expect(log.length, greaterThan(before),
+          reason: 'после неудачи следующая автопроверка снова идёт в сеть');
+    });
+
+    test('P13: успех ставит порог — повторная автопроверка молчит', () async {
+      await SettingsStorage.setAutoCheckUpdates(true);
+      final log = <Uri>[];
+      await withNet(() => UpdateChecker.I.maybeCheck(localVersion: '1.0.0'),
+          log: log);
+      expect(await SettingsStorage.getLastUpdateCheck(), isNotNull);
+      final before = log.length;
+      await withNet(() => UpdateChecker.I.maybeCheck(localVersion: '1.0.0'),
+          log: log);
+      expect(log.length, before);
+    });
+
+    test('P13: «Check now» идёт в сеть мимо тумблера, порога и dev-сборки',
+        () async {
+      final recent = DateTime.now().toUtc().subtract(const Duration(hours: 1));
+      await SettingsStorage.setLastUpdateCheck(recent);
+      final log = <Uri>[];
+      final res = await withNet(
+          () => UpdateChecker.I.forceCheck(localVersion: '1.0.0-dev.1'),
+          log: log);
+      expect(log, isNotEmpty);
+      expect(res.kind, UpdateCheckKind.newer);
+      expect(res.info?.tag, 'v9.9.9');
     });
   });
 }
