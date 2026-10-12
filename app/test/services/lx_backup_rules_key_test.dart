@@ -50,7 +50,7 @@ String _file10({List<Map<String, dynamic>>? rules}) => jsonEncode({
           },
         },
       ],
-      if (rules != null) 'rules': rules,
+      'rules': ?rules,
     });
 
 /// Файл 0.x с одним узлом; [rules] `null` — ключа нет вовсе.
@@ -65,7 +65,7 @@ String _file0x({List<Map<String, dynamic>>? rules}) => jsonEncode({
           'uri': 'trojan://testpass640@example-2.com:443#one-node',
         },
       ],
-      if (rules != null) 'rules': rules,
+      'rules': ?rules,
     });
 
 /// Правила приёмника — тем же разбором, каким их пишет импорт.
