@@ -218,6 +218,14 @@ const String kWarnSourceKindUnsupported = 'backup_source_kind_unsupported';
 /// autogroup-текстов, которые не нашлись.
 const String kWarnGroupDegraded = 'backup_group_degraded';
 
+/// §640 (контракт 1.1.116, BACKUP.md §9 п. 7) — файл нёс ключ `rules` (пусть
+/// `[]`), и правила приёмника замещены правилами файла целиком. Detail —
+/// `rules: <count>`, число снятых правил приёмника (параметр реестра
+/// `count`); код ставится
+/// только при `count > 0`. Файл без ключа `rules` правил не трогает и кода не
+/// даёт: «ключа нет» и `rules: []` — разные файлы.
+const String kWarnRulesReplaced = 'backup_rules_replaced';
+
 /// Переносимые имена переменных — зеркало `registry/vars.json` (portable=true).
 ///
 /// Сверяется с реестром тестом: разъехавшийся список означает, что бэкап либо
@@ -641,6 +649,7 @@ class LxBackupFile {
     this.chainPositions = const {},
     this.dns,
     this.warp = const [],
+    this.rulesDeclared = true,
   });
 
   final int version;
@@ -669,6 +678,11 @@ class LxBackupFile {
 
   /// Правила в порядке файла (ось `num` учтена при разборе).
   final List<CustomRule> rules;
+
+  /// §640 (контракт 1.1.116) — ключ `rules` есть в корне файла, пусть и `[]`.
+  /// `false` — файл о правилах молчит, и импорт правила приёмника не трогает
+  /// (BACKUP.md §9 п. 7); [rules] тогда пуст.
+  final bool rulesDeclared;
 
   /// §393 C9 — цепочки хопов, ПРИМЕНИМЫЕ на этой стороне (SPEC 110, схема
   /// v1.2): приехавшие теги, которых у нас ещё нет. Занятый тег сюда не
@@ -735,6 +749,7 @@ class LxBackupFile {
         directions: directions,
         directionPing: directionPing,
         rules: rules ?? this.rules,
+        rulesDeclared: rulesDeclared,
         chains: chains,
         chainHops: chainHops,
         chainPositions: chainPositions,
@@ -856,7 +871,10 @@ Future<LxBackupExport> buildLxBackup({
       'directions': [
         for (final d in directions) _directionToJson(d, directionPing[d.tag]),
       ],
-    if (ruleRecords.isNotEmpty) 'rules': ruleRecords,
+    // §640 (контракт 1.1.116) — ключ пишется ВСЕГДА, пусть `[]`: файл
+    // описывает всю настройку (§1), и импорт отличает «правил нет» от
+    // «файл о правилах молчит» (BACKUP.md §9 п. 7).
+    'rules': ruleRecords,
     if (dns != null && dns.isNotEmpty) 'dns': dns,
     if (portableVars.isNotEmpty) 'vars': portableVars,
     if (routeFinal != null && routeFinal.isNotEmpty)
@@ -1228,6 +1246,7 @@ LxBackupFile _parse0x(
     directions: directions.directions,
     directionPing: directions.ping,
     rules: sortRulesByAxis(rules),
+    rulesDeclared: decoded.containsKey('rules'),
     chains: chains,
     subscriptions: subscriptions,
     servers: servers,
@@ -2527,6 +2546,7 @@ LxBackupFile gateLxBackupTargets(LxBackupFile file, Set<String>? known) {
     directions: file.directions,
     directionPing: file.directionPing,
     rules: rules,
+    rulesDeclared: file.rulesDeclared,
     chains: file.chains,
     chainHops: file.chainHops,
     chainPositions: file.chainPositions,
@@ -2850,6 +2870,7 @@ LxBackupFile _parse10(
     directions: parsedDirections.directions,
     directionPing: parsedDirections.ping,
     rules: sortRulesByAxis(rules),
+    rulesDeclared: decoded.containsKey('rules'),
     chains: chains,
     chainHops: chainHops,
     chainPositions: chainPositions,
