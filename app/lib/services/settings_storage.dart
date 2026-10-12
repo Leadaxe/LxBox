@@ -143,6 +143,8 @@ class SettingsStorage {
     'resolve_enabled',
     'resolve_strategy',
     'route_address_enable',
+    'sys_proxy',
+    'sys_proxy_port',
     'tls_fragment',
     'tls_fragment_fallback_delay',
     'tls_mixed_case_sni',
