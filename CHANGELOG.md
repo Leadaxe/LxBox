@@ -20,6 +20,12 @@
 
 ### Fixed
 
+- **"Unknown traffic" preset is pinned to the TUN inbound.** The rule now
+  carries `inbound: ["tun-in"]`. In pure Proxy mode the app is not the active
+  VPN, `getConnectionOwnerUid` attributes nothing, and the old rule rejected
+  every connection through the local proxy; now it stays inert there. In
+  VPN+Proxy mode connections arriving at `mixed-in` (including LAN clients)
+  are no longer judged by it.
 - **JSON on the rule's View tab and the DNS server's JSON preview is
   highlighted ([task 631](docs/spec/tasks/631-rule-view-tab-json-highlight.md)).**
   The storage record and the sing-box preview use the same viewer as the

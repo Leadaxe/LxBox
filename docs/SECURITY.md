@@ -99,7 +99,7 @@ How to read it:
 - `package_name_regex: "^"` — the `^` regex matches **any** string (including the empty one): "there is some package".
 - `invert: true` — flips the condition → the rule catches traffic whose **package is NOT defined** (empty / `INVALID_UID`).
 
-So the rule isolates exactly the traffic that enters the tunnel without attribution to an installed app.
+So the rule isolates exactly the traffic that enters the tunnel without attribution to an installed app. The rule carries `inbound: ["tun-in"]`, so it applies to the tunnel only: connections that arrive at the local proxy inbound (`mixed-in`) are not judged by it, and in pure Proxy mode, where the app is not the active VPN and `getConnectionOwnerUid` cannot attribute anything, the rule stays inert instead of rejecting every connection.
 
 **What to do with it** (the `outbound` var in the preset):
 

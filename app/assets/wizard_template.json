@@ -1989,6 +1989,9 @@
         }
       ],
       "rule": {
+        "inbound": [
+          "tun-in"
+        ],
         "rule_set": [
           "unknown-apps"
         ],
