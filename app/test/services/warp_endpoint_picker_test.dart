@@ -150,10 +150,10 @@ void main() {
 
   test('masque recommended_sni: родной домен первым в пуле и помечен', () async {
     final p = await WarpEndpointPicker.load(region: '');
-    // DPI умеет резать по НЕсовпадению SNI с IP-блоком (§143), поэтому родной
-    // домен — полноправный кандидат перебора (в т.ч. для кубика), а не «палево».
-    // Он же дефолт ядра при пустом поле SNI.
-    expect(p.recommendedMasqueSni, 'consumer-masque.cloudflareclient.com');
+    // §638: рекомендованный SNI — дефолт ядра `www.cloudflare.com` (§393);
+    // родной consumer-masque остаётся в пуле как кандидат перебора (§143).
+    expect(p.recommendedMasqueSni, 'www.cloudflare.com');
+    expect(p.masqueSniPool, contains('consumer-masque.cloudflareclient.com'));
     expect(p.masqueSniPool.first, p.recommendedMasqueSni);
   });
 
@@ -258,9 +258,10 @@ void main() {
       expect(ru.sniPool, contains(d));
       expect(ru.masqueSniPool, contains(d));
     }
-    // Родной SNI официального клиента остаётся первым и рекомендуемым в
-    // обоих вариантах пула.
-    expect(p.masqueSniPool.first, 'consumer-masque.cloudflareclient.com');
-    expect(ru.masqueSniPool.first, 'consumer-masque.cloudflareclient.com');
+    // §638: рекомендуемый SNI (дефолт ядра) первый в обоих вариантах пула,
+    // родной домен официального клиента остаётся кандидатом перебора.
+    expect(p.masqueSniPool.first, 'www.cloudflare.com');
+    expect(ru.masqueSniPool.first, 'www.cloudflare.com');
+    expect(ru.masqueSniPool, contains('consumer-masque.cloudflareclient.com'));
   });
 }
