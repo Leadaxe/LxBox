@@ -78,7 +78,9 @@ the home screen — "… · fetching subscriptions…".
   the errors, the rest is applied.
 - From the home screen: replace of all the file's categories without a
   preview, then re-reading the sources and a forced subscription update.
-- Debug API: the `app`/`kind` markers are not checked; merge — the same
+- Debug API: the body is `{storage, vpn_settings}` by the contract, not the
+  file envelope, so there are no `app`/`kind` markers to check (they belong
+  to the UI file envelope only); merge — the same
   merge as the UI (sources appended by `id`, chains by tag), the counters in
   `applied.merge`; the response carries `migrated`, the migration report and
   `dropped_keys`.
