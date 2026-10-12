@@ -11,6 +11,9 @@ import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/record_codec.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/source_chain.dart';
+import 'package:lxbox/models/tls_policy.dart';
+import 'package:lxbox/services/parser/body_decoder.dart';
+import 'package:lxbox/services/parser/parse_all.dart';
 import 'package:lxbox/services/dns/dns_backup.dart';
 import 'package:lxbox/services/json_clone.dart';
 import 'package:lxbox/services/lx_backup.dart';
@@ -517,6 +520,79 @@ void main() {
       }
     }, skip: corpusTestSkip('test/contract/lx_backup_roundtrip_test.dart',
         subpath: 'schema'));
+  });
+  // §636 — TLS-политика: контракт поле `tls` не объявил (Л2), поэтому в файл
+  // оно не едет и называется срезом; слияние держит локальную политику так
+  // же, как локальную ссылку detour.
+  group('§636 tls', () {
+    const uriA = 'vless://11111111-1111-1111-1111-111111111111@198.51.100.1:443'
+        '?type=ws&security=tls#Alpha';
+    const uriB = 'vless://22222222-2222-2222-2222-222222222222@198.51.100.2:443'
+        '?type=ws&security=tls#Beta';
+    const local = TlsPolicy(fragment: false, fallbackDelay: '1s');
+
+    List<ServerList> lists({required bool withTls}) {
+      final tls = withTls ? local : TlsPolicy.none;
+      return [
+        SubscriptionServers(
+          id: withTls ? 'sub-local' : 'sub-file',
+          name: 'S',
+          enabled: true,
+          tagPrefix: '',
+          detourPolicy: DetourPolicy.defaults,
+          tls: tls,
+          url: 'https://s.example/sub',
+        ),
+        UserServer(
+          id: withTls ? 'srv-local' : 'srv-file',
+          name: '',
+          enabled: true,
+          tagPrefix: '',
+          detourPolicy: DetourPolicy.defaults,
+          tls: tls,
+          rawBody: uriA,
+          nodes: parseAll(decode(uriA)),
+        ),
+        FolderServers(
+          id: withTls ? 'f-local' : 'f-file',
+          name: 'F',
+          enabled: true,
+          tagPrefix: '',
+          detourPolicy: DetourPolicy.defaults,
+          tls: tls,
+          members: [FolderMember(raw: uriB, tls: tls)],
+        ),
+      ];
+    }
+
+    test('экспорт: tls не едет и называется срезом', () async {
+      final out = await _export(_State(lists: lists(withTls: true)));
+      final dropped = [
+        for (final w in out.warnings)
+          if (w.code == kWarnLocalOnlyDropped) w.detail,
+      ];
+      expect(dropped.where((d) => d.contains('tls')), hasLength(3),
+          reason: '$dropped');
+      expect(out.json.contains('"tls"'), isFalse);
+    });
+
+    test('слияние: совпавшие источник и узел держат свою политику', () async {
+      final out = await _export(_State(lists: lists(withTls: false)));
+      final merged = planLxBackupImport(
+        out.json,
+        LxImportReceiver(
+          lists: lists(withTls: true),
+          directions: const [],
+          chains: const [],
+        ),
+      ).lists;
+      expect(merged, hasLength(3));
+      for (final l in merged) {
+        expect(l.tls, local, reason: l.type);
+      }
+      final folder = merged.whereType<FolderServers>().single;
+      expect(folder.members.single.tls, local);
+    });
   });
 }
 

@@ -2,10 +2,13 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/node_spec.dart';
+import 'package:lxbox/models/server_list.dart';
+import 'package:lxbox/models/tls_policy.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/models/tls_spec.dart';
 import 'package:lxbox/services/builder/post_steps.dart';
 import 'package:lxbox/services/probe/probe_config.dart';
+import 'package:lxbox/services/probe/probe_controller.dart';
 
 import '../parser/engine_test_setup.dart';
 
@@ -96,5 +99,47 @@ void main() {
     expect((main['tls'] as Map).containsKey('fragment'), isFalse);
     final hop = outboundOf(cfg, main['detour'] as String);
     expect((hop['tls'] as Map)['fragment'], true);
+  });
+
+  // §636 — уровни TLS узла и источника доходят до пробы той же картой, что
+  // у туннеля: узел → источник → глобально.
+  test('§636: проба применяет уровни узла и папки', () {
+    final folder = FolderServers(
+      id: 'f',
+      name: 'F',
+      enabled: true,
+      tagPrefix: '',
+      detourPolicy: DetourPolicy.defaults,
+      tls: const TlsPolicy(fragment: true, fallbackDelay: '300ms'),
+      members: [
+        FolderMember(
+            raw: 'vless://$uuid@a.example:443?security=tls&sni=a.example'
+                '&type=tcp#A',
+            tls: const TlsPolicy(fragment: false, recordFragment: true)),
+        FolderMember(
+            raw: 'vless://$uuid@b.example:443?security=tls&sni=b.example'
+                '&type=tcp#B'),
+      ],
+    );
+    final cfg = buildProbeConfig(
+      ProbeController.probeNodesOf(folder),
+      tlsByIndex: ProbeController.probeTlsOf(folder),
+    );
+    final a = outboundOf(cfg, cfg.tagByIndex[0]!)['tls'] as Map;
+    final b = outboundOf(cfg, cfg.tagByIndex[1]!)['tls'] as Map;
+    expect(a.containsKey('fragment'), isFalse);
+    expect(a['record_fragment'], true);
+    expect(a['fragment_fallback_delay'], '300ms');
+    expect(b['fragment'], true);
+    expect(b.containsKey('record_fragment'), isFalse);
+
+    // Узловой `false` бьёт глобальный `true`.
+    final g = buildProbeConfig(
+      ProbeController.probeNodesOf(folder),
+      vars: vars,
+      tlsByIndex: ProbeController.probeTlsOf(folder),
+    );
+    final ga = outboundOf(g, g.tagByIndex[0]!)['tls'] as Map;
+    expect(ga.containsKey('fragment'), isFalse);
   });
 }

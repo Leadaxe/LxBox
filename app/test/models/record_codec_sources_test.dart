@@ -10,6 +10,7 @@ import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/source_chain.dart';
 import 'package:lxbox/models/source_replace.dart';
 import 'package:lxbox/models/subscription_meta.dart';
+import 'package:lxbox/models/tls_policy.dart';
 import 'package:lxbox/services/builder/verbatim_body.dart';
 import 'package:lxbox/services/node_hash.dart';
 import 'package:lxbox/services/parser/body_decoder.dart';
@@ -727,6 +728,97 @@ void main() {
       expect(sourceKindOf(bare), 'singbox_outbound');
       expect((jsonDecode(bare) as Map)['tag'], before.tag);
       expect(parseAll(decode(bare)).single.tag, before.tag);
+    });
+  });
+  group('§636 — tls', () {
+    const full = TlsPolicy(
+        fragment: false,
+        recordFragment: true,
+        fallbackDelay: '1s',
+        mixedCaseSni: true);
+    const partial = TlsPolicy(fragment: true);
+
+    test('round-trip у подписки, сервера, папки и члена', () {
+      final sub = SubscriptionServers(
+        id: 's',
+        name: 'S',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        tls: full,
+        url: 'https://s.example/sub',
+      );
+      expect((_sourceRoundTrip(sub) as SubscriptionServers).tls, full);
+
+      final server = UserServer(
+        id: 'u',
+        name: '',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        tls: partial,
+        rawBody: _uriAlpha,
+        nodes: parseAll(decode(_uriAlpha)),
+      );
+      final u = _sourceRoundTrip(server) as UserServer;
+      expect(u.tls, partial);
+      expect(u, server);
+
+      final folder = FolderServers(
+        id: 'f',
+        name: 'F',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        tls: partial,
+        members: [
+          FolderMember(raw: _uriAlpha, tls: full),
+          FolderMember(raw: _uriBeta),
+        ],
+      );
+      final f = _sourceRoundTrip(folder) as FolderServers;
+      expect(f.tls, partial);
+      expect(f.members[0].tls, full);
+      expect(f.members[1].tls.isEmpty, isTrue);
+      expect(f.members, folder.members);
+    });
+
+    test('пишутся только заданные поля; пустая политика не пишется', () {
+      final folder = FolderServers(
+        id: 'f',
+        name: 'F',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        members: [
+          FolderMember(raw: _uriAlpha, tls: partial),
+          FolderMember(raw: _uriBeta),
+        ],
+      );
+      final record = sourceToRecord(folder);
+      expect(record.containsKey('tls'), isFalse);
+      final nodes = record['nodes'] as List;
+      expect((nodes[0] as Map)['tls'], {'fragment': true});
+      expect((nodes[1] as Map).containsKey('tls'), isFalse);
+    });
+
+    test('неизвестный ключ и не тот тип внутри tls не ломают запись', () {
+      final read = sourceFromRecord(_viaFile({
+        'kind': 'server',
+        'id': 'u',
+        'enabled': true,
+        'origin': {'kind': 'uri', 'raw': _uriAlpha},
+        'tls': {
+          'fragment': 'yes',
+          'record_fragment': true,
+          'fallback_delay': 5,
+          'future_knob': 1,
+        },
+      }));
+      expect(read.dropped, isNull);
+      final u = read.value! as UserServer;
+      expect(u.tls, const TlsPolicy(recordFragment: true));
+      expect(u.nodes, hasLength(1));
     });
   });
 }
