@@ -1034,7 +1034,7 @@
       "id": "dpi-bypass",
       "name": "TLS Fragmentation",
       "chapter": "core",
-      "description": "Splits the TLS handshake so it carries no single-packet signature",
+      "description": "Splits the TLS handshake so it carries no single-packet signature. Default for all servers; override per server, folder or subscription.",
       "vars": [
         {
           "name": "tls_fragment",

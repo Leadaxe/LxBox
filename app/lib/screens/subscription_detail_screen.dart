@@ -876,6 +876,11 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
         unawaited(widget.controller.persistSources());
       },
       onShowOverrideDetourPicker: () => _showOverrideDetourPicker(),
+      // §636 — TLS-политика источника: запись сразу, как у detour.
+      onTlsChanged: (v) {
+        setState(() => widget.entry.tls = v);
+        unawaited(widget.controller.persistSources());
+      },
       onReplaceDetourChainChanged: (val) {
         setState(() => widget.entry.replaceDetourChain = val);
         unawaited(widget.controller.persistSources());
