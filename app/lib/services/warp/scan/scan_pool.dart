@@ -199,7 +199,7 @@ class ScanPool {
       masqueHostsPreset: endpoints,
       masqueRecommendedHost: base?.masqueRecommendedHost ?? '',
       masqueV4Cidr: cidrs,
-      masqueH3HostsExtra: base?.masqueH3HostsExtra ?? const [],
+      masqueH3HostsExtra: endpoints.isNotEmpty ? endpoints : (base?.masqueH3HostsExtra ?? const []),
       masqueH2Exclude: base?.masqueH2Exclude ?? const [],
       masquePortsH3: base?.masquePortsH3 ?? const [443, 4443, 8095],
       masquePortsH2: base?.masquePortsH2 ?? const [500, 4500, 8443],
