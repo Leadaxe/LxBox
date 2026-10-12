@@ -514,21 +514,32 @@ class EndpointScanner {
     // Поэтому ключ аккаунта достаём ДО скана (кеш → регистрация), а пробу
     // шлём залпом. Если аккаунта нет и зарегистрировать не удалось —
     // деградируем к прежнему голому WG-зонду (лучше, чем ничего).
+    // §842 — деградация к голому WG делается ГРОМКОЙ: раньше сбой получения
+    // ключа аккаунта молча давал «живых 0» по всем адресам и выглядел как
+    // «сканер не работает». Теперь причина видна и в журнале, и в заметке.
+    String? awgDegradedReason;
     List<int>? warpPrivRaw;
     try {
       var acc = await SettingsStorage.getWarpAccount();
       if (acc == null) {
         log?.i('p1', 'WARP-аккаунта нет — регистрирую для пробы живости…');
-        final regClient = _injectedWarp ?? WarpClient();
-        try {
-          acc = await regClient.register(
-            endpoint: WarpAccount.defaultEndpoint,
-            nowIso8601: DateTime.now().toUtc().toIso8601String(),
-          );
-          await SettingsStorage.setWarpAccount(acc);
-        } finally {
-          if (_injectedWarp == null) regClient.close();
+        Object? lastErr;
+        for (var attempt = 1; attempt <= 2 && acc == null; attempt++) {
+          final regClient = _injectedWarp ?? WarpClient();
+          try {
+            acc = await regClient.register(
+              endpoint: WarpAccount.defaultEndpoint,
+              nowIso8601: DateTime.now().toUtc().toIso8601String(),
+            );
+            await SettingsStorage.setWarpAccount(acc);
+          } catch (e) {
+            lastErr = e;
+            log?.w('p1', 'регистрация (попытка $attempt/2) не удалась: $e');
+          } finally {
+            if (_injectedWarp == null) regClient.close();
+          }
         }
+        if (acc == null) throw lastErr ?? 'registration returned null';
       }
       warpPrivRaw = base64Decode(acc.privKey);
       log?.i(
@@ -537,7 +548,13 @@ class EndpointScanner {
         '+junk(jc=6,j10..50)+init, ключ аккаунта ок (${warpPrivRaw.length}Б)',
       );
     } catch (e) {
-      log?.w('p1', 'аккаунт для пробы недоступен ($e) — голый WG-init');
+      awgDegradedReason = 'ключ аккаунта не получен';
+      log?.e(
+        'p1',
+        'КЛЮЧ АККАУНТА НЕ ПОЛУЧЕН ($e) → голый WG-init. На сетях, режущих '
+        'UDP, это даст 0 живых: WARP отвечает только на handshake от ключа '
+        'ЗАРЕГИСТРИРОВАННОГО пира. Проверьте интернет и повторите скан.',
+      );
     }
 
     Future<void> wgPass(List<int> ports) async {
@@ -561,7 +578,14 @@ class EndpointScanner {
           detail: r.detail,
         ));
       }
-      log?.i('p1', 'UDP WG-проба: ${cand.length} адресов, порты=$ports');
+      final awgMode = warpPrivRaw != null;
+      log?.i(
+        'p1',
+        awgMode
+            ? 'UDP-проба AWG-залпом (обфусцированно): ${cand.length} адресов, '
+                'порты=$ports'
+            : 'UDP-проба голым WG-init: ${cand.length} адресов, порты=$ports',
+      );
       final batch = await (warpPrivRaw != null
           ? scanAwgBatch(
               endpoints: cand,
@@ -607,6 +631,14 @@ class EndpointScanner {
       'p1',
       'итог фазы 1: живых=${alive.length} без ответа=${failed.length}',
     );
+
+    // §842 — если ключ аккаунта не получен, проба шла голым WG: на сети,
+    // режущей UDP, это 0 живых. Поднимаем причину в заметку под итогом скана,
+    // чтобы пользователь видел не только «0», но и ЧТО сломано.
+    if (awgDegradedReason != null && alive.isEmpty) {
+      note = '$awgDegradedReason — проба шла без обфускации. '
+          'Проверьте интернет и повторите скан.';
+    }
 
     // ── Phase 1b — MASQUE-путь, если UDP не дал живых ─────────────────────
     // Открытый TCP 443 НЕ считаем живостью (CF-edge отвечает почти всегда):
