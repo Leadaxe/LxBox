@@ -429,6 +429,9 @@
         "id": "hostkey-moscow",
         "name": "Hostkey (Moscow)",
         "download_url": "https://spd-rudp.hostkey.ru/files/10mb.bin",
+        "upload_url": "https://spd-rudp.hostkey.ru/empty",
+        "upload_method": "POST",
+        "upload_chunk_bytes": 1000000,
         "ping_url": "https://spd-rudp.hostkey.ru/"
       },
       {
@@ -441,6 +444,9 @@
         "id": "hostkey-frankfurt",
         "name": "Hostkey (Frankfurt)",
         "download_url": "https://spd-desrv.hostkey.com/files/10mb.bin",
+        "upload_url": "https://spd-desrv.hostkey.com/empty",
+        "upload_method": "POST",
+        "upload_chunk_bytes": 1000000,
         "ping_url": "https://spd-desrv.hostkey.com/"
       },
       {
@@ -453,12 +459,18 @@
         "id": "hostkey-helsinki",
         "name": "Hostkey (Helsinki)",
         "download_url": "https://spd-fisrv.hostkey.com/files/10mb.bin",
+        "upload_url": "https://spd-fisrv.hostkey.com/empty",
+        "upload_method": "POST",
+        "upload_chunk_bytes": 1000000,
         "ping_url": "https://spd-fisrv.hostkey.com/"
       },
       {
         "id": "hostkey-new-york",
         "name": "Hostkey (New York)",
         "download_url": "https://spd-uswb.hostkey.com/files/10mb.bin",
+        "upload_url": "https://spd-uswb.hostkey.com/empty",
+        "upload_method": "POST",
+        "upload_chunk_bytes": 1000000,
         "ping_url": "https://spd-uswb.hostkey.com/"
       },
       {
@@ -997,6 +1009,24 @@
           "wizard_ui": "hidden",
           "title": "Require auth",
           "tooltip": "Whether the local proxy requires username/password. Forced on for non-loopback listen."
+        },
+        {
+          "name": "sys_proxy",
+          "type": "bool",
+          "default_value": "false",
+          "required": true,
+          "wizard_ui": "hidden",
+          "title": "System HTTP proxy",
+          "tooltip": "Announce a local HTTP proxy to the VPN network (Android 10+)."
+        },
+        {
+          "name": "sys_proxy_port",
+          "type": "int",
+          "default_value": "2081",
+          "required": true,
+          "wizard_ui": "hidden",
+          "title": "System proxy port",
+          "tooltip": "Loopback port of the system HTTP proxy inbound."
         }
       ]
     },
@@ -1105,7 +1135,21 @@
             "mtu": "@tun_mtu",
             "auto_route": "@tun_auto_route",
             "strict_route": "@tun_strict_route",
-            "stack": "@tun_stack"
+            "stack": "@tun_stack",
+            "#if sys_proxy": {
+              "#and": [
+                "@sys_proxy"
+              ],
+              "#value": {
+                "platform": {
+                  "http_proxy": {
+                    "enabled": true,
+                    "server": "127.0.0.1",
+                    "server_port": "@sys_proxy_port"
+                  }
+                }
+              }
+            }
           }
         }
       },
@@ -1139,6 +1183,19 @@
                 ]
               }
             }
+          }
+        }
+      },
+      {
+        "#if": {
+          "#and": [
+            "@sys_proxy"
+          ],
+          "#value": {
+            "type": "http",
+            "tag": "sysproxy-in",
+            "listen": "127.0.0.1",
+            "listen_port": "@sys_proxy_port"
           }
         }
       }
@@ -1916,8 +1973,8 @@
       "preset_id": "unknown-traffic",
       "ui": {
         "label": "Unknown traffic",
-        "description": "Reject traffic in the tunnel not attributed to any installed app (background/foreign processes). Send it direct to bypass VPN instead.",
-        "default": false,
+        "description": "Traffic in the tunnel not attributed to any installed app (background/foreign processes) goes direct, bypassing the VPN, so a process that binds to the tunnel cannot learn the server address. Pick Reject to drop it instead.",
+        "default": true,
         "num": 1150,
         "isSortable": true
       },
@@ -1925,10 +1982,10 @@
         {
           "name": "outbound",
           "type": "outbound",
-          "default_value": "reject",
+          "default_value": "direct-out",
           "required": true,
           "title": "outbound",
-          "tooltip": "Reject = drop. Or pick Direct to send it outside the VPN."
+          "tooltip": "Direct = send it outside the VPN. Or pick Reject to drop it (strict mode: any attribution failure means no network)."
         }
       ],
       "rule_set": [
@@ -1944,6 +2001,9 @@
         }
       ],
       "rule": {
+        "inbound": [
+          "tun-in"
+        ],
         "rule_set": [
           "unknown-apps"
         ],

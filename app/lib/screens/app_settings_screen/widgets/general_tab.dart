@@ -129,7 +129,7 @@ class GeneralTab extends StatelessWidget {
         ListTile(
           leading: const Icon(Icons.touch_app_outlined),
           title: Text(getLocalText.s("Home-screen shortcut")),
-          subtitle: Text(getLocalText.s("Long-press the L×Box icon on your home screen → choose \"Toggle VPN\".")),
+          subtitle: Text(getLocalText.s("Long-press the L×Box icon on your home screen → \"Connect\" when the VPN is off, \"Disconnect\" when it is on. Android 11 and newer.")),
         ),
         const Divider(height: 32),
         Text(getLocalText.s("Updates"),
@@ -137,7 +137,7 @@ class GeneralTab extends StatelessWidget {
         const SizedBox(height: 8),
         SwitchListTile(
           title: Text(getLocalText.s("Check for updates on launch")),
-          subtitle: Text(getLocalText.s("Pings github.com once a day to check for new releases. \"View\" opens the release page in browser; install is manual.")),
+          subtitle: Text(getLocalText.s("Pings github.com once a day for new releases. Tap the message to open the update page — the GitHub release or the app's store page. Later hides it until the next launch, Ignore skips this version.")),
           secondary: const Icon(Icons.system_update_alt),
           value: autoCheckUpdates,
           onChanged: loaded ? onAutoCheckUpdatesChanged : null,

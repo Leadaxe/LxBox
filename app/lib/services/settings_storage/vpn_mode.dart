@@ -45,6 +45,8 @@ Future<VpnModeConfig> _getVpnMode() async {
         proxyUsername:
             (raw['proxy_username'] as String?) ?? VpnModeConfig.defaultUsername,
         proxyPassword: (raw['proxy_password'] as String?) ?? '',
+        // §629 — отсутствие/битое значение → false (выкл по умолчанию).
+        systemProxyEnabled: raw['system_proxy_enabled'] == true,
       );
     }
   }
@@ -81,6 +83,7 @@ class VpnModeConfig {
     required this.proxyAuthEnabled,
     required this.proxyUsername,
     required this.proxyPassword,
+    this.systemProxyEnabled = false,
   });
 
   /// Default = текущее поведение (mode=vpn). Для existing юзеров без ключа.
@@ -91,12 +94,17 @@ class VpnModeConfig {
         proxyListen = listenLocal,
         proxyAuthEnabled = true,
         proxyUsername = defaultUsername,
-        proxyPassword = '';
+        proxyPassword = '',
+        systemProxyEnabled = false;
 
   static const int defaultPort = 2080;
   static const String listenLocal = '127.0.0.1';
   static const String listenPublic = '0.0.0.0';
   static const String defaultUsername = 'user';
+
+  /// §629 — фиксированный порт скрытого HTTP-инбаунда `sysproxy-in`
+  /// (системный прокси VPN-сети, Android 10+). В хранилище и UI не выносится.
+  static const int systemProxyPort = 2081;
 
   /// Валиден ли адрес для `listen` (IPv4: 4 октета 0..255). UI/storage
   /// отвергают всё остальное — sing-box иначе упадёт на reload.
@@ -144,6 +152,14 @@ class VpnModeConfig {
   final String proxyUsername;
   final String proxyPassword;
 
+  /// §629 — объявлять системе HTTP-прокси VPN-сети (`setHttpProxy`) через
+  /// отдельный loopback-инбаунд `sysproxy-in`. Независим от `mixed-in`.
+  final bool systemProxyEnabled;
+
+  /// §629 — порт `sysproxy-in`: 2081, при коллизии с `proxy_port` → 2082.
+  int get effectiveSystemProxyPort =>
+      proxyPort == systemProxyPort ? systemProxyPort + 1 : systemProxyPort;
+
   bool get isVpn => mode == 'vpn';
   bool get isProxy => mode == 'proxy';
   bool get isVpnProxy => mode == 'vpn_proxy';
@@ -169,6 +185,7 @@ class VpnModeConfig {
     bool? proxyAuthEnabled,
     String? proxyUsername,
     String? proxyPassword,
+    bool? systemProxyEnabled,
   }) =>
       VpnModeConfig(
         mode: mode ?? this.mode,
@@ -178,6 +195,7 @@ class VpnModeConfig {
         proxyAuthEnabled: proxyAuthEnabled ?? this.proxyAuthEnabled,
         proxyUsername: proxyUsername ?? this.proxyUsername,
         proxyPassword: proxyPassword ?? this.proxyPassword,
+        systemProxyEnabled: systemProxyEnabled ?? this.systemProxyEnabled,
       );
 
   Map<String, Object?> toJson() => {
@@ -188,5 +206,6 @@ class VpnModeConfig {
         'proxy_auth_enabled': proxyAuthEnabled,
         'proxy_username': proxyUsername,
         'proxy_password': proxyPassword,
+        'system_proxy_enabled': systemProxyEnabled,
       };
 }

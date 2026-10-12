@@ -225,15 +225,24 @@ class SpeedTestServer {
     this.downloadUrl = '',
     this.uploadUrl,
     this.uploadMethod = 'PUT',
+    this.uploadChunkBytes,
     this.pingUrl = '',
   });
 
   final String id;
   final String name; // display (локализуется overlay'ем)
   final String downloadUrl;
-  final String? uploadUrl; // null → fallback на downloadUrl
+  /// §634 — endpoint, принимающий тело. null/пусто → у сервера нет
+  /// проверяемого upload, Upload не меряется (n/a), PUT на downloadUrl не шлём.
+  final String? uploadUrl;
   final String uploadMethod; // 'PUT' | 'POST'
+
+  /// §634 — максимум байт в одном запросе upload (лимит тела на сервере,
+  /// например 1 МБ у LibreSpeed Hostkey). null → весь объём одним запросом.
+  final int? uploadChunkBytes;
   final String pingUrl; // пустой → fallback на downloadUrl
+
+  bool get hasUpload => uploadUrl != null && uploadUrl!.isNotEmpty;
 
   factory SpeedTestServer.fromJson(Map<String, dynamic> json) =>
       SpeedTestServer(
@@ -242,6 +251,9 @@ class SpeedTestServer {
         downloadUrl: json['download_url']?.toString() ?? '',
         uploadUrl: json['upload_url']?.toString(),
         uploadMethod: json['upload_method']?.toString() ?? 'PUT',
+        uploadChunkBytes: json['upload_chunk_bytes'] is num
+            ? (json['upload_chunk_bytes'] as num).toInt()
+            : null,
         pingUrl: json['ping_url']?.toString() ?? '',
       );
 }

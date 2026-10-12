@@ -444,6 +444,9 @@ class SoraEditorPlatformView(
                 // вверх / вниз отсюда уводит фокус из поля (D-pad, §624).
                 "atTop" to (bottom <= rowH * 1.5f),
                 "atBottom" to (rightBottom >= layoutH - rowH * 0.5f),
+                // Есть выделение — Flutter отдаёт view все жесты, иначе
+                // ручки выделения перехватывают вкладки и страница (§628).
+                "selected" to c.isSelected,
             ),
         )
     }

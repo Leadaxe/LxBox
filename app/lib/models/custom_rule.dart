@@ -146,7 +146,8 @@ sealed class CustomRule {
       };
 
   /// §030/new_fields — `inbound`-ось: теги inbound'ов билдера (`tun-in`/
-  /// `mixed-in`, §119). Headless rule_set `inbound` НЕ принимает → routing-rule
+  /// `mixed-in`, §119; `sysproxy-in` — системный HTTP-прокси, §629: его трафик
+  /// приходит не через `tun-in`). Headless rule_set `inbound` НЕ принимает → routing-rule
   /// level (как `ip_is_private`). AND с остальным правилом.
   List<String> get inbounds => switch (this) {
         CustomRuleInline(:final inbounds) => inbounds,

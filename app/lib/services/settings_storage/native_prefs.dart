@@ -135,10 +135,19 @@ Future<Map<String, dynamic>> _exportToBackupMap() async {
 Future<int> _applyFromBackupMap(
   Map<String, dynamic> data, {
   void Function(String key, Object error)? onError,
+  bool onlyMissing = false,
+  void Function(String key)? onKept,
 }) async {
+  // §633 — Merge: ключ, который в зеркале получателя уже есть, остаётся его.
+  final mine =
+      onlyMissing ? (await _load())[SettingsStorage.nativePrefsKey] : null;
   var n = 0;
   for (final key in NativePrefsKeys.all) {
     if (!data.containsKey(key)) continue;
+    if (mine is Map && mine.containsKey(key)) {
+      onKept?.call(key);
+      continue;
+    }
     try {
       if (key == NativePrefsKeys.backgroundMode) {
         // Нормализация/валидация через BackgroundMode (не голый каст).

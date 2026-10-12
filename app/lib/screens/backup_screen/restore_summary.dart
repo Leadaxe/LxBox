@@ -23,12 +23,16 @@ String restoreSummaryText(
     if (apply.vpnSettingsApplied > 0)
       getLocalText.plural("%d VPN settings", apply.vpnSettingsApplied),
   ];
+  // §633 — Merge: сколько добавлено и сколько уже было (осталось вашим).
   final out = StringBuffer(
-    parts.isEmpty
-        ? getLocalText.s("Nothing imported")
-        : getLocalText.s("Imported: %s", parts.join(', ')),
+    apply.merged
+        ? getLocalText.s("Merged: %1\$d added, %2\$d already here",
+            apply.totalApplied, apply.mergeKept)
+        : parts.isEmpty
+            ? getLocalText.s("Nothing imported")
+            : getLocalText.s("Imported: %s", parts.join(', ')),
   );
-  if (fetchingSubscriptions && parts.isNotEmpty) {
+  if (fetchingSubscriptions && apply.totalApplied > 0) {
     out.write(' · ${getLocalText.s("fetching subscriptions…")}');
   }
   if (apply.hasErrors) {

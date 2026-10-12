@@ -59,7 +59,7 @@ wizard_template.json
 │
 ├─ speed_test_options              object{3 keys}       (§015)
 │   ├─ servers[]                   list[10]      Cloudflare, Selectel, Hetzner, OVH, etc.
-│   │   └─ {id, name, download_url, upload_url, upload_method, ping_url}
+│   │   └─ {id, name, download_url, upload_url, upload_method, upload_chunk_bytes, ping_url}
 │   ├─ stream_options              list[3]       parallel-streams choices (e.g. [1,4,10])
 │   └─ default_streams             int           default 4
 │
@@ -333,6 +333,13 @@ The endpoints for the speed-test screen. The user does not override them (though
 The current template holds ten servers (Cloudflare, Selectel, Hetzner, OVH and others).
 `id` is a stable machine id (§279): the runtime choice of server on the speed-test screen
 is keyed by it rather than by index; an unknown id falls back to the default (the first server).
+
+`upload_url` is set only for a server with a published endpoint that accepts a request body
+(§634); a request counts when the server answers below 400. Without `upload_url` the screen
+shows Upload as `n/a` and sends nothing. `upload_method` is `PUT` (default) or `POST`.
+`upload_chunk_bytes` caps one request (the 5 MB per stream goes as several requests in a
+row) for servers with a body-size limit, e.g. 1000000 for the Hostkey LibreSpeed servers,
+which answer 413 above about 1 MB. Sources per server — task 634.
 
 ---
 
@@ -849,16 +856,16 @@ the base sniff/hijack-dns/resolve rules.
 | `ru-inside` | (false) | — | — | ✓ (outbound, force_ipv4) | ✓ (remote ru-inside) | ✓ an array: `[resolve ipv4_only #if @force_ipv4, @outbound]` (§246) | — | — |
 | `bittorrent` | true | — | — | ✓ (outbound) | — | ✓ (`protocol: bittorrent` → `@outbound`) | — | — |
 | `private-ip` | (false) | — | — | ✓ (outbound) | — | ✓ (`ip_is_private` → `@outbound`) | — | — |
-| `unknown-traffic` | false | — | — | ✓ (`outbound`=reject) | ✓ (inline `unknown-apps`, invert `package_name_regex: "^"`) | ✓ (`@outbound`) | — | — |
+| `unknown-traffic` | true | — | — | ✓ (`outbound`=direct) | ✓ (inline `unknown-apps`, invert `package_name_regex: "^"`) | ✓ (`@outbound`) | — | — |
 | `tailscale` (§578) | true | — | 945 | ✓ (dns_enable) | — | ✓ per node: `[resolve → <node>-dns #if @dns_enable, preferred_by → @node]` | ✓ per node (`preferred_by` → `<node>-dns`, #if @dns_enable) | ✓ per node (type `tailscale`, `endpoint: @node`, #if @dns_enable) |
 | `fcm-push` (§364) | false | — | 970 | ✓ (outbound=direct-out, gms_only) | — | ✓ one logical `and` rule: `[package_name gms #if @gms_only, or(domain mtalk/android.apis, domain_suffix firebase…)]` → `@outbound` | — | — |
 | `vowifi` (§371) | true | — | 990 | ✓ (outbound=direct-out, ike_ports) | ✓ (inline `vowifi-epdg`: `domain_suffix pub.3gppnetwork.org`) | ✓ an array: `[rule_set vowifi-epdg → @outbound, udp 500/4500 → @outbound #if @ike_ports]` | — | — |
 
 **`traffic-processing` (§264/§370)** is a locked, unsortable preset and the FIRST in `selectable_rules`. It carries the base route rules `sniff`, `hijack-dns` and `resolve`, which before §264 lived directly in `config.route.rules` (now empty). `num:0` plus `isSortable:false` guarantee its rules come first.
 
-`unknown-traffic` is reject or direct for traffic inside the tunnel that is attributed to no installed application (background or foreign processes). Its inline `rule_set` `unknown-apps` matches “everything that is NOT an application” through `invert: true` plus `package_name_regex: "^"`.
+`unknown-traffic` is reject or direct for traffic inside the tunnel that is attributed to no installed application (background or foreign processes). Its inline `rule_set` `unknown-apps` matches “everything that is NOT an application” through `invert: true` plus `package_name_regex: "^"`. The rule is pinned to `inbound: ["tun-in"]`: it judges only traffic that entered through the tunnel. Connections arriving at `mixed-in` (Proxy and VPN+Proxy modes, including LAN clients) are not touched, and in pure Proxy mode the rule never matches because there is no `tun-in` inbound.
 
-**The `reject`→`action` backstop.** `unknown-traffic` has the var default `outbound: "reject"` and `rule.outbound: "@outbound"`. In sing-box `reject` is an `action`, NOT an outbound tag: the literal `{outbound: "reject"}` is rejected by the validator as a dangling ref and the core will not start. That is why `preset_expand.dart` normalises it UNCONDITIONALLY.
+**The `reject`→`action` backstop.** `unknown-traffic` offers `reject` as a value of its `outbound` var (the default is `direct`) and has `rule.outbound: "@outbound"`. In sing-box `reject` is an `action`, NOT an outbound tag: the literal `{outbound: "reject"}` is rejected by the validator as a dangling ref and the core will not start. That is why `preset_expand.dart` normalises it UNCONDITIONALLY.
 
 **`fakeip` (§228)** is FakeIP DNS: `dns_servers` supplies a server of `type: fakeip` (the ranges 198.18.0.0/15 and fc00::/18), and `dns_rule` routes every `A` and `AAAA` query to it. The application receives a placeholder IP instantly (zero latency, no pre-tunnel DNS leak), while the real domain resolution happens inside the tunnel.
 

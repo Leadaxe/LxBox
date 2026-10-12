@@ -48,6 +48,7 @@ void main() {
           'download_url': 'https://cf/down',
           'upload_url': 'https://cf/up',
           'upload_method': 'POST',
+          'upload_chunk_bytes': 1000000,
           'ping_url': 'https://cf/ping',
         },
         {
@@ -86,9 +87,14 @@ void main() {
     expect(m.servers.map((s) => s.id), ['cloudflare', 'selectel-ru']);
     expect(m.servers.first.uploadMethod, 'POST');
     expect(m.servers.first.uploadUrl, 'https://cf/up');
+    expect(m.servers.first.hasUpload, isTrue);
+    expect(m.servers.first.uploadChunkBytes, 1000000);
     expect(m.servers.first.pingUrl, 'https://cf/ping');
     // Отсутствующие поля — дефолты (fallback-цепочки экрана).
     expect(m.servers[1].uploadUrl, isNull);
+    // §634 — без upload_url Upload не меряется (n/a), PUT на download не шлём.
+    expect(m.servers[1].hasUpload, isFalse);
+    expect(m.servers[1].uploadChunkBytes, isNull);
     expect(m.servers[1].uploadMethod, 'PUT');
     expect(m.servers[1].pingUrl, isEmpty);
     expect(m.streamOptions, [1, 4, 10]);

@@ -68,10 +68,13 @@ entry); **the input is default-deny**; **a failure does not wipe settings**
   **Witness:** unit tests "foreign key dropped", "foreign var dropped, known
   ones kept", "merge filters too", "§600 — flags not in droppedKeys, foreign
   key next to them dropped". **Mutation:** filtering only in replace mode.
-- **P6. Merge deletes nothing.** Sources are appended by `id`, vars by key,
-  whatever is absent in the file stays. **Witness:** unit tests "merge keeps
-  untouched keys", "sources are appended by id". **Mutation:** merging
-  sources by replacing the list.
+- **P6. Merge deletes and overwrites nothing.** Every list is merged by
+  record identity (sources by `id`, chains, Directions and DNS servers by
+  tag, rules by `ref` / `id` / content), new records are appended after the
+  receiver's; a scalar or var keeps the receiver's value, a key the receiver
+  lacks comes from the file (§633). **Witness:** unit tests "merge keeps
+  untouched keys", "sources are appended by id", `backup_merge_test.dart`.
+  **Mutation:** a top-level upsert (a file key replaces the receiver's).
 - **P7. Replace replaces the selected categories; unselected categories keep
   the receiver's values.** A selected category is replaced wholesale by the
   file's content: a key of the category absent in the file is removed. An
@@ -216,7 +219,7 @@ source_app_version, storage{…}, vpn_settings{…}}`; LX Backup 1.0
 ```
 Full backup:  settings → categories → envelope + VPN block → file
 Restore: file → markers → migration of an old block → preview (categories,
-   counters, mode) → merge: sources by id + upsert | replace: whole document
+   counters, mode) → merge: records by identity, receiver's values win | replace: selected categories
    (+ device Debug API and prompt flags) → default-deny allowlist → atomic
    write → Directions seeding → VPN block → summary + "Restart now"
 Transfer: settings → record slice + thin layer → LX Backup 1.0;

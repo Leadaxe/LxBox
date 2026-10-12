@@ -218,12 +218,12 @@ class _StatsScreenState extends State<StatsScreen> {
               if (_currentSessionAllowBypass)
                 Tooltip(
                   message:
-                      'VPN bypass is active in this session.\n\n'
-                      'Apps can use bindProcessToNetwork() to skip the tunnel '
-                      '(banking apps, WhatsApp, system services). '
-                      'Some traffic may not go through VPN.\n\n'
-                      'Disable in VPN Settings → System → Allow VPN bypass '
-                      'and reload VPN to enforce strict tunnel.',
+                      'VPN bypass is on in this session: apps that call '
+                      'bindProcessToNetwork() (banking apps, WhatsApp, system '
+                      'services) send their traffic outside the tunnel.\n\n'
+                      'To keep all traffic in the tunnel, turn off '
+                      'VPN Settings → Mode → Tunnel options → Allow VPN bypass '
+                      'and reload the VPN.',
                   triggerMode: TooltipTriggerMode.tap,
                   showDuration: const Duration(seconds: 12),
                   waitDuration: const Duration(milliseconds: 100),

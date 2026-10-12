@@ -675,7 +675,7 @@ class _SettingsScreenState extends State<SettingsScreen>
               RadioListTile<BackgroundMode>(
                 value: BackgroundMode.always,
                 title: Text(getLocalText.s("Aggressive battery saving")),
-                subtitle: Text(getLocalText.s("Pause tunnel whenever screen turns off. Max battery savings, but pushes, incoming calls and background sync stop until unlock.")),
+                subtitle: Text(getLocalText.s("Pause tunnel whenever screen turns off. Max battery savings, but pushes, incoming calls and background sync stop until the screen turns on again.")),
               ),
             ],
           ),

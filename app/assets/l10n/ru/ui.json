@@ -886,8 +886,8 @@
   "Added: %s": {
     "value": "Добавлено: %s"
   },
-  "Adds new items, keeps existing.": {
-    "value": "Добавляет новое, сохраняет существующее."
+  "Adds what you don't have, keeps everything you do.": {
+    "value": "Добавляет то, чего у вас нет; всё, что есть, остаётся."
   },
   "Adds padding traffic so the WireGuard handshake carries no fixed size signature. Enable if the plain tunnel does not connect.": {
     "value": "Добавляет паддинг-трафик, чтобы у handshake WireGuard не было фиксированной сигнатуры размера. Включите, если обычный туннель не подключается."
@@ -966,6 +966,9 @@
   },
   "Android restricts background activity to save battery. Without an exception, the VPN tunnel may be killed when the screen turns off — your connection drops until you reopen L×Box.\n\nOpen system settings and choose \"Unrestricted\" / \"Not optimized\".": {
     "value": "Android ограничивает фоновую активность ради экономии батареи. Без исключения туннель VPN может быть закрыт при выключении экрана — связь пропадёт, пока вы снова не откроете L×Box.\n\nОткройте системные настройки и выберите «Без ограничений» / «Не оптимизировать»."
+  },
+  "Announce a local HTTP proxy to the VPN network (Android 10+).": {
+    "value": "Объявить локальный HTTP-прокси в сети VPN (Android 10+)."
   },
   "Another VPN app is currently running. Switch to L×Box?\n\nTo see which app it is, open VPN settings — the active VPN is marked as connected.": {
     "value": "Сейчас работает VPN другого приложения. Переключиться на L×Box?\n\nЧтобы узнать, какое именно, откройте настройки VPN — активный VPN отмечен как подключённый."
@@ -1050,6 +1053,9 @@
   },
   "Apps may use ConnectivityManager to bypass tun.": {
     "value": "Приложения могут обходить туннель через ConnectivityManager."
+  },
+  "Apps that honor the system proxy (Chrome, Play) connect over TCP via the core; no QUIC.": {
+    "value": "Приложения, учитывающие системный прокси (Chrome, Play), подключаются по TCP через ядро; без QUIC."
   },
   "At least two positions are needed: the core rejects a single-hop chain.": {
     "value": "Нужно минимум две позиции: цепочку из одного хопа ядро отвергает."
@@ -1197,6 +1203,9 @@
   },
   "Source has unsaved changes.": {
     "value": "В источнике есть несохранённая правка."
+  },
+  "System HTTP proxy": {
+    "value": "Системный HTTP-прокси"
   },
   "The STUN decoy carries no domain.": {
     "value": "Приманка STUN домена не несёт."
@@ -1438,6 +1447,9 @@
   },
   "Config is empty": {
     "value": "Конфиг пуст"
+  },
+  "Config is too large to edit on device. Share it, edit it elsewhere, then pick the edited file in Load from file: it is saved right away.": {
+    "value": "Конфиг слишком большой для правки на устройстве. Поделитесь им, отредактируйте в другом месте и выберите правленый файл в «Загрузить из файла»: он сохранится сразу."
   },
   "Config loading error": {
     "value": "Ошибка загрузки конфига"
@@ -2311,9 +2323,6 @@
   "File is empty": {
     "value": "Файл пуст"
   },
-  "File is too large to edit on device. Share it, edit externally, then load it back.": {
-    "value": "Файл слишком большой для правки на устройстве. Поделитесь им, отредактируйте во внешнем редакторе и загрузите обратно."
-  },
   "Fill missing": {
     "value": "Дополнить недостающие"
   },
@@ -2914,8 +2923,8 @@
   "Log": {
     "value": "Лог"
   },
-  "Long-press the L×Box icon on your home screen → choose \"Toggle VPN\".": {
-    "value": "Долгое нажатие на иконку L×Box на главном экране → выберите «Toggle VPN»."
+  "Long-press the L×Box icon on your home screen → \"Connect\" when the VPN is off, \"Disconnect\" when it is on. Android 11 and newer.": {
+    "value": "Долгое нажатие на иконку L×Box на главном экране → «Подключить», когда VPN выключен, «Отключить», когда включён. Android 11 и новее."
   },
   "LxBox (default)": {
     "value": "LxBox (по умолчанию)"
@@ -2979,6 +2988,9 @@
   },
   "Merge with existing (recommended)": {
     "value": "Объединить с текущими (рекомендуется)"
+  },
+  "Merged: %1$d added, %2$d already here": {
+    "value": "Объединено: добавлено %1$d, уже было %2$d"
   },
   "Metadata is missing or unreadable.": {
     "value": "Метаданные отсутствуют или не читаются."
@@ -3072,6 +3084,9 @@
   },
   "Never updated": {
     "value": "Ещё не обновлялась"
+  },
+  "new: %1$d, already here: %2$d": {
+    "value": "новое: %1$d, уже есть: %2$d"
   },
   "New auto node": {
     "value": "Новый авто-узел"
@@ -3623,8 +3638,8 @@
   "Pause only in deep Doze (screen off for a long time + no motion). Balanced.": {
     "value": "Приостанавливать только в глубоком Doze (экран долго выключен, устройство неподвижно). Сбалансированно."
   },
-  "Pause tunnel whenever screen turns off. Max battery savings, but pushes, incoming calls and background sync stop until unlock.": {
-    "value": "Приостанавливать туннель при каждом выключении экрана. Максимальная экономия, но push-уведомления, входящие звонки и фоновая синхронизация не работают до разблокировки."
+  "Pause tunnel whenever screen turns off. Max battery savings, but pushes, incoming calls and background sync stop until the screen turns on again.": {
+    "value": "Приостанавливать туннель при каждом выключении экрана. Максимальная экономия, но push-уведомления, входящие звонки и фоновая синхронизация не работают, пока экран снова не включится."
   },
   "Pay": {
     "value": "Оплатить"
@@ -3680,8 +3695,8 @@
   "Ping target": {
     "value": "Цель пинга"
   },
-  "Pings github.com once a day to check for new releases. \"View\" opens the release page in browser; install is manual.": {
-    "value": "Раз в день обращается к github.com за новыми релизами. «Открыть» открывает страницу релиза в браузере; установка вручную."
+  "Pings github.com once a day for new releases. Tap the message to open the update page — the GitHub release or the app's store page. Later hides it until the next launch, Ignore skips this version.": {
+    "value": "Раз в день обращается к github.com за новыми релизами. Тап по сообщению открывает страницу обновления — релиз на GitHub или страницу приложения в сторе. «Позже» скрывает его до следующего запуска, «Не напоминать» пропускает эту версию."
   },
   "Pinned. UI actions skip config rebuild — useful when testing PUT /config overrides.": {
     "value": "Закреплён. Действия в UI не пересобирают конфиг — удобно при тестировании override через PUT /config."
@@ -4566,8 +4581,8 @@
   "Stopping…": {
     "value": "Остановка…"
   },
-  "Stored locally only. Existing entries persist when you turn this off — remove individually in Pick saved (long-press chip → Remove).": {
-    "value": "Хранится только на устройстве. При выключении записи не удаляются — убирайте их по одной в «Pick saved» (долгое нажатие на чип → Remove)."
+  "Stored locally only. Existing entries persist when you turn this off — remove them one by one in Pick saved with ✕ (Remove from history).": {
+    "value": "Хранится только на устройстве. При выключении записи не удаляются — убирайте их по одной в «Pick saved» крестиком ✕ («Убрать из истории»)."
   },
   "Straight to the Downloads folder": {
     "value": "Сразу в папку «Загрузки»"
@@ -4933,8 +4948,8 @@
   "Token copied": {
     "value": "Токен скопирован"
   },
-  "Token is shown only here. It is NOT written to any file — use Copy to save. Server binds on 127.0.0.1 only; use `adb forward tcp:9269 tcp:9269`.": {
-    "value": "Токен показывается только здесь и НЕ записывается в файлы — сохраните его кнопкой «Копировать». Сервер слушает только 127.0.0.1; используйте `adb forward tcp:9269 tcp:9269`."
+  "The token is stored in app settings and is not included in Backup by default — use Copy to keep it elsewhere. Server binds on 127.0.0.1 only; use `adb forward tcp:9269 tcp:9269`.": {
+    "value": "Токен хранится в настройках приложения и по умолчанию не попадает в резервную копию — чтобы сохранить его отдельно, используйте «Копировать». Сервер слушает только 127.0.0.1; используйте `adb forward tcp:9269 tcp:9269`."
   },
   "Tolerance (ms)": {
     "value": "Допуск (мс)"
@@ -5154,8 +5169,8 @@
   "View, edit, import JSON": {
     "value": "Просмотр, правка и импорт JSON"
   },
-  "Visible in Debug → Core.": {
-    "value": "Видны в Debug → Core."
+  "Visible in Debug → Log, filter Core.": {
+    "value": "Видны в «Отладка» → «Лог», фильтр «Ядро»."
   },
   "WARP accounts: %d": {
     "value": "Аккаунтов WARP: %d"
@@ -5918,5 +5933,14 @@
   },
   "Needs a saved exit node.": {
     "value": "Нужен сохранённый выходной узел."
+  },
+  "Route depends on your rules, shown after the test": {
+    "value": "Маршрут задают ваши правила, он появится после теста"
+  },
+  "Route depends on your rules": {
+    "value": "Маршрут задают ваши правила"
+  },
+  "n/a": {
+    "value": "н/д"
   }
 }

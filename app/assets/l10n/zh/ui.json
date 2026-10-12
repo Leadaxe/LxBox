@@ -697,8 +697,8 @@
   "Added: %s": {
     "value": "已添加：%s"
   },
-  "Adds new items, keeps existing.": {
-    "value": "新增条目，保留原有内容。"
+  "Adds what you don't have, keeps everything you do.": {
+    "value": "添加您没有的内容，保留您已有的一切。"
   },
   "Adds padding traffic so the WireGuard handshake carries no fixed size signature. Enable if the plain tunnel does not connect.": {
     "value": "添加填充流量，使 WireGuard 握手中不含固定长度特征。若普通隧道连不上可启用。"
@@ -777,6 +777,9 @@
   },
   "Android restricts background activity to save battery. Without an exception, the VPN tunnel may be killed when the screen turns off — your connection drops until you reopen L×Box.\n\nOpen system settings and choose \"Unrestricted\" / \"Not optimized\".": {
     "value": "Android 为省电会限制后台活动。若未加入例外，熄屏后 VPN 隧道可能被终止——在重新打开 L×Box 之前连接会中断。\n\n请打开系统设置并选择「无限制」/「不优化」。"
+  },
+  "Announce a local HTTP proxy to the VPN network (Android 10+).": {
+    "value": "向 VPN 网络声明本地 HTTP 代理（Android 10+）。"
   },
   "Another VPN app is currently running. Switch to L×Box?\n\nTo see which app it is, open VPN settings — the active VPN is marked as connected.": {
     "value": "另一个 VPN 应用正在运行。是否切换到 L×Box？\n\n想查看是哪个应用，请打开 VPN 设置——处于连接状态的即为当前 VPN。"
@@ -861,6 +864,9 @@
   },
   "Apps may use ConnectivityManager to bypass tun.": {
     "value": "应用可通过 ConnectivityManager 绕过 tun。"
+  },
+  "Apps that honor the system proxy (Chrome, Play) connect over TCP via the core; no QUIC.": {
+    "value": "遵循系统代理的应用（Chrome、Play）经由内核通过 TCP 连接；不使用 QUIC。"
   },
   "At least two positions are needed: the core rejects a single-hop chain.": {
     "value": "至少需要两个位置：内核不接受单跳链路。"
@@ -1008,6 +1014,9 @@
   },
   "Source has unsaved changes.": {
     "value": "来源有未保存的修改。"
+  },
+  "System HTTP proxy": {
+    "value": "系统 HTTP 代理"
   },
   "The STUN decoy carries no domain.": {
     "value": "STUN 诱饵不携带域名。"
@@ -1234,6 +1243,9 @@
   },
   "Config is empty": {
     "value": "配置为空"
+  },
+  "Config is too large to edit on device. Share it, edit it elsewhere, then pick the edited file in Load from file: it is saved right away.": {
+    "value": "配置太大，无法在本机编辑。请分享出去，在别处改好后，用“从文件载入”选择改好的文件：会立即保存。"
   },
   "Config loading error": {
     "value": "配置加载错误"
@@ -2080,9 +2092,6 @@
   "File is empty": {
     "value": "文件为空"
   },
-  "File is too large to edit on device. Share it, edit externally, then load it back.": {
-    "value": "文件太大，无法在本机编辑。请分享出去，用外部编辑器改好后再载入。"
-  },
   "Fill missing": {
     "value": "补全缺失项"
   },
@@ -2671,8 +2680,8 @@
   "Log": {
     "value": "日志"
   },
-  "Long-press the L×Box icon on your home screen → choose \"Toggle VPN\".": {
-    "value": "长按桌面上的 L×Box 图标 → 选择「Toggle VPN」。"
+  "Long-press the L×Box icon on your home screen → \"Connect\" when the VPN is off, \"Disconnect\" when it is on. Android 11 and newer.": {
+    "value": "长按桌面上的 L×Box 图标 → VPN 关闭时选「连接」，开启时选「断开」。需 Android 11 及以上。"
   },
   "LxBox (default)": {
     "value": "LxBox（默认）"
@@ -2736,6 +2745,9 @@
   },
   "Merge with existing (recommended)": {
     "value": "与现有内容合并（推荐）"
+  },
+  "Merged: %1$d added, %2$d already here": {
+    "value": "已合并：新增 %1$d，已有 %2$d"
   },
   "Metadata is missing or unreadable.": {
     "value": "元数据缺失或无法读取。"
@@ -2829,6 +2841,9 @@
   },
   "Never updated": {
     "value": "从未更新"
+  },
+  "new: %1$d, already here: %2$d": {
+    "value": "新增：%1$d，已有：%2$d"
   },
   "New auto node": {
     "value": "新建自动节点"
@@ -3368,8 +3383,8 @@
   "Pause only in deep Doze (screen off for a long time + no motion). Balanced.": {
     "value": "仅在深度 Doze 时暂停（长时间熄屏且设备静止）。均衡方案。"
   },
-  "Pause tunnel whenever screen turns off. Max battery savings, but pushes, incoming calls and background sync stop until unlock.": {
-    "value": "每次熄屏都暂停隧道。最省电，但熄屏期间推送、来电和后台同步都会停止，直到解锁。"
+  "Pause tunnel whenever screen turns off. Max battery savings, but pushes, incoming calls and background sync stop until the screen turns on again.": {
+    "value": "每次熄屏都暂停隧道。最省电，但熄屏期间推送、来电和后台同步都会停止，直到屏幕重新亮起。"
   },
   "Pay": {
     "value": "支付"
@@ -3425,8 +3440,8 @@
   "Ping target": {
     "value": "测速目标"
   },
-  "Pings github.com once a day to check for new releases. \"View\" opens the release page in browser; install is manual.": {
-    "value": "每天访问一次 github.com 检查新版本。「查看」会在浏览器中打开发布页；安装需手动。"
+  "Pings github.com once a day for new releases. Tap the message to open the update page — the GitHub release or the app's store page. Later hides it until the next launch, Ignore skips this version.": {
+    "value": "每天访问一次 github.com 检查新版本。点按消息会打开更新页面——GitHub 发布页或应用商店页面。「稍后」隐藏至下次启动，「不再提醒」跳过此版本。"
   },
   "Pinned. UI actions skip config rebuild — useful when testing PUT /config overrides.": {
     "value": "已固定。界面操作会跳过配置重建——在测试 PUT /config 覆盖时很有用。"
@@ -4299,8 +4314,8 @@
   "Stopping…": {
     "value": "正在停止…"
   },
-  "Stored locally only. Existing entries persist when you turn this off — remove individually in Pick saved (long-press chip → Remove).": {
-    "value": "仅保存在本机。关闭后已有记录仍会保留——可在「Pick saved」中逐个移除（长按标签 → Remove）。"
+  "Stored locally only. Existing entries persist when you turn this off — remove them one by one in Pick saved with ✕ (Remove from history).": {
+    "value": "仅保存在本机。关闭后已有记录仍会保留——可在「Pick saved」中点 ✕（从历史中移除）逐个移除。"
   },
   "Straight to the Downloads folder": {
     "value": "直接存入「下载」文件夹"
@@ -4663,8 +4678,8 @@
   "Token copied": {
     "value": "令牌已复制"
   },
-  "Token is shown only here. It is NOT written to any file — use Copy to save. Server binds on 127.0.0.1 only; use `adb forward tcp:9269 tcp:9269`.": {
-    "value": "令牌只在此处显示，不会写入任何文件——请用「复制」保存。服务只监听 127.0.0.1；请使用 `adb forward tcp:9269 tcp:9269`。"
+  "The token is stored in app settings and is not included in Backup by default — use Copy to keep it elsewhere. Server binds on 127.0.0.1 only; use `adb forward tcp:9269 tcp:9269`.": {
+    "value": "令牌保存在应用设置中，默认不包含在备份里——如需另存，请用「复制」。服务只监听 127.0.0.1；请使用 `adb forward tcp:9269 tcp:9269`。"
   },
   "Tolerance (ms)": {
     "value": "容差（ms）"
@@ -4884,8 +4899,8 @@
   "View, edit, import JSON": {
     "value": "查看、编辑、导入 JSON"
   },
-  "Visible in Debug → Core.": {
-    "value": "可在 调试 → 内核 中查看。"
+  "Visible in Debug → Log, filter Core.": {
+    "value": "可在 调试 → 日志 中查看，筛选「内核」。"
   },
   "WARP accounts: %d": {
     "value": "WARP 账号：%d"
@@ -5639,5 +5654,14 @@
   },
   "Needs a saved exit node.": {
     "value": "需要已保存的出口节点。"
+  },
+  "Route depends on your rules, shown after the test": {
+    "value": "路由由您的规则决定，测试后显示"
+  },
+  "Route depends on your rules": {
+    "value": "路由由您的规则决定"
+  },
+  "n/a": {
+    "value": "不适用"
   }
 }

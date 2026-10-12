@@ -1518,7 +1518,7 @@ curl -X POST -H "$HDR" -H "Content-Type: application/json" \
   --data-binary @/tmp/lxbox-backup.json \
   "$BASE/backup/import?rebuild=true"
 
-# Merge mode — top-level upsert (vars upsert, остальные ключи overwrite, отсутствующие в файле — keep)
+# Merge mode — слияние §633: добавляется то, чего нет; своё остаётся (счётчики — applied.merge)
 curl -X POST -H "$HDR" -H "Content-Type: application/json" \
   --data-binary @/tmp/lxbox-backup.json \
   "$BASE/backup/import?merge=true"
@@ -1550,7 +1550,7 @@ curl -s -H "$HDR" "$BASE/backup/export?include=storage&from=v0_bak" > /tmp/lxbox
 
 ⚠ Источники в памяти приложения (экран Servers) после `POST /backup/import` не перечитываются до холодного рестарта. Так и в 2.23.2, к §439 не относится.
 
-`merge=false` (default) — replace всего документа (категорий у запроса нет; замена по категориям §599 — только у UI-импорта); `merge=true` — top-level upsert. Кеши (cache.db, stderr.log, SRS-blob, runtime node-tags) в backup не входят — restore их пересоздаёт.
+`merge=false` (default) — replace всего документа (категорий у запроса нет; замена по категориям §599 — только у UI-импорта); `merge=true` — слияние §633, то же, что Merge в UI: списки по идентичности записи (источники по `id`, цепочки / Направления / DNS-серверы по тегу, правила по `ref` пресета, `id` или содержимому; новые — в конец, правила — в конец пользовательской зоны `num`), Tunnel apps — объединение пакетов, режим получателя, если не `off`; скаляры, `vars` и `vpn_settings` — значение получателя, отсутствующий ключ — из файла. Ответ: `applied.merge` = `{sources, rules, directions, dns_servers, dns_rules, tun_apps, keys}` по `{added, kept}`, `applied.vpn_settings_kept`. Кеши (cache.db, stderr.log, SRS-blob, runtime node-tags) в backup не входят — restore их пересоздаёт.
 
 ---
 

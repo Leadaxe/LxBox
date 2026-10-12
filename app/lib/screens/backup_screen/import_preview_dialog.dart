@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../services/backup_merge.dart' show MergeCount;
 import '../../services/backup_service.dart';
 import '../../services/format_utils.dart' show formatDateTime;
 import '../../services/l10n/locale_controller.dart';
@@ -19,6 +20,20 @@ Future<ImportDialogResult?> showImportPreview(
   final available = c.availableCategories();
   var include = Set<BackupCategory>.from(available);
   var merge = true;
+  // §633 — что добавит Merge и что уже есть, по категориям. Сбой подсчёта не
+  // мешает импорту: строка просто не показывается.
+  Map<BackupCategory, MergeCount>? preview;
+  try {
+    preview = await const BackupService().previewMerge(c);
+  } catch (_) {}
+  if (!context.mounted) return null;
+  String? mergeLine(BackupCategory cat) {
+    final m = preview?[cat];
+    if (!merge || m == null) return null;
+    return getLocalText.s(
+        "new: %1\$d, already here: %2\$d", m.added, m.kept);
+  }
+
   return await showDialog<ImportDialogResult>(
     context: context,
     builder: (ctx) => StatefulBuilder(
@@ -59,6 +74,7 @@ Future<ImportDialogResult?> showImportPreview(
                         c.countFor(BackupCategory.serverLists),
                         servers.subs,
                         servers.custom),
+                    subtitle: mergeLine(BackupCategory.serverLists),
                     checked: include.contains(BackupCategory.serverLists),
                     onChanged: (v) => set(() {
                       if (v == true) {
@@ -78,6 +94,7 @@ Future<ImportDialogResult?> showImportPreview(
                             "Routing — %1\$d rules, final: %2\$s",
                             c.countFor(BackupCategory.routing),
                             c.routingFinalOutbound),
+                    subtitle: mergeLine(BackupCategory.routing),
                     checked: include.contains(BackupCategory.routing),
                     onChanged: (v) => set(() {
                       if (v == true) {
@@ -92,6 +109,7 @@ Future<ImportDialogResult?> showImportPreview(
                     ctx,
                     label: getLocalText.plural("%d app settings",
                         c.countFor(BackupCategory.appSettings)),
+                    subtitle: mergeLine(BackupCategory.appSettings),
                     checked: include.contains(BackupCategory.appSettings),
                     onChanged: (v) => set(() {
                       if (v == true) {
@@ -106,6 +124,7 @@ Future<ImportDialogResult?> showImportPreview(
                     ctx,
                     label: getLocalText.plural("%d VPN system toggles",
                         c.countFor(BackupCategory.vpnSettings)),
+                    subtitle: mergeLine(BackupCategory.vpnSettings),
                     checked: include.contains(BackupCategory.vpnSettings),
                     onChanged: (v) => set(() {
                       if (v == true) {
@@ -120,6 +139,7 @@ Future<ImportDialogResult?> showImportPreview(
                     ctx,
                     label: getLocalText
                         .s("Debug API config (sensitive — token included)"),
+                    subtitle: mergeLine(BackupCategory.debugConfig),
                     checked: include.contains(BackupCategory.debugConfig),
                     onChanged: (v) => set(() {
                       if (v == true) {
@@ -146,7 +166,8 @@ Future<ImportDialogResult?> showImportPreview(
                         value: true,
                         title: Text(getLocalText.s("Merge with existing (recommended)")),
                         subtitle: Text(
-                          getLocalText.s("Adds new items, keeps existing."),
+                          getLocalText.s(
+                              "Adds what you don't have, keeps everything you do."),
                           style: const TextStyle(fontSize: 11),
                         ),
                       ),
@@ -224,6 +245,7 @@ Future<ImportDialogResult?> showImportPreview(
 Widget _previewCheckbox(
   BuildContext ctx, {
   required String label,
+  String? subtitle,
   required bool checked,
   required ValueChanged<bool?> onChanged,
 }) {
@@ -234,5 +256,8 @@ Widget _previewCheckbox(
     value: checked,
     onChanged: onChanged,
     title: Text(label),
+    subtitle: subtitle == null
+        ? null
+        : Text(subtitle, style: const TextStyle(fontSize: 11)),
   );
 }

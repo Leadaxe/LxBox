@@ -239,7 +239,7 @@ class DiagnosticsTab extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  getLocalText.s("Token is shown only here. It is NOT written to any file — use Copy to save. Server binds on 127.0.0.1 only; use `adb forward tcp:9269 tcp:9269`."),
+                  getLocalText.s("The token is stored in app settings and is not included in Backup by default — use Copy to keep it elsewhere. Server binds on 127.0.0.1 only; use `adb forward tcp:9269 tcp:9269`."),
                   style: const TextStyle(fontSize: 12),
                 ),
               ],
@@ -278,7 +278,7 @@ class DiagnosticsTab extends StatelessWidget {
             title: Text(getLocalText.s("Forward sing-box logs")),
             subtitle: Text(
               coreLogsEnabled
-                  ? getLocalText.s("Visible in Debug → Core.")
+                  ? getLocalText.s("Visible in Debug → Log, filter Core.")
                   : getLocalText.s("Off."),
             ),
             secondary: const Icon(Icons.terminal),
@@ -312,10 +312,11 @@ class DiagnosticsTab extends StatelessWidget {
             ],
           ),
         ),
-        // §051 Phase 3 — auto-record visited Wi-Fi networks. Default ON:
-        // без auto-record «Pick saved» picker почти всегда пустой,
-        // фича теряет смысл. 5-минутный stickiness отсекает drive-by
-        // сети (магазин/проход). Toggle для тех кто не хочет logging.
+        // §051 Phase 3 — auto-record visited Wi-Fi networks. По умолчанию
+        // выключено (SettingsStorage.getAutoRecordWifi): запись посещённых
+        // сетей — след приватности даже локально. Без неё «Pick saved»
+        // наполняют только Add current / Manual. 5-минутный stickiness
+        // отсекает drive-by сети (магазин/проход).
         const Divider(height: 8),
         SwitchListTile(
           title: Text(getLocalText.s("Auto-record visited Wi-Fi networks")),
@@ -331,7 +332,7 @@ class DiagnosticsTab extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.fromLTRB(72, 0, 16, 12),
           child: Text(
-            getLocalText.s("Stored locally only. Existing entries persist when you turn this off — remove individually in Pick saved (long-press chip → Remove)."),
+            getLocalText.s("Stored locally only. Existing entries persist when you turn this off — remove them one by one in Pick saved with ✕ (Remove from history)."),
             style: TextStyle(
               fontSize: 12,
               color: Theme.of(context).colorScheme.onSurfaceVariant,

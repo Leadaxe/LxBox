@@ -85,7 +85,8 @@ Future<DebugResponse> _export(DebugRequest req) async {
 ///   принимается и мигрирует до allowlist'а; в ответе `applied.migrated: true`
 ///   и отчёт `applied.migration`.
 /// - `merge=false` (default) — replace existing.
-/// - `merge=true` — top-level merge (vars upsert, остальные ключи overwrite).
+/// - `merge=true` — слияние §633 (`mergeStorageDoc`): добавляется то, чего у
+///   получателя нет; его записи и значения остаются. Итог — `applied.merge`.
 /// - `rebuild=true` — после restore зовёт `SubscriptionController.generateConfig`
 ///   и сохраняет в HomeState (то же что `POST /action/rebuild-config`).
 Future<DebugResponse> _import(DebugRequest req, DebugContext ctx) async {
@@ -120,8 +121,9 @@ Future<DebugResponse> _import(DebugRequest req, DebugContext ctx) async {
     }
     // §159 — replaceRaw применяет allowlist (default-deny). Отброшенные
     // неизвестные/чужеродные ключи возвращаются и отдаются в ответе.
-    final dropped =
-        await SettingsStorage.replaceRaw(migration.doc, merge: merge);
+    final dropped = await SettingsStorage.replaceRaw(migration.doc,
+        merge: merge,
+        onMerged: (stats) => applied['merge'] = stats.toJson());
     applied['storage_keys'] = storage.length;
     if (dropped.isNotEmpty) applied['dropped_keys'] = dropped;
     // §279 — restore мог привезти другой app_language: полный пайплайн смены
@@ -144,7 +146,11 @@ Future<DebugResponse> _import(DebugRequest req, DebugContext ctx) async {
   final vpn = body['vpn_settings'];
   if (vpn is Map<String, dynamic>) {
     // §189 — единая сериализация (делегат NativePrefs, как BackupService).
-    applied['vpn_settings'] = await SettingsStorage.applyNativePrefsBackup(vpn);
+    // §633 — Merge: тумблеры, которые у получателя есть, остаются его.
+    var vpnKept = 0;
+    applied['vpn_settings'] = await SettingsStorage.applyNativePrefsBackup(vpn,
+        onlyMissing: merge, onKept: (_) => vpnKept++);
+    if (merge) applied['vpn_settings_kept'] = vpnKept;
   } else if (vpn != null) {
     throw const BadRequest('vpn_settings must be a JSON object');
   }

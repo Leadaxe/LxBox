@@ -99,20 +99,28 @@ How to read it:
 - `package_name_regex: "^"` — the `^` regex matches **any** string (including the empty one): "there is some package".
 - `invert: true` — flips the condition → the rule catches traffic whose **package is NOT defined** (empty / `INVALID_UID`).
 
-So the rule isolates exactly the traffic that enters the tunnel without attribution to an installed app.
+So the rule isolates exactly the traffic that enters the tunnel without attribution to an installed app. The rule carries `inbound: ["tun-in"]`, so it applies to the tunnel only: connections that arrive at the local proxy inbound (`mixed-in`) are not judged by it, and in pure Proxy mode, where the app is not the active VPN and `getConnectionOwnerUid` cannot attribute anything, the rule stays inert instead of rejecting every connection.
 
 **What to do with it** (the `outbound` var in the preset):
 
 | Value | Behavior |
 |-------|----------|
-| `reject` (default) | drop — ownerless traffic isn't let out at all |
-| `direct` | send it outside the VPN (direct egress, bypassing the tunnel) |
+| `direct` (default, preset on by default) | send it outside the VPN (direct egress, bypassing the tunnel): the process learns nothing it did not already know, and an attribution failure costs the user no connectivity |
+| `reject` | drop — ownerless traffic isn't let out at all. Strict mode: an attribution failure (system UIDs, a `find_process` miss) means no network for that flow |
 
 **Why it's needed:**
 
 1. **Close the leak.** A process crawling into tun behind VpnService's back can't exfiltrate traffic past the routing policy.
 2. **Tunnel hygiene.** Only legitimate apps' traffic goes through the proxy; everything unattributed is brought under control (drop or direct).
 3. **Different axis than §2.2.** A legitimate app with a valid UID and destination `1.2.3.4` is caught by `0.0.0.0/0`, but **not** by "Unknown traffic" — the sets barely overlap.
+
+**How to check it on the device.** Exclude Termux from the VPN (per-app mode), then run from Termux:
+
+```bash
+curl --interface tun0 https://ifconfig.me/ip
+```
+
+With the "Unknown traffic" rule on and `direct` (the default) the response is your own ISP address: the route layer sends the ownerless connection out past the tunnel. With `reject` the command times out. With the rule disabled the response is the server address — that is the leak. The same probe, the Android kernel mechanics behind it (`SO_BINDTODEVICE` on Linux 5.7+) and a survey of how other clients handle `INVALID_UID` are in a two-part series on Habr: [part 1, the overview](https://habr.com/ru/articles/1088980/) and [part 2, the fix walkthrough](https://habr.com/ru/articles/1089082/). The series insists that an unknown owner must mean reject in every per-app mode; we expose that as the `reject` value, and default to `direct` so that an attribution failure degrades to a direct connection rather than to no network.
 
 ### 2.5 Layers: route engine vs connection journal
 

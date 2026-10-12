@@ -286,7 +286,8 @@ void main() {
       },
       merge: true,
     );
-    expect(await SettingsStorage.getVar('log_level', ''), 'warn');
+    // §633 — Merge не затирает: значение получателя остаётся.
+    expect(await SettingsStorage.getVar('log_level', ''), 'info');
     expect(await SettingsStorage.getVar('auto_update_subs', ''), 'true');
     final cr = await SettingsStorage.getCustomRules();
     expect(cr.length, 1, reason: 'custom_rules must be preserved on merge');
@@ -854,8 +855,12 @@ void main() {
       expect(raw['directions_migrated'], true);
     });
 
-    test('старый архив, merge поверх ЖИВЫХ Направлений — архив побеждает',
-        () async {
+    // §633 — Merge сливает Направления по тегу: живые остаются, новые теги
+    // архива дописываются. Раньше (§393 A2) архив заменял список целиком;
+    // суть проверки — легаси-`channels` не выбрасывается рядом с живым
+    // `directions` — сохраняется: vpn-2 архива приезжает.
+    test('старый архив, merge поверх ЖИВЫХ Направлений — новые теги архива '
+        'дописаны, живые на месте', () async {
       // Канонический сценарий восстановления: свежая установка уже посеяла
       // (или юзер настроил) свои Направления, затем накатывается старый архив
       // в merge-дефолте UI. До нормализации имён архивный `channels` ложился
@@ -876,16 +881,16 @@ void main() {
       final restored = await SettingsStorage.getDirections();
       // vpn-2 архива — detour-Направление: fromJson сам помечает label
       // префиксом kDetourTagPrefix (§248), поэтому «⚙ Relay».
-      expect(restored.map((c) => c.label), ['Main', '⚙ Relay'],
-          reason: 'юзер восстанавливает архив РАДИ его Направлений — они '
-              'обязаны заменить живой список, а не молча проиграть ему');
+      expect(restored.map((c) => c.label),
+          ['LIVE-Home', 'LIVE-Work', '⚙ Relay'],
+          reason: 'Направления архива не теряются, свои остаются (§633)');
       final raw = await rawStorage();
       expect(raw.containsKey('channels'), isFalse);
       expect(raw.containsKey('channels_migrated'), isFalse);
     });
 
-    test('новый архив, merge поверх живых Направлений — архив побеждает',
-        () async {
+    test('новый архив, merge поверх живых Направлений — vpn-1 получателя, '
+        'новый тег дописан (§633)', () async {
       await SettingsStorage.replaceRaw({
         'directions': [
           {'tag': 'vpn-1', 'label': 'LIVE', 'enabled': true},
@@ -907,7 +912,7 @@ void main() {
       await svc.applyImport(await svc.parseImport(archive),
           merge: true, include: {BackupCategory.routing});
       expect((await SettingsStorage.getDirections()).map((c) => c.label),
-          ['ARCHIVE-Main', 'ARCHIVE-Relay']);
+          ['LIVE', 'ARCHIVE-Relay']);
     });
 
     test('re-export после restore старого архива пишет только новые ключи',

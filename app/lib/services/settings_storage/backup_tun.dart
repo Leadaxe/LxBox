@@ -20,9 +20,9 @@ Future<Map<String, dynamic>> _dumpCache() async {
 /// `POST /backup/import` (оба сходятся здесь). Экспорт (`_dumpCache`) НЕ
 /// фильтруется — чистим только на входе.
 ///
-/// `merge=false` (default) — replace целиком; `merge=true` — top-level upsert
-/// (присутствующие ключи overwrite, отсутствующие keep), `vars` мерджится
-/// per-subkey. Фильтр применяется к обоим путям.
+/// `merge=false` (default) — replace целиком; `merge=true` — слияние §633
+/// ([mergeStorageDoc]): добавляется то, чего у получателя нет, его записи и
+/// значения остаются; итог — в [onMerged]. Фильтр применяется к обоим путям.
 ///
 /// §413 — при `merge=false` ключи Debug API ([SettingsStorage.debugApiVarKeys]),
 /// которых во входящем `vars` нет, переносятся из текущего стораджа. Экспорт
@@ -41,7 +41,41 @@ Future<List<String>> _replaceRaw(
   bool merge = false,
   bool Function(String key)? keepTopLevel,
   bool Function(String varKey)? keepVar,
+  void Function(StorageMergeStats stats)? onMerged,
 }) async {
+  final (:filtered, :dropped) = await _filterSnapshot(snapshot);
+
+  if (!merge) {
+    await _applyReplace(filtered,
+        keepTopLevel: keepTopLevel, keepVar: keepVar);
+    return dropped;
+  }
+
+  // §633 — Merge: добавляется то, чего у получателя нет; то, что есть, не
+  // трогается (списки — по идентичности записи, скаляры — значение
+  // получателя). Раньше здесь был upsert верхнего уровня: ключ файла целиком
+  // заменял ключ получателя.
+  final current = await _load();
+  final stats = mergeStorageDoc(current, filtered);
+  SettingsStorage._cache = current;
+  await _save();
+  onMerged?.call(stats);
+  return dropped;
+}
+
+/// §633 — что сделал бы Merge снимка [snapshot] с текущим документом, без
+/// записи: тот же фильтр входа, слияние на копии.
+Future<StorageMergeStats> _previewMergeRaw(
+    Map<String, dynamic> snapshot) async {
+  final (:filtered, dropped: _) = await _filterSnapshot(snapshot);
+  final copy = await _dumpCache();
+  return mergeStorageDoc(copy, filtered);
+}
+
+/// Вход снимка: миграция формы 2.23.2 и allowlist (default-deny). Возвращает
+/// допущенный документ и отброшенные ключи.
+Future<({Map<String, dynamic> filtered, List<String> dropped})>
+    _filterSnapshot(Map<String, dynamic> snapshot) async {
   // Allowlist для vars: кодовые флаги ∪ имена vars из локального template
   // (template в бэкап не входит — резолвим против зашитого в APK, §159).
   final template = await TemplateLoader.load();
@@ -102,81 +136,69 @@ Future<List<String>> _replaceRaw(
       filtered[key] = value;
     }
   }
+  return (filtered: filtered, dropped: dropped);
+}
 
-  if (!merge) {
-    final current = await _load();
-    final currentVars = current['vars'];
-    // §599 — неотмеченные категории не трогаются: их ключи и подключи `vars`
-    // берутся у получателя, снимок для них не читается.
-    if (keepTopLevel != null) {
-      filtered.removeWhere((k, _) => k != 'vars' && keepTopLevel(k));
-      for (final entry in current.entries) {
-        if (entry.key != 'vars' && keepTopLevel(entry.key)) {
-          filtered[entry.key] = entry.value;
-        }
-      }
-    }
-    if (keepVar != null) {
-      final outVars = (filtered['vars'] as Map<String, dynamic>?) ??
-          <String, dynamic>{};
-      outVars.removeWhere((k, _) => keepVar(k));
-      if (currentVars is Map) {
-        for (final v in currentVars.entries) {
-          final vk = v.key.toString();
-          if (keepVar(vk)) outVars[vk] = v.value;
-        }
-      }
-      if (outVars.isNotEmpty) filtered['vars'] = outVars;
-    }
-    // §413 — Debug API устройства переживает замену, если файл о нём молчит
-    // (в том числе при отмеченной категории Debug config без этих ключей).
-    if (currentVars is Map) {
-      final outVars = (filtered['vars'] as Map<String, dynamic>?) ??
-          <String, dynamic>{};
-      for (final k in const {
-        ...SettingsStorage.debugApiVarKeys,
-        ...SettingsStorage.startupPromptVarKeys, // §447
-      }) {
-        if (!outVars.containsKey(k) && currentVars.containsKey(k)) {
-          outVars[k] = currentVars[k];
-        }
-      }
-      if (outVars.isNotEmpty) filtered['vars'] = outVars;
-    }
-    // §607 — зеркало тумблеров VPN получателя переживает замену: без него
-    // экраны до рестарта видели дефолты, а первая запись тумблера создавала
-    // секцию из одного ключа (остальные при старте уезжали в native
-    // дефолтами).
-    final nativePrefs = current[SettingsStorage.nativePrefsKey];
-    if (nativePrefs != null) {
-      filtered[SettingsStorage.nativePrefsKey] = nativePrefs;
-    }
-    // §611 — снятые ключи получателя переживают замену (их читает §612).
-    for (final k in SettingsStorage.retiredTopLevelKeys) {
-      if (current.containsKey(k)) filtered[k] = current[k];
-    }
-    SettingsStorage._cache = filtered;
-    await _save();
-    return dropped;
-  }
-
+/// Replace (§599): отмеченные категории — из [filtered], неотмеченные
+/// ([keepTopLevel] / [keepVar]) и свойства устройства — у получателя.
+Future<void> _applyReplace(
+  Map<String, dynamic> filtered, {
+  bool Function(String key)? keepTopLevel,
+  bool Function(String varKey)? keepVar,
+}) async {
   final current = await _load();
-  for (final entry in filtered.entries) {
-    final key = entry.key;
-    final value = entry.value;
-    if (key == 'vars' && value is Map<String, dynamic>) {
-      final existing = (current['vars'] as Map<String, dynamic>?) ?? {};
-      for (final v in value.entries) {
-        existing[v.key] = v.value;
+  final currentVars = current['vars'];
+  // §599 — неотмеченные категории не трогаются: их ключи и подключи `vars`
+  // берутся у получателя, снимок для них не читается.
+  if (keepTopLevel != null) {
+    filtered.removeWhere((k, _) => k != 'vars' && keepTopLevel(k));
+    for (final entry in current.entries) {
+      if (entry.key != 'vars' && keepTopLevel(entry.key)) {
+        filtered[entry.key] = entry.value;
       }
-      current['vars'] = existing;
-    } else {
-      current[key] = value;
     }
   }
-  SettingsStorage._cache = current;
+  if (keepVar != null) {
+    final outVars = (filtered['vars'] as Map<String, dynamic>?) ??
+        <String, dynamic>{};
+    outVars.removeWhere((k, _) => keepVar(k));
+    if (currentVars is Map) {
+      for (final v in currentVars.entries) {
+        final vk = v.key.toString();
+        if (keepVar(vk)) outVars[vk] = v.value;
+      }
+    }
+    if (outVars.isNotEmpty) filtered['vars'] = outVars;
+  }
+  // §413 — Debug API устройства переживает замену, если файл о нём молчит
+  // (в том числе при отмеченной категории Debug config без этих ключей).
+  if (currentVars is Map) {
+    final outVars = (filtered['vars'] as Map<String, dynamic>?) ??
+        <String, dynamic>{};
+    for (final k in const {
+      ...SettingsStorage.debugApiVarKeys,
+      ...SettingsStorage.startupPromptVarKeys, // §447
+    }) {
+      if (!outVars.containsKey(k) && currentVars.containsKey(k)) {
+        outVars[k] = currentVars[k];
+      }
+    }
+    if (outVars.isNotEmpty) filtered['vars'] = outVars;
+  }
+  // §607 — зеркало тумблеров VPN получателя переживает замену: без него
+  // экраны до рестарта видели дефолты, а первая запись тумблера создавала
+  // секцию из одного ключа (остальные при старте уезжали в native
+  // дефолтами).
+  final nativePrefs = current[SettingsStorage.nativePrefsKey];
+  if (nativePrefs != null) {
+    filtered[SettingsStorage.nativePrefsKey] = nativePrefs;
+  }
+  // §611 — снятые ключи получателя переживают замену (их читает §612).
+  for (final k in SettingsStorage.retiredTopLevelKeys) {
+    if (current.containsKey(k)) filtered[k] = current[k];
+  }
+  SettingsStorage._cache = filtered;
   await _save();
-  return dropped;
 }
 
 Future<TunAppsConfig> _getTunApps() async {
