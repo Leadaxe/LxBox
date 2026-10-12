@@ -94,10 +94,10 @@ the node's notifications; a build warning line.
 - `Off` on any level does not remove flags that came in the node body (Xray
   `dialerProxy`, `finalmask.tcp`, authored JSON) — it only stops adding them.
 
-- The global settings are portable: they go into the cross-platform backup.
-  The node and source policy (record field `tls`) is not declared by the
-  backup contract yet: it does not go into the file, the export names it as
-  dropped; on merge the matched source and node keep their own.
+- All settings are portable: the global ones go into the cross-platform
+  backup as `vars`, the node and source policy as the record field `tls`
+  (contract 1.1.117, LxBox side; the launcher silently ignores it). On merge
+  the matched source and node keep their own policy.
 
 ## Boundaries
 

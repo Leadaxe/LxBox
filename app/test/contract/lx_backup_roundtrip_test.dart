@@ -521,9 +521,10 @@ void main() {
     }, skip: corpusTestSkip('test/contract/lx_backup_roundtrip_test.dart',
         subpath: 'schema'));
   });
-  // §636 — TLS-политика: контракт поле `tls` не объявил (Л2), поэтому в файл
-  // оно не едет и называется срезом; слияние держит локальную политику так
-  // же, как локальную ссылку detour.
+  // §636 — TLS-политика: контракт 1.1.117 объявил поле `tls` у подписки,
+  // сервера, папки и члена папки ($defs/tlsPolicy), поэтому оно едет в файл и
+  // применяется на импорте; слияние держит локальную политику так же, как
+  // локальную ссылку detour.
   group('§636 tls', () {
     const uriA = 'vless://11111111-1111-1111-1111-111111111111@198.51.100.1:443'
         '?type=ws&security=tls#Alpha';
@@ -565,15 +566,26 @@ void main() {
       ];
     }
 
-    test('экспорт: tls не едет и называется срезом', () async {
+    test('экспорт и импорт: tls едет у подписки, сервера, папки и члена',
+        () async {
       final out = await _export(_State(lists: lists(withTls: true)));
       final dropped = [
         for (final w in out.warnings)
           if (w.code == kWarnLocalOnlyDropped) w.detail,
       ];
-      expect(dropped.where((d) => d.contains('tls')), hasLength(3),
+      expect(dropped.where((d) => d.contains('tls')), isEmpty,
           reason: '$dropped');
-      expect(out.json.contains('"tls"'), isFalse);
+      expect(out.json.contains('"tls"'), isTrue);
+      final imported = planLxBackupImport(
+        out.json,
+        const LxImportReceiver(lists: [], directions: [], chains: []),
+      ).lists;
+      expect(imported, hasLength(3));
+      for (final l in imported) {
+        expect(l.tls, local, reason: l.type);
+      }
+      final folder = imported.whereType<FolderServers>().single;
+      expect(folder.members.single.tls, local);
     });
 
     test('слияние: совпавшие источник и узел держат свою политику', () async {

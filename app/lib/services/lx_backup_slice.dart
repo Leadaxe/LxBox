@@ -96,9 +96,10 @@ const List<BackupField> kBackupFields = [
       declared: true),
   BackupField(BackupRecord.subscription, 'on_update_action', _s,
       declared: true),
-  // §636 — TLS-политика: настройка LxBox без дома в 1.0 (контракт её не
-  // объявил) — срезается и называется, импорт применит её после объявления.
-  BackupField(BackupRecord.subscription, 'tls', _s),
+  // §636 — TLS-политика по уровням; объявлена контрактом 1.1.117 ($defs/
+  // tlsPolicy у подписки, сервера, папки и члена папки), едет и применяется.
+  BackupField(BackupRecord.subscription, 'tls', _s,
+      declared: true),
   // BACKUP.md §2: метаданные выдачи и история обновлений — рантайм машины.
   BackupField(BackupRecord.subscription, 'meta', _r),
   BackupField(BackupRecord.subscription, 'last_updated', _r),
@@ -129,7 +130,8 @@ const List<BackupField> kBackupFields = [
   BackupField(BackupRecord.server, 'skip_presets', _c),
   BackupField(BackupRecord.server, 'detour_policy', _s, declared: true),
   BackupField(BackupRecord.server, 'tag_policy', _s, declared: true),
-  BackupField(BackupRecord.server, 'tls', _s), // §636
+  BackupField(BackupRecord.server, 'tls', _s,
+      declared: true), // §636
 
   // ── папка ────────────────────────────────────────────────────────────────
   BackupField(BackupRecord.folder, 'kind', _c),
@@ -142,7 +144,8 @@ const List<BackupField> kBackupFields = [
   BackupField(BackupRecord.folder, 'detour_policy', _s, declared: true),
   BackupField(BackupRecord.folder, 'ping_url', _s, declared: true),
   BackupField(BackupRecord.folder, 'ping_timeout_ms', _s, declared: true),
-  BackupField(BackupRecord.folder, 'tls', _s), // §636
+  BackupField(BackupRecord.folder, 'tls', _s,
+      declared: true), // §636
   BackupField(BackupRecord.folder, 'created_at', _r),
   BackupField(BackupRecord.folder, 'nodes', _c),
 
@@ -158,7 +161,8 @@ const List<BackupField> kBackupFields = [
   BackupField(BackupRecord.folderNode, 'reason', _c),
   BackupField(BackupRecord.folderNode, 'sections', _r), // §575
   BackupField(BackupRecord.folderNode, 'skip_presets', _c),
-  BackupField(BackupRecord.folderNode, 'tls', _s), // §636
+  BackupField(BackupRecord.folderNode, 'tls', _s,
+      declared: true), // §636
   // Член-группа `kind: auto` (§439 N2): состав и стратегия — `group`; поля
   // стороны LxBox `members_rule` и `pool_badge` лежат внутри `group`
   // (контракт 1.0.1) и едут вместе с ним.
