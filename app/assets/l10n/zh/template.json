@@ -380,14 +380,14 @@
  "Randomize letter case in server_name (WwW.gOoGle.CoM). Per RFC 6066 the field is case-insensitive, so servers accept either form; defeats naive exact-match matching only. Skipped on REALITY nodes — their SNI must stay byte-exact": {
   "value": "随机化 server_name 的字母大小写（WwW.gOoGle.CoM）。按 RFC 6066，该字段不区分大小写，服务器两种写法都接受；只能骗过朴素的精确匹配。REALITY 节点会跳过——它们的 SNI 必须逐字节一致"
  },
- "Reject = drop. Or pick Direct to send it outside the VPN.": {
-  "value": "拦截 = 丢弃。也可选择「直连」，把它送出 VPN 之外。"
+ "Direct = send it outside the VPN. Or pick Reject to drop it (strict mode: any attribution failure means no network).": {
+  "value": "直连 = 送出 VPN 之外。也可选择「拦截」将其丢弃（严格模式：任何归属失败都意味着没有网络）。"
  },
  "Reject ad-related connections. Downloads rule set (~1 MB).": {
   "value": "拦截与广告相关的连接。会下载规则集（约 1 MB）。"
  },
- "Reject traffic in the tunnel not attributed to any installed app (background/foreign processes). Send it direct to bypass VPN instead.": {
-  "value": "拦截隧道内无法归属到任何已安装应用的流量（后台/外来进程）。也可改为直连以绕过 VPN。"
+ "Traffic in the tunnel not attributed to any installed app (background/foreign processes) goes direct, bypassing the VPN, so a process that binds to the tunnel cannot learn the server address. Pick Reject to drop it instead.": {
+  "value": "隧道内无法归属到任何已安装应用的流量（后台/外来进程）会直连并绕过 VPN，这样绑定到隧道的进程无法得知服务器地址。可改选「拦截」将其丢弃。"
  },
  "Reply empty to HTTPS/SVCB DNS records (RFC 9460) so apps fall back to plain A/AAAA. Keeps these queries from leaking to the fallback DNS.": {
   "value": "对 HTTPS/SVCB DNS 记录（RFC 9460）回复空应答，让应用回退到普通 A/AAAA。可避免这些查询泄漏到兜底 DNS。"
