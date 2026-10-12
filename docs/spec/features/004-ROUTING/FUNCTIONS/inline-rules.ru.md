@@ -71,6 +71,9 @@ headless-матче — правило маршрута без `rule_set`.
 
 - Отрицания условия нет; `domain_regex`, `source_port` не выведены в форму —
   доступны через [сырой JSON](raw-json-rules.ru.md).
+- Снифферы ядра lx `wireguard`, `openvpn`, `ike`, `tailscale`, `sip` в
+  списке протоколов формы отсутствуют; правило на них пишется
+  [сырым JSON](raw-json-rules.ru.md).
 - Какие приложения вообще идут в туннель —
   [011-SPLIT_TUNNELING](../../011-SPLIT_TUNNELING/FEATURE.ru.md).
 - DNS-опция правила — [005-DNS](../../005-DNS/FEATURE.ru.md).

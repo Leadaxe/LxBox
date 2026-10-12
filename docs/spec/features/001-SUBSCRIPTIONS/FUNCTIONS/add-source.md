@@ -45,7 +45,8 @@ No settings of its own. Entry points on the sources screen:
 **Importing one file:** if it holds > 1 node, a
 [file subscription](file-subscription.md) is created, named from `profile-title` or the file
 name without extension; ≤ 1 node — a single server, the file name becomes a
-hint for the node name. **Several files** → a new folder, one server from
+hint for the node name (a one-node file never becomes a one-node file
+subscription; nothing is lost — the node is added as it is). **Several files** → a new folder, one server from
 each file; empty files are listed in the message.
 
 **Output:** a new entry; a snackbar "Config regenerated: N nodes" (or "…& applied").

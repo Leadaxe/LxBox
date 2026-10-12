@@ -62,7 +62,9 @@ per set and one route rule with the list of tags.
   (dimmed switch, ☁); auto-update downloads it, and an open screen updates the
   row. The list switch of a disabled rule without files first downloads, and
   enables only on full success. In the editor the switch of an `.srs` rule is
-  unavailable until the download.
+  unavailable until the download. The two paths differ on purpose and both
+  stay: the list downloads and enables, the editor waits for the files
+  (audit 591, 2026-10-13).
 - A rule added from the catalog with external sets arrives
   disabled: "Added … — tap ☁ to download, then enable".
 - Changing a rule's URL or kind wipes the old files and disables the rule;

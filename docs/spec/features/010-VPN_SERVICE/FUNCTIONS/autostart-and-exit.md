@@ -47,6 +47,8 @@ Both settings are part of the backup and are restored with it.
   swiping stops the tunnel regularly.
 - The "on" default also applies to users whose value was never saved
   explicitly (default changed in §188).
+- In Proxy mode the toggle is hidden, but the saved value still applies
+  (on by default); it is not reset on a mode change.
 - "Quit & reopen app" ends the whole process together with the tunnel; the
   keep-alive setting does not affect this. The stop is final: the "tunnel
   wanted" flag and the watchdog alarm are cleared first, so the tunnel does

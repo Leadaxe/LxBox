@@ -73,8 +73,8 @@ link byte for byte as the source) or "no node" + a code for the rejects.
 
 - `http://`/`https://` is a subscription address, not a node
   ([001-SUBSCRIPTIONS](../../001-SUBSCRIPTIONS/FEATURE.md)).
-- `hysteria://`/`hy://` (v1) is declared by the registry, but there is no hysteria v1 model
-  in the app — no node is created.
+- `hysteria://`/`hy://` (v1) is declared by the registry as `extension: desktop`;
+  there is no hysteria v1 model in the app — no node is created.
 - Details of TLS obfuscation and XHTTP — [016-DPI_HARDENING](../../016-DPI_HARDENING/FEATURE.md).
 
 ## Revisions

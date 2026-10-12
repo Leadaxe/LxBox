@@ -71,6 +71,9 @@ headless match — a route rule without `rule_set`.
 
 - There is no condition negation; `domain_regex`, `source_port` are not exposed in the form —
   available via [raw JSON](raw-json-rules.md).
+- The core's lx sniffers `wireguard`, `openvpn`, `ike`, `tailscale`, `sip`
+  are not in the protocol list of the form; a rule on them is written as
+  [raw JSON](raw-json-rules.md).
 - Which apps go into the tunnel at all —
   [011-SPLIT_TUNNELING](../../011-SPLIT_TUNNELING/FEATURE.md).
 - A rule's DNS option — [005-DNS](../../005-DNS/FEATURE.md).

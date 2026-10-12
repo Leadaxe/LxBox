@@ -224,6 +224,9 @@ app start: read sources → "updating" → failed
   [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.md).
 - File picking and the camera for QR depend on OS capabilities (on a TV without
   a file manager — a hint instead of a picker).
+- The registry limit `max_nodes_per_subscription=3000` is not enforced: a
+  subscription of any size is accepted, the `max_nodes_exceeded` code exists
+  only in the shared warning dictionary.
 - Not planned (owner decision 2026-09-29, audit [591](../../tasks/591-spec-kit-revision-audit.md)): the "Get Free VPN" Quick Start and refreshing
   subscriptions by interval on pressing Start (`§010F`) — subscriptions are
   refreshed by the auto-update triggers.

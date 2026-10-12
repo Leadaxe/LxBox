@@ -73,8 +73,8 @@
 
 - `http://`/`https://` — это адрес подписки, а не узел
   ([001-SUBSCRIPTIONS](../../001-SUBSCRIPTIONS/FEATURE.ru.md)).
-- `hysteria://`/`hy://` (v1) реестр объявляет, но модели hysteria v1 в
-  приложении нет — узел не создаётся.
+- `hysteria://`/`hy://` (v1) реестр объявляет как `extension: desktop`; модели
+  hysteria v1 в приложении нет — узел не создаётся.
 - Детали TLS-обфускации и XHTTP — [016-DPI_HARDENING](../../016-DPI_HARDENING/FEATURE.ru.md).
 
 ## Ревизии

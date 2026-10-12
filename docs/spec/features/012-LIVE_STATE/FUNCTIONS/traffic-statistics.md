@@ -47,6 +47,9 @@ chain under a card).
   lists); not found or empty — `final`; the result is cached.
 - The connection host is the domain if there is one, otherwise the host from
   the destination address.
+- Cards are grouped by rule, not by node; the `↳ via …` line appears only
+  when the rule's traffic went through a detour chain, so a plain setup
+  shows no such line. Kept as is (audit 591, 2026-10-13).
 - "Memory" is that of the whole app process, not only the core: the core lives
   in the same process. The size of the core's Go heap is not available
   separately.
