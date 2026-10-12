@@ -269,8 +269,10 @@ rejection:   Start → core start → rejection names the node → disable + ver
 - **The group test is a separate RPC.** A measurement "through a group" by its
   tag does no reselection; the bug lived for months disguised as "Auto keeps a
   dead node" (§308).
-- **Folder test and home ping use different scales.** The home list colors by
-  200/500 ms with no setting, list tests by the configurable 250/500/700.
+- **Folder test and home ping use different scales.** The home list and the
+  pool view color by 200/500 ms with no setting, list tests by the
+  configurable 250/500/700 — three places, two scales. Kept as is (audit
+  591, 2026-10-13).
 - **The core rejection arrives wrapped.** Parsing looks for `initialize `
   anywhere in the string: Go prefixes and a localized template on top are
   normal; in the first version the safety net never fired because of them

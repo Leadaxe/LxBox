@@ -62,8 +62,9 @@ outbounds; the membership of selectors and `<tag>-auto`.
 - An Xray `dialerProxy` link may itself go through the next one; service
   `freedom`/`blackhole`/`dns` are never links; an invalid link in the middle
   brings down its owner — a truncated path is not built.
-- A node whose tag starts with `⚙ ` and a folder member that another
-  member's personal detour points to behave as a link: into node selection
+- A node whose tag starts with `⚙ ` (the prefix is still read as a link
+  marker, although new links no longer get it since 404) and a folder member
+  that another member's personal detour points to behave as a link: into node selection
   and auto-select — only via the register toggles.
 - Folder: a member's personal detour is kept with Use and Fill missing; with
   Replace all it is overridden by the folder's. If the folder override

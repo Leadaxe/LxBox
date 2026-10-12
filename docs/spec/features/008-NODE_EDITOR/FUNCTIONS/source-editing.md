@@ -61,7 +61,8 @@ answer.
   WireGuard under `endpoints`, the rest under `outbounds`. Exactly what will
   go into the config is checked: for a sing-box body — the body itself, for
   an Xray object — the model's body. The bridge to the core is unavailable —
-  saving is not blocked (P7).
+  saving is not blocked (P7) and goes through without a check, silently.
+  Kept as is (audit 591, 2026-10-13).
 - **Verbatim.** A custom sing-box body (a custom server or a folder member)
   goes into the config as written: keys outside the model survive, the
   application's gates do not edit the body, the registry only reports; the

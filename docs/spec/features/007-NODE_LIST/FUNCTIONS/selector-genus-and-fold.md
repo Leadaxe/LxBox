@@ -53,7 +53,8 @@ the `replace` setting of the source record, the user's member selection.
   fastest of N, `🔀 [N/M]` a pool of M out of N) and "→ selected"; a
   manual-genus group shows only its name in the row — neither the genus nor
   the selected member (the "Manual" genus is visible in the folder filter
-  chips and on the node screen).
+  chips and on the node screen); any protocol chip hides it, since the
+  group has no protocol of its own. Kept as is (audit 591, 2026-10-13).
 - A `default` pointing to a dropped member is removed — the core takes the
   first; one line `group_member_dropped` in the build report.
 - The member selection of a **folder** group is stored in the group itself;
