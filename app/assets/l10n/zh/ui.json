@@ -5648,5 +5648,14 @@
   },
   "Needs a saved exit node.": {
     "value": "需要已保存的出口节点。"
+  },
+  "Route depends on your rules, shown after the test": {
+    "value": "路由由您的规则决定，测试后显示"
+  },
+  "Route depends on your rules": {
+    "value": "路由由您的规则决定"
+  },
+  "n/a": {
+    "value": "不适用"
   }
 }

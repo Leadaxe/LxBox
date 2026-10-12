@@ -7,6 +7,8 @@ import 'package:http/http.dart' as http;
 import '../controllers/home_controller.dart';
 import '../models/parser_config.dart' show SpeedTestServer;
 import '../services/app_log.dart';
+import '../services/platform_channels.dart' show PlatformChannels;
+import '../vpn/cc_channel.dart';
 import '../services/error_format.dart';
 import '../services/format_utils.dart' show formatTimeHm;
 import '../services/l10n/template_aware_state.dart';
@@ -37,7 +39,13 @@ class _SpeedTestResult {
   final DateTime timestamp;
   final double ping;
   final double download;
-  final double upload;
+
+  /// §634 — null: у сервера нет проверяемого upload-endpoint (n/a);
+  /// отрицательное: ни один запрос upload не принят сервером.
+  final double? upload;
+
+  /// Outbound, через который ядро провело запросы к серверу (§634), `Direct`
+  /// без VPN; пусто — ядро маршрут не сообщило.
   final String proxy;
   final bool vpnEnabled;
   final String server;
@@ -99,13 +107,75 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
     }
   }
 
-  String get _currentProxy {
-    final state = widget.homeController.state;
-    if (!state.tunnelUp) return 'Direct'; // l10n-exempt: outbound tag-like label
-    return state.activeInGroup ?? state.selectedGroup ?? 'VPN';
+  bool get _vpnEnabled => widget.homeController.state.tunnelUp;
+
+  // §634 — маршрут к тестовому серверу решают правила маршрутизации (например,
+  // пресет Ru internet segment уводит `.ru` в direct-out), а не активный узел.
+  // Поэтому «Via» берётся из ядра: на время теста подписка на CommandClient
+  // connections (profilerClient, refcount §259), outbound соединения к хосту
+  // сервера. До теста и без ответа ядра узел не называем.
+  final _cc = CcChannel.instance;
+  StreamSubscription<List<CcConnection>>? _routeSub;
+  String? _observedRoute;
+  String? _observedRouteServerId;
+
+  void _startRouteWatch(String host) {
+    _observedRoute = null;
+    _observedRouteServerId = _serverId(_selectedServer);
+    if (!_vpnEnabled || host.isEmpty) return;
+    unawaited(_cc.acquireProfiler());
+    _routeSub = _cc.connections.listen(
+      (conns) {
+        for (final c in conns) {
+          final sameHost =
+              c.domain == host || c.destination.startsWith('$host:');
+          if (!sameHost || c.outbound.isEmpty) continue;
+          if (c.packageName.isNotEmpty &&
+              c.packageName != PlatformChannels.packageName) {
+            continue;
+          }
+          _observedRoute = c.outbound;
+        }
+      },
+      onError: (Object e, StackTrace _) =>
+          AppLog.I.debug('[speedtest] connections stream error: $e'),
+    );
   }
 
-  bool get _vpnEnabled => widget.homeController.state.tunnelUp;
+  void _stopRouteWatch() {
+    final sub = _routeSub;
+    if (sub == null) return;
+    _routeSub = null;
+    unawaited(sub.cancel());
+    unawaited(_cc.releaseProfiler());
+  }
+
+  /// Значение для истории: `Direct` без VPN, outbound из ядра, пусто — неизвестно.
+  String get _routeForHistory {
+    if (!_vpnEnabled) return 'Direct'; // l10n-exempt: outbound tag-like label
+    return _observedRoute ?? '';
+  }
+
+  String get _routeLabel {
+    if (!_vpnEnabled) return getLocalText.s("Direct (no VPN)");
+    final tested =
+        !_running && _observedRouteServerId == _serverId(_selectedServer);
+    if (!tested) {
+      return getLocalText.s("Route depends on your rules, shown after the test");
+    }
+    final route = _observedRoute;
+    if (route != null) return getLocalText.s("Via: %s", route);
+    return getLocalText.s("Route depends on your rules");
+  }
+
+  bool _serverHasUpload(int i) =>
+      _servers.isNotEmpty && _servers[i].hasUpload;
+
+  @override
+  void dispose() {
+    _stopRouteWatch();
+    super.dispose();
+  }
 
   Future<void> _runTest() async {
     if (_running) return;
@@ -117,6 +187,9 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
       _ping = 0;
       _progress = 0;
     });
+    final selected = _selectedServer;
+    final hasUpload = _serverHasUpload(selected);
+    _startRouteWatch(Uri.tryParse(_serverDownloadUrl(selected))?.host ?? '');
 
     try {
       // Ping — 5 attempts, trimmed mean
@@ -133,15 +206,16 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
       if (!mounted) return;
       setState(() {
         _downloadMbps = dlSpeed;
-        _progress = 0.65;
-        _status = getLocalText.s("Testing upload...");
+        _progress = hasUpload ? 0.65 : 1.0;
+        if (hasUpload) _status = getLocalText.s("Testing upload...");
       });
 
-      // Upload
-      final ulSpeed = await _testUpload();
+      // Upload — только у сервера с проверяемым endpoint (§634).
+      final double? ulSpeed = hasUpload ? await _testUpload(selected) : null;
       if (!mounted) return;
+      _stopRouteWatch();
       setState(() {
-        _uploadMbps = ulSpeed;
+        if (ulSpeed != null) _uploadMbps = ulSpeed;
         _progress = 1.0;
         _status = getLocalText.s("Complete");
       });
@@ -153,10 +227,10 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
           timestamp: DateTime.now(),
           ping: _ping,
           download: _downloadMbps,
-          upload: _uploadMbps,
-          proxy: _currentProxy,
+          upload: ulSpeed,
+          proxy: _routeForHistory,
           vpnEnabled: _vpnEnabled,
-          server: _serverName(_selectedServer),
+          server: _serverName(selected),
         ),
       );
       if (_history.length > 10) _history.removeLast();
@@ -166,6 +240,7 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
             _status = getLocalText.s("Error: %s", formatUserError(e).render()));
       }
     } finally {
+      _stopRouteWatch();
       if (mounted) setState(() => _running = false);
     }
   }
@@ -202,8 +277,6 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
   String _serverName(int i) =>
       _servers[i].name.isNotEmpty ? _servers[i].name : getLocalText.s("Server %d", i);
   String _serverDownloadUrl(int i) => _servers[i].downloadUrl;
-  String? _serverUploadUrl(int i) => _servers[i].uploadUrl;
-  String _serverUploadMethod(int i) => _servers[i].uploadMethod;
 
   /// Download test: parallel streams with real-time speed updates.
   Future<double> _testDownload() async {
@@ -284,48 +357,58 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
     }
   }
 
-  Future<double> _testUpload() async {
-    // 2 parallel upload streams, 2MB each
+  /// §634 — 2 параллельных потока по 5 МБ на upload-endpoint сервера.
+  /// Засчитываются только байты запросов, на которые сервер ответил < 400;
+  /// потоки останавливаются по дедлайну, отправленное до него учитывается.
+  /// -1 — сервер не принял ни одного запроса.
+  Future<double> _testUpload(int server) async {
     final client = http.Client();
+    _ulBytesTotal = 0;
+    final sw = Stopwatch()..start();
     try {
-      final data = Uint8List(5 * 1024 * 1024);
-      var totalBytes = 0;
-      final sw = Stopwatch()..start();
-
-      final futures = <Future<int>>[];
-      for (var i = 0; i < 2; i++) {
-        futures.add(_uploadStream(client, data));
-      }
-
-      final results = await Future.wait(futures).timeout(const Duration(seconds: 30));
-      sw.stop();
-
-      for (final bytes in results) {
-        totalBytes += bytes;
-      }
-
-      if (totalBytes == 0) return 0;
-      final seconds = sw.elapsedMilliseconds / 1000.0;
-      return (totalBytes * 8 / 1000000) / seconds;
+      await Future.wait([
+        for (var i = 0; i < 2; i++)
+          _uploadStream(client, _servers[server], 5 * 1024 * 1024, sw),
+      ]);
     } finally {
+      sw.stop();
       client.close();
     }
+    if (_ulBytesTotal == 0) return -1;
+    final seconds = sw.elapsedMilliseconds / 1000.0;
+    return (_ulBytesTotal * 8 / 1000000) / seconds;
   }
 
-  Future<int> _uploadStream(http.Client client, Uint8List data) async {
+  var _ulBytesTotal = 0;
+  static const _uploadDeadline = Duration(seconds: 30);
+
+  Future<void> _uploadStream(http.Client client, SpeedTestServer server,
+      int total, Stopwatch sw) async {
+    final uri = Uri.parse(server.uploadUrl!);
+    final headers = {'Content-Type': 'application/octet-stream'};
+    final chunk = (server.uploadChunkBytes ?? total).clamp(1, total);
+    final data = Uint8List(chunk);
+    var sent = 0;
     try {
-      final uploadUrl = _serverUploadUrl(_selectedServer) ?? _serverDownloadUrl(_selectedServer);
-      final uri = Uri.parse(uploadUrl);
-      final headers = {'Content-Type': 'application/octet-stream'};
-      final method = _serverUploadMethod(_selectedServer);
-      if (method == 'POST') {
-        await http.post(uri, body: data, headers: headers).timeout(const Duration(seconds: 30));
-      } else {
-        await http.put(uri, body: data, headers: headers).timeout(const Duration(seconds: 30));
+      while (sent < total && sw.elapsed < _uploadDeadline) {
+        final body = total - sent >= chunk
+            ? data
+            : Uint8List.sublistView(data, 0, total - sent);
+        final request = server.uploadMethod == 'POST'
+            ? client.post(uri, body: body, headers: headers)
+            : client.put(uri, body: body, headers: headers);
+        final response =
+            await request.timeout(_uploadDeadline - sw.elapsed);
+        if (response.statusCode >= 400) {
+          AppLog.I.debug(
+              '[speedtest] upload rejected: HTTP ${response.statusCode}');
+          return;
+        }
+        sent += body.length;
+        _ulBytesTotal += body.length;
       }
-      return data.length;
-    } catch (_) {
-      return 0;
+    } catch (e) {
+      AppLog.I.debug('[speedtest] upload stream aborted: $e');
     }
   }
 
@@ -354,12 +437,12 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
                   color: _vpnEnabled ? cs.primary : cs.onSurfaceVariant,
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  _vpnEnabled
-                      ? getLocalText.s("Via: %s", _currentProxy)
-                      : getLocalText.s("Direct (no VPN)"),
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: cs.onSurfaceVariant,
+                Expanded(
+                  child: Text(
+                    _routeLabel,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                    ),
                   ),
                 ),
               ],
@@ -390,7 +473,11 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
           // Upload
           _buildGauge(
             getLocalText.s("Upload"),
-            '${_uploadMbps.toStringAsFixed(1)} Mbps',
+            !_serverHasUpload(_selectedServer)
+                ? getLocalText.s("n/a")
+                : _uploadMbps < 0
+                    ? getLocalText.s("Failed")
+                    : '${_uploadMbps.toStringAsFixed(1)} Mbps',
             Icons.arrow_upward,
             cs.secondary,
           ),
@@ -509,7 +596,7 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  r.proxy,
+                  r.proxy.isNotEmpty ? r.proxy : '—', // l10n-exempt: no route reported
                   style: theme.textTheme.bodySmall,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -536,7 +623,11 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
           ),
           const SizedBox(width: 8),
           Text(
-            '↑${r.upload.toStringAsFixed(1)}',
+            r.upload == null
+                ? '↑${getLocalText.s("n/a")}'
+                : r.upload! < 0
+                    ? '↑—' // l10n-exempt: upload rejected by the server
+                    : '↑${r.upload!.toStringAsFixed(1)}',
             style: theme.textTheme.bodySmall?.copyWith(color: cs.secondary),
           ),
         ],

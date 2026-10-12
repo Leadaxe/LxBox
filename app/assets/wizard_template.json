@@ -429,6 +429,9 @@
         "id": "hostkey-moscow",
         "name": "Hostkey (Moscow)",
         "download_url": "https://spd-rudp.hostkey.ru/files/10mb.bin",
+        "upload_url": "https://spd-rudp.hostkey.ru/empty",
+        "upload_method": "POST",
+        "upload_chunk_bytes": 1000000,
         "ping_url": "https://spd-rudp.hostkey.ru/"
       },
       {
@@ -441,6 +444,9 @@
         "id": "hostkey-frankfurt",
         "name": "Hostkey (Frankfurt)",
         "download_url": "https://spd-desrv.hostkey.com/files/10mb.bin",
+        "upload_url": "https://spd-desrv.hostkey.com/empty",
+        "upload_method": "POST",
+        "upload_chunk_bytes": 1000000,
         "ping_url": "https://spd-desrv.hostkey.com/"
       },
       {
@@ -453,12 +459,18 @@
         "id": "hostkey-helsinki",
         "name": "Hostkey (Helsinki)",
         "download_url": "https://spd-fisrv.hostkey.com/files/10mb.bin",
+        "upload_url": "https://spd-fisrv.hostkey.com/empty",
+        "upload_method": "POST",
+        "upload_chunk_bytes": 1000000,
         "ping_url": "https://spd-fisrv.hostkey.com/"
       },
       {
         "id": "hostkey-new-york",
         "name": "Hostkey (New York)",
         "download_url": "https://spd-uswb.hostkey.com/files/10mb.bin",
+        "upload_url": "https://spd-uswb.hostkey.com/empty",
+        "upload_method": "POST",
+        "upload_chunk_bytes": 1000000,
         "ping_url": "https://spd-uswb.hostkey.com/"
       },
       {

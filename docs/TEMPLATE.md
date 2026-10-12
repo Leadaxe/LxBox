@@ -59,7 +59,7 @@ wizard_template.json
 │
 ├─ speed_test_options              object{3 keys}       (§015)
 │   ├─ servers[]                   list[10]      Cloudflare, Selectel, Hetzner, OVH, etc.
-│   │   └─ {id, name, download_url, upload_url, upload_method, ping_url}
+│   │   └─ {id, name, download_url, upload_url, upload_method, upload_chunk_bytes, ping_url}
 │   ├─ stream_options              list[3]       parallel-streams choices (e.g. [1,4,10])
 │   └─ default_streams             int           default 4
 │
@@ -333,6 +333,13 @@ The endpoints for the speed-test screen. The user does not override them (though
 The current template holds ten servers (Cloudflare, Selectel, Hetzner, OVH and others).
 `id` is a stable machine id (§279): the runtime choice of server on the speed-test screen
 is keyed by it rather than by index; an unknown id falls back to the default (the first server).
+
+`upload_url` is set only for a server with a published endpoint that accepts a request body
+(§634); a request counts when the server answers below 400. Without `upload_url` the screen
+shows Upload as `n/a` and sends nothing. `upload_method` is `PUT` (default) or `POST`.
+`upload_chunk_bytes` caps one request (the 5 MB per stream goes as several requests in a
+row) for servers with a body-size limit, e.g. 1000000 for the Hostkey LibreSpeed servers,
+which answer 413 above about 1 MB. Sources per server — task 634.
 
 ---
 

@@ -1869,10 +1869,19 @@ to sleep.
 
 The **Speed Test** screen measures latency, download speed and upload speed
 between the phone and a test server. Where: ≡ → Speed Test. With the VPN on,
-requests go through the tunnel; with it off, they go directly. The line
-above the results shows which: `Via: <node or group>` or `Direct (no VPN)`.
-With the VPN on, the line shows the node selected in the group, or the group
-name if there is none.
+requests go through the tunnel and the routing rules decide where each one
+exits; with it off, they go directly. The line above the results shows the
+route:
+
+- `Direct (no VPN)` — the VPN is off.
+- `Route depends on your rules, shown after the test` — the VPN is on and the
+  selected server has not been tested yet.
+- `Via: <outbound>` — after a test: the outbound the core used for the
+  requests to the server, taken from the core's connection list. A node
+  name means the requests went through that node; `direct-out` means a rule
+  sent them directly, past the node.
+- `Route depends on your rules` — the test ran, but the core did not report
+  a connection to the server.
 
 To run a test:
 
@@ -1881,7 +1890,8 @@ To run a test:
 2. Pick **Streams** — the number of parallel downloads: 1, 4 or 10; 4 by
    default.
 3. Tap **Start Test**. The line under the gauges shows the stage: Testing
-   ping..., Testing download..., Testing upload..., and Complete at the end.
+   ping..., Testing download..., Testing upload... (only on servers that
+   measure Upload), and Complete at the end.
 
 Each of the three results has its own method:
 
@@ -1889,29 +1899,33 @@ Each of the three results has its own method:
 |---|---|---|
 | Ping | Five HTTP requests to the server; a response with a status below 400 counts as a success. With three or more successes, the app drops the fastest and the slowest and averages the rest; with fewer, it averages all of them. Each request includes connection setup and TLS. | The number is higher than an ICMP ping to the same server. `Failed` means no request finished successfully; each request gets 5 seconds. |
 | Download | Streams parallel downloads of one file: 25 MB from Cloudflare, 10 MB from the others. The measurement stops after 15 seconds. | Mbit/s. One stream shows the speed of a single download; 4 and 10 come closer to the link capacity. |
-| Upload | Two parallel 5 MB uploads, 30 seconds at most. | Mbit/s. |
+| Upload | Two parallel 5 MB uploads to the server's upload address, 30 seconds at most. A request counts only when the server answers with a status below 400. Hostkey servers accept at most 1 MB per request, so the app sends them 1 MB requests one after another. | Mbit/s. `n/a` — the server has no upload address, and the app does not measure Upload there. `Failed` — the server accepted no request. |
 
 A run uses traffic: with Cloudflare and 4 streams it downloads up to 100 MB.
 On mobile data, pick 1 stream.
 
 The **Session History** list under the button keeps the last 10 runs: time,
-VPN icon, node, test server, ping, ↓ and ↑. The list records a failed ping
-as `-1ms` and a failed Download or Upload as `0.0 Mbps`. The list lasts
+VPN icon, route, test server, ping, ↓ and ↑. The route is the outbound
+from the core, `Direct` without VPN, or `—` if the core did not report it.
+The list records a failed ping as `-1ms`, a failed Download as `↓0.0`, a
+server without Upload as `↑n/a`, and an Upload the server rejected as `↑—`.
+The list lasts
 until the app restarts. To compare nodes, switch the node on the home screen
 and run the test with the same Server and the same Streams: the rows line
 up next to each other.
 
 > ⚠️ The Hostkey (Moscow) and Selectel (RU) servers sit in the `.ru` zone.
 > With the Ru internet segment preset on, as it is by default, requests to
-> them go direct, past the node, although the screen shows
-> `Via: <node or group>`. To measure a node, pick servers outside `.ru`.
+> them go direct, past the node, and after the test the screen shows
+> `Via: direct-out`. To measure a node, pick servers outside `.ru`.
 
 Measurement limits:
 
-- The app measures Upload on the two servers that have an upload address:
-  Cloudflare and Tele2 (EU). To the others the app sends 5 MB at the
-  download address and does not check the server's response; do not compare
-  their Upload with the rest.
+- Upload is measured on the servers with a published upload address:
+  Cloudflare, Tele2 (EU), Hostkey (Moscow), Hostkey (Frankfurt), Hostkey
+  (Helsinki) and Hostkey (New York). Selectel (RU), Hostkey (Amsterdam), OVH
+  (France) and ThinkBroadband (UK) only serve files, so Upload there is
+  `n/a`.
 - If the selected server does not serve the file, Download comes from the
   first server from the top of the list that serves it, other than the
   selected one. Session History records the selected one.
