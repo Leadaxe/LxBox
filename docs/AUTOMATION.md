@@ -137,6 +137,11 @@ All of them are broadcast intents. The prefix is `com.leadaxe.lxbox.`.
 > from the UI. Press Connect in the app once; after that automation works without
 > a dialog.
 
+> **Only `START_VPN`, `STOP_VPN` and `TOGGLE_VPN` work without the app loaded.**
+> Every other command, and every outgoing event, needs the app process with its
+> UI engine up (the app was opened at least once since boot and not killed).
+> Without it such a command is skipped silently, with no `VPN_ERROR`.
+
 ---
 
 ## Outgoing events (L×Box → outside)
