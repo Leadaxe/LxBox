@@ -34,7 +34,7 @@ class EndpointScanScreen extends StatefulWidget {
     super.key,
     this.concurrency = 16,
     this.timeout = const Duration(seconds: 3),
-    this.perCountryLimit = 200,
+    this.perCountryLimit = 0,
     this.excludeColos = const {},
   });
 
@@ -181,7 +181,9 @@ class _EndpointScanScreenState extends State<EndpointScanScreen>
     final eps = <String>[
       for (final g in r.groups)
         if (_selected.contains(g.code))
-          for (final e in g.endpoints.take(widget.perCountryLimit)) e.endpoint,
+          for (final e in widget.perCountryLimit <= 0
+              ? g.endpoints
+              : g.endpoints.take(widget.perCountryLimit)) e.endpoint,
     ];
     // §834 — возвращаем ScanPool (а не строки): генератор сразу сгенерирует
     // конфиги WARP/MASQUE на выбранных эндпоинтах через poolOverride.

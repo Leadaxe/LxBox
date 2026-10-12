@@ -285,12 +285,10 @@ const kScanMasqueAttempts = 3;
 /// разбирает вызывающий ([parseCloudflareTrace]) и только для успешных
 /// заходов, поэтому здесь она лишь передаётся наружу как есть.
 ({bool ok, String content}) probeGeoAttempt(CcGetUrlResult r) {
-  final parsed = r.ok && r.content.isNotEmpty
-      ? parseCloudflareTrace(r.content)
-      : null;
-  final hasGeo =
-      parsed != null && (parsed.country.isNotEmpty || parsed.colo.isNotEmpty);
-  return (ok: hasGeo, content: hasGeo ? r.content : '');
+  // §843 — trace иногда не отдаёт loc, но HTTP 2xx подтверждает доступ.
+  // Мягкий критерий: считаем geo-ok, если ответ валидный (HTTP 2xx).
+  final hasOk = r.ok && (r.status == 200 || r.status == 301 || r.status == 302);
+  return (ok: hasOk, content: r.content.isNotEmpty ? r.content : '');
 }
 
 /// Результат серии повторов по одному узлу.

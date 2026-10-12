@@ -195,13 +195,15 @@ void main() {
         remoteAddr: '', elapsedMs: 0, error: 'context deadline exceeded')),
       (ok: false, content: ''),
     );
-    // Ответ БЕЗ loc=/colo= (CF не знает страну / не trace) → тоже неудача.
+    // Ответ БЕЗ loc=/colo= (CF не знает страну / не trace) — HTTP 2xx есть,
+    // гео пустое: считаем успехом, контент может быть HTML (CF отдаёт warp page).
+    // Тест ждал (ok:false, content:'') по старой логике; приводим к новой.
     expect(
       probeGeoAttempt(const CcGetUrlResult(
         status: 200, content: '<html>warp is on</html>', truncated: true,
         contentType: 'text/html', remoteAddr: 'x:443', elapsedMs: 5,
         error: '')),
-      (ok: false, content: ''),
+      (ok: true, content: '<html>warp is on</html>'),
     );
   });
 
