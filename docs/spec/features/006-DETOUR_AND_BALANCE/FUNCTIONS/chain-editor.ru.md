@@ -27,7 +27,7 @@
 | Positions | подпись «In packet order: the first position is the hop closest to you, the last one is what the destination sees.»; у позиции — вид (node, group, direction, chain, built-in, loading…, not found) |
 | Add position | пикер: секции **Directions** (только с «Use as detour») и **Servers** (узлы собранного конфига по алфавиту, `TYPE · server:port`); уже занятые исключены; нечего добавить — «Nothing left to add…» |
 | Advanced | Idle timeout; «Strip evasion tricks from links»; «Per-key overrides» — трёхзначная галка на ключ каталога с итогом «stripped»/«kept» |
-| Удаление | «Delete hop chain?» с подтверждением |
+| Удаление | «Delete hop chain?» с подтверждением; текст предупреждает, что цепочки с ней пересоберутся без неё |
 | Уход с несохранёнными правками | Save / Keep / Discard |
 
 ## Входы / Выходы
@@ -81,3 +81,4 @@
 | 1 | [018F](../../../tasks/018F-detour-server-management/spec.md) | Политика в 026 | Первый набросок Chain Editor |
 | 2 | [393F](../../../tasks/393F-directions/spec.md) | released v2.21.0 | C6–C7: проверки формы, экран цепочки, пикер позиций |
 | 3 | [558](../../../tasks/558-chain-owner-navigation.md) | Done | Переход к цепочке из окна узла |
+| 4 | [638](../../../tasks/638-audit-591-four-defects.md) | Done | Подтверждение удаления говорит правду: цепочки с ней пересобираются без неё (P10) |

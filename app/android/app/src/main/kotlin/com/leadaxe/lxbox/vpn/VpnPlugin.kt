@@ -518,11 +518,16 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 // 2. через 200ms killProcess + exitProcess убивают процесс
                 //    (некоторые OEM-launchers иначе оставляют zombie).
                 //
-                // VPN service ещё может быть активен — Android сам его
-                // остановит как только процесс умрёт (foreground service binding
-                // с процессом). KEEP_ON_EXIT не реактивируем здесь: если юзер
+                // §638: VPN останавливается вместе с процессом, и это должно
+                // быть окончательно. Сторож §428 (будильник VpnWatchdog +
+                // признак «VPN желателен») иначе через 2–3,5 мин увидит мёртвый
+                // сервис при desired=true и поднимет VPN сам — вопреки диалогу
+                // «VPN service will stop». Поэтому до убийства процесса снимаем
+                // признак и будильник. KEEP_ON_EXIT не реактивируем: если юзер
                 // явно запросил Quit, ему нужен полный рестарт, не fall-through
                 // в keep-alive путь.
+                BootReceiver.setVpnDesired(context, false)
+                VpnWatchdog.disarm(context)
                 result.success(true)
                 mainHandler.postDelayed({
                     activity?.finishAffinity()

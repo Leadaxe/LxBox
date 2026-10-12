@@ -114,7 +114,8 @@ class ScanPool {
 
   /// SNI для MASQUE (МОЖЕТ содержать cloudflare-домены — трафик и так идёт в CF).
   /// Включает родной `consumer-masque.cloudflareclient.com` — см. [wgSniPool]
-  /// про DPI по несовпадению SNI; он же дефолт ядра при пустом поле.
+  /// про DPI по несовпадению SNI. Дефолт ядра при пустом поле (с lx.25-rc.4)
+  /// и рекомендуемый — `www.cloudflare.com` (§638).
   final List<String> masqueSniPool;
 
   /// Рекомендуемый SNI из [masqueSniPool] (ключ `recommended_sni`). Семантика

@@ -3734,8 +3734,8 @@
   "Remove \"%s\"?": {
     "value": "移除「%s」？"
   },
-  "Remove \"%s\"? Other chains using it as a position will stop building until you fix them.": {
-    "value": "移除「%s」？其它把它作为位置的链路在你修好之前将无法构建。"
+  "Remove \"%s\"? Chains using this node will be rebuilt without it.": {
+    "value": "移除「%s」？使用此节点的链路将在不含它的情况下重新构建。"
   },
   "Remove %d servers that failed the test (unreachable or broken)?": {
     "value": {
