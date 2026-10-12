@@ -96,15 +96,15 @@ void main() {
 
   // Вертикальный Scrollable вкладки Settings (у TextField и TabBarView —
   // горизонтальные).
-  Finder _settingsList() => find
+  Finder settingsList() => find
       .byWidgetPredicate(
           (w) => w is Scrollable && w.axisDirection == AxisDirection.down)
       .first;
 
   // Строка под нижней панелью экрана не принимает тап: докрутить с запасом.
   Future<void> reveal(WidgetTester tester, Finder row) async {
-    await tester.scrollUntilVisible(row, 200, scrollable: _settingsList());
-    await tester.drag(_settingsList(), const Offset(0, -300));
+    await tester.scrollUntilVisible(row, 200, scrollable: settingsList());
+    await tester.drag(settingsList(), const Offset(0, -300));
     await tester.pumpAndSettle();
   }
 
