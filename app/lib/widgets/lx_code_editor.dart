@@ -61,9 +61,8 @@ LxCodeLanguage? detectCodeLanguage(String text) {
   if (i == lines.length) return null;
   final first = clean(lines[i]);
   if (_iniSection.hasMatch(first)) return LxCodeLanguage.ini;
-  if (first.startsWith('{') || first.startsWith('[')) {
+  if (first.startsWith('{') || first.startsWith('['))
     return LxCodeLanguage.json;
-  }
   if (first.startsWith('#') || first.startsWith(';')) {
     for (var j = i + 1; j < lines.length; j++) {
       final l = clean(lines[j]);
@@ -260,6 +259,22 @@ class LxCodeEditorState extends State<LxCodeEditor>
   /// В редакторе есть выделение — его ручки тянут и по вертикали, и по
   /// горизонтали, поэтому жесты целиком уходят редактору (§628).
   bool _selected = false;
+
+  /// Текст не помещается в поле — вертикальный свайп листает редактор.
+  bool _scrollable = true;
+
+  /// `PlatformViewLink` кэширует поверхность вместе с распознавателями,
+  /// поэтому набор постоянный, а условие «всё редактору» проверяется
+  /// заново на каждом касании (§628).
+  late final Set<Factory<OneSequenceGestureRecognizer>> _recognizers = {
+    Factory<OneSequenceGestureRecognizer>(
+      () => _GatedEagerGestureRecognizer(() => _scrollable || _selected),
+    ),
+    const Factory<OneSequenceGestureRecognizer>(
+      HorizontalDragGestureRecognizer.new,
+    ),
+    const Factory<OneSequenceGestureRecognizer>(LongPressGestureRecognizer.new),
+  };
   Rect? _cursorRect;
 
   /// Каретка в первой / последней экранной строке (из `cursor`): стрелка
@@ -494,7 +509,7 @@ class LxCodeEditorState extends State<LxCodeEditor>
         final focused = args['focused'] as bool? ?? false;
         if (focused != _focused) setState(() => _focused = focused);
         final selected = args['selected'] as bool? ?? false;
-        if (selected != _selected) setState(() => _selected = selected);
+        _selected = selected;
         _atTop = args['atTop'] as bool? ?? true;
         _atBottom = args['atBottom'] as bool? ?? true;
         final rowH = ((args['rowHeight'] as num?) ?? 0) / dpr;
@@ -627,7 +642,8 @@ class LxCodeEditorState extends State<LxCodeEditor>
         scrollable = _rows > shown;
     }
 
-    Widget field = _nativeEditor ? _buildNative(scrollable) : _buildStub();
+    _scrollable = scrollable;
+    Widget field = _nativeEditor ? _buildNative() : _buildStub();
     if (_nativeEditor) {
       field = DecoratedBox(
         decoration: BoxDecoration(
@@ -766,23 +782,11 @@ class LxCodeEditorState extends State<LxCodeEditor>
     );
   }
 
-  Widget _buildNative(bool scrollable) {
+  Widget _buildNative() {
     // Текст помещается — вертикальные свайпы уходят странице; нет — их
     // забирает редактор. Тап, долгий тап, горизонтальный свайп — редактору.
     // Пока есть выделение — всё редактору: иначе ручку выделения уводят
     // вертикальный скролл страницы и свайп вкладок (§628).
-    final recognizers = <Factory<OneSequenceGestureRecognizer>>{
-      if (scrollable || _selected)
-        const Factory<OneSequenceGestureRecognizer>(EagerGestureRecognizer.new)
-      else ...[
-        const Factory<OneSequenceGestureRecognizer>(
-          HorizontalDragGestureRecognizer.new,
-        ),
-        const Factory<OneSequenceGestureRecognizer>(
-          LongPressGestureRecognizer.new,
-        ),
-      ],
-    };
     return Focus(
       canRequestFocus: false,
       skipTraversal: true,
@@ -792,7 +796,7 @@ class LxCodeEditorState extends State<LxCodeEditor>
         if (has && !_focused) unawaited(_invoke('focus'));
       },
       onKeyEvent: _onKey,
-      child: _buildView(recognizers),
+      child: _buildView(),
     );
   }
 
@@ -821,14 +825,14 @@ class LxCodeEditorState extends State<LxCodeEditor>
     return KeyEventResult.skipRemainingHandlers;
   }
 
-  Widget _buildView(Set<Factory<OneSequenceGestureRecognizer>> recognizers) {
+  Widget _buildView() {
     final w = widget;
     return PlatformViewLink(
       key: _viewKey,
       viewType: _viewType,
       surfaceFactory: (context, controller) => AndroidViewSurface(
         controller: controller as AndroidViewController,
-        gestureRecognizers: recognizers,
+        gestureRecognizers: _recognizers,
         hitTestBehavior: PlatformViewHitTestBehavior.opaque,
       ),
       onCreatePlatformView: (params) {
@@ -877,6 +881,18 @@ class LxCodeEditorState extends State<LxCodeEditor>
 
 /// Панель поиска над текстом редактора: поле, счёт совпадений,
 /// предыдущее/следующее, закрыть. Пустой запрос снимает подсветку.
+/// [EagerGestureRecognizer], который берёт касание, только пока [gate]
+/// истинен; иначе касание разыгрывают остальные распознаватели view.
+class _GatedEagerGestureRecognizer extends EagerGestureRecognizer {
+  _GatedEagerGestureRecognizer(this.gate);
+
+  final bool Function() gate;
+
+  @override
+  bool isPointerAllowed(PointerDownEvent event) =>
+      gate() && super.isPointerAllowed(event);
+}
+
 class _LxFindPanel extends StatelessWidget {
   const _LxFindPanel({
     required this.controller,
