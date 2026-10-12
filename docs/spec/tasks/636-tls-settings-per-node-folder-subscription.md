@@ -177,7 +177,12 @@ or 1s» (проверка — `parseCoreDurationNanos`, тот же, что в �
 servers of this subscription.» / «…of this folder.»; `Default` наследует
 только из глобального.
 
-Глобальный раздел «TLS Fragmentation» не меняется.
+**Глобальный раздел «TLS Fragmentation»** (`app/assets/wizard_template.json`,
+секция `dpi-bypass`): ручки те же, меняется только `description` секции —
+«Splits the TLS handshake so it carries no single-packet signature. Default
+for all servers; override per server, folder or subscription.» Перевод — в
+`app/assets/l10n/{ru,zh}/template.json` (ключ `TLS Fragmentation`),
+`template_check` должен остаться 0/0.
 
 ### Debug API
 
