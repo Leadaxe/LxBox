@@ -53,7 +53,7 @@
       "exclude": ["162.159.198.1", "162.159.199.1"],
       "ports": [443, 500, 1701, 4500, 4443, 8443, 8095]
     },
-    "recommended_sni": "consumer-masque.cloudflareclient.com",
+    "recommended_sni": "www.cloudflare.com",
     "sni_pool": [
       "consumer-masque.cloudflareclient.com", "www.cloudflare.com", "www.google.com",
       "www.microsoft.com", "www.bing.com", "www.apple.com", "www.wikipedia.org",

@@ -4061,8 +4061,8 @@
   "Remove \"%s\"?": {
     "value": "Удалить «%s»?"
   },
-  "Remove \"%s\"? Other chains using it as a position will stop building until you fix them.": {
-    "value": "Удалить «%s»? Другие цепочки, где она стоит позицией, перестанут собираться, пока вы их не поправите."
+  "Remove \"%s\"? Chains using this node will be rebuilt without it.": {
+    "value": "Удалить «%s»? Цепочки, где стоит этот узел, будут пересобраны без него."
   },
   "Remove %d servers that failed the test (unreachable or broken)?": {
     "value": {

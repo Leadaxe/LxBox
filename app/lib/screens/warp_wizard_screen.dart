@@ -644,10 +644,12 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                       const SizedBox(height: 12),
                       _label('SNI'),
                       // combo-box: пункты из sni_pool + свободный ввод. Пусто →
-                      // дефолт ядра (consumer-masque.cloudflareclient.com); он
-                      // же ПЕРВЫМ пунктом пула и помечен recommended — DPI
+                      // дефолт ядра (www.cloudflare.com, с lx.25-rc.4); он же
+                      // помечен recommended (§638: с родным
+                      // consumer-masque.cloudflareclient.com h3 не встаёт на
+                      // RU-каналах, §393). Родной домен остаётся в пуле — DPI
                       // умеет резать по несовпадению SNI с блоком (§143), так
-                      // что родной домен перебирается наравне, включая кубик.
+                      // что он перебирается наравне, включая кубик.
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [

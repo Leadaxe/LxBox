@@ -90,8 +90,11 @@ Ru internet segment, BitTorrent, VoWiFi, Tailscale networks are enabled.
   TTL, "Never" is not touched, a conditional GET; once per session, 30 s after
   app start or tunnel bring-up, only in the foreground.
   **Witness:** unit tests "TTL 0 = Never", "a fresh cache within the TTL →
-  skip", "If-None-Match goes into the request"; the schedule — `no
-  witness`. **Mutation:** a background timer.
+  skip", "If-None-Match goes into the request"; the schedule — unit tests
+  `rule_set_auto_updater_schedule_test.dart` "app start → one attempt in 30 s",
+  "going to the background cancels the planned attempt", "in the background
+  triggers plan nothing"; "once per session" (sleep after a successful pass) —
+  manual check on a device (the pass goes to the network). **Mutation:** a background timer.
 - **P11. The Routing screen never turns a rule off by itself.** `enabled` is only the
   user's intent; a missing file is a separate state of the row:
 
@@ -109,7 +112,12 @@ Ru internet segment, BitTorrent, VoWiFi, Tailscale networks are enabled.
   **Witness:** unit tests "включённые правила без файлов остаются включёнными",
   "включённое правило без файла берётся в работу, выключенное — нет",
   "§601 — включённые правила без скачанного файла: сборка без ошибки", widget
-  "§601 «ждёт скачивания»: свич включён, приглушён, ☁". **Mutation:** the screen
+  "§601 «ждёт скачивания»: свич включён, приглушён, ☁"
+  (`routing_srs_cache_scan_test.dart`, `rule_set_auto_updater_test.dart`,
+  `builder/apply_all_custom_rules_test.dart`, `custom_rule_tile_display_test.dart`).
+  Switch in 3 → download → enable (`_enableAfterDownload`, screen state +
+  network) — manual check on a device: a disabled rule without a file → switch →
+  ☁ spins → the file is downloaded → the rule is enabled. **Mutation:** the screen
   writes `enabled=false` for a rule without a file — auto-update skips it forever.
 - **P12. Raw JSON does not break the build:** a broken/empty body — skipped with
   a warning, `//…` keys are removed; the editor does not save invalid JSON or

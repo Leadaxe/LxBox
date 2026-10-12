@@ -7,7 +7,7 @@
 | Поле | Значение |
 |------|----------|
 | Фича | [014-AUTOMATION](../FEATURE.ru.md) |
-| Обещания | P7, P8, P9, P10, P13 |
+| Обещания | P7, P8, P9, P10, P13, P14 |
 | Состояние | ✅ написана по коду, 2026-09-28 |
 
 ## Что делает
@@ -55,9 +55,9 @@
 - Остановка по ошибке даёт пару `VPN_ERROR(tunnel_error)` + `VPN_DISCONNECTED(error)`;
   перехват слота — `VPN_REVOKED` + `VPN_DISCONNECTED(revoked)`; обычная
   остановка — `VPN_DISCONNECTED(user)`.
-- `message` у `VPN_ERROR(tunnel_error)` — сырой текст ошибки ядра, без
-  маскирования: автоматизатор получает то же, что журнал (решение владельца
-  2026-09-29).
+- `message` у `VPN_ERROR(tunnel_error)` — текст ошибки ядра, где IP-адреса и
+  имена хостов заменены на `***`; порт и остальной текст остаются (решение
+  владельца 2026-10-13, §638).
 - «Запрос-ответ»: успех команды приходит в State (`ACTIVE_NODE_CHANGED` /
   `NODE_ALREADY_ACTIVE` / `ACTIVE_GROUP_CHANGED`), провал — `VPN_ERROR` в
   Lifecycle. Настройки прямо подсказывают включить обе.
@@ -95,3 +95,4 @@
 | 5 | [219](../../../tasks/219-deep-audit-2026-07.md) | Done (аудит) | Юнит ограничения частоты не проверяет ровно минутную границу |
 | 6 | [290](../../../tasks/290-automation-node-switch-gaps.md) | complete | `NODE_ALREADY_ACTIVE`, `VPN_ERROR` на провал команды, подсказка «включите обе категории» |
 | 7 | [605](../../../tasks/605-service-live-automation-workspaces-bugs.md) | Реализовано | Мёртвый тумблер Health убран; код `switch_failed` |
+| 8 | [638](../../../tasks/638-audit-591-four-defects.md) | Done | `VPN_ERROR(tunnel_error)` маскирует адреса в `message` (P14) |

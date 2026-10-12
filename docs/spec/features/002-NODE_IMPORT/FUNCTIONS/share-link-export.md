@@ -23,7 +23,7 @@ of own servers, so it must parse back into the same node.
 |------|--------------|
 | `vless`, `trojan`, `tuic`, `anytls`, `hysteria2`, `ssh` | URL form, parameters in alphabetical order |
 | `vmess` | `vmess://` + base64(JSON) without padding |
-| `shadowsocks` | `ss://` + base64url(`method:password`) without padding, `@host:port#name` |
+| `shadowsocks` | `ss://` + base64url(`method:password`) without padding, `@host:port#name`; the SIP003 `plugin`/`plugin_opts` are not written (the registry `emit` says so) — they stay in the node's JSON body and outbound |
 | `socks` | scheme by version: `socks4://`, `socks4a://`, otherwise `socks5://` |
 | `http` | `proxy-https://` with TLS, otherwise `proxy-http://` |
 | `naive` | `naive+quic://` with QUIC, otherwise `naive+https://`; the port is always written |
@@ -63,6 +63,7 @@ be built.
 
 - Where copying and QR are in the UI — [007-NODE_LIST](../../007-NODE_LIST/FEATURE.md).
 - Node storage form and backup — [017-BACKUP_AND_STORAGE](../../017-BACKUP_AND_STORAGE/FEATURE.md).
+- A Shadowsocks node with a SIP003 plugin loses the plugin in the `ss://` link: by contract, not a defect; the outbound and the JSON copy keep it.
 - A subscription node's link is its source text; export builds the link
   anew from the body, it is not obliged to match the original byte for byte.
 

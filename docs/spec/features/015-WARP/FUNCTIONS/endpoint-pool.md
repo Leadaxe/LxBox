@@ -34,7 +34,7 @@ Pool file sections:
 | `masque` | `hosts_preset`, `recommended_host` | Hosts where both h3 and h2 live |
 | | `h3.hosts_extra`, `h3.ports` | h3-only hosts, h3 ports |
 | | `h2.v4_cidr`, `h2.exclude`, `h2.ports` | The h2 block and addresses excluded from it |
-| | `sni_pool`, `recommended_sni` | MASQUE SNI (Cloudflare domains allowed) |
+| | `sni_pool`, `recommended_sni` | MASQUE SNI (Cloudflare domains allowed); recommended — `www.cloudflare.com`, the core default |
 | `loc.<cc>` | any keys above or `alias` | Overrides for a region |
 
 The "Usage region" setting (App Settings → General): Auto (the country of the
@@ -93,3 +93,4 @@ the experiment's JSON window (same format).
 | 6 | [420](../../../tasks/420-masque-pool-per-transport.md) | Done (unit) · DEVICE-PENDING | `hosts_preset`, `h3.hosts_extra`, `h2.exclude` |
 | 7 | [424](../../../tasks/424-warp-preset-recommended-mark-leak.md) | Implemented (unit + widget test) | The mark only in the menu |
 | 8 | [425](../../../tasks/425-warp-pool-region-loc.md) | Implemented, device-verified | Region setting and `loc.<cc>` sections |
+| 9 | [638](../../../tasks/638-audit-591-four-defects.md) | Done | `recommended_sni` = `www.cloudflare.com`: with `consumer-masque.cloudflareclient.com` h3 does not come up on RU links (§393) |

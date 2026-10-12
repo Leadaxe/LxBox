@@ -119,7 +119,8 @@ entry); **the input is default-deny**; **a failure does not wipe settings**
   tag — the incoming one is not applied and is named; "disabled" marks are
   merged. **Witness:** unit tests "taken tag is not applied and is named",
   "marks from the file are added". A live WARP registration is not
-  overwritten — `no witness`. **Mutation:** "last writer wins".
+  overwritten — unit test "a registration exists → the file's entry is not
+  applied" (`lx_backup_import_fresh_state_test.dart`). **Mutation:** "last writer wins".
 - **P14. A rule does not go nowhere.** A rule with a target unknown to the
   receiver arrives disabled; `route.final` to nowhere is not applied; an
   incoming Direction makes the rule working. **Witness:** unit tests
@@ -185,7 +186,9 @@ entry); **the input is default-deny**; **a failure does not wipe settings**
   check.
 - **P25. Transfer is written against fresh state:** the LX import plan is
   recomputed at confirmation time, not taken from the preview.
-  `no witness`.
+  **Witness:** unit test "a tag taken between the preview and the confirmation
+  is not overwritten" (`lx_backup_import_fresh_state_test.dart`).
+  **Mutation:** writing the preview's plan without recomputing.
 
 ## Controlled parameters
 
