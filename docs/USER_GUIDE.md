@@ -31,12 +31,12 @@ code — about the logic and the order in which to set things up.
 - [Detour sends a server to the internet through another server](#detour-sends-a-server-to-the-internet-through-another-server)
   - [Detour is set on a server, subscription or folder](#detour-is-set-on-a-server-subscription-or-folder)
   - [Detours form a chain but not a loop](#detours-form-a-chain-but-not-a-loop)
-  - [A direction with Use as detour serves as a switchable relay](#a-direction-with-use-as-detour-serves-as-a-switchable-relay)
+  - [A direction with Use as detour serves as a switchable intermediate server](#a-direction-with-use-as-detour-serves-as-a-switchable-intermediate-server)
   - [The whole detour chain runs inside one tunnel](#the-whole-detour-chain-runs-inside-one-tunnel)
   - [Statistics shows which servers a connection went through](#statistics-shows-which-servers-a-connection-went-through)
   - [A node with a ping error flags its dependents with ⚠](#a-node-with-a-ping-error-flags-its-dependents-with-)
 - [Hop chains — a route you build yourself](#hop-chains--a-route-you-build-yourself)
-  - [A chain builds a route; a detour builds a relay in front of a server](#a-chain-builds-a-route-a-detour-builds-a-relay-in-front-of-a-server)
+  - [A chain builds a route; a detour adds an intermediate server in front of one server](#a-chain-builds-a-route-a-detour-adds-an-intermediate-server-in-front-of-one-server)
   - [Positions follow packet order](#positions-follow-packet-order)
   - [The editor refuses to save a chain that breaks four rules](#the-editor-refuses-to-save-a-chain-that-breaks-four-rules)
   - [The Diagnostics tab shows which hop breaks the chain](#the-diagnostics-tab-shows-which-hop-breaks-the-chain)
@@ -132,7 +132,7 @@ Mode. Three options:
 | **Proxy** | No tunnel and no key icon. L×Box starts a local proxy, and only apps with the proxy set by hand send traffic to it. The Android VPN slot stays free: the mode coexists with another VPN app. |
 | **VPN + Proxy** | The tunnel and the proxy port at the same time. |
 
-The proxy is configured on the same tab, with four options:
+You configure the proxy on the same tab, with four options:
 
 | Option | Default | What it does |
 |---|---|---|
@@ -326,7 +326,7 @@ others.
 
 ### Servers carry traffic only through directions
 
-Servers from subscriptions, folders and standalone entries carry no traffic
+Servers from subscriptions, folders and standalone servers carry no traffic
 on their own. They go into a common pool, and directions pick the ones they
 need from the pool by filter and connect to them. Hence the order: first add
 a subscription, folder or server, then a direction picks them up.
@@ -403,7 +403,7 @@ second is to update the subscription: the provider may have fixed the server
 already, and a server whose contents changed turns back on by itself. None
 of this affects servers you switched off by hand.
 
-The gauge icon in the bar above the node list pings the subscription's
+The speedometer icon in the bar above the node list pings the subscription's
 nodes without starting the VPN. With the VPN running, a dialog appears with
 **Stop VPN** and Cancel buttons: on top of a live tunnel the measurements
 would be wrong.
@@ -522,7 +522,7 @@ Besides the selected servers, a direction can offer direct, block and other
 directions as options. The boxes sit in the **What goes into this direction**
 section of the editor. Only directions listed above can be included: this
 order rules out loops. Reorder the list and you change both what can be
-included and the order of groups in the config.
+included and the order of directions in the config.
 
 ### Interrupt connections on switch — three switches for three events
 
@@ -536,7 +536,7 @@ The option exists in three places, and each one answers its own event:
 
 | Where | What it reacts to | How it works |
 |---|---|---|
-| VPN Settings → System → Interrupt connections on switch (off by default) | You tap a node on the home screen | The app closes the open connections of the switched group. Nothing goes into the config; switches made by the core stay uncovered. |
+| VPN Settings → System → Interrupt connections on switch (off by default) | You tap a node on the home screen | The app closes the open connections of the switched direction. Nothing goes into the config; switches made by the core stay uncovered. |
 | Direction editor → Behavior (on by default) | The direction's choice changes from any source: a tap, Quick connect, an automation action, the API | Goes into the direction in the config; the core drops the connections. |
 | Direction editor → Include auto (urltest), and the same box in an [auto node](#auto-node--one-list-entry-with-a-pool-of-servers-inside) (off by default) | The auto group changes node by itself: a faster node appeared or the current one failed | Goes into the auto group in the config; the core drops the connections. |
 
@@ -628,11 +628,11 @@ Limitations the editor itself warns about:
 - the pairing is unavailable with port and protocol filters: they are unknown
   at the time of the DNS query;
 - with a rule-set the pairing works only if the list contains domains: IP-only
-  lists never match DNS queries.
+  lists do not match DNS queries.
 
 ### Raw JSON and the View tab cover fields the form lacks
 
-A rule can be written as a sing-box `route.rules` JSON fragment: choose Raw
+You can write a rule as a sing-box `route.rules` JSON fragment: choose Raw
 JSON in Source. The JSON itself sets the action; the editor checks the syntax
 as you type.
 
@@ -650,7 +650,7 @@ Settings.
 The DNS server catalog includes Google, Cloudflare, OpenDNS, Quad9 and Yandex
 over UDP, DoT and DoH. Each server has an IP or profile and a direction it
 travels through — the **Outbound (detour)** field. To send DNS queries through
-the tunnel so the resolver sees the server's IP rather than your provider's,
+the tunnel so the resolver sees the server's IP rather than your ISP's,
 set the server's Outbound to your VPN direction.
 
 ### Group and Shield DNS combine several servers under one tag
@@ -698,7 +698,7 @@ server addresses and domains in routing rules. On a fresh install it is
 `dns_shield`.
 
 > ⚠️ `local_dns_resolver` in Default Domain Resolver sends queries to the
-> system DNS past the VPN, and your provider sees them. Choose `dns_shield` or
+> system DNS past the VPN, and your ISP sees them. Choose `dns_shield` or
 > another server from the catalog.
 
 ### DNS Rules assign a DNS server to a domain
@@ -751,13 +751,13 @@ server and not a direction. It has three kinds of target:
 | Target | What happens |
 |---|---|
 | **None (direct)** (default) | The server goes out to the internet directly. |
-| Another server | A standalone server or a folder member: a fixed relay. |
+| Another server | A standalone server or a folder member: a fixed intermediate server. |
 | A direction | The server goes out through whichever server the direction selects at the moment; by default the direction picks by speed. This target is called a detour direction. |
 
 ### Detour is set on a server, subscription or folder
 
 You pick a detour in the same **Detour server** window every time; you open it
-from the settings of whatever you assign the relay to.
+from the settings of whatever you assign the detour to.
 
 | Assigning to | Where | Applies to |
 |---|---|---|
@@ -782,19 +782,19 @@ Detours can form a chain: A through B, B through C, and traffic goes
 [Hop chain](#hop-chains--a-route-you-build-yourself) source is a different
 thing, compared in its own section. Inside a folder such chains link its
 members: a member goes out through another member of the same folder. A member
-that serves as an intermediate hop for another carries the ⚙ icon.
+that serves as an intermediate link for another carries the ⚙ icon.
 
 L×Box will not start a loop of detours. When it builds the config, the app
 finds the cycle, the VPN does not start, and the **Routing loop — VPN not
 started** window opens with the list of culprits. Tapping a culprit takes you
 to its source: change or remove the detour there, and the loop breaks.
 
-### A direction with Use as detour serves as a switchable relay
+### A direction with Use as detour serves as a switchable intermediate server
 
 The **Use as detour** checkbox in the direction editor lets you pick this
 direction as a detour target. Any server can then go out through the
 direction, and the direction's own selection decides which server inside it
-carries the traffic: by default, the fastest one. The relay is no longer
+carries the traffic: by default, the fastest one. The detour is no longer
 pinned to one server.
 
 The checkbox takes no other role away from the direction: it stays a target
@@ -818,7 +818,7 @@ traffic went through the intermediate server.
 A node with an ERR ping that other nodes or DNS servers go out through gets
 the **⚠** icon next to its name. The app counts dependencies both direct and
 through a direction where this node is selected. Tapping the icon opens the
-list of affected entries with the dependency path: you see who this hop takes
+list of affected nodes with the dependency path: you see who this link takes
 down with it.
 
 If DNS servers depend on the node, a banner appears as well. Domains of such a
@@ -841,7 +841,7 @@ L×Box builds one exit from this order. In the common source list a chain is an
 ordinary row: you can switch it off, drag it and pick it with a direction's
 filter.
 
-### A chain builds a route; a detour builds a relay in front of a server
+### A chain builds a route; a detour adds an intermediate server in front of one server
 
 A chain and a detour solve the same problem from opposite ends:
 
@@ -850,12 +850,12 @@ A chain and a detour solve the same problem from opposite ends:
 | What it is | A route, a source in its own right | A property of one server |
 | What you set | This route goes through these servers in this order | This server goes out through that one |
 | Where you edit it | In the chain editor | On the server, subscription or folder |
-| When to choose it | You need the route itself | One server needs a relay |
-| Can traffic exit through the last server directly | Yes: chain positions stay standalone servers, and a direction with an empty filter offers them one by one | No: the relay belongs to the server, and no direct path to it remains |
+| When to choose it | You need the route itself | One server needs an intermediate server |
+| Can traffic exit through the last server directly | Yes: chain positions stay standalone servers, and a direction with an empty filter offers them one by one | No: the detour belongs to the server, and no direct path to it remains |
 
 The last row decides. If the last server must not see your IP (WARP behind
 Proton), use a detour; see the recipe
-[Double hop: the last server never sees your IP](#double-hop-the-last-server-does-not-see-your-ip).
+[Double hop: the last server does not see your IP](#double-hop-the-last-server-does-not-see-your-ip).
 
 ### Positions follow packet order
 
@@ -888,7 +888,7 @@ start-up, so the editor catches them before saving:
 
 Deleting a server or subscription removes its positions from every chain, and
 the app reports how many positions dropped out: the route does not get shorter
-unnoticed. A subscription refresh leaves positions alone.
+unnoticed. A subscription update leaves positions alone.
 
 ### The Diagnostics tab shows which hop breaks the chain
 
@@ -902,8 +902,8 @@ starts the measurement; Probe again repeats it.
   hop 3   96 ms  (+5)
 ```
 
-The number in brackets is the difference from the previous hop: a hop cannot
-be measured apart from the path that leads to it. If a hop does not answer,
+The number in brackets is the difference from the previous hop: you cannot
+measure a hop apart from the path that leads to it. If a hop does not answer,
 the core's error text appears next to it, and the hops behind it show
 `not reached`. You see where the route breaks at once, without trial and
 error.
@@ -977,7 +977,7 @@ The Allow-list only admits traffic into L×Box; Default traffic in Routing →
 Directions decides where it goes. With Default traffic = Direct, admitted apps
 go out directly. Set **Default traffic** = VPN.
 
-**The VPN started working after L×Box was added to the Allow-list.**
+**The VPN started working after you added L×Box to the Allow-list.**
 That was not the cause: Default traffic = VPN was, if it changed at the same
 time. L×Box's own service traffic and DNS bypass the tunnel; L×Box does not
 need the tunnel.
@@ -1013,7 +1013,7 @@ themselves (see [What is what](#what-is-what)). Check that their servers land
 in the active direction (the direction's filter is empty or matches their
 names) and that **Default traffic** = VPN.
 
-**Sites stopped opening after IPv6 was turned on, Russian ones more often.**
+**Sites stopped opening after you turned IPv6 on, Russian ones more often.**
 A network with broken IPv6 behaves this way: a domain resolves to an IPv6
 address, and the connection hangs. Turn off **Enable IPv6** (VPN Settings →
 Core → TUN) and restart the VPN. Details are in the IPv6 section above.
@@ -1029,7 +1029,7 @@ on settings change**.
 The provider's panel requires a device identifier (HWID) and returns a
 placeholder until it gets one. Turn on **Send HWID**, in App Settings →
 Subscriptions or in the subscription's settings, Fetch identity section, and
-refresh the subscription.
+update the subscription.
 
 **After a direction switch, pings disappeared or turned grey with `~`.**
 Each direction has its own measurements: directions have different test
@@ -1057,7 +1057,7 @@ Diagnostic tools, from simple to detailed:
 
 | Tool | Where | What it shows |
 |---|---|---|
-| Ping and the ⚠ icon | Home screen | ERR: the node does not answer. ⚠: other entries go out through the node and fail with it; tap to see which ones. |
+| Ping and the ⚠ icon | Home screen | ERR: the node does not answer. ⚠: other servers go out through the node and fail with it; tap to see which ones. |
 | Stats | Statistics, while the VPN is on | Traffic per direction: where the bytes go. |
 | Conns | Statistics | Live connections: app, host, rule, chain of exits. Connections with traffic in one direction only are highlighted: replies get lost on the way, for example when the carrier cuts the protocol. |
 | Profiler | Statistics | A real-time recording of connections and DNS resolves, with filters by app, domain and IP: which domain fails to resolve, which direction a request took, where an app connects. For DNS groups you see which members answered and which stayed silent. |
@@ -1107,10 +1107,10 @@ Limitations of this approach:
 - The phone and the client must share a network: one router, or a hotspot on
   this same phone. Over mobile internet from outside the `192.168.x.y` address
   is unreachable.
-- The proxy does not receive all of the client's traffic. The system Wi-Fi
-  proxy is honoured by browsers and by apps that read it; games, messengers and
-  everything else that bypasses the system proxy go out directly. This does not
-  replace a VPN on the client itself.
+- The proxy does not receive all of the client's traffic. Browsers and some
+  other apps use the system Wi-Fi proxy; games, messengers and everything else
+  that bypasses the system proxy go out directly. This does not replace a VPN
+  on the client itself.
 - A hotspot does not tunnel traffic by itself: its clients go out past the VPN
   until they set the proxy by hand.
 - Do not turn on the LAN proxy on someone else's or a public network: every
@@ -1235,7 +1235,7 @@ contains a private key" dialog. Whoever receives the link can use the key, so
 Copy anyway is for moving the node to your own second device, not for sharing.
 Cancel and a tap outside the dialog leave the clipboard untouched. The key
 stays in the link: the node is stored in this same form, and without the key it
-would not survive a reload.
+would not survive a restart.
 
 Latency measurements are stored per direction. Each direction has its own test
 URL and timeout, so "180 ms" from different tests are different quantities.
@@ -1346,7 +1346,7 @@ The general form is "what we look for, and what must not follow":
 (condition)(?!.*(forbidden))
 ```
 
-Finnish nodes without the `🇫🇮 Finland #2`, `#3` duplicates are written like
+Finnish nodes without the `🇫🇮 Finland #2`, `#3` duplicates look like
 this:
 
 ```
@@ -1474,7 +1474,7 @@ button to the right of "L×Box" shows the current workspace and opens the
 |---|---|
 | Load — tap a workspace | The app saves the current state under its own name, so nothing is lost. It copies the chosen workspace in its place, re-reads the settings and rebuilds the config. A running VPN stops for the switch and comes back up with the new config — a few seconds without a tunnel. |
 | Save as… | Saves the current state under a new name or overwrites an existing one. From then on the auto-save on Load goes to that name. |
-| ⋮ on a workspace row | Rename or Delete. The current workspace cannot be deleted: the auto-save goes into it. |
+| ⋮ on a workspace row | Rename or Delete. You cannot delete the current workspace: the auto-save goes into it. |
 
 Until anything is saved, there is one workspace, Default, and nothing changes
 on disk. A workspace holds the settings file, the subscription content cache
