@@ -209,6 +209,9 @@ tunnel and subscription events → toggle → throttling → vibration
   [029-LOCALIZATION](../029-LOCALIZATION/FEATURE.md).
 - There is no in-app update installation: only a link.
 - The message feed cannot be turned off entirely; it can be snoozed or read.
+  A switch for it is not planned (owner decision 2026-10-13, audit [591](../../tasks/591-spec-kit-revision-audit.md)).
+- There is no themed (monochrome) launcher icon for Android 13+; the icon
+  keeps its own colors on a themed home screen.
 - Donations — About → "Support the project"; the addresses come as a separate
   list on an explicit action (public document `docs/DONATE.md`).
 - Depends on OS capabilities: the vibration motor and the system "Touch

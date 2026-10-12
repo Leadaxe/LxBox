@@ -75,8 +75,12 @@ registration cache; a log line with secrets masked.
 - Registration is a direct request from the app; choosing a node or detour
   for it is not possible.
 - WARP+ for MASQUE is not supported and is not planned (owner decision 2026-09-29, audit [591](../../../tasks/591-spec-kit-revision-audit.md)).
+- Every Register adds a new node; a name already taken gets the suffix ` 2`,
+  ` 3`…, the earlier node stays (the `025F` wording "a repeated Get WARP
+  updates the node" is obsolete).
 - There is no device deletion at Cloudflare: Re-register leaves the old device
-  in the Cloudflare account.
+  in the Cloudflare account. Entering a license drops the free-account cache
+  (a new registration). Kept as is (audit 591, 2026-10-13).
 - Registration without the UI (`POST /warp`, WireGuard only) — Debug API,
   [027-DEBUG_API](../../027-DEBUG_API/FUNCTIONS/route-map.md).
 

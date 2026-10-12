@@ -21,7 +21,7 @@ IP-пакеты внутри HTTP/3 (QUIC) или HTTP/2 (TCP) к Cloudflare —
 
 | Параметр | Ключ ядра | Значения | Дефолт |
 |----------|-----------|----------|--------|
-| Transport | `vhttp` | Auto (h3 → h2) · HTTP/3 (QUIC) · HTTP/2 (TCP) | Auto |
+| Transport | `vhttp` | Auto (h3 → h2) · HTTP/3 (QUIC) · HTTP/2 (TCP) | Auto в мастере; `h3` у ссылки без `vhttp`, у h3-узла генератора и в Debug API |
 | Endpoint IP | `server` | IP; пресеты по транспорту; 🎲 | пусто = сервер регистрации (виден подсказкой) |
 | Port | `server_port` | набор портов транспорта + ввод | первый порт набора |
 | SNI | `tls.server_name` | домен; SNI-пул MASQUE; 🎲 | случайный из пула |

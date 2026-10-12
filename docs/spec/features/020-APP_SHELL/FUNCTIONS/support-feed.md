@@ -49,8 +49,10 @@ input field with the link filled in; the system "Share"; an external browser.
   copy. The feed is read once per process.
 - When shown — while the app is on screen, home is open and the tunnel is
   connected: on opening, on returning, or at the moment during work when the
-  session and uptime reach the thresholds. Not without the tunnel and not in
-  the background. At most one message per app launch.
+  session and uptime reach the thresholds — so a message can appear in the
+  middle of a session, not only at launch (`105F` is obsolete here). Not
+  without the tunnel and not in the background. At most one message per app
+  launch; "X" defers it until the next process start.
 - Uptime is the tunnel's running time, including while the interface is
   closed; a tunnel restart begins a new session, with no double counting.
 - The queue is strict: the first visible unread message is taken; if it has
