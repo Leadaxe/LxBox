@@ -20,6 +20,7 @@ code — about the **logic** and the order in which to set things up.
   - [How all of this reaches directions](#how-all-of-this-reaches-directions)
   - [The subscription screen — what's inside](#the-subscription-screen--whats-inside)
 - [2. Directions — exit paths](#2-directions--exit-paths)
+  - [Interrupt connections on switch — three switches, three events](#interrupt-connections-on-switch--three-switches-three-events)
 - [3. Rules — how traffic is sorted out](#3-rules--how-traffic-is-sorted-out)
   - [Pairing a rule with DNS](#pairing-a-rule-with-dns)
   - [When the form isn't enough](#when-the-form-isnt-enough)
@@ -294,7 +295,9 @@ selection** between them. It appears in two ways:
   built from that folder's servers. Membership is defined in three ways: all
   servers in the folder, a rule (include/exclude regex with a live preview) or an
   explicit checkbox list. Test interval, mode and session stickiness are under
-  Advanced.
+  Advanced. The "Interrupt connections on switch" box there is one of three
+  switches with that name — which one fires when is explained in
+  [Directions](#interrupt-connections-on-switch--three-switches-three-events).
 
 Not to be confused with a direction's auto twin (`<direction>-auto`, see the
 Directions section): the twin collects the nodes of a **direction** by its filter,
@@ -461,6 +464,34 @@ direction can offer **Direct**, **Block** and **other directions** as options
 inside it. Only directions **listed above** it are available — that ordering is
 what rules out loops. Reorder the list and you change both what can be included
 and the order things are emitted in the config.
+
+### Interrupt connections on switch — three switches, three events
+
+When the active node changes, connections that are already open **keep running
+through the old server** until they close by themselves: a download finishes on
+the old exit, a long-lived chat socket stays where it was. Usually that is what
+you want. If you would rather have traffic move to the new node at once, the
+app has an "Interrupt connections on switch" option — in **three places**, and
+they are not copies of each other. None of them is "global" over the rest: each
+one answers a different event.
+
+| Where | What it reacts to | What it is |
+|---|---|---|
+| **Settings** → Interrupt connections on switch | **You** tap a node on the home screen | The app itself closes the open connections of the group you just switched. Nothing is written to the config; switches made by the core are not covered. |
+| **Direction editor** → checkbox under the name | The direction's choice changes **from any source** — a tap, Quick connect, an automation action, the API | Written into the direction's selector in the config; the core drops the connections. |
+| **Direction editor → Auto section**, and the same box in an [auto node](#auto-nodes--one-entry-a-pool-inside) | The **auto group changes node by itself** — a faster node appeared, or the current one died in failover mode | Written into the auto group in the config; the core drops the connections. |
+
+So:
+
+- for a manual switch inside a direction the first two overlap — either one is
+  enough;
+- for automatic switching only the third one matters, and the first two do
+  nothing;
+- to have connections dropped in every case, enable all three.
+
+The Settings switch is the only one that is app-wide; the other two are per
+direction (or per auto node), so you can keep a "work" direction gentle and a
+"streaming" direction strict.
 
 ---
 
@@ -866,6 +897,14 @@ other apps.
 **"I want everything through the VPN, but ads blocked and local domains direct."**
 Allow-list = Off (or all the apps you need); Directions Default = VPN; Rules: ads →
 Block, local domains → Direct.
+
+**"I switched the node but the download / the call is still going through the
+old server."**
+That's the default: open connections finish where they started. There are three
+"Interrupt connections on switch" options — one in Settings for your own taps,
+one in the direction for any switch, one in the auto group for automatic
+switches. Which to enable is in
+[Directions](#interrupt-connections-on-switch--three-switches-three-events).
 
 **"My DNS queries are visible to my ISP / go past the VPN."**
 Out of the box, app DNS no longer goes through the ISP's system resolver (DNS
