@@ -6,6 +6,15 @@
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **Selection handles in the JSON editor work again
+  ([task 628](docs/spec/tasks/628-editor-selection-handles-gestures.md), #167).**
+  Dragging a selection handle in a short JSON field no longer swipes the tab
+  or scrolls the page.
+
 ## [2.25.12] — 2026-10-12
 
 ### Added

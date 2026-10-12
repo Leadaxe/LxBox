@@ -61,7 +61,8 @@ LxCodeLanguage? detectCodeLanguage(String text) {
   if (i == lines.length) return null;
   final first = clean(lines[i]);
   if (_iniSection.hasMatch(first)) return LxCodeLanguage.ini;
-  if (first.startsWith('{') || first.startsWith('[')) return LxCodeLanguage.json;
+  if (first.startsWith('{') || first.startsWith('['))
+    return LxCodeLanguage.json;
   if (first.startsWith('#') || first.startsWith(';')) {
     for (var j = i + 1; j < lines.length; j++) {
       final l = clean(lines[j]);
@@ -113,11 +114,11 @@ class LxCodeEditor extends StatefulWidget {
     this.actions = const [],
     this.header,
     this.format = false,
-  })  : _fit = _Fit.fill,
-        _height = null,
-        _minLines = null,
-        _maxLines = null,
-        _onEdited = null;
+  }) : _fit = _Fit.fill,
+       _height = null,
+       _minLines = null,
+       _maxLines = null,
+       _onEdited = null;
 
   const LxCodeEditor._sized({
     required this.controller,
@@ -137,12 +138,12 @@ class LxCodeEditor extends StatefulWidget {
     this.actions = const [],
     this.header,
     this.format = false,
-  })  : find = null,
-        _fit = fit,
-        _height = height,
-        _minLines = minLines,
-        _maxLines = maxLines,
-        _onEdited = onEdited;
+  }) : find = null,
+       _fit = fit,
+       _height = height,
+       _minLines = minLines,
+       _maxLines = maxLines,
+       _onEdited = onEdited;
 
   /// Текст поля. Запись из кода (Paste, Load from file) уходит в натив,
   /// правка в поле — сюда.
@@ -206,7 +207,7 @@ class LxCodeEditor extends StatefulWidget {
 /// финальный `changed` должен лечь в контроллер, а не потеряться.
 class _SoraLink {
   _SoraLink(int viewId, this.controller)
-      : channel = MethodChannel('com.leadaxe.lxbox/sora_editor_$viewId') {
+    : channel = MethodChannel('com.leadaxe.lxbox/sora_editor_$viewId') {
     channel.setMethodCallHandler(_handle);
   }
 
@@ -254,6 +255,10 @@ class LxCodeEditorState extends State<LxCodeEditor>
   double _textOffsetX = 0;
 
   bool _focused = false;
+
+  /// В редакторе есть выделение — его ручки тянут и по вертикали, и по
+  /// горизонтали, поэтому жесты целиком уходят редактору (§628).
+  bool _selected = false;
   Rect? _cursorRect;
 
   /// Каретка в первой / последней экранной строке (из `cursor`): стрелка
@@ -414,9 +419,11 @@ class LxCodeEditorState extends State<LxCodeEditor>
     try {
       formatted = formatJson5(text);
     } on FormatException catch (e) {
-      ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(
-        content: Text(getLocalText.s("Failed to parse JSON: %s", e.message)),
-      ));
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(
+          content: Text(getLocalText.s("Failed to parse JSON: %s", e.message)),
+        ),
+      );
       return;
     }
     if (formatted == text) return;
@@ -485,6 +492,8 @@ class LxCodeEditorState extends State<LxCodeEditor>
       case 'cursor':
         final focused = args['focused'] as bool? ?? false;
         if (focused != _focused) setState(() => _focused = focused);
+        final selected = args['selected'] as bool? ?? false;
+        if (selected != _selected) setState(() => _selected = selected);
         _atTop = args['atTop'] as bool? ?? true;
         _atBottom = args['atBottom'] as bool? ?? true;
         final rowH = ((args['rowHeight'] as num?) ?? 0) / dpr;
@@ -510,8 +519,12 @@ class LxCodeEditorState extends State<LxCodeEditor>
     final box = _viewKey.currentContext?.findRenderObject();
     if (box is RenderBox && box.hasSize) {
       box.showOnScreen(
-        rect: Rect.fromLTWH(0, rect.top, box.size.width, rect.height)
-            .inflate(8),
+        rect: Rect.fromLTWH(
+          0,
+          rect.top,
+          box.size.width,
+          rect.height,
+        ).inflate(8),
         duration: const Duration(milliseconds: 120),
         curve: Curves.easeOut,
       );
@@ -545,9 +558,10 @@ class LxCodeEditorState extends State<LxCodeEditor>
       'text': cs.onSurface.toARGB32(),
       'lineNumber': cs.onSurfaceVariant.withValues(alpha: 0.7).toARGB32(),
       'divider': cs.outlineVariant.toARGB32(),
-      'selection': (theme.textSelectionTheme.selectionColor ??
-              cs.primary.withValues(alpha: 0.4))
-          .toARGB32(),
+      'selection':
+          (theme.textSelectionTheme.selectionColor ??
+                  cs.primary.withValues(alpha: 0.4))
+              .toARGB32(),
       'caret': cs.primary.toARGB32(),
       'currentLine': cs.onSurface.withValues(alpha: 0.05).toARGB32(),
       'match': cs.tertiary.withValues(alpha: 0.35).toARGB32(),
@@ -651,10 +665,10 @@ class LxCodeEditorState extends State<LxCodeEditor>
                     overflow: TextOverflow.ellipsis,
                     textScaler: TextScaler.noScaling,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontFamily: 'monospace',
-                          fontSize: w.fontSize,
-                          color: cs.onSurfaceVariant,
-                        ),
+                      fontFamily: 'monospace',
+                      fontSize: w.fontSize,
+                      color: cs.onSurfaceVariant,
+                    ),
                   ),
                 ),
               ),
@@ -754,14 +768,18 @@ class LxCodeEditorState extends State<LxCodeEditor>
   Widget _buildNative(bool scrollable) {
     // Текст помещается — вертикальные свайпы уходят странице; нет — их
     // забирает редактор. Тап, долгий тап, горизонтальный свайп — редактору.
+    // Пока есть выделение — всё редактору: иначе ручку выделения уводят
+    // вертикальный скролл страницы и свайп вкладок (§628).
     final recognizers = <Factory<OneSequenceGestureRecognizer>>{
-      if (scrollable)
+      if (scrollable || _selected)
         const Factory<OneSequenceGestureRecognizer>(EagerGestureRecognizer.new)
       else ...[
         const Factory<OneSequenceGestureRecognizer>(
-            HorizontalDragGestureRecognizer.new),
+          HorizontalDragGestureRecognizer.new,
+        ),
         const Factory<OneSequenceGestureRecognizer>(
-            LongPressGestureRecognizer.new),
+          LongPressGestureRecognizer.new,
+        ),
       ],
     };
     return Focus(
@@ -788,7 +806,8 @@ class LxCodeEditorState extends State<LxCodeEditor>
     if (key == LogicalKeyboardKey.escape) return KeyEventResult.ignored;
     if (e is! KeyUpEvent) {
       final hk = HardwareKeyboard.instance;
-      final plain = !hk.isShiftPressed &&
+      final plain =
+          !hk.isShiftPressed &&
           !hk.isControlPressed &&
           !hk.isAltPressed &&
           !hk.isMetaPressed;
@@ -992,7 +1011,8 @@ class _LxJsonViewState extends State<LxJsonView> {
     final h = widget.height;
     // Липкие заголовки sora рисует только без переноса строк; в
     // просмотрщике JSON прокрутка вбок допустима, перенос уступает им.
-    final sticky = widget.stickyHeaders && widget.language == LxCodeLanguage.json;
+    final sticky =
+        widget.stickyHeaders && widget.language == LxCodeLanguage.json;
     return LxCodeEditor._sized(
       controller: _ctrl,
       fit: h == null ? _Fit.fill : _Fit.fixed,
@@ -1073,8 +1093,8 @@ class LxTextCodeField extends StatelessWidget {
     final fit = height != null
         ? _Fit.fixed
         : minLines != null
-            ? _Fit.grow
-            : _Fit.fill;
+        ? _Fit.grow
+        : _Fit.fill;
     final editor = LxCodeEditor._sized(
       controller: controller,
       fit: fit,
@@ -1089,12 +1109,16 @@ class LxTextCodeField extends StatelessWidget {
       language: language,
       autofocus: autofocus,
       format: format,
-      header: header ??
+      header:
+          header ??
           (label == null
               ? null
-              : Text(label,
-                  style: theme.textTheme.labelSmall
-                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant))),
+              : Text(
+                  label,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                )),
     );
     final error = errorText;
     return Column(
@@ -1109,8 +1133,9 @@ class LxTextCodeField extends StatelessWidget {
               error,
               maxLines: 4,
               overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.error),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.error,
+              ),
             ),
           ),
       ],
