@@ -36,8 +36,8 @@
 | [bug] | 48 |
 | [doc] | 0 |
 | [doc-legacy] | 27 |
-| [owner] | 58 |
-| [decided] | 27 |
+| [owner] | 3 |
+| [decided] | 82 |
 | [test] | 14 |
 | [moved] | 18 |
 | [done] | 92 |
@@ -471,6 +471,6 @@
 - [done] `docs/PROTOCOLS.md` §9.7 и `KERNEL.md` упоминают `kTailscaleMinCoreVersion`, которого нет; гейт по тегу `with_tailscale` (586). `warnings.json` говорит «1.14.0-lx.31 or newer», KERNEL — `with_tailscale` с lx.38. — **исправлено 2026-09-30:** PROTOCOLS.md §9.7 и KERNEL.md — гейт описан как узловой гейт реестра (`build_tag` против зеркала `kCoreBuildTags`, контракт §56), константы версии нет. Текст `warnings.json` («1.14.0-lx.31 or newer») — сторона лаунчера, здесь не правится: передать вместе с пунктом про `index.md`.
 - [decided] Реестр `protocols/tailscale.json` `refs.dart` ссылается на старый путь `add_server_wizard/tailscale_bundle.dart` и «инъекцию секций узла» (снята в 575). — **2026-09-30:** `app/contract/registry/protocols/tailscale.json` — копия контракта лаунчера, здесь не правится; факт: файл теперь `lib/models/tailscale_bundle.dart`, инъекции секций нет (§575). → Вопрос: передать лаунчеру правку `refs.dart` (варианты: A передать одной строкой вместе с `naive.json` note и `index.md` / B игнорировать, `refs` — справочное поле) → **Решено 2026-10-13: A** — передать лаунчеру.
 - [done] Тест мастера: в названии 🪢, проверяет 🕸️; 449 тоже пишет 🪢. — **проверено 2026-09-30:** НЕ ПОДТВЕРЖДЁН: код даёт 🕸️ (`app/lib/services/node_emoji.dart:49`), тест проверяет 🕸️ (`app/test/screens/add_server_wizard_test.dart:280`); устарели название теста и спека 449 (`docs/spec/tasks/449-tailscale-default-hostname.md:34`). — **закрыто 2026-10-13:** тест в `add_server_wizard_test.dart` переименован на 🕸️, в `tasks/449-tailscale-default-hostname.md` пример тега — `🕸️ hometest`.
-- [owner] Открытые вопросы 445 §10: правка `auth_key`/`control_url` не выдаёт новую личность; нет подтверждения «удалит логин Tailscale» при удалении узла/слота; `android:allowBackup` не задан → ключи `tailscale/` уходят в системный бэкап. → Вопрос: `android:allowBackup=false` (ключи `tailscale/` не в системный бэкап)? Подтверждение «удалит логин Tailscale»? Новая личность при правке `auth_key`? (варианты: по каждому A да / B нет)
+- [owner] Открытые вопросы 445 §10: правка `auth_key`/`control_url` не выдаёт новую личность; нет подтверждения «удалит логин Tailscale» при удалении узла/слота; `android:allowBackup` не задан → ключи `tailscale/` уходят в системный бэкап. → Вопрос: `android:allowBackup=false` (ключи `tailscale/` не в системный бэкап)? Подтверждение «удалит логин Tailscale»? Новая личность при правке `auth_key`? (варианты: по каждому A да / B нет) → **2026-10-13:** подтверждение и новая личность приняты, allowBackup ждёт владельца
 - [test] Поведение при смене сети и в режиме Proxy — специального кода нет, без свидетеля. — **только на устройстве:** FEATURE.md сам относит это к Boundaries («No Tailscale-specific reaction to a network change or to the Proxy mode… `no witness`») — рестарт туннеля принадлежит 010-VPN_SERVICE, узел просто переподключается по identity из state-каталога; пригодного для юнит-теста чистого Dart-слоя в 030 нет. Проверять: смена сети / Proxy-режим на устройстве с активным Tailscale-узлом → конфиг не отличается, узел переподключается с той же identity.
 - [test] DEVICE-PENDING по 445/449/578/579/581: вход по ссылке, exit-переключение, Log out, Ping на живом tailnet не проверены. — **только на устройстве:** FEATURE.md прямым текстом (Boundaries) фиксирует то же самое как DEVICE-PENDING по тем же задачам; требует живого tailnet. Проверять: вход по интерактивной ссылке, переключение exit-узла, Log out (с подтверждением), Ping — на реальном устройстве с живым tailnet.
