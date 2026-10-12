@@ -1952,9 +1952,14 @@ screen with an unsaved edit asks Discard, Keep or Save.
 > copy: ⋮ → Copy to clipboard.
 
 A config longer than 1,048,576 characters opens read-only, with the label
-`File is too large to edit on device. Share it, edit externally, then load it
-back.` Save is inactive on such a screen. Share hands the file to an
-external editor, and ⋮ → Load from file loads the edited file back.
+`Config is too large to edit on device. Share it, edit it elsewhere, then pick
+the edited file in Load from file: it is saved right away.` Save is inactive
+on such a screen. Share hands the file to an external editor. Here
+⋮ → Load from file and ⋮ → Paste from clipboard save the loaded text at once,
+without editing and without a size limit: the JSON check and the error are
+the same as for Save. As with Save, Lock config does not block this save; with
+Lock config on, the next rebuild does not overwrite the saved file. The
+screen stays read-only until you open it again.
 
 ### Lock config pins a manual config
 

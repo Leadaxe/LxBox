@@ -18,7 +18,8 @@ import '../widgets/safe_bottom.dart';
 /// §333 — страховочный порог: выше него редактор открывается read-only.
 /// Даже построчному редактору многомегабайтный конфиг на слабом устройстве
 /// даётся плохо, а правка такого объёма на телефоне — не сценарий: Share →
-/// внешний редактор → Load from file. Порог в символах `configRaw`
+/// внешний редактор → Load from file (§635: в read-only сохраняет сразу,
+/// без редактора). Порог в символах `configRaw`
 /// (конфиг — практически ASCII, так что символы ≈ байты).
 const int kConfigEditMaxChars = 1024 * 1024;
 
@@ -116,11 +117,42 @@ class _ConfigScreenState extends State<ConfigScreen> {
       }
       return;
     }
+    if (_readOnly) {
+      await _saveImported(text);
+      return;
+    }
     final pretty = await prettyJsonForDisplayAsync(text);
     if (!mounted) return;
     _textController.text = pretty;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(getLocalText.s("Pasted from clipboard"))),
+    );
+  }
+
+  /// §635 — в режиме только чтения правки в редакторе нет и Save неактивна,
+  /// поэтому загруженный текст (файл или буфер) сохраняется сразу, тем же
+  /// [HomeController.saveConfigRaw], что и Save: та же проверка JSON, та же
+  /// ошибка через `lastError`. Размер не ограничен — порог касается только
+  /// правки в редакторе. Экран остаётся только для чтения до переоткрытия.
+  Future<void> _saveImported(String text) async {
+    final ok = await widget.controller.saveConfigRaw(text);
+    if (!ok || !mounted) return;
+    final pretty = await prettyJsonForDisplayAsync(text);
+    if (!mounted) return;
+    _textController.text = pretty;
+    _baseline = pretty;
+    _showSaved();
+  }
+
+  void _showSaved() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          getLocalText.s(
+            "Config saved. The next rebuild overwrites it; to keep it, lock the config in App Settings → Diagnostics (Debug API on).",
+          ),
+        ),
+      ),
     );
   }
 
@@ -140,6 +172,10 @@ class _ConfigScreenState extends State<ConfigScreen> {
       final file = outcome.single;
       // §333 — utf8, не fromCharCodes (см. PickedFile.text).
       final text = file.text;
+      if (_readOnly) {
+        await _saveImported(text.trim());
+        return;
+      }
       final pretty = await prettyJsonForDisplayAsync(text.trim());
       if (!mounted) return;
       _textController.text = pretty;
@@ -168,15 +204,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
     if (!mounted) return ok;
     if (ok) {
       _baseline = text;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            getLocalText.s(
-              "Config saved. The next rebuild overwrites it; to keep it, lock the config in App Settings → Diagnostics (Debug API on).",
-            ),
-          ),
-        ),
-      );
+      _showSaved();
     }
     return ok;
   }
@@ -276,7 +304,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
                       ),
                       child: Text(
                         getLocalText.s(
-                          "File is too large to edit on device. Share it, edit externally, then load it back.",
+                          "Config is too large to edit on device. Share it, edit it elsewhere, then pick the edited file in Load from file: it is saved right away.",
                         ),
                         style: TextStyle(
                           fontSize: 12,

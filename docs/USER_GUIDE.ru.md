@@ -1938,9 +1938,14 @@ Discard, Keep или Save.
 > ⋮ → Copy to clipboard.
 
 Конфиг длиннее 1 048 576 символов открывается только для чтения, с подписью
-`File is too large to edit on device. Share it, edit externally, then load it
-back.` Save на таком экране неактивна. Share отдаёт файл во внешний редактор,
-⋮ → Load from file загружает правленый файл обратно.
+`Config is too large to edit on device. Share it, edit it elsewhere, then pick
+the edited file in Load from file: it is saved right away.` Save на таком
+экране неактивна. Share отдаёт файл во внешний редактор. ⋮ → Load from file и
+⋮ → Paste from clipboard здесь сразу сохраняют загруженный текст, без правки в
+редакторе и без ограничения размера: проверка JSON и ошибка — те же, что у
+Save. Как и у Save, Lock config это сохранение не запрещает; при включённом Lock
+config следующая пересборка сохранённый файл не перезапишет. Экран остаётся
+только для чтения, пока его не открыть заново.
 
 ### Lock config закрепляет ручной конфиг
 
