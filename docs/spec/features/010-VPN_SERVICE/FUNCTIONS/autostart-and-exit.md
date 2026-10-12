@@ -72,3 +72,4 @@ Both settings are part of the backup and are restored with it.
 | 2 | [020](../../../tasks/020-android14-fgs-special-use.md) | Done | The tunnel service declares the type required by new OS versions |
 | 3 | [188](../../../tasks/188-tun-toggles-to-mode-tab.md) | ✅ DEVICE-VERIFIED | Keep VPN on exit is on by default, lives on the mode screen |
 | 4 | [638](../../../tasks/638-audit-591-four-defects.md) | Done | "Quit & reopen app" clears the "tunnel wanted" flag and the watchdog alarm — the watchdog no longer resurrects the tunnel |
+| 5 | [639](../../../tasks/639-quit-clears-vpn-notification.md) | Done | "Quit & reopen app" stops the tunnel the regular way before ending the process — the tunnel notification no longer lingers |

@@ -25,12 +25,16 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 
 class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
     PluginRegistry.ActivityResultListener {
 
     companion object {
         private const val TAG = "VpnPlugin"
+        /// §639 — сколько Quit ждёт Stopped от штатной остановки сервиса
+        /// перед убийством процесса. Уведомление снимается раньше (Stopping).
+        private const val QUIT_STOP_BUDGET_MS = 3_000L
         private const val METHOD_CHANNEL = "com.leadaxe.lxbox/methods"
         private const val STATUS_CHANNEL = "com.leadaxe.lxbox/status_events"
         private const val CORE_LOG_CHANNEL = "lxbox/coreLog"   // §043
@@ -532,10 +536,33 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 mainHandler.postDelayed({
                     activity?.finishAffinity()
                 }, 50)
-                mainHandler.postDelayed({
-                    android.os.Process.killProcess(android.os.Process.myPid())
-                    kotlin.system.exitProcess(0)
-                }, 250)
+                // §639: сервис останавливаем штатным путём Stop (тот же
+                // `stopAwait`, что у `stopVPN`) ДО убийства процесса. Иначе он
+                // умирает без `stopForeground`, и уведомление id=1 висит в
+                // шторке «VPN работает» до следующего запуска. `doStop` снимает
+                // foreground сразу при переходе в Stopping; ждём Stopped не
+                // дольше QUIT_STOP_BUDGET_MS, затем страховочно cancel(id=1)
+                // и убиваем процесс (не раньше прежних 250 мс).
+                // Свой scope, не pluginScope: finishAffinity может отсоединить
+                // engine, а onDetachedFromEngine отменяет pluginScope — тогда
+                // процесс не был бы убит.
+                val quitStartedAt = android.os.SystemClock.elapsedRealtime()
+                CoroutineScope(SupervisorJob() + Dispatchers.Main).launch {
+                    val stopped = runCatching {
+                        withTimeoutOrNull(QUIT_STOP_BUDGET_MS) {
+                            BoxVpnService.stopAwait(context).await()
+                        }
+                    }.getOrNull()
+                    if (stopped == null) {
+                        Log.w(TAG, "[vpn §639] quitApp: Stopped not reported in ${QUIT_STOP_BUDGET_MS}ms")
+                    }
+                    ServiceNotification.cancelServiceNotification()
+                    val elapsed = android.os.SystemClock.elapsedRealtime() - quitStartedAt
+                    mainHandler.postDelayed({
+                        android.os.Process.killProcess(android.os.Process.myPid())
+                        kotlin.system.exitProcess(0)
+                    }, (250L - elapsed).coerceAtLeast(0L))
+                }
             }
             "getInstalledApps" -> {
                 // Lightweight metadata only — иконки лениво подгружаются
