@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Status | Done |
+| Status | Done, released in v2.25.13 |
 | Start date | 2026-10-12 |
 | End date | 2026-10-12 |
 | Commits | `fix(634): Speed Test — Upload только у серверов с проверяемым endpoint, честный Via` |

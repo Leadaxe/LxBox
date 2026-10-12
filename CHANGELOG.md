@@ -6,7 +6,7 @@
 
 ---
 
-## [Unreleased]
+## [2.25.13] — 2026-10-13
 
 ### Added
 
@@ -17,27 +17,126 @@
   proxy already uses 2081); apps that honor the system proxy (Chrome, Play)
   connect over TCP through the core and show up as inbound `sysproxy-in`.
   UDP and other apps keep going through TUN.
+  (RU: Тумблер System HTTP proxy в VPN Settings → Mode → Tunnel options,
+  по умолчанию выключен: VPN объявляет системе локальный HTTP-прокси
+  `127.0.0.1:2081` (2082, если 2081 занят локальным прокси); Chrome, Play и
+  другие приложения, уважающие системный прокси, ходят через ядро по TCP
+  (inbound `sysproxy-in`), UDP и прочие приложения — через TUN.)
 
-### Fixed
+### Changed
 
 - **"Unknown traffic" preset is on by default and sends ownerless traffic
   direct.** A process that binds to the tunnel interface from outside the VPN
   (`curl --interface tun0` from an excluded app) used to reach the server and
   learn its address; now such traffic leaves through the direct outbound and
-  learns nothing new. `reject` stays available as the strict option. The rule
-  also carries `inbound: ["tun-in"]`. In pure Proxy mode the app is not the active
-  VPN, `getConnectionOwnerUid` attributes nothing, and the old rule rejected
-  every connection through the local proxy; now it stays inert there. In
-  VPN+Proxy mode connections arriving at `mixed-in` (including LAN clients)
-  are no longer judged by it.
+  learns nothing new. `reject` stays available as the strict option. A rule
+  that had `reject` follows the new default `direct` (the default value is
+  not stored with the rule); pick Reject again to keep it strict. The rule also carries `inbound: ["tun-in"]`. In
+  pure Proxy mode the app is not the active VPN, `getConnectionOwnerUid`
+  attributes nothing, and the old rule rejected every connection through the
+  local proxy; now it stays inert there. In VPN+Proxy mode connections
+  arriving at `mixed-in` (including LAN clients) are no longer judged by it.
+  (RU: Пресет «Unknown traffic» на новой установке включён, бесхозный трафик
+  уходит в `direct-out`; `reject` — строгий вариант. Правило с `reject`
+  (прежнее умолчание не хранится в правиле) переходит на `direct`; строгий
+  режим — снова выбрать Reject.
+  Правило привязано к inbound `tun-in`: в режиме Proxy больше не режет весь
+  трафик через локальный прокси, в VPN+Proxy не судит соединения `mixed-in`.)
+- **Speed Test measures Upload only where the server has an upload endpoint,
+  and Via shows the real route
+  ([task 634](docs/spec/tasks/634-speed-test-upload-honest.md)).**
+  A server without an upload address used to get the body sent to its
+  download address, and a refusal (405, 413) counted as 5 MB sent, so Upload
+  on most servers was an arbitrary number. Now Upload runs only for servers
+  with an upload address (Cloudflare, Tele2 and four Hostkey servers); the
+  rest show `n/a` on the gauge and in the history. Only requests answered
+  below 400 count; if the server accepts nothing, the gauge shows `Failed`.
+  Via used to show the node selected on the home screen, while the app's own
+  requests are routed by your rules (Ru internet segment sends Russian test
+  servers to `direct-out`). Now Via shows the outbound the core reported for
+  the test connection, `Direct (no VPN)` without VPN, and "Route depends on
+  your rules" when the core reported nothing.
+  (RU: Speed Test: Upload меряется только у серверов с адресом отправки
+  (Cloudflare, Tele2, четыре сервера Hostkey), у остальных `n/a`; засчитываются
+  только ответы ниже 400, сервер ничего не принял — `Failed`. Via показывает
+  outbound, который ядро сообщило для соединения теста, а не узел с главного
+  экрана.)
+
+### Fixed
+
+- **Backup import: Merge merges
+  ([task 633](docs/spec/tasks/633-backup-merge-is-merge.md)).**
+  Merge promised to add new items and keep existing ones, but only Server
+  lists sources were merged; rules, Directions, DNS, Tunnel apps and
+  settings were taken from the file whole and replaced the device's own.
+  Now Merge adds what the device does not have and changes nothing it has:
+  rules match by preset, `id` or content; Directions and chains by tag; DNS
+  servers and DNS rules by tag, name or content; Tunnel apps packages are
+  joined; a setting already on the device keeps its value. VPN toggles take
+  only keys the device does not have. The import dialog shows "new: N,
+  already here: M" under each category and "Merged: N added, M already
+  here" after the import. Debug API `POST /backup/import?merge=true` merges
+  the same way. Replace all is unchanged.
+  (RU: Merge при импорте бэкапа сливает, а не перезаписывает: правила,
+  Направления, цепочки, DNS, Tunnel apps и настройки — добавляется то, чего
+  нет, своё не меняется; окно импорта показывает «new / already here» по
+  категориям; так же работает `merge=true` в Debug API; Replace all не
+  изменился.)
+- **Config Editor: a config over 1 MB can be replaced from a file
+  ([task 635](docs/spec/tasks/635-config-editor-large-file.md)).**
+  Such a config opens read-only, and the screen suggested editing it
+  elsewhere and loading it back, but Load from file only put the text into
+  the editor: Save stayed disabled and Back dropped the text. In read-only
+  mode Load from file and Paste from clipboard now save the text at once,
+  with the same JSON check as Save. The hint says so.
+  (RU: Редактор конфига: конфиг больше 1 МБ открывается только для чтения, и
+  Load from file / Paste from clipboard в этом режиме сразу сохраняют текст с
+  той же проверкой JSON, что Save; подсказка говорит об этом.)
+- **Setting hints match the app
+  ([task 632](docs/spec/tasks/632-settings-hints-mismatch.md)).**
+  Six hints named things that do not exist: Forward sing-box logs now points
+  to Debug → Log, filter Core; Aggressive battery saving says sync resumes
+  when the screen turns on, not on unlock; Home-screen shortcut names
+  Connect and Disconnect (Android 11+); Check for updates describes tapping
+  the message, Later and Ignore; Auto-record Wi-Fi names ✕ (Remove from
+  history); Debug API says the token is stored in app settings and left out
+  of Backup by default.
+  (RU: Шесть подсказок настроек приведены к поведению приложения: Debug →
+  Log с фильтром Core, сон до включения экрана, ярлыки Connect/Disconnect,
+  Later/Ignore у обновления, ✕ Remove from history у записи Wi-Fi, токен
+  Debug API хранится в настройках и не входит в Backup по умолчанию.)
+- **The Statistics hint leads to Allow VPN bypass
+  ([task 630](docs/spec/tasks/630-stats-bypass-hint-path.md)).**
+  The warning icon in the Statistics header pointed to VPN Settings → System,
+  which has no such switch. It now points to VPN Settings → Mode → Tunnel
+  options → Allow VPN bypass and says which apps leave the tunnel.
+  (RU: Подсказка у значка в Statistics ведёт в VPN Settings → Mode → Tunnel
+  options → Allow VPN bypass, а не на вкладку System.)
 - **JSON on the rule's View tab and the DNS server's JSON preview is
   highlighted ([task 631](docs/spec/tasks/631-rule-view-tab-json-highlight.md)).**
   The storage record and the sing-box preview use the same viewer as the
   other JSON fields: syntax colors, the caption and Copy above the frame.
+  (RU: JSON на вкладке View правила и в превью DNS-сервера подсвечен, как в
+  остальных JSON-полях.)
 - **Selection handles in the JSON editor work again
   ([task 628](docs/spec/tasks/628-editor-selection-handles-gestures.md), #167).**
   Dragging a selection handle in a short JSON field no longer swipes the tab
-  or scrolls the page.
+  or scrolls the page. A field that grew past its line limit after opening
+  scrolls itself instead of the page.
+  (RU: Ручки выделения в JSON-редакторе больше не листают вкладку и не
+  прокручивают страницу.)
+
+### Docs
+
+- The user guide (EN and RU) is rewritten section by section and checked
+  against the app: new sections on VPN Settings, App Settings, Presets,
+  Speed Test, Config Editor, Backup, the node's Dependents and Diagnostics
+  tabs, and Replace with a group; the three "Interrupt connections on
+  switch" options and the event each one covers (#166).
+- `docs/SECURITY.md` §2.4: how to check the tun0 leak from Termux.
+- `docs/EDITORIAL_POLICY.ru.md`: internal rules for user-facing texts.
+
+---
 
 ## [2.25.12] — 2026-10-12
 

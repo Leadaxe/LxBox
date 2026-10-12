@@ -1,25 +1,26 @@
-# L×Box v2.25.12
+# L×Box v2.25.13
 
-**A patch on top of [v2.25.11](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.11).**
+**A patch on top of [v2.25.12](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.12).**
 
-Every JSON field and the config editor now run on a native Android editor:
-the keyboard no longer covers the text, keyboard arrows and Copy work, and
-JSON fields get a Format button. Every screen with a Save button asks before
-dropping unsaved edits. Your own WireGuard/AmneziaWG nodes get a Masquerade
-section. A new intent re-tests every Direction at once. Direct connections
-get a configurable connect timeout. REALITY nodes no longer get the global
-TLS fragmentation. Core `v1.14.3-lx.15`, contract 1.1.115.
+The VPN can announce a system HTTP proxy to Android 10+, so Chrome and Play go
+through the core over TCP. The Unknown traffic preset is on for new installs
+and sends ownerless traffic direct. Merge on backup import now really merges.
+Speed Test measures Upload only where the server accepts it and shows the
+route the core used. A config over 1 MB can be replaced from a file. Setting
+hints, the Statistics hint and JSON views match the app. The user guide is
+rewritten in both languages. Core `v1.14.3-lx.15` and contract 1.1.115 are
+unchanged.
 
-**Патч поверх [v2.25.11](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.11).**
+**Патч поверх [v2.25.12](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.12).**
 
-Все JSON-поля и редактор конфига переведены на нативный редактор Android:
-клавиатура больше не закрывает текст, стрелки и Copy клавиатуры работают, у
-JSON-полей появилась кнопка Format. Все экраны с кнопкой Save спрашивают,
-прежде чем потерять несохранённые правки. У своих узлов WireGuard/AmneziaWG
-появилась секция Masquerade. Новый интент перепроверяет все Направления
-разом. У прямых соединений настраиваемый таймаут. Глобальная фрагментация
-TLS больше не применяется к узлам REALITY. Ядро `v1.14.3-lx.15`, контракт
-1.1.115.
+VPN умеет объявить Android 10+ системный HTTP-прокси: Chrome и Play идут через
+ядро по TCP. Пресет Unknown traffic на новой установке включён и отправляет
+бесхозный трафик напрямую. Merge при импорте бэкапа теперь действительно
+сливает. Speed Test меряет Upload только там, где сервер его принимает, и
+показывает маршрут, который выбрало ядро. Конфиг больше 1 МБ можно заменить
+из файла. Подсказки настроек, подсказка в Statistics и просмотр JSON
+приведены к приложению. Руководство пользователя переписано на обоих языках.
+Ядро `v1.14.3-lx.15` и контракт 1.1.115 без изменений.
 
 ---
 
@@ -28,136 +29,119 @@ TLS больше не применяется к узлам REALITY. Ядро `v1
 
 ## ⚠️ Read before updating
 
-- **Core `v1.14.3-lx.15` (from `v1.14.2-lx.12`, base sing-box 1.14.3, [docs/KERNEL.md](docs/KERNEL.md)).**
-  - AWG masquerade `ip=quic` (WARP wizard nodes and any node with
-    `ip=quic`): the decoy is generated before every handshake, a new QUIC
-    Initial with fresh connection IDs on each start, rekey, wake and
-    reconnect. Before, the node sent the same datagram with the same DCID
-    for its whole lifetime.
-  - `ib=chrome` and `ib=firefox` are real QUIC ClientHellos of the browser,
-    calibrated against Chrome 147/155 and Firefox 149 captures. Before, a
-    TCP ClientHello sat inside the QUIC Initial.
-  - `ip=sip` sends only INVITE; `ip=dns` sends EDNS without options.
-  - The core value `ib=chrome-full` is experimental and not offered: a node
-    with it gets the value dropped with a warning.
-  - Auto groups test their nodes on every `interval`. Before, a node was
-    probed once per two intervals; with the default 15 minutes that means
-    twice as many background probes as before.
-  - Hold until failure also leaves a node that answers but is more than
-    twice as slow as the others.
-  - `fingerprint: random` / `randomized` no longer leave REALITY nodes to
-    Xray v26.9.8 and newer dead until restart.
-  - Hysteria2, TUIC and WireGuard on top of WARP (MASQUE) or another IP
-    tunnel get a packet size that fits the tunnel, so hysteria2 over WARP to
-    an IPv6 server works.
-  - MASQUE `vhttp: auto` no longer stays on h2 until restart after one
-    quick h3 failure.
-  - uTLS/REALITY connections hold 18–25 KB less memory; gRPC is updated for
-    a critical advisory.
-- **XHTTP nodes with a `?…` tail in `path` get a new content hash.**
-  Their config is marked changed once; node selection and disabled marks are
-  kept.
-- **The config editor no longer wraps long lines.**
-  They scroll sideways; in exchange the headers of the enclosing blocks stay
-  pinned while you scroll (see Changed).
+- **Unknown traffic with Reject switches to Direct.**
+  If the preset was on with outbound `reject`, it now uses the new default
+  `direct-out`: ownerless traffic leaves past the tunnel instead of being
+  dropped. Reject was the default before, and the default is not saved with
+  the rule, so the rule follows the new one. To keep it strict, pick Reject
+  in the preset's outbound again after updating. A rule with a node or
+  another outbound keeps it.
 
 ## ✨ Added
 
-- **Masquerade section for your own WireGuard/AmneziaWG node ([task 623](docs/spec/tasks/623-node-masquerade-section.md)).**
-  The node's Settings tab has Masquerade: protocol (Off, QUIC, DNS, STUN,
-  SIP), domain and browser, as rows like Detour server. A choice is saved at
-  once: `ip`/`id`/`ib` go into the node's source (a link, a `.conf` or a
-  sing-box body), the rest of the text stays as it was. Turning on QUIC, DNS
-  or SIP fills a random domain from the pool; the dice picks another, the
-  arrow lists the pool. QUIC needs a domain (it becomes the SNI of the decoy
-  ClientHello) and defaults to the Chrome profile. A node that sets `I1`
-  itself keeps it: the section is off and says why. Packed links (`awg://`
-  base64, `vpn://`) and Xray sources are not written to. The WARP wizard
-  uses the same fields; its QUIC hint no longer calls the domain cosmetic.
-- **One intent re-tests every Direction ([task 625](docs/spec/tasks/625-urltest-all-intent.md)).**
-  `com.leadaxe.lxbox.URLTEST_ALL` takes no extras and runs the URL test of
-  every Direction's auto group in turn; the core re-selects a live node in
-  each. The same command is `urltest-all` in the Tasker/Locale plugin and
-  `POST /action/urltest-all` in the Debug API. Handy on a MacroDroid shake
-  gesture when the network goes stale.
-- **Direct connect timeout for `direct-out` ([task 616](docs/spec/tasks/616-direct-connect-timeout.md)).**
-  The connect timeout of the direct outbound is a setting now: Traffic
-  Processing → Params → Direct connect timeout, presets 5s–2m or any
-  duration. The default is 15s instead of the core's 5s, so apps on networks
-  that lose SYN packets (e.g. T-Bank over Tele2) no longer get their
-  connections cut. Proxy nodes and auto groups are unchanged.
-- **Format button for JSON fields ([task 624](docs/spec/tasks/624-sora-editor-for-json-fields.md)).**
-  Editable JSON fields (node Source, Edit server in a folder, DNS server
-  JSON, rule JSON, the DNS rule editor, the wizard's JSON field) have a
-  Format button: it parses the text as JSON5, like Save on Config, and lays
-  it out with a two-space indent. Undo reverts it. A parse error shows the
-  position and leaves the text alone; if the text has comments, a dialog
-  warns that they will be removed.
+- **System HTTP proxy for the VPN network, Android 10+ ([task 629](docs/spec/tasks/629-system-http-proxy-android.md), #165).**
+  VPN Settings → Mode → Tunnel options has a new switch, System HTTP proxy,
+  off by default. When it is on, the VPN announces a local HTTP proxy
+  (`127.0.0.1:2081`, or 2082 if the local proxy already uses 2081) on the VPN
+  network. Apps that honor the system proxy (Chrome, Play) connect over TCP
+  through the core without their own DNS and QUIC; in Connections they show
+  up as inbound `sysproxy-in` with the domain name. UDP and other apps keep
+  going through the tunnel. The proxy listens only on loopback and has no
+  password: Android cannot pass one. In Proxy mode the switch is hidden.
 
 ## 🔄 Changed
 
-- **JSON fields run on a native Android editor ([task 624](docs/spec/tasks/624-sora-editor-for-json-fields.md)).**
-  The config editor and every JSON field (node Source and JSON, rules, DNS,
-  the add-server wizard, subscription Source) use a native editor now. The
-  keyboard no longer covers the line with the cursor. The arrows of
-  Unexpected Keyboard and Hacker's Keyboard move the cursor instead of
-  closing the keyboard. The keyboard's Copy takes the whole multi-line
-  selection. The selection menu follows the app language. Fields that take
-  anything highlight WireGuard `.conf` and links as well as JSON. The config
-  editor and the add-server wizard no longer open the keyboard on their own.
-  On a TV the D-pad moves into the field and OK opens the keyboard. The
-  editor works on Android 7 as well.
-- **Pinned block headers instead of folding.**
-  Block folding is gone. Instead, up to three lines of the enclosing blocks
-  stay pinned at the top while you scroll the config, the node JSON and a
-  JSON subscription Source.
-- **Field buttons above the field.**
-  Find, Copy and Format sit in a row above the field, next to its caption,
-  instead of over the text. A field that grows with its text counts wrapped
-  lines, so a one-line compact JSON grows to the field's limit. Wrapped
-  fields no longer shade the whole field as the current line.
-- **The custom DNS rule is edited on a full-screen editor ([task 626](docs/spec/tasks/626-unsaved-changes-everywhere.md)),**
-  like the DNS server, with the JSON body taking the rest of the screen,
-  instead of a bottom sheet.
+- **Unknown traffic is on by default and sends ownerless traffic direct.**
+  This changes default behavior. On a new install the preset is on and its
+  outbound is `direct-out`. A process that binds to the tunnel interface
+  from outside the VPN (`curl --interface tun0` from an excluded app) used
+  to reach the server and learn its address; now such traffic leaves
+  through the direct outbound and learns nothing new. `reject` stays as the
+  strict option. The rule now applies only to the tunnel inbound `tun-in`:
+  in Proxy mode it no longer rejects every connection through the local
+  proxy, and in VPN+Proxy mode connections to the local proxy (including LAN
+  clients) are not judged by it.
+- **Speed Test: Upload only where the server accepts it, Via shows the real route ([task 634](docs/spec/tasks/634-speed-test-upload-honest.md)).**
+  Upload is measured only for servers with an upload address: Cloudflare,
+  Tele2 and four Hostkey servers (Moscow, Frankfurt, Helsinki, New York).
+  Other servers show `n/a` on the gauge and in Session History. Only
+  requests the server answers below 400 count; a server that accepts nothing
+  shows `Failed`. Before, a server without an upload address got the body
+  sent to its download address, and a refusal counted as 5 MB sent. Via
+  now shows the outbound the core reported for the test connection (a node
+  or `direct-out`), `Direct (no VPN)` without VPN, and "Route depends on
+  your rules" before the test or when the core reported nothing. Before, it
+  showed the node selected on the home screen, although the Ru internet
+  segment preset sends Russian test servers to `direct-out`.
 
 ## 🩹 Fixed
 
-- **Every screen with a Save button asks before dropping unsaved edits ([task 626](docs/spec/tasks/626-unsaved-changes-everywhere.md)).**
-  Config, node settings (Tag and Source), the replace-with-group editor,
-  Edit server in a folder, renaming a folder or a subscription, the
-  subscription filter rule editor and the custom DNS rule editor used to
-  drop edits on Back without a word. Now they show the "Unsaved changes"
-  dialog: Save, Discard or Keep. Save works like the screen's Save button:
-  if the save is refused (for example, a parse error on Config), the screen
-  stays open with the message. Changing a field back to what it was is not
-  an edit.
-- **REALITY nodes no longer get the global TLS fragmentation ([task 627](docs/spec/tasks/627-reality-no-global-fragment.md)).**
-  With TLS record fragmentation on, some VLESS + REALITY servers stopped
-  answering: the server does not accept a ClientHello split into several
-  records. The global fragmentation toggles now skip REALITY nodes.
-- **XHTTP keeps the query part of `path` ([task 620](docs/spec/tasks/620-xhttp-path-query-verbatim.md)).**
-  A path like `/?proxyip=…` (Cloudflare Worker relays) lost its `?…` tail on
-  import, so the relay never got its parameter and sites behind Cloudflare
-  failed with 502. The path now goes to the core verbatim, as in Xray, and
-  the core sends the tail as the request query. Applies to share links, Xray
-  JSON and sing-box JSON. Nodes of one server that differ only in the path
-  query are no longer merged into one.
-- **Tailscale Network tab: the exit device is back under Devices ([task 613](docs/spec/tasks/613-wg-peers-tailscale-path-health.md)).**
-  In v2.25.11 the chosen exit node was shown only in the Exit node block,
-  which has no row menu, so it could not be pinged or copied. It is listed
-  under Devices again with its status and path.
-- **Wrapped lines in JSON fields no longer lose a character at the right edge.**
+- **Merge on backup import merges ([task 633](docs/spec/tasks/633-backup-merge-is-merge.md)).**
+  Merge promised to add new items and keep existing ones, but only Server
+  lists sources were merged. Rules, Directions, chains, DNS, Tunnel apps
+  and settings came from the file whole and replaced what the device had.
+  Now Merge adds what the device lacks and changes nothing it has. Rules
+  match by preset, `id` or content; Directions and chains by tag; DNS
+  servers and DNS rules by tag, name or content. Tunnel apps packages are
+  joined. A setting already on the device keeps its value; a missing one
+  comes from the file. VPN toggles take only keys the device does not have.
+  The import dialog shows "new: N, already here: M" under each category,
+  and the result reads "Merged: N added, M already here". Debug API
+  `POST /backup/import?merge=true` merges the same way. Replace all is
+  unchanged.
+- **Config Editor: a config over 1 MB can be replaced from a file ([task 635](docs/spec/tasks/635-config-editor-large-file.md)).**
+  Such a config opens read-only. The screen suggested editing it elsewhere
+  and loading it back, but Load from file only put the text into the
+  editor: Save stayed disabled and Back dropped the text. In read-only mode
+  Load from file and Paste from clipboard now save the text at once, with
+  the same JSON check as Save; a file with broken JSON leaves the config as
+  it was. The hint under the editor says the file is saved right away.
+- **Setting hints match the app ([task 632](docs/spec/tasks/632-settings-hints-mismatch.md)).**
+  Six hints named screens, buttons or behavior that do not exist. Forward
+  sing-box logs points to Debug → Log, filter Core. Aggressive battery
+  saving says sync resumes when the screen turns on, not on unlock.
+  Home-screen shortcut names Connect and Disconnect and says Android 11 and
+  newer. Check for updates describes tapping the message, Later and Ignore.
+  Auto-record Wi-Fi names the ✕ button (Remove from history). Debug API
+  says the token is stored in app settings and left out of Backup by
+  default.
+- **The Statistics hint leads to Allow VPN bypass ([task 630](docs/spec/tasks/630-stats-bypass-hint-path.md)).**
+  The warning icon in the Statistics header pointed to VPN Settings →
+  System, which has no such switch. It now points to VPN Settings → Mode →
+  Tunnel options → Allow VPN bypass and names the apps that leave the tunnel
+  (banking apps, WhatsApp, system services).
+- **JSON on the rule's View tab and in the DNS server preview is highlighted ([task 631](docs/spec/tasks/631-rule-view-tab-json-highlight.md)).**
+  The storage record and the sing-box preview use the same viewer as the
+  other JSON fields: syntax colors, the caption and Copy above the frame.
+- **Selection handles in the JSON editor no longer move the tab or the page ([task 628](docs/spec/tasks/628-editor-selection-handles-gestures.md), #167).**
+  Dragging a selection handle in a short JSON field, such as a node's
+  Source, used to swipe the tab or scroll the page. Now it moves the
+  selection. Without a selection a vertical swipe still scrolls the page. A
+  field that grew past its line limit after opening scrolls its own text.
+
+## 📚 Documentation
+
+- **The user guide is rewritten ([EN](docs/USER_GUIDE.md), [RU](docs/USER_GUIDE.ru.md)).**
+  Both versions follow one structure, paragraph for paragraph, and were
+  checked against the app: names, paths and limits are as on screen. New
+  sections cover VPN Settings, App Settings, Presets, Speed Test, Config
+  Editor, Backup, the node's Dependents and Diagnostics tabs and Replace
+  with a group. Setting up from scratch moved near the start.
+- **Three "Interrupt connections on switch" options (#166).**
+  The guide explains which of the three options reacts to which event: the
+  VPN Settings switch to a node tapped on the home screen, the Direction
+  editor's switch to any change of the Direction's choice, the auto group's
+  switch to the group changing node by itself.
+- **Checking the tun0 leak ([SECURITY.md](docs/SECURITY.md) §2.4).**
+  How to run the `curl --interface tun0` probe from Termux and what each
+  Unknown traffic setting returns.
+- **Editorial policy** (`docs/EDITORIAL_POLICY.ru.md`): internal rules for
+  user-facing texts.
 
 ## 🔧 Under the hood
 
-- Core `v1.14.3-lx.15` (from lx.12); the Java surface of the core is
-  unchanged for the app.
-- Contract 1.1.115 (from 1.1.114).
-- The APK is about 2 MB larger: the native editor and its highlighting
-  grammars.
-- Release candidates go to Google Play Open testing
-  ([task 619](docs/spec/tasks/619-rc-to-play-open-testing.md)).
-- CI: `actions/checkout` v7, `actions/download-artifact` v8.
+- Core `v1.14.3-lx.15` (unchanged).
+- Contract 1.1.115 (unchanged).
 
 </details>
 
@@ -166,132 +150,120 @@ TLS больше не применяется к узлам REALITY. Ядро `v1
 
 ## ⚠️ Прочтите до обновления
 
-- **Ядро `v1.14.3-lx.15` (было `v1.14.2-lx.12`, база sing-box 1.14.3, [docs/KERNEL.md](docs/KERNEL.md)).**
-  - Маскировка AWG `ip=quic` (узлы мастера WARP и любой узел с `ip=quic`):
-    decoy генерируется перед каждым хендшейком — новый QUIC Initial со
-    свежими connection ID при каждом старте, rekey, пробуждении и
-    переподключении. Раньше узел всё время жизни слал один и тот же
-    датаграм с одним DCID.
-  - `ib=chrome` и `ib=firefox` — настоящие QUIC ClientHello браузера,
-    откалиброванные по захватам Chrome 147/155 и Firefox 149. Раньше
-    внутри QUIC Initial лежал TCP ClientHello.
-  - `ip=sip` шлёт только INVITE; `ip=dns` шлёт EDNS без опций.
-  - Значение ядра `ib=chrome-full` экспериментальное и не предлагается: у
-    узла с ним значение снимается с предупреждением.
-  - Авто-группы проверяют узлы каждый `interval`. Раньше узел проверялся
-    раз в два интервала; при стандартных 15 минутах фоновых проверок
-    становится вдвое больше.
-  - Hold until failure уходит и с узла, который отвечает, но вдвое
-    медленнее остальных.
-  - `fingerprint: random` / `randomized` больше не глушат до перезапуска
-    узлы REALITY к Xray v26.9.8 и новее.
-  - Hysteria2, TUIC и WireGuard поверх WARP (MASQUE) или другого
-    IP-туннеля получают размер пакета, который туннель пропускает, —
-    hysteria2 поверх WARP к серверу на IPv6 работает.
-  - MASQUE `vhttp: auto` больше не застревает на h2 до перезапуска после
-    одного быстрого отказа h3.
-  - Соединения uTLS/REALITY держат на 18–25 КБ меньше памяти; gRPC обновлён
-    по критической уязвимости.
-- **У узлов XHTTP с хвостом `?…` в `path` меняется хеш содержимого.**
-  Их конфиг один раз помечается изменившимся; выбор узла и отметки
-  отключения сохраняются.
-- **Редактор конфига больше не переносит длинные строки.**
-  Они прокручиваются вбок; взамен заголовки охватывающих блоков закреплены
-  при прокрутке (см. «Изменено»).
+- **Unknown traffic с Reject переходит на Direct.**
+  Если пресет был включён с outbound `reject`, теперь он использует новое
+  умолчание `direct-out`: бесхозный трафик уходит мимо туннеля, а не
+  отбрасывается. Reject раньше был умолчанием, а умолчание с правилом не
+  сохраняется, поэтому правило следует новому. Чтобы оставить строгий режим,
+  после обновления снова выберите Reject в outbound пресета. Правило с узлом
+  или другим outbound сохраняет его.
 
 ## ✨ Добавлено
 
-- **Секция Masquerade у своего узла WireGuard/AmneziaWG ([задача 623](docs/spec/tasks/623-node-masquerade-section.md)).**
-  На вкладке Settings узла появилась Masquerade: протокол (Off, QUIC, DNS,
-  STUN, SIP), домен и браузер — строками, как Detour server. Выбор
-  сохраняется сразу: `ip`/`id`/`ib` пишутся в источник узла (ссылку,
-  `.conf` или тело sing-box), остальной текст не меняется. При включении
-  QUIC, DNS или SIP подставляется случайный домен из пула; кубик выбирает
-  другой, стрелка показывает весь пул. QUIC требует домен (он становится
-  SNI decoy-ClientHello) и по умолчанию берёт профиль Chrome. Узел, где `I1`
-  задан явно, сохраняет его: секция выключена и объясняет почему.
-  Упакованные ссылки (`awg://` в base64, `vpn://`) и источники Xray не
-  переписываются. Мастер WARP использует те же поля; его подсказка к QUIC
-  больше не называет домен косметикой.
-- **Один интент перепроверяет все Направления ([задача 625](docs/spec/tasks/625-urltest-all-intent.md)).**
-  `com.leadaxe.lxbox.URLTEST_ALL` без extras по очереди запускает URL-тест
-  авто-группы каждого Направления; ядро в каждой переключается на живой
-  узел. Та же команда — `urltest-all` в плагине Tasker/Locale и
-  `POST /action/urltest-all` в Debug API. Удобно повесить на встряхивание в
-  MacroDroid, когда сеть подвисла.
-- **Таймаут соединения для `direct-out` ([задача 616](docs/spec/tasks/616-direct-connect-timeout.md)).**
-  Таймаут соединения прямого выхода теперь настройка: Traffic Processing →
-  Params → Direct connect timeout, пресеты 5s–2m или любая длительность. По
-  умолчанию 15 с вместо 5 с ядра, поэтому приложения в сетях, теряющих
-  SYN-пакеты (например, Т‑Банк через Tele2), больше не обрываются.
-  Прокси-узлы и авто-группы не затронуты.
-- **Кнопка Format у JSON-полей ([задача 624](docs/spec/tasks/624-sora-editor-for-json-fields.md)).**
-  У редактируемых JSON-полей (Source узла, Edit server в папке, JSON
-  DNS-сервера, JSON правила, редактор DNS-правила, JSON-поле мастера) есть
-  кнопка Format: разбирает текст как JSON5, как Save на Config, и
-  раскладывает с отступом в два пробела. Undo отменяет. Ошибка разбора
-  показывает позицию и не трогает текст; если в тексте есть комментарии,
-  диалог предупреждает, что они будут удалены.
+- **Системный HTTP-прокси для VPN-сети, Android 10+ ([задача 629](docs/spec/tasks/629-system-http-proxy-android.md), #165).**
+  В VPN Settings → Mode → Tunnel options появился тумблер System HTTP proxy,
+  по умолчанию выключен. Когда он включён, VPN объявляет на VPN-сети
+  локальный HTTP-прокси (`127.0.0.1:2081`, или 2082, если 2081 уже занят
+  локальным прокси). Приложения, уважающие системный прокси (Chrome, Play),
+  ходят через ядро по TCP, без своего DNS и QUIC; в Connections они видны
+  как inbound `sysproxy-in` с именем домена. UDP и остальные приложения
+  по-прежнему идут через туннель. Прокси слушает только loopback и без
+  пароля: Android не умеет его передать. В режиме Proxy тумблер скрыт.
 
 ## 🔄 Изменено
 
-- **JSON-поля на нативном редакторе Android ([задача 624](docs/spec/tasks/624-sora-editor-for-json-fields.md)).**
-  Редактор конфига и все JSON-поля (Source и JSON узла, правила, DNS, мастер
-  добавления сервера, Source подписки) работают на нативном редакторе.
-  Клавиатура больше не закрывает строку с курсором. Стрелки Unexpected
-  Keyboard и Hacker's Keyboard двигают курсор, а не сворачивают клавиатуру.
-  Copy клавиатуры копирует всё многострочное выделение. Меню выделения — на
-  языке приложения. Поля, принимающие что угодно, подсвечивают, кроме JSON,
-  `.conf` WireGuard и ссылки. Редактор конфига и мастер добавления сервера
-  больше не открывают клавиатуру сами. На ТВ D-pad заходит в поле, OK
-  открывает клавиатуру. Редактор работает и на Android 7.
-- **Закреплённые заголовки блоков вместо свёртки.**
-  Свёртки блоков больше нет. Вместо неё при прокрутке конфига, JSON узла и
-  JSON-Source подписки сверху закреплены до трёх строк охватывающих блоков.
-- **Кнопки поля — над полем.**
-  Поиск, Copy и Format стоят строкой над полем, рядом с его подписью, а не
-  поверх текста. Растущее поле учитывает перенос строк, поэтому
-  однострочный компактный JSON растёт до предела поля. Поле с переносом
-  больше не заливается целиком подсветкой текущей строки.
-- **Своё DNS-правило правится на полноэкранном редакторе ([задача 626](docs/spec/tasks/626-unsaved-changes-everywhere.md)),**
-  как DNS-сервер, с JSON-телом на всю оставшуюся высоту, а не в шторке.
+- **Unknown traffic включён по умолчанию и отправляет бесхозный трафик напрямую.**
+  Это меняет поведение по умолчанию. На новой установке пресет включён, его
+  outbound — `direct-out`. Процесс, который привязывается к интерфейсу
+  туннеля снаружи VPN (`curl --interface tun0` из исключённого приложения),
+  раньше доходил до сервера и узнавал его адрес; теперь такой трафик уходит
+  через прямой выход и ничего нового не узнаёт. `reject` остаётся строгим
+  вариантом. Правило теперь действует только на inbound туннеля `tun-in`: в
+  режиме Proxy оно больше не отвергает все соединения через локальный
+  прокси, а в режиме VPN+Proxy не судит соединения к локальному прокси (в
+  том числе клиентов из LAN).
+- **Speed Test: Upload только там, где сервер его принимает, Via показывает настоящий маршрут ([задача 634](docs/spec/tasks/634-speed-test-upload-honest.md)).**
+  Upload меряется только у серверов с адресом отправки: Cloudflare, Tele2 и
+  четыре сервера Hostkey (Moscow, Frankfurt, Helsinki, New York). У
+  остальных на шкале и в Session History — `n/a`. Засчитываются только
+  запросы, на которые сервер ответил кодом ниже 400; если сервер не принял
+  ничего — `Failed`. Раньше сервер без адреса отправки получал тело на адрес
+  скачивания, а отказ засчитывался как отправленные 5 МБ. Via теперь
+  показывает outbound, который ядро сообщило для соединения теста (узел или
+  `direct-out`), `Direct (no VPN)` без VPN и «Route depends on your rules»
+  до теста или если ядро ничего не сообщило. Раньше там стоял узел с
+  главного экрана, хотя пресет Ru internet segment отправляет российские
+  тестовые серверы в `direct-out`.
 
 ## 🩹 Исправлено
 
-- **Все экраны с кнопкой Save спрашивают, прежде чем потерять правки ([задача 626](docs/spec/tasks/626-unsaved-changes-everywhere.md)).**
-  Config, настройки узла (Tag и Source), редактор свёртки в группу, Edit
-  server в папке, переименование папки и подписки, редактор правила
-  фильтров подписки и редактор своего DNS-правила теряли правки на Back
-  молча. Теперь они показывают диалог «Unsaved changes»: Save, Discard или
-  Keep. Save работает как кнопка Save экрана: если сохранение отклонено
-  (например, ошибка разбора на Config), экран остаётся открытым с
-  сообщением. Вернуть поле к прежнему значению — не правка.
-- **Глобальная фрагментация TLS больше не применяется к узлам REALITY ([задача 627](docs/spec/tasks/627-reality-no-global-fragment.md)).**
-  При включённой фрагментации TLS-записей часть серверов VLESS + REALITY
-  переставала отвечать: сервер не принимает ClientHello, разрезанный на
-  несколько записей. Глобальные переключатели фрагментации теперь
-  пропускают узлы REALITY.
-- **XHTTP сохраняет query в `path` ([задача 620](docs/spec/tasks/620-xhttp-path-query-verbatim.md)).**
-  Путь вида `/?proxyip=…` (релеи Cloudflare Worker) при импорте терял хвост
-  `?…`: релей не получал свой параметр, и сайты за Cloudflare отвечали 502.
-  Теперь путь уходит в ядро дословно, как в Xray, а ядро отправляет хвост
-  как query запроса. Касается ссылок, Xray JSON и sing-box JSON. Узлы одного
-  сервера, различающиеся только query пути, больше не схлопываются в один.
-- **Вкладка Network у Tailscale: выходное устройство снова в Devices ([задача 613](docs/spec/tasks/613-wg-peers-tailscale-path-health.md)).**
-  В v2.25.11 выбранный exit node показывался только в блоке Exit node, где
-  нет меню строки, поэтому его нельзя было пинговать или скопировать. Теперь
-  он снова в списке Devices со статусом и путём.
-- **Перенесённые строки в JSON-полях больше не теряют символ у правого края.**
+- **Merge при импорте бэкапа сливает ([задача 633](docs/spec/tasks/633-backup-merge-is-merge.md)).**
+  Merge обещал добавить новое и сохранить имеющееся, но сливались только
+  источники Server lists. Правила, Направления, цепочки, DNS, Tunnel apps и
+  настройки приходили из файла целиком и заменяли то, что было на
+  устройстве. Теперь Merge добавляет то, чего на устройстве нет, и не меняет
+  то, что есть. Правила сопоставляются по пресету, `id` или содержимому;
+  Направления и цепочки — по тегу; DNS-серверы и DNS-правила — по тегу,
+  имени или содержимому. Пакеты Tunnel apps объединяются. Настройка, которая
+  уже есть на устройстве, сохраняет своё значение; отсутствующая берётся из
+  файла. Из VPN toggles берутся только ключи, которых на устройстве нет. Окно
+  импорта показывает «new: N, already here: M» под каждой категорией, итог —
+  «Merged: N added, M already here». Debug API
+  `POST /backup/import?merge=true` сливает так же. Replace all не изменился.
+- **Редактор конфига: конфиг больше 1 МБ можно заменить из файла ([задача 635](docs/spec/tasks/635-config-editor-large-file.md)).**
+  Такой конфиг открывается только для чтения. Экран советовал править его
+  вне устройства и загрузить обратно, но Load from file только клал текст в
+  редактор: Save оставалась неактивной, а Back терял текст. В режиме только
+  для чтения Load from file и Paste from clipboard теперь сразу сохраняют
+  текст, с той же проверкой JSON, что Save; файл с битым JSON оставляет
+  конфиг прежним. Подсказка под редактором говорит, что файл сохраняется
+  сразу.
+- **Подсказки настроек соответствуют приложению ([задача 632](docs/spec/tasks/632-settings-hints-mismatch.md)).**
+  Шесть подсказок называли экраны, кнопки или поведение, которых нет.
+  Forward sing-box logs ведёт в Debug → Log, фильтр Core. Aggressive battery
+  saving говорит, что синхронизация возобновляется при включении экрана, а
+  не при разблокировке. Home-screen shortcut называет Connect и Disconnect и
+  указывает Android 11 и новее. Check for updates описывает тап по
+  сообщению, Later и Ignore. Auto-record Wi-Fi называет кнопку ✕ (Remove
+  from history). Debug API говорит, что токен хранится в настройках
+  приложения и по умолчанию не входит в Backup.
+- **Подсказка в Statistics ведёт к Allow VPN bypass ([задача 630](docs/spec/tasks/630-stats-bypass-hint-path.md)).**
+  Значок-предупреждение в шапке Statistics отправлял в VPN Settings →
+  System, где такого тумблера нет. Теперь он ведёт в VPN Settings → Mode →
+  Tunnel options → Allow VPN bypass и называет приложения, которые уходят
+  мимо туннеля (банковские приложения, WhatsApp, системные службы).
+- **JSON на вкладке View правила и в превью DNS-сервера подсвечен ([задача 631](docs/spec/tasks/631-rule-view-tab-json-highlight.md)).**
+  Запись хранилища и превью sing-box показываются тем же просмотрщиком, что
+  остальные JSON-поля: подсветка синтаксиса, подпись и Copy над рамкой.
+- **Ручки выделения в JSON-редакторе больше не двигают вкладку и страницу ([задача 628](docs/spec/tasks/628-editor-selection-handles-gestures.md), #167).**
+  Ручка выделения в коротком JSON-поле, например в Source узла, листала
+  вкладку или прокручивала страницу. Теперь она двигает выделение. Без
+  выделения вертикальный свайп, как и раньше, прокручивает страницу. Поле,
+  которое после открытия выросло за предел строк, прокручивает свой текст.
+
+## 📚 Документация
+
+- **Руководство пользователя переписано ([EN](docs/USER_GUIDE.md), [RU](docs/USER_GUIDE.ru.md)).**
+  Обе версии идут по одной структуре, абзац в абзац, и сверены с
+  приложением: названия, пути и ограничения — как на экране. Новые разделы:
+  VPN Settings, App Settings, Presets, Speed Test, Config Editor, Backup,
+  вкладки узла Dependents и Diagnostics, Replace with a group. «Порядок
+  настройки с нуля» поднят к началу.
+- **Три настройки «Interrupt connections on switch» (#166).**
+  Руководство объясняет, какая из трёх настроек отвечает на какое событие:
+  тумблер в VPN Settings — на тап по узлу на главном экране, тумблер в
+  редакторе Направления — на любую смену выбора Направления, тумблер
+  авто-группы — на смену узла самой группой.
+- **Проверка утечки через tun0 ([SECURITY.ru.md](docs/SECURITY.ru.md) §2.4).**
+  Как запустить проверку `curl --interface tun0` из Termux и что она
+  возвращает при каждом варианте Unknown traffic.
+- **Редакционная политика** (`docs/EDITORIAL_POLICY.ru.md`): внутренние
+  правила для текстов, которые читает пользователь.
 
 ## 🔧 Под капотом
 
-- Ядро `v1.14.3-lx.15` (было lx.12); Java-поверхность ядра для приложения
-  не изменилась.
-- Контракт 1.1.115 (было 1.1.114).
-- APK вырос примерно на 2 МБ: нативный редактор и грамматики подсветки.
-- Релиз-кандидаты уходят в открытое тестирование Google Play
-  ([задача 619](docs/spec/tasks/619-rc-to-play-open-testing.md)).
-- CI: `actions/checkout` v7, `actions/download-artifact` v8.
+- Ядро `v1.14.3-lx.15` (без изменений).
+- Контракт 1.1.115 (без изменений).
 
 </details>
 
@@ -300,7 +272,7 @@ TLS больше не применяется к узлам REALITY. Ядро `v1
 ## Install / Установка
 
 ```bash
-adb install -r LxBox-v2.25.12-arm64-v8a.apk
+adb install -r LxBox-v2.25.13-arm64-v8a.apk
 ```
 
 Без uninstall! Поверх существующей установки. Настройки и подписки сохранятся.
@@ -310,4 +282,4 @@ are preserved.
 
 ---
 
-Previous release / Предыдущий релиз: [v2.25.11](docs/releases/v2.25.11.md).
+Previous release / Предыдущий релиз: [v2.25.12](docs/releases/v2.25.12.md).
