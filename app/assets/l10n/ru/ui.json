@@ -967,6 +967,9 @@
   "Android restricts background activity to save battery. Without an exception, the VPN tunnel may be killed when the screen turns off — your connection drops until you reopen L×Box.\n\nOpen system settings and choose \"Unrestricted\" / \"Not optimized\".": {
     "value": "Android ограничивает фоновую активность ради экономии батареи. Без исключения туннель VPN может быть закрыт при выключении экрана — связь пропадёт, пока вы снова не откроете L×Box.\n\nОткройте системные настройки и выберите «Без ограничений» / «Не оптимизировать»."
   },
+  "Announce a local HTTP proxy to the VPN network (Android 10+).": {
+    "value": "Объявить локальный HTTP-прокси в сети VPN (Android 10+)."
+  },
   "Another VPN app is currently running. Switch to L×Box?\n\nTo see which app it is, open VPN settings — the active VPN is marked as connected.": {
     "value": "Сейчас работает VPN другого приложения. Переключиться на L×Box?\n\nЧтобы узнать, какое именно, откройте настройки VPN — активный VPN отмечен как подключённый."
   },
@@ -1050,6 +1053,9 @@
   },
   "Apps may use ConnectivityManager to bypass tun.": {
     "value": "Приложения могут обходить туннель через ConnectivityManager."
+  },
+  "Apps that honor the system proxy (Chrome, Play) connect over TCP via the core; no QUIC.": {
+    "value": "Приложения, учитывающие системный прокси (Chrome, Play), подключаются по TCP через ядро; без QUIC."
   },
   "At least two positions are needed: the core rejects a single-hop chain.": {
     "value": "Нужно минимум две позиции: цепочку из одного хопа ядро отвергает."
@@ -1197,6 +1203,9 @@
   },
   "Source has unsaved changes.": {
     "value": "В источнике есть несохранённая правка."
+  },
+  "System HTTP proxy": {
+    "value": "Системный HTTP-прокси"
   },
   "The STUN decoy carries no domain.": {
     "value": "Приманка STUN домена не несёт."

@@ -118,6 +118,10 @@ class CustomRuleEditController extends ChangeNotifier {
   /// Читается async в `_init` через [SettingsStorage.getVpnMode].
   bool _hasMixedInbound = false;
 
+  /// §629 — есть ли `sysproxy-in` (системный HTTP-прокси VPN-сети): тумблер
+  /// включён и есть TUN. Тот же источник, что [_hasMixedInbound].
+  bool _hasSystemProxy = false;
+
   /// §264 — глобальные vars для превью пресета в View-табе (expandPreset
   /// globalVars): `@vpn_mode`/`@resolve_strategy` в правилах пресета
   /// (traffic-processing) резолвятся из глобали, иначе `#if @vpn_mode` не
@@ -160,6 +164,8 @@ class CustomRuleEditController extends ChangeNotifier {
   List<({String tag, String label})> get inboundChoices => [
         (tag: 'tun-in', label: 'TUN — system interface'),
         if (_hasMixedInbound) (tag: 'mixed-in', label: 'Proxy interface'),
+        if (_hasSystemProxy)
+          (tag: 'sysproxy-in', label: 'System proxy interface'),
       ];
 
   CustomRuleKind get kind => _kind;
@@ -343,6 +349,7 @@ class CustomRuleEditController extends ChangeNotifier {
     final template = await TemplateLoader.load();
     if (_disposed) return;
     _hasMixedInbound = cfg.hasMixed;
+    _hasSystemProxy = cfg.systemProxyEnabled && cfg.hasTun;
 
     // §265 — резолвим ref-vars пресета: для каждой `{"ref": name}` берём
     // определение глобали из template + значение (userVars или её default).

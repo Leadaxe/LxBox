@@ -71,6 +71,9 @@
   "Add an IPv6 address to the tunnel. Off by default — turn on only if your network has working IPv6. Turning on sets resolution to prefer IPv4, turning off forces IPv4-only — you can change the strategy in DNS Settings.": {
     "value": "Добавить туннелю IPv6-адрес. По умолчанию выключено — включайте, только если в вашей сети работает IPv6. Включение переводит резолв в режим «предпочитать IPv4», выключение — в «только IPv4»; стратегию можно поменять в настройках DNS."
   },
+  "Announce a local HTTP proxy to the VPN network (Android 10+).": {
+    "value": "Объявить локальный HTTP-прокси в сети VPN (Android 10+)."
+  },
   "Apple": {
     "value": "Apple"
   },
@@ -202,6 +205,9 @@
   },
   "GeoIP IP-range fallback": {
     "value": "GeoIP-диапазоны (резерв)"
+  },
+  "Loopback port of the system HTTP proxy inbound.": {
+    "value": "Loopback-порт входящего подключения системного HTTP-прокси."
   },
   "Russian apps by package": {
     "value": "Российские приложения по пакету"
@@ -463,6 +469,12 @@
   },
   "System DNS": {
     "value": "Системный DNS"
+  },
+  "System HTTP proxy": {
+    "value": "Системный HTTP-прокси"
+  },
+  "System proxy port": {
+    "value": "Порт системного прокси"
   },
   "TLS Fragment": {
     "value": "Фрагментация TLS"

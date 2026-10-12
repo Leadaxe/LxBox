@@ -997,6 +997,24 @@
           "wizard_ui": "hidden",
           "title": "Require auth",
           "tooltip": "Whether the local proxy requires username/password. Forced on for non-loopback listen."
+        },
+        {
+          "name": "sys_proxy",
+          "type": "bool",
+          "default_value": "false",
+          "required": true,
+          "wizard_ui": "hidden",
+          "title": "System HTTP proxy",
+          "tooltip": "Announce a local HTTP proxy to the VPN network (Android 10+)."
+        },
+        {
+          "name": "sys_proxy_port",
+          "type": "int",
+          "default_value": "2081",
+          "required": true,
+          "wizard_ui": "hidden",
+          "title": "System proxy port",
+          "tooltip": "Loopback port of the system HTTP proxy inbound."
         }
       ]
     },
@@ -1105,7 +1123,21 @@
             "mtu": "@tun_mtu",
             "auto_route": "@tun_auto_route",
             "strict_route": "@tun_strict_route",
-            "stack": "@tun_stack"
+            "stack": "@tun_stack",
+            "#if sys_proxy": {
+              "#and": [
+                "@sys_proxy"
+              ],
+              "#value": {
+                "platform": {
+                  "http_proxy": {
+                    "enabled": true,
+                    "server": "127.0.0.1",
+                    "server_port": "@sys_proxy_port"
+                  }
+                }
+              }
+            }
           }
         }
       },
@@ -1139,6 +1171,19 @@
                 ]
               }
             }
+          }
+        }
+      },
+      {
+        "#if": {
+          "#and": [
+            "@sys_proxy"
+          ],
+          "#value": {
+            "type": "http",
+            "tag": "sysproxy-in",
+            "listen": "127.0.0.1",
+            "listen_port": "@sys_proxy_port"
           }
         }
       }

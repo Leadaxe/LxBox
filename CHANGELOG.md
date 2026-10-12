@@ -8,6 +8,16 @@
 
 ## [Unreleased]
 
+### Added
+
+- **System HTTP proxy for the VPN network, Android 10+
+  ([task 629](docs/spec/tasks/629-system-http-proxy-android.md), #165).**
+  New switch in VPN Settings → Mode → Tunnel options, off by default. When on,
+  the VPN announces a local HTTP proxy (`127.0.0.1:2081`, or 2082 if the local
+  proxy already uses 2081); apps that honor the system proxy (Chrome, Play)
+  connect over TCP through the core and show up as inbound `sysproxy-in`.
+  UDP and other apps keep going through TUN.
+
 ### Fixed
 
 - **Selection handles in the JSON editor work again

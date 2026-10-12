@@ -778,6 +778,9 @@
   "Android restricts background activity to save battery. Without an exception, the VPN tunnel may be killed when the screen turns off — your connection drops until you reopen L×Box.\n\nOpen system settings and choose \"Unrestricted\" / \"Not optimized\".": {
     "value": "Android 为省电会限制后台活动。若未加入例外，熄屏后 VPN 隧道可能被终止——在重新打开 L×Box 之前连接会中断。\n\n请打开系统设置并选择「无限制」/「不优化」。"
   },
+  "Announce a local HTTP proxy to the VPN network (Android 10+).": {
+    "value": "向 VPN 网络声明本地 HTTP 代理（Android 10+）。"
+  },
   "Another VPN app is currently running. Switch to L×Box?\n\nTo see which app it is, open VPN settings — the active VPN is marked as connected.": {
     "value": "另一个 VPN 应用正在运行。是否切换到 L×Box？\n\n想查看是哪个应用，请打开 VPN 设置——处于连接状态的即为当前 VPN。"
   },
@@ -861,6 +864,9 @@
   },
   "Apps may use ConnectivityManager to bypass tun.": {
     "value": "应用可通过 ConnectivityManager 绕过 tun。"
+  },
+  "Apps that honor the system proxy (Chrome, Play) connect over TCP via the core; no QUIC.": {
+    "value": "遵循系统代理的应用（Chrome、Play）经由内核通过 TCP 连接；不使用 QUIC。"
   },
   "At least two positions are needed: the core rejects a single-hop chain.": {
     "value": "至少需要两个位置：内核不接受单跳链路。"
@@ -1008,6 +1014,9 @@
   },
   "Source has unsaved changes.": {
     "value": "来源有未保存的修改。"
+  },
+  "System HTTP proxy": {
+    "value": "系统 HTTP 代理"
   },
   "The STUN decoy carries no domain.": {
     "value": "STUN 诱饵不携带域名。"

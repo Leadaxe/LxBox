@@ -218,6 +218,12 @@ class _VpnModeTabState extends State<VpnModeTab>
     _commit();
   }
 
+  // §629 — системный HTTP-прокси VPN-сети: поле `_cfg`, staging как у прочих.
+  void _toggleSystemProxy(bool enable) {
+    setState(() => _cfg = _cfg.copyWith(systemProxyEnabled: enable));
+    _commit();
+  }
+
   void _applyPort(String raw) {
     final port = int.tryParse(raw);
     if (port == null || port < 1024 || port > 65535) {
@@ -400,6 +406,18 @@ class _VpnModeTabState extends State<VpnModeTab>
             secondary: const Icon(Icons.alt_route),
             value: _allowBypass,
             onChanged: _tunTogglesLoaded ? _toggleAllowBypass : null,
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(getLocalText.s("System HTTP proxy")),
+            subtitle: Text(
+              _cfg.systemProxyEnabled
+                  ? getLocalText.s("Apps that honor the system proxy (Chrome, Play) connect over TCP via the core; no QUIC.")
+                  : getLocalText.s("Announce a local HTTP proxy to the VPN network (Android 10+)."),
+            ),
+            secondary: const Icon(Icons.http),
+            value: _cfg.systemProxyEnabled,
+            onChanged: _toggleSystemProxy,
           ),
         ],
 

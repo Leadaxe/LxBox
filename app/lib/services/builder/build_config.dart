@@ -319,8 +319,15 @@ Future<BuildResult> _buildConfig({
         (vpnMode.effectiveAuth && vpnMode.proxyPassword.isNotEmpty)
             ? 'true'
             : 'false';
+    // §629 — системный HTTP-прокси VPN-сети: без TUN объявлять нечего.
+    vars['sys_proxy'] =
+        (vpnMode.systemProxyEnabled && vpnMode.mode != 'proxy')
+            ? 'true'
+            : 'false';
+    vars['sys_proxy_port'] = '${vpnMode.effectiveSystemProxyPort}';
   } else {
     vars['vpn_mode'] = 'vpn'; // degrade к tun-only (иначе пустой inbounds[])
+    vars['sys_proxy'] = 'false';
   }
 
   final resolve = makeResolver(vars, byName);

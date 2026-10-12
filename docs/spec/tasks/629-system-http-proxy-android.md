@@ -144,6 +144,39 @@ allowlist tun по образцу остальных ключей tun, без р
 с `inbound: tun-in` на него не действуют. В `custom_rule.dart:148` упомянуть
 третий тег в комментарии.
 
+### Реализация (сделано)
+
+- Хранилище: [vpn_mode.dart](../../../app/lib/services/settings_storage/vpn_mode.dart)
+  — чтение `system_proxy_enabled` (:49, только `true` → вкл), поле и
+  константа `systemProxyPort = 2081` (:98, :159), геттер
+  `effectiveSystemProxyPort` (:161), `copyWith`/`toJson` (:188, :209).
+  Конструктор принимает поле необязательным (`= false`) — существующие вызовы
+  не меняются. `==`/`hashCode` у класса нет — не добавлялись.
+- Debug API: `PUT /settings/vpn_mode` принимает `system_proxy_enabled`
+  ([settings.dart:257](../../../app/lib/services/debug/handlers/settings.dart)),
+  `GET` отдаёт его через `toJson`.
+- Билдер: `vars['sys_proxy']`/`vars['sys_proxy_port']`
+  ([build_config.dart:323-330](../../../app/lib/services/builder/build_config.dart)).
+- Шаблон: переменные `sys_proxy` (bool) и `sys_proxy_port` (int, тип даёт
+  число) в секции `vpn-mode` (wizard_template.json:1002-1011); условный
+  `platform.http_proxy` у `tun-in` под ключом `"#if sys_proxy"` (движок
+  допускает суффикс к `#if`, `if_engine.dart` `isIfKey`) — :1127-1136;
+  инбаунд `sysproxy-in` после `mixed-in` — :1180-1186. Гард сборки ключ
+  `platform` у tun не снимает (проверено тестом), allowlist не трогался.
+  Переводы title/tooltip новых переменных — `assets/l10n/{ru,zh}/template.json`.
+- UI: тумблер после «Allow VPN bypass» в Tunnel options
+  ([vpn_mode_tab.dart:412-421](../../../app/lib/screens/vpn_mode_tab.dart),
+  обработчик :223); блок уже гейтится `_cfg.hasTun`. Строки —
+  `assets/l10n/{ru,zh}/ui.json`.
+- Правила: `sysproxy-in` в `inboundChoices`
+  ([custom_rule_edit/edit_controller.dart:168](../../../app/lib/screens/custom_rule_edit/edit_controller.dart),
+  условие :352 — `systemProxyEnabled && hasTun`); комментарий в
+  `custom_rule.dart` у `inbounds`.
+- Тест: `app/test/builder/system_proxy_test.dart` (настоящий шаблон через
+  `buildConfig`), зелёный. Golden хранилища не менялись: `vpn_mode` в
+  roundtrip-фикстурах отсутствует, при выключенном тумблере конфиг прежний.
+- Эмулятор не проверялся.
+
 ## Границы
 
 - Только TCP, только HTTP: UDP (QUIC, DNS, игры, WebRTC) и приложения,

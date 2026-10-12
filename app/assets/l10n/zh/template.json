@@ -71,6 +71,9 @@
  "Add an IPv6 address to the tunnel. Off by default — turn on only if your network has working IPv6. Turning on sets resolution to prefer IPv4, turning off forces IPv4-only — you can change the strategy in DNS Settings.": {
   "value": "为隧道添加 IPv6 地址。默认关闭——只有当你的网络 IPv6 可用时才开启。开启会把解析改为「优先 IPv4」，关闭则强制仅 IPv4；策略可在 DNS 设置中更改。"
  },
+ "Announce a local HTTP proxy to the VPN network (Android 10+).": {
+  "value": "向 VPN 网络声明本地 HTTP 代理（Android 10+）。"
+ },
  "Apple": {
   "value": "Apple"
  },
@@ -202,6 +205,9 @@
  },
  "GeoIP IP-range fallback": {
   "value": "GeoIP IP 段兜底"
+ },
+ "Loopback port of the system HTTP proxy inbound.": {
+  "value": "系统 HTTP 代理入站的回环端口。"
  },
  "Russian apps by package": {
   "value": "按包名匹配俄罗斯应用"
@@ -463,6 +469,12 @@
  },
  "System DNS": {
   "value": "系统 DNS"
+ },
+ "System HTTP proxy": {
+  "value": "系统 HTTP 代理"
+ },
+ "System proxy port": {
+  "value": "系统代理端口"
  },
  "TLS Fragment": {
   "value": "TLS 分片"

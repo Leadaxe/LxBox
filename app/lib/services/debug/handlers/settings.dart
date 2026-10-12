@@ -227,7 +227,7 @@ Future<DebugResponse> _getVpnMode() async {
 
 /// `PUT /settings/vpn_mode` body — частичное обновление (copyWith поверх
 /// текущего): `mode`/`proxy_protocol`/`proxy_port`/`proxy_listen`/`proxy_auth`/
-/// `proxy_user`/`proxy_pass`. Config-significant (меняет inbounds) → `?rebuild=true`.
+/// `proxy_user`/`proxy_pass`/`system_proxy_enabled` (§629). Config-significant (меняет inbounds) → `?rebuild=true`.
 Future<DebugResponse> _putVpnMode(DebugRequest req, DebugContext ctx) async {
   final body = req.jsonBodyAsMap();
   final cur = await SettingsStorage.getVpnMode();
@@ -254,6 +254,7 @@ Future<DebugResponse> _putVpnMode(DebugRequest req, DebugContext ctx) async {
     proxyAuthEnabled: fieldBool(body, 'proxy_auth'),
     proxyUsername: fieldString(body, 'proxy_user'),
     proxyPassword: fieldString(body, 'proxy_pass'),
+    systemProxyEnabled: fieldBool(body, 'system_proxy_enabled'),
   );
   // §293 — через фасад: несёт 3 инварианта (password-gen / auth-force /
   // setNativeHasTun-зеркало), которые раньше Debug пропускал → PUT mode=proxy
