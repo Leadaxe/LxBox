@@ -19,6 +19,7 @@ import '../models/parser_config.dart';
 import '../models/server_list.dart';
 import '../vpn/box_vpn_client.dart';
 import 'app_log.dart';
+import 'backup_merge.dart';
 import 'config_dirty_check.dart';
 import 'l10n/app_language_reconcile.dart';
 import 'record_vars.dart';
@@ -1100,9 +1101,20 @@ class SettingsStorage {
     bool merge = false,
     bool Function(String key)? keepTopLevel,
     bool Function(String varKey)? keepVar,
+    void Function(StorageMergeStats stats)? onMerged,
   }) =>
       _replaceRaw(snapshot,
-          merge: merge, keepTopLevel: keepTopLevel, keepVar: keepVar);
+          merge: merge,
+          keepTopLevel: keepTopLevel,
+          keepVar: keepVar,
+          onMerged: onMerged);
+
+  /// §633 — итог Merge снимка [snapshot] с текущим документом без записи
+  /// (превью импорта): тот же фильтр входа и то же слияние, что у
+  /// [replaceRaw] с `merge: true`.
+  static Future<StorageMergeStats> previewMergeRaw(
+          Map<String, dynamic> snapshot) =>
+      _previewMergeRaw(snapshot);
 
   // ---------------------------------------------------------------------------
   // Tunnel apps — OS-level split-tunneling (§046)
@@ -1177,9 +1189,15 @@ class SettingsStorage {
   /// в одном месте). backup_service и Debug-handler делегируют сюда.
   static Future<Map<String, dynamic>> exportNativePrefsBackup() =>
       _exportToBackupMap();
+  ///
+  /// §633 — [onlyMissing]: Merge — применяются только ключи, которых нет в
+  /// зеркале `native_prefs` получателя; прочие отдаются в [onKept].
   static Future<int> applyNativePrefsBackup(Map<String, dynamic> data,
-          {void Function(String, Object)? onError}) =>
-      _applyFromBackupMap(data, onError: onError);
+          {void Function(String, Object)? onError,
+          bool onlyMissing = false,
+          void Function(String key)? onKept}) =>
+      _applyFromBackupMap(data,
+          onError: onError, onlyMissing: onlyMissing, onKept: onKept);
 
   /// §192 — зеркалить has_tun (производное от vpn_mode) в native. Гейтит
   /// VpnService.prepare(). Зовётся при смене режима в Mode-вкладке.

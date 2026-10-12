@@ -443,6 +443,8 @@ A flat `Map<String, String>` (values are stringified on read). It serves both **
 
 A full replace (`replaceRaw` with `merge=false`: backup restore in Replace mode, `POST /backup/import`) keeps some device keys from the current storage when the incoming `vars` lack them: `debug_enabled` / `debug_token` / `debug_port` (§413, `SettingsStorage.debugApiVarKeys`) and the one-shot startup prompt flags `wizard_battery_v1`, `wizard_addtile_v1`, `wizard_update_check_v1`, `notif_perm_prompted_v1` (§447, `SettingsStorage.startupPromptVarKeys`). None of the four startup prompt flags is in the import allowlist, so a file never brings them; import (both modes) skips them silently instead of reporting them as unknown keys (§600), while export still writes them.
 
+A merge (`replaceRaw` with `merge=true`: backup restore in Merge mode, `POST /backup/import?merge=true`) adds what the receiver lacks and keeps what it has (§633, `lib/services/backup_merge.dart`): `vars` and every other scalar key keep the receiver's value, a key the receiver lacks comes from the file; `rules`, `directions`, `dns.servers`, `dns.rules` and `sources` are merged by record identity (preset rule — `ref`; other rules and DNS rules — `id` or content; directions, DNS servers, chains — tag; other sources — `id`), new records are appended, new user rules get `num` past the receiver's last user rule; a preset rule is on when it is on on either side; `tun_apps` joins the packages and keeps the receiver's mode unless it is `off`. A record whose tag is taken by a receiver's chain or direction is skipped.
+
 `removeVar(k)` is not the same as `setVar(k, '')` — an empty string can be a legitimate value, while an absent key falls back to the default.
 
 ---
@@ -1513,8 +1515,9 @@ After the migration the set of directions lives in `directions[]` and is edited 
   (`migrateStorageDoc`): on the file in `_load()` and on the import boundaries (internal
   backup, Debug API `/backup/import`) before `replaceRaw`, `channels` /
   `channels_migrated` become `directions` / `directions_migrated` when the new names are
-  absent (the new name wins; a legacy pair next to a list sets the guard). The merge-upsert
-  then collides on the single `directions` name and the archive wins over live data. The
+  absent (the new name wins; a legacy pair next to a list sets the guard). A merge then
+  works on the single `directions` name: live directions stay, the archive's new tags
+  are appended (§633; before it the archive replaced the live list). The
   legacy pair is **not** in any allowlist. `migrateDirectionsIfNeeded` has three
   branches: `directions` present → no-op; `directions_migrated == true` with no list →
   migrated-and-empty, stamp the marker but do **not** re-seed; otherwise → seed from the

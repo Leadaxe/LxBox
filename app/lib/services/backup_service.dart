@@ -7,6 +7,7 @@ import '../models/custom_rule.dart';
 import '../models/server_list.dart';
 import '../models/source_chain.dart';
 import 'app_log.dart';
+import 'backup_merge.dart';
 import 'json_clone.dart';
 import 'record_vars.dart';
 import 'settings_storage.dart';
@@ -257,6 +258,8 @@ class BackupApplyResult {
     this.appSettingsApplied = 0,
     this.debugConfigApplied = 0,
     this.vpnSettingsApplied = 0,
+    this.merged = false,
+    this.mergeKept = 0,
     this.droppedKeys = const [],
     this.errors = const [],
   });
@@ -266,6 +269,20 @@ class BackupApplyResult {
   final int appSettingsApplied;
   final int debugConfigApplied;
   final int vpnSettingsApplied;
+
+  /// §633 — импорт шёл в режиме Merge. Тогда `*Applied` — сколько записей и
+  /// ключей добавлено (у получателя их не было), а [mergeKept] — сколько
+  /// пропущено как уже существующие (осталось значение получателя).
+  final bool merged;
+  final int mergeKept;
+
+  /// Сколько применено во всех категориях (для Merge — добавлено).
+  int get totalApplied =>
+      serverListsApplied +
+      routingApplied +
+      appSettingsApplied +
+      debugConfigApplied +
+      vpnSettingsApplied;
 
   /// §159 — ключи, отброшенные allowlist'ом при импорте (неизвестные top-level
   /// или `vars.<key>`). Пусто для «чистого» нашего бэкапа; непусто для
@@ -386,7 +403,10 @@ class BackupService {
   }
 
   /// Apply import согласно [include] (юзер мог снять галочки в preview-dialog'е).
-  /// `merge=true` — top-level merge (vars upsert, источники append-by-id);
+  /// `merge=true` — слияние (§633): добавляется то, чего у получателя нет, его
+  /// записи и значения остаются (источники по `id`, цепочки по тегу; правила,
+  /// Направления, DNS, Tunnel apps — по идентичности записи; скаляры и
+  /// `vars` — значение получателя, см. [mergeStorageDoc]);
   /// `merge=false` — replace (§599): отмеченная категория заменяется целиком
   /// содержимым файла, неотмеченная не трогается.
   Future<BackupApplyResult> applyImport(
@@ -401,6 +421,7 @@ class BackupService {
     var appS = 0;
     var debug = 0;
     var vpn = 0;
+    var kept = 0;
 
     final raw = contents.storage;
     if (raw != null) {
@@ -415,10 +436,10 @@ class BackupService {
             '${migration.warnings.join('; ')}');
       }
 
-      // merge: источники дописываются по `id` на моделях, цепочки заменяют
-      // часть цепочек — в документ для replaceRaw `sources` не идёт, иначе
-      // upsert затёр бы весь список (§439: цепочки и прочие источники — один
-      // ключ).
+      // merge: источники дописываются по `id`, цепочки — по тегу, на моделях
+      // (счётчики и ошибки битых записей); в документ для replaceRaw
+      // `sources` не идёт (§439: цепочки и прочие источники — один ключ).
+      Map<BackupCategory, MergeCount>? mergeCounts;
       final mergeServerLists =
           merge && include.contains(BackupCategory.serverLists);
       // §524 — цепочки идут той же галкой, что остальные записи списка.
@@ -437,6 +458,8 @@ class BackupService {
             if (ids.add(list.id)) {
               existing.add(list);
               serverLists++;
+            } else {
+              kept++;
             }
           }
           if (serverLists > 0) await SettingsStorage.saveServerLists(existing);
@@ -451,11 +474,27 @@ class BackupService {
         for (final e in contents._chains.corrupt) {
           errors.add('Chain parse: $e');
         }
-        // Цепочки архива заменяют цепочки хранения целиком; архив без цепочек
-        // текущие не трогает.
+        // §633 — цепочки дописываются по тегу: цепочка получателя с тем же
+        // тегом остаётся его; тег, занятый его Направлением, пропускается
+        // (два outbound с одним тегом сломали бы конфиг).
         if (contents._chains.items.isNotEmpty) {
           try {
-            await SettingsStorage.setChains(contents._chains.items);
+            final chains = await SettingsStorage.getChains();
+            final taken = {
+              for (final c in chains) c.tag,
+              for (final d in await SettingsStorage.getDirections()) d.tag,
+            };
+            var added = 0;
+            for (final c in contents._chains.items) {
+              if (taken.add(c.tag)) {
+                chains.add(c);
+                added++;
+              } else {
+                kept++;
+              }
+            }
+            if (added > 0) await SettingsStorage.setChains(chains);
+            serverLists += added;
           } catch (e) {
             errors.add('Chains: $e');
           }
@@ -476,6 +515,7 @@ class BackupService {
             return cat != null && !include.contains(cat);
           },
           keepVar: (vk) => !include.contains(categoryOfVarKey(vk)),
+          onMerged: (stats) => mergeCounts = mergeCountsByCategory(stats),
         );
         droppedKeys.addAll(dropped);
         if (dropped.isNotEmpty) {
@@ -502,9 +542,20 @@ class BackupService {
         errors.add('Directions migration: $e');
       }
 
-      routing = contents.countFor(BackupCategory.routing);
-      appS = contents.countFor(BackupCategory.appSettings);
-      debug = contents.countFor(BackupCategory.debugConfig);
+      if (merge) {
+        // §633 — для Merge счётчик категории — сколько добавлено.
+        final m = mergeCounts ?? const <BackupCategory, MergeCount>{};
+        routing = m[BackupCategory.routing]?.added ?? 0;
+        appS = m[BackupCategory.appSettings]?.added ?? 0;
+        debug = m[BackupCategory.debugConfig]?.added ?? 0;
+        for (final c in m.values) {
+          kept += c.kept;
+        }
+      } else {
+        routing = contents.countFor(BackupCategory.routing);
+        appS = contents.countFor(BackupCategory.appSettings);
+        debug = contents.countFor(BackupCategory.debugConfig);
+      }
       if (!include.contains(BackupCategory.routing)) routing = 0;
       if (!include.contains(BackupCategory.appSettings)) appS = 0;
       if (!include.contains(BackupCategory.debugConfig)) debug = 0;
@@ -512,7 +563,12 @@ class BackupService {
 
     if (include.contains(BackupCategory.vpnSettings) &&
         contents.vpnSettings != null) {
-      vpn = await _applyVpnSettings(contents.vpnSettings!, errors);
+      vpn = await SettingsStorage.applyNativePrefsBackup(
+        contents.vpnSettings!,
+        onError: (key, e) => errors.add('vpn_settings.$key: $e'),
+        onlyMissing: merge,
+        onKept: (_) => kept++,
+      );
     }
 
     return BackupApplyResult(
@@ -521,6 +577,8 @@ class BackupService {
       appSettingsApplied: appS,
       debugConfigApplied: debug,
       vpnSettingsApplied: vpn,
+      merged: merge,
+      mergeKept: merge ? kept : 0,
       droppedKeys: droppedKeys,
       errors: errors,
     );
@@ -532,10 +590,95 @@ class BackupService {
   Future<Map<String, dynamic>> _readVpnSettings() =>
       SettingsStorage.exportNativePrefsBackup();
 
-  Future<int> _applyVpnSettings(
-          Map<String, dynamic> data, List<String> errors) =>
-      SettingsStorage.applyNativePrefsBackup(data,
-          onError: (key, e) => errors.add('vpn_settings.$key: $e'));
+  /// §633 — превью Merge по категориям файла: сколько записей и ключей
+  /// добавится и сколько уже есть у получателя. Считает то же слияние, что
+  /// [applyImport] с `merge: true`, на копии — без записи.
+  Future<Map<BackupCategory, MergeCount>> previewMerge(
+      BackupContents contents) async {
+    final out = <BackupCategory, MergeCount>{};
+    final raw = contents.storage;
+    if (raw != null) {
+      final all = contents.availableCategories();
+      final filtered = _filterStorage(raw, include: all)..remove(kSourcesKey);
+      final stats = await SettingsStorage.previewMergeRaw(filtered);
+      out.addAll(mergeCountsByCategory(stats));
+
+      final servers = MergeCount();
+      final ids = {
+        for (final l in await SettingsStorage.getServerLists()) l.id,
+      };
+      for (final l in contents._serverLists.items) {
+        if (ids.add(l.id)) {
+          servers.added++;
+        } else {
+          servers.kept++;
+        }
+      }
+      final taken = {
+        for (final c in await SettingsStorage.getChains()) c.tag,
+        for (final d in await SettingsStorage.getDirections()) d.tag,
+      };
+      for (final c in contents._chains.items) {
+        if (taken.add(c.tag)) {
+          servers.added++;
+        } else {
+          servers.kept++;
+        }
+      }
+      out[BackupCategory.serverLists] = servers;
+    }
+    final vpnFile = contents.vpnSettings;
+    if (vpnFile != null) {
+      final mine =
+          (await SettingsStorage.exportRaw())[SettingsStorage.nativePrefsKey];
+      final vpnCount = MergeCount();
+      for (final k in vpnFile.keys) {
+        if (mine is Map && mine.containsKey(k)) {
+          vpnCount.kept++;
+        } else {
+          vpnCount.added++;
+        }
+      }
+      out[BackupCategory.vpnSettings] = vpnCount;
+    }
+    return out;
+  }
+
+  /// §633 — итог слияния документа по категориям бэкапа: списки Routing
+  /// (правила, Направления, DNS, Tunnel apps) и скалярные ключи — по
+  /// [categoryOfTopLevelKey] / [categoryOfVarKey].
+  @visibleForTesting
+  static Map<BackupCategory, MergeCount> mergeCountsByCategory(
+      StorageMergeStats stats) {
+    final out = {for (final c in BackupCategory.values) c: MergeCount()};
+    void addTo(BackupCategory cat, MergeCount c) {
+      out[cat]!.added += c.added;
+      out[cat]!.kept += c.kept;
+    }
+
+    addTo(BackupCategory.serverLists, stats.sources);
+    for (final c in [
+      stats.rules,
+      stats.directions,
+      stats.dnsServers,
+      stats.dnsRules,
+      stats.tunApps,
+    ]) {
+      addTo(BackupCategory.routing, c);
+    }
+    BackupCategory? catOf(String key) => key.startsWith('vars.')
+        ? categoryOfVarKey(key.substring('vars.'.length))
+        : categoryOfTopLevelKey(key);
+    for (final k in stats.addedKeys) {
+      final cat = catOf(k);
+      if (cat != null) out[cat]!.added++;
+    }
+    for (final k in stats.keptKeys) {
+      final cat = catOf(k);
+      if (cat != null) out[cat]!.kept++;
+    }
+    return out;
+  }
 
   /// Suggested filename для export'а: `lxbox-backup-v{appver}-{YYYYMMDD-HHMM}.json`.
   ///

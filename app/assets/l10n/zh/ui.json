@@ -697,8 +697,8 @@
   "Added: %s": {
     "value": "已添加：%s"
   },
-  "Adds new items, keeps existing.": {
-    "value": "新增条目，保留原有内容。"
+  "Adds what you don't have, keeps everything you do.": {
+    "value": "添加您没有的内容，保留您已有的一切。"
   },
   "Adds padding traffic so the WireGuard handshake carries no fixed size signature. Enable if the plain tunnel does not connect.": {
     "value": "添加填充流量，使 WireGuard 握手中不含固定长度特征。若普通隧道连不上可启用。"
@@ -2746,6 +2746,9 @@
   "Merge with existing (recommended)": {
     "value": "与现有内容合并（推荐）"
   },
+  "Merged: %1$d added, %2$d already here": {
+    "value": "已合并：新增 %1$d，已有 %2$d"
+  },
   "Metadata is missing or unreadable.": {
     "value": "元数据缺失或无法读取。"
   },
@@ -2838,6 +2841,9 @@
   },
   "Never updated": {
     "value": "从未更新"
+  },
+  "new: %1$d, already here: %2$d": {
+    "value": "新增：%1$d，已有：%2$d"
   },
   "New auto node": {
     "value": "新建自动节点"

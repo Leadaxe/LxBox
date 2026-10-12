@@ -2462,15 +2462,12 @@ The mode sits below the list:
 
 | Mode | What it does |
 |---|---|
-| **Merge with existing (recommended)** (default) | Servers from the file join yours; an entry with the same identifier stays yours. App settings from the file overwrite the matching ones, and the rest stay. Chains from the file replace yours if the file has them. |
+| **Merge with existing (recommended)** (default) | Adds what you don't have and keeps everything you do. Servers, chains, rules, directions, DNS servers and DNS rules from the file join yours; an entry you already have stays yours. New rules go after your own, so yours keep priority. A preset is on if it is on in either place. Tunnel apps: the app lists are joined, your mode stays unless it is Off. A setting you already have keeps your value; one you don't have comes from the file. Under each category the window shows `new: 3, already here: 12`. |
 | **Replace all (destructive)** | The file's contents replace the ticked categories entirely; unticked ones stay untouched. Before applying, the app asks Replace all data?; the replacement cannot be undone. Debug API settings missing from the file stay yours. |
 
-> ⚠️ The Routing category replaces rules, directions, DNS and Tunnel apps
-> with the file's version in both modes; Merge does not combine them. To
-> keep your rules, untick Routing in the Import backup window.
-
 After import the app shows the summary: `Imported: 2 server lists,
-routing (18 rules), 40 app settings`. The app skips keys this version does
+routing (18 rules), 40 app settings`; after Merge — `Merged: 5 added,
+40 already here`. The app skips keys this version does
 not know and counts them in the same summary: `3 unknown keys skipped`.
 Language and automation apply at once. The other screens show the old
 settings until a restart: the **Restart now** button in the summary closes
