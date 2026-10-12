@@ -114,6 +114,14 @@ So the rule isolates exactly the traffic that enters the tunnel without attribut
 2. **Tunnel hygiene.** Only legitimate apps' traffic goes through the proxy; everything unattributed is brought under control (drop or direct).
 3. **Different axis than §2.2.** A legitimate app with a valid UID and destination `1.2.3.4` is caught by `0.0.0.0/0`, but **not** by "Unknown traffic" — the sets barely overlap.
 
+**How to check it on the device.** Exclude Termux from the VPN (per-app mode), then run from Termux:
+
+```bash
+curl --interface tun0 https://ifconfig.me/ip
+```
+
+With the "Unknown traffic" rule enabled the command times out: the route layer rejects the connection before it leaves the tunnel. With the rule disabled the response is the server address — that is the leak. The same probe, the Android kernel mechanics behind it (`SO_BINDTODEVICE` on Linux 5.7+) and a survey of how other clients handle `INVALID_UID` are in a two-part series on Habr: [part 1, the overview](https://habr.com/ru/articles/1088980/) and [part 2, the fix walkthrough](https://habr.com/ru/articles/1089082/). The series' key point matches ours: an unknown owner must mean reject, in every per-app mode.
+
 ### 2.5 Layers: route engine vs connection journal
 
 An important diagnostic caveat. Two independent layers touch ownerless traffic: the **route layer** (the routing engine sees the packet and its empty attribution and enforces `block_unknown`) and the **connection journal** (the Live/Profiler stream fed by the libbox CommandClient; there is no Clash API `/connections` — it was removed in the §122 CommandClient migration).
