@@ -105,8 +105,8 @@ So the rule isolates exactly the traffic that enters the tunnel without attribut
 
 | Value | Behavior |
 |-------|----------|
-| `reject` (default) | drop — ownerless traffic isn't let out at all |
-| `direct` | send it outside the VPN (direct egress, bypassing the tunnel) |
+| `direct` (default, preset on by default) | send it outside the VPN (direct egress, bypassing the tunnel): the process learns nothing it did not already know, and an attribution failure costs the user no connectivity |
+| `reject` | drop — ownerless traffic isn't let out at all. Strict mode: an attribution failure (system UIDs, a `find_process` miss) means no network for that flow |
 
 **Why it's needed:**
 
@@ -120,7 +120,7 @@ So the rule isolates exactly the traffic that enters the tunnel without attribut
 curl --interface tun0 https://ifconfig.me/ip
 ```
 
-With the "Unknown traffic" rule enabled the command times out: the route layer rejects the connection before it leaves the tunnel. With the rule disabled the response is the server address — that is the leak. The same probe, the Android kernel mechanics behind it (`SO_BINDTODEVICE` on Linux 5.7+) and a survey of how other clients handle `INVALID_UID` are in a two-part series on Habr: [part 1, the overview](https://habr.com/ru/articles/1088980/) and [part 2, the fix walkthrough](https://habr.com/ru/articles/1089082/). The series' key point matches ours: an unknown owner must mean reject, in every per-app mode.
+With the "Unknown traffic" rule on and `direct` (the default) the response is your own ISP address: the route layer sends the ownerless connection out past the tunnel. With `reject` the command times out. With the rule disabled the response is the server address — that is the leak. The same probe, the Android kernel mechanics behind it (`SO_BINDTODEVICE` on Linux 5.7+) and a survey of how other clients handle `INVALID_UID` are in a two-part series on Habr: [part 1, the overview](https://habr.com/ru/articles/1088980/) and [part 2, the fix walkthrough](https://habr.com/ru/articles/1089082/). The series insists that an unknown owner must mean reject in every per-app mode; we expose that as the `reject` value, and default to `direct` so that an attribution failure degrades to a direct connection rather than to no network.
 
 ### 2.5 Layers: route engine vs connection journal
 

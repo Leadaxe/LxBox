@@ -1961,8 +1961,8 @@
       "preset_id": "unknown-traffic",
       "ui": {
         "label": "Unknown traffic",
-        "description": "Reject traffic in the tunnel not attributed to any installed app (background/foreign processes). Send it direct to bypass VPN instead.",
-        "default": false,
+        "description": "Traffic in the tunnel not attributed to any installed app (background/foreign processes) goes direct, bypassing the VPN, so a process that binds to the tunnel cannot learn the server address. Pick Reject to drop it instead.",
+        "default": true,
         "num": 1150,
         "isSortable": true
       },
@@ -1970,10 +1970,10 @@
         {
           "name": "outbound",
           "type": "outbound",
-          "default_value": "reject",
+          "default_value": "direct-out",
           "required": true,
           "title": "outbound",
-          "tooltip": "Reject = drop. Or pick Direct to send it outside the VPN."
+          "tooltip": "Direct = send it outside the VPN. Or pick Reject to drop it (strict mode: any attribution failure means no network)."
         }
       ],
       "rule_set": [

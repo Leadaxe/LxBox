@@ -20,8 +20,12 @@
 
 ### Fixed
 
-- **"Unknown traffic" preset is pinned to the TUN inbound.** The rule now
-  carries `inbound: ["tun-in"]`. In pure Proxy mode the app is not the active
+- **"Unknown traffic" preset is on by default and sends ownerless traffic
+  direct.** A process that binds to the tunnel interface from outside the VPN
+  (`curl --interface tun0` from an excluded app) used to reach the server and
+  learn its address; now such traffic leaves through the direct outbound and
+  learns nothing new. `reject` stays available as the strict option. The rule
+  also carries `inbound: ["tun-in"]`. In pure Proxy mode the app is not the active
   VPN, `getConnectionOwnerUid` attributes nothing, and the old rule rejected
   every connection through the local proxy; now it stays inert there. In
   VPN+Proxy mode connections arriving at `mixed-in` (including LAN clients)
