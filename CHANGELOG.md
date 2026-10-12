@@ -59,6 +59,12 @@
 
 ### Fixed
 
+- **REALITY nodes no longer get the global TLS fragmentation
+  ([task 627](docs/spec/tasks/627-reality-no-global-fragment.md)).**
+  With TLS record fragmentation on, some VLESS + REALITY servers stopped
+  answering: the server does not accept a ClientHello split into several
+  records. The global fragmentation toggles now skip REALITY nodes.
+
 - **Config asks before dropping unsaved edits
   ([task 624](docs/spec/tasks/624-sora-editor-for-json-fields.md)).**
   Back on the Config screen with an unsaved edit (typed, pasted or loaded

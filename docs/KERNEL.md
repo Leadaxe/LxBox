@@ -339,7 +339,9 @@ automatic `record_fragment` the core turns on under a `detour` — so the global
 fragmentation toggle looked enabled and did nothing on exactly the nodes that
 need it most. Nothing changed on the app side: the `applyTlsFragment` post-step
 (`post_steps/tls_transforms.dart`) never excluded REALITY nodes, so the toggle
-simply started taking effect on them. **SPEC 089**: a per-node
+simply started taking effect on them. That broke REALITY servers that refuse a
+ClientHello split across records, so since task 627 the post-step skips nodes
+with `tls.reality.enabled` ([627](spec/tasks/627-reality-no-global-fragment.md)). **SPEC 089**: a per-node
 `tls.reality.key_share` — `hybrid` demands the `X25519MLKEM768` key share,
 `classical` strips it out of `key_share` and `supported_groups`, absent means
 whatever the fingerprint carries. The wire format, the AAR tag sets and the Go
