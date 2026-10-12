@@ -682,9 +682,9 @@ preset that needs a downloadable rule list (`.srs`) turned off and shows
 `Added "…" — tap ☁ to download, then enable`. Turn the rule on with its
 switch: the switch downloads the list and turns the rule on once it loads.
 
-A fresh install has five presets in Rules, turned on: Traffic Processing, Ru
-internet segment, BitTorrent, Tailscale networks and VoWiFi (carrier
-calling). The app does not add a deleted preset back; you can return it
+A fresh install has six presets in Rules, turned on: Traffic Processing, Ru
+internet segment, BitTorrent, Tailscale networks, VoWiFi (carrier calling)
+and Unknown traffic. The app does not add a deleted preset back; you can return it
 from the catalog.
 
 Catalog presets, in the order the tab shows them:
@@ -699,7 +699,7 @@ Catalog presets, in the order the tab shows them:
 | BitTorrent | Sends traffic detected as BitTorrent to the chosen exit. | In Rules, direct |
 | Tailscale networks | Sends each Tailscale network's traffic through its Tailscale node; that node's DNS resolves the network's names. Works when the servers include a Tailscale node. | In Rules |
 | Private IPs | Routes local network addresses: router, NAS, printer. Direct gives access to your own network; a direction gives access to a remote network over the VPN. | No |
-| Unknown traffic | Rejects tunnel traffic that belongs to no installed app: system background processes. The direct exit lets it out past the VPN. | No |
+| Unknown traffic | Sends tunnel traffic that belongs to no installed app (system background processes) out directly, past the VPN, so a process bound to the tunnel cannot learn the server address. The Reject option drops it instead. | Yes |
 | VoWiFi (carrier calling) | Lets carrier Wi-Fi calls out past the VPN: the domains `pub.3gppnetwork.org` and UDP ports 500 and 4500. Through the VPN, voice gets delay, and the carrier sees the registration come from a foreign address. | In Rules, direct |
 | Google push (FCM) | Lets only Google push notifications out past the VPN: ports 5228–5230 and the FCM hosts. Notifications arrive with the screen off, and the Google Play region does not change. | No |
 
