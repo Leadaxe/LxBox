@@ -3,7 +3,7 @@
 | Поле | Значение |
 |------|----------|
 | Тип | Функция |
-| Статус | В работе |
+| Статус | D (done), проверено на эмуляторе; выйдет в следующем релизе |
 | Дата | 2026-10-12 |
 | Источник | GitHub issue #165 (уточнение закрытого #84) |
 | Связанные | §119 (VPN mode: tun-in / mixed-in), §049 F17 (Kotlin-связка `setHttpProxy`), §120 (типизированные `@var` и `#if` в шаблоне) |
@@ -204,6 +204,29 @@ allowlist tun по образцу остальных ключей tun, без р
   соединения через `sysproxy-in` с доменом из `CONNECT`, QUIC/DNS от Chrome
   пропадают; с выключенным — как раньше. На телефон владельца не ставить.
 - CI — Sonnet-дежурный, один затронутый тестовый файл локально, не каталог.
+
+### Результат проверки (12.10.2026, эмулятор LxBox_test, 2.25.12-dev.26)
+
+- Хвосты после исполнителя, закрыты в develop: golden roundtrip хранилища
+  (`$.vpn_mode.system_proxy_enabled: <absent> → false`, ddd65dd2) и
+  объявление `sys_proxy`/`sys_proxy_port` в `SettingsStorage.configVarKeys`
+  (9567442d). CI на 9567442d зелёный.
+- База: один inbound `tun-in`, `platform: null`, у VPN-сети в
+  `dumpsys connectivity` поля HttpProxy нет.
+- Включение через Debug API + `reload-vpn`: в running config
+  `{"type":"http","tag":"sysproxy-in","listen":"127.0.0.1","listen_port":2081}`
+  без `users`, у `tun-in` `platform.http_proxy{enabled:true, server_port:2081}`
+  (число); у VPN-сети `HttpProxy: [127.0.0.1] 2081`, глобальный
+  `http_proxy` пуст — прокси объявлен на сети, не глобально.
+- Chrome (`www.google.com`, `play.google.com`): в логах ядра
+  `inbound/http[sysproxy-in]: inbound connection to www.google.com:443`,
+  30 строк `sysproxy-in` и ни одной `tun-in`; профайлер — 64 TCP-события
+  с доменами, 0 UDP, QUIC нет. Ошибок в logcat нет.
+- Выключение: running config побайтно равен базе, HttpProxy у сети пропал.
+- UI: тумблер в Tunnel options под «Allow VPN bypass», выключен; в режиме
+  Proxy блока нет.
+- Наблюдение: у Chrome в профайлере 16 `dnsResolve` (`dns_stream`) — ядро
+  резолвит домен из `CONNECT` для `direct-out`, это не DNS Chrome.
 
 ## Нерешённое
 
