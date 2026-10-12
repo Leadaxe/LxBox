@@ -26,6 +26,9 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // §624 — sora-editor (language-textmate) зовёт java.time.Duration,
+        // которого нет до API 26; minSdk 24 — без desugaring падает на 7.x.
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlin {
@@ -130,6 +133,9 @@ android {
                 } else {
                     signingConfigs.getByName("debug")
                 }
+            // §624 — sora-editor: jcodings/joni/tm4e ищут классы по имени,
+            // без keep-правил release падает при открытии редактора.
+            proguardFiles("proguard-sora.pro")
         }
     }
 
@@ -147,6 +153,13 @@ dependencies {
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+    // §624 — нативный редактор JSON-полей (sora-editor, LGPL-2.1, Maven Central).
+    // Версия пинится точно; при бампе — проверить R8 (proguard-sora.pro).
+    implementation(platform("io.github.Rosemoe.sora-editor:bom:0.23.6"))
+    implementation("io.github.Rosemoe.sora-editor:editor")
+    implementation("io.github.Rosemoe.sora-editor:language-textmate")
+    // java.time и пр. для API < 26 (Google Maven; см. compileOptions).
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 }
 
 flutter {

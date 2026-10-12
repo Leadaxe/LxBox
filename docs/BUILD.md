@@ -60,6 +60,14 @@ the channel is determined at runtime from the installer. See
 
 Requires `git` and a JDK (for Gradle); the script downloads the core `app/android/app/libs/libbox.aar` itself.
 
+**Native Maven dependencies.** Besides the core, Gradle pulls the native code
+editor from Maven Central: `io.github.Rosemoe.sora-editor` (BOM `0.23.6`,
+`editor` + `language-textmate`; LGPL-2.1) with its transitive tm4e, joni and
+jcodings — pure JVM artifacts, no prebuilt `.so`. The release build runs R8 with
+the keep rules from `app/android/app/proguard-sora.pro`: the TextMate engine
+loads classes by name, and without them a release APK crashes on opening any
+JSON field (§624). Bumping sora-editor = re-check a release APK on a device.
+
 ### Git worktree bootstrap
 
 Parallel agents often work in a separate `git worktree`. A fresh worktree has no

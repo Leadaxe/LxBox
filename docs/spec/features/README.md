@@ -72,6 +72,7 @@ a screen. One task may be listed as a revision of several functions.
 | [028-TRAFFIC_PROFILER](028-TRAFFIC_PROFILER/FEATURE.md) | Traffic profiler — per-app connection log, attribution, filters and views, DNS trace | 044 | ✅ 2026-09-29 |
 | [029-LOCALIZATION](029-LOCALIZATION/FEATURE.md) | Localization — languages, the English-as-key model, translation workflow, native and core strings | 279 | ✅ 2026-09-29 |
 | [030-TAILSCALE](030-TAILSCALE/FEATURE.md) | Tailscale — the phone as a node of your tailnet: node, device identity and state, tailnet DNS and routes, Network tab | 435 (former feature) | ✅ 2026-09-29 |
+| [031-DEVICE_TRANSFER](031-DEVICE_TRANSFER/FEATURE.md) | Device transfer — send settings from a phone to a TV over the local network: QR code with a one-time key, encrypted backup, restore preview on the receiver | — | ✍ 2026-10-09 |
 
 ## Process
 

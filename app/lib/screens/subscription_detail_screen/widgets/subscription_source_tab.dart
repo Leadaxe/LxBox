@@ -208,9 +208,9 @@ class SubscriptionSourceTab extends StatelessWidget {
             ),
           ),
         ),
-        // §614 — тело в редакторе только для чтения: номера строк, свёртка,
-        // поиск; подсветка JSON — когда тело и есть JSON (base64 и списки
-        // ссылок — без подсветки). Редактор построчный, огромные тела ему
+        // §614/§624 — тело в редакторе только для чтения: номера строк,
+        // липкие заголовки; подсветка по виду тела (JSON, список ссылок —
+        // построчно как URI; base64 — без подсветки). Редактор построчный, огромные тела ему
         // по силам (§333); высота фиксированная — прокрутка внутри.
         if (rawSource.isNotEmpty)
           SliverPadding(
@@ -223,17 +223,13 @@ class SubscriptionSourceTab extends StatelessWidget {
                     .clamp(320.0, double.infinity),
                 fontSize: 11,
                 showLineNumbers: true,
-                language: _looksLikeJson(rawSource) ? LxCodeLanguage.json : null,
+                language: detectCodeLanguage(rawSource),
+                stickyHeaders: true,
               ),
             ),
           ),
       ],
     );
-  }
-
-  static bool _looksLikeJson(String text) {
-    final t = text.trimLeft();
-    return t.startsWith('{') || t.startsWith('[');
   }
 
   Widget _headerRow(String name, String value, ThemeData theme) {

@@ -225,18 +225,16 @@ class _NodeInspectScreenState extends State<NodeInspectScreen> {
         ),
       );
     }
-    return Stack(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-          child: LxJsonView(text: text),
-        ),
-        Positioned(
-          top: 4,
-          right: 4,
-          child: IconButton(
+    // §624 — Copy в строке кнопок над рамкой, не поверх текста.
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+      child: LxJsonView(
+        text: text,
+        actions: [
+          IconButton(
             icon: const Icon(Icons.copy, size: 18),
             tooltip: getLocalText.s("Copy"),
+            visualDensity: VisualDensity.compact,
             onPressed: () {
               Clipboard.setData(ClipboardData(text: text));
               ScaffoldMessenger.of(context).showSnackBar(
@@ -244,8 +242,8 @@ class _NodeInspectScreenState extends State<NodeInspectScreen> {
               );
             },
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

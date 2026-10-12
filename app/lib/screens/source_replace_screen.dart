@@ -4,6 +4,8 @@
 /// Направления (`direction_edit_screen.dart`).
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../models/direction.dart';
@@ -11,6 +13,7 @@ import '../models/server_list.dart';
 import '../models/source_replace.dart';
 import '../services/tag_resolver.dart';
 import '../services/l10n/locale_controller.dart';
+import '../services/ui_helpers.dart';
 import '../widgets/safe_bottom.dart';
 import '../widgets/urltest_idle_hint.dart';
 
@@ -188,13 +191,37 @@ class _SourceReplaceScreenState extends State<SourceReplaceScreen> {
     );
   }
 
+  /// §626 — Back (системный, жест, стрелка AppBar) с правками: общий
+  /// диалог Discard / Keep / Save (§219). Save — как кнопка экрана.
+  Future<void> _handleBack() async {
+    final snap = _snapshot();
+    if (snap == widget.initial) {
+      Navigator.pop<SourceReplaceResult>(context);
+      return;
+    }
+    final action = await showUnsavedChangesDialog(context); // §219
+    if (!mounted) return;
+    if (action == 'save') {
+      Navigator.pop<SourceReplaceResult>(context, (replace: snap));
+    } else if (action == 'discard') {
+      Navigator.pop<SourceReplaceResult>(context);
+    }
+    // 'keep' / null (dismiss) — остаёмся.
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final snap = _snapshot();
     final dirty = snap != widget.initial;
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        unawaited(_handleBack());
+      },
+      child: Scaffold(
       appBar: AppBar(
         title: Text(getLocalText.s("Replace with a group")),
         actions: [
@@ -267,6 +294,7 @@ class _SourceReplaceScreenState extends State<SourceReplaceScreen> {
             if (_mode != ReplaceMode.manual) ..._autoFields(cs),
           ],
         ],
+      ),
       ),
     );
   }

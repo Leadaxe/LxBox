@@ -5,6 +5,60 @@ code — about the **logic** and the order in which to set things up.
 
 > Русская версия: [USER_GUIDE.ru.md](USER_GUIDE.ru.md)
 
+## Contents
+
+- [What is what](#what-is-what)
+- [The big picture: how traffic flows through L×Box](#the-big-picture-how-traffic-flows-through-lbox)
+- [Operating mode — tunnel or local proxy](#operating-mode--tunnel-or-local-proxy)
+- [1. Allow-list (Tunnel apps) — who gets in](#1-allow-list-tunnel-apps--who-gets-in)
+  - [Allow VPN bypass — for apps that conflict with a VPN](#allow-vpn-bypass--for-apps-that-conflict-with-a-vpn)
+- [Servers, subscriptions and folders — where exits come from](#servers-subscriptions-and-folders--where-exits-come-from)
+  - [Standalone server](#standalone-server)
+  - [Subscription](#subscription)
+  - [Folder](#folder)
+  - [Auto nodes — one entry, a pool inside](#auto-nodes--one-entry-a-pool-inside)
+  - [How all of this reaches directions](#how-all-of-this-reaches-directions)
+  - [The subscription screen — what's inside](#the-subscription-screen--whats-inside)
+- [2. Directions — exit paths](#2-directions--exit-paths)
+- [3. Rules — how traffic is sorted out](#3-rules--how-traffic-is-sorted-out)
+  - [Pairing a rule with DNS](#pairing-a-rule-with-dns)
+  - [When the form isn't enough](#when-the-form-isnt-enough)
+- [4. DNS — how names get resolved](#4-dns--how-names-get-resolved)
+- [Detour — "going through" (server chains)](#detour--going-through-server-chains)
+  - [Where it is configured](#where-it-is-configured)
+  - [Detour chains](#detour-chains)
+  - [Detour directions](#detour-directions)
+  - [Limitations](#limitations)
+  - [How to verify a detour works](#how-to-verify-a-detour-works)
+  - [A dead hop is visible immediately](#a-dead-hop-is-visible-immediately)
+- [Chains of hops — a route you build yourself](#chains-of-hops--a-route-you-build-yourself)
+  - [Chain or detour?](#chain-or-detour)
+  - [Positions](#positions)
+  - [The rules a chain must obey](#the-rules-a-chain-must-obey)
+  - [Seeing where a chain breaks](#seeing-where-a-chain-breaks)
+  - [What to watch out for in practice](#what-to-watch-out-for-in-practice)
+- [IPv6 — when to enable it (usually: don't)](#ipv6--when-to-enable-it-usually-dont)
+- [Common misunderstandings](#common-misunderstandings)
+- [When something goes wrong — where to look](#when-something-goes-wrong--where-to-look)
+- [Setting up from scratch](#setting-up-from-scratch)
+- [Recipes](#recipes)
+  - [Share the VPN with other devices over Wi-Fi](#share-the-vpn-with-other-devices-over-wi-fi)
+  - [Pairing with ByeDPI (and other local proxies)](#pairing-with-byedpi-and-other-local-proxies)
+  - [Double hop: the last server never sees your IP](#double-hop-the-last-server-never-sees-your-ip)
+- [Get WARP — a server without a subscription](#get-warp--a-server-without-a-subscription)
+- [The server list — search and labels](#the-server-list--search-and-labels)
+- [Regular expressions (regex)](#regular-expressions-regex)
+  - [Negation is the `!` toggle, not a character in the pattern](#negation-is-the--toggle-not-a-character-in-the-pattern)
+  - [What to write in the pattern](#what-to-write-in-the-pattern)
+  - [Examples by task](#examples-by-task)
+  - [Negation inside the pattern](#negation-inside-the-pattern)
+  - [What to know about the behaviour](#what-to-know-about-the-behaviour)
+- [Quick connect](#quick-connect)
+- [Automation — turning the VPN on by events](#automation--turning-the-vpn-on-by-events)
+- [App language](#app-language)
+- [Workspaces — named sets of settings](#workspaces--named-sets-of-settings)
+- [Backup — moving your settings](#backup--moving-your-settings)
+
 ---
 
 ## What is what
@@ -173,6 +227,17 @@ alike but behave differently:
 A single server. You added it by pasting a link (`vless://…`, `vmess://…`,
 `wg://…`, a QR code and so on) or from a file. There is nothing to update — it's
 a static entry. Fits the "I just have one config from a friend/provider" case.
+
+A WireGuard or AmneziaWG server of your own has a **Masquerade** section on the
+Settings tab of its screen: before the handshake the client sends decoy
+packets that look like QUIC, DNS, STUN or SIP. For QUIC the domain is required
+— it becomes the SNI of the decoy ClientHello; for DNS and SIP the domain is
+visible on the wire, and left empty, the core makes one up. As with the detour
+server, a choice is saved at once: the `ip`/`id`/`ib` keys go into the
+server's source (link, `.conf` or JSON), the rest of the text stays as it
+was. A plain WireGuard server drops the decoys, so
+masquerade does not break it; the node is then labelled AmneziaWG. If the
+source sets `I1` itself, the section is off: `I1` takes priority.
 
 ### Subscription
 
@@ -669,6 +734,12 @@ the usual mistake:
 | You are saying | "this route goes through these servers, in this order" | "this server goes through that one" |
 | Where you edit it | in the chain's own editor | on the server / subscription / folder |
 | Reach for it when | the route itself is the thing you're building | a single server needs a relay in front of it |
+| The last server must never be reached directly | **no** — its positions stay standalone servers, and a direction with an empty filter offers them on their own | **yes** — the relay belongs to the server itself, no direct path to it remains |
+
+The last row is where the two really differ. If the point of the route is that
+the final server never sees your IP (WARP behind Proton, for example), use a
+detour — see the recipe
+[Double hop: the last server never sees your IP](#double-hop-the-last-server-never-sees-your-ip).
 
 ### Positions
 
@@ -1014,6 +1085,38 @@ Caveats:
 - **Any** local proxy on the phone connects the same way (another service's own
   SOCKS5/HTTP client): a `socks://` or `socks5://` link to its address, plus the
   deny-list so the traffic isn't looped.
+
+### Double hop: the last server never sees your IP
+
+The task: `you → server A → server B → internet`, and B must never be reached
+from your own IP. The usual case: Proton, Mullvad or your own VPS as A, WARP
+as B — Cloudflare should see A's exit IP, never yours.
+
+The relay goes **on B itself**. Every server in the pool is an exit in its own
+right: a chain or a direction adds a route to it but doesn't remove the direct
+one. A chain `[A, B]` leaves B a standalone server, and a direction with an
+empty filter offers it on its own — picking it by hand, the auto twin's test,
+a ping in the server list all reach B directly. A detour changes B itself, so
+the config has no direct path to it at all.
+
+1. **Detour on B.** Servers → tap B → **Settings** → **Detour** → pick A →
+   Save. If A is missing from the picker, B is AmneziaWG and A is plain
+   WireGuard: the core can't carry that pair (see Detour → Limitations). For
+   WARP, re-create it in **Get WARP** with **Add Amnezia obfuscation** off —
+   inside A's tunnel the obfuscation gives nothing anyway.
+2. **The direction holds only B.** Routing → Directions → `vpn-1` → **Node filter** — a
+   pattern that matches B's name and nothing else (`WARP`, for example; see
+   [Regular expressions](#regular-expressions-regex)). Turn **Include auto
+   (urltest)** off: with one server there is nothing to choose. Without the
+   filter A lands in the direction as well — not a leak, but traffic may leave
+   from A instead of B.
+3. **Default traffic = VPN.** DNS servers whose outbound is `vpn-1` take the
+   same route.
+4. **Check.** VPN on → **Statistics** → any connection → the **Detour** line
+   lists both A and B.
+
+If a chain `[A, B]` already exists, delete it: it adds nothing to the detour
+and keeps the standalone B in sight.
 
 ---
 

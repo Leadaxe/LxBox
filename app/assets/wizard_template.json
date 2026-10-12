@@ -593,6 +593,26 @@
           "wizard_ui": "edit",
           "title": "Auto-detect interface",
           "tooltip": "Automatically detect the default network interface"
+        },
+        {
+          "name": "direct_connect_timeout",
+          "type": "text",
+          "options_open": true,
+          "wizard_ui": "edit",
+          "title": "Direct connect timeout",
+          "tooltip": "How long the core waits for a direct TCP connect before giving up. sing-box default is 5s; mobile networks that lose SYN packets need more. Android itself retries for about 2 minutes, apps usually wait 10-30s. Format: 15s, 1m, 1m30s.",
+          "default_value": "15s",
+          "required": true,
+          "options": [
+            "5s",
+            "15s",
+            "20s",
+            "25s",
+            "30s",
+            "45s",
+            "1m",
+            "2m"
+          ]
         }
       ]
     },
@@ -1127,7 +1147,8 @@
     "outbounds": [
       {
         "type": "direct",
-        "tag": "direct-out"
+        "tag": "direct-out",
+        "connect_timeout": "@direct_connect_timeout"
       },
       {
         "type": "block",

@@ -52,8 +52,14 @@ while typing.
 ## Rules and invariants
 
 - Detour and Skip presets are written immediately on selection; Tag and
-  Source — only with the Save button in the header. There is no confirmation
-  when leaving with an unsaved Tag.
+  Source — only with the Save button in the header.
+- **Leaving with unsaved edits.** An edit is a Tag field or Source text that
+  differs from what is saved; changing it back is not an edit. Back (system,
+  gesture, AppBar arrow) with an edit shows the shared "Unsaved changes"
+  dialog: Save — same as the Save button (if the save is refused — empty
+  Source, the core rejects the node — the screen stays open with the
+  message); Discard — leave without saving; Keep or dismiss — stay. No edit or
+  still loading — leave without the dialog.
 - Save re-saves the Source text with the tag from the Tag field: a link —
   into the fragment, JSON — into the `tag` field, INI — into a record field.
 - An emoji is not substituted into the tag automatically on edit; it is
@@ -89,3 +95,4 @@ while typing.
 | 8 | [501](../../../tasks/501-diagnostics-notifications-merge.md) | Released in v2.25.0 | Notifications inside Diagnostics |
 | 9 | [578](../../../tasks/578-tailscale-preset-template-for-each.md) | Spec, implementation started | Skip presets toggle |
 | 10 | [581](../../../tasks/581-tailscale-network-tab.md) | Implemented | Network tab of a Tailscale node |
+| 11 | [626](../../../tasks/626-unsaved-changes-everywhere.md) | Implemented | "Unsaved changes" dialog on leaving with an edited Tag or Source |

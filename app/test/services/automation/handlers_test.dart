@@ -80,5 +80,12 @@ void main() {
         throwsA(isA<Conflict>()),
       );
     });
+
+    test('urltest-all без home → Conflict', () {
+      expect(
+        () => actionUrltestAll(emptyCtx()),
+        throwsA(isA<Conflict>()),
+      );
+    });
   });
 }

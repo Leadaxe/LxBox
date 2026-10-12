@@ -23,7 +23,7 @@ import '../widgets/outbound_picker.dart';
 import 'dns_server_edit_screen.dart';
 import 'dns_settings_screen/dns_server_resolver.dart';
 import 'dns_settings_screen/resolved_server.dart';
-import 'dns_settings_screen/user_rule_editor_sheet.dart';
+import 'dns_settings_screen/user_rule_edit_screen.dart';
 import 'dns_settings_screen/widgets/dns_mirror_group_card.dart';
 import 'dns_settings_screen/widgets/dns_rule_tile.dart';
 import 'dns_settings_screen/widgets/local_resolver_warning_banner.dart';
@@ -562,28 +562,24 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
     });
   }
 
-  void _showUserRuleEditor(int index) {
+  Future<void> _showUserRuleEditor(int index) async {
     final isNew = index < 0;
     // Редактор открывается только у inline-тайла (DnsRuleTile).
     final existing = isNew ? null : _rules[index] as DnsRuleInline;
-    showUserRuleEditor(
-      context,
-      isNew: isNew,
-      existing: existing,
-      onSave: (entry) {
-        setState(() {
-          if (isNew) {
-            // Default order: user > preset > template — новые user
-            // правила добавляются в начало (юзер всегда может
-            // перетащить в любое место drag-handle'ом).
-            _rules.insert(0, entry);
-          } else {
-            _rules[index] = entry;
-          }
-          _markDirty();
-        });
-      },
-    );
+    // §626 ревизия 2 — полноэкранный редактор вместо шторки.
+    final entry = await openUserRuleEditor(context, existing: existing);
+    if (entry == null || !mounted) return;
+    setState(() {
+      if (isNew) {
+        // Default order: user > preset > template — новые user
+        // правила добавляются в начало (юзер всегда может
+        // перетащить в любое место drag-handle'ом).
+        _rules.insert(0, entry);
+      } else {
+        _rules[index] = entry;
+      }
+      _markDirty();
+    });
   }
 
   @override

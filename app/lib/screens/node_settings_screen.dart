@@ -11,6 +11,7 @@ import '../services/error_format.dart';
 import '../services/preset_nodes_view.dart';
 import '../services/settings_storage.dart';
 import '../services/template_loader.dart';
+import '../services/ui_helpers.dart';
 import '../models/direction.dart';
 import '../models/node_link.dart';
 import '../models/node_spec.dart';
@@ -24,6 +25,9 @@ import '../widgets/node_diagnostics_tab.dart';
 import '../widgets/tailscale_network_tab.dart';
 import '../services/tailscale_network.dart';
 import '../services/l10n/locale_controller.dart';
+import '../services/warp/warp_endpoint_picker.dart';
+import '../services/wireguard/masquerade_source.dart';
+import '../widgets/masquerade_fields.dart';
 import 'node_settings/node_document.dart';
 import 'subscriptions_screen/entry_warnings.dart';
 
@@ -111,6 +115,10 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
 
   /// §581 — узел Tailscale: есть вкладка Network.
   bool _isTailscale = false;
+
+  /// §623 — пул доменов маскировки (тот же, что у визарда WARP) для поля
+  /// домена секции Masquerade узла WireGuard/AmneziaWG.
+  WarpEndpointPicker? _picker;
 
   @override
   void initState() {
@@ -239,6 +247,15 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     // §239 — кандидаты живут в общем пикере (showDetourTargetPicker):
     // «свободные» одиночки + члены СВОЕЙ папки (для member-режима).
 
+    // §623 — пул доменов маскировки; не загрузился — поле без подсказок.
+    if (node is WireguardSpec && _picker == null) {
+      try {
+        _picker = await WarpEndpointPicker.load();
+      } catch (_) {
+        _picker = null;
+      }
+    }
+
     if (mounted) setState(() {});
   }
 
@@ -334,11 +351,13 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
   /// JSON — тег из поля Tag в тело (§435, `prepareNodeDocumentForSave`) и
   /// ворота ядра (`CheckConfig`): такой узел идёт в конфиг дословно, гейты
   /// модели его не проверяют. Ссылка — тег во фрагмент. INI — как есть.
-  Future<void> _saveSource() async {
+  /// true — записано (§626: Save диалога Unsaved changes закрывает экран
+  /// только при успехе).
+  Future<bool> _saveSource() async {
     final text = _sourceCtrl.text.trim();
     if (text.isEmpty) {
       _snack(getLocalText.s("Source is empty"));
-      return;
+      return false;
     }
     final String toStore;
     var droppedExtras = false;
@@ -349,7 +368,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
       final prep = prepareNodeDocumentForSave(text, _tagCtrl.text);
       if (prep is NodeDocumentRejected) {
         _snack(prep.message);
-        return;
+        return false;
       }
       final ready = prep as NodeDocumentReady;
       toStore = ready.text;
@@ -358,24 +377,23 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
       final payload = checkPayloadFor(toStore);
       if (payload != null) {
         final check = await BoxVpnClient.I.checkConfig(payload);
-        if (!mounted) return;
+        if (!mounted) return false;
         // null — мост недоступен (юнит-тест, старый native): проверять нечем,
         // сохранение не блокируем.
         if (check != null && !check.ok) {
           _snack(getLocalText.s("The core rejected the node: %s", check.error));
-          return;
+          return false;
         }
       }
     } else if (!text.contains('\n') && text.contains('://')) {
       toStore = SubscriptionController.rawWithName(text, _tagCtrl.text.trim());
     } else {
       // §456 — INI: текст как есть, имя — полем записи (`nameHint`).
-      await _store(text,
+      return _store(text,
           nameHint: _tagCtrl.text.trim(),
           savedMessage: () => getLocalText.s("Saved"));
-      return;
     }
-    await _store(toStore,
+    return _store(toStore,
         savedMessage: () => droppedExtras
             ? getLocalText.s(
                 "Only the node is saved. The rest of the input is not kept.")
@@ -407,9 +425,62 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     await _saveSource();
   }
 
+  /// §623 — выбор в секции Masquerade пишется сразу (как detour): ключи
+  /// `ip`/`id`/`ib` в текст сохранённого источника (вид источника
+  /// сохраняется, в отличие от Tailscale), дальше — как Save вкладки Source.
+  /// Отказ (ядро, разбор) — Source возвращается к сохранённому тексту, строки
+  /// секции остаются прежними.
+  Future<void> _saveMasquerade(Masquerade m) async {
+    final before = _containerRaw;
+    _sourceCtrl.text = withMasquerade(before, m);
+    await _saveSource();
+    if (mounted && _containerRaw == before) _sourceCtrl.text = before;
+  }
+
+  /// §623 — секция Masquerade узла WireGuard/AmneziaWG. Явный `i1`
+  /// приоритетнее: тогда секция недоступна; так же — у упакованной ссылки и
+  /// у источника, в который писать не умеем.
+  Widget _buildMasqueradeSection(WireguardSpec node) {
+    final fields = node.awg?.fields;
+    final raw = _containerRaw;
+    final String? reason;
+    if (fields?['i1'] != null) {
+      final ignored = masqueradeKeysPresent(raw);
+      reason = [
+        getLocalText.s(
+            "Masquerade is off: the node sets I1 explicitly, and I1 takes priority. Without I1 in Source this section becomes available."),
+        if (ignored) getLocalText.s("The masquerade keys in Source are ignored."),
+      ].join(' ');
+    } else {
+      reason = switch (masqueradeWritability(raw)) {
+        MasqueradeWritability.writable => null,
+        MasqueradeWritability.packedLink => getLocalText.s(
+            "This source is a packed link. Masquerade can be changed after Edit JSON turns the node into JSON."),
+        MasqueradeWritability.unsupportedFormat =>
+          getLocalText.s("Masquerade is not supported for this source format."),
+      };
+    }
+    final picker = _picker;
+    return ListenableBuilder(
+      listenable: _sourceCtrl,
+      builder: (context, _) => MasqueradeSection(
+        value: Masquerade.fromFields(fields),
+        unavailableReason: reason,
+        sipBlocked: fields?['i2'] != null,
+        sourceDirty: _sourceCtrl.text != raw,
+        onSourceDirty: () =>
+            _snack(getLocalText.s("Source has unsaved changes.")),
+        domainPool: picker?.sniPool ?? const [],
+        randomDomain: picker?.randomSni,
+        onChanged: _saveMasquerade,
+      ),
+    );
+  }
+
   /// Записать [raw] источником узла (одиночный — `updateConnectionAt`, член
   /// папки — `updateMemberAt`) и перечитать экран.
-  Future<void> _store(String raw,
+  /// true — записано.
+  Future<bool> _store(String raw,
       {String? nameHint, required String Function() savedMessage}) async {
     try {
       final mi = widget.memberIndex;
@@ -420,20 +491,22 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
               .updateMemberAt(widget.index, mi, raw, nameHint: nameHint)
           : await widget.subController
               .updateConnectionAt(widget.index, [raw], nameHint: nameHint);
-      if (!mounted) return;
+      if (!mounted) return err == null;
       if (err != null) {
         _snack(err.render());
-        return;
+        return false;
       }
       // Перечитать узел: Source показывает записанный текст, JSON — тело,
       // предупреждения — свежие.
       await _load();
-      if (!mounted) return;
+      if (!mounted) return true;
       _snack(savedMessage());
+      return true;
     } catch (e) {
       if (mounted) {
         _snack(getLocalText.s("Invalid JSON: %s", formatUserError(e).render()));
       }
+      return false;
     }
   }
 
@@ -476,10 +549,54 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
 
+  bool _saving = false;
+
+  /// §626 — несохранённые правки: поле Tag (Settings) и текст Source
+  /// отличаются от записанного. Detour, Masquerade, Skip presets и поля
+  /// вкладки Network пишутся сразу и правкой не считаются.
+  bool get _dirty =>
+      _originalTag.isNotEmpty &&
+      (_tagCtrl.text != _originalTag || _sourceCtrl.text != _containerRaw);
+
+  /// Save в AppBar и в диалоге Unsaved changes.
+  Future<bool> _save() async {
+    if (_saving) return false;
+    _saving = true;
+    try {
+      return await _saveSource();
+    } finally {
+      _saving = false;
+    }
+  }
+
+  /// §626 — Back (системный, жест, стрелка AppBar): при правках общий
+  /// диалог Discard / Keep / Save (§219). Загрузка и запись — без диалога.
+  Future<void> _handleBack() async {
+    if (_saving) return;
+    if (!_dirty) {
+      Navigator.pop(context);
+      return;
+    }
+    final action = await showUnsavedChangesDialog(context); // §219
+    if (!mounted) return;
+    if (action == 'save') {
+      if (await _save() && mounted) Navigator.pop(context);
+    } else if (action == 'discard') {
+      Navigator.pop(context);
+    }
+    // 'keep' / null (dismiss) — остаёмся.
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        unawaited(_handleBack());
+      },
+      child: Scaffold(
         appBar: AppBar(
           title: Text(_tagCtrl.text.isNotEmpty
               ? _tagCtrl.text
@@ -488,7 +605,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
             IconButton(
               tooltip: getLocalText.s("Save"),
               icon: const Icon(Icons.save),
-              onPressed: () => unawaited(_saveSource()),
+              onPressed: () => unawaited(_save()),
             ),
           ],
           bottom: TabBar(
@@ -534,6 +651,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
                   ),
                 ],
               ),
+      ),
     );
   }
 
@@ -575,6 +693,14 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
             ),
           ),
         ),
+        if (_node case final WireguardSpec wg) ...[
+          const SizedBox(height: 16),
+          _sectionHeader(getLocalText.s("Masquerade"),
+              getLocalText.s(
+                "AmneziaWG 1.5 parameters: decoy packets before the WireGuard handshake."),
+              theme),
+          _buildMasqueradeSection(wg),
+        ],
         // §322 — у узла автовыбора detour'а нет: он не соединение, а правило
         // выбора среди членов. Блок не рисуем вовсе (не «серым»).
         if (_member?.node?.isGroup != true) ...[
@@ -664,30 +790,23 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
         _sectionHeader(getLocalText.s("Source"),
             getLocalText.s("The node's original text. Save writes it as is."), theme),
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-          child: Text(
-            kindNote,
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          // §614 — редактор с подсветкой: язык по виду источника на лету
-          // (вставили JSON — подсветка включилась). Недописанный объект
-          // `originKindOf` ещё не признаёт JSON — по `{` подсветку держим.
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          // §614/§624 — редактор с подсветкой: язык по виду источника на
+          // лету (вставили ссылку, `.conf` или JSON — подсветка сменилась).
+          // Подпись — слева в строке кнопок поля (поиск, Format).
           child: ListenableBuilder(
             listenable: _sourceCtrl,
-            builder: (context, _) {
-              final t = _sourceCtrl.text.trimLeft();
-              final json = t.startsWith('{') || originKindOf(t) == 'json';
-              return LxTextCodeField(
-                key: const ValueKey('node-source-editor'),
-                controller: _sourceCtrl,
-                minLines: 12,
-                language: json ? LxCodeLanguage.json : null,
-              );
-            },
+            builder: (context, _) => LxTextCodeField(
+              key: const ValueKey('node-source-editor'),
+              controller: _sourceCtrl,
+              minLines: 12,
+              language: detectCodeLanguage(_sourceCtrl.text),
+              header: Text(
+                kindNote,
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              ),
+            ),
           ),
         ),
       ],
@@ -705,23 +824,22 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
             getLocalText.s("What the core receives. Read-only: edit the source instead."), theme),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Stack(
-            children: [
-              LxJsonView(text: _jsonCtrl.text, height: 420),
-              Positioned(
-                top: 4,
-                right: 4,
-                child: IconButton(
-                  icon: const Icon(Icons.copy, size: 16),
-                  tooltip: getLocalText.s("Copy JSON"),
-                  visualDensity: VisualDensity.compact,
-                  onPressed: () {
-                    Clipboard.setData(ClipboardData(text: _jsonCtrl.text));
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(getLocalText.s("JSON copied"))),
-                    );
-                  },
-                ),
+          // §624 — Copy в строке кнопок над рамкой, не поверх текста.
+          child: LxJsonView(
+            text: _jsonCtrl.text,
+            height: 420,
+            stickyHeaders: true,
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.copy, size: 16),
+                tooltip: getLocalText.s("Copy JSON"),
+                visualDensity: VisualDensity.compact,
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: _jsonCtrl.text));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(getLocalText.s("JSON copied"))),
+                  );
+                },
               ),
             ],
           ),

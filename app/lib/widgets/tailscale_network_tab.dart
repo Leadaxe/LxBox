@@ -174,8 +174,9 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab> {
         getLocalText.s("The node is not in the running config."),
       );
     }
-    // §613 — действующий выход показан в блоке Exit node, в Devices его нет.
-    final devices = sortDevices(withoutActiveExit(s.peers, s));
+    // Выход остаётся и в Devices: меню строки (пинг, копирование) есть только
+    // там, у пункта Exit node его нет.
+    final devices = sortDevices(s.peers);
     final grouped = showOwnerGroups(s);
     final children = <Widget>[
       if (s.health.isNotEmpty) _healthBlock(context, s.health),
@@ -191,10 +192,9 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab> {
     final rows = <Object>[];
     if (grouped) {
       for (final g in s.userGroups) {
-        final peers = withoutActiveExit(g.peers, s);
-        if (peers.isEmpty) continue;
+        if (g.peers.isEmpty) continue;
         rows.add(g.title);
-        rows.addAll(sortDevices(peers));
+        rows.addAll(sortDevices(g.peers));
       }
     } else {
       rows.addAll(devices);

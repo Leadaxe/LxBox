@@ -49,6 +49,41 @@ String prettyJsonForDisplay(String raw) {
   }
 }
 
+/// §624 — кнопка Format JSON-полей: тот же разбор JSON5, что Save Config
+/// ([canonicalJsonForSingbox]), вывод — с отступом 2 пробела, как Config
+/// при открытии ([prettyJsonForDisplay]). Ошибка разбора — [FormatException]
+/// с позицией в сообщении.
+String formatJson5(String text) {
+  final trimmed = text.trim();
+  if (trimmed.isEmpty) {
+    throw const FormatException('Empty input');
+  }
+  final dynamic parsed = _json5DecodeNormalized(trimmed);
+  return const JsonEncoder.withIndent('  ').convert(_toJsonEncodable(parsed));
+}
+
+/// Есть ли в тексте комментарии JSON5 (`//`, `/*`) вне строк — Format их
+/// теряет, перед заменой нужен диалог.
+bool hasJson5Comments(String text) {
+  int? quote;
+  for (var i = 0; i < text.length; i++) {
+    final c = text.codeUnitAt(i);
+    if (quote != null) {
+      if (c == 0x5C) {
+        i++; // экранированный символ
+      } else if (c == quote) {
+        quote = null;
+      }
+    } else if (c == 0x22 || c == 0x27) {
+      quote = c;
+    } else if (c == 0x2F && i + 1 < text.length) {
+      final n = text.codeUnitAt(i + 1);
+      if (n == 0x2F || n == 0x2A) return true;
+    }
+  }
+  return false;
+}
+
 // §333 — off-main-thread версии для больших конфигов (сотни КБ json5-парса
 // фризят UI). Sync-версии выше остаются для мелких вызовов и тестов.
 

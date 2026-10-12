@@ -150,6 +150,7 @@ POST /action/urltest?tag=<node>                Single-node URLTest (CommandClien
 POST /action/urltest?group=<group>             Group URLTest (CommandClient, requires tunnel)
 POST /action/urltest?all=true                  Mass URLTest of all nodes in the active group (concurrency 10)
 POST /action/urltest?cancel=1                  Cancel in-flight mass URLTest (epoch-bump)
+POST /action/urltest-all                       Group URLTest of every urltest group, sequential (requires tunnel)
 POST /action/switch-node?tag=<tag>             HomeController.switchNode
 POST /action/set-group?group=<tag>             Change the active group
 POST /action/rebuild-config                    SubscriptionController.generateConfig + saveParsedConfig
@@ -715,6 +716,7 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'POST', 'path': '/action/reset-network', 'description': 'Light recovery: closeAll + DNS flush + dialer rebind (spec 031). Requires tunnel up.'},
     {'method': 'POST', 'path': '/action/quic-knobs', 'params': {'gso': 'on|off (optional)', 'ecn': 'on|off (optional)'}, 'description': '§341: quic-go env knobs (GSO/ECN) via static Libbox call; affects new QUIC sockets, follow with reload-vpn/reset-network. At least one param.'},
     {'method': 'POST', 'path': '/action/urltest', 'params': {'tag': 'node tag (single)', 'group': 'group tag (group urltest, URL-encode emoji)', 'all': 'true (mass urltest)', 'cancel': '1 (abort in-flight mass urltest)'}, 'description': 'URLTest dispatch by query: one of tag/group/all/cancel'},
+    {'method': 'POST', 'path': '/action/urltest-all', 'description': 'Group URLTest of every urltest group, sequential, fire-and-forget (requires tunnel) → {ok,action,groups}'},
     {'method': 'POST', 'path': '/action/switch-node', 'params': {'tag': 'node tag'}, 'description': 'Selector switch via HomeController'},
     {'method': 'POST', 'path': '/action/set-group', 'params': {'group': 'group tag'}, 'description': 'Change active group'},
     {'method': 'POST', 'path': '/action/rebuild-config', 'description': 'Regenerate sing-box config'},

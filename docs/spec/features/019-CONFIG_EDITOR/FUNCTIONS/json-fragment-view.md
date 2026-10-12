@@ -17,13 +17,15 @@ detour chain.
 Shows a piece of the final config where it is needed: the JSON tab on the node
 details screen (with copying of the node and its detour chain) and the View
 tab of the custom rule editor (how the rule will land in the config). The view
-is read-only, with highlighting and the same selection menu as the editor.
+is read-only, with highlighting and the same selection menu as the editor; in
+the node JSON up to three lines of the enclosing blocks stay pinned while
+scrolling.
 
 ## Parameters
 
 | Place | Action | What is copied |
 |-------|--------|----------------|
-| Node without detour | "Copy JSON" icon | the node's outbound without the `detour` field |
+| Node without detour | "Copy JSON" icon in the row above the field | the node's outbound without the `detour` field |
 | Node with detour | "Copy server JSON" | the node's outbound without `detour` |
 | — | "Copy detour" | the first detour hop without `detour`; no hop — "No detour for this node" |
 | — | "Copy server + detour" / "+ detours(N)" | an array: the node and the whole hop chain, each without `detour` |
@@ -44,6 +46,9 @@ data for the tag".
   from the saved one; no tag — a message, not silence.
 - **The node's JSON tab** shows the outbound itself, and with a detour — the
   "node + hops" array.
+- **The Copy button sits above the field, on the right** (node JSON tab,
+  subscription node inspector), not over the text, like the buttons of the
+  editable fields. A read-only view has no Format.
 - **Copies are self-contained:** the `detour` field is removed from every
   element so that a paste does not refer to a missing tag.
 - **The rule preview does not filter by `enabled`:** a disabled rule shows
@@ -68,3 +73,4 @@ data for the tag".
 | 3 | [258](../../../tasks/258-outbound-view-tabs-runtime-chain.md) | done | Node screen with Overview and JSON tabs |
 | 4 | [311](../../../tasks/311-running-config-from-kernel.md) | implemented | Node JSON from a snapshot of the running core; the editor — from the file |
 | 5 | [554F](../../../tasks/554F-schema-driven-node-editor/spec.md) | Idea; only highlighting done | Highlighted JSON view instead of plain text |
+| 6 | [624](../../../tasks/624-sora-editor-for-json-fields.md) | Implemented | Native viewer, sticky headers in the node JSON |

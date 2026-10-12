@@ -25,7 +25,7 @@ file, copy it, share it and save it to the core.
 | Save | AppBar | JSON5 parse → canonical JSON → save; snackbar "Config saved" |
 | Paste from clipboard | ⋮ menu | clipboard text, formatted, into the editor; empty clipboard — "Clipboard is empty" |
 | Load from file | ⋮ menu | file text (UTF-8), formatted, into the editor |
-| Copy to clipboard / Copy icon | ⋮ menu / editor corner | the whole editor text to the clipboard |
+| Copy to clipboard / Copy icon | ⋮ menu / button row above the field | the whole editor text to the clipboard |
 | Share | ⋮ menu | `lxbox_config.json` file with the editor text |
 | Read-only threshold | — | above 1 048 576 characters |
 
@@ -48,6 +48,13 @@ snackbars and errors on screen.
   config does not change.
 - **Substitution ≠ saving.** Paste and Load from file change only the editor
   text.
+- **Leaving with unsaved edits** — as on the other edit screens. An edit is
+  editor text that differs from the text the screen opened with or last
+  saved by Save; Paste and Load from file count. Back (system, gesture, AppBar
+  arrow) with an edit shows the shared "Unsaved changes" dialog: Save — same
+  as the Save button (on a parse error the screen stays open with the error);
+  Discard — leave without saving; Keep or dismiss — stay. No edit, read-only
+  or still loading — leave without the dialog.
 - **Read-only** for a config that is too large: banner "File is too large to
   edit on device. Share it, edit externally, then load it back.", Save is
   disabled.
@@ -56,11 +63,41 @@ snackbars and errors on screen.
   ([config-pin.md](config-pin.md)).
 - **Tunnel up.** Saving does not restart the core; if the config differs from
   the running one — the "config changed" flag.
-- **Selection menu** (shared by all JSON fields of the app): long tap — Cut /
+- **Input works like a regular system text field** (shared by all JSON fields
+  of the app): the keyboard sees the whole text, its arrows move the cursor,
+  its Copy copies the whole selection; the cursor line stays above the
+  keyboard.
+- **Selection menu** — the editor's native menu in the app language: Cut /
   Copy / Paste / Select all over the live selection (a read-only field offers
-  only Copy / Select all, §607); the action, then the menu is removed. There is one menu; it is removed by a tap on empty space
-  (the selection collapses), a scroll, or leaving the screen; a screen redraw
-  does not spawn copies.
+  only Copy / Select all, §607).
+- **Field buttons sit above the frame, on the right** (Find, Copy, Format),
+  never inside it: the text starts at the normal inset. A field with a
+  caption (the node Source note, the DNS server JSON note) keeps the caption
+  on the left of the same row; it wraps in the width the buttons leave.
+- **Find** — the search button opens a panel in place of the button row:
+  query, match count, previous / next; an empty query clears the match
+  highlight.
+- **Format** (editable JSON fields other than this screen: node Source, Edit
+  server in a folder, DNS server JSON, route rule JSON, DNS rule sheet, the
+  wizard's JSON field) — shown when the text looks like JSON. It parses the
+  text as JSON5, the same way Save does, and replaces it with JSON indented by
+  two spaces. It is an ordinary edit: undo reverts it and the screen counts it
+  as unsaved. A parse error shows "Failed to parse JSON: …" with the position
+  and leaves the text alone. JSON5 comments do not survive: if the text has
+  `//` or `/*` outside strings, the dialog "Comments will be removed" asks
+  first (Format / Cancel). This screen has no Format: it formats the config
+  when it opens.
+- **Growing fields** (node Source, rule JSON, Edit server) grow by screen
+  rows, wrapped lines included, up to their limit; past it the text scrolls
+  inside. Fields that wrap lines do not highlight the cursor line (one
+  compact JSON line would paint the whole field).
+- **Sticky headers.** While scrolling, up to three lines of the enclosing
+  blocks stay pinned at the top (`"outbounds": [` → `{` → …). The editor draws
+  them only without line wrapping, so this screen does not wrap: long lines
+  scroll sideways. The node JSON and a JSON subscription Source have them too.
+  There is no block folding.
+- **Highlighting** of JSON; in fields that take anything — by the look of the
+  text: JSON, WireGuard INI, links (`scheme://…`) or none.
 - A file picking error or a missing file manager — a clear text, not a
   technical exception.
 
@@ -85,3 +122,4 @@ snackbars and errors on screen.
 | 8 | [521](../../../tasks/521-editor-menu-hide-and-single-overlay.md) | Released in v2.25.3 | One menu, explicit removal triggers |
 | 9 | [554F](../../../tasks/554F-schema-driven-node-editor/spec.md) | Idea; only highlighting done | JSON syntax highlighting |
 | 10 | [607](../../../tasks/607-l10n-backup-shell-bugs-from-591.md) | Done | A read-only field's selection menu has no Cut / Paste |
+| 11 | [624](../../../tasks/624-sora-editor-for-json-fields.md) | Implemented | Native editor: input and keyboard like a system field, sticky headers instead of folding, JSON / INI / URI highlighting |

@@ -253,10 +253,7 @@ void main() {
     }
   });
 
-  group('§613 — путь, Devices без выхода, поля тела', () {
-    const gw = CcTailscalePeer(stableId: 'n2', hostName: 'gw');
-    const nas = CcTailscalePeer(stableId: 'n3', hostName: 'nas');
-
+  group('§613 — путь, поля тела', () {
     test('путь NONE и ядро без пути — пусто, прочие — строка', () {
       expect(tailscalePathLabel(const CcTailscalePeer(path: 'NONE')), isEmpty);
       expect(tailscalePathLabel(const CcTailscalePeer()), isEmpty);
@@ -268,28 +265,6 @@ void main() {
             path: 'DIRECT', endpoint: '198.51.100.7:41641')),
         contains('198.51.100.7:41641'),
       );
-    });
-
-    test('действующий выход в Devices не повторяется', () {
-      const s = CcTailscaleStatus(
-        tag: 'ts',
-        backendState: 'Running',
-        stateText: '',
-        exitNode: gw,
-        userGroups: [
-          CcTailscaleUserGroup(peers: [gw, nas]),
-        ],
-      );
-      expect(withoutActiveExit(s.peers, s).map((p) => p.stableId), ['n3']);
-      const none = CcTailscaleStatus(
-        tag: 'ts',
-        backendState: 'Running',
-        stateText: '',
-        userGroups: [
-          CcTailscaleUserGroup(peers: [gw, nas]),
-        ],
-      );
-      expect(withoutActiveExit(none.peers, none), hasLength(2));
     });
 
     test('поля тела: запись и снятие, порядок ключей', () {

@@ -450,10 +450,12 @@ void main() {
       expect(t.path, '/p');
     });
 
-    test('path с ?-хвостом обрезается', () {
+    // §620 — хвост `?…` у xhttp — query запроса (контракт Xray, ядро SPEC
+    // 119), а не мусор: путь уходит дословно, `?ed=` early data не значит.
+    test('path с ?-хвостом остаётся дословным', () {
       final t = parseTransport({'type': 'xhttp', 'path': '/GaMeOpTiMiZeR?ed=2048'})
           as XhttpTransport;
-      expect(t.path, '/GaMeOpTiMiZeR');
+      expect(t.path, '/GaMeOpTiMiZeR?ed=2048');
     });
 
     test('sc* float-хвост отбрасывается (30.0 → "30")', () {

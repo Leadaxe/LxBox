@@ -137,19 +137,6 @@ List<CcTailscalePeer> sortDevices(Iterable<CcTailscalePeer> peers) {
   return list;
 }
 
-/// §613 — устройства блока Devices: действующий exit node показан в блоке
-/// Exit node и в списке владельцев не повторяется.
-List<CcTailscalePeer> withoutActiveExit(
-  Iterable<CcTailscalePeer> peers,
-  CcTailscaleStatus s,
-) {
-  final id = s.exitNode?.stableId ?? '';
-  return [
-    for (final p in peers)
-      if (!(p.exitNode || (id.isNotEmpty && p.stableId == id))) p,
-  ];
-}
-
 /// §613 (ядро SPEC 115) — путь до устройства одной строкой по таблице §2
 /// руководства ядра: `direct 1.2.3.4:41641`, `peer relay`, `relay fra`.
 /// `NONE` (узел ни разу не слал устройству) и ядро без пути — пусто.

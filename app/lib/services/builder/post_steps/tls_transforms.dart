@@ -87,6 +87,10 @@ void applyTlsFragment(Map<String, dynamic> config, Map<String, String> vars) {
       final t = ob['tls'];
       if (t is! Map<String, dynamic>) continue;
       if (t['enabled'] != true) continue;
+      // §627 — REALITY-сервер не принимает разрезанный ClientHello (с lx.4
+      // ядро режет и его), а маскировка у REALITY своя.
+      final reality = t['reality'];
+      if (reality is Map && reality['enabled'] == true) continue;
       tls = t;
     }
     if (addFragment) tls['fragment'] = true;

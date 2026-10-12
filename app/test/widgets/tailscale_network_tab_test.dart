@@ -232,14 +232,18 @@ void main() {
       expect(find.text('no home relay'), findsOneWidget);
     });
 
-    testWidgets('выход не дублируется в Devices', (tester) async {
+    testWidgets('выход есть и в Devices, из его строки доступен пинг',
+        (tester) async {
       await tester.binding.setSurfaceSize(const Size(800, 2400));
       addTearDown(() => tester.binding.setSurfaceSize(null));
       await pump(tester, data: [_status(exit: _gw)]);
       expect(find.widgetWithText(RadioListTile<String>, 'gw'), findsOneWidget);
-      // Единственная плитка с именем — пункт Exit node (RadioListTile
-      // строится на ListTile); в Devices строки нет.
-      expect(find.widgetWithText(ListTile, 'gw'), findsOneWidget);
+      // Пункт Exit node (RadioListTile строится на ListTile) и строка Devices.
+      final rows = find.widgetWithText(ListTile, 'gw');
+      expect(rows, findsNWidgets(2));
+      await tester.tap(rows.last);
+      await tester.pumpAndSettle();
+      expect(find.text('Ping'), findsOneWidget);
     });
 
     testWidgets('Settings без выхода: LAN неактивен, advertise пишется',

@@ -41,6 +41,7 @@ Future<DebugResponse> actionHandler(
   }
   return switch (req.path) {
     '/action/urltest' => _urltest(req, ctx),
+    '/action/urltest-all' => _urltestAll(ctx),
     '/action/switch-node' => _switchNode(req, ctx),
     '/action/set-group' => _setGroup(req, ctx),
     '/action/start-vpn' => _startVpn(ctx),
@@ -230,6 +231,14 @@ Future<DebugResponse> _urltest(DebugRequest req, DebugContext ctx) async {
   // all=true (or any value — presence-only flag)
   unawaited(home.runMassUrltest());
   return _ok('urltest', {'scope': 'mass'});
+}
+
+/// `/action/urltest-all` — групповой URLTest всех urltest-групп (общий
+/// обработчик с Automation API). Отдельный маршрут: `all` у `/action/urltest`
+/// занят под mass-ping узлов.
+Future<DebugResponse> _urltestAll(DebugContext ctx) async {
+  final groups = await automation.actionUrltestAll(ctx);
+  return _ok('urltest-all', {'groups': groups});
 }
 
 Future<DebugResponse> _switchNode(DebugRequest req, DebugContext ctx) async {

@@ -37,7 +37,8 @@ Locale/Tasker (Tasker, MacroDroid, Llama, Automate с премиум-блоко�
 одна строка JSON под ключом `com.leadaxe.lxbox.plugin.CONFIG` —
 действие `{"v":1,"cmd":"<команда>","args":{…}}`, где команда — `start-vpn`,
 `stop-vpn`, `toggle-vpn`, `switch-node` (`tag`), `set-group` (`group`),
-`urltest-group` (`group`), `refresh-subs`, `rebuild-config`, `reset-network`;
+`urltest-group` (`group`), `urltest-all`, `refresh-subs`, `rebuild-config`,
+`reset-network`;
 условие `{"v":1,"check":"vpn-up|active-node|active-group","equals":"…"}`.
 
 ## Входы / Выходы

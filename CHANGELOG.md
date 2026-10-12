@@ -6,7 +6,189 @@
 
 ---
 
-## [Unreleased]
+## [2.25.12] — 2026-10-12
+
+### Added
+
+- **Masquerade section for your own WireGuard/AmneziaWG node
+  ([task 623](docs/spec/tasks/623-node-masquerade-section.md)).**
+  The node's Settings tab has Masquerade: protocol (Off, QUIC, DNS, STUN,
+  SIP), domain and browser, as rows like Detour server. A choice is saved at
+  once: `ip`/`id`/`ib` go into the node's source — a link, a `.conf` or a
+  sing-box body — and the rest of the text stays as it was. QUIC needs a domain: it becomes the SNI of the decoy ClientHello. A
+  node that sets `I1` itself keeps it: the section is off and says why. Packed
+  links (`awg://` base64, `vpn://`) and Xray sources are not written to. The
+  WARP wizard uses the same fields; its QUIC hint no longer calls the domain
+  cosmetic. Turning on QUIC, DNS or SIP fills a random domain from the pool
+  (the dice picks another, the arrow lists the pool); QUIC defaults to the
+  Chrome profile.
+  (RU: Секция Masquerade у своего узла WireGuard/AmneziaWG на вкладке
+  Settings: протокол, домен, браузер — строками, как Detour; выбор сразу
+  пишет `ip`/`id`/`ib` в источник, остальной текст не трогает; у QUIC домен обязателен (SNI ClientHello);
+  явный `I1` приоритетнее — секция выключена с причиной; подсказка QUIC в
+  визарде WARP исправлена; при включении QUIC/DNS/SIP подставляется
+  случайный домен из пула, у QUIC по умолчанию профиль Chrome.)
+- **One intent re-tests every Direction
+  ([task 625](docs/spec/tasks/625-urltest-all-intent.md)).**
+  `com.leadaxe.lxbox.URLTEST_ALL` takes no extras and runs the group URL test
+  of every Direction's auto group in turn; the core re-selects a live node in
+  each. The same command is `urltest-all` in the Tasker/Locale plugin and
+  `POST /action/urltest-all` in the Debug API. Handy on a MacroDroid shake
+  gesture when the network goes stale. `URLTEST_GROUP` is unchanged.
+  (RU: Интент `URLTEST_ALL` без extras перепроверяет auto-группы всех
+  Направлений по очереди, ядро в каждой переселектит на живой узел; та же
+  команда `urltest-all` есть в плагине Tasker/Locale и в Debug API.)
+- **Format button for JSON fields; field buttons above the field
+  ([task 624](docs/spec/tasks/624-sora-editor-for-json-fields.md)).**
+  Editable JSON fields (node Source, Edit server in a folder, DNS server
+  JSON, rule JSON, the DNS rule sheet, the wizard's JSON field) have a Format
+  button: it parses the text as JSON5, like Save on Config, and lays it out
+  with a two-space indent. Undo reverts it. A parse error shows the position
+  and leaves the text alone; if the text has comments, a dialog warns that
+  they will be removed. Find, Copy and Format now sit in a row above the
+  field instead of over the text, next to the field's caption. A field that
+  grows with its text now counts wrapped lines, so a one-line compact JSON
+  grows to the field's limit, and wrapped fields no longer shade the whole
+  field as the current line.
+  (RU: Кнопка Format у редактируемых JSON-полей: разбор JSON5, как Save
+  конфига, отступ два пробела, отменяется undo; ошибка — с позицией, текст
+  не меняется; при комментариях — предупреждение. Поиск, Copy и Format —
+  строкой над полем, рядом с подписью, а не поверх текста. Растущее поле
+  учитывает перенос строк, поле с переносом больше не заливается подсветкой
+  текущей строки.)
+
+### Fixed
+
+- **REALITY nodes no longer get the global TLS fragmentation
+  ([task 627](docs/spec/tasks/627-reality-no-global-fragment.md)).**
+  With TLS record fragmentation on, some VLESS + REALITY servers stopped
+  answering: the server does not accept a ClientHello split into several
+  records. The global fragmentation toggles now skip REALITY nodes.
+
+- **Config asks before dropping unsaved edits
+  ([task 624](docs/spec/tasks/624-sora-editor-for-json-fields.md)).**
+  Back on the Config screen with an unsaved edit (typed, pasted or loaded
+  from a file) used to lose it silently. Now it shows the same "Unsaved
+  changes" dialog as the other edit screens: Save, Discard or Keep. Save
+  works like the Save button: a parse error keeps the screen open.
+  (RU: Back на экране Config с несохранённой правкой больше не теряет её
+  молча: тот же диалог «Unsaved changes», что на соседних экранах правки —
+  Save, Discard, Keep; при ошибке разбора Save оставляет экран открытым.)
+- **Every screen with a Save button asks before dropping unsaved edits
+  ([task 626](docs/spec/tasks/626-unsaved-changes-everywhere.md)).**
+  Node settings (Tag and Source), the replace-with-group editor, Edit server
+  in a folder, renaming a folder or a subscription, the subscription filter
+  rule editor and the custom DNS rule editor used to drop edits on Back
+  without a word. Now they show the same "Unsaved changes" dialog: Save,
+  Discard or Keep. The custom DNS rule editor is now a full-screen editor
+  like the DNS server editor, with the JSON body taking the rest of the
+  screen. Save works like the screen's Save button: if the save is refused,
+  the screen stays open with the message. Changing a field back to what it
+  was is not an edit.
+  (RU: Настройки узла (Tag и Source), редактор свёртки, Edit server в папке,
+  переименование папки и подписки, редактор правила фильтров подписки и
+  редактор своего DNS-правила больше не теряют правки молча: тот же диалог
+  «Unsaved changes» — Save, Discard, Keep; своё DNS-правило теперь правится
+  на полноэкранном редакторе, как DNS-сервер, с JSON-телом на всю высоту;
+  отклонённый Save оставляет экран открытым.)
+- **JSON fields type like a regular text field
+  ([task 624](docs/spec/tasks/624-sora-editor-for-json-fields.md)).**
+  The config editor and every JSON field (node Source and JSON, rules, DNS,
+  the add-server wizard, subscription Source) now use a native Android
+  editor. The keyboard no longer covers the line with the cursor, the arrows
+  of Unexpected Keyboard and Hacker's Keyboard move the cursor instead of
+  closing the keyboard, and the keyboard's Copy takes the whole multi-line
+  selection. The selection menu follows the app language. Block folding is
+  gone; instead, up to three lines of the enclosing blocks stay pinned while
+  scrolling the config, the node JSON and a JSON subscription Source; for
+  that the config editor no longer wraps long lines (they scroll sideways). Fields
+  that take anything highlight WireGuard `.conf` and links as well as JSON.
+  The config editor and the add-server wizard no longer open the keyboard on
+  their own. On a TV the D-pad moves into the field and OK opens the keyboard.
+  The editor works on Android 7 as well.
+  (RU: Конфиг и все JSON-поля — на нативном редакторе Android: клавиатура не
+  закрывает строку с курсором, стрелки Unexpected/Hacker's Keyboard двигают
+  курсор, Copy клавиатуры копирует всё выделение; меню выделения на языке
+  приложения; вместо свёртки блоков — до трёх закреплённых строк блоков при
+  прокрутке конфига, JSON узла и JSON-Source подписки (в конфиге поэтому
+  без переноса строк — длинные строки прокручиваются вбок); подсветка `.conf` и ссылок; Config и мастер не открывают
+  клавиатуру сами; на ТВ D-pad заходит в поле, OK открывает клавиатуру;
+  редактор работает и на Android 7.)
+
+- **Tailscale Network tab: the exit device is back under Devices
+  ([task 613](docs/spec/tasks/613-wg-peers-tailscale-path-health.md)).**
+  In v2.25.11 the chosen exit node was shown only in the Exit node block, which
+  has no row menu, so it could not be pinged or copied. It is listed under
+  Devices again with its status and path.
+  (RU: Вкладка Network у Tailscale: выбранный exit node снова есть в Devices —
+  в v2.25.11 он остался только в блоке Exit node, где нет меню, и пинговать
+  его было нельзя.)
+- **XHTTP: the query part of `path` is kept
+  ([task 620](docs/spec/tasks/620-xhttp-path-query-verbatim.md)).**
+  A path like `/?proxyip=149.56.109.62` (Cloudflare Worker relays) lost its
+  `?…` tail on import, so the relay never got its parameter and sites behind
+  Cloudflare failed with 502. The path now goes to the core verbatim, as in
+  Xray; the core sends the tail as the request query (sing-box-lx SPEC 119).
+  Applies to share links, Xray JSON and sing-box JSON (contract 1.1.115).
+  Nodes of one server that differ only in the path query (relay variants with
+  different `proxyip`) are no longer merged into one. Nodes with such a tail
+  get a new content hash, so their config is marked changed once; node
+  selection and disabled marks are kept. Needs a core with SPEC 119: an
+  older core puts the tail into the path and Xray servers answer 404.
+  (RU: XHTTP: query в `path` больше не срезается — релеи Cloudflare Worker
+  с `/?proxyip=…` получают свой параметр; узлы, различные только query пути,
+  больше не схлопываются; конфиг таких узлов один раз помечается
+  изменившимся; нужно ядро с SPEC 119.)
+
+### Changed
+
+- **Contract 1.1.115** (from 1.1.114).
+- **Direct connect timeout for `direct-out` ([task 616](docs/spec/tasks/616-direct-connect-timeout.md)).**
+  The connect timeout of the direct outbound is a setting now: Traffic
+  Processing → Params → Direct connect timeout, presets 5s–2m or any duration.
+  The default is 15s instead of the core's 5s, so apps on networks that lose
+  SYN packets (e.g. T-Bank over Tele2) no longer get their connections cut.
+  Proxy nodes and auto groups are unchanged.
+  (RU: Прямой выход (direct-out): таймаут соединения вынесен в настройку
+  Traffic Processing → Params (Direct connect timeout), дефолт 15 с вместо
+  5 с ядра — приложения на сетях с потерей SYN (например, Т‑Банк через Tele2)
+  больше не обрываются.)
+- **Core `v1.14.2-lx.12` → `v1.14.3-lx.15` (upstream base sing-box 1.14.3,
+  [docs/KERNEL.md](docs/KERNEL.md); v2.25.12-rc.1 shipped the release
+  candidate `v1.14.2-lx.13-rc.1`).** AWG masquerade `ip=quic`: the decoy is
+  generated fresh before every handshake instead of one fixed `i1` for the
+  endpoint's lifetime; `ib=chrome` / `ib=firefox` are real QUIC ClientHellos
+  now (before, a TCP ClientHello sat inside the Initial), calibrated against
+  Chrome 147/155 and Firefox 149 captures; `ip=sip` sends only INVITE,
+  `ip=dns` sends EDNS without options. The core value `ib=chrome-full` is
+  experimental and not offered: the app drops it with a warning. XHTTP sends
+  the `?…` part of `path` as the request query (SPEC 119, see task 620 above).
+  Hysteria2 / TUIC / WireGuard over a MASQUE (WARP) or another IP tunnel get a
+  packet size that fits the tunnel (core key `lx.mtu_align`, default `clamp`;
+  the app does not write it), so hysteria2 over WARP to an IPv6 server works.
+  MASQUE `vhttp: auto` no longer stays on h2 until restart after one quick h3
+  failure. lx.15: auto groups test on every `interval` (before, a node was
+  probed once per two intervals); Hold until failure also leaves a node that
+  answers but is more than twice as slow as the others; `fingerprint:
+  random` / `randomized` no longer leave REALITY nodes on Xray ≥ v26.9.8 dead
+  until restart; uTLS/REALITY connections hold 18–25 KB less memory; gRPC
+  updated for a critical advisory.
+  (RU: ядро `v1.14.3-lx.15`: decoy `ip=quic` свежий на каждом хендшейке,
+  `ib=chrome`/`firefox` — настоящие QUIC ClientHello, формы `ip=sip` и
+  `ip=dns` исправлены; query в `path` XHTTP уходит query запроса; размер
+  пакета hysteria2/TUIC/WireGuard поверх WARP подгоняется под туннель;
+  `vhttp: auto` не залипает на h2; lx.15: авто-группы проверяют узлы каждый
+  `interval`, а не раз в два, Hold until failure уходит и с узла, который
+  вдвое медленнее остальных, `fingerprint: random`/`randomized` больше не
+  глушат узлы REALITY к Xray ≥ v26.9.8, uTLS/REALITY-соединения держат на
+  18–25 КБ меньше памяти, gRPC обновлён по критической уязвимости.)
+
+### Internal
+
+- Release candidates go to Google Play Open testing (beta track)
+  ([task 619](docs/spec/tasks/619-rc-to-play-open-testing.md)).
+- CI: `actions/checkout` v5 → v7, `actions/download-artifact` v7 → v8;
+  Dependabot updates for GitHub Actions target `develop`.
 
 ---
 
