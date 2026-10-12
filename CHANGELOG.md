@@ -19,14 +19,90 @@
   above. A checkbox set on a REALITY server itself fragments it; bulk levels
   still skip REALITY. Ping and the node test use the same levels. The
   per-server/source policy does not go into the backup file yet (the export
-  names it); on merge local settings stay.
+  names it); on merge local settings stay. A server's own TLS settings move
+  with it on Ungroup and when the server is moved into a folder. Debug API
+  shows and patches the `tls` field of a source and a folder member (PATCH
+  is partial).
   (RU: Четыре опции TLS Fragmentation получили секцию **TLS** на экране
   сервера и на вкладке настроек подписки или папки. Опция решается
   сервер → подписка/папка → глобально; Default наследует, Off ниже бьёт On
   выше. Галка на самом сервере REALITY его фрагментирует, массовые уровни
   REALITY пропускают. Пинг и тест узла учитывают те же уровни. В файл
   бэкапа политика пока не едет — экспорт называет её; при слиянии своя
-  остаётся.)
+  остаётся. Свои настройки TLS сервера переезжают с ним при Ungroup и при
+  переносе в папку. Debug API отдаёт и частично меняет поле `tls` источника
+  и члена папки.)
+
+### Fixed
+
+- **The start error notification goes away after a successful start
+  ([task 637](docs/spec/tasks/637-clear-error-notification-on-successful-start.md)).**
+  When the core rejected a node, the app disabled it and started again, and
+  the start succeeded, but the "Error" notification stayed next to the VPN
+  notification. It is now removed when the service reaches Started and when
+  the user starts the VPN again; a new failure shows a new one.
+  (RU: Уведомление «Error» после неудачного старта снимается, когда следующий
+  старт успешен или пользователь запускает VPN заново; раньше оно висело
+  рядом с уведомлением работающего VPN.)
+- **Quit & reopen app no longer brings the VPN back
+  ([task 638](docs/spec/tasks/638-audit-591-four-defects.md)).**
+  Quit killed the process but left the "VPN wanted" flag and the watchdog
+  alarm, so 2–3 minutes later the watchdog started the VPN again. Quit now
+  clears both.
+  (RU: «Quit & reopen app» больше не воскрешает VPN сторожем через 2–3 мин:
+  признак «VPN желателен» и будильник сторожа снимаются.)
+- **Quit & reopen app stops the VPN service properly
+  ([task 639](docs/spec/tasks/639-quit-clears-vpn-notification.md)).**
+  The service died with the process and its notification stayed in the
+  shade, showing a VPN that no longer ran. Quit now stops the service the
+  same way as Stop (up to 3 s), then closes the app; the notification is
+  removed.
+  (RU: После «Quit & reopen app» сервис останавливается штатно, как по Stop,
+  и уведомление VPN не остаётся в шторке.)
+- **The chain delete dialog tells what happens
+  ([task 638](docs/spec/tasks/638-audit-591-four-defects.md)).**
+  It said other chains would stop building; in fact the node is removed from
+  them and they are rebuilt shorter. New text: "Chains using this node will
+  be rebuilt without it."
+  (RU: Диалог удаления цепочки говорит правду: цепочки с этим узлом
+  пересобираются без него.)
+- **Intent API `VPN_ERROR(tunnel_error)` hides server addresses
+  ([task 638](docs/spec/tasks/638-audit-591-four-defects.md)).**
+  The core's error text (`dial tcp <ip>:<port>: …`) went to every subscriber
+  of the broadcast. IPv4, IPv6 and host names in it are replaced with `***`;
+  the port and the rest of the text stay. Other error codes are unchanged.
+  (RU: Событие `VPN_ERROR(tunnel_error)` Intent API маскирует IPv4, IPv6 и
+  имена хостов серверов в тексте ошибки; другие коды не тронуты.)
+
+### Changed
+
+- **MASQUE recommended SNI is `www.cloudflare.com`
+  ([task 638](docs/spec/tasks/638-audit-591-four-defects.md)).**
+  `consumer-masque.cloudflareclient.com` does not bring h3 up on Russian
+  networks; it stays in the SNI pool for scanning.
+  (RU: Рекомендованный SNI для MASQUE — `www.cloudflare.com`; прежний домен
+  остался в пуле SNI для перебора.)
+- Core `v1.14.3-lx.15` and launcher contract 1.1.115 are unchanged.
+  (RU: Ядро `v1.14.3-lx.15` и контракт 1.1.115 без изменений.)
+
+### Tests
+
+- New tests from the spec audit
+  ([task 591](docs/spec/tasks/591-spec-kit-revision-audit.md)): return to
+  the home screen, the config mtime flag, the rule-set auto-update schedule,
+  importing an LX backup into a fresh state, the update check; TLS codec,
+  backup slice and merge, probe by levels (task 636); `VPN_ERROR` masking
+  (task 638).
+  (RU: Новые тесты аудита: возврат на главный, mtime-флаг конфига,
+  расписание автообновления наборов, импорт бэкапа LX, проверка обновлений;
+  кодек TLS, срез и слияние бэкапа, проба по уровням; маска в `VPN_ERROR`.)
+
+### Docs
+
+- Spec audit closed
+  ([task 591](docs/spec/tasks/591-spec-kit-revision-audit.md)): about 85
+  feature spec files now describe the app as it behaves.
+  (RU: Аудит спек закрыт: около 85 файлов спек фич приведены к коду.)
 
 ## [2.25.13] — 2026-10-13
 
