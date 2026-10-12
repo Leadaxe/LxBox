@@ -35,6 +35,15 @@
 
 ### Fixed
 
+- **A Transfer to desktop file without rules no longer wipes the rules
+  ([task 640](docs/spec/tasks/640-backup-rules-key-absent-untouched.md)).**
+  Contract 1.1.116: a file without the `rules` key (one server, a folder, a
+  Direction) leaves the current rules as they were. A file with the key, even
+  an empty one, replaces them as before, and the preview names how many
+  rules are removed (`backup_rules_replaced`). Export always writes the key.
+  (RU: Файл Transfer to desktop без ключа `rules` правила не трогает; файл с
+  ключом, даже пустым, замещает их, и превью называет число снятых правил
+  (`backup_rules_replaced`). Экспорт пишет ключ всегда. Контракт 1.1.116.)
 - **The start error notification goes away after a successful start
   ([task 637](docs/spec/tasks/637-clear-error-notification-on-successful-start.md)).**
   When the core rejected a node, the app disabled it and started again, and

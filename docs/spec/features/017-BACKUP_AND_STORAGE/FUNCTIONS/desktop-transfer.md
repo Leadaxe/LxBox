@@ -59,7 +59,11 @@ N", or "Imported N rule(s), M items not applied".
   the file's settings but keeps its own `id` and name.
 - **Directions and chains:** a taken tag — the incoming one is not applied
   (`backup_direction_exists`, `backup_chain_exists`), your own stays (P13).
-- **Rules:** replace the receiver's rules; the order — by the file's numbers.
+- **Rules:** a file with the `rules` key (even `[]`) replaces the receiver's
+  rules; the removed ones are named by one `backup_rules_replaced {count}`,
+  only when `count > 0`. A file without the `rules` key leaves the receiver's
+  rules as they were, with no code (contract 1.1.116). Export always writes
+  the key. The order — by the file's numbers.
   A rule's target is checked after merging sources and Directions: an unknown
   target — the rule is disabled (`backup_unknown_outbound`); `route.final`
   to nowhere — not applied (`backup_final_dropped`) (P14). A foreign preset

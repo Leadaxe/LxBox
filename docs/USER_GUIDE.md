@@ -2509,4 +2509,6 @@ what does not apply in the form it arrived in.
 
 > ⚠️ Import in Transfer to desktop replaces the current rules entirely: the
 > window warns about it with the line `Importing replaces the current rules`.
+> A file without a `rules` key (one server, a folder) leaves the current
+> rules as they were.
 > Before importing, run Export in the Export card.
