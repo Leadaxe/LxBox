@@ -1387,11 +1387,13 @@ NodeSpec? _parseSingboxEntryTyped(
         if (ipv6.isNotEmpty) ensureCidr(ipv6),
       ];
       // §393/контракт 0.8.0 (D-078) — только схема ядра (`vhttp` + вложенный
-      // `tls{}`). Плоские legacy-ключи (`network`/`sni`/`skip_cert_verify`)
-      // НЕ переносятся — «не принимаем» (директива оператора 25.08). Читать
-      // их не читаем; в эмит они не попадают по построению (MasqueSpec несёт
-      // только свои поля) — зеркально Go-стрипу sanitizeSingboxMasqueLegacy,
-      // где плоский `sni` рядом с tls.server_name ронял ядро fail-fast'ом.
+      // `tls{}`). Плоские legacy-ключи `sni`/`skip_cert_verify` НЕ переносятся
+      // (директива оператора 25.08): плоский `sni` рядом с tls.server_name
+      // ронял ядро fail-fast'ом. `network` — не legacy-имя `vhttp`, а ключ,
+      // зарезервированный под tcp/udp как в sing-box (контракт 1.1.118,
+      // D-129): не читается вовсе. Снимает все три общий unknown_key
+      // санитайзера (body.skipped); в эмит они не попадают по построению
+      // (MasqueSpec несёт только свои поля).
       final masqueTls = entry['tls'];
       final tlsMap = masqueTls is Map ? masqueTls : const {};
       final vhttpRaw = entry['vhttp']?.toString() ?? '';

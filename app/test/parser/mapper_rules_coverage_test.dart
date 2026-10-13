@@ -593,14 +593,15 @@ void main() {
       expect(auto.warnings, isEmpty);
     });
 
-    test('masque: плоские network/sni/skip_cert_verify не переносятся', () {
+    test('masque: network/server_name/skip_cert_verify в ссылке не переносятся',
+        () {
       // `singbox_flat_fields_stripped` — чужой диалект. Плоский `sni` рядом с
       // `tls.server_name` роняет ядро fail-fast'ом на весь конфиг, поэтому
       // ключи снимаются БЕЗ переноса значений (контракт 0.8.0, D-078).
       final spec = parseUri(bare.replaceAll(
           '#n', '&network=h2&server_name=legacy.example&skip_cert_verify=1#n'))!;
       final body = spec.emit(TemplateVars.empty).map;
-      expect(body['vhttp'], 'h3', reason: 'legacy network= не влияет ни на что');
+      expect(body['vhttp'], 'h3', reason: 'network= не читается (D-129)');
       expect(body.containsKey('network'), isFalse);
       expect(body.containsKey('sni'), isFalse);
       expect(body.containsKey('skip_cert_verify'), isFalse);

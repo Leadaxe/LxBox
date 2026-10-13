@@ -194,11 +194,11 @@ void main() {
       expect(m.keepAlive, '45s');
     });
 
-    test('§393/0.8.0 (D-078) — masque: плоские legacy-ключи НЕ переносятся', () {
-      // Директива оператора 25.08: network/sni «не принимаем» — значения
-      // игнорируются (узел живёт на дефолтах), в эмит не протаскиваются
-      // (зеркально Go-стрипу sanitizeSingboxMasqueLegacy: плоский sni рядом
-      // с tls.server_name ронял ядро fail-fast'ом).
+    test('§393/0.8.0 (D-078) — masque: плоские sni и network НЕ переносятся', () {
+      // Директива оператора 25.08: плоский sni «не принимаем» (рядом с
+      // tls.server_name он ронял ядро fail-fast'ом). `network` — не
+      // legacy-имя vhttp, а ключ под tcp/udp (контракт 1.1.118, D-129):
+      // не читается. Узел живёт на дефолтах, в эмит ключи не попадают.
       final m = parseSingboxEntry({
         'type': 'masque',
         'tag': 'legacy',
@@ -214,7 +214,7 @@ void main() {
       // Контракт 1.1.64 (корпус body/singbox/masque_tls_owner_rules, узел
       // masque-no-vhttp-fragment): тело без `vhttp` остаётся без него —
       // у ядра это `auto` (default реестра), а не прежний местный h3.
-      expect(m!.vhttp, '', reason: 'legacy network игнорируется — ключа нет');
+      expect(m!.vhttp, '', reason: 'network не читается — vhttp не задан');
       expect(m.sni, isEmpty, reason: 'плоский sni не переносится');
       expect(m.disableSni, isFalse);
     });

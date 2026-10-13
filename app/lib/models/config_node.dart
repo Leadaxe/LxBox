@@ -73,8 +73,9 @@ class ConfigNode {
   static String? _deriveTransport(String type, Map<String, dynamic> raw) {
     // §130/§393 — MASQUE ходит поверх QUIC(h3)/h2. Версия HTTP лежит в СВОЁМ
     // ключе `vhttp`, а не в `transport` (там у остальных типов объект
-    // `{type: …}` — ws/grpc/…). Legacy-имя `network` НЕ читается (контракт
-    // 0.8.0, D-078). Пусто → дефолт h3.
+    // `{type: …}` — ws/grpc/…). `network` версией HTTP не является и не
+    // читается (контракт 1.1.118, D-129: ключ зарезервирован под tcp/udp).
+    // Пусто → дефолт h3.
     if (type == 'masque') {
       final net = raw['vhttp'];
       return (net is String && net.isNotEmpty) ? net : 'h3';
