@@ -23,6 +23,7 @@ import '../contract/body_sanitizer.dart';
 import '../contract/group_genus.dart';
 import '../contract/registry.dart';
 import '../node_identity.dart';
+import 'engine/engine_mapper.dart' show foreignExtensionReject;
 import 'authored_scope.dart'
     show parsingAuthoredBody, parsingOwnSource, singboxBodySource;
 import 'json_parsers.dart';
@@ -282,6 +283,18 @@ List<NodeSpec> _parseOne(
   for (var i = 0; i < candidates.length; i++) {
     final ob = candidates[i];
     final rawTag = ob['tag']?.toString().trim() ?? '';
+    // Контракт 1.1.118 (§591 п.4) — тип, который реестр объявляет
+    // расширением другой стороны (hysteria v1): отбраковка своим кодом с
+    // подсказкой, ДО модели и до правила «свой незнакомый тип» (§585).
+    final foreign = foreignExtensionReject(ob['type']?.toString() ?? '');
+    if (foreign != null) {
+      dropped?.add(RegistryWarning(
+        code: foreign.code,
+        params: foreign.params,
+        ownerTag: rawTag,
+      ));
+      continue;
+    }
     try {
       // §454 — источник узла = оригинальный outbound (до подмены тега лейблом).
       final compact = _prettyJson(ob);
