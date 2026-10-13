@@ -8,8 +8,10 @@ subscription, and the setting travels in the backup. A Transfer to desktop
 file without rules no longer wipes the rules, and the import screen says
 what happens to them. Quit & reopen app stops the VPN for good. In an
 imported sing-box config a node with a broken `detour` chain is dropped
-instead of connecting directly; Hysteria v1 is rejected with a hint. The URL
-test gets two YouTube addresses. Core `v1.14.3-lx.18`, contract 1.1.118.
+instead of connecting directly; Hysteria v1 is rejected with a hint. A new
+switch on the DNS screen keeps node hostnames from being served stale
+answers. The URL test gets two YouTube addresses. Core `v1.14.3-lx.18`,
+contract 1.1.119.
 
 **Патч поверх [v2.25.13](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.13).**
 Часть изменений выходила в Open testing как `v2.25.14-rc.1`.
@@ -19,8 +21,9 @@ test gets two YouTube addresses. Core `v1.14.3-lx.18`, contract 1.1.118.
 не стирает правила, а экран импорта говорит, что с ними будет. Quit & reopen
 app останавливает VPN окончательно. В импортированном конфиге sing-box узел с
 битой цепочкой `detour` отбрасывается, а не идёт напрямую; Hysteria v1
-отклоняется с подсказкой. В URL-тесте два адреса YouTube. Ядро
-`v1.14.3-lx.18`, контракт 1.1.118.
+отклоняется с подсказкой. Новый переключатель на экране DNS не даёт
+отвечать на имена узлов устаревшим ответом из кэша. В URL-тесте два адреса
+YouTube. Ядро `v1.14.3-lx.18`, контракт 1.1.119.
 
 ---
 
@@ -65,6 +68,17 @@ app останавливает VPN окончательно. В импортир
   Ping Settings and the Test URL of the auto group offer two more presets:
   YouTube (`https://www.youtube.com/generate_204`) and YouTube (ytimg)
   (`https://i.ytimg.com/generate_204`).
+- **DNS: Never serve stale answers for node hostnames ([task 643](docs/spec/tasks/643-contract-1-1-119-node-loops.md)).**
+  A new switch on the DNS screen under Default domain resolver, on by default.
+  - The default resolver looks a node's hostname up again once the cached
+    answer expires, so a node whose provider changed its address does not
+    stay on the old one.
+  - App DNS queries are not affected: they follow DNS rules and Serve stale
+    answers.
+  - The setting travels in LX Backup as `dns_resolver_no_stale`.
+  - In the generated config `route.default_domain_resolver` is now an object
+    `{"server": …, "disable_optimistic_cache": …}` instead of a string.
+    Scripts that read the config should expect both forms.
 
 ## 🔄 Changed
 
@@ -136,11 +150,20 @@ app останавливает VPN окончательно. В импортир
   before updating"). lx.16 and lx.17 change only the Linux router daemon and
   the Windows 7 build; nothing of them is in the Android library. The Java
   surface is identical to lx.15.
-- **Launcher contract 1.1.115 → 1.1.118.** 1.1.116: the `rules` key of the
+- **Launcher contract 1.1.115 → 1.1.119.** 1.1.116: the `rules` key of the
   backup file is optional on import. 1.1.117: the `tls` field of a server and a
   source in the backup. 1.1.118: `detour` errors drop the node, Hysteria v1 is
   an unsupported protocol with an alternative, `chrome_155`, MASQUE `network`
-  is not an alias of `vhttp`.
+  is not an alias of `vhttp`. 1.1.119: node loops in the template (next item)
+  and the object form of `default_domain_resolver`.
+- **Contract 1.1.119: node loops in the template ([task 643](docs/spec/tasks/643-contract-1-1-119-node-loops.md)).**
+  `for_each` is gone. A preset walks nodes with `for_each_node` (one body per
+  node) or `for_each_node_do` (collect values with `#do`/`#append` and
+  `#final`, one body after the walk). The filter is `#filter` in the `#if`
+  condition language; the node name is fixed as `@node`. Variable
+  declarations get the fields `unique` and `wizard_ui: "internal"`. The
+  Tailscale preset is rewritten on the new key; its output is byte-for-byte
+  unchanged.
 - New tests: return to the home screen, the config mtime flag, the rule-set
   auto-update schedule, LX backup import into a fresh state, the update check;
   TLS codec, backup slice and merge, probe by levels; address masking in
@@ -189,6 +212,18 @@ app останавливает VPN окончательно. В импортир
   В Ping Settings и в Test URL авто-группы два новых пресета: YouTube
   (`https://www.youtube.com/generate_204`) и YouTube (ytimg)
   (`https://i.ytimg.com/generate_204`).
+- **DNS: Never serve stale answers for node hostnames ([задача 643](docs/spec/tasks/643-contract-1-1-119-node-loops.md)).**
+  Новый переключатель на экране DNS под Default domain resolver, включён по
+  умолчанию.
+  - Резолвер по умолчанию запрашивает имя хоста узла заново, когда ответ в
+    кэше истёк, и узел, у которого провайдер сменил адрес, не остаётся на
+    старом.
+  - DNS-запросы приложений не затронуты: для них действуют правила DNS и
+    Serve stale answers.
+  - Настройка едет в LX Backup как `dns_resolver_no_stale`.
+  - В собранном конфиге `route.default_domain_resolver` теперь объект
+    `{"server": …, "disable_optimistic_cache": …}`, а не строка. Скриптам,
+    которые читают конфиг, нужно ожидать обе формы.
 
 ## 🔄 Изменено
 
@@ -259,11 +294,19 @@ app останавливает VPN окончательно. В импортир
   до обновления»). lx.16 и lx.17 меняют только Linux-демон для роутеров и
   сборку для Windows 7; в Android-библиотеке их нет. Java-поверхность
   идентична lx.15.
-- **Контракт лаунчера 1.1.115 → 1.1.118.** 1.1.116: ключ `rules` файла
+- **Контракт лаунчера 1.1.115 → 1.1.119.** 1.1.116: ключ `rules` файла
   бэкапа необязателен при импорте. 1.1.117: поле `tls` сервера и источника в
   бэкапе. 1.1.118: ошибки `detour` роняют узел, Hysteria v1 — неподдерживаемый
   протокол с альтернативой, `chrome_155`, `network` у MASQUE — не алиас
-  `vhttp`.
+  `vhttp`. 1.1.119: обход узлов в шаблоне (следующий пункт) и объектная форма
+  `default_domain_resolver`.
+- **Контракт 1.1.119: обход узлов в шаблоне ([задача 643](docs/spec/tasks/643-contract-1-1-119-node-loops.md)).**
+  `for_each` снят. Пресет обходит узлы ключом `for_each_node` (тело на каждый
+  узел) или `for_each_node_do` (сбор значений через `#do`/`#append` и
+  `#final`, одно тело после обхода). Отбор — `#filter` на языке условий
+  `#if`; имя узла фиксировано: `@node`. У объявления переменной появились
+  поля `unique` и `wizard_ui: "internal"`. Пресет Tailscale переписан на
+  новый ключ; его вывод не изменился ни на байт.
 - Новые тесты: возврат на главный, mtime-флаг конфига, расписание
   автообновления наборов, импорт бэкапа LX в чистое состояние, проверка
   обновлений; кодек TLS, срез и слияние бэкапа, проба по уровням; маска

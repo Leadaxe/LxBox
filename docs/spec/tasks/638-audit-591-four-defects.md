@@ -3,7 +3,7 @@
 | Поле | Значение |
 |------|----------|
 | Тип | B (баг) |
-| Статус | D (done) |
+| Статус | D (done), выпущено в v2.25.14 |
 | Фичи | [010-VPN_SERVICE](../features/010-VPN_SERVICE/FEATURE.md), [006-DETOUR_AND_BALANCE](../features/006-DETOUR_AND_BALANCE/FEATURE.md) / [026-DIRECTIONS](../features/026-DIRECTIONS/FEATURE.md), [014-AUTOMATION](../features/014-AUTOMATION/FEATURE.md), [015-WARP](../features/015-WARP/FEATURE.md) |
 | Дата | 2026-10-13 |
 | Связанные | §591 (аудит, источник находок), §428 (сторож VPN), §404, §014, §393 (SNI MASQUE на RU-каналах) |
