@@ -673,5 +673,11 @@
  },
  "Store the DNS cache in cache.db so it survives a restart.": {
   "value": "将 DNS 缓存存入 cache.db，重启后仍然保留。"
- }
+ },
+  "YouTube": {
+    "value": "YouTube"
+  },
+  "YouTube (ytimg)": {
+    "value": "YouTube (ytimg)"
+  }
 }

@@ -673,5 +673,11 @@
   },
   "Store the DNS cache in cache.db so it survives a restart.": {
     "value": "Хранить кэш DNS в cache.db, чтобы он переживал перезапуск."
+  },
+  "YouTube": {
+    "value": "YouTube"
+  },
+  "YouTube (ytimg)": {
+    "value": "YouTube (ytimg)"
   }
 }
