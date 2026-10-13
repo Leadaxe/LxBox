@@ -346,11 +346,19 @@ class DnsServerEditController extends ChangeNotifier {
         break;
       }
     }
+    // §643 (D-132) — `unique` у `text_list`: дубли снимаются при сохранении;
+    // `internal` в запись не пишется.
     final stored = recordVarValueToStore(
       value,
       decl == null
           ? null
-          : RecordVarDecl(name: decl.name, defaultValue: decl.defaultValue),
+          : RecordVarDecl(
+              name: decl.name,
+              defaultValue: decl.defaultValue,
+              type: decl.type,
+              isInternal: decl.isInternal,
+              unique: decl.unique,
+            ),
     );
     if (stored == null) {
       _varValues.remove(name);

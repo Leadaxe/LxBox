@@ -76,15 +76,18 @@ The feature protects three principles:
   consent — not a single request, the cache is read", "without consent and
   without a cache — the bundled copy, the network is not touched"; for the
   update check — unit "maybeCheck: toggle off (default) — last_update_check
-  untouched" (no network reached); a false-positive of the default itself
-  needs HTTP mocking the repo lacks — not covered.
+  untouched" (no network reached) and "P12: by default the auto-check makes
+  not a single request" (`update_checker_test.dart`, the network is replaced
+  through `http.runWithClient`).
   **Mutation:** the update check default is `true`.
 - **P13. Auto-check — at most once a day, dev builds stay silent, "Check now"
   always works.** **Witness:** units "maybeCheck: toggle off — last_update_check
   untouched", "maybeCheck: dev build silent even with toggle on", "maybeCheck:
-  24h threshold not elapsed — no re-check"; the daily-threshold-from-failure
-  mutation and "Check now" bypass need HTTP mocking the repo does not have
-  (`http.get` not injectable) — not covered, `no witness` for that part.
+  24h threshold not elapsed — no re-check", "P13: a failed attempt does not
+  move the daily threshold", "P13: success sets the threshold — a repeated
+  auto-check stays silent", "P13: Check now goes to the network past the
+  toggle, the threshold and a dev build" (`update_checker_test.dart`, the
+  network is replaced through `http.runWithClient`).
   **Mutation:** the daily threshold is counted from a failed attempt.
 - **P14. The new version notice — only at launch and only from the stored
   result.** The result of a network check appears on the next launch; the
@@ -206,6 +209,9 @@ tunnel and subscription events → toggle → throttling → vibration
   [029-LOCALIZATION](../029-LOCALIZATION/FEATURE.md).
 - There is no in-app update installation: only a link.
 - The message feed cannot be turned off entirely; it can be snoozed or read.
+  A switch for it is not planned (owner decision 2026-10-13, audit [591](../../tasks/591-spec-kit-revision-audit.md)).
+- There is no themed (monochrome) launcher icon for Android 13+; the icon
+  keeps its own colors on a themed home screen.
 - Donations — About → "Support the project"; the addresses come as a separate
   list on an explicit action (public document `docs/DONATE.md`).
 - Depends on OS capabilities: the vibration motor and the system "Touch

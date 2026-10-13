@@ -164,16 +164,26 @@ void main() {
   });
 
   group('§455 checkPayloadFor', () {
-    test('голое тело → outbounds без detour', () {
+    test('голое тело → outbounds', () {
       final payload = checkPayloadFor(
           '{"type":"socks","tag":"a","server":"h","server_port":1080,'
-          '"detour":"x","foo":1}');
+          '"foo":1}');
       final m = jsonDecode(payload!) as Map<String, dynamic>;
       final body = (m['outbounds'] as List).single as Map;
       expect(body['tag'], 'a');
       expect(body.containsKey('detour'), isFalse);
       expect(body['foo'], 1); // ключ вне модели — ядро проверит его само
       expect(m.containsKey('endpoints'), isFalse);
+    });
+
+    // §642 (контракт 1.1.118, D-128) — голое тело с `detour` на чужой тег:
+    // хоп без узла = `detour_target_missing`, узла нет, проверять нечего.
+    test('голое тело с висячим detour → null', () {
+      expect(
+          checkPayloadFor(
+              '{"type":"socks","tag":"a","server":"h","server_port":1080,'
+              '"detour":"x"}'),
+          isNull);
     });
 
     test('wireguard → endpoints', () {

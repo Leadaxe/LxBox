@@ -57,7 +57,8 @@ void main() {
     expect(ob.containsKey('tls'), isFalse);
   });
 
-  test('legacy `network: h2` (конфиг до миграции) тоже фрагментируется', () {
+  test('`network: h2` не читается (D-129): vhttp не задан → фрагментируется',
+      () {
     final ob = <String, dynamic>{
       'tag': 'masque-out',
       'type': 'masque',

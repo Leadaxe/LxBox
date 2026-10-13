@@ -12,6 +12,7 @@
 
 import '../../models/node_spec.dart';
 import '../../models/server_list.dart';
+import '../../models/tls_policy.dart';
 import '../node_hash.dart';
 import '../settings_storage.dart';
 import '../template_loader.dart';
@@ -34,8 +35,13 @@ class ProbeController {
     required String url,
     required int timeoutMs,
     required void Function(int index, ProbeResult result) onResult,
+    Map<int, TlsLayers> tlsByIndex = const {},
   }) =>
-      _runner.run(nodes, url: url, timeoutMs: timeoutMs, onResult: onResult);
+      _runner.run(nodes,
+          url: url,
+          timeoutMs: timeoutMs,
+          onResult: onResult,
+          tlsByIndex: tlsByIndex);
 
   /// Эргономичный оверлоуд: switch member-vs-nodes[] в ОДНОМ месте.
   Future<String> runList(
@@ -44,7 +50,37 @@ class ProbeController {
     required int timeoutMs,
     required void Function(int index, ProbeResult result) onResult,
   }) =>
-      run(nodes: probeNodesOf(list), url: url, timeoutMs: timeoutMs, onResult: onResult);
+      run(
+          nodes: probeNodesOf(list),
+          url: url,
+          timeoutMs: timeoutMs,
+          onResult: onResult,
+          tlsByIndex: probeTlsOf(list));
+
+  /// §636 — уровни TLS-политики узлов [list] по индексу [probeNodesOf]: проба
+  /// фрагментирует так же, как туннель. Пустые уровни не записываются.
+  static Map<int, TlsLayers> probeTlsOf(ServerList list) {
+    final out = <int, TlsLayers>{};
+    void put(int i, TlsLayers l) {
+      if (!l.isEmpty) out[i] = l;
+    }
+
+    switch (list) {
+      case FolderServers(:final members, :final tls):
+        for (var i = 0; i < members.length; i++) {
+          put(i, TlsLayers(node: members[i].tls, source: tls));
+        }
+      case UserServer(:final tls):
+        for (var i = 0; i < list.nodes.length; i++) {
+          put(i, TlsLayers(node: tls));
+        }
+      case SubscriptionServers(:final tls):
+        for (var i = 0; i < list.nodes.length; i++) {
+          put(i, TlsLayers(source: tls));
+        }
+    }
+    return out;
+  }
 
   /// §296 — приведение любого [ServerList] к списку нод для probe. Единственное
   /// место, где решается member-vs-nodes[]. Папка отдаёт члены (nullable,

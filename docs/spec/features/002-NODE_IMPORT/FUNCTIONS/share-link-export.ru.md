@@ -23,7 +23,7 @@
 |------|--------------|
 | `vless`, `trojan`, `tuic`, `anytls`, `hysteria2`, `ssh` | URL-форма, параметры по алфавиту |
 | `vmess` | `vmess://` + base64(JSON) без паддинга |
-| `shadowsocks` | `ss://` + base64url(`method:password`) без паддинга, `@host:port#имя` |
+| `shadowsocks` | `ss://` + base64url(`method:password`) без паддинга, `@host:port#имя`; `plugin`/`plugin_opts` SIP003 не пишутся (так велит секция `emit` реестра) — остаются в JSON-теле узла и в outbound |
 | `socks` | схема по версии: `socks4://`, `socks4a://`, иначе `socks5://` |
 | `http` | `proxy-https://` при TLS, иначе `proxy-http://` |
 | `naive` | `naive+quic://` при QUIC, иначе `naive+https://`; порт пишется всегда |
@@ -63,6 +63,7 @@
 
 - Где в интерфейсе копирование и QR — [007-NODE_LIST](../../007-NODE_LIST/FEATURE.ru.md).
 - Форма хранения узлов и бэкап — [017-BACKUP_AND_STORAGE](../../017-BACKUP_AND_STORAGE/FEATURE.ru.md).
+- Узел Shadowsocks с плагином SIP003 теряет плагин в ссылке `ss://`: так задумано контрактом, не дефект; outbound и JSON-копия его сохраняют.
 - Ссылка узла подписки — это её исходный текст; экспорт собирает ссылку
   заново из тела, байт в байт с исходной она не обязана совпадать.
 

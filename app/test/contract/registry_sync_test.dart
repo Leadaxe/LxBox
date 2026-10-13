@@ -93,6 +93,9 @@ const _codesInCode = <String>{
   kWarnSectionRecordDropped,
   kWarnSourceKindUnsupported,
   kWarnGroupDegraded,
+  // §640 — контракт 1.1.116: замещение правил приёмника файлом с ключом
+  // `rules` (BACKUP.md §9 п. 7).
+  kWarnRulesReplaced,
 };
 
 void main() {

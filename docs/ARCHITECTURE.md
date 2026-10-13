@@ -130,6 +130,13 @@ snapshot plus `stage()` over the DNS section, leaving the screen thin), and
 auth-force and `has_tun`-mirror invariants for the UI **and** for Debug). The typed storage models are the sealed `DnsServerRef` and `DnsRuleRef` (§294).
 The full invariant plus the strangler plan is in `docs/spec/tasks/291F-layered-architecture-facades/`.
 
+**Known layer violations (debt, no user-visible effect; audit 591, 2026-10-13):**
+`services/dns/dns_controller.dart` and `services/debug/handlers/chains.dart` import
+from `screens/` (the DNS server resolver of the DNS screen; the chain form validation,
+hop candidates and hop targets of the chain editor). They are recorded here rather than
+fixed: the owner's rule is not to touch what works; a fix moves those pure helpers down
+to `services/` without changing behavior.
+
 **The event brokers (push, bottom-up):** §122 moved the UI's control channel onto the
 libbox **CommandClient** (a server-stream push instead of Timer polling). The push channels:
 the native status `Stream<TunnelStatusEvent>` (the tunnel's lifecycle), the `lxbox/coreLog`

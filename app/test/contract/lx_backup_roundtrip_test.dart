@@ -11,6 +11,9 @@ import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/record_codec.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/source_chain.dart';
+import 'package:lxbox/models/tls_policy.dart';
+import 'package:lxbox/services/parser/body_decoder.dart';
+import 'package:lxbox/services/parser/parse_all.dart';
 import 'package:lxbox/services/dns/dns_backup.dart';
 import 'package:lxbox/services/json_clone.dart';
 import 'package:lxbox/services/lx_backup.dart';
@@ -83,6 +86,7 @@ LxBackupFile _import(_State s, String raw) {
       lists: s.lists,
       directions: s.directions,
       chains: s.chains,
+      rules: s.rules,
     ),
   );
   final file = plan.file;
@@ -416,10 +420,12 @@ void main() {
       final before = _snapshot(state);
 
       final again = _import(state, out.json);
+      // §640 — свой экспорт несёт ключ `rules`, и правила приёмника
+      // замещаются: это названо `backup_rules_replaced` (BACKUP.md §9 п. 7).
       expect(again.warnings.map((w) => w.code).toSet(),
-          {kWarnChainExists, kWarnDirectionExists},
+          {kWarnChainExists, kWarnDirectionExists, kWarnRulesReplaced},
           reason: 'своя цепочка и своё Направление под тем же тегом сильнее — '
-              'и названы');
+              'и названы; замещение правил названо');
       expect(_snapshot(state), _deepEquals(before),
           reason: 'папки-тёзки, узлы, DNS и правила не задвоились');
       expect(state.lists.whereType<FolderServers>().map((f) => f.members.length), [3, 1]);
@@ -517,6 +523,91 @@ void main() {
       }
     }, skip: corpusTestSkip('test/contract/lx_backup_roundtrip_test.dart',
         subpath: 'schema'));
+  });
+  // §636 — TLS-политика: контракт 1.1.117 объявил поле `tls` у подписки,
+  // сервера, папки и члена папки ($defs/tlsPolicy), поэтому оно едет в файл и
+  // применяется на импорте; слияние держит локальную политику так же, как
+  // локальную ссылку detour.
+  group('§636 tls', () {
+    const uriA = 'vless://11111111-1111-1111-1111-111111111111@198.51.100.1:443'
+        '?type=ws&security=tls#Alpha';
+    const uriB = 'vless://22222222-2222-2222-2222-222222222222@198.51.100.2:443'
+        '?type=ws&security=tls#Beta';
+    const local = TlsPolicy(fragment: false, fallbackDelay: '1s');
+
+    List<ServerList> lists({required bool withTls}) {
+      final tls = withTls ? local : TlsPolicy.none;
+      return [
+        SubscriptionServers(
+          id: withTls ? 'sub-local' : 'sub-file',
+          name: 'S',
+          enabled: true,
+          tagPrefix: '',
+          detourPolicy: DetourPolicy.defaults,
+          tls: tls,
+          url: 'https://s.example/sub',
+        ),
+        UserServer(
+          id: withTls ? 'srv-local' : 'srv-file',
+          name: '',
+          enabled: true,
+          tagPrefix: '',
+          detourPolicy: DetourPolicy.defaults,
+          tls: tls,
+          rawBody: uriA,
+          nodes: parseAll(decode(uriA)),
+        ),
+        FolderServers(
+          id: withTls ? 'f-local' : 'f-file',
+          name: 'F',
+          enabled: true,
+          tagPrefix: '',
+          detourPolicy: DetourPolicy.defaults,
+          tls: tls,
+          members: [FolderMember(raw: uriB, tls: tls)],
+        ),
+      ];
+    }
+
+    test('экспорт и импорт: tls едет у подписки, сервера, папки и члена',
+        () async {
+      final out = await _export(_State(lists: lists(withTls: true)));
+      final dropped = [
+        for (final w in out.warnings)
+          if (w.code == kWarnLocalOnlyDropped) w.detail,
+      ];
+      expect(dropped.where((d) => d.contains('tls')), isEmpty,
+          reason: '$dropped');
+      expect(out.json.contains('"tls"'), isTrue);
+      final imported = planLxBackupImport(
+        out.json,
+        const LxImportReceiver(lists: [], directions: [], chains: []),
+      ).lists;
+      expect(imported, hasLength(3));
+      for (final l in imported) {
+        expect(l.tls, local, reason: l.type);
+      }
+      final folder = imported.whereType<FolderServers>().single;
+      expect(folder.members.single.tls, local);
+    });
+
+    test('слияние: совпавшие источник и узел держат свою политику', () async {
+      final out = await _export(_State(lists: lists(withTls: false)));
+      final merged = planLxBackupImport(
+        out.json,
+        LxImportReceiver(
+          lists: lists(withTls: true),
+          directions: const [],
+          chains: const [],
+        ),
+      ).lists;
+      expect(merged, hasLength(3));
+      for (final l in merged) {
+        expect(l.tls, local, reason: l.type);
+      }
+      final folder = merged.whereType<FolderServers>().single;
+      expect(folder.members.single.tls, local);
+    });
   });
 }
 

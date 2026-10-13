@@ -34,7 +34,7 @@ milliseconds. `startTailscaleSSHSession` is not used.
 | Called from | `scripts/build-local-apk.sh` and CI (`ci.yml` → the android job → “Fetch sing-box-lx core”) |
 | The AAR in git | NO (~110 MB as of lx.25; `app/android/app/libs/` is in `.gitignore`); `build.gradle.kts` → `implementation(files("libs/libbox.aar"))` |
 
-**The current pin: `v1.14.3-lx.15`** (see `app/android/libbox.version`) — lx.1
+**The current pin: `v1.14.3-lx.18`** (see `app/android/libbox.version`) — lx.1
 plus XHTTP HTTP-version parity (**SPEC 104**, lx.2), Vision on top of VLESS
 Encryption (**SPEC 105**, lx.3), the runtime WG/AWG endpoint toggle
 (**SPEC 106**, lx.4: `CommandClient.setEndpointEnabled`, `endpointState =
@@ -44,7 +44,7 @@ default without `xmux` moved to `max_connections 3` (lx.6), three MASQUE hangs f
 control channel on port 443 from the first connection (**SPEC 111**, lx.9),
 the headroom Tailscale needs on a direct UDP path restored in the AWG
 wireguard-go (**SPEC 112**, lx.10), one more `stable` sync (lx.11), lx.12 and
-lx.13-rc.1, lx.13, lx.14 and lx.15 (below). The Java surface of lx.11 is identical to lx.8 (`javap` over both
+lx.13-rc.1, lx.13, lx.14, lx.15 and lx.16–lx.18 (below). The Java surface of lx.11 is identical to lx.8 (`javap` over both
 `classes.jar`). The `lx.1` layers: **SPEC 097**, **SPEC 098**, **SPEC 101** and
 the upstream sync to sing-box **1.14.2** (**SPEC 102**).
 
@@ -153,6 +153,28 @@ identical to lx.14). Java surface lx.14 → lx.15: identical (javap over all
 diff). AAR sha256
 `9146eeaa79b9c750e7c5747c74c4281fc07411627c6ac0dc2737f706f6224ecb` (checked
 against the release `SHA256SUMS`).
+
+**`v1.14.3-lx.18`** — three releases in two days, none touching the Android
+data path. lx.16 (**SPEC 127/128/129/130**) and lx.17 (**SPEC 129** hotfix)
+are about the Linux router daemon (`sing-box lxd update` self-update, named
+root commands in `daemon.json`, `/admin/info` platform fields, a Windows 7
+start fix, the procd TUN `EBUSY` retry at boot) — nothing of it is compiled
+into `libbox`. lx.18 (**SPEC 131**) removes the legacy `network` key of the
+`masque` outbound: since the schema migration it only duplicated `vhttp`
+(h3/h2) under a name that means the tcp/udp list everywhere else. A masque
+outbound that still carries `network` no longer loads (`outbounds[N].network:
+json: unknown field "network"`). LxBox emits `vhttp` and never writes
+`network` (§393, §556); since §642 (D-129) the parser does not read it either,
+so a `network` key left in an authored sing-box body now reaches the core
+verbatim and the node is rejected at start (the app disables it and starts
+again, §637) — rename the key to `vhttp`. The flat TLS aliases (`sni`,
+`skip_cert_verify`, `fragment*`) are still accepted with a deprecation line.
+Base sing-box v1.14.3, zero drift from `upstream/stable`, Go 1.26.8. Build
+tags unchanged. Java surface lx.15 → lx.18: identical (javap over all 258
+classes of both `classes.jar` in one call per jar, 3583 lines each, empty
+diff). `strings -a` of `libbox.so` inside the AAR reports `1.14.3-lx.18`. AAR
+sha256 `ebd362a960a31cc876f0b3fa51790d33a42217eee4edeba94ae7cabf23e09fae`
+(checked against the release `SHA256SUMS`).
 
 **SPEC 098** moves every global knob of the fork into a root **`lx`** block,
 grouped by subsystem. The three idle keys keep their SPEC 020 semantics and
@@ -1122,7 +1144,8 @@ subscription), the core provides insurance in case the client misses something.
 
 | rc | What was added |
 |---|---|
-| **v1.14.3-lx.15** (current pin) | **`urltest` probes every `interval` (SPEC 125), `failover` leaves a degraded node (SPEC 126), `fingerprint: random`/`randomized` safe for REALITY (SPEC 123), uTLS handshake state released (SPEC 122), gRPC security bump.** Base sing-box v1.14.3. Java surface identical to lx.14 (258 classes, 3583 javap lines). AAR sha256 `9146eeaa79b9c750e7c5747c74c4281fc07411627c6ac0dc2737f706f6224ecb`. |
+| **v1.14.3-lx.18** (current pin) | **The legacy `network` key of the `masque` outbound is gone (SPEC 131): a masque body with `network` fails to load, rename it to `vhttp`.** lx.16/lx.17 (SPEC 127–130) are Linux-daemon and Windows 7 changes outside `libbox`. Base sing-box v1.14.3. Java surface identical to lx.15 (258 classes, 3583 javap lines). AAR sha256 `ebd362a960a31cc876f0b3fa51790d33a42217eee4edeba94ae7cabf23e09fae`. |
+| **v1.14.3-lx.15** | **`urltest` probes every `interval` (SPEC 125), `failover` leaves a degraded node (SPEC 126), `fingerprint: random`/`randomized` safe for REALITY (SPEC 123), uTLS handshake state released (SPEC 122), gRPC security bump.** Base sing-box v1.14.3. Java surface identical to lx.14 (258 classes, 3583 javap lines). AAR sha256 `9146eeaa79b9c750e7c5747c74c4281fc07411627c6ac0dc2737f706f6224ecb`. |
 | **v1.14.3-lx.14** | **XHTTP `path` query verbatim (SPEC 119), `lx.mtu_align` (SPEC 120), `vhttp: auto` h2 memory with a window (SPEC 121).** Base sing-box v1.14.3. LxBox §620 depends on SPEC 119. Java surface: 258 classes in both, 3584 → 3583 javap lines — `CommandServer.recordLockState` removed (unused by LxBox). AAR sha256 `a06dbdc86aed9bc5ed018af208a04a01db216db770821eac4c4da4fb9bbd2975`. |
 | **v1.14.2-lx.13** | The release of lx.13-rc.1 on sing-box v1.14.3 (DNS-server change resets the network); `ib=chrome-full` experimental, not exposed by client UIs. |
 | **v1.14.2-lx.13-rc.1** (core rc, shipped in v2.25.12-rc.1) | **Fresh `ip=quic` decoy per handshake, `ib` profiles as real QUIC ClientHellos.** Base sing-box v1.14.2 as in lx.12, no upstream drift taken. The `ip=quic` decoy is no longer a static `i1` baked into the endpoint for its lifetime (the same datagram with the same DCID before every handshake initiation): the engine calls a generator before each handshake through the lx hook `SetDecoyPacketsFunc` in the fork of wireguard-go and sends a fresh Initial (new DCID/SCID, random, key_share, layout). `ib=chrome` / `ib=firefox` were TCP ClientHellos inside the QUIC Initial since 18.06.2026 (no `quic_transport_parameters`, TLS 1.2 ciphers, TCP extensions); now they are real QUIC ClientHellos, calibrated against Chrome 147/155 and Firefox 149 captures. `ip=sip` sends only INVITE (`i2` empty); `ip=dns` sends EDNS without options. New value `ib=chrome-full` (Chrome 155 with ML-KEM in one oversize Initial) — **not supported in LxBox yet**: the contract registry (`app/contract/registry/protocols/wireguard.json`, `body.fields.ib`) lists `chrome|firefox|curl`, an unknown value is dropped with `awg3_field_invalid`; support is a separate task with a contract version. Core release candidate: the field run of `chrome-full` did not happen before the tag. Java surface identical to lx.12: 258 classes, 3584 javap lines on both sides, `classes.jar` byte-identical. |

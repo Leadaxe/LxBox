@@ -24,6 +24,7 @@ Outbound sing-box, массив outbound, полный конфиг или ма�
 | `vless`, `vmess`, `trojan`, `anytls`, `shadowsocks`, `hysteria2`, `naive`, `tuic`, `ssh`, `socks`, `http`, `masque` | узел с моделью |
 | `wireguard`, `tailscale` (в `outbounds[]` или `endpoints[]`) | endpoint-узел |
 | `openvpn-client` | узел, тело как написано, без проверок и предупреждений |
+| `hysteria` (v1) | отбраковка `protocol_extension_unsupported` с подсказкой `hysteria2` (контракт 1.1.118) |
 | тип вне реестра | из своего источника — узел с предупреждением `unknown_node_type`; из подписки — отбраковка `protocol_unsupported` |
 | `urltest`, `selector` | группа того же рода; `selector` сохраняет `default` |
 | `direct`, `block`, `dns` | не узлы |
@@ -44,10 +45,13 @@ Outbound sing-box, массив outbound, полный конфиг или ма�
 - **`detour`.** Цель цепочки узлом не дублируется, а становится звеном
   владельца; одна цель у двух владельцев — копия каждому. Цепочки любой
   длины разворачиваются, звеном может быть любой тип; глубже 8 —
-  обрезка с кодом `detour_chain_too_deep`. Цикл рвётся с кодом
-  `detour_cycle_broken`, узлы не исчезают. Висячая ссылка —
-  `detour_target_missing`; `detour` на группу — `detour_to_group`;
-  `detour: direct` молча игнорируется.
+  обрезка с кодом `detour_chain_too_deep`, узел живёт. Негодная цепочка —
+  fail-closed (контракт 1.1.118, D-128): узел-носитель не создаётся и уходит
+  в `dropped[]` со своим тегом — висячая ссылка или хоп, не ставший узлом, —
+  `detour_target_missing`; `detour` на группу — `detour_to_group` (группа и
+  её члены живут); кольцо или самоссылка — `detour_cycle_broken` у каждого
+  участника. Узел с деградировавшим маршрутом напрямую не идёт.
+  `detour: direct` (при записи `direct` в конфиге) молча игнорируется.
 - **Группы.** Состав — точные ссылки на разобранные узлы (не regex); состав
   на тегах соседнего конфига резолвится через синонимы; дубли схлопываются;
   вложенная группа выпадает из состава с кодом; пустой состав — группы нет.
@@ -89,3 +93,4 @@ Outbound sing-box, массив outbound, полный конфиг или ма�
 | 10 | [584F](../../../tasks/584F-openvpn-import/spec.md) | Отложено | Импорт `.ovpn` — ТЗ есть, не реализован |
 | 11 | [585](../../../tasks/585-unknown-node-type-accepted.md) | Implemented | Незнакомый тип принимается из своего источника |
 | 12 | [586](../../../tasks/586-endpoint-types-from-registry.md) | Implemented | Разделы `endpoints`/`outbounds` из реестра; `openvpn-client` — известный тип |
+| 13 | [642](../../../tasks/642-contract-1-1-118-sync.md) | Done | Битый `detour` отбраковывает носителя; hysteria v1 — явный отказ |

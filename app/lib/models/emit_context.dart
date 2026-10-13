@@ -5,6 +5,7 @@ import 'node_spec.dart';
 import 'node_warning.dart' show RegistryWarning;
 import 'singbox_entry.dart';
 import 'template_vars.dart';
+import 'tls_policy.dart';
 
 /// Контекст одного вызова `buildConfig`. `ServerList.build(ctx)` использует
 /// его, чтобы:
@@ -41,7 +42,7 @@ abstract class EmitContext {
   RuleSetRegistry get ruleSets;
 
   /// §435 — финальный тег эмитированного узла (после префикса контейнера и
-  /// `allocateTag`). По нему `buildConfig` собирает узлы для `for_each`
+  /// `allocateTag`). По нему `buildConfig` собирает узлы для обхода узлов
   /// пресетов (§578) и адресный индекс; узла, которого здесь нет, в конфиге
   /// нет.
   void noteEmitted(NodeSpec node, String finalTag) {}
@@ -50,6 +51,11 @@ abstract class EmitContext {
   /// ведёт к [owner], а не к своему звену. При коллизии с main-тегом того же
   /// узла побеждает [noteEmitted].
   void noteEmittedAlias(String finalTag, NodeSpec owner) {}
+
+  /// §636 — уровни TLS-политики outbound'а с итоговым тегом [finalTag]
+  /// (узел и его родная цепочка). Пустые уровни не записываются: такой
+  /// outbound живёт по глобальному слою.
+  void noteTls(String finalTag, TlsLayers layers) {}
 
   /// §435 — предупреждение сборки из `ServerList.build` (гейт ядра и т.п.):
   /// уходит в `emitWarnings` наравне с остальными строками отчёта.

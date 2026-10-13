@@ -293,6 +293,11 @@ class SubscriptionEntry extends ChangeNotifier {
   set replaceDetourChain(bool v) =>
       _replaceList(_copy(detourPolicy: detourPolicy.copyWith(replaceDetourChain: v)));
 
+  /// §636 — TLS-политика записи: у подписки и папки — уровень источника, у
+  /// одиночного сервера — узловой. UI после set зовёт `persistSources()`.
+  TlsPolicy get tls => _list.tls;
+  set tls(TlsPolicy v) => _replaceList(_copy(tls: v));
+
   /// Фича 565 фаза B — свёртка папки или подписки в группу (§74); `null` —
   /// не свёрнута. У одиночного сервера свёртки нет — no-op.
   SourceReplace? get replace => _list.replace;
@@ -309,6 +314,7 @@ class SubscriptionEntry extends ChangeNotifier {
     bool? enabled,
     String? tagPrefix,
     DetourPolicy? detourPolicy,
+    TlsPolicy? tls,
   }) =>
       switch (_list) {
         final SubscriptionServers s => s.copyWith(
@@ -316,18 +322,21 @@ class SubscriptionEntry extends ChangeNotifier {
             enabled: enabled,
             tagPrefix: tagPrefix,
             detourPolicy: detourPolicy,
+            tls: tls,
           ),
         final UserServer u => u.copyWith(
             name: name,
             enabled: enabled,
             tagPrefix: tagPrefix,
             detourPolicy: detourPolicy,
+            tls: tls,
           ),
         final FolderServers f => f.copyWith(
             name: name,
             enabled: enabled,
             tagPrefix: tagPrefix,
             detourPolicy: detourPolicy,
+            tls: tls,
           ),
       };
 }

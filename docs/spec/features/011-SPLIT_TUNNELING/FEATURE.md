@@ -156,6 +156,9 @@ user choice / Debug API / backup
 - Per-package routing inside the core — 004-ROUTING; per-app traffic —
   012-LIVE_STATE; banner and auto-restart — 003-CONFIG_BUILD.
 - Split by domains/IP at the OS level — not done (those are core rules).
+- The app list is applied only while the expert template variable
+  `tun_auto_route` is `true` (its default); with it off the list is ignored
+  silently, without a banner. Kept as is (audit [591](../../tasks/591-spec-kit-revision-audit.md), 2026-10-13).
 - Not planned (owner decision 2026-09-29, audit [591](../../tasks/591-spec-kit-revision-audit.md)) from `046F`: a snackbar when adding
   LxBox to the Deny list, a "Config is locked" banner on the tab, a checkbox
   toggle on a listed app (removal by the cross stays), "Show system apps" in the

@@ -52,6 +52,7 @@ class DnsSettingsSnapshot {
     this.cacheCapacity = '',
     this.optimistic = true,
     this.storeCache = true,
+    this.resolverNoStale = true,
   });
 
   final List<DnsServerRef> servers;
@@ -73,8 +74,8 @@ class DnsSettingsSnapshot {
   /// `markDirty()` (persist битого ref не должен дожить до билда).
   final bool resolverReset;
 
-  /// §578 — пресет с `for_each` → теги узлов, которые он обслуживает
-  /// (подпись строки пресета). Пресета без `for_each` здесь нет.
+  /// §578 — пресет с `for_each_node` → теги узлов, которые он обслуживает
+  /// (подпись строки пресета). Пресета без `for_each_node` здесь нет.
   final Map<String, List<String>> presetServedTagsByPresetId;
 
   /// §580 — кэш DNS: `dns_cache_capacity` (строкой, как в storage),
@@ -83,6 +84,11 @@ class DnsSettingsSnapshot {
   final String cacheCapacity;
   final bool optimistic;
   final bool storeCache;
+
+  /// §643 (TEMPLATE_LANG §6.9) — `dns_resolver_no_stale`: резолвер по
+  /// умолчанию не отдаёт из кэша ответ с истёкшим TTL. Не задано — значение
+  /// по умолчанию шаблона.
+  final bool resolverNoStale;
 }
 
 class DnsController {
@@ -93,7 +99,7 @@ class DnsController {
   /// строит превью-mirror'ы и считает §121 resolver-autoreset. Чистый
   /// read+derive. Возвращает [DnsSettingsSnapshot].
   ///
-  /// §578 — [presetNodes]: узлы источников для пресетов с `for_each`
+  /// §578 — [presetNodes]: узлы источников для пресетов с обходом узлов
   /// (`presetNodesForView`); без них такой пресет не даёт ни серверов, ни
   /// правил, и сохранённые ссылки на его серверы ушли бы как сироты.
   static Future<DnsSettingsSnapshot> load({
@@ -143,7 +149,7 @@ class DnsController {
     final presetIdByServerTag = <String, String>{};
     // §578 — `preset_id` для записи хранения: только серверы в пространстве
     // пресета (`<preset_id>:<тег>`), как у сборки (`custom_rules.dart`). Тег
-    // сервера пресета с `for_each` (`<тег узла>-dns`) пространства не имеет:
+    // сервера пресета с `for_each_node` (`<тег узла>-dns`) пространства не имеет:
     // с `preset_id` модель `DnsServerPreset` достроила бы его до
     // `tailscale:<тег>-dns`. Владелец такого сервера на экране — из пометок
     // `_preset_id`/`_preset_label` тела (карта выше), не из хранения.
@@ -172,7 +178,9 @@ class DnsController {
         presetDnsEnable[cr.presetId] = presetDnsEnableVar(cr, match);
       }
       final fragments = expandPreset(cr, match, nodes: presetNodes);
-      if (match.forEach != null) {
+      // §643 — подпись «обслуживаемые узлы» только у `for_each_node`: у
+      // `for_each_node_do` тело одно, пресет на экране как обычный.
+      if (match.nodeLoop?.isNode ?? false) {
         presetServedTagsByPresetId[cr.presetId] = [
           for (final n in presetForEachNodes(cr, match, presetNodes)) n.tag,
         ];
@@ -327,6 +335,7 @@ class DnsController {
       cacheCapacity: cacheCapacity,
       optimistic: boolVar('dns_optimistic'),
       storeCache: boolVar('dns_store_cache'),
+      resolverNoStale: boolVar('dns_resolver_no_stale'),
     );
   }
 
@@ -344,6 +353,7 @@ class DnsController {
     String? cacheCapacity,
     bool? optimistic,
     bool? storeCache,
+    bool? resolverNoStale,
   }) async {
     await SettingsStorage.saveDnsServers(servers, flush: false);
     final cleaned = cleanDnsRulesForPersist(
@@ -369,6 +379,13 @@ class DnsController {
     }
     if (storeCache != null) {
       await SettingsStorage.setVar('dns_store_cache', '$storeCache',
+          flush: false);
+    }
+    // §643 — резолвер по умолчанию: объектная форма, меняется только поле
+    // `disable_optimistic_cache`; `server` — `dns_default_domain_resolver`.
+    if (resolverNoStale != null) {
+      await SettingsStorage.setVar(
+          'dns_resolver_no_stale', '$resolverNoStale',
           flush: false);
     }
   }

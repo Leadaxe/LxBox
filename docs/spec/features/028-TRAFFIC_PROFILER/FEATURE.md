@@ -255,5 +255,5 @@ STOP ──► unsubscribe; the log is frozen until the next START
   2000-01-01 are "no data" sentinels, not dates (§353).
 - The event's `extra` must serialise to JSON, otherwise the Debug API loses the
   server, the source and the group trace that the screen shows (§315).
-- Export uploads the whole log, not the filtered list, although the serialiser
-  is meant for the filtered one (task candidate, 591).
+- Export hands over the whole log regardless of the active filter; the share
+  caption names the number of events. Kept as is (audit 591, 2026-10-13).

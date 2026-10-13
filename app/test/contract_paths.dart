@@ -107,7 +107,7 @@ const kKnownCorpusGatedSuites = <String>[
   'test/contract/node_edit_corpus_test.dart',
   'test/contract/registry_invariant_test.dart',
   'test/contract/template_contract_test.dart',
-  'test/contract/template_for_each_corpus_test.dart',
+  'test/contract/template_node_loop_corpus_test.dart',
   'test/contract/template_load_reject_test.dart',
   'test/parser/anytls_pipeline_invariants_test.dart',
   'test/parser/http_pipeline_invariants_test.dart',

@@ -52,7 +52,8 @@ the config; a warning if the node dropped out.
 - Subscription nodes and members of other folders are never targets — they
   live under someone else's policy.
 - An auto-select node (group) is never a target and has no Detour block
-  itself (P12).
+  itself (P12). The ban lives in the picker: a `detour` to an auto-select
+  node that arrives in a body or via import is accepted by the build.
 - The reference is resolved in the build's second pass, when all final tags
   are known; the target may be lower in the source list.
 - Fail-closed (P1): a reference to a missing/disabled node, a deleted

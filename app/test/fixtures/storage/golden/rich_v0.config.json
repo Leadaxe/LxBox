@@ -342,9 +342,7 @@
       "password": "testpass123",
       "tls": {
         "enabled": true,
-        "server_name": "example-14.com",
-        "fragment": true,
-        "fragment_fallback_delay": "500ms"
+        "server_name": "example-14.com"
       }
     },
     {
@@ -435,9 +433,7 @@
       },
       "tls": {
         "enabled": true,
-        "server_name": "example-2.com",
-        "fragment": true,
-        "fragment_fallback_delay": "500ms"
+        "server_name": "example-2.com"
       }
     },
     {
@@ -475,9 +471,7 @@
         "server_name": "example-1.com",
         "alpn": [
           "h3"
-        ],
-        "fragment": true,
-        "fragment_fallback_delay": "500ms"
+        ]
       }
     },
     {
@@ -674,7 +668,10 @@
   ],
   "route": {
     "find_process": true,
-    "default_domain_resolver": "google_udp",
+    "default_domain_resolver": {
+      "server": "google_udp",
+      "disable_optimistic_cache": true
+    },
     "rules": [
       {
         "action": "sniff",

@@ -209,7 +209,7 @@ void main() {
   });
 
   // §578 — dns_servers[] тела пресета: плоский сервер, условная обёртка
-  // `#if/#value/#else`, тег-`#tpl` (пресет с `for_each`).
+  // `#if/#value/#else`, тег-`#tpl` (пресет с `for_each_node`).
   group('preset dns_servers', () {
     Map<String, dynamic> presetWith(List<dynamic> servers) => {
           'selectable_rules': [

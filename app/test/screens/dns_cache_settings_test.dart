@@ -171,4 +171,23 @@ void main() {
         '8192');
     await close(tester);
   });
+
+  // §643 (TEMPLATE_LANG §6.9) — переключатель под резолвером по умолчанию:
+  // по умолчанию включён, снятие помечает конфиг и сохраняет `false`.
+  testWidgets('резолвер без устаревших ответов: по умолчанию вкл, сохраняется',
+      (tester) async {
+    await openScreen(tester);
+    final sw = find.byKey(const ValueKey('dns_resolver_no_stale'));
+    expect(tester.widget<SwitchListTile>(sw).value, isTrue);
+    SettingsStorage.configDirty = false;
+    await tester.tap(sw);
+    await tester.pump();
+    await settle(tester);
+    expect(SettingsStorage.configDirty, isTrue);
+    expect(
+        await tester.runAsync(
+            () => SettingsStorage.getVar('dns_resolver_no_stale', '')),
+        'false');
+    await close(tester);
+  });
 }

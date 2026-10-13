@@ -131,6 +131,7 @@ class SettingsStorage {
     'dns_default_domain_resolver',
     'dns_final',
     'dns_optimistic',
+    'dns_resolver_no_stale',
     'dns_store_cache',
     'dns_strategy',
     'ipv6_enabled',

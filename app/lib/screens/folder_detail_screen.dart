@@ -317,6 +317,8 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     // отфильтрован до enabled+parsed).
     final err = await runner.run(
       [for (final m in _folder.members) m.node],
+      // §636 — проба фрагментирует так же, как туннель.
+      tlsByIndex: ProbeController.probeTlsOf(_folder),
       url: url,
       timeoutMs: timeoutMs,
       onResult: (i, r) {
@@ -1617,6 +1619,11 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
         unawaited(widget.controller.persistSources());
       },
       onShowOverrideDetourPicker: () => _showOverrideDetourPicker(),
+      // §636 — TLS-политика источника: запись сразу, как у detour.
+      onTlsChanged: (v) {
+        setState(() => widget.entry.tls = v);
+        unawaited(widget.controller.persistSources());
+      },
       onReplaceDetourChainChanged: (val) {
         setState(() => widget.entry.replaceDetourChain = val);
         unawaited(widget.controller.persistSources());

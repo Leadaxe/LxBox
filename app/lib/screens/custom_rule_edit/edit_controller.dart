@@ -56,7 +56,7 @@ class CustomRuleEditController extends ChangeNotifier {
     _init();
   }
 
-  /// §578 — узлы для превью пресета с `for_each` в View-табе.
+  /// §578 — узлы для превью пресета с обходом узлов в View-табе.
   final List<PresetNode> presetNodes;
 
   /// Исходное правило (до open editor'а). На save сравнивается со
@@ -565,11 +565,19 @@ class CustomRuleEditController extends ChangeNotifier {
         break;
       }
     }
+    // §643 (D-132) — `unique` у `text_list`: дубли снимаются при сохранении;
+    // `internal` в запись не пишется.
     final stored = recordVarValueToStore(
       val,
       decl == null
           ? null
-          : RecordVarDecl(name: decl.name, defaultValue: decl.defaultValue),
+          : RecordVarDecl(
+              name: decl.name,
+              defaultValue: decl.defaultValue,
+              type: decl.type,
+              isInternal: decl.isInternal,
+              unique: decl.unique,
+            ),
     );
     if (stored == null) {
       _varsValues.remove(name);

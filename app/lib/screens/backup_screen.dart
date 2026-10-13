@@ -23,6 +23,7 @@ import '../widgets/export_action_sheet.dart';
 import 'backup_screen/export_card.dart';
 import 'backup_screen/import_card.dart';
 import 'backup_screen/import_preview_dialog.dart';
+import 'backup_screen/lx_import_summary.dart';
 import 'backup_screen/lx_transfer_card.dart';
 import 'backup_screen/restore_summary.dart';
 import '../services/utf8_decode.dart';
@@ -440,49 +441,14 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       final result = await importer.apply(plan);
       if (!mounted) return;
 
-      final parsed = result.file;
-      final appliedDirections = result.appliedDirections;
-      final counts = result.appliedSettings;
-      final skipped = parsed.warnings.length;
-      // Счётное существительное — только через plural: по-русски иначе
-      // получится «Импортировано 2 правил».
-      //
-      // §393 B5 — созданные Направления названы отдельно: правила приехали
-      // рабочими именно потому, что цели заведены, и молчать об этом значило
-      // бы скрыть половину произошедшего с настройками.
-      //
-      // §393 B6 — то же и с остальными секциями: подписки, DNS, переменные и
-      // регистрации WARP теперь реально применяются, и счётчик обязан их
-      // показать — иначе «Импортировано 0 правил» после файла с тремя
-      // подписками выглядит как отказ, хотя всё применилось.
-      final String message;
-      if (skipped > 0) {
-        message = getLocalText.s("Imported %d rule(s), %d items not applied",
-            parsed.rules.length, skipped);
-      } else if (appliedDirections > 0 && counts > 0) {
-        message = getLocalText.s(
-            "Imported %1\$d rules, %2\$d directions and %3\$d settings",
-            parsed.rules.length,
-            appliedDirections,
-            counts);
-      } else if (appliedDirections > 0) {
-        message = getLocalText.s("Imported %1\$d rules and %2\$d directions",
-            parsed.rules.length, appliedDirections);
-      } else if (counts > 0) {
-        message = getLocalText.s("Imported %1\$d rules and %2\$d settings",
-            parsed.rules.length, counts);
-      } else {
-        message = getLocalText.plural("Imported %d rules", parsed.rules.length);
-      }
-      // §393 C9 — цепочки названы ОТДЕЛЬНОЙ клаузой, а не влиты в счётчик
-      // настроек: это созданные сущности, как Направления, и «Импортировано
-      // правил: 0, настроек: 2» после файла с двумя маршрутами скрыло бы
-      // ровно то, что произошло. Клауза-суффикс, а не шестая ветка лестницы:
-      // добавить цепочки измерением удвоило бы число строк каталога,
-      // из которых половина не встречается никогда.
-      showSnack(result.appliedChains > 0
-          ? '$message; ${getLocalText.s("chains: %d", result.appliedChains)}'
-          : message);
+      // §641 — итог одной строкой: замена правил приёмника названа хвостом,
+      // а не посчитана в «не применено».
+      showSnack(lxImportSnackText(
+        result.file,
+        appliedDirections: result.appliedDirections,
+        appliedSettings: result.appliedSettings,
+        appliedChains: result.appliedChains,
+      ));
     } catch (e) {
       if (!mounted) return;
       showSnack(getLocalText.s("Import failed: %s", formatUserError(e).render()));
@@ -493,45 +459,8 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
 
   /// Показывает состав файла и что не применится — до применения.
   Future<bool?> _confirmLxImport(LxBackupFile parsed) {
-    final lines = <String>[
-      getLocalText.s("From %s %s", parsed.exportedByApp, parsed.exportedByVersion),
-      // §393 B5 — Направления названы отдельной строкой: они не «часть
-      // правил», а создаваемые сущности, и пользователь вправе увидеть,
-      // сколько их заведётся, ДО применения.
-      if (parsed.directions.isNotEmpty)
-        getLocalText.s("Directions: %d", parsed.directions.length),
-      // §393 C9 — цепочки хопов: тоже создаваемые сущности, и их число
-      // пользователь вправе увидеть ДО применения.
-      if (parsed.chains.isNotEmpty)
-        getLocalText.s("Chains: %d", parsed.chains.length),
-      getLocalText.s("Rules: %d", parsed.rules.length),
-      getLocalText.s("Subscriptions: %d", parsed.subscriptions.length),
-      // §401 — одиночные узлы и члены папок: до этого их разбирали и не
-      // применяли, и пользователь не видел ни строки о том, что приехало.
-      if (parsed.servers.isNotEmpty)
-        getLocalText.s("Servers: %d", parsed.servers.length),
-      getLocalText.s("Variables: %d", parsed.vars.length),
-      // §393 B8/B9 — секции, которые теперь применяются: пользователь должен
-      // увидеть их ДО применения, а не обнаружить постфактум чужой DNS-сервер
-      // в списке.
-      if (parsed.dns != null && !parsed.dns!.isEmpty)
-        getLocalText.s("DNS entries: %d",
-            parsed.dns!.servers.length + parsed.dns!.rules.length),
-      if (parsed.warp.isNotEmpty)
-        getLocalText.s("WARP accounts: %d", parsed.warp.length),
-    ];
-    if (parsed.warnings.isNotEmpty) {
-      lines.add('');
-      lines.add(getLocalText.s("Not applied as-is:"));
-      for (final w in parsed.warnings.take(8)) {
-        lines.add('• ${w.detail}');
-      }
-      if (parsed.warnings.length > 8) {
-        lines.add('… +${parsed.warnings.length - 8}');
-      }
-    }
-    lines.add('');
-    lines.add(getLocalText.s("Importing replaces the current rules."));
+    // §641 — строки превью и последняя фраза о правилах — в одном месте.
+    final lines = lxImportPreviewLines(parsed);
 
     return showDialog<bool>(
       context: context,

@@ -21,6 +21,7 @@ import '../../services/parser/parse_all.dart';
 import '../import_rule.dart';
 import '../node_link.dart';
 import '../node_spec.dart';
+import '../tls_policy.dart';
 import '../record_codec.dart' show RecordRead;
 import '../core_reject_verdict.dart';
 import '../server_list.dart';
@@ -73,6 +74,7 @@ Map<String, dynamic> _subscriptionToRecord(SubscriptionServers s) => {
       if (s.replace != null) 'replace': sourceReplaceToRecord(s.replace!),
       // L — настройки LxBox.
       ..._detourPolicyToRecord(s.detourPolicy),
+      ..._tlsToRecord(s.tls),
       // §565 / задача 570 — выбор члена групп ручного рода: сырой тег группы
       // → сырой тег члена. В бэкап не едет (lx_backup_slice, рантайм).
       if (s.groupDefaults.isNotEmpty)
@@ -112,6 +114,7 @@ Map<String, dynamic> _serverToRecord(UserServer u) {
     if (u.skipPresets) 'skip_presets': true,
     // L — настройки LxBox.
     ..._detourPolicyToRecord(u.detourPolicy),
+    ..._tlsToRecord(u.tls),
     if (u.tagPrefix.isNotEmpty) 'tag_policy': _tagPolicyToRecord(u.tagPrefix),
   };
 }
@@ -127,6 +130,7 @@ Map<String, dynamic> _folderToRecord(FolderServers f) => {
       if (f.replace != null) 'replace': sourceReplaceToRecord(f.replace!),
       // L — настройки LxBox.
       ..._detourPolicyToRecord(f.detourPolicy),
+      ..._tlsToRecord(f.tls),
       if (f.pingUrl != null) 'ping_url': f.pingUrl,
       if (f.pingTimeoutMs != null) 'ping_timeout_ms': f.pingTimeoutMs,
       // L — момент создания: его отдаёт Debug API `/folders`.
@@ -151,8 +155,13 @@ Map<String, dynamic> _memberToRecord(FolderMember m, String folderId) {
     if (node == null) 'reason': kMemberUnparsedReason,
     // §578 — пишется только `true`; отсутствие = `false`.
     if (m.skipPresets) 'skip_presets': true,
+    ..._tlsToRecord(m.tls),
   };
 }
+
+/// §636 — TLS-политика: только заданные поля, пустая не пишется.
+Map<String, dynamic> _tlsToRecord(TlsPolicy p) =>
+    p.isEmpty ? const {} : {'tls': p.toJson()};
 
 /// §439 п. 9 — у контракта разделитель внутри префикса, у модели снаружи.
 Map<String, dynamic> _tagPolicyToRecord(String prefix) => {'prefix': '$prefix '};
@@ -315,23 +324,23 @@ const Set<String> _subscriptionKeys = {
   'disabled', 'warnings', 'detour', 'detour_policy', 'import_rules',
   'import_rules_enabled', 'on_update_action', 'meta', 'last_updated',
   'last_update_attempt', 'last_update_status', 'last_node_count',
-  'consecutive_fails', 'replace', 'group_defaults',
+  'consecutive_fails', 'replace', 'group_defaults', 'tls',
 };
 
 const Set<String> _serverKeys = {
   'kind', 'id', 'tag', 'enabled', 'warnings', 'origin', 'body', 'detour',
   'sections', 'skip_presets',
-  'detour_policy', 'tag_policy',
+  'detour_policy', 'tag_policy', 'tls',
 };
 
 const Set<String> _folderKeys = {
   'kind', 'id', 'name', 'enabled', 'tag_policy', 'detour', 'detour_policy',
-  'ping_url', 'ping_timeout_ms', 'created_at', 'nodes', 'replace',
+  'ping_url', 'ping_timeout_ms', 'created_at', 'nodes', 'replace', 'tls',
 };
 
 const Set<String> _memberKeys = {
   'kind', 'tag', 'enabled', 'warnings', 'origin', 'body', 'detour', 'reason',
-  'sections', 'skip_presets',
+  'sections', 'skip_presets', 'tls',
 };
 
 const Set<String> _detourPolicyKeys = {
@@ -400,6 +409,7 @@ SubscriptionServers _subscriptionFromRecord(
     enabled: _bool(j['enabled'], true),
     tagPrefix: _prefixFromRecord(j['tag_policy'], unknown),
     detourPolicy: _detourPolicyFromRecord(j, unknown),
+    tls: TlsPolicy.fromJson(j['tls']),
     url: _string(j['url']),
     meta: _metaFromRecord(j['meta'], where, notes),
     lastUpdated: _date(j['last_updated']),
@@ -460,6 +470,7 @@ UserServer _serverFromRecord(
     warnings: storedWarningsFromJson(j['warnings']),
     tagPrefix: _prefixFromRecord(j['tag_policy'], unknown),
     detourPolicy: _detourPolicyFromRecord(j, unknown),
+    tls: TlsPolicy.fromJson(j['tls']),
     rawBody: raw,
     skipPresets: _bool(j['skip_presets'], false),
     // Список растущий: контроллер дописывает узлы на месте (как fromJson).
@@ -491,6 +502,7 @@ FolderServers _folderFromRecord(
     enabled: _bool(j['enabled'], true),
     tagPrefix: _prefixFromRecord(j['tag_policy'], unknown),
     detourPolicy: _detourPolicyFromRecord(j, unknown),
+    tls: TlsPolicy.fromJson(j['tls']),
     members: members,
     // Пустой адрес — «брать глобальный», как у legacy-чтения.
     pingUrl: pingUrl is String && pingUrl.trim().isNotEmpty
@@ -548,6 +560,7 @@ FolderMember? _memberFromRecord(
     detour: nodeLinkFromRecord(j['detour']) ?? NodeLink.none,
     nameHint: hint ?? '',
     skipPresets: _bool(j['skip_presets'], false),
+    tls: TlsPolicy.fromJson(j['tls']),
   );
   if (hint == null) _checkTag(j, member.node?.tag, where, notes);
   return member;

@@ -603,6 +603,27 @@ app/test/services/subscription_controller_init_test.dart (NEW)
   - init clean → configDirty=false
 ```
 
+**Сверка с деревом (аудит 591, 2026-10-13).** Список выше — план 076F; файлы
+с такими именами не заводились. Фактические свидетели:
+
+- Возврат на главный — `app/test/services/nav/home_return_observer_test.dart`
+  (pop на корневой маршрут, pop внутри стека, `previousRoute=null`,
+  set/clear обработчика).
+- Восстановление флага после kill (mtime compare) —
+  `app/test/services/config_dirty_check_test.dart` (края `isDirty`) и
+  `app/test/services/config_dirty_flag_test.dart` (filesDir §414, touch §113).
+- Пометка перезапуска — `markConfigChangedNeedRestart` в коде нет; решение
+  «показывать Restart» живёт в `saveParsedConfig` и покрыто
+  `app/test/subscription/on_update_action_test.dart` (группа «гейт состав не
+  изменился») и `app/test/screens/app_banner_test.dart` (взаимоисключение
+  плашек).
+- Lazy-экраны (persist на dispose/paused) — состояние `State` виджетов;
+  staging в памяти покрыт `app/test/services/settings_storage_staging_test.dart`,
+  сам flush на `paused` — **ручное/устройство**.
+- Гейт на Start (Start сначала пересобирает при грязном флаге) —
+  `_rebuildAndStart` в `home_screen.dart`, завязан на живой экран и
+  native-каналы — **ручное/устройство** (003-CONFIG_BUILD · P13).
+
 ---
 
 ## Storage migration / API compatibility

@@ -55,6 +55,9 @@ VPN to apply".
   flag is cleared, the "restart needed" flag is set, no auto-apply is running.
   Tap — stop the VPN (with >3 active connections — with the confirmation
   "Stop VPN?"); the banner disappears when the tunnel state actually changes.
+  The tap only stops; starting again is up to the user. The hands-free path
+  is the "Auto-restart VPN on settings change" toggle. Kept as is (audit 591,
+  2026-10-13).
 - These two banners are never shown at the same time.
 - **The "restart needed" flag** is set by saving the config if the tunnel is
   up and the config changed in canonical form; it is cleared by saving a

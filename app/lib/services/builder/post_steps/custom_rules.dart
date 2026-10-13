@@ -227,7 +227,7 @@ List<String> _applyPresetSingle(
       final existing = state.dnsServerByTag[tag];
       if (existing == null) {
         state.dnsServerByTag[tag] = s;
-        // §578 — у пресета с `for_each` тег сервера без пространства пресета
+        // §578 — у пресета с `for_each_node` тег сервера без пространства пресета
         // (`<тег узла>-dns`): запись хранения DNS держит его как `ref` = тег.
         // С `preset_id` модель достроила бы тег до `tailscale:<тег>-dns`, и
         // сервер разошёлся бы с правилами, которые на него ссылаются.
@@ -615,7 +615,7 @@ UnifiedApplyResult applyAllCustomRules(
   Map<String, String> srsPaths = const {},
   Map<String, String> presetSrsPaths = const {},
   Map<String, String> globalVars = const {},
-  // §578 — узлы конфига для пресетов с `for_each` (порядок конфига).
+  // §578 — узлы конфига для пресетов с обходом узлов (порядок конфига).
   List<PresetNode> presetNodes = const [],
 }) {
   final state = _PresetSharedState();

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import '../../models/node_spec.dart';
+import '../../models/tls_policy.dart';
 import '../../vpn/box_vpn_client.dart';
 import '../../vpn/cc_channel.dart';
 import '../app_log.dart';
@@ -76,6 +77,7 @@ class ProbeRunner {
     required String url,
     required int timeoutMs,
     required void Function(int index, ProbeResult result) onResult,
+    Map<int, TlsLayers> tlsByIndex = const {},
   }) async {
     _cancelled = false;
     // §286 — регистрируем отмену в общем реестре: stop VPN / смерть туннеля /
@@ -100,7 +102,8 @@ class ProbeRunner {
       // §606 — anti-DPI туннеля (фрагментация, mixed-case SNI) и в пробе.
       final vars = await loadProbeVars();
       final batches =
-          buildProbeBatches(nodes, coreVersion: coreVersion, vars: vars);
+          buildProbeBatches(nodes,
+              coreVersion: coreVersion, vars: vars, tlsByIndex: tlsByIndex);
 
       // Битые/несобираемые/группы — вердикт сразу, без ядра. Вердикты лежат
       // в первом батче (§518 `_assemble`), покрывают весь список целиком.

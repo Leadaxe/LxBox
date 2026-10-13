@@ -458,8 +458,8 @@
   "Split handshake into multiple TLS records (try this first)": {
     "value": "Разбивать рукопожатие на несколько TLS-записей (попробуйте сначала это)"
   },
-  "Splits the TLS handshake so it carries no single-packet signature": {
-    "value": "Разбивает handshake TLS, чтобы он не укладывался в один пакет с узнаваемой сигнатурой"
+  "Splits the TLS handshake so it carries no single-packet signature. Default for all servers; override per server, folder or subscription.": {
+    "value": "Разбивает handshake TLS, чтобы он не укладывался в один пакет с узнаваемой сигнатурой. Умолчание для всех серверов; переопределяется на сервере, в папке или подписке."
   },
   "Stack": {
     "value": "Стек"
@@ -668,10 +668,22 @@
   "Answer from cache at once and refresh in the background.": {
     "value": "Сразу отвечать из кэша и обновлять запись в фоне."
   },
+  "Never serve stale answers for node hostnames": {
+    "value": "Не отдавать устаревшие ответы для имён узлов"
+  },
+  "Hostnames the core resolves itself (node servers) are looked up again once the cached answer expires, so a node whose address changed does not stay on the old one. App DNS queries are not affected.": {
+    "value": "Имена, которые ядро резолвит само (серверы узлов), запрашиваются заново, когда срок ответа в кэше истёк, — узел, сменивший адрес, не остаётся на старом. На DNS-запросы приложений не влияет."
+  },
   "Keep DNS cache after restart": {
     "value": "Сохранять кэш DNS после перезапуска"
   },
   "Store the DNS cache in cache.db so it survives a restart.": {
     "value": "Хранить кэш DNS в cache.db, чтобы он переживал перезапуск."
+  },
+  "YouTube": {
+    "value": "YouTube"
+  },
+  "YouTube (ytimg)": {
+    "value": "YouTube (ytimg)"
   }
 }

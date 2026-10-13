@@ -25,12 +25,16 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 
 class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
     PluginRegistry.ActivityResultListener {
 
     companion object {
         private const val TAG = "VpnPlugin"
+        /// §639 — сколько Quit ждёт Stopped от штатной остановки сервиса
+        /// перед убийством процесса. Уведомление снимается раньше (Stopping).
+        private const val QUIT_STOP_BUDGET_MS = 3_000L
         private const val METHOD_CHANNEL = "com.leadaxe.lxbox/methods"
         private const val STATUS_CHANNEL = "com.leadaxe.lxbox/status_events"
         private const val CORE_LOG_CHANNEL = "lxbox/coreLog"   // §043
@@ -518,19 +522,47 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 // 2. через 200ms killProcess + exitProcess убивают процесс
                 //    (некоторые OEM-launchers иначе оставляют zombie).
                 //
-                // VPN service ещё может быть активен — Android сам его
-                // остановит как только процесс умрёт (foreground service binding
-                // с процессом). KEEP_ON_EXIT не реактивируем здесь: если юзер
+                // §638: VPN останавливается вместе с процессом, и это должно
+                // быть окончательно. Сторож §428 (будильник VpnWatchdog +
+                // признак «VPN желателен») иначе через 2–3,5 мин увидит мёртвый
+                // сервис при desired=true и поднимет VPN сам — вопреки диалогу
+                // «VPN service will stop». Поэтому до убийства процесса снимаем
+                // признак и будильник. KEEP_ON_EXIT не реактивируем: если юзер
                 // явно запросил Quit, ему нужен полный рестарт, не fall-through
                 // в keep-alive путь.
+                BootReceiver.setVpnDesired(context, false)
+                VpnWatchdog.disarm(context)
                 result.success(true)
                 mainHandler.postDelayed({
                     activity?.finishAffinity()
                 }, 50)
-                mainHandler.postDelayed({
-                    android.os.Process.killProcess(android.os.Process.myPid())
-                    kotlin.system.exitProcess(0)
-                }, 250)
+                // §639: сервис останавливаем штатным путём Stop (тот же
+                // `stopAwait`, что у `stopVPN`) ДО убийства процесса. Иначе он
+                // умирает без `stopForeground`, и уведомление id=1 висит в
+                // шторке «VPN работает» до следующего запуска. `doStop` снимает
+                // foreground сразу при переходе в Stopping; ждём Stopped не
+                // дольше QUIT_STOP_BUDGET_MS, затем страховочно cancel(id=1)
+                // и убиваем процесс (не раньше прежних 250 мс).
+                // Свой scope, не pluginScope: finishAffinity может отсоединить
+                // engine, а onDetachedFromEngine отменяет pluginScope — тогда
+                // процесс не был бы убит.
+                val quitStartedAt = android.os.SystemClock.elapsedRealtime()
+                CoroutineScope(SupervisorJob() + Dispatchers.Main).launch {
+                    val stopped = runCatching {
+                        withTimeoutOrNull(QUIT_STOP_BUDGET_MS) {
+                            BoxVpnService.stopAwait(context).await()
+                        }
+                    }.getOrNull()
+                    if (stopped == null) {
+                        Log.w(TAG, "[vpn §639] quitApp: Stopped not reported in ${QUIT_STOP_BUDGET_MS}ms")
+                    }
+                    ServiceNotification.cancelServiceNotification()
+                    val elapsed = android.os.SystemClock.elapsedRealtime() - quitStartedAt
+                    mainHandler.postDelayed({
+                        android.os.Process.killProcess(android.os.Process.myPid())
+                        kotlin.system.exitProcess(0)
+                    }, (250L - elapsed).coerceAtLeast(0L))
+                }
             }
             "getInstalledApps" -> {
                 // Lightweight metadata only — иконки лениво подгружаются

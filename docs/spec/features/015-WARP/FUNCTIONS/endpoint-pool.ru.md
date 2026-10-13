@@ -34,7 +34,7 @@
 | `masque` | `hosts_preset`, `recommended_host` | Хосты, где живут и h3, и h2 |
 | | `h3.hosts_extra`, `h3.ports` | Хосты только для h3, порты h3 |
 | | `h2.v4_cidr`, `h2.exclude`, `h2.ports` | Блок h2 и исключённые из него адреса |
-| | `sni_pool`, `recommended_sni` | SNI MASQUE (домены Cloudflare допустимы) |
+| | `sni_pool`, `recommended_sni` | SNI MASQUE (домены Cloudflare допустимы); рекомендуемый — `www.cloudflare.com`, дефолт ядра |
 | `loc.<cc>` | любые ключи выше или `alias` | Поправки для региона |
 
 Настройка «Usage region» (App Settings → General): Auto (страна сети
@@ -93,3 +93,4 @@ JSON-окно эксперимента (тот же формат).
 | 6 | [420](../../../tasks/420-masque-pool-per-transport.md) | Done (unit) · DEVICE-PENDING | `hosts_preset`, `h3.hosts_extra`, `h2.exclude` |
 | 7 | [424](../../../tasks/424-warp-preset-recommended-mark-leak.md) | Implemented (unit + widget test) | Пометка только в меню |
 | 8 | [425](../../../tasks/425-warp-pool-region-loc.md) | Implemented, device-verified | Настройка региона и секции `loc.<cc>` |
+| 9 | [638](../../../tasks/638-audit-591-four-defects.md) | Done | `recommended_sni` = `www.cloudflare.com`: с `consumer-masque.cloudflareclient.com` h3 не встаёт на RU-каналах (§393) |

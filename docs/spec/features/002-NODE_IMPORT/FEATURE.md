@@ -101,9 +101,10 @@ Principles the feature protects:
   after `#` travels as a message. **Witness:** unit tests "a banner as the ONLY entry of
   the body: no nodes, the reason is named", "the PORT is NOT a marker". **Mutation:**
   checking by port `1`.
-- **P16. An OpenVPN `.ovpn` profile is accepted.** `no witness` — the format is not
-  implemented (owner's decision: postponed); only a ready core body
-  `openvpn-client` is accepted (see the sing-box JSON function).
+- **P16. Withdrawn** (audit [591](../../tasks/591-spec-kit-revision-audit.md), 2026-10-13).
+  An OpenVPN `.ovpn` profile is not supported: only a ready core body
+  `openvpn-client` is accepted (see the sing-box JSON function). A pasted
+  profile yields no nodes, and the reject sheet names the reason (`§500`).
 
 ## Controlled parameters
 
@@ -192,7 +193,10 @@ node ─► emit by the registry emit section ─► share link (or rejection)
   [025-CONTRACT_REGISTRY](../025-CONTRACT_REGISTRY/FEATURE.md); the core pin —
   [021-CORE_CONTRACT](../021-CORE_CONTRACT/FEATURE.md).
 - Does not do: `.ovpn`, Clash YAML (recognized, yields no nodes), hysteria v1
-  as a node, Amnezia containers other than WG/AWG, network checks of a node.
+  as a node (`hysteria://`/`hy://` and `type: hysteria` — the registry marks
+  them `extension: desktop`, no node is created, the reject is named by
+  `protocol_extension_unsupported` with the hint `hysteria2`; the schemes live
+  in the registry shared with the launcher), Amnezia containers other than WG/AWG, network checks of a node.
 - Not planned (owner decision 2026-09-29, audit [591](../../tasks/591-spec-kit-revision-audit.md)): recognizing the format by the file
   extension (`584F`) — the format is recognized by text only.
 

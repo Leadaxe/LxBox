@@ -25,6 +25,7 @@ import '../models/record_codec.dart';
 import '../models/server_list.dart';
 import '../models/source_chain.dart';
 import '../models/source_replace.dart';
+import '../models/tls_policy.dart';
 import 'core_reject/core_reject_backup.dart';
 import 'lx_backup_slice.dart';
 import 'node_link_address.dart';
@@ -99,11 +100,14 @@ const String kWarnVarSkipped = 'backup_var_skipped';
 /// `preset:<ref>`), которого шаблон приёмника у носителя не объявил (Н2);
 /// [kVarSkippedSuperseded] — корневое `dns_<tag>_<var>` при записи сервера со
 /// своими `vars` (Н8); [kVarSkippedNoRecord] — корневое `dns_<tag>_<var>`,
-/// а записи сервера с этим тегом в файле нет (Н8).
+/// а записи сервера с этим тегом в файле нет (Н8); [kVarSkippedInternal]
+/// (§643, контракт 1.1.119, D-132) — имя объявлено носителем (или корневой
+/// переменной шаблона) с `wizard_ui: internal`: его пишет только сборка.
 const String kVarSkippedNotPortable = 'not_portable';
 const String kVarSkippedUndeclared = 'undeclared';
 const String kVarSkippedSuperseded = 'superseded';
 const String kVarSkippedNoRecord = 'no_record';
+const String kVarSkippedInternal = 'internal';
 
 /// Ключ вне схемы: в состояние не попадает (П3). Detail называет ПОЛНЫЙ путь
 /// (`subscriptions[https://…].outbounds[vpn-1].key`), иначе предупреждение не
@@ -217,6 +221,14 @@ const String kWarnSourceKindUnsupported = 'backup_source_kind_unsupported';
 /// autogroup-текстов, которые не нашлись.
 const String kWarnGroupDegraded = 'backup_group_degraded';
 
+/// §640 (контракт 1.1.116, BACKUP.md §9 п. 7) — файл нёс ключ `rules` (пусть
+/// `[]`), и правила приёмника замещены правилами файла целиком. Detail —
+/// `rules: <count>`, число снятых правил приёмника (параметр реестра
+/// `count`); код ставится
+/// только при `count > 0`. Файл без ключа `rules` правил не трогает и кода не
+/// даёт: «ключа нет» и `rules: []` — разные файлы.
+const String kWarnRulesReplaced = 'backup_rules_replaced';
+
 /// Переносимые имена переменных — зеркало `registry/vars.json` (portable=true).
 ///
 /// Сверяется с реестром тестом: разъехавшийся список означает, что бэкап либо
@@ -228,6 +240,9 @@ const Set<String> kLxPortableVars = {
   'dns_default_domain_resolver',
   'dns_final',
   'dns_optimistic',
+  // §643 (контракт 1.1.119, TEMPLATE_LANG §6.9) — едет в `vars` бэкапа, как
+  // `dns_optimistic`; секция `dns.default_domain_resolver` — строка-тег.
+  'dns_resolver_no_stale',
   'dns_store_cache',
   'dns_strategy',
   'ipv6_enabled',
@@ -315,7 +330,12 @@ class LxSubscription {
     this.importRulesEnabled,
     this.onUpdateAction,
     this.replace,
+    this.tls,
   });
+
+  /// §636 — TLS-политика источника: едет, только если контракт объявил поле
+  /// (Л2); `null` — у новой подписки пусто, у совпавшей своя остаётся.
+  final TlsPolicy? tls;
 
   /// Фича 565 фаза B (§74) — свёртка подписки в группу. Поле контракта: у
   /// файла 1.0 ([fullSettings]) отсутствие объекта значит «не свёрнута»; у
@@ -394,7 +414,12 @@ class LxServer {
     this.autoGroup,
     this.detourPolicy,
     this.tagPrefix,
+    this.tls,
   });
+
+  /// §636 — узловая TLS-политика (корневой сервер и член папки): едет, только
+  /// если контракт объявил поле (Л2); совпавший узел держит свою.
+  final TlsPolicy? tls;
 
   /// §439 N2 — член папки 1.0 `kind: auto`: узел автовыбора со ссылками файла
   /// как есть (член `{tag}` уже поднят до пары с [folderRef]). Адрес здесь
@@ -469,7 +494,11 @@ class LxFolder {
     this.pingUrl,
     this.pingTimeoutMs,
     this.replace,
+    this.tls,
   });
+
+  /// §636 — TLS-политика папки: как у [LxSubscription.tls].
+  final TlsPolicy? tls;
 
   /// Фича 565 фаза B (§74) — свёртка папки в группу; `null` — не свёрнута
   /// (поле контракта: запись 1.0 несёт папку целиком).
@@ -626,6 +655,7 @@ class LxBackupFile {
     this.chainPositions = const {},
     this.dns,
     this.warp = const [],
+    this.rulesDeclared = true,
   });
 
   final int version;
@@ -654,6 +684,11 @@ class LxBackupFile {
 
   /// Правила в порядке файла (ось `num` учтена при разборе).
   final List<CustomRule> rules;
+
+  /// §640 (контракт 1.1.116) — ключ `rules` есть в корне файла, пусть и `[]`.
+  /// `false` — файл о правилах молчит, и импорт правила приёмника не трогает
+  /// (BACKUP.md §9 п. 7); [rules] тогда пуст.
+  final bool rulesDeclared;
 
   /// §393 C9 — цепочки хопов, ПРИМЕНИМЫЕ на этой стороне (SPEC 110, схема
   /// v1.2): приехавшие теги, которых у нас ещё нет. Занятый тег сюда не
@@ -720,6 +755,7 @@ class LxBackupFile {
         directions: directions,
         directionPing: directionPing,
         rules: rules ?? this.rules,
+        rulesDeclared: rulesDeclared,
         chains: chains,
         chainHops: chainHops,
         chainPositions: chainPositions,
@@ -805,9 +841,13 @@ Future<LxBackupExport> buildLxBackup({
     warnings: warnings,
   );
 
+  // §643 — `internal` в бэкап не экспортируется (у правил-пресетов ключи
+  // снимает normalizePresetRulesVars ниже).
   final portableVars = <String, String>{
     for (final e in vars.entries)
-      if (kLxPortableVars.contains(e.key)) e.key: e.value,
+      if (kLxPortableVars.contains(e.key) &&
+          !recordVars.internalGlobals.contains(e.key))
+        e.key: e.value,
   };
 
   final ruleRecords = <Map<String, dynamic>>[];
@@ -841,7 +881,10 @@ Future<LxBackupExport> buildLxBackup({
       'directions': [
         for (final d in directions) _directionToJson(d, directionPing[d.tag]),
       ],
-    if (ruleRecords.isNotEmpty) 'rules': ruleRecords,
+    // §640 (контракт 1.1.116) — ключ пишется ВСЕГДА, пусть `[]`: файл
+    // описывает всю настройку (§1), и импорт отличает «правил нет» от
+    // «файл о правилах молчит» (BACKUP.md §9 п. 7).
+    'rules': ruleRecords,
     if (dns != null && dns.isNotEmpty) 'dns': dns,
     if (portableVars.isNotEmpty) 'vars': portableVars,
     if (routeFinal != null && routeFinal.isNotEmpty)
@@ -1213,6 +1256,7 @@ LxBackupFile _parse0x(
     directions: directions.directions,
     directionPing: directions.ping,
     rules: sortRulesByAxis(rules),
+    rulesDeclared: decoded.containsKey('rules'),
     chains: chains,
     subscriptions: subscriptions,
     servers: servers,
@@ -1312,6 +1356,13 @@ _ParsedDirections _parseDirections(
   };
   var lifted = false;
   for (final key in rawVars.keys.toList()..sort()) {
+    // §643 (D-132) — корневая переменная шаблона приёмника с
+    // `wizard_ui: internal`: значение файла не данные пользователя.
+    if (recordVars.internalGlobals.contains(key)) {
+      warnings.add(LxBackupWarning(kWarnVarSkipped, key,
+          reason: kVarSkippedInternal));
+      continue;
+    }
     if (kLxPortableVars.contains(key)) {
       vars[key] = '${rawVars[key]}';
       continue;
@@ -2512,6 +2563,7 @@ LxBackupFile gateLxBackupTargets(LxBackupFile file, Set<String>? known) {
     directions: file.directions,
     directionPing: file.directionPing,
     rules: rules,
+    rulesDeclared: file.rulesDeclared,
     chains: file.chains,
     chainHops: file.chainHops,
     chainPositions: file.chainPositions,
@@ -2835,6 +2887,7 @@ LxBackupFile _parse10(
     directions: parsedDirections.directions,
     directionPing: parsedDirections.ping,
     rules: sortRulesByAxis(rules),
+    rulesDeclared: decoded.containsKey('rules'),
     chains: chains,
     chainHops: chainHops,
     chainPositions: chainPositions,
@@ -2949,6 +3002,10 @@ LxServer? _server10(
     position: position,
     id: fileId,
     skipPresets: node.skipPresets,
+    tls: _carries(folder == null ? BackupRecord.server : BackupRecord.folderNode,
+            j, 'tls')
+        ? node.tls
+        : null,
   );
 }
 
@@ -3048,6 +3105,7 @@ LxSubscription _subscription10(
     importRulesEnabled:
         carries('import_rules_enabled') ? sub.importRulesEnabled : null,
     onUpdateAction: carries('on_update_action') ? sub.onUpdateAction : null,
+    tls: carries('tls') ? sub.tls : null,
     replace: sub.replace,
     fullSettings: true,
     position: position,
@@ -3082,6 +3140,7 @@ LxFolder _folder10(Map<String, dynamic> j, int position) {
     pingUrl: carries('ping_url') ? folder.pingUrl : null,
     pingTimeoutMs: carries('ping_timeout_ms') ? folder.pingTimeoutMs : null,
     replace: folder.replace,
+    tls: carries('tls') ? folder.tls : null,
   );
 }
 
@@ -3654,6 +3713,7 @@ BackupSubscriptionMerge mergeBackupSubscriptions(
       enabled: sub.enabled,
       tagPrefix: sub.tagPrefix,
       detourPolicy: sub.detourPolicy ?? DetourPolicy.defaults,
+      tls: sub.tls ?? TlsPolicy.none,
       url: sub.url,
       updateIntervalHours:
           sub.updateIntervalHours ?? _defaultUpdateIntervalHours,
@@ -3939,6 +3999,7 @@ BackupServerMerge mergeBackupServers(
           enabled: item.enabled,
           tagPrefix: item.tagPrefix,
           detourPolicy: item.detourPolicy ?? DetourPolicy.defaults,
+          tls: item.tls ?? TlsPolicy.none,
           pingUrl: item.pingUrl,
           pingTimeoutMs: item.pingTimeoutMs,
           replace: item.replace,
@@ -4017,6 +4078,7 @@ BackupServerMerge mergeBackupServers(
         enabled: srv.enabled,
         tagPrefix: srv.tagPrefix ?? '',
         detourPolicy: srv.detourPolicy ?? DetourPolicy.defaults,
+        tls: srv.tls ?? TlsPolicy.none,
         origin: UserSource.manual,
         rawBody: body,
         // Фича 478 — прочие warnings записи; вердикт страховки срезан (§489).
@@ -4292,6 +4354,7 @@ int _mergeFolderMember(
     warnings: srv.warnings,
     detour: detour,
     skipPresets: srv.skipPresets, // §578
+    tls: srv.tls ?? TlsPolicy.none, // §636
   );
   final here = member.node?.tag ?? '';
   if (srv.name.isNotEmpty && here.isNotEmpty) {

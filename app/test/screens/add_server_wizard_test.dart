@@ -270,7 +270,7 @@ void main() {
       expect((node as TailscaleSpec).body['auth_key'], 'tskey-auth-x');
     });
 
-    testWidgets('пустой Tag → «tailscale» с эмодзи по умолчанию 🪢',
+    testWidgets('пустой Tag → «tailscale» с эмодзи по умолчанию 🕸️',
         (tester) async {
       final c = await openTailscale(tester);
       await tester.enterText(field(1), 'tskey-auth-x');

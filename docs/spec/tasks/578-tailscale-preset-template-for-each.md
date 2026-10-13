@@ -1,5 +1,10 @@
 # 578 — Пресет Tailscale и язык шаблона: `for_each`, `@node`, `#tpl`
 
+> **Заменено [§643](643-contract-1-1-119-node-loops.md) (контракт 1.1.119):**
+> `for_each` снят, вместо него `for_each_node` / `for_each_node_do` с
+> `#filter`; мягкий снос пресета §83 отменён. Раннер корпуса —
+> `test/contract/template_node_loop_corpus_test.dart`.
+
 | Поле | Значение |
 |------|----------|
 | Статус | Implemented — `for_each`/`@node`/`#tpl` в `if_engine.dart`, пресет `tailscale` в шаблоне; тесты `test/contract/template_for_each_corpus_test.dart`, `test/services/builder/preset_for_each_test.dart`, `test/builder/tailscale_preset_build_test.dart`; выпущено в v2.25.8 |

@@ -119,7 +119,8 @@ entry); **the input is default-deny**; **a failure does not wipe settings**
   tag — the incoming one is not applied and is named; "disabled" marks are
   merged. **Witness:** unit tests "taken tag is not applied and is named",
   "marks from the file are added". A live WARP registration is not
-  overwritten — `no witness`. **Mutation:** "last writer wins".
+  overwritten — unit test "a registration exists → the file's entry is not
+  applied" (`lx_backup_import_fresh_state_test.dart`). **Mutation:** "last writer wins".
 - **P14. A rule does not go nowhere.** A rule with a target unknown to the
   receiver arrives disabled; `route.final` to nowhere is not applied; an
   incoming Direction makes the rule working. **Witness:** unit tests
@@ -177,15 +178,14 @@ entry); **the input is default-deny**; **a failure does not wipe settings**
   "staged rules are visible to a reader before the disk write"; widget tests
   "write on leaving the screen when there are unsaved changes", "write on
   backgrounding". **Mutation:** writing to memory only on leaving.
-- **P24. A write "from the past" does not go through.** A controller that
-  outlived a settings-set switch does not write into the new set; a halted
-  update pass does not continue. **Witness:** unit tests "a deferred fetch
-  of the old controller does not touch the new slot", "halt interrupts the
-  pass between subscriptions". **Mutation:** writing without a generation
-  check.
+- **P24. Withdrawn into [018-WORKSPACES · P8](../018-WORKSPACES/FEATURE.md#promises)**
+  (audit 591, 2026-10-13): a write "from the past" after a settings-set
+  switch is that feature's promise; it is not duplicated here.
 - **P25. Transfer is written against fresh state:** the LX import plan is
   recomputed at confirmation time, not taken from the preview.
-  `no witness`.
+  **Witness:** unit test "a tag taken between the preview and the confirmation
+  is not overwritten" (`lx_backup_import_fresh_state_test.dart`).
+  **Mutation:** writing the preview's plan without recomputing.
 
 ## Controlled parameters
 
@@ -263,7 +263,7 @@ Start: document → old form? → migration → copy of the original → write
 | Transfer to desktop | Exchanges the shared part of settings with the desktop launcher in LX Backup 1.0: write, read, merge, named losses. | P10–P16, P25 | [desktop-transfer.md](FUNCTIONS/desktop-transfer.md) |
 | Storage contract | Defines what the app stores and in which form: data sets, 1.0 records, node links. | P17 | [storage-contract.md](FUNCTIONS/storage-contract.md) |
 | Storage migration | Converts settings in the 2.23.2 form to storage contract 1.0 once, with the same built config. | P18–P20 | [storage-migration.md](FUNCTIONS/storage-migration.md) |
-| Durable writes | Keeps settings intact through kills and switches: atomic writes, recovery, deferred writes, races. | P21–P24 | [durable-writes.md](FUNCTIONS/durable-writes.md) |
+| Durable writes | Keeps settings intact through kills and switches: atomic writes, recovery, deferred writes, races. | P21–P23 (P24 → 018 · P8) | [durable-writes.md](FUNCTIONS/durable-writes.md) |
 
 ## Related features
 

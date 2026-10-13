@@ -214,7 +214,7 @@ POST   /subs[?rebuild=true]                    Create. Body {"input":"<url|URI|W
 PATCH  /subs/{id}[?rebuild=true][?reveal=true] Update meta, any subset: {enabled,name,url,tag_prefix,
                                                  update_interval_hours,override_detour,register_detour_servers,
                                                  register_detour_in_auto,use_detour_servers,replace_detour_chain,
-                                                 on_update_action,import_rules_enabled,identity}.
+                                                 on_update_action,import_rules_enabled,identity,tls}.
                                                  url applies to SubscriptionServers only (no-op for UserServer).
                                                  override_detour = node link {"folder_id"?:"...","tag":"..."}
                                                  (null clears): a folder member or subscription node is
@@ -231,6 +231,12 @@ PATCH  /subs/{id}[?rebuild=true][?reveal=true] Update meta, any subset: {enabled
                                                  {user_agent,send_hwid,hwid,device_os,ver_os,device_model}.
                                                  So {"identity":{"send_hwid":true,"hwid":"<uuid>"}} enables
                                                  HWID for this subscription only, leaving globals untouched.
+                                                 tls = TLS overrides {fragment,record_fragment,fallback_delay,
+                                                 mixed_case_sni}: source level for a subscription or folder,
+                                                 node level for a standalone server. A missing key keeps the
+                                                 field, null resets it to inherit (node → source → global).
+                                                 fallback_delay must be a core duration (500ms, 1s) → else 400.
+                                                 Responses carry "tls": all four keys, or {} when nothing is set.
 DELETE /subs/{id}[?rebuild=true]               Remove
 POST   /subs/{id}/refresh                      Force HTTP re-fetch (SubscriptionServers only). Fire-and-forget.
 POST   /subs/reorder                           Body {"order":[id1,id2,...]} — exactly the current ids
@@ -427,7 +433,9 @@ POST   /folders/{id}/members[?rebuild=true]    Add members. Body: exactly one of
                                                  or {"url":"..."} (one-shot snapshot: fetch → static members,
                                                  URL is not stored, no auto-update)
 PATCH  /folders/{id}/members/{idx}[?rebuild=true]
-                                               Subset {raw,enabled,detour}. raw must parse (400 keeps old);
+                                               Subset {raw,enabled,detour,tls}. raw must parse (400 keeps old);
+                                                 tls = node-level TLS overrides of the member, same shape and
+                                                 rules as PATCH /subs/{id} tls;
                                                  detour = personal member detour as a node link
                                                  {"folder_id"?:"...","tag":"..."} (null clears). A plain string
                                                  is read as a sibling member's raw tag when one matches, else as
@@ -740,7 +748,7 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/subs', 'params': {'reveal': 'true|false (default false → URLs masked)'}, 'description': 'Alias /state/subs'},
     {'method': 'GET', 'path': '/subs/{id}', 'params': {'reveal': 'true|false', 'warnings': 'true|false (default false)'}, 'description': 'Single entry. warnings=true (feature 478): adds origin_kind, source_kind and per-node PARSE warnings under `warnings` — {tag: [{code, severity, path, value, params, title_en, text_en}]}, pinned English; every node present, empty list when none. code/path/value/title_en are null for app-local warnings; text_en is always there. Off by default — on 500 nodes it is dead weight.'},
     {'method': 'POST', 'path': '/subs', 'params': {'rebuild': 'true|false'}, 'body': '{"input":"<url|URI|WG-conf|JSON-outbounds>"}', 'description': 'Create via parser pipeline (JSON may create several entries). Rejected input → 400 with top-level dropped[] (parse reasons), nothing created'},
-    {'method': 'PATCH', 'path': '/subs/{id}', 'params': {'rebuild': 'true|false', 'reveal': 'true|false'}, 'body': 'Any subset: {enabled,name,url,tag_prefix,update_interval_hours,override_detour,register_detour_servers,register_detour_in_auto,use_detour_servers,replace_detour_chain,on_update_action,import_rules_enabled,identity}', 'description': 'Update meta. url is SubscriptionServers-only (no-op for UserServer). override_detour = node link {folder_id?, tag} (null clears; a string is read as {tag}). on_update_action: rebuild|reload|none. identity is a tristate: omit = keep, null = Default (global identity), object = Custom. The object patches the snapshot (initialised from globals on switch to Custom): {user_agent,send_hwid,hwid,device_os,ver_os,device_model} — so {"identity":{"send_hwid":true,"hwid":"<uuid>"}} enables HWID for this subscription only, leaving globals untouched.'},
+    {'method': 'PATCH', 'path': '/subs/{id}', 'params': {'rebuild': 'true|false', 'reveal': 'true|false'}, 'body': 'Any subset: {enabled,name,url,tag_prefix,update_interval_hours,override_detour,register_detour_servers,register_detour_in_auto,use_detour_servers,replace_detour_chain,on_update_action,import_rules_enabled,identity,tls}', 'description': 'Update meta. tls (§636) = {fragment,record_fragment,fallback_delay,mixed_case_sni}: missing key keeps the field, null resets it to inherit (node → source → global); a bad fallback_delay → 400. Source level for a subscription/folder, node level for a standalone server. url is SubscriptionServers-only (no-op for UserServer). override_detour = node link {folder_id?, tag} (null clears; a string is read as {tag}). on_update_action: rebuild|reload|none. identity is a tristate: omit = keep, null = Default (global identity), object = Custom. The object patches the snapshot (initialised from globals on switch to Custom): {user_agent,send_hwid,hwid,device_os,ver_os,device_model} — so {"identity":{"send_hwid":true,"hwid":"<uuid>"}} enables HWID for this subscription only, leaving globals untouched.'},
     {'method': 'DELETE', 'path': '/subs/{id}', 'params': {'rebuild': 'true|false'}, 'description': 'Remove entry'},
     {'method': 'POST', 'path': '/subs/{id}/refresh', 'description': 'Force HTTP re-fetch (SubscriptionServers only). Fire-and-forget.'},
     {'method': 'POST', 'path': '/subs/reorder', 'body': '{"order":[id,...]}', 'description': 'Reorder (exactly the current ids)'},
@@ -773,7 +781,7 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/folders/{id}', 'params': {'reveal': 'true|false'}, 'description': 'Single folder + members'},
     {'method': 'DELETE', 'path': '/folders/{id}', 'params': {'keep_servers': 'true|false (default false)', 'rebuild': 'true|false'}, 'description': 'Delete folder. keep_servers=true → members become standalone single servers in place; auto nodes are deleted either way.'},
     {'method': 'POST', 'path': '/folders/{id}/members', 'params': {'rebuild': 'true|false', 'reveal': 'true|false'}, 'body': 'exactly one of {"input":"<uri|WG-ini|JSON>","name_fallback"?} (paste) or {"url":"..."} (one-shot snapshot)', 'description': 'Add members. Snapshot: fetch → static members, URL not stored.'},
-    {'method': 'PATCH', 'path': '/folders/{id}/members/{idx}', 'params': {'rebuild': 'true|false', 'reveal': 'true|false'}, 'body': 'Any subset: {raw,enabled,detour}', 'description': 'Edit member. raw must parse (400 keeps old); detour = personal member detour, node link {folder_id?, tag} (null clears; a string is read as a sibling raw tag or a root {tag}).'},
+    {'method': 'PATCH', 'path': '/folders/{id}/members/{idx}', 'params': {'rebuild': 'true|false', 'reveal': 'true|false'}, 'body': 'Any subset: {raw,enabled,detour,tls}', 'description': 'Edit member. tls = node-level TLS overrides (same rules as PATCH /subs/{id}). raw must parse (400 keeps old); detour = personal member detour, node link {folder_id?, tag} (null clears; a string is read as a sibling raw tag or a root {tag}).'},
     {'method': 'DELETE', 'path': '/folders/{id}/members/{idx}', 'params': {'rebuild': 'true|false'}, 'description': 'Remove member (indexes shift — use the returned folder snapshot)'},
     {'method': 'POST', 'path': '/folders/{id}/members/reorder', 'params': {'rebuild': 'true|false'}, 'body': '{"order":[old indexes in new order]}', 'description': 'Reorder members (full permutation required)'},
     {'method': 'POST', 'path': '/folders/{id}/members/{idx}/ungroup', 'params': {'rebuild': 'true|false'}, 'description': 'Member → standalone single server after the folder (personal detour → override_detour); 409 for an auto node'},

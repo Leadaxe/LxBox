@@ -383,6 +383,25 @@ curl -s -H "$HDR" "$BASE/subs" \
   | jq '.[] | select(.kind=="UserServer") | {id, skip_presets}'
 ```
 
+§636 — у каждой записи `/subs` (подписка, папка, одиночный сервер) и у члена
+папки есть поле `tls` — переопределение ручек раздела TLS Fragmentation:
+`{fragment, record_fragment, fallback_delay, mixed_case_sni}`, не заданное
+поле — `null`, запись без политики — `{}`. У подписки и папки это уровень
+источника, у одиночного сервера и члена папки — узловой. Сборка разрешает
+каждое поле отдельно: узел → источник → глобальные `vars`.
+
+`PATCH /subs/{id}` и `PATCH /folders/{id}/members/{idx}` принимают `tls` —
+объект: ключа нет — поле не меняется, `null` — сброс в «наследовать».
+Неизвестный ключ, значение не того типа или `fallback_delay`, которую ядро не
+разберёт как длительность (`500`, `fast`), → 400, ничего не меняется.
+Config-significant → `?rebuild=true`, чтобы применить.
+
+```bash
+# выключить фрагментацию одному члену папки при глобально включённой
+curl -s -X PATCH -H "$HDR" "$BASE/folders/$FID/members/0?rebuild=true" \
+  -d '{"tls":{"fragment":false,"record_fragment":false}}' | jq '.member.tls'
+```
+
 **§524 — `GET /subs` отдаёт ВЕСЬ список источников** в порядке `sources[]`, тот
 же, что видит пользователь на экране Servers: подписки, серверы, папки **и
 цепочки** одним массивом. До §524 ответ нёс только контейнеры, а цепочки жили в
@@ -409,7 +428,7 @@ curl -s -H "$HDR" "$BASE/subs" \
 | `/subs` | GET | `?reveal=true` — clear URLs |
 | `/subs` | POST | `{"input":"<url\|URI\|WG-ini\|JSON-outbound>"}` |
 | `/subs/{id}` | GET | `?reveal=true`, `?warnings=true` — см. ниже |
-| `/subs/{id}` | PATCH | subset: name/enabled/tag_prefix/update_interval_hours/override_detour/register_detour_{servers,in_auto}/use_detour_servers/replace_detour_chain/url + **§346**: on_update_action/import_rules_enabled/identity. **§439:** `override_detour` — ссылка на узел `{folder_id?, tag}`, `null` снимает |
+| `/subs/{id}` | PATCH | subset: name/enabled/tag_prefix/update_interval_hours/override_detour/register_detour_{servers,in_auto}/use_detour_servers/replace_detour_chain/url + **§346**: on_update_action/import_rules_enabled/identity + **§636**: `tls` (частичная правка, `null` — наследовать). **§439:** `override_detour` — ссылка на узел `{folder_id?, tag}`, `null` снимает |
 | `/subs/{id}` | DELETE | — |
 | `/subs/{id}/refresh` | POST | trigger fetch. 409 для UserServer |
 | `/subs/reorder` | POST | **§524** `{"order":[source_key,...]}` — ключи ЛЮБОГО рода (`id:<uuid>` / `chain:<tag>`), состав обязан совпасть с текущим списком. Голый uuid тоже принимается (форма до §524). Одна запись на диск |
@@ -1004,7 +1023,7 @@ credentials (URI/ключи) → по умолчанию скрыт, `?reveal=tr
 | `/folders/{id}` | GET | — |
 | `/folders/{id}` | DELETE | `?keep_servers=true` — вынести членов одиночными серверами (default false — удалить совсем) |
 | `/folders/{id}/members` | POST | ровно одно из: `{"input":"<uri\|WG-ini\|JSON>","name_fallback"?}` (paste) или `{"url":"..."}` (одноразовый снапшот: URL не хранится, авто-обновления нет) |
-| `/folders/{id}/members/{idx}` | PATCH | subset `{raw,enabled,detour}` — §578: `skip_presets` в GET read-only, PATCH не принимает |
+| `/folders/{id}/members/{idx}` | PATCH | subset `{raw,enabled,detour,tls}` (§636: `tls` — узловая политика, правила как у `PATCH /subs/{id}`) — §578: `skip_presets` в GET read-only, PATCH не принимает |
 | `/folders/{id}/members/{idx}` | DELETE | — |
 | `/folders/{id}/members/reorder` | POST | `{"order":[старые индексы в новом порядке]}` — полная перестановка |
 | `/folders/{id}/members/{idx}/ungroup` | POST | член → одиночный сервер сразу после папки |

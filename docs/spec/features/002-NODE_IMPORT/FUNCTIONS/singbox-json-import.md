@@ -24,6 +24,7 @@ and gets the same nodes, groups and chains.
 | `vless`, `vmess`, `trojan`, `anytls`, `shadowsocks`, `hysteria2`, `naive`, `tuic`, `ssh`, `socks`, `http`, `masque` | a node with a model |
 | `wireguard`, `tailscale` (in `outbounds[]` or `endpoints[]`) | an endpoint node |
 | `openvpn-client` | a node, the body as written, without checks and warnings |
+| `hysteria` (v1) | a reject `protocol_extension_unsupported` with the hint `hysteria2` (contract 1.1.118) |
 | a type outside the registry | from an own source — a node with the warning `unknown_node_type`; from a subscription — a reject `protocol_unsupported` |
 | `urltest`, `selector` | a group of the same kind; `selector` keeps `default` |
 | `direct`, `block`, `dns` | not nodes |
@@ -44,10 +45,14 @@ rejects with the entry tag.
 - **`detour`.** The chain target is not duplicated as a node, but becomes a link of the
   owner; one target with two owners — a copy for each. Chains of any
   length are unfolded, any type can be a link; deeper than 8 —
-  truncated with code `detour_chain_too_deep`. A cycle is broken with code
-  `detour_cycle_broken`, nodes do not disappear. A dangling reference —
-  `detour_target_missing`; `detour` to a group — `detour_to_group`;
-  `detour: direct` is silently ignored.
+  truncated with code `detour_chain_too_deep`, the node lives. An unusable
+  chain is fail-closed (contract 1.1.118, D-128): the carrier node is not
+  created and goes to `dropped[]` with its tag — a dangling reference or a hop
+  that did not become a node — `detour_target_missing`; `detour` to a group —
+  `detour_to_group` (the group and its members live); a cycle or a
+  self-reference — `detour_cycle_broken` for every participant. A node whose
+  route degraded never connects directly instead. `detour: direct` (with a
+  `direct` entry in the config) is silently ignored.
 - **Groups.** Members — exact references to parsed nodes (not regex); members
   written with tags of a neighbouring config are resolved via synonyms; duplicates collapse;
   a nested group drops out of the members with a code; empty members — no group.
@@ -89,3 +94,4 @@ rejects with the entry tag.
 | 10 | [584F](../../../tasks/584F-openvpn-import/spec.md) | Postponed | `.ovpn` import — there is a spec, not implemented |
 | 11 | [585](../../../tasks/585-unknown-node-type-accepted.md) | Implemented | An unknown type is accepted from an own source |
 | 12 | [586](../../../tasks/586-endpoint-types-from-registry.md) | Implemented | `endpoints`/`outbounds` sections from the registry; `openvpn-client` is a known type |
+| 13 | [642](../../../tasks/642-contract-1-1-118-sync.md) | Done | A broken `detour` drops the carrier; hysteria v1 — an explicit reject |

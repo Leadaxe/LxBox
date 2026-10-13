@@ -48,7 +48,7 @@ class CustomRuleEditScreen extends StatefulWidget {
 
   final CustomRule initial;
 
-  /// §578 — узлы для превью пресета с `for_each` (View-таб), тот же отбор,
+  /// §578 — узлы для превью пресета с обходом узлов (View-таб), тот же отбор,
   /// что у строки пресета на экране маршрутов.
   final List<PresetNode> presetNodes;
   final List<OutboundOption> outboundOptions;

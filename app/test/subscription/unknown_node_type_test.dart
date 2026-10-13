@@ -103,9 +103,13 @@ void main() {
   "network": "udp",
   "username": "test-user",
   "password": "test-pass",
-  "detour": "warp-out",
   "tls": { "certificate_path": "/sdcard/certs/x.crt" }
 }''';
+
+  // Контракт 1.1.118 (D-128) — висячий `detour` тела = fail-closed: запись
+  // отбраковывается при разборе, узел не создаётся.
+  final bodyWithDetour = jsonEncode(
+      {...(jsonDecode(body) as Map<String, dynamic>), 'detour': 'warp-out'});
 
   const commented = '''
 {
@@ -177,6 +181,10 @@ void main() {
     s.build(ctx);
     expect(ctx.entries.last, isA<Outbound>());
     expect(built(s)['x'], {'y': 1});
+  });
+
+  test('тело с висячим detour отбраковывается (D-128)', () {
+    expect(parseAll(decode(bodyWithDetour), own: true), isEmpty);
   });
 
   test('проба строит тело узла незнакомого типа', () {

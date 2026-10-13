@@ -4,6 +4,7 @@ import '../../config/consts.dart' show kDirectOutboundTag;
 import '../../models/node_spec.dart';
 import '../../models/node_warning.dart';
 import '../../models/singbox_entry.dart';
+import '../../models/tls_policy.dart';
 import '../app_log.dart';
 import '../builder/detour_yields.dart' show yieldToBuildDetour;
 import '../builder/post_steps.dart' show applyMixedCaseSni, applyTlsFragment;
@@ -128,12 +129,17 @@ const _wireguardEndpointType = 'wireguard';
 /// [vars] — переменные шаблона (`SettingsStorage.getAllVars()`): §606 — из них
 /// берутся глобальные anti-DPI-настройки туннеля (`tls_fragment*`,
 /// `tls_mixed_case_sni`), чтобы проба шла тем же путём, что трафик.
+///
+/// [tlsByIndex] — §636: уровни TLS-политики узла (узел, источник) по индексу
+/// в [nodes], те же, что сборка туннеля кладёт по тегу.
 ProbeConfig buildProbeConfig(
   List<NodeSpec?> nodes, {
   String coreVersion = '',
   Map<String, String> vars = const {},
+  Map<int, TlsLayers> tlsByIndex = const {},
 }) =>
-    buildProbeBatches(nodes, coreVersion: coreVersion, vars: vars)
+    buildProbeBatches(nodes,
+            coreVersion: coreVersion, vars: vars, tlsByIndex: tlsByIndex)
         .firstOrNull ??
     ProbeConfig(
       configJson: null,
@@ -160,6 +166,7 @@ List<ProbeConfig> buildProbeBatches(
   List<NodeSpec?> nodes, {
   String coreVersion = '',
   Map<String, String> vars = const {},
+  Map<int, TlsLayers> tlsByIndex = const {},
 }) {
   final built = <int, _Built>{};
   final broken = <int, String>{};
@@ -219,7 +226,9 @@ List<ProbeConfig> buildProbeBatches(
   return [
     for (var g = 0; g < groups.length; g++)
       _assemble(groups[g], built,
-          brokenByIndex: g == 0 ? broken : const {}, vars: vars),
+          brokenByIndex: g == 0 ? broken : const {},
+          vars: vars,
+          tlsByIndex: tlsByIndex),
   ];
 }
 
@@ -334,7 +343,9 @@ ProbeConfig _assemble(
   Map<int, _Built> built, {
   required Map<int, String> brokenByIndex,
   Map<String, String> vars = const {},
+  Map<int, TlsLayers> tlsByIndex = const {},
 }) {
+  final tlsByTag = <String, TlsLayers>{};
   final outbounds = <Map<String, dynamic>>[
     {'type': 'direct', 'tag': kDirectOutboundTag},
   ];
@@ -376,6 +387,13 @@ ProbeConfig _assemble(
       }
     }
     tagByIndex[i] = mainTag;
+    // §636 — уровни TLS узла: его main и родная цепочка.
+    final layers = tlsByIndex[i];
+    if (layers != null && !layers.isEmpty) {
+      for (final e in b.entries) {
+        tlsByTag[e.tag] = layers;
+      }
+    }
   }
 
   if (tagByIndex.isEmpty) {
@@ -404,8 +422,8 @@ ProbeConfig _assemble(
   // (`build_config.dart`, после уступок detour): иначе «пинг есть, VPN нет»
   // (§363). Уступка §574 сохраняется — detour у main назначен и уступки сняты
   // выше, а оба шага сами пропускают outbound с `detour`.
-  applyTlsFragment(config, vars);
-  applyMixedCaseSni(config, vars);
+  applyTlsFragment(config, vars, byTag: tlsByTag);
+  applyMixedCaseSni(config, vars, byTag: tlsByTag);
   return ProbeConfig(
     configJson: jsonEncode(config),
     tagByIndex: tagByIndex,

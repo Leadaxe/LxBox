@@ -57,6 +57,13 @@ class ServiceNotification(private val service: Service) {
             BoxApplication.notificationManager.activeNotifications.any { it.id == NOTIFICATION_ID }
         }.getOrDefault(false)
 
+        /// §639 — страховочное снятие уведомления id=1 перед убийством
+        /// процесса в Quit. После штатного `stopForeground` это no-op; если
+        /// сервис ещё foreground, NMS cancel отбросит (см. §430) — вреда нет.
+        fun cancelServiceNotification() {
+            runCatching { BoxApplication.notificationManager.cancel(NOTIFICATION_ID) }
+        }
+
         /// §428 — обычное уведомление на том же канале, живёт после stopSelf()
         /// и без сервиса (зовётся и из VpnWatchdogReceiver). Без
         /// POST_NOTIFICATIONS (API 33+) система молча его не покажет — это
@@ -81,6 +88,18 @@ class ServiceNotification(private val service: Service) {
             runCatching {
                 (ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
                     .notify(ALERT_NOTIFICATION_ID, builder.build())
+            }
+        }
+
+        /// §637 — снять уведомление об ошибке (id=2) при новом явном старте и
+        /// при успешном переходе в Started: после отказа старта страховка
+        /// «core rejected node» отключает узел и повторяет старт, и без снятия
+        /// «Error: Failed to start service …» висело бы рядом с живым VPN.
+        /// Трогает только id=2; постоянное уведомление id=1 не пересобирается.
+        fun cancelAlert(ctx: Context) {
+            runCatching {
+                (ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+                    .cancel(ALERT_NOTIFICATION_ID)
             }
         }
     }
@@ -163,6 +182,8 @@ class ServiceNotification(private val service: Service) {
     }
 
     fun showAlert(title: String, text: String) = showAlert(service, title, text)
+
+    fun cancelAlert() = cancelAlert(service)
 
     fun stop() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {

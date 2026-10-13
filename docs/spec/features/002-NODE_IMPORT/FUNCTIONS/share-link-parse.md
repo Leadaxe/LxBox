@@ -73,8 +73,10 @@ link byte for byte as the source) or "no node" + a code for the rejects.
 
 - `http://`/`https://` is a subscription address, not a node
   ([001-SUBSCRIPTIONS](../../001-SUBSCRIPTIONS/FEATURE.md)).
-- `hysteria://`/`hy://` (v1) is declared by the registry, but there is no hysteria v1 model
-  in the app — no node is created.
+- `hysteria://`/`hy://` (v1) is declared by the registry as `extension: desktop`;
+  there is no hysteria v1 model in the app — no node is created, the line goes
+  to `dropped[]` with `protocol_extension_unsupported` and the hint
+  `alternative` from the registry (`hysteria2`, contract 1.1.118).
 - Details of TLS obfuscation and XHTTP — [016-DPI_HARDENING](../../016-DPI_HARDENING/FEATURE.md).
 
 ## Revisions
@@ -102,3 +104,4 @@ link byte for byte as the source) or "no node" + a code for the rejects.
 | 19 | [543](../../../tasks/543-hysteria2-3xui-gecko-aliases.md) | Done | 3x-ui links with gecko |
 | 20 | [562](../../../tasks/562-uri-scheme-dispatch-from-registry.md) | Done | The scheme dispatcher only from the registry |
 | 21 | [570](../../../tasks/570-close-open-tails.md) | Wave B done | A `vpn://` line in a list — all containers |
+| 22 | [642](../../../tasks/642-contract-1-1-118-sync.md) | Done | hysteria v1 — an explicit reject with a hint; masque `network=` is an unknown parameter |

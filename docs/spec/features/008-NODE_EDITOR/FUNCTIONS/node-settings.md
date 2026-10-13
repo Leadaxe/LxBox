@@ -24,7 +24,7 @@ while typing.
 
 | Tab | Contents |
 |---|---|
-| Settings | Protocol, Server (read-only); Tag with an emoji palette; Detour server with path preview; Skip presets |
+| Settings | Protocol, Server (read-only); Tag with an emoji palette; Detour server with path preview; TLS (node-level overrides of the TLS Fragmentation options, written immediately); Skip presets |
 | Source | the source text, editable; a caption about the source kind |
 | JSON | the body the core will receive, read-only, highlighted; Copy JSON; Edit JSON |
 | Network | only for a Tailscale node — tailnet devices, Exit node choice |
@@ -96,3 +96,4 @@ while typing.
 | 9 | [578](../../../tasks/578-tailscale-preset-template-for-each.md) | Spec, implementation started | Skip presets toggle |
 | 10 | [581](../../../tasks/581-tailscale-network-tab.md) | Implemented | Network tab of a Tailscale node |
 | 11 | [626](../../../tasks/626-unsaved-changes-everywhere.md) | Implemented | "Unsaved changes" dialog on leaving with an edited Tag or Source |
+| 12 | [636](../../../tasks/636-tls-settings-per-node-folder-subscription.md) | Implemented | TLS section between Detour and Skip presets |

@@ -252,8 +252,9 @@ class RoutingHelpers {
         // (напр. resolve_enabled: true, когда глобаль уже false). Ref-vars из
         // подписи исключаем — их состояние не место в subtitle правила.
         if (v.isRef) continue;
-        // §266 — hidden-var (rule_enable и т.п.) служебная, не для показа.
-        if (v.wizardUI == 'hidden') continue;
+        // §266 — hidden-var (rule_enable и т.п.) служебная, не для показа;
+        // §643 — internal (только для сборки) тоже.
+        if (v.isFormHidden) continue;
         final value = rule.varsValues[v.name] ?? v.defaultValue;
         if (value.isEmpty || value == v.defaultValue) continue;
         extras.add('${v.name}: $value');

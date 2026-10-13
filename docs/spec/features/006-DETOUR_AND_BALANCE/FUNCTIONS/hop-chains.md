@@ -71,6 +71,9 @@ Direction groups; the chain tag in Direction pools; warnings with codes
   **positions**; counter "N chain position(s) removed". A chain with <2
   positions stays visible and is not built. Dissolving a folder while
   keeping its servers and updating a subscription do not touch positions.
+- Disabling a Direction keeps the positions: a chain standing on it is not
+  built at all (fail-closed, not shortened) and comes back when the
+  Direction is re-enabled; only deletion removes the positions.
 - Storage — `kind: chain` records in the shared source list; record order =
   declaration order. Backup — in the servers category.
 

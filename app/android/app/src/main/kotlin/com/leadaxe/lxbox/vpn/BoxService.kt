@@ -320,6 +320,11 @@ class BoxService(
                 service.stopSelf()
                 return Service.START_NOT_STICKY
             }
+        } else {
+            // §637 — явный старт (кнопка, плитка, Intent API): ошибка прошлой
+            // попытки снимается; если этот старт тоже упадёт, stopAndAlert
+            // покажет новую.
+            notification.cancelAlert()
         }
         try {
             notification.show(
@@ -630,6 +635,8 @@ class BoxService(
             return
         }
         setStatus(VpnStatus.Started)
+        // §637 — старт удался: ошибка прошлой попытки (id=2) больше не актуальна.
+        notification.cancelAlert()
 
         // §122 Фаза 0 — поднять CommandClient-канал. ПОСЛЕ startCommandServer()
         // и Started: command.sock существует только когда сервер запущен. statusClient

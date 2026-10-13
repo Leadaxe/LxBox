@@ -129,7 +129,7 @@ wizard_template.json
 │   │   └─ {type:"block",  tag:"block"}        §201 — the drop-out; a direction selector option and a route_final
 │   ├─ route                       object{5 keys}
 │   │   ├─ find_process            bool          true enables package_name detection
-│   │   ├─ default_domain_resolver "@dns_default_domain_resolver"
+│   │   ├─ default_domain_resolver {server: "@dns_default_domain_resolver", disable_optimistic_cache: "@dns_resolver_no_stale"}  §643
 │   │   ├─ rules[]                 list[0]       [] — §264: sniff/hijack-dns/resolve
 │   │   │                                         MOVED into the locked traffic-processing preset
 │   │   │                                         (num:0 → first in route.rules).
@@ -763,7 +763,7 @@ The base of the final sing-box config. It carries `@var` placeholders; the subst
   ],
   "route": {
     "find_process":            true,
-    "default_domain_resolver": "@dns_default_domain_resolver",
+    "default_domain_resolver": {"server": "@dns_default_domain_resolver", "disable_optimistic_cache": "@dns_resolver_no_stale"},
     "rules": [
       // §264: route.rules is EMPTY in the template. The base sniff/hijack-dns/resolve
       // rules MOVED into the locked traffic-processing preset (first in selectable_rules,
@@ -982,28 +982,61 @@ The vars declared in a preset are **visible only while the preset is enabled**. 
 
 The universal `outbound` override (spec [§033], Expansion §5): when `varsValues['outbound']` holds a non-empty value, it replaces the rule's outbound.
 
-### `for_each` — one body per node (§578)
+### Node loops — `for_each_node` / `for_each_node_do` (§578, §643)
 
-A preset with `for_each` repeats its body (`rules`, `dns_servers`, `dns_rules`)
-for every config node that matches. The shipped example is the `tailscale`
-preset.
+A preset walks the config nodes with exactly one of two keys (contract
+1.1.119, the norm is `TEMPLATE_LANG.md` §6.5–§6.7):
+
+| Key | Body (`rules`, `rule_set`, `dns_servers`, `dns_rules`) | Purpose |
+|---|---|---|
+| `for_each_node` | repeated for every node that passes, `@node` in scope | per-node fragments; the shipped example is the `tailscale` preset |
+| `for_each_node_do` | expanded **once after the walk**, no `@node` | collect values from the nodes into the preset's own vars |
 
 ```jsonc
-"for_each": {
-  "node_type": "tailscale",                    // required: the `type` field of the node body
-  "as": "node",                                // required: the name the node goes by in the body
-  "filter": { "#not": "@node.skip_presets" }   // optional: a condition in the `#if` language
-}
+"for_each_node":    { "#filter": { "#and": [ { "@node.body.type": "tailscale" },
+                                             { "#not": "@node.skip_presets" } ] } }
+
+"for_each_node_do": { "#filter": { "@node.body.server": "#notEmpty" },
+                      "#do":     { "@domains": { "#append": "@node.body.server" } },
+                      "#final":  { "@domains": { "#unique": true, "#sort": true, "#limit": 200 } } }
 ```
 
-A node is served when all of these hold: its body `type` equals `node_type`,
-the node is enabled, it made it into the config (not dropped by the registry
-gate, the core gate or a degradation), and `filter` is true. The container
-does not matter: a user server, a folder member and a subscription node are all
-served. Repeats follow the order of the nodes in the config; no nodes means the
-preset emits nothing. A preset without `for_each` works as before.
+The keys inside are a closed list: `#filter` (both, optional — a full `#if`
+condition without the `#if`/`#value` wrapper), `#do` (only `for_each_node_do`,
+required), `#final` (only `for_each_node_do`, optional). Any other key,
+unmarked `filter`/`do`/`final`, both loop keys in one preset and the removed
+`for_each` (with `node_type`/`as`) fail the template load. There is no soft
+drop of a single preset any more (§83 is gone with `for_each`).
 
-**Node access** (`node` here is the `as` name):
+A node is walked when all of these hold: the node is enabled, it made it into
+the config (not dropped by the registry gate, the core gate or a
+degradation), and `#filter` is true (a missing value is false). The node type
+is just a condition on `@node.body.type`. The container does not matter: a
+user server, a folder member and a subscription node are all walked. The
+order is the order of the nodes in the config. A preset without a loop works
+as before.
+
+**`#do` / `#final`.** `#do` maps `"@name"` to exactly one verb; the only verb
+is `#append`, the name must be a `text_list` declared in this preset's `vars`,
+the right side is a reference string or `{"#tpl": …}` evaluated per node
+(an empty value skips the node; no dedup). `#final` applies `#unique` →
+`#sort` (byte order) → `#limit` (int > 0) once after the walk, in that order
+whatever the key order. The build: base value (user value or
+`default_value`) → walk → `#do` → `#final` → `unique` of the declaration →
+body once. The collected list lives only in a copy for the build and is never
+stored. An empty result becomes `[]`; a rule left with no condition is dropped
+with `template_fragment_dropped`.
+
+**Declaration fields** (`TEMPLATE_LANG.md` §2.1): `unique: true` (only
+`text_list`) keeps the value free of duplicates — user input on save, the
+stored value on read, `default_value` and the collected result.
+`wizard_ui: "internal"` is a build-only var: no row in any form, the stored
+and backup values are ignored (the base is `default_value`), it is never
+written to the state nor exported, and import drops it with
+`backup_var_skipped {reason: internal}`. A var named `node` or `node.*`
+(global or preset) is a load error.
+
+**Node access** (§6.6; the name is fixed):
 
 | Reference | Value |
 |---|---|
@@ -1022,18 +1055,32 @@ a value any number of times; a bare `@name` inside the string is a literal. An
 unknown name or an empty value drops the whole value. An object carrying `#tpl`
 next to other keys is a template error.
 
-**Tags.** The tags of a `for_each` preset are not namespaced
+**Tags.** The tags of a `for_each_node` preset are not namespaced
 (`<preset_id>:<tag>`, §103 C7): the node tag already makes them unique, so the
 DNS server of `tailscale` is `<node tag>-dns`. Its storage record keeps `ref`
 equal to the tag and carries no `preset_id` (otherwise `DnsServerPreset` would
 rebuild the tag as `tailscale:<tag>-dns`). The DNS screen learns the owner from
-the expanded body instead.
+the expanded body instead. A `for_each_node_do` body is expanded once without
+a node, so its tags are namespaced like those of a plain preset.
 
 **Screens.** The routing and DNS screens and the rule editor's View tab expand
-the preset over the nodes of the sources (`presetNodesForView`): the tag is the
-final tag of the last build when the node was in it, otherwise the display tag.
-The preset row lists the served tags, comma separated, or says there are no
-matching nodes. The probe does not expand presets at all.
+the preset over the nodes of the sources (`presetNodesForView`; only node types
+the `#filter` can let through are emitted): the tag is the final tag of the
+last build when the node was in it, otherwise the display tag. A
+`for_each_node` row lists the served tags, comma separated, or says there are
+no matching nodes; a `for_each_node_do` row has no such note. The **Skip
+presets** switch on the node screen shows when some loop preset's `#filter`
+accepts the node with `skip_presets = false`. The probe does not expand
+presets at all.
+
+**Default domain resolver** (`TEMPLATE_LANG.md` §6.9).
+`route.default_domain_resolver` is the core's object form
+`{"server": "@dns_default_domain_resolver", "disable_optimistic_cache": "@dns_resolver_no_stale"}`.
+`dns_resolver_no_stale` (bool, default `true`, portable, travels in the backup
+`vars` like `dns_optimistic`) is the DNS screen switch **Never serve stale
+answers for node hostnames** under the default resolver. Readers of the key
+accept a string or an object with `server`; whoever replaces the resolver
+(the heal steps of the build) changes only `server`.
 
 **The `tailscale` preset.** For every Tailscale node: a `resolve` rule and a
 DNS rule pointing at the node's own DNS server `<node>-dns` (`type: tailscale`,
@@ -1065,7 +1112,7 @@ See the implementation in `app/lib/services/builder/build_config.dart` and `pres
 
 ## The `#if` construct (§120)
 
-Declarative conditionals right inside the `config` and preset bodies. They are resolved during the substitution phase. The language as a whole (constructs, predicates, `#enable`, `#on_change`, `for_each`, `#tpl`) is specified in [024-TEMPLATE → template-language](./spec/features/024-TEMPLATE/FUNCTIONS/template-language.md); this section is the schema-level view of `#if`.
+Declarative conditionals right inside the `config` and preset bodies. They are resolved during the substitution phase. The language as a whole (constructs, predicates, `#enable`, `#on_change`, node loops `for_each_node` / `for_each_node_do`, `#tpl`) is specified in [024-TEMPLATE → template-language](./spec/features/024-TEMPLATE/FUNCTIONS/template-language.md); this section is the schema-level view of `#if`.
 
 ```jsonc
 "#if": {
@@ -1309,7 +1356,7 @@ on both pseudo-vars (`rule_enable` AND `dns_enable`), so it fires along either p
 
 ## Related documents
 
-- [024-TEMPLATE](./spec/features/024-TEMPLATE/FEATURE.md) — the feature: the template language (`#if`, `#enable`, `for_each`, `#tpl`, typed variables) and the preset language; this file is the schema reference for `wizard_template.json`
+- [024-TEMPLATE](./spec/features/024-TEMPLATE/FEATURE.md) — the feature: the template language (`#if`, `#enable`, `for_each_node` / `for_each_node_do`, `#tpl`, typed variables) and the preset language; this file is the schema reference for `wizard_template.json`
 - [`STORAGE.md`](./STORAGE.md) — the user state in `lxbox_settings.json` (what the user changes, including the directions)
 - [§058 config generator v1 (superseded)](./spec/tasks/058-config-generator-wizard-v1-superseded/spec.md) — substitution and expansion (formerly feature §005x, superseded by §026)
 - [§026 parser v2](./spec/tasks/026F-parser-v2/spec.md) — `parser_config.version`

@@ -18,6 +18,7 @@ import '../models/node_spec.dart';
 import '../models/node_warning.dart';
 import '../models/server_list.dart';
 import '../models/template_vars.dart';
+import '../models/tls_policy.dart';
 import '../widgets/detour_target_picker.dart';
 import '../widgets/emoji_picker_button.dart';
 import '../widgets/lx_code_editor.dart';
@@ -28,6 +29,7 @@ import '../services/l10n/locale_controller.dart';
 import '../services/warp/warp_endpoint_picker.dart';
 import '../services/wireguard/masquerade_source.dart';
 import '../widgets/masquerade_fields.dart';
+import '../widgets/tls_policy_tiles.dart';
 import 'node_settings/node_document.dart';
 import 'subscriptions_screen/entry_warnings.dart';
 
@@ -109,8 +111,9 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
   /// Notifications во вкладке Diagnostics.
   List<NodeWarning> _notifications = const [];
 
-  /// §578 — переключатель `Skip presets` виден: в шаблоне есть пресет с
-  /// `for_each` под тип этого узла (см. [skipPresetsToggleVisible]).
+  /// §578/§643 — переключатель `Skip presets` виден: в шаблоне есть пресет с
+  /// обходом узлов, чей `#filter` принимает этот узел (см.
+  /// [skipPresetsToggleVisible]).
   bool _skipPresetsVisible = false;
 
   /// §581 — узел Tailscale: есть вкладка Network.
@@ -231,13 +234,15 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     // (_pickDetour перечитывает свежий список перед показом пикера).
     _directions = await SettingsStorage.getDirections();
 
-    // §578 — видимость `Skip presets`: пресеты с `for_each` из шаблона.
+    // §578/§643 — видимость `Skip presets`: пресеты с обходом узлов из
+    // шаблона, чей `#filter` принимает этот узел.
     try {
       final template = await TemplateLoader.load();
       _skipPresetsVisible = skipPresetsToggleVisible(
         list: widget.entry.list,
         isMember: member != null,
-        nodeType: node.protocol,
+        nodeTag: node.tag,
+        nodeBody: node.emit(TemplateVars.empty).map,
         presets: template.selectableRules,
       );
     } catch (_) {
@@ -729,11 +734,78 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),
         ),
+        // §636 — TLS: узловое переопределение ручек «TLS Fragmentation».
+        const SizedBox(height: 16),
+        ..._buildTlsSection(theme),
         ], // §322 — конец гейта detour-блока
         const SizedBox(height: 16),
         ..._buildSkipPresetsBlock(theme),
       ],
     );
+  }
+
+  /// §636 — узловая TLS-политика: член папки — `FolderMember.tls`, одиночный
+  /// сервер — `UserServer.tls`. Читается при каждом build.
+  TlsPolicy get _tls {
+    final member = _member;
+    if (member != null) return member.tls;
+    return widget.entry.tls;
+  }
+
+  /// §636 — узел идёт через detour (личный или папочный): флаги TLS ему не
+  /// пишутся (только first-hop), секция об этом говорит.
+  bool get _underDetour {
+    if (_detour.isNotEmpty) return true;
+    final list = widget.entry.list;
+    if (_member == null || list is! FolderServers) return false;
+    final p = list.detourPolicy;
+    return p.useDetourServers && p.overrideDetour.isNotEmpty;
+  }
+
+  List<Widget> _buildTlsSection(ThemeData theme) {
+    final list = widget.entry.list;
+    final folder = _member != null && list is FolderServers ? list : null;
+    return [
+      _sectionHeader(getLocalText.s("TLS"),
+          getLocalText.s("Override the global TLS settings for this server."),
+          theme),
+      if (_underDetour)
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          child: Text(
+            getLocalText.s("Not applied: traffic goes through a detour first."),
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          ),
+        ),
+      TlsPolicyTiles(
+        policy: _tls,
+        inherited: folder?.tls ?? TlsPolicy.none,
+        inheritedLevel: folder != null ? TlsLevel.folder : TlsLevel.global,
+        onChanged: (v) => unawaited(_persistTls(v)),
+      ),
+    ];
+  }
+
+  /// §636 — запись сразу, как у detour: член папки → setMemberTls,
+  /// одиночный → `entry.tls` + persistSources.
+  Future<void> _persistTls(TlsPolicy value) async {
+    final mi = widget.memberIndex;
+    if (mi != null) {
+      // Синхронная часть заменяет член до записи на диск — экран
+      // перерисовывается сразу, не дожидаясь IO.
+      final pending = widget.subController.setMemberTls(widget.index, mi, value);
+      setState(() {});
+      final err = await pending;
+      if (err != null && mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(err.render())));
+        setState(() {});
+      }
+      return;
+    }
+    setState(() => widget.entry.tls = value);
+    await widget.subController.persistSources();
   }
 
   /// §578 — поле записи `skip_presets`, как хранит контейнер (одиночный —
@@ -746,7 +818,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
   }
 
   /// §578 — переключатель `Skip presets`: узел не обслуживается пресетами с
-  /// `for_each`.
+  /// обходом узлов (`#not @node.skip_presets` в `#filter`).
   List<Widget> _buildSkipPresetsBlock(ThemeData theme) {
     if (!_skipPresetsVisible) return const [];
     return [

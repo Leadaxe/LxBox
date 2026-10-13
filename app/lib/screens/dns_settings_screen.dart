@@ -92,7 +92,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
   /// Live lookup: storage хранит presetId, UI отображает текущий label.
   Map<String, String> _presetLabelByPresetId = {};
 
-  /// §578 — пресет с `for_each` → обслуживаемые узлы (подпись строки).
+  /// §578 — пресет с `for_each_node` → обслуживаемые узлы (подпись строки).
   Map<String, List<String>> _presetServedTagsByPresetId = {};
 
   /// §117: Направления для `type: outbound` vars DNS-серверов — Direct + активные
@@ -135,6 +135,10 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
   String _cacheCapacity = '';
   bool _optimistic = true;
   bool _storeCache = true;
+
+  /// §643 (TEMPLATE_LANG §6.9) — `dns_resolver_no_stale`:
+  /// `route.default_domain_resolver.disable_optimistic_cache`.
+  bool _resolverNoStale = true;
   String _cacheCapacityError = '';
   final TextEditingController _cacheCapacityCtl = TextEditingController();
 
@@ -181,13 +185,13 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
   Future<void> _load() async {
     // §300 — вся read+derive-логика вынесена в DnsController.load() (тело
     // verbatim + типизация краёв §294). Экран только присваивает snapshot.
-    // §578 — узлы для пресетов с `for_each`: тот же отбор, что у строки
-    // пресета на экране маршрутов.
+    // §578/§643 — узлы для пресетов с обходом узлов: тот же отбор, что у
+    // строки пресета на экране маршрутов.
     final template = await TemplateLoader.load();
     final s = await DnsController.load(
       presetNodes: presetNodesForView(
         [for (final e in widget.subController.entries) e.list],
-        nodeTypes: forEachNodeTypes(template.selectableRules),
+        nodeTypes: presetLoopNodeTypes(template.selectableRules),
         lastEmittedTagMap: widget.subController.lastEmittedTagMap,
       ),
     );
@@ -211,6 +215,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
       _cacheCapacity = s.cacheCapacity;
       _optimistic = s.optimistic;
       _storeCache = s.storeCache;
+      _resolverNoStale = s.resolverNoStale;
       _cacheCapacityError = '';
       _cacheCapacityCtl.text = s.cacheCapacity;
       _loading = false;
@@ -236,6 +241,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
       cacheCapacity: _cacheCapacity,
       optimistic: _optimistic,
       storeCache: _storeCache,
+      resolverNoStale: _resolverNoStale,
     );
   }
 
@@ -467,7 +473,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
           onToggle: dnsEnable == null
               ? null
               : (v) => _togglePresetDnsEnable(cr.presetId, v),
-          // §578 — пресет с `for_each`: какие узлы он обслуживает.
+          // §578 — пресет с `for_each_node`: какие узлы он обслуживает.
           note: switch (_presetServedTagsByPresetId[cr.presetId]) {
             final List<String> tags => presetServedNodesLabel(tags),
             null => null,
@@ -758,6 +764,21 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
                 _markDirty();
               }),
             ),
+          // §643 (TEMPLATE_LANG §6.9) — резолвер по умолчанию не отдаёт из
+          // оптимистичного кэша ответ с истёкшим TTL (имена серверов узлов).
+          SwitchListTile(
+            key: const ValueKey('dns_resolver_no_stale'),
+            contentPadding: EdgeInsets.zero,
+            title: Text(getLocalText
+                .s("Never serve stale answers for node hostnames")),
+            subtitle: Text(getLocalText.s(
+                "Node hostnames are resolved again once the cached answer expires. App DNS queries are not affected.")),
+            value: _resolverNoStale,
+            onChanged: (v) => setState(() {
+              _resolverNoStale = v;
+              _markDirty();
+            }),
+          ),
 
           // §580 — кэш DNS ядра: размер, устаревшие ответы, хранение в
           // cache.db. Изменение помечает конфиг к пересборке.

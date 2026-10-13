@@ -9,6 +9,7 @@ import 'node_spec.dart';
 import 'node_warning.dart';
 import 'source_replace.dart';
 import 'subscription_meta.dart';
+import 'tls_policy.dart';
 
 /// Контейнер узлов (§1 спеки 026). Sealed: `SubscriptionServers` (fetch по
 /// URL) vs `UserServer` (paste/file/qr/manual) vs `FolderServers` (§234 —
@@ -20,6 +21,10 @@ sealed class ServerList {
   final bool enabled;
   final String tagPrefix;
   final DetourPolicy detourPolicy;
+
+  /// §636 — переопределение TLS-ручек. У подписки и папки — уровень
+  /// источника, у одиночного сервера — узловой (сервер = свой источник).
+  final TlsPolicy tls;
   final List<NodeSpec> nodes; // mutable: перезаписывается на refresh/reparse
 
   ServerList({
@@ -28,6 +33,7 @@ sealed class ServerList {
     required this.enabled,
     required this.tagPrefix,
     required this.detourPolicy,
+    this.tls = TlsPolicy.none,
     List<NodeSpec>? nodes,
   }) : nodes = nodes ?? <NodeSpec>[];
 
@@ -249,6 +255,7 @@ final class SubscriptionServers extends ServerList {
     required super.enabled,
     required super.tagPrefix,
     required super.detourPolicy,
+    super.tls,
     required this.url,
     this.meta,
     this.lastUpdated,
@@ -301,6 +308,7 @@ final class SubscriptionServers extends ServerList {
     bool? enabled,
     String? tagPrefix,
     DetourPolicy? detourPolicy,
+    TlsPolicy? tls,
     String? url,
     SubscriptionMeta? meta,
     DateTime? lastUpdated,
@@ -328,6 +336,7 @@ final class SubscriptionServers extends ServerList {
         enabled: enabled ?? this.enabled,
         tagPrefix: tagPrefix ?? this.tagPrefix,
         detourPolicy: detourPolicy ?? this.detourPolicy,
+        tls: tls ?? this.tls,
         url: url ?? this.url,
         meta: meta ?? this.meta,
         lastUpdated: lastUpdated ?? this.lastUpdated,
@@ -361,6 +370,7 @@ final class SubscriptionServers extends ServerList {
           enabled == other.enabled &&
           tagPrefix == other.tagPrefix &&
           detourPolicy == other.detourPolicy &&
+          tls == other.tls &&
           url == other.url &&
           meta == other.meta &&
           lastUpdated == other.lastUpdated &&
@@ -386,6 +396,7 @@ final class SubscriptionServers extends ServerList {
         enabled,
         tagPrefix,
         detourPolicy,
+        tls,
         url,
         meta,
         lastUpdated,
@@ -427,7 +438,7 @@ final class UserServer extends ServerList {
   final List<StoredWarning> warnings;
 
   /// §578 — поле записи `skip_presets`: узел не обслуживается пресетами с
-  /// `for_each`, чей `filter` читает поле. Хранится только `true`.
+  /// `for_each_node*`, чей `#filter` читает поле. Хранится только `true`.
   final bool skipPresets;
 
   UserServer({
@@ -436,6 +447,7 @@ final class UserServer extends ServerList {
     required super.enabled,
     required super.tagPrefix,
     required super.detourPolicy,
+    super.tls,
     this.origin = UserSource.manual,
     this.rawBody = '',
     this.warnings = const [],
@@ -451,6 +463,7 @@ final class UserServer extends ServerList {
     bool? enabled,
     String? tagPrefix,
     DetourPolicy? detourPolicy,
+    TlsPolicy? tls,
     UserSource? origin,
     String? rawBody,
     List<StoredWarning>? warnings,
@@ -463,6 +476,7 @@ final class UserServer extends ServerList {
         enabled: enabled ?? this.enabled,
         tagPrefix: tagPrefix ?? this.tagPrefix,
         detourPolicy: detourPolicy ?? this.detourPolicy,
+        tls: tls ?? this.tls,
         origin: origin ?? this.origin,
         rawBody: rawBody ?? this.rawBody,
         warnings: warnings ?? this.warnings,
@@ -480,12 +494,13 @@ final class UserServer extends ServerList {
           enabled == other.enabled &&
           tagPrefix == other.tagPrefix &&
           detourPolicy == other.detourPolicy &&
+          tls == other.tls &&
           rawBody == other.rawBody &&
           _eq.equals(warnings, other.warnings) &&
           skipPresets == other.skipPresets);
 
   @override
-  int get hashCode => Object.hash(id, enabled, tagPrefix, detourPolicy,
+  int get hashCode => Object.hash(id, enabled, tagPrefix, detourPolicy, tls,
       rawBody, _eq.hash(warnings), skipPresets);
 }
 
@@ -515,6 +530,9 @@ final class FolderMember {
   /// §578 — поле записи `skip_presets`, как у `UserServer.skipPresets`.
   final bool skipPresets;
 
+  /// §636 — узловое переопределение TLS-ручек члена.
+  final TlsPolicy tls;
+
   /// Распарсенная нода фрагмента; null = битый raw (member виден в UI как
   /// нечитаемый, юзер может отредактировать/удалить).
   final NodeSpec? node;
@@ -526,6 +544,7 @@ final class FolderMember {
     this.detour = NodeLink.none,
     this.nameHint = '',
     this.skipPresets = false,
+    this.tls = TlsPolicy.none,
     NodeSpec? node,
   }) : node = node ?? _parseFirst(raw, nameHint);
 
@@ -557,6 +576,7 @@ final class FolderMember {
     NodeLink? detour,
     String? nameHint,
     bool? skipPresets,
+    TlsPolicy? tls,
   }) =>
       FolderMember(
         raw: raw ?? this.raw,
@@ -565,6 +585,7 @@ final class FolderMember {
         detour: detour ?? this.detour,
         nameHint: nameHint ?? this.nameHint,
         skipPresets: skipPresets ?? this.skipPresets,
+        tls: tls ?? this.tls,
         // Смена raw или имени → re-parse в конструкторе; иначе нода та же.
         node: raw == null && nameHint == null ? node : null,
       );
@@ -581,6 +602,7 @@ final class FolderMember {
           detour == other.detour &&
           nameHint == other.nameHint &&
           skipPresets == other.skipPresets &&
+          tls == other.tls &&
           _sameGroup(node, other.node));
 
   static bool _sameGroup(NodeSpec? a, NodeSpec? b) => a is AutoSelectSpec
@@ -589,7 +611,7 @@ final class FolderMember {
 
   @override
   int get hashCode => Object.hash(
-      raw, enabled, _eq.hash(warnings), detour, nameHint, skipPresets);
+      raw, enabled, _eq.hash(warnings), detour, nameHint, skipPresets, tls);
 }
 
 /// §234 — папка ручных серверов: контейнер членов с общим toggle,
@@ -618,6 +640,7 @@ final class FolderServers extends ServerList {
     required super.enabled,
     required super.tagPrefix,
     required super.detourPolicy,
+    super.tls,
     List<FolderMember>? members,
     DateTime? createdAt,
     this.pingUrl,
@@ -646,6 +669,12 @@ final class FolderServers extends ServerList {
 
   /// §237 — личные detour'ы, выровненные с [nodes] (тот же фильтр
   /// enabled+parsed, тот же порядок). Builder применяет их пер-нодно.
+  /// §636 — узловые TLS-политики членов, выровненные с [nodes].
+  List<TlsPolicy> get nodeTls => [
+        for (final m in members)
+          if (m.enabled && m.node != null) m.tls,
+      ];
+
   List<NodeLink> get nodeDetours => [
         for (final m in members)
           if (m.enabled && m.node != null) m.detour,
@@ -656,6 +685,7 @@ final class FolderServers extends ServerList {
     bool? enabled,
     String? tagPrefix,
     DetourPolicy? detourPolicy,
+    TlsPolicy? tls,
     List<FolderMember>? members,
     String? pingUrl,
     int? pingTimeoutMs,
@@ -669,6 +699,7 @@ final class FolderServers extends ServerList {
         enabled: enabled ?? this.enabled,
         tagPrefix: tagPrefix ?? this.tagPrefix,
         detourPolicy: detourPolicy ?? this.detourPolicy,
+        tls: tls ?? this.tls,
         createdAt: createdAt,
         members: members ?? this.members,
         pingUrl: clearPing ? null : (pingUrl ?? this.pingUrl),
@@ -686,6 +717,7 @@ final class FolderServers extends ServerList {
           enabled == other.enabled &&
           tagPrefix == other.tagPrefix &&
           detourPolicy == other.detourPolicy &&
+          tls == other.tls &&
           _eq.equals(members, other.members) &&
           createdAt == other.createdAt &&
           pingUrl == other.pingUrl &&
@@ -694,7 +726,7 @@ final class FolderServers extends ServerList {
 
   @override
   int get hashCode => Object.hash(id, name, enabled, tagPrefix, detourPolicy,
-      _eq.hash(members), createdAt, pingUrl, pingTimeoutMs, replace);
+      tls, _eq.hash(members), createdAt, pingUrl, pingTimeoutMs, replace);
 }
 
 /// §248 — сброс detour-ссылок на Направление [tag] (или его auto-двойник

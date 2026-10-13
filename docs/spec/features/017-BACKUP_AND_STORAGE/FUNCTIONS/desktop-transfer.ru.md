@@ -42,9 +42,15 @@ sources[], directions[], rules[], dns{}, vars{}, route{final}, warp[]}`;
 have no place in the shared format:»). Превью импорта «Import backup»:
 «From <app> <version>», счётчики Directions / Chains / Rules / Subscriptions
 / Servers / Variables / DNS entries / WARP accounts, список «Not applied
-as-is:» и строка «Importing replaces the current rules.». Итог — «Imported N
-rules, M directions and K settings» (варианты) с «; chains: N» или «Imported
-N rule(s), M items not applied».
+as-is:» (без `backup_rules_replaced`; пустой список — без заголовка) и
+итоговая строка о правилах: «This file has no rules. The current rules
+stay.» (ключа `rules` нет), «Importing adds the file's rules.» (ключ есть,
+своих правил нет) или «Importing replaces the current N rule(s).». Итог —
+«Imported N rules, M directions and K settings» (варианты) или «Imported
+N rule(s), M items not applied» (замена правил в «не применено» не
+считается), затем «, replaced N rule(s)», если правила заменены, и
+«; chains: N»; все счётчики нулевые — «Nothing to import: the file has no
+rules, directions or settings.».
 
 ## Правила и инварианты
 
@@ -58,7 +64,10 @@ N rule(s), M items not applied».
   но держит свой `id` и имя.
 - **Направления и цепочки:** занятый тег — приехавшее не применяется
   (`backup_direction_exists`, `backup_chain_exists`), своё остаётся (P13).
-- **Правила:** замещают правила приёмника; порядок — по номерам файла.
+- **Правила:** файл с ключом `rules` (пусть `[]`) замещает правила
+  приёмника; снятые названы одним `backup_rules_replaced {count}`, только при
+  `count > 0`. Файл без ключа `rules` правил приёмника не трогает, кода нет
+  (контракт 1.1.116). Экспорт пишет ключ всегда. Порядок — по номерам файла.
   Цель правила сверяется после слияния источников и Направлений: неизвестная
   цель — правило выключено (`backup_unknown_outbound`); `route.final` в
   никуда — не применяется (`backup_final_dropped`) (P14). Чужой пресет

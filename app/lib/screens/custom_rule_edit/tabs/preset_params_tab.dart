@@ -78,10 +78,12 @@ class PresetParamsTab extends StatelessWidget {
     // не varsValues. Битая ссылка (нет в refVarDefs) → пропускаем.
     final visibleVars = <WizardVar>[];
     for (final v in preset.vars) {
-      if (v.wizardUI == 'hidden') continue;
+      // §643 — `internal` (только для сборки) в форме не показывается, как
+      // и `hidden`.
+      if (v.isFormHidden) continue;
       if (v.isRef) {
         final g = c.refVarDefs[v.ref];
-        if (g == null) continue;
+        if (g == null || g.isInternal) continue;
         visibleVars.add(WizardVar(
           name: g.name,
           type: g.type,
@@ -92,6 +94,7 @@ class PresetParamsTab extends StatelessWidget {
           title: g.title,
           tooltip: g.tooltip,
           required: g.required,
+          unique: g.unique,
           ref: v.ref, // помечаем как ref → контрол пойдёт в globalVars
         ));
       } else {

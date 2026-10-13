@@ -315,6 +315,11 @@ Delete node / Workspace delete → index record removed → directory removed wh
   not resolved.
 - Editing `auth_key` or `control_url` of an existing node does not issue a new
   identity: a node that already signed in keeps its tailnet.
+- Deleting a node or a Workspace slot does not ask a separate "this will log
+  out of Tailscale" confirmation: the usual delete confirmation is the only
+  one, and the identity goes with it.
+- `android:allowBackup` stays at the platform default (owner decision
+  2026-10-13, audit [591](../../tasks/591-spec-kit-revision-audit.md)).
 - SSH to a peer, Taildrop, `*.ts.net` certificates, IPv6-only tailnets under
   `prefer_ipv6` and per-device traffic are out of scope. The Android system
   backup includes `files/` with the tailnet keys — stock behaviour, by design

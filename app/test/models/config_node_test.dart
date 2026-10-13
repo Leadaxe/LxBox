@@ -267,12 +267,12 @@ void main() {
       expect(pc['rlt']?.transportLabel, 'tcp');
     });
 
-    test('§130/0.8.0 transport: MASQUE vhttp h3/h2, legacy network игнорируется',
+    test('§130/1.1.118 transport: MASQUE vhttp h3/h2, network не читается',
         () {
       expect(pc['mq3']?.transportLabel, 'h3');
       expect(pc['mq2']?.transportLabel, 'h2');
-      // D-078 — плоское legacy-имя `network` больше не читается: узел
-      // показывает дефолт, а не значение из старого ключа.
+      // D-129 — `network` не имя vhttp и не читается: узел показывает
+      // дефолт, а не значение этого ключа.
       expect(pc['mqlegacy']?.transportLabel, 'h3');
       expect(pc['mqdef']?.transportLabel, 'h3');
     });

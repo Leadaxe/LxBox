@@ -8,25 +8,40 @@ part of '../post_steps.dart';
 ///
 /// Выполняется на этапе emit конфига; зафиксировано на жизнь туннеля.
 /// Re-randomization на каждый handshake потребовала бы патча libbox.
-void applyMixedCaseSni(Map<String, dynamic> config, Map<String, String> vars) {
-  if (vars['tls_mixed_case_sni'] != 'true') return;
-  final rng = Random.secure();
+///
+/// §636 — [byTag]: уровни TLS-политики outbound'ов из источников по
+/// итоговому тегу (узел → источник → глобальный `vars`, первое не-`null`
+/// побеждает). Outbound не из источника — только глобальный слой.
+void applyMixedCaseSni(
+  Map<String, dynamic> config,
+  Map<String, String> vars, {
+  Map<String, TlsLayers> byTag = const {},
+}) {
+  final global = vars['tls_mixed_case_sni'] == 'true';
+  if (!global && byTag.isEmpty) return;
+  Random? rng;
   final outbounds = config['outbounds'] as List<dynamic>? ?? const [];
   for (final ob in outbounds) {
     if (ob is! Map<String, dynamic>) continue;
     if (ob.containsKey('detour')) continue;
+    final layers = byTag[ob['tag']];
+    final on = layers?.node.mixedCaseSni ??
+        layers?.source.mixedCaseSni ??
+        global;
+    if (!on) continue;
     final tls = ob['tls'];
     if (tls is! Map<String, dynamic>) continue;
     // §363 — REALITY: SNI входит в AAD хендшейка (клиент шифрует SessionId с
     // hello.Raw целиком), а сервер матчит имя по map с точным строковым ключом
     // и БЕЗ нормализации регистра. Любая изменённая буква → промах по map →
     // молчаливый fallback на маскировочный сайт, узел не поднимается.
-    // Обфусцировать тут и нечего: SNI у REALITY и так фиктивный.
+    // Обфусцировать тут и нечего: SNI у REALITY и так фиктивный. §636 — ни на
+    // каком уровне.
     final reality = tls['reality'];
     if (reality is Map<String, dynamic> && reality['enabled'] == true) continue;
     final sn = tls['server_name'];
     if (sn is! String || sn.isEmpty) continue;
-    tls['server_name'] = _randomizeHostCase(sn, rng);
+    tls['server_name'] = _randomizeHostCase(sn, rng ??= Random.secure());
   }
 }
 
@@ -60,23 +75,34 @@ String _randomizeHostCase(String host, Random rng) {
 /// теле». Так naive (`forbidden_for`) и masque на `vhttp: h3` (связь
 /// `conflicts` с `when`) фрагментацию не получают, masque на h2/auto —
 /// получает, без списка схем в коде.
-void applyTlsFragment(Map<String, dynamic> config, Map<String, String> vars) {
+///
+/// §636 — [byTag]: уровни TLS-политики outbound'ов из источников по
+/// итоговому тегу; каждое поле отдельно: узел → источник → глобальный `vars`.
+/// `false` не снимает флаг, пришедший в теле, — только не дописывает.
+/// REALITY фрагментируется, только если флаг задан на уровне узла (§627:
+/// массовая настройка не знает, примет ли сервер резаный ClientHello).
+void applyTlsFragment(
+  Map<String, dynamic> config,
+  Map<String, String> vars, {
+  Map<String, TlsLayers> byTag = const {},
+}) {
   final fragment = vars['tls_fragment'] == 'true';
   final recordFragment = vars['tls_record_fragment'] == 'true';
-  if (!fragment && !recordFragment) return;
+  if (!fragment && !recordFragment && byTag.isEmpty) return;
 
-  // §606 — значение, которое ядро не разберёт как duration (`500`, `fast`,
-  // `1 s`), отвергло бы конфиг целиком: подставляется умолчание шаблона.
-  final rawDelay = vars['tls_fragment_fallback_delay'] ?? '';
-  final fallbackDelay =
-      parseCoreDurationNanos(rawDelay) == null ? '500ms' : rawDelay;
+  final globalDelay = vars['tls_fragment_fallback_delay'] ?? '';
   final outbounds = config['outbounds'] as List<dynamic>? ?? const [];
   for (final ob in outbounds) {
     if (ob is! Map<String, dynamic>) continue;
     if (ob.containsKey('detour')) continue;
-    final addFragment = fragment && fieldAllowedOn(ob, 'tls.fragment');
-    final addRecord =
-        recordFragment && fieldAllowedOn(ob, 'tls.record_fragment');
+    final layers = byTag[ob['tag']];
+    final node = layers?.node ?? TlsPolicy.none;
+    final source = layers?.source ?? TlsPolicy.none;
+    final wantFragment = node.fragment ?? source.fragment ?? fragment;
+    final wantRecord =
+        node.recordFragment ?? source.recordFragment ?? recordFragment;
+    var addFragment = wantFragment && fieldAllowedOn(ob, 'tls.fragment');
+    var addRecord = wantRecord && fieldAllowedOn(ob, 'tls.record_fragment');
     if (!addFragment && !addRecord) continue;
     Map<String, dynamic> tls;
     // §393 — masque: TLS всегда включён по природе транспорта, выключателя
@@ -88,11 +114,21 @@ void applyTlsFragment(Map<String, dynamic> config, Map<String, String> vars) {
       if (t is! Map<String, dynamic>) continue;
       if (t['enabled'] != true) continue;
       // §627 — REALITY-сервер не принимает разрезанный ClientHello (с lx.4
-      // ядро режет и его), а маскировка у REALITY своя.
+      // ядро режет и его), а маскировка у REALITY своя. §636 — кроме флага,
+      // поставленного на сам узел.
       final reality = t['reality'];
-      if (reality is Map && reality['enabled'] == true) continue;
+      if (reality is Map && reality['enabled'] == true) {
+        addFragment = addFragment && node.fragment != null;
+        addRecord = addRecord && node.recordFragment != null;
+        if (!addFragment && !addRecord) continue;
+      }
       tls = t;
     }
+    // §606 — значение, которое ядро не разберёт как duration (`500`, `fast`,
+    // `1 s`), отвергло бы конфиг целиком: подставляется умолчание шаблона.
+    final rawDelay = node.fallbackDelay ?? source.fallbackDelay ?? globalDelay;
+    final fallbackDelay =
+        parseCoreDurationNanos(rawDelay) == null ? '500ms' : rawDelay;
     if (addFragment) tls['fragment'] = true;
     if (addRecord) tls['record_fragment'] = true;
     tls['fragment_fallback_delay'] = fallbackDelay;

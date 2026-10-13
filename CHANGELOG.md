@@ -6,6 +6,212 @@
 
 ---
 
+## [2.25.14] — 2026-10-13
+
+### Added
+
+- **TLS options per server, folder and subscription
+  ([task 636](docs/spec/tasks/636-tls-settings-per-node-folder-subscription.md)).**
+  The four TLS Fragmentation options (TLS Fragment, TLS Record Fragment,
+  Fallback delay, Mixed-case SNI) get a **TLS** section on a server's Settings
+  tab and on a subscription's or folder's settings tab. Each option resolves
+  server → subscription/folder → global; Default inherits, Off below beats On
+  above. A checkbox set on a REALITY server itself fragments it; bulk levels
+  still skip REALITY. Ping and the node test use the same levels. The
+  per-server/source policy travels in the cross-platform backup (contract
+  1.1.117); on merge local settings stay. A server's own TLS settings move
+  with it on Ungroup and when the server is moved into a folder. Debug API
+  shows and patches the `tls` field of a source and a folder member (PATCH
+  is partial).
+  (RU: Четыре опции TLS Fragmentation получили секцию **TLS** на экране
+  сервера и на вкладке настроек подписки или папки. Опция решается
+  сервер → подписка/папка → глобально; Default наследует, Off ниже бьёт On
+  выше. Галка на самом сервере REALITY его фрагментирует, массовые уровни
+  REALITY пропускают. Пинг и тест узла учитывают те же уровни. Политика
+  едет в межплатформенный бэкап (контракт 1.1.117); при слиянии своя
+  остаётся. Свои настройки TLS сервера переезжают с ним при Ungroup и при
+  переносе в папку. Debug API отдаёт и частично меняет поле `tls` источника
+  и члена папки.)
+
+- **uTLS fingerprint `chrome_155`
+  ([task 642](docs/spec/tasks/642-contract-1-1-118-sync.md)).** The Chrome 155
+  preset of the core (lx.13 and newer) is accepted in links and JSON and
+  counts as a hybrid fingerprint under REALITY.
+  (RU: Отпечаток uTLS `chrome_155` — пресет Chrome 155 ядра lx.13+ —
+  принимается в ссылках и JSON и под REALITY считается гибридным.)
+- **Ping presets YouTube and YouTube (ytimg).** The URL test address list
+  (Ping Settings and the Test URL of the auto group) gets
+  `https://www.youtube.com/generate_204` and `https://i.ytimg.com/generate_204`.
+  (RU: В список адресов URL-теста (Ping Settings и Test URL авто-группы)
+  добавлены YouTube `https://www.youtube.com/generate_204` и YouTube (ytimg)
+  `https://i.ytimg.com/generate_204`.)
+- **DNS: Never serve stale answers for node hostnames
+  ([task 643](docs/spec/tasks/643-contract-1-1-119-node-loops.md)).**
+  A switch on the DNS settings screen under the default domain resolver,
+  on by default: hostnames the core resolves itself (node servers) are looked
+  up again once the cached answer expires, so a node whose address changed
+  does not stay on the old one. App DNS queries are not affected.
+  `route.default_domain_resolver` is now the object
+  `{server, disable_optimistic_cache}`; the setting travels in LX Backup.
+  (RU: Переключатель на экране настроек DNS под резолвером по умолчанию,
+  включён по умолчанию: имена, которые ядро резолвит само (серверы узлов),
+  запрашиваются заново после истечения ответа в кэше — узел, сменивший адрес,
+  не остаётся на старом. DNS-запросы приложений не затронуты. Настройка
+  переносится в LX Backup.)
+
+### Fixed
+
+- **A Transfer to desktop file without rules no longer wipes the rules
+  ([task 640](docs/spec/tasks/640-backup-rules-key-absent-untouched.md)).**
+  Contract 1.1.116: a file without the `rules` key (one server, a folder, a
+  Direction) leaves the current rules as they were. A file with the key, even
+  an empty one, replaces them as before, and the preview names how many
+  rules are removed (`backup_rules_replaced`). Export always writes the key.
+  (RU: Файл Transfer to desktop без ключа `rules` правила не трогает; файл с
+  ключом, даже пустым, замещает их, и превью называет число снятых правил
+  (`backup_rules_replaced`). Экспорт пишет ключ всегда. Контракт 1.1.116.)
+- **The Transfer to desktop import screen tells the truth about rules
+  ([task 641](docs/spec/tasks/641-backup-import-ui-rules-replaced.md)).**
+  The preview ends with "This file has no rules. The current rules stay.",
+  "Importing adds the file's rules." or "Importing replaces the current N
+  rule(s)."; the result no longer counts replaced rules as "not applied" and
+  says "replaced N rule(s)". (RU: Превью и итог импорта говорят правду о
+  правилах: файл без правил их не трогает, замена не считается отказом.)
+- **The start error notification goes away after a successful start
+  ([task 637](docs/spec/tasks/637-clear-error-notification-on-successful-start.md)).**
+  When the core rejected a node, the app disabled it and started again, and
+  the start succeeded, but the "Error" notification stayed next to the VPN
+  notification. It is now removed when the service reaches Started and when
+  the user starts the VPN again; a new failure shows a new one.
+  (RU: Уведомление «Error» после неудачного старта снимается, когда следующий
+  старт успешен или пользователь запускает VPN заново; раньше оно висело
+  рядом с уведомлением работающего VPN.)
+- **Quit & reopen app no longer brings the VPN back
+  ([task 638](docs/spec/tasks/638-audit-591-four-defects.md)).**
+  Quit killed the process but left the "VPN wanted" flag and the watchdog
+  alarm, so 2–3 minutes later the watchdog started the VPN again. Quit now
+  clears both.
+  (RU: «Quit & reopen app» больше не воскрешает VPN сторожем через 2–3 мин:
+  признак «VPN желателен» и будильник сторожа снимаются.)
+- **Quit & reopen app stops the VPN service properly
+  ([task 639](docs/spec/tasks/639-quit-clears-vpn-notification.md)).**
+  The service died with the process and its notification stayed in the
+  shade, showing a VPN that no longer ran. Quit now stops the service the
+  same way as Stop (up to 3 s), then closes the app; the notification is
+  removed.
+  (RU: После «Quit & reopen app» сервис останавливается штатно, как по Stop,
+  и уведомление VPN не остаётся в шторке.)
+- **The chain delete dialog tells what happens
+  ([task 638](docs/spec/tasks/638-audit-591-four-defects.md)).**
+  It said other chains would stop building; in fact the node is removed from
+  them and they are rebuilt shorter. New text: "Chains using this node will
+  be rebuilt without it."
+  (RU: Диалог удаления цепочки говорит правду: цепочки с этим узлом
+  пересобираются без него.)
+- **Intent API `VPN_ERROR(tunnel_error)` hides server addresses
+  ([task 638](docs/spec/tasks/638-audit-591-four-defects.md)).**
+  The core's error text (`dial tcp <ip>:<port>: …`) went to every subscriber
+  of the broadcast. IPv4, IPv6 and host names in it are replaced with `***`;
+  the port and the rest of the text stay. Other error codes are unchanged.
+  (RU: Событие `VPN_ERROR(tunnel_error)` Intent API маскирует IPv4, IPv6 и
+  имена хостов серверов в тексте ошибки; другие коды не тронуты.)
+
+### Changed
+
+- **Contract 1.1.119: node loops in the template
+  ([task 643](docs/spec/tasks/643-contract-1-1-119-node-loops.md)).**
+  The preset key `for_each` is replaced by `for_each_node` (one body per node,
+  nodes picked by a `#filter` condition) and `for_each_node_do` (collect
+  values from the nodes with `#do`/`#append` and `#final`, one body after the
+  walk); variable declarations get `unique` and `wizard_ui: "internal"`.
+  The Tailscale preset moves to `for_each_node` and builds the same config as
+  before.
+  (RU: Ключ пресета `for_each` заменён на `for_each_node` (тело на каждый
+  узел, отбор условием `#filter`) и `for_each_node_do` (сбор значений с узлов
+  через `#do`/`#append` и `#final`, одно тело после обхода); у объявления
+  переменной появились `unique` и `wizard_ui: "internal"`. Пресет Tailscale
+  переведён на `for_each_node`, конфиг собирается прежний.)
+- **MASQUE recommended SNI is `www.cloudflare.com`
+  ([task 638](docs/spec/tasks/638-audit-591-four-defects.md)).**
+  `consumer-masque.cloudflareclient.com` does not bring h3 up on Russian
+  networks; it stays in the SNI pool for scanning.
+  (RU: Рекомендованный SNI для MASQUE — `www.cloudflare.com`; прежний домен
+  остался в пуле SNI для перебора.)
+- **A node with a broken `detour` chain is dropped instead of connecting
+  directly ([task 642](docs/spec/tasks/642-contract-1-1-118-sync.md)).**
+  Contract 1.1.118: in an imported sing-box config, a node whose `detour`
+  points to a missing tag, to a hop that did not become a node or to a group
+  is not created, and every node of a `detour` loop is dropped; each one is
+  listed among the subscription's dropped entries with its tag and the
+  reason. `detour: direct` and the 8-hop limit work as before.
+  (RU: Контракт 1.1.118: в импортированном конфиге sing-box узел, чей
+  `detour` ведёт на несуществующий тег, на хоп, не ставший узлом, или на
+  группу, не создаётся, а кольцо `detour` роняет всех участников; каждый
+  попадает в отброшенные записи подписки со своим тегом и причиной. Раньше
+  такой узел шёл напрямую. `detour: direct` и предел в 8 звеньев — как
+  прежде.)
+- **Hysteria v1 is rejected with a hint
+  ([task 642](docs/spec/tasks/642-contract-1-1-118-sync.md)).**
+  A `hysteria://`/`hy://` link, a sing-box `type: hysteria` entry and an
+  Xray `hysteria` element of version 1 are named by the code
+  `protocol_extension_unsupported` with the hint to use hysteria2, instead
+  of disappearing silently or as an unknown protocol.
+  (RU: Ссылка `hysteria://`/`hy://`, запись sing-box `type: hysteria` и
+  элемент Xray `hysteria` версии 1 отбраковываются кодом
+  `protocol_extension_unsupported` с подсказкой «используйте hysteria2», а не
+  пропадают молча или как неизвестный протокол.)
+- **TLS fragmentation skips QUIC nodes
+  ([task 642](docs/spec/tasks/642-contract-1-1-118-sync.md)).**
+  Hysteria, Hysteria2 and TUIC nodes no longer get the TLS Fragment / Record
+  Fragment flags from any level: QUIC is not fragmented.
+  (RU: Узлы Hysteria, Hysteria2 и TUIC больше не получают флаги TLS Fragment /
+  Record Fragment ни с одного уровня: QUIC не фрагментируется.)
+- **MASQUE `network`** is no longer an old name of `vhttp`: a link with
+  `network=h2` gets the default h3 and the parameter is reported as unknown;
+  the key is reserved for the tcp/udp list (contract 1.1.118).
+  (RU: `network` у MASQUE — больше не старое имя `vhttp`: ссылка с
+  `network=h2` получает дефолт h3, параметр помечается неизвестным; ключ
+  зарезервирован под список tcp/udp.)
+- **Core `v1.14.3-lx.15` → `v1.14.3-lx.18`
+  ([docs/KERNEL.md](docs/KERNEL.md)).** The legacy `network` key of the
+  `masque` outbound is gone from the core (SPEC 131): it duplicated `vhttp`
+  (h3/h2) under a name that means the tcp/udp list on every other outbound.
+  The app has always written `vhttp` and since task 642 does not read
+  `network` either; an authored sing-box body that still carries it is now
+  rejected by the core at start and the node is disabled — rename the key to
+  `vhttp`. lx.16 and lx.17 change only the Linux router daemon and the
+  Windows 7 build, nothing of them is in the Android library. The Java
+  surface is identical to lx.15.
+  (RU: Ядро `v1.14.3-lx.15` → `v1.14.3-lx.18`. Из ядра снят устаревший ключ
+  `network` у outbound `masque` (SPEC 131): он дублировал `vhttp` (h3/h2) под
+  именем, которое у остальных outbound означает список tcp/udp. Приложение
+  всегда писало `vhttp`, а с задачи 642 и не читает `network`; авторское тело
+  sing-box с этим ключом ядро теперь отвергает на старте, узел отключается —
+  переименуйте ключ в `vhttp`. lx.16 и lx.17 меняют только Linux-демон и
+  сборку для Windows 7, в Android-библиотеке их нет. Java-поверхность
+  идентична lx.15.)
+- **Contract 1.1.119** (from 1.1.115).
+  (RU: Контракт 1.1.119.)
+
+### Tests
+
+- New tests from the spec audit
+  ([task 591](docs/spec/tasks/591-spec-kit-revision-audit.md)): return to
+  the home screen, the config mtime flag, the rule-set auto-update schedule,
+  importing an LX backup into a fresh state, the update check; TLS codec,
+  backup slice and merge, probe by levels (task 636); `VPN_ERROR` masking
+  (task 638).
+  (RU: Новые тесты аудита: возврат на главный, mtime-флаг конфига,
+  расписание автообновления наборов, импорт бэкапа LX, проверка обновлений;
+  кодек TLS, срез и слияние бэкапа, проба по уровням; маска в `VPN_ERROR`.)
+
+### Docs
+
+- Spec audit closed
+  ([task 591](docs/spec/tasks/591-spec-kit-revision-audit.md)): about 85
+  feature spec files now describe the app as it behaves.
+  (RU: Аудит спек закрыт: около 85 файлов спек фич приведены к коду.)
+
 ## [2.25.13] — 2026-10-13
 
 ### Added

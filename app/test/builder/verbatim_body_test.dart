@@ -67,9 +67,11 @@ void main() {
     'username': 'user',
     'password': 'password',
     'tls': {'enabled': true, 'server_name': 'server.com', 'certificate': pem},
-    'detour': 'someone-else',
     'unknown_to_model': {'x': 1},
   };
+  // Контракт 1.1.118 (D-128) — тело с висячим `detour` при разборе
+  // отбраковывается (fail-closed), поэтому у общей фикстуры detour нет.
+  final naiveDetour = {...naive, 'detour': 'someone-else'};
 
   UserServer server(String raw) => UserServer(
         id: 's1',
@@ -143,6 +145,10 @@ void main() {
   });
 
   group('verbatimBodyOf', () {
+    test('висячий detour тела → узел отбракован при разборе (D-128)', () {
+      expect(parseAll(decode(jsonEncode(naiveDetour))), isEmpty);
+    });
+
     test('JSON-источник → объект без detour; ссылка → null', () {
       final raw = jsonEncode(naive);
       final node = parseAll(decode(raw)).single;
@@ -334,8 +340,8 @@ void main() {
       final ctx = _Ctx();
       folder.build(ctx);
       final main = ctx.entries.firstWhere((e) => e.map['type'] == 'naive');
-      // detour ссылкой ставит второй проход сборки (deferDetour); в теле
-      // ключ `detour: someone-else` источника не должен остаться.
+      // detour ссылкой ставит второй проход сборки (deferDetour). Тело с
+      // висячим `detour` сюда не доезжает: разбор его отбраковывает (D-128).
       expect(main.map['detour'], isNot('someone-else'));
     });
   });

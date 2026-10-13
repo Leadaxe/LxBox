@@ -24,7 +24,7 @@ outbound'ов — и переводит их серверы в узлы sing-box
 |-----------------|------|---------|
 | `vless`, `vmess`, `trojan`, `shadowsocks` | тот же тип | `vnext[]` / `servers[]`, `streamSettings` → `tls`/`transport` |
 | `hysteria` с `version: 2` | `hysteria2` | форма форка; `finalmask.quicParams` в тело не едет |
-| `hysteria` с `version: 1` | — | узла нет |
+| `hysteria` с `version: 1` или без `version` | — | узла нет: `protocol_extension_unsupported`, подсказка `hysteria2` |
 | `wireguard` | endpoint `wireguard` | |
 | `http` | `http` | |
 | `socks` | — самостоятельным узлом не становится | только как звено |
@@ -85,3 +85,4 @@ outbound'ов — и переводит их серверы в узлы sing-box
 | 9 | [560](../../../tasks/560-xray-body-parse-gaps.md) | частично | Пробелы разбора тел Xray по корпусу |
 | 10 | [561](../../../tasks/561-dropped-only-in-source-summary.md) | Выполнено | Отбраковка только в `dropped[]`, не на первом узле |
 | 11 | [573](../../../tasks/573-xray-finalmask-tcp-fragment.md) | Released v2.25.7 | `finalmask.tcp` fragment → `tls.fragment` |
+| 12 | [642](../../../tasks/642-contract-1-1-118-sync.md) | Done | `hysteria` v1 — явный отказ с подсказкой |

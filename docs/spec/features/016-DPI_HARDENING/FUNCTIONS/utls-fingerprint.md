@@ -22,8 +22,8 @@ for Xray, which accepts raw library names and any case.
 ## Parameters
 
 The core dictionary: `chrome`, `chrome_psk`, `chrome_psk_shuffle`,
-`chrome_padding_psk_shuffle`, `chrome_pq`, `chrome_pq_psk`, `firefox`,
-`edge`, `safari`, `360`, `qq`, `ios`, `android`, `random`, `randomized`.
+`chrome_padding_psk_shuffle`, `chrome_pq`, `chrome_pq_psk`, `chrome_155`,
+`firefox`, `edge`, `safari`, `360`, `qq`, `ios`, `android`, `random`, `randomized`.
 
 Default fingerprint (no `fp` field or empty):
 
@@ -93,3 +93,4 @@ Default fingerprint (no `fp` field or empty):
 | 5 | [451](../../../tasks/451-reality-fp-firefox-safari-hybrid.md) | Implemented | `firefox`/`safari` come out from under the warning |
 | 6 | [463](../../../tasks/463-contract-w2c-corpus-conformance.md) | Released v2.25.0 | `hellorandom*` no longer goes to `chrome` |
 | 7 | [556](../../../tasks/556-registry-debt-1157-1170.md) | Partially done | The REALITY ↔ uTLS pair is a registry rule (`random` → `chrome`) |
+| 8 | [642](../../../tasks/642-contract-1-1-118-sync.md) | Done | `chrome_155` (Chrome 155, core lx.13+) in the dictionary and the hybrid set |

@@ -1,4 +1,5 @@
 import '../../models/validation.dart';
+import 'domain_resolver_ref.dart';
 
 /// §254 — сколько detour-виновников показывать максимум. Юзер чинит первые,
 /// пересобирает, видит следующие. Кап рубит квадратичную окраску на
@@ -116,7 +117,9 @@ ValidationResult validateConfig(Map<String, dynamic> config) {
       !dnsServerTags.contains(dnsFinal)) {
     issues.add(DanglingDnsServerRef('dns.final', dnsFinal));
   }
-  final domainResolver = config['route']?['default_domain_resolver'];
+  // §643 (TEMPLATE_LANG §6.9) — строка-тег или объект `{server, …}`.
+  final domainResolver =
+      domainResolverServer(config['route']?['default_domain_resolver']);
   if (domainResolver is String &&
       domainResolver.isNotEmpty &&
       !dnsServerTags.contains(domainResolver)) {

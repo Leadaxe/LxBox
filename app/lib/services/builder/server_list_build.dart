@@ -8,6 +8,7 @@ import '../../models/node_link.dart';
 import '../../models/node_spec.dart';
 import '../../models/node_warning.dart' show RegistryWarning;
 import '../../models/singbox_entry.dart';
+import '../../models/tls_policy.dart';
 import '../contract/body_sanitizer.dart' show exitCapableByRegistry;
 import '../node_hash.dart';
 import '../node_identity.dart';
@@ -106,6 +107,15 @@ extension ServerListBuild on ServerList {
     final autoSelects = <(AutoSelectSpec, int)>[];
     final resolvedTags = <NodeSpec, String>{};
 
+    // §636 — TLS-политики: у подписки и папки — уровень источника, у
+    // одиночного сервера — узловой (сервер = свой источник), у члена папки —
+    // узловой поверх папочного.
+    final sourceTls = this is UserServer ? TlsPolicy.none : tls;
+    final memberTls = switch (this) {
+      final FolderServers f => f.nodeTls,
+      _ => null,
+    };
+
     for (var i = 0; i < nodes.length; i++) {
       final server = nodes[i];
       // Узел без идентичности (группа §322, безымянный) в карте отсутствует —
@@ -163,11 +173,26 @@ extension ServerListBuild on ServerList {
       // §322 — итоговый тег нужен второму проходу: пул автовыбора ссылается
       // на членов уже ПОСЛЕ префикса и уникализации.
       resolvedTags[server] = main.map['tag'] as String;
-      // §578 — тот же финальный тег нужен узлам `for_each` пресетов.
+      // §578 — тот же финальный тег нужен узлам пресетов с обходом.
       ctx.noteEmitted(server, main.map['tag'] as String);
       // §439 — адрес узла, затем звеньев его родной цепочки (сырой тег узла
       // сильнее тёзки-звена).
       noteAddress(server, mainBase, main.tag);
+      // §636 — уровни TLS узла и его родной цепочки по итоговым тегам.
+      final tlsLayers = TlsLayers(
+        node: this is UserServer
+            ? tls
+            : (memberTls != null && i < memberTls.length
+                ? memberTls[i]
+                : TlsPolicy.none),
+        source: sourceTls,
+      );
+      if (!tlsLayers.isEmpty) {
+        ctx.noteTls(main.tag, tlsLayers);
+        for (final d in detours) {
+          ctx.noteTls(d.tag, tlsLayers);
+        }
+      }
       for (var k = 0; k < detours.length; k++) {
         if (this is UserServer) {
           targets?.noteRootNode(detours[k].tag);

@@ -11,10 +11,52 @@ library;
 
 import '../../../models/node_warning.dart';
 import '../../contract/body_sanitizer.dart' show BodySource;
+import '../../contract/registry.dart';
 import '../drop_verdict.dart';
 import '../mappers/uri_mapper.dart';
 import 'interpreter.dart';
 import 'section_loader.dart';
+
+/// Имя этой стороны в поле `extension` протокола реестра
+/// (`registry.schema.json`: `desktop` — лаунчер, `mobile` — LxBox).
+const _kThisSideExtension = 'mobile';
+
+/// Контракт 1.1.118 (§591 п.4) — тип тела, который реестр объявляет
+/// расширением ДРУГОЙ стороны (`extension` протокола = `desktop`; какие
+/// секции — знает только реестр): запись отбраковывается кодом `protocol_extension_unsupported`
+/// с подсказкой `alternative` из поля секции `extension_alternative`, а не
+/// общим путём «узел не создался». Подсказки в секции нет — параметр
+/// пустой. `null` — тип этой стороны или общий, либо реестр не загружен.
+///
+/// Имён протоколов здесь нет: схема, помеченная реестром, отбраковывается
+/// без правки кода.
+RegistryWarning? foreignExtensionReject(String singboxType) {
+  final proto = ContractRegistry.I.rawProtocol(singboxType);
+  final ext = proto?['extension'];
+  if (ext is! String || ext.isEmpty || ext == _kThisSideExtension) {
+    return null;
+  }
+  final scheme = proto?['scheme'];
+  final alt = proto?['extension_alternative'];
+  return RegistryWarning(
+    code: 'protocol_extension_unsupported',
+    params: {
+      'scheme': scheme is String && scheme.isNotEmpty ? scheme : singboxType,
+      'alternative': alt is String ? alt : '',
+    },
+  );
+}
+
+/// [foreignExtensionReject] в вердикт: `true` — запись снята.
+bool _rejectForeignExtension(String singboxType, XrayDropVerdict? dropped) {
+  final reject = foreignExtensionReject(singboxType);
+  if (reject == null) return false;
+  if (dropped != null) {
+    dropped.explicit = true;
+    dropped.reason = reject;
+  }
+  return true;
+}
 
 /// Разобрать ссылку движком по секции вида `uri`.
 ///
@@ -27,6 +69,7 @@ UriMapping? mapViaEngine(String uri, String singboxType,
     {XrayDropVerdict? dropped}) {
   final section = MapperSections.I.sectionFor('uri', singboxType);
   if (section == null) return null;
+  if (_rejectForeignExtension(singboxType, dropped)) return null;
   final res = runSection(section, uri, dropped: dropped);
   if (res == null) return null;
   return UriMapping(
@@ -128,6 +171,7 @@ JsonMapping? mapJsonViaEngine(String kind, Map<String, dynamic> element,
     }
     return null;
   }
+  if (_rejectForeignExtension(section.singboxType, dropped)) return null;
   final res = runSectionOnJson(section, element,
       dropped: dropped, document: document);
   if (res == null) return null;

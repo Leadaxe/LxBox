@@ -23,6 +23,7 @@ import '../contract/body_sanitizer.dart';
 import '../contract/group_genus.dart';
 import '../contract/registry.dart';
 import '../node_identity.dart';
+import 'engine/engine_mapper.dart' show foreignExtensionReject;
 import 'authored_scope.dart'
     show parsingAuthoredBody, parsingOwnSource, singboxBodySource;
 import 'json_parsers.dart';
@@ -228,21 +229,19 @@ List<NodeSpec> _parseOne(
     if (tag.isNotEmpty) byTag.putIfAbsent(tag, () => e);
   }
 
-  // §4 P3 — рёбра, замыкающие кольцо. Считаем ПЕРВЫМИ: узел, участвующий в
-  // кольце, иначе попал бы в `detourTargets` и исчез бы из списка совсем —
-  // ровно та молчаливая потеря, против которой §3.5. Снятое ребро возвращает
-  // свою цель в кандидаты.
-  final brokenEdges = _findCycleEdges(entries, byTag);
+  // §4 P3 / контракт 1.1.118 (D-128) — участники колец detour. Считаем
+  // ПЕРВЫМИ: участник кольца — чья-то цель и иначе исчез бы в `detourTargets`
+  // без следа (§3.5). Кольцо роняет ВСЕХ участников, и каждый оставляет
+  // запись отбраковки на своей позиции — поэтому в кандидатах они остаются.
+  final cycleMembers = _findCycleMembers(entries, byTag);
 
   // §4 P1 — цели detour: приезжают звеном владельца, самостоятельным узлом не
   // дублируются. Правило действует независимо от того, сколько узлов на цель
-  // ссылается, но ребро со снятым кольцом целью больше не считается.
+  // ссылается.
   final detourTargets = <String>{};
   for (final e in entries) {
-    final tag = e['tag']?.toString() ?? '';
     final d = e['detour'];
     if (d is! String || d.isEmpty) continue;
-    if (brokenEdges.contains(tag)) continue;
     detourTargets.add(d);
   }
 
@@ -259,7 +258,11 @@ List<NodeSpec> _parseOne(
       continue;
     }
     final tag = e['tag']?.toString() ?? '';
-    if (tag.isNotEmpty && detourTargets.contains(tag)) continue;
+    if (tag.isNotEmpty &&
+        detourTargets.contains(tag) &&
+        !cycleMembers.contains(tag)) {
+      continue;
+    }
     candidates.add(e);
   }
 
@@ -280,6 +283,18 @@ List<NodeSpec> _parseOne(
   for (var i = 0; i < candidates.length; i++) {
     final ob = candidates[i];
     final rawTag = ob['tag']?.toString().trim() ?? '';
+    // Контракт 1.1.118 (§591 п.4) — тип, который реестр объявляет
+    // расширением другой стороны (hysteria v1): отбраковка своим кодом с
+    // подсказкой, ДО модели и до правила «свой незнакомый тип» (§585).
+    final foreign = foreignExtensionReject(ob['type']?.toString() ?? '');
+    if (foreign != null) {
+      dropped?.add(RegistryWarning(
+        code: foreign.code,
+        params: foreign.params,
+        ownerTag: rawTag,
+      ));
+      continue;
+    }
     try {
       // §454 — источник узла = оригинальный outbound (до подмены тега лейблом).
       final compact = _prettyJson(ob);
@@ -311,7 +326,16 @@ List<NodeSpec> _parseOne(
 
       // §4 — detour-цепочка. Строим ДО дедупа (§404): путь дозвона входит в
       // подпись, значит без него дедуп не посчитать.
-      final chained = _buildChain(ob, byTag, spec.warnings);
+      //
+      // Контракт 1.1.118 (D-128) — непригодная цепочка = fail-closed: узел
+      // не эмитится, отбраковка в `dropped[]` с тегом записи. Узел с
+      // деградировавшим маршрутом не должен молча идти напрямую.
+      final (:chained, :reject) =
+          _buildChain(ob, byTag, spec.warnings, rejectTag: rawTag);
+      if (reject != null) {
+        dropped?.add(reject);
+        continue;
+      }
       final node = chained == null ? spec : withChained(spec, chained);
 
       // §404 / D-086 — подпись записи для дедупа: эмиссия узла без tag/detour
@@ -424,20 +448,18 @@ Map<String, dynamic> _withLabel(Map<String, dynamic> entry, String label) {
   return {...entry, 'tag': label};
 }
 
-/// §368 §4 P3 — теги узлов, чьё исходящее `detour`-ребро замыкает кольцо.
+/// §368 §4 P3 / контракт 1.1.118 (D-128) — теги всех участников колец
+/// `detour` (самоссылка — кольцо из одного узла).
 ///
-/// Обход по каждому старту; ребро, ведущее на узел, уже находящийся в **текущем
-/// пути**, объявляется замыкающим. Владелец такого ребра — виновник; его
-/// цепочка обрывается на нём, а сама цель возвращается в кандидаты (иначе узел,
-/// на который ссылается только кольцо, исчез бы из списка целиком).
-///
-/// Детерминизм: старты идут в порядке файла, поэтому на кольце `A → B → A`
-/// виновником всегда назначается тот, кого обошли первым.
-Set<String> _findCycleEdges(
+/// Обход по каждому старту; ребро, ведущее на узел, уже находящийся в
+/// **текущем пути**, замыкает кольцо — его участники = отрезок пути от цели
+/// ребра до конца. Узлы, которые лишь ведут В кольцо, участниками не
+/// считаются: их отбраковывает собственная цепочка тем же кодом.
+Set<String> _findCycleMembers(
   List<Map<String, dynamic>> entries,
   Map<String, Map<String, dynamic>> byTag,
 ) {
-  final broken = <String>{};
+  final members = <String>{};
   // Узлы, для которых обход уже завершён: повторно стартовать смысла нет.
   final settled = <String>{};
 
@@ -445,7 +467,7 @@ Set<String> _findCycleEdges(
     final startTag = start['tag']?.toString() ?? '';
     if (startTag.isEmpty || settled.contains(startTag)) continue;
 
-    final path = <String>{};
+    final path = <String>[];
     var current = start;
     var tag = startTag;
     while (true) {
@@ -453,34 +475,44 @@ Set<String> _findCycleEdges(
       settled.add(tag);
       final d = current['detour'];
       if (d is! String || d.isEmpty) break;
-      if (path.contains(d)) {
-        broken.add(tag);
+      final at = path.indexOf(d);
+      if (at >= 0) {
+        members.addAll(path.sublist(at));
         break;
       }
+      // Дальше уже обходили: кольцо там, если было, уже записано.
+      if (settled.contains(d)) break;
       final next = byTag[d];
       if (next == null) break;
       current = next;
       tag = d;
     }
   }
-  return broken;
+  return members;
 }
 
 /// §368 §4 — `detour: "<tag>"` → вложенный `chained`.
 ///
-/// Возвращает звено (со своей цепочкой внутри) либо `null`, если цепочки нет
-/// или ссылка непригодна. Все причины непригодности — warning в [warnings]
-/// владельца, узел при этом остаётся рабочим (§169: отброс негодной части).
-NodeSpec? _buildChain(
+/// `chained` — звено (со своей цепочкой внутри) либо `null`, если цепочки
+/// нет. `reject` — причина отбраковки НОСИТЕЛЯ (контракт 1.1.118, D-128,
+/// fail-closed): цели нет или она узлом не стала (`detour_target_missing`),
+/// цель — группа (`detour_to_group`), цепочка замкнулась
+/// (`detour_cycle_broken`). `detour: "direct"` (служебная цель) — не звено и
+/// не ошибка; предел глубины ([kMaxDetourDepth]) по-прежнему обрезает хвост
+/// предупреждением в [warnings] носителя, узел живёт. [rejectTag] — тег
+/// записи носителя для `reject` ([NodeWarning.ownerTag], D-088).
+({NodeSpec? chained, NodeWarning? reject}) _buildChain(
   Map<String, dynamic> owner,
   Map<String, Map<String, dynamic>> byTag,
-  List<NodeWarning> warnings,
-) {
+  List<NodeWarning> warnings, {
+  required String rejectTag,
+}) {
   // Кольцо ищем по тегам ТЕКУЩЕЙ цепочки, а не по всему конфигу: два разных
   // узла законно ссылаются на один джамп.
   final visited = <String>{};
   final ownerTag = owner['tag']?.toString() ?? '';
   if (ownerTag.isNotEmpty) visited.add(ownerTag);
+  NodeWarning? reject;
 
   NodeSpec? build(Map<String, dynamic> node, int depth) {
     final raw = node['detour'];
@@ -492,25 +524,23 @@ NodeSpec? _buildChain(
       return null;
     }
 
-    // §4 P3 — замыкающее ребро. Рвём его (а не роняем конфиг, как §254):
-    // кольцо приехало из чужого файла, пользователь его не создавал.
+    // §4 P3 — замыкающее ребро: кольцо роняет носителя.
     if (visited.contains(raw)) {
-      warnings.add(DetourCycleBrokenWarning(raw));
+      reject = DetourCycleBrokenWarning(raw, ownerTag: rejectTag);
       return null;
     }
 
     final target = byTag[raw];
     // §4 P4 — висячая ссылка.
     if (target == null) {
-      warnings.add(DetourTargetMissingWarning(raw));
+      reject = DetourTargetMissingWarning(raw, ownerTag: rejectTag);
       return null;
     }
 
-    // §4 P5 — цепочка на группу: типово выразима, семантически не поддержана
-    // (getEntries развернёт группу в detour-список без её членов).
+    // §4 P5 — цепочка на группу: группа не может быть хопом.
     final type = target['type']?.toString() ?? '';
     if (_isGroupType(type)) {
-      warnings.add(DetourToGroupWarning(raw));
+      reject = DetourToGroupWarning(raw, ownerTag: rejectTag);
       return null;
     }
     if (_kSingboxServiceTypes.contains(type)) {
@@ -528,20 +558,22 @@ NodeSpec? _buildChain(
         sanitizedFrom: BodySource.singbox,
       );
     } catch (_) {
-      // Битое звено: узел-владелец важнее цепочки.
-      warnings.add(DetourTargetMissingWarning(raw));
+      // Битое звено = хоп, который узлом не стал.
+      reject = DetourTargetMissingWarning(raw, ownerTag: rejectTag);
       return null;
     }
     if (spec == null) {
-      warnings.add(DetourTargetMissingWarning(raw));
+      reject = DetourTargetMissingWarning(raw, ownerTag: rejectTag);
       return null;
     }
 
     final next = build(target, depth + 1);
+    if (reject != null) return null;
     return next == null ? spec : withChained(spec, next);
   }
 
-  return build(owner, 0);
+  final chained = build(owner, 0);
+  return (chained: reject == null ? chained : null, reject: reject);
 }
 
 /// §368 §5 — `urltest`/`selector` → узел автовыбора.

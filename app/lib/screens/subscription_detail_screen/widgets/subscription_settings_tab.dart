@@ -5,6 +5,7 @@ import '../../../models/direction.dart';
 import '../../../models/node_link.dart';
 import '../../../models/server_list.dart';
 import '../../../models/source_replace.dart';
+import '../../../models/tls_policy.dart';
 import '../../source_replace_screen.dart';
 import '../../../services/subscription/input_helpers.dart';
 import '../../../services/subscription/user_agent.dart';
@@ -13,6 +14,7 @@ import '../detour_mode.dart';
 import '../subscription_detail_format.dart';
 import '../../../services/l10n/locale_controller.dart';
 import '../../../widgets/safe_bottom.dart';
+import '../../../widgets/tls_policy_tiles.dart';
 
 /// Settings tab: tag-prefix field, detour-mode radio group (+ sub-options) and
 /// the subscription-info block. Extracted verbatim from `_buildSettingsTab` /
@@ -51,7 +53,12 @@ class SubscriptionSettingsTab extends StatelessWidget {
     this.onEditIdentityDeviceModel,
     this.onReplaceChanged,
     this.otherSources = const [],
+    this.onTlsChanged,
   });
+
+  /// §636 — TLS-политика источника изменена (запись сразу). Нет колбэка —
+  /// секция не рисуется.
+  final ValueChanged<TlsPolicy>? onTlsChanged;
 
   /// Фича 565 фаза B — свёртка источника в группу сохранена (`null` — снята).
   /// Нет колбэка — секция не рисуется.
@@ -351,6 +358,25 @@ class SubscriptionSettingsTab extends StatelessWidget {
             trailing: const Icon(Icons.chevron_right),
             onTap: onShowOverrideDetourPicker,
           ),
+        ],
+        // §636 — TLS: переопределение ручек «TLS Fragmentation» для всех
+        // серверов источника. У одиночного сервера — на экране узла.
+        if (onTlsChanged != null && entry.list is! UserServer) ...[
+          const SizedBox(height: 24),
+          Text(getLocalText.s("TLS"), style: theme.textTheme.titleSmall?.copyWith(
+            color: theme.colorScheme.primary,
+            fontWeight: FontWeight.bold,
+          )),
+          const SizedBox(height: 4),
+          Text(
+            folderMode
+                ? getLocalText.s("Override the global TLS settings for all servers of this folder.")
+                : getLocalText.s("Override the global TLS settings for all servers of this subscription."),
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          ),
+          const Divider(),
+          TlsPolicyTiles(policy: entry.tls, onChanged: onTlsChanged!),
         ],
         if (entry.list is SubscriptionServers) ...[
           const SizedBox(height: 24),

@@ -214,6 +214,7 @@ Future<DebugResponse> _update(
   final idx = sub.entries.indexWhere((e) => e.id == id);
   if (idx < 0) throw NotFound('sub: $id');
   final entry = sub.entries[idx];
+  final tls = fieldTlsPatch(body, entry.tls); // §636
 
   // Простые setter'ы через SubscriptionEntry — они мутируют wrapped list
   // через copyWith, после всех изменений дёргаем persistSources().
@@ -244,6 +245,9 @@ Future<DebugResponse> _update(
   // §073 — был пропущен (асимметрия: соседние detour-поля маппились, это нет).
   final replaceDetour = fieldBool(body, 'replace_detour_chain');
   if (replaceDetour != null) entry.replaceDetourChain = replaceDetour;
+  // §636 — TLS-политика: частичная правка, `null` поля — «наследовать».
+  // Разобрана до первых записей (негодное тело — 400 без побочных правок).
+  if (tls != null) entry.tls = tls;
 
   // §346 — поля SubscriptionServers, ранее недоступные headless-пути (тот же
   // класс дефекта, что §073 выше). Setter'ы — no-op для не-подписок.

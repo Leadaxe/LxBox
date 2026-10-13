@@ -50,6 +50,22 @@ void main() {
       expect(sent.single.$2['message'], 'tunnel not connected');
     });
 
+    test('VPN_ERROR(tunnel_error) hides server address (014 P, §638)', () {
+      AutomationEventEmitter.I
+          .debugConfigureForTest(lifecycle: true, onSend: capture);
+      AutomationEventEmitter.I.emitVpnError(
+          'tunnel_error', 'dial tcp 1.2.3.4:443: i/o timeout');
+      AutomationEventEmitter.I.emitVpnError('tunnel_error',
+          'dial tcp [2001:db8::1]:443: connect: connection refused');
+      AutomationEventEmitter.I.emitVpnError(
+          'tunnel_error', 'lookup srv.example.com: no such host');
+      final msgs = [for (final e in sent) e.$2['message'] as String];
+      expect(msgs[0], isNot(contains('1.2.3.4')));
+      expect(msgs[0], contains('dial tcp'));
+      expect(msgs[1], isNot(contains('2001:db8')));
+      expect(msgs[2], isNot(contains('example.com')));
+    });
+
     test('state gate emits node/group only', () {
       AutomationEventEmitter.I
           .debugConfigureForTest(state: true, onSend: capture);

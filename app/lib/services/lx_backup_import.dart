@@ -40,6 +40,7 @@ class LxImportReceiver {
     this.lists = const [],
     this.directions = const [],
     this.chains = const [],
+    this.rules = const [],
     this.systemTags = const {},
     this.selectableRules = const [],
     this.receiverTargets = const {},
@@ -55,6 +56,12 @@ class LxImportReceiver {
 
   /// Цепочки приёмника в порядке списка.
   final List<SourceChain> chains;
+
+  /// §640 — правила приёмника до импорта: весь список, который замещает
+  /// [SettingsStorage.saveCustomRules] (пользовательские и пресеты). Файл без
+  /// ключа `rules` оставляет их как есть; файл с ключом снимает, и их число —
+  /// `count` предупреждения [kWarnRulesReplaced] (BACKUP.md §9 п. 7).
+  final List<CustomRule> rules;
 
   /// Служебные теги шаблона приёмника ([templateSystemTags]). Пусто — шаблона
   /// нет, действуют [kLxImportDefaultSystemTags].
@@ -137,6 +144,7 @@ class LxImportPlan {
   final int appliedChains;
 
   /// Корневые правила на оси порядка (полная замена, BACKUP.md §9 п. 7).
+  /// §640 — файл без ключа `rules`: правила приёмника как есть, без записи.
   final List<CustomRule> rules;
 
   /// §393 B9 + §441 — DNS после слияния; `null` — секции DNS в файле нет.
@@ -291,27 +299,46 @@ LxImportPlan planLxBackupImport(String raw, LxImportReceiver receiver) {
       if (acceptedChainTags.contains(c.tag)) c,
   ];
 
-  // §438 — ось порядка одним проходом по корневым правилам и правилам узлов,
-  // пришедших или узнанных этим импортом (BACKUP.md §9 п. 7).
-  var rules = renumberBackupAxis(file.rules);
-  // D-117 — несортируемый пресет встаёт на номер шаблона приёмника, откуда бы
-  // номер ни приехал.
-  if (pinRequiredRuleNums(rules, receiver.selectableRules)) {
-    rules = sortRulesByAxis(rules);
-  }
-
-  // §441 (SPEC 129 §5.4) — `vars` правил-пресетов против шаблона приёмника:
-  // необъявленное имя снимается с предупреждением (Н2), умолчание — молча
-  // (Н4). Пресет, которого в шаблоне нет, — прежнее `backup_unknown_preset`,
-  // его `vars` не трогаются.
   final extraWarnings = <LxBackupWarning>[];
-  rules = normalizePresetRulesVars(
-    rules,
-    receiver.recordVars,
-    onUndeclared: (presetId, name) => extraWarnings.add(LxBackupWarning(
-        kWarnVarSkipped, 'preset:$presetId.vars.$name',
-        reason: kVarSkippedUndeclared)),
-  );
+  final List<CustomRule> rules;
+  if (!file.rulesDeclared) {
+    // §640 (контракт 1.1.116, BACKUP.md §9 п. 7) — ключа `rules` нет: файл о
+    // правилах молчит, правила приёмника остаются как были. Ось, D-117 и
+    // нормализация `vars` над ними не прогоняются — трогать нечего.
+    rules = receiver.rules;
+  } else {
+    // §640 — ключ есть (пусть `[]`): правила приёмника снимаются целиком, и
+    // снятые называются одним предупреждением, только когда их было.
+    if (receiver.rules.isNotEmpty) {
+      extraWarnings.add(LxBackupWarning(
+          kWarnRulesReplaced, 'rules: ${receiver.rules.length}'));
+    }
+    // §438 — ось порядка одним проходом по корневым правилам и правилам узлов,
+    // пришедших или узнанных этим импортом (BACKUP.md §9 п. 7).
+    var axis = renumberBackupAxis(file.rules);
+    // D-117 — несортируемый пресет встаёт на номер шаблона приёмника, откуда
+    // бы номер ни приехал.
+    if (pinRequiredRuleNums(axis, receiver.selectableRules)) {
+      axis = sortRulesByAxis(axis);
+    }
+
+    // §441 (SPEC 129 §5.4) — `vars` правил-пресетов против шаблона приёмника:
+    // необъявленное имя снимается с предупреждением (Н2), умолчание — молча
+    // (Н4). Пресет, которого в шаблоне нет, — прежнее `backup_unknown_preset`,
+    // его `vars` не трогаются.
+    rules = normalizePresetRulesVars(
+      axis,
+      receiver.recordVars,
+      onUndeclared: (presetId, name) => extraWarnings.add(LxBackupWarning(
+          kWarnVarSkipped, 'preset:$presetId.vars.$name',
+          reason: kVarSkippedUndeclared)),
+      // §643 (D-132) — имя `wizard_ui: internal`: значение файла не данные
+      // пользователя, снимается и называется.
+      onInternal: (presetId, name) => extraWarnings.add(LxBackupWarning(
+          kWarnVarSkipped, 'preset:$presetId.vars.$name',
+          reason: kVarSkippedInternal)),
+    );
+  }
 
   // §393 B9 + §441 — DNS: слияние §5.2, Н2/Н4 против шаблона приёмника, Н9
   // по тому же единому списку целей, что у правил.
@@ -320,8 +347,9 @@ LxImportPlan planLxBackupImport(String raw, LxImportReceiver receiver) {
   // (Н2/Н3/Н4 над `vars` template-серверов, молча), ПОТОМ наложение файла:
   // слияние работает с записями в той форме, в которой их запишет
   // репозиторий, и план (превью, раннер корпуса) показывает нормализованными
-  // и записи, которых файл не коснулся. `rules[]` приёмника в план не входят:
-  // секция замещается правилами файла, их `vars` нормализуются выше.
+  // и записи, которых файл не коснулся. `rules[]` приёмника в план входят
+  // только у файла без ключа `rules` (§640) — как есть; иначе секция
+  // замещается правилами файла, их `vars` нормализуются выше.
   final incomingDns = file.dns;
   final dns = incomingDns == null || incomingDns.isEmpty
       ? null
@@ -401,6 +429,7 @@ class LxBackupImportService {
       lists: await SettingsStorage.getServerLists(),
       directions: await SettingsStorage.getDirections(),
       chains: await SettingsStorage.getChains(),
+      rules: await SettingsStorage.getCustomRules(),
       systemTags: templateSystemTags(template),
       selectableRules: template.selectableRules,
       dns: LxDns(
@@ -438,7 +467,8 @@ class LxBackupImportService {
       );
     }
     if (plan.appliedChains > 0) await SettingsStorage.setChains(plan.chains);
-    await SettingsStorage.saveCustomRules(plan.rules);
+    // §640 — файл без ключа `rules` правил не трогает: записи нет вовсе.
+    if (file.rulesDeclared) await SettingsStorage.saveCustomRules(plan.rules);
 
     final settings = await _applySections(plan);
     await _placeImportedSources(plan.sourceOrder);

@@ -22,8 +22,8 @@ Xray-псевдоним или опечатка не ломали конфиг.
 ## Параметры
 
 Словарь ядра: `chrome`, `chrome_psk`, `chrome_psk_shuffle`,
-`chrome_padding_psk_shuffle`, `chrome_pq`, `chrome_pq_psk`, `firefox`,
-`edge`, `safari`, `360`, `qq`, `ios`, `android`, `random`, `randomized`.
+`chrome_padding_psk_shuffle`, `chrome_pq`, `chrome_pq_psk`, `chrome_155`,
+`firefox`, `edge`, `safari`, `360`, `qq`, `ios`, `android`, `random`, `randomized`.
 
 Отпечаток по умолчанию (поля `fp` нет или пусто):
 
@@ -89,3 +89,4 @@ sing-box JSON.
 | 5 | [451](../../../tasks/451-reality-fp-firefox-safari-hybrid.md) | Реализовано | `firefox`/`safari` выходят из-под предупреждения |
 | 6 | [463](../../../tasks/463-contract-w2c-corpus-conformance.md) | Released v2.25.0 | `hellorandom*` больше не уходит в `chrome` |
 | 7 | [556](../../../tasks/556-registry-debt-1157-1170.md) | Частично сделано | Пара REALITY ↔ uTLS — правило реестра (`random` → `chrome`) |
+| 8 | [642](../../../tasks/642-contract-1-1-118-sync.md) | Done | `chrome_155` (Chrome 155, ядро lx.13+) в словаре и гибридном наборе |

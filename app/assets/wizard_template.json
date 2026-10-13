@@ -412,6 +412,16 @@
         "id": "yandex",
         "name": "Yandex",
         "url": "https://ya.ru/"
+      },
+      {
+        "id": "youtube",
+        "name": "YouTube",
+        "url": "https://www.youtube.com/generate_204"
+      },
+      {
+        "id": "youtube-ytimg",
+        "name": "YouTube (ytimg)",
+        "url": "https://i.ytimg.com/generate_204"
       }
     ]
   },
@@ -678,7 +688,9 @@
           "options": [
             "https://cp.cloudflare.com/generate_204",
             "https://www.gstatic.com/generate_204",
-            "https://captive.apple.com/hotspot-detect.html"
+            "https://captive.apple.com/hotspot-detect.html",
+            "https://www.youtube.com/generate_204",
+            "https://i.ytimg.com/generate_204"
           ]
         },
         {
@@ -775,6 +787,15 @@
           "wizard_ui": "fix",
           "title": "Serve stale answers",
           "tooltip": "Answer from cache at once and refresh in the background."
+        },
+        {
+          "name": "dns_resolver_no_stale",
+          "type": "bool",
+          "default_value": "true",
+          "required": true,
+          "wizard_ui": "fix",
+          "title": "Never serve stale answers for node hostnames",
+          "tooltip": "Hostnames the core resolves itself (node servers) are looked up again once the cached answer expires, so a node whose address changed does not stay on the old one. App DNS queries are not affected."
         },
         {
           "name": "dns_store_cache",
@@ -1034,7 +1055,7 @@
       "id": "dpi-bypass",
       "name": "TLS Fragmentation",
       "chapter": "core",
-      "description": "Splits the TLS handshake so it carries no single-packet signature",
+      "description": "Splits the TLS handshake so it carries no single-packet signature. Default for all servers; override per server, folder or subscription.",
       "vars": [
         {
           "name": "tls_fragment",
@@ -1214,7 +1235,10 @@
     ],
     "route": {
       "find_process": true,
-      "default_domain_resolver": "@dns_default_domain_resolver",
+      "default_domain_resolver": {
+        "server": "@dns_default_domain_resolver",
+        "disable_optimistic_cache": "@dns_resolver_no_stale"
+      },
       "rules": [],
       "final": "vpn-1",
       "auto_detect_interface": "@auto_detect_interface"
@@ -1862,11 +1886,16 @@
     },
     {
       "preset_id": "tailscale",
-      "for_each": {
-        "node_type": "tailscale",
-        "as": "node",
-        "filter": {
-          "#not": "@node.skip_presets"
+      "for_each_node": {
+        "#filter": {
+          "#and": [
+            {
+              "@node.body.type": "tailscale"
+            },
+            {
+              "#not": "@node.skip_presets"
+            }
+          ]
         }
       },
       "ui": {

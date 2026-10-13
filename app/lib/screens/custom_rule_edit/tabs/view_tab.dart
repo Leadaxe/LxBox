@@ -41,7 +41,7 @@ class ViewTab extends StatelessWidget {
             preset,
             srsPaths: c.presetSrsPaths,
             globalVars: c.globalVars, // §264 — @vpn_mode/@resolve_strategy в превью
-            nodes: c.presetNodes, // §578 — `for_each` раскрывается по узлам
+            nodes: c.presetNodes, // §578/§643 — обход раскрывается по узлам
           );
           warnings = fragments.warnings;
           // §264 — показываем только НЕПУСТЫЕ секции: пресет без DNS/rule_set

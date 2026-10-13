@@ -37,6 +37,20 @@ itself when there are no explicit flags.
 The `fragment_fallback_delay` pause applies where the ACK cannot be tracked
 (in particular under `detour`).
 
+Levels (§636). The four options (both checkboxes, the delay, Mixed-case SNI)
+are set on three levels:
+
+| Level | Where | Applies to |
+|---|---|---|
+| node | node screen, TLS section (standalone server, folder member) | this node and its own chain |
+| source | subscription or folder settings tab, TLS section | every node of the source |
+| global | VPN Settings → Core → TLS Fragmentation | everything else and whatever is not set above |
+
+Each field resolves on its own: node → source → global, the first one set
+wins; `Default` means "inherit". `Off` below beats `On` above. Outbounds that
+do not come from a source (template, Directions, WARP) follow the global level
+only. A subscription node has no level of its own.
+
 ## Inputs / Outputs
 
 **Inputs:** the checkboxes and the delay; node bodies after `detour` is set;
@@ -53,7 +67,9 @@ the node's notifications; a build warning line.
   `500ms`.
 - Whether the field suits the node is asked of the registry by the body:
   naive — forbidden (the core fails with "fragment is not supported on naive
-  outbound"); MASQUE `vhttp: h3` — a conflict, skipped silently; MASQUE
+  outbound"); hysteria, hysteria2, tuic — forbidden, QUIC is not fragmented
+  (`tls_not_applicable_quic`, contract 1.1.118); MASQUE `vhttp: h3` — a
+  conflict, skipped silently; MASQUE
   `h2`/unset — a `tls{}` block is created if there was none, the SNI is not
   lost.
 - Flags with `tls.engine` = `apple`/`windows` are removed with the code
@@ -73,15 +89,22 @@ the node's notifications; a build warning line.
   without a code; both forms at once — one flag. On hysteria/hysteria2 the
   entry has no effect. Other `type` values in `finalmask.tcp[]` —
   `json_field_unknown`.
-- REALITY nodes are fragmented like any other node (core ≥ `v1.14.1-lx.4`;
-  earlier the flag was silently ignored).
+- REALITY and fragmentation (§627, §636): the global and the
+  subscription/folder checkboxes skip a REALITY node — a bulk setting cannot
+  know whether the server accepts a split ClientHello; a checkbox set on the
+  node itself applies. Mixed-case SNI never applies to REALITY, on any level.
+- `Off` on any level does not remove flags that came in the node body (Xray
+  `dialerProxy`, `finalmask.tcp`, authored JSON) — it only stops adding them.
 
-- All three settings are portable: they go into the cross-platform backup.
+- All settings are portable: the global ones go into the cross-platform
+  backup as `vars`, the node and source policy as the record field `tls`
+  (contract 1.1.117, LxBox side; the launcher silently ignores it). On merge
+  the matched source and node keep their own policy.
 
 ## Boundaries
 
-- Node ping and probe build their own config, but apply the same global
-  checkboxes and the same delay as the tunnel, so the ping checks the path the
+- Node ping and probe build their own config, but apply the same checkboxes
+  and the same delay per level as the tunnel, so the ping checks the path the
   traffic takes; the node's `tls.fragment` under the probe's `detour` is
   removed the same way, but without a code.
 
@@ -105,3 +128,5 @@ the node's notifications; a build warning line.
 | 6 | [574](../../../tasks/574-tls-fragment-yields-to-detour.md) | Released v2.25.7 | `tls.fragment` yields to the build's `detour` and to the system engine |
 | 7 | [606](../../../tasks/606-audit-591-export-list-tun-warp-dpi-bugs.md) | Done | An invalid fallback delay is replaced with `500ms` |
 | 8 | [606](../../../tasks/606-audit-591-export-list-tun-warp-dpi-bugs.md) | Done | Ping and probe apply the global fragmentation like the tunnel |
+| 9 | [636](../../../tasks/636-tls-settings-per-node-folder-subscription.md) | Implemented | Options on node, folder and subscription; REALITY is fragmented only by the node-level flag |
+| 10 | [642](../../../tasks/642-contract-1-1-118-sync.md) | Done | QUIC protocols (hysteria, hysteria2, tuic) do not get the flags |

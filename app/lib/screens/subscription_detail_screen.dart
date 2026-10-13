@@ -304,6 +304,8 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
     _probeRunner = runner;
     final err = await runner.run(
       nodes,
+      // §636 — проба фрагментирует так же, как туннель.
+      tlsByIndex: ProbeController.probeTlsOf(widget.entry.list),
       url: url,
       timeoutMs: timeoutMs,
       onResult: (i, r) {
@@ -874,6 +876,11 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
         unawaited(widget.controller.persistSources());
       },
       onShowOverrideDetourPicker: () => _showOverrideDetourPicker(),
+      // §636 — TLS-политика источника: запись сразу, как у detour.
+      onTlsChanged: (v) {
+        setState(() => widget.entry.tls = v);
+        unawaited(widget.controller.persistSources());
+      },
       onReplaceDetourChainChanged: (val) {
         setState(() => widget.entry.replaceDetourChain = val);
         unawaited(widget.controller.persistSources());
