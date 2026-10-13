@@ -33,6 +33,13 @@
   переносе в папку. Debug API отдаёт и частично меняет поле `tls` источника
   и члена папки.)
 
+- **uTLS fingerprint `chrome_155`
+  ([task 642](docs/spec/tasks/642-contract-1-1-118-sync.md)).** The Chrome 155
+  preset of the core (lx.13 and newer) is accepted in links and JSON and
+  counts as a hybrid fingerprint under REALITY.
+  (RU: Отпечаток uTLS `chrome_155` — пресет Chrome 155 ядра lx.13+ —
+  принимается в ссылках и JSON и под REALITY считается гибридным.)
+
 ### Fixed
 
 - **A Transfer to desktop file without rules no longer wipes the rules
@@ -98,8 +105,43 @@
   networks; it stays in the SNI pool for scanning.
   (RU: Рекомендованный SNI для MASQUE — `www.cloudflare.com`; прежний домен
   остался в пуле SNI для перебора.)
-- Core `v1.14.3-lx.15` and launcher contract 1.1.115 are unchanged.
-  (RU: Ядро `v1.14.3-lx.15` и контракт 1.1.115 без изменений.)
+- **A node with a broken `detour` chain is dropped instead of connecting
+  directly ([task 642](docs/spec/tasks/642-contract-1-1-118-sync.md)).**
+  Contract 1.1.118: in an imported sing-box config, a node whose `detour`
+  points to a missing tag, to a hop that did not become a node or to a group
+  is not created, and every node of a `detour` loop is dropped; each one is
+  listed among the subscription's dropped entries with its tag and the
+  reason. `detour: direct` and the 8-hop limit work as before.
+  (RU: Контракт 1.1.118: в импортированном конфиге sing-box узел, чей
+  `detour` ведёт на несуществующий тег, на хоп, не ставший узлом, или на
+  группу, не создаётся, а кольцо `detour` роняет всех участников; каждый
+  попадает в отброшенные записи подписки со своим тегом и причиной. Раньше
+  такой узел шёл напрямую. `detour: direct` и предел в 8 звеньев — как
+  прежде.)
+- **Hysteria v1 is rejected with a hint
+  ([task 642](docs/spec/tasks/642-contract-1-1-118-sync.md)).**
+  A `hysteria://`/`hy://` link, a sing-box `type: hysteria` entry and an
+  Xray `hysteria` element of version 1 are named by the code
+  `protocol_extension_unsupported` with the hint to use hysteria2, instead
+  of disappearing silently or as an unknown protocol.
+  (RU: Ссылка `hysteria://`/`hy://`, запись sing-box `type: hysteria` и
+  элемент Xray `hysteria` версии 1 отбраковываются кодом
+  `protocol_extension_unsupported` с подсказкой «используйте hysteria2», а не
+  пропадают молча или как неизвестный протокол.)
+- **TLS fragmentation skips QUIC nodes
+  ([task 642](docs/spec/tasks/642-contract-1-1-118-sync.md)).**
+  Hysteria, Hysteria2 and TUIC nodes no longer get the TLS Fragment / Record
+  Fragment flags from any level: QUIC is not fragmented.
+  (RU: Узлы Hysteria, Hysteria2 и TUIC больше не получают флаги TLS Fragment /
+  Record Fragment ни с одного уровня: QUIC не фрагментируется.)
+- **MASQUE `network`** is no longer an old name of `vhttp`: a link with
+  `network=h2` gets the default h3 and the parameter is reported as unknown;
+  the key is reserved for the tcp/udp list (contract 1.1.118).
+  (RU: `network` у MASQUE — больше не старое имя `vhttp`: ссылка с
+  `network=h2` получает дефолт h3, параметр помечается неизвестным; ключ
+  зарезервирован под список tcp/udp.)
+- **Contract 1.1.118** (from 1.1.115); core `v1.14.3-lx.15` is unchanged.
+  (RU: Контракт 1.1.118; ядро `v1.14.3-lx.15` без изменений.)
 
 ### Tests
 

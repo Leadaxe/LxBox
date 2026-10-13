@@ -65,7 +65,9 @@ Xray-JSON узла (`streamSettings.sockopt.dialerProxy` → `freedom` с
   которое ядро не разберёт как длительность (`500`, `fast`), заменяется на
   `500ms`.
 - Годность поля узлу спрашивается у реестра по телу: naive — запрещено
-  (ядро падает «fragment is not supported on naive outbound»); MASQUE
+  (ядро падает «fragment is not supported on naive outbound»); hysteria,
+  hysteria2, tuic — запрещено, QUIC не фрагментируется
+  (`tls_not_applicable_quic`, контракт 1.1.118); MASQUE
   `vhttp: h3` — конфликт, пропуск молча; MASQUE `h2`/не задан — блок
   `tls{}` создаётся, если его не было, SNI не теряется.
 - Флаги с `tls.engine` = `apple`/`windows` снимаются с кодом
@@ -123,3 +125,4 @@ Xray-JSON узла (`streamSettings.sockopt.dialerProxy` → `freedom` с
 | 7 | [606](../../../tasks/606-audit-591-export-list-tun-warp-dpi-bugs.md) | Done | Невалидная пауза заменяется на `500ms` |
 | 8 | [606](../../../tasks/606-audit-591-export-list-tun-warp-dpi-bugs.md) | Done | Пинг и проба применяют глобальную фрагментацию, как туннель |
 | 9 | [636](../../../tasks/636-tls-settings-per-node-folder-subscription.md) | Implemented | Ручки на узле, папке и подписке; REALITY фрагментируется только от узлового флага |
+| 10 | [642](../../../tasks/642-contract-1-1-118-sync.md) | Done | QUIC-протоколы (hysteria, hysteria2, tuic) флагов не получают |

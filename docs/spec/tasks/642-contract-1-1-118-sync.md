@@ -3,7 +3,7 @@
 | Поле | Значение |
 |------|----------|
 | Тип | Синк контракта + нормы |
-| Статус | ТЗ, исполнитель запущен |
+| Статус | Реализовано (ветка `task-642`) |
 | Дата | 2026-10-14 |
 | Связанные | контракт 1.1.118 (лаунчер `6dc299d4`, TASKS_LXBOX §115, решения D-128 / D-129), аудит §591 (пункты 1–7 списка лаунчера), §393 (masque vhttp), §636 (§7 реестра `tls.fragment` forbidden_for) |
 
@@ -65,3 +65,37 @@
   URI и тело → код с `alternative: hysteria2`).
 - Линты CI: `use_null_aware_elements`,
   `no_leading_underscores_for_local_identifiers`.
+
+## Отклонения при реализации
+
+1. **П. 6 — кода нет.** Golden `uri/masque/legacy_params_ignored` прошёл
+   сразу после синка: URI-движок читает `$legacy_flat` из реестра, и
+   `network=` уже шёл общим `uri_param_unknown`. Правки — комментарии и
+   названия тестов (`json_parsers.dart`, `config_node.dart`, пять тестов).
+2. **П. 5 — голое своё тело тоже fail-closed.** Свой сервер или член папки
+   из одного sing-box-объекта с `detour` на тег вне тела (`"detour":
+   "warp-out"`) теперь не создаётся (`detour_target_missing` в `dropped[]`).
+   Прежде `detour` тела снимался, и узел шёл по политике сборки. Так же у
+   лаунчера: одиночный outbound он заворачивает в `{"outbounds":[ob]}` и
+   ведёт тем же `parseSingboxConfig`. Фикстуры `verbatim_body_test` и
+   `unknown_node_type_test` лишились `detour`, добавлены тесты на отказ.
+   **Вопрос владельцу:** нужен ли своему телу прежний мягкий путь.
+3. **П. 5 — кольцо.** Отбраковка записывается на КАЖДОГО участника (A → B →
+   C → A — три записи). Лаунчер рвёт одно ребро и прячет одного участника
+   кольца из трёх и более узлов как цель `detour` (у него две записи).
+   Узел, лишь ведущий в кольцо, отбраковывается тем же
+   `detour_cycle_broken` — как у лаунчера.
+4. **П. 4 — проверка в движке, не в парсерах.** `foreignExtensionReject`
+   (`engine_mapper.dart`) читает `extension`/`extension_alternative`
+   протокола; срабатывает в `mapViaEngine` (ссылки), `mapJsonViaEngine`
+   (Xray) и в разборе sing-box до модели и правила «свой незнакомый тип»
+   §585. Xray `hysteria` без `version` — v1 по `detect` реестра, тоже отказ.
+   У класса предупреждения нет (`dart: null` в реестре) — `RegistryWarning`.
+5. **П. 3 — `chrome_155` и в `kRealityHybridFingerprints`:** реестр включил
+   его в исключения advisory `reality_fp_not_chrome`.
+6. **Ожидания, изменённые контрактом:** `registry_load_test` (`body.core` =
+   `1.14.3-lx.17`); эталон `test/fixtures/storage/golden/rich_v0.config.json`
+   перезаписан `UPDATE_GOLDEN=1` — у hysteria2/tuic сняты `fragment` и
+   `fragment_fallback_delay` (п. 7).
+7. **CHANGELOG:** устаревшая строка «контракт 1.1.115 без изменений» в
+   Unreleased заменена на «Контракт 1.1.118 (from 1.1.115)».

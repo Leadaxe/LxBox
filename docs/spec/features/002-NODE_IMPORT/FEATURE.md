@@ -193,9 +193,10 @@ node ─► emit by the registry emit section ─► share link (or rejection)
   [025-CONTRACT_REGISTRY](../025-CONTRACT_REGISTRY/FEATURE.md); the core pin —
   [021-CORE_CONTRACT](../021-CORE_CONTRACT/FEATURE.md).
 - Does not do: `.ovpn`, Clash YAML (recognized, yields no nodes), hysteria v1
-  as a node (`hysteria://`/`hy://` — the registry marks them `extension:
-  desktop`, no node is created; the schemes live in the registry shared with
-  the launcher), Amnezia containers other than WG/AWG, network checks of a node.
+  as a node (`hysteria://`/`hy://` and `type: hysteria` — the registry marks
+  them `extension: desktop`, no node is created, the reject is named by
+  `protocol_extension_unsupported` with the hint `hysteria2`; the schemes live
+  in the registry shared with the launcher), Amnezia containers other than WG/AWG, network checks of a node.
 - Not planned (owner decision 2026-09-29, audit [591](../../tasks/591-spec-kit-revision-audit.md)): recognizing the format by the file
   extension (`584F`) — the format is recognized by text only.
 

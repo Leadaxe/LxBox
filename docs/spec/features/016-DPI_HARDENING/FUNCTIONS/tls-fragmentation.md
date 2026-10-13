@@ -67,7 +67,9 @@ the node's notifications; a build warning line.
   `500ms`.
 - Whether the field suits the node is asked of the registry by the body:
   naive — forbidden (the core fails with "fragment is not supported on naive
-  outbound"); MASQUE `vhttp: h3` — a conflict, skipped silently; MASQUE
+  outbound"); hysteria, hysteria2, tuic — forbidden, QUIC is not fragmented
+  (`tls_not_applicable_quic`, contract 1.1.118); MASQUE `vhttp: h3` — a
+  conflict, skipped silently; MASQUE
   `h2`/unset — a `tls{}` block is created if there was none, the SNI is not
   lost.
 - Flags with `tls.engine` = `apple`/`windows` are removed with the code
@@ -127,3 +129,4 @@ the node's notifications; a build warning line.
 | 7 | [606](../../../tasks/606-audit-591-export-list-tun-warp-dpi-bugs.md) | Done | An invalid fallback delay is replaced with `500ms` |
 | 8 | [606](../../../tasks/606-audit-591-export-list-tun-warp-dpi-bugs.md) | Done | Ping and probe apply the global fragmentation like the tunnel |
 | 9 | [636](../../../tasks/636-tls-settings-per-node-folder-subscription.md) | Implemented | Options on node, folder and subscription; REALITY is fragmented only by the node-level flag |
+| 10 | [642](../../../tasks/642-contract-1-1-118-sync.md) | Done | QUIC protocols (hysteria, hysteria2, tuic) do not get the flags |
