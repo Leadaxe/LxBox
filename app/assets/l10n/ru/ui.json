@@ -1374,14 +1374,14 @@
       "other": "Позиций в цепочке: %d"
     }
   },
-  "Chain target \"%s\" is a group, which cannot be used as a chain hop. The node connects directly.": {
-    "value": "Цель цепочки «%s» — группа, а группа звеном быть не может. Узел подключается напрямую."
+  "Node dropped: chain target \"%s\" is a group, which cannot be a chain hop.": {
+    "value": "Узел отброшен: цель цепочки «%s» — группа, а группа звеном цепочки быть не может."
   },
-  "Chain target \"%s\" was not found in the config. The node connects directly.": {
-    "value": "Цель цепочки «%s» в конфиге не найдена. Узел подключается напрямую."
+  "Node dropped: chain target \"%s\" was not found in the config.": {
+    "value": "Узел отброшен: цели цепочки «%s» в конфиге нет."
   },
-  "Chain to \"%s\" would loop back on itself, so it was dropped. The node connects directly.": {
-    "value": "Цепочка на «%s» замкнулась бы в кольцо и была отброшена. Узел подключается напрямую."
+  "Node dropped: its chain loops back on itself through \"%s\".": {
+    "value": "Узел отброшен: его цепочка замыкается сама на себя через «%s»."
   },
   "Chains %s are declared below this one — a chain may only reference chains above it. Move them up, or this chain will not build.": {
     "value": "Цепочки %s объявлены ниже этой — сослаться можно только на цепочку выше по списку. Поднимите их, иначе эта цепочка не соберётся."

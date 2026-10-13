@@ -1182,14 +1182,14 @@
       "other": "链路位置（%d）"
     }
   },
-  "Chain target \"%s\" is a group, which cannot be used as a chain hop. The node connects directly.": {
-    "value": "链路目标「%s」是分组，不能作为链路的一跳。该节点将直连。"
+  "Node dropped: chain target \"%s\" is a group, which cannot be a chain hop.": {
+    "value": "节点已丢弃：链路目标「%s」是分组，不能作为链路的一跳。"
   },
-  "Chain target \"%s\" was not found in the config. The node connects directly.": {
-    "value": "配置中找不到链路目标「%s」。该节点将直连。"
+  "Node dropped: chain target \"%s\" was not found in the config.": {
+    "value": "节点已丢弃：配置中找不到链路目标「%s」。"
   },
-  "Chain to \"%s\" would loop back on itself, so it was dropped. The node connects directly.": {
-    "value": "指向「%s」的链路会自身成环，已丢弃。该节点将直连。"
+  "Node dropped: its chain loops back on itself through \"%s\".": {
+    "value": "节点已丢弃：其链路经「%s」自身成环。"
   },
   "Chains %s are declared below this one — a chain may only reference chains above it. Move them up, or this chain will not build.": {
     "value": "链路 %s 声明在本链路之下——只能引用列表更靠前的链路。请把它们上移，否则本链路无法构建。"
