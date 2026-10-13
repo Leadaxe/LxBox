@@ -18,8 +18,8 @@
   server → subscription/folder → global; Default inherits, Off below beats On
   above. A checkbox set on a REALITY server itself fragments it; bulk levels
   still skip REALITY. Ping and the node test use the same levels. The
-  per-server/source policy does not go into the backup file yet (the export
-  names it); on merge local settings stay. A server's own TLS settings move
+  per-server/source policy travels in the cross-platform backup (contract
+  1.1.117); on merge local settings stay. A server's own TLS settings move
   with it on Ungroup and when the server is moved into a folder. Debug API
   shows and patches the `tls` field of a source and a folder member (PATCH
   is partial).
@@ -39,6 +39,12 @@
   counts as a hybrid fingerprint under REALITY.
   (RU: Отпечаток uTLS `chrome_155` — пресет Chrome 155 ядра lx.13+ —
   принимается в ссылках и JSON и под REALITY считается гибридным.)
+- **Ping presets YouTube and YouTube (ytimg).** The URL test address list
+  (Ping Settings and the Test URL of the auto group) gets
+  `https://www.youtube.com/generate_204` and `https://i.ytimg.com/generate_204`.
+  (RU: В список адресов URL-теста (Ping Settings и Test URL авто-группы)
+  добавлены YouTube `https://www.youtube.com/generate_204` и YouTube (ytimg)
+  `https://i.ytimg.com/generate_204`.)
 
 ### Fixed
 
@@ -140,8 +146,26 @@
   (RU: `network` у MASQUE — больше не старое имя `vhttp`: ссылка с
   `network=h2` получает дефолт h3, параметр помечается неизвестным; ключ
   зарезервирован под список tcp/udp.)
-- **Contract 1.1.118** (from 1.1.115); core `v1.14.3-lx.15` is unchanged.
-  (RU: Контракт 1.1.118; ядро `v1.14.3-lx.15` без изменений.)
+- **Core `v1.14.3-lx.15` → `v1.14.3-lx.18`
+  ([docs/KERNEL.md](docs/KERNEL.md)).** The legacy `network` key of the
+  `masque` outbound is gone from the core (SPEC 131): it duplicated `vhttp`
+  (h3/h2) under a name that means the tcp/udp list on every other outbound.
+  The app has always written `vhttp` and since task 642 does not read
+  `network` either; an authored sing-box body that still carries it is now
+  rejected by the core at start and the node is disabled — rename the key to
+  `vhttp`. lx.16 and lx.17 change only the Linux router daemon and the
+  Windows 7 build, nothing of them is in the Android library. The Java
+  surface is identical to lx.15.
+  (RU: Ядро `v1.14.3-lx.15` → `v1.14.3-lx.18`. Из ядра снят устаревший ключ
+  `network` у outbound `masque` (SPEC 131): он дублировал `vhttp` (h3/h2) под
+  именем, которое у остальных outbound означает список tcp/udp. Приложение
+  всегда писало `vhttp`, а с задачи 642 и не читает `network`; авторское тело
+  sing-box с этим ключом ядро теперь отвергает на старте, узел отключается —
+  переименуйте ключ в `vhttp`. lx.16 и lx.17 меняют только Linux-демон и
+  сборку для Windows 7, в Android-библиотеке их нет. Java-поверхность
+  идентична lx.15.)
+- **Contract 1.1.118** (from 1.1.115).
+  (RU: Контракт 1.1.118.)
 
 ### Tests
 
