@@ -42,9 +42,15 @@ sources[], directions[], rules[], dns{}, vars{}, route{final}, warp[]}`;
 have no place in the shared format:»). Превью импорта «Import backup»:
 «From <app> <version>», счётчики Directions / Chains / Rules / Subscriptions
 / Servers / Variables / DNS entries / WARP accounts, список «Not applied
-as-is:» и строка «Importing replaces the current rules.». Итог — «Imported N
-rules, M directions and K settings» (варианты) с «; chains: N» или «Imported
-N rule(s), M items not applied».
+as-is:» (без `backup_rules_replaced`; пустой список — без заголовка) и
+итоговая строка о правилах: «This file has no rules. The current rules
+stay.» (ключа `rules` нет), «Importing adds the file's rules.» (ключ есть,
+своих правил нет) или «Importing replaces the current N rule(s).». Итог —
+«Imported N rules, M directions and K settings» (варианты) или «Imported
+N rule(s), M items not applied» (замена правил в «не применено» не
+считается), затем «, replaced N rule(s)», если правила заменены, и
+«; chains: N»; все счётчики нулевые — «Nothing to import: the file has no
+rules, directions or settings.».
 
 ## Правила и инварианты
 

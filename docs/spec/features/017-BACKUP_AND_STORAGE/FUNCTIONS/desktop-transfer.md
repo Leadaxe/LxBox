@@ -43,9 +43,15 @@ on export losses — the "Not included in the file" dialog ("These settings
 have no place in the shared format:"). The "Import backup" import preview:
 "From <app> <version>", counters Directions / Chains / Rules / Subscriptions
 / Servers / Variables / DNS entries / WARP accounts, the "Not applied
-as-is:" list and the line "Importing replaces the current rules.". Result —
-"Imported N rules, M directions and K settings" (variants) with "; chains:
-N", or "Imported N rule(s), M items not applied".
+as-is:" list (without `backup_rules_replaced`; no heading when the list is
+empty) and a closing line about rules: "This file has no rules. The current
+rules stay." (no `rules` key), "Importing adds the file's rules." (key
+present, no rules here) or "Importing replaces the current N rule(s).".
+Result — "Imported N rules, M directions and K settings" (variants), or
+"Imported N rule(s), M items not applied" (replaced rules are not counted
+as not applied), followed by ", replaced N rule(s)" when rules were replaced
+and "; chains: N"; all counters zero — "Nothing to import: the file has no
+rules, directions or settings."
 
 ## Rules and invariants
 

@@ -44,6 +44,13 @@
   (RU: Файл Transfer to desktop без ключа `rules` правила не трогает; файл с
   ключом, даже пустым, замещает их, и превью называет число снятых правил
   (`backup_rules_replaced`). Экспорт пишет ключ всегда. Контракт 1.1.116.)
+- **The Transfer to desktop import screen tells the truth about rules
+  ([task 641](docs/spec/tasks/641-backup-import-ui-rules-replaced.md)).**
+  The preview ends with "This file has no rules. The current rules stay.",
+  "Importing adds the file's rules." or "Importing replaces the current N
+  rule(s)."; the result no longer counts replaced rules as "not applied" and
+  says "replaced N rule(s)". (RU: Превью и итог импорта говорят правду о
+  правилах: файл без правил их не трогает, замена не считается отказом.)
 - **The start error notification goes away after a successful start
   ([task 637](docs/spec/tasks/637-clear-error-notification-on-successful-start.md)).**
   When the core rejected a node, the app disabled it and started again, and
