@@ -382,7 +382,9 @@ void main() {
           reason: 'final был на выпавшем my-doh: ключ снят');
       expect(rules.last, {'action': 'reject'},
           reason: 'заглушка reject последним DNS-правилом');
-      expect((config['route'] as Map)['default_domain_resolver'], 'dns_shield');
+      // §643 — резолвер из шаблона в объектной форме; лечение меняет только `server`.
+      expect((config['route'] as Map)['default_domain_resolver'],
+          {'server': 'dns_shield', 'disable_optimistic_cache': true});
 
       expect(build.warnings,
           contains('DNS server "my-doh" dropped: its detour "vpn-ghost" is not in the config.'));
