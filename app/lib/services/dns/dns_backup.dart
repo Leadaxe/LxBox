@@ -268,6 +268,13 @@ Map<String, String> _declaredFileVars(
           reason: kVarSkippedUndeclared));
       continue;
     }
+    // §643 (D-132) — имя `wizard_ui: internal` законным не бывает.
+    if (byName[e.key]?.isInternal ?? false) {
+      warnings.add(LxBackupWarning(
+          kWarnVarSkipped, 'dns:${s.tag}.vars.${e.key}',
+          reason: kVarSkippedInternal));
+      continue;
+    }
     final v = e.value.trim();
     if (v.isNotEmpty) out[e.key] = v;
   }

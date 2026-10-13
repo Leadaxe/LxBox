@@ -1,3 +1,7 @@
+import 'preset_node_loop.dart';
+
+export 'preset_node_loop.dart';
+
 /// Full wizard template loaded from asset.
 class WizardTemplate {
   WizardTemplate({
@@ -40,9 +44,10 @@ class WizardTemplate {
   /// Все переменные заданного `chapter` в порядке объявления в template.
   /// `chapter` — категория экрана-владельца: `core` (VPN Settings), `routing`
   /// (Routing), `dns` (DNS Settings). Переменные с `wizard_ui: hidden`
-  /// исключаются — они запекаются в template до UI.
+  /// исключаются — они запекаются в template до UI; §643 — `internal` тоже
+  /// (переменная только для сборки, в форме её нет).
   List<WizardVar> varsFor(String chapter) => vars
-      .where((v) => v.chapter == chapter && v.wizardUI != 'hidden')
+      .where((v) => v.chapter == chapter && !v.isFormHidden)
       .toList(growable: false);
 
   /// Секции заданного `chapter` для построения UI. Нужно для отображения
@@ -493,6 +498,7 @@ class WizardVar {
     this.required = true,
     this.onChange,
     this.ref = '',
+    this.unique = false,
   });
 
   final String name;
@@ -504,7 +510,18 @@ class WizardVar {
   final String
       type; // bool, int, text, text_list, enum, secret, outbound, dns_servers
   final String defaultValue;
-  final String wizardUI; // edit, fix, hidden
+
+  /// `edit` | `fix` | `hidden` | `internal` (§643, контракт 1.1.119, D-132):
+  /// `internal` — переменная только для сборки: в формах её нет, значение
+  /// из состояния и бэкапа сборка игнорирует (база — `default_value`, пишет
+  /// только `#do` обхода узлов), в состояние и бэкап не пишется.
+  final String wizardUI;
+
+  /// §643 (D-132) — `unique` объявления: значение `text_list` без дублей в
+  /// порядке первого появления (ввод пользователя, `default_value`, итог
+  /// `#append`). У другого типа — ошибка загрузки.
+  final bool unique;
+
   /// Допустимые значения (TEMPLATE_LANG §2.1): закрытое множество при любом
   /// `type`, кроме `bool`. `type` и `options` ортогональны (SPEC 143, D-125):
   /// объектная форма `{title, value}` тип не меняет, `enum` = `text` +
@@ -550,6 +567,13 @@ class WizardVar {
   bool get isRef => ref.isNotEmpty;
 
   bool get isEditable => wizardUI == 'edit';
+
+  /// §643 — переменная только для сборки (`wizard_ui: internal`).
+  bool get isInternal => wizardUI == kWizardUiInternal;
+
+  /// Строки в форме нет: `hidden` (значение — данные пользователя) или
+  /// `internal` (не данные пользователя вовсе).
+  bool get isFormHidden => wizardUI == 'hidden' || isInternal;
 
   /// Legacy-aware accessor: только `value`-part каждой опции. Для кода,
   /// которому нужен plain `List<String>` (валидация, sing-box emit).
@@ -622,9 +646,36 @@ class WizardVar {
       // SPEC 107: канон — помеченный `#on_change`; легаси `on_change`
       // читается бессрочно.
       onChange: (json['#on_change'] ?? json['on_change']) as Map<String, dynamic>?,
+      // §643 — допустимость (только `text_list`, только bool) проверяет
+      // загрузчик шаблона (`validateVarDeclaration`).
+      unique: json['unique'] == true,
     );
   }
 }
+
+/// §643 — значение `wizard_ui` переменной только для сборки (D-132).
+const String kWizardUiInternal = 'internal';
+
+/// §643 (D-132) — `text_list` без дублей, порядок первого появления; строки
+/// подрезаны, пустые выброшены (как у `splitTextList` движка). Результат —
+/// строками через перевод строки, форма хранения значения.
+String dedupTextListValue(String raw) {
+  final seen = <String>{};
+  final out = <String>[];
+  for (final line in raw.split('\n')) {
+    final t = line.trim();
+    if (t.isEmpty || !seen.add(t)) continue;
+    out.add(t);
+  }
+  return out.join('\n');
+}
+
+/// §643 — значение переменной с учётом `unique` объявления [v]: у
+/// `text_list` с `unique` — [dedupTextListValue], иначе как есть.
+String applyVarUnique(WizardVar? v, String raw) =>
+    (v != null && v.unique && v.type == 'text_list')
+        ? dedupTextListValue(raw)
+        : raw;
 
 /// A section header for grouping vars in the settings UI.
 /// `chapter` наследуется на все переменные этой секции и определяет
@@ -664,33 +715,6 @@ const int kDefaultRuleNum = kUserRuleNumStart;
 /// `CustomRule(kind: preset)` хранит только ссылку `{presetId, varsValues}`,
 /// expansion + merge выполняется в `preset_expand.dart`.
 ///
-/// §578 — `for_each` пресета: тело пресета повторяется для каждого узла
-/// конфига с полем `type` тела, равным [nodeType], под именем [as]; [filter]
-/// — условие языка `#if` (null — истина).
-class PresetForEach {
-  const PresetForEach({
-    required this.nodeType,
-    required this.as,
-    this.filter,
-  });
-
-  final String nodeType;
-  final String as;
-  final Object? filter;
-
-  /// null — ключа нет или обязательные `node_type`/`as` пусты (такой
-  /// `for_each` отвергает загрузка шаблона).
-  static PresetForEach? fromJson(Object? raw) {
-    if (raw is! Map) return null;
-    final type = raw['node_type'];
-    final as = raw['as'];
-    if (type is! String || type.isEmpty || as is! String || as.isEmpty) {
-      return null;
-    }
-    return PresetForEach(nodeType: type, as: as, filter: raw['filter']);
-  }
-}
-
 /// `presetId` обязательный (§067 убрал legacy mode без preset_id).
 class SelectableRule {
   SelectableRule({
@@ -706,14 +730,15 @@ class SelectableRule {
     this.vars = const [],
     dynamic dnsRule,
     this.dnsServers = const [],
-    this.forEach,
+    this.nodeLoop,
   })  : rules = _normalizeRules(rule),
         dnsRules = _normalizeRules(dnsRule);
 
   final String label;
 
-  /// §578 — повтор тела пресета по узлам конфига; null — пресет обычный.
-  final PresetForEach? forEach;
+  /// §643 — обход узлов конфига (`for_each_node` / `for_each_node_do`);
+  /// null — пресет обычный.
+  final PresetNodeLoop? nodeLoop;
   final String description;
   final bool defaultEnabled;
 
@@ -852,7 +877,8 @@ class SelectableRule {
               ?.map((e) => Map<String, dynamic>.from(e as Map))
               .toList() ??
           const [],
-      forEach: PresetForEach.fromJson(json['for_each']),
+      // §643 — нарушение нормы обхода — FormatException на весь load.
+      nodeLoop: PresetNodeLoop.parse(json),
     );
   }
 }

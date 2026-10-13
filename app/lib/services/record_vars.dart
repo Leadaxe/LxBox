@@ -45,6 +45,8 @@ class RecordVarDecl {
     this.defaultValue = '',
     this.type = '',
     this.isRef = false,
+    this.isInternal = false,
+    this.unique = false,
   });
 
   final String name;
@@ -57,11 +59,23 @@ class RecordVarDecl {
 
   /// §265 — ссылка на глобальную переменную: значение не в записи.
   final bool isRef;
+
+  /// §643 (D-132) — `wizard_ui: internal`: имя законным для хранения не
+  /// бывает (импорт снимает с `backup_var_skipped {reason: internal}`,
+  /// хранение — молча).
+  final bool isInternal;
+
+  /// §643 (D-132) — `unique` у `text_list`: значение без дублей.
+  final bool unique;
 }
 
 /// Объявления переменных носителей из шаблона своей стороны.
 class RecordVarDecls {
-  const RecordVarDecls({this.dnsServers = const {}, this.presets = const {}});
+  const RecordVarDecls({
+    this.dnsServers = const {},
+    this.presets = const {},
+    this.internalGlobals = const {},
+  });
 
   /// Шаблона нет — нормализации нет.
   static const none = RecordVarDecls();
@@ -73,12 +87,21 @@ class RecordVarDecls {
   /// `preset_id` → переменные пресета.
   final Map<String, List<RecordVarDecl>> presets;
 
-  bool get isEmpty => dnsServers.isEmpty && presets.isEmpty;
+  /// §643 (D-132) — глобальные переменные шаблона с `wizard_ui: internal`:
+  /// корневое имя из файла бэкапа снимается с `reason: internal`.
+  final Set<String> internalGlobals;
+
+  bool get isEmpty =>
+      dnsServers.isEmpty && presets.isEmpty && internalGlobals.isEmpty;
 
   /// Из загруженного шаблона приложения.
   factory RecordVarDecls.fromTemplate(WizardTemplate template) =>
       RecordVarDecls(
         dnsServers: dnsServerVarDecls(template.dnsOptions),
+        internalGlobals: {
+          for (final v in template.vars)
+            if (v.isInternal) v.name,
+        },
         presets: {
           for (final p in template.selectableRules)
             if (p.presetId.isNotEmpty)
@@ -90,6 +113,8 @@ class RecordVarDecls {
                       defaultValue: v.defaultValue,
                       type: v.type,
                       isRef: v.isRef,
+                      isInternal: v.isInternal,
+                      unique: v.unique,
                     ),
               ],
         },
@@ -158,6 +183,8 @@ RecordVarDecl? _declOf(Map d) {
     name: name,
     defaultValue: def?.toString() ?? '',
     type: type is String ? type : '',
+    isInternal: d['wizard_ui'] == kWizardUiInternal,
+    unique: d['unique'] == true,
   );
 }
 
@@ -173,11 +200,12 @@ Future<RecordVarDecls> loadRecordVarDecls() async {
   }
 }
 
-/// Итог нормализации одной карты значений: законные значения и снятые
-/// необъявленные имена (в порядке входа).
+/// Итог нормализации одной карты значений: законные значения, снятые
+/// необъявленные имена и (§643) снятые имена `internal` — в порядке входа.
 typedef RecordVarsNormalized = ({
   Map<String, String> vars,
   List<String> undeclared,
+  List<String> internal,
 });
 
 /// Н2/Н3/Н4 над картой значений [values] против объявлений [decls].
@@ -192,6 +220,7 @@ RecordVarsNormalized normalizeRecordVarValues(
   final byName = {for (final d in decls) d.name: d};
   final vars = <String, String>{};
   final undeclared = <String>[];
+  final internal = <String>[];
   for (final e in values.entries) {
     final decl = byName[e.key];
     if (decl == null) {
@@ -207,22 +236,40 @@ RecordVarsNormalized normalizeRecordVarValues(
       vars[e.key] = e.value; // §265 — не трогается
       continue;
     }
-    final v = e.value.trim();
-    if (v.isEmpty || v == decl.defaultValue.trim()) continue;
+    // §643 (D-132) — `internal` законным для хранения не бывает.
+    if (decl.isInternal) {
+      internal.add(e.key);
+      continue;
+    }
+    final v = _uniqueValue(decl, e.value.trim());
+    if (v.isEmpty || v == _uniqueValue(decl, decl.defaultValue.trim())) {
+      continue;
+    }
     vars[e.key] = v;
   }
-  return (vars: vars, undeclared: undeclared);
+  return (vars: vars, undeclared: undeclared, internal: internal);
 }
+
+/// §643 — `unique` у `text_list`: дубли строк сняты (порядок первого
+/// появления).
+String _uniqueValue(RecordVarDecl decl, String v) =>
+    (decl.unique && decl.type == 'text_list') ? dedupTextListValue(v) : v;
 
 /// Значение переменной записи, которое пишет редактор: [value] подрезано;
 /// пустое или равное умолчанию объявления [decl] — `null`, ключ снимается
 /// (выбор умолчания — сброс, Н4). [decl] `null` — имя без объявления
 /// (у пресета — универсальная замена цели): Н4 не применяется.
+///
+/// §643 (D-132) — у `internal` — всегда `null` (в запись не пишется); у
+/// `text_list` с `unique` дубли строк снимаются при сохранении.
 String? recordVarValueToStore(String value, RecordVarDecl? decl) {
   if (decl != null && decl.isRef) return value;
-  final v = value.trim();
+  if (decl != null && decl.isInternal) return null;
+  final v = decl == null ? value.trim() : _uniqueValue(decl, value.trim());
   if (v.isEmpty) return null;
-  if (decl != null && v == decl.defaultValue.trim()) return null;
+  if (decl != null && v == _uniqueValue(decl, decl.defaultValue.trim())) {
+    return null;
+  }
   return v;
 }
 
@@ -235,26 +282,31 @@ bool _sameVars(Map<String, String> a, Map<String, String> b) {
 }
 
 /// Н2–Н4 у template-сервера DNS. Сервер другого вида или не объявленный
-/// шаблоном — как есть. [onUndeclared] получает снятые необъявленные имена.
+/// шаблоном — как есть. [onUndeclared] получает снятые необъявленные имена,
+/// [onInternal] (§643) — снятые имена `wizard_ui: internal`.
 DnsServerRef normalizeDnsServerVars(
   DnsServerRef server,
   RecordVarDecls decls, {
   void Function(String name)? onUndeclared,
+  void Function(String name)? onInternal,
 }) {
   if (server is! DnsServerTemplate) return server;
   final declared = decls.dnsServers[server.tag];
   if (declared == null) return server;
   final n = normalizeRecordVarValues(server.varValues, declared);
   if (onUndeclared != null) n.undeclared.forEach(onUndeclared);
+  if (onInternal != null) n.internal.forEach(onInternal);
   if (_sameVars(n.vars, server.varValues)) return server;
   return server.copyWith(varValues: n.vars);
 }
 
-/// [normalizeDnsServerVars] по списку; [onUndeclared] — `(тег, имя)`.
+/// [normalizeDnsServerVars] по списку; [onUndeclared] и [onInternal] —
+/// `(тег, имя)`.
 List<DnsServerRef> normalizeDnsServersVars(
   List<DnsServerRef> servers,
   RecordVarDecls decls, {
   void Function(String tag, String name)? onUndeclared,
+  void Function(String tag, String name)? onInternal,
 }) {
   if (decls.dnsServers.isEmpty) return servers;
   return [
@@ -264,16 +316,20 @@ List<DnsServerRef> normalizeDnsServersVars(
         decls,
         onUndeclared:
             onUndeclared == null ? null : (name) => onUndeclared(s.tag, name),
+        onInternal:
+            onInternal == null ? null : (name) => onInternal(s.tag, name),
       ),
   ];
 }
 
 /// Н2–Н4 у правила-пресета. Правило другого вида или пресет, которого нет в
-/// шаблоне (`backup_unknown_preset`), — как есть.
+/// шаблоне (`backup_unknown_preset`), — как есть. [onInternal] (§643) —
+/// снятые имена `wizard_ui: internal`.
 CustomRule normalizePresetRuleVars(
   CustomRule rule,
   RecordVarDecls decls, {
   void Function(String name)? onUndeclared,
+  void Function(String name)? onInternal,
 }) {
   if (rule is! CustomRulePreset) return rule;
   final declared = decls.presets[rule.presetId];
@@ -281,15 +337,18 @@ CustomRule normalizePresetRuleVars(
   final n = normalizeRecordVarValues(rule.varsValues, declared,
       implicit: const {kPresetOutboundVar});
   if (onUndeclared != null) n.undeclared.forEach(onUndeclared);
+  if (onInternal != null) n.internal.forEach(onInternal);
   if (_sameVars(n.vars, rule.varsValues)) return rule;
   return rule.copyWith(varsValues: n.vars);
 }
 
-/// [normalizePresetRuleVars] по списку; [onUndeclared] — `(preset_id, имя)`.
+/// [normalizePresetRuleVars] по списку; [onUndeclared] и [onInternal] —
+/// `(preset_id, имя)`.
 List<CustomRule> normalizePresetRulesVars(
   List<CustomRule> rules,
   RecordVarDecls decls, {
   void Function(String presetId, String name)? onUndeclared,
+  void Function(String presetId, String name)? onInternal,
 }) {
   if (decls.presets.isEmpty) return rules;
   return [
@@ -300,6 +359,8 @@ List<CustomRule> normalizePresetRulesVars(
         onUndeclared: onUndeclared == null
             ? null
             : (name) => onUndeclared(r.presetId, name),
+        onInternal:
+            onInternal == null ? null : (name) => onInternal(r.presetId, name),
       ),
   ];
 }

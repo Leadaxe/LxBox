@@ -668,6 +668,12 @@
   "Answer from cache at once and refresh in the background.": {
     "value": "Сразу отвечать из кэша и обновлять запись в фоне."
   },
+  "Never serve stale answers for node hostnames": {
+    "value": "Не отдавать устаревшие ответы для имён узлов"
+  },
+  "Hostnames the core resolves itself (node servers) are looked up again once the cached answer expires, so a node whose address changed does not stay on the old one. App DNS queries are not affected.": {
+    "value": "Имена, которые ядро резолвит само (серверы узлов), запрашиваются заново, когда срок ответа в кэше истёк, — узел, сменивший адрес, не остаётся на старом. На DNS-запросы приложений не влияет."
+  },
   "Keep DNS cache after restart": {
     "value": "Сохранять кэш DNS после перезапуска"
   },

@@ -332,6 +332,11 @@ LxImportPlan planLxBackupImport(String raw, LxImportReceiver receiver) {
       onUndeclared: (presetId, name) => extraWarnings.add(LxBackupWarning(
           kWarnVarSkipped, 'preset:$presetId.vars.$name',
           reason: kVarSkippedUndeclared)),
+      // §643 (D-132) — имя `wizard_ui: internal`: значение файла не данные
+      // пользователя, снимается и называется.
+      onInternal: (presetId, name) => extraWarnings.add(LxBackupWarning(
+          kWarnVarSkipped, 'preset:$presetId.vars.$name',
+          reason: kVarSkippedInternal)),
     );
   }
 

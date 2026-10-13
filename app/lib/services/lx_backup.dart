@@ -100,11 +100,14 @@ const String kWarnVarSkipped = 'backup_var_skipped';
 /// `preset:<ref>`), которого шаблон приёмника у носителя не объявил (Н2);
 /// [kVarSkippedSuperseded] — корневое `dns_<tag>_<var>` при записи сервера со
 /// своими `vars` (Н8); [kVarSkippedNoRecord] — корневое `dns_<tag>_<var>`,
-/// а записи сервера с этим тегом в файле нет (Н8).
+/// а записи сервера с этим тегом в файле нет (Н8); [kVarSkippedInternal]
+/// (§643, контракт 1.1.119, D-132) — имя объявлено носителем (или корневой
+/// переменной шаблона) с `wizard_ui: internal`: его пишет только сборка.
 const String kVarSkippedNotPortable = 'not_portable';
 const String kVarSkippedUndeclared = 'undeclared';
 const String kVarSkippedSuperseded = 'superseded';
 const String kVarSkippedNoRecord = 'no_record';
+const String kVarSkippedInternal = 'internal';
 
 /// Ключ вне схемы: в состояние не попадает (П3). Detail называет ПОЛНЫЙ путь
 /// (`subscriptions[https://…].outbounds[vpn-1].key`), иначе предупреждение не
@@ -237,6 +240,9 @@ const Set<String> kLxPortableVars = {
   'dns_default_domain_resolver',
   'dns_final',
   'dns_optimistic',
+  // §643 (контракт 1.1.119, TEMPLATE_LANG §6.9) — едет в `vars` бэкапа, как
+  // `dns_optimistic`; секция `dns.default_domain_resolver` — строка-тег.
+  'dns_resolver_no_stale',
   'dns_store_cache',
   'dns_strategy',
   'ipv6_enabled',
@@ -835,9 +841,13 @@ Future<LxBackupExport> buildLxBackup({
     warnings: warnings,
   );
 
+  // §643 — `internal` в бэкап не экспортируется (у правил-пресетов ключи
+  // снимает normalizePresetRulesVars ниже).
   final portableVars = <String, String>{
     for (final e in vars.entries)
-      if (kLxPortableVars.contains(e.key)) e.key: e.value,
+      if (kLxPortableVars.contains(e.key) &&
+          !recordVars.internalGlobals.contains(e.key))
+        e.key: e.value,
   };
 
   final ruleRecords = <Map<String, dynamic>>[];
@@ -1346,6 +1356,13 @@ _ParsedDirections _parseDirections(
   };
   var lifted = false;
   for (final key in rawVars.keys.toList()..sort()) {
+    // §643 (D-132) — корневая переменная шаблона приёмника с
+    // `wizard_ui: internal`: значение файла не данные пользователя.
+    if (recordVars.internalGlobals.contains(key)) {
+      warnings.add(LxBackupWarning(kWarnVarSkipped, key,
+          reason: kVarSkippedInternal));
+      continue;
+    }
     if (kLxPortableVars.contains(key)) {
       vars[key] = '${rawVars[key]}';
       continue;

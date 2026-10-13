@@ -45,6 +45,19 @@
   (RU: В список адресов URL-теста (Ping Settings и Test URL авто-группы)
   добавлены YouTube `https://www.youtube.com/generate_204` и YouTube (ytimg)
   `https://i.ytimg.com/generate_204`.)
+- **DNS: Never serve stale answers for node hostnames
+  ([task 643](docs/spec/tasks/643-contract-1-1-119-node-loops.md)).**
+  A switch on the DNS settings screen under the default domain resolver,
+  on by default: hostnames the core resolves itself (node servers) are looked
+  up again once the cached answer expires, so a node whose address changed
+  does not stay on the old one. App DNS queries are not affected.
+  `route.default_domain_resolver` is now the object
+  `{server, disable_optimistic_cache}`; the setting travels in LX Backup.
+  (RU: Переключатель на экране настроек DNS под резолвером по умолчанию,
+  включён по умолчанию: имена, которые ядро резолвит само (серверы узлов),
+  запрашиваются заново после истечения ответа в кэше — узел, сменивший адрес,
+  не остаётся на старом. DNS-запросы приложений не затронуты. Настройка
+  переносится в LX Backup.)
 
 ### Fixed
 
@@ -105,6 +118,19 @@
 
 ### Changed
 
+- **Contract 1.1.119: node loops in the template
+  ([task 643](docs/spec/tasks/643-contract-1-1-119-node-loops.md)).**
+  The preset key `for_each` is replaced by `for_each_node` (one body per node,
+  nodes picked by a `#filter` condition) and `for_each_node_do` (collect
+  values from the nodes with `#do`/`#append` and `#final`, one body after the
+  walk); variable declarations get `unique` and `wizard_ui: "internal"`.
+  The Tailscale preset moves to `for_each_node` and builds the same config as
+  before.
+  (RU: Ключ пресета `for_each` заменён на `for_each_node` (тело на каждый
+  узел, отбор условием `#filter`) и `for_each_node_do` (сбор значений с узлов
+  через `#do`/`#append` и `#final`, одно тело после обхода); у объявления
+  переменной появились `unique` и `wizard_ui: "internal"`. Пресет Tailscale
+  переведён на `for_each_node`, конфиг собирается прежний.)
 - **MASQUE recommended SNI is `www.cloudflare.com`
   ([task 638](docs/spec/tasks/638-audit-591-four-defects.md)).**
   `consumer-masque.cloudflareclient.com` does not bring h3 up on Russian

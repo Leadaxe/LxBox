@@ -438,7 +438,7 @@ final class UserServer extends ServerList {
   final List<StoredWarning> warnings;
 
   /// §578 — поле записи `skip_presets`: узел не обслуживается пресетами с
-  /// `for_each`, чей `filter` читает поле. Хранится только `true`.
+  /// `for_each_node*`, чей `#filter` читает поле. Хранится только `true`.
   final bool skipPresets;
 
   UserServer({

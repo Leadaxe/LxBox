@@ -5646,6 +5646,12 @@
   "Answer from cache at once and refresh in the background.": {
     "value": "立即用缓存应答，并在后台刷新。"
   },
+  "Never serve stale answers for node hostnames": {
+    "value": "节点主机名不返回过期应答"
+  },
+  "Node hostnames are resolved again once the cached answer expires. App DNS queries are not affected.": {
+    "value": "节点主机名在缓存应答过期后重新解析。不影响应用的 DNS 查询。"
+  },
   "Keep DNS cache after restart": {
     "value": "重启后保留 DNS 缓存"
   },

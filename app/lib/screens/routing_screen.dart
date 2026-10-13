@@ -145,7 +145,7 @@ class _RoutingScreenState extends State<RoutingScreen>
   void initState() {
     super.initState();
     // §578 — правка узла при открытом Routing (редактор узла, Debug API,
-    // toggle источника) меняет подпись пресета с `for_each`.
+    // toggle источника) меняет подпись пресета с `for_each_node`.
     widget.subController.addListener(_onSubControllerChanged);
     // §601 — файл набора скачало автообновление при открытом экране: строка
     // «ждёт скачивания» становится рабочей без переоткрытия.
@@ -169,18 +169,20 @@ class _RoutingScreenState extends State<RoutingScreen>
 
   void _onSubControllerChanged() {
     if (!mounted || _loading) return;
-    // §578 — строка пресета с `for_each` показывает обслуживаемые узлы:
-    // правка источника (включение, `skip_presets`) её меняет.
-    if (forEachNodeTypes(_template?.selectableRules ?? const []).isNotEmpty) {
+    // §578/§643 — строка пресета с `for_each_node` показывает обслуживаемые
+    // узлы: правка источника (включение, `skip_presets`) её меняет.
+    final types = presetLoopNodeTypes(_template?.selectableRules ?? const []);
+    if (types == null || types.isNotEmpty) {
       setState(() {});
     }
   }
 
-  /// §578 — узлы источников для пресетов с `for_each` (строка пресета и
-  /// превью редактора), см. [presetNodesForView].
+  /// §578/§643 — узлы источников для пресетов с обходом узлов (строка
+  /// пресета и превью редактора), см. [presetNodesForView].
   List<PresetNode> _presetViewNodes() => presetNodesForView(
         [for (final e in widget.subController.entries) e.list],
-        nodeTypes: forEachNodeTypes(_template?.selectableRules ?? const []),
+        nodeTypes:
+            presetLoopNodeTypes(_template?.selectableRules ?? const []),
         lastEmittedTagMap: widget.subController.lastEmittedTagMap,
       );
 
@@ -970,7 +972,7 @@ class _RoutingScreenState extends State<RoutingScreen>
     final preset = rule.kind == CustomRuleKind.preset
         ? _presetFor(rule.presetId)
         : null;
-    // §578 — у пресета с `for_each` подпись — обслуживаемые узлы.
+    // §578 — у пресета с `for_each_node` подпись — обслуживаемые узлы.
     final servedTags = rule is CustomRulePreset && preset != null
         ? presetServedTags(rule, preset, _presetViewNodes())
         : null;
@@ -1216,7 +1218,7 @@ class _RoutingScreenState extends State<RoutingScreen>
       preset: current.kind == CustomRuleKind.preset
           ? _presetFor(current.presetId)
           : null,
-      // §578 — превью пресета с `for_each` раскрывается по узлам.
+      // §578/§643 — превью пресета с обходом раскрывается по узлам.
       presetNodes: current.kind == CustomRuleKind.preset
           ? _presetViewNodes()
           : const [],

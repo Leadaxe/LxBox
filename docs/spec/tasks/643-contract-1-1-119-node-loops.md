@@ -3,7 +3,7 @@
 | Поле | Значение |
 |------|----------|
 | Тип | Синк контракта + движок шаблона + UI + бэкап |
-| Статус | В работе (ветка `task-643`) |
+| Статус | Реализовано, ждёт CI (ветка исполнителя от `ccde370d`) |
 | Дата | 2026-10-13 |
 | Связанные | контракт 1.1.119 (лаунчер `baf7e9a2`, TASKS_LXBOX §116, SPEC 166, решения D-130 / D-131 / D-132, разрыв N16), §578 (прежний `for_each`, заменяется), §580 (кэш DNS, соседний переключатель), §83 (мягкий снос пресета — отменяется), §441 (`backup_var_skipped`) |
 
@@ -224,4 +224,61 @@
 
 ## Отклонения при реализации
 
-_(заполняет исполнитель)_
+- **Где живёт разбор.** Модель — отдельный файл `lib/models/preset_node_loop.dart`
+  (`PresetNodeLoop`, `PresetLoopFinal`, `PresetNodeLoopKind`; реэкспорт из
+  `parser_config.dart`), поле `SelectableRule.nodeLoop`. Структурный разбор по
+  закрытым спискам §6.5/§6.7 — `PresetNodeLoop.parse` (бросает
+  `FormatException`), его зовёт `SelectableRule.fromJson`. «Одна функция»
+  для загрузчика и корпуса — `parsePresetNodeLoop` в
+  `lib/services/builder/preset_node_loop.dart`: объявления переменных
+  пресета (`validateVarDeclaration`), тот же `PresetNodeLoop.parse`
+  (ошибка → `TemplateIfError`) и `#filter` через `validateCondNode` в scope
+  `PresetNodeScope` (бывший `_ForEachScope`, имя `node` фиксировано).
+  Следствие: в `TemplateLoader` структурная ошибка обхода всплывает
+  `FormatException` из `WizardTemplate.fromJson` раньше
+  `validateTemplateConstructs` — load всё равно падает целиком.
+  `validateTemplateConstructs` больше ничего не снимает и возвращает `void`.
+- **`#do`, правая часть.** Принимается строка (с `@` — ссылка, без `@` —
+  литерал) или ровно `{"#tpl": "<строка>"}`; число, bool, null, иной объект,
+  массив — отказ (норма называет только две формы). Строка `"@x"`
+  вычисляется как вставка `@{x}` через `evalTpl`.
+- **`unique` у объявления.** Отказ при наличии ключа у не-`text_list`
+  (любое значение) и при не-bool значении.
+- **Переменные `#do` и required.** `presetVarsMap(collected: …)`: у имён из
+  `#do` пустая база ошибкой required не считается (значение даёт сбор).
+- **Экраны.** `forEachNodeTypes` → `presetLoopNodeTypes`: типы узлов, которые
+  пропускает `#filter` (`nodeLoopTypeHint`: равенство или `#in` на
+  `@node.body.type`, сам предикат или член верхнего `#and`); null — фильтр
+  тип не сужает, тогда `presetNodesForView` эмитит узлы любого типа.
+  У `tailscale` сужение `{tailscale}` — эмиссия на экранах прежняя.
+  `skipPresetsToggleVisible` принимает тег и тело узла вместо типа и
+  вычисляет `#filter` (`presetLoopAcceptsNode`) при значениях переменных
+  пресета по умолчанию. `presetForEachNodes` сохранил имя, для
+  `for_each_node_do` возвращает пусто.
+- **`internal` глобальных переменных.** Писатель `_setVar` берёт объявление
+  из `TemplateLoader.cachedOrNull()`; шаблон не в кэше — значение пишется как
+  есть (сборка `internal` всё равно не читает, `build_config.dart` берёт
+  `default_value`). Импорт корневой переменной `internal` —
+  `backup_var_skipped {reason: internal}` с detail = имя (через
+  `RecordVarDecls.internalGlobals`), проверка раньше `not_portable`.
+- **`internal` у шаблонных DNS-серверов.** Сверх ТЗ, по §6.4 Н2 (оба
+  носителя): `normalizeDnsServerVars` снимает такие имена молча,
+  импорт секции `dns` (`dns_backup.dart`) называет их `reason: internal`.
+- **Читатели резолвера.** Общие помощники `domain_resolver_ref.dart`
+  (`domainResolverServer`, `withDomainResolverServer`): `validator.dart`,
+  `heal_dangling_dns_resolvers.dart`, `heal_detour_dropped_dns.dart`
+  (последний уже понимал объект — переведён на помощник). Running config /
+  Debug API ключ не разбирают.
+- **Проба.** `probe/probe_config.dart` пресеты не раскрывает вовсе —
+  исключать нечего.
+- **Эталоны.** `test/fixtures/storage/golden/{avd_v0,rich_v0}.config.json`
+  перегенерированы (`UPDATE_GOLDEN=1`): изменился только
+  `route.default_domain_resolver` (строка → объект с
+  `disable_optimistic_cache: true`); фрагменты `tailscale` в `rich_v0` байт в
+  байт прежние.
+- **Строки UI.** Подзаголовок переключателя на экране DNS короче подсказки
+  переменной в шаблоне; ru и zh добавлены в `ui.json`.
+- **Не обновлено:** документы фичи `docs/spec/features/024-TEMPLATE/`
+  (EN/RU: `FEATURE`, `template-language`, `preset-bundles`,
+  `config-template`, `extending-the-client`) всё ещё описывают `for_each` и
+  мягкий снос §83 — вне списка раздела 7.

@@ -111,8 +111,9 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
   /// Notifications во вкладке Diagnostics.
   List<NodeWarning> _notifications = const [];
 
-  /// §578 — переключатель `Skip presets` виден: в шаблоне есть пресет с
-  /// `for_each` под тип этого узла (см. [skipPresetsToggleVisible]).
+  /// §578/§643 — переключатель `Skip presets` виден: в шаблоне есть пресет с
+  /// обходом узлов, чей `#filter` принимает этот узел (см.
+  /// [skipPresetsToggleVisible]).
   bool _skipPresetsVisible = false;
 
   /// §581 — узел Tailscale: есть вкладка Network.
@@ -233,13 +234,15 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     // (_pickDetour перечитывает свежий список перед показом пикера).
     _directions = await SettingsStorage.getDirections();
 
-    // §578 — видимость `Skip presets`: пресеты с `for_each` из шаблона.
+    // §578/§643 — видимость `Skip presets`: пресеты с обходом узлов из
+    // шаблона, чей `#filter` принимает этот узел.
     try {
       final template = await TemplateLoader.load();
       _skipPresetsVisible = skipPresetsToggleVisible(
         list: widget.entry.list,
         isMember: member != null,
-        nodeType: node.protocol,
+        nodeTag: node.tag,
+        nodeBody: node.emit(TemplateVars.empty).map,
         presets: template.selectableRules,
       );
     } catch (_) {
@@ -815,7 +818,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
   }
 
   /// §578 — переключатель `Skip presets`: узел не обслуживается пресетами с
-  /// `for_each`.
+  /// обходом узлов (`#not @node.skip_presets` в `#filter`).
   List<Widget> _buildSkipPresetsBlock(ThemeData theme) {
     if (!_skipPresetsVisible) return const [];
     return [

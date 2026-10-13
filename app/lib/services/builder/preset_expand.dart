@@ -273,12 +273,17 @@ class BundleMerge {
 /// warning: правило не активно до первого download'а через UI (spec §033,
 /// task 011).
 ///
-/// §578 — пресет с `for_each`: тело повторяется для каждого узла из [nodes]
-/// (порядок конфига), у которого `type` тела равен `node_type` и `filter`
-/// истинен; узел виден телу под именем `as` ([presetNodeResolver]). Фрагменты
-/// повторов склеиваются подряд. Нет подходящих узлов — пресет пуст. Теги
-/// такого пресета не неймспейсятся: их уникальность даёт тег узла (`@{node}-dns`),
-/// а ссылки пользователя на `<тег>-dns` остаются рабочими.
+/// §643 (контракт 1.1.119, TEMPLATE_LANG §6.5–§6.7) — пресет с обходом узлов:
+///
+/// - `for_each_node` — тело повторяется для каждого узла из [nodes] (порядок
+///   конфига), у которого `#filter` истинен; узел виден телу как `@node`
+///   ([presetNodeResolver]). Фрагменты повторов склеиваются подряд. Нет
+///   подходящих узлов — пресет пуст. Теги такого пресета не неймспейсятся:
+///   их уникальность даёт тег узла (`@{node}-dns`), а ссылки пользователя на
+///   `<тег>-dns` остаются рабочими.
+/// - `for_each_node_do` — обход ради сбора значений в переменные пресета
+///   ([collectNodeLoopValues]); тело раскрывается один раз с итоговыми
+///   значениями, без `@node`, теги в неймспейсе пресета, как у обычного.
 PresetFragments expandPreset(
   CustomRulePreset rule,
   SelectableRule preset, {
@@ -286,21 +291,32 @@ PresetFragments expandPreset(
   Map<String, String> globalVars = const {},
   List<PresetNode> nodes = const [],
 }) {
-  final forEach = preset.forEach;
-  if (forEach == null) {
+  final loop = preset.nodeLoop;
+  if (loop == null) {
     return _expandPresetBody(rule, preset,
         srsPaths: srsPaths, globalVars: globalVars);
+  }
+  if (loop.isNodeDo) {
+    final collected =
+        collectNodeLoopValues(rule, preset, nodes, globalVars: globalVars);
+    if (collected.error != null) {
+      return PresetFragments(warnings: [collected.error!]);
+    }
+    return _expandPresetBody(rule, preset,
+        srsPaths: srsPaths,
+        globalVars: globalVars,
+        varsOverride: collected.values);
   }
   final resolvedVars = presetVarsMap(rule, preset, globalVars: globalVars);
   if (resolvedVars.error != null) {
     return PresetFragments(warnings: [resolvedVars.error!]);
   }
   final parts = <PresetFragments>[
-    for (final node in _forEachMatches(forEach, nodes, resolvedVars.vars))
+    for (final node in _loopMatches(loop, nodes, resolvedVars.vars))
       _expandPresetBody(rule, preset,
           srsPaths: srsPaths,
           globalVars: globalVars,
-          nodeVars: presetNodeResolver(forEach.as, node),
+          nodeVars: presetNodeResolver(node),
           namespace: false),
   ];
   return PresetFragments(
@@ -313,47 +329,155 @@ PresetFragments expandPreset(
   );
 }
 
-/// §578 — узлы, которые обслуживает пресет с `for_each`: `type` тела равен
-/// `node_type`, `filter` истинен. Порядок — порядок [nodes]. Пресет без
-/// `for_each` или с ошибкой переменных — пусто. Та же выборка, что у
-/// [expandPreset]: экраны маршрутов и DNS показывают по ней, какие узлы
-/// обслуживает пресет.
+/// §643 — узлы, которые обслуживает пресет с `for_each_node`: `#filter`
+/// истинен. Порядок — порядок [nodes]. Пресет без обхода, с
+/// `for_each_node_do` (тело одно, узлам не принадлежит) или с ошибкой
+/// переменных — пусто. Та же выборка, что у [expandPreset]: экраны маршрутов
+/// и DNS показывают по ней, какие узлы обслуживает пресет.
 List<PresetNode> presetForEachNodes(
   CustomRulePreset rule,
   SelectableRule preset,
   List<PresetNode> nodes, {
   Map<String, String> globalVars = const {},
 }) {
-  final forEach = preset.forEach;
-  if (forEach == null) return const [];
+  final loop = preset.nodeLoop;
+  if (loop == null || !loop.isNode) return const [];
   final resolvedVars = presetVarsMap(rule, preset, globalVars: globalVars);
   if (resolvedVars.error != null) return const [];
-  return _forEachMatches(forEach, nodes, resolvedVars.vars).toList();
+  return _loopMatches(loop, nodes, resolvedVars.vars).toList();
 }
 
-Iterable<PresetNode> _forEachMatches(
-  PresetForEach forEach,
+/// §643 — обход пресета (любого вида) принимает узел [node]: `#filter`
+/// истинен при значениях переменных пресета по умолчанию. Пресет без обхода
+/// — false. Экран узла решает по этому видимость `Skip presets`.
+bool presetLoopAcceptsNode(
+  SelectableRule preset,
+  PresetNode node, {
+  Map<String, String> globalVars = const {},
+}) {
+  final loop = preset.nodeLoop;
+  if (loop == null) return false;
+  final vars = presetVarsMap(
+    CustomRulePreset(name: preset.label, presetId: preset.presetId),
+    preset,
+    globalVars: globalVars,
+  ).vars;
+  return _loopMatches(loop, [node], vars).isNotEmpty;
+}
+
+/// Резолвер имён обхода на узле [node]: имена узла (§6.6), затем словарь
+/// переменных пресета [varsMap] (значение null — объявлена без значения).
+VarResolver _loopResolver(PresetNode node, Map<String, dynamic> varsMap) {
+  final nodeVars = presetNodeResolver(node);
+  return (name) {
+    final v = nodeVars(name);
+    if (v != null) return v;
+    if (!varsMap.containsKey(name)) return null;
+    return varsMap[name] ?? Dropped.instance;
+  };
+}
+
+Iterable<PresetNode> _loopMatches(
+  PresetNodeLoop loop,
   List<PresetNode> nodes,
   Map<String, dynamic> varsMap,
 ) sync* {
+  final filter = loop.filter;
   for (final node in nodes) {
-    if (node.body['type'] != forEach.nodeType) continue;
-    final filter = forEach.filter;
-    if (filter != null) {
-      final nodeVars = presetNodeResolver(forEach.as, node);
-      final ok = evalCond(deepCloneJson(filter), (name) {
-        final v = nodeVars(name);
-        if (v != null) return v;
-        if (!varsMap.containsKey(name)) return null;
-        return varsMap[name] ?? Dropped.instance;
-      });
-      if (!ok) continue;
+    if (filter != null &&
+        !evalCond(deepCloneJson(filter), _loopResolver(node, varsMap))) {
+      continue;
     }
     yield node;
   }
 }
 
-/// §578 — узел конфига для `for_each`: финальный тег, тело записи в конфиге
+/// §643 (§6.7.3) — сбор `for_each_node_do`: значения переменных из `#do`
+/// пресета [preset] на время сборки, по шагам нормы:
+///
+/// 1. база — значение записи ([CustomRulePreset.varsValues]), при его
+///    отсутствии `default_value`; у `wizard_ui: internal` — только
+///    `default_value`; при `unique` база без дублей ([presetVarsMap]);
+/// 2. обход узлов с `#filter`;
+/// 3. `#append` на каждом прошедшем узле: правая часть вычисляется как
+///    вставка `#tpl` (имена узла, затем переменные пресета); пустое значение
+///    — узел пропускается молча, дедупа нет;
+/// 4. `#final`: `#unique` → `#sort` (байтовый, по возрастанию) → `#limit`;
+/// 5. `unique` объявления.
+///
+/// [values] — имя → итоговый список (`text_list` в форме JSON-массива); в
+/// запись ничего не пишется. [error] — ошибка переменных пресета (как у
+/// [presetVarsMap]).
+({Map<String, dynamic> values, String? error}) collectNodeLoopValues(
+  CustomRulePreset rule,
+  SelectableRule preset,
+  List<PresetNode> nodes, {
+  Map<String, String> globalVars = const {},
+}) {
+  final loop = preset.nodeLoop;
+  if (loop == null || !loop.isNodeDo) return (values: const {}, error: null);
+  final resolved = presetVarsMap(rule, preset,
+      globalVars: globalVars, collected: loop.collect.keys.toSet());
+  if (resolved.error != null) {
+    return (values: const {}, error: resolved.error);
+  }
+  final varsMap = resolved.vars;
+  final lists = <String, List<String>>{
+    for (final name in loop.collect.keys)
+      name: switch (varsMap[name]) {
+        final String s => splitTextList(s),
+        final List<dynamic> l => [for (final e in l) '$e'],
+        _ => <String>[],
+      },
+  };
+  for (final node in _loopMatches(loop, nodes, varsMap)) {
+    final resolve = _loopResolver(node, varsMap);
+    for (final e in loop.collect.entries) {
+      final v = _appendValue(e.value, resolve);
+      if (v != null) lists[e.key]!.add(v);
+    }
+  }
+  final declByName = {for (final v in preset.vars) v.name: v};
+  for (final e in lists.entries) {
+    var list = e.value;
+    final fin = loop.finals[e.key];
+    if (fin != null) {
+      if (fin.unique) list = _uniqueOrdered(list);
+      if (fin.sort) list.sort(); // compareTo — по code units, байтовый
+      final limit = fin.limit;
+      if (limit != null && list.length > limit) list = list.sublist(0, limit);
+    }
+    if (declByName[e.key]?.unique ?? false) list = _uniqueOrdered(list);
+    lists[e.key] = list;
+  }
+  return (values: lists, error: null);
+}
+
+/// Правая часть `#append` на узле: строка `"@имя"` ≡ вставка `@{имя}`,
+/// `{"#tpl": …}` — как есть (§4.8). Пустое значение (нет пути, null, `""`,
+/// объект, список) — null: узел пропускается.
+String? _appendValue(Object rhs, VarResolver resolve) {
+  final Map<String, dynamic> tpl;
+  if (rhs is String) {
+    tpl = {tplKey: rhs.startsWith('@') ? '@{${rhs.substring(1)}}' : rhs};
+  } else if (rhs is Map) {
+    tpl = Map<String, dynamic>.from(rhs);
+  } else {
+    return null;
+  }
+  final v = evalTpl(tpl, resolve);
+  return (v is String && v.isNotEmpty) ? v : null;
+}
+
+List<String> _uniqueOrdered(List<String> list) {
+  final seen = <String>{};
+  return [
+    for (final s in list)
+      if (seen.add(s)) s,
+  ];
+}
+
+/// §578 — узел конфига для обхода: финальный тег, тело записи в конфиге
 /// и поле записи `skip_presets` (у узла подписки записи нет — `false`).
 class PresetNode {
   const PresetNode({
@@ -371,16 +495,17 @@ class PresetNode {
 /// контрактом.
 const Set<String> kPresetNodeRecordFields = {'skip_presets'};
 
-/// §578 — резолвер имён узла под именем [as]:
-/// - `@<as>` — финальный тег;
-/// - `@<as>.<поле записи>` — поле из [kPresetNodeRecordFields];
-/// - `@<as>.body.<путь>` — поле тела, путь через точку.
+/// §578/§643 — резолвер имён узла (имя фиксировано, §6.6):
+/// - `@node` — финальный тег;
+/// - `@node.<поле записи>` — поле из [kPresetNodeRecordFields];
+/// - `@node.body.<путь>` — поле тела, путь через точку.
 ///
 /// Отсутствующее или пустое поле — [Dropped] (в условии ложь, в теле ключ
 /// или элемент снимается). Имя вне неймспейса узла — null (решает словарь
 /// переменных пресета).
-VarResolver presetNodeResolver(String as, PresetNode node) {
-  final prefix = '$as.';
+VarResolver presetNodeResolver(PresetNode node) {
+  const as = PresetNodeLoop.nodeName;
+  const prefix = '$as.';
   return (String name) {
     if (name == as) return node.tag;
     if (!name.startsWith(prefix)) return null;
@@ -398,6 +523,8 @@ VarResolver presetNodeResolver(String as, PresetNode node) {
   };
 }
 
+/// [varsOverride] (§643) — значения, собранные `for_each_node_do`: поверх
+/// словаря переменных пресета, только на время этой сборки.
 PresetFragments _expandPresetBody(
   CustomRulePreset rule,
   SelectableRule preset, {
@@ -405,18 +532,22 @@ PresetFragments _expandPresetBody(
   Map<String, String> globalVars = const {},
   VarResolver? nodeVars,
   bool namespace = true,
+  Map<String, dynamic> varsOverride = const {},
 }) {
   final warnings = <String>[];
 
   // §534 — словарь переменных собирает [presetVarsMap]: тот же, по которому
   // путь скачивания/UI (`isRuleSetEnabledFor`) решает гейт наборов.
-  final resolvedVars = presetVarsMap(rule, preset, globalVars: globalVars);
+  final resolvedVars = presetVarsMap(rule, preset,
+      globalVars: globalVars, collected: varsOverride.keys.toSet());
   final varsError = resolvedVars.error;
   if (varsError != null) {
     warnings.add(varsError);
     return PresetFragments(warnings: warnings);
   }
-  final varsMap = resolvedVars.vars;
+  final varsMap = varsOverride.isEmpty
+      ? resolvedVars.vars
+      : {...resolvedVars.vars, ...varsOverride};
 
   final expandedRuleSets = <Map<String, dynamic>>[];
   for (final rs in preset.ruleSets) {
@@ -991,7 +1122,7 @@ String? normalizeDnsDetour(
 /// - `@name`, имени нет в `vars` → оставить плейсхолдер (legacy/section-var);
 /// - не-`@` строка → как есть.
 ///
-/// §578 — [extra] (имена узла `for_each`) спрашивается первым; null от него —
+/// §578 — [extra] (имена узла `for_each_node`) спрашивается первым; null от него —
 /// имя не его, решает [vars].
 dynamic substituteVars(
   dynamic obj,
@@ -1032,10 +1163,16 @@ dynamic substituteVars(
 /// (у сломанной переменной — `null`): [expandPreset] на ошибке ничего не
 /// выпускает и словарём не пользуется, а гейт пути скачивания вычисляется на
 /// частичном словаре.
+///
+/// §643 (D-132): у `wizard_ui: internal` значение записи игнорируется —
+/// база только `default_value`; у `text_list` с `unique` значение без
+/// дублей. [collected] — имена, которые пишет `#do` обхода: пустая база у
+/// них ошибкой required не считается (значение даст сбор).
 ({Map<String, dynamic> vars, String? error}) presetVarsMap(
   CustomRulePreset rule,
   SelectableRule preset, {
   Map<String, String> globalVars = const {},
+  Set<String> collected = const {},
 }) {
   final varsMap = <String, dynamic>{};
   String? error;
@@ -1043,6 +1180,12 @@ dynamic substituteVars(
     // §265 — ref-var: значение НЕ в rule.varsValues (оно в глобальном
     // userVars) — подмешивается вторым проходом ниже из globalVars.
     if (v.isRef) continue;
+    // §643 — переменная только для сборки: запись не читается.
+    if (v.isInternal || collected.contains(v.name)) {
+      final base = v.isInternal ? v.defaultValue : _presetVarBase(rule, v);
+      varsMap[v.name] = base.isEmpty ? null : applyVarUnique(v, base);
+      continue;
+    }
     // Семантика (spec §033):
     // - varsValues содержит ключ → юзер явно выбрал значение (включая "")
     //     - непустое → используется
@@ -1061,10 +1204,10 @@ dynamic substituteVars(
         }
         varsMap[v.name] = null;
       } else {
-        varsMap[v.name] = explicit;
+        varsMap[v.name] = applyVarUnique(v, explicit);
       }
     } else if (v.defaultValue.isNotEmpty) {
-      varsMap[v.name] = v.defaultValue;
+      varsMap[v.name] = applyVarUnique(v, v.defaultValue);
     } else {
       if (v.required) {
         error ??= 'preset "${preset.presetId}": required var "${v.name}" unset';
@@ -1096,6 +1239,13 @@ dynamic substituteVars(
   }
   return (vars: varsMap, error: error);
 }
+
+/// §643 — база пользовательской переменной сбора: значение записи (в т.ч.
+/// явное пустое), при его отсутствии `default_value`.
+String _presetVarBase(CustomRulePreset rule, WizardVar v) =>
+    rule.varsValues.containsKey(v.name)
+        ? (rule.varsValues[v.name] ?? '')
+        : v.defaultValue;
 
 /// SPEC 107 — гейт фрагмента пресета: `#enable` (канон) плюс легаси
 /// `enabled: "@var"` (§045). Оба присутствуют → and.

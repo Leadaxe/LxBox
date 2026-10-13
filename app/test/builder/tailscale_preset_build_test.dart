@@ -14,7 +14,7 @@ import 'package:lxbox/services/settings_storage.dart';
 
 import '../parser/engine_test_setup.dart';
 
-/// §578 — пресет `tailscale` с `for_each` при сборке: записи на каждый узел
+/// §578 — пресет `tailscale` с `for_each_node` (контракт 1.1.119, §643) при сборке: записи на каждый узел
 /// Tailscale, попавший в конфиг, в порядке конфига.
 void main() {
   setUpAll(loadEngineSections);

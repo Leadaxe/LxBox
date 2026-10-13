@@ -9,7 +9,7 @@ import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/node_hash.dart';
 import 'package:lxbox/services/preset_nodes_view.dart';
 
-/// §578 — узлы для пресетов с `for_each` на экранах, обслуживаемые узлы
+/// §578/§643 — узлы для пресетов с обходом узлов на экранах, обслуживаемые узлы
 /// строки пресета и видимость переключателя `Skip presets`.
 void main() {
   final shipped = jsonDecode(
@@ -109,8 +109,20 @@ void main() {
       expect(nodes.single.tag, 'home-ts-1');
     });
 
-    test('нет типов for_each — пусто', () {
+    test('нет пресетов с обходом — пусто; null — узлы любого типа', () {
       expect(presetNodesForView([user(ts('a'))], nodeTypes: const {}),
+          isEmpty);
+      expect(presetNodesForView([user(ts('a'))], nodeTypes: null)
+          .map((n) => n.tag), ['a']);
+    });
+
+    test('типы шаблона — сужение #filter пресета tailscale', () {
+      expect(presetLoopNodeTypes(presets), types);
+      expect(
+          presetLoopNodeTypes([
+            for (final p in presets)
+              if (p.nodeLoop == null) p
+          ]),
           isEmpty);
     });
   });
@@ -125,56 +137,66 @@ void main() {
       expect(presetServedTags(rule, tsPreset, nodes), ['home-ts', 'work-ts']);
     });
 
-    test('узлов нет — пустой список; пресет без for_each — null', () {
+    test('узлов нет — пустой список; пресет без обхода — null', () {
       expect(presetServedTags(rule, tsPreset, const []), isEmpty);
-      final plain = presets.firstWhere((p) => p.forEach == null);
+      final plain = presets.firstWhere((p) => p.nodeLoop == null);
       final plainRule = CustomRulePreset(
           name: plain.label, presetId: plain.presetId, orderNum: 1);
       expect(presetServedTags(plainRule, plain, const []), isNull);
     });
   });
 
+  // §643 — видимость: есть пресет с обходом, чей `#filter` истинен для узла
+  // при `skip_presets = false`.
+  const tsBody = {'type': 'tailscale', 'tag': 'a'};
+  const vlessBody = {'type': 'vless', 'tag': 'v', 'server': 'v.example'};
+
   group('skipPresetsToggleVisible', () {
-    test('свой сервер и член папки с типом пресета — виден', () {
+    test('свой сервер и член папки, #filter принимает узел — виден', () {
       expect(
           skipPresetsToggleVisible(
               list: user(ts('a')),
               isMember: false,
-              nodeType: 'tailscale',
+              nodeTag: 'a',
+              nodeBody: tsBody,
               presets: presets),
           isTrue);
       expect(
           skipPresetsToggleVisible(
               list: folder([FolderMember(raw: ts('a').toUri())]),
               isMember: true,
-              nodeType: 'tailscale',
+              nodeTag: 'a',
+              nodeBody: tsBody,
               presets: presets),
           isTrue);
     });
 
-    test('подписка, другой тип, шаблон без for_each — не виден', () {
+    test('подписка, узел вне #filter, шаблон без обхода — не виден', () {
       expect(
           skipPresetsToggleVisible(
               list: sub([ts('a')]),
               isMember: false,
-              nodeType: 'tailscale',
+              nodeTag: 'a',
+              nodeBody: tsBody,
               presets: presets),
           isFalse);
       expect(
           skipPresetsToggleVisible(
               list: user(ts('a')),
               isMember: false,
-              nodeType: 'vless',
+              nodeTag: 'v',
+              nodeBody: vlessBody,
               presets: presets),
           isFalse);
       expect(
           skipPresetsToggleVisible(
               list: user(ts('a')),
               isMember: false,
-              nodeType: 'tailscale',
+              nodeTag: 'a',
+              nodeBody: tsBody,
               presets: [
                 for (final p in presets)
-                  if (p.forEach == null) p
+                  if (p.nodeLoop == null) p
               ]),
           isFalse);
     });

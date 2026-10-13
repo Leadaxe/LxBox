@@ -516,7 +516,10 @@
   ],
   "route": {
     "find_process": true,
-    "default_domain_resolver": "dns_shield",
+    "default_domain_resolver": {
+      "server": "dns_shield",
+      "disable_optimistic_cache": true
+    },
     "rules": [
       {
         "action": "sniff",

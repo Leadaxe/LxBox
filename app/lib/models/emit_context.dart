@@ -42,7 +42,7 @@ abstract class EmitContext {
   RuleSetRegistry get ruleSets;
 
   /// §435 — финальный тег эмитированного узла (после префикса контейнера и
-  /// `allocateTag`). По нему `buildConfig` собирает узлы для `for_each`
+  /// `allocateTag`). По нему `buildConfig` собирает узлы для обхода узлов
   /// пресетов (§578) и адресный индекс; узла, которого здесь нет, в конфиге
   /// нет.
   void noteEmitted(NodeSpec node, String finalTag) {}

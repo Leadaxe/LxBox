@@ -668,6 +668,12 @@
  "Answer from cache at once and refresh in the background.": {
   "value": "立即用缓存应答，并在后台刷新。"
  },
+ "Never serve stale answers for node hostnames": {
+  "value": "节点主机名不返回过期应答"
+ },
+ "Hostnames the core resolves itself (node servers) are looked up again once the cached answer expires, so a node whose address changed does not stay on the old one. App DNS queries are not affected.": {
+  "value": "内核自行解析的主机名（节点服务器）在缓存应答过期后重新查询，地址变更的节点不会停留在旧地址上。不影响应用的 DNS 查询。"
+ },
  "Keep DNS cache after restart": {
   "value": "重启后保留 DNS 缓存"
  },

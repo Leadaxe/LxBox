@@ -668,7 +668,10 @@
   ],
   "route": {
     "find_process": true,
-    "default_domain_resolver": "google_udp",
+    "default_domain_resolver": {
+      "server": "google_udp",
+      "disable_optimistic_cache": true
+    },
     "rules": [
       {
         "action": "sniff",
