@@ -412,6 +412,16 @@
         "id": "yandex",
         "name": "Yandex",
         "url": "https://ya.ru/"
+      },
+      {
+        "id": "youtube",
+        "name": "YouTube",
+        "url": "https://www.youtube.com/generate_204"
+      },
+      {
+        "id": "youtube-ytimg",
+        "name": "YouTube (ytimg)",
+        "url": "https://i.ytimg.com/generate_204"
       }
     ]
   },
@@ -678,7 +688,9 @@
           "options": [
             "https://cp.cloudflare.com/generate_204",
             "https://www.gstatic.com/generate_204",
-            "https://captive.apple.com/hotspot-detect.html"
+            "https://captive.apple.com/hotspot-detect.html",
+            "https://www.youtube.com/generate_204",
+            "https://i.ytimg.com/generate_204"
           ]
         },
         {
