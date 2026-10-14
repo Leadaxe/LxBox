@@ -6,6 +6,19 @@
 
 ---
 
+## [Unreleased]
+
+### Removed
+
+- **Переключатель «Allow LAN access while using exit node» на вкладке Network
+  узла Tailscale убран
+  ([§646](docs/spec/tasks/646-tailscale-remove-lan-access-switch.md)).** Ядро на
+  Android поле `exit_node_allow_lan_access` не применяет; локальную сеть при
+  выходном узле ведёт direct пресет «Private IPs». Поле по-прежнему
+  принимается из JSON.
+
+---
+
 ## [2.25.15] — 2026-10-14
 
 ### Changed

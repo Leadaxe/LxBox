@@ -6036,14 +6036,8 @@
   "Advertise this device as exit node": {
     "value": "Предлагать это устройство как выходной узел"
   },
-  "Allow LAN access while using exit node": {
-    "value": "Доступ в локальную сеть при выходном узле"
-  },
   "Not available while an exit node is used.": {
     "value": "Недоступно, пока используется выходной узел."
-  },
-  "Needs a saved exit node.": {
-    "value": "Нужен сохранённый выходной узел."
   },
   "Route depends on your rules, shown after the test": {
     "value": "Маршрут задают ваши правила, он появится после теста"

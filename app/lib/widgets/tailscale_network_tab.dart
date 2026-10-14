@@ -626,15 +626,14 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
 
   // ── Settings ──
 
-  /// §613 — `advertise_exit_node` и `exit_node_allow_lan_access` тела узла.
-  /// Первый ядро не совмещает с `exit_node` (реестр: `field_conflict`) — при
-  /// записанном выходе его можно только снять; второй без записанного
-  /// `exit_node` реестр снимает (`field_requires`) — переключатель неактивен.
+  /// §613 — `advertise_exit_node` тела узла. Ядро не совмещает его с
+  /// `exit_node` (реестр: `field_conflict`) — при записанном выходе его можно
+  /// только снять. `exit_node_allow_lan_access` в UI нет (§646): ядро на
+  /// Android его не применяет, локальную сеть ведёт пресет «Private IPs».
   Widget _settingsBlock(BuildContext context) {
     final body = widget.body;
     final hasExit = recordedExitNode(body) != null;
     final advertise = body['advertise_exit_node'] == true;
-    final lan = body['exit_node_allow_lan_access'] == true;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -652,18 +651,6 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
           onChanged: _busy || (hasExit && !advertise)
               ? null
               : (v) => unawaited(_saveField('advertise_exit_node', v)),
-        ),
-        SwitchListTile(
-          key: const ValueKey('tailscale-exit-lan'),
-          dense: true,
-          title: Text(getLocalText.s("Allow LAN access while using exit node")),
-          subtitle: hasExit
-              ? null
-              : Text(getLocalText.s("Needs a saved exit node.")),
-          value: lan,
-          onChanged: _busy || !hasExit
-              ? null
-              : (v) => unawaited(_saveField('exit_node_allow_lan_access', v)),
         ),
       ],
     );

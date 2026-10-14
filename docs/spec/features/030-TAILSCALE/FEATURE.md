@@ -203,7 +203,7 @@ lives in the core until "Save choice" writes it into the node.
 | Preset "Tailscale networks" (`tailscale`) | on/off, sortable, `num` 945; variable "DNS" (`dns_enable`) | on · DNS on |
 | DNS server of type `tailscale` | `endpoint` (a Tailscale node, required), `accept_default_resolvers` | — |
 | Network tab → Exit node | a peer with `ExitNodeOption` or None; "Save choice" | from the body |
-| Network tab → Settings: Advertise this device as exit node, Allow LAN access while using exit node | two switches; the first is locked while an `exit_node` is saved, the second needs one | from the body (off) |
+| Network tab → Settings: Advertise this device as exit node | switch; locked while an `exit_node` is saved | from the body (off) |
 | Network tab → Log out | after confirmation | — |
 
 Core config keys the feature emits: `endpoints[]` entry `{type: tailscale, tag,
@@ -211,8 +211,8 @@ Core config keys the feature emits: `endpoints[]` entry `{type: tailscale, tag,
 `preferred_by`, `action: resolve`, `server`, `outbound`; `dns.servers` entry
 `{type: tailscale, tag: <node>-dns, endpoint: <node>}`; `dns.rules` entry with
 `preferred_by` and `server`. Save choice writes `exit_node` into the node body,
-the Settings switches — `advertise_exit_node` / `exit_node_allow_lan_access`
-(a switch turned off removes its key). Since core lx.12 the status stream
+the Settings switch — `advertise_exit_node` (turned off, it removes the
+key). Since core lx.12 the status stream
 carries the path to each device (`direct <ip:port>` / `peer relay` /
 `relay <region>`) and backend `health` warnings: the Network tab shows the
 path under each device and under the active exit, the warnings as an orange
@@ -301,13 +301,19 @@ Delete node / Workspace delete → index record removed → directory removed wh
   the identity from its state directory; the config is built the same way in
   both modes (`no witness`).
 - The wizard has no `exit_node_allow_lan_access`, `advertise_routes`,
-  `advertise_exit_node` or SSH fields. `advertise_exit_node` and
-  `exit_node_allow_lan_access` are switches in the Settings block of the
-  Network tab (own server or folder member; written into the body like Save
-  choice); `advertise_routes` and SSH stay JSON-only. The registry checks them
-  all (a default route in `advertise_routes` is dropped with a code,
-  `exit_node` conflicts with `advertise_exit_node`, the LAN switch requires a
-  saved `exit_node`).
+  `advertise_exit_node` or SSH fields. `advertise_exit_node` is a switch in
+  the Settings block of the Network tab (own server or folder member; written
+  into the body like Save choice); `exit_node_allow_lan_access`,
+  `advertise_routes` and SSH stay JSON-only. The registry checks them all (a
+  default route in `advertise_routes` is dropped with a code, `exit_node`
+  conflicts with `advertise_exit_node`, `exit_node_allow_lan_access` requires
+  `exit_node`).
+- `exit_node_allow_lan_access` is accepted from JSON and passed to the core,
+  but the core on Android does not apply it: tsnet has no OS router there, so
+  the field changes no route. Traffic is routed by sing-box rules: with an
+  exit node on, the local network stays reachable because the "Private IPs"
+  preset (local addresses → direct, position 950) or a user rule sends it
+  past the node; whatever reaches the Tailscale node goes into the tailnet.
 - Subnets behind peers (`accept_routes`) are matched by the same `preferred_by`
   condition; a subnet that collides with the home LAN is the user's call
   (position 945 comes before "Private IPs" at 950).
