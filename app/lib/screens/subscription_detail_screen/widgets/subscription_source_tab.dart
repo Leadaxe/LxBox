@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../../models/ui_msg.dart';
 
 import '../../../services/l10n/locale_controller.dart';
+import '../../../services/subscription/sources.dart';
 import '../../../widgets/lx_code_editor.dart';
 import '../../../widgets/safe_bottom.dart';
 
@@ -128,7 +129,7 @@ class SubscriptionSourceTab extends StatelessWidget {
                             fontSize: 12, fontStyle: FontStyle.italic))
                   else ...[
                     for (final h in importantHeaders)
-                      _headerRow(h.key, h.value, theme),
+                      _HeaderRow(key: ValueKey(h.key), name: h.key, value: h.value),
                     if (_hasMoreHeaders) ...[
                       const SizedBox(height: 4),
                       TextButton.icon(
@@ -145,7 +146,7 @@ class SubscriptionSourceTab extends StatelessWidget {
                       ),
                       if (showAllHeaders)
                         for (final h in moreHeaders)
-                          _headerRow(h.key, h.value, theme),
+                          _HeaderRow(key: ValueKey(h.key), name: h.key, value: h.value),
                     ],
                   ],
                   const SizedBox(height: 16),
@@ -231,8 +232,41 @@ class SubscriptionSourceTab extends StatelessWidget {
       ],
     );
   }
+}
 
-  Widget _headerRow(String name, String value, ThemeData theme) {
+/// Строка блока Response headers. §650 — значение `base64:…`, которое
+/// расшифровывается в UTF-8 (тот же декодер, что разбор `profile-title`),
+/// показывается расшифрованным; под именем заголовка — подпись `base64`
+/// с пунктирным подчёркиванием, тап переключает вид значения (расшифровано ↔
+/// исходное). Состояние своё у строки и живёт, пока открыт экран. Без префикса,
+/// с битым base64 или не-UTF-8 — значение как есть, без подписи.
+class _HeaderRow extends StatefulWidget {
+  const _HeaderRow({super.key, required this.name, required this.value});
+
+  final String name;
+  final String value;
+
+  @override
+  State<_HeaderRow> createState() => _HeaderRowState();
+}
+
+class _HeaderRowState extends State<_HeaderRow> {
+  bool _showRaw = false;
+
+  /// Расшифровка или `null`. Декодер мягкий (битые байты → U+FFFD), поэтому
+  /// U+FFFD в результате считаем признаком не-UTF-8 и подпись не показываем.
+  String? get _decoded {
+    final d = decodeBase64HeaderValue(widget.value);
+    if (d == null || d.isEmpty || d.contains('\uFFFD')) return null;
+    return d;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final decoded = _decoded;
+    final shown = decoded == null || _showRaw ? widget.value : decoded;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
@@ -240,13 +274,36 @@ class SubscriptionSourceTab extends StatelessWidget {
         children: [
           SizedBox(
             width: 140,
-            child: Text(name, style: TextStyle(
-              fontSize: 11, fontWeight: FontWeight.w600,
-              color: theme.colorScheme.onSurfaceVariant,
-            )),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(widget.name, style: TextStyle(
+                  fontSize: 11, fontWeight: FontWeight.w600,
+                  color: cs.onSurfaceVariant,
+                )),
+                if (decoded != null)
+                  GestureDetector(
+                    key: ValueKey('header-base64-toggle-${widget.name}'),
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => setState(() => _showRaw = !_showRaw),
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 2, bottom: 2),
+                      child: Text(
+                        'base64', // l10n-exempt: имя кодировки, не переводится
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: cs.primary,
+                          decoration: TextDecoration.underline,
+                          decorationStyle: TextDecorationStyle.dashed,
+                          decorationColor: cs.primary,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
           Expanded(
-            child: SelectableText(value, style: const TextStyle(fontSize: 11)),
+            child: SelectableText(shown, style: const TextStyle(fontSize: 11)),
           ),
         ],
       ),

@@ -68,6 +68,13 @@ page", the "N entries dropped" line.
   no translation, no markup, links are not clickable. Collapsed — at most 4 lines
   with an ellipsis; a longer text expands on tap and collapses on a second tap, a
   short one does not react. No field — no block.
+- The Source tab, Response headers block: a `base64:…` value that decodes to
+  UTF-8 (the same decoder as for `profile-title`) is shown decoded, with a small
+  dashed-underlined `base64` label under the header name. Tapping the label
+  toggles that row between the decoded and the original value; the state is per
+  row and is not kept between screen openings. A value without the prefix, with
+  broken base64 or non-UTF-8 bytes is shown as is, without the label. Copying the
+  block copies the original values.
 
 ## Boundaries
 
@@ -85,3 +92,4 @@ page", the "N entries dropped" line.
 | 4 | [219](../../../tasks/219-deep-audit-2026-07.md) | Done / findings in progress | Unparsable `expire` → "no expiry", not 1970 |
 | 5 | [129F](../../../tasks/129F-file-subscription/spec.md) | Spec (implemented) | `# key: value` at the beginning of the file → file subscription metadata |
 | 6 | [648](../../../tasks/648-subscription-announce.md) | Implemented, device-pending | Subscription description from the `announce` header |
+| 7 | [650](../../../tasks/650-source-headers-base64-toggle.md) | Implemented, device-pending | Source tab: `base64:` headers decoded, with a toggle |

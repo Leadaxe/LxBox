@@ -288,18 +288,24 @@ Future<FetchResult> _fetch(SubscriptionSource source, http.Client client) async 
   }
 }
 
+/// §650 — значение заголовка вида `base64:…`, расшифрованное в UTF-8.
+/// `null` — нет префикса `base64:` или base64 битый. Общий декодер для
+/// разбора `profile-title` и показа заголовков на вкладке Source.
+String? decodeBase64HeaderValue(String raw) {
+  const prefix = 'base64:';
+  if (!raw.startsWith(prefix)) return null;
+  try {
+    return decodeUtf8Lenient(base64.decode(raw.substring(prefix.length)));
+  } catch (_) {
+    return null;
+  }
+}
+
 /// Некоторые сервера (Liberty и др.) отдают title как
 /// `base64:TGliZXJ0eSBWUE4g...`. Декодируем если есть префикс.
 String? _decodeBase64Title(String? raw) {
   if (raw == null) return null;
-  const prefix = 'base64:';
-  if (!raw.startsWith(prefix)) return raw;
-  try {
-    final bytes = base64.decode(raw.substring(prefix.length));
-    return decodeUtf8Lenient(bytes);
-  } catch (_) {
-    return raw;
-  }
+  return decodeBase64HeaderValue(raw) ?? raw;
 }
 
 /// §648 — предел длины описания подписки, в графемах.
