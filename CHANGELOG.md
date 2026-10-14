@@ -10,13 +10,19 @@
 
 ### Fixed
 
-- **Дефолтные пресеты маршрутизации включаются сразу после установки
-  ([§644](docs/spec/tasks/644-default-presets-seed-before-routing.md)).**
-  Раньше пресеты, включённые в шаблоне по умолчанию (BitTorrent, Tailscale и
-  др.), попадали в конфиг только после первого открытия экрана Routing: узел,
-  добавленный и подключённый до этого, шёл без них. Теперь они засеваются при
-  старте приложения и перед сборкой конфига, один раз на установку; удалённый
-  пресет не возвращается.
+- **Default routing presets are on right after install
+  ([task 644](docs/spec/tasks/644-default-presets-seed-before-routing.md)).**
+  Presets the template enables by default (Russia-only services, BitTorrent,
+  Tailscale networks, Unknown traffic, VoWiFi) reached the config only after
+  the Routing screen was opened once: a node added and connected before that
+  ran without them. They are now seeded at app start and before the config
+  is built, once per install; a preset the user removed does not come back.
+  (RU: Пресеты, включённые в шаблоне по умолчанию (Russia-only services,
+  BitTorrent, Tailscale networks, Unknown traffic, VoWiFi), попадали в конфиг
+  только после первого открытия экрана Routing: узел, добавленный и
+  подключённый до этого, шёл без них. Теперь они засеваются при старте
+  приложения и перед сборкой конфига, один раз на установку; удалённый
+  пресет не возвращается.)
 
 ---
 

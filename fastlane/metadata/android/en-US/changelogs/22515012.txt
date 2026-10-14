@@ -1,0 +1,1 @@
+Release candidate. Default routing presets (Russia-only services, BitTorrent, Tailscale networks, Unknown traffic, VoWiFi) are on right after install; before, they reached the config only after the Routing screen was opened once, and a node connected earlier ran without them. A preset you removed does not come back.
