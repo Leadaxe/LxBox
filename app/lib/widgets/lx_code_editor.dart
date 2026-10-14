@@ -115,8 +115,8 @@ class LxCodeEditor extends StatefulWidget {
     this.actions = const [],
     this.header,
     this.format = false,
-  }) : wrapToggle = false,
-       _fit = _Fit.fill,
+    this.wrapToggle = false,
+  }) : _fit = _Fit.fill,
        _height = null,
        _minLines = null,
        _maxLines = null,
@@ -191,8 +191,9 @@ class LxCodeEditor extends StatefulWidget {
   /// обычная — в undo и в `onChanged`.
   final bool format;
 
-  /// Кнопка переноса строк в строке кнопок (§649): только у [LxJsonView]
-  /// с липкими заголовками JSON, где перенос по умолчанию выключен.
+  /// Кнопка переноса строк в строке кнопок (§649): у [LxJsonView] с липкими
+  /// заголовками JSON и у редактора Config — там, где перенос по умолчанию
+  /// выключен.
   /// Исходное значение — [wordWrap]; выбор живёт в `State` и нигде не
   /// хранится.
   final bool wrapToggle;

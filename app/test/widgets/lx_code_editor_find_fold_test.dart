@@ -327,6 +327,30 @@ void main() {
     }
   });
 
+  testWidgets('перенос: кнопка у редактора Config (wrapToggle)', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: LxCodeEditor(
+            controller: TextEditingController(text: '{"a": 1}'),
+            showLineNumbers: true,
+            language: LxCodeLanguage.json,
+            stickyHeaders: true,
+            wordWrap: false,
+            wrapToggle: true,
+          ),
+        ),
+      ),
+    );
+    expect(find.byKey(wrapBtn), findsOneWidget);
+    expect(wrapTooltip(tester), 'Wrap lines', reason: 'по умолчанию выключен');
+    await tester.tap(find.byKey(wrapBtn));
+    await tester.pump();
+    expect(wrapTooltip(tester), 'Unwrap lines');
+  });
+
   test('hasJson5Comments: только вне строк', () {
     expect(hasJson5Comments('{"u": "http://x/*y"}'), isFalse);
     expect(hasJson5Comments(r"{'a': 'b\\'} // c"), isTrue);

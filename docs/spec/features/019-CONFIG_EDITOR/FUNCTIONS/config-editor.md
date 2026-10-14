@@ -93,8 +93,10 @@ snackbars and errors on screen.
   compact JSON line would paint the whole field).
 - **Sticky headers.** While scrolling, up to three lines of the enclosing
   blocks stay pinned at the top (`"outbounds": [` → `{` → …). The editor draws
-  them only without line wrapping, so this screen does not wrap: long lines
-  scroll sideways. The node JSON and a JSON subscription Source have them too.
+  them only without line wrapping, so this screen does not wrap by default:
+  long lines scroll sideways. The wrap button above the field turns wrapping
+  on (sticky headers disappear meanwhile); the choice is not saved, the screen
+  opens again without wrapping. The node JSON and a JSON subscription Source have them too.
   There is no block folding.
 - **Highlighting** of JSON; in fields that take anything — by the look of the
   text: JSON, WireGuard INI, links (`scheme://…`) or none.
@@ -123,3 +125,4 @@ snackbars and errors on screen.
 | 9 | [554F](../../../tasks/554F-schema-driven-node-editor/spec.md) | Idea; only highlighting done | JSON syntax highlighting |
 | 10 | [607](../../../tasks/607-l10n-backup-shell-bugs-from-591.md) | Done | A read-only field's selection menu has no Cut / Paste |
 | 11 | [624](../../../tasks/624-sora-editor-for-json-fields.md) | Implemented | Native editor: input and keyboard like a system field, sticky headers instead of folding, JSON / INI / URI highlighting |
+| 12 | [649](../../../tasks/649-json-view-wrap-toggle.md) | Implemented | Line-wrap button (off by default, not saved) |
