@@ -217,11 +217,7 @@ class SoraEditorPlatformView(
         // Flutter-текст с textScaler по умолчанию.
         editor.setTextSizePx(((args?.get("fontSize") as? Number)?.toFloat() ?: 12f) * density)
         editor.isLineNumberEnabled = args?.get("lineNumbers") as? Boolean ?: true
-        val wordWrap = args?.get("wordWrap") as? Boolean ?: true
-        editor.isWordwrap = wordWrap
-        // С переносом логическая строка бывает на весь экран (компактный
-        // JSON) — подсветка текущей строки заливала всё поле.
-        editor.isHighlightCurrentLine = !wordWrap
+        applyWordWrap(args?.get("wordWrap") as? Boolean ?: true)
         editor.setScalable(false)
         // Линии блоков (направляющие от `{` до `}`) — выключены (владелец).
         editor.isBlockLineEnabled = false
@@ -347,6 +343,17 @@ class SoraEditorPlatformView(
         editor.setEditorLanguage(
             if (scope == null) EmptyLanguage() else TextMateLanguage.create(scope, false),
         )
+    }
+
+    /**
+     * Перенос строк: при создании и на лету (кнопка просмотрщика JSON, §649).
+     * Липкие заголовки sora при переносе сама не рисует — их не трогаем.
+     */
+    private fun applyWordWrap(on: Boolean) {
+        editor.isWordwrap = on
+        // С переносом логическая строка бывает на весь экран (компактный
+        // JSON) — подсветка текущей строки заливала всё поле.
+        editor.isHighlightCurrentLine = !on
     }
 
     private fun setReadOnly(value: Boolean) {
@@ -509,6 +516,10 @@ class SoraEditorPlatformView(
             }
             "setReadOnly" -> {
                 setReadOnly(call.argument<Boolean>("readOnly") ?: false)
+                result.success(null)
+            }
+            "setWordWrap" -> {
+                applyWordWrap(call.argument<Boolean>("wordWrap") ?: true)
                 result.success(null)
             }
             "setDark" -> {

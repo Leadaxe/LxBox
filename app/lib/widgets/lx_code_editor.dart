@@ -115,7 +115,8 @@ class LxCodeEditor extends StatefulWidget {
     this.actions = const [],
     this.header,
     this.format = false,
-  }) : _fit = _Fit.fill,
+  }) : wrapToggle = false,
+       _fit = _Fit.fill,
        _height = null,
        _minLines = null,
        _maxLines = null,
@@ -139,6 +140,7 @@ class LxCodeEditor extends StatefulWidget {
     this.actions = const [],
     this.header,
     this.format = false,
+    this.wrapToggle = false,
   }) : find = null,
        _fit = fit,
        _height = height,
@@ -188,6 +190,12 @@ class LxCodeEditor extends StatefulWidget {
   /// — JSON ([detectCodeLanguage]). Разбор JSON5, отступ 2 пробела; правка
   /// обычная — в undo и в `onChanged`.
   final bool format;
+
+  /// Кнопка переноса строк в строке кнопок (§649): только у [LxJsonView]
+  /// с липкими заголовками JSON, где перенос по умолчанию выключен.
+  /// Исходное значение — [wordWrap]; выбор живёт в `State` и нигде не
+  /// хранится.
+  final bool wrapToggle;
 
   final _Fit _fit;
   final double? _height;
@@ -295,6 +303,10 @@ class LxCodeEditorState extends State<LxCodeEditor>
   /// Кнопка Format видна (см. [LxCodeEditor.format]).
   bool _canFormat = false;
 
+  /// Текущий перенос строк: из [LxCodeEditor.wordWrap], кнопка
+  /// [LxCodeEditor.wrapToggle] переключает на лету (§649).
+  bool _wordWrap = true;
+
   MethodChannel? get _channel => _link?.channel;
 
   bool _computeCanFormat() =>
@@ -314,6 +326,7 @@ class LxCodeEditorState extends State<LxCodeEditor>
     _nativeText = widget.controller.text;
     _rows = _countLines(_nativeText);
     _canFormat = _computeCanFormat();
+    _wordWrap = widget.wordWrap;
     widget.controller.addListener(_onController);
   }
 
@@ -348,6 +361,7 @@ class LxCodeEditorState extends State<LxCodeEditor>
     if (oldWidget.language != widget.language) {
       unawaited(_invoke('setLanguage', {'language': widget.language?.name}));
     }
+    if (oldWidget.wordWrap != widget.wordWrap) _setWordWrap(widget.wordWrap);
     _canFormat = _computeCanFormat();
   }
 
@@ -422,6 +436,13 @@ class LxCodeEditorState extends State<LxCodeEditor>
     }
     _refreshFormat();
     widget._onEdited?.call(text);
+  }
+
+  /// Перенос строк на лету: натив без пересоздания view (§649).
+  void _setWordWrap(bool on) {
+    if (on == _wordWrap) return;
+    setState(() => _wordWrap = on);
+    unawaited(_invoke('setWordWrap', {'wordWrap': on}));
   }
 
   /// Format: JSON5 → JSON с отступом 2 пробела (как Config при открытии).
@@ -711,6 +732,16 @@ class LxCodeEditorState extends State<LxCodeEditor>
           visualDensity: VisualDensity.compact,
           onPressed: () => _toggleFind(true),
         ),
+      if (w.wrapToggle)
+        IconButton(
+          key: const ValueKey('lx-code-editor-wrap'),
+          icon: const Icon(Icons.wrap_text, size: 18),
+          tooltip: _wordWrap
+              ? getLocalText.s("Unwrap lines")
+              : getLocalText.s("Wrap lines"),
+          visualDensity: VisualDensity.compact,
+          onPressed: () => _setWordWrap(!_wordWrap),
+        ),
       if (_canFormat)
         IconButton(
           key: const ValueKey('lx-code-editor-format'),
@@ -850,7 +881,7 @@ class LxCodeEditorState extends State<LxCodeEditor>
             'colors': _colors,
             'lineNumbers': w.showLineNumbers,
             'fontSize': w.fontSize,
-            'wordWrap': w.wordWrap,
+            'wordWrap': _wordWrap,
             'language': w.language?.name,
             'locale': LocaleController.I.effectiveTag,
             'autofocus': w.autofocus,
@@ -1041,6 +1072,7 @@ class _LxJsonViewState extends State<LxJsonView> {
       showLineNumbers: widget.showLineNumbers,
       language: widget.language,
       stickyHeaders: widget.stickyHeaders,
+      wrapToggle: sticky,
       actions: widget.actions,
       header: widget.header,
     );

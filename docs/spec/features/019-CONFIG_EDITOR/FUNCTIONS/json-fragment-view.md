@@ -49,6 +49,11 @@ data for the tag".
 - **The Copy button sits above the field, on the right** (node JSON tab,
   subscription node inspector), not over the text, like the buttons of the
   editable fields. A read-only view has no Format.
+- **Line-wrap button** — in the row above the field, after search, only in
+  a JSON viewer with sticky headers (wrapping is off there by default).
+  Turns wrapping on and off on the fly; the choice is not remembered — the
+  next time the screen opens wrapping is off again. With wrapping on there
+  are no sticky headers and no current-line highlight.
 - **Copies are self-contained:** the `detour` field is removed from every
   element so that a paste does not refer to a missing tag.
 - **The rule preview does not filter by `enabled`:** a disabled rule shows
@@ -74,3 +79,4 @@ data for the tag".
 | 4 | [311](../../../tasks/311-running-config-from-kernel.md) | implemented | Node JSON from a snapshot of the running core; the editor — from the file |
 | 5 | [554F](../../../tasks/554F-schema-driven-node-editor/spec.md) | Idea; only highlighting done | Highlighted JSON view instead of plain text |
 | 6 | [624](../../../tasks/624-sora-editor-for-json-fields.md) | Implemented | Native viewer, sticky headers in the node JSON |
+| 7 | [649](../../../tasks/649-json-view-wrap-toggle.md) | Implemented | Line-wrap button in the JSON viewer |

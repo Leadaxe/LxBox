@@ -2134,6 +2134,12 @@
   "Find": {
     "value": "查找"
   },
+  "Wrap lines": {
+    "value": "自动换行"
+  },
+  "Unwrap lines": {
+    "value": "取消自动换行"
+  },
   "Imported: %s": {
     "value": "已导入：%s"
   },

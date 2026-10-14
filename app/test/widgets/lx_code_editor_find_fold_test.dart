@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/config/config_parse.dart';
 import 'package:lxbox/widgets/lx_code_editor.dart';
@@ -39,8 +40,9 @@ void main() {
     expect(find.byKey(findIcon), findsNothing);
   });
 
-  testWidgets('с номерами строк — иконка открывает панель, крестик закрывает',
-      (tester) async {
+  testWidgets('с номерами строк — иконка открывает панель, крестик закрывает', (
+    tester,
+  ) async {
     await pump(tester, showLineNumbers: true);
     expect(find.byKey(findIcon), findsOneWidget);
 
@@ -100,8 +102,12 @@ void main() {
   const formatBtn = ValueKey('lx-code-editor-format');
   const bar = ValueKey('lx-code-editor-bar');
 
-  Future<TextEditingController> pumpField(WidgetTester tester, String text,
-      {List<String>? changes, bool readOnly = false}) async {
+  Future<TextEditingController> pumpField(
+    WidgetTester tester,
+    String text, {
+    List<String>? changes,
+    bool readOnly = false,
+  }) async {
     final c = TextEditingController(text: text);
     addTearDown(c.dispose);
     await tester.pumpWidget(
@@ -124,30 +130,39 @@ void main() {
     return c;
   }
 
-  testWidgets('строка кнопок над рамкой: подпись слева, поиск и Format справа',
-      (tester) async {
-    await pumpField(tester, '{"a":1}');
-    Finder inBar(Finder f) => find.descendant(of: find.byKey(bar), matching: f);
-    expect(inBar(find.text('caption')), findsOneWidget);
-    expect(inBar(find.byKey(findIcon)), findsOneWidget);
-    expect(inBar(find.byKey(formatBtn)), findsOneWidget);
-    final barBottom = tester.getBottomLeft(find.byKey(bar)).dy;
-    final fieldTop = tester.getTopLeft(find.byType(TextField)).dy;
-    expect(fieldTop, greaterThanOrEqualTo(barBottom),
-        reason: 'кнопки не внутри рамки');
-    expect(tester.getTopLeft(find.byKey(formatBtn)).dx,
-        greaterThan(tester.getTopLeft(find.text('caption')).dx));
+  testWidgets(
+    'строка кнопок над рамкой: подпись слева, поиск и Format справа',
+    (tester) async {
+      await pumpField(tester, '{"a":1}');
+      Finder inBar(Finder f) =>
+          find.descendant(of: find.byKey(bar), matching: f);
+      expect(inBar(find.text('caption')), findsOneWidget);
+      expect(inBar(find.byKey(findIcon)), findsOneWidget);
+      expect(inBar(find.byKey(formatBtn)), findsOneWidget);
+      final barBottom = tester.getBottomLeft(find.byKey(bar)).dy;
+      final fieldTop = tester.getTopLeft(find.byType(TextField)).dy;
+      expect(
+        fieldTop,
+        greaterThanOrEqualTo(barBottom),
+        reason: 'кнопки не внутри рамки',
+      );
+      expect(
+        tester.getTopLeft(find.byKey(formatBtn)).dx,
+        greaterThan(tester.getTopLeft(find.text('caption')).dx),
+      );
 
-    // Поиск открыт — панель вместо строки кнопок, подпись остаётся.
-    await tester.tap(find.byKey(findIcon));
-    await tester.pump();
-    expect(find.byKey(bar), findsNothing);
-    expect(find.byKey(findPanel), findsOneWidget);
-    expect(find.text('caption'), findsOneWidget);
-  });
+      // Поиск открыт — панель вместо строки кнопок, подпись остаётся.
+      await tester.tap(find.byKey(findIcon));
+      await tester.pump();
+      expect(find.byKey(bar), findsNothing);
+      expect(find.byKey(findPanel), findsOneWidget);
+      expect(find.text('caption'), findsOneWidget);
+    },
+  );
 
-  testWidgets('свои actions — в строке над рамкой (Copy LxJsonView)',
-      (tester) async {
+  testWidgets('свои actions — в строке над рамкой (Copy LxJsonView)', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       const MaterialApp(
         home: Scaffold(
@@ -160,9 +175,12 @@ void main() {
       ),
     );
     expect(
-        find.descendant(
-            of: find.byKey(bar), matching: find.byKey(const ValueKey('copy'))),
-        findsOneWidget);
+      find.descendant(
+        of: find.byKey(bar),
+        matching: find.byKey(const ValueKey('copy')),
+      ),
+      findsOneWidget,
+    );
     expect(find.byKey(formatBtn), findsNothing, reason: 'только чтение');
   });
 
@@ -173,8 +191,9 @@ void main() {
     expect(find.byKey(formatBtn), findsNothing);
   });
 
-  testWidgets('Format: JSON5 → JSON с отступом 2, в контроллер и onChanged',
-      (tester) async {
+  testWidgets('Format: JSON5 → JSON с отступом 2, в контроллер и onChanged', (
+    tester,
+  ) async {
     final changes = <String>[];
     final c = await pumpField(tester, '{a: 1, b: [1, 2,],}', changes: changes);
     await tester.tap(find.byKey(formatBtn));
@@ -207,10 +226,105 @@ void main() {
 
     await tester.tap(find.byKey(formatBtn));
     await tester.pumpAndSettle();
-    await tester
-        .tap(find.byKey(const ValueKey('lx-code-editor-format-confirm')));
+    await tester.tap(
+      find.byKey(const ValueKey('lx-code-editor-format-confirm')),
+    );
     await tester.pumpAndSettle();
     expect(c.text, '{\n  "a": 1\n}');
+  });
+
+  // §649 — кнопка переноса строк у просмотрщика JSON с липкими заголовками.
+  const wrapBtn = ValueKey('lx-code-editor-wrap');
+  String? wrapTooltip(WidgetTester tester) =>
+      tester.widget<IconButton>(find.byKey(wrapBtn)).tooltip;
+
+  testWidgets('перенос: кнопка у LxJsonView со sticky JSON, после поиска; '
+      'нажатие переключает и зовёт setWordWrap', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: LxJsonView(
+            text: '{"a": 1}',
+            height: 200,
+            showLineNumbers: true,
+            stickyHeaders: true,
+            actions: [Icon(Icons.copy, key: ValueKey('copy'))],
+          ),
+        ),
+      ),
+    );
+    expect(find.byKey(wrapBtn), findsOneWidget);
+    double x(Finder f) => tester.getTopLeft(f).dx;
+    expect(x(find.byKey(wrapBtn)), greaterThan(x(find.byKey(findIcon))));
+    expect(
+      x(find.byKey(const ValueKey('copy'))),
+      greaterThan(x(find.byKey(wrapBtn))),
+    );
+    expect(wrapTooltip(tester), 'Wrap lines', reason: 'по умолчанию выключен');
+
+    const channel = MethodChannel('com.leadaxe.lxbox/sora_editor_9');
+    final calls = <MethodCall>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
+      call,
+    ) async {
+      calls.add(call);
+      return null;
+    });
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        channel,
+        null,
+      ),
+    );
+    tester
+        .state<LxCodeEditorState>(find.byType(LxCodeEditor))
+        .debugAttachChannel(9);
+    await tester.pump();
+    calls.clear();
+
+    await tester.tap(find.byKey(wrapBtn));
+    await tester.pump();
+    expect(wrapTooltip(tester), 'Unwrap lines');
+    final wrapCalls = calls.where((c) => c.method == 'setWordWrap').toList();
+    expect(wrapCalls.map((c) => c.arguments), [
+      {'wordWrap': true},
+    ]);
+
+    await tester.tap(find.byKey(wrapBtn));
+    await tester.pump();
+    expect(wrapTooltip(tester), 'Wrap lines');
+    expect(calls.where((c) => c.method == 'setWordWrap').last.arguments, {
+      'wordWrap': false,
+    });
+
+    // Панель поиска прячет кнопку вместе с остальными.
+    await tester.tap(find.byKey(findIcon));
+    await tester.pump();
+    expect(find.byKey(wrapBtn), findsNothing);
+  });
+
+  testWidgets('перенос: кнопки нет у редактируемого поля и у просмотрщика '
+      'без sticky JSON', (tester) async {
+    await pumpField(tester, '{"a":1}');
+    expect(find.byKey(wrapBtn), findsNothing);
+    for (final view in const [
+      LxJsonView(text: '{"a": 1}', height: 200),
+      LxJsonView(
+        text: 'vless://x',
+        height: 200,
+        stickyHeaders: true,
+        language: null,
+      ),
+    ]) {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: KeyedSubtree(key: UniqueKey(), child: view),
+          ),
+        ),
+      );
+      expect(find.byKey(wrapBtn), findsNothing);
+    }
   });
 
   test('hasJson5Comments: только вне строк', () {

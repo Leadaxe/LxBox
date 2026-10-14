@@ -3,7 +3,7 @@
 | Поле | Значение |
 |------|----------|
 | Тип | Доработка фичи [019-CONFIG_EDITOR](../features/019-CONFIG_EDITOR/FEATURE.ru.md) (функция [json-fragment-view](../features/019-CONFIG_EDITOR/FUNCTIONS/json-fragment-view.ru.md)), согласовано владельцем 14.10.2026 |
-| Статус | P (в работе) |
+| Статус | D (done), ждёт проверки на эмуляторе |
 | Дата | 2026-10-14 |
 | Связанные | §624 (нативный sora-editor, липкие заголовки) |
 
