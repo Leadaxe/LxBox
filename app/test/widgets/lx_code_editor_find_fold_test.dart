@@ -237,6 +237,12 @@ void main() {
   const wrapBtn = ValueKey('lx-code-editor-wrap');
   String? wrapTooltip(WidgetTester tester) =>
       tester.widget<IconButton>(find.byKey(wrapBtn)).tooltip;
+  // Включённый перенос — тональная подложка (secondaryContainer).
+  Color? wrapBackground(WidgetTester tester) {
+    final b = tester.widget<IconButton>(find.byKey(wrapBtn));
+    expect(b.isSelected, b.style != null);
+    return b.style?.backgroundColor?.resolve(const {WidgetState.selected});
+  }
 
   testWidgets('перенос: кнопка у LxJsonView со sticky JSON, после поиска; '
       'нажатие переключает и зовёт setWordWrap', (tester) async {
@@ -261,6 +267,8 @@ void main() {
       greaterThan(x(find.byKey(wrapBtn))),
     );
     expect(wrapTooltip(tester), 'Wrap lines', reason: 'по умолчанию выключен');
+    expect(wrapBackground(tester), isNull);
+    final cs = Theme.of(tester.element(find.byKey(wrapBtn))).colorScheme;
 
     const channel = MethodChannel('com.leadaxe.lxbox/sora_editor_9');
     final calls = <MethodCall>[];
@@ -285,6 +293,7 @@ void main() {
     await tester.tap(find.byKey(wrapBtn));
     await tester.pump();
     expect(wrapTooltip(tester), 'Unwrap lines');
+    expect(wrapBackground(tester), cs.secondaryContainer);
     final wrapCalls = calls.where((c) => c.method == 'setWordWrap').toList();
     expect(wrapCalls.map((c) => c.arguments), [
       {'wordWrap': true},
@@ -293,6 +302,7 @@ void main() {
     await tester.tap(find.byKey(wrapBtn));
     await tester.pump();
     expect(wrapTooltip(tester), 'Wrap lines');
+    expect(wrapBackground(tester), isNull);
     expect(calls.where((c) => c.method == 'setWordWrap').last.arguments, {
       'wordWrap': false,
     });
@@ -301,6 +311,47 @@ void main() {
     await tester.tap(find.byKey(findIcon));
     await tester.pump();
     expect(find.byKey(wrapBtn), findsNothing);
+  });
+
+  testWidgets('раскладка: полоса прогресса только если натив считает '
+      'дольше 300 мс', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: LxJsonView(text: '{"a": 1}', height: 200, stickyHeaders: true),
+        ),
+      ),
+    );
+    const channel = MethodChannel('com.leadaxe.lxbox/sora_editor_11');
+    tester
+        .state<LxCodeEditorState>(find.byType(LxCodeEditor))
+        .debugAttachChannel(11);
+    Future<void> busy(bool on) async {
+      await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+        channel.name,
+        const StandardMethodCodec().encodeMethodCall(
+          MethodCall('layoutBusy', {'busy': on}),
+        ),
+        (_) {},
+      );
+      await tester.pump();
+    }
+
+    const bar = ValueKey('lx-code-editor-layout-busy');
+    // Быстрый пересчёт — полосы нет.
+    await busy(true);
+    await tester.pump(const Duration(milliseconds: 200));
+    await busy(false);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byKey(bar), findsNothing);
+
+    // Долгий — полоса после задержки, снимается концом раскладки.
+    await busy(true);
+    expect(find.byKey(bar), findsNothing);
+    await tester.pump(const Duration(milliseconds: 301));
+    expect(find.byKey(bar), findsOneWidget);
+    await busy(false);
+    expect(find.byKey(bar), findsNothing);
   });
 
   testWidgets('перенос: кнопки нет у редактируемого поля и у просмотрщика '

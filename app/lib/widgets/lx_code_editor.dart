@@ -270,18 +270,49 @@ class LxCodeEditorState extends State<LxCodeEditor>
   /// горизонтали, поэтому жесты целиком уходят редактору (§628).
   bool _selected = false;
 
-  /// Текст не помещается в поле — вертикальный свайп листает редактор.
+  /// Текст не помещается в поле по вертикали.
   bool _scrollable = true;
 
+  /// Поле во всю высоту (экран Config): страницы вокруг нет, касание
+  /// целиком у редактора.
+  bool _fill = false;
+
+  /// Состояние прокрутки натива (`scrollState`): есть куда вбок, прокрутка
+  /// у верхнего / нижнего края (§649).
+  bool _canScrollX = false;
+  bool _scrollTop = true;
+  bool _scrollBottom = false;
+
+  /// Натив считает раскладку строк (`layoutBusy`); полоса — только если
+  /// счёт длится дольше [_layoutBusyDelay] (§649).
+  Timer? _layoutBusyTimer;
+  bool _showLayoutBusy = false;
+  static const _layoutBusyDelay = Duration(milliseconds: 300);
+
+  /// Порог сдвига, на котором решается, кому жест: не больше порога
+  /// drag-распознавателей вкладок и страницы (`Scrollable` берёт его из
+  /// `MediaQuery.gestureSettings`, на Android он меньше [kTouchSlop]).
+  double _dragSlop = kTouchSlop;
+
   /// `PlatformViewLink` кэширует поверхность вместе с распознавателями,
-  /// поэтому набор постоянный, а условие «всё редактору» проверяется
-  /// заново на каждом касании (§628).
+  /// поэтому набор постоянный, а условия читаются заново на каждом
+  /// касании (§628). Кому жест — §649: при выделении (или во всю высоту)
+  /// редактору сразу, иначе по направлению на пороге сдвига
+  /// ([lxEditorOwnsDrag]). Отдельного горизонтального drag нет: вбок,
+  /// когда некуда, жест уходит вкладкам.
   late final Set<Factory<OneSequenceGestureRecognizer>> _recognizers = {
     Factory<OneSequenceGestureRecognizer>(
-      () => _GatedEagerGestureRecognizer(() => _scrollable || _selected),
-    ),
-    const Factory<OneSequenceGestureRecognizer>(
-      HorizontalDragGestureRecognizer.new,
+      () => LxEditorDragRecognizer(
+        takesAtDown: () => _fill || _selected,
+        takesDrag: (delta) => lxEditorOwnsDrag(
+          delta,
+          canScrollX: _canScrollX,
+          scrollable: _scrollable,
+          scrollTop: _scrollTop,
+          scrollBottom: _scrollBottom,
+        ),
+        slop: () => _dragSlop,
+      ),
     ),
     const Factory<OneSequenceGestureRecognizer>(LongPressGestureRecognizer.new),
   };
@@ -377,6 +408,7 @@ class LxCodeEditorState extends State<LxCodeEditor>
 
   @override
   void dispose() {
+    _layoutBusyTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     widget.controller.removeListener(_onController);
     _link?.detach();
@@ -440,6 +472,20 @@ class LxCodeEditorState extends State<LxCodeEditor>
   }
 
   /// Перенос строк на лету: натив без пересоздания view (§649).
+  /// Быстрые пересчёты (ввод, смена ширины) полосой не мигают: она
+  /// появляется, только если раскладка не готова за [_layoutBusyDelay].
+  void _onLayoutBusy(bool busy) {
+    _layoutBusyTimer?.cancel();
+    _layoutBusyTimer = null;
+    if (busy) {
+      _layoutBusyTimer = Timer(_layoutBusyDelay, () {
+        if (mounted) setState(() => _showLayoutBusy = true);
+      });
+    } else if (_showLayoutBusy) {
+      setState(() => _showLayoutBusy = false);
+    }
+  }
+
   void _setWordWrap(bool on) {
     if (on == _wordWrap) return;
     setState(() => _wordWrap = on);
@@ -539,6 +585,12 @@ class LxCodeEditorState extends State<LxCodeEditor>
         final y = ((args['y'] as num?) ?? 0) / dpr;
         _cursorRect = Rect.fromLTWH(0, y, 1, rowH);
         if (_focused) _revealCursor();
+      case 'layoutBusy':
+        _onLayoutBusy(args['busy'] as bool? ?? false);
+      case 'scrollState':
+        _canScrollX = args['canScrollX'] as bool? ?? false;
+        _scrollTop = args['scrollTop'] as bool? ?? true;
+        _scrollBottom = args['scrollBottom'] as bool? ?? false;
       case 'searchResult':
         setState(() {
           _matchIndex = (args['index'] as num?)?.toInt() ?? -1;
@@ -546,6 +598,7 @@ class LxCodeEditorState extends State<LxCodeEditor>
         });
       case 'disposed':
         _link?.channel.setMethodCallHandler(null);
+        _onLayoutBusy(false);
     }
     return null;
   }
@@ -666,6 +719,11 @@ class LxCodeEditorState extends State<LxCodeEditor>
     }
 
     _scrollable = scrollable;
+    _fill = w._fit == _Fit.fill;
+    final deviceSlop = MediaQuery.maybeGestureSettingsOf(context)?.touchSlop;
+    _dragSlop = deviceSlop != null && deviceSlop < kTouchSlop
+        ? deviceSlop
+        : kTouchSlop;
     Widget field = _nativeEditor ? _buildNative() : _buildStub();
     if (_nativeEditor) {
       field = DecoratedBox(
@@ -682,6 +740,26 @@ class LxCodeEditorState extends State<LxCodeEditor>
           padding: EdgeInsets.all(_focused ? _pad : _pad + 1),
           child: ClipRect(child: field),
         ),
+      );
+    }
+    if (_showLayoutBusy) {
+      // Натив долго считает раскладку (перенос большого тела, §649) —
+      // тонкая полоса у верхнего края рамки, раскладку поля не меняет.
+      final inset = _focused ? 2.0 : 1.0;
+      field = Stack(
+        fit: StackFit.passthrough,
+        children: [
+          field,
+          Positioned(
+            top: inset,
+            left: inset,
+            right: inset,
+            child: const LinearProgressIndicator(
+              key: ValueKey('lx-code-editor-layout-busy'),
+              minHeight: 2,
+            ),
+          ),
+        ],
       );
     }
     final hint = w.hint;
@@ -741,6 +819,15 @@ class LxCodeEditorState extends State<LxCodeEditor>
               ? getLocalText.s("Unwrap lines")
               : getLocalText.s("Wrap lines"),
           visualDensity: VisualDensity.compact,
+          // Включённый перенос — тональная подложка, как у
+          // `IconButton.filledTonal`; выключенный — обычная кнопка.
+          isSelected: _wordWrap,
+          style: _wordWrap
+              ? IconButton.styleFrom(
+                  backgroundColor: cs.secondaryContainer,
+                  foregroundColor: cs.onSecondaryContainer,
+                )
+              : null,
           onPressed: () => _setWordWrap(!_wordWrap),
         ),
       if (_canFormat)
@@ -914,16 +1001,97 @@ class LxCodeEditorState extends State<LxCodeEditor>
 
 /// Панель поиска над текстом редактора: поле, счёт совпадений,
 /// предыдущее/следующее, закрыть. Пустой запрос снимает подсветку.
-/// [EagerGestureRecognizer], который берёт касание, только пока [gate]
-/// истинен; иначе касание разыгрывают остальные распознаватели view.
-class _GatedEagerGestureRecognizer extends EagerGestureRecognizer {
-  _GatedEagerGestureRecognizer(this.gate);
+/// Кому жест без выделения (§649), по сдвигу [delta] на пороге:
+/// - вбок (|dx| > |dy|) — редактору, если есть куда вбок ([canScrollX]);
+/// - вертикально — редактору, если текст не помещается ([scrollable]) и
+///   в эту сторону есть куда мотать: палец вниз — прокрутка не у верхнего
+///   края ([scrollTop]), палец вверх — не у нижнего ([scrollBottom]);
+/// - иначе — вкладкам / странице.
+@visibleForTesting
+bool lxEditorOwnsDrag(
+  Offset delta, {
+  required bool canScrollX,
+  required bool scrollable,
+  required bool scrollTop,
+  required bool scrollBottom,
+}) {
+  if (delta.dx.abs() > delta.dy.abs()) return canScrollX;
+  if (!scrollable) return false;
+  return delta.dy > 0 ? !scrollTop : !scrollBottom;
+}
 
-  final bool Function() gate;
+/// Распознаватель platform view редактора (§649). Если [takesAtDown]
+/// истинен — берёт касание сразу, как [EagerGestureRecognizer] (ручки
+/// выделения тянут в любую сторону, §628). Иначе ждёт сдвига пальца больше
+/// [slop] по любой оси и решает по [takesDrag]: принять — вся
+/// последовательность (с буферизованными до решения событиями) уходит
+/// native view; отклонить — жест разыгрывают вкладки и страница. Решение —
+/// на весь жест.
+@visibleForTesting
+class LxEditorDragRecognizer extends OneSequenceGestureRecognizer {
+  LxEditorDragRecognizer({
+    required this.takesAtDown,
+    required this.takesDrag,
+    required this.slop,
+  });
+
+  final bool Function() takesAtDown;
+  final bool Function(Offset delta) takesDrag;
+  final double Function() slop;
+
+  /// Точка касания указателей, по которым решение ещё не принято.
+  final Map<int, Offset> _origins = {};
 
   @override
-  bool isPointerAllowed(PointerDownEvent event) =>
-      gate() && super.isPointerAllowed(event);
+  void addAllowedPointer(PointerDownEvent event) {
+    super.addAllowedPointer(event);
+    if (takesAtDown()) {
+      resolvePointer(event.pointer, GestureDisposition.accepted);
+      stopTrackingPointer(event.pointer);
+      return;
+    }
+    _origins[event.pointer] = event.position;
+  }
+
+  @override
+  void handleEvent(PointerEvent event) {
+    final origin = _origins[event.pointer];
+    if (origin != null && event is PointerMoveEvent) {
+      final delta = event.position - origin;
+      final s = slop();
+      if (delta.dx.abs() > s || delta.dy.abs() > s) {
+        _origins.remove(event.pointer);
+        resolvePointer(
+          event.pointer,
+          takesDrag(delta)
+              ? GestureDisposition.accepted
+              : GestureDisposition.rejected,
+        );
+        stopTrackingPointer(event.pointer);
+        return;
+      }
+    }
+    stopTrackingIfPointerNoLongerDown(event);
+  }
+
+  @override
+  void acceptGesture(int pointer) {
+    _origins.remove(pointer);
+  }
+
+  @override
+  void rejectGesture(int pointer) {
+    _origins.remove(pointer);
+    stopTrackingPointer(pointer);
+  }
+
+  @override
+  void didStopTrackingLastPointer(int pointer) {
+    _origins.remove(pointer);
+  }
+
+  @override
+  String get debugDescription => 'lx editor drag';
 }
 
 class _LxFindPanel extends StatelessWidget {

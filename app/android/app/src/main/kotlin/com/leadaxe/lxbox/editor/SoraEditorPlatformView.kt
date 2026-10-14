@@ -20,6 +20,7 @@ import io.flutter.plugin.platform.PlatformViewFactory
 import io.github.rosemoe.sora.event.ColorSchemeUpdateEvent
 import io.github.rosemoe.sora.event.ContentChangeEvent
 import io.github.rosemoe.sora.event.PublishSearchResultEvent
+import io.github.rosemoe.sora.event.ScrollEvent
 import io.github.rosemoe.sora.event.SelectionChangeEvent
 import io.github.rosemoe.sora.lang.EmptyLanguage
 import io.github.rosemoe.sora.langs.textmate.TextMateColorScheme
@@ -53,7 +54,10 @@ import java.util.Locale
 ///  Натив → Dart: `changed` {text?, lines, rowHeight, textOffsetX} на каждую
 ///  правку (текст ≤ [SYNC_LIMIT] — сразу, длиннее — с задержкой
 ///  [SYNC_DEBOUNCE_MS], в промежуточных событиях без текста); `cursor`
-///  {y, rowHeight, focused}; `searchResult` {index, count}; `disposed` — последнее сообщение view. Истина
+///  {y, rowHeight, focused}; `scrollState` {canScrollX, scrollTop,
+///  scrollBottom} — только при смене значений (Flutter решает, кому жест,
+///  §649); `layoutBusy` {busy} — фоновая раскладка строк началась /
+///  кончилась (полоса прогресса); `searchResult` {index, count}; `disposed` — последнее сообщение view. Истина
 ///  текста — на стороне Dart: пересозданный view получает его в creation
 ///  params, поэтому задержанный текст сбрасывается при потере фокуса,
 ///  на `getText` и в [dispose].
@@ -149,8 +153,13 @@ private class LxSoraEditor(context: Context) : CodeEditor(context) {
     var suppressFocus = false
     var onLayoutReady: (() -> Unit)? = null
 
+    /// Начало и конец фоновой раскладки — для полосы прогресса во Flutter
+    /// (перенос большого тела считается долго, §649).
+    var onLayoutBusy: ((Boolean) -> Unit)? = null
+
     override fun setLayoutBusy(busy: Boolean) {
         super.setLayoutBusy(busy)
+        onLayoutBusy?.invoke(busy)
         if (!busy) onLayoutReady?.invoke()
     }
 
@@ -192,6 +201,13 @@ class SoraEditorPlatformView(
     private var replacing = false
     /// Последнее отправленное число экранных строк.
     private var sentRows = -1
+
+    /// Последнее отправленное `scrollState` битами (canScrollX = 1,
+    /// scrollTop = 2, scrollBottom = 4); -1 — ещё не слали.
+    private var sentScroll = -1
+
+    /// Последнее отправленное `layoutBusy`.
+    private var sentLayoutBusy = false
 
     init {
         val t0 = System.nanoTime()
@@ -246,6 +262,8 @@ class SoraEditorPlatformView(
 
         editor.addOnLayoutChangeListener { _, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
             val h = bottom - top
+            // Высота поля меняет предел прокрутки по вертикали.
+            if (h != oldBottom - oldTop) editor.post { sendScrollState() }
             // Ширина изменилась — перенос строк пересчитан, число строк другое.
             if (right - left != oldRight - oldLeft) editor.post { sendChanged(withText = false) }
             // Растущее поле: пока view было ниже текста, sora прокрутил его
@@ -272,6 +290,14 @@ class SoraEditorPlatformView(
         // Растущее поле: высоту в Dart задаёт число экранных строк, а с
         // переносом оно известно только после фоновой раскладки.
         editor.onLayoutReady = { editor.post { sendChanged(withText = false) } }
+        editor.onLayoutBusy = { busy ->
+            main.post {
+                if (!editor.isReleased && busy != sentLayoutBusy) {
+                    sentLayoutBusy = busy
+                    channel.invokeMethod("layoutBusy", hashMapOf("busy" to busy))
+                }
+            }
+        }
         editor.subscribeAlways(ContentChangeEvent::class.java) {
             if (applyingFromDart || replacing) return@subscribeAlways
             if (editor.text.length <= SYNC_LIMIT) {
@@ -292,6 +318,9 @@ class SoraEditorPlatformView(
             if (editor.searcher.hasQuery()) sendSearchResult()
         }
         editor.subscribeAlways(PublishSearchResultEvent::class.java) { sendSearchResult() }
+        // Прокрутка: событие несёт конечную точку (анимированная докрутка
+        // ещё в пути — offsetY старый).
+        editor.subscribeAlways(ScrollEvent::class.java) { sendScrollState(it.endY) }
         // Не синхронно: тема (`applyDefault`) ставит цвета по одному, и
         // каждый setColor шлёт событие — повтор из обработчика рекурсивно
         // уходил в StackOverflowError (API 28, ТВ). Свои события пропускаем,
@@ -360,6 +389,9 @@ class SoraEditorPlatformView(
         // С переносом логическая строка бывает на весь экран (компактный
         // JSON) — подсветка текущей строки заливала всё поле.
         editor.isHighlightCurrentLine = !on
+        // Без переноса раскладка не фоновая (onLayoutReady не придёт) —
+        // пределы прокрутки догоняем после кадра.
+        editor.post { sendScrollState() }
     }
 
     private fun setReadOnly(value: Boolean) {
@@ -432,6 +464,31 @@ class SoraEditorPlatformView(
         args["rowHeight"] = editor.rowHeight
         args["textOffsetX"] = editor.measureTextRegionOffset().toDouble()
         channel.invokeMethod("changed", args)
+        // Текст, перенос, ширина — пределы прокрутки другие.
+        sendScrollState()
+    }
+
+    /// Состояние прокрутки для решения «кому жест» во Flutter (§649):
+    /// есть куда вбок, прокрутка у верхнего / нижнего края. Шлётся только
+    /// при смене значений — не на каждый пиксель прокрутки.
+    private fun sendScrollState(offsetY: Int = editor.offsetY) {
+        if (editor.isReleased) return
+        val maxX = runCatching { editor.scrollMaxX }.getOrDefault(0)
+        val maxY = runCatching { editor.scrollMaxY }.getOrDefault(0)
+        val canScrollX = maxX > 0
+        val top = offsetY <= 0
+        val bottom = offsetY >= maxY
+        val bits = (if (canScrollX) 1 else 0) or (if (top) 2 else 0) or (if (bottom) 4 else 0)
+        if (bits == sentScroll) return
+        sentScroll = bits
+        channel.invokeMethod(
+            "scrollState",
+            hashMapOf(
+                "canScrollX" to canScrollX,
+                "scrollTop" to top,
+                "scrollBottom" to bottom,
+            ),
+        )
     }
 
     private fun sendCursor() {
