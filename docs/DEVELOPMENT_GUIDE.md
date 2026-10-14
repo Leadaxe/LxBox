@@ -65,6 +65,10 @@ Operator's decision, 2026-07-24.
 - Unfinished/unchecked work is not committed: code → check first (for device
   features: APK → operator confirmation).
 - Push to `develop` is fine together with finishing the work.
+- An executor sub-agent in its own worktree makes one commit to its branch
+  and does not push; the orchestrator pushes that branch into `develop`. In
+  the main tree an executor does not commit, the orchestrator commits its
+  files by pathspec. Details — [`SUBAGENT_BRIEF.md`](SUBAGENT_BRIEF.md) → “Git”.
 - **Only on the operator's explicit command:**
   - `git push --force` and any rewrite of published history;
   - anything touching `main` and `vX.Y.Z` tags (the release process —

@@ -5,7 +5,7 @@
 LxBox ships one config template, `wizard_template.json`, that declares every VPN setting, the
 sing-box config skeleton, the preset catalog and the DNS catalog; the app is extended by editing
 this template, not only by writing code. The template language — typed variables, `@var`
-substitution, `#if` conditions, `for_each` over nodes — is shared with the desktop launcher and
+substitution, `#if` conditions, node loops (`for_each_node`, `for_each_node_do`) — is shared with the desktop launcher and
 has a normative description and a test corpus. This feature owns the template as an entity: its
 schema, its language, the preset language, what happens to user overrides when a new template
 arrives with an app update, and the procedure for adding a capability through the template.
@@ -15,7 +15,7 @@ arrives with an app update, and the procedure for adding a capability through th
 | Feature | 024-TEMPLATE |
 | Type | Product feature with a process part (extending the client through the template) |
 | Absorbed | `§120F` (template engine: typed variables, `#if`, ref variables — moved from 003), `§033F` (preset bundles: the preset language and catalog; the rule-list part stays in 004) |
-| State | ✅ written from code, 2026-09-29 |
+| State | ✅ written from code, 2026-09-29; node loops, `unique`/`internal` and the object default resolver — contract 1.1.119 ([643](../../tasks/643-contract-1-1-119-node-loops.md)), 2026-10-14 |
 
 ## Purpose
 
@@ -65,11 +65,16 @@ Principles the feature protects:
   has no effect", "false without else — the element drops out", the contract corpus
   for the template engine. **Mutation:** walk both branches.
 - **P4. A malformed shipped template is rejected at load, not at
-  build.** Exception: a preset with an incomplete `for_each` is removed alone, the template
-  lives. **Witness:** unit tests "the real bundled wizard_template.json passes
-  validation", "a broken #enable of the shipped template is rejected at load",
-  "for_each without as — only this preset is removed", "the live tailscale
-  preset passes validation". **Mutation:** validation only at build.
+  build.** There are no exceptions: a structural error in a node loop (the
+  removed `for_each`, both loop keys in one preset, an unknown key inside the
+  loop, a variable named `node`) fails the load of the whole template; the
+  former soft drop of a single preset (§83) is gone. **Witness:** unit tests
+  "the real bundled wizard_template.json passes validation", "a broken #enable
+  of the shipped template is rejected at load", "for_each is a load error of
+  the whole template (D-130, §83 cancelled)", "a global variable node.* or
+  unique on a non-text_list is an error", "the live tailscale preset passes
+  validation". **Mutation:** validation only at build, or dropping the broken
+  preset and loading the rest.
 - **P5. Something unknown at runtime does not break the build, but is visible.** An undeclared
   `@name` stays a literal, an unknown `#` directive is removed — both with
   a warning code; template warnings go first in the build report
@@ -80,11 +85,19 @@ Principles the feature protects:
   in the preset record is ignored. **Witness:** unit tests "ref variable: value
   from globals → enabled", "no global value, only in the preset
   record → disabled". **Mutation:** read the ref from the preset record.
-- **P7. `for_each` yields one body per node that actually made it into the
-  config.** Zero nodes — the preset is empty; `filter` (for example `skip_presets`)
-  excludes a node. **Witness:** unit tests "zero nodes — the preset is empty", "two nodes —
-  repetitions in a row in node order, tags without a namespace", "filter false
-  (skip_presets)". **Mutation:** serve a disabled node or one removed by a gate.
+- **P7. A node loop walks only the nodes that actually made it into the
+  config.** `for_each_node` yields one body per walked node, with `@node` in
+  scope; zero nodes — the preset is empty. `for_each_node_do` collects values
+  from the walked nodes into the preset's own variables and expands the body
+  once after the walk. `#filter` (for example `#not @node.skip_presets`)
+  excludes a node; a missing value in it is false. **Witness:** unit tests
+  "zero nodes — the preset is empty", "two nodes — repetitions in a row in node
+  order, tags without a namespace", "filter false (skip_presets) — the node is
+  not served", "#filter on a body field; a missing field in the condition is
+  false", "body once, tags in the preset namespace, the record does not
+  change", "#final: unique → sort → limit regardless of key order".
+  **Mutation:** serve a disabled node or one removed by a gate; expand a
+  `for_each_node_do` body per node.
 - **P8. A preset is a reference to the template:** it is expanded on every build;
   variable defaults are not stored; the user's target replaces the template's
   decision entirely, intermediate `resolve`/`sniff` are not touched. **Witness:**
@@ -114,8 +127,9 @@ Principles the feature protects:
 - **P12. Preset tags live in the preset's namespace.** A DNS server or rule
   set declared inside a preset gets the tag `<preset_id>:<tag>` in the config,
   and references to it inside the preset follow; a foreign tag (a shared rule
-  set, a Direction, `direct-out`) is untouched; a `for_each` preset's tags have
-  no namespace. A record from the 2.23.2 form is read into the same namespace.
+  set, a Direction, `direct-out`) is untouched; a `for_each_node` preset's tags
+  have no namespace (the node tag already makes them unique), a
+  `for_each_node_do` preset's tags have one, as with a plain preset. A record from the 2.23.2 form is read into the same namespace.
   **Witness:** unit tests "build tags are in the preset namespace", "record:
   ref without a repeated namespace", "an early 2.23.3 record with a repeated
   namespace is read tolerantly", "two nodes — tags without a namespace".
@@ -135,6 +149,19 @@ Principles the feature protects:
   overlay localizes display fields, config subtree untouched", "every declared
   template overlay asset loads and parses". **Mutation:** translate a
   `default_value`.
+- **P15. A build-only variable is not user data.** A variable declared with
+  `wizard_ui: "internal"` has no row in any form; the build ignores its stored
+  and backup values and starts from `default_value`; it is never written to
+  the state nor exported, and an import drops it with `backup_var_skipped`
+  (`reason: internal`). A `text_list` declared with `unique: true` never holds
+  duplicates — neither the user's input, nor the default, nor what a loop
+  collected. **Witness:** unit tests "the record writer drops internal
+  silently, onInternal names it", "import: an internal value is dropped with
+  reason internal", "export: internal is written neither for a preset nor for
+  a global", "internal: the record value is ignored, the base is
+  default_value", "the unique declaration removes duplicates of input and of
+  the collected list". **Mutation:** store or export an `internal` value like
+  a `hidden` one.
 
 ## Documentation and examples
 
@@ -147,7 +174,9 @@ copy:
 - `contract/docs/TEMPLATE_LANG.md` in the launcher repository
   ([Leadaxe/singbox-launcher](https://github.com/Leadaxe/singbox-launcher)) —
   the normative description of the language: keywords, variable types,
-  coercion, the semantics of `#if`, `for_each`, `#tpl`, warning codes. The app
+  coercion, the semantics of `#if`, the node loops (§6.5–§6.7), `#tpl`, the
+  declaration fields `unique` and `internal` (§2.1), the default domain
+  resolver (§6.9), warning codes. The app
   pulls a copy into `app/contract/` with `app/tool/sync_contract.sh`; the copy
   is not committed, so there is no in-repo link.
 - The shared corpus `contract/corpus/template/` in the same repository —
@@ -200,16 +229,35 @@ that exists only when the condition holds, otherwise it drops out:
 ]
 ```
 
-**`for_each` on a preset** — the body is repeated for each node of the type;
-`filter` reads a field of the node record:
+**`for_each_node` on a preset** — the body is repeated for each node that
+passes `#filter`; the node type is an ordinary condition on `@node.body.type`,
+`@node.skip_presets` reads a field of the node record:
 
 ```json
-"for_each": {
-  "node_type": "tailscale",
-  "as": "node",
-  "filter": {
-    "#not": "@node.skip_presets"
+"for_each_node": {
+  "#filter": {
+    "#and": [
+      {
+        "@node.body.type": "tailscale"
+      },
+      {
+        "#not": "@node.skip_presets"
+      }
+    ]
   }
+}
+```
+
+**`for_each_node_do` on a preset** — not in the shipped template; the
+language example from `TEMPLATE_LANG.md` §6.7: the walk collects node server
+names into the preset's `text_list` variable, `#final` deduplicates, sorts
+and caps the list, then the body is expanded once:
+
+```json
+"for_each_node_do": {
+  "#filter": { "@node.body.server": "#notEmpty" },
+  "#do":     { "@domains": { "#append": "@node.body.server" } },
+  "#final":  { "@domains": { "#unique": true, "#sort": true, "#limit": 200 } }
 }
 ```
 
@@ -267,6 +315,18 @@ preset is toggled:
 }
 ```
 
+**The default domain resolver** — an object in the core's form; `server` is
+the resolver choice on the DNS screen, `disable_optimistic_cache` is the
+switch "Never serve stale answers for node hostnames" (variable
+`dns_resolver_no_stale`, `true` by default):
+
+```json
+"default_domain_resolver": {
+  "server": "@dns_default_domain_resolver",
+  "disable_optimistic_cache": "@dns_resolver_no_stale"
+}
+```
+
 **A ref variable** — a preset shows a global variable in its editor instead of
 declaring its own; the value lives in the global:
 
@@ -296,7 +356,7 @@ belong to the owning features (see Boundaries).
 
 **Inputs:** the shipped template file; the display-text overlay for the
 active language; the user's variable values; preset and DNS server records
-(id, overrides, target); nodes of the final config for `for_each`; the
+(id, overrides, target); nodes of the final config for the node loops; the
 contract registry of variables (portable flags).
 
 **Outputs:** the loaded template model for screens and the build; the
@@ -313,7 +373,7 @@ app update ─► new template ─► load: overlay → construct check → mode
    saved state  ─► late default presets once; records keep only overrides
                                    ▼
  variables (value ← default, type, bounds) ─► SKELETON @var/#if ─► PRESETS (expand, namespace,
-                                              for_each, on_change) ─► DNS catalog ─► build (003)
+                                              node loops, on_change) ─► DNS catalog ─► build (003)
                                    ▼
  backup / transfer: vars filtered by this build's template ∪ app flags; records with ref + overrides
 ```
@@ -323,10 +383,23 @@ app update ─► new template ─► load: overlay → construct check → mode
 - The template is loaded once per language; the overlay changes display
   fields only; an unreadable overlay gives the English template and a log
   error instead of a crash.
-- All conditional constructs (`#if`, `#enable`, `#on_change`, `for_each.filter`,
-  DNS server body placeholders) are checked at load against the declared
-  variables; a violation rejects the template, except an incomplete
-  `for_each`, which removes only its preset.
+- All conditional constructs (`#if`, `#enable`, `#on_change`, the loop's
+  `#filter`, DNS server body placeholders) are checked at load against the
+  declared variables; a violation rejects the whole template, with no
+  exceptions.
+- A preset walks the nodes with at most one loop key, `for_each_node` or
+  `for_each_node_do`; the keys inside a loop are a closed list (`#filter`,
+  `#do`, `#final`) without unmarked aliases. The node's name is always
+  `@node`, so a variable named `node` or `node.*`, global or preset, is a
+  load error. The removed `for_each` is a load error as well, not an ignored
+  unknown field.
+- `wizard_ui: "internal"` and `unique` are declaration fields, not keywords;
+  `unique` is allowed only on `text_list`. `internal` differs from `hidden`:
+  a hidden value is still the user's data and travels in a backup, an
+  internal one is not data at all.
+- `route.default_domain_resolver` is an object; whatever replaces the
+  resolver (the choice on the DNS screen, the build replacing a dropped
+  server) changes only `server` and keeps the other fields.
 - Variable metadata (type, default, options) comes only from the template;
   the bounds of an `int` variable (today `dns_cache_capacity`) are set by the
   app; storage holds only the value. The `internal` section is not
@@ -364,8 +437,8 @@ app update ─► new template ─► load: overlay → construct check → mode
 | Function | What it does | Promises | File |
 |---|---|---|---|
 | Config template | Declares variable sections, the config skeleton, the preset and DNS catalogs; loaded and checked once per language with localized display texts. | P4 P14 | [config-template.md](FUNCTIONS/config-template.md) |
-| Template language | Coerces variables by declared type and evaluates `@var`, `#if`/`#enable`, predicates, `for_each`/`#tpl`, ref variables and `on_change`. | P1 P2 P3 P5 P6 P7 | [template-language.md](FUNCTIONS/template-language.md) |
-| Preset language and catalog | Defines how a preset is declared — `ui`, `vars`, `on_change`, `@outbound`, `for_each`, tag namespace — and lists the shipped presets. | P8 P9 P12 | [preset-bundles.md](FUNCTIONS/preset-bundles.md) |
+| Template language | Coerces variables by declared type and evaluates `@var`, `#if`/`#enable`, predicates, the node loops with `#do`/`#final`, `#tpl`, ref variables, `on_change` and the `unique`/`internal` declaration fields. | P1 P2 P3 P5 P6 P7 P15 | [template-language.md](FUNCTIONS/template-language.md) |
+| Preset language and catalog | Defines how a preset is declared — `ui`, `vars`, `on_change`, `@outbound`, `for_each_node`/`for_each_node_do`, tag namespace — and lists the shipped presets. | P8 P9 P12 | [preset-bundles.md](FUNCTIONS/preset-bundles.md) |
 | Template lifecycle | Describes what an app update with a new template does to saved state: seeding, late defaults, tag migration, which overrides survive, and how overrides travel in a backup. | P10 P11 P13 | [template-lifecycle.md](FUNCTIONS/template-lifecycle.md) |
 | Extending the client | The procedure for a new capability through the template: what needs no code, what needs code, the checklist and the documents to update. | — | [extending-the-client.md](FUNCTIONS/extending-the-client.md) |
 

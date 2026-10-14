@@ -31,14 +31,15 @@ the procedure has two sides: the app repository and the launcher contract.
 | A variable with a field on a generic screen | a `sections[].vars[]` entry with `wizard_ui: edit` and a `@var` or `#if` in the skeleton or a preset | the `tun_*`, `log_level` variables |
 | A ref variable in a preset | `{"ref": "<global>"}` in the preset's `vars[]`; the global exists (an `internal` section if it must not be shown) | [264](../../../tasks/264-traffic-processing-preset.md) `resolve_strategy` in Traffic Processing |
 | An `on_change` reaction | `#on_change: {#set: {...}}` on a variable or on the preset pseudo-variables `rule_enable` / `dns_enable` | `ipv6_enabled` → strategies; FakeIP → `resolve_enabled` |
-| A per-node preset | `for_each{node_type, as, filter}`, `@node`, `#tpl` in the body | the `tailscale` preset ([578](../../../tasks/578-tailscale-preset-template-for-each.md)) |
+| A per-node preset | `for_each_node` with a `#filter` (the node type is a condition on `@node.body.type`), `@node` and `#tpl` in the body | the `tailscale` preset ([578](../../../tasks/578-tailscale-preset-template-for-each.md), [643](../../../tasks/643-contract-1-1-119-node-loops.md)) |
+| One rule built from values of all nodes | `for_each_node_do` with `#filter`, `#do` (`#append` into a `text_list` of the preset's own `vars`, often `wizard_ui: internal` and `unique: true`) and an optional `#final`; the body uses the collected variable once | none shipped; the language example is `TEMPLATE_LANG.md` §6.7.4 |
 | A changed default or text | `default_value`, `title`, `tooltip`, `ui.label`; the overlay keys follow the English text | — |
 
 **Requires code** (the template edit is only part of the change):
 
 | Need | Why code | Real example |
 |---|---|---|
-| A new language construct | engine, load-time validator, model, corpus, the launcher norm | [578](../../../tasks/578-tailscale-preset-template-for-each.md) `for_each`/`@node`/`#tpl`; [265](../../../tasks/265-ref-vars.md) `ref`; [264](../../../tasks/264-traffic-processing-preset.md) the `ui` object, locked/pinned |
+| A new language construct | engine, load-time validator, model, corpus, the launcher norm | [578](../../../tasks/578-tailscale-preset-template-for-each.md) `for_each`/`@node`/`#tpl`, replaced by [643](../../../tasks/643-contract-1-1-119-node-loops.md) `for_each_node`/`for_each_node_do`, `unique`, `internal`; [265](../../../tasks/265-ref-vars.md) `ref`; [264](../../../tasks/264-traffic-processing-preset.md) the `ui` object, locked/pinned |
 | A variable on a dedicated screen or with bounds | `wizard_ui: fix` is rendered by that screen; `int` bounds are not in the template | [580](../../../tasks/580-dns-cache-settings.md) DNS cache variables on the DNS tab, 1024..65535 |
 | A variable of a new `type` | a renderer on the settings screen, coercion | — |
 | A new top-level template key | a reader in the build | — |
@@ -64,7 +65,9 @@ The checklist, in order:
 2. **Template edit** in `wizard_template.json` following the formatting style
    in `docs/TEMPLATE.md`; display texts in English; every new conditional
    construct refers only to declared variables, otherwise the shipped
-   template is rejected at load ([P4](../FEATURE.md#promises)).
+   template is rejected at load ([P4](../FEATURE.md#promises)); the same
+   holds for a node loop error — the whole template is rejected, not the one
+   preset.
 3. **Contract, if shared text or language changed:** a request to the
    launcher (a `TEMPLATE_LANG.md` section for a construct, `registry/vars.json`
    with `portable` for a variable that travels in transfer, a corpus case for
@@ -133,6 +136,7 @@ Invariants:
 | 5 | [527](../../../tasks/527-dns-shield-yandex-dot-base.md) | Released v2.25.3 | A DNS catalog entry without code |
 | 6 | [531](../../../tasks/531-ru-app-list-ruleset-in-ru-preset.md) | Done | A rule set with a switch inside a preset; overlay keys renamed with the text |
 | 7 | [555](../../../tasks/555-template-lang-spec143-parity.md) | Done (items 1–6) | Parity campaign: the norm, the registry and the corpus are kept in step |
-| 8 | [578](../../../tasks/578-tailscale-preset-template-for-each.md) | Spec. Implementation started | Constructs with code, a record field, late seeding, a contract bump |
+| 8 | [578](../../../tasks/578-tailscale-preset-template-for-each.md) | Released v2.25.8, superseded by 643 | Constructs with code, a record field, late seeding, a contract bump |
 | 9 | [580](../../../tasks/580-dns-cache-settings.md) | Done | Variables with bounds and a dedicated screen; portable in the registry |
 | 10 | [591](../../../tasks/591-spec-kit-revision-audit.md) | Open | Audit: `docs/TEMPLATE.md` drift, stale-flag variable list |
+| 11 | [643](../../../tasks/643-contract-1-1-119-node-loops.md) | Released v2.25.14 | A language change from the launcher: contract sync, a renamed corpus, a reworked loop model, new declaration fields |
