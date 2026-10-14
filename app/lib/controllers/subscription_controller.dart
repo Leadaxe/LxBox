@@ -2996,8 +2996,10 @@ class SubscriptionController extends ChangeNotifier {
     // (кэш на процесс, как у §316; без канала — пусто, поле не пишется).
     final tailscaleStateRoot = await _tailscaleStateRoot();
 
-    // §578 — разовый шаг: поздний дефолтный пресет (`tailscale`) у
-    // пользователя с уже засеянными дефолтами.
+    // §644 — первый seed дефолтных пресетов, если его ещё не было (сборка
+    // до первого открытия Routing); §578 — разовый шаг: поздний дефолтный
+    // пресет (`tailscale`) у пользователя с уже засеянными дефолтами.
+    await SettingsStorage.seedDefaultPresets();
     await SettingsStorage.seedLateDefaultPresets();
 
     final settings = BuildSettings(

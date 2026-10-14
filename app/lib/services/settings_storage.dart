@@ -565,6 +565,11 @@ class SettingsStorage {
 
   static Future<void> markDefaultsSeeded() => _markDefaultsSeeded();
 
+  /// §644 — первый seed дефолтных пресетов шаблона (`default: true`), один
+  /// раз на установку. `true` — список правил изменился.
+  static Future<bool> seedDefaultPresets([WizardTemplate? template]) =>
+      _seedDefaultPresets(template);
+
   /// §578 — разовое добавление пресетов с `default: true`, появившихся в
   /// шаблоне после первой установки ([kLateDefaultPresetIds]). `true` — список
   /// правил изменился.

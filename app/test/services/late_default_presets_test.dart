@@ -76,4 +76,51 @@ void main() {
     expect(await SettingsStorage.seedLateDefaultPresets(template), isFalse);
     expect(await presetIds(), isEmpty);
   });
+
+  // §644 — первый seed дефолтов идёт в хранилище (старт / сборка / Routing),
+  // а не только на экране маршрутов.
+  group('§644 первый seed дефолтов', () {
+    final defaults = [
+      for (final r in template.selectableRules)
+        if (r.defaultEnabled) r.presetId,
+    ];
+
+    test('свежая установка: все default-пресеты, поздние закрыты', () async {
+      expect(defaults, containsAll(['bittorrent', 'tailscale']));
+      expect(await SettingsStorage.seedDefaultPresets(template), isTrue);
+      expect(await presetIds(), defaults);
+      expect(await SettingsStorage.hasDefaultsSeeded(), isTrue);
+      // Поздний шаг после первого seed ничего не добавляет.
+      expect(await SettingsStorage.seedLateDefaultPresets(template), isFalse);
+      expect(await presetIds(), defaults);
+    });
+
+    test('разовый: удалённый пресет не возвращается', () async {
+      await SettingsStorage.seedDefaultPresets(template);
+      await SettingsStorage.saveCustomRules(const []);
+      expect(await SettingsStorage.seedDefaultPresets(template), isFalse);
+      expect(await presetIds(), isEmpty);
+    });
+
+    test('дефолты уже засеяны — не трогается', () async {
+      writeDoc({'presets_migrated': true});
+      expect(await SettingsStorage.seedDefaultPresets(template), isFalse);
+      expect(await presetIds(), isEmpty);
+    });
+
+    test('пресет уже в правилах — дубля нет, выбор пользователя цел', () async {
+      await SettingsStorage.saveCustomRules([
+        CustomRulePreset(name: 'x', presetId: 'bittorrent', enabled: false),
+      ]);
+      expect(await SettingsStorage.seedDefaultPresets(template), isTrue);
+      final rules = await SettingsStorage.getCustomRules();
+      final bt = rules
+          .whereType<CustomRulePreset>()
+          .where((r) => r.presetId == 'bittorrent')
+          .toList();
+      expect(bt, hasLength(1));
+      expect(bt.single.enabled, isFalse);
+      expect(rules, hasLength(defaults.length));
+    });
+  });
 }
