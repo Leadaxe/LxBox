@@ -32,6 +32,7 @@ import io.github.rosemoe.sora.langs.textmate.registry.model.ThemeModel
 import io.github.rosemoe.sora.langs.textmate.registry.provider.AssetsFileResolver
 import io.github.rosemoe.sora.widget.CodeEditor
 import io.github.rosemoe.sora.widget.EditorSearcher
+import io.github.rosemoe.sora.widget.component.Magnifier
 import io.github.rosemoe.sora.widget.schemes.EditorColorScheme
 import org.eclipse.tm4e.core.registry.IThemeSource
 import java.util.Locale
@@ -228,6 +229,11 @@ class SoraEditorPlatformView(
         // По умолчанию sora глушит экранную клавиатуру при подключённой
         // аппаратной (эмулятор, BT-клавиатура) — решение оставляем системе.
         editor.isDisableSoftKbdIfHardKbdAvailable = false
+        // Лупа выделения на API 26+ копирует кусок окна (`PixelCopy`) по
+        // `getLocationInWindow()` редактора; под hybrid composition Flutter
+        // координаты врут — лупа белая или со строками не из-под пальца
+        // (форум 13.10). Рисуем её из самого редактора.
+        editor.getComponent(Magnifier::class.java).isWithinEditorForcibly = true
         setReadOnly(args?.get("readOnly") as? Boolean ?: false)
         setTextFromDart(args?.get("text") as? String ?: "")
         if (args?.get("autofocus") == true && !readOnly) {
