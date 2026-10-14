@@ -7,6 +7,10 @@
 /// import-правила, отметки выключения и хранимые вердикты на входе; узлы,
 /// мигрированные отметки, сводка `dropped` и подсказка пустого разбора на
 /// выходе. Мутации контроллера остаются на main.
+///
+/// §652 C — тем же механизмом в воркере разбирается и ответ источника
+/// подписки (сеть, снапшот файловой, тело нового файла): [FetchParseInput] →
+/// [FetchParseResult].
 library;
 
 import 'dart:isolate';
@@ -25,6 +29,7 @@ import '../../services/parser/body_decoder.dart';
 import '../../services/parser/engine/section_loader.dart';
 import '../../services/parser/parse_all.dart';
 import '../../services/subscription/import_rules.dart';
+import '../../services/subscription/sources.dart';
 import 'core_reject_ops.dart';
 
 /// Вход разбора кэша одной подписки.
@@ -157,18 +162,77 @@ final class ParseEnvSnapshot {
 /// ошибка воркера (исключение), а не тихий разбор без них. Вызывающий
 /// отвечает за откат на main.
 Future<CacheParseResult> parseCachedBodyInIsolate(
-        CacheParseInput input, ParseEnvSnapshot env) =>
-    // Замыкание строится здесь, в top-level функции: созданное в методе
-    // контроллера, оно утянуло бы в воркер контекст с `this`.
-    Isolate.run(() => _workerMain(input, env), debugName: 'rehydrate');
-
-Future<CacheParseResult> _workerMain(
     CacheParseInput input, ParseEnvSnapshot env) async {
+  final (value, logs) =
+      await _runInWorker(() => parseCachedBody(input), env, 'rehydrate');
+  return value._withLogs(logs);
+}
+
+/// Общий запуск чистого разбора в отдельном isolate: установка синглтонов
+/// из снимка main, перехват журнала. [parse] обязан быть построен в
+/// top-level функции: замыкание из метода контроллера утянуло бы в воркер
+/// контекст с `this`.
+Future<(R, List<CapturedLog>)> _runInWorker<R>(
+        R Function() parse, ParseEnvSnapshot env, String debugName) =>
+    Isolate.run(() => _workerMain(parse, env), debugName: debugName);
+
+Future<(R, List<CapturedLog>)> _workerMain<R>(
+    R Function() parse, ParseEnvSnapshot env) async {
   final logs = <CapturedLog>[];
   AppLog.I.capture = (level, message, source) =>
       logs.add((level: level, message: message, source: source));
   await env._install();
-  return parseCachedBody(input)._withLogs(logs);
+  return (parse(), logs);
+}
+
+/// §652 C — вход разбора ответа источника подписки (сеть, снапшот файловой,
+/// ответ того же URL в проходе автообновления, тело нового файла).
+final class FetchParseInput {
+  const FetchParseInput({required this.fetch, this.rules = const []});
+
+  final FetchResult fetch;
+
+  /// `SubscriptionServers.activeImportRules` на момент старта разбора
+  /// (§302). Пусто — правила не применяются (новая подписка, смена
+  /// источника).
+  final List<ImportRule> rules;
+}
+
+/// §652 C — результат разбора ответа: [ParseResult] (узлы после
+/// import-правил, мета, `dropped`) и отметки правил.
+final class FetchParseResult {
+  const FetchParseResult({
+    required this.result,
+    required this.ruleMarks,
+    this.logs = const [],
+  });
+
+  final ParseResult result;
+
+  /// [applyRulesToNodes] над [ParseResult.nodes].
+  final ({Set<String> disable, Set<String> enable}) ruleMarks;
+
+  /// Записи журнала разбора в воркере (на main разбор пишет сразу).
+  final List<CapturedLog> logs;
+}
+
+/// §652 C — разбор ответа: `parseFetched` (inline-заголовки, мета, `decode`,
+/// `parseAll(dropped:)`) и import-правила. Состояние контроллера (миграция,
+/// вердикты, GC, ключ состава) здесь не трогается — это main.
+FetchParseResult parseFetchedWithRules(FetchParseInput input) {
+  final result = parseFetched(input.fetch);
+  final marks = applyRulesToNodes(result.nodes, input.rules);
+  return FetchParseResult(result: result, ruleMarks: marks);
+}
+
+/// [parseFetchedWithRules] в отдельном isolate — тот же механизм, что у
+/// [parseCachedBodyInIsolate]. Откат на main — у вызывающего.
+Future<FetchParseResult> parseFetchedInIsolate(
+    FetchParseInput input, ParseEnvSnapshot env) async {
+  final (value, logs) =
+      await _runInWorker(() => parseFetchedWithRules(input), env, 'fetch-parse');
+  return FetchParseResult(
+      result: value.result, ruleMarks: value.ruleMarks, logs: logs);
 }
 
 /// Воспроизводит на main записи журнала, сделанные разбором в воркере.

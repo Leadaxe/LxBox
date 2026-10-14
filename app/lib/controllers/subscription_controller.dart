@@ -471,6 +471,28 @@ class SubscriptionController extends ChangeNotifier {
     }
   }
 
+  /// §652 C — тест-шов: подмена воркера разбора ответа источника подписки.
+  @visibleForTesting
+  Future<FetchParseResult> Function(
+      FetchParseInput input, ParseEnvSnapshot env)? fetchParseWorkerForTesting;
+
+  /// §652 C — разбор тела подписки (ответ сети, снапшот файловой, тело
+  /// нового файла) в отдельном isolate; отказ воркера → тот же разбор на
+  /// main с warning. Записи журнала воркера воспроизводятся здесь.
+  Future<FetchParseResult> _parseFetchedBody(
+      FetchParseInput input, String shortUrl) async {
+    final worker = fetchParseWorkerForTesting ?? parseFetchedInIsolate;
+    try {
+      final result = await worker(input, ParseEnvSnapshot.capture());
+      replayCapturedLogs(result.logs);
+      return result;
+    } catch (e) {
+      AppLog.I.warning('Parse: worker failed for $shortUrl '
+          '(${humanizeError(e).renderEn()}) — parsing on main');
+      return parseFetchedWithRules(input);
+    }
+  }
+
   /// §074 — add a fully-constructed UserServer (used by Add server wizard
   /// для SOCKS5 form тab). Не парсит — caller уже построил `UserServer` с
   /// нодами. Persist + lastError-aware (паттерн как `addFromInput`).
@@ -1367,7 +1389,10 @@ class SubscriptionController extends ChangeNotifier {
   /// Возвращает true, если создана файловая подписка; false — если нод ≤ 1
   /// (caller должен упасть на старое поведение `addFromInput`).
   Future<bool> addFileSubscription(String body, String fileName) async {
-    final result = await parseFromSource(InlineSource(body));
+    // §652 C — тело подписки разбирается в isolate.
+    final result = (await _parseFetchedBody(
+            FetchParseInput(fetch: FetchResult(body)), 'file "$fileName"'))
+        .result;
     if (result.nodes.length <= 1) return false; // ≤1 → не файловая (spec 129)
 
     final url = 'file:${newUuidV4()}';
@@ -1423,10 +1448,14 @@ class SubscriptionController extends ChangeNotifier {
     try {
       // 1. Получаем НОВЫЙ источник (ещё ничего не трогаем).
       // §289 — сохраняем per-subscription идентичность при смене источника.
-      final result = toFile
-          ? await parseFromSource(InlineSource(fileBody))
-          : await parseFromSource(UrlSource(newUrl, identity: old.identity),
+      // §652 C — сеть на main, разбор тела в isolate.
+      final fetched = toFile
+          ? FetchResult(fileBody)
+          : await fetchRaw(UrlSource(newUrl, identity: old.identity),
               client: httpClientForTesting);
+      final result = (await _parseFetchedBody(
+              FetchParseInput(fetch: fetched), maskSubscriptionUrl(newUrl)))
+          .result;
 
       // 2. Успех нового = > 0 нод. Иначе — полный откат (§101-инвариант).
       if (result.nodes.isEmpty) {
@@ -3197,10 +3226,10 @@ class SubscriptionController extends ChangeNotifier {
       // §289 — per-subscription идентичность (null → глобальная).
       // §302 — import-rules здесь не участвуют: применяются ниже, к уже
       // разобранным узлам.
-      final result = pre != null
-          ? parseFetched(pre)
-          : await parseFromSource(
-              UrlSource(list.url, identity: list.identity),
+      // §652 C — сеть (ретраи, ожидание I/O) на main, разбор ответа и
+      // import-правила — в isolate.
+      final fetched = pre ??
+          await fetchRaw(UrlSource(list.url, identity: list.identity),
               client: httpClientForTesting);
       // §515 — сетевые секунды это окно, в котором пользователь успевает
       // переключить пространство. Выходим до разбора результата: писать в
@@ -3211,6 +3240,33 @@ class SubscriptionController extends ChangeNotifier {
             'workspaces: fetch result dropped — workspace switched: $shortUrl');
         return false;
       }
+      final ruleSource = entry.list as SubscriptionServers;
+      final parsed = await _parseFetchedBody(
+          FetchParseInput(
+              fetch: fetched, rules: ruleSource.activeImportRules),
+          shortUrl);
+      // §515 / §101 — и после воркера: пространство могли переключить,
+      // запись — удалить или перевести на другой источник (Edit source).
+      if (stale) {
+        AppLog.I.warning(
+            'workspaces: fetch result dropped — workspace switched: $shortUrl');
+        return false;
+      }
+      final afterParse = entry.list;
+      if (!_entries.contains(entry) ||
+          afterParse is! SubscriptionServers ||
+          afterParse.url != list.url) {
+        AppLog.I.debug('Fetch result dropped — entry removed or source '
+            'changed while parsing: $shortUrl');
+        // Плитка не должна остаться в «Fetching»: состояние записи уже
+        // выставил тот, кто сменил источник.
+        if (_entries.contains(entry)) {
+          entry.status = SubStatusNodes(entry.list.nodes.length);
+          notifyListeners();
+        }
+        return false;
+      }
+      final result = parsed.result;
       AppLog.I.info(
           'Fetched ${result.nodes.length} nodes from $shortUrl'
           '${result.meta?.profileTitle == null ? "" : " (title: ${result.meta!.profileTitle})"}');
@@ -3310,8 +3366,13 @@ class SubscriptionController extends ChangeNotifier {
       // `nodeIdentityHash` того же инстанса), поэтому пометка гарантированно
       // совпадает с узлом, который билдер увидит.
       final ruleNow = DateTime.now();
-      final ruleMarks =
-          applyRulesToNodes(result.nodes, current.activeImportRules);
+      // §652 C — правила применены в воркере по снимку на старте разбора.
+      // Сменились, пока он работал (вкладка Filters), — применяем текущие
+      // заново на main: прогон стартует с чистого узла (§307).
+      final ruleMarks = identical(current.importRules, ruleSource.importRules) &&
+              current.importRulesEnabled == ruleSource.importRulesEnabled
+          ? parsed.ruleMarks
+          : applyRulesToNodes(result.nodes, current.activeImportRules);
 
       // §400 (IDENTITY.md §5.1) — миграция legacy-ключей: отметки, записанные
       // до перехода на тег, опознаются по форме 64-hex и переезжают на

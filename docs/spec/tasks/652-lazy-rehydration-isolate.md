@@ -3,7 +3,7 @@
 | Поле | Значение |
 |------|----------|
 | Тип | P (производительность) + D (дефект: UI замирает на старте) |
-| Статус | P (in progress): A+B — done (89d162c4, CI 38649166029, проверено владельцем 15.10.2026); C — в работе |
+| Статус | D (done): A+B+C — A+B 89d162c4 (CI 38649166029, проверено владельцем 15.10.2026); C — доработка того же дня |
 | Фича | [001-SUBSCRIPTIONS](../features/001-SUBSCRIPTIONS/) |
 | Дата | 2026-10-15 |
 | Связанные | §101 (гонки регидрации), §283 (регидрация не сигнал «узел ушёл»), §302 (import-rules на кэше), §400 (миграция legacy-ключей), §478 (вердикты ядра), §515 (stale-контроллер слота), §561 (`dropped`), §615 (`nodesNotLoaded`) |
@@ -190,6 +190,72 @@
    ставится при догрузке, тест зовёт `ensureHydrated`. Остальные перечисленные
    файлы (вкл. golden_* из `storage_migration`, экраны подписки) зелёные без
    правок.
+
+### Реализация C (15.10.2026)
+
+Файлы (от `app/`):
+
+- `lib/controllers/subscription_controller/cache_rehydrate.dart` — общий
+  запуск `_runInWorker` (установка `ParseEnvSnapshot`, перехват `AppLog`),
+  через него теперь идут и `parseCachedBodyInIsolate`, и новый
+  `parseFetchedInIsolate`; `FetchParseInput` (`FetchResult` + правила) /
+  `FetchParseResult` (`ParseResult` + отметки правил + логи); чистая
+  `parseFetchedWithRules` = `parseFetched` + `applyRulesToNodes`.
+- `lib/services/subscription/sources.dart` — `parseFromSource` =
+  `parseFetched(await fetchRaw(...))` (C.1: сетевая половина — уже
+  существовавший `fetchRaw`).
+- `lib/controllers/subscription_controller.dart` — `_parseFetchedBody`
+  (воркер → откат на main с warning `Parse: worker failed for … — parsing on
+  main`, воспроизведение логов), тест-шов `fetchParseWorkerForTesting`.
+  Через воркер: `_fetchEntryByRef` (сеть и `pre` — снапшот файловой / ответ
+  того же URL в проходе), `addFileSubscription`, `updateSourceAt` (Edit source,
+  URL и файл). Первое добавление по URL идёт через `_fetchEntryByRef`. На
+  main остались одиночные узлы (`addFromInput` без URL, `_addJsonNodes`,
+  `_addUriLines`, `updateConnectionAt`, WARP) и папки
+  (`addMembersToFolder`, `addUrlSnapshotToFolder` — `FolderServers`, не тело
+  подписки по C.4).
+- Тесты: `test/subscription/fetch_parse_worker_test.dart` (пп. 9 через
+  контроллер, 10, 11), `test/subscription/rehydrate_worker_equivalence_test.dart`
+  (п. 9 на корпусе п. 6: узлы, `dropped`, мета из заголовков, rawBody,
+  заголовки, отметки REPLACE/DISABLE).
+
+Пересылаемость: `ParseResult` (узлы, `DecodedBody`, `SubscriptionMeta`,
+`dropped`, тело, заголовки) — обычные данные, уходят из воркера как есть;
+достраивать на main ничего не пришлось.
+
+Замер (п. C.5): тело `public_subscriptions/bodies/27-github-ru-white-all-white`
+целиком — 4025 узлов; refresh через контроллер с `MockClient`, `flutter test`
+(JIT, debug — абсолюты выше релиза), 3 прогона после прогрева; «занятость
+main» — сумма пауз цикла событий > 4 мс по heartbeat-таймеру.
+
+| | refresh всего | разбор | занятость main | самая длинная пауза main |
+|---|---|---|---|---|
+| до (разбор на main) | 1,83–1,88 с | 1,66–1,70 с на main | 1,82–1,86 с | 1,81–1,86 с |
+| после (isolate) | 2,12–2,17 с | 1,91–1,98 с в воркере | 0,23–0,25 с | 0,13–0,16 с |
+
+Остаток на main ~240 мс (> 200 мс), что его держит: `bodiesByIdentity` ×2
+(старые и новые узлы для вердиктов) ~70 мс; приём результата воркера и снимок
+окружения ~30 мс; `sourceNodeIdentities` ~2 мс; остальное (~140 мс, порознь
+не мерилось) — `_compositionKey` ×2 (контент-хеш каждого узла старого и
+нового списка), миграция и GC отметок, `stampStoredVerdicts`, `_persist`.
+По ТЗ не оптимизировалось.
+
+Отступления и уточнения C:
+
+1. Guard'ы после воркера: кроме `stale` (он был и после фетча) добавлены
+   «запись ещё в списке, тот же URL» — после фетча их не было, хотя спека
+   называла их существующими. Окно расширилось на время разбора, а Edit
+   source в это окно иначе записал бы узлы старого URL поверх нового
+   источника. Результат отбрасывается (`debug`-лог), плитке возвращается
+   статус по текущим узлам.
+2. Правила для воркера берутся после сети, перед разбором («на момент старта
+   разбора»). Сменились (`importRules` / `importRulesEnabled` не те же), пока
+   воркер работал, — `applyRulesToNodes` с текущими на main; отметки берутся
+   из этого прогона.
+3. `updateSourceAt` и `addFileSubscription` правила не применяли и не
+   применяют (вход с пустыми правилами), поведение то же.
+4. Отдельный тест-шов `fetchParseWorkerForTesting` вместо общего с
+   `cacheParseWorkerForTesting`: входы и выходы разные.
 
 ## Вне объёма
 

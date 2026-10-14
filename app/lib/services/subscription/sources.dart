@@ -94,18 +94,13 @@ class ParseResult {
 /// Мержит HTTP-заголовки с inline псевдо-заголовками (`# profile-title: …`
 /// в начале тела) — некоторые провайдеры кладут метаданные в комменты,
 /// а не в HTTP-headers. HTTP первичны, inline как fallback.
+///
+/// §652 C — две половины: [fetchRaw] (сеть, ретраи — ожидание I/O на main)
+/// и [parseFetched] (счёт). Контроллер подписок зовёт их порознь и разбирает
+/// тело подписки в отдельном isolate.
 Future<ParseResult> parseFromSource(SubscriptionSource source,
-    {http.Client? client}) async {
-  // §219 — закрываем ТОЛЬКО самосозданный клиент (инжектированный извне
-  // закрывает владелец): иначе `http.Client()` течёт на каждый fetch.
-  final owned = client == null;
-  final c = client ?? http.Client();
-  try {
-    return parseFetched(await _fetch(source, c));
-  } finally {
-    if (owned) c.close();
-  }
-}
+        {http.Client? client}) async =>
+    parseFetched(await fetchRaw(source, client: client));
 
 /// §603 — разбор уже полученного ответа (тело + HTTP-заголовки) без сети.
 /// Для повторного разбора снапшота файловой подписки и для записей с тем же
@@ -184,10 +179,12 @@ set fetchBackoffsForTesting(List<Duration>? value) =>
     _fetchBackoffsOverride = value;
 
 /// Прямой HTTP GET без декода/парса. Для UI «Source» — показать живой
-/// ответ сервера как есть. Не пишет в кэш.
+/// ответ сервера как есть; сетевая половина [parseFromSource] (§652 C).
+/// Не пишет в кэш.
 Future<FetchResult> fetchRaw(SubscriptionSource source,
     {http.Client? client}) async {
-  // §219 — закрываем только самосозданный клиент (см. parseFromSource).
+  // §219 — закрываем ТОЛЬКО самосозданный клиент (инжектированный извне
+  // закрывает владелец): иначе `http.Client()` течёт на каждый fetch.
   final owned = client == null;
   final c = client ?? http.Client();
   try {
