@@ -750,7 +750,7 @@ class CcTailscalePeer {
           for (final ip in CcChannel._asList(m['ips']))
             if (ip != null && '$ip'.isNotEmpty) '$ip',
         ],
-        path: '${m['path'] ?? ''}',
+        path: '${m['path'] ?? ''}'.toLowerCase(),
         endpoint: '${m['endpoint'] ?? ''}',
         peerRelay: '${m['peer_relay'] ?? ''}',
         derpRegionCode: '${m['derp_region_code'] ?? ''}',
@@ -758,14 +758,16 @@ class CcTailscalePeer {
       );
 }
 
-/// §613 (ядро SPEC 115) — значения `TailscalePeer.path`. Строки ядра.
+/// §613 (ядро SPEC 115) — значения `TailscalePeer.path`. Строки ядра
+/// (`command_types_tailscale.go`): строчные, «никогда не слал» — пустая
+/// строка; разбор приводит к нижнему регистру (§645).
 abstract final class CcTailscalePath {
-  static const direct = 'DIRECT';
-  static const peerRelay = 'PEER_RELAY';
-  static const derp = 'DERP';
+  static const direct = 'direct';
+  static const peerRelay = 'peer_relay';
+  static const derp = 'derp';
 
   /// Узел ни разу не слал устройству.
-  static const none = 'NONE';
+  static const none = '';
 }
 
 /// §581 — владелец устройств сети (`TailscaleUserGroup` ядра).

@@ -210,7 +210,7 @@ void main() {
       hostName: 'router',
       dnsName: 'router.tail.ts.net.',
       online: true,
-      path: 'DIRECT',
+      path: 'direct',
       endpoint: '198.51.100.7:41641',
       ips: ['100.64.0.9', 'fd7a::9', '10.0.0.9'],
     );

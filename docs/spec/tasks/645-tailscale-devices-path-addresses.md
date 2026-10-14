@@ -203,3 +203,12 @@ UI только английский. Новые строки (`last seen %s ago
 - Возраст `last seen` — свой короткий формат: у `wgAgeLabel` нет дней и формат
   `33 h ago`, у `relativeTime` — `yesterday` / недели, оба не дают `33h` /
   `17d` из макета.
+
+## Дефект §613, найденный на эмуляторе (14.10.2026)
+
+Путь не показывался никогда, и на телефоне тоже: ядро отдаёт
+`TailscalePeer.path` строчными (`direct` / `peer_relay` / `derp`, пусто —
+не слал; `experimental/libbox/command_types_tailscale.go`), а `CcTailscalePath`
+с §613 сравнивал с `DIRECT` / `PEER_RELAY` / `DERP`. Константы приведены к
+строкам ядра, разбор `path` — через `toLowerCase()`; тесты переведены на строки
+ядра, добавлен тест на оба регистра (`test/vpn/cc_wireguard_status_test.dart`).
