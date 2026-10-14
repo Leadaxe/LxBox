@@ -139,6 +139,9 @@ void main() async {
         for (final v in directionsTemplate.vars) v.name: v.defaultValue,
       },
     );
+    // §644 — первый seed дефолтных пресетов шаблона (`default: true`), один
+    // раз на установку, ДО первого билда: Connect без открытия Routing.
+    await SettingsStorage.seedDefaultPresets(directionsTemplate);
     // §612 — one-shot: passive_check (§611) true/отсутствует → автовыбор
     // least_test становится failover. ПОСЛЕ seed Направлений (чистая
     // установка получает failover и у засеянных) и ДО первого билда.

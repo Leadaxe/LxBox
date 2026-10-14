@@ -6,6 +6,50 @@
 
 ---
 
+## [2.25.15] — 2026-10-14
+
+### Changed
+
+- **Tailscale Network tab shows how each device is reached
+  ([task 645](docs/spec/tasks/645-tailscale-devices-path-addresses.md)).**
+  A third line per device: green bolt and `direct <ip:port>`, orange cloud and
+  `relay <region>` (DERP), orange hub and `peer relay`; offline devices show
+  `last seen 33h ago` and `key expired`. The exit node shows its path with the
+  same icon. Rows are shorter: name and first address, then OS and roles with
+  the second address; more than two addresses fold into `+N`. MagicDNS name
+  and every address moved into the device menu; the header counts
+  `N online / M`. This device lists its addresses under one Address heading.
+  While the tab is open and the VPN is on it calls the core's one-shot
+  `GetTailscaleStatus` every 3 s. (RU: Вкладка Network узла Tailscale
+  показывает путь до каждого устройства — direct / relay / peer relay с
+  иконкой; строки короче, адреса столбиком с `+N`, MagicDNS и адреса в меню,
+  счётчик в заголовке; вкладка обновляется раз в 3 с, пока открыта.)
+
+### Fixed
+
+- **The Tailscale connection path never appeared (task 645).** The core reports
+  the path in lower case (`direct`, `peer_relay`, `derp`); since v2.25.11 the
+  app compared it with upper case and the path line stayed empty. Parsing is
+  now case-insensitive. (RU: Путь соединения Tailscale не показывался с
+  v2.25.11: ядро отдаёт его строчными, приложение сравнивало с заглавными.
+  Теперь регистр не важен.)
+
+- **Default routing presets are on right after install
+  ([task 644](docs/spec/tasks/644-default-presets-seed-before-routing.md)).**
+  Presets the template enables by default (Russia-only services, BitTorrent,
+  Tailscale networks, Unknown traffic, VoWiFi) reached the config only after
+  the Routing screen was opened once: a node added and connected before that
+  ran without them. They are now seeded at app start and before the config
+  is built, once per install; a preset the user removed does not come back.
+  (RU: Пресеты, включённые в шаблоне по умолчанию (Russia-only services,
+  BitTorrent, Tailscale networks, Unknown traffic, VoWiFi), попадали в конфиг
+  только после первого открытия экрана Routing: узел, добавленный и
+  подключённый до этого, шёл без них. Теперь они засеваются при старте
+  приложения и перед сборкой конфига, один раз на установку; удалённый
+  пресет не возвращается.)
+
+---
+
 ## [2.25.14] — 2026-10-13
 
 ### Added

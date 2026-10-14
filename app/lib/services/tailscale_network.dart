@@ -99,10 +99,9 @@ String exitNodeConfigValue(CcTailscalePeer peer) {
 /// убирается). Источник — JSON-объект тела узла; порядок прочих ключей
 /// сохраняется, запись — JSON с отступом в два пробела. Не объект —
 /// [FormatException].
-String withExitNode(String source, String? value) =>
-    withBodyFields(source, {
-      'exit_node': value == null || value.isEmpty ? null : value,
-    });
+String withExitNode(String source, String? value) => withBodyFields(source, {
+  'exit_node': value == null || value.isEmpty ? null : value,
+});
 
 /// §613 — текст источника узла с полями [fields]: значение `null` убирает
 /// поле, прочее записывается как есть. Порядок прочих ключей сохраняется,
@@ -141,15 +140,78 @@ List<CcTailscalePeer> sortDevices(Iterable<CcTailscalePeer> peers) {
 /// руководства ядра: `direct 1.2.3.4:41641`, `peer relay`, `relay fra`.
 /// `NONE` (узел ни разу не слал устройству) и ядро без пути — пусто.
 String tailscalePathLabel(CcTailscalePeer p) => switch (p.path) {
-  CcTailscalePath.direct => p.endpoint.isEmpty
-      ? getLocalText.s("direct")
-      : getLocalText.s("direct %s", p.endpoint),
+  CcTailscalePath.direct =>
+    p.endpoint.isEmpty
+        ? getLocalText.s("direct")
+        : getLocalText.s("direct %s", p.endpoint),
   CcTailscalePath.peerRelay => getLocalText.s("peer relay"),
-  CcTailscalePath.derp => p.derpRegionCode.isEmpty
-      ? getLocalText.s("relay")
-      : getLocalText.s("relay %s", p.derpRegionCode),
+  CcTailscalePath.derp =>
+    p.derpRegionCode.isEmpty
+        ? getLocalText.s("relay")
+        : getLocalText.s("relay %s", p.derpRegionCode),
   _ => '',
 };
+
+/// §645 — вид пути до устройства для иконки строки «как подключено»; `null` —
+/// пути нет (`NONE`, ядро без пути, неизвестное значение).
+enum TailscalePathKind { direct, derp, peerRelay }
+
+TailscalePathKind? tailscalePathKind(CcTailscalePeer p) => switch (p.path) {
+  CcTailscalePath.direct => TailscalePathKind.direct,
+  CcTailscalePath.derp => TailscalePathKind.derp,
+  CcTailscalePath.peerRelay => TailscalePathKind.peerRelay,
+  _ => null,
+};
+
+/// §645 — короткий возраст `42s` / `5m` / `33h` / `17d` (часы до 48 ч, как в
+/// лаунчере); отрицательное — как 0.
+String tailscaleAgeLabel(int seconds) {
+  final s = seconds < 0 ? 0 : seconds;
+  if (s < 60) return getLocalText.s("%ss", '$s');
+  if (s < 3600) return getLocalText.s("%sm", '${s ~/ 60}');
+  if (s < 48 * 3600) return getLocalText.s("%sh", '${s ~/ 3600}');
+  return getLocalText.s("%sd", '${s ~/ 86400}');
+}
+
+/// §645 — третья строка устройства в Devices («как подключено»), условия по
+/// порядку, срабатывает первое:
+/// 1. путь `DIRECT` / `DERP` / `PEER_RELAY` — [tailscalePathLabel];
+/// 2. пути нет, устройство не в сети и `lastSeen > 0` — `last seen 33h ago`;
+/// 3. иначе — ничего.
+///
+/// Истёкший ключ дописывается через ` · `. Пусто — строки нет. Возраста
+/// хендшейка здесь нет (он только у пункта Exit node).
+String tailscaleConnectionText(CcTailscalePeer p, int nowUnix) {
+  final parts = <String>[];
+  final path = tailscalePathKind(p) == null ? '' : tailscalePathLabel(p);
+  if (path.isNotEmpty) {
+    parts.add(path);
+  } else if (!p.online && p.lastSeen > 0) {
+    parts.add(
+      getLocalText.s(
+        "last seen %s ago",
+        tailscaleAgeLabel(nowUnix - p.lastSeen),
+      ),
+    );
+  }
+  if (p.expired) parts.add(getLocalText.s("key expired"));
+  return parts.join(' · ');
+}
+
+/// §645 — левая часть второй строки устройства: ОС и роли через ` · `. Слова
+/// «в сети» нет — это показывает точка.
+String tailscaleDeviceDetails(CcTailscalePeer p) => [
+  if (p.os.isNotEmpty) p.os,
+  if (p.exitNodeOption) getLocalText.s("exit node"),
+  if (p.shareeNode) getLocalText.s("shared"),
+].join(' · ');
+
+/// §645 — правая часть второй строки устройства: второй адрес ([second], пусто
+/// при адресах ≤ 1) и число скрытых адресов ([more] — адресов сверх двух).
+({String second, int more}) tailscaleAddressTail(List<String> ips) => (
+  second: ips.length >= 2 ? ips[1] : '',
+  more: ips.length > 2 ? ips.length - 2 : 0,
+);
 
 /// Устройства, предлагающие себя как exit node (список блока Exit node).
 List<CcTailscalePeer> exitNodeOptions(CcTailscaleStatus s) =>

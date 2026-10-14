@@ -355,6 +355,38 @@ Future<void> _markDefaultsSeeded() async {
   await _save();
 }
 
+/// §644 — первый seed дефолтов: пресеты шаблона с `default: true` добавляются
+/// в правила один раз на установку (метка `presets_migrated`). Идёт в общем
+/// пути хранилища — при старте приложения, перед сборкой конфига и на экране
+/// маршрутов, а не только на экране: иначе Connect до первого открытия Routing
+/// собирал конфиг без дефолтных пресетов. Пресет, уже лежащий в правилах
+/// (импорт бэкапа, Debug API), не дублируется. `true` — список правил изменился.
+Future<bool> _seedDefaultPresets(WizardTemplate? template) async {
+  if (await _hasDefaultsSeeded()) return false;
+  final WizardTemplate tpl;
+  try {
+    tpl = template ?? await TemplateLoader.load();
+  } catch (e) {
+    AppLog.I.warning('SettingsStorage: default presets not seeded, '
+        'template unavailable: $e');
+    return false;
+  }
+  final rules = _customRulesOf(await _load());
+  final present = {
+    for (final cr in rules)
+      if (cr is CustomRulePreset) cr.presetId,
+  };
+  var added = false;
+  for (final sr in tpl.selectableRules) {
+    if (!sr.defaultEnabled || present.contains(sr.presetId)) continue;
+    rules.add(selectableRuleToCustom(sr, tpl));
+    added = true;
+  }
+  if (added) await _saveCustomRules(rules);
+  await _markDefaultsSeeded();
+  return added;
+}
+
 /// §578 — пресеты с `default: true`, добавленные в шаблон, когда у
 /// пользователей уже было сохранённое состояние. Первый seed дефолтов
 /// ([_markDefaultsSeeded]) идёт один раз на установку, и новый дефолтный

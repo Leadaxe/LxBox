@@ -1,15 +1,15 @@
 [English](template-language.md) · [Русский](template-language.ru.md)
 
-# Template language — typed variables, conditions and per-node repetition
+# Template language — typed variables, conditions and node loops
 
-The template language turns variables, `#if` conditions and `for_each` repetition over nodes into
-concrete sing-box JSON; the declared type decides how each value is written.
+The template language turns variables, `#if` conditions and node loops (`for_each_node`,
+`for_each_node_do`) into concrete sing-box JSON; the declared type decides how each value is written.
 
 | Field | Value |
 |------|----------|
 | Feature | [024-TEMPLATE](../FEATURE.md) |
-| Promises | P1 P2 P3 P5 P6 P7 |
-| State | ✅ written from code, 2026-09-28 |
+| Promises | P1 P2 P3 P5 P6 P7 P15 |
+| State | ✅ written from code, 2026-09-28; contract 1.1.119 ([643](../../../tasks/643-contract-1-1-119-node-loops.md)), 2026-10-14 |
 
 ## What it does
 
@@ -35,6 +35,13 @@ with `required` and a non-empty default → the default (not for `secret`).
 A variable with bounds (`dns_cache_capacity` 1024..65535): out of bounds —
 the default.
 
+**Declaration fields that change how a value is kept:**
+
+| Field | Effect |
+|---|---|
+| `unique: true` | only on `text_list` (on another type — a load error); the value never holds duplicates, first occurrence wins: the editor removes them on save, a stored value is normalized on read, the same applies to `default_value` and to a list collected by `#do` |
+| `wizard_ui: "internal"` | a build-only variable: no row in any form; the stored and backup values are ignored, the base is `default_value`; never written to the state, never exported; an import drops it with `backup_var_skipped` (`reason: internal`). Unlike `hidden`, whose value stays the user's data. Outside a preset with `#do` it is a constant `default_value` without a form row |
+
 **Constructs:**
 
 | Construct | Meaning |
@@ -45,17 +52,46 @@ the default.
 | `"#enable": <condition>` | the node exists only if the condition is true; the contents are not evaluated |
 | `"#on_change": {"#set": {"@x": …}}` | when the variable is toggled, write derived values once |
 | `{"ref": "<global>"}` in a preset's `vars` | a variable by reference to a global one |
-| `for_each: {node_type, as, filter}` on a preset | the body is repeated for each matching node; `@node`, `@node.skip_presets`, `@node.body.<path>` |
+| `for_each_node: {"#filter": …}` on a preset | the body is repeated for each node that passes; `@node`, `@node.skip_presets`, `@node.body.<path>` in scope |
+| `for_each_node_do: {"#filter": …, "#do": …, "#final": …}` on a preset | the walk collects values into the preset's own `text_list` variables; the body is expanded once after the walk, without `@node` |
 
 Predicates: `"@v"` (bool), `{"@v": "literal"}`, `{"@v": "#notEmpty"|"#isEmpty"}`,
 `{"@v": {"#in"|"#notIn": […]}}`, `{"@v": {"#matches": "re"}}`,
 `{"#not": …}`; conditions nest to any depth. Legacy spellings without `#`
 (`and`, `value`, `enabled: "@var"`) are read indefinitely.
 
+**Node loops** (`TEMPLATE_LANG.md` §6.5–§6.7). A preset has at most one loop
+key. Inside it the keys are a closed list, all marked with `#`, with no
+unmarked aliases:
+
+| Key | `for_each_node` | `for_each_node_do` | Meaning |
+|---|---|---|---|
+| `#filter` | optional | optional | a full `#if` condition without the `#if`/`#value` wrapper; no key — every node passes; the node type is a condition on `@node.body.type` |
+| `#do` | load error | required | `{"@name": {"#append": <reference or #tpl>}}`: the name is a `text_list` declared in this preset's `vars`; an empty value skips the node; no dedup |
+| `#final` | load error | optional | `{"@name": {"#unique": true, "#sort": true, "#limit": N}}` once after the walk; applied as unique → sort (byte order) → limit whatever the key order |
+
+A `for_each_node_do` build goes: base value (the user's value or
+`default_value`) → walk → `#do` → `#final` → `unique` of the declaration →
+body once. The collected list exists only in the build and is never stored;
+an empty result is `[]`, and a rule left with no condition is dropped with
+`template_fragment_dropped`.
+
+**Node access** (`TEMPLATE_LANG.md` §6.6). The name is fixed:
+
+| Reference | Value |
+|---|---|
+| `@node` | the node's final tag in the config |
+| `@node.<field>` | a field of the node's storage record; today only `skip_presets` |
+| `@node.body.<path>` | a field of the node body, a dot path |
+
+A missing field is the empty value: false in a condition, the key or element
+drops out of the body. A subscription node has no record, so
+`@node.skip_presets` is false for it.
+
 ## Inputs / Outputs
 
 **Inputs:** a template fragment (the skeleton, a preset body, a template DNS
-server body), variable values, for `for_each` — the nodes of the final config.
+server body), variable values, for the node loops — the nodes of the final config.
 **Outputs:** a JSON fragment; engine warnings with a code and parameters
 (`template_var_undeclared`, `template_unknown_directive`,
 `template_int_clamped`, `template_int_invalid`, `template_fragment_dropped`),
@@ -85,8 +121,20 @@ without duplicates by the "code + parameters" pair.
   `resolve_strategy` to `prefer_ipv4` / `ipv4_only`. The preset pseudo-variables
   `@rule_enable` / `@dns_enable` recompute global targets when
   the preset and its DNS part are enabled (FakeIP turns off `resolve_enabled`).
-- `for_each` serves only nodes that got into the final config, in config
-  order; the tags of such presets have no preset prefix (`<node>-dns`).
+- A loop walks only nodes that are enabled and got into the final config
+  (not dropped by the registry gate, the core gate or a degradation), in
+  config order; the container does not matter (own server, folder member,
+  subscription node). The tags of a `for_each_node` preset have no preset
+  prefix (`<node>-dns`); a `for_each_node_do` body has no node, so its tags
+  are prefixed as in a plain preset. The node probe does not expand loop
+  presets.
+- Structural errors of a loop fail the load of the whole template: the
+  removed `for_each` (with `node_type` / `as`), both loop keys in one preset,
+  any other key inside a loop including unmarked `filter` / `do` / `final`,
+  `#do` or `#final` in `for_each_node`, `#do` on a name outside this preset's
+  `text_list` variables, `@node` inside a `for_each_node_do` body, a variable
+  named `node` or `node.*`. A preset is never dropped alone: the former soft
+  drop (§83) is gone together with `for_each`.
 - `@runtime.platform/arch/target` are declared without a value on the phone: the key
   or element drops out, in a condition — false.
 
@@ -100,7 +148,8 @@ without duplicates by the "code + parameters" pair.
 ## Documentation
 
 - The normative description of the template language (keywords, variable
-  types, coercion rules, `#if` / `for_each` / `#tpl` semantics) is
+  types and declaration fields in §2.1, coercion rules, keyword marking in
+  §4.5.1, `#if`, the node loops in §6.5–§6.7, `#tpl`) is
   `contract/docs/TEMPLATE_LANG.md` in the launcher repository
   ([Leadaxe/singbox-launcher](https://github.com/Leadaxe/singbox-launcher)),
   together with the shared corpus `contract/corpus/template/`. The app pulls a
@@ -124,5 +173,6 @@ without duplicates by the "code + parameters" pair.
 | 9 | [441](../../../tasks/441-template-preset-vars-in-record.md) | Released v2.24.0 | Value norms in records: the default is not stored |
 | 10 | [555](../../../tasks/555-template-lang-spec143-parity.md) | Done (items 1–6) | Array merging, `runtime.*`, warning codes with dedup |
 | 11 | [570](../../../tasks/570-close-open-tails.md) | Done (waves A, B) | Tails of the template language campaign |
-| 12 | [578](../../../tasks/578-tailscale-preset-template-for-each.md) | Spec. Implementation started | `for_each`, `@node`, `#tpl` |
+| 12 | [578](../../../tasks/578-tailscale-preset-template-for-each.md) | Released v2.25.8, superseded by 643 | `for_each`, `@node`, `#tpl` |
 | 13 | [580](../../../tasks/580-dns-cache-settings.md) | Done | Bounds of an `int` variable, out of bounds → default |
+| 14 | [643](../../../tasks/643-contract-1-1-119-node-loops.md) | Released v2.25.14 | Contract 1.1.119: `for_each_node` / `for_each_node_do` with `#filter` / `#do` / `#final`, the fixed name `@node`, `unique` and `internal`, a loop error fails the whole template |

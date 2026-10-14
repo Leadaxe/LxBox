@@ -23,6 +23,10 @@ class TailscaleNetworkActions {
 
   Future<String?> logout(String tag) => CcChannel.instance.tailscaleLogout(tag);
 
+  /// §645 — одиночный статус endpoint'а для опроса вкладки.
+  Future<CcTailscaleStatusPoll> getStatus(String tag) =>
+      CcChannel.instance.getTailscaleStatus(tag);
+
   Future<void> startPing(String tag, String ip) =>
       CcChannel.instance.startTailscalePing(tag, ip);
 
@@ -73,7 +77,8 @@ class TailscaleNetworkTab extends StatefulWidget {
   State<TailscaleNetworkTab> createState() => _TailscaleNetworkTabState();
 }
 
-class _TailscaleNetworkTabState extends State<TailscaleNetworkTab> {
+class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
+    with WidgetsBindingObserver {
   bool _vpnUp = false;
   bool _hasData = false;
   CcTailscaleStatus? _status;
@@ -85,24 +90,47 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab> {
   static const _minRedraw = Duration(seconds: 1);
   DateTime _lastRedraw = DateTime.fromMillisecondsSinceEpoch(0);
   Timer? _redrawTimer;
-  List<CcTailscaleStatus>? _pending;
+
+  /// Последняя запись узла из потока или опроса; `null` — узла нет в
+  /// работающем конфиге. [_hasPending] — запись ждёт перерисовки.
+  CcTailscaleStatus? _pending;
+  bool _hasPending = false;
 
   bool _busy = false;
+
+  // §645 — опрос `GetTailscaleStatus` раз в 3 с, пока вкладка на экране и
+  // VPN включён. Ядро без метода — опрос снят до закрытия вкладки.
+  static const _pollInterval = Duration(seconds: 3);
+  Timer? _pollTimer;
+  bool _pollInFlight = false;
+  bool _pollUnsupported = false;
+  bool _onScreen = true;
+  bool _appResumed = true;
+
+  /// Устройства (`stableId`), у которых раскрыты адреса сверх двух.
+  final _expanded = <String>{};
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    final life = WidgetsBinding.instance.lifecycleState;
+    _appResumed = life == null || life == AppLifecycleState.resumed;
     final forced = widget.vpnUp;
     if (forced != null) {
       _vpnUp = forced;
     } else {
       unawaited(
         BoxVpnClient.I.getVpnStatus().then((s) {
-          if (mounted) setState(() => _vpnUp = s.isUp);
+          if (!mounted) return;
+          setState(() => _vpnUp = s.isUp);
+          _syncPolling();
         }),
       );
       _vpnSub = BoxVpnClient.I.onStatusChanged.listen((e) {
-        if (mounted) setState(() => _vpnUp = e.status.isUp);
+        if (!mounted) return;
+        setState(() => _vpnUp = e.status.isUp);
+        _syncPolling();
       });
     }
     final source = widget.statusSource;
@@ -117,7 +145,23 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Маршрут перекрыт другим или вкладка за кадром — тикеры выключены.
+    _onScreen = TickerMode.valuesOf(context).enabled;
+    _syncPolling();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _appResumed = state == AppLifecycleState.resumed;
+    _syncPolling();
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _pollTimer?.cancel();
     _redrawTimer?.cancel();
     unawaited(_sub?.cancel());
     unawaited(_vpnSub?.cancel());
@@ -125,8 +169,49 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab> {
     super.dispose();
   }
 
-  void _onStatus(List<CcTailscaleStatus> list) {
-    _pending = list;
+  /// §645 — опрос идёт, пока вкладка на экране, приложение на переднем плане,
+  /// VPN включён и ядро знает метод. Запуск — первый вызов сразу.
+  void _syncPolling() {
+    final want =
+        mounted && _onScreen && _appResumed && _vpnUp && !_pollUnsupported;
+    if (!want) {
+      _pollTimer?.cancel();
+      _pollTimer = null;
+      return;
+    }
+    if (_pollTimer != null) return;
+    _pollTimer = Timer.periodic(_pollInterval, (_) => unawaited(_pollTick()));
+    unawaited(_pollTick());
+  }
+
+  /// Вызов ещё не вернулся — тик пропускается.
+  Future<void> _pollTick() async {
+    if (_pollInFlight) return;
+    _pollInFlight = true;
+    try {
+      final r = await widget.actions.getStatus(widget.liveTag);
+      if (!mounted) return;
+      if (r.unsupported) {
+        _pollUnsupported = true;
+        _syncPolling();
+        return;
+      }
+      final s = r.status;
+      // Пропуск тика: тег не найден, endpoint не запущен, опрос снят.
+      if (s == null || s.tag != widget.liveTag || _pollTimer == null) return;
+      _offer(s);
+    } finally {
+      _pollInFlight = false;
+    }
+  }
+
+  void _onStatus(List<CcTailscaleStatus> list) =>
+      _offer(list.where((s) => s.tag == widget.liveTag).firstOrNull);
+
+  /// Запись из потока или опроса: на экране — пришедшая последней.
+  void _offer(CcTailscaleStatus? s) {
+    _pending = s;
+    _hasPending = true;
     final wait = _minRedraw - DateTime.now().difference(_lastRedraw);
     if (!_hasData || wait <= Duration.zero) {
       _applyPending();
@@ -139,13 +224,14 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab> {
   }
 
   void _applyPending() {
-    final list = _pending;
-    if (list == null || !mounted) return;
+    if (!_hasPending || !mounted) return;
+    final s = _pending;
     _pending = null;
+    _hasPending = false;
     _lastRedraw = DateTime.now();
     setState(() {
       _hasData = true;
-      _status = list.where((s) => s.tag == widget.liveTag).firstOrNull;
+      _status = s;
     });
   }
 
@@ -184,7 +270,7 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab> {
       if (s.self != null) _thisDeviceBlock(context, s.self!),
       _exitNodeBlock(context, s),
       if (widget.onSaveFields != null) _settingsBlock(context),
-      _header(context, getLocalText.s("Devices")),
+      _devicesHeader(context, devices),
       if (devices.isEmpty)
         ListTile(dense: true, title: Text(getLocalText.s("No devices"))),
     ];
@@ -222,19 +308,51 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab> {
     padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
     child: Text(
       text,
-      style: Theme.of(
-        context,
-      ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+      style: Theme.of(context).textTheme.titleSmall
+          ?.copyWith(fontWeight: FontWeight.w600),
     ),
   );
+
+  /// §645 — `Devices` и вторичным цветом `· 2 online / 6` (всего — устройства
+  /// списка).
+  Widget _devicesHeader(BuildContext context, List<CcTailscalePeer> devices) {
+    final theme = Theme.of(context);
+    final online = devices.where((p) => p.online).length;
+    final counts = getLocalText.s(
+      "%s online / %s",
+      '$online',
+      '${devices.length}',
+    );
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+      child: Text.rich(
+        TextSpan(
+          children: [
+            TextSpan(text: getLocalText.s("Devices")),
+            if (devices.isNotEmpty)
+              TextSpan(
+                text: ' · $counts',
+                style: TextStyle(
+                  fontWeight: FontWeight.normal,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+          ],
+        ),
+        key: const ValueKey('tailscale-devices-header'),
+        style: theme.textTheme.titleSmall?.copyWith(
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
 
   Widget _groupTitle(BuildContext context, String title) => Padding(
     padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
     child: Text(
       title,
-      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-        color: Theme.of(context).colorScheme.onSurfaceVariant,
-      ),
+      style: Theme.of(context).textTheme.labelMedium
+          ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
     ),
   );
 
@@ -321,7 +439,7 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab> {
         _header(context, getLocalText.s("This device")),
         _copyTile(getLocalText.s("Name"), self.hostName),
         _copyTile(getLocalText.s("MagicDNS name"), self.dnsNameClean),
-        for (final ip in self.ips) _copyTile(getLocalText.s("Address"), ip),
+        if (self.ips.isNotEmpty) _addressTile(self.ips),
         if (self.keyExpiry > 0)
           ListTile(
             dense: true,
@@ -341,6 +459,26 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab> {
       onTap: () => unawaited(_copy(value)),
     );
   }
+
+  /// §645 — один заголовок Address, адреса столбиком в порядке ядра; тап по
+  /// строке копирует этот адрес.
+  Widget _addressTile(List<String> ips) => ListTile(
+    dense: true,
+    title: Text(getLocalText.s("Address")),
+    subtitle: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final ip in ips)
+          InkWell(
+            onTap: () => unawaited(_copy(ip)),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Text(ip),
+            ),
+          ),
+      ],
+    ),
+  );
 
   static String _date(int unixSeconds) {
     final d = DateTime.fromMillisecondsSinceEpoch(unixSeconds * 1000);
@@ -451,13 +589,39 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab> {
     return '$path · ${getLocalText.s("handshake %s", wgAgeLabel(age))}';
   }
 
-  /// §613 — подпись пункта Exit node: у действующего выхода — путь до него.
+  /// §613 — подпись пункта Exit node: у действующего выхода — путь до него
+  /// (§645 — с иконкой пути).
   Widget? _exitSubtitle(CcTailscalePeer p, CcTailscalePeer? active) {
-    final lines = [
-      if (!p.online) getLocalText.s("offline"),
-      if (active != null && active.stableId == p.stableId) _pathLine(active),
-    ].where((v) => v.isNotEmpty);
-    return lines.isEmpty ? null : Text(lines.join(' · '));
+    final offline = p.online ? '' : getLocalText.s("offline");
+    final path = active != null && active.stableId == p.stableId
+        ? _pathLine(active)
+        : '';
+    if (offline.isEmpty && path.isEmpty) return null;
+    return Text.rich(
+      TextSpan(
+        children: [
+          if (offline.isNotEmpty)
+            TextSpan(text: path.isEmpty ? offline : '$offline · '),
+          if (path.isNotEmpty) ..._pathSpans(tailscalePathKind(active!), path),
+        ],
+      ),
+    );
+  }
+
+  /// §645 — иконка пути (цветная только она) и текст подписи.
+  static List<InlineSpan> _pathSpans(TailscalePathKind? kind, String text) {
+    final look = tailscalePathIcon(kind);
+    return [
+      if (look != null)
+        WidgetSpan(
+          alignment: PlaceholderAlignment.middle,
+          child: Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: Icon(look.icon, size: 15, color: look.color),
+          ),
+        ),
+      TextSpan(text: text),
+    ];
   }
 
   // ── Settings ──
@@ -480,7 +644,9 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab> {
           dense: true,
           title: Text(getLocalText.s("Advertise this device as exit node")),
           subtitle: hasExit && !advertise
-              ? Text(getLocalText.s("Not available while an exit node is used."))
+              ? Text(
+                  getLocalText.s("Not available while an exit node is used."),
+                )
               : null,
           value: advertise,
           onChanged: _busy || (hasExit && !advertise)
@@ -555,33 +721,77 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab> {
 
   // ── Devices ──
 
+  /// §645 — строка устройства:
+  /// 1. точка в сети / нет, имя; справа первый адрес;
+  /// 2. ОС и роли; справа второй адрес и `+N` (раскрывает остальные адреса);
+  /// 3. как подключено ([tailscaleConnectionText]) с иконкой пути.
+  ///
+  /// Не влезает по ширине — обрезается левая часть, адрес справа целый.
   Widget _deviceRow(
     BuildContext context,
     CcTailscaleStatus s,
     CcTailscalePeer p,
   ) {
     final theme = Theme.of(context);
-    final marks = <String>[
-      if (p.online)
-        getLocalText.s("online")
-      else if (p.lastSeen > 0)
-        getLocalText.s("last seen %s", _date(p.lastSeen)),
-      if (p.os.isNotEmpty) p.os,
-      if (p.expired) getLocalText.s("key expired"),
-      if (p.shareeNode) getLocalText.s("shared"),
-      if (p.exitNodeOption) getLocalText.s("exit node"),
-    ];
-    final second = [p.dnsNameClean, p.firstIp].where((v) => v.isNotEmpty);
+    final small = theme.textTheme.bodySmall;
+    final tail = tailscaleAddressTail(p.ips);
+    final expanded = tail.more > 0 && _expanded.contains(p.stableId);
+    final details = tailscaleDeviceDetails(p);
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    final connection = tailscaleConnectionText(p, now);
+    final rowKey = p.stableId.isEmpty ? p.hostName : p.stableId;
     return ListTile(
+      key: ValueKey('tailscale-device-$rowKey'),
       dense: true,
-      title: Text(p.hostName),
-      subtitle: Text(
-        [
-          second.join(' · '),
-          marks.join(' · '),
-          _pathLine(p),
-        ].where((v) => v.isNotEmpty).join('\n'),
-        style: theme.textTheme.bodySmall,
+      title: Row(
+        children: [
+          Expanded(
+            child: Text(
+              p.hostName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          if (p.firstIp.isNotEmpty) ...[
+            const SizedBox(width: 8),
+            Text(p.firstIp, style: small),
+          ],
+        ],
+      ),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (details.isNotEmpty || tail.second.isNotEmpty)
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    details,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: small,
+                  ),
+                ),
+                if (tail.second.isNotEmpty) ...[
+                  const SizedBox(width: 8),
+                  _secondAddress(p, tail, expanded, small),
+                ],
+              ],
+            ),
+          if (expanded)
+            for (final ip in p.ips.skip(2))
+              Align(
+                alignment: Alignment.centerRight,
+                child: Text(ip, style: small),
+              ),
+          if (connection.isNotEmpty)
+            Text.rich(
+              TextSpan(children: _pathSpans(tailscalePathKind(p), connection)),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: small,
+            ),
+        ],
       ),
       leading: Icon(
         Icons.circle,
@@ -592,7 +802,37 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab> {
     );
   }
 
+  /// Второй адрес; при адресах сверх двух — `+N` и стрелка, тап раскрывает и
+  /// сворачивает остальные адреса.
+  Widget _secondAddress(
+    CcTailscalePeer p,
+    ({String second, int more}) tail,
+    bool expanded,
+    TextStyle? style,
+  ) {
+    final address = Text(tail.second, style: style);
+    if (tail.more == 0) return address;
+    return InkWell(
+      key: ValueKey('tailscale-more-${p.stableId}'),
+      onTap: () => setState(() {
+        if (!_expanded.remove(p.stableId)) _expanded.add(p.stableId);
+      }),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          address,
+          const SizedBox(width: 4),
+          Text('+${tail.more}', style: style), // l10n-exempt: count
+          Icon(expanded ? Icons.expand_less : Icons.expand_more, size: 16),
+        ],
+      ),
+    );
+  }
+
+  /// Меню устройства: имя, MagicDNS-имя, по пункту на адрес, проверка по
+  /// первому адресу.
   Future<void> _deviceMenu(CcTailscalePeer p) async {
+    final single = p.ips.length == 1;
     final action = await showAppBottomSheet<String>(
       context: context,
       builder: (ctx) => Column(
@@ -603,11 +843,21 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab> {
             title: Text(getLocalText.s("Copy name")),
             onTap: () => Navigator.pop(ctx, 'name'),
           ),
-          if (p.firstIp.isNotEmpty)
+          if (p.dnsNameClean.isNotEmpty)
+            ListTile(
+              leading: const Icon(Icons.copy),
+              title: Text(getLocalText.s("Copy MagicDNS name")),
+              onTap: () => Navigator.pop(ctx, 'dns'),
+            ),
+          for (final ip in p.ips)
             ListTile(
               leading: const Icon(Icons.copy_all),
-              title: Text(getLocalText.s("Copy address")),
-              onTap: () => Navigator.pop(ctx, 'address'),
+              title: Text(
+                single
+                    ? getLocalText.s("Copy address")
+                    : getLocalText.s("Copy %s", ip),
+              ),
+              onTap: () => Navigator.pop(ctx, 'ip:$ip'),
             ),
           if (p.firstIp.isNotEmpty)
             ListTile(
@@ -618,12 +868,16 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab> {
         ],
       ),
     );
-    if (!mounted) return;
+    if (!mounted || action == null) return;
+    if (action.startsWith('ip:')) {
+      await _copy(action.substring(3));
+      return;
+    }
     switch (action) {
       case 'name':
-        await _copy(p.dnsNameClean.isNotEmpty ? p.dnsNameClean : p.hostName);
-      case 'address':
-        await _copy(p.firstIp);
+        await _copy(p.hostName);
+      case 'dns':
+        await _copy(p.dnsNameClean);
       case 'ping':
         await showAppBottomSheet<void>(
           context: context,
@@ -636,6 +890,18 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab> {
     }
   }
 }
+
+/// §645 — иконка и цвет пути до устройства: напрямую — молния цвета точки
+/// «в сети», через DERP и через пира-ретранслятора — оранжевые; пути нет —
+/// без иконки.
+({IconData icon, Color color})? tailscalePathIcon(
+  TailscalePathKind? kind,
+) => switch (kind) {
+  TailscalePathKind.direct => (icon: Icons.bolt, color: Colors.green),
+  TailscalePathKind.derp => (icon: Icons.cloud_outlined, color: Colors.orange),
+  TailscalePathKind.peerRelay => (icon: Icons.device_hub, color: Colors.orange),
+  null => null,
+};
 
 /// Подпись состояния узла — значения таблицы раздела 3 спеки 579; прочие
 /// состояния — текстом ядра.

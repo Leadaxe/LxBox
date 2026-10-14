@@ -102,6 +102,10 @@
 - LX-перенос на десктоп берёт только переменные, помеченные `portable` в
   реестре контракта; остальные пропускаются с `backup_var_skipped`
   ([017 · P15](../../017-BACKUP_AND_STORAGE/FEATURE.ru.md#обещания)).
+- Переменной с `wizard_ui: "internal"` в бэкапе не бывает: экспорт её
+  пропускает, а импорт, встретив её, снимает с `backup_var_skipped`
+  (`reason: internal`) ([P15](../FEATURE.ru.md#обещания)). Переключатель DNS
+  `dns_resolver_no_stale` переносимый и едет, как `dns_optimistic`.
 - Слот Workspaces — копия документа; шаблон общий для всех слотов, слот
   старой формы мигрирует при загрузке ([018-WORKSPACES · P13](../../018-WORKSPACES/FEATURE.ru.md#обещания)).
 

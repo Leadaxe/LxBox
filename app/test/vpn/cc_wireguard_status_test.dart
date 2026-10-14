@@ -152,7 +152,7 @@ void main() {
           'exit_node': {
             'stable_id': 'n1',
             'host_name': 'gl-mt2500',
-            'path': 'DIRECT',
+            'path': 'direct',
             'endpoint': '198.51.100.7:41641',
             'peer_relay': '',
             'derp_region_code': 'fra',
@@ -167,6 +167,17 @@ void main() {
       expect(e.endpoint, '198.51.100.7:41641');
       expect(e.derpRegionCode, 'fra');
       expect(e.lastHandshake, 1700000000);
+    });
+
+    test('§645 — путь ядра строчный; регистр при разборе не важен', () {
+      for (final raw in ['direct', 'DIRECT']) {
+        final p = CcTailscalePeer.fromMap({'stable_id': 'n1', 'path': raw});
+        expect(p.path, CcTailscalePath.direct);
+      }
+      expect(CcTailscalePeer.fromMap(const {'path': 'peer_relay'}).path,
+          CcTailscalePath.peerRelay);
+      expect(CcTailscalePeer.fromMap(const {'path': 'derp'}).path,
+          CcTailscalePath.derp);
     });
 
     test('ядро без пути — пустые поля', () {

@@ -829,6 +829,28 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                     result.success(err)
                 }
             }
+            // §645 — одиночный GetTailscaleStatus для опроса вкладки Network:
+            // map записи, null — пропуск тика, ядро без метода — error
+            // `unimplemented` (Dart останавливает опрос).
+            "ccGetTailscaleStatus" -> {
+                val cc = BoxService.commandClient
+                val tag = call.argument<String>("tag") ?: ""
+                pluginScope.launch {
+                    val r = withContext(Dispatchers.IO) {
+                        runCatching { cc?.getTailscaleStatus(tag) }
+                    }
+                    r.fold(
+                        onSuccess = { result.success(it) },
+                        onFailure = {
+                            if (it is UnsupportedOperationException) {
+                                result.error("unimplemented", null, null)
+                            } else {
+                                result.success(null)
+                            }
+                        },
+                    )
+                }
+            }
             "ccTailscaleLogout" -> {
                 val cc = BoxService.commandClient
                 val tag = call.argument<String>("tag") ?: ""
