@@ -120,6 +120,8 @@ Map<String, Object?> serializeSubEntry(
       // Сам список — под-ресурс /subs/{id}/rules: у подписки правил может быть
       // много, а это общий листинг.
       'import_rules_count': list.importRules.length,
+      // §648 — описание подписки из заголовка `announce`; нет — пустая строка.
+      'announce': e.announce,
     },
   };
 }

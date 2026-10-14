@@ -417,6 +417,9 @@ curl -s -X PATCH -H "$HDR" "$BASE/folders/$FID/members/0?rebuild=true" \
 | `SourceChain` | цепочка (§524 — такая же запись списка) | `id` = тег, `title`, `enabled`, `nodes_count` = `hops_count` = число позиций |
 | `Unreadable` | запись, которую кодек не читает (§141 P1.8c) | `record_kind` — её `kind` с диска, `enabled: false` |
 
+У `SubscriptionServers` в записи есть `announce` — описание подписки из
+заголовка `announce` (§648), расшифрованное и нормализованное; нет — `""`.
+
 Маршрут цепочки (позиции, `strip`, `rewrite`) здесь НЕ разворачивается: его
 читает и правит `/chains/{tag}` — `/subs` отвечает за состав и порядок списка.
 
