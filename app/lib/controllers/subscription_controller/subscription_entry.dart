@@ -185,6 +185,11 @@ class SubscriptionEntry extends ChangeNotifier {
   /// [nodesNotLoaded].
   bool _bodyCacheMissing = false;
 
+  /// §652 — регидрация из кэша этой записи: общая `Future` конкурентных
+  /// вызовов `ensureHydrated` и URL, для которого она запущена.
+  Future<void>? _hydration;
+  String? _hydrationUrl;
+
   void _markBodyCacheMissing() {
     if (_bodyCacheMissing) return;
     _bodyCacheMissing = true;

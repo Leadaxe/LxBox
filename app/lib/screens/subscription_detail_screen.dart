@@ -645,6 +645,13 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
         // §219 — index по ссылке (список мог сместиться от reorder).
         final idx = widget.controller.entries.indexOf(widget.entry);
         if (idx >= 0) await widget.controller.updateAt(idx);
+      } else {
+        // §652 (г) — выключенная подписка на старте не разбиралась: узлы
+        // догружаются из кэша здесь, пока идёт индикатор (вместо «No nodes
+        // found»). Вкладки Nodes / Filters и сводка `dropped` читают тот же
+        // entry.list.
+        await widget.controller.ensureHydrated(widget.entry);
+        if (!mounted) return;
       }
       // v2: узлы уже распарсены в entry.list.nodes. Детоур-узлы показываем
       // отдельной строкой под родителем.

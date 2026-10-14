@@ -561,8 +561,36 @@ final class ContractRegistry {
     _schemaCache.clear();
     _transportCache.clear();
     _sharedCache.clear();
+    _sourceTexts.clear();
+    _sourceProtocols.clear();
     _generation++;
   }
+
+  /// §652 — тексты файлов, прочитанные загрузкой (путь от корня контракта →
+  /// содержимое), и состав протоколов. Копят ВСЕ загрузки, как и сам реестр
+  /// (`_shared` на повторной загрузке не перечитывается).
+  final Map<String, String> _sourceTexts = {};
+  final Set<String> _sourceProtocols = {};
+
+  /// §652 — снимок загруженного реестра для другого isolate (воркер
+  /// регидрации подписок): там синглтон пуст, а разбор без реестра не падает,
+  /// а молча деградирует. `null` — реестр не загружен (воркер тогда тоже
+  /// работает без него, как и main).
+  RegistrySnapshot? get snapshot => _loaded
+      ? RegistrySnapshot(
+          texts: Map.unmodifiable(_sourceTexts),
+          protocols: List.unmodifiable(_sourceProtocols.toList()..sort()),
+        )
+      : null;
+
+  /// §652 — загрузка из [snapshot] другого isolate. Файл, которого в снимке
+  /// нет, читается так же, как отсутствующий ассет (бросает).
+  Future<void> loadFromSnapshot(RegistrySnapshot snap) => _load(
+        (rel) async =>
+            snap.texts[rel] ??
+            (throw StateError('registry snapshot: no $rel')),
+        () async => snap.protocols,
+      );
 
   /// Версия контракта из `contract/VERSION` (например `1.1.0`).
   String get version => _version;
@@ -611,9 +639,22 @@ final class ContractRegistry {
     ..sort();
 
   Future<void> _load(
-    Future<String> Function(String rel) read,
-    Future<List<String>> Function() listProtocols,
+    Future<String> Function(String rel) readRaw,
+    Future<List<String>> Function() listRaw,
   ) async {
+    // §652 — каждый прочитанный файл и состав протоколов остаются в снимке.
+    Future<String> read(String rel) async {
+      final text = await readRaw(rel);
+      _sourceTexts[rel] = text;
+      return text;
+    }
+
+    Future<List<String>> listProtocols() async {
+      final names = await listRaw();
+      _sourceProtocols.addAll(names);
+      return names;
+    }
+
     _version = (await read('VERSION')).trim();
 
     for (final entry in _kSharedRefs.entries) {
@@ -1088,3 +1129,15 @@ String? awgMtuClampCodeByRegistry(String type) => ContractRegistry.I
 /// молчание безопасно: выдуманный код хуже его отсутствия, а выдуманный MTU
 /// здесь — единственный рабочий.
 const kAwgMtuFallback = 1280;
+
+/// §652 — тексты файлов реестра и состав протоколов: вход [ContractRegistry.loadFromSnapshot]
+/// в другом isolate. Только строки — пересылается как есть.
+final class RegistrySnapshot {
+  const RegistrySnapshot({required this.texts, required this.protocols});
+
+  /// Путь от корня контракта (`VERSION`, `registry/…`) → содержимое файла.
+  final Map<String, String> texts;
+
+  /// Имена файлов `registry/protocols/` без `.json`.
+  final List<String> protocols;
+}

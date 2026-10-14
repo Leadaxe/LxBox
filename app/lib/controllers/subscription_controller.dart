@@ -21,6 +21,7 @@ import '../models/tls_policy.dart';
 import '../models/tunnel_status.dart';
 import '../models/validation.dart';
 import '../services/app_log.dart';
+import 'subscription_controller/cache_rehydrate.dart';
 import 'subscription_controller/core_reject_ops.dart';
 import '../services/core_reject/core_reject_guard.dart';
 import '../services/automation/event_emitter.dart';
@@ -30,7 +31,6 @@ import '../services/parse_hints.dart';
 import '../services/relative_time.dart';
 import '../services/node_emoji.dart';
 import '../services/node_hash.dart';
-import '../services/node_identity.dart';
 import '../services/node_link_address.dart';
 import '../services/settings_storage/node_link_registry.dart';
 import '../services/tailscale_state/state_keys.dart';
@@ -51,7 +51,6 @@ import '../services/haptic_service.dart';
 import '../services/settings_storage.dart';
 import '../services/subscription/auto_updater.dart';
 import '../services/subscription/http_cache.dart';
-import '../services/subscription/import_rules.dart';
 import '../services/subscription/input_helpers.dart';
 import '../services/subscription/sources.dart';
 import '../services/subscription/subscription_identity.dart';
@@ -325,170 +324,150 @@ class SubscriptionController extends ChangeNotifier {
       for (final entry in entries) {
         final list = entry.list;
         if (list is! SubscriptionServers) continue;
-        if (list.nodes.isNotEmpty) continue;
-        final body = await HttpCache.loadBody(list.url);
+        // §652 — на старте только включённые: узлы выключенной в конфиг не
+        // попадают, а разбор большого тела подвешивал UI. Выключенная
+        // догружается по требованию — [ensureHydrated].
+        if (!list.enabled) continue;
+        await ensureHydrated(entry);
         // §515 — регидрация стартует `unawaited` из `_initBody`: контроллер
         // прежнего слота может дожить до неё уже после переключения.
         if (stale) return;
-        if (body == null || body.isEmpty) {
-          // §615 — раньше пропуск молчал: вкладка Nodes писала «No nodes
-          // found» при живом `last_node_count`.
-          if (list.lastNodeCount > 0 || list.lastUpdated != null) {
-            final path = await HttpCache.bodyPath(list.url);
-            if (stale) return;
-            AppLog.I.warning(
-                'Re-hydrate: no cached body for "${list.name}" '
-                '(${maskSubscriptionUrl(list.url)}), expected $path — '
-                'nodes not loaded until the next update');
-          }
-          entry._markBodyCacheMissing();
-          continue;
-        }
-        try {
-          final decoded = decode(body);
-          // §561 — `dropped[]` сводки источника восстанавливается тем же
-          // разбором кэша, что и узлы: в кодек записи он не пишется.
-          final dropped = <NodeWarning>[];
-          final nodes = parseAll(decoded, dropped: dropped);
-          // §302 — применяем те же import-rules к кэшу: иначе после рестарта
-          // узлы вернулись бы в ДОзаменном виде, их nodeIdentityHash не совпал
-          // бы с персистентными DISABLE-хешами → выключение слетело бы до
-          // следующего сетевого refresh, а REPLACE не применился бы. GC и
-          // пересчёт disable здесь НЕ делаем — регидрация не сигнал «узел ушёл»
-          // (§283).
-          _applyRulesToNodes(nodes, list.activeImportRules);
-          if (nodes.isEmpty) {
-            // §101 — раньше скипали молча; UI-счётчик при этом показывает
-            // stale lastNodeCount. Логируем с подсказкой, что в кеше.
-            final hint = diagnoseEmptyParse(body);
-            AppLog.I.warning(
-                'Re-hydrate: cached body parsed to 0 nodes for '
-                '${maskSubscriptionUrl(list.url)}${hint != null ? ' — $hint' : ''}');
-            continue;
-          }
-          // §101 — guard после await'ов: entry могли удалить; list мог
-          // подменить конкурентный fetch или UI-сеттер (rename/enabled —
-          // они сохраняют nodes как есть). Применяем кеш только если у
-          // ТЕКУЩЕГО list по-прежнему нет нод, и копируем на него (не на
-          // устаревший снимок) — правки юзера не теряются.
-          if (!_entries.contains(entry)) continue;
-          final cur = entry.list;
-          if (cur is! SubscriptionServers ||
-              cur.url != list.url ||
-              cur.nodes.isNotEmpty) {
-            continue;
-          }
-          // §400 (IDENTITY.md §5.1) — регидрация кэша это тоже первый разбор
-          // источника: узлы появились, значит legacy-ключи можно опознать, не
-          // дожидаясь сетевого refresh. GC здесь по-прежнему НЕ делаем —
-          // кэш не сигнал «узел ушёл» (§283), а миграция чистит только те
-          // ключи, содержимого которых в теле нет.
-          final migrated =
-              migrateLegacyDisabledKeys(cur.disabledHashes, nodes);
-          // Фича 478 — вердикт ядра пересчётом по телу не воспроизводится:
-          // дописываем его на разобранные узлы, иначе регидрация из кэша
-          // покажет узел выключенным без причины.
-          stampStoredVerdicts(nodes, cur.nodeWarnings);
-          final next = cur.copyWith(
-            nodes: nodes,
-            lastNodeCount: nodes.length,
-            disabledHashes: migrated,
-            dropped: summaryDropped(dropped),
-          );
-          entry._replaceList(next);
-          // Результат миграции обязан лечь на диск: иначе legacy-ключи
-          // прогоняются заново на каждом старте. Метаданные — флаг пересборки
-          // не поднимаем (регидрация состав конфига не меняет).
-          if (!identical(migrated, cur.disabledHashes)) {
-            await _persist(keepDirtyFlag: true);
-          }
-          final detours = nodes.where((n) => n.chained != null).length;
-          entry.nodeCount = nodes.length;
-          entry.status =
-              SubStatusNodes(nodes.length, detours: detours, cached: true);
-          AppLog.I.info(
-              'Re-hydrated ${nodes.length} nodes from cache: ${maskSubscriptionUrl(list.url)}');
-        } catch (e) {
-          AppLog.I.warning(
-              'Re-hydrate failed for ${maskSubscriptionUrl(list.url)}: ${humanizeError(e).renderEn()}');
-        }
+        // §652 — плитки оживают по мере готовности, а не разом в конце.
+        notifyListeners();
       }
-      notifyListeners();
     } finally {
       if (!_rehydrated.isCompleted) _rehydrated.complete();
     }
   }
 
-  /// §302 — применяет import-rules к разобранным узлам и возвращает
-  /// идентичности узлов, помеченных к выключению (Disable) и к
-  /// принудительному включению (Enable, §332).
+  /// §652 — тест-шов: подмена воркера разбора кэша (счёт вызовов, отказ).
+  @visibleForTesting
+  Future<CacheParseResult> Function(
+      CacheParseInput input, ParseEnvSnapshot env)? cacheParseWorkerForTesting;
+
+  /// §652 — восстанавливает узлы подписки из кэша тела, если их ещё нет.
   ///
-  /// §400 — REPLACE патчит `NodeSpec.patchedJson` (узел эмитится из него), но
-  /// идентичность считается от ТЕГА, а патч тег не трогает: правило, меняющее
-  /// server/uuid, отметку больше не срывает.
-  ({Set<String> disable, Set<String> enable}) _applyRulesToNodes(
-      List<NodeSpec> nodes, List<ImportRule> rules) {
-    // §307 — правила НЕ инкрементальны: каждый прогон стартует с чистого
-    // узла (движок читает `emitRaw`), поэтому прошлый патч всегда сбрасываем.
-    // Сегодня узлы в обоих call-site'ах свежераспарсенные и сброс — no-op,
-    // но если сюда когда-нибудь придёт живой список, накопления не будет.
-    for (final n in nodes) {
-      n.patchedJson = null;
-      n.ruleTrail = const [];
+  /// Идемпотентен: узлы есть — выход сразу; конкурентные вызовы на одну
+  /// запись делят одну `Future`; повторный вызов для того же URL после
+  /// неудачи (тела нет, 0 узлов) кэш не перечитывает. Не бросает.
+  /// `configDirty` не поднимает: регидрация состав конфига не меняет.
+  ///
+  /// Точки вызова: старт (только включённые), включение ([toggleAt]), начало
+  /// [generateConfig] (включённые без узлов — в том числе включённые через
+  /// Debug API), сетевое обновление до чтения прежних узлов, открытие экрана
+  /// подписки.
+  Future<void> ensureHydrated(SubscriptionEntry entry) {
+    if (stale) return Future<void>.value();
+    final list = entry.list;
+    if (list is! SubscriptionServers || list.nodes.isNotEmpty) {
+      return Future<void>.value();
     }
-    if (rules.isEmpty || nodes.isEmpty) return (disable: const {}, enable: const {});
-    final result = applyImportRules(nodes, rules);
-    if (result.isEmpty) return (disable: const {}, enable: const {});
-
-    final disable = <String>{};
-    final enable = <String>{};
-    // §400 — идентичность узла от его тега, поэтому REPLACE-патч её НЕ
-    // меняет: правило может переписать server/uuid, отметка остаётся на том
-    // же ключе. Карта считается один раз на весь список.
-    final identities = sourceNodeIdentities(nodes);
-    result.outcomes.forEach((i, outcome) {
-      if (i < 0 || i >= nodes.length) return;
-      final node = nodes[i];
-      if (outcome.patchedJson != null) {
-        node.patchedJson = outcome.patchedJson;
-        node.ruleTrail = outcome.replacements;
-      }
-      final identity = identities[node];
-      if (identity == null) return; // группа/безымянный — отметок не имеет
-      if (outcome.disabled == true) disable.add(identity);
-      if (outcome.disabled == false) enable.add(identity);
-    });
-
-    // §322 — правила могли переписать `server`/`uuid`, и тогда идентичность
-    // узла другая, а синонимы группы указывают на прежнюю. Пересобираем
-    // таблицу по патченым узлам: тег провайдера тот же, ключ новый.
-    _remapAutoSelectSynonyms(nodes);
-    return (disable: disable, enable: enable);
+    final pending = entry._hydration;
+    if (pending != null && entry._hydrationUrl == list.url) return pending;
+    entry._hydrationUrl = list.url;
+    return entry._hydration = _hydrateEntry(entry, list);
   }
 
-  /// §322 — пересчёт таблицы синонимов после §302-правил. Тег провайдера
-  /// (ключ таблицы) правила не трогают — меняется только идентичность, на
-  /// которую он указывает.
-  void _remapAutoSelectSynonyms(List<NodeSpec> nodes) {
-    final autos = nodes.whereType<AutoSelectSpec>().toList();
-    if (autos.isEmpty) return;
-    // Старая идентичность → новая. Считаем по узлам, которые правила задели.
-    final moved = <String, String>{};
-    for (final n in nodes) {
-      if (n.patchedJson == null) continue;
-      final before = nodeIdentityKeyRaw(n);
-      final after = nodeIdentityKey(n);
-      if (before != null && after != null && before != after) {
-        moved[before] = after;
+  Future<void> _hydrateEntry(
+      SubscriptionEntry entry, SubscriptionServers list) async {
+    final shortUrl = maskSubscriptionUrl(list.url);
+    try {
+      final body = await HttpCache.loadBody(list.url);
+      if (stale) return;
+      if (body == null || body.isEmpty) {
+        // §615 — раньше пропуск молчал: вкладка Nodes писала «No nodes
+        // found» при живом `last_node_count`.
+        if (list.lastNodeCount > 0 || list.lastUpdated != null) {
+          final path = await HttpCache.bodyPath(list.url);
+          if (stale) return;
+          AppLog.I.warning(
+              'Re-hydrate: no cached body for "${list.name}" '
+              '($shortUrl), expected $path — '
+              'nodes not loaded until the next update');
+        }
+        entry._markBodyCacheMissing();
+        return;
       }
+      var parsed = await _parseCachedBody(CacheParseInput(
+        body: body,
+        rules: list.activeImportRules,
+        disabledHashes: list.disabledHashes,
+        nodeWarnings: list.nodeWarnings,
+      ), shortUrl);
+      if (stale) return;
+      if (parsed.nodes.isEmpty) {
+        // §101 — раньше скипали молча; UI-счётчик при этом показывает
+        // stale lastNodeCount. Логируем с подсказкой, что в кеше.
+        final hint = parsed.emptyHint;
+        AppLog.I.warning(
+            'Re-hydrate: cached body parsed to 0 nodes for '
+            '$shortUrl${hint != null ? ' — $hint' : ''}');
+        return;
+      }
+      // §101 — guard после await'ов (и после воркера, §652): entry могли
+      // удалить; list мог подменить конкурентный fetch или UI-сеттер
+      // (rename/enabled — они сохраняют nodes как есть). Применяем кеш только
+      // если у ТЕКУЩЕГО list по-прежнему нет нод, и копируем на него (не на
+      // устаревший снимок) — правки юзера не теряются.
+      if (!_entries.contains(entry)) return;
+      final cur = entry.list;
+      if (cur is! SubscriptionServers ||
+          cur.url != list.url ||
+          cur.nodes.isNotEmpty) {
+        return;
+      }
+      // §652 — входы разбора (отметки, вердикты, правила) сменились, пока
+      // воркер работал: разбор повторяется на main по текущим.
+      if (!identical(cur.disabledHashes, list.disabledHashes) ||
+          !identical(cur.nodeWarnings, list.nodeWarnings) ||
+          !identical(cur.importRules, list.importRules) ||
+          cur.importRulesEnabled != list.importRulesEnabled) {
+        parsed = parseCachedBody(CacheParseInput(
+          body: body,
+          rules: cur.activeImportRules,
+          disabledHashes: cur.disabledHashes,
+          nodeWarnings: cur.nodeWarnings,
+        ));
+        if (parsed.nodes.isEmpty) return;
+      }
+      final nodes = parsed.nodes;
+      final migrated = parsed.migrated;
+      final next = cur.copyWith(
+        nodes: nodes,
+        lastNodeCount: nodes.length,
+        disabledHashes: migrated ?? cur.disabledHashes,
+        dropped: parsed.dropped,
+      );
+      entry._replaceList(next);
+      // §400 — результат миграции обязан лечь на диск: иначе legacy-ключи
+      // прогоняются заново на каждом старте. Метаданные — флаг пересборки
+      // не поднимаем (регидрация состав конфига не меняет).
+      if (migrated != null) await _persist(keepDirtyFlag: true);
+      final detours = nodes.where((n) => n.chained != null).length;
+      entry.nodeCount = nodes.length;
+      entry.status =
+          SubStatusNodes(nodes.length, detours: detours, cached: true);
+      AppLog.I.info('Re-hydrated ${nodes.length} nodes from cache: $shortUrl');
+    } catch (e) {
+      AppLog.I.warning(
+          'Re-hydrate failed for $shortUrl: ${humanizeError(e).renderEn()}');
     }
-    if (moved.isEmpty) return;
-    for (var i = 0; i < nodes.length; i++) {
-      final a = nodes[i];
-      if (a is! AutoSelectSpec || a.tagSynonyms.isEmpty) continue;
-      nodes[i] = a.copyWith(tagSynonyms: {
-        for (final e in a.tagSynonyms.entries) e.key: moved[e.value] ?? e.value,
-      });
+  }
+
+  /// §652 — разбор кэша в отдельном isolate; отказ воркера (исключение,
+  /// ошибка инициализации синглтонов) → тот же разбор на main с warning.
+  /// Записи журнала, сделанные разбором в воркере, воспроизводятся здесь.
+  Future<CacheParseResult> _parseCachedBody(
+      CacheParseInput input, String shortUrl) async {
+    final worker = cacheParseWorkerForTesting ?? parseCachedBodyInIsolate;
+    try {
+      final result = await worker(input, ParseEnvSnapshot.capture());
+      replayCapturedLogs(result.logs);
+      return result;
+    } catch (e) {
+      AppLog.I.warning('Re-hydrate: worker failed for $shortUrl '
+          '(${humanizeError(e).renderEn()}) — parsing on main');
+      return parseCachedBody(input);
     }
   }
 
@@ -2486,14 +2465,23 @@ class SubscriptionController extends ChangeNotifier {
 
   Future<void> toggleAt(int index) async {
     if (index < 0 || index >= _entries.length) return;
-    final list = _entries[index].list;
-    final enabling = !list.enabled;
+    final entry = _entries[index];
+    final enabling = !entry.list.enabled;
+    // §652 (а) — выключенная подписка на старте не разбиралась: узлы из кэша
+    // догружаются ДО записи и уведомления, иначе включённая подписка ушла бы
+    // в пересборку пустой. Индекс после await мог сместиться — дальше по
+    // ссылке на entry.
+    if (enabling && entry.list is SubscriptionServers) {
+      await ensureHydrated(entry);
+      if (stale || !_entries.contains(entry)) return;
+    }
+    final list = entry.list;
     final ServerList next = switch (list) {
       UserServer u when enabling =>
         u.copyWith(enabled: true, warnings: dropVerdict(u.warnings)),
       _ => _toggleEnabled(list, enabling),
     };
-    _entries[index]._replaceList(next);
+    entry._replaceList(next);
     await _persist();
     notifyListeners();
   }
@@ -2824,6 +2812,16 @@ class SubscriptionController extends ChangeNotifier {
     if (!used) await HttpCache.remove(url);
   }
 
+  /// §652 (б) — [ensureHydrated] для всех включённых подписок без узлов.
+  Future<void> _hydrateEnabledEntries() async {
+    for (final e in List<SubscriptionEntry>.of(_entries)) {
+      final l = e.list;
+      if (l is SubscriptionServers && l.enabled && l.nodes.isEmpty) {
+        await ensureHydrated(e);
+      }
+    }
+  }
+
   Future<String?> generateConfig() async {
     // §037: Когда юзер pin'ит свой config через Debug API `PUT /config`,
     // ставится lock var. Любые UI-driven rebuild'ы возвращают null
@@ -2847,8 +2845,13 @@ class SubscriptionController extends ChangeNotifier {
     // `configDirty` — значит молча выбросить изменение до следующей случайной
     // мутации. Сравниваем снимок с составом на выходе и гасим флаг, только
     // если под нами ничего не поменялось.
-    final before = _compositionSignature();
     try {
+      // §652 (б) — включённые подписки без узлов (выключенные на старте и
+      // включённые мимо [toggleAt], например Debug API `PATCH enabled`)
+      // догружаются из кэша ДО снимка состава: иначе подпись на выходе
+      // разошлась бы со снимком и `configDirty` не снялся бы.
+      await _hydrateEnabledEntries();
+      final before = _compositionSignature();
       final config = await _generate();
       _lastGeneratedConfig = config;
       if (_compositionSignature() == before) {
@@ -3124,6 +3127,14 @@ class SubscriptionController extends ChangeNotifier {
       {UpdateTrigger? trigger,
       FetchResult? prefetched,
       void Function(FetchResult fetched)? onFetched}) async {
+    // §652 (в) — прежние узлы нужны ниже (`oldBodies` вердиктов, ключ
+    // состава): у неразобранной выключенной подписки их ещё нет, и пустой
+    // список снял бы вердикты `core_rejected`, а состав всегда «менялся бы».
+    // До фетча — пока кэш тела не перезаписан ответом.
+    if (entry.list is SubscriptionServers) {
+      await ensureHydrated(entry);
+      if (stale) return false;
+    }
     final list = entry.list;
     if (list is! SubscriptionServers) return false;
 
@@ -3300,7 +3311,7 @@ class SubscriptionController extends ChangeNotifier {
       // совпадает с узлом, который билдер увидит.
       final ruleNow = DateTime.now();
       final ruleMarks =
-          _applyRulesToNodes(result.nodes, current.activeImportRules);
+          applyRulesToNodes(result.nodes, current.activeImportRules);
 
       // §400 (IDENTITY.md §5.1) — миграция legacy-ключей: отметки, записанные
       // до перехода на тег, опознаются по форме 64-hex и переезжают на

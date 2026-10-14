@@ -3,7 +3,7 @@
 | Поле | Значение |
 |------|----------|
 | Тип | P (производительность) + D (дефект: UI замирает на старте) |
-| Статус | P (in progress) |
+| Статус | D (done), ждёт проверки на эмуляторе |
 | Фича | [001-SUBSCRIPTIONS](../features/001-SUBSCRIPTIONS/) |
 | Дата | 2026-10-15 |
 | Связанные | §101 (гонки регидрации), §283 (регидрация не сигнал «узел ушёл»), §302 (import-rules на кэше), §400 (миграция legacy-ключей), §478 (вердикты ядра), §515 (stale-контроллер слота), §561 (`dropped`), §615 (`nodesNotLoaded`) |
@@ -86,6 +86,71 @@
 6. Записи разбираются последовательно (как сейчас), по одному `Isolate.run` на
    запись; `notifyListeners()` — после каждой записи, чтобы плитки оживали по
    мере готовности, а не разом в конце.
+
+### Реализация (15.10.2026)
+
+Файлы (от `app/`):
+
+- `lib/controllers/subscription_controller/cache_rehydrate.dart` (новый) —
+  `CacheParseInput` / `CacheParseResult`, чистая `parseCachedBody`,
+  `parseCachedBodyInIsolate` (`Isolate.run`, замыкание строится в top-level
+  функции), `ParseEnvSnapshot` (снимок реестра и черновиков main и их установка
+  в воркере), `replayCapturedLogs`; сюда же вынесены `applyRulesToNodes` и
+  `_remapAutoSelectSynonyms` (раньше методы контроллера).
+- `lib/controllers/subscription_controller.dart` — `_rehydrateFromCache` идёт
+  только по `enabled`, `notifyListeners()` после каждой записи;
+  `ensureHydrated` + `_hydrateEntry` (все guard'ы цикла сохранены) +
+  `_parseCachedBody` (воркер → откат на main с warning `Re-hydrate: worker
+  failed for … — parsing on main`); точки догрузки: `toggleAt` при включении
+  (а), `_hydrateEnabledEntries()` в начале `generateConfig` до
+  `_compositionSignature()` (б), начало `_fetchEntryByRef` (в); тест-шов
+  `cacheParseWorkerForTesting`.
+- `lib/controllers/subscription_controller/subscription_entry.dart` — поля
+  `_hydration` / `_hydrationUrl` (общая `Future` и URL, для которого она
+  запущена).
+- `lib/screens/subscription_detail_screen.dart` — (г): `_loadNodes(cacheOnly:
+  true)` ждёт `ensureHydrated`, пока `_loading` (полоса прогресса; пустой список
+  при `loading` не рисует «No nodes found»).
+- `lib/services/contract/registry.dart` — `_load` запоминает прочитанные
+  тексты и состав протоколов; `snapshot` (`RegistrySnapshot`) и
+  `loadFromSnapshot`.
+- `lib/services/parser/engine/section_loader.dart` — тексты черновиков
+  сохраняются при загрузке; `draftTexts` (незагруженный черновик сначала
+  догружается с диска, как при первом разборе) и `loadDraftsFromTexts`.
+- `lib/services/app_log.dart` — `capture`: перехват записей вместо буфера
+  (ставит воркер; записи `uri_utils.dart` воспроизводятся на main).
+- Тесты: `test/subscription/lazy_rehydration_test.dart` (пп. 1–5, 7),
+  `test/subscription/rehydrate_worker_equivalence_test.dart` (п. 6: 8 самых
+  маленьких тел `public_subscriptions` + фикстуры форматов, REPLACE-правило,
+  legacy-ключ и вердикт на первом узле; сравниваются emit-JSON, identity,
+  предупреждения, патч, `dropped`, миграция, подсказка).
+
+Отступления и уточнения:
+
+1. Реестр в воркере грузится не через `load(loader:, lister:)`, а новым
+   `loadFromSnapshot` поверх того же `_load`: `load` приклеивает префикс
+   ассетов и листинг манифеста, а снимок хранит пути от корня контракта и
+   работает одинаково для `load` и `loadFromDirectory` (тесты). Тексты не
+   перечитываются — это те, что прочитала загрузка на main.
+2. `ensureHydrated` не повторяет попытку для того же URL после неудачи (тела
+   нет, 0 узлов, ошибка): иначе каждый `generateConfig` заново читал бы кэш и
+   писал тот же warning. Новый URL (Edit source) — новая попытка.
+3. Если пока работал воркер у записи сменились `disabledHashes`,
+   `nodeWarnings` или import-правила, разбор повторяется на main по текущим
+   (раньше окно было только на чтение файла, теперь — на весь разбор).
+4. (в) стоит в самом начале `_fetchEntryByRef`, до проверки `inProgress`:
+   догрузка обязана прочитать кэш до того, как фетч перезапишет его ответом
+   (иначе старое и новое тела совпали бы и вердикт держался бы ложно).
+5. Отметка конвейера `markPipelineParsed` (Expando) через границу isolate не
+   переезжает. Она читается только внутри `parseAll` (`parse_warnings.dart`),
+   после разбора не нужна.
+6. П. 1 «тело выключенной не читалось» проверяется через тест-шов воркера (тело
+   на разбор не передавалось), а не счётчиком чтений `HttpCache`.
+7. П. 8: `nodes_not_loaded_test` («тела нет: признак в памяти…») держал
+   подписку выключенной и ждал признак сразу после старта — теперь признак
+   ставится при догрузке, тест зовёт `ensureHydrated`. Остальные перечисленные
+   файлы (вкл. golden_* из `storage_migration`, экраны подписки) зелёные без
+   правок.
 
 ## Вне объёма
 
