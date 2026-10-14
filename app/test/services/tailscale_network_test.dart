@@ -267,6 +267,90 @@ void main() {
       );
     });
 
+    test('§645 — как подключено: условия по порядку', () {
+      const now = 1700000000;
+      String line(CcTailscalePeer p) => tailscaleConnectionText(p, now);
+      // 1. DIRECT с адресом и без.
+      expect(
+        line(const CcTailscalePeer(
+            path: 'DIRECT', endpoint: '198.51.100.7:41641', online: true)),
+        allOf(contains('direct'), contains('198.51.100.7:41641')),
+      );
+      expect(line(const CcTailscalePeer(path: 'DIRECT')),
+          tailscalePathLabel(const CcTailscalePeer(path: 'DIRECT')));
+      // 2. DERP с кодом и без.
+      expect(line(const CcTailscalePeer(path: 'DERP', derpRegionCode: 'ams')),
+          contains('ams'));
+      expect(line(const CcTailscalePeer(path: 'DERP')), isNotEmpty);
+      // 3. PEER_RELAY.
+      expect(line(const CcTailscalePeer(path: 'PEER_RELAY')), isNotEmpty);
+      // Путь важнее last seen.
+      expect(
+        line(const CcTailscalePeer(path: 'DERP', lastSeen: now - 3600)),
+        isNot(contains('last seen')),
+      );
+      // 4. Пути нет, не в сети, lastSeen > 0 — относительный возраст.
+      expect(
+        line(const CcTailscalePeer(path: 'NONE', lastSeen: now - 33 * 3600)),
+        allOf(contains('last seen'), contains(tailscaleAgeLabel(33 * 3600))),
+      );
+      // 5. Иначе — ничего: в сети без пути, не в сети без lastSeen.
+      expect(
+        line(const CcTailscalePeer(
+            path: 'NONE', online: true, lastSeen: now - 60)),
+        isEmpty,
+      );
+      expect(line(const CcTailscalePeer()), isEmpty);
+      // key expired дописывается и стоит один, если прочего нет.
+      expect(
+        line(const CcTailscalePeer(path: 'DIRECT', expired: true)),
+        allOf(contains('direct'), contains('key expired')),
+      );
+      expect(line(const CcTailscalePeer(online: true, expired: true)),
+          'key expired');
+    });
+
+    test('§645 — вид пути', () {
+      expect(tailscalePathKind(const CcTailscalePeer(path: 'DIRECT')),
+          TailscalePathKind.direct);
+      expect(tailscalePathKind(const CcTailscalePeer(path: 'DERP')),
+          TailscalePathKind.derp);
+      expect(tailscalePathKind(const CcTailscalePeer(path: 'PEER_RELAY')),
+          TailscalePathKind.peerRelay);
+      for (final path in ['NONE', '', 'SOMETHING_NEW']) {
+        expect(tailscalePathKind(CcTailscalePeer(path: path)), isNull);
+      }
+    });
+
+    test('§645 — правая часть второй строки по числу адресов', () {
+      expect(tailscaleAddressTail(const []), (second: '', more: 0));
+      expect(tailscaleAddressTail(const ['100.64.0.1']), (second: '', more: 0));
+      expect(tailscaleAddressTail(const ['100.64.0.1', 'fd7a::1']),
+          (second: 'fd7a::1', more: 0));
+      expect(tailscaleAddressTail(const ['100.64.0.1', 'fd7a::1', 'fd7a::2']),
+          (second: 'fd7a::1', more: 1));
+    });
+
+    test('§645 — возраст: секунды, минуты, часы до 48 ч, дни', () {
+      expect(tailscaleAgeLabel(-5), tailscaleAgeLabel(0));
+      expect(tailscaleAgeLabel(42), contains('42'));
+      expect(tailscaleAgeLabel(5 * 60), contains('5'));
+      expect(tailscaleAgeLabel(33 * 3600), contains('33'));
+      expect(tailscaleAgeLabel(47 * 3600), contains('47'));
+      expect(tailscaleAgeLabel(17 * 86400), contains('17'));
+      expect(tailscaleAgeLabel(17 * 86400), isNot(contains('408')));
+    });
+
+    test('§645 — вторая строка без «online»', () {
+      const p = CcTailscalePeer(
+          os: 'linux', online: true, exitNodeOption: true, shareeNode: true);
+      final d = tailscaleDeviceDetails(p);
+      expect(d, allOf(contains('linux'), contains('exit node'),
+          contains('shared')));
+      expect(d, isNot(contains('online')));
+      expect(tailscaleDeviceDetails(const CcTailscalePeer()), isEmpty);
+    });
+
     test('поля тела: запись и снятие, порядок ключей', () {
       const src = '{"type": "tailscale", "exit_node": "gw"}';
       final on = jsonDecode(withBodyFields(src, {

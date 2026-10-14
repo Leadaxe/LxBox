@@ -5862,11 +5862,29 @@
   "Save choice": {
     "value": "Записать выбор"
   },
-  "online": {
-    "value": "в сети"
+  "last seen %s ago": {
+    "value": "был в сети %s назад"
   },
-  "last seen %s": {
-    "value": "был в сети %s"
+  "%ss": {
+    "value": "%s с"
+  },
+  "%sm": {
+    "value": "%s мин"
+  },
+  "%sh": {
+    "value": "%s ч"
+  },
+  "%sd": {
+    "value": "%s дн"
+  },
+  "%s online / %s": {
+    "value": "в сети %s из %s"
+  },
+  "Copy MagicDNS name": {
+    "value": "Копировать имя MagicDNS"
+  },
+  "Copy %s": {
+    "value": "Копировать %s"
   },
   "key expired": {
     "value": "ключ истёк"

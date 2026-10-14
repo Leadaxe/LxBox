@@ -5583,11 +5583,29 @@
   "Save choice": {
     "value": "保存选择"
   },
-  "online": {
-    "value": "在线"
+  "last seen %s ago": {
+    "value": "%s前在线"
   },
-  "last seen %s": {
-    "value": "最后在线 %s"
+  "%ss": {
+    "value": "%s 秒"
+  },
+  "%sm": {
+    "value": "%s 分钟"
+  },
+  "%sh": {
+    "value": "%s 小时"
+  },
+  "%sd": {
+    "value": "%s 天"
+  },
+  "%s online / %s": {
+    "value": "%s 在线 / 共 %s"
+  },
+  "Copy MagicDNS name": {
+    "value": "复制 MagicDNS 名称"
+  },
+  "Copy %s": {
+    "value": "复制 %s"
   },
   "key expired": {
     "value": "密钥已过期"

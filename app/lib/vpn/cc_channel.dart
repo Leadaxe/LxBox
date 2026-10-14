@@ -269,6 +269,29 @@ class CcChannel {
         'stable_id': stableId,
       });
 
+  /// §645 — одиночный `GetTailscaleStatus(tag)` ядра: свежая запись
+  /// endpoint'а (путь до устройств — на момент вызова, у потока — на момент
+  /// последнего события). Тег не найден, endpoint не запущен, сервис не поднят
+  /// — [CcTailscaleStatusPoll.skip]; ядро или native без метода —
+  /// [CcTailscaleStatusPoll.notSupported].
+  Future<CcTailscaleStatusPoll> getTailscaleStatus(String tag) async {
+    try {
+      final r = await _methods.invokeMethod<Object?>('ccGetTailscaleStatus', {
+        'tag': tag,
+      });
+      if (r is! Map) return CcTailscaleStatusPoll.skip;
+      final m = _asMap(r);
+      if ('${m['tag'] ?? ''}'.isEmpty) m['tag'] = tag;
+      return CcTailscaleStatusPoll(status: CcTailscaleStatus.fromMap(m));
+    } on PlatformException catch (e) {
+      return e.code == 'unimplemented'
+          ? CcTailscaleStatusPoll.notSupported
+          : CcTailscaleStatusPoll.skip;
+    } on MissingPluginException {
+      return CcTailscaleStatusPoll.notSupported;
+    }
+  }
+
   /// §581 — выход узла из аккаунта. `null` — успех, иначе текст ошибки.
   Future<String?> tailscaleLogout(String tag) =>
       _invokeError('ccTailscaleLogout', {'tag': tag});
@@ -630,6 +653,20 @@ class CcTailscaleStatus {
           if (m is Map)
             CcTailscaleStatus.fromMap(CcChannel._asMap(m)),
       ].where((s) => s.tag.isNotEmpty).toList();
+}
+
+/// §645 — ответ [CcChannel.getTailscaleStatus]: запись endpoint'а; без неё —
+/// пропуск тика ([skip]) или метод не поддержан ([notSupported]).
+class CcTailscaleStatusPoll {
+  const CcTailscaleStatusPoll({this.status, this.unsupported = false});
+
+  final CcTailscaleStatus? status;
+
+  /// Ядро или native без `GetTailscaleStatus`: опрашивать дальше незачем.
+  final bool unsupported;
+
+  static const skip = CcTailscaleStatusPoll();
+  static const notSupported = CcTailscaleStatusPoll(unsupported: true);
 }
 
 /// §581 — устройство сети Tailscale (`TailscalePeer` ядра). Времена —

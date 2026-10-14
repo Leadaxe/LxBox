@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/node_spec.dart';
+import 'package:lxbox/services/tailscale_network.dart' show TailscalePathKind;
 import 'package:lxbox/vpn/cc_channel.dart';
 import 'package:lxbox/widgets/node_diagnostics_tab.dart';
 import 'package:lxbox/widgets/tailscale_network_tab.dart';
@@ -16,6 +17,25 @@ class _FakeActions extends TailscaleNetworkActions {
   Future<String?> setExitNode(String tag, String stableId) async {
     chosen.add(stableId);
     return null;
+  }
+}
+
+/// §645 — опрос `getStatus`: счётчик вызовов, ответ [reply] / [result],
+/// [hold] — вызов не возвращается, пока его не завершат.
+class _PollActions extends TailscaleNetworkActions {
+  int calls = 0;
+  CcTailscaleStatus? reply;
+  CcTailscaleStatusPoll? result;
+  Completer<CcTailscaleStatusPoll>? hold;
+
+  @override
+  Future<CcTailscaleStatusPoll> getStatus(String tag) async {
+    calls++;
+    final h = hold;
+    if (h != null) return h.future;
+    final r = reply;
+    if (r != null) return CcTailscaleStatusPoll(status: r);
+    return result ?? CcTailscaleStatusPoll.skip;
   }
 }
 
@@ -164,17 +184,212 @@ void main() {
         tester.getTopLeft(find.widgetWithText(ListTile, n).last).dy,
     ];
     expect(ys, [...ys]..sort());
-    String sub(String name) => (tester
-            .widget<ListTile>(find.widgetWithText(ListTile, name).last)
-            .subtitle as Text)
-        .data!;
-    expect(sub('nas'), contains('key expired'));
-    expect(sub('nas'), contains('online'));
-    expect(sub('gw'), contains('exit node'));
-    expect(sub('shared-box'), contains('shared'));
-    expect(sub('zeta'), contains('last seen'));
+    bool has(String name, String text) => find
+        .descendant(
+          of: find.widgetWithText(ListTile, name).last,
+          matching: find.textContaining(text),
+        )
+        .evaluate()
+        .isNotEmpty;
+    expect(has('nas', 'key expired'), isTrue);
+    expect(has('nas', 'online'), isFalse);
+    expect(has('gw', 'exit node'), isTrue);
+    expect(has('gw', '100.64.0.2'), isTrue);
+    expect(has('gw', 'gw.tail.ts.net'), isFalse);
+    expect(has('shared-box', 'shared'), isTrue);
+    expect(has('zeta', 'last seen'), isTrue);
+    // Заголовок: в сети 2 из 4.
+    expect(find.textContaining('2 online / 4'), findsOneWidget);
     // Один владелец — без заголовков групп.
     expect(find.text('Alice'), findsNothing);
+  });
+
+  group('§645 — адреса и путь', () {
+    const multi = CcTailscalePeer(
+      stableId: 'm1',
+      hostName: 'router',
+      dnsName: 'router.tail.ts.net.',
+      online: true,
+      path: 'DIRECT',
+      endpoint: '198.51.100.7:41641',
+      ips: ['100.64.0.9', 'fd7a::9', '10.0.0.9'],
+    );
+    CcTailscaleStatus st() => const CcTailscaleStatus(
+          tag: 'ts',
+          backendState: 'Running',
+          stateText: '',
+          self: CcTailscalePeer(
+              hostName: 'phone', ips: ['100.64.0.1', 'fd7a::1']),
+          userGroups: [
+            CcTailscaleUserGroup(peers: [multi]),
+          ],
+        );
+
+    testWidgets('This device: один заголовок Address, адреса столбиком',
+        (tester) async {
+      await pump(tester, data: [st()]);
+      expect(find.text('Address'), findsOneWidget);
+      expect(find.text('100.64.0.1'), findsOneWidget);
+      expect(find.text('fd7a::1'), findsOneWidget);
+    });
+
+    testWidgets('+N раскрывает и сворачивает адреса сверх двух',
+        (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 2400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await pump(tester, data: [st()]);
+      expect(find.text('fd7a::9'), findsOneWidget);
+      expect(find.text('+1'), findsOneWidget);
+      expect(find.text('10.0.0.9'), findsNothing);
+      expect(find.byIcon(Icons.bolt), findsOneWidget);
+      final more = find.byKey(const ValueKey('tailscale-more-m1'));
+      await tester.tap(more);
+      await tester.pump();
+      expect(find.text('10.0.0.9'), findsOneWidget);
+      expect(find.byIcon(Icons.expand_less), findsOneWidget);
+      // Меню строки при раскрытии не открылось.
+      expect(find.text('Ping'), findsNothing);
+      await tester.tap(more);
+      await tester.pump();
+      expect(find.text('10.0.0.9'), findsNothing);
+    });
+
+    testWidgets('меню: MagicDNS-имя и пункт на каждый адрес',
+        (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 2400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await pump(tester, data: [st()]);
+      await tester.tap(find.widgetWithText(ListTile, 'router').last);
+      await tester.pumpAndSettle();
+      expect(find.text('Copy name'), findsOneWidget);
+      expect(find.text('Copy MagicDNS name'), findsOneWidget);
+      expect(find.text('Copy address'), findsNothing);
+      for (final ip in multi.ips) {
+        expect(find.text('Copy $ip'), findsOneWidget);
+      }
+      expect(find.text('Ping'), findsOneWidget);
+    });
+
+    test('иконка пути: напрямую зелёная, посредники оранжевые, нет — нет', () {
+      expect(tailscalePathIcon(TailscalePathKind.direct),
+          (icon: Icons.bolt, color: Colors.green));
+      expect(tailscalePathIcon(TailscalePathKind.derp),
+          (icon: Icons.cloud_outlined, color: Colors.orange));
+      expect(tailscalePathIcon(TailscalePathKind.peerRelay),
+          (icon: Icons.device_hub, color: Colors.orange));
+      expect(tailscalePathIcon(null), isNull);
+    });
+  });
+
+  group('§645 — опрос статуса', () {
+    Future<void> pumpPoll(
+      WidgetTester tester,
+      _PollActions actions, {
+      bool vpnUp = true,
+      StreamController<List<CcTailscaleStatus>>? ctrl,
+    }) async {
+      final c = ctrl ?? StreamController<List<CcTailscaleStatus>>();
+      addTearDown(c.close);
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: TailscaleNetworkTab(
+            key: const ValueKey('tab'),
+            liveTag: 'ts',
+            body: const {},
+            statusSource: c.stream,
+            vpnUp: vpnUp,
+            actions: actions,
+          ),
+        ),
+      ));
+      await tester.pump();
+    }
+
+    testWidgets('первый вызов сразу, ответ строит вкладку, дальше раз в 3 с',
+        (tester) async {
+      final a = _PollActions()..reply = _status();
+      await pumpPoll(tester, a);
+      expect(a.calls, 1);
+      expect(find.text('This device'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 3));
+      expect(a.calls, 2);
+      await tester.pump(const Duration(seconds: 3));
+      expect(a.calls, 3);
+    });
+
+    testWidgets('VPN выключен — опроса нет', (tester) async {
+      final a = _PollActions();
+      await pumpPoll(tester, a, vpnUp: false);
+      await tester.pump(const Duration(seconds: 7));
+      expect(a.calls, 0);
+    });
+
+    testWidgets('вкладка ушла с экрана — опрос стоит, вернулась — сразу',
+        (tester) async {
+      // С данными: без них крутится индикатор и переход не «оседает».
+      final a = _PollActions()..reply = _status();
+      await pumpPoll(tester, a);
+      expect(a.calls, 1);
+      final ctx = tester.element(find.byKey(const ValueKey('tab')));
+      unawaited(Navigator.of(ctx).push(MaterialPageRoute<void>(
+        builder: (_) => const Scaffold(body: Text('over')),
+      )));
+      await tester.pumpAndSettle();
+      final before = a.calls;
+      await tester.pump(const Duration(seconds: 7));
+      expect(a.calls, before);
+      Navigator.of(tester.element(find.text('over'))).pop();
+      await tester.pumpAndSettle();
+      expect(a.calls, before + 1);
+    });
+
+    testWidgets('вкладка закрыта — таймер снят', (tester) async {
+      final a = _PollActions();
+      await pumpPoll(tester, a);
+      await tester.pumpWidget(const MaterialApp(home: SizedBox()));
+      await tester.pump(const Duration(seconds: 7));
+      expect(a.calls, 1);
+    });
+
+    testWidgets('ядро без метода — опрос остановлен, поток работает',
+        (tester) async {
+      final a = _PollActions()..result = CcTailscaleStatusPoll.notSupported;
+      final ctrl = StreamController<List<CcTailscaleStatus>>();
+      await pumpPoll(tester, a, ctrl: ctrl);
+      await tester.pump(const Duration(seconds: 7));
+      expect(a.calls, 1);
+      ctrl.add([_status()]);
+      await tester.pump();
+      expect(find.text('This device'), findsOneWidget);
+    });
+
+    testWidgets('вызов не вернулся — тик пропускается', (tester) async {
+      final a = _PollActions()..hold = Completer<CcTailscaleStatusPoll>();
+      await pumpPoll(tester, a);
+      await tester.pump(const Duration(seconds: 7));
+      expect(a.calls, 1);
+      a.hold!.complete(CcTailscaleStatusPoll.skip);
+      a.hold = null;
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 3));
+      expect(a.calls, 2);
+    });
+
+    testWidgets('на экране — пришедшая последней запись', (tester) async {
+      final a = _PollActions()..result = CcTailscaleStatusPoll.skip;
+      final ctrl = StreamController<List<CcTailscaleStatus>>();
+      await pumpPoll(tester, a, ctrl: ctrl);
+      ctrl.add(const [
+        CcTailscaleStatus(
+            tag: 'ts', backendState: 'NeedsLogin', stateText: ''),
+      ]);
+      await tester.pump();
+      expect(find.text('sign-in needed'), findsOneWidget);
+      a.reply = _status();
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('running'), findsOneWidget);
+    });
   });
 
   group('Diagnostics у узла Tailscale', () {

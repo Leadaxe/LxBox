@@ -20,6 +20,7 @@ import io.nekohasekai.libbox.PoolSlotIterator
 import io.nekohasekai.libbox.RuleIterator
 import io.nekohasekai.libbox.StatusMessage
 import io.nekohasekai.libbox.StringIterator
+import io.nekohasekai.libbox.TailscaleEndpointStatus
 import io.nekohasekai.libbox.TailscalePeer
 import io.nekohasekai.libbox.TailscalePingHandler
 import io.nekohasekai.libbox.TailscalePingResult
@@ -389,42 +390,7 @@ class BoxCommandClient {
                 val iter = update.endpoints() ?: return@runCatching
                 while (iter.hasNext()) {
                     val e = iter.next() ?: continue
-                    // §581 — полное состояние для вкладки Network. Имена,
-                    // адреса и ссылка входа в лог не пишутся (раздел 9).
-                    val groups = ArrayList<Map<String, Any>>()
-                    val gi = e.userGroups()
-                    while (gi != null && gi.hasNext()) {
-                        val g = gi.next() ?: continue
-                        val peers = ArrayList<Map<String, Any>>()
-                        val pi = g.peers()
-                        while (pi != null && pi.hasNext()) {
-                            val p = pi.next() ?: continue
-                            peers.add(tailscalePeerMap(p))
-                        }
-                        groups.add(mapOf(
-                            "user_id" to g.userID,
-                            "login_name" to (g.loginName ?: ""),
-                            "display_name" to (g.displayName ?: ""),
-                            "peers" to peers,
-                        ))
-                    }
-                    val m = HashMap<String, Any>()
-                    m["tag"] = e.endpointTag ?: ""
-                    m["backend_state"] = e.backendState ?: ""
-                    m["state_text"] = e.stateText ?: ""
-                    m["auth_url"] = e.authURL ?: ""
-                    m["network_name"] = e.networkName ?: ""
-                    m["magic_dns_suffix"] = e.magicDNSSuffix ?: ""
-                    m["key_auth"] = e.keyAuth
-                    e.self?.let { m["self"] = tailscalePeerMap(it) }
-                    e.exitNode?.let { m["exit_node"] = tailscalePeerMap(it) }
-                    m["user_groups"] = groups
-                    // §613 (ядро SPEC 115, lx.12) — предупреждения бэкенда.
-                    val health = ArrayList<String>()
-                    val hi = e.health()
-                    while (hi != null && hi.hasNext()) hi.next()?.let { health.add(it) }
-                    m["health"] = health
-                    out.add(m)
+                    out.add(tailscaleEndpointMap(e))
                 }
                 tailscaleEmitter.offer(out)
             }.onFailure { Log.w(TAG, "tailscale onStatusUpdate failed: ${it.javaClass.simpleName}") }
@@ -433,6 +399,69 @@ class BoxCommandClient {
         override fun onError(message: String?) {
             runCatching { Log.w(TAG, "tailscale status stream error (gen=$gen): $message") }
         }
+    }
+
+    /// §581 — запись `TailscaleEndpointStatus` в map канала: полное состояние
+    /// для вкладки Network. Имена, адреса и ссылка входа в лог не пишутся
+    /// (раздел 9). §645 — тот же разбор у потока и у `getTailscaleStatus`.
+    private fun tailscaleEndpointMap(e: TailscaleEndpointStatus): HashMap<String, Any> {
+        val groups = ArrayList<Map<String, Any>>()
+        val gi = e.userGroups()
+        while (gi != null && gi.hasNext()) {
+            val g = gi.next() ?: continue
+            val peers = ArrayList<Map<String, Any>>()
+            val pi = g.peers()
+            while (pi != null && pi.hasNext()) {
+                val p = pi.next() ?: continue
+                peers.add(tailscalePeerMap(p))
+            }
+            groups.add(mapOf(
+                "user_id" to g.userID,
+                "login_name" to (g.loginName ?: ""),
+                "display_name" to (g.displayName ?: ""),
+                "peers" to peers,
+            ))
+        }
+        val m = HashMap<String, Any>()
+        m["tag"] = e.endpointTag ?: ""
+        m["backend_state"] = e.backendState ?: ""
+        m["state_text"] = e.stateText ?: ""
+        m["auth_url"] = e.authURL ?: ""
+        m["network_name"] = e.networkName ?: ""
+        m["magic_dns_suffix"] = e.magicDNSSuffix ?: ""
+        m["key_auth"] = e.keyAuth
+        e.self?.let { m["self"] = tailscalePeerMap(it) }
+        e.exitNode?.let { m["exit_node"] = tailscalePeerMap(it) }
+        m["user_groups"] = groups
+        // §613 (ядро SPEC 115, lx.12) — предупреждения бэкенда.
+        val health = ArrayList<String>()
+        val hi = e.health()
+        while (hi != null && hi.hasNext()) hi.next()?.let { health.add(it) }
+        m["health"] = health
+        return m
+    }
+
+    /// §645 — одиночный `GetTailscaleStatus(tag)` (ядро SPEC 115): ядро
+    /// перечитывает состояние на каждый вызов, путь до устройств — на момент
+    /// запроса. Блокирующий gRPC — звать с `Dispatchers.IO`. Вкладка Network
+    /// зовёт раз в 3 с, поэтому без записей в журнал. `null` — пропуск (клиента
+    /// нет, тег не найден, endpoint не запущен); ядро без метода —
+    /// [UnsupportedOperationException].
+    fun getTailscaleStatus(tag: String): Map<String, Any>? {
+        val client = ensurePingClient() ?: return null
+        val e = try {
+            client.getTailscaleStatus(tag)
+        } catch (_: LinkageError) {
+            throw UnsupportedOperationException("getTailscaleStatus")
+        } catch (t: Exception) {
+            if ((t.message ?: "").contains("unimplemented", ignoreCase = true)) {
+                throw UnsupportedOperationException("getTailscaleStatus")
+            }
+            return null
+        } ?: return null
+        return runCatching {
+            tailscaleEndpointMap(e).also { if ((it["tag"] as String).isEmpty()) it["tag"] = tag }
+        }.getOrNull()
     }
 
     /// §581 — `TailscalePeer` в map канала. `key_expiry`/`last_seen` — Unix-секунды
