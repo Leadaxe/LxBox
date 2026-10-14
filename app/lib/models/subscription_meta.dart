@@ -1,5 +1,6 @@
 /// Метаданные из HTTP-заголовков подписки (`subscription-userinfo`,
-/// `profile-title`, `profile-update-interval`, `profile-web-page-url`).
+/// `profile-title`, `profile-update-interval`, `profile-web-page-url`,
+/// `announce`).
 ///
 /// Поля опциональны — сервер может отдавать любое подмножество. Трафик
 /// в байтах. Expire — unix seconds (int), UI конвертирует в DateTime при
@@ -14,6 +15,10 @@ class SubscriptionMeta {
   final String? profileTitle;
   final int? updateIntervalHours;
 
+  /// §648 — описание подписки из заголовка `announce`, уже декодированное
+  /// и нормализованное (см. `parseAnnounceHeader`).
+  final String? announce;
+
   const SubscriptionMeta({
     this.uploadBytes = 0,
     this.downloadBytes = 0,
@@ -23,6 +28,7 @@ class SubscriptionMeta {
     this.webPageUrl,
     this.profileTitle,
     this.updateIntervalHours,
+    this.announce,
   });
 
   factory SubscriptionMeta.fromJson(Map<String, dynamic> j) => SubscriptionMeta(
@@ -34,6 +40,7 @@ class SubscriptionMeta {
         webPageUrl: j['web_page_url'] as String?,
         profileTitle: j['profile_title'] as String?,
         updateIntervalHours: (j['update_interval_hours'] as num?)?.toInt(),
+        announce: j['announce'] as String?,
       );
 
   Map<String, dynamic> toJson() => {
@@ -46,6 +53,7 @@ class SubscriptionMeta {
         if (profileTitle != null) 'profile_title': profileTitle,
         if (updateIntervalHours != null)
           'update_interval_hours': updateIntervalHours,
+        if (announce != null) 'announce': announce,
       };
 
   @override
@@ -59,9 +67,11 @@ class SubscriptionMeta {
           supportUrl == other.supportUrl &&
           webPageUrl == other.webPageUrl &&
           profileTitle == other.profileTitle &&
-          updateIntervalHours == other.updateIntervalHours);
+          updateIntervalHours == other.updateIntervalHours &&
+          announce == other.announce);
 
   @override
   int get hashCode => Object.hash(uploadBytes, downloadBytes, totalBytes,
-      expireTimestamp, supportUrl, webPageUrl, profileTitle, updateIntervalHours);
+      expireTimestamp, supportUrl, webPageUrl, profileTitle, updateIntervalHours,
+      announce);
 }

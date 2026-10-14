@@ -214,6 +214,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
     'support-url',
     'subscription-userinfo',
     'content-type',
+    'announce', // §648
   };
 
   @override

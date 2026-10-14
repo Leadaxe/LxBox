@@ -901,7 +901,8 @@ From the subscription's HTTP headers ([§027]):
   "support_url":           "…"?,
   "web_page_url":          "…"?,
   "profile_title":         "…"?,
-  "update_interval_hours": 24?
+  "update_interval_hours": 24?,
+  "announce":              "…"?    // §648 — описание подписки (заголовок announce)
 }
 ```
 

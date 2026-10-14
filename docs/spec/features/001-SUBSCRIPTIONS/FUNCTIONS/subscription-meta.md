@@ -2,7 +2,7 @@
 
 # Subscription metadata — traffic, expiry, name and support links from the provider
 
-The app reads traffic usage, expiry, name, update interval and support links from the provider's
+The app reads traffic usage, expiry, name, update interval, description and support links from the provider's
 response headers or body comments and shows them in the subscription header.
 
 | Field | Value |
@@ -34,6 +34,7 @@ No settings of its own.
 | `profile-update-interval` | update interval in hours |
 | `support-url` | support link |
 | `profile-web-page-url` | the provider's page |
+| `announce` | the subscription description (e.g. a legend for the emoji in node names); a `base64:…` value is decoded as UTF-8, otherwise taken as is |
 
 If there are no headers, the same keys are taken from comment lines at the beginning of the body
 (`#`, `//`, `;` + `key: value`); reading stops at the first
@@ -42,7 +43,7 @@ take priority.
 
 **Output (subscription header):** `N nodes` (`N +D⚙ nodes` with detour nodes),
 "M off", a "used / total" bar with a non-zero limit, "Expires: N days left /
-N hours left / Expired", the "Support" chip (Telegram icon for `t.me`) and "Web
+N hours left / Expired", the description text, the "Support" chip (Telegram icon for `t.me`) and "Web
 page", the "N entries dropped" line.
 
 ## Rules and invariants
@@ -58,6 +59,15 @@ page", the "N entries dropped" line.
   `-1` ([auto-update.md](auto-update.md)).
 - Used = upload + download; the bar is capped at 100 %.
 - There are no threshold warnings about expiry or traffic — display only.
+- `announce`: `\r\n` → `\n`, whitespace trimmed at the edges of the whole text,
+  more than two line breaks in a row collapse to two, at most 2000 characters
+  (graphemes) are kept. An empty result or broken base64 means no field (broken
+  base64 — a warning in AppLog); the subscription updates as usual.
+- The description is shown under the "Expires" line, above the "Support" / "Web
+  page" chips, in the style of the neighbouring header lines, as is: multi-line,
+  no translation, no markup, links are not clickable. Collapsed — at most 4 lines
+  with an ellipsis; a longer text expands on tap and collapses on a second tap, a
+  short one does not react. No field — no block.
 
 ## Boundaries
 
@@ -74,3 +84,4 @@ page", the "N entries dropped" line.
 | 3 | [027F](../../../tasks/027F-subscription-auto-update/spec.md) | Implemented | Interval from `profile-update-interval` |
 | 4 | [219](../../../tasks/219-deep-audit-2026-07.md) | Done / findings in progress | Unparsable `expire` → "no expiry", not 1970 |
 | 5 | [129F](../../../tasks/129F-file-subscription/spec.md) | Spec (implemented) | `# key: value` at the beginning of the file → file subscription metadata |
+| 6 | [648](../../../tasks/648-subscription-announce.md) | Implemented, device-pending | Subscription description from the `announce` header |

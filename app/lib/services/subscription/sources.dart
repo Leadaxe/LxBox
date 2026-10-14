@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/widgets.dart' show StringCharacters;
 import 'package:http/http.dart' as http;
 
 import '../../models/node_spec.dart';
@@ -9,6 +10,7 @@ import '../../models/server_list.dart';
 import '../../models/subscription_meta.dart';
 import '../parser/body_decoder.dart';
 import '../parser/engine/decoders.dart' show decodeUtf8Lenient;
+import '../app_log.dart';
 import '../parser/parse_all.dart';
 import 'http_cache.dart';
 import 'input_helpers.dart' show isFileSubscription;
@@ -161,6 +163,8 @@ Map<String, String> _inlineHeaders(String body) {
       'support-url',
       'subscription-userinfo',
       'content-disposition',
+      // §648 — описание подписки (легенда к эмодзи и т.п.).
+      'announce',
     }.contains(key)) {
       out[key] = value;
     }
@@ -298,6 +302,40 @@ String? _decodeBase64Title(String? raw) {
   }
 }
 
+/// §648 — предел длины описания подписки, в графемах.
+const kAnnounceMaxGraphemes = 2000;
+
+final _crlfRe = RegExp(r'\r\n?');
+final _manyNewlinesRe = RegExp(r'\n{3,}');
+
+/// §648 — заголовок `announce`: `base64:…` (UTF-8) или открытый текст.
+/// Нормализация: `\r\n` → `\n`, обрезка краёв, больше двух переводов строки
+/// подряд → два, не длиннее [kAnnounceMaxGraphemes] графем. Пустой результат
+/// и битый base64 — `null` (битый — с предупреждением в AppLog).
+String? parseAnnounceHeader(String? raw) {
+  if (raw == null) return null;
+  var text = raw.trim();
+  const prefix = 'base64:';
+  if (text.startsWith(prefix)) {
+    try {
+      text = decodeUtf8Lenient(base64.decode(text.substring(prefix.length)));
+    } catch (e) {
+      AppLog.I.warning('[subscription] announce: broken base64 ($e)');
+      return null;
+    }
+  }
+  text = text
+      .replaceAll(_crlfRe, '\n')
+      .trim()
+      .replaceAll(_manyNewlinesRe, '\n\n');
+  if (text.isEmpty) return null;
+  final chars = text.characters;
+  if (chars.length > kAnnounceMaxGraphemes) {
+    text = chars.take(kAnnounceMaxGraphemes).toString().trimRight();
+  }
+  return text;
+}
+
 /// Достаёт имя файла из `Content-Disposition` (RFC 6266). Порядок:
 /// `filename*=UTF-8''<percent-encoded>` (RFC 5987, юникод) → `filename="…"`
 /// → `filename=…`. Используется как fallback для `profile-title`, когда
@@ -382,12 +420,16 @@ SubscriptionMeta? _metaFromHeaders(Map<String, String> h) {
   final webPage = get('profile-web-page-url');
   final support = get('support-url');
   final updateIntervalRaw = get('profile-update-interval');
+  // §648 — HTTP-заголовок приоритетнее ключа из комментариев тела: слияние
+  // в [parseFetched] кладёт HTTP поверх inline.
+  final announce = parseAnnounceHeader(get('announce'));
 
   if (userInfo == null &&
       title == null &&
       webPage == null &&
       support == null &&
-      updateIntervalRaw == null) {
+      updateIntervalRaw == null &&
+      announce == null) {
     return null;
   }
 
@@ -427,5 +469,6 @@ SubscriptionMeta? _metaFromHeaders(Map<String, String> h) {
     webPageUrl: webPage,
     profileTitle: title,
     updateIntervalHours: updateHours,
+    announce: announce,
   );
 }
