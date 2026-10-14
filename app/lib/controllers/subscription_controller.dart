@@ -1398,7 +1398,8 @@ class SubscriptionController extends ChangeNotifier {
       id: newUuidV4(),
       name: name,
       enabled: true,
-      tagPrefix: '',
+      // §647 — имя известно сразу: префикс из его эмодзи.
+      tagPrefix: _autoTagPrefixForName(name),
       detourPolicy: DetourPolicy.defaults,
       url: url,
       meta: result.meta,
@@ -1504,6 +1505,22 @@ class SubscriptionController extends ChangeNotifier {
 
   /// Публичный доступ к [_stripExt] для UI (§234 — имя из имени файла).
   static String fileBaseName(String fileName) => _stripExt(fileName);
+
+  /// §647 — префикс тегов из эмодзи первого имени подписки, свободный среди
+  /// префиксов остальных источников списка (подписки и UserServer). [selfId] —
+  /// подписка, уже лежащая в списке: её собственный префикс не в счёт. Эмодзи
+  /// в имени нет — пустая строка.
+  String _autoTagPrefixForName(String name, {String? selfId}) {
+    final candidate = emojiPrefixFromTitle(name);
+    if (candidate.isEmpty) return '';
+    return dedupTagPrefix(
+      candidate,
+      _entries
+          .where((e) => e.list.id != selfId)
+          .map((e) => e.list.tagPrefix)
+          .where((p) => p.isNotEmpty),
+    );
+  }
 
   // ──────────────────────── §234 — Server folders ────────────────────────
 
@@ -3255,6 +3272,14 @@ class SubscriptionController extends ChangeNotifier {
       final nextName = current.name.isEmpty && result.meta?.profileTitle != null
           ? result.meta!.profileTitle!
           : current.name;
+      // §647 — первое непустое имя при пустом префиксе: префикс из эмодзи
+      // имени. Ровно один раз — у названной подписки (в том числе с
+      // очищенным пользователем префиксом) ветка не срабатывает. Пишем мимо
+      // relinkServerTagPrefix: на новый префикс ещё никто не ссылается.
+      final firstName = current.name.isEmpty && nextName.isNotEmpty;
+      final nextPrefix = firstName && current.tagPrefix.isEmpty
+          ? _autoTagPrefixForName(nextName, selfId: current.id)
+          : current.tagPrefix;
 
       // §129 — семантика интервала:
       //   -1 = «Don't auto-update», игнорируем серверный profile-update-interval;
@@ -3329,6 +3354,7 @@ class SubscriptionController extends ChangeNotifier {
 
       final next = current.copyWith(
         name: nextName,
+        tagPrefix: nextPrefix,
         meta: result.meta,
         // §603 — файловая: источник не перечитывался, «обновлено» не сдвигаем.
         lastUpdated: isFile ? current.lastUpdated : DateTime.now(),

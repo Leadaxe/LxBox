@@ -63,6 +63,18 @@ each file; empty files are listed in the message.
 - A subscription by URL is added **even if the first request failed**: the entry
   stays with an error status and is retried in the usual order.
 - The same URL can be added twice — there is no entry dedup.
+- Tag prefix from the name's emoji ([647](../../../tasks/647-subscription-emoji-tag-prefix.md)):
+  when a subscription gets a non-empty name for the first time (from
+  `profile-title` / `Content-Disposition` on the first successful update, or
+  from `profile-title` / the file name on file import) and its tag prefix is
+  empty, the emoji group of the name becomes the prefix. The group starts at the
+  first emoji and takes the emoji that follow, directly or after fewer than 3
+  separators (spaces, `·`, `|` …); text or a longer gap ends it; at most 4
+  grapheme clusters. `©`, `™`, `★` without emoji presentation do not count. If
+  another source already has this prefix, an index is appended with no space:
+  `🗽2`, `🗽3`, … This happens once: an already named subscription, a non-empty
+  prefix, a rename or a prefix cleared by the user never trigger it, and single
+  servers never get it.
 
 ## Boundaries
 
@@ -87,3 +99,4 @@ each file; empty files are listed in the message.
 | 6 | [500](../../../tasks/500-direct-link-reject-reason.md) | Released v2.25.0 | Rejection reason of a single input in a sheet |
 | 7 | [504](../../../tasks/504-new-entry-highlight.md) | Released v2.25.0 | Scrolling to and highlighting the new entry |
 | 8 | [561](../../../tasks/561-dropped-only-in-source-summary.md) | Done | Rejections are shown in the paste preview and the source summary |
+| 9 | [647](../../../tasks/647-subscription-emoji-tag-prefix.md) | Implemented, device-pending | Tag prefix from the emoji of the first subscription name |

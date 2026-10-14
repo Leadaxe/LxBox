@@ -37,6 +37,7 @@ dependencies:
   package_info_plus: ^10.2.1
   connectivity_plus: ^7.3.1
   collection: ^1.18.0
+  characters: ^1.4.0 # §647 — графемные кластеры названия подписки (префикс тегов из эмодзи)
   crypto: ^3.0.3 # §283 — sha256 для identity-хеша ноды подписки
   pointycastle: ^4.0.0 # §130 — ECDSA P-256 keygen (pure-Dart, работает на Android; cryptography P-256 keygen не реализует)
   flutter_zxing: ^3.0.1 # §382 — QR-сканер (ZXing-C++ через FFI; §380 FOSS); §432 — zxing-cpp 3.1.1
