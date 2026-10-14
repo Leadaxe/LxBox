@@ -51,7 +51,7 @@ sets, several route rules, DNS servers and DNS rules at once.
 | Russia-only services | off | 1110 | an external list "available only from Russia" | Outbound, Force IPv4 |
 | Ru internet segment | on | 1120 | ru TLDs, services, GeoIP-RU, Russian apps | Outbound, DNS, UDP server IP, GeoIP IP-range fallback, Russian apps by package, Force IPv4 |
 | FakeIP | off | 1130 | DNS only (see 005) | DNS, Block HTTPS records |
-| Unknown traffic | off | 1150 | traffic without an owning app | outbound (`reject`) |
+| Unknown traffic | on | 1150 | traffic without an owning app | Outbound (`direct-out`; `reject` as the strict option) |
 
 ¹ a global variable by `ref`: shared by the whole app, not per rule.
 

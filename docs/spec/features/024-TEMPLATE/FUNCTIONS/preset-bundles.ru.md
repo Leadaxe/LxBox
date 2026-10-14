@@ -51,7 +51,7 @@ DNS-серверы и DNS-правила.
 | Russia-only services | выкл | 1110 | внешний список «доступно только из РФ» | Outbound, Force IPv4 |
 | Ru internet segment | вкл | 1120 | ru-TLD, сервисы, GeoIP-RU, российские приложения | Outbound, DNS, UDP server IP, GeoIP IP-range fallback, Russian apps by package, Force IPv4 |
 | FakeIP | выкл | 1130 | только DNS (см. 005) | DNS, Block HTTPS records |
-| Unknown traffic | выкл | 1150 | трафик без приложения-владельца | outbound (`reject`) |
+| Unknown traffic | вкл | 1150 | трафик без приложения-владельца | Outbound (`direct-out`; `reject` — строгий вариант) |
 
 ¹ глобальная переменная по `ref`: общая для всего приложения, а не для правила.
 
