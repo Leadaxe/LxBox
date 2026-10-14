@@ -3,7 +3,7 @@
 | Поле | Значение |
 |------|----------|
 | Тип | Дефект |
-| Статус | D (done) |
+| Статус | D (done), выпущено в v2.25.15 |
 | Дата | 2026-10-14 |
 | Связанные | §159 (метка `presets_migrated`), §578 (поздние дефолты `late_presets_seeded`), [024-TEMPLATE · template-lifecycle](../features/024-TEMPLATE/FUNCTIONS/template-lifecycle.md) («A clean install»), `docs/STORAGE.md` (`presets_migrated`) |
 
