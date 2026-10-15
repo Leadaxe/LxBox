@@ -14,6 +14,7 @@ import '../../controllers/subscription_controller.dart';
 import '../../models/core_reject_verdict.dart';
 import '../../vpn/box_vpn_client.dart';
 import '../app_log.dart';
+import 'core_error_parse.dart';
 import 'core_reject_guard.dart';
 import 'core_reject_state.dart';
 
@@ -60,10 +61,14 @@ class AppCoreRejectHost implements CoreRejectHost {
     final json = await rebuildAndSave();
     if (json == null || json.isEmpty) return null;
     // Теги — из обратной карты той же сборки (PARSING_PRINCIPLES §9.3): против них
-    // проверяются кандидаты разбора строки ошибки.
-    return RebuiltConfig(
+    // проверяются кандидаты разбора строки ошибки. Порядок массивов — из
+    // самого текста конфига, который уходит ядру (§653: индекс → тег).
+    return RebuiltConfig.withConfigTags(
       configJson: json,
-      tags: sub.lastEmittedTagMap.keys.toSet(),
+      configTags: CoreConfigTags.fromConfigJson(
+        json,
+        all: sub.lastEmittedTagMap.keys.toSet(),
+      ),
     );
   }
 
@@ -78,9 +83,11 @@ class AppCoreRejectHost implements CoreRejectHost {
   @override
   Future<CoreRejectNodeRef?> disableNode(String tag, String reason) async {
     final ref = await sub.disableNodeByCoreTag(tag, reason);
-    AppLog.I.warning(ref != null
-        ? 'core rejected node "$tag", disabled: $reason'
-        : 'core rejected tag "$tag" with no matching node, no automation');
+    AppLog.I.warning(
+      ref != null
+          ? 'core rejected node "$tag", disabled: $reason'
+          : 'core rejected tag "$tag" with no matching node, no automation',
+    );
     return ref;
   }
 
@@ -99,6 +106,5 @@ class AppCoreRejectHost implements CoreRejectHost {
     int round, {
     List<DisabledNode> disabledNodes = const [],
   }) =>
-      CoreRejectState.I
-          .onProgress(phase, round, disabledNodes: disabledNodes);
+      CoreRejectState.I.onProgress(phase, round, disabledNodes: disabledNodes);
 }

@@ -3,7 +3,7 @@
 | Поле | Значение |
 |------|----------|
 | Тип | D (дефект: страховка §478 не срабатывает) |
-| Статус | In progress |
+| Статус | Done (B. LxBox; A — лаунчер) |
 | Дата | 2026-10-15 |
 | Связанные | §478 (узел, которого не приняло ядро, выключается сам), §642 (контракт 1.1.118, D-129: masque `network` не читается), §577 (авторское тело: мягкие правила не правят), §460 (гард реестра на сборке), ядро SPEC 131 (lx.18: legacy `network` у masque снесён), PARSING_PRINCIPLES §9 |
 | Контракт | требуется правка §9.1–§9.3 (лаунчер), версия поднимается лаунчером |
@@ -155,4 +155,25 @@ service: ` (Go), локализованный префикс Kotlin. Разбо�
 
 ## Как сделано
 
-(заполняет исполнитель: файлы, решения, коммит)
+- `core_error_parse.dart`: `CoreConfigEntry(tag, type)` и `CoreConfigTags
+  {all, outbounds, endpoints}` с фабрикой `fromConfigJson` (один `jsonDecode`;
+  запись без строкового `tag`/`type` → `''`, битый JSON → пустые массивы).
+  `parseCoreRejection(line, CoreConfigTags)`: сначала форма `initialize` (по
+  `all`), затем `_parseDecode` — вхождения `outbounds[`/`endpoints[` слева
+  направо; индекс — цифры без ведущих нулей, в пределах массива, тег по
+  индексу непустой; `reason` по §9.4. Решение исполнителя: вхождение, перед
+  которым буква/цифра/`_`/`.` (чужой вложенный путь `foo.outbounds[1]`), не
+  считается.
+- `core_reject_guard.dart`: `RebuiltConfig` несёт `configTags:
+  CoreConfigTags`; конструктор с `tags: Set` оставлен (порядка нет — форма
+  декодирования молчит), чтобы не трогать поддельные хосты других тестов;
+  новый `RebuiltConfig.withConfigTags`. `_consume` отдаёт разбору
+  `CoreConfigTags`.
+- `core_reject_host.dart`: `rebuild` строит `CoreConfigTags.fromConfigJson(json,
+  all: lastEmittedTagMap.keys)`.
+- Тесты: `core_error_parse_test.dart` (группы «§9.1 форма декодирования» и
+  `fromConfigJson` — отдельного `core_reject_host_test.dart` нет, юнит на
+  извлечение тегов там же), `core_reject_guard_test.dart` (`FakeCore.decodeForm`:
+  сигнальный старт на `outbounds[1]`, сдвиг индексов после выключения).
+- Доки: `KERNEL.md` (абзац lx.18 без ложного «§637»), `GUARDS.md` (строка
+  про форму декодирования в разделе feature 478), докблок разбора.

@@ -166,8 +166,13 @@ outbound that still carries `network` no longer loads (`outbounds[N].network:
 json: unknown field "network"`). LxBox emits `vhttp` and never writes
 `network` (§393, §556); since §642 (D-129) the parser does not read it either,
 so a `network` key left in an authored sing-box body now reaches the core
-verbatim and the node is rejected at start (the app disables it and starts
-again, §637) — rename the key to `vhttp`. The flat TLS aliases (`sni`,
+verbatim (the build guard reports it as an unknown key but does not edit an
+authored body, §577) and the core refuses the config while **decoding** it,
+before any outbound exists — the error carries only the array index, no tag.
+Since §653 the app resolves that index to a tag through the config it just
+sent, disables the node and starts again (the feature 478 loop); before §653
+the start simply failed with the core's text. To keep the node, rename the key
+to `vhttp`. The flat TLS aliases (`sni`,
 `skip_cert_verify`, `fragment*`) are still accepted with a deprecation line.
 Base sing-box v1.14.3, zero drift from `upstream/stable`, Go 1.26.8. Build
 tags unchanged. Java surface lx.15 → lx.18: identical (javap over all 258
