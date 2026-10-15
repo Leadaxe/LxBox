@@ -46,6 +46,15 @@
 - **WARP: the eight `8.x` blocks are back in the WireGuard endpoint pool
   ([task 651](docs/spec/tasks/651-warp-8x-blocks-return.md)).** Fresh
   measurements show them answering on a par with the other blocks.
+- **Core `v1.14.3-lx.18` → `v1.14.3-lx.21`
+  ([docs/KERNEL.md](docs/KERNEL.md)).** Nothing changes for the app: lx.19
+  and lx.20 fix the Linux router daemon, lx.21 adds the experimental
+  TrustTunnel protocol to the desktop and router builds only — the Android
+  library does not include it. The Java surface is identical to lx.18.
+  (RU: Ядро `v1.14.3-lx.18` → `v1.14.3-lx.21`. Для приложения ничего не
+  меняется: lx.19 и lx.20 правят Linux-демон роутера, lx.21 добавляет
+  экспериментальный протокол TrustTunnel только в desktop- и роутерные
+  сборки — в Android-библиотеке его нет. Java-поверхность идентична lx.18.)
 
 ### Fixed
 
