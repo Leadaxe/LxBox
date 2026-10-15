@@ -985,6 +985,14 @@ final class _Ctx {
     final disc = f.discriminator ?? 'type';
     final map = value.cast<String, dynamic>();
     final type = map[disc];
+    if (!map.containsKey(disc)) {
+      // Контракт 1.1.124 (PARSING_PRINCIPLES §6.4, `variantObject` лаунчера) —
+      // без дискриминатора варианта нет: `transport: {}` → `field_missing`
+      // на `transport.type`, объект снимается целиком, узел живёт.
+      final dp = _join(path, disc);
+      warn('field_missing', path: dp, params: {'field': dp});
+      return const _Value.drop();
+    }
     if (type is! String) {
       // Транспорт без `type` ядро не разберёт вовсе — тот же тип-фатал.
       return _invalid(f, path, value);
@@ -1022,12 +1030,14 @@ final class _Ctx {
       dropObject = false;
       return const _Value.drop();
     }
-    // Контракт 1.1.122 (`nodeflow.objectField` лаунчера: пустой результат —
-    // объекта нет) — объект, который санитайзер опустошил (связь сняла
-    // единственное поле: `tls.client_certificate_path` без ключа), в тело не
-    // идёт: пустая секция — не то, что написал автор. Пустой объект во
-    // входе — прежним путём.
-    if (cleaned.isEmpty && map.isNotEmpty) return const _Value.drop();
+    // Контракт 1.1.124 (PARSING_PRINCIPLES §6.4, `nodeflow.objectField`
+    // лаунчера: пустой результат — объекта нет) — описанный объект, пустой
+    // после обхода, в тело не идёт, без кода: опустошён правилами (связь
+    // сняла единственное поле: `tls.client_certificate_path` без ключа) или
+    // пришёл как `{}` (`tls.ech: {}`). Для ядра пустой объект и отсутствие
+    // ключа одно и то же. Сквозной ключ под `*` сюда не попадает: его
+    // копирует [_sanitizeObjectBody] как написан, `{}` в том числе.
+    if (cleaned.isEmpty) return const _Value.drop();
 
     // §467 — `all_or_nothing` НЕ влечёт действия санитайзера.
     //

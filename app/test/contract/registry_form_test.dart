@@ -13,8 +13,8 @@ void main() {
   setUp(() => layout = formLayoutFor('openconnect')!);
 
   test('схема без формы — null', () {
-    expect(formLayoutFor('vless'), isNull);
-    expect(formStateFor('vless', const {}), isNull);
+    expect(formLayoutFor('vmess'), isNull);
+    expect(formStateFor('vmess', const {}), isNull);
   });
 
   test('раскладка: блоки, поля блока в порядке order, группа выбора', () {
@@ -122,5 +122,111 @@ void main() {
     final st = layout.stateOf({'mtu': 1600});
     expect(st.outOfRangeAt('mtu')?.value, 1600);
     expect(st.canSave, isFalse);
+  });
+
+  // §654 A2 — контракт 1.1.123 (TASKS_LXBOX §120).
+  group('контракт 1.1.123', () {
+    test('общая секция: блок ref-поля, поля группы выбора блок не имеют', () {
+      final vless = formLayoutFor('vless')!;
+      expect(vless.field('server')!.block, 'connection');
+      expect(vless.field('tls.server_name')!.block, 'tls');
+      expect(vless.field('tls.enabled')!.block, isNull);
+      expect(vless.field('tls.enabled')!.choiceId, 'security');
+      expect(
+        [for (final f in vless.fieldsIn('transport')) f.path],
+        containsAllInOrder(['transport', 'transport.type', 'transport.path']),
+      );
+      final disc = vless.field('transport.type')!;
+      expect(disc.discriminator, isTrue);
+      expect(disc.values, isNot(contains('quic')));
+      expect(disc.values!.first, '');
+      // У http reality/utls/alpn сняты exclude_fields.
+      final http = formLayoutFor('http')!;
+      expect(http.field('tls.alpn'), isNull);
+      expect(http.field('tls.reality.enabled'), isNull);
+      expect(http.field('tls.server_name'), isNotNull);
+      // hysteria2: reality запрещён схеме (forbidden_for) — с поддеревом.
+      expect(formLayoutFor('hysteria2')!.field('tls.reality.enabled'), isNull);
+    });
+
+    test('fixed: не рисуется, пишется при сохранении', () {
+      final trojan = formLayoutFor('trojan')!;
+      expect(trojan.fixed, {'tls.enabled': true});
+      expect(trojan.field('tls.enabled'), isNull);
+      expect(trojan.stateOf(const {}).isVisible('tls.server_name'), isTrue);
+      final saved = formBodyForSave('trojan', {
+        'type': 'trojan',
+        'tag': 't',
+        'server': 't.example.com',
+        'server_port': 443,
+        'password': 'p',
+      });
+      expect(saved['tls'], {'enabled': true});
+    });
+
+    test('смена варианта security у VLESS: reality → tls → none', () {
+      final vless = formLayoutFor('vless')!;
+      final c = vless.choice('security')!;
+      final reality = applyFormOption(const {}, c, 'reality');
+      expect(reality['tls'], {
+        'enabled': true,
+        'reality': {'enabled': true},
+      });
+      expect(activeFormOption(c, reality), 'reality');
+      final tls = applyFormOption(reality, c, 'tls');
+      expect(tls['tls'], {'enabled': true});
+      expect(activeFormOption(c, tls), 'tls');
+      expect(applyFormOption(tls, c, 'none').containsKey('tls'), isFalse);
+    });
+
+    test('массив: элемент [0] создаётся, второй не трогается, пустой '
+        'единственный снимается', () {
+      final one = withFormValue(const {}, 'peers.0.address', 'w.example.com');
+      expect(one['peers'], [
+        {'address': 'w.example.com'},
+      ]);
+      expect(formValueAt(one, 'peers.0.address'), 'w.example.com');
+      expect(formPathSet(one, 'peers.1.address'), isFalse);
+      expect(withFormValue(one, 'peers.0.address', null), isEmpty);
+      final two = <String, dynamic>{
+        'peers': [
+          {'address': 'a'},
+          {'address': 'b'},
+        ],
+      };
+      expect(withFormValue(two, 'peers.0.address', null)['peers'], [
+        <String, dynamic>{},
+        {'address': 'b'},
+      ]);
+    });
+
+    test('implies: отпечаток пишет utls.enabled, очистка снимает', () {
+      final trojan = formLayoutFor('trojan')!;
+      final on = trojan.write(const {}, 'tls.utls.fingerprint', 'firefox');
+      expect(on['tls'], {
+        'utls': {'enabled': true, 'fingerprint': 'firefox'},
+      });
+      expect(trojan.write(on, 'tls.utls.fingerprint', ''), isEmpty);
+    });
+
+    test('тело формы — через санитайзер (п. 11): WireGuard получает '
+        'allowed_ips пира', () {
+      final saved = formBodyForSave('wireguard', {
+        'type': 'wireguard',
+        'tag': 'wg',
+        'address': ['10.0.0.2/32'],
+        'private_key': 'yAnz5TF+lXXJte14tji3zlMNq+hd2rYUIgJBgB3fBmk=',
+        'peers': [
+          {
+            'address': 'w.example.com',
+            'port': 51820,
+            'public_key': 'xTIBA5rboUvnH4htodjb6e697QjLERt1NAB4mZqp8Dg=',
+          },
+        ],
+      });
+      expect(saved['type'], 'wireguard');
+      expect(saved['tag'], 'wg');
+      expect((saved['peers'] as List).single['allowed_ips'], isNotEmpty);
+    });
   });
 }

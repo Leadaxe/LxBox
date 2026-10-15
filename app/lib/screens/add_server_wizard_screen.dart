@@ -246,8 +246,10 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
     final tagInput = _ocTag.text.trim();
     final tag = tagInput.isNotEmpty ? tagInput : _kDefaultOcTag;
     final entry = <String, dynamic>{'type': _kOcScheme, 'tag': tag, ..._ocBody};
+    // §654 A2 (контракт 1.1.123, §120 п. 11) — тело формы не авторское:
+    // уходит прогнанным санитайзером (`fixed` + правила реестра).
     await widget.subController.addFromInput(
-      jsonEncode(entry),
+      jsonEncode(formBodyForSave(_kOcScheme, entry)),
       origin: UserSource.manual,
     );
     await _afterAdd(addedTag: tag);

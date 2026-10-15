@@ -176,7 +176,10 @@ void main() {
       }
 
       final entry = {'type': 'openconnect', 'tag': 'forti', ...formBody()};
-      final byForm = await add(jsonEncode(entry), UserSource.manual);
+      final byForm = await add(
+        jsonEncode(formBodyForSave('openconnect', entry)),
+        UserSource.manual,
+      );
       final byPaste = await add(_reference, UserSource.paste);
       expect(c.entries, hasLength(2));
       expect(byForm, isA<UnknownTypeSpec>());

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/services/contract/body_edit.dart';
 import 'package:lxbox/services/contract/body_sanitizer.dart';
 import 'package:lxbox/services/contract/registry.dart';
 
@@ -117,6 +118,76 @@ void main() {
       });
       expect(_codes(r), ['field_requires@tls.client_certificate_path']);
       expect(r.body!.containsKey('tls'), isFalse);
+    });
+
+    // §654 A2 (контракт 1.1.123, TASKS_LXBOX §120 п. 7) — у `headers` ws и
+    // httpupgrade описан `Host` и стоит `*`: прочие заголовки идут насквозь,
+    // без `unknown_key`.
+    for (final t in const ['ws', 'httpupgrade']) {
+      test('$t: сквозные заголовки без unknown_key, Host описан', () {
+        final headers = {
+          'Host': 'cdn.example.com',
+          'User-Agent': 'Mozilla/5.0',
+          'X-Forwarded-For': ['1.1.1.1', '2.2.2.2'],
+        };
+        final r = _sanitize({
+          'type': 'vless',
+          'tag': 'x',
+          'server': 'a.example.com',
+          'server_port': 443,
+          'uuid': 'b831381d-6324-4d53-ad4f-8cda48b30811',
+          'transport': {'type': t, 'path': '/ws', 'headers': headers},
+        });
+        expect(_codes(r), isEmpty);
+        expect((r.body!['transport'] as Map)['headers'], headers);
+      });
+    }
+
+    // §654 A2 (контракт 1.1.124, PARSING_PRINCIPLES §6.4).
+    test('описанный объект `{}` во входе снимается без кода; вариантный '
+        '`{}` — field_missing на дискриминаторе', () {
+      final r = _sanitize({
+        'type': 'vless',
+        'tag': 'x',
+        'server': 'a.example.com',
+        'server_port': 443,
+        'uuid': 'b831381d-6324-4d53-ad4f-8cda48b30811',
+        'tls': {'enabled': true, 'server_name': 'a.example.com', 'ech': {}},
+        'transport': {},
+      });
+      expect(_codes(r), ['field_missing@transport.type']);
+      expect(r.body!.containsKey('transport'), isFalse);
+      expect(r.body!['tls'], {'enabled': true, 'server_name': 'a.example.com'});
+    });
+
+    test('авторское тело (§577): пустой описанный объект не правится', () {
+      final raw = <String, dynamic>{
+        'type': 'vless',
+        'tag': 'x',
+        'server': 'a.example.com',
+        'server_port': 443,
+        'uuid': 'b831381d-6324-4d53-ad4f-8cda48b30811',
+        'tls': {'enabled': true, 'server_name': 'a.example.com', 'ech': {}},
+        'transport': {},
+      };
+      final res = settleSanitized('vless', raw, _sanitize(raw), authored: true);
+      expect(res.body, raw);
+      expect([
+        for (final w in res.warnings) '${w.code}@${w.path}:${w.applied}',
+      ], ['field_missing@transport.type:false']);
+    });
+
+    test('сквозной `{}` под `*` остаётся', () {
+      final r = _sanitize({
+        'type': 'openconnect',
+        'tag': 'x',
+        'server': 'fw.example.com',
+        'csd': {},
+        'tls': {'server_name': 'fw.example.com', 'hip': {}},
+      });
+      expect(_codes(r), isEmpty);
+      expect(r.body!['csd'], <String, dynamic>{});
+      expect((r.body!['tls'] as Map)['hip'], <String, dynamic>{});
     });
   });
 

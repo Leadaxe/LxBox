@@ -104,6 +104,22 @@ final class FieldSchema {
     };
   }
 
+  /// Контракт 1.1.123 — имена вариантов в порядке `values` секции (форма
+  /// рисует их в этом порядке); у поля без [variants] — пусто.
+  List<String> get variantValues {
+    final v = raw['variant_values'];
+    if (v is List) return [for (final e in v) '$e'];
+    return variants?.keys.toList() ?? const [];
+  }
+
+  /// `forbidden_for`/`allowed_for` поля пускают схему [scheme] (лаунчер:
+  /// `Field.AllowedForScheme`).
+  bool allowedForScheme(String scheme) {
+    if (forbiddenFor?.contains(scheme) ?? false) return false;
+    final allowed = allowedFor;
+    return allowed == null || allowed.isEmpty || allowed.contains(scheme);
+  }
+
   bool get inline => raw['inline'] == true;
 
   /// §560 — поле пишет СБОРКА (`detour`), а не тело узла: разбор его не
@@ -1051,6 +1067,10 @@ final class ContractRegistry {
       if ((v is List && v.isEmpty) || (v is Map && v.isEmpty)) continue;
       raw[k] = v;
     }
+    // Контракт 1.1.123 — правила формы у ref-поля схемы: `server` у одной
+    // схемы обязателен в форме, у другой его в форме нет вовсе. Пустой
+    // `form: {}` значим (поле в форме без своих правил).
+    if (w['form'] is Map) raw['form'] = w['form'];
     return FieldSchema(Map.unmodifiable(raw));
   }
 
@@ -1097,6 +1117,11 @@ final class ContractRegistry {
     }
     final raw = _wrapperAttrs(src, 'transports');
     raw['discriminator'] = disc;
+    // Контракт 1.1.123 — порядок вариантов для формы: `values` секции.
+    raw['variant_values'] = List<String>.unmodifiable([
+      for (final v in (body?['values'] as List?) ?? vs.keys)
+        if (variants.containsKey('$v')) '$v',
+    ]);
     raw['variants'] = {for (final e in variants.entries) e.key: e.value.raw};
     return FieldSchema._expanded(
         Map.unmodifiable(raw), null, Map.unmodifiable(variants));

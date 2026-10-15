@@ -175,6 +175,51 @@ sing-box JSON доезжает до ядра, но:
   `registry_form_test.dart`, `registry_wildcard_test.dart`, кейс variant в
   `test/models/config_node_test.dart`.
 
+### A2. Контракт 1.1.123–1.1.124
+
+Норма — `TASKS_LXBOX.md` §120 (1.1.123) и §121 (1.1.124) лаунчера,
+`PARSING_PRINCIPLES.md` §6.4. Синк на `0e88c814` (1.1.124).
+
+- **§121 — пустой описанный объект снимается.** `_sanitizeObjectField`:
+  объект с `fields`, пустой после обхода, в тело не идёт без кода — и
+  опустошённый правилами, и `{}` во входе (`tls.ech: {}`).
+  `_sanitizeVariantObject`: без дискриминатора (`transport: {}`) —
+  `field_missing@transport.type`, объект снят, узел живёт. Сквозной ключ под
+  `*` копируется как есть, `{}` в том числе (`openvpn-client` `tls: {}`).
+  Авторское тело (§577) `{}` сохраняет: правило мягкое, точка правки
+  (`settleSanitized`) переносит только жёсткие пути; `field_missing` идёт с
+  `applied: false`. Корпус: `empty_described_object_dropped`,
+  `openvpn_client_empty_tls_kept`.
+- **§120 — модель формы** (`registry_form.dart`, обход по образцу `formWalk`
+  лаунчера): общая секция входит только через `form` ref-поля
+  (`_mergeRefAttrs` переносит `form`, `{}` тоже), поле с `forbidden_for`/
+  `allowed_for` схемы отпадает с поддеревом, `exclude_fields`; блок поля
+  секции без своего — блок ref-поля; вариантная секция — синтетический
+  дискриминатор (`FormFieldSpec.discriminator`, `enum` из `""` и вариантов
+  без `exclude_variants`, порядок — `values` секции,
+  `FieldSchema.variantValues`) и поля всех вариантов (`variant`,
+  `variantOf`), `stateOf` берёт вариант по текущему дискриминатору;
+  `FormLayout.fixed` накладывается перед вычислением, путь не рисуется;
+  `formBodyForSave` его пишет; массив объектов с `form` — элемент `[0]`,
+  числовой сегмент в `formValueAt`/`withFormValue` (дополнение массива,
+  снятие единственного пустого элемента); `activeFormOption` — самое длинное
+  совпадение; `FormLayout.write` — значение + `form.implies`. Поля групп
+  выбора помечены `choiceId`, `block` у них `null` (как раньше). «Задан» —
+  не `null` и не строка из пробелов.
+- **п. 7 — `headers` ws/httpupgrade:** `Host` описан, прочие заголовки идут
+  через `*` без `unknown_key` — работало с волны A (`hasWildcard` читает
+  сырые `fields` варианта), закреплено тестом.
+- **п. 11 — тело формы не авторское.** Узел из формы Add server — свой
+  сервер с телом `singbox_outbound`, то есть авторский: мягкие правила на нём
+  не работали бы. `formBodyForSave(scheme, entry)` — `fixed` + санитайзер со
+  входом `other`; экран OpenConnect сохраняет его результат. Вставка JSON
+  руками — без изменений.
+- Тесты: `form_corpus_test.dart` (все 9 файлов `corpus/form`, кейсы
+  `write` → `expect.body`), `registry_form_test.dart` (группа «контракт
+  1.1.123»), `registry_wildcard_test.dart` (headers, `{}`, авторское тело),
+  `openconnect_form_entry_test.dart` (сохранение через `formBodyForSave`).
+  Новых форм UI для других протоколов нет.
+
 ### B. Форма «Add server → OpenConnect» и правка узла
 
 Макет и правила — SPEC 167 §2.3 лаунчера, три блока:
