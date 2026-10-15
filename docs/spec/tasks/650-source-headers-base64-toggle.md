@@ -3,7 +3,7 @@
 | Поле | Значение |
 |------|----------|
 | Тип | F (доработка UI, вид согласован владельцем 14.10.2026) |
-| Статус | I (реализовано), device-pending |
+| Статус | I (реализовано), device-pending; выпущено в v2.25.16 |
 | Фича | [001-SUBSCRIPTIONS](../features/001-SUBSCRIPTIONS/FEATURE.md) → `FUNCTIONS/subscription-meta.md` |
 | Дата | 2026-10-14 |
 | Связанные | §648 (announce) |
