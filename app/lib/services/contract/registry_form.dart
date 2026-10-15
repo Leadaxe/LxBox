@@ -366,6 +366,25 @@ List<String> formAdvisoryCodes(
   return out;
 }
 
+/// Текст поля ввода формы → значение для [withFormValue]. Пустое (после
+/// trim) — `null`: ключ не пишется. `int` — число, если текст разбирается;
+/// иначе текст как есть (санитайзер и `outOfRange` скажут сами). Секрет не
+/// обрезается: пробелы по краям пароля — часть пароля.
+Object? formInputValue(FormFieldSpec f, String text) {
+  final t = text.trim();
+  if (t.isEmpty) return null;
+  if (f.secret) return text;
+  if (f.type == 'int') return int.tryParse(t) ?? t;
+  return t;
+}
+
+/// Список через запятую (`tls.peer_fingerprint`) → элементы без пустых.
+/// Пустой ввод — пустой список: [withFormValue] ключ не пишет.
+List<String> formListInput(String text) => [
+  for (final s in text.split(','))
+    if (s.trim().isNotEmpty) s.trim(),
+];
+
 /// Значение по пути [path] (через точку); `null` — пути нет.
 Object? formValueAt(Map<String, dynamic> body, String path) {
   Object? cur = body;
