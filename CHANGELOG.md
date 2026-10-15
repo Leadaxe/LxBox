@@ -8,34 +8,63 @@
 
 ## [Unreleased]
 
+---
+
+## [2.25.16] — 2026-10-15
+
 ### Added
 
-- **Вкладка Source: `base64:`-заголовки показаны расшифрованными
-  ([§650](docs/spec/tasks/650-source-headers-base64-toggle.md)).** В блоке
-  Response headers значение `base64:…` (например, `profile-title`, `announce`)
-  выводится в UTF-8; подпись `base64` под именем заголовка переключает строку
-  на исходное значение и обратно. Копирование блока — как прежде, в исходном
-  виде.
-- **Описание подписки из заголовка `announce`
-  ([§648](docs/spec/tasks/648-subscription-announce.md)).** Текст провайдера
-  (`base64:…` или открытый; запасной путь — ключ в комментариях в начале тела)
-  показывается в шапке подписки под строкой «Expires»: до 4 строк, тап
-  раскрывает целиком. На вкладке Source заголовок попадает в список важных.
-- **Префикс тегов новой подписки берётся из эмодзи её названия
-  ([§647](docs/spec/tasks/647-subscription-emoji-tag-prefix.md)).** Когда
-  подписка впервые получает имя (`profile-title`, `Content-Disposition`, имя
-  файла), а префикс пустой, префиксом становится группа эмодзи из имени:
-  `Liberty VPN 🗽` → `🗽`. Занятый префикс получает индекс: `🗽2`. Существующие
-  подписки не меняются.
+- **Line-wrap button in the JSON editor
+  ([task 649](docs/spec/tasks/649-json-view-wrap-toggle.md)).** The Config
+  editor and the read-only JSON views with sticky headers (subscription Source,
+  node JSON) get a wrap button next to search. Off by default, highlighted when
+  on, not saved. While wrapping is on there are no sticky headers. A thin
+  progress bar shows while a long text is being laid out.
+- **Subscription description from the `announce` header
+  ([task 648](docs/spec/tasks/648-subscription-announce.md)).** The provider's
+  text (`base64:…` or plain; fallback — a key in the comments at the top of the
+  body) is shown in the subscription header under Expires: up to 4 lines, a tap
+  expands it. On the Source tab the header is among the important ones.
+- **Tag prefix of a new subscription from the emoji in its name
+  ([task 647](docs/spec/tasks/647-subscription-emoji-tag-prefix.md)).** When a
+  subscription first gets a name and the prefix is empty, the emoji group of
+  the name becomes the prefix: `Liberty VPN 🗽` → `🗽`; a taken prefix gets an
+  index (`🗽2`). Existing subscriptions are not changed.
+- **Source tab: `base64:` headers decoded
+  ([task 650](docs/spec/tasks/650-source-headers-base64-toggle.md)).** Values
+  like `profile-title` and `announce` are shown as UTF-8; the `base64` label
+  under the header name switches back to the raw value. Copy still copies the
+  raw block.
+
+### Changed
+
+- **JSON editor gestures by direction (task 649).** A sideways swipe over a
+  long line scrolls the text instead of switching the tab; where nothing
+  scrolls sideways the swipe switches the tab as before. A vertical swipe
+  scrolls the text and, once the text is at its edge, the next swipe scrolls
+  the page. With a selection the editor keeps the whole touch, as before.
+- **WARP: the eight `8.x` blocks are back in the WireGuard endpoint pool
+  ([task 651](docs/spec/tasks/651-warp-8x-blocks-return.md)).** Fresh
+  measurements show them answering on a par with the other blocks.
+
+### Fixed
+
+- **Selection magnifier (task 649).** In the Config editor after scrolling down
+  it was blank; in node JSON after moving the page it showed lines from
+  elsewhere. It now draws from the editor itself.
+- **Freeze after start with large subscriptions
+  ([task 652](docs/spec/tasks/652-lazy-rehydration-isolate.md)).** Disabled subscriptions are not rehydrated at
+  start (loaded on enable, open, config build or fetch); parsing the cache and
+  the network response runs in an isolate with a snapshot of the contract
+  registry. Refresh of 4025 nodes: main thread 1.85 s → 0.24 s.
 
 ### Removed
 
-- **Переключатель «Allow LAN access while using exit node» на вкладке Network
-  узла Tailscale убран
-  ([§646](docs/spec/tasks/646-tailscale-remove-lan-access-switch.md)).** Ядро на
-  Android поле `exit_node_allow_lan_access` не применяет; локальную сеть при
-  выходном узле ведёт direct пресет «Private IPs». Поле по-прежнему
-  принимается из JSON.
+- **Tailscale node: the "Allow LAN access while using exit node" switch
+  ([task 646](docs/spec/tasks/646-tailscale-remove-lan-access-switch.md)).**
+  The core on Android does not apply `exit_node_allow_lan_access`; the local
+  network with an exit node goes direct through the "Private IPs" preset. The
+  field is still accepted from JSON.
 
 ---
 

@@ -3,7 +3,7 @@
 | Поле | Значение |
 |------|----------|
 | Тип | D (данные пула) |
-| Статус | D (done) |
+| Статус | D (done); выпущено в v2.25.16 |
 | Фича | [015-WARP → endpoint-pool](../features/015-WARP/FUNCTIONS/endpoint-pool.ru.md) |
 | Дата | 2026-10-14 |
 | Связанные | §132 (откуда блоки), §136 (первое включение), коммит `2d2803b15` (удаление 18.06), PR [Leadaxe/LxBox#164](https://github.com/Leadaxe/LxBox/pull/164) |
