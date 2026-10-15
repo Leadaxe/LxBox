@@ -215,6 +215,29 @@ sing-box JSON доезжает до ядра, но:
 
 ### C. Второй фактор и SSO через libbox
 
+**Волна C выполнена (15.10.2026).** Реализация:
+- подписку держит натив (`BoxCommandClient.syncOpenConnectStatus`): после
+  старта VPN и после reload — по наличию endpoint'а `openconnect` в
+  конфиге; снимается в `shutdownAll`. В отличие от Tailscale Dart её не
+  поднимает: челлендж приходит сразу после старта, а старт бывает с
+  QS-плитки без Flutter-движка. Канал `lxbox/cc/openconnect` несёт снапшот
+  `{endpoints, callback}`, `ccGetOpenConnectStatus` отдаёт текущий;
+- уведомление «Sign-in required: <tag>» ставит натив (канал уведомления
+  VPN, своё id на тег), снимает, когда челлендж исчез; тап → экстра
+  `openconnect_tag` → Dart забирает (`ccTakeOpenConnectOpenRequest`) на
+  старте и при возврате;
+- слушатель SSO — в нативе (`OpenConnectCallbackServer.kt`, только
+  127.0.0.1), пойманный URL отдаёт ядру сам, без Dart; гаснет при ответе,
+  «Not now», смене/исчезновении челленджа и остановке VPN;
+- диалоги и метка узла — `lib/screens/home/openconnect_auth_ui.dart`,
+  метка — на месте подписи состояния endpoint'а в строке узла (`node_row`);
+  чистая логика (порт из префиксов, режим, счётчик неверных кодов, ответ
+  формой, метка) — `lib/services/openconnect_auth.dart`, юниты
+  `test/services/openconnect_auth_test.dart`.
+
+Не проверено: реальный челлендж и SAML (нужен шлюз владельца); на
+эмуляторе подписка не прогонялась.
+
 Канал есть всегда (libbox CommandClient), в отличие от лаунчера в
 классическом режиме.
 

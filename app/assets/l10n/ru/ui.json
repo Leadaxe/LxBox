@@ -5907,6 +5907,51 @@
   "Copy address": {
     "value": "Копировать адрес"
   },
+  "Waiting for sign-in": {
+    "value": "ждёт входа"
+  },
+  "Sign in: %s": {
+    "value": "Вход: %s"
+  },
+  "Not now": {
+    "value": "Не сейчас"
+  },
+  "Submit": {
+    "value": "Отправить"
+  },
+  "Request": {
+    "value": "Запросить"
+  },
+  "Request a new code": {
+    "value": "Запросить новый код"
+  },
+  "The gateway will send a new code": {
+    "value": "Шлюз пришлёт новый код"
+  },
+  "Each wrong code triggers a new sign-in on the gateway": {
+    "value": "Каждый неверный код запускает на шлюзе новый вход"
+  },
+  "The gateway asks for the password again: the password saved in the server settings is probably wrong.": {
+    "value": "Шлюз снова просит пароль: вероятно, пароль в настройках сервера неверен."
+  },
+  "SSO for this gateway type is not supported yet": {
+    "value": "SSO для этого типа шлюза пока не поддерживается"
+  },
+  "Sign in in your browser": {
+    "value": "Войдите в браузере"
+  },
+  "The sign-in link is not a web address, so it is not opened automatically.": {
+    "value": "Ссылка входа — не веб-адрес, поэтому сама не открывается."
+  },
+  "Waiting for the browser to come back…": {
+    "value": "Ждём возврата из браузера…"
+  },
+  "Signing in…": {
+    "value": "Входим…"
+  },
+  "Cannot listen on 127.0.0.1:%s: the port is busy or blocked. Close the app that uses it and try again.": {
+    "value": "Не удалось слушать 127.0.0.1:%s: порт занят или запрещён. Закройте приложение, которое его использует, и повторите."
+  },
   "No reply: %s": {
     "value": "Нет ответа: %s"
   },

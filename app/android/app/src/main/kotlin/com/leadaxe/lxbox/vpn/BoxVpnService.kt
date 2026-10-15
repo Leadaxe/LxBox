@@ -223,6 +223,14 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
         /// §581 — ответы проверки устройства Tailscale (`StartTailscalePing`).
         @Volatile
         var ccTailscalePingSink: io.flutter.plugin.common.EventChannel.EventSink? = null
+        /// §654 C — состояние endpoint'ов openconnect (`SubscribeOpenConnectStatus`):
+        /// снапшот `{endpoints: [...], callback: {...}?}` на каждое обновление.
+        @Volatile
+        var ccOpenConnectSink: io.flutter.plugin.common.EventChannel.EventSink? = null
+        /// §654 C — тап по уведомлению «Sign-in required»: тег узла, чей
+        /// челлендж показать. Dart забирает его на старте и при возврате.
+        @Volatile
+        var openConnectOpenRequest: String? = null
 
         fun start(context: Context) {
             Log.d(TAG, "[vpn] companion.start() → startForegroundService, current status=${currentStatus.name}")

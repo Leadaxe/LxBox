@@ -60,4 +60,6 @@
     <string name="automation_save">保存</string>
     <string name="sora_editor_long_select">长选择</string>
     <string name="sora_editor_clip_text_length_too_large">文本过大，无法复制</string>
+    <string name="openconnect_sign_in_title">需要登录：%1$s</string>
+    <string name="openconnect_sign_in_text">网关正在等待验证码或浏览器登录。点按继续。</string>
 </resources>

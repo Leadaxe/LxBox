@@ -102,6 +102,54 @@ class ServiceNotification(private val service: Service) {
                     .cancel(ALERT_NOTIFICATION_ID)
             }
         }
+
+        /// §654 C — экстра интента MainActivity: тег узла openconnect, чей
+        /// челлендж показать после тапа по уведомлению.
+        const val EXTRA_OPENCONNECT_TAG = "openconnect_tag"
+
+        /// §654 C — id уведомления «Sign-in required» на узел: своё на каждый
+        /// тег, вне id 1/2.
+        private fun signInId(tag: String): Int = 1000 + (tag.hashCode() and 0x7fff)
+
+        /// §654 C — шлюз openconnect ждёт второй фактор или вход через
+        /// браузер. Тап открывает приложение с диалогом этого узла. Канал
+        /// тот же, что у уведомления VPN.
+        fun showSignIn(ctx: Context, tag: String) {
+            runCatching {
+                createChannel(ctx)
+                val openIntent = ctx.packageManager.getLaunchIntentForPackage(ctx.packageName)
+                    ?.apply {
+                        putExtra(EXTRA_OPENCONNECT_TAG, tag)
+                        addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                    }
+                val text = L10n.str(ctx, R.string.openconnect_sign_in_text)
+                val builder = NotificationCompat.Builder(ctx, CHANNEL_ID)
+                    .setSmallIcon(android.R.drawable.ic_lock_lock)
+                    .setContentTitle(L10n.str(ctx, R.string.openconnect_sign_in_title, tag))
+                    .setContentText(text)
+                    .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+                    .setCategory(NotificationCompat.CATEGORY_STATUS)
+                    .setAutoCancel(true)
+                if (openIntent != null) {
+                    builder.setContentIntent(
+                        PendingIntent.getActivity(
+                            ctx, signInId(tag), openIntent,
+                            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                        )
+                    )
+                }
+                (ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+                    .notify(signInId(tag), builder.build())
+            }
+        }
+
+        /// §654 C — челлендж узла закрыт (ответ, отмена, остановка VPN).
+        fun cancelSignIn(ctx: Context, tag: String) {
+            runCatching {
+                (ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+                    .cancel(signInId(tag))
+            }
+        }
     }
 
     init {

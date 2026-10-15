@@ -42,6 +42,7 @@ import 'home/home_menus.dart';
 import 'home/home_dialogs.dart';
 import 'home/node_filter_view_model.dart';
 import 'home/node_list_presenter.dart';
+import 'home/openconnect_auth_ui.dart';
 import 'home/restore_backup.dart';
 import 'home/startup_wizard.dart';
 import '../services/debug/bootstrap.dart';
@@ -69,6 +70,9 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, TickerProviderStateMixin {
   late final HomeController _controller;
+  /// §654 C — диалоги второго фактора и SSO openconnect.
+  late final OpenConnectAuthPresenter _openConnectAuth =
+      OpenConnectAuthPresenter(_controller);
   late final SubscriptionController _subController;
   late final AutoUpdater _autoUpdater;
 
@@ -99,6 +103,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       alignment: 0.3,
     ));
   }
+
+  /// §654 C — тап по метке «Waiting for sign-in» узла openconnect.
+  void _openOpenConnect(String tag) =>
+      unawaited(_openConnectAuth.open(context, tag));
 
   /// §208 — попап с составом пула round_robin-Направления по его auto-тегу.
   /// Title = label Направления (из groupLabels по базовому tag `<base>-auto`).
@@ -259,6 +267,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       // пришёл от native (connectedSince=null) → no-op; реальный показ
       // ловит _onControllerChange, когда придёт connected и сессия дорастёт.
       unawaited(_maybeShowSupport());
+      // §654 C — холодный старт тапом по «Sign-in required».
+      unawaited(_controllerInit.then((_) {
+        if (mounted) unawaited(_openConnectAuth.handleOpenRequest(context));
+      }));
     });
     // Update check (§036 + §390): снек показываем ТОЛЬКО из кеша, на старте.
     // Сетевой fetch (через 5 сек, throttled 24h) снек НЕ поднимает — его
@@ -337,6 +349,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   }
 
   void _onControllerChange() {
+    // §654 C — новый челлендж openconnect: диалог, если приложение на экране.
+    if (mounted) {
+      _openConnectAuth.onState(context,
+          foreground: _lifecycle == AppLifecycleState.resumed);
+    }
     final state = _controller.state;
     final now = state.tunnel;
     final nowError = state.lastError;
@@ -580,6 +597,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     _lifecycle = state;
     if (state == AppLifecycleState.resumed) {
       _controller.onAppResumed();
+      // §654 C — тап по «Sign-in required» или челлендж, пришедший в фоне.
+      unawaited(_openConnectAuth.handleOpenRequest(context));
+      _openConnectAuth.onState(context, foreground: true);
       _ruleSetAutoUpdater.onAppResumed(); // §366
       // §291 — досмотреть подписки на возврате из фона: periodic-таймер спит
       // вместе с замороженным процессом (свёрнут + VPN off), так что вечером
@@ -904,6 +924,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                     rowKeyFor: _nodeRowKey, // §203
                     onSelectServer: _scrollToNode, // §203
                     onViewPool: _showPool, // §208
+                    onOpenConnectTap: _openOpenConnect, // §654
                   ),
                   // §614 — фоновые ошибки: «Errors (N)» → журнал.
                   const ErrorsCounterRow(),

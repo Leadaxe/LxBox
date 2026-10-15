@@ -46,6 +46,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         private const val CC_DNS_CHANNEL = "lxbox/cc/dns" // §180
         private const val CC_TAILSCALE_CHANNEL = "lxbox/cc/tailscale" // §579
         private const val CC_TAILSCALE_PING_CHANNEL = "lxbox/cc/tailscale_ping" // §581
+        private const val CC_OPENCONNECT_CHANNEL = "lxbox/cc/openconnect" // §654
         private const val VPN_REQUEST_CODE = 24
 
         // §207 — allowlist имён pprof-профилей (до `?`). Пропускаем наружу
@@ -129,6 +130,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
     private lateinit var ccDnsEventChannel: EventChannel // §180
     private lateinit var ccTailscaleEventChannel: EventChannel // §579
     private lateinit var ccTailscalePingEventChannel: EventChannel // §581
+    private lateinit var ccOpenConnectEventChannel: EventChannel // §654
     private lateinit var context: Context
     private var activity: Activity? = null
     private var statusSink: EventChannel.EventSink? = null
@@ -258,6 +260,12 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             override fun onListen(args: Any?, sink: EventChannel.EventSink?) { BoxVpnService.ccTailscalePingSink = sink }
             override fun onCancel(args: Any?) { BoxVpnService.ccTailscalePingSink = null }
         })
+        // §654 C — состояние endpoint'ов openconnect (второй фактор / SSO).
+        ccOpenConnectEventChannel = EventChannel(binding.binaryMessenger, CC_OPENCONNECT_CHANNEL)
+        ccOpenConnectEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
+            override fun onListen(args: Any?, sink: EventChannel.EventSink?) { BoxVpnService.ccOpenConnectSink = sink }
+            override fun onCancel(args: Any?) { BoxVpnService.ccOpenConnectSink = null }
+        })
 
         Log.d(TAG, "[vpn] onAttachedToEngine: registerReceiver(statusReceiver)")
         // §155 — на отдельных OEM-прошивках registerReceiver может бросить
@@ -285,6 +293,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         ccDnsEventChannel.setStreamHandler(null) // §180
         ccTailscaleEventChannel.setStreamHandler(null) // §579
         ccTailscalePingEventChannel.setStreamHandler(null) // §581
+        ccOpenConnectEventChannel.setStreamHandler(null) // §654
         statusSink = null
         BoxVpnService.coreLogSink = null
         BoxVpnService.ccStatusSink = null
@@ -293,6 +302,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         BoxVpnService.ccConnectionsSink = null
         BoxVpnService.ccDnsQueriesSink = null // §180
         BoxVpnService.ccTailscaleSink = null // §579
+        BoxVpnService.ccOpenConnectSink = null // §654
         // §047 — обнуляем bridge-ссылки (engine detached).
         bridgeChannel = null
         appContext = null
@@ -871,6 +881,62 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             "ccStopTailscalePing" -> {
                 val cc = BoxService.commandClient
                 if (cc != null) pluginScope.launch(Dispatchers.IO) { cc.stopTailscalePing() }
+                result.success(true)
+            }
+            // §654 C — openconnect: снапшот статуса, ответ на челлендж,
+            // отмена, слушатель SSO. Блокирующий gRPC — на Dispatchers.IO;
+            // ответ — null (успех) или текст ошибки.
+            "ccGetOpenConnectStatus" -> {
+                result.success(BoxService.commandClient?.openConnectSnapshot())
+            }
+            "ccTakeOpenConnectOpenRequest" -> {
+                val tag = BoxVpnService.openConnectOpenRequest
+                BoxVpnService.openConnectOpenRequest = null
+                result.success(tag)
+            }
+            "ccSubmitOpenConnectForm" -> {
+                val cc = BoxService.commandClient
+                val tag = call.argument<String>("tag") ?: ""
+                val id = call.argument<String>("challenge_id") ?: ""
+                val raw = call.argument<List<Any?>>("values") ?: emptyList()
+                val values = raw.mapNotNull { e ->
+                    val m = e as? Map<*, *> ?: return@mapNotNull null
+                    val k = m["key"] as? String ?: return@mapNotNull null
+                    k to (m["value"] as? String ?: "")
+                }
+                pluginScope.launch {
+                    val err = withContext(Dispatchers.IO) {
+                        cc?.submitOpenConnectForm(tag, id, values) ?: "no command client"
+                    }
+                    result.success(err)
+                }
+            }
+            "ccCancelOpenConnectChallenge" -> {
+                val cc = BoxService.commandClient
+                val tag = call.argument<String>("tag") ?: ""
+                val id = call.argument<String>("challenge_id") ?: ""
+                pluginScope.launch {
+                    val err = withContext(Dispatchers.IO) {
+                        cc?.cancelOpenConnectChallenge(tag, id) ?: "no command client"
+                    }
+                    result.success(err)
+                }
+            }
+            "ccStartOpenConnectCallback" -> {
+                val cc = BoxService.commandClient
+                val tag = call.argument<String>("tag") ?: ""
+                val id = call.argument<String>("challenge_id") ?: ""
+                val port = call.argument<Int>("port") ?: 8020
+                val prefixes = call.argument<List<String>>("prefixes") ?: emptyList()
+                pluginScope.launch {
+                    val err = withContext(Dispatchers.IO) {
+                        cc?.startOpenConnectCallback(tag, id, port, prefixes) ?: "no command client"
+                    }
+                    result.success(err)
+                }
+            }
+            "ccStopOpenConnectCallback" -> {
+                BoxService.commandClient?.stopOpenConnectCallback()
                 result.success(true)
             }
             "ccCancelPing" -> {

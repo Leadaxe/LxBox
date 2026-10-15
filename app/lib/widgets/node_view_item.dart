@@ -1,5 +1,8 @@
 import '../models/node_warning.dart';
 import '../services/networks_direction.dart' show TailnetNote, TailnetRowState;
+import '../services/openconnect_auth.dart' show OpenConnectRowKind;
+
+export '../services/openconnect_auth.dart' show OpenConnectRowKind;
 
 /// Immutable view-model для одной node row на главной (или другом screen'е
 /// который захочет переиспользовать `NodeRow`).
@@ -34,6 +37,8 @@ class NodeViewItem {
     this.endpointState = '',
     this.tailnetState,
     this.tailnetNote,
+    this.openConnectKind = OpenConnectRowKind.none,
+    this.openConnectText = '',
   });
 
   /// Tag ноды или group selector (например `vpn-1`, `✨auto`).
@@ -128,4 +133,9 @@ class NodeViewItem {
   /// В строке узла с exit — на месте подписи состояния endpoint'а, в строке
   /// NETWORKS — на месте `running`. `null` — предупреждать не о чем.
   final TailnetNote? tailnetNote;
+
+  /// §654 C — метка узла openconnect: ждёт входа (второй фактор / SSO) или
+  /// ошибка ядра ([openConnectText]). На месте подписи состояния endpoint'а.
+  final OpenConnectRowKind openConnectKind;
+  final String openConnectText;
 }

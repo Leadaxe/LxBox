@@ -63,6 +63,12 @@ class HomeController extends ChangeNotifier
   StreamSubscription<List<CcTailscaleStatus>>? _tailnetSub;
   String? _tailnetKey;
 
+  /// §654 C — поток состояния openconnect (подписку в ядре держит натив).
+  StreamSubscription<CcOpenConnectSnapshot>? _openConnectSub;
+
+  /// §654 C — последний снапшот натива (в state — только при tunnelUp).
+  CcOpenConnectSnapshot _openConnectRaw = CcOpenConnectSnapshot.empty;
+
   /// §193 — resyncForReopen (§185 cold-start) делаем ОДИН раз за жизнь движка.
   /// На реконнектах refcount валиден (тот же движок) → resync только рвал бы
   /// connections-доставку (single-shot, без pull). false на свежем движке.
@@ -230,6 +236,33 @@ class HomeController extends ChangeNotifier
     // через тот же handler — он сам решит что эмитить.
     final pulled = await _vpn.getVpnStatus();
     _handleStatusEvent(TunnelStatusEvent(status: pulled, raw: pulled.name));
+    // §654 C — подписку openconnect держит натив; здесь только слушатель и
+    // текущий снапшот (висящий челлендж при открытии приложения).
+    _openConnectSub ??= _cc.openConnectStatus.listen(_onOpenConnect,
+        onError: (Object e) =>
+            _addDebug(DebugSource.app, 'cc openconnect stream error: $e'));
+    unawaited(refreshOpenConnect());
+  }
+
+  /// §654 C — снапшот openconnect от натива: при открытии приложения и на
+  /// возврате из фона (поток мог не дойти, пока движок спал).
+  Future<void> refreshOpenConnect() async {
+    final snap = await _cc.getOpenConnectStatus();
+    if (_disposed || snap == null) return;
+    _onOpenConnect(snap);
+  }
+
+  void _onOpenConnect(CcOpenConnectSnapshot snap) {
+    if (_disposed) return;
+    final prev = _openConnectRaw;
+    _openConnectRaw = snap;
+    if (snap.endpoints.isEmpty &&
+        snap.callback == null &&
+        prev.endpoints.isEmpty &&
+        prev.callback == null) {
+      return;
+    }
+    _emit(_state); // _emit кладёт снапшот в state по tunnelUp
   }
 
   /// §125 — перечитать tag→label Направлений из storage и положить в state. Зовётся
@@ -324,6 +357,7 @@ class HomeController extends ChangeNotifier
     _ccGroupsSub?.cancel();
     _groupsPullTimer?.cancel();
     _tailnetSub?.cancel();
+    _openConnectSub?.cancel(); // §654
     if (_tailnetKey != null) unawaited(_cc.releaseTailscaleStatus());
     super.dispose();
   }
@@ -340,7 +374,13 @@ class HomeController extends ChangeNotifier
     // закрывает весь класс разом; точечные `if (_disposed) return` после await
     // (§219) остаются как ранний выход, но больше не единственная защита.
     if (_disposed) return;
-    _state = next;
+    // §654 C — снапшот openconnect виден только при поднятом туннеле: при
+    // выключенном он протух (поток мог не дойти до спящего движка), а
+    // пришедший раньше перехода в connected показывается на переходе.
+    final oc = next.tunnelUp ? _openConnectRaw : CcOpenConnectSnapshot.empty;
+    _state = identical(oc, next.openConnect)
+        ? next
+        : next.copyWith(openConnect: oc);
     notifyListeners();
     _syncTailnetStatus();
   }
@@ -1992,6 +2032,7 @@ class HomeController extends ChangeNotifier
   /// в steady-state ничего не крутится.
   void onAppResumed() {
     unawaited(_resyncOnResume());
+    unawaited(refreshOpenConnect()); // §654 C
   }
 
   /// §141 P0.2 — app ушёл в фон: останавливаем heartbeat-таймер. Это

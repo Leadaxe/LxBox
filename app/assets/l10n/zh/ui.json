@@ -5625,6 +5625,51 @@
   "Copy name": {
     "value": "复制名称"
   },
+  "Waiting for sign-in": {
+    "value": "等待登录"
+  },
+  "Sign in: %s": {
+    "value": "登录：%s"
+  },
+  "Not now": {
+    "value": "暂不"
+  },
+  "Submit": {
+    "value": "提交"
+  },
+  "Request": {
+    "value": "请求"
+  },
+  "Request a new code": {
+    "value": "请求新验证码"
+  },
+  "The gateway will send a new code": {
+    "value": "网关将发送新的验证码"
+  },
+  "Each wrong code triggers a new sign-in on the gateway": {
+    "value": "每次输错验证码都会在网关上触发一次新的登录"
+  },
+  "The gateway asks for the password again: the password saved in the server settings is probably wrong.": {
+    "value": "网关再次要求输入密码：服务器设置中保存的密码可能有误。"
+  },
+  "SSO for this gateway type is not supported yet": {
+    "value": "暂不支持此类网关的 SSO"
+  },
+  "Sign in in your browser": {
+    "value": "请在浏览器中登录"
+  },
+  "The sign-in link is not a web address, so it is not opened automatically.": {
+    "value": "登录链接不是网页地址，因此不会自动打开。"
+  },
+  "Waiting for the browser to come back…": {
+    "value": "正在等待浏览器返回…"
+  },
+  "Signing in…": {
+    "value": "正在登录…"
+  },
+  "Cannot listen on 127.0.0.1:%s: the port is busy or blocked. Close the app that uses it and try again.": {
+    "value": "无法监听 127.0.0.1:%s：端口被占用或被禁止。请关闭占用该端口的应用后重试。"
+  },
   "Copy address": {
     "value": "复制地址"
   },

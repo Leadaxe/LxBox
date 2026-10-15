@@ -93,6 +93,7 @@ class HomeState {
     this.lastStartErrorAt,
     this.networksOpen = false,
     this.tailscaleStatus = const <String, CcTailscaleStatus>{},
+    this.openConnect = CcOpenConnectSnapshot.empty,
   })  : configModel = configModel ?? ParsedConfig.parse(configRaw),
         runningModel = runningModel ??
             (runningConfigRaw != null
@@ -295,6 +296,11 @@ class HomeState {
   /// Задача 579 — записи потока ядра `SubscribeTailscaleStatus` по тегу
   /// endpoint'а. Пусто, пока VPN выключен или подписки нет.
   final Map<String, CcTailscaleStatus> tailscaleStatus;
+
+  /// §654 C — снапшот потока ядра `SubscribeOpenConnectStatus`: endpoint'ы
+  /// openconnect по тегу (висящий челлендж, ошибка) и слушатель SSO. Пусто,
+  /// пока VPN выключен или openconnect-узлов в конфиге нет.
+  final CcOpenConnectSnapshot openConnect;
 
   /// Задача 579 — узлы NETWORKS из конфига, по которому работает ядро
   /// ([activeModel]; при выключенном VPN — последний собранный).
@@ -534,6 +540,7 @@ class HomeState {
     Object? lastStartErrorAt = _unset,
     bool? networksOpen,
     Map<String, CcTailscaleStatus>? tailscaleStatus,
+    CcOpenConnectSnapshot? openConnect,
   }) {
     return HomeState(
       configRaw: configRaw ?? this.configRaw,
@@ -600,6 +607,7 @@ class HomeState {
           : lastStartErrorAt as DateTime?,
       networksOpen: networksOpen ?? this.networksOpen,
       tailscaleStatus: tailscaleStatus ?? this.tailscaleStatus,
+      openConnect: openConnect ?? this.openConnect,
     );
   }
 }

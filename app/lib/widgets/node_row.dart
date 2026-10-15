@@ -32,6 +32,7 @@ class NodeRow extends StatelessWidget {
     this.onViewPool,
     this.onSickTap,
     this.onToggleEndpoint,
+    this.onOpenConnectTap,
   });
 
   final NodeViewItem item;
@@ -64,6 +65,10 @@ class NodeRow extends StatelessWidget {
   /// для WG/AWG-узла (ядро отдало `endpointState`) при живом туннеле; иначе
   /// пункта нет. Направление переключения — по [NodeViewItem.endpointState].
   final VoidCallback? onToggleEndpoint;
+
+  /// §654 C — тап по метке «Waiting for sign-in» узла openconnect: диалог
+  /// висящего челленджа. `null` — челленджа нет, метка не нажимается.
+  final VoidCallback? onOpenConnectTap;
 
   /// Right-side delay label (или PING… / ERR), цвет по latency.
   ///
@@ -152,7 +157,20 @@ class NodeRow extends StatelessWidget {
       item.endpointState != CcEndpointState.disabled &&
       item.endpointState != CcEndpointState.building;
 
+  /// §654 C — метка openconnect подменяет up/sleep/down, но не `off`.
+  bool get _openConnectShown =>
+      !_isTailnet &&
+      item.openConnectKind != OpenConnectRowKind.none &&
+      item.endpointState != CcEndpointState.disabled;
+
   String get _endpointStateLabel {
+    if (_openConnectShown) {
+      return item.openConnectKind == OpenConnectRowKind.waiting
+          ? getLocalText.s("Waiting for sign-in")
+          : item.openConnectText.isNotEmpty
+              ? item.openConnectText // l10n-exempt: core error text as is
+              : getLocalText.s("error");
+    }
     if (_endpointNoteShown) return _tailnetNoteLabel;
     final st = item.endpointState;
     // §557 — выключен вручную: отдельная подпись, не сон и не «down».
@@ -264,14 +282,24 @@ class NodeRow extends StatelessWidget {
 
     // §557 — выключенный узел: «off» оранжевым (тот же оранжевый, что у
     // пинга 200–500 мс), курсивом, как соседние up/sleep/down.
+    // §654 C — openconnect: ждёт входа оранжевым (тап — диалог челленджа),
+    // ошибка ядра — цветом ошибки.
+    final Color stateColor = _openConnectShown
+        ? (item.openConnectKind == OpenConnectRowKind.waiting
+            ? Colors.orange
+            : cs.error)
+        : _isDisabled || _endpointNoteShown
+            ? Colors.orange
+            : cs.onSurfaceVariant;
     final Widget? endpointStateText = stateLabel.isEmpty
         ? null
         : Flexible(
-            child: _endpointStateLabelText(
-                stateLabel,
-                _isDisabled || _endpointNoteShown
-                    ? Colors.orange
-                    : cs.onSurfaceVariant),
+            child: _openConnectShown && onOpenConnectTap != null
+                ? GestureDetector(
+                    onTap: onOpenConnectTap,
+                    child: _endpointStateLabelText(stateLabel, stateColor),
+                  )
+                : _endpointStateLabelText(stateLabel, stateColor),
           );
 
     final Widget? proto = (hasProto || hasNotificationBadge)

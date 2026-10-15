@@ -18,6 +18,7 @@ import com.leadaxe.lxbox.vpn.BoxVpnService
 import com.leadaxe.lxbox.vpn.L10n
 import com.leadaxe.lxbox.vpn.PermissionUtils
 import com.leadaxe.lxbox.vpn.QuickShortcuts
+import com.leadaxe.lxbox.vpn.ServiceNotification
 import com.leadaxe.lxbox.vpn.VpnPlugin
 import com.leadaxe.lxbox.vpn.VpnStatus
 import com.leadaxe.lxbox.vpn.WifiHistoryBridge
@@ -284,6 +285,12 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun handleQuickAction(intent: Intent?) {
+        // §654 C — тап по «Sign-in required»: Dart заберёт тег при старте или
+        // возврате и откроет диалог челленджа этого узла.
+        intent?.getStringExtra(ServiceNotification.EXTRA_OPENCONNECT_TAG)?.let { tag ->
+            BoxVpnService.openConnectOpenRequest = tag
+            intent.removeExtra(ServiceNotification.EXTRA_OPENCONNECT_TAG)
+        }
         val action = intent?.getStringExtra(EXTRA_ACTION) ?: return
         Log.d(TAG, "handleQuickAction action=$action currentStatus=${BoxVpnService.currentStatus.name}")
         // `extras.action` ставится только из tile или shortcut'а — поэтому

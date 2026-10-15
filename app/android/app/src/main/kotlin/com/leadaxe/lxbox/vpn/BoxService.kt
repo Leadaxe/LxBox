@@ -645,6 +645,9 @@ class BoxService(
             val cc = BoxCommandClient()
             commandClient = cc
             cc.startStatus()
+            // §654 C — статус openconnect (второй фактор / SSO): подписка, если
+            // в конфиге есть такой endpoint; Dart для этого не нужен.
+            cc.syncOpenConnectStatus(ConfigManager.load())
         }.onFailure { Log.w(TAG, "BoxCommandClient.startStatus failed: ${it.message}") }
 
         // §223 Часть B (#23) — если UI не открывался (старт с QS-плитки → нет
@@ -918,6 +921,11 @@ class BoxService(
                 return@runCatching
             }
             runCatching { cs.startOrReloadService(config, buildOverrideOptions(config)) }
+                .onSuccess {
+                    // §654 C — после reload прежний стрим статуса мог
+                    // закончиться молча, а состав endpoint'ов — смениться.
+                    runCatching { commandClient?.syncOpenConnectStatus(config) }
+                }
                 .onFailure {
                     Log.e(TAG, "serviceReload failed", it)
                     runCatching { cs.setError("android: reload: ${it.message}") }

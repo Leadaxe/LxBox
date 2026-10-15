@@ -4,6 +4,9 @@ import 'package:flutter/services.dart';
 
 import '../services/platform_channels.dart';
 import '../services/selector_info.dart'; // §251 — fold «селектор (выбор)»
+import 'cc_openconnect.dart';
+
+export 'cc_openconnect.dart';
 
 /// §122 Фаза 1a — Dart-клиент нативного libbox `CommandClient`-канала
 /// (`BoxCommandClient.kt`, Фаза 0). Замена `ClashApiClient` (HTTP-петли).
@@ -45,6 +48,9 @@ class CcChannel {
   static const EventChannel _tailscalePingChannel = EventChannel(
     PlatformChannels.ccTailscalePing,
   ); // §581
+  static const EventChannel _openConnectChannel = EventChannel(
+    PlatformChannels.ccOpenConnect,
+  ); // §654
 
   // ─────────────────────────── Streams ───────────────────────────
   //
@@ -237,6 +243,83 @@ class CcChannel {
   /// per-call ctx in-flight URLTest'ов (не дожидаясь TCPTimeout), не задевая
   /// status/screen/profiler-стримы. Следующий urlTestOutbound поднимет свежий.
   Future<void> cancelPing() => _invoke('ccCancelPing');
+
+  // ─────────────────────── §654 C — OpenConnect ───────────────────────
+  // Подписку в ядре держит натив (старт VPN / reload по составу конфига);
+  // здесь — поток снапшотов, текущий снапшот и ответы на челлендж.
+
+  late final Stream<CcOpenConnectSnapshot> _openConnectStream =
+      _sharedStream<CcOpenConnectSnapshot>(
+        _openConnectChannel,
+        CcOpenConnectSnapshot.fromObject,
+      );
+
+  /// §654 C — состояние endpoint'ов openconnect и слушателя SSO.
+  Stream<CcOpenConnectSnapshot> get openConnectStatus => _openConnectStream;
+
+  /// §654 C — текущий снапшот (висящий челлендж при открытии приложения).
+  /// `null` — канала нет (VPN выключен, натив недоступен).
+  Future<CcOpenConnectSnapshot?> getOpenConnectStatus() async {
+    try {
+      final r = await _methods.invokeMethod<Object?>('ccGetOpenConnectStatus');
+      return r == null ? null : CcOpenConnectSnapshot.fromObject(r);
+    } on PlatformException {
+      return null;
+    } on MissingPluginException {
+      return null;
+    }
+  }
+
+  /// §654 C — тег узла из тапа по уведомлению «Sign-in required»; забирается
+  /// один раз.
+  Future<String?> takeOpenConnectOpenRequest() async {
+    try {
+      return await _methods.invokeMethod<String>('ccTakeOpenConnectOpenRequest');
+    } on PlatformException {
+      return null;
+    } on MissingPluginException {
+      return null;
+    }
+  }
+
+  /// §654 C — ответ формой: пары ключ → значение в порядке полей. `null` —
+  /// успех, иначе текст ошибки.
+  Future<String?> submitOpenConnectForm(
+    String tag,
+    String challengeId,
+    List<MapEntry<String, String>> values,
+  ) =>
+      _invokeError('ccSubmitOpenConnectForm', {
+        'tag': tag,
+        'challenge_id': challengeId,
+        'values': [
+          for (final v in values) {'key': v.key, 'value': v.value},
+        ],
+      });
+
+  /// §654 C — отмена челленджа: ядро логинится заново (новый код).
+  Future<String?> cancelOpenConnectChallenge(String tag, String challengeId) =>
+      _invokeError('ccCancelOpenConnectChallenge', {
+        'tag': tag,
+        'challenge_id': challengeId,
+      });
+
+  /// §654 C — слушатель SSO на `127.0.0.1:port`; URL редиректа натив сам
+  /// отдаёт ядру. `null` — слушает, иначе текст ошибки (порт занят).
+  Future<String?> startOpenConnectCallback(
+    String tag,
+    String challengeId,
+    int port,
+    List<String> prefixes,
+  ) =>
+      _invokeError('ccStartOpenConnectCallback', {
+        'tag': tag,
+        'challenge_id': challengeId,
+        'port': port,
+        'prefixes': prefixes,
+      });
+
+  Future<void> stopOpenConnectCallback() => _invoke('ccStopOpenConnectCallback');
 
   /// §579 — поднять / снять подписку ядра на состояние узлов Tailscale.
   Future<void> startTailscaleStatus() => _invoke('ccStartTailscaleStatus');

@@ -10,6 +10,7 @@ import '../../../services/direction_mutations.dart';
 import '../../../services/settings_storage.dart';
 import '../../../services/haptic_service.dart';
 import '../../../services/networks_direction.dart';
+import '../../../services/openconnect_auth.dart';
 import '../../../services/subscription/auto_updater.dart';
 import '../../../widgets/node_row.dart';
 import '../../../widgets/node_view_item.dart';
@@ -94,6 +95,7 @@ class HomeNodeList extends StatelessWidget {
     required this.rowKeyFor,
     required this.onSelectServer,
     required this.onViewPool,
+    this.onOpenConnectTap,
   });
 
   final HomeController controller;
@@ -116,6 +118,9 @@ class HomeNodeList extends StatelessWidget {
 
   /// §208 — открыть попап пула round_robin-Направления по его auto-тегу (View pool).
   final void Function(String autoTag) onViewPool;
+
+  /// §654 C — открыть диалог висящего челленджа openconnect узла.
+  final void Function(String tag)? onOpenConnectTap;
 
   @override
   Widget build(BuildContext context) {
@@ -586,6 +591,17 @@ class HomeNodeList extends StatelessWidget {
     final exitName = tailnetExitName(tailnet);
     // §613 — ядро lx.12 отдаёт путь до exit-пира в потоке состояния.
     final exitPath = exitName == null ? null : tailnetExitPath(tailnet);
+    // §654 C — узел openconnect: ждёт входа (второй фактор / SSO) или
+    // ошибка ядра. Записи ядра нет — строка как была.
+    final openConnect = state.tunnelUp
+        ? state.openConnect.endpoints[tag]
+        : null;
+    final ocRow = openConnectRowState(openConnect);
+    final ocTap = ocRow.kind == OpenConnectRowKind.waiting &&
+            openConnect?.challenge != null &&
+            onOpenConnectTap != null
+        ? () => onOpenConnectTap!(tag)
+        : null;
     final notificationWarnings = _notificationWarningsForRow(
       outboundType: outboundType,
       isDirectionAuto: isDirectionAuto,
@@ -643,6 +659,8 @@ class HomeNodeList extends StatelessWidget {
             now: DateTime.now(),
             withExit: true,
           ),
+          openConnectKind: ocRow.kind,
+          openConnectText: ocRow.text,
           matches: matchingSet.contains(tag),
           // §355 — мёртвая нода с зависимыми (DNS/ноды через detour):
           // ⚠-метка, тап по ней — sheet со списком пострадавших.
@@ -683,6 +701,7 @@ class HomeNodeList extends StatelessWidget {
                 homeController: controller,
                 openDependents: true)
             : null,
+        onOpenConnectTap: ocTap,
       ),
     );
     // §203 — GlobalKey на сам row (для Scrollable.ensureVisible); reorder-key
