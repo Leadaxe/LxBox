@@ -104,6 +104,9 @@ void main() {
       for (final type in ContractRegistry.I.protocolNames) {
         final server = ContractRegistry.I.schemaFor(type)?.fields['server'];
         if (server == null) continue;
+        // Контракт 1.1.122 — у openconnect `server` не ссылка `host`, а
+        // `host:port` или URL (схему и порт дописывает ядро), правило своё.
+        if (type == 'openconnect') continue;
         expect(server.required, isTrue, reason: '$type.server');
         expect(server.onInvalid?['action'], 'drop_node',
             reason: '$type.server');

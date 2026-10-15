@@ -476,12 +476,7 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
       color: Theme.of(context).colorScheme.onSurfaceVariant,
     );
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(
-        16,
-        16,
-        16,
-        32,
-      ).withSafeBottom(context),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32).withSafeBottom(context),
       child: Form(
         key: _tsFormKey,
         autovalidateMode: AutovalidateMode.onUserInteraction,
@@ -847,12 +842,7 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
       );
     }
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(
-        16,
-        16,
-        16,
-        32,
-      ).withSafeBottom(context),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32).withSafeBottom(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: children,
@@ -1060,12 +1050,7 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
 
   Widget _buildSocksForm(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(
-        16,
-        16,
-        16,
-        32,
-      ).withSafeBottom(context),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32).withSafeBottom(context),
       child: Form(
         key: _socksFormKey,
         autovalidateMode: AutovalidateMode.onUserInteraction,
@@ -1150,12 +1135,7 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
 
   Widget _buildHttpForm(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(
-        16,
-        16,
-        16,
-        32,
-      ).withSafeBottom(context),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32).withSafeBottom(context),
       child: Form(
         key: _httpFormKey,
         autovalidateMode: AutovalidateMode.onUserInteraction,
