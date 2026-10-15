@@ -35,7 +35,7 @@ void main() {
       PresetNode(
         tag: tag,
         body: {'type': 'tailscale', 'tag': tag, ...?extra},
-        skipPresets: skip,
+        skipTailscalePresets: skip,
       );
 
   PresetNode vless(String tag) =>
@@ -269,7 +269,7 @@ void main() {
           nodeLoopTypeHint({
             '#and': [
               {'@node.body.type': 'tailscale'},
-              {'#not': '@node.skip_presets'},
+              {'#not': '@node.skip_tailscale_presets'},
             ],
           }),
           {'tailscale'});
@@ -320,7 +320,7 @@ void main() {
 
     test('тег, поле записи, поле тела', () {
       expect(r('node'), 'home-ts');
-      expect(r('node.skip_presets'), false);
+      expect(r('node.skip_tailscale_presets'), false);
       expect(r('node.body.hostname'), 'box');
       expect(r('node.body.nested.deep'), 7);
     });
@@ -475,7 +475,7 @@ void main() {
         'rules': [
           {
             '#if': {
-              '#and': ['@node.skip_presets'],
+              '#and': ['@node.skip_tailscale_presets'],
               '#value': {'domain': '@hosts', 'outbound': 'direct-out'},
             },
           },

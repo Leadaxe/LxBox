@@ -735,6 +735,22 @@ void main() {
           reason: 'sing-box не принимает outbound:"reject" — это action');
     });
 
+    // §656 (TEMPLATE_LANG §6.5.2) — второй сентинел переменной `outbound`.
+    test('§656 сентинел drop в @outbound → action:reject + method:drop', () {
+      final preset = SelectableRule(
+        label: 'X',
+        presetId: 'x',
+        vars: [
+          WizardVar(name: 'out', type: 'outbound', defaultValue: 'drop'),
+        ],
+        rule: const {'inbound': ['wg'], 'outbound': '@out'},
+      );
+      final f = expandPreset(
+          CustomRulePreset(name: 'X', presetId: 'x', varsValues: {}), preset);
+      expect(f.routingRules.single,
+          {'inbound': ['wg'], 'action': 'reject', 'method': 'drop'});
+    });
+
     test('unknown @name (не объявлен в vars) → остаётся как литерал', () {
       // Legacy / typo: шаблон ссылается на @foo, в `vars` такого нет.
       // _substitute должен вернуть строку как есть (не крашить).

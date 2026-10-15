@@ -9323,3 +9323,274 @@ Issue Leadaxe/sing-box-lx#36: узел VLESS+XHTTP с `path=/?proxyip=…` (ре
 
 Что сделать LxBox: синк контракта; снимать пустые описанные объекты по п. 1 (включая `{}` во входе); сквозные `{}` оставлять; прогнать два кейса. Расхождение — сюда.
 
+## 122. Контракт 1.1.125 — короткая форма `#if` (`[cond, V, E]`), `#if` на операции `#do`
+
+Решения владельца 15.10.2026 (SPEC 169 лаунчера, D-133). Норма — `docs/TEMPLATE_LANG.md` §4.1 (грамматика), §4.3–4.5 (позиции, примеры в обеих формах), §4.5.1 (канон), §4.6 (что не вводится), §6.7.1 (операция `#do` с условием), §7.4 (`default_value`), §9 (строка D-133). Параграф написан так, чтобы реализовать по нему без чтения нашего Go.
+
+### Что меняется в языке
+
+1. **Форма `#if` читается по типу значения ключа `#if…`** — и только по нему, в одном месте движка:
+
+   | Значение ключа `#if…` | Форма | Статус |
+   |---|---|---|
+   | массив `[cond, V]` или `[cond, V, E]` | короткая тернарная | **канон** |
+   | объект с ключом `#value` (легаси `value`) | длинная `{"#and"\|"#or": […], "#value": V, "#else": E}` | читается бессрочно, как сегодня |
+   | строка, число, bool, `null`, объект без `#value` | — | **ошибка загрузки**; толерантный рантайм — ветка не выбрана + `template_unknown_directive {key}` |
+
+2. **`cond` короткой формы — условие без обёртки**: ровно грамматика вашего `#filter` и тела `#enable` — `"@flag"`, `{"@x": "#notEmpty"}`, `{"@x": {"#in": […]}}`, `{"#not": cond}`, `{"#and": [cond, …]}`, `{"#or": [cond, …]}`, вложение любой глубины; легаси `and`/`or` внутри читаются (D-073). Одиночный предикат **не** оборачивается в `#and`.
+3. **`cond` никогда не массив.** Сахар-список `["@a", "@b"]`, допустимый у `#enable`, в позиции условия запрещён: `{"#if": [["@a", "@b"], V]}` — ошибка загрузки (рантайм — ветка не выбрана + `template_unknown_directive`). Несколько условий — только `{"#and": […]}` / `{"#or": […]}`.
+4. **Чтение позиционное:** `[0]` — условие, `[1]` — значение, `[2]` — иначе. `{"#if": ["@a", "@b"]}` = «если `a`, то строка `"@b"`» (с подстановкой `@b`), **не** «`a` и `b`». Длина 2 или 3: один элемент, четыре и более — ошибка загрузки. `V` или `E` = `null` — ошибка загрузки (как `#value: null` / `#else: null` сегодня).
+5. **Семантика короткой формы равна длинной**: `[cond, V]` ≡ `{"#and": [cond], "#value": V}` (но `cond` не оборачивается), `[cond, V, E]` ≡ `… "#else": E`. Ленивое вычисление, Dropped-каскад §5.1, сплайс ветки-массива на один уровень (§4.4, D-123), merge/last-wins и именованные `#if…` (§4.3, D-045), один ключ `#if…` в элементе массива — всё без изменений. Формы можно смешивать (короткая ветка внутри длинной и наоборот).
+6. **Где действует** — везде, где сегодня длинная: map-spread (§4.3), array-element (§4.4, в том числе фрагмент пресета целиком `{"#if": ["@geoip_enabled", {"tag": "geoip-ru", …}]}`), `evalIfScalar` для `on_change.set` (§4.5, §4.7: `{"@dns_strategy": {"#if": ["@ipv6_enabled", "prefer_ipv4", "ipv4_only"]}}`), `default_value` (§7.4, если вы его поддерживаете) и **новое** — объект операции `#do` (п. 8).
+7. **Что НЕ вводится** (решения владельца, §4.6, §2.4 SPEC): плоский гейт `{"#if": cond, …поля…}` — отвергнут, форма гейта остаётся `#enable` (D-065); `#if` значением скалярного поля в `config` (D-044) — по-прежнему нет, ни одной формой; условие внутри значения `#append` (`{"#append": {"#if": …}}`) — отвергнуто. `#enable`, `#filter` — без изменений.
+8. **Операция `#do` с условием (§6.7.1).** Значение ключа `"@имя"` в `#do` может быть объектом с единственным ключом `#if…` (любой формы), к которому на каждом узле применяется обычный map-spread `#if` с пространством узла (`@node`, `@node.<поле записи>`, `@node.body.<путь>`, переменные пресета, глобальные):
+
+   ```json
+   "#do": {
+     "@all_nodes": { "#append": "@node" },
+     "@ts_nodes":  { "#if": [{ "@node.body.type": "tailscale" }, { "#append": "@node" }] },
+     "@own_nodes": { "#if": [{ "#not": "@node.skip_presets" }, { "#append": "@node" }] },
+     "@named":     { "#if": [{ "@node.body.server": "#notEmpty" }, { "#append": "@node.body.server" }, { "#append": "@node" }] }
+   }
+   ```
+
+   - результат на узле — объект **ровно с одним глаголом** (операция выполняется) или **пустой объект `{}`** (`#if` ложен без `E` — узел пропущен молча, без предупреждения, как пустое значение `#append`);
+   - валидатор загрузки проверяет глаголы **внутри обеих веток**: неизвестный глагол, два глагола, ветка не-объект, ветка с ключами кроме глагола — ошибка загрузки; правая часть `#append` в ветке — прежняя норма (ссылка, строка, `#tpl`);
+   - на операции ровно один ключ `#if…` (второй — ошибка загрузки); рядом с `#if…` других ключей нет: `{"#if": […], "#append": …}` — ошибка загрузки;
+   - `#do` без `#if` — как раньше; `#final`, `unique`, `wizard_ui: internal`, порядок шагов §6.7.3 — без изменений.
+
+### Что сделать LxBox
+
+- `if_engine.dart`: один нормализатор формы по типу значения `#if…` → `(cond, V, hasV, E, hasE)`; на него перевести map-spread, array-element и `evalIfScalar`. Короткая форма: `cond` — в тот же `evaluateCond`, что у `#filter`/`#enable`, без обёртки; массив в `[0]` — невалидная форма.
+- Валидатор загрузки: отказы п. 1, 3, 4 с контекстом `…#if: …`; рекурсия в обе ветки короткой формы; ветки `null` — отказ. Элемент массива — объект с одним ключом `#if…` и телом **любого типа** (раньше вы могли требовать объект).
+- `parser_config.dart` (`default_value`), если `#if` там поддержан, — через тот же нормализатор.
+- `preset_expand.dart` (`#do`): перед вычислением правой части прогнать объект операции через map-spread с пространством узла; `{}` → узел пропущен; иначе — обычный `#append`. Разбор `#do` на загрузке — п. 8 (глаголы в обеих ветках, один `#if…`, без соседних ключей).
+- Шаблон LxBox переписывать не обязательно: движок читает обе формы бессрочно. Шаблон лаунчера переведён на короткую форму.
+
+### Корпус — критерий паритета (обязателен)
+
+Парные кейсы: у каждого `short_*` / `do_if_*` есть сосед с длинной формой и тем же `expected`.
+
+- `grammar/`: `short_two_elements`, `short_three_elements`, `short_two_strings_is_ternary`, `short_named_keys`; отказы (`load: reject`, рантайм — ветка не выбрана + `template_unknown_directive`): `short_one_element_rejected`, `short_four_elements_rejected`, `short_cond_sugar_list_rejected`, `short_null_value_rejected`, `short_null_else_rejected`, `short_string_body_rejected`;
+- `map_spread/`: `short_merge_last_wins`, `short_else_merge`, `short_false_no_else_keeps_parent`;
+- `array_element/`: `short_true_replaces`, `short_false_drops_element`, `short_splice_one_level`, `short_fragment_whole_object`;
+- `on_change/`: `short_set_target`;
+- `for_each_node_do/`: `do_if_true_appends`, `do_if_false_skips_node`, `do_if_not`, `do_if_else_other_value`, `do_if_long_form_accepted`; отказы: `do_if_two_verbs_rejected`, `do_if_unknown_verb_in_else_rejected`, `do_if_mixed_with_verb_rejected`, `do_if_two_if_keys_rejected`.
+
+`deps/` без изменений: грамматика `cond` не менялась, раннер deps получает `cond`, а не узел `#if`. Расхождение — сюда.
+
+## 123. Контракт 1.1.126 — поля записи узла `allow_local` / `allow_lan` / `allow_gateway`, `skip_presets` → `skip_tailscale_presets`, пресет `tunnel-ingress`
+
+Решения владельца 15.10.2026 (SPEC 170 лаунчера, D-134) по итогам разбора с агентом ядра sing-box-lx. Норма — `docs/TEMPLATE_LANG.md` §6.5.1 (фильтр `tailscale`), **§6.5.2 (новый: пресет `tunnel-ingress` целиком)**, §6.6 (поля записи), §6.7.5 (поздние дефолты), §9 (строка D-134); `docs/BACKUP.md` (таблица полей узла); `schema/backup.schema.json` (`$defs/sourceServer`, `$defs/node`). Зависит от §122 (короткая форма `#if` и `#if` на операции `#do`): тело пресета написано на ней. Параграф написан так, чтобы реализовать по нему без чтения нашего Go.
+
+### Зачем
+
+Клиентский endpoint — `wireguard` (и AWG), `openvpn-client`, `openconnect` — двусторонний канал. Входящий поток из туннеля ядро отдаёт в роутер как обычное inbound-соединение с `metadata.Inbound = <тег endpoint'а>`. Адресат, равный нашему туннельному адресу, endpoint переписывает в loopback; любой другой идёт по `route.rules` и в `final`. gVisor-стек принимает пакеты на **любой** адрес: сервер WG/AWG, OpenVPN или OpenConnect с той стороны может послать SYN на `192.168.1.1` или на внешний IP — и телефон откроет соединение: при `final = direct` это доступ к LAN пользователя и выход с его IP, при `final = proxy` сервер катается по его цепочке. Tailscale в пресет не входит (контракт 1.1.129, **§126**): пиры tailnet — свои устройства пользователя, их ограничивают ACL Tailscale и фильтр control-plane.
+
+Ядро не меняется (поведение upstream: endpoint задуман как «inbound + outbound», в том числе чтобы публиковать локальные сервисы в WG-сеть). Закрывает генератор конфига: условие `inbound` правила маршрута и DNS-правила матчится по тегу endpoint'а (`route/rule/rule_item_inbound.go` ядра), хотя документация sing-box описывает поле как «Tags of Inbound». `inbound` уже есть в `registry/allowlists.json` → `route_rule_conditions` и `dns_rule_conditions`, гейт «правило без условий» такие правила не трогает. **Автоматики нет:** включённый `private-ip` пиру ничего не открывает — доступ дают только поля записи узла (п. 1).
+
+### 1. Три поля записи узла (§6.6, BACKUP.md)
+
+| Поле записи | Тумблер в форме узла | Что разрешено пиру этого endpoint'а |
+|---|---|---|
+| `allow_local` | Allow access to this device | сервисы на нашем туннельном адресе (ядро уже переписало адресат в loopback). Подсказка обязана предупредить: сервис видит пира как `127.0.0.1`, доступно всё, что доверяет localhost |
+| `allow_lan` | Expose local network | наши частные сети (`ip_is_private`) |
+| `allow_gateway` | Allow as gateway | ходить через нас куда угодно: трафик уходит в outbound `gateway_out` пресета, DNS пира не отбрасывается |
+
+- Тип bool; **пишется только `true`**, отсутствие = `false` — ровно как у прежнего `skip_presets` (в состоянии и в LX Backup).
+- Носитель — свой сервер в корне `sources[]` и член папки (`kind: server`). У узла подписки записи нет: значения всегда ложь, поле не ставится и не читается.
+- В пространстве обхода пресета (`for_each_node`, `for_each_node_do`: `#filter`, `#do`, тело `for_each_node`) — `@node.allow_local`, `@node.allow_lan`, `@node.allow_gateway`, тип bool; у узла подписки — `false`. Закрытый перечень полей записи теперь: `skip_tailscale_presets`, `allow_local`, `allow_lan`, `allow_gateway`; иное имя `@node.<x>` вне `body.` — пустое значение без предупреждения (как сегодня).
+- Тумблеры показываются **только** у узлов с `body.type` ∈ {`wireguard`, `openvpn-client`, `openconnect`} (у AWG `type` тот же `wireguard`). У Tailscale тумблеров нет (1.1.129, §126); значения, если уже стоят в записи, хранятся и переносятся бэкапом, но пресет их у `tailscale` не читает. Строки — в вашей локализации; английские тексты лаунчера: «Incoming connections from this tunnel» (заголовок), «Peers on the other side of this tunnel can open connections to this device. Without the switches below they are rejected.», подсказки — «Peers reach services on this device's tunnel address. The service sees them as 127.0.0.1, so everything that trusts localhost becomes reachable.», «Peers reach private networks behind this device.», «Peers route any traffic through this device; it leaves through the outbound chosen in the Tunnel ingress preset.» (прежняя подсказка у Tailscale про `advertise_routes` снята вместе с тумблерами, 1.1.129).
+- **Импорт бэкапа**: новый узел — значения из файла; узел, совпавший по телу с уже имеющимся (свой сервер — по всему состоянию, член папки — в пределах папки), получает `true` из файла; отсутствие поля в файле своё `true` **не сбрасывает**. Экспорт — только `true`.
+
+### 2. `skip_presets` → `skip_tailscale_presets` (терпимое чтение)
+
+- Поле сужено до того, для чего вводилось вашим §578: «пресет `tailscale` узел не обслуживает». Общее «пресеты с обходом узлов не обслуживают узел» сняло бы и защитный пресет `tunnel-ingress` (п. 3) — тихо открыв шлюз.
+- Новое имя — **везде**: JSON-ключ записи в состоянии и в LX Backup, имя обхода `@node.skip_tailscale_presets`, фильтр пресета `tailscale` в вашем шаблоне:
+  ```json
+  "for_each_node": { "#filter": { "#and": [
+    { "@node.body.type": "tailscale" },
+    { "#not": "@node.skip_tailscale_presets" }
+  ] } }
+  ```
+- **Терпимое чтение:** ключ `skip_presets` в вашем хранилище и в импортируемом бэкапе (любой версии файла) читается как `skip_tailscale_presets` (`true` → `true`; оба ключа сразу — `true`, если хоть один `true`). Пишется **только новый** ключ. Имени `@node.skip_presets` в обходе больше нет (вне перечня — пустое значение; `{"#not": "@node.skip_presets"}` стал бы истиной для всех узлов, поэтому фильтр переписывается, а данные переносятся при чтении).
+- В `schema/backup.schema.json` `skip_presets` оставлен с `"deprecated": true` («читается, не пишется»).
+- Переключатель «Skip Tailscale presets» (бывший «Skip presets») показывается только у узлов `type: tailscale`, и только если пресет с обходом его действительно снимает (проверка «пресет узел обслуживает» прежняя, добавляется условие на тип).
+- Пресет `tunnel-ingress` это поле **не читает**.
+
+### 3. Пресет `tunnel-ingress` (§6.5.2)
+
+Тело одинаковое на обеих сторонах, оболочка — в вашем диалекте (D-046: `preset_id`, `ui{}`, `vars[].default_value`). Тело в форме лаунчера, перенести символ в символ (кроме оболочки; `"default"` у вас — `"default_value"`). Тело поправлено по месту контрактом 1.1.129 (§126): Tailscale выведен, списки служебные, форма — три настройки:
+
+```json
+{
+  "id": "tunnel-ingress",
+  "label": "Tunnel ingress",
+  "description": "Connections arriving from a client tunnel (WireGuard, AWG, OpenVPN, OpenConnect) are rejected unless the node's own switches allow them: access to this device, the local network, or using this device as a gateway. The settings below choose what happens to the rest and where allowed and gateway traffic goes.",
+  "default_enabled": true,
+  "num": 940,
+  "vars": [
+    { "name": "all_nodes",           "type": "text_list", "wizard_ui": "internal" },
+    { "name": "allow_local_nodes",   "type": "text_list", "wizard_ui": "internal" },
+    { "name": "allow_lan_nodes",     "type": "text_list", "wizard_ui": "internal" },
+    { "name": "allow_gateway_nodes", "type": "text_list", "wizard_ui": "internal" },
+    { "name": "closed_nodes",        "type": "text_list", "wizard_ui": "internal" },
+    { "name": "closed_out", "type": "outbound", "default": "reject", "title": "Incoming from tunnels",
+      "tooltip": "What happens to connections arriving from a tunnel that the node's switches did not allow. reject (default) and drop close them; an outbound forwards them." },
+    { "name": "allowed_out", "type": "outbound", "default": "direct-out", "title": "Device and local network go to",
+      "tooltip": "Outbound for peers allowed to reach this device or the local network." },
+    { "name": "gateway_out", "type": "outbound", "default": "proxy-out", "title": "Gateway traffic goes to",
+      "tooltip": "Outbound for peers allowed to use this device as a gateway." }
+  ],
+  "for_each_node_do": {
+    "#filter": { "@node.body.type": { "#in": ["wireguard", "openvpn-client", "openconnect"] } },
+    "#do": {
+      "@all_nodes":           { "#append": "@node" },
+      "@allow_local_nodes":   { "#if": ["@node.allow_local",   { "#append": "@node" }] },
+      "@allow_lan_nodes":     { "#if": ["@node.allow_lan",     { "#append": "@node" }] },
+      "@allow_gateway_nodes": { "#if": ["@node.allow_gateway", { "#append": "@node" }] },
+      "@closed_nodes":        { "#if": [{ "#not": "@node.allow_gateway" }, { "#append": "@node" }] }
+    }
+  },
+  "rules": [
+    { "#if": [{ "@allow_local_nodes": "#notEmpty" },   { "inbound": "@allow_local_nodes",   "ip_cidr": ["127.0.0.0/8", "::1/128"], "outbound": "@allowed_out" }] },
+    { "#if": [{ "@allow_lan_nodes": "#notEmpty" },     { "inbound": "@allow_lan_nodes",     "ip_is_private": true, "outbound": "@allowed_out" }] },
+    { "#if": [{ "@allow_gateway_nodes": "#notEmpty" }, { "inbound": "@allow_gateway_nodes", "outbound": "@gateway_out" }] },
+    { "#if": [{ "@all_nodes": "#notEmpty" },           { "inbound": "@all_nodes",           "outbound": "@closed_out" }] }
+  ],
+  "dns_rules": [
+    { "#if": [{ "#and": [{ "@closed_nodes": "#notEmpty" }, { "@closed_out": { "#in": ["reject", "drop"] } }] },
+              { "inbound": "@closed_nodes", "action": "reject" }] }
+  ]
+}
+```
+
+Что важно при переносе:
+
+- **Позиция на оси правил — сразу после запертой головы** (ваш `traffic-processing`, `num: 0`) и **раньше** `tailscale` (945) и `private-ip` (ваш id; 950 у лаунчера): иначе «private → direct» пропустит пира в LAN, а `preferred_by` пресета `tailscale` — в tailnet. Нетерминальные `sniff`/`resolve` головы ничего не решают, терминальный `hijack-dns` закрывает DNS-правило пресета.
+- **DNS-reject — по `closed_nodes`, а не по `all_nodes`**: пир шлюза обязан резолвить имена, а `hijack-dns` перехватит даже его запрос к внешнему DNS. И только при `closed_out` ∈ {`reject`, `drop`} (условие `#and` в теле): если закрытый трафик направлен в outbound, DNS пирам не режется. Порядок DNS-правил: правило пресета должно стоять раньше «ловящих всё» DNS-правил (например `query_type: A/AAAA → fakeip`), иначе reject не сработает. Место слота — по оси маршрутного правила: норма §6.10, контракт 1.1.127, **§124 ниже** (у лаунчера до 1.1.127 слот вставал в хвост).
+- **`#notEmpty` на каждом правиле обязателен**: без него пустой список у пользователя без туннельных узлов даёт правило без условий → `template_fragment_dropped` и деградацию в отчёте у всех. С ним правило снимается молча (кейс `tunnel_ingress_no_nodes`).
+- **Списки — служебные переменные пресета** (все пять `wizard_ui: internal`, §2.1, с 1.1.129): в форме не показываются, ручного ввода тегов нет, значение из состояния/бэкапа игнорируется, не экспортируется; заполняет их только `#do`, собранное не персистится.
+- **Форма — три настройки** (1.1.129): `closed_out` (по умолчанию `reject`), `allowed_out` (`direct-out`), `gateway_out` (`proxy-out`). Значения `reject` / `drop` переменной `outbound` — сентинелы, как у `block-ads`: правило `{"inbound": [...], "outbound": "reject"}` уходит в конфиг как `{"inbound": [...], "action": "reject"}`, `drop` — `"action": "reject", "method": "drop"`.
+- **Правило без `network`** отбрасывает и ICMP — намеренно.
+- `gateway_out` по умолчанию `proxy-out` (как `route.final`): пир шлюза едет в выбранный outbound, минуя остальные правила; `allowed_out` по умолчанию `direct-out`.
+- Пространство тегов `<preset_id>:` (§6.2) у `for_each_node_do` действует, но значения `inbound` — теги узлов, а не теги пресета: префикс к ним не применяется (корпус сравнивает литералы).
+- WG с `system: true` (кернельный интерфейс) пресет не защищает — там решает ОС, правило просто не срабатывает.
+- **Поздний дефолт** (§6.7.5): пресет включён по умолчанию и у существующих пользователей появляется сам, один раз; удалённый пользователем — не возвращается. Добавьте `tunnel-ingress` в `kLateDefaultPresetIds` (лаунчер: `LateDefaultPresetIDs = ["tailscale", "tunnel-ingress"]`).
+- `registry/presets.json`: `tunnel-ingress` объявлен `in: desktop` до вашей реализации; после неё — сообщите, переведём в `both` (ссылка `{kind: preset, ref: tunnel-ingress}` станет переносимой).
+
+Итог для узлов `wg-home` (WireGuard, без полей), `oc-work` (OpenConnect, `allow_local` + `allow_lan`), `ts` (Tailscale, `allow_gateway` — не учитывается, 1.1.129), `wg-exit` (WireGuard, `allow_gateway`), `v1` (VLESS, `allow_lan` — не туннель, не учитывается), настройки по умолчанию:
+
+```json
+"route.rules": [
+  { "inbound": ["oc-work"], "ip_cidr": ["127.0.0.0/8", "::1/128"], "outbound": "direct-out" },
+  { "inbound": ["oc-work"], "ip_is_private": true, "outbound": "direct-out" },
+  { "inbound": ["wg-exit"], "outbound": "proxy-out" },
+  { "inbound": ["wg-home", "oc-work", "wg-exit"], "action": "reject" }
+]
+"dns.rules": [ { "inbound": ["wg-home", "oc-work"], "action": "reject" } ]
+```
+
+С `closed_out: proxy-out` последнее правило — `{ "inbound": ["wg-home", "oc-work", "wg-exit"], "outbound": "proxy-out" }`, DNS-правила нет.
+
+### Что сделать LxBox
+
+- Модель узла (свой сервер, член папки): три bool `allow_local`, `allow_lan`, `allow_gateway`; `skip_presets` → `skip_tailscale_presets` с терпимым чтением старого ключа из хранилища; запись — только `true`, только новые ключи.
+- Бэкап: экспорт новых ключей (только `true`); импорт — терпимое чтение `skip_presets`, слияние «только `true`» для всех четырёх полей у узла, совпавшего по телу; `skip_presets` не писать никогда.
+- `preset_expand.dart` (пространство узла обхода): положить `@node.skip_tailscale_presets`, `@node.allow_local`, `@node.allow_lan`, `@node.allow_gateway` (bool; у узла подписки — `false`); `@node.skip_presets` из пространства убрать.
+- Шаблон: фильтр пресета `tailscale` на новое имя; новый пресет `tunnel-ingress` (тело выше, `num` — между вашей запертой головой и `tailscale`); `kLateDefaultPresetIds` += `tunnel-ingress`.
+- Форма узла: три тумблера у трёх типов (п. 1; без `tailscale` — 1.1.129), «Skip Tailscale presets» — только у `tailscale`.
+
+### Корпус — критерий паритета (обязателен)
+
+- `corpus/template/for_each_node/*` и `corpus/template/for_each_node_do/do_if_*`: поле `nodes[].skip_presets` → `nodes[].skip_tailscale_presets`, фильтры `@node.skip_presets` → `@node.skip_tailscale_presets`; ожидания не менялись. Формат `nodes[]` в README корпуса: `{tag, body, enabled?, in_config?, skip_tailscale_presets?, allow_local?, allow_lan?, allow_gateway?}` — раннер кладёт поля записи в пространство узла.
+- Новые: `for_each_node_do/tunnel_ingress_mixed` (тело §6.5.2 в форме ядра — `default_value` вместо `default`, без оболочки; узлы `wg-home`, `oc-work`, `ts`, `wg-exit`, `v1`; `vars.json` — `{}`; ожидание — четыре правила и DNS-правило выше, `ts` нигде нет, `warnings` пусты), `for_each_node_do/tunnel_ingress_closed_out_forwarded` (те же узлы, `vars.json` — `{"closed_out": "proxy-out"}`; последнее правило с `outbound`, DNS-правил нет) и `for_each_node_do/tunnel_ingress_no_nodes` (один узел VLESS, ввода нет — `rules`, `dns_rules` пусты, `warnings` пусты: каждое правило снято своим `#notEmpty`, без `template_fragment_dropped`).
+- Бэкап-корпус не менялся: старый ключ в существующих фикстурах `corpus/backup/` не встречается; терпимое чтение проверяйте своим тестом (у лаунчера — `TestLoadLegacySkipPresetsKey` в состоянии и в импорте).
+
+Расхождение — сюда.
+
+## 124. Контракт 1.1.127 — DNS-слот пресета появляется по оси маршрутного правила
+
+Решение владельца 15.10.2026 (SPEC 171 лаунчера, D-135). Повод — известное ограничение SPEC 170 (§123): DNS-reject пресета `tunnel-ingress` у существующего пользователя вставал в хвост `dns.rules` и не срабатывал за «ловящим всё» правилом `fakeip`. Норма — `docs/TEMPLATE_LANG.md` **§6.10 (новый)**, ссылки из §6.5.2 и §6.7.5; `docs/BACKUP.md`, таблица `dns`, строка `rules[].ref`. Реестр и корпус не менялись.
+
+### Норма
+
+Маршрутные правила `rules[]` живут на оси `num`; DNS-правила `dns.rules[]` номера не имеют, их порядок — порядок пользователя. **Когда запись `dns.rules[] {kind: preset, ref: <id>}` создаётся впервые** — поздний дефолт (`seedLateDefaultPresets`), включение пресета пользователем, импорт состояния или LX Backup без такой записи, правка через API, сборка на состоянии без записи, — она встаёт **перед первым уже стоящим слотом пресета, чей `num` маршрутного правила больше** номера этого пресета; такого слота нет — в конец.
+
+- Номер — `num` правила `rules[]` с тем же `ref` (неразмеченное — 1000); у позднего дефолта это номер шаблона, выставленный засевом.
+- Пользовательские DNS-правила (`kind: user`) не учитываются и не двигаются: правило пользователя выше всех пресетов остаётся выше нового слота.
+- Уже стоящие слоты не переупорядочиваются (ничто не отличит «перетащил» от «дописано в хвост»); равные номера — новый слот после. Миграции записанных состояний нет: `tunnel-ingress` ни в одном релизе ещё не появлялся, он придёт уже по норме; `tailscale` у существующих пользователей остаётся где стоит.
+
+Итог у пользователя с `fakeip` (1130) и своим DNS-правилом первым: `dns.rules = [user, tunnel-ingress (940), fakeip]` — reject закрытых пиров раньше `A/AAAA → fakeip`; на чистой установке порядок прежний (слоты по оси).
+
+### Что сделать у LxBox
+
+- Точка, которая создаёт DNS-запись пресета (у лаунчера одна функция места, три вызывающих: синхронизация DNS-записей при сохранении/API, восстановление порядка в редакторе DNS после засева/включения, сборка на состоянии без записи): вместо «в конец» — индекс первого слота пресета с бо́льшим `num`, иначе конец. Если ваша модель DNS хранит порядок пресетных правил иначе (`order_num` и т. п.) — та же норма в её терминах: место нового слота по оси маршрута, существующие не двигать.
+- `seedLateDefaultPresets`: после засева маршрутного правила DNS-слот пресета — по этой же норме (не хвост).
+- Критерий: состояние с включённым `fakeip`, своим DNS-правилом первым и `late_presets_seeded: [tailscale]` → после засева `tunnel-ingress` и сборки с узлом WireGuard без `allow_*`: в `dns.rules` конфига правило пользователя первым, `{"action":"reject","inbound":[…]}` раньше `query_type: [A, AAAA]` (у лаунчера — `TestLatePresetDNSRuleTakesAxisPosition`).
+
+Расхождение — сюда.
+
+## 125. Контракт 1.1.128 — пресет `split-all-traffic` снят (desktop-only)
+
+Решение владельца 15.10.2026: пресет «Split all traffic 50/50 across two outbounds» не актуален и снят из шаблона лаунчера и из `registry/presets.json`. Он был `in: desktop` — у LxBox работы нет. Если в бэкапе встретится правило `{kind: "preset", ref: "split-all-traffic"}`, действует общая норма TEMPLATE_LANG §6.1 для неизвестного id: правило выключено + warning, не потеря.
+
+Расхождение — сюда.
+
+## 126. Контракт 1.1.129 — Tailscale выведен из `tunnel-ingress`; форма пресета — три настройки
+
+Решения владельца 15.10.2026 (SPEC 170 лаунчера, изменение; D-136). Норма — `docs/TEMPLATE_LANG.md` §6.5.2 (абзац «Почему без Tailscale», тело пресета), `docs/BACKUP.md` и `schema/backup.schema.json` (описания `allow_*`), `registry/presets.json` (note). Тело пресета и итог кейса в **§123** поправлены по месту — переносите оттуда.
+
+### Почему
+
+Пиры tailnet — свои устройства пользователя, доступ к ним уже ограничивают ACL Tailscale и фильтр control-plane: он пропускает к нам только наши адреса и анонсированное `advertise_routes` / `advertise_exit_node`, которые пользователь задаёт явно в узле. Под reject по умолчанию устройства пользователя перестали бы доставать эту машину по tailnet.
+
+### Что меняется
+
+- `#filter` пресета `tunnel-ingress`: `{"@node.body.type": {"#in": ["wireguard", "openvpn-client", "openconnect"]}}`; в `description` — «(WireGuard, AWG, OpenVPN, OpenConnect)».
+- Тумблеры `allow_local` / `allow_lan` / `allow_gateway` у узла `tailscale` не показываются (подсказка про `advertise_routes` у Tailscale снята). Значения, если уже стоят в записи, **остаются** (хранилище, экспорт/импорт бэкапа как прежде), обход их у `tailscale` просто не читает — фильтр узел не берёт.
+- `skip_tailscale_presets` и пресет `tailscale` — без изменений.
+
+### Форма пресета: настройки вместо списков
+
+В форме пресета пользователь не видит заполняемые списки — только настройки по умолчанию.
+
+- Все пять списков (`all_nodes`, `allow_local_nodes`, `allow_lan_nodes`, `allow_gateway_nodes`, `closed_nodes`) — `wizard_ui: "internal"`, без `unique` (`#append` по тегам узлов дублей не даёт). Ручного ввода тегов больше нет; значение из хранилища/бэкапа у internal игнорируется (D-132).
+- Видимы ровно три переменные `outbound`, в таком порядке: `closed_out` (по умолчанию `reject`, «Incoming from tunnels»), `allowed_out` (`direct-out`, «Device and local network go to»), `gateway_out` (`proxy-out`, «Gateway traffic goes to»); тексты подсказок — в теле §123.
+- Правила: loopback и LAN разрешённых — в `@allowed_out` (было `direct-out`); шлюз — `@gateway_out`; всё прочее из туннеля — `{"inbound": "@all_nodes", "outbound": "@closed_out"}` (было `"action": "reject"`). Сентинелы `reject` / `drop` переменной `outbound` превращаются в action, как у `block-ads`: при значении по умолчанию в конфиге `"action": "reject"`.
+- DNS-правило — под `#and` из `{"@closed_nodes": "#notEmpty"}` и `{"@closed_out": {"#in": ["reject", "drop"]}}`: если закрытый трафик куда-то направлен, DNS пирам не режется.
+- `description` переписан: без списков и ручных тегов, о трёх настройках одной фразой.
+
+### Корпус
+
+- `for_each_node_do/tunnel_ingress_mixed` — узел `ts` (tailscale, `allow_gateway`) оставлен как доказательство исключения, добавлен `wg-exit` (wireguard, `allow_gateway`); `vars.json` — `{}` (ручного `manual-wg` нет): правило шлюза `{"inbound": ["wg-exit"], "outbound": "proxy-out"}`, reject по `["wg-home", "oc-work", "wg-exit"]` (`"action": "reject"`), DNS-reject по `["wg-home", "oc-work"]`.
+- Новый `for_each_node_do/tunnel_ingress_closed_out_forwarded` — те же узлы, `{"closed_out": "proxy-out"}`: последнее правило `{"inbound": ["wg-home", "oc-work", "wg-exit"], "outbound": "proxy-out"}`, `dns_rules` пуст.
+- `tunnel_ingress_no_nodes` — новое тело, ожидание то же. Все три кейса — критерий паритета.
+
+Расхождение — сюда.
+
+## 127. Контракт 1.1.130 — `rules[].dns` стал полем обеих сторон (DNS-зеркало правила)
+
+Решения владельца 15.10.2026 (SPEC 172 лаунчера, D-137). Норма — `docs/TEMPLATE_LANG.md` §6.11, `registry/allowlists.json` (`rule_dns_mirror_match`, `rule_dns_mirror_gate` — новые), `docs/BACKUP.md` (таблица `rules[]`), `docs/ONE_NAMESPACE.md` §1, `schema/backup.schema.json` (`$defs/rule/properties/dns`). Повод — issue #140 лаунчера.
+
+### Что меняется для вас
+
+- **Форма — ваша, без изменений:** `{"enabled", "serverTag", "forceIpv4"?}` у `inline` и `srs`. Ключи остаются camelCase (решение владельца: данные уже записаны, переименование — миграция обеих сторон ради стиля).
+- **Лаунчер поле теперь читает, хранит, применяет и пишет на экспорте.** Раньше терял на импорте и при сохранении Конфигуратора: ваши DNS-опции, прошедшие через лаунчер, возвращались пустыми. Импорт — как вся запись правила (`rules[]` замещаются целиком): отсутствие `dns` в файле лаунчера = опций нет.
+- `resolve{}` — без изменений: LxBox-only, лаунчер игнорирует молча и не пишет (в таблице `rules[]` снято обещание «провозит», которого код не выполнял).
+
+### Норма сборки §6.11 — сверить со своей
+
+Описана по вашему §117 задача 3 / §256 / §257; обобщена на порядок DNS лаунчера, где слоты пресетов не уплотняются (порядок пользователя, SPEC 062):
+
+1. **Место.** Пара «глушилка + зеркало» правила с номером `N` — перед первым слотом пресета с номером больше `N`, иначе сразу после последнего слота, иначе в конец. При вашем уплотнённом блоке слотов (решение №6) в порядке оси это даёт ту же последовательность, что ваша группа у первого слота. Отличие возможно только у пользователя, переставившего слоты пресетов не по оси, — у вас такого состояния нет.
+2. **Матчер inline.** У вас — headless `rule_set` из всех матчеров тела (включая `ip_cidr`), у нормы — ключи тела из списка реестра `rule_dns_mirror_match` прямо в DNS-правиле, IP назначения (`ip_cidr`, `ip_is_private`) не участвуют. Для доменов и приложений результат один; IP-часть DNS-запрос не проверяет. Если по ядру у вас иначе — сюда.
+3. **Гейт** — список реестра `rule_dns_mirror_gate`: `port`, `port_range`, `protocol`, `network` (как у вас в коде; в вашем §256/STORAGE.md `network` не упомянут).
+4. **Сервер:** удалённый — зеркала нет (у вас молча, у лаунчера — предупреждение в отчёте сборки; в конфиге одинаково); выключенный — включается принудительно (ваш locked №7).
+5. **Пустой матчер** — ничего не выпускается (ваше `if (mirror.isEmpty) return;`).
+
+### Критерий
+
+Бэкап LxBox с `rules[].dns` → импорт в лаунчер → экспорт → импорт в LxBox: объект `dns` у правил тот же. Конфиги обеих сторон на одном состоянии (правила inline/srs с `dns`, слоты пресетов подряд по оси) дают одинаковый порядок и тела DNS-правил с точностью до имён тегов `rule_set`.
+
+Расхождение — сюда.

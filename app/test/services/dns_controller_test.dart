@@ -188,7 +188,7 @@ void main() {
       await seedTailscalePreset();
       final snap = await DnsController.load(presetNodes: const [
         PresetNode(
-            tag: 'home-ts', body: {'type': 'tailscale'}, skipPresets: true),
+            tag: 'home-ts', body: {'type': 'tailscale'}, skipTailscalePresets: true),
       ]);
       expect(snap.presetServedTagsByPresetId['tailscale'], isEmpty);
       expect(snap.presetServersByTag.keys.where((t) => t.endsWith('-dns')),

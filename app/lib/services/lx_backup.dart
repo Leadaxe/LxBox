@@ -3001,7 +3001,7 @@ LxServer? _server10(
     folderRef: folder?.key ?? '',
     position: position,
     id: fileId,
-    skipPresets: node.skipPresets,
+    skipPresets: node.skipTailscalePresets,
     tls: _carries(folder == null ? BackupRecord.server : BackupRecord.folderNode,
             j, 'tls')
         ? node.tls
@@ -3415,8 +3415,13 @@ const Set<String> _node10Keys = {
   'service',
   'reason',
   'sections',
-  // §578 — «пропустить пресеты» узла (запрос в контракт); пишется только true.
+  // §578 — «пропустить пресеты» узла: старый ключ, только терпимое чтение.
   'skip_presets',
+  // §656 (контракт 1.1.126) — поля записи узла; пишется только true.
+  'skip_tailscale_presets',
+  'allow_local',
+  'allow_lan',
+  'allow_gateway',
   // Фича 478 — вердикт на члене папки. Ключ известен обходу, чтобы старый
   // файл с `core_rejected` не давал `backup_unknown_field`; содержимое
   // срезает санитизация §489.
@@ -4060,12 +4065,13 @@ BackupServerMerge mergeBackupServers(
             ?.copyWith(overrideDetour: local.detourPolicy.overrideDetour);
         final side = (flags != null && flags != local.detourPolicy) ||
             (srv.tagPrefix != null && srv.tagPrefix != local.tagPrefix);
-        final skip = srv.skipPresets && !local.skipPresets; // §578
+        final skip =
+            srv.skipPresets && !local.skipTailscalePresets; // §578
         if (side || skip) {
           merged[hit] = local.copyWith(
             detourPolicy: flags,
             tagPrefix: srv.tagPrefix,
-            skipPresets: skip ? true : null,
+            skipTailscalePresets: skip ? true : null,
           );
           applied++;
         }
@@ -4083,7 +4089,7 @@ BackupServerMerge mergeBackupServers(
         rawBody: body,
         // Фича 478 — прочие warnings записи; вердикт страховки срезан (§489).
         warnings: srv.warnings,
-        skipPresets: srv.skipPresets, // §578
+        skipTailscalePresets: srv.skipPresets, // §578
       ));
       pendingLinks.add((
         at: merged.length - 1,
@@ -4340,10 +4346,11 @@ int _mergeFolderMember(
     }
     touched.add((list: folderAt, member: hit));
     // §578 — `skip_presets: true` из файла; отсутствие своё не сбрасывает.
-    final skip = srv.skipPresets && !folder.members[hit].skipPresets;
+    final skip =
+        srv.skipPresets && !folder.members[hit].skipTailscalePresets;
     if (!skip) return 0;
     final members = folder.members.toList();
-    members[hit] = members[hit].copyWith(skipPresets: true);
+    members[hit] = members[hit].copyWith(skipTailscalePresets: true);
     merged[folderAt] = folder.copyWith(members: members);
     return 1;
   }
@@ -4353,7 +4360,7 @@ int _mergeFolderMember(
     // Фича 478 — прочие warnings записи; вердикт страховки срезан (§489).
     warnings: srv.warnings,
     detour: detour,
-    skipPresets: srv.skipPresets, // §578
+    skipTailscalePresets: srv.skipPresets, // §578
     tls: srv.tls ?? TlsPolicy.none, // §636
   );
   final here = member.node?.tag ?? '';

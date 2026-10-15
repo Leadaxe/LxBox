@@ -12,7 +12,8 @@ library;
 import 'dart:collection';
 
 import '../../models/parser_config.dart';
-import 'if_engine.dart' show TemplateIfError, validateCondNode;
+import 'if_engine.dart'
+    show TemplateIfError, validateCondNode, validateIfConstructs;
 
 /// Объявление переменной (глобальной или пресета) по нормам 1.1.119:
 /// `unique` — только bool и только у `text_list`; имя `node` / `node.*`
@@ -61,12 +62,20 @@ PresetNodeLoop? parsePresetNodeLoop(
     throw TemplateIfError('$path: ${e.message}');
   }
   if (loop == null) return null;
+  final key = loop.isNode ? PresetNodeLoop.keyNode : PresetNodeLoop.keyNodeDo;
+  final scope = PresetNodeScope(presetVarScope(preset, globals));
   final filter = loop.filter;
   if (filter != null) {
-    final key =
-        loop.isNode ? PresetNodeLoop.keyNode : PresetNodeLoop.keyNodeDo;
-    validateCondNode(filter, PresetNodeScope(presetVarScope(preset, globals)),
-        '$path.$key.#filter');
+    validateCondNode(filter, scope, '$path.$key.#filter');
+  }
+  // §656 — условие операции `#do` под `#if…`: те же имена, что у `#filter`
+  // (узел, переменные пресета, глобальные). Ветки — глаголы, их проверил
+  // разбор модели; здесь — только условие (и вложенные `#if` ветвей).
+  for (final e in loop.collect.entries) {
+    final op = e.value;
+    if (op is! PresetDoIf) continue;
+    validateIfConstructs({op.ifKey: op.raw}, scope,
+        path: '$path.$key.#do.@${e.key}');
   }
   return loop;
 }
@@ -90,8 +99,20 @@ Map<String, WizardVar> presetVarScope(
   return scope;
 }
 
+/// §578/§656 (контракт 1.1.126, TEMPLATE_LANG §6.6) — закрытый перечень
+/// полей записи узла, видимых обходу как `@node.<поле>` (bool; у узла
+/// подписки — `false`). `skip_presets` снят: старое имя вне перечня.
+const Set<String> kPresetNodeRecordFieldNames = {
+  'skip_tailscale_presets',
+  'allow_local',
+  'allow_lan',
+  'allow_gateway',
+};
+
 /// Область видимости с именами узла обхода (§6.6): `@node` (тег, text),
-/// `@node.skip_presets` (bool), `@node.body.<путь>` (поле тела, text). Путь
+/// поля записи [kPresetNodeRecordFieldNames] (bool, §656:
+/// `skip_tailscale_presets`, `allow_local`, `allow_lan`, `allow_gateway`),
+/// `@node.body.<путь>` (поле тела, text). Путь
 /// тела заранее не известен, поэтому имена узла вычисляются при обращении,
 /// а не перечисляются.
 class PresetNodeScope extends MapBase<String, WizardVar> {
@@ -108,7 +129,8 @@ class PresetNodeScope extends MapBase<String, WizardVar> {
     if (key == _node || key.startsWith('$_node.body.')) {
       return WizardVar(name: key, type: 'text', defaultValue: '');
     }
-    if (key == '$_node.skip_presets') {
+    if (key.startsWith('$_node.') &&
+        kPresetNodeRecordFieldNames.contains(key.substring(_node.length + 1))) {
       return WizardVar(name: key, type: 'bool', defaultValue: '');
     }
     return null;

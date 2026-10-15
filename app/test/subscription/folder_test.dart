@@ -418,11 +418,11 @@ void main() {
       await c.addFromInput(uriA);
       c.configDirty = false;
       expect(await c.setSkipPresets(0, null, true), isNull);
-      expect((c.entries.single.list as UserServer).skipPresets, isTrue);
+      expect((c.entries.single.list as UserServer).skipTailscalePresets, isTrue);
       expect(c.configDirty, isTrue);
       expect(
           ((await SettingsStorage.getServerLists()).single as UserServer)
-              .skipPresets,
+              .skipTailscalePresets,
           isTrue);
 
       await c.addFolder('F');
@@ -430,12 +430,12 @@ void main() {
       c.configDirty = false;
       expect(await c.setSkipPresets(0, 0, false), isNull);
       var folder = c.entries.single.list as FolderServers;
-      expect(folder.members.single.skipPresets, isFalse);
+      expect(folder.members.single.skipTailscalePresets, isFalse);
       expect(c.configDirty, isTrue);
       expect(await c.setSkipPresets(0, 0, true), isNull);
       final saved =
           (await SettingsStorage.getServerLists()).single as FolderServers;
-      expect(saved.members.single.skipPresets, isTrue);
+      expect(saved.members.single.skipTailscalePresets, isTrue);
       // Член вне диапазона и папка как одиночный — ошибка, без записи.
       expect(await c.setSkipPresets(0, 5, true), isNotNull);
       expect(await c.setSkipPresets(0, null, true), isNotNull);

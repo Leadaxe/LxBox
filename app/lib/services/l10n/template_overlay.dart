@@ -78,13 +78,19 @@ class TemplateOverlay {
   // ---------------------------------------------------------------------------
 
   /// §578 — ветки элемента массива тела пресета: плоский объект — он сам;
-  /// условная обёртка `{"#if": {..., "#value": X, "#else": Y}}` — `X` и,
+  /// условная обёртка `{"#if": {..., "#value": X, "#else": Y}}` или
+  /// `{"#if": [cond, X, Y]}` (§656) — `X` и,
   /// если есть, `Y` (каждая ветка разворачивается так же: вложенный `#if`
   /// и ветка-массив допустимы). Ветки — те же объекты шаблона, не копии: apply пишет в них.
   static List<Map> conditionalBranches(dynamic item) {
     if (item is List) return [for (final x in item) ...conditionalBranches(x)];
     if (item is! Map) return const [];
     final cond = item['#if'];
+    // §656 — короткая форма `[cond, V, E?]`: ветки — элементы 1 и 2.
+    if (cond is List) {
+      if (cond.length < 2) return [item];
+      return [for (final b in cond.skip(1)) ...conditionalBranches(b)];
+    }
     if (cond is! Map) return [item];
     return [
       for (final key in const ['#value', '#else'])

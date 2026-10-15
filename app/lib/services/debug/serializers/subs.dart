@@ -100,7 +100,7 @@ Map<String, Object?> serializeSubEntry(
     // FolderServers полей нет (их никто не фетчит) — ключи не кладём вовсе,
     // чтобы `null` не читался как «Default identity» у записи, где режима нет.
     // §578 — поле записи «пропустить пресеты», read-only.
-    if (list is UserServer) 'skip_presets': list.skipPresets,
+    if (list is UserServer) 'skip_presets': list.skipTailscalePresets,
     // §636 — TLS-политика: у подписки и папки — уровень источника, у
     // одиночного сервера — узловой.
     'tls': serializeTlsPolicy(list.tls),
@@ -315,7 +315,7 @@ Map<String, Object?> serializeFolderMember(
       'protocol': m.node?.protocol,
       'broken': m.node == null,
       if (reveal) 'raw': m.raw,
-      'skip_presets': m.skipPresets, // §578 — read-only
+      'skip_presets': m.skipTailscalePresets, // §578 — read-only
       'tls': serializeTlsPolicy(m.tls), // §636 — узловая политика члена
     };
 

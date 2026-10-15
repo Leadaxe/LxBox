@@ -1889,12 +1889,12 @@ void main() {
       const uri = 'vless://skip@h:443';
       final withFlag = mergeBackupServers(
           const [], const [LxServer(uri: uri, skipPresets: true)]);
-      expect((withFlag.lists.single as UserServer).skipPresets, isTrue);
+      expect((withFlag.lists.single as UserServer).skipTailscalePresets, isTrue);
 
       // Тот же импорт без skip_presets в файле — своя запись сильнее.
       final second =
           mergeBackupServers(withFlag.lists, const [LxServer(uri: uri)]);
-      expect((second.lists.single as UserServer).skipPresets, isTrue,
+      expect((second.lists.single as UserServer).skipTailscalePresets, isTrue,
           reason: 'приехавшая запись без флага не должна снимать true');
     });
 
@@ -1905,14 +1905,14 @@ void main() {
         LxServer(uri: uri, folder: 'DE', skipPresets: true),
       ]);
       expect(
-          (withFlag.lists.single as FolderServers).members.single.skipPresets,
+          (withFlag.lists.single as FolderServers).members.single.skipTailscalePresets,
           isTrue);
 
       final second = mergeBackupServers(withFlag.lists, const [
         LxServer(uri: uri, folder: 'DE'),
       ]);
       expect(
-          (second.lists.single as FolderServers).members.single.skipPresets,
+          (second.lists.single as FolderServers).members.single.skipTailscalePresets,
           isTrue,
           reason: 'приехавшая запись без флага не должна снимать true');
     });

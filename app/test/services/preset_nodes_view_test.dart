@@ -39,7 +39,7 @@ void main() {
         tagPrefix: '',
         detourPolicy: DetourPolicy.defaults,
         rawBody: node.toUri(),
-        skipPresets: skip,
+        skipTailscalePresets: skip,
         nodes: [node],
       );
 
@@ -95,11 +95,11 @@ void main() {
       final nodes = presetNodesForView([
         user(ts('home-ts'), skip: true),
         folder([
-          FolderMember(raw: ts('work-ts').toUri(), skipPresets: true),
+          FolderMember(raw: ts('work-ts').toUri(), skipTailscalePresets: true),
         ]),
         sub([ts('sub-ts')]),
       ], nodeTypes: types);
-      expect([for (final n in nodes) n.skipPresets], [true, true, false]);
+      expect([for (final n in nodes) n.skipTailscalePresets], [true, true, false]);
     });
 
     test('финальный тег последней сборки побеждает отображаемый', () {

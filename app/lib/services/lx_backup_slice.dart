@@ -128,6 +128,12 @@ const List<BackupField> kBackupFields = [
   BackupField(BackupRecord.server, 'sections', _r),
   // §578 — поле записи узла (запрос в контракт): едет в файл как есть.
   BackupField(BackupRecord.server, 'skip_presets', _c),
+  // §656 (контракт 1.1.126) — поля записи узла; `skip_presets` выше — только
+  // терпимое чтение старого ключа.
+  BackupField(BackupRecord.server, 'skip_tailscale_presets', _c),
+  BackupField(BackupRecord.server, 'allow_local', _c),
+  BackupField(BackupRecord.server, 'allow_lan', _c),
+  BackupField(BackupRecord.server, 'allow_gateway', _c),
   BackupField(BackupRecord.server, 'detour_policy', _s, declared: true),
   BackupField(BackupRecord.server, 'tag_policy', _s, declared: true),
   BackupField(BackupRecord.server, 'tls', _s,
@@ -161,6 +167,10 @@ const List<BackupField> kBackupFields = [
   BackupField(BackupRecord.folderNode, 'reason', _c),
   BackupField(BackupRecord.folderNode, 'sections', _r), // §575
   BackupField(BackupRecord.folderNode, 'skip_presets', _c),
+  BackupField(BackupRecord.folderNode, 'skip_tailscale_presets', _c), // §656
+  BackupField(BackupRecord.folderNode, 'allow_local', _c),
+  BackupField(BackupRecord.folderNode, 'allow_lan', _c),
+  BackupField(BackupRecord.folderNode, 'allow_gateway', _c),
   BackupField(BackupRecord.folderNode, 'tls', _s,
       declared: true), // §636
   // Член-группа `kind: auto` (§439 N2): состав и стратегия — `group`; поля

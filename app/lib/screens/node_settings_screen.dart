@@ -818,9 +818,9 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
   /// `UserServer`, член — `FolderMember`). Читается при каждом build.
   bool get _skipPresets {
     final member = _member;
-    if (member != null) return member.skipPresets;
+    if (member != null) return member.skipTailscalePresets;
     final list = widget.entry.list;
-    return list is UserServer && list.skipPresets;
+    return list is UserServer && list.skipTailscalePresets;
   }
 
   /// §578 — переключатель `Skip presets`: узел не обслуживается пресетами с

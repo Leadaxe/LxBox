@@ -1893,7 +1893,7 @@
               "@node.body.type": "tailscale"
             },
             {
-              "#not": "@node.skip_presets"
+              "#not": "@node.skip_tailscale_presets"
             }
           ]
         }

@@ -1644,7 +1644,11 @@ class SubscriptionController extends ChangeNotifier {
         // Узел тот же объект: реестр ссылок узнаёт в нём бывшего члена.
         origin: UserSource.manual,
         rawBody: m.raw,
-        skipPresets: m.skipPresets, // §578
+        // §578/§656 — поля записи едут с узлом.
+        skipTailscalePresets: m.skipTailscalePresets,
+        allowLocal: m.allowLocal,
+        allowLan: m.allowLan,
+        allowGateway: m.allowGateway,
         tls: m.tls, // §636 — узловая политика едет с узлом
         nodes: [if (m.node != null) m.node!],
       );
@@ -2444,7 +2448,11 @@ class SubscriptionController extends ChangeNotifier {
                 raw: server.rawBody,
                 enabled: server.enabled,
                 detour: personalDetour,
-                skipPresets: server.skipPresets, // §578
+                // §578/§656 — поля записи едут с узлом.
+                skipTailscalePresets: server.skipTailscalePresets,
+                allowLocal: server.allowLocal,
+                allowLan: server.allowLan,
+                allowGateway: server.allowGateway,
                 tls: server.tls), // §636
           ]
         : _bindAutoMembers([
@@ -2454,8 +2462,11 @@ class SubscriptionController extends ChangeNotifier {
                   nameHint: memberNameHintFor(n),
                   enabled: server.enabled,
                   detour: personalDetour,
-                  // §578 — «пропустить пресеты» — поле записи, едет с узлами.
-                  skipPresets: server.skipPresets,
+                  // §578/§656 — поля записи едут с узлами.
+                  skipTailscalePresets: server.skipTailscalePresets,
+                  allowLocal: server.allowLocal,
+                  allowLan: server.allowLan,
+                  allowGateway: server.allowGateway,
                   tls: server.tls), // §636
           ], server.nodes, folder.id);
     folderEntry._replaceList(
@@ -2990,7 +3001,8 @@ class SubscriptionController extends ChangeNotifier {
     return '';
   }
 
-  /// §578 — поле записи `skip_presets` своего сервера ([memberIndex] null)
+  /// §578 — поле записи `skip_tailscale_presets` (§656, бывший
+  /// `skip_presets`) своего сервера ([memberIndex] null)
   /// или члена папки. Хранится только `true`; правка помечает конфиг
   /// грязным через [_persist], как соседние правки записи.
   Future<UiMsg?> setSkipPresets(int index, int? memberIndex, bool value) async {
@@ -3001,16 +3013,17 @@ class SubscriptionController extends ChangeNotifier {
     final list = entry.list;
     if (memberIndex == null) {
       if (list is! UserServer) return const ErrMsg(ErrKey.serverNotFound);
-      if (list.skipPresets == value) return null;
-      entry._replaceList(list.copyWith(skipPresets: value));
+      if (list.skipTailscalePresets == value) return null;
+      entry._replaceList(list.copyWith(skipTailscalePresets: value));
     } else {
       if (list is! FolderServers) return const ErrMsg(ErrKey.notAFolder);
       if (memberIndex < 0 || memberIndex >= list.members.length) {
         return const ErrMsg(ErrKey.serverNotFound);
       }
       final members = [...list.members];
-      if (members[memberIndex].skipPresets == value) return null;
-      members[memberIndex] = members[memberIndex].copyWith(skipPresets: value);
+      if (members[memberIndex].skipTailscalePresets == value) return null;
+      members[memberIndex] =
+          members[memberIndex].copyWith(skipTailscalePresets: value);
       entry._replaceList(list.copyWith(members: members));
     }
     await _persist();

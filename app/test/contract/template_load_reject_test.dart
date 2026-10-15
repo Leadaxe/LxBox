@@ -44,6 +44,13 @@ const _mustRejectOnLoad = <String, String>{
   // "Объект с #tpl и другим ключом — ошибка шаблона: загрузка отвергает"
   // (контракт 1.1.86, §4.8) — тот же fail-closed, что у `#if` без and/or.
   'tpl/extra_key_is_error': '#tpl не допускает других ключей объекта',
+  // §656 (контракт 1.1.125, D-133) — короткая форма `#if`: отказы §122 п. 1, 3, 4.
+  'grammar/short_one_element_rejected': 'короткая форма из одного элемента',
+  'grammar/short_four_elements_rejected': 'короткая форма из четырёх элементов',
+  'grammar/short_cond_sugar_list_rejected': 'массив в позиции условия',
+  'grammar/short_null_value_rejected': 'V = null',
+  'grammar/short_null_else_rejected': 'E = null',
+  'grammar/short_string_body_rejected': 'значение #if — строка',
 };
 
 /// Кейсы, где толерантность рантайма — И ЕСТЬ контракт: форма законна, и
@@ -74,6 +81,18 @@ const _mustLoadFine = <String>[
   'predicates/p6_not_wraps_equality',
   'map_spread/named_if_two_on_one_object',
   'map_spread/nested_if_in_branch',
+  // §656 — короткая форма `#if` во всех позициях.
+  'grammar/short_two_elements',
+  'grammar/short_three_elements',
+  'grammar/short_two_strings_is_ternary',
+  'grammar/short_named_keys',
+  'map_spread/short_merge_last_wins',
+  'map_spread/short_else_merge',
+  'map_spread/short_false_no_else_keeps_parent',
+  'array_element/short_true_replaces',
+  'array_element/short_false_drops_element',
+  'array_element/short_splice_one_level',
+  'array_element/short_fragment_whole_object',
 ];
 
 /// НЕНОРМИРОВАННЫЕ ВЕРДИКТЫ, измеренные 24.08.2026 прогоном ОБОИХ валидаторов
