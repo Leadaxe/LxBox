@@ -1643,7 +1643,9 @@ TransportSpec? _transportFromSingbox(dynamic raw) {
       final edField = raw['max_early_data'];
       return WsTransport(
         path: path,
-        host: headers?['Host']?.toString() ?? '',
+        // §654 — `Host` у sing-box `Listable[string]`: список берётся первым
+        // элементом, как прочие заголовки (`toString()` давал «[a.com]»).
+        host: headers == null ? '' : _headerValue(headers['Host']),
         // §476 — прочие заголовки ЧИТАЮТСЯ. `WsTransport.headers` их эмитит, а
         // эта ветка брала из карты один `Host`: узел с `User-Agent` или
         // `X-Forwarded-For`, пересохранённый через JSON-вкладку, терял их
