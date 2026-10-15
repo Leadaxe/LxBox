@@ -10,13 +10,11 @@ import '../models/server_list.dart';
 import '../models/template_vars.dart';
 import '../models/tls_spec.dart';
 import '../services/contract/registry_form.dart' hide FormState;
-import '../services/contract/registry_form.dart' as rf show FormState;
-import '../services/contract/registry_warning.dart';
 import '../services/parser/uri_utils.dart' show newUuidV4;
 import '../services/ui_helpers.dart';
-import '../widgets/banner_palette.dart' show warningSeverityStyle;
 import '../widgets/emoji_picker_button.dart';
 import '../widgets/lx_code_editor.dart';
+import '../widgets/openconnect_form.dart';
 import '../services/l10n/locale_controller.dart';
 import '../services/subscription/subscription_identity.dart';
 import '../widgets/safe_bottom.dart';
@@ -114,27 +112,16 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
   bool _tsAcceptRoutes = false;
   bool _tsShowKey = false;
 
-  // §654 B — OpenConnect tab. Раскладка, видимость, обязательность,
-  // диапазоны и варианты — из модели формы реестра ([formLayoutFor]); экран
-  // держит только подписи. Поле формы реестра без подписи экрана не
-  // рисуется (`token.*`, пути сертификатов — вне формы, правятся JSON-ом).
-  // Тело копится в [_ocBody] через [withFormValue]/[applyFormOption]:
-  // пустое поле ключ не пишет.
+  // §654 B — OpenConnect tab. Поля — общий виджет [OpenConnectForm] (модель
+  // формы реестра + подписи), экран держит Tag и тело [_ocBody]; виджет
+  // отдаёт новое тело после правки поля (пустое поле ключ не пишет).
   static const _kDefaultOcTag = 'openconnect';
-  static const _kOcScheme = 'openconnect';
+  static const _kOcScheme = kOpenConnectScheme;
   static const _kOcDefaultFlavor = 'fortinet';
   late final FormLayout? _ocLayout = formLayoutFor(_kOcScheme);
   final _ocTag = TextEditingController();
-  final Map<String, TextEditingController> _ocText = {};
   Map<String, dynamic> _ocBody = {'flavor': _kOcDefaultFlavor};
-  bool _ocShowPassword = false;
   bool _ocTried = false;
-  bool _ocSecurityOpen = true;
-  bool _ocAdvancedOpen = false;
-  // Вариант группы выбора, выбранный в этой форме, по id группы. Нужен,
-  // пока путь выбранного варианта пуст (выбрали Pinned, отпечаток ещё не
-  // ввели): по телу активным был бы вариант без путей.
-  final Map<String, String> _ocPicked = {};
 
   bool _busy = false;
 
@@ -171,9 +158,6 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
     _tsHostname.dispose();
     _tsExitNode.dispose();
     _ocTag.dispose();
-    for (final c in _ocText.values) {
-      c.dispose();
-    }
     super.dispose();
   }
 
@@ -253,7 +237,7 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
     final blocking = [
       ...st.missing,
       for (final v in st.outOfRange) v.path,
-    ].where((p) => _ocShown(layout, st, p));
+    ].where((p) => openConnectFieldShown(layout, st, p));
     if (blocking.isNotEmpty) {
       setState(() => _ocTried = true);
       showSnack(getLocalText.s("Fill in the required fields"));
@@ -603,433 +587,41 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
     setState(() {});
   }
 
-  /// §654 B — подпись поля формы OpenConnect; `null` — поле экраном не
-  /// рисуется (в форме реестра есть, в форму экрана не входит).
-  String? _ocLabel(String path) => switch (path) {
-    'server' => getLocalText.s("Server"),
-    'flavor' => getLocalText.s("Gateway"),
-    'username' => getLocalText.s("Username"),
-    'password' => getLocalText.s("Password"),
-    'auth_group' => getLocalText.s("Group / Realm"),
-    'external_auth_disabled' => getLocalText.s("Disable SSO (external auth)"),
-    // l10n-exempt: technical term
-    'tls.server_name' => 'SNI',
-    // l10n-exempt: HTTP header name
-    'user_agent' => 'User-Agent',
-    'fortinet_host_check.hostcheck' => getLocalText.s("Hostcheck"),
-    'no_udp' => getLocalText.s("TCP only (no DTLS)"),
-    'ipv6_disabled' => getLocalText.s("Disable IPv6"),
-    // l10n-exempt: technical term
-    'mtu' => 'MTU',
-    'dpd_interval' => getLocalText.s("DPD interval"),
-    'reconnect_timeout' => getLocalText.s("Reconnect timeout"),
-    'allow_insecure_crypto' => getLocalText.s("Allow legacy crypto"),
-    _ => null,
-  };
-
-  /// §654 B — подсказка под полем (макет SPEC 167 §2.3 лаунчера). Диапазон
-  /// MTU — из `min`/`max` формы реестра.
-  String? _ocHint(FormFieldSpec f) => switch (f.path) {
-    'server' => getLocalText.s("host:port or full URL; port 443 if omitted"),
-    'password' => getLocalText.s(
-      "If the gateway asks for a code, you will be prompted on connect",
-    ),
-    'tls.server_name' => getLocalText.s(
-      "Only if it differs from the server host",
-    ),
-    'user_agent' => getLocalText.s(
-      "Empty = core default (FortiGate: Mozilla/5.0 SV1)",
-    ),
-    'fortinet_host_check.hostcheck' => getLocalText.s("FortiGate only"),
-    'no_udp' => getLocalText.s(
-      "Use when UDP is blocked and the tunnel keeps dropping",
-    ),
-    'mtu' => getLocalText.s(
-      "Empty = from gateway; lower it if HTTPS stalls (%1\$s…%2\$s)",
-      '${f.min ?? ''}',
-      '${f.max ?? ''}',
-    ),
-    'dpd_interval' => getLocalText.s(
-      "Keep-alive probe period, e.g. 30s. Empty = from gateway",
-    ),
-    'reconnect_timeout' => getLocalText.s(
-      "How long to retry a dropped tunnel, e.g. 5m. Empty = core default (5m)",
-    ),
-    'allow_insecure_crypto' => getLocalText.s(
-      "Only for old gateways (TLS 1.0)",
-    ),
-    _ => null,
-  };
-
-  /// §654 B — подпись значения enum-поля; незнакомое значение — само
-  /// значение (wire-имя вендора).
-  String _ocValueLabel(String path, String value) => switch ((path, value)) {
-    // l10n-exempt: vendor name
-    ('flavor', 'fortinet') => 'FortiGate (fortinet)',
-    // l10n-exempt: vendor name
-    ('flavor', 'anyconnect') => 'Cisco AnyConnect (anyconnect)',
-    // l10n-exempt: vendor name
-    ('flavor', 'gp') => 'GlobalProtect (gp)',
-    // l10n-exempt: vendor name
-    ('flavor', 'f5') => 'F5 (f5)',
-    // l10n-exempt: vendor name
-    ('flavor', 'pulse') => 'Pulse (pulse)',
-    // l10n-exempt: vendor name
-    ('flavor', 'nc') => 'Juniper (nc)',
-    _ => value,
-  };
-
-  String? _ocBlockTitle(String block) => switch (block) {
-    'security' => getLocalText.s("Security"),
-    'advanced' => getLocalText.s("Advanced"),
-    _ => null,
-  };
-
-  String? _ocChoiceLabel(String choice) => switch (choice) {
-    'server_cert_check' => getLocalText.s("Server certificate"),
-    _ => null,
-  };
-
-  String? _ocOptionLabel(String choice, String option) =>
-      switch ((choice, option)) {
-        ('server_cert_check', 'system') => getLocalText.s("System CA"),
-        ('server_cert_check', 'pinned') => getLocalText.s("Pinned fingerprint"),
-        ('server_cert_check', 'insecure') => getLocalText.s("Do not verify"),
-        _ => null,
-      };
-
-  /// Свёрнут ли блок: первый блок раскладки всегда раскрыт и без заголовка,
-  /// Security раскрыт, прочие свёрнуты (макет SPEC 167 §2.3).
-  bool _ocBlockOpen(String block) =>
-      block == 'security' ? _ocSecurityOpen : _ocAdvancedOpen;
-
-  void _ocSetBlockOpen(String block, bool open) {
-    if (block == 'security') {
-      _ocSecurityOpen = open;
-    } else {
-      _ocAdvancedOpen = open;
-    }
-  }
-
-  TextEditingController _ocCtrl(String path) => _ocText.putIfAbsent(path, () {
-    final v = formValueAt(_ocBody, path);
-    return TextEditingController(
-      text: v is List ? v.join(', ') : (v == null ? '' : '$v'),
-    );
-  });
-
-  /// Поле рисуется экраном: видимо по модели и у него есть подпись (для
-  /// путей групп выбора — у группы).
-  bool _ocShown(FormLayout layout, rf.FormState st, String path) {
-    if (!st.isVisible(path)) return false;
-    if (_ocLabel(path) != null) return true;
-    for (final c in layout.choices) {
-      if (c.paths.contains(path) && _ocChoiceLabel(c.id) != null) return true;
-    }
-    return false;
-  }
-
-  void _ocSet(String path, Object? value) =>
-      setState(() => _ocBody = withFormValue(_ocBody, path, value));
-
-  String? _ocError(FormFieldSpec f, rf.FormState st) {
-    final range = st.outOfRangeAt(f.path);
-    if (range != null) {
-      return getLocalText.s(
-        "Allowed range: %1\$s…%2\$s",
-        '${range.min ?? ''}',
-        '${range.max ?? ''}',
-      );
-    }
-    if (_ocTried && st.isMissing(f.path)) return getLocalText.s("Required");
-    return null;
-  }
-
-  List<Widget> _ocAdvisories(List<String> codes) {
-    if (codes.isEmpty) return const [];
-    final lang = registryLangForTag(LocaleController.I.effectiveTag);
-    final small = Theme.of(context).textTheme.bodySmall;
-    return [
-      for (final code in codes)
-        Padding(
-          padding: const EdgeInsets.only(top: 4),
-          child: Builder(
-            builder: (context) {
-              final (color, icon) = warningSeverityStyle(
-                context,
-                registrySeverity(code),
-              );
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(icon, size: 16, color: color),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      registryTitle(code, lang),
-                      style: small?.copyWith(color: color),
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-        ),
-    ];
-  }
-
-  /// §654 B — форма OpenConnect: блоки и поля по модели формы реестра,
-  /// подписи экрана, Tag как у соседних форм.
+  /// §654 B — форма OpenConnect: Tag как у соседних форм, дальше общий
+  /// виджет формы [OpenConnectForm] (он же — на вкладке Source правки узла).
   Widget _buildOpenConnectForm(BuildContext context) {
-    final layout = _ocLayout;
-    if (layout == null) return const SizedBox.shrink();
-    final st = layout.stateOf(_ocBody);
+    if (_ocLayout == null) return const SizedBox.shrink();
     final hintStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
       color: Theme.of(context).colorScheme.onSurfaceVariant,
     );
-    final children = <Widget>[
-      _label(getLocalText.s("Tag (optional)")),
-      TextFormField(
-        controller: _ocTag,
-        decoration: _input(
-          _kDefaultOcTag,
-        ).copyWith(suffixIcon: EmojiPickerButton(onPick: _insertOcTagEmoji)),
-      ),
-      const SizedBox(height: 6),
-      Text(
-        getLocalText.s(
-          "Shown as the server title in the Servers list. If empty, \"%s\" is used.",
-          _kDefaultOcTag,
-        ),
-        style: hintStyle,
-      ),
-    ];
-    for (var i = 0; i < layout.blocks.length; i++) {
-      final block = layout.blocks[i];
-      final items = <Widget>[
-        for (final c in layout.choicesIn(block))
-          ..._ocChoiceWidgets(layout, c, hintStyle),
-        for (final f in layout.fieldsIn(block))
-          if (!f.isObject && _ocShown(layout, st, f.path))
-            ..._ocFieldWidgets(f, st, hintStyle),
-      ];
-      if (items.isEmpty) continue;
-      if (i == 0) {
-        children.addAll(items);
-        continue;
-      }
-      final title = _ocBlockTitle(block);
-      if (title == null) continue;
-      children.add(const SizedBox(height: 8));
-      children.add(
-        Theme(
-          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-          child: ExpansionTile(
-            initiallyExpanded: _ocBlockOpen(block),
-            onExpansionChanged: (v) => _ocSetBlockOpen(block, v),
-            tilePadding: EdgeInsets.zero,
-            childrenPadding: const EdgeInsets.only(bottom: 8),
-            expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
-            title: Text(
-              title,
-              style: Theme.of(
-                context,
-              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
-            ),
-            children: items,
-          ),
-        ),
-      );
-    }
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32).withSafeBottom(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: children,
+        children: [
+          _label(getLocalText.s("Tag (optional)")),
+          TextFormField(
+            controller: _ocTag,
+            decoration: _input(
+              _kDefaultOcTag,
+            ).copyWith(suffixIcon: EmojiPickerButton(onPick: _insertOcTagEmoji)),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            getLocalText.s(
+              "Shown as the server title in the Servers list. If empty, \"%s\" is used.",
+              _kDefaultOcTag,
+            ),
+            style: hintStyle,
+          ),
+          OpenConnectForm(
+            body: _ocBody,
+            showErrors: _ocTried,
+            onChanged: (b) => setState(() => _ocBody = b),
+          ),
+        ],
       ),
     );
-  }
-
-  List<Widget> _ocFieldWidgets(
-    FormFieldSpec f,
-    rf.FormState st,
-    TextStyle? hintStyle,
-  ) {
-    final label = _ocLabel(f.path)!;
-    final hint = _ocHint(f);
-    final value = formValueAt(_ocBody, f.path);
-    final advisories = _ocAdvisories(formAdvisoryCodes(f, value, _ocBody));
-    if (f.type == 'bool') {
-      return [
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          title: Text(label),
-          subtitle: hint == null ? null : Text(hint),
-          value: value == true,
-          // Булево пишется только `true` (дефолт ядра — false).
-          onChanged: (v) => _ocSet(f.path, v ? true : null),
-        ),
-        ...advisories,
-      ];
-    }
-    final error = _ocError(f, st);
-    final Widget input;
-    if (f.type == 'enum' && (f.values?.isNotEmpty ?? false)) {
-      final values = [for (final v in f.values!) '$v'];
-      final current = value is String && values.contains(value) ? value : null;
-      input = DropdownButtonFormField<String>(
-        key: ValueKey('oc-${f.path}-$current'),
-        initialValue: current,
-        isExpanded: true,
-        decoration: _input('').copyWith(errorText: error),
-        items: [
-          for (final v in values)
-            DropdownMenuItem(value: v, child: Text(_ocValueLabel(f.path, v))),
-        ],
-        onChanged: (v) => _ocSet(f.path, v),
-      );
-    } else {
-      final isInt = f.type == 'int';
-      final obscure = f.secret && !_ocShowPassword;
-      input = TextFormField(
-        controller: _ocCtrl(f.path),
-        obscureText: obscure,
-        autocorrect: false,
-        enableSuggestions: !f.secret,
-        keyboardType: isInt
-            ? TextInputType.number
-            : (f.path == 'server' ? TextInputType.url : TextInputType.text),
-        inputFormatters: isInt
-            ? [FilteringTextInputFormatter.digitsOnly]
-            : null,
-        decoration: _input('').copyWith(
-          errorText: error,
-          suffixIcon: f.secret
-              ? IconButton(
-                  tooltip: _ocShowPassword
-                      ? getLocalText.s("Hide")
-                      : getLocalText.s("Show"),
-                  icon: Icon(
-                    _ocShowPassword ? Icons.visibility_off : Icons.visibility,
-                    size: 20,
-                  ),
-                  onPressed: () =>
-                      setState(() => _ocShowPassword = !_ocShowPassword),
-                )
-              : null,
-        ),
-        onChanged: (t) => _ocSet(f.path, formInputValue(f, t)),
-      );
-    }
-    return [
-      const SizedBox(height: 12),
-      _label(label),
-      input,
-      if (hint != null) ...[
-        const SizedBox(height: 6),
-        Text(hint, style: hintStyle),
-      ],
-      ...advisories,
-    ];
-  }
-
-  /// §654 B — группа выбора (`form.choices`): радио по вариантам, ввод для
-  /// путей выбранного варианта, которые он не ставит сам (`set`), и
-  /// предупреждения `advisory` полей варианта.
-  List<Widget> _ocChoiceWidgets(
-    FormLayout layout,
-    FormChoice c,
-    TextStyle? hintStyle,
-  ) {
-    final title = _ocChoiceLabel(c.id);
-    if (title == null) return const [];
-    final byBody = activeFormOption(c, _ocBody);
-    final picked = _ocPicked[c.id];
-    // Выбор формы держится, пока тело не говорит о другом варианте с путями.
-    final active = picked != null && (c.option(byBody)?.paths.isEmpty ?? true)
-        ? picked
-        : byBody;
-    final option = c.option(active);
-    final inputs = <Widget>[];
-    final codes = <String>[];
-    for (final p in option?.paths ?? const <String>[]) {
-      final f = layout.field(p);
-      if (f == null) continue;
-      codes.addAll(formAdvisoryCodes(f, formValueAt(_ocBody, p), _ocBody));
-      if (option!.set.containsKey(p)) continue;
-      final listable = f.type.startsWith('listable');
-      inputs.add(
-        Padding(
-          padding: const EdgeInsets.only(left: 16, bottom: 8),
-          child: TextFormField(
-            controller: _ocCtrl(p),
-            autocorrect: false,
-            enableSuggestions: false,
-            decoration: _input('sha256:…'),
-            onChanged: (t) =>
-                _ocSet(p, listable ? formListInput(t) : formInputValue(f, t)),
-          ),
-        ),
-      );
-      if (listable) {
-        inputs.add(
-          Padding(
-            padding: const EdgeInsets.only(left: 16, bottom: 8),
-            child: Text(
-              getLocalText.s("Several values: comma-separated"),
-              style: hintStyle,
-            ),
-          ),
-        );
-      }
-    }
-    return [
-      const SizedBox(height: 4),
-      _label(title),
-      RadioGroup<String>(
-        groupValue: active,
-        onChanged: (id) {
-          if (id == null) return;
-          setState(() {
-            _ocPicked[c.id] = id;
-            var body = applyFormOption(_ocBody, c, id);
-            // Введённое раньше в поле варианта возвращается в тело.
-            final chosen = c.option(id);
-            for (final p in chosen?.paths ?? const <String>[]) {
-              final f = layout.field(p);
-              final ctrl = _ocText[p];
-              if (f == null || ctrl == null || chosen!.set.containsKey(p)) {
-                continue;
-              }
-              body = withFormValue(
-                body,
-                p,
-                f.type.startsWith('listable')
-                    ? formListInput(ctrl.text)
-                    : formInputValue(f, ctrl.text),
-              );
-            }
-            _ocBody = body;
-          });
-        },
-        child: Column(
-          children: [
-            for (final o in c.options)
-              if (_ocOptionLabel(c.id, o.id) case final label?) ...[
-                RadioListTile<String>(
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  visualDensity: VisualDensity.compact,
-                  value: o.id,
-                  title: Text(label),
-                ),
-                if (o.id == active) ...inputs,
-              ],
-          ],
-        ),
-      ),
-      ..._ocAdvisories(codes),
-    ];
   }
 
   /// §090 G2b — вставка эмодзи из пикера в позицию курсора поля Tag (SOCKS).

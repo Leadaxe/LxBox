@@ -6186,6 +6186,9 @@
   "Route depends on your rules": {
     "value": "Маршрут задают ваши правила"
   },
+  "The form is off: Source is not a valid JSON object.": {
+    "value": "Форма отключена: в источнике не JSON-объект."
+  },
   "n/a": {
     "value": "н/д"
   }

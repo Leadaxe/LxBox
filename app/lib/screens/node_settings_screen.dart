@@ -23,6 +23,8 @@ import '../widgets/detour_target_picker.dart';
 import '../widgets/emoji_picker_button.dart';
 import '../widgets/lx_code_editor.dart';
 import '../widgets/node_diagnostics_tab.dart';
+import '../widgets/openconnect_form.dart';
+import '../services/contract/form_source_sync.dart';
 import '../widgets/tailscale_network_tab.dart';
 import '../services/tailscale_network.dart';
 import '../services/l10n/locale_controller.dart';
@@ -106,6 +108,10 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
   /// §392 — разобранный узел для вкладки Diagnostics (probe-ветка собирает
   /// из него временный конфиг).
   NodeSpec? _node;
+
+  /// §654 B2 — последнее тело формы OpenConnect, разобранное из Source: пока
+  /// текст не объект, форма показывает его неактивной.
+  Map<String, dynamic>? _ocLastBody;
 
   /// Разбор + хранимый вердикт (`core_rejected` и др.) для секции
   /// Notifications во вкладке Diagnostics.
@@ -846,6 +852,43 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     setState(() {});
   }
 
+  /// §654 B2 — форма OpenConnect над редактором Source (общий виджет с Add
+  /// server). Источник истины — текст `_sourceCtrl`, как у секции Masquerade:
+  /// правка поля переписывает текст (формат и порядок ключей прежние), правка
+  /// текста руками обновляет форму. Текст не объект — форма неактивна.
+  /// Сохранение — Save экрана.
+  Widget _buildOpenConnectSourceForm(ThemeData theme) => ListenableBuilder(
+        listenable: _sourceCtrl,
+        builder: (context, _) {
+          final body = formBodyFromSource(_sourceCtrl.text);
+          if (body != null) _ocLastBody = body;
+          final shown = body ?? _ocLastBody;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (body == null)
+                Text(
+                  getLocalText.s(
+                      "The form is off: Source is not a valid JSON object."),
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                ),
+              if (shown != null)
+                OpenConnectForm(
+                  key: const ValueKey('node-openconnect-form'),
+                  body: shown,
+                  enabled: body != null,
+                  showErrors: true,
+                  onChanged: (b) {
+                    final next = sourceWithFormBody(_sourceCtrl.text, b);
+                    if (next != _sourceCtrl.text) _sourceCtrl.text = next;
+                  },
+                ),
+            ],
+          );
+        },
+      );
+
   /// §455 — вкладка Source: `origin.raw` как есть, единственное место правки.
   Widget _buildSourceTab(ThemeData theme) {
     final kindNote = switch (_originKind) {
@@ -861,6 +904,11 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
       children: [
         _sectionHeader(getLocalText.s("Source"),
             getLocalText.s("The node's original text. Save writes it as is."), theme),
+        if (_node?.protocol == kOpenConnectScheme)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: _buildOpenConnectSourceForm(theme),
+          ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
           // §614/§624 — редактор с подсветкой: язык по виду источника на

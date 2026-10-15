@@ -5907,6 +5907,9 @@
   "Route depends on your rules": {
     "value": "路由由您的规则决定"
   },
+  "The form is off: Source is not a valid JSON object.": {
+    "value": "表单已停用：来源不是有效的 JSON 对象。"
+  },
   "n/a": {
     "value": "不适用"
   }
