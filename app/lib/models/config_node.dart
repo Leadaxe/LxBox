@@ -70,6 +70,8 @@ class ConfigNode {
   /// §103 — вычисляется один раз в [ParsedConfig.parse] (eager, не getter).
   final String? securityLabel;
 
+  /// Порядок слота: `vhttp` (masque) → `transport.type` → роль `variant`
+  /// реестра → `tcp` у v2ray-протоколов без транспорта → пусто.
   static String? _deriveTransport(String type, Map<String, dynamic> raw) {
     // §130/§393 — MASQUE ходит поверх QUIC(h3)/h2. Версия HTTP лежит в СВОЁМ
     // ключе `vhttp`, а не в `transport` (там у остальных типов объект
@@ -85,6 +87,11 @@ class ConfigNode {
       final t = tr['type'];
       if (t is String && t.isNotEmpty) return t == 'http' ? 'h2' : t;
     }
+    // Контракт 1.1.122 — после `transport` и `vhttp` слот занимает поле с
+    // ролью `variant` реестра («openconnect·fortinet»; без `flavor` —
+    // `default` поля, «openconnect·anyconnect»).
+    final variant = variantLabelByRegistry(type, raw);
+    if (variant != null) return variant;
     // §269 — anytls: TCP-over-TLS без transport-обёртки (как trojan).
     if (const {'vless', 'vmess', 'trojan', 'anytls'}.contains(type)) {
       return 'tcp';

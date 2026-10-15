@@ -88,9 +88,9 @@ void main() {
         bad.add('$type: body_source=${s.bodySource}, ожидался singbox');
       }
       // `keep`, а не `drop`: чужой ключ может быть расширением форка.
-      // Тип с `body.fields_unchecked` (контракт 1.1.99, openvpn-client)
-      // полей не описывает и unknown_key не несёт по решению владельца.
-      if (!ContractRegistry.I.isUncheckedType(type)) {
+      // Тип с wildcard `*` в корне тела (контракт 1.1.122: openvpn-client,
+      // openconnect) неописанные ключи пропускает и unknown_key не несёт.
+      if (ContractRegistry.I.schemaFor(type)?.hasWildcard != true) {
         if (s.unknownKeyAction != 'keep') {
           bad.add('$type: unknown_key.action=${s.unknownKeyAction}');
         }

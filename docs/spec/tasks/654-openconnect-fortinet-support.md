@@ -3,7 +3,7 @@
 | Поле | Значение |
 |------|----------|
 | Тип | F (новая возможность: протокол `openconnect`) |
-| Статус | In progress |
+| Статус | In progress (волна A выполнена 15.10.2026; B, C — в работе) |
 | Дата | 2026-10-15 |
 | Связанные | §653 (синк 1.1.121; 1.1.120 = `openconnect` известен как endpoint), §579/§581/§645 (подписка статуса Tailscale через libbox — образец канала), §586 (`fields_unchecked`), §577 (авторское тело), §478 (автоснятие узла) |
 | Контракт | 1.1.122, `TASKS_LXBOX.md` §119 лаунчера; синк на коммит лаунчера `0ca7b7c5` |
@@ -133,6 +133,47 @@ sing-box JSON доезжает до ядра, но:
 Расхождение с корпусом, которое не объясняется нормой, — сообщить
 лаунчеру (сессия «OpenConnect Fortinet configuration»), не править корпус
 у себя.
+
+**Волна A — выполнено (15.10.2026).** Контракт синкнут на `0ca7b7c5`
+(1.1.122). Что сделано и где:
+
+- Wildcard: `ContractRegistry` не кладёт `*` в разобранные карты полей
+  (`FieldSchema.fields`, `BodySchema.fields`), в `order` он остаётся слотом;
+  признак — `hasWildcard`. Все обходы по `fields` его не видят по
+  построению. Санитайзер (`sanitizeObject`): при `*` в `order` объекта
+  неописанные ключи копируются (глубокая копия, во входящем порядке) и
+  кладутся в снимок для связей. Эмиттера тела по `order` реестра в LxBox
+  нет (санитайзер сохраняет входящий порядок, корпус сравнивает тела по
+  отсортированным ключам), так что слот `*` в эмиссии не используется.
+- `fields_unchecked` снят; `isUncheckedType` заменён на
+  `ContractRegistry.knowsType` (есть схема у типа). Узел типа без своей
+  модели (`openvpn-client`, `openconnect`) — `UnknownTypeSpec` с ОЧИЩЕННЫМ
+  телом; коды и снятие записи — проход по дословной карте
+  (`annotateFromRawBody`, раньше `UnknownTypeSpec` он пропускал).
+- Адрес: `UnknownTypeSpec` адрес в тело не дописывает вовсе;
+  `ContractRegistry.describesRootField(type, name)` — для мест, которые
+  будут дописывать.
+- Роль `variant`: `variantLabelByRegistry` (`protocol_level.dart`),
+  `_deriveTransport` — `vhttp` → `transport` → `variant` → `tcp`.
+- Модель формы: `lib/services/contract/registry_form.dart` —
+  `formLayoutFor(scheme)` → `FormLayout` (`blocks`, `fieldsIn(block)`,
+  `choicesIn(block)`, `field(path)`, `choice(id)`, `stateOf(body)`),
+  `FormState` (`visible`, `required`, `missing`, `choices`, `outOfRange`,
+  `isVisible/isRequired/isMissing/outOfRangeAt`, `canSave`),
+  `activeFormOption`, `applyFormOption`, `withFormValue` (пустое снимает
+  ключ и опустевший объект), `formValueAt`, `formPathSet`,
+  `formAdvisoryCodes`, `formRequired`.
+- Четыре кода: тексты EN/RU — данные `warnings.json` (синк); своих строк
+  приложение для кодов реестра не держит, ZH падает в EN
+  (`registry_warning.dart`) — l10n-файлы не менялись.
+- Попутно по норме лаунчера: объект, который санитайзер опустошил (связь
+  сняла единственное поле), в тело не идёт (кейс
+  `openconnect_client_cert_without_key`); код снятия записи в `dropped[]`
+  берётся из `dropFrom` санитайзера, когда он не `error`
+  (`openconnect_flavor_invalid` — warning).
+- Тесты: `test/contract/form_corpus_test.dart` (раннер `corpus/form`),
+  `registry_form_test.dart`, `registry_wildcard_test.dart`, кейс variant в
+  `test/models/config_node_test.dart`.
 
 ### B. Форма «Add server → OpenConnect» и правка узла
 

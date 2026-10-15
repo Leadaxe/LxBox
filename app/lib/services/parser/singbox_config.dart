@@ -299,12 +299,14 @@ List<NodeSpec> _parseOne(
       // §454 — источник узла = оригинальный outbound (до подмены тега лейблом).
       final compact = _prettyJson(ob);
       final label = _entryLabel(tag: rawTag, index: i, tagUses: tagUses);
+      final clean = _sanitizedEntry(_withLabel(ob, label));
       final spec = parseSingboxEntry(
-            _sanitizedEntry(_withLabel(ob, label)),
+            clean,
             rawSource: compact,
             sanitizedFrom: BodySource.singbox,
           ) ??
-          _ownUnknownTypeNode(ob, label: label, rawSource: compact);
+          _ownUnknownTypeNode(ob,
+              label: label, rawSource: compact, clean: clean);
       if (spec == null) {
         // §561 — тип, которого ядро не ведёт: причина в `dropped[]` с тегом
         // записи (D-088), параметр `scheme` — значение поля `type`.
@@ -386,22 +388,32 @@ List<NodeSpec> _parseOne(
 /// действует, когда выполнены все условия: (1) `type` записи — строка, не
 /// пустая; (2) у типа нет своей модели ([isAppKnownSingboxType]): тип с
 /// моделью и негодной формой (нет `server`) по-прежнему отбрасывается;
-/// (3) разбор своего источника ([parsingOwnSource]) — ЛИБО тип известен
-/// реестру без описания полей ([ContractRegistry.isUncheckedType], §586:
-/// тогда и тело подписки, и без предупреждения).
+/// (3) разбор своего источника ([parsingOwnSource]) — ЛИБО у типа есть схема
+/// тела в реестре ([ContractRegistry.knowsType], §586; контракт 1.1.122:
+/// `openvpn-client`, `openconnect`) — тогда и тело подписки, и без
+/// предупреждения.
+///
+/// Контракт 1.1.122 — тело узла типа со схемой в реестре — ОЧИЩЕННОЕ
+/// санитайзером ([clean], та же точка правки, что у моделей): описанные поля
+/// судятся правилами, неописанные проходят через wildcard `*`. Вердикт о
+/// снятии записи и коды ставит проход по дословной карте
+/// (`annotateFromRawBody`). Тег — исходный, адрес в тело не дописывается
+/// (`server_port` у `openconnect` не описан и в ядро не уходит).
 /// Служебные типы и группы сюда не доходят — их отсеивает `_parseOne` раньше.
 NodeSpec? _ownUnknownTypeNode(
   Map<String, dynamic> ob, {
   required String label,
   required String rawSource,
+  Map<String, dynamic>? clean,
 }) {
   final type = ob['type'];
   if (type is! String || type.trim().isEmpty) return null;
   if (isAppKnownSingboxType(type)) return null;
-  // §586 — тип известен реестру без описания полей (`openvpn-client`):
+  // §586 — у типа есть схема в реестре (`openvpn-client`, `openconnect`):
   // принимается из любого источника, без предупреждения.
-  final known = ContractRegistry.I.isUncheckedType(type);
+  final known = ContractRegistry.I.knowsType(type);
   if (!known && !parsingOwnSource) return null;
+  final body = known && clean != null ? _withOriginalTag(clean, ob) : ob;
   final tag = label.isNotEmpty ? label : type;
   final server = ob['server'];
   final port = ob['server_port'];
@@ -410,7 +422,7 @@ NodeSpec? _ownUnknownTypeNode(
     tag: tag,
     label: tag,
     type: type,
-    body: ob,
+    body: body,
     server: server is String ? server : '',
     port: port is num ? port.toInt() : 0,
     rawSource: rawSource,
@@ -720,6 +732,19 @@ Map<String, dynamic> _sanitizedEntry(Map<String, dynamic> entry) {
     authored: parsingAuthoredBody,
   );
   return res.body ?? entry;
+}
+
+/// Очищенное тело с ИСХОДНЫМ тегом записи: [_withLabel] подменил его
+/// лейблом ради разбора, а тело узла хранит то, что прислал провайдер.
+Map<String, dynamic> _withOriginalTag(
+    Map<String, dynamic> clean, Map<String, dynamic> ob) {
+  final out = Map<String, dynamic>.of(clean);
+  if (ob.containsKey('tag')) {
+    out['tag'] = ob['tag'];
+  } else {
+    out.remove('tag');
+  }
+  return out;
 }
 
 /// §302 — стабильный отступ для показа фрагмента конфига пользователю.
