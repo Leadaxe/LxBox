@@ -1860,6 +1860,9 @@
   "Detour copied": {
     "value": "Detour скопирован"
   },
+  "DNS": {
+    "value": "DNS"
+  },
   "DNS exchange failed: %s": {
     "value": "Сбой DNS-запроса: %s"
   },
@@ -1871,9 +1874,6 @@
   },
   "DNS Servers": {
     "value": "DNS-серверы"
-  },
-  "DNS Settings": {
-    "value": "Настройки DNS"
   },
   "DNS cache cleared": {
     "value": "Кэш DNS очищен"
@@ -1916,9 +1916,6 @@
   },
   "DNS server — via \"%1$s\"": {
     "value": "DNS-сервер — через \"%1$s\""
-  },
-  "DNS servers and rules": {
-    "value": "DNS-серверы и правила"
   },
   "DNS-over-HTTP/3 · port 443": {
     "value": "DNS-over-HTTP/3 · порт 443"
@@ -2094,8 +2091,8 @@
   "Directions": {
     "value": "Направления"
   },
-  "Directions and routing rules": {
-    "value": "Направления и правила маршрутизации"
+  "Directions, rules and DNS": {
+    "value": "Направления, правила и DNS"
   },
   "Directions: %d": {
     "value": "Направлений: %d"

@@ -66,8 +66,8 @@ v1 реализует единственное действие — `route:<scre
 | Маршрут | Экран | Вкладки (`<tab>`) |
 |---|---|---|
 | `route:servers` | SubscriptionsScreen | — |
-| `route:routing` | RoutingScreen | `presets` (через `initialPresetsTab`) |
-| `route:dns` | DnsSettingsScreen | — |
+| `route:routing` | RoutingScreen | `presets`, `dns` (через `initialTab`, §655) |
+| `route:dns` | RoutingScreen, вкладка DNS (§655; `route:routing/dns` — то же) | — |
 | `route:vpn-settings` | SettingsScreen | — |
 | `route:app-settings` | AppSettingsScreen | `general`/`subscriptions`/`diagnostics`/`automation` → `initialTab` 0–3 |
 | `route:speedtest` | SpeedTestScreen | — |

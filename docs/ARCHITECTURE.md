@@ -731,7 +731,8 @@ home/widgets/                   # node_list · home_controls · home_drawer (the
                              #   · add_server_cta
 routing_screen.dart          # the routing config (598 lines) plus LazyPersistMixin and _RoutingSrsCacheMixin (a part)
 routing_screen/                 # widgets/ (custom_rule/preset_catalog/route_final/routing_group/srs_status) + menus
-dns_settings_screen.dart     # the DNS settings (592 lines) plus the editor sheets, dns_server_resolver and widgets/
+dns_settings_tab.dart        # the DNS tab of Routing (§655; was the DNS Settings screen) plus DnsTabWrites;
+                             #   dns_settings_screen/ holds the editors, dns_server_resolver and widgets/
 custom_rule_edit_screen.dart # CustomRule editor (456) + custom_rule_edit/ (edit_controller, tabs/, sections/, widgets/)
 subscription_detail_screen.dart # a subscription's details (431 lines, a TabController) plus widgets/ (settings/source/meta)
 subscriptions_screen.dart    # the subscription list (445 lines) plus widgets/ and the helpers (clipboard/paste/share/context)
@@ -2003,8 +2004,8 @@ HomeScreen
   │   │              ├─ onTap UserServer → NodeSettingsScreen (editable Tag, Mark as detour)
   │   │              └─ onTap SubscriptionServers → SubscriptionDetailScreen
   │   │                     (Nodes / Settings / Source tabs)
-  │   ├─ Routing → RoutingScreen
-  │   ├─ DNS Settings → DnsSettingsScreen
+  │   ├─ Routing → RoutingScreen — Directions · Presets · Rules · DNS · Tunnel apps
+  │   │       (§655: DNS is the DnsSettingsTab; no menu item of its own)
   │   ├─ VPN Settings → SettingsScreen — 2 tabs (§052):
   │   │       • System — Tunnel sleep mode (`BackgroundMode`)
   │   │                 (§188 — “Allow VPN bypass” and “Keep VPN on exit” moved to the Mode tab)

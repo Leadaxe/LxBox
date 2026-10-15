@@ -20,7 +20,6 @@ import '../../controllers/home_controller.dart';
 import '../../controllers/subscription_controller.dart';
 import '../../models/custom_rule.dart';
 import '../../services/settings_storage.dart';
-import '../dns_settings_screen.dart';
 import '../routing_screen.dart';
 import '../../services/l10n/locale_controller.dart';
 import '../../widgets/app_bottom_sheet.dart';
@@ -80,8 +79,12 @@ class _DnsHealthSheetState extends State<_DnsHealthSheet> {
     if (sub == null || home == null) return;
     Navigator.pop(context);
     Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) =>
-          DnsSettingsScreen(subController: sub, homeController: home),
+      // §655 — DNS — вкладка экрана Routing.
+      builder: (_) => RoutingScreen(
+        subController: sub,
+        homeController: home,
+        initialTab: RoutingTab.dns,
+      ),
     ));
   }
 
@@ -94,7 +97,7 @@ class _DnsHealthSheetState extends State<_DnsHealthSheet> {
       builder: (_) => RoutingScreen(
         subController: sub,
         homeController: home,
-        initialPresetsTab: true,
+        initialTab: RoutingTab.presets,
       ),
     ));
   }

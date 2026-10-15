@@ -3,7 +3,7 @@
 | Поле | Значение |
 |------|----------|
 | Тип | U (интерфейс: перенос экрана) |
-| Статус | S (spec): решение владельца 15.10.2026, код не начат |
+| Статус | I (implemented): код в коммите задачи, эмулятор не проверен |
 | Фича | [004-ROUTING](../features/004-ROUTING/), [005-DNS](../features/005-DNS/), [020-APP_SHELL](../features/020-APP_SHELL/) |
 | Дата | 2026-10-15 |
 | Связанные | §107 (staging LazyPersistMixin), §117 (DNS-опция правила, локи «used by»), §257 (`dns_enable` пресета), §262 (вход на Presets из DNS-health), §312 (живое состояние DNS-групп), §357 (support-ссылки `route:*`), §396 (меню ⋮ на вкладке Rules), §626 (несохранённые правки) |
@@ -147,6 +147,25 @@ DNS не держится живой (`TabBarView` без keep-alive уничт�
   по редполитике.
 - §357 — строка таблицы `route:dns` (новое назначение).
 - Старые release notes и закрытые задачи не правим.
+
+## Реализация
+
+- `screens/dns_settings_tab.dart`: `DnsSettingsTab` (бывший
+  `DnsSettingsScreen`, блоки и строки те же) и `DnsTabWrites` — реестр
+  записей вкладки: staging `LazyPersistMixin` и прямые записи
+  `custom_rules`/каскада `on_change`.
+- `RoutingScreen`: `enum RoutingTab` и параметр `initialTab`; свой
+  `TabController` вместо `DefaultTabController`.
+- И1: вкладка без keep-alive, каждый вход монтирует её заново (`_load` +
+  `_pullDnsGroups`).
+- И2/И4: на смену `TabController.index` с DNS и на каждую завершённую запись
+  вкладки при индексе не на DNS Routing ждёт `DnsTabWrites.settle()` и
+  перечитывает `custom_rules`, `route_final`, vars (`_refreshSrsCache`) без
+  `markDirty`; повторные запросы сливаются в один проход.
+- И3: flush на диск — как был: dispose вкладки DNS (уход с неё), dispose
+  Routing, `paused`.
+- Тесты: `test/screens/dns_cache_settings_test.dart` на `DnsSettingsTab`,
+  `test/screens/routing_dns_tab_sync_test.dart` — И2.
 
 ## Открытое
 

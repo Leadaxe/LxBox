@@ -26,9 +26,14 @@ Side menu (top to bottom, groups separated by a divider):
 
 | Group | Items |
 |-------|-------|
-| Setup | Servers · Routing · DNS Settings · VPN Settings · App Settings |
+| Setup | Servers · Routing · VPN Settings · App Settings |
 | Tools | Speed Test · Statistics · Config Editor · Debug |
 | About the app | About |
+
+DNS has no menu item of its own: it is the DNS tab of the Routing screen
+(subtitle "Directions, rules and DNS"). Every way into DNS — the support links
+`route:dns` and `route:routing/dns`, the DNS-health sheet on Live — opens
+Routing on that tab.
 
 The home screen title is "L×Box" (not translated) and the settings set menu
 (018). About: version and install channel, user guide, source code, core
@@ -82,3 +87,4 @@ window closed.
 | 5 | [426](../../../tasks/426-install-sources-always-in-about.md) | Done | All install channels always visible in About |
 | 6 | [429](../../../tasks/429-bottom-inset-system-navigation.md) | Done | Inset for the system navigation on all screens and sheets |
 | 7 | [583](../../../tasks/583-home-back-press-twice-to-exit.md) | Implemented | Exit from home by a double "back" |
+| 8 | [655](../../../tasks/655-dns-tab-in-routing.md) | Implemented | DNS Settings menu item removed: DNS is a tab of Routing |

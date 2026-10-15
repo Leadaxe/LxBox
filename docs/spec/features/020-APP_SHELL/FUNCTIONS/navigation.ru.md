@@ -27,9 +27,14 @@
 
 | Группа | Пункты |
 |--------|--------|
-| Настройка | Servers · Routing · DNS Settings · VPN Settings · App Settings |
+| Настройка | Servers · Routing · VPN Settings · App Settings |
 | Инструменты | Speed Test · Statistics · Config Editor · Debug |
 | О приложении | About |
+
+Своего пункта у DNS нет: это вкладка DNS экрана Routing (подпись «Directions,
+rules and DNS»). Все входы в DNS — support-ссылки `route:dns` и
+`route:routing/dns`, лист DNS-health на Live — открывают Routing на этой
+вкладке.
 
 Заголовок главного экрана — «L×Box» (не переводится) и меню наборов
 настроек (018). About: версия и канал установки, руководство пользователя,
@@ -81,3 +86,4 @@ get L×Box» (все каналы установки всегда видны), �
 | 5 | [426](../../../tasks/426-install-sources-always-in-about.md) | Done | Все каналы установки видны в About всегда |
 | 6 | [429](../../../tasks/429-bottom-inset-system-navigation.md) | Done | Отступ под системную навигацию на всех экранах и листах |
 | 7 | [583](../../../tasks/583-home-back-press-twice-to-exit.md) | Implemented | Выход с главного по двойному «назад» |
+| 8 | [655](../../../tasks/655-dns-tab-in-routing.md) | Implemented | Пункт DNS Settings убран из меню: DNS — вкладка Routing |

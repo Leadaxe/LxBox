@@ -15,7 +15,7 @@ String? templateDnsServerTag(Map<String, dynamic> entry) {
 }
 
 /// §117: tag → wrapper map для `dns_options.servers` шаблона. Используется
-/// и build'ом (applyCustomDns), и UI (DnsSettingsScreen) — единая точка.
+/// и build'ом (applyCustomDns), и UI (вкладка DNS экрана Routing, DnsSettingsTab) — единая точка.
 Map<String, Map<String, dynamic>> templateDnsServersByTag(
   List<Map<String, dynamic>> templateServers,
 ) {
@@ -85,7 +85,7 @@ Map<String, dynamic>? resolveTemplateDnsServerBody(
 
 /// §043: Auto-discovery + orphan cleanup для `dns_options.servers`.
 ///
-/// Используется и UI (DnsSettingsScreen) и build-time pipeline'ом — единая
+/// Используется и UI (DnsSettingsTab — вкладка DNS экрана Routing) и build-time pipeline'ом — единая
 /// точка истины. Persist'ит в storage если результат отличается от
 /// сохранённого.
 ///

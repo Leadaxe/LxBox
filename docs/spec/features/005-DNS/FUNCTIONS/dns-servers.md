@@ -16,7 +16,8 @@ channel, adds custom servers by form or JSON and overrides template ones.
 Shows every DNS server that may get into the config in one list and lets the
 user manage them: enable and disable, choose the channel (`detour`) and the
 address from the template's options, add custom servers via a form or JSON,
-override template servers, rename without breaking references.
+override template servers, rename without breaking references. The list is
+the top block of the DNS tab of the Routing screen (Routing → DNS).
 
 ## Parameters
 
@@ -112,3 +113,4 @@ active Directions, Tailscale nodes, references from routing rules.
 | 17 | [530](../../../tasks/530-dns-server-raw-json-tls-preserved.md) | Done (604) | SNI from the form must not wipe the rest of `tls` |
 | 18 | [555](../../../tasks/555-template-lang-spec143-parity.md) | Done | Template server bodies see template variables; without an address — dropped |
 | 19 | [578](../../../tasks/578-tailscale-preset-template-for-each.md) | Spec | Preset servers per node (`for_each`) without the preset namespace |
+| 20 | [655](../../../tasks/655-dns-tab-in-routing.md) | Implemented | The DNS Settings screen became the DNS tab of Routing |

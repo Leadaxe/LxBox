@@ -498,7 +498,7 @@ vars stay in `template.vars`, so the builder and the ref resolution still see th
 |---|---|---|
 | `core` | VPN Settings (App Settings → Configuration) | General, Network, TUN, VPN Mode, DPI Bypass |
 | `routing` | Routing screen | Auto Proxy |
-| `dns` | DNS Settings screen | DNS |
+| `dns` | DNS tab of the Routing screen | DNS |
 | `internal` | **nowhere** (§265) | Internal |
 
 ### `internal` — the service section (§265)
@@ -649,7 +649,7 @@ The current semantics of the IPv6 toggle (§249): both strategy vars default to
 `ipv4_only` (IPv6 on the tun is off by default — applications do not need AAAA); enabling
 IPv6 moves resolution to `prefer_ipv4` (v6 is available, but v4 first — on networks with
 half-working v6, `prefer_ipv6` produced dead direct connections, see §246); disabling it
-forces `ipv4_only`. Fine tuning lives in DNS Settings → Strategy (the toggle is a one-off
+forces `ipv4_only`. Fine tuning lives in Routing → DNS → Strategy (the toggle is a one-off
 effect, not a lock).
 
 The semantics:
@@ -667,9 +667,11 @@ The semantics:
   `evalIfScalar` (`if_engine.dart`) and NOT through `walk` directly: a bare map
   `{"#if":…}` sent through `walk` falls into map-spread mode and collapses the scalar to `{}`.
 - **Cross-screen targets** (for example `dns_strategy`, chapter `dns`, rendered on the
-  DNS Settings screen): there is NO live update on the other screen (the model is
-  per-screen); the value arrives through the cache the next time that screen opens. The
-  screens are never co-mounted, so the user never sees the divergence.
+  DNS tab of the Routing screen): there is NO live update on the other screen or tab (the
+  model is per-screen); the value arrives through the cache the next time it opens. The
+  DNS tab is mounted only while shown and rereads storage on every entry (§655), and
+  Routing rereads its rules and vars after leaving it, so the user never sees the
+  divergence.
 
 ### A preset's `on_change` — reacting to being enabled or disabled (§266)
 
@@ -720,8 +722,8 @@ The semantics:
 - **It is called from ALL five places** where `rule_enable` / `dns_enable` change:
   creating a preset (`routing_screen._copyPreset`), the routing switch toggle
   (`routing_screen` plus the editor's `edit_controller.onBoolVarToggle`), the dns_enable
-  toggle in the rule editor, and the one **in DNS Settings**
-  (`dns_settings_screen._togglePresetDnsEnable`). Miss any of them and the target is not
+  toggle in the rule editor, and the one **on the DNS tab of Routing**
+  (`dns_settings_tab._togglePresetDnsEnable`). Miss any of them and the target is not
   recomputed along that path.
 - **It is idempotent** — `setVar` overwrites, so calling it again with the same state
   yields the same value.
@@ -877,7 +879,7 @@ The names of preset vars are **not arbitrary**: several of them carry special se
 |---|---|---|---|
 | `dns_server` (`type: dns_servers`) | `preset_expand.dart` | **Selects** which of the preset's `dns_servers[]` is poured into `config.dns.servers`. The builder emits EXACTLY ONE server — the one whose `tag == varsValues['dns_server']` (or the `default_value`). | every server of the preset would be emitted |
 | `outbound` (`type: outbound`) | `preset_expand.dart` plus the Routing UI | The value for `@outbound` in `rule` and `dns_servers.detour`. The UI draws an outbound picker on the preset's row (see `hasOutboundAffordance`). A default of `"reject"` goes through the backstop normalisation. | the picker would vanish from the row |
-| `dns_enable` (`type: bool`) | `custom_rules.dart` (`presetDnsEnableVar`) plus the DNS Settings UI | §257: the **master toggle of the preset's DNS block** (dns_servers plus dns_rules plus the mirror group). The builder gates the DNS aspect on the var's value. | the DNS block could not be turned off separately |
+| `dns_enable` (`type: bool`) | `custom_rules.dart` (`presetDnsEnableVar`) plus the DNS tab of Routing | §257: the **master toggle of the preset's DNS block** (dns_servers plus dns_rules plus the mirror group). The builder gates the DNS aspect on the var's value. | the DNS block could not be turned off separately |
 | `rule_enable` (`type: bool`, a pseudo-var) | `preset_on_change.dart` | §266: the **pseudo-var** of an on_change formula. It is never stored — the resolver substitutes `cr.enabled` (the preset is on, via the switch). It carries the `on_change`. | the formula would never fire |
 
 **§265 — ref-vars (`{"ref": "<global>"}`).** An element of a preset's `vars[]` may be a **reference** to a global var (one from a section, including `internal`).
@@ -1348,7 +1350,7 @@ The magic pseudo-var (`rule_enable` / `dns_enable`) carries `on_change: {"set":{
 Mandatory: (1) a `default_value` plus `required:false` on the pseudo-var (otherwise the preset
 silently fails to emit — the `29fe61c` gotcha); (2) the target is an existing global (usually in
 `internal`); (3) call `applyPresetOnChange` from **every** point where the preset's state
-changes (the routing switch, the DNS toggle, the editor, DNS Settings — five places today). If
+changes (the routing switch, the DNS toggle, the editor, the DNS tab — five places today). If
 the formula depends on both the routing and the DNS state, hang an **identical** on_change
 on both pseudo-vars (`rule_enable` AND `dns_enable`), so it fires along either path.
 

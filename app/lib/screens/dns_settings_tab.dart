@@ -32,30 +32,76 @@ import 'dns_settings_screen/widgets/resolver_picker.dart';
 import 'lazy_persist_mixin.dart';
 import '../services/l10n/locale_controller.dart';
 
+/// §655 — записи вкладки DNS, которых ждёт экран Routing.
+///
+/// Вкладка DNS и остальные вкладки Routing держат свои буферы и стейджат их в
+/// `SettingsStorage._cache` (§107). Вкладка DNS пишет и чужой ей
+/// `custom_rules` (переименование сервера, DNS-аспект правила, `dns_enable`
+/// пресета), а каскад `on_change` (§266) — глобальные vars. Routing после
+/// ухода с вкладки DNS ждёт [settle] и перечитывает свои буферы, иначе его
+/// следующий staging затёр бы эти правки. Слушатели (`addListener`)
+/// узнают о завершении каждой записи.
+class DnsTabWrites extends ChangeNotifier {
+  final Set<Future<void>> _pending = {};
+
+  /// Запись в работе: [settle] её дождётся, по завершении — notify.
+  void track(Future<void> write) {
+    late final Future<void> done;
+    done = write.catchError((Object e, StackTrace st) {
+      FlutterError.reportError(FlutterErrorDetails(
+        exception: e,
+        stack: st,
+        library: 'dns settings tab',
+      ));
+    }).whenComplete(() {
+      _pending.remove(done);
+      notifyListeners();
+    });
+    _pending.add(done);
+  }
+
+  /// Дождаться всех записей, включая начатые во время ожидания.
+  Future<void> settle() async {
+    while (_pending.isNotEmpty) {
+      await Future.wait(_pending.toList());
+    }
+  }
+}
+
 /// DNS Settings (§014, §061 dns-rules-refactor, бывший feature §041).
+/// §655 — вкладка экрана Routing (после Rules), своего маршрута нет.
 ///
 /// §061 — DNS rules refactored to first-class named/toggleable model
 /// ([DnsRuleRef], §033 виды inline/srs/preset/template). Linear order (free
 /// reorder через drag-handle), individual enable/disable, user-rules editable.
-class DnsSettingsScreen extends StatefulWidget {
-  const DnsSettingsScreen({
+///
+/// §655 — вкладка не держится живой: каждый вход монтирует её заново и
+/// читает хранилище (`_load`), уход с вкладки — dispose с flush'ем
+/// [LazyPersistMixin].
+class DnsSettingsTab extends StatefulWidget {
+  const DnsSettingsTab({
     super.key,
     required this.subController,
     required this.homeController,
+    this.writes,
   });
 
   final SubscriptionController subController;
   final HomeController homeController;
 
+  /// §655 — куда сообщать о записях (staging и прямые записи
+  /// `custom_rules`/vars). null — вкладка вне Routing (тесты).
+  final DnsTabWrites? writes;
+
   @override
-  State<DnsSettingsScreen> createState() => _DnsSettingsScreenState();
+  State<DnsSettingsTab> createState() => _DnsSettingsTabState();
 }
 
-class _DnsSettingsScreenState extends State<DnsSettingsScreen>
+class _DnsSettingsTabState extends State<DnsSettingsTab>
     with
         WidgetsBindingObserver,
-        LazyPersistMixin<DnsSettingsScreen>,
-        TemplateAwareState<DnsSettingsScreen> {
+        LazyPersistMixin<DnsSettingsTab>,
+        TemplateAwareState<DnsSettingsTab> {
   @override
   SubscriptionController get lazyController => widget.subController;
 
@@ -182,6 +228,16 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
   // §085 R4 — alias: сохраняет существующие call-sites `_markDirty()`.
   void _markDirty() => markDirty();
 
+  /// §655 — запись, которую Routing дождётся перед перечитыванием буферов.
+  void _track(Future<void> write) {
+    final writes = widget.writes;
+    if (writes == null) {
+      unawaited(write);
+    } else {
+      writes.track(write);
+    }
+  }
+
   Future<void> _load() async {
     // §300 — вся read+derive-логика вынесена в DnsController.load() (тело
     // verbatim + типизация краёв §294). Экран только присваивает snapshot.
@@ -227,7 +283,13 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
   /// §107: staging — буфер экрана в `_cache` на каждую мутацию; дисковый
   /// flush — mixin'ом (flushToDisk) на dispose/paused.
   @override
-  Future<void> stageChanges() async {
+  Future<void> stageChanges() {
+    final staging = _stage();
+    widget.writes?.track(staging);
+    return staging;
+  }
+
+  Future<void> _stage() async {
     // §300 D3 — staged-запись через DnsController.stage (byte-identical).
     // custom_rules НЕ входит (это §295, device). §076: configDirty уже true.
     await DnsController.stage(
@@ -384,9 +446,10 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
           final renamed = renameRuleDnsServerTag(_customRules, tag, newTag);
           if (!identical(renamed, _customRules)) {
             _customRules = renamed;
-            // custom_rules — чужой этому экрану storage (routing), staged
-            // персистом LazyPersistMixin не покрывается — пишем сразу.
-            unawaited(SettingsStorage.saveCustomRules(renamed));
+            // custom_rules — чужой этой вкладке storage (routing), staged
+            // персистом LazyPersistMixin не покрывается — пишем сразу;
+            // Routing перечитает буфер после ухода с вкладки (§655).
+            _track(SettingsStorage.saveCustomRules(renamed));
           }
         }
       } else {
@@ -591,10 +654,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return Scaffold(
-        appBar: AppBar(title: Text(getLocalText.s("DNS Settings"))),
-        body: const Center(child: CircularProgressIndicator()),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
 
     final theme = Theme.of(context);
@@ -617,222 +677,219 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
     final mirrors = _ruleMirrors;
     final rows = _ruleDisplayRows;
 
-    return Scaffold(
-      appBar: AppBar(title: Text(getLocalText.s("DNS Settings"))),
-      body: ListView(
-        padding: EdgeInsets.fromLTRB(12, 12, 12, MediaQuery.of(context).padding.bottom + 24),
-        children: [
-          // --- Servers ---
-          Row(
-            children: [
-              Text(getLocalText.s("DNS Servers"),
-                  style: theme.textTheme.titleMedium),
-              const Spacer(),
-              IconButton(icon: const Icon(Icons.add), onPressed: _addServer),
-            ],
-          ),
-          const SizedBox(height: 4),
-          // §042: единый render через 3-tier merged list. §117 задача 4:
-          // тайл — только switch + тап→полноэкранный редактор.
-          ...displayed.map((entry) => MergedServerTile(
-                entry: entry,
-                onToggleEnabled: _toggleServerEnabled,
-                onTap: _editServer,
-                liveGroup: _liveDnsGroups[entry.tag], // §312
-              )),
-          const Divider(height: 32),
+    return ListView(
+      padding: EdgeInsets.fromLTRB(12, 12, 12, MediaQuery.of(context).padding.bottom + 24),
+      children: [
+        // --- Servers ---
+        Row(
+          children: [
+            Text(getLocalText.s("DNS Servers"),
+                style: theme.textTheme.titleMedium),
+            const Spacer(),
+            IconButton(icon: const Icon(Icons.add), onPressed: _addServer),
+          ],
+        ),
+        const SizedBox(height: 4),
+        // §042: единый render через 3-tier merged list. §117 задача 4:
+        // тайл — только switch + тап→полноэкранный редактор.
+        ...displayed.map((entry) => MergedServerTile(
+              entry: entry,
+              onToggleEnabled: _toggleServerEnabled,
+              onTap: _editServer,
+              liveGroup: _liveDnsGroups[entry.tag], // §312
+            )),
+        const Divider(height: 32),
 
-          // --- Strategy ---
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text(getLocalText.s("Strategy")),
-            trailing: DropdownButton<String>(
-              value: ['prefer_ipv4', 'prefer_ipv6', 'ipv4_only', 'ipv6_only'].contains(_strategy)
-                  ? _strategy : 'ipv4_only',
-              items: const [
-                DropdownMenuItem(value: 'prefer_ipv4', child: Text('prefer_ipv4')), // l10n-exempt: sing-box wire value
-                DropdownMenuItem(value: 'prefer_ipv6', child: Text('prefer_ipv6')), // l10n-exempt: sing-box wire value
-                DropdownMenuItem(value: 'ipv4_only', child: Text('ipv4_only')), // l10n-exempt: sing-box wire value
-                DropdownMenuItem(value: 'ipv6_only', child: Text('ipv6_only')), // l10n-exempt: sing-box wire value
-              ],
-              onChanged: (v) { if (v != null) setState(() { _strategy = v; _markDirty(); }); },
+        // --- Strategy ---
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          title: Text(getLocalText.s("Strategy")),
+          trailing: DropdownButton<String>(
+            value: ['prefer_ipv4', 'prefer_ipv6', 'ipv4_only', 'ipv6_only'].contains(_strategy)
+                ? _strategy : 'ipv4_only',
+            items: const [
+              DropdownMenuItem(value: 'prefer_ipv4', child: Text('prefer_ipv4')), // l10n-exempt: sing-box wire value
+              DropdownMenuItem(value: 'prefer_ipv6', child: Text('prefer_ipv6')), // l10n-exempt: sing-box wire value
+              DropdownMenuItem(value: 'ipv4_only', child: Text('ipv4_only')), // l10n-exempt: sing-box wire value
+              DropdownMenuItem(value: 'ipv6_only', child: Text('ipv6_only')), // l10n-exempt: sing-box wire value
+            ],
+            onChanged: (v) { if (v != null) setState(() { _strategy = v; _markDirty(); }); },
+          ),
+        ),
+
+        const Divider(height: 32),
+
+        // --- DNS Rules (§061 dns-rules-refactor) ---
+        Row(
+          children: [
+            Text(getLocalText.s("DNS Rules"), style: theme.textTheme.titleMedium),
+            const Spacer(),
+            TextButton.icon(
+              onPressed: _addUserRule,
+              icon: const Icon(Icons.add, size: 18),
+              label: Text(getLocalText.s("Add user rule")),
             ),
-          ),
-
-          const Divider(height: 32),
-
-          // --- DNS Rules (§061 dns-rules-refactor) ---
-          Row(
-            children: [
-              Text(getLocalText.s("DNS Rules"), style: theme.textTheme.titleMedium),
-              const Spacer(),
-              TextButton.icon(
-                onPressed: _addUserRule,
-                icon: const Icon(Icons.add, size: 18),
-                label: Text(getLocalText.s("Add user rule")),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          if (_rules.isEmpty && mirrors.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              child: Text(
-                getLocalText.s("No DNS rules. Add user rules manually, or enable presets / template defaults."),
-                style: const TextStyle(color: Colors.grey, fontSize: 13),
-              ),
-            )
-          else
-            // §117 (решение №6): display-модель — standalone-записи +
-            // атомарная mirror-группа одним элементом (см. _ruleDisplayRows).
-            ReorderableListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              buildDefaultDragHandles: false,
-              itemCount: rows.length,
-              onReorderItem: _onReorderRules,
-              itemBuilder: (ctx, i) {
-                final row = rows[i];
-                if (row == -1) {
-                  // Группа draggable только при наличии preset-якорей —
-                  // иначе позицию не во что персистить.
-                  final draggable = _rules.any((e) => e is DnsRulePreset);
-                  return DnsMirrorGroupCard(
-                    key: const ValueKey('dns-mirror-group'),
-                    dragIndex: draggable ? i : null,
-                    children: _buildMirrorGroupChildren(),
-                  );
-                }
-                return DnsRuleTile(
-                  index: row,
-                  dragIndex: i,
-                  entry: _rules[row],
-                  templateRulesByName: _templateRulesByName,
-                  presetRulesByPresetId: _presetRulesByPresetId,
-                  presetLabelByPresetId: _presetLabelByPresetId,
-                  onToggleEnabled: _toggleRuleEnabled,
-                  onEdit: _showUserRuleEditor,
-                  onDelete: _deleteRule,
-                  // §033: identity для reorder — name (inline/template/srs)
-                  // или presetId (preset). Нужно стабильное непустое значение.
-                  key: ValueKey(
-                    'dns-rule-$row-${_ruleIdentity(_rules[row])}',
-                  ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        if (_rules.isEmpty && mirrors.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Text(
+              getLocalText.s("No DNS rules. Add user rules manually, or enable presets / template defaults."),
+              style: const TextStyle(color: Colors.grey, fontSize: 13),
+            ),
+          )
+        else
+          // §117 (решение №6): display-модель — standalone-записи +
+          // атомарная mirror-группа одним элементом (см. _ruleDisplayRows).
+          ReorderableListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            buildDefaultDragHandles: false,
+            itemCount: rows.length,
+            onReorderItem: _onReorderRules,
+            itemBuilder: (ctx, i) {
+              final row = rows[i];
+              if (row == -1) {
+                // Группа draggable только при наличии preset-якорей —
+                // иначе позицию не во что персистить.
+                final draggable = _rules.any((e) => e is DnsRulePreset);
+                return DnsMirrorGroupCard(
+                  key: const ValueKey('dns-mirror-group'),
+                  dragIndex: draggable ? i : null,
+                  children: _buildMirrorGroupChildren(),
                 );
-              },
-            ),
-          const Divider(height: 32),
-
-          // --- Final ---
-          // §048/§047 tooltip — `dns.final` — catch-all для app's DNS queries
-          // (когда не match'ит ни один rule). `local_dns_resolver` тут БЕЗОПАСЕН:
-          // app's queries не recurse через TUN потому что system resolver
-          // вызывается через protected JNI path для apps. Encrypted options
-          // (`google_doh`, `*_dot`) рекомендуем для privacy.
-          ResolverPicker(
-            title: getLocalText.s("DNS Final"),
-            subtitle: getLocalText.s("For apps · default fallback when no DNS rule matches"),
-            value: _dnsFinal,
-            serverTags: resolverTags,
-            onChanged: (v) => setState(() { _dnsFinal = v; _markDirty(); }),
-            tooltip: getLocalText.s("Default fallback DNS server. Used when an app makes a DNS query and no DNS rule above matches it. Every app DNS query that isn't routed by a rule ends up here.\n\nRecommended:\n  • dns_shield — default; races 6 encrypted providers, answers from whichever replies first\n  • google_doh — encrypted (DoH)\n  • cloudflare_dot / google_dot — encrypted (DoT)\n  • cloudflare_udp / google_udp — fast plain UDP\n\nlocal_dns_resolver works but reveals queries to your ISP. Encrypted options keep them private."),
-            warnIfLocal: false,
+              }
+              return DnsRuleTile(
+                index: row,
+                dragIndex: i,
+                entry: _rules[row],
+                templateRulesByName: _templateRulesByName,
+                presetRulesByPresetId: _presetRulesByPresetId,
+                presetLabelByPresetId: _presetLabelByPresetId,
+                onToggleEnabled: _toggleRuleEnabled,
+                onEdit: _showUserRuleEditor,
+                onDelete: _deleteRule,
+                // §033: identity для reorder — name (inline/template/srs)
+                // или presetId (preset). Нужно стабильное непустое значение.
+                key: ValueKey(
+                  'dns-rule-$row-${_ruleIdentity(_rules[row])}',
+                ),
+              );
+            },
           ),
+        const Divider(height: 32),
 
-          // --- Default Resolver ---
-          // §047 tooltip — `route.default_domain_resolver` — internal sing-box
-          // DNS lookups (outbound endpoint hostname'ы, domain matching в routing
-          // rules). Здесь `local_dns_resolver` ОПАСЕН: на Android-VPN system
-          // resolver может recurse через TUN и накапливать stale kernel state
-          // → §047 deterioration через несколько часов uptime. Показываем
-          // жёлтый ⚠ если выбран local_dns_resolver.
-          ResolverPicker(
-            title: getLocalText.s("Default Domain Resolver"),
-            subtitle: getLocalText.s("For routing · resolves hostnames inside sing-box (outbound endpoints, routing rules)"),
-            value: _defaultResolver,
-            serverTags: resolverTags,
-            onChanged: (v) => setState(() { _defaultResolver = v; _markDirty(); }),
-            tooltip: getLocalText.s("Used by routing engine to resolve hostnames internally (outbound endpoints, routing rules). Not the resolver apps use.\n\nRecommended:\n  • dns_shield — default; races 6 encrypted providers, answers from whichever replies first\n  • cloudflare_udp — UDP to 1.1.1.1 (fast)\n  • google_udp — UDP to 8.8.8.8 (fast)\n  • google_doh — encrypted\n\n⚠ local_dns_resolver here leaks lookups to your ISP — system DNS bypasses the VPN."),
-            warnIfLocal: true,
-          ),
-          if (_defaultResolver == 'local_dns_resolver')
-            LocalResolverWarningBanner(
-              hasCloudflareUdp:
-                  _servers.any((s) => s.tag == 'cloudflare_udp'),
-              onSwitchToCloudflareUdp: () => setState(() {
-                _defaultResolver = 'cloudflare_udp';
-                _markDirty();
-              }),
-            ),
-          // §643 (TEMPLATE_LANG §6.9) — резолвер по умолчанию не отдаёт из
-          // оптимистичного кэша ответ с истёкшим TTL (имена серверов узлов).
-          SwitchListTile(
-            key: const ValueKey('dns_resolver_no_stale'),
-            contentPadding: EdgeInsets.zero,
-            title: Text(getLocalText
-                .s("Never serve stale answers for node hostnames")),
-            subtitle: Text(getLocalText.s(
-                "Node hostnames are resolved again once the cached answer expires. App DNS queries are not affected.")),
-            value: _resolverNoStale,
-            onChanged: (v) => setState(() {
-              _resolverNoStale = v;
+        // --- Final ---
+        // §048/§047 tooltip — `dns.final` — catch-all для app's DNS queries
+        // (когда не match'ит ни один rule). `local_dns_resolver` тут БЕЗОПАСЕН:
+        // app's queries не recurse через TUN потому что system resolver
+        // вызывается через protected JNI path для apps. Encrypted options
+        // (`google_doh`, `*_dot`) рекомендуем для privacy.
+        ResolverPicker(
+          title: getLocalText.s("DNS Final"),
+          subtitle: getLocalText.s("For apps · default fallback when no DNS rule matches"),
+          value: _dnsFinal,
+          serverTags: resolverTags,
+          onChanged: (v) => setState(() { _dnsFinal = v; _markDirty(); }),
+          tooltip: getLocalText.s("Default fallback DNS server. Used when an app makes a DNS query and no DNS rule above matches it. Every app DNS query that isn't routed by a rule ends up here.\n\nRecommended:\n  • dns_shield — default; races 6 encrypted providers, answers from whichever replies first\n  • google_doh — encrypted (DoH)\n  • cloudflare_dot / google_dot — encrypted (DoT)\n  • cloudflare_udp / google_udp — fast plain UDP\n\nlocal_dns_resolver works but reveals queries to your ISP. Encrypted options keep them private."),
+          warnIfLocal: false,
+        ),
+
+        // --- Default Resolver ---
+        // §047 tooltip — `route.default_domain_resolver` — internal sing-box
+        // DNS lookups (outbound endpoint hostname'ы, domain matching в routing
+        // rules). Здесь `local_dns_resolver` ОПАСЕН: на Android-VPN system
+        // resolver может recurse через TUN и накапливать stale kernel state
+        // → §047 deterioration через несколько часов uptime. Показываем
+        // жёлтый ⚠ если выбран local_dns_resolver.
+        ResolverPicker(
+          title: getLocalText.s("Default Domain Resolver"),
+          subtitle: getLocalText.s("For routing · resolves hostnames inside sing-box (outbound endpoints, routing rules)"),
+          value: _defaultResolver,
+          serverTags: resolverTags,
+          onChanged: (v) => setState(() { _defaultResolver = v; _markDirty(); }),
+          tooltip: getLocalText.s("Used by routing engine to resolve hostnames internally (outbound endpoints, routing rules). Not the resolver apps use.\n\nRecommended:\n  • dns_shield — default; races 6 encrypted providers, answers from whichever replies first\n  • cloudflare_udp — UDP to 1.1.1.1 (fast)\n  • google_udp — UDP to 8.8.8.8 (fast)\n  • google_doh — encrypted\n\n⚠ local_dns_resolver here leaks lookups to your ISP — system DNS bypasses the VPN."),
+          warnIfLocal: true,
+        ),
+        if (_defaultResolver == 'local_dns_resolver')
+          LocalResolverWarningBanner(
+            hasCloudflareUdp:
+                _servers.any((s) => s.tag == 'cloudflare_udp'),
+            onSwitchToCloudflareUdp: () => setState(() {
+              _defaultResolver = 'cloudflare_udp';
               _markDirty();
             }),
           ),
+        // §643 (TEMPLATE_LANG §6.9) — резолвер по умолчанию не отдаёт из
+        // оптимистичного кэша ответ с истёкшим TTL (имена серверов узлов).
+        SwitchListTile(
+          key: const ValueKey('dns_resolver_no_stale'),
+          contentPadding: EdgeInsets.zero,
+          title: Text(getLocalText
+              .s("Never serve stale answers for node hostnames")),
+          subtitle: Text(getLocalText.s(
+              "Node hostnames are resolved again once the cached answer expires. App DNS queries are not affected.")),
+          value: _resolverNoStale,
+          onChanged: (v) => setState(() {
+            _resolverNoStale = v;
+            _markDirty();
+          }),
+        ),
 
-          // §580 — кэш DNS ядра: размер, устаревшие ответы, хранение в
-          // cache.db. Изменение помечает конфиг к пересборке.
-          const Divider(height: 32),
-          TextField(
-            key: const ValueKey('dns_cache_capacity'),
-            controller: _cacheCapacityCtl,
-            keyboardType: TextInputType.number,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            decoration: InputDecoration(
-              labelText: getLocalText.s("DNS cache size"),
-              helperText: getLocalText.s("Number of cached answers."),
-              errorText:
-                  _cacheCapacityError.isEmpty ? null : _cacheCapacityError,
-              isDense: true,
-              border: const OutlineInputBorder(),
-            ),
-            onChanged: _applyCacheCapacity,
+        // §580 — кэш DNS ядра: размер, устаревшие ответы, хранение в
+        // cache.db. Изменение помечает конфиг к пересборке.
+        const Divider(height: 32),
+        TextField(
+          key: const ValueKey('dns_cache_capacity'),
+          controller: _cacheCapacityCtl,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          decoration: InputDecoration(
+            labelText: getLocalText.s("DNS cache size"),
+            helperText: getLocalText.s("Number of cached answers."),
+            errorText:
+                _cacheCapacityError.isEmpty ? null : _cacheCapacityError,
+            isDense: true,
+            border: const OutlineInputBorder(),
           ),
-          SwitchListTile(
-            key: const ValueKey('dns_optimistic'),
-            contentPadding: EdgeInsets.zero,
-            title: Text(getLocalText.s("Serve stale answers")),
-            subtitle: Text(getLocalText.s(
-                "Answer from cache at once and refresh in the background.")),
-            value: _optimistic,
-            onChanged: (v) => setState(() {
-              _optimistic = v;
-              _markDirty();
-            }),
-          ),
-          SwitchListTile(
-            key: const ValueKey('dns_store_cache'),
-            contentPadding: EdgeInsets.zero,
-            title: Text(getLocalText.s("Keep DNS cache after restart")),
-            value: _storeCache,
-            onChanged: (v) => setState(() {
-              _storeCache = v;
-              _markDirty();
-            }),
-          ),
+          onChanged: _applyCacheCapacity,
+        ),
+        SwitchListTile(
+          key: const ValueKey('dns_optimistic'),
+          contentPadding: EdgeInsets.zero,
+          title: Text(getLocalText.s("Serve stale answers")),
+          subtitle: Text(getLocalText.s(
+              "Answer from cache at once and refresh in the background.")),
+          value: _optimistic,
+          onChanged: (v) => setState(() {
+            _optimistic = v;
+            _markDirty();
+          }),
+        ),
+        SwitchListTile(
+          key: const ValueKey('dns_store_cache'),
+          contentPadding: EdgeInsets.zero,
+          title: Text(getLocalText.s("Keep DNS cache after restart")),
+          value: _storeCache,
+          onChanged: (v) => setState(() {
+            _storeCache = v;
+            _markDirty();
+          }),
+        ),
 
-          // §263 — сброс DNS-кэша ядра (cache.db). Внизу экрана, отдельным
-          // блоком: это разовое действие, не настройка конфига (не в rebuild).
-          // §580: удаляется файл целиком — с ним и записи DNS (`store_dns`).
-          ListTile(
-            leading: Icon(Icons.cleaning_services_outlined,
-                color: Theme.of(context).colorScheme.error),
-            title: Text(getLocalText.s("Clear DNS cache")),
-            subtitle: Text(getLocalText.s("Flush FakeIP allocations and cached DNS responses. Reloads the VPN if running.")),
-            onTap: _confirmClearDnsCache,
-          ),
-        ],
-      ),
+        // §263 — сброс DNS-кэша ядра (cache.db). Внизу экрана, отдельным
+        // блоком: это разовое действие, не настройка конфига (не в rebuild).
+        // §580: удаляется файл целиком — с ним и записи DNS (`store_dns`).
+        ListTile(
+          leading: Icon(Icons.cleaning_services_outlined,
+              color: Theme.of(context).colorScheme.error),
+          title: Text(getLocalText.s("Clear DNS cache")),
+          subtitle: Text(getLocalText.s("Flush FakeIP allocations and cached DNS responses. Reloads the VPN if running.")),
+          onTap: _confirmClearDnsCache,
+        ),
+      ],
     );
   }
 
@@ -911,7 +968,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
       _customRules = [..._customRules]..[idx] = updated;
       _markDirty();
     });
-    unawaited(SettingsStorage.saveCustomRules(_customRules));
+    _track(SettingsStorage.saveCustomRules(_customRules));
   }
 
   /// §257: свитч Force IPv4 в DNS-блоке правила — пишет `RuleDns.forceIpv4`
@@ -936,7 +993,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
       _customRules = [..._customRules]..[idx] = updated;
       _markDirty();
     });
-    unawaited(SettingsStorage.saveCustomRules(_customRules));
+    _track(SettingsStorage.saveCustomRules(_customRules));
   }
 
   /// §257: свитч DNS-блока пресета — пишет магическую var `dns_enable` в
@@ -956,10 +1013,10 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
       _presetDnsEnable = {..._presetDnsEnable, presetId: value};
       _markDirty();
     });
-    unawaited(SettingsStorage.saveCustomRules(_customRules));
+    _track(SettingsStorage.saveCustomRules(_customRules));
     // §266 — dns_enable-тумблер входит в формулу on_change (@rule_enable AND
     // @dns_enable) → каскад (FakeIP DNS off → resolve_enabled возвращается).
-    unawaited(() async {
+    _track(() async {
       final template = await TemplateLoader.load();
       final match = template.selectableRules
           .where((p) => p.presetId == presetId)

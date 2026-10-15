@@ -385,8 +385,8 @@ Map<String, dynamic>? cleanDanglingDnsRuleSet(
 /// §439 A1 — записи, которые модель не выражает (незнакомый вид, формы §032),
 /// сюда не приходят и сохранением не стираются: их держит репозиторий.
 ///
-/// Используется и `applyCustomDns` (build pipeline), и `DnsSettingsScreen`
-/// (UI load) — единая точка истины.
+/// Используется и `applyCustomDns` (build pipeline), и `DnsSettingsTab`
+/// (вкладка DNS экрана Routing, UI load) — единая точка истины.
 Future<List<DnsRuleRef>> resolveDnsRulesList({
   required List<Map<String, dynamic>> templateRules,
   required Set<String> activePresetIdsWithDnsRule,

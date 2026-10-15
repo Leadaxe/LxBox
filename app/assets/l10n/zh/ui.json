@@ -1641,6 +1641,9 @@
   "Detour copied": {
     "value": "已复制 detour"
   },
+  "DNS": {
+    "value": "DNS"
+  },
   "DNS exchange failed: %s": {
     "value": "DNS 查询失败：%s"
   },
@@ -1652,9 +1655,6 @@
   },
   "DNS Servers": {
     "value": "DNS 服务器"
-  },
-  "DNS Settings": {
-    "value": "DNS 设置"
   },
   "DNS cache cleared": {
     "value": "DNS 缓存已清除"
@@ -1697,9 +1697,6 @@
   },
   "DNS server — via \"%1$s\"": {
     "value": "DNS 服务器 —— 经「%1$s」"
-  },
-  "DNS servers and rules": {
-    "value": "DNS 服务器与规则"
   },
   "DNS-over-HTTP/3 · port 443": {
     "value": "DNS-over-HTTP/3 · 端口 443"
@@ -1875,8 +1872,8 @@
   "Directions": {
     "value": "方向"
   },
-  "Directions and routing rules": {
-    "value": "方向与路由规则"
+  "Directions, rules and DNS": {
+    "value": "方向、规则与 DNS"
   },
   "Directions: %d": {
     "value": "方向：%d"

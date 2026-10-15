@@ -215,7 +215,7 @@ forces the selected apps out of the VPN, whatever the app.
 
 Sections open from the side menu: swipe from the left edge or tap the ≡ icon
 on the home screen. Servers holds servers, subscriptions and folders; Routing
-holds directions, rules and Tunnel apps; DNS Settings holds DNS.
+holds directions, rules, DNS and Tunnel apps.
 
 1. A source of servers. Servers → add the source that fits the situation:
    - one config — a standalone server: link, QR or file;
@@ -229,7 +229,7 @@ holds directions, rules and Tunnel apps; DNS Settings holds DNS.
    L×Box; Allow-list — only the selected ones.
 4. **Rules** (Routing → Rules). Exceptions: ads → Block, local domains →
    Direct; ready-made sets are in Presets.
-5. **DNS** (DNS Settings). The default is the Shield DNS group, which survives
+5. **DNS** (Routing → DNS). The default is the Shield DNS group, which survives
    the failure of any single resolver. Change anything here only if you need
    strictly encrypted DNS or your own resolvers.
 6. Detour, optional. Set an exit through a chain of servers in the settings of
@@ -704,7 +704,7 @@ Catalog presets, in the order the tab shows them:
 | Google push (FCM) | Lets only Google push notifications out past the VPN: ports 5228–5230 and the FCM hosts. Notifications arrive with the screen off, and the Google Play region does not change. | No |
 
 > ⚠️ With DNS through the tunnel, Google push (FCM) needs a matching direct
-> DNS rule for the same hosts in DNS Settings. Without it the hosts resolve
+> DNS rule for the same hosts in Routing → DNS. Without it the hosts resolve
 > to a foreign region, and notifications do not arrive.
 
 #### A preset's parameters change in its copy on the Rules tab
@@ -715,7 +715,7 @@ preset banner with the preset's name and description. The Name field is
 read-only: the name comes from the preset. Next to it is the copy's on/off
 switch; on Traffic Processing the switch is inactive. A preset that adds a
 DNS server or a DNS rule carries a DNS chip and the line
-`This rule changes DNS settings`: its entries appear in DNS Settings.
+`This rule changes DNS settings`: its entries appear on the DNS tab.
 
 The **Outbound** parameter sets the exit for matching traffic: direct, block
 or a direction. Ru internet segment, Russia-only services, BitTorrent,
@@ -793,9 +793,9 @@ that goes into the config.
 
 ## 4. DNS decides which server resolves each name
 
-The **DNS Settings** screen sets how a site name becomes an IP. It has its own
-server list and its own rules, separate from the routing rules. Where: DNS
-Settings.
+The **DNS** tab of the Routing screen sets how a site name becomes an IP. It
+has its own server list and its own rules, separate from the routing rules.
+Where: Routing → DNS, after the Rules tab.
 
 The DNS server catalog includes Google, Cloudflare, OpenDNS, Quad9 and Yandex
 over UDP, DoT and DoH. Each server has an IP or profile and a direction it
@@ -853,7 +853,7 @@ server addresses and domains in routing rules. On a fresh install it is
 
 ### DNS Rules assign a DNS server to a domain
 
-The **DNS Rules** list on the DNS Settings screen sets which server resolves
+The **DNS Rules** list on the DNS tab sets which server resolves
 which domains. Like routing rules, DNS rules apply in order: you can drag
 them, and each has a switch. Rules in the list come from four sources:
 
@@ -997,7 +997,7 @@ twin `<direction>-auto`) is affected only if none of its members works.
 DNS servers come first in the list. Tapping a server opens its owner — the
 subscription, folder, standalone server, direction or chain — where you
 change the detour. DNS server rows do not respond to taps: a DNS server's
-exit changes in DNS Settings → server → Params → Outbound (detour).
+exit changes in Routing → DNS → server → Params → Outbound (detour).
 
 The tab sees only detour. A hop chain that contains this node does not
 appear in the list: a chain position is not a detour. For a working node,
@@ -1174,7 +1174,7 @@ IPv6 settings sit on several screens:
 |---|---|---|---|
 | **Enable IPv6** | VPN Settings → Core → TUN | Off | Gives the tunnel an IPv6 address. The main switch. |
 | **IPv6 address** | VPN Settings → Core → TUN | `fdfe:dcba:9876::1/126` | The tunnel's IPv6 address. Applies only when Enable IPv6 is on. |
-| **Strategy** | DNS Settings | `ipv4_only` | Which addresses to prefer in DNS resolution: `prefer_ipv4`, `prefer_ipv6`, `ipv4_only`, `ipv6_only`. |
+| **Strategy** | Routing → DNS | `ipv4_only` | Which addresses to prefer in DNS resolution: `prefer_ipv4`, `prefer_ipv6`, `ipv4_only`, `ipv6_only`. |
 | **Resolve strategy** | Routing → Rules → Traffic Processing → Params | `ipv4_only` | Which addresses to prefer when routing rules resolve domains. You cannot turn the preset off, but you can change the value in it. |
 | **Force IPv4** | Routing → Rules → preset → Params, in presets that resolve domains | On | Resolves the preset's domains to IPv4 only. |
 | **Force IPv4 (drop AAAA)** | Your own rule's editor → Params → DNS section | Off | Answers IPv6 queries for the rule's domains with an empty response, and traffic goes over IPv4. |
@@ -1183,12 +1183,12 @@ Enable IPv6 keeps the strategies in sync by itself. Turn it on, and Strategy
 and Resolve strategy switch to `prefer_ipv4`: IPv6 is in use, IPv4 takes
 priority. Turn it off, and both return to `ipv4_only`. VPN Settings has no
 Resolve strategy: you change it by hand in the Traffic Processing preset (which
-cannot be turned off), and Strategy in DNS Settings. `prefer_ipv6` suits a
+cannot be turned off), and Strategy in Routing → DNS. `prefer_ipv6` suits a
 network with full IPv6.
 
 A user rule has its own resolve strategy: Action & Resolve (the gear next to
 Action) → Resolve first → Strategy. By default the rule inherits Strategy
-from DNS Settings.
+from Routing → DNS.
 
 Order of enabling:
 
@@ -1209,7 +1209,8 @@ The **VPN Settings** screen holds the settings of the VPN itself: how much
 memory the core takes, when tunnels go to sleep, which parameters the virtual
 interface comes up with and in which mode L×Box receives traffic. Servers,
 directions and rules are not configured here: they live on the Servers and
-Routing screens, DNS in DNS Settings. Where: main menu ≡ → VPN Settings.
+Routing screens, DNS on the DNS tab of Routing. Where: main menu ≡ → VPN
+Settings.
 
 The screen has three tabs:
 

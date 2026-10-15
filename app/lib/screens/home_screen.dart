@@ -20,7 +20,6 @@ import 'about_screen.dart';
 import 'app_settings_screen.dart';
 import 'config_screen.dart';
 import 'debug_screen.dart';
-import 'dns_settings_screen.dart';
 import 'home/support_message_screen.dart';
 import 'routing_screen.dart';
 import 'settings_screen.dart';
@@ -730,12 +729,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
         return RoutingScreen(
           subController: _subController,
           homeController: _controller,
-          initialPresetsTab: tab == 'presets',
+          initialTab: switch (tab) {
+            'presets' => RoutingTab.presets,
+            'dns' => RoutingTab.dns,
+            _ => RoutingTab.directions,
+          },
         );
       case 'dns':
-        return DnsSettingsScreen(
+        // §655 — DNS стал вкладкой Routing; `route:dns` из уже
+        // опубликованных support-сообщений ведёт на неё.
+        return RoutingScreen(
           subController: _subController,
           homeController: _controller,
+          initialTab: RoutingTab.dns,
         );
       case 'vpn-settings':
         return SettingsScreen(
