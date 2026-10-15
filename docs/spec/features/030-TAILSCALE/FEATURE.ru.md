@@ -137,7 +137,7 @@ tailnet выглядит с телефона.
   Свидетель: юниты «дефолты засеяны раньше: пресет добавляется один раз»,
   «пресет уже есть — дубля нет», «свежая установка не трогается; первый seed
   закрывает шаг». Мутация: пресет добавлен повторно после удаления.
-- **P17. `skip_presets` переживает бэкап.** Хранится только `true`; импорт,
+- **P17. `skip_tailscale_presets` (до 1.1.126 `skip_presets`) переживает бэкап.** Хранится только `true`; импорт,
   совпавший по телу, его не сбрасывает. Свидетель: юниты «одиночный узел:
   skip_presets=true своей записи не сбрасывается», «член папки:
   skip_presets=true не сбрасывается при повторном импорте». Мутация:
@@ -189,7 +189,7 @@ tailnet выглядит с телефона.
 | Ручка | Значения | По умолчанию |
 |-------|----------|--------------|
 | Мастер → Tailscale: Tag, Auth key, Control URL, Hostname, Ephemeral, Accept routes, Exit node | строки, два тумблера; Auth key обязателен, маскирован с Show/Hide | `tailscale` · — · пусто · `LxBox-<модель>` · выкл · выкл · пусто |
-| Экран узла → «Skip presets» | вкл/выкл; виден у своего сервера и члена папки, когда в шаблоне есть пресет с `for_each` под тип узла | выкл |
+| Экран узла → «Skip Tailscale presets» | вкл/выкл; виден у своего узла Tailscale и члена папки, когда в шаблоне есть пресет с обходом, который его принимает | выкл |
 | Пресет «Tailscale networks» (`tailscale`) | вкл/выкл, сортируемый, `num` 945; переменная «DNS» (`dns_enable`) | вкл · DNS вкл |
 | DNS-сервер типа `tailscale` | `endpoint` (узел Tailscale, обязателен), `accept_default_resolvers` | — |
 | Вкладка Network → Exit node | пир с `ExitNodeOption` или None; «Save choice» | из тела |
@@ -212,7 +212,7 @@ tailscale, tag, …тело, state_directory}`; от пресета — запи
 `StartTailscalePing`. Файлы данных: `tailscale/<имя>/` (состояние одного узла у
 ядра), `tailscale_state.json` (индекс слот → ключ узла → имя каталога). Код
 предупреждения: `tailscale_core_unsupported`. Debug API: поле `tailscale` в
-`GET /state`, поле записи `skip_presets` (только чтение).
+`GET /state`, поле записи `skip_tailscale_presets` (только чтение).
 
 ## Входы / Выходы
 
@@ -265,7 +265,7 @@ tailscale, tag, …тело, state_directory}`; от пресета — запи
   копирует записи (оба слота — одно устройство tailnet), Rename переносит их,
   Delete снимает и сразу удаляет каталоги без ссылок
   ([018-WORKSPACES · P12](../018-WORKSPACES/FEATURE.ru.md#обещания)).
-- Бэкап несёт тело узла (включая `auth_key`) и `skip_presets`, но не личность:
+- Бэкап несёт тело узла (включая `auth_key`) и `skip_tailscale_presets`, но не личность:
   восстановленный на другом устройстве узел регистрируется заново, а
   потраченный одноразовый ключ даёт `invalid key`. Очистка данных приложения
   действует так же — мастер говорит об этом под Auth key.
@@ -331,7 +331,7 @@ tailscale, tag, …тело, state_directory}`; от пресета — запи
 |---------|------------|----------|------|
 | Узел Tailscale | Создаёт и хранит endpoint Tailscale из мастера или sing-box JSON, гейтит его сборкой ядра и решает, может ли он быть Направлением. | P1–P5, P11 | [tailscale-node.ru.md](FUNCTIONS/tailscale-node.ru.md) |
 | Личность устройства и состояние | Даёт каждому узлу каталог состояния по стабильному ключу, сохраняет его при переименованиях, переносах и в Workspaces, удаляет вместе с узлом и держит вне бэкапа. | P6–P10 | [device-identity-and-state.ru.md](FUNCTIONS/device-identity-and-state.ru.md) |
-| DNS и маршруты tailnet | Обслуживает каждый узел Tailscale сервером MagicDNS и правилами `preferred_by` через пресет `tailscale`, с отказом «Skip presets» и типом DNS-сервера `tailscale`. | P12–P18 | [tailnet-dns-and-routes.ru.md](FUNCTIONS/tailnet-dns-and-routes.ru.md) |
+| DNS и маршруты tailnet | Обслуживает каждый узел Tailscale сервером MagicDNS и правилами `preferred_by` через пресет `tailscale`, с отказом «Skip Tailscale presets» и типом DNS-сервера `tailscale`. | P12–P18 | [tailnet-dns-and-routes.ru.md](FUNCTIONS/tailnet-dns-and-routes.ru.md) |
 | Вкладка Network | Показывает на экране узла состояние, это устройство, устройства tailnet и exit node, переключает выход на ходу и записывает его в тело. | P19–P24 | [networks-tab.ru.md](FUNCTIONS/networks-tab.ru.md) |
 
 ## Связанные фичи

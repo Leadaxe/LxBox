@@ -131,24 +131,50 @@ String presetServedNodesLabel(List<String> tags) => tags.isEmpty
     ? getLocalText.s("No matching nodes")
     : tags.join(', ');
 
-/// Переключатель `Skip presets` на экране узла: свой сервер или член папки
-/// ([isMember] у папки), и в шаблоне есть пресет с обходом (любого вида),
-/// чей `#filter` истинен для этого узла при `skip_tailscale_presets = false`
+/// Переключатель `Skip Tailscale presets` на экране узла (§578, §656): свой
+/// сервер или член папки ([isMember] у папки), узел `type: tailscale`
+/// (контракт 1.1.126) и в шаблоне есть пресет с обходом (любого вида), чей
+/// `#filter` истинен для этого узла при `skip_tailscale_presets = false`
 /// ([presetLoopAcceptsNode]; [nodeTag] и [nodeBody] — тег и тело узла в
 /// форме конфига). У узла подписки записи нет — переключателя нет.
-bool skipPresetsToggleVisible({
+bool skipTailscalePresetsToggleVisible({
   required ServerList list,
   required bool isMember,
   required String nodeTag,
   required Map<String, dynamic> nodeBody,
   required Iterable<SelectableRule> presets,
 }) {
-  final hasRecord = switch (list) {
-    UserServer() => true,
-    FolderServers() => isMember,
-    SubscriptionServers() => false,
-  };
-  if (!hasRecord || nodeBody.isEmpty) return false;
+  if (!_hasNodeRecord(list, isMember) || nodeBody['type'] != 'tailscale') {
+    return false;
+  }
   final node = PresetNode(tag: nodeTag, body: nodeBody);
   return presets.any((p) => presetLoopAcceptsNode(p, node));
 }
+
+/// §656 (контракт 1.1.126/1.1.129) — типы клиентских endpoint'ов, у которых
+/// форма узла показывает блок `Incoming connections from this tunnel`
+/// (`allow_local` / `allow_lan` / `allow_gateway`). У AWG `type` тот же
+/// `wireguard`; `tailscale` выведен (1.1.129).
+const Set<String> kTunnelIngressNodeTypes = {
+  'wireguard',
+  'openvpn-client',
+  'openconnect',
+};
+
+/// §656 — блок `Incoming connections from this tunnel` виден: свой сервер
+/// или член папки ([isMember]) с `body.type` из [kTunnelIngressNodeTypes].
+/// У узла подписки записи нет — блока нет.
+bool tunnelIngressTogglesVisible({
+  required ServerList list,
+  required bool isMember,
+  required Map<String, dynamic> nodeBody,
+}) =>
+    _hasNodeRecord(list, isMember) &&
+    kTunnelIngressNodeTypes.contains(nodeBody['type']);
+
+/// Запись узла есть у своего сервера и у члена папки; у подписки — нет.
+bool _hasNodeRecord(ServerList list, bool isMember) => switch (list) {
+      UserServer() => true,
+      FolderServers() => isMember,
+      SubscriptionServers() => false,
+    };

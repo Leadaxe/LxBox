@@ -644,6 +644,30 @@
   "Also route UDP 500/4500 directly. Some modems get the gateway address from the carrier network and never send a DNS query, so the domain rule alone misses them. Those ports carry nothing but IPsec key exchange.": {
     "value": "Направлять напрямую и UDP 500/4500. Часть модемов получает адрес шлюза от сети оператора и не делает DNS-запрос — доменное правило их не поймает. На этих портах нет ничего кроме обмена ключами IPsec."
   },
+  "Tunnel ingress": {
+    "value": "Входящие из туннелей"
+  },
+  "Connections arriving from a client tunnel (WireGuard, AWG, OpenVPN, OpenConnect) are rejected unless the node's own switches allow them: access to this device, the local network, or using this device as a gateway. The settings below choose what happens to the rest and where allowed and gateway traffic goes.": {
+    "value": "Соединения из клиентского туннеля (WireGuard, AWG, OpenVPN, OpenConnect) отклоняются, если их не разрешают переключатели самого узла: доступ к устройству, к локальной сети или работа устройства шлюзом. Настройки ниже задают, что делать с остальными соединениями и куда идёт разрешённый трафик и трафик шлюза."
+  },
+  "Incoming from tunnels": {
+    "value": "Неразрешённые входящие"
+  },
+  "What happens to connections arriving from a tunnel that the node's switches did not allow. reject (default) and drop close them; an outbound forwards them.": {
+    "value": "Что делать с соединениями из туннеля, которые не разрешили переключатели узла: reject (по умолчанию) и drop их закрывают, исходящий канал пропускает их туда."
+  },
+  "Device and local network go to": {
+    "value": "Доступ к устройству и сети идёт в"
+  },
+  "Outbound for peers allowed to reach this device or the local network.": {
+    "value": "Исходящий канал для пиров, которым разрешён доступ к устройству или локальной сети."
+  },
+  "Gateway traffic goes to": {
+    "value": "Трафик шлюза идёт в"
+  },
+  "Outbound for peers allowed to use this device as a gateway.": {
+    "value": "Исходящий канал для пиров, которым разрешено ходить через устройство как через шлюз."
+  },
   "Tailscale networks": {
     "value": "Сети Tailscale"
   },

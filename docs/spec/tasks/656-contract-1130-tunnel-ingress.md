@@ -101,6 +101,9 @@
      - `gateway_out` (`proxy-out`).
    - Сентинелы `reject`/`drop` переменной `outbound` превращаются в action,
      как у `block-ads`.
+   - Отступление диалекта: `gateway_out` по умолчанию `vpn-1` — наш
+     `route.final`. Тега `proxy-out` у LxBox нет; контракт задаёт умолчание
+     «как `route.final`».
 
    Переводы имён и подсказок — в `l10n/{ru,zh}/template.json`: гейт
    `template_check --strict`, у zh отступ в 1 пробел.

@@ -350,7 +350,7 @@ List<PresetNode> presetForEachNodes(
 
 /// §643 — обход пресета (любого вида) принимает узел [node]: `#filter`
 /// истинен при значениях переменных пресета по умолчанию. Пресет без обхода
-/// — false. Экран узла решает по этому видимость `Skip presets`.
+/// — false. Экран узла решает по этому видимость `Skip Tailscale presets`.
 bool presetLoopAcceptsNode(
   SelectableRule preset,
   PresetNode node, {

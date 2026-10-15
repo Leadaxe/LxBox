@@ -3001,11 +3001,11 @@ class SubscriptionController extends ChangeNotifier {
     return '';
   }
 
-  /// §578 — поле записи `skip_tailscale_presets` (§656, бывший
-  /// `skip_presets`) своего сервера ([memberIndex] null)
-  /// или члена папки. Хранится только `true`; правка помечает конфиг
-  /// грязным через [_persist], как соседние правки записи.
-  Future<UiMsg?> setSkipPresets(int index, int? memberIndex, bool value) async {
+  /// §578/§656 — поле записи узла [flag] своего сервера ([memberIndex] null)
+  /// или члена папки (TEMPLATE_LANG §6.6). Хранится только `true`; правка
+  /// помечает конфиг грязным через [_persist], как соседние правки записи.
+  Future<UiMsg?> setNodeRecordFlag(
+      int index, int? memberIndex, NodeRecordFlag flag, bool value) async {
     if (index < 0 || index >= _entries.length) {
       return const ErrMsg(ErrKey.serverNotFound);
     }
@@ -3013,17 +3013,16 @@ class SubscriptionController extends ChangeNotifier {
     final list = entry.list;
     if (memberIndex == null) {
       if (list is! UserServer) return const ErrMsg(ErrKey.serverNotFound);
-      if (list.skipTailscalePresets == value) return null;
-      entry._replaceList(list.copyWith(skipTailscalePresets: value));
+      if (flag.ofServer(list) == value) return null;
+      entry._replaceList(flag.onServer(list, value));
     } else {
       if (list is! FolderServers) return const ErrMsg(ErrKey.notAFolder);
       if (memberIndex < 0 || memberIndex >= list.members.length) {
         return const ErrMsg(ErrKey.serverNotFound);
       }
       final members = [...list.members];
-      if (members[memberIndex].skipTailscalePresets == value) return null;
-      members[memberIndex] =
-          members[memberIndex].copyWith(skipTailscalePresets: value);
+      if (flag.ofMember(members[memberIndex]) == value) return null;
+      members[memberIndex] = flag.onMember(members[memberIndex], value);
       entry._replaceList(list.copyWith(members: members));
     }
     await _persist();

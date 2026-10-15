@@ -255,7 +255,8 @@ class _RoutingScreenState extends State<RoutingScreen>
   void _onSubControllerChanged() {
     if (!mounted || _loading) return;
     // §578/§643 — строка пресета с `for_each_node` показывает обслуживаемые
-    // узлы: правка источника (включение, `skip_presets`) её меняет.
+    // узлы: правка источника (включение, `skip_tailscale_presets`,
+    // `allow_*`) её меняет.
     final types = presetLoopNodeTypes(_template?.selectableRules ?? const []);
     if (types == null || types.isNotEmpty) {
       setState(() {});

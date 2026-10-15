@@ -153,7 +153,8 @@ detour и цепочки — [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/
 | Paste URI / Paste JSON | Мастер | текст | — |
 | Tag | Узел → Settings | строка + палитра из 14 эмодзи | тег узла |
 | Detour server | Узел → Settings | см. [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.ru.md) | None (direct) |
-| Skip presets | Узел → Settings; виден, если в шаблоне есть пресет `for_each` под тип узла | вкл/выкл | выкл |
+| Skip Tailscale presets | Узел → Settings; виден у узла `tailscale`, если в шаблоне есть пресет с обходом, который его принимает | вкл/выкл | выкл |
+| Allow access to this device / Expose local network / Allow as gateway | Узел → Settings, блок Incoming connections from this tunnel; виден у своих узлов `wireguard`, `openvpn-client`, `openconnect` | вкл/выкл | выкл |
 | Masquerade: протокол · домен · браузер | Узел WireGuard/AmneziaWG → Settings → Masquerade | Off · `quic` · `dns` · `stun` · `sip`; LDH-имя ≤ 253 байт; `chrome` · `firefox` · `curl` · Default | из узла (`ip`/`id`/`ib`) |
 | Source | Узел → Source | текст источника | как сохранён |
 | Exit node | Узел Tailscale → Network → Save choice | узел tailnet / None | из тела |
@@ -194,7 +195,8 @@ kept.», «Comments were removed.», «The core rejected the node: …».
 - Вид источника выводится из текста: JSON-объект → `json`, WireGuard INI →
   `wg_ini`, прочее → ссылка. Флага режима нет.
 - Tag и Source применяются только кнопкой Save; Edit JSON — сразу после
-  подтверждения; Detour и Skip presets записываются сразу при выборе.
+  подтверждения; Detour, Skip Tailscale presets и переключатели входящих
+  записываются сразу при выборе.
 - «Edit JSON» у ссылки или INI после предупреждения заменяет источник телом
   модели — необратимо, обратно в ссылку дороги нет; у JSON-источника просто
   открывает Source.
@@ -233,7 +235,7 @@ kept.», «Comments were removed.», «The core rejected the node: …».
 | Функция | Что делает | Обещания | Файл |
 |---|---|---|---|
 | Мастер добавления сервера | Создаёт свой узел SOCKS5, HTTP или Tailscale из формы либо любой узел из вставленной ссылки или sing-box JSON. | P1 P2 P13 P15 | [add-server-wizard.ru.md](FUNCTIONS/add-server-wizard.ru.md) |
-| Настройки узла | Показывает вкладки своего узла и позволяет сменить тег с эмодзи, detour-сервер и переключатель Skip presets. | P3 P4 | [node-settings.ru.md](FUNCTIONS/node-settings.ru.md) |
+| Настройки узла | Показывает вкладки своего узла и позволяет сменить тег с эмодзи, detour-сервер, переключатель Skip Tailscale presets и переключатели входящих из клиентского туннеля. | P3 P4 | [node-settings.ru.md](FUNCTIONS/node-settings.ru.md) |
 | Правка источника | Сохраняет источник по его виду (ссылка, INI или JSON), оставляет только тело узла, проверяет JSON ядром и по запросу превращает ссылку в JSON. | P5 P6 P7 P8 P9 P10 P12 | [source-editing.ru.md](FUNCTIONS/source-editing.ru.md) |
 | Имя равно тегу | Делает тег узла единственным именем своего сервера: умолчания, автоматический эмодзи, суффиксы при коллизии и перезапись ссылок при переименовании. | P2 P3 P4 P11 | [name-is-tag.ru.md](FUNCTIONS/name-is-tag.ru.md) |
 | JSON и схема протокола | Показывает sing-box JSON узла с подсветкой, сохраняет неизвестные приложению поля и фиксирует, чего не хватает редактору по схеме, включая ловушку «замены всего `tls`». | P6 P8 | [json-and-schema.ru.md](FUNCTIONS/json-and-schema.ru.md) |

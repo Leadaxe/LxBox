@@ -1888,7 +1888,7 @@ void main() {
         'при импорте совпавшего по телу узла без флага', () {
       const uri = 'vless://skip@h:443';
       final withFlag = mergeBackupServers(
-          const [], const [LxServer(uri: uri, skipPresets: true)]);
+          const [], const [LxServer(uri: uri, skipTailscalePresets: true)]);
       expect((withFlag.lists.single as UserServer).skipTailscalePresets, isTrue);
 
       // Тот же импорт без skip_presets в файле — своя запись сильнее.
@@ -1902,7 +1902,7 @@ void main() {
         'импорте совпавшего по телу члена без флага', () {
       const uri = 'vless://skip-folder@h:443';
       final withFlag = mergeBackupServers(const [], const [
-        LxServer(uri: uri, folder: 'DE', skipPresets: true),
+        LxServer(uri: uri, folder: 'DE', skipTailscalePresets: true),
       ]);
       expect(
           (withFlag.lists.single as FolderServers).members.single.skipTailscalePresets,

@@ -391,7 +391,7 @@ Future<bool> _seedDefaultPresets(WizardTemplate? template) async {
 /// пользователей уже было сохранённое состояние. Первый seed дефолтов
 /// ([_markDefaultsSeeded]) идёт один раз на установку, и новый дефолтный
 /// пресет до такого пользователя сам не доходит. Список только растёт.
-const Set<String> kLateDefaultPresetIds = {'tailscale'};
+const Set<String> kLateDefaultPresetIds = {'tailscale', 'tunnel-ingress'};
 
 /// §578 — ключ хранения: id из [kLateDefaultPresetIds], для которых разовый
 /// шаг уже прошёл.

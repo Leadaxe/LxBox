@@ -996,7 +996,7 @@ A preset walks the config nodes with exactly one of two keys (contract
 
 ```jsonc
 "for_each_node":    { "#filter": { "#and": [ { "@node.body.type": "tailscale" },
-                                             { "#not": "@node.skip_presets" } ] } }
+                                             { "#not": "@node.skip_tailscale_presets" } ] } }
 
 "for_each_node_do": { "#filter": { "@node.body.server": "#notEmpty" },
                       "#do":     { "@domains": { "#append": "@node.body.server" } },
@@ -1043,12 +1043,12 @@ written to the state nor exported, and import drops it with
 | Reference | Value |
 |---|---|
 | `@node` | the node's final tag in the config |
-| `@node.<field>` | a field of the node's storage record; the closed list today is `skip_presets` |
+| `@node.<field>` | a field of the node's storage record; the closed list is `skip_tailscale_presets`, `allow_local`, `allow_lan`, `allow_gateway` (contract 1.1.126) |
 | `@node.body.<path>` | a field of the node body, a dot path |
 
 A missing field yields the empty value: false in a condition, and the key or
 element is dropped from the body, as with an optional var. A subscription node
-has no record, so `@node.skip_presets` is always false for it.
+has no record, so all four fields are always false for it.
 
 **`#tpl`** builds a string from pieces: `{"#tpl": "@{node}-dns"}`. It is allowed
 in a value position (an object field, an array element, inside `#value`), not
@@ -1071,8 +1071,9 @@ the `#filter` can let through are emitted): the tag is the final tag of the
 last build when the node was in it, otherwise the display tag. A
 `for_each_node` row lists the served tags, comma separated, or says there are
 no matching nodes; a `for_each_node_do` row has no such note. The **Skip
-presets** switch on the node screen shows when some loop preset's `#filter`
-accepts the node with `skip_presets = false`. The probe does not expand
+Tailscale presets** switch on the node screen shows for a `tailscale` node
+when some loop preset's `#filter` accepts it with
+`skip_tailscale_presets = false`. The probe does not expand
 presets at all.
 
 **Default domain resolver** (`TEMPLATE_LANG.md` §6.9).
@@ -1090,9 +1091,27 @@ DNS rule pointing at the node's own DNS server `<node>-dns` (`type: tailscale`,
 part follows the `dns_enable` var. `preferred_by` asks the node whether an
 address or name is its own; Tailscale answers from the live tailnet state, so
 the preset carries no fixed subnets. A node opts out with the record field
-`skip_presets` (the **Skip presets** switch on the node screen, see
-[STORAGE.md](STORAGE.md)). Existing installs get the preset once through
+`skip_tailscale_presets` (the **Skip Tailscale presets** switch on the node
+screen, see [STORAGE.md](STORAGE.md)). Existing installs get the preset once through
 `SettingsStorage.seedLateDefaultPresets` (the `late_presets_seeded` key).
+
+**The `tunnel-ingress` preset** (`num` 940, on by default, a late default like
+`tailscale`; contract 1.1.126–1.1.129, TEMPLATE_LANG §6.5.2). A client
+endpoint — `wireguard` (and AWG), `openvpn-client`, `openconnect` — is a
+two-way channel: a peer on the other side can open a connection to any
+address. The preset walks those nodes with `for_each_node_do` into five
+`internal` lists and emits rules keyed by `inbound: [<node tags>]`: loopback
+for `allow_local` and `ip_is_private` for `allow_lan` go to `allowed_out`
+(`direct-out`), `allow_gateway` goes to `gateway_out` (`vpn-1`, our
+`route.final`; the launcher's default is its `proxy-out`), everything else
+from those tunnels goes to `closed_out` (`reject`; `reject`/`drop` become
+an action). A DNS rule rejects queries of the peers without `allow_gateway`
+while `closed_out` is `reject` or `drop`. Each rule is gated by `#notEmpty`,
+so a user without tunnel nodes gets nothing. The node fields are the
+**Incoming connections from this tunnel** switches on the node screen. The
+route rule sits right after the `traffic-processing` head, before
+`tailscale` and `private-ip`; its DNS slot is placed by the route axis, so the
+reject comes before `fakeip`'s catch-all A/AAAA rule.
 
 ---
 

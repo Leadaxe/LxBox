@@ -89,7 +89,7 @@ Principles the feature protects:
   config.** `for_each_node` yields one body per walked node, with `@node` in
   scope; zero nodes — the preset is empty. `for_each_node_do` collects values
   from the walked nodes into the preset's own variables and expands the body
-  once after the walk. `#filter` (for example `#not @node.skip_presets`)
+  once after the walk. `#filter` (for example `#not @node.skip_tailscale_presets`)
   excludes a node; a missing value in it is false. **Witness:** unit tests
   "zero nodes — the preset is empty", "two nodes — repetitions in a row in node
   order, tags without a namespace", "filter false (skip_presets) — the node is
@@ -231,7 +231,7 @@ that exists only when the condition holds, otherwise it drops out:
 
 **`for_each_node` on a preset** — the body is repeated for each node that
 passes `#filter`; the node type is an ordinary condition on `@node.body.type`,
-`@node.skip_presets` reads a field of the node record:
+`@node.skip_tailscale_presets` reads a field of the node record:
 
 ```json
 "for_each_node": {
@@ -241,7 +241,7 @@ passes `#filter`; the node type is an ordinary condition on `@node.body.type`,
         "@node.body.type": "tailscale"
       },
       {
-        "#not": "@node.skip_presets"
+        "#not": "@node.skip_tailscale_presets"
       }
     ]
   }

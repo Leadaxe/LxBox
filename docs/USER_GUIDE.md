@@ -1431,8 +1431,8 @@ config, and keeps it while the tunnel runs.
 
 The section sets the default for all servers. The same four options can be
 overridden for one subscription or folder (its settings tab, **TLS** section)
-and for one server (the server's Settings tab, **TLS** section, between
-Detour and Skip presets). Each option is resolved on its own: server, then
+and for one server (the server's Settings tab, **TLS** section, under
+Detour). Each option is resolved on its own: server, then
 subscription or folder, then the global section; **Default** takes the value
 from the level above, and the row shows which one. **Off** on a server turns
 the option off for it even when it is on globally. A checkbox set on a REALITY

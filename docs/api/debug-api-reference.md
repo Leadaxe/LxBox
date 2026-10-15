@@ -372,15 +372,20 @@ Rules матчатся **first-wins** сверху вниз, так что reord
 Подписки + inline user-servers. §575 — поля `sections` в ответе нет: секции
 узла упразднены.
 
-§578 — у `UserServer` и у члена папки (`GET /folders/{id}`) есть поле записи
-`skip_presets` (bool): `true` — узел не обслуживают пресеты с `for_each`
-(пресет `tailscale`). Read-only, PATCH его не принимает; меняется переключателем
-Skip presets на экране узла.
+§578/§656 — у `UserServer` и у члена папки (`GET /folders/{id}`) есть поля
+записи (bool, read-only, PATCH их не принимает):
+
+- `skip_tailscale_presets` (до контракта 1.1.126 — `skip_presets`): `true` —
+  узел не обслуживает пресет `tailscale`; меняется переключателем
+  Skip Tailscale presets на экране узла;
+- `allow_local`, `allow_lan`, `allow_gateway` — что пресет `tunnel-ingress`
+  разрешает пирам туннеля (WireGuard, OpenVPN, OpenConnect); меняются
+  тумблерами блока Incoming connections from this tunnel.
 
 ```bash
-# узлы с отметкой «пропустить пресеты»
+# узлы с отметкой «пропустить пресеты Tailscale»
 curl -s -H "$HDR" "$BASE/subs" \
-  | jq '.[] | select(.kind=="UserServer") | {id, skip_presets}'
+  | jq '.[] | select(.kind=="UserServer") | {id, skip_tailscale_presets}'
 ```
 
 §636 — у каждой записи `/subs` (подписка, папка, одиночный сервер) и у члена
@@ -1026,7 +1031,7 @@ credentials (URI/ключи) → по умолчанию скрыт, `?reveal=tr
 | `/folders/{id}` | GET | — |
 | `/folders/{id}` | DELETE | `?keep_servers=true` — вынести членов одиночными серверами (default false — удалить совсем) |
 | `/folders/{id}/members` | POST | ровно одно из: `{"input":"<uri\|WG-ini\|JSON>","name_fallback"?}` (paste) или `{"url":"..."}` (одноразовый снапшот: URL не хранится, авто-обновления нет) |
-| `/folders/{id}/members/{idx}` | PATCH | subset `{raw,enabled,detour,tls}` (§636: `tls` — узловая политика, правила как у `PATCH /subs/{id}`) — §578: `skip_presets` в GET read-only, PATCH не принимает |
+| `/folders/{id}/members/{idx}` | PATCH | subset `{raw,enabled,detour,tls}` (§636: `tls` — узловая политика, правила как у `PATCH /subs/{id}`) — §578/§656: `skip_tailscale_presets` и `allow_*` в GET read-only, PATCH не принимает |
 | `/folders/{id}/members/{idx}` | DELETE | — |
 | `/folders/{id}/members/reorder` | POST | `{"order":[старые индексы в новом порядке]}` — полная перестановка |
 | `/folders/{id}/members/{idx}/ungroup` | POST | член → одиночный сервер сразу после папки |

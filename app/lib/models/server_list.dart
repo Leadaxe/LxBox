@@ -918,3 +918,40 @@ class DetourPolicy {
   int get hashCode => Object.hash(registerDetourServers, registerDetourInAuto,
       useDetourServers, overrideDetour, replaceDetourChain);
 }
+
+/// §578/§656 — поле записи узла (свой сервер и член папки, TEMPLATE_LANG
+/// §6.6): bool, хранится только `true`. У узла подписки записи нет.
+enum NodeRecordFlag {
+  skipTailscalePresets,
+  allowLocal,
+  allowLan,
+  allowGateway;
+
+  bool ofServer(UserServer u) => switch (this) {
+        skipTailscalePresets => u.skipTailscalePresets,
+        allowLocal => u.allowLocal,
+        allowLan => u.allowLan,
+        allowGateway => u.allowGateway,
+      };
+
+  bool ofMember(FolderMember m) => switch (this) {
+        skipTailscalePresets => m.skipTailscalePresets,
+        allowLocal => m.allowLocal,
+        allowLan => m.allowLan,
+        allowGateway => m.allowGateway,
+      };
+
+  UserServer onServer(UserServer u, bool v) => switch (this) {
+        skipTailscalePresets => u.copyWith(skipTailscalePresets: v),
+        allowLocal => u.copyWith(allowLocal: v),
+        allowLan => u.copyWith(allowLan: v),
+        allowGateway => u.copyWith(allowGateway: v),
+      };
+
+  FolderMember onMember(FolderMember m, bool v) => switch (this) {
+        skipTailscalePresets => m.copyWith(skipTailscalePresets: v),
+        allowLocal => m.copyWith(allowLocal: v),
+        allowLan => m.copyWith(allowLan: v),
+        allowGateway => m.copyWith(allowGateway: v),
+      };
+}

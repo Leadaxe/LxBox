@@ -1518,7 +1518,7 @@ the Add Server Wizard's Tailscale mode.
   suffix (launcher decision D-120). It matches only once the tailnet is up; until then the
   traffic follows the other rules. Two nodes in one tailnet claim the same machines, and the
   first by config order wins. A subscription node is served too. A server or a folder
-  member opts out with the record field `skip_presets` (the **Skip presets** switch on the
+  member opts out with the record field `skip_tailscale_presets` (the **Skip Tailscale presets** switch on the
   node screen, STORAGE.md). The DNS server tag stays `<node>-dns`, so user references to it
   keep working. The preset replaces the node's own bundle, which §575 removed: a node no
   longer carries route rules or DNS records of its own (see STORAGE.md “Node sections —

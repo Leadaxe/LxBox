@@ -24,7 +24,7 @@ while typing.
 
 | Tab | Contents |
 |---|---|
-| Settings | Protocol, Server (read-only); Tag with an emoji palette; Detour server with path preview; TLS (node-level overrides of the TLS Fragmentation options, written immediately); Skip presets |
+| Settings | Protocol, Server (read-only); Tag with an emoji palette; Detour server with path preview; TLS (node-level overrides of the TLS Fragmentation options, written immediately); Skip Tailscale presets; Incoming connections from this tunnel |
 | Source | the source text, editable; a caption about the source kind |
 | JSON | the body the core will receive, read-only, highlighted; Copy JSON; Edit JSON |
 | Network | only for a Tailscale node — tailnet devices, Exit node choice |
@@ -39,9 +39,19 @@ while typing.
   directly to this server." or "Phone → … → <tag> → Internet" — the full path
   along the detour chain. Selection, prohibitions and policy —
   [006](../../006-DETOUR_AND_BALANCE/FEATURE.md).
-- **Skip presets**: "Presets will not add routing or DNS rules for this
-  node." Visible only if the template has a preset with `for_each` for the
-  node type; never for a subscription.
+- **Skip Tailscale presets**: "Presets will not add routing or DNS rules for
+  this node." Visible only for a `tailscale` node and only if the template has
+  a node-loop preset whose `#filter` accepts it; never for a subscription
+  node. Record field `skip_tailscale_presets` (until 1.1.126 —
+  `skip_presets`).
+- **Incoming connections from this tunnel** (§656): a header with "Peers on
+  the other side of this tunnel can open connections to this device. Without
+  the switches below they are rejected." and three switches — **Allow access
+  to this device** (`allow_local`), **Expose local network** (`allow_lan`),
+  **Allow as gateway** (`allow_gateway`), read by the Tunnel ingress preset.
+  Visible only for a server or folder member of type `wireguard` (and AWG),
+  `openvpn-client`, `openconnect`; never for a subscription node or
+  Tailscale.
 
 ## Inputs / Outputs
 
@@ -51,7 +61,8 @@ while typing.
 
 ## Rules and invariants
 
-- Detour and Skip presets are written immediately on selection; Tag and
+- Detour, Skip Tailscale presets and the incoming-connection switches are
+  written immediately on selection; Tag and
   Source — only with the Save button in the header.
 - **Leaving with unsaved edits.** An edit is a Tag field or Source text that
   differs from what is saved; changing it back is not an edit. Back (system,
@@ -97,3 +108,4 @@ while typing.
 | 10 | [581](../../../tasks/581-tailscale-network-tab.md) | Implemented | Network tab of a Tailscale node |
 | 11 | [626](../../../tasks/626-unsaved-changes-everywhere.md) | Implemented | "Unsaved changes" dialog on leaving with an edited Tag or Source |
 | 12 | [636](../../../tasks/636-tls-settings-per-node-folder-subscription.md) | Implemented | TLS section between Detour and Skip presets |
+| 13 | [656](../../../tasks/656-contract-1130-tunnel-ingress.md) | In progress | Skip Tailscale presets only for Tailscale; Incoming connections from this tunnel |

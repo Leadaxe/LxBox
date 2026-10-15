@@ -632,7 +632,10 @@ The `nodes` of a subscription are **not stored**: they are re-parsed from `sub_c
                                               // the text: a JSON object → json, a WG INI → wg_ini,
                                               // anything else → uri. The node is re-parsed from raw on load.
   "detour":        { "tag": "vpn-2" },        // personal detour, a NodeLink; absent = none
-  "skip_presets":  true,                      // §578 — optional, only `true` is written; see below
+  "skip_tailscale_presets": true,            // §578/§656 — optional, only `true` is written; see below
+  "allow_local":   true,                      // §656 — optional, only `true` is written; see below
+  "allow_lan":     true,                      // §656
+  "allow_gateway": true,                      // §656
   "detour_policy": { … },                     // LxBox, only when a flag is not default
   "tag_policy":    { "prefix": "Home " }      // LxBox, only when set. The prefix is part of the
                                               // server's root address: changing it rewrites the
@@ -676,17 +679,33 @@ is written in the new form on the next save; the storage form version does not
 change. The node's body, tag and identity stay as they were. Only a bare body
 goes to the core verbatim (the §455 build mode above).
 
-**`skip_presets` (§578).** A record field of a server and of a folder member:
-the node is not served by presets with a node loop (`for_each_node` /
-`for_each_node_do`, §643) whose `#filter` reads the field (the shipped
-`tailscale` preset does). Only `true` is written; a missing
-field means the node is served. The field travels in a backup: on import a node
-matched by its body takes `true` from the file, and a missing field does not
-reset the local value (only `true` is stored, so absence cannot be told from
-`false`). A subscription node has no record and is always served. The UI is the
-**Skip presets** switch on the node screen, shown when the `#filter` of some
-loop preset in the template accepts the node with `skip_presets = false`; the
-Debug API returns the field in the node record.
+**Node record flags (§578, §656, contract 1.1.126).** Four bool fields of a
+server and of a folder member, visible to a preset's node loop as
+`@node.<field>` (`for_each_node` / `for_each_node_do`, §643). Only `true` is
+written; a missing field is `false`. A subscription node has no record: all
+four are always `false`.
+
+- `skip_tailscale_presets` — the `tailscale` preset does not serve the node
+  (its `#filter` reads the field). Until contract 1.1.126 the key was
+  `skip_presets`: it is still read from storage and from a backup of any
+  version (both keys present — `true` if either is `true`) and never written.
+  The UI is the **Skip Tailscale presets** switch on the node screen, shown
+  for a `tailscale` node when the `#filter` of some loop preset in the
+  template accepts it with the field `false`.
+- `allow_local`, `allow_lan`, `allow_gateway` — what the `tunnel-ingress`
+  preset lets the peers of this client tunnel reach: services on the
+  device's tunnel address, private networks, or anything through the
+  device as a gateway. Without them the peers' connections are rejected.
+  The UI is the **Incoming connections from this tunnel** block of three
+  switches, shown for `wireguard` (and AWG), `openvpn-client` and
+  `openconnect` nodes only; the values of other types are kept but no preset
+  reads them.
+
+The fields travel in a backup: on import a new node takes them from the file;
+a node matched by its body takes `true` from the file, and a missing field
+does not reset the local value (only `true` is stored, so absence cannot be
+told from `false`). The Debug API returns them in the node record
+(read-only).
 
 #### Node sections — removed (§575)
 
@@ -721,7 +740,7 @@ detour. A subscription cannot be put into a folder, and there is no nesting.
     { "kind": "server", "tag": "Alpha", "enabled": true,
       "origin": { "kind": "uri", "raw": "vless://…#Alpha" },
       "detour": { "folder_id": "<this folder id>", "tag": "Jump" },    // §237 — personal detour
-      "skip_presets": true },                                          // §578 — as on a server
+      "skip_tailscale_presets": true },                                // §578/§656 — as on a server
     { "kind": "server", "tag": "Beta", "enabled": false,
       "origin": { "kind": "wg_ini", "raw": "[Interface]\n…" },
       "warnings": [ { "code": "core_rejected",

@@ -117,10 +117,14 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
   /// Notifications во вкладке Diagnostics.
   List<NodeWarning> _notifications = const [];
 
-  /// §578/§643 — переключатель `Skip presets` виден: в шаблоне есть пресет с
-  /// обходом узлов, чей `#filter` принимает этот узел (см.
-  /// [skipPresetsToggleVisible]).
+  /// §578/§643/§656 — переключатель `Skip Tailscale presets` виден: узел
+  /// `tailscale`, в шаблоне есть пресет с обходом узлов, чей `#filter`
+  /// принимает этот узел (см. [skipTailscalePresetsToggleVisible]).
   bool _skipPresetsVisible = false;
+
+  /// §656 — блок `Incoming connections from this tunnel` виден (см.
+  /// [tunnelIngressTogglesVisible]).
+  bool _tunnelIngressVisible = false;
 
   /// §581 — узел Tailscale: есть вкладка Network.
   bool _isTailscale = false;
@@ -240,15 +244,23 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     // (_pickDetour перечитывает свежий список перед показом пикера).
     _directions = await SettingsStorage.getDirections();
 
-    // §578/§643 — видимость `Skip presets`: пресеты с обходом узлов из
-    // шаблона, чей `#filter` принимает этот узел.
+    // §656 — блок входящих из туннеля: своя запись и тип endpoint'а.
+    final nodeBody = node.emit(TemplateVars.empty).map;
+    _tunnelIngressVisible = tunnelIngressTogglesVisible(
+      list: widget.entry.list,
+      isMember: member != null,
+      nodeBody: nodeBody,
+    );
+
+    // §578/§643/§656 — видимость `Skip Tailscale presets`: узел `tailscale`
+    // и пресеты с обходом узлов из шаблона, чей `#filter` принимает узел.
     try {
       final template = await TemplateLoader.load();
-      _skipPresetsVisible = skipPresetsToggleVisible(
+      _skipPresetsVisible = skipTailscalePresetsToggleVisible(
         list: widget.entry.list,
         isMember: member != null,
         nodeTag: node.tag,
-        nodeBody: node.emit(TemplateVars.empty).map,
+        nodeBody: nodeBody,
         presets: template.selectableRules,
       );
     } catch (_) {
@@ -563,8 +575,9 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
   bool _saving = false;
 
   /// §626 — несохранённые правки: поле Tag (Settings) и текст Source
-  /// отличаются от записанного. Detour, Masquerade, Skip presets и поля
-  /// вкладки Network пишутся сразу и правкой не считаются.
+  /// отличаются от записанного. Detour, Masquerade, Skip Tailscale presets,
+  /// переключатели входящих и поля вкладки Network пишутся сразу и правкой
+  /// не считаются.
   bool get _dirty =>
       _originalTag.isNotEmpty &&
       (_tagCtrl.text != _originalTag || _sourceCtrl.text != _containerRaw);
@@ -746,6 +759,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
         ], // §322 — конец гейта detour-блока
         const SizedBox(height: 16),
         ..._buildSkipPresetsBlock(theme),
+        ..._buildTunnelIngressBlock(theme),
       ],
     );
   }
@@ -814,36 +828,83 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     await widget.subController.persistSources();
   }
 
-  /// §578 — поле записи `skip_presets`, как хранит контейнер (одиночный —
+  /// §578/§656 — поле записи узла [flag], как хранит контейнер (одиночный —
   /// `UserServer`, член — `FolderMember`). Читается при каждом build.
-  bool get _skipPresets {
+  bool _recordFlag(NodeRecordFlag flag) {
     final member = _member;
-    if (member != null) return member.skipTailscalePresets;
+    if (member != null) return flag.ofMember(member);
     final list = widget.entry.list;
-    return list is UserServer && list.skipTailscalePresets;
+    return list is UserServer && flag.ofServer(list);
   }
 
-  /// §578 — переключатель `Skip presets`: узел не обслуживается пресетами с
-  /// обходом узлов (`#not @node.skip_presets` в `#filter`).
+  /// §578/§656 — переключатель `Skip Tailscale presets`: узел не
+  /// обслуживается пресетом `tailscale`
+  /// (`#not @node.skip_tailscale_presets` в `#filter`).
   List<Widget> _buildSkipPresetsBlock(ThemeData theme) {
     if (!_skipPresetsVisible) return const [];
     return [
       SwitchListTile(
         key: const ValueKey('node-skip-presets'),
         secondary: const Icon(Icons.rule_folder_outlined, size: 20),
-        title: Text(getLocalText.s("Skip presets")),
+        title: Text(getLocalText.s("Skip Tailscale presets")),
         subtitle: Text(getLocalText
             .s("Presets will not add routing or DNS rules for this node.")),
-        value: _skipPresets,
-        onChanged: (v) => unawaited(_setSkipPresets(v)),
+        value: _recordFlag(NodeRecordFlag.skipTailscalePresets),
+        onChanged: (v) => unawaited(
+            _setRecordFlag(NodeRecordFlag.skipTailscalePresets, v)),
       ),
       const SizedBox(height: 16),
     ];
   }
 
-  Future<void> _setSkipPresets(bool value) async {
+  /// §656 (контракт 1.1.126) — входящие из туннеля: три поля записи узла,
+  /// которые читает пресет `tunnel-ingress`. Без них пиры с той стороны
+  /// туннеля получают reject.
+  List<Widget> _buildTunnelIngressBlock(ThemeData theme) {
+    if (!_tunnelIngressVisible) return const [];
+    Widget flag(String key, IconData icon, NodeRecordFlag f, String title,
+            String subtitle) =>
+        SwitchListTile(
+          key: ValueKey(key),
+          secondary: Icon(icon, size: 20),
+          title: Text(title),
+          subtitle: Text(subtitle),
+          value: _recordFlag(f),
+          onChanged: (v) => unawaited(_setRecordFlag(f, v)),
+        );
+    return [
+      _sectionHeader(
+          getLocalText.s("Incoming connections from this tunnel"),
+          getLocalText.s(
+              "Peers on the other side of this tunnel can open connections to this device. Without the switches below they are rejected."),
+          theme),
+      flag(
+          'node-allow-local',
+          Icons.phone_android_outlined,
+          NodeRecordFlag.allowLocal,
+          getLocalText.s("Allow access to this device"),
+          getLocalText.s(
+              "Peers reach services on this device's tunnel address. The service sees them as 127.0.0.1, so everything that trusts localhost becomes reachable.")),
+      flag(
+          'node-allow-lan',
+          Icons.lan_outlined,
+          NodeRecordFlag.allowLan,
+          getLocalText.s("Expose local network"),
+          getLocalText.s("Peers reach private networks behind this device.")),
+      flag(
+          'node-allow-gateway',
+          Icons.alt_route_outlined,
+          NodeRecordFlag.allowGateway,
+          getLocalText.s("Allow as gateway"),
+          getLocalText.s(
+              "Peers route any traffic through this device; it leaves through the outbound chosen in the Tunnel ingress preset.")),
+      const SizedBox(height: 16),
+    ];
+  }
+
+  Future<void> _setRecordFlag(NodeRecordFlag flag, bool value) async {
     final err = await widget.subController
-        .setSkipPresets(widget.index, widget.memberIndex, value);
+        .setNodeRecordFlag(widget.index, widget.memberIndex, flag, value);
     if (!mounted) return;
     if (err != null) {
       ScaffoldMessenger.of(context)
