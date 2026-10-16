@@ -8,6 +8,17 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **Editor ⋮ menu ([task 660](docs/spec/tasks/660-editor-overflow-menu.md)).**
+  Every JSON field and viewer gets a ⋮ menu at the right end of its button
+  row. Format moves there from the row, and read-only viewers (a subscription
+  Source, the node JSON) get it too: it formats only what is shown, and Show
+  original brings the source text back. Magnifier turns the selection
+  magnifier on and off; the setting is saved for the whole app. After a wrap
+  toggle or Format the wrap button and the menu show a spinner and ignore
+  taps until the editor has finished laying out the lines.
+
 ---
 
 ## [2.25.16] — 2026-10-15

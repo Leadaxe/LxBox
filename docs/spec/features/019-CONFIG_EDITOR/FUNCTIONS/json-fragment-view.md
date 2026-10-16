@@ -48,7 +48,17 @@ data for the tag".
   "node + hops" array.
 - **The Copy button sits above the field, on the right** (node JSON tab,
   subscription node inspector), not over the text, like the buttons of the
-  editable fields. A read-only view has no Format.
+  editable fields. The ⋮ menu comes last on the right.
+- **Format in the viewer** (a ⋮ menu item when the text is JSON) formats
+  only what is shown; the stored body does not change. The item turns into
+  Show original, which brings the source text back. The choice is not
+  remembered; new text (say, after Re-fetch) is shown as is. JSON5 comments
+  are dropped from the view without a question — the source stays intact. A
+  body over 64 KB is formatted in the background. Broken JSON — a snackbar
+  "Failed to parse JSON: …". While formatting and layout run, the ⋮ menu and
+  the wrap button are busy (an indicator instead of the icon).
+- **Magnifier** (a ⋮ menu item) — the selection magnifier on/off, one saved
+  setting for the whole app.
 - **Line-wrap button** — in the row above the field, after search, only in
   a JSON viewer with sticky headers (wrapping is off there by default).
   Turns wrapping on and off on the fly; the choice is not remembered — the
@@ -80,3 +90,4 @@ data for the tag".
 | 5 | [554F](../../../tasks/554F-schema-driven-node-editor/spec.md) | Idea; only highlighting done | Highlighted JSON view instead of plain text |
 | 6 | [624](../../../tasks/624-sora-editor-for-json-fields.md) | Implemented | Native viewer, sticky headers in the node JSON |
 | 7 | [649](../../../tasks/649-json-view-wrap-toggle.md) | Implemented | Line-wrap button in the JSON viewer |
+| 8 | [660](../../../tasks/660-editor-overflow-menu.md) | Implemented | The ⋮ menu: Format / Show original in the viewer, the magnifier |

@@ -167,6 +167,8 @@ void main() {
     await attach(tester);
     nativeText = '{"a":1}';
 
+    await tester.tap(find.byKey(const ValueKey('lx-code-editor-menu')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('lx-code-editor-format')));
     await tester.pumpAndSettle();
     final replace = calls.where((e) => e.method == 'replaceAll').single;

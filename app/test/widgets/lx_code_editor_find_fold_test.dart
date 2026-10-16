@@ -1,7 +1,11 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/config/config_parse.dart';
+import 'package:lxbox/services/settings_storage.dart';
 import 'package:lxbox/widgets/lx_code_editor.dart';
 
 /// §614/§624 — поиск в LxCodeEditor (панель — Flutter-виджет, сам поиск —
@@ -98,9 +102,21 @@ void main() {
     expect(changes, ['{"c": 3}']);
   });
 
-  // §624 доработка 2 — кнопки над рамкой, подпись слева, кнопка Format.
+  // §624 доработка 2 — кнопки над рамкой, подпись слева; §660 — Format в
+  // меню ⋮.
   const formatBtn = ValueKey('lx-code-editor-format');
+  const menuBtn = ValueKey('lx-code-editor-menu');
   const bar = ValueKey('lx-code-editor-bar');
+
+  Future<void> openMenu(WidgetTester tester) async {
+    await tester.tap(find.byKey(menuBtn));
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> tapFormat(WidgetTester tester) async {
+    await openMenu(tester);
+    await tester.tap(find.byKey(formatBtn));
+  }
 
   Future<TextEditingController> pumpField(
     WidgetTester tester,
@@ -130,35 +146,35 @@ void main() {
     return c;
   }
 
-  testWidgets(
-    'строка кнопок над рамкой: подпись слева, поиск и Format справа',
-    (tester) async {
-      await pumpField(tester, '{"a":1}');
-      Finder inBar(Finder f) =>
-          find.descendant(of: find.byKey(bar), matching: f);
-      expect(inBar(find.text('caption')), findsOneWidget);
-      expect(inBar(find.byKey(findIcon)), findsOneWidget);
-      expect(inBar(find.byKey(formatBtn)), findsOneWidget);
-      final barBottom = tester.getBottomLeft(find.byKey(bar)).dy;
-      final fieldTop = tester.getTopLeft(find.byType(TextField)).dy;
-      expect(
-        fieldTop,
-        greaterThanOrEqualTo(barBottom),
-        reason: 'кнопки не внутри рамки',
-      );
-      expect(
-        tester.getTopLeft(find.byKey(formatBtn)).dx,
-        greaterThan(tester.getTopLeft(find.text('caption')).dx),
-      );
+  testWidgets('строка кнопок над рамкой: подпись слева, поиск и ⋮ справа', (
+    tester,
+  ) async {
+    await pumpField(tester, '{"a":1}');
+    Finder inBar(Finder f) => find.descendant(of: find.byKey(bar), matching: f);
+    expect(inBar(find.text('caption')), findsOneWidget);
+    expect(inBar(find.byKey(findIcon)), findsOneWidget);
+    expect(inBar(find.byKey(menuBtn)), findsOneWidget);
+    expect(find.byKey(formatBtn), findsNothing, reason: 'Format — в меню');
+    final barBottom = tester.getBottomLeft(find.byKey(bar)).dy;
+    final fieldTop = tester.getTopLeft(find.byType(TextField)).dy;
+    expect(
+      fieldTop,
+      greaterThanOrEqualTo(barBottom),
+      reason: 'кнопки не внутри рамки',
+    );
+    expect(
+      tester.getTopLeft(find.byKey(menuBtn)).dx,
+      greaterThan(tester.getTopLeft(find.text('caption')).dx),
+    );
 
-      // Поиск открыт — панель вместо строки кнопок, подпись остаётся.
-      await tester.tap(find.byKey(findIcon));
-      await tester.pump();
-      expect(find.byKey(bar), findsNothing);
-      expect(find.byKey(findPanel), findsOneWidget);
-      expect(find.text('caption'), findsOneWidget);
-    },
-  );
+    // Поиск открыт — панель вместо строки кнопок, подпись остаётся.
+    await tester.tap(find.byKey(findIcon));
+    await tester.pump();
+    expect(find.byKey(bar), findsNothing);
+    expect(find.byKey(findPanel), findsOneWidget);
+    expect(find.byKey(menuBtn), findsNothing);
+    expect(find.text('caption'), findsOneWidget);
+  });
 
   testWidgets('свои actions — в строке над рамкой (Copy LxJsonView)', (
     tester,
@@ -181,14 +197,134 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(find.byKey(formatBtn), findsNothing, reason: 'только чтение');
+    // ⋮ — последним справа, после actions.
+    expect(
+      tester.getTopLeft(find.byKey(menuBtn)).dx,
+      greaterThan(tester.getTopLeft(find.byKey(const ValueKey('copy'))).dx),
+    );
   });
 
-  testWidgets('Format не виден: не JSON или только чтение', (tester) async {
+  testWidgets('Format не виден: не JSON или format: false; меню есть', (
+    tester,
+  ) async {
     await pumpField(tester, 'vless://x@h:1#n');
+    await openMenu(tester);
     expect(find.byKey(formatBtn), findsNothing);
-    await pumpField(tester, '{"a":1}', readOnly: true);
+    expect(
+      find.byKey(const ValueKey('lx-code-editor-magnifier')),
+      findsOneWidget,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: LxTextCodeField(
+            key: UniqueKey(),
+            controller: TextEditingController(text: '{"a":1}'),
+            minLines: 6,
+            format: false,
+          ),
+        ),
+      ),
+    );
+    await openMenu(tester);
     expect(find.byKey(formatBtn), findsNothing);
+  });
+
+  testWidgets('меню есть и без подписи, кнопок и actions', (tester) async {
+    await pump(tester);
+    expect(find.byKey(bar), findsOneWidget);
+    expect(find.byKey(menuBtn), findsOneWidget);
+  });
+
+  testWidgets('только чтение: Format ↔ Show original меняют показ, не '
+      'контроллер; новый текст сверху сбрасывает показ', (tester) async {
+    Widget view(String text) => MaterialApp(
+      home: Scaffold(body: LxJsonView(text: text, height: 200)),
+    );
+    await tester.pumpWidget(view('{"a":1,"b":[1]}'));
+    final field = find.descendant(
+      of: find.byType(LxCodeEditor),
+      matching: find.byType(EditableText),
+    );
+    String shown() => tester.widget<EditableText>(field).controller.text;
+    TextEditingController source() =>
+        tester.widget<LxCodeEditor>(find.byType(LxCodeEditor)).controller;
+
+    await tapFormat(tester);
+    await tester.pumpAndSettle();
+    const pretty = '{\n  "a": 1,\n  "b": [\n    1\n  ]\n}';
+    expect(shown(), pretty);
+    expect(source().text, '{"a":1,"b":[1]}', reason: 'хранимое не трогаем');
+
+    await openMenu(tester);
+    expect(find.text('Show original'), findsOneWidget);
+    await tester.tap(find.byKey(formatBtn));
+    await tester.pumpAndSettle();
+    expect(shown(), '{"a":1,"b":[1]}');
+
+    await tapFormat(tester);
+    await tester.pumpAndSettle();
+    expect(shown(), pretty);
+    await tester.pumpWidget(view('{"c":2}'));
+    await tester.pump();
+    expect(shown(), '{"c":2}');
+    await openMenu(tester);
+    expect(find.text('Format'), findsOneWidget);
+  });
+
+  testWidgets('только чтение: битый JSON — снек, показ не меняется', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(body: LxJsonView(text: '{"a": 1,, }', height: 200)),
+      ),
+    );
+    await tapFormat(tester);
+    await tester.pump();
+    expect(find.textContaining('Failed to parse JSON: '), findsOneWidget);
+  });
+
+  testWidgets('Magnifier: снимает галку, шлёт setMagnifier и пишет '
+      'настройку', (tester) async {
+    final tmp = Directory.systemTemp.createTempSync('lxbox_magnifier_');
+    addTearDown(() => tmp.deleteSync(recursive: true));
+    const pathChannel = MethodChannel('plugins.flutter.io/path_provider');
+    final messenger = tester.binding.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(pathChannel, (_) async => tmp.path);
+    addTearDown(() => messenger.setMockMethodCallHandler(pathChannel, null));
+    SettingsStorage.resetCacheForTesting();
+    addTearDown(SettingsStorage.resetCacheForTesting);
+    // Кэш хранилища прогрет вне fake async: дальше чтение без диска.
+    await tester.runAsync(SettingsStorage.getEditorMagnifier);
+    LxCodeEditorState.debugResetMagnifier();
+    addTearDown(LxCodeEditorState.debugResetMagnifier);
+
+    await pumpField(tester, '{"a":1}');
+    const channel = MethodChannel('com.leadaxe.lxbox/sora_editor_12');
+    final calls = <MethodCall>[];
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      calls.add(call);
+      return null;
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+    tester
+        .state<LxCodeEditorState>(find.byType(LxCodeEditor))
+        .debugAttachChannel(12);
+
+    const item = ValueKey('lx-code-editor-magnifier');
+    bool checked() =>
+        tester.widget<CheckedPopupMenuItem<Object?>>(find.byKey(item)).checked;
+    await openMenu(tester);
+    expect(checked(), isTrue, reason: 'по умолчанию включена');
+    await tester.tap(find.byKey(item));
+    await tester.pumpAndSettle();
+    expect(calls.where((c) => c.method == 'setMagnifier').single.arguments, {
+      'enabled': false,
+    });
+    expect(await SettingsStorage.getEditorMagnifier(), isFalse);
+    await openMenu(tester);
+    expect(checked(), isFalse);
   });
 
   testWidgets('Format: JSON5 → JSON с отступом 2, в контроллер и onChanged', (
@@ -196,7 +332,7 @@ void main() {
   ) async {
     final changes = <String>[];
     final c = await pumpField(tester, '{a: 1, b: [1, 2,],}', changes: changes);
-    await tester.tap(find.byKey(formatBtn));
+    await tapFormat(tester);
     await tester.pumpAndSettle();
     const want = '{\n  "a": 1,\n  "b": [\n    1,\n    2\n  ]\n}';
     expect(c.text, want);
@@ -206,7 +342,7 @@ void main() {
   testWidgets('Format: битый JSON — снек, текст не меняется', (tester) async {
     final changes = <String>[];
     final c = await pumpField(tester, '{"a": 1,, }', changes: changes);
-    await tester.tap(find.byKey(formatBtn));
+    await tapFormat(tester);
     await tester.pump();
     expect(find.textContaining('Failed to parse JSON: '), findsOneWidget);
     expect(c.text, '{"a": 1,, }');
@@ -217,14 +353,14 @@ void main() {
       'форматирует', (tester) async {
     const src = '{\n  // note\n  "a": 1\n}';
     final c = await pumpField(tester, src);
-    await tester.tap(find.byKey(formatBtn));
+    await tapFormat(tester);
     await tester.pumpAndSettle();
     expect(find.text('Comments will be removed'), findsOneWidget);
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
     expect(c.text, src);
 
-    await tester.tap(find.byKey(formatBtn));
+    await tapFormat(tester);
     await tester.pumpAndSettle();
     await tester.tap(
       find.byKey(const ValueKey('lx-code-editor-format-confirm')),
@@ -311,6 +447,73 @@ void main() {
     await tester.tap(find.byKey(findIcon));
     await tester.pump();
     expect(find.byKey(wrapBtn), findsNothing);
+  });
+
+  testWidgets('перенос и Format: «занят» до ответа натива — обе кнопки '
+      'недоступны, повторные нажатия не проходят', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: LxJsonView(text: '{"a": 1}', height: 200, stickyHeaders: true),
+        ),
+      ),
+    );
+    const channel = MethodChannel('com.leadaxe.lxbox/sora_editor_13');
+    final messenger = tester.binding.defaultBinaryMessenger;
+    final calls = <MethodCall>[];
+    var reply = Completer<void>();
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      calls.add(call);
+      if (call.method == 'setWordWrap' ||
+          (call.arguments as Map?)?['waitLayout'] == true) {
+        await reply.future;
+      }
+      return null;
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+    tester
+        .state<LxCodeEditorState>(find.byType(LxCodeEditor))
+        .debugAttachChannel(13);
+    await tester.pump();
+
+    bool wrapEnabled() =>
+        tester.widget<IconButton>(find.byKey(wrapBtn)).onPressed != null;
+    bool menuEnabled() =>
+        tester.widget<PopupMenuButton<Object?>>(find.byKey(menuBtn)).enabled;
+    const wrapBusy = ValueKey('lx-code-editor-wrap-busy');
+    const menuBusy = ValueKey('lx-code-editor-menu-busy');
+
+    await tester.tap(find.byKey(wrapBtn));
+    await tester.pump();
+    expect(wrapEnabled(), isFalse);
+    expect(menuEnabled(), isFalse);
+    expect(find.byKey(wrapBusy), findsOneWidget, reason: 'сразу, без задержки');
+    expect(find.byKey(menuBusy), findsOneWidget);
+    await tester.tap(find.byKey(wrapBtn));
+    await tester.pump();
+    expect(calls.where((c) => c.method == 'setWordWrap'), hasLength(1));
+
+    reply.complete();
+    await tester.pump();
+    expect(wrapEnabled(), isTrue);
+    expect(menuEnabled(), isTrue);
+    expect(find.byKey(wrapBusy), findsNothing);
+
+    // Format показа: «занят», пока натив раскладывает новый текст.
+    reply = Completer<void>();
+    await tapFormat(tester);
+    await tester.pump();
+    await tester.pump();
+    expect(calls.where((c) => c.method == 'setText').last.arguments, {
+      'text': '{\n  "a": 1\n}',
+      'waitLayout': true,
+    });
+    expect(wrapEnabled(), isFalse);
+    expect(find.byKey(menuBusy), findsOneWidget);
+    reply.complete();
+    await tester.pumpAndSettle();
+    expect(wrapEnabled(), isTrue);
+    expect(find.byKey(menuBusy), findsNothing);
   });
 
   testWidgets('раскладка: полоса прогресса только если натив считает '

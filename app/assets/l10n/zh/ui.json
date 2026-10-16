@@ -2227,6 +2227,15 @@
   "Unwrap lines": {
     "value": "取消自动换行"
   },
+  "More options": {
+    "value": "更多选项"
+  },
+  "Show original": {
+    "value": "显示原文"
+  },
+  "Magnifier": {
+    "value": "放大镜"
+  },
   "Imported: %s": {
     "value": "已导入：%s"
   },

@@ -213,6 +213,7 @@ class SettingsStorage {
     'node_sort_mode',
     'node_manual_order',
     'profiler_retention_sec', // §044/new-profiler — окно хранения Live-журнала
+    'editor_magnifier', // §660 — лупа выделения редактора кода
   };
 
   /// Var-ключи, которые живут ТОЛЬКО в коде (app feature-flags), а НЕ в
@@ -652,6 +653,20 @@ class SettingsStorage {
   static Future<void> setInterruptOnSwitch(bool value) async {
     final c = await _load();
     c['interrupt_connections_on_switch'] = value;
+    SettingsStorage._cache = c;
+    await _save();
+  }
+
+  /// §660 — лупа выделения в редакторе кода (sora). Одна на всё
+  /// приложение. Не config-significant → без markConfigDirty. Default true.
+  static Future<bool> getEditorMagnifier() async {
+    final c = await _load();
+    return c['editor_magnifier'] != false;
+  }
+
+  static Future<void> setEditorMagnifier(bool value) async {
+    final c = await _load();
+    c['editor_magnifier'] = value;
     SettingsStorage._cache = c;
     await _save();
   }

@@ -50,7 +50,10 @@ import java.util.Locale
 /// Протокол канала `com.leadaxe.lxbox/sora_editor_<id>`:
 ///  Dart → натив: setText, getText, setReadOnly, setDark (+colors),
 ///  setLanguage, search / searchNext / searchPrevious, replaceAll (Format:
-///  замена всего текста правкой — в undo, с `changed`).
+///  замена всего текста правкой — в undo, с `changed`), setMagnifier
+///  {enabled} (лупа выделения, §660), setWordWrap {wordWrap} и setText
+///  {waitLayout: true} — ответ приходит, когда фоновая раскладка после них
+///  кончилась (§660: кнопки переноса и ⋮ недоступны до ответа).
 ///  Натив → Dart: `changed` {text?, lines, rowHeight, textOffsetX} на каждую
 ///  правку (текст ≤ [SYNC_LIMIT] — сразу, длиннее — с задержкой
 ///  [SYNC_DEBOUNCE_MS], в промежуточных событиях без текста); `cursor`
@@ -209,6 +212,14 @@ class SoraEditorPlatformView(
     /// Последнее отправленное `layoutBusy`.
     private var sentLayoutBusy = false
 
+    /// Ответы `setWordWrap` и `setText {waitLayout}`, ждущие конца
+    /// раскладки (§660: кнопки переноса и ⋮ «заняты» до ответа). Обе раскладки
+    /// sora (`WordwrapLayout`, `LineBreakLayout`) всегда ставят задачу,
+    /// которая начинается `setLayoutBusy(true)` в фоне и кончается
+    /// `setLayoutBusy(false)` на главном потоке; ответ уходит на первый
+    /// `false` после переключения. Dart ждёт не дольше 30 с.
+    private val layoutReplies = mutableListOf<MethodChannel.Result>()
+
     init {
         val t0 = System.nanoTime()
         SoraTextMate.ensure(context)
@@ -250,6 +261,9 @@ class SoraEditorPlatformView(
         // координаты врут — лупа белая или со строками не из-под пальца
         // (форум 13.10). Рисуем её из самого редактора.
         editor.getComponent(Magnifier::class.java).isWithinEditorForcibly = true
+        // Лупу можно выключить (настройка приложения, §660).
+        editor.getComponent(Magnifier::class.java).isEnabled =
+            args?.get("magnifier") as? Boolean ?: true
         setReadOnly(args?.get("readOnly") as? Boolean ?: false)
         setTextFromDart(args?.get("text") as? String ?: "")
         if (args?.get("autofocus") == true && !readOnly) {
@@ -292,6 +306,7 @@ class SoraEditorPlatformView(
         editor.onLayoutReady = { editor.post { sendChanged(withText = false) } }
         editor.onLayoutBusy = { busy ->
             main.post {
+                if (!busy) replyLayoutDone()
                 if (!editor.isReleased && busy != sentLayoutBusy) {
                     sentLayoutBusy = busy
                     channel.invokeMethod("layoutBusy", hashMapOf("busy" to busy))
@@ -347,6 +362,7 @@ class SoraEditorPlatformView(
         // Порядок важен: задержанная правка уходит в Dart до снятия канала,
         // иначе уход с экрана сразу после правки длинного текста её теряет.
         flushPending()
+        replyLayoutDone()
         channel.invokeMethod("disposed", null)
         channel.setMethodCallHandler(null)
         editor.release()
@@ -392,6 +408,14 @@ class SoraEditorPlatformView(
         // Без переноса раскладка не фоновая (onLayoutReady не придёт) —
         // пределы прокрутки догоняем после кадра.
         editor.post { sendScrollState() }
+    }
+
+    /// Ответить ждущим конца раскладки (§660).
+    private fun replyLayoutDone() {
+        if (layoutReplies.isEmpty()) return
+        val pending = layoutReplies.toList()
+        layoutReplies.clear()
+        pending.forEach { it.success(null) }
     }
 
     private fun setReadOnly(value: Boolean) {
@@ -554,7 +578,12 @@ class SoraEditorPlatformView(
                 val text = call.argument<String>("text") ?: ""
                 setTextFromDart(text)
                 Log.d(TAG, "setText ${text.length} chars in ${(System.nanoTime() - t0) / 1_000_000} ms")
-                result.success(null)
+                // Format / Show original просмотрщика ждут конца раскладки (§660).
+                if (call.argument<Boolean>("waitLayout") == true) {
+                    layoutReplies.add(result)
+                } else {
+                    result.success(null)
+                }
             }
             "replaceAll" -> {
                 val text = call.argument<String>("text") ?: ""
@@ -582,7 +611,17 @@ class SoraEditorPlatformView(
                 result.success(null)
             }
             "setWordWrap" -> {
-                applyWordWrap(call.argument<Boolean>("wordWrap") ?: true)
+                val on = call.argument<Boolean>("wordWrap") ?: true
+                if (on == editor.isWordwrap) {
+                    result.success(null)
+                } else {
+                    layoutReplies.add(result)
+                    applyWordWrap(on)
+                }
+            }
+            "setMagnifier" -> {
+                editor.getComponent(Magnifier::class.java).isEnabled =
+                    call.argument<Boolean>("enabled") ?: true
                 result.success(null)
             }
             "setDark" -> {

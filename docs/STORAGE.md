@@ -111,6 +111,7 @@ lxbox_settings.json                          # SettingsStorage (Dart), the main 
 ├─ node_sort_mode                string        §100 — the chosen node sort mode ('' means the template default)
 ├─ node_manual_order[]           list          §100 — the manual order of node tags (for mode=manual)
 ├─ profiler_retention_sec        int           §044 — the profiler's live-journal window, default 600 (10 min); NOT config-significant
+├─ editor_magnifier              bool          §660 — the code editor's selection magnifier, default true; NOT config-significant
 ├─ warp_account                  object?       §025 — the cached WARP account (see the section below)
 ├─ masque_account                object?       §130 — the cached MASQUE-WARP account (see the section below)
 ├─ tun_apps                      object        §046 — split tunneling (see the section below)
@@ -214,6 +215,7 @@ Android SharedPreferences:
   "node_sort_mode":     "",        // §100
   "node_manual_order":  [ … ],     // §100
   "profiler_retention_sec": 600,   // §044 — the profiler's live-journal window (NOT config-significant)
+  "editor_magnifier":   true,      // §660 — the code editor's selection magnifier (NOT config-significant)
   "warp_account":       { … },     // §025 — the cached WARP account (secrets)
   "masque_account":     { … },     // §130 — the cached MASQUE-WARP account (secrets)
   "tun_apps":           { … },     // §046 — split-tunneling
@@ -1683,6 +1685,7 @@ with a warning. A legacy 0.12 file carries a root `chains[]` section (contract 0
 | `node_sort_mode` | `String` | §100 — the chosen node sort mode. `''` means the template default. CRUD: `getNodeSort` / `setNodeSort` (written as a pair with `node_manual_order`). |
 | `node_manual_order` | `List<String>` | §100 — the manual order of node tags (relevant in manual mode). Written together with `node_sort_mode`. |
 | `profiler_retention_sec` | `int` | §044 — the retention window of the profiler's live journal (the rolling buffer), in seconds. Default `600` (10 minutes), the UI offers 60/600/3600, and valid values are `> 0`. **NOT** config-significant. CRUD: `getProfilerRetentionSec` / `setProfilerRetentionSec`. |
+| `editor_magnifier` | `bool` | §660 — the selection magnifier of the code editor (sora), one setting for the whole app; the ⋮ menu of any editor toggles it. Default `true` (a missing key reads as `true`). **NOT** config-significant. Travels in the backup with the app settings. CRUD: `getEditorMagnifier` / `setEditorMagnifier`. |
 | `route_idle_suspend_reachable` | `String` | §272 — the reachable idle window (`lx.wg.idle_suspend_reachable`, §535). A duration string, default `'5m'`. **Config-significant** (`markConfigDirty`). CRUD: `getIdleSuspendReachable` / `saveIdleSuspendReachable`. |
 | `wg_build_max` | `int` | §542 — the WG/AWG build budget (`lx.wg.build_max`, core SPEC 097): how many endpoints stay built at once. Default `5`, `0` = no cap; the UI offers 0/3/5/8/12. Written to the config only together with `idle_suspend`. **Config-significant**. CRUD: `getWgBuildMax` / `saveWgBuildMax`. |
 | `wg_lazy_build` | `bool` | §542 — lazy WG/AWG build (`lx.wg.lazy_build`, core SPEC 097). Default `true`. `false` → neither `lazy_build` nor `build_max` is written. Written only together with `idle_suspend`. **Config-significant**. CRUD: `getWgLazyBuild` / `saveWgLazyBuild`. |

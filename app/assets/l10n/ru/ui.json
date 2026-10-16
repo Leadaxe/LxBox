@@ -2458,6 +2458,15 @@
   "Unwrap lines": {
     "value": "Не переносить строки"
   },
+  "More options": {
+    "value": "Ещё"
+  },
+  "Show original": {
+    "value": "Показать исходный"
+  },
+  "Magnifier": {
+    "value": "Лупа"
+  },
   "Imported: %s": {
     "value": "Импортировано: %s"
   },
