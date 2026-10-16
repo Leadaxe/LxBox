@@ -290,6 +290,9 @@ Start: document → old form? → migration → copy of the original → write
   the backup, the theme is not; startup prompt flags survive replace.
 - [030-TAILSCALE](../030-TAILSCALE/FEATURE.md) — Tailscale node state (device
   identities) is not in the backup and lives per slot.
+- [031-DEVICE_TRANSFER](../031-DEVICE_TRANSFER/FEATURE.md) — delivers a full
+  backup from a phone to a TV over the local network; the TV restores it
+  through this feature's preview and restore.
 
 ## Maintenance notes
 

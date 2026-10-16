@@ -80,6 +80,7 @@ code — about the logic and the order in which to set things up.
 - [Backup moves settings to another device](#backup-moves-settings-to-another-device)
   - [Export saves the chosen categories to a file](#export-saves-the-chosen-categories-to-a-file)
   - [Import shows the file's contents before applying](#import-shows-the-files-contents-before-applying)
+  - [Set up a TV from your phone](#set-up-a-tv-from-your-phone)
   - [Transfer to desktop moves the shared part of settings to the desktop launcher](#transfer-to-desktop-moves-the-shared-part-of-settings-to-the-desktop-launcher)
 
 ---
@@ -2421,13 +2422,15 @@ The **Backup & restore** screen saves L×Box settings to a JSON file and
 restores them from a file. Where: App Settings → General → Backup &
 restore. The screen serves to move to a new phone and to keep a copy before
 a reinstall. The screen has three cards: Export, Import and Transfer to
-desktop.
+desktop. A phone with a camera also shows Send to TV; an Android TV shows
+Receive from phone as the first card.
 
 | Task | What to choose |
 |---|---|
 | New phone, L×Box reinstall, a spare copy | Export, then Import |
 | Empty home screen right after install | Restore from backup under the + button on the home screen |
 | Moving settings to or from the desktop launcher | Transfer to desktop |
+| Setting up L×Box on an Android TV | Receive from phone on the TV, Send to TV on the phone |
 
 ### Export saves the chosen categories to a file
 
@@ -2489,6 +2492,40 @@ subscriptions update.
 The **Restore from backup** button on the empty home screen does the same
 without the selection window: it restores all categories of the file in
 Replace all mode and updates the subscriptions right away.
+
+### Set up a TV from your phone
+
+An Android TV gets the phone's settings over the local network: the TV
+shows a QR code, the phone scans it and sends. Nothing is typed with the
+remote. Both devices must be on the same network; a guest Wi-Fi often keeps
+devices from seeing each other.
+
+1. On the TV: Backup & restore → Receive from phone → **Show code**. On an
+   empty home screen the same item sits above Restore from backup. The
+   Receive settings screen shows the code, the device name, the address and
+   the time left; a code lives 10 minutes, **New code** makes another one.
+2. On the phone: Backup & restore → tick the categories in the Export card
+   → Send to TV → **Scan code**, point the camera at the TV and confirm
+   `Send to <TV name>?`.
+3. On the TV the Import backup window opens, the same as for a file:
+   choose categories and Merge or Replace all, apply, then **Restart now**.
+   From the empty home screen subscriptions update right away.
+
+The settings travel encrypted with a one-time key that only the QR code
+carries; the code works for one transfer. The phone sends past its own
+VPN, so the transfer works with the tunnel up. Debug API config stays off
+unless ticked, as in Export.
+
+| Line on the phone | What it means |
+|---|---|
+| `Sent. Confirm the restore on the TV.` | The TV accepted the settings; finish on the TV |
+| `Cannot reach the TV…` | Different networks or a guest Wi-Fi |
+| `The code has expired or was already used…` | Show a new code on the TV |
+| `The TV did not accept the code…` | The code is from another session; show a new one and scan again |
+| `This is not a LxBox transfer code` | The scanned QR code is something else |
+
+After five sends with a wrong code the TV closes the code. The receive
+item appears only on a TV, the send item only on a device with a camera.
 
 ### Transfer to desktop moves the shared part of settings to the desktop launcher
 

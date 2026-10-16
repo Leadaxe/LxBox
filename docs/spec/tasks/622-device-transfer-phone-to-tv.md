@@ -3,7 +3,7 @@
 | Поле | Значение |
 |------|----------|
 | Тип | F (новая фича) |
-| Статус | Спека, к реализации не приступали |
+| Статус | Implemented (2026-10-16); ручные проверки на эмуляторах TV/телефона не проведены |
 | Дата | 2026-10-09 |
 | Связанные | [Leadaxe/LxBox#163](https://github.com/Leadaxe/LxBox/issues/163); фича [031-DEVICE_TRANSFER](../features/031-DEVICE_TRANSFER/FEATURE.ru.md); §372 (Android TV); §375/§382 (QR-сканер); 017-BACKUP_AND_STORAGE |
 
@@ -153,6 +153,59 @@ LxBox в allow-mode кладёт себя в туннель (`BoxService.kt:961`
 нужен проброс `adb forward` на TV-эмуляторе плюс отладочная подмена
 адреса в коде передачи — или реальный TV и телефон в одной сети
 (телефон владельца — только с его разрешения).
+
+## Решение (реализация 2026-10-16)
+
+Узлы 1–4, 6 и Kotlin-часть узла 5 сделаны; ручная проверка на стенде не
+проводилась.
+
+- **Код и конверт:** `app/lib/services/transfer/transfer_code.dart`
+  (`TransferCode.encode/tryParse`, `toString` маскирует ключ),
+  `transfer_envelope.dart` (`sealTransferEnvelope` / `openTransferEnvelope`,
+  ошибки формата → 400, аутентификации → 403).
+- **Сервер приёма:** `app/lib/services/transfer/transfer_receiver.dart` —
+  `HttpServer.bind(anyIPv4, 0)`, один маршрут, порядок и коды как в узле 2;
+  400 в счётчик отказов не входит (считается только 403); 422 сессию не
+  закрывает. `pickTransferAddresses` / `localTransferAddresses` — адреса
+  для QR (отбрасываются также `ppp*`, `wg*`, `ipsec*`).
+- **Решение «показывать пункт»:** `app/lib/services/transfer/transfer_entries.dart`;
+  признаки — `UrlLauncher.isTelevision()` (новый метод канала `isTelevision`
+  в `MainActivity.kt`: `UI_MODE_TYPE_TELEVISION` или `FEATURE_LEANBACK`,
+  кеш на процесс в Dart) и `UrlLauncher.hasCamera()`.
+- **Экран приёма:** `app/lib/screens/transfer_receive_screen.dart` — QR
+  через `zx.encodeBarcode` (модуль = пиксель, рисуется `CustomPainter` на
+  белом поле), автофокус на «Cancel», `setKeepScreenOn` (новый метод
+  канала, снимается в `dispose`). Принятый бэкап возвращается через `pop`.
+- **Общий путь восстановления:** `app/lib/screens/backup_screen/restore_flow.dart`
+  (`restoreFromContents`), зовут импорт файла и приём в
+  `backup_screen.dart` и приём на пустом главном экране
+  (`home/restore_backup.dart` → `receiveFromPhone`, с перечитыванием
+  подписок через `onApplied`).
+- **Отправка:** шаг в `backup_screen.dart` (`_onSendToTv`, категории
+  карточки Export), карточка `backup_screen/device_transfer_card.dart`,
+  тексты итога `backup_screen/transfer_send_text.dart`, доставка
+  `app/lib/services/transfer/transfer_sender.dart`.
+- **Узел 5 (P7):** `app/android/.../LanTransferSender.kt`, метод канала
+  `lanPost`. Сокет создаётся `Network.socketFactory` сети Wi-Fi/Ethernet без
+  `TRANSPORT_VPN` (при нескольких — той, в чьей подсети адрес) и тем самым
+  привязан к её netId; netd пускает такую привязку для UID, которому
+  разрешено защищать сокеты, — владелец VPN среди них, `allowBypass` не
+  нужен. HTTP пишется руками: `HttpURLConnection` подчиняется
+  `network_security_config`, где cleartext разрешён только для loopback.
+  Нет такой сети или канала — `HttpClient` в Dart. Отказ соединения
+  трактуется как «код истёк/использован», таймаут — «недоступно».
+- **Пункты входа:** TV — первая карточка экрана Backup и кнопка над
+  «Restore from backup» в гайде пустого главного экрана
+  (`add_server_cta.dart`, `node_list.dart`, `home_screen.dart`); телефон с
+  камерой — карточка «Send to TV» под Export.
+- **Тесты:** `app/test/services/transfer/transfer_code_test.dart`,
+  `transfer_envelope_test.dart`, `transfer_receiver_test.dart` (реальный
+  сокет на loopback), `transfer_sender_test.dart`,
+  `transfer_entries_test.dart`, `app/test/screens/backup_screen_transfer_test.dart`.
+- **Доки:** фича 031 (свидетели, функции `receive-session`, `send-to-tv`),
+  017 «Связанные фичи», `docs/USER_GUIDE.md` / `.ru.md` → «Set up a TV
+  from your phone». Файл функции отправки назван `send-to-tv` (в узле 6
+  было `send-to-device`).
 
 ## Проверка (критерии приёмки)
 
