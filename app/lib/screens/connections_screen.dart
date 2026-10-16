@@ -382,6 +382,17 @@ class _ConnectionsViewState extends State<ConnectionsView> {
                     ],
                   ),
                 ),
+                // §661 — Row 3: `source / inbound`, только если вход не tun-in
+                // (соединение пришло через эндпоинт или локальный прокси).
+                if (conn.sourceLabel.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 22, top: 1),
+                    child: Text(
+                      conn.sourceLabel,
+                      style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
               ],
             ),
           ),

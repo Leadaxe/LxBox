@@ -1618,6 +1618,11 @@ class BoxCommandClient {
                 "network" to c.getNetwork(),
                 "domain" to c.getDomain(),
                 "destination" to c.getDestination(),
+                // §661 — вход и источник: при эндпоинтах/прокси мы шлюз,
+                // соединение может прийти не из tun-in и не с адреса устройства.
+                "source" to c.getSource(),
+                "inbound" to c.getInbound(),
+                "inboundType" to c.getInboundType(),
                 "rule" to c.getRule(),
                 "uplink" to c.getUplinkTotal(),
                 "downlink" to c.getDownlinkTotal(),

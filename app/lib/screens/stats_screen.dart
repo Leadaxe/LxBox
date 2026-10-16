@@ -165,6 +165,7 @@ class _StatsScreenState extends State<StatsScreen> {
         upload: c.uplink,
         download: c.downlink,
         start: c.createdAt,
+        sourceLabel: c.sourceLabel,
       );
 
       final existing = perRule[rule];

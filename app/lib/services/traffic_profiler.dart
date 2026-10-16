@@ -699,6 +699,9 @@ class TrafficProfiler extends ChangeNotifier {
           network: network,
           rule: rule.isNotEmpty ? rule : null,
           rulePayload: rulePayload.isNotEmpty ? rulePayload : null,
+          // §661 — источник/вход только для нестандартного входа.
+          source: !c.isStandardInbound && c.source.isNotEmpty ? c.source : null,
+          inbound: !c.isStandardInbound ? c.inbound : null,
           confidence: hasProcess
               ? ConfidenceLevel.verified
               : ConfidenceLevel.unattributed,
@@ -732,6 +735,8 @@ class TrafficProfiler extends ChangeNotifier {
           matchedVia: globalEv.matchedVia,
           rule: rule,
           rulePayload: rulePayload,
+          source: globalEv.source, // §661
+          inbound: globalEv.inbound,
         );
       } else {
         // Update bytes — снапшот latest values, не emit'им event.
@@ -778,6 +783,8 @@ class TrafficProfiler extends ChangeNotifier {
         network: snap.network,
         rule: snap.rule.isEmpty ? null : snap.rule,
         rulePayload: snap.rulePayload.isEmpty ? null : snap.rulePayload,
+        source: snap.source, // §661
+        inbound: snap.inbound,
         confidence: snap.confidence,
         matchedVia: snap.matchedVia,
         issues: _classifyConnectionClose(snap, closeTs),

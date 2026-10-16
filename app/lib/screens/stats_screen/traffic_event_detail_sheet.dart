@@ -156,6 +156,9 @@ class _TrafficEventDetailSheet extends StatelessWidget {
       _confidenceRow(context, e),
       _copyRow(context, 'Matched via', e.matchedVia ?? ''),
       _copyRow(context, 'Shown because', e.shownBecause ?? ''),
+      // §661 — вход не через tun-in: откуда и через какой inbound.
+      _copyRow(context, 'Source', e.source ?? ''),
+      _copyRow(context, 'Inbound', e.inbound ?? ''),
     ]));
 
     // Routing (§181/§204) — единый набор строк (routingRows), общий с Conns.

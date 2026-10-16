@@ -1158,6 +1158,9 @@ class CcConnection {
     required this.network,
     required this.domain,
     required this.destination,
+    this.source = '',
+    this.inbound = '',
+    this.inboundType = '',
     required this.rule,
     required this.uplink,
     required this.downlink,
@@ -1179,6 +1182,21 @@ class CcConnection {
   final String domain;
   final String destination;
   final String rule;
+
+  /// §661 — источник `ip:port` и вход (тег/тип inbound). При эндпоинтах и
+  /// локальных прокси мы шлюз: соединение приходит не только из `tun-in`.
+  /// Пусто на старом нативе.
+  final String source;
+  final String inbound;
+  final String inboundType;
+
+  /// §661 — стандартный вход: TUN устройства (или натив не отдал inbound).
+  bool get isStandardInbound => inbound.isEmpty || inbound == 'tun-in';
+
+  /// §661 — `source / inbound` для нестандартного входа, иначе `''`.
+  String get sourceLabel => isStandardInbound
+      ? ''
+      : (source.isNotEmpty ? '$source / $inbound' : inbound);
 
   /// Накопленный итог за соединение (всего передано). `getUplinkTotal`.
   final int uplink;
@@ -1281,6 +1299,9 @@ class CcConnection {
     network: m['network']?.toString() ?? '',
     domain: m['domain']?.toString() ?? '',
     destination: m['destination']?.toString() ?? '',
+    source: m['source']?.toString() ?? '',
+    inbound: m['inbound']?.toString() ?? '',
+    inboundType: m['inboundType']?.toString() ?? '',
     rule: m['rule']?.toString() ?? '',
     uplink: _int(m['uplink']),
     downlink: _int(m['downlink']),

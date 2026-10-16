@@ -164,6 +164,16 @@ class _ConnectionDetailSheet extends StatelessWidget {
       ]));
     }
 
+    // §661 — Source: откуда пришло соединение и через какой вход. Только
+    // если натив отдал inbound (старый натив — группы нет).
+    if (conn.inbound.isNotEmpty) {
+      out.addAll(_group(context, 'Source', [
+        _row(context, 'Source', conn.source),
+        _row(context, 'Inbound', conn.inbound),
+        _row(context, 'Inbound type', conn.inboundType),
+      ]));
+    }
+
     // Destination
     out.addAll(_group(context, 'Destination', [
       _row(context, 'Host', conn.domain),
@@ -374,6 +384,9 @@ class _ConnectionDetailSheet extends StatelessWidget {
         'network': conn.network,
         'domain': conn.domain,
         'destination': conn.destination,
+        if (conn.source.isNotEmpty) 'source': conn.source,
+        if (conn.inbound.isNotEmpty) 'inbound': conn.inbound,
+        if (conn.inboundType.isNotEmpty) 'inboundType': conn.inboundType,
         'rule': conn.rule,
         'uplink': conn.uplink,
         'downlink': conn.downlink,

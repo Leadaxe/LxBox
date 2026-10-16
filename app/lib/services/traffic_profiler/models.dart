@@ -124,6 +124,8 @@ class TrafficEvent {
     this.network,
     this.rule,
     this.rulePayload,
+    this.source,
+    this.inbound,
     this.rawLogLine,
     this.confidence = ConfidenceLevel.verified,
     this.matchedVia,
@@ -171,6 +173,12 @@ class TrafficEvent {
   final String? network; // tcp / udp
   final String? rule;
   final String? rulePayload;
+
+  /// §661 — источник `ip:port` и тег inbound, только если вход не `tun-in`
+  /// (соединение через эндпоинт или локальный прокси — мы шлюз). null для
+  /// TUN, DNS и старого натива.
+  final String? source;
+  final String? inbound;
 
   /// §219 — (DORMANT) никогда не заполняется: лог-питатель профайлера снят в
   /// §180 (DNS из структурного стрима, TCP из ядра). Копируется при
@@ -281,6 +289,8 @@ class TrafficEvent {
         if (network != null) 'network': network,
         if (rule != null) 'rule': rule,
         if (rulePayload != null) 'rule_payload': rulePayload,
+        if (source != null) 'source': source,
+        if (inbound != null) 'inbound': inbound,
         // §048 — confidence всегда отражается, даже для verified
         // (consumers могут отличать «default» от опущенного поля).
         'confidence': confidence.name,
@@ -326,6 +336,8 @@ class TrafficEvent {
         network: network,
         rule: rule,
         rulePayload: rulePayload,
+        source: source,
+        inbound: inbound,
         rawLogLine: rawLogLine,
         confidence: confidence ?? this.confidence,
         matchedVia: matchedVia ?? this.matchedVia,

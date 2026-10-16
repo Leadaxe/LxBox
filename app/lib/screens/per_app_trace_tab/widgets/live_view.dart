@@ -179,9 +179,13 @@ class LiveView extends StatelessWidget {
                     children: [
                       Expanded(
                         child: Text(
-                          (e.process ?? '').isNotEmpty
-                              ? e.process!
-                              : getLocalText.s("(no owner)"),
+                          ((e.process ?? '').isNotEmpty
+                                  ? e.process!
+                                  : getLocalText.s("(no owner)")) +
+                              // §661 — вход не через tun-in (шлюз/прокси).
+                              ((e.inbound ?? '').isNotEmpty
+                                  ? ' · ${(e.source ?? '').isNotEmpty ? '${e.source} / ' : ''}${e.inbound}'
+                                  : ''),
                           style: TextStyle(
                               fontSize: 11,
                               color: (e.process ?? '').isNotEmpty
