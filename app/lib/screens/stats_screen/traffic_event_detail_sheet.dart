@@ -107,6 +107,15 @@ class _TrafficEventDetailSheet extends StatelessWidget {
     final e = event;
     final out = <Widget>[];
 
+    // §661 — Source: вход не через tun-in (эндпоинт/прокси, мы шлюз) —
+    // откуда пришло соединение и через какой inbound. Для TUN группы нет.
+    if ((e.inbound ?? '').isNotEmpty) {
+      out.addAll(_group(context, 'Source', [
+        _copyRow(context, 'Source', e.source ?? ''),
+        _copyRow(context, 'Inbound', e.inbound ?? ''),
+      ]));
+    }
+
     // Destination — host/IP/port кликабельны → поиск.
     out.addAll(_group(context, 'Destination', [
       _searchRow(context, 'Host', e.domain ?? ''),
@@ -156,9 +165,6 @@ class _TrafficEventDetailSheet extends StatelessWidget {
       _confidenceRow(context, e),
       _copyRow(context, 'Matched via', e.matchedVia ?? ''),
       _copyRow(context, 'Shown because', e.shownBecause ?? ''),
-      // §661 — вход не через tun-in: откуда и через какой inbound.
-      _copyRow(context, 'Source', e.source ?? ''),
-      _copyRow(context, 'Inbound', e.inbound ?? ''),
     ]));
 
     // Routing (§181/§204) — единый набор строк (routingRows), общий с Conns.
