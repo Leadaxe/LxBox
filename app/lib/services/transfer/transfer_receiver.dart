@@ -130,7 +130,8 @@ class TransferReceiver {
   bool _accepted = false;
   int _rejected = 0;
 
-  /// Последняя отвергнутая попытка; null — пока не было.
+  /// Последняя отвергнутая попытка; null — пока не было. Не освобождается:
+  /// запрос, начатый до [close], может дописать сюда уже после закрытия.
   final ValueNotifier<TransferProblem?> problem = ValueNotifier(null);
 
   /// Порт сессии; остаётся известным и после закрытия.

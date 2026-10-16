@@ -6212,5 +6212,104 @@
   },
   "n/a": {
     "value": "н/д"
+  },
+  "Address: %s": {
+    "value": "Адрес: %s"
+  },
+  "Cannot reach the TV. Both devices must be on the same network; guest Wi-Fi often keeps devices from seeing each other.": {
+    "value": "Телевизор недоступен. Оба устройства должны быть в одной сети; гостевой Wi-Fi часто не даёт устройствам видеть друг друга."
+  },
+  "Code expires in %s": {
+    "value": "Код действует ещё %s"
+  },
+  "Connect this TV to Wi-Fi or Ethernet, then press New code.": {
+    "value": "Подключите телевизор к Wi-Fi или Ethernet и нажмите «Новый код»."
+  },
+  "Could not start receiving: %s": {
+    "value": "Не удалось начать приём: %s"
+  },
+  "Device: %s": {
+    "value": "Устройство: %s"
+  },
+  "New code": {
+    "value": "Новый код"
+  },
+  "No local network": {
+    "value": "Нет локальной сети"
+  },
+  "On your phone, open Backup & restore in LxBox, choose Send to TV and scan this code.": {
+    "value": "На телефоне откройте в LxBox «Резервное копирование», выберите «Отправить на TV» и отсканируйте этот код."
+  },
+  "Preparing the code…": {
+    "value": "Готовим код…"
+  },
+  "Receive from phone": {
+    "value": "Принять с телефона"
+  },
+  "Receive settings": {
+    "value": "Приём настроек"
+  },
+  "Rejected attempts with a wrong code: %1$d of %2$d": {
+    "value": "Отклонено попыток с чужим кодом: %1$d из %2$d"
+  },
+  "Scan code": {
+    "value": "Сканировать код"
+  },
+  "Scan the code shown by LxBox on your TV to send the categories selected under Export over the local network. Both devices must be on the same network.": {
+    "value": "Отсканируйте код, который показывает LxBox на телевизоре, чтобы отправить по локальной сети категории, отмеченные в разделе «Экспорт». Оба устройства должны быть в одной сети."
+  },
+  "Send": {
+    "value": "Отправить"
+  },
+  "Send to %s?": {
+    "value": "Отправить на %s?"
+  },
+  "Send to TV": {
+    "value": "Отправить на TV"
+  },
+  "Sending failed: %s": {
+    "value": "Не удалось отправить: %s"
+  },
+  "Sending failed: HTTP %d": {
+    "value": "Не удалось отправить: HTTP %d"
+  },
+  "Sent. Confirm the restore on the TV.": {
+    "value": "Отправлено. Подтвердите восстановление на телевизоре."
+  },
+  "Show a code on this TV and scan it with LxBox on your phone. The phone sends its settings over the local network; you confirm them here before they apply.": {
+    "value": "Покажите код на этом телевизоре и отсканируйте его в LxBox на телефоне. Телефон отправит настройки по локальной сети, а применятся они только после подтверждения здесь."
+  },
+  "Show code": {
+    "value": "Показать код"
+  },
+  "The TV cannot restore these settings: %s": {
+    "value": "Телевизор не может восстановить эти настройки: %s"
+  },
+  "The TV did not accept the code. Show a new code on the TV and scan it again.": {
+    "value": "Телевизор не принял код. Покажите на телевизоре новый код и отсканируйте его снова."
+  },
+  "The code has expired or was already used. Show a new code on the TV.": {
+    "value": "Код истёк или уже использован. Покажите на телевизоре новый код."
+  },
+  "The code has expired. Press New code to get another one.": {
+    "value": "Код истёк. Нажмите «Новый код», чтобы получить другой."
+  },
+  "The phone sent settings that cannot be restored: %s": {
+    "value": "Телефон прислал настройки, которые нельзя восстановить: %s"
+  },
+  "The selected categories are encrypted with the key from the code and sent over the local network. The TV shows what arrived and asks before applying it.": {
+    "value": "Отмеченные категории шифруются ключом из кода и отправляются по локальной сети. Телевизор покажет, что пришло, и спросит перед применением."
+  },
+  "The settings are too large to send.": {
+    "value": "Настройки слишком большие для отправки."
+  },
+  "This is not a LxBox transfer code": {
+    "value": "Это не код передачи LxBox"
+  },
+  "Too many attempts with a wrong code. The code is closed; press New code to get another one.": {
+    "value": "Слишком много попыток с чужим кодом. Код закрыт; нажмите «Новый код», чтобы получить другой."
+  },
+  "Waiting for the phone…": {
+    "value": "Ждём телефон…"
   }
 }

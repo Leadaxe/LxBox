@@ -43,6 +43,7 @@ import 'home/node_filter_view_model.dart';
 import 'home/node_list_presenter.dart';
 import 'home/openconnect_auth_ui.dart';
 import 'home/restore_backup.dart';
+import '../services/url_launcher.dart';
 import 'home/startup_wizard.dart';
 import '../services/debug/bootstrap.dart';
 import '../services/debug/debug_registry.dart';
@@ -138,6 +139,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   /// завершением reload'а (снял), что читается как «галка не работает».
   bool _autoApplying = false;
 
+  /// §622 — устройство в режиме TV: гайд пустого экрана предлагает приём
+  /// настроек с телефона.
+  bool _isTelevision = false;
+
   /// §107 (R3): one-shot listener «subController освободился — догнать
   /// pending rebuild», см. [_retryRebuildWhenIdle].
   VoidCallback? _idleRetryListener;
@@ -181,6 +186,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // §622 — приём настроек с телефона в гайде пустого экрана только на TV.
+    unawaited(UrlLauncher.isTelevision().then((tv) {
+      if (tv && mounted) setState(() => _isTelevision = true);
+    }));
     // Порядок: subController first → AutoUpdater видит entries,
     // HomeController holds AutoUpdater для VPN-transitions callback.
     _subController = SubscriptionController();
@@ -926,6 +935,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                     showEmptyGuide: showEmptyGuide,
                     onRestoreFromBackup: () =>
                         restoreFromBackup(context, _subController, _autoUpdater),
+                    onReceiveFromPhone: _isTelevision
+                        ? () => unawaited(receiveFromPhone(
+                            context, _subController, _autoUpdater))
+                        : null,
                     onTapToConnect: () => unawaited(_startWithAutoRefresh()),
                     rowKeyFor: _nodeRowKey, // §203
                     onSelectServer: _scrollToNode, // §203

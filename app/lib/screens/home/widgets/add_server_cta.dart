@@ -17,12 +17,16 @@ class AddServerCta extends StatelessWidget {
     required this.subController,
     required this.autoUpdater,
     required this.onRestoreFromBackup,
+    this.onReceiveFromPhone,
   });
 
   final HomeController controller;
   final SubscriptionController subController;
   final AutoUpdater autoUpdater;
   final VoidCallback onRestoreFromBackup;
+
+  /// §622 — приём настроек с телефона; null вне TV (пункта нет, P10).
+  final VoidCallback? onReceiveFromPhone;
 
   @override
   Widget build(BuildContext context) {
@@ -69,6 +73,15 @@ class AddServerCta extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
+            if (onReceiveFromPhone != null)
+              TextButton.icon(
+                onPressed: onReceiveFromPhone,
+                icon: const Icon(Icons.tv, size: 18),
+                label: Text(getLocalText.s("Receive from phone")),
+                style: TextButton.styleFrom(
+                  foregroundColor: cs.onSurfaceVariant,
+                ),
+              ),
             TextButton.icon(
               onPressed: onRestoreFromBackup,
               icon: const Icon(Icons.restore, size: 18),

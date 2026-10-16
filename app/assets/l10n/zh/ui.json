@@ -5933,5 +5933,104 @@
   },
   "n/a": {
     "value": "不适用"
+  },
+  "Address: %s": {
+    "value": "地址：%s"
+  },
+  "Cannot reach the TV. Both devices must be on the same network; guest Wi-Fi often keeps devices from seeing each other.": {
+    "value": "无法连接电视。两台设备必须在同一网络中；访客 Wi-Fi 通常会阻止设备互相访问。"
+  },
+  "Code expires in %s": {
+    "value": "代码将在 %s 后过期"
+  },
+  "Connect this TV to Wi-Fi or Ethernet, then press New code.": {
+    "value": "请将电视连接到 Wi-Fi 或以太网，然后按“新代码”。"
+  },
+  "Could not start receiving: %s": {
+    "value": "无法开始接收：%s"
+  },
+  "Device: %s": {
+    "value": "设备：%s"
+  },
+  "New code": {
+    "value": "新代码"
+  },
+  "No local network": {
+    "value": "无本地网络"
+  },
+  "On your phone, open Backup & restore in LxBox, choose Send to TV and scan this code.": {
+    "value": "在手机上打开 LxBox 的“备份与恢复”，选择“发送到电视”并扫描此代码。"
+  },
+  "Preparing the code…": {
+    "value": "正在生成代码…"
+  },
+  "Receive from phone": {
+    "value": "从手机接收"
+  },
+  "Receive settings": {
+    "value": "接收设置"
+  },
+  "Rejected attempts with a wrong code: %1$d of %2$d": {
+    "value": "错误代码的尝试已拒绝：%1$d / %2$d"
+  },
+  "Scan code": {
+    "value": "扫描代码"
+  },
+  "Scan the code shown by LxBox on your TV to send the categories selected under Export over the local network. Both devices must be on the same network.": {
+    "value": "扫描电视上 LxBox 显示的代码，通过本地网络发送“导出”中选中的类别。两台设备必须在同一网络中。"
+  },
+  "Send": {
+    "value": "发送"
+  },
+  "Send to %s?": {
+    "value": "发送到 %s？"
+  },
+  "Send to TV": {
+    "value": "发送到电视"
+  },
+  "Sending failed: %s": {
+    "value": "发送失败：%s"
+  },
+  "Sending failed: HTTP %d": {
+    "value": "发送失败：HTTP %d"
+  },
+  "Sent. Confirm the restore on the TV.": {
+    "value": "已发送。请在电视上确认恢复。"
+  },
+  "Show a code on this TV and scan it with LxBox on your phone. The phone sends its settings over the local network; you confirm them here before they apply.": {
+    "value": "在这台电视上显示代码，然后用手机上的 LxBox 扫描。手机会通过本地网络发送设置，在这里确认后才会应用。"
+  },
+  "Show code": {
+    "value": "显示代码"
+  },
+  "The TV cannot restore these settings: %s": {
+    "value": "电视无法恢复这些设置：%s"
+  },
+  "The TV did not accept the code. Show a new code on the TV and scan it again.": {
+    "value": "电视未接受该代码。请在电视上显示新代码并重新扫描。"
+  },
+  "The code has expired or was already used. Show a new code on the TV.": {
+    "value": "代码已过期或已被使用。请在电视上显示新代码。"
+  },
+  "The code has expired. Press New code to get another one.": {
+    "value": "代码已过期。按“新代码”获取新的代码。"
+  },
+  "The phone sent settings that cannot be restored: %s": {
+    "value": "手机发送的设置无法恢复：%s"
+  },
+  "The selected categories are encrypted with the key from the code and sent over the local network. The TV shows what arrived and asks before applying it.": {
+    "value": "选中的类别会用代码中的密钥加密，并通过本地网络发送。电视会显示收到的内容，并在应用前询问。"
+  },
+  "The settings are too large to send.": {
+    "value": "设置太大，无法发送。"
+  },
+  "This is not a LxBox transfer code": {
+    "value": "这不是 LxBox 传输代码"
+  },
+  "Too many attempts with a wrong code. The code is closed; press New code to get another one.": {
+    "value": "错误代码的尝试次数过多。代码已关闭；按“新代码”获取新的代码。"
+  },
+  "Waiting for the phone…": {
+    "value": "正在等待手机…"
   }
 }

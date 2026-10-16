@@ -91,6 +91,7 @@ class HomeNodeList extends StatelessWidget {
     required this.state,
     required this.showEmptyGuide,
     required this.onRestoreFromBackup,
+    this.onReceiveFromPhone,
     required this.onTapToConnect,
     required this.rowKeyFor,
     required this.onSelectServer,
@@ -109,6 +110,9 @@ class HomeNodeList extends StatelessWidget {
   /// (там же гейтит контролы — решение одно на весь экран).
   final bool showEmptyGuide;
   final Future<void> Function() onRestoreFromBackup;
+
+  /// §622 — приём настроек с телефона в гайде пустого экрана; null вне TV.
+  final VoidCallback? onReceiveFromPhone;
   final VoidCallback onTapToConnect;
 
   /// §203 — per-tag GlobalKey строки (для scroll-to-node) + колбэк «перейти к
@@ -134,6 +138,7 @@ class HomeNodeList extends StatelessWidget {
           subController: subController,
           autoUpdater: autoUpdater,
           onRestoreFromBackup: onRestoreFromBackup,
+          onReceiveFromPhone: onReceiveFromPhone,
         ),
       );
     }
@@ -150,6 +155,7 @@ class HomeNodeList extends StatelessWidget {
             subController: subController,
             autoUpdater: autoUpdater,
             onRestoreFromBackup: onRestoreFromBackup,
+            onReceiveFromPhone: onReceiveFromPhone,
           ),
         );
       }
