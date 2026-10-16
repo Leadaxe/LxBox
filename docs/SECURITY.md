@@ -18,20 +18,22 @@ Related specs: [`020 — Security & DPI Bypass`](spec/tasks/020F-security-and-dp
    - 2.4 [The "Unknown traffic" rule — socket-owner filter](#24-the-unknown-traffic-rule--socket-owner-filter)
    - 2.5 [Layers: route engine vs connection journal](#25-layers-route-engine-vs-connection-journal)
 3. [Local attack surface](#3-local-attack-surface)
-4. [Secrets on the device](#4-secrets-on-the-device)
-5. [Summary table](#5-summary-table)
+4. [Inbound connections from client tunnels](#4-inbound-connections-from-client-tunnels)
+5. [Secrets on the device](#5-secrets-on-the-device)
+6. [Summary table](#6-summary-table)
 
 ---
 
 ## 1. Threat model
 
-L×Box is a VPN client: it accepts other apps' traffic, wraps it in a tunnel, and sends it to a remote node. Three classes of threat follow from that, and we defend against each:
+L×Box is a VPN client: it accepts other apps' traffic, wraps it in a tunnel, and sends it to a remote node. Four classes of threat follow from that, and we defend against each:
 
 | Class | Threat | Covered in |
 |-------|--------|------------|
 | **Traffic leak** | Traffic escapes the tunnel or the routing policy — deanonymization, bypass simply doesn't work | [§2](#2-traffic-leaks-out-of-the-tunnel) |
 | **Local surface** | An open local proxy/API that another app on the device could abuse | [§3](#3-local-attack-surface) |
-| **Secret theft** | Private keys, device tokens, subscription credentials leak out of the app | [§4](#4-secrets-on-the-device) |
+| **Tunnel ingress** | The server or a peer of a client tunnel (WireGuard, OpenVPN, OpenConnect) opens a connection inward — to the device, into the LAN, or out to the internet from the user's IP | [§4](#4-inbound-connections-from-client-tunnels) |
+| **Secret theft** | Private keys, device tokens, subscription credentials leak out of the app | [§5](#5-secrets-on-the-device) |
 
 ---
 
@@ -156,18 +158,42 @@ Source and roadmap — [`020 — Security & DPI Bypass`](spec/tasks/020F-securit
 
 ---
 
-## 4. Secrets on the device
+## 4. Inbound connections from client tunnels
+
+Threat: a client endpoint (WireGuard/AWG, OpenVPN, OpenConnect) is a two-way channel. The server, or any peer on the far side, can open a connection inward on its own, and the gVisor stack accepts a connection to any address. Without a dedicated rule such a connection follows the general routing. With `final = direct` the peer reaches the device itself (`127.0.0.1`), the user's local network, and the internet from the user's IP.
+
+The defence is the **Tunnel ingress** preset (`tunnel-ingress`, §656, contract 1.1.126–1.1.129):
+
+- **On by default.** Existing installs get it once on update (late default). A preset the user deleted does not come back.
+- **Coverage.** Every node of type `wireguard`, `openvpn-client` or `openconnect`: own servers, folder members and subscription nodes. Rules match on the inbound: `inbound` = the endpoint tag.
+- **Node switches.** The "Incoming connections from this tunnel" block on the node screen: access to this device (`allow_local`), to the local network (`allow_lan`), using this device as a gateway (`allow_gateway`). All off by default. A subscription node has no switches and is always closed.
+
+Preset rules, top to bottom:
+
+| Condition | Destinations | Goes to |
+|---|---|---|
+| `allow_local` | `127.0.0.0/8`, `::1/128` | `allowed_out` (default `direct-out`) |
+| `allow_lan` | private addresses (`ip_is_private`) | `allowed_out` |
+| `allow_gateway` | any | `gateway_out` (default `vpn-1`, same as `route.final`) |
+| everything else from these endpoints | any | `closed_out` (default `reject`; `drop` or an outbound also allowed) |
+
+DNS queries from nodes without `allow_gateway` are rejected by a rule in `dns.rules` when `closed_out` is `reject` or `drop`. That rule does not depend on the preset's `dns_enable`. A peer allowed only the device or the LAN does not get to use the client's resolver.
+
+---
+
+## 5. Secrets on the device
 
 | Secret | How we protect it |
 |--------|-------------------|
 | **WARP private key** | The X25519 key is generated **on the device** and never leaves it — only the public key is sent to Cloudflare. We don't use third-party generator workers (they hand out a server-generated private key). See [§025 WARP](spec/tasks/025F-warp-integration/spec.md). |
 | **MASQUE key & device token** | The §130 MASQUE transport uses a **separate** ECDSA P-256 keypair generated on the device; only the public part is enrolled with Cloudflare (PATCH enroll), the SEC1-DER private key never leaves the phone. The per-device Cloudflare Bearer token is stored locally and is marked never-log alongside the private key. See [§130 MASQUE](spec/tasks/130F-masque-warp-transport/spec.md). |
+| **Subscription HWID** (`x-hwid`) | Not a secret but a stable install identifier for panels with device limits (Remnawave). Since §658 it is sent by default together with `x-device-os` / `x-ver-os` / `x-device-model`; the "Send HWID" switch turns it off. The HWID is in the backup **on purpose**: a backup restored on another device carries the same HWID, the panel sees one device, and moving to a new phone does not use up a slot. Regenerate after the restore makes the panel count it as a separate device. |
 | **Debug API Bearer token** | Held in settings storage; the Debug API is off by default and bound to loopback only (see §3). |
 | **Subscription credentials** | Roadmap: encrypted storage (Android Keystore), URL masking in the UI — see the roadmap in spec 020. A §129 file-based subscription additionally persists its imported body as a plaintext `HttpCache` snapshot (keyed `file:<uuid>`) in the app's private storage; the same encrypted-storage roadmap item covers these snapshots. |
 
 ---
 
-## 5. Summary table
+## 6. Summary table
 
 | Mechanism | Axis / layer | What it catches | Apps affected? |
 |-----------|--------------|-----------------|----------------|
@@ -178,5 +204,6 @@ Source and roadmap — [`020 — Security & DPI Bypass`](spec/tasks/020F-securit
 | Debug API off by default; loopback + Bearer + Host check | local surface | unauthorized config control (opt-in only) | — |
 | TUN-only / auth-on-LAN | local surface | other apps using the local proxy | — |
 | On-device key gen (WARP X25519, MASQUE P-256) | secrets | private-key leakage | — |
+| **Tunnel ingress** preset (`tunnel-ingress`) | tunnel inbound (`inbound`) | peer connections inward: to the device, into the LAN, out through us | no — endpoint inbound only |
 
 **Key takeaway:** ownerless traffic = entered tun bypassing the VpnService intercept (`curl --interface tun0`, termux bind), the UID doesn't resolve → the package is empty → it's caught **only** by the "Unknown traffic" rule, not by destination rules like `0.0.0.0/0`. So full leak protection needs both axes.
