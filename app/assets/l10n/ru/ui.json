@@ -6311,5 +6311,8 @@
   },
   "Waiting for the phone…": {
     "value": "Ждём телефон…"
+  },
+  "The TV is busy with another request. Try again in a moment.": {
+    "value": "Телевизор занят другим запросом. Попробуйте ещё раз чуть позже."
   }
 }

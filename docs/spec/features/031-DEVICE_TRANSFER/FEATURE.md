@@ -49,11 +49,15 @@ backup file, with the same checks and the same confirmation.
   error", "corrupted nonce → auth error".
   **Mutation:** the payload is accepted in plain text.
 - **P3. One session — one transfer.** After the first accepted payload the
-  session closes; repeated attempts are refused. After a fixed number of
-  rejected attempts the session closes as well. **Witness:** units "valid
-  envelope → 200, session closed, same parse as backup file (P3, P4)",
-  "second request while the first is accepted → 409 (P3)", "wrong key → 403,
-  parse not called; 5th rejection closes (P2, P3)".
+  session closes; repeated attempts are refused. The receiver handles one
+  request at a time; a request that arrives meanwhile is refused as busy
+  before its content is read. After a fixed number of rejected attempts —
+  an envelope that does not parse or does not decrypt — the session closes
+  as well. **Witness:** units "valid envelope → 200, session closed, same
+  parse as backup file (P3, P4)", "second request while the first is in
+  processing → 503 busy (P3)", "5 garbage envelopes → 400 each, session
+  closed (P3)", "wrong key → 403, parse not called; 5th rejection closes
+  (P2, P3)".
   **Mutation:** the session stays open after success.
 - **P4. A transfer is applied as a backup.** The received content goes
   through the backup validation and restore
@@ -112,7 +116,8 @@ No user settings. Fixed values:
 | Session lifetime | 10 minutes |
 | Port | any free one, chosen per session |
 | Payload size limit | 32 MiB |
-| Rejected attempts before the session closes | 5 |
+| Rejected attempts (unparsable or undecryptable envelope) before the session closes | 5 |
+| Requests handled at a time | 1, the others are refused as busy |
 | Encryption | AES-256-GCM, 96-bit nonce, one-time 256-bit key per session |
 
 Transfer code (QR content), version 1:

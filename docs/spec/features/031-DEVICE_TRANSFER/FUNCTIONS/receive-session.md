@@ -33,7 +33,8 @@ No user settings.
 | Session lifetime | 10 minutes, a countdown on screen |
 | Port | chosen by the system per session |
 | Payload limit | 32 MiB |
-| Wrong-key attempts before the session closes | 5 |
+| Rejected attempts (unparsable or undecryptable envelope) before the session closes | 5 |
+| Requests handled at a time | 1 |
 
 ## Inputs / Outputs
 
@@ -44,14 +45,17 @@ out); one `POST /transfer` with the envelope.
 **Outputs:** the QR code (`lxbox-transfer:1?a=…&k=…&n=…`); the state line;
 a reply to the sender — 200 accepted, 400 bad envelope, 403 wrong key, 404
 other route, 409 session already closed, 413 too large, 422 not a usable
-backup (with the reason); the parsed backup to the restore preview.
+backup (with the reason), 503 busy with another request; the parsed backup to the restore preview.
 
 ## Rules and invariants
 
 - Order of checks: size → envelope → decryption → backup parse. Nothing is
   parsed before it authenticates.
-- A wrong key adds to the counter, shown as "Rejected attempts with a wrong
-  code: N of 5"; the fifth closes the session — "Too many attempts with a
+- One request at a time: while one is being read, decrypted or parsed,
+  another `POST /transfer` gets 503 before its content is read.
+- An envelope that does not parse (400) or does not decrypt (403) adds to
+  the counter, shown as "Rejected attempts with a wrong code: N of 5"; the
+  fifth closes the session — "Too many attempts with a
   wrong code. The code is closed; press New code to get another one."
 - A payload that decrypts but is not a backup keeps the session open and
   shows "The phone sent settings that cannot be restored: <reason>".

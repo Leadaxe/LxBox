@@ -165,8 +165,12 @@ LxBox в allow-mode кладёт себя в туннель (`BoxService.kt:961`
   ошибки формата → 400, аутентификации → 403).
 - **Сервер приёма:** `app/lib/services/transfer/transfer_receiver.dart` —
   `HttpServer.bind(anyIPv4, 0)`, один маршрут, порядок и коды как в узле 2;
-  400 в счётчик отказов не входит (считается только 403); 422 сессию не
-  закрывает. `pickTransferAddresses` / `localTransferAddresses` — адреса
+  в обработке один запрос за раз (чтение тела, расшифровка, разбор),
+  остальные `POST /transfer` получают 503 «busy» до чтения тела (ревью:
+  параллельные запросы по 32 МиБ роняли бы TV по памяти); 400 и 403 оба
+  идут в счётчик отказов (иначе мусором можно держать единственный слот
+  всю сессию); 422 сессию не закрывает. На отправителе 503 — отдельная
+  строка «The TV is busy with another request. Try again in a moment.» `pickTransferAddresses` / `localTransferAddresses` — адреса
   для QR (отбрасываются также `ppp*`, `wg*`, `ipsec*`).
 - **Решение «показывать пункт»:** `app/lib/services/transfer/transfer_entries.dart`;
   признаки — `UrlLauncher.isTelevision()` (новый метод канала `isTelevision`

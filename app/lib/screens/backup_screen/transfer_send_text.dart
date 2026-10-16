@@ -17,6 +17,8 @@ String transferSendResultText(TransferSendResult r) => switch (r.status) {
         getLocalText.s("The settings are too large to send."),
       TransferSendStatus.invalid => getLocalText.s(
           "The TV cannot restore these settings: %s", r.detail ?? ''),
+      TransferSendStatus.busy => getLocalText.s(
+          "The TV is busy with another request. Try again in a moment."),
       TransferSendStatus.failed =>
         getLocalText.s("Sending failed: HTTP %d", r.httpStatus ?? 0),
     };

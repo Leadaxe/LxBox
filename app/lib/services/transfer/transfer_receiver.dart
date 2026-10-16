@@ -5,8 +5,9 @@
 // противоположные.
 //
 // Порядок обработки `POST /transfer`: размер (413) → конверт (400) →
-// расшифровка (403, счётчик отказов) → разбор бэкапа (422 с причиной) →
-// 200 → закрытие сессии. Остальные маршруты — 404, после закрытия — 409.
+// расшифровка (403; 400 и 403 — в счётчик отказов) → разбор бэкапа (422 с
+// причиной) → 200 → закрытие сессии. Остальные маршруты — 404, после
+// закрытия — 409, пока обрабатывается другой запрос — 503.
 
 import 'dart:async';
 import 'dart:convert';
@@ -67,9 +68,15 @@ class TransferInvalidBackup extends TransferProblem {
 typedef TransferParse = Future<BackupContents> Function(String raw);
 
 class TransferReceiver {
-  TransferReceiver._(this._server, this.key, this._parse, this._log,
-      this._maxBodyBytes, this._maxRejects, Duration ttl)
-      : port = _server.port {
+  TransferReceiver._(
+    this._server,
+    this.key,
+    this._parse,
+    this._log,
+    this._maxBodyBytes,
+    this._maxRejects,
+    Duration ttl,
+  ) : port = _server.port {
     _timer = Timer(ttl, () {
       if (_accepted) return;
       _log('session expired');
@@ -97,8 +104,10 @@ class TransferReceiver {
     void Function(String line)? log,
   }) async {
     final sink = log ?? (line) => AppLog.I.info('[transfer] $line');
-    final server =
-        await HttpServer.bind(bindAddress ?? InternetAddress.anyIPv4, 0);
+    final server = await HttpServer.bind(
+      bindAddress ?? InternetAddress.anyIPv4,
+      0,
+    );
     final rx = TransferReceiver._(
       server,
       Uint8List.fromList(key ?? newTransferKey()),
@@ -128,6 +137,11 @@ class TransferReceiver {
 
   /// Бэкап принят, ответ 200 ещё уходит: остальные запросы — 409.
   bool _accepted = false;
+
+  /// В обработке один запрос (чтение тела, расшифровка, разбор): иначе
+  /// параллельные запросы по 32 МиБ уронили бы TV по памяти. Остальные
+  /// получают 503 до чтения тела.
+  bool _busy = false;
   int _rejected = 0;
 
   /// Последняя отвергнутая попытка; null — пока не было. Не освобождается:
@@ -144,10 +158,10 @@ class TransferReceiver {
 
   /// Код передачи для QR этой сессии.
   TransferCode codeFor(List<String> hosts, String name) => TransferCode(
-        addresses: [for (final h in hosts) TransferEndpoint(h, port)],
-        key: key,
-        name: name,
-      );
+    addresses: [for (final h in hosts) TransferEndpoint(h, port)],
+    key: key,
+    name: name,
+  );
 
   /// Закрывает сессию; повторный вызов ничего не делает.
   Future<void> close() => _finish(const TransferCancelled(), force: true);
@@ -172,61 +186,92 @@ class TransferReceiver {
         await _reply(res, HttpStatus.conflict, 'session closed');
         return;
       }
-      final body = await _readLimited(req);
-      if (body == null) {
-        _log('request rejected: too large');
-        await _reply(res, HttpStatus.requestEntityTooLarge, 'too large');
+      if (_busy) {
+        _log('request refused: busy');
+        await _reply(res, HttpStatus.serviceUnavailable, 'busy');
         return;
       }
-
-      final Uint8List clear;
+      _busy = true;
       try {
-        clear = await openTransferEnvelope(
-            utf8.decode(body, allowMalformed: true), key);
-      } on TransferEnvelopeFormatException catch (e) {
-        _log('request rejected: bad envelope (${e.message})');
-        await _reply(res, HttpStatus.badRequest, 'bad envelope');
-        return;
-      } on TransferEnvelopeAuthException {
-        _rejected++;
-        _log('request rejected: wrong key ($_rejected/$_maxRejects)');
-        problem.value = TransferWrongKey(_rejected);
-        await _reply(res, HttpStatus.forbidden, 'wrong key');
-        if (_rejected >= _maxRejects) {
-          await _finish(const TransferRejectedTooOften(), force: false);
-        }
-        return;
-      }
-
-      final BackupContents contents;
-      try {
-        final raw = utf8.decode(clear);
-        contents = await _parse(raw);
-      } on FormatException catch (e) {
-        _log('request rejected: invalid backup');
-        problem.value = TransferInvalidBackup(e.message);
-        await _reply(res, HttpStatus.unprocessableEntity, e.message);
-        return;
-      }
-
-      // Пока шёл разбор, сессию мог закрыть другой запрос или таймер.
-      if (_closed || _accepted) {
-        await _reply(res, HttpStatus.conflict, 'session closed');
-        return;
-      }
-      _accepted = true;
-      _log('backup received (${clear.length} bytes)');
-      try {
-        await _reply(res, HttpStatus.ok, 'ok');
+        await _process(req, res);
       } finally {
-        await _finish(TransferReceived(contents), force: false);
+        _busy = false;
       }
-      return;
     } catch (e) {
       _log('request failed: ${e.runtimeType}');
       try {
         await _reply(res, HttpStatus.internalServerError, 'error');
       } catch (_) {}
+    }
+  }
+
+  /// Попытка с неразобранным конвертом (400) или чужим ключом (403): идёт в
+  /// счётчик, на [_maxRejects]-й сессия закрывается. Мусор тоже считается —
+  /// иначе им можно было бы занимать единственный слот всю сессию.
+  Future<void> _rejectAttempt(
+    HttpResponse res,
+    int status,
+    String text,
+    String why,
+  ) async {
+    _rejected++;
+    _log('request rejected: $why ($_rejected/$_maxRejects)');
+    problem.value = TransferWrongKey(_rejected);
+    await _reply(res, status, text);
+    if (_rejected >= _maxRejects) {
+      await _finish(const TransferRejectedTooOften(), force: false);
+    }
+  }
+
+  Future<void> _process(HttpRequest req, HttpResponse res) async {
+    final body = await _readLimited(req);
+    if (body == null) {
+      _log('request rejected: too large');
+      await _reply(res, HttpStatus.requestEntityTooLarge, 'too large');
+      return;
+    }
+
+    final Uint8List clear;
+    try {
+      clear = await openTransferEnvelope(
+        utf8.decode(body, allowMalformed: true),
+        key,
+      );
+    } on TransferEnvelopeFormatException catch (e) {
+      await _rejectAttempt(
+        res,
+        HttpStatus.badRequest,
+        'bad envelope',
+        'bad envelope (${e.message})',
+      );
+      return;
+    } on TransferEnvelopeAuthException {
+      await _rejectAttempt(res, HttpStatus.forbidden, 'wrong key', 'wrong key');
+      return;
+    }
+
+    final BackupContents contents;
+    try {
+      final raw = utf8.decode(clear);
+      contents = await _parse(raw);
+    } on FormatException catch (e) {
+      _log('request rejected: invalid backup');
+      problem.value = TransferInvalidBackup(e.message);
+      await _reply(res, HttpStatus.unprocessableEntity, e.message);
+      return;
+    }
+
+    // Пока шёл разбор, сессию мог закрыть другой запрос или таймер.
+    if (_closed || _accepted) {
+      await _reply(res, HttpStatus.conflict, 'session closed');
+      return;
+    }
+    _accepted = true;
+    _log('backup received (${clear.length} bytes)');
+    try {
+      await _reply(res, HttpStatus.ok, 'ok');
+    } finally {
+      await _finish(TransferReceived(contents), force: false);
     }
   }
 
@@ -256,7 +301,8 @@ class TransferReceiver {
 /// Адреса для QR: IPv4 без loopback, link-local и туннелей; Wi-Fi и Ethernet
 /// раньше прочих. Порядок внутри группы — как отдала система.
 List<String> pickTransferAddresses(
-    List<({String interface, String address})> candidates) {
+  List<({String interface, String address})> candidates,
+) {
   bool isTunnel(String name) =>
       name.startsWith('tun') ||
       name.startsWith('ppp') ||

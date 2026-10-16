@@ -104,12 +104,18 @@ void main() {
     expect(rx.isClosed, isFalse);
   });
 
-  test('bad envelope → 400, not counted as wrong key', () async {
-    await open();
-    for (var i = 0; i < TransferReceiver.maxRejects + 1; i++) {
-      expect((await _post(rx.port, 'garbage')).status, 400);
+  test('5 garbage envelopes → 400 each, session closed (P3)', () async {
+    var parsed = 0;
+    await open(parse: (raw) async {
+      parsed++;
+      return BackupContents();
+    });
+    for (var i = 1; i <= TransferReceiver.maxRejects; i++) {
+      expect((await _post(rx.port, 'garbage')).status, 400, reason: 'attempt $i');
     }
-    expect(rx.isClosed, isFalse);
+    expect(await rx.done, isA<TransferRejectedTooOften>());
+    expect(parsed, 0);
+    expect(await _portRefuses(rx.port), isTrue);
   });
 
   test('other routes → 404', () async {
@@ -137,20 +143,34 @@ void main() {
     expect(rx.isClosed, isFalse);
   });
 
-  test('second request while the first is accepted → 409 (P3)', () async {
-    final entered = <Completer<void>>[];
-    final both = Completer<void>();
+  test('second request while the first is in processing → 503 busy (P3)',
+      () async {
+    final entered = Completer<void>();
+    final release = Completer<void>();
+    var parsed = 0;
     await open(parse: (raw) async {
-      entered.add(Completer());
-      if (entered.length == 2) both.complete();
-      await both.future;
+      parsed++;
+      if (!entered.isCompleted) entered.complete();
+      await release.future;
       return BackupContents();
     });
     final env = await sealTransferEnvelope(utf8.encode(_backup), rx.key);
-    final results = await Future.wait([_post(rx.port, env), _post(rx.port, env)]);
-    final statuses = results.map((r) => r.status).toList()..sort();
-    expect(statuses, [200, 409]);
+    final first = _post(rx.port, env);
+    await entered.future;
+    final second = await _post(rx.port, env);
+    expect(second.status, 503);
+    expect(second.body, 'busy');
+    release.complete();
+    expect((await first).status, 200);
+    expect(parsed, 1);
     expect(await rx.done, isA<TransferReceived>());
+  });
+
+  test('busy slot is released after a rejected request', () async {
+    await open();
+    expect((await _post(rx.port, 'garbage')).status, 400);
+    final env = await sealTransferEnvelope(utf8.encode(_backup), rx.key);
+    expect((await _post(rx.port, env)).status, 200);
   });
 
   test('timeout closes the session and the port (P1)', () async {

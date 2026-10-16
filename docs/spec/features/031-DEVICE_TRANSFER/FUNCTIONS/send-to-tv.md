@@ -54,6 +54,7 @@ code in turn, until one answers; the result line.
     scan it again.";
   - 413 — "The settings are too large to send.";
   - 422 — "The TV cannot restore these settings: <reason>";
+  - 503 — "The TV is busy with another request. Try again in a moment.";
   - another answer — "Sending failed: HTTP <code>".
 
 ## Boundaries

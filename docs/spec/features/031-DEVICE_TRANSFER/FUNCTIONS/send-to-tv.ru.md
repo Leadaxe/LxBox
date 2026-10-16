@@ -56,6 +56,7 @@
     scan it again.»;
   - 413 — «The settings are too large to send.»;
   - 422 — «The TV cannot restore these settings: <причина>»;
+  - 503 — «The TV is busy with another request. Try again in a moment.»;
   - другой ответ — «Sending failed: HTTP <код>».
 
 ## Границы

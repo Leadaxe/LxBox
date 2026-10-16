@@ -38,6 +38,9 @@ enum TransferSendStatus {
   /// 422: получатель расшифровал, но не может восстановить такой бэкап.
   invalid,
 
+  /// 503: получатель обрабатывает другой запрос (один за раз).
+  busy,
+
   /// Прочие ответы.
   failed,
 }
@@ -61,6 +64,8 @@ TransferSendResult transferResultForResponse(int status, String body) =>
         const TransferSendResult(TransferSendStatus.expired, httpStatus: 409),
       413 =>
         const TransferSendResult(TransferSendStatus.tooLarge, httpStatus: 413),
+      503 =>
+        const TransferSendResult(TransferSendStatus.busy, httpStatus: 503),
       422 => TransferSendResult(TransferSendStatus.invalid,
           httpStatus: 422, detail: body.trim()),
       _ => TransferSendResult(TransferSendStatus.failed, httpStatus: status),

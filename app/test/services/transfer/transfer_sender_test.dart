@@ -34,6 +34,8 @@ void main() {
       final invalid = transferResultForResponse(422, ' Not a LxBox backup ');
       expect(invalid.status, TransferSendStatus.invalid);
       expect(invalid.detail, 'Not a LxBox backup');
+      expect(transferResultForResponse(503, 'busy').status,
+          TransferSendStatus.busy);
       final other = transferResultForResponse(500, '');
       expect(other.status, TransferSendStatus.failed);
       expect(other.httpStatus, 500);
