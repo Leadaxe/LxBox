@@ -3,9 +3,8 @@
 # Device transfer — send settings from a phone to a TV over the local network
 
 LxBox sends its VPN settings — subscriptions, servers, routing rules, DNS,
-split tunneling — from one device to another on the same Wi-Fi in two steps:
-the receiving device (typically an Android TV) shows a QR code, the sending
-phone scans it and sends. Nothing is typed with a remote control, nothing
+split tunneling — from a phone to an Android TV on the same Wi-Fi in two steps:
+the TV shows a QR code, the phone scans it and sends. Nothing is typed with a remote control, nothing
 passes through a cloud service, and the receiver applies the settings only
 after the user confirms them on its screen.
 
@@ -24,7 +23,9 @@ picker to load a backup from
 ([§372](../../tasks/372-android-tv-support.md)). The phone already holds a
 working setup. The feature moves it to the TV in one scan.
 
-Principles: **nothing listens by default** — the receiver exists only while
+Principles: **a TV-only receiver** — only a television receives; on a phone
+or a tablet the receive entry does not exist, because those devices already
+have a file picker and a keyboard; **nothing listens by default** — the receiver exists only while
 its screen is open; **the network is not trusted** — the local network may
 be shared, so the content is encrypted and authenticated with a key that
 only the QR code carries; **one path for incoming settings** — a transfer is
@@ -85,6 +86,12 @@ in §622.
 - **P9. The key does not leak.** The key is not written to logs, the
   request log or crash reports. **Witness:** unit "session log masks the
   key". **Mutation:** the QR text in the log.
+- **P10. Only a TV receives.** The receive entry is shown only on a device
+  that runs in television mode (Android TV, Google TV); on a phone or a
+  tablet it is absent. The send entry is shown only on a device with a
+  camera. **Witness:** unit "not a TV → no receive entry"; manual check on
+  a TV emulator and a phone emulator. **Mutation:** the receive entry on a
+  phone.
 
 ## Controlled parameters
 
@@ -147,6 +154,8 @@ Receiver: envelope → size check → decrypt (key) → backup parse
 
 ## Boundaries
 
+- **Phone to TV only.** Phone to phone or phone to tablet is not a
+  transfer: those devices import a backup file. A TV does not send.
 - **The same local network only.** No relay through the internet, no cloud
   account, no discovery: the QR code is the only way to find the receiver.
   A Wi-Fi with client isolation (often a guest network) makes the transfer
@@ -169,8 +178,8 @@ Function files are written together with the implementation (§622).
 
 | Function | What it does | Promises |
 |----------|--------------|----------|
-| Receive session | Opens the session, shows the QR code, accepts and decrypts one payload, hands it to the restore preview | P1–P4, P6–P9 |
-| Send to device | Category choice, QR scan, encryption and delivery, result | P5–P7 |
+| Receive session (TV) | Opens the session, shows the QR code, accepts and decrypts one payload, hands it to the restore preview | P1–P4, P6–P10 |
+| Send to TV (phone) | Category choice, QR scan, encryption and delivery, result | P5–P7, P10 |
 
 ## Related features
 

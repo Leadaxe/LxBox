@@ -62,10 +62,15 @@
 
 ### 3. Экран приёма — `lib/screens/transfer_receive_screen.dart`
 
-- Входы: экран бэкапа (`backup_screen.dart`), пустой главный экран
-  (`screens/home/restore_backup.dart`, рядом с «Restore from backup»). На
-  TV (`hasRealFilePicker == false` или признак leanback из §372) пункт
-  приёма стоит первым.
+- **Только TV (решение владельца 16.10).** Признака TV в коде нет —
+  новый метод канала `isTelevision` в `MainActivity`:
+  `UiModeManager.currentModeType == UI_MODE_TYPE_TELEVISION` или
+  `hasSystemFeature(FEATURE_LEANBACK)`; кешировать на процесс.
+  `hasRealFilePicker` признаком TV не считать (бывают телефоны без
+  DocumentsUI).
+- Входы (только на TV): экран бэкапа (`backup_screen.dart`) и пустой
+  главный экран (`screens/home/restore_backup.dart`, рядом с «Restore
+  from backup»), в обоих — первым пунктом.
 - QR через `flutter_zxing` (`zx.encodeBarcode`; кодирование есть в
   пакете, новых зависимостей нет), крупно, на белом поле.
 - Под QR: имя устройства, адрес(а), обратный отсчёт, состояние
@@ -81,6 +86,10 @@
   пост-шага от разных задач (§279, §605, §607).
 
 ### 4. Отправка — `lib/screens/transfer_send_screen.dart` (или шаг в `backup_screen.dart`)
+
+- Пункт «Send to TV» на экране бэкапа — на всех устройствах, кроме TV,
+  и только при наличии камеры (`UrlLauncher.hasCamera()` — то же условие,
+  что у кнопки QR-сканера в `subscriptions_screen.dart`).
 
 - Выбор категорий: тот же набор, что у экспорта, Debug API выключен по
   умолчанию (`BackupService.buildExport(include:)`).
@@ -157,6 +166,8 @@ LxBox в allow-mode кладёт себя в туннель (`BoxService.kt:961`
 - То же с поднятым туннелем на обеих сторонах и выключенным
   `private-ip` на отправителе.
 - Весь экран приёма проходится с D-pad без касаний.
+- На эмуляторе телефона пункта приёма нет, на эмуляторе TV нет пункта
+  отправки (P10).
 
 ## Не входит
 
