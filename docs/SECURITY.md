@@ -124,6 +124,8 @@ curl --interface tun0 https://ifconfig.me/ip
 
 With the "Unknown traffic" rule on and `direct` (the default) the response is your own ISP address: the route layer sends the ownerless connection out past the tunnel. With `reject` the command times out. With the rule disabled the response is the server address — that is the leak. The same probe, the Android kernel mechanics behind it (`SO_BINDTODEVICE` on Linux 5.7+) and a survey of how other clients handle `INVALID_UID` are in a two-part series on Habr: [part 1, the overview](https://habr.com/ru/articles/1088980/) and [part 2, the fix walkthrough](https://habr.com/ru/articles/1089082/). The series insists that an unknown owner must mean reject in every per-app mode; we expose that as the `reject` value, and default to `direct` so that an attribution failure degrades to a direct connection rather than to no network.
 
+**Leak summary.** Ownerless traffic enters tun bypassing the VpnService intercept (`curl --interface tun0`, a bind from Termux). Its UID does not resolve, so the package is empty. Destination rules like `0.0.0.0/0` cannot tell it from ordinary traffic; only "Unknown traffic" can. So leak protection rests on both axes: WHERE (§2.2) and WHO (§2.4).
+
 ### 2.5 Layers: route engine vs connection journal
 
 An important diagnostic caveat. Two independent layers touch ownerless traffic: the **route layer** (the routing engine sees the packet and its empty attribution and enforces `block_unknown`) and the **connection journal** (the Live/Profiler stream fed by the libbox CommandClient; there is no Clash API `/connections` — it was removed in the §122 CommandClient migration).
@@ -215,5 +217,3 @@ The core config is built from this data on every start. Anything in it is also v
 | TUN-only / auth-on-LAN | local surface | other apps using the local proxy | — |
 | On-device key gen (WARP X25519, MASQUE P-256) | secrets | private-key leakage | — |
 | **Tunnel ingress** preset (`tunnel-ingress`) | tunnel inbound (`inbound`) | peer connections inward: to the device, into the LAN, out through us | no — endpoint inbound only |
-
-**Key takeaway:** ownerless traffic = entered tun bypassing the VpnService intercept (`curl --interface tun0`, termux bind), the UID doesn't resolve → the package is empty → it's caught **only** by the "Unknown traffic" rule, not by destination rules like `0.0.0.0/0`. So full leak protection needs both axes.
