@@ -33,7 +33,7 @@ L×Box is a VPN client: it accepts other apps' traffic, wraps it in a tunnel, an
 | **Traffic leak** | Traffic escapes the tunnel or the routing policy — deanonymization, bypass simply doesn't work | [§2](#2-traffic-leaks-out-of-the-tunnel) |
 | **Local surface** | An open local proxy/API that another app on the device could abuse | [§3](#3-local-attack-surface) |
 | **Tunnel ingress** | The server or a peer of a client tunnel (WireGuard, OpenVPN, OpenConnect) opens a connection inward — to the device, into the LAN, or out to the internet from the user's IP | [§4](#4-inbound-connections-from-client-tunnels) |
-| **Secret theft** | Private keys, device tokens, subscription credentials leak out of the app | [§5](#5-secrets-on-the-device) |
+| **Secret theft** | Private keys, device tokens, subscription credentials leak out of the app or out of a backup | [§5](#5-secrets-on-the-device) |
 
 ---
 
@@ -152,7 +152,7 @@ Threat: another app on the same device abuses our local proxy or API (the class 
 | **Automation receivers — exported but disabled** | The §047/§157 automation receiver and Locale-plugin components are declared `android:exported="true"` but `android:enabled="false"`, so they are inert until the user flips the master "accept automation commands" toggle | Off by default means no third-party app can drive the client out of the box |
 | **VpnService / BootReceiver not exported** | `android:exported="false"` | Third-party apps can't invoke our core service components |
 
-Source and roadmap — [`020 — Security & DPI Bypass`](spec/tasks/020F-security-and-dpi-bypass/spec.md).
+Source — [`020 — Security & DPI Bypass`](spec/tasks/020F-security-and-dpi-bypass/spec.md).
 
 > **Automation caveat (§157).** Once the automation master toggle is ON, the receiver accepts its control commands from **any** caller on the device — a broadcast carries no caller identity, so there is no per-app authentication (`android:permission` is deliberately unset). The commands are control-only (start/stop/switch node/set group/rebuild/refresh/reset/urltest — no secret-exfiltration path), and outgoing automation events carry status labels only. See the “Security” section of [`AUTOMATION.md`](AUTOMATION.md).
 
@@ -183,13 +183,23 @@ DNS queries from nodes without `allow_gateway` are rejected by a rule in `dns.ru
 
 ## 5. Secrets on the device
 
-| Secret | How we protect it |
-|--------|-------------------|
-| **WARP private key** | The X25519 key is generated **on the device** and never leaves it — only the public key is sent to Cloudflare. We don't use third-party generator workers (they hand out a server-generated private key). See [§025 WARP](spec/tasks/025F-warp-integration/spec.md). |
-| **MASQUE key & device token** | The §130 MASQUE transport uses a **separate** ECDSA P-256 keypair generated on the device; only the public part is enrolled with Cloudflare (PATCH enroll), the SEC1-DER private key never leaves the phone. The per-device Cloudflare Bearer token is stored locally and is marked never-log alongside the private key. See [§130 MASQUE](spec/tasks/130F-masque-warp-transport/spec.md). |
-| **Subscription HWID** (`x-hwid`) | Not a secret but a stable install identifier for panels with device limits (Remnawave). Since §658 it is sent by default together with `x-device-os` / `x-ver-os` / `x-device-model`; the "Send HWID" switch turns it off. The HWID is in the backup **on purpose**: a backup restored on another device carries the same HWID, the panel sees one device, and moving to a new phone does not use up a slot. Regenerate after the restore makes the panel count it as a separate device. |
-| **Debug API Bearer token** | Held in settings storage; the Debug API is off by default and bound to loopback only (see §3). |
-| **Subscription credentials** | Roadmap: encrypted storage (Android Keystore), URL masking in the UI — see the roadmap in spec 020. A §129 file-based subscription additionally persists its imported body as a plaintext `HttpCache` snapshot (keyed `file:<uuid>`) in the app's private storage; the same encrypted-storage roadmap item covers these snapshots. |
+All secrets sit in the app's private storage as plain text. There is no storage encryption and none is planned: protection comes from the Android sandbox.
+
+Backups come in two formats:
+- **native** — a settings snapshot with categories on the Backup screen;
+- **LX Backup** — the portable contract format shared with the launcher.
+
+The core config is built from this data on every start. Anything in it is also visible wherever the whole config is shown.
+
+| Secret | In the core config | In the backup | How we protect it |
+|--------|--------------------|---------------|-------------------|
+| **WARP (WireGuard): private key, Cloudflare token, license** | the private key only (`wireguard` endpoint) | yes, both formats: native — `warp_account` (App settings category), LX Backup — `warp[]` (`private_key`, `token`, `license`) | The X25519 key is generated **on the device**; only the public key goes to Cloudflare. No third-party generator workers: they hand out a server-generated key. The backup carries the whole registration, otherwise "Add WARP" on a new machine would create an extra Cloudflare device. See [§025 WARP](spec/tasks/025F-warp-integration/spec.md), §393. |
+| **MASQUE: ECDSA P-256 key, device token** | the private key only (`masque` endpoint) | yes, both formats: native — `masque_account`, LX Backup — `warp[]` with `type: masque` (`private_key_der`, `token`) | A separate keypair is generated on the device; only the public part is enrolled with Cloudflare (PATCH enroll). The key and the token are marked never-log. See [§130 MASQUE](spec/tasks/130F-masque-warp-transport/spec.md). |
+| **Subscriptions: URL (often carrying an access token)** | no | yes, both formats (`sources[]` records) | — |
+| **Node credentials** (uuid, passwords, REALITY/WireGuard keys of own servers) | yes, in the node's outbound/endpoint | own servers — yes, both formats (the node body); subscription nodes — no, they come again from the URL | — |
+| **File subscription body** (§129) | its nodes — yes | no: kept as an `HttpCache` snapshot (key `file:<uuid>`) on the device only | — |
+| **Subscription HWID** (`x-hwid`) | no | the global one — native only (App settings category); a subscription's own HWID (§289) — both formats, in `identity` | Not a secret but a stable install identifier for panels with device limits (Remnawave). Since §658 it is sent by default together with `x-device-os` / `x-ver-os` / `x-device-model`; the "Send HWID" switch turns it off. In the backup **on purpose**: a backup restored on another device carries the same HWID, the panel sees one device, and the move does not use up a slot. Regenerate after the restore makes the panel count it as a separate device. |
+| **Debug API Bearer token** | no | native only, as the separate "Debug API config" category, off by default; not in LX Backup | The Debug API is off by default and bound to loopback only (see §3). |
 
 ---
 
