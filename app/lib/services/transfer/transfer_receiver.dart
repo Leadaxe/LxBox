@@ -171,9 +171,23 @@ class TransferReceiver {
     _closed = true;
     _timer.cancel();
     _log('session closed: ${end.runtimeType}');
-    if (!_done.isCompleted) _done.complete(end);
-    await _server.close(force: force);
+    // Сначала порт, потом [done]: подписчик [done] вправе считать, что
+    // порт уже отказывает (P1). Мягкое закрытие ждёт открытых соединений —
+    // медленный клиент из LAN держал бы его сколько угодно, поэтому через
+    // [_closeGrace] соединения рвутся.
+    try {
+      await _server.close(force: force).timeout(
+            _closeGrace,
+            onTimeout: () => _server.close(force: true),
+          );
+    } catch (e) {
+      _log('server close failed: ${e.runtimeType}');
+    } finally {
+      if (!_done.isCompleted) _done.complete(end);
+    }
   }
+
+  static const _closeGrace = Duration(seconds: 2);
 
   Future<void> _handle(HttpRequest req) async {
     final res = req.response;
