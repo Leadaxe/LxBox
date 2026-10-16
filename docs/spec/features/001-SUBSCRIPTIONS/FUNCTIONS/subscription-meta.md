@@ -43,7 +43,7 @@ take priority.
 
 **Output (subscription header):** `N nodes` (`N +D⚙ nodes` with detour nodes),
 "M off", a "used / total" bar with a non-zero limit, "Expires: N days left /
-N hours left / Expired", the description text, the "Support" chip (Telegram icon for `t.me`) and "Web
+N hours left / Expired", the description text, the "Support" chip (Telegram icon for `t.me` / `telegram.me` / `tg://` links, §657) and "Web
 page", the "N entries dropped" line.
 
 ## Rules and invariants

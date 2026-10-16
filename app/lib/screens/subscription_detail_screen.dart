@@ -34,6 +34,7 @@ import 'subscription_detail_screen/widgets/subscription_node_list.dart';
 import 'subscription_detail_screen/widgets/subscription_settings_tab.dart';
 import 'subscription_detail_screen/widgets/subscription_source_tab.dart';
 import '../services/l10n/locale_controller.dart';
+import '../services/telegram_link.dart'; // §657
 
 class SubscriptionDetailScreen extends StatefulWidget {
   const SubscriptionDetailScreen({
@@ -697,7 +698,8 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
   }
 
   Future<void> _openUrl(String url) async {
-    final opened = await UrlLauncher.open(url);
+    final opened =
+        await UrlLauncher.open(url, fallbackUrl: telegramWebFallback(url));
     if (!opened && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(getLocalText.s("Copied: %s", url))),

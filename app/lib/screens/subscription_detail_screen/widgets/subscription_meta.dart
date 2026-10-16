@@ -7,6 +7,7 @@ import '../../../controllers/subscription_controller.dart';
 import '../subscription_detail_format.dart';
 import '../../../services/l10n/locale_controller.dart';
 import 'node_warnings_sheet.dart';
+import '../../../services/telegram_link.dart'; // §657
 
 /// Header/meta block on the Nodes tab: url + copy, last-updated, node counts,
 /// traffic quota bar, expiry, announce text (§648), support/web-page chips. Extracted verbatim from
@@ -139,9 +140,9 @@ class SubscriptionMeta extends StatelessWidget {
                 if (entry.supportUrl.isNotEmpty)
                   ActionChip(
                     avatar: Icon(
-                      entry.supportUrl.contains('t.me') ? Icons.telegram : Icons.open_in_new,
+                      isTelegramUrl(entry.supportUrl) ? Icons.telegram : Icons.open_in_new,
                       size: 16,
-                      color: entry.supportUrl.contains('t.me')
+                      color: isTelegramUrl(entry.supportUrl)
                           ? const Color(0xFF2AABEE)
                           : null,
                     ),

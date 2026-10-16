@@ -43,7 +43,7 @@
 
 **Выход (шапка подписки):** `N nodes` (`N +D⚙ nodes` при detour-узлах),
 «M off», полоса «used / total» при ненулевом лимите, «Expires: N days left /
-N hours left / Expired», текст описания, чипы «Support» (иконка Telegram для `t.me`) и «Web
+N hours left / Expired», текст описания, чипы «Support» (иконка Telegram для ссылок `t.me` / `telegram.me` / `tg://`, §657) и «Web
 page», строка «N entries dropped».
 
 ## Правила и инварианты
