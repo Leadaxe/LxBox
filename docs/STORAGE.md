@@ -426,7 +426,7 @@ A flat `Map<String, String>` (values are stringified on read). It serves both **
 | `automation_emit_health` | `'false'` | §047 | Emitting health events. Default OFF. |
 | `automation_explainer_shown_v1` | `'false'` | §047 | One-shot: the automation explainer dialog has been shown. |
 | `subscription_user_agent` | — | identity headers | The User-Agent used when fetching subscriptions. |
-| `subscription_send_hwid` | — | identity headers | Whether to send the hwid headers on a fetch. |
+| `subscription_send_hwid` | absent = on | identity headers | Whether to send the hwid headers on a fetch. Only an explicit `'false'` turns it off (§658). |
 | `subscription_hwid` | — | identity headers | The HWID (potentially identifying). |
 | `subscription_device_os` | — | identity headers | The subscription's OS header. |
 | `subscription_ver_os` | — | identity headers | The OS version header. |

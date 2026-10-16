@@ -172,10 +172,8 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     final autoRecordWifi = await SettingsStorage.getAutoRecordWifi();
     final userAgent =
         await SettingsStorage.getVar(SubscriptionIdentity.varUserAgent, '');
-    final sendHwid =
-        (await SettingsStorage.getVar(SubscriptionIdentity.varSendHwid,
-            'false')) ==
-            'true';
+    final sendHwid = SubscriptionIdentity.parseSendHwid(
+        await SettingsStorage.getVar(SubscriptionIdentity.varSendHwid, ''));
     final hwid =
         await SettingsStorage.getVar(SubscriptionIdentity.varHwid, '');
     final deviceOs =

@@ -64,7 +64,7 @@ effective-заголовок не кладётся.
 | Var | Тип | Дефолт | Семантика |
 |---|---|---|---|
 | `subscription_user_agent` | String | `''` | пусто = брендированный UA; иначе override |
-| `subscription_send_hwid` | bool (`'true'`/`'false'`) | `false` | слать ли HWID-заголовки |
+| `subscription_send_hwid` | bool (`'true'`/`'false'`) | `false` (с §658 — вкл: отсутствие = вкл) | слать ли HWID-заголовки |
 | `subscription_hwid` | String | `''` → лениво UUIDv4 | значение `x-hwid`; генерится при первом включении |
 | `subscription_device_os` | String | `''` → `android` | override `x-device-os` |
 | `subscription_ver_os` | String | `''` → `Build.VERSION.RELEASE` | override `x-ver-os` |

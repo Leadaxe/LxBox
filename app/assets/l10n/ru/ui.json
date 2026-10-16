@@ -4532,8 +4532,8 @@
   "Send to another app": {
     "value": "Отправить в другое приложение"
   },
-  "Send x-hwid + device headers on every subscription fetch — for panels with HWID device limits (Remnawave). Off by default.": {
-    "value": "Отправлять x-hwid и заголовки устройства при каждой загрузке подписки — для панелей с лимитом устройств по HWID (Remnawave). По умолчанию выключено."
+  "Send x-hwid + device headers on every subscription fetch — for panels with HWID device limits (Remnawave). On by default.": {
+    "value": "Отправлять x-hwid и заголовки устройства при каждой загрузке подписки — для панелей с лимитом устройств по HWID (Remnawave). По умолчанию включено."
   },
   "Sends the Cloudflare client_id. Off for obfuscation (the device binding tends to get blocked).": {
     "value": "Отправляет client_id Cloudflare. При обфускации отключено — привязку к устройству часто блокируют."

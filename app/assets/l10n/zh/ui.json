@@ -4268,8 +4268,8 @@
   "Send to another app": {
     "value": "发送到其它应用"
   },
-  "Send x-hwid + device headers on every subscription fetch — for panels with HWID device limits (Remnawave). Off by default.": {
-    "value": "每次获取订阅时发送 x-hwid 与设备请求头——用于按 HWID 限制设备的面板（Remnawave）。默认关闭。"
+  "Send x-hwid + device headers on every subscription fetch — for panels with HWID device limits (Remnawave). On by default.": {
+    "value": "每次获取订阅时发送 x-hwid 与设备请求头——用于按 HWID 限制设备的面板（Remnawave）。默认开启。"
   },
   "Sends the Cloudflare client_id. Off for obfuscation (the device binding tends to get blocked).": {
     "value": "会发送 Cloudflare 的 client_id。使用混淆时关闭（设备绑定容易被封）。"
