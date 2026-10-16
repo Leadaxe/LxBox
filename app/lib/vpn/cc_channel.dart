@@ -482,10 +482,17 @@ class CcChannel {
     required String link,
     int timeoutMs = 0,
     int maxBytes = 0,
+    String userAgent = '',
   }) async {
     final r = await _methods.invokeMethod<Map<dynamic, dynamic>>(
       'probeGetUrl',
-      {'tag': tag, 'link': link, 'timeoutMs': timeoutMs, 'maxBytes': maxBytes},
+      {
+        'tag': tag,
+        'link': link,
+        'timeoutMs': timeoutMs,
+        'maxBytes': maxBytes,
+        'userAgent': userAgent,
+      },
     );
     return CcGetUrlResult.fromMap(_asMap(r ?? const {}));
   }
@@ -501,15 +508,24 @@ class CcChannel {
   /// `maxBytes` 0 → дефолт ядра 256 KiB (потолок 1 MiB); `timeoutMs` 0 →
   /// ограничен только вызовом. Реальный трафик через узел — зовётся ТОЛЬКО по
   /// явному действию юзера, фоновые обходы списка запрещены (kernel SPEC 058 §5).
+  ///
+  /// §659 — `userAgent` пустой → заголовков нет, ядро шлёт `Go-http-client`.
   Future<CcGetUrlResult> getUrlViaOutbound(
     String tag, {
     required String link,
     int timeoutMs = 0,
     int maxBytes = 0,
+    String userAgent = '',
   }) async {
     final r = await _methods.invokeMethod<Map<dynamic, dynamic>>(
       'ccGetUrlViaOutbound',
-      {'tag': tag, 'link': link, 'timeoutMs': timeoutMs, 'maxBytes': maxBytes},
+      {
+        'tag': tag,
+        'link': link,
+        'timeoutMs': timeoutMs,
+        'maxBytes': maxBytes,
+        'userAgent': userAgent,
+      },
     );
     return CcGetUrlResult.fromMap(_asMap(r ?? const {}));
   }

@@ -15,6 +15,7 @@ import 'package:flutter/services.dart';
 
 import '../app_log.dart';
 import '../platform_channels.dart';
+import '../subscription/user_agent.dart';
 import 'transfer_code.dart';
 import 'transfer_receiver.dart';
 
@@ -159,6 +160,7 @@ Future<LanPostOutcome> nativeLanPost(
       'body': body,
       'connectTimeoutMs': _connectTimeout.inMilliseconds,
       'readTimeoutMs': _responseTimeout.inMilliseconds,
+      'userAgent': resolveAppUserAgent(),
     });
     return switch (r?['outcome']) {
       'response' => LanPostResponse(
@@ -178,7 +180,8 @@ Future<LanPostOutcome> nativeLanPost(
 Future<LanPostOutcome> dartLanPost(TransferEndpoint ep, Uint8List body) async {
   final client = HttpClient()
     ..connectionTimeout = _connectTimeout
-    ..findProxy = (_) => 'DIRECT';
+    ..findProxy = ((_) => 'DIRECT')
+    ..userAgent = resolveAppUserAgent();
   try {
     final req = await client
         .post(ep.host, ep.port, TransferReceiver.path)

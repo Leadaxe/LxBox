@@ -14,6 +14,7 @@ import '../services/format_utils.dart' show formatTimeHm;
 import '../services/l10n/template_aware_state.dart';
 import '../services/template_loader.dart';
 import '../services/l10n/locale_controller.dart';
+import '../services/subscription/user_agent.dart';
 import '../widgets/safe_bottom.dart';
 
 class SpeedTestScreen extends StatefulWidget {
@@ -254,7 +255,10 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
     for (var i = 0; i < 5; i++) {
       try {
         final sw = Stopwatch()..start();
-        final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 5));
+        final response = await http
+            .get(Uri.parse(url),
+                headers: {'User-Agent': resolveAppUserAgent()})
+            .timeout(const Duration(seconds: 5));
         sw.stop();
         if (response.statusCode < 400) {
           times.add(sw.elapsedMilliseconds);
@@ -347,7 +351,8 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
 
   Future<void> _downloadStream(http.Client client, String url) async {
     try {
-      final request = http.Request('GET', Uri.parse(url));
+      final request = http.Request('GET', Uri.parse(url))
+        ..headers['User-Agent'] = resolveAppUserAgent();
       final response = await client.send(request).timeout(const Duration(seconds: 15));
       await for (final chunk in response.stream) {
         _dlBytesTotal += chunk.length;
@@ -385,7 +390,10 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
   Future<void> _uploadStream(http.Client client, SpeedTestServer server,
       int total, Stopwatch sw) async {
     final uri = Uri.parse(server.uploadUrl!);
-    final headers = {'Content-Type': 'application/octet-stream'};
+    final headers = {
+      'Content-Type': 'application/octet-stream',
+      'User-Agent': resolveAppUserAgent(),
+    };
     final chunk = (server.uploadChunkBytes ?? total).clamp(1, total);
     final data = Uint8List(chunk);
     var sent = 0;

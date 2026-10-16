@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import 'subscription/user_agent.dart';
+
 /// Один список тестовых серверов из комьюнити-манифеста.
 class CommunityServerList {
   const CommunityServerList({required this.source});
@@ -52,7 +54,10 @@ class CommunityServersLoader {
     final c = client ?? http.Client();
     final http.Response resp;
     try {
-      resp = await c.get(Uri.parse(manifestUrl)).timeout(_timeout);
+      resp = await c
+          .get(Uri.parse(manifestUrl),
+              headers: {'User-Agent': resolveAppUserAgent()})
+          .timeout(_timeout);
     } finally {
       if (owned) c.close();
     }

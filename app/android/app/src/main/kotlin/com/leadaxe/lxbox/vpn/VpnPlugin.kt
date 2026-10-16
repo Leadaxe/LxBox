@@ -984,9 +984,10 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 val link = call.argument<String>("link") ?: ""
                 val timeoutMs = call.argument<Int>("timeoutMs") ?: 0
                 val maxBytes = call.argument<Int>("maxBytes") ?: 0
+                val userAgent = call.argument<String>("userAgent") ?: ""
                 pluginScope.launch {
                     val r = withContext(Dispatchers.IO) {
-                        cc.getUrlViaOutbound(tag, link, timeoutMs, maxBytes)
+                        cc.getUrlViaOutbound(tag, link, timeoutMs, maxBytes, userAgent)
                     }
                     result.success(r)
                 }
@@ -1028,9 +1029,10 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 val link = call.argument<String>("link") ?: ""
                 val timeoutMs = call.argument<Int>("timeoutMs") ?: 0
                 val maxBytes = call.argument<Int>("maxBytes") ?: 0
+                val userAgent = call.argument<String>("userAgent") ?: ""
                 pluginScope.launch {
                     val r = withContext(Dispatchers.IO) {
-                        ProbeSession.getUrl(tag, link, timeoutMs, maxBytes)
+                        ProbeSession.getUrl(tag, link, timeoutMs, maxBytes, userAgent)
                     }
                     result.success(r)
                 }

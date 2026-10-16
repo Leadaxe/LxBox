@@ -38,6 +38,7 @@ object LanTransferSender {
         body: ByteArray,
         connectTimeoutMs: Int,
         readTimeoutMs: Int,
+        userAgent: String,
         result: MethodChannel.Result,
     ) {
         val target = runCatching { InetAddress.getByName(host) }.getOrNull()
@@ -48,7 +49,7 @@ object LanTransferSender {
         }
         Thread({
             val out = runCatching {
-                send(network, host, port, path, body, connectTimeoutMs, readTimeoutMs)
+                send(network, host, port, path, body, connectTimeoutMs, readTimeoutMs, userAgent)
             }.getOrElse { e -> failure(e) }
             main.post { result.success(out) }
         }, "lan-transfer").start()
@@ -94,6 +95,7 @@ object LanTransferSender {
         body: ByteArray,
         connectTimeoutMs: Int,
         readTimeoutMs: Int,
+        userAgent: String,
     ): Map<String, Any> {
         network.socketFactory.createSocket().use { socket ->
             socket.connect(InetSocketAddress(host, port), connectTimeoutMs)
@@ -101,6 +103,7 @@ object LanTransferSender {
             val head = "POST $path HTTP/1.1\r\n" +
                 "Host: $host:$port\r\n" +
                 "Content-Type: application/json\r\n" +
+                (if (userAgent.isBlank()) "" else "User-Agent: $userAgent\r\n") +
                 "Content-Length: ${body.size}\r\n" +
                 "Connection: close\r\n\r\n"
             val os = socket.getOutputStream()

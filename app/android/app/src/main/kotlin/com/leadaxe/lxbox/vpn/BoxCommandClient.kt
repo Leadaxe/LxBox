@@ -11,6 +11,7 @@ import io.nekohasekai.libbox.ConnectionEvents
 import io.nekohasekai.libbox.Connections
 import io.nekohasekai.libbox.DnsQuery
 import io.nekohasekai.libbox.GetURLResult
+import io.nekohasekai.libbox.HTTPHeaders
 import io.nekohasekai.libbox.Libbox
 import io.nekohasekai.libbox.LogIterator
 import io.nekohasekai.libbox.OpenConnectEndpointStatus
@@ -864,13 +865,14 @@ class BoxCommandClient {
         link: String,
         timeoutMs: Int,
         maxBytes: Int,
+        userAgent: String,
     ): Map<String, Any> {
         val client = ensurePingClient()
             ?: return mapOf("error" to "command client not connected")
         return runCatching {
-            // headers = null — легальный вызов «без заголовков» (в gomobile нет
-            // ни overload'ов, ни variadic; см. kernel SPEC 058 §2.3).
-            val r: GetURLResult = client.getURLViaOutbound(tag, link, timeoutMs, maxBytes, null)
+            val r: GetURLResult = client.getURLViaOutbound(
+                tag, link, timeoutMs, maxBytes, userAgentHeaders(userAgent),
+            )
             // ГРАБЛЯ: у GetURLResult геттеры БЕЗ `get`-префикса (`content()`,
             // `status()`), в отличие от URLTestOutboundResult.getDelay() —
             // gomobile снимает префикс, когда имя поля не начинается с Get.
@@ -1715,3 +1717,11 @@ class BoxCommandClient {
         }
     }
 }
+
+/// §659 — заголовки диагностического GET (kernel SPEC 058): только User-Agent
+/// приложения. Пустая строка → null — легальный вызов «без заголовков» (в
+/// gomobile нет ни overload'ов, ни variadic; см. SPEC 058 §2.3), ядро тогда
+/// шлёт `Go-http-client`.
+internal fun userAgentHeaders(userAgent: String): HTTPHeaders? =
+    if (userAgent.isBlank()) null
+    else HTTPHeaders().apply { add("User-Agent", userAgent) }

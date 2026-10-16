@@ -47,6 +47,11 @@ void main() {
   });
 
   // §610 — пресеты UA популярных клиентов для поля Custom User-Agent.
+  test('§659 resolveAppUserAgent = брендовый дефолт подписки', () {
+    expect(resolveAppUserAgent(), resolveSubscriptionUserAgent());
+    expect(resolveAppUserAgent(), startsWith('LxBox-android/'));
+  });
+
   group('kUserAgentPresets', () {
     test('первый пресет — дефолт LxBox (пустая строка)', () {
       expect(kUserAgentPresets.first.value, isEmpty);

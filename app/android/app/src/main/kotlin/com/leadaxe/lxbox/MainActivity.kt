@@ -195,6 +195,7 @@ class MainActivity : FlutterActivity() {
                                 host, port, path, body,
                                 call.argument<Int>("connectTimeoutMs") ?: 5000,
                                 call.argument<Int>("readTimeoutMs") ?: 60000,
+                                call.argument<String>("userAgent") ?: "",
                                 result,
                             )
                         }

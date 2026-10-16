@@ -62,6 +62,12 @@ String _sanitizeToken(String raw, {required String fallback}) {
 String resolveSubscriptionUserAgent() =>
     buildSubscriptionUserAgent(appVersion: VersionInfo.I.version);
 
+/// §659 — UA для всех остальных запросов приложения (rule-set'ы, GitHub,
+/// диагностика узла, speed test, передача на TV). Та же брендовая строка, что
+/// дефолт подписки; Custom User-Agent (§610) сюда НЕ подмешивается — он только
+/// для подписок. Исключение — WARP: там UA официального клиента Cloudflare.
+String resolveAppUserAgent() => resolveSubscriptionUserAgent();
+
 /// Готовая строка User-Agent популярного клиента для поля Custom User-Agent
 /// (§610). Часть панелей отдаёт полный формат (xray-JSON) только «своим»
 /// клиентам, а остальным — урезанные ссылки или отказ. Пресет — лишь

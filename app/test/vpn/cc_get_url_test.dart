@@ -93,6 +93,7 @@ void main() {
         link: 'https://1.1.1.1/cdn-cgi/trace',
         timeoutMs: 10000,
         maxBytes: 65536,
+        userAgent: 'LxBox-android/2.25.16',
       );
       expect(seen.method, 'ccGetUrlViaOutbound');
       final args = seen.arguments as Map;
@@ -100,6 +101,7 @@ void main() {
       expect(args['link'], 'https://1.1.1.1/cdn-cgi/trace');
       expect(args['timeoutMs'], 10000);
       expect(args['maxBytes'], 65536);
+      expect(args['userAgent'], 'LxBox-android/2.25.16');
       expect(r.content, 'ok');
     });
 
