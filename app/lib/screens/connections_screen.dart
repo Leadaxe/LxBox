@@ -6,7 +6,7 @@ import '../services/app_info_cache.dart';
 import '../services/format_utils.dart';
 import '../services/rule_name_resolver.dart';
 import '../vpn/cc_channel.dart';
-import 'connections_screen/connection_detail_sheet.dart';
+import 'connection_detail/detail_sheet.dart';
 import '../services/l10n/locale_controller.dart';
 
 /// §153 — «однобокое» (зависшее) соединение: TCP, прожившее ≥

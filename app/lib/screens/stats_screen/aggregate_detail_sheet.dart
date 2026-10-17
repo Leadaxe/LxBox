@@ -8,7 +8,7 @@ import '../../services/traffic_profiler.dart';
 import '../per_app_trace_tab/widgets/aggregate_axis.dart';
 import '../per_app_trace_tab/widgets/aggregated_view.dart';
 import '../per_app_trace_tab/widgets/ip_chip.dart';
-import 'traffic_event_detail_sheet.dart';
+import '../connection_detail/detail_sheet.dart';
 import '../../services/l10n/locale_controller.dart';
 import '../../widgets/app_bottom_sheet.dart';
 

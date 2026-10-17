@@ -739,8 +739,10 @@ subscriptions_screen.dart    # the subscription list (445 lines) plus widgets/ a
 stats_screen.dart            # the TabBarView host: Overview + Connections + LiveEvents (§288 removed PerAppTrace)
 stats_screen/overview_tab.dart  # the Overview tab plus overview_models
 stats_screen/                   # §264-266 Traffic Processing: trace_explorer + profiler_filter(+_sheet,
-                             #   profiler_filters) + traffic_event_detail_sheet · aggregate_detail_sheet ·
+                             #   profiler_filters) + aggregate_detail_sheet ·
                              #   memory_detail_sheet · routing_section (the details are in features/044)
+connection_detail/              # §662 one connection card for Conns and the profiler feed:
+                             #   detail_data (adapters from CcConnection / TrafficEvent) + detail_sheet
 live_events_tab.dart         # the Stats “Profiler” subtab (371 lines): event_tile/recording_header/unattributed_banner
 tun_apps_tab.dart            # the per-app VPN routing subtab (384 lines) — shared by Stats and Routing
 app_settings_screen.dart     # the application settings (516 lines): the General and Diagnostics tabs plus update_section

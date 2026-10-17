@@ -29,6 +29,8 @@ class _ConnSnapshot {
     required this.rulePayload,
     this.source, // §661
     this.inbound, // §661
+    this.inboundType, // §662
+    this.protocol, // §662
   });
   final String id;
   final String host;
@@ -53,4 +55,6 @@ class _ConnSnapshot {
   final String rulePayload;
   final String? source; // §661 — только для входа не через tun-in
   final String? inbound; // §661
+  final String? inboundType; // §662
+  final String? protocol; // §662
 }
