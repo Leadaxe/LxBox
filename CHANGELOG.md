@@ -24,7 +24,8 @@
 - **Start after a long idle no longer hangs in “stopping”
   ([task 663](docs/spec/tasks/663-force-stop-reaches-stuck-stopping.md)).**
   Start could stay dead until the app was force-closed; force-stop now
-  reaches the service even after its receiver is gone.
+  reaches the service even after its receiver is gone. Checked on the
+  emulator only, not yet on a real device.
 
 ---
 
