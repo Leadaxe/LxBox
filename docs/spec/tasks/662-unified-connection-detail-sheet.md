@@ -74,7 +74,7 @@ TrafficEvent ──fromEvent───────┘        (общие поля
 | Заголовок | `host:port` или destination, пусто → `(connection)` | `host:port` или ip, пусто → `(event)` | `host:port` (host = домен, иначе адрес); пусто → `(connection)` у Conns, `(event)` у профайлера |
 | Бейдж протокола | нет | `DNS` / `TCP` / `TCP·` / `UDP`, цвет по виду события | есть у обеих. Conns: `TCP` / `UDP`, закрытое — `TCP·` / `UDP·` цветом `outline`, как закрытые в профайлере |
 | Бейдж `One-way` | есть | нет | только Conns (у события признака нет) |
-| Бейдж `closed` | есть | нет (закрытие показывает `TCP·`) | убирается: закрытость показывает бейдж протокола, как в профайлере |
+| Бейдж `closed` | есть | нет (закрытие показывает `TCP·`) | бейдж `TCP·` / `UDP·` и рядом словами `TCP closed` / `UDP closed` — у обеих карточек. Точка — наше обозначение из ленты, стандартом не является; подпись учит её читать (решение владельца 17.10.2026) |
 | Футер | Copy JSON + Close | Copy JSON | Copy JSON; Close — если передан `onClose` |
 | Copy JSON | 9 полей (`id`, `network`, `domain`, `destination`, `rule`, байты, время) | весь `event.toJson()` | Conns: все поля `CcConnection` (+ chains, detours, outbound, outboundType, protocol, process, source/inbound); профайлер: как было |
 

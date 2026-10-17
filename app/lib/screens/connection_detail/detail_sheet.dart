@@ -153,6 +153,16 @@ class ConnectionDetailSheet extends StatelessWidget {
                   const SizedBox(width: 6),
                 ],
                 if (data.badgeLabel.isNotEmpty) _protocolBadge(context),
+                // Точка в `TCP·` — наше обозначение закрытого (лента
+                // профайлера); в карточке рядом словами, чтобы его выучили.
+                if (data.closed && data.badgeLabel.isNotEmpty) ...[
+                  const SizedBox(width: 6),
+                  Text(
+                    '${data.badgeLabel.replaceAll('·', '')} '
+                    '${getLocalText.s("closed")}',
+                    style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+                  ),
+                ],
               ],
             ),
           ),

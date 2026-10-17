@@ -55,7 +55,8 @@ class ConnectionDetailData {
   final String badgeLabel;
   final DetailBadgeTone badgeTone;
 
-  /// Соединение закрыто (Conns: кнопка Close недоступна).
+  /// Соединение закрыто: в заголовке подпись `TCP closed` рядом с бейджем
+  /// `TCP·` (учит читать точку, §662); у Conns кнопка Close недоступна.
   final bool closed;
 
   final String package;
@@ -195,6 +196,7 @@ class ConnectionDetailData {
       title: _title(host, address, port),
       origin: DetailOrigin.event,
       badgeLabel: label,
+      closed: e.kind == TrafficEventKind.tcpClose,
       badgeTone: tone,
       package: package,
       processPath: process != package ? process : '',

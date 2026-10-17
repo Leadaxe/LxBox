@@ -100,6 +100,18 @@ void main() {
     expect(d.badgeTone, DetailBadgeTone.outline);
     expect(d.title, '1.1.1.1:53');
     expect(d.duration, const Duration(seconds: 5));
+    expect(d.closed, isTrue);
+  });
+
+  test('profiler close event is closed: TCP· + caption', () {
+    final d = ConnectionDetailData.fromEvent(TrafficEvent(
+      ts: DateTime(2026),
+      kind: TrafficEventKind.tcpClose,
+      ip: '1.1.1.1',
+      port: 443,
+    ));
+    expect(d.badgeLabel, 'TCP·');
+    expect(d.closed, isTrue);
   });
 
   test('event with process path: no package, path shown as Process', () {
@@ -112,6 +124,7 @@ void main() {
     expect(d.package, '');
     expect(d.processPath, '/system/bin/netd');
     expect(d.badgeLabel, 'DNS');
+    expect(d.closed, isFalse);
     expect(d.kind, 'dnsResolve');
     expect(d.title, 'example.com');
   });
