@@ -309,6 +309,21 @@ class BoxService(
             Log.w(TAG, "[vpn §430] bounce done — foreground shown and removed, stopSelf($startId)")
             return Service.START_NOT_STICKY
         }
+        if (intent?.action == BoxVpnService.ACTION_FORCE_STOP) {
+            // §663 — сюда force-stop приходит startService'ом, когда приёмник
+            // уже снят: doStop снимает его до teardown'а ядра, и если Go-вызов
+            // повис, broadcast ACTION_FORCE_STOP ловить некому, а служба
+            // навсегда в Stopping. Ветка стоит до notification.show и до гарда
+            // `status != Stopped`. Пустой экземпляр (статус Stopped) — no-op и
+            // stopSelf(startId), чтобы не оставить started-сервис.
+            if (status == VpnStatus.Stopped) {
+                Log.d(TAG, "[vpn §663] ACTION_FORCE_STOP via startService — already Stopped, stopSelf($startId)")
+                service.stopSelf(startId)
+            } else {
+                doForceStop()
+            }
+            return Service.START_NOT_STICKY
+        }
         if (intent == null) {
             val n = BootReceiver.noteStickyRestart(service)
             Log.w(TAG, "[vpn §428] sticky restart #$n (limit=${BootReceiver.STICKY_RESTART_LIMIT} per ${BootReceiver.STICKY_RESTART_WINDOW_MS / 1000}s)")

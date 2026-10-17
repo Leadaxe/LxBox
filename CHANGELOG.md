@@ -19,6 +19,13 @@
   toggle or Format the wrap button and the menu show a spinner and ignore
   taps until the editor has finished laying out the lines.
 
+### Fixed
+
+- **Start after a long idle no longer hangs in “stopping”
+  ([task 663](docs/spec/tasks/663-force-stop-reaches-stuck-stopping.md)).**
+  Start could stay dead until the app was force-closed; force-stop now
+  reaches the service even after its receiver is gone.
+
 ---
 
 ## [2.25.16] — 2026-10-15

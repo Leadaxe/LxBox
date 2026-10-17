@@ -1603,6 +1603,8 @@ BoxService (per instance, recreated with every new BoxVpnService)
 
 **`AtomicReference` for fileDescriptor and commandServer** (§049 F2/F3): `getAndSet(null)?.close()` guarantees a single close.
 
+**Force-stop has two delivery channels** (§663): while the stop receiver is registered, `BoxVpnService.forceStop` sends the `ACTION_FORCE_STOP` broadcast; once it is gone (`doStop` unregisters it before the core teardown, as do `onRevoke`/`exit`), it calls `startService(ACTION_FORCE_STOP)`, and `onStartCommand` routes it to `doForceStop()` ahead of the foreground notification and the `status != Stopped` guard. Without the second channel a teardown stuck in Go left the service in `Stopping` for good.
+
 ### Channel Contract
 
 The three Flutter–Android channels live in `VpnPlugin.kt`:

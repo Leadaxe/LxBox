@@ -256,11 +256,28 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
         /// `BoxService.doForceStop` сразу делает `stopSelf()`, teardown ядра — фоном
         /// best-effort. В отличие от `stopAwait` — НЕ возвращает Deferred (ждать
         /// нечего: ядро Stopped не отдаст).
+        ///
+        /// §663 — два канала доставки. Приёмник жив → broadcast. Приёмник снят
+        /// (doStop снимает его до teardown'а ядра; onRevoke/exit тоже) →
+        /// broadcast некому ловить, служба навсегда остаётся в Stopping;
+        /// тогда команда идёт через startService в onStartCommand, где ветка
+        /// ACTION_FORCE_STOP стоит до гарда `status != Stopped`.
         fun forceStop(context: Context) {
-            Log.w(TAG, "[vpn] companion.forceStop() → sendBroadcast(ACTION_FORCE_STOP), current status=${currentStatus.name}")
-            context.sendBroadcast(
-                Intent(ACTION_FORCE_STOP).setPackage(context.packageName)
-            )
+            if (stopReceiverAlive) {
+                Log.w(TAG, "[vpn] companion.forceStop() → sendBroadcast(ACTION_FORCE_STOP), current status=${currentStatus.name}")
+                context.sendBroadcast(
+                    Intent(ACTION_FORCE_STOP).setPackage(context.packageName)
+                )
+                return
+            }
+            Log.w(TAG, "[vpn §663] companion.forceStop() → receiver gone, startService(ACTION_FORCE_STOP), current status=${currentStatus.name}")
+            runCatching {
+                context.startService(
+                    Intent(context, BoxVpnService::class.java).apply { action = ACTION_FORCE_STOP }
+                )
+            }.onFailure {
+                Log.e(TAG, "[vpn §663] startService(ACTION_FORCE_STOP) failed", it)
+            }
         }
 
         fun reload(context: Context) {

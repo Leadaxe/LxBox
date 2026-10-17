@@ -1,6 +1,6 @@
 # 663 — forceStop не доходит до сервиса, застрявшего в Stopping
 
-Статус: Draft. Источник: 4PDA, k-dmitriy, 13.10 и 17.10.2026 (прокси-режим, простой ~6 ч).
+Статус: Done (17.10.2026). Источник: 4PDA, k-dmitriy, 13.10 и 17.10.2026 (прокси-режим, простой ~6 ч).
 
 ## Проблема
 
@@ -72,3 +72,20 @@ logcat нативной стороны); это первый эшелон и в 
 - CHANGELOG: «Start after a long idle could hang in “stopping” until the app
   was force-closed; force-stop now reaches the service even after its receiver
   is gone».
+
+## Итог
+
+Сделано по решению: `BoxVpnService.forceStop` при снятом приёмнике шлёт
+`startService(ACTION_FORCE_STOP)`, `BoxService.onStartCommand` ведёт его в
+`doForceStop()` до `notification.show` и гарда; пустой экземпляр (статус
+`Stopped`) делает `stopSelf(startId)`.
+
+Эмулятор (release-сборка с временным `delay(60_000)` перед
+`closeCommandServerAtomic` в `doStop`, прокси-режим): Stop → свернуть →
+развернуть; через 12 с `forceStopVPN` → `startService` → `doForceStop ENTER
+status=Stopping` → `setStatus(Stopped)` → `onDestroy`, экран «Disconnected»;
+следующий Start поднял службу (`Started`), отложенная корутина старого
+экземпляра отменилась с его scope и новую сессию не тронула. Строку
+`status=stopped` в логе приложения отдельно не смотрели — статус виден по
+нативному broadcast и экрану. Живой сценарий с повисшим Go-вызовом (первый
+эшелон) не воспроизводили.
