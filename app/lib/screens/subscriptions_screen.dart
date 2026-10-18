@@ -860,22 +860,19 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
       );
       return;
     }
-    final config = await widget.subController.generateConfig();
-    if (!mounted) return;
-    if (config != null) {
-      final ok = await widget.homeController.saveParsedConfig(config);
-      if (!mounted) return;
-      if (ok) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              getLocalText.plural("Config generated: %d nodes", widget.subController.entries
-                  .fold<int>(0, (s, e) => s + e.nodeCount)),
-            ),
-          ),
-        );
-      }
-    }
+    // §667 Р4 — своей пересборки здесь больше нет: реакция подписок внутри
+    // прохода (§323, `_reactToSubscriptionUpdate`) уже собрала и применила
+    // через общий гейт. Вторая запись того же конфига давала `changed=false`
+    // и гасила флаг «устарел» при ядре на старом конфиге (Д5). Состав не
+    // менялся → реакции нет, собирать не из чего.
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          getLocalText.plural("Config generated: %d nodes", widget.subController.entries
+              .fold<int>(0, (s, e) => s + e.nodeCount)),
+        ),
+      ),
+    );
   }
 
   @override

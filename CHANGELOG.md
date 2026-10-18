@@ -40,6 +40,26 @@
   с унаследованной фрагментацией пишет об этом под секцией TLS. **Если ваш
   REALITY-сервер не принимает разрезанный ClientHello, после обновления
   поставьте Off на этом узле или его подписке.**)
+- **“Auto-restart VPN on settings change” now applies every change
+  ([task 667](docs/spec/tasks/667-auto-apply-gate-shared-by-all-rebuild-paths.md)).**
+  The setting fired unevenly: enabling a large subscription and going back
+  at once, applying a Direction from the home list, two edits within three
+  seconds, or an edit made while a rebuild was already running could leave a
+  banner instead of a reload. One gate now decides for every path, a change
+  that hits the three-second cooldown is applied once the cooldown ends, and
+  a repeated save of the same config no longer clears the “restart” state
+  while the core still runs the old one. Editing a chain or adding a source
+  on Servers no longer reloads the VPN on its own: with the setting off it
+  shows the usual “restart VPN” banner like any other change.
+  (RU: «Автоперезапуск VPN при смене настроек» теперь применяет каждое
+  изменение: включение большой подписки с мгновенным Back, Направление с
+  главного экрана, две правки за три секунды или правка во время уже идущей
+  пересборки оставляли плашку вместо перезапуска. Решает один гейт для всех
+  путей; правка, попавшая в трёхсекундную паузу, применяется по её
+  окончании; повторная запись того же конфига больше не снимает состояние
+  «нужен перезапуск», пока ядро на старом. Правка цепочки и добавление
+  источника на Servers больше не перезапускают VPN сами: при выключенной
+  галке — обычная плашка «restart VPN», как у любой правки.)
 - **Speed Test no longer fails to open while the VPN is up
   ([task 666](docs/spec/tasks/666-speed-test-open-rangeerror-empty-servers.md)).**
   Since 2.25.13 the route label under the title was computed before the server

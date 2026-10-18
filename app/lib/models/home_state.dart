@@ -88,6 +88,7 @@ class HomeState {
     this.traffic = TrafficSnapshot.zero,
     this.connectedSince,
     this.configChangedNeedRestart = false,
+    this.autoApplying = false,
     this.configLoadError = false,
     this.lastStartError = '',
     this.lastStartErrorAt,
@@ -267,6 +268,14 @@ class HomeState {
   /// относительно saved, нужен restart чтобы native перечитал.
   /// Sticky in-memory flag, сбрасывается на каждом успешном `_startInternal`.
   final bool configChangedNeedRestart;
+
+  /// §667 (§338) — авто-применение в полёте: `HomeController.applyIfAutoReload`
+  /// решил «запускаем» и ждёт `reloadVpn`. На это окно (~1–3 с) розовая плашка
+  /// «restart VPN» подавляется: флаг [configChangedNeedRestart] честно взведён,
+  /// но звать пользователя перезапускать VPN, который вот-вот перезапустится
+  /// сам, нельзя — мигание читается как «галка не работает». Живёт в state, а
+  /// не в home_screen: гейт зовут и пути мимо воронки home (Р2).
+  final bool autoApplying;
 
   /// §116 — на старте `getConfig()` не вернул конфиг (`configRaw` пустой) ПРИ
   /// живом туннеле: файл не прочёлся, но туннель уже несёт рабочий конфиг.
@@ -535,6 +544,7 @@ class HomeState {
     TrafficSnapshot? traffic,
     Object? connectedSince = _unset,
     bool? configChangedNeedRestart,
+    bool? autoApplying,
     bool? configLoadError,
     String? lastStartError,
     Object? lastStartErrorAt = _unset,
@@ -600,6 +610,7 @@ class HomeState {
           ? this.connectedSince
           : connectedSince as DateTime?,
       configChangedNeedRestart: configChangedNeedRestart ?? this.configChangedNeedRestart,
+      autoApplying: autoApplying ?? this.autoApplying,
       configLoadError: configLoadError ?? this.configLoadError,
       lastStartError: lastStartError ?? this.lastStartError,
       lastStartErrorAt: identical(lastStartErrorAt, _unset)

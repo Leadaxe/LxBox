@@ -792,8 +792,13 @@ class HomeNodeList extends StatelessWidget {
     await controller.refreshDirectionLabels();
     if (!context.mounted) return;
     final config = await subController.generateConfig();
+    var applied = false;
     if (config != null && context.mounted) {
       await controller.saveParsedConfig(config);
+      // §667 Д2 — редактор Направления pushed-route: `_onReturnToHome` уже
+      // отработал с чистым флагом, воронка home эту правку не увидит. Гейт
+      // авто-применения зовём сами — он один для всех путей.
+      applied = await controller.applyIfAutoReload();
     }
     if (!context.mounted) return;
     // §248 Q3 — heal молчаливым не бывает: flag-unset из этого пути лечит
@@ -809,10 +814,11 @@ class HomeNodeList extends StatelessWidget {
               : getLocalText.s("Saved direction \"%1\$s\" — %2\$s", label,
                   healedParts.join('; ')))),
     );
-    // §338 — при включённой галке пересборка на возврате на home применит
-    // правку сама: просить рестарт нельзя, это прямая ложь.
-    if (state.tunnelUp && !await SettingsStorage.getAutoReloadOnChange()) {
-      if (!context.mounted) return;
+    // §338/§667 — просить рестарт только когда гейт reload не запустил, а
+    // применять есть что (туннель up, saved разошёлся с running — §324).
+    if (!applied &&
+        controller.state.tunnelUp &&
+        controller.state.configChangedNeedRestart) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(getLocalText.s("Restart VPN to apply changes"))),
       );

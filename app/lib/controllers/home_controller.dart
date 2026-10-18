@@ -352,6 +352,7 @@ class HomeController extends ChangeNotifier
     _stopHeartbeat();
     _autoPingTimer?.cancel();
     _transientTimeoutTimer?.cancel();
+    _autoApplyRetry?.cancel(); // §667
     _statusSub?.cancel();
     _ccStatusSub?.cancel();
     _ccGroupsSub?.cancel();
@@ -769,6 +770,12 @@ class HomeController extends ChangeNotifier
   void debugSetConfigRaw(String raw) =>
       _emit(_state.copyWith(configRaw: raw));
 
+  /// §667 — засеять снапшот работающего конфига (§311) без RPC к ядру: тесты
+  /// `saveParsedConfig` проверяют вердикт §324 против известного running.
+  @visibleForTesting
+  void debugSetRunningConfigRaw(String raw) =>
+      _emit(_state.copyWith(runningConfigRaw: raw));
+
   /// Перезапускает safety-timer на transient-фазу. Cancel'ит предыдущий
   /// (защита от спама `Future.delayed` при множественных stopping/
   /// connecting подряд) и стартует новый. §140 — порог зависит от фазы:
@@ -1158,6 +1165,84 @@ class HomeController extends ChangeNotifier
     // §141 P1.9a — гейт `_disposed`: контроллер мог умереть за время cooldown.
     Future.delayed(_recoveryCooldown, () {
       if (!_disposed && _lastReloadTap != null) notifyListeners();
+    });
+  }
+
+  /// §667 — единственный гейт «применять ли сохранённый конфиг к живому
+  /// туннелю» (§338). Пути пересборки (воронка home, правка цепочек и
+  /// добавление источников §558, Направление с home) лишь сообщают сюда, что
+  /// конфиг сохранён; решение — здесь, одно для всех. `true` — reload
+  /// запущен. Условия, все одновременно:
+  ///
+  /// 1. галка «Auto-restart VPN on settings change» включена;
+  /// 2. туннель up («перезапуск» ≠ «запуск»: лежащий подхватит конфиг на Start);
+  /// 3. `configChangedNeedRestart` — §324-вердикт: saved разошёлся с running
+  ///    (`fresh` → ядро уже на этом конфиге, рвать незачем);
+  /// 4. [canReload] — connected и cooldown 3 с прошёл.
+  ///
+  /// Срыв только по cooldown (п. 4 при connected) планирует ОДИН отложенный
+  /// повтор на момент его истечения: до §667 скип был молчаливым, и вторая
+  /// правка в пределах 3 с оставалась розовой плашкой (Д4). Повтор заново
+  /// проверяет все четыре условия (конфиг могли применить руками, туннель —
+  /// опустить) и второго таймера при ждущем не ставит. Срыв по не-connected
+  /// повтора не планирует.
+  ///
+  /// На окно от решения «запускаем» до конца [reloadVpn] держит
+  /// `state.autoApplying` — плашка «restart VPN» подавлена (см. поле).
+  Future<bool> applyIfAutoReload() async {
+    if (_disposed) return false;
+    if (!_state.tunnelUp) return false;
+    if (!_state.configChangedNeedRestart) {
+      AppLog.I.debug('§338: reload skipped — config identical to running');
+      return false;
+    }
+    if (!await SettingsStorage.getAutoReloadOnChange()) return false;
+    // Условия 2–3 — заново: галка читалась через await.
+    if (_disposed || !_state.tunnelUp || !_state.configChangedNeedRestart) {
+      return false;
+    }
+    if (!canReload) {
+      if (_state.tunnel == TunnelStatus.connected && _lastReloadTap != null) {
+        _scheduleAutoApplyRetry();
+        AppLog.I.warning(
+            '§338: reload skipped — cooldown, retry scheduled');
+      } else {
+        AppLog.I.warning(
+            '§338: reload skipped — not connected, banner stays');
+      }
+      return false;
+    }
+    _autoApplyRetry?.cancel();
+    _autoApplyRetry = null;
+    AppLog.I.info('§338: auto-reload on settings change');
+    _emit(_state.copyWith(autoApplying: true));
+    try {
+      await reloadVpn();
+    } finally {
+      if (!_disposed) _emit(_state.copyWith(autoApplying: false));
+    }
+    return true;
+  }
+
+  /// §667 — отложенный повтор [applyIfAutoReload] после cooldown. Один на
+  /// контроллер: второй вызов во время ожидания таймер не трогает.
+  Timer? _autoApplyRetry;
+
+  /// §667 — тестовый мост: ждёт ли повтор авто-применения.
+  @visibleForTesting
+  bool get autoApplyRetryPendingForTesting => _autoApplyRetry?.isActive ?? false;
+
+  void _scheduleAutoApplyRetry() {
+    if (_autoApplyRetry?.isActive ?? false) return;
+    // `canReload` требует строго БОЛЬШЕ cooldown'а — небольшой запас, чтобы
+    // повтор не споткнулся о тот же гейт на границе.
+    final elapsed = DateTime.now().difference(_lastReloadTap!);
+    var wait = _recoveryCooldown - elapsed + const Duration(milliseconds: 100);
+    if (wait.isNegative) wait = const Duration(milliseconds: 100);
+    _autoApplyRetry = Timer(wait, () {
+      _autoApplyRetry = null;
+      if (_disposed) return;
+      unawaited(applyIfAutoReload());
     });
   }
 

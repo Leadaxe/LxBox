@@ -147,11 +147,6 @@ class SubscriptionController extends ChangeNotifier {
   bool _busy = false;
   bool get busy => _busy;
 
-  /// §360 — узкий флаг «сейчас идёт `generateConfig`». Нужен `_persist`, чтобы
-  /// не поднимать `configDirty` на собственных служебных записях пересборки, не
-  /// глуша при этом мутации от юзера (см. коммент в `_persist`).
-  bool _generating = false;
-
   /// §113 — флаг живёт в `SettingsStorage` (объект, где меняются настройки):
   /// config-значимые сейверы сами его поднимают. Здесь — делегат, чтобы все
   /// существующие read/write-сайты (home, debug, bootstrap) не менялись.
@@ -257,6 +252,7 @@ class SubscriptionController extends ChangeNotifier {
 
   String? _lastGeneratedConfig;
   String? get lastGeneratedConfig => _lastGeneratedConfig;
+
 
   Future<void> init() async {
     try {
@@ -2511,7 +2507,14 @@ class SubscriptionController extends ChangeNotifier {
     // догружаются ДО записи и уведомления, иначе включённая подписка ушла бы
     // в пересборку пустой. Индекс после await мог сместиться — дальше по
     // ссылке на entry.
+    //
+    // §667 Р3 — dirty ДО первого await: гидрация большой подписки занимает
+    // заметные доли секунды и `busy` не поднимает; Back в это окно давал
+    // `_onReturnToHome` чистый флаг — пересборки нет, флаг поднимался уже на
+    // home синей плашкой (Д1). Ранний return ниже флаг не откатывает: лишняя
+    // пересборка дешевле потерянного изменения.
     if (enabling && entry.list is SubscriptionServers) {
+      configDirty = true;
       await ensureHydrated(entry);
       if (stale || !_entries.contains(entry)) return;
     }
@@ -2875,30 +2878,32 @@ class SubscriptionController extends ChangeNotifier {
       return null;
     }
     _busy = true;
-    _generating = true;
     _lastError = null;
     _lastFatalIssues = const [];
     notifyListeners();
-    // §360 — снимок состава на момент, с которого `_generate` начнёт читать
-    // `_entries`. Мутация, прилетевшая из UI ПОКА мы генерируем (toggle
-    // подписки на экране Servers), в этот конфиг уже не попала: гасить по ней
-    // `configDirty` — значит молча выбросить изменение до следующей случайной
-    // мутации. Сравниваем снимок с составом на выходе и гасим флаг, только
-    // если под нами ничего не поменялось.
+    // §360/§667 Р5 — поколение dirty на момент, с которого `_generate` начнёт
+    // читать входы. Мутация, прилетевшая ПОКА мы генерируем (toggle подписки
+    // на Servers, правка Routing, var, тумблер — любой источник), в этот
+    // конфиг уже не попала: гасить по ней `configDirty` — значит молча
+    // выбросить изменение до следующей случайной мутации. До §667 сверялся
+    // только состав источников (`_compositionSignature`), правки вне состава
+    // терялись (Д6); поколение покрывает всё по построению — каждый подъём
+    // флага его инкрементирует.
     try {
       // §652 (б) — включённые подписки без узлов (выключенные на старте и
       // включённые мимо [toggleAt], например Debug API `PATCH enabled`)
-      // догружаются из кэша ДО снимка состава: иначе подпись на выходе
-      // разошлась бы со снимком и `configDirty` не снялся бы.
+      // догружаются из кэша ДО снимка: регидрация флаг не поднимает.
       await _hydrateEnabledEntries();
-      final before = _compositionSignature();
-      final config = await _generate();
+      final generation = SettingsStorage.configDirtyGeneration;
+      // Записи самой сборки (сиды, DNS-листы, generatedVars) — в зоне «своих»
+      // записей: поколение они не двигают.
+      final config = await SettingsStorage.withoutDirtyBump(_generate);
       _lastGeneratedConfig = config;
-      if (_compositionSignature() == before) {
+      if (SettingsStorage.configDirtyGeneration == generation) {
         configDirty = false;
       } else {
         AppLog.I.info(
-            '§360: entries changed during rebuild — configDirty kept');
+            '§360: settings changed during rebuild — configDirty kept');
       }
       return config;
     } catch (e) {
@@ -2908,7 +2913,6 @@ class SubscriptionController extends ChangeNotifier {
       return null;
     } finally {
       _busy = false;
-      _generating = false;
       _progressMessage = null;
       notifyListeners();
     }
@@ -3669,25 +3673,6 @@ class SubscriptionController extends ChangeNotifier {
     return '$tags|$disabled';
   }
 
-  /// §360 — отпечаток состава ВСЕХ entries: что увидит билдер, если собрать
-  /// конфиг прямо сейчас. Служит одной цели — понять, менялись ли `_entries`
-  /// под летящей пересборкой (см. `generateConfig`).
-  ///
-  /// В отличие от §331-`_compositionKey` (одна подписка, вопрос «фетч принёс
-  /// новое?») здесь входит и `enabled`: выключенная подписка отдаёт билдеру
-  /// пустой набор узлов, так что сам флаг — часть состава. Порядок entries
-  /// значим по той же причине, что и порядок узлов внутри списка.
-  String _compositionSignature() {
-    final parts = _entries.map((e) {
-      final l = e.list;
-      // §400 — тот же контент-отпечаток, что у §331: вопрос «изменилось ли
-      // то, что уйдёт в конфиг», а не «тот ли это узел».
-      final nodes = l.nodes.map(legacyNodeIdentityHash).join(',');
-      return '${l.id}:${l.enabled ? 1 : 0}:$nodes';
-    });
-    return parts.map((s) => '${s.length}:$s').join();
-  }
-
   /// [keepDirtyFlag] — §331: записать на диск, НЕ поднимая `configDirty`.
   /// Единственный законный случай: успешный fetch, в котором состав узлов
   /// оказался тем же. На диск писать всё равно надо (`last_updated`,
@@ -3697,16 +3682,14 @@ class SubscriptionController extends ChangeNotifier {
   ///
   /// Для всех прочих вызовов дефолт неизменен: любая запись = pending changes.
   ///
-  /// §360 — гейт здесь смотрит на `_generating`, а НЕ на `_busy`. `_busy`
-  /// поднимают ещё и `addUserServer`/`addFromInput`/fetch/`addMembersToFolder`
-  /// — операции, которые обязаны быть dirty; под общим гейтом они молча теряли
-  /// флаг. Хуже того, гейт ловил и мутации, пришедшие из UI ПОКА летит чужая
-  /// пересборка (toggle подписки сразу после возврата на home): изменение
-  /// применялось в `_entries`, но `configDirty` не вставал, а `generateConfig`
-  /// следом гасил его в false — новый состав нод не доезжал до конфига до
-  /// следующей случайной мутации. Самозагрязнение самой пересборки закрыто
-  /// явным `keepDirtyFlag: true` на её внутренних вызовах, отдельный гейт для
-  /// этого не нужен.
+  /// §360/§667 Р5 — гейта на «идёт пересборка» здесь НЕТ. Мутация, пришедшая
+  /// из UI ПОКА летит пересборка (toggle подписки сразу после возврата на
+  /// home), обязана поднять флаг: по поколению dirty `generateConfig` увидит,
+  /// что под ним что-то менялось, и флаг не погасит. Сама пересборка
+  /// `_persist` не зовёт; служебные записи (sweep, миграция) идут с явным
+  /// `keepDirtyFlag: true`. Старый гейт по `_busy` ловил ещё и
+  /// `addUserServer`/`addFromInput`/fetch — операции, которые обязаны быть
+  /// dirty; они молча теряли флаг.
   ///
   /// §515 — первая строка: барьер поколения. Контроллер, переживший
   /// переключение пространства (или уже disposed'нутый), НЕ пишет: сцена на
@@ -3723,7 +3706,7 @@ class SubscriptionController extends ChangeNotifier {
           '${_disposed ? ' (disposed)' : ''}');
       return;
     }
-    if (!_generating && !keepDirtyFlag) configDirty = true;
+    if (!keepDirtyFlag) configDirty = true;
     await SettingsStorage.saveServerLists(_entries.map((e) => e.list).toList());
   }
 

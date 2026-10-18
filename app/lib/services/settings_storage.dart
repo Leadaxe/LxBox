@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -92,6 +93,25 @@ class SettingsStorage {
   static bool get configDirty => _configDirty;
   static bool _configDirty = false;
 
+  /// §667 Р5 — поколение dirty: растёт на КАЖДОМ `configDirty = true`, не
+  /// только на переходе false→true. `generateConfig` запоминает его на входе
+  /// и гасит флаг лишь при равенстве на выходе: правка любого источника
+  /// (Routing, var, тумблер, состав), сделанная под летящей пересборкой, в
+  /// тот конфиг не попала и флаг переживает её по построению.
+  static int get configDirtyGeneration => _configDirtyGeneration;
+  static int _configDirtyGeneration = 0;
+  static const _selfWriteZoneKey = #lxboxConfigDirtySelfWrite;
+
+  /// §667 Р5 — записи самой пересборки (сиды пресетов §644/§578, DNS-листы
+  /// в `buildConfig`, `generatedVars`: clash-секрет и §419-heal резолверов)
+  /// входы конфига не меняют: собранный конфиг уже содержит записанное.
+  /// Подъём флага из [body] и всей его async-цепочки поколение не двигает.
+  /// Граница — Dart-зона, а не время: записи сборки идут вперемешку с
+  /// дисковым I/O, и правка пользователя, прилетевшая из UI в это окно,
+  /// выполняется в своей зоне — её подъём считается, как положено.
+  static Future<T> withoutDirtyBump<T>(Future<T> Function() body) =>
+      runZoned(body, zoneValues: {_selfWriteZoneKey: true});
+
   /// §338 (инспекция) — переход false→true логируется с caller-фреймами:
   /// 25+ сайтов поднимают флаг, и «кто зажёг синюю плашку» иначе не выяснить
   /// на устройстве. Только переход (не каждый повторный set) и только на
@@ -106,6 +126,7 @@ class SettingsStorage {
           .join(' ← ');
       AppLog.I.debug('configDirty ↑ $caller');
     }
+    if (v && Zone.current[_selfWriteZoneKey] != true) _configDirtyGeneration++;
     _configDirty = v;
   }
 
