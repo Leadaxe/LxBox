@@ -1183,6 +1183,9 @@
   "Default (Off — global)": {
     "value": "По умолчанию (выключено — глобально)"
   },
+  "Default (Off — not inherited by REALITY)": {
+    "value": "По умолчанию (выключено — REALITY не наследует)"
+  },
   "Default (Off — subscription)": {
     "value": "По умолчанию (выключено — подписка)"
   },
@@ -1254,6 +1257,9 @@
   },
   "Importing replaces the current %d rule(s).": {
     "value": "Импорт заменит текущие правила: %d."
+  },
+  "Inherited: Off (REALITY ignores global, folder and subscription levels)": {
+    "value": "Наследуется: выключено (REALITY не учитывает глобальный уровень, папку и подписку)"
   },
   "Inherited: Off (folder)": {
     "value": "Унаследовано: выключено (папка)"
@@ -1332,6 +1338,9 @@
   },
   "Pinned fingerprint": {
     "value": "Закреплённый отпечаток"
+  },
+  "REALITY: global, folder and subscription fragmentation are not applied. Turn it on here if this server needs it.": {
+    "value": "REALITY: фрагментация глобального уровня, папки и подписки не применяется. Если этому серверу она нужна, включите её здесь."
   },
   "Reconnect timeout": {
     "value": "Время переподключения"

@@ -1,6 +1,6 @@
 # 664 — REALITY: подпись «Default (On — global)» лжёт про фрагментацию
 
-Статус: In progress (18.10.2026). Источник: GitHub issue #170 (Alex01d),
+Статус: Done (18.10.2026). Источник: GitHub issue #170 (Alex01d),
 LxBox 2.25.15, VLESS + REALITY + Vision, Xray 26.10.10.
 
 ## Проблема
@@ -60,3 +60,18 @@ override на узле он может только угадать.
 - Существующие `app/test/builder/tls_fragment_reality_test.dart` не трогать —
   генерация не меняется.
 - CHANGELOG `[Unreleased]` → Fixed, EN+RU, ссылка на задачу и issue #170.
+
+## Итог
+
+- `TlsPolicyTiles` получил `reality` (по умолчанию `false`): у `fragment` и
+  `record_fragment` при `reality` подпись тайла «Default (Off — not inherited
+  by REALITY)», в диалоге — «Inherited: Off (REALITY ignores global, folder
+  and subscription levels)»; `mixed_case_sni` и `fallback_delay` не тронуты.
+- `node_settings_screen.dart`: признак REALITY считается в `_load` по тому
+  же телу, что показывает вкладка JSON (дословный sing-box-объект или
+  `emit()`), критерием `applyTlsFragment`; подсказка под секцией TLS — при
+  REALITY и без detour.
+- Строки — в `ru` и `zh` `ui.json`; `hardcoded_check` 0/0.
+- Тест `app/test/widgets/tls_policy_tiles_reality_test.dart` (2 случая:
+  REALITY и не REALITY при глобальном `tls_record_fragment = true`) зелёный.
+- На устройстве и эмуляторе не проверено.

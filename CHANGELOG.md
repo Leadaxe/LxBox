@@ -26,6 +26,16 @@
   Start could stay dead until the app was force-closed; force-stop now
   reaches the service even after its receiver is gone. Checked on the
   emulator only, not yet on a real device.
+- **TLS section of a REALITY node no longer shows global fragmentation as on
+  ([task 664](docs/spec/tasks/664-reality-tls-inherited-label-effective.md),
+  issue #170).** Global, folder and subscription fragmentation is not written
+  to a REALITY node (since 2.25.12), but the node's TLS section said
+  “Default (On — global)”. It now says “Default (Off — not inherited by
+  REALITY)”, and a note under the section explains that fragmentation has to
+  be turned on on the node itself. The generated config does not change.
+  (RU: У REALITY-узла секция TLS больше не показывает глобальную
+  фрагментацию включённой: подпись «по умолчанию — выключено», под секцией
+  подсказка включить её на самом узле. Конфиг не меняется.)
 
 ---
 

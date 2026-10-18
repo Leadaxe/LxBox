@@ -994,6 +994,9 @@
   "Default (Off — global)": {
     "value": "默认（关闭 — 全局）"
   },
+  "Default (Off — not inherited by REALITY)": {
+    "value": "默认（关闭 — REALITY 不继承）"
+  },
   "Default (Off — subscription)": {
     "value": "默认（关闭 — 订阅）"
   },
@@ -1065,6 +1068,9 @@
   },
   "Importing replaces the current %d rule(s).": {
     "value": "导入会替换当前 %d 条规则。"
+  },
+  "Inherited: Off (REALITY ignores global, folder and subscription levels)": {
+    "value": "继承：关闭（REALITY 忽略全局、文件夹和订阅级别）"
   },
   "Inherited: Off (folder)": {
     "value": "继承：关闭（文件夹）"
@@ -1143,6 +1149,9 @@
   },
   "Pinned fingerprint": {
     "value": "固定指纹"
+  },
+  "REALITY: global, folder and subscription fragmentation are not applied. Turn it on here if this server needs it.": {
+    "value": "REALITY：不应用全局、文件夹和订阅级别的分片。如果此服务器需要，请在此处开启。"
   },
   "Reconnect timeout": {
     "value": "重连超时"
