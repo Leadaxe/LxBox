@@ -40,6 +40,13 @@
   с унаследованной фрагментацией пишет об этом под секцией TLS. **Если ваш
   REALITY-сервер не принимает разрезанный ClientHello, после обновления
   поставьте Off на этом узле или его подписке.**)
+- **Speed Test no longer fails to open while the VPN is up
+  ([task 666](docs/spec/tasks/666-speed-test-open-rangeerror-empty-servers.md)).**
+  Since 2.25.13 the route label under the title was computed before the server
+  list had loaded, so the screen showed an error instead of the test.
+  (RU: Тест скорости снова открывается при поднятом VPN: с 2.25.13 подпись
+  маршрута считалась до загрузки списка серверов, и вместо экрана выходила
+  ошибка.)
 
 ---
 

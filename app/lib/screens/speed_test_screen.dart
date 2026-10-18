@@ -159,8 +159,11 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
 
   String get _routeLabel {
     if (!_vpnEnabled) return getLocalText.s("Direct (no VPN)");
-    final tested =
-        !_running && _observedRouteServerId == _serverId(_selectedServer);
+    // §666 — первый кадр идёт до `_loadConfig`: `_servers` пуст, `_serverId`
+    // звать нельзя (RangeError при открытии экрана с поднятым туннелем).
+    final tested = !_running &&
+        _servers.isNotEmpty &&
+        _observedRouteServerId == _serverId(_selectedServer);
     if (!tested) {
       return getLocalText.s("Route depends on your rules, shown after the test");
     }
@@ -179,7 +182,8 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
   }
 
   Future<void> _runTest() async {
-    if (_running) return;
+    // §666 — до загрузки шаблона серверов нет: индексировать нечего.
+    if (_running || _servers.isEmpty) return;
     setState(() {
       _running = true;
       _status = getLocalText.s("Testing ping...");
@@ -547,7 +551,7 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
-              onPressed: _running ? null : _runTest,
+              onPressed: _running || _servers.isEmpty ? null : _runTest,
               icon: Icon(_running ? Icons.hourglass_top : Icons.speed),
               label: Text(_running
                   ? getLocalText.s("Testing...")
