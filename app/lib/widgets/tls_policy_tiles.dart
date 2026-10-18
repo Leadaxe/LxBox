@@ -22,17 +22,16 @@ class TlsPolicyTiles extends StatefulWidget {
     required this.onChanged,
     this.inherited = TlsPolicy.none,
     this.inheritedLevel = TlsLevel.global,
-    this.reality = false,
+    this.inheritNotice = false,
   });
 
   final TlsPolicy policy;
   final TlsPolicy inherited;
   final TlsLevel inheritedLevel;
 
-  /// §664 — узел REALITY: `fragment`/`record_fragment` уровней выше ему не
-  /// пишутся (`applyTlsFragment`), унаследованное значение — «выключено».
-  final bool reality;
-
+  /// §665 — экран узла: над строками нотис, когда `fragment` или
+  /// `record_fragment` включены не своим флагом, а уровнем выше.
+  final bool inheritNotice;
   final ValueChanged<TlsPolicy> onChanged;
 
   @override
@@ -93,6 +92,27 @@ class _TlsPolicyTilesState extends State<TlsPolicyTiles> {
           getLocalText.s("Inherited: Off (subscription)"),
       };
 
+  /// §665 — уровень, с которого узлу пришла включённая фрагментация; `null`
+  /// — нотиса нет. Оба поля с разных уровней — уровень `record_fragment`.
+  TlsLevel? _inheritedOnLevel() {
+    final p = widget.policy;
+    final up = widget.inherited;
+    final record = _inheritedBool(up.recordFragment, 'tls_record_fragment');
+    if (p.recordFragment == null && record.$1) return record.$2;
+    final fragment = _inheritedBool(up.fragment, 'tls_fragment');
+    if (p.fragment == null && fragment.$1) return fragment.$2;
+    return null;
+  }
+
+  String _inheritNoticeText(TlsLevel level) => switch (level) {
+        TlsLevel.global => getLocalText.s(
+            "Fragmentation is inherited from the global level. If this server does not accept a split ClientHello, set it to Off here."),
+        TlsLevel.folder => getLocalText.s(
+            "Fragmentation is inherited from the folder level. If this server does not accept a split ClientHello, set it to Off here."),
+        TlsLevel.subscription => getLocalText.s(
+            "Fragmentation is inherited from the subscription level. If this server does not accept a split ClientHello, set it to Off here."),
+      };
+
   void _set(String key, Object? value) =>
       widget.onChanged(widget.policy.patched({key: value}));
 
@@ -103,36 +123,24 @@ class _TlsPolicyTilesState extends State<TlsPolicyTiles> {
     required bool? value,
     required bool? fromAbove,
     required String varName,
-    bool realityExempt = false,
   }) {
     final inherited = _inheritedBool(fromAbove, varName);
-    // §664 — REALITY: уровни выше эти поля узлу не пишут.
-    final notInherited = realityExempt && widget.reality;
     return ListTile(
       key: ValueKey('tls-$keyName'),
       leading: Icon(icon, size: 20),
       title: Text(title),
       subtitle: Text(switch (value) {
-        null when notInherited =>
-          getLocalText.s("Default (Off — not inherited by REALITY)"),
         null => _defaultLabel(inherited),
         true => getLocalText.s("On"),
         false => getLocalText.s("Off"),
       }),
       trailing: const Icon(Icons.chevron_right),
-      onTap: () => unawaited(_pickBool(
-          keyName,
-          title,
-          value,
-          notInherited
-              ? getLocalText.s(
-                  "Inherited: Off (REALITY ignores global, folder and subscription levels)")
-              : _inheritedLabel(inherited))),
+      onTap: () => unawaited(_pickBool(keyName, title, value, inherited)),
     );
   }
 
   Future<void> _pickBool(String keyName, String title, bool? current,
-      String inheritedLabel) async {
+      (bool, TlsLevel) inherited) async {
     // 0 — Default, 1 — On, 2 — Off.
     final picked = await showDialog<int>(
       context: context,
@@ -149,7 +157,7 @@ class _TlsPolicyTilesState extends State<TlsPolicyTiles> {
                   key: ValueKey('tls-$keyName-default'),
                   value: 0,
                   title: Text(getLocalText.s("Default")),
-                  subtitle: Text(inheritedLabel),
+                  subtitle: Text(_inheritedLabel(inherited)),
                 ),
                 RadioListTile<int>(
                   key: ValueKey('tls-$keyName-on'),
@@ -187,9 +195,24 @@ class _TlsPolicyTilesState extends State<TlsPolicyTiles> {
   Widget build(BuildContext context) {
     final p = widget.policy;
     final up = widget.inherited;
+    final noticeLevel = widget.inheritNotice ? _inheritedOnLevel() : null;
+    final theme = Theme.of(context);
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
+        if (noticeLevel != null)
+          Padding(
+            key: const ValueKey('tls-inherit-notice'),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                _inheritNoticeText(noticeLevel),
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              ),
+            ),
+          ),
         _boolTile(
           keyName: 'fragment',
           icon: Icons.call_split,
@@ -197,7 +220,6 @@ class _TlsPolicyTilesState extends State<TlsPolicyTiles> {
           value: p.fragment,
           fromAbove: up.fragment,
           varName: 'tls_fragment',
-          realityExempt: true,
         ),
         _boolTile(
           keyName: 'record_fragment',
@@ -206,7 +228,6 @@ class _TlsPolicyTilesState extends State<TlsPolicyTiles> {
           value: p.recordFragment,
           fromAbove: up.recordFragment,
           varName: 'tls_record_fragment',
-          realityExempt: true,
         ),
         ListTile(
           key: const ValueKey('tls-fallback_delay'),

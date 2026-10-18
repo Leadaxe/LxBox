@@ -1,6 +1,6 @@
 # 664 — REALITY: подпись «Default (On — global)» лжёт про фрагментацию
 
-Статус: Done (18.10.2026). Источник: GitHub issue #170 (Alex01d),
+Статус: Done (18.10.2026). Снято §665 (18.10.2026): исключение REALITY отменено, подписи и подсказка убраны. Источник: GitHub issue #170 (Alex01d),
 LxBox 2.25.15, VLESS + REALITY + Vision, Xray 26.10.10.
 
 ## Проблема

@@ -129,10 +129,6 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
   /// §581 — узел Tailscale: есть вкладка Network.
   bool _isTailscale = false;
 
-  /// §664 — тело узла, уходящее в ядро, — REALITY (тот же критерий, что
-  /// у `applyTlsFragment`): фрагментация уровней выше ему не пишется.
-  bool _reality = false;
-
   /// §623 — пул доменов маскировки (тот же, что у визарда WARP) для поля
   /// домена секции Masquerade узла WireGuard/AmneziaWG.
   WarpEndpointPicker? _picker;
@@ -232,12 +228,10 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     final raw = _containerRaw;
     _sourceCtrl.text = raw;
     _originKind = originKindOf(raw);
-    final Object? emitted =
+    _jsonCtrl.text = const JsonEncoder.withIndent('  ').convert(
         sourceIsSingbox(raw) && node.rawSource.trimLeft().startsWith('{')
             ? jsonDecode(node.rawSource)
-            : node.emit(TemplateVars.empty).map;
-    _jsonCtrl.text = const JsonEncoder.withIndent('  ').convert(emitted);
-    _reality = _isRealityBody(emitted);
+            : node.emit(TemplateVars.empty).map);
     _tagCtrl.text = _originalTag;
 
     // Detour: одиночный — `entry.detourPolicy.overrideDetour`; §237 член —
@@ -788,16 +782,6 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     return p.useDetourServers && p.overrideDetour.isNotEmpty;
   }
 
-  /// §664 — критерий REALITY из `applyTlsFragment` (`tls_transforms.dart`):
-  /// `tls.enabled == true` и `tls.reality.enabled == true`.
-  static bool _isRealityBody(Object? body) {
-    if (body is! Map) return false;
-    final tls = body['tls'];
-    if (tls is! Map || tls['enabled'] != true) return false;
-    final reality = tls['reality'];
-    return reality is Map && reality['enabled'] == true;
-  }
-
   List<Widget> _buildTlsSection(ThemeData theme) {
     final list = widget.entry.list;
     final folder = _member != null && list is FolderServers ? list : null;
@@ -814,21 +798,12 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),
         ),
-      if (_reality && !_underDetour)
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          child: Text(
-            getLocalText.s(
-                "REALITY: global, folder and subscription fragmentation are not applied. Turn it on here if this server needs it."),
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-          ),
-        ),
       TlsPolicyTiles(
         policy: _tls,
-        reality: _reality,
         inherited: folder?.tls ?? TlsPolicy.none,
         inheritedLevel: folder != null ? TlsLevel.folder : TlsLevel.global,
+        // §665 — под detour уже «Not applied: …».
+        inheritNotice: !_underDetour,
         onChanged: (v) => unawaited(_persistTls(v)),
       ),
     ];

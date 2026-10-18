@@ -20,14 +20,14 @@ class _FakePathProvider extends PathProviderPlatform
   Future<String?> getApplicationDocumentsPath() async => '$tempRoot/docs';
 }
 
-// §664 — у REALITY-узла глобальная фрагментация не наследуется: подпись
-// «Default» не должна говорить «On — global».
+// §665 — нотис о наследовании фрагментации у узла: показан, когда
+// `fragment`/`record_fragment` включены уровнем выше, а не своим флагом.
 void main() {
   late Directory tempDir;
 
   setUp(() async {
     TestWidgetsFlutterBinding.ensureInitialized();
-    tempDir = await Directory.systemTemp.createTemp('tls_tiles_reality_');
+    tempDir = await Directory.systemTemp.createTemp('tls_tiles_notice_');
     await Directory('${tempDir.path}/docs').create();
     await Directory('${tempDir.path}/support').create();
     PathProviderPlatform.instance = _FakePathProvider(tempDir.path);
@@ -47,22 +47,30 @@ void main() {
     return (tile.subtitle! as Text).data!;
   }
 
-  Future<void> pumpTiles(WidgetTester tester, {required bool reality}) async {
+  final notice = find.byKey(const ValueKey('tls-inherit-notice'));
+
+  Future<void> pumpTiles(
+    WidgetTester tester, {
+    required TlsPolicy policy,
+    TlsPolicy inherited = TlsPolicy.none,
+    TlsLevel inheritedLevel = TlsLevel.global,
+  }) async {
     await tester.runAsync(() async {
-      await SettingsStorage.setVar('tls_record_fragment', 'true');
       await SettingsStorage.setVar('tls_mixed_case_sni', 'true');
     });
     await tester.pumpWidget(MaterialApp(
       home: Scaffold(
         body: TlsPolicyTiles(
-          policy: TlsPolicy.none,
-          reality: reality,
+          policy: policy,
+          inherited: inherited,
+          inheritedLevel: inheritedLevel,
+          inheritNotice: true,
           onChanged: (_) {},
         ),
       ),
     ));
     // Глобальные vars читаются асинхронно — ждать подписи «On — global»
-    // у поля, на которое REALITY не влияет.
+    // у поля, которого нотис не касается.
     for (var i = 0;
         i < 300 &&
             subtitleOf(tester, 'mixed_case_sni') != 'Default (On — global)';
@@ -74,25 +82,40 @@ void main() {
     expect(subtitleOf(tester, 'mixed_case_sni'), 'Default (On — global)');
   }
 
-  testWidgets('REALITY: глобальный record_fragment не показан как On',
-      (tester) async {
-    await pumpTiles(tester, reality: true);
-    expect(subtitleOf(tester, 'record_fragment'),
-        'Default (Off — not inherited by REALITY)');
-    expect(subtitleOf(tester, 'fragment'),
-        'Default (Off — not inherited by REALITY)');
-
-    await tester.tap(find.byKey(const ValueKey('tls-record_fragment')));
-    await tester.pumpAndSettle();
-    expect(
-        find.text(
-            'Inherited: Off (REALITY ignores global, folder and subscription levels)'),
-        findsOneWidget);
+  testWidgets('true с папки → нотис с уровнем folder', (tester) async {
+    await pumpTiles(
+      tester,
+      policy: TlsPolicy.none,
+      inherited: const TlsPolicy(recordFragment: true),
+      inheritedLevel: TlsLevel.folder,
+    );
+    expect(notice, findsOneWidget);
+    final text = tester
+        .widget<Text>(find.descendant(of: notice, matching: find.byType(Text)))
+        .data!;
+    expect(text, contains('folder'));
   });
 
-  testWidgets('не REALITY: подпись наследования как раньше', (tester) async {
-    await pumpTiles(tester, reality: false);
-    expect(subtitleOf(tester, 'record_fragment'), 'Default (On — global)');
-    expect(subtitleOf(tester, 'fragment'), 'Default (Off — global)');
+  testWidgets('своё true → нотиса нет', (tester) async {
+    await pumpTiles(
+      tester,
+      policy: const TlsPolicy(fragment: true, recordFragment: true),
+      inherited: const TlsPolicy(recordFragment: true),
+      inheritedLevel: TlsLevel.folder,
+    );
+    expect(notice, findsNothing);
+  });
+
+  testWidgets('всё null или false → нотиса нет', (tester) async {
+    await pumpTiles(tester, policy: TlsPolicy.none);
+    expect(notice, findsNothing);
+
+    await pumpTiles(
+      tester,
+      policy: const TlsPolicy(fragment: false),
+      inherited: const TlsPolicy(fragment: true, recordFragment: false),
+      inheritedLevel: TlsLevel.folder,
+    );
+    expect(notice, findsNothing);
   });
 }

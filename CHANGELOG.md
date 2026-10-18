@@ -26,16 +26,20 @@
   Start could stay dead until the app was force-closed; force-stop now
   reaches the service even after its receiver is gone. Checked on the
   emulator only, not yet on a real device.
-- **TLS section of a REALITY node no longer shows global fragmentation as on
-  ([task 664](docs/spec/tasks/664-reality-tls-inherited-label-effective.md),
-  issue #170).** Global, folder and subscription fragmentation is not written
-  to a REALITY node (since 2.25.12), but the node's TLS section said
-  “Default (On — global)”. It now says “Default (Off — not inherited by
-  REALITY)”, and a note under the section explains that fragmentation has to
-  be turned on on the node itself. The generated config does not change.
-  (RU: У REALITY-узла секция TLS больше не показывает глобальную
-  фрагментацию включённой: подпись «по умолчанию — выключено», под секцией
-  подсказка включить её на самом узле. Конфиг не меняется.)
+- **TLS fragmentation now reaches REALITY nodes from every level
+  ([task 665](docs/spec/tasks/665-tls-fragment-inherits-everywhere-reality-too.md),
+  issue #170).** Since 2.25.12 the global, folder and subscription
+  fragmentation settings skipped REALITY nodes, so a REALITY node behind a
+  DPI that needs a split ClientHello did not connect with the global “On”.
+  REALITY now inherits fragmentation like any node, and a node that gets it
+  from a level above says so under its TLS section. **If your REALITY server
+  does not accept a split ClientHello, set fragmentation to Off on that node
+  or its subscription after the update.**
+  (RU: Фрагментация TLS теперь доходит до REALITY-узлов с любого уровня:
+  глобальная настройка, папка и подписка больше не пропускают REALITY, узел
+  с унаследованной фрагментацией пишет об этом под секцией TLS. **Если ваш
+  REALITY-сервер не принимает разрезанный ClientHello, после обновления
+  поставьте Off на этом узле или его подписке.**)
 
 ---
 
