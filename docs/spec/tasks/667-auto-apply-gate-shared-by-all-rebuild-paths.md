@@ -209,7 +209,7 @@ HttpCache + разбор в изоляте, на больших подписка
 - Новый тест `regenerateSourcesConfig`: галка выключена, туннель
   `connected`, конфиг изменился → `reloadVpn` не вызван; галка включена →
   вызван.
-- `test/vpn/config_staleness_test.dart` (или соседний по `saveParsedConfig`):
+- `test/services/config_staleness_test.dart` (или соседний по `saveParsedConfig`):
   два сохранения одного конфига при живом туннеле и снимке running, отличном
   от него → флаг взведён после обоих.
 - `test/subscription/toggle_during_rebuild_test.dart`: `configDirty = true`
