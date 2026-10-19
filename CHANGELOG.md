@@ -8,6 +8,18 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Stopping the VPN no longer hangs on a stuck core call
+  ([task 668](docs/spec/tasks/668-stop-teardown-trace-and-timeouts.md)).**
+  Each stop step has a real time limit (the core shutdown step 20 s, the
+  others 3 s); when a step does not return, the service still reaches Stopped.
+  The forced stop's 2 s limits now actually apply. A step that hangs longer
+  than 5 s writes `stuck at <step>` to the app log together with a goroutine
+  dump, and the dump is included in the support pack
+  (`stop_stuck_goroutines`). Every stop leaves its steps with timings in the
+  app log. Not verified on a device.
+
 ---
 
 ## [2.25.16] — 2026-10-19
