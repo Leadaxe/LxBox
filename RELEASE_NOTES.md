@@ -1,34 +1,37 @@
-# L×Box v2.25.16-rc.1
+# L×Box v2.25.16
 
-**A release candidate on top of [v2.25.15](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.15).**
+**A patch on top of [v2.25.15](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.15).**
 
-This is a pre-release on GitHub; in Google Play it goes to Open testing. It is
-not offered to users of the stable release.
+An Android TV can take its settings from a phone: the TV shows a QR code, the
+phone scans it and sends a backup over the local network. OpenConnect gateways
+(FortiGate and others) can be added from a form in **Add server**; when the
+gateway asks for a code or a browser sign-in, the app shows a **Sign-in
+required** notification. DNS settings are now a tab of the **Routing** screen.
+The new **Tunnel ingress** preset rejects connections that peers open from the
+other side of a WireGuard, AmneziaWG, OpenVPN or OpenConnect node, unless the
+node allows them. **Send HWID** is now on by default, and TLS fragmentation
+reaches REALITY nodes from every level: see "Read before updating". Also here:
+the ⋮ menu and line wrap in the JSON editor, one connection card for Conns and
+the profiler, the subscription `announce` text, "Auto-restart VPN on settings
+change" that applies every change, fixes for Speed Test and for a start stuck
+in "stopping". Core `v1.14.3-lx.21`, contract 1.1.132.
 
-OpenConnect gateways (FortiGate and others) can be added from a form in
-**Add server**; when the gateway asks for a code or a browser sign-in, the app
-shows a **Sign-in required** notification. DNS settings are now a tab of the
-**Routing** screen, and the **DNS Settings** menu item is gone. The new
-**Tunnel ingress** preset rejects connections that peers open from the other
-side of a WireGuard, AmneziaWG, OpenVPN or OpenConnect node, unless the node
-allows them. Also here: line wrap and direction-aware gestures in the JSON
-editor, the subscription `announce` text, emoji tag prefixes, no freeze after
-start with large subscriptions. Core `v1.14.3-lx.21`, contract 1.1.132.
+**Патч поверх [v2.25.15](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.15).**
 
-**Релиз-кандидат поверх [v2.25.15](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.15).**
-
-На GitHub это pre-release, в Google Play сборка уходит в открытое
-тестирование. Пользователям стабильного релиза она не предлагается.
-
-Шлюзы OpenConnect (FortiGate и другие) добавляются формой в **Add server**;
-когда шлюз просит код или вход через браузер, приложение показывает
-уведомление **Sign-in required**. Настройки DNS стали вкладкой экрана
-**Routing**, пункта меню **DNS Settings** больше нет. Новый пресет
+Android TV получает настройки с телефона: TV показывает QR-код, телефон
+сканирует его и отправляет бэкап по локальной сети. Шлюзы OpenConnect
+(FortiGate и другие) добавляются формой в **Add server**; когда шлюз просит
+код или вход через браузер, приложение показывает уведомление **Sign-in
+required**. Настройки DNS стали вкладкой экрана **Routing**. Новый пресет
 **Tunnel ingress** отклоняет соединения, которые пиры открывают с той стороны
 узла WireGuard, AmneziaWG, OpenVPN или OpenConnect, если узел их не
-разрешает. Кроме того: перенос строк и жесты по направлению в редакторе JSON,
-текст `announce` подписки, эмодзи-префиксы тегов, экран не замирает после
-старта с большими подписками. Ядро `v1.14.3-lx.21`, контракт 1.1.132.
+разрешает. **Send HWID** теперь включён по умолчанию, а фрагментация TLS
+доходит до REALITY-узлов с любого уровня: см. «Прочтите до обновления».
+Кроме того: меню ⋮ и перенос строк в редакторе JSON, одна карточка
+соединения для Conns и профайлера, текст `announce` подписки,
+«Auto-restart VPN on settings change» применяет каждое изменение,
+исправлены Speed Test и старт, застревавший в «stopping». Ядро
+`v1.14.3-lx.21`, контракт 1.1.132.
 
 ---
 
@@ -63,9 +66,39 @@ start with large subscriptions. Core `v1.14.3-lx.21`, contract 1.1.132.
   **Gateway traffic goes to** (`vpn-1` by default). DNS queries from a closed
   tunnel are rejected too. Tailscale nodes are not covered: tailnet peers are
   limited by Tailscale ACLs.
+- **Send HWID is on by default ([task 658](docs/spec/tasks/658-send-hwid-on-by-default.md)).**
+  Without `x-hwid` a Remnawave panel registers the device itself, without a
+  name, and after an app update may count it as a new device against the
+  limit. If you never touched **Send HWID**, the app starts sending it with the
+  next subscription update; an explicit Off stays Off. A panel with a device
+  limit sees the install once more, now with its name (`SM-S918B | Android`).
+  Remove the old nameless device in the panel or the provider's bot.
+- **TLS fragmentation reaches REALITY nodes from every level ([task 665](docs/spec/tasks/665-tls-fragment-inherits-everywhere-reality-too.md), issue #170).**
+  Since 2.25.12 the global, folder and subscription settings skipped REALITY
+  nodes. Now REALITY inherits fragmentation like any node, and a node that
+  gets it from a level above says so under its TLS section. **If your REALITY
+  server does not accept a split ClientHello, set fragmentation to Off on that
+  node or its subscription.**
 
 ## ✨ New
 
+- **Set up a TV from your phone ([task 622](docs/spec/tasks/622-device-transfer-phone-to-tv.md), issue #163).**
+  On the TV: Backup & restore → Receive from phone → **Show code**. On the
+  phone: Backup & restore → tick the categories → **Send to TV** → **Scan
+  code**. The TV opens the usual **Import backup** window. The settings travel
+  encrypted with a one-time key that only the QR code carries; a code lives
+  10 minutes, works for one transfer and closes after five sends with a wrong
+  key. The phone sends past its own VPN, so the transfer works with the tunnel
+  up. Both devices must be on the same network; a guest Wi-Fi often keeps them
+  apart. The receive item appears only on a TV, the send item only on a device
+  with a camera. Not yet checked on real devices.
+- **Source and inbound of connections from other inputs ([task 661](docs/spec/tasks/661-stats-source-inbound.md)).**
+  With Tunnel ingress, `allow_lan` / `allow_gateway` on a node, or a local
+  proxy (`mixed-in`, `sysproxy-in`), connections come not only from the TUN.
+  Conns, Stats → Overview and the profiler feed add `<ip:port> / <inbound>` to
+  such a connection, for example `(no owner) · 10.8.0.2:40112 / wg-in`. For
+  `tun-in` nothing is added. The connection card has a **Source** group before
+  Destination.
 - **OpenConnect in Add server ([task 654](docs/spec/tasks/654-openconnect-fortinet-support.md)).**
   A new **OpenConnect** tab adds a corporate VPN gateway. The main block has
   **Tag**, **Gateway** (FortiGate, Cisco AnyConnect, GlobalProtect, F5,
@@ -129,6 +162,14 @@ start with large subscriptions. Core `v1.14.3-lx.21`, contract 1.1.132.
 
 ## 🔄 Changed
 
+- **⋮ menu in the JSON editor ([task 660](docs/spec/tasks/660-editor-overflow-menu.md)).**
+  Every JSON field and viewer has a ⋮ menu at the right end of its button row.
+  **Format** moves there, and read-only viewers (subscription **Source**, node
+  **JSON**) get it too: it formats only what is shown, **Show original** brings
+  the source text back. **Magnifier** turns the selection magnifier on and
+  off; the choice is saved for the whole app. After a wrap toggle or Format the
+  wrap button and the menu show a spinner and ignore taps until the lines are
+  laid out.
 - **Editor gestures follow the direction of the swipe (task 649).**
   - A sideways swipe over a line that does not fit scrolls the text; the tab
     stays. Where nothing scrolls sideways, the swipe switches the tab as
@@ -140,12 +181,43 @@ start with large subscriptions. Core `v1.14.3-lx.21`, contract 1.1.132.
 - **"Skip presets" is now "Skip Tailscale presets" (task 656).**
   The switch is shown only on Tailscale nodes and affects only the Tailscale
   preset. The old setting carries over, including from older LX Backup files.
+- **One connection card for Conns and the profiler ([task 662](docs/spec/tasks/662-unified-connection-detail-sheet.md)).**
+  Both screens open the same card with the same groups in the same order. Each
+  keeps its own blocks: One-way traffic and **Close** on Conns, DNS and Issues
+  in the profiler. A closed connection shows a `TCP·` / `UDP·` badge; a tap on
+  it says `TCP closed` / `UDP closed`.
+- **One User-Agent for every request of the app ([task 659](docs/spec/tasks/659-app-user-agent-everywhere.md)).**
+  Rule-sets, update checks, Donate and the support feed, Speed Test, community
+  servers, node diagnostics and the TV transfer send `LxBox-android/<version>`,
+  the same string as the subscription default. **Custom User-Agent** applies to
+  subscriptions only. WARP registration keeps the Cloudflare client string;
+  ping and auto-select are unchanged.
 - **WARP: the eight `8.x` blocks are back in the WireGuard endpoint pool ([task 651](docs/spec/tasks/651-warp-8x-blocks-return.md)).**
   They were removed in June as unreachable; fresh measurements show them
   answering on a par with the other blocks.
 
 ## 🩹 Fixed
 
+- **"Auto-restart VPN on settings change" applies every change ([task 667](docs/spec/tasks/667-auto-apply-gate-shared-by-all-rebuild-paths.md)).**
+  Enabling a large subscription and going back at once, applying a Direction
+  from the home list, two edits within three seconds, or an edit made during a
+  rebuild could leave the "restart VPN" banner instead of a reload. One check
+  now decides for every path; a change that falls into the three-second pause
+  is applied when the pause ends. Editing a chain or adding a source on
+  **Servers** no longer reloads the VPN on its own: with the setting off they
+  show the banner like any other change.
+- **Start after a long idle no longer hangs in "stopping" ([task 663](docs/spec/tasks/663-force-stop-reaches-stuck-stopping.md)).**
+  **Start** could stay dead until the app was force-closed. The force stop now
+  reaches the service even after its receiver is gone. Checked on the
+  emulator only.
+- **Speed Test opens with the VPN up ([task 666](docs/spec/tasks/666-speed-test-open-rangeerror-empty-servers.md)).**
+  Since 2.25.13 the route label under the title was computed before the server
+  list had loaded, and the screen showed an error instead of the test. **Start**
+  is now inactive until the list is loaded.
+- **Telegram support links with `tg://` ([task 657](docs/spec/tasks/657-telegram-support-url-tg-scheme.md)).**
+  A `support-url: tg://resolve?domain=…` header shows the Telegram icon on the
+  subscription screen and in the list. Without Telegram installed the link
+  opens its `t.me` web form instead of only being copied.
 - **A node the core cannot decode is turned off ([task 653](docs/spec/tasks/653-core-decode-error-index-to-tag.md)).**
   An old MASQUE node from sing-box JSON still carrying `network: h2|h3` made
   the core refuse the config at **Start** with
@@ -192,7 +264,11 @@ start with large subscriptions. Core `v1.14.3-lx.21`, contract 1.1.132.
   `announce` parsing, emoji prefixes with indexes, `base64` header decoding,
   the decode form of a core rejection, the OpenConnect form and its sync with
   Source, sign-in logic, the Tunnel ingress build and node flags in LX Backup,
-  the DNS tab staying in sync with the other Routing tabs.
+  the DNS tab staying in sync with the other Routing tabs, the transfer code
+  and its encrypted envelope, the TV receive server, Telegram link detection,
+  the Send HWID default, the app User-Agent, Speed Test's first frame with the
+  tunnel up, the auto-restart check on every rebuild path, fragmentation
+  inheritance for REALITY.
 
 </details>
 
@@ -226,9 +302,40 @@ start with large subscriptions. Core `v1.14.3-lx.21`, contract 1.1.132.
   `direct-out`) и **Gateway traffic goes to** (по умолчанию `vpn-1`).
   DNS-запросы из закрытого туннеля тоже отклоняются. Узлы Tailscale пресет
   не трогает: пиров tailnet ограничивают ACL Tailscale.
+- **Send HWID включён по умолчанию ([задача 658](docs/spec/tasks/658-send-hwid-on-by-default.md)).**
+  Без `x-hwid` панель Remnawave заводит устройство сама, без имени, и после
+  обновления приложения может посчитать его новым устройством в лимите. Если
+  **Send HWID** не трогали, приложение начнёт слать его со следующего
+  обновления подписки; явное Off сохраняется. Панель с лимитом устройств
+  увидит установку ещё раз, уже с именем (`SM-S918B | Android`). Старое
+  безымянное устройство удаляется в панели или в боте провайдера.
+- **Фрагментация TLS доходит до REALITY-узлов с любого уровня ([задача 665](docs/spec/tasks/665-tls-fragment-inherits-everywhere-reality-too.md), issue #170).**
+  С 2.25.12 глобальная настройка, папка и подписка пропускали REALITY-узлы.
+  Теперь REALITY наследует фрагментацию как любой узел, а узел с
+  унаследованной фрагментацией пишет об этом под секцией TLS. **Если ваш
+  REALITY-сервер не принимает разрезанный ClientHello, поставьте Off на этом
+  узле или его подписке.**
 
 ## ✨ Новое
 
+- **Настройка TV с телефона ([задача 622](docs/spec/tasks/622-device-transfer-phone-to-tv.md), issue #163).**
+  На TV: Backup & restore → Receive from phone → **Show code**. На телефоне:
+  Backup & restore → отметить категории → **Send to TV** → **Scan code**. На
+  TV открывается обычное окно **Import backup**. Настройки идут
+  зашифрованными одноразовым ключом, который есть только в QR-коде; код
+  живёт 10 минут, годен на одну передачу и закрывается после пяти отправок с
+  неверным ключом. Телефон отправляет мимо своего VPN, так что передача
+  работает при поднятом туннеле. Оба устройства должны быть в одной сети;
+  гостевой Wi-Fi часто их разделяет. Пункт приёма есть только на TV, пункт
+  отправки — только на устройстве с камерой. На реальных устройствах ещё не
+  проверено.
+- **Источник и вход у соединений не через TUN ([задача 661](docs/spec/tasks/661-stats-source-inbound.md)).**
+  С Tunnel ingress, `allow_lan` / `allow_gateway` у узла или локальным
+  прокси (`mixed-in`, `sysproxy-in`) соединения приходят не только из TUN.
+  Conns, Stats → Overview и лента профайлера дописывают к такому соединению
+  `<ip:port> / <inbound>`, например `(no owner) · 10.8.0.2:40112 / wg-in`.
+  Для `tun-in` ничего не дописывается. В карточке соединения перед
+  Destination появилась группа **Source**.
 - **OpenConnect в Add server ([задача 654](docs/spec/tasks/654-openconnect-fortinet-support.md)).**
   Новая вкладка **OpenConnect** добавляет корпоративный VPN-шлюз. В основном
   блоке — **Tag**, **Gateway** (FortiGate, Cisco AnyConnect, GlobalProtect,
@@ -290,6 +397,14 @@ start with large subscriptions. Core `v1.14.3-lx.21`, contract 1.1.132.
 
 ## 🔄 Изменено
 
+- **Меню ⋮ в редакторе JSON ([задача 660](docs/spec/tasks/660-editor-overflow-menu.md)).**
+  У каждого поля и просмотрщика JSON справа в ряду кнопок есть меню ⋮.
+  **Format** переехал туда и появился в просмотрщиках только для чтения
+  (**Source** подписки, **JSON** узла): форматирует только показанное,
+  **Show original** возвращает исходный текст. **Magnifier** включает и
+  выключает лупу выделения; выбор сохраняется для всего приложения. После
+  переключения переноса или Format кнопка переноса и меню показывают
+  индикатор и не реагируют на тапы, пока строки не разложены.
 - **Жесты редактора идут по направлению свайпа (задача 649).**
   - Свайп вбок по строке, которая не помещается, прокручивает текст; вкладка
     стоит. Где вбок прокручивать нечего, свайп переключает вкладку, как
@@ -302,12 +417,43 @@ start with large subscriptions. Core `v1.14.3-lx.21`, contract 1.1.132.
   Переключатель виден только у узлов Tailscale и действует только на пресет
   Tailscale. Прежнее значение сохраняется, в том числе из старых файлов
   LX Backup.
+- **Одна карточка соединения для Conns и профайлера ([задача 662](docs/spec/tasks/662-unified-connection-detail-sheet.md)).**
+  Оба экрана открывают одну карточку с одними группами в одном порядке. У
+  каждого остаются свои блоки: One-way traffic и **Close** в Conns, DNS и
+  Issues в профайлере. У закрытого соединения бейдж `TCP·` / `UDP·`; тап по
+  нему показывает `TCP closed` / `UDP closed`.
+- **Один User-Agent для всех запросов приложения ([задача 659](docs/spec/tasks/659-app-user-agent-everywhere.md)).**
+  Rule-set'ы, проверка обновлений, Donate и support-лента, Speed Test,
+  community-серверы, диагностика узла и передача на TV шлют
+  `LxBox-android/<версия>` — ту же строку, что подписки по умолчанию.
+  **Custom User-Agent** действует только на подписки. Регистрация WARP
+  оставляет строку клиента Cloudflare; пинг и автовыбор не менялись.
 - **WARP: восемь блоков `8.x` вернулись в пул адресов WireGuard ([задача 651](docs/spec/tasks/651-warp-8x-blocks-return.md)).**
   В июне их убрали как недоступные; свежие замеры показывают, что они
   отвечают наравне с остальными блоками.
 
 ## 🩹 Исправлено
 
+- **«Auto-restart VPN on settings change» применяет каждое изменение ([задача 667](docs/spec/tasks/667-auto-apply-gate-shared-by-all-rebuild-paths.md)).**
+  Включение большой подписки с мгновенным возвратом назад, Направление с
+  главного экрана, две правки за три секунды или правка во время уже идущей
+  пересборки могли оставить плашку «restart VPN» вместо перезапуска. Теперь
+  решает одна проверка для всех путей; правка, попавшая в трёхсекундную
+  паузу, применяется по её окончании. Правка цепочки и добавление источника
+  на **Servers** больше не перезапускают VPN сами: при выключенной настройке
+  они показывают плашку, как любая правка.
+- **Старт после долгого простоя не зависает в «stopping» ([задача 663](docs/spec/tasks/663-force-stop-reaches-stuck-stopping.md)).**
+  **Start** мог не работать, пока приложение не закроешь принудительно.
+  Принудительная остановка теперь доходит до службы и после того, как её
+  приёмник снят. Проверено только на эмуляторе.
+- **Speed Test открывается при поднятом VPN ([задача 666](docs/spec/tasks/666-speed-test-open-rangeerror-empty-servers.md)).**
+  С 2.25.13 подпись маршрута под заголовком считалась до загрузки списка
+  серверов, и вместо теста экран показывал ошибку. **Start** теперь
+  неактивна, пока список не загружен.
+- **Ссылки поддержки в Telegram вида `tg://` ([задача 657](docs/spec/tasks/657-telegram-support-url-tg-scheme.md)).**
+  Заголовок `support-url: tg://resolve?domain=…` показывает значок Telegram
+  на экране подписки и в списке. Без установленного Telegram ссылка
+  открывается в веб-форме `t.me`, а не только копируется.
 - **Узел, который ядро не может разобрать, выключается ([задача 653](docs/spec/tasks/653-core-decode-error-index-to-tag.md)).**
   Старый узел MASQUE из sing-box JSON с ключом `network: h2|h3` заставлял
   ядро отказывать на **Start** с ошибкой
@@ -353,7 +499,11 @@ start with large subscriptions. Core `v1.14.3-lx.21`, contract 1.1.132.
   drag, разбор `announce`, эмодзи-префиксы с индексами, расшифровка
   `base64`-заголовков, форма отказа ядра на декодировании, форма OpenConnect
   и её связь с Source, логика входа, сборка Tunnel ingress и флаги узла в
-  LX Backup, согласованность вкладки DNS с остальными вкладками Routing.
+  LX Backup, согласованность вкладки DNS с остальными вкладками Routing, код
+  передачи и его шифрованный конверт, сервер приёма на TV, опознание ссылок
+  Telegram, дефолт Send HWID, User-Agent приложения, первый кадр Speed Test
+  при поднятом туннеле, проверка автоперезапуска на всех путях пересборки,
+  наследование фрагментации у REALITY.
 
 </details>
 
@@ -362,7 +512,7 @@ start with large subscriptions. Core `v1.14.3-lx.21`, contract 1.1.132.
 ## Install / Установка
 
 ```bash
-adb install -r LxBox-v2.25.16-rc.1-arm64-v8a.apk
+adb install -r LxBox-v2.25.16-arm64-v8a.apk
 ```
 
 Без uninstall! Поверх существующей установки. Настройки и подписки сохранятся.

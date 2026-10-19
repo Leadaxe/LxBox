@@ -3,7 +3,7 @@
 | Поле | Значение |
 |------|----------|
 | Тип | F (новая фича) |
-| Статус | Implemented (2026-10-16); ручные проверки на эмуляторах TV/телефона не проведены |
+| Статус | Implemented (2026-10-16); ручные проверки на эмуляторах TV/телефона не проведены; выпущено в v2.25.16 |
 | Дата | 2026-10-09 |
 | Связанные | [Leadaxe/LxBox#163](https://github.com/Leadaxe/LxBox/issues/163); фича [031-DEVICE_TRANSFER](../features/031-DEVICE_TRANSFER/FEATURE.ru.md); §372 (Android TV); §375/§382 (QR-сканер); 017-BACKUP_AND_STORAGE |
 

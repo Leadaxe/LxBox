@@ -3,7 +3,7 @@
 | Поле | Значение |
 |------|----------|
 | Тип | Доработка фич [012-LIVE_STATE](../features/012-LIVE_STATE/FEATURE.ru.md) (Conns, Overview) и [028-TRAFFIC_PROFILER](../features/028-TRAFFIC_PROFILER/FEATURE.ru.md) (лента Live), запрос владельца 17.10.2026 |
-| Статус | I (implemented): CI и проверка на устройстве — ждут |
+| Статус | I (implemented): CI и проверка на устройстве — ждут; выпущено в v2.25.16 |
 | Дата | 2026-10-17 |
 | Связанные | §122 (Conns на CommandClient), §204 (routing-строка), §656 (`tunnel-ingress`) |
 

@@ -3,7 +3,7 @@
 | Поле | Значение |
 |------|----------|
 | Тип | B (дефект) |
-| Статус | I (implemented) |
+| Статус | I (implemented); выпущено в v2.25.16 |
 | Фича | [001-SUBSCRIPTIONS](../features/001-SUBSCRIPTIONS/FUNCTIONS/subscription-meta.md) |
 | Дата | 2026-10-17 |
 | Связанные | 006F (шапка подписки, иконка Telegram), §390 (`fallbackUrl` для custom-scheme) |
