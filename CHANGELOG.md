@@ -8,69 +8,9 @@
 
 ## [Unreleased]
 
-### Changed
-
-- **Editor ⋮ menu ([task 660](docs/spec/tasks/660-editor-overflow-menu.md)).**
-  Every JSON field and viewer gets a ⋮ menu at the right end of its button
-  row. Format moves there from the row, and read-only viewers (a subscription
-  Source, the node JSON) get it too: it formats only what is shown, and Show
-  original brings the source text back. Magnifier turns the selection
-  magnifier on and off; the setting is saved for the whole app. After a wrap
-  toggle or Format the wrap button and the menu show a spinner and ignore
-  taps until the editor has finished laying out the lines.
-
-### Fixed
-
-- **Start after a long idle no longer hangs in “stopping”
-  ([task 663](docs/spec/tasks/663-force-stop-reaches-stuck-stopping.md)).**
-  Start could stay dead until the app was force-closed; force-stop now
-  reaches the service even after its receiver is gone. Checked on the
-  emulator only, not yet on a real device.
-- **TLS fragmentation now reaches REALITY nodes from every level
-  ([task 665](docs/spec/tasks/665-tls-fragment-inherits-everywhere-reality-too.md),
-  issue #170).** Since 2.25.12 the global, folder and subscription
-  fragmentation settings skipped REALITY nodes, so a REALITY node behind a
-  DPI that needs a split ClientHello did not connect with the global “On”.
-  REALITY now inherits fragmentation like any node, and a node that gets it
-  from a level above says so under its TLS section. **If your REALITY server
-  does not accept a split ClientHello, set fragmentation to Off on that node
-  or its subscription after the update.**
-  (RU: Фрагментация TLS теперь доходит до REALITY-узлов с любого уровня:
-  глобальная настройка, папка и подписка больше не пропускают REALITY, узел
-  с унаследованной фрагментацией пишет об этом под секцией TLS. **Если ваш
-  REALITY-сервер не принимает разрезанный ClientHello, после обновления
-  поставьте Off на этом узле или его подписке.**)
-- **“Auto-restart VPN on settings change” now applies every change
-  ([task 667](docs/spec/tasks/667-auto-apply-gate-shared-by-all-rebuild-paths.md)).**
-  The setting fired unevenly: enabling a large subscription and going back
-  at once, applying a Direction from the home list, two edits within three
-  seconds, or an edit made while a rebuild was already running could leave a
-  banner instead of a reload. One gate now decides for every path, a change
-  that hits the three-second cooldown is applied once the cooldown ends, and
-  a repeated save of the same config no longer clears the “restart” state
-  while the core still runs the old one. Editing a chain or adding a source
-  on Servers no longer reloads the VPN on its own: with the setting off it
-  shows the usual “restart VPN” banner like any other change.
-  (RU: «Автоперезапуск VPN при смене настроек» теперь применяет каждое
-  изменение: включение большой подписки с мгновенным Back, Направление с
-  главного экрана, две правки за три секунды или правка во время уже идущей
-  пересборки оставляли плашку вместо перезапуска. Решает один гейт для всех
-  путей; правка, попавшая в трёхсекундную паузу, применяется по её
-  окончании; повторная запись того же конфига больше не снимает состояние
-  «нужен перезапуск», пока ядро на старом. Правка цепочки и добавление
-  источника на Servers больше не перезапускают VPN сами: при выключенной
-  галке — обычная плашка «restart VPN», как у любой правки.)
-- **Speed Test no longer fails to open while the VPN is up
-  ([task 666](docs/spec/tasks/666-speed-test-open-rangeerror-empty-servers.md)).**
-  Since 2.25.13 the route label under the title was computed before the server
-  list had loaded, so the screen showed an error instead of the test.
-  (RU: Тест скорости снова открывается при поднятом VPN: с 2.25.13 подпись
-  маршрута считалась до загрузки списка серверов, и вместо экрана выходила
-  ошибка.)
-
 ---
 
-## [2.25.16] — 2026-10-15
+## [2.25.16] — 2026-10-19
 
 ### Added
 
@@ -130,6 +70,28 @@
   like `profile-title` and `announce` are shown as UTF-8; the `base64` label
   under the header name switches back to the raw value. Copy still copies the
   raw block.
+- **Set up a TV from your phone
+  ([task 622](docs/spec/tasks/622-device-transfer-phone-to-tv.md),
+  issue #163).** On an Android TV, Backup & restore → Receive from phone
+  shows a QR code; on the phone, Send to TV scans it and sends the ticked
+  backup categories over the local network. The TV opens the usual Import
+  backup window. The settings travel encrypted with a one-time key carried
+  only by the QR code; a code lives 10 minutes, works for one transfer and
+  closes after five sends with a wrong key. The phone sends past its own
+  VPN. The receive item shows only on a TV, the send item only on a device
+  with a camera. Not yet checked on real devices.
+  (RU: Настройка TV с телефона: на TV Backup & restore → Receive from phone
+  показывает QR, телефон через Send to TV сканирует его и отправляет
+  отмеченные категории бэкапа по локальной сети, на TV открывается обычное
+  окно Import backup. Данные шифруются одноразовым ключом из QR; код живёт
+  10 минут и годен на одну передачу.)
+- **Source and inbound of connections that do not come through the TUN
+  ([task 661](docs/spec/tasks/661-stats-source-inbound.md)).** With endpoints
+  that let peers in (Tunnel ingress, `allow_lan`/`allow_gateway`) and local
+  proxies (`mixed-in`, `sysproxy-in`) connections arrive from other inputs.
+  Conns, Stats → Overview and the profiler feed now append
+  `<ip:port> / <inbound>` to such a connection; for `tun-in` nothing is
+  added. The connection card has a Source group before Destination.
 
 ### Changed
 
@@ -168,6 +130,41 @@
   меняется: lx.19 и lx.20 правят Linux-демон роутера, lx.21 добавляет
   экспериментальный протокол TrustTunnel только в desktop- и роутерные
   сборки — в Android-библиотеке его нет. Java-поверхность идентична lx.18.)
+- **Editor ⋮ menu ([task 660](docs/spec/tasks/660-editor-overflow-menu.md)).**
+  Every JSON field and viewer gets a ⋮ menu at the right end of its button
+  row. Format moves there from the row, and read-only viewers (a subscription
+  Source, the node JSON) get it too: it formats only what is shown, and Show
+  original brings the source text back. Magnifier turns the selection
+  magnifier on and off; the setting is saved for the whole app. After a wrap
+  toggle or Format the wrap button and the menu show a spinner and ignore
+  taps until the editor has finished laying out the lines.
+- **Send HWID is on by default
+  ([task 658](docs/spec/tasks/658-send-hwid-on-by-default.md)).** Without
+  `x-hwid` a Remnawave panel registers the device itself, nameless, and after
+  every app update counts it as a new device against the limit. Installs
+  where the switch was never touched start sending the HWID with the next
+  subscription update; an explicit Off stays Off. A panel with a device limit
+  sees the install once more, now with a name; the old nameless device can be
+  removed in the panel.
+  (RU: «Send HWID» включён по умолчанию. Без `x-hwid` панель Remnawave
+  заводит устройство сама, без имени, и после обновления приложения считает
+  его новым. Где тумблер не трогали, HWID уходит со следующего обновления
+  подписки; явное Off сохраняется. Панель с лимитом увидит установку ещё раз,
+  уже с именем; старое безымянное устройство удаляется в панели.)
+- **One User-Agent for every request of the app
+  ([task 659](docs/spec/tasks/659-app-user-agent-everywhere.md)).**
+  Rule-sets, update checks, Donate and the support feed, Speed Test,
+  community servers, node diagnostics and the TV transfer send
+  `LxBox-android/<version>`, the same string as the subscription default.
+  Custom User-Agent applies to subscriptions only. Exceptions: WARP
+  registration keeps the Cloudflare client UA; ping and auto-select are
+  untouched.
+- **One connection card for Conns and the profiler
+  ([task 662](docs/spec/tasks/662-unified-connection-detail-sheet.md)).**
+  Both screens open the same card with the same groups in the same order;
+  each keeps its own blocks (One-way traffic and Close on Conns, DNS and
+  Issues in the profiler). A closed connection shows a `TCP·` / `UDP·` badge;
+  a tap on it says `TCP closed` / `UDP closed`.
 
 ### Fixed
 
@@ -191,6 +188,57 @@
   start (loaded on enable, open, config build or fetch); parsing the cache and
   the network response runs in an isolate with a snapshot of the contract
   registry. Refresh of 4025 nodes: main thread 1.85 s → 0.24 s.
+- **Start after a long idle no longer hangs in “stopping”
+  ([task 663](docs/spec/tasks/663-force-stop-reaches-stuck-stopping.md)).**
+  Start could stay dead until the app was force-closed; force-stop now
+  reaches the service even after its receiver is gone. Checked on the
+  emulator only, not yet on a real device.
+- **TLS fragmentation now reaches REALITY nodes from every level
+  ([task 665](docs/spec/tasks/665-tls-fragment-inherits-everywhere-reality-too.md),
+  issue #170).** Since 2.25.12 the global, folder and subscription
+  fragmentation settings skipped REALITY nodes, so a REALITY node behind a
+  DPI that needs a split ClientHello did not connect with the global “On”.
+  REALITY now inherits fragmentation like any node, and a node that gets it
+  from a level above says so under its TLS section. **If your REALITY server
+  does not accept a split ClientHello, set fragmentation to Off on that node
+  or its subscription after the update.**
+  (RU: Фрагментация TLS теперь доходит до REALITY-узлов с любого уровня:
+  глобальная настройка, папка и подписка больше не пропускают REALITY, узел
+  с унаследованной фрагментацией пишет об этом под секцией TLS. **Если ваш
+  REALITY-сервер не принимает разрезанный ClientHello, после обновления
+  поставьте Off на этом узле или его подписке.**)
+- **“Auto-restart VPN on settings change” now applies every change
+  ([task 667](docs/spec/tasks/667-auto-apply-gate-shared-by-all-rebuild-paths.md)).**
+  The setting fired unevenly: enabling a large subscription and going back
+  at once, applying a Direction from the home list, two edits within three
+  seconds, or an edit made while a rebuild was already running could leave a
+  banner instead of a reload. One gate now decides for every path, a change
+  that hits the three-second cooldown is applied once the cooldown ends, and
+  a repeated save of the same config no longer clears the “restart” state
+  while the core still runs the old one. Editing a chain or adding a source
+  on Servers no longer reloads the VPN on its own: with the setting off it
+  shows the usual “restart VPN” banner like any other change.
+  (RU: «Автоперезапуск VPN при смене настроек» теперь применяет каждое
+  изменение: включение большой подписки с мгновенным Back, Направление с
+  главного экрана, две правки за три секунды или правка во время уже идущей
+  пересборки оставляли плашку вместо перезапуска. Решает один гейт для всех
+  путей; правка, попавшая в трёхсекундную паузу, применяется по её
+  окончании; повторная запись того же конфига больше не снимает состояние
+  «нужен перезапуск», пока ядро на старом. Правка цепочки и добавление
+  источника на Servers больше не перезапускают VPN сами: при выключенной
+  галке — обычная плашка «restart VPN», как у любой правки.)
+- **Speed Test no longer fails to open while the VPN is up
+  ([task 666](docs/spec/tasks/666-speed-test-open-rangeerror-empty-servers.md)).**
+  Since 2.25.13 the route label under the title was computed before the server
+  list had loaded, so the screen showed an error instead of the test.
+  (RU: Тест скорости снова открывается при поднятом VPN: с 2.25.13 подпись
+  маршрута считалась до загрузки списка серверов, и вместо экрана выходила
+  ошибка.)
+- **Telegram support links with `tg://`
+  ([task 657](docs/spec/tasks/657-telegram-support-url-tg-scheme.md)).** A
+  `support-url: tg://resolve?domain=…` header now shows the Telegram icon on
+  the subscription screen and in the list. Without Telegram installed the
+  link opens its `t.me` web form instead of only being copied.
 
 ### Removed
 
