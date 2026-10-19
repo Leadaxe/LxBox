@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/widgets.dart' show StringCharacters;
 import 'package:http/http.dart' as http;
 
 import '../../models/node_spec.dart';
@@ -9,6 +10,7 @@ import '../../models/server_list.dart';
 import '../../models/subscription_meta.dart';
 import '../parser/body_decoder.dart';
 import '../parser/engine/decoders.dart' show decodeUtf8Lenient;
+import '../app_log.dart';
 import '../parser/parse_all.dart';
 import 'http_cache.dart';
 import 'input_helpers.dart' show isFileSubscription;
@@ -92,18 +94,13 @@ class ParseResult {
 /// Мержит HTTP-заголовки с inline псевдо-заголовками (`# profile-title: …`
 /// в начале тела) — некоторые провайдеры кладут метаданные в комменты,
 /// а не в HTTP-headers. HTTP первичны, inline как fallback.
+///
+/// §652 C — две половины: [fetchRaw] (сеть, ретраи — ожидание I/O на main)
+/// и [parseFetched] (счёт). Контроллер подписок зовёт их порознь и разбирает
+/// тело подписки в отдельном isolate.
 Future<ParseResult> parseFromSource(SubscriptionSource source,
-    {http.Client? client}) async {
-  // §219 — закрываем ТОЛЬКО самосозданный клиент (инжектированный извне
-  // закрывает владелец): иначе `http.Client()` течёт на каждый fetch.
-  final owned = client == null;
-  final c = client ?? http.Client();
-  try {
-    return parseFetched(await _fetch(source, c));
-  } finally {
-    if (owned) c.close();
-  }
-}
+        {http.Client? client}) async =>
+    parseFetched(await fetchRaw(source, client: client));
 
 /// §603 — разбор уже полученного ответа (тело + HTTP-заголовки) без сети.
 /// Для повторного разбора снапшота файловой подписки и для записей с тем же
@@ -161,6 +158,8 @@ Map<String, String> _inlineHeaders(String body) {
       'support-url',
       'subscription-userinfo',
       'content-disposition',
+      // §648 — описание подписки (легенда к эмодзи и т.п.).
+      'announce',
     }.contains(key)) {
       out[key] = value;
     }
@@ -180,10 +179,12 @@ set fetchBackoffsForTesting(List<Duration>? value) =>
     _fetchBackoffsOverride = value;
 
 /// Прямой HTTP GET без декода/парса. Для UI «Source» — показать живой
-/// ответ сервера как есть. Не пишет в кэш.
+/// ответ сервера как есть; сетевая половина [parseFromSource] (§652 C).
+/// Не пишет в кэш.
 Future<FetchResult> fetchRaw(SubscriptionSource source,
     {http.Client? client}) async {
-  // §219 — закрываем только самосозданный клиент (см. parseFromSource).
+  // §219 — закрываем ТОЛЬКО самосозданный клиент (инжектированный извне
+  // закрывает владелец): иначе `http.Client()` течёт на каждый fetch.
   final owned = client == null;
   final c = client ?? http.Client();
   try {
@@ -284,18 +285,58 @@ Future<FetchResult> _fetch(SubscriptionSource source, http.Client client) async 
   }
 }
 
+/// §650 — значение заголовка вида `base64:…`, расшифрованное в UTF-8.
+/// `null` — нет префикса `base64:` или base64 битый. Общий декодер для
+/// разбора `profile-title` и показа заголовков на вкладке Source.
+String? decodeBase64HeaderValue(String raw) {
+  const prefix = 'base64:';
+  if (!raw.startsWith(prefix)) return null;
+  try {
+    return decodeUtf8Lenient(base64.decode(raw.substring(prefix.length)));
+  } catch (_) {
+    return null;
+  }
+}
+
 /// Некоторые сервера (Liberty и др.) отдают title как
 /// `base64:TGliZXJ0eSBWUE4g...`. Декодируем если есть префикс.
 String? _decodeBase64Title(String? raw) {
   if (raw == null) return null;
+  return decodeBase64HeaderValue(raw) ?? raw;
+}
+
+/// §648 — предел длины описания подписки, в графемах.
+const kAnnounceMaxGraphemes = 2000;
+
+final _crlfRe = RegExp(r'\r\n?');
+final _manyNewlinesRe = RegExp(r'\n{3,}');
+
+/// §648 — заголовок `announce`: `base64:…` (UTF-8) или открытый текст.
+/// Нормализация: `\r\n` → `\n`, обрезка краёв, больше двух переводов строки
+/// подряд → два, не длиннее [kAnnounceMaxGraphemes] графем. Пустой результат
+/// и битый base64 — `null` (битый — с предупреждением в AppLog).
+String? parseAnnounceHeader(String? raw) {
+  if (raw == null) return null;
+  var text = raw.trim();
   const prefix = 'base64:';
-  if (!raw.startsWith(prefix)) return raw;
-  try {
-    final bytes = base64.decode(raw.substring(prefix.length));
-    return decodeUtf8Lenient(bytes);
-  } catch (_) {
-    return raw;
+  if (text.startsWith(prefix)) {
+    try {
+      text = decodeUtf8Lenient(base64.decode(text.substring(prefix.length)));
+    } catch (e) {
+      AppLog.I.warning('[subscription] announce: broken base64 ($e)');
+      return null;
+    }
   }
+  text = text
+      .replaceAll(_crlfRe, '\n')
+      .trim()
+      .replaceAll(_manyNewlinesRe, '\n\n');
+  if (text.isEmpty) return null;
+  final chars = text.characters;
+  if (chars.length > kAnnounceMaxGraphemes) {
+    text = chars.take(kAnnounceMaxGraphemes).toString().trimRight();
+  }
+  return text;
 }
 
 /// Достаёт имя файла из `Content-Disposition` (RFC 6266). Порядок:
@@ -382,12 +423,16 @@ SubscriptionMeta? _metaFromHeaders(Map<String, String> h) {
   final webPage = get('profile-web-page-url');
   final support = get('support-url');
   final updateIntervalRaw = get('profile-update-interval');
+  // §648 — HTTP-заголовок приоритетнее ключа из комментариев тела: слияние
+  // в [parseFetched] кладёт HTTP поверх inline.
+  final announce = parseAnnounceHeader(get('announce'));
 
   if (userInfo == null &&
       title == null &&
       webPage == null &&
       support == null &&
-      updateIntervalRaw == null) {
+      updateIntervalRaw == null &&
+      announce == null) {
     return null;
   }
 
@@ -427,5 +472,6 @@ SubscriptionMeta? _metaFromHeaders(Map<String, String> h) {
     webPageUrl: webPage,
     profileTitle: title,
     updateIntervalHours: updateHours,
+    announce: announce,
   );
 }

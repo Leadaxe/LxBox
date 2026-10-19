@@ -439,7 +439,7 @@ class SubscriptionSettingsTab extends StatelessWidget {
         ),
         SwitchListTile(
           title: Text(getLocalText.s("Send HWID")),
-          subtitle: Text(getLocalText.s("Send x-hwid + device headers on every subscription fetch — for panels with HWID device limits (Remnawave). Off by default.")),
+          subtitle: Text(getLocalText.s("Send x-hwid + device headers on every subscription fetch — for panels with HWID device limits (Remnawave). On by default.")),
           secondary: const Icon(Icons.devices_outlined),
           value: id.sendHwid,
           onChanged: onIdentitySendHwidChanged,

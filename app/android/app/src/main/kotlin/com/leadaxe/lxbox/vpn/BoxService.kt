@@ -309,6 +309,21 @@ class BoxService(
             Log.w(TAG, "[vpn §430] bounce done — foreground shown and removed, stopSelf($startId)")
             return Service.START_NOT_STICKY
         }
+        if (intent?.action == BoxVpnService.ACTION_FORCE_STOP) {
+            // §663 — сюда force-stop приходит startService'ом, когда приёмник
+            // уже снят: doStop снимает его до teardown'а ядра, и если Go-вызов
+            // повис, broadcast ACTION_FORCE_STOP ловить некому, а служба
+            // навсегда в Stopping. Ветка стоит до notification.show и до гарда
+            // `status != Stopped`. Пустой экземпляр (статус Stopped) — no-op и
+            // stopSelf(startId), чтобы не оставить started-сервис.
+            if (status == VpnStatus.Stopped) {
+                Log.d(TAG, "[vpn §663] ACTION_FORCE_STOP via startService — already Stopped, stopSelf($startId)")
+                service.stopSelf(startId)
+            } else {
+                doForceStop()
+            }
+            return Service.START_NOT_STICKY
+        }
         if (intent == null) {
             val n = BootReceiver.noteStickyRestart(service)
             Log.w(TAG, "[vpn §428] sticky restart #$n (limit=${BootReceiver.STICKY_RESTART_LIMIT} per ${BootReceiver.STICKY_RESTART_WINDOW_MS / 1000}s)")
@@ -645,6 +660,9 @@ class BoxService(
             val cc = BoxCommandClient()
             commandClient = cc
             cc.startStatus()
+            // §654 C — статус openconnect (второй фактор / SSO): подписка, если
+            // в конфиге есть такой endpoint; Dart для этого не нужен.
+            cc.syncOpenConnectStatus(ConfigManager.load())
         }.onFailure { Log.w(TAG, "BoxCommandClient.startStatus failed: ${it.message}") }
 
         // §223 Часть B (#23) — если UI не открывался (старт с QS-плитки → нет
@@ -918,6 +936,11 @@ class BoxService(
                 return@runCatching
             }
             runCatching { cs.startOrReloadService(config, buildOverrideOptions(config)) }
+                .onSuccess {
+                    // §654 C — после reload прежний стрим статуса мог
+                    // закончиться молча, а состав endpoint'ов — смениться.
+                    runCatching { commandClient?.syncOpenConnectStatus(config) }
+                }
                 .onFailure {
                     Log.e(TAG, "serviceReload failed", it)
                     runCatching { cs.setError("android: reload: ${it.message}") }

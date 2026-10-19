@@ -24,6 +24,9 @@ class _FakePathProvider extends PathProviderPlatform
 
 /// §360 — гонка toggle ↔ пересборка: мутация, попавшая в окно `_busy`, не
 /// должна терять `configDirty`.
+///
+/// §667 — Р3: `toggleAt` поднимает флаг ДО гидрации (синхронно); Р5: флаг
+/// переживает пересборку при правке ЛЮБОГО источника, не только состава.
 void main() {
   // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
   // (критерий 7 спеки 480).
@@ -107,5 +110,51 @@ void main() {
     expect(c.entries, hasLength(2));
     expect(c.configDirty, isTrue,
         reason: 'добавленный сервер обязан попасть в конфиг');
+  });
+
+  test('§667 Р5: configDirty=true под пересборкой (не состав) → флаг остаётся',
+      () async {
+    final c = SubscriptionController();
+    await c.init();
+    await c.addFolder('F');
+    await c.addMembersToFolder(0, uriA);
+
+    final gen = c.generateConfig();
+    while (!c.busy) {
+      await Future<void>.delayed(Duration.zero);
+    }
+    // Правка Routing / var / тумблера: состав источников не трогает, только
+    // поднимает флаг — до §667 сверка состава (§360) гасила его на выходе.
+    SettingsStorage.markConfigDirty();
+    await gen;
+
+    expect(c.configDirty, isTrue,
+        reason: 'правка под летящей пересборкой в конфиг не попала');
+  });
+
+  test('§667 Р3: toggleAt на выключенной подписке поднимает флаг синхронно',
+      () async {
+    await SettingsStorage.saveServerLists([
+      SubscriptionServers(
+        id: 's1',
+        name: 's1',
+        enabled: false,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        url: 'http://x/a',
+        lastNodeCount: 3, // «непустой кэш» на диске — гидрация пойдёт в него
+      ),
+    ]);
+    final c = SubscriptionController();
+    await c.init();
+    await c.rehydrationDone;
+    c.configDirty = false;
+
+    final pending = c.toggleAt(0);
+    expect(c.configDirty, isTrue,
+        reason: 'Д1 — Back до конца гидрации обязан застать флаг поднятым');
+    await pending;
+    expect(c.entries.single.enabled, isTrue);
+    expect(c.configDirty, isTrue);
   });
 }

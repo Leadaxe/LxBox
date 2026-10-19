@@ -5,6 +5,7 @@ import '../../vpn/cc_channel.dart';
 import '../builder/core_chain_capability.dart';
 import '../probe/probe_config.dart';
 import '../probe/probe_lifecycle.dart';
+import '../subscription/user_agent.dart';
 
 /// §392 — итог одного диагностического прогона по узлу.
 ///
@@ -105,6 +106,7 @@ class NodeDiagnosticsRunner {
       link: url,
       timeoutMs: kTimeoutMs,
       maxBytes: kMaxBytes,
+      userAgent: resolveAppUserAgent(),
     );
     return DiagnosticOutcome(source: DiagnosticSource.live, result: r);
   }
@@ -139,6 +141,7 @@ class NodeDiagnosticsRunner {
         link: url,
         timeoutMs: kTimeoutMs,
         maxBytes: kMaxBytes,
+        userAgent: resolveAppUserAgent(),
       );
       return DiagnosticOutcome(source: DiagnosticSource.probe, result: r);
     } finally {

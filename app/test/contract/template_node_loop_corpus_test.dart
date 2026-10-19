@@ -21,7 +21,9 @@ import 'package:lxbox/services/builder/preset_node_loop.dart';
 //                          "dns_rules": [...], "warnings": [...]}
 //
 // `preset` несёт только ключи языка — оболочку (`preset_id`, `ui`) добавляет
-// этот раннер. `nodes` — узлы конфига в порядке файла; `enabled: false` /
+// этот раннер. `nodes` — узлы конфига в порядке файла: `{tag, body,
+// enabled?, in_config?, skip_tailscale_presets?, allow_local?, allow_lan?,
+// allow_gateway?}` (§656); `enabled: false` /
 // `in_config: false` отсеиваются здесь (сборка LxBox их до обхода не
 // доводит). `load: reject` = исключение [parsePresetNodeLoop] — той же
 // функции, которой загрузчик шаблона разбирает обход
@@ -61,7 +63,13 @@ _LoopCase _loadCase(String base) {
           PresetNode(
             tag: n['tag'] as String,
             body: Map<String, dynamic>.from(n['body'] as Map),
-            skipPresets: n['skip_presets'] as bool? ?? false,
+            // §656 (контракт 1.1.126) — поля записи узла кладутся в
+            // пространство обхода.
+            skipTailscalePresets:
+                n['skip_tailscale_presets'] as bool? ?? false,
+            allowLocal: n['allow_local'] as bool? ?? false,
+            allowLan: n['allow_lan'] as bool? ?? false,
+            allowGateway: n['allow_gateway'] as bool? ?? false,
           ),
     ],
     varsValues: {

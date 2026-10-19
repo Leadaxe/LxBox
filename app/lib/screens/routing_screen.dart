@@ -36,6 +36,7 @@ import '../widgets/export_action_sheet.dart';
 import '../widgets/outbound_picker.dart';
 import 'direction_edit_screen.dart';
 import 'custom_rule_edit_screen.dart';
+import 'dns_settings_tab.dart';
 import 'lazy_persist_mixin.dart';
 import 'routing_screen/new_direction_dialog.dart';
 import 'routing_screen/routing_screen_helpers.dart';
@@ -52,13 +53,17 @@ import '../services/l10n/locale_controller.dart';
 
 part 'routing_screen/routing_srs_cache.dart';
 
+/// §655 — вкладки экрана Routing в порядке полосы. Индекс = позиция в
+/// `TabBar`: Rules = 2 (гейт меню ⋮ §396), DNS = 3.
+enum RoutingTab { directions, presets, rules, dns, tunnelApps }
+
 class RoutingScreen extends StatefulWidget {
   const RoutingScreen({
     super.key,
     required this.subController,
     required this.homeController,
     this.focusDirectionTag,
-    this.initialPresetsTab = false,
+    this.initialTab = RoutingTab.directions,
   });
 
   final SubscriptionController subController;
@@ -68,9 +73,10 @@ class RoutingScreen extends StatefulWidget {
   /// (навигация «хоп рантайм-цепочки → Направление», openTagOwner). null = нет.
   final String? focusDirectionTag;
 
-  /// §262 — открыть сразу на табе Presets (каталог пресетов). Навигация из
-  /// листа DNS-health «Enable FakeIP» → юзер видит каталог, находит FakeIP.
-  final bool initialPresetsTab;
+  /// Вкладка при открытии. §262 — Presets из листа DNS-health «Enable
+  /// FakeIP» (юзер видит каталог, находит FakeIP); §655 — DNS из листа
+  /// DNS-health и support-ссылок `route:dns`, `route:routing/dns`.
+  final RoutingTab initialTab;
 
   @override
   State<RoutingScreen> createState() => _RoutingScreenState();
@@ -82,7 +88,8 @@ class _RoutingScreenState extends State<RoutingScreen>
         LazyPersistMixin<RoutingScreen>,
         _RoutingSrsCacheMixin,
         TemplateAwareState<RoutingScreen>,
-        SnackHelper<RoutingScreen> {
+        SnackHelper<RoutingScreen>,
+        SingleTickerProviderStateMixin<RoutingScreen> {
   @override
   WizardTemplate? _template;
   // §534 — снимок глобального userVars (`SettingsStorage.getAllVars()`) для
@@ -141,9 +148,31 @@ class _RoutingScreenState extends State<RoutingScreen>
     setState(() => _template = template);
   }
 
+  late final TabController _tabController;
+
+  /// §655 — индекс, с которого считается уход с вкладки DNS. Граница —
+  /// смена `TabController.index`, а не `animation.value` (И4).
+  late int _lastTabIndex;
+
+  /// §655 — записи вкладки DNS (staging и прямые записи `custom_rules`/vars).
+  final _dnsTabWrites = DnsTabWrites();
+
+  /// §655 — перечитывание буферов после записей вкладки DNS: одно в работе,
+  /// повторный запрос на это время копится флагом.
+  Future<void>? _sharedResync;
+  bool _sharedResyncAgain = false;
+
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(
+      length: RoutingTab.values.length,
+      vsync: this,
+      initialIndex: widget.initialTab.index,
+    );
+    _lastTabIndex = _tabController.index;
+    _tabController.addListener(_onTabIndexChanged);
+    _dnsTabWrites.addListener(_onDnsTabWrite);
     // §578 — правка узла при открытом Routing (редактор узла, Debug API,
     // toggle источника) меняет подпись пресета с `for_each_node`.
     widget.subController.addListener(_onSubControllerChanged);
@@ -164,13 +193,70 @@ class _RoutingScreenState extends State<RoutingScreen>
     widget.subController.removeListener(_onSubControllerChanged);
     unawaited(_ruleSetCacheSub?.cancel());
     _directionHighlightTimer?.cancel();
+    _tabController.removeListener(_onTabIndexChanged);
+    _tabController.dispose();
+    _dnsTabWrites.removeListener(_onDnsTabWrite);
     super.dispose();
+  }
+
+  /// §655 И2 — уход с вкладки DNS: дождаться её записей и перечитать буферы.
+  void _onTabIndexChanged() {
+    final index = _tabController.index;
+    if (index == _lastTabIndex) return;
+    final leftDns = _lastTabIndex == RoutingTab.dns.index;
+    _lastTabIndex = index;
+    if (leftDns) _resyncSharedBuffers();
+  }
+
+  /// §655 И4 — запись вкладки DNS завершилась, когда индекс уже ушёл с неё
+  /// (тап по вкладке: индекс меняется в начале анимации, а вкладка DNS ещё
+  /// видна и принимает правки). Пока индекс на DNS, перечитывать незачем:
+  /// это сделает уход.
+  void _onDnsTabWrite() {
+    if (_tabController.index != RoutingTab.dns.index) _resyncSharedBuffers();
+  }
+
+  void _resyncSharedBuffers() {
+    if (_sharedResync != null) {
+      _sharedResyncAgain = true;
+      return;
+    }
+    _sharedResync = () async {
+      do {
+        _sharedResyncAgain = false;
+        await _reloadSharedBuffers();
+      } while (_sharedResyncAgain && mounted);
+    }()
+        .whenComplete(() => _sharedResync = null);
+    unawaited(_sharedResync);
+  }
+
+  /// §655 И2 — вкладка DNS пишет `custom_rules` (переименование сервера,
+  /// DNS-аспект правила, `dns_enable` пресета) и vars (каскад §266) мимо
+  /// буферов Routing. Перечитываем `custom_rules`, `route_final` и vars БЕЗ
+  /// markDirty: только буферы и перерисовка. Иначе следующий staging
+  /// Rules/Presets затёр бы правки вкладки DNS устаревшим буфером.
+  Future<void> _reloadSharedBuffers() async {
+    await _dnsTabWrites.settle();
+    if (!mounted || _loading) return;
+    final storedFinal = await SettingsStorage.getRouteFinal();
+    final rules = await SettingsStorage.getCustomRules();
+    if (!mounted) return;
+    _routeFinal = storedFinal.isNotEmpty ? storedFinal : 'vpn-1';
+    _customRules
+      ..clear()
+      ..addAll(rules);
+    // vars (`_userVars`) и кэш наборов — по обновлённым правилам.
+    await _refreshSrsCache();
+    if (!mounted) return;
+    setState(() {});
   }
 
   void _onSubControllerChanged() {
     if (!mounted || _loading) return;
     // §578/§643 — строка пресета с `for_each_node` показывает обслуживаемые
-    // узлы: правка источника (включение, `skip_presets`) её меняет.
+    // узлы: правка источника (включение, `skip_tailscale_presets`,
+    // `allow_*`) её меняет.
     final types = presetLoopNodeTypes(_template?.selectableRules ?? const []);
     if (types == null || types.isNotEmpty) {
       setState(() {});
@@ -258,91 +344,95 @@ class _RoutingScreenState extends State<RoutingScreen>
     final template = _template!;
     final bottomPad = MediaQuery.of(context).padding.bottom + 24;
 
-    return DefaultTabController(
-      length: 4,
-      // §262 — таб Presets (index 1) первым при навигации из DNS-health листа.
-      initialIndex: widget.initialPresetsTab ? 1 : 0,
-      child: Builder(
-        builder: (tabCtx) => Scaffold(
-          appBar: AppBar(
-            title: Text(getLocalText.s("Routing")),
-            actions: [
-              // §396 — меню экспорта/импорта правил. Живёт в AppBar (решение
-              // владельца: «⋮ на самом верху, напротив Routing»), но видно
-              // только на табе Rules (index 2) — на остальных табах меню про
-              // правила сбивало бы с толку. animation (а не index) — чтобы
-              // кнопка появлялась уже во время свайпа, а не по его завершении.
-              AnimatedBuilder(
-                animation: DefaultTabController.of(tabCtx).animation!,
-                builder: (_, _) {
-                  final onRulesTab =
-                      DefaultTabController.of(
-                        tabCtx,
-                      ).animation!.value.round() ==
-                      2;
-                  if (!onRulesTab) return const SizedBox.shrink();
-                  return RulesMenuButton(
-                  // §398 — пресеты не экспортируются; при этом уйти на шаг
-                  // DNS можно и без правил, поэтому гейт снят до «есть хоть
-                  // какие-то настройки» (пустой storage — экран пуст в любом
-                  // случае).
-                  canExport: true,
-                    onExport: _exportRules,
-                    onImport: _importRules,
-                  );
-                },
-              ),
-            ],
-            bottom: TabBar(
-              isScrollable: true,
-              tabAlignment: TabAlignment.start,
-              tabs: [
-                Tab(text: getLocalText.s("Directions")),
-                Tab(text: getLocalText.s("Presets")),
-                Tab(text: getLocalText.s("Rules")),
-                Tab(text: getLocalText.s("Tunnel apps")),
-              ],
-            ),
+    // §262/§655 — начальная вкладка задаётся в initState (`initialTab`).
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(getLocalText.s("Routing")),
+        actions: [
+          // §396 — меню экспорта/импорта правил. Живёт в AppBar (решение
+          // владельца: «⋮ на самом верху, напротив Routing»), но видно
+          // только на табе Rules (index 2) — на остальных табах меню про
+          // правила сбивало бы с толку. animation (а не index) — чтобы
+          // кнопка появлялась уже во время свайпа, а не по его завершении.
+          AnimatedBuilder(
+            animation: _tabController.animation!,
+            builder: (_, _) {
+              final onRulesTab =
+                  _tabController.animation!.value.round() ==
+                  RoutingTab.rules.index;
+              if (!onRulesTab) return const SizedBox.shrink();
+              return RulesMenuButton(
+              // §398 — пресеты не экспортируются; при этом уйти на шаг
+              // DNS можно и без правил, поэтому гейт снят до «есть хоть
+              // какие-то настройки» (пустой storage — экран пуст в любом
+              // случае).
+              canExport: true,
+                onExport: _exportRules,
+                onImport: _importRules,
+              );
+            },
           ),
-          body: TabBarView(
-            children: [
-              // ─── Directions: Направления (CRUD) + default fallback + Auto tuning ───
-              RoutingDirectionsTab(
-                bottomPad: bottomPad,
-                groupTiles: _directions.map(_buildDirectionTile).toList(),
-                directionCount: _directions.length,
-                // §393 A3 — лимита на количество Направлений больше нет
-                // (паритет с лаунчером); счётчик показывает, сколько их.
-                onAddDirection: _addDirection,
-                routeFinalTile: _buildRouteFinalTile(),
-              ),
-
-              // ─── Presets: catalog of pre-built rules to copy into Rules ───
-              RoutingPresetsTab(
-                bottomPad: bottomPad,
-                catalogTiles: template.selectableRules
-                    .map(_buildPresetCatalogTile)
-                    .toList(),
-              ),
-
-              // ─── Rules: unified custom routing (spec §030) ───
-              RoutingRulesTab(
-                bottomPad: bottomPad,
-                itemCount: _customRules.length,
-                onReorder: _onReorderCustomRule,
-                itemKey: (i) => ValueKey(_customRules[i].id),
-                itemBuilder: _buildCustomRuleTile,
-                onAdd: _addCustomRule,
-              ),
-
-              // ─── Tunnel apps: §046 OS-level split-tunneling ───
-              TunAppsTab(
-                homeController: widget.homeController,
-                subController: widget.subController,
-              ),
-            ],
-          ),
+        ],
+        bottom: TabBar(
+          controller: _tabController,
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
+          tabs: [
+            Tab(text: getLocalText.s("Directions")),
+            Tab(text: getLocalText.s("Presets")),
+            Tab(text: getLocalText.s("Rules")),
+            Tab(text: getLocalText.s("DNS")),
+            Tab(text: getLocalText.s("Tunnel apps")),
+          ],
         ),
+      ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          // ─── Directions: Направления (CRUD) + default fallback + Auto tuning ───
+          RoutingDirectionsTab(
+            bottomPad: bottomPad,
+            groupTiles: _directions.map(_buildDirectionTile).toList(),
+            directionCount: _directions.length,
+            // §393 A3 — лимита на количество Направлений больше нет
+            // (паритет с лаунчером); счётчик показывает, сколько их.
+            onAddDirection: _addDirection,
+            routeFinalTile: _buildRouteFinalTile(),
+          ),
+
+          // ─── Presets: catalog of pre-built rules to copy into Rules ───
+          RoutingPresetsTab(
+            bottomPad: bottomPad,
+            catalogTiles: template.selectableRules
+                .map(_buildPresetCatalogTile)
+                .toList(),
+          ),
+
+          // ─── Rules: unified custom routing (spec §030) ───
+          RoutingRulesTab(
+            bottomPad: bottomPad,
+            itemCount: _customRules.length,
+            onReorder: _onReorderCustomRule,
+            itemKey: (i) => ValueKey(_customRules[i].id),
+            itemBuilder: _buildCustomRuleTile,
+            onAdd: _addCustomRule,
+          ),
+
+          // ─── DNS: серверы, правила, кэш (§655, бывший экран DNS Settings) ───
+          // Без keep-alive: вход — свежая загрузка (И1), уход — dispose
+          // со staging'ом; Routing ждёт записи и перечитывает буферы (И2).
+          DnsSettingsTab(
+            subController: widget.subController,
+            homeController: widget.homeController,
+            writes: _dnsTabWrites,
+          ),
+
+          // ─── Tunnel apps: §046 OS-level split-tunneling ───
+          TunAppsTab(
+            homeController: widget.homeController,
+            subController: widget.subController,
+          ),
+        ],
       ),
     );
   }

@@ -20,7 +20,6 @@ import 'about_screen.dart';
 import 'app_settings_screen.dart';
 import 'config_screen.dart';
 import 'debug_screen.dart';
-import 'dns_settings_screen.dart';
 import 'home/support_message_screen.dart';
 import 'routing_screen.dart';
 import 'settings_screen.dart';
@@ -42,7 +41,9 @@ import 'home/home_menus.dart';
 import 'home/home_dialogs.dart';
 import 'home/node_filter_view_model.dart';
 import 'home/node_list_presenter.dart';
+import 'home/openconnect_auth_ui.dart';
 import 'home/restore_backup.dart';
+import '../services/url_launcher.dart';
 import 'home/startup_wizard.dart';
 import '../services/debug/bootstrap.dart';
 import '../services/debug/debug_registry.dart';
@@ -69,6 +70,9 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, TickerProviderStateMixin {
   late final HomeController _controller;
+  /// §654 C — диалоги второго фактора и SSO openconnect.
+  late final OpenConnectAuthPresenter _openConnectAuth =
+      OpenConnectAuthPresenter(_controller);
   late final SubscriptionController _subController;
   late final AutoUpdater _autoUpdater;
 
@@ -100,6 +104,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     ));
   }
 
+  /// §654 C — тап по метке «Waiting for sign-in» узла openconnect.
+  void _openOpenConnect(String tag) =>
+      unawaited(_openConnectAuth.open(context, tag));
+
   /// §208 — попап с составом пула round_robin-Направления по его auto-тегу.
   /// Title = label Направления (из groupLabels по базовому tag `<base>-auto`).
   void _showPool(String autoTag) {
@@ -125,11 +133,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   /// повторные триггеры await'ят её вместо параллельного запуска второй.
   Future<void>? _rebuildInFlight;
 
-  /// §338 — авто-применение в полёте: воронка пересобирает при включённой
-  /// галке. На это окно (rebuild + reload, ~1–3с) розовая плашка подавляется —
-  /// иначе она честно мигает между saveParsedConfig (взвёл флаг) и
-  /// завершением reload'а (снял), что читается как «галка не работает».
-  bool _autoApplying = false;
+  /// §622 — устройство в режиме TV: гайд пустого экрана предлагает приём
+  /// настроек с телефона.
+  bool _isTelevision = false;
 
   /// §107 (R3): one-shot listener «subController освободился — догнать
   /// pending rebuild», см. [_retryRebuildWhenIdle].
@@ -174,6 +180,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // §622 — приём настроек с телефона в гайде пустого экрана только на TV.
+    unawaited(UrlLauncher.isTelevision().then((tv) {
+      if (tv && mounted) setState(() => _isTelevision = true);
+    }));
     // Порядок: subController first → AutoUpdater видит entries,
     // HomeController holds AutoUpdater для VPN-transitions callback.
     _subController = SubscriptionController();
@@ -259,6 +269,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       // пришёл от native (connectedSince=null) → no-op; реальный показ
       // ловит _onControllerChange, когда придёт connected и сессия дорастёт.
       unawaited(_maybeShowSupport());
+      // §654 C — холодный старт тапом по «Sign-in required».
+      unawaited(_controllerInit.then((_) {
+        if (mounted) unawaited(_openConnectAuth.handleOpenRequest(context));
+      }));
     });
     // Update check (§036 + §390): снек показываем ТОЛЬКО из кеша, на старте.
     // Сетевой fetch (через 5 сек, throttled 24h) снек НЕ поднимает — его
@@ -337,6 +351,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   }
 
   void _onControllerChange() {
+    // §654 C — новый челлендж openconnect: диалог, если приложение на экране.
+    if (mounted) {
+      _openConnectAuth.onState(context,
+          foreground: _lifecycle == AppLifecycleState.resumed);
+    }
     final state = _controller.state;
     final now = state.tunnel;
     final nowError = state.lastError;
@@ -580,6 +599,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     _lifecycle = state;
     if (state == AppLifecycleState.resumed) {
       _controller.onAppResumed();
+      // §654 C — тап по «Sign-in required» или челлендж, пришедший в фоне.
+      unawaited(_openConnectAuth.handleOpenRequest(context));
+      _openConnectAuth.onState(context, foreground: true);
       _ruleSetAutoUpdater.onAppResumed(); // §366
       // §291 — досмотреть подписки на возврате из фона: periodic-таймер спит
       // вместе с замороженным процессом (свёрнут + VPN off), так что вечером
@@ -710,12 +732,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
         return RoutingScreen(
           subController: _subController,
           homeController: _controller,
-          initialPresetsTab: tab == 'presets',
+          initialTab: switch (tab) {
+            'presets' => RoutingTab.presets,
+            'dns' => RoutingTab.dns,
+            _ => RoutingTab.directions,
+          },
         );
       case 'dns':
-        return DnsSettingsScreen(
+        // §655 — DNS стал вкладкой Routing; `route:dns` из уже
+        // опубликованных support-сообщений ведёт на неё.
+        return RoutingScreen(
           subController: _subController,
           homeController: _controller,
+          initialTab: RoutingTab.dns,
         );
       case 'vpn-settings':
         return SettingsScreen(
@@ -838,8 +867,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                       controller: _controller,
                       subController: _subController,
                       presenter: _nodeList,
-                      autoApplying: _autoApplying, // §338
-
                       connectingAnimChild: StatusChip(
                         state: state,
                         isRevoked: state.tunnel == TunnelStatus.revoked,
@@ -900,10 +927,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                     showEmptyGuide: showEmptyGuide,
                     onRestoreFromBackup: () =>
                         restoreFromBackup(context, _subController, _autoUpdater),
+                    onReceiveFromPhone: _isTelevision
+                        ? () => unawaited(receiveFromPhone(
+                            context, _subController, _autoUpdater))
+                        : null,
                     onTapToConnect: () => unawaited(_startWithAutoRefresh()),
                     rowKeyFor: _nodeRowKey, // §203
                     onSelectServer: _scrollToNode, // §203
                     onViewPool: _showPool, // §208
+                    onOpenConnectTap: _openOpenConnect, // §654
                   ),
                   // §614 — фоновые ошибки: «Errors (N)» → журнал.
                   const ErrorsCounterRow(),
@@ -1061,59 +1093,43 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   /// молчать нельзя — snackbar там уже запланирован её инициатором. Для
   /// авто-обновления это верно по смыслу: юзер в тот момент что-то нажимал,
   /// его пересборка и отчитывается.
-  Future<void> _rebuildAndClearDirty({bool silent = false}) {
-    return _rebuildInFlight ??= () async {
-      try {
-        // §338 — одно чтение флага на пересборку: и текст snackbar'а, и хук
-        // ниже должны судить по одному значению (иначе юзер прочтёт
-        // «перезагружаю», а галку он снял между двумя чтениями).
-        final autoReload = await SettingsStorage.getAutoReloadOnChange();
-        if (!mounted) return;
-        // §338 — подавить розовую плашку на окно применения (см. поле).
-        if (autoReload) setState(() => _autoApplying = true);
-        final ok = await _rebuildConfig(silent: silent, autoReload: autoReload);
-        if (mounted) setState(() {});
-        // §338 — единственная воронка всех путей пересборки (возврат на home
-        // §076, retry-when-idle §107, реакция подписки §323, гейт на Start,
-        // bootstrap). Хук здесь, а не на 25+ сайтах `configDirty = true`: тот
-        // флаг живёт статикой в SettingsStorage (§113) и notifyListeners не
-        // даёт.
-        if (ok && autoReload) await _maybeAutoReload();
-      } finally {
-        _rebuildInFlight = null;
-        if (_autoApplying && mounted) setState(() => _autoApplying = false);
-        _autoApplying = false;
-      }
-    }();
+  ///
+  /// §667 Р5 — присоединившийся вызов после чужой пересборки проверяет
+  /// `configDirty` ещё раз: правка, сделанная за время её полёта (Routing,
+  /// vars, тумблер — любой источник), в тот конфиг не попала, а поколение
+  /// dirty (§667, `SettingsStorage`) не даёт `generateConfig` погасить флаг.
+  /// Тогда — своя пересборка, один раз: если к этому моменту уже летит
+  /// следующая, присоединяемся к ней без дальнейших повторов.
+  Future<void> _rebuildAndClearDirty({bool silent = false}) async {
+    final inFlight = _rebuildInFlight;
+    if (inFlight != null) {
+      await inFlight;
+      if (!mounted || !_subController.configDirty) return;
+      await (_rebuildInFlight ??= _runRebuild(silent: silent));
+      return;
+    }
+    await (_rebuildInFlight = _runRebuild(silent: silent));
   }
 
-  /// §338 — автоперезапуск VPN при смене настроек. Применяем ТОЛЬКО когда есть
-  /// что применять: туннель поднят и §324-вердикт сказал, что saved разошёлся с
-  /// running (`fresh` → ядро уже на этом конфиге, рвать незачем). Саму галку
-  /// проверяет вызывающий (`_rebuildAndClearDirty`) — там же, откуда её значение
-  /// уходит в текст snackbar'а. Дальше `reloadVpn` со своим `canReload`:
-  /// cooldown 3с, гейт на не-connected и сброс `configChangedNeedRestart` при
-  /// успехе (§323 fix).
-  Future<void> _maybeAutoReload() async {
-    if (!mounted) return;
-    final state = _controller.state;
-    // Туннель лежит — «перезапуск» ≠ «запуск»: конфиг подхватится на Start.
-    if (!state.tunnelUp) return;
-    if (!state.configChangedNeedRestart) {
-      AppLog.I.debug('§338: reload skipped — config identical to running');
-      return;
+  Future<void> _runRebuild({required bool silent}) async {
+    try {
+      // §338 — одно чтение флага на пересборку: и текст snackbar'а, и гейт
+      // ниже должны судить по одному значению (иначе юзер прочтёт
+      // «перезагружаю», а галку он снял между двумя чтениями).
+      final autoReload = await SettingsStorage.getAutoReloadOnChange();
+      if (!mounted) return;
+      final ok = await _rebuildConfig(silent: silent, autoReload: autoReload);
+      if (mounted) setState(() {});
+      // §338/§667 — воронка путей пересборки (возврат на home §076,
+      // retry-when-idle §107, реакция подписки §323, гейт на Start,
+      // bootstrap) сообщает гейту, что конфиг сохранён. Решение «применять
+      // ли к живому туннелю» — в `HomeController.applyIfAutoReload`, общее с
+      // путями мимо воронки (§558, Направление с home). Галку гейт читает сам;
+      // здесь она нужна только тексту снека.
+      if (ok && autoReload) await _controller.applyIfAutoReload();
+    } finally {
+      _rebuildInFlight = null;
     }
-    // §338 — cooldown-гейт reloadVpn (3с) молча глотает вызов; для авто-пути
-    // это значит «применение пропало без следа». Логируем причину явно —
-    // плашка, оставшаяся из-за скипа, перестаёт быть загадкой. Флаг остаётся
-    // взведённым, плашка после окна подавления — честный fallback.
-    if (!_controller.canReload) {
-      AppLog.I.warning(
-          '§338: reload skipped — cooldown/not-connected, banner stays');
-      return;
-    }
-    AppLog.I.info('§338: auto-reload on settings change');
-    await _controller.reloadVpn();
   }
 
   /// §076/§107: callback зарегистрированный в `homeReturnObserver`.
@@ -1181,7 +1197,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     }
     await _rebuildAndClearDirty(silent: true);
     if (!mounted) return;
-    // §338 — при включённой галке reload уже сделал хук внутри
+    // §338 — при включённой галке reload уже сделал гейт внутри
     // `_rebuildAndClearDirty` (и погасил флаг). Свой путь не нужен: гейт ниже
     // всё равно отсеял бы его, но зависеть от порядка гашения не хочется.
     if (!reload) return;
@@ -1210,9 +1226,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   /// меньше плашки, из-за которой §323 и затевался.
   ///
   /// §338 — `autoReload`: галка «автоперезапуск при смене настроек» включена.
-  /// Влияет только на ТЕКСТ snackbar'а: сам reload делает `_maybeAutoReload`
-  /// после нас. Читается вызывающим (одно чтение storage на пересборку), чтобы
-  /// текст и хук судили по одному значению.
+  /// Влияет только на ТЕКСТ snackbar'а: сам reload делает
+  /// `HomeController.applyIfAutoReload` после нас. Читается вызывающим (одно
+  /// чтение storage на пересборку), чтобы текст и гейт судили по одному
+  /// значению.
   /// §419 — снек с причиной fatal-сборки. Detour-циклы не дублируем: их
   /// показывает sheet §254 (вызывающие проверяют `_showDetourCycleSheetIfAny`).
   void _showRebuildFailed() {
@@ -1251,9 +1268,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     if (mounted && !silent) {
       final nodeCount = ParsedConfig.parse(config).nodeCount;
       // §338 — при включённой галке звать юзера перезапускать VPN нельзя: это
-      // сделает `_maybeAutoReload` сразу после нас. Текст должен отчитаться о
+      // сделает `applyIfAutoReload` сразу после нас. Текст должен отчитаться о
       // применении, а не просить действия. `willAutoReload` — то же условие,
-      // что в самом хуке (галка + туннель up + конфиг разошёлся с running).
+      // что в самом гейте (галка + туннель up + конфиг разошёлся с running +
+      // `canReload`: §667 Д4 — в cooldown reload уйдёт лишь повтором через
+      // ≤3 с, обещать «reloading» сейчас нечестно).
       //
       // §338 (device-скрин 02.08) — «restart VPN to apply» показываем ТОЛЬКО
       // при needRestart: до этого ветка (tunnelUp, !willAutoReload) звала
@@ -1261,8 +1280,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       // применять нечего, текст врал. Ложь древняя (до §338 текст при живом
       // туннеле был безусловным), галка её лишь высветила.
       final needRestart = _controller.state.configChangedNeedRestart;
-      final willAutoReload =
-          autoReload && _controller.state.tunnelUp && needRestart;
+      final willAutoReload = autoReload &&
+          _controller.state.tunnelUp &&
+          needRestart &&
+          _controller.canReload;
       // configChangedNeedRestart выставляется внутри saveParsedConfig,
       // AnimatedBuilder переотрисует через _needsRestart getter.
       ScaffoldMessenger.of(context).showSnackBar(

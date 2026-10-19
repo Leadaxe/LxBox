@@ -1053,18 +1053,36 @@ Future<BuildResult> _buildConfig({
 /// §578 — узлы конфига для обхода узлов в порядке конфига (`outbounds`, затем
 /// `endpoints`). Берутся только записи узлов из источников, у которых есть
 /// финальный тег в `emittedTagByNode`: выключенный, снятый гейтом реестра,
-/// ядра или detour-проходом узел туда не попадает. `skip_presets` — поле
-/// записи своего сервера или члена папки; у узла подписки записи нет.
+/// ядра или detour-проходом узел туда не попадает. Поля записи (§656:
+/// `skip_tailscale_presets`, `allow_local`, `allow_lan`, `allow_gateway`) —
+/// у своего сервера или члена папки; у узла подписки записи нет — `false`.
 List<PresetNode> _collectPresetNodes(List<ServerList> lists, _BuildCtx ctx) {
-  final skip = <NodeSpec>{};
+  final record = <NodeSpec, PresetNode Function(String, Map<String, dynamic>)>{};
   for (final list in lists) {
     switch (list) {
       case UserServer u:
-        if (u.skipPresets) skip.addAll(u.nodes);
+        for (final n in u.nodes) {
+          record[n] = (tag, body) => PresetNode(
+                tag: tag,
+                body: body,
+                skipTailscalePresets: u.skipTailscalePresets,
+                allowLocal: u.allowLocal,
+                allowLan: u.allowLan,
+                allowGateway: u.allowGateway,
+              );
+        }
       case FolderServers f:
         for (final m in f.members) {
           final node = m.node;
-          if (m.skipPresets && node != null) skip.add(node);
+          if (node == null) continue;
+          record[node] = (tag, body) => PresetNode(
+                tag: tag,
+                body: body,
+                skipTailscalePresets: m.skipTailscalePresets,
+                allowLocal: m.allowLocal,
+                allowLan: m.allowLan,
+                allowGateway: m.allowGateway,
+              );
         }
       case SubscriptionServers():
         break;
@@ -1076,7 +1094,8 @@ List<PresetNode> _collectPresetNodes(List<ServerList> lists, _BuildCtx ctx) {
   return [
     for (final e in <SingboxEntry>[...ctx.outbounds, ...ctx.endpoints])
       if (nodeByTag[e.tag] case final NodeSpec node)
-        PresetNode(tag: e.tag, body: e.map, skipPresets: skip.contains(node)),
+        record[node]?.call(e.tag, e.map) ??
+            PresetNode(tag: e.tag, body: e.map),
   ];
 }
 

@@ -20,6 +20,7 @@ import io.flutter.plugin.platform.PlatformViewFactory
 import io.github.rosemoe.sora.event.ColorSchemeUpdateEvent
 import io.github.rosemoe.sora.event.ContentChangeEvent
 import io.github.rosemoe.sora.event.PublishSearchResultEvent
+import io.github.rosemoe.sora.event.ScrollEvent
 import io.github.rosemoe.sora.event.SelectionChangeEvent
 import io.github.rosemoe.sora.lang.EmptyLanguage
 import io.github.rosemoe.sora.langs.textmate.TextMateColorScheme
@@ -32,6 +33,7 @@ import io.github.rosemoe.sora.langs.textmate.registry.model.ThemeModel
 import io.github.rosemoe.sora.langs.textmate.registry.provider.AssetsFileResolver
 import io.github.rosemoe.sora.widget.CodeEditor
 import io.github.rosemoe.sora.widget.EditorSearcher
+import io.github.rosemoe.sora.widget.component.Magnifier
 import io.github.rosemoe.sora.widget.schemes.EditorColorScheme
 import org.eclipse.tm4e.core.registry.IThemeSource
 import java.util.Locale
@@ -48,11 +50,17 @@ import java.util.Locale
 /// Протокол канала `com.leadaxe.lxbox/sora_editor_<id>`:
 ///  Dart → натив: setText, getText, setReadOnly, setDark (+colors),
 ///  setLanguage, search / searchNext / searchPrevious, replaceAll (Format:
-///  замена всего текста правкой — в undo, с `changed`).
+///  замена всего текста правкой — в undo, с `changed`), setMagnifier
+///  {enabled} (лупа выделения, §660), setWordWrap {wordWrap} и setText
+///  {waitLayout: true} — ответ приходит, когда фоновая раскладка после них
+///  кончилась (§660: кнопки переноса и ⋮ недоступны до ответа).
 ///  Натив → Dart: `changed` {text?, lines, rowHeight, textOffsetX} на каждую
 ///  правку (текст ≤ [SYNC_LIMIT] — сразу, длиннее — с задержкой
 ///  [SYNC_DEBOUNCE_MS], в промежуточных событиях без текста); `cursor`
-///  {y, rowHeight, focused}; `searchResult` {index, count}; `disposed` — последнее сообщение view. Истина
+///  {y, rowHeight, focused}; `scrollState` {canScrollX, scrollTop,
+///  scrollBottom} — только при смене значений (Flutter решает, кому жест,
+///  §649); `layoutBusy` {busy} — фоновая раскладка строк началась /
+///  кончилась (полоса прогресса); `searchResult` {index, count}; `disposed` — последнее сообщение view. Истина
 ///  текста — на стороне Dart: пересозданный view получает его в creation
 ///  params, поэтому задержанный текст сбрасывается при потере фокуса,
 ///  на `getText` и в [dispose].
@@ -61,6 +69,8 @@ private const val TAG = "SoraEditor"
 private const val THEME_LIGHT = "lx-light"
 private const val THEME_DARK = "lx-dark"
 private const val SYNC_LIMIT = 256 * 1024
+/// Сколько ширина должна устояться, чтобы пересчитать раскладку с переносом.
+private const val RELAYOUT_DELAY_MS = 500L
 private const val SYNC_DEBOUNCE_MS = 300L
 
 class SoraEditorFactory(private val messenger: BinaryMessenger) :
@@ -148,9 +158,50 @@ private class LxSoraEditor(context: Context) : CodeEditor(context) {
     var suppressFocus = false
     var onLayoutReady: (() -> Unit)? = null
 
+    /// Начало и конец фоновой раскладки — для полосы прогресса во Flutter
+    /// (перенос большого тела считается долго, §649).
+    var onLayoutBusy: ((Boolean) -> Unit)? = null
+
     override fun setLayoutBusy(busy: Boolean) {
         super.setLayoutBusy(busy)
+        onLayoutBusy?.invoke(busy)
         if (!busy) onLayoutReady?.invoke()
+    }
+
+    /// Ширина, под которую посчитана раскладка с переносом.
+    private var layoutWidth = 0
+    private val relayout = Runnable {
+        if (isReleased || !isWordwrap || width == 0 || width == layoutWidth) return@Runnable
+        layoutWidth = width
+        createLayout()
+    }
+
+    /// При переносе sora на любую смену ширины пересчитывает раскладку
+    /// целиком (на большом теле — секунды). Гашение/включение экрана
+    /// (OnePlus, Android 15) на миг меняет размер platform view и ширина
+    /// возвращается — раскладка считалась заново на ровном месте (§660).
+    /// Смену ширины отрабатываем с задержкой и только если она устоялась;
+    /// нулевой размер — транзит, раскладку не трогает.
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        if (w == 0 || h == 0) return
+        removeCallbacks(relayout)
+        if (!isWordwrap || layoutWidth == 0) {
+            // Без переноса ширина раскладку не трогает; первая ненулевая
+            // ширина — раскладка сразу, как у sora.
+            layoutWidth = w
+            super.onSizeChanged(w, h, oldw, oldh)
+            return
+        }
+        // oldw = w — sora не зовёт createLayout; размеры рендерера и
+        // кламп прокрутки обновляются как обычно.
+        super.onSizeChanged(w, h, w, oldh)
+        if (w != layoutWidth) postDelayed(relayout, RELAYOUT_DELAY_MS)
+    }
+
+    override fun setWordwrap(wordwrap: Boolean, antiWordBreaking: Boolean) {
+        removeCallbacks(relayout)
+        layoutWidth = width
+        super.setWordwrap(wordwrap, antiWordBreaking)
     }
 
     override fun requestFocus(direction: Int, previouslyFocusedRect: Rect?): Boolean =
@@ -192,6 +243,21 @@ class SoraEditorPlatformView(
     /// Последнее отправленное число экранных строк.
     private var sentRows = -1
 
+    /// Последнее отправленное `scrollState` битами (canScrollX = 1,
+    /// scrollTop = 2, scrollBottom = 4); -1 — ещё не слали.
+    private var sentScroll = -1
+
+    /// Последнее отправленное `layoutBusy`.
+    private var sentLayoutBusy = false
+
+    /// Ответы `setWordWrap` и `setText {waitLayout}`, ждущие конца
+    /// раскладки (§660: кнопки переноса и ⋮ «заняты» до ответа). Обе раскладки
+    /// sora (`WordwrapLayout`, `LineBreakLayout`) всегда ставят задачу,
+    /// которая начинается `setLayoutBusy(true)` в фоне и кончается
+    /// `setLayoutBusy(false)` на главном потоке; ответ уходит на первый
+    /// `false` после переключения. Dart ждёт не дольше 30 с.
+    private val layoutReplies = mutableListOf<MethodChannel.Result>()
+
     init {
         val t0 = System.nanoTime()
         SoraTextMate.ensure(context)
@@ -217,11 +283,7 @@ class SoraEditorPlatformView(
         // Flutter-текст с textScaler по умолчанию.
         editor.setTextSizePx(((args?.get("fontSize") as? Number)?.toFloat() ?: 12f) * density)
         editor.isLineNumberEnabled = args?.get("lineNumbers") as? Boolean ?: true
-        val wordWrap = args?.get("wordWrap") as? Boolean ?: true
-        editor.isWordwrap = wordWrap
-        // С переносом логическая строка бывает на весь экран (компактный
-        // JSON) — подсветка текущей строки заливала всё поле.
-        editor.isHighlightCurrentLine = !wordWrap
+        applyWordWrap(args?.get("wordWrap") as? Boolean ?: true)
         editor.setScalable(false)
         // Линии блоков (направляющие от `{` до `}`) — выключены (владелец).
         editor.isBlockLineEnabled = false
@@ -232,6 +294,14 @@ class SoraEditorPlatformView(
         // По умолчанию sora глушит экранную клавиатуру при подключённой
         // аппаратной (эмулятор, BT-клавиатура) — решение оставляем системе.
         editor.isDisableSoftKbdIfHardKbdAvailable = false
+        // Лупа выделения на API 26+ копирует кусок окна (`PixelCopy`) по
+        // `getLocationInWindow()` редактора; под hybrid composition Flutter
+        // координаты врут — лупа белая или со строками не из-под пальца
+        // (форум 13.10). Рисуем её из самого редактора.
+        editor.getComponent(Magnifier::class.java).isWithinEditorForcibly = true
+        // Лупу можно выключить (настройка приложения, §660).
+        editor.getComponent(Magnifier::class.java).isEnabled =
+            args?.get("magnifier") as? Boolean ?: true
         setReadOnly(args?.get("readOnly") as? Boolean ?: false)
         setTextFromDart(args?.get("text") as? String ?: "")
         if (args?.get("autofocus") == true && !readOnly) {
@@ -244,6 +314,8 @@ class SoraEditorPlatformView(
 
         editor.addOnLayoutChangeListener { _, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
             val h = bottom - top
+            // Высота поля меняет предел прокрутки по вертикали.
+            if (h != oldBottom - oldTop) editor.post { sendScrollState() }
             // Ширина изменилась — перенос строк пересчитан, число строк другое.
             if (right - left != oldRight - oldLeft) editor.post { sendChanged(withText = false) }
             // Растущее поле: пока view было ниже текста, sora прокрутил его
@@ -270,6 +342,15 @@ class SoraEditorPlatformView(
         // Растущее поле: высоту в Dart задаёт число экранных строк, а с
         // переносом оно известно только после фоновой раскладки.
         editor.onLayoutReady = { editor.post { sendChanged(withText = false) } }
+        editor.onLayoutBusy = { busy ->
+            main.post {
+                if (!busy) replyLayoutDone()
+                if (!editor.isReleased && busy != sentLayoutBusy) {
+                    sentLayoutBusy = busy
+                    channel.invokeMethod("layoutBusy", hashMapOf("busy" to busy))
+                }
+            }
+        }
         editor.subscribeAlways(ContentChangeEvent::class.java) {
             if (applyingFromDart || replacing) return@subscribeAlways
             if (editor.text.length <= SYNC_LIMIT) {
@@ -290,6 +371,9 @@ class SoraEditorPlatformView(
             if (editor.searcher.hasQuery()) sendSearchResult()
         }
         editor.subscribeAlways(PublishSearchResultEvent::class.java) { sendSearchResult() }
+        // Прокрутка: событие несёт конечную точку (анимированная докрутка
+        // ещё в пути — offsetY старый).
+        editor.subscribeAlways(ScrollEvent::class.java) { sendScrollState(it.endY) }
         // Не синхронно: тема (`applyDefault`) ставит цвета по одному, и
         // каждый setColor шлёт событие — повтор из обработчика рекурсивно
         // уходил в StackOverflowError (API 28, ТВ). Свои события пропускаем,
@@ -316,6 +400,7 @@ class SoraEditorPlatformView(
         // Порядок важен: задержанная правка уходит в Dart до снятия канала,
         // иначе уход с экрана сразу после правки длинного текста её теряет.
         flushPending()
+        replyLayoutDone()
         channel.invokeMethod("disposed", null)
         channel.setMethodCallHandler(null)
         editor.release()
@@ -347,6 +432,28 @@ class SoraEditorPlatformView(
         editor.setEditorLanguage(
             if (scope == null) EmptyLanguage() else TextMateLanguage.create(scope, false),
         )
+    }
+
+    /**
+     * Перенос строк: при создании и на лету (кнопка просмотрщика JSON, §649).
+     * Липкие заголовки sora при переносе сама не рисует — их не трогаем.
+     */
+    private fun applyWordWrap(on: Boolean) {
+        editor.isWordwrap = on
+        // С переносом логическая строка бывает на весь экран (компактный
+        // JSON) — подсветка текущей строки заливала всё поле.
+        editor.isHighlightCurrentLine = !on
+        // Без переноса раскладка не фоновая (onLayoutReady не придёт) —
+        // пределы прокрутки догоняем после кадра.
+        editor.post { sendScrollState() }
+    }
+
+    /// Ответить ждущим конца раскладки (§660).
+    private fun replyLayoutDone() {
+        if (layoutReplies.isEmpty()) return
+        val pending = layoutReplies.toList()
+        layoutReplies.clear()
+        pending.forEach { it.success(null) }
     }
 
     private fun setReadOnly(value: Boolean) {
@@ -419,6 +526,31 @@ class SoraEditorPlatformView(
         args["rowHeight"] = editor.rowHeight
         args["textOffsetX"] = editor.measureTextRegionOffset().toDouble()
         channel.invokeMethod("changed", args)
+        // Текст, перенос, ширина — пределы прокрутки другие.
+        sendScrollState()
+    }
+
+    /// Состояние прокрутки для решения «кому жест» во Flutter (§649):
+    /// есть куда вбок, прокрутка у верхнего / нижнего края. Шлётся только
+    /// при смене значений — не на каждый пиксель прокрутки.
+    private fun sendScrollState(offsetY: Int = editor.offsetY) {
+        if (editor.isReleased) return
+        val maxX = runCatching { editor.scrollMaxX }.getOrDefault(0)
+        val maxY = runCatching { editor.scrollMaxY }.getOrDefault(0)
+        val canScrollX = maxX > 0
+        val top = offsetY <= 0
+        val bottom = offsetY >= maxY
+        val bits = (if (canScrollX) 1 else 0) or (if (top) 2 else 0) or (if (bottom) 4 else 0)
+        if (bits == sentScroll) return
+        sentScroll = bits
+        channel.invokeMethod(
+            "scrollState",
+            hashMapOf(
+                "canScrollX" to canScrollX,
+                "scrollTop" to top,
+                "scrollBottom" to bottom,
+            ),
+        )
     }
 
     private fun sendCursor() {
@@ -484,7 +616,12 @@ class SoraEditorPlatformView(
                 val text = call.argument<String>("text") ?: ""
                 setTextFromDart(text)
                 Log.d(TAG, "setText ${text.length} chars in ${(System.nanoTime() - t0) / 1_000_000} ms")
-                result.success(null)
+                // Format / Show original просмотрщика ждут конца раскладки (§660).
+                if (call.argument<Boolean>("waitLayout") == true) {
+                    layoutReplies.add(result)
+                } else {
+                    result.success(null)
+                }
             }
             "replaceAll" -> {
                 val text = call.argument<String>("text") ?: ""
@@ -509,6 +646,20 @@ class SoraEditorPlatformView(
             }
             "setReadOnly" -> {
                 setReadOnly(call.argument<Boolean>("readOnly") ?: false)
+                result.success(null)
+            }
+            "setWordWrap" -> {
+                val on = call.argument<Boolean>("wordWrap") ?: true
+                if (on == editor.isWordwrap) {
+                    result.success(null)
+                } else {
+                    layoutReplies.add(result)
+                    applyWordWrap(on)
+                }
+            }
+            "setMagnifier" -> {
+                editor.getComponent(Magnifier::class.java).isEnabled =
+                    call.argument<Boolean>("enabled") ?: true
                 result.success(null)
             }
             "setDark" -> {

@@ -220,29 +220,31 @@ void main() {
       expect(_tls(obs, 'RM')['record_fragment'], isTrue);
     });
 
-    test('подписка и папка On — пропуск', () async {
+    test('подписка и папка On наследуются, как у любого узла (§665)',
+        () async {
       final obs = await _build([
         _sub('p1', [_realityUri('RS')],
             tls: const TlsPolicy(fragment: true, recordFragment: true)),
         _folder('f1', [FolderMember(raw: _realityUri('RF'))],
             tls: const TlsPolicy(fragment: true)),
       ]);
-      for (final tag in ['RS', 'RF']) {
-        final tls = _tls(obs, tag);
-        expect(tls.containsKey('fragment'), isFalse, reason: tag);
-        expect(tls.containsKey('record_fragment'), isFalse, reason: tag);
-        expect(tls.containsKey('fragment_fallback_delay'), isFalse,
-            reason: tag);
-      }
+      final rs = _tls(obs, 'RS');
+      expect(rs['fragment'], isTrue);
+      expect(rs['record_fragment'], isTrue);
+      expect(rs['fragment_fallback_delay'], isNotNull);
+      final rf = _tls(obs, 'RF');
+      expect(rf['fragment'], isTrue);
+      expect(rf.containsKey('record_fragment'), isFalse);
     });
 
-    test('узловой On не тянет глобальный флаг другого поля', () async {
+    test('узловой On одного поля и глобальный On другого — пишутся оба',
+        () async {
       final obs = await _build([
         _server('s1', _realityUri('R'),
             tls: const TlsPolicy(fragment: true)),
       ], vars: {'tls_record_fragment': 'true'});
       expect(_tls(obs, 'R')['fragment'], isTrue);
-      expect(_tls(obs, 'R').containsKey('record_fragment'), isFalse);
+      expect(_tls(obs, 'R')['record_fragment'], isTrue);
     });
 
     test('mixed-case SNI — никогда, ни на каком уровне', () async {

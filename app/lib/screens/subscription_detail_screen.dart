@@ -34,6 +34,7 @@ import 'subscription_detail_screen/widgets/subscription_node_list.dart';
 import 'subscription_detail_screen/widgets/subscription_settings_tab.dart';
 import 'subscription_detail_screen/widgets/subscription_source_tab.dart';
 import '../services/l10n/locale_controller.dart';
+import '../services/telegram_link.dart'; // §657
 
 class SubscriptionDetailScreen extends StatefulWidget {
   const SubscriptionDetailScreen({
@@ -214,6 +215,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
     'support-url',
     'subscription-userinfo',
     'content-type',
+    'announce', // §648
   };
 
   @override
@@ -644,6 +646,13 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
         // §219 — index по ссылке (список мог сместиться от reorder).
         final idx = widget.controller.entries.indexOf(widget.entry);
         if (idx >= 0) await widget.controller.updateAt(idx);
+      } else {
+        // §652 (г) — выключенная подписка на старте не разбиралась: узлы
+        // догружаются из кэша здесь, пока идёт индикатор (вместо «No nodes
+        // found»). Вкладки Nodes / Filters и сводка `dropped` читают тот же
+        // entry.list.
+        await widget.controller.ensureHydrated(widget.entry);
+        if (!mounted) return;
       }
       // v2: узлы уже распарсены в entry.list.nodes. Детоур-узлы показываем
       // отдельной строкой под родителем.
@@ -689,7 +698,8 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
   }
 
   Future<void> _openUrl(String url) async {
-    final opened = await UrlLauncher.open(url);
+    final opened =
+        await UrlLauncher.open(url, fallbackUrl: telegramWebFallback(url));
     if (!opened && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(getLocalText.s("Copied: %s", url))),

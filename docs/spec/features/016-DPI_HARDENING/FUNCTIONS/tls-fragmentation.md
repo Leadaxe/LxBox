@@ -89,10 +89,11 @@ the node's notifications; a build warning line.
   without a code; both forms at once — one flag. On hysteria/hysteria2 the
   entry has no effect. Other `type` values in `finalmask.tcp[]` —
   `json_field_unknown`.
-- REALITY and fragmentation (§627, §636): the global and the
-  subscription/folder checkboxes skip a REALITY node — a bulk setting cannot
-  know whether the server accepts a split ClientHello; a checkbox set on the
-  node itself applies. Mixed-case SNI never applies to REALITY, on any level.
+- REALITY and fragmentation (§665): a REALITY node inherits the flags like
+  any node, node → source → global. A server that refuses a split
+  ClientHello is set to Off on the node or its source; a node that gets the
+  flag from above says so under its TLS section. Mixed-case SNI never applies
+  to REALITY, on any level.
 - `Off` on any level does not remove flags that came in the node body (Xray
   `dialerProxy`, `finalmask.tcp`, authored JSON) — it only stops adding them.
 
@@ -128,5 +129,6 @@ the node's notifications; a build warning line.
 | 6 | [574](../../../tasks/574-tls-fragment-yields-to-detour.md) | Released v2.25.7 | `tls.fragment` yields to the build's `detour` and to the system engine |
 | 7 | [606](../../../tasks/606-audit-591-export-list-tun-warp-dpi-bugs.md) | Done | An invalid fallback delay is replaced with `500ms` |
 | 8 | [606](../../../tasks/606-audit-591-export-list-tun-warp-dpi-bugs.md) | Done | Ping and probe apply the global fragmentation like the tunnel |
-| 9 | [636](../../../tasks/636-tls-settings-per-node-folder-subscription.md) | Implemented | Options on node, folder and subscription; REALITY is fragmented only by the node-level flag |
+| 9 | [636](../../../tasks/636-tls-settings-per-node-folder-subscription.md) | Implemented | Options on node, folder and subscription |
 | 10 | [642](../../../tasks/642-contract-1-1-118-sync.md) | Done | QUIC protocols (hysteria, hysteria2, tuic) do not get the flags |
+| 11 | [665](../../../tasks/665-tls-fragment-inherits-everywhere-reality-too.md) | Done | REALITY inherits fragmentation like any node (627 reverted); inheritance note on the node |

@@ -277,6 +277,22 @@ void main() {
       expect(pc['mqdef']?.transportLabel, 'h3');
     });
 
+    test('§654 — роль variant реестра: openconnect·<flavor>, без flavor — '
+        'default поля', () {
+      final oc = ParsedConfig.parse(cfg({
+        'endpoints': [
+          {'tag': 'forti', 'type': 'openconnect', 'server': 'fw.example.com',
+            'flavor': ' fortinet '},
+          {'tag': 'ac', 'type': 'openconnect', 'server': 'vpn.example.com'},
+          {'tag': 'blank', 'type': 'openconnect', 'server': 'vpn.example.com',
+            'flavor': ''},
+        ],
+      }));
+      expect(oc['forti']?.transportLabel, 'fortinet');
+      expect(oc['ac']?.transportLabel, 'anyconnect');
+      expect(oc['blank']?.transportLabel, 'anyconnect');
+    });
+
     test('transport: протоколы со встроенным транспортом → null', () {
       expect(pc['hy2']?.transportLabel, isNull);
       expect(pc['wg']?.transportLabel, isNull);

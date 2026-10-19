@@ -101,7 +101,7 @@ void main() {
         detourPolicy: DetourPolicy.defaults,
         origin: UserSource.manual,
         rawBody: node.toUri(),
-        skipPresets: skip,
+        skipTailscalePresets: skip,
         nodes: [node],
       );
 

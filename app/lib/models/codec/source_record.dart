@@ -110,8 +110,9 @@ Map<String, dynamic> _serverToRecord(UserServer u) {
     if (u.warnings.isNotEmpty) 'warnings': storedWarningsToJson(u.warnings),
     if (u.rawBody.isNotEmpty) 'origin': _originToRecord(u.rawBody),
     ..._detourLinkToRecord(u.detourPolicy),
-    // §578 — пишется только `true`; отсутствие = `false`.
-    if (u.skipPresets) 'skip_presets': true,
+    // §578/§656 — пишется только `true` и только новые ключи.
+    ..._recordFlagsToRecord(u.skipTailscalePresets, u.allowLocal, u.allowLan,
+        u.allowGateway),
     // L — настройки LxBox.
     ..._detourPolicyToRecord(u.detourPolicy),
     ..._tlsToRecord(u.tls),
@@ -153,11 +154,29 @@ Map<String, dynamic> _memberToRecord(FolderMember m, String folderId) {
     if (m.raw.isNotEmpty) 'origin': _originToRecord(m.raw),
     if (m.detour.isNotEmpty) 'detour': nodeLinkToRecord(m.detour),
     if (node == null) 'reason': kMemberUnparsedReason,
-    // §578 — пишется только `true`; отсутствие = `false`.
-    if (m.skipPresets) 'skip_presets': true,
+    // §578/§656 — пишется только `true` и только новые ключи.
+    ..._recordFlagsToRecord(m.skipTailscalePresets, m.allowLocal, m.allowLan,
+        m.allowGateway),
     ..._tlsToRecord(m.tls),
   };
 }
+
+/// §656 (контракт 1.1.126) — поля записи узла: только `true`; старый ключ
+/// `skip_presets` не пишется никогда.
+Map<String, dynamic> _recordFlagsToRecord(
+        bool skipTailscalePresets, bool allowLocal, bool allowLan,
+        bool allowGateway) =>
+    {
+      if (skipTailscalePresets) 'skip_tailscale_presets': true,
+      if (allowLocal) 'allow_local': true,
+      if (allowLan) 'allow_lan': true,
+      if (allowGateway) 'allow_gateway': true,
+    };
+
+/// §656 — терпимое чтение: `skip_presets` (до 1.1.126) читается как
+/// `skip_tailscale_presets`; оба ключа — `true`, если хоть один `true`.
+bool _skipTailscalePresetsOf(Map<String, dynamic> j) =>
+    _bool(j['skip_tailscale_presets'], false) || _bool(j['skip_presets'], false);
 
 /// §636 — TLS-политика: только заданные поля, пустая не пишется.
 Map<String, dynamic> _tlsToRecord(TlsPolicy p) =>
@@ -329,7 +348,8 @@ const Set<String> _subscriptionKeys = {
 
 const Set<String> _serverKeys = {
   'kind', 'id', 'tag', 'enabled', 'warnings', 'origin', 'body', 'detour',
-  'sections', 'skip_presets',
+  'sections', 'skip_presets', 'skip_tailscale_presets', 'allow_local',
+  'allow_lan', 'allow_gateway',
   'detour_policy', 'tag_policy', 'tls',
 };
 
@@ -340,7 +360,8 @@ const Set<String> _folderKeys = {
 
 const Set<String> _memberKeys = {
   'kind', 'tag', 'enabled', 'warnings', 'origin', 'body', 'detour', 'reason',
-  'sections', 'skip_presets', 'tls',
+  'sections', 'skip_presets', 'skip_tailscale_presets', 'allow_local',
+  'allow_lan', 'allow_gateway', 'tls',
 };
 
 const Set<String> _detourPolicyKeys = {
@@ -472,7 +493,10 @@ UserServer _serverFromRecord(
     detourPolicy: _detourPolicyFromRecord(j, unknown),
     tls: TlsPolicy.fromJson(j['tls']),
     rawBody: raw,
-    skipPresets: _bool(j['skip_presets'], false),
+    skipTailscalePresets: _skipTailscalePresetsOf(j),
+    allowLocal: _bool(j['allow_local'], false),
+    allowLan: _bool(j['allow_lan'], false),
+    allowGateway: _bool(j['allow_gateway'], false),
     // Список растущий: контроллер дописывает узлы на месте (как fromJson).
     nodes: [...nodes],
   );
@@ -559,7 +583,10 @@ FolderMember? _memberFromRecord(
     warnings: storedWarningsFromJson(j['warnings']),
     detour: nodeLinkFromRecord(j['detour']) ?? NodeLink.none,
     nameHint: hint ?? '',
-    skipPresets: _bool(j['skip_presets'], false),
+    skipTailscalePresets: _skipTailscalePresetsOf(j),
+    allowLocal: _bool(j['allow_local'], false),
+    allowLan: _bool(j['allow_lan'], false),
+    allowGateway: _bool(j['allow_gateway'], false),
     tls: TlsPolicy.fromJson(j['tls']),
   );
   if (hint == null) _checkTag(j, member.node?.tag, where, notes);

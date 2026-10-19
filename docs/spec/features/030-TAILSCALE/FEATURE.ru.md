@@ -137,7 +137,7 @@ tailnet выглядит с телефона.
   Свидетель: юниты «дефолты засеяны раньше: пресет добавляется один раз»,
   «пресет уже есть — дубля нет», «свежая установка не трогается; первый seed
   закрывает шаг». Мутация: пресет добавлен повторно после удаления.
-- **P17. `skip_presets` переживает бэкап.** Хранится только `true`; импорт,
+- **P17. `skip_tailscale_presets` (до 1.1.126 `skip_presets`) переживает бэкап.** Хранится только `true`; импорт,
   совпавший по телу, его не сбрасывает. Свидетель: юниты «одиночный узел:
   skip_presets=true своей записи не сбрасывается», «член папки:
   skip_presets=true не сбрасывается при повторном импорте». Мутация:
@@ -189,11 +189,11 @@ tailnet выглядит с телефона.
 | Ручка | Значения | По умолчанию |
 |-------|----------|--------------|
 | Мастер → Tailscale: Tag, Auth key, Control URL, Hostname, Ephemeral, Accept routes, Exit node | строки, два тумблера; Auth key обязателен, маскирован с Show/Hide | `tailscale` · — · пусто · `LxBox-<модель>` · выкл · выкл · пусто |
-| Экран узла → «Skip presets» | вкл/выкл; виден у своего сервера и члена папки, когда в шаблоне есть пресет с `for_each` под тип узла | выкл |
+| Экран узла → «Skip Tailscale presets» | вкл/выкл; виден у своего узла Tailscale и члена папки, когда в шаблоне есть пресет с обходом, который его принимает | выкл |
 | Пресет «Tailscale networks» (`tailscale`) | вкл/выкл, сортируемый, `num` 945; переменная «DNS» (`dns_enable`) | вкл · DNS вкл |
 | DNS-сервер типа `tailscale` | `endpoint` (узел Tailscale, обязателен), `accept_default_resolvers` | — |
 | Вкладка Network → Exit node | пир с `ExitNodeOption` или None; «Save choice» | из тела |
-| Вкладка Network → Settings: Advertise this device as exit node, Allow LAN access while using exit node | два переключателя; первый заблокирован при записанном `exit_node`, второму он нужен | из тела (выкл) |
+| Вкладка Network → Settings: Advertise this device as exit node | переключатель; заблокирован при записанном `exit_node` | из тела (выкл) |
 | Вкладка Network → Log out | после подтверждения | — |
 
 Ключи конфига ядра, которые фича отдаёт: запись `endpoints[]` `{type:
@@ -201,8 +201,8 @@ tailscale, tag, …тело, state_directory}`; от пресета — запи
 `preferred_by`, `action: resolve`, `server`, `outbound`; запись `dns.servers`
 `{type: tailscale, tag: <узел>-dns, endpoint: <узел>}`; запись `dns.rules` с
 `preferred_by` и `server`. Save choice пишет `exit_node` в тело узла,
-переключатели Settings — `advertise_exit_node` / `exit_node_allow_lan_access`
-(выключенный переключатель убирает ключ). С ядра lx.12 поток состояния несёт
+переключатель Settings — `advertise_exit_node` (выключенный убирает
+ключ). С ядра lx.12 поток состояния несёт
 путь до каждого устройства (`direct <ip:port>` / `peer relay` /
 `relay <регион>`) и предупреждения бэкенда `health`: вкладка Network
 показывает путь под устройством и под действующим выходом, предупреждения —
@@ -212,7 +212,7 @@ tailscale, tag, …тело, state_directory}`; от пресета — запи
 `StartTailscalePing`. Файлы данных: `tailscale/<имя>/` (состояние одного узла у
 ядра), `tailscale_state.json` (индекс слот → ключ узла → имя каталога). Код
 предупреждения: `tailscale_core_unsupported`. Debug API: поле `tailscale` в
-`GET /state`, поле записи `skip_presets` (только чтение).
+`GET /state`, поле записи `skip_tailscale_presets` (только чтение).
 
 ## Входы / Выходы
 
@@ -265,7 +265,7 @@ tailscale, tag, …тело, state_directory}`; от пресета — запи
   копирует записи (оба слота — одно устройство tailnet), Rename переносит их,
   Delete снимает и сразу удаляет каталоги без ссылок
   ([018-WORKSPACES · P12](../018-WORKSPACES/FEATURE.ru.md#обещания)).
-- Бэкап несёт тело узла (включая `auth_key`) и `skip_presets`, но не личность:
+- Бэкап несёт тело узла (включая `auth_key`) и `skip_tailscale_presets`, но не личность:
   восстановленный на другом устройстве узел регистрируется заново, а
   потраченный одноразовый ключ даёт `invalid key`. Очистка данных приложения
   действует так же — мастер говорит об этом под Auth key.
@@ -292,13 +292,19 @@ tailscale, tag, …тело, state_directory}`; от пресета — запи
   личностью из каталога состояния; конфиг в обоих режимах собирается
   одинаково (`без свидетеля`).
 - В мастере нет полей `exit_node_allow_lan_access`, `advertise_routes`,
-  `advertise_exit_node` и SSH. `advertise_exit_node` и
-  `exit_node_allow_lan_access` — переключатели блока Settings вкладки Network
-  (свой сервер или член папки; пишутся в тело так же, как Save choice);
-  `advertise_routes` и SSH — по-прежнему только JSON. Все их проверяет реестр
-  (маршрут по умолчанию в `advertise_routes` снимается с кодом, `exit_node`
-  конфликтует с `advertise_exit_node`, переключатель LAN требует записанного
-  `exit_node`).
+  `advertise_exit_node` и SSH. `advertise_exit_node` — переключатель блока
+  Settings вкладки Network (свой сервер или член папки; пишется в тело так же,
+  как Save choice); `exit_node_allow_lan_access`, `advertise_routes` и SSH —
+  только JSON. Все их проверяет реестр (маршрут по умолчанию в
+  `advertise_routes` снимается с кодом, `exit_node` конфликтует с
+  `advertise_exit_node`, `exit_node_allow_lan_access` требует `exit_node`).
+- `exit_node_allow_lan_access` принимается из JSON и уходит в ядро, но ядро
+  на Android его не применяет: у tsnet там нет системного роутера, и поле ни
+  одного маршрута не меняет. Трафик раскладывают правила sing-box: при
+  включённом exit node локальная сеть доступна, потому что пресет
+  «Private IPs» (локальные адреса → direct, позиция 950) или правило
+  пользователя ведёт её мимо узла; что дошло до узла Tailscale, уходит в
+  tailnet.
 - Подсети за пирами (`accept_routes`) матчатся тем же условием
   `preferred_by`; подсеть, совпавшая с домашней, — решение пользователя
   (позиция 945 стоит раньше «Private IPs» на 950).
@@ -325,7 +331,7 @@ tailscale, tag, …тело, state_directory}`; от пресета — запи
 |---------|------------|----------|------|
 | Узел Tailscale | Создаёт и хранит endpoint Tailscale из мастера или sing-box JSON, гейтит его сборкой ядра и решает, может ли он быть Направлением. | P1–P5, P11 | [tailscale-node.ru.md](FUNCTIONS/tailscale-node.ru.md) |
 | Личность устройства и состояние | Даёт каждому узлу каталог состояния по стабильному ключу, сохраняет его при переименованиях, переносах и в Workspaces, удаляет вместе с узлом и держит вне бэкапа. | P6–P10 | [device-identity-and-state.ru.md](FUNCTIONS/device-identity-and-state.ru.md) |
-| DNS и маршруты tailnet | Обслуживает каждый узел Tailscale сервером MagicDNS и правилами `preferred_by` через пресет `tailscale`, с отказом «Skip presets» и типом DNS-сервера `tailscale`. | P12–P18 | [tailnet-dns-and-routes.ru.md](FUNCTIONS/tailnet-dns-and-routes.ru.md) |
+| DNS и маршруты tailnet | Обслуживает каждый узел Tailscale сервером MagicDNS и правилами `preferred_by` через пресет `tailscale`, с отказом «Skip Tailscale presets» и типом DNS-сервера `tailscale`. | P12–P18 | [tailnet-dns-and-routes.ru.md](FUNCTIONS/tailnet-dns-and-routes.ru.md) |
 | Вкладка Network | Показывает на экране узла состояние, это устройство, устройства tailnet и exit node, переключает выход на ходу и записывает его в тело. | P19–P24 | [networks-tab.ru.md](FUNCTIONS/networks-tab.ru.md) |
 
 ## Связанные фичи

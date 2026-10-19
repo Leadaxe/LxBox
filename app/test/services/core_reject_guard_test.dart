@@ -4,6 +4,7 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/core_reject_verdict.dart';
+import 'package:lxbox/services/core_reject/core_error_parse.dart';
 import 'package:lxbox/services/core_reject/core_reject_guard.dart';
 
 /// Поддельное ядро: список узлов с тегами, каждый — годный либо негодный.
@@ -16,6 +17,7 @@ class FakeCore implements CoreRejectHost {
     this.runOnlyBad = const {},
     this.prompt = CoreRejectPrompt.keepChecking,
     this.rebuildFails = false,
+    this.decodeForm = false,
   });
 
   /// Все теги конфига в порядке сборки.
@@ -30,6 +32,11 @@ class FakeCore implements CoreRejectHost {
 
   final CoreRejectPrompt prompt;
   final bool rebuildFails;
+
+  /// §653: ядро отказывает на ДЕКОДИРОВАНИИ — `outbounds[i].network: …`,
+  /// тега в строке нет, `i` — позиция в ОТПРАВЛЕННОМ конфиге (выключенные
+  /// узлы в него не попадают, индексы сдвигаются).
+  final bool decodeForm;
 
   final disabledTags = <String>[];
   final reasons = <String, String>{};
@@ -46,7 +53,12 @@ class FakeCore implements CoreRejectHost {
   String? _firstBad({required bool runOnly}) {
     for (final t in _live) {
       final r = bad[t] ?? (runOnly ? runOnlyBad[t] : null);
-      if (r != null) return 'initialize outbound[${tags.indexOf(t)}] vless[$t]: $r';
+      if (r == null) continue;
+      if (decodeForm) {
+        return 'start or reload service: decode config: '
+            'outbounds[${_live.indexOf(t)}].network: $r';
+      }
+      return 'initialize outbound[${tags.indexOf(t)}] vless[$t]: $r';
     }
     return null;
   }
@@ -62,6 +74,15 @@ class FakeCore implements CoreRejectHost {
   Future<RebuiltConfig?> rebuild() async {
     rebuilds++;
     if (rebuildFails) return null;
+    if (decodeForm) {
+      return RebuiltConfig.withConfigTags(
+        configJson: '{}',
+        configTags: CoreConfigTags(
+          all: _live.toSet(),
+          outbounds: [for (final t in _live) CoreConfigEntry(t, 'masque')],
+        ),
+      );
+    }
     return RebuiltConfig(configJson: '{}', tags: _live.toSet());
   }
 
@@ -91,11 +112,50 @@ class FakeCore implements CoreRejectHost {
     CoreRejectPhase phase,
     int round, {
     List<DisabledNode> disabledNodes = const [],
-  }) =>
-      progress.add((phase, disabledNodes.length, round));
+  }) => progress.add((phase, disabledNodes.length, round));
 }
 
 void main() {
+  group('§653 — отказ на декодировании, индекс → тег', () {
+    test(
+      'сигнальный старт: outbounds[1] → выключен узел [1], reason по §9.4',
+      () async {
+        final core = FakeCore(
+          tags: ['A', 'B', 'C'],
+          bad: {'B': 'json: unknown field "network"'},
+          decodeForm: true,
+        );
+        final run = await CoreRejectGuard(core).run();
+
+        expect(run.outcome, CoreRejectOutcome.startedWithDisabled);
+        expect(core.disabledTags, ['B']);
+        expect(core.reasons['B'], 'network: json: unknown field "network"');
+        expect(core.realStarts, 2);
+        expect(core.checks, 1);
+      },
+    );
+
+    test(
+      'индексы сдвигаются после выключения — тег берётся из нового конфига',
+      () async {
+        final core = FakeCore(
+          tags: ['A', 'B', 'C', 'D'],
+          bad: {
+            'B': 'json: unknown field "network"',
+            'D': 'json: unknown field "network"',
+          },
+          decodeForm: true,
+        );
+        final run = await CoreRejectGuard(core).run();
+
+        // D во втором круге стоит в отправленном конфиге под индексом 2.
+        expect(core.disabledTags, ['B', 'D']);
+        expect(run.outcome, CoreRejectOutcome.startedWithDisabled);
+        expect(core.realStarts, 2);
+      },
+    );
+  });
+
   group('дерево ветвлений раздела 3', () {
     test('старт чистый → ни одного checkConfig, ни одной пересборки', () async {
       final core = FakeCore(tags: ['A', 'B', 'C']);
@@ -108,23 +168,31 @@ void main() {
       expect(run.disabled, isEmpty);
     });
 
-    test('один негодный → старт, check чисто, старт; два реальных старта',
-        () async {
-      final core = FakeCore(
-        tags: ['A', 'B', 'C'],
-        bad: {'B': 'parse encryption: unknown encryption appearance'},
-      );
-      final run = await CoreRejectGuard(core).run();
+    test(
+      'один негодный → старт, check чисто, старт; два реальных старта',
+      () async {
+        final core = FakeCore(
+          tags: ['A', 'B', 'C'],
+          bad: {'B': 'parse encryption: unknown encryption appearance'},
+        );
+        final run = await CoreRejectGuard(core).run();
 
-      expect(run.outcome, CoreRejectOutcome.startedWithDisabled);
-      expect(core.realStarts, 2, reason: 'сигнальный + финальный, третьего нет');
-      expect(core.checks, 1);
-      expect(core.disabledTags, ['B']);
-      expect(core.reasons['B'],
-          'parse encryption: unknown encryption appearance');
-      expect(run.disabled.single.tag, 'B');
-      expect(run.rounds, 1);
-    });
+        expect(run.outcome, CoreRejectOutcome.startedWithDisabled);
+        expect(
+          core.realStarts,
+          2,
+          reason: 'сигнальный + финальный, третьего нет',
+        );
+        expect(core.checks, 1);
+        expect(core.disabledTags, ['B']);
+        expect(
+          core.reasons['B'],
+          'parse encryption: unknown encryption appearance',
+        );
+        expect(run.disabled.single.tag, 'B');
+        expect(run.rounds, 1);
+      },
+    );
 
     test('три негодных → три круга, один финальный старт', () async {
       final core = FakeCore(
@@ -167,37 +235,43 @@ void main() {
       expect(scripted.checks, 0);
     });
 
-    test('тот же узел назван повторно → цикл прерван (PARSING_PRINCIPLES §9.5)', () async {
-      // Ядро упрямо называет A, а выключение его не убирает. Повтор судится
-      // по ref узла (H1): хост зовётся второй раз, отдаёт тот же ref — и цикл
-      // обрывается, не начиная третьего круга.
-      final core = _StubbornCore();
-      final run = await CoreRejectGuard(core).run();
+    test(
+      'тот же узел назван повторно → цикл прерван (PARSING_PRINCIPLES §9.5)',
+      () async {
+        // Ядро упрямо называет A, а выключение его не убирает. Повтор судится
+        // по ref узла (H1): хост зовётся второй раз, отдаёт тот же ref — и цикл
+        // обрывается, не начиная третьего круга.
+        final core = _StubbornCore();
+        final run = await CoreRejectGuard(core).run();
 
-      expect(run.outcome, CoreRejectOutcome.failed);
-      expect(run.disabled.map((d) => d.tag), ['A'],
-          reason: 'в итоге прогона узел один, второго выключения нет');
-      expect(core.disabledTags.toSet(), {'A'});
-      expect(run.rounds, 1);
-    });
+        expect(run.outcome, CoreRejectOutcome.failed);
+        expect(run.disabled.map((d) => d.tag), [
+          'A',
+        ], reason: 'в итоге прогона узел один, второго выключения нет');
+        expect(core.disabledTags.toSet(), {'A'});
+        expect(run.rounds, 1);
+      },
+    );
   });
 
   group('предел кругов и диалог', () {
-    test('одиннадцать негодных → диалог; Keep checking доводит до конца',
-        () async {
-      final tags = [for (var i = 0; i < 15; i++) 'N$i'];
-      final core = FakeCore(
-        tags: tags,
-        bad: {for (var i = 0; i < 11; i++) 'N$i': 'bad $i'},
-        prompt: CoreRejectPrompt.keepChecking,
-      );
-      final run = await CoreRejectGuard(core).run();
+    test(
+      'одиннадцать негодных → диалог; Keep checking доводит до конца',
+      () async {
+        final tags = [for (var i = 0; i < 15; i++) 'N$i'];
+        final core = FakeCore(
+          tags: tags,
+          bad: {for (var i = 0; i < 11; i++) 'N$i': 'bad $i'},
+          prompt: CoreRejectPrompt.keepChecking,
+        );
+        final run = await CoreRejectGuard(core).run();
 
-      expect(core.prompts, 1, reason: 'предел снят до конца этого Start');
-      expect(run.outcome, CoreRejectOutcome.startedWithDisabled);
-      expect(core.disabledTags.length, 11);
-      expect(run.disabled.length, 11);
-    });
+        expect(core.prompts, 1, reason: 'предел снят до конца этого Start');
+        expect(run.outcome, CoreRejectOutcome.startedWithDisabled);
+        expect(core.disabledTags.length, 11);
+        expect(run.disabled.length, 11);
+      },
+    );
 
     test('Stop → VPN не поднят, выключенные остаются выключенными', () async {
       final tags = [for (var i = 0; i < 15; i++) 'N$i'];
@@ -246,21 +320,25 @@ void main() {
   });
 
   group('финальный старт', () {
-    test('run-only ошибка → узел выключен, третьего старта нет, ошибка видна',
-        () async {
-      final core = FakeCore(
-        tags: ['A', 'B', 'C'],
-        bad: {'B': 'bad b'},
-        runOnlyBad: {'C': 'runtime only'},
-      );
-      final run = await CoreRejectGuard(core).run();
+    test(
+      'run-only ошибка → узел выключен, третьего старта нет, ошибка видна',
+      () async {
+        final core = FakeCore(
+          tags: ['A', 'B', 'C'],
+          bad: {'B': 'bad b'},
+          runOnlyBad: {'C': 'runtime only'},
+        );
+        final run = await CoreRejectGuard(core).run();
 
-      expect(run.outcome, CoreRejectOutcome.failed);
-      expect(run.error, contains('runtime only'));
-      expect(core.realStarts, 2, reason: 'третьего старта нет');
-      expect(core.disabledTags, ['B', 'C'],
-          reason: 'названный финальным стартом узел тоже выключен');
-    });
+        expect(run.outcome, CoreRejectOutcome.failed);
+        expect(run.error, contains('runtime only'));
+        expect(core.realStarts, 2, reason: 'третьего старта нет');
+        expect(core.disabledTags, [
+          'B',
+          'C',
+        ], reason: 'названный финальным стартом узел тоже выключен');
+      },
+    );
   });
 
   group('вырожденные случаи', () {
@@ -297,10 +375,7 @@ void main() {
     });
 
     test('отмена после успешного check не поднимает VPN', () async {
-      final core = _DeferredCheckCore(
-        tags: ['A', 'B'],
-        bad: {'A': 'bad a'},
-      );
+      final core = _DeferredCheckCore(tags: ['A', 'B'], bad: {'A': 'bad a'});
       final guard = CoreRejectGuard(core);
       final fut = guard.run();
       await core.checkGate.future;
@@ -345,7 +420,9 @@ class _DeferredCheckCore implements CoreRejectHost {
     realStarts++;
     if (realStarts == 1) {
       final t = tags.firstWhere((t) => bad.containsKey(t));
-      return CoreAttempt.rejected('initialize outbound[0] vless[$t]: ${bad[t]}');
+      return CoreAttempt.rejected(
+        'initialize outbound[0] vless[$t]: ${bad[t]}',
+      );
     }
     return const CoreAttempt.accepted();
   }
@@ -436,7 +513,7 @@ class _StubbornCore implements CoreRejectHost {
 
   @override
   Future<RebuiltConfig?> rebuild() async =>
-      const RebuiltConfig(configJson: '{}', tags: {'A', 'B'});
+      RebuiltConfig(configJson: '{}', tags: const {'A', 'B'});
 
   @override
   Future<CoreAttempt> check(String configJson) async {

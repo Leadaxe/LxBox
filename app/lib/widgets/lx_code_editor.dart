@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 
 import '../config/config_parse.dart';
 import '../services/l10n/locale_controller.dart';
+import '../services/settings_storage.dart';
 
 /// §624 — JSON-поля приложения на нативном редакторе sora-editor (Android
 /// View через platform view, hybrid composition). Kotlin-сторона —
@@ -115,6 +116,7 @@ class LxCodeEditor extends StatefulWidget {
     this.actions = const [],
     this.header,
     this.format = false,
+    this.wrapToggle = false,
   }) : _fit = _Fit.fill,
        _height = null,
        _minLines = null,
@@ -139,6 +141,7 @@ class LxCodeEditor extends StatefulWidget {
     this.actions = const [],
     this.header,
     this.format = false,
+    this.wrapToggle = false,
   }) : find = null,
        _fit = fit,
        _height = height,
@@ -177,17 +180,26 @@ class LxCodeEditor extends StatefulWidget {
   final bool stickyHeaders;
 
   /// Свои кнопки поля (Copy конфига) — в строке кнопок над рамкой, справа,
-  /// рядом с поиском; на время панели поиска прячутся.
+  /// рядом с поиском, перед меню ⋮; на время панели поиска прячутся.
   final List<Widget> actions;
 
   /// Подпись слева в строке кнопок над рамкой (Source узла: «sing-box JSON:
   /// sent to the core as is…»): переносится в ширине, оставшейся от кнопок.
   final Widget? header;
 
-  /// Кнопка Format в строке кнопок: видна, когда поле редактируемое и текст
+  /// Пункт Format в меню ⋮ редактируемого поля (§660): виден, когда текст
   /// — JSON ([detectCodeLanguage]). Разбор JSON5, отступ 2 пробела; правка
-  /// обычная — в undo и в `onChanged`.
+  /// обычная — в undo и в `onChanged`. У поля только для чтения Format есть
+  /// всегда, когда текст — JSON, и меняет только показ (Show original
+  /// возвращает исходный); параметр там не нужен.
   final bool format;
+
+  /// Кнопка переноса строк в строке кнопок (§649): у [LxJsonView] с липкими
+  /// заголовками JSON и у редактора Config — там, где перенос по умолчанию
+  /// выключен.
+  /// Исходное значение — [wordWrap]; выбор живёт в `State` и нигде не
+  /// хранится.
+  final bool wrapToggle;
 
   final _Fit _fit;
   final double? _height;
@@ -201,6 +213,21 @@ class LxCodeEditor extends StatefulWidget {
 
   @override
   State<LxCodeEditor> createState() => LxCodeEditorState();
+}
+
+/// Пункты меню ⋮ редактора (§660).
+enum _LxEditorMenu { format, magnifier }
+
+/// Индикатор «занят» вместо иконки кнопки (§660), размер иконки 18.
+class _LxBusyIcon extends StatelessWidget {
+  const _LxBusyIcon({super.key});
+
+  @override
+  Widget build(BuildContext context) => const SizedBox(
+    width: 18,
+    height: 18,
+    child: CircularProgressIndicator(strokeWidth: 2),
+  );
 }
 
 /// Держатель канала view. Живёт дольше `State`: натив в `dispose` сбрасывает
@@ -261,18 +288,49 @@ class LxCodeEditorState extends State<LxCodeEditor>
   /// горизонтали, поэтому жесты целиком уходят редактору (§628).
   bool _selected = false;
 
-  /// Текст не помещается в поле — вертикальный свайп листает редактор.
+  /// Текст не помещается в поле по вертикали.
   bool _scrollable = true;
 
+  /// Поле во всю высоту (экран Config): страницы вокруг нет, касание
+  /// целиком у редактора.
+  bool _fill = false;
+
+  /// Состояние прокрутки натива (`scrollState`): есть куда вбок, прокрутка
+  /// у верхнего / нижнего края (§649).
+  bool _canScrollX = false;
+  bool _scrollTop = true;
+  bool _scrollBottom = false;
+
+  /// Натив считает раскладку строк (`layoutBusy`); полоса — только если
+  /// счёт длится дольше [_layoutBusyDelay] (§649).
+  Timer? _layoutBusyTimer;
+  bool _showLayoutBusy = false;
+  static const _layoutBusyDelay = Duration(milliseconds: 300);
+
+  /// Порог сдвига, на котором решается, кому жест: не больше порога
+  /// drag-распознавателей вкладок и страницы (`Scrollable` берёт его из
+  /// `MediaQuery.gestureSettings`, на Android он меньше [kTouchSlop]).
+  double _dragSlop = kTouchSlop;
+
   /// `PlatformViewLink` кэширует поверхность вместе с распознавателями,
-  /// поэтому набор постоянный, а условие «всё редактору» проверяется
-  /// заново на каждом касании (§628).
+  /// поэтому набор постоянный, а условия читаются заново на каждом
+  /// касании (§628). Кому жест — §649: при выделении (или во всю высоту)
+  /// редактору сразу, иначе по направлению на пороге сдвига
+  /// ([lxEditorOwnsDrag]). Отдельного горизонтального drag нет: вбок,
+  /// когда некуда, жест уходит вкладкам.
   late final Set<Factory<OneSequenceGestureRecognizer>> _recognizers = {
     Factory<OneSequenceGestureRecognizer>(
-      () => _GatedEagerGestureRecognizer(() => _scrollable || _selected),
-    ),
-    const Factory<OneSequenceGestureRecognizer>(
-      HorizontalDragGestureRecognizer.new,
+      () => LxEditorDragRecognizer(
+        takesAtDown: () => _fill || _selected,
+        takesDrag: (delta) => lxEditorOwnsDrag(
+          delta,
+          canScrollX: _canScrollX,
+          scrollable: _scrollable,
+          scrollTop: _scrollTop,
+          scrollBottom: _scrollBottom,
+        ),
+        slop: () => _dragSlop,
+      ),
     ),
     const Factory<OneSequenceGestureRecognizer>(LongPressGestureRecognizer.new),
   };
@@ -292,14 +350,51 @@ class LxCodeEditorState extends State<LxCodeEditor>
   int _matchIndex = -1;
   int _matchCount = 0;
 
-  /// Кнопка Format видна (см. [LxCodeEditor.format]).
+  /// Пункт Format в меню виден (см. [LxCodeEditor.format]).
   bool _canFormat = false;
+
+  /// Только чтение: показ отформатирован (§660), в редакторе этот текст
+  /// вместо [LxCodeEditor.controller]; контроллер не трогаем. `null` —
+  /// показ исходного текста. Новый текст сверху сбрасывает показ.
+  String? _formattedView;
+
+  /// Заглушка вне Android показывает [_formattedView] через свой контроллер.
+  final _stubView = TextEditingController();
+
+  /// Тело длиннее — форматирование показа вне главного изолята.
+  static const _isolateFormatLimit = 64 * 1024;
+
+  /// Редактор занят переносом или Format (§660): от нажатия до конца
+  /// раскладки нового текста. Одно состояние на обе кнопки — перенос и ⋮
+  /// недоступны, вместо иконок индикатор. Конец — ответ натива: на
+  /// `setWordWrap` и `setText` с `waitLayout` натив отвечает после
+  /// раскладки (первый `layoutBusy(false)`), `replaceAll` раскладывает
+  /// синхронно; без натива ответ сразу.
+  bool _busy = false;
+
+  /// Страховка: натив не ответил — кнопки снова доступны.
+  static const _busyTimeout = Duration(seconds: 30);
+
+  /// Лупа выделения (§660): одна настройка на приложение, кэш на процесс.
+  /// `null` — ещё не читали; до чтения — включена.
+  static bool? _magnifier;
+  static bool get _magnifierOn => _magnifier ?? true;
+  static Future<void>? _magnifierWarm;
+
+  /// Значение лупы, ушедшее в creation params.
+  bool _creationMagnifier = true;
+
+  /// Текст в редакторе: отформатированный показ или контроллер.
+  String get _shownText => _formattedView ?? widget.controller.text;
+
+  /// Текущий перенос строк: из [LxCodeEditor.wordWrap], кнопка
+  /// [LxCodeEditor.wrapToggle] переключает на лету (§649).
+  bool _wordWrap = true;
 
   MethodChannel? get _channel => _link?.channel;
 
   bool _computeCanFormat() =>
-      widget.format &&
-      !widget.readOnly &&
+      (widget.readOnly || widget.format) &&
       detectCodeLanguage(widget.controller.text) == LxCodeLanguage.json;
 
   void _refreshFormat() {
@@ -314,7 +409,47 @@ class LxCodeEditorState extends State<LxCodeEditor>
     _nativeText = widget.controller.text;
     _rows = _countLines(_nativeText);
     _canFormat = _computeCanFormat();
+    _wordWrap = widget.wordWrap;
     widget.controller.addListener(_onController);
+    if (_nativeEditor && _magnifier == null) unawaited(_warmMagnifier());
+  }
+
+  /// Прогрев кэша лупы: первое чтение настройки на процесс (§660).
+  Future<void> _warmMagnifier() async {
+    await (_magnifierWarm ??= () async {
+      try {
+        final v = await SettingsStorage.getEditorMagnifier();
+        _magnifier ??= v;
+      } catch (_) {
+        // Хранилище недоступно — лупа как по умолчанию.
+      }
+    }());
+    if (!mounted) return;
+    if (_channel != null && _magnifierOn != _creationMagnifier) {
+      _creationMagnifier = _magnifierOn;
+      unawaited(_invoke('setMagnifier', {'enabled': _magnifierOn}));
+    }
+    setState(() {});
+  }
+
+  /// Пункт Magnifier: сразу в этом редакторе, остальные — при создании.
+  Future<void> _toggleMagnifier() async {
+    final on = !_magnifierOn;
+    setState(() => _magnifier = on);
+    _creationMagnifier = on;
+    unawaited(_invoke('setMagnifier', {'enabled': on}));
+    try {
+      await SettingsStorage.setEditorMagnifier(on);
+    } catch (_) {
+      // Не записалось — значение живёт до перезапуска.
+    }
+  }
+
+  /// Сброс кэша лупы между тестами.
+  @visibleForTesting
+  static void debugResetMagnifier() {
+    _magnifier = null;
+    _magnifierWarm = null;
   }
 
   static int _countLines(String t) => '\n'.allMatches(t).length + 1;
@@ -348,6 +483,7 @@ class LxCodeEditorState extends State<LxCodeEditor>
     if (oldWidget.language != widget.language) {
       unawaited(_invoke('setLanguage', {'language': widget.language?.name}));
     }
+    if (oldWidget.wordWrap != widget.wordWrap) _setWordWrap(widget.wordWrap);
     _canFormat = _computeCanFormat();
   }
 
@@ -362,9 +498,11 @@ class LxCodeEditorState extends State<LxCodeEditor>
 
   @override
   void dispose() {
+    _layoutBusyTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     widget.controller.removeListener(_onController);
     _link?.detach();
+    _stubView.dispose();
     _findCtrl.dispose();
     _findFocus.dispose();
     super.dispose();
@@ -386,7 +524,8 @@ class LxCodeEditorState extends State<LxCodeEditor>
   /// Save / Copy / Share: текст длиннее 256 КБ натив отдаёт не на каждую
   /// правку.
   Future<void> flush() async {
-    if (_channel == null) return;
+    // В нативе отформатированный показ, не текст поля (§660).
+    if (_channel == null || _formattedView != null) return;
     final text = await _invoke<String>('getText');
     if (text == null || !mounted) return;
     _applyNativeText(text);
@@ -397,6 +536,10 @@ class LxCodeEditorState extends State<LxCodeEditor>
     if (_syncing) return;
     _refreshFormat();
     final t = widget.controller.text;
+    if (_formattedView != null) {
+      // Сверху пришёл новый текст — показ снова исходный (§660).
+      setState(() => _formattedView = null);
+    }
     if (t == _nativeText) return;
     _nativeText = t;
     if (_channel == null) {
@@ -422,6 +565,91 @@ class LxCodeEditorState extends State<LxCodeEditor>
     }
     _refreshFormat();
     widget._onEdited?.call(text);
+  }
+
+  /// Перенос строк на лету: натив без пересоздания view (§649).
+  /// Быстрые пересчёты (ввод, смена ширины) полосой не мигают: она
+  /// появляется, только если раскладка не готова за [_layoutBusyDelay].
+  void _onLayoutBusy(bool busy) {
+    _layoutBusyTimer?.cancel();
+    _layoutBusyTimer = null;
+    if (busy) {
+      _layoutBusyTimer = Timer(_layoutBusyDelay, () {
+        if (mounted) setState(() => _showLayoutBusy = true);
+      });
+    } else if (_showLayoutBusy) {
+      setState(() => _showLayoutBusy = false);
+    }
+  }
+
+  /// Пока прошлое переключение не кончилось, вызов игнорируется (§660):
+  /// повторные нажатия, D-pad, событие до перерисовки не копятся.
+  void _setWordWrap(bool on) {
+    if (_busy || on == _wordWrap) return;
+    setState(() => _wordWrap = on);
+    unawaited(
+      _whileBusy(
+        () => _invoke('setWordWrap', {
+          'wordWrap': on,
+        }).timeout(_busyTimeout, onTimeout: () => null),
+      ),
+    );
+  }
+
+  /// [job] под общим «занят» (§660); пока занято — не запускается.
+  Future<void> _whileBusy(Future<void> Function() job) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await job();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// Format в просмотрщике (только чтение, §660): меняет показ, хранимое
+  /// тело (контроллер) не трогает. Комментарии JSON5 теряются без диалога —
+  /// Show original вернёт всё. Тело больше [_isolateFormatLimit] —
+  /// в изоляте, на это время полоса раскладки и пункт недоступен.
+  Future<void> _formatView() async {
+    final text = widget.controller.text;
+    String? formatted;
+    String? error;
+    try {
+      formatted = text.length > _isolateFormatLimit
+          ? await compute(formatJson5, text)
+          : formatJson5(text);
+    } on FormatException catch (e) {
+      error = e.message;
+    }
+    if (!mounted || widget.controller.text != text) return;
+    if (error != null) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(
+          content: Text(getLocalText.s("Failed to parse JSON: %s", error)),
+        ),
+      );
+      return;
+    }
+    await _showView(formatted);
+  }
+
+  /// Показ в редакторе: [formatted] или (`null`) исходный текст контроллера.
+  /// Завершается, когда натив разложил новый текст.
+  Future<void> _showView(String? formatted) async {
+    setState(() => _formattedView = formatted);
+    final shown = _shownText;
+    _nativeText = shown;
+    if (formatted != null) _stubView.text = formatted;
+    if (_channel != null) {
+      await _invoke('setText', {
+        'text': shown,
+        'waitLayout': true,
+      }).timeout(_busyTimeout, onTimeout: () => null);
+    } else {
+      final n = _countLines(shown);
+      if (n != _rows) setState(() => _rows = n);
+    }
   }
 
   /// Format: JSON5 → JSON с отступом 2 пробела (как Config при открытии).
@@ -465,8 +693,9 @@ class LxCodeEditorState extends State<LxCodeEditor>
       if (ok != true || !mounted) return;
     }
     if (_channel != null) {
-      // Натив заменяет текст правкой (undo) и присылает `changed`.
-      await _invoke('replaceAll', {'text': formatted});
+      // Натив заменяет текст правкой (undo) и присылает `changed`; раскладка
+      // правки синхронная — «занят» до ответа (§660).
+      await _whileBusy(() => _invoke('replaceAll', {'text': formatted}));
       return;
     }
     _nativeText = formatted;
@@ -517,6 +746,12 @@ class LxCodeEditorState extends State<LxCodeEditor>
         final y = ((args['y'] as num?) ?? 0) / dpr;
         _cursorRect = Rect.fromLTWH(0, y, 1, rowH);
         if (_focused) _revealCursor();
+      case 'layoutBusy':
+        _onLayoutBusy(args['busy'] as bool? ?? false);
+      case 'scrollState':
+        _canScrollX = args['canScrollX'] as bool? ?? false;
+        _scrollTop = args['scrollTop'] as bool? ?? true;
+        _scrollBottom = args['scrollBottom'] as bool? ?? false;
       case 'searchResult':
         setState(() {
           _matchIndex = (args['index'] as num?)?.toInt() ?? -1;
@@ -524,6 +759,7 @@ class LxCodeEditorState extends State<LxCodeEditor>
         });
       case 'disposed':
         _link?.channel.setMethodCallHandler(null);
+        _onLayoutBusy(false);
     }
     return null;
   }
@@ -554,9 +790,13 @@ class LxCodeEditorState extends State<LxCodeEditor>
     _link = link;
     // Контроллер успел поменяться между созданием view и его готовностью
     // (экран Config грузит конфиг асинхронно) — догоняем.
-    if (widget.controller.text != _creationText) {
-      _nativeText = widget.controller.text;
+    if (_shownText != _creationText) {
+      _nativeText = _shownText;
       unawaited(_invoke('setText', {'text': _nativeText}));
+    }
+    if (_magnifierOn != _creationMagnifier) {
+      _creationMagnifier = _magnifierOn;
+      unawaited(_invoke('setMagnifier', {'enabled': _magnifierOn}));
     }
   }
 
@@ -644,6 +884,11 @@ class LxCodeEditorState extends State<LxCodeEditor>
     }
 
     _scrollable = scrollable;
+    _fill = w._fit == _Fit.fill;
+    final deviceSlop = MediaQuery.maybeGestureSettingsOf(context)?.touchSlop;
+    _dragSlop = deviceSlop != null && deviceSlop < kTouchSlop
+        ? deviceSlop
+        : kTouchSlop;
     Widget field = _nativeEditor ? _buildNative() : _buildStub();
     if (_nativeEditor) {
       field = DecoratedBox(
@@ -660,6 +905,26 @@ class LxCodeEditorState extends State<LxCodeEditor>
           padding: EdgeInsets.all(_focused ? _pad : _pad + 1),
           child: ClipRect(child: field),
         ),
+      );
+    }
+    if (_showLayoutBusy) {
+      // Натив долго считает раскладку (перенос большого тела, §649) —
+      // тонкая полоса у верхнего края рамки, раскладку поля не меняет.
+      final inset = _focused ? 2.0 : 1.0;
+      field = Stack(
+        fit: StackFit.passthrough,
+        children: [
+          field,
+          Positioned(
+            top: inset,
+            left: inset,
+            right: inset,
+            child: const LinearProgressIndicator(
+              key: ValueKey('lx-code-editor-layout-busy'),
+              minHeight: 2,
+            ),
+          ),
+        ],
       );
     }
     final hint = w.hint;
@@ -711,18 +976,33 @@ class LxCodeEditorState extends State<LxCodeEditor>
           visualDensity: VisualDensity.compact,
           onPressed: () => _toggleFind(true),
         ),
-      if (_canFormat)
+      if (w.wrapToggle)
         IconButton(
-          key: const ValueKey('lx-code-editor-format'),
-          icon: const Icon(Icons.format_indent_increase, size: 18),
-          tooltip: getLocalText.s("Format"),
+          key: const ValueKey('lx-code-editor-wrap'),
+          // Раскладка после переключения ещё идёт — индикатор (§660).
+          icon: _busy
+              ? const _LxBusyIcon(key: ValueKey('lx-code-editor-wrap-busy'))
+              : const Icon(Icons.wrap_text, size: 18),
+          tooltip: _wordWrap
+              ? getLocalText.s("Unwrap lines")
+              : getLocalText.s("Wrap lines"),
           visualDensity: VisualDensity.compact,
-          onPressed: () => unawaited(_format()),
+          // Включённый перенос — тональная подложка, как у
+          // `IconButton.filledTonal`; выключенный — обычная кнопка.
+          isSelected: _wordWrap,
+          style: _wordWrap
+              ? IconButton.styleFrom(
+                  backgroundColor: cs.secondaryContainer,
+                  foregroundColor: cs.onSecondaryContainer,
+                )
+              : null,
+          onPressed: _busy ? null : () => _setWordWrap(!_wordWrap),
         ),
       ...w.actions,
+      _buildMenu(),
     ];
     final top = <Widget>[
-      if (!_findOpen && (header != null || buttons.isNotEmpty))
+      if (!_findOpen)
         Row(
           key: const ValueKey('lx-code-editor-bar'),
           children: [
@@ -756,12 +1036,61 @@ class LxCodeEditorState extends State<LxCodeEditor>
     );
   }
 
+  /// Меню ⋮ — последним справа в строке кнопок (§660): Format (или Show
+  /// original в просмотрщике) и лупа выделения.
+  Widget _buildMenu() {
+    final shownFormatted = _formattedView != null;
+    return PopupMenuButton<_LxEditorMenu>(
+      key: const ValueKey('lx-code-editor-menu'),
+      icon: _busy
+          ? const _LxBusyIcon(key: ValueKey('lx-code-editor-menu-busy'))
+          : const Icon(Icons.more_vert, size: 18),
+      enabled: !_busy,
+      tooltip: getLocalText.s("More options"),
+      style: IconButton.styleFrom(visualDensity: VisualDensity.compact),
+      onSelected: (item) {
+        switch (item) {
+          case _LxEditorMenu.format:
+            // Редактируемое поле: «занят» — только замена текста, не
+            // диалог про комментарии.
+            unawaited(
+              !widget.readOnly
+                  ? _format()
+                  : _whileBusy(
+                      shownFormatted ? () => _showView(null) : _formatView,
+                    ),
+            );
+          case _LxEditorMenu.magnifier:
+            unawaited(_toggleMagnifier());
+        }
+      },
+      itemBuilder: (context) => [
+        if (_canFormat)
+          PopupMenuItem(
+            key: const ValueKey('lx-code-editor-format'),
+            value: _LxEditorMenu.format,
+            child: Text(
+              shownFormatted
+                  ? getLocalText.s("Show original")
+                  : getLocalText.s("Format"),
+            ),
+          ),
+        CheckedPopupMenuItem(
+          key: const ValueKey('lx-code-editor-magnifier'),
+          value: _LxEditorMenu.magnifier,
+          checked: _magnifierOn,
+          child: Text(getLocalText.s("Magnifier")),
+        ),
+      ],
+    );
+  }
+
   /// Заглушка вне Android: обычный `TextField` с той же раскладкой.
   Widget _buildStub() {
     final w = widget;
     // Высоту задаёт обёртка (родитель, фиксированная или по строкам).
     return TextField(
-      controller: w.controller,
+      controller: _formattedView != null ? _stubView : w.controller,
       readOnly: w.readOnly,
       autofocus: w.autofocus,
       expands: true,
@@ -837,8 +1166,9 @@ class LxCodeEditorState extends State<LxCodeEditor>
         hitTestBehavior: PlatformViewHitTestBehavior.opaque,
       ),
       onCreatePlatformView: (params) {
-        _creationText = widget.controller.text;
+        _creationText = _shownText;
         _nativeText = _creationText;
+        _creationMagnifier = _magnifierOn;
         final c = PlatformViewsService.initExpensiveAndroidView(
           id: params.id,
           viewType: _viewType,
@@ -850,11 +1180,12 @@ class LxCodeEditorState extends State<LxCodeEditor>
             'colors': _colors,
             'lineNumbers': w.showLineNumbers,
             'fontSize': w.fontSize,
-            'wordWrap': w.wordWrap,
+            'wordWrap': _wordWrap,
             'language': w.language?.name,
             'locale': LocaleController.I.effectiveTag,
             'autofocus': w.autofocus,
             'stickyHeaders': w.stickyHeaders,
+            'magnifier': _creationMagnifier,
           },
           creationParamsCodec: const StandardMessageCodec(),
           onFocus: () => params.onFocusChanged(true),
@@ -871,7 +1202,8 @@ class LxCodeEditorState extends State<LxCodeEditor>
   /// задержка, докрутка) на заглушке.
   @visibleForTesting
   void debugAttachChannel(int viewId) {
-    _creationText = widget.controller.text;
+    _creationText = _shownText;
+    _creationMagnifier = _magnifierOn;
     _attach(viewId);
   }
 
@@ -882,16 +1214,97 @@ class LxCodeEditorState extends State<LxCodeEditor>
 
 /// Панель поиска над текстом редактора: поле, счёт совпадений,
 /// предыдущее/следующее, закрыть. Пустой запрос снимает подсветку.
-/// [EagerGestureRecognizer], который берёт касание, только пока [gate]
-/// истинен; иначе касание разыгрывают остальные распознаватели view.
-class _GatedEagerGestureRecognizer extends EagerGestureRecognizer {
-  _GatedEagerGestureRecognizer(this.gate);
+/// Кому жест без выделения (§649), по сдвигу [delta] на пороге:
+/// - вбок (|dx| > |dy|) — редактору, если есть куда вбок ([canScrollX]);
+/// - вертикально — редактору, если текст не помещается ([scrollable]) и
+///   в эту сторону есть куда мотать: палец вниз — прокрутка не у верхнего
+///   края ([scrollTop]), палец вверх — не у нижнего ([scrollBottom]);
+/// - иначе — вкладкам / странице.
+@visibleForTesting
+bool lxEditorOwnsDrag(
+  Offset delta, {
+  required bool canScrollX,
+  required bool scrollable,
+  required bool scrollTop,
+  required bool scrollBottom,
+}) {
+  if (delta.dx.abs() > delta.dy.abs()) return canScrollX;
+  if (!scrollable) return false;
+  return delta.dy > 0 ? !scrollTop : !scrollBottom;
+}
 
-  final bool Function() gate;
+/// Распознаватель platform view редактора (§649). Если [takesAtDown]
+/// истинен — берёт касание сразу, как [EagerGestureRecognizer] (ручки
+/// выделения тянут в любую сторону, §628). Иначе ждёт сдвига пальца больше
+/// [slop] по любой оси и решает по [takesDrag]: принять — вся
+/// последовательность (с буферизованными до решения событиями) уходит
+/// native view; отклонить — жест разыгрывают вкладки и страница. Решение —
+/// на весь жест.
+@visibleForTesting
+class LxEditorDragRecognizer extends OneSequenceGestureRecognizer {
+  LxEditorDragRecognizer({
+    required this.takesAtDown,
+    required this.takesDrag,
+    required this.slop,
+  });
+
+  final bool Function() takesAtDown;
+  final bool Function(Offset delta) takesDrag;
+  final double Function() slop;
+
+  /// Точка касания указателей, по которым решение ещё не принято.
+  final Map<int, Offset> _origins = {};
 
   @override
-  bool isPointerAllowed(PointerDownEvent event) =>
-      gate() && super.isPointerAllowed(event);
+  void addAllowedPointer(PointerDownEvent event) {
+    super.addAllowedPointer(event);
+    if (takesAtDown()) {
+      resolvePointer(event.pointer, GestureDisposition.accepted);
+      stopTrackingPointer(event.pointer);
+      return;
+    }
+    _origins[event.pointer] = event.position;
+  }
+
+  @override
+  void handleEvent(PointerEvent event) {
+    final origin = _origins[event.pointer];
+    if (origin != null && event is PointerMoveEvent) {
+      final delta = event.position - origin;
+      final s = slop();
+      if (delta.dx.abs() > s || delta.dy.abs() > s) {
+        _origins.remove(event.pointer);
+        resolvePointer(
+          event.pointer,
+          takesDrag(delta)
+              ? GestureDisposition.accepted
+              : GestureDisposition.rejected,
+        );
+        stopTrackingPointer(event.pointer);
+        return;
+      }
+    }
+    stopTrackingIfPointerNoLongerDown(event);
+  }
+
+  @override
+  void acceptGesture(int pointer) {
+    _origins.remove(pointer);
+  }
+
+  @override
+  void rejectGesture(int pointer) {
+    _origins.remove(pointer);
+    stopTrackingPointer(pointer);
+  }
+
+  @override
+  void didStopTrackingLastPointer(int pointer) {
+    _origins.remove(pointer);
+  }
+
+  @override
+  String get debugDescription => 'lx editor drag';
 }
 
 class _LxFindPanel extends StatelessWidget {
@@ -1041,6 +1454,7 @@ class _LxJsonViewState extends State<LxJsonView> {
       showLineNumbers: widget.showLineNumbers,
       language: widget.language,
       stickyHeaders: widget.stickyHeaders,
+      wrapToggle: sticky,
       actions: widget.actions,
       header: widget.header,
     );

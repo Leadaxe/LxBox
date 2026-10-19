@@ -164,7 +164,8 @@ the node list, folders and order — [007-NODE_LIST](../007-NODE_LIST/FEATURE.md
 | Paste URI / Paste JSON | Wizard | text | — |
 | Tag | Node → Settings | string + a palette of 14 emoji | node tag |
 | Detour server | Node → Settings | see [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.md) | None (direct) |
-| Skip presets | Node → Settings; visible if the template has a `for_each` preset for the node type | on/off | off |
+| Skip Tailscale presets | Node → Settings; visible for a `tailscale` node if the template has a node-loop preset that accepts it | on/off | off |
+| Allow access to this device / Expose local network / Allow as gateway | Node → Settings, block Incoming connections from this tunnel; visible for `wireguard`, `openvpn-client`, `openconnect` own nodes | on/off | off |
 | Masquerade: protocol · domain · browser | WireGuard/AmneziaWG node → Settings → Masquerade | Off · `quic` · `dns` · `stun` · `sip`; LDH name ≤ 253 bytes; `chrome` · `firefox` · `curl` · Default | from the node (`ip`/`id`/`ib`) |
 | Source | Node → Source | source text | as saved |
 | Exit node | Tailscale node → Network → Save choice | tailnet node / None | from the body |
@@ -207,8 +208,8 @@ build: custom JSON source ─► body verbatim (without detour) ; otherwise ─�
 - The source kind is derived from the text: a JSON object → `json`, a
   WireGuard INI → `wg_ini`, anything else → a link. There is no mode flag.
 - Tag and Source are applied only with the Save button; Edit JSON —
-  immediately after confirmation; Detour and Skip presets are written
-  immediately on selection.
+  immediately after confirmation; Detour, Skip Tailscale presets and the
+  incoming-connection switches are written immediately on selection.
 - "Edit JSON" on a link or INI, after a warning, replaces the source with the
   model's body — irreversibly, there is no way back to the link; on a JSON
   source it opens Source.
@@ -249,7 +250,7 @@ build: custom JSON source ─► body verbatim (without detour) ; otherwise ─�
 | Function | What it does | Promises | File |
 |---|---|---|---|
 | Add server wizard | Creates a custom SOCKS5, HTTP or Tailscale node from a form, or any node from a pasted link or sing-box JSON. | P1 P2 P13 P15 | [add-server-wizard.md](FUNCTIONS/add-server-wizard.md) |
-| Node settings | Shows the tabs of a custom node and lets you change its tag with an emoji, its detour server and the Skip presets switch. | P3 P4 | [node-settings.md](FUNCTIONS/node-settings.md) |
+| Node settings | Shows the tabs of a custom node and lets you change its tag with an emoji, its detour server, the Skip Tailscale presets switch and the incoming-connection switches of a client tunnel. | P3 P4 | [node-settings.md](FUNCTIONS/node-settings.md) |
 | Source editing | Saves the source by its kind (link, INI or JSON), keeps only the node body, checks JSON with the core and converts a link to JSON on request. | P5 P6 P7 P8 P9 P10 P12 | [source-editing.md](FUNCTIONS/source-editing.md) |
 | The name is the tag | Makes the node tag the only name of a custom server, with defaults, an automatic emoji, collision suffixes and reference rewriting on rename. | P2 P3 P4 P11 | [name-is-tag.md](FUNCTIONS/name-is-tag.md) |
 | JSON and protocol schema | Shows the node's sing-box JSON with highlighting, keeps fields unknown to the app and records what the schema-aware editor still lacks, including the "replace the whole `tls`" trap. | P6 P8 | [json-and-schema.md](FUNCTIONS/json-and-schema.md) |

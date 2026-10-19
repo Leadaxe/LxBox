@@ -61,6 +61,8 @@ class SubscriptionEntry extends ChangeNotifier {
   int get expireTimestamp => meta?.expireTimestamp ?? 0;
   String get supportUrl => meta?.supportUrl ?? '';
   String get webPageUrl => meta?.webPageUrl ?? '';
+  /// §648 — описание подписки (заголовок `announce`), пустое — блока нет.
+  String get announce => meta?.announce ?? '';
   int get updateIntervalHours => _list is SubscriptionServers
       ? (_list as SubscriptionServers).updateIntervalHours
       : 0;
@@ -182,6 +184,11 @@ class SubscriptionEntry extends ChangeNotifier {
   /// пишется (§291); его гасит первая регидрация/обновление с узлами — см.
   /// [nodesNotLoaded].
   bool _bodyCacheMissing = false;
+
+  /// §652 — регидрация из кэша этой записи: общая `Future` конкурентных
+  /// вызовов `ensureHydrated` и URL, для которого она запущена.
+  Future<void>? _hydration;
+  String? _hydrationUrl;
 
   void _markBodyCacheMissing() {
     if (_bodyCacheMissing) return;

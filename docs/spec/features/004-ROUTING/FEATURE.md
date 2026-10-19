@@ -207,6 +207,9 @@ rule list ─► NORMALIZATION: seeding the head, numbers, sorting, preset dedup
 - Changing a rule's URL or kind wipes the cache and disables the rule; `vpn-1` cannot be
   disabled or deleted.
 - An edit on the screen marks the config for rebuild; the write — on leaving.
+- An edit on the DNS tab and a later edit on Rules or Presets both reach the
+  config: after leaving the DNS tab the screen rereads its rules from storage
+  (§655).
 
 ## Boundaries
 
@@ -222,6 +225,9 @@ rule list ─► NORMALIZATION: seeding the head, numbers, sorting, preset dedup
   references, node selection on the main screen — [026-DIRECTIONS](../026-DIRECTIONS/FEATURE.md);
   here a Direction is only a rule target. The NETWORKS pseudo-direction —
   [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.md).
+- The DNS tab of this screen (after Rules: Directions · Presets · Rules · DNS
+  · Tunnel apps). The screen is shared; what the tab does — servers, DNS
+  rules, strategy, cache — is described in [005-DNS](../005-DNS/FEATURE.md).
 - Which apps go into the tunnel at all (the Tunnel apps tab) —
   [011-SPLIT_TUNNELING](../011-SPLIT_TUNNELING/FEATURE.md). A rule by
   package here acts inside the core and sees only traffic that already got into the

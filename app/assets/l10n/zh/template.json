@@ -644,6 +644,30 @@
  "Also route UDP 500/4500 directly. Some modems get the gateway address from the carrier network and never send a DNS query, so the domain rule alone misses them. Those ports carry nothing but IPsec key exchange.": {
   "value": "同时把 UDP 500/4500 直连。部分基带从运营商网络获取网关地址，从不发 DNS 查询，仅靠域名规则会漏掉它们。这两个端口上除了 IPsec 密钥交换没有别的内容。"
  },
+ "Tunnel ingress": {
+  "value": "隧道入站"
+ },
+ "Connections arriving from a client tunnel (WireGuard, AWG, OpenVPN, OpenConnect) are rejected unless the node's own switches allow them: access to this device, the local network, or using this device as a gateway. The settings below choose what happens to the rest and where allowed and gateway traffic goes.": {
+  "value": "来自客户端隧道（WireGuard、AWG、OpenVPN、OpenConnect）的连接会被拒绝，除非节点自身的开关允许：访问此设备、访问本地网络，或将此设备用作网关。下方设置决定其余连接如何处理，以及允许的流量和网关流量从哪里出站。"
+ },
+ "Incoming from tunnels": {
+  "value": "来自隧道的入站"
+ },
+ "What happens to connections arriving from a tunnel that the node's switches did not allow. reject (default) and drop close them; an outbound forwards them.": {
+  "value": "节点开关未允许的隧道入站连接如何处理：reject（默认）和 drop 会关闭连接；选择出站则转发过去。"
+ },
+ "Device and local network go to": {
+  "value": "设备和本地网络流量出站"
+ },
+ "Outbound for peers allowed to reach this device or the local network.": {
+  "value": "允许访问此设备或本地网络的对等方所用的出站。"
+ },
+ "Gateway traffic goes to": {
+  "value": "网关流量出站"
+ },
+ "Outbound for peers allowed to use this device as a gateway.": {
+  "value": "允许将此设备用作网关的对等方所用的出站。"
+ },
  "Tailscale networks": {
   "value": "Tailscale 网络"
  },

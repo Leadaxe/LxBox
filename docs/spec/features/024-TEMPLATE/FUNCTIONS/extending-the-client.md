@@ -45,7 +45,7 @@ the procedure has two sides: the app repository and the launcher contract.
 | A new top-level template key | a reader in the build | — |
 | A variable that must mark the config stale | the list of config variable names is fixed in code (audit 591: 18 variables are missing from it) | — |
 | A preset that must reach users with saved state | the late-defaults list | [578](../../../tasks/578-tailscale-preset-template-for-each.md) `tailscale` |
-| A new record field (a node field a preset reads) | storage, backup, Debug API, transfer | `skip_presets` ([578](../../../tasks/578-tailscale-preset-template-for-each.md)) |
+| A new record field (a node field a preset reads) | storage, backup, Debug API, transfer | `skip_tailscale_presets` ([578](../../../tasks/578-tailscale-preset-template-for-each.md)), `allow_*` ([656](../../../tasks/656-contract-1130-tunnel-ingress.md)) |
 | A core config key | the installed core must accept it; checked against the core sources or the contract registry | [580](../../../tasks/580-dns-cache-settings.md) `dns.cache_capacity`, `dns.optimistic`, `store_dns` |
 
 ## Inputs / Outputs

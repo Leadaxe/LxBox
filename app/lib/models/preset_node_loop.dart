@@ -6,6 +6,8 @@
 /// (`parsePresetNodeLoop` в `services/builder/preset_node_loop.dart`).
 library;
 
+import '../services/builder/if_engine.dart' show IfForm, isIfKey, normalizeIfForm;
+
 /// Вид обхода: ключ `for_each_node` (тело на каждый узел, `@node` в scope)
 /// или `for_each_node_do` (сбор значений по узлам, тело один раз после
 /// обхода, без `@node`).
@@ -24,11 +26,29 @@ class PresetLoopFinal {
   final int? limit;
 }
 
+/// §656 (контракт 1.1.125, TEMPLATE_LANG §6.7.1) — операция `#do` под
+/// условием: `{"#if…": [cond, {"#append": …}, {"#append": …}?]}` (или
+/// длинная форма). Ветки уже проверены разбором ([PresetNodeLoop.parse]):
+/// каждая — ровно один глагол `#append` с правой частью нормы.
+class PresetDoIf {
+  const PresetDoIf({required this.ifKey, required this.form, required this.raw});
+
+  /// Ключ `#if…` операции (для предупреждений и валидации условия).
+  final String ifKey;
+
+  /// Нормализованная форма ([normalizeIfForm]).
+  final IfForm form;
+
+  /// Значение ключа как в шаблоне — для load-валидации условия.
+  final Object raw;
+}
+
 /// Обход узлов пресета.
 ///
 /// [filter] — условие языка `#if` (§4.1–4.2) без обёртки, null — истина;
 /// [collect] — `#do`: имя переменной пресета (без `@`) → правая часть
-/// `#append` (строка-ссылка или `{"#tpl": …}`); [finals] — `#final` по
+/// `#append` (строка-ссылка или `{"#tpl": …}`) либо [PresetDoIf] — операция
+/// под условием (§656); [finals] — `#final` по
 /// именам из [collect]. У [PresetNodeLoopKind.node] [collect] и [finals]
 /// пусты.
 class PresetNodeLoop {
@@ -75,7 +95,9 @@ class PresetNodeLoop {
   /// (`node_type`, `as`, непомеченные `filter`/`do`/`final`, `#do`/`#final` у
   /// `for_each_node`); нет `#do` у `for_each_node_do`; ключ `#do` без `@`;
   /// имя не из `vars` этого пресета или не `text_list`; глагол не `#append`
-  /// или не один; правая часть не строка и не `{"#tpl": "…"}`; `#final` на
+  /// или не один; правая часть не строка и не `{"#tpl": "…"}`; операция с
+  /// `#if…` (§656): второй `#if…`, соседний ключ, невалидная форма, ветка не
+  /// по норме глагола; `#final` на
   /// имя вне `#do`; чужой глагол или тип значения в `#final`.
   static PresetNodeLoop? parse(Map<String, dynamic> preset) {
     if (preset.containsKey(keyRemoved)) {
@@ -138,24 +160,37 @@ class PresetNodeLoop {
             'text_list, `@$name` is `$type`');
       }
       final op = e.value;
-      if (op is! Map || op.length != 1) {
-        throw FormatException('`$key.#do.@$name`: operation must be an object '
-            'with exactly one verb');
+      final where = '$key.#do.@$name';
+      final ifKeys = op is Map
+          ? op.keys.whereType<String>().where(isIfKey).toList()
+          : const <String>[];
+      if (op is Map && ifKeys.isNotEmpty) {
+        // §656 (контракт 1.1.125, §6.7.1) — операция под условием: ровно
+        // один ключ `#if…`, соседей нет, глаголы — в обеих ветках.
+        if (ifKeys.length > 1) {
+          throw FormatException('`$where`: exactly one `#if…` key is allowed '
+              'on an operation (got ${ifKeys.join(', ')})');
+        }
+        if (op.length != 1) {
+          throw FormatException('`$where`: `${ifKeys.first}` must be the only '
+              'key of the operation');
+        }
+        final ifKey = ifKeys.first;
+        final form = normalizeIfForm(_jsonMap(op)[ifKey]);
+        if (form == null) {
+          throw FormatException('`$where.$ifKey`: value must be `[cond, V, E]` '
+              'or an object with `#value`');
+        }
+        _parseVerb(form.value, '$where.$ifKey.value');
+        if (form.hasElse) _parseVerb(form.elseValue, '$where.$ifKey.else');
+        collect[name] = PresetDoIf(
+          ifKey: ifKey,
+          form: form,
+          raw: _jsonMap(op)[ifKey] as Object,
+        );
+        continue;
       }
-      final verb = op.keys.first;
-      if (verb != _kAppend) {
-        throw FormatException(
-            '`$key.#do.@$name`: unknown verb `$verb` (only `#append`)');
-      }
-      final rhs = op[_kAppend];
-      if (rhs is String) {
-        collect[name] = rhs;
-      } else if (rhs is Map && rhs.length == 1 && rhs[_kTpl] is String) {
-        collect[name] = <String, dynamic>{_kTpl: rhs[_kTpl]};
-      } else {
-        throw FormatException('`$key.#do.@$name.#append`: right side must be '
-            'a reference string or `{"#tpl": "…"}`');
-      }
+      collect[name] = _parseVerb(op, where);
     }
 
     final finals = <String, PresetLoopFinal>{};
@@ -207,6 +242,30 @@ class PresetNodeLoop {
       finals: finals,
     );
   }
+
+  /// Операция `{"#append": rhs}` → rhs (строка-ссылка или `{"#tpl": …}`).
+  /// Иное — [FormatException]: не объект, не один глагол, неизвестный
+  /// глагол, правая часть не той формы.
+  static Object _parseVerb(Object? op, String where) {
+    if (op is! Map || op.length != 1) {
+      throw FormatException('`$where`: operation must be an object '
+          'with exactly one verb');
+    }
+    final verb = op.keys.first;
+    if (verb != _kAppend) {
+      throw FormatException('`$where`: unknown verb `$verb` (only `#append`)');
+    }
+    final rhs = op[_kAppend];
+    if (rhs is String) return rhs;
+    if (rhs is Map && rhs.length == 1 && rhs[_kTpl] is String) {
+      return <String, dynamic>{_kTpl: rhs[_kTpl]};
+    }
+    throw FormatException('`$where.#append`: right side must be '
+        'a reference string or `{"#tpl": "…"}`');
+  }
+
+  static Map<String, dynamic> _jsonMap(Map m) =>
+      m is Map<String, dynamic> ? m : Map<String, dynamic>.from(m);
 
   /// Ключ `"@имя"` операции `#do` / `#final` → имя; без `@` — ошибка.
   static String _varRef(Object? key, String where) {

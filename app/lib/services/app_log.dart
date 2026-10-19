@@ -163,6 +163,11 @@ class AppLog extends ChangeNotifier {
 
   // ─── Public write API ─────────────────────────────────────────
 
+  /// §652 — перехват записей вместо буфера. Ставит его воркер регидрации
+  /// подписок (отдельный isolate): своего журнала у воркера нет, записи
+  /// разбора собираются и воспроизводятся на main после возврата.
+  void Function(DebugLevel level, String message, DebugSource source)? capture;
+
   void log(
     DebugLevel level,
     String message, {
@@ -170,6 +175,11 @@ class AppLog extends ChangeNotifier {
   }) {
     final line = message.trim();
     if (line.isEmpty) return;
+    final sink = capture;
+    if (sink != null) {
+      sink(level, line, source);
+      return;
+    }
     final queue = _entriesBySource[source];
     if (queue == null) return; // unknown source — silently ignore
     _appendOne(queue, source, level, line);

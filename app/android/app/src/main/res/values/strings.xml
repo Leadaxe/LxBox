@@ -64,4 +64,6 @@
          en-ключ; текст тот же, что в библиотеке. -->
     <string name="sora_editor_long_select">Long Select</string>
     <string name="sora_editor_clip_text_length_too_large">Text is too large to copy</string>
+    <string name="openconnect_sign_in_title">Sign-in required: %1$s</string>
+    <string name="openconnect_sign_in_text">The gateway is waiting for a code or a browser sign-in. Tap to continue.</string>
 </resources>

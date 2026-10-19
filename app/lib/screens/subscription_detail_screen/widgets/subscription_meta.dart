@@ -7,9 +7,10 @@ import '../../../controllers/subscription_controller.dart';
 import '../subscription_detail_format.dart';
 import '../../../services/l10n/locale_controller.dart';
 import 'node_warnings_sheet.dart';
+import '../../../services/telegram_link.dart'; // §657
 
 /// Header/meta block on the Nodes tab: url + copy, last-updated, node counts,
-/// traffic quota bar, expiry, support/web-page chips. Extracted verbatim from
+/// traffic quota bar, expiry, announce text (§648), support/web-page chips. Extracted verbatim from
 /// `_buildMeta`/`_buildTrafficBar`.
 class SubscriptionMeta extends StatelessWidget {
   const SubscriptionMeta({
@@ -125,6 +126,11 @@ class SubscriptionMeta extends StatelessWidget {
               ],
             ),
           ],
+          // §648 — описание подписки из заголовка `announce`.
+          if (entry.announce.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _AnnounceBlock(text: entry.announce),
+          ],
           // Support & web page links
           if (entry.supportUrl.isNotEmpty || entry.webPageUrl.isNotEmpty) ...[
             const SizedBox(height: 8),
@@ -134,9 +140,9 @@ class SubscriptionMeta extends StatelessWidget {
                 if (entry.supportUrl.isNotEmpty)
                   ActionChip(
                     avatar: Icon(
-                      entry.supportUrl.contains('t.me') ? Icons.telegram : Icons.open_in_new,
+                      isTelegramUrl(entry.supportUrl) ? Icons.telegram : Icons.open_in_new,
                       size: 16,
-                      color: entry.supportUrl.contains('t.me')
+                      color: isTelegramUrl(entry.supportUrl)
                           ? const Color(0xFF2AABEE)
                           : null,
                     ),
@@ -173,6 +179,51 @@ class SubscriptionMeta extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+/// §648 — описание подписки как есть: свёрнуто до [_collapsedLines] строк
+/// с многоточием; если текст длиннее, тап раскрывает и сворачивает его.
+/// Короткий текст на тап не реагирует.
+class _AnnounceBlock extends StatefulWidget {
+  const _AnnounceBlock({required this.text});
+
+  final String text;
+
+  @override
+  State<_AnnounceBlock> createState() => _AnnounceBlockState();
+}
+
+class _AnnounceBlockState extends State<_AnnounceBlock> {
+  static const _collapsedLines = 4;
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = Theme.of(context).textTheme.bodySmall;
+    return LayoutBuilder(builder: (context, constraints) {
+      // Длиннее ли текст свёрнутого вида — меряем той же раскладкой, что Text.
+      final painter = TextPainter(
+        text: TextSpan(text: widget.text, style: style),
+        maxLines: _collapsedLines,
+        textDirection: Directionality.of(context),
+        textScaler: MediaQuery.textScalerOf(context),
+      )..layout(maxWidth: constraints.maxWidth);
+      final overflows = painter.didExceedMaxLines;
+      painter.dispose();
+      final text = Text(
+        widget.text,
+        style: style,
+        maxLines: _expanded ? null : _collapsedLines,
+        overflow: _expanded ? null : TextOverflow.ellipsis,
+      );
+      if (!overflows) return text;
+      return InkWell(
+        borderRadius: BorderRadius.circular(4),
+        onTap: () => setState(() => _expanded = !_expanded),
+        child: text,
+      );
+    });
   }
 }
 

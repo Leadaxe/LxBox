@@ -144,7 +144,7 @@ on the main screen — [007-NODE_LIST](../007-NODE_LIST/FEATURE.md).
 | Auto-update subscriptions | Settings → Subscriptions; duplicated in the sources screen menu | on/off | on |
 | Update disabled subscriptions | same place; active only with auto-update enabled | on/off | off |
 | Custom User-Agent (global) | Settings → Subscriptions | string or a client preset; empty = `LxBox-android/<version>` | empty |
-| Send HWID | Settings → Subscriptions | on/off | off |
+| Send HWID | Settings → Subscriptions | on/off | on (§658) |
 | HWID · `x-hwid` | same place, Regenerate button | UUIDv4, generated on first display | — |
 | `x-device-os` / `x-ver-os` / `x-device-model` | same place | string; empty = the device value | `android` / OS version / model |
 | Update interval (per subscription) | Subscription → Settings | `-1` Don't auto-update · `0` Never (respect server) · 1/3/6/12/24/48/72/168 h | 24 h (online), `-1` (file) |

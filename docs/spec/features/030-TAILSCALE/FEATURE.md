@@ -144,7 +144,7 @@ lives in the core until "Save choice" writes it into the node.
   units "defaults seeded earlier: the preset is added once", "the preset is
   already there — no duplicate", "a fresh install is untouched; the first seed
   closes the step". **Mutation:** the preset re-added after deletion.
-- **P17. `skip_presets` survives a backup round trip.** Only `true` is stored;
+- **P17. `skip_tailscale_presets` (until 1.1.126 `skip_presets`) survives a backup round trip.** Only `true` is stored;
   an import that matches the node by body does not reset it. **Witness:** units
   "a single node: skip_presets=true of the own record is not reset", "a folder
   member: skip_presets=true is not reset on a repeated import". **Mutation:**
@@ -199,11 +199,11 @@ lives in the core until "Save choice" writes it into the node.
 | Knob | Values | Default |
 |------|--------|---------|
 | Wizard → Tailscale: Tag, Auth key, Control URL, Hostname, Ephemeral, Accept routes, Exit node | strings, two switches; Auth key required, masked with Show/Hide | `tailscale` · — · empty · `LxBox-<model>` · off · off · empty |
-| Node screen → "Skip presets" | on/off; visible on an own server or folder member when the template has a `for_each` preset for the node type | off |
+| Node screen → "Skip Tailscale presets" | on/off; visible on an own Tailscale server or folder member when the template has a node-loop preset that accepts it | off |
 | Preset "Tailscale networks" (`tailscale`) | on/off, sortable, `num` 945; variable "DNS" (`dns_enable`) | on · DNS on |
 | DNS server of type `tailscale` | `endpoint` (a Tailscale node, required), `accept_default_resolvers` | — |
 | Network tab → Exit node | a peer with `ExitNodeOption` or None; "Save choice" | from the body |
-| Network tab → Settings: Advertise this device as exit node, Allow LAN access while using exit node | two switches; the first is locked while an `exit_node` is saved, the second needs one | from the body (off) |
+| Network tab → Settings: Advertise this device as exit node | switch; locked while an `exit_node` is saved | from the body (off) |
 | Network tab → Log out | after confirmation | — |
 
 Core config keys the feature emits: `endpoints[]` entry `{type: tailscale, tag,
@@ -211,8 +211,8 @@ Core config keys the feature emits: `endpoints[]` entry `{type: tailscale, tag,
 `preferred_by`, `action: resolve`, `server`, `outbound`; `dns.servers` entry
 `{type: tailscale, tag: <node>-dns, endpoint: <node>}`; `dns.rules` entry with
 `preferred_by` and `server`. Save choice writes `exit_node` into the node body,
-the Settings switches — `advertise_exit_node` / `exit_node_allow_lan_access`
-(a switch turned off removes its key). Since core lx.12 the status stream
+the Settings switch — `advertise_exit_node` (turned off, it removes the
+key). Since core lx.12 the status stream
 carries the path to each device (`direct <ip:port>` / `peer relay` /
 `relay <region>`) and backend `health` warnings: the Network tab shows the
 path under each device and under the active exit, the warnings as an orange
@@ -221,7 +221,7 @@ Core RPC: `SubscribeTailscaleStatus`, `SetTailscaleExitNode`, `TailscaleLogout`,
 `StartTailscalePing`. Data files: `tailscale/<name>/` (the core's state of one
 node), `tailscale_state.json` (the index slot → node key → directory name).
 Warning code: `tailscale_core_unsupported`. Debug API: `GET /state` field
-`tailscale`, record field `skip_presets` (read-only).
+`tailscale`, record field `skip_tailscale_presets` (read-only).
 
 ## Inputs / Outputs
 
@@ -274,7 +274,7 @@ Delete node / Workspace delete → index record removed → directory removed wh
   as" copies the records (both slots are one tailnet device), Rename moves
   them, Delete drops them and removes unreferenced directories at once
   ([018-WORKSPACES · P12](../018-WORKSPACES/FEATURE.md#promises)).
-- The backup carries the node body (including `auth_key`) and `skip_presets`,
+- The backup carries the node body (including `auth_key`) and `skip_tailscale_presets`,
   never the identity: restored on another device the node registers anew and
   a one-time key already spent gives `invalid key`. Clearing the app data has
   the same effect — the wizard says so under Auth key.
@@ -301,13 +301,19 @@ Delete node / Workspace delete → index record removed → directory removed wh
   the identity from its state directory; the config is built the same way in
   both modes (`no witness`).
 - The wizard has no `exit_node_allow_lan_access`, `advertise_routes`,
-  `advertise_exit_node` or SSH fields. `advertise_exit_node` and
-  `exit_node_allow_lan_access` are switches in the Settings block of the
-  Network tab (own server or folder member; written into the body like Save
-  choice); `advertise_routes` and SSH stay JSON-only. The registry checks them
-  all (a default route in `advertise_routes` is dropped with a code,
-  `exit_node` conflicts with `advertise_exit_node`, the LAN switch requires a
-  saved `exit_node`).
+  `advertise_exit_node` or SSH fields. `advertise_exit_node` is a switch in
+  the Settings block of the Network tab (own server or folder member; written
+  into the body like Save choice); `exit_node_allow_lan_access`,
+  `advertise_routes` and SSH stay JSON-only. The registry checks them all (a
+  default route in `advertise_routes` is dropped with a code, `exit_node`
+  conflicts with `advertise_exit_node`, `exit_node_allow_lan_access` requires
+  `exit_node`).
+- `exit_node_allow_lan_access` is accepted from JSON and passed to the core,
+  but the core on Android does not apply it: tsnet has no OS router there, so
+  the field changes no route. Traffic is routed by sing-box rules: with an
+  exit node on, the local network stays reachable because the "Private IPs"
+  preset (local addresses → direct, position 950) or a user rule sends it
+  past the node; whatever reaches the Tailscale node goes into the tailnet.
 - Subnets behind peers (`accept_routes`) are matched by the same `preferred_by`
   condition; a subnet that collides with the home LAN is the user's call
   (position 945 comes before "Private IPs" at 950).
@@ -334,7 +340,7 @@ Delete node / Workspace delete → index record removed → directory removed wh
 |----------|--------------|----------|------|
 | Tailscale node | Creates and stores a Tailscale endpoint from the wizard or sing-box JSON, gates it by the core build and decides whether it can be a Direction. | P1–P5, P11 | [tailscale-node.md](FUNCTIONS/tailscale-node.md) |
 | Device identity and state | Gives every node a state directory bound to a stable key, keeps it through renames, moves and Workspaces, deletes it with the node and keeps it out of the backup. | P6–P10 | [device-identity-and-state.md](FUNCTIONS/device-identity-and-state.md) |
-| Tailnet DNS and routes | Serves every Tailscale node with a MagicDNS server and `preferred_by` rules through the `tailscale` preset, with a Skip presets opt-out and the `tailscale` DNS server type. | P12–P18 | [tailnet-dns-and-routes.md](FUNCTIONS/tailnet-dns-and-routes.md) |
+| Tailnet DNS and routes | Serves every Tailscale node with a MagicDNS server and `preferred_by` rules through the `tailscale` preset, with a Skip Tailscale presets opt-out and the `tailscale` DNS server type. | P12–P18 | [tailnet-dns-and-routes.md](FUNCTIONS/tailnet-dns-and-routes.md) |
 | Network tab | Shows the node state, this device, the tailnet devices and the exit node on the node screen, switches the exit on the fly and saves it into the body. | P19–P24 | [networks-tab.md](FUNCTIONS/networks-tab.md) |
 
 ## Related features

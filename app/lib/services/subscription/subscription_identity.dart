@@ -26,7 +26,8 @@ class SubscriptionIdentity {
   /// Пусто = слать брендированный `LxBox-android/<ver>` ([resolveSubscriptionUserAgent]).
   static String userAgentOverride = '';
 
-  /// Слать ли `x-hwid` + device-meta. OFF по умолчанию (решение №3).
+  /// Слать ли `x-hwid` + device-meta. §658 — включено по умолчанию
+  /// ([parseSendHwid]); до [init] — выкл, HWID ещё не заведён.
   static bool sendHwid = false;
 
   /// `x-hwid` — UUIDv4 (решение №2), переписываемый юзером.
@@ -51,12 +52,22 @@ class SubscriptionIdentity {
   static String get effectiveDeviceModel =>
       deviceModelOverride.isNotEmpty ? deviceModelOverride : deviceModel;
 
+  /// §658 — значение `subscription_send_hwid`: выключено только явным
+  /// `'false'`, отсутствие переменной = включено.
+  static bool parseSendHwid(String raw) => raw.trim() != 'false';
+
   /// Читает var'ы + device-info. Зовётся в `main()` после `VersionInfo`.
   static Future<void> init() async {
     userAgentOverride =
         (await SettingsStorage.getVar(varUserAgent, '')).trim();
-    sendHwid = (await SettingsStorage.getVar(varSendHwid, 'false')) == 'true';
+    sendHwid = parseSendHwid(await SettingsStorage.getVar(varSendHwid, ''));
     hwid = (await SettingsStorage.getVar(varHwid, '')).trim();
+    // §658 — включено по умолчанию: HWID заводится на старте, иначе гейт по
+    // непустому hwid молча снял бы заголовки.
+    if (sendHwid && hwid.isEmpty) {
+      hwid = generateUuidV4();
+      await SettingsStorage.setVar(varHwid, hwid);
+    }
     deviceOsOverride =
         (await SettingsStorage.getVar(varDeviceOs, '')).trim();
     verOsOverride = (await SettingsStorage.getVar(varVerOs, '')).trim();

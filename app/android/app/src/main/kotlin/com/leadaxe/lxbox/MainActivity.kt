@@ -1,8 +1,10 @@
 package com.leadaxe.lxbox
 
 import android.app.Activity
+import android.app.UiModeManager
 import android.content.ContentValues
 import android.content.Intent
+import android.content.res.Configuration
 import android.net.Uri
 import android.net.VpnService
 import android.os.Build
@@ -11,6 +13,7 @@ import android.os.Environment
 import android.provider.MediaStore
 import android.telephony.TelephonyManager
 import android.util.Log
+import android.view.WindowManager
 import android.widget.Toast
 import com.leadaxe.lxbox.vpn.BootReceiver
 import com.leadaxe.lxbox.vpn.BoxApplication
@@ -18,6 +21,7 @@ import com.leadaxe.lxbox.vpn.BoxVpnService
 import com.leadaxe.lxbox.vpn.L10n
 import com.leadaxe.lxbox.vpn.PermissionUtils
 import com.leadaxe.lxbox.vpn.QuickShortcuts
+import com.leadaxe.lxbox.vpn.ServiceNotification
 import com.leadaxe.lxbox.vpn.VpnPlugin
 import com.leadaxe.lxbox.vpn.VpnStatus
 import com.leadaxe.lxbox.vpn.WifiHistoryBridge
@@ -162,6 +166,40 @@ class MainActivity : FlutterActivity() {
                         // §375 — есть ли камера (для QR-сканера).
                         result.success(hasCamera())
                     }
+                    "isTelevision" -> {
+                        // §622 — режим телевизора: пункт приёма настроек только здесь.
+                        result.success(isTelevision)
+                    }
+                    "setKeepScreenOn" -> {
+                        // §622 — экран приёма держит экран включённым.
+                        val on = call.argument<Boolean>("on") ?: false
+                        runOnUiThread {
+                            if (on) {
+                                window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                            } else {
+                                window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                            }
+                        }
+                        result.success(null)
+                    }
+                    "lanPost" -> {
+                        // §622 — отправка на TV по физической сети мимо своего tun.
+                        val host = call.argument<String>("host")
+                        val port = call.argument<Int>("port")
+                        val path = call.argument<String>("path")
+                        val body = call.argument<ByteArray>("body")
+                        if (host == null || port == null || path == null || body == null) {
+                            result.error("INVALID_ARGS", "host/port/path/body is null", null)
+                        } else {
+                            LanTransferSender.post(
+                                host, port, path, body,
+                                call.argument<Int>("connectTimeoutMs") ?: 5000,
+                                call.argument<Int>("readTimeoutMs") ?: 60000,
+                                call.argument<String>("userAgent") ?: "",
+                                result,
+                            )
+                        }
+                    }
                     "canSaveToDownloads" -> {
                         // §374 — MediaStore-запись в Downloads без разрешений
                         // доступна с API 29 (scoped storage).
@@ -284,6 +322,12 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun handleQuickAction(intent: Intent?) {
+        // §654 C — тап по «Sign-in required»: Dart заберёт тег при старте или
+        // возврате и откроет диалог челленджа этого узла.
+        intent?.getStringExtra(ServiceNotification.EXTRA_OPENCONNECT_TAG)?.let { tag ->
+            BoxVpnService.openConnectOpenRequest = tag
+            intent.removeExtra(ServiceNotification.EXTRA_OPENCONNECT_TAG)
+        }
         val action = intent?.getStringExtra(EXTRA_ACTION) ?: return
         Log.d(TAG, "handleQuickAction action=$action currentStatus=${BoxVpnService.currentStatus.name}")
         // `extras.action` ставится только из tile или shortcut'а — поэтому
@@ -456,6 +500,17 @@ class MainActivity : FlutterActivity() {
     /// на приставке с подключённой веб-камерой — true, и сканер там работает.
     private fun hasCamera(): Boolean =
         packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_CAMERA_ANY)
+
+    /// §622 — устройство в режиме телевизора (Android TV, Google TV).
+    ///
+    /// `UI_MODE_TYPE_TELEVISION` или `FEATURE_LEANBACK`. Наличие файлового
+    /// пикера признаком TV не считается: бывают телефоны без DocumentsUI.
+    /// Режим за время жизни процесса не меняется — считаем один раз.
+    private val isTelevision: Boolean by lazy {
+        val ui = getSystemService(UI_MODE_SERVICE) as? UiModeManager
+        ui?.currentModeType == Configuration.UI_MODE_TYPE_TELEVISION ||
+            packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_LEANBACK)
+    }
 
     /// Пакеты-заглушки, которыми TV-framework затыкает отсутствующие
     /// системные приложения. Матчим по префиксу — имя различается между

@@ -79,8 +79,8 @@ String _randomizeHostCase(String host, Random rng) {
 /// §636 — [byTag]: уровни TLS-политики outbound'ов из источников по
 /// итоговому тегу; каждое поле отдельно: узел → источник → глобальный `vars`.
 /// `false` не снимает флаг, пришедший в теле, — только не дописывает.
-/// REALITY фрагментируется, только если флаг задан на уровне узла (§627:
-/// массовая настройка не знает, примет ли сервер резаный ClientHello).
+/// §665 — REALITY наследует как все: сервер, не принимающий резаный
+/// ClientHello, выключается «Off» на узле или источнике.
 void applyTlsFragment(
   Map<String, dynamic> config,
   Map<String, String> vars, {
@@ -101,8 +101,8 @@ void applyTlsFragment(
     final wantFragment = node.fragment ?? source.fragment ?? fragment;
     final wantRecord =
         node.recordFragment ?? source.recordFragment ?? recordFragment;
-    var addFragment = wantFragment && fieldAllowedOn(ob, 'tls.fragment');
-    var addRecord = wantRecord && fieldAllowedOn(ob, 'tls.record_fragment');
+    final addFragment = wantFragment && fieldAllowedOn(ob, 'tls.fragment');
+    final addRecord = wantRecord && fieldAllowedOn(ob, 'tls.record_fragment');
     if (!addFragment && !addRecord) continue;
     Map<String, dynamic> tls;
     // §393 — masque: TLS всегда включён по природе транспорта, выключателя
@@ -113,15 +113,6 @@ void applyTlsFragment(
       final t = ob['tls'];
       if (t is! Map<String, dynamic>) continue;
       if (t['enabled'] != true) continue;
-      // §627 — REALITY-сервер не принимает разрезанный ClientHello (с lx.4
-      // ядро режет и его), а маскировка у REALITY своя. §636 — кроме флага,
-      // поставленного на сам узел.
-      final reality = t['reality'];
-      if (reality is Map && reality['enabled'] == true) {
-        addFragment = addFragment && node.fragment != null;
-        addRecord = addRecord && node.recordFragment != null;
-        if (!addFragment && !addRecord) continue;
-      }
       tls = t;
     }
     // §606 — значение, которое ядро не разберёт как duration (`500`, `fast`,

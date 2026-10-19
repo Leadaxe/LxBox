@@ -22,11 +22,16 @@ class TlsPolicyTiles extends StatefulWidget {
     required this.onChanged,
     this.inherited = TlsPolicy.none,
     this.inheritedLevel = TlsLevel.global,
+    this.inheritNotice = false,
   });
 
   final TlsPolicy policy;
   final TlsPolicy inherited;
   final TlsLevel inheritedLevel;
+
+  /// §665 — экран узла: над строками нотис, когда `fragment` или
+  /// `record_fragment` включены не своим флагом, а уровнем выше.
+  final bool inheritNotice;
   final ValueChanged<TlsPolicy> onChanged;
 
   @override
@@ -85,6 +90,27 @@ class _TlsPolicyTilesState extends State<TlsPolicyTiles> {
           getLocalText.s("Inherited: On (subscription)"),
         (false, TlsLevel.subscription) =>
           getLocalText.s("Inherited: Off (subscription)"),
+      };
+
+  /// §665 — уровень, с которого узлу пришла включённая фрагментация; `null`
+  /// — нотиса нет. Оба поля с разных уровней — уровень `record_fragment`.
+  TlsLevel? _inheritedOnLevel() {
+    final p = widget.policy;
+    final up = widget.inherited;
+    final record = _inheritedBool(up.recordFragment, 'tls_record_fragment');
+    if (p.recordFragment == null && record.$1) return record.$2;
+    final fragment = _inheritedBool(up.fragment, 'tls_fragment');
+    if (p.fragment == null && fragment.$1) return fragment.$2;
+    return null;
+  }
+
+  String _inheritNoticeText(TlsLevel level) => switch (level) {
+        TlsLevel.global => getLocalText.s(
+            "Fragmentation is inherited from the global level. If this server does not accept a split ClientHello, set it to Off here."),
+        TlsLevel.folder => getLocalText.s(
+            "Fragmentation is inherited from the folder level. If this server does not accept a split ClientHello, set it to Off here."),
+        TlsLevel.subscription => getLocalText.s(
+            "Fragmentation is inherited from the subscription level. If this server does not accept a split ClientHello, set it to Off here."),
       };
 
   void _set(String key, Object? value) =>
@@ -169,9 +195,24 @@ class _TlsPolicyTilesState extends State<TlsPolicyTiles> {
   Widget build(BuildContext context) {
     final p = widget.policy;
     final up = widget.inherited;
+    final noticeLevel = widget.inheritNotice ? _inheritedOnLevel() : null;
+    final theme = Theme.of(context);
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
+        if (noticeLevel != null)
+          Padding(
+            key: const ValueKey('tls-inherit-notice'),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                _inheritNoticeText(noticeLevel),
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              ),
+            ),
+          ),
         _boolTile(
           keyName: 'fragment',
           icon: Icons.call_split,

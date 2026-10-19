@@ -461,14 +461,14 @@ void main() {
       expect(find.text('Ping'), findsOneWidget);
     });
 
-    testWidgets('Settings без выхода: LAN неактивен, advertise пишется',
+    testWidgets('Settings без выхода: advertise пишется, LAN-переключателя нет',
         (tester) async {
       await tester.binding.setSurfaceSize(const Size(800, 2400));
       addTearDown(() => tester.binding.setSurfaceSize(null));
       final saved = <Map<String, Object?>>[];
       await pump(tester,
           data: [_status()], onSaveFields: (f) async => saved.add(f));
-      expect(tile(tester, 'tailscale-exit-lan').onChanged, isNull);
+      expect(find.byKey(const ValueKey('tailscale-exit-lan')), findsNothing);
       await tester.tap(find.byKey(const ValueKey('tailscale-advertise-exit')));
       await tester.pump();
       expect(saved, [
@@ -485,7 +485,7 @@ void main() {
           body: const {'exit_node': 'gw'},
           onSaveFields: (f) async {});
       expect(tile(tester, 'tailscale-advertise-exit').onChanged, isNull);
-      expect(tile(tester, 'tailscale-exit-lan').onChanged, isNotNull);
+      expect(find.byKey(const ValueKey('tailscale-exit-lan')), findsNothing);
     });
 
     testWidgets('узел подписки — блока Settings нет', (tester) async {

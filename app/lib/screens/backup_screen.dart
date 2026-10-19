@@ -7,7 +7,6 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
-import '../services/automation/automation_sync.dart';
 import '../services/backup_service.dart';
 import '../services/dns/dns_backup.dart';
 import '../services/lx_backup.dart';
@@ -18,14 +17,20 @@ import '../services/settings_storage.dart';
 import '../services/error_format.dart';
 import '../services/l10n/locale_controller.dart';
 import '../services/ui_helpers.dart';
-import '../vpn/box_vpn_client.dart';
 import '../widgets/export_action_sheet.dart';
 import 'backup_screen/export_card.dart';
 import 'backup_screen/import_card.dart';
-import 'backup_screen/import_preview_dialog.dart';
 import 'backup_screen/lx_import_summary.dart';
 import 'backup_screen/lx_transfer_card.dart';
-import 'backup_screen/restore_summary.dart';
+import 'backup_screen/device_transfer_card.dart';
+import 'backup_screen/restore_flow.dart';
+import 'backup_screen/transfer_send_text.dart';
+import 'qr_scan_screen.dart';
+import 'transfer_receive_screen.dart';
+import '../services/transfer/transfer_code.dart';
+import '../services/transfer/transfer_entries.dart';
+import '../services/transfer/transfer_envelope.dart';
+import '../services/transfer/transfer_sender.dart';
 import '../services/utf8_decode.dart';
 import '../services/file_export.dart';
 import '../services/file_import.dart';
@@ -53,6 +58,18 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
 
   bool _busy = false;
 
+  /// §622 — пункты передачи телефон → TV: приём только на TV, отправка только
+  /// с камерой (P10). До ответа платформы не показываем ни один.
+  TransferEntries _transfer = TransferEntries.none;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(loadTransferEntries().then((e) {
+      if (mounted) setState(() => _transfer = e);
+    }));
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -60,6 +77,10 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       body: ListView(
         padding: const EdgeInsets.symmetric(vertical: 8).withSafeBottom(context),
         children: [
+          if (_transfer.receive) ...[
+            DeviceTransferCard.receive(busy: _busy, onReceive: _onReceive),
+            const SizedBox(height: 8),
+          ],
           ExportCard(
             serverLists: _expServerLists,
             routing: _expRouting,
@@ -83,6 +104,10 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
             }),
             onExport: _onExport,
           ),
+          if (_transfer.send) ...[
+            const SizedBox(height: 8),
+            DeviceTransferCard.send(busy: _busy, onSend: _onSendToTv),
+          ],
           const SizedBox(height: 8),
           ImportCard(
             busy: _busy,
@@ -219,42 +244,7 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       }
 
       if (!mounted) return;
-      final result = await showImportPreview(context, contents);
-      if (result == null) return; // cancelled
-
-      final apply = await _service.applyImport(
-        contents,
-        merge: result.merge,
-        include: result.include,
-      );
-      // §279 — restore мог привезти другой app_language: применить через
-      // владеющий пайплайн (LocaleController), не дожидаясь рестарта.
-      await LocaleController.I.reloadFromStorage();
-      // §605 — бэкап мог привезти другой тумблер приёма команд и emit-гейты.
-      await syncAutomationFromStorage();
-      if (!mounted) return;
-      // §607 — общий с главным экраном локализованный итог.
-      final summary = restoreSummaryText(apply);
-      final appliedAnything = restoreAppliedAnything(apply);
-      // applyImport пишет в SettingsStorage, но controllers (Subscription /
-      // Home / Routing screen state) держат in-memory snapshot — UI остаётся
-      // stale. Restart-кнопка вызывает quitApp(); юзер сам тапает иконку,
-      // app поднимается с fresh storage.
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(summary),
-            duration: const Duration(seconds: 6),
-            action: !appliedAnything
-                ? null
-                : SnackBarAction(
-                    label: getLocalText.s("Restart now"),
-                    onPressed: () =>
-                        unawaited(BoxVpnClient().quitApp()),
-                  ),
-          ),
-        );
-      }
+      await restoreFromContents(context, contents);
     } catch (e) {
       if (!mounted) return;
       showSnack(getLocalText.s("Import failed: %s", formatUserError(e).render()));
@@ -264,6 +254,87 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
   }
 
   // §219 — _snack вынесен в SnackHelper.showSnack (services/ui_helpers.dart).
+
+  // ——— §622: передача настроек телефон → TV ———
+
+  /// TV: экран приёма, затем общий путь восстановления (фича 031 P4).
+  Future<void> _onReceive() async {
+    final contents = await openTransferReceiveScreen(context);
+    if (contents == null || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      await restoreFromContents(context, contents);
+    } catch (e) {
+      if (!mounted) return;
+      showSnack(getLocalText.s("Import failed: %s", formatUserError(e).render()));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// Телефон: скан кода с TV → подтверждение → шифрование → отправка.
+  /// Категории — те же, что отмечены в карточке Export (P5).
+  Future<void> _onSendToTv() async {
+    final include = _exportInclude();
+    if (include.isEmpty) {
+      showSnack(getLocalText.s("Nothing to export — pick at least one category."));
+      return;
+    }
+    final outcome = await Navigator.of(context).push<ScanOutcome>(
+      MaterialPageRoute(builder: (_) => const QrScanScreen()),
+    );
+    if (!mounted) return;
+    if (outcome is! ScannedCode) {
+      final problem = outcome == null ? null : scanProblemText(outcome);
+      if (problem != null) showSnack(problem);
+      return;
+    }
+    final code = TransferCode.tryParse(outcome.value);
+    if (code == null) {
+      showSnack(getLocalText.s("This is not a LxBox transfer code"));
+      return;
+    }
+    final confirmed = await _confirmSend(code);
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _busy = true);
+    try {
+      final json = await _service.buildExport(include: include);
+      final envelope = await sealTransferEnvelope(utf8.encode(json), code.key);
+      final result = await TransferSender().send(code, envelope);
+      if (!mounted) return;
+      showSnack(transferSendResultText(result));
+    } catch (e) {
+      if (!mounted) return;
+      showSnack(getLocalText.s("Sending failed: %s", formatUserError(e).render()));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<bool?> _confirmSend(TransferCode code) {
+    final name = code.name.isEmpty ? code.addresses.first.host : code.name;
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(getLocalText.s("Send to %s?", name)),
+        content: Text(getLocalText.s(
+            "The selected categories are encrypted with the key from the code "
+            "and sent over the local network. The TV shows what arrived and "
+            "asks before applying it.")),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(getLocalText.s("Cancel")),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(getLocalText.s("Send")),
+          ),
+        ],
+      ),
+    );
+  }
 
   // ——— §103 фаза 4: перенос на десктоп (LX Backup) ———
 

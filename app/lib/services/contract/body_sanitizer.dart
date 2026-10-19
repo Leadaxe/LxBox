@@ -342,9 +342,10 @@ final class RegistrySanitizer {
     Set<String> kinds = const {},
   }) {
     final schema = ContractRegistry.I.schemaFor(scheme);
-    // Контракт 1.1.99 — у схемы с `fields_unchecked` правил нет: тело как
-    // написано, без кодов.
-    if (schema == null || schema.fieldsUnchecked) {
+    // Контракт 1.1.122 — снятый `fields_unchecked` выражен wildcard `*`
+    // (`order: ["*"]`): такое тело обходится общим путём и уходит как
+    // написано, без кодов (ключи сборки на своих местах).
+    if (schema == null) {
       return SanitizeResult(body, const []);
     }
 
@@ -402,6 +403,26 @@ final class RegistrySanitizer {
     return _truncateWarningValue(_renderWarningScalar(value));
   }
 }
+
+/// Контракт 1.1.122 — глубокая копия сквозного значения wildcard: санитайзер
+/// переписывает карты, и результат не должен делить вложенные объекты с
+/// исходным телом.
+Object? _deepCopy(Object? v) {
+  if (v is Map) {
+    return <String, dynamic>{
+      for (final e in v.entries) '${e.key}': _deepCopy(e.value),
+    };
+  }
+  if (v is List) return [for (final e in v) _deepCopy(e)];
+  return v;
+}
+
+/// Условие грамматики `condition` (без `source_kind`) по телу — общий суд
+/// для читателей вне санитайзера: `visible_when` модели формы (контракт
+/// 1.1.122). `any_set` = поле задано и не пустая строка; предикат по значению
+/// на отсутствующем пути: равенство и `in` ложны, `not_in` истинен.
+bool registryConditionHolds(Object? when, Map<String, dynamic> body) =>
+    _Ctx.conditionOnFinalBody(when, body);
 
 /// Печать значения по канону корпуса (см. [RegistrySanitizer.renderWarningValue]).
 String _renderWarningScalar(Object? value) {
@@ -622,10 +643,18 @@ final class _Ctx {
     // значит нет и его флага — печатаем как есть, ровно как вторая сторона.
     // Контракт 1.1.57 — неизвестные ключи судятся по алфавиту (корпус
     // `masque_legacy_flat_keys`), а не в порядке прибытия.
-    for (final key in src.keys.toList()..sort()) {
-      if (fields.containsKey(key)) continue;
-      if (prefix.isEmpty && _kBuildManagedKeys.contains(key)) continue;
-      warn('unknown_key', path: _join(prefix, key), value: src[key]);
+    //
+    // Контракт 1.1.122 — wildcard `*` в `order` ЭТОГО объекта: неописанный
+    // ключ не снимается и не судится, а копируется как есть (хвост
+    // [_sanitizeObjectBody]). Не наследуется: вложенный описанный объект без
+    // своего `*` строгий.
+    final wildcard = order.contains(kWildcardField);
+    if (!wildcard) {
+      for (final key in src.keys.toList()..sort()) {
+        if (fields.containsKey(key)) continue;
+        if (prefix.isEmpty && _kBuildManagedKeys.contains(key)) continue;
+        warn('unknown_key', path: _join(prefix, key), value: src[key]);
+      }
     }
 
     // 2. Значения — по одному, в порядке схемы: и результат, и список
@@ -800,6 +829,17 @@ final class _Ctx {
       written[e.key] = path;
       sanitized[path] = e.value;
     }
+    // Контракт 1.1.122 — сквозные ключи wildcard видны связям так же, как
+    // описанные (`unless_set: ["tls.client_key"]` на неописанном пути): без
+    // записи в снимке разобранная ветка читалась бы «ключ снят».
+    final wildcard = order.contains(kWildcardField);
+    if (wildcard) {
+      for (final key in src.keys) {
+        if (fields.containsKey(key)) continue;
+        if (prefix.isEmpty && _kBuildManagedKeys.contains(key)) continue;
+        sanitized[_join(prefix, key)] = src[key];
+      }
+    }
 
     // 3. Связи между полями — когда состав уже известен: `requires` смотрит
     // на соседей, `conflicts` снимает декларанта (§474).
@@ -821,11 +861,16 @@ final class _Ctx {
     // Ключи сборки (`type`/`tag`/`detour`) идут здесь же, на своих местах:
     // схема их не описывает, но снимать их нельзя — без `tag` запись
     // безымянна, без `detour` рушится маршрут.
+    //
+    // Контракт 1.1.122 — сквозные ключи wildcard идут как есть (глубокая
+    // копия), тоже на своих местах.
     for (final key in src.keys) {
       if (kept.containsKey(key)) {
         out[key] = kept[key];
       } else if (prefix.isEmpty && _kBuildManagedKeys.contains(key)) {
         out[key] = src[key];
+      } else if (wildcard && !fields.containsKey(key)) {
+        out[key] = _deepCopy(src[key]);
       }
     }
     // Ключи, появившиеся в санитайзинге (дефолты all_or_nothing лежат внутри
@@ -940,6 +985,14 @@ final class _Ctx {
     final disc = f.discriminator ?? 'type';
     final map = value.cast<String, dynamic>();
     final type = map[disc];
+    if (!map.containsKey(disc)) {
+      // Контракт 1.1.124 (PARSING_PRINCIPLES §6.4, `variantObject` лаунчера) —
+      // без дискриминатора варианта нет: `transport: {}` → `field_missing`
+      // на `transport.type`, объект снимается целиком, узел живёт.
+      final dp = _join(path, disc);
+      warn('field_missing', path: dp, params: {'field': dp});
+      return const _Value.drop();
+    }
     if (type is! String) {
       // Транспорт без `type` ядро не разберёт вовсе — тот же тип-фатал.
       return _invalid(f, path, value);
@@ -977,6 +1030,14 @@ final class _Ctx {
       dropObject = false;
       return const _Value.drop();
     }
+    // Контракт 1.1.124 (PARSING_PRINCIPLES §6.4, `nodeflow.objectField`
+    // лаунчера: пустой результат — объекта нет) — описанный объект, пустой
+    // после обхода, в тело не идёт, без кода: опустошён правилами (связь
+    // сняла единственное поле: `tls.client_certificate_path` без ключа) или
+    // пришёл как `{}` (`tls.ech: {}`). Для ядра пустой объект и отсутствие
+    // ключа одно и то же. Сквозной ключ под `*` сюда не попадает: его
+    // копирует [_sanitizeObjectBody] как написан, `{}` в том числе.
+    if (cleaned.isEmpty) return const _Value.drop();
 
     // §467 — `all_or_nothing` НЕ влечёт действия санитайзера.
     //

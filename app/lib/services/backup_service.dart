@@ -79,6 +79,7 @@ const _topLevelAppKeys = {
   'node_sort_mode',
   'node_manual_order',
   'profiler_retention_sec', // §219/§221 — окно Live-журнала (был в allowlist, не в export)
+  'editor_magnifier', // §660 — лупа выделения редактора кода
 };
 
 /// Sub-keys внутри `vars` относящиеся к Debug API category.

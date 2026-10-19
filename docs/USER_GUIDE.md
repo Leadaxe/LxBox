@@ -80,6 +80,7 @@ code — about the logic and the order in which to set things up.
 - [Backup moves settings to another device](#backup-moves-settings-to-another-device)
   - [Export saves the chosen categories to a file](#export-saves-the-chosen-categories-to-a-file)
   - [Import shows the file's contents before applying](#import-shows-the-files-contents-before-applying)
+  - [Set up a TV from your phone](#set-up-a-tv-from-your-phone)
   - [Transfer to desktop moves the shared part of settings to the desktop launcher](#transfer-to-desktop-moves-the-shared-part-of-settings-to-the-desktop-launcher)
 
 ---
@@ -215,7 +216,7 @@ forces the selected apps out of the VPN, whatever the app.
 
 Sections open from the side menu: swipe from the left edge or tap the ≡ icon
 on the home screen. Servers holds servers, subscriptions and folders; Routing
-holds directions, rules and Tunnel apps; DNS Settings holds DNS.
+holds directions, rules, DNS and Tunnel apps.
 
 1. A source of servers. Servers → add the source that fits the situation:
    - one config — a standalone server: link, QR or file;
@@ -229,7 +230,7 @@ holds directions, rules and Tunnel apps; DNS Settings holds DNS.
    L×Box; Allow-list — only the selected ones.
 4. **Rules** (Routing → Rules). Exceptions: ads → Block, local domains →
    Direct; ready-made sets are in Presets.
-5. **DNS** (DNS Settings). The default is the Shield DNS group, which survives
+5. **DNS** (Routing → DNS). The default is the Shield DNS group, which survives
    the failure of any single resolver. Change anything here only if you need
    strictly encrypted DNS or your own resolvers.
 6. Detour, optional. Set an exit through a chain of servers in the settings of
@@ -704,7 +705,7 @@ Catalog presets, in the order the tab shows them:
 | Google push (FCM) | Lets only Google push notifications out past the VPN: ports 5228–5230 and the FCM hosts. Notifications arrive with the screen off, and the Google Play region does not change. | No |
 
 > ⚠️ With DNS through the tunnel, Google push (FCM) needs a matching direct
-> DNS rule for the same hosts in DNS Settings. Without it the hosts resolve
+> DNS rule for the same hosts in Routing → DNS. Without it the hosts resolve
 > to a foreign region, and notifications do not arrive.
 
 #### A preset's parameters change in its copy on the Rules tab
@@ -715,7 +716,7 @@ preset banner with the preset's name and description. The Name field is
 read-only: the name comes from the preset. Next to it is the copy's on/off
 switch; on Traffic Processing the switch is inactive. A preset that adds a
 DNS server or a DNS rule carries a DNS chip and the line
-`This rule changes DNS settings`: its entries appear in DNS Settings.
+`This rule changes DNS settings`: its entries appear on the DNS tab.
 
 The **Outbound** parameter sets the exit for matching traffic: direct, block
 or a direction. Ru internet segment, Russia-only services, BitTorrent,
@@ -793,9 +794,9 @@ that goes into the config.
 
 ## 4. DNS decides which server resolves each name
 
-The **DNS Settings** screen sets how a site name becomes an IP. It has its own
-server list and its own rules, separate from the routing rules. Where: DNS
-Settings.
+The **DNS** tab of the Routing screen sets how a site name becomes an IP. It
+has its own server list and its own rules, separate from the routing rules.
+Where: Routing → DNS, after the Rules tab.
 
 The DNS server catalog includes Google, Cloudflare, OpenDNS, Quad9 and Yandex
 over UDP, DoT and DoH. Each server has an IP or profile and a direction it
@@ -853,7 +854,7 @@ server addresses and domains in routing rules. On a fresh install it is
 
 ### DNS Rules assign a DNS server to a domain
 
-The **DNS Rules** list on the DNS Settings screen sets which server resolves
+The **DNS Rules** list on the DNS tab sets which server resolves
 which domains. Like routing rules, DNS rules apply in order: you can drag
 them, and each has a switch. Rules in the list come from four sources:
 
@@ -997,7 +998,7 @@ twin `<direction>-auto`) is affected only if none of its members works.
 DNS servers come first in the list. Tapping a server opens its owner — the
 subscription, folder, standalone server, direction or chain — where you
 change the detour. DNS server rows do not respond to taps: a DNS server's
-exit changes in DNS Settings → server → Params → Outbound (detour).
+exit changes in Routing → DNS → server → Params → Outbound (detour).
 
 The tab sees only detour. A hop chain that contains this node does not
 appear in the list: a chain position is not a detour. For a working node,
@@ -1174,7 +1175,7 @@ IPv6 settings sit on several screens:
 |---|---|---|---|
 | **Enable IPv6** | VPN Settings → Core → TUN | Off | Gives the tunnel an IPv6 address. The main switch. |
 | **IPv6 address** | VPN Settings → Core → TUN | `fdfe:dcba:9876::1/126` | The tunnel's IPv6 address. Applies only when Enable IPv6 is on. |
-| **Strategy** | DNS Settings | `ipv4_only` | Which addresses to prefer in DNS resolution: `prefer_ipv4`, `prefer_ipv6`, `ipv4_only`, `ipv6_only`. |
+| **Strategy** | Routing → DNS | `ipv4_only` | Which addresses to prefer in DNS resolution: `prefer_ipv4`, `prefer_ipv6`, `ipv4_only`, `ipv6_only`. |
 | **Resolve strategy** | Routing → Rules → Traffic Processing → Params | `ipv4_only` | Which addresses to prefer when routing rules resolve domains. You cannot turn the preset off, but you can change the value in it. |
 | **Force IPv4** | Routing → Rules → preset → Params, in presets that resolve domains | On | Resolves the preset's domains to IPv4 only. |
 | **Force IPv4 (drop AAAA)** | Your own rule's editor → Params → DNS section | Off | Answers IPv6 queries for the rule's domains with an empty response, and traffic goes over IPv4. |
@@ -1183,12 +1184,12 @@ Enable IPv6 keeps the strategies in sync by itself. Turn it on, and Strategy
 and Resolve strategy switch to `prefer_ipv4`: IPv6 is in use, IPv4 takes
 priority. Turn it off, and both return to `ipv4_only`. VPN Settings has no
 Resolve strategy: you change it by hand in the Traffic Processing preset (which
-cannot be turned off), and Strategy in DNS Settings. `prefer_ipv6` suits a
+cannot be turned off), and Strategy in Routing → DNS. `prefer_ipv6` suits a
 network with full IPv6.
 
 A user rule has its own resolve strategy: Action & Resolve (the gear next to
 Action) → Resolve first → Strategy. By default the rule inherits Strategy
-from DNS Settings.
+from Routing → DNS.
 
 Order of enabling:
 
@@ -1209,7 +1210,8 @@ The **VPN Settings** screen holds the settings of the VPN itself: how much
 memory the core takes, when tunnels go to sleep, which parameters the virtual
 interface comes up with and in which mode L×Box receives traffic. Servers,
 directions and rules are not configured here: they live on the Servers and
-Routing screens, DNS in DNS Settings. Where: main menu ≡ → VPN Settings.
+Routing screens, DNS on the DNS tab of Routing. Where: main menu ≡ → VPN
+Settings.
 
 The screen has three tabs:
 
@@ -1430,8 +1432,8 @@ config, and keeps it while the tunnel runs.
 
 The section sets the default for all servers. The same four options can be
 overridden for one subscription or folder (its settings tab, **TLS** section)
-and for one server (the server's Settings tab, **TLS** section, between
-Detour and Skip presets). Each option is resolved on its own: server, then
+and for one server (the server's Settings tab, **TLS** section, under
+Detour). Each option is resolved on its own: server, then
 subscription or folder, then the global section; **Default** takes the value
 from the level above, and the row shows which one. **Off** on a server turns
 the option off for it even when it is on globally. A checkbox set on a REALITY
@@ -2420,13 +2422,15 @@ The **Backup & restore** screen saves L×Box settings to a JSON file and
 restores them from a file. Where: App Settings → General → Backup &
 restore. The screen serves to move to a new phone and to keep a copy before
 a reinstall. The screen has three cards: Export, Import and Transfer to
-desktop.
+desktop. A phone with a camera also shows Send to TV; an Android TV shows
+Receive from phone as the first card.
 
 | Task | What to choose |
 |---|---|
 | New phone, L×Box reinstall, a spare copy | Export, then Import |
 | Empty home screen right after install | Restore from backup under the + button on the home screen |
 | Moving settings to or from the desktop launcher | Transfer to desktop |
+| Setting up L×Box on an Android TV | Receive from phone on the TV, Send to TV on the phone |
 
 ### Export saves the chosen categories to a file
 
@@ -2488,6 +2492,40 @@ subscriptions update.
 The **Restore from backup** button on the empty home screen does the same
 without the selection window: it restores all categories of the file in
 Replace all mode and updates the subscriptions right away.
+
+### Set up a TV from your phone
+
+An Android TV gets the phone's settings over the local network: the TV
+shows a QR code, the phone scans it and sends. Nothing is typed with the
+remote. Both devices must be on the same network; a guest Wi-Fi often keeps
+devices from seeing each other.
+
+1. On the TV: Backup & restore → Receive from phone → **Show code**. On an
+   empty home screen the same item sits above Restore from backup. The
+   Receive settings screen shows the code, the device name, the address and
+   the time left; a code lives 10 minutes, **New code** makes another one.
+2. On the phone: Backup & restore → tick the categories in the Export card
+   → Send to TV → **Scan code**, point the camera at the TV and confirm
+   `Send to <TV name>?`.
+3. On the TV the Import backup window opens, the same as for a file:
+   choose categories and Merge or Replace all, apply, then **Restart now**.
+   From the empty home screen subscriptions update right away.
+
+The settings travel encrypted with a one-time key that only the QR code
+carries; the code works for one transfer. The phone sends past its own
+VPN, so the transfer works with the tunnel up. Debug API config stays off
+unless ticked, as in Export.
+
+| Line on the phone | What it means |
+|---|---|
+| `Sent. Confirm the restore on the TV.` | The TV accepted the settings; finish on the TV |
+| `Cannot reach the TV…` | Different networks or a guest Wi-Fi |
+| `The code has expired or was already used…` | Show a new code on the TV |
+| `The TV did not accept the code…` | The code is from another session; show a new one and scan again |
+| `This is not a LxBox transfer code` | The scanned QR code is something else |
+
+After five sends with a wrong code the TV closes the code. The receive
+item appears only on a TV, the send item only on a device with a camera.
 
 ### Transfer to desktop moves the shared part of settings to the desktop launcher
 

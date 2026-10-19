@@ -138,7 +138,7 @@ User-Agent и, по желанию, HWID-заголовками.
 | Auto-update subscriptions | Настройки → Subscriptions; дубль в меню экрана источников | вкл/выкл | вкл |
 | Update disabled subscriptions | там же; активна только при включённом автообновлении | вкл/выкл | выкл |
 | Custom User-Agent (глобальный) | Настройки → Subscriptions | строка или пресет клиента; пусто = `LxBox-android/<версия>` | пусто |
-| Send HWID | Настройки → Subscriptions | вкл/выкл | выкл |
+| Send HWID | Настройки → Subscriptions | вкл/выкл | вкл (§658) |
 | HWID · `x-hwid` | там же, кнопка Regenerate | UUIDv4, генерируется при первом показе | — |
 | `x-device-os` / `x-ver-os` / `x-device-model` | там же | строка; пусто = значение устройства | `android` / версия ОС / модель |
 | Update interval (на подписке) | Подписка → Settings | `-1` Don't auto-update · `0` Never (respect server) · 1/3/6/12/24/48/72/168 ч | 24 ч (онлайн), `-1` (файл) |

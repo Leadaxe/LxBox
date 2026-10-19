@@ -10,7 +10,7 @@ import 'package:lxbox/services/node_hash.dart';
 import 'package:lxbox/services/preset_nodes_view.dart';
 
 /// §578/§643 — узлы для пресетов с обходом узлов на экранах, обслуживаемые узлы
-/// строки пресета и видимость переключателя `Skip presets`.
+/// строки пресета и видимость переключателя `Skip Tailscale presets`.
 void main() {
   final shipped = jsonDecode(
           File('assets/wizard_template.json').readAsStringSync())
@@ -39,7 +39,7 @@ void main() {
         tagPrefix: '',
         detourPolicy: DetourPolicy.defaults,
         rawBody: node.toUri(),
-        skipPresets: skip,
+        skipTailscalePresets: skip,
         nodes: [node],
       );
 
@@ -95,11 +95,11 @@ void main() {
       final nodes = presetNodesForView([
         user(ts('home-ts'), skip: true),
         folder([
-          FolderMember(raw: ts('work-ts').toUri(), skipPresets: true),
+          FolderMember(raw: ts('work-ts').toUri(), skipTailscalePresets: true),
         ]),
         sub([ts('sub-ts')]),
       ], nodeTypes: types);
-      expect([for (final n in nodes) n.skipPresets], [true, true, false]);
+      expect([for (final n in nodes) n.skipTailscalePresets], [true, true, false]);
     });
 
     test('финальный тег последней сборки побеждает отображаемый', () {
@@ -116,8 +116,12 @@ void main() {
           .map((n) => n.tag), ['a']);
     });
 
-    test('типы шаблона — сужение #filter пресета tailscale', () {
-      expect(presetLoopNodeTypes(presets), types);
+    test('типы шаблона — сужение #filter пресетов tailscale и tunnel-ingress',
+        () {
+      // §656 — `tunnel-ingress` обходит wireguard / openvpn-client /
+      // openconnect.
+      expect(presetLoopNodeTypes(presets),
+          {...types, 'wireguard', 'openvpn-client', 'openconnect'});
       expect(
           presetLoopNodeTypes([
             for (final p in presets)
@@ -150,11 +154,12 @@ void main() {
   // при `skip_presets = false`.
   const tsBody = {'type': 'tailscale', 'tag': 'a'};
   const vlessBody = {'type': 'vless', 'tag': 'v', 'server': 'v.example'};
+  const wgBody = {'type': 'wireguard', 'tag': 'w'};
 
-  group('skipPresetsToggleVisible', () {
+  group('skipTailscalePresetsToggleVisible', () {
     test('свой сервер и член папки, #filter принимает узел — виден', () {
       expect(
-          skipPresetsToggleVisible(
+          skipTailscalePresetsToggleVisible(
               list: user(ts('a')),
               isMember: false,
               nodeTag: 'a',
@@ -162,7 +167,7 @@ void main() {
               presets: presets),
           isTrue);
       expect(
-          skipPresetsToggleVisible(
+          skipTailscalePresetsToggleVisible(
               list: folder([FolderMember(raw: ts('a').toUri())]),
               isMember: true,
               nodeTag: 'a',
@@ -173,7 +178,7 @@ void main() {
 
     test('подписка, узел вне #filter, шаблон без обхода — не виден', () {
       expect(
-          skipPresetsToggleVisible(
+          skipTailscalePresetsToggleVisible(
               list: sub([ts('a')]),
               isMember: false,
               nodeTag: 'a',
@@ -181,7 +186,7 @@ void main() {
               presets: presets),
           isFalse);
       expect(
-          skipPresetsToggleVisible(
+          skipTailscalePresetsToggleVisible(
               list: user(ts('a')),
               isMember: false,
               nodeTag: 'v',
@@ -189,7 +194,7 @@ void main() {
               presets: presets),
           isFalse);
       expect(
-          skipPresetsToggleVisible(
+          skipTailscalePresetsToggleVisible(
               list: user(ts('a')),
               isMember: false,
               nodeTag: 'a',
@@ -198,6 +203,55 @@ void main() {
                 for (final p in presets)
                   if (p.nodeLoop == null) p
               ]),
+          isFalse);
+    });
+
+    test('§656: WireGuard (его берёт tunnel-ingress) — не виден', () {
+      expect(
+          skipTailscalePresetsToggleVisible(
+              list: user(ts('a')),
+              isMember: false,
+              nodeTag: 'w',
+              nodeBody: wgBody,
+              presets: presets),
+          isFalse);
+    });
+  });
+
+  // §656 — блок `Incoming connections from this tunnel`: свой сервер и член
+  // папки с типом из трёх; у подписки и у tailscale — нет.
+  group('tunnelIngressTogglesVisible', () {
+    test('wireguard / openvpn-client / openconnect у своей записи — виден', () {
+      for (final type in ['wireguard', 'openvpn-client', 'openconnect']) {
+        expect(
+            tunnelIngressTogglesVisible(
+                list: user(ts('a')),
+                isMember: false,
+                nodeBody: {'type': type}),
+            isTrue,
+            reason: type);
+        expect(
+            tunnelIngressTogglesVisible(
+                list: folder([FolderMember(raw: ts('a').toUri())]),
+                isMember: true,
+                nodeBody: {'type': type}),
+            isTrue,
+            reason: type);
+      }
+    });
+
+    test('подписка, tailscale, vless — не виден', () {
+      expect(
+          tunnelIngressTogglesVisible(
+              list: sub([ts('a')]), isMember: false, nodeBody: wgBody),
+          isFalse);
+      expect(
+          tunnelIngressTogglesVisible(
+              list: user(ts('a')), isMember: false, nodeBody: tsBody),
+          isFalse);
+      expect(
+          tunnelIngressTogglesVisible(
+              list: user(ts('a')), isMember: false, nodeBody: vlessBody),
           isFalse);
     });
   });

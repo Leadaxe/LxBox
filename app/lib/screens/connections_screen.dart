@@ -6,7 +6,7 @@ import '../services/app_info_cache.dart';
 import '../services/format_utils.dart';
 import '../services/rule_name_resolver.dart';
 import '../vpn/cc_channel.dart';
-import 'connections_screen/connection_detail_sheet.dart';
+import 'connection_detail/detail_sheet.dart';
 import '../services/l10n/locale_controller.dart';
 
 /// §153 — «однобокое» (зависшее) соединение: TCP, прожившее ≥
@@ -382,6 +382,17 @@ class _ConnectionsViewState extends State<ConnectionsView> {
                     ],
                   ),
                 ),
+                // §661 — Row 3: `source / inbound`, только если вход не tun-in
+                // (соединение пришло через эндпоинт или локальный прокси).
+                if (conn.sourceLabel.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 22, top: 1),
+                    child: Text(
+                      conn.sourceLabel,
+                      style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
               ],
             ),
           ),

@@ -63,6 +63,12 @@ class HomeController extends ChangeNotifier
   StreamSubscription<List<CcTailscaleStatus>>? _tailnetSub;
   String? _tailnetKey;
 
+  /// §654 C — поток состояния openconnect (подписку в ядре держит натив).
+  StreamSubscription<CcOpenConnectSnapshot>? _openConnectSub;
+
+  /// §654 C — последний снапшот натива (в state — только при tunnelUp).
+  CcOpenConnectSnapshot _openConnectRaw = CcOpenConnectSnapshot.empty;
+
   /// §193 — resyncForReopen (§185 cold-start) делаем ОДИН раз за жизнь движка.
   /// На реконнектах refcount валиден (тот же движок) → resync только рвал бы
   /// connections-доставку (single-shot, без pull). false на свежем движке.
@@ -230,6 +236,33 @@ class HomeController extends ChangeNotifier
     // через тот же handler — он сам решит что эмитить.
     final pulled = await _vpn.getVpnStatus();
     _handleStatusEvent(TunnelStatusEvent(status: pulled, raw: pulled.name));
+    // §654 C — подписку openconnect держит натив; здесь только слушатель и
+    // текущий снапшот (висящий челлендж при открытии приложения).
+    _openConnectSub ??= _cc.openConnectStatus.listen(_onOpenConnect,
+        onError: (Object e) =>
+            _addDebug(DebugSource.app, 'cc openconnect stream error: $e'));
+    unawaited(refreshOpenConnect());
+  }
+
+  /// §654 C — снапшот openconnect от натива: при открытии приложения и на
+  /// возврате из фона (поток мог не дойти, пока движок спал).
+  Future<void> refreshOpenConnect() async {
+    final snap = await _cc.getOpenConnectStatus();
+    if (_disposed || snap == null) return;
+    _onOpenConnect(snap);
+  }
+
+  void _onOpenConnect(CcOpenConnectSnapshot snap) {
+    if (_disposed) return;
+    final prev = _openConnectRaw;
+    _openConnectRaw = snap;
+    if (snap.endpoints.isEmpty &&
+        snap.callback == null &&
+        prev.endpoints.isEmpty &&
+        prev.callback == null) {
+      return;
+    }
+    _emit(_state); // _emit кладёт снапшот в state по tunnelUp
   }
 
   /// §125 — перечитать tag→label Направлений из storage и положить в state. Зовётся
@@ -319,11 +352,13 @@ class HomeController extends ChangeNotifier
     _stopHeartbeat();
     _autoPingTimer?.cancel();
     _transientTimeoutTimer?.cancel();
+    _autoApplyRetry?.cancel(); // §667
     _statusSub?.cancel();
     _ccStatusSub?.cancel();
     _ccGroupsSub?.cancel();
     _groupsPullTimer?.cancel();
     _tailnetSub?.cancel();
+    _openConnectSub?.cancel(); // §654
     if (_tailnetKey != null) unawaited(_cc.releaseTailscaleStatus());
     super.dispose();
   }
@@ -340,7 +375,13 @@ class HomeController extends ChangeNotifier
     // закрывает весь класс разом; точечные `if (_disposed) return` после await
     // (§219) остаются как ранний выход, но больше не единственная защита.
     if (_disposed) return;
-    _state = next;
+    // §654 C — снапшот openconnect виден только при поднятом туннеле: при
+    // выключенном он протух (поток мог не дойти до спящего движка), а
+    // пришедший раньше перехода в connected показывается на переходе.
+    final oc = next.tunnelUp ? _openConnectRaw : CcOpenConnectSnapshot.empty;
+    _state = identical(oc, next.openConnect)
+        ? next
+        : next.copyWith(openConnect: oc);
     notifyListeners();
     _syncTailnetStatus();
   }
@@ -728,6 +769,12 @@ class HomeController extends ChangeNotifier
   @visibleForTesting
   void debugSetConfigRaw(String raw) =>
       _emit(_state.copyWith(configRaw: raw));
+
+  /// §667 — засеять снапшот работающего конфига (§311) без RPC к ядру: тесты
+  /// `saveParsedConfig` проверяют вердикт §324 против известного running.
+  @visibleForTesting
+  void debugSetRunningConfigRaw(String raw) =>
+      _emit(_state.copyWith(runningConfigRaw: raw));
 
   /// Перезапускает safety-timer на transient-фазу. Cancel'ит предыдущий
   /// (защита от спама `Future.delayed` при множественных stopping/
@@ -1118,6 +1165,84 @@ class HomeController extends ChangeNotifier
     // §141 P1.9a — гейт `_disposed`: контроллер мог умереть за время cooldown.
     Future.delayed(_recoveryCooldown, () {
       if (!_disposed && _lastReloadTap != null) notifyListeners();
+    });
+  }
+
+  /// §667 — единственный гейт «применять ли сохранённый конфиг к живому
+  /// туннелю» (§338). Пути пересборки (воронка home, правка цепочек и
+  /// добавление источников §558, Направление с home) лишь сообщают сюда, что
+  /// конфиг сохранён; решение — здесь, одно для всех. `true` — reload
+  /// запущен. Условия, все одновременно:
+  ///
+  /// 1. галка «Auto-restart VPN on settings change» включена;
+  /// 2. туннель up («перезапуск» ≠ «запуск»: лежащий подхватит конфиг на Start);
+  /// 3. `configChangedNeedRestart` — §324-вердикт: saved разошёлся с running
+  ///    (`fresh` → ядро уже на этом конфиге, рвать незачем);
+  /// 4. [canReload] — connected и cooldown 3 с прошёл.
+  ///
+  /// Срыв только по cooldown (п. 4 при connected) планирует ОДИН отложенный
+  /// повтор на момент его истечения: до §667 скип был молчаливым, и вторая
+  /// правка в пределах 3 с оставалась розовой плашкой (Д4). Повтор заново
+  /// проверяет все четыре условия (конфиг могли применить руками, туннель —
+  /// опустить) и второго таймера при ждущем не ставит. Срыв по не-connected
+  /// повтора не планирует.
+  ///
+  /// На окно от решения «запускаем» до конца [reloadVpn] держит
+  /// `state.autoApplying` — плашка «restart VPN» подавлена (см. поле).
+  Future<bool> applyIfAutoReload() async {
+    if (_disposed) return false;
+    if (!_state.tunnelUp) return false;
+    if (!_state.configChangedNeedRestart) {
+      AppLog.I.debug('§338: reload skipped — config identical to running');
+      return false;
+    }
+    if (!await SettingsStorage.getAutoReloadOnChange()) return false;
+    // Условия 2–3 — заново: галка читалась через await.
+    if (_disposed || !_state.tunnelUp || !_state.configChangedNeedRestart) {
+      return false;
+    }
+    if (!canReload) {
+      if (_state.tunnel == TunnelStatus.connected && _lastReloadTap != null) {
+        _scheduleAutoApplyRetry();
+        AppLog.I.warning(
+            '§338: reload skipped — cooldown, retry scheduled');
+      } else {
+        AppLog.I.warning(
+            '§338: reload skipped — not connected, banner stays');
+      }
+      return false;
+    }
+    _autoApplyRetry?.cancel();
+    _autoApplyRetry = null;
+    AppLog.I.info('§338: auto-reload on settings change');
+    _emit(_state.copyWith(autoApplying: true));
+    try {
+      await reloadVpn();
+    } finally {
+      if (!_disposed) _emit(_state.copyWith(autoApplying: false));
+    }
+    return true;
+  }
+
+  /// §667 — отложенный повтор [applyIfAutoReload] после cooldown. Один на
+  /// контроллер: второй вызов во время ожидания таймер не трогает.
+  Timer? _autoApplyRetry;
+
+  /// §667 — тестовый мост: ждёт ли повтор авто-применения.
+  @visibleForTesting
+  bool get autoApplyRetryPendingForTesting => _autoApplyRetry?.isActive ?? false;
+
+  void _scheduleAutoApplyRetry() {
+    if (_autoApplyRetry?.isActive ?? false) return;
+    // `canReload` требует строго БОЛЬШЕ cooldown'а — небольшой запас, чтобы
+    // повтор не споткнулся о тот же гейт на границе.
+    final elapsed = DateTime.now().difference(_lastReloadTap!);
+    var wait = _recoveryCooldown - elapsed + const Duration(milliseconds: 100);
+    if (wait.isNegative) wait = const Duration(milliseconds: 100);
+    _autoApplyRetry = Timer(wait, () {
+      _autoApplyRetry = null;
+      if (_disposed) return;
+      unawaited(applyIfAutoReload());
     });
   }
 
@@ -1992,6 +2117,7 @@ class HomeController extends ChangeNotifier
   /// в steady-state ничего не крутится.
   void onAppResumed() {
     unawaited(_resyncOnResume());
+    unawaited(refreshOpenConnect()); // §654 C
   }
 
   /// §141 P0.2 — app ушёл в фон: останавливаем heartbeat-таймер. Это

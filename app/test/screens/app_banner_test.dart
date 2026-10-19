@@ -20,13 +20,11 @@ void main() {
     bool configDirty = false,
     bool busy = false,
     bool crashPending = false,
-    bool autoApplying = false,
   }) =>
       activeBanners(s,
               configDirty: configDirty,
               busy: busy,
               crashPending: crashPending,
-              autoApplying: autoApplying,
               actions: actions)
           .map((b) => b.key)
           .toSet();
@@ -93,19 +91,19 @@ void main() {
       expect(keys(s, configDirty: true), {'settings_changed'});
     });
 
-    test('§338 restart подавлен на окно autoApplying', () {
+    test('§338 restart подавлен на окно autoApplying (§667 — из state)', () {
       final s = HomeState(
         tunnel: TunnelStatus.connected,
         configChangedNeedRestart: true,
       );
-      expect(keys(s, autoApplying: true), isEmpty,
+      expect(keys(s.copyWith(autoApplying: true)), isEmpty,
           reason: 'reload вот-вот случится сам — звать юзера нельзя');
       // Окно закрылось (reload сорвался, флаг не снят) → честный fallback.
       expect(keys(s), {'restart'});
     });
 
     test('§338 autoApplying НЕ трогает синюю (там свой busy-гейт)', () {
-      expect(keys(HomeState(), configDirty: true, autoApplying: true),
+      expect(keys(HomeState(autoApplying: true), configDirty: true),
           {'settings_changed'});
     });
 

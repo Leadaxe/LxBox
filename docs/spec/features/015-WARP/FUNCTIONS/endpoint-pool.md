@@ -68,8 +68,10 @@ the experiment's JSON window (same format).
   broken file — the built-in fallback list (matches the file).
 - **A broken pool** — the wizard works on defaults (the registration endpoint,
   empty presets), the experiment button is hidden.
-- **Live data (as of 2026-09).** WG: `162.159.192/193/195.0/24`,
-  `188.114.96.0/22`. MASQUE: `.198.2`, `.199.2` — both transports; `.198.1`,
+- **Live data (as of 2026-10).** WG: `162.159.192/193/195.0/24`,
+  `188.114.96.0/22`, `8.6.112`, `8.34.70`, `8.34.146`, `8.35.211`, `8.39.125`,
+  `8.39.204`, `8.39.214`, `8.47.69` (`/24`); per-block measurements —
+  [§651](../../../tasks/651-warp-8x-blocks-return.md). MASQUE: `.198.2`, `.199.2` — both transports; `.198.1`,
   `.199.1` — h3 only; the rest of `162.159.198/199.0/24` — h2 only; ports for
   both — 443/500/1701/4500/4443/8443/8095. The `ru` region adds Russian
   domains to both SNI pools.

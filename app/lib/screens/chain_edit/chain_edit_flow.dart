@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
 import '../../controllers/home_controller.dart';
@@ -64,15 +62,17 @@ Future<ChainEditOutcome?> editChainAndPersist(
   return const ChainEditOutcome(deleted: false);
 }
 
-/// §558 — пересобрать конфиг после правки источника и применить на лету.
+/// §558 — пересобрать конфиг после правки источника и сохранить.
 /// null — конфиг не собран; иначе true, если ушёл in-place reload.
 ///
 /// Директива оператора 24.08 («поменял цепочку — конфиг не перестроился
-/// сам»): правка источников при живом туннеле применяется сама через
-/// in-place reload (§367-механика, туннель не рвётся), а не баннером
-/// «перезапустите VPN». Гейт canReload даёт connected + cooldown 3s —
-/// серия быстрых правок не устроит шторм перезагрузок: применится
-/// последняя по баннеру, как раньше.
+/// сам»): правка источников доезжает до сборки сама. Применять ли её к
+/// живому туннелю, решает не этот путь, а общий гейт §338/§667
+/// (`HomeController.applyIfAutoReload`): галка, туннель up, §324-вердикт,
+/// cooldown. До §667 reload здесь шёл безусловно — галку игнорировал и
+/// занимал cooldown у следующего применения (решение владельца 19.10.2026:
+/// дефект). При выключенной галке и живом туннеле остаётся обычная плашка
+/// «restart VPN», как у всех прочих правок.
 Future<bool?> regenerateSourcesConfig(
   SubscriptionController subController,
   HomeController homeController,
@@ -80,7 +80,5 @@ Future<bool?> regenerateSourcesConfig(
   final config = await subController.generateConfig();
   if (config == null) return null;
   await homeController.saveParsedConfig(config);
-  final applied = homeController.canReload;
-  if (applied) unawaited(homeController.reloadVpn());
-  return applied;
+  return homeController.applyIfAutoReload();
 }

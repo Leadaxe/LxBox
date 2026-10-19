@@ -1885,6 +1885,190 @@
       }
     },
     {
+      "preset_id": "tunnel-ingress",
+      "for_each_node_do": {
+        "#filter": {
+          "@node.body.type": {
+            "#in": [
+              "wireguard",
+              "openvpn-client",
+              "openconnect"
+            ]
+          }
+        },
+        "#do": {
+          "@all_nodes": {
+            "#append": "@node"
+          },
+          "@allow_local_nodes": {
+            "#if": [
+              "@node.allow_local",
+              {
+                "#append": "@node"
+              }
+            ]
+          },
+          "@allow_lan_nodes": {
+            "#if": [
+              "@node.allow_lan",
+              {
+                "#append": "@node"
+              }
+            ]
+          },
+          "@allow_gateway_nodes": {
+            "#if": [
+              "@node.allow_gateway",
+              {
+                "#append": "@node"
+              }
+            ]
+          },
+          "@closed_nodes": {
+            "#if": [
+              {
+                "#not": "@node.allow_gateway"
+              },
+              {
+                "#append": "@node"
+              }
+            ]
+          }
+        }
+      },
+      "ui": {
+        "label": "Tunnel ingress",
+        "description": "Connections arriving from a client tunnel (WireGuard, AWG, OpenVPN, OpenConnect) are rejected unless the node's own switches allow them: access to this device, the local network, or using this device as a gateway. The settings below choose what happens to the rest and where allowed and gateway traffic goes.",
+        "default": true,
+        "num": 940,
+        "isSortable": true
+      },
+      "vars": [
+        {
+          "name": "all_nodes",
+          "type": "text_list",
+          "wizard_ui": "internal"
+        },
+        {
+          "name": "allow_local_nodes",
+          "type": "text_list",
+          "wizard_ui": "internal"
+        },
+        {
+          "name": "allow_lan_nodes",
+          "type": "text_list",
+          "wizard_ui": "internal"
+        },
+        {
+          "name": "allow_gateway_nodes",
+          "type": "text_list",
+          "wizard_ui": "internal"
+        },
+        {
+          "name": "closed_nodes",
+          "type": "text_list",
+          "wizard_ui": "internal"
+        },
+        {
+          "name": "closed_out",
+          "type": "outbound",
+          "default_value": "reject",
+          "title": "Incoming from tunnels",
+          "tooltip": "What happens to connections arriving from a tunnel that the node's switches did not allow. reject (default) and drop close them; an outbound forwards them."
+        },
+        {
+          "name": "allowed_out",
+          "type": "outbound",
+          "default_value": "direct-out",
+          "title": "Device and local network go to",
+          "tooltip": "Outbound for peers allowed to reach this device or the local network."
+        },
+        {
+          "name": "gateway_out",
+          "type": "outbound",
+          "default_value": "vpn-1",
+          "title": "Gateway traffic goes to",
+          "tooltip": "Outbound for peers allowed to use this device as a gateway."
+        }
+      ],
+      "rules": [
+        {
+          "#if": [
+            {
+              "@allow_local_nodes": "#notEmpty"
+            },
+            {
+              "inbound": "@allow_local_nodes",
+              "ip_cidr": [
+                "127.0.0.0/8",
+                "::1/128"
+              ],
+              "outbound": "@allowed_out"
+            }
+          ]
+        },
+        {
+          "#if": [
+            {
+              "@allow_lan_nodes": "#notEmpty"
+            },
+            {
+              "inbound": "@allow_lan_nodes",
+              "ip_is_private": true,
+              "outbound": "@allowed_out"
+            }
+          ]
+        },
+        {
+          "#if": [
+            {
+              "@allow_gateway_nodes": "#notEmpty"
+            },
+            {
+              "inbound": "@allow_gateway_nodes",
+              "outbound": "@gateway_out"
+            }
+          ]
+        },
+        {
+          "#if": [
+            {
+              "@all_nodes": "#notEmpty"
+            },
+            {
+              "inbound": "@all_nodes",
+              "outbound": "@closed_out"
+            }
+          ]
+        }
+      ],
+      "dns_rules": [
+        {
+          "#if": [
+            {
+              "#and": [
+                {
+                  "@closed_nodes": "#notEmpty"
+                },
+                {
+                  "@closed_out": {
+                    "#in": [
+                      "reject",
+                      "drop"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "inbound": "@closed_nodes",
+              "action": "reject"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "preset_id": "tailscale",
       "for_each_node": {
         "#filter": {
@@ -1893,7 +2077,7 @@
               "@node.body.type": "tailscale"
             },
             {
-              "#not": "@node.skip_presets"
+              "#not": "@node.skip_tailscale_presets"
             }
           ]
         }

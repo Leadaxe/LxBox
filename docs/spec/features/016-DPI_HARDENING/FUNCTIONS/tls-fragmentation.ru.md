@@ -86,10 +86,11 @@ Xray-JSON узла (`streamSettings.sockopt.dialerProxy` → `freedom` с
   отбрасываются без кода; две формы сразу — один флаг. У hysteria/
   hysteria2 запись не действует. Прочие `type` в `finalmask.tcp[]` —
   `json_field_unknown`.
-- REALITY и фрагментация (§627, §636): галки глобального уровня и уровня
-  подписки/папки REALITY-узел пропускают — массовая настройка не знает,
-  примет ли сервер разрезанный ClientHello; галка, поставленная на сам узел,
-  применяется. Mixed-case SNI к REALITY не применяется ни на каком уровне.
+- REALITY и фрагментация (§665): REALITY-узел наследует флаги как любой
+  узел, узел → источник → глобально. Сервер, не принимающий разрезанный
+  ClientHello, выключается «Off» на узле или источнике; узел, которому флаг
+  пришёл сверху, говорит об этом под секцией TLS. Mixed-case SNI к REALITY
+  не применяется ни на каком уровне.
 - `Off` на любом уровне флаги, пришедшие в теле узла (Xray `dialerProxy`,
   `finalmask.tcp`, авторский JSON), не снимает — только не дописывает.
 
@@ -124,5 +125,6 @@ Xray-JSON узла (`streamSettings.sockopt.dialerProxy` → `freedom` с
 | 6 | [574](../../../tasks/574-tls-fragment-yields-to-detour.md) | Released v2.25.7 | `tls.fragment` уступает `detour` сборки и системному движку |
 | 7 | [606](../../../tasks/606-audit-591-export-list-tun-warp-dpi-bugs.md) | Done | Невалидная пауза заменяется на `500ms` |
 | 8 | [606](../../../tasks/606-audit-591-export-list-tun-warp-dpi-bugs.md) | Done | Пинг и проба применяют глобальную фрагментацию, как туннель |
-| 9 | [636](../../../tasks/636-tls-settings-per-node-folder-subscription.md) | Implemented | Ручки на узле, папке и подписке; REALITY фрагментируется только от узлового флага |
+| 9 | [636](../../../tasks/636-tls-settings-per-node-folder-subscription.md) | Implemented | Ручки на узле, папке и подписке |
 | 10 | [642](../../../tasks/642-contract-1-1-118-sync.md) | Done | QUIC-протоколы (hysteria, hysteria2, tuic) флагов не получают |
+| 11 | [665](../../../tasks/665-tls-fragment-inherits-everywhere-reality-too.md) | Done | REALITY наследует фрагментацию как любой узел (627 отменена); нотис о наследовании у узла |

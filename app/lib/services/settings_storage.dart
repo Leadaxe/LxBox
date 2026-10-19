@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -92,6 +93,25 @@ class SettingsStorage {
   static bool get configDirty => _configDirty;
   static bool _configDirty = false;
 
+  /// §667 Р5 — поколение dirty: растёт на КАЖДОМ `configDirty = true`, не
+  /// только на переходе false→true. `generateConfig` запоминает его на входе
+  /// и гасит флаг лишь при равенстве на выходе: правка любого источника
+  /// (Routing, var, тумблер, состав), сделанная под летящей пересборкой, в
+  /// тот конфиг не попала и флаг переживает её по построению.
+  static int get configDirtyGeneration => _configDirtyGeneration;
+  static int _configDirtyGeneration = 0;
+  static const _selfWriteZoneKey = #lxboxConfigDirtySelfWrite;
+
+  /// §667 Р5 — записи самой пересборки (сиды пресетов §644/§578, DNS-листы
+  /// в `buildConfig`, `generatedVars`: clash-секрет и §419-heal резолверов)
+  /// входы конфига не меняют: собранный конфиг уже содержит записанное.
+  /// Подъём флага из [body] и всей его async-цепочки поколение не двигает.
+  /// Граница — Dart-зона, а не время: записи сборки идут вперемешку с
+  /// дисковым I/O, и правка пользователя, прилетевшая из UI в это окно,
+  /// выполняется в своей зоне — её подъём считается, как положено.
+  static Future<T> withoutDirtyBump<T>(Future<T> Function() body) =>
+      runZoned(body, zoneValues: {_selfWriteZoneKey: true});
+
   /// §338 (инспекция) — переход false→true логируется с caller-фреймами:
   /// 25+ сайтов поднимают флаг, и «кто зажёг синюю плашку» иначе не выяснить
   /// на устройстве. Только переход (не каждый повторный set) и только на
@@ -106,6 +126,7 @@ class SettingsStorage {
           .join(' ← ');
       AppLog.I.debug('configDirty ↑ $caller');
     }
+    if (v && Zone.current[_selfWriteZoneKey] != true) _configDirtyGeneration++;
     _configDirty = v;
   }
 
@@ -213,6 +234,7 @@ class SettingsStorage {
     'node_sort_mode',
     'node_manual_order',
     'profiler_retention_sec', // §044/new-profiler — окно хранения Live-журнала
+    'editor_magnifier', // §660 — лупа выделения редактора кода
   };
 
   /// Var-ключи, которые живут ТОЛЬКО в коде (app feature-flags), а НЕ в
@@ -652,6 +674,20 @@ class SettingsStorage {
   static Future<void> setInterruptOnSwitch(bool value) async {
     final c = await _load();
     c['interrupt_connections_on_switch'] = value;
+    SettingsStorage._cache = c;
+    await _save();
+  }
+
+  /// §660 — лупа выделения в редакторе кода (sora). Одна на всё
+  /// приложение. Не config-significant → без markConfigDirty. Default true.
+  static Future<bool> getEditorMagnifier() async {
+    final c = await _load();
+    return c['editor_magnifier'] != false;
+  }
+
+  static Future<void> setEditorMagnifier(bool value) async {
+    final c = await _load();
+    c['editor_magnifier'] = value;
     SettingsStorage._cache = c;
     await _save();
   }

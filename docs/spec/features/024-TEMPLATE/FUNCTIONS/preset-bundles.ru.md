@@ -37,11 +37,12 @@ DNS-серверы и DNS-правила.
 | `for_each_node_do{#filter, #do, #final}` | обход собирает значения узлов в собственные переменные пресета типа `text_list` (`#append`), `#final` снимает дубли, сортирует и ограничивает их; тело раскрывается один раз после обхода |
 | псевдопеременные `rule_enable`, `dns_enable` с `#on_change` | реагируют на переключение пресета и его DNS-части; пересчитывают глобальные |
 
-**Каталог** (11 пресетов в поставляемом шаблоне):
+**Каталог** (12 пресетов в поставляемом шаблоне):
 
 | Пресет | Умолч. | Номер | Что делает | Переменные |
 |---|---|---|---|---|
 | Traffic Processing | вкл, закреплён | 0 | `sniff`, `hijack-dns` для `protocol: dns`, `resolve` | Packet sniffing, Sniff timeout, Hijack DNS, Resolve destination IP¹, Resolve strategy¹ |
+| Tunnel ingress | вкл | 940 | соединения из клиентского туннеля (WireGuard, AWG, OpenVPN, OpenConnect): разрешённое переключателями `allow_*` узла идёт в свой outbound, остальное — reject; DNS закрытых пиров — reject | Incoming from tunnels (`reject`), Device and local network go to (`direct-out`), Gateway traffic goes to (`vpn-1`) |
 | Tailscale networks | вкл | 945 | на каждый узел Tailscale: `preferred_by` → узел, резолв его DNS | DNS |
 | Private IPs | выкл | 950 | `ip_is_private` | Outbound (`direct-out`) |
 | Block Ads | выкл | 960 | внешний `ads-all` → reject | — |
@@ -151,3 +152,4 @@ DNS-часть — в [005-DNS](../../005-DNS/FEATURE.ru.md); теги в про
 | 16 | [571](../../../tasks/571-rule-conditions-allowlist.md) | Done | Правило без условий выпадает |
 | 17 | [578](../../../tasks/578-tailscale-preset-template-for-each.md) | Выпущено в v2.25.8, обход заменён 643 | Пресет Tailscale: правило на каждый узел, поздний засев |
 | 18 | [643](../../../tasks/643-contract-1-1-119-node-loops.md) | Выпущено в v2.25.14 | `for_each_node` / `for_each_node_do` вместо `for_each`; пресет Tailscale фильтрует по `@node.body.type` |
+| 19 | [656](../../../tasks/656-contract-1130-tunnel-ingress.md) | в работе | Пресет Tunnel ingress (поздний дефолт), поля узла `allow_*`, `skip_presets` → `skip_tailscale_presets` |

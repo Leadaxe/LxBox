@@ -14,6 +14,7 @@ import '../services/format_utils.dart' show formatTimeHm;
 import '../services/l10n/template_aware_state.dart';
 import '../services/template_loader.dart';
 import '../services/l10n/locale_controller.dart';
+import '../services/subscription/user_agent.dart';
 import '../widgets/safe_bottom.dart';
 
 class SpeedTestScreen extends StatefulWidget {
@@ -158,8 +159,11 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
 
   String get _routeLabel {
     if (!_vpnEnabled) return getLocalText.s("Direct (no VPN)");
-    final tested =
-        !_running && _observedRouteServerId == _serverId(_selectedServer);
+    // §666 — первый кадр идёт до `_loadConfig`: `_servers` пуст, `_serverId`
+    // звать нельзя (RangeError при открытии экрана с поднятым туннелем).
+    final tested = !_running &&
+        _servers.isNotEmpty &&
+        _observedRouteServerId == _serverId(_selectedServer);
     if (!tested) {
       return getLocalText.s("Route depends on your rules, shown after the test");
     }
@@ -178,7 +182,8 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
   }
 
   Future<void> _runTest() async {
-    if (_running) return;
+    // §666 — до загрузки шаблона серверов нет: индексировать нечего.
+    if (_running || _servers.isEmpty) return;
     setState(() {
       _running = true;
       _status = getLocalText.s("Testing ping...");
@@ -254,7 +259,10 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
     for (var i = 0; i < 5; i++) {
       try {
         final sw = Stopwatch()..start();
-        final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 5));
+        final response = await http
+            .get(Uri.parse(url),
+                headers: {'User-Agent': resolveAppUserAgent()})
+            .timeout(const Duration(seconds: 5));
         sw.stop();
         if (response.statusCode < 400) {
           times.add(sw.elapsedMilliseconds);
@@ -347,7 +355,8 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
 
   Future<void> _downloadStream(http.Client client, String url) async {
     try {
-      final request = http.Request('GET', Uri.parse(url));
+      final request = http.Request('GET', Uri.parse(url))
+        ..headers['User-Agent'] = resolveAppUserAgent();
       final response = await client.send(request).timeout(const Duration(seconds: 15));
       await for (final chunk in response.stream) {
         _dlBytesTotal += chunk.length;
@@ -385,7 +394,10 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
   Future<void> _uploadStream(http.Client client, SpeedTestServer server,
       int total, Stopwatch sw) async {
     final uri = Uri.parse(server.uploadUrl!);
-    final headers = {'Content-Type': 'application/octet-stream'};
+    final headers = {
+      'Content-Type': 'application/octet-stream',
+      'User-Agent': resolveAppUserAgent(),
+    };
     final chunk = (server.uploadChunkBytes ?? total).clamp(1, total);
     final data = Uint8List(chunk);
     var sent = 0;
@@ -539,7 +551,7 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
-              onPressed: _running ? null : _runTest,
+              onPressed: _running || _servers.isEmpty ? null : _runTest,
               icon: Icon(_running ? Icons.hourglass_top : Icons.speed),
               label: Text(_running
                   ? getLocalText.s("Testing...")

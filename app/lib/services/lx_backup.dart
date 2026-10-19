@@ -408,7 +408,10 @@ class LxServer {
     this.folder = '',
     this.folderRef = '',
     this.id = '',
-    this.skipPresets = false,
+    this.skipTailscalePresets = false,
+    this.allowLocal = false,
+    this.allowLan = false,
+    this.allowGateway = false,
     this.detour,
     this.position = 0,
     this.autoGroup,
@@ -452,9 +455,33 @@ class LxServer {
   /// §438 — `id` корневой записи 1.0; у членов папки и у 0.x пусто.
   final String id;
 
-  /// §578 — поле записи `skip_presets` (пишется только `true`). Совпавший по
-  /// телу узел получает `true` из файла; отсутствие поля своё не сбрасывает.
-  final bool skipPresets;
+  /// §578/§656 — поля записи узла `skip_tailscale_presets` (старый ключ
+  /// `skip_presets` читается терпимо), `allow_local`, `allow_lan`,
+  /// `allow_gateway` (пишутся только `true`). Совпавший по телу узел
+  /// получает `true` из файла; отсутствие поля своё не сбрасывает.
+  final bool skipTailscalePresets;
+  final bool allowLocal;
+  final bool allowLan;
+  final bool allowGateway;
+
+  /// §656 — флаги записи файла поверх своих: только `true` (слияние
+  /// совпавшего узла). Все поля уже стоят — null.
+  ({bool skip, bool local, bool lan, bool gateway})? flagsOver({
+    required bool skip,
+    required bool local,
+    required bool lan,
+    required bool gateway,
+  }) {
+    final r = (
+      skip: skip || skipTailscalePresets,
+      local: local || allowLocal,
+      lan: lan || allowLan,
+      gateway: gateway || allowGateway,
+    );
+    return r == (skip: skip, local: local, lan: lan, gateway: gateway)
+        ? null
+        : r;
+  }
 
   /// Имя записи: `node_tag` схемы, а не подпись. У канона имени, кроме тега,
   /// нет (SPEC 112), и `label` старого файла становится им только когда
@@ -3001,7 +3028,10 @@ LxServer? _server10(
     folderRef: folder?.key ?? '',
     position: position,
     id: fileId,
-    skipPresets: node.skipPresets,
+    skipTailscalePresets: node.skipTailscalePresets,
+    allowLocal: node.allowLocal,
+    allowLan: node.allowLan,
+    allowGateway: node.allowGateway,
     tls: _carries(folder == null ? BackupRecord.server : BackupRecord.folderNode,
             j, 'tls')
         ? node.tls
@@ -3415,8 +3445,13 @@ const Set<String> _node10Keys = {
   'service',
   'reason',
   'sections',
-  // §578 — «пропустить пресеты» узла (запрос в контракт); пишется только true.
+  // §578 — «пропустить пресеты» узла: старый ключ, только терпимое чтение.
   'skip_presets',
+  // §656 (контракт 1.1.126) — поля записи узла; пишется только true.
+  'skip_tailscale_presets',
+  'allow_local',
+  'allow_lan',
+  'allow_gateway',
   // Фича 478 — вердикт на члене папки. Ключ известен обходу, чтобы старый
   // файл с `core_rejected` не давал `backup_unknown_field`; содержимое
   // срезает санитизация §489.
@@ -4060,12 +4095,21 @@ BackupServerMerge mergeBackupServers(
             ?.copyWith(overrideDetour: local.detourPolicy.overrideDetour);
         final side = (flags != null && flags != local.detourPolicy) ||
             (srv.tagPrefix != null && srv.tagPrefix != local.tagPrefix);
-        final skip = srv.skipPresets && !local.skipPresets; // §578
-        if (side || skip) {
+        // §578/§656 — поля записи: `true` из файла, своё не сбрасывается.
+        final rec = srv.flagsOver(
+          skip: local.skipTailscalePresets,
+          local: local.allowLocal,
+          lan: local.allowLan,
+          gateway: local.allowGateway,
+        );
+        if (side || rec != null) {
           merged[hit] = local.copyWith(
             detourPolicy: flags,
             tagPrefix: srv.tagPrefix,
-            skipPresets: skip ? true : null,
+            skipTailscalePresets: rec?.skip,
+            allowLocal: rec?.local,
+            allowLan: rec?.lan,
+            allowGateway: rec?.gateway,
           );
           applied++;
         }
@@ -4083,7 +4127,11 @@ BackupServerMerge mergeBackupServers(
         rawBody: body,
         // Фича 478 — прочие warnings записи; вердикт страховки срезан (§489).
         warnings: srv.warnings,
-        skipPresets: srv.skipPresets, // §578
+        // §578/§656 — поля записи из файла.
+        skipTailscalePresets: srv.skipTailscalePresets,
+        allowLocal: srv.allowLocal,
+        allowLan: srv.allowLan,
+        allowGateway: srv.allowGateway,
       ));
       pendingLinks.add((
         at: merged.length - 1,
@@ -4339,11 +4387,23 @@ int _mergeFolderMember(
       landings?[(folderAt, srv.name)] = here;
     }
     touched.add((list: folderAt, member: hit));
-    // §578 — `skip_presets: true` из файла; отсутствие своё не сбрасывает.
-    final skip = srv.skipPresets && !folder.members[hit].skipPresets;
-    if (!skip) return 0;
+    // §578/§656 — поля записи: `true` из файла; отсутствие своё не
+    // сбрасывает.
+    final own = folder.members[hit];
+    final rec = srv.flagsOver(
+      skip: own.skipTailscalePresets,
+      local: own.allowLocal,
+      lan: own.allowLan,
+      gateway: own.allowGateway,
+    );
+    if (rec == null) return 0;
     final members = folder.members.toList();
-    members[hit] = members[hit].copyWith(skipPresets: true);
+    members[hit] = own.copyWith(
+      skipTailscalePresets: rec.skip,
+      allowLocal: rec.local,
+      allowLan: rec.lan,
+      allowGateway: rec.gateway,
+    );
     merged[folderAt] = folder.copyWith(members: members);
     return 1;
   }
@@ -4353,7 +4413,11 @@ int _mergeFolderMember(
     // Фича 478 — прочие warnings записи; вердикт страховки срезан (§489).
     warnings: srv.warnings,
     detour: detour,
-    skipPresets: srv.skipPresets, // §578
+    // §578/§656 — поля записи из файла.
+    skipTailscalePresets: srv.skipTailscalePresets,
+    allowLocal: srv.allowLocal,
+    allowLan: srv.allowLan,
+    allowGateway: srv.allowGateway,
     tls: srv.tls ?? TlsPolicy.none, // §636
   );
   final here = member.node?.tag ?? '';

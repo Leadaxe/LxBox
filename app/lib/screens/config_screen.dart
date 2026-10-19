@@ -164,8 +164,9 @@ class _ConfigScreenState extends State<ConfigScreen> {
       if (outcome is! PickedFiles) {
         final problem = pickProblemText(outcome);
         if (problem != null && mounted) {
-          ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text(problem)));
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(problem)));
         }
         return;
       }
@@ -328,6 +329,8 @@ class _ConfigScreenState extends State<ConfigScreen> {
                       // §624 — липкие заголовки sora рисует только без переноса
                       // строк (решение владельца 11.10: перенос на Config выключен).
                       wordWrap: false,
+                      // §649 — перенос включается кнопкой, выбор не хранится.
+                      wrapToggle: true,
                       actions: [
                         IconButton(
                           icon: const Icon(Icons.copy, size: 16),

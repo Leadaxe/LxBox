@@ -64,6 +64,10 @@ final class MapperSections {
 
   bool _draftLoaded = false;
 
+  /// §652 — исходные тексты загруженных черновиков (ключ как у [_draft]):
+  /// вход воркера регидрации подписок, см. [draftTexts].
+  final Map<String, String> _draftTexts = {};
+
   /// Каталог черновиков на диске (тесты) либо `null` — читать из ассетов.
   String? _draftDir;
 
@@ -82,6 +86,7 @@ final class MapperSections {
   Future<void> loadDrafts({String? dir, List<String> files = const []}) async {
     _draftDir = dir;
     _draft.clear();
+    _draftTexts.clear();
     _cache.clear();
     _typesCache.clear();
     _documents = null;
@@ -97,6 +102,7 @@ final class MapperSections {
       }
       if (text == null) continue;
       _draft[key] = jsonDecode(text) as Map<String, dynamic>;
+      _draftTexts[key] = text;
       // Загрузка асинхронная: разбор между двумя файлами обязан видеть
       // черновик таким, какой он есть сейчас, а не список до загрузки.
       _typesCache.clear();
@@ -111,6 +117,7 @@ final class MapperSections {
     _cache.clear();
     _typesCache.clear();
     _draft.clear();
+    _draftTexts.clear();
     _documents = null;
     _draftLoaded = false;
     _draftDir = null;
@@ -138,14 +145,39 @@ final class MapperSections {
         final name = f.uri.pathSegments.last.replaceAll('.json', '');
         final key = sub.isEmpty ? name : '$sub/$name';
         try {
-          _draft[key] =
-              jsonDecode(f.readAsStringSync()) as Map<String, dynamic>;
+          final text = f.readAsStringSync();
+          _draft[key] = jsonDecode(text) as Map<String, dynamic>;
+          _draftTexts[key] = text;
         } catch (_) {
           // Битый черновик — та же «секции нет».
         }
       }
     }
     _typesCache.clear();
+  }
+
+  /// §652 — тексты черновиков для другого isolate (воркер регидрации): там
+  /// синглтон пуст, а разбор без черновых секций не падает, а молча
+  /// деградирует. Незагруженный черновик сначала догружается с диска — тем
+  /// же путём, которым его догрузил бы первый разбор на main.
+  Map<String, String> get draftTexts {
+    if (!_draftLoaded) _loadDraftsFromDiskSync();
+    return Map.unmodifiable(_draftTexts);
+  }
+
+  /// §652 — загрузка из [draftTexts] другого isolate: состояние то же, что
+  /// после [loadDrafts] на main (диск и ассеты не читаются).
+  void loadDraftsFromTexts(Map<String, String> texts) {
+    _draft.clear();
+    _draftTexts.clear();
+    _cache.clear();
+    _typesCache.clear();
+    _documents = null;
+    for (final e in texts.entries) {
+      _draft[e.key] = jsonDecode(e.value) as Map<String, dynamic>;
+      _draftTexts[e.key] = e.value;
+    }
+    _draftLoaded = true;
   }
 
   Future<String?> _readDraft(String rel) async {

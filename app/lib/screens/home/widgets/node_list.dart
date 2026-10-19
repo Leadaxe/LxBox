@@ -10,6 +10,7 @@ import '../../../services/direction_mutations.dart';
 import '../../../services/settings_storage.dart';
 import '../../../services/haptic_service.dart';
 import '../../../services/networks_direction.dart';
+import '../../../services/openconnect_auth.dart';
 import '../../../services/subscription/auto_updater.dart';
 import '../../../widgets/node_row.dart';
 import '../../../widgets/node_view_item.dart';
@@ -90,10 +91,12 @@ class HomeNodeList extends StatelessWidget {
     required this.state,
     required this.showEmptyGuide,
     required this.onRestoreFromBackup,
+    this.onReceiveFromPhone,
     required this.onTapToConnect,
     required this.rowKeyFor,
     required this.onSelectServer,
     required this.onViewPool,
+    this.onOpenConnectTap,
   });
 
   final HomeController controller;
@@ -107,6 +110,9 @@ class HomeNodeList extends StatelessWidget {
   /// (там же гейтит контролы — решение одно на весь экран).
   final bool showEmptyGuide;
   final Future<void> Function() onRestoreFromBackup;
+
+  /// §622 — приём настроек с телефона в гайде пустого экрана; null вне TV.
+  final VoidCallback? onReceiveFromPhone;
   final VoidCallback onTapToConnect;
 
   /// §203 — per-tag GlobalKey строки (для scroll-to-node) + колбэк «перейти к
@@ -116,6 +122,9 @@ class HomeNodeList extends StatelessWidget {
 
   /// §208 — открыть попап пула round_robin-Направления по его auto-тегу (View pool).
   final void Function(String autoTag) onViewPool;
+
+  /// §654 C — открыть диалог висящего челленджа openconnect узла.
+  final void Function(String tag)? onOpenConnectTap;
 
   @override
   Widget build(BuildContext context) {
@@ -129,6 +138,7 @@ class HomeNodeList extends StatelessWidget {
           subController: subController,
           autoUpdater: autoUpdater,
           onRestoreFromBackup: onRestoreFromBackup,
+          onReceiveFromPhone: onReceiveFromPhone,
         ),
       );
     }
@@ -145,6 +155,7 @@ class HomeNodeList extends StatelessWidget {
             subController: subController,
             autoUpdater: autoUpdater,
             onRestoreFromBackup: onRestoreFromBackup,
+            onReceiveFromPhone: onReceiveFromPhone,
           ),
         );
       }
@@ -586,6 +597,17 @@ class HomeNodeList extends StatelessWidget {
     final exitName = tailnetExitName(tailnet);
     // §613 — ядро lx.12 отдаёт путь до exit-пира в потоке состояния.
     final exitPath = exitName == null ? null : tailnetExitPath(tailnet);
+    // §654 C — узел openconnect: ждёт входа (второй фактор / SSO) или
+    // ошибка ядра. Записи ядра нет — строка как была.
+    final openConnect = state.tunnelUp
+        ? state.openConnect.endpoints[tag]
+        : null;
+    final ocRow = openConnectRowState(openConnect);
+    final ocTap = ocRow.kind == OpenConnectRowKind.waiting &&
+            openConnect?.challenge != null &&
+            onOpenConnectTap != null
+        ? () => onOpenConnectTap!(tag)
+        : null;
     final notificationWarnings = _notificationWarningsForRow(
       outboundType: outboundType,
       isDirectionAuto: isDirectionAuto,
@@ -643,6 +665,8 @@ class HomeNodeList extends StatelessWidget {
             now: DateTime.now(),
             withExit: true,
           ),
+          openConnectKind: ocRow.kind,
+          openConnectText: ocRow.text,
           matches: matchingSet.contains(tag),
           // §355 — мёртвая нода с зависимыми (DNS/ноды через detour):
           // ⚠-метка, тап по ней — sheet со списком пострадавших.
@@ -683,6 +707,7 @@ class HomeNodeList extends StatelessWidget {
                 homeController: controller,
                 openDependents: true)
             : null,
+        onOpenConnectTap: ocTap,
       ),
     );
     // §203 — GlobalKey на сам row (для Scrollable.ensureVisible); reorder-key
@@ -767,8 +792,13 @@ class HomeNodeList extends StatelessWidget {
     await controller.refreshDirectionLabels();
     if (!context.mounted) return;
     final config = await subController.generateConfig();
+    var applied = false;
     if (config != null && context.mounted) {
       await controller.saveParsedConfig(config);
+      // §667 Д2 — редактор Направления pushed-route: `_onReturnToHome` уже
+      // отработал с чистым флагом, воронка home эту правку не увидит. Гейт
+      // авто-применения зовём сами — он один для всех путей.
+      applied = await controller.applyIfAutoReload();
     }
     if (!context.mounted) return;
     // §248 Q3 — heal молчаливым не бывает: flag-unset из этого пути лечит
@@ -784,10 +814,11 @@ class HomeNodeList extends StatelessWidget {
               : getLocalText.s("Saved direction \"%1\$s\" — %2\$s", label,
                   healedParts.join('; ')))),
     );
-    // §338 — при включённой галке пересборка на возврате на home применит
-    // правку сама: просить рестарт нельзя, это прямая ложь.
-    if (state.tunnelUp && !await SettingsStorage.getAutoReloadOnChange()) {
-      if (!context.mounted) return;
+    // §338/§667 — просить рестарт только когда гейт reload не запустил, а
+    // применять есть что (туннель up, saved разошёлся с running — §324).
+    if (!applied &&
+        controller.state.tunnelUp &&
+        controller.state.configChangedNeedRestart) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(getLocalText.s("Restart VPN to apply changes"))),
       );

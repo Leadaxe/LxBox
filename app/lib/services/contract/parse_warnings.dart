@@ -136,8 +136,12 @@ bool annotateFromRawBody(NodeSpec node) {
   if (chained != null) annotateFromRawBody(chained);
 
   if (node.isGroup) return false;
-  // §585 — тип приложению незнаком: схемы нет, тело не проверяется.
-  if (node is UnknownTypeSpec) return false;
+  // §585 — тип вне реестра: схемы нет, тело не проверяется. Контракт
+  // 1.1.122 — тип со схемой без своей модели (`openconnect`) судится по
+  // дословной карте, как остальные: коды полей и снятие записи.
+  if (node is UnknownTypeSpec && !ContractRegistry.I.knowsType(node.type)) {
+    return false;
+  }
 
   // §472 шаг 8 — узел конвейера санитайзер уже прошёл, по карте, которую
   // построил маппер. Второй раз идти незачем, и та же отметка избавляет от
@@ -183,8 +187,22 @@ bool annotateFromRawBody(NodeSpec node) {
   // — ядро такое тело не примет, и Go снимает его при разборе
   // (`dropped[]`, корпус `authored/hard_tuic_uuid_invalid_removed`). Тело
   // подписки — по-прежнему только явный `drop_node`.
-  return res.explicitDropNode || (parsingAuthoredBody && res.body == null);
+  final drops =
+      res.explicitDropNode || (parsingAuthoredBody && res.body == null);
+  if (drops && res.dropFrom >= 0 && res.dropFrom < res.warnings.length) {
+    _dropReason[node] = res.warnings[res.dropFrom];
+  }
+  return drops;
 }
+
+/// Код, которым санитайзер снял запись (первый код снятия, `dropFrom`).
+final _dropReason = Expando<RegistryWarning>('registryDropReason');
+
+/// §654 (контракт 1.1.122) — код, которым проход по дословной карте снял
+/// узел ([annotateFromRawBody] вернул `true`); `null` — не снимал. Нужен
+/// `dropped[]`, когда код снятия не `error` (`openconnect_flavor_invalid` —
+/// warning: снят узел, остальные работают).
+RegistryWarning? registryDropReasonOf(NodeSpec node) => _dropReason[node];
 
 /// §473 — вход, которым приехало тело узла.
 ///

@@ -69,6 +69,10 @@ void main() {
       await c.rehydrationDone;
 
       final entry = c.entries.single;
+      // §652 — подписка выключена: на старте кэш не читается, признак
+      // появляется при догрузке (открытие экрана, включение, пересборка).
+      expect(entry.nodesNotLoaded, isFalse);
+      await c.ensureHydrated(entry);
       expect(entry.list.nodes, isEmpty);
       expect(entry.nodesNotLoaded, isTrue);
       final line = AppLog.I.entries.where((e) =>

@@ -52,7 +52,7 @@ the default.
 | `"#enable": <condition>` | the node exists only if the condition is true; the contents are not evaluated |
 | `"#on_change": {"#set": {"@x": …}}` | when the variable is toggled, write derived values once |
 | `{"ref": "<global>"}` in a preset's `vars` | a variable by reference to a global one |
-| `for_each_node: {"#filter": …}` on a preset | the body is repeated for each node that passes; `@node`, `@node.skip_presets`, `@node.body.<path>` in scope |
+| `for_each_node: {"#filter": …}` on a preset | the body is repeated for each node that passes; `@node`, `@node.skip_tailscale_presets`, `@node.body.<path>` in scope |
 | `for_each_node_do: {"#filter": …, "#do": …, "#final": …}` on a preset | the walk collects values into the preset's own `text_list` variables; the body is expanded once after the walk, without `@node` |
 
 Predicates: `"@v"` (bool), `{"@v": "literal"}`, `{"@v": "#notEmpty"|"#isEmpty"}`,
@@ -81,12 +81,12 @@ an empty result is `[]`, and a rule left with no condition is dropped with
 | Reference | Value |
 |---|---|
 | `@node` | the node's final tag in the config |
-| `@node.<field>` | a field of the node's storage record; today only `skip_presets` |
+| `@node.<field>` | a field of the node's storage record: `skip_tailscale_presets`, `allow_local`, `allow_lan`, `allow_gateway` (contract 1.1.126) |
 | `@node.body.<path>` | a field of the node body, a dot path |
 
 A missing field is the empty value: false in a condition, the key or element
 drops out of the body. A subscription node has no record, so
-`@node.skip_presets` is false for it.
+all four fields are false for it.
 
 ## Inputs / Outputs
 

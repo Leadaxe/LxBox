@@ -437,9 +437,17 @@ final class UserServer extends ServerList {
   /// `warnings` записи источника). В бэкап вердикт страховки не едет (§489).
   final List<StoredWarning> warnings;
 
-  /// §578 — поле записи `skip_presets`: узел не обслуживается пресетами с
-  /// `for_each_node*`, чей `#filter` читает поле. Хранится только `true`.
-  final bool skipPresets;
+  /// §578/§656 — поле записи `skip_tailscale_presets` (бывший
+  /// `skip_presets`, контракт 1.1.126): узел не обслуживается пресетом
+  /// `tailscale`, чей `#filter` читает поле. Хранится только `true`.
+  final bool skipTailscalePresets;
+
+  /// §656 (контракт 1.1.126) — поля записи `allow_local` / `allow_lan` /
+  /// `allow_gateway`: что разрешено пиру клиентского туннеля (пресет
+  /// `tunnel-ingress`). Хранится только `true`.
+  final bool allowLocal;
+  final bool allowLan;
+  final bool allowGateway;
 
   UserServer({
     required super.id,
@@ -451,7 +459,10 @@ final class UserServer extends ServerList {
     this.origin = UserSource.manual,
     this.rawBody = '',
     this.warnings = const [],
-    this.skipPresets = false,
+    this.skipTailscalePresets = false,
+    this.allowLocal = false,
+    this.allowLan = false,
+    this.allowGateway = false,
     super.nodes,
   });
 
@@ -468,7 +479,10 @@ final class UserServer extends ServerList {
     String? rawBody,
     List<StoredWarning>? warnings,
     List<NodeSpec>? nodes,
-    bool? skipPresets,
+    bool? skipTailscalePresets,
+    bool? allowLocal,
+    bool? allowLan,
+    bool? allowGateway,
   }) =>
       UserServer(
         id: id,
@@ -480,7 +494,10 @@ final class UserServer extends ServerList {
         origin: origin ?? this.origin,
         rawBody: rawBody ?? this.rawBody,
         warnings: warnings ?? this.warnings,
-        skipPresets: skipPresets ?? this.skipPresets,
+        skipTailscalePresets: skipTailscalePresets ?? this.skipTailscalePresets,
+        allowLocal: allowLocal ?? this.allowLocal,
+        allowLan: allowLan ?? this.allowLan,
+        allowGateway: allowGateway ?? this.allowGateway,
         nodes: nodes ?? this.nodes,
       );
 
@@ -497,11 +514,15 @@ final class UserServer extends ServerList {
           tls == other.tls &&
           rawBody == other.rawBody &&
           _eq.equals(warnings, other.warnings) &&
-          skipPresets == other.skipPresets);
+          skipTailscalePresets == other.skipTailscalePresets &&
+          allowLocal == other.allowLocal &&
+          allowLan == other.allowLan &&
+          allowGateway == other.allowGateway);
 
   @override
   int get hashCode => Object.hash(id, enabled, tagPrefix, detourPolicy, tls,
-      rawBody, _eq.hash(warnings), skipPresets);
+      rawBody, _eq.hash(warnings), skipTailscalePresets, allowLocal, allowLan,
+      allowGateway);
 }
 
 /// §234 — член папки: самодостаточный парсируемый фрагмент (URI-строка,
@@ -527,8 +548,12 @@ final class FolderMember {
   /// server_list_build). Сосед по папке — пара с `id` этой папки.
   final NodeLink detour;
 
-  /// §578 — поле записи `skip_presets`, как у `UserServer.skipPresets`.
-  final bool skipPresets;
+  /// §578/§656 — поля записи, как у `UserServer`:
+  /// `skip_tailscale_presets`, `allow_local`, `allow_lan`, `allow_gateway`.
+  final bool skipTailscalePresets;
+  final bool allowLocal;
+  final bool allowLan;
+  final bool allowGateway;
 
   /// §636 — узловое переопределение TLS-ручек члена.
   final TlsPolicy tls;
@@ -543,7 +568,10 @@ final class FolderMember {
     this.warnings = const [],
     this.detour = NodeLink.none,
     this.nameHint = '',
-    this.skipPresets = false,
+    this.skipTailscalePresets = false,
+    this.allowLocal = false,
+    this.allowLan = false,
+    this.allowGateway = false,
     this.tls = TlsPolicy.none,
     NodeSpec? node,
   }) : node = node ?? _parseFirst(raw, nameHint);
@@ -575,7 +603,10 @@ final class FolderMember {
     List<StoredWarning>? warnings,
     NodeLink? detour,
     String? nameHint,
-    bool? skipPresets,
+    bool? skipTailscalePresets,
+    bool? allowLocal,
+    bool? allowLan,
+    bool? allowGateway,
     TlsPolicy? tls,
   }) =>
       FolderMember(
@@ -584,7 +615,10 @@ final class FolderMember {
         warnings: warnings ?? this.warnings,
         detour: detour ?? this.detour,
         nameHint: nameHint ?? this.nameHint,
-        skipPresets: skipPresets ?? this.skipPresets,
+        skipTailscalePresets: skipTailscalePresets ?? this.skipTailscalePresets,
+        allowLocal: allowLocal ?? this.allowLocal,
+        allowLan: allowLan ?? this.allowLan,
+        allowGateway: allowGateway ?? this.allowGateway,
         tls: tls ?? this.tls,
         // Смена raw или имени → re-parse в конструкторе; иначе нода та же.
         node: raw == null && nameHint == null ? node : null,
@@ -601,7 +635,10 @@ final class FolderMember {
           _eq.equals(warnings, other.warnings) &&
           detour == other.detour &&
           nameHint == other.nameHint &&
-          skipPresets == other.skipPresets &&
+          skipTailscalePresets == other.skipTailscalePresets &&
+          allowLocal == other.allowLocal &&
+          allowLan == other.allowLan &&
+          allowGateway == other.allowGateway &&
           tls == other.tls &&
           _sameGroup(node, other.node));
 
@@ -611,7 +648,16 @@ final class FolderMember {
 
   @override
   int get hashCode => Object.hash(
-      raw, enabled, _eq.hash(warnings), detour, nameHint, skipPresets, tls);
+      raw,
+      enabled,
+      _eq.hash(warnings),
+      detour,
+      nameHint,
+      skipTailscalePresets,
+      allowLocal,
+      allowLan,
+      allowGateway,
+      tls);
 }
 
 /// §234 — папка ручных серверов: контейнер членов с общим toggle,
@@ -871,4 +917,41 @@ class DetourPolicy {
   @override
   int get hashCode => Object.hash(registerDetourServers, registerDetourInAuto,
       useDetourServers, overrideDetour, replaceDetourChain);
+}
+
+/// §578/§656 — поле записи узла (свой сервер и член папки, TEMPLATE_LANG
+/// §6.6): bool, хранится только `true`. У узла подписки записи нет.
+enum NodeRecordFlag {
+  skipTailscalePresets,
+  allowLocal,
+  allowLan,
+  allowGateway;
+
+  bool ofServer(UserServer u) => switch (this) {
+        skipTailscalePresets => u.skipTailscalePresets,
+        allowLocal => u.allowLocal,
+        allowLan => u.allowLan,
+        allowGateway => u.allowGateway,
+      };
+
+  bool ofMember(FolderMember m) => switch (this) {
+        skipTailscalePresets => m.skipTailscalePresets,
+        allowLocal => m.allowLocal,
+        allowLan => m.allowLan,
+        allowGateway => m.allowGateway,
+      };
+
+  UserServer onServer(UserServer u, bool v) => switch (this) {
+        skipTailscalePresets => u.copyWith(skipTailscalePresets: v),
+        allowLocal => u.copyWith(allowLocal: v),
+        allowLan => u.copyWith(allowLan: v),
+        allowGateway => u.copyWith(allowGateway: v),
+      };
+
+  FolderMember onMember(FolderMember m, bool v) => switch (this) {
+        skipTailscalePresets => m.copyWith(skipTailscalePresets: v),
+        allowLocal => m.copyWith(allowLocal: v),
+        allowLan => m.copyWith(allowLan: v),
+        allowGateway => m.copyWith(allowGateway: v),
+      };
 }

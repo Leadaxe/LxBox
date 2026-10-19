@@ -7,7 +7,7 @@ import '../per_app_trace_tab/widgets/live_view.dart';
 import 'aggregate_detail_sheet.dart';
 import 'profiler_filter.dart';
 import 'profiler_filter_sheet.dart';
-import 'traffic_event_detail_sheet.dart';
+import '../connection_detail/detail_sheet.dart';
 import '../../services/l10n/locale_controller.dart';
 
 /// §160 / §044-new-profiler — общий explorer трафика. Единый движок Profiler

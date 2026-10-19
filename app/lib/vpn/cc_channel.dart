@@ -4,6 +4,9 @@ import 'package:flutter/services.dart';
 
 import '../services/platform_channels.dart';
 import '../services/selector_info.dart'; // §251 — fold «селектор (выбор)»
+import 'cc_openconnect.dart';
+
+export 'cc_openconnect.dart';
 
 /// §122 Фаза 1a — Dart-клиент нативного libbox `CommandClient`-канала
 /// (`BoxCommandClient.kt`, Фаза 0). Замена `ClashApiClient` (HTTP-петли).
@@ -45,6 +48,9 @@ class CcChannel {
   static const EventChannel _tailscalePingChannel = EventChannel(
     PlatformChannels.ccTailscalePing,
   ); // §581
+  static const EventChannel _openConnectChannel = EventChannel(
+    PlatformChannels.ccOpenConnect,
+  ); // §654
 
   // ─────────────────────────── Streams ───────────────────────────
   //
@@ -238,6 +244,83 @@ class CcChannel {
   /// status/screen/profiler-стримы. Следующий urlTestOutbound поднимет свежий.
   Future<void> cancelPing() => _invoke('ccCancelPing');
 
+  // ─────────────────────── §654 C — OpenConnect ───────────────────────
+  // Подписку в ядре держит натив (старт VPN / reload по составу конфига);
+  // здесь — поток снапшотов, текущий снапшот и ответы на челлендж.
+
+  late final Stream<CcOpenConnectSnapshot> _openConnectStream =
+      _sharedStream<CcOpenConnectSnapshot>(
+        _openConnectChannel,
+        CcOpenConnectSnapshot.fromObject,
+      );
+
+  /// §654 C — состояние endpoint'ов openconnect и слушателя SSO.
+  Stream<CcOpenConnectSnapshot> get openConnectStatus => _openConnectStream;
+
+  /// §654 C — текущий снапшот (висящий челлендж при открытии приложения).
+  /// `null` — канала нет (VPN выключен, натив недоступен).
+  Future<CcOpenConnectSnapshot?> getOpenConnectStatus() async {
+    try {
+      final r = await _methods.invokeMethod<Object?>('ccGetOpenConnectStatus');
+      return r == null ? null : CcOpenConnectSnapshot.fromObject(r);
+    } on PlatformException {
+      return null;
+    } on MissingPluginException {
+      return null;
+    }
+  }
+
+  /// §654 C — тег узла из тапа по уведомлению «Sign-in required»; забирается
+  /// один раз.
+  Future<String?> takeOpenConnectOpenRequest() async {
+    try {
+      return await _methods.invokeMethod<String>('ccTakeOpenConnectOpenRequest');
+    } on PlatformException {
+      return null;
+    } on MissingPluginException {
+      return null;
+    }
+  }
+
+  /// §654 C — ответ формой: пары ключ → значение в порядке полей. `null` —
+  /// успех, иначе текст ошибки.
+  Future<String?> submitOpenConnectForm(
+    String tag,
+    String challengeId,
+    List<MapEntry<String, String>> values,
+  ) =>
+      _invokeError('ccSubmitOpenConnectForm', {
+        'tag': tag,
+        'challenge_id': challengeId,
+        'values': [
+          for (final v in values) {'key': v.key, 'value': v.value},
+        ],
+      });
+
+  /// §654 C — отмена челленджа: ядро логинится заново (новый код).
+  Future<String?> cancelOpenConnectChallenge(String tag, String challengeId) =>
+      _invokeError('ccCancelOpenConnectChallenge', {
+        'tag': tag,
+        'challenge_id': challengeId,
+      });
+
+  /// §654 C — слушатель SSO на `127.0.0.1:port`; URL редиректа натив сам
+  /// отдаёт ядру. `null` — слушает, иначе текст ошибки (порт занят).
+  Future<String?> startOpenConnectCallback(
+    String tag,
+    String challengeId,
+    int port,
+    List<String> prefixes,
+  ) =>
+      _invokeError('ccStartOpenConnectCallback', {
+        'tag': tag,
+        'challenge_id': challengeId,
+        'port': port,
+        'prefixes': prefixes,
+      });
+
+  Future<void> stopOpenConnectCallback() => _invoke('ccStopOpenConnectCallback');
+
   /// §579 — поднять / снять подписку ядра на состояние узлов Tailscale.
   Future<void> startTailscaleStatus() => _invoke('ccStartTailscaleStatus');
   Future<void> stopTailscaleStatus() => _invoke('ccStopTailscaleStatus');
@@ -399,10 +482,17 @@ class CcChannel {
     required String link,
     int timeoutMs = 0,
     int maxBytes = 0,
+    String userAgent = '',
   }) async {
     final r = await _methods.invokeMethod<Map<dynamic, dynamic>>(
       'probeGetUrl',
-      {'tag': tag, 'link': link, 'timeoutMs': timeoutMs, 'maxBytes': maxBytes},
+      {
+        'tag': tag,
+        'link': link,
+        'timeoutMs': timeoutMs,
+        'maxBytes': maxBytes,
+        'userAgent': userAgent,
+      },
     );
     return CcGetUrlResult.fromMap(_asMap(r ?? const {}));
   }
@@ -418,15 +508,24 @@ class CcChannel {
   /// `maxBytes` 0 → дефолт ядра 256 KiB (потолок 1 MiB); `timeoutMs` 0 →
   /// ограничен только вызовом. Реальный трафик через узел — зовётся ТОЛЬКО по
   /// явному действию юзера, фоновые обходы списка запрещены (kernel SPEC 058 §5).
+  ///
+  /// §659 — `userAgent` пустой → заголовков нет, ядро шлёт `Go-http-client`.
   Future<CcGetUrlResult> getUrlViaOutbound(
     String tag, {
     required String link,
     int timeoutMs = 0,
     int maxBytes = 0,
+    String userAgent = '',
   }) async {
     final r = await _methods.invokeMethod<Map<dynamic, dynamic>>(
       'ccGetUrlViaOutbound',
-      {'tag': tag, 'link': link, 'timeoutMs': timeoutMs, 'maxBytes': maxBytes},
+      {
+        'tag': tag,
+        'link': link,
+        'timeoutMs': timeoutMs,
+        'maxBytes': maxBytes,
+        'userAgent': userAgent,
+      },
     );
     return CcGetUrlResult.fromMap(_asMap(r ?? const {}));
   }
@@ -1059,6 +1158,9 @@ class CcConnection {
     required this.network,
     required this.domain,
     required this.destination,
+    this.source = '',
+    this.inbound = '',
+    this.inboundType = '',
     required this.rule,
     required this.uplink,
     required this.downlink,
@@ -1080,6 +1182,21 @@ class CcConnection {
   final String domain;
   final String destination;
   final String rule;
+
+  /// §661 — источник `ip:port` и вход (тег/тип inbound). При эндпоинтах и
+  /// локальных прокси мы шлюз: соединение приходит не только из `tun-in`.
+  /// Пусто на старом нативе.
+  final String source;
+  final String inbound;
+  final String inboundType;
+
+  /// §661 — стандартный вход: TUN устройства (или натив не отдал inbound).
+  bool get isStandardInbound => inbound.isEmpty || inbound == 'tun-in';
+
+  /// §661 — `source / inbound` для нестандартного входа, иначе `''`.
+  String get sourceLabel => isStandardInbound
+      ? ''
+      : (source.isNotEmpty ? '$source / $inbound' : inbound);
 
   /// Накопленный итог за соединение (всего передано). `getUplinkTotal`.
   final int uplink;
@@ -1182,6 +1299,9 @@ class CcConnection {
     network: m['network']?.toString() ?? '',
     domain: m['domain']?.toString() ?? '',
     destination: m['destination']?.toString() ?? '',
+    source: m['source']?.toString() ?? '',
+    inbound: m['inbound']?.toString() ?? '',
+    inboundType: m['inboundType']?.toString() ?? '',
     rule: m['rule']?.toString() ?? '',
     uplink: _int(m['uplink']),
     downlink: _int(m['downlink']),

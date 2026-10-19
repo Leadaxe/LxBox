@@ -3,7 +3,7 @@
 | Поле | Значение |
 |------|----------|
 | Тип | F (новая фича) |
-| Статус | Спека, к реализации не приступали |
+| Статус | Implemented (2026-10-16); ручные проверки на эмуляторах TV/телефона не проведены; выпущено в v2.25.16 |
 | Дата | 2026-10-09 |
 | Связанные | [Leadaxe/LxBox#163](https://github.com/Leadaxe/LxBox/issues/163); фича [031-DEVICE_TRANSFER](../features/031-DEVICE_TRANSFER/FEATURE.ru.md); §372 (Android TV); §375/§382 (QR-сканер); 017-BACKUP_AND_STORAGE |
 
@@ -62,10 +62,15 @@
 
 ### 3. Экран приёма — `lib/screens/transfer_receive_screen.dart`
 
-- Входы: экран бэкапа (`backup_screen.dart`), пустой главный экран
-  (`screens/home/restore_backup.dart`, рядом с «Restore from backup»). На
-  TV (`hasRealFilePicker == false` или признак leanback из §372) пункт
-  приёма стоит первым.
+- **Только TV (решение владельца 16.10).** Признака TV в коде нет —
+  новый метод канала `isTelevision` в `MainActivity`:
+  `UiModeManager.currentModeType == UI_MODE_TYPE_TELEVISION` или
+  `hasSystemFeature(FEATURE_LEANBACK)`; кешировать на процесс.
+  `hasRealFilePicker` признаком TV не считать (бывают телефоны без
+  DocumentsUI).
+- Входы (только на TV): экран бэкапа (`backup_screen.dart`) и пустой
+  главный экран (`screens/home/restore_backup.dart`, рядом с «Restore
+  from backup»), в обоих — первым пунктом.
 - QR через `flutter_zxing` (`zx.encodeBarcode`; кодирование есть в
   пакете, новых зависимостей нет), крупно, на белом поле.
 - Под QR: имя устройства, адрес(а), обратный отсчёт, состояние
@@ -81,6 +86,10 @@
   пост-шага от разных задач (§279, §605, §607).
 
 ### 4. Отправка — `lib/screens/transfer_send_screen.dart` (или шаг в `backup_screen.dart`)
+
+- Пункт «Send to TV» на экране бэкапа — на всех устройствах, кроме TV,
+  и только при наличии камеры (`UrlLauncher.hasCamera()` — то же условие,
+  что у кнопки QR-сканера в `subscriptions_screen.dart`).
 
 - Выбор категорий: тот же набор, что у экспорта, Debug API выключен по
   умолчанию (`BackupService.buildExport(include:)`).
@@ -145,6 +154,63 @@ LxBox в allow-mode кладёт себя в туннель (`BoxService.kt:961`
 адреса в коде передачи — или реальный TV и телефон в одной сети
 (телефон владельца — только с его разрешения).
 
+## Решение (реализация 2026-10-16)
+
+Узлы 1–4, 6 и Kotlin-часть узла 5 сделаны; ручная проверка на стенде не
+проводилась.
+
+- **Код и конверт:** `app/lib/services/transfer/transfer_code.dart`
+  (`TransferCode.encode/tryParse`, `toString` маскирует ключ),
+  `transfer_envelope.dart` (`sealTransferEnvelope` / `openTransferEnvelope`,
+  ошибки формата → 400, аутентификации → 403).
+- **Сервер приёма:** `app/lib/services/transfer/transfer_receiver.dart` —
+  `HttpServer.bind(anyIPv4, 0)`, один маршрут, порядок и коды как в узле 2;
+  в обработке один запрос за раз (чтение тела, расшифровка, разбор),
+  остальные `POST /transfer` получают 503 «busy» до чтения тела (ревью:
+  параллельные запросы по 32 МиБ роняли бы TV по памяти); 400 и 403 оба
+  идут в счётчик отказов (иначе мусором можно держать единственный слот
+  всю сессию); 422 сессию не закрывает. На отправителе 503 — отдельная
+  строка «The TV is busy with another request. Try again in a moment.» `pickTransferAddresses` / `localTransferAddresses` — адреса
+  для QR (отбрасываются также `ppp*`, `wg*`, `ipsec*`).
+- **Решение «показывать пункт»:** `app/lib/services/transfer/transfer_entries.dart`;
+  признаки — `UrlLauncher.isTelevision()` (новый метод канала `isTelevision`
+  в `MainActivity.kt`: `UI_MODE_TYPE_TELEVISION` или `FEATURE_LEANBACK`,
+  кеш на процесс в Dart) и `UrlLauncher.hasCamera()`.
+- **Экран приёма:** `app/lib/screens/transfer_receive_screen.dart` — QR
+  через `zx.encodeBarcode` (модуль = пиксель, рисуется `CustomPainter` на
+  белом поле), автофокус на «Cancel», `setKeepScreenOn` (новый метод
+  канала, снимается в `dispose`). Принятый бэкап возвращается через `pop`.
+- **Общий путь восстановления:** `app/lib/screens/backup_screen/restore_flow.dart`
+  (`restoreFromContents`), зовут импорт файла и приём в
+  `backup_screen.dart` и приём на пустом главном экране
+  (`home/restore_backup.dart` → `receiveFromPhone`, с перечитыванием
+  подписок через `onApplied`).
+- **Отправка:** шаг в `backup_screen.dart` (`_onSendToTv`, категории
+  карточки Export), карточка `backup_screen/device_transfer_card.dart`,
+  тексты итога `backup_screen/transfer_send_text.dart`, доставка
+  `app/lib/services/transfer/transfer_sender.dart`.
+- **Узел 5 (P7):** `app/android/.../LanTransferSender.kt`, метод канала
+  `lanPost`. Сокет создаётся `Network.socketFactory` сети Wi-Fi/Ethernet без
+  `TRANSPORT_VPN` (при нескольких — той, в чьей подсети адрес) и тем самым
+  привязан к её netId; netd пускает такую привязку для UID, которому
+  разрешено защищать сокеты, — владелец VPN среди них, `allowBypass` не
+  нужен. HTTP пишется руками: `HttpURLConnection` подчиняется
+  `network_security_config`, где cleartext разрешён только для loopback.
+  Нет такой сети или канала — `HttpClient` в Dart. Отказ соединения
+  трактуется как «код истёк/использован», таймаут — «недоступно».
+- **Пункты входа:** TV — первая карточка экрана Backup и кнопка над
+  «Restore from backup» в гайде пустого главного экрана
+  (`add_server_cta.dart`, `node_list.dart`, `home_screen.dart`); телефон с
+  камерой — карточка «Send to TV» под Export.
+- **Тесты:** `app/test/services/transfer/transfer_code_test.dart`,
+  `transfer_envelope_test.dart`, `transfer_receiver_test.dart` (реальный
+  сокет на loopback), `transfer_sender_test.dart`,
+  `transfer_entries_test.dart`, `app/test/screens/backup_screen_transfer_test.dart`.
+- **Доки:** фича 031 (свидетели, функции `receive-session`, `send-to-tv`),
+  017 «Связанные фичи», `docs/USER_GUIDE.md` / `.ru.md` → «Set up a TV
+  from your phone». Файл функции отправки назван `send-to-tv` (в узле 6
+  было `send-to-device`).
+
 ## Проверка (критерии приёмки)
 
 - Юниты: разбор кода (чужая схема, версия 2, без ключа), конверт
@@ -157,6 +223,8 @@ LxBox в allow-mode кладёт себя в туннель (`BoxService.kt:961`
 - То же с поднятым туннелем на обеих сторонах и выключенным
   `private-ip` на отправителе.
 - Весь экран приёма проходится с D-pad без касаний.
+- На эмуляторе телефона пункта приёма нет, на эмуляторе TV нет пункта
+  отправки (P10).
 
 ## Не входит
 

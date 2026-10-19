@@ -20,6 +20,19 @@ void main() {
     });
   });
 
+  group('§658 parseSendHwid — включено по умолчанию', () {
+    test('переменной нет → вкл', () {
+      expect(SubscriptionIdentity.parseSendHwid(''), isTrue);
+    });
+    test("явное 'false' → выкл", () {
+      expect(SubscriptionIdentity.parseSendHwid('false'), isFalse);
+      expect(SubscriptionIdentity.parseSendHwid(' false '), isFalse);
+    });
+    test("'true' → вкл", () {
+      expect(SubscriptionIdentity.parseSendHwid('true'), isTrue);
+    });
+  });
+
   group('§118 SubscriptionIdentity.fetchHeaders', () {
     setUp(() {
       SubscriptionIdentity.sendHwid = false;

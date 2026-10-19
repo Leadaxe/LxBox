@@ -29,8 +29,8 @@ MagicDNS server bound to a node.
 | Preset `tailscale` ("Tailscale networks") | on by default, `num` 945, sortable; `for_each` over `node_type: tailscale` with `filter: not skip_presets`; variable "DNS" (`dns_enable`, on) |
 | Records per node | `route.rules`: `{preferred_by: [<node>], action: resolve, server: <node>-dns}` then `{preferred_by: [<node>], outbound: <node>}`; `dns.servers`: `{type: tailscale, tag: <node>-dns, endpoint: <node>, description: "MagicDNS of the tailnet"}`; `dns.rules`: `{preferred_by: [<node>-dns], server: <node>-dns}` |
 | `dns_enable` off | only the route rule |
-| Record field `skip_presets` | own server and folder member; only `true` is stored; subscription node — always served |
-| "Skip presets" switch | on the node screen; visible when the template has a `for_each` preset for the node type |
+| Record field `skip_tailscale_presets` (until 1.1.126 `skip_presets`) | own server and folder member; only `true` is stored; subscription node — always served |
+| "Skip Tailscale presets" switch | on the node screen of a Tailscale node; visible when the template has a node-loop preset that accepts it |
 | DNS server type `tailscale` | `endpoint` — a Tailscale node (required), `accept_default_resolvers`; no address, no `detour` |
 | Late seeding | the list of late default presets (`tailscale`); the ids already seeded are remembered |
 

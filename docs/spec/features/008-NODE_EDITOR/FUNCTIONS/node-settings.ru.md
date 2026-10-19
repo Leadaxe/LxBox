@@ -23,7 +23,7 @@
 
 | Вкладка | Содержимое |
 |---|---|
-| Settings | Protocol, Server (только чтение); Tag с палитрой эмодзи; Detour server с превью пути; TLS (узловое переопределение ручек TLS Fragmentation, пишется сразу); Skip presets |
+| Settings | Protocol, Server (только чтение); Tag с палитрой эмодзи; Detour server с превью пути; TLS (узловое переопределение ручек TLS Fragmentation, пишется сразу); Skip Tailscale presets; Incoming connections from this tunnel |
 | Source | текст источника, редактируемый; подпись о виде источника |
 | JSON | тело, которое получит ядро, только чтение, подсветка; Copy JSON; Edit JSON |
 | Network | только у узла Tailscale — устройства tailnet, выбор Exit node |
@@ -37,9 +37,18 @@
 - **Detour server**: «None (direct)» или цель; подпись «Traffic goes directly to
   this server.» либо «Phone → … → <тег> → Internet» — полный путь по цепочке
   detour. Выбор, запреты и политика — [006](../../006-DETOUR_AND_BALANCE/FEATURE.ru.md).
-- **Skip presets**: «Presets will not add routing or DNS rules for this node.»
-  Виден, только если в шаблоне есть пресет с `for_each` под тип узла; у
-  подписки не бывает.
+- **Skip Tailscale presets**: «Presets will not add routing or DNS rules for
+  this node.» Виден только у узла `tailscale` и только если в шаблоне есть
+  пресет с обходом узлов, чей `#filter` его принимает; у узла подписки не
+  бывает. Поле записи `skip_tailscale_presets` (до 1.1.126 — `skip_presets`).
+- **Incoming connections from this tunnel** (§656): заголовок с пояснением
+  «Peers on the other side of this tunnel can open connections to this device.
+  Without the switches below they are rejected.» и три переключателя —
+  **Allow access to this device** (`allow_local`), **Expose local network**
+  (`allow_lan`), **Allow as gateway** (`allow_gateway`); их читает пресет
+  Tunnel ingress. Виден только у своего сервера и члена папки с типом
+  `wireguard` (и AWG), `openvpn-client`, `openconnect`; у узла подписки и у
+  Tailscale не бывает.
 
 ## Входы / Выходы
 
@@ -49,7 +58,8 @@
 
 ## Правила и инварианты
 
-- Detour и Skip presets записываются сразу при выборе; Tag и Source — только
+- Detour, Skip Tailscale presets и переключатели входящих записываются сразу
+  при выборе; Tag и Source — только
   кнопкой Save в заголовке.
 - **Выход с несохранёнными правками.** Правка — поле Tag или текст Source,
   отличные от сохранённого; вернул как было — правки нет. Back (системный,
@@ -95,3 +105,4 @@
 | 10 | [581](../../../tasks/581-tailscale-network-tab.md) | Implemented | Вкладка Network узла Tailscale |
 | 11 | [626](../../../tasks/626-unsaved-changes-everywhere.md) | Implemented | Диалог «Unsaved changes» при выходе с правкой Tag или Source |
 | 12 | [636](../../../tasks/636-tls-settings-per-node-folder-subscription.md) | Implemented | Секция TLS между Detour и Skip presets |
+| 13 | [656](../../../tasks/656-contract-1130-tunnel-ingress.md) | В работе | Skip Tailscale presets только у Tailscale; блок Incoming connections from this tunnel |

@@ -102,11 +102,19 @@ object ProbeSession : CommandServerHandler {
     /// Провал обмена приезжает исключением (libbox-обёртка мапит payload-error
     /// в Go-error), не-2xx — обычный результат со статусом. Форма Map зеркалит
     /// [BoxCommandClient.getUrlViaOutbound]: у Dart один разбор на обе ветки.
-    fun getUrl(tag: String, link: String, timeoutMs: Int, maxBytes: Int): Map<String, Any> {
+    fun getUrl(
+        tag: String,
+        link: String,
+        timeoutMs: Int,
+        maxBytes: Int,
+        userAgent: String,
+    ): Map<String, Any> {
         val cl = client.get()
             ?: return mapOf("error" to "probe session not running")
         return runCatching {
-            val r = cl.getURLViaOutbound(tag, link, timeoutMs, maxBytes, null)
+            val r = cl.getURLViaOutbound(
+                tag, link, timeoutMs, maxBytes, userAgentHeaders(userAgent),
+            )
             // Геттеры без `get`-префикса — см. BoxCommandClient.getUrlViaOutbound.
             mapOf(
                 "status" to r.status(),

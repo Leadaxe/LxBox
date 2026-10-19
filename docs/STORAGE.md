@@ -111,6 +111,7 @@ lxbox_settings.json                          # SettingsStorage (Dart), the main 
 ├─ node_sort_mode                string        §100 — the chosen node sort mode ('' means the template default)
 ├─ node_manual_order[]           list          §100 — the manual order of node tags (for mode=manual)
 ├─ profiler_retention_sec        int           §044 — the profiler's live-journal window, default 600 (10 min); NOT config-significant
+├─ editor_magnifier              bool          §660 — the code editor's selection magnifier, default true; NOT config-significant
 ├─ warp_account                  object?       §025 — the cached WARP account (see the section below)
 ├─ masque_account                object?       §130 — the cached MASQUE-WARP account (see the section below)
 ├─ tun_apps                      object        §046 — split tunneling (see the section below)
@@ -214,6 +215,7 @@ Android SharedPreferences:
   "node_sort_mode":     "",        // §100
   "node_manual_order":  [ … ],     // §100
   "profiler_retention_sec": 600,   // §044 — the profiler's live-journal window (NOT config-significant)
+  "editor_magnifier":   true,      // §660 — the code editor's selection magnifier (NOT config-significant)
   "warp_account":       { … },     // §025 — the cached WARP account (secrets)
   "masque_account":     { … },     // §130 — the cached MASQUE-WARP account (secrets)
   "tun_apps":           { … },     // §046 — split-tunneling
@@ -426,7 +428,7 @@ A flat `Map<String, String>` (values are stringified on read). It serves both **
 | `automation_emit_health` | `'false'` | §047 | Emitting health events. Default OFF. |
 | `automation_explainer_shown_v1` | `'false'` | §047 | One-shot: the automation explainer dialog has been shown. |
 | `subscription_user_agent` | — | identity headers | The User-Agent used when fetching subscriptions. |
-| `subscription_send_hwid` | — | identity headers | Whether to send the hwid headers on a fetch. |
+| `subscription_send_hwid` | absent = on | identity headers | Whether to send the hwid headers on a fetch. Only an explicit `'false'` turns it off (§658). |
 | `subscription_hwid` | — | identity headers | The HWID (potentially identifying). |
 | `subscription_device_os` | — | identity headers | The subscription's OS header. |
 | `subscription_ver_os` | — | identity headers | The OS version header. |
@@ -632,7 +634,10 @@ The `nodes` of a subscription are **not stored**: they are re-parsed from `sub_c
                                               // the text: a JSON object → json, a WG INI → wg_ini,
                                               // anything else → uri. The node is re-parsed from raw on load.
   "detour":        { "tag": "vpn-2" },        // personal detour, a NodeLink; absent = none
-  "skip_presets":  true,                      // §578 — optional, only `true` is written; see below
+  "skip_tailscale_presets": true,            // §578/§656 — optional, only `true` is written; see below
+  "allow_local":   true,                      // §656 — optional, only `true` is written; see below
+  "allow_lan":     true,                      // §656
+  "allow_gateway": true,                      // §656
   "detour_policy": { … },                     // LxBox, only when a flag is not default
   "tag_policy":    { "prefix": "Home " }      // LxBox, only when set. The prefix is part of the
                                               // server's root address: changing it rewrites the
@@ -676,17 +681,33 @@ is written in the new form on the next save; the storage form version does not
 change. The node's body, tag and identity stay as they were. Only a bare body
 goes to the core verbatim (the §455 build mode above).
 
-**`skip_presets` (§578).** A record field of a server and of a folder member:
-the node is not served by presets with a node loop (`for_each_node` /
-`for_each_node_do`, §643) whose `#filter` reads the field (the shipped
-`tailscale` preset does). Only `true` is written; a missing
-field means the node is served. The field travels in a backup: on import a node
-matched by its body takes `true` from the file, and a missing field does not
-reset the local value (only `true` is stored, so absence cannot be told from
-`false`). A subscription node has no record and is always served. The UI is the
-**Skip presets** switch on the node screen, shown when the `#filter` of some
-loop preset in the template accepts the node with `skip_presets = false`; the
-Debug API returns the field in the node record.
+**Node record flags (§578, §656, contract 1.1.126).** Four bool fields of a
+server and of a folder member, visible to a preset's node loop as
+`@node.<field>` (`for_each_node` / `for_each_node_do`, §643). Only `true` is
+written; a missing field is `false`. A subscription node has no record: all
+four are always `false`.
+
+- `skip_tailscale_presets` — the `tailscale` preset does not serve the node
+  (its `#filter` reads the field). Until contract 1.1.126 the key was
+  `skip_presets`: it is still read from storage and from a backup of any
+  version (both keys present — `true` if either is `true`) and never written.
+  The UI is the **Skip Tailscale presets** switch on the node screen, shown
+  for a `tailscale` node when the `#filter` of some loop preset in the
+  template accepts it with the field `false`.
+- `allow_local`, `allow_lan`, `allow_gateway` — what the `tunnel-ingress`
+  preset lets the peers of this client tunnel reach: services on the
+  device's tunnel address, private networks, or anything through the
+  device as a gateway. Without them the peers' connections are rejected.
+  The UI is the **Incoming connections from this tunnel** block of three
+  switches, shown for `wireguard` (and AWG), `openvpn-client` and
+  `openconnect` nodes only; the values of other types are kept but no preset
+  reads them.
+
+The fields travel in a backup: on import a new node takes them from the file;
+a node matched by its body takes `true` from the file, and a missing field
+does not reset the local value (only `true` is stored, so absence cannot be
+told from `false`). The Debug API returns them in the node record
+(read-only).
 
 #### Node sections — removed (§575)
 
@@ -721,7 +742,7 @@ detour. A subscription cannot be put into a folder, and there is no nesting.
     { "kind": "server", "tag": "Alpha", "enabled": true,
       "origin": { "kind": "uri", "raw": "vless://…#Alpha" },
       "detour": { "folder_id": "<this folder id>", "tag": "Jump" },    // §237 — personal detour
-      "skip_presets": true },                                          // §578 — as on a server
+      "skip_tailscale_presets": true },                                // §578/§656 — as on a server
     { "kind": "server", "tag": "Beta", "enabled": false,
       "origin": { "kind": "wg_ini", "raw": "[Interface]\n…" },
       "warnings": [ { "code": "core_rejected",
@@ -901,7 +922,8 @@ From the subscription's HTTP headers ([§027]):
   "support_url":           "…"?,
   "web_page_url":          "…"?,
   "profile_title":         "…"?,
-  "update_interval_hours": 24?
+  "update_interval_hours": 24?,
+  "announce":              "…"?    // §648 — описание подписки (заголовок announce)
 }
 ```
 
@@ -970,9 +992,9 @@ Only non-empty matchers are written. `name` is user-supplied and mutable.
 
 OR semantics inside a category, AND between them. `protocol` and `ip_is_private` are not made headless — they are lifted to the routing-rule level.
 
-`dns` ([§117] task 3, “DNS follows the rule”) is optional: the builder emits a mirror DNS rule `{rule_set: <the same headless one>, server: serverTag}` inside an atomic mirror group (ordered like the routing rules). Absent → the old behaviour. The gate: with non-empty `port` or `protocol` the mirror is not emitted.
+`dns` ([§117] task 3, “DNS follows the rule”) is optional: the builder emits a mirror DNS rule `{rule_set: <the same headless one>, server: serverTag}` inside an atomic mirror group (ordered like the routing rules). Absent → the old behaviour. The gate: with non-empty `port` (or port ranges), `protocol` or `network` the mirror is not emitted.
 
-`dns.forceIpv4` ([§256], Force IPv4) is optional: it suppresses AAAA (IPv6) for the rule's match through a serverless rule `{rule_set|match, ip_version: 6, action: predefined, rcode: NOERROR}` (so the app cleanly takes the A record). It is **orthogonal** to `enabled` and `serverTag` — the suppressor answers locally and needs no DNS server, so a rule may carry `forceIpv4` alone (`enabled: false`, `serverTag: ""`). It is emitted BEFORE the server mirror (the §253 order). The same port/protocol gate applies (the DNS layer is blind to port and protocol).
+`dns.forceIpv4` ([§256], Force IPv4) is optional: it suppresses AAAA (IPv6) for the rule's match through a serverless rule `{rule_set|match, ip_version: 6, action: predefined, rcode: NOERROR}` (so the app cleanly takes the A record). It is **orthogonal** to `enabled` and `serverTag` — the suppressor answers locally and needs no DNS server, so a rule may carry `forceIpv4` alone (`enabled: false`, `serverTag: ""`). It is emitted BEFORE the server mirror (the §253 order). The same port/protocol/network gate applies (the DNS layer is blind to port, protocol and network).
 
 `resolve` ([§247]) is optional: the builder emits a non-terminal route rule `{rule_set: <the same headless one>, action: resolve, …}` either BEFORE the terminal route (`only: false`, the flagship case — forcing `ipv4_only` for direct branches) or INSTEAD of it (`only: true`, an advanced fall-through). The gate: for inline rules it is emitted only when the domain group is non-empty (`resolveEligible`); for srs it is always emitted, since a `.srs` may contain domains.
 
@@ -1663,6 +1685,7 @@ with a warning. A legacy 0.12 file carries a root `chains[]` section (contract 0
 | `node_sort_mode` | `String` | §100 — the chosen node sort mode. `''` means the template default. CRUD: `getNodeSort` / `setNodeSort` (written as a pair with `node_manual_order`). |
 | `node_manual_order` | `List<String>` | §100 — the manual order of node tags (relevant in manual mode). Written together with `node_sort_mode`. |
 | `profiler_retention_sec` | `int` | §044 — the retention window of the profiler's live journal (the rolling buffer), in seconds. Default `600` (10 minutes), the UI offers 60/600/3600, and valid values are `> 0`. **NOT** config-significant. CRUD: `getProfilerRetentionSec` / `setProfilerRetentionSec`. |
+| `editor_magnifier` | `bool` | §660 — the selection magnifier of the code editor (sora), one setting for the whole app; the ⋮ menu of any editor toggles it. Default `true` (a missing key reads as `true`). **NOT** config-significant. Travels in the backup with the app settings. CRUD: `getEditorMagnifier` / `setEditorMagnifier`. |
 | `route_idle_suspend_reachable` | `String` | §272 — the reachable idle window (`lx.wg.idle_suspend_reachable`, §535). A duration string, default `'5m'`. **Config-significant** (`markConfigDirty`). CRUD: `getIdleSuspendReachable` / `saveIdleSuspendReachable`. |
 | `wg_build_max` | `int` | §542 — the WG/AWG build budget (`lx.wg.build_max`, core SPEC 097): how many endpoints stay built at once. Default `5`, `0` = no cap; the UI offers 0/3/5/8/12. Written to the config only together with `idle_suspend`. **Config-significant**. CRUD: `getWgBuildMax` / `saveWgBuildMax`. |
 | `wg_lazy_build` | `bool` | §542 — lazy WG/AWG build (`lx.wg.lazy_build`, core SPEC 097). Default `true`. `false` → neither `lazy_build` nor `build_max` is written. Written only together with `idle_suspend`. **Config-significant**. CRUD: `getWgLazyBuild` / `saveWgLazyBuild`. |

@@ -731,15 +731,18 @@ home/widgets/                   # node_list · home_controls · home_drawer (the
                              #   · add_server_cta
 routing_screen.dart          # the routing config (598 lines) plus LazyPersistMixin and _RoutingSrsCacheMixin (a part)
 routing_screen/                 # widgets/ (custom_rule/preset_catalog/route_final/routing_group/srs_status) + menus
-dns_settings_screen.dart     # the DNS settings (592 lines) plus the editor sheets, dns_server_resolver and widgets/
+dns_settings_tab.dart        # the DNS tab of Routing (§655; was the DNS Settings screen) plus DnsTabWrites;
+                             #   dns_settings_screen/ holds the editors, dns_server_resolver and widgets/
 custom_rule_edit_screen.dart # CustomRule editor (456) + custom_rule_edit/ (edit_controller, tabs/, sections/, widgets/)
 subscription_detail_screen.dart # a subscription's details (431 lines, a TabController) plus widgets/ (settings/source/meta)
 subscriptions_screen.dart    # the subscription list (445 lines) plus widgets/ and the helpers (clipboard/paste/share/context)
 stats_screen.dart            # the TabBarView host: Overview + Connections + LiveEvents (§288 removed PerAppTrace)
 stats_screen/overview_tab.dart  # the Overview tab plus overview_models
 stats_screen/                   # §264-266 Traffic Processing: trace_explorer + profiler_filter(+_sheet,
-                             #   profiler_filters) + traffic_event_detail_sheet · aggregate_detail_sheet ·
+                             #   profiler_filters) + aggregate_detail_sheet ·
                              #   memory_detail_sheet · routing_section (the details are in features/044)
+connection_detail/              # §662 one connection card for Conns and the profiler feed:
+                             #   detail_data (adapters from CcConnection / TrafficEvent) + detail_sheet
 live_events_tab.dart         # the Stats “Profiler” subtab (371 lines): event_tile/recording_header/unattributed_banner
 tun_apps_tab.dart            # the per-app VPN routing subtab (384 lines) — shared by Stats and Routing
 app_settings_screen.dart     # the application settings (516 lines): the General and Diagnostics tabs plus update_section
@@ -1600,6 +1603,8 @@ BoxService (per instance, recreated with every new BoxVpnService)
 
 **`AtomicReference` for fileDescriptor and commandServer** (§049 F2/F3): `getAndSet(null)?.close()` guarantees a single close.
 
+**Force-stop has two delivery channels** (§663): while the stop receiver is registered, `BoxVpnService.forceStop` sends the `ACTION_FORCE_STOP` broadcast; once it is gone (`doStop` unregisters it before the core teardown, as do `onRevoke`/`exit`), it calls `startService(ACTION_FORCE_STOP)`, and `onStartCommand` routes it to `doForceStop()` ahead of the foreground notification and the `status != Stopped` guard. Without the second channel a teardown stuck in Go left the service in `Stopping` for good.
+
 ### Channel Contract
 
 The three Flutter–Android channels live in `VpnPlugin.kt`:
@@ -1990,7 +1995,9 @@ Pattern: `ChangeNotifier` + `AnimatedBuilder`. `HomeState` is immutable with `co
 **§323/§324 update — the pink banner is no longer purely sticky.** Two things clear it early:
 
 - **§323** — an identical rebuild (`changed == false`) *clears* the flag instead of preserving it. Rationale: if the saved config matches the previous one byte-for-byte, the running instance cannot be stale, regardless of flag history. A successful `reloadVpn()` also clears it (the core re-read the file, so running == saved).
-- **§324** — a text diff answers "did the file change", not "is the running instance stale". When the diff says *changed* and the tunnel is up, the core is asked instead: `formatConfig(saved + OverrideOptions)` vs `runningConfigRaw` (§311 snapshot). Both sides pass through the same core parser+encoder (kernel SPEC 037 §3), so field order / `omitempty` / `[] → null` collapse **inside the core** — no client-side list of "differences to ignore". The verdict can only *clear* a false banner, never raise one; `unknown` (core unreachable, snapshot absent, old kernel) keeps the banner. See `services/config_staleness.dart` — it mirrors `OverrideOptions` because `formatConfig` does not apply them while the snapshot is post-override.
+- **§324** — a text diff answers "did the file change", not "is the running instance stale". When the tunnel is up and a running snapshot exists, the core is asked instead: `formatConfig(saved + OverrideOptions)` vs `runningConfigRaw` (§311 snapshot). Both sides pass through the same core parser+encoder (kernel SPEC 037 §3), so field order / `omitempty` / `[] → null` collapse **inside the core** — no client-side list of "differences to ignore". **§667 update:** the verdict decides in both directions (`stale` raises, `fresh` clears) regardless of the text diff with the previous write — a second identical write used to clear the flag while the core still ran the old config. The §323 text diff with its sticky rule remains only when there is no snapshot (tunnel down, `unknown`: core unreachable, old kernel). See `services/config_staleness.dart` — it mirrors `OverrideOptions` because `formatConfig` does not apply them while the snapshot is post-override.
+
+**§338/§667 — auto-apply gate.** The checkbox «Auto-restart VPN on settings change» is decided in one place, `HomeController.applyIfAutoReload()`: checkbox on, tunnel up, `configChangedNeedRestart` (§324 verdict), `canReload` (connected + 3 s cooldown). Every rebuild path only reports "config saved" to it: the home funnel `_rebuildAndClearDirty` (return to home §076, retry-when-idle §107, subscription reaction §323, Start gate, bootstrap), `regenerateSourcesConfig` (§558: chain edit, adding a source on Servers) and the Direction editor opened from home. A miss on cooldown alone schedules one retry at cooldown expiry; a miss on not-connected does not (Start picks the config up). `HomeState.autoApplying` covers the window from the decision to the end of `reloadVpn` and suppresses the pink banner on any path. `SettingsStorage.configDirtyGeneration` grows on every `configDirty = true`; `generateConfig` clears the flag only if the generation is unchanged on exit, so an edit of any source made under a rebuild in flight survives it (replaces the §360 composition signature). The build's own storage writes (preset seeds, DNS lists in `buildConfig`, `generatedVars`) run inside `SettingsStorage.withoutDirtyBump` — a Dart zone whose async chain does not move the generation; user edits arrive from the UI zone and count.
 
 ---
 
@@ -2003,8 +2010,8 @@ HomeScreen
   │   │              ├─ onTap UserServer → NodeSettingsScreen (editable Tag, Mark as detour)
   │   │              └─ onTap SubscriptionServers → SubscriptionDetailScreen
   │   │                     (Nodes / Settings / Source tabs)
-  │   ├─ Routing → RoutingScreen
-  │   ├─ DNS Settings → DnsSettingsScreen
+  │   ├─ Routing → RoutingScreen — Directions · Presets · Rules · DNS · Tunnel apps
+  │   │       (§655: DNS is the DnsSettingsTab; no menu item of its own)
   │   ├─ VPN Settings → SettingsScreen — 2 tabs (§052):
   │   │       • System — Tunnel sleep mode (`BackgroundMode`)
   │   │                 (§188 — “Allow VPN bypass” and “Keep VPN on exit” moved to the Mode tab)

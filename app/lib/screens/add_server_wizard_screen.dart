@@ -9,10 +9,12 @@ import '../models/node_spec.dart';
 import '../models/server_list.dart';
 import '../models/template_vars.dart';
 import '../models/tls_spec.dart';
+import '../services/contract/registry_form.dart' hide FormState;
 import '../services/parser/uri_utils.dart' show newUuidV4;
 import '../services/ui_helpers.dart';
 import '../widgets/emoji_picker_button.dart';
 import '../widgets/lx_code_editor.dart';
+import '../widgets/openconnect_form.dart';
 import '../services/l10n/locale_controller.dart';
 import '../services/subscription/subscription_identity.dart';
 import '../widgets/safe_bottom.dart';
@@ -23,8 +25,9 @@ import '../models/tailscale_bundle.dart';
 // (no template processing).
 final TemplateVars _emptyVars = TemplateVars.empty;
 
-/// §074 — Add server wizard. Full-screen route с 5 tabs: SOCKS5 form,
-/// HTTP form (§222), Paste URI, Paste JSON, Tailscale form (§435).
+/// §074 — Add server wizard. Full-screen route с 6 tabs: SOCKS5 form,
+/// HTTP form (§222), Paste URI, Paste JSON, Tailscale form (§435),
+/// OpenConnect form (§654 B).
 /// Открывается long-press'ом на «+» в Subscriptions screen.
 ///
 /// Submit поведение:
@@ -35,6 +38,9 @@ final TemplateVars _emptyVars = TemplateVars.empty;
 ///   - Tailscale tab (§435) → `TailscaleSpec` + `UserServer`, через
 ///     `addUserServer`. Связку tailnet (маршрут, MagicDNS) даёт пресет
 ///     шаблона `tailscale` (§578), не узел (§575).
+///   - OpenConnect tab (§654 B) → тело endpoint'а из формы реестра
+///     (`registry_form.dart`) уходит JSON-текстом в `addFromInput` — тот же
+///     разбор и санитайзер, что у вставки такого узла на вкладке Paste JSON.
 ///
 /// После successful add → callback [onAdded] (regenerate config + save +
 /// snackbar в parent screen).
@@ -106,17 +112,29 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
   bool _tsAcceptRoutes = false;
   bool _tsShowKey = false;
 
+  // §654 B — OpenConnect tab. Поля — общий виджет [OpenConnectForm] (модель
+  // формы реестра + подписи), экран держит Tag и тело [_ocBody]; виджет
+  // отдаёт новое тело после правки поля (пустое поле ключ не пишет).
+  static const _kDefaultOcTag = 'openconnect';
+  static const _kOcScheme = kOpenConnectScheme;
+  static const _kOcDefaultFlavor = 'fortinet';
+  late final FormLayout? _ocLayout = formLayoutFor(_kOcScheme);
+  final _ocTag = TextEditingController();
+  Map<String, dynamic> _ocBody = {'flavor': _kOcDefaultFlavor};
+  bool _ocTried = false;
+
   bool _busy = false;
 
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 5, vsync: this);
+    _tab = TabController(length: 6, vsync: this);
     _tab.addListener(() => setState(() {})); // обновить Add button enabled
     // §449 — hostname узла Tailscale: дефолт видно до создания узла, юзер его
     // правит или стирает (пусто = имя выбирает tsnet, как было).
-    _tsHostname.text =
-        defaultTailscaleHostname(SubscriptionIdentity.effectiveDeviceModel);
+    _tsHostname.text = defaultTailscaleHostname(
+      SubscriptionIdentity.effectiveDeviceModel,
+    );
   }
 
   @override
@@ -139,6 +157,7 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
     _tsControlUrl.dispose();
     _tsHostname.dispose();
     _tsExitNode.dispose();
+    _ocTag.dispose();
     super.dispose();
   }
 
@@ -157,6 +176,8 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
           await _submitInput(_jsonCtrl.text);
         case 4:
           await _submitTailscale();
+        case 5:
+          await _submitOpenConnect();
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -202,6 +223,35 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
       nodes: [spec],
     );
     await widget.subController.addUserServer(us);
+    await _afterAdd(addedTag: tag);
+  }
+
+  /// §654 B — узел OpenConnect: `{type, tag, …тело формы}` JSON-текстом в
+  /// `addFromInput` — путь вставки sing-box JSON (разбор своего тела,
+  /// санитайзер по реестру, `endpoints[]` по `kind` реестра). Server не
+  /// разбирается на host/port, `https://` не дописывается.
+  Future<void> _submitOpenConnect() async {
+    final layout = _ocLayout;
+    if (layout == null) return;
+    final st = layout.stateOf(_ocBody);
+    final blocking = [
+      ...st.missing,
+      for (final v in st.outOfRange) v.path,
+    ].where((p) => openConnectFieldShown(layout, st, p));
+    if (blocking.isNotEmpty) {
+      setState(() => _ocTried = true);
+      showSnack(getLocalText.s("Fill in the required fields"));
+      return;
+    }
+    final tagInput = _ocTag.text.trim();
+    final tag = tagInput.isNotEmpty ? tagInput : _kDefaultOcTag;
+    final entry = <String, dynamic>{'type': _kOcScheme, 'tag': tag, ..._ocBody};
+    // §654 A2 (контракт 1.1.123, §120 п. 11) — тело формы не авторское:
+    // уходит прогнанным санитайзером (`fixed` + правила реестра).
+    await widget.subController.addFromInput(
+      jsonEncode(formBodyForSave(_kOcScheme, entry)),
+      origin: UserSource.manual,
+    );
     await _afterAdd(addedTag: tag);
   }
 
@@ -331,8 +381,8 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
     final msg = widget.subController.lastCommentsRemoved
         ? getLocalText.s("Comments were removed.")
         : addedTag != null && addedTag.isNotEmpty
-            ? getLocalText.s("Added: %s", addedTag)
-            : getLocalText.s("Added");
+        ? getLocalText.s("Added: %s", addedTag)
+        : getLocalText.s("Added");
     showSnack(msg);
     Navigator.of(context).pop();
   }
@@ -369,6 +419,8 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
             // §435 — последней, чтобы индексы прежних вкладок не поехали.
             // l10n-exempt: protocol name
             const Tab(text: 'Tailscale'),
+            // l10n-exempt: protocol name
+            const Tab(text: 'OpenConnect'),
           ],
         ),
       ),
@@ -380,6 +432,7 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
           _buildUriPaste(context),
           _buildJsonPaste(context),
           _buildTailscaleForm(context),
+          _buildOpenConnectForm(context),
         ],
       ),
     );
@@ -389,8 +442,9 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
   void _insertTailscaleTagEmoji(String emoji) {
     final text = _tsTag.text;
     final sel = _tsTag.selection;
-    final start =
-        (sel.start >= 0 && sel.start <= text.length) ? sel.start : text.length;
+    final start = (sel.start >= 0 && sel.start <= text.length)
+        ? sel.start
+        : text.length;
     final end = (sel.end >= 0 && sel.end <= text.length) ? sel.end : start;
     final insert = '$emoji ';
     _tsTag.value = TextEditingValue(
@@ -405,8 +459,8 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
   /// Control URL, Hostname, Ephemeral, Accept routes, Exit node.
   Widget _buildTailscaleForm(BuildContext context) {
     final hintStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
-        );
+      color: Theme.of(context).colorScheme.onSurfaceVariant,
+    );
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32).withSafeBottom(context),
       child: Form(
@@ -424,7 +478,10 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
             ),
             const SizedBox(height: 6),
             Text(
-              getLocalText.s("Shown as the server title in the Servers list. If empty, \"%s\" is used.", _kDefaultTailscaleTag),
+              getLocalText.s(
+                "Shown as the server title in the Servers list. If empty, \"%s\" is used.",
+                _kDefaultTailscaleTag,
+              ),
               style: hintStyle,
             ),
             const SizedBox(height: 12),
@@ -452,7 +509,9 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
             ),
             const SizedBox(height: 6),
             Text(
-              getLocalText.s("A one-time key is consumed on the first login; the device identity then lives in the state directory. Clearing the app data registers a new device."),
+              getLocalText.s(
+                "A one-time key is consumed on the first login; the device identity then lives in the state directory. Clearing the app data registers a new device.",
+              ),
               style: hintStyle,
             ),
             const SizedBox(height: 12),
@@ -474,14 +533,22 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: Text(getLocalText.s("Ephemeral")),
-              subtitle: Text(getLocalText.s("The device is removed from the tailnet when it goes offline")),
+              subtitle: Text(
+                getLocalText.s(
+                  "The device is removed from the tailnet when it goes offline",
+                ),
+              ),
               value: _tsEphemeral,
               onChanged: (v) => setState(() => _tsEphemeral = v),
             ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: Text(getLocalText.s("Accept routes")),
-              subtitle: Text(getLocalText.s("Use subnet routes advertised by other tailnet devices")),
+              subtitle: Text(
+                getLocalText.s(
+                  "Use subnet routes advertised by other tailnet devices",
+                ),
+              ),
               value: _tsAcceptRoutes,
               onChanged: (v) => setState(() => _tsAcceptRoutes = v),
             ),
@@ -494,7 +561,9 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
             ),
             const SizedBox(height: 6),
             Text(
-              getLocalText.s("Tailscale IP or machine name of a peer that advertises an exit node; pick this node as the Direction on Home to route your internet through it. Leave empty for tailnet access only — the node will not appear in Directions"),
+              getLocalText.s(
+                "Tailscale IP or machine name of a peer that advertises an exit node; pick this node as the Direction on Home to route your internet through it. Leave empty for tailnet access only — the node will not appear in Directions",
+              ),
               style: hintStyle,
             ),
           ],
@@ -503,12 +572,67 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
     );
   }
 
+  /// §654 B — вставка эмодзи из пикера в позицию курсора поля Tag
+  /// (OpenConnect).
+  void _insertOcTagEmoji(String emoji) {
+    final text = _ocTag.text;
+    final sel = _ocTag.selection;
+    final start = (sel.start >= 0 && sel.start <= text.length)
+        ? sel.start
+        : text.length;
+    final end = (sel.end >= 0 && sel.end <= text.length) ? sel.end : start;
+    final insert = '$emoji ';
+    _ocTag.value = TextEditingValue(
+      text: text.replaceRange(start, end, insert),
+      selection: TextSelection.collapsed(offset: start + insert.length),
+    );
+    setState(() {});
+  }
+
+  /// §654 B — форма OpenConnect: Tag как у соседних форм, дальше общий
+  /// виджет формы [OpenConnectForm] (он же — на вкладке Source правки узла).
+  Widget _buildOpenConnectForm(BuildContext context) {
+    if (_ocLayout == null) return const SizedBox.shrink();
+    final hintStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
+      color: Theme.of(context).colorScheme.onSurfaceVariant,
+    );
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32).withSafeBottom(context),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _label(getLocalText.s("Tag (optional)")),
+          TextFormField(
+            controller: _ocTag,
+            decoration: _input(
+              _kDefaultOcTag,
+            ).copyWith(suffixIcon: EmojiPickerButton(onPick: _insertOcTagEmoji)),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            getLocalText.s(
+              "Shown as the server title in the Servers list. If empty, \"%s\" is used.",
+              _kDefaultOcTag,
+            ),
+            style: hintStyle,
+          ),
+          OpenConnectForm(
+            body: _ocBody,
+            showErrors: _ocTried,
+            onChanged: (b) => setState(() => _ocBody = b),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// §090 G2b — вставка эмодзи из пикера в позицию курсора поля Tag (SOCKS).
   void _insertSocksTagEmoji(String emoji) {
     final text = _socksTag.text;
     final sel = _socksTag.selection;
-    final start =
-        (sel.start >= 0 && sel.start <= text.length) ? sel.start : text.length;
+    final start = (sel.start >= 0 && sel.start <= text.length)
+        ? sel.start
+        : text.length;
     final end = (sel.end >= 0 && sel.end <= text.length) ? sel.end : start;
     final insert = '$emoji ';
     _socksTag.value = TextEditingValue(
@@ -538,10 +662,13 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
             ),
             const SizedBox(height: 6),
             Text(
-              getLocalText.s("Shown as the server title in the Servers list. If empty, \"%s\" is used.", _kDefaultSocksTag),
+              getLocalText.s(
+                "Shown as the server title in the Servers list. If empty, \"%s\" is used.",
+                _kDefaultSocksTag,
+              ),
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
             const SizedBox(height: 12),
             _label(getLocalText.s("Host")),
@@ -570,10 +697,7 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
             ),
             const SizedBox(height: 12),
             _label(getLocalText.s("Username (optional)")),
-            TextFormField(
-              controller: _socksUser,
-              decoration: _input(''),
-            ),
+            TextFormField(controller: _socksUser, decoration: _input('')),
             const SizedBox(height: 12),
             _label(getLocalText.s("Password (optional)")),
             TextFormField(
@@ -591,8 +715,9 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
   void _insertHttpTagEmoji(String emoji) {
     final text = _httpTag.text;
     final sel = _httpTag.selection;
-    final start =
-        (sel.start >= 0 && sel.start <= text.length) ? sel.start : text.length;
+    final start = (sel.start >= 0 && sel.start <= text.length)
+        ? sel.start
+        : text.length;
     final end = (sel.end >= 0 && sel.end <= text.length) ? sel.end : start;
     final insert = '$emoji ';
     _httpTag.value = TextEditingValue(
@@ -622,10 +747,13 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
             ),
             const SizedBox(height: 6),
             Text(
-              getLocalText.s("Shown as the server title in the Servers list. If empty, \"%s\" is used.", _kDefaultHttpTag),
+              getLocalText.s(
+                "Shown as the server title in the Servers list. If empty, \"%s\" is used.",
+                _kDefaultHttpTag,
+              ),
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
             const SizedBox(height: 12),
             _label(getLocalText.s("Host")),
@@ -654,10 +782,7 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
             ),
             const SizedBox(height: 12),
             _label(getLocalText.s("Username (optional)")),
-            TextFormField(
-              controller: _httpUser,
-              decoration: _input(''),
-            ),
+            TextFormField(controller: _httpUser, decoration: _input('')),
             const SizedBox(height: 12),
             _label(getLocalText.s("Password (optional)")),
             TextFormField(
@@ -669,7 +794,11 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: Text(getLocalText.s("HTTPS (TLS to proxy)")),
-              subtitle: Text(getLocalText.s("Connect to the proxy over TLS; Host is used as the SNI. ALPN, insecure and the other TLS options can be set later on the node's JSON tab (Edit JSON).")),
+              subtitle: Text(
+                getLocalText.s(
+                  "Connect to the proxy over TLS; Host is used as the SNI. ALPN, insecure and the other TLS options can be set later on the node's JSON tab (Edit JSON).",
+                ),
+              ),
               value: _httpTls,
               onChanged: (v) => setState(() => _httpTls = v),
             ),
@@ -702,10 +831,12 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
           ),
           const SizedBox(height: 8),
           Text(
-            getLocalText.s("Supported: vless / vmess / trojan / ss / hy2 / tuic / socks5 / proxy-http(s) / wireguard URLs"),
+            getLocalText.s(
+              "Supported: vless / vmess / trojan / ss / hy2 / tuic / socks5 / proxy-http(s) / wireguard URLs",
+            ),
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
         ],
       ),
@@ -730,10 +861,12 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
           ),
           const SizedBox(height: 8),
           Text(
-            getLocalText.s("Single object or array of outbounds. WireGuard routes to endpoints[] automatically."),
+            getLocalText.s(
+              "Single object or array of outbounds. WireGuard routes to endpoints[] automatically.",
+            ),
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
         ],
       ),
@@ -741,18 +874,19 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
   }
 
   Widget _label(String text) => Padding(
-        padding: const EdgeInsets.only(bottom: 4),
-        child: Text(text,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                )),
-      );
+    padding: const EdgeInsets.only(bottom: 4),
+    child: Text(
+      text,
+      style: Theme.of(
+        context,
+      ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600),
+    ),
+  );
 
   InputDecoration _input(String hint) => InputDecoration(
-        hintText: hint,
-        border: const OutlineInputBorder(),
-        isDense: true,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      );
+    hintText: hint,
+    border: const OutlineInputBorder(),
+    isDense: true,
+    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+  );
 }

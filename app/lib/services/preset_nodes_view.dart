@@ -3,7 +3,7 @@
 /// узла). Сборка берёт список из готового конфига
 /// (`_collectPresetNodes` в `build_config.dart`); экрану конфиг не нужен —
 /// список строится из источников контроллера тем же отбором: узел включён
-/// (источник, член папки, отметка `disabled_hashes` подписки), `skip_presets`
+/// (источник, член папки, отметка `disabled_hashes` подписки), `skip_tailscale_presets`
 /// из записи своего сервера или члена папки, у узла подписки — `false`.
 ///
 /// Тег — финальный тег последней сборки ([lastEmittedTagMap]), если узел в
@@ -57,7 +57,11 @@ List<PresetNode> presetNodesForView(
     finalTagOf.putIfAbsent(e.value, () => e.key);
   }
   final out = <PresetNode>[];
-  void add(NodeSpec node, String tagPrefix, bool skip) {
+  void add(NodeSpec node, String tagPrefix,
+      [bool skip = false,
+      bool allowLocal = false,
+      bool allowLan = false,
+      bool allowGateway = false]) {
     if (nodeTypes != null && !nodeTypes.contains(node.protocol)) return;
     final Map<String, dynamic> body;
     try {
@@ -69,7 +73,10 @@ List<PresetNode> presetNodesForView(
     out.add(PresetNode(
       tag: finalTagOf[node] ?? TagResolver.displayTag(tagPrefix, node.tag),
       body: body,
-      skipPresets: skip,
+      skipTailscalePresets: skip,
+      allowLocal: allowLocal,
+      allowLan: allowLan,
+      allowGateway: allowGateway,
     ));
   }
 
@@ -78,13 +85,15 @@ List<PresetNode> presetNodesForView(
     switch (list) {
       case UserServer u:
         for (final n in u.nodes) {
-          add(n, u.tagPrefix, u.skipPresets);
+          add(n, u.tagPrefix, u.skipTailscalePresets, u.allowLocal,
+              u.allowLan, u.allowGateway);
         }
       case FolderServers f:
         for (final m in f.members) {
           final node = m.node;
           if (!m.enabled || node == null) continue;
-          add(node, f.tagPrefix, m.skipPresets);
+          add(node, f.tagPrefix, m.skipTailscalePresets, m.allowLocal,
+              m.allowLan, m.allowGateway);
         }
       case SubscriptionServers s:
         final identities =
@@ -92,7 +101,7 @@ List<PresetNode> presetNodesForView(
         for (final n in s.nodes) {
           final id = identities?[n];
           if (id != null && s.disabledHashes.containsKey(id)) continue;
-          add(n, s.tagPrefix, false);
+          add(n, s.tagPrefix);
         }
     }
   }
@@ -122,24 +131,50 @@ String presetServedNodesLabel(List<String> tags) => tags.isEmpty
     ? getLocalText.s("No matching nodes")
     : tags.join(', ');
 
-/// Переключатель `Skip presets` на экране узла: свой сервер или член папки
-/// ([isMember] у папки), и в шаблоне есть пресет с обходом (любого вида),
-/// чей `#filter` истинен для этого узла при `skip_presets = false`
+/// Переключатель `Skip Tailscale presets` на экране узла (§578, §656): свой
+/// сервер или член папки ([isMember] у папки), узел `type: tailscale`
+/// (контракт 1.1.126) и в шаблоне есть пресет с обходом (любого вида), чей
+/// `#filter` истинен для этого узла при `skip_tailscale_presets = false`
 /// ([presetLoopAcceptsNode]; [nodeTag] и [nodeBody] — тег и тело узла в
 /// форме конфига). У узла подписки записи нет — переключателя нет.
-bool skipPresetsToggleVisible({
+bool skipTailscalePresetsToggleVisible({
   required ServerList list,
   required bool isMember,
   required String nodeTag,
   required Map<String, dynamic> nodeBody,
   required Iterable<SelectableRule> presets,
 }) {
-  final hasRecord = switch (list) {
-    UserServer() => true,
-    FolderServers() => isMember,
-    SubscriptionServers() => false,
-  };
-  if (!hasRecord || nodeBody.isEmpty) return false;
+  if (!_hasNodeRecord(list, isMember) || nodeBody['type'] != 'tailscale') {
+    return false;
+  }
   final node = PresetNode(tag: nodeTag, body: nodeBody);
   return presets.any((p) => presetLoopAcceptsNode(p, node));
 }
+
+/// §656 (контракт 1.1.126/1.1.129) — типы клиентских endpoint'ов, у которых
+/// форма узла показывает блок `Incoming connections from this tunnel`
+/// (`allow_local` / `allow_lan` / `allow_gateway`). У AWG `type` тот же
+/// `wireguard`; `tailscale` выведен (1.1.129).
+const Set<String> kTunnelIngressNodeTypes = {
+  'wireguard',
+  'openvpn-client',
+  'openconnect',
+};
+
+/// §656 — блок `Incoming connections from this tunnel` виден: свой сервер
+/// или член папки ([isMember]) с `body.type` из [kTunnelIngressNodeTypes].
+/// У узла подписки записи нет — блока нет.
+bool tunnelIngressTogglesVisible({
+  required ServerList list,
+  required bool isMember,
+  required Map<String, dynamic> nodeBody,
+}) =>
+    _hasNodeRecord(list, isMember) &&
+    kTunnelIngressNodeTypes.contains(nodeBody['type']);
+
+/// Запись узла есть у своего сервера и у члена папки; у подписки — нет.
+bool _hasNodeRecord(ServerList list, bool isMember) => switch (list) {
+      UserServer() => true,
+      FolderServers() => isMember,
+      SubscriptionServers() => false,
+    };

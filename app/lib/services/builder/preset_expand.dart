@@ -4,6 +4,7 @@ import '../../models/parser_config.dart';
 import '../contract/registry.dart';
 import '../json_clone.dart';
 import 'if_engine.dart';
+import 'preset_node_loop.dart' show kPresetNodeRecordFieldNames;
 
 /// Результат expansion одного `CustomRule(kind: preset)` через его
 /// `SelectableRule`-определение в шаблоне (spec §033).
@@ -349,7 +350,7 @@ List<PresetNode> presetForEachNodes(
 
 /// §643 — обход пресета (любого вида) принимает узел [node]: `#filter`
 /// истинен при значениях переменных пресета по умолчанию. Пресет без обхода
-/// — false. Экран узла решает по этому видимость `Skip presets`.
+/// — false. Экран узла решает по этому видимость `Skip Tailscale presets`.
 bool presetLoopAcceptsNode(
   SelectableRule preset,
   PresetNode node, {
@@ -433,7 +434,9 @@ Iterable<PresetNode> _loopMatches(
   for (final node in _loopMatches(loop, nodes, varsMap)) {
     final resolve = _loopResolver(node, varsMap);
     for (final e in loop.collect.entries) {
-      final v = _appendValue(e.value, resolve);
+      final rhs = _doOperationRhs(e.value, resolve);
+      if (rhs == null) continue; // §656 — `#if` без ветки: узел пропущен
+      final v = _appendValue(rhs, resolve);
       if (v != null) lists[e.key]!.add(v);
     }
   }
@@ -451,6 +454,21 @@ Iterable<PresetNode> _loopMatches(
     lists[e.key] = list;
   }
   return (values: lists, error: null);
+}
+
+/// §656 (контракт 1.1.125, §6.7.1) — правая часть операции `#do` на узле.
+/// Обычная операция — её `#append`; операция под `#if…` — условие на
+/// пространстве узла выбирает ветку-глагол (map-spread: `{}` при лжи без
+/// `E` — null, узел пропущен молча). Ветки разобраны на загрузке.
+Object? _doOperationRhs(Object op, VarResolver resolve) {
+  if (op is! PresetDoIf) return op;
+  final (taken, branch) =
+      selectIfBranch(op.form, resolve, key: op.ifKey);
+  if (!taken || branch is! Map) return null;
+  final rhs = branch['#append'];
+  if (rhs is String) return rhs;
+  if (rhs is Map) return Map<String, dynamic>.from(rhs);
+  return null;
 }
 
 /// Правая часть `#append` на узле: строка `"@имя"` ≡ вставка `@{имя}`,
@@ -477,23 +495,43 @@ List<String> _uniqueOrdered(List<String> list) {
   ];
 }
 
-/// §578 — узел конфига для обхода: финальный тег, тело записи в конфиге
-/// и поле записи `skip_presets` (у узла подписки записи нет — `false`).
+/// §578/§656 — узел конфига для обхода: финальный тег, тело записи в
+/// конфиге и поля записи (TEMPLATE_LANG §6.6) — у узла подписки записи нет,
+/// все `false`.
 class PresetNode {
   const PresetNode({
     required this.tag,
     required this.body,
-    this.skipPresets = false,
+    this.skipTailscalePresets = false,
+    this.allowLocal = false,
+    this.allowLan = false,
+    this.allowGateway = false,
   });
 
   final String tag;
   final Map<String, dynamic> body;
-  final bool skipPresets;
+
+  /// `skip_tailscale_presets` (бывший `skip_presets`, контракт 1.1.126).
+  final bool skipTailscalePresets;
+
+  /// `allow_local` / `allow_lan` / `allow_gateway` (контракт 1.1.126).
+  final bool allowLocal;
+  final bool allowLan;
+  final bool allowGateway;
+
+  /// Поле записи по имени из [kPresetNodeRecordFields]; иное — null.
+  bool? recordField(String name) => switch (name) {
+        'skip_tailscale_presets' => skipTailscalePresets,
+        'allow_local' => allowLocal,
+        'allow_lan' => allowLan,
+        'allow_gateway' => allowGateway,
+        _ => null,
+      };
 }
 
-/// §578 — поля записи узла, видимые пресету. Перечень закрытый, расширяется
-/// контрактом.
-const Set<String> kPresetNodeRecordFields = {'skip_presets'};
+/// §578/§656 — поля записи узла, видимые пресету. Перечень закрытый,
+/// расширяется контрактом.
+const Set<String> kPresetNodeRecordFields = kPresetNodeRecordFieldNames;
 
 /// §578/§643 — резолвер имён узла (имя фиксировано, §6.6):
 /// - `@node` — финальный тег;
@@ -510,7 +548,8 @@ VarResolver presetNodeResolver(PresetNode node) {
     if (name == as) return node.tag;
     if (!name.startsWith(prefix)) return null;
     final field = name.substring(prefix.length);
-    if (field == 'skip_presets') return node.skipPresets;
+    final record = node.recordField(field);
+    if (record != null) return record;
     if (!field.startsWith('body.')) return Dropped.instance;
     Object? cur = node.body;
     for (final part in field.substring('body.'.length).split('.')) {
@@ -767,6 +806,12 @@ PresetFragments _expandPresetBody(
         if (result['outbound'] == 'reject') {
           result.remove('outbound');
           result['action'] = 'reject';
+        } else if (result['outbound'] == 'drop') {
+          // §656 (TEMPLATE_LANG §6.5.2) — второй сентинел переменной
+          // `outbound`: `drop` ≡ `action: reject` + `method: drop`.
+          result.remove('outbound');
+          result['action'] = 'reject';
+          result['method'] = 'drop';
         }
       }
 

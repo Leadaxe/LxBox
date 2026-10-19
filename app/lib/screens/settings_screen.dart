@@ -211,8 +211,10 @@ class _SettingsScreenState extends State<SettingsScreen>
   Future<void> _applyIdleSuspend(String value) async {
     if (value == _idleSuspend) return;
     setState(() => _idleSuspend = value);
-    await SettingsStorage.saveIdleSuspend(value);
+    // §667 Р3 — dirty ДО await: Back во время записи файла давал
+    // `_onReturnToHome` чистый флаг (Д1).
     widget.subController.configDirty = true;
+    await SettingsStorage.saveIdleSuspend(value);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -242,8 +244,10 @@ class _SettingsScreenState extends State<SettingsScreen>
   Future<void> _applyWgLazyBuild(bool value) async {
     if (value == _wgLazyBuild) return;
     setState(() => _wgLazyBuild = value);
-    await SettingsStorage.saveWgLazyBuild(value);
+    // §667 Р3 — dirty ДО await: Back во время записи файла давал
+    // `_onReturnToHome` чистый флаг (Д1).
     widget.subController.configDirty = true;
+    await SettingsStorage.saveWgLazyBuild(value);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -256,8 +260,10 @@ class _SettingsScreenState extends State<SettingsScreen>
   Future<void> _applyWgBuildMax(int value) async {
     if (value == _wgBuildMax) return;
     setState(() => _wgBuildMax = value);
-    await SettingsStorage.saveWgBuildMax(value);
+    // §667 Р3 — dirty ДО await: Back во время записи файла давал
+    // `_onReturnToHome` чистый флаг (Д1).
     widget.subController.configDirty = true;
+    await SettingsStorage.saveWgBuildMax(value);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -272,8 +278,10 @@ class _SettingsScreenState extends State<SettingsScreen>
   Future<void> _applyIdleSuspendReachable(String value) async {
     if (value == _idleSuspendReachable) return;
     setState(() => _idleSuspendReachable = value);
-    await SettingsStorage.saveIdleSuspendReachable(value);
+    // §667 Р3 — dirty ДО await: Back во время записи файла давал
+    // `_onReturnToHome` чистый флаг (Д1).
     widget.subController.configDirty = true;
+    await SettingsStorage.saveIdleSuspendReachable(value);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
