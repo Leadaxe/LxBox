@@ -69,6 +69,8 @@ private const val TAG = "SoraEditor"
 private const val THEME_LIGHT = "lx-light"
 private const val THEME_DARK = "lx-dark"
 private const val SYNC_LIMIT = 256 * 1024
+/// Сколько ширина должна устояться, чтобы пересчитать раскладку с переносом.
+private const val RELAYOUT_DELAY_MS = 500L
 private const val SYNC_DEBOUNCE_MS = 300L
 
 class SoraEditorFactory(private val messenger: BinaryMessenger) :
@@ -164,6 +166,42 @@ private class LxSoraEditor(context: Context) : CodeEditor(context) {
         super.setLayoutBusy(busy)
         onLayoutBusy?.invoke(busy)
         if (!busy) onLayoutReady?.invoke()
+    }
+
+    /// Ширина, под которую посчитана раскладка с переносом.
+    private var layoutWidth = 0
+    private val relayout = Runnable {
+        if (isReleased || !isWordwrap || width == 0 || width == layoutWidth) return@Runnable
+        layoutWidth = width
+        createLayout()
+    }
+
+    /// При переносе sora на любую смену ширины пересчитывает раскладку
+    /// целиком (на большом теле — секунды). Гашение/включение экрана
+    /// (OnePlus, Android 15) на миг меняет размер platform view и ширина
+    /// возвращается — раскладка считалась заново на ровном месте (§660).
+    /// Смену ширины отрабатываем с задержкой и только если она устоялась;
+    /// нулевой размер — транзит, раскладку не трогает.
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        if (w == 0 || h == 0) return
+        removeCallbacks(relayout)
+        if (!isWordwrap || layoutWidth == 0) {
+            // Без переноса ширина раскладку не трогает; первая ненулевая
+            // ширина — раскладка сразу, как у sora.
+            layoutWidth = w
+            super.onSizeChanged(w, h, oldw, oldh)
+            return
+        }
+        // oldw = w — sora не зовёт createLayout; размеры рендерера и
+        // кламп прокрутки обновляются как обычно.
+        super.onSizeChanged(w, h, w, oldh)
+        if (w != layoutWidth) postDelayed(relayout, RELAYOUT_DELAY_MS)
+    }
+
+    override fun setWordwrap(wordwrap: Boolean, antiWordBreaking: Boolean) {
+        removeCallbacks(relayout)
+        layoutWidth = width
+        super.setWordwrap(wordwrap, antiWordBreaking)
     }
 
     override fun requestFocus(direction: Int, previouslyFocusedRect: Rect?): Boolean =
