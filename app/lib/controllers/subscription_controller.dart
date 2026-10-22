@@ -193,6 +193,16 @@ class SubscriptionController extends ChangeNotifier {
   Map<String, NodeSpec> _lastTagMap = const {};
   Map<String, NodeSpec> get lastEmittedTagMap => _lastTagMap;
 
+  /// §675 — итоговый тег узла автовыбора последней сборки → его spec
+  /// (значки пула на главном). До первой сборки пусто.
+  Map<String, AutoSelectSpec> _lastGroupTagMap = const {};
+  Map<String, AutoSelectSpec> get lastEmittedGroupMap => _lastGroupTagMap;
+
+  @visibleForTesting
+  void debugSetLastEmittedGroupMap(Map<String, AutoSelectSpec> map) {
+    _lastGroupTagMap = map;
+  }
+
   /// §505 — предупреждения сборки по финальному config-тегу (гард реестра).
   Map<String, List<NodeWarning>> _lastBuildWarningsByTag = const {};
   Map<String, List<NodeWarning>> get lastBuildWarningsByTag =>
@@ -3102,6 +3112,7 @@ class SubscriptionController extends ChangeNotifier {
               e.key: originals[e.value] ?? e.value,
           };
     _groupDefaultsPending = false;
+    _lastGroupTagMap = result.groupByEmittedTag;
     _lastBuildWarningsByTag = result.nodeBuildWarningsByEmittedTag;
     _lastSourceBuildCodes = result.sourceBuildCodes;
 

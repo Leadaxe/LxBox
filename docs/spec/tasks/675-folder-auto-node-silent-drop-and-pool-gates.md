@@ -2,11 +2,11 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | In progress |
+| Статус | Done |
 | Дата начала | 2026-10-23 |
-| Дата конца | — |
+| Дата конца | 2026-10-23 |
 | Коммиты | см. `git log --grep 675` |
-| Связанные спеки | [322F](322F-folder-auto-group/spec.md); [features/007-*/FUNCTIONS/server-folders.md](../features/007-SERVER_FOLDERS/FUNCTIONS/server-folders.md); [568](568-source-replace-group.md); [591](591-detour-to-auto-group-forbidden.md) |
+| Связанные спеки | [322F](322F-balancer-node/spec.md); [features/007-NODE_LIST/FUNCTIONS/server-folders.md](../features/007-NODE_LIST/FUNCTIONS/server-folders.md); [568](568-source-replace-group.md); [591](591-detour-to-auto-group-forbidden.md) |
 
 ## Проблема
 
@@ -58,13 +58,43 @@ broken». Деталей нет (запрошены). По коду всегда
 - Ничего из UX папки (кнопки, пункты меню, перенос группы между папками
   §322F:22) не менять.
 
+### Сделано
+
+- Д1: `server_list_build.dart:297-306` — пустой состав называется при любом
+  режиме: «Auto node "X" was skipped: it has no members, an empty group would
+  stop the VPN core» (у явного — прежняя строка). Редактор:
+  `auto_group_edit_screen.dart:398-405` — при кандидатах без совпадений под
+  счётчиком «No servers match, the auto node stays out of the config until
+  one does» (стиль строки «Folder has no servers yet»), ключ в `ru`/`zh`.
+- Д2: `server_list_build.dart:307-313` — при свёртке без селектора
+  (`!fold.hasSelector`) «Auto node "X" is unreachable: its source is replaced
+  with an Auto group, which does not include auto nodes»; `ctx.warn`
+  дедуплицирует. Поведение свёртки прежнее.
+- Д3: кандидат пула пишется в `resolvedTags` только при
+  `poolAdmission(...).selector` (`server_list_build.dart:264`) — предикат
+  §670, один на оба пула. Явный член, отсеянный гейтом, выпадает с
+  `group_member_dropped`.
+- Д4: сборка отдаёт карту «итоговый тег → spec группы»
+  (`EmitContext.noteGroupEmitted`, `server_list_build.dart:323`;
+  `BuildResult.groupByEmittedTag`, `build_config.dart:87, :1065`;
+  `SubscriptionController.lastEmittedGroupMap`, `subscription_controller.dart:3115`).
+  `poolBadgeOf` (`node_list.dart:941`) ищет по ней точный тег, до первой
+  сборки — по показанному тегу spec'а (`displayTag(префикс, tag)`), без
+  `endsWith`. Карта отдельная от `nodeByEmittedTag` намеренно: туда группы
+  положить нельзя — `_collectPresetNodes` сделал бы их узлами обхода пресетов
+  (§578), а отказ ядра по тегу группы выключал бы группу.
+
 ## Проверка
 
-- Unit (сборка): папка с Rule без совпадений → отчёт содержит предупреждение,
-  группы нет; свёртка Auto + auto-узел → предупреждение; папка с `⚙`-звеном и
-  Tailscale без exit → их нет в пуле при политике off; есть при «Register
-  detour servers» on (звено).
-- Unit: значок пула для группы с тегом `Auto-1`.
+- `flutter test test/builder/auto_group_folder_test.dart` — 23 теста, All
+  tests passed: Rule без совпадений и пустая папка → группы нет, warning;
+  свёртка Auto → warning о недостижимости, свёртка Both → без warning; папка
+  с `isChainLink`-звеном и Tailscale без exit: при политике off пул = [exit]
+  (оба узла эмитированы), при «Register detour servers» = [hop, exit].
+- `flutter test test/screens/pool_badge_cache_test.dart` — 8 тестов, All
+  tests passed: `Auto-1` находится по карте сборки; суффиксное совпадение
+  чужую группу больше не ловит.
+- `ui_check --strict`: 0 failures.
 
 ## Docs to update
 

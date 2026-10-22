@@ -36,39 +36,46 @@ void main() {
     return c;
   }
 
-  test('значок берётся у spec с суффиксным совпадением тега', () {
+  test('до сборки значок берётся у spec с тем же показанным тегом', () {
     final c = controllerWith([auto('auto-de', '🇩🇪')]);
-    // Итоговый тег несёт префикс контейнера — матчинг суффиксный.
-    expect(poolBadgeOf(c, 'sub-1-auto-de'), '🇩🇪');
+    expect(poolBadgeOf(c, 'auto-de'), '🇩🇪');
+  });
+
+  test('§675 — суффиксное совпадение больше не матчит чужую группу', () {
+    final c = controllerWith([auto('de', '🇩🇪'), auto('auto-de', '🏳')]);
+    expect(poolBadgeOf(c, 'auto-de'), '🏳');
+    expect(poolBadgeOf(c, 'sub-1-auto-de'), kDefaultPoolBadge);
+  });
+
+  test('§675 — тег с суффиксом уникализации находится по карте сборки', () {
+    final g = auto('Auto', '🇩🇪');
+    final c = controllerWith([auto('Auto', '🏳'), g]);
+    c.debugSetLastEmittedGroupMap({'Auto-1': g});
+    expect(poolBadgeOf(c, 'Auto-1'), '🇩🇪');
   });
 
   test('тег без своего spec получает дефолт', () {
     final c = controllerWith([auto('auto-de', '🇩🇪')]);
-    expect(poolBadgeOf(c, 'sub-1-auto-nl'), kDefaultPoolBadge);
-  });
-
-  test('первый подходящий spec выигрывает — порядок как у прежнего обхода', () {
-    final c = controllerWith([auto('de', '🇩🇪'), auto('auto-de', '🏳')]);
-    expect(poolBadgeOf(c, 'sub-1-auto-de'), '🇩🇪');
+    expect(poolBadgeOf(c, 'auto-nl'), kDefaultPoolBadge);
   });
 
   test('смена состава подписок инвалидирует кэш', () {
     final c = controllerWith([auto('auto-de', '🇩🇪')]);
-    expect(poolBadgeOf(c, 'sub-1-auto-de'), '🇩🇪');
+    expect(poolBadgeOf(c, 'auto-de'), '🇩🇪');
 
     // Другой набор подписок: новый список узлов, новый значок у того же тега.
     c.debugSetEntries([
       SubscriptionEntry(list: listWith([auto('auto-de', '🇳🇱')])),
     ]);
-    expect(poolBadgeOf(c, 'sub-1-auto-de'), '🇳🇱');
+    expect(poolBadgeOf(c, 'auto-de'), '🇳🇱');
   });
 
   test('пустые подписки — дефолт, кэш не залипает на прошлом составе', () {
     final c = controllerWith([auto('auto-de', '🇩🇪')]);
-    expect(poolBadgeOf(c, 'sub-1-auto-de'), '🇩🇪');
+    expect(poolBadgeOf(c, 'auto-de'), '🇩🇪');
 
     c.debugSetEntries([]);
-    expect(poolBadgeOf(c, 'sub-1-auto-de'), kDefaultPoolBadge);
+    expect(poolBadgeOf(c, 'auto-de'), kDefaultPoolBadge);
   });
 
   group('кэш regexp значков', () {

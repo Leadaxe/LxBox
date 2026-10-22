@@ -170,9 +170,6 @@ extension ServerListBuild on ServerList {
       final mainBase = main.tag;
       main.map['tag'] =
           ctx.allocateTag(TagResolver.displayTag(tagPrefix, mainBase));
-      // §322 — итоговый тег нужен второму проходу: пул автовыбора ссылается
-      // на членов уже ПОСЛЕ префикса и уникализации.
-      resolvedTags[server] = main.map['tag'] as String;
       // §578 — тот же финальный тег нужен узлам пресетов с обходом.
       ctx.noteEmitted(server, main.map['tag'] as String);
       // §439 — адрес узла, затем звеньев его родной цепочки (сырой тег узла
@@ -260,6 +257,11 @@ extension ServerListBuild on ServerList {
       );
       if (admit.selector) toSelector(i, main);
       if (admit.auto) toAuto(i, main);
+      // §322 — итоговый тег нужен второму проходу: пул автовыбора ссылается
+      // на членов уже ПОСЛЕ префикса и уникализации. §675 — в пул идёт тот,
+      // кого гейты пускают в селекторы Направлений: Tailscale без exit node
+      // и звено цепочки при выключенной «Register detour servers» — нет.
+      if (admit.selector) resolvedTags[server] = main.tag;
       final hop = poolAdmission(
           tailnetOnly: false, detourLink: true, policy: detourPolicy);
       for (final d in detours) {
@@ -290,15 +292,24 @@ extension ServerListBuild on ServerList {
       );
       // Пустой urltest роняет старт ядра (validator.dart) — достижимо, если
       // все члены выключены (§283) или подписка обновилась и пул опустел.
-      // Не эмитим вовсе: безопаснее, чем пустая группа. Явный состав, не
-      // давший ни одного члена, называется (NODE_LINK §5.1); правило, ничего
-      // не поймавшее, — законная настройка.
+      // Не эмитим вовсе: безопаснее, чем пустая группа. §675 — о снятии
+      // говорит отчёт при любом режиме: явный состав, не давший ни одного
+      // члена (NODE_LINK §5.1), и правило / «все», ничего не поймавшие
+      // (пустая папка, все члены выключены, нет совпадений).
       if (members.isEmpty) {
-        if (spec.membership is ExplicitMembers) {
-          ctx.warn('Auto node "$shown" was skipped: none of its members '
-              'resolved, an empty group would stop the VPN core');
-        }
+        ctx.warn(spec.membership is ExplicitMembers
+            ? 'Auto node "$shown" was skipped: none of its members '
+                'resolved, an empty group would stop the VPN core'
+            : 'Auto node "$shown" was skipped: it has no members, an empty '
+                'group would stop the VPN core');
         continue;
+      }
+      // §675 — у свёртки Auto ручного селектора нет, а провайдерская группа
+      // идёт только в него (§74 п.3): узел собран, но ни в одну группу не
+      // входит. Поведение свёртки прежнее, о недостижимости говорит отчёт.
+      if (fold != null && !fold.hasSelector) {
+        ctx.warn('Auto node "$shown" is unreachable: its source is replaced '
+            'with an Auto group, which does not include auto nodes');
       }
 
       // §565 — тело разбора + параметры замера, которых источник не объявил.
@@ -308,6 +319,8 @@ extension ServerListBuild on ServerList {
       entry.map['tag'] =
           ctx.allocateTag(TagResolver.displayTag(tagPrefix, spec.tag));
       noteAddress(spec, spec.tag, entry.tag, group: true);
+      // §675 — итоговый тег группы для экрана (значки пула по точному тегу).
+      ctx.noteGroupEmitted(spec, entry.tag);
       entry.map['outbounds'] = members;
       // §565 — `default` ручного рода: сырой тег члена → итоговый. Член не
       // разрешился — поле снимается, ядро берёт первого живого члена.

@@ -26,6 +26,15 @@
   names the Direction's auto group, the toggle is disabled while the first
   one is off, and a folder shows both toggles only when one of its members is
   a link of another member's chain.
+- **Auto node in a folder no longer disappears without a word
+  ([task 675](docs/spec/tasks/675-folder-auto-node-silent-drop-and-pool-gates.md)).**
+  An auto node with no members (empty folder, a rule with no matches, all
+  members off) is named in the build report, and the editor says it stays out
+  of the config; a folder replaced with an Auto group reports its auto nodes
+  as unreachable. The auto node's pool follows the same rules as Directions:
+  Tailscale without an exit node is never in it, chain links only with
+  "Register detour servers". Pool badges on the main screen find a group with
+  a unique-name suffix (`Auto-1`).
 - **Stopping the VPN no longer hangs on a stuck core call
   ([task 668](docs/spec/tasks/668-stop-teardown-trace-and-timeouts.md)).**
   Each stop step has a real time limit (the core shutdown step 20 s, the

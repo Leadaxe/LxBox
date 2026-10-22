@@ -3193,6 +3193,9 @@
   "No servers found in selected files": {
     "value": "所选文件中未找到服务器"
   },
+  "No servers match, the auto node stays out of the config until one does": {
+    "value": "没有匹配的服务器，在出现匹配之前该自动节点不会写入配置"
+  },
   "No source URI for this node": {
     "value": "此节点没有来源 URI"
   },

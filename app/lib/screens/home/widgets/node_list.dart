@@ -8,6 +8,7 @@ import '../../../models/home_state.dart';
 import '../../../models/node_warning.dart';
 import '../../../services/direction_mutations.dart';
 import '../../../services/settings_storage.dart';
+import '../../../services/tag_resolver.dart';
 import '../../../services/haptic_service.dart';
 import '../../../services/networks_direction.dart';
 import '../../../services/openconnect_auth.dart';
@@ -872,7 +873,7 @@ String? _autoLabelWithBadges(
   final base = autoGroupLabel(cache.rawOf(tag));
   if (base == null) return null;
   // Тег в конфиге — с префиксом контейнера и, возможно, суффиксом
-  // уникализации; ищем группу, чей базовый тег в нём содержится.
+  // уникализации; группа ищется по точному итоговому тегу (§675).
   final badge = poolBadgeOf(subs, tag);
   if (badge.isEmpty) return base;
   final slots = controller.poolSlots(tag);
@@ -882,16 +883,18 @@ String? _autoLabelWithBadges(
 }
 
 /// §446 — плоский срез spec'ов автовыбора из всех подписок: пара
-/// `(тег, regexp значков)` в том же порядке обхода, что был у линейного
-/// поиска. Пересобирается только когда сменился состав подписок.
+/// `(показанный тег, regexp значков)` в порядке обхода источников.
+/// Пересобирается только когда сменился состав подписок или префикс.
 ///
-/// Матчинг суффиксный (`tag.endsWith(spec.tag)`), поэтому Map по тегу здесь
-/// не годится — итоговый тег несёт префикс контейнера и суффикс
-/// уникализации. Зато сам срез теперь короткий: узлов автовыбора единицы,
-/// а прежний обход шёл по ВСЕМ узлам всех подписок (сотни при большой
-/// сборной подписке) — и делал это на каждую видимую строку каждый кадр.
+/// §675 — показанный тег = `TagResolver.displayTag(префикс, spec.tag)`, без
+/// суффикса уникализации: срез — запасной путь до первой сборки, точный
+/// итоговый тег даёт карта сборки (`lastEmittedGroupMap`). Прежний суффиксный
+/// матчинг (`endsWith`) не находил `Auto-1` и ловил чужие группы.
+/// Узлов автовыбора единицы, а прежний обход шёл по ВСЕМ узлам всех подписок
+/// — на каждую видимую строку каждый кадр.
 List<(String, String)> _autoSpecs = const [];
 List<List<NodeSpec>>? _autoSpecsSource;
+List<String>? _autoSpecsPrefixes;
 
 /// Сброс кэша между тестами: кэш держит ссылки на списки узлов, и соседний
 /// тест с другим набором подписок получил бы чужие значки (§290 — глобальное
@@ -900,34 +903,46 @@ List<List<NodeSpec>>? _autoSpecsSource;
 void resetPoolBadgeCache() {
   _autoSpecs = const [];
   _autoSpecsSource = null;
+  _autoSpecsPrefixes = null;
 }
 
 List<(String, String)> _autoSpecsOf(SubscriptionController subs) {
   // Ключ — identity самих списков узлов: `_replaceList` ставит новый список,
-  // мутация на месте состав spec'ов не меняет.
+  // мутация на месте состав spec'ов не меняет. Префикс входит в показанный
+  // тег — его смена тоже сбрасывает срез.
   final source = [for (final e in subs.entries) e.list.nodes];
+  final prefixes = [for (final e in subs.entries) e.list.tagPrefix];
   final cached = _autoSpecsSource;
+  final cachedPrefixes = _autoSpecsPrefixes;
   if (cached != null &&
+      cachedPrefixes != null &&
       cached.length == source.length &&
-      Iterable<int>.generate(source.length)
-          .every((i) => identical(cached[i], source[i]))) {
+      Iterable<int>.generate(source.length).every((i) =>
+          identical(cached[i], source[i]) &&
+          cachedPrefixes[i] == prefixes[i])) {
     return _autoSpecs;
   }
   _autoSpecsSource = source;
+  _autoSpecsPrefixes = prefixes;
   _autoSpecs = [
-    for (final nodes in source)
-      for (final n in nodes)
-        if (n is AutoSelectSpec) (n.tag, n.poolBadge),
+    for (var i = 0; i < source.length; i++)
+      for (final n in source[i])
+        if (n is AutoSelectSpec)
+          (TagResolver.displayTag(prefixes[i], n.tag), n.poolBadge),
   ];
   return _autoSpecs;
 }
 
-/// §322 — regexp значков у группы с итоговым тегом [tag]. Дефолт, если группа
-/// не нашлась (узел мог приехать из конфиг-редактора, минуя подписки).
+/// §322 — regexp значков у группы с итоговым тегом [tag]. §675 — сравнение
+/// по точному тегу: сначала карта последней сборки (тег с префиксом и
+/// суффиксом уникализации), до неё — показанный тег spec'а. Дефолт, если
+/// группа не нашлась (узел мог приехать из конфиг-редактора, минуя подписки).
 @visibleForTesting
 String poolBadgeOf(SubscriptionController subs, String tag) {
-  for (final (specTag, badge) in _autoSpecsOf(subs)) {
-    if (tag.endsWith(specTag)) return badge;
+  final built = subs.lastEmittedGroupMap[tag];
+  if (built != null) return built.poolBadge;
+  for (final (shown, badge) in _autoSpecsOf(subs)) {
+    if (shown == tag) return badge;
   }
   return kDefaultPoolBadge;
 }

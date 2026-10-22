@@ -54,6 +54,11 @@ abstract class EmitContext {
   /// узла побеждает [noteEmitted].
   void noteEmittedAlias(String finalTag, NodeSpec owner) {}
 
+  /// §675 — итоговый тег узла автовыбора (§322) после префикса и
+  /// `allocateTag`. Отдельно от [noteEmitted]: группа — не узел для обхода
+  /// пресетов (§578) и не цель выключения по отказу ядра.
+  void noteGroupEmitted(AutoSelectSpec group, String finalTag) {}
+
   /// §636 — уровни TLS-политики outbound'а с итоговым тегом [finalTag]
   /// (узел и его родная цепочка). Пустые уровни не записываются: такой
   /// outbound живёт по глобальному слою.

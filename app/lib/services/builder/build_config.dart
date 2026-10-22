@@ -4,7 +4,7 @@ import '../../models/direction.dart';
 import '../../models/custom_rule.dart';
 import '../../models/dns_ref.dart';
 import '../../models/emit_context.dart';
-import '../../models/node_spec.dart' show NodeSpec;
+import '../../models/node_spec.dart' show AutoSelectSpec, NodeSpec;
 import '../../models/node_warning.dart';
 import '../../models/parser_config.dart';
 import '../../models/server_list.dart';
@@ -82,6 +82,10 @@ class BuildResult {
   /// источник × группа). Счётчик предупреждений строки подписки/папки.
   final Map<String, List<RegistryWarning>> sourceBuildCodes;
 
+  /// §675 — итоговый тег узла автовыбора (§322) → его spec. Отдельно от
+  /// [nodeByEmittedTag]: группа — не узел. Экран ищет по нему значки пула.
+  final Map<String, AutoSelectSpec> groupByEmittedTag;
+
   const BuildResult({
     required this.configJson,
     required this.config,
@@ -94,6 +98,7 @@ class BuildResult {
     this.templateWarnings = const [],
     this.buildCodes = const [],
     this.sourceBuildCodes = const {},
+    this.groupByEmittedTag = const {},
   });
 }
 
@@ -1057,6 +1062,7 @@ Future<BuildResult> _buildConfig({
       for (final e in ctx.emittedTagByNode.entries) e.value: e.key,
     },
     nodeBuildWarningsByEmittedTag: registryReport.warningsByEmittedTag,
+    groupByEmittedTag: ctx.groupByEmittedTag,
   );
 }
 
@@ -1268,6 +1274,14 @@ class _BuildCtx implements EmitContext {
   @override
   void noteEmittedAlias(String finalTag, NodeSpec owner) {
     emittedTagAliases[finalTag] = owner;
+  }
+
+  /// §675 — итоговый тег → узел автовыбора (§322).
+  final groupByEmittedTag = <String, AutoSelectSpec>{};
+
+  @override
+  void noteGroupEmitted(AutoSelectSpec group, String finalTag) {
+    groupByEmittedTag[finalTag] = group;
   }
 
   @override

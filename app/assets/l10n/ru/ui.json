@@ -3436,6 +3436,9 @@
   "No servers found in selected files": {
     "value": "В выбранных файлах серверы не найдены"
   },
+  "No servers match, the auto node stays out of the config until one does": {
+    "value": "Совпадений нет — авто-узел не попадёт в конфиг, пока не найдётся хотя бы один сервер"
+  },
   "No source URI for this node": {
     "value": "У этого узла нет исходного URI"
   },

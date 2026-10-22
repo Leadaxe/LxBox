@@ -395,6 +395,14 @@ class _AutoGroupEditScreenState extends State<AutoGroupEditScreen> {
               getLocalText.s("%s of %s servers", '${matched.length}',
                   '${widget.candidates.length}'),
             ),
+            // §675 — пустой состав сборка не эмитит: узел остаётся в папке,
+            // но в конфиг не идёт. Пустую папку называет _memberList.
+            if (matched.isEmpty && widget.candidates.isNotEmpty)
+              _previewLine(
+                cs,
+                getLocalText.s(
+                    "No servers match, the auto node stays out of the config until one does"),
+              ),
             const SizedBox(height: 6),
             _memberList(cs, matched),
 
