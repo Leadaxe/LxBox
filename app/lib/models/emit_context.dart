@@ -15,7 +15,9 @@ import 'tls_policy.dart';
 ///    (sealed-switch внутри ctx по типу);
 ///  - отметить entry как участника preset-групп:
 ///    - `addToSelectorTagList(e)` → попадёт в vpn-1/2/3;
-///    - `addToAutoList(e)` → попадёт в auto-proxy-out (urltest).
+///    - `addToAutoList(e)` → попадёт в `<tag>-auto` Направлений (urltest);
+///      §670: только вместе с `addToSelectorTagList` — запись из одного
+///      селекторного списка в `-auto` не идёт.
 ///
 /// Регистрируем **entry целиком**, не просто тэг. SingboxEntry сам отдаёт
 /// текущий `tag` через геттер — если post-step переименует, preset-группы
@@ -33,7 +35,7 @@ abstract class EmitContext {
   /// Пометить, что этот entry попадает в selector-группы (vpn-1/2/3).
   void addToSelectorTagList(SingboxEntry entry);
 
-  /// Пометить, что этот entry попадает в auto-proxy-out (urltest).
+  /// Пометить, что этот entry попадает в `<tag>-auto` Направлений (urltest).
   void addToAutoList(SingboxEntry entry);
 
   /// Общий реестр для `route.rule_set` / `route.rules` секций. Живёт один

@@ -2876,8 +2876,8 @@
   "Include block": {
     "value": "Добавлять block"
   },
-  "Include detour servers in auto-proxy-out urltest": {
-    "value": "Включать detour-серверы в urltest-группу auto-proxy-out"
+  "Include detour servers in the Direction's auto group": {
+    "value": "Включать detour-серверы в auto-группу Направления"
   },
   "Include direct-out": {
     "value": "Добавлять direct-out"

@@ -574,6 +574,15 @@ Future<BuildResult> _buildConfig({
     ...replaceBuild.candidates,
     ...chainResolution.tags,
   ];
+  // §670 — звено цепочки, которое источник пустил в селектор («Register
+  // detour servers»), но не в auto («Register detour in auto group» off): в
+  // пуле Направления оно есть, в `<tag>-auto` — нет. Обычный узел
+  // регистрируется в оба списка и сюда не попадает.
+  final autoTags = {for (final e in ctx.autoEntries) e.tag};
+  final selectorOnlyTags = {
+    for (final e in ctx.selectorEntries)
+      if (!autoTags.contains(e.tag)) e.tag,
+  };
 
   // §248/§254 — эмитированные узлы (те же map-объекты уходят в config ниже):
   // AWG-advisory читает типы. detour больше НЕ правится in-place (§254 —
@@ -590,6 +599,7 @@ Future<BuildResult> _buildConfig({
   final presetOutbounds = _buildDirectionGroups(
     directions: directions,
     selectorTags: selectorTags,
+    selectorOnlyTags: selectorOnlyTags,
     nodeEntries: nodeEntries,
     emitWarnings: emitWarnings,
     directionsWithoutNodes: directionsWithoutNodes,
@@ -1328,6 +1338,8 @@ class _BuildCtx implements EmitContext {
 List<Map<String, dynamic>> _buildDirectionGroups({
   required List<Direction> directions,
   required List<String> selectorTags,
+  // §670 — теги, которым путь в `<tag>-auto` закрыт политикой detour.
+  Set<String> selectorOnlyTags = const {},
   required List<Map<String, dynamic>> nodeEntries,
   required List<String> emitWarnings,
   required List<String> directionsWithoutNodes, // §274 — display-имена, out-параметр
@@ -1386,7 +1398,7 @@ List<Map<String, dynamic>> _buildDirectionGroups({
     for (final ms in memberSets)
       [
         for (final t in ms)
-          if (!groupTags.contains(t)) t,
+          if (!groupTags.contains(t) && !selectorOnlyTags.contains(t)) t,
       ],
   ];
 

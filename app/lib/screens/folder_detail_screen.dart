@@ -12,6 +12,7 @@ import '../models/direction.dart';
 import '../models/node_warning.dart';
 import '../models/node_link.dart';
 import '../models/server_list.dart';
+import '../services/builder/server_list_build.dart' show folderHasDetourLinks;
 import '../services/error_format.dart';
 import '../services/node_link_address.dart';
 import '../services/probe/probe_controller.dart';
@@ -1595,6 +1596,9 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
               ? widget.entry.list as FolderServers
               : null),
       hasDetour: hasDetour,
+      // §670 — галки register только при звеньях: тот же предикат, что у
+      // сборщика.
+      hasDetourLinks: folderHasDetourLinks(_folder),
       detourMode: _detourMode,
       onTagPrefixChanged: (val) {
         widget.entry.tagPrefix = val.trim();

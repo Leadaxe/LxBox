@@ -40,7 +40,17 @@ With Use and Fill missing — toggles (stored independently of the mode):
 | Knob | Default | Effect |
 |---|---|---|
 | Register detour servers | off | links get into Direction selectors (visible in the node list) |
-| Register detour in auto group | off | links get into `<tag>-auto` |
+| Register detour in auto group | off | links registered in Direction selectors also get into `<tag>-auto` |
+
+The second toggle depends on the first: a link gets into `<tag>-auto` only
+when it is in the Direction's selector too, so with "Register detour servers"
+off the second toggle is disabled. A folded source (Replace with a group)
+reads the second toggle on its own: it decides whether links join the fold's
+auto group. A link is a native chain hop, a node tagged `⚙`, or a folder
+member that another member of the same folder uses as its personal detour.
+A folder whose members only use detours outside the folder has no links, and
+the folder settings do not show the two toggles (the detour mode choice
+stays).
 
 A source without native chains shows a single **Detour server** row ("None —
 nodes connect directly" or `Phone → X → Nodes → Internet`) — the same

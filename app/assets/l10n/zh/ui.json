@@ -2633,8 +2633,8 @@
   "Include block": {
     "value": "包含 block"
   },
-  "Include detour servers in auto-proxy-out urltest": {
-    "value": "将 detour 服务器纳入 auto-proxy-out 的 urltest"
+  "Include detour servers in the Direction's auto group": {
+    "value": "将 detour 服务器纳入方向的 auto 分组"
   },
   "Include direct-out": {
     "value": "包含 direct-out"

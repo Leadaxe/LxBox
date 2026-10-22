@@ -2,9 +2,9 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | In progress |
+| Статус | Done |
 | Дата начала | 2026-10-23 |
-| Дата конца | — |
+| Дата конца | 2026-10-23 |
 | Коммиты | см. `git log --grep 670` |
 | Связанные спеки | [features/006-DETOUR_AND_BALANCE/FUNCTIONS/source-detour-policy.md](../features/006-DETOUR_AND_BALANCE/FUNCTIONS/source-detour-policy.md); [125](125-direction-auto-twin-from-selector.md); [239](239-folder-detour-links.md); [565](565-source-replace-group.md) |
 
@@ -78,11 +78,33 @@ don't seem to work? Not sure what's supposed to happen».
 - `auto_group_folder_test.dart` и соседи: проверять состав `-auto` в итоговом
   конфиге для четырёх клеток матрицы, а не вызов `addToAutoList`.
 
+### Сделано
+
+- Р1: `build_config.dart:577-585` — `selectorOnlyTags` = записи из
+  `selectorEntries` без пары в `autoEntries`; `_buildDirectionGroups`
+  вычитает их из `autoSets` (`:1342, :1401`). Регистрация в пулы идёт через
+  одну функцию `poolAdmission` (`server_list_build.dart:369`, вызовы
+  `:256, :263`) — её же берёт §675 Д3. Свёртка §565 читает `auto` как есть.
+- Р2: подпись «Include detour servers in the Direction's auto group»
+  (`subscription_settings_tab.dart:550`), ключ переименован в `ru`/`zh`
+  `ui.json`; вторая галка неактивна при выключенной первой (`:553`). Папка:
+  `folderHasDetourLinks` (`server_list_build.dart:386`, `FolderDetourPlan.hasChainLinks`
+  `:602`) — родная цепочка, тег `⚙` или `isChainLink`; передаётся новым
+  параметром `hasDetourLinks` (`folder_detail_screen.dart:1601`) и гейтит
+  только register-галки (`subscription_settings_tab.dart:275, :330`).
+  **Отступление:** радио Detour (`hasDetour`, `:1583`) не сужено — у папки с
+  личными detour наружу режимы None / Replace all по-прежнему меняют
+  поведение (§237), прятать их значило бы сломать работающее.
+- Р3: `app/test/builder/detour_auto_registration_test.dart` — итоговый
+  `buildConfig` для четырёх клеток матрицы и предикат папки.
+
 ## Проверка
 
-- Unit: матрица 4 клетки → состав `<tag>` и `<tag>-auto`.
-- Unit (widget или чистая функция предиката): папка с личным detour на внешний
-  узел → блока Detour нет; с detour на члена папки → есть.
+- `flutter test test/builder/detour_auto_registration_test.dart` — 6 тестов,
+  All tests passed: off/off → `vpn-1-auto` = [exit]; on/off → `hop` в `vpn-1`,
+  не в `-auto`; on/on → в обоих; off/on → ни там, ни там. Папка с detour на
+  внешний узел (корень и подписка) → `false`; на члена папки → `true`.
+- `ui_check --strict`: 0 failures.
 
 ## Docs to update
 

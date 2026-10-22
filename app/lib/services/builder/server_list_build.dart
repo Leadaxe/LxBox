@@ -253,19 +253,18 @@ extension ServerListBuild on ServerList {
       // Направлений не идёт ни при какой политике. В `endpoints[]` он
       // эмитирован (`addEntry` выше) — законная цель `detour`, `outbound`
       // правила узла и позиции цепочки.
-      final tailnetOnly = !exitCapableByRegistry(main.map);
-      if (tailnetOnly) {
-        // ничего: ни selector, ни auto
-      } else if (!isMainAsDetour) {
-        toSelector(i, main);
-        toAuto(i, main);
-      } else {
-        if (detourPolicy.registerDetourServers) toSelector(i, main);
-        if (detourPolicy.registerDetourInAuto) toAuto(i, main);
-      }
+      final admit = poolAdmission(
+        tailnetOnly: !exitCapableByRegistry(main.map),
+        detourLink: isMainAsDetour,
+        policy: detourPolicy,
+      );
+      if (admit.selector) toSelector(i, main);
+      if (admit.auto) toAuto(i, main);
+      final hop = poolAdmission(
+          tailnetOnly: false, detourLink: true, policy: detourPolicy);
       for (final d in detours) {
-        if (detourPolicy.registerDetourServers) toSelector(i, d);
-        if (detourPolicy.registerDetourInAuto) toAuto(i, d);
+        if (hop.selector) toSelector(i, d);
+        if (hop.auto) toAuto(i, d);
       }
     }
 
@@ -354,6 +353,42 @@ extension ServerListBuild on ServerList {
       ctx.addReplacePlan(plan);
     }
   }
+}
+
+/// §670 — допуск узла источника в пулы по политике detour. Одна функция на
+/// все пулы: селекторы Направлений, `<tag>-auto` и (§675) пул auto-узла
+/// источника.
+///
+/// - [tailnetOnly] — реестр не считает узел выходом (§435, Tailscale без
+///   `exit_node`): ни в один пул.
+/// - Не звено ([detourLink] false) — в оба.
+/// - Звено цепочки (`⚙`, хоп родной цепочки, `isChainLink` папки):
+///   `selector` — по «Register detour servers»; `auto` — по «Register detour
+///   in auto group». В `<tag>-auto` Направлений запись идёт только вместе с
+///   `selector` (сверка в `buildConfig`); свёртка §565 читает `auto` как есть.
+({bool selector, bool auto}) poolAdmission({
+  required bool tailnetOnly,
+  required bool detourLink,
+  required DetourPolicy policy,
+}) {
+  if (tailnetOnly) return (selector: false, auto: false);
+  if (!detourLink) return (selector: true, auto: true);
+  return (
+    selector: policy.registerDetourServers,
+    auto: policy.registerDetourInAuto,
+  );
+}
+
+/// §670 — есть ли у папки звенья, которые регистрируют галки «Register
+/// detour …»: член с родной цепочкой, член с `⚙`-тегом или член-цель
+/// личного detour другого члена ЭТОЙ папки ([FolderDetourPlan.isChainLink]).
+/// Личный detour на узел вне папки звена в папке не даёт.
+bool folderHasDetourLinks(FolderServers folder) {
+  for (final n in folder.nodes) {
+    if (n is AutoSelectSpec) continue;
+    if (n.chained != null || n.tag.startsWith(kDetourTagPrefix)) return true;
+  }
+  return FolderDetourPlan(folder).hasChainLinks;
 }
 
 /// §322 §3.3 — состав пула по режиму членства.
@@ -562,6 +597,9 @@ class FolderDetourPlan {
 
   /// Член-цель чужого интра-detour → регистрируется как звено (⚙-семантика).
   bool isChainLink(int i) => _chainLinks.contains(i);
+
+  /// §670 — хотя бы один член — звено интра-цепочки.
+  bool get hasChainLinks => _chainLinks.isNotEmpty;
 
   /// Эффективная политика ноды [i] поверх папочной [base] (§237-семантика +
   /// §239 exempt).

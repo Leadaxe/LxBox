@@ -18,6 +18,14 @@
   that a preset or a rule uses stays, as in the build. Stored settings do not
   change. Not verified on a device.
 
+- **"Register detour in auto group" works again
+  ([task 670](docs/spec/tasks/670-register-detour-in-auto-group-dead-toggle.md)).**
+  Detour links get into a Direction's auto group only with this toggle on (and
+  "Register detour servers" on, which puts them into the Direction itself);
+  before, the auto group followed the first toggle alone. The caption now
+  names the Direction's auto group, the toggle is disabled while the first
+  one is off, and a folder shows both toggles only when one of its members is
+  a link of another member's chain.
 - **Stopping the VPN no longer hangs on a stuck core call
   ([task 668](docs/spec/tasks/668-stop-teardown-trace-and-timeouts.md)).**
   Each stop step has a real time limit (the core shutdown step 20 s, the
