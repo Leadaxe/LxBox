@@ -5,7 +5,7 @@
 | Статус | Done |
 | Дата начала | 2026-10-23 |
 | Дата конца | 2026-10-23 |
-| Коммиты | 43cc27c6 (`git log --grep 675`) |
+| Коммиты | 8ac66dd7 (`git log --grep 675`) |
 | Связанные спеки | [322F](322F-balancer-node/spec.md); [features/007-NODE_LIST/FUNCTIONS/server-folders.md](../features/007-NODE_LIST/FUNCTIONS/server-folders.md); [568](568-source-replace-group.md); [591](591-detour-to-auto-group-forbidden.md) |
 
 ## Проблема
