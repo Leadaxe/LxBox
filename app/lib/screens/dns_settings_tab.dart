@@ -333,7 +333,11 @@ class _DnsSettingsTabState extends State<DnsSettingsTab>
             DnsMemberOption(
               tag: s.tag,
               type: s.body['type']?.toString() ?? '',
-              enabled: s.enabled || s.locked,
+              enabled: dnsServerRefEmitted(
+                enabled: s.enabled,
+                presetReferenced: s.lockedByPreset,
+                ruleReferenced: s.usedByRule != null,
+              ),
             ),
       ];
 

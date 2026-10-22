@@ -609,6 +609,9 @@
   "%s · disabled — will be skipped": {
     "value": "%s · выключен — будет пропущен"
   },
+  "Disabled, skipped at build: %s": {
+    "value": "Выключены, при сборке пропускаются: %s"
+  },
   "%s — tap to edit": {
     "value": "%s — нажмите, чтобы изменить"
   },

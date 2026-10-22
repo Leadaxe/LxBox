@@ -10,6 +10,14 @@
 
 ### Fixed
 
+- **The JSON preview of a DNS group no longer lists disabled members
+  ([task 671](docs/spec/tasks/671-dns-group-json-preview-disabled-members.md)).**
+  The "sing-box server preview" of a group server (for example `dns_shield`)
+  drops disabled members the same way the config build does, and a line under
+  the preview names them: "Disabled, skipped at build: …". A disabled member
+  that a preset or a rule uses stays, as in the build. Stored settings do not
+  change. Not verified on a device.
+
 - **Stopping the VPN no longer hangs on a stuck core call
   ([task 668](docs/spec/tasks/668-stop-teardown-trace-and-timeouts.md)).**
   Each stop step has a real time limit (the core shutdown step 20 s, the

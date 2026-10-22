@@ -426,6 +426,9 @@
   "%s · disabled — will be skipped": {
     "value": "%s · 已关闭 —— 将被跳过"
   },
+  "Disabled, skipped at build: %s": {
+    "value": "已关闭，构建时跳过：%s"
+  },
   "%s — tap to edit": {
     "value": "%s — 点击编辑"
   },

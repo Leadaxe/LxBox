@@ -131,6 +131,66 @@ void main() {
     });
   });
 
+  // §671 — превью JSON-вкладки редактора: тот же критерий, что у сборки.
+  group('§671 превью состава группы', () {
+    const six = ['a', 'b', 'c', 'd', 'e', 'f'];
+    Map<String, bool> allOn() => {for (final t in six) t: true};
+
+    test('один член выключен → 5 в превью, он в «skipped»', () {
+      final r = previewDnsGroupMembers(six,
+          selfTag: 'shield', emittedByTag: {...allOn(), 'c': false});
+      expect(r.kept, ['a', 'b', 'd', 'e', 'f']);
+      expect(r.disabled, ['c']);
+    });
+
+    test('все включены → 6, «skipped» пуст', () {
+      final r = previewDnsGroupMembers(six,
+          selfTag: 'shield', emittedByTag: allOn());
+      expect(r.kept, six);
+      expect(r.disabled, isEmpty);
+    });
+
+    test('выключенный, но реферимый правилом/пресетом — остаётся, как у '
+        'сборки', () {
+      final emitted = {
+        ...allOn(),
+        'c': dnsServerRefEmitted(enabled: false, ruleReferenced: true),
+        'd': dnsServerRefEmitted(enabled: false, presetReferenced: true),
+        'e': dnsServerRefEmitted(enabled: false),
+      };
+      final r = previewDnsGroupMembers(six,
+          selfTag: 'shield', emittedByTag: emitted);
+      expect(r.kept, ['a', 'b', 'c', 'd', 'f']);
+      expect(r.disabled, ['e']);
+
+      // Паритет со сборкой: c — выключен, но под правилом; e — выключен.
+      final warnings = <String>[];
+      final out = resolveDnsServersBodies(
+        resolved: [
+          for (final t in six)
+            inlineRef(t, {'type': 'udp', 'server': '1.1.1.1'},
+                enabled: t != 'c' && t != 'e'),
+          inlineRef('shield', groupBody(six, mode: 'fastest')),
+        ],
+        templateByTag: const {},
+        presetServersByTag: const {},
+        ruleReferencedTags: const {'c'},
+        warningsOut: warnings,
+      );
+      final grp = out.firstWhere((b) => b['tag'] == 'shield');
+      expect(grp['servers'], ['a', 'b', 'c', 'd', 'f']);
+      expect(warnings, contains("DNS group 'shield': member 'e' dropped "
+          '(disabled)'));
+    });
+
+    test('незнакомый редактору член не судится, self/повтор снимаются', () {
+      final r = previewDnsGroupMembers(['a', 'x', 'a', 'shield'],
+          selfTag: 'shield', emittedByTag: {'a': true});
+      expect(r.kept, ['a', 'x']);
+      expect(r.disabled, isEmpty);
+    });
+  });
+
   group('§312 validator', () {
     Map<String, dynamic> cfg(List<Map<String, dynamic>> servers) => {
           'outbounds': [
