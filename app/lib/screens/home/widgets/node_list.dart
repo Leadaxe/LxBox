@@ -590,6 +590,10 @@ class HomeNodeList extends StatelessWidget {
     final transport = protoSrcNode?.transportLabel;
     final security = protoSrcNode?.securityLabel;
     final outboundType = cache[tag]?.type;
+    // Член-Направление (`vpn-2` в списке `vpn-1`): заголовок строки — label,
+    // tag — первым звеном подзаголовка, как на плитке Routing.
+    final dirLabel = state.groupLabels[tag];
+    final showDirLabel = dirLabel != null && dirLabel != tag;
     // §608 — Tailscale-узел с exit node: через какое устройство идёт трафик,
     // живо ли оно и не истекает ли ключ. Записи ядра нет — строка как была.
     final tailnet = outboundType == 'tailscale' && state.tunnelUp
@@ -623,6 +627,7 @@ class HomeNodeList extends StatelessWidget {
       child: NodeRow(
         item: NodeViewItem(
           tag: tag,
+          displayLabel: showDirLabel ? dirLabel : null,
           active: tag == state.activeInGroup,
           highlighted: tag == state.highlightedNode,
           delay: state.delayOf(tag),
@@ -652,8 +657,9 @@ class HomeNodeList extends StatelessWidget {
               : _autoLabelWithBadges(
                   controller, subController, cache, tag),
           protocolLabel: protoType == null
-              ? null
+              ? (showDirLabel ? tag : null)
               : [
+                  if (showDirLabel) tag,
                   protoLabel(protoType),
                   ?transport,
                   ?security,

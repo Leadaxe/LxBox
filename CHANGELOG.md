@@ -10,6 +10,16 @@
 
 ### Fixed
 
+- **A renamed Direction is shown by its new title everywhere, not by the old
+  tag on some screens
+  ([task 672](docs/spec/tasks/672-direction-label-vs-tag-consistency.md),
+  issue #171).** The tag still does not change on rename. The notification
+  (`Germany: node`, `[final = Germany]`), a home row whose member is another
+  Direction, the Direction editor header, and the route line, Chain and
+  Detour rows in Statistics Connections and Live now show the title; the tag
+  stays next to it (subtitle, tag line, or `Germany (vpn-1)`). Chain
+  positions and Debug API keep the tag. Not verified on a device.
+
 - **The JSON preview of a DNS group no longer lists disabled members
   ([task 671](docs/spec/tasks/671-dns-group-json-preview-disabled-members.md)).**
   The "sing-box server preview" of a group server (for example `dns_shield`)

@@ -30,6 +30,7 @@ Future<void> showAggregateDetailSheet(
   required AggAxis axis,
   required String key,
   required void Function(String key) onSearchKey,
+  Map<String, String> directionLabels = const {},
 }) {
   return showAppBottomSheet<void>(
     context: context,
@@ -41,6 +42,7 @@ Future<void> showAggregateDetailSheet(
       axis: axis,
       aggKey: key,
       onSearchKey: onSearchKey,
+      directionLabels: directionLabels,
     ),
   );
 }
@@ -53,6 +55,7 @@ class _AggregateDetailSheet extends StatelessWidget {
     required this.axis,
     required this.aggKey,
     required this.onSearchKey,
+    required this.directionLabels,
   });
 
   final List<TrafficEvent> events;
@@ -61,6 +64,7 @@ class _AggregateDetailSheet extends StatelessWidget {
   final AggAxis axis;
   final String aggKey;
   final void Function(String key) onSearchKey;
+  final Map<String, String> directionLabels;
 
   /// Все conn-события (tcp/udp open/close) по этому ключу, newest-first.
   List<TrafficEvent> _connEvents() {
@@ -220,7 +224,7 @@ class _AggregateDetailSheet extends StatelessWidget {
         : '[${e.ip ?? "?"}]:${e.port ?? "?"}';
     return InkWell(
       onTap: () => showTrafficEventDetailSheet(context, e,
-          onSearchKey: onSearchKey),
+          onSearchKey: onSearchKey, directionLabels: directionLabels),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 6),
         child: Row(

@@ -910,8 +910,9 @@ class HomeController extends ChangeNotifier
   }
 
   /// §123 — собрать и отправить строки foreground-уведомления.
-  ///   title = `L×Box [final = <route.final>]` (сырое route.final)
-  ///   text  = `<селектор>: <выбранная нода>`, напр. `vpn-1: L: 🇫🇮⚡Финляндия-2`.
+  ///   title = `L×Box [final = <route.final>]` (label Направления, иначе tag)
+  ///   text  = `<селектор>: <выбранная нода>`, напр. `Germany: L: 🇫🇮⚡Финляндия-2`
+  ///           (селектор — label Направления, иначе tag).
   ///           Селектор = selectedGroup, нода = его `now` (= activeInGroup,
   ///           которое applyGroup заполняет из entry['now'] группы).
   ///           Нет ноды → только селектор; нет конфига → пусто (native подставит
@@ -920,24 +921,42 @@ class HomeController extends ChangeNotifier
   Future<void> _pushNotificationLabels() async {
     // §311 — шторка описывает ТЕКУЩИЙ туннель → route.final из среза ядра
     // (activeConfigRaw; фоллбэк на файл, если снапшот ещё не подтянут).
-    final routeFinal = RouteConfig.finalTag(_state.activeConfigRaw);
+    final lines = notificationLines(
+      routeFinal: RouteConfig.finalTag(_state.activeConfigRaw),
+      selectedGroup: _state.selectedGroup,
+      activeInGroup: _state.activeInGroup,
+      directionLabels: _directionLabels,
+    );
+    await _vpn.setNotificationTitle(lines.title);
+    await _vpn.setNotificationText(lines.text);
+  }
+
+  /// Строки шторки без побочных эффектов (см. [_pushNotificationLabels]).
+  /// Направление подписано label'ом (`directionLabels[tag]`), tag — фоллбэк.
+  @visibleForTesting
+  static ({String title, String text}) notificationLines({
+    required String? routeFinal,
+    required String? selectedGroup,
+    required String? activeInGroup,
+    required Map<String, String> directionLabels,
+  }) {
     final title = (routeFinal == null || routeFinal.isEmpty)
         ? 'L×Box'
-        : 'L×Box [final = $routeFinal]';
+        : 'L×Box [final = ${directionLabels[routeFinal] ?? routeFinal}]';
 
     // selectedGroup = активный селектор (vpn-1), activeInGroup = его выбранная
     // нода (`now`). Формат подтекста: «<селектор>: <нода>».
-    final group = _state.selectedGroup;
-    final node = _state.activeInGroup;
+    final group = selectedGroup == null
+        ? null
+        : (directionLabels[selectedGroup] ?? selectedGroup);
+    final node = activeInGroup;
     final String text;
     if (group != null && group.isNotEmpty) {
       text = (node != null && node.isNotEmpty) ? '$group: $node' : group;
     } else {
       text = (node != null && node.isNotEmpty) ? node : (routeFinal ?? '');
     }
-
-    await _vpn.setNotificationTitle(title);
-    await _vpn.setNotificationText(text);
+    return (title: title, text: text);
   }
 
   /// Atomic start: native call + intent-based sticky reset.

@@ -2,9 +2,9 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | In progress |
+| Статус | Done |
 | Дата начала | 2026-10-23 |
-| Дата конца | — |
+| Дата конца | 2026-10-23 |
 | Коммиты | см. `git log --grep 672` |
 | Связанные спеки | [features/026-DIRECTIONS](../features/026-DIRECTIONS/FEATURE.md) P2 (tag неизменяем), [FUNCTIONS/direction-model.md](../features/026-DIRECTIONS/FUNCTIONS/direction-model.md):60 |
 
@@ -58,12 +58,50 @@ API и правилами.
   передавать снаружи, не тянуть storage в канал.
 - Позиции цепочки — не трогать.
 
+### Сделано
+
+- Шторка: строки собирает чистая `HomeController.notificationLines`
+  (`controllers/home_controller.dart:937`), `_pushNotificationLabels` (`:921`)
+  только отправляет; `directionLabels[tag] ?? tag` у селектора и у `route.final`.
+- Home: `node_list.dart:594-595` берёт `state.groupLabels[tag]`; label уходит в
+  новое поле `NodeViewItem.displayLabel` (`widgets/node_view_item.dart`), `NodeRow`
+  рисует его заголовком (`widgets/node_row.dart:615`); tag — первым звеном
+  подзаголовка (`protocolLabel`), у селектора без протокола — им одним.
+- Редактор: заголовок «Edit direction · %s» берёт `c.displayLabel`
+  (`direction_edit_screen.dart:403`); строка tag под ним уже была.
+- Кандидаты-папки: не тронуты. Это свёртки источников (`FoldCandidate` =
+  `{tag, source}`, `direction_edit_screen.dart:967`), не Направления: у группы
+  свёртки нет label отдельно от tag, имя группы и есть tag, а подзаголовок уже
+  несёт имя источника. Маппинга tag→label для них нет.
+- Stats/Live: `directionTagDisplay(tag, labels)` → `label (tag)`
+  (`services/selector_info.dart:112`); `foldSelectorPairs(chain, labels:)` подписывает
+  элементы, признак селектора по сырому тегу. Карта — параметром (`labels`) в
+  `CcConnection.routingLineOf` (`vpn/cc_channel.dart:1253`), зеркальном
+  `TrafficEvent.routingLineOf` (`services/traffic_profiler/models.dart`) и
+  `routingRows` (`stats_screen/routing_section.dart:50-59`); storage в канал не
+  попал. Источник карты — `homeController.state.groupLabels`: `stats_screen.dart:291`
+  → `ConnectionsView` → `showConnectionDetailSheet`; `live_events_tab.dart:231` →
+  `TraceExplorer` → `LiveView`, `showTrafficEventDetailSheet`,
+  `showAggregateDetailSheet`. `routingLine` (дамп) зовёт без карты — сырые теги.
+- Свёртка выхода с label: `Germany (vpn-1) (node)` — формат «label (tag)» плюс
+  скобка выбора §251.
+- Позиции цепочки не тронуты. Новых l10n-строк нет.
+
 ## Проверка
 
 - Widget/unit: шторка с label «Germany» для `vpn-1` → текст «Germany: node»;
   Stats Chain для `vpn-1` → «Germany (vpn-1)».
 - Ручная: переименовать направление → ни на одном экране из таблицы не
   осталось строки, где tag стоит без label.
+
+### Итог проверки
+
+- `test/screens/direction_label_display_test.dart` (7 тестов, All tests passed):
+  шторка `vpn-1`+«Germany» → «Germany: node» и `[final = Germany]`; Chain
+  `vpn-1` → «Germany (vpn-1)»; Detour со свёрткой; routing-строка Conns ≡ Live с
+  картой и сырые теги без неё; `NodeRow` члена-Направления — label заголовком,
+  tag в подзаголовке. `flutter analyze` чистый.
+- Ручная проверка на устройстве не проводилась.
 
 ## Docs to update
 

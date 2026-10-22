@@ -36,6 +36,7 @@ class ConnectionDetailData {
     this.rule = '',
     this.chain = const [],
     this.detour = const [],
+    this.directionLabels = const {},
     this.outbound = '',
     this.outboundType = '',
     this.upBytes,
@@ -85,6 +86,9 @@ class ConnectionDetailData {
   final String rule;
   final List<String> chain;
   final List<String> detour;
+
+  /// `tag Направления → label` для строк Chain/Detour (`label (tag)`).
+  final Map<String, String> directionLabels;
   final String outbound;
   final String outboundType;
 
@@ -110,6 +114,7 @@ class ConnectionDetailData {
     CcConnection c, {
     required bool closed,
     DateTime? now,
+    Map<String, String> directionLabels = const {},
   }) {
     final address = hostOf(c.destination);
     final port = portOf(c.destination);
@@ -144,10 +149,11 @@ class ConnectionDetailData {
       port: port,
       network: c.network,
       protocol: c.protocol,
-      route: c.routingLineOf(),
+      route: c.routingLineOf(labels: directionLabels),
       rule: c.rule,
       chain: c.chains,
       detour: c.detours,
+      directionLabels: directionLabels,
       outbound: c.outbound,
       outboundType: c.outboundType,
       upBytes: c.uplink,
@@ -179,7 +185,10 @@ class ConnectionDetailData {
     );
   }
 
-  factory ConnectionDetailData.fromEvent(TrafficEvent e) {
+  factory ConnectionDetailData.fromEvent(
+    TrafficEvent e, {
+    Map<String, String> directionLabels = const {},
+  }) {
     final process = (e.process ?? '').trim();
     final package = packageNameFromProcess(process);
     final host = (e.domain ?? '').trim();
@@ -209,10 +218,11 @@ class ConnectionDetailData {
       network: e.network ?? '',
       protocol: e.protocol ?? '',
       kind: e.kind.name,
-      route: e.routingLine,
+      route: e.routingLineOf(labels: directionLabels),
       rule: e.rule ?? '',
       chain: e.outboundChain,
       detour: e.detourChain,
+      directionLabels: directionLabels,
       outbound: e.outboundChain.isNotEmpty ? e.outboundChain.first : '',
       outboundType: e.outboundType ?? '',
       upBytes: e.upBytes,

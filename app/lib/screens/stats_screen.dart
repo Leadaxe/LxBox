@@ -286,7 +286,10 @@ class _StatsScreenState extends State<StatsScreen> {
                 byRule: _byRule,
                 detourChain: _detourChain,
               ),
-              const ConnectionsView(),
+              ConnectionsView(
+                directionLabels:
+                    widget.homeController?.state.groupLabels ?? const {},
+              ),
               LiveEventsTab(
                 subController: widget.subController,
                 homeController: widget.homeController,

@@ -235,7 +235,13 @@ class TrafficEvent {
   /// [compact] — для live-списка: префикс `process ⇒ [network]` опускается,
   /// т.к. дублирует строку процесса + бейдж типа над ней. Строка начинается с
   /// `rule` (`final ⇒ vpn-1 : …`). Detail-sheet зовёт без compact (полная).
-  String routingLineOf({bool compact = false}) {
+  ///
+  /// [labels] — `tag Направления → label` от UI: Направления подписаны
+  /// `label (tag)` ([directionTagDisplay]), как в `CcConnection.routingLineOf`.
+  String routingLineOf({
+    bool compact = false,
+    Map<String, String> labels = const {},
+  }) {
     final sb = StringBuffer();
     // Ось решения (⇒): процесс → [net] правило → селекторы (сверху вниз).
     final inner = <String>[];
@@ -246,7 +252,10 @@ class TrafficEvent {
         : ruleText);
     if (outboundChain.length > 1) {
       // selectors = chain[1:] от ВЕРХНЕГО к нижнему (reverse).
-      inner.addAll(outboundChain.sublist(1).reversed);
+      inner.addAll(outboundChain
+          .sublist(1)
+          .reversed
+          .map((t) => directionTagDisplay(t, labels)));
     }
     sb.write(inner.join(' ⇒ '));
     // §252 — физический путь (→ по ходу пакета): транспорт изнутри наружу
@@ -255,11 +264,13 @@ class TrafficEvent {
     // СТРУКТУРЕ outboundChain (`[node, …selectors]` — роли известны от
     // ядра §174), не через SelectorInfo: селекторы не должны рассыпаться в
     // ложные «хопы», даже если держатель тегов пуст.
-    final phys = <String>[...foldSelectorPairs(detourChain).reversed];
+    final phys = <String>[
+      ...foldSelectorPairs(detourChain, labels: labels).reversed,
+    ];
     if (outboundChain.isNotEmpty) {
-      var exit = outboundChain.first;
+      var exit = directionTagDisplay(outboundChain.first, labels);
       for (final sel in outboundChain.skip(1)) {
-        exit = '$sel ($exit)';
+        exit = '${directionTagDisplay(sel, labels)} ($exit)';
       }
       phys.add(exit);
     }

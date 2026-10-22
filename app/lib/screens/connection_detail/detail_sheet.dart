@@ -34,12 +34,14 @@ Future<void> showConnectionDetailSheet(
   required bool closed,
   bool oneWay = false,
   required void Function(String id) onClose,
+  Map<String, String> directionLabels = const {},
 }) {
   return showAppBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     builder: (ctx) => ConnectionDetailSheet(
-      data: ConnectionDetailData.fromConnection(conn, closed: closed),
+      data: ConnectionDetailData.fromConnection(conn,
+          closed: closed, directionLabels: directionLabels),
       onClose: onClose,
       headerBadge: oneWay ? const _OneWayBadge() : null,
       topBanner: oneWay ? _OneWayBanner(conn: conn) : null,
@@ -52,12 +54,14 @@ Future<void> showTrafficEventDetailSheet(
   BuildContext context,
   TrafficEvent event, {
   required void Function(String key) onSearchKey,
+  Map<String, String> directionLabels = const {},
 }) {
   return showAppBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     builder: (ctx) => ConnectionDetailSheet(
-      data: ConnectionDetailData.fromEvent(event),
+      data: ConnectionDetailData.fromEvent(event,
+          directionLabels: directionLabels),
       onSearchKey: onSearchKey,
       appExtraRows: (ctx) => [
         _confidenceRow(ctx, event),
@@ -237,6 +241,7 @@ class ConnectionDetailSheet extends StatelessWidget {
           detour: d.detour,
           outbound: d.outbound,
           outboundType: d.outboundType,
+          labels: d.directionLabels,
         ).map((r) => detailRow(context, r.label, r.value)).toList(),
       ),
     );

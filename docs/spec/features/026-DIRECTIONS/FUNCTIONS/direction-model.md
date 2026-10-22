@@ -63,6 +63,15 @@ counters; the tag conflict reason in the dialog.
   membership is a regex over final node tags, so node addresses `{folder_id?, tag}`
   ([017-BACKUP_AND_STORAGE · P17](../../017-BACKUP_AND_STORAGE/FEATURE.md#promises)) play
   no part here.
+- **Shown by title, tag beside it.** Wherever a Direction is shown to the user, the
+  primary text is its title (with the ⚙ prefix of a detour Direction); the tag stays as a
+  secondary line or in brackets, so it can be matched against Debug API and rules: the
+  Routing tile (title, tag below), the editor header (title, tag line below), a member row
+  on home that is another Direction (title, tag first in the subtitle), the notification
+  (`<title>: <node>`, `[final = <title>]`), Statistics Connections and Live (route line,
+  Chain and Detour rows: `<title> (<tag>)`). A Direction without a title, or a tag that is
+  not a Direction, is shown as the tag. Chain positions, Debug API, automation and the
+  traffic dump keep the bare tag.
 - A new tag is rejected with a reason: "Tag cannot be empty", "This tag is reserved by the
   config" (`direct-out`, `block`, `block-out`, `dns-out`, `direct`, `reject`, `drop`), "A
   direction with this tag already exists", "This tag collides with an auto twin

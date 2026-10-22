@@ -18,6 +18,7 @@ export '../services/openconnect_auth.dart' show OpenConnectRowKind;
 class NodeViewItem {
   const NodeViewItem({
     required this.tag,
+    this.displayLabel,
     required this.active,
     required this.highlighted,
     required this.delay,
@@ -43,6 +44,10 @@ class NodeViewItem {
 
   /// Tag ноды или group selector (например `vpn-1`, `✨auto`).
   final String tag;
+
+  /// Имя строки для показа, когда член списка — другое Направление: его label
+  /// (`Germany`), а [tag] уходит в подзаголовок. `null` → показываем [tag].
+  final String? displayLabel;
 
   /// `tag == state.activeInGroup` — выделение selected outbound в группе.
   final bool active;

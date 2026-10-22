@@ -399,7 +399,8 @@ class _DirectionEditScreenState extends State<DirectionEditScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: Text(getLocalText.s("Edit direction · %s", c.tag)),
+          // Заголовок — label (как плитка Routing), tag — строкой ниже.
+          title: Text(getLocalText.s("Edit direction · %s", c.displayLabel)),
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),
             onPressed: _handleBack,

@@ -1248,7 +1248,13 @@ class CcConnection {
   /// [ruleLabel] — резолвленное человекочитаемое имя правила (UI-слой
   /// `RuleNameResolver`); если передано — используется вместо сырого `rule`
   /// (модель vpn не знает про резолвер). Пусто → берётся `rule` или `final`.
-  String routingLineOf({bool compact = false, String? ruleLabel}) {
+  /// [labels] — `tag Направления → label` от UI (модель storage не знает):
+  /// Направления подписаны `label (tag)` ([directionTagDisplay]).
+  String routingLineOf({
+    bool compact = false,
+    String? ruleLabel,
+    Map<String, String> labels = const {},
+  }) {
     final sb = StringBuffer();
     // Ось решения (⇒): [net] rule → селекторы (сверху вниз = chains[1:].reversed).
     final inner = <String>[];
@@ -1258,21 +1264,28 @@ class CcConnection {
     inner.add(
       !compact && network.isNotEmpty ? '[$network] $ruleText' : ruleText,
     );
-    if (chains.length > 1) inner.addAll(chains.sublist(1).reversed);
+    if (chains.length > 1) {
+      inner.addAll(chains
+          .sublist(1)
+          .reversed
+          .map((t) => directionTagDisplay(t, labels)));
+    }
     sb.write(inner.join(' ⇒ '));
     // §252 — физический путь (→ по ходу пакета): транспорт изнутри наружу
     // (detour-ось развёрнута: вход первым) → выход ОДНИМ элементом
     // `селектор (…вложенно… (node))` (свёртка ПО СТРУКТУРЕ chains
     // `[node, …selectors]`, не через SelectorInfo; пустые chains —
     // outbound-fallback) → назначение.
-    final phys = <String>[...foldSelectorPairs(detours).reversed];
+    final phys = <String>[
+      ...foldSelectorPairs(detours, labels: labels).reversed,
+    ];
     final exitChain = chains.isNotEmpty
         ? chains
         : (outbound.isNotEmpty ? [outbound] : null);
     if (exitChain != null) {
-      var exit = exitChain.first;
+      var exit = directionTagDisplay(exitChain.first, labels);
       for (final sel in exitChain.skip(1)) {
-        exit = '$sel ($exit)';
+        exit = '${directionTagDisplay(sel, labels)} ($exit)';
       }
       phys.add(exit);
     }

@@ -26,12 +26,17 @@ class LiveView extends StatelessWidget {
     required this.events,
     required this.unattributed,
     required this.onOpenDetail,
+    this.directionLabels = const {},
   });
 
   final bool recording;
   final List<TrafficEvent> events;
   final List<TrafficEvent> unattributed;
   final void Function(TrafficEvent e) onOpenDetail;
+
+  /// `tag Направления → label` (`HomeState.groupLabels`): Направления в
+  /// routing-строке и карточке подписаны `label (tag)`.
+  final Map<String, String> directionLabels;
 
   @override
   Widget build(BuildContext context) {
@@ -121,7 +126,8 @@ class LiveView extends StatelessWidget {
     // compact: префикс [net] process ⇒ опущен — он дублирует строку процесса
     // (строка 2) + бейдж типа (TCP/DNS, строка 1). Начинаем с rule.
     final meta = <String>[];
-    final routing = e.routingLineOf(compact: true);
+    final routing =
+        e.routingLineOf(compact: true, labels: directionLabels);
     if (routing.isNotEmpty) meta.add(routing);
 
     return Padding(
