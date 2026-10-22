@@ -54,6 +54,14 @@
   dump, and the dump is included in the support pack
   (`stop_stuck_goroutines`). Every stop leaves its steps with timings in the
   app log. Not verified on a device.
+- **Test servers with the VPN off: Stop works and Start works again
+  ([task 669](docs/spec/tasks/669-probe-session-cancel-stop-timeout-race.md)).**
+  Stop aborts the measurements already sent to the core instead of waiting
+  for their timeout; while the test session closes the bar shows `Stopping…`
+  and the button is inactive. Closing the test session is capped at 3 s, so a
+  stuck close no longer blocks the next test or the VPN start. An old run can
+  no longer close the session of a new one or reset its indicator
+  (GitHub issue #171). Not verified on a device.
 
 ---
 

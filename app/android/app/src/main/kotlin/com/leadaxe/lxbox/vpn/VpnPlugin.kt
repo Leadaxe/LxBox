@@ -1004,8 +1004,10 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 }
             }
             // §236 — headless probe-сессия (Test servers в папке при
-            // ВЫКЛЮЧЕННОМ VPN). start/urlTest/stop; гейт «VPN не запущен» —
+            // ВЫКЛЮЧЕННОМ VPN). start/urlTest/cancel/stop; гейт «VPN не запущен» —
             // внутри ProbeSession. Все вызовы блокирующие → Dispatchers.IO.
+            // §669 — probeStart отдаёт {error, runId}; остальные вызовы несут
+            // runId владельца прогона, чужой/устаревший — no-op («stale run»).
             "probeStart" -> {
                 val config = call.argument<String>("config") ?: ""
                 pluginScope.launch {
@@ -1018,7 +1020,9 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 val link = call.argument<String>("link") ?: ""
                 val timeoutMs = call.argument<Int>("timeoutMs") ?: 0
                 pluginScope.launch {
-                    val r = withContext(Dispatchers.IO) { ProbeSession.urlTest(tag, link, timeoutMs) }
+                    val r = withContext(Dispatchers.IO) {
+                        ProbeSession.urlTest(probeRunId(call), tag, link, timeoutMs)
+                    }
                     result.success(r)
                 }
             }
@@ -1032,14 +1036,23 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 val userAgent = call.argument<String>("userAgent") ?: ""
                 pluginScope.launch {
                     val r = withContext(Dispatchers.IO) {
-                        ProbeSession.getUrl(tag, link, timeoutMs, maxBytes, userAgent)
+                        ProbeSession.getUrl(probeRunId(call), tag, link, timeoutMs, maxBytes, userAgent)
                     }
                     result.success(r)
                 }
             }
-            "probeStop" -> {
+            // §669 — обрыв начатых замеров (disconnect клиента сессии, §175).
+            "probeCancel" -> {
+                val runId = probeRunId(call)
                 pluginScope.launch {
-                    withContext(Dispatchers.IO) { runCatching { ProbeSession.stop() } }
+                    withContext(Dispatchers.IO) { runCatching { ProbeSession.cancel(runId) } }
+                    result.success(null)
+                }
+            }
+            "probeStop" -> {
+                val runId = probeRunId(call)
+                pluginScope.launch {
+                    withContext(Dispatchers.IO) { runCatching { ProbeSession.stop(runId) } }
                     result.success(null)
                 }
             }
@@ -1297,6 +1310,12 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             else -> result.notImplemented()
         }
     }
+
+    /// §669 — runId владельца probe-прогона. Dart-int приезжает Integer или
+    /// Long по величине, поэтому через Number; нет аргумента → 0 (ни одна
+    /// сессия такого id не получает — вызов уйдёт в «stale run»).
+    private fun probeRunId(call: MethodCall): Long =
+        call.argument<Number>("runId")?.toLong() ?: 0L
 
     /// §242/§507 — PSS-разбивка своего процесса для Stats → Memory sheet.
     ///

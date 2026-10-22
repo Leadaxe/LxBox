@@ -58,51 +58,91 @@ won't be able to start again — nothing happens. Got to force stop the whole ap
 
 ## Решение
 
-Три правки, по образцу уже принятых решений §175 и §287.
+Три правки, по образцу уже принятых решений §175 и §287. Сделано так
+(строки — на момент коммита `fix(669)`).
 
 ### Р1. Владелец сессии (гонка)
 
-- У пробной сессии появляется идентификатор прогона (`runId`/token):
-  `probeStart` возвращает его, `probeUrlTest`/`probeStop` принимают его.
-  Вызов с чужим или устаревшим идентификатором — no-op с кодом «stale run»
-  (без исключения в UI).
-- `ProbeRunner` помнит свой идентификатор; `finally` старого прогона не может
-  закрыть сессию нового.
-- Экраны папки/подписки: `_testing=false` и сброс индикаторов — только из
-  того прогона, который сейчас активен (сравнение по экземпляру `ProbeRunner`
-  или runId). Stop переводит UI в состояние «stopping» (кнопка неактивна,
-  подпись «Stopping…») до фактического завершения старого прогона, затем
-  Start снова доступен. Если это противоречит текущему UX в features/009 —
-  согласовать: спеку править, UI не изобретать.
+- Kotlin: живая сессия — один объект `Session(runId, server, client)` в
+  `AtomicReference` (`ProbeSession.kt:48`); `start` выдаёт новый runId из
+  монотонного счётчика и отдаёт `{error, runId}` (`ProbeSession.kt:89`).
+  `urlTest`/`getUrl` (`:137`, `:167`) сверяют runId: чужой/устаревший →
+  `{"error": "stale run"}` (`STALE_RUN`, `:68`), без исключения.
+  `stop(runId)` (`:199`) с чужим id — no-op с записью в logcat; безымянный
+  `stop()` (`:211`) остался принудительным для `BoxService.startCommandServer`
+  и `serviceStop`. Канал: `probeStart` → Map, остальные вызовы несут `runId`
+  (`VpnPlugin.kt:1045-1058`, разбор `probeRunId` — `:1317`, через `Number`).
+- Dart: `CcProbeStart` и `kProbeStaleRun` (`cc_channel.dart:1560-1580`);
+  `probeStart` возвращает `CcProbeStart`, `probeUrlTest`/`probeGetUrl`/
+  `probeStop` требуют `runId` (`cc_channel.dart:462-517`).
+- `ProbeRunner` помнит `_runId` текущего батча (`probe_runner.dart:65`),
+  `finally` зовёт `probeStop(runId)` своей сессии (`:174`). Ответ «stale run»
+  на замер = прогон вытеснен: раннер останавливается, вердикт узлу не пишет
+  (`:202`). Диагностика узла (§392) тоже адресует свою сессию
+  (`node_diagnostics_runner.dart:137-154`).
+- Экраны: `_testing=false` и сброс таймера — только если завершился прогон,
+  который сейчас активен (`identical(_runner, runner)`;
+  `folder_detail_screen.dart:334,341`, `subscription_detail_screen.dart:320,326`).
+  Stop ставит `_stopping` (`folder_detail_screen.dart:282`,
+  `subscription_detail_screen.dart:281`): подпись `Stopping…` на месте
+  `Testing… N done` (`:1390` / `:531`), кнопка неактивна и серая — так же,
+  как она уже выглядит у пустой папки / подписки без узлов
+  (`:1416` / `:577`). Строка `Stopping…` уже есть в переводах (статус
+  туннеля), новых строк нет. Противоречия с features/009 нет; там дописано
+  поведение отмены (`FUNCTIONS/server-list-test.md` / `.ru.md`, ревизия 13).
+- Попутно: экран подписки при закрытии не отменял прогон (папка отменяла) —
+  добавлена отмена в `dispose` (`subscription_detail_screen.dart:251`).
 
 ### Р2. Обрыв начатых замеров
 
-- По образцу §175: отдельный клиент/контекст у пробной сессии, `cancel()`
-  обрывает контекст в ядре → начатые dial'ы падают сразу, не дожидаясь
-  таймаута. Если в `ProbeSession` замеры идут через `CommandClient` —
-  `disconnect` его экземпляра; если напрямую — контекст с отменой на Kotlin
-  стороне. Выбрать то, что уже есть в биндинге (`BoxCommandClient.kt:347-350`
-  как образец).
+- Замеры пробной сессии идут через её `CommandClient`, поэтому взят образец
+  `BoxCommandClient.cancelPing` (§175): новый вызов `probeCancel(runId)` →
+  `ProbeSession.cancel` (`ProbeSession.kt:153`) помечает сессию отменённой и
+  делает `disconnect` клиента этой сессии — ядро отменяет per-call ctx уже
+  ушедших dial'ов. Не synchronized: не ждёт монитора долгого `start`/`stop`.
+  Последующие замеры этой сессии получают «probe run cancelled». Сервер
+  закрывает `probeStop` владельца.
+- `ProbeRunner.cancel()` остаётся синхронным (его зовёт
+  `ProbeLifecycle.haltAll`), но кроме флага шлёт `probeCancel` текущего runId
+  (`probe_runner.dart:75`). Stop во время `probeStart` — замеры не
+  начинаются, сессия сразу закрывается.
 
 ### Р3. Потолок остановки
 
-- `ProbeSession.stop`: `closeService` под `withTimeout` (ориентир — тот же
-  потолок, что у §287 для VPN-службы, 3 с), по истечении — принудительное
-  освобождение сессии (обнулить ссылку, залогировать «probe close timed out»),
-  чтобы монитор не держал `probeStart` и `startCommandServer`.
-- Snap-замер WG/AWG (пачки §523) не менять.
+- `closeServerBounded` (`ProbeSession.kt:236`): `close()` → `closeService()` в
+  потоке-демоне, ожидание `CountDownLatch` не дольше 3 с (`CLOSE_TIMEOUT_MS`,
+  `:73`). По истечении — `Log.w("probe close timed out …, session released")`;
+  ссылка на сессию снята до закрытия, так что монитор не держит `start`/`stop`
+  и `BoxService.startCommandServer`. `withTimeout` не взят сознательно: вокруг
+  блокирующего JNI-вызова он ничего не ограничивает (вывод §668, `StopTrace`).
+- Порядок `close()` раньше `closeService()` — как §330 у VPN-службы:
+  command.sock освобождается сразу, даже если разбор WG-узлов висит; иначе
+  следующий старт (проба или VPN) не смог бы занять сокет.
+- Snap-замер WG/AWG (пачки §523) не менялся.
 
 ## Проверка
 
-- Unit (Dart): `probe_runner` — `cancel()` во время прогона → `run()`
-  завершается ≤ одного замера; `probeStop` старого прогона после `probeStart`
-  нового не закрывает новую сессию (мок канала с runId).
-- Unit (Dart, экран): Stop → состояние stopping → старый прогон завершён →
-  Start доступен; индикатор нового прогона не гасится старым.
-- Kotlin: таймаут `closeService` → `stop` возвращается, следующая `start`
-  не блокируется.
-- Устройство: папка с ≥ 8 WG + ≥ 8 vless, VPN выключен, Test servers → Stop
-  через 2 с → Start сразу: второй прогон идёт, первый не вмешивается.
+- Unit (Dart), `test/probe/probe_runner_cancel_test.dart` на двойнике
+  сессии `test/probe/probe_session_fake.dart` (семантика `ProbeSession.kt`:
+  runId, «stale run», обрыв по `probeCancel`, рестарт по `probeStart`):
+  `cancel()` при шести висящих dial'ах → `run()` завершается сразу,
+  `probeCancel(1)` и `probeStop(1)`, вердиктов нет; `cancel()` до старта
+  сессии; `probeStop` старого прогона после `probeStart` нового — no-op,
+  новый домеряет все 8 узлов. All tests passed (3).
+- Unit (Dart, экран), `test/screens/subscription_detail_probe_stop_test.dart`:
+  Stop → `Stopping…` и неактивная кнопка (повторный тап не поднимает
+  сессию), пока висит `probeStop` → после закрытия Start доступен → новый
+  прогон в сессии 2 с индикатором `Testing…`, итог `8 ok`. All tests passed.
+  Экран папки той же правки отдельным тестом не покрыт (код зеркальный).
+- Обновлены моки под новый канал и прогнаны: `test/probe/probe_test.dart`
+  (30), `test/services/node_diagnostics_runner_test.dart` (11, плюс проверка
+  runId у GET/stop), `test/vpn/cc_get_url_test.dart` (9) — All tests passed.
+- Kotlin: unit-теста нет (инфраструктуры JVM-тестов на libbox нет, APK не
+  собирали); компиляцию проверит CI.
+- Устройство — не проверено: папка с ≥ 8 WG + ≥ 8 vless, VPN выключен,
+  Test servers → Stop через 2 с → Start сразу: второй прогон идёт, первый не
+  вмешивается; `Stopping…` держится не дольше ~3 с; logcat `ProbeSession`
+  без «probe close timed out» на обычных конфигах.
 
 ## Docs to update
 

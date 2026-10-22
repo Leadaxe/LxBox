@@ -451,34 +451,47 @@ class CcChannel {
 
   // ─── §236 — headless probe-сессия (Test servers при выключенном VPN) ───
 
-  /// Стартует probe-инстанс ядра (конфиг БЕЗ tun). Возвращает '' при успехе,
-  /// текст ошибки иначе (в т.ч. «VPN is running…» — тогда caller уходит на
-  /// ветку [urlTestOutbound] через боевое ядро).
-  Future<String> probeStart(String config) async {
-    final r = await _methods.invokeMethod<String>('probeStart', {
+  /// Стартует probe-инстанс ядра (конфиг БЕЗ tun). [CcProbeStart.error] — ''
+  /// при успехе, текст ошибки иначе (в т.ч. «VPN is running…» — тогда caller
+  /// уходит на ветку [urlTestOutbound] через боевое ядро).
+  ///
+  /// §669 — [CcProbeStart.runId] — владелец сессии: остальные probe-вызовы
+  /// несут его, а с чужим/устаревшим id ничего не делают ([kProbeStaleRun]).
+  /// Новый старт поверх живой сессии её закрывает — старый прогон уже не
+  /// может закрыть новую.
+  Future<CcProbeStart> probeStart(String config) async {
+    final r = await _methods.invokeMethod<Map<dynamic, dynamic>>('probeStart', {
       'config': config,
     });
-    return r ?? '';
+    return CcProbeStart.fromMap(_asMap(r ?? const {}));
   }
 
   /// Тест одной ноды в probe-сессии. Семантика результата как у
   /// [urlTestOutbound] (Variant B: провал — только в `error`).
   Future<CcDelayResult> probeUrlTest(
     String tag, {
+    required int runId,
     String link = '',
     int timeoutMs = 0,
   }) async {
     final r = await _methods.invokeMethod<Map<dynamic, dynamic>>(
       'probeUrlTest',
-      {'tag': tag, 'link': link, 'timeoutMs': timeoutMs},
+      {'runId': runId, 'tag': tag, 'link': link, 'timeoutMs': timeoutMs},
     );
     return CcDelayResult.fromMap(_asMap(r ?? const {}));
   }
+
+  /// §669 — обрыв начатых замеров прогона [runId] (как [cancelPing] §175:
+  /// disconnect клиента сессии → ядро отменяет контексты dial'ов). Сессия
+  /// остаётся до [probeStop]. Чужой id — no-op.
+  Future<void> probeCancel(int runId) =>
+      _methods.invokeMethod<void>('probeCancel', {'runId': runId});
 
   /// §392 — диагностический GET через узел в probe-сессии (VPN выключен).
   /// Семантика результата — см. [getUrlViaOutbound].
   Future<CcGetUrlResult> probeGetUrl(
     String tag, {
+    required int runId,
     required String link,
     int timeoutMs = 0,
     int maxBytes = 0,
@@ -487,6 +500,7 @@ class CcChannel {
     final r = await _methods.invokeMethod<Map<dynamic, dynamic>>(
       'probeGetUrl',
       {
+        'runId': runId,
         'tag': tag,
         'link': link,
         'timeoutMs': timeoutMs,
@@ -497,8 +511,10 @@ class CcChannel {
     return CcGetUrlResult.fromMap(_asMap(r ?? const {}));
   }
 
-  /// Гасит probe-сессию (идемпотентно).
-  Future<void> probeStop() => _methods.invokeMethod<void>('probeStop');
+  /// Гасит probe-сессию прогона [runId] (идемпотентно; чужой/устаревший id —
+  /// no-op, §669). Kotlin закрывает сервер под потолком 3 с.
+  Future<void> probeStop(int runId) =>
+      _methods.invokeMethod<void>('probeStop', {'runId': runId});
 
   /// §392 — диагностический HTTP GET через узел боевого ядра, адресуемый тегом
   /// (kernel SPEC 058). В отличие от [urlTestOutbound] возвращает ТЕЛО ответа:
@@ -1549,6 +1565,27 @@ class CcDelayResult {
   factory CcDelayResult.fromMap(Map<String, dynamic> m) => CcDelayResult(
     delay: _int(m['delay']),
     error: m['error']?.toString() ?? '',
+  );
+}
+
+/// §669 — ответ probe-сессии на вызов с чужим/устаревшим runId: прогон вытеснен
+/// новым (`ProbeSession.STALE_RUN` на Kotlin-стороне, сверка дословная).
+const kProbeStaleRun = 'stale run';
+
+/// §669 — результат `probeStart`: [error] '' при успехе, иначе текст ошибки;
+/// [runId] — владелец поднятой сессии (0 при ошибке). Его несут
+/// `probeUrlTest`/`probeGetUrl`/`probeCancel`/`probeStop`.
+class CcProbeStart {
+  const CcProbeStart({required this.error, required this.runId});
+
+  final String error;
+  final int runId;
+
+  bool get ok => error.isEmpty;
+
+  factory CcProbeStart.fromMap(Map<String, dynamic> m) => CcProbeStart(
+    error: m['error']?.toString() ?? '',
+    runId: _int(m['runId']),
   );
 }
 

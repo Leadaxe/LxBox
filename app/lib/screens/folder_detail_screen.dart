@@ -77,6 +77,10 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
   // пачкой), а этот throttle сливает их в один setState раз в ~120мс.
   Timer? _probeFlushTimer;
   bool _testing = false;
+  // §669 — Stop нажат, прогон ещё доходит до finally (обрыв замеров +
+  // закрытие сессии): кнопка неактивна, подпись «Stopping…». Start снова
+  // доступен только после фактического завершения прогона.
+  bool _stopping = false;
   ProbeThresholds _thresholds = const ProbeThresholds();
 
   // §236 UI-rework — локальный фильтр членов (как на главном: regex +
@@ -271,11 +275,12 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
   }
 
   Future<void> _toggleTest() async {
+    if (_stopping) return;
     if (_testing) {
+      // §669 — `_testing` гасит только сам прогон, дойдя до конца: иначе
+      // новый Start поднял бы сессию, которую закрыл бы finally старого.
       _runner?.cancel();
-      _probeFlushTimer?.cancel();
-      _probeFlushTimer = null;
-      setState(() => _testing = false);
+      setState(() => _stopping = true);
       return;
     }
     if (_folder.members.isEmpty) return;
@@ -327,14 +332,22 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
         // §286 — накапливаем без setState-на-члена; throttle сольёт в один
         // ребилд (~120мс). Иначе «WARP GENERATOR» (~100 членов) даёт ~100
         // setState пачкой → главный поток лагает.
+        if (!identical(_runner, runner)) return; // §669 — вытеснен
         if (i < probeKeys.length) _probe[probeKeys[i]] = r;
         _scheduleProbeFlush();
       },
     );
+    // §669 — состояние экрана гасит только активный прогон: завершение
+    // вытесненного не трогает индикатор нового.
+    if (!identical(_runner, runner)) return;
+    _runner = null;
     _probeFlushTimer?.cancel();
     _probeFlushTimer = null;
     if (!mounted) return;
-    setState(() => _testing = false);
+    setState(() {
+      _testing = false;
+      _stopping = false;
+    });
     // §236 — VPN стартовал между гейтом и probeStart (гонка): runner вернул
     // маркер → тот же гейт-попап, не текст ошибки.
     if (err == kProbeVpnRunning) {
@@ -1374,7 +1387,9 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     final muted = theme.colorScheme.onSurfaceVariant;
     final s = _probeSummary();
     final String info;
-    if (_testing) {
+    if (_stopping) {
+      info = getLocalText.s("Stopping…"); // §669
+    } else if (_testing) {
       info = getLocalText.s("Testing… %d done", s.ok + s.dead);
     } else if (_probe.isNotEmpty) {
       info = [
@@ -1399,8 +1414,10 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
           ),
           // Кнопка теста — как mass-ping на главном (Icons.speed / stop),
           // long-press = настройки теста (URL/timeout + пороги шкалы).
+          // §669 — на время «Stopping…» кнопка неактивна (как при пустой
+          // папке): Start доступен только после завершения прогона.
           GestureDetector(
-            onTap: _folder.members.isEmpty
+            onTap: _folder.members.isEmpty || _stopping
                 ? null
                 : () => unawaited(_toggleTest()),
             onLongPress: _showTestSettings,
@@ -1409,7 +1426,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
               child: Icon(
                 _testing ? Icons.stop_circle_outlined : Icons.speed,
                 size: 22,
-                color: _folder.members.isEmpty
+                color: _folder.members.isEmpty || _stopping
                     ? Theme.of(context).disabledColor
                     : null,
               ),

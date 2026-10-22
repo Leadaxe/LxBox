@@ -113,12 +113,14 @@ void main() {
       });
       final r = await CcChannel.instance.probeGetUrl(
         'node-de',
+        runId: 3,
         link: 'https://ipinfo.io/json',
         timeoutMs: 10000,
         maxBytes: 65536,
       );
       expect(seen.method, 'probeGetUrl');
       expect((seen.arguments as Map)['tag'], 'node-de');
+      expect((seen.arguments as Map)['runId'], 3); // §669
       expect(r.ok, true);
       expect(r.content, 'trace');
     });
