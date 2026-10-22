@@ -5,7 +5,7 @@
 | Статус | Done |
 | Дата начала | 2026-10-23 |
 | Дата конца | 2026-10-23 |
-| Коммиты | см. `git log --grep 670` |
+| Коммиты | 41555a53, d5f18a98 (`git log --grep 670`) |
 | Связанные спеки | [features/006-DETOUR_AND_BALANCE/FUNCTIONS/source-detour-policy.md](../features/006-DETOUR_AND_BALANCE/FUNCTIONS/source-detour-policy.md); [125](125-direction-auto-twin-from-selector.md); [239](239-folder-detour-links.md); [565](565-source-replace-group.md) |
 
 ## Проблема
