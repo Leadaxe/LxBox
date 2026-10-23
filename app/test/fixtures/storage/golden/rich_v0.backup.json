@@ -791,7 +791,10 @@
       {
         "kind": "template",
         "tag": "google_udp",
-        "enabled": true
+        "enabled": true,
+        "vars": {
+          "outbound": "direct-out"
+        }
       },
       {
         "kind": "template",
