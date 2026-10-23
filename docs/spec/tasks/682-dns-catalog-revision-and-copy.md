@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | In progress — решения владельца получены |
+| Статус | Done (на устройстве не проверено) — 74c0ddd3 (A), 9b8d9afb (B), de53f2a7 (C) |
 | Дата начала | 2026-10-23 |
 | Связанные спеки | [680](680-dns-servers-catalog-seed-once.md) — каталог, посев один раз, удаление шаблонных; [681](681-dns-servers-uniform-backup-catalog.md) — `template_catalog` в бэкапе; [117F](117F-dns-rework/spec.md) — vars у шаблонных серверов, `direct-out` = нет ключа `detour` (решение №2), rename inline с каскадом (задача 4b) |
 
@@ -179,3 +179,32 @@ DNS, `dns_settings_tab.dart` ~853) резолвит адреса узлов пр
   меняет тело в превью JSON.
 - Duplicate и смена тега: оригинал на месте с локами, копия inline с
   ожидаемым тегом и телом; эмулятор.
+
+## Реализация
+
+- **A — vars у четырёх записей** (74c0ddd3): `app/assets/wizard_template.json`
+  — `opendns_udp`, `opendns_doh`, `quad9_doh`, `yandex_dot` получили
+  `outbound` и `dns_ip`, тело `"server": "@dns_ip"` на прежнем месте и
+  `"detour": "@outbound"` в конце (порядок ключей сохранён). Адреса сверены
+  по A/AAAA самих SNI-имён (`dns.opendns.com`, `dns.quad9.net`,
+  `common.dot.dns.yandex.net`) — в выбор вошли ровно они; у Яндекса второй
+  v6 `2a02:6b8:0:1::feed:ff` (в таблице выше его не было,
+  `2a02:6b8::feed:0ff` записан как `2a02:6b8::feed:ff`). Переводы
+  `assets/l10n/{ru,zh}/template.json`. Тест
+  `test/services/wizard_template_dns_vars_defaults_test.dart` (тело с
+  дефолтами = прежнее, байт в байт); `wizard_template_dns_shield_test.dart`
+  читает тела через подстановку дефолтов.
+- **B — копия** (9b8d9afb): `dns_settings_screen/dns_server_copy.dart`
+  (`dnsCopyTag`, `dnsServerCopy`); редактор — ⋮ → Duplicate, поле Tag у
+  template/preset с «Save as copy» (`edit_controller.dart`: `canCopy`,
+  `savesAsCopy`, `copySnapshot`); long-press тайла — пункт Duplicate в
+  `showRuleContextMenu` (`showDuplicate`); вкладка — `_addServer(initial:)`
+  открывает копию редактором нового сервера, «Save as copy» дописывает
+  inline-запись. Duplicate из редактора берёт текущие значения формы (как
+  превью JSON); несохранённые правки оригинала при этом не применяются.
+  Тест `test/screens/dns_settings_screen/dns_server_copy_test.dart`.
+- **C — предупреждение** (de53f2a7): `defaultResolverTunnelDetour` в
+  `dns_server_resolver.dart`, ⚠ и диалог в `widgets/resolver_picker.dart`
+  (`tunnelDetour`). Эмитируемый член группы = есть в списке и включён или
+  залочен пресетом/правилом. Тест
+  `test/screens/dns_settings_screen/default_resolver_tunnel_test.dart`.
