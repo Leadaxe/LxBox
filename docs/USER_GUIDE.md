@@ -21,9 +21,9 @@ code — about the logic and the order in which to set things up.
   - [Servers carry traffic only through directions](#servers-carry-traffic-only-through-directions)
   - [The subscription screen has four tabs: Nodes, Settings, Source, Filters](#the-subscription-screen-has-four-tabs-nodes-settings-source-filters)
   - [Replace with a group folds a subscription or folder into one group](#replace-with-a-group-folds-a-subscription-or-folder-into-one-group)
-- [2. Directions sets the exits and the default path](#2-directions-sets-the-exits-and-the-default-path)
+- [2. Directions sets the exits](#2-directions-sets-the-exits)
   - [Interrupt connections on switch — three switches for three events](#interrupt-connections-on-switch--three-switches-for-three-events)
-- [3. Rules sets exceptions to the default](#3-rules-sets-exceptions-to-the-default)
+- [3. Rules sets exceptions and the default exit](#3-rules-sets-exceptions-and-the-default-exit)
   - [Presets — a catalog of ready-made rules to copy into Rules](#presets--a-catalog-of-ready-made-rules-to-copy-into-rules)
   - [A rule can assign a DNS server to its own domains](#a-rule-can-assign-a-dns-server-to-its-own-domains)
   - [Raw JSON and the View tab cover fields the form lacks](#raw-json-and-the-view-tab-cover-fields-the-form-lacks)
@@ -117,14 +117,15 @@ App traffic passes four stages, and each answers its own question:
             │  (traffic of admitted apps)
             ▼
  ┌─────────────────────────┐
- │ 2. Directions           │   Which directions exist and where traffic goes
- │    (Default traffic)    │   by default: a direction, direct or block.
+ │ 2. Directions           │   Which directions exist: the exits
+ │                         │   and the servers behind each one.
  └─────────────────────────┘
             │
             ▼
  ┌─────────────────────────┐
- │ 3. Rules                │   Exceptions to the default:
- │                         │   which domain or app goes to which direction.
+ │ 3. Rules                │   Which domain or app goes to which direction;
+ │    (Default traffic)    │   the rest goes by default: a direction,
+ │                         │   direct or block.
  └─────────────────────────┘
             │
             ▼
@@ -225,7 +226,8 @@ holds directions, rules, DNS and Tunnel apps.
 
    Without a subscription, Get WARP provides a working server (see below).
 2. **Directions** (Routing → Directions). To send all traffic through the
-   tunnel by default, check that Default traffic = VPN.
+   tunnel by default, check that Default traffic = VPN: Routing → Rules, the
+   last row.
 3. **Tunnel apps** (Routing → Tunnel apps), optional. Off — all apps go through
    L×Box; Allow-list — only the selected ones.
 4. **Rules** (Routing → Rules). Exceptions: ads → Block, local domains →
@@ -338,6 +340,20 @@ Interrupt connections on switch checkbox sit in the Advanced section. The
 app has three checkboxes with that name; which one fires when is covered in
 [Directions](#interrupt-connections-on-switch--three-switches-for-three-events).
 
+An auto node admits servers by the same rules as a direction: a Tailscale
+node without an exit node never gets in, and a detour link (a server marked
+⚙) gets in only when its source has Register detour servers on (see
+[Detour](#detour-is-set-on-a-server-subscription-or-folder)).
+
+An auto node without members does not go into the config: an empty group
+would stop the core. This happens with an empty folder or a Rule that matches
+nothing. The build warns `Auto node "…" was skipped: it has no members…`, and
+the Rule editor shows `No servers match, the auto node stays out of the
+config until one does` under the counter. If the folder is folded with
+[Replace with a group](#replace-with-a-group-folds-a-subscription-or-folder-into-one-group)
+in Auto mode, its auto nodes stay unreachable: the Auto group does not include
+them, and the build warns that the auto node is unreachable.
+
 A direction's auto twin (`<direction>-auto`, Directions section) is a
 different object: it collects the direction's nodes by the direction's
 filter, while an auto node lives in the general server list alongside the
@@ -425,7 +441,10 @@ of this affects servers you switched off by hand.
 The speedometer icon in the bar above the node list pings the subscription's
 nodes without starting the VPN. With the VPN running, a dialog appears with
 **Stop VPN** and Cancel buttons: on top of a live tunnel the measurements
-would be wrong.
+would be wrong. A folder has the same icon. A second tap stops the test and
+cuts the measurements already under way; until the test session closes, the
+summary reads `Stopping…` and the icon is inactive. Closing takes at most
+3 seconds, then the test can be started again.
 
 The **Settings** tab holds Tag prefix, detour, Update interval, Replace
 with a group (section
@@ -497,12 +516,14 @@ one choice in the direction.
 | Pool size, Pool tolerance (ms), Sticky session by | Load balance mode parameters. | `3`, `0`, `process` and `domain` |
 | Interrupt connections on switch | Visible in Auto and Both modes. Drops connections when the auto group switches server. Picking a server in the group by hand always drops connections. | Off |
 
-Section [2. Directions](#2-directions-sets-the-exits-and-the-default-path)
+Section [2. Directions](#2-directions-sets-the-exits)
 describes the auto-selection modes, and section
 [Interrupt connections on switch](#interrupt-connections-on-switch--three-switches-for-three-events)
 describes the Interrupt connections on switch box. The group's
 auto-selection leaves out the provider's auto nodes from the same
-subscription; manual selection lists them.
+subscription; manual selection lists them. Detour links of the source join
+the group's auto-selection only with Register detour in auto group on (see
+[Detour](#detour-is-set-on-a-server-subscription-or-folder)).
 
 The group name must not match a name already taken. The editor warns but
 still lets you save:
@@ -522,10 +543,11 @@ rejects an empty group. Nothing from such a source reaches a direction.
 
 ---
 
-## 2. Directions sets the exits and the default path
+## 2. Directions sets the exits
 
-The **Directions** tab lists the exits traffic takes to the outside and sets
-which one works by default. Where: Routing → Directions.
+The **Directions** tab lists the exits traffic takes to the outside. Where:
+Routing → Directions. Which exit works by default is set on the Rules tab, in
+Default traffic.
 
 There are three kinds of exit:
 
@@ -540,15 +562,6 @@ neither turn off nor delete `vpn-1`; when you delete another direction,
 references to it move to `vpn-1`. The **Add direction** button adds
 directions: for example, different servers for different jobs.
 
-The **Default traffic** setting at the bottom of the tab sets the exit for
-captured traffic that no rule in Rules matched. The options are direct, any
-enabled direction and block. On a fresh install `vpn-1` is selected.
-
-> ⚠️ An app in the Allow-list with Default traffic = direct goes out
-> directly, and the VPN looks broken. The Allow-list decides whether traffic
-> enters L×Box; Default traffic decides where it goes next. To send traffic
-> through the tunnel, choose a direction in Default traffic.
-
 A direction does not store servers; it selects them from the common pool: all
 subscriptions, folders and standalone servers. The **Node filter (regex)**
 field in the direction editor sets the selection:
@@ -556,6 +569,13 @@ field in the direction editor sets the selection:
 - empty field — every server enters the direction;
 - text or regex (`🇩🇪`, `^mullvad-`) — only servers whose name matched;
 - the `!` toggle left of the field — every server except the matches.
+
+Under the field the editor shows how many servers the filter matched. The
+count comes from the config the app builds, not from the running core, so it
+works with the VPN off too. When nothing matches, the line reads
+`No nodes match`. The count covers the same entries the direction's selector
+gets: servers, source groups (provider auto nodes, folded sources) and hop
+chains.
 
 Pattern syntax, examples and negation are in
 [Regular expressions](#regular-expressions-regex).
@@ -579,17 +599,45 @@ options:
 | **Load balance** | Connections spread across a pool of several live nodes. A session stays on one node by the keys in Sticky session by, by default by app and domain, so rotation does not break connections. With no keys ticked, nodes alternate freely. Only the pool is health-checked; latencies of all nodes in the list come from Auto-ping after connect. |
 | **Hold until failure** | The current node stays while it works; after a failure the choice moves to the next live one. Auto-ping after connect does not move it. |
 
+How Load balance fills its pool depends on Pool tolerance (ms):
+
+- **0** (the default) — after connecting, the first Pool size nodes enter the
+  pool without tests; afterwards only the pool's nodes are tested, and the
+  others are tested when a pool slot dies and needs a replacement;
+- **above 0** — every node is tested, and the pool holds the fastest ones; a
+  pool node gives way only to a node faster by more than the tolerance.
+
+After Auto-ping after connect (App Settings → General), the app re-selects
+the node only in Fastest groups; Load balance and Hold until failure keep
+their choice. **Run URLTest** in a group's menu on the home screen tests
+every node of the group and picks the fastest one; in Hold until failure this
+drops the held node.
+
 You set the direction's tag: `ru-exit`, `streaming`, `vpn-1`. There is no cap
 on the number of directions. A direction created without a name gets the next
 free tag `vpn-N`. The form refuses a tag that is empty, reserved (`direct`,
 `block`, `reject`), already taken or equal to someone's auto twin tag
 `<tag>-auto`, and names the reason.
 
+The tag is set once, when you create the direction, and does not change. The
+**Title** field in the editor changes the name the app shows: in the
+notification shade, in the node list, in Statistics. The tag stays next to
+the title in small print or in brackets, `Germany (vpn-1)`, so it can be
+matched against rules and the Debug API. Positions of a hop chain show tags.
+
 Besides the selected servers, a direction can offer direct, block and other
 directions as options. The boxes sit in the **What goes into this direction**
 section of the editor. Only directions listed above can be included: this
 order rules out loops. Reorder the list and you change both what can be
 included and the order of directions in the config.
+
+You reorder directions by dragging a row by its handle; `vpn-1` moves like
+any other. While you drag, the rows where the direction cannot be dropped are
+tinted in the error color: below — the first direction that includes the
+dragged one, and everything under it; above — the last direction the dragged
+one includes, and everything over it. A drop there changes nothing and shows
+a hint such as `Cannot move: "Streaming" includes "Germany"`. The Debug API
+refuses such an order the same way, with code 409.
 
 ### Interrupt connections on switch — three switches for three events
 
@@ -620,10 +668,10 @@ make a streaming one strict.
 
 ---
 
-## 3. Rules sets exceptions to the default
+## 3. Rules sets exceptions and the default exit
 
-The **Rules** tab sets exceptions to Default traffic: which traffic goes to
-which direction. Where: Routing → Rules → Add rule.
+The **Rules** tab sets which traffic goes to which direction and where the
+rest goes. Where: Routing → Rules → Add rule.
 
 A rule consists of conditions and an action. The **Source** switch sets where
 the conditions come from: Inline — form fields, Remote (.srs) — an external
@@ -667,7 +715,15 @@ Typical rules:
 - UDP (games, calls) → direct, TCP through the tunnel.
 
 Rules apply top to bottom; the first match wins. If none matched, traffic goes
-to Default traffic from Directions.
+to **Default traffic (no rule matched)**, the last row of the tab. It is the
+last, implicit rule: it always sits under the rules and does not move with
+them. The options are direct, any enabled direction and block. On a fresh
+install `vpn-1` is selected.
+
+> ⚠️ An app in the Allow-list with Default traffic = direct goes out
+> directly, and the VPN looks broken. The Allow-list decides whether traffic
+> enters L×Box; Default traffic decides where it goes next. To send traffic
+> through the tunnel, choose a direction in Default traffic.
 
 ### Presets — a catalog of ready-made rules to copy into Rules
 
@@ -825,7 +881,11 @@ members — any of your DNS servers. Next to them you pick the **Selection mode*
 and how long errors and wins are remembered: Error TTL and Win TTL, the latter
 shown only for Fastest. A disabled or deleted member does not break the group:
 the editor marks it as skipped, and once you re-enable it, it returns to its
-place. In the server list a group carries the badge
+place. The editor's JSON tab shows the group as the build will emit it:
+disabled members are left out, and a line under the preview lists them,
+`Disabled, skipped at build: …`. A member that a DNS rule or a preset refers
+to stays in the group even when disabled. In the server list a group carries
+the badge
 `group · mode · member count`; with the tunnel up, it shows the current target
 and each member's state: errors, RTT.
 
@@ -925,6 +985,20 @@ The window has four sections:
 - **Directions** — detour directions; the section appears when such
   directions exist;
 - **Standalone servers** — standalone servers.
+
+A subscription or folder whose servers go through intermediate links shows
+two more boxes in its Settings tab. A link is a server another server of the
+same source goes out through, marked ⚙. By default links work only as
+intermediate hops and are not offered as exits.
+
+| Box | What it does | Default |
+|---|---|---|
+| Register detour servers | Links become selectable exits in directions. | Off |
+| Register detour in auto group | Links also join the direction's auto twin. Active only while the first box is on. | Off |
+
+A folder shows both boxes only when it has links: a member that another
+member of the same folder goes out through. A detour to an outside server,
+such as WARP or a subscription server, does not make a link.
 
 ### Detours form a chain but not a loop
 
@@ -1255,7 +1329,7 @@ The group splits tunnels into two kinds. A tunnel on the active route is the
 node selected in a direction, or a node in the pool of an auto twin: the group
 that picks the direction's node by itself when the Include auto (urltest)
 checkbox is on in the direction editor (see
-[Directions](#2-directions-sets-the-exits-and-the-default-path)). The other
+[Directions](#2-directions-sets-the-exits)). The other
 WireGuard nodes from subscriptions and folders are off the route: no traffic
 goes to them until someone selects them.
 
@@ -1669,7 +1743,7 @@ places.
 Location (background) and Nearby Wi-Fi devices are required by rules with
 the WI-FI NETWORK condition and by recording of visited networks: without
 them, Android returns `<unknown ssid>` instead of the network name. The
-condition is described in [Rules](#3-rules-sets-exceptions-to-the-default).
+condition is described in [Rules](#3-rules-sets-exceptions-and-the-default-exit).
 
 The **Developer** section is for troubleshooting — your own or at the
 developer's request in an issue:
@@ -1781,7 +1855,7 @@ commands and events with ready-made recipes.
 
 **The app is in the Allow-list, but the VPN does not affect it.**
 The Allow-list only admits traffic into L×Box; Default traffic in Routing →
-Directions decides where it goes. With Default traffic = Direct, admitted apps
+Rules decides where it goes. With Default traffic = Direct, admitted apps
 go out directly. Set **Default traffic** = VPN.
 
 **The VPN started working after you added L×Box to the Allow-list.**
