@@ -147,6 +147,9 @@ typedef DnsBackupApply = ({
 /// проверять нечем, цели не режутся. Значения типа `dns_server` не
 /// проверяются (висячий резолвер лечит сборка).
 ///
+/// §680 — шаблонные записи (`kind: template`): файл — полный список, записи
+/// приёмника с тегом вне файла снимаются; у файла без серверов — нет.
+///
 /// `final`/`strategy`/`default_domain_resolver` применяются только когда
 /// приехали непустыми: пустая строка в файле означает «сторона это не
 /// переносила», а не «сбросить».
@@ -208,6 +211,20 @@ DnsBackupApply applyDnsBackup({
       final gated = _gateServerTarget(outServers[i], recordVars, knownTargets, sink);
       if (gated != null) outServers[i] = gated;
     }
+  }
+  // §680 (решение владельца 23.10.2026) — для `kind: template` файл есть
+  // полный список: шаблонные записи приёмника, тегов которых в файле нет,
+  // снимаются (пользователь удалил сервер — на восстановлении его нет).
+  // inline/preset — слияние выше. Файл без серверов список не трогает.
+  if (incoming.servers.isNotEmpty) {
+    final fileTemplateTags = <String>{
+      for (final s in incoming.servers)
+        if (s is DnsServerTemplate) s.tag,
+    };
+    final before = outServers.length;
+    outServers.removeWhere(
+        (s) => s is DnsServerTemplate && !fileTemplateTags.contains(s.tag));
+    applied += before - outServers.length;
   }
 
   final outRules = rules.toList();

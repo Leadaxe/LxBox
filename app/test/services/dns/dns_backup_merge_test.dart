@@ -162,4 +162,71 @@ void main() {
       DnsServerInline(enabled: true, tag: 'my-doh', body: {'server': '1.1.1.1'}),
     ]);
   });
+
+  group('§680 — шаблонные серверы: файл — полный список', () {
+    const allTags = [
+      'local_dns_resolver',
+      'google_udp',
+      'google_dot',
+      'google_doh',
+      'cloudflare_udp',
+      'cloudflare_dot',
+      'safe_dns_dot',
+      'opendns_udp',
+      'opendns_doh',
+      'quad9_doh',
+      'yandex_dot',
+      'dns_shield',
+    ];
+    List<DnsServerRef> full({Set<String> without = const {}}) => [
+          for (final t in allTags)
+            if (!without.contains(t))
+              DnsServerTemplate(enabled: t != 'safe_dns_dot', tag: t),
+        ];
+    const mine = DnsServerInline(
+        enabled: true, tag: 'my-doh', body: {'type': 'https', 'server': 'x'});
+    const preset = DnsServerPreset(
+        enabled: true, tag: 'ru-direct:yandex_udp', presetId: 'ru-direct');
+
+    test('шаблонная запись вне файла снимается; inline/preset — слияние', () {
+      final got = _apply(
+        const [],
+        incomingServers: full(without: {'opendns_udp'}),
+        localServers: [...full(), mine, preset],
+      );
+      final tags = got.servers.map((s) => s.tag).toList();
+      expect(tags, isNot(contains('opendns_udp')));
+      expect(tags, containsAll(['my-doh', 'ru-direct:yandex_udp']));
+      expect(tags.length, allTags.length - 1 + 2);
+      expect(got.applied, 1);
+    });
+
+    test('старый бэкап со всеми 12 серверами ничего не теряет', () {
+      final got = _apply(
+        const [],
+        incomingServers: full(),
+        localServers: [...full(), mine],
+      );
+      expect(got.servers, [...full(), mine]);
+      expect(got.applied, 0);
+    });
+
+    test('удалённый у приёмника сервер из файла возвращается', () {
+      final got = _apply(
+        const [],
+        incomingServers: full(),
+        localServers: full(without: {'opendns_udp'}),
+      );
+      expect(got.servers.map((s) => s.tag), contains('opendns_udp'));
+      expect(got.servers.length, allTags.length);
+    });
+
+    test('файл без серверов список не трогает', () {
+      final got = _apply(
+        const [DnsRuleInline(name: 'corp', rule: _corp)],
+        localServers: full(),
+      );
+      expect(got.servers, full());
+    });
+  });
 }

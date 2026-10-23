@@ -15,6 +15,9 @@ import '../../services/rule_set_downloader.dart';
 import '../../services/settings_storage.dart';
 import '../../services/template_loader.dart';
 import '../../widgets/wifi_entry.dart';
+import '../../models/dns_ref.dart';
+import '../dns_settings_screen/dns_server_resolver.dart'
+    show defaultDnsServerTag;
 import 'normalizers.dart' as norm;
 import 'sections/srs_section.dart' show SrsDownloadState;
 import 'wifi_zip.dart';
@@ -324,22 +327,38 @@ class CustomRuleEditController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// §117: теги DNS-серверов для дропдауна — storage-refs (kind-ref'ы §043,
-  /// синхронизируются на каждом build/DNS-screen open) ∪ template-серверы
-  /// (fallback для свежей установки, где storage ещё пуст).
+  /// §117/§680: теги DNS-серверов для дропдауна — только список
+  /// пользователя (kind-ref'ы §043, синхронизируются на каждом
+  /// build/DNS-screen open). Серверы шаблона вне списка не предлагаются:
+  /// mirror на них не эмитится (висящая ссылка).
   Future<void> _loadDnsServerTags() async {
     final stored = await SettingsStorage.getDnsServers();
     final template = await TemplateLoader.load();
+    final wrappers = template.dnsOptionsModel.wrappersByTag;
     final tags = <String>{
       for (final s in stored)
         if (s.tag.isNotEmpty) s.tag,
     };
-    // §279 — typed DnsOptionsModel вместо raw-скана dns_options.servers.
-    tags.addAll(template.dnsOptionsModel.servers.map((s) => s.tag));
+    // Тип для пригодности дефолта: inline — из тела, template — из обёртки;
+    // у preset тип здесь неизвестен — считается пригодным.
+    final typeByTag = <String, String>{
+      for (final s in stored)
+        s.tag: switch (s) {
+          DnsServerInline(:final body) => body['type']?.toString() ?? '',
+          DnsServerTemplate() =>
+            (wrappers[s.tag]?['server'] as Map?)?['type']?.toString() ?? '',
+          DnsServerPreset() => '',
+        },
+    };
     if (_disposed) return;
     _dnsServerTags = tags.toList();
+    _dnsDefaultServerTag = defaultDnsServerTag(_dnsServerTags,
+        eligible: (t) => typeByTag[t] != 'fakeip' && typeByTag[t] != 'hosts');
     notifyListeners();
   }
+
+  /// §680 — дефолт DNS-опции правила: [defaultDnsServerTag] по списку.
+  String _dnsDefaultServerTag = '';
 
   /// §030/new_fields — читает текущий vpn_mode для гейта `mixed-in`-чекбокса
   /// в INBOUND-секции. `mixed-in` существует только в proxy/vpn_proxy (§119).
@@ -602,9 +621,7 @@ class CustomRuleEditController extends ChangeNotifier {
     }
     var tag = _dns?.serverTag ?? '';
     if (tag.isEmpty) {
-      tag = _dnsServerTags.contains('google_udp')
-          ? 'google_udp'
-          : (_dnsServerTags.isNotEmpty ? _dnsServerTags.first : '');
+      tag = _dnsDefaultServerTag;
     }
     // §256: copyWith сохраняет forceIpv4 (ортогонален dedicated-серверу).
     _dns = (_dns ?? const RuleDns()).copyWith(enabled: true, serverTag: tag);

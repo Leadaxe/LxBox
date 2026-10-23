@@ -180,6 +180,22 @@ Map<String, List<String>> dnsServerListRefs(
   return refs;
 }
 
+/// §680 — дефолтный сервер для авто-выбора (DNS-опция правила,
+/// `domain_resolver` hostname-адреса): `google_udp`, если он в [tags];
+/// иначе первый пригодный ([eligible] — не fakeip/hosts); иначе пусто.
+/// [tags] — только теги списка: сервер вне списка дал бы висящую ссылку.
+/// — pure.
+String defaultDnsServerTag(
+  List<String> tags, {
+  bool Function(String tag)? eligible,
+}) {
+  if (tags.contains('google_udp')) return 'google_udp';
+  for (final t in tags) {
+    if (t.isNotEmpty && (eligible == null || eligible(t))) return t;
+  }
+  return '';
+}
+
 /// Tags доступные в dropdown'ах (DNS Final / Default Resolver / per-rule).
 /// Filter `enabled` на ref-level. §117: locked-сервер (реферится активным
 /// пресетом или правилом) build всегда force-include'ит — показываем его

@@ -88,9 +88,7 @@
           "google_doh",
           "google_dot",
           "cloudflare_dot",
-          "opendns_doh",
-          "quad9_doh",
-          "yandex_dot"
+          "quad9_doh"
         ],
         "mode": "fastest",
         "error_ttl": "5m",
@@ -115,27 +113,6 @@
         "path": "/dns-query",
         "domain_resolver": "google_udp",
         "tag": "doh3_411_test"
-      },
-      {
-        "type": "https",
-        "tag": "opendns_doh",
-        "server_port": 443,
-        "server": "208.67.222.222",
-        "path": "/dns-query",
-        "tls": {
-          "enabled": true,
-          "server_name": "dns.opendns.com"
-        }
-      },
-      {
-        "type": "tls",
-        "tag": "yandex_dot",
-        "server_port": 853,
-        "server": "77.88.8.8",
-        "tls": {
-          "enabled": true,
-          "server_name": "common.dot.dns.yandex.net"
-        }
       }
     ],
     "rules": [

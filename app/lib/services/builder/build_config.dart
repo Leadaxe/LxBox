@@ -967,6 +967,11 @@ Future<BuildResult?> _buildConfig({
         'missing DNS server "${h.target}" — falling back to DNS routing.');
   }
 
+  // §680 — `domain_resolver` DNS-сервера на тег вне `dns.servers` (новый
+  // дефолт var шаблона указывает на сервер, которого в списке нет): ключ
+  // снимается, ядро берёт `route.default_domain_resolver`.
+  emitWarnings.addAll(healDanglingDnsServerResolvers(config));
+
   // §419 — битые `dns.final` / `route.default_domain_resolver` (сервер
   // выключенного/удалённого пресета) → дефолт шаблона, var уходит в
   // generatedVars и персистится контроллером. Иначе каждая сборка — fatal

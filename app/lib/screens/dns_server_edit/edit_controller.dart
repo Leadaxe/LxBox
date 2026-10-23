@@ -10,6 +10,8 @@ import '../../services/dns/tailscale_endpoint_options.dart' show TailscaleEndpoi
 import '../../services/record_vars.dart';
 import '../../widgets/outbound_picker.dart';
 import '../../widgets/var_values_model.dart';
+import '../dns_settings_screen/dns_server_resolver.dart'
+    show defaultDnsServerTag;
 import '../dns_settings_screen/resolved_server.dart';
 
 /// §117 задача 4b — режимы формы создания/редактирования inline-сервера.
@@ -585,9 +587,11 @@ class DnsServerEditController extends ChangeNotifier {
     }
     if (isHostnameAddress) {
       if (domainResolver.isEmpty) {
-        final def = dnsServerTags.contains('google_udp')
-            ? 'google_udp'
-            : (dnsServerTags.isNotEmpty ? dnsServerTags.first : '');
+        // §680 — только серверы списка; пригодность — по опциям членов
+        // группы (в них нет fakeip/hosts). Без опций типы неизвестны.
+        final memberTags = {for (final o in dnsMemberOptions) o.tag};
+        final def = defaultDnsServerTag(dnsServerTags,
+            eligible: memberTags.isEmpty ? null : memberTags.contains);
         if (def.isNotEmpty) _body['domain_resolver'] = def;
       }
     } else {

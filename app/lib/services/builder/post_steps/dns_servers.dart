@@ -155,10 +155,9 @@ Future<List<DnsServerRef>> resolveDnsServersList({
     }
   }
 
-  // Step 4: persist if changed (не писать на каждый load). При посеве ключ
-  // пишется всегда — после этого шаг 3 больше не выполняется.
-  if (!seeded ||
-      !const ListEquality<DnsServerRef>().equals(stored, result)) {
+  // Step 4: persist if changed (не писать на каждый load). Посев меняет
+  // состав — ключ записывается, и шаг 3 больше не выполняется.
+  if (!const ListEquality<DnsServerRef>().equals(stored, result)) {
     await SettingsStorage.saveDnsServers(result);
   }
   return result;
