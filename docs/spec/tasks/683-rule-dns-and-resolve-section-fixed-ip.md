@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | In progress — макет согласован владельцем 23.10.2026 |
+| Статус | Done — на устройстве не проверено (макет согласован владельцем 23.10.2026) |
 | Дата начала | 2026-10-23 |
 | Связанные спеки | [247](247-custom-rule-resolve-action.md) — resolve-опция правила, окно «Action & Resolve»; [256](256-rule-force-ipv4-dns.md) — Force IPv4; [117F](117F-dns-rework/spec.md) — DNS-зеркало правила (задача 3); [682](682-dns-catalog-revision-and-copy.md) |
 
@@ -173,3 +173,71 @@ lx.23 разбирает такие записи (`option` → `dns.NewRR`), п�
   в превью View и в карточке вкладки DNS виден predefined; Resolve only
   выбирается в Action; Resolve before routing + Strategy + Advanced
   сохраняются и эмитят тот же `resolve`, что раньше давало окно.
+
+## Реализация
+
+Коммиты: ee0d9ae5 (A — модель, хранение, эмиссия), fcaedafb + f80e66fc
+(B — UI; первый коммит унёс только удаление окна и старой секции, код и
+словари — вторым).
+
+**Модель и эмиссия**
+- `models/custom_rule.dart` — `RuleDns.fixed` / `fixedIps` (ключи `fixed`,
+  `fixedIps`, пишутся только `true` / непустым), `fixedMode`, `isEmpty`,
+  `RuleDns.ipRecordType` (A/AAAA/null, `Uri.parseIPv4Address` /
+  `parseIPv6Address` — билдер без `dart:io`); предикат `dnsFixedActive`
+  (гейт как у Force IPv4); `dnsMirrorActive` и `forceIpv4Active` ложны при
+  `fixedMode`.
+- `services/builder/post_steps/custom_rules.dart` — `fixedIpMirrors`: два
+  serverless-mirror'а (`query_type` A и AAAA, `predefined` + `NOERROR`,
+  `answer` `*. 300 IN A|AAAA <ip>` или без `answer`), на месте
+  server-mirror'а; `DnsMirrorEntry.fixedAnswer`; `applyCustomRules`
+  принимает `dnsMirrors` (превью редактора).
+- Ядро lx.23: записи `*. 300 IN A …` / `AAAA` и правило `predefined` с
+  `query_type` + `answer` и без `answer` разбираются
+  (`option.DNSRecordOptions` → `dns.NewZoneParser`, `DNSRule`
+  UnmarshalJSONContext) — проверено go-тестом через `-overlay`, в дерево
+  ядра не добавлен. `rewriteRecords`: `*.` подходит любому имени запроса.
+- Debug API: `dns.fixed`, `dns.fixed_ips` в чтении и записи правила
+  (`debug/serializers/rules.dart`, `debug/handlers/rules.dart`,
+  `docs/api/debug-api-reference.md`).
+
+**UI**
+- `custom_rule_edit/sections/dns_resolve_section.dart` (вместо
+  `dns_section.dart`) — Answer, поле Fixed IP с «+», Force IPv4, Resolve
+  before routing + Strategy, Advanced; `action_resolve_sheet.dart` удалён.
+- `custom_rule_edit/edit_controller.dart` — `DnsAnswerMode`,
+  `setDnsAnswerMode`, `fixedIpCtrl` / `fixedIpError`, `setResolveOnly`,
+  `setResolveFirst`, `updateResolve`, Advanced-поля контроллерами;
+  `saveBlockReason` учитывает Fixed IP и Advanced.
+- `widgets/outbound_picker.dart` — пункт Resolve only
+  (`kResolveOnlyAction`, `allowResolveOnly`); `tabs/params_tab.dart` — без
+  ⚙ и inline-статуса.
+- `tabs/view_tab.dart` — превью показывает `dns_rules` правила.
+- `dns_settings_tab.dart`, `dns_mirror_group_card.dart` — строка «Fixed IP»
+  (`action: predefined · answer: …`, ✕ = Answer → Default); включение
+  сервера на вкладке DNS снимает `fixed`.
+- l10n ru/zh: 20 новых ключей, 15 ключей окна и старой секции удалены.
+
+**Тесты**: `test/services/builder/rule_dns_fixed_ip_test.dart` (модель,
+round-trip, старые записи, эмиссия v4/v6/оба, srs, гейт),
+`test/screens/custom_rule_edit/dns_resolve_section_test.dart` (Save-гейт
+поля, сохранение адресов, Resolve only в Action); golden-конфиг не
+изменился.
+
+**Отклонения**
+- Save блокируется и при выбранном Fixed IP без адресов («Enter an IP
+  address»): иначе сохранялся бы режим без эффекта.
+- У «Port range» Save не блокируется (только счётчик invalid) — для
+  Fixed IP блокировка сделана по тексту спеки, ошибка — `errorText` поля.
+- Однострочный вид поля — `maxLines: 5` при `minLines: 1`: у
+  `maxLines: 1` Flutter срезает переводы строк при вставке, и вставка
+  нескольких адресов не могла бы раскрыть поле.
+- Выбор Default в Answer не стирает serverTag (спека: значения хранятся),
+  поэтому правило с запомненным сервером остаётся на вкладке DNS строкой
+  с выключенным свитчем (поведение §117 до §257).
+- Возврат с Resolve only на направление восстанавливает «Resolve before
+  routing» в том виде, что был до выбора Resolve only (при открытии
+  правила с `only` — выключена).
+- Оранжевое предупреждение окна про Resolve only снято вместе с окном.
+- Контракт: запрос лаунчеру на `dns.fixedIps` / `dns.fixed` в
+  `backup.schema.json` — за координатором.
