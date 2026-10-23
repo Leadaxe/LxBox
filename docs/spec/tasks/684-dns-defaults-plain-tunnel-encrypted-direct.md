@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | In progress |
+| Статус | Done (на устройстве не проверено) |
 | Дата начала | 2026-10-24 |
 | Связанные спеки | [682](682-dns-catalog-revision-and-copy.md) — vars `outbound` у всех серверов каталога; решение 682 №2 («разнобой не трогать») **отменено** этой задачей |
 
@@ -93,3 +93,29 @@ AdGuard-хоста шёл бы через туннель).
 - Валидатор шаблона (`template_check`) зелёный.
 - Эмулятор: у дефолтного резолвера `dns_shield` значка ⚠ нет; выбор
   `google_udp` в Default Domain Resolver показывает ⚠.
+
+## Реализация
+
+- `35b94bd8` — шаблон: дефолты `outbound` каталога по таблице п. 1, описания
+  без пути, `safe_dns_dot.dom_resolver` = `google_doh`; пресет `ru-direct` —
+  var `dns_plain_outbound` / `dns_encrypted_outbound` после `dns_ip`, у
+  `yandex_doh` появился `detour: "@dns_encrypted_outbound"`; tooltip var
+  `dns_final` / `dns_default_domain_resolver`; l10n `template.json` ru/zh
+  (старые ключи переименованы). Видимость новых var — как у `dns_ip`: условий
+  видимости отдельных var в языке шаблона нет, var видны при включённом
+  пресете, `dns_enable` их не скрывает. Golden `avd_v0`/`rich_v0` обновлены,
+  список изменившихся `detour` — в сообщении коммита (сверх таблиц ничего).
+  Тесты под новую норму: `wizard_template_dns_vars_defaults_test.dart`
+  (переписан на весь каталог + ru-direct), `wizard_template_dns_shield_test.dart`
+  (страж «quad9 через vpn-1» заменён на «все члены щита напрямую»),
+  `preset_expand_test.dart`, `dns_detour_fail_closed_test.dart`,
+  `dns_servers_resolver_test.dart`, `dns_resolvers_record_kinds_test.dart`,
+  `record_vars_test.dart` (примеры «не умолчания» сдвинуты на новые дефолты).
+- `0e3e25c1` — подсказки `ResolverPicker` в `dns_settings_tab.dart`, l10n
+  `ui.json` ru/zh.
+- `docs/TEMPLATE.md` — пример обёртки и соглашения §117 под новые дефолты.
+
+Открыто: баннер `LocalResolverWarningBanner` (выбран `local_dns_resolver`)
+предлагает переключиться на `cloudflare_udp`, который теперь идёт через
+туннель и сам даёт ⚠ в Default Domain Resolver; в объём задачи не входил.
+Проверка на эмуляторе (⚠ у `google_udp`, нет ⚠ у `dns_shield`) не выполнялась.
