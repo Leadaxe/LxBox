@@ -16,6 +16,7 @@ class ResolverPicker extends StatelessWidget {
     required this.onChanged,
     required this.tooltip,
     required this.warnIfLocal,
+    this.tunnelDetour,
   });
 
   final String title;
@@ -25,6 +26,10 @@ class ResolverPicker extends StatelessWidget {
   final ValueChanged<String> onChanged;
   final String tooltip;
   final bool warnIfLocal;
+
+  /// §682 — выбранный резолвер ходит через Направление с этим тегом (null —
+  /// напрямую): справа от пикера неброский ⚠, тап — диалог с пояснением.
+  final String? tunnelDetour;
 
   @override
   Widget build(BuildContext context) {
@@ -53,18 +58,56 @@ class ResolverPicker extends StatelessWidget {
         ],
       ),
       subtitle: Text(subtitle, style: const TextStyle(fontSize: 12)),
-      trailing: DropdownButton<String>(
-        value: serverTags.contains(value) ? value : null,
-        hint: Text(getLocalText.s("select")),
-        items: serverTags
-            .map((t) => DropdownMenuItem(
-                value: t,
-                child: Text(t, style: const TextStyle(fontSize: 13))))
-            .toList(),
-        onChanged: (v) {
-          if (v != null) onChanged(v);
-        },
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _dropdown(),
+          if (tunnelDetour case final detour?)
+            IconButton(
+              key: const ValueKey('resolver_tunnel_warning'),
+              icon: Icon(
+                Icons.warning_amber_rounded,
+                size: 20,
+                color: cs.onSurfaceVariant,
+              ),
+              onPressed: () => showDialog<void>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  content: Text(
+                    getLocalText.s(
+                      "This resolver sends queries through %s. It is used to look up server addresses while the connection is being set up, before the tunnel exists, so lookups can fail and the VPN may not connect. A direct resolver is the safest choice; for privacy pick a DoT or DoH server.",
+                      detour,
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: Text(getLocalText.s("OK")),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
       ),
+    );
+  }
+
+  Widget _dropdown() {
+    return DropdownButton<String>(
+      value: serverTags.contains(value) ? value : null,
+      hint: Text(getLocalText.s("select")),
+      items: serverTags
+          .map(
+            (t) => DropdownMenuItem(
+              value: t,
+              child: Text(t, style: const TextStyle(fontSize: 13)),
+            ),
+          )
+          .toList(),
+      onChanged: (v) {
+        if (v != null) onChanged(v);
+      },
     );
   }
 }

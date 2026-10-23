@@ -326,3 +326,43 @@ List<DnsRuleRef> cleanDnsRulesForPersist(
           })
       .toList();
 }
+
+/// §682 — Default Domain Resolver через туннель: резолвер ищет адреса узлов,
+/// пока туннеля ещё нет, и запрос через `detour` ждёт сам себя. Возвращает
+/// тег Направления, когда предупреждать, иначе null:
+/// - одиночный сервер — его `detour` после нормализации (`direct-out` = нет);
+/// - группа — только если ВСЕ эмитируемые члены (есть в списке, включены или
+///   залочены) с `detour`; тег — первого из них. Хоть один прямой член,
+///   член-группа или ни одного эмитируемого — null.
+/// Тела берутся из [servers] (template — с подставленными vars). — pure.
+String? defaultResolverTunnelDetour(
+  String resolverTag,
+  List<ResolvedServer> servers,
+) {
+  final byTag = {for (final s in servers) s.tag: s};
+  String? detourOf(ResolvedServer s) {
+    if (s.body['type'] == 'group') return null;
+    final body = Map<String, dynamic>.of(s.body);
+    normalizeDnsDetour(body);
+    final d = body['detour'];
+    return d is String && d.isNotEmpty ? d : null;
+  }
+
+  final selected = byTag[resolverTag];
+  if (selected == null) return null;
+  if (selected.body['type'] != 'group') return detourOf(selected);
+  final members = selected.body['servers'];
+  if (members is! List) return null;
+  String? first;
+  var emitted = 0;
+  for (final m in members) {
+    final member = byTag[m?.toString() ?? ''];
+    if (member == null || member.tag == selected.tag) continue;
+    if (!member.enabled && !member.forceIncluded) continue;
+    emitted++;
+    final d = detourOf(member);
+    if (d == null) return null;
+    first ??= d;
+  }
+  return emitted == 0 ? null : first;
+}

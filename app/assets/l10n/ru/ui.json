@@ -6391,5 +6391,8 @@
   },
   "Changing the tag creates a custom copy. The template server stays in the list.": {
     "value": "Смена тега создаёт собственную копию. Сервер из шаблона остаётся в списке."
+  },
+  "This resolver sends queries through %s. It is used to look up server addresses while the connection is being set up, before the tunnel exists, so lookups can fail and the VPN may not connect. A direct resolver is the safest choice; for privacy pick a DoT or DoH server.": {
+    "value": "Этот резолвер отправляет запросы через %s. Он ищет адреса серверов, пока соединение устанавливается и туннеля ещё нет, поэтому запросы могут не пройти и VPN может не подключиться. Надёжнее всего прямой резолвер; для приватности выберите сервер DoT или DoH."
   }
 }
