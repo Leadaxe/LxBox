@@ -157,24 +157,8 @@ Future<void> applyCustomDns(
     if (mirrorGroupEmitted) return;
     mirrorGroupEmitted = true;
     for (final m in dnsMirrors) {
-      if (m.presetId != null) {
-        // Preset-источник: body несёт server (serverless-действия §253 —
-        // predefined/reject — без него, эмитятся как есть). Defensive:
-        // dangling server (преcет-сервер не дожил до dns.servers) → тихо
-        // пропускаем.
-        final srv = m.body['server'];
-        if (srv is String && !emittedServerTags.contains(srv)) continue;
-        outRules.add(m.body);
-      } else if (m.serverless) {
-        // §256 — Rule-источник, serverless (Force IPv4 predefined): тело
-        // самодостаточно, server не подставляем и не режем по его отсутствию.
-        outRules.add(m.body);
-      } else {
-        // Rule-источник: пропавший сервер → DNS-rule тихо не эмитится
-        // (решение №3).
-        if (!emittedServerTags.contains(m.serverTag)) continue;
-        outRules.add({...m.body, 'server': m.serverTag});
-      }
+      final rule = dnsMirrorRule(m, emittedServerTags);
+      if (rule != null) outRules.add(rule);
     }
   }
 
@@ -474,4 +458,30 @@ Future<List<DnsRuleRef>> resolveDnsRulesList({
     await SettingsStorage.saveDnsRulesList(result);
   }
   return result;
+}
+
+/// Итоговое DNS-правило одного mirror'а в `dns.rules` или `null`, если оно
+/// не эмитится (сервер не попал в [emittedServerTags]). Вынесено из
+/// `applyCustomDns` для раннера корпуса `rule_dns` (§135 контракта).
+Map<String, dynamic>? dnsMirrorRule(
+    DnsMirrorEntry m, Set<String> emittedServerTags) {
+  if (m.presetId != null) {
+    // Preset-источник: body несёт server (serverless-действия §253 —
+    // predefined/reject — без него, эмитятся как есть). Defensive:
+    // dangling server (преcет-сервер не дожил до dns.servers) → тихо
+    // пропускаем.
+    final srv = m.body['server'];
+    if (srv is String && !emittedServerTags.contains(srv)) return null;
+    return m.body;
+  }
+  if (m.serverless) {
+    // §256 — Rule-источник, serverless (Force IPv4 predefined, §683 Fixed
+    // IP): тело самодостаточно, server не подставляем и не режем по его
+    // отсутствию.
+    return m.body;
+  }
+  // Rule-источник: пропавший сервер → DNS-rule тихо не эмитится
+  // (решение №3).
+  if (!emittedServerTags.contains(m.serverTag)) return null;
+  return {...m.body, 'server': m.serverTag};
 }
