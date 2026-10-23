@@ -74,8 +74,9 @@ URLTest» в меню группы.
   сообщение об ошибке в баннере.
 - **Автоматический переселект** запускается также при провале пинга
   выбранного группой узла и в конце массового пинга
-  ([node-ping](node-ping.ru.md)); в конце массового пинга — кроме групп Load
-  balance, их пул ядро проверяет само. Повторные запуски во время идущего
+  ([node-ping](node-ping.ru.md)); в конце массового пинга — только для групп
+  Fastest (`least_test`): пул Load balance ядро проверяет само, а Hold until
+  failure держит удерживаемый узел до его отказа. Повторные запуски во время идущего
   теста ядро гасит само.
 - Пустая группа в конфиг не эмитится: `urltest` без членов роняет ядро.
 
@@ -101,4 +102,4 @@ URLTest» в меню группы.
 | 7 | [308](../../../tasks/308-group-urltest-wrong-rpc-no-reselect.md) | ✅ device-проверка пройдена | Групповой тест через `urlTestGroup` с переселектом |
 | 8 | [376](../../../tasks/376-FEEDBACK-kernel-urltest-goroutines-survive-restart.md) | — | Обратная связь ядру: прогоны группы переживали рестарт |
 | 9 | [442](../../../tasks/442-urltest-interval-idle-pair.md) | Released v2.24.0 | Пара `interval`/`idle_timeout` не роняет старт |
-| 10 | [677](../../../tasks/677-autoping-tail-skips-round-robin-groups.md) | Done | Без переселекта в конце массового пинга для Load balance |
+| 10 | [677](../../../tasks/677-autoping-tail-skips-round-robin-groups.md) | Done | Переселект в конце массового пинга только у Fastest (`least_test`) |

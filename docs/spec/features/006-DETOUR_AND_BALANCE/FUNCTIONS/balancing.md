@@ -65,9 +65,10 @@ The core keeps the Load balance pool by itself
   rebuilds the pool from the fresh results.
 
 Auto-ping after connect pings every node of the active Direction one by one
-to show latencies in the list. The group test it runs afterwards for Fastest
-and Hold until failure groups is not run for Load balance groups ([677](../../../tasks/677-autoping-tail-skips-round-robin-groups.md)): the
-first run after connecting does not test the whole list.
+to show latencies in the list. The group test it runs afterwards is run only
+for Fastest (`least_test`) groups ([677](../../../tasks/677-autoping-tail-skips-round-robin-groups.md)): for Load balance the
+first run after connecting does not test the whole list, and Hold until
+failure does not drop the held node because of auto-ping.
 
 ## Inputs / Outputs
 
@@ -126,4 +127,4 @@ live pool of the running core
 | 9 | [568](../../../tasks/568-source-replace-fold.md) | Implemented | "Replace with a group" for a folder and a subscription |
 | 10 | [611](../../../tasks/611-drop-passive-check-kernel-lx12.md) | Implemented | `passive_check` removed (core lx.12) |
 | 11 | [612](../../../tasks/612-contract-1-1-113-failover.md) | Implemented | Hold until failure (`failover`), migration from `passive_check` |
-| 12 | [677](../../../tasks/677-autoping-tail-skips-round-robin-groups.md) | Done | Auto ping on start does not force a group test of Load balance |
+| 12 | [677](../../../tasks/677-autoping-tail-skips-round-robin-groups.md) | Done | Auto ping on start forces a group test only for Fastest (`least_test`) |

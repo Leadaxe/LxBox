@@ -22,8 +22,9 @@ class _FakePathProvider extends PathProviderPlatform
 }
 
 /// §677 — хвост mass-ping (§308) делает групповой force-URLTest только по
-/// группам не-round_robin: у балансировщика ядро само тестирует пул, а force
-/// тестировал бы всех членов и пересобирал пул (issue #171 п.16).
+/// группам Fastest (least_test): у балансировщика ядро само тестирует пул, а
+/// force тестировал бы всех членов и пересобирал пул (issue #171 п.16);
+/// failover force перевыбрал бы удерживаемый узел без отказа.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -122,14 +123,14 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 50));
   }
 
-  test('round_robin пропущен, least_test и failover — групповой URLTest',
+  test('round_robin и failover пропущены, least_test — групповой URLTest',
       () async {
     seed();
     controller.debugSetRunningConfigRaw(configJson);
 
     await runMassPingAndTail();
 
-    expect(groupUrltestCalls, ['fast', 'hold']);
+    expect(groupUrltestCalls, ['fast']);
   });
 
   test('без снапшота ядра режим берётся из собранного конфига', () async {
@@ -138,6 +139,6 @@ void main() {
 
     await runMassPingAndTail();
 
-    expect(groupUrltestCalls, ['fast', 'hold']);
+    expect(groupUrltestCalls, ['fast']);
   });
 }

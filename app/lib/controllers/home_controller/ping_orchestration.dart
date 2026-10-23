@@ -393,7 +393,7 @@ mixin _PingMixin on ChangeNotifier {
       // т.п.): свежая mass-ping-история выбор группы НЕ меняет (ядро
       // пересчитывает его только собственным прогоном), поэтому ядро
       // тестит членов заново и делает переселект. Дубль-пробы — цена
-      // переселекта на текущем ядре. §677 — кроме round_robin (см. ниже).
+      // переселекта на текущем ядре. §677 — только Fastest (см. ниже).
       unawaited(_runAllUrltestGroups(epoch));
     }
   }
@@ -401,18 +401,24 @@ mixin _PingMixin on ChangeNotifier {
   Future<void> _runAllUrltestGroups(int epoch) async {
     // §122 — snapshot тегов до цикла: state.ccGroups может смениться стримом
     // во время await'ов, а нам нужен стабильный список urltest-групп.
-    // §677 — группы round_robin пропускаем: хвост §308 нужен Fastest
-    // (переселект самого быстрого), а force-тест пула тестирует ВСЕХ членов и
-    // пересобирает пул, сводя на нет «тестируем только пул» балансировщика
-    // (§208). Режим — из конфига, который знает приложение (activeModel §311:
-    // срез ядра при живом туннеле, иначе собранный); `mode: round_robin`
-    // эмитится всегда вместе с `balancer{}`. Без RPC к ядру.
+    // §677 — хвост §308 только для Fastest (без `mode` или
+    // `mode: least_test`): ему нужен переселект самого быстрого. round_robin
+    // пропускаем — force-тест пула тестирует ВСЕХ членов и пересобирает пул,
+    // сводя на нет «тестируем только пул» балансировщика (§208). failover
+    // пропускаем — force = полный прогон и перевыбор, удерживаемый узел
+    // сменился бы без отказа (контракт режима §612); отказ ядро ловит само.
+    // Режим — из конфига, который знает приложение (activeModel §311: срез
+    // ядра при живом туннеле, иначе собранный). Без RPC к ядру.
     final model = _state.activeModel;
     final tags = <String>[];
     for (final g in _state.urltestGroups) {
-      if (model[g.tag]?.raw['mode'] == 'round_robin') {
-        _addDebug(DebugSource.app,
-            'Group URLTest skipped: ${g.tag} (round_robin, core tests the pool)');
+      final mode = model[g.tag]?.raw['mode'];
+      if (mode != null && mode != 'least_test') {
+        final why = mode == 'round_robin'
+            ? 'core tests the pool'
+            : 'no reselect outside failure';
+        _addDebug(
+            DebugSource.app, 'Group URLTest skipped: ${g.tag} ($mode, $why)');
         continue;
       }
       tags.add(g.tag);

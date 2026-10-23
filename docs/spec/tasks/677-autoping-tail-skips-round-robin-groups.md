@@ -70,6 +70,15 @@ force-тест ему тоже чужой (по доке ядра ручной U
   (`@visibleForTesting`) для теста.
 - «Спасение» (`_rescueGroupsSelecting`), `runGroupUrltest`, automation и UI не
   тронуты.
+- Дополнение 23.10 (хвост только для `least_test`):
+  `ping_orchestration.dart:401-440` — условие инвертировано (строка 416:
+  `mode != null && mode != 'least_test'` → пропуск), строка журнала
+  `Group URLTest skipped: <tag> (<mode>, …)` (строки 417-421: `round_robin` —
+  «core tests the pool», `failover` — «no reselect outside failure»),
+  комментарий — строки 396 и 404-411. Тест: `ccUrlTestGroup` ровно `['fast']`
+  в обоих случаях. Доки: `balancing`, `node-ping`, `urltest-group` (EN+RU) —
+  «только для Fastest (least_test)»; USER_GUIDE (EN+RU) — строка Hold until
+  failure; 308 — «Семантика»; CHANGELOG `[Unreleased]` — строка 677.
 
 ## Документация (обязательная часть задачи)
 
@@ -110,7 +119,8 @@ CHANGELOG `[Unreleased]` → Fixed. Факты сверены с ядром: `se
   `failover` → вызов `ccUrlTestGroup` только для не-`round_robin` (мок канала,
   как в соседних тестах `ping_orchestration`).
   Сделано: `app/test/controllers/mass_ping_group_tail_round_robin_test.dart` —
-  `runMassUrltest` → хвост, `ccUrlTestGroup` ровно `['fast', 'hold']`; два
+  `runMassUrltest` → хвост, `ccUrlTestGroup` ровно `['fast']` (до дополнения
+  23.10 — `['fast', 'hold']`); два
   случая: режим из снапшота ядра и из собранного конфига (туннель без
   снапшота). All tests passed.
 - Ручная (владелец): направление Load balance, pool 3, tolerance 0, ≥10 узлов,

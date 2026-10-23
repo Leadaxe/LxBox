@@ -19,14 +19,14 @@
 
 ### Fixed
 
-- **Auto-ping after connect no longer tests every node of a Load balance group
-  in the core
+- **Auto-ping after connect no longer forces a group URLTest on Load balance
+  and Hold until failure groups
   ([task 677](docs/spec/tasks/677-autoping-tail-skips-round-robin-groups.md),
   issue #171).** After a mass ping the app forced a group URLTest on every
   auto-select group; for Load balance that tested all members and rebuilt the
-  pool, though with pool tolerance 0 the core checks only the pool. Load
-  balance groups are now skipped; Fastest and Hold until failure still get the
-  group test. Latencies of all nodes in the list still come from the ping.
+  pool, though with pool tolerance 0 the core checks only the pool; for Hold
+  until failure it reselected the fastest node and dropped the held one with
+  no failure. The group test now runs only for Fastest groups. Latencies of all nodes in the list still come from the ping.
   Run URLTest in the group menu and the reselection on a failed selected node
   are unchanged. The balancing and ping docs now describe how the pool is
   filled and checked. Not verified on a device.

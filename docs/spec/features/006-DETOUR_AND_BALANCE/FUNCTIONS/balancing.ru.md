@@ -66,10 +66,10 @@ interval пробуется только он. Задержки остальны
   пересобирает пул по свежим результатам.
 
 Автопинг после подключения пингует по одному каждый узел активного
-Направления, чтобы показать задержки в списке. Групповой тест, который он
-запускает после этого для групп Fastest и Hold until failure, для групп Load
-balance не делается ([677](../../../tasks/677-autoping-tail-skips-round-robin-groups.md)): первый прогон после подключения не
-тестирует весь список.
+Направления, чтобы показать задержки в списке. Групповой тест после этого
+запускается только для групп Fastest (`least_test`) ([677](../../../tasks/677-autoping-tail-skips-round-robin-groups.md)): у Load balance
+первый прогон после подключения не тестирует весь список, а Hold until
+failure не сбрасывает удерживаемый узел из-за автопинга.
 
 ## Входы / Выходы
 
@@ -125,4 +125,4 @@ balance не делается ([677](../../../tasks/677-autoping-tail-skips-roun
 | 9 | [568](../../../tasks/568-source-replace-fold.md) | Реализовано | «Replace with a group» у папки и подписки |
 | 10 | [611](../../../tasks/611-drop-passive-check-kernel-lx12.md) | Реализовано | `passive_check` снят (ядро lx.12) |
 | 11 | [612](../../../tasks/612-contract-1-1-113-failover.md) | Реализовано | Hold until failure (`failover`), миграция от `passive_check` |
-| 12 | [677](../../../tasks/677-autoping-tail-skips-round-robin-groups.md) | Done | Автопинг на старте не форсит групповой тест Load balance |
+| 12 | [677](../../../tasks/677-autoping-tail-skips-round-robin-groups.md) | Done | Автопинг на старте форсит групповой тест только у Fastest (`least_test`) |
