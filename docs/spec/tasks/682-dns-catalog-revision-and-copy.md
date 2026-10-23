@@ -143,9 +143,11 @@ DNS, `dns_settings_tab.dart` ~853) резолвит адреса узлов пр
 
 У DNS Final предупреждения нет: его запросы идут при поднятом туннеле.
 
-**Вид:** справа от пикера неброский значок ⚠ (tertiary/onSurfaceVariant,
-не error); тап — диалог с текстом, кнопка OK. Сборку не блокирует, выбор не
-меняет. Текст:
+**Вид** (правка владельца 23.10.2026 после эмулятора): оранжевый ⚠ у
+заголовка вместо ℹ (цвет `bannerIconColor(warning)`, как у предупреждения про
+`local_dns_resolver`); тап — диалог с оранжевым значком и заголовком
+«Resolver goes through a tunnel», текст ниже, кнопка OK. Сборку не блокирует,
+выбор не меняет. Текст:
 
 > This resolver sends queries through %s. It is used to look up server
 > addresses while the connection is being set up, before the tunnel exists,
