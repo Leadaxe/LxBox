@@ -632,6 +632,13 @@ the gomobile binding for `OutboundGroup` has not been regenerated. This does not
 affect §393 (`vhttp` is config parsing, not a Java surface), but anyone who wants
 `mode` has to wait for a core build that regenerates the binding.
 
+**First run of a `round_robin` pool.** At start the core seeds the pool
+without tests and then tests only pool members (`pool_tolerance: 0`); a manual
+URLTest of the group tests every member and rebuilds the pool
+(`sing-box-lx/docs/configuration/outbound/urltest.md`, section `balancer`).
+So LxBox does not force a group URLTest of such a group after a mass ping
+(§677).
+
 **The `masque` schema (introduced in rc.4).** The HTTP version moved from
 `network` to `vhttp`, and the TLS options moved from the flat root into a nested
 `tls{}` (`sni` → `tls.server_name`, `skip_cert_verify` → `tls.insecure`, and

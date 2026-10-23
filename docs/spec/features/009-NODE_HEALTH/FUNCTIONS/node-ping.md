@@ -38,8 +38,8 @@ is success).
 duration of the measurement; an error line of the form
 `<node> → <host> — <reason>` in the log and banner for a single failure; at the
 end of a mass run — a single re-sort of the list and a group test of all
-URLTest groups ([urltest-group](urltest-group.md)); recalculation of the
-"root causes" for detour.
+URLTest groups except Load balance ones ([urltest-group](urltest-group.md));
+recalculation of the "root causes" for detour.
 
 ## Rules and invariants
 
@@ -70,6 +70,11 @@ URLTest groups ([urltest-group](urltest-group.md)); recalculation of the
 - **Single failure of the selected node.** If the failed node is selected by
   some URLTest group, a group test with reselection is started for that group
   immediately. For other nodes — nothing.
+- **No group test for Load balance after a run.** A group test tests all
+  members and rebuilds the pool; a Load balance group (`round_robin`) checks
+  only its pool by itself, so the end of a mass run, auto-ping included, skips
+  it ([balancing](../../006-DETOUR_AND_BALANCE/FUNCTIONS/balancing.md)). The
+  failure of a selected node and the Run URLTest item are unchanged.
 - **Batched rendering.** Results of a mass run are applied in batches every
   ~120 ms, so that a list of hundreds of nodes is not redrawn for each one.
 - Measurements live in memory and are not kept between app launches.
@@ -98,3 +103,4 @@ URLTest groups ([urltest-group](urltest-group.md)); recalculation of the
 | 10 | [355](../../../tasks/355-detour-dependency-health-warnings.md) | DEVICE-VERIFIED | Measurements feed the dependency graph of dead nodes |
 | 11 | [367](../../../tasks/367-autoping-after-inplace-reload.md) | ✅ Fixed | Auto-ping also after a config reload on a live tunnel |
 | 12 | [557](../../../tasks/557-kernel-lx4-wg-endpoint-toggle.md) | Implemented | A disabled endpoint — a dash instead of a measurement |
+| 13 | [677](../../../tasks/677-autoping-tail-skips-round-robin-groups.md) | Done | The end of a run skips the group test of Load balance |

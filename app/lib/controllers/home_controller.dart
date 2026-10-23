@@ -776,6 +776,12 @@ class HomeController extends ChangeNotifier
   void debugSetRunningConfigRaw(String raw) =>
       _emit(_state.copyWith(runningConfigRaw: raw));
 
+  /// §677 — засеять снапшот групп ядра (`ccGroups`) без стрима: тест хвоста
+  /// mass-ping проверяет, по каким urltest-группам идёт групповой URLTest.
+  @visibleForTesting
+  void debugSetCcGroups(List<CcGroup> groups) =>
+      _emit(_state.copyWith(ccGroups: groups));
+
   /// Перезапускает safety-timer на transient-фазу. Cancel'ит предыдущий
   /// (защита от спама `Future.delayed` при множественных stopping/
   /// connecting подряд) и стартует новый. §140 — порог зависит от фазы:

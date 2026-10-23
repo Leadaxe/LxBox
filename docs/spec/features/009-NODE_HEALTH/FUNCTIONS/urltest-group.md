@@ -78,8 +78,9 @@ stream.
   is an error message in the banner.
 - **Automatic reselection** is also started on a ping failure of the node
   selected by the group and at the end of a mass ping
-  ([node-ping](node-ping.md)). Repeated starts during a running test are
-  suppressed by the core itself.
+  ([node-ping](node-ping.md)); at the end of a mass ping — except Load
+  balance groups, whose pool the core checks by itself. Repeated starts during
+  a running test are suppressed by the core itself.
 - An empty group is not emitted to the config: a `urltest` without members
   crashes the core.
 
@@ -105,3 +106,4 @@ stream.
 | 7 | [308](../../../tasks/308-group-urltest-wrong-rpc-no-reselect.md) | ✅ device check passed | Group test via `urlTestGroup` with reselection |
 | 8 | [376](../../../tasks/376-FEEDBACK-kernel-urltest-goroutines-survive-restart.md) | — | Feedback to the core: group runs survived a restart |
 | 9 | [442](../../../tasks/442-urltest-interval-idle-pair.md) | Released v2.24.0 | The `interval`/`idle_timeout` pair does not break the start |
+| 10 | [677](../../../tasks/677-autoping-tail-skips-round-robin-groups.md) | Done | No reselection at the end of a mass ping for Load balance |

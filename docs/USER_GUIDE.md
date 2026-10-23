@@ -576,7 +576,7 @@ options:
 | Mode | How the node is chosen |
 |---|---|
 | **Fastest** | All traffic goes to the single node with the lowest measured latency. |
-| **Load balance** | Connections spread across a pool of several live nodes. A session stays on one node by the keys in Sticky session by, by default by app and domain, so rotation does not break connections. With no keys ticked, nodes alternate freely. |
+| **Load balance** | Connections spread across a pool of several live nodes. A session stays on one node by the keys in Sticky session by, by default by app and domain, so rotation does not break connections. With no keys ticked, nodes alternate freely. Only the pool is health-checked; latencies of all nodes in the list come from Auto-ping after connect. |
 | **Hold until failure** | The current node stays while it works; after a failure the choice moves to the next live one. |
 
 You set the direction's tag: `ru-exit`, `streaming`, `vpn-1`. There is no cap

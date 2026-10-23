@@ -2,11 +2,11 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | In progress |
+| Статус | Done |
 | Дата начала | 2026-10-23 |
-| Дата конца | — |
+| Дата конца | 2026-10-23 |
 | Коммиты | см. `git log --grep 677` |
-| Связанные спеки | [308](308-group-urltest-after-mass-ping.md) — групповой URLTest после массового пинга; [208](208-urltest-balancer-round-robin.md) — балансировщик; [features/006-DETOUR_AND_BALANCE/FUNCTIONS/balancing.md](../features/006-DETOUR_AND_BALANCE/FUNCTIONS/balancing.md); [features/009-NODE_HEALTH](../features/009-NODE_HEALTH/FEATURE.md) (ping on start, urltest-group) |
+| Связанные спеки | [308](308-group-urltest-wrong-rpc-no-reselect.md) — групповой URLTest после массового пинга; [208](208-urltest-balancer-round-robin.md) — балансировщик; [features/006-DETOUR_AND_BALANCE/FUNCTIONS/balancing.md](../features/006-DETOUR_AND_BALANCE/FUNCTIONS/balancing.md); [features/009-NODE_HEALTH](../features/009-NODE_HEALTH/FEATURE.md) (ping on start, urltest-group) |
 
 ## Проблема
 
@@ -54,6 +54,23 @@ force-тест ему тоже чужой (по доке ядра ручной U
 - Массовый пинг по узлам для показа задержек не трогать: это дело галки «Auto
   ping on start», не балансировщика.
 
+### Сделано
+
+- `app/lib/controllers/home_controller/ping_orchestration.dart:401-434` —
+  `_runAllUrltestGroups` собирает список тегов, пропуская группы с
+  `activeModel[tag].raw['mode'] == 'round_robin'` (строка 413), с записью
+  `Group URLTest skipped: <tag> (round_robin, core tests the pool)` в журнал.
+  Режим — из `HomeState.activeModel` (§311): срез работающего конфига при
+  живом туннеле, иначе собранный `configRaw`; оба уже лежат в state, RPC к ядру
+  не добавлено. `mode: round_robin` эмитится всегда вместе с `balancer{}`
+  (`AutoSelectSpec.toJson`, `source_replace_build.dart:166`), тот же признак
+  режима, что у `autoModeOf` в `node_list_presenter.dart`. Комментарий хвоста —
+  строка 396.
+- `app/lib/controllers/home_controller.dart:779-783` — `debugSetCcGroups`
+  (`@visibleForTesting`) для теста.
+- «Спасение» (`_rescueGroupsSelecting`), `runGroupUrltest`, automation и UI не
+  тронуты.
+
 ## Документация (обязательная часть задачи)
 
 Владелец: «убедись, что документация полна и актуальна по данному вопросу».
@@ -76,11 +93,26 @@ force-тест ему тоже чужой (по доке ядра ручной U
 - `308-group-urltest-after-mass-ping.md`: пометка про исключение (§677).
 - CHANGELOG `[Unreleased]`.
 
+Сделано: `balancing.md`/`.ru.md` — подраздел «How the pool is filled and
+checked» / «Как заполняется и проверяется пул» + ревизия 12; `node-ping.md`/
+`.ru.md` — Outputs/Выходы и правило «No group test for Load balance after a
+run» + ревизия 13; `urltest-group.md`/`.ru.md` — «Automatic reselection» +
+ревизия 10; `USER_GUIDE.md`/`.ru.md` — строка Load balance; `KERNEL.md:635` —
+«First run of a `round_robin` pool»; 308 — исключение в «Семантике»;
+CHANGELOG `[Unreleased]` → Fixed. Факты сверены с ядром: `seedPool`
+(`urltest.go:996-1033`, сначала узлы с историей по задержке, затем порядок
+конфига), `balancePoolFirstLive` (`:822-922`), `balancePoolTolerant`
+(`:925`), `URLTest()` (`:581-586`, force + `rebuildPool`).
+
 ## Проверка
 
 - Unit: `_runAllUrltestGroups` с группами `least_test`, `round_robin`,
   `failover` → вызов `ccUrlTestGroup` только для не-`round_robin` (мок канала,
   как в соседних тестах `ping_orchestration`).
+  Сделано: `app/test/controllers/mass_ping_group_tail_round_robin_test.dart` —
+  `runMassUrltest` → хвост, `ccUrlTestGroup` ровно `['fast', 'hold']`; два
+  случая: режим из снапшота ядра и из собранного конфига (туннель без
+  снапшота). All tests passed.
 - Ручная (владелец): направление Load balance, pool 3, tolerance 0, ≥10 узлов,
   Auto ping on start включена → после подключения в журнале ядра один URLTest
   по трём узлам, а не по всем; задержки в списке есть (от пинга по узлам).
