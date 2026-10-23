@@ -172,13 +172,33 @@ void main() {
       // Хранилище уже в памяти, как на работающем TV: подсчёт Merge идёт без
       // I/O, диалог встаёт в том же кадре, что и перестройка экрана с busy.
       await tester.runAsync(SettingsStorage.getServerLists);
-      await tester.pumpWidget(const MaterialApp(home: BackupScreen()));
+      // Backup открыт поверх главного, как в приложении: в тулбаре «Back».
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (ctx) => Scaffold(
+              body: TextButton(
+                onPressed: () => Navigator.of(ctx).push(
+                  MaterialPageRoute<void>(builder: (_) => const BackupScreen()),
+                ),
+                child: const Text('open backup'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open backup'));
       await tester.pumpAndSettle();
 
       final showCode = find.ancestor(
         of: find.text('Show code'),
         matching: find.byWidgetPredicate((w) => w is FilledButton),
       );
+      // Пульт пришёл на карточку с «Back» тулбара: «Back» — в истории фокуса
+      // экрана, и погашенная кнопка отдаёт фокус именно ему.
+      Focus.of(tester.element(find.byType(BackButtonIcon))).requestFocus();
+      await tester.pump();
+      expect(_focusInside(find.byType(BackButton)), isTrue);
       Focus.of(tester.element(find.text('Show code'))).requestFocus();
       await tester.pump();
       await tester.sendKeyEvent(LogicalKeyboardKey.enter);

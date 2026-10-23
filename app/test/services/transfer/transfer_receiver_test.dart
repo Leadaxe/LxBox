@@ -189,6 +189,49 @@ void main() {
     expect(await _portRefuses(port), isTrue);
   });
 
+  test('close() logs no close failure', () async {
+    await open();
+    await rx.close();
+    expect(log.where((l) => l.contains('close failed')), isEmpty);
+  });
+
+  test('client holding a connection open: soft close falls back to force '
+      'within the grace period, no failure logged (P1)', () async {
+    await open();
+    final port = rx.port;
+    // Соединение открыто, заголовки не дописаны: обработчик (и слот приёма)
+    // не занят, но соединение активно — мягкое закрытие ждало бы его вечно.
+    final held = await Socket.connect('127.0.0.1', port);
+    addTearDown(held.destroy);
+    final heldClosed = Completer<void>();
+    held.listen(
+      (_) {},
+      onDone: heldClosed.complete,
+      onError: (_) {
+        if (!heldClosed.isCompleted) heldClosed.complete();
+      },
+    );
+    held.write(
+      'GET /held HTTP/1.1\r\nHost: x\r\n'
+      'X-Slow: 1\r\n',
+    );
+    await held.flush();
+
+    // Пять отказов закрывают сессию мягко (force: false).
+    for (var i = 1; i <= TransferReceiver.maxRejects; i++) {
+      expect((await _post(port, 'garbage')).status, 400);
+    }
+    final sw = Stopwatch()..start();
+    expect(
+      await rx.done.timeout(const Duration(seconds: 4)),
+      isA<TransferRejectedTooOften>(),
+    );
+    await heldClosed.future.timeout(const Duration(seconds: 4));
+    expect(sw.elapsed, lessThan(const Duration(seconds: 3)));
+    expect(await _portRefuses(port), isTrue);
+    expect(log.where((l) => l.contains('close failed')), isEmpty);
+  });
+
   test('session log never contains the key or the code text (P9)', () async {
     await open();
     final code = rx.codeFor(['192.168.1.20'], 'TV');

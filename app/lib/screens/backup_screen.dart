@@ -298,12 +298,12 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
     }
   }
 
-  /// Фокус обратно на карточку, если он остался на самом экране (кнопка
-  /// гасла на время восстановления); выбранное пользователем не трогаем.
+  /// Фокус обратно на карточку — безусловно: погашенная на время
+  /// восстановления кнопка отдала его последнему фокусу экрана из истории
+  /// (обычно «Back» тулбара, откуда пульт пришёл на карточку).
   void _refocusReceive() {
-    if (!mounted) return;
-    final scope = _receiveFocus.enclosingScope;
-    if (scope != null && scope.hasPrimaryFocus) _receiveFocus.requestFocus();
+    if (!mounted || _receiveFocus.context == null) return;
+    _receiveFocus.requestFocus();
   }
 
   /// Телефон: скан кода с TV → подтверждение → шифрование → отправка.

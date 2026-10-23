@@ -175,10 +175,17 @@ class TransferReceiver {
     // порт уже отказывает (P1). Мягкое закрытие ждёт открытых соединений —
     // медленный клиент из LAN держал бы его сколько угодно, поэтому через
     // [_closeGrace] соединения рвутся.
+    // `HttpServer.close` объявлен как `Future<dynamic>`, а настоящий future —
+    // другого типа: `onTimeout`, вернувший его как есть, падал `_TypeError`
+    // сразу же, и принудительное закрытие не наступало никогда. Оба future
+    // приводятся к `Future<void>`.
     try {
-      await _server.close(force: force).timeout(
+      await _server
+          .close(force: force)
+          .then<void>((_) {})
+          .timeout(
             _closeGrace,
-            onTimeout: () => _server.close(force: true),
+            onTimeout: () => _server.close(force: true).then<void>((_) {}),
           );
     } catch (e) {
       _log('server close failed: ${e.runtimeType}');
