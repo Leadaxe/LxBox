@@ -21,6 +21,7 @@ import '../vpn/box_vpn_client.dart';
 import '../vpn/cc_channel.dart';
 import '../widgets/outbound_picker.dart';
 import 'dns_server_edit_screen.dart';
+import 'dns_settings_screen/dns_server_catalog_screen.dart';
 import 'dns_settings_screen/dns_server_delete.dart';
 import 'dns_settings_screen/dns_server_resolver.dart';
 import 'dns_settings_screen/resolved_server.dart';
@@ -365,7 +366,35 @@ class _DnsSettingsTabState extends State<DnsSettingsTab>
     });
   }
 
-  /// §117 задача 4: «+» → полноэкранный редактор в new-режиме (kind inline).
+  /// §680: «+» → страница «Add DNS server»: каталог шаблона и строка
+  /// «Custom server» (inline-редактор [_addServer]). Add дописывает
+  /// шаблонную запись в конец списка и ставит dirty, страница остаётся.
+  Future<void> _openCatalog() async {
+    final result = await Navigator.of(context).push<DnsServerCatalogResult>(
+      MaterialPageRoute(
+        builder: (_) => DnsServerCatalogScreen(
+          templateServers: _templateByTag.values.toList(),
+          presentTags: {for (final s in _servers) s.tag},
+          onAdd: (refs) {
+            if (!mounted) return;
+            setState(() {
+              for (final r in refs) {
+                if (_servers.any((s) => s.tag == r.tag)) continue;
+                _servers.add(r);
+              }
+              _markDirty();
+            });
+          },
+        ),
+      ),
+    );
+    if (result == DnsServerCatalogResult.custom && mounted) {
+      await _addServer();
+    }
+  }
+
+  /// §117 задача 4: строка «Custom server» каталога (§680) → полноэкранный
+  /// редактор в new-режиме (kind inline).
   /// Заготовка — форма UDP с пустым адресом (save требует ввода); порт/
   /// detour отсутствуют — ключи появляются только при явном выборе.
   Future<void> _addServer() async {
@@ -701,7 +730,7 @@ class _DnsSettingsTabState extends State<DnsSettingsTab>
             Text(getLocalText.s("DNS Servers"),
                 style: theme.textTheme.titleMedium),
             const Spacer(),
-            IconButton(icon: const Icon(Icons.add), onPressed: _addServer),
+            IconButton(icon: const Icon(Icons.add), onPressed: _openCatalog),
           ],
         ),
         const SizedBox(height: 4),

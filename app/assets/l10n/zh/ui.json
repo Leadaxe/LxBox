@@ -613,6 +613,32 @@
   "Add DNS Server": {
     "value": "添加 DNS 服务器"
   },
+  "Add DNS server": {
+    "value": "添加 DNS 服务器"
+  },
+  "Add all defaults": {
+    "value": "添加全部默认服务器"
+  },
+  "Custom server": {
+    "value": "自定义服务器"
+  },
+  "Your own UDP / DoT / DoH / group…": {
+    "value": "自己的 UDP / DoT / DoH / 组…"
+  },
+  "From template": {
+    "value": "来自模板"
+  },
+  "Added \"%s\"": {
+    "value": "已添加“%s”"
+  },
+  "Added %d servers": {
+    "value": {
+      "other": "已添加 %d 个服务器"
+    }
+  },
+  "All defaults are already in the list": {
+    "value": "所有默认服务器都已在列表中"
+  },
   "Add Wi-Fi network": {
     "value": "添加 Wi-Fi 网络"
   },

@@ -802,6 +802,35 @@
   "Add DNS Server": {
     "value": "Добавить DNS-сервер"
   },
+  "Add DNS server": {
+    "value": "Добавить DNS-сервер"
+  },
+  "Add all defaults": {
+    "value": "Добавить все стандартные"
+  },
+  "Custom server": {
+    "value": "Свой сервер"
+  },
+  "Your own UDP / DoT / DoH / group…": {
+    "value": "Свой UDP / DoT / DoH / группа…"
+  },
+  "From template": {
+    "value": "Из шаблона"
+  },
+  "Added \"%s\"": {
+    "value": "Добавлен «%s»"
+  },
+  "Added %d servers": {
+    "value": {
+      "one": "Добавлен %d сервер",
+      "few": "Добавлено %d сервера",
+      "many": "Добавлено %d серверов",
+      "other": "Добавлено %d сервера"
+    }
+  },
+  "All defaults are already in the list": {
+    "value": "Все стандартные серверы уже в списке"
+  },
   "Add Wi-Fi network": {
     "value": "Добавить сеть Wi-Fi"
   },
