@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/custom_rule.dart';
+import 'package:lxbox/screens/custom_rule_edit/edit_controller.dart'
+    show DnsAnswerMode;
 import 'package:lxbox/screens/custom_rule_edit_screen.dart';
 import 'package:lxbox/widgets/outbound_picker.dart';
 
@@ -55,7 +57,7 @@ CustomRuleInline _rule({List<String> ips = const ['192.168.1.10']}) =>
       name: 'nas',
       domains: const ['nas.home'],
       outbound: 'direct-out',
-      dns: RuleDns(fixed: true, fixedIps: ips),
+      dns: RuleDns(serverTag: 'google_udp', fixedIps: ips),
     );
 
 Finder get _fixedField => find.byWidgetPredicate((w) =>
@@ -84,6 +86,33 @@ void main() {
     final dns = host.result!.saved!.dns!;
     expect(dns.fixedMode, isTrue);
     expect(dns.fixedIps, ['10.0.0.1', 'fd00::1']);
+  });
+
+  testWidgets('переключение на Dedicated стирает адреса Fixed IP',
+      (tester) async {
+    final host = await _open(tester, _rule());
+    expect(_fixedField, findsOneWidget);
+    Finder radio(DnsAnswerMode m) => find.byWidgetPredicate(
+        (w) => w is RadioListTile<DnsAnswerMode> && w.value == m);
+    await tester.tap(radio(DnsAnswerMode.dedicated));
+    await tester.pumpAndSettle();
+    expect(_fixedField, findsNothing);
+
+    // Возврат на Fixed IP: поле пустое — адреса стёрты, не спрятаны.
+    await tester.tap(radio(DnsAnswerMode.fixedIp));
+    await tester.pumpAndSettle();
+    expect(tester.widget<TextField>(_fixedField).controller!.text, isEmpty);
+    expect(tester.widget<IconButton>(_appBarSave).onPressed, isNull);
+
+    await tester.tap(radio(DnsAnswerMode.dedicated));
+    await tester.pumpAndSettle();
+    await tester.tap(_appBarSave);
+    await tester.pumpAndSettle();
+    final dns = host.result!.saved!.dns!;
+    expect(dns.fixedIps, isEmpty);
+    expect(dns.fixedMode, isFalse);
+    expect(dns.enabled, isTrue);
+    expect(dns.serverTag, 'google_udp');
   });
 
   testWidgets('Resolve only в Action ставит resolve.only, направление цело',

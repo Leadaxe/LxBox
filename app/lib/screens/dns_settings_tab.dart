@@ -1090,9 +1090,11 @@ class _DnsSettingsTabState extends State<DnsSettingsTab>
     final updated = switch (cr) {
       // §683 — включение сервера выходит из Answer = Fixed IP.
       CustomRuleInline() => cr.copyWith(
-          dns: cr.dns!.copyWith(enabled: value, fixed: value ? false : null)),
+          dns: cr.dns!.copyWith(
+              enabled: value, fixedIps: value ? const [] : null)),
       CustomRuleSrs() => cr.copyWith(
-          dns: cr.dns!.copyWith(enabled: value, fixed: value ? false : null)),
+          dns: cr.dns!.copyWith(
+              enabled: value, fixedIps: value ? const [] : null)),
       _ => cr,
     };
     setState(() {
@@ -1102,12 +1104,12 @@ class _DnsSettingsTabState extends State<DnsSettingsTab>
     _track(SettingsStorage.saveCustomRules(_customRules));
   }
 
-  /// §683: ✕ у строки Fixed IP — Answer → Default (`fixed = false`),
-  /// адреса остаются в правиле (вернуть можно в редакторе).
+  /// §683: ✕ у строки Fixed IP — Answer → Default: адреса `fixedIps`
+  /// стираются (отдельного флага режима нет).
   void _removeRuleFixedIp(CustomRule cr) {
     final idx = _customRules.indexWhere((r) => r.id == cr.id);
     if (idx < 0 || cr.dns == null) return;
-    final next = cr.dns!.copyWith(fixed: false);
+    final next = cr.dns!.copyWith(fixedIps: const []);
     final updated = switch (cr) {
       CustomRuleInline() => cr.copyWith(dns: next),
       CustomRuleSrs() => cr.copyWith(dns: next),

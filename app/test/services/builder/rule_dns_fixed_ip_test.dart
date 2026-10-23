@@ -16,11 +16,11 @@ UnifiedApplyResult _apply(CustomRule r, {Map<String, String>? srsPaths}) =>
 /// §683 — Answer = Fixed IP: модель, хранение, эмиссия `predefined`.
 void main() {
   group('RuleDns Fixed IP — модель и хранение', () {
-    test('режимы Answer: fixedMode приоритетнее enabled, пустой список — нет',
+    test('режимы Answer: fixedMode = разбираемый адрес, приоритетнее enabled',
         () {
-      expect(const RuleDns(fixed: true, fixedIps: ['1.2.3.4']).fixedMode, true);
-      expect(const RuleDns(fixed: true).fixedMode, false);
-      expect(const RuleDns(fixedIps: ['1.2.3.4']).fixedMode, false);
+      expect(const RuleDns(fixedIps: ['1.2.3.4']).fixedMode, true);
+      expect(const RuleDns().fixedMode, false);
+      expect(const RuleDns(fixedIps: ['nas.home']).fixedMode, false);
       final r = CustomRuleInline(
         name: 'r',
         domains: ['a.com'],
@@ -29,7 +29,6 @@ void main() {
             enabled: true,
             serverTag: 'google_udp',
             forceIpv4: true,
-            fixed: true,
             fixedIps: ['1.2.3.4']),
       );
       expect(r.dnsFixedActive, true);
@@ -37,23 +36,23 @@ void main() {
       expect(r.forceIpv4Active, false);
     });
 
-    test('round-trip fixed + fixedIps; выключенный режим хранит адреса', () {
+    test('round-trip fixedIps; ключ fixed не пишется, старый игнорируется', () {
       final on = CustomRuleInline(
         name: 'nas',
         domains: ['nas.home'],
         outbound: 'direct-out',
-        dns: const RuleDns(fixed: true, fixedIps: ['192.168.1.10', 'fd00::1']),
+        dns: const RuleDns(fixedIps: ['192.168.1.10', 'fd00::1']),
       );
       final rec = ruleToRecord(on)['dns'] as Map;
-      expect(rec['fixed'], true);
+      expect(rec.containsKey('fixed'), false);
       expect(rec['fixedIps'], ['192.168.1.10', 'fd00::1']);
       expect(_roundTrip(on).dns, on.dns);
 
-      final off = on.copyWith(
-          dns: const RuleDns(serverTag: 'x', fixedIps: ['192.168.1.10']));
-      final offRec = ruleToRecord(off)['dns'] as Map;
-      expect(offRec.containsKey('fixed'), false);
-      expect(_roundTrip(off).dns!.fixedIps, ['192.168.1.10']);
+      // Запись невыпущенной сборки с `fixed` — ключ игнорируется.
+      final legacy = RuleDns.fromJson(
+          {'enabled': false, 'serverTag': 'x', 'fixed': false, 'fixedIps': ['1.2.3.4']});
+      expect(legacy, const RuleDns(serverTag: 'x', fixedIps: ['1.2.3.4']));
+      expect(legacy!.toJson().containsKey('fixed'), false);
     });
 
     test('старая запись без новых ключей читается как раньше', () {
@@ -66,7 +65,6 @@ void main() {
       final rec = ruleToRecord(old)['dns'] as Map;
       expect(rec.keys.toSet(), {'enabled', 'serverTag'});
       final back = _roundTrip(old);
-      expect(back.dns!.fixed, false);
       expect(back.dns!.fixedIps, isEmpty);
       expect(back.dnsMirrorActive, true);
     });
@@ -86,7 +84,7 @@ void main() {
         name: 'nas',
         domains: ['nas.home'],
         outbound: 'direct-out',
-        dns: const RuleDns(fixed: true, fixedIps: ['192.168.1.10', '10.0.0.2']),
+        dns: const RuleDns(fixedIps: ['192.168.1.10', '10.0.0.2']),
       );
       final m = _apply(r).dnsMirrors;
       expect(m, hasLength(2));
@@ -111,7 +109,7 @@ void main() {
         name: 'v6',
         domains: ['h.lan'],
         outbound: 'direct-out',
-        dns: const RuleDns(fixed: true, fixedIps: ['fd00::10']),
+        dns: const RuleDns(fixedIps: ['fd00::10']),
       );
       final m = _apply(r).dnsMirrors;
       expect(m[0].body.containsKey('answer'), false);
@@ -128,7 +126,6 @@ void main() {
             enabled: true,
             serverTag: 'google_udp',
             forceIpv4: true,
-            fixed: true,
             fixedIps: ['1.2.3.4', 'fd00::1']),
       );
       final m = _apply(r).dnsMirrors;
@@ -145,7 +142,7 @@ void main() {
         srsUrl: 'https://e/l.srs',
         packages: ['com.app'],
         outbound: 'vpn-1',
-        dns: const RuleDns(fixed: true, fixedIps: ['1.2.3.4']),
+        dns: const RuleDns(fixedIps: ['1.2.3.4']),
       );
       final m = _apply(r, srsPaths: {r.id: '/tmp/l.srs'}).dnsMirrors;
       expect(m, hasLength(2));
@@ -154,30 +151,30 @@ void main() {
       expect(m[0].body['answer'], ['*. 300 IN A 1.2.3.4']);
     });
 
-    test('ports → гейт, Fixed IP не эмитится; fixed без адресов — тоже', () {
+    test('ports → гейт, Fixed IP не эмитится; без адресов — тоже', () {
       final gated = CustomRuleInline(
         name: 'g',
         domains: ['a.com'],
         ports: ['443'],
         outbound: 'direct-out',
-        dns: const RuleDns(fixed: true, fixedIps: ['1.2.3.4']),
+        dns: const RuleDns(fixedIps: ['1.2.3.4']),
       );
       expect(_apply(gated).dnsMirrors, isEmpty);
       final empty = CustomRuleInline(
         name: 'e',
         domains: ['a.com'],
         outbound: 'direct-out',
-        dns: const RuleDns(fixed: true),
+        dns: const RuleDns(),
       );
       expect(_apply(empty).dnsMirrors, isEmpty);
     });
 
-    test('адреса хранятся, но режим Default — зеркала нет', () {
+    test('в списке нет разбираемого адреса — режим не действует', () {
       final r = CustomRuleInline(
         name: 'd',
         domains: ['a.com'],
         outbound: 'direct-out',
-        dns: const RuleDns(fixedIps: ['1.2.3.4']),
+        dns: const RuleDns(fixedIps: ['nas.home']),
       );
       expect(_apply(r).dnsMirrors, isEmpty);
     });

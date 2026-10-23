@@ -326,7 +326,6 @@ class RuleDns {
     this.enabled = false,
     this.serverTag = '',
     this.forceIpv4 = false,
-    this.fixed = false,
     this.fixedIps = const [],
   });
 
@@ -340,15 +339,13 @@ class RuleDns {
   final bool forceIpv4;
 
   /// §683 — Answer = Fixed IP: правило отвечает на DNS-запросы своего матча
-  /// адресами [fixedIps] (`predefined`, как hosts). Режим действует только
-  /// при непустом [fixedIps] ([fixedMode]); адреса хранятся и при `false`.
-  final bool fixed;
-
-  /// §683 — адреса ответа (IPv4/IPv6, по строке на адрес в UI).
+  /// этими адресами (`predefined`, как hosts; IPv4/IPv6, по строке на адрес
+  /// в UI). Отдельного флага нет (решение владельца 24.10): режим = в списке
+  /// хотя бы один разбираемый адрес ([fixedMode]).
   final List<String> fixedIps;
 
   /// §683 — режим Answer = Fixed IP. Приоритетнее [enabled] (Dedicated).
-  bool get fixedMode => fixed && fixedIps.isNotEmpty;
+  bool get fixedMode => fixedIps.any((ip) => ipRecordType(ip) != null);
 
   /// §683 — тип DNS-записи для адреса ответа: `A` (IPv4), `AAAA` (IPv6),
   /// null — не адрес. Без `dart:io` (билдер чистый Dart).
@@ -375,7 +372,6 @@ class RuleDns {
         'enabled': enabled,
         'serverTag': serverTag,
         if (forceIpv4) 'forceIpv4': true,
-        if (fixed) 'fixed': true,
         if (fixedIps.isNotEmpty) 'fixedIps': List<String>.of(fixedIps),
       };
 
@@ -387,7 +383,7 @@ class RuleDns {
       enabled: j['enabled'] == true,
       serverTag: j['serverTag']?.toString() ?? '',
       forceIpv4: j['forceIpv4'] == true,
-      fixed: j['fixed'] == true,
+      // Ключ `fixed` старых записей игнорируется (сборки с ним не выпускались).
       fixedIps: ips is List
           ? [
               for (final e in ips)
@@ -402,14 +398,12 @@ class RuleDns {
     bool? enabled,
     String? serverTag,
     bool? forceIpv4,
-    bool? fixed,
     List<String>? fixedIps,
   }) =>
       RuleDns(
         enabled: enabled ?? this.enabled,
         serverTag: serverTag ?? this.serverTag,
         forceIpv4: forceIpv4 ?? this.forceIpv4,
-        fixed: fixed ?? this.fixed,
         fixedIps: fixedIps ?? this.fixedIps,
       );
 
@@ -418,7 +412,6 @@ class RuleDns {
       !enabled &&
       serverTag.isEmpty &&
       !forceIpv4 &&
-      !fixed &&
       fixedIps.isEmpty;
 
   @override
@@ -428,12 +421,11 @@ class RuleDns {
           enabled == other.enabled &&
           serverTag == other.serverTag &&
           forceIpv4 == other.forceIpv4 &&
-          fixed == other.fixed &&
           _listEq(fixedIps, other.fixedIps));
 
   @override
   int get hashCode =>
-      Object.hash(enabled, serverTag, forceIpv4, fixed, Object.hashAll(fixedIps));
+      Object.hash(enabled, serverTag, forceIpv4, Object.hashAll(fixedIps));
 }
 
 /// §247 — resolve-опция правила (route rule action `resolve`, sing-box 1.14).

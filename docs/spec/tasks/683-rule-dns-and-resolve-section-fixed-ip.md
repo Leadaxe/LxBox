@@ -167,8 +167,8 @@ lx.23 разбирает такие записи (`option` → `dns.NewRR`), п�
 
 - Юнит: эмиссия Fixed IP (только v4, только v6, оба; inline и srs; рядом
   с Force IPv4 — неактивен), режимы Answer в модели, round-trip хранения
-  (`fixedIps` + `fixed`), старые записи без новых ключей читаются как
-  раньше.
+  (`fixedIps`; ключ `fixed` не пишется, у старой записи игнорируется),
+  старые записи без новых ключей читаются как раньше.
 - Golden-конфиг без новых полей не меняется байт в байт.
 - Эмулятор: правило `nas.home` → Fixed IP 192.168.1.10, Action direct;
   в превью View и в карточке вкладки DNS виден predefined; Resolve only
@@ -179,11 +179,14 @@ lx.23 разбирает такие записи (`option` → `dns.NewRR`), п�
 
 Коммиты: ee0d9ae5 (A — модель, хранение, эмиссия), fcaedafb + f80e66fc
 (B — UI; первый коммит унёс только удаление окна и старой секции, код и
-словари — вторым).
+словари — вторым); поправка 24.10 — флаг `fixed` снят, одно поле
+`fixedIps` (коммит «fix(683): одно поле fixedIps»).
 
 **Модель и эмиссия**
-- `models/custom_rule.dart` — `RuleDns.fixed` / `fixedIps` (ключи `fixed`,
-  `fixedIps`, пишутся только `true` / непустым), `fixedMode`, `isEmpty`,
+- `models/custom_rule.dart` — `RuleDns.fixedIps` (ключ `fixedIps`, пишется
+  только непустым; ключ `fixed` записей невыпущенных сборок при чтении
+  игнорируется), `fixedMode` = в списке хотя бы один разбираемый адрес,
+  `isEmpty`,
   `RuleDns.ipRecordType` (A/AAAA/null, `Uri.parseIPv4Address` /
   `parseIPv6Address` — билдер без `dart:io`); предикат `dnsFixedActive`
   (гейт как у Force IPv4); `dnsMirrorActive` и `forceIpv4Active` ложны при
@@ -198,7 +201,7 @@ lx.23 разбирает такие записи (`option` → `dns.NewRR`), п�
   (`option.DNSRecordOptions` → `dns.NewZoneParser`, `DNSRule`
   UnmarshalJSONContext) — проверено go-тестом через `-overlay`, в дерево
   ядра не добавлен. `rewriteRecords`: `*.` подходит любому имени запроса.
-- Debug API: `dns.fixed`, `dns.fixed_ips` в чтении и записи правила
+- Debug API: `dns.fixed_ips` в чтении и записи правила (непустой = Fixed IP)
   (`debug/serializers/rules.dart`, `debug/handlers/rules.dart`,
   `docs/api/debug-api-reference.md`).
 
@@ -206,8 +209,11 @@ lx.23 разбирает такие записи (`option` → `dns.NewRR`), п�
 - `custom_rule_edit/sections/dns_resolve_section.dart` (вместо
   `dns_section.dart`) — Answer, поле Fixed IP с «+», Force IPv4, Resolve
   before routing + Strategy, Advanced; `action_resolve_sheet.dart` удалён.
-- `custom_rule_edit/edit_controller.dart` — `DnsAnswerMode`,
-  `setDnsAnswerMode`, `fixedIpCtrl` / `fixedIpError`, `setResolveOnly`,
+- `custom_rule_edit/edit_controller.dart` — `DnsAnswerMode` (радио Fixed IP
+  — состояние формы `_fixedChosen`, выбирается и при пустом поле),
+  `setDnsAnswerMode` (Default / Dedicated очищают `fixedIps` и поле, Fixed
+  IP ставит `enabled = false`, `serverTag` хранится), `fixedIpCtrl` /
+  `fixedIpError`, `setResolveOnly`,
   `setResolveFirst`, `updateResolve`, Advanced-поля контроллерами;
   `saveBlockReason` учитывает Fixed IP и Advanced.
 - `widgets/outbound_picker.dart` — пункт Resolve only
@@ -215,15 +221,15 @@ lx.23 разбирает такие записи (`option` → `dns.NewRR`), п�
   ⚙ и inline-статуса.
 - `tabs/view_tab.dart` — превью показывает `dns_rules` правила.
 - `dns_settings_tab.dart`, `dns_mirror_group_card.dart` — строка «Fixed IP»
-  (`action: predefined · answer: …`, ✕ = Answer → Default); включение
-  сервера на вкладке DNS снимает `fixed`.
+  (`action: predefined · answer: …`, ✕ = Answer → Default, `fixedIps`
+  стирается); включение сервера на вкладке DNS стирает `fixedIps`.
 - l10n ru/zh: 20 новых ключей, 15 ключей окна и старой секции удалены.
 
 **Тесты**: `test/services/builder/rule_dns_fixed_ip_test.dart` (модель,
 round-trip, старые записи, эмиссия v4/v6/оба, srs, гейт),
 `test/screens/custom_rule_edit/dns_resolve_section_test.dart` (Save-гейт
-поля, сохранение адресов, Resolve only в Action); golden-конфиг не
-изменился.
+поля, сохранение адресов, переключение на Dedicated стирает адреса,
+Resolve only в Action); golden-конфиг не изменился.
 
 **Отклонения**
 - Save блокируется и при выбранном Fixed IP без адресов («Enter an IP
@@ -233,12 +239,12 @@ round-trip, старые записи, эмиссия v4/v6/оба, srs, гей�
 - Однострочный вид поля — `maxLines: 5` при `minLines: 1`: у
   `maxLines: 1` Flutter срезает переводы строк при вставке, и вставка
   нескольких адресов не могла бы раскрыть поле.
-- Выбор Default в Answer не стирает serverTag (спека: значения хранятся),
+- Выбор Default в Answer не стирает serverTag (спека: serverTag хранится),
   поэтому правило с запомненным сервером остаётся на вкладке DNS строкой
   с выключенным свитчем (поведение §117 до §257).
 - Возврат с Resolve only на направление восстанавливает «Resolve before
   routing» в том виде, что был до выбора Resolve only (при открытии
   правила с `only` — выключена).
 - Оранжевое предупреждение окна про Resolve only снято вместе с окном.
-- Контракт: запрос лаунчеру на `dns.fixedIps` / `dns.fixed` в
-  `backup.schema.json` — за координатором.
+- Контракт: `dns.fixedIps` в `backup.schema.json` — за координатором
+  (синк 1.1.138 ещё объявляет `fixed`; LxBox его не пишет).

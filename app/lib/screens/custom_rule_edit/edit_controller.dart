@@ -102,6 +102,11 @@ class CustomRuleEditController extends ChangeNotifier {
   /// §683 — адреса Answer = Fixed IP, по одному на строку.
   late final TextEditingController fixedIpCtrl;
 
+  /// §683 — радио Answer стоит на Fixed IP. Состояние формы, не хранения:
+  /// в `RuleDns` режим = непустой `fixedIps`, а радио выбирается и при ещё
+  /// пустом поле (Save тогда заблокирован [fixedIpError]).
+  bool _fixedChosen = false;
+
   /// §683 — Advanced-поля резолва (бывшее окно «Action & Resolve»).
   late final TextEditingController resolveTtlCtrl;
   late final TextEditingController resolveTimeoutCtrl;
@@ -313,6 +318,7 @@ class CustomRuleEditController extends ChangeNotifier {
     _wifiNetworks = unzipWifiEntries(r.wifiSsids, r.wifiBssids);
     _varsValues = Map<String, String>.from(r.varsValues);
     _dns = r.dns;
+    _fixedChosen = r.dns?.fixedMode ?? false;
     _resolve = r.resolve;
     if (_resolve != null) _resolveKeep = _resolve!;
     fixedIpCtrl =
@@ -712,34 +718,38 @@ class CustomRuleEditController extends ChangeNotifier {
     }
   }
 
-  /// §683 — режим Answer секции DNS & Resolve (радио). UI берёт его из
-  /// флагов, а не из [RuleDns.fixedMode]: Fixed IP выбран и при ещё пустом
-  /// поле адресов.
+  /// §683 — режим Answer секции DNS & Resolve (радио). Fixed IP — из
+  /// состояния формы [_fixedChosen], а не из [RuleDns.fixedMode]: радио
+  /// выбрано и при ещё пустом поле адресов.
   DnsAnswerMode get dnsAnswerMode {
     final d = _dns;
+    if (_fixedChosen) return DnsAnswerMode.fixedIp;
     if (d == null) return DnsAnswerMode.defaultDns;
-    if (d.fixed) return DnsAnswerMode.fixedIp;
     if (d.enabled) return DnsAnswerMode.dedicated;
     return DnsAnswerMode.defaultDns;
   }
 
-  /// §683 — выбор Answer. serverTag и адреса при переключении хранятся.
-  /// Первый выбор Dedicated без сервера — преселект дефолтного (§117).
+  /// §683 — выбор Answer. serverTag при переключении хранится; Default и
+  /// Dedicated стирают адреса Fixed IP (поле очищается), Fixed IP снимает
+  /// `enabled`. Первый выбор Dedicated без сервера — преселект дефолтного
+  /// (§117).
   void setDnsAnswerMode(DnsAnswerMode m) {
     final cur = _dns ?? const RuleDns();
     final RuleDns next;
     switch (m) {
       case DnsAnswerMode.defaultDns:
-        next = cur.copyWith(enabled: false, fixed: false);
+        next = cur.copyWith(enabled: false, fixedIps: const []);
       case DnsAnswerMode.dedicated:
         next = cur.copyWith(
           enabled: true,
-          fixed: false,
+          fixedIps: const [],
           serverTag: cur.serverTag.isEmpty ? _dnsDefaultServerTag : null,
         );
       case DnsAnswerMode.fixedIp:
-        next = cur.copyWith(enabled: false, fixed: true);
+        next = cur.copyWith(enabled: false);
     }
+    _fixedChosen = m == DnsAnswerMode.fixedIp;
+    if (!_fixedChosen && fixedIpCtrl.text.isNotEmpty) fixedIpCtrl.clear();
     _dns = next.isEmpty && _dns == null ? null : next;
     notifyListeners();
   }
@@ -766,11 +776,13 @@ class CustomRuleEditController extends ChangeNotifier {
     return null;
   }
 
-  /// §683 — dns для snapshot: адреса берутся из поля (годные строки).
+  /// §683 — dns для snapshot: адреса берутся из поля (годные строки) и
+  /// только при выбранном Fixed IP.
   RuleDns? get _effectiveDns {
     final ips = [
-      for (final l in _fixedIpLines)
-        if (RuleDns.ipRecordType(l) != null) l,
+      if (_fixedChosen)
+        for (final l in _fixedIpLines)
+          if (RuleDns.ipRecordType(l) != null) l,
     ];
     if (_dns == null && ips.isEmpty) return null;
     return (_dns ?? const RuleDns()).copyWith(fixedIps: ips);

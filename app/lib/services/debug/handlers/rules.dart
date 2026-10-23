@@ -599,11 +599,7 @@ RuleDns? _fieldRuleDns(Map<String, dynamic> m, String key) {
     throw BadRequest(
         'field "$key.server_tag" must be non-empty when enabled is true');
   }
-  // §683 — Answer = Fixed IP: `fixed` bool, `fixed_ips` массив адресов.
-  final fixedRaw = v['fixed'];
-  if (fixedRaw != null && fixedRaw is! bool) {
-    throw BadRequest('field "$key.fixed" must be bool');
-  }
+  // §683 — Answer = Fixed IP: `fixed_ips` массив адресов; непустой = режим.
   final ipsRaw = v['fixed_ips'];
   if (ipsRaw != null && ipsRaw is! List) {
     throw BadRequest('field "$key.fixed_ips" must be array');
@@ -619,7 +615,6 @@ RuleDns? _fieldRuleDns(Map<String, dynamic> m, String key) {
     enabled: enabled,
     serverTag: tag,
     forceIpv4: forceIpv4,
-    fixed: fixedRaw == true,
     fixedIps: ips,
   );
 }
