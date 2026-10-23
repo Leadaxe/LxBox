@@ -45,7 +45,7 @@ the selection lists — [012-LIVE_STATE · P19](../../012-LIVE_STATE/FEATURE.md#
 | Interrupt connections on switch | on/off | on | `interrupt_exist_connections` |
 | Include auto (urltest) + its fields | see [groups](direction-groups-in-config.md) | off | `<tag>-auto` |
 | Use as detour | checkbox (hidden for `vpn-1`) | off | [detour layer](direction-as-detour.md) |
-| Default traffic | `direct` · Direction · `block` | `vpn-1` | `route.final` |
+| Default traffic (no rule matched) — on the Rules tab since 676, not a Direction field | `direct` · Direction · `block` | `vpn-1` | `route.final` |
 
 Debug API: `GET/POST /directions`, `GET/PATCH/DELETE /directions/{tag}`,
 `POST /directions/reorder`; a `PATCH` setting the flag on `vpn-1` gets 409. A reorder that

@@ -43,7 +43,7 @@
 | Interrupt connections on switch | вкл/выкл | вкл | `interrupt_exist_connections` |
 | Include auto (urltest) и его поля | см. [группы](direction-groups-in-config.ru.md) | выкл | `<tag>-auto` |
 | Use as detour | галка (у `vpn-1` скрыта) | выкл | [detour-прослойка](direction-as-detour.ru.md) |
-| Default traffic | `direct` · Направление · `block` | `vpn-1` | `route.final` |
+| Default traffic (no rule matched) — с 676 на вкладке Rules, не поле Направления | `direct` · Направление · `block` | `vpn-1` | `route.final` |
 
 Debug API: `GET/POST /directions`, `GET/PATCH/DELETE /directions/{tag}`,
 `POST /directions/reorder`; `PATCH`, ставящий флаг на `vpn-1`, получает 409. Перестановка,
