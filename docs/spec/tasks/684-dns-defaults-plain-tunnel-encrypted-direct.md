@@ -115,7 +115,8 @@ AdGuard-хоста шёл бы через туннель).
   `ui.json` ru/zh.
 - `docs/TEMPLATE.md` — пример обёртки и соглашения §117 под новые дефолты.
 
-Открыто: баннер `LocalResolverWarningBanner` (выбран `local_dns_resolver`)
-предлагает переключиться на `cloudflare_udp`, который теперь идёт через
-туннель и сам даёт ⚠ в Default Domain Resolver; в объём задачи не входил.
+Баннер `LocalResolverWarningBanner` (выбран `local_dns_resolver`)
+предлагал переключиться на `cloudflare_udp`, который теперь идёт через
+туннель и сам даёт ⚠ в Default Domain Resolver. Кнопка переведена на
+`google_doh` (шифрованный прямой, рекомендация владельца) — отдельный коммит.
 Проверка на эмуляторе (⚠ у `google_udp`, нет ⚠ у `dns_shield`) не выполнялась.

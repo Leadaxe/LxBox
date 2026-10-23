@@ -904,10 +904,9 @@ class _DnsSettingsTabState extends State<DnsSettingsTab>
         ),
         if (_defaultResolver == 'local_dns_resolver')
           LocalResolverWarningBanner(
-            hasCloudflareUdp:
-                _servers.any((s) => s.tag == 'cloudflare_udp'),
-            onSwitchToCloudflareUdp: () => setState(() {
-              _defaultResolver = 'cloudflare_udp';
+            hasGoogleDoh: _servers.any((s) => s.tag == 'google_doh'),
+            onSwitchToGoogleDoh: () => setState(() {
+              _defaultResolver = 'google_doh';
               _markDirty();
             }),
           ),

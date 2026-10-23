@@ -4687,8 +4687,8 @@
   "Switch failed: %s": {
     "value": "切换失败：%s"
   },
-  "Switch to cloudflare_udp": {
-    "value": "切换到 cloudflare_udp"
+  "Switch to google_doh": {
+    "value": "切换到 google_doh"
   },
   "Switch tolerance (ms)": {
     "value": "切换阈值（ms）"

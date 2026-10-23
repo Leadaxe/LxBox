@@ -4957,8 +4957,8 @@
   "Switch failed: %s": {
     "value": "Не удалось переключить узел: %s"
   },
-  "Switch to cloudflare_udp": {
-    "value": "Переключить на cloudflare_udp"
+  "Switch to google_doh": {
+    "value": "Переключить на google_doh"
   },
   "Switch tolerance (ms)": {
     "value": "Порог переключения (мс)"
