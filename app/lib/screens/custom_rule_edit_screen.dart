@@ -14,7 +14,6 @@ import '../widgets/wifi_manual_add_dialog.dart';
 import '../widgets/wifi_permission_dialog.dart';
 import '../widgets/wifi_saved_picker_sheet.dart';
 import 'app_picker_screen.dart';
-import 'custom_rule_edit/action_resolve_sheet.dart';
 import 'custom_rule_edit/edit_controller.dart';
 import 'custom_rule_edit/sections/wifi_section.dart' show WifiHint, wifiHintFromError;
 import 'custom_rule_edit/tabs/params_tab.dart';
@@ -367,15 +366,6 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen>
     _ctrl.setPackages(result.packages);
   }
 
-  /// §247 — окно «Action & Resolve» (⚙ у Action-пикера).
-  void _openActionResolve() {
-    showActionResolveSheet(
-      context,
-      controller: _ctrl,
-      outboundOptions: widget.outboundOptions,
-    );
-  }
-
   void _onBoolVarFailed(String varDisplay) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -400,7 +390,6 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen>
       wifiHint: _wifiHint,
       onShowCloudMenu: _showCloudMenu,
       onBoolVarFailed: _onBoolVarFailed,
-      onOpenActionResolve: _openActionResolve,
     );
 
     return CustomRuleEditScope(

@@ -426,6 +426,27 @@
   "%s · disabled — will be skipped": {
     "value": "%s · 已关闭 —— 将被跳过"
   },
+  "Action is Resolve only": {
+    "value": "动作为“仅解析”"
+  },
+  "Add address": {
+    "value": "添加地址"
+  },
+  "Answer": {
+    "value": "应答"
+  },
+  "Answer AAAA (IPv6) queries locally so matched traffic uses IPv4.": {
+    "value": "本地应答 AAAA（IPv6）查询，使匹配的流量走 IPv4。"
+  },
+  "DNS & RESOLVE": {
+    "value": "DNS 与解析"
+  },
+  "Dedicated server": {
+    "value": "专用服务器"
+  },
+  "Default — queries go to DNS Final": {
+    "value": "默认 — 查询发往 DNS Final"
+  },
   "Disabled, skipped at build: %s": {
     "value": "已关闭，构建时跳过：%s"
   },
@@ -592,9 +613,6 @@
   "Action": {
     "value": "动作"
   },
-  "Action & Resolve": {
-    "value": "动作与解析"
-  },
   "Active": {
     "value": "已启用"
   },
@@ -621,6 +639,42 @@
   },
   "Custom server": {
     "value": "自定义服务器"
+  },
+  "Enter an IP address": {
+    "value": "请输入 IP 地址"
+  },
+  "Fixed IP": {
+    "value": "固定 IP"
+  },
+  "How domains matched by this rule are resolved.": {
+    "value": "如何解析与此规则匹配的域名。"
+  },
+  "IP address": {
+    "value": "IP 地址"
+  },
+  "IP addresses": {
+    "value": "IP 地址列表"
+  },
+  "IP or CIDR, e.g. 1.2.3.0/24": {
+    "value": "IP 或 CIDR，例如 1.2.3.0/24"
+  },
+  "Line %d: not an IPv4 or IPv6 address": {
+    "value": "第 %d 行：不是 IPv4 或 IPv6 地址"
+  },
+  "Look up the address before routing, so IP rules and the address family apply.": {
+    "value": "在路由前查询地址，使 IP 规则和地址族生效。"
+  },
+  "Non-negative integer": {
+    "value": "非负整数"
+  },
+  "One address per line, IPv4 or IPv6.": {
+    "value": "每行一个地址，IPv4 或 IPv6。"
+  },
+  "Resolve before routing": {
+    "value": "路由前解析"
+  },
+  "Used when the rule resolves before routing.": {
+    "value": "在规则于路由前解析时生效。"
   },
   "Your own UDP / DoT / DoH / group…": {
     "value": "自己的 UDP / DoT / DoH / 组…"
@@ -741,12 +795,6 @@
   "Advanced": {
     "value": "高级"
   },
-  "Advanced DNS options": {
-    "value": "高级 DNS 选项"
-  },
-  "Advanced: this rule resolves but does not route. If no later rule matches, traffic goes to Final.": {
-    "value": "高级：此规则只解析不路由。若后续规则都不匹配，流量将走 Final。"
-  },
   "Aggressive battery saving": {
     "value": "激进省电"
   },
@@ -824,9 +872,6 @@
   },
   "Another VPN is active": {
     "value": "有其他 VPN 正在运行"
-  },
-  "Answer AAAA (IPv6) queries locally so matched traffic uses IPv4. No DNS server required.": {
-    "value": "本地应答 AAAA（IPv6）查询，使匹配的流量走 IPv4。无需 DNS 服务器。"
   },
   "Any app on this device will be able to control the VPN via broadcast commands while this is on. Only turn it on if you use Tasker / Macrodroid and understand the implications.": {
     "value": "开启后，本机任意应用都能通过广播指令控制 VPN。仅当你使用 Tasker / MacroDroid 并了解其影响时才开启。"
@@ -1208,6 +1253,9 @@
   },
   "Username": {
     "value": "用户名"
+  },
+  "e.g. 5s, 500ms": {
+    "value": "例如 5s、500ms"
   },
   "host:port or full URL; port 443 if omitted": {
     "value": "host:port 或完整 URL；省略端口时为 443"
@@ -2540,9 +2588,6 @@
   "How it works: directions, rules, DNS, detour, recipes": {
     "value": "工作原理：方向、规则、DNS、detour、示例"
   },
-  "How this rule directs and resolves matched traffic.": {
-    "value": "此规则如何定向并解析匹配的流量。"
-  },
   "INBOUND": {
     "value": "INBOUND"
   },
@@ -3763,9 +3808,6 @@
   "Presets are not transferable — this app has its own": {
     "value": "预设无法迁移——本应用自带"
   },
-  "Preview (route.rules)": {
-    "value": "预览（route.rules）"
-  },
   "Private IP": {
     "value": "私有 IP"
   },
@@ -4055,20 +4097,8 @@
   "Reset to global": {
     "value": "恢复为全局设置"
   },
-  "Resolve first": {
-    "value": "先解析"
-  },
   "Resolve only": {
     "value": "仅解析"
-  },
-  "Resolve options": {
-    "value": "解析选项"
-  },
-  "Resolve the domain before routing — force an address family (e.g. IPv4 only).": {
-    "value": "路由前先解析域名——可强制地址族（例如仅 IPv4）。"
-  },
-  "Resolve, then fall through to the next rule.": {
-    "value": "解析后继续交给下一条规则。"
   },
   "Resolves the server hostname itself": {
     "value": "自行解析该服务器的主机名"
@@ -4120,9 +4150,6 @@
   },
   "Route through another server first": {
     "value": "先经另一台服务器转发"
-  },
-  "Route to outbound": {
-    "value": "路由到出站"
   },
   "Routing": {
     "value": "路由"
@@ -4312,14 +4339,8 @@
   "Selector \"%1$s\" default \"%2$s\" is not in the options list.": {
     "value": "选择器「%1$s」的默认值「%2$s」不在选项列表中。"
   },
-  "Send DNS to dedicated server": {
-    "value": "把 DNS 发送到专用服务器"
-  },
   "Send HWID": {
     "value": "发送 HWID"
-  },
-  "Send matched traffic to a direction.": {
-    "value": "将匹配的流量送往某个方向。"
   },
   "Send to another app": {
     "value": "发送到其它应用"
@@ -5586,12 +5607,6 @@
   },
   "≤%dms": {
     "value": "≤%dms"
-  },
-  "✳ Resolve first%s": {
-    "value": "✳ 先解析%s"
-  },
-  "✳ Resolve only%s": {
-    "value": "✳ 仅解析%s"
   },
   "off": {
     "value": "off"

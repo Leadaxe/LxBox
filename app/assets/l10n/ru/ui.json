@@ -609,6 +609,27 @@
   "%s · disabled — will be skipped": {
     "value": "%s · выключен — будет пропущен"
   },
+  "Action is Resolve only": {
+    "value": "Действие — «Только резолв»"
+  },
+  "Add address": {
+    "value": "Добавить адрес"
+  },
+  "Answer": {
+    "value": "Ответ"
+  },
+  "Answer AAAA (IPv6) queries locally so matched traffic uses IPv4.": {
+    "value": "Отвечать на AAAA-запросы (IPv6) локально, чтобы совпавший трафик шёл по IPv4."
+  },
+  "DNS & RESOLVE": {
+    "value": "DNS И РЕЗОЛВ"
+  },
+  "Dedicated server": {
+    "value": "Выделенный сервер"
+  },
+  "Default — queries go to DNS Final": {
+    "value": "По умолчанию — запросы идут в DNS Final"
+  },
   "Disabled, skipped at build: %s": {
     "value": "Выключены, при сборке пропускаются: %s"
   },
@@ -781,9 +802,6 @@
   "Action": {
     "value": "Действие"
   },
-  "Action & Resolve": {
-    "value": "Действие и резолв"
-  },
   "Active": {
     "value": "Активен"
   },
@@ -810,6 +828,42 @@
   },
   "Custom server": {
     "value": "Свой сервер"
+  },
+  "Enter an IP address": {
+    "value": "Введите IP-адрес"
+  },
+  "Fixed IP": {
+    "value": "Фиксированный IP"
+  },
+  "How domains matched by this rule are resolved.": {
+    "value": "Как резолвятся домены, совпавшие с этим правилом."
+  },
+  "IP address": {
+    "value": "IP-адрес"
+  },
+  "IP addresses": {
+    "value": "IP-адреса"
+  },
+  "IP or CIDR, e.g. 1.2.3.0/24": {
+    "value": "IP или CIDR, например 1.2.3.0/24"
+  },
+  "Line %d: not an IPv4 or IPv6 address": {
+    "value": "Строка %d: не адрес IPv4 или IPv6"
+  },
+  "Look up the address before routing, so IP rules and the address family apply.": {
+    "value": "Узнать адрес до маршрутизации, чтобы сработали IP-правила и семейство адресов."
+  },
+  "Non-negative integer": {
+    "value": "Неотрицательное целое число"
+  },
+  "One address per line, IPv4 or IPv6.": {
+    "value": "По адресу на строку, IPv4 или IPv6."
+  },
+  "Resolve before routing": {
+    "value": "Резолвить до маршрутизации"
+  },
+  "Used when the rule resolves before routing.": {
+    "value": "Действуют, когда правило резолвит до маршрутизации."
   },
   "Your own UDP / DoT / DoH / group…": {
     "value": "Свой UDP / DoT / DoH / группа…"
@@ -933,12 +987,6 @@
   "Advanced": {
     "value": "Дополнительно"
   },
-  "Advanced DNS options": {
-    "value": "Расширенные настройки DNS"
-  },
-  "Advanced: this rule resolves but does not route. If no later rule matches, traffic goes to Final.": {
-    "value": "Продвинутый режим: правило резолвит, но не маршрутизирует. Если ни одно последующее правило не совпадёт, трафик уйдёт в Final."
-  },
   "Aggressive battery saving": {
     "value": "Агрессивная экономия батареи"
   },
@@ -1016,9 +1064,6 @@
   },
   "Another VPN is active": {
     "value": "Активен другой VPN"
-  },
-  "Answer AAAA (IPv6) queries locally so matched traffic uses IPv4. No DNS server required.": {
-    "value": "Отвечать на AAAA-запросы (IPv6) локально, чтобы совпавший трафик шёл по IPv4. DNS-сервер не нужен."
   },
   "Any app on this device will be able to control the VPN via broadcast commands while this is on. Only turn it on if you use Tasker / Macrodroid and understand the implications.": {
     "value": "Пока эта настройка включена, любое приложение на устройстве сможет управлять VPN через broadcast-команды. Включайте, только если пользуетесь Tasker / MacroDroid и понимаете последствия."
@@ -1400,6 +1445,9 @@
   },
   "Username": {
     "value": "Имя пользователя"
+  },
+  "e.g. 5s, 500ms": {
+    "value": "например 5s, 500ms"
   },
   "host:port or full URL; port 443 if omitted": {
     "value": "host:port или полный URL; без порта — 443"
@@ -2777,9 +2825,6 @@
   "How it works: directions, rules, DNS, detour, recipes": {
     "value": "Как это работает: Направления, правила, DNS, detour, рецепты"
   },
-  "How this rule directs and resolves matched traffic.": {
-    "value": "Как правило направляет и резолвит совпавший трафик."
-  },
   "INBOUND": {
     "value": "INBOUND"
   },
@@ -4021,9 +4066,6 @@
   "Presets are not transferable — this app has its own": {
     "value": "Пресеты не переносятся — они есть в самом приложении"
   },
-  "Preview (route.rules)": {
-    "value": "Превью (route.rules)"
-  },
   "Private IP": {
     "value": "Приватный IP"
   },
@@ -4319,20 +4361,8 @@
   "Reset to global": {
     "value": "Сбросить к глобальным"
   },
-  "Resolve first": {
-    "value": "Сначала резолвить"
-  },
   "Resolve only": {
     "value": "Только резолв"
-  },
-  "Resolve options": {
-    "value": "Параметры резолва"
-  },
-  "Resolve the domain before routing — force an address family (e.g. IPv4 only).": {
-    "value": "Резолвить домен до маршрутизации — можно навязать семейство адресов (например, только IPv4)."
-  },
-  "Resolve, then fall through to the next rule.": {
-    "value": "Резолвить и передать трафик следующему правилу."
   },
   "Resolves the server hostname itself": {
     "value": "Резолвит имя самого DNS-сервера"
@@ -4384,9 +4414,6 @@
   },
   "Route through another server first": {
     "value": "Сначала пропустить трафик через другой сервер"
-  },
-  "Route to outbound": {
-    "value": "Направить в исходящий канал"
   },
   "Routing": {
     "value": "Маршрутизация"
@@ -4579,14 +4606,8 @@
   "Selector \"%1$s\" default \"%2$s\" is not in the options list.": {
     "value": "У селектора «%1$s» значение по умолчанию «%2$s» отсутствует в списке вариантов."
   },
-  "Send DNS to dedicated server": {
-    "value": "Отправлять DNS на выделенный сервер"
-  },
   "Send HWID": {
     "value": "Отправлять HWID"
-  },
-  "Send matched traffic to a direction.": {
-    "value": "Отправлять совпавший трафик в Направление."
   },
   "Send to another app": {
     "value": "Отправить в другое приложение"
@@ -5862,12 +5883,6 @@
   },
   "≤%dms": {
     "value": "≤%d мс"
-  },
-  "✳ Resolve first%s": {
-    "value": "✳ Сначала резолвить%s"
-  },
-  "✳ Resolve only%s": {
-    "value": "✳ Только резолв%s"
   },
   "off": {
     "value": "off"

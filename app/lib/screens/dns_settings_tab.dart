@@ -530,7 +530,11 @@ class _DnsSettingsTabState extends State<DnsSettingsTab>
 
   /// §117 задача 3: routing-правила с активным DNS-mirror'ом (routing order).
   List<CustomRule> get _ruleMirrors =>
-      [for (final cr in _customRules) if (cr.dnsMirrorActive) cr];
+      [
+        for (final cr in _customRules)
+          // §683 — Answer = Fixed IP тоже даёт DNS-правило группы.
+          if (cr.dnsMirrorActive || cr.dnsFixedActive) cr,
+      ];
 
   /// §117 (решение №6): display-модель списка DNS-правил. Элемент ≥0 —
   /// индекс standalone-записи в [_rules]; `-1` — атомарная mirror-группа
@@ -605,18 +609,26 @@ class _DnsSettingsTabState extends State<DnsSettingsTab>
         // (RuleDns.forceIpv4), каждая со своим свитчем. Блок виден, когда
         // настроен ХОТЬ ОДИН аспект — Force IPv4-правило без dedicated-
         // сервера больше не невидимка (гейт не требует serverTag).
-        final hasServerAspect = cr.dnsMirrorEligible; // serverTag настроен
+        // §683 — при Answer = Fixed IP строки сервера нет: режимы
+        // взаимоисключающие, ответ даёт само правило.
+        final hasFixedAspect = cr.dnsFixedActive;
+        final hasServerAspect =
+            cr.dnsMirrorEligible && !hasFixedAspect; // serverTag настроен
         // Вариант A (решение владельца): Force-строка — только когда галка
         // РЕАЛЬНО стоит (forceIpv4Active), не у любого eligible-правила.
         // Правило с одним сервером не тащит пустой Force-тумблер; включают
         // Force в редакторе правила.
         final hasForceAspect = cr.forceIpv4Active;
-        if (!hasServerAspect && !hasForceAspect) continue;
+        if (!hasServerAspect && !hasForceAspect && !hasFixedAspect) continue;
         final mirrors = _dnsMirrorsByRuleId[cr.id] ?? const <DnsMirrorEntry>[];
         Map<String, dynamic>? serverBody;
         Map<String, dynamic>? forceBody;
+        Map<String, dynamic>? fixedBody;
         for (final m in mirrors) {
-          if (m.serverless) {
+          if (m.fixedAnswer) {
+            // §683 — тело с адресами (A или AAAA) — для диалога по тапу.
+            if (m.body.containsKey('answer')) fixedBody ??= m.body;
+          } else if (m.serverless) {
             forceBody ??= m.body;
           } else {
             serverBody ??= m.body;
@@ -646,6 +658,21 @@ class _DnsSettingsTabState extends State<DnsSettingsTab>
           // Убрав Force и не имея server-аспекта → правило уходит из секции
           // (_toggleRuleForceIpv4(false) обнуляет dns). Галка активна →
           // serverless-mirror собран → forceBody не null (fallback defensive).
+          // §683 — Answer = Fixed IP: ✕ = Answer → Default (адреса
+          // остаются в правиле).
+          fixedIpRow: hasFixedAspect
+              ? DnsAspectRow(
+                  body: fixedBody ?? const <String, dynamic>{},
+                  enabled: true,
+                  // l10n-exempt: sing-box wire fields
+                  preview: 'action: predefined · answer: '
+                      '${cr.dns!.fixedIps.join(', ')}',
+                  note: cr is CustomRuleSrs
+                      ? getLocalText.s("matches only domains in the rule-set")
+                      : null,
+                  onRemove: () => _removeRuleFixedIp(cr),
+                )
+              : null,
           forceIpv4Row: hasForceAspect
               ? DnsAspectRow(
                   body: forceBody ??
@@ -1061,10 +1088,32 @@ class _DnsSettingsTabState extends State<DnsSettingsTab>
     final idx = _customRules.indexWhere((r) => r.id == cr.id);
     if (idx < 0 || cr.dns == null) return;
     final updated = switch (cr) {
-      CustomRuleInline() => cr.copyWith(dns: cr.dns!.copyWith(enabled: value)),
-      CustomRuleSrs() => cr.copyWith(dns: cr.dns!.copyWith(enabled: value)),
+      // §683 — включение сервера выходит из Answer = Fixed IP.
+      CustomRuleInline() => cr.copyWith(
+          dns: cr.dns!.copyWith(enabled: value, fixed: value ? false : null)),
+      CustomRuleSrs() => cr.copyWith(
+          dns: cr.dns!.copyWith(enabled: value, fixed: value ? false : null)),
       _ => cr,
     };
+    setState(() {
+      _customRules = [..._customRules]..[idx] = updated;
+      _markDirty();
+    });
+    _track(SettingsStorage.saveCustomRules(_customRules));
+  }
+
+  /// §683: ✕ у строки Fixed IP — Answer → Default (`fixed = false`),
+  /// адреса остаются в правиле (вернуть можно в редакторе).
+  void _removeRuleFixedIp(CustomRule cr) {
+    final idx = _customRules.indexWhere((r) => r.id == cr.id);
+    if (idx < 0 || cr.dns == null) return;
+    final next = cr.dns!.copyWith(fixed: false);
+    final updated = switch (cr) {
+      CustomRuleInline() => cr.copyWith(dns: next),
+      CustomRuleSrs() => cr.copyWith(dns: next),
+      _ => cr,
+    };
+    if (identical(updated, cr)) return;
     setState(() {
       _customRules = [..._customRules]..[idx] = updated;
       _markDirty();
@@ -1080,8 +1129,7 @@ class _DnsSettingsTabState extends State<DnsSettingsTab>
     final idx = _customRules.indexWhere((r) => r.id == cr.id);
     if (idx < 0) return;
     final next = (cr.dns ?? const RuleDns()).copyWith(forceIpv4: value);
-    final clear =
-        !next.forceIpv4 && !next.enabled && next.serverTag.isEmpty;
+    final clear = next.isEmpty;
     final updated = switch (cr) {
       CustomRuleInline() =>
         clear ? cr.copyWith(clearDns: true) : cr.copyWith(dns: next),

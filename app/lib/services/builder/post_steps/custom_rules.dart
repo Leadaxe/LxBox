@@ -353,6 +353,8 @@ List<String> applyCustomRules(
   List<CustomRule> rules, {
   Map<String, String> srsPaths = const {},
   bool skipDisabled = true,
+  // §683 — превью редактора: собрать и DNS-mirror'ы правила.
+  List<DnsMirrorEntry>? dnsMirrors,
 }) {
   // §062: shim вокруг `_applyInlineSingle` / `_applySrsSingle`. Обходит
   // ТОЛЬКО inline/srs (фильтруя preset). Сохраняет старый publi API +
@@ -366,9 +368,11 @@ List<String> applyCustomRules(
         // Preset-правила обрабатывает applyPresetBundles (spec §033).
         continue;
       case CustomRuleSrs():
-        warnings.addAll(_applySrsSingle(cr, registry, srsPaths));
+        warnings.addAll(_applySrsSingle(cr, registry, srsPaths,
+            dnsMirrors: dnsMirrors));
       case CustomRuleInline():
-        warnings.addAll(_applyInlineSingle(cr, registry));
+        warnings.addAll(
+            _applyInlineSingle(cr, registry, dnsMirrors: dnsMirrors));
       case CustomRuleJson():
         warnings.addAll(_applyJsonSingle(cr, registry));
     }

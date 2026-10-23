@@ -81,11 +81,20 @@ class ViewTab extends StatelessWidget {
         // skipDisabled: false — preview показывает «что родит правило при
         // включении», не отфильтровывая по `enabled`. Юзер открыл editor
         // именно для inspect'а формы; Switch — отдельная UX-плоскость.
+        // §683 — DNS-правила правила (сервер / Force IPv4 / Fixed IP).
+        final mirrors = <DnsMirrorEntry>[];
         warnings = applyCustomRules(reg, [c.snapshot()],
-            srsPaths: srsPaths, skipDisabled: false);
+            srsPaths: srsPaths, skipDisabled: false, dnsMirrors: mirrors);
         json = const JsonEncoder.withIndent('  ').convert({
           'rule_set': reg.getRuleSets(),
           'rules': reg.getRules(),
+          if (mirrors.isNotEmpty)
+            'dns_rules': [
+              for (final m in mirrors)
+                m.serverless || m.serverTag.isEmpty
+                    ? m.body
+                    : {...m.body, 'server': m.serverTag},
+            ],
         });
       }
     } catch (e) {
