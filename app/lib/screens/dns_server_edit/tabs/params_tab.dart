@@ -59,7 +59,7 @@ class DnsServerParamsTab extends StatelessWidget {
               border: const OutlineInputBorder(),
               isDense: true,
               prefixIcon: const Icon(Icons.tag, size: 18),
-              helperText: getLocalText.s("Changing the tag creates a custom copy. The template server stays in the list."),
+              helperText: getLocalText.s("Changing the tag creates a custom copy. The original server stays in the list."),
               helperMaxLines: 3,
             ),
           ),
