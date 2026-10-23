@@ -152,8 +152,8 @@
   "Default domain resolver": {
     "value": "Резолвер доменов по умолчанию"
   },
-  "Default fallback DNS server. Used when an app's DNS query doesn't match any DNS rule.\n\n  • dns_shield — default; races 6 encrypted providers, answers from whichever replies first\n  • google_doh, cloudflare_dot — encrypted, single provider\n  • cloudflare_udp, google_udp — fast plain UDP\n\nlocal_dns_resolver (system DNS) is safe here.": {
-    "value": "Резервный DNS-сервер по умолчанию. Используется, когда DNS-запрос приложения не совпал ни с одним DNS-правилом.\n\n  • dns_shield — по умолчанию; опрашивает 6 шифрованных провайдеров наперегонки, отвечает тот, кто первым откликнулся\n  • google_doh, cloudflare_dot — шифрованные, один провайдер\n  • cloudflare_udp, google_udp — быстрый обычный UDP\n\nlocal_dns_resolver (системный DNS) здесь безопасен."
+  "Default fallback DNS server. Used when an app's DNS query doesn't match any DNS rule.\n\n  • dns_shield — default; races 6 encrypted providers over a direct connection, answers from whichever replies first\n  • google_doh, cloudflare_dot — recommended; encrypted, direct\n  • cloudflare_udp, google_udp — plain UDP through the tunnel; fine here\n\nlocal_dns_resolver (system DNS) is safe here.": {
+    "value": "Резервный DNS-сервер по умолчанию. Используется, когда DNS-запрос приложения не совпал ни с одним DNS-правилом.\n\n  • dns_shield — по умолчанию; опрашивает 6 шифрованных провайдеров напрямую наперегонки, отвечает тот, кто первым откликнулся\n  • google_doh, cloudflare_dot — рекомендуются; шифрованные, напрямую\n  • cloudflare_udp, google_udp — обычный UDP через туннель; здесь допустимо\n\nlocal_dns_resolver (системный DNS) здесь безопасен."
   },
   "Detect protocol and domain from packets for accurate routing.\n⚠️ WARNING: turning this off stops protocol matching (e.g. BitTorrent, TLS, QUIC), and domain matching too unless FakeIP is on.": {
     "value": "Определять протокол и домен из пакетов для точной маршрутизации.\n⚠️ ВНИМАНИЕ: выключение прекращает сопоставление по протоколу (например BitTorrent, TLS, QUIC), а без включённого FakeIP — и по домену."
@@ -218,8 +218,8 @@
   "Google 204": {
     "value": "Google 204"
   },
-  "Google DNS (direct)": {
-    "value": "Google DNS (напрямую)"
+  "Google UDP": {
+    "value": "Google UDP"
   },
   "Google DoH": {
     "value": "Google DoH"
@@ -374,8 +374,8 @@
   "Quad9 · anti-malware": {
     "value": "Quad9 · защита от вредоносного ПО"
   },
-  "RU DNS group (UDP via direction + DoT via vpn-1 + direct DoH)": {
-    "value": "Группа DNS для RU (UDP через Направление + DoT через vpn-1 + прямой DoH)"
+  "RU DNS group (UDP + DoT + DoH)": {
+    "value": "Группа DNS для RU (UDP + DoT + DoH)"
   },
   "Randomize letter case in server_name (WwW.gOoGle.CoM). Per RFC 6066 the field is case-insensitive, so servers accept either form; defeats naive exact-match matching only. Skipped on REALITY nodes — their SNI must stay byte-exact": {
     "value": "Случайный регистр букв в server_name (WwW.gOoGle.CoM). По RFC 6066 поле нечувствительно к регистру, поэтому серверы принимают любую запись; помогает только против наивного сравнения на точное совпадение. Не применяется к узлам REALITY — их SNI должен оставаться байт-в-байт."
@@ -527,8 +527,8 @@
   "Unknown traffic": {
     "value": "Неизвестный трафик"
   },
-  "Used by routing engine to resolve hostnames internally (outbound endpoints, routing rules). Not the resolver apps use.\n\n  • dns_shield — default; races 6 encrypted providers, answers from whichever replies first\n  • cloudflare_udp, google_udp — fast plain UDP\n  • google_doh — encrypted\n\n⚠ local_dns_resolver here leaks lookups to your ISP — system DNS bypasses the VPN.": {
-    "value": "Используется движком маршрутизации для внутреннего резолва имён (адреса серверов, правила маршрутизации). Это не резолвер для приложений.\n\n  • dns_shield — по умолчанию; опрашивает 6 шифрованных провайдеров наперегонки, отвечает тот, кто первым откликнулся\n  • cloudflare_udp, google_udp — быстрый обычный UDP\n  • google_doh — шифрованный\n\n⚠ Избегайте здесь local_dns_resolver — системный DNS отдаёт эти запросы провайдеру в обход VPN."
+  "Used by routing engine to resolve hostnames internally (outbound endpoints, routing rules). Not the resolver apps use.\n\n  • dns_shield — default; races 6 encrypted providers over a direct connection, answers from whichever replies first\n  • google_doh, cloudflare_dot — recommended; encrypted, direct\n\n⚠ Plain UDP servers go through the tunnel and can't answer before it is up — don't use them here.\n⚠ local_dns_resolver here leaks lookups to your ISP — system DNS bypasses the VPN.": {
+    "value": "Используется движком маршрутизации для внутреннего резолва имён (адреса серверов, правила маршрутизации). Это не резолвер для приложений.\n\n  • dns_shield — по умолчанию; опрашивает 6 шифрованных провайдеров напрямую наперегонки, отвечает тот, кто первым откликнулся\n  • google_doh, cloudflare_dot — рекомендуются; шифрованные, напрямую\n\n⚠ Обычные UDP-серверы ходят через туннель и не ответят, пока он не поднят — здесь их не выбирайте.\n⚠ Избегайте здесь local_dns_resolver — системный DNS отдаёт эти запросы провайдеру в обход VPN."
   },
   "Username for proxy auth (when auth is on).": {
     "value": "Имя пользователя для авторизации на прокси (когда она включена)."
@@ -581,11 +581,11 @@
   "Yandex": {
     "value": "Яндекс"
   },
-  "Yandex Safe DoH (direct)": {
-    "value": "Яндекс DoH (безопасный, напрямую)"
+  "Yandex Safe DoH": {
+    "value": "Яндекс DoH (безопасный)"
   },
-  "Yandex Safe DoT (via vpn-1)": {
-    "value": "Яндекс DoT (безопасный, через vpn-1)"
+  "Yandex Safe DoT": {
+    "value": "Яндекс DoT (безопасный)"
   },
   "Yandex UDP (IP from above)": {
     "value": "Яндекс UDP (IP из настройки выше)"
@@ -602,17 +602,17 @@
   "Shield DNS (multi-provider group)": {
     "value": "Shield DNS (группа из нескольких провайдеров)"
   },
-  "OpenDNS UDP (direct)": {
-    "value": "OpenDNS UDP (напрямую)"
+  "OpenDNS UDP": {
+    "value": "OpenDNS UDP"
   },
   "OpenDNS DoH": {
     "value": "OpenDNS DoH"
   },
-  "Quad9 DoH (via VPN, anti-malware)": {
-    "value": "Quad9 DoH (через VPN, антивредонос)"
+  "Quad9 DoH (anti-malware)": {
+    "value": "Quad9 DoH (антивредонос)"
   },
-  "Yandex DoT (direct)": {
-    "value": "Yandex DoT (напрямую)"
+  "Yandex DoT": {
+    "value": "Yandex DoT"
   },
   "Google push (FCM)": {
     "value": "Google-пуши (FCM)"
@@ -757,5 +757,17 @@
   },
   "Yandex DNS IP for DNS-over-TLS (port 853). TLS SNI is pinned to common.dot.dns.yandex.net.": {
     "value": "IP-адрес Яндекс DNS для DNS-over-TLS (порт 853). TLS SNI закреплён как common.dot.dns.yandex.net."
+  },
+  "UDP DNS outbound": {
+    "value": "Направление для UDP DNS"
+  },
+  "Encrypted DNS outbound": {
+    "value": "Направление для шифрованного DNS"
+  },
+  "Which direction carries plain UDP queries to Yandex DNS": {
+    "value": "Через какое Направление идут обычные UDP-запросы к DNS Яндекса"
+  },
+  "Which direction carries Yandex DoT and DoH queries": {
+    "value": "Через какое Направление идут запросы DoT и DoH к Яндексу"
   }
 }

@@ -7,57 +7,74 @@ import 'package:lxbox/services/builder/post_steps.dart'
 import 'package:lxbox/services/builder/preset_expand.dart'
     show normalizeDnsDetour;
 
-/// §682 — четырём зашитым серверам каталога добавлены vars `outbound` и
-/// `dns_ip`. Дефолты обязаны давать то же тело, что было зашито до ревизии,
-/// байт в байт (порядок ключей тоже): у существующих установок конфиг не
-/// меняется.
+/// §684 — одно правило дефолтов Направления для всех DNS-серверов шаблона:
+/// нешифрованный (udp) — через туннель (`vpn-1`), шифрованный (tls/https) —
+/// напрямую (тело без `detour`). У каждого сервера с путём — var `outbound`.
 void main() {
-  // Тела до §682 — дословно из wizard_template.json.
-  const before = <String, String>{
-    'opendns_udp':
-        '{"type":"udp","tag":"opendns_udp","server_port":53,"server":"208.67.222.222"}',
-    'opendns_doh':
-        '{"type":"https","tag":"opendns_doh","server_port":443,"server":"208.67.222.222","path":"/dns-query","tls":{"enabled":true,"server_name":"dns.opendns.com"}}',
-    'quad9_doh':
-        '{"type":"https","tag":"quad9_doh","server_port":443,"server":"9.9.9.9","path":"/dns-query","tls":{"enabled":true,"server_name":"dns.quad9.net"},"detour":"vpn-1"}',
-    'yandex_dot':
-        '{"type":"tls","tag":"yandex_dot","server_port":853,"server":"77.88.8.8","tls":{"enabled":true,"server_name":"common.dot.dns.yandex.net"}}',
-  };
-
   final tpl = jsonDecode(File('assets/wizard_template.json').readAsStringSync())
       as Map<String, dynamic>;
   final wrappers = <String, Map<String, dynamic>>{
     for (final e in (tpl['dns_options'] as Map)['servers'] as List)
-      if ((e as Map)['server'] is Map)
+      if ((e as Map)['server'] is Map &&
+          const {'udp', 'tls', 'https'}.contains((e['server'] as Map)['type']))
         (e['server'] as Map)['tag'] as String: e.cast<String, dynamic>(),
   };
 
-  for (final tag in before.keys) {
-    test('$tag: тело с дефолтами vars = тело до ревизии', () {
+  test('каталог: все серверы с путём на месте', () {
+    expect(
+        wrappers.keys,
+        containsAll(<String>[
+          'google_udp', 'cloudflare_udp', 'opendns_udp', //
+          'google_dot', 'cloudflare_dot', 'yandex_dot', 'safe_dns_dot',
+          'google_doh', 'opendns_doh', 'quad9_doh',
+        ]));
+  });
+
+  for (final tag in wrappers.keys) {
+    test('$tag: дефолт Направления — udp через vpn-1, шифрованный напрямую',
+        () {
       final w = wrappers[tag]!;
-      final names = [
-        for (final v in w['vars'] as List) (v as Map)['name'],
-      ];
-      expect(names, containsAll(['outbound', 'dns_ip']));
+      final names = [for (final v in w['vars'] as List) (v as Map)['name']];
+      expect(names, contains('outbound'));
       final body = resolveTemplateDnsServerBody(w)!;
       normalizeDnsDetour(body);
-      final old = jsonDecode(before[tag]!) as Map<String, dynamic>;
-      normalizeDnsDetour(old);
-      expect(jsonEncode(body), jsonEncode(old));
+      if (body['type'] == 'udp') {
+        expect(body['detour'], 'vpn-1');
+      } else {
+        expect(body.containsKey('detour'), isFalse,
+            reason: 'шифрованный сервер по умолчанию идёт напрямую');
+      }
     });
 
-    test('$tag: выбор адреса и Направления меняет тело', () {
-      final w = wrappers[tag]!;
-      final ipVar = (w['vars'] as List)
-          .cast<Map>()
-          .firstWhere((v) => v['name'] == 'dns_ip');
-      final options = [for (final o in ipVar['options'] as List) o['value']];
-      final alt = options.last as String;
-      final body = resolveTemplateDnsServerBody(w,
-          varValues: {'dns_ip': alt, 'outbound': 'vpn-2'})!;
+    test('$tag: выбор Направления меняет тело', () {
+      final body = resolveTemplateDnsServerBody(wrappers[tag]!,
+          varValues: {'outbound': 'vpn-2'})!;
       normalizeDnsDetour(body);
-      expect(body['server'], alt);
       expect(body['detour'], 'vpn-2');
     });
   }
+
+  test('safe_dns_dot: резолвер своего имени — google_doh', () {
+    final body = resolveTemplateDnsServerBody(wrappers['safe_dns_dot']!)!;
+    expect(body['domain_resolver'], 'google_doh');
+  });
+
+  test('ru-direct: UDP через vpn-1, DoT/DoH напрямую, свои var', () {
+    final preset = (tpl['selectable_rules'] as List)
+        .cast<Map>()
+        .firstWhere((p) => p['preset_id'] == 'ru-direct');
+    final vars = {
+      for (final v in (preset['vars'] as List).cast<Map>())
+        v['name']: v['default_value'],
+    };
+    expect(vars['dns_plain_outbound'], 'vpn-1');
+    expect(vars['dns_encrypted_outbound'], 'direct-out');
+    final servers = {
+      for (final s in (preset['dns_servers'] as List).cast<Map>())
+        s['tag']: s['detour'],
+    };
+    expect(servers['yandex_udp'], '@dns_plain_outbound');
+    expect(servers['yandex_dot'], '@dns_encrypted_outbound');
+    expect(servers['yandex_doh'], '@dns_encrypted_outbound');
+  });
 }

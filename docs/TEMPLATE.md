@@ -249,10 +249,10 @@ The builder (`resolveTemplateDnsServerBody`) substitutes the vars with the user'
 
 ```jsonc
 {
-  "description": "Google DNS (direct)",
+  "description": "Google UDP",
   "enabled":     true,               // state on seeding / on adding from the catalog (§680)
   "vars": [                          // optional (local_dns_resolver has none)
-    {"name": "outbound", "type": "outbound", "default_value": "direct-out",
+    {"name": "outbound", "type": "outbound", "default_value": "vpn-1",
      "title": "Outbound", "tooltip": "Which direction carries DNS queries…"},
     {"name": "dns_ip", "type": "enum", "default_value": "8.8.8.8",
      "title": "UDP server IP", "options": [ {"title": "…", "value": "8.8.8.8"}, … ]}
@@ -271,8 +271,10 @@ The conventions (§117):
   written by default (`normalizeDnsDetour`: `direct-out`, an empty value and a direction
   unknown to the builder all erase the key; “no detour” is both the default and the fallback).
 - For domain-addressed servers (the address is a hostname): `domain_resolver: "@dom_resolver"` plus
-  the var `{type: dns_servers, default_value: "google_udp"}` decides what resolves the
+  the var `{type: dns_servers, default_value: "google_doh"}` decides what resolves the
   DNS server's own hostname.
+- §684 default directions: plain UDP servers go through the tunnel (`vpn-1`), encrypted
+  ones (DoT/DoH) go direct; the path is chosen by the `outbound` var, not written in the description.
 
 The seven default servers in the current template:
 
@@ -863,7 +865,7 @@ the base sniff/hijack-dns/resolve rules.
 |---|---|---|---|---|---|---|---|---|
 | `traffic-processing` | true | true | 0 | ✓ (sniff_enabled, sniff_timeout §264 enum 100ms/300ms/500ms/1s/3s, hijack_dns_enabled §264 bool with a WARNING tooltip, `{"ref":"resolve_enabled"}` + `{"ref":"resolve_strategy"}` §265 — both ref the `internal` section) | — | ✓ an array: `[sniff #if @sniff_enabled, hijack-dns, resolve strategy:@resolve_strategy #if @resolve_enabled]` | — | — |
 | `block-ads` | false | — | — | — | ✓ (remote ads-all) | ✓ (action: reject) | — | — |
-| `ru-direct` | true | — | — | ✓ (outbound, dns_enable §257, dns_server, dns_ip, geoip_enabled, force_ipv4) | ✓ (inline `.ru` suffixes) | ✓ an array: `[resolve ipv4_only #if @force_ipv4, @outbound]` (§246) | ✓ an array: `[predefined-NOERROR ip_version:6 #if @force_ipv4, → @dns_server]` (§253) | ✓ (yandex_udp/doh/dot) |
+| `ru-direct` | true | — | — | ✓ (outbound, dns_enable §257, dns_server, dns_ip, dns_plain_outbound + dns_encrypted_outbound §684, geoip_enabled, force_ipv4) | ✓ (inline `.ru` suffixes) | ✓ an array: `[resolve ipv4_only #if @force_ipv4, @outbound]` (§246) | ✓ an array: `[predefined-NOERROR ip_version:6 #if @force_ipv4, → @dns_server]` (§253) | ✓ (yandex_udp/doh/dot) |
 | `fakeip` | false | — | — | ✓ (rule_enable §266 pseudo + on_change, dns_enable §257 + on_change, dns_server — **hidden**) | — | — | ✓ (`query_type: [A,AAAA]` → `@dns_server`) | ✓ (type `fakeip`, ranges 198.18/15 + fc00::/18) |
 | `ru-inside` | (false) | — | — | ✓ (outbound, force_ipv4) | ✓ (remote ru-inside) | ✓ an array: `[resolve ipv4_only #if @force_ipv4, @outbound]` (§246) | — | — |
 | `bittorrent` | true | — | — | ✓ (outbound) | — | ✓ (`protocol: bittorrent` → `@outbound`) | — | — |

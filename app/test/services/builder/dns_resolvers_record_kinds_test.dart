@@ -54,8 +54,8 @@ void main() {
       'kind': 'template',
       'tag': 'google_udp',
       'enabled': false,
-      'vars': {'outbound': 'vpn-1', 'dns_ip': '8.8.4.4'},
-      'description': 'Google, via VPN',
+      'vars': {'outbound': 'vpn-2', 'dns_ip': '8.8.4.4'},
+      'description': 'Google, via VPN 2',
     },
     {'kind': 'preset', 'ref': 'ru-direct:yandex_udp', 'enabled': true},
     {
@@ -162,8 +162,8 @@ void main() {
       DnsServerTemplate(
         enabled: false,
         tag: 'google_udp',
-        varValues: {'outbound': 'vpn-1', 'dns_ip': '8.8.4.4'},
-        description: 'Google, via VPN',
+        varValues: {'outbound': 'vpn-2', 'dns_ip': '8.8.4.4'},
+        description: 'Google, via VPN 2',
       ),
       DnsServerPreset(
           enabled: true, tag: 'ru-direct:yandex_udp', presetId: 'ru-direct'),

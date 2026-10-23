@@ -11,10 +11,10 @@
         "server": {"type": "local", "tag": "local_dns_resolver"}
       },
       {
-        "description": "Google DNS (direct)",
+        "description": "Google UDP",
         "enabled": true,
         "vars": [
-          {"name": "outbound", "type": "outbound", "default_value": "direct-out", "required": true, "title": "Outbound", "tooltip": "Which direction carries DNS queries to this server"},
+          {"name": "outbound", "type": "outbound", "default_value": "vpn-1", "required": true, "title": "Outbound", "tooltip": "Which direction carries DNS queries to this server"},
           { "name": "dns_ip", "type": "enum", "title": "UDP server IP", "tooltip": "Google Public DNS address. IPv4 — universal; IPv6 — if your network supports it.",
             "default_value": "8.8.8.8", "required": true,
             "options": [
@@ -31,7 +31,7 @@
         "description": "Google DoT",
         "enabled": true,
         "vars": [
-          {"name": "outbound", "type": "outbound", "default_value": "vpn-1", "required": true, "title": "Outbound", "tooltip": "Which direction carries DNS queries to this server"},
+          {"name": "outbound", "type": "outbound", "default_value": "direct-out", "required": true, "title": "Outbound", "tooltip": "Which direction carries DNS queries to this server"},
           { "name": "dns_ip", "type": "enum", "title": "DoT server IP", "tooltip": "Google Public DNS address for DNS-over-TLS (port 853).",
             "default_value": "8.8.8.8", "required": true,
             "options": [
@@ -65,7 +65,7 @@
         "description": "Cloudflare UDP",
         "enabled": true,
         "vars": [
-          {"name": "outbound", "type": "outbound", "default_value": "direct-out", "required": true, "title": "Outbound", "tooltip": "Which direction carries DNS queries to this server"},
+          {"name": "outbound", "type": "outbound", "default_value": "vpn-1", "required": true, "title": "Outbound", "tooltip": "Which direction carries DNS queries to this server"},
           { "name": "dns_ip", "type": "enum", "title": "UDP server IP", "tooltip": "Cloudflare Public DNS address. IPv4 — universal; IPv6 — if your network supports it.",
             "default_value": "1.1.1.1", "required": true,
             "options": [
@@ -82,7 +82,7 @@
         "description": "Cloudflare DoT",
         "enabled": true,
         "vars": [
-          {"name": "outbound", "type": "outbound", "default_value": "vpn-1", "required": true, "title": "Outbound", "tooltip": "Which direction carries DNS queries to this server"},
+          {"name": "outbound", "type": "outbound", "default_value": "direct-out", "required": true, "title": "Outbound", "tooltip": "Which direction carries DNS queries to this server"},
           { "name": "dns_ip", "type": "enum", "title": "DoT server IP", "tooltip": "Cloudflare Public DNS address for DNS-over-TLS (port 853).",
             "default_value": "1.1.1.1", "required": true,
             "options": [
@@ -108,15 +108,15 @@
               {"title": "AdGuard Family · ad + adult", "value": "family.adguard-dns.com"}
             ]
           },
-          {"name": "dom_resolver", "type": "dns_servers", "default_value": "google_udp", "required": true, "title": "Domain resolver", "tooltip": "DNS server used to resolve the Safe DNS hostname itself (AdGuard profiles use a domain address)."}
+          {"name": "dom_resolver", "type": "dns_servers", "default_value": "google_doh", "required": true, "title": "Domain resolver", "tooltip": "DNS server used to resolve the Safe DNS hostname itself (AdGuard profiles use a domain address)."}
         ],
         "server": {"type": "tls", "tag": "safe_dns_dot", "server_port": 853, "server": "@safe_profile", "domain_resolver": "@dom_resolver", "detour": "@outbound"}
       },
       {
-        "description": "OpenDNS UDP (direct)",
+        "description": "OpenDNS UDP",
         "enabled": true,
         "vars": [
-          {"name": "outbound", "type": "outbound", "default_value": "direct-out", "required": true, "title": "Outbound", "tooltip": "Which direction carries DNS queries to this server"},
+          {"name": "outbound", "type": "outbound", "default_value": "vpn-1", "required": true, "title": "Outbound", "tooltip": "Which direction carries DNS queries to this server"},
           { "name": "dns_ip", "type": "enum", "title": "UDP server IP", "tooltip": "OpenDNS address. IPv4 — universal; IPv6 — if your network supports it.",
             "default_value": "208.67.222.222", "required": true,
             "options": [
@@ -147,10 +147,10 @@
         "server": {"type": "https", "tag": "opendns_doh", "server_port": 443, "server": "@dns_ip", "path": "/dns-query", "tls": {"enabled": true, "server_name": "dns.opendns.com"}, "detour": "@outbound"}
       },
       {
-        "description": "Quad9 DoH (via VPN, anti-malware)",
+        "description": "Quad9 DoH (anti-malware)",
         "enabled": true,
         "vars": [
-          {"name": "outbound", "type": "outbound", "default_value": "vpn-1", "required": true, "title": "Outbound", "tooltip": "Which direction carries DNS queries to this server"},
+          {"name": "outbound", "type": "outbound", "default_value": "direct-out", "required": true, "title": "Outbound", "tooltip": "Which direction carries DNS queries to this server"},
           { "name": "dns_ip", "type": "enum", "title": "DoH server IP", "tooltip": "Quad9 IP for IP-based DoH. TLS SNI is pinned to dns.quad9.net.",
             "default_value": "9.9.9.9", "required": true,
             "options": [
@@ -164,7 +164,7 @@
         "server": {"type": "https", "tag": "quad9_doh", "server_port": 443, "server": "@dns_ip", "path": "/dns-query", "tls": {"enabled": true, "server_name": "dns.quad9.net"}, "detour": "@outbound"}
       },
       {
-        "description": "Yandex DoT (direct)",
+        "description": "Yandex DoT",
         "enabled": true,
         "vars": [
           {"name": "outbound", "type": "outbound", "default_value": "direct-out", "required": true, "title": "Outbound", "tooltip": "Which direction carries DNS queries to this server"},
@@ -317,8 +317,8 @@
           "default_value": "ipv4_only", "required": true,
           "options": ["prefer_ipv4", "prefer_ipv6", "ipv4_only", "ipv6_only"]
         },
-        {"name": "dns_default_domain_resolver", "type": "text", "default_value": "dns_shield", "required": true, "wizard_ui": "fix", "title": "Default domain resolver", "tooltip": "Used by routing engine to resolve hostnames internally (outbound endpoints, routing rules). Not the resolver apps use.\n\n  • dns_shield — default; races 6 encrypted providers, answers from whichever replies first\n  • cloudflare_udp, google_udp — fast plain UDP\n  • google_doh — encrypted\n\n⚠ local_dns_resolver here leaks lookups to your ISP — system DNS bypasses the VPN."},
-        {"name": "dns_final", "type": "text", "default_value": "dns_shield", "required": true, "wizard_ui": "fix", "title": "DNS final", "tooltip": "Default fallback DNS server. Used when an app's DNS query doesn't match any DNS rule.\n\n  • dns_shield — default; races 6 encrypted providers, answers from whichever replies first\n  • google_doh, cloudflare_dot — encrypted, single provider\n  • cloudflare_udp, google_udp — fast plain UDP\n\nlocal_dns_resolver (system DNS) is safe here."},
+        {"name": "dns_default_domain_resolver", "type": "text", "default_value": "dns_shield", "required": true, "wizard_ui": "fix", "title": "Default domain resolver", "tooltip": "Used by routing engine to resolve hostnames internally (outbound endpoints, routing rules). Not the resolver apps use.\n\n  • dns_shield — default; races 6 encrypted providers over a direct connection, answers from whichever replies first\n  • google_doh, cloudflare_dot — recommended; encrypted, direct\n\n⚠ Plain UDP servers go through the tunnel and can't answer before it is up — don't use them here.\n⚠ local_dns_resolver here leaks lookups to your ISP — system DNS bypasses the VPN."},
+        {"name": "dns_final", "type": "text", "default_value": "dns_shield", "required": true, "wizard_ui": "fix", "title": "DNS final", "tooltip": "Default fallback DNS server. Used when an app's DNS query doesn't match any DNS rule.\n\n  • dns_shield — default; races 6 encrypted providers over a direct connection, answers from whichever replies first\n  • google_doh, cloudflare_dot — recommended; encrypted, direct\n  • cloudflare_udp, google_udp — plain UDP through the tunnel; fine here\n\nlocal_dns_resolver (system DNS) is safe here."},
         {"name": "dns_cache_capacity", "type": "int", "default_value": "4000", "required": true, "wizard_ui": "fix", "title": "DNS cache size", "tooltip": "Number of cached answers (1024..65535)."},
         {"name": "dns_optimistic", "type": "bool", "default_value": "true", "required": true, "wizard_ui": "fix", "title": "Serve stale answers", "tooltip": "Answer from cache at once and refresh in the background."},
         {"name": "dns_resolver_no_stale", "type": "bool", "default_value": "true", "required": true, "wizard_ui": "fix", "title": "Never serve stale answers for node hostnames", "tooltip": "Hostnames the core resolves itself (node servers) are looked up again once the cached answer expires, so a node whose address changed does not stay on the old one. App DNS queries are not affected."},
@@ -543,6 +543,8 @@
             {"title": "2a02:6b8::feed:a11 · Family v6", "value": "2a02:6b8::feed:a11"}
           ]
         },
+        {"name": "dns_plain_outbound", "type": "outbound", "default_value": "vpn-1", "required": true, "title": "UDP DNS outbound", "tooltip": "Which direction carries plain UDP queries to Yandex DNS"},
+        {"name": "dns_encrypted_outbound", "type": "outbound", "default_value": "direct-out", "required": true, "title": "Encrypted DNS outbound", "tooltip": "Which direction carries Yandex DoT and DoH queries"},
         {"name": "geoip_enabled", "type": "bool", "default_value": "true", "title": "GeoIP IP-range fallback", "tooltip": "Match Russian-AS IPs as well as domains — catches CDN/QUIC/ECH cases where domain detection fails. Auto-downloads geoip-ru.srs (~150 KB) on first use."},
         {"name": "apps_enabled", "type": "bool", "default_value": "true", "title": "Russian apps by package", "tooltip": "Route Android apps from the legiz-ru list (banks, marketplaces, government services, Yandex/VK and others) by package name, regardless of the domains they use. Auto-downloads ru-app-list.srs (~4 KB) on first use."},
         {"name": "force_ipv4", "type": "bool", "default_value": "true", "title": "Force IPv4", "tooltip": "Resolve Russian domains to IPv4 only. Prevents dead IPv6 connections on networks without working global IPv6. Works through this preset's DNS rule — keep the DNS toggle on. Turn off if your network has functional IPv6."}
@@ -584,10 +586,10 @@
         {"rule_set": ["ru-domains", "ru-services"], "server": "dns_ru", "action": "route"}
       ],
       "dns_servers": [
-        {"type": "group", "tag": "dns_ru", "servers": ["yandex_udp", "yandex_dot", "yandex_doh"], "mode": "fastest", "error_ttl": "5m", "win_ttl": "5m", "description": "RU DNS group (UDP via direction + DoT via vpn-1 + direct DoH)"},
-        {"type": "udp", "tag": "yandex_udp", "server": "@dns_ip", "server_port": 53, "description": "Yandex UDP (IP from above)", "detour": "@outbound"},
-        {"type": "tls", "tag": "yandex_dot", "server": "77.88.8.88", "server_port": 853, "description": "Yandex Safe DoT (via vpn-1)", "tls": {"enabled": true, "server_name": "safe.dot.dns.yandex.net"}, "detour": "vpn-1"},
-        {"type": "https", "tag": "yandex_doh", "server": "77.88.8.88", "server_port": 443, "path": "/dns-query", "description": "Yandex Safe DoH (direct)", "tls": {"enabled": true, "server_name": "safe.dot.dns.yandex.net"}}
+        {"type": "group", "tag": "dns_ru", "servers": ["yandex_udp", "yandex_dot", "yandex_doh"], "mode": "fastest", "error_ttl": "5m", "win_ttl": "5m", "description": "RU DNS group (UDP + DoT + DoH)"},
+        {"type": "udp", "tag": "yandex_udp", "server": "@dns_ip", "server_port": 53, "description": "Yandex UDP (IP from above)", "detour": "@dns_plain_outbound"},
+        {"type": "tls", "tag": "yandex_dot", "server": "77.88.8.88", "server_port": 853, "description": "Yandex Safe DoT", "tls": {"enabled": true, "server_name": "safe.dot.dns.yandex.net"}, "detour": "@dns_encrypted_outbound"},
+        {"type": "https", "tag": "yandex_doh", "server": "77.88.8.88", "server_port": 443, "path": "/dns-query", "description": "Yandex Safe DoH", "tls": {"enabled": true, "server_name": "safe.dot.dns.yandex.net"}, "detour": "@dns_encrypted_outbound"}
       ]
     },
     {

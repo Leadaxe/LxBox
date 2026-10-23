@@ -164,11 +164,14 @@ void main() {
         reason: 'detour у члена «щита» вернёт зависимость от туннеля');
   });
 
-  test('quad9_doh сохраняет detour vpn-1 (§517: намеренно не трогаем)', () {
-    // Единственный член группы с детуром. При mode=fastest это значит, что
-    // члены идут разными путями и состав победителей зависит от того, поднят
-    // ли vpn-1. Решение «ставить детур всем или никому» — за владельцем,
-    // в §517 сознательно вне объёма; страж фиксирует текущее состояние.
-    expect(baseServersByTag(template())['quad9_doh']!['detour'], 'vpn-1');
+  test('§684 все члены dns_shield по умолчанию идут напрямую', () {
+    // Шифрованные серверы каталога по умолчанию без detour (решение
+    // владельца §684; бывшее исключение quad9_doh через vpn-1 снято).
+    final base = baseServersByTag(template());
+    final members = (base['dns_shield']!['servers'] as List).cast<String>();
+    for (final tag in members) {
+      expect(base[tag]!.containsKey('detour'), isFalse,
+          reason: '$tag: detour у члена «щита» вернёт зависимость от туннеля');
+    }
   });
 }

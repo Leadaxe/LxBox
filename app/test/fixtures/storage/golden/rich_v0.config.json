@@ -38,8 +38,7 @@
         "type": "tls",
         "tag": "google_dot",
         "server_port": 853,
-        "server": "8.8.8.8",
-        "detour": "vpn-1"
+        "server": "8.8.8.8"
       },
       {
         "type": "https",
@@ -57,14 +56,14 @@
         "type": "tls",
         "tag": "cloudflare_dot",
         "server_port": 853,
-        "server": "1.1.1.1",
-        "detour": "vpn-1"
+        "server": "1.1.1.1"
       },
       {
         "type": "udp",
         "tag": "opendns_udp",
         "server_port": 53,
-        "server": "208.67.222.222"
+        "server": "208.67.222.222",
+        "detour": "vpn-1"
       },
       {
         "type": "https",
@@ -75,8 +74,7 @@
         "tls": {
           "enabled": true,
           "server_name": "dns.quad9.net"
-        },
-        "detour": "vpn-1"
+        }
       },
       {
         "type": "group",
@@ -107,7 +105,8 @@
         "type": "udp",
         "tag": "ru-direct:yandex_udp",
         "server": "77.88.8.1",
-        "server_port": 53
+        "server_port": 53,
+        "detour": "vpn-1"
       },
       {
         "type": "tls",
@@ -117,8 +116,7 @@
         "tls": {
           "enabled": true,
           "server_name": "safe.dot.dns.yandex.net"
-        },
-        "detour": "vpn-1"
+        }
       },
       {
         "type": "https",

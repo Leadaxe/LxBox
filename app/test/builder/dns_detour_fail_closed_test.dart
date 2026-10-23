@@ -428,8 +428,8 @@ void main() {
       final dot = (await SettingsStorage.getDnsServers())
           .whereType<DnsServerTemplate>()
           .firstWhere((s) => s.tag == 'google_dot');
-      expect(dot.varValues, isEmpty,
-          reason: 'vpn-1 — умолчание шаблона: ключ снят (Н4)');
+      // §684: умолчание google_dot — direct-out, поэтому vpn-1 хранится явно.
+      expect(dot.varValues, {'outbound': 'vpn-1'});
       expect(DirectionMutations.healMessageParts(healed),
           contains('1 DNS server(s) switched to vpn-1'));
 

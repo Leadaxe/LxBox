@@ -300,7 +300,7 @@ void main() {
         const DnsServerTemplate(
           enabled: true,
           tag: 'google_udp',
-          varValues: {'outbound': 'vpn-1'},
+          varValues: {'outbound': 'vpn-2'},
         ),
       ]);
 
@@ -310,7 +310,7 @@ void main() {
       );
 
       final google = result.firstWhere((s) => s.tag == 'google_udp');
-      expect((google as DnsServerTemplate).varValues, {'outbound': 'vpn-1'});
+      expect((google as DnsServerTemplate).varValues, {'outbound': 'vpn-2'});
     });
 
     test('Already-migrated storage (есть kind) — enabled flag preserved',

@@ -22,7 +22,8 @@
         "type": "udp",
         "tag": "cloudflare_udp",
         "server_port": 53,
-        "server": "1.1.1.1"
+        "server": "1.1.1.1",
+        "detour": "vpn-1"
       },
       {
         "type": "https",
@@ -40,22 +41,20 @@
         "type": "tls",
         "tag": "cloudflare_dot",
         "server_port": 853,
-        "server": "1.1.1.1",
-        "detour": "vpn-1"
+        "server": "1.1.1.1"
       },
       {
         "type": "tls",
         "tag": "google_dot",
         "server_port": 853,
-        "server": "8.8.8.8",
-        "detour": "vpn-1"
+        "server": "8.8.8.8"
       },
       {
         "type": "tls",
         "tag": "safe_dns_dot",
         "server_port": 853,
         "server": "9.9.9.9",
-        "domain_resolver": "google_udp"
+        "domain_resolver": "google_doh"
       },
       {
         "type": "udp",
@@ -67,7 +66,8 @@
         "type": "udp",
         "tag": "opendns_udp",
         "server_port": 53,
-        "server": "208.67.222.222"
+        "server": "208.67.222.222",
+        "detour": "vpn-1"
       },
       {
         "type": "https",
@@ -78,8 +78,7 @@
         "tls": {
           "enabled": true,
           "server_name": "dns.quad9.net"
-        },
-        "detour": "vpn-1"
+        }
       },
       {
         "type": "group",
