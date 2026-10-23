@@ -610,7 +610,9 @@ class NodeRow extends StatelessWidget {
                       // подменённым label'ом + иконкой; тип берём ТОЧНО из
                       // конфига (item.outboundType), не по маске имени.
                       final special = _special;
-                      final displayText = special?.label ?? item.tag;
+                      // Член-Направление — label вместо tag (tag в подзаголовке).
+                      final displayText =
+                          special?.label ?? item.displayLabel ?? item.tag;
                       return Row(
                         children: [
                           if (special != null) ...[

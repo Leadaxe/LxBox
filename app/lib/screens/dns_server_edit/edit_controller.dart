@@ -10,6 +10,11 @@ import '../../services/dns/tailscale_endpoint_options.dart' show TailscaleEndpoi
 import '../../services/record_vars.dart';
 import '../../widgets/outbound_picker.dart';
 import '../../widgets/var_values_model.dart';
+import '../dns_settings_screen/dns_server_resolver.dart'
+    show defaultDnsServerTag;
+import '../../services/builder/post_steps.dart'
+    show resolveTemplateDnsServerBody;
+import '../dns_settings_screen/dns_server_copy.dart';
 import '../dns_settings_screen/resolved_server.dart';
 
 /// §117 задача 4b — режимы формы создания/редактирования inline-сервера.
@@ -140,10 +145,44 @@ class DnsServerEditController extends ChangeNotifier {
   bool get isNew => resolved == null;
   ServerKind get kind => resolved?.kind ?? ServerKind.inline;
   bool get locked => resolved?.locked ?? false;
+  bool get forceIncluded => resolved?.forceIncluded ?? false;
   String get lockedByLabel => resolved?.lockedByLabel ?? '';
   ServerKind? get overrides => resolved?.overrides;
   bool get isUserOnly => resolved?.isUserOnly ?? true;
   List<WizardVar> get vars => resolved?.vars ?? const [];
+
+  /// §682 — у шаблонного/пресетного сервера (и override) есть Duplicate.
+  bool get canCopy =>
+      !isNew && (kind != ServerKind.inline || overrides != null);
+
+  /// §682 — у шаблонной/пресетной записи правка тега не переименовывает
+  /// ссылку: Save сохраняет inline-копию с новым тегом, оригинал остаётся.
+  bool get savesAsCopy =>
+      !isNew &&
+      kind != ServerKind.inline &&
+      tagCtrl.text.trim() != initialRef.tag;
+
+  /// §682 — разрешённое тело с ТЕКУЩИМИ значениями формы (как в превью
+  /// JSON): template — обёртка с выбранными vars, preset — тело пресета,
+  /// inline (override) — тело формы.
+  Map<String, dynamic> currentResolvedBody() {
+    final wrapper = templateWrapper;
+    if (kind == ServerKind.template && wrapper != null) {
+      final b = resolveTemplateDnsServerBody(wrapper, varValues: _varValues);
+      if (b != null) return b;
+    }
+    if (kind == ServerKind.inline) return Map<String, dynamic>.of(_body);
+    return Map<String, dynamic>.of(resolved?.body ?? const {});
+  }
+
+  /// §682 — inline-копия текущего состояния формы под тегом [tag].
+  DnsServerInline copySnapshot(String tag, {String? description}) =>
+      dnsServerCopy(
+        body: currentResolvedBody(),
+        tag: tag,
+        enabled: _enabled,
+        description: description ?? descCtrl.text.trim(),
+      );
 
   // ─── Text controllers / mutable state ────────────────────────────────
 
@@ -584,9 +623,11 @@ class DnsServerEditController extends ChangeNotifier {
     }
     if (isHostnameAddress) {
       if (domainResolver.isEmpty) {
-        final def = dnsServerTags.contains('google_udp')
-            ? 'google_udp'
-            : (dnsServerTags.isNotEmpty ? dnsServerTags.first : '');
+        // §680 — только серверы списка; пригодность — по опциям членов
+        // группы (в них нет fakeip/hosts). Без опций типы неизвестны.
+        final memberTags = {for (final o in dnsMemberOptions) o.tag};
+        final def = defaultDnsServerTag(dnsServerTags,
+            eligible: memberTags.isEmpty ? null : memberTags.contains);
         if (def.isNotEmpty) _body['domain_resolver'] = def;
       }
     } else {
@@ -750,7 +791,7 @@ class DnsServerEditController extends ChangeNotifier {
     };
   }
 
-  bool isDirty() => snapshot() != initialRef;
+  bool isDirty() => savesAsCopy || snapshot() != initialRef;
 }
 
 /// §044/§117: tag/description/enabled живут на ref-level, UI-аннотации не

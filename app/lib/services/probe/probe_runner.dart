@@ -59,11 +59,28 @@ class ProbeRunner {
   final CcChannel _cc;
   bool _cancelled = false;
 
+  /// §669 — владелец текущей probe-сессии этого прогона (0 — сессии нет).
+  /// Все probe-вызовы несут его: `finally` старого прогона не закроет сессию,
+  /// которую уже поднял новый.
+  int _runId = 0;
+
   /// Конкурентность пула: ядро меряет по одной ноде synchronous+stateless
   /// (SPEC 014), мультиплекс на одном клиенте — как mass-ping §209.
   static const _concurrency = 6;
 
-  void cancel() => _cancelled = true;
+  /// Отмена прогона. §669 — кроме флага рвёт начатые замеры в ядре
+  /// (`probeCancel`, образец §175): до шести параллельных dial'ов возвращаются
+  /// сразу, а не по таймауту замера. Синхронная — её зовёт и
+  /// [ProbeLifecycle.haltAll].
+  void cancel() {
+    _cancelled = true;
+    final id = _runId;
+    if (id != 0) {
+      unawaited(_cc.probeCancel(id).catchError((Object e) {
+        AppLog.I.warning('Probe cancel failed: $e');
+      }));
+    }
+  }
 
   /// Прогоняет тест по всем [nodes] (null-слот → вердикт 'broken', индекс
   /// сохраняется). Результаты отдаются по мере готовности в [onResult]
@@ -128,8 +145,9 @@ class ProbeRunner {
       for (final cfg in batches) {
         if (_cancelled) return '';
         if (cfg.configJson == null) continue;
-        final err = await _cc.probeStart(cfg.configJson!);
-        if (err.isNotEmpty) {
+        final started = await _cc.probeStart(cfg.configJson!);
+        if (!started.ok) {
+          final err = started.error;
           // VPN активен → probe-сессию не поднять. UI гейтит тест ещё до run()
           // (getVpnStatus), но между проверкой и probeStart VPN мог стартовать —
           // ловим здесь маркером, не боевой веткой.
@@ -137,18 +155,23 @@ class ProbeRunner {
           AppLog.I.warning('Probe session failed to start: $err');
           return err;
         }
+        final runId = started.runId;
+        _runId = runId;
         try {
+          // §669 — Stop пришёл, пока сессия поднималась: замеров не начинаем.
+          if (_cancelled) return '';
           await _runPool(
             cfg.tagByIndex,
-            test: (tag) =>
-                _cc.probeUrlTest(tag, link: url, timeoutMs: timeoutMs),
+            test: (tag) => _cc.probeUrlTest(tag,
+                runId: runId, link: url, timeoutMs: timeoutMs),
             onResult: onResult,
           );
         } finally {
           // Сессию гасим ПОСЛЕ каждого батча, а не в конце прогона: иначе
           // движки naive-узлов и WG-пулы (§523) предыдущего батча жили бы до
           // конца sweep'а и гейт не давал бы ничего.
-          await _cc.probeStop();
+          _runId = 0;
+          await _cc.probeStop(runId);
         }
       }
       return '';
@@ -174,6 +197,12 @@ class ProbeRunner {
         final entry = queue[next++];
         final r = await test(entry.value);
         if (_cancelled) return;
+        // §669 — сессию перехватил другой прогон (новый probeStart её
+        // закрыл): этот прогон вытеснен, вердикт «stale run» узлу не пишем.
+        if (r.error == kProbeStaleRun) {
+          _cancelled = true;
+          return;
+        }
         onResult(
           entry.key,
           r.ok

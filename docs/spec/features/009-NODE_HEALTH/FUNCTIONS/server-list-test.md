@@ -83,7 +83,12 @@ Summary: `Test servers` → `Testing… N done` → `N ok · N err · N broken`.
   subscription has a filter rule that enables nodes, bulk disabling warns:
   the next update will remove manual marks.
 - The test is cancelled by the button, by stopping the tunnel and by
-  backgrounding the app. Results live while the screen is open.
+  backgrounding the app. Cancelling aborts the measurements already sent to
+  the core, they do not wait for their timeout. Until the test session is
+  closed the bar shows `Stopping…` and the button is inactive; then Start is
+  available again. Results live while the screen is open.
+- A finished or replaced run does not touch the next one: it neither closes
+  its session nor resets its indicator.
 - A fatal session start error is shown as text; errors of individual nodes —
   only in their badges.
 
@@ -112,3 +117,4 @@ Summary: `Test servers` → `Testing… N done` → `N ok · N err · N broken`.
 | 10 | [523](../../../tasks/523-wireguard-probe-batch-memory.md) | Released v2.25.3 | WireGuard/AmneziaWG — up to 4 per session |
 | 11 | [546](../../../tasks/546-emitters-drop-registry-rule-copies.md) | — | Registry check in the test session — by the core version of the live build |
 | 12 | [604](../../../tasks/604-dns-build-health-directions-bugs.md) | Done | No global URL — the template's ping URL, not the core default |
+| 13 | [669](../../../tasks/669-probe-session-cancel-stop-timeout-race.md) | In progress | Stop aborts started measurements, `Stopping…` state, session close capped, an old run does not close a new one |

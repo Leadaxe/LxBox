@@ -16,6 +16,8 @@ import '../models/dns_ref.dart';
 import '../models/parser_config.dart';
 import '../services/builder/preset_expand.dart' show PresetNode;
 import '../services/builder/rule_order.dart';
+import '../services/app_log.dart';
+import '../services/builder/direction_pool_preview.dart';
 import '../services/direction_mutations.dart';
 import '../services/error_format.dart';
 import '../services/file_export.dart';
@@ -107,6 +109,13 @@ class _RoutingScreenState extends State<RoutingScreen>
   // custom-rule tile (N Направлений × M правил реконструкций/build). Инвалидируем
   // при любой мутации _directions (_invalidateOutboundOptions).
   List<RoutingOutboundOption>? _cachedOutboundOptions;
+  // §674 — пул кандидатов Направлений от сборщика (не снимок ядра): число
+  // узлов в подписи и превью редактора работают без туннеля. null — ещё
+  // считается; поколение отсекает устаревший ответ.
+  List<String>? _nodePool;
+  Future<List<String>>? _nodePoolFuture;
+  int _nodePoolGen = 0;
+  Timer? _nodePoolDebounce;
   @override
   String _routeFinal = '';
   @override
@@ -125,6 +134,10 @@ class _RoutingScreenState extends State<RoutingScreen>
   final _directionKeys = <String, GlobalKey>{};
   String? _highlightedDirectionTag;
   Timer? _directionHighlightTimer;
+
+  /// §673 — индекс перетаскиваемого Направления (подсветка запретных зон);
+  /// null вне drag.
+  int? _dragDirectionIndex;
 
   @override
   SubscriptionController get lazyController => widget.subController;
@@ -176,6 +189,7 @@ class _RoutingScreenState extends State<RoutingScreen>
     // §578 — правка узла при открытом Routing (редактор узла, Debug API,
     // toggle источника) меняет подпись пресета с `for_each_node`.
     widget.subController.addListener(_onSubControllerChanged);
+    _refreshNodePool();
     // §601 — файл набора скачало автообновление при открытом экране: строка
     // «ждёт скачивания» становится рабочей без переоткрытия.
     _ruleSetCacheSub = RuleSetDownloader.changes.listen((_) {
@@ -193,6 +207,7 @@ class _RoutingScreenState extends State<RoutingScreen>
     widget.subController.removeListener(_onSubControllerChanged);
     unawaited(_ruleSetCacheSub?.cancel());
     _directionHighlightTimer?.cancel();
+    _nodePoolDebounce?.cancel();
     _tabController.removeListener(_onTabIndexChanged);
     _tabController.dispose();
     _dnsTabWrites.removeListener(_onDnsTabWrite);
@@ -253,6 +268,11 @@ class _RoutingScreenState extends State<RoutingScreen>
   }
 
   void _onSubControllerChanged() {
+    // §674 — источники поменялись: пул пересчитать (с отсрочкой — контроллер
+    // уведомляет пачками).
+    _nodePoolDebounce?.cancel();
+    _nodePoolDebounce =
+        Timer(const Duration(milliseconds: 300), _refreshNodePool);
     if (!mounted || _loading) return;
     // §578/§643 — строка пресета с `for_each_node` показывает обслуживаемые
     // узлы: правка источника (включение, `skip_tailscale_presets`,
@@ -389,15 +409,19 @@ class _RoutingScreenState extends State<RoutingScreen>
       body: TabBarView(
         controller: _tabController,
         children: [
-          // ─── Directions: Направления (CRUD) + default fallback + Auto tuning ───
+          // ─── Directions: Направления (CRUD) + Auto tuning ───
           RoutingDirectionsTab(
             bottomPad: bottomPad,
-            groupTiles: _directions.map(_buildDirectionTile).toList(),
             directionCount: _directions.length,
+            // §673 — перестановка тем же bulk-путём, что Debug API reorder.
+            onReorder: _onReorderDirection,
+            onReorderStart: (i) => setState(() => _dragDirectionIndex = i),
+            onReorderEnd: (_) => setState(() => _dragDirectionIndex = null),
+            itemKey: (i) => ValueKey('direction-${_directions[i].tag}'),
+            itemBuilder: (i) => _buildDirectionTile(_directions[i], i),
             // §393 A3 — лимита на количество Направлений больше нет
             // (паритет с лаунчером); счётчик показывает, сколько их.
             onAddDirection: _addDirection,
-            routeFinalTile: _buildRouteFinalTile(),
           ),
 
           // ─── Presets: catalog of pre-built rules to copy into Rules ───
@@ -416,6 +440,8 @@ class _RoutingScreenState extends State<RoutingScreen>
             itemKey: (i) => ValueKey(_customRules[i].id),
             itemBuilder: _buildCustomRuleTile,
             onAdd: _addCustomRule,
+            // §676 — route.final в хвосте Rules (последнее неявное правило).
+            routeFinalTile: _buildRouteFinalTile(),
           ),
 
           // ─── DNS: серверы, правила, кэш (§655, бывший экран DNS Settings) ───
@@ -437,26 +463,91 @@ class _RoutingScreenState extends State<RoutingScreen>
     );
   }
 
-  Widget _buildDirectionTile(Direction direction) {
+  Widget _buildDirectionTile(Direction direction, int index) {
     // §258 — вспышка при focusDirectionTag (стиль как у члена папки, §255).
     final cs = Theme.of(context).colorScheme;
     final highlighted = _highlightedDirectionTag == direction.tag;
+    // §673 — на время drag строки запретных зон подкрашены цветом ошибки
+    // (та же форма, что у вспышки §258).
+    final forbidden = _inForbiddenZone(index);
     return AnimatedContainer(
       key: _directionKeys.putIfAbsent(direction.tag, GlobalKey.new),
       duration: const Duration(milliseconds: 200),
-      decoration: highlighted
+      decoration: forbidden
           ? BoxDecoration(
-              color: cs.primaryContainer.withValues(alpha: 0.5),
-              border: Border(left: BorderSide(color: cs.primary, width: 3)),
+              color: cs.error.withValues(alpha: 0.12),
+              border: Border(left: BorderSide(color: cs.error, width: 3)),
             )
-          : null,
+          : highlighted
+              ? BoxDecoration(
+                  color: cs.primaryContainer.withValues(alpha: 0.5),
+                  border:
+                      Border(left: BorderSide(color: cs.primary, width: 3)),
+                )
+              : null,
       child: RoutingDirectionTile(
         direction: direction,
+        dragIndex: index,
         nodeCount: _nodeCountFor(direction),
         onToggle: (val) => unawaited(_toggleDirection(direction, val)),
         onTap: () => _editDirection(direction),
       ),
     );
+  }
+
+  /// §673 — строка [index] в запретной зоне перетаскиваемого Направления:
+  /// Направление, включающее его, и всё ниже; цель его `include` и всё выше.
+  bool _inForbiddenZone(int index) {
+    final drag = _dragDirectionIndex;
+    if (drag == null || index == drag || drag >= _directions.length) {
+      return false;
+    }
+    final b = directionMoveBounds(_directions, drag);
+    final below = b.includedBy;
+    final above = b.includesAbove;
+    if (below != null && index >= _directions.indexOf(below)) return true;
+    if (above != null && index <= _directions.indexOf(above)) return true;
+    return false;
+  }
+
+  /// §673 — перестановка Направлений. Запись — тот же
+  /// [DirectionMutations.bulkReplace], что у `POST /directions/reorder` (bulk
+  /// replace, без heal'ов). Правило 026 «Other directions — только выше»:
+  /// сброс в запретную зону ([directionMoveBounds]) не меняет список и
+  /// объясняется SnackBar'ом; та же проверка у Debug API отвечает 409.
+  /// `vpn-1` переставляется, как и в Debug API. [newIndex] приходит из
+  /// `onReorderItem` — уже в списке без перетаскиваемого элемента.
+  Future<void> _onReorderDirection(int oldIndex, int newIndex) async {
+    if (_dragDirectionIndex != null) {
+      setState(() => _dragDirectionIndex = null);
+    }
+    if (oldIndex < 0 || oldIndex >= _directions.length) return;
+    if (newIndex < 0 || newIndex > _directions.length - 1) return;
+    if (oldIndex == newIndex) return;
+    final b = directionMoveBounds(_directions, oldIndex);
+    final moving = _directions[oldIndex];
+    final String? blocked = newIndex > b.max
+        ? getLocalText.s('Cannot move: "%s" includes "%s"',
+            b.includedBy!.displayLabel, moving.displayLabel)
+        : newIndex < b.min
+            ? getLocalText.s('Cannot move: "%s" includes "%s"',
+                moving.displayLabel, b.includesAbove!.displayLabel)
+            : null;
+    if (blocked != null) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(blocked)));
+      return;
+    }
+    setState(() {
+      final moved = _directions.removeAt(oldIndex);
+      _directions.insert(newIndex, moved);
+      _invalidateOutboundOptions();
+    });
+    await DirectionMutations.bulkReplace(_directions);
+    if (!mounted) return;
+    _markDirty();
+    await widget.homeController.refreshDirectionLabels();
   }
 
   /// Вкл/выкл Направления. §202/§248 — идёт через storage-API: disable лечит
@@ -532,30 +623,31 @@ class _RoutingScreenState extends State<RoutingScreen>
     ).showSnackBar(SnackBar(content: Text('$lead — ${parts.join(', ')}.')));
   }
 
-  /// Кол-во нод Направления после regex-фильтра (для subtitle). -1 = снимок нод
-  /// недоступен (туннель не поднят).
+  /// Кол-во нод Направления после regex-фильтра (для subtitle). -1 = пул ещё
+  /// считается.
   int _nodeCountFor(Direction direction) {
-    final all = _allNodeTags();
-    if (all.isEmpty) return -1;
+    final all = _nodePool;
+    if (all == null) return -1;
     // §604 — тот же фильтр, что у сборки (с инверсией «Exclude matching»).
     return direction.filterNodeTags(all).length;
   }
 
-  /// Снимок всех node-тегов подписки из ccGroups (union по группам, без самих
-  /// групп). Для live-превью фильтров в редакторе. Пусто = туннель не поднят.
-  List<String> _allNodeTags() {
-    final groupTags = widget.homeController.state.ccGroups
-        .map((g) => g.tag)
-        .toSet();
-    final seen = <String>{};
-    final out = <String>[];
-    for (final g in widget.homeController.state.ccGroups) {
-      for (final item in g.items) {
-        if (groupTags.contains(item.tag)) continue; // это группа, не нода
-        if (seen.add(item.tag)) out.add(item.tag);
-      }
-    }
-    return out;
+  /// §674 — пересчитать пул кандидатов Направлений по хранилищу (сборщик,
+  /// без побочных эффектов). Возвращает тот же future, что получит редактор.
+  Future<List<String>> _refreshNodePool() {
+    final gen = ++_nodePoolGen;
+    final f = directionPoolPreview(
+        [for (final e in widget.subController.entries) e.list]);
+    _nodePoolFuture = f;
+    f.then(
+      (v) {
+        if (!mounted || gen != _nodePoolGen) return;
+        setState(() => _nodePool = v);
+      },
+      onError: (Object e) =>
+          AppLog.I.warning('Direction pool preview failed: $e'),
+    );
+    return f;
   }
 
   Future<void> _addDirection() async {
@@ -586,6 +678,8 @@ class _RoutingScreenState extends State<RoutingScreen>
       _invalidateOutboundOptions();
     });
     _markDirty();
+    // §674 — новый тег резервируется сборкой (узел-тёзка переименуется).
+    _refreshNodePool();
     _editDirection(created);
   }
 
@@ -598,7 +692,7 @@ class _RoutingScreenState extends State<RoutingScreen>
       context,
       initial: direction,
       canDelete: !direction.isRequired,
-      allNodeTags: _allNodeTags(),
+      nodePool: _nodePoolFuture ?? _refreshNodePool(),
       directionsAbove: idx <= 0 ? const [] : _directions.sublist(0, idx),
       // §568 / задача 570 — свёртки источников тоже законные опции.
       foldCandidates: foldCandidatesOf([
@@ -633,6 +727,7 @@ class _RoutingScreenState extends State<RoutingScreen>
         _invalidateOutboundOptions();
       });
       _markDirty();
+      _refreshNodePool(); // §674 — тег Направления больше не зарезервирован
       _notifyHealed(direction, healed, ruleLead: getLocalText.s('deleted'));
     } else if (result.saved != null) {
       final saved = result.saved!;
@@ -1081,7 +1176,9 @@ class _RoutingScreenState extends State<RoutingScreen>
     // ports/protocols).
     final touchesDns = rule.kind == CustomRuleKind.preset
         ? (preset?.touchesDns ?? false)
-        : (rule.dnsMirrorActive || rule.forceIpv4Active);
+        : (rule.dnsMirrorActive ||
+            rule.forceIpv4Active ||
+            rule.dnsFixedActive); // §683 — Answer = Fixed IP
 
     Widget? statusButton;
     if (rule is CustomRuleSrs) {

@@ -333,7 +333,7 @@ Rules матчатся **first-wins** сверху вниз, так что reord
   "num": 42,                        // только в ответе (§370, ось порядка; null — ещё не размечено); двигать — /rules/move
   "preset_id": "<id>",              // required при kind=preset
   "vars_values": {"var":"val"},     // preset-only: overrides шаблонных vars
-  "dns": {"enabled": true, "server_tag": "<tag>", "force_ipv4": false}, // inline/srs DNS-опция: dedicated server + Force IPv4 (drop AAAA); поля независимы, server_tag обязателен лишь при enabled=true
+  "dns": {"enabled": true, "server_tag": "<tag>", "force_ipv4": false, "fixed_ips": ["192.168.1.10"]}, // inline/srs DNS-опция: dedicated server + Force IPv4 (drop AAAA) + ответ фиксированным IP (непустой fixed_ips, приоритетнее enabled; отдельного флага нет); поля независимы, server_tag обязателен лишь при enabled=true
   "domains": ["exact.domain"],
   "domain_suffixes": [".ru","xn--p1ai"],
   "domain_keywords": ["tracker"],
@@ -783,7 +783,7 @@ storage-JSON Направления (`Direction.toJson()`, snake_case), вклю
 | `/directions` | POST | опц. `{"label":"...","tag":"..."}` + любые PATCH-поля; без `tag` — первый свободный `vpn-N`, 201 |
 | `/directions/{tag}` | PATCH | subset: `label,enabled,include_direct,include_block,node_filter,node_filter_invert,default_filter,include,interrupt_exist_connections,auto,detour` |
 | `/directions/{tag}` | DELETE | — |
-| `/directions/reorder` | POST | `{"order":["vpn-1",...]}` — ровно текущие теги |
+| `/directions/reorder` | POST | `{"order":["vpn-1",...]}` — ровно текущие теги; ссылка `include` вниз → 409 |
 
 Все write'ы принимают `?rebuild=true` (порядок Направлений = порядок эмита в
 конфиге, так что reorder тоже config-significant).
@@ -830,9 +830,16 @@ curl -X PATCH -H "$HDR" -H "Content-Type: application/json" \
   Полный reset — прислать все поля явно. `"auto": null` — снять галку.
 - `tag` immutable (системный id) → передан в PATCH → 400. Юзер-имя — `label`.
 - `include` (§393) — теги **других** Направлений, предлагаемых опциями внутри
-  этого. Эмитятся только цели, объявленные **выше** по списку (порядок задаёт
-  `/directions/reorder`) — порядок и исключает циклы. Ссылка вниз по списку
-  молча не попадает в конфиг.
+  этого (и группы свёрток источников). Законны только Направления **выше** по
+  списку — UX-правило, порядок исключает циклы (§673). `include` в
+  POST/PATCH, называющий Направление не выше, само Направление или
+  неизвестный тег, → 409 `conflict`; `/directions/reorder`, ставящий
+  существующую ссылку вниз, → 409 `conflict`; хранилище не меняется. Тело
+  409 рядом с `error` несёт нарушенные пары:
+  `{"conflicts":[{"direction":"vpn-2","includes":"vpn-3","reason":"not_above"}]}`
+  (`reason`: `not_above` / `self` / `unknown`; у reorder — только
+  `not_above`). Ссылка вниз из старого бэкапа reorder не блокирует, сборка
+  снимает её с предупреждением.
 - `PATCH vpn-1 {"enabled":false}` и `DELETE /directions/vpn-1` → 409 `conflict`.
 - `detour` (§248/§274): `PATCH vpn-1 {"detour":true}` → 409 `conflict`
   (vpn-1 — главное Направление и heal-резерв, продуктовое решение).

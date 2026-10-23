@@ -20,6 +20,13 @@ not empty, the `urltest` twin is written first and becomes the selector's defaul
 membership is shared by the selector and the twin, except that groups (auto-select nodes,
 source folds) enter the selector only. Default traffic is written as `route.final`.
 
+The filter preview in the Direction editor and the node count on the Directions tab use the
+same candidate pool, computed by the same build from storage and stopped before the
+Direction groups and post-steps (no storage writes, no network, no core). The pool filtered by
+the Direction's filter equals the selector's members minus the service options, with the
+tunnel up or down. An empty result reads "No nodes match"
+([674](../../../tasks/674-direction-filter-preview-without-tunnel.md)).
+
 ## Parameters
 
 | Knob | Values | Default | Core key |
@@ -104,3 +111,4 @@ without nodes for a home-screen snackbar.
 | 8 | [393F](../../../tasks/393F-directions/spec.md) | released v2.21.0 | `include`, normative order, twin as default, chains through a Direction |
 | 9 | [442](../../../tasks/442-urltest-interval-idle-pair.md) | Released v2.24.0 | `interval`/`idle_timeout` pair, editor hint |
 | 10 | [604](../../../tasks/604-dns-build-health-directions-bugs.md) | Done | `pool_tolerance` clamped to the core's 15000, as for a node; one `interval` default |
+| 11 | [674](../../../tasks/674-direction-filter-preview-without-tunnel.md) | Done | Filter preview and node count from the build's candidate pool, not the core snapshot |

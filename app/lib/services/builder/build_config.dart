@@ -4,7 +4,7 @@ import '../../models/direction.dart';
 import '../../models/custom_rule.dart';
 import '../../models/dns_ref.dart';
 import '../../models/emit_context.dart';
-import '../../models/node_spec.dart' show NodeSpec;
+import '../../models/node_spec.dart' show AutoSelectSpec, NodeSpec;
 import '../../models/node_warning.dart';
 import '../../models/parser_config.dart';
 import '../../models/server_list.dart';
@@ -82,6 +82,10 @@ class BuildResult {
   /// источник × группа). Счётчик предупреждений строки подписки/папки.
   final Map<String, List<RegistryWarning>> sourceBuildCodes;
 
+  /// §675 — итоговый тег узла автовыбора (§322) → его spec. Отдельно от
+  /// [nodeByEmittedTag]: группа — не узел. Экран ищет по нему значки пула.
+  final Map<String, AutoSelectSpec> groupByEmittedTag;
+
   const BuildResult({
     required this.configJson,
     required this.config,
@@ -94,6 +98,7 @@ class BuildResult {
     this.templateWarnings = const [],
     this.buildCodes = const [],
     this.sourceBuildCodes = const {},
+    this.groupByEmittedTag = const {},
   });
 }
 
@@ -230,7 +235,34 @@ Future<BuildResult> buildConfig({
       template: template,
       templateWarnings: templateWarnings,
     ),
+  ).then((r) => r!);
+}
+
+/// §674 — пул кандидатов Направлений: ровно тот список тегов, из которого
+/// [buildConfig] формирует состав селектора `<tag>` ДО фильтра Направления
+/// (`selectorTags`: узлы источников, свёртки, цепочки — после отбраковок
+/// detour-резолвера, гарда реестра и свёрток). Та же сборка, остановленная
+/// до групп Направлений и пост-шагов: без чтения и записи хранилища (пост-шаги
+/// DNS пишут его), без сети, без ядра. Превью фильтра в UI фильтрует этот
+/// список [Direction.filterNodeTags] — тем же фильтром, что и сборка.
+Future<List<String>> buildDirectionPool({
+  required List<ServerList> lists,
+  BuildSettings settings = const BuildSettings(),
+  WizardTemplate? template,
+}) async {
+  final pool = <String>[];
+  final templateWarnings = TemplateWarnings();
+  await collectTemplateWarnings(
+    templateWarnings,
+    () => _buildConfig(
+      lists: lists,
+      settings: settings,
+      template: template,
+      templateWarnings: templateWarnings,
+      poolSink: pool,
+    ),
   );
+  return pool;
 }
 
 /// EN-строка предупреждения шаблона для [BuildResult.emitWarnings]: заголовок
@@ -254,11 +286,14 @@ bool varIntInBounds(String name, String raw) {
   return n != null && n >= b.$1 && n <= b.$2;
 }
 
-Future<BuildResult> _buildConfig({
+/// [poolSink] не null — §674: сборка кладёт в него пул кандидатов
+/// Направлений и возвращает null, не доходя до групп и пост-шагов.
+Future<BuildResult?> _buildConfig({
   required List<ServerList> lists,
   required BuildSettings settings,
   required WizardTemplate? template,
   required TemplateWarnings templateWarnings,
+  List<String>? poolSink,
 }) async {
   template ??= await TemplateLoader.load();
 
@@ -574,6 +609,21 @@ Future<BuildResult> _buildConfig({
     ...replaceBuild.candidates,
     ...chainResolution.tags,
   ];
+  // §674 — превью фильтра: дальше идут группы Направлений и пост-шаги с
+  // записью в хранилище, превью они не нужны.
+  if (poolSink != null) {
+    poolSink.addAll(selectorTags);
+    return null;
+  }
+  // §670 — звено цепочки, которое источник пустил в селектор («Register
+  // detour servers»), но не в auto («Register detour in auto group» off): в
+  // пуле Направления оно есть, в `<tag>-auto` — нет. Обычный узел
+  // регистрируется в оба списка и сюда не попадает.
+  final autoTags = {for (final e in ctx.autoEntries) e.tag};
+  final selectorOnlyTags = {
+    for (final e in ctx.selectorEntries)
+      if (!autoTags.contains(e.tag)) e.tag,
+  };
 
   // §248/§254 — эмитированные узлы (те же map-объекты уходят в config ниже):
   // AWG-advisory читает типы. detour больше НЕ правится in-place (§254 —
@@ -590,6 +640,7 @@ Future<BuildResult> _buildConfig({
   final presetOutbounds = _buildDirectionGroups(
     directions: directions,
     selectorTags: selectorTags,
+    selectorOnlyTags: selectorOnlyTags,
     nodeEntries: nodeEntries,
     emitWarnings: emitWarnings,
     directionsWithoutNodes: directionsWithoutNodes,
@@ -916,6 +967,11 @@ Future<BuildResult> _buildConfig({
         'missing DNS server "${h.target}" — falling back to DNS routing.');
   }
 
+  // §680 — `domain_resolver` DNS-сервера на тег вне `dns.servers` (новый
+  // дефолт var шаблона указывает на сервер, которого в списке нет): ключ
+  // снимается, ядро берёт `route.default_domain_resolver`.
+  emitWarnings.addAll(healDanglingDnsServerResolvers(config));
+
   // §419 — битые `dns.final` / `route.default_domain_resolver` (сервер
   // выключенного/удалённого пресета) → дефолт шаблона, var уходит в
   // generatedVars и персистится контроллером. Иначе каждая сборка — fatal
@@ -1047,6 +1103,7 @@ Future<BuildResult> _buildConfig({
       for (final e in ctx.emittedTagByNode.entries) e.value: e.key,
     },
     nodeBuildWarningsByEmittedTag: registryReport.warningsByEmittedTag,
+    groupByEmittedTag: ctx.groupByEmittedTag,
   );
 }
 
@@ -1260,6 +1317,14 @@ class _BuildCtx implements EmitContext {
     emittedTagAliases[finalTag] = owner;
   }
 
+  /// §675 — итоговый тег → узел автовыбора (§322).
+  final groupByEmittedTag = <String, AutoSelectSpec>{};
+
+  @override
+  void noteGroupEmitted(AutoSelectSpec group, String finalTag) {
+    groupByEmittedTag[finalTag] = group;
+  }
+
   @override
   void warn(String line) {
     if (!warnings.contains(line)) warnings.add(line);
@@ -1328,6 +1393,8 @@ class _BuildCtx implements EmitContext {
 List<Map<String, dynamic>> _buildDirectionGroups({
   required List<Direction> directions,
   required List<String> selectorTags,
+  // §670 — теги, которым путь в `<tag>-auto` закрыт политикой detour.
+  Set<String> selectorOnlyTags = const {},
   required List<Map<String, dynamic>> nodeEntries,
   required List<String> emitWarnings,
   required List<String> directionsWithoutNodes, // §274 — display-имена, out-параметр
@@ -1386,14 +1453,15 @@ List<Map<String, dynamic>> _buildDirectionGroups({
     for (final ms in memberSets)
       [
         for (final t in ms)
-          if (!groupTags.contains(t)) t,
+          if (!groupTags.contains(t) && !selectorOnlyTags.contains(t)) t,
       ],
   ];
 
   // §393 A3 — теги Направлений, УЖЕ эмитированных выше по списку. Только на
-  // них законна ссылка `include`: эмиссия идёт по порядку, и ссылка вниз
-  // была бы forward-ref (антицикл держится порядком, как у лаунчера —
-  // `tagsAbove` в форме + топологический проход генератора).
+  // них законна ссылка `include` — UX-правило 026 (решение владельца, §673):
+  // включать можно только Направления выше, порядок списка исключает циклы
+  // по построению, как у лаунчера (`tagsAbove` в форме). Ядру порядок
+  // безразличен: зависимости outbound'ов оно разрешает само.
   final emittedAbove = <String>{};
 
   final result = <Map<String, dynamic>>[];
@@ -1405,9 +1473,11 @@ List<Map<String, dynamic>> _buildDirectionGroups({
 
     // §393 A3 — фильтр include: в состав идут только теги Направлений,
     // эмитированных ВЫШЕ. Отсеиваются три случая, все одним warning'ом:
-    //   • ссылка ВНИЗ по списку (в т.ч. после reorder — Направление
-    //     переехало выше своей цели): ядро отвергло бы конфиг на
-    //     forward-ref, поэтому деградируем состав, а не ломаем сборку;
+    //   • ссылка ВНИЗ по списку: UX-правило 026 «включать можно только
+    //     Направления выше» (ядру порядок безразличен — разрешает
+    //     зависимости само). UI и Debug API такой порядок/include не
+    //     пропускают (§673), здесь — последний гард для данных старых
+    //     бэкапов: деградируем состав, а не ломаем сборку;
     //   • ссылка на выключенное Направление: его нет в `active`, значит и
     //     тега в конфиге нет — dangling ref не даёт ядру стартовать;
     //   • ссылка на несуществующий тег (удалённое Направление, правленый

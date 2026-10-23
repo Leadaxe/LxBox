@@ -355,12 +355,12 @@ void main() {
         () async {
       await SettingsStorage.saveDnsServers(const [
         DnsServerTemplate(enabled: true, tag: 'google_udp', varValues: {
-          'outbound': 'direct-out',
+          'outbound': 'vpn-1',
           'dns_ip': '8.8.4.4',
           'legacy_x': '1',
         }),
         DnsServerTemplate(
-            enabled: true, tag: 'google_dot', varValues: {'outbound': 'vpn-1'}),
+            enabled: true, tag: 'google_dot', varValues: {'outbound': 'direct-out'}),
       ]);
       await SettingsStorage.saveCustomRules([
         CustomRulePreset(
@@ -373,7 +373,7 @@ void main() {
       final servers = ((raw['dns'] as Map)['servers'] as List).cast<Map>();
       expect(servers[0]['vars'], {'dns_ip': '8.8.4.4'});
       expect(servers[1].containsKey('vars'), isFalse,
-          reason: 'google_dot: outbound vpn-1 — умолчание шаблона LxBox');
+          reason: 'google_dot: outbound direct-out — умолчание шаблона LxBox');
       final rules = (raw['rules'] as List).cast<Map>();
       expect(rules.single['vars'], {'dns_ip': '77.88.8.1'});
     });
@@ -387,7 +387,7 @@ void main() {
               'kind': 'template',
               'tag': 'google_udp',
               'enabled': true,
-              'varValues': {'outbound': 'direct-out', 'dns_ip': '8.8.4.4'},
+              'varValues': {'outbound': 'vpn-1', 'dns_ip': '8.8.4.4'},
             },
           ],
         },

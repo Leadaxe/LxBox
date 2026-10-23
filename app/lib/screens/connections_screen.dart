@@ -50,7 +50,11 @@ String ruleName(String rule) => RuleNameResolver.I.resolve(rule);
 /// соединения; closed-историю (режим «закрытые не исчезают») ведёт ЭТОТ виджет
 /// (`_accumulate`/`_closedIds`/`_closedAt`) — точно как раньше с Clash-pull.
 class ConnectionsView extends StatefulWidget {
-  const ConnectionsView({super.key});
+  const ConnectionsView({super.key, this.directionLabels = const {}});
+
+  /// `tag Направления → label` (`HomeState.groupLabels`): Направления в
+  /// routing-строке и карточке подписаны `label (tag)`.
+  final Map<String, String> directionLabels;
 
   @override
   State<ConnectionsView> createState() => _ConnectionsViewState();
@@ -312,6 +316,7 @@ class _ConnectionsViewState extends State<ConnectionsView> {
             oneWay: oneWay,
             closed: closed,
             onClose: (cid) => unawaited(_closeConnection(cid)),
+            directionLabels: widget.directionLabels,
           )),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -362,7 +367,11 @@ class _ConnectionsViewState extends State<ConnectionsView> {
                     children: [
                       Expanded(
                         child: Text(
-                          conn.routingLineOf(compact: true, ruleLabel: rule),
+                          conn.routingLineOf(
+                            compact: true,
+                            ruleLabel: rule,
+                            labels: widget.directionLabels,
+                          ),
                           style: TextStyle(fontSize: 11, color: cs.primary),
                           overflow: TextOverflow.ellipsis,
                         ),

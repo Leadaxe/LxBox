@@ -44,6 +44,7 @@ part 'post_steps/dns_servers.dart';
 part 'post_steps/heal_preset_tag_prefix.dart';
 part 'post_steps/heal_dangling_resolve_servers.dart';
 part 'post_steps/heal_dangling_dns_resolvers.dart';
+part 'post_steps/heal_dangling_dns_server_resolver.dart';
 part 'post_steps/heal_detour_dropped_dns.dart';
 part 'post_steps/heal_legacy_dns_strategy.dart';
 part 'post_steps/heal_unknown_utls_fingerprints.dart';

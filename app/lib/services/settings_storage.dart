@@ -717,6 +717,11 @@ class SettingsStorage {
   /// (`settings_storage/network.dart`).
   static Future<List<DnsServerRef>> getDnsServers() => _getDnsServers();
 
+  /// §680 — список серверов уже создан: ключ `dns.servers` есть в хранилище
+  /// (в том числе пустым списком). [getDnsServers] отдаёт `[]` и для
+  /// отсутствующего ключа, различать по нему нельзя.
+  static Future<bool> hasDnsServersList() => _hasDnsServersList();
+
   /// Сохраняет список серверов целиком. Orphan-cleanup и auto-discovery —
   /// забота вызывающего (`resolveDnsServersList`).
   static Future<void> saveDnsServers(List<DnsServerRef> servers,

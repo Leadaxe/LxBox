@@ -28,6 +28,7 @@ class SubscriptionSettingsTab extends StatelessWidget {
     this.directions = const [],
     this.detourPathHopsOf,
     required this.hasDetour,
+    this.hasDetourLinks,
     required this.detourMode,
     required this.onTagPrefixChanged,
     this.onTagPrefixCommitted,
@@ -86,6 +87,12 @@ class SubscriptionSettingsTab extends StatelessWidget {
   /// с controller'ом экрана). null → показываем один хоп (как раньше).
   final List<String> Function(NodeLink stored)? detourPathHopsOf;
   final bool hasDetour;
+
+  /// §670 — есть ли звенья, которые регистрируют галки «Register detour …».
+  /// null — те же, что [hasDetour] (подписка: родные цепочки). Папка
+  /// передаёт `folderHasDetourLinks`: личный detour на узел вне папки
+  /// радио Detour даёт, а звена — нет.
+  final bool? hasDetourLinks;
   final DetourMode detourMode;
 
   final ValueChanged<String> onTagPrefixChanged;
@@ -264,7 +271,9 @@ class SubscriptionSettingsTab extends StatelessWidget {
                     : getLocalText.s("Nodes connect through detour servers")),
               ),
               // §096 — register-тоглы под Use (нативные детуры используются).
-              if (detourMode == DetourMode.use) _registerToggles(context),
+              if (detourMode == DetourMode.use &&
+                  (hasDetourLinks ?? hasDetour))
+                _registerToggles(context),
               RadioListTile<DetourMode>(
                 value: DetourMode.override,
                 title: Text(getLocalText.s("Add detour")),
@@ -317,7 +326,9 @@ class SubscriptionSettingsTab extends StatelessWidget {
                 // §096 — в режиме Fill missing (append) нативные детуры
                 // подписки сохраняются в цепочке → register-тоглы
                 // осмысленны и тут.
-                if (!entry.replaceDetourChain) _registerToggles(context),
+                if (!entry.replaceDetourChain &&
+                    (hasDetourLinks ?? hasDetour))
+                  _registerToggles(context),
               ],
               RadioListTile<DetourMode>(
                 value: DetourMode.none,
@@ -536,9 +547,13 @@ class SubscriptionSettingsTab extends StatelessWidget {
           ),
           SwitchListTile(
             title: Text(getLocalText.s("Register detour in auto group")),
-            subtitle: Text(getLocalText.s("Include detour servers in auto-proxy-out urltest")),
+            subtitle: Text(getLocalText.s("Include detour servers in the Direction's auto group")),
             value: entry.registerDetourInAuto,
-            onChanged: onRegisterDetourInAutoChanged,
+            // §670 — в `-auto` звено идёт только из селектора: без первой
+            // галки второй нечего добавлять.
+            onChanged: entry.registerDetourServers
+                ? onRegisterDetourInAutoChanged
+                : null,
           ),
         ]),
       );

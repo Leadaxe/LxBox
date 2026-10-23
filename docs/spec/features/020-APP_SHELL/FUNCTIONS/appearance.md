@@ -44,6 +44,9 @@ columns; refreshed list data.
   settings sets — it is a device property.
 - Allow rotation off — portrait only; on — the system decides the orientation,
   including its rotation lock.
+- On a TV the orientation is never locked, whatever Allow rotation says; the
+  toggle is hidden and its stored value is neither read nor rewritten (a backup
+  taken on a TV does not turn rotation on for a phone).
 - Two columns: row-wise order (1-2 / 3-4); with manual sort the list is always
   a single column; switching without layout flicker at startup.
 - Pull-to-refresh:
@@ -79,3 +82,4 @@ columns; refreshed list data.
 | 5 | [220](../../../tasks/220-allow-rotation-setting.md) | — | Allow rotation, portrait by default |
 | 6 | [537](../../../tasks/537-nodes-two-columns-wide.md) | Done | Node list in two columns from 600 dp |
 | 7 | [541](../../../tasks/541-appearance-tab-two-columns-toggle.md) | Done | Appearance tab, two-column toggle |
+| 8 | [679](../../../tasks/679-tv-no-portrait-lock.md) | Implemented | No orientation lock on a TV, Allow rotation hidden there |

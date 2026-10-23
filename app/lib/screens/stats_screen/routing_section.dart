@@ -34,6 +34,8 @@ class RoutingRow {
 /// - [outbound]     — финальный узел (для conn — отдельное поле; для event —
 ///                    `outboundChain.first`). Пусто → строка скрыта.
 /// - [outboundType] — тип финального outbound (selector/urltest/vless/…).
+/// - [labels]       — `tag Направления → label`: Направления в Chain/Detour
+///                    подписаны `label (tag)` ([directionTagDisplay]).
 List<RoutingRow> routingRows({
   required String route,
   required String rule,
@@ -41,17 +43,20 @@ List<RoutingRow> routingRows({
   required List<String> detour,
   String outbound = '',
   String outboundType = '',
+  Map<String, String> labels = const {},
 }) {
   return [
     RoutingRow('Route', route),
     RoutingRow('Rule', rule.isNotEmpty ? rule : 'final'),
     // Chain НЕ фолдится (§251): там выбор идёт ПЕРЕД селектором
     // (`[node, …selectors]`) — соседней пары «селектор → его выбор» нет.
-    RoutingRow('Chain', chain.join(' / ')),
+    RoutingRow('Chain',
+        chain.map((t) => directionTagDisplay(t, labels)).join(' / ')),
     // §251/§252 — «селектор + его выбор» схлопнуты в `селектор (выбор)`,
     // порядок ФИЗИЧЕСКИЙ (по ходу пакета: вход первым) — ядро отдаёт
     // detour-ось изнутри наружу, разворачиваем.
-    RoutingRow('Detour', foldSelectorPairs(detour).reversed.join(' → ')),
+    RoutingRow('Detour',
+        foldSelectorPairs(detour, labels: labels).reversed.join(' → ')),
     RoutingRow('Outbound', outbound),
     RoutingRow('Outbound type', outboundType),
   ];

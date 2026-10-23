@@ -535,7 +535,11 @@ void main() {
         calls.add(call);
         switch (call.method) {
           case 'probeStart':
-            return probeStartAnswer;
+            // §669 — {error, runId}; runId 0 при ошибке старта.
+            return {
+              'error': probeStartAnswer,
+              'runId': probeStartAnswer.isEmpty ? 1 : 0,
+            };
           case 'probeUrlTest':
             final tag = (call.arguments as Map)['tag'] as String;
             // Alpha живой (120мс), остальные — err.

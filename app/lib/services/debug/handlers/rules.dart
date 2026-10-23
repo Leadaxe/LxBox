@@ -599,7 +599,24 @@ RuleDns? _fieldRuleDns(Map<String, dynamic> m, String key) {
     throw BadRequest(
         'field "$key.server_tag" must be non-empty when enabled is true');
   }
-  return RuleDns(enabled: enabled, serverTag: tag, forceIpv4: forceIpv4);
+  // §683 — Answer = Fixed IP: `fixed_ips` массив адресов; непустой = режим.
+  final ipsRaw = v['fixed_ips'];
+  if (ipsRaw != null && ipsRaw is! List) {
+    throw BadRequest('field "$key.fixed_ips" must be array');
+  }
+  final ips = <String>[];
+  for (final e in (ipsRaw as List?) ?? const []) {
+    if (e is! String || RuleDns.ipRecordType(e) == null) {
+      throw BadRequest('field "$key.fixed_ips" must hold IPv4/IPv6 addresses');
+    }
+    ips.add(e.trim());
+  }
+  return RuleDns(
+    enabled: enabled,
+    serverTag: tag,
+    forceIpv4: forceIpv4,
+    fixedIps: ips,
+  );
 }
 
 /// §247 — resolve-опция правила. Wire shape (snake_case):

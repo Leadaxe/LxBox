@@ -216,7 +216,7 @@ void main() {
 
     test(
         'форма до §043 (без kind) — наверх не отдаётся, в хранении остаётся; '
-        'auto-discovery добавляет template ref', () async {
+        'ключ есть → досева нет (§680)', () async {
       final legacy = {
         'type': 'udp',
         'tag': 'google_udp',
@@ -237,14 +237,10 @@ void main() {
         presetServersByTag: {},
       );
 
-      expect(result,
-          [const DnsServerTemplate(enabled: true, tag: 'google_udp')]);
+      expect(result, isEmpty);
       final raw = await SettingsStorage.exportRaw();
       final servers = (raw['dns'] as Map)['servers'] as List;
-      expect(servers, [
-        legacy,
-        {'kind': 'template', 'tag': 'google_udp', 'enabled': true},
-      ]);
+      expect(servers, [legacy]);
     });
 
     test('Orphan cleanup: kind:template ref на удалённый tag → drop', () async {
@@ -304,7 +300,7 @@ void main() {
         const DnsServerTemplate(
           enabled: true,
           tag: 'google_udp',
-          varValues: {'outbound': 'vpn-1'},
+          varValues: {'outbound': 'vpn-2'},
         ),
       ]);
 
@@ -314,7 +310,7 @@ void main() {
       );
 
       final google = result.firstWhere((s) => s.tag == 'google_udp');
-      expect((google as DnsServerTemplate).varValues, {'outbound': 'vpn-1'});
+      expect((google as DnsServerTemplate).varValues, {'outbound': 'vpn-2'});
     });
 
     test('Already-migrated storage (есть kind) — enabled flag preserved',
@@ -331,10 +327,52 @@ void main() {
       // google_udp user-disabled flag preserved
       final google = result.firstWhere((s) => s.tag == 'google_udp');
       expect(google.enabled, false);
-      // cloudflare_udp auto-discovered
-      final cf = result.firstWhere((s) => s.tag == 'cloudflare_udp');
-      expect(cf, isA<DnsServerTemplate>());
-      expect(cf.enabled, true);
+      // §680: список уже создан → cloudflare_udp не досевается (он в каталоге).
+      expect(result.map((s) => s.tag), ['google_udp']);
+    });
+
+    test('§680: шаг 3 только при отсутствующем ключе — посев пишет ключ',
+        () async {
+      expect(await SettingsStorage.hasDnsServersList(), isFalse);
+      final first = await resolveDnsServersList(
+        templateServers: [tplGoogleUdp(), tplCloudflareUdp()],
+        presetServersByTag: {},
+      );
+      expect(first.map((s) => s.tag), ['google_udp', 'cloudflare_udp']);
+      expect(await SettingsStorage.hasDnsServersList(), isTrue);
+
+      // Пользователь удалил cloudflare_udp → следующий resolve не досевает.
+      await SettingsStorage.saveDnsServers([first.first]);
+      final second = await resolveDnsServersList(
+        templateServers: [tplGoogleUdp(), tplCloudflareUdp()],
+        presetServersByTag: {},
+      );
+      expect(second.map((s) => s.tag), ['google_udp']);
+    });
+
+    test('§680: пустой сохранённый список не досевается', () async {
+      await SettingsStorage.saveDnsServers(const []);
+      expect(await SettingsStorage.hasDnsServersList(), isTrue);
+      final result = await resolveDnsServersList(
+        templateServers: [tplGoogleUdp(), tplCloudflareUdp()],
+        presetServersByTag: {},
+      );
+      expect(result, isEmpty);
+      expect(await SettingsStorage.getDnsServers(), isEmpty);
+    });
+
+    test('§680: существующий список не меняется; пресет досевается (шаг 2)',
+        () async {
+      final stored = [
+        const DnsServerTemplate(enabled: true, tag: 'cloudflare_udp'),
+      ];
+      await SettingsStorage.saveDnsServers(stored);
+      final result = await resolveDnsServersList(
+        templateServers: [tplGoogleUdp(), tplCloudflareUdp()],
+        presetServersByTag: {'yandex_udp': presetYandexUdp()},
+      );
+      expect(result.map((s) => s.tag), ['cloudflare_udp', 'yandex_udp']);
+      expect(result.last, isA<DnsServerPreset>());
     });
   });
 

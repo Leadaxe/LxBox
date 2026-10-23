@@ -20,9 +20,13 @@ Three tags are built in and cannot be taken by a Direction: `direct-out` (leave 
 directly) and `block` (drop the traffic) are template outbounds offered inside a Direction
 as options, and `vpn-1` is the required primary Direction — the default target of Default
 traffic and the fallback every healed reference lands on. The **Directions** tab of the
-Routing screen lists them with "Add direction (N)" and the **Default traffic** tile; each
-row shows the tag, the node count from the running core's snapshot ("all nodes" or
-"filtered" with the tunnel down), " · auto" and " · required".
+Routing screen lists them with "Add direction (N)"; the **Default traffic (no rule
+matched)** tile (`route.final`) sits at the bottom of the **Rules** tab
+([676](../../../tasks/676-route-final-on-rules-tab.md)); each
+row shows the tag, the node count from the build's candidate pool (works with the tunnel
+down; "all nodes" or "filtered" while the pool is being computed —
+[674](../../../tasks/674-direction-filter-preview-without-tunnel.md)), " · auto" and
+" · required".
 
 `NETWORKS` in the home-screen dropdown is not a Direction: it is a view of nodes outside
 the selection lists — [012-LIVE_STATE · P19](../../012-LIVE_STATE/FEATURE.md#promises).
@@ -41,10 +45,15 @@ the selection lists — [012-LIVE_STATE · P19](../../012-LIVE_STATE/FEATURE.md#
 | Interrupt connections on switch | on/off | on | `interrupt_exist_connections` |
 | Include auto (urltest) + its fields | see [groups](direction-groups-in-config.md) | off | `<tag>-auto` |
 | Use as detour | checkbox (hidden for `vpn-1`) | off | [detour layer](direction-as-detour.md) |
-| Default traffic | `direct` · Direction · `block` | `vpn-1` | `route.final` |
+| Default traffic (no rule matched) — on the Rules tab since 676, not a Direction field | `direct` · Direction · `block` | `vpn-1` | `route.final` |
 
 Debug API: `GET/POST /directions`, `GET/PATCH/DELETE /directions/{tag}`,
-`POST /directions/reorder`; a `PATCH` setting the flag on `vpn-1` gets 409.
+`POST /directions/reorder`; a `PATCH` setting the flag on `vpn-1` gets 409. A reorder that
+puts an "Other directions" reference below its Direction, and an `include` in `POST`/`PATCH`
+naming a Direction not above, the Direction itself or a tag that is neither a Direction nor
+a source replace group, get 409 with the
+violated pairs (`conflicts`: `direction`, `includes`, `reason` = `not_above` / `self` /
+`unknown`); storage is not changed ([673](../../../tasks/673-directions-reorder-in-ui.md)).
 
 ## Inputs / Outputs
 
@@ -63,6 +72,15 @@ counters; the tag conflict reason in the dialog.
   membership is a regex over final node tags, so node addresses `{folder_id?, tag}`
   ([017-BACKUP_AND_STORAGE · P17](../../017-BACKUP_AND_STORAGE/FEATURE.md#promises)) play
   no part here.
+- **Shown by title, tag beside it.** Wherever a Direction is shown to the user, the
+  primary text is its title (with the ⚙ prefix of a detour Direction); the tag stays as a
+  secondary line or in brackets, so it can be matched against Debug API and rules: the
+  Routing tile (title, tag below), the editor header (title, tag line below), a member row
+  on home that is another Direction (title, tag first in the subtitle), the notification
+  (`<title>: <node>`, `[final = <title>]`), Statistics Connections and Live (route line,
+  Chain and Detour rows: `<title> (<tag>)`). A Direction without a title, or a tag that is
+  not a Direction, is shown as the tag. Chain positions, Debug API, automation and the
+  traffic dump keep the bare tag.
 - A new tag is rejected with a reason: "Tag cannot be empty", "This tag is reserved by the
   config" (`direct-out`, `block`, `block-out`, `dns-out`, `direct`, `reject`, `drop`), "A
   direction with this tag already exists", "This tag collides with an auto twin
@@ -102,7 +120,15 @@ counters; the tag conflict reason in the dialog.
   [direction-groups-in-config.md](direction-groups-in-config.md); the home-screen
   selection — [direction-selection.md](direction-selection.md).
 - The row's node count uses the same filter as the build, "Exclude matching" included.
-  Reordering Directions is available only through the Debug API.
+  Directions are reordered by the drag handle on the tab or by `POST /directions/reorder`;
+  both write the list with the same bulk replace, heal-free, and neither breaks an existing
+  "Other directions" reference: during a drag the tab tints the forbidden zones (the
+  Direction that includes the dragged one and everything below it; the lowest Direction the
+  dragged one includes and everything above it) and a drop there changes nothing and shows
+  a notice; the API answers 409 ([673](../../../tasks/673-directions-reorder-in-ui.md)).
+  "Only above" is a UX rule (owner decision 2026-10-23): the order shows who may include
+  whom and rules out cycles by construction; the core does not need it. A reference left
+  pointing down by an old backup is still dropped by the build with a warning.
 - The DNS side of a healed server (fail-closed on a channel that vanished at build time,
   419) — [005-DNS · P2](../../005-DNS/FEATURE.md#promises).
 - Rule import healing a dangling target — [004-ROUTING · P19](../../004-ROUTING/FEATURE.md#promises).
@@ -125,3 +151,4 @@ counters; the tag conflict reason in the dialog.
 | 12 | [439F](../../../tasks/439F-storage-contract-1-0/spec.md) | Released v2.24.0 | Storage in contract form; `channels` renamed to `directions` on read |
 | 13 | [441](../../../tasks/441-template-preset-vars-in-record.md) | Released v2.24.0 | Healing the target in preset and DNS server variables → `vpn-1` |
 | 14 | [604](../../../tasks/604-dns-build-health-directions-bugs.md) | Done | The row's node count honours "Exclude matching" |
+| 15 | [676](../../../tasks/676-route-final-on-rules-tab.md) | Done | The Default traffic tile moved from Directions to the bottom of Rules |

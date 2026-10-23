@@ -426,6 +426,30 @@
   "%s · disabled — will be skipped": {
     "value": "%s · 已关闭 —— 将被跳过"
   },
+  "Action is Resolve only": {
+    "value": "动作为“仅解析”"
+  },
+  "Add address": {
+    "value": "添加地址"
+  },
+  "Answer": {
+    "value": "应答"
+  },
+  "Answer AAAA (IPv6) queries locally so matched traffic uses IPv4.": {
+    "value": "本地应答 AAAA（IPv6）查询，使匹配的流量走 IPv4。"
+  },
+  "DNS & RESOLVE": {
+    "value": "DNS 与解析"
+  },
+  "Dedicated server": {
+    "value": "专用服务器"
+  },
+  "Default — queries go to DNS Final": {
+    "value": "默认 — 查询发往 DNS Final"
+  },
+  "Disabled, skipped at build: %s": {
+    "value": "已关闭，构建时跳过：%s"
+  },
   "%s — tap to edit": {
     "value": "%s — 点击编辑"
   },
@@ -589,9 +613,6 @@
   "Action": {
     "value": "动作"
   },
-  "Action & Resolve": {
-    "value": "动作与解析"
-  },
   "Active": {
     "value": "已启用"
   },
@@ -609,6 +630,68 @@
   },
   "Add DNS Server": {
     "value": "添加 DNS 服务器"
+  },
+  "Add DNS server": {
+    "value": "添加 DNS 服务器"
+  },
+  "Add all defaults": {
+    "value": "添加全部默认服务器"
+  },
+  "Custom server": {
+    "value": "自定义服务器"
+  },
+  "Enter an IP address": {
+    "value": "请输入 IP 地址"
+  },
+  "Fixed IP": {
+    "value": "固定 IP"
+  },
+  "How domains matched by this rule are resolved.": {
+    "value": "如何解析与此规则匹配的域名。"
+  },
+  "IP address": {
+    "value": "IP 地址"
+  },
+  "IP addresses": {
+    "value": "IP 地址列表"
+  },
+  "IP or CIDR, e.g. 1.2.3.0/24": {
+    "value": "IP 或 CIDR，例如 1.2.3.0/24"
+  },
+  "Line %d: not an IPv4 or IPv6 address": {
+    "value": "第 %d 行：不是 IPv4 或 IPv6 地址"
+  },
+  "Look up the address before routing, so IP rules and the address family apply.": {
+    "value": "在路由前查询地址，使 IP 规则和地址族生效。"
+  },
+  "Non-negative integer": {
+    "value": "非负整数"
+  },
+  "One address per line, IPv4 or IPv6.": {
+    "value": "每行一个地址，IPv4 或 IPv6。"
+  },
+  "Resolve before routing": {
+    "value": "路由前解析"
+  },
+  "Used when the rule resolves before routing.": {
+    "value": "在规则于路由前解析时生效。"
+  },
+  "Your own UDP / DoT / DoH / group…": {
+    "value": "自己的 UDP / DoT / DoH / 组…"
+  },
+  "From template": {
+    "value": "来自模板"
+  },
+  "Added \"%s\"": {
+    "value": "已添加“%s”"
+  },
+  "Added %d servers": {
+    "value": {
+      "other": "已添加 %d 个服务器"
+    }
+  },
+  "All defaults are already in the list": {
+    "value": "所有默认服务器都已在列表中"
   },
   "Add Wi-Fi network": {
     "value": "添加 Wi-Fi 网络"
@@ -712,12 +795,6 @@
   "Advanced": {
     "value": "高级"
   },
-  "Advanced DNS options": {
-    "value": "高级 DNS 选项"
-  },
-  "Advanced: this rule resolves but does not route. If no later rule matches, traffic goes to Final.": {
-    "value": "高级：此规则只解析不路由。若后续规则都不匹配，流量将走 Final。"
-  },
   "Aggressive battery saving": {
     "value": "激进省电"
   },
@@ -795,9 +872,6 @@
   },
   "Another VPN is active": {
     "value": "有其他 VPN 正在运行"
-  },
-  "Answer AAAA (IPv6) queries locally so matched traffic uses IPv4. No DNS server required.": {
-    "value": "本地应答 AAAA（IPv6）查询，使匹配的流量走 IPv4。无需 DNS 服务器。"
   },
   "Any app on this device will be able to control the VPN via broadcast commands while this is on. Only turn it on if you use Tasker / Macrodroid and understand the implications.": {
     "value": "开启后，本机任意应用都能通过广播指令控制 VPN。仅当你使用 Tasker / MacroDroid 并了解其影响时才开启。"
@@ -1179,6 +1253,9 @@
   },
   "Username": {
     "value": "用户名"
+  },
+  "e.g. 5s, 500ms": {
+    "value": "例如 5s、500ms"
   },
   "host:port or full URL; port 443 if omitted": {
     "value": "host:port 或完整 URL；省略端口时为 443"
@@ -1740,11 +1817,11 @@
   "Default Domain Resolver": {
     "value": "默认域名解析器"
   },
-  "Default fallback DNS server. Used when an app makes a DNS query and no DNS rule above matches it. Every app DNS query that isn't routed by a rule ends up here.\n\nRecommended:\n  • dns_shield — default; races 6 encrypted providers, answers from whichever replies first\n  • google_doh — encrypted (DoH)\n  • cloudflare_dot / google_dot — encrypted (DoT)\n  • cloudflare_udp / google_udp — fast plain UDP\n\nlocal_dns_resolver works but reveals queries to your ISP. Encrypted options keep them private.": {
-    "value": "默认兜底 DNS 服务器。当应用的 DNS 查询没有匹配上方任何 DNS 规则时使用。所有未被规则定向的应用 DNS 查询都会走到这里。\n\n推荐：\n  • dns_shield —— 默认；同时向 6 家加密服务商发起查询，谁先应答用谁\n  • google_doh —— 加密（DoH）\n  • cloudflare_dot / google_dot —— 加密（DoT）\n  • cloudflare_udp / google_udp —— 快速明文 UDP\n\nlocal_dns_resolver 也能用，但会把查询内容暴露给你的运营商。加密选项可保护隐私。"
+  "Default fallback DNS server. Used when an app makes a DNS query and no DNS rule above matches it. Every app DNS query that isn't routed by a rule ends up here.\n\nRecommended:\n  • dns_shield — default; races 6 encrypted providers over a direct connection, answers from whichever replies first\n  • google_doh, cloudflare_dot — encrypted, direct\n\nPlain UDP servers (cloudflare_udp, google_udp) go through the tunnel — fine here.\n\nlocal_dns_resolver works but reveals queries to your ISP. Encrypted options keep them private.": {
+    "value": "默认兜底 DNS 服务器。当应用的 DNS 查询没有匹配上方任何 DNS 规则时使用。所有未被规则定向的应用 DNS 查询都会走到这里。\n\n推荐：\n  • dns_shield —— 默认；直连同时向 6 家加密服务商发起查询，谁先应答用谁\n  • google_doh、cloudflare_dot —— 加密，直连\n\n明文 UDP 服务器（cloudflare_udp、google_udp）经隧道——在这里可以用。\n\nlocal_dns_resolver 也能用，但会把查询内容暴露给你的运营商。加密选项可保护隐私。"
   },
-  "Default traffic": {
-    "value": "默认流量"
+  "Default traffic (no rule matched)": {
+    "value": "默认流量（未匹配任何规则）"
   },
   "Default · %s": {
     "value": "默认 · %s"
@@ -2511,9 +2588,6 @@
   "How it works: directions, rules, DNS, detour, recipes": {
     "value": "工作原理：方向、规则、DNS、detour、示例"
   },
-  "How this rule directs and resolves matched traffic.": {
-    "value": "此规则如何定向并解析匹配的流量。"
-  },
   "INBOUND": {
     "value": "INBOUND"
   },
@@ -2630,8 +2704,8 @@
   "Include block": {
     "value": "包含 block"
   },
-  "Include detour servers in auto-proxy-out urltest": {
-    "value": "将 detour 服务器纳入 auto-proxy-out 的 urltest"
+  "Include detour servers in the Direction's auto group": {
+    "value": "将 detour 服务器纳入方向的 auto 分组"
   },
   "Include direct-out": {
     "value": "包含 direct-out"
@@ -3151,6 +3225,9 @@
   "No nodes loaded yet. Apply rules to load them.": {
     "value": "还没加载节点。点「应用规则」加载。"
   },
+  "No nodes match": {
+    "value": "没有匹配的节点"
+  },
   "No nodes match. Check the path against a node's JSON.": {
     "value": "没有匹配的节点。请对照节点 JSON 检查路径。"
   },
@@ -3189,6 +3266,9 @@
   },
   "No servers found in selected files": {
     "value": "所选文件中未找到服务器"
+  },
+  "No servers match, the auto node stays out of the config until one does": {
+    "value": "没有匹配的服务器，在出现匹配之前该自动节点不会写入配置"
   },
   "No source URI for this node": {
     "value": "此节点没有来源 URI"
@@ -3728,9 +3808,6 @@
   "Presets are not transferable — this app has its own": {
     "value": "预设无法迁移——本应用自带"
   },
-  "Preview (route.rules)": {
-    "value": "预览（route.rules）"
-  },
   "Private IP": {
     "value": "私有 IP"
   },
@@ -3926,6 +4003,9 @@
   "Remove \"%s\" permanently?": {
     "value": "永久移除「%s」？"
   },
+  "Remove \"%s\" from the list?\nYou can add it back from the catalog.": {
+    "value": "从列表中移除“%s”？\n之后可从目录中重新添加。"
+  },
   "Remove \"%s\"?": {
     "value": "移除「%s」？"
   },
@@ -4017,20 +4097,8 @@
   "Reset to global": {
     "value": "恢复为全局设置"
   },
-  "Resolve first": {
-    "value": "先解析"
-  },
   "Resolve only": {
     "value": "仅解析"
-  },
-  "Resolve options": {
-    "value": "解析选项"
-  },
-  "Resolve the domain before routing — force an address family (e.g. IPv4 only).": {
-    "value": "路由前先解析域名——可强制地址族（例如仅 IPv4）。"
-  },
-  "Resolve, then fall through to the next rule.": {
-    "value": "解析后继续交给下一条规则。"
   },
   "Resolves the server hostname itself": {
     "value": "自行解析该服务器的主机名"
@@ -4082,9 +4150,6 @@
   },
   "Route through another server first": {
     "value": "先经另一台服务器转发"
-  },
-  "Route to outbound": {
-    "value": "路由到出站"
   },
   "Routing": {
     "value": "路由"
@@ -4274,14 +4339,8 @@
   "Selector \"%1$s\" default \"%2$s\" is not in the options list.": {
     "value": "选择器「%1$s」的默认值「%2$s」不在选项列表中。"
   },
-  "Send DNS to dedicated server": {
-    "value": "把 DNS 发送到专用服务器"
-  },
   "Send HWID": {
     "value": "发送 HWID"
-  },
-  "Send matched traffic to a direction.": {
-    "value": "将匹配的流量送往某个方向。"
   },
   "Send to another app": {
     "value": "发送到其它应用"
@@ -4628,8 +4687,8 @@
   "Switch failed: %s": {
     "value": "切换失败：%s"
   },
-  "Switch to cloudflare_udp": {
-    "value": "切换到 cloudflare_udp"
+  "Switch to google_doh": {
+    "value": "切换到 google_doh"
   },
   "Switch tolerance (ms)": {
     "value": "切换阈值（ms）"
@@ -5047,8 +5106,8 @@
   "Use this node": {
     "value": "使用此节点"
   },
-  "Used by routing engine to resolve hostnames internally (outbound endpoints, routing rules). Not the resolver apps use.\n\nRecommended:\n  • dns_shield — default; races 6 encrypted providers, answers from whichever replies first\n  • cloudflare_udp — UDP to 1.1.1.1 (fast)\n  • google_udp — UDP to 8.8.8.8 (fast)\n  • google_doh — encrypted\n\n⚠ local_dns_resolver here leaks lookups to your ISP — system DNS bypasses the VPN.": {
-    "value": "供路由引擎在内部解析主机名使用（出站地址、路由规则）。不是应用使用的解析器。\n\n推荐：\n  • dns_shield —— 默认；同时向 6 家加密服务商查询，谁先应答用谁\n  • cloudflare_udp —— UDP 到 1.1.1.1（快）\n  • google_udp —— UDP 到 8.8.8.8（快）\n  • google_doh —— 加密\n\n⚠ 这里的 local_dns_resolver 会把查询泄露给运营商——系统 DNS 会绕过 VPN。"
+  "Used by routing engine to resolve hostnames internally (outbound endpoints, routing rules). Not the resolver apps use.\n\nRecommended:\n  • dns_shield — default; races 6 encrypted providers over a direct connection, answers from whichever replies first\n  • google_doh, cloudflare_dot — encrypted, direct\n\n⚠ Plain UDP servers go through the tunnel and can't answer before it is up — don't use them here.\n\n⚠ local_dns_resolver here leaks lookups to your ISP — system DNS bypasses the VPN.": {
+    "value": "供路由引擎在内部解析主机名使用（出站地址、路由规则）。不是应用使用的解析器。\n\n推荐：\n  • dns_shield —— 默认；直连同时向 6 家加密服务商查询，谁先应答用谁\n  • google_doh、cloudflare_dot —— 加密，直连\n\n⚠ 明文 UDP 服务器经隧道，隧道建立前无法应答——这里不要用。\n\n⚠ 这里的 local_dns_resolver 会把查询泄露给运营商——系统 DNS 会绕过 VPN。"
   },
   "User": {
     "value": "自定义"
@@ -5549,12 +5608,6 @@
   "≤%dms": {
     "value": "≤%dms"
   },
-  "✳ Resolve first%s": {
-    "value": "✳ 先解析%s"
-  },
-  "✳ Resolve only%s": {
-    "value": "✳ 仅解析%s"
-  },
   "off": {
     "value": "off"
   },
@@ -6053,5 +6106,29 @@
   },
   "The TV is busy with another request. Try again in a moment.": {
     "value": "电视正在处理另一个请求。请稍后重试。"
+  },
+  "Cannot move: \"%s\" includes \"%s\"": {
+    "value": "无法移动：「%s」包含「%s」"
+  },
+  "Locked: used by %s. Remove the reference first.": {
+    "value": "已锁定：被 %s 使用。请先移除引用。"
+  },
+  "Duplicate": {
+    "value": "复制"
+  },
+  "Save as copy": {
+    "value": "另存为副本"
+  },
+  "%s (copy)": {
+    "value": "%s（副本）"
+  },
+  "Changing the tag creates a custom copy. The original server stays in the list.": {
+    "value": "更改标签会创建自定义副本，原服务器仍保留在列表中。"
+  },
+  "Resolver goes through a tunnel": {
+    "value": "解析器经由隧道"
+  },
+  "This resolver sends queries through %s. It is used to look up server addresses while the connection is being set up, before the tunnel exists, so lookups can fail and the VPN may not connect. A direct resolver is the safest choice; for privacy pick a DoT or DoH server.": {
+    "value": "此解析器通过 %s 发送查询。它在连接建立期间、隧道尚未存在时用于查找服务器地址，因此查询可能失败，VPN 可能无法连接。直连解析器最稳妥；如需隐私，请选择 DoT 或 DoH 服务器。"
   }
 }

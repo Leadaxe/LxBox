@@ -37,8 +37,9 @@ import '../services/tailscale_state/state_keys.dart';
 import '../services/tailscale_state/state_store.dart';
 import '../services/url_mask.dart';
 import '../services/builder/build_config.dart';
+import '../services/builder/direction_pool_preview.dart'
+    show readStoredBuildSettings;
 import '../services/builder/if_engine.dart' show TemplateWarning;
-import '../services/builder/core_chain_capability.dart';
 import '../vpn/box_vpn_client.dart';
 import '../services/parser/body_decoder.dart';
 import '../services/parser/ini_parser.dart';
@@ -192,6 +193,16 @@ class SubscriptionController extends ChangeNotifier {
   /// пересобирает конфиг перед каждым кругом и читает карту сразу.
   Map<String, NodeSpec> _lastTagMap = const {};
   Map<String, NodeSpec> get lastEmittedTagMap => _lastTagMap;
+
+  /// §675 — итоговый тег узла автовыбора последней сборки → его spec
+  /// (значки пула на главном). До первой сборки пусто.
+  Map<String, AutoSelectSpec> _lastGroupTagMap = const {};
+  Map<String, AutoSelectSpec> get lastEmittedGroupMap => _lastGroupTagMap;
+
+  @visibleForTesting
+  void debugSetLastEmittedGroupMap(Map<String, AutoSelectSpec> map) {
+    _lastGroupTagMap = map;
+  }
 
   /// §505 — предупреждения сборки по финальному config-тегу (гард реестра).
   Map<String, List<NodeWarning>> _lastBuildWarningsByTag = const {};
@@ -3067,27 +3078,8 @@ class SubscriptionController extends ChangeNotifier {
     await SettingsStorage.seedDefaultPresets();
     await SettingsStorage.seedLateDefaultPresets();
 
-    final settings = BuildSettings(
-      userVars: await SettingsStorage.getAllVars(),
-      enabledGroups: await SettingsStorage.getEnabledGroups(),
-      customRules: await SettingsStorage.getCustomRules(),
-      routeFinal: await SettingsStorage.getRouteFinal(),
-      directions: await SettingsStorage.getDirections(), // §125
-      chains: await SettingsStorage.getChains(), // §393 C2
-      // §393 C5 — гейт возможностей ядра живёт в СБОРКЕ, не в UI: цепочку
-      // может добавить и Debug API, и restore бэкапа с новой машины, а
-      // отвергнутый ядром конфиг оставит пользователя без VPN целиком.
-      // Кэшируется на сессию — версия ядра вкомпилирована в APK и не меняется
-      // (см. [CoreVersionCache]).
-      coreVersion:
-          await CoreVersionCache.ensure(BoxVpnClient().getCoreVersion),
-      tunApps: await SettingsStorage.getTunApps(),
-      vpnMode: await SettingsStorage.getVpnMode(),
-      idleSuspend: await SettingsStorage.getIdleSuspend(), // §215
-      idleSuspendReachable:
-          await SettingsStorage.getIdleSuspendReachable(), // §272
-      wgBuildMax: await SettingsStorage.getWgBuildMax(), // §542
-      wgLazyBuild: await SettingsStorage.getWgLazyBuild(), // §542
+    // §674 — тот же снимок хранилища читает превью пула Направлений.
+    final settings = await readStoredBuildSettings(
       tailscaleStateRoot: tailscaleStateRoot,
       // §445 — имена каталогов из индекса (стабильны при переименовании).
       tailscaleStateDirs:
@@ -3102,6 +3094,7 @@ class SubscriptionController extends ChangeNotifier {
               e.key: originals[e.value] ?? e.value,
           };
     _groupDefaultsPending = false;
+    _lastGroupTagMap = result.groupByEmittedTag;
     _lastBuildWarningsByTag = result.nodeBuildWarningsByEmittedTag;
     _lastSourceBuildCodes = result.sourceBuildCodes;
 

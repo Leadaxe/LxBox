@@ -609,6 +609,30 @@
   "%s · disabled — will be skipped": {
     "value": "%s · выключен — будет пропущен"
   },
+  "Action is Resolve only": {
+    "value": "Действие — «Только резолв»"
+  },
+  "Add address": {
+    "value": "Добавить адрес"
+  },
+  "Answer": {
+    "value": "Ответ"
+  },
+  "Answer AAAA (IPv6) queries locally so matched traffic uses IPv4.": {
+    "value": "Отвечать на AAAA-запросы (IPv6) локально, чтобы совпавший трафик шёл по IPv4."
+  },
+  "DNS & RESOLVE": {
+    "value": "DNS И РЕЗОЛВ"
+  },
+  "Dedicated server": {
+    "value": "Выделенный сервер"
+  },
+  "Default — queries go to DNS Final": {
+    "value": "По умолчанию — запросы идут в DNS Final"
+  },
+  "Disabled, skipped at build: %s": {
+    "value": "Выключены, при сборке пропускаются: %s"
+  },
   "%s — tap to edit": {
     "value": "%s — нажмите, чтобы изменить"
   },
@@ -778,9 +802,6 @@
   "Action": {
     "value": "Действие"
   },
-  "Action & Resolve": {
-    "value": "Действие и резолв"
-  },
   "Active": {
     "value": "Активен"
   },
@@ -798,6 +819,71 @@
   },
   "Add DNS Server": {
     "value": "Добавить DNS-сервер"
+  },
+  "Add DNS server": {
+    "value": "Добавить DNS-сервер"
+  },
+  "Add all defaults": {
+    "value": "Добавить все стандартные"
+  },
+  "Custom server": {
+    "value": "Свой сервер"
+  },
+  "Enter an IP address": {
+    "value": "Введите IP-адрес"
+  },
+  "Fixed IP": {
+    "value": "Фиксированный IP"
+  },
+  "How domains matched by this rule are resolved.": {
+    "value": "Как резолвятся домены, совпавшие с этим правилом."
+  },
+  "IP address": {
+    "value": "IP-адрес"
+  },
+  "IP addresses": {
+    "value": "IP-адреса"
+  },
+  "IP or CIDR, e.g. 1.2.3.0/24": {
+    "value": "IP или CIDR, например 1.2.3.0/24"
+  },
+  "Line %d: not an IPv4 or IPv6 address": {
+    "value": "Строка %d: не адрес IPv4 или IPv6"
+  },
+  "Look up the address before routing, so IP rules and the address family apply.": {
+    "value": "Узнать адрес до маршрутизации, чтобы сработали IP-правила и семейство адресов."
+  },
+  "Non-negative integer": {
+    "value": "Неотрицательное целое число"
+  },
+  "One address per line, IPv4 or IPv6.": {
+    "value": "По адресу на строку, IPv4 или IPv6."
+  },
+  "Resolve before routing": {
+    "value": "Резолвить до маршрутизации"
+  },
+  "Used when the rule resolves before routing.": {
+    "value": "Действуют, когда правило резолвит до маршрутизации."
+  },
+  "Your own UDP / DoT / DoH / group…": {
+    "value": "Свой UDP / DoT / DoH / группа…"
+  },
+  "From template": {
+    "value": "Из шаблона"
+  },
+  "Added \"%s\"": {
+    "value": "Добавлен «%s»"
+  },
+  "Added %d servers": {
+    "value": {
+      "one": "Добавлен %d сервер",
+      "few": "Добавлено %d сервера",
+      "many": "Добавлено %d серверов",
+      "other": "Добавлено %d сервера"
+    }
+  },
+  "All defaults are already in the list": {
+    "value": "Все стандартные серверы уже в списке"
   },
   "Add Wi-Fi network": {
     "value": "Добавить сеть Wi-Fi"
@@ -901,12 +987,6 @@
   "Advanced": {
     "value": "Дополнительно"
   },
-  "Advanced DNS options": {
-    "value": "Расширенные настройки DNS"
-  },
-  "Advanced: this rule resolves but does not route. If no later rule matches, traffic goes to Final.": {
-    "value": "Продвинутый режим: правило резолвит, но не маршрутизирует. Если ни одно последующее правило не совпадёт, трафик уйдёт в Final."
-  },
   "Aggressive battery saving": {
     "value": "Агрессивная экономия батареи"
   },
@@ -984,9 +1064,6 @@
   },
   "Another VPN is active": {
     "value": "Активен другой VPN"
-  },
-  "Answer AAAA (IPv6) queries locally so matched traffic uses IPv4. No DNS server required.": {
-    "value": "Отвечать на AAAA-запросы (IPv6) локально, чтобы совпавший трафик шёл по IPv4. DNS-сервер не нужен."
   },
   "Any app on this device will be able to control the VPN via broadcast commands while this is on. Only turn it on if you use Tasker / Macrodroid and understand the implications.": {
     "value": "Пока эта настройка включена, любое приложение на устройстве сможет управлять VPN через broadcast-команды. Включайте, только если пользуетесь Tasker / MacroDroid и понимаете последствия."
@@ -1368,6 +1445,9 @@
   },
   "Username": {
     "value": "Имя пользователя"
+  },
+  "e.g. 5s, 500ms": {
+    "value": "например 5s, 500ms"
   },
   "host:port or full URL; port 443 if omitted": {
     "value": "host:port или полный URL; без порта — 443"
@@ -1959,11 +2039,11 @@
   "Default Domain Resolver": {
     "value": "Резолвер доменов по умолчанию"
   },
-  "Default fallback DNS server. Used when an app makes a DNS query and no DNS rule above matches it. Every app DNS query that isn't routed by a rule ends up here.\n\nRecommended:\n  • dns_shield — default; races 6 encrypted providers, answers from whichever replies first\n  • google_doh — encrypted (DoH)\n  • cloudflare_dot / google_dot — encrypted (DoT)\n  • cloudflare_udp / google_udp — fast plain UDP\n\nlocal_dns_resolver works but reveals queries to your ISP. Encrypted options keep them private.": {
-    "value": "Резервный DNS-сервер по умолчанию. Используется, когда DNS-запрос приложения не совпал ни с одним DNS-правилом выше. Сюда попадает каждый запрос приложений, не направленный правилом.\n\nРекомендуется:\n  • dns_shield — по умолчанию; опрашивает 6 шифрованных провайдеров наперегонки, отвечает тот, кто первым откликнулся\n  • google_doh — шифрованный (DoH)\n  • cloudflare_dot / google_dot — шифрованные (DoT)\n  • cloudflare_udp / google_udp — быстрый обычный UDP\n\nlocal_dns_resolver работает, но раскрывает запросы вашему провайдеру. Шифрованные варианты сохраняют их приватность."
+  "Default fallback DNS server. Used when an app makes a DNS query and no DNS rule above matches it. Every app DNS query that isn't routed by a rule ends up here.\n\nRecommended:\n  • dns_shield — default; races 6 encrypted providers over a direct connection, answers from whichever replies first\n  • google_doh, cloudflare_dot — encrypted, direct\n\nPlain UDP servers (cloudflare_udp, google_udp) go through the tunnel — fine here.\n\nlocal_dns_resolver works but reveals queries to your ISP. Encrypted options keep them private.": {
+    "value": "Резервный DNS-сервер по умолчанию. Используется, когда DNS-запрос приложения не совпал ни с одним DNS-правилом выше. Сюда попадает каждый запрос приложений, не направленный правилом.\n\nРекомендуется:\n  • dns_shield — по умолчанию; опрашивает 6 шифрованных провайдеров напрямую наперегонки, отвечает тот, кто первым откликнулся\n  • google_doh, cloudflare_dot — шифрованные, напрямую\n\nОбычные UDP-серверы (cloudflare_udp, google_udp) ходят через туннель — здесь это допустимо.\n\nlocal_dns_resolver работает, но раскрывает запросы вашему провайдеру. Шифрованные варианты сохраняют их приватность."
   },
-  "Default traffic": {
-    "value": "Трафик по умолчанию"
+  "Default traffic (no rule matched)": {
+    "value": "Трафик по умолчанию (ни одно правило не сработало)"
   },
   "Default · %s": {
     "value": "По умолчанию · %s"
@@ -2745,9 +2825,6 @@
   "How it works: directions, rules, DNS, detour, recipes": {
     "value": "Как это работает: Направления, правила, DNS, detour, рецепты"
   },
-  "How this rule directs and resolves matched traffic.": {
-    "value": "Как правило направляет и резолвит совпавший трафик."
-  },
   "INBOUND": {
     "value": "INBOUND"
   },
@@ -2873,8 +2950,8 @@
   "Include block": {
     "value": "Добавлять block"
   },
-  "Include detour servers in auto-proxy-out urltest": {
-    "value": "Включать detour-серверы в urltest-группу auto-proxy-out"
+  "Include detour servers in the Direction's auto group": {
+    "value": "Включать detour-серверы в auto-группу Направления"
   },
   "Include direct-out": {
     "value": "Добавлять direct-out"
@@ -3394,6 +3471,9 @@
   "No nodes loaded yet. Apply rules to load them.": {
     "value": "Узлы ещё не загружены. Нажмите «Применить правила», чтобы загрузить."
   },
+  "No nodes match": {
+    "value": "Нет подходящих узлов"
+  },
   "No nodes match. Check the path against a node's JSON.": {
     "value": "Совпадений нет. Сверьте путь с JSON узла."
   },
@@ -3432,6 +3512,9 @@
   },
   "No servers found in selected files": {
     "value": "В выбранных файлах серверы не найдены"
+  },
+  "No servers match, the auto node stays out of the config until one does": {
+    "value": "Совпадений нет — авто-узел не попадёт в конфиг, пока не найдётся хотя бы один сервер"
   },
   "No source URI for this node": {
     "value": "У этого узла нет исходного URI"
@@ -3983,9 +4066,6 @@
   "Presets are not transferable — this app has its own": {
     "value": "Пресеты не переносятся — они есть в самом приложении"
   },
-  "Preview (route.rules)": {
-    "value": "Превью (route.rules)"
-  },
   "Private IP": {
     "value": "Приватный IP"
   },
@@ -4181,6 +4261,9 @@
   "Remove \"%s\" permanently?": {
     "value": "Удалить «%s» безвозвратно?"
   },
+  "Remove \"%s\" from the list?\nYou can add it back from the catalog.": {
+    "value": "Убрать «%s» из списка?\nВернуть его можно из каталога."
+  },
   "Remove \"%s\"?": {
     "value": "Удалить «%s»?"
   },
@@ -4278,20 +4361,8 @@
   "Reset to global": {
     "value": "Сбросить к глобальным"
   },
-  "Resolve first": {
-    "value": "Сначала резолвить"
-  },
   "Resolve only": {
     "value": "Только резолв"
-  },
-  "Resolve options": {
-    "value": "Параметры резолва"
-  },
-  "Resolve the domain before routing — force an address family (e.g. IPv4 only).": {
-    "value": "Резолвить домен до маршрутизации — можно навязать семейство адресов (например, только IPv4)."
-  },
-  "Resolve, then fall through to the next rule.": {
-    "value": "Резолвить и передать трафик следующему правилу."
   },
   "Resolves the server hostname itself": {
     "value": "Резолвит имя самого DNS-сервера"
@@ -4343,9 +4414,6 @@
   },
   "Route through another server first": {
     "value": "Сначала пропустить трафик через другой сервер"
-  },
-  "Route to outbound": {
-    "value": "Направить в исходящий канал"
   },
   "Routing": {
     "value": "Маршрутизация"
@@ -4538,14 +4606,8 @@
   "Selector \"%1$s\" default \"%2$s\" is not in the options list.": {
     "value": "У селектора «%1$s» значение по умолчанию «%2$s» отсутствует в списке вариантов."
   },
-  "Send DNS to dedicated server": {
-    "value": "Отправлять DNS на выделенный сервер"
-  },
   "Send HWID": {
     "value": "Отправлять HWID"
-  },
-  "Send matched traffic to a direction.": {
-    "value": "Отправлять совпавший трафик в Направление."
   },
   "Send to another app": {
     "value": "Отправить в другое приложение"
@@ -4895,8 +4957,8 @@
   "Switch failed: %s": {
     "value": "Не удалось переключить узел: %s"
   },
-  "Switch to cloudflare_udp": {
-    "value": "Переключить на cloudflare_udp"
+  "Switch to google_doh": {
+    "value": "Переключить на google_doh"
   },
   "Switch tolerance (ms)": {
     "value": "Порог переключения (мс)"
@@ -5317,8 +5379,8 @@
   "Use this node": {
     "value": "Использовать этот узел"
   },
-  "Used by routing engine to resolve hostnames internally (outbound endpoints, routing rules). Not the resolver apps use.\n\nRecommended:\n  • dns_shield — default; races 6 encrypted providers, answers from whichever replies first\n  • cloudflare_udp — UDP to 1.1.1.1 (fast)\n  • google_udp — UDP to 8.8.8.8 (fast)\n  • google_doh — encrypted\n\n⚠ local_dns_resolver here leaks lookups to your ISP — system DNS bypasses the VPN.": {
-    "value": "Используется движком маршрутизации для внутреннего резолва имён (адреса исходящих серверов, правила маршрутизации). Это не резолвер приложений.\n\nРекомендуется:\n  • dns_shield — по умолчанию; опрашивает 6 шифрованных провайдеров наперегонки, отвечает тот, кто первым откликнулся\n  • cloudflare_udp — UDP к 1.1.1.1 (быстро)\n  • google_udp — UDP к 8.8.8.8 (быстро)\n  • google_doh — шифрованный\n\n⚠ local_dns_resolver здесь сливает запросы провайдеру — системный DNS идёт мимо VPN."
+  "Used by routing engine to resolve hostnames internally (outbound endpoints, routing rules). Not the resolver apps use.\n\nRecommended:\n  • dns_shield — default; races 6 encrypted providers over a direct connection, answers from whichever replies first\n  • google_doh, cloudflare_dot — encrypted, direct\n\n⚠ Plain UDP servers go through the tunnel and can't answer before it is up — don't use them here.\n\n⚠ local_dns_resolver here leaks lookups to your ISP — system DNS bypasses the VPN.": {
+    "value": "Используется движком маршрутизации для внутреннего резолва имён (адреса исходящих серверов, правила маршрутизации). Это не резолвер приложений.\n\nРекомендуется:\n  • dns_shield — по умолчанию; опрашивает 6 шифрованных провайдеров напрямую наперегонки, отвечает тот, кто первым откликнулся\n  • google_doh, cloudflare_dot — шифрованные, напрямую\n\n⚠ Обычные UDP-серверы ходят через туннель и не ответят, пока он не поднят — здесь их не выбирайте.\n\n⚠ local_dns_resolver здесь сливает запросы провайдеру — системный DNS идёт мимо VPN."
   },
   "User": {
     "value": "Свой"
@@ -5821,12 +5883,6 @@
   },
   "≤%dms": {
     "value": "≤%d мс"
-  },
-  "✳ Resolve first%s": {
-    "value": "✳ Сначала резолвить%s"
-  },
-  "✳ Resolve only%s": {
-    "value": "✳ Только резолв%s"
   },
   "off": {
     "value": "off"
@@ -6332,5 +6388,29 @@
   },
   "The TV is busy with another request. Try again in a moment.": {
     "value": "Телевизор занят другим запросом. Попробуйте ещё раз чуть позже."
+  },
+  "Cannot move: \"%s\" includes \"%s\"": {
+    "value": "Нельзя переместить: «%s» включает «%s»"
+  },
+  "Locked: used by %s. Remove the reference first.": {
+    "value": "Заблокировано, используется: %s. Сначала уберите ссылку."
+  },
+  "Duplicate": {
+    "value": "Дублировать"
+  },
+  "Save as copy": {
+    "value": "Сохранить как копию"
+  },
+  "%s (copy)": {
+    "value": "%s (копия)"
+  },
+  "Changing the tag creates a custom copy. The original server stays in the list.": {
+    "value": "Смена тега создаёт собственную копию. Исходный сервер остаётся в списке."
+  },
+  "Resolver goes through a tunnel": {
+    "value": "Резолвер ходит через туннель"
+  },
+  "This resolver sends queries through %s. It is used to look up server addresses while the connection is being set up, before the tunnel exists, so lookups can fail and the VPN may not connect. A direct resolver is the safest choice; for privacy pick a DoT or DoH server.": {
+    "value": "Этот резолвер отправляет запросы через %s. Он ищет адреса серверов, пока соединение устанавливается и туннеля ещё нет, поэтому запросы могут не пройти и VPN может не подключиться. Надёжнее всего прямой резолвер; для приватности выберите сервер DoT или DoH."
   }
 }

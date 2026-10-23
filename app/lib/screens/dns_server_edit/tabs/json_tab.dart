@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../../../models/codec/dns_record.dart' show dnsServerToRecord;
 import '../../../services/builder/post_steps.dart'
-    show resolveTemplateDnsServerBody;
+    show previewDnsGroupMembers, resolveTemplateDnsServerBody;
 import '../../../services/builder/preset_expand.dart' show normalizeDnsDetour;
 import '../../dns_settings_screen/resolved_server.dart';
 import '../edit_controller.dart';
@@ -67,21 +67,36 @@ class _ReadOnlyPreview extends StatelessWidget {
     final theme = Theme.of(context);
 
     // Отрезолвленное тело с ТЕКУЩИМИ значениями формы (live: поменял var в
-    // Params → превью обновилось). Display = emit-форма (detour normalized).
+    // Params → превью обновилось). Display = emit-форма (detour normalized,
+    // §671 — у группы выключенные члены сняты тем же критерием, что у сборки).
     String resolvedJson;
+    var skipped = const <String>[];
     final wrapper = c.templateWrapper;
+    Map<String, dynamic>? body;
     if (c.kind == ServerKind.template && wrapper != null) {
-      final body = resolveTemplateDnsServerBody(wrapper, varValues: c.varValues);
-      if (body == null) {
-        resolvedJson = '// malformed template wrapper';
-      } else {
+      body = resolveTemplateDnsServerBody(wrapper, varValues: c.varValues);
+      if (body != null) {
         normalizeDnsDetour(body);
         body['tag'] = c.resolved?.tag ?? '';
-        resolvedJson = const JsonEncoder.withIndent('  ').convert(body);
       }
     } else {
-      resolvedJson = const JsonEncoder.withIndent('  ')
-          .convert(c.resolved?.body ?? const {});
+      body = Map<String, dynamic>.from(c.resolved?.body ?? const {});
+    }
+    if (body == null) {
+      resolvedJson = '// malformed template wrapper';
+    } else {
+      if (body['type'] == 'group' && body['servers'] is List) {
+        final members = previewDnsGroupMembers(
+          [for (final m in body['servers'] as List) m?.toString() ?? ''],
+          selfTag: c.resolved?.tag ?? body['tag']?.toString() ?? '',
+          emittedByTag: {
+            for (final o in c.dnsMemberOptions) o.tag: o.enabled,
+          },
+        );
+        body['servers'] = members.kept;
+        skipped = members.disabled;
+      }
+      resolvedJson = const JsonEncoder.withIndent('  ').convert(body);
     }
 
     // Запись хранения — кодеком (§439: у DnsServerRef нет toJson; модель в
@@ -118,6 +133,14 @@ class _ReadOnlyPreview extends StatelessWidget {
               actions: [_CopyButton(text: resolvedJson)],
             ),
           ),
+          if (skipped.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              getLocalText.s(
+                  "Disabled, skipped at build: %s", skipped.join(', ')),
+              style: TextStyle(fontSize: 11, color: theme.colorScheme.error),
+            ),
+          ],
         ],
       ),
     );

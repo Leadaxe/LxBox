@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show LogicalKeyboardKey;
 
 import '../../services/backup_merge.dart' show MergeCount;
 import '../../services/backup_service.dart';
@@ -157,31 +158,37 @@ Future<ImportDialogResult?> showImportPreview(
                 RadioGroup<bool>(
                   groupValue: merge,
                   onChanged: (v) => set(() => merge = v ?? true),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      RadioListTile<bool>(
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
-                        value: true,
-                        title: Text(getLocalText.s("Merge with existing (recommended)")),
-                        subtitle: Text(
-                          getLocalText.s(
-                              "Adds what you don't have, keeps everything you do."),
-                          style: const TextStyle(fontSize: 11),
+                  // RadioGroup вешает на стрелки «выбрать соседнее радио», и
+                  // пульт TV крутился между Merge и Replace, не доходя до
+                  // Import. Стрелки здесь двигают фокус, выбор — OK/Enter.
+                  child: Shortcuts(
+                    shortcuts: _arrowsMoveFocus,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        RadioListTile<bool>(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          value: true,
+                          title: Text(getLocalText.s("Merge with existing (recommended)")),
+                          subtitle: Text(
+                            getLocalText.s(
+                                "Adds what you don't have, keeps everything you do."),
+                            style: const TextStyle(fontSize: 11),
+                          ),
                         ),
-                      ),
-                      RadioListTile<bool>(
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
-                        value: false,
-                        title: Text(getLocalText.s("Replace all (destructive)")),
-                        subtitle: Text(
-                          getLocalText.s("Wipes existing data in selected categories."),
-                          style: const TextStyle(fontSize: 11),
+                        RadioListTile<bool>(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          value: false,
+                          title: Text(getLocalText.s("Replace all (destructive)")),
+                          subtitle: Text(
+                            getLocalText.s("Wipes existing data in selected categories."),
+                            style: const TextStyle(fontSize: 11),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -241,6 +248,17 @@ Future<ImportDialogResult?> showImportPreview(
     ),
   );
 }
+
+const _arrowsMoveFocus = <ShortcutActivator, Intent>{
+  SingleActivator(LogicalKeyboardKey.arrowUp):
+      DirectionalFocusIntent(TraversalDirection.up),
+  SingleActivator(LogicalKeyboardKey.arrowDown):
+      DirectionalFocusIntent(TraversalDirection.down),
+  SingleActivator(LogicalKeyboardKey.arrowLeft):
+      DirectionalFocusIntent(TraversalDirection.left),
+  SingleActivator(LogicalKeyboardKey.arrowRight):
+      DirectionalFocusIntent(TraversalDirection.right),
+};
 
 Widget _previewCheckbox(
   BuildContext ctx, {

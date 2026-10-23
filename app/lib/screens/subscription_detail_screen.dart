@@ -111,6 +111,9 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
   final Map<String, ProbeResult> _probe = {};
   Timer? _probeFlushTimer;
   bool _testing = false;
+  // §669 — Stop нажат, прогон ещё доходит до finally (как в папке):
+  // кнопка неактивна, подпись «Stopping…».
+  bool _stopping = false;
   ProbeRunner? _probeRunner;
   ProbeThresholds _probeThresholds = ProbeThresholds.defaults;
 
@@ -244,6 +247,8 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
   @override
   void dispose() {
     widget.entry.removeListener(_onEntryChanged); // §283
+    // §669 — как в папке: отмена доводит run() до finally → probeStop.
+    _probeRunner?.cancel();
     _probeFlushTimer?.cancel(); // §339/§286
     _probeFlushTimer = null;
     _tabCtrl.dispose();
@@ -269,11 +274,11 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
   }
 
   Future<void> _toggleProbeTest() async {
+    if (_stopping) return;
     if (_testing) {
+      // §669 — `_testing` гасит только сам прогон, дойдя до конца (см. папку).
       _probeRunner?.cancel();
-      _probeFlushTimer?.cancel();
-      _probeFlushTimer = null;
-      setState(() => _testing = false);
+      setState(() => _stopping = true);
       return;
     }
     if (widget.entry.list.nodes.isEmpty) return;
@@ -312,14 +317,21 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
       timeoutMs: timeoutMs,
       onResult: (i, r) {
         if (!mounted) return;
+        if (!identical(_probeRunner, runner)) return; // §669 — вытеснен
         if (i < probeKeys.length) _probe[probeKeys[i]] = r;
         _scheduleProbeFlush();
       },
     );
+    // §669 — состояние экрана гасит только активный прогон.
+    if (!identical(_probeRunner, runner)) return;
+    _probeRunner = null;
     _probeFlushTimer?.cancel();
     _probeFlushTimer = null;
     if (!mounted) return;
-    setState(() => _testing = false);
+    setState(() {
+      _testing = false;
+      _stopping = false;
+    });
     // §236-гонка — VPN стартовал между гейтом и probeStart: тот же попап.
     if (err == kProbeVpnRunning) {
       if (mounted && await onProbeVpnRaceGate()) await _runProbe();
@@ -515,7 +527,9 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
     final muted = theme.colorScheme.onSurfaceVariant;
     final s = _probeSummary();
     final String? info;
-    if (_testing) {
+    if (_stopping) {
+      info = getLocalText.s("Stopping…"); // §669
+    } else if (_testing) {
       info = getLocalText.s("Testing… %d done", s.ok + s.dead);
     } else if (_probe.isNotEmpty) {
       info = [
@@ -560,14 +574,17 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
                 ? Text(info, style: TextStyle(fontSize: 12, color: muted))
                 : const SizedBox.shrink(),
           ),
+          // §669 — на время «Stopping…» кнопка неактивна (как без узлов).
           GestureDetector(
-            onTap: hasNodes ? () => unawaited(_toggleProbeTest()) : null,
+            onTap: hasNodes && !_stopping
+                ? () => unawaited(_toggleProbeTest())
+                : null,
             child: Padding(
               padding: const EdgeInsets.all(8),
               child: Icon(
                 _testing ? Icons.stop_circle_outlined : Icons.speed,
                 size: 22,
-                color: hasNodes ? null : theme.disabledColor,
+                color: hasNodes && !_stopping ? null : theme.disabledColor,
               ),
             ),
           ),

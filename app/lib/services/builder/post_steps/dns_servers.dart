@@ -112,6 +112,9 @@ Future<List<DnsServerRef>> resolveDnsServersList({
   Map<String, String> presetIdByTag = const {},
 }) async {
   final stored = await SettingsStorage.getDnsServers();
+  // §680 — посев шаблонных серверов один раз: признак «список создан» —
+  // наличие ключа `dns.servers`. Пустой сохранённый список не досевается.
+  final seeded = await SettingsStorage.hasDnsServersList();
   // §117: template-серверы — обёртки `{description, enabled, vars?, server}`,
   // tag живёт в `server.tag`.
   final templateByTag = templateDnsServersByTag(templateServers);
@@ -138,17 +141,22 @@ Future<List<DnsServerRef>> resolveDnsServersList({
         enabled: true, tag: tag, presetId: presetIdByTag[tag] ?? ''));
     seen.add(tag);
   }
-  // Step 3: auto-discover missing template entries (наследуют enabled из template).
-  for (final s in templateServers) {
-    final tag = templateDnsServerTag(s);
-    if (tag == null) continue;
-    if (seen.contains(tag)) continue;
-    final enabled = s['enabled'] != false;
-    result.add(DnsServerTemplate(enabled: enabled, tag: tag));
-    seen.add(tag);
+  // Step 3: посев шаблонных серверов (наследуют enabled из template) — только
+  // на первом запуске, пока ключа нет (§680). Дальше список принадлежит
+  // пользователю: новые серверы шаблона появляются в каталоге по (+).
+  if (!seeded) {
+    for (final s in templateServers) {
+      final tag = templateDnsServerTag(s);
+      if (tag == null) continue;
+      if (seen.contains(tag)) continue;
+      final enabled = s['enabled'] != false;
+      result.add(DnsServerTemplate(enabled: enabled, tag: tag));
+      seen.add(tag);
+    }
   }
 
-  // Step 4: persist if changed (не писать на каждый load).
+  // Step 4: persist if changed (не писать на каждый load). Посев меняет
+  // состав — ключ записывается, и шаг 3 больше не выполняется.
   if (!const ListEquality<DnsServerRef>().equals(stored, result)) {
     await SettingsStorage.saveDnsServers(result);
   }
@@ -222,9 +230,11 @@ List<Map<String, dynamic>> resolveDnsServersBodies({
   for (final entry in resolved) {
     final tag = entry.tag;
     if (tag.isEmpty) continue;
-    if (!entry.enabled &&
-        !presetServersByTag.containsKey(tag) &&
-        !ruleReferencedTags.contains(tag)) {
+    if (!dnsServerRefEmitted(
+      enabled: entry.enabled,
+      presetReferenced: presetServersByTag.containsKey(tag),
+      ruleReferenced: ruleReferencedTags.contains(tag),
+    )) {
       continue;
     }
     if (seen.contains(tag)) continue;
@@ -282,6 +292,69 @@ List<Map<String, dynamic>> resolveDnsServersBodies({
     warningsOut: warningsOut,
   );
   return out;
+}
+
+/// §117/§671 — эмитится ли ref-запись DNS-сервера: включённая, либо
+/// реферимая активным пресетом или правилом с DNS-опцией (force-include,
+/// locked №7). Один критерий для сборки и превью редактора.
+bool dnsServerRefEmitted({
+  required bool enabled,
+  bool presetReferenced = false,
+  bool ruleReferenced = false,
+}) =>
+    enabled || presetReferenced || ruleReferenced;
+
+/// §312/§671 — причина, по которой член [member] группы [selfTag] не
+/// эмитится, или `null` (член остаётся). [kept] — уже принятые члены (повтор),
+/// [knownTags] — все ref-теги, [emittedTags] — реально эмитированные,
+/// [detourDropped] — выпавшие второй линией. Порядок проверок значим.
+/// Общая для сборки ([_filterDnsGroupMembers]) и превью JSON-вкладки
+/// ([previewDnsGroupMembers]).
+String? dnsGroupMemberDropReason(
+  String member, {
+  required String selfTag,
+  required List<String> kept,
+  required Set<String> knownTags,
+  required Set<String> emittedTags,
+  Set<String> detourDropped = const {},
+}) {
+  if (member == selfTag) return 'itself';
+  if (kept.contains(member)) return 'duplicate';
+  // Тега нет ни в одном ref'е — опечатка/удалён: надо чинить группу.
+  if (member.isEmpty || !knownTags.contains(member)) return 'unknown';
+  if (detourDropped.contains(member)) return 'dangling detour';
+  // Ref есть, но не эмитится — выключен: включение вернёт члена.
+  if (!emittedTags.contains(member)) return 'disabled';
+  return null;
+}
+
+/// §671 — состав группы в превью редактора: [members] через тот же критерий,
+/// что у сборки. [emittedByTag] — известные редактору серверы: тег →
+/// эмитится ли ([dnsServerRefEmitted]). Член, которого редактор не знает
+/// (нет в [emittedByTag]), превью не судит и оставляет — полный ref-список
+/// и вторая линия (`detour`) видны только сборке.
+({List<String> kept, List<String> disabled}) previewDnsGroupMembers(
+  List<String> members, {
+  required String selfTag,
+  required Map<String, bool> emittedByTag,
+}) {
+  final known = {...emittedByTag.keys, ...members};
+  final emitted = {
+    for (final m in members)
+      if (emittedByTag[m] ?? true) m,
+  };
+  final kept = <String>[];
+  final disabled = <String>[];
+  for (final m in members) {
+    final reason = dnsGroupMemberDropReason(m,
+        selfTag: selfTag, kept: kept, knownTags: known, emittedTags: emitted);
+    if (reason == null) {
+      kept.add(m);
+    } else if (reason == 'disabled' && !disabled.contains(m)) {
+      disabled.add(m);
+    }
+  }
+  return (kept: kept, disabled: disabled);
 }
 
 /// §435 — санитайзер ребра `endpoint` у DNS-серверов `tailscale`
@@ -391,22 +464,14 @@ void _filterDnsGroupMembers(
     final kept = <String>[];
     for (final raw in (body['servers'] as List<dynamic>? ?? const [])) {
       final m = raw?.toString() ?? '';
-      final String? dropReason;
-      if (m == selfTag) {
-        dropReason = 'itself';
-      } else if (kept.contains(m)) {
-        dropReason = 'duplicate';
-      } else if (m.isEmpty || !allRefTags.contains(m)) {
-        // Тега нет ни в одном ref'е — опечатка/удалён: надо чинить группу.
-        dropReason = 'unknown';
-      } else if (dropped.contains(m)) {
-        dropReason = 'dangling detour';
-      } else if (!emittedTags.contains(m)) {
-        // Ref есть, но не эмитится — выключен: включение вернёт члена.
-        dropReason = 'disabled';
-      } else {
-        dropReason = null;
-      }
+      final dropReason = dnsGroupMemberDropReason(
+        m,
+        selfTag: selfTag,
+        kept: kept,
+        knownTags: allRefTags,
+        emittedTags: emittedTags,
+        detourDropped: dropped,
+      );
       if (dropReason != null) {
         warningsOut?.add(
           "DNS group '$selfTag': member '$m' dropped ($dropReason)",

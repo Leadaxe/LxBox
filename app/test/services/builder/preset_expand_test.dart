@@ -1294,7 +1294,7 @@ void main() {
     // §354 — на РЕАЛЬНОМ шаблоне: дефолтная группа приезжает с членами.
     // Пустая группа = EmptyDnsGroup (fatal), поэтому проверяем на живом JSON,
     // а не только на фикстуре.
-    test('ru-direct (дефолты) → dns_ru + три члена по разным путям', () {
+    test('ru-direct (дефолты) → dns_ru + члены по своим var (§684)', () {
       final f = expandPreset(
         CustomRulePreset(
           name: 'RU',
@@ -1314,12 +1314,12 @@ void main() {
       expect(grp['mode'], 'fastest');
       expect(grp.containsKey('detour'), isFalse, reason: '§319');
 
-      // Три НЕзависимых пути отказа — иначе одна мёртвая нода вешает ru-DNS.
-      // UDP — по Направлению пресета (открытый, но идёт туда же, куда трафик);
-      // DoT — через vpn-1; DoH — напрямую. Оба шифрованных пути не зависят
-      // от @outbound, поэтому мёртвая нода в нём их не трогает.
-      expect(byTag('ru-direct:yandex_udp')['detour'], 'vpn-2');
-      expect(byTag('ru-direct:yandex_dot')['detour'], 'vpn-1');
+      // §684: серверы не следуют @outbound маршрута. UDP — по
+      // `dns_plain_outbound` (дефолт vpn-1), DoT и DoH — по
+      // `dns_encrypted_outbound` (дефолт direct-out → detour снят, §117).
+      expect(byTag('ru-direct:yandex_udp')['detour'], 'vpn-1');
+      expect(byTag('ru-direct:yandex_dot').containsKey('detour'), isFalse,
+          reason: 'direct-out → detour снят (§117)');
       expect(byTag('ru-direct:yandex_doh').containsKey('detour'), isFalse,
           reason: 'direct-out → detour снят (§117)');
     });

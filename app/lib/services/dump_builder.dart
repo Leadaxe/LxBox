@@ -86,6 +86,10 @@ class DumpBuilder {
     // §318 — снимки oom-killer'а ядра. Второй автоматический канал улик по
     // памяти: снят самим ядром в момент проблемы, до §318 в пак не попадал.
     final oomReports = await oomReportsSection();
+    // §668 — дамп горутин последнего зависания остановки (пишет BoxService,
+    // сторож StopTrace). `goroutines_stack` выше снимается только при
+    // поднятом туннеле, а этот — в момент зависания, туннель уже гаснет.
+    final stopStuck = await _stopStuckGoroutines();
 
     final dump = <String, dynamic>{
       'generated_at': now.toIso8601String(),
@@ -107,6 +111,7 @@ class DumpBuilder {
       'exit_info': exitInfo,
       'logcat_tail': logcatTail,
       'goroutines_stack': goroutinesStack,  // §207 — null если туннель не активен
+      'stop_stuck_goroutines': stopStuck,  // §668 — null если зависаний не было
     };
 
     final dir = await getTemporaryDirectory();
@@ -126,6 +131,22 @@ class DumpBuilder {
   /// Обрезанное помечаем явно, чтобы читающий не гадал, почему трейс
   /// обрывается на полуслове.
   static const _crashBodyLimit = 64 * 1024;
+
+  /// §668 — `filesDir/stop_stuck_goroutines.txt` (имя — `StopTrace.DUMP_FILE_NAME`).
+  static const _stopStuckLimit = 512 * 1024;
+  static Future<String?> _stopStuckGoroutines() async {
+    try {
+      final f = File(
+          '${await CrashReports.baseDir()}/stop_stuck_goroutines.txt');
+      if (!await f.exists()) return null;
+      final text = await f.readAsString();
+      return text.length > _stopStuckLimit
+          ? '${text.substring(0, _stopStuckLimit)}\n…(truncated)'
+          : text;
+    } catch (_) {
+      return null;
+    }
+  }
 
   static Future<List<Map<String, Object?>>> _crashArchive() async {
     try {

@@ -47,6 +47,29 @@ is probed each interval. The other members' latencies age; a manual group test
 re-picks the fastest. On the first launch after the update, groups in Fastest
 become Hold until failure unless passive checking had been switched off.
 
+### How the pool is filled and checked
+
+The core keeps the Load balance pool by itself
+(`sing-box-lx/docs/configuration/outbound/urltest.md`, section `balancer`):
+
+- At start the first `pool` nodes go into the pool without a test: nodes with
+  a latency history first, fastest first, then in config order.
+- Pool tolerance `0`: each interval only pool members are tested. A node
+  outside the pool is tested only when a member fails, and only as many as
+  needed to refill the pool. A list of hundreds of nodes does not mean
+  hundreds of tests.
+- Pool tolerance `> 0`: each interval all members are tested; the pool holds
+  the fastest `pool` of them, and a member is replaced only when an outside
+  node beats it by more than the tolerance.
+- A manual group test (Run URLTest in the group menu) tests all members and
+  rebuilds the pool from the fresh results.
+
+Auto-ping after connect pings every node of the active Direction one by one
+to show latencies in the list. The group test it runs afterwards is run only
+for Fastest (`least_test`) groups ([677](../../../tasks/677-autoping-tail-skips-round-robin-groups.md)): for Load balance the
+first run after connecting does not test the whole list, and Hold until
+failure does not drop the held node because of auto-ping.
+
 ## Inputs / Outputs
 
 **Inputs:** nodes of the Direction / container; Xray `routing.balancers` and
@@ -104,3 +127,4 @@ live pool of the running core
 | 9 | [568](../../../tasks/568-source-replace-fold.md) | Implemented | "Replace with a group" for a folder and a subscription |
 | 10 | [611](../../../tasks/611-drop-passive-check-kernel-lx12.md) | Implemented | `passive_check` removed (core lx.12) |
 | 11 | [612](../../../tasks/612-contract-1-1-113-failover.md) | Implemented | Hold until failure (`failover`), migration from `passive_check` |
+| 12 | [677](../../../tasks/677-autoping-tail-skips-round-robin-groups.md) | Done | Auto ping on start forces a group test only for Fastest (`least_test`) |

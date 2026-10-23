@@ -1605,6 +1605,8 @@ BoxService (per instance, recreated with every new BoxVpnService)
 
 **Force-stop has two delivery channels** (§663): while the stop receiver is registered, `BoxVpnService.forceStop` sends the `ACTION_FORCE_STOP` broadcast; once it is gone (`doStop` unregisters it before the core teardown, as do `onRevoke`/`exit`), it calls `startService(ACTION_FORCE_STOP)`, and `onStartCommand` routes it to `doForceStop()` ahead of the foreground notification and the `status != Stopped` guard. Without the second channel a teardown stuck in Go left the service in `Stopping` for good.
 
+**Stop steps are traced and capped** (§668): `doStop` and `doForceStop` run each teardown step (`closeFileDescriptor`, `DefaultNetworkMonitor.stop`, `closeCommandServerAtomic`) through `StopTrace.step` — the call runs on its own daemon thread and the coroutine waits with `withTimeoutOrNull`, because `withTimeout` around a blocking JNI call caps nothing. Ceilings: 3 / 3 / 20 s for `doStop` (the last one at least 15 s, §287), 2 s each for `doForceStop`. Begin/done marks and a context snapshot (WG endpoint count, time since the last pause/wake/resetNetwork/reload, Doze) go to logcat and to the app log over the core-log channel; a step past 5 s logs `stuck at <step>` at WARN, takes `PProfClient.goroutineDump()` once and writes `filesDir/stop_stuck_goroutines.txt`, which the support pack carries as `stop_stuck_goroutines`. `doStop` runs on `forceStopScope`; after the steps it sets `Stopped` + `stopSelf()` only if the instance is not destroyed and still `Stopping`. An abandoned Go call keeps its thread and may still hold core locks or ports, the same risk as force-stop.
+
 ### Channel Contract
 
 The three Flutter–Android channels live in `VpnPlugin.kt`:

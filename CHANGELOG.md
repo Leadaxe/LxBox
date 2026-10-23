@@ -10,6 +10,282 @@
 
 ---
 
+## [2.25.17] — 2026-10-24
+
+### Added
+
+- **Fixed IP answer in a routing rule, like a hosts entry
+  ([task 683](docs/spec/tasks/683-rule-dns-and-resolve-section-fixed-ip.md)).**
+  In the rule editor, DNS & Resolve → Answer → Fixed IP answers the rule's
+  domains with the given IPv4/IPv6 addresses: the build writes a DNS rule
+  with the same match, `action: predefined`, `rcode: NOERROR` and
+  `*. 300 IN A|AAAA <ip>` records; when only one address family is given,
+  queries of the other type get an empty NOERROR answer. The field holds one
+  address; "+" turns it into a list, one address per line, and pasting
+  several lines does the same. A line that is not an IP address marks the
+  field with an error and blocks Save. The DNS tab shows such a rule in
+  "From routing rules" as `action: predefined · answer: …` with ✕. Stored as
+  `rule.dns.fixedIps` (written only when not empty; contract 1.1.139),
+  Debug API `dns.fixed_ips`. Rules without the key build as before. Not
+  verified on a device.
+  (RU: Ответ фиксированным IP у правила маршрутизации, как запись hosts:
+  DNS & Resolve → Answer → Fixed IP; сборка пишет DNS-правило `predefined`
+  с записями `*. 300 IN A|AAAA <ip>`; «+» делает поле списком по адресу на
+  строку; хранение `rule.dns.fixedIps`, Debug API `dns.fixed_ips`.)
+- **Duplicate for template and preset DNS servers
+  ([task 682](docs/spec/tasks/682-dns-catalog-revision-and-copy.md)).**
+  ⋮ → Duplicate in the server editor and Duplicate in the long-press menu of
+  the tile open a new custom server with the original's resolved body (vars
+  filled in, as in the JSON preview), tag `<tag>_copy` and description
+  `<description> (copy)`; nothing is written until Save. The editor of a
+  template or preset server now shows the Tag field: changing it turns Save
+  into "Save as copy", and the original stays in the list. The original keeps
+  its locks; groups, DNS Final and rules still point to it.
+  (RU: Duplicate у шаблонных и пресетных DNS-серверов — ⋮ редактора и
+  long-press тайла; копия — свой сервер с разрешённым телом оригинала;
+  смена Tag у шаблонного сервера даёт «Save as copy», оригинал остаётся.)
+- **Outbound and server address for OpenDNS UDP, OpenDNS DoH, Quad9 DoH and
+  Yandex DoT (task 682).** These four had a fixed body; now their editor has
+  an Outbound choice and an address choice (primary/secondary, IPv4/IPv6,
+  checked against the A/AAAA records of each server's TLS name).
+- **Warning when Default Domain Resolver goes through a tunnel (task 682).**
+  An orange ⚠ at the right of the Default Domain Resolver header when the
+  selected server has a non-direct Outbound, or when every emitted member of
+  the selected group has one. Tapping it opens "Resolver goes through a
+  tunnel": the resolver looks up server addresses before the tunnel is up, so
+  lookups can fail and the VPN may not connect. The choice and the build are
+  not changed. The ℹ next to DNS Final and Default Domain Resolver opens a
+  popup instead of a tooltip.
+  (RU: Оранжевый ⚠ у Default Domain Resolver, когда резолвер ходит через
+  Направление; тап — пояснение; выбор и сборка не меняются.)
+
+### Changed
+
+- **⚠ DNS server defaults: plain UDP through the tunnel, DoT and DoH direct
+  ([task 684](docs/spec/tasks/684-dns-defaults-plain-tunnel-encrypted-direct.md)).**
+  One rule for every template and preset DNS server. `google_udp`,
+  `cloudflare_udp`, `opendns_udp`: `direct-out` → `vpn-1`. `google_dot`,
+  `cloudflare_dot`, `quad9_doh`: `vpn-1` → `direct-out`. `google_doh`,
+  `opendns_doh`, `yandex_dot`, `safe_dns_dot` stay direct. Template servers
+  take their defaults from the template on every build, so the config changes
+  for everyone who left Outbound untouched; the Shield group (`dns_shield`,
+  six encrypted members) is now direct as a whole. `safe_dns_dot` resolves its
+  name through `google_doh` instead of `google_udp`. Descriptions no longer
+  name the path ("Google UDP", "OpenDNS UDP", "Quad9 DoH (anti-malware)",
+  "Yandex DoT"). The Ru internet segment preset has two new vars:
+  **UDP DNS outbound** (default `vpn-1`, for `yandex_udp`) and **Encrypted
+  DNS outbound** (default `direct-out`, for Yandex DoT and DoH); `yandex_udp`
+  no longer follows the preset's Outbound, `yandex_dot` is direct by default.
+  The hints of DNS Final and Default Domain Resolver recommend `google_doh` or
+  `cloudflare_dot` and say that UDP servers are fine for DNS Final but not for
+  Default Domain Resolver. The `local_dns_resolver` banner offers "Switch to
+  google_doh" instead of `cloudflare_udp`. Not verified on a device.
+  (RU: Дефолты Outbound DNS-серверов: UDP через `vpn-1`, DoT/DoH напрямую;
+  конфиг меняется у всех, кто Outbound не трогал; группа Shield целиком
+  прямая; у пресета Ru internet segment новые var UDP DNS outbound (`vpn-1`)
+  и Encrypted DNS outbound (`direct-out`); баннер `local_dns_resolver`
+  предлагает `google_doh`.)
+- **Rule editor: one "DNS & Resolve" section, the "Action & Resolve" sheet
+  and its ⚙ are gone (task 683).** Action at the top only chooses where the
+  traffic goes; **Resolve only** is now an item of the Action list (after
+  Reject, for rules with domains). The section at the bottom holds Answer
+  (Default — DNS Final / Dedicated server / Fixed IP), Force IPv4, **Resolve
+  before routing** (formerly Resolve first) with Strategy, and a collapsed
+  Advanced block with the former sheet's fields (DNS server for the lookup,
+  Disable cache, Disable optimistic cache, Rewrite TTL, Query timeout, Client
+  subnet), active when the rule resolves. The View tab shows the rule's DNS
+  rules. What is written for existing rules is unchanged.
+  (RU: Редактор правила: одна секция «DNS & Resolve», окно «Action & Resolve»
+  и ⚙ убраны, Resolve only — пункт списка Action.)
+- **Launcher contract 1.1.132 → 1.1.139.** DNS servers in LX Backup:
+  `dns.template_catalog` and one removal rule (1.1.134–1.1.136, tasks
+  680/681); the corpus case for the catalog (1.1.137); `rules[].dns.fixedIps`
+  for both sides (1.1.138–1.1.139) with a `rule_dns` corpus runner.
+
+- **DNS servers: the list is seeded once, template servers can be deleted,
+  new ones come from a catalog under (+)
+  ([task 680](docs/spec/tasks/680-dns-servers-catalog-seed-once.md)).**
+  The template's DNS servers are put into the list only on the first launch;
+  after that the app no longer re-adds them. A template server can now be
+  deleted (long-press → Delete on the DNS tab, or the trash icon in the
+  editor), a preset's server cannot. The (+) next to "DNS Servers" opens
+  "Add DNS server": "Custom server" plus the template's catalog with Add /
+  Added and ⋮ → "Add all defaults". Servers that a newer template brings now
+  appear in this catalog, not in the list. A server that the list itself
+  depends on — a group member, the DNS Final or Default Domain Resolver
+  choice, another server's name resolver — is locked with "used by …"
+  (several sources: two names and "+N"). The rule editor offers only servers
+  from the list. A full backup or a phone→TV transfer carries the list of
+  template servers as is: one deleted on the source is removed on the
+  receiver; older backups hold all of them and lose nothing. The file now
+  carries the source's template catalog (`dns.template_catalog`, contract
+  1.1.135), and one rule decides for any app: a template server is removed
+  only when the source knew it and deleted it, and nothing still refers to it
+  after the import (such a server stays, with a warning). A `final` or
+  default resolver from the file pointing at a server the receiver lacks is
+  reset to the template default, and an imported group with no known member
+  comes in turned off, both with a warning. Older files without the catalog:
+  removal only for an LxBox file, a launcher file is merged
+  ([task 681](docs/spec/tasks/681-dns-servers-uniform-backup-catalog.md)).
+  The build drops a
+  server's `domain_resolver` that points outside the list, with a warning.
+  Existing installs keep their list unchanged. Not verified on a device.
+  (RU: DNS-серверы: список засевается один раз, шаблонные можно удалять,
+  новые серверы шаблона появляются в каталоге по (+), а не в списке; сервер,
+  от которого зависит сам список, залочен подписью «used by …»; полный бэкап
+  переносит список шаблонных серверов как есть и каталог шаблона источника
+  (`dns.template_catalog`): одно правило для любого приложения — сервер
+  снимается, только если источник его знал и удалил и на него ничего не
+  ссылается после импорта; висячие `final`/default resolver сбрасываются на
+  умолчание шаблона, группа без известных членов приезжает выключенной;
+  старый файл без каталога — снятие только у файла LxBox.)
+
+- **Default traffic moved to the bottom of the Rules tab
+  ([task 676](docs/spec/tasks/676-route-final-on-rules-tab.md)).** The
+  `route.final` picker is where traffic goes when no rule matched, so it now
+  sits after the rule list and "Add rule", outside the drag list, labelled
+  "Default traffic (no rule matched)". The Directions tab no longer shows it.
+  The choices and what is written are unchanged.
+
+- **On Android TV the app fills the screen instead of a portrait column
+  ([task 679](docs/spec/tasks/679-tv-no-portrait-lock.md), issue #163).**
+  On a TV the orientation is never locked, whatever "Allow rotation" says,
+  and the toggle is hidden in App Settings → Appearance there. The stored
+  value is not changed, so a backup from a TV does not turn rotation on for a
+  phone. Phones and tablets keep portrait by default. Not verified on a
+  device.
+  (RU: На Android TV приложение занимает весь экран, а не портретную колонку:
+  ориентация не фиксируется, переключатель «Allow rotation» там скрыт,
+  сохранённое значение не меняется.)
+
+### Fixed
+
+- **Core `v1.14.3-lx.21` → `v1.14.3-lx.23`
+  ([docs/KERNEL.md](docs/KERNEL.md)).** Stopping the VPN with many
+  WireGuard/AmneziaWG/WARP endpoints is fast again: since an older core
+  release every endpoint waited for its own receive worker one after another,
+  which is the likely cause of the service staying in "Stopping"
+  ([task 668](docs/spec/tasks/668-stop-teardown-trace-and-timeouts.md)). Start
+  no longer waits 10–16 s for an unrelated mux handshake. A MASQUE node with
+  `vhttp: auto` no longer keeps the previous core instance in memory after
+  each Stop/Start or profile switch. A Load balance (`round_robin`) group no
+  longer sends new connections to a node that failed its last check while a
+  live node is available; a manual ping that fails also takes the node out of
+  the rotation until the next group check. A stop that hangs longer than
+  20 s now writes a goroutine dump to the core log. The Java surface is
+  identical to lx.21. Not verified on a device.
+  (RU: Ядро `v1.14.3-lx.21` → `v1.14.3-lx.23`. Остановка VPN с многими
+  WireGuard/AmneziaWG/WARP-узлами снова быстрая: в одной из прежних версий
+  ядра каждый endpoint по очереди ждал свой приёмный воркер — вероятная
+  причина зависания службы в «Stopping». Старт больше не ждёт 10–16 с чужой
+  mux-handshake. MASQUE-узел с `vhttp: auto` больше не держит в памяти
+  прошлый экземпляр ядра после каждого Stop/Start или смены профиля. Группа
+  Load balance (`round_robin`) больше не отправляет новые соединения узлу,
+  провалившему последнюю проверку, пока есть живой; неудачный ручной пинг
+  тоже выводит узел из ротации до следующей проверки группы. Остановка,
+  зависшая дольше 20 с, теперь пишет дамп горутин в лог ядра.
+  Java-поверхность идентична lx.21. На устройстве не проверено.)
+- **Auto-ping after connect no longer forces a group URLTest on Load balance
+  and Hold until failure groups
+  ([task 677](docs/spec/tasks/677-autoping-tail-skips-round-robin-groups.md),
+  issue #171).** After a mass ping the app forced a group URLTest on every
+  auto-select group; for Load balance that tested all members and rebuilt the
+  pool, though with pool tolerance 0 the core checks only the pool; for Hold
+  until failure it reselected the fastest node and dropped the held one with
+  no failure. The group test now runs only for Fastest groups. Latencies of all nodes in the list still come from the ping.
+  Run URLTest in the group menu and the reselection on a failed selected node
+  are unchanged. The balancing and ping docs now describe how the pool is
+  filled and checked. Not verified on a device.
+
+- **A renamed Direction is shown by its new title everywhere, not by the old
+  tag on some screens
+  ([task 672](docs/spec/tasks/672-direction-label-vs-tag-consistency.md),
+  issue #171).** The tag still does not change on rename. The notification
+  (`Germany: node`, `[final = Germany]`), a home row whose member is another
+  Direction, the Direction editor header, and the route line, Chain and
+  Detour rows in Statistics Connections and Live now show the title; the tag
+  stays next to it (subtitle, tag line, or `Germany (vpn-1)`). Chain
+  positions and Debug API keep the tag. Not verified on a device.
+
+- **Directions can be reordered on the Directions tab
+  ([task 673](docs/spec/tasks/673-directions-reorder-in-ui.md), issue #171).**
+  Each row has a drag handle, as in the rule list; `vpn-1` can be moved too.
+  A move cannot break "Other directions": while dragging, the rows a Direction
+  cannot pass are tinted red (the Direction that includes it and everything
+  below; the lowest Direction it includes and everything above), and a drop
+  there leaves the list as it was and shows why. Debug API follows the same
+  rule: `POST /directions/reorder` that would put a reference below its
+  Direction, and an `include` in `POST`/`PATCH /directions` naming a Direction
+  not above, itself or an unknown tag, now get 409 with the violated pairs
+  in `conflicts` instead of being saved. Not verified on a device.
+
+- **The Direction node filter preview works with the VPN off
+  ([task 674](docs/spec/tasks/674-direction-filter-preview-without-tunnel.md),
+  issue #171).** The editor and the node count on the Directions tab take the
+  candidate nodes from the config build instead of the running core, so they
+  match the Direction's members in the built config with the tunnel up or
+  down. "No node snapshot (connect to preview)" is gone; an empty result reads
+  "No nodes match". Not verified on a device.
+
+- **The JSON preview of a DNS group no longer lists disabled members
+  ([task 671](docs/spec/tasks/671-dns-group-json-preview-disabled-members.md)).**
+  The "sing-box server preview" of a group server (for example `dns_shield`)
+  drops disabled members the same way the config build does, and a line under
+  the preview names them: "Disabled, skipped at build: …". A disabled member
+  that a preset or a rule uses stays, as in the build. Stored settings do not
+  change. Not verified on a device.
+
+- **"Register detour in auto group" works again
+  ([task 670](docs/spec/tasks/670-register-detour-in-auto-group-dead-toggle.md)).**
+  Detour links get into a Direction's auto group only with this toggle on (and
+  "Register detour servers" on, which puts them into the Direction itself);
+  before, the auto group followed the first toggle alone. The caption now
+  names the Direction's auto group, the toggle is disabled while the first
+  one is off, and a folder shows both toggles only when one of its members is
+  a link of another member's chain.
+- **Auto node in a folder no longer disappears without a word
+  ([task 675](docs/spec/tasks/675-folder-auto-node-silent-drop-and-pool-gates.md)).**
+  An auto node with no members (empty folder, a rule with no matches, all
+  members off) is named in the build report, and the editor says it stays out
+  of the config; a folder replaced with an Auto group reports its auto nodes
+  as unreachable. The auto node's pool follows the same rules as Directions:
+  Tailscale without an exit node is never in it, chain links only with
+  "Register detour servers". Pool badges on the main screen find a group with
+  a unique-name suffix (`Auto-1`).
+- **Stopping the VPN no longer hangs on a stuck core call
+  ([task 668](docs/spec/tasks/668-stop-teardown-trace-and-timeouts.md)).**
+  Each stop step has a real time limit (the core shutdown step 20 s, the
+  others 3 s); when a step does not return, the service still reaches Stopped.
+  The forced stop's 2 s limits now actually apply. A step that hangs longer
+  than 5 s writes `stuck at <step>` to the app log together with a goroutine
+  dump, and the dump is included in the support pack
+  (`stop_stuck_goroutines`). Every stop leaves its steps with timings in the
+  app log. Not verified on a device.
+- **Test servers with the VPN off: Stop works and Start works again
+  ([task 669](docs/spec/tasks/669-probe-session-cancel-stop-timeout-race.md)).**
+  Stop aborts the measurements already sent to the core instead of waiting
+  for their timeout; while the test session closes the bar shows `Stopping…`
+  and the button is inactive. Closing the test session is capped at 3 s, so a
+  stuck close no longer blocks the next test or the VPN start. An old run can
+  no longer close the session of a new one or reset its indicator
+  (GitHub issue #171). Not verified on a device.
+- **Android TV: receiving settings from a phone with the remote
+  ([task 622](docs/spec/tasks/622-device-transfer-phone-to-tv.md)).** The
+  receive screen fits without scrolling: the QR code takes the remaining
+  height and the buttons stay on screen. In the import preview the arrows
+  move between choices and OK selects. After the preview the focus returns
+  to the transfer card on the Backup screen. Closing the receive server no
+  longer fails and the forced close after 2 s applies.
+- **Template formatter
+  ([task 678](docs/spec/tasks/678-format-wizard-template-new-dialect.md)).**
+  `app/scripts/format_wizard_template.py` accepts the current template
+  language (`#and`/`#or`/`#not`/`#value`/`#else`, the short `#if`, `#tpl`,
+  `#do`, `#filter`) and checks that the meaning is unchanged before writing;
+  `wizard_template.json` is reformatted (2367 → 760 lines), contents
+  unchanged.
+
+---
+
 ## [2.25.16] — 2026-10-19
 
 ### Added

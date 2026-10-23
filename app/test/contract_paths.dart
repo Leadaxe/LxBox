@@ -106,6 +106,7 @@ const kKnownCorpusGatedSuites = <String>[
   'test/contract/lx_backup_roundtrip_test.dart',
   'test/contract/node_edit_corpus_test.dart',
   'test/contract/registry_invariant_test.dart',
+  'test/contract/rule_dns_corpus_test.dart',
   'test/contract/template_contract_test.dart',
   'test/contract/template_node_loop_corpus_test.dart',
   'test/contract/template_load_reject_test.dart',

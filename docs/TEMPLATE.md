@@ -231,6 +231,16 @@ The default DNS configuration for a fresh install. It is stockpiled into the sto
 
 ### `dns_options.servers[i]` — a DNS server catalog entry (§117)
 
+**Catalog, seeded once (§680).** The section is a catalog, like
+`selectable_rules`: the template says what exists, the user's list says what
+is in use. Its servers are seeded into the storage `dns.servers` only while
+that key is absent (the first launch); after that the list belongs to the
+user — a deleted template server is not re-added, and servers that a newer
+template brings appear only in the catalog under (+) on the DNS tab
+("Add DNS server"). `enabled` of the wrapper is the state on seeding and on
+adding from the catalog. The body is still a reference: the record keeps the
+tag, `enabled` and `vars`, the body comes from the template on every build.
+
 The wrapper is `{description, enabled, vars?, server}`, where `server` is a sing-box body carrying
 `@var` placeholders, and `vars` holds the same definitions as preset vars (§033).
 The tag lives in `server.tag` (there is no top-level `tag` any more — see `templateDnsServerTag`).
@@ -239,10 +249,10 @@ The builder (`resolveTemplateDnsServerBody`) substitutes the vars with the user'
 
 ```jsonc
 {
-  "description": "Google DNS (direct)",
-  "enabled":     true,               // default-enabled for auto-discovery
+  "description": "Google UDP",
+  "enabled":     true,               // state on seeding / on adding from the catalog (§680)
   "vars": [                          // optional (local_dns_resolver has none)
-    {"name": "outbound", "type": "outbound", "default_value": "direct-out",
+    {"name": "outbound", "type": "outbound", "default_value": "vpn-1",
      "title": "Outbound", "tooltip": "Which direction carries DNS queries…"},
     {"name": "dns_ip", "type": "enum", "default_value": "8.8.8.8",
      "title": "UDP server IP", "options": [ {"title": "…", "value": "8.8.8.8"}, … ]}
@@ -261,8 +271,10 @@ The conventions (§117):
   written by default (`normalizeDnsDetour`: `direct-out`, an empty value and a direction
   unknown to the builder all erase the key; “no detour” is both the default and the fallback).
 - For domain-addressed servers (the address is a hostname): `domain_resolver: "@dom_resolver"` plus
-  the var `{type: dns_servers, default_value: "google_udp"}` decides what resolves the
+  the var `{type: dns_servers, default_value: "google_doh"}` decides what resolves the
   DNS server's own hostname.
+- §684 default directions: plain UDP servers go through the tunnel (`vpn-1`), encrypted
+  ones (DoT/DoH) go direct; the path is chosen by the `outbound` var, not written in the description.
 
 The seven default servers in the current template:
 
@@ -853,7 +865,7 @@ the base sniff/hijack-dns/resolve rules.
 |---|---|---|---|---|---|---|---|---|
 | `traffic-processing` | true | true | 0 | ✓ (sniff_enabled, sniff_timeout §264 enum 100ms/300ms/500ms/1s/3s, hijack_dns_enabled §264 bool with a WARNING tooltip, `{"ref":"resolve_enabled"}` + `{"ref":"resolve_strategy"}` §265 — both ref the `internal` section) | — | ✓ an array: `[sniff #if @sniff_enabled, hijack-dns, resolve strategy:@resolve_strategy #if @resolve_enabled]` | — | — |
 | `block-ads` | false | — | — | — | ✓ (remote ads-all) | ✓ (action: reject) | — | — |
-| `ru-direct` | true | — | — | ✓ (outbound, dns_enable §257, dns_server, dns_ip, geoip_enabled, force_ipv4) | ✓ (inline `.ru` suffixes) | ✓ an array: `[resolve ipv4_only #if @force_ipv4, @outbound]` (§246) | ✓ an array: `[predefined-NOERROR ip_version:6 #if @force_ipv4, → @dns_server]` (§253) | ✓ (yandex_udp/doh/dot) |
+| `ru-direct` | true | — | — | ✓ (outbound, dns_enable §257, dns_server, dns_ip, dns_plain_outbound + dns_encrypted_outbound §684, geoip_enabled, force_ipv4) | ✓ (inline `.ru` suffixes) | ✓ an array: `[resolve ipv4_only #if @force_ipv4, @outbound]` (§246) | ✓ an array: `[predefined-NOERROR ip_version:6 #if @force_ipv4, → @dns_server]` (§253) | ✓ (yandex_udp/doh/dot) |
 | `fakeip` | false | — | — | ✓ (rule_enable §266 pseudo + on_change, dns_enable §257 + on_change, dns_server — **hidden**) | — | — | ✓ (`query_type: [A,AAAA]` → `@dns_server`) | ✓ (type `fakeip`, ranges 198.18/15 + fc00::/18) |
 | `ru-inside` | (false) | — | — | ✓ (outbound, force_ipv4) | ✓ (remote ru-inside) | ✓ an array: `[resolve ipv4_only #if @force_ipv4, @outbound]` (§246) | — | — |
 | `bittorrent` | true | — | — | ✓ (outbound) | — | ✓ (`protocol: bittorrent` → `@outbound`) | — | — |
@@ -1156,9 +1168,11 @@ The legacy spellings without `#` (`and`, `or`, `value`, `else`, and `enabled: "@
 
 An example (the §119 inbounds, see `wizard_template.json`):
 ```jsonc
-{"#if": {"and": [{"@vpn_mode": {"#in": ["proxy", "vpn_proxy"]}}], "value": {
-  "type": "@proxy_type", "tag": "mixed-in", "listen_port": "@proxy_port",
-  "#if": {"and": ["@proxy_auth"], "value": {
+{"#if": {"#and": [{"@vpn_mode": {"#in": ["proxy", "vpn_proxy"]}}], "#value": {
+  "type": "@proxy_type",
+  "tag": "mixed-in",
+  "listen_port": "@proxy_port",
+  "#if": {"#and": ["@proxy_auth"], "#value": {
     "users": [{"username": "@proxy_user", "password": "@proxy_pass"}]
   }}
 }}}
@@ -1173,6 +1187,12 @@ of keys and the line breaks **do not affect** the loader or the builder — they
 The semantics (`#if`, the magic vars, the rule order) are mandatory; the formatting is not, but keep it
 uniform. Custom or imported templates may ignore this section.
 
+The layout is applied by `app/scripts/format_wizard_template.py`
+(`python3 -I app/scripts/format_wizard_template.py [path]`). It keeps the order of keys and array
+elements, re-parses its own output and refuses to write the file when the result differs from the
+input in any value or key order. A `#` construct it does not know is written on one line, with a
+warning naming the path to the node.
+
 ### The general principle
 
 **Compact** (one line) for literals and small metadata objects. **Expanded**
@@ -1184,10 +1204,13 @@ placeholder or a nested `#if` is expanded; pure literals may be squeezed.
 | Part of a var | Layout |
 |---|---|
 | The “header” — `name`, `type`, `wizard_ui`, `title`, `tooltip` | **Line 1** (together) |
-| `default_value` | **Its own line**, indented |
-| `options[]` | **Multiline** — one element per line (`{title,value}` or a bare string) |
+| `default_value` | **Starts a new line**, indented; the scalar keys after it stay on that line |
+| `options[]` | Bare strings — one line; `{title,value}` objects — one element per line |
+| `#on_change` | `"#on_change": {"#set": {` on its own line, one target var per line, closing `}}` |
 | A ref-var (§265) `{"ref": "<name>"}` | **One line** in full (it carries no metadata) |
-| A simple bool var with no options | **One line** in full |
+| A simple var with no options (only header keys and `default_value`) | **One line** in full |
+
+The keys keep the order they have in the file; the layout only decides where a line breaks.
 
 ```jsonc
 { "name": "resolve_strategy", "type": "enum", "wizard_ui": "edit", "title": "Resolve strategy", "tooltip": "IP version preference for DNS resolution",
@@ -1213,40 +1236,79 @@ defaults); `num` is always written — it is part of the axis layout.
 
 | Context | Rule |
 |---|---|
-| Fields holding an `@` placeholder | **one field per line** |
-| Literals (`type`, `tag`, `auto_route`, `server_port`) | may share one line |
-| Small structs of two or three literals (`direct-out`, hijack-dns) | **one line** |
-| Large objects (`dns_options.servers[]`, a preset's `dns_servers[]`) | **multiline** — one field per line |
-| `options` and `filters` **without** an `@` | **one line** |
+| An object whose values are scalars (literals or `@` placeholders) and flat lists | **one line**, whatever its length — e.g. a DNS server's `server` body, an outbound, a rule |
+| An object holding a nested object, an `#if`/`#do` construct or a list of objects | **multiline** — one field per line |
+| The wrapper of a `dns_options.servers[]` / `dns_servers[]` entry (`description`, `enabled`, `vars`, `server`) | **multiline** — one field per line; the `server` body inside follows the first row |
+| `options` and `filters` | **one line** per element |
 
 ### The `#if` construct (§120)
 
-| `value` / `else` | Layout |
+The canonical keys are `#and` / `#or` / `#not` / `#value` / `#else`; the legacy spellings without
+`#` are laid out the same way. The condition (`#and`, `#or`, `#not`, the first element of the
+short form) is always one line.
+
+| Form and branch | Layout |
 |---|---|
-| **A scalar** | `{"#if": {"and": [...], "value": "..."}}` — one line |
-| **An object** | the condition plus `"value": {` on line 1; the body below; closing with `}}}` |
+| `#value` / `#else` **a scalar** | `{"#if": {"#and": [...], "#value": "..."}}` — one line |
+| `#value` **an object** | the condition plus `"#value": {` on line 1; the body below, one field per line; closing with `}}}` |
+| `#value` and `#else` **objects** | `}, "#else": {` between the two bodies; closing with `}}}` |
+| Short form `#if: [cond, V, E]`, `V` **a scalar** | `{"#if": ["@flag", "..."]}` — one line |
+| Short form, `V` **an object** | `{"#if": [cond, {` on line 1; the body below; closing with `}]}` (with `E`: `}, E]}`) |
+| `#if` as a map-spread key (`"#if"`, `"#if <label>"`) | the same rules, written as a field of the parent object |
+
+A branch that is a single operator object (`{"#append": "@node"}`, `{"#tpl": "…"}`) counts as a
+scalar.
 
 ```jsonc
-{"#if": {"and": ["@force_ipv4"], "value": {
-  "rule_set": ["ru-domains", "ru-services"], "ip_version": 6,
-  "action": "predefined", "rcode": "NOERROR"
-}}}
+{"#if": {"#and": ["@force_ipv4"], "#value": {
+  "rule_set": ["ru-domains", "ru-services"],
+  "ip_version": 6,
+  "action": "predefined",
+  "rcode": "NOERROR"
+}}},
+{"#if": [{"@allow_lan_nodes": "#notEmpty"}, {
+  "inbound": "@allow_lan_nodes",
+  "ip_is_private": true,
+  "outbound": "@allowed_out"
+}]}
+```
+
+### `#tpl`, `#do`, `#filter`, node loops
+
+| Construct | Layout |
+|---|---|
+| `{"#tpl": "…"}` | always one line |
+| `#filter` | the predicate on one line |
+| `for_each_node` / `for_each_node_do` with only `#filter` | one line |
+| `#do` | one target var per line; each `{"#append": …}` or short `#if` on that line |
+
+```jsonc
+"for_each_node_do": {
+  "#filter": {"@node.body.type": {"#in": ["wireguard", "openvpn-client", "openconnect"]}},
+  "#do": {
+    "@all_nodes": {"#append": "@node"},
+    "@allow_lan_nodes": {"#if": ["@node.allow_lan", {"#append": "@node"}]}
+  }
+}
 ```
 
 ### A preset's rules (`rule`/`rules`, `dns_rule`/`dns_rules`)
 
 | Case | Layout |
 |---|---|
-| A single literal rule (no `#if`, no `@`) | **one line** |
+| A rule without `#if` | **one line** |
 | A rule under an `#if` with a scalar | one line |
-| A rule under an `#if` with an object `value` | multiline (condition → body → `}}}`) |
+| A rule under an `#if` with an object `#value` | multiline (condition → body → `}}}`) |
+| A rule holding a nested `#if` (a `logical` rule) | one field per line |
 | `rule_set[]`, inline or remote | line 1: the metadata (`tag`/`type`/`format`); line 2: `rules`/`url` |
 | Long inline suffix lists | one line when it fits; otherwise wrapped |
 
 ```jsonc
 "dns_rules": [
-  {"#if": {"and": ["@force_ipv4"], "value": {
-    "query_type": ["HTTPS", "SVCB"], "action": "predefined", "rcode": "NOERROR"
+  {"#if": {"#and": ["@force_ipv4"], "#value": {
+    "query_type": ["HTTPS", "SVCB"],
+    "action": "predefined",
+    "rcode": "NOERROR"
   }}},
   {"rule_set": ["ru-domains", "ru-services"], "server": "@dns_server", "action": "route"}
 ]
@@ -1262,8 +1324,11 @@ defaults); `num` is always written — it is part of the axis layout.
 | ref-var `{"ref":...}` | ✓ | — |
 | A preset's `ui` object | ✓ (when it fits) | the flags below |
 | An `@` field in a payload | — | ✓ (per field) |
-| `#if` plus an object `value` | the condition | the body |
+| `#if` plus an object `#value` | the condition | the body |
 | `#if` plus a scalar | ✓ | — |
+| Short `#if` plus an object `V` | the condition | the body |
+| `{"#tpl": …}` | ✓ | — |
+| `#do` | — | ✓ (per target var) |
 | A preset's literal rule | ✓ | — |
 
 > **A gotcha:** do NOT put comment keys (`"//": "..."`) into the `config` block — sing-box's

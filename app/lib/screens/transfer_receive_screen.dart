@@ -7,6 +7,7 @@
 // экран не гаснет (P8).
 
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_zxing/flutter_zxing.dart';
@@ -28,6 +29,20 @@ Future<BackupContents?> openTransferReceiveScreen(BuildContext context) =>
 
 class TransferReceiveScreen extends StatefulWidget {
   const TransferReceiveScreen({super.key});
+
+  /// Белое поле QR — тест раскладки ищет его по ключу.
+  @visibleForTesting
+  static const qrKey = ValueKey('transfer-receive-qr');
+
+  /// Подмены для теста раскладки: адреса, сервер на loopback и кодировщик QR
+  /// (zxing — нативная библиотека, в тестах её нет).
+  @visibleForTesting
+  static Future<List<String>> Function() addresses = localTransferAddresses;
+  @visibleForTesting
+  static Future<TransferReceiver> Function() openReceiver = TransferReceiver.open;
+  @visibleForTesting
+  static ({int side, List<bool> dark}) Function(String text) encodeQr =
+      _QrMatrix.zxing;
 
   @override
   State<TransferReceiveScreen> createState() => _TransferReceiveScreenState();
@@ -81,13 +96,13 @@ class _TransferReceiveScreenState extends State<TransferReceiveScreen> {
     });
 
     try {
-      final addresses = await localTransferAddresses();
+      final addresses = await TransferReceiveScreen.addresses();
       if (!mounted || gen != _generation) return;
       if (addresses.isEmpty) {
         setState(() => _phase = _Phase.noNetwork);
         return;
       }
-      final rx = await TransferReceiver.open();
+      final rx = await TransferReceiveScreen.openReceiver();
       if (!mounted || gen != _generation) {
         unawaited(rx.close());
         return;
@@ -97,7 +112,8 @@ class _TransferReceiveScreenState extends State<TransferReceiveScreen> {
       _rx = rx;
       setState(() {
         _addresses = addresses;
-        _qr = _QrMatrix.encode(code.encode());
+        final m = TransferReceiveScreen.encodeQr(code.encode());
+        _qr = _QrMatrix(m.side, m.dark);
         _deadline = DateTime.now().add(TransferReceiver.sessionTtl);
         _phase = _Phase.waiting;
       });
@@ -141,30 +157,73 @@ class _TransferReceiveScreenState extends State<TransferReceiveScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text(getLocalText.s("Receive settings"))),
+      // Экран целиком помещается в окно без прокрутки (P8): на TV при
+      // портретной фиксации окно — узкая колонка, и прокрутка уводила кнопки
+      // за край, а поле QR — под AppBar. Поэтому сторона QR считается от того,
+      // что осталось после подписей и кнопок; кнопки всегда на экране.
       body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, box) {
-            final wide = box.maxWidth > box.maxHeight;
-            final qrSide = (wide ? box.maxHeight : box.maxWidth) * 0.75;
-            final qr = _buildQr(qrSide.clamp(160.0, 420.0));
-            final info = _buildInfo(context);
-            return SingleChildScrollView(
-              padding: const EdgeInsets.all(24).withSafeBottom(context),
-              child: wide
-                  ? Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        qr,
-                        const SizedBox(width: 32),
-                        Expanded(child: info),
-                      ],
-                    )
-                  : Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [Center(child: qr), const SizedBox(height: 24), info],
+        child: Padding(
+          padding: const EdgeInsets.all(24).withSafeBottom(context),
+          child: LayoutBuilder(
+            builder: (context, box) {
+              final wide = box.maxWidth > box.maxHeight;
+              // Прежний размер — верхняя граница: в окне, где всё влезало,
+              // вид не меняется.
+              final cap = (((wide ? box.maxHeight : box.maxWidth) + 48) * 0.75)
+                  .clamp(160.0, 420.0);
+              final info = _buildInfo(context);
+              final actions = _buildActions(context);
+              if (wide) {
+                final side = math.min(
+                    cap, math.min(box.maxHeight, (box.maxWidth - 32) / 2));
+                return Align(
+                  alignment: Alignment.topLeft,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      _buildQr(side),
+                      const SizedBox(width: 32),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(child: SingleChildScrollView(child: info)),
+                            const SizedBox(height: 24),
+                            actions,
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Flexible(
+                    child: LayoutBuilder(
+                      builder: (context, area) => Align(
+                        alignment: Alignment.topCenter,
+                        heightFactor: 1,
+                        child: _buildQr(math.min(
+                            cap, math.min(area.maxWidth, area.maxHeight))),
+                      ),
                     ),
-            );
-          },
+                  ),
+                  const SizedBox(height: 24),
+                  // Подписи не отнимают у QR больше половины окна; длиннее —
+                  // прокручиваются сами, кнопки остаются на месте.
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxHeight: box.maxHeight / 2),
+                    child: SingleChildScrollView(child: info),
+                  ),
+                  const SizedBox(height: 24),
+                  Align(alignment: Alignment.centerLeft, child: actions),
+                ],
+              );
+            },
+          ),
         ),
       ),
     );
@@ -187,6 +246,7 @@ class _TransferReceiveScreenState extends State<TransferReceiveScreen> {
     }
     // Белое поле с тихой зоной: сканер телефона не читает код на тёмной теме.
     return Container(
+      key: TransferReceiveScreen.qrKey,
       width: side,
       height: side,
       padding: EdgeInsets.all(side * 0.06),
@@ -267,9 +327,14 @@ class _TransferReceiveScreenState extends State<TransferReceiveScreen> {
             style: theme.textTheme.titleMedium?.copyWith(color: cs.error)));
     }
 
-    lines.addAll([
-      const SizedBox(height: 24),
-      Wrap(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: lines,
+    );
+  }
+
+  Widget _buildActions(BuildContext context) => Wrap(
         spacing: 12,
         runSpacing: 8,
         children: [
@@ -284,15 +349,7 @@ class _TransferReceiveScreenState extends State<TransferReceiveScreen> {
             label: Text(getLocalText.s("New code")),
           ),
         ],
-      ),
-    ]);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: lines,
-    );
-  }
+      );
 }
 
 /// Матрица модулей QR: zxing кодирует с одним пикселем на модуль, рисуем сами
@@ -303,7 +360,7 @@ class _QrMatrix {
   final int side;
   final List<bool> dark;
 
-  static _QrMatrix encode(String text) {
+  static ({int side, List<bool> dark}) zxing(String text) {
     final r = zx.encodeBarcode(
       contents: text,
       params: EncodeParams(
@@ -320,7 +377,7 @@ class _QrMatrix {
     if (!r.isValid || data == null || w <= 0 || w != h) {
       throw StateError(r.error ?? 'QR encoding failed');
     }
-    return _QrMatrix(w, [for (final b in data) b < 128]);
+    return (side: w, dark: [for (final b in data) b < 128]);
   }
 }
 

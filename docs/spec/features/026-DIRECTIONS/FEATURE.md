@@ -226,7 +226,16 @@ core groups ─► home screen dropdown (P16) ─► SelectOutbound (P15) ─►
 ## Rules and guarantees
 
 - Directions are emitted and scoped in list order: "Other directions" may name only Directions
-  above; reordering is a Debug API operation and heals nothing.
+  above. This is a UX rule (owner decision 2026-10-23): the order shows who may include whom
+  and rules out cycles by construction; the core does not need it, it resolves outbound
+  dependencies itself.
+- The order is changed by drag on the Directions tab or by Debug API `POST /directions/reorder`
+  — one bulk write of the list, `vpn-1` movable too; reordering heals nothing. Neither path
+  breaks an existing reference: the tab tints the forbidden zones during a drag and ignores a
+  drop there with a notice, the Debug API answers 409 with the violated pairs; an `include`
+  in `POST`/`PATCH` naming a Direction not above gets the same 409
+  ([673](../../tasks/673-directions-reorder-in-ui.md)). A reference pointing down that comes
+  from an old backup is dropped by the build with a warning, and the config still builds.
 - Every heal is one storage write plus the in-memory mirror; a bulk replace of the list (tab,
   reorder) is the only heal-free path, by design.
 - The selection inside a selector is not stored by the app; the core's
@@ -244,9 +253,10 @@ core groups ─► home screen dropdown (P16) ─► SelectOutbound (P15) ─►
   [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.md); measurement —
   [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.md); the build pipeline and the pre-start check —
   [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.md).
-- No UI reordering of Directions, and it is not planned (owner decision 2026-09-29, audit [591](../../tasks/591-spec-kit-revision-audit.md)): the
-  order changes only through the Debug API (`POST /directions/reorder`). No per-node references
-  from a Direction (membership is a regex).
+- UI reordering of Directions exists since [673](../../tasks/673-directions-reorder-in-ui.md)
+  (issue #171; owner decision 2026-10-23 reverses the 2026-09-29 "not planned" of audit
+  [591](../../tasks/591-spec-kit-revision-audit.md)): the tab and the Debug API share one
+  write path and one rule. No per-node references from a Direction (membership is a regex).
 - The former discrepancies (`pool_tolerance` clamp 65535 vs the core's 15000, `interval` `5m` for
   a stored twin without the key, the row's node count ignoring "Exclude matching") are fixed
   in 604.
@@ -282,7 +292,10 @@ core groups ─► home screen dropdown (P16) ─► SelectOutbound (P15) ─►
   kind joins the same heal and the same notification.
 - **The twin tag `<tag>-auto` is derived, never stored;** the hyphen is part of the contract
   with the template's `magic_nodes` and with filters and sorting.
-- **The tab's node count is a preview from the running core's snapshot,** not from the build:
-  with the tunnel down it can only say "all nodes" or "filtered".
+- **The tab's node count and the editor's filter preview come from the build,** not from the
+  core: the same candidate pool the build filters into `<tag>`, read from storage, so they work
+  with the tunnel down
+  ([674](../../tasks/674-direction-filter-preview-without-tunnel.md)). While the pool is being
+  computed the row says "all nodes" or "filtered".
 - **`vpn-1` is a product decision hard-coded on purpose:** required, non-detour, the target of
   every heal; every load path passes through the one migration that insures it.

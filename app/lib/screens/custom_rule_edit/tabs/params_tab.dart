@@ -4,7 +4,7 @@ import '../../../models/custom_rule.dart';
 import '../../../widgets/outbound_picker.dart';
 import '../edit_controller.dart';
 import '../sections/apps_section.dart';
-import '../sections/dns_section.dart';
+import '../sections/dns_resolve_section.dart';
 import '../sections/inbound_section.dart';
 import '../sections/json_section.dart';
 import '../sections/match_section.dart';
@@ -71,51 +71,23 @@ class ParamsTab extends StatelessWidget {
         const SizedBox(height: 12),
         // §225 — у json-правила действие внутри тела, OutboundPicker скрыт.
         if (c.kind != CustomRuleKind.json) ...[
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                child: OutboundPicker(
-                  value: c.outbound,
-                  options: outboundOptions,
-                  onChanged: c.setOutbound,
-                  dense: false,
-                  label: 'Action',
-                ),
-              ),
-              // §247 — шестерёнка «Action & Resolve». Видна только когда
-              // правилу есть что резолвить (inline с доменами / srs).
-              if (c.resolveEligible) ...[
-                const SizedBox(width: 4),
-                IconButton(
-                  tooltip: getLocalText.s("Action & Resolve"),
-                  icon: Icon(
-                    Icons.settings_outlined,
-                    color: c.resolve != null
-                        ? theme.colorScheme.primary
-                        : theme.colorScheme.onSurfaceVariant,
-                  ),
-                  onPressed: actions.onOpenActionResolve,
-                ),
-              ],
-            ],
+          // §683 — Resolve only — пункт Action (⚙ и окно «Action & Resolve»
+          // сняты; настройки резолва — в секции DNS & Resolve).
+          OutboundPicker(
+            value: c.resolveOnly ? kResolveOnlyAction : c.outbound,
+            options: outboundOptions,
+            onChanged: (v) {
+              if (v == kResolveOnlyAction) {
+                c.setResolveOnly(true);
+              } else {
+                c.setResolveOnly(false);
+                c.setOutbound(v);
+              }
+            },
+            allowResolveOnly: c.resolveEligible,
+            dense: false,
+            label: 'Action',
           ),
-          // §247 — inline-статус текущего режима (виден без открытия окна).
-          if (c.resolve != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 6, left: 4),
-              child: Text(
-                c.resolve!.only
-                    ? getLocalText.s("✳ Resolve only%s", c.resolve!.strategy.isNotEmpty
-                            ? ' · ${c.resolve!.strategy}'
-                            : '')
-                    : getLocalText.s("✳ Resolve first%s", c.resolve!.strategy.isNotEmpty
-                            ? ' · ${c.resolve!.strategy}'
-                            : ''),
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.primary),
-              ),
-            ),
           const SizedBox(height: 16),
           const Divider(),
           AppsSection(
@@ -228,16 +200,8 @@ class ParamsTab extends StatelessWidget {
               choices: c.inboundChoices,
               onToggle: c.toggleInbound,
             ),
-          // §117 задача 3 — DNS follows the rule (только inline/srs).
-          DnsSection(
-            dns: c.dns,
-            serverTags: c.dnsServerTags,
-            gateBlocked: c.dnsGateBlocked,
-            isSrs: c.kind == CustomRuleKind.srs,
-            onEnabledChanged: c.setDnsEnabled,
-            onServerTagChanged: c.setDnsServerTag,
-            onForceIpv4Changed: c.setForceIpv4,
-          ),
+          // §117 задача 3 / §683 — DNS & Resolve (только inline/srs).
+          DnsResolveSection(controller: c),
         ],
         const SizedBox(height: 24),
         const Divider(),
@@ -267,7 +231,6 @@ class ParamsTabActions {
     required this.onOpenWifiPermissions,
     required this.onShowCloudMenu,
     required this.onBoolVarFailed,
-    required this.onOpenActionResolve,
     this.wifiHint,
   });
 
@@ -283,9 +246,6 @@ class ParamsTabActions {
   /// порядке); экран проверяет один раз при открытии и после возврата.
   final WifiHint? wifiHint;
   final void Function(Offset globalPos) onShowCloudMenu;
-
-  /// §247 — открыть окно «Action & Resolve» (⚙ у Action-пикера).
-  final VoidCallback onOpenActionResolve;
 
   /// Bool-var toggle закончился ошибкой — caller показывает snackbar.
   /// Параметр — display-имя var'а ("title or name") для текста сообщения.

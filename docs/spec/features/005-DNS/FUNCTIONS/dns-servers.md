@@ -50,10 +50,14 @@ active Directions, Tailscale nodes, references from routing rules.
 
 ## Rules and invariants
 
-- Completion: a new template server appears with the template's `enabled`, a
-  new preset server — enabled; a record whose template or preset vanished is
-  deleted; custom ones — never. The user's order is kept; on screen —
-  template servers, then preset, then custom.
+- Completion: template servers are seeded once, on the first launch (while
+  the storage has no `dns.servers` key), with the template's `enabled`; after
+  that the list belongs to the user and new template servers show up only in
+  the catalog under (+) ("Add DNS server": "Custom server", the template
+  catalog with Add / Added, ⋮ "Add all defaults"). A new preset server appears
+  enabled; a record whose template or preset vanished is deleted; custom
+  ones — never. The user's order is kept; on screen — template servers, then
+  preset, then custom.
 - Variables: the user's value (after trimming whitespace) →
   `default_value` → the key is dropped. A name declared neither by the server
   nor by the template — the key is dropped with a warning. An address-type
@@ -69,6 +73,15 @@ active Directions, Tailscale nodes, references from routing rules.
 - A server referenced by an active preset or by a routing rule with a DNS
   option is emitted regardless of the toggle; in the UI — a "used by …" lock,
   no deletion (P3). A disabled preset gives no servers (P4).
+- References from the list itself lock as well: a member of a group in the
+  list, the DNS Final and Default Domain Resolver values, the
+  `domain_resolver` of another server in the list. Several sources — the
+  first two and "+N". Such a server cannot be disabled or deleted while the
+  reference is there.
+- Deletion: custom and template servers (an override goes away whole) —
+  from the editor or by long-press → Delete, if not locked; a preset server —
+  never. A template server comes back from the catalog. A `domain_resolver`
+  that points outside the list is dropped from the build with a warning.
 - Saving: empty tag, invalid JSON, empty address (except group and
   `tailscale`), `tailscale` without a node — snackbar, no save. Renaming to an
   occupied tag — forbidden; a new server with an occupied tag — a "Replace?"
@@ -114,3 +127,4 @@ active Directions, Tailscale nodes, references from routing rules.
 | 18 | [555](../../../tasks/555-template-lang-spec143-parity.md) | Done | Template server bodies see template variables; without an address — dropped |
 | 19 | [578](../../../tasks/578-tailscale-preset-template-for-each.md) | Spec | Preset servers per node (`for_each`) without the preset namespace |
 | 20 | [655](../../../tasks/655-dns-tab-in-routing.md) | Implemented | The DNS Settings screen became the DNS tab of Routing |
+| 21 | [680](../../../tasks/680-dns-servers-catalog-seed-once.md) | Done | Seeded once, template servers deletable, catalog under (+), locks by list references |

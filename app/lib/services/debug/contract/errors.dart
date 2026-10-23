@@ -72,7 +72,18 @@ class NotFound extends DebugError {
 /// 409 — pre-condition не выполнен (VPN не поднят, controller не готов,
 /// config пустой и т.п.). Юзер может повторить когда state подходит.
 class Conflict extends DebugError {
-  const Conflict(super.message) : super(status: 409, code: 'conflict');
+  const Conflict(super.message, {this.conflicts})
+      : super(status: 409, code: 'conflict');
+
+  /// §673 — нарушенные пары (например, `include` Направлений «вниз»), если
+  /// есть; кладутся рядом с `error`, как `dropped` у [BadRequest].
+  final List<Map<String, Object?>>? conflicts;
+
+  @override
+  Map<String, Object?> toJson() => {
+        ...super.toJson(),
+        if (conflicts != null) 'conflicts': conflicts,
+      };
 }
 
 /// 413 — тело запроса превысило `maxBodyBytes`.

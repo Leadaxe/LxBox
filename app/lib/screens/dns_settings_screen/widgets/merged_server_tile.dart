@@ -23,6 +23,7 @@ class MergedServerTile extends StatelessWidget {
     required this.entry,
     required this.onToggleEnabled,
     required this.onTap,
+    this.onLongPressStart,
     this.liveGroup,
   });
 
@@ -31,6 +32,9 @@ class MergedServerTile extends StatelessWidget {
 
   /// Тап по тайлу — открыть редактор сервера.
   final void Function(String tag) onTap;
+
+  /// §680 — long-press: контекстное меню (Delete) в точке нажатия.
+  final void Function(String tag, Offset globalPosition)? onLongPressStart;
 
   /// §312 — live-состояние DNS-группы от ядра (SPEC 035); null = туннель
   /// down / ядро без метода / сервер не группа. Рисуется доп. строкой.
@@ -42,6 +46,10 @@ class MergedServerTile extends StatelessWidget {
     final addr = entry.body['server']?.toString() ?? '';
     final theme = Theme.of(context);
     final locked = entry.locked;
+    // §117: force-include сборки → показываем ON. §680: лок ссылкой из
+    // списка держит включённый сервер включённым; выключенный (состояние
+    // до §680) остаётся выключенным, но включить его можно.
+    final switchOn = entry.enabled || entry.forceIncluded;
 
     // Короткие labels (§044).
     final (String badgeText, Color badgeColor) = switch (entry.kind) {
@@ -71,15 +79,32 @@ class MergedServerTile extends StatelessWidget {
         '${entry.tag} · $type$groupInfo${addr.isNotEmpty ? ' · $addr' : ''}'
         '${entry.presetLabel != null && entry.presetLabel!.isNotEmpty ? ' · ${entry.presetLabel}' : ''}';
 
-    return Card(
+    final longPress = onLongPressStart;
+    return GestureDetector(
+      onLongPressStart: longPress == null
+          ? null
+          : (d) => longPress(entry.tag, d.globalPosition),
+      child: Card(
       child: ListTile(
         onTap: () => onTap(entry.tag),
         leading: SizedBox(
           width: 40,
           child: Switch(
             // §117: locked-сервер build force-include'ит — показываем ON.
-            value: entry.enabled || locked,
-            onChanged: locked ? null : (v) => onToggleEnabled(entry.tag, v),
+            value: switchOn,
+            // §680: залоченный включённый — активный и ON (disabled Material
+            // рисует серым, строка читалась как выключенная); тап объясняет
+            // лок вместо переключения.
+            onChanged: locked && switchOn
+                ? (_) => ScaffoldMessenger.of(context)
+                  ..hideCurrentSnackBar()
+                  ..showSnackBar(SnackBar(
+                    content: Text(getLocalText.s(
+                      "Locked: used by %s. Remove the reference first.",
+                      entry.lockedByLabel,
+                    )),
+                  ))
+                : (v) => onToggleEnabled(entry.tag, v),
           ),
         ),
         title: Text(
@@ -87,7 +112,7 @@ class MergedServerTile extends StatelessWidget {
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w500,
-            color: entry.enabled || locked
+            color: switchOn
                 ? null
                 : theme.colorScheme.onSurfaceVariant,
           ),
@@ -112,11 +137,15 @@ class MergedServerTile extends StatelessWidget {
                     color: theme.colorScheme.primary,
                   ),
                   const SizedBox(width: 4),
-                  Text(
-                    getLocalText.s("used by %s", entry.lockedByLabel),
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: theme.colorScheme.primary,
+                  // §680 — источников может быть несколько: длинная подпись
+                  // переносится, а не переполняет строку.
+                  Flexible(
+                    child: Text(
+                      getLocalText.s("used by %s", entry.lockedByLabel),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: theme.colorScheme.primary,
+                      ),
                     ),
                   ),
                 ],
@@ -126,6 +155,7 @@ class MergedServerTile extends StatelessWidget {
           ],
         ),
         trailing: DnsBadge(badgeText, badgeColor),
+      ),
       ),
     );
   }

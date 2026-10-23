@@ -14,6 +14,7 @@ import '../services/lx_backup_import.dart';
 import '../services/record_vars.dart';
 import '../services/warp/warp_backup.dart';
 import '../services/settings_storage.dart';
+import '../services/template_loader.dart';
 import '../services/error_format.dart';
 import '../services/l10n/locale_controller.dart';
 import '../services/ui_helpers.dart';
@@ -42,6 +43,11 @@ import '../widgets/safe_bottom.dart';
 class BackupScreen extends StatefulWidget {
   const BackupScreen({super.key});
 
+  /// §622 — экран приёма; тест подменяет, чтобы не поднимать сервер и QR.
+  @visibleForTesting
+  static Future<BackupContents?> Function(BuildContext context) openReceive =
+      openTransferReceiveScreen;
+
   @override
   State<BackupScreen> createState() => _BackupScreenState();
 }
@@ -62,12 +68,21 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
   /// с камерой (P10). До ответа платформы не показываем ни один.
   TransferEntries _transfer = TransferEntries.none;
 
+  /// Кнопка «Show code»: после восстановления фокус пульта возвращается сюда.
+  final _receiveFocus = FocusNode(debugLabel: 'transfer-receive');
+
   @override
   void initState() {
     super.initState();
     unawaited(loadTransferEntries().then((e) {
       if (mounted) setState(() => _transfer = e);
     }));
+  }
+
+  @override
+  void dispose() {
+    _receiveFocus.dispose();
+    super.dispose();
   }
 
   @override
@@ -78,7 +93,11 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
         padding: const EdgeInsets.symmetric(vertical: 8).withSafeBottom(context),
         children: [
           if (_transfer.receive) ...[
-            DeviceTransferCard.receive(busy: _busy, onReceive: _onReceive),
+            DeviceTransferCard.receive(
+              busy: _busy,
+              onReceive: _onReceive,
+              focusNode: _receiveFocus,
+            ),
             const SizedBox(height: 8),
           ],
           ExportCard(
@@ -259,17 +278,33 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
 
   /// TV: экран приёма, затем общий путь восстановления (фича 031 P4).
   Future<void> _onReceive() async {
-    final contents = await openTransferReceiveScreen(context);
+    final contents = await BackupScreen.openReceive(context);
     if (contents == null || !mounted) return;
     setState(() => _busy = true);
+    // Погашенная busy кнопка отдаёт фокус своему экрану. В одном кадре с
+    // открытием предпросмотра это перебивает запрос фокуса диалога, и пульт
+    // ходит по экрану под ним — поэтому сначала кадр с погашенной кнопкой.
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
     try {
       await restoreFromContents(context, contents);
     } catch (e) {
       if (!mounted) return;
       showSnack(getLocalText.s("Import failed: %s", formatUserError(e).render()));
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        setState(() => _busy = false);
+        WidgetsBinding.instance.addPostFrameCallback((_) => _refocusReceive());
+      }
     }
+  }
+
+  /// Фокус обратно на карточку — безусловно: погашенная на время
+  /// восстановления кнопка отдала его последнему фокусу экрана из истории
+  /// (обычно «Back» тулбара, откуда пульт пришёл на карточку).
+  void _refocusReceive() {
+    if (!mounted || _receiveFocus.context == null) return;
+    _receiveFocus.requestFocus();
   }
 
   /// Телефон: скан кода с TV → подтверждение → шифрование → отправка.
@@ -387,6 +422,9 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
         defaultDomainResolver: vars['dns_default_domain_resolver'] ?? '',
         warnings: exportWarnings,
         recordVars: recordVars,
+        // §681 (контракт 1.1.135, D-139) — каталог шаблона этой стороны:
+        // приёмник по нему отличает «удалён» от «не знал».
+        templateCatalog: await _templateDnsCatalogOrNull(),
       );
       // §393 B8 — регистрации WARP в каноне схемы (`type: wg|masque`).
       final warpAccount = await SettingsStorage.getWarpAccount();
@@ -578,5 +616,16 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
         ],
       ),
     );
+  }
+}
+
+/// §681 — каталог DNS-серверов шаблона для `dns.template_catalog`; `null` —
+/// шаблон не загрузился, поле не пишется (приёмник уйдёт в переходную ветку).
+Future<List<String>?> _templateDnsCatalogOrNull() async {
+  try {
+    final template = await TemplateLoader.load();
+    return [for (final s in template.dnsOptionsModel.servers) s.tag];
+  } catch (_) {
+    return null;
   }
 }

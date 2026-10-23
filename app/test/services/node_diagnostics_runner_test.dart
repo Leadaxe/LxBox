@@ -42,7 +42,11 @@ void main() {
         case 'getVpnStatus':
           return vpnStatus;
         case 'probeStart':
-          return probeStartError;
+          // §669 — {error, runId}; runId 0 при ошибке старта.
+          return {
+            'error': probeStartError,
+            'runId': probeStartError.isEmpty ? 7 : 0,
+          };
         case 'probeStop':
           return null;
         case 'probeGetUrl':
@@ -72,6 +76,11 @@ void main() {
       final methods = calls.map((c) => c.method).toList();
       expect(methods, containsAllInOrder(
           ['probeStart', 'probeGetUrl', 'probeStop']));
+      // §669 — GET и остановка адресуют свою сессию runId из probeStart.
+      for (final m in ['probeGetUrl', 'probeStop']) {
+        final c = calls.firstWhere((c) => c.method == m);
+        expect((c.arguments as Map)['runId'], 7, reason: m);
+      }
       // Боевой клиент в этой ветке не трогаем вовсе.
       expect(methods, isNot(contains('ccGetUrlViaOutbound')));
     });

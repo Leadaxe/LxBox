@@ -2,6 +2,10 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/services/builder/post_steps.dart'
+    show resolveTemplateDnsServerBody;
+import 'package:lxbox/services/builder/preset_expand.dart'
+    show normalizeDnsDetour;
 
 /// §517 часть G — страж состава группы `dns_shield` в боевом шаблоне.
 ///
@@ -23,12 +27,15 @@ void main() {
       ) as Map<String, dynamic>;
 
   /// Записи `dns_options.servers[].server` — база, всегда в сборке.
+  /// §682 — тело с подставленными дефолтами vars (как в сборке).
   Map<String, Map<String, dynamic>> baseServersByTag(Map<String, dynamic> tpl) {
     final out = <String, Map<String, dynamic>>{};
     for (final e in (tpl['dns_options'] as Map)['servers'] as List) {
       final s = (e as Map)['server'];
       if (s is Map && s['tag'] is String) {
-        out[s['tag'] as String] = s.cast<String, dynamic>();
+        final body = resolveTemplateDnsServerBody(e.cast<String, dynamic>())!;
+        normalizeDnsDetour(body);
+        out[s['tag'] as String] = body;
       }
     }
     return out;
@@ -157,11 +164,14 @@ void main() {
         reason: 'detour у члена «щита» вернёт зависимость от туннеля');
   });
 
-  test('quad9_doh сохраняет detour vpn-1 (§517: намеренно не трогаем)', () {
-    // Единственный член группы с детуром. При mode=fastest это значит, что
-    // члены идут разными путями и состав победителей зависит от того, поднят
-    // ли vpn-1. Решение «ставить детур всем или никому» — за владельцем,
-    // в §517 сознательно вне объёма; страж фиксирует текущее состояние.
-    expect(baseServersByTag(template())['quad9_doh']!['detour'], 'vpn-1');
+  test('§684 все члены dns_shield по умолчанию идут напрямую', () {
+    // Шифрованные серверы каталога по умолчанию без detour (решение
+    // владельца §684; бывшее исключение quad9_doh через vpn-1 снято).
+    final base = baseServersByTag(template());
+    final members = (base['dns_shield']!['servers'] as List).cast<String>();
+    for (final tag in members) {
+      expect(base[tag]!.containsKey('detour'), isFalse,
+          reason: '$tag: detour у члена «щита» вернёт зависимость от туннеля');
+    }
   });
 }

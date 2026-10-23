@@ -45,8 +45,10 @@ The feature protects three principles:
   theme is read only at startup.
 - **P2. Portrait by default, rotation by consent.** Without "Allow rotation" the
   interface is locked to portrait; turning it on immediately hands the
-  orientation to the system auto-rotate (and its lock). **Witness:** manual check
-  on a tablet. **Mutation:** rotation allowed by default.
+  orientation to the system auto-rotate (and its lock). Exception: on a TV the
+  orientation is never locked and the toggle is not shown; the stored value is
+  kept as is (679). **Witness:** manual check on a tablet. **Mutation:**
+  rotation allowed by default.
 - **P3. Two columns of the node list — from 600 dp and only with the toggle
   on.** Manual sort is always single-column. **Witness:** units "599 dp — one
   column", "600 dp — two columns (non-strict threshold)", "§541 toggle off — one

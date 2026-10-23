@@ -18,7 +18,7 @@ Future<void> _pump(WidgetTester tester, DirectionAuto auto) async {
     home: DirectionEditScreen(
       initial: Direction(tag: 'vpn-2', label: 'X', auto: auto),
       canDelete: true,
-      allNodeTags: const [],
+      nodePool: Future.value(const []),
     ),
   ));
   await tester.pumpAndSettle();

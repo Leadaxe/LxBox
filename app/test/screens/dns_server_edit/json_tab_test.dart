@@ -100,4 +100,59 @@ void main() {
     expect(texts.first, contains('"ref": "ru-direct:dns_ru"'));
     expect(texts.last, contains('"server": "77.88.8.8"'));
   });
+
+  // §671 — превью шаблонной группы снимает выключенных членов, как сборка.
+  DnsServerEditController shield(List<DnsMemberOption> options) =>
+      DnsServerEditController(
+        initialRef: const DnsServerTemplate(enabled: true, tag: 'dns_shield'),
+        resolved: const ResolvedServer(
+          kind: ServerKind.template,
+          tag: 'dns_shield',
+          description: 'Shield',
+          enabled: true,
+          body: {},
+        ),
+        templateWrapper: const {
+          'description': 'Shield',
+          'server': {
+            'type': 'group',
+            'mode': 'fastest',
+            'servers': ['m1', 'm2', 'm3', 'm4', 'm5', 'm6'],
+          },
+        },
+        canonicalDescription: 'Shield',
+        dnsMemberOptions: options,
+      );
+  List<DnsMemberOption> opts({String? off}) => [
+        for (var i = 1; i <= 6; i++)
+          DnsMemberOption(tag: 'm$i', type: 'https', enabled: 'm$i' != off),
+      ];
+
+  testWidgets('§671 группа: выключенный член снят + строка skipped',
+      (tester) async {
+    final c = shield(opts(off: 'm3'));
+    addTearDown(c.dispose);
+    await tester.pumpWidget(host(c));
+    expect(tester.takeException(), isNull);
+    final preview =
+        tester.widgetList<LxJsonView>(find.byType(LxJsonView)).last.text;
+    expect(preview, isNot(contains('"m3"')));
+    for (final t in ['m1', 'm2', 'm4', 'm5', 'm6']) {
+      expect(preview, contains('"$t"'));
+    }
+    expect(find.text('Disabled, skipped at build: m3'), findsOneWidget);
+  });
+
+  testWidgets('§671 группа: все включены — 6 членов, строки нет',
+      (tester) async {
+    final c = shield(opts());
+    addTearDown(c.dispose);
+    await tester.pumpWidget(host(c));
+    final preview =
+        tester.widgetList<LxJsonView>(find.byType(LxJsonView)).last.text;
+    for (var i = 1; i <= 6; i++) {
+      expect(preview, contains('"m$i"'));
+    }
+    expect(find.textContaining('skipped at build'), findsNothing);
+  });
 }

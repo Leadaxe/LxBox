@@ -82,6 +82,7 @@ class DnsMirrorEntry {
     this.ruleName = '',
     this.serverTag = '',
     this.serverless = false,
+    this.fixedAnswer = false,
     required this.body,
   });
 
@@ -95,7 +96,57 @@ class DnsMirrorEntry {
   /// в `dns.servers`. Для rule-источника (у preset-источника serverless-тела
   /// эмитятся по ветке `presetId != null`, §253).
   final bool serverless;
+
+  /// §683 — serverless-тело ответа фиксированным IP (Answer = Fixed IP),
+  /// а не AAAA-глушилка Force IPv4. Нужен UI вкладки DNS, чтобы различать
+  /// два вида serverless-mirror'ов правила.
+  final bool fixedAnswer;
   final Map<String, dynamic> body;
+}
+
+/// §683 — TTL записей ответа Fixed IP.
+const int kFixedIpAnswerTtl = 300;
+
+/// §683 — DNS-mirror'ы Answer = Fixed IP: по одному на тип запроса (A и
+/// AAAA), `predefined` + `NOERROR`. Есть адреса семейства — `answer` с
+/// записями `*. 300 IN A|AAAA <ip>` (ядро подставляет имя запроса вместо
+/// `*`, `rewriteRecords`); нет — пустой ответ, приложение берёт другое
+/// семейство. Остальные типы запросов правило не трогает. Неразбираемые
+/// адреса пропускаются (UI их не сохраняет); ни одного годного — ничего.
+List<DnsMirrorEntry> fixedIpMirrors(
+  CustomRule cr,
+  Map<String, dynamic> Function() match,
+) {
+  final v4 = <String>[];
+  final v6 = <String>[];
+  for (final ip in cr.dns?.fixedIps ?? const <String>[]) {
+    switch (RuleDns.ipRecordType(ip)) {
+      case 'A':
+        v4.add(ip.trim());
+      case 'AAAA':
+        v6.add(ip.trim());
+    }
+  }
+  if (v4.isEmpty && v6.isEmpty) return const [];
+  return [
+    for (final (type, ips) in [('A', v4), ('AAAA', v6)])
+      DnsMirrorEntry(
+        ruleId: cr.id,
+        ruleName: cr.name,
+        serverless: true,
+        fixedAnswer: true,
+        body: match()
+          ..['query_type'] = [type]
+          ..['action'] = 'predefined'
+          ..['rcode'] = 'NOERROR'
+          ..addAll({
+            if (ips.isNotEmpty)
+              'answer': [
+                for (final ip in ips) '*. $kFixedIpAnswerTtl IN $type $ip',
+              ],
+          }),
+      ),
+  ];
 }
 
 /// §257 — магическая var `dns_enable`: единственный тумблер DNS-блока
@@ -302,6 +353,8 @@ List<String> applyCustomRules(
   List<CustomRule> rules, {
   Map<String, String> srsPaths = const {},
   bool skipDisabled = true,
+  // §683 — превью редактора: собрать и DNS-mirror'ы правила.
+  List<DnsMirrorEntry>? dnsMirrors,
 }) {
   // §062: shim вокруг `_applyInlineSingle` / `_applySrsSingle`. Обходит
   // ТОЛЬКО inline/srs (фильтруя preset). Сохраняет старый publi API +
@@ -315,9 +368,11 @@ List<String> applyCustomRules(
         // Preset-правила обрабатывает applyPresetBundles (spec §033).
         continue;
       case CustomRuleSrs():
-        warnings.addAll(_applySrsSingle(cr, registry, srsPaths));
+        warnings.addAll(_applySrsSingle(cr, registry, srsPaths,
+            dnsMirrors: dnsMirrors));
       case CustomRuleInline():
-        warnings.addAll(_applyInlineSingle(cr, registry));
+        warnings.addAll(
+            _applyInlineSingle(cr, registry, dnsMirrors: dnsMirrors));
       case CustomRuleJson():
         warnings.addAll(_applyJsonSingle(cr, registry));
     }
@@ -401,7 +456,8 @@ List<String> _applySrsSingle(
       wifiBssids: cr.wifiBssids,
     ));
   }
-  if (dnsMirrors != null && (cr.dnsMirrorActive || cr.forceIpv4Active)) {
+  if (dnsMirrors != null &&
+      (cr.dnsMirrorActive || cr.forceIpv4Active || cr.dnsFixedActive)) {
     // DNS-безопасные AND-поля правила (srs: rule_set + package/wifi/source/
     // inbound — ports/protocols отрезаны гейтом). Общие для обоих mirror'ов.
     Map<String, dynamic> srsMatch() {
@@ -436,6 +492,8 @@ List<String> _applySrsSingle(
         body: srsMatch(),
       ));
     }
+    // §683 — Answer = Fixed IP на месте server-mirror'а (режимы взаимоисключающие).
+    if (cr.dnsFixedActive) dnsMirrors.addAll(fixedIpMirrors(cr, srsMatch));
   }
   return warnings;
 }
@@ -489,6 +547,13 @@ List<String> _applyInlineSingle(
   }
 
   void addDnsMirror(String ruleSetTag) {
+    // §683 — Answer = Fixed IP на месте server-mirror'а. Пустой матч — не
+    // эмитим (иначе ответ подменялся бы для всех доменов).
+    if (dnsMirrors != null && cr.dnsFixedActive) {
+      if (mirrorBody(ruleSetTag).isEmpty) return;
+      dnsMirrors.addAll(fixedIpMirrors(cr, () => mirrorBody(ruleSetTag)));
+      return;
+    }
     if (dnsMirrors == null || !cr.dnsMirrorActive) return;
     final mirror = mirrorBody(ruleSetTag);
     // Пустой матч (только ip_is_private/source_ip_is_private) — DNS-rule

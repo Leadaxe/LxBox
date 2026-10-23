@@ -38,8 +38,7 @@
         "type": "tls",
         "tag": "google_dot",
         "server_port": 853,
-        "server": "8.8.8.8",
-        "detour": "vpn-1"
+        "server": "8.8.8.8"
       },
       {
         "type": "https",
@@ -57,14 +56,14 @@
         "type": "tls",
         "tag": "cloudflare_dot",
         "server_port": 853,
-        "server": "1.1.1.1",
-        "detour": "vpn-1"
+        "server": "1.1.1.1"
       },
       {
         "type": "udp",
         "tag": "opendns_udp",
         "server_port": 53,
-        "server": "208.67.222.222"
+        "server": "208.67.222.222",
+        "detour": "vpn-1"
       },
       {
         "type": "https",
@@ -75,8 +74,7 @@
         "tls": {
           "enabled": true,
           "server_name": "dns.quad9.net"
-        },
-        "detour": "vpn-1"
+        }
       },
       {
         "type": "group",
@@ -85,9 +83,7 @@
           "google_doh",
           "google_dot",
           "cloudflare_dot",
-          "opendns_doh",
-          "quad9_doh",
-          "yandex_dot"
+          "quad9_doh"
         ],
         "mode": "fastest",
         "error_ttl": "5m",
@@ -109,7 +105,8 @@
         "type": "udp",
         "tag": "ru-direct:yandex_udp",
         "server": "77.88.8.1",
-        "server_port": 53
+        "server_port": 53,
+        "detour": "vpn-1"
       },
       {
         "type": "tls",
@@ -119,8 +116,7 @@
         "tls": {
           "enabled": true,
           "server_name": "safe.dot.dns.yandex.net"
-        },
-        "detour": "vpn-1"
+        }
       },
       {
         "type": "https",
@@ -131,27 +127,6 @@
         "tls": {
           "enabled": true,
           "server_name": "safe.dot.dns.yandex.net"
-        }
-      },
-      {
-        "type": "https",
-        "tag": "opendns_doh",
-        "server_port": 443,
-        "server": "208.67.222.222",
-        "path": "/dns-query",
-        "tls": {
-          "enabled": true,
-          "server_name": "dns.opendns.com"
-        }
-      },
-      {
-        "type": "tls",
-        "tag": "yandex_dot",
-        "server_port": 853,
-        "server": "77.88.8.8",
-        "tls": {
-          "enabled": true,
-          "server_name": "common.dot.dns.yandex.net"
         }
       }
     ],
@@ -566,7 +541,6 @@
         "PR FI-1",
         "PR ss-1",
         "S2 JP-1",
-        "S2 jump",
         "S2 US-1",
         "VLESS Reality",
         "WireGuard",
