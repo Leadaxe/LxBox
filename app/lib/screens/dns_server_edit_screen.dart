@@ -13,6 +13,7 @@ export '../services/dns/tailscale_endpoint_options.dart' show TailscaleEndpointO
 import '../services/dns/tailscale_endpoint_options.dart' show TailscaleEndpointOption;
 import 'dns_server_edit/tabs/json_tab.dart';
 import 'dns_server_edit/tabs/params_tab.dart';
+import 'dns_settings_screen/dns_server_copy.dart' show dnsCopyTag;
 import 'dns_settings_screen/dns_server_delete.dart';
 import 'dns_settings_screen/resolved_server.dart';
 import '../services/l10n/locale_controller.dart';
@@ -96,6 +97,25 @@ class _DnsServerEditScreenState extends State<DnsServerEditScreen> {
   // ─── Save / delete / reset / back ────────────────────────────────────
 
   Future<void> _save() async {
+    // §682 — у шаблонной/пресетной записи сменённый тег = inline-копия;
+    // оригинал и ссылки на него не трогаются.
+    if (_ctrl.savesAsCopy) {
+      final tag = _ctrl.tagCtrl.text.trim();
+      if (tag.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(getLocalText.s("Tag is required"))),
+        );
+        return;
+      }
+      if (widget.existingTags.contains(tag)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(getLocalText.s("Tag \"%s\" is already in use", tag))),
+        );
+        return;
+      }
+      Navigator.pop(context, DnsServerEditResult.copy(_ctrl.copySnapshot(tag)));
+      return;
+    }
     if (_ctrl.kind == ServerKind.inline) {
       final tag = _ctrl.tagCtrl.text.trim();
       if (tag.isEmpty) {
@@ -166,6 +186,22 @@ class _DnsServerEditScreenState extends State<DnsServerEditScreen> {
     }
     if (!mounted) return;
     Navigator.pop(context, DnsServerEditResult.saved(_ctrl.snapshot()));
+  }
+
+  /// §682 — Duplicate: копия текущего состояния формы уходит caller'у,
+  /// тот открывает её в редакторе нового сервера; до Save ничего не пишется.
+  void _duplicate() {
+    final resolved = widget.resolved;
+    if (resolved == null) return;
+    final tag = dnsCopyTag(
+        resolved.tag, {...widget.existingTags, resolved.tag});
+    final desc = _ctrl.descCtrl.text.trim();
+    Navigator.pop(
+      context,
+      DnsServerEditResult.duplicate(_ctrl.copySnapshot(tag,
+          description: getLocalText.s(
+              "%s (copy)", desc.isNotEmpty ? desc : resolved.tag))),
+    );
   }
 
   Future<void> _delete() async {
@@ -275,6 +311,23 @@ class _DnsServerEditScreenState extends State<DnsServerEditScreen> {
                     onPressed: _delete,
                   ),
                 _SaveIconButton(controller: _ctrl, onPressed: _save),
+                if (_ctrl.canCopy)
+                  PopupMenuButton<String>(
+                    onSelected: (v) {
+                      if (v == 'duplicate') _duplicate();
+                    },
+                    itemBuilder: (_) => [
+                      PopupMenuItem<String>(
+                        value: 'duplicate',
+                        child: ListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(Icons.copy_all, size: 20),
+                          title: Text(getLocalText.s("Duplicate")),
+                        ),
+                      ),
+                    ],
+                  ),
               ],
               bottom: TabBar(
                 tabs: [
@@ -311,7 +364,9 @@ class _SaveIconButton extends StatelessWidget {
       builder: (ctx, _) {
         final dirty = controller.isDirty();
         return IconButton(
-          tooltip: getLocalText.s("Save"),
+          tooltip: controller.savesAsCopy
+              ? getLocalText.s("Save as copy")
+              : getLocalText.s("Save"),
           icon: Icon(Icons.save,
               color: dirty ? Theme.of(ctx).colorScheme.primary : null),
           onPressed: onPressed,
@@ -323,14 +378,27 @@ class _SaveIconButton extends StatelessWidget {
 
 /// Результат редактора — сохранённая ref-запись либо удаление.
 class DnsServerEditResult {
-  const DnsServerEditResult._({this.saved, this.wasDeleted = false});
+  const DnsServerEditResult._(
+      {this.saved, this.wasDeleted = false, this.copy, this.duplicate});
 
   /// Новый/обновлённый ref. Для reset-to-canonical — схлопнутый ref.
   final DnsServerRef? saved;
   final bool wasDeleted;
 
+  /// §682 — «Save as copy»: inline-копия дописывается в список, оригинал
+  /// остаётся как был.
+  final DnsServerInline? copy;
+
+  /// §682 — Duplicate: заготовка, которую caller открывает в редакторе
+  /// нового сервера (в список пишется только по Save).
+  final DnsServerInline? duplicate;
+
   factory DnsServerEditResult.saved(DnsServerRef ref) =>
       DnsServerEditResult._(saved: ref);
+  factory DnsServerEditResult.copy(DnsServerInline ref) =>
+      DnsServerEditResult._(copy: ref);
+  factory DnsServerEditResult.duplicate(DnsServerInline ref) =>
+      DnsServerEditResult._(duplicate: ref);
   factory DnsServerEditResult.deleted() =>
       const DnsServerEditResult._(wasDeleted: true);
 }

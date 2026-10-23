@@ -6379,5 +6379,17 @@
   },
   "Locked: used by %s. Remove the reference first.": {
     "value": "Заблокировано, используется: %s. Сначала уберите ссылку."
+  },
+  "Duplicate": {
+    "value": "Дублировать"
+  },
+  "Save as copy": {
+    "value": "Сохранить как копию"
+  },
+  "%s (copy)": {
+    "value": "%s (копия)"
+  },
+  "Changing the tag creates a custom copy. The template server stays in the list.": {
+    "value": "Смена тега создаёт собственную копию. Сервер из шаблона остаётся в списке."
   }
 }

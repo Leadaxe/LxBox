@@ -22,6 +22,7 @@ import '../vpn/cc_channel.dart';
 import '../widgets/outbound_picker.dart';
 import 'dns_server_edit_screen.dart';
 import 'dns_settings_screen/dns_server_catalog_screen.dart';
+import 'dns_settings_screen/dns_server_copy.dart';
 import 'dns_settings_screen/dns_server_delete.dart';
 import 'dns_settings_screen/dns_server_resolver.dart';
 import 'dns_settings_screen/resolved_server.dart';
@@ -397,17 +398,21 @@ class _DnsSettingsTabState extends State<DnsSettingsTab>
   /// редактор в new-режиме (kind inline).
   /// Заготовка — форма UDP с пустым адресом (save требует ввода); порт/
   /// detour отсутствуют — ключи появляются только при явном выборе.
-  Future<void> _addServer() async {
+  /// §682 — [initial]: заготовка Duplicate (копия шаблонного/пресетного
+  /// сервера), открывается тем же редактором нового сервера.
+  Future<void> _addServer({DnsServerInline? initial}) async {
     final result = await openDnsServerEditor(
       context,
-      initialRef: DnsServerInline(
-        enabled: true,
-        tag: 'dns_new',
-        // §279 seed-time-локализация: метка резолвится через активную локаль
-        // в момент создания (дальше — user data, ретроактивно не мигрируется).
-        description: getLocalText.s("My DNS"),
-        body: const <String, dynamic>{'type': 'udp'},
-      ),
+      initialRef: initial ??
+          DnsServerInline(
+            enabled: true,
+            tag: 'dns_new',
+            // §279 seed-time-локализация: метка резолвится через активную
+            // локаль в момент создания (дальше — user data, ретроактивно не
+            // мигрируется).
+            description: getLocalText.s("My DNS"),
+            body: const <String, dynamic>{'type': 'udp'},
+          ),
       outboundOptions: _outboundOptions,
       dnsServerTags: _enabledServerTags,
       dnsMemberOptions: _dnsMemberOptions,
@@ -467,8 +472,16 @@ class _DnsSettingsTabState extends State<DnsSettingsTab>
       },
     );
     if (result == null || !mounted) return;
+    // §682 — Duplicate: копия открывается редактором нового сервера.
+    if (result.duplicate case final dup?) {
+      await _addServer(initial: dup);
+      return;
+    }
     setState(() {
-      if (result.wasDeleted) {
+      if (result.copy case final copy?) {
+        // §682 — «Save as copy»: оригинал и ссылки на него не трогаются.
+        _servers.add(copy);
+      } else if (result.wasDeleted) {
         _servers.removeAt(idx);
       } else if (result.saved != null) {
         _servers[idx] = result.saved!;
@@ -990,9 +1003,26 @@ class _DnsSettingsTabState extends State<DnsSettingsTab>
       }
     }
     if (resolved == null) return;
+    // §682 — Duplicate у шаблонного/пресетного сервера (и override).
+    final canCopy =
+        resolved.kind != ServerKind.inline || resolved.overrides != null;
     final action = await showRuleContextMenu(context, pos,
-        deleteEnabled: canDeleteDnsServer(resolved));
-    if (action != 'delete' || !mounted) return;
+        deleteEnabled: canDeleteDnsServer(resolved), showDuplicate: canCopy);
+    if (!mounted) return;
+    if (action == 'duplicate') {
+      final src = resolved;
+      await _addServer(
+        initial: dnsServerCopy(
+          body: src.body,
+          tag: dnsCopyTag(src.tag, {for (final s in _servers) s.tag}),
+          enabled: true,
+          description: getLocalText.s("%s (copy)",
+              src.description.isNotEmpty ? src.description : src.tag),
+        ),
+      );
+      return;
+    }
+    if (action != 'delete') return;
     final ok = await confirmDeleteDnsServer(context, resolved);
     if (ok != true || !mounted) return;
     setState(() {

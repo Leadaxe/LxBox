@@ -55,6 +55,8 @@ Future<String?> showRuleContextMenu(
   Offset pos, {
   // §680 — DNS-сервер под ссылкой: пункт виден, но неактивен.
   bool deleteEnabled = true,
+  // §682 — пункт Duplicate (DNS-сервер из шаблона/пресета).
+  bool showDuplicate = false,
 }) {
   final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
   return showMenu<String>(
@@ -66,6 +68,16 @@ Future<String?> showRuleContextMenu(
       overlay.size.height - pos.dy,
     ),
     items: [
+      if (showDuplicate)
+        PopupMenuItem<String>(
+          value: 'duplicate',
+          child: ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.copy_all, size: 20),
+            title: Text(getLocalText.s("Duplicate")),
+          ),
+        ),
       PopupMenuItem<String>(
         value: 'delete',
         enabled: deleteEnabled,

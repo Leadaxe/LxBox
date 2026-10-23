@@ -49,6 +49,22 @@ class DnsServerParamsTab extends StatelessWidget {
           ),
           const SizedBox(height: 12),
         ],
+        // §682 — у шаблонной/пресетной записи тег правится, но смена тега
+        // сохраняет копию, а не переименовывает ссылку.
+        if (c.kind != ServerKind.inline && !c.isNew) ...[
+          TextField(
+            controller: c.tagCtrl,
+            decoration: InputDecoration(
+              labelText: getLocalText.s("Tag"),
+              border: const OutlineInputBorder(),
+              isDense: true,
+              prefixIcon: const Icon(Icons.tag, size: 18),
+              helperText: getLocalText.s("Changing the tag creates a custom copy. The template server stays in the list."),
+              helperMaxLines: 3,
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
         TextField(
           controller: c.descCtrl,
           decoration: InputDecoration(
@@ -169,7 +185,9 @@ class DnsServerParamsTab extends StatelessWidget {
         const SizedBox(height: 12),
         FilledButton.icon(
           icon: const Icon(Icons.save, size: 18),
-          label: Text(getLocalText.s("Save")),
+          label: Text(c.savesAsCopy
+              ? getLocalText.s("Save as copy")
+              : getLocalText.s("Save")),
           onPressed: onSave,
         ),
       ],

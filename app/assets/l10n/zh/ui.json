@@ -6097,5 +6097,17 @@
   },
   "Locked: used by %s. Remove the reference first.": {
     "value": "已锁定：被 %s 使用。请先移除引用。"
+  },
+  "Duplicate": {
+    "value": "复制"
+  },
+  "Save as copy": {
+    "value": "另存为副本"
+  },
+  "%s (copy)": {
+    "value": "%s（副本）"
+  },
+  "Changing the tag creates a custom copy. The template server stays in the list.": {
+    "value": "更改标签会创建自定义副本，模板服务器仍保留在列表中。"
   }
 }
