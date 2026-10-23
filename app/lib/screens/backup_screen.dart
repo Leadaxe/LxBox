@@ -14,6 +14,7 @@ import '../services/lx_backup_import.dart';
 import '../services/record_vars.dart';
 import '../services/warp/warp_backup.dart';
 import '../services/settings_storage.dart';
+import '../services/template_loader.dart';
 import '../services/error_format.dart';
 import '../services/l10n/locale_controller.dart';
 import '../services/ui_helpers.dart';
@@ -421,6 +422,9 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
         defaultDomainResolver: vars['dns_default_domain_resolver'] ?? '',
         warnings: exportWarnings,
         recordVars: recordVars,
+        // §681 (контракт 1.1.135, D-139) — каталог шаблона этой стороны:
+        // приёмник по нему отличает «удалён» от «не знал».
+        templateCatalog: await _templateDnsCatalogOrNull(),
       );
       // §393 B8 — регистрации WARP в каноне схемы (`type: wg|masque`).
       final warpAccount = await SettingsStorage.getWarpAccount();
@@ -612,5 +616,16 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
         ],
       ),
     );
+  }
+}
+
+/// §681 — каталог DNS-серверов шаблона для `dns.template_catalog`; `null` —
+/// шаблон не загрузился, поле не пишется (приёмник уйдёт в переходную ветку).
+Future<List<String>?> _templateDnsCatalogOrNull() async {
+  try {
+    final template = await TemplateLoader.load();
+    return [for (final s in template.dnsOptionsModel.servers) s.tag];
+  } catch (_) {
+    return null;
   }
 }

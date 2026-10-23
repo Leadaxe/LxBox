@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/dns_ref.dart';
 import 'package:lxbox/services/dns/dns_backup.dart';
 import 'package:lxbox/services/lx_backup.dart';
@@ -235,7 +236,7 @@ void main() {
       expect(got.servers, full());
     });
 
-    // Контракт 1.1.134 (BACKUP.md §9 п. 5, D-133): норма полного списка —
+    // Контракт 1.1.134 (BACKUP.md §9 п. 5, D-138): норма полного списка —
     // только у файла своего приложения. Каталог лаунчера без `opendns_doh` и
     // `yandex_dot`: его файл не может их назвать, и снимать их нельзя.
     test('файл лаунчера с неполным списком — шаблонные записи остаются', () {
@@ -257,6 +258,308 @@ void main() {
       );
       expect(got.servers, [...full(), mine]);
       expect(got.applied, 0);
+    });
+  });
+
+  // ════════════════════════════════════════════════════════════════════════
+  // §681 — каталог источника в файле (контракт 1.1.135, D-139, BACKUP.md §9
+  // п. 5): снятие по трём условиям, удерживающие ссылки, переходная ветка,
+  // висячие final/default resolver, пустая группа.
+  // ════════════════════════════════════════════════════════════════════════
+  group('§681 каталог источника', () {
+    const allTags = [
+      'local_dns_resolver',
+      'google_udp',
+      'google_doh',
+      'cloudflare_udp',
+      'opendns_udp',
+      'opendns_doh',
+      'quad9_doh',
+      'yandex_dot',
+    ];
+    List<DnsServerRef> full({Set<String> without = const {}}) => [
+          for (final t in allTags)
+            if (!without.contains(t)) DnsServerTemplate(enabled: true, tag: t),
+        ];
+    Map<String, dynamic> wrapper(String tag, {Map<String, dynamic>? extra,
+            bool required = false}) =>
+        {
+          'description': tag,
+          'enabled': true,
+          if (required) 'required': true,
+          'server': {'type': 'udp', 'tag': tag, 'server': '1.1.1.1', ...?extra},
+        };
+    final templateServers = [for (final t in allTags) wrapper(t)];
+
+    DnsBackupApply run({
+      required List<DnsServerRef> fileServers,
+      required List<DnsServerRef> local,
+      List<String>? catalog,
+      String exportedBy = kLxAppLxBox,
+      String fileFinal = '',
+      String localFinal = '',
+      List<DnsRuleRef> localRules = const [],
+      List<CustomRule> routing = const [],
+      List<Map<String, dynamic>>? template,
+      List<LxBackupWarning>? warnings,
+    }) =>
+        applyDnsBackup(
+          incoming: LxDns(
+              servers: fileServers,
+              finalServer: fileFinal,
+              templateCatalog: catalog),
+          servers: local,
+          rules: localRules,
+          dnsFinal: localFinal,
+          strategy: '',
+          exportedByApp: exportedBy,
+          warnings: warnings,
+          scene: DnsImportScene(
+            templateServers: template ?? templateServers,
+            routingRules: routing,
+            finalDefault: 'google_udp',
+          ),
+        );
+
+    List<String> codes(List<LxBackupWarning> w, String code) =>
+        [for (final x in w) if (x.code == code) x.detail];
+
+    test('тег из каталога, удалённый источником, снимается', () {
+      final w = <LxBackupWarning>[];
+      final got = run(
+        fileServers: full(without: {'opendns_udp'}),
+        local: full(),
+        catalog: allTags,
+        warnings: w,
+      );
+      expect(got.servers.map((s) => s.tag), isNot(contains('opendns_udp')));
+      expect(got.servers.length, allTags.length - 1);
+      expect(codes(w, kWarnDnsEntryKept), isEmpty);
+    });
+
+    test('тег вне каталога файла не трогается (другой каталог)', () {
+      final launcherCatalog = [
+        for (final t in allTags)
+          if (t != 'opendns_doh' && t != 'yandex_dot') t,
+      ];
+      final got = run(
+        fileServers: full(without: {'opendns_doh', 'yandex_dot', 'quad9_doh'}),
+        local: full(),
+        catalog: launcherCatalog,
+        exportedBy: kLxAppLauncher,
+      );
+      final tags = got.servers.map((s) => s.tag).toList();
+      expect(tags, containsAll(['opendns_doh', 'yandex_dot']));
+      expect(tags, isNot(contains('quad9_doh')));
+    });
+
+    test('удерживаемые записи остаются с kept, used_by — первая по словарю',
+        () {
+      const group = DnsServerInline(
+          enabled: true,
+          tag: 'my-group',
+          body: {
+            'type': 'group',
+            'servers': ['google_doh', 'cloudflare_udp'],
+          });
+      const resolverUser = DnsServerInline(
+          enabled: true,
+          tag: 'my-doh',
+          body: {
+            'type': 'https',
+            'server': 'doh.example',
+            'domain_resolver': 'opendns_udp',
+          });
+      final w = <LxBackupWarning>[];
+      final got = run(
+        fileServers: full(without: {
+          'google_doh',
+          'cloudflare_udp',
+          'opendns_udp',
+          'opendns_doh',
+          'quad9_doh',
+          'local_dns_resolver',
+          'yandex_dot',
+        }),
+        local: [...full(), group, resolverUser],
+        catalog: allTags,
+        // final приёмника на cloudflare_udp: и группа, и final — пишется final
+        localFinal: 'cloudflare_udp',
+        localRules: const [
+          DnsRuleInline(name: 'corp', rule: {
+            'domain_suffix': ['.corp'],
+            'server': 'opendns_doh',
+          }),
+        ],
+        routing: [
+          CustomRuleInline(
+              name: 'Streaming',
+              dns: const RuleDns(enabled: true, serverTag: 'quad9_doh')),
+        ],
+        template: [
+          for (final t in allTags)
+            wrapper(t, required: t == 'local_dns_resolver'),
+        ],
+        warnings: w,
+      );
+      final tags = got.servers.map((s) => s.tag).toSet();
+      expect(tags, containsAll([
+        'google_doh',
+        'cloudflare_udp',
+        'opendns_udp',
+        'opendns_doh',
+        'quad9_doh',
+        'local_dns_resolver',
+      ]));
+      expect(tags, isNot(contains('yandex_dot')));
+      expect(
+          codes(w, kWarnDnsEntryKept).toSet(),
+          {
+            'template:google_doh used_by=group:my-group',
+            'template:cloudflare_udp used_by=final',
+            'template:opendns_udp used_by=server:my-doh',
+            'template:opendns_doh used_by=dns_rule:opendns_doh',
+            'template:quad9_doh used_by=rule:Streaming',
+            'template:local_dns_resolver used_by=required',
+          });
+    });
+
+    test('ссылка только от снимаемого сервера не держит (второй круг)', () {
+      final template = [
+        for (final t in allTags)
+          wrapper(t,
+              extra: t == 'quad9_doh' ? {'domain_resolver': 'opendns_udp'} : null),
+      ];
+      final w = <LxBackupWarning>[];
+      final got = run(
+        fileServers: full(without: {'quad9_doh', 'opendns_udp'}),
+        local: full(),
+        catalog: allTags,
+        template: template,
+        warnings: w,
+      );
+      final tags = got.servers.map((s) => s.tag);
+      expect(tags, isNot(contains('quad9_doh')));
+      expect(tags, isNot(contains('opendns_udp')));
+      expect(codes(w, kWarnDnsEntryKept), isEmpty);
+    });
+
+    test('файл без каталога от lxbox — как 1.1.134: снятие по шаблону', () {
+      final got = run(
+        fileServers: full(without: {'opendns_udp'}),
+        local: full(),
+      );
+      expect(got.servers.map((s) => s.tag), isNot(contains('opendns_udp')));
+    });
+
+    test('файл без каталога от launcher — слияние', () {
+      final got = run(
+        fileServers: full(without: {'opendns_doh', 'yandex_dot'}),
+        local: full(),
+        exportedBy: kLxAppLauncher,
+      );
+      expect(got.servers, full());
+    });
+
+    test('файл без серверов не трогает состав даже с каталогом', () {
+      final got = run(fileServers: const [], local: full(), catalog: allTags);
+      expect(got.servers, full());
+    });
+
+    test('final файла на чужой тег — сброс на умолчание шаблона', () {
+      final w = <LxBackupWarning>[];
+      final got = run(
+        fileServers: full(),
+        local: full(),
+        catalog: allTags,
+        fileFinal: 'direct_dns_resolver',
+        localFinal: 'quad9_doh',
+        warnings: w,
+      );
+      expect(got.dnsFinal, 'google_udp');
+      expect(codes(w, kWarnDnsResolverReset), ['final=direct_dns_resolver']);
+    });
+
+    test('final файла на выключенный сервер — сброс', () {
+      final w = <LxBackupWarning>[];
+      final got = run(
+        fileServers: full(),
+        local: [
+          for (final s in full())
+            s.tag == 'quad9_doh' ? s.withEnabled(false) : s,
+        ],
+        catalog: allTags,
+        fileFinal: 'quad9_doh',
+        warnings: w,
+      );
+      expect(got.dnsFinal, 'google_udp');
+      expect(codes(w, kWarnDnsResolverReset), ['final=quad9_doh']);
+    });
+
+    test('final файла на известный включённый — без сброса', () {
+      final w = <LxBackupWarning>[];
+      final got = run(
+        fileServers: full(),
+        local: full(),
+        catalog: allTags,
+        fileFinal: 'quad9_doh',
+        warnings: w,
+      );
+      expect(got.dnsFinal, 'quad9_doh');
+      expect(codes(w, kWarnDnsResolverReset), isEmpty);
+    });
+
+    test('группа из одних чужих членов ввозится выключенной', () {
+      const foreignGroup = DnsServerInline(
+          enabled: true,
+          tag: 'desk-group',
+          body: {
+            'type': 'group',
+            'servers': ['direct_dns_resolver', 'adguard_doh'],
+          });
+      const okGroup = DnsServerInline(
+          enabled: true,
+          tag: 'ok-group',
+          body: {
+            'type': 'group',
+            'servers': ['adguard_doh', 'google_udp'],
+          });
+      final w = <LxBackupWarning>[];
+      final got = run(
+        fileServers: [...full(), foreignGroup, okGroup],
+        local: full(),
+        catalog: allTags,
+        warnings: w,
+      );
+      final byTag = {for (final s in got.servers) s.tag: s};
+      expect(byTag['desk-group']!.enabled, isFalse);
+      expect(byTag['ok-group']!.enabled, isTrue);
+      expect(codes(w, kWarnDnsGroupEmpty), ['desk-group']);
+    });
+  });
+
+  group('§681 экспорт template_catalog', () {
+    test('каталог пишется всегда, когда известен; пустой — пустым', () {
+      final withCatalog = dnsToBackup(
+        servers: const [],
+        rules: const [],
+        dnsFinal: '',
+        strategy: '',
+        templateCatalog: const ['google_udp', 'quad9_doh'],
+      );
+      expect(withCatalog!['template_catalog'], ['google_udp', 'quad9_doh']);
+      final empty = dnsToBackup(
+        servers: const [],
+        rules: const [],
+        dnsFinal: '',
+        strategy: '',
+        templateCatalog: const [],
+      );
+      expect(empty!['template_catalog'], isEmpty);
+      expect(
+          dnsToBackup(
+              servers: const [], rules: const [], dnsFinal: '', strategy: ''),
+          isNull);
     });
   });
 }

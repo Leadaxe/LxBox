@@ -46,6 +46,9 @@ class LxImportReceiver {
     this.receiverTargets = const {},
     this.dns = const LxDns(),
     this.recordVars = RecordVarDecls.none,
+    this.dnsTemplateServers = const [],
+    this.dnsFinalDefault = '',
+    this.dnsDefaultResolverDefault = '',
   });
 
   /// Источники приёмника в порядке списка.
@@ -84,6 +87,17 @@ class LxImportReceiver {
   /// §441 — объявления переменных записей шаблона приёмника (SPEC 129 Н2,
   /// Н4, Н8). [RecordVarDecls.none] — шаблона нет, нормализации нет.
   final RecordVarDecls recordVars;
+
+  /// §681 — обёртки `dns_options.servers` шаблона приёмника в порядке
+  /// шаблона: каталог переходной ветки, тела для удерживающих ссылок,
+  /// `required`. Пусто — шаблона нет (раннер корпуса).
+  final List<Map<String, dynamic>> dnsTemplateServers;
+
+  /// §681 — `default_value` переменных `dns_final` /
+  /// `dns_default_domain_resolver` шаблона приёмника: на них сбрасываются
+  /// висячие значения файла.
+  final String dnsFinalDefault;
+  final String dnsDefaultResolverDefault;
 }
 
 /// План импорта: разобранный файл и всё, что импорт запишет.
@@ -350,6 +364,12 @@ LxImportPlan planLxBackupImport(String raw, LxImportReceiver receiver) {
   // и записи, которых файл не коснулся. `rules[]` приёмника в план входят
   // только у файла без ключа `rules` (§640) — как есть; иначе секция
   // замещается правилами файла, их `vars` нормализуются выше.
+  //
+  // §681 — точка после правил намеренно: удерживающие ссылки на шаблонные
+  // серверы считаются по состоянию ПОСЛЕ импорта, а `rules` выше — уже
+  // итоговые маршрутные правила (у файла с ключом `rules` правила приёмника
+  // замещены). Переменные корня (`file.vars`) на DNS не влияют: секция
+  // пишется после них и её скаляры замещают одноимённые var.
   final incomingDns = file.dns;
   final dns = incomingDns == null || incomingDns.isEmpty
       ? null
@@ -365,6 +385,13 @@ LxImportPlan planLxBackupImport(String raw, LxImportReceiver receiver) {
           knownTargets: known,
           warnings: extraWarnings,
           exportedByApp: file.exportedByApp,
+          scene: DnsImportScene(
+            templateServers: receiver.dnsTemplateServers,
+            routingRules: rules,
+            presets: receiver.selectableRules,
+            finalDefault: receiver.dnsFinalDefault,
+            defaultResolverDefault: receiver.dnsDefaultResolverDefault,
+          ),
         );
   if (extraWarnings.isNotEmpty) {
     file = file.copyWith(warnings: [...file.warnings, ...extraWarnings]);
@@ -426,6 +453,13 @@ class LxBackupImportService {
   Future<LxImportReceiver> loadReceiver() async {
     final template = await TemplateLoader.load();
     final vars = await SettingsStorage.getAllVars();
+    String templateDefault(String name) {
+      for (final v in template.vars) {
+        if (v.name == name) return v.defaultValue;
+      }
+      return '';
+    }
+
     return LxImportReceiver(
       lists: await SettingsStorage.getServerLists(),
       directions: await SettingsStorage.getDirections(),
@@ -441,6 +475,12 @@ class LxBackupImportService {
         defaultDomainResolver: vars['dns_default_domain_resolver'] ?? '',
       ),
       recordVars: RecordVarDecls.fromTemplate(template),
+      dnsTemplateServers: [
+        for (final s in template.dnsOptionsModel.servers) s.wrapper,
+      ],
+      dnsFinalDefault: templateDefault('dns_final'),
+      dnsDefaultResolverDefault:
+          templateDefault('dns_default_domain_resolver'),
     );
   }
 

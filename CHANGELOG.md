@@ -25,16 +25,28 @@
   (several sources: two names and "+N"). The rule editor offers only servers
   from the list. A full backup or a phone→TV transfer carries the list of
   template servers as is: one deleted on the source is removed on the
-  receiver; older backups hold all of them and lose nothing. This applies to
-  LxBox backups only: a file exported by the desktop launcher is merged as
-  before. The build drops a
+  receiver; older backups hold all of them and lose nothing. The file now
+  carries the source's template catalog (`dns.template_catalog`, contract
+  1.1.135), and one rule decides for any app: a template server is removed
+  only when the source knew it and deleted it, and nothing still refers to it
+  after the import (such a server stays, with a warning). A `final` or
+  default resolver from the file pointing at a server the receiver lacks is
+  reset to the template default, and an imported group with no known member
+  comes in turned off, both with a warning. Older files without the catalog:
+  removal only for an LxBox file, a launcher file is merged
+  ([task 681](docs/spec/tasks/681-dns-servers-uniform-backup-catalog.md)).
+  The build drops a
   server's `domain_resolver` that points outside the list, with a warning.
   Existing installs keep their list unchanged. Not verified on a device.
   (RU: DNS-серверы: список засевается один раз, шаблонные можно удалять,
   новые серверы шаблона появляются в каталоге по (+), а не в списке; сервер,
   от которого зависит сам список, залочен подписью «used by …»; полный бэкап
-  переносит список шаблонных серверов как есть — только бэкап LxBox, файл
-  лаунчера сливается как раньше.)
+  переносит список шаблонных серверов как есть и каталог шаблона источника
+  (`dns.template_catalog`): одно правило для любого приложения — сервер
+  снимается, только если источник его знал и удалил и на него ничего не
+  ссылается после импорта; висячие `final`/default resolver сбрасываются на
+  умолчание шаблона, группа без известных членов приезжает выключенной;
+  старый файл без каталога — снятие только у файла LxBox.)
 
 - **Default traffic moved to the bottom of the Rules tab
   ([task 676](docs/spec/tasks/676-route-final-on-rules-tab.md)).** The

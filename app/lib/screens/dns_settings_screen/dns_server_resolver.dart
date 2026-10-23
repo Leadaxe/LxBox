@@ -4,6 +4,7 @@ import '../../models/parser_config.dart' show WizardVar;
 import '../../services/builder/post_steps.dart'
     show resolveTemplateDnsServerBody;
 import '../../services/builder/preset_expand.dart' show normalizeDnsDetour;
+import '../../services/dns/dns_server_holds.dart';
 import 'resolved_server.dart';
 
 /// §044: render list — typed `ResolvedServer` для каждой ref-записи.
@@ -141,15 +142,10 @@ List<ResolvedServer> resolveDisplayedServers(
 }
 
 /// §680 — кто из самого списка ссылается на сервер: tag → метки источников.
-/// Источники (только записи [servers] — группа вне списка никого не держит):
-/// - группа (`type: group`) — каждый член `servers[]`, метка = description
-///   группы, иначе её тег;
-/// - `domain_resolver` другого сервера (строка или `{server}`; у template —
-///   после подстановки vars, `dom_resolver` у `safe_dns_dot`), метка =
-///   description сервера, иначе тег;
-/// - [dnsFinal] / [defaultResolver] — метки [dnsFinalLabel] /
-///   [defaultResolverLabel].
-/// Ссылка сервера на себя не считается. — pure.
+/// Расчёт ссылок — [dnsServerListHolds] (общий с импортом бэкапа, §681);
+/// здесь только подписи: группа и `domain_resolver` — description
+/// сервера-источника, иначе его тег; [dnsFinal] / [defaultResolver] — метки
+/// [dnsFinalLabel] / [defaultResolverLabel]. — pure.
 Map<String, List<String>> dnsServerListRefs(
   List<ResolvedServer> servers, {
   String dnsFinal = '',
@@ -157,26 +153,29 @@ Map<String, List<String>> dnsServerListRefs(
   String dnsFinalLabel = 'DNS Final',
   String defaultResolverLabel = 'Default Domain Resolver',
 }) {
-  final refs = <String, List<String>>{};
-  void add(String? target, String label, {String? self}) {
-    if (target == null || target.isEmpty || target == self) return;
-    final list = refs.putIfAbsent(target, () => []);
-    if (!list.contains(label)) list.add(label);
-  }
-
+  final labelByTag = <String, String>{};
   for (final s in servers) {
-    final label = s.description.isNotEmpty ? s.description : s.tag;
-    if (s.body['type'] == 'group') {
-      for (final m in (s.body['servers'] as List<dynamic>? ?? const [])) {
-        add(m?.toString(), label, self: s.tag);
-      }
-    }
-    final dr = s.body['domain_resolver'];
-    add(dr is Map ? dr['server']?.toString() : dr?.toString(), label,
-        self: s.tag);
+    labelByTag.putIfAbsent(
+        s.tag, () => s.description.isNotEmpty ? s.description : s.tag);
   }
-  add(dnsFinal, dnsFinalLabel);
-  add(defaultResolver, defaultResolverLabel);
+  final holds = dnsServerListHolds(
+    [for (final s in servers) (tag: s.tag, body: s.body)],
+    dnsFinal: dnsFinal,
+    defaultResolver: defaultResolver,
+  );
+  final refs = <String, List<String>>{};
+  for (final e in holds.entries) {
+    final labels = <String>[];
+    for (final h in e.value) {
+      final label = switch (h.kind) {
+        DnsHoldKind.dnsFinal => dnsFinalLabel,
+        DnsHoldKind.defaultDomainResolver => defaultResolverLabel,
+        _ => labelByTag[h.source] ?? h.source,
+      };
+      if (!labels.contains(label)) labels.add(label);
+    }
+    refs[e.key] = labels;
+  }
   return refs;
 }
 

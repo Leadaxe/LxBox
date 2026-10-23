@@ -193,6 +193,23 @@ const String kWarnChainExists = 'backup_chain_exists';
 /// упразднён (П3). Она отбрасывается, и молчать об этом нельзя.
 const String kWarnDnsEntrySkipped = 'backup_dns_entry_skipped';
 
+/// §681 (контракт 1.1.135, D-139, BACKUP.md §9 п. 5) — шаблонный DNS-сервер,
+/// который источник знал (тег в `dns.template_catalog`) и удалил, у приёмника
+/// НЕ снят: его держит ссылка состояния после импорта. detail —
+/// `template:<tag> used_by=<ссылка>`, ссылка — первая по словарю
+/// (`final`, `default_domain_resolver`, `dns_rule:<server>`, `rule:<name>`,
+/// `group:<tag>`, `server:<tag>`, `preset:<id>`, `required`).
+const String kWarnDnsEntryKept = 'backup_dns_entry_kept';
+
+/// §681 — `dns.final` / `dns.default_domain_resolver` файла после импорта
+/// указывает на тег вне списка приёмника или выключенный: сброшен на
+/// умолчание шаблона приёмника. detail — `<field>=<значение файла>`.
+const String kWarnDnsResolverReset = 'backup_dns_resolver_reset';
+
+/// §681 — приехавшая сервер-группа без единого члена из списка приёмника
+/// ввезена выключенной. detail — тег группы.
+const String kWarnDnsGroupEmpty = 'backup_dns_group_empty';
+
 /// §393 B8 — запись `warp[]` не разобралась (нет дискриминатора `type`,
 /// нет ключа регистрации). Аккаунт без приватного ключа не собирает узел,
 /// поэтому применять нечего.
@@ -564,7 +581,13 @@ class LxDns {
     this.finalServer = '',
     this.strategy = '',
     this.defaultDomainResolver = '',
+    this.templateCatalog,
   });
+
+  /// §681 (контракт 1.1.135, D-139) — `dns.template_catalog`: теги
+  /// `dns_options.servers` шаблона источника на момент экспорта. `null` —
+  /// поля в файле нет (файл до 1.1.135, переходная ветка BACKUP.md §9 п. 5).
+  final List<String>? templateCatalog;
 
   /// §438 — `dns.default_domain_resolver` (1.0; мобильная var
   /// `dns_default_domain_resolver`). Третий скаляр секции живёт по тому же
@@ -1432,6 +1455,7 @@ _ParsedDirections _parseDirections(
             finalServer: dns.finalServer,
             strategy: dns.strategy,
             defaultDomainResolver: dns.defaultDomainResolver,
+            templateCatalog: dns.templateCatalog,
           ),
   );
 }
@@ -3407,6 +3431,14 @@ LxDns? _dns10(
     finalServer: _str(j['final']),
     strategy: _str(j['strategy']),
     defaultDomainResolver: _str(j['default_domain_resolver']),
+    // §681 — отсутствие ключа и пустой массив различаются: пустой каталог
+    // источника снимать нечего, нет ключа — переходная ветка.
+    templateCatalog: j.containsKey('template_catalog')
+        ? [
+            for (final t in _list(j['template_catalog']))
+              if (t is String && t.trim().isNotEmpty) t.trim(),
+          ]
+        : null,
   );
 }
 
@@ -3511,6 +3543,7 @@ const Set<String> _dns10Keys = {
   'strategy',
   'final',
   'default_domain_resolver',
+  'template_catalog',
   'servers',
   'rules',
 };

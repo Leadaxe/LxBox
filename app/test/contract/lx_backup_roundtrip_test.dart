@@ -525,6 +525,54 @@ void main() {
     }, skip: corpusTestSkip('test/contract/lx_backup_roundtrip_test.dart',
         subpath: 'schema'));
   });
+  // §681 — `dns.template_catalog` (контракт 1.1.135, D-139): экспорт пишет
+  // каталог, файл проходит схему, импорт снимает удалённый источником
+  // шаблонный сервер и не трогает тег вне каталога.
+  group('§681 template_catalog', () {
+    const catalog = ['google_udp', 'opendns_udp', 'quad9_doh'];
+    final receiverServers = <DnsServerRef>[
+      for (final t in [...catalog, 'yandex_dot'])
+        DnsServerTemplate(enabled: true, tag: t),
+    ];
+
+    test('экспорт → схема → импорт по каталогу', () async {
+      final out = await buildLxBackup(
+        lists: const [],
+        rules: const [],
+        vars: const {},
+        directions: const [],
+        directionPing: const {},
+        chains: const [],
+        dns: dnsToBackup(
+          servers: const [
+            DnsServerTemplate(enabled: true, tag: 'google_udp'),
+            DnsServerTemplate(enabled: true, tag: 'quad9_doh'),
+          ],
+          rules: const [],
+          dnsFinal: '',
+          strategy: '',
+          templateCatalog: catalog,
+        ),
+      );
+      final json = jsonDecode(out.json) as Map<String, dynamic>;
+      expect((json['dns'] as Map)['template_catalog'], catalog);
+      final schemaFile = File(_schemaPath);
+      if (schemaFile.existsSync()) {
+        final schema =
+            jsonDecode(schemaFile.readAsStringSync()) as Map<String, dynamic>;
+        expect(validateJsonSchema(json, schema), isEmpty);
+      }
+      final plan = planLxBackupImport(
+        out.json,
+        LxImportReceiver(dns: LxDns(servers: receiverServers)),
+      );
+      expect(plan.file.dns!.templateCatalog, catalog);
+      expect(plan.file.warnings.where((w) => w.code == kWarnUnknownField),
+          isEmpty);
+      final tags = plan.dns!.servers.map((s) => s.tag).toList();
+      expect(tags, ['google_udp', 'quad9_doh', 'yandex_dot']);
+    });
+  });
   // §636 — TLS-политика: контракт 1.1.117 объявил поле `tls` у подписки,
   // сервера, папки и члена папки ($defs/tlsPolicy), поэтому оно едет в файл и
   // применяется на импорте; слияние держит локальную политику так же, как

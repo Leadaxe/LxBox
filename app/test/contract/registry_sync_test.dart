@@ -86,6 +86,9 @@ const _codesInCode = <String>{
   kWarnDirectionExists,
   kWarnChainExists,
   kWarnDnsEntrySkipped,
+  kWarnDnsEntryKept,
+  kWarnDnsResolverReset,
+  kWarnDnsGroupEmpty,
   kWarnWarpSkipped,
   // §438 — чтение контракта 1.0: отбраковка записи секции узла (норма B3) и
   // запись `sources[]` вида, которому здесь нет места (читатель отвергает
