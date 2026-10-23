@@ -2,6 +2,10 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/services/builder/post_steps.dart'
+    show resolveTemplateDnsServerBody;
+import 'package:lxbox/services/builder/preset_expand.dart'
+    show normalizeDnsDetour;
 
 /// §517 часть G — страж состава группы `dns_shield` в боевом шаблоне.
 ///
@@ -23,12 +27,15 @@ void main() {
       ) as Map<String, dynamic>;
 
   /// Записи `dns_options.servers[].server` — база, всегда в сборке.
+  /// §682 — тело с подставленными дефолтами vars (как в сборке).
   Map<String, Map<String, dynamic>> baseServersByTag(Map<String, dynamic> tpl) {
     final out = <String, Map<String, dynamic>>{};
     for (final e in (tpl['dns_options'] as Map)['servers'] as List) {
       final s = (e as Map)['server'];
       if (s is Map && s['tag'] is String) {
-        out[s['tag'] as String] = s.cast<String, dynamic>();
+        final body = resolveTemplateDnsServerBody(e.cast<String, dynamic>())!;
+        normalizeDnsDetour(body);
+        out[s['tag'] as String] = body;
       }
     }
     return out;

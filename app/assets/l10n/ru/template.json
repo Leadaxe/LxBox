@@ -709,5 +709,53 @@
   },
   "YouTube (ytimg)": {
     "value": "YouTube (ytimg)"
+  },
+  "208.67.222.222 · Primary v4": {
+    "value": "208.67.222.222 · Основной v4"
+  },
+  "208.67.220.220 · Secondary v4": {
+    "value": "208.67.220.220 · Резервный v4"
+  },
+  "2620:119:35::35 · Primary v6": {
+    "value": "2620:119:35::35 · Основной v6"
+  },
+  "2620:119:53::53 · Secondary v6": {
+    "value": "2620:119:53::53 · Резервный v6"
+  },
+  "9.9.9.9 · Primary v4": {
+    "value": "9.9.9.9 · Основной v4"
+  },
+  "149.112.112.112 · Secondary v4": {
+    "value": "149.112.112.112 · Резервный v4"
+  },
+  "2620:fe::fe · Primary v6": {
+    "value": "2620:fe::fe · Основной v6"
+  },
+  "2620:fe::9 · Secondary v6": {
+    "value": "2620:fe::9 · Резервный v6"
+  },
+  "77.88.8.8 · Primary v4": {
+    "value": "77.88.8.8 · Основной v4"
+  },
+  "77.88.8.1 · Secondary v4": {
+    "value": "77.88.8.1 · Резервный v4"
+  },
+  "2a02:6b8::feed:ff · Primary v6": {
+    "value": "2a02:6b8::feed:ff · Основной v6"
+  },
+  "2a02:6b8:0:1::feed:ff · Secondary v6": {
+    "value": "2a02:6b8:0:1::feed:ff · Резервный v6"
+  },
+  "OpenDNS address. IPv4 — universal; IPv6 — if your network supports it.": {
+    "value": "Адрес OpenDNS. IPv4 — универсально; IPv6 — если ваша сеть его поддерживает."
+  },
+  "OpenDNS IP for IP-based DoH. TLS SNI is pinned to dns.opendns.com.": {
+    "value": "IP-адрес OpenDNS для DoH по IP. TLS SNI закреплён как dns.opendns.com."
+  },
+  "Quad9 IP for IP-based DoH. TLS SNI is pinned to dns.quad9.net.": {
+    "value": "IP-адрес Quad9 для DoH по IP. TLS SNI закреплён как dns.quad9.net."
+  },
+  "Yandex DNS IP for DNS-over-TLS (port 853). TLS SNI is pinned to common.dot.dns.yandex.net.": {
+    "value": "IP-адрес Яндекс DNS для DNS-over-TLS (порт 853). TLS SNI закреплён как common.dot.dns.yandex.net."
   }
 }

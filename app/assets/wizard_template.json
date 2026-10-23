@@ -115,22 +115,70 @@
       {
         "description": "OpenDNS UDP (direct)",
         "enabled": true,
-        "server": {"type": "udp", "tag": "opendns_udp", "server_port": 53, "server": "208.67.222.222"}
+        "vars": [
+          {"name": "outbound", "type": "outbound", "default_value": "direct-out", "required": true, "title": "Outbound", "tooltip": "Which direction carries DNS queries to this server"},
+          { "name": "dns_ip", "type": "enum", "title": "UDP server IP", "tooltip": "OpenDNS address. IPv4 — universal; IPv6 — if your network supports it.",
+            "default_value": "208.67.222.222", "required": true,
+            "options": [
+              {"title": "208.67.222.222 · Primary v4", "value": "208.67.222.222"},
+              {"title": "208.67.220.220 · Secondary v4", "value": "208.67.220.220"},
+              {"title": "2620:119:35::35 · Primary v6", "value": "2620:119:35::35"},
+              {"title": "2620:119:53::53 · Secondary v6", "value": "2620:119:53::53"}
+            ]
+          }
+        ],
+        "server": {"type": "udp", "tag": "opendns_udp", "server_port": 53, "server": "@dns_ip", "detour": "@outbound"}
       },
       {
         "description": "OpenDNS DoH",
         "enabled": true,
-        "server": {"type": "https", "tag": "opendns_doh", "server_port": 443, "server": "208.67.222.222", "path": "/dns-query", "tls": {"enabled": true, "server_name": "dns.opendns.com"}}
+        "vars": [
+          {"name": "outbound", "type": "outbound", "default_value": "direct-out", "required": true, "title": "Outbound", "tooltip": "Which direction carries DNS queries to this server"},
+          { "name": "dns_ip", "type": "enum", "title": "DoH server IP", "tooltip": "OpenDNS IP for IP-based DoH. TLS SNI is pinned to dns.opendns.com.",
+            "default_value": "208.67.222.222", "required": true,
+            "options": [
+              {"title": "208.67.222.222 · Primary v4", "value": "208.67.222.222"},
+              {"title": "208.67.220.220 · Secondary v4", "value": "208.67.220.220"},
+              {"title": "2620:119:35::35 · Primary v6", "value": "2620:119:35::35"},
+              {"title": "2620:119:53::53 · Secondary v6", "value": "2620:119:53::53"}
+            ]
+          }
+        ],
+        "server": {"type": "https", "tag": "opendns_doh", "server_port": 443, "server": "@dns_ip", "path": "/dns-query", "tls": {"enabled": true, "server_name": "dns.opendns.com"}, "detour": "@outbound"}
       },
       {
         "description": "Quad9 DoH (via VPN, anti-malware)",
         "enabled": true,
-        "server": {"type": "https", "tag": "quad9_doh", "server_port": 443, "server": "9.9.9.9", "path": "/dns-query", "tls": {"enabled": true, "server_name": "dns.quad9.net"}, "detour": "vpn-1"}
+        "vars": [
+          {"name": "outbound", "type": "outbound", "default_value": "vpn-1", "required": true, "title": "Outbound", "tooltip": "Which direction carries DNS queries to this server"},
+          { "name": "dns_ip", "type": "enum", "title": "DoH server IP", "tooltip": "Quad9 IP for IP-based DoH. TLS SNI is pinned to dns.quad9.net.",
+            "default_value": "9.9.9.9", "required": true,
+            "options": [
+              {"title": "9.9.9.9 · Primary v4", "value": "9.9.9.9"},
+              {"title": "149.112.112.112 · Secondary v4", "value": "149.112.112.112"},
+              {"title": "2620:fe::fe · Primary v6", "value": "2620:fe::fe"},
+              {"title": "2620:fe::9 · Secondary v6", "value": "2620:fe::9"}
+            ]
+          }
+        ],
+        "server": {"type": "https", "tag": "quad9_doh", "server_port": 443, "server": "@dns_ip", "path": "/dns-query", "tls": {"enabled": true, "server_name": "dns.quad9.net"}, "detour": "@outbound"}
       },
       {
         "description": "Yandex DoT (direct)",
         "enabled": true,
-        "server": {"type": "tls", "tag": "yandex_dot", "server_port": 853, "server": "77.88.8.8", "tls": {"enabled": true, "server_name": "common.dot.dns.yandex.net"}}
+        "vars": [
+          {"name": "outbound", "type": "outbound", "default_value": "direct-out", "required": true, "title": "Outbound", "tooltip": "Which direction carries DNS queries to this server"},
+          { "name": "dns_ip", "type": "enum", "title": "DoT server IP", "tooltip": "Yandex DNS IP for DNS-over-TLS (port 853). TLS SNI is pinned to common.dot.dns.yandex.net.",
+            "default_value": "77.88.8.8", "required": true,
+            "options": [
+              {"title": "77.88.8.8 · Primary v4", "value": "77.88.8.8"},
+              {"title": "77.88.8.1 · Secondary v4", "value": "77.88.8.1"},
+              {"title": "2a02:6b8::feed:ff · Primary v6", "value": "2a02:6b8::feed:ff"},
+              {"title": "2a02:6b8:0:1::feed:ff · Secondary v6", "value": "2a02:6b8:0:1::feed:ff"}
+            ]
+          }
+        ],
+        "server": {"type": "tls", "tag": "yandex_dot", "server_port": 853, "server": "@dns_ip", "tls": {"enabled": true, "server_name": "common.dot.dns.yandex.net"}, "detour": "@outbound"}
       },
       {
         "description": "Shield DNS (multi-provider group)",

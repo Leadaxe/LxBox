@@ -709,5 +709,53 @@
  },
  "YouTube (ytimg)": {
   "value": "YouTube (ytimg)"
+ },
+ "208.67.222.222 · Primary v4": {
+  "value": "208.67.222.222 · 主用 v4"
+ },
+ "208.67.220.220 · Secondary v4": {
+  "value": "208.67.220.220 · 备用 v4"
+ },
+ "2620:119:35::35 · Primary v6": {
+  "value": "2620:119:35::35 · 主用 v6"
+ },
+ "2620:119:53::53 · Secondary v6": {
+  "value": "2620:119:53::53 · 备用 v6"
+ },
+ "9.9.9.9 · Primary v4": {
+  "value": "9.9.9.9 · 主用 v4"
+ },
+ "149.112.112.112 · Secondary v4": {
+  "value": "149.112.112.112 · 备用 v4"
+ },
+ "2620:fe::fe · Primary v6": {
+  "value": "2620:fe::fe · 主用 v6"
+ },
+ "2620:fe::9 · Secondary v6": {
+  "value": "2620:fe::9 · 备用 v6"
+ },
+ "77.88.8.8 · Primary v4": {
+  "value": "77.88.8.8 · 主用 v4"
+ },
+ "77.88.8.1 · Secondary v4": {
+  "value": "77.88.8.1 · 备用 v4"
+ },
+ "2a02:6b8::feed:ff · Primary v6": {
+  "value": "2a02:6b8::feed:ff · 主用 v6"
+ },
+ "2a02:6b8:0:1::feed:ff · Secondary v6": {
+  "value": "2a02:6b8:0:1::feed:ff · 备用 v6"
+ },
+ "OpenDNS address. IPv4 — universal; IPv6 — if your network supports it.": {
+  "value": "OpenDNS 地址。IPv4 —— 通用；IPv6 —— 需网络支持。"
+ },
+ "OpenDNS IP for IP-based DoH. TLS SNI is pinned to dns.opendns.com.": {
+  "value": "用于基于 IP 的 DoH 的 OpenDNS 地址。TLS SNI 固定为 dns.opendns.com。"
+ },
+ "Quad9 IP for IP-based DoH. TLS SNI is pinned to dns.quad9.net.": {
+  "value": "用于基于 IP 的 DoH 的 Quad9 地址。TLS SNI 固定为 dns.quad9.net。"
+ },
+ "Yandex DNS IP for DNS-over-TLS (port 853). TLS SNI is pinned to common.dot.dns.yandex.net.": {
+  "value": "Yandex DNS 的 DNS-over-TLS 地址（端口 853）。TLS SNI 固定为 common.dot.dns.yandex.net。"
  }
 }
