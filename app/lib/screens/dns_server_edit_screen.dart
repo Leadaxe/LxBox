@@ -13,6 +13,7 @@ export '../services/dns/tailscale_endpoint_options.dart' show TailscaleEndpointO
 import '../services/dns/tailscale_endpoint_options.dart' show TailscaleEndpointOption;
 import 'dns_server_edit/tabs/json_tab.dart';
 import 'dns_server_edit/tabs/params_tab.dart';
+import 'dns_settings_screen/dns_server_delete.dart';
 import 'dns_settings_screen/resolved_server.dart';
 import '../services/l10n/locale_controller.dart';
 
@@ -168,12 +169,10 @@ class _DnsServerEditScreenState extends State<DnsServerEditScreen> {
   }
 
   Future<void> _delete() async {
-    final tag = widget.resolved?.tag ?? '';
-    final confirmed = await showDeleteConfirmDialog(
-      context,
-      title: getLocalText.s("Delete DNS server?"),
-      message: getLocalText.s("Remove \"%s\" permanently?", tag),
-    ); // §219
+    final resolved = widget.resolved;
+    if (resolved == null) return;
+    // §219 / §680 — текст зависит от вида: шаблонный возвращается из каталога.
+    final confirmed = await confirmDeleteDnsServer(context, resolved);
     if (confirmed == true && mounted) {
       Navigator.pop(context, DnsServerEditResult.deleted());
     }
@@ -236,7 +235,10 @@ class _DnsServerEditScreenState extends State<DnsServerEditScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final canDelete = !_ctrl.isNew && _ctrl.isUserOnly && !_ctrl.locked;
+    // §680 — inline и template (override — как template), если не залочен;
+    // preset-ref живёт с пресетом.
+    final resolved = widget.resolved;
+    final canDelete = resolved != null && canDeleteDnsServer(resolved);
     final canReset = !_ctrl.isNew && _ctrl.overrides != null;
 
     return DnsServerEditScope(

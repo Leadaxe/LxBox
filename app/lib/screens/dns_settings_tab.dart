@@ -21,6 +21,7 @@ import '../vpn/box_vpn_client.dart';
 import '../vpn/cc_channel.dart';
 import '../widgets/outbound_picker.dart';
 import 'dns_server_edit_screen.dart';
+import 'dns_settings_screen/dns_server_delete.dart';
 import 'dns_settings_screen/dns_server_resolver.dart';
 import 'dns_settings_screen/resolved_server.dart';
 import 'dns_settings_screen/user_rule_edit_screen.dart';
@@ -30,6 +31,7 @@ import 'dns_settings_screen/widgets/local_resolver_warning_banner.dart';
 import 'dns_settings_screen/widgets/merged_server_tile.dart';
 import 'dns_settings_screen/widgets/resolver_picker.dart';
 import 'lazy_persist_mixin.dart';
+import 'routing_screen/routing_screen_menus.dart' show showRuleContextMenu;
 import '../services/l10n/locale_controller.dart';
 
 /// §655 — записи вкладки DNS, которых ждёт экран Routing.
@@ -316,9 +318,18 @@ class _DnsSettingsTabState extends State<DnsSettingsTab>
       };
 
   /// §044: render list — typed `ResolvedServer` для каждой ref-записи.
+  /// §680 — + ссылки из самого списка (группы, domain_resolver, пикеры
+  /// DNS Final / Default Domain Resolver ниже на вкладке).
   List<ResolvedServer> get _displayedServers => resolveDisplayedServers(
-      _servers, _templateByTag, _presetServersByTag,
-      ruleRefsByTag: _ruleRefsByTag);
+        _servers,
+        _templateByTag,
+        _presetServersByTag,
+        ruleRefsByTag: _ruleRefsByTag,
+        dnsFinal: _dnsFinal,
+        defaultResolver: _defaultResolver,
+        dnsFinalLabel: getLocalText.s("DNS Final"),
+        defaultResolverLabel: getLocalText.s("Default Domain Resolver"),
+      );
 
   /// Tags доступные в dropdown'ах (DNS Final / Default Resolver / per-rule).
   /// Filter `enabled` на ref-level.
@@ -700,6 +711,7 @@ class _DnsSettingsTabState extends State<DnsSettingsTab>
               entry: entry,
               onToggleEnabled: _toggleServerEnabled,
               onTap: _editServer,
+              onLongPressStart: _showServerContextMenu,
               liveGroup: _liveDnsGroups[entry.tag], // §312
             )),
         const Divider(height: 32),
@@ -938,6 +950,28 @@ class _DnsSettingsTabState extends State<DnsSettingsTab>
   }
 
   /// §043: Toggle enabled — обновляет `enabled` в ref'е, kind не меняется.
+  /// §680 — long-press на тайле сервера: меню «Delete», как у правил на
+  /// Rules. У залоченного и preset-сервера пункт неактивен.
+  Future<void> _showServerContextMenu(String tag, Offset pos) async {
+    ResolvedServer? resolved;
+    for (final s in _displayedServers) {
+      if (s.tag == tag) {
+        resolved = s;
+        break;
+      }
+    }
+    if (resolved == null) return;
+    final action = await showRuleContextMenu(context, pos,
+        deleteEnabled: canDeleteDnsServer(resolved));
+    if (action != 'delete' || !mounted) return;
+    final ok = await confirmDeleteDnsServer(context, resolved);
+    if (ok != true || !mounted) return;
+    setState(() {
+      _servers.removeWhere((s) => s.tag == tag);
+      _markDirty();
+    });
+  }
+
   void _toggleServerEnabled(String tag, bool value) {
     final idx = _servers.indexWhere((s) => s.tag == tag);
     if (idx < 0) return;

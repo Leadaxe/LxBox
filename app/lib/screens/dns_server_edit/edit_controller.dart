@@ -140,6 +140,7 @@ class DnsServerEditController extends ChangeNotifier {
   bool get isNew => resolved == null;
   ServerKind get kind => resolved?.kind ?? ServerKind.inline;
   bool get locked => resolved?.locked ?? false;
+  bool get forceIncluded => resolved?.forceIncluded ?? false;
   String get lockedByLabel => resolved?.lockedByLabel ?? '';
   ServerKind? get overrides => resolved?.overrides;
   bool get isUserOnly => resolved?.isUserOnly ?? true;

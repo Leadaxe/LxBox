@@ -52,6 +52,7 @@ class ResolvedServer {
     this.vars = const [],
     this.varValues = const {},
     this.usedByRule,
+    this.usedByList = const [],
   });
 
   final ServerKind kind;
@@ -78,6 +79,28 @@ class ResolvedServer {
   /// на этот сервер. null = правила не ссылаются.
   final String? usedByRule;
 
+  /// §680 — ссылки из самого списка: группы (`servers[]`), `domain_resolver`
+  /// других серверов, значения DNS Final / Default Domain Resolver. Метки
+  /// источников в порядке обнаружения. Лок удаления и выключения; сборка
+  /// такой сервер не форсирует (он включён — ссылка жива).
+  final List<String> usedByList;
+
+  /// §680 — копия с источниками ссылок из списка.
+  ResolvedServer withUsedByList(List<String> refs) => ResolvedServer(
+        kind: kind,
+        tag: tag,
+        description: description,
+        enabled: enabled,
+        body: body,
+        overrides: overrides,
+        presetLabel: presetLabel,
+        presetId: presetId,
+        vars: vars,
+        varValues: varValues,
+        usedByRule: usedByRule,
+        usedByList: List.unmodifiable(refs),
+      );
+
   bool get isOverridden => kind == ServerKind.inline && overrides != null;
   bool get isUserOnly => kind == ServerKind.inline && overrides == null;
 
@@ -87,10 +110,26 @@ class ResolvedServer {
       kind == ServerKind.preset || overrides == ServerKind.preset;
 
   /// §117 lifecycle (locked №7): реферимый активным пресетом ИЛИ правилом
-  /// с DNS-опцией — не выключается / не удаляется независимо.
-  bool get locked => lockedByPreset || usedByRule != null;
+  /// с DNS-опцией — сборка эмитит его независимо от `enabled`
+  /// (force-include, [dnsServerRefEmitted]).
+  bool get forceIncluded => lockedByPreset || usedByRule != null;
 
-  /// Кто ссылается — для «used by <…>» в UI.
-  String get lockedByLabel =>
-      lockedByPreset ? (presetLabel ?? 'preset') : (usedByRule ?? '');
+  /// §117 №7 + §680: на сервер ссылаются (пресет, правило, список) — не
+  /// выключается / не удаляется независимо.
+  bool get locked => forceIncluded || usedByList.isNotEmpty;
+
+  /// §680 — все источники ссылки по порядку: пресет, правило, список.
+  List<String> get lockedBySources => [
+        if (lockedByPreset) presetLabel ?? 'preset',
+        ?usedByRule,
+        ...usedByList,
+      ];
+
+  /// Кто ссылается — для «used by <…>» в UI. §680: несколько источников —
+  /// через запятую первые два, дальше «+N».
+  String get lockedByLabel {
+    final all = lockedBySources;
+    if (all.length <= 2) return all.join(', ');
+    return '${all.take(2).join(', ')} +${all.length - 2}';
+  }
 }

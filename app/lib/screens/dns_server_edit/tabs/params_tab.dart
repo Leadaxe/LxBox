@@ -77,8 +77,11 @@ class DnsServerParamsTab extends StatelessWidget {
                   ],
                 )
               : null,
-          value: c.enabled || c.locked,
-          onChanged: c.locked ? null : c.setEnabled,
+          // §680: лок ссылкой из списка держит включённый сервер включённым.
+          value: c.enabled || c.forceIncluded,
+          onChanged: c.locked && (c.enabled || c.forceIncluded)
+              ? null
+              : c.setEnabled,
         ),
         const Divider(),
         switch (c.kind) {

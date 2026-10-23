@@ -3935,6 +3935,9 @@
   "Remove \"%s\" permanently?": {
     "value": "永久移除「%s」？"
   },
+  "Remove \"%s\" from the list?\nYou can add it back from the catalog.": {
+    "value": "从列表中移除“%s”？\n之后可从目录中重新添加。"
+  },
   "Remove \"%s\"?": {
     "value": "移除「%s」？"
   },

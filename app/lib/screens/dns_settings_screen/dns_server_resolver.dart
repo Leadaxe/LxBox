@@ -28,6 +28,12 @@ List<ResolvedServer> resolveDisplayedServers(
   // §117 задача 3: tag → имя routing-правила с активной DNS-опцией
   // (lifecycle-лок «used by <правило>»).
   Map<String, String> ruleRefsByTag = const {},
+  // §680 — значения пикеров вкладки: сервер под ними залочен с меткой
+  // [dnsFinalLabel] / [defaultResolverLabel] (caller передаёт локализованные).
+  String dnsFinal = '',
+  String defaultResolver = '',
+  String dnsFinalLabel = 'DNS Final',
+  String defaultResolverLabel = 'Default Domain Resolver',
 }) {
   final out = <ResolvedServer>[];
   for (final ref in servers) {
@@ -120,7 +126,58 @@ List<ResolvedServer> resolveDisplayedServers(
   // §044: render-order — template → preset → inline (см. ServerKind enum).
   // Stable sort: внутри каждой группы insertion-order сохраняется.
   out.sort((a, b) => a.kind.index.compareTo(b.kind.index));
-  return out;
+  final listRefs = dnsServerListRefs(
+    out,
+    dnsFinal: dnsFinal,
+    defaultResolver: defaultResolver,
+    dnsFinalLabel: dnsFinalLabel,
+    defaultResolverLabel: defaultResolverLabel,
+  );
+  if (listRefs.isEmpty) return out;
+  return [
+    for (final s in out)
+      if (listRefs[s.tag] case final refs?) s.withUsedByList(refs) else s,
+  ];
+}
+
+/// §680 — кто из самого списка ссылается на сервер: tag → метки источников.
+/// Источники (только записи [servers] — группа вне списка никого не держит):
+/// - группа (`type: group`) — каждый член `servers[]`, метка = description
+///   группы, иначе её тег;
+/// - `domain_resolver` другого сервера (строка или `{server}`; у template —
+///   после подстановки vars, `dom_resolver` у `safe_dns_dot`), метка =
+///   description сервера, иначе тег;
+/// - [dnsFinal] / [defaultResolver] — метки [dnsFinalLabel] /
+///   [defaultResolverLabel].
+/// Ссылка сервера на себя не считается. — pure.
+Map<String, List<String>> dnsServerListRefs(
+  List<ResolvedServer> servers, {
+  String dnsFinal = '',
+  String defaultResolver = '',
+  String dnsFinalLabel = 'DNS Final',
+  String defaultResolverLabel = 'Default Domain Resolver',
+}) {
+  final refs = <String, List<String>>{};
+  void add(String? target, String label, {String? self}) {
+    if (target == null || target.isEmpty || target == self) return;
+    final list = refs.putIfAbsent(target, () => []);
+    if (!list.contains(label)) list.add(label);
+  }
+
+  for (final s in servers) {
+    final label = s.description.isNotEmpty ? s.description : s.tag;
+    if (s.body['type'] == 'group') {
+      for (final m in (s.body['servers'] as List<dynamic>? ?? const [])) {
+        add(m?.toString(), label, self: s.tag);
+      }
+    }
+    final dr = s.body['domain_resolver'];
+    add(dr is Map ? dr['server']?.toString() : dr?.toString(), label,
+        self: s.tag);
+  }
+  add(dnsFinal, dnsFinalLabel);
+  add(defaultResolver, defaultResolverLabel);
+  return refs;
 }
 
 /// Tags доступные в dropdown'ах (DNS Final / Default Resolver / per-rule).
@@ -132,7 +189,7 @@ List<ResolvedServer> resolveDisplayedServers(
 List<String> enabledServerTags(List<ResolvedServer> displayedServers) {
   final out = <String>[];
   for (final s in displayedServers) {
-    if (!s.enabled && !s.locked) continue;
+    if (!s.enabled && !s.forceIncluded) continue;
     if (s.tag.isEmpty) continue;
     out.add(s.tag);
   }

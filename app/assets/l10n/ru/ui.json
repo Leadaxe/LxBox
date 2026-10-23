@@ -4190,6 +4190,9 @@
   "Remove \"%s\" permanently?": {
     "value": "Удалить «%s» безвозвратно?"
   },
+  "Remove \"%s\" from the list?\nYou can add it back from the catalog.": {
+    "value": "Убрать «%s» из списка?\nВернуть его можно из каталога."
+  },
   "Remove \"%s\"?": {
     "value": "Удалить «%s»?"
   },

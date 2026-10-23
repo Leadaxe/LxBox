@@ -52,8 +52,10 @@ Future<String?> showPresetCloudMenu(
 /// `'delete'` или null. `pos` — глобальные координаты точки long-press.
 Future<String?> showRuleContextMenu(
   BuildContext context,
-  Offset pos,
-) {
+  Offset pos, {
+  // §680 — DNS-сервер под ссылкой: пункт виден, но неактивен.
+  bool deleteEnabled = true,
+}) {
   final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
   return showMenu<String>(
     context: context,
@@ -66,13 +68,21 @@ Future<String?> showRuleContextMenu(
     items: [
       PopupMenuItem<String>(
         value: 'delete',
+        enabled: deleteEnabled,
         child: ListTile(
           dense: true,
+          enabled: deleteEnabled,
           contentPadding: EdgeInsets.zero,
           leading: Icon(Icons.delete_outline,
-              size: 20, color: Theme.of(context).colorScheme.error),
+              size: 20,
+              color: deleteEnabled
+                  ? Theme.of(context).colorScheme.error
+                  : Theme.of(context).disabledColor),
           title: Text(getLocalText.s("Delete"),
-              style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              style: TextStyle(
+                  color: deleteEnabled
+                      ? Theme.of(context).colorScheme.error
+                      : Theme.of(context).disabledColor)),
         ),
       ),
     ],
