@@ -8,7 +8,99 @@
 
 ## [Unreleased]
 
+---
+
+## [2.25.17] — 2026-10-24
+
+### Added
+
+- **Fixed IP answer in a routing rule, like a hosts entry
+  ([task 683](docs/spec/tasks/683-rule-dns-and-resolve-section-fixed-ip.md)).**
+  In the rule editor, DNS & Resolve → Answer → Fixed IP answers the rule's
+  domains with the given IPv4/IPv6 addresses: the build writes a DNS rule
+  with the same match, `action: predefined`, `rcode: NOERROR` and
+  `*. 300 IN A|AAAA <ip>` records; when only one address family is given,
+  queries of the other type get an empty NOERROR answer. The field holds one
+  address; "+" turns it into a list, one address per line, and pasting
+  several lines does the same. A line that is not an IP address marks the
+  field with an error and blocks Save. The DNS tab shows such a rule in
+  "From routing rules" as `action: predefined · answer: …` with ✕. Stored as
+  `rule.dns.fixedIps` (written only when not empty; contract 1.1.139),
+  Debug API `dns.fixed_ips`. Rules without the key build as before. Not
+  verified on a device.
+  (RU: Ответ фиксированным IP у правила маршрутизации, как запись hosts:
+  DNS & Resolve → Answer → Fixed IP; сборка пишет DNS-правило `predefined`
+  с записями `*. 300 IN A|AAAA <ip>`; «+» делает поле списком по адресу на
+  строку; хранение `rule.dns.fixedIps`, Debug API `dns.fixed_ips`.)
+- **Duplicate for template and preset DNS servers
+  ([task 682](docs/spec/tasks/682-dns-catalog-revision-and-copy.md)).**
+  ⋮ → Duplicate in the server editor and Duplicate in the long-press menu of
+  the tile open a new custom server with the original's resolved body (vars
+  filled in, as in the JSON preview), tag `<tag>_copy` and description
+  `<description> (copy)`; nothing is written until Save. The editor of a
+  template or preset server now shows the Tag field: changing it turns Save
+  into "Save as copy", and the original stays in the list. The original keeps
+  its locks; groups, DNS Final and rules still point to it.
+  (RU: Duplicate у шаблонных и пресетных DNS-серверов — ⋮ редактора и
+  long-press тайла; копия — свой сервер с разрешённым телом оригинала;
+  смена Tag у шаблонного сервера даёт «Save as copy», оригинал остаётся.)
+- **Outbound and server address for OpenDNS UDP, OpenDNS DoH, Quad9 DoH and
+  Yandex DoT (task 682).** These four had a fixed body; now their editor has
+  an Outbound choice and an address choice (primary/secondary, IPv4/IPv6,
+  checked against the A/AAAA records of each server's TLS name).
+- **Warning when Default Domain Resolver goes through a tunnel (task 682).**
+  An orange ⚠ at the right of the Default Domain Resolver header when the
+  selected server has a non-direct Outbound, or when every emitted member of
+  the selected group has one. Tapping it opens "Resolver goes through a
+  tunnel": the resolver looks up server addresses before the tunnel is up, so
+  lookups can fail and the VPN may not connect. The choice and the build are
+  not changed. The ℹ next to DNS Final and Default Domain Resolver opens a
+  popup instead of a tooltip.
+  (RU: Оранжевый ⚠ у Default Domain Resolver, когда резолвер ходит через
+  Направление; тап — пояснение; выбор и сборка не меняются.)
+
 ### Changed
+
+- **⚠ DNS server defaults: plain UDP through the tunnel, DoT and DoH direct
+  ([task 684](docs/spec/tasks/684-dns-defaults-plain-tunnel-encrypted-direct.md)).**
+  One rule for every template and preset DNS server. `google_udp`,
+  `cloudflare_udp`, `opendns_udp`: `direct-out` → `vpn-1`. `google_dot`,
+  `cloudflare_dot`, `quad9_doh`: `vpn-1` → `direct-out`. `google_doh`,
+  `opendns_doh`, `yandex_dot`, `safe_dns_dot` stay direct. Template servers
+  take their defaults from the template on every build, so the config changes
+  for everyone who left Outbound untouched; the Shield group (`dns_shield`,
+  six encrypted members) is now direct as a whole. `safe_dns_dot` resolves its
+  name through `google_doh` instead of `google_udp`. Descriptions no longer
+  name the path ("Google UDP", "OpenDNS UDP", "Quad9 DoH (anti-malware)",
+  "Yandex DoT"). The Ru internet segment preset has two new vars:
+  **UDP DNS outbound** (default `vpn-1`, for `yandex_udp`) and **Encrypted
+  DNS outbound** (default `direct-out`, for Yandex DoT and DoH); `yandex_udp`
+  no longer follows the preset's Outbound, `yandex_dot` is direct by default.
+  The hints of DNS Final and Default Domain Resolver recommend `google_doh` or
+  `cloudflare_dot` and say that UDP servers are fine for DNS Final but not for
+  Default Domain Resolver. The `local_dns_resolver` banner offers "Switch to
+  google_doh" instead of `cloudflare_udp`. Not verified on a device.
+  (RU: Дефолты Outbound DNS-серверов: UDP через `vpn-1`, DoT/DoH напрямую;
+  конфиг меняется у всех, кто Outbound не трогал; группа Shield целиком
+  прямая; у пресета Ru internet segment новые var UDP DNS outbound (`vpn-1`)
+  и Encrypted DNS outbound (`direct-out`); баннер `local_dns_resolver`
+  предлагает `google_doh`.)
+- **Rule editor: one "DNS & Resolve" section, the "Action & Resolve" sheet
+  and its ⚙ are gone (task 683).** Action at the top only chooses where the
+  traffic goes; **Resolve only** is now an item of the Action list (after
+  Reject, for rules with domains). The section at the bottom holds Answer
+  (Default — DNS Final / Dedicated server / Fixed IP), Force IPv4, **Resolve
+  before routing** (formerly Resolve first) with Strategy, and a collapsed
+  Advanced block with the former sheet's fields (DNS server for the lookup,
+  Disable cache, Disable optimistic cache, Rewrite TTL, Query timeout, Client
+  subnet), active when the rule resolves. The View tab shows the rule's DNS
+  rules. What is written for existing rules is unchanged.
+  (RU: Редактор правила: одна секция «DNS & Resolve», окно «Action & Resolve»
+  и ⚙ убраны, Resolve only — пункт списка Action.)
+- **Launcher contract 1.1.132 → 1.1.139.** DNS servers in LX Backup:
+  `dns.template_catalog` and one removal rule (1.1.134–1.1.136, tasks
+  680/681); the corpus case for the catalog (1.1.137); `rules[].dns.fixedIps`
+  for both sides (1.1.138–1.1.139) with a `rule_dns` corpus runner.
 
 - **DNS servers: the list is seeded once, template servers can be deleted,
   new ones come from a catalog under (+)
@@ -177,6 +269,20 @@
   stuck close no longer blocks the next test or the VPN start. An old run can
   no longer close the session of a new one or reset its indicator
   (GitHub issue #171). Not verified on a device.
+- **Android TV: receiving settings from a phone with the remote
+  ([task 622](docs/spec/tasks/622-device-transfer-phone-to-tv.md)).** The
+  receive screen fits without scrolling: the QR code takes the remaining
+  height and the buttons stay on screen. In the import preview the arrows
+  move between choices and OK selects. After the preview the focus returns
+  to the transfer card on the Backup screen. Closing the receive server no
+  longer fails and the forced close after 2 s applies.
+- **Template formatter
+  ([task 678](docs/spec/tasks/678-format-wizard-template-new-dialect.md)).**
+  `app/scripts/format_wizard_template.py` accepts the current template
+  language (`#and`/`#or`/`#not`/`#value`/`#else`, the short `#if`, `#tpl`,
+  `#do`, `#filter`) and checks that the meaning is unchanged before writing;
+  `wizard_template.json` is reformatted (2367 → 760 lines), contents
+  unchanged.
 
 ---
 

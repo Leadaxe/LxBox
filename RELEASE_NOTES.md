@@ -1,37 +1,30 @@
-# L×Box v2.25.16
+# L×Box v2.25.17
 
-**A patch on top of [v2.25.15](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.15).**
+**A patch on top of [v2.25.16](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.16).**
 
-An Android TV can take its settings from a phone: the TV shows a QR code, the
-phone scans it and sends a backup over the local network. OpenConnect gateways
-(FortiGate and others) can be added from a form in **Add server**; when the
-gateway asks for a code or a browser sign-in, the app shows a **Sign-in
-required** notification. DNS settings are now a tab of the **Routing** screen.
-The new **Tunnel ingress** preset rejects connections that peers open from the
-other side of a WireGuard, AmneziaWG, OpenVPN or OpenConnect node, unless the
-node allows them. **Send HWID** is now on by default, and TLS fragmentation
-reaches REALITY nodes from every level: see "Read before updating". Also here:
-the ⋮ menu and line wrap in the JSON editor, one connection card for Conns and
-the profiler, the subscription `announce` text, "Auto-restart VPN on settings
-change" that applies every change, fixes for Speed Test and for a start stuck
-in "stopping". Core `v1.14.3-lx.21`, contract 1.1.132.
+DNS servers get new defaults: plain UDP servers go through the tunnel, DoT and
+DoH go direct, and the Shield group is now direct as a whole. The DNS server
+list is filled from the template once; template servers can be deleted, and
+new ones are added from a catalog under (+). A template or preset server can be
+duplicated into your own. A routing rule can answer its domains with a fixed IP
+address, like a hosts entry, and everything about resolving now sits in one
+**DNS & Resolve** section of the rule editor. Directions can be reordered,
+**Default traffic** moved to the bottom of the Rules tab, and on Android TV the
+app fills the screen. Stopping the VPN no longer hangs. Core
+`v1.14.3-lx.23`, contract 1.1.139.
 
-**Патч поверх [v2.25.15](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.15).**
+**Патч поверх [v2.25.16](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.16).**
 
-Android TV получает настройки с телефона: TV показывает QR-код, телефон
-сканирует его и отправляет бэкап по локальной сети. Шлюзы OpenConnect
-(FortiGate и другие) добавляются формой в **Add server**; когда шлюз просит
-код или вход через браузер, приложение показывает уведомление **Sign-in
-required**. Настройки DNS стали вкладкой экрана **Routing**. Новый пресет
-**Tunnel ingress** отклоняет соединения, которые пиры открывают с той стороны
-узла WireGuard, AmneziaWG, OpenVPN или OpenConnect, если узел их не
-разрешает. **Send HWID** теперь включён по умолчанию, а фрагментация TLS
-доходит до REALITY-узлов с любого уровня: см. «Прочтите до обновления».
-Кроме того: меню ⋮ и перенос строк в редакторе JSON, одна карточка
-соединения для Conns и профайлера, текст `announce` подписки,
-«Auto-restart VPN on settings change» применяет каждое изменение,
-исправлены Speed Test и старт, застревавший в «stopping». Ядро
-`v1.14.3-lx.21`, контракт 1.1.132.
+У DNS-серверов новые умолчания: нешифрованные UDP-серверы ходят через туннель,
+DoT и DoH — напрямую, группа Shield теперь целиком прямая. Список DNS-серверов
+заполняется из шаблона один раз; шаблонные серверы можно удалять, новые
+добавляются из каталога по (+). Шаблонный или пресетный сервер можно
+продублировать в свой. Правило маршрутизации может отвечать на свои домены
+фиксированным IP-адресом, как запись hosts, а всё про резолв собрано в одну
+секцию **DNS & Resolve** редактора правила. Направления можно переставлять,
+**Default traffic** переехал в конец вкладки Rules, на Android TV приложение
+занимает весь экран. Остановка VPN больше не зависает. Ядро
+`v1.14.3-lx.23`, контракт 1.1.139.
 
 ---
 
@@ -40,235 +33,180 @@ required**. Настройки DNS стали вкладкой экрана **Ro
 
 ## ⚠️ Read before updating
 
-- **DNS settings moved to the Routing screen ([task 655](docs/spec/tasks/655-dns-tab-in-routing.md)).**
-  The **DNS Settings** item is gone from the side menu. The same settings are
-  on the **DNS** tab of **Routing**, right after **Rules**: Directions ·
-  Presets · Rules · DNS · Tunnel apps. The blocks, editors and dialogs are
-  unchanged. The Routing menu item now reads "Directions, rules and DNS".
-  **DNS settings** in the DNS health sheet and support links to the DNS screen
-  open Routing on the DNS tab.
-- **Incoming connections from client tunnels are rejected ([task 656](docs/spec/tasks/656-contract-1130-tunnel-ingress.md)).**
-  Peers on the other side of a WireGuard, AmneziaWG, OpenVPN or OpenConnect
-  node can open connections to the phone: to the phone itself, to the local
-  network, or out to the internet through it. The new **Tunnel ingress**
-  preset is on by default and closes them. On an existing install it is added
-  once on update; a preset you removed does not come back. What a node lets
-  in is set in its settings, in the **Incoming connections from this tunnel**
-  block:
-  - **Allow access to this device**;
-  - **Expose local network** — peers reach private networks behind the
-    phone;
-  - **Allow as gateway** — peers send any traffic through the phone.
+- **DNS servers: plain UDP through the tunnel, DoT and DoH direct ([task 684](docs/spec/tasks/684-dns-defaults-plain-tunnel-encrypted-direct.md)).**
+  Template servers take their Outbound from the template on every build, so
+  the config changes for everyone who has not changed it by hand:
+  - `google_udp`, `cloudflare_udp`, `opendns_udp` — `direct-out` → `vpn-1`;
+  - `google_dot`, `cloudflare_dot`, `quad9_doh` — `vpn-1` → `direct-out`;
+  - `google_doh`, `opendns_doh`, `yandex_dot`, `safe_dns_dot` — direct, as
+    before.
 
-  All three are off by default. The preset has three settings: **Incoming
-  from tunnels** (what happens to the rest: `reject` by default, `drop`, or an
-  outbound), **Device and local network go to** (`direct-out` by default) and
-  **Gateway traffic goes to** (`vpn-1` by default). DNS queries from a closed
-  tunnel are rejected too. Tailscale nodes are not covered: tailnet peers are
-  limited by Tailscale ACLs.
-- **Send HWID is on by default ([task 658](docs/spec/tasks/658-send-hwid-on-by-default.md)).**
-  Without `x-hwid` a Remnawave panel registers the device itself, without a
-  name, and after an app update may count it as a new device against the
-  limit. If you never touched **Send HWID**, the app starts sending it with the
-  next subscription update; an explicit Off stays Off. A panel with a device
-  limit sees the install once more, now with its name (`SM-S918B | Android`).
-  Remove the old nameless device in the panel or the provider's bot.
-- **TLS fragmentation reaches REALITY nodes from every level ([task 665](docs/spec/tasks/665-tls-fragment-inherits-everywhere-reality-too.md), issue #170).**
-  Since 2.25.12 the global, folder and subscription settings skipped REALITY
-  nodes. Now REALITY inherits fragmentation like any node, and a node that
-  gets it from a level above says so under its TLS section. **If your REALITY
-  server does not accept a split ClientHello, set fragmentation to Off on that
-  node or its subscription.**
+  The **Shield** group (`dns_shield`, six encrypted providers) is now direct
+  as a whole. `safe_dns_dot` resolves its own name through `google_doh`
+  instead of `google_udp`. Descriptions no longer name the path: "Google
+  UDP", "OpenDNS UDP", "Quad9 DoH (anti-malware)", "Yandex DoT"; the path is
+  the Outbound field in the editor.
+- **Ru internet segment: separate Outbound for its UDP and encrypted DNS (task 684).**
+  Two new preset settings: **UDP DNS outbound** (default `vpn-1`, for
+  `yandex_udp`) and **Encrypted DNS outbound** (default `direct-out`, for
+  Yandex DoT and DoH). `yandex_udp` no longer follows the preset's
+  **Outbound**, and Yandex DoT is direct by default.
+- **The DNS server list is filled from the template once ([task 680](docs/spec/tasks/680-dns-servers-catalog-seed-once.md)).**
+  An existing install keeps its list as it is. Servers that a newer template
+  brings appear in the catalog under (+) next to **DNS Servers**, not in the
+  list.
 
 ## ✨ New
 
-- **Set up a TV from your phone ([task 622](docs/spec/tasks/622-device-transfer-phone-to-tv.md), issue #163).**
-  On the TV: Backup & restore → Receive from phone → **Show code**. On the
-  phone: Backup & restore → tick the categories → **Send to TV** → **Scan
-  code**. The TV opens the usual **Import backup** window. The settings travel
-  encrypted with a one-time key that only the QR code carries; a code lives
-  10 minutes, works for one transfer and closes after five sends with a wrong
-  key. The phone sends past its own VPN, so the transfer works with the tunnel
-  up. Both devices must be on the same network; a guest Wi-Fi often keeps them
-  apart. The receive item appears only on a TV, the send item only on a device
-  with a camera. Not yet checked on real devices.
-- **Source and inbound of connections from other inputs ([task 661](docs/spec/tasks/661-stats-source-inbound.md)).**
-  With Tunnel ingress, `allow_lan` / `allow_gateway` on a node, or a local
-  proxy (`mixed-in`, `sysproxy-in`), connections come not only from the TUN.
-  Conns, Stats → Overview and the profiler feed add `<ip:port> / <inbound>` to
-  such a connection, for example `(no owner) · 10.8.0.2:40112 / wg-in`. For
-  `tun-in` nothing is added. The connection card has a **Source** group before
-  Destination.
-- **OpenConnect in Add server ([task 654](docs/spec/tasks/654-openconnect-fortinet-support.md)).**
-  A new **OpenConnect** tab adds a corporate VPN gateway. The main block has
-  **Tag**, **Gateway** (FortiGate, Cisco AnyConnect, GlobalProtect, F5,
-  Pulse, Juniper; FortiGate by default), **Server** (`host:port` or a full URL,
-  port 443 if omitted), **Username** and **Password**.
-  - **Security**: server certificate check (System CA, Pinned fingerprint, or
-    Do not verify), SNI, Group / Realm (hidden for FortiGate), Disable SSO.
-  - **Advanced** (collapsed): TCP only (no DTLS), User-Agent, Hostcheck
-    (FortiGate only), MTU, DPD interval, Reconnect timeout, Disable IPv6,
-    Allow legacy crypto.
-
-  An empty field writes no key. A token, a client certificate and a cookie
-  are set in JSON. The node row shows the gateway type, for example
-  `openconnect·fortinet`. If UDP to the gateway does not get through, the
-  core falls back to TLS after about 8 s; **TCP only (no DTLS)** skips that
-  wait.
-- **OpenConnect form on the Source tab of a node (task 654).**
-  For an OpenConnect node the same form sits above the JSON on **Source**.
-  The form and the JSON are one body: a field change rewrites the text, a
-  text change updates the form. Keys the form does not show (`token`,
-  `cookie`, `detour`, client certificate) are kept. Changes are saved with
-  the screen's **Save**. While the text is not a valid JSON object, the form
-  is off and says so.
-- **Sign-in codes and browser SSO for OpenConnect (task 654).**
-  - When the gateway asks for a second factor, a **Sign-in required: <tag>**
-    notification appears, and the node row shows **Waiting for sign-in**. The
-    dialog shows the gateway's fields and message. **Submit** sends the code,
-    **Not now** closes the dialog and leaves the request pending, **Request a
-    new code** makes the gateway send a fresh one. After two wrong codes in a
-    row the dialog warns that each wrong code starts a new sign-in on the
-    gateway.
-  - FortiGate SAML: the **Sign in in your browser** dialog opens the link in
-    the browser. The app listens on `127.0.0.1` (the port the gateway names,
-    otherwise 8020) and hands the redirect back to the core.
-  - SSO that needs a cookie from an embedded browser (Cisco AnyConnect and
-    others) is not supported: the dialog says so.
-
-  Code entry and SAML have not yet been run against a live gateway with MFA.
-- **Line-wrap button in the JSON editor ([task 649](docs/spec/tasks/649-json-view-wrap-toggle.md)).**
-  The Config editor and the read-only JSON views with sticky headers
-  (subscription **Source**, node **JSON**) have a wrap button next to search.
-  Wrapping is off by default, the button is highlighted while it is on, and
-  the choice is not saved: the screen opens again without wrapping. While
-  wrapping is on there are no sticky headers — the editor draws them only for
-  unwrapped text. Laying out a very long line takes time; a thin progress bar
-  at the top of the field shows while it runs.
-- **Subscription description from the `announce` header ([task 648](docs/spec/tasks/648-subscription-announce.md)).**
-  Providers send a short text in `announce` (`base64:…` or plain), for example
-  a legend for the emoji in node names. It is shown in the subscription header
-  under **Expires**: up to 4 lines, a tap expands the whole text. If the header
-  is missing, the same key is read from the comments at the top of the body.
-- **Tag prefix from the emoji in the subscription name ([task 647](docs/spec/tasks/647-subscription-emoji-tag-prefix.md)).**
-  When a new subscription first gets its name and the prefix is empty, the
-  emoji group from the name becomes the prefix: `Liberty VPN 🗽` → `🗽`. A
-  prefix already taken gets an index: `🗽2`. Existing subscriptions keep their
-  prefixes.
-- **Source tab: `base64:` headers decoded ([task 650](docs/spec/tasks/650-source-headers-base64-toggle.md)).**
-  Values such as `profile-title` and `announce` are shown as text; the
-  `base64` label under the header name switches the line back to the raw
-  value. Copy still copies the raw block.
+- **Fixed IP answer in a rule ([task 683](docs/spec/tasks/683-rule-dns-and-resolve-section-fixed-ip.md)).**
+  Rule editor → **DNS & Resolve** → Answer → **Fixed IP** answers the rule's
+  domains with the given IPv4 or IPv6 addresses, like a hosts entry: for
+  example `nas.home` → `192.168.1.10`. "+" turns the field into a list, one
+  address per line; pasting several lines does the same. A line that is not
+  an IP address marks the field and blocks Save. With addresses of one family
+  only, queries of the other type get an empty answer. Traffic to the address
+  follows the rule's Action. On the DNS tab such a rule shows as
+  `action: predefined · answer: …` under "From routing rules", and ✕ there
+  returns it to Default.
+- **"Add DNS server" catalog (task 680).** The (+) next to **DNS Servers**
+  opens **Add DNS server**: **Custom server** and the template's servers with
+  **Add** / **Added**, and ⋮ → **Add all defaults**. A template server can be
+  deleted: long-press → **Delete** on the DNS tab, or the trash icon in the
+  editor; a preset's server cannot. A server the list depends on (a group
+  member, the DNS Final or Default Domain Resolver choice, another server's
+  name resolver) is locked and shows "used by …"; tapping its switch shows
+  "Locked: used by …". The rule editor offers only servers from the list.
+- **Duplicate a template or preset DNS server ([task 682](docs/spec/tasks/682-dns-catalog-revision-and-copy.md)).**
+  ⋮ → **Duplicate** in the server editor, or **Duplicate** in the tile's
+  long-press menu, opens a new custom server with the original's body (with
+  its current settings), tag `<tag>_copy` and description
+  `<description> (copy)`. Nothing is saved until **Save**. The editor of a
+  template or preset server now shows the **Tag** field: changing it turns
+  Save into **Save as copy**, and the original stays in the list. Groups, DNS
+  Final and rules keep pointing to the original.
+- **Outbound and address for OpenDNS UDP, OpenDNS DoH, Quad9 DoH and Yandex DoT (task 682).**
+  These four servers had a fixed body. Now their editor has **Outbound** and
+  a choice of the server address: primary or secondary, IPv4 or IPv6.
+- **Warning when Default Domain Resolver goes through a tunnel (task 682).**
+  This resolver looks up server addresses while the connection is being set
+  up, before the tunnel exists. When the selected server goes through a
+  Direction, or every member of the selected group does, an orange ⚠ appears
+  at the right of the **Default Domain Resolver** header; tapping it explains
+  the risk ("Resolver goes through a tunnel"). The choice is not changed. With
+  the default Shield the ⚠ does not appear.
+- **Reorder Directions ([task 673](docs/spec/tasks/673-directions-reorder-in-ui.md), issue #171).**
+  Each row on the **Directions** tab has a drag handle, `vpn-1` included.
+  While dragging, the rows a Direction cannot pass are tinted red: a
+  Direction that includes others must stay below them. A drop there leaves
+  the list as it was and says why.
 
 ## 🔄 Changed
 
-- **⋮ menu in the JSON editor ([task 660](docs/spec/tasks/660-editor-overflow-menu.md)).**
-  Every JSON field and viewer has a ⋮ menu at the right end of its button row.
-  **Format** moves there, and read-only viewers (subscription **Source**, node
-  **JSON**) get it too: it formats only what is shown, **Show original** brings
-  the source text back. **Magnifier** turns the selection magnifier on and
-  off; the choice is saved for the whole app. After a wrap toggle or Format the
-  wrap button and the menu show a spinner and ignore taps until the lines are
-  laid out.
-- **Editor gestures follow the direction of the swipe (task 649).**
-  - A sideways swipe over a line that does not fit scrolls the text; the tab
-    stays. Where nothing scrolls sideways, the swipe switches the tab as
-    before.
-  - A vertical swipe scrolls the text. Once the text is at its edge, the next
-    swipe in the same direction scrolls the page.
-  - With a selection the editor keeps the whole touch, so the handles move in
-    any direction.
-- **"Skip presets" is now "Skip Tailscale presets" (task 656).**
-  The switch is shown only on Tailscale nodes and affects only the Tailscale
-  preset. The old setting carries over, including from older LX Backup files.
-- **One connection card for Conns and the profiler ([task 662](docs/spec/tasks/662-unified-connection-detail-sheet.md)).**
-  Both screens open the same card with the same groups in the same order. Each
-  keeps its own blocks: One-way traffic and **Close** on Conns, DNS and Issues
-  in the profiler. A closed connection shows a `TCP·` / `UDP·` badge; a tap on
-  it says `TCP closed` / `UDP closed`.
-- **One User-Agent for every request of the app ([task 659](docs/spec/tasks/659-app-user-agent-everywhere.md)).**
-  Rule-sets, update checks, Donate and the support feed, Speed Test, community
-  servers, node diagnostics and the TV transfer send `LxBox-android/<version>`,
-  the same string as the subscription default. **Custom User-Agent** applies to
-  subscriptions only. WARP registration keeps the Cloudflare client string;
-  ping and auto-select are unchanged.
-- **WARP: the eight `8.x` blocks are back in the WireGuard endpoint pool ([task 651](docs/spec/tasks/651-warp-8x-blocks-return.md)).**
-  They were removed in June as unreachable; fresh measurements show them
-  answering on a par with the other blocks.
+- **Rule editor: one "DNS & Resolve" section (task 683).**
+  The "Action & Resolve" sheet and the ⚙ next to Action are gone. Action only
+  chooses where the traffic goes; **Resolve only** is now an item of its
+  list, after Reject (for rules with domains). The section at the bottom
+  holds:
+  - **Answer**: Default (queries go to DNS Final), **Dedicated server**, or
+    **Fixed IP**;
+  - **Force IPv4 (drop AAAA)**;
+  - **Resolve before routing** (formerly Resolve first) with Strategy;
+  - **Advanced**, collapsed: the DNS server for the lookup, Disable cache,
+    Disable optimistic cache, Rewrite TTL, Query timeout, Client subnet.
+
+  Existing rules build the same config. The **View** tab now shows the rule's
+  DNS rules too.
+- **DNS hints (task 684).** The ℹ next to **DNS Final** and **Default Domain
+  Resolver** opens a popup. It recommends `google_doh` or `cloudflare_dot` and
+  says that UDP servers are fine for DNS Final but not for Default Domain
+  Resolver. The `local_dns_resolver` banner offers **Switch to google_doh**.
+- **Default traffic is at the bottom of the Rules tab ([task 676](docs/spec/tasks/676-route-final-on-rules-tab.md)).**
+  The `route.final` picker sits after the rule list and **Add rule**, labelled
+  **Default traffic (no rule matched)**. The Directions tab no longer shows
+  it. What is written is the same.
+- **A Direction is shown by its title everywhere ([task 672](docs/spec/tasks/672-direction-label-vs-tag-consistency.md)).**
+  The notification, a home row whose member is another Direction, the
+  Direction editor header, and the route, Chain and Detour lines in Stats →
+  Connections and Live show the title, with the tag next to it, for example
+  `Germany (vpn-1)`. Renaming still does not change the tag.
+- **The Direction node filter preview works with the VPN off ([task 674](docs/spec/tasks/674-direction-filter-preview-without-tunnel.md)).**
+  The editor and the node count on the Directions tab take nodes from the
+  config build, so they match the built config whether the tunnel is up or
+  not. An empty result reads "No nodes match".
+- **On Android TV the app fills the screen ([task 679](docs/spec/tasks/679-tv-no-portrait-lock.md), issue #163).**
+  On a TV the orientation is never locked, and **Allow rotation** is hidden
+  there. The stored value is kept, so a backup from a TV does not turn
+  rotation on for a phone.
+- **Auto-ping after connect runs the group test only for Fastest groups ([task 677](docs/spec/tasks/677-autoping-tail-skips-round-robin-groups.md)).**
+  Load balance groups no longer have their pool rebuilt, and Hold until
+  failure groups no longer drop the held node after a ping. Latencies of all
+  nodes still come from the ping; **Run URLTest** in the group menu works as
+  before.
 
 ## 🩹 Fixed
 
-- **"Auto-restart VPN on settings change" applies every change ([task 667](docs/spec/tasks/667-auto-apply-gate-shared-by-all-rebuild-paths.md)).**
-  Enabling a large subscription and going back at once, applying a Direction
-  from the home list, two edits within three seconds, or an edit made during a
-  rebuild could leave the "restart VPN" banner instead of a reload. One check
-  now decides for every path; a change that falls into the three-second pause
-  is applied when the pause ends. Editing a chain or adding a source on
-  **Servers** no longer reloads the VPN on its own: with the setting off they
-  show the banner like any other change.
-- **Start after a long idle no longer hangs in "stopping" ([task 663](docs/spec/tasks/663-force-stop-reaches-stuck-stopping.md)).**
-  **Start** could stay dead until the app was force-closed. The force stop now
-  reaches the service even after its receiver is gone. Checked on the
-  emulator only.
-- **Speed Test opens with the VPN up ([task 666](docs/spec/tasks/666-speed-test-open-rangeerror-empty-servers.md)).**
-  Since 2.25.13 the route label under the title was computed before the server
-  list had loaded, and the screen showed an error instead of the test. **Start**
-  is now inactive until the list is loaded.
-- **Telegram support links with `tg://` ([task 657](docs/spec/tasks/657-telegram-support-url-tg-scheme.md)).**
-  A `support-url: tg://resolve?domain=…` header shows the Telegram icon on the
-  subscription screen and in the list. Without Telegram installed the link
-  opens its `t.me` web form instead of only being copied.
-- **A node the core cannot decode is turned off ([task 653](docs/spec/tasks/653-core-decode-error-index-to-tag.md)).**
-  An old MASQUE node from sing-box JSON still carrying `network: h2|h3` made
-  the core refuse the config at **Start** with
-  `outbounds[N].network: json: unknown field`. The VPN did not come up and
-  the node stayed on. Now the index is matched to the node in the config that
-  was sent, the node is turned off and the start is repeated, as with other
-  nodes the core rejects.
-- **WebSocket `Host` written as a list (task 654).** A sing-box JSON node with
-  `headers.Host` as a list got `[a.com]` as its host. The first element is
-  taken now.
-- **Selection magnifier (task 649).** In the Config editor after scrolling
-  down it was a blank white box; in node JSON after moving the page it showed
-  lines from another place. It now draws the editor's own text under the
-  finger.
-- **The screen no longer freezes after start with large subscriptions ([task 652](docs/spec/tasks/652-lazy-rehydration-isolate.md)).**
-  Disabled subscriptions are no longer loaded at start: they are read from the
-  cache when turned on, opened, or needed for the config. Parsing the cached
-  body and the fresh server response runs off the UI thread: updating a
-  subscription with 4025 nodes now holds the UI for 0.24 s instead of 1.85 s.
-
-## 🗑 Removed
-
-- **Tailscale node: the "Allow LAN access while using exit node" switch ([task 646](docs/spec/tasks/646-tailscale-remove-lan-access-switch.md)).**
-  The core on Android does not apply `exit_node_allow_lan_access`. The local
-  network with an exit node goes direct through the **Private IPs** preset.
-  The field is still accepted from JSON.
+- **Stopping the VPN no longer hangs ([task 668](docs/spec/tasks/668-stop-teardown-trace-and-timeouts.md)).**
+  With many WireGuard, AmneziaWG or WARP nodes the stop is fast again: the
+  core waited for each endpoint's receive worker one after another. Each stop
+  step also has a real time limit (core shutdown 20 s, other steps 3 s), so
+  the service reaches Stopped even when a step does not return. A step stuck
+  longer than 5 s writes `stuck at <step>` and a goroutine dump to the app
+  log, and the dump goes into the support pack.
+- **Test servers with the VPN off: Stop stops, Start starts again ([task 669](docs/spec/tasks/669-probe-session-cancel-stop-timeout-race.md), issue #171).**
+  **Stop** aborts the measurements already sent instead of waiting for their
+  timeout; the bar shows `Stopping…` meanwhile. A stuck test session no
+  longer blocks the next test or the VPN start.
+- **Load balance skips a node that failed its check.** A `round_robin` group
+  no longer sends new connections to a node that failed its last check while
+  a live node is available; a failed manual ping also takes the node out of
+  the rotation until the next group check.
+- **"Register detour in auto group" works ([task 670](docs/spec/tasks/670-register-detour-in-auto-group-dead-toggle.md)).**
+  Chain links get into a Direction's auto group only with this switch on.
+  It is disabled while **Register detour servers** is off, and a folder shows
+  both switches only when it has chain links.
+- **An auto node in a folder no longer disappears silently ([task 675](docs/spec/tasks/675-folder-auto-node-silent-drop-and-pool-gates.md)).**
+  An auto node with no members is named in the build report, and its editor
+  says it stays out of the config. Its pool follows the same rules as a
+  Direction's: Tailscale without an exit node is never in it, chain links only
+  with **Register detour servers**.
+- **The JSON preview of a DNS group skips disabled members ([task 671](docs/spec/tasks/671-dns-group-json-preview-disabled-members.md)).**
+  As the build does; a line under the preview names them: "Disabled, skipped
+  at build: …".
+- **Android TV: receiving settings with the remote ([task 622](docs/spec/tasks/622-device-transfer-phone-to-tv.md)).**
+  The receive screen fits without scrolling, the arrows move between choices
+  in the import preview, and the focus returns to the transfer card after it.
+- **Start no longer waits 10–16 s for an unrelated mux handshake**, and a
+  MASQUE node with `vhttp: auto` no longer keeps the previous core instance
+  in memory after each Stop/Start or profile switch.
 
 ## 🔧 Under the hood
 
-- Core `v1.14.3-lx.18` → `v1.14.3-lx.21`. Nothing changes on Android: lx.19
-  and lx.20 fix the Linux router daemon, lx.21 adds TrustTunnel to desktop and
-  router builds only. The Java surface is the same as in lx.18.
-- Launcher contract 1.1.119 → 1.1.132: OpenConnect fields and the form model
-  in the registry; keys a type does not describe pass through as is
-  (`openvpn-client`, `openconnect`); an empty described object
-  (`tls.ech: {}`, `transport: {}`) is dropped with a warning; the short `#if`
-  form and `#if` on `#do` in the template language; node fields
-  `allow_local`, `allow_lan`, `allow_gateway`; `skip_presets` renamed to
-  `skip_tailscale_presets` (the old key is still read in storage and
-  LX Backup).
-- The Debug API returns `announce` in `/subs`.
-- New tests: the wrap button and its state, the progress bar, the gesture
-  decision table and the recognizer against horizontal and vertical drags,
-  `announce` parsing, emoji prefixes with indexes, `base64` header decoding,
-  the decode form of a core rejection, the OpenConnect form and its sync with
-  Source, sign-in logic, the Tunnel ingress build and node flags in LX Backup,
-  the DNS tab staying in sync with the other Routing tabs, the transfer code
-  and its encrypted envelope, the TV receive server, Telegram link detection,
-  the Send HWID default, the app User-Agent, Speed Test's first frame with the
-  tunnel up, the auto-restart check on every rebuild path, fragmentation
-  inheritance for REALITY.
+- Core `v1.14.3-lx.21` → `v1.14.3-lx.23` ([docs/KERNEL.md](docs/KERNEL.md)):
+  the stop, start, MASQUE and Load balance fixes above; a stop that hangs
+  longer than 20 s writes a goroutine dump to the core log. The Java surface
+  is the same as in lx.21.
+- Launcher contract 1.1.132 → 1.1.139: the source's template catalog in LX
+  Backup (`dns.template_catalog`) with one rule for removing template DNS
+  servers on import ([task 681](docs/spec/tasks/681-dns-servers-uniform-backup-catalog.md));
+  `rules[].dns.fixedIps` for both sides.
+- LX Backup and the phone → TV transfer carry the list of template DNS
+  servers as is: a server deleted on the source is removed on the receiver,
+  unless something still refers to it (then it stays, with a warning). A DNS
+  Final or default resolver pointing to a missing server is reset to the
+  template default, and a group with no known member comes in turned off.
+  Older backups lose nothing.
+- Debug API: `POST /directions/reorder` and `include` in `POST`/`PATCH
+  /directions` that would put a Direction above one it includes get 409 with
+  the pairs in `conflicts`; rules read and write `dns.fixed_ips`.
+- The template formatter (`app/scripts/format_wizard_template.py`) accepts
+  the current template language and checks the meaning before writing;
+  `wizard_template.json` is reformatted, 2367 → 760 lines, contents
+  unchanged ([task 678](docs/spec/tasks/678-format-wizard-template-new-dialect.md)).
+- New tests: Fixed IP emission and storage, the DNS & Resolve section, DNS
+  server copy, the tunnel resolver warning, DNS defaults of the whole catalog
+  and Ru internet segment, Directions reorder zones, the filter preview pool,
+  the probe session stop, TV receive layout and D-pad focus, the `rule_dns`
+  contract corpus.
 
 </details>
 
@@ -277,233 +215,179 @@ required**. Настройки DNS стали вкладкой экрана **Ro
 
 ## ⚠️ Прочтите до обновления
 
-- **Настройки DNS переехали на экран Routing ([задача 655](docs/spec/tasks/655-dns-tab-in-routing.md)).**
-  Пункта **DNS Settings** в боковом меню больше нет. Те же настройки — на
-  вкладке **DNS** экрана **Routing**, сразу после **Rules**: Directions ·
-  Presets · Rules · DNS · Tunnel apps. Блоки, редакторы и диалоги прежние.
-  Подпись пункта Routing в меню теперь «Directions, rules and DNS».
-  **DNS settings** в листе DNS health и support-ссылки на экран DNS
-  открывают Routing на вкладке DNS.
-- **Входящие соединения из клиентских туннелей отклоняются ([задача 656](docs/spec/tasks/656-contract-1130-tunnel-ingress.md)).**
-  Пиры с той стороны узла WireGuard, AmneziaWG, OpenVPN или OpenConnect
-  могут открывать соединения к телефону: к самому телефону, в локальную сеть
-  или через него в интернет. Новый пресет **Tunnel ingress** включён по
-  умолчанию и закрывает их. На существующей установке он добавляется один
-  раз при обновлении; удалённый пресет не возвращается. Что пропускает узел,
-  задаётся в его настройках, в блоке **Incoming connections from this
-  tunnel**:
-  - **Allow access to this device** — доступ к самому телефону;
-  - **Expose local network** — пиры видят частные сети за телефоном;
-  - **Allow as gateway** — пиры пускают через телефон любой трафик.
+- **DNS-серверы: UDP через туннель, DoT и DoH напрямую ([задача 684](docs/spec/tasks/684-dns-defaults-plain-tunnel-encrypted-direct.md)).**
+  Шаблонные серверы берут Outbound из шаблона на каждой сборке, поэтому
+  конфиг меняется у всех, кто не менял его руками:
+  - `google_udp`, `cloudflare_udp`, `opendns_udp` — `direct-out` → `vpn-1`;
+  - `google_dot`, `cloudflare_dot`, `quad9_doh` — `vpn-1` → `direct-out`;
+  - `google_doh`, `opendns_doh`, `yandex_dot`, `safe_dns_dot` — напрямую, как
+    и раньше.
 
-  По умолчанию все три выключены. У пресета три настройки: **Incoming from
-  tunnels** (что делать с остальными: по умолчанию `reject`, можно `drop`
-  или исходящий канал), **Device and local network go to** (по умолчанию
-  `direct-out`) и **Gateway traffic goes to** (по умолчанию `vpn-1`).
-  DNS-запросы из закрытого туннеля тоже отклоняются. Узлы Tailscale пресет
-  не трогает: пиров tailnet ограничивают ACL Tailscale.
-- **Send HWID включён по умолчанию ([задача 658](docs/spec/tasks/658-send-hwid-on-by-default.md)).**
-  Без `x-hwid` панель Remnawave заводит устройство сама, без имени, и после
-  обновления приложения может посчитать его новым устройством в лимите. Если
-  **Send HWID** не трогали, приложение начнёт слать его со следующего
-  обновления подписки; явное Off сохраняется. Панель с лимитом устройств
-  увидит установку ещё раз, уже с именем (`SM-S918B | Android`). Старое
-  безымянное устройство удаляется в панели или в боте провайдера.
-- **Фрагментация TLS доходит до REALITY-узлов с любого уровня ([задача 665](docs/spec/tasks/665-tls-fragment-inherits-everywhere-reality-too.md), issue #170).**
-  С 2.25.12 глобальная настройка, папка и подписка пропускали REALITY-узлы.
-  Теперь REALITY наследует фрагментацию как любой узел, а узел с
-  унаследованной фрагментацией пишет об этом под секцией TLS. **Если ваш
-  REALITY-сервер не принимает разрезанный ClientHello, поставьте Off на этом
-  узле или его подписке.**
+  Группа **Shield** (`dns_shield`, шесть шифрованных провайдеров) теперь
+  целиком прямая. `safe_dns_dot` резолвит своё имя через `google_doh` вместо
+  `google_udp`. В описаниях больше нет пути: «Google UDP», «OpenDNS UDP»,
+  «Quad9 DoH (anti-malware)», «Yandex DoT»; путь — поле Outbound в
+  редакторе.
+- **Ru internet segment: отдельный Outbound для UDP и шифрованного DNS (задача 684).**
+  Две новые настройки пресета: **UDP DNS outbound** (по умолчанию `vpn-1`,
+  для `yandex_udp`) и **Encrypted DNS outbound** (по умолчанию `direct-out`,
+  для Yandex DoT и DoH). `yandex_udp` больше не следует **Outbound** пресета,
+  Yandex DoT по умолчанию напрямую.
+- **Список DNS-серверов заполняется из шаблона один раз ([задача 680](docs/spec/tasks/680-dns-servers-catalog-seed-once.md)).**
+  У существующей установки список остаётся как есть. Серверы, которые
+  приносит новый шаблон, появляются в каталоге по (+) рядом с **DNS
+  Servers**, а не в списке.
 
 ## ✨ Новое
 
-- **Настройка TV с телефона ([задача 622](docs/spec/tasks/622-device-transfer-phone-to-tv.md), issue #163).**
-  На TV: Backup & restore → Receive from phone → **Show code**. На телефоне:
-  Backup & restore → отметить категории → **Send to TV** → **Scan code**. На
-  TV открывается обычное окно **Import backup**. Настройки идут
-  зашифрованными одноразовым ключом, который есть только в QR-коде; код
-  живёт 10 минут, годен на одну передачу и закрывается после пяти отправок с
-  неверным ключом. Телефон отправляет мимо своего VPN, так что передача
-  работает при поднятом туннеле. Оба устройства должны быть в одной сети;
-  гостевой Wi-Fi часто их разделяет. Пункт приёма есть только на TV, пункт
-  отправки — только на устройстве с камерой. На реальных устройствах ещё не
-  проверено.
-- **Источник и вход у соединений не через TUN ([задача 661](docs/spec/tasks/661-stats-source-inbound.md)).**
-  С Tunnel ingress, `allow_lan` / `allow_gateway` у узла или локальным
-  прокси (`mixed-in`, `sysproxy-in`) соединения приходят не только из TUN.
-  Conns, Stats → Overview и лента профайлера дописывают к такому соединению
-  `<ip:port> / <inbound>`, например `(no owner) · 10.8.0.2:40112 / wg-in`.
-  Для `tun-in` ничего не дописывается. В карточке соединения перед
-  Destination появилась группа **Source**.
-- **OpenConnect в Add server ([задача 654](docs/spec/tasks/654-openconnect-fortinet-support.md)).**
-  Новая вкладка **OpenConnect** добавляет корпоративный VPN-шлюз. В основном
-  блоке — **Tag**, **Gateway** (FortiGate, Cisco AnyConnect, GlobalProtect,
-  F5, Pulse, Juniper; по умолчанию FortiGate), **Server** (`host:port` или
-  полный URL, без порта — 443), **Username** и **Password**.
-  - **Security**: проверка сертификата сервера (System CA, Pinned
-    fingerprint или Do not verify), SNI, Group / Realm (у FortiGate скрыто),
-    Disable SSO.
-  - **Advanced** (свёрнут): TCP only (no DTLS), User-Agent, Hostcheck
-    (только FortiGate), MTU, DPD interval, Reconnect timeout, Disable IPv6,
-    Allow legacy crypto.
-
-  Пустое поле ключ не пишет. Токен, клиентский сертификат и cookie задаются
-  в JSON. В строке узла виден тип шлюза, например `openconnect·fortinet`.
-  Если UDP до шлюза не проходит, ядро уходит на TLS примерно через 8 с;
-  **TCP only (no DTLS)** убирает это ожидание.
-- **Форма OpenConnect на вкладке Source узла (задача 654).**
-  У узла OpenConnect та же форма стоит над JSON на вкладке **Source**. Форма
-  и JSON — одно тело: правка поля переписывает текст, правка текста
-  обновляет форму. Ключи, которых в форме нет (`token`, `cookie`, `detour`,
-  клиентский сертификат), сохраняются. Сохраняет общая кнопка **Save**
-  экрана. Пока текст не разбирается как JSON-объект, форма выключена и
-  об этом написано.
-- **Коды входа и SSO через браузер для OpenConnect (задача 654).**
-  - Когда шлюз просит второй фактор, появляется уведомление **Sign-in
-    required: <тег>**, а в строке узла — **Waiting for sign-in**. Диалог
-    показывает поля и сообщение шлюза. **Submit** отправляет код, **Not now**
-    закрывает диалог и оставляет запрос висеть, **Request a new code**
-    просит шлюз прислать новый. После двух неверных кодов подряд диалог
-    предупреждает, что каждый неверный код запускает на шлюзе новый вход.
-  - SAML у FortiGate: диалог **Sign in in your browser** открывает ссылку в
-    браузере. Приложение слушает `127.0.0.1` (порт, который назвал шлюз,
-    иначе 8020) и отдаёт редирект ядру.
-  - SSO, которому нужен cookie из встроенного браузера (Cisco AnyConnect и
-    другие), не поддержан: диалог так и говорит.
-
-  Ввод кода и SAML на живом шлюзе с MFA ещё не прогонялись.
-- **Кнопка переноса строк в редакторе JSON ([задача 649](docs/spec/tasks/649-json-view-wrap-toggle.md)).**
-  В редакторе Config и в просмотрщиках JSON с липкими заголовками (**Source**
-  подписки, **JSON** узла) рядом с поиском появилась кнопка переноса. По
-  умолчанию перенос выключен, включённая кнопка подсвечена, выбор не
-  сохраняется: экран открывается снова без переноса. Пока перенос включён,
-  липких заголовков нет — редактор рисует их только без переноса. Раскладка
-  очень длинной строки считается не сразу; пока она идёт, у верхнего края
-  поля видна тонкая полоса прогресса.
-- **Описание подписки из заголовка `announce` ([задача 648](docs/spec/tasks/648-subscription-announce.md)).**
-  Провайдеры присылают в `announce` короткий текст (`base64:…` или открытый),
-  например легенду к эмодзи в именах узлов. Он показывается в шапке подписки
-  под **Expires**: до 4 строк, тап раскрывает текст целиком. Если заголовка
-  нет, тот же ключ читается из комментариев в начале тела.
-- **Префикс тегов из эмодзи в названии подписки ([задача 647](docs/spec/tasks/647-subscription-emoji-tag-prefix.md)).**
-  Когда новая подписка впервые получает имя, а префикс пустой, префиксом
-  становится группа эмодзи из имени: `Liberty VPN 🗽` → `🗽`. Занятый префикс
-  получает индекс: `🗽2`. У существующих подписок префиксы не меняются.
-- **Вкладка Source: `base64:`-заголовки расшифрованы ([задача 650](docs/spec/tasks/650-source-headers-base64-toggle.md)).**
-  Значения вроде `profile-title` и `announce` показываются текстом; подпись
-  `base64` под именем заголовка переключает строку на исходное значение и
-  обратно. Копирование блока — как прежде, в исходном виде.
+- **Ответ фиксированным IP у правила ([задача 683](docs/spec/tasks/683-rule-dns-and-resolve-section-fixed-ip.md)).**
+  Редактор правила → **DNS & Resolve** → Answer → **Fixed IP** отвечает на
+  домены правила заданными адресами IPv4 или IPv6, как запись hosts:
+  например, `nas.home` → `192.168.1.10`. «+» делает поле списком, по адресу
+  на строку; вставка нескольких строк делает то же. Строка, которая не
+  является IP-адресом, подсвечивает поле и блокирует Save. Если заданы адреса
+  только одного семейства, запросы другого типа получают пустой ответ. Трафик
+  к адресу идёт по Action правила. На вкладке DNS такое правило видно в «From
+  routing rules» строкой `action: predefined · answer: …`, ✕ там возвращает
+  его в Default.
+- **Каталог «Add DNS server» (задача 680).** (+) рядом с **DNS Servers**
+  открывает **Add DNS server**: **Custom server** и серверы шаблона с
+  **Add** / **Added**, ⋮ → **Add all defaults**. Шаблонный сервер можно
+  удалить: долгое нажатие → **Delete** на вкладке DNS или корзина в
+  редакторе; сервер пресета — нельзя. Сервер, от которого зависит список
+  (член группы, выбор DNS Final или Default Domain Resolver, резолвер имени
+  другого сервера), залочен с подписью «used by …»; тап по его переключателю
+  показывает «Locked: used by …». Редактор правила предлагает только серверы
+  из списка.
+- **Дубликат шаблонного или пресетного DNS-сервера ([задача 682](docs/spec/tasks/682-dns-catalog-revision-and-copy.md)).**
+  ⋮ → **Duplicate** в редакторе сервера или **Duplicate** в меню долгого
+  нажатия на плитке открывает новый свой сервер с телом оригинала (с его
+  текущими настройками), тегом `<tag>_copy` и описанием
+  `<description> (copy)`. До **Save** ничего не сохраняется. В редакторе
+  шаблонного или пресетного сервера теперь есть поле **Tag**: его правка
+  превращает Save в **Save as copy**, оригинал остаётся в списке. Группы,
+  DNS Final и правила по-прежнему указывают на оригинал.
+- **Outbound и адрес у OpenDNS UDP, OpenDNS DoH, Quad9 DoH и Yandex DoT (задача 682).**
+  У этих четырёх серверов тело было зашито. Теперь в редакторе есть
+  **Outbound** и выбор адреса сервера: основной или запасной, IPv4 или IPv6.
+- **Предупреждение, когда Default Domain Resolver ходит через туннель (задача 682).**
+  Этот резолвер ищет адреса серверов при установке соединения, когда туннеля
+  ещё нет. Если выбранный сервер ходит через Направление или через него ходят
+  все члены выбранной группы, у правого края заголовка **Default Domain
+  Resolver** появляется оранжевый ⚠; тап объясняет риск («Resolver goes
+  through a tunnel»). Выбор не меняется. У Shield по умолчанию ⚠ нет.
+- **Перестановка Направлений ([задача 673](docs/spec/tasks/673-directions-reorder-in-ui.md), issue #171).**
+  У каждой строки на вкладке **Directions** есть ручка перетаскивания,
+  включая `vpn-1`. Во время перетаскивания строки, за которые Направление
+  заходить не может, подсвечены красным: Направление, включающее другие,
+  должно оставаться ниже них. Сброс туда оставляет список как был и
+  объясняет причину.
 
 ## 🔄 Изменено
 
-- **Меню ⋮ в редакторе JSON ([задача 660](docs/spec/tasks/660-editor-overflow-menu.md)).**
-  У каждого поля и просмотрщика JSON справа в ряду кнопок есть меню ⋮.
-  **Format** переехал туда и появился в просмотрщиках только для чтения
-  (**Source** подписки, **JSON** узла): форматирует только показанное,
-  **Show original** возвращает исходный текст. **Magnifier** включает и
-  выключает лупу выделения; выбор сохраняется для всего приложения. После
-  переключения переноса или Format кнопка переноса и меню показывают
-  индикатор и не реагируют на тапы, пока строки не разложены.
-- **Жесты редактора идут по направлению свайпа (задача 649).**
-  - Свайп вбок по строке, которая не помещается, прокручивает текст; вкладка
-    стоит. Где вбок прокручивать нечего, свайп переключает вкладку, как
-    раньше.
-  - Вертикальный свайп прокручивает текст. Когда текст упёрся в край,
-    следующий свайп в ту же сторону листает страницу.
-  - При выделении редактор забирает касание целиком, ручки тянутся в любую
-    сторону.
-- **«Skip presets» теперь «Skip Tailscale presets» (задача 656).**
-  Переключатель виден только у узлов Tailscale и действует только на пресет
-  Tailscale. Прежнее значение сохраняется, в том числе из старых файлов
-  LX Backup.
-- **Одна карточка соединения для Conns и профайлера ([задача 662](docs/spec/tasks/662-unified-connection-detail-sheet.md)).**
-  Оба экрана открывают одну карточку с одними группами в одном порядке. У
-  каждого остаются свои блоки: One-way traffic и **Close** в Conns, DNS и
-  Issues в профайлере. У закрытого соединения бейдж `TCP·` / `UDP·`; тап по
-  нему показывает `TCP closed` / `UDP closed`.
-- **Один User-Agent для всех запросов приложения ([задача 659](docs/spec/tasks/659-app-user-agent-everywhere.md)).**
-  Rule-set'ы, проверка обновлений, Donate и support-лента, Speed Test,
-  community-серверы, диагностика узла и передача на TV шлют
-  `LxBox-android/<версия>` — ту же строку, что подписки по умолчанию.
-  **Custom User-Agent** действует только на подписки. Регистрация WARP
-  оставляет строку клиента Cloudflare; пинг и автовыбор не менялись.
-- **WARP: восемь блоков `8.x` вернулись в пул адресов WireGuard ([задача 651](docs/spec/tasks/651-warp-8x-blocks-return.md)).**
-  В июне их убрали как недоступные; свежие замеры показывают, что они
-  отвечают наравне с остальными блоками.
+- **Редактор правила: одна секция «DNS & Resolve» (задача 683).**
+  Окна «Action & Resolve» и ⚙ рядом с Action больше нет. Action выбирает
+  только, куда идёт трафик; **Resolve only** теперь пункт его списка, после
+  Reject (у правил с доменами). Секция внизу содержит:
+  - **Answer**: Default (запросы идут в DNS Final), **Dedicated server** или
+    **Fixed IP**;
+  - **Force IPv4 (drop AAAA)**;
+  - **Resolve before routing** (бывший Resolve first) со Strategy;
+  - **Advanced**, свёрнутый: DNS-сервер для резолва, Disable cache, Disable
+    optimistic cache, Rewrite TTL, Query timeout, Client subnet.
+
+  Существующие правила собираются в тот же конфиг. Вкладка **View** теперь
+  показывает и DNS-правила правила.
+- **Подсказки DNS (задача 684).** ℹ рядом с **DNS Final** и **Default Domain
+  Resolver** открывает попап. Он рекомендует `google_doh` или
+  `cloudflare_dot` и говорит, что UDP-серверы годятся для DNS Final, но не
+  для Default Domain Resolver. Баннер `local_dns_resolver` предлагает
+  **Switch to google_doh**.
+- **Default traffic — в конце вкладки Rules ([задача 676](docs/spec/tasks/676-route-final-on-rules-tab.md)).**
+  Выбор `route.final` стоит после списка правил и **Add rule**, с подписью
+  **Default traffic (no rule matched)**. На вкладке Directions его больше
+  нет. Записывается то же самое.
+- **Направление везде показано своим названием ([задача 672](docs/spec/tasks/672-direction-label-vs-tag-consistency.md)).**
+  Уведомление, строка на главном экране, членом которой является другое
+  Направление, заголовок редактора Направления, строки маршрута, Chain и
+  Detour в Stats → Connections и Live показывают название и рядом тег,
+  например `Germany (vpn-1)`. Переименование по-прежнему не меняет тег.
+- **Превью фильтра узлов Направления работает с выключенным VPN ([задача 674](docs/spec/tasks/674-direction-filter-preview-without-tunnel.md)).**
+  Редактор и счётчик узлов на вкладке Directions берут узлы из сборки
+  конфига, поэтому совпадают с собранным конфигом при поднятом туннеле и без
+  него. Пустой результат — «No nodes match».
+- **На Android TV приложение занимает весь экран ([задача 679](docs/spec/tasks/679-tv-no-portrait-lock.md), issue #163).**
+  На TV ориентация не фиксируется, **Allow rotation** там скрыт. Сохранённое
+  значение не меняется, поэтому бэкап с TV не включает поворот на телефоне.
+- **Автопинг после подключения запускает тест группы только у групп Fastest ([задача 677](docs/spec/tasks/677-autoping-tail-skips-round-robin-groups.md)).**
+  У групп Load balance пул больше не пересобирается, группы Hold until
+  failure больше не бросают удерживаемый узел после пинга. Задержки всех
+  узлов по-прежнему даёт пинг; **Run URLTest** в меню группы работает как
+  раньше.
 
 ## 🩹 Исправлено
 
-- **«Auto-restart VPN on settings change» применяет каждое изменение ([задача 667](docs/spec/tasks/667-auto-apply-gate-shared-by-all-rebuild-paths.md)).**
-  Включение большой подписки с мгновенным возвратом назад, Направление с
-  главного экрана, две правки за три секунды или правка во время уже идущей
-  пересборки могли оставить плашку «restart VPN» вместо перезапуска. Теперь
-  решает одна проверка для всех путей; правка, попавшая в трёхсекундную
-  паузу, применяется по её окончании. Правка цепочки и добавление источника
-  на **Servers** больше не перезапускают VPN сами: при выключенной настройке
-  они показывают плашку, как любая правка.
-- **Старт после долгого простоя не зависает в «stopping» ([задача 663](docs/spec/tasks/663-force-stop-reaches-stuck-stopping.md)).**
-  **Start** мог не работать, пока приложение не закроешь принудительно.
-  Принудительная остановка теперь доходит до службы и после того, как её
-  приёмник снят. Проверено только на эмуляторе.
-- **Speed Test открывается при поднятом VPN ([задача 666](docs/spec/tasks/666-speed-test-open-rangeerror-empty-servers.md)).**
-  С 2.25.13 подпись маршрута под заголовком считалась до загрузки списка
-  серверов, и вместо теста экран показывал ошибку. **Start** теперь
-  неактивна, пока список не загружен.
-- **Ссылки поддержки в Telegram вида `tg://` ([задача 657](docs/spec/tasks/657-telegram-support-url-tg-scheme.md)).**
-  Заголовок `support-url: tg://resolve?domain=…` показывает значок Telegram
-  на экране подписки и в списке. Без установленного Telegram ссылка
-  открывается в веб-форме `t.me`, а не только копируется.
-- **Узел, который ядро не может разобрать, выключается ([задача 653](docs/spec/tasks/653-core-decode-error-index-to-tag.md)).**
-  Старый узел MASQUE из sing-box JSON с ключом `network: h2|h3` заставлял
-  ядро отказывать на **Start** с ошибкой
-  `outbounds[N].network: json: unknown field`. VPN не поднимался, узел
-  оставался включённым. Теперь индекс сопоставляется с узлом по
-  отправленному конфигу, узел выключается и старт повторяется — как с
-  другими узлами, которые ядро не приняло.
-- **`Host` у WebSocket, записанный списком (задача 654).** Узел из sing-box
-  JSON с `headers.Host` в виде списка получал хост `[a.com]`. Теперь берётся
-  первый элемент.
-- **Лупа выделения (задача 649).** В редакторе Config после прокрутки вниз
-  она была пустой белой; в JSON узла после сдвига страницы показывала строки
-  из другого места. Теперь она рисует текст самого редактора под пальцем.
-- **Экран не замирает после старта с большими подписками ([задача 652](docs/spec/tasks/652-lazy-rehydration-isolate.md)).**
-  Выключенные подписки на старте больше не загружаются: они читаются из кэша,
-  когда их включают, открывают или они нужны для сборки конфига. Разбор
-  кэша и свежего ответа сервера идёт вне потока интерфейса: обновление
-  подписки на 4025 узлов держит интерфейс 0,24 с вместо 1,85 с.
-
-## 🗑 Удалено
-
-- **Узел Tailscale: переключатель «Allow LAN access while using exit node» ([задача 646](docs/spec/tasks/646-tailscale-remove-lan-access-switch.md)).**
-  Ядро на Android поле `exit_node_allow_lan_access` не применяет. Локальная
-  сеть при выходном узле идёт напрямую через пресет **Private IPs**. Поле
-  по-прежнему принимается из JSON.
+- **Остановка VPN больше не зависает ([задача 668](docs/spec/tasks/668-stop-teardown-trace-and-timeouts.md)).**
+  С многими узлами WireGuard, AmneziaWG или WARP остановка снова быстрая:
+  ядро ждало приёмный воркер каждого endpoint'а по очереди. У каждого шага
+  остановки теперь настоящий предел времени (остановка ядра 20 с, остальные
+  шаги 3 с), и служба доходит до Stopped, даже если шаг не вернулся. Шаг,
+  зависший дольше 5 с, пишет `stuck at <step>` и дамп горутин в журнал
+  приложения, дамп попадает в пакет для поддержки.
+- **Test servers при выключенном VPN: Stop останавливает, Start снова запускает ([задача 669](docs/spec/tasks/669-probe-session-cancel-stop-timeout-race.md), issue #171).**
+  **Stop** обрывает уже отправленные замеры, а не ждёт их таймаута; в это
+  время полоса показывает `Stopping…`. Зависшая тестовая сессия больше не
+  блокирует следующий тест и старт VPN.
+- **Load balance пропускает узел, проваливший проверку.** Группа
+  `round_robin` больше не отправляет новые соединения узлу, провалившему
+  последнюю проверку, пока есть живой; неудачный ручной пинг тоже выводит
+  узел из ротации до следующей проверки группы.
+- **«Register detour in auto group» работает ([задача 670](docs/spec/tasks/670-register-detour-in-auto-group-dead-toggle.md)).**
+  Звенья цепочек попадают в авто-группу Направления только при включённом
+  переключателе. Он неактивен, пока выключен **Register detour servers**, а
+  папка показывает оба переключателя, только если в ней есть звенья цепочек.
+- **Авто-узел в папке больше не пропадает молча ([задача 675](docs/spec/tasks/675-folder-auto-node-silent-drop-and-pool-gates.md)).**
+  Авто-узел без членов назван в отчёте сборки, а его редактор говорит, что
+  узел не попадает в конфиг. Пул следует тем же правилам, что у Направления:
+  Tailscale без exit node в него не входит, звенья цепочек — только с
+  **Register detour servers**.
+- **JSON-превью DNS-группы пропускает выключенных членов ([задача 671](docs/spec/tasks/671-dns-group-json-preview-disabled-members.md)).**
+  Как это делает сборка; строка под превью их перечисляет: «Disabled,
+  skipped at build: …».
+- **Android TV: приём настроек с пульта ([задача 622](docs/spec/tasks/622-device-transfer-phone-to-tv.md)).**
+  Экран приёма помещается без прокрутки, стрелки переключают варианты в
+  предпросмотре импорта, после него фокус возвращается на карточку передачи.
+- **Старт больше не ждёт 10–16 с чужого mux-handshake**, а MASQUE-узел с
+  `vhttp: auto` больше не держит в памяти прошлый экземпляр ядра после
+  каждого Stop/Start или смены профиля.
 
 ## 🔧 Под капотом
 
-- Ядро `v1.14.3-lx.18` → `v1.14.3-lx.21`. На Android ничего не меняется:
-  lx.19 и lx.20 правят Linux-демон роутера, lx.21 добавляет TrustTunnel
-  только в desktop- и роутерные сборки. Java-поверхность та же, что у lx.18.
-- Контракт лаунчера 1.1.119 → 1.1.132: поля OpenConnect и модель формы в
-  реестре; ключи, которые тип не описывает, проходят как есть
-  (`openvpn-client`, `openconnect`); пустой описанный объект
-  (`tls.ech: {}`, `transport: {}`) снимается с предупреждением; короткая
-  форма `#if` и `#if` на `#do` в языке шаблона; поля узла `allow_local`,
-  `allow_lan`, `allow_gateway`; `skip_presets` переименован в
-  `skip_tailscale_presets` (старый ключ по-прежнему читается в хранилище и
-  LX Backup).
-- Debug API отдаёт `announce` в `/subs`.
-- Новые тесты: кнопка переноса и её состояние, полоса прогресса, таблица
-  решений жестов и распознаватель против горизонтального и вертикального
-  drag, разбор `announce`, эмодзи-префиксы с индексами, расшифровка
-  `base64`-заголовков, форма отказа ядра на декодировании, форма OpenConnect
-  и её связь с Source, логика входа, сборка Tunnel ingress и флаги узла в
-  LX Backup, согласованность вкладки DNS с остальными вкладками Routing, код
-  передачи и его шифрованный конверт, сервер приёма на TV, опознание ссылок
-  Telegram, дефолт Send HWID, User-Agent приложения, первый кадр Speed Test
-  при поднятом туннеле, проверка автоперезапуска на всех путях пересборки,
-  наследование фрагментации у REALITY.
+- Ядро `v1.14.3-lx.21` → `v1.14.3-lx.23` ([docs/KERNEL.md](docs/KERNEL.md)):
+  исправления остановки, старта, MASQUE и Load balance выше; остановка,
+  зависшая дольше 20 с, пишет дамп горутин в лог ядра. Java-поверхность та
+  же, что в lx.21.
+- Контракт с лаунчером 1.1.132 → 1.1.139: каталог шаблона источника в LX
+  Backup (`dns.template_catalog`) и одно правило снятия шаблонных
+  DNS-серверов при импорте ([задача 681](docs/spec/tasks/681-dns-servers-uniform-backup-catalog.md));
+  `rules[].dns.fixedIps` для обеих сторон.
+- LX Backup и передача телефон → TV переносят список шаблонных DNS-серверов
+  как есть: сервер, удалённый у источника, снимается у приёмника, если на
+  него ничего не ссылается (иначе остаётся, с предупреждением). DNS Final или
+  резолвер по умолчанию, указывающий на отсутствующий сервер, сбрасывается
+  на умолчание шаблона, а группа без известных членов приезжает выключенной.
+  Старые бэкапы ничего не теряют.
+- Debug API: `POST /directions/reorder` и `include` в `POST`/`PATCH
+  /directions`, ставящие Направление выше включаемого им, получают 409 с
+  парами в `conflicts`; правила читают и пишут `dns.fixed_ips`.
+- Форматтер шаблона (`app/scripts/format_wizard_template.py`) понимает
+  текущий язык шаблона и проверяет смысл перед записью; `wizard_template.json`
+  переформатирован, 2367 → 760 строк, содержание то же ([задача 678](docs/spec/tasks/678-format-wizard-template-new-dialect.md)).
+- Новые тесты: эмиссия и хранение Fixed IP, секция DNS & Resolve, копия
+  DNS-сервера, предупреждение о резолвере через туннель, умолчания DNS всего
+  каталога и Ru internet segment, запретные зоны перестановки Направлений,
+  пул превью фильтра, остановка пробной сессии, раскладка приёма на TV и
+  фокус D-pad, корпус контракта `rule_dns`.
 
 </details>
 
@@ -512,7 +396,7 @@ required**. Настройки DNS стали вкладкой экрана **Ro
 ## Install / Установка
 
 ```bash
-adb install -r LxBox-v2.25.16-arm64-v8a.apk
+adb install -r LxBox-v2.25.17-arm64-v8a.apk
 ```
 
 Без uninstall! Поверх существующей установки. Настройки и подписки сохранятся.
@@ -522,4 +406,4 @@ are preserved.
 
 ---
 
-Previous release / Предыдущий релиз: [v2.25.15](docs/releases/v2.25.15.md).
+Previous release / Предыдущий релиз: [v2.25.16](docs/releases/v2.25.16.md).
