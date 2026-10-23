@@ -2,9 +2,9 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | In progress (макеты утверждены владельцем 23.10.2026) |
+| Статус | Done (на устройстве не проверено) |
 | Дата начала | 2026-10-23 |
-| Дата конца | — |
+| Дата конца | 2026-10-23 |
 | Коммиты | см. `git log --grep 680` |
 | Связанные спеки | [117F](117F-dns-rework/spec.md) — жизненный цикл DNS-сервера, локи «used by»; [043](043-dns-servers-refs-by-kind.md) — автодискавери и orphan-cleanup; [125F](125F-configurable-channels/) и [393F](393F-directions/spec.md) — образец «шаблон = посев на первый запуск»; [010](010-preset-bundles.md) — флаг `presets_migrated` (посев дефолтных пресетов); [655](655-dns-tab-in-routing.md) — вкладка DNS в Routing |
 
@@ -266,3 +266,23 @@ FROM TEMPLATE
   `GET /config` после сборки содержит ровно его.
 - Бэкап: экспорт после удаления `opendns_udp`, импорт на устройстве с полным
   списком → `opendns_udp` снят; импорт старого бэкапа (все 12) → список полный.
+
+## Реализация
+
+- Посев: `SettingsStorage.hasDnsServersList()`, шаг 3 `resolveDnsServersList`
+  под `!seeded`. Эталоны `test/fixtures/storage/golden/{rich,avd}_v0.config*`
+  перезаписаны: снимки v0 не содержат `opendns_doh`/`yandex_dot`, досева
+  больше нет, группа `dns_shield` теряет их с предупреждением (п. 5, без
+  изменений).
+- Локи: `ResolvedServer.usedByList` (`dnsServerListRefs`), `forceIncluded` =
+  прежний лок сборки (пресет, правило). Лок по ссылке из списка сборку не
+  форсирует: включённый сервер держится включённым; выключенный (состояние
+  до 680, например член группы) показывается выключенным и включается, но не
+  удаляется. `enabledServerTags` — по `forceIncluded`, как раньше.
+- Бэкап: снятие шаблонных записей вне файла — только если в секции файла
+  есть серверы (`incoming.servers` не пуст); секция с одними скалярами список
+  не трогает. Текст `BACKUP.md` §9 п. 5 контракта (слияние для `kind:
+  template`) с решением 680 расходится — синхронизация с лаунчером отдельно.
+- Post-step `healDanglingDnsServerResolvers`
+  (`post_steps/heal_dangling_dns_server_resolver.dart`), перед
+  `healDanglingDnsResolvers`.

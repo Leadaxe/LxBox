@@ -231,6 +231,16 @@ The default DNS configuration for a fresh install. It is stockpiled into the sto
 
 ### `dns_options.servers[i]` — a DNS server catalog entry (§117)
 
+**Catalog, seeded once (§680).** The section is a catalog, like
+`selectable_rules`: the template says what exists, the user's list says what
+is in use. Its servers are seeded into the storage `dns.servers` only while
+that key is absent (the first launch); after that the list belongs to the
+user — a deleted template server is not re-added, and servers that a newer
+template brings appear only in the catalog under (+) on the DNS tab
+("Add DNS server"). `enabled` of the wrapper is the state on seeding and on
+adding from the catalog. The body is still a reference: the record keeps the
+tag, `enabled` and `vars`, the body comes from the template on every build.
+
 The wrapper is `{description, enabled, vars?, server}`, where `server` is a sing-box body carrying
 `@var` placeholders, and `vars` holds the same definitions as preset vars (§033).
 The tag lives in `server.tag` (there is no top-level `tag` any more — see `templateDnsServerTag`).
@@ -240,7 +250,7 @@ The builder (`resolveTemplateDnsServerBody`) substitutes the vars with the user'
 ```jsonc
 {
   "description": "Google DNS (direct)",
-  "enabled":     true,               // default-enabled for auto-discovery
+  "enabled":     true,               // state on seeding / on adding from the catalog (§680)
   "vars": [                          // optional (local_dns_resolver has none)
     {"name": "outbound", "type": "outbound", "default_value": "direct-out",
      "title": "Outbound", "tooltip": "Which direction carries DNS queries…"},

@@ -860,6 +860,28 @@ travels through — the **Outbound (detour)** field. To send DNS queries through
 the tunnel so the resolver sees the server's IP rather than your ISP's,
 set the server's Outbound to your VPN direction.
 
+### The server list is yours: delete, add back from the catalog
+
+The list is filled with the template's servers once, on the first launch.
+After that the app does not add or return servers by itself.
+
+- **Delete a server**: long-press its row → **Delete**, or the trash icon in
+  the server editor. Template and custom servers can be deleted; a preset's
+  server lives and goes with its preset.
+- **Add a server**: the **+** next to **DNS Servers** opens **Add DNS server**.
+  **Custom server** opens the editor for your own server. Below, **From
+  template** lists the template's servers: **Add** puts one back into the list
+  (with the template's on/off state), the ones you already have show
+  **Added**. The **⋮** menu → **Add all defaults** adds every template server
+  missing from the list. Servers that a new app version brings appear here,
+  not in your list.
+- **Locked servers**: a server something depends on shows **used by …** with
+  a lock — its switch and Delete are unavailable. It is held by a preset, a
+  routing rule's DNS option, a group in the list, the **DNS Final** or
+  **Default Domain Resolver** choice, or another server's name resolver. With
+  several sources the label names two and adds "+N". Remove the reference
+  (delete the group, pick another DNS Final) and the server is free.
+
 ### Group and Shield DNS combine several servers under one tag
 
 The **Group** DNS server type combines several servers under one tag. The

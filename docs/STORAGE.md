@@ -1099,6 +1099,13 @@ the model's own words (`inline`, `rule`, `presetId`, `varValues`) and a dead `ru
 
 ### `dns.servers[i]`
 
+§680 — the presence of the `dns.servers` key is the "seeded" mark: while it is
+absent (the first launch) the resolver seeds the template's servers and writes
+the key; once it exists the template servers are never re-added (an empty list
+stays empty). New template servers show up in the catalog under (+), not in the
+list. Read it with `SettingsStorage.hasDnsServersList()` — `getDnsServers()`
+returns `[]` both for a missing key and for an empty list.
+
 ```jsonc
 { "kind": "user", "tag": "my-doh", "enabled": true,
   "body": { "type": "https", "server": "1.1.1.1" },     // a partial sing-box server WITHOUT tag
