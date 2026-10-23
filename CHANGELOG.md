@@ -17,6 +17,17 @@
   "Default traffic (no rule matched)". The Directions tab no longer shows it.
   The choices and what is written are unchanged.
 
+- **On Android TV the app fills the screen instead of a portrait column
+  ([task 679](docs/spec/tasks/679-tv-no-portrait-lock.md), issue #163).**
+  On a TV the orientation is never locked, whatever "Allow rotation" says,
+  and the toggle is hidden in App Settings → Appearance there. The stored
+  value is not changed, so a backup from a TV does not turn rotation on for a
+  phone. Phones and tablets keep portrait by default. Not verified on a
+  device.
+  (RU: На Android TV приложение занимает весь экран, а не портретную колонку:
+  ориентация не фиксируется, переключатель «Allow rotation» там скрыт,
+  сохранённое значение не меняется.)
+
 ### Fixed
 
 - **Auto-ping after connect no longer forces a group URLTest on Load balance

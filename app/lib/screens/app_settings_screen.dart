@@ -63,6 +63,8 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
   bool _autoCheckUpdates = true;
   // §220 — снятие портретной фиксации (default OFF = портрет).
   bool _allowRotation = false;
+  // §679 — на TV ориентация не фиксируется, переключатель поворота скрыт.
+  bool _isTelevision = false;
   // §541 — две колонки списка узлов на широком окне (default ON).
   bool _nodeListTwoColumns = true;
   bool _loaded = false;
@@ -104,6 +106,9 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     WidgetsBinding.instance.addObserver(this);
     _debugPortCtl = TextEditingController();
     unawaited(_loadAutoStart());
+    unawaited(ul.UrlLauncher.isTelevision().then((tv) {
+      if (tv && mounted) setState(() => _isTelevision = true);
+    }));
     if (widget.highlightCoreLogs) {
       // Tile живёт в Diagnostics tab (initialTab=3). Tab сам строит
       // children когда юзер на нём — postFrame этого build'а гарантирует
@@ -689,6 +694,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     return AppearanceTab(
       loaded: _loaded,
       allowRotation: _allowRotation,
+      showAllowRotation: !_isTelevision,
       nodeListTwoColumns: _nodeListTwoColumns,
       padding: _tabPadding(context),
       onAllowRotationChanged: (val) => unawaited(_toggleAllowRotation(val)),

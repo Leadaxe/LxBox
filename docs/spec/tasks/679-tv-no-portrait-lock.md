@@ -3,7 +3,7 @@
 | Поле | Значение |
 |------|----------|
 | Тип | B (поведение) |
-| Статус | Спека |
+| Статус | Implemented (2026-10-23); на устройстве не проверено |
 | Дата | 2026-10-23 |
 | Связанные | §220 (Allow rotation), §372 (Android TV), §622 / фича 031 (проверка на TV-эмуляторе 23.10); [Leadaxe/LxBox#163](https://github.com/Leadaxe/LxBox/issues/163) |
 
@@ -40,6 +40,28 @@ Android TV экран всегда альбомный, и система пок�
   поведение, затем повторное применение. Мигания быть не должно: на TV
   до runApp ответ канала уже есть, если вызывать после инициализации
   binding; проверить порядок в `main`.
+
+## Решение (реализация 2026-10-23)
+
+- `app/lib/main.dart` — `applyAllowRotationSetting` сначала ждёт
+  `UrlLauncher.isTelevision()`; на TV `allow_rotation` не читается и не
+  пишется, список предпочтений пустой. Выбор вынесен в
+  `preferredOrientationsFor(allowRotation:, isTelevision:)`. Порядок на
+  старте: вызов после `WidgetsFlutterBinding.ensureInitialized()` и до
+  `runApp`, ответ канала приходит до первого кадра — портретной колонки на
+  TV нет. В манифесте `screenOrientation` не задан, нативной фиксации нет.
+- `app/lib/screens/app_settings_screen/widgets/appearance_tab.dart` —
+  параметр `showAllowRotation` (по умолчанию `true`) скрывает переключатель.
+- `app/lib/screens/app_settings_screen.dart` — признак TV в `initState`
+  (как на home), `showAllowRotation: !_isTelevision`.
+- Экран приёма §622 (`transfer_receive_screen.dart`) выбирает раскладку по
+  `maxWidth > maxHeight` своего `LayoutBuilder`, без своей фиксации
+  ориентации; на TV в альбоме берётся альбомная (QR слева, текст справа).
+- Тесты: `app/test/services/allow_rotation_tv_test.dart` (чистая функция и
+  `applyAllowRotationSetting` с подменой каналов; на TV файл настроек
+  побайтно тот же), `app/test/screens/appearance_tab_rotation_test.dart`
+  (переключатель на TV скрыт, на телефоне есть; проверяется на уровне
+  вкладки, проводка `_isTelevision` в экране — нет).
 
 ## Проверка
 

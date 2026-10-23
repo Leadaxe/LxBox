@@ -25,6 +25,7 @@ import 'services/debug/bootstrap.dart' as debug_bootstrap;
 import 'services/nav/home_return_observer.dart';
 import 'services/settings_storage.dart';
 import 'services/template_loader.dart';
+import 'services/url_launcher.dart';
 import 'services/version_info.dart';
 import 'services/workspaces/workspace_controller.dart';
 import 'services/workspaces/workspace_store.dart';
@@ -204,17 +205,35 @@ void main() async {
 /// своему auto-rotate (уважает системный rotation-lock). Вызывается на
 /// старте (до runApp) и из App Settings при переключении toggle'а —
 /// применяется мгновенно, рестарт не нужен.
+///
+/// §679 — на TV фиксации нет никогда, флаг не читается и не пишется. Признак
+/// TV ждём до `setPreferredOrientations`: на старте вызов идёт до runApp,
+/// поэтому портретной колонки на TV не бывает и на первом кадре.
 Future<void> applyAllowRotationSetting() async {
+  final tv = await UrlLauncher.isTelevision();
   var allow = false;
-  try {
-    allow = await SettingsStorage.getAllowRotation();
-  } catch (_) {
-    // Storage недоступен — безопасный дефолт (портрет).
+  if (!tv) {
+    try {
+      allow = await SettingsStorage.getAllowRotation();
+    } catch (_) {
+      // Storage недоступен — безопасный дефолт (портрет).
+    }
   }
   await SystemChrome.setPreferredOrientations(
-    allow ? const <DeviceOrientation>[] : const [DeviceOrientation.portraitUp],
+    preferredOrientationsFor(allowRotation: allow, isTelevision: tv),
   );
 }
+
+/// §220/§679 — список предпочтений ориентации: пустой (решает система) на TV
+/// и при включённом «Allow rotation», иначе portraitUp.
+@visibleForTesting
+List<DeviceOrientation> preferredOrientationsFor({
+  required bool allowRotation,
+  required bool isTelevision,
+}) =>
+    isTelevision || allowRotation
+        ? const <DeviceOrientation>[]
+        : const [DeviceOrientation.portraitUp];
 
 /// Fallback-widget для UI-ошибок (replace Flutter's red screen).
 /// Показывает краткое описание + подсказку открыть Debug → Logs.
