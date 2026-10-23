@@ -39,6 +39,12 @@ Future<void> _until(WidgetTester tester, bool Function() cond,
     await tester.pump();
   }
   expect(cond(), isTrue, reason: 'не дождались: $what');
+  // Кадр ПОСЛЕ выполнения условия: `pump()` досливает микрозадачи уже после
+  // drawFrame, и если цепочка tap → setState(_testing) → probeStart →
+  // probeUrlTest целиком прошла в этом хвосте (кэш SettingsStorage прогрет,
+  // реального I/O нет), условие истинно, а дерево ещё старое — «Testing…»
+  // не найден. Без этого кадра проверки UI ниже зависят от тайминга I/O.
+  await tester.pump();
 }
 
 void main() {
