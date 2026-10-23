@@ -146,7 +146,9 @@ final class ParseEnvSnapshot {
   final RegistrySnapshot? registry;
   final Map<String, String> drafts;
 
-  Future<void> _install() async {
+  /// Поставить снимок в синглтоны текущего (рабочего) isolate. §674 —
+  /// тем же снимком воркер превью пула Направлений.
+  Future<void> install() async {
     final reg = registry;
     if (reg != null) {
       await ContractRegistry.I.loadFromSnapshot(reg);
@@ -181,7 +183,7 @@ Future<(R, List<CapturedLog>)> _workerMain<R>(
   final logs = <CapturedLog>[];
   AppLog.I.capture = (level, message, source) =>
       logs.add((level: level, message: message, source: source));
-  await env._install();
+  await env.install();
   return (parse(), logs);
 }
 

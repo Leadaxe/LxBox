@@ -16,6 +16,8 @@ import '../models/dns_ref.dart';
 import '../models/parser_config.dart';
 import '../services/builder/preset_expand.dart' show PresetNode;
 import '../services/builder/rule_order.dart';
+import '../services/app_log.dart';
+import '../services/builder/direction_pool_preview.dart';
 import '../services/direction_mutations.dart';
 import '../services/error_format.dart';
 import '../services/file_export.dart';
@@ -107,6 +109,13 @@ class _RoutingScreenState extends State<RoutingScreen>
   // custom-rule tile (N Направлений × M правил реконструкций/build). Инвалидируем
   // при любой мутации _directions (_invalidateOutboundOptions).
   List<RoutingOutboundOption>? _cachedOutboundOptions;
+  // §674 — пул кандидатов Направлений от сборщика (не снимок ядра): число
+  // узлов в подписи и превью редактора работают без туннеля. null — ещё
+  // считается; поколение отсекает устаревший ответ.
+  List<String>? _nodePool;
+  Future<List<String>>? _nodePoolFuture;
+  int _nodePoolGen = 0;
+  Timer? _nodePoolDebounce;
   @override
   String _routeFinal = '';
   @override
@@ -176,6 +185,7 @@ class _RoutingScreenState extends State<RoutingScreen>
     // §578 — правка узла при открытом Routing (редактор узла, Debug API,
     // toggle источника) меняет подпись пресета с `for_each_node`.
     widget.subController.addListener(_onSubControllerChanged);
+    _refreshNodePool();
     // §601 — файл набора скачало автообновление при открытом экране: строка
     // «ждёт скачивания» становится рабочей без переоткрытия.
     _ruleSetCacheSub = RuleSetDownloader.changes.listen((_) {
@@ -193,6 +203,7 @@ class _RoutingScreenState extends State<RoutingScreen>
     widget.subController.removeListener(_onSubControllerChanged);
     unawaited(_ruleSetCacheSub?.cancel());
     _directionHighlightTimer?.cancel();
+    _nodePoolDebounce?.cancel();
     _tabController.removeListener(_onTabIndexChanged);
     _tabController.dispose();
     _dnsTabWrites.removeListener(_onDnsTabWrite);
@@ -253,6 +264,11 @@ class _RoutingScreenState extends State<RoutingScreen>
   }
 
   void _onSubControllerChanged() {
+    // §674 — источники поменялись: пул пересчитать (с отсрочкой — контроллер
+    // уведомляет пачками).
+    _nodePoolDebounce?.cancel();
+    _nodePoolDebounce =
+        Timer(const Duration(milliseconds: 300), _refreshNodePool);
     if (!mounted || _loading) return;
     // §578/§643 — строка пресета с `for_each_node` показывает обслуживаемые
     // узлы: правка источника (включение, `skip_tailscale_presets`,
@@ -532,30 +548,31 @@ class _RoutingScreenState extends State<RoutingScreen>
     ).showSnackBar(SnackBar(content: Text('$lead — ${parts.join(', ')}.')));
   }
 
-  /// Кол-во нод Направления после regex-фильтра (для subtitle). -1 = снимок нод
-  /// недоступен (туннель не поднят).
+  /// Кол-во нод Направления после regex-фильтра (для subtitle). -1 = пул ещё
+  /// считается.
   int _nodeCountFor(Direction direction) {
-    final all = _allNodeTags();
-    if (all.isEmpty) return -1;
+    final all = _nodePool;
+    if (all == null) return -1;
     // §604 — тот же фильтр, что у сборки (с инверсией «Exclude matching»).
     return direction.filterNodeTags(all).length;
   }
 
-  /// Снимок всех node-тегов подписки из ccGroups (union по группам, без самих
-  /// групп). Для live-превью фильтров в редакторе. Пусто = туннель не поднят.
-  List<String> _allNodeTags() {
-    final groupTags = widget.homeController.state.ccGroups
-        .map((g) => g.tag)
-        .toSet();
-    final seen = <String>{};
-    final out = <String>[];
-    for (final g in widget.homeController.state.ccGroups) {
-      for (final item in g.items) {
-        if (groupTags.contains(item.tag)) continue; // это группа, не нода
-        if (seen.add(item.tag)) out.add(item.tag);
-      }
-    }
-    return out;
+  /// §674 — пересчитать пул кандидатов Направлений по хранилищу (сборщик,
+  /// без побочных эффектов). Возвращает тот же future, что получит редактор.
+  Future<List<String>> _refreshNodePool() {
+    final gen = ++_nodePoolGen;
+    final f = directionPoolPreview(
+        [for (final e in widget.subController.entries) e.list]);
+    _nodePoolFuture = f;
+    f.then(
+      (v) {
+        if (!mounted || gen != _nodePoolGen) return;
+        setState(() => _nodePool = v);
+      },
+      onError: (Object e) =>
+          AppLog.I.warning('Direction pool preview failed: $e'),
+    );
+    return f;
   }
 
   Future<void> _addDirection() async {
@@ -586,6 +603,8 @@ class _RoutingScreenState extends State<RoutingScreen>
       _invalidateOutboundOptions();
     });
     _markDirty();
+    // §674 — новый тег резервируется сборкой (узел-тёзка переименуется).
+    _refreshNodePool();
     _editDirection(created);
   }
 
@@ -598,7 +617,7 @@ class _RoutingScreenState extends State<RoutingScreen>
       context,
       initial: direction,
       canDelete: !direction.isRequired,
-      allNodeTags: _allNodeTags(),
+      nodePool: _nodePoolFuture ?? _refreshNodePool(),
       directionsAbove: idx <= 0 ? const [] : _directions.sublist(0, idx),
       // §568 / задача 570 — свёртки источников тоже законные опции.
       foldCandidates: foldCandidatesOf([
@@ -633,6 +652,7 @@ class _RoutingScreenState extends State<RoutingScreen>
         _invalidateOutboundOptions();
       });
       _markDirty();
+      _refreshNodePool(); // §674 — тег Направления больше не зарезервирован
       _notifyHealed(direction, healed, ruleLead: getLocalText.s('deleted'));
     } else if (result.saved != null) {
       final saved = result.saved!;

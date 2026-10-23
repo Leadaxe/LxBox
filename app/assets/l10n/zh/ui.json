@@ -3154,6 +3154,9 @@
   "No nodes loaded yet. Apply rules to load them.": {
     "value": "还没加载节点。点「应用规则」加载。"
   },
+  "No nodes match": {
+    "value": "没有匹配的节点"
+  },
   "No nodes match. Check the path against a node's JSON.": {
     "value": "没有匹配的节点。请对照节点 JSON 检查路径。"
   },

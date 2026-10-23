@@ -3397,6 +3397,9 @@
   "No nodes loaded yet. Apply rules to load them.": {
     "value": "Узлы ещё не загружены. Нажмите «Применить правила», чтобы загрузить."
   },
+  "No nodes match": {
+    "value": "Нет подходящих узлов"
+  },
   "No nodes match. Check the path against a node's JSON.": {
     "value": "Совпадений нет. Сверьте путь с JSON узла."
   },

@@ -20,6 +20,14 @@
   stays next to it (subtitle, tag line, or `Germany (vpn-1)`). Chain
   positions and Debug API keep the tag. Not verified on a device.
 
+- **The Direction node filter preview works with the VPN off
+  ([task 674](docs/spec/tasks/674-direction-filter-preview-without-tunnel.md),
+  issue #171).** The editor and the node count on the Directions tab take the
+  candidate nodes from the config build instead of the running core, so they
+  match the Direction's members in the built config with the tunnel up or
+  down. "No node snapshot (connect to preview)" is gone; an empty result reads
+  "No nodes match". Not verified on a device.
+
 - **The JSON preview of a DNS group no longer lists disabled members
   ([task 671](docs/spec/tasks/671-dns-group-json-preview-disabled-members.md)).**
   The "sing-box server preview" of a group server (for example `dns_shield`)

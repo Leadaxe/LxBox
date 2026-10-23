@@ -235,7 +235,34 @@ Future<BuildResult> buildConfig({
       template: template,
       templateWarnings: templateWarnings,
     ),
+  ).then((r) => r!);
+}
+
+/// §674 — пул кандидатов Направлений: ровно тот список тегов, из которого
+/// [buildConfig] формирует состав селектора `<tag>` ДО фильтра Направления
+/// (`selectorTags`: узлы источников, свёртки, цепочки — после отбраковок
+/// detour-резолвера, гарда реестра и свёрток). Та же сборка, остановленная
+/// до групп Направлений и пост-шагов: без чтения и записи хранилища (пост-шаги
+/// DNS пишут его), без сети, без ядра. Превью фильтра в UI фильтрует этот
+/// список [Direction.filterNodeTags] — тем же фильтром, что и сборка.
+Future<List<String>> buildDirectionPool({
+  required List<ServerList> lists,
+  BuildSettings settings = const BuildSettings(),
+  WizardTemplate? template,
+}) async {
+  final pool = <String>[];
+  final templateWarnings = TemplateWarnings();
+  await collectTemplateWarnings(
+    templateWarnings,
+    () => _buildConfig(
+      lists: lists,
+      settings: settings,
+      template: template,
+      templateWarnings: templateWarnings,
+      poolSink: pool,
+    ),
   );
+  return pool;
 }
 
 /// EN-строка предупреждения шаблона для [BuildResult.emitWarnings]: заголовок
@@ -259,11 +286,14 @@ bool varIntInBounds(String name, String raw) {
   return n != null && n >= b.$1 && n <= b.$2;
 }
 
-Future<BuildResult> _buildConfig({
+/// [poolSink] не null — §674: сборка кладёт в него пул кандидатов
+/// Направлений и возвращает null, не доходя до групп и пост-шагов.
+Future<BuildResult?> _buildConfig({
   required List<ServerList> lists,
   required BuildSettings settings,
   required WizardTemplate? template,
   required TemplateWarnings templateWarnings,
+  List<String>? poolSink,
 }) async {
   template ??= await TemplateLoader.load();
 
@@ -579,6 +609,12 @@ Future<BuildResult> _buildConfig({
     ...replaceBuild.candidates,
     ...chainResolution.tags,
   ];
+  // §674 — превью фильтра: дальше идут группы Направлений и пост-шаги с
+  // записью в хранилище, превью они не нужны.
+  if (poolSink != null) {
+    poolSink.addAll(selectorTags);
+    return null;
+  }
   // §670 — звено цепочки, которое источник пустил в селектор («Register
   // detour servers»), но не в auto («Register detour in auto group» off): в
   // пуле Направления оно есть, в `<tag>-auto` — нет. Обычный узел

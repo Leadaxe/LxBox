@@ -21,8 +21,10 @@ directly) and `block` (drop the traffic) are template outbounds offered inside a
 as options, and `vpn-1` is the required primary Direction — the default target of Default
 traffic and the fallback every healed reference lands on. The **Directions** tab of the
 Routing screen lists them with "Add direction (N)" and the **Default traffic** tile; each
-row shows the tag, the node count from the running core's snapshot ("all nodes" or
-"filtered" with the tunnel down), " · auto" and " · required".
+row shows the tag, the node count from the build's candidate pool (works with the tunnel
+down; "all nodes" or "filtered" while the pool is being computed —
+[674](../../../tasks/674-direction-filter-preview-without-tunnel.md)), " · auto" and
+" · required".
 
 `NETWORKS` in the home-screen dropdown is not a Direction: it is a view of nodes outside
 the selection lists — [012-LIVE_STATE · P19](../../012-LIVE_STATE/FEATURE.md#promises).

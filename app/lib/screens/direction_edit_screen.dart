@@ -13,14 +13,16 @@ import '../widgets/urltest_idle_hint.dart';
 /// Navigator.push + PopScope back-guard (Save/Keep/Discard) + AppBar
 /// delete/save. tag read-only (системный), label — единственное «имя».
 ///
-/// Live-превью regex: [allNodeTags] — снимок тегов нод подписки (из ccGroups).
-/// Пусто (туннель не поднят) → превью показывает «no node snapshot».
+/// Live-превью regex: [nodePool] — пул кандидатов Направления от сборщика
+/// (§674, `directionPoolPreview`), не снимок ядра: состав селектора решает
+/// сборка, и превью работает без поднятого туннеля. Пока пул считается —
+/// спиннер; пустой результат фильтра — «No nodes match».
 class DirectionEditScreen extends StatefulWidget {
   const DirectionEditScreen({
     super.key,
     required this.initial,
     required this.canDelete,
-    required this.allNodeTags,
+    required this.nodePool,
     this.directionsAbove = const [],
     this.foldCandidates = const [],
   });
@@ -30,8 +32,9 @@ class DirectionEditScreen extends StatefulWidget {
   /// vpn-1 неудаляем → false. Прочие → true.
   final bool canDelete;
 
-  /// Снимок тегов нод подписки для live-превью фильтров.
-  final List<String> allNodeTags;
+  /// §674 — пул кандидатов Направления по хранилищу (теги, из которых сборка
+  /// формирует состав `<tag>` до фильтра) для live-превью фильтров.
+  final Future<List<String>> nodePool;
 
   /// §393 A3 — Направления, стоящие ВЫШЕ редактируемого по списку: только их
   /// законно взять опцией (`include`). Порядок исключает циклы по построению,
@@ -51,6 +54,8 @@ class DirectionEditScreen extends StatefulWidget {
 }
 
 class _DirectionEditScreenState extends State<DirectionEditScreen> {
+  /// §674 — null, пока пул считается.
+  List<String>? _nodePool;
   late final TextEditingController _labelCtrl;
   late final TextEditingController _nodeFilterCtrl;
   late final TextEditingController _defaultFilterCtrl;
@@ -81,6 +86,16 @@ class _DirectionEditScreenState extends State<DirectionEditScreen> {
   @override
   void initState() {
     super.initState();
+    // §674 — пул от сборщика приходит асинхронно (isolate); до него превью
+    // показывает спиннер. Ошибка сборки пула — пустой пул, не вечный спиннер.
+    widget.nodePool.then(
+      (v) {
+        if (mounted) setState(() => _nodePool = v);
+      },
+      onError: (Object _) {
+        if (mounted) setState(() => _nodePool = const []);
+      },
+    );
     final c = widget.initial;
     _labelCtrl = TextEditingController(text: c.label);
     _nodeFilterCtrl = TextEditingController(text: c.nodeFilter);
@@ -377,11 +392,12 @@ class _DirectionEditScreenState extends State<DirectionEditScreen> {
     final re = _compile(nodeFilterText);
     final nodeFilterValid = nodeFilterText.isEmpty || re != null;
     // §197 — превью учитывает инверсию (как билдер): invert → ноды НЕ матчащие.
+    final pool = _nodePool ?? const <String>[];
     final matchedNodes = nodeFilterText.isEmpty
-        ? widget.allNodeTags
+        ? pool
         : (re == null
-            ? widget.allNodeTags
-            : widget.allNodeTags
+            ? pool
+            : pool
                 .where((t) => re.hasMatch(t) != _nodeFilterInvert)
                 .toList());
 
@@ -569,13 +585,23 @@ class _DirectionEditScreenState extends State<DirectionEditScreen> {
               ],
             ),
             const SizedBox(height: 4),
-            _previewLine(
-              cs,
-              widget.allNodeTags.isEmpty
-                  ? 'No node snapshot (connect to preview)'
-                  : '${_nodeFilterInvert ? "excluded → " : ""}matched: '
-                      '${matchedNodes.length} / ${widget.allNodeTags.length} nodes',
-            ),
+            if (_nodePool == null)
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: SizedBox(
+                  width: 12,
+                  height: 12,
+                  child: CircularProgressIndicator(strokeWidth: 1.5),
+                ),
+              )
+            else
+              _previewLine(
+                cs,
+                matchedNodes.isEmpty
+                    ? getLocalText.s("No nodes match")
+                    : '${_nodeFilterInvert ? "excluded → " : ""}matched: '
+                        '${matchedNodes.length} / ${pool.length} nodes',
+              ),
             const SizedBox(height: 16),
 
             // default-filter regex + live-превью
@@ -806,7 +832,7 @@ class _DirectionEditScreenState extends State<DirectionEditScreen> {
   /// Pool size / Pool tolerance + ряд sticky-чипов. Рендерится только под
   /// Load balance.
   List<Widget> _balancerControls(ColorScheme cs) {
-    final nodeCount = widget.allNodeTags.length;
+    final nodeCount = _nodePool?.length ?? 0;
     return [
       const SizedBox(height: 10),
       _previewLine(cs, '15m interval recommended for large pools'),
@@ -946,7 +972,7 @@ Future<DirectionEditResult?> openDirectionEditor(
   BuildContext context, {
   required Direction initial,
   required bool canDelete,
-  required List<String> allNodeTags,
+  required Future<List<String>> nodePool,
   List<Direction> directionsAbove = const [],
   List<FoldCandidate> foldCandidates = const [],
 }) =>
@@ -956,7 +982,7 @@ Future<DirectionEditResult?> openDirectionEditor(
         builder: (_) => DirectionEditScreen(
           initial: initial,
           canDelete: canDelete,
-          allNodeTags: allNodeTags,
+          nodePool: nodePool,
           directionsAbove: directionsAbove,
           foldCandidates: foldCandidates,
         ),

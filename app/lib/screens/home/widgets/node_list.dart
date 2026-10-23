@@ -16,6 +16,7 @@ import '../../../services/subscription/auto_updater.dart';
 import '../../../widgets/node_row.dart';
 import '../../../widgets/node_view_item.dart';
 import '../../../widgets/reorder_grab_strip.dart';
+import '../../../services/builder/direction_pool_preview.dart';
 import '../../direction_edit_screen.dart';
 import '../node_actions.dart';
 import '../node_filter_view_model.dart';
@@ -775,12 +776,13 @@ class HomeNodeList extends StatelessWidget {
     final seeded = choice == 'node'
         ? direction.copyWith(nodeFilter: pattern, nodeFilterInvert: invert)
         : direction.copyWith(defaultFilter: pattern);
-    final allNodeTags = _allNodeTagsFromState();
     final result = await openDirectionEditor(
       context,
       initial: seeded,
       canDelete: !direction.isRequired,
-      allNodeTags: allNodeTags,
+      // §674 — пул от сборщика, как в Routing: превью без туннеля.
+      nodePool: directionPoolPreview(
+          [for (final e in subController.entries) e.list]),
       // §393 A3 + §568 — те же кандидаты опций, что в Routing: без них
       // сохранение отсюда вычёркивало бы опции Направления.
       directionsAbove: idx <= 0 ? const [] : directions.sublist(0, idx),
@@ -849,20 +851,6 @@ class HomeNodeList extends StatelessWidget {
     return warnings ?? const [];
   }
 
-  /// §195 — снимок всех node-тегов из ccGroups (union, без самих групп) для
-  /// live-превью фильтров в редакторе. Пусто = туннель не поднят.
-  List<String> _allNodeTagsFromState() {
-    final groupTags = state.ccGroups.map((g) => g.tag).toSet();
-    final seen = <String>{};
-    final out = <String>[];
-    for (final g in state.ccGroups) {
-      for (final item in g.items) {
-        if (groupTags.contains(item.tag)) continue;
-        if (seen.add(item.tag)) out.add(item.tag);
-      }
-    }
-    return out;
-  }
 }
 
 /// §322 — метка режима + значки живого пула: `🔀 [15/7] 🇩🇪, 🇳🇱[2]`.

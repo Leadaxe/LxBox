@@ -282,7 +282,10 @@ core groups ─► home screen dropdown (P16) ─► SelectOutbound (P15) ─►
   kind joins the same heal and the same notification.
 - **The twin tag `<tag>-auto` is derived, never stored;** the hyphen is part of the contract
   with the template's `magic_nodes` and with filters and sorting.
-- **The tab's node count is a preview from the running core's snapshot,** not from the build:
-  with the tunnel down it can only say "all nodes" or "filtered".
+- **The tab's node count and the editor's filter preview come from the build,** not from the
+  core: the same candidate pool the build filters into `<tag>`, read from storage, so they work
+  with the tunnel down
+  ([674](../../tasks/674-direction-filter-preview-without-tunnel.md)). While the pool is being
+  computed the row says "all nodes" or "filtered".
 - **`vpn-1` is a product decision hard-coded on purpose:** required, non-detour, the target of
   every heal; every load path passes through the one migration that insures it.
