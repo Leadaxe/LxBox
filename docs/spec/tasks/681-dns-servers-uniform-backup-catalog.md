@@ -6,7 +6,7 @@
 | Дата начала | 2026-10-23 |
 | Дата конца | — |
 | Коммиты | см. `git log --grep 681` |
-| Связанные спеки | [680](680-dns-servers-catalog-seed-once.md) — каталог и посев один раз; контракт `app/contract/docs/BACKUP.md` §9 п. 5 (1.1.134, D-133, TASKS_LXBOX §131); [622](622-device-transfer-tv.md) — перенос телефон→TV |
+| Связанные спеки | [680](680-dns-servers-catalog-seed-once.md) — каталог и посев один раз; контракт `app/contract/docs/BACKUP.md` §9 п. 5 (1.1.134, D-133, TASKS_LXBOX §131); [622](622-device-transfer-phone-to-tv.md) — перенос телефон→TV |
 
 ## Проблема
 
