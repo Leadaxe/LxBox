@@ -1224,11 +1224,10 @@ defaults); `num` is always written — it is part of the axis layout.
 
 | Context | Rule |
 |---|---|
-| Fields holding an `@` placeholder | **one field per line** |
-| Literals (`type`, `tag`, `auto_route`, `server_port`) | may share one line |
-| Small structs of two or three literals (`direct-out`, hijack-dns) | **one line** |
-| Large objects (`dns_options.servers[]`, a preset's `dns_servers[]`) | **multiline** — one field per line |
-| `options` and `filters` **without** an `@` | **one line** |
+| An object whose values are scalars (literals or `@` placeholders) and flat lists | **one line**, whatever its length — e.g. a DNS server's `server` body, an outbound, a rule |
+| An object holding a nested object, an `#if`/`#do` construct or a list of objects | **multiline** — one field per line |
+| The wrapper of a `dns_options.servers[]` / `dns_servers[]` entry (`description`, `enabled`, `vars`, `server`) | **multiline** — one field per line; the `server` body inside follows the first row |
+| `options` and `filters` | **one line** per element |
 
 ### The `#if` construct (§120)
 
