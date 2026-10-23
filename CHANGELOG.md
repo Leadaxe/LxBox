@@ -25,13 +25,16 @@
   (several sources: two names and "+N"). The rule editor offers only servers
   from the list. A full backup or a phone→TV transfer carries the list of
   template servers as is: one deleted on the source is removed on the
-  receiver; older backups hold all of them and lose nothing. The build drops a
+  receiver; older backups hold all of them and lose nothing. This applies to
+  LxBox backups only: a file exported by the desktop launcher is merged as
+  before. The build drops a
   server's `domain_resolver` that points outside the list, with a warning.
   Existing installs keep their list unchanged. Not verified on a device.
   (RU: DNS-серверы: список засевается один раз, шаблонные можно удалять,
   новые серверы шаблона появляются в каталоге по (+), а не в списке; сервер,
   от которого зависит сам список, залочен подписью «used by …»; полный бэкап
-  переносит список шаблонных серверов как есть.)
+  переносит список шаблонных серверов как есть — только бэкап LxBox, файл
+  лаунчера сливается как раньше.)
 
 - **Default traffic moved to the bottom of the Rules tab
   ([task 676](docs/spec/tasks/676-route-final-on-rules-tab.md)).** The

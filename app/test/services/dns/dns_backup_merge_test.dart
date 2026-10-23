@@ -25,6 +25,7 @@ DnsBackupApply _apply(
   List<DnsRuleRef> local = const [],
   List<DnsServerRef> incomingServers = const [],
   List<DnsServerRef> localServers = const [],
+  String exportedByApp = '',
 }) =>
     applyDnsBackup(
       incoming: LxDns(servers: incomingServers, rules: incoming),
@@ -32,6 +33,7 @@ DnsBackupApply _apply(
       rules: local,
       dnsFinal: '',
       strategy: '',
+      exportedByApp: exportedByApp,
     );
 
 String _file(List<Map<String, dynamic>> rules) => jsonEncode({
@@ -193,6 +195,7 @@ void main() {
         const [],
         incomingServers: full(without: {'opendns_udp'}),
         localServers: [...full(), mine, preset],
+        exportedByApp: kLxAppLxBox,
       );
       final tags = got.servers.map((s) => s.tag).toList();
       expect(tags, isNot(contains('opendns_udp')));
@@ -206,6 +209,7 @@ void main() {
         const [],
         incomingServers: full(),
         localServers: [...full(), mine],
+        exportedByApp: kLxAppLxBox,
       );
       expect(got.servers, [...full(), mine]);
       expect(got.applied, 0);
@@ -216,6 +220,7 @@ void main() {
         const [],
         incomingServers: full(),
         localServers: full(without: {'opendns_udp'}),
+        exportedByApp: kLxAppLxBox,
       );
       expect(got.servers.map((s) => s.tag), contains('opendns_udp'));
       expect(got.servers.length, allTags.length);
@@ -225,8 +230,33 @@ void main() {
       final got = _apply(
         const [DnsRuleInline(name: 'corp', rule: _corp)],
         localServers: full(),
+        exportedByApp: kLxAppLxBox,
       );
       expect(got.servers, full());
+    });
+
+    // Контракт 1.1.134 (BACKUP.md §9 п. 5, D-133): норма полного списка —
+    // только у файла своего приложения. Каталог лаунчера без `opendns_doh` и
+    // `yandex_dot`: его файл не может их назвать, и снимать их нельзя.
+    test('файл лаунчера с неполным списком — шаблонные записи остаются', () {
+      final got = _apply(
+        const [],
+        incomingServers: full(without: {'opendns_doh', 'yandex_dot'}),
+        localServers: [...full(), mine],
+        exportedByApp: kLxAppLauncher,
+      );
+      expect(got.servers, [...full(), mine]);
+      expect(got.applied, 0);
+    });
+
+    test('файл без exported_by — слияние, шаблонные записи остаются', () {
+      final got = _apply(
+        const [],
+        incomingServers: full(without: {'opendns_udp'}),
+        localServers: [...full(), mine],
+      );
+      expect(got.servers, [...full(), mine]);
+      expect(got.applied, 0);
     });
   });
 }

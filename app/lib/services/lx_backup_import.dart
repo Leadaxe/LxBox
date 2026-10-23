@@ -364,6 +364,7 @@ LxImportPlan planLxBackupImport(String raw, LxImportReceiver receiver) {
           recordVars: receiver.recordVars,
           knownTargets: known,
           warnings: extraWarnings,
+          exportedByApp: file.exportedByApp,
         );
   if (extraWarnings.isNotEmpty) {
     file = file.copyWith(warnings: [...file.warnings, ...extraWarnings]);

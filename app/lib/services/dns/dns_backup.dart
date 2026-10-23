@@ -148,7 +148,9 @@ typedef DnsBackupApply = ({
 /// проверяются (висячий резолвер лечит сборка).
 ///
 /// §680 — шаблонные записи (`kind: template`): файл — полный список, записи
-/// приёмника с тегом вне файла снимаются; у файла без серверов — нет.
+/// приёмника с тегом вне файла снимаются. Только у файла LxBox
+/// ([exportedByApp] == `lxbox`, контракт 1.1.134, D-133) и только когда в
+/// файле есть серверы; файл лаунчера или без `exported_by` — слияние.
 ///
 /// `final`/`strategy`/`default_domain_resolver` применяются только когда
 /// приехали непустыми: пустая строка в файле означает «сторона это не
@@ -163,6 +165,7 @@ DnsBackupApply applyDnsBackup({
   RecordVarDecls recordVars = RecordVarDecls.none,
   Set<String>? knownTargets,
   List<LxBackupWarning>? warnings,
+  String exportedByApp = '',
 }) {
   var applied = 0;
   final sink = warnings ?? <LxBackupWarning>[];
@@ -216,7 +219,12 @@ DnsBackupApply applyDnsBackup({
   // полный список: шаблонные записи приёмника, тегов которых в файле нет,
   // снимаются (пользователь удалил сервер — на восстановлении его нет).
   // inline/preset — слияние выше. Файл без серверов список не трогает.
-  if (incoming.servers.isNotEmpty) {
+  // Контракт 1.1.134 (BACKUP.md §9 п. 5, D-133, TASKS_LXBOX §131): норма
+  // только для файла своего приложения. Каталог шаблона у лаунчера другой
+  // (нет `opendns_doh`/`yandex_dot`), записей `kind: template` у него может
+  // не быть вовсе — файл с десктопа снял бы серверы, которых пользователь не
+  // удалял. Файл лаунчера и файл без `exported_by` — слияние, как до §680.
+  if (incoming.servers.isNotEmpty && exportedByApp == kLxAppLxBox) {
     final fileTemplateTags = <String>{
       for (final s in incoming.servers)
         if (s is DnsServerTemplate) s.tag,

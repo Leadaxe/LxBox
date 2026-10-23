@@ -100,6 +100,7 @@ LxBackupFile _import(_State s, String raw) {
     dnsFinal: s.dnsFinal,
     strategy: s.dnsStrategy,
     defaultDomainResolver: s.dnsResolver,
+    exportedByApp: file.exportedByApp,
   );
   s.dnsServers = dns.servers;
   s.dnsRules = dns.rules;
