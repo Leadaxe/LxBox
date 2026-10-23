@@ -286,6 +286,13 @@ DnsRuleRef? _dnsRuleOf(Map<String, dynamic> j) => dnsRuleFromRecord(j).value;
 Future<List<DnsServerRef>> _getDnsServers() async =>
     _parseDnsEntries(_dnsList(await _load(), kDnsServersKey), _dnsServerOf);
 
+/// §680 — ключ `dns.servers` присутствует (список создан). Пустой список —
+/// тоже «создан»: признак посева, отдельного флага нет.
+Future<bool> _hasDnsServersList() async {
+  final dns = (await _load())[kDnsKey];
+  return dns is Map && dns[kDnsServersKey] is List;
+}
+
 /// §441 — значения переменных template-сервера пишутся по нормам Н2–Н4
 /// против шаблона ([normalizeDnsServersVars]): необъявленное имя и значение,
 /// равное умолчанию, снимаются молча. Запись, которую нормализация не

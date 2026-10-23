@@ -112,6 +112,9 @@ Future<List<DnsServerRef>> resolveDnsServersList({
   Map<String, String> presetIdByTag = const {},
 }) async {
   final stored = await SettingsStorage.getDnsServers();
+  // §680 — посев шаблонных серверов один раз: признак «список создан» —
+  // наличие ключа `dns.servers`. Пустой сохранённый список не досевается.
+  final seeded = await SettingsStorage.hasDnsServersList();
   // §117: template-серверы — обёртки `{description, enabled, vars?, server}`,
   // tag живёт в `server.tag`.
   final templateByTag = templateDnsServersByTag(templateServers);
@@ -138,18 +141,24 @@ Future<List<DnsServerRef>> resolveDnsServersList({
         enabled: true, tag: tag, presetId: presetIdByTag[tag] ?? ''));
     seen.add(tag);
   }
-  // Step 3: auto-discover missing template entries (наследуют enabled из template).
-  for (final s in templateServers) {
-    final tag = templateDnsServerTag(s);
-    if (tag == null) continue;
-    if (seen.contains(tag)) continue;
-    final enabled = s['enabled'] != false;
-    result.add(DnsServerTemplate(enabled: enabled, tag: tag));
-    seen.add(tag);
+  // Step 3: посев шаблонных серверов (наследуют enabled из template) — только
+  // на первом запуске, пока ключа нет (§680). Дальше список принадлежит
+  // пользователю: новые серверы шаблона появляются в каталоге по (+).
+  if (!seeded) {
+    for (final s in templateServers) {
+      final tag = templateDnsServerTag(s);
+      if (tag == null) continue;
+      if (seen.contains(tag)) continue;
+      final enabled = s['enabled'] != false;
+      result.add(DnsServerTemplate(enabled: enabled, tag: tag));
+      seen.add(tag);
+    }
   }
 
-  // Step 4: persist if changed (не писать на каждый load).
-  if (!const ListEquality<DnsServerRef>().equals(stored, result)) {
+  // Step 4: persist if changed (не писать на каждый load). При посеве ключ
+  // пишется всегда — после этого шаг 3 больше не выполняется.
+  if (!seeded ||
+      !const ListEquality<DnsServerRef>().equals(stored, result)) {
     await SettingsStorage.saveDnsServers(result);
   }
   return result;

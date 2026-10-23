@@ -243,8 +243,9 @@ void main() {
       () async {
     await seedFile();
 
-    // Шаблон принёс новый template-сервер и новое template-правило: оба
-    // резолвера дописывают и сохраняют.
+    // Пресет принёс новый сервер, шаблон — новое template-правило: оба
+    // резолвера дописывают и сохраняют. Новый template-сервер в уже
+    // созданный список не досевается (§680 — он в каталоге).
     final servers = await resolveDnsServersList(
       templateServers: [
         templateGoogleUdp(),
@@ -253,15 +254,25 @@ void main() {
           'server': {'type': 'udp', 'tag': 'quad9_udp', 'server': '9.9.9.9'},
         },
       ],
-      presetServersByTag: presetServersByTag,
-      presetIdByTag: const {'ru-direct:yandex_udp': 'ru-direct'},
+      presetServersByTag: {
+        ...presetServersByTag,
+        'ru-direct:yandex_dot': {
+          'type': 'tls',
+          'tag': 'ru-direct:yandex_dot',
+          'server': '77.88.8.8',
+        },
+      },
+      presetIdByTag: const {
+        'ru-direct:yandex_udp': 'ru-direct',
+        'ru-direct:yandex_dot': 'ru-direct',
+      },
     );
     expect(servers.map((s) => s.tag), [
       'my-doh',
       'google_udp',
       'ru-direct:yandex_udp',
       'dns-group',
-      'quad9_udp',
+      'ru-direct:yandex_dot',
     ]);
 
     await resolveDnsRulesList(
@@ -276,7 +287,7 @@ void main() {
         as Map<String, dynamic>)['dns'] as Map<String, dynamic>;
     expect(dns['servers'], [
       ...serverRecords,
-      {'kind': 'template', 'tag': 'quad9_udp', 'enabled': false},
+      {'kind': 'preset', 'ref': 'ru-direct:yandex_dot', 'enabled': true},
     ]);
     expect(dns['rules'], [
       ...ruleRecords,
