@@ -6376,5 +6376,8 @@
   },
   "Cannot move: \"%s\" includes \"%s\"": {
     "value": "Нельзя переместить: «%s» включает «%s»"
+  },
+  "Locked: used by %s. Remove the reference first.": {
+    "value": "Заблокировано, используется: %s. Сначала уберите ссылку."
   }
 }

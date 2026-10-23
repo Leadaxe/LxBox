@@ -6094,5 +6094,8 @@
   },
   "Cannot move: \"%s\" includes \"%s\"": {
     "value": "无法移动：「%s」包含「%s」"
+  },
+  "Locked: used by %s. Remove the reference first.": {
+    "value": "已锁定：被 %s 使用。请先移除引用。"
   }
 }

@@ -92,8 +92,18 @@ class MergedServerTile extends StatelessWidget {
           child: Switch(
             // §117: locked-сервер build force-include'ит — показываем ON.
             value: switchOn,
+            // §680: залоченный включённый — активный и ON (disabled Material
+            // рисует серым, строка читалась как выключенная); тап объясняет
+            // лок вместо переключения.
             onChanged: locked && switchOn
-                ? null
+                ? (_) => ScaffoldMessenger.of(context)
+                  ..hideCurrentSnackBar()
+                  ..showSnackBar(SnackBar(
+                    content: Text(getLocalText.s(
+                      "Locked: used by %s. Remove the reference first.",
+                      entry.lockedByLabel,
+                    )),
+                  ))
                 : (v) => onToggleEnabled(entry.tag, v),
           ),
         ),

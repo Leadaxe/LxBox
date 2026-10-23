@@ -79,8 +79,17 @@ class DnsServerParamsTab extends StatelessWidget {
               : null,
           // §680: лок ссылкой из списка держит включённый сервер включённым.
           value: c.enabled || c.forceIncluded,
+          // §680: залоченный включённый — активный и ON; тап объясняет лок
+          // SnackBar'ом вместо переключения (disabled рисовался серым).
           onChanged: c.locked && (c.enabled || c.forceIncluded)
-              ? null
+              ? (_) => ScaffoldMessenger.of(context)
+                ..hideCurrentSnackBar()
+                ..showSnackBar(SnackBar(
+                  content: Text(getLocalText.s(
+                    "Locked: used by %s. Remove the reference first.",
+                    c.lockedByLabel,
+                  )),
+                ))
               : c.setEnabled,
         ),
         const Divider(),
