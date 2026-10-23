@@ -1156,9 +1156,11 @@ The legacy spellings without `#` (`and`, `or`, `value`, `else`, and `enabled: "@
 
 An example (the §119 inbounds, see `wizard_template.json`):
 ```jsonc
-{"#if": {"and": [{"@vpn_mode": {"#in": ["proxy", "vpn_proxy"]}}], "value": {
-  "type": "@proxy_type", "tag": "mixed-in", "listen_port": "@proxy_port",
-  "#if": {"and": ["@proxy_auth"], "value": {
+{"#if": {"#and": [{"@vpn_mode": {"#in": ["proxy", "vpn_proxy"]}}], "#value": {
+  "type": "@proxy_type",
+  "tag": "mixed-in",
+  "listen_port": "@proxy_port",
+  "#if": {"#and": ["@proxy_auth"], "#value": {
     "users": [{"username": "@proxy_user", "password": "@proxy_pass"}]
   }}
 }}}
@@ -1173,6 +1175,12 @@ of keys and the line breaks **do not affect** the loader or the builder — they
 The semantics (`#if`, the magic vars, the rule order) are mandatory; the formatting is not, but keep it
 uniform. Custom or imported templates may ignore this section.
 
+The layout is applied by `app/scripts/format_wizard_template.py`
+(`python3 -I app/scripts/format_wizard_template.py [path]`). It keeps the order of keys and array
+elements, re-parses its own output and refuses to write the file when the result differs from the
+input in any value or key order. A `#` construct it does not know is written on one line, with a
+warning naming the path to the node.
+
 ### The general principle
 
 **Compact** (one line) for literals and small metadata objects. **Expanded**
@@ -1184,10 +1192,13 @@ placeholder or a nested `#if` is expanded; pure literals may be squeezed.
 | Part of a var | Layout |
 |---|---|
 | The “header” — `name`, `type`, `wizard_ui`, `title`, `tooltip` | **Line 1** (together) |
-| `default_value` | **Its own line**, indented |
-| `options[]` | **Multiline** — one element per line (`{title,value}` or a bare string) |
+| `default_value` | **Starts a new line**, indented; the scalar keys after it stay on that line |
+| `options[]` | Bare strings — one line; `{title,value}` objects — one element per line |
+| `#on_change` | `"#on_change": {"#set": {` on its own line, one target var per line, closing `}}` |
 | A ref-var (§265) `{"ref": "<name>"}` | **One line** in full (it carries no metadata) |
-| A simple bool var with no options | **One line** in full |
+| A simple var with no options (only header keys and `default_value`) | **One line** in full |
+
+The keys keep the order they have in the file; the layout only decides where a line breaks.
 
 ```jsonc
 { "name": "resolve_strategy", "type": "enum", "wizard_ui": "edit", "title": "Resolve strategy", "tooltip": "IP version preference for DNS resolution",
@@ -1221,32 +1232,72 @@ defaults); `num` is always written — it is part of the axis layout.
 
 ### The `#if` construct (§120)
 
-| `value` / `else` | Layout |
+The canonical keys are `#and` / `#or` / `#not` / `#value` / `#else`; the legacy spellings without
+`#` are laid out the same way. The condition (`#and`, `#or`, `#not`, the first element of the
+short form) is always one line.
+
+| Form and branch | Layout |
 |---|---|
-| **A scalar** | `{"#if": {"and": [...], "value": "..."}}` — one line |
-| **An object** | the condition plus `"value": {` on line 1; the body below; closing with `}}}` |
+| `#value` / `#else` **a scalar** | `{"#if": {"#and": [...], "#value": "..."}}` — one line |
+| `#value` **an object** | the condition plus `"#value": {` on line 1; the body below, one field per line; closing with `}}}` |
+| `#value` and `#else` **objects** | `}, "#else": {` between the two bodies; closing with `}}}` |
+| Short form `#if: [cond, V, E]`, `V` **a scalar** | `{"#if": ["@flag", "..."]}` — one line |
+| Short form, `V` **an object** | `{"#if": [cond, {` on line 1; the body below; closing with `}]}` (with `E`: `}, E]}`) |
+| `#if` as a map-spread key (`"#if"`, `"#if <label>"`) | the same rules, written as a field of the parent object |
+
+A branch that is a single operator object (`{"#append": "@node"}`, `{"#tpl": "…"}`) counts as a
+scalar.
 
 ```jsonc
-{"#if": {"and": ["@force_ipv4"], "value": {
-  "rule_set": ["ru-domains", "ru-services"], "ip_version": 6,
-  "action": "predefined", "rcode": "NOERROR"
-}}}
+{"#if": {"#and": ["@force_ipv4"], "#value": {
+  "rule_set": ["ru-domains", "ru-services"],
+  "ip_version": 6,
+  "action": "predefined",
+  "rcode": "NOERROR"
+}}},
+{"#if": [{"@allow_lan_nodes": "#notEmpty"}, {
+  "inbound": "@allow_lan_nodes",
+  "ip_is_private": true,
+  "outbound": "@allowed_out"
+}]}
+```
+
+### `#tpl`, `#do`, `#filter`, node loops
+
+| Construct | Layout |
+|---|---|
+| `{"#tpl": "…"}` | always one line |
+| `#filter` | the predicate on one line |
+| `for_each_node` / `for_each_node_do` with only `#filter` | one line |
+| `#do` | one target var per line; each `{"#append": …}` or short `#if` on that line |
+
+```jsonc
+"for_each_node_do": {
+  "#filter": {"@node.body.type": {"#in": ["wireguard", "openvpn-client", "openconnect"]}},
+  "#do": {
+    "@all_nodes": {"#append": "@node"},
+    "@allow_lan_nodes": {"#if": ["@node.allow_lan", {"#append": "@node"}]}
+  }
+}
 ```
 
 ### A preset's rules (`rule`/`rules`, `dns_rule`/`dns_rules`)
 
 | Case | Layout |
 |---|---|
-| A single literal rule (no `#if`, no `@`) | **one line** |
+| A rule without `#if` | **one line** |
 | A rule under an `#if` with a scalar | one line |
-| A rule under an `#if` with an object `value` | multiline (condition → body → `}}}`) |
+| A rule under an `#if` with an object `#value` | multiline (condition → body → `}}}`) |
+| A rule holding a nested `#if` (a `logical` rule) | one field per line |
 | `rule_set[]`, inline or remote | line 1: the metadata (`tag`/`type`/`format`); line 2: `rules`/`url` |
 | Long inline suffix lists | one line when it fits; otherwise wrapped |
 
 ```jsonc
 "dns_rules": [
-  {"#if": {"and": ["@force_ipv4"], "value": {
-    "query_type": ["HTTPS", "SVCB"], "action": "predefined", "rcode": "NOERROR"
+  {"#if": {"#and": ["@force_ipv4"], "#value": {
+    "query_type": ["HTTPS", "SVCB"],
+    "action": "predefined",
+    "rcode": "NOERROR"
   }}},
   {"rule_set": ["ru-domains", "ru-services"], "server": "@dns_server", "action": "route"}
 ]
@@ -1262,8 +1313,11 @@ defaults); `num` is always written — it is part of the axis layout.
 | ref-var `{"ref":...}` | ✓ | — |
 | A preset's `ui` object | ✓ (when it fits) | the flags below |
 | An `@` field in a payload | — | ✓ (per field) |
-| `#if` plus an object `value` | the condition | the body |
+| `#if` plus an object `#value` | the condition | the body |
 | `#if` plus a scalar | ✓ | — |
+| Short `#if` plus an object `V` | the condition | the body |
+| `{"#tpl": …}` | ✓ | — |
+| `#do` | — | ✓ (per target var) |
 | A preset's literal rule | ✓ | — |
 
 > **A gotcha:** do NOT put comment keys (`"//": "..."`) into the `config` block — sing-box's

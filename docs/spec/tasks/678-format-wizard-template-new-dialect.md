@@ -2,9 +2,9 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | In progress |
+| Статус | Done |
 | Дата начала | 2026-10-23 |
-| Дата конца | — |
+| Дата конца | 2026-10-23 |
 | Коммиты | см. `git log --grep 678` |
 | Связанные спеки | [656](656-contract-1130-tunnel-ingress.md) — короткий `#if`, `#if` на `#do`; [578](578-tailscale-preset-template-for-each.md) — `for_each_node*`, `@node`, `#tpl`; `docs/TEMPLATE.md` → «Formatting style» |
 
