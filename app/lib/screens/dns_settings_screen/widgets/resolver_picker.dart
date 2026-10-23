@@ -28,7 +28,7 @@ class ResolverPicker extends StatelessWidget {
   final bool warnIfLocal;
 
   /// §682 — выбранный резолвер ходит через Направление с этим тегом (null —
-  /// напрямую): у заголовка оранжевый ⚠ вместо ℹ, тап — диалог с пояснением.
+  /// напрямую): оранжевый ⚠ справа от пикера, тап — диалог с пояснением.
   final String? tunnelDetour;
 
   @override
@@ -39,42 +39,42 @@ class ResolverPicker extends StatelessWidget {
       contentPadding: EdgeInsets.zero,
       title: Row(
         children: [
-          if (tunnelDetour case final detour?)
-            InkResponse(
-              key: const ValueKey('resolver_tunnel_warning'),
-              radius: 18,
-              onTap: () => _showTunnelWarning(context, detour),
-              child: Tooltip(
-                message: getLocalText.s("Resolver goes through a tunnel"),
-                triggerMode: TooltipTriggerMode.manual,
-                child: Icon(
-                  Icons.warning_amber_rounded,
-                  size: 18,
-                  color: bannerIconColor(context, BannerSeverity.warning),
-                ),
-              ),
-            )
-          else
-            Tooltip(
-              message: tooltip,
-              preferBelow: false,
-              triggerMode: TooltipTriggerMode.tap,
-              showDuration: const Duration(seconds: 12),
-              waitDuration: const Duration(milliseconds: 100),
-              child: Icon(
-                showWarn ? Icons.warning_amber_rounded : Icons.info_outline,
-                size: 18,
-                color: showWarn
-                    ? bannerIconColor(context, BannerSeverity.warning)
-                    : cs.onSurfaceVariant,
-              ),
+          Tooltip(
+            message: tooltip,
+            preferBelow: false,
+            triggerMode: TooltipTriggerMode.tap,
+            showDuration: const Duration(seconds: 12),
+            waitDuration: const Duration(milliseconds: 100),
+            child: Icon(
+              showWarn ? Icons.warning_amber_rounded : Icons.info_outline,
+              size: 18,
+              color: showWarn
+                  ? bannerIconColor(context, BannerSeverity.warning)
+                  : cs.onSurfaceVariant,
             ),
+          ),
           const SizedBox(width: 6),
           Text(title),
         ],
       ),
       subtitle: Text(subtitle, style: const TextStyle(fontSize: 12)),
-      trailing: _dropdown(),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _dropdown(),
+          if (tunnelDetour case final detour?)
+            IconButton(
+              key: const ValueKey('resolver_tunnel_warning'),
+              tooltip: getLocalText.s("Resolver goes through a tunnel"),
+              icon: Icon(
+                Icons.warning_amber_rounded,
+                size: 20,
+                color: bannerIconColor(context, BannerSeverity.warning),
+              ),
+              onPressed: () => _showTunnelWarning(context, detour),
+            ),
+        ],
+      ),
     );
   }
 
@@ -83,16 +83,24 @@ class ResolverPicker extends StatelessWidget {
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        icon: Icon(Icons.warning_amber_rounded, color: warn),
-        title: Text(
-          getLocalText.s("Resolver goes through a tunnel"),
-          style: TextStyle(color: warn),
-        ),
-        content: Text(
-          getLocalText.s(
-            "This resolver sends queries through %s. It is used to look up server addresses while the connection is being set up, before the tunnel exists, so lookups can fail and the VPN may not connect. A direct resolver is the safest choice; for privacy pick a DoT or DoH server.",
-            detour,
-          ),
+        // Заголовок — строкой контента: тот же размер, что у текста, только
+        // оранжевый (правка владельца §682).
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              getLocalText.s("Resolver goes through a tunnel"),
+              style: TextStyle(color: warn),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              getLocalText.s(
+                "This resolver sends queries through %s. It is used to look up server addresses while the connection is being set up, before the tunnel exists, so lookups can fail and the VPN may not connect. A direct resolver is the safest choice; for privacy pick a DoT or DoH server.",
+                detour,
+              ),
+            ),
+          ],
         ),
         actions: [
           TextButton(
