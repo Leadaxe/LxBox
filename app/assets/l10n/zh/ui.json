@@ -6110,6 +6110,9 @@
   "Changing the tag creates a custom copy. The original server stays in the list.": {
     "value": "更改标签会创建自定义副本，原服务器仍保留在列表中。"
   },
+  "Resolver goes through a tunnel": {
+    "value": "解析器经由隧道"
+  },
   "This resolver sends queries through %s. It is used to look up server addresses while the connection is being set up, before the tunnel exists, so lookups can fail and the VPN may not connect. A direct resolver is the safest choice; for privacy pick a DoT or DoH server.": {
     "value": "此解析器通过 %s 发送查询。它在连接建立期间、隧道尚未存在时用于查找服务器地址，因此查询可能失败，VPN 可能无法连接。直连解析器最稳妥；如需隐私，请选择 DoT 或 DoH 服务器。"
   }

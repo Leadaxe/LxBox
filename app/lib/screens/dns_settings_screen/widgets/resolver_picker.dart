@@ -65,6 +65,7 @@ class ResolverPicker extends StatelessWidget {
           if (tunnelDetour case final detour?)
             IconButton(
               key: const ValueKey('resolver_tunnel_warning'),
+              tooltip: getLocalText.s("Resolver goes through a tunnel"),
               icon: Icon(
                 Icons.warning_amber_rounded,
                 size: 20,
