@@ -53,6 +53,31 @@
 
 ### Fixed
 
+- **Core `v1.14.3-lx.21` → `v1.14.3-lx.23`
+  ([docs/KERNEL.md](docs/KERNEL.md)).** Stopping the VPN with many
+  WireGuard/AmneziaWG/WARP endpoints is fast again: since an older core
+  release every endpoint waited for its own receive worker one after another,
+  which is the likely cause of the service staying in "Stopping"
+  ([task 668](docs/spec/tasks/668-stop-teardown-trace-and-timeouts.md)). Start
+  no longer waits 10–16 s for an unrelated mux handshake. A MASQUE node with
+  `vhttp: auto` no longer keeps the previous core instance in memory after
+  each Stop/Start or profile switch. A Load balance (`round_robin`) group no
+  longer sends new connections to a node that failed its last check while a
+  live node is available; a manual ping that fails also takes the node out of
+  the rotation until the next group check. A stop that hangs longer than
+  20 s now writes a goroutine dump to the core log. The Java surface is
+  identical to lx.21. Not verified on a device.
+  (RU: Ядро `v1.14.3-lx.21` → `v1.14.3-lx.23`. Остановка VPN с многими
+  WireGuard/AmneziaWG/WARP-узлами снова быстрая: в одной из прежних версий
+  ядра каждый endpoint по очереди ждал свой приёмный воркер — вероятная
+  причина зависания службы в «Stopping». Старт больше не ждёт 10–16 с чужой
+  mux-handshake. MASQUE-узел с `vhttp: auto` больше не держит в памяти
+  прошлый экземпляр ядра после каждого Stop/Start или смены профиля. Группа
+  Load balance (`round_robin`) больше не отправляет новые соединения узлу,
+  провалившему последнюю проверку, пока есть живой; неудачный ручной пинг
+  тоже выводит узел из ротации до следующей проверки группы. Остановка,
+  зависшая дольше 20 с, теперь пишет дамп горутин в лог ядра.
+  Java-поверхность идентична lx.21. На устройстве не проверено.)
 - **Auto-ping after connect no longer forces a group URLTest on Load balance
   and Hold until failure groups
   ([task 677](docs/spec/tasks/677-autoping-tail-skips-round-robin-groups.md),
