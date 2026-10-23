@@ -42,6 +42,11 @@ import '../widgets/safe_bottom.dart';
 class BackupScreen extends StatefulWidget {
   const BackupScreen({super.key});
 
+  /// §622 — экран приёма; тест подменяет, чтобы не поднимать сервер и QR.
+  @visibleForTesting
+  static Future<BackupContents?> Function(BuildContext context) openReceive =
+      openTransferReceiveScreen;
+
   @override
   State<BackupScreen> createState() => _BackupScreenState();
 }
@@ -62,12 +67,21 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
   /// с камерой (P10). До ответа платформы не показываем ни один.
   TransferEntries _transfer = TransferEntries.none;
 
+  /// Кнопка «Show code»: после восстановления фокус пульта возвращается сюда.
+  final _receiveFocus = FocusNode(debugLabel: 'transfer-receive');
+
   @override
   void initState() {
     super.initState();
     unawaited(loadTransferEntries().then((e) {
       if (mounted) setState(() => _transfer = e);
     }));
+  }
+
+  @override
+  void dispose() {
+    _receiveFocus.dispose();
+    super.dispose();
   }
 
   @override
@@ -78,7 +92,11 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
         padding: const EdgeInsets.symmetric(vertical: 8).withSafeBottom(context),
         children: [
           if (_transfer.receive) ...[
-            DeviceTransferCard.receive(busy: _busy, onReceive: _onReceive),
+            DeviceTransferCard.receive(
+              busy: _busy,
+              onReceive: _onReceive,
+              focusNode: _receiveFocus,
+            ),
             const SizedBox(height: 8),
           ],
           ExportCard(
@@ -259,17 +277,33 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
 
   /// TV: экран приёма, затем общий путь восстановления (фича 031 P4).
   Future<void> _onReceive() async {
-    final contents = await openTransferReceiveScreen(context);
+    final contents = await BackupScreen.openReceive(context);
     if (contents == null || !mounted) return;
     setState(() => _busy = true);
+    // Погашенная busy кнопка отдаёт фокус своему экрану. В одном кадре с
+    // открытием предпросмотра это перебивает запрос фокуса диалога, и пульт
+    // ходит по экрану под ним — поэтому сначала кадр с погашенной кнопкой.
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
     try {
       await restoreFromContents(context, contents);
     } catch (e) {
       if (!mounted) return;
       showSnack(getLocalText.s("Import failed: %s", formatUserError(e).render()));
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        setState(() => _busy = false);
+        WidgetsBinding.instance.addPostFrameCallback((_) => _refocusReceive());
+      }
     }
+  }
+
+  /// Фокус обратно на карточку, если он остался на самом экране (кнопка
+  /// гасла на время восстановления); выбранное пользователем не трогаем.
+  void _refocusReceive() {
+    if (!mounted) return;
+    final scope = _receiveFocus.enclosingScope;
+    if (scope != null && scope.hasPrimaryFocus) _receiveFocus.requestFocus();
   }
 
   /// Телефон: скан кода с TV → подтверждение → шифрование → отправка.

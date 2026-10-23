@@ -244,16 +244,22 @@ class AppLog extends ChangeNotifier {
   Timer? _notifyThrottleTimer;
   bool _notifyPending = false;
 
-  /// Leading-edge throttle: первый вызов сразу `notifyListeners()`,
+  /// Leading-edge throttle: первый вызов — `notifyListeners()` микрозадачей,
   /// последующие в окне 16ms объединяются и emit'ятся одним notify в
   /// конце окна. На устойчивом core-log потоке (100+ строк/сек) UI
   /// rebuild ≤ 60Hz вместо `freq(write)`.
+  ///
+  /// Запись бывает из build/layout/dispose (лог `dispose()` экрана, ошибка
+  /// фреймворка через `FlutterError.onError`). Синхронный notify там =
+  /// `setState` слушателя при запертом дереве → новая ошибка → новая запись
+  /// → новый notify (debug-сборка уходила в лавину). Поэтому окно ставится
+  /// ДО уведомления, а само уведомление — после текущей задачи, когда кадр
+  /// уже отпустил дерево.
   void _scheduleNotify() {
     if (_notifyThrottleTimer != null) {
       _notifyPending = true;
       return;
     }
-    notifyListeners();
     _notifyThrottleTimer = Timer(_notifyWindow, () {
       _notifyThrottleTimer = null;
       if (_notifyPending) {
@@ -261,6 +267,7 @@ class AppLog extends ChangeNotifier {
         _scheduleNotify();
       }
     });
+    scheduleMicrotask(notifyListeners);
   }
 
   void debug(String message, {DebugSource source = DebugSource.app}) =>

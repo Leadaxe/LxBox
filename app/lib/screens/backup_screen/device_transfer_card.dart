@@ -12,6 +12,7 @@ class DeviceTransferCard extends StatelessWidget {
     super.key,
     required this.busy,
     required VoidCallback onReceive,
+    this.focusNode,
   })  : _receive = true,
         onPressed = onReceive;
 
@@ -19,12 +20,17 @@ class DeviceTransferCard extends StatelessWidget {
     super.key,
     required this.busy,
     required VoidCallback onSend,
+    this.focusNode,
   })  : _receive = false,
         onPressed = onSend;
 
   final bool _receive;
   final bool busy;
   final VoidCallback onPressed;
+
+  /// Фокус кнопки: экран возвращает его на карточку после восстановления —
+  /// на время `busy` кнопка гаснет и фокус теряет (пульт TV, P8).
+  final FocusNode? focusNode;
 
   @override
   Widget build(BuildContext context) {
@@ -67,6 +73,7 @@ class DeviceTransferCard extends StatelessWidget {
             Align(
               alignment: Alignment.centerRight,
               child: FilledButton.icon(
+                focusNode: focusNode,
                 onPressed: busy ? null : onPressed,
                 icon: Icon(_receive ? Icons.qr_code_2 : Icons.qr_code_scanner),
                 label: Text(_receive
