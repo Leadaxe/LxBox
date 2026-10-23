@@ -70,7 +70,7 @@ Answer
 |---|---|---|
 | Default | `dns.enabled = false`, `fixedIps` пуст | DNS-зеркала нет (как сейчас без галки) |
 | Dedicated server | `dns.enabled = true`, `serverTag` | как сейчас «Send DNS to dedicated server» |
-| Fixed IP | `dns.fixed = true`, `fixedIps` непуст | п. 3 |
+| Fixed IP | `fixedIps` непуст (поправка 24.10: флага `fixed` нет) | п. 3 |
 
 Переход между вариантами не теряет значения других (serverTag хранится и
 при `enabled: false`, как сейчас; `fixedIps` хранится, но эмитится только
@@ -134,14 +134,15 @@ lx.23 разбирает такие записи (`option` → `dns.NewRR`), п�
 
 ### 4. Модель и хранение
 
-- `RuleDns` (`models/custom_rule.dart`) — два новых поля:
-  `fixedIps: List<String>` (ключ `fixedIps`, пишется только непустым) и
-  `fixed: bool` (ключ `fixed`, пишется только `true`). Режим Answer:
-  `fixed && fixedIps.isNotEmpty` → Fixed IP; иначе `enabled` → Dedicated
-  server; иначе Default. Выбор Fixed IP ставит `fixed = true,
-  enabled = false`; выбор Dedicated — `enabled = true, fixed = false`;
-  Default — оба `false`. Адреса и serverTag при переключении хранятся.
-  Имена ключей — camelCase, как у соседних (`serverTag`, `forceIpv4`).
+- `RuleDns` (`models/custom_rule.dart`) — **одно** новое поле
+  `fixedIps: List<String>` (ключ `fixedIps`, пишется только непустым).
+  Режим Answer: есть хотя бы один разбираемый IP → Fixed IP; иначе
+  `enabled` → Dedicated server; иначе Default. Выбор Dedicated или Default
+  очищает `fixedIps`; выбор Fixed IP ставит `enabled = false`, `serverTag`
+  хранится. Радио Fixed IP с пустым полем — состояние формы, не
+  хранения (Save заблокирован). **Поправка владельца 24.10.2026:** флаг
+  `fixed` снят — «одно поле тут и в лаунчере»; адреса при переключении
+  режима не сохраняются.
 - `dnsMirrorActive` / гейт / `_toggleRuleForceIpv4` на вкладке DNS —
   учесть новый режим: карточка правила в блоке «From routing rules»
   вкладки DNS показывает строку `action: predefined · answer: <ip>, …`
