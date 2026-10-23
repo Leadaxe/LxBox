@@ -164,6 +164,9 @@ Map<String, Object?> _serializeRuleDns(RuleDns dns) => {
       'server_tag': dns.serverTag,
       // §256 — Force IPv4 (AAAA-глушилка), скрываем когда выкл.
       if (dns.forceIpv4) 'force_ipv4': true,
+      // §683 — Answer = Fixed IP; скрываем, когда не задано.
+      if (dns.fixed) 'fixed': true,
+      if (dns.fixedIps.isNotEmpty) 'fixed_ips': dns.fixedIps,
     };
 
 /// §247 — resolve-опция. Пустые/дефолтные поля скрываем (симметрия

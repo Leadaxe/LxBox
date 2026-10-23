@@ -198,7 +198,10 @@ sealed class CustomRule {
 
   /// §117: DNS-mirror **активен** — [dnsMirrorEligible] И галка DNS включена.
   /// Build (эмиссия) и UI (lifecycle-локи серверов) используют этот предикат.
-  bool get dnsMirrorActive => dnsMirrorEligible && (dns?.enabled ?? false);
+  bool get dnsMirrorActive =>
+      dnsMirrorEligible &&
+      (dns?.enabled ?? false) &&
+      !(dns?.fixedMode ?? false);
 
   /// §256: Force IPv4 (AAAA-глушилка) **применима** — правило DNS-mirror-
   /// способно по headless-гейту (порт/протокол неизвестны в момент
@@ -214,7 +217,15 @@ sealed class CustomRule {
 
   /// §256: Force IPv4 **активна** — [forceIpv4Eligible] И галка включена.
   /// Build (эмиссия serverless-mirror'а) и UI (маркер) используют этот предикат.
-  bool get forceIpv4Active => forceIpv4Eligible && (dns?.forceIpv4 ?? false);
+  bool get forceIpv4Active =>
+      forceIpv4Eligible &&
+      (dns?.forceIpv4 ?? false) &&
+      !(dns?.fixedMode ?? false);
+
+  /// §683: Answer = Fixed IP **активен** — тот же headless-гейт, что у
+  /// [forceIpv4Eligible] (сервер не нужен: `predefined` отвечает локально),
+  /// и [RuleDns.fixedMode]. При нём server-mirror и Force IPv4 не эмитятся.
+  bool get dnsFixedActive => forceIpv4Eligible && (dns?.fixedMode ?? false);
 
   /// §247 — resolve-опция правила (только inline/srs). `null` = обычный
   /// outbound (backward-compat: старые записи без `resolve`).
@@ -315,6 +326,8 @@ class RuleDns {
     this.enabled = false,
     this.serverTag = '',
     this.forceIpv4 = false,
+    this.fixed = false,
+    this.fixedIps = const [],
   });
 
   final bool enabled;
@@ -326,28 +339,87 @@ class RuleDns {
   /// — глушилка отвечает локально, DNS-серверу не нужна.
   final bool forceIpv4;
 
+  /// §683 — Answer = Fixed IP: правило отвечает на DNS-запросы своего матча
+  /// адресами [fixedIps] (`predefined`, как hosts). Режим действует только
+  /// при непустом [fixedIps] ([fixedMode]); адреса хранятся и при `false`.
+  final bool fixed;
+
+  /// §683 — адреса ответа (IPv4/IPv6, по строке на адрес в UI).
+  final List<String> fixedIps;
+
+  /// §683 — режим Answer = Fixed IP. Приоритетнее [enabled] (Dedicated).
+  bool get fixedMode => fixed && fixedIps.isNotEmpty;
+
+  /// §683 — тип DNS-записи для адреса ответа: `A` (IPv4), `AAAA` (IPv6),
+  /// null — не адрес. Без `dart:io` (билдер чистый Dart).
+  static String? ipRecordType(String raw) {
+    final s = raw.trim();
+    if (s.isEmpty) return null;
+    if (s.contains(':')) {
+      try {
+        Uri.parseIPv6Address(s);
+        return 'AAAA';
+      } on FormatException {
+        return null;
+      }
+    }
+    try {
+      Uri.parseIPv4Address(s);
+      return 'A';
+    } on FormatException {
+      return null;
+    }
+  }
+
   Map<String, dynamic> toJson() => {
         'enabled': enabled,
         'serverTag': serverTag,
         if (forceIpv4) 'forceIpv4': true,
+        if (fixed) 'fixed': true,
+        if (fixedIps.isNotEmpty) 'fixedIps': List<String>.of(fixedIps),
       };
 
   /// Backward-compat: не-Map (отсутствует в старых записях) → null.
   static RuleDns? fromJson(dynamic j) {
     if (j is! Map) return null;
+    final ips = j['fixedIps'];
     return RuleDns(
       enabled: j['enabled'] == true,
       serverTag: j['serverTag']?.toString() ?? '',
       forceIpv4: j['forceIpv4'] == true,
+      fixed: j['fixed'] == true,
+      fixedIps: ips is List
+          ? [
+              for (final e in ips)
+                if (e != null && e.toString().trim().isNotEmpty)
+                  e.toString().trim(),
+            ]
+          : const [],
     );
   }
 
-  RuleDns copyWith({bool? enabled, String? serverTag, bool? forceIpv4}) =>
+  RuleDns copyWith({
+    bool? enabled,
+    String? serverTag,
+    bool? forceIpv4,
+    bool? fixed,
+    List<String>? fixedIps,
+  }) =>
       RuleDns(
         enabled: enabled ?? this.enabled,
         serverTag: serverTag ?? this.serverTag,
         forceIpv4: forceIpv4 ?? this.forceIpv4,
+        fixed: fixed ?? this.fixed,
+        fixedIps: fixedIps ?? this.fixedIps,
       );
+
+  /// Ничего не задано — запись `dns` можно снять с правила.
+  bool get isEmpty =>
+      !enabled &&
+      serverTag.isEmpty &&
+      !forceIpv4 &&
+      !fixed &&
+      fixedIps.isEmpty;
 
   @override
   bool operator ==(Object other) =>
@@ -355,10 +427,13 @@ class RuleDns {
       (other is RuleDns &&
           enabled == other.enabled &&
           serverTag == other.serverTag &&
-          forceIpv4 == other.forceIpv4);
+          forceIpv4 == other.forceIpv4 &&
+          fixed == other.fixed &&
+          _listEq(fixedIps, other.fixedIps));
 
   @override
-  int get hashCode => Object.hash(enabled, serverTag, forceIpv4);
+  int get hashCode =>
+      Object.hash(enabled, serverTag, forceIpv4, fixed, Object.hashAll(fixedIps));
 }
 
 /// §247 — resolve-опция правила (route rule action `resolve`, sing-box 1.14).

@@ -1176,7 +1176,9 @@ class _RoutingScreenState extends State<RoutingScreen>
     // ports/protocols).
     final touchesDns = rule.kind == CustomRuleKind.preset
         ? (preset?.touchesDns ?? false)
-        : (rule.dnsMirrorActive || rule.forceIpv4Active);
+        : (rule.dnsMirrorActive ||
+            rule.forceIpv4Active ||
+            rule.dnsFixedActive); // §683 — Answer = Fixed IP
 
     Widget? statusButton;
     if (rule is CustomRuleSrs) {
