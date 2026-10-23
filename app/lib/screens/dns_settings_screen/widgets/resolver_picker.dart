@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../widgets/banner_palette.dart';
 import '../../../services/l10n/locale_controller.dart';
 
-/// §047/§048 — DNS resolver picker с info-icon ℹ tooltip'ом и опциональным
+/// §047/§048 — DNS resolver picker с info-icon ℹ (тап — попап, §682) и опциональным
 /// жёлтым ⚠ маркером когда выбран `local_dns_resolver` (только для
 /// `Default Domain Resolver` поля — там это antipattern).
 class ResolverPicker extends StatelessWidget {
@@ -28,23 +28,21 @@ class ResolverPicker extends StatelessWidget {
   final bool warnIfLocal;
 
   /// §682 — выбранный резолвер ходит через Направление с этим тегом (null —
-  /// напрямую): оранжевый ⚠ справа от пикера, тап — диалог с пояснением.
+  /// напрямую): оранжевый ⚠ в строке заголовка у правого края, тап — диалог.
   final String? tunnelDetour;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final showWarn = warnIfLocal && value == 'local_dns_resolver';
-    return ListTile(
+    final tile = ListTile(
       contentPadding: EdgeInsets.zero,
       title: Row(
         children: [
-          Tooltip(
-            message: tooltip,
-            preferBelow: false,
-            triggerMode: TooltipTriggerMode.tap,
-            showDuration: const Duration(seconds: 12),
-            waitDuration: const Duration(milliseconds: 100),
+          // ℹ — попап с жирным заголовком (правка владельца §682).
+          InkResponse(
+            radius: 18,
+            onTap: () => _showInfo(context),
             child: Icon(
               showWarn ? Icons.warning_amber_rounded : Icons.info_outline,
               size: 18,
@@ -58,21 +56,60 @@ class ResolverPicker extends StatelessWidget {
         ],
       ),
       subtitle: Text(subtitle, style: const TextStyle(fontSize: 12)),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _dropdown(),
-          if (tunnelDetour case final detour?)
-            IconButton(
-              key: const ValueKey('resolver_tunnel_warning'),
-              tooltip: getLocalText.s("Resolver goes through a tunnel"),
-              icon: Icon(
-                Icons.warning_amber_rounded,
-                size: 20,
-                color: bannerIconColor(context, BannerSeverity.warning),
+      trailing: _dropdown(),
+    );
+    final detour = tunnelDetour;
+    if (detour == null) return tile;
+    // ⚠ в строке заголовка у правого края — над пикером, ширину пикера не
+    // трогает (правка владельца §682).
+    return Stack(
+      children: [
+        tile,
+        Positioned(
+          top: 6,
+          right: 0,
+          child: InkResponse(
+            key: const ValueKey('resolver_tunnel_warning'),
+            radius: 18,
+            onTap: () => _showTunnelWarning(context, detour),
+            child: Tooltip(
+              message: getLocalText.s("Resolver goes through a tunnel"),
+              triggerMode: TooltipTriggerMode.manual,
+              child: Padding(
+                padding: const EdgeInsets.all(4),
+                child: Icon(
+                  Icons.warning_amber_rounded,
+                  size: 20,
+                  color: bannerIconColor(context, BannerSeverity.warning),
+                ),
               ),
-              onPressed: () => _showTunnelWarning(context, detour),
             ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showInfo(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              Text(tooltip),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(getLocalText.s("OK")),
+          ),
         ],
       ),
     );
