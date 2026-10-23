@@ -29,6 +29,18 @@
   stays next to it (subtitle, tag line, or `Germany (vpn-1)`). Chain
   positions and Debug API keep the tag. Not verified on a device.
 
+- **Directions can be reordered on the Directions tab
+  ([task 673](docs/spec/tasks/673-directions-reorder-in-ui.md), issue #171).**
+  Each row has a drag handle, as in the rule list; `vpn-1` can be moved too.
+  A move cannot break "Other directions": while dragging, the rows a Direction
+  cannot pass are tinted red (the Direction that includes it and everything
+  below; the lowest Direction it includes and everything above), and a drop
+  there leaves the list as it was and shows why. Debug API follows the same
+  rule: `POST /directions/reorder` that would put a reference below its
+  Direction, and an `include` in `POST`/`PATCH /directions` naming a Direction
+  not above, itself or an unknown tag, now get 409 with the violated pairs
+  in `conflicts` instead of being saved. Not verified on a device.
+
 - **The Direction node filter preview works with the VPN off
   ([task 674](docs/spec/tasks/674-direction-filter-preview-without-tunnel.md),
   issue #171).** The editor and the node count on the Directions tab take the

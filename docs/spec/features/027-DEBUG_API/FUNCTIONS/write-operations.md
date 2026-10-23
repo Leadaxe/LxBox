@@ -52,7 +52,7 @@ top-level `dropped[]` with the parse reasons.
 |--------|------|------|
 | 400 | `bad_request` | missing or wrong query, malformed JSON, wrong field type, a validation finding (chain `tooFewHops`, an immutable Direction `tag`, a chain `tagEmpty`/`tagTaken`, a bad regex), unsupported method |
 | 404 | `not_found` | unknown sub-path, id, tag or index |
-| 409 | `conflict` | a precondition is missing: tunnel down, a guard run in flight, `vpn-1` disable or delete, a taken or reserved tag, a protected `debug_*` var, rebuild while Lock config is on |
+| 409 | `conflict` | a precondition is missing: tunnel down, a guard run in flight, `vpn-1` disable or delete, a taken or reserved tag, a protected `debug_*` var, rebuild while Lock config is on, a Direction order or `include` that puts an "Other directions" reference below its Direction (the body adds `conflicts`, [673](../../../tasks/673-directions-reorder-in-ui.md)) |
 | 413 | `payload_too_large` | body over 1 MiB |
 | 502 | `upstream_error` | the core, the native side or the config save refused |
 | 504 | `timeout` | the handler did not finish in 30 s |

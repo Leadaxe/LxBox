@@ -128,8 +128,12 @@ void main() {
       home: Scaffold(
         body: RoutingDirectionsTab(
           bottomPad: 0,
-          groupTiles: const [ListTile(title: Text('VPN 1'))],
           directionCount: 1,
+          onReorder: (_, _) {},
+          onReorderStart: (_) {},
+          onReorderEnd: (_) {},
+          itemKey: (i) => ValueKey('d$i'),
+          itemBuilder: (_) => const ListTile(title: Text('VPN 1')),
           onAddDirection: () {},
         ),
       ),

@@ -9,14 +9,26 @@ class RoutingDirectionsTab extends StatelessWidget {
   const RoutingDirectionsTab({
     super.key,
     required this.bottomPad,
-    required this.groupTiles,
     required this.directionCount,
+    required this.onReorder,
+    required this.onReorderStart,
+    required this.onReorderEnd,
+    required this.itemKey,
+    required this.itemBuilder,
     required this.onAddDirection,
   });
 
   final double bottomPad;
-  final List<Widget> groupTiles;
   final int directionCount;
+
+  /// §673 — перестановка Направлений: порядок нормативен («Other directions»
+  /// ссылаются только вверх), drag-handle как у правил маршрута. Start/End —
+  /// подсветка запретных зон на время drag.
+  final ReorderCallback onReorder;
+  final void Function(int index) onReorderStart;
+  final void Function(int index) onReorderEnd;
+  final Key Function(int index) itemKey;
+  final Widget Function(int index) itemBuilder;
 
   /// §393 A3 — лимита на количество Направлений больше нет; callback
   /// остаётся nullable ради общей идиомы «disabled кнопки».
@@ -36,7 +48,17 @@ class RoutingDirectionsTab extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        ...groupTiles,
+        ReorderableListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          buildDefaultDragHandles: false,
+          itemCount: directionCount,
+          onReorderItem: onReorder,
+          onReorderStart: onReorderStart,
+          onReorderEnd: onReorderEnd,
+          itemBuilder: (ctx, i) =>
+              KeyedSubtree(key: itemKey(i), child: itemBuilder(i)),
+        ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
           child: TextButton.icon(

@@ -318,6 +318,129 @@ List<String> _parseInclude(Object? raw) {
   return (healed: out, count: count);
 }
 
+/// §673 — допустимые позиции перетаскиваемого Направления `list[index]` по
+/// правилу 026 «Other directions — только Направления выше» (UX-правило
+/// владельца: порядок списка задаёт, кто кого может включать, циклы
+/// исключены по построению; ядру порядок безразличен).
+///
+/// [min]/[max] — границы КОНЕЧНОГО индекса X в списке без него самого
+/// (семантика `newIndex` у `onReorderItem`), включительно:
+///   • снизу — самое верхнее Направление Y ниже X, у которого `include`
+///     содержит X ([includedBy]): X нельзя опустить ниже Y → `max` = индекс
+///     Y в списке без X;
+///   • сверху — самое нижнее Направление Z выше X из `include` самого X
+///     ([includesAbove]): X нельзя поднять выше Z → `min` = индекс Z + 1.
+/// Ссылки, УЖЕ стоящие вниз (данные старого бэкапа), зону не порождают —
+/// иначе текущее место X само оказалось бы запретным. Выключенные
+/// Направления участвуют как обычные: ссылка на выключенное хранится и
+/// оживает при включении. Ссылки на свёртки источников порядка не имеют.
+({int min, int max, Direction? includedBy, Direction? includesAbove})
+    directionMoveBounds(List<Direction> list, int index) {
+  final x = list[index];
+  var min = 0;
+  Direction? includesAbove;
+  for (var i = index - 1; i >= 0; i--) {
+    if (x.include.contains(list[i].tag)) {
+      includesAbove = list[i];
+      min = i + 1; // выше X индексы в списке без X не меняются
+      break;
+    }
+  }
+  var max = list.length - 1;
+  Direction? includedBy;
+  for (var i = index + 1; i < list.length; i++) {
+    if (list[i].include.contains(x.tag)) {
+      includedBy = list[i];
+      max = i - 1; // индекс Y в списке без X
+      break;
+    }
+  }
+  return (
+    min: min,
+    max: max,
+    includedBy: includedBy,
+    includesAbove: includesAbove,
+  );
+}
+
+/// §673 — нарушение правила 026 «Other directions — только выше»:
+/// [direction] называет в `include` цель [includes]. [reason] —
+/// [kIncludeNotAbove] / [kIncludeSelf] / [kIncludeUnknown]; формат пары —
+/// тело 409 Debug API (`conflicts`).
+typedef DirectionIncludeConflict = ({
+  String direction,
+  String includes,
+  String reason,
+});
+
+const String kIncludeNotAbove = 'not_above';
+const String kIncludeSelf = 'self';
+const String kIncludeUnknown = 'unknown';
+
+Map<String, String> directionIncludeConflictJson(DirectionIncludeConflict c) =>
+    {'direction': c.direction, 'includes': c.includes, 'reason': c.reason};
+
+/// §673 — ссылки `include`, которые порядок [order] ставит «вниз», а порядок
+/// [before] вниз не ставил. Ссылки, уже стоявшие вниз до перестановки (старый
+/// бэкап), перестановку не блокируют — сборка снимает их со своим
+/// предупреждением. Учитываются только цели-Направления: свёртки источников
+/// от порядка не зависят, самоссылку перестановка не создаёт и не лечит.
+List<DirectionIncludeConflict> directionOrderConflicts(
+  List<Direction> order, {
+  List<Direction> before = const [],
+}) {
+  Set<String> downward(List<Direction> list) {
+    final pos = {for (var i = 0; i < list.length; i++) list[i].tag: i};
+    return {
+      for (var i = 0; i < list.length; i++)
+        for (final t in list[i].include)
+          if (t != list[i].tag && (pos[t] ?? -1) > i) '${list[i].tag}\n$t',
+    };
+  }
+
+  final was = downward(before);
+  final pos = {for (var i = 0; i < order.length; i++) order[i].tag: i};
+  final out = <DirectionIncludeConflict>[];
+  for (var i = 0; i < order.length; i++) {
+    final d = order[i];
+    for (final t in d.include) {
+      if (t == d.tag || (pos[t] ?? -1) <= i) continue;
+      if (was.contains('${d.tag}\n$t')) continue;
+      out.add((direction: d.tag, includes: t, reason: kIncludeNotAbove));
+    }
+  }
+  return out;
+}
+
+/// §673 — проверка нового `include` Направления [tag] на списке [list]
+/// (Направления нет в списке → оно встанет последним, как при создании):
+/// цель — Направление ВЫШЕ либо свёртка источника из [foldTags].
+List<DirectionIncludeConflict> directionIncludeConflicts(
+  List<Direction> list,
+  String tag,
+  List<String> include, {
+  Set<String> foldTags = const {},
+}) {
+  var idx = list.indexWhere((d) => d.tag == tag);
+  if (idx < 0) idx = list.length;
+  final pos = {for (var i = 0; i < list.length; i++) list[i].tag: i};
+  final out = <DirectionIncludeConflict>[];
+  for (final t in include) {
+    final String? reason;
+    if (t == tag) {
+      reason = kIncludeSelf;
+    } else if (pos.containsKey(t)) {
+      reason = pos[t]! < idx ? null : kIncludeNotAbove;
+    } else {
+      reason = foldTags.contains(t) ? null : kIncludeUnknown;
+    }
+    if (reason != null) {
+      out.add((direction: tag, includes: t, reason: reason));
+    }
+  }
+  return out;
+}
+
 /// §393 A3 — теги, которые не может занять Направление: служебные outbound'ы
 /// принимающего конфига и псевдо-цели правил sing-box.
 ///

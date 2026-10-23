@@ -6062,5 +6062,8 @@
   },
   "The TV is busy with another request. Try again in a moment.": {
     "value": "电视正在处理另一个请求。请稍后重试。"
+  },
+  "Cannot move: \"%s\" includes \"%s\"": {
+    "value": "无法移动：「%s」包含「%s」"
   }
 }

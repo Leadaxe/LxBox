@@ -48,7 +48,12 @@ the selection lists — [012-LIVE_STATE · P19](../../012-LIVE_STATE/FEATURE.md#
 | Default traffic | `direct` · Direction · `block` | `vpn-1` | `route.final` |
 
 Debug API: `GET/POST /directions`, `GET/PATCH/DELETE /directions/{tag}`,
-`POST /directions/reorder`; a `PATCH` setting the flag on `vpn-1` gets 409.
+`POST /directions/reorder`; a `PATCH` setting the flag on `vpn-1` gets 409. A reorder that
+puts an "Other directions" reference below its Direction, and an `include` in `POST`/`PATCH`
+naming a Direction not above, the Direction itself or a tag that is neither a Direction nor
+a source replace group, get 409 with the
+violated pairs (`conflicts`: `direction`, `includes`, `reason` = `not_above` / `self` /
+`unknown`); storage is not changed ([673](../../../tasks/673-directions-reorder-in-ui.md)).
 
 ## Inputs / Outputs
 
@@ -115,7 +120,15 @@ counters; the tag conflict reason in the dialog.
   [direction-groups-in-config.md](direction-groups-in-config.md); the home-screen
   selection — [direction-selection.md](direction-selection.md).
 - The row's node count uses the same filter as the build, "Exclude matching" included.
-  Reordering Directions is available only through the Debug API.
+  Directions are reordered by the drag handle on the tab or by `POST /directions/reorder`;
+  both write the list with the same bulk replace, heal-free, and neither breaks an existing
+  "Other directions" reference: during a drag the tab tints the forbidden zones (the
+  Direction that includes the dragged one and everything below it; the lowest Direction the
+  dragged one includes and everything above it) and a drop there changes nothing and shows
+  a notice; the API answers 409 ([673](../../../tasks/673-directions-reorder-in-ui.md)).
+  "Only above" is a UX rule (owner decision 2026-10-23): the order shows who may include
+  whom and rules out cycles by construction; the core does not need it. A reference left
+  pointing down by an old backup is still dropped by the build with a warning.
 - The DNS side of a healed server (fail-closed on a channel that vanished at build time,
   419) — [005-DNS · P2](../../005-DNS/FEATURE.md#promises).
 - Rule import healing a dangling target — [004-ROUTING · P19](../../004-ROUTING/FEATURE.md#promises).

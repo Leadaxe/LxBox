@@ -6341,5 +6341,8 @@
   },
   "The TV is busy with another request. Try again in a moment.": {
     "value": "Телевизор занят другим запросом. Попробуйте ещё раз чуть позже."
+  },
+  "Cannot move: \"%s\" includes \"%s\"": {
+    "value": "Нельзя переместить: «%s» включает «%s»"
   }
 }

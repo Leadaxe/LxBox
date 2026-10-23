@@ -46,7 +46,12 @@
 | Default traffic | `direct` · Направление · `block` | `vpn-1` | `route.final` |
 
 Debug API: `GET/POST /directions`, `GET/PATCH/DELETE /directions/{tag}`,
-`POST /directions/reorder`; `PATCH`, ставящий флаг на `vpn-1`, получает 409.
+`POST /directions/reorder`; `PATCH`, ставящий флаг на `vpn-1`, получает 409. Перестановка,
+ставящая ссылку «Other directions» ниже её Направления, и `include` в `POST`/`PATCH`,
+называющий Направление не выше, само Направление или тег, который не Направление и не
+группа свёртки источника, получают 409 с
+нарушенными парами (`conflicts`: `direction`, `includes`, `reason` = `not_above` / `self` /
+`unknown`); хранение не меняется ([673](../../../tasks/673-directions-reorder-in-ui.md)).
 
 ## Входы / Выходы
 
@@ -104,7 +109,15 @@ Debug API: `GET/POST /directions`, `GET/PATCH/DELETE /directions/{tag}`,
   [direction-groups-in-config.md](direction-groups-in-config.ru.md); выбор на главном экране
   — [direction-selection.md](direction-selection.ru.md).
 - Число узлов в строке считается тем же фильтром, что у сборки, с учётом «Exclude
-  matching». Перестановка Направлений есть только в Debug API.
+  matching». Направления переставляются drag-handle'ом на табе или
+  `POST /directions/reorder`; оба пишут список той же перезаписью целиком, без лечения, и
+  ни один не ломает существующую ссылку «Other directions»: на время drag таб подкрашивает
+  запретные зоны (Направление, включающее перетаскиваемое, и всё ниже; самое нижнее из
+  включённых им и всё выше), сброс туда ничего не меняет и показывает уведомление; API
+  отвечает 409 ([673](../../../tasks/673-directions-reorder-in-ui.md)). «Только выше» —
+  UX-правило (решение владельца 2026-10-23): порядок показывает, кто кого может включать, и
+  исключает циклы по построению; ядру оно не нужно. Ссылку вниз из старого бэкапа сборка
+  по-прежнему снимает с предупреждением.
 - DNS-сторона вылеченного сервера (fail-closed по каналу, исчезнувшему на сборке, 419) —
   [005-DNS · P2](../../005-DNS/FEATURE.ru.md#обещания).
 - Лечение висячей цели при импорте правил — [004-ROUTING · P19](../../004-ROUTING/FEATURE.ru.md#обещания).

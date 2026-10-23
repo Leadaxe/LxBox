@@ -135,6 +135,10 @@ class _RoutingScreenState extends State<RoutingScreen>
   String? _highlightedDirectionTag;
   Timer? _directionHighlightTimer;
 
+  /// §673 — индекс перетаскиваемого Направления (подсветка запретных зон);
+  /// null вне drag.
+  int? _dragDirectionIndex;
+
   @override
   SubscriptionController get lazyController => widget.subController;
 
@@ -408,8 +412,13 @@ class _RoutingScreenState extends State<RoutingScreen>
           // ─── Directions: Направления (CRUD) + Auto tuning ───
           RoutingDirectionsTab(
             bottomPad: bottomPad,
-            groupTiles: _directions.map(_buildDirectionTile).toList(),
             directionCount: _directions.length,
+            // §673 — перестановка тем же bulk-путём, что Debug API reorder.
+            onReorder: _onReorderDirection,
+            onReorderStart: (i) => setState(() => _dragDirectionIndex = i),
+            onReorderEnd: (_) => setState(() => _dragDirectionIndex = null),
+            itemKey: (i) => ValueKey('direction-${_directions[i].tag}'),
+            itemBuilder: (i) => _buildDirectionTile(_directions[i], i),
             // §393 A3 — лимита на количество Направлений больше нет
             // (паритет с лаунчером); счётчик показывает, сколько их.
             onAddDirection: _addDirection,
@@ -454,26 +463,91 @@ class _RoutingScreenState extends State<RoutingScreen>
     );
   }
 
-  Widget _buildDirectionTile(Direction direction) {
+  Widget _buildDirectionTile(Direction direction, int index) {
     // §258 — вспышка при focusDirectionTag (стиль как у члена папки, §255).
     final cs = Theme.of(context).colorScheme;
     final highlighted = _highlightedDirectionTag == direction.tag;
+    // §673 — на время drag строки запретных зон подкрашены цветом ошибки
+    // (та же форма, что у вспышки §258).
+    final forbidden = _inForbiddenZone(index);
     return AnimatedContainer(
       key: _directionKeys.putIfAbsent(direction.tag, GlobalKey.new),
       duration: const Duration(milliseconds: 200),
-      decoration: highlighted
+      decoration: forbidden
           ? BoxDecoration(
-              color: cs.primaryContainer.withValues(alpha: 0.5),
-              border: Border(left: BorderSide(color: cs.primary, width: 3)),
+              color: cs.error.withValues(alpha: 0.12),
+              border: Border(left: BorderSide(color: cs.error, width: 3)),
             )
-          : null,
+          : highlighted
+              ? BoxDecoration(
+                  color: cs.primaryContainer.withValues(alpha: 0.5),
+                  border:
+                      Border(left: BorderSide(color: cs.primary, width: 3)),
+                )
+              : null,
       child: RoutingDirectionTile(
         direction: direction,
+        dragIndex: index,
         nodeCount: _nodeCountFor(direction),
         onToggle: (val) => unawaited(_toggleDirection(direction, val)),
         onTap: () => _editDirection(direction),
       ),
     );
+  }
+
+  /// §673 — строка [index] в запретной зоне перетаскиваемого Направления:
+  /// Направление, включающее его, и всё ниже; цель его `include` и всё выше.
+  bool _inForbiddenZone(int index) {
+    final drag = _dragDirectionIndex;
+    if (drag == null || index == drag || drag >= _directions.length) {
+      return false;
+    }
+    final b = directionMoveBounds(_directions, drag);
+    final below = b.includedBy;
+    final above = b.includesAbove;
+    if (below != null && index >= _directions.indexOf(below)) return true;
+    if (above != null && index <= _directions.indexOf(above)) return true;
+    return false;
+  }
+
+  /// §673 — перестановка Направлений. Запись — тот же
+  /// [DirectionMutations.bulkReplace], что у `POST /directions/reorder` (bulk
+  /// replace, без heal'ов). Правило 026 «Other directions — только выше»:
+  /// сброс в запретную зону ([directionMoveBounds]) не меняет список и
+  /// объясняется SnackBar'ом; та же проверка у Debug API отвечает 409.
+  /// `vpn-1` переставляется, как и в Debug API. [newIndex] приходит из
+  /// `onReorderItem` — уже в списке без перетаскиваемого элемента.
+  Future<void> _onReorderDirection(int oldIndex, int newIndex) async {
+    if (_dragDirectionIndex != null) {
+      setState(() => _dragDirectionIndex = null);
+    }
+    if (oldIndex < 0 || oldIndex >= _directions.length) return;
+    if (newIndex < 0 || newIndex > _directions.length - 1) return;
+    if (oldIndex == newIndex) return;
+    final b = directionMoveBounds(_directions, oldIndex);
+    final moving = _directions[oldIndex];
+    final String? blocked = newIndex > b.max
+        ? getLocalText.s('Cannot move: "%s" includes "%s"',
+            b.includedBy!.displayLabel, moving.displayLabel)
+        : newIndex < b.min
+            ? getLocalText.s('Cannot move: "%s" includes "%s"',
+                moving.displayLabel, b.includesAbove!.displayLabel)
+            : null;
+    if (blocked != null) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(blocked)));
+      return;
+    }
+    setState(() {
+      final moved = _directions.removeAt(oldIndex);
+      _directions.insert(newIndex, moved);
+      _invalidateOutboundOptions();
+    });
+    await DirectionMutations.bulkReplace(_directions);
+    if (!mounted) return;
+    _markDirty();
+    await widget.homeController.refreshDirectionLabels();
   }
 
   /// Вкл/выкл Направления. §202/§248 — идёт через storage-API: disable лечит
