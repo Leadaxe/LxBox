@@ -20,7 +20,8 @@
 шаблона, предлагаемые внутри Направления опциями, а `vpn-1` — обязательное главное
 Направление: цель Default traffic по умолчанию и запасная цель, куда попадает каждая
 вылеченная ссылка. Таб **Directions** экрана Routing перечисляет их с кнопкой «Add direction
-(N)» и тайлом **Default traffic**; строка показывает тег, число узлов по пулу кандидатов сборки
+(N)»; тайл **Default traffic (no rule matched)** (`route.final`) стоит в хвосте таба
+**Rules** ([676](../../../tasks/676-route-final-on-rules-tab.md)); строка показывает тег, число узлов по пулу кандидатов сборки
 (работает при опущенном туннеле; «all nodes» или «filtered», пока пул считается —
 [674](../../../tasks/674-direction-filter-preview-without-tunnel.md)), « · auto» и
 « · required».
@@ -126,3 +127,4 @@ Debug API: `GET/POST /directions`, `GET/PATCH/DELETE /directions/{tag}`,
 | 12 | [439F](../../../tasks/439F-storage-contract-1-0/spec.md) | Released v2.24.0 | Хранение в форме контракта; `channels` переименовывается в `directions` при чтении |
 | 13 | [441](../../../tasks/441-template-preset-vars-in-record.md) | Released v2.24.0 | Лечение цели в переменных пресетов и DNS-серверов → `vpn-1` |
 | 14 | [604](../../../tasks/604-dns-build-health-directions-bugs.md) | Done | Число узлов в строке учитывает «Exclude matching» |
+| 15 | [676](../../../tasks/676-route-final-on-rules-tab.md) | Done | Тайл Default traffic переехал с Directions в хвост Rules |

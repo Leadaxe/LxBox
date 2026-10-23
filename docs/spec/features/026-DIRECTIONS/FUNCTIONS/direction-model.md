@@ -20,7 +20,9 @@ Three tags are built in and cannot be taken by a Direction: `direct-out` (leave 
 directly) and `block` (drop the traffic) are template outbounds offered inside a Direction
 as options, and `vpn-1` is the required primary Direction — the default target of Default
 traffic and the fallback every healed reference lands on. The **Directions** tab of the
-Routing screen lists them with "Add direction (N)" and the **Default traffic** tile; each
+Routing screen lists them with "Add direction (N)"; the **Default traffic (no rule
+matched)** tile (`route.final`) sits at the bottom of the **Rules** tab
+([676](../../../tasks/676-route-final-on-rules-tab.md)); each
 row shows the tag, the node count from the build's candidate pool (works with the tunnel
 down; "all nodes" or "filtered" while the pool is being computed —
 [674](../../../tasks/674-direction-filter-preview-without-tunnel.md)), " · auto" and
@@ -136,3 +138,4 @@ counters; the tag conflict reason in the dialog.
 | 12 | [439F](../../../tasks/439F-storage-contract-1-0/spec.md) | Released v2.24.0 | Storage in contract form; `channels` renamed to `directions` on read |
 | 13 | [441](../../../tasks/441-template-preset-vars-in-record.md) | Released v2.24.0 | Healing the target in preset and DNS server variables → `vpn-1` |
 | 14 | [604](../../../tasks/604-dns-build-health-directions-bugs.md) | Done | The row's node count honours "Exclude matching" |
+| 15 | [676](../../../tasks/676-route-final-on-rules-tab.md) | Done | The Default traffic tile moved from Directions to the bottom of Rules |

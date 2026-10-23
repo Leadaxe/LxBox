@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../services/l10n/locale_controller.dart';
 
-/// Таб "Directions": proxy-groups + default-fallback + Auto tuning. Все тайлы
+/// Таб "Directions": proxy-groups + Auto tuning. Все тайлы
 /// собираются в экране и приходят сюда готовыми списками — поведение
 /// идентично исходному inline-ListView.
 class RoutingDirectionsTab extends StatelessWidget {
@@ -12,7 +12,6 @@ class RoutingDirectionsTab extends StatelessWidget {
     required this.groupTiles,
     required this.directionCount,
     required this.onAddDirection,
-    required this.routeFinalTile,
   });
 
   final double bottomPad;
@@ -22,8 +21,6 @@ class RoutingDirectionsTab extends StatelessWidget {
   /// §393 A3 — лимита на количество Направлений больше нет; callback
   /// остаётся nullable ради общей идиомы «disabled кнопки».
   final VoidCallback? onAddDirection;
-
-  final Widget routeFinalTile;
 
   @override
   Widget build(BuildContext context) {
@@ -50,8 +47,6 @@ class RoutingDirectionsTab extends StatelessWidget {
             ),
           ),
         ),
-        const Divider(height: 24),
-        routeFinalTile,
       ],
     );
   }
@@ -92,6 +87,10 @@ class RoutingPresetsTab extends StatelessWidget {
 ///
 /// NB: ListView с горизонтальными paddings'ами 0 — чтобы тайлы растягивались
 /// edge-to-edge. Интро и Add-button сами дают себе 12px через Padding.
+///
+/// §676 — `routeFinalTile` (route.final, «куда идёт то, что не поймало ни одно
+/// правило») стоит в хвосте после кнопки добавления, ВНЕ
+/// `ReorderableListView`: не перетаскивается и правилом не считается.
 class RoutingRulesTab extends StatelessWidget {
   const RoutingRulesTab({
     super.key,
@@ -101,6 +100,7 @@ class RoutingRulesTab extends StatelessWidget {
     required this.itemKey,
     required this.itemBuilder,
     required this.onAdd,
+    required this.routeFinalTile,
   });
 
   final double bottomPad;
@@ -109,6 +109,7 @@ class RoutingRulesTab extends StatelessWidget {
   final Key Function(int index) itemKey;
   final Widget Function(int index) itemBuilder;
   final VoidCallback onAdd;
+  final Widget routeFinalTile;
 
   @override
   Widget build(BuildContext context) {
@@ -144,6 +145,8 @@ class RoutingRulesTab extends StatelessWidget {
             label: Text(getLocalText.s("Add rule")),
           ),
         ),
+        const Divider(height: 24),
+        routeFinalTile,
       ],
     );
   }

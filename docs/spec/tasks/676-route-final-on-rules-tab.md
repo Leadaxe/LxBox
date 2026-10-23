@@ -2,11 +2,11 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | In progress |
+| Статус | Done |
 | Дата начала | 2026-10-23 |
-| Дата конца | — |
+| Дата конца | 2026-10-23 |
 | Коммиты | см. `git log --grep 676` |
-| Связанные спеки | [features/026-DIRECTIONS/FUNCTIONS/direction-model.md](../features/026-DIRECTIONS/FUNCTIONS/direction-model.md) (строка «Default traffic»); [features/004-ROUTING_RULES](../features/004-ROUTING_RULES/FEATURE.md) (если такая фича есть — исполнителю найти фичу вкладки Rules по `docs/spec/features/README.md`) |
+| Связанные спеки | [features/026-DIRECTIONS/FUNCTIONS/direction-model.md](../features/026-DIRECTIONS/FUNCTIONS/direction-model.md) (строка «Default traffic»); [features/004-ROUTING/FUNCTIONS/rule-order.md](../features/004-ROUTING/FUNCTIONS/rule-order.md) (вкладка Rules) |
 
 ## Проблема
 
@@ -41,6 +41,24 @@
 - Тесты, которые ищут «Default traffic» на вкладке Directions, перевести на
   Rules (grep `Default traffic` в `app/test`).
 
+### Сделано
+
+- `app/lib/screens/routing_screen/widgets/routing_tabs.dart:94-153` —
+  `RoutingRulesTab` получил параметр `routeFinalTile`; в `ListView` после
+  кнопки «Add rule» — `Divider(height: 24)` + тайл (стр. 148-149), вне
+  `ReorderableListView.builder`. `RoutingDirectionsTab` параметр и
+  разделитель потерял (стр. 8-53).
+- `app/lib/screens/routing_screen.dart:409-436` — `_buildRouteFinalTile()`
+  передаётся в `RoutingRulesTab` вместо `RoutingDirectionsTab`; сам билдер
+  (`:1029`) и запись `route.final` не тронуты.
+- `app/lib/screens/routing_screen/widgets/route_final_tile.dart:25` — подпись
+  «Default traffic (no rule matched)»; пикер не менялся.
+- l10n: ключ `"Default traffic"` переименован в
+  `"Default traffic (no rule matched)"` в `app/assets/l10n/ru/ui.json` и
+  `app/assets/l10n/zh/ui.json` (старый ключ в коде больше не встречается).
+- Тестов, искавших «Default traffic» на Directions, не было (grep по
+  `app/test` пуст) — переводить нечего.
+
 ## Проверка
 
 - Widget: на вкладке Rules последним элементом стоит тайл «Default traffic
@@ -55,3 +73,16 @@
   фича вкладки Rules — пункт про `route.final` в хвосте;
   `features/026-DIRECTIONS/FEATURE.md`, если там упомянуто место тайла.
 - CHANGELOG `[Unreleased]`.
+
+### Результат проверки (2026-10-23)
+
+- `app/test/screens/route_final_on_rules_tab_test.dart` (новый, 3 теста) —
+  All tests passed:
+  - Rules: тайл последний ребёнок `ListView`, ниже «Add rule», не потомок
+    `ReorderableListView`; выбор `block` в дропдауне отдаёт `block` в
+    `onChanged` (тот же колбэк, что пишет `route.final`).
+  - Rules: перетаскивание правила за ручку вызывает `onReorder` один раз,
+    тайл остаётся на месте последним.
+  - Directions: тайла и текста «Default traffic» нет.
+- `ui_check --strict` чистый; `flutter analyze` чистый.
+- На устройстве не проверено.

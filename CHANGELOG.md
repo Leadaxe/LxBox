@@ -8,6 +8,15 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **Default traffic moved to the bottom of the Rules tab
+  ([task 676](docs/spec/tasks/676-route-final-on-rules-tab.md)).** The
+  `route.final` picker is where traffic goes when no rule matched, so it now
+  sits after the rule list and "Add rule", outside the drag list, labelled
+  "Default traffic (no rule matched)". The Directions tab no longer shows it.
+  The choices and what is written are unchanged.
+
 ### Fixed
 
 - **A renamed Direction is shown by its new title everywhere, not by the old

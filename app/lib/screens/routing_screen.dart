@@ -405,7 +405,7 @@ class _RoutingScreenState extends State<RoutingScreen>
       body: TabBarView(
         controller: _tabController,
         children: [
-          // ─── Directions: Направления (CRUD) + default fallback + Auto tuning ───
+          // ─── Directions: Направления (CRUD) + Auto tuning ───
           RoutingDirectionsTab(
             bottomPad: bottomPad,
             groupTiles: _directions.map(_buildDirectionTile).toList(),
@@ -413,7 +413,6 @@ class _RoutingScreenState extends State<RoutingScreen>
             // §393 A3 — лимита на количество Направлений больше нет
             // (паритет с лаунчером); счётчик показывает, сколько их.
             onAddDirection: _addDirection,
-            routeFinalTile: _buildRouteFinalTile(),
           ),
 
           // ─── Presets: catalog of pre-built rules to copy into Rules ───
@@ -432,6 +431,8 @@ class _RoutingScreenState extends State<RoutingScreen>
             itemKey: (i) => ValueKey(_customRules[i].id),
             itemBuilder: _buildCustomRuleTile,
             onAdd: _addCustomRule,
+            // §676 — route.final в хвосте Rules (последнее неявное правило).
+            routeFinalTile: _buildRouteFinalTile(),
           ),
 
           // ─── DNS: серверы, правила, кэш (§655, бывший экран DNS Settings) ───

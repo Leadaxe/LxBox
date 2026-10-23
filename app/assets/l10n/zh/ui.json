@@ -1746,8 +1746,8 @@
   "Default fallback DNS server. Used when an app makes a DNS query and no DNS rule above matches it. Every app DNS query that isn't routed by a rule ends up here.\n\nRecommended:\n  • dns_shield — default; races 6 encrypted providers, answers from whichever replies first\n  • google_doh — encrypted (DoH)\n  • cloudflare_dot / google_dot — encrypted (DoT)\n  • cloudflare_udp / google_udp — fast plain UDP\n\nlocal_dns_resolver works but reveals queries to your ISP. Encrypted options keep them private.": {
     "value": "默认兜底 DNS 服务器。当应用的 DNS 查询没有匹配上方任何 DNS 规则时使用。所有未被规则定向的应用 DNS 查询都会走到这里。\n\n推荐：\n  • dns_shield —— 默认；同时向 6 家加密服务商发起查询，谁先应答用谁\n  • google_doh —— 加密（DoH）\n  • cloudflare_dot / google_dot —— 加密（DoT）\n  • cloudflare_udp / google_udp —— 快速明文 UDP\n\nlocal_dns_resolver 也能用，但会把查询内容暴露给你的运营商。加密选项可保护隐私。"
   },
-  "Default traffic": {
-    "value": "默认流量"
+  "Default traffic (no rule matched)": {
+    "value": "默认流量（未匹配任何规则）"
   },
   "Default · %s": {
     "value": "默认 · %s"
