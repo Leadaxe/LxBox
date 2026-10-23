@@ -332,8 +332,18 @@ DnsBackupApply applyDnsBackup({
 
   // §681 — `final` / `default_domain_resolver` файла: тег вне списка или
   // выключенный и не форсируемый сборкой — сброс на умолчание шаблона.
-  bool available(String tag) => outServers
-      .any((s) => s.tag == tag && (s.enabled || forced.contains(tag)));
+  // Сервер пресета, активного после импорта, доступен и без записи: в
+  // `outServers` его ещё нет — запись досеет шаг 2 `resolveDnsServersList`
+  // на следующей сборке/загрузке, сбрасывать ссылку на него рано.
+  final presetServerTags = <String>{
+    for (final p in presetDns.values)
+      for (final s in p.servers)
+        if (s['tag'] case final String tag when tag.isNotEmpty) tag,
+  };
+  bool available(String tag) =>
+      presetServerTags.contains(tag) ||
+      outServers
+          .any((s) => s.tag == tag && (s.enabled || forced.contains(tag)));
   String resolver(String fromFile, String local, String fallback, String field) {
     if (fromFile.isEmpty) return local;
     if (available(fromFile)) return fromFile;

@@ -138,7 +138,10 @@ backup_warnings.json`) с тремя уточнениями:
   resolver файла сбрасываются → снятие по каталогу с локами. Сцена
   (шаблон приёмника, итоговые маршрутные правила, пресеты, умолчания
   резолверов) собирается в `planLxBackupImport` после расчёта `rules`,
-  то есть по состоянию после импорта.
+  то есть по состоянию после импорта. Тег сервера пресета, активного после
+  импорта (`activePresetDns`, тег с неймспейсом `<preset_id>:`), при сбросе
+  `final`/default resolver считается доступным и без записи в списке — её
+  досеет шаг 2 `resolveDnsServersList` на следующей сборке.
 - Локи — `app/lib/services/dns/dns_server_holds.dart`: `dnsServerListHolds`
   (ссылки списка: группы, `domain_resolver`, final/default — общий расчёт с
   подписями «used by» вкладки, `dnsServerListRefs` строит метки поверх него)

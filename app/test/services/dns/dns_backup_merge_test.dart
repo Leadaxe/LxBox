@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/dns_ref.dart';
+import 'package:lxbox/models/parser_config.dart' show SelectableRule;
 import 'package:lxbox/services/dns/dns_backup.dart';
 import 'package:lxbox/services/lx_backup.dart';
 
@@ -300,6 +301,7 @@ void main() {
       String localFinal = '',
       List<DnsRuleRef> localRules = const [],
       List<CustomRule> routing = const [],
+      List<SelectableRule> presets = const [],
       List<Map<String, dynamic>>? template,
       List<LxBackupWarning>? warnings,
     }) =>
@@ -317,6 +319,7 @@ void main() {
           scene: DnsImportScene(
             templateServers: template ?? templateServers,
             routingRules: routing,
+            presets: presets,
             finalDefault: 'google_udp',
           ),
         );
@@ -506,6 +509,36 @@ void main() {
         warnings: w,
       );
       expect(got.dnsFinal, 'quad9_doh');
+      expect(codes(w, kWarnDnsResolverReset), isEmpty);
+    });
+
+    test('final файла на сервер пресета, активного после импорта, — без сброса',
+        () {
+      // Записи сервера пресета у приёмника нет: её досеет шаг 2
+      // resolveDnsServersList на следующей сборке.
+      final preset = SelectableRule(
+        label: 'Russian domains direct',
+        presetId: 'ru-direct',
+        rule: const {'domain_suffix': ['ru'], 'outbound': 'direct-out'},
+        dnsRule: const {'domain_suffix': ['ru'], 'server': 'yandex_udp'},
+        dnsServers: [
+          {'type': 'udp', 'tag': 'yandex_udp', 'server': '77.88.8.8'},
+        ],
+      );
+      final w = <LxBackupWarning>[];
+      final got = run(
+        fileServers: full(),
+        local: full(),
+        catalog: allTags,
+        // тег сервера пресета в сборке — с неймспейсом `<preset_id>:`
+        fileFinal: 'ru-direct:yandex_udp',
+        routing: [CustomRulePreset(name: 'ru', presetId: 'ru-direct')],
+        presets: [preset],
+        warnings: w,
+      );
+      expect(got.servers.map((s) => s.tag),
+          isNot(contains('ru-direct:yandex_udp')));
+      expect(got.dnsFinal, 'ru-direct:yandex_udp');
       expect(codes(w, kWarnDnsResolverReset), isEmpty);
     });
 
