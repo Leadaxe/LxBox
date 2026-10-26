@@ -55,9 +55,15 @@ The core keeps the Load balance pool by itself
 - At start the first `pool` nodes go into the pool without a test: nodes with
   a latency history first, fastest first, then in config order.
 - Pool tolerance `0`: each interval only pool members are tested. A node
-  outside the pool is tested only when a member fails, and only as many as
-  needed to refill the pool. A list of hundreds of nodes does not mean
-  hundreds of tests.
+  outside the pool is tested only when a member fails. The core then walks
+  the nodes outside the pool in config order, in parallel batches of `pool`
+  nodes, and stops after the batch that fills the last dead slot: one dead
+  slot can cost up to `pool` extra tests, not one. A list of hundreds of
+  nodes still does not mean hundreds of tests.
+- A WireGuard / AmneziaWG candidate brings its device up when tested, so the
+  node list shows it as "up" while it is not in the pool. A candidate the
+  pool did not take falls asleep again after its idle window. "up" / "sleep"
+  in the list is the device state, not pool membership.
 - Pool tolerance `> 0`: each interval all members are tested; the pool holds
   the fastest `pool` of them, and a member is replaced only when an outside
   node beats it by more than the tolerance.

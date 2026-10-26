@@ -293,6 +293,12 @@ class _DirectionEditScreenState extends State<DirectionEditScreen> {
             style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
         Text(getLocalText.s("a folder or subscription replaced with one group"),
             style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+        // §686 п.12 — галка ставит группу в служебный блок селектора мимо
+        // фильтра; в urltest-двойник группы не идут (§322/§565).
+        Text(
+            getLocalText.s(
+                "A ticked group joins even when the filter does not match it, and goes above the servers. Groups never join the Direction's auto group."),
+            style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
         const SizedBox(height: 4),
         for (final f in widget.foldCandidates)
           CheckboxListTile(

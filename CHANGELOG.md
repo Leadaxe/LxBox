@@ -8,7 +8,42 @@
 
 ## [Unreleased]
 
+### Added
+
+- **INI tab for WireGuard / AmneziaWG nodes
+  ([task 686](docs/spec/tasks/686-folder-auto-node-source-tab.md)).** Node
+  Settings shows the node as a `.conf` whatever it was added from (link, INI
+  or JSON): all peers, masquerade and AmneziaWG fields, with Copy, Share .conf
+  and Edit INI. Edit INI replaces the node's source with the edited INI after
+  a warning; keys of the body that INI cannot express are listed under "Not
+  in INI".
+- **Several `[Peer]` sections in a WireGuard INI are accepted
+  ([task 686](docs/spec/tasks/686-folder-auto-node-source-tab.md)).** Each
+  section becomes its own peer of the node; before, everything after the
+  first was dropped. A peer without a public key or endpoint is dropped with
+  a warning naming it.
+
 ### Changed
+
+- **Auto node in a folder is edited in Node Settings
+  ([task 686](docs/spec/tasks/686-folder-auto-node-source-tab.md)).** A tap
+  opens the group form on the Settings tab (name, servers in the pool, mode,
+  advanced); Source shows the stored record and can be edited; the JSON tab
+  says "Members are resolved at build time" instead of an empty `outbounds`.
+  Before, a tap opened an empty Source, the name could not be saved and the
+  JSON tab showed no members. The pool preview no longer counts disabled
+  servers and marks them with ⏻.
+- **Long-press menu no longer offers editing that lives in Node Settings
+  ([task 686](docs/spec/tasks/686-folder-auto-node-source-tab.md)).** "Edit…"
+  of a folder member and "Edit source…" / "Update" of a standalone server are
+  removed; a tap opens the same screen.
+- **`#` comments in pasted JSON
+  ([task 686](docs/spec/tasks/686-folder-auto-node-source-tab.md)).** A node
+  JSON and the Config screen accept `#` line comments, as the core does, next
+  to `//` and `/* */`; they are stripped like the others.
+- Direction editor: a caption under "Replace groups" says what the checkbox
+  does — a ticked group joins even when the filter does not match it and goes
+  above the servers; groups never join the Direction's auto group.
 
 - **Subscription update interval: "As subscription" mode; the server no
   longer overwrites your choice

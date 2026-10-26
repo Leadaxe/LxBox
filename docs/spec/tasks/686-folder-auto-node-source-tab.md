@@ -260,6 +260,19 @@
     JSON5 (//, /* */ and # comments)». Ответ в issue по п.20 исправляется:
     прежний «rejected» был ошибкой.
 
+12. **Подсказка под «Replace groups» в редакторе Направления** (issue #171
+    п.11; слово владельца 27.10.2026). Свёртка, которую фильтр и так
+    пропускает, попадает в селектор без галки, поэтому галка у неё меняет
+    только место: опции `include` стоят в служебном блоке перед узлами
+    (`build_config.dart`, `selectorOutbounds`). В `<tag>-auto` группы не идут
+    никогда (§322/§565). Под подписью раздела добавлена строка «A ticked group
+    joins even when the filter does not match it, and goes above the servers.
+    Groups never join the Direction's auto group.» Поведение не меняется.
+    Попутно `features/006` → `balancing`: кандидаты на мёртвый слот
+    проверяются пачками по `pool` узлов, а «up» / «sleep» в списке — это
+    состояние WG-устройства, а не членство в пуле (п.16 issue). Доки ядра не
+    трогаем (слово владельца).
+
 ## Точки входа
 
 Экран узла открывается не только тапом в папке: из списка Servers
@@ -273,7 +286,7 @@
 
 - Новые строки UI (английский, переводы — по `docs/l10n.md`): «Members are
   resolved at build time», «Not in INI: %s», «Edit INI», «Edit INI?» и текст
-  предупреждения, «Share .conf», «INI copied», «· %s off»; подсказка поля Config «JSON or JSON5
+  предупреждения, «Share .conf», «INI copied», «· %s off», подсказка «Replace groups» (п.12); подсказка поля Config «JSON or JSON5
   (//, /* */ and # comments)».
 - Обновить: `features/008-NODE_EDITOR` (`node-settings`, `source-editing`,
   `json-and-schema` — вкладки Settings/Source/JSON/INI у auto-узла и WG/AWG),

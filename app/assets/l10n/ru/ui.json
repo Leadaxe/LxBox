@@ -5988,6 +5988,9 @@
   "a folder or subscription replaced with one group": {
     "value": "папка или подписка, заменённая одной группой"
   },
+  "A ticked group joins even when the filter does not match it, and goes above the servers. Groups never join the Direction's auto group.": {
+    "value": "Отмеченная группа входит, даже если фильтр её не пропускает, и стоит выше серверов. В auto-группу Направления группы не входят."
+  },
   "A server already has this name — it will get a numeric suffix.": {
     "value": "Это имя уже носит сервер — ему добавится числовой суффикс."
   },

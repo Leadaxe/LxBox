@@ -5709,6 +5709,9 @@
   "a folder or subscription replaced with one group": {
     "value": "被替换为一个分组的文件夹或订阅"
   },
+  "A ticked group joins even when the filter does not match it, and goes above the servers. Groups never join the Direction's auto group.": {
+    "value": "勾选的分组即使不匹配过滤器也会加入，并排在服务器之前。分组从不加入方向的 auto 分组。"
+  },
   "A server already has this name — it will get a numeric suffix.": {
     "value": "已有服务器使用此名称——该服务器将获得数字后缀。"
   },
