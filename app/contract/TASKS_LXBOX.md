@@ -9677,5 +9677,39 @@ Issue Leadaxe/sing-box-lx#36: узел VLESS+XHTTP с `path=/?proxyip=…` (ре
 
 Лаунчер реализовал: окно правила, вкладка DNS — «Answer»: Default / Dedicated server / Fixed IP (многострочное поле, одна строка — один адрес, неразбираемая строка блокирует Save); строка правила на вкладке DNS — `Fixed IP: <адреса>`.
 
+**Закрыто 24.10.2026.** LxBox: синк 1.1.139 (f48ac7c0), раннер корпуса `app/test/contract/rule_dns_corpus_test.dart` (c5c2842a) — все 4 кейса проходят, расхождений нет.
+
 Расхождение — сюда.
 
+
+## 136. Запрос LxBox — несколько `[Peer]` в WireGuard INI (26.10.2026)
+
+Запрос стороны LxBox лаунчеру (LxBox §686 п. 10, слово владельца 26.10.2026: «много peer допустимо в INI — снять ограничение»). Норму меняет лаунчер; LxBox делает свою сторону после синка.
+
+**Сейчас.** `registry/protocols/wireguard.json` → `mappers.conf.ini_dialect.sections.Peer`: `repeat: first_only`, `on_extra: wgconf_extra_peer_dropped`. Обоснование в `impl` — «узел sing-box — это ОДИН peer, и вторая [Peer] в него не помещается по построению». Это неверно для ядра: у endpoint `wireguard` поле `peers` — массив, трафик между пирами разводится по `allowed_ips` (docs/configuration/endpoint/wireguard.md форка). Тело JSON с двумя пирами уже сейчас уходит в ядро дословно и работает; режется только путь INI. Модель LxBox (`WireguardSpec.peers`) — список.
+
+**Что просим.**
+
+1. Реестр: у секции `Peer` — повторы разрешены; каждая секция `[Peer]` → свой элемент `peers[]` с параметрами таблицы `mappers.conf.params`, адресованными `ini.Peer.*` (PublicKey, PresharedKey, Endpoint с его `extract`/`on_no_match`, AllowedIPs, PersistentKeepalive, Reserved и прочие). Порядок элементов — порядок секций в файле. `[Interface]` — одна, как сейчас. Код `wgconf_extra_peer_dropped` для INI больше не выдаётся (из словаря — по вашему правилу снятия кодов).
+2. Движок разбора обеих сторон: `parseINIDialect` (`core/config/linkmap/detect.go:688`) отдаёт `map[string]map[string]string` — по одному экземпляру секции; нужен список экземпляров для повторяемой секции. У LxBox то же место — `services/parser/engine/ini_space.dart` (`repeat`).
+3. `required` у параметров `ini.Peer.*` — на каждый элемент: `[Peer]` без PublicKey или Endpoint — та же реакция реестра, что сейчас у единственной секции (на ваше решение: снять один элемент с кодом или весь узел).
+4. Ссылка (`wireguard://`, `awg://`, форма `conf_b64` — она декодируется в INI и пойдёт тем же путём, то есть тоже получит все пиры) — у формы `key@host` второго пира нет места, она остаётся с одним.
+5. Корпус: `conf/wireguard/multi_peer` — INI с двумя `[Peer]` (разные `AllowedIPs`), ожидание — `peers` из двух элементов в порядке файла; кейс с AWG-полями в `[Interface]` и двумя пирами — по желанию.
+
+**Открытый вопрос — ваш.** Пересекающиеся `AllowedIPs` у двух пиров: ядро решает само (wireguard-go: побеждает последний добавленный префикс). Предлагаем не валидировать в реестре и не предупреждать; если считаете, что предупреждение нужно — код и текст на вас.
+
+**LxBox после синка:** разбор INI с N пирами, вкладка INI в редакторе узла выводит все пиры тела (обратный ход по той же таблице `conf`), Edit INI ничего не теряет на теле с N пирами.
+
+Расхождение — сюда.
+
+**Ответ лаунчера — контракт 1.1.140 (26.10.2026).** Все пять пунктов и уточнения из сессии LxBox (п. 3: код `wgconf_peer_dropped` {index, missing}, снятие одного пира и за негодный ключ; п. 5: третий кейс) приняты как есть. Подробно — строка 1.1.140 в `README.md`.
+
+1. Реестр: `mappers.conf.ini_dialect.sections.Peer` → `repeat: each`, `into: peers[]`, `on_drop: {code: wgconf_peer_dropped}`. Новый примитив диалекта — `repeat: each` (`schema/registry_mapper.schema.json` `ini_section`): таблица исполняется на каждом экземпляре секции отдельно, элементы `into` из всех прогонов встают в тело в порядке файла, всё вне `into` (Interface, метка, род) — от первого уцелевшего. Метка по-прежнему `ini.$comment.Peer` — первый комментарий первой `[Peer]` файла. `wgconf_extra_peer_dropped` из словаря снят.
+2. Движок Go: `parseINIDialect` отдаёт экземпляры секции с `each` (`iniDoc.Instances`), `Exec` → `execEach` (`core/config/linkmap/exec.go`).
+3. `required` на элемент: экземпляр без обязательного ключа (запись с `required`, все источники которой — ключи этой секции) снимается до прогона с `wgconf_peer_dropped` {`index` — номер `[Peer]` с 1, `missing` — ключи, как их пишет реестр, через `, ` по алфавиту}; **путь кода — `peer.<index>`** (нужен дедупу (код, путь) при двух снятых). Экземпляр, чей прогон отказал иначе, — кодом отказа с `index`. Не уцелел ни один — прежний отказ required первого. Негодный ключ — на ТЕЛЕ: у `peers` новый атрибут `on_item_failure: {action: drop_item, code: wg_peer_dropped, core_rejects: true}` (`schema/registry_body.schema.json`) — отказ узла внутри элемента (`on_invalid: drop_node` или незаполненное `required`) снимает элемент, коды его обхода заменяются одним `wg_peer_dropped` с путём элемента (`peers[1]`, индекс входа) и параметрами `index` (с 1) и `reason` (код отказа: `wg_key_invalid`, `field_missing`, …); не уцелел ни один — массив судится заново без изоляции, и узел получает прежний отказ первого; единственный элемент не изолируется. Правило тела — для всех входов, включая sing-box JSON и авторское тело (`core_rejects`).
+4. Ссылка `key@host` — один пир; `conf_b64` идёт через INI и получает всех. Пересечение `AllowedIPs` не судим. Ваша заметка про `_withIniDialect` попала в цель: у Go форма `conf_b64` (`mappers.uri`) своего диалекта не имела и читала текст диалектом по умолчанию — две `[Peer]` слипались в один пир ключами второй. Теперь норма записана: секция с формой `ini` без своего `ini_dialect` берёт диалект соседней секции протокола (`core/config/registry/mapper.go:shareIniDialect`); кейс `corpus/uri/wireguard/awg_conf_base64_multi_peer`.
+5. Корпус `corpus/body/wgconf/` (имя каталога вида — не `conf/wireguard`): `ini_extra_peer` переименован в `ini_multi_peer` (два пира, разные AllowedIPs, второй с keepalive), новые `ini_multi_peer_awg`, `ini_multi_peer_missing_key` (ожидание — один пир и `wgconf_peer_dropped` {index 2, missing PublicKey}, путь `peer.2`), `ini_multi_peer_bad_key` (три пира, у второго `PublicKey = not-a-key` → пиры 1 и 3 и `wg_peer_dropped` {index 2, reason wg_key_invalid}, путь `peers[1]`). Раннер лаунчера теперь сверяет и `warnings` ожидания — включением (каждый записанный код обязан найтись; путь и параметры — если записаны). Формат корпуса тел (`code`/`path`/`value`) параметров не несёт, поэтому в ожиданиях — код и путь; `index`/`missing`/`reason` нормативны по тексту выше и по словарю.
+
+Задача вам: синк, разбор INI с N пирами (`ini_space.dart`), `on_item_failure` у санитайзера, прогон пяти кейсов (четыре `body/wgconf` и один `uri/wireguard`), вкладка INI.
+
+Расхождение — сюда.
