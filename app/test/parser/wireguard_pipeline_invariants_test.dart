@@ -190,6 +190,10 @@ void main() {
       for (final u in _corpusUris()) {
         final a = parseUri(u);
         if (a == null) continue;
+        // Контракт 1.1.140 — узел с НЕСКОЛЬКИМИ пирами (`awg://<base64 .conf>`
+        // с N `[Peer]`) ссылкой не выражается: эмит отказывает по
+        // `refuse_when peers>1` реестра, и круга у такого узла нет по норме.
+        if (a is WireguardSpec && a.peers.length > 1) continue;
         // `awg://<base64 .conf>` (§450) — форма БЕЗ обратного эмиттера:
         // `toUriWireguard` всегда пишет каноническую `key@host:port?…`.
         // Круг при этом сохраняет и тело, и identity — расходится только

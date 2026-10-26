@@ -1447,4 +1447,73 @@ void main() {
       expect(tls['record_fragment'], true);
     });
   });
+  group('контракт 1.1.140 — peers.on_item_failure снимает пир, а не узел', () {
+    const pubA = 'cHVibGljS2V5QmFzZTY0RXhhbXBsZVZhbHVlMTIzNDU=';
+    Map<String, dynamic> peer(String host, String pub) => {
+          'address': host,
+          'port': 51820,
+          'public_key': pub,
+          'allowed_ips': ['0.0.0.0/0'],
+        };
+    Map<String, dynamic> wg(List<Map<String, dynamic>> peers) => {
+          'type': 'wireguard',
+          'tag': 'wg1',
+          'address': ['10.0.0.2/32'],
+          'private_key': 'cHJpdmF0ZUtleUJhc2U2NEV4YW1wbGVWYWx1ZTEyMzQ=',
+          'peers': peers,
+        };
+
+    test('негодный ключ второго из трёх — пиры 1 и 3, один wg_peer_dropped', () {
+      final r = _san(
+          wg([
+            peer('a.example.com', pubA),
+            peer('b.example.com', 'not-a-key'),
+            peer('c.example.com', pubA),
+          ]),
+          scheme: 'wireguard');
+      expect(r.body, isNotNull);
+      final peers = (r.body!['peers'] as List).cast<Map>();
+      expect([for (final p in peers) p['address']],
+          ['a.example.com', 'c.example.com']);
+      expect(_codes(r), ['wg_peer_dropped'],
+          reason: 'коды обхода снятого пира заменены одним');
+      final w = _byCode(r, 'wg_peer_dropped');
+      expect(w.path, 'peers[1]');
+      expect(w.params, {'index': '2', 'reason': 'wg_key_invalid'});
+    });
+
+    test('пир без адреса снимается один (required внутри элемента)', () {
+      final r = _san(
+          wg([
+            peer('a.example.com', pubA),
+            {'public_key': pubA, 'allowed_ips': ['0.0.0.0/0']},
+          ]),
+          scheme: 'wireguard');
+      expect(r.body, isNotNull);
+      expect(r.body!['peers'] as List, hasLength(1));
+      expect(_byCode(r, 'wg_peer_dropped').path, 'peers[1]');
+    });
+
+    test('единственный негодный пир не изолируется — узел снят прежним кодом',
+        () {
+      final r = _san(wg([peer('a.example.com', 'not-a-key')]),
+          scheme: 'wireguard');
+      expect(r.body, isNull);
+      expect(_codes(r), contains('wg_key_invalid'));
+      expect(_codes(r), isNot(contains('wg_peer_dropped')));
+    });
+
+    test('не уцелел ни один из двух — прежний отказ узла, без wg_peer_dropped',
+        () {
+      final r = _san(
+          wg([
+            peer('a.example.com', 'not-a-key'),
+            peer('b.example.com', 'also-bad'),
+          ]),
+          scheme: 'wireguard');
+      expect(r.body, isNull);
+      expect(_codes(r), contains('wg_key_invalid'));
+      expect(_codes(r), isNot(contains('wg_peer_dropped')));
+    });
+  });
 }

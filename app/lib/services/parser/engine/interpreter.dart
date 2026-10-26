@@ -134,7 +134,7 @@ EngineResult? runSection(MapperSection section, String text,
     }
     return null;
   }
-  return _Run(section, space, trace, dropped: dropped).execute();
+  return _execute(section, space, trace, dropped: dropped);
 }
 
 /// §480 W5 — исполнить секцию на РАЗОБРАННОМ документе-объекте.
@@ -197,9 +197,207 @@ EngineResult? runSectionOnIni(
   final space = _selectIniForm(section, text);
   if (space == null) return null;
   final parsed = parseIniSpace(text, section.iniDialect ?? const IniDialect());
-  return _Run(section, space, trace,
-          nameHint: nameHint, dropped: dropped, context: context)
-      .execute(inputCodes: parsed.codes);
+  return _execute(section, space, trace,
+      nameHint: nameHint,
+      dropped: dropped,
+      context: context,
+      inputCodes: parsed.codes);
+}
+
+/// Исполнить таблицу секции над пространством: один прогон либо — у входа
+/// INI, где секция с `repeat: each` пришла несколькими экземплярами, —
+/// прогон на каждом экземпляре ([_execEach], контракт 1.1.140).
+EngineResult? _execute(
+  MapperSection section,
+  SourceSpace space,
+  MapperTrace? trace, {
+  String? nameHint,
+  XrayDropVerdict? dropped,
+  Map<String, dynamic>? context,
+  List<String> inputCodes = const [],
+}) {
+  EngineResult? one(SourceSpace s, XrayDropVerdict? d) => _Run(section, s, trace,
+          nameHint: nameHint, dropped: d, context: context)
+      .execute(inputCodes: inputCodes);
+  final each = _eachSection(section, space);
+  if (each == null) return one(space, dropped);
+  return _execEach(section, space, each, one, dropped);
+}
+
+/// Секция INI с `repeat: each` и `into`, у которой во входе БОЛЬШЕ ОДНОГО
+/// экземпляра; `null` — таблица исполняется один раз. Таких секций диалект
+/// может объявить несколько, но тело собирает одна — первая по имени, как у
+/// лаунчера (`exec.go:eachSection`).
+(String, IniSectionRule, List<Map<String, String>>)? _eachSection(
+    MapperSection section, SourceSpace space) {
+  final d = section.iniDialect;
+  if (d == null || space.iniInstances.isEmpty) return null;
+  final names = space.iniInstances.keys.toList()..sort();
+  for (final name in names) {
+    final rule = d.sectionRule(name);
+    final into = rule?.into;
+    if (rule == null || rule.repeat != 'each' || into == null || into.isEmpty) {
+      continue;
+    }
+    final list = space.iniInstances[name]!;
+    if (list.length < 2) return null;
+    return (name, rule, list);
+  }
+  return null;
+}
+
+/// Контракт 1.1.140 (wg-quick с несколькими `[Peer]`) — таблица на каждом
+/// экземпляре секции, узел — один.
+///
+/// Каждый экземпляр — отдельный прогон над копией пространства, где секция —
+/// этот экземпляр ([SourceSpace.withIniInstance]). Тело узла — тело первого
+/// уцелевшего прогона, а массив `into` в нём — элементы ВСЕХ уцелевших
+/// прогонов в порядке файла.
+///
+/// Экземпляр без обязательного ключа своей секции снимается до прогона с
+/// кодом `on_drop` ({index, missing}, путь `<секция>.<index>`); экземпляр,
+/// чей прогон отказал иначе, — кодом самого отказа и `index`. Не уцелел ни
+/// один — исполняется первый экземпляр, и узел получает ровно тот отказ, что
+/// и при единственной секции (`exec.go:execEach`).
+EngineResult? _execEach(
+  MapperSection section,
+  SourceSpace space,
+  (String, IniSectionRule, List<Map<String, String>>) each,
+  EngineResult? Function(SourceSpace, XrayDropVerdict?) one,
+  XrayDropVerdict? dropped,
+) {
+  final (name, rule, instances) = each;
+  final kept = <EngineResult>[];
+  final drops = <NodeWarning>[];
+  for (var i = 0; i < instances.length; i++) {
+    final index = '${i + 1}';
+    final path = '$name.$index';
+    final missing = _missingIniKeys(section, space.formId, name, instances[i]);
+    if (missing.isNotEmpty) {
+      final code = rule.onDropCode;
+      if (code != null && code.isNotEmpty) {
+        drops.add(RegistryWarning(
+          code: code,
+          path: path,
+          params: {'index': index, 'missing': missing.join(', ')},
+        ));
+      }
+      continue;
+    }
+    // Вердикт у прогона свой: отказ экземпляра — не отказ узла, и в вердикт
+    // вызывающего он попасть не должен.
+    final verdict = XrayDropVerdict();
+    final res = one(space.withIniInstance(name, instances[i]), verdict);
+    if (res == null) {
+      final reason = verdict.reason;
+      if (reason != null && reason.code.isNotEmpty) {
+        drops.add(RegistryWarning(
+          code: reason.code,
+          path: path,
+          params: {...reason.params, 'index': index},
+        ));
+      }
+      continue;
+    }
+    kept.add(res);
+  }
+  if (kept.isEmpty) {
+    return one(space.withIniInstance(name, instances.first), dropped);
+  }
+
+  final base = kept.first;
+  final arrPath = rule.into!.endsWith('[]')
+      ? rule.into!.substring(0, rule.into!.length - 2)
+      : rule.into!;
+  final elems = <dynamic>[
+    for (final r in kept)
+      if (_bodyPathGet(r.body, arrPath) case final List<dynamic> list) ...list,
+  ];
+  _bodyPathSet(base.body, arrPath, elems);
+
+  // Коды прогонов — без повторов (код, путь, параметры): общий `[Interface]`
+  // даёт один и тот же код в каждом прогоне. Коды снятых экземпляров — в
+  // конце, в порядке файла.
+  final warnings = <NodeWarning>[];
+  for (final r in kept) {
+    for (final w in r.warnings) {
+      if (!warnings.contains(w)) warnings.add(w);
+    }
+  }
+  warnings.addAll(drops);
+  return EngineResult(
+    body: base.body,
+    label: base.label,
+    warnings: warnings,
+    extensionFields: base.extensionFields,
+    wsEarlyDataHeaderImplicit: base.wsEarlyDataHeaderImplicit,
+    tagAddress: base.tagAddress,
+    tagScheme: base.tagScheme,
+    kinds: base.kinds,
+    bodySource: base.bodySource,
+  );
+}
+
+/// Обязательные ключи секции [name], которых нет в экземпляре [inst].
+///
+/// Обязательной считается запись с `required`, ВСЕ источники которой (для
+/// формы [formId]) — ключи этой секции (`ini.<Секция>.<Ключ>`): только о
+/// таких экземпляр судит сам. Имена — как их пишет реестр (`PublicKey`), без
+/// повторов, в алфавитном порядке (`exec.go:missingINIKeys`).
+List<String> _missingIniKeys(MapperSection section, String formId,
+    String name, Map<String, String> inst) {
+  final plan = _planCache[section] ??= _SectionPlan(section);
+  final prefix = 'ini.$name.';
+  final missing = <String>[];
+  for (final p in plan.all) {
+    if (!p.required) continue;
+    final srcs = p.sourceByForm[formId] ?? p.source;
+    if (srcs.isEmpty) continue;
+    final keys = <String>[];
+    for (final src in srcs) {
+      if (src.length <= prefix.length ||
+          src.substring(0, prefix.length).toLowerCase() != prefix) {
+        keys.clear();
+        break;
+      }
+      keys.add(src.substring(prefix.length));
+    }
+    if (keys.isEmpty) continue;
+    final present = keys.any((k) {
+      final want = '$name.${k.toLowerCase()}';
+      return inst.entries
+          .any((e) => e.value.isNotEmpty && e.key.toLowerCase() == want);
+    });
+    if (!present && !missing.contains(keys.first)) missing.add(keys.first);
+  }
+  return missing..sort();
+}
+
+/// Значение по пути тела `a.b.c` (без индексов); `null` — пути нет.
+dynamic _bodyPathGet(Map<String, dynamic> body, String path) {
+  dynamic cur = body;
+  for (final part in path.split('.')) {
+    if (cur is! Map) return null;
+    cur = cur[part];
+  }
+  return cur;
+}
+
+/// Положить значение по пути тела `a.b.c`, создав недостающие объекты.
+void _bodyPathSet(Map<String, dynamic> body, String path, dynamic value) {
+  final parts = path.split('.');
+  var cur = body;
+  for (final part in parts.take(parts.length - 1)) {
+    final next = cur[part];
+    if (next is Map<String, dynamic>) {
+      cur = next;
+    } else {
+      final created = <String, dynamic>{};
+      cur[part] = created;
+      cur = created;
+    }
+  }
+  cur[parts.last] = value;
 }
 
 /// Порядок проб форм: объявленный, но форма с `detect.default` — последней,
@@ -227,7 +425,8 @@ SourceSpace? _selectIniForm(MapperSection section, String text) {
       : formsInTrialOrder(section.forms);
   for (final form in forms) {
     if (!detectMatchesIni(form.detect, parsed.space)) continue;
-    return SourceSpace(formId: form.id, ini: parsed.space);
+    return SourceSpace(
+        formId: form.id, ini: parsed.space, iniInstances: parsed.instances);
   }
   return null;
 }
@@ -378,6 +577,7 @@ SourceSpace? _selectLinkIniForm(
     scheme: split.scheme,
     fragment: fragment,
     ini: parsed.space,
+    iniInstances: parsed.instances,
   );
 }
 

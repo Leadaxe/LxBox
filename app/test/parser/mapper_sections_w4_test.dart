@@ -320,15 +320,17 @@ void main() {
       expect((noMatch['defaults'] as Map)['peers[].port'], 51820);
     });
 
-    test('читается только ПЕРВАЯ [Peer], и отброс повтора назван кодом', () {
+    test('каждая [Peer] — свой пир, снятая секция названа кодом', () {
       // Контракт 1.1.30 объявил диалект INI ДАННЫМИ (`ini_dialect`), и наш
-      // оверлей снят: судить надо реестр. До него на одном месте жили три
-      // поведения — слияние секций, молчаливый отброс и норма, — и выбрать
-      // между ними было нечем, пока решение жило в коде.
+      // оверлей снят: судить надо реестр. Контракт 1.1.140 сменил норму
+      // повтора с `first_only` (вторая [Peer] отброшена кодом
+      // `wgconf_extra_peer_dropped`) на `each`: экземпляры собирают
+      // `peers[]`, секция без обязательного ключа снимается одна.
       final dialect = section(path, 'conf')['ini_dialect'] as Map;
       final peer = (dialect['sections'] as Map)['Peer'] as Map;
-      expect(peer['repeat'], 'first_only');
-      expect((peer['on_extra'] as Map)['code'], 'wgconf_extra_peer_dropped');
+      expect(peer['repeat'], 'each');
+      expect(peer['into'], 'peers[]');
+      expect((peer['on_drop'] as Map)['code'], 'wgconf_peer_dropped');
       // Диалект wg-quick дословно; имя префиксов комментария — по
       // GRAMMAR_SYNC §0.11 (`line_comment_prefixes`).
       expect(dialect['key_case'], 'lower');

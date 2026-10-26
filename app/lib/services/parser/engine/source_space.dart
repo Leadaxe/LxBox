@@ -84,6 +84,7 @@ final class SourceSpace {
     this.json,
     this.jsonBase,
     this.ini,
+    this.iniInstances = const {},
   }) : _query = query;
 
   final QueryPairs? _query;
@@ -141,6 +142,40 @@ final class SourceSpace {
   /// регистре, плюс `$comment.<Section>`.
   final Map<String, String>? ini;
 
+  /// Контракт 1.1.140 — экземпляры секций с `repeat: each` в порядке файла
+  /// (`ini_space.dart`, [IniParse]). Пусто — у входа таких секций нет, и
+  /// таблица исполняется один раз.
+  final Map<String, List<Map<String, String>>> iniInstances;
+
+  /// Копия, в которой секция [section] — это экземпляр [inst]: ключи прочих
+  /// экземпляров той же секции из [ini] сняты, остальное общее (`[Interface]`
+  /// и оболочка у экземпляров одни). Экземпляров у копии нет — второй раз она
+  /// на экземпляры не делится.
+  SourceSpace withIniInstance(String section, Map<String, String> inst) {
+    final prefix = '$section.';
+    return SourceSpace(
+      formId: formId,
+      scheme: scheme,
+      authority: authority,
+      userinfo: userinfo,
+      userinfoUser: userinfoUser,
+      userinfoPass: userinfoPass,
+      host: host,
+      port: port,
+      portRaw: portRaw,
+      path: path,
+      fragment: fragment,
+      query: _query,
+      json: json,
+      jsonBase: jsonBase,
+      ini: {
+        for (final e in (ini ?? const <String, String>{}).entries)
+          if (!e.key.startsWith(prefix)) e.key: e.value,
+        ...inst,
+      },
+    );
+  }
+
   SourceSpace copyWith({
     String? formId,
     String? userinfoUser,
@@ -162,5 +197,6 @@ final class SourceSpace {
         json: json,
         jsonBase: jsonBase,
         ini: ini,
+        iniInstances: iniInstances,
       );
 }

@@ -270,18 +270,31 @@ final class ListSpec {
 
 /// Правило ПОВТОРНОЙ секции INI (`ini_dialect.sections.<Name>`).
 final class IniSectionRule {
-  const IniSectionRule({this.repeat, this.onExtraCode});
+  const IniSectionRule(
+      {this.repeat, this.onExtraCode, this.into, this.onDropCode});
 
   factory IniSectionRule.fromJson(Map<String, dynamic> j) => IniSectionRule(
         repeat: j['repeat'] as String?,
         onExtraCode: ((j['on_extra'] as Map?)?['code']) as String?,
+        into: j['into'] as String?,
+        onDropCode: ((j['on_drop'] as Map?)?['code']) as String?,
       );
 
-  /// `first_only` — читается первая, прочие отбрасываются.
+  /// `merge` (по умолчанию) | `first_only` — читается первая, прочие
+  /// отбрасываются | `each` (контракт 1.1.140) — каждая секция свой
+  /// экземпляр, таблица исполняется на каждом отдельно.
   final String? repeat;
 
   /// Код о том, что повтор отброшен; `null` — отбрасывается молча.
   final String? onExtraCode;
+
+  /// Для `each`: путь массива тела, который собирают экземпляры
+  /// (`peers[]`).
+  final String? into;
+
+  /// Для `each`: код на экземпляр, снятый до прогона за незаполненный
+  /// обязательный ключ своей секции (параметры `index`, `missing`).
+  final String? onDropCode;
 }
 
 /// §0.11 DRAFT — ДИАЛЕКТ разбора INI (`ini_dialect`).
