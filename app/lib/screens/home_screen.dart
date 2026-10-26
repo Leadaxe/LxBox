@@ -23,7 +23,7 @@ import 'debug_screen.dart';
 import 'home/support_message_screen.dart';
 import 'routing_screen.dart';
 import 'settings_screen.dart';
-import 'speed_test_screen.dart';
+import 'diagnostics/diagnostics_screen.dart';
 import 'stats_screen.dart';
 import 'home/widgets/detour_cycle_sheet.dart';
 import 'home/widgets/errors_counter_row.dart';
@@ -762,7 +762,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
           },
         );
       case 'speedtest':
-        return SpeedTestScreen(homeController: _controller);
+        return DiagnosticsScreen(
+          homeController: _controller,
+          initialTab: DiagnosticsTab.speedTest,
+        );
+      case 'diagnostics':
+        return DiagnosticsScreen(homeController: _controller);
       case 'stats':
         // Как пункт drawer: без поднятого туннеля данных нет — кнопку прячем.
         if (!_controller.state.tunnelUp) return null;

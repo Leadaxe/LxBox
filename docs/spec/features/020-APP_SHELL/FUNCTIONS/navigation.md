@@ -27,7 +27,7 @@ Side menu (top to bottom, groups separated by a divider):
 | Group | Items |
 |-------|-------|
 | Setup | Servers · Routing · VPN Settings · App Settings |
-| Tools | Speed Test · Statistics · Config Editor · Debug |
+| Tools | Diagnostics (URL Check, Speed Test) · Statistics · Config Editor · Debug |
 | About the app | About |
 
 DNS has no menu item of its own: it is the DNS tab of the Routing screen

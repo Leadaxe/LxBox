@@ -4813,9 +4813,6 @@
   "Test actions": {
     "value": "测试动作"
   },
-  "Test download/upload speed": {
-    "value": "测试下载/上传速度"
-  },
   "Test servers list unavailable": {
     "value": "测试服务器列表不可用"
   },
@@ -6178,5 +6175,113 @@
   },
   "Unknown keys: %s": {
     "value": "未知键：%s"
+  },
+  "Enter an http or https URL": {
+    "value": "请输入 http 或 https 地址"
+  },
+  "VPN is not running": {
+    "value": "VPN 未运行"
+  },
+  "example.com or https://…": {
+    "value": "example.com 或 https://…"
+  },
+  "Any app": {
+    "value": "任意应用"
+  },
+  "Full": {
+    "value": "完整"
+  },
+  "Route": {
+    "value": "路由"
+  },
+  "From scratch": {
+    "value": "从头开始"
+  },
+  "Bypass DNS cache and open new connections": {
+    "value": "绕过 DNS 缓存并建立新连接"
+  },
+  "Start VPN to run a check": {
+    "value": "请先启动 VPN 再进行检查"
+  },
+  "Stopped": {
+    "value": "已停止"
+  },
+  "Too many checks running, try again": {
+    "value": "同时进行的检查过多，请稍后重试"
+  },
+  "Failed at %s: %s": {
+    "value": "失败于 %s：%s"
+  },
+  "HTTP %d · %d ms": {
+    "value": "HTTP %d · %d 毫秒"
+  },
+  "Completed · %d ms": {
+    "value": "完成 · %d 毫秒"
+  },
+  "trace truncated": {
+    "value": "跟踪已截断"
+  },
+  "Skipped": {
+    "value": "已跳过"
+  },
+  "Reused": {
+    "value": "已复用"
+  },
+  "Sent, not confirmed": {
+    "value": "已发送，未确认"
+  },
+  "Not evaluated": {
+    "value": "未评估"
+  },
+  "This app does not go through the VPN. The path shown is hypothetical": {
+    "value": "此应用不经过 VPN，所示路径仅为假设"
+  },
+  "The server address is resolved by DNS rules for this app; for another app the path may differ": {
+    "value": "服务器地址按此应用的 DNS 规则解析；其他应用的路径可能不同"
+  },
+  "The path depends on a server that is not on the route": {
+    "value": "路径依赖于不在路由上的服务器"
+  },
+  "Resolve cycle: a server address is resolved through itself": {
+    "value": "解析循环：服务器地址通过其自身解析"
+  },
+  "IP rules were not evaluated: the address is unknown": {
+    "value": "未评估 IP 规则：地址未知"
+  },
+  "Fake IP is not kept across restarts: apps with cached addresses fail after a restart": {
+    "value": "Fake IP 在重启后不保留：缓存了地址的应用在重启后会失败"
+  },
+  "The fake IP pool wraps faster than the answer TTL: an old address may now belong to another domain": {
+    "value": "Fake IP 池循环快于应答 TTL：旧地址可能已属于其他域名"
+  },
+  "The address is in the fake IP range but has no record": {
+    "value": "该地址在 Fake IP 范围内，但没有记录"
+  },
+  "The address now belongs to another domain": {
+    "value": "该地址当前属于另一个域名"
+  },
+  "IPv6 fake IP is returned, but the tunnel has no IPv6 address": {
+    "value": "返回了 IPv6 Fake IP，但隧道没有 IPv6 地址"
+  },
+  "HTTPS DNS queries are rejected: no ECH and no ALPN hints for the app": {
+    "value": "HTTPS 类型 DNS 查询被拒绝：应用无法获得 ECH 和 ALPN 提示"
+  },
+  "UDP 443 is rejected: browsers fall back to TCP": {
+    "value": "UDP 443 被拒绝：浏览器会回退到 TCP"
+  },
+  "The REALITY server did not recognize the client: check public key, short ID, server name": {
+    "value": "REALITY 服务器未识别客户端：请检查 public key、short ID 和服务器名称"
+  },
+  "The connection broke after an unconfirmed step: wrong UUID or password, the server cannot reach the target, or large packets are lost": {
+    "value": "连接在未确认的步骤后中断：UUID 或密码错误、服务器无法访问目标，或大数据包丢失"
+  },
+  "Some steps were reused: this does not prove the path comes up from scratch": {
+    "value": "部分步骤为复用：这不能证明路径能从头建立"
+  },
+  "URL Check": {
+    "value": "URL 检查"
+  },
+  "URL check and speed test": {
+    "value": "URL 检查和测速"
   }
 }

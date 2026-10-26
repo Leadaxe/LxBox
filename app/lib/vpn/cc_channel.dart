@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 
 import '../services/platform_channels.dart';
 import '../services/selector_info.dart'; // §251 — fold «селектор (выбор)»
+import '../services/diagnostics/connection_test.dart';
 import 'cc_openconnect.dart';
 
 export 'cc_openconnect.dart';
@@ -48,6 +49,9 @@ class CcChannel {
   static const EventChannel _tailscalePingChannel = EventChannel(
     PlatformChannels.ccTailscalePing,
   ); // §581
+  static const EventChannel _connectionTestChannel = EventChannel(
+    PlatformChannels.ccConnectionTest,
+  ); // §687
   static const EventChannel _openConnectChannel = EventChannel(
     PlatformChannels.ccOpenConnect,
   ); // §654
@@ -132,6 +136,19 @@ class CcChannel {
 
   /// §581 — поток ответов [startTailscalePing]. Слушать до старта.
   Stream<CcTailscalePingResult> get tailscalePing => _tailscalePingStream;
+
+  // §687 — события теста соединения. Нативная сторона шлёт батчи (список
+  // карт), здесь они разворачиваются в одиночные события без кэша.
+  late final Stream<ConnectionTestEvent> _connectionTestStream =
+      _connectionTestChannel.receiveBroadcastStream().expand(
+            (e) => [
+              for (final m in e is List ? e : [e])
+                if (m is Map) ConnectionTestEvent.fromMap(_asMap(m)),
+            ],
+          );
+
+  /// §687 — поток событий [startConnectionTest]. Слушать до старта.
+  Stream<ConnectionTestEvent> get connectionTest => _connectionTestStream;
 
   /// §122 — shared-стрим с КЭШЕМ последнего снапшота.
   ///
@@ -394,6 +411,31 @@ class CcChannel {
   }
 
   Future<void> stopTailscalePing() => _invoke('ccStopTailscalePing');
+
+  /// §687 — тест соединения через роутер (kernel SPEC 139). События идут в
+  /// [connectionTest]. false — сервис не поднят, событий не будет.
+  Future<bool> startConnectionTest({
+    required String link,
+    String packageName = '',
+    ConnectionTestDepth depth = ConnectionTestDepth.http,
+    bool fresh = false,
+  }) async {
+    try {
+      final ok = await _methods.invokeMethod<bool>('ccStartConnectionTest', {
+        'link': link,
+        'package_name': packageName,
+        'depth': depth.wire,
+        'fresh': fresh,
+      });
+      return ok == true;
+    } on PlatformException {
+      return false;
+    } on MissingPluginException {
+      return false;
+    }
+  }
+
+  Future<void> stopConnectionTest() => _invoke('ccStopConnectionTest');
 
   Future<String?> _invokeError(String method, Map<String, Object> args) async {
     try {

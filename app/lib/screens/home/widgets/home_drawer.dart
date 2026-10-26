@@ -9,7 +9,7 @@ import '../../config_screen.dart';
 import '../../debug_screen.dart';
 import '../../routing_screen.dart';
 import '../../settings_screen.dart';
-import '../../speed_test_screen.dart';
+import '../../diagnostics/diagnostics_screen.dart';
 import '../../stats_screen.dart';
 import '../../subscriptions_screen.dart';
 import '../../../services/l10n/locale_controller.dart';
@@ -87,11 +87,11 @@ class HomeDrawer extends StatelessWidget {
             ),
             const Divider(),
             ListTile(
-              leading: const Icon(Icons.speed_outlined),
-              title: Text(getLocalText.s("Speed Test")),
-              subtitle: Text(getLocalText.s("Test download/upload speed")),
+              leading: const Icon(Icons.troubleshoot_outlined),
+              title: Text(getLocalText.s("Diagnostics")),
+              subtitle: Text(getLocalText.s("URL check and speed test")),
               onTap: () =>
-                  _go(context, SpeedTestScreen(homeController: controller)),
+                  _go(context, DiagnosticsScreen(homeController: controller)),
             ),
             ListTile(
               leading: const Icon(Icons.bar_chart_outlined),

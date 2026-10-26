@@ -18,9 +18,17 @@ import '../services/subscription/user_agent.dart';
 import '../widgets/safe_bottom.dart';
 
 class SpeedTestScreen extends StatefulWidget {
-  const SpeedTestScreen({super.key, required this.homeController});
+  const SpeedTestScreen({
+    super.key,
+    required this.homeController,
+    this.embedded = false,
+  });
 
   final HomeController homeController;
+
+  /// §687 — вкладка раздела Diagnostics: без своего Scaffold, состояние
+  /// держится при переключении вкладок (идущий замер не обрывается).
+  final bool embedded;
 
   @override
   State<SpeedTestScreen> createState() => _SpeedTestScreenState();
@@ -56,7 +64,10 @@ class _SpeedTestResult {
 final _sessionHistory = <_SpeedTestResult>[];
 
 class _SpeedTestScreenState extends State<SpeedTestScreen>
-    with TemplateAwareState<SpeedTestScreen> {
+    with TemplateAwareState<SpeedTestScreen>, AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => widget.embedded;
+
   bool _running = false;
 
   /// §279 — пусто = idle-подсказка (speedStatusIdle); локализованные статусы
@@ -426,12 +437,11 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final cs = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
 
-    return Scaffold(
-      appBar: AppBar(title: Text(getLocalText.s("Speed Test"))),
-      body: ListView(
+    final body = ListView(
         padding: const EdgeInsets.all(24).withSafeBottom(context),
         children: [
           // Proxy indicator
@@ -567,7 +577,11 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
             ..._history.map((r) => _buildHistoryTile(r, theme, cs)),
           ],
         ],
-      ),
+    );
+    if (widget.embedded) return body;
+    return Scaffold(
+      appBar: AppBar(title: Text(getLocalText.s("Speed Test"))),
+      body: body,
     );
   }
 

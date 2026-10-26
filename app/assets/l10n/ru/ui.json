@@ -5083,9 +5083,6 @@
   "Test actions": {
     "value": "Действия теста"
   },
-  "Test download/upload speed": {
-    "value": "Проверка скорости загрузки и отдачи"
-  },
   "Test servers list unavailable": {
     "value": "Список тестовых серверов недоступен"
   },
@@ -6460,5 +6457,113 @@
   },
   "Unknown keys: %s": {
     "value": "Незнакомые ключи: %s"
+  },
+  "Enter an http or https URL": {
+    "value": "Введите адрес http или https"
+  },
+  "VPN is not running": {
+    "value": "VPN не запущен"
+  },
+  "example.com or https://…": {
+    "value": "example.com или https://…"
+  },
+  "Any app": {
+    "value": "Любое приложение"
+  },
+  "Full": {
+    "value": "Полностью"
+  },
+  "Route": {
+    "value": "Маршрут"
+  },
+  "From scratch": {
+    "value": "С нуля"
+  },
+  "Bypass DNS cache and open new connections": {
+    "value": "Мимо кэша DNS, с новыми соединениями"
+  },
+  "Start VPN to run a check": {
+    "value": "Запустите VPN, чтобы проверить"
+  },
+  "Stopped": {
+    "value": "Остановлено"
+  },
+  "Too many checks running, try again": {
+    "value": "Слишком много проверок сразу, повторите позже"
+  },
+  "Failed at %s: %s": {
+    "value": "Сбой на %s: %s"
+  },
+  "HTTP %d · %d ms": {
+    "value": "HTTP %d · %d мс"
+  },
+  "Completed · %d ms": {
+    "value": "Готово · %d мс"
+  },
+  "trace truncated": {
+    "value": "трасса обрезана"
+  },
+  "Skipped": {
+    "value": "Пропущено"
+  },
+  "Reused": {
+    "value": "Использовано готовое"
+  },
+  "Sent, not confirmed": {
+    "value": "Отправлено, без подтверждения"
+  },
+  "Not evaluated": {
+    "value": "Не вычислено"
+  },
+  "This app does not go through the VPN. The path shown is hypothetical": {
+    "value": "Это приложение не идёт через VPN. Показанный путь условный"
+  },
+  "The server address is resolved by DNS rules for this app; for another app the path may differ": {
+    "value": "Адрес сервера резолвится правилами DNS для этого приложения; у другого приложения путь может быть иным"
+  },
+  "The path depends on a server that is not on the route": {
+    "value": "Путь зависит от сервера, которого нет в маршруте"
+  },
+  "Resolve cycle: a server address is resolved through itself": {
+    "value": "Цикл резолва: адрес сервера резолвится через него же"
+  },
+  "IP rules were not evaluated: the address is unknown": {
+    "value": "Правила по IP не проверены: адрес неизвестен"
+  },
+  "Fake IP is not kept across restarts: apps with cached addresses fail after a restart": {
+    "value": "Fake IP не сохраняется между перезапусками: приложения с закэшированными адресами после перезапуска получают отказ"
+  },
+  "The fake IP pool wraps faster than the answer TTL: an old address may now belong to another domain": {
+    "value": "Пул fake IP проходит круг быстрее TTL ответа: старый адрес может уже принадлежать другому домену"
+  },
+  "The address is in the fake IP range but has no record": {
+    "value": "Адрес из диапазона fake IP, но записи о нём нет"
+  },
+  "The address now belongs to another domain": {
+    "value": "Адрес сейчас принадлежит другому домену"
+  },
+  "IPv6 fake IP is returned, but the tunnel has no IPv6 address": {
+    "value": "Возвращается IPv6 fake IP, но у туннеля нет IPv6-адреса"
+  },
+  "HTTPS DNS queries are rejected: no ECH and no ALPN hints for the app": {
+    "value": "DNS-запросы HTTPS отклоняются: приложение не получит ECH и подсказки ALPN"
+  },
+  "UDP 443 is rejected: browsers fall back to TCP": {
+    "value": "UDP 443 отклоняется: браузеры переходят на TCP"
+  },
+  "The REALITY server did not recognize the client: check public key, short ID, server name": {
+    "value": "Сервер REALITY не узнал клиента: проверьте public key, short ID, имя сервера"
+  },
+  "The connection broke after an unconfirmed step: wrong UUID or password, the server cannot reach the target, or large packets are lost": {
+    "value": "Соединение оборвалось после неподтверждённого шага: неверный UUID или пароль, сервер не достучался до цели или теряются большие пакеты"
+  },
+  "Some steps were reused: this does not prove the path comes up from scratch": {
+    "value": "Часть шагов взята готовой: это не доказывает, что путь поднимается с нуля"
+  },
+  "URL Check": {
+    "value": "Проверка URL"
+  },
+  "URL check and speed test": {
+    "value": "Проверка URL и скорости"
   }
 }

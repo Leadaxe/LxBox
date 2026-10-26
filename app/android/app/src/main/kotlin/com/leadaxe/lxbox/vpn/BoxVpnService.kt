@@ -223,6 +223,10 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
         /// §581 — ответы проверки устройства Tailscale (`StartTailscalePing`).
         @Volatile
         var ccTailscalePingSink: io.flutter.plugin.common.EventChannel.EventSink? = null
+        /// §687 — события теста соединения (`StartConnectionTest`): батчи
+        /// `{event: stage|result|error, …}`.
+        @Volatile
+        var ccConnectionTestSink: io.flutter.plugin.common.EventChannel.EventSink? = null
         /// §654 C — состояние endpoint'ов openconnect (`SubscribeOpenConnectStatus`):
         /// снапшот `{endpoints: [...], callback: {...}?}` на каждое обновление.
         @Volatile
