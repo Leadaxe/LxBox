@@ -6139,5 +6139,20 @@
   },
   "This resolver sends queries through %s. It is used to look up server addresses while the connection is being set up, before the tunnel exists, so lookups can fail and the VPN may not connect. A direct resolver is the safest choice; for privacy pick a DoT or DoH server.": {
     "value": "此解析器通过 %s 发送查询。它在连接建立期间、隧道尚未存在时用于查找服务器地址，因此查询可能失败，VPN 可能无法连接。直连解析器最稳妥；如需隐私，请选择 DoT 或 DoH 服务器。"
+  },
+  "Members are resolved at build time": {
+    "value": "成员在构建时确定"
+  },
+  "· %s off": {
+    "value": "· %s 个已停用"
+  },
+  "Source is not a JSON object.": {
+    "value": "来源不是 JSON 对象。"
+  },
+  "\"kind\" must be \"auto\".": {
+    "value": "“kind” 必须为 “auto”。"
+  },
+  "Unknown keys: %s": {
+    "value": "未知键：%s"
   }
 }

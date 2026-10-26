@@ -340,6 +340,14 @@ Interrupt connections on switch checkbox sit in the Advanced section. The
 app has three checkboxes with that name; which one fires when is covered in
 [Directions](#interrupt-connections-on-switch--three-switches-for-three-events).
 
+A server switched off in the folder stays in the preview with the ⏻ icon
+and is not counted: `5 of 6 servers · 1 off`. In Pick you can tick it; it
+joins the pool once you switch it on.
+
+To change an existing auto node, tap it in the folder. Settings holds the
+same form, Source holds the auto node as stored (JSON), and Save writes the
+changes.
+
 An auto node admits servers by the same rules as a direction: a Tailscale
 node without an exit node never gets in, and a detour link (a server marked
 ⚙) gets in only when its source has Register detour servers on (see

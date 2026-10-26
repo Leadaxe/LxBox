@@ -94,6 +94,12 @@ live pool of the running core
   `<tag>-auto` (a urltest inside a urltest would measure someone else's
   choice). Disabled or missing members are cut off with the code
   `group_member_dropped`.
+- **Pool preview of an auto node** (the group form): a member switched off
+  in the folder stays in the list with the ⏻ icon (All and Rule — in place
+  of ✓/⊖, Pick — to the right of the name), the row is dimmed. It counts
+  neither in N nor in M of "N of M servers"; when there are such members,
+  "· K off" is added. In Pick it can be ticked: the choice is kept and works
+  once the server is switched on.
 - Xray import: `random`/`roundRobin`/`leastLoad` with `expected>1` → Load
   balance; `leastPing` or `expected≤1` → Fastest; `expected` → pool,
   `maxRTT` → pool_tolerance; `selector` → include rule `^(…)`; `pingConfig`
@@ -128,3 +134,4 @@ live pool of the running core
 | 10 | [611](../../../tasks/611-drop-passive-check-kernel-lx12.md) | Implemented | `passive_check` removed (core lx.12) |
 | 11 | [612](../../../tasks/612-contract-1-1-113-failover.md) | Implemented | Hold until failure (`failover`), migration from `passive_check` |
 | 12 | [677](../../../tasks/677-autoping-tail-skips-round-robin-groups.md) | Done | Auto ping on start forces a group test only for Fastest (`least_test`) |
+| 13 | [686](../../../tasks/686-folder-auto-node-source-tab.md) | In progress | Pool preview: a member switched off in the folder — ⏻, outside the count |

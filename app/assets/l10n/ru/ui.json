@@ -6421,5 +6421,20 @@
   },
   "This resolver sends queries through %s. It is used to look up server addresses while the connection is being set up, before the tunnel exists, so lookups can fail and the VPN may not connect. A direct resolver is the safest choice; for privacy pick a DoT or DoH server.": {
     "value": "Этот резолвер отправляет запросы через %s. Он ищет адреса серверов, пока соединение устанавливается и туннеля ещё нет, поэтому запросы могут не пройти и VPN может не подключиться. Надёжнее всего прямой резолвер; для приватности выберите сервер DoT или DoH."
+  },
+  "Members are resolved at build time": {
+    "value": "Состав определяется при сборке"
+  },
+  "· %s off": {
+    "value": "· %s выкл."
+  },
+  "Source is not a JSON object.": {
+    "value": "В источнике не JSON-объект."
+  },
+  "\"kind\" must be \"auto\".": {
+    "value": "Значение «kind» должно быть «auto»."
+  },
+  "Unknown keys: %s": {
+    "value": "Незнакомые ключи: %s"
   }
 }

@@ -82,6 +82,11 @@ answer.
   are stripped before parsing; a custom body
   type unknown to the application is accepted with a warning; a body without
   `type` — refusal (P12).
+- **Auto node of a folder.** Source is the stored record `kind: auto`
+  (formatted JSON: `tag`, `enabled`, `group`). Save parses it and writes
+  the group the same way as the group editor. Not JSON, not an object,
+  `kind` other than `auto` or unknown keys — refusal naming the key path;
+  the record and the text in the editor stay as they were.
 - After writing, the screen re-reads the node: Source — the written text,
   JSON — the new body, notifications — fresh.
 
@@ -108,3 +113,4 @@ answer.
 | 9 | [478F](../../../tasks/478F-core-rejected-node-auto-disable/spec.md) | Released in v2.25.0 | Editing the body clears the core's verdict |
 | 10 | [237](../../../tasks/237-folder-member-node-settings.md) | Implemented | Editing a folder member is transactional |
 | 11 | [603](../../../tasks/603-subscription-and-own-server-bugs.md) | Implemented | A standalone server does not save a source without a node |
+| 12 | [686](../../../tasks/686-folder-auto-node-source-tab.md) | In progress | Source of an auto node = its stored record, editable |

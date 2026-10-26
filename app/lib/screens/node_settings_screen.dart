@@ -32,6 +32,8 @@ import '../services/warp/warp_endpoint_picker.dart';
 import '../services/wireguard/masquerade_source.dart';
 import '../widgets/masquerade_fields.dart';
 import '../widgets/tls_policy_tiles.dart';
+import '../widgets/auto_group_form.dart';
+import 'node_settings/auto_group_source.dart';
 import 'node_settings/node_document.dart';
 import 'subscriptions_screen/entry_warnings.dart';
 
@@ -164,7 +166,14 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
   /// §455 — текст источника записи: raw члена папки или `rawBody` одиночного.
   String get _containerRaw {
     final member = _member;
-    if (member != null) return member.raw;
+    // §686 — у auto-узла текста нет: источник — его запись `kind: auto`.
+    if (member != null) {
+      final group = _autoGroup;
+      if (group != null) {
+        return autoGroupSourceText(member, group, _folderId);
+      }
+      return member.raw;
+    }
     final list = widget.entry.list;
     return list is UserServer ? list.rawBody : '';
   }
@@ -178,6 +187,22 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     if (mi < 0 || mi >= list.members.length) return null;
     return list.members[mi];
   }
+
+  /// §686 — группа auto-узла папки (член `kind: auto`); `null` — иной узел.
+  /// Решает тип узла, а не экран, откуда открыли карточку.
+  AutoSelectSpec? get _autoGroup {
+    final n = _member?.node;
+    return n is AutoSelectSpec ? n : null;
+  }
+
+  String get _folderId {
+    final list = widget.entry.list;
+    return list is FolderServers ? list.id : '';
+  }
+
+  /// §686 — последняя группа, разобранная из Source: пока текст не объект,
+  /// форма показывает её неактивной.
+  AutoSelectSpec? _autoLastGroup;
 
   Future<void> _load() async {
     // v2: одиночный — узел уже распарсен в entry.list.nodes.first;
@@ -229,9 +254,12 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     _sourceCtrl.text = raw;
     _originKind = originKindOf(raw);
     _jsonCtrl.text = const JsonEncoder.withIndent('  ').convert(
-        sourceIsSingbox(raw) && node.rawSource.trimLeft().startsWith('{')
-            ? jsonDecode(node.rawSource)
-            : node.emit(TemplateVars.empty).map);
+        node is AutoSelectSpec && member != null
+            ? autoGroupJsonPreview(node) // §686
+            : sourceIsSingbox(raw) && node.rawSource.trimLeft().startsWith('{')
+                ? jsonDecode(node.rawSource)
+                : node.emit(TemplateVars.empty).map);
+    _autoLastGroup = null;
     _tagCtrl.text = _originalTag;
 
     // Detour: одиночный — `entry.detourPolicy.overrideDetour`; §237 член —
@@ -425,6 +453,33 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
                 : getLocalText.s("Saved"));
   }
 
+  /// §686 — Save вкладки Source auto-узла: запись разбирается строго и
+  /// пишется тем же путём, что Save редактора группы (`updateAutoMemberAt`).
+  /// Отказ — сообщение, запись и текст в редакторе не меняются.
+  Future<bool> _saveAutoSource() async {
+    final group = _autoGroup;
+    final mi = widget.memberIndex;
+    if (group == null || mi == null) return false;
+    final parsed = parseAutoGroupSource(_sourceCtrl.text, _folderId, group);
+    if (parsed is AutoGroupSourceRejected) {
+      _snack(parsed.message);
+      return false;
+    }
+    final ready = parsed as AutoGroupSourceReady;
+    final err = await widget.subController.updateAutoMemberAt(
+        widget.index, mi, ready.group,
+        enabled: ready.enabled);
+    if (!mounted) return err == null;
+    if (err != null) {
+      _snack(err.render());
+      return false;
+    }
+    await _load();
+    if (!mounted) return true;
+    _snack(getLocalText.s("Saved"));
+    return true;
+  }
+
   /// §581 — Save choice вкладки Network: `exit_node` = [value] (`null` —
   /// поле убирается) в теле узла, дальше тем же путём, что Save вкладки
   /// Source (тег из поля Tag, проверка ядром, запись, пересборка).
@@ -587,7 +642,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     if (_saving) return false;
     _saving = true;
     try {
-      return await _saveSource();
+      return await (_autoGroup != null ? _saveAutoSource() : _saveSource());
     } finally {
       _saving = false;
     }
@@ -680,6 +735,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
   }
 
   Widget _buildSettingsTab(ThemeData theme) {
+    if (_autoGroup != null) return _buildAutoGroupSettingsTab(theme);
     return ListView(
       padding:
           EdgeInsets.fromLTRB(16, 16, 16, MediaQuery.of(context).padding.bottom + 24),
@@ -915,6 +971,67 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     setState(() {});
   }
 
+  /// §686 — Settings auto-узла: форма группы (общая с экраном создания).
+  /// Источник истины — текст Source, как у формы OpenConnect: правка формы
+  /// переписывает `tag` и `group` записи, правка текста руками доходит до
+  /// формы; текст не объект — форма неактивна. Сохранение — Save экрана.
+  /// Info, Masquerade, Detour и TLS у группы нет.
+  Widget _buildAutoGroupSettingsTab(ThemeData theme) {
+    final list = widget.entry.list;
+    final candidates = list is FolderServers
+        ? autoPoolCandidates(list)
+        : const <AutoPoolCandidate>[];
+    return ListView(
+      padding: EdgeInsets.fromLTRB(
+          16, 16, 16, MediaQuery.of(context).padding.bottom + 24),
+      children: [
+        ListenableBuilder(
+          listenable: _sourceCtrl,
+          builder: (context, _) {
+            final member = _member;
+            final current = _autoGroup;
+            if (member == null || current == null) {
+              return const SizedBox.shrink();
+            }
+            final parsed =
+                autoGroupFromSourceText(_sourceCtrl.text, _folderId, current);
+            if (parsed != null) _autoLastGroup = parsed;
+            final shown = parsed ?? _autoLastGroup ?? current;
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (parsed == null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(
+                        getLocalText.s(
+                            "The form is off: Source is not a valid JSON object."),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant),
+                      ),
+                    ),
+                  AutoGroupForm(
+                    key: const ValueKey('node-auto-group-form'),
+                    value: shown,
+                    candidates: candidates,
+                    enabled: parsed != null,
+                    onChanged: (g) {
+                      final next = autoGroupSourceWith(
+                          _sourceCtrl.text, member, g, _folderId);
+                      if (next != _sourceCtrl.text) _sourceCtrl.text = next;
+                    },
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
   /// §654 B2 — форма OpenConnect над редактором Source (общий виджет с Add
   /// server). Источник истины — текст `_sourceCtrl`, как у секции Masquerade:
   /// правка поля переписывает текст (формат и порядок ключей прежние), правка
@@ -954,6 +1071,8 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
 
   /// §455 — вкладка Source: `origin.raw` как есть, единственное место правки.
   Widget _buildSourceTab(ThemeData theme) {
+    // §686 — у auto-узла источник — запись группы, подписи вида нет.
+    final isAuto = _autoGroup != null;
     final kindNote = switch (_originKind) {
       'json' => getLocalText.s(
           "sing-box JSON: sent to the core as is. The core checks it on save."),
@@ -984,11 +1103,13 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
               controller: _sourceCtrl,
               minLines: 12,
               language: detectCodeLanguage(_sourceCtrl.text),
-              header: Text(
-                kindNote,
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-              ),
+              header: isAuto
+                  ? null
+                  : Text(
+                      kindNote,
+                      style: theme.textTheme.bodySmall
+                          ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                    ),
             ),
           ),
         ),
@@ -1027,6 +1148,9 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
             ],
           ),
         ),
+        // §686 — у группы нет тела узла, которое можно отдать ядру
+        // дословно: правят форму или Source.
+        if (_autoGroup == null)
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           child: Align(

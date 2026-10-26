@@ -27,6 +27,7 @@ class _FakePathProvider extends PathProviderPlatform
 
 /// Меню члена папки: у авто-узла нет «Move out of folder» (одиночным
 /// сервером группа стала бы пустой записью), «Move to folder…» остаётся.
+/// §686 — «Edit…» только у битого члена.
 void main() {
   // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
   // (критерий 7 спеки 480).
@@ -82,29 +83,37 @@ void main() {
 
     await openMenu('Alpha');
     expect(find.text('Move out of folder'), findsOneWidget);
+    // §686 — член с узлом правят в карточке (тап), «Edit…» в меню нет.
+    expect(find.text('Edit…'), findsNothing);
     await closeMenu();
 
     await openMenu('Fast');
     expect(find.text('Move out of folder'), findsNothing);
+    expect(find.text('Edit…'), findsNothing);
     await closeMenu();
   });
 
   // §615 — «Edit server» члена папки: поле на LxCodeEditor (как §614),
-  // подсветка JSON по `{` на лету, сохранение — прежним путём.
+  // подсветка JSON по `{` на лету, сохранение — прежним путём. §686 — пункт
+  // есть только у битого члена (узла нет).
   testWidgets('Edit server: редактор с подсветкой, Save пишет новое тело',
       (tester) async {
     final c = SubscriptionController();
     await tester.runAsync(() async {
       await c.init();
       await c.addFolder('F');
-      await c.addMembersToFolder(
-          0, 'vless://u1@h1.example:443?type=ws&security=tls#Alpha');
     });
+    final f = c.entries.single.list as FolderServers;
+    c.debugSetEntries([
+      SubscriptionEntry(
+          list: f.copyWith(
+              members: [FolderMember(raw: 'Alpha')])),
+    ]);
     await tester.pumpWidget(MaterialApp(
       home: FolderDetailScreen(entry: c.entries.single, controller: c),
     ));
     await tester.pumpAndSettle();
-    await tester.longPress(find.text('Alpha').first);
+    await tester.longPress(find.text('Unreadable entry').first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Edit…'));
     await tester.pumpAndSettle();
@@ -117,8 +126,7 @@ void main() {
         findsOneWidget);
     LxCodeEditor editor() =>
         tester.widget<LxCodeEditor>(find.byType(LxCodeEditor));
-    expect(editor().controller.text, contains('vless://u1@h1.example'));
-    expect(editor().language, LxCodeLanguage.uri, reason: 'ссылка — URI');
+    expect(editor().controller.text, 'Alpha');
 
     editor().controller.text = '{"type": "direct"';
     await tester.pump();

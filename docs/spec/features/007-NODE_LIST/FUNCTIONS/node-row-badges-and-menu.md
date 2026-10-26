@@ -85,6 +85,9 @@ ones.
   [001-SUBSCRIPTIONS](../../001-SUBSCRIPTIONS/FEATURE.md)/[002-NODE_IMPORT](../../002-NODE_IMPORT/FEATURE.md).
 - The View details screen, Copy URI with confirmation for links containing a
   key — [008-NODE_EDITOR](../../008-NODE_EDITOR/FEATURE.md).
+- The long-press menu of a record on the Servers screen is a different menu:
+  a subscription has Update and Edit source…, a standalone server does not
+  (it is edited in its card by a tap) — [server-folders.md](server-folders.md).
 
 ## Revisions
 

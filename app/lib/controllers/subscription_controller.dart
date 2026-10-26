@@ -2150,9 +2150,10 @@ class SubscriptionController extends ChangeNotifier {
   }
 
   /// §439 — заменить группу члена-группы [memberIndex]; `enabled` члена
-  /// остаётся.
+  /// остаётся, если не задан [enabled] (§686 — Save вкладки Source пишет
+  /// запись целиком, `enabled` в ней тоже).
   Future<UiMsg?> updateAutoMemberAt(
-      int index, int memberIndex, AutoSelectSpec group) async {
+      int index, int memberIndex, AutoSelectSpec group, {bool? enabled}) async {
     if (index < 0 || index >= _entries.length) {
       return const ErrMsg(ErrKey.folderNotFound);
     }
@@ -2166,7 +2167,8 @@ class SubscriptionController extends ChangeNotifier {
     final members = [...folder.members];
     final previous = members[memberIndex].node;
     members[memberIndex] =
-        FolderMember.auto(group, enabled: members[memberIndex].enabled);
+        FolderMember.auto(group,
+            enabled: enabled ?? members[memberIndex].enabled);
     entry._replaceList(folder.copyWith(members: members));
     entry.nodeCount = entry.list.nodes.length;
     // §439 (D-113) — переименование группы переписывает ссылки на неё.

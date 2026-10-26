@@ -1,16 +1,12 @@
 import 'package:flutter/material.dart';
 
-import '../models/auto_select.dart';
-import '../models/direction.dart';
-import '../models/node_link.dart';
 import '../models/node_spec.dart';
-import '../services/contract/group_genus.dart';
 import '../services/l10n/locale_controller.dart';
-import '../services/parser/uri_utils.dart';
-import '../services/safe_regex.dart';
 import '../services/ui_helpers.dart';
+import '../widgets/auto_group_form.dart';
 import '../widgets/safe_bottom.dart';
-import '../widgets/urltest_idle_hint.dart';
+
+export '../widgets/auto_group_form.dart' show AutoPoolCandidate;
 
 /// §322 — редактор узла автовыбора внутри папки.
 ///
@@ -20,6 +16,10 @@ import '../widgets/urltest_idle_hint.dart';
 /// Отличие от Направления: членство здесь — три режима (все / правило / список),
 /// и превью показывает, кто именно попал в пул. [candidates] — узлы папки
 /// (без самой группы), по ним и считается превью.
+///
+/// §686 — поля — общий виджет [AutoGroupForm] (он же — на Settings карточки
+/// узла); экран — создание (⋮ → Add auto node…): правка существующего узла
+/// идёт в карточке.
 class AutoGroupEditScreen extends StatefulWidget {
   const AutoGroupEditScreen({
     super.key,
@@ -32,8 +32,8 @@ class AutoGroupEditScreen extends StatefulWidget {
   final AutoSelectSpec? initial;
 
   /// Кандидаты в пул — узлы того же контейнера: ссылка на члена
-  /// `{id папки, сырой тег}` (§439) и имя.
-  final List<({NodeLink key, String label})> candidates;
+  /// `{id папки, сырой тег}` (§439), имя и флаг включения (§686).
+  final List<AutoPoolCandidate> candidates;
 
   final bool canDelete;
 
@@ -57,181 +57,26 @@ final class AutoGroupDeleted extends AutoGroupEditResult {
   const AutoGroupDeleted();
 }
 
-enum _MembershipMode { all, rule, explicit }
-
-/// §565 — выбор режима группы: три вида автовыбора (§612 — удержание до
-/// отказа) и ручной род.
-enum _Kind { fastest, balance, hold, manual }
-
 class _AutoGroupEditScreenState extends State<AutoGroupEditScreen> {
-  late final TextEditingController _labelCtrl;
-  late final TextEditingController _includeCtrl;
-  late final TextEditingController _excludeCtrl;
-  late final TextEditingController _urlCtrl;
-  late final TextEditingController _intervalCtrl;
-  late final TextEditingController _toleranceCtrl;
-  late final TextEditingController _idleCtrl;
-  late final TextEditingController _poolCtrl;
-  late final TextEditingController _poolToleranceCtrl;
-  late final TextEditingController _badgeCtrl; // §322 — UI-only значки
+  final _form = GlobalKey<AutoGroupFormState>();
 
-  late _MembershipMode _mode;
-  late Set<NodeLink> _picked; // ссылки для режима «список»
-  late UrltestMode _urlMode;
-  late Set<StickyHashKey> _sticky;
-  late bool _interrupt; // §208 — рвать соединения при смене узла
-  late bool _manual; // §565 — род selector: член выбирается вручную
-  late String _default; // §565 — сырой тег выбранного члена
-  bool _advanced = false;
+  /// Снимок для сравнения «грязно ли» — то, что форма собрала при открытии.
+  AutoSelectSpec? _initial;
 
-  late final AutoSelectSpec _initial; // снимок для сравнения «грязно ли»
+  AutoSelectSpec? _snapshot() => _form.currentState?.snapshot();
+
+  bool _isDirty() {
+    final now = _snapshot();
+    final initial = _initial;
+    return now != null && initial != null && !now.sameGroupAs(initial);
+  }
 
   @override
   void initState() {
     super.initState();
-    final s = widget.initial;
-    final m = s?.membership ?? const RuleMembers();
-    final p = s?.params ?? const AutoSelectParams();
-
-    _labelCtrl = TextEditingController(text: s?.label ?? '')
-      ..addListener(_onChanged);
-    _includeCtrl = TextEditingController(
-        text: m is RuleMembers ? m.include : '')
-      ..addListener(_onChanged);
-    _excludeCtrl = TextEditingController(
-        text: m is RuleMembers ? m.exclude : '')
-      ..addListener(_onChanged);
-    _urlCtrl = TextEditingController(text: p.url)..addListener(_onChanged);
-    _intervalCtrl = TextEditingController(text: p.interval)
-      ..addListener(_onChanged);
-    _toleranceCtrl = TextEditingController(text: '${p.tolerance}')
-      ..addListener(_onChanged);
-    _idleCtrl = TextEditingController(text: p.idleTimeout)
-      ..addListener(_onChanged);
-    _poolCtrl = TextEditingController(text: '${p.pool}')
-      ..addListener(_onChanged);
-    _poolToleranceCtrl = TextEditingController(text: '${p.poolTolerance}')
-      ..addListener(_onChanged);
-    _badgeCtrl = TextEditingController(text: s?.poolBadge ?? kDefaultPoolBadge)
-      ..addListener(_onChanged);
-
-    _mode = switch (m) {
-      ExplicitMembers() => _MembershipMode.explicit,
-      RuleMembers(:final include, :final exclude)
-          when include.isEmpty && exclude.isEmpty =>
-        _MembershipMode.all,
-      RuleMembers() => _MembershipMode.rule,
-    };
-    _picked = m is ExplicitMembers ? m.members.toSet() : <NodeLink>{};
-    // §612 — новая группа предлагается в режиме failover.
-    _urlMode = s == null ? kNewAutoMode : p.mode;
-    _sticky = p.stickyHash.toSet();
-    _interrupt = p.interruptExistConnections;
-    _manual = s?.isManual ?? false;
-    _default = s?.manualDefault ?? '';
-    _initial = _snapshot();
-  }
-
-  @override
-  void dispose() {
-    for (final c in [
-      _labelCtrl, _includeCtrl, _excludeCtrl, _urlCtrl, _intervalCtrl,
-      _toleranceCtrl, _idleCtrl, _poolCtrl, _poolToleranceCtrl, _badgeCtrl,
-    ]) {
-      c.dispose();
-    }
-    super.dispose();
-  }
-
-  void _onChanged() => setState(() {});
-
-  // ── Сборка результата ──
-
-  AutoSelectMembership _membership() => switch (_mode) {
-        _MembershipMode.all => const RuleMembers(),
-        _MembershipMode.rule => RuleMembers(
-            include: _includeCtrl.text.trim(),
-            exclude: _excludeCtrl.text.trim(),
-          ),
-        // Порядок — как в списке папки, а не как кликали чекбоксы.
-        _MembershipMode.explicit => ExplicitMembers([
-            for (final c in widget.candidates)
-              if (_picked.contains(c.key)) c.key,
-          ]),
-      };
-
-  AutoSelectSpec _snapshot() {
-    final label = _labelCtrl.text.trim().isEmpty
-        ? getLocalText.s("Auto")
-        : _labelCtrl.text.trim();
-    const d = AutoSelectParams();
-    return AutoSelectSpec(
-      id: widget.initial?.id ?? newUuidV4(),
-      tag: tagFromLabel(label, 'urltest', 'auto', 0),
-      label: label,
-      membership: _membership(),
-      params: AutoSelectParams(
-        url: _urlCtrl.text.trim().isEmpty ? d.url : _urlCtrl.text.trim(),
-        interval: _intervalValue,
-        tolerance: int.tryParse(_toleranceCtrl.text.trim()) ?? d.tolerance,
-        idleTimeout: _idleValue,
-        mode: _urlMode,
-        pool: int.tryParse(_poolCtrl.text.trim()) ?? d.pool,
-        poolTolerance: clampPoolTolerance(
-            int.tryParse(_poolToleranceCtrl.text.trim()) ?? d.poolTolerance),
-        stickyHash: [
-          for (final k in StickyHashKey.values)
-            if (_sticky.contains(k)) k,
-        ],
-        interruptExistConnections: _interrupt,
-      ),
-      // Синонимы — производное от подписки; у папочной группы их нет, у
-      // приехавшей из подписки сохраняем как есть (правка их не меняет).
-      tagSynonyms: widget.initial?.tagSynonyms ?? const {},
-      poolBadge: _badgeCtrl.text.trim(),
-      // §565 — род и выбранный член. У автовыбора `default` доживает
-      // сквозным, как пришёл (контракт 1.1.50).
-      genus: _manual ? GroupGenus.manual : GroupGenus.auto,
-      manualDefault: _default,
-    );
-  }
-
-  /// Interval и idle timeout ровно такими, какими они уйдут в хранение:
-  /// пустое поле — умолчание [AutoSelectParams].
-  String get _intervalValue {
-    final v = _intervalCtrl.text.trim();
-    return v.isEmpty ? const AutoSelectParams().interval : v;
-  }
-
-  String get _idleValue {
-    final v = _idleCtrl.text.trim();
-    return v.isEmpty ? const AutoSelectParams().idleTimeout : v;
-  }
-
-  bool _isDirty() => !_snapshot().sameGroupAs(_initial);
-
-  // ── Превью состава ──
-
-  /// Кандидаты, попавшие в пул при текущих настройках. Повторяет логику
-  /// `resolveAutoSelectMembers`, но по именам: синонимов у папочной группы
-  /// нет, а у приехавшей из подписки превью всё равно показывает имена.
-  List<({NodeLink key, String label})> _matched() {
-    switch (_mode) {
-      case _MembershipMode.all:
-        return widget.candidates;
-      case _MembershipMode.explicit:
-        return [
-          for (final c in widget.candidates)
-            if (_picked.contains(c.key)) c
-        ];
-      case _MembershipMode.rule:
-        final inc = tryCompileRegex(_includeCtrl.text.trim());
-        final exc = tryCompileRegex(_excludeCtrl.text.trim());
-        return [
-          for (final c in widget.candidates)
-            if (ruleAccepts([c.label], inc, exc)) c
-        ];
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() => _initial = _snapshot());
+    });
   }
 
   // ── Навигация ──
@@ -250,8 +95,11 @@ class _AutoGroupEditScreenState extends State<AutoGroupEditScreen> {
     }
   }
 
-  void _save() =>
-      Navigator.pop(context, AutoGroupEditResult.saved(_snapshot()));
+  void _save() {
+    final spec = _snapshot();
+    if (spec == null) return;
+    Navigator.pop(context, AutoGroupEditResult.saved(spec));
+  }
 
   Future<void> _delete() async {
     final ok = await showDeleteConfirmDialog(
@@ -268,11 +116,6 @@ class _AutoGroupEditScreenState extends State<AutoGroupEditScreen> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final dirty = _isDirty();
-    final matched = _matched();
-    final includeText = _includeCtrl.text.trim();
-    final excludeText = _excludeCtrl.text.trim();
-    final includeValid = includeText.isEmpty || tryCompileRegex(includeText) != null;
-    final excludeValid = excludeText.isEmpty || tryCompileRegex(excludeText) != null;
 
     return PopScope(
       canPop: false,
@@ -306,506 +149,16 @@ class _AutoGroupEditScreenState extends State<AutoGroupEditScreen> {
         body: ListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 32).withSafeBottom(context),
           children: [
-            TextField(
-              controller: _labelCtrl,
-              decoration: InputDecoration(
-                labelText: getLocalText.s("Name"),
-                hintText: getLocalText.s("Auto"),
-                border: const OutlineInputBorder(),
-                isDense: true,
-              ),
-              style: const TextStyle(fontSize: 14),
+            AutoGroupForm(
+              key: _form,
+              value: widget.initial,
+              candidates: widget.candidates,
+              // Перерисовка — цвет кнопки Save следует за правками.
+              onChanged: (_) => setState(() {}),
             ),
-            const Divider(height: 28),
-
-            // ── Членство ──
-            Text(getLocalText.s("Servers in the pool"),
-                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
-            const SizedBox(height: 6),
-            SegmentedButton<_MembershipMode>(
-              segments: [
-                ButtonSegment(
-                  value: _MembershipMode.all,
-                  label: Text(getLocalText.s("All")),
-                  icon: const Icon(Icons.select_all, size: 16),
-                ),
-                ButtonSegment(
-                  value: _MembershipMode.rule,
-                  label: Text(getLocalText.s("Rule")),
-                  icon: const Icon(Icons.filter_alt_outlined, size: 16),
-                ),
-                ButtonSegment(
-                  value: _MembershipMode.explicit,
-                  label: Text(getLocalText.s("Pick")),
-                  icon: const Icon(Icons.checklist, size: 16),
-                ),
-              ],
-              selected: {_mode},
-              showSelectedIcon: false,
-              style: const ButtonStyle(
-                visualDensity: VisualDensity.compact,
-                textStyle: WidgetStatePropertyAll(TextStyle(fontSize: 12)),
-              ),
-              onSelectionChanged: (s) => setState(() {
-                final next = s.first;
-                // Переключение «правило → список» разворачивает текущий
-                // результат в галочки: пользователь видит то же самое и может
-                // подправить руками, а не начинает с нуля.
-                if (next == _MembershipMode.explicit &&
-                    _mode != _MembershipMode.explicit) {
-                  _picked = _matched().map((c) => c.key).toSet();
-                }
-                _mode = next;
-              }),
-            ),
-            const SizedBox(height: 10),
-
-            if (_mode == _MembershipMode.rule) ...[
-              TextField(
-                controller: _includeCtrl,
-                decoration: InputDecoration(
-                  labelText: getLocalText.s("Include (regex)"),
-                  hintText: getLocalText.s("empty = all servers"),
-                  border: const OutlineInputBorder(),
-                  isDense: true,
-                  errorText: includeValid ? null : 'Invalid regex',
-                  errorStyle: const TextStyle(fontSize: 10),
-                ),
-                style: const TextStyle(fontSize: 13),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _excludeCtrl,
-                decoration: InputDecoration(
-                  labelText: getLocalText.s("Exclude (regex)"),
-                  hintText: getLocalText.s("applied after include"),
-                  border: const OutlineInputBorder(),
-                  isDense: true,
-                  errorText: excludeValid ? null : 'Invalid regex',
-                  errorStyle: const TextStyle(fontSize: 10),
-                ),
-                style: const TextStyle(fontSize: 13),
-              ),
-              const SizedBox(height: 8),
-            ],
-
-            // Превью состава — общее для всех режимов.
-            _previewLine(
-              cs,
-              getLocalText.s("%s of %s servers", '${matched.length}',
-                  '${widget.candidates.length}'),
-            ),
-            // §675 — пустой состав сборка не эмитит: узел остаётся в папке,
-            // но в конфиг не идёт. Пустую папку называет _memberList.
-            if (matched.isEmpty && widget.candidates.isNotEmpty)
-              _previewLine(
-                cs,
-                getLocalText.s(
-                    "No servers match, the auto node stays out of the config until one does"),
-              ),
-            const SizedBox(height: 6),
-            _memberList(cs, matched),
-
-            const Divider(height: 28),
-
-            // ── Режим выбора ──
-            Text(getLocalText.s("Mode"),
-                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
-            const SizedBox(height: 6),
-            SegmentedButton<_Kind>(
-              segments: [
-                ButtonSegment(
-                  value: _Kind.fastest,
-                  label: Text(getLocalText.s("Fastest")),
-                  icon: const Icon(Icons.bolt, size: 16),
-                ),
-                ButtonSegment(
-                  value: _Kind.balance,
-                  label: Text(getLocalText.s("Load balance")),
-                  icon: const Icon(Icons.hub_outlined, size: 16),
-                ),
-                // §612 (контракт 1.1.111) — удержание узла до отказа.
-                ButtonSegment(
-                  value: _Kind.hold,
-                  label: Text(getLocalText.s("Hold until failure")),
-                  icon: const Icon(Icons.push_pin_outlined, size: 16),
-                ),
-                ButtonSegment(
-                  value: _Kind.manual,
-                  label: Text(getLocalText.s("Manual")),
-                  icon: const Icon(Icons.touch_app_outlined, size: 16),
-                ),
-              ],
-              selected: {_kind},
-              showSelectedIcon: false,
-              style: const ButtonStyle(
-                visualDensity: VisualDensity.compact,
-                textStyle: WidgetStatePropertyAll(TextStyle(fontSize: 12)),
-              ),
-              onSelectionChanged: (s) => setState(() {
-                switch (s.first) {
-                  case _Kind.manual:
-                    _manual = true;
-                  case _Kind.fastest:
-                    _manual = false;
-                    _urlMode = UrltestMode.leastTest;
-                  case _Kind.balance:
-                    _manual = false;
-                    _urlMode = UrltestMode.roundRobin;
-                  case _Kind.hold:
-                    _manual = false;
-                    _urlMode = UrltestMode.failover;
-                }
-              }),
-            ),
-            const SizedBox(height: 4),
-            _previewLine(
-              cs,
-              switch (_kind) {
-                _Kind.fastest =>
-                  getLocalText.s("single best server by latency"),
-                _Kind.balance => getLocalText
-                    .s("spread connections across a pool of servers"),
-                _Kind.hold =>
-                  getLocalText.s("keep the fastest server until it fails"),
-                _Kind.manual =>
-                  getLocalText.s("you pick the server, no latency tests"),
-              },
-            ),
-
-            if (_kind == _Kind.balance) ..._balancerControls(cs),
-            if (_kind == _Kind.manual) ..._manualControls(cs, matched),
-
-            const Divider(height: 28),
-
-            // ── Advanced ──
-            InkWell(
-              onTap: () => setState(() => _advanced = !_advanced),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Row(
-                  children: [
-                    Icon(
-                      _advanced ? Icons.expand_less : Icons.expand_more,
-                      size: 18,
-                      color: cs.onSurfaceVariant,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(getLocalText.s("Advanced"),
-                        style:
-                            TextStyle(fontSize: 13, color: cs.onSurfaceVariant)),
-                  ],
-                ),
-              ),
-            ),
-            if (_advanced) ..._advancedControls(cs),
           ],
         ),
       ),
     );
   }
-
-  _Kind get _kind => _manual
-      ? _Kind.manual
-      : switch (_urlMode) {
-          UrltestMode.roundRobin => _Kind.balance,
-          UrltestMode.failover => _Kind.hold,
-          UrltestMode.leastTest => _Kind.fastest,
-        };
-
-  /// §565 — род selector: выбранный член пула. Отметка — текущий `default`;
-  /// без него (или если член выпал из пула) ядро берёт первого.
-  List<Widget> _manualControls(
-      ColorScheme cs, List<({NodeLink key, String label})> matched) {
-    if (matched.isEmpty) return const [];
-    final current = matched.any((c) => c.key.tag == _default)
-        ? _default
-        : matched.first.key.tag;
-    return [
-      const SizedBox(height: 10),
-      Text(getLocalText.s("Selected server"),
-          style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
-      const SizedBox(height: 4),
-      RadioGroup<String>(
-        groupValue: current,
-        onChanged: (v) => setState(() => _default = v ?? ''),
-        child: Column(
-          children: [
-            for (final c in matched)
-              RadioListTile<String>(
-                key: ValueKey('auto-group-default-${c.key.tag}'),
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-                visualDensity: VisualDensity.compact,
-                value: c.key.tag,
-                title: Text(c.label,
-                    style: const TextStyle(fontSize: 13),
-                    overflow: TextOverflow.ellipsis),
-              ),
-          ],
-        ),
-      ),
-    ];
-  }
-
-  Widget _previewLine(ColorScheme cs, String text) => Text(
-        text,
-        style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
-      );
-
-  /// Список кандидатов. В режиме «список» — с чекбоксами; иначе только
-  /// показывает, кто попал (галочка) и кто нет (приглушённый).
-  Widget _memberList(
-      ColorScheme cs, List<({NodeLink key, String label})> matched) {
-    if (widget.candidates.isEmpty) {
-      return _previewLine(cs, getLocalText.s("Folder has no servers yet"));
-    }
-    final hit = matched.map((c) => c.key).toSet();
-    return Container(
-      constraints: const BoxConstraints(maxHeight: 240),
-      decoration: BoxDecoration(
-        border: Border.all(color: cs.outlineVariant),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: ListView.builder(
-        shrinkWrap: true,
-        itemCount: widget.candidates.length,
-        itemBuilder: (_, i) {
-          final c = widget.candidates[i];
-          final inPool = hit.contains(c.key);
-          if (_mode == _MembershipMode.explicit) {
-            return CheckboxListTile(
-              dense: true,
-              visualDensity: VisualDensity.compact,
-              controlAffinity: ListTileControlAffinity.leading,
-              title: Text(c.label,
-                  style: const TextStyle(fontSize: 13),
-                  overflow: TextOverflow.ellipsis),
-              value: _picked.contains(c.key),
-              onChanged: (v) => setState(() {
-                if (v ?? false) {
-                  _picked.add(c.key);
-                } else {
-                  _picked.remove(c.key);
-                }
-              }),
-            );
-          }
-          return ListTile(
-            dense: true,
-            visualDensity: VisualDensity.compact,
-            leading: Icon(
-              inPool ? Icons.check_circle_outline : Icons.remove_circle_outline,
-              size: 18,
-              color: inPool ? cs.primary : cs.onSurfaceVariant.withValues(alpha: .5),
-            ),
-            title: Text(
-              c.label,
-              style: TextStyle(
-                fontSize: 13,
-                color: inPool ? null : cs.onSurfaceVariant.withValues(alpha: .5),
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  /// §208 — pool size / tolerance + sticky-чипы. Только под Load balance.
-  List<Widget> _balancerControls(ColorScheme cs) {
-    final n = widget.candidates.length;
-    return [
-      const SizedBox(height: 10),
-      Row(
-        children: [
-          Expanded(
-            child: TextField(
-              controller: _poolCtrl,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: getLocalText.s("Pool size"),
-                border: const OutlineInputBorder(),
-                isDense: true,
-                helperText:
-                    n > 0 ? getLocalText.plural("of %d nodes", n) : null,
-                helperStyle: const TextStyle(fontSize: 10),
-              ),
-              style: const TextStyle(fontSize: 13),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: TextField(
-              controller: _poolToleranceCtrl,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: getLocalText.s("Pool tolerance (ms)"),
-                border: const OutlineInputBorder(),
-                isDense: true,
-                helperText: getLocalText.s("0 = keep pool full"),
-                helperStyle: const TextStyle(fontSize: 10),
-              ),
-              style: const TextStyle(fontSize: 13),
-            ),
-          ),
-        ],
-      ),
-      const SizedBox(height: 10),
-      Text(getLocalText.s("Sticky session by"),
-          style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
-      const SizedBox(height: 4),
-      SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            for (final k in StickyHashKey.values)
-              Padding(
-                padding: const EdgeInsets.only(right: 6),
-                child: FilterChip(
-                  label: Text(_stickyLabel(k),
-                      style: const TextStyle(fontSize: 12)),
-                  selected: _sticky.contains(k),
-                  visualDensity: VisualDensity.compact,
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  onSelected: (sel) => setState(() {
-                    if (sel) {
-                      _sticky.add(k);
-                    } else {
-                      _sticky.remove(k);
-                    }
-                  }),
-                ),
-              ),
-          ],
-        ),
-      ),
-      const SizedBox(height: 4),
-      _previewLine(
-        cs,
-        _sticky.isEmpty
-            ? getLocalText.s("no stickiness — every connection re-picks")
-            : getLocalText.s("connections with the same key keep one server"),
-      ),
-    ];
-  }
-
-  List<Widget> _advancedControls(ColorScheme cs) => [
-        // §565 — у ручного рода замеров нет: их поля не показываем.
-        if (!_manual) ..._probeControls(),
-        const SizedBox(height: 4),
-        CheckboxListTile(
-          dense: true,
-          contentPadding: EdgeInsets.zero,
-          controlAffinity: ListTileControlAffinity.leading,
-          visualDensity: VisualDensity.compact,
-          title: Text(getLocalText.s("Interrupt connections on switch"),
-              style: const TextStyle(fontSize: 14)),
-          subtitle: Text(
-              getLocalText.s(
-                  "off: open connections finish on the old server"),
-              style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
-          value: _interrupt,
-          onChanged: (v) => setState(() => _interrupt = v ?? false),
-        ),
-        const SizedBox(height: 10),
-        TextField(
-          controller: _badgeCtrl,
-          decoration: InputDecoration(
-            labelText: getLocalText.s("Badge in list (regex)"),
-            border: const OutlineInputBorder(),
-            isDense: true,
-            helperText: getLocalText.s(
-                "taken from member names; empty = no badges. Display only — not sent to the core"),
-            helperMaxLines: 3,
-            helperStyle: const TextStyle(fontSize: 10),
-          ),
-          style: const TextStyle(fontSize: 13),
-        ),
-        // §612 — у failover tolerance не действует и не эмитится: поле скрыто.
-        if (!_manual && _urlMode != UrltestMode.failover) ...[
-          const SizedBox(height: 10),
-          TextField(
-            controller: _toleranceCtrl,
-            keyboardType: TextInputType.number,
-            decoration: InputDecoration(
-              labelText: getLocalText.s("Switch tolerance (ms)"),
-              border: const OutlineInputBorder(),
-              isDense: true,
-              helperText:
-                  getLocalText.s("how much faster a rival must be to win"),
-              helperStyle: const TextStyle(fontSize: 10),
-            ),
-            style: const TextStyle(fontSize: 13),
-          ),
-        ],
-      ];
-
-  /// Параметры замера автовыбора: адрес, период, простой.
-  List<Widget> _probeControls() => [
-        const SizedBox(height: 8),
-        TextField(
-          controller: _urlCtrl,
-          decoration: InputDecoration(
-            labelText: getLocalText.s("Test URL"),
-            border: const OutlineInputBorder(),
-            isDense: true,
-          ),
-          style: const TextStyle(fontSize: 13),
-        ),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _intervalCtrl,
-                decoration: InputDecoration(
-                  labelText: getLocalText.s("Interval"),
-                  border: const OutlineInputBorder(),
-                  isDense: true,
-                  helperText: getLocalText.s("e.g. 15m"),
-                  helperStyle: const TextStyle(fontSize: 10),
-                ),
-                style: const TextStyle(fontSize: 13),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: TextField(
-                controller: _idleCtrl,
-                decoration: InputDecoration(
-                  labelText: getLocalText.s("Idle timeout"),
-                  border: const OutlineInputBorder(),
-                  isDense: true,
-                  helperText: getLocalText.s("e.g. 30m"),
-                  helperStyle: const TextStyle(fontSize: 10),
-                ),
-                style: const TextStyle(fontSize: 13),
-              ),
-            ),
-          ],
-        ),
-        // §442 — interval > idle_timeout: сохранить можно, санитайзер сборки
-        // поднимет idle_timeout до interval. Условие — по значениям, которые
-        // уйдут в хранение (пустое поле — умолчание AutoSelectParams).
-        if (urltestIdleRaiseTarget(_intervalValue, _idleValue)
-            case final target?) ...[
-          const SizedBox(height: 4),
-          UrltestIdleRaiseHint(
-            key: const ValueKey('auto-group-idle-raise-hint'),
-            target: target,
-          ),
-        ],
-      ];
-
-  // Названия ключей — как в §208-редакторе Направления: технические термины
-  // config'а, не переводим (l10n-exempt по тому же основанию).
-  String _stickyLabel(StickyHashKey k) => switch (k) {
-        StickyHashKey.process => 'process',
-        StickyHashKey.domain => 'domain',
-        StickyHashKey.sourceIp => 'source ip',
-        StickyHashKey.destIp => 'dest ip',
-        StickyHashKey.destPort => 'dest port',
-      };
 }
