@@ -1,0 +1,111 @@
+# 686 — Auto-узел папки: вкладка Source показывает хранимую запись и редактируется
+
+| Поле | Значение |
+|------|----------|
+| Статус | Draft (решения владельца внесены, к реализации) |
+| Дата начала | 2026-10-26 |
+| Связанные спеки | [675](675-folder-auto-node-silent-drop-and-pool-gates.md) — предупреждения и гейты пула auto-узла; [237] — тап по члену папки открывает Node Settings; issue #171 п.9 |
+
+## Проблема
+
+Пользователь создаёт в папке auto-узел (⋮ → Add auto node…, режим пула All)
+и обычным тапом открывает его. Открывается общий экран Node Settings:
+
+1. вкладка Source пустая;
+2. переименование не сохраняется: Tag меняется, Save отвечает «Source is
+   empty», запись не меняется;
+3. вкладка JSON показывает `"outbounds": []`.
+
+Сборка конфига при этом верна: группа уходит в конфиг со всеми членами папки
+(`test/builder/auto_group_folder_test.dart`). Пользователь видит пустую группу
+и не может её отредактировать, хотя она работает.
+
+## Диагностика
+
+- Тап по члену папки с узлом всегда открывает `NodeSettingsScreen`, отдельной
+  ветки для группы нет (`folder_detail_screen.dart:1350-1368`). Редактор группы
+  открывается только долгим тапом → Edit… (`_editAutoNode`).
+- Source берёт текст из `member.raw` (`node_settings_screen.dart:165`). У
+  члена `kind: auto` `raw` пустой (`FolderMember.auto`, `server_list.dart`):
+  группа хранится записью без текста узла.
+- Save на этом экране только `_saveSource()`; на пустом тексте — «Source is
+  empty» и выход (`node_settings_screen.dart:379-383`).
+- Хранимая форма у группы есть: запись `kind: auto` контракта 1.0
+  (`autoGroupMemberToRecord` / `autoGroupMemberFromRecord`,
+  `models/codec/auto_group_record.dart`). Её пишут хранилище и LX Backup.
+- JSON показывает `node.emit(TemplateVars.empty)`; у группы-правила
+  `outbounds` там пустой, состав считает только сборка (`node_spec.dart`).
+
+## Решение (слово владельца 26.10.2026)
+
+Вкладку Source у auto-узла чинить, а не уводить тап в другой экран.
+
+1. **Source показывает запись, как она хранится:** результат
+   `autoGroupMemberToRecord(member, spec, folderId)`, отформатированный JSON.
+   Пример для режима All:
+   ```json
+   {
+     "kind": "auto",
+     "tag": "Auto",
+     "enabled": true,
+     "group": {
+       "group_type": "urltest",
+       "strategy": { "mode": "least_test", "url": "…", "interval": "15m", … },
+       "members_rule": { "include": "", "exclude": "" }
+     }
+   }
+   ```
+2. **Source редактируется, Save записывает:** текст разбирается
+   `autoGroupMemberFromRecord` и пишется тем же путём, что Save редактора
+   группы (`SubscriptionController.updateAutoMemberAt`). Так один раз
+   проверяются тег, состав и гейты, без второго пути записи.
+3. **Отказ — без записи:** не JSON, не объект, `kind` не `auto` или незнакомые
+   ключи (`unknown` читателя) → ошибка с путём ключа, запись не меняется,
+   текст в редакторе остаётся.
+4. **Поля группы — на первой вкладке, как у остальных типов.** У обычного
+   узла на Settings лежат редактируемые поля (Tag, Masquerade, Detour, TLS);
+   у OpenConnect — целая форма поверх текста Source (`OpenConnectForm`: правка
+   формы переписывает Source через `sourceWithFormBody`, Save пишет Source;
+   битый Source гасит форму подписью «The form is off: Source is not a valid
+   JSON object.»). У auto-узла Settings — форма редактора группы: Name (Tag),
+   Servers in the pool (All / Rule / Pick) с превью состава, Mode, Advanced,
+   Selected server, Sticky session, Interrupt connections. Правило то же:
+   форма правит текст Source, Save один — по Source. Секции Info (Protocol,
+   Server), Masquerade, Detour, TLS у группы не показываются.
+5. **Форма одна на два экрана.** Тело формы выносится из
+   `AutoGroupEditScreen` в общий виджет; экран создания (⋮ → Add auto node…)
+   остаётся и использует тот же виджет. Долгий тап → Edit… у auto-узла
+   открывает Node Settings, как обычный тап: место правки одно.
+6. **Вкладка JSON** у группы-правила вместо `"outbounds": []` показывает строку
+   «состав считает сборка» (EN в UI: «Members are resolved at build time»); у
+   группы с явным составом (Pick) — сырые теги выбранных членов, как сейчас
+   (`AutoSelectSpec.emitRaw`).
+7. **Превью состава не считает выключенных членов** (сборка их отбрасывает):
+   кандидаты пула (`_poolCandidates`, `folder_detail_screen.dart:873`)
+   фильтруются по `m.enabled`.
+
+## Вне задачи
+
+- Auto-узлы, приехавшие из подписки (не члены папки): их экран и запись не
+  меняются.
+- Состав из последней сборки на вкладке JSON (решение владельца — строка).
+
+## Открытые вопросы
+
+Нет (ответы владельца 26.10.2026 внесены в «Решение»: Source = хранимая
+запись; поля группы на первой вкладке, как у остальных типов; JSON — строка
+вместо пустого массива; превью без выключенных членов).
+
+## Проверка
+
+- Unit: запись → текст Source → разбор → та же запись (All, Rule, Pick;
+  `pool_badge`, `warnings`).
+- Unit/widget: правка формы на Settings переписывает Source; правка Source
+  меняет форму; битый Source гасит форму; битый JSON и незнакомый ключ ничего
+  не пишут.
+- Unit: выключенный член папки не входит в превью состава.
+- Эмулятор: папка из 3 серверов, один выключен; создать auto-узел (All) →
+  превью «2 of 2 servers»; тап → Settings с формой группы, Source не пустой,
+  JSON со строкой вместо `[]`; переименовать полем Name, Save → новое имя в
+  списке папки и в собранном конфиге; долгий тап → Edit… открывает тот же
+  экран.
