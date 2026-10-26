@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Draft (решения владельца внесены, к реализации) |
+| Статус | Ready (спека принята владельцем 26.10.2026, к реализации) |
 | Дата начала | 2026-10-26 |
 | Связанные спеки | [675](675-folder-auto-node-silent-drop-and-pool-gates.md) — предупреждения и гейты пула auto-узла; [237] — тап по члену папки открывает Node Settings; issue #171 п.9 |
 
@@ -246,7 +246,16 @@
     `//`, `/* */` и `#`; перед `json5Decode` (Config, Format, `config_io`,
     `route_config`) — только `#`, остальное разбирает пакет `json5`. Вне строк
     `#` в JSON5 не бывает ни в ключе без кавычек, ни в числе, ни в hex, поэтому
-    проход ничего, кроме комментария, не задевает. Пакет `json5` не меняется. Предупреждение «Comments will be removed» и отметка «comments
+    проход ничего, кроме комментария, не задевает. Пакет `json5` не меняется.
+
+    **Снимать, не переписывать в `//`** (решение владельца 26.10.2026). Нигде
+    JSON с комментариями на диск не попадает: тело узла пишется без них
+    (`uncommentedJson`), конфиг экрана Config — каноническим JSON
+    (`saveParsedConfig` → `_vpn.saveConfig(canonicalJson)`). Набранный текст
+    живёт только в памяти редактора Config (`configRaw = displayRaw`) — там он
+    остаётся как набран, с `#`, без замены. Замена `#` → `//` результата
+    `json5Decode` не меняет и не делается. Комментарии INI-источника (`#`, `;`)
+    и кэш тела подписки — не JSON-путь, не трогаются. Предупреждение «Comments will be removed» и отметка «comments
     removed» при вставке срабатывают и на `#`. Подсказка поля Config — «JSON or
     JSON5 (//, /* */ and # comments)». Ответ в issue по п.20 исправляется:
     прежний «rejected» был ошибкой.
@@ -264,7 +273,8 @@
 
 - Новые строки UI (английский, переводы — по `docs/l10n.md`): «Members are
   resolved at build time», «Not in INI: %s», «Edit INI», «Edit INI?» и текст
-  предупреждения, «Share .conf», «INI copied», «· %s off».
+  предупреждения, «Share .conf», «INI copied», «· %s off»; подсказка поля Config «JSON or JSON5
+  (//, /* */ and # comments)».
 - Обновить: `features/008-NODE_EDITOR` (`node-settings`, `source-editing`,
   `json-and-schema` — вкладки Settings/Source/JSON/INI у auto-узла и WG/AWG),
   `features/007-NODE_LIST` (`server-folders` — тап и меню члена папки,
