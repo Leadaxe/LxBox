@@ -321,7 +321,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
                       controller: _textController,
                       readOnly: _readOnly,
                       hint: getLocalText.s(
-                        "JSON or JSON5 (// and /* */ comments)",
+                        "JSON or JSON5 (//, /* */ and # comments)",
                       ),
                       showLineNumbers: true,
                       language: LxCodeLanguage.json,

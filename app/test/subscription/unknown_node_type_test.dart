@@ -234,6 +234,22 @@ void main() {
     expect(src['password'], 'https://not-a-comment');
   });
 
+  // §686 п.11 — `#` до конца строки снимается, как `//`; в строке остаётся.
+  test('вход с #-комментариями принимается, # в строке цел', () async {
+    final c = SubscriptionController();
+    await c.addFromInput(commented
+        .replaceFirst('// United States Central', '# United States Central')
+        .replaceFirst('"test-user",', '"test-user", # user')
+        .replaceFirst('https://not-a-comment', 'pass#word'));
+    expect(c.lastError, isNull);
+    expect(c.lastCommentsRemoved, isTrue);
+    final list = c.entries.single.list as UserServer;
+    expect(list.rawBody, isNot(contains('United States')));
+    expect(list.rawBody, isNot(contains('# user')));
+    final src = jsonDecode(list.nodes.single.rawSource) as Map;
+    expect(src['password'], 'pass#word');
+  });
+
   test('без комментариев флаг не ставится', () async {
     final c = SubscriptionController();
     await c.addFromInput(body);
@@ -244,6 +260,8 @@ void main() {
     expect(uncommentedJson('{"a": "//x"}'), isNull);
     expect(uncommentedJson('vless://u@h:1#t // x'), isNull);
     expect(uncommentedJson('{"a": 1 // c\n}'), '{"a": 1\n}');
+    expect(uncommentedJson('{"a": "#x"}'), isNull);
+    expect(uncommentedJson('{"a": 1 # c\n}'), '{"a": 1\n}');
   });
 
   test('узел подписки незнакомого типа по-прежнему не создаётся', () {

@@ -2820,8 +2820,8 @@
   "JSON must be an outbound object with \"type\" or a document with \"endpoints\"/\"outbounds\"": {
     "value": "JSON 必须是带「type」的出站对象，或包含「endpoints」/「outbounds」的文档"
   },
-  "JSON or JSON5 (// and /* */ comments)": {
-    "value": "JSON 或 JSON5（支持 // 与 /* */ 注释）"
+  "JSON or JSON5 (//, /* */ and # comments)": {
+    "value": "JSON 或 JSON5（支持 //、/* */ 与 # 注释）"
   },
   "JSON outbound": {
     "value": "JSON outbound"

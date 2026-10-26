@@ -3066,8 +3066,8 @@
   "JSON must be an outbound object with \"type\" or a document with \"endpoints\"/\"outbounds\"": {
     "value": "JSON должен быть объектом outbound с «type» или документом с «endpoints»/«outbounds»"
   },
-  "JSON or JSON5 (// and /* */ comments)": {
-    "value": "JSON или JSON5 (комментарии // и /* */)"
+  "JSON or JSON5 (//, /* */ and # comments)": {
+    "value": "JSON или JSON5 (комментарии //, /* */ и #)"
   },
   "JSON outbound": {
     "value": "JSON outbound"

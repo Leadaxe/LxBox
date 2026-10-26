@@ -42,7 +42,8 @@ The feature protects three principles:
   synchronous formatting"; invalid — manual check (Paste from clipboard with
   garbage). **Mutation:** a crash on invalid text.
 - **P2. JSON5 is accepted, canonical JSON goes to the core.** `//` `/* */`
-  comments and trailing commas are allowed; compact JSON is saved. **Witness:**
+  comments, `#` to the end of the line (the core reads it too) and trailing
+  commas are allowed; compact JSON is saved. **Witness:**
   units "canonicalization accepts JSON5 comments", "background canonicalization
   matches synchronous canonicalization". **Mutation:** text with comments goes
   to the core.

@@ -2057,7 +2057,7 @@ such an edit survives a rebuild.
 
 | Element | What it does |
 |---|---|
-| Editor field | JSON with indents, line numbers and sticky block headers. Accepts JSON5: `//` and `/* */` comments. |
+| Editor field | JSON with indents, line numbers and sticky block headers. Accepts JSON5: `//` and `/* */` comments, and `#` to the end of the line, as the core reads it. |
 | Find | Searches the text; Previous match and Next match move between matches. |
 | Copy | Copies the whole text. |
 | Save | Checks the syntax and writes the config. |

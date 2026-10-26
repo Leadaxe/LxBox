@@ -78,7 +78,8 @@ answer.
   the verdict. A node disabled by the person is not enabled by an edit (P9).
 - **A folder member and a standalone server** — transactionally: text
   without a node is not written, the record stays as it was (P10).
-- **Comments** `//` and `/* */` are stripped before parsing; a custom body
+- **Comments** `//`, `/* */` and `#` (to the end of the line, outside strings)
+  are stripped before parsing; a custom body
   type unknown to the application is accepted with a warning; a body without
   `type` — refusal (P12).
 - After writing, the screen re-reads the node: Source — the written text,
