@@ -27,6 +27,7 @@ while typing.
 | Settings | Protocol, Server (read-only); Tag with an emoji palette; Detour server with path preview; TLS (node-level overrides of the TLS Fragmentation options, written immediately); Skip Tailscale presets; Incoming connections from this tunnel |
 | Source | the source text, editable; a caption about the source kind |
 | JSON | the body the core will receive, read-only, highlighted; Copy JSON; Edit JSON |
+| INI | only for a WireGuard / AmneziaWG node — the node as a `.conf`, read-only, highlighted; Copy, Share .conf (file name from the tag); Edit INI; "Not in INI: …" under the text when the body has keys the `.conf` cannot carry |
 | Network | only for a Tailscale node — tailnet devices, Exit node choice |
 
 **Auto node of a folder** (a member `kind: auto`): Settings holds the group
@@ -119,4 +120,4 @@ valid JSON object." This holds for every way the screen is opened.
 | 11 | [626](../../../tasks/626-unsaved-changes-everywhere.md) | Implemented | "Unsaved changes" dialog on leaving with an edited Tag or Source |
 | 12 | [636](../../../tasks/636-tls-settings-per-node-folder-subscription.md) | Implemented | TLS section between Detour and Skip presets |
 | 13 | [656](../../../tasks/656-contract-1130-tunnel-ingress.md) | In progress | Skip Tailscale presets only for Tailscale; Incoming connections from this tunnel |
-| 14 | [686](../../../tasks/686-folder-auto-node-source-tab.md) | In progress | Auto node of a folder: group form on Settings over the Source text |
+| 14 | [686](../../../tasks/686-folder-auto-node-source-tab.md) | In progress | Auto node of a folder: group form on Settings over the Source text; INI tab of a WireGuard / AmneziaWG node |

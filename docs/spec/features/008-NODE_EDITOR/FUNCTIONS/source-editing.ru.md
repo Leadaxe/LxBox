@@ -26,7 +26,8 @@ WireGuard INI или тело sing-box — и сохранить его так, 
 | ссылка (одна строка с `://`) | «Link: the tag goes into its fragment on save.» | тег во фрагмент `#…`, запись |
 | WireGuard INI | «WireGuard config: saved as is. The tag is stored separately.» | текст как есть, тег — полем записи |
 
-Кнопка **Edit JSON** на вкладке JSON.
+Кнопка **Edit JSON** на вкладке JSON; **Edit INI** — на вкладке INI узла
+WireGuard / AmneziaWG.
 
 ## Входы / Выходы
 
@@ -68,6 +69,17 @@ WireGuard INI или тело sing-box — и сохранить его так, 
   предупреждение «Edit JSON?» (приложение перестаёт проверять узел, проверяет
   только ядро на Save, «There is no way back to a link»); Continue заменяет
   источник телом модели и уводит на Source («Source replaced with JSON»).
+- **Edit INI** (WireGuard / AmneziaWG). У INI-источника — переход на
+  Source. У ссылки и JSON — предупреждение «Edit INI?» («The source will be
+  replaced by this INI. The tag and Detour stay as they are.», плюс «Not in
+  INI: …», если в теле есть ключи, которых `.conf` не несёт); Continue
+  заменяет источник текстом вкладки INI и уводит на Source («Source
+  replaced with INI»). Текст INI строится обратным ходом таблицы переноса
+  `conf` реестра — той же, что разбирает `.conf` и, через общие имена
+  параметров, ссылку: из ссылки ничего не теряется, каждый пир тела — своя
+  `[Peer]`, маскировка (`Ip`/`Id`/`Ib`) и ключи AmneziaWG переносятся.
+  Теряться могут только ключи тела, которых в таблице нет, и они
+  перечисляются.
 - **Вердикт ядра** снимается, только если тело узла действительно
   изменилось; узел при этом включается. Правка имени и пробелов вердикт не
   трогает. Выключенный человеком узел правкой не включается (P9).
@@ -107,4 +119,4 @@ WireGuard INI или тело sing-box — и сохранить его так, 
 | 9 | [478F](../../../tasks/478F-core-rejected-node-auto-disable/spec.md) | Released в v2.25.0 | Правка тела снимает вердикт ядра |
 | 10 | [237](../../../tasks/237-folder-member-node-settings.md) | Реализовано | Правка члена папки транзакционна |
 | 11 | [603](../../../tasks/603-subscription-and-own-server-bugs.md) | Реализовано | Одиночный сервер не сохраняет источник без узла |
-| 12 | [686](../../../tasks/686-folder-auto-node-source-tab.md) | В работе | Source auto-узла = его хранимая запись, редактируется |
+| 12 | [686](../../../tasks/686-folder-auto-node-source-tab.md) | В работе | Source auto-узла = его хранимая запись, редактируется; Edit INI |

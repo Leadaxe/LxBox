@@ -283,6 +283,14 @@ labelled AmneziaWG.
 
 If the source sets `I1` itself, the section is off: `I1` takes priority.
 
+The **INI** tab of a WireGuard or AmneziaWG server shows it as a `.conf`
+file, whatever the source: link, `.conf` or JSON. Copy puts the text on the
+clipboard, Share .conf sends it as a file named after the tag. Every peer
+gets its own `[Peer]` section; masquerade and AmneziaWG keys are kept.
+A JSON body can hold keys a `.conf` has no place for; the tab lists them
+under the text as "Not in INI". **Edit INI** makes this text the server's
+source and opens Source; the tag and the detour server stay as they are.
+
 ### Subscription — a provider's server list that updates itself
 
 A subscription is a link from a VPN provider that stands for a whole list

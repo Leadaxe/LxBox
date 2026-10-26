@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../services/tag_resolver.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/codec/source_record.dart';
@@ -30,6 +33,7 @@ import '../services/tailscale_network.dart';
 import '../services/l10n/locale_controller.dart';
 import '../services/warp/warp_endpoint_picker.dart';
 import '../services/wireguard/masquerade_source.dart';
+import '../services/wireguard/wg_ini_export.dart';
 import '../widgets/masquerade_fields.dart';
 import '../widgets/tls_policy_tiles.dart';
 import '../widgets/auto_group_form.dart';
@@ -42,7 +46,8 @@ import 'subscriptions_screen/entry_warnings.dart';
 /// **Source** (§455 — `origin.raw` записи как есть, единственное место
 /// правки; Save в AppBar сохраняет его), **JSON** (только чтение: то, что
 /// уйдёт в ядро; кнопка Edit после предупреждения заменяет источник этим
-/// JSON и уводит в Source) и **Diagnostics** (§392). Ручная ⚙-detour-пометка
+/// JSON и уводит в Source), у WireGuard/AmneziaWG — **INI** (§686 п. 9: узел
+/// в виде `.conf`, Edit INI заменяет им источник) и **Diagnostics** (§392). Ручная ⚙-detour-пометка
 /// убрана — detour структурный (§091/G2a), ⚙ остаётся как обычный эмодзи.
 ///
 /// §455 — узел, чей источник JSON (`origin.kind: json`), уходит в конфиг
@@ -74,8 +79,8 @@ class NodeSettingsScreen extends StatefulWidget {
   final int initialTab;
 
   /// Индекс вкладки Diagnostics: Settings, Source, JSON, Diagnostics. У узла
-  /// Tailscale перед Diagnostics стоит Network (§581) — экран сдвигает индекс
-  /// сам.
+  /// Tailscale перед Diagnostics стоит Network (§581), у WireGuard/AmneziaWG
+  /// — INI (§686 п. 9): экран сдвигает индекс сам.
   static const diagnosticsTabIndex = 3;
 
   @override
@@ -131,6 +136,13 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
   /// §581 — узел Tailscale: есть вкладка Network.
   bool _isTailscale = false;
 
+  /// §686 п. 9 — узел WireGuard/AmneziaWG: есть вкладка INI.
+  bool _isWireguard = false;
+
+  /// §686 п. 9 — `.conf` вкладки INI: обратный ход таблицы `conf` реестра
+  /// по телу вкладки JSON; `lost` — ключи тела, которых в `.conf` нет.
+  IniEmitResult? _ini;
+
   /// §623 — пул доменов маскировки (тот же, что у визарда WARP) для поля
   /// домена секции Masquerade узла WireGuard/AmneziaWG.
   WarpEndpointPicker? _picker;
@@ -145,10 +157,12 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     final first = _member?.node ??
         (widget.entry.list.nodes.isEmpty ? null : widget.entry.list.nodes.first);
     _isTailscale = first is TailscaleSpec;
-    final count = _isTailscale ? 5 : 4;
+    // §686 п. 9 — у WireGuard/AmneziaWG вкладка INI после JSON.
+    _isWireguard = first is WireguardSpec;
+    final count = 4 + (_isTailscale ? 1 : 0) + (_isWireguard ? 1 : 0);
     var initial = widget.initialTab.clamp(0, 3);
-    if (_isTailscale && initial == NodeSettingsScreen.diagnosticsTabIndex) {
-      initial = 4;
+    if (initial == NodeSettingsScreen.diagnosticsTabIndex) {
+      initial = count - 1;
     }
     _tabs = TabController(length: count, vsync: this, initialIndex: initial);
     unawaited(_load());
@@ -253,12 +267,17 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     final raw = _containerRaw;
     _sourceCtrl.text = raw;
     _originKind = originKindOf(raw);
-    _jsonCtrl.text = const JsonEncoder.withIndent('  ').convert(
-        node is AutoSelectSpec && member != null
-            ? autoGroupJsonPreview(node) // §686
-            : sourceIsSingbox(raw) && node.rawSource.trimLeft().startsWith('{')
-                ? jsonDecode(node.rawSource)
-                : node.emit(TemplateVars.empty).map);
+    final Object? preview = node is AutoSelectSpec && member != null
+        ? autoGroupJsonPreview(node) // §686
+        : sourceIsSingbox(raw) && node.rawSource.trimLeft().startsWith('{')
+            ? jsonDecode(node.rawSource)
+            : node.emit(TemplateVars.empty).map;
+    _jsonCtrl.text = const JsonEncoder.withIndent('  ').convert(preview);
+    // §686 п. 9 — `.conf` из того же тела, что показывает вкладка JSON: у
+    // тела sing-box JSON ключи вне таблицы переноса уходят в «Not in INI».
+    _ini = node is WireguardSpec && preview is Map
+        ? wireguardIniOf(Map<String, dynamic>.from(preview))
+        : null;
     _autoLastGroup = null;
     _tagCtrl.text = _originalTag;
 
@@ -622,6 +641,64 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     _tabs.animateTo(_kSourceTab);
   }
 
+  /// §686 п. 9 — кнопка Edit INI на вкладке INI. У INI-источника менять
+  /// нечего — переход в Source. Иначе предупреждение (с ключами, которых в
+  /// `.conf` нет), источник заменяется текстом вкладки и экран уводит в
+  /// Source. Тег и Detour — поля записи, замена их не трогает.
+  Future<void> _editIni() async {
+    if (_originKind == 'wg_ini') {
+      _tabs.animateTo(_kSourceTab);
+      return;
+    }
+    final ini = _ini;
+    if (ini == null) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(getLocalText.s("Edit INI?")),
+        content: Text([
+          getLocalText.s(
+              "The source will be replaced by this INI. The tag and Detour stay as they are."),
+          if (ini.lost.isNotEmpty)
+            getLocalText.s("Not in INI: %s", ini.lost.join(', ')),
+        ].join('\n\n')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(getLocalText.s("Cancel")),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(getLocalText.s("Continue")),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final stored = await _store(ini.text,
+        nameHint: _originalTag,
+        savedMessage: () => getLocalText.s("Source replaced with INI"));
+    if (!stored || !mounted) return;
+    _tabs.animateTo(_kSourceTab);
+  }
+
+  /// §686 п. 9 — Share `.conf`: файл во временном каталоге, имя от тега.
+  Future<void> _shareIni() async {
+    final ini = _ini;
+    if (ini == null) return;
+    final name = wireguardIniFileName(_originalTag);
+    try {
+      final dir = await getTemporaryDirectory();
+      final path = '${dir.path}/$name';
+      await File(path).writeAsString(ini.text);
+      await SharePlus.instance.share(ShareParams(
+        files: [XFile(path, mimeType: 'text/plain', name: name)],
+      ));
+    } catch (e) {
+      _snack(formatUserError(e).render());
+    }
+  }
+
   void _snack(String text) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
@@ -696,6 +773,8 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
               Tab(text: getLocalText.s("Source")),
               // l10n-exempt: format name, locale-invariant
               const Tab(text: 'JSON'),
+              // l10n-exempt: format name, locale-invariant
+              if (_isWireguard) const Tab(text: 'INI'),
               if (_isTailscale) Tab(text: getLocalText.s("Network")),
               NodeDiagnosticsTabLabel(warnings: _notifications),
             ],
@@ -709,6 +788,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
                   _buildSettingsTab(theme),
                   _buildSourceTab(theme),
                   _buildJsonTab(theme),
+                  if (_isWireguard) _buildIniTab(theme),
                   if (_isTailscale)
                     TailscaleNetworkTab(
                       liveTag: TagResolver.displayTag(
@@ -1159,6 +1239,67 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
               icon: const Icon(Icons.edit_outlined, size: 18),
               label: Text(getLocalText.s("Edit JSON")),
               onPressed: () => unawaited(_editJson()),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// §686 п. 9 — вкладка INI: только чтение — узел в виде `.conf`. Copy и
+  /// Share `.conf` — в строке кнопок над рамкой, как Copy у JSON; под текстом
+  /// — ключи тела, которых в `.conf` нет, и кнопка Edit INI ([_editIni]).
+  Widget _buildIniTab(ThemeData theme) {
+    final ini = _ini;
+    final lost = ini?.lost ?? const <String>[];
+    return ListView(
+      padding:
+          EdgeInsets.fromLTRB(16, 16, 16, MediaQuery.of(context).padding.bottom + 24),
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: LxJsonView(
+            text: ini?.text ?? '',
+            height: 420,
+            language: LxCodeLanguage.ini,
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.copy, size: 16),
+                tooltip: getLocalText.s("Copy"),
+                visualDensity: VisualDensity.compact,
+                onPressed: ini == null
+                    ? null
+                    : () {
+                        Clipboard.setData(ClipboardData(text: ini.text));
+                        _snack(getLocalText.s("INI copied"));
+                      },
+              ),
+              IconButton(
+                icon: const Icon(Icons.share, size: 16),
+                tooltip: getLocalText.s("Share .conf"),
+                visualDensity: VisualDensity.compact,
+                onPressed: ini == null ? null : () => unawaited(_shareIni()),
+              ),
+            ],
+          ),
+        ),
+        if (lost.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: Text(
+              getLocalText.s("Not in INI: %s", lost.join(', ')),
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+          ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              icon: const Icon(Icons.edit_outlined, size: 18),
+              label: Text(getLocalText.s("Edit INI")),
+              onPressed: ini == null ? null : () => unawaited(_editIni()),
             ),
           ),
         ),

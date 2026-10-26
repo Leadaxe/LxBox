@@ -2096,6 +2096,15 @@
   "Edit JSON?": {
     "value": "编辑 JSON？"
   },
+  "Edit INI": {
+    "value": "编辑 INI"
+  },
+  "Edit INI?": {
+    "value": "编辑 INI？"
+  },
+  "Not in INI: %s": {
+    "value": "INI 中没有：%s"
+  },
   "Edit auto node": {
     "value": "编辑自动节点"
   },
@@ -2816,6 +2825,9 @@
   },
   "JSON copied": {
     "value": "JSON 已复制"
+  },
+  "INI copied": {
+    "value": "INI 已复制"
   },
   "JSON must be an outbound object with \"type\" or a document with \"endpoints\"/\"outbounds\"": {
     "value": "JSON 必须是带「type」的出站对象，或包含「endpoints」/「outbounds」的文档"
@@ -4426,6 +4438,9 @@
   "Share": {
     "value": "分享"
   },
+  "Share .conf": {
+    "value": "分享 .conf"
+  },
   "Share %d events (JSON)": {
     "value": {
       "other": "分享 %d 条事件（JSON）"
@@ -4525,6 +4540,9 @@
   },
   "Source replaced with JSON": {
     "value": "来源已替换为 JSON"
+  },
+  "Source replaced with INI": {
+    "value": "来源已替换为 INI"
   },
   "Source: local file": {
     "value": "来源：本地文件"
@@ -4871,6 +4889,9 @@
   },
   "The source will be replaced by this JSON and the node will go to the core as is. The app stops checking such a node: only the core validates it on save, and a mistake can leave it unable to connect. There is no way back to a link. Edit the source instead when you can.": {
     "value": "来源将被替换为此 JSON，节点将原样发送给内核。应用不再检查这样的节点：只有内核会在保存时校验它，出错可能导致节点无法连接。无法再变回链接。如有可能，请改为编辑来源。"
+  },
+  "The source will be replaced by this INI. The tag and Detour stay as they are.": {
+    "value": "来源将被替换为此 INI。标签和 Detour 保持不变。"
   },
   "The whole element as the provider sent it": {
     "value": "服务商下发的完整原始元素"

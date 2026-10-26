@@ -26,7 +26,8 @@ core sees is derived from it and is not stored.
 | link (one line with `://`) | "Link: the tag goes into its fragment on save." | tag into the `#…` fragment, write |
 | WireGuard INI | "WireGuard config: saved as is. The tag is stored separately." | text as is, tag as a record field |
 
-The **Edit JSON** button is on the JSON tab.
+The **Edit JSON** button is on the JSON tab; **Edit INI** — on the INI tab
+of a WireGuard / AmneziaWG node.
 
 ## Inputs / Outputs
 
@@ -73,6 +74,17 @@ answer.
   the core checks on Save, "There is no way back to a link"); Continue
   replaces the source with the model's body and goes to Source ("Source
   replaced with JSON").
+- **Edit INI** (WireGuard / AmneziaWG). For an INI source — navigation to
+  Source. For a link and JSON — the warning "Edit INI?" ("The source will
+  be replaced by this INI. The tag and Detour stay as they are.", plus
+  "Not in INI: …" when the body has keys the `.conf` cannot carry);
+  Continue replaces the source with the text of the INI tab and goes to
+  Source ("Source replaced with INI"). The INI text is built by reversing
+  the registry's `conf` transfer table — the same table that parses a
+  `.conf` and, through shared parameter names, a link: nothing from a link
+  is lost, every peer of the body becomes its own `[Peer]`, masquerade
+  (`Ip`/`Id`/`Ib`) and AmneziaWG keys are carried over. Only body keys
+  missing from the table can be lost, and they are listed.
 - **The core's verdict** is cleared only if the node body really changed; the
   node is re-enabled then. Editing the name and whitespace does not touch
   the verdict. A node disabled by the person is not enabled by an edit (P9).
@@ -113,4 +125,4 @@ answer.
 | 9 | [478F](../../../tasks/478F-core-rejected-node-auto-disable/spec.md) | Released in v2.25.0 | Editing the body clears the core's verdict |
 | 10 | [237](../../../tasks/237-folder-member-node-settings.md) | Implemented | Editing a folder member is transactional |
 | 11 | [603](../../../tasks/603-subscription-and-own-server-bugs.md) | Implemented | A standalone server does not save a source without a node |
-| 12 | [686](../../../tasks/686-folder-auto-node-source-tab.md) | In progress | Source of an auto node = its stored record, editable |
+| 12 | [686](../../../tasks/686-folder-auto-node-source-tab.md) | In progress | Source of an auto node = its stored record, editable; Edit INI |

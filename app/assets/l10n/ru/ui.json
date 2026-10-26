@@ -2327,6 +2327,15 @@
   "Edit JSON?": {
     "value": "Править JSON?"
   },
+  "Edit INI": {
+    "value": "Править INI"
+  },
+  "Edit INI?": {
+    "value": "Править INI?"
+  },
+  "Not in INI: %s": {
+    "value": "Нет в INI: %s"
+  },
   "Edit auto node": {
     "value": "Настройка авто-узла"
   },
@@ -3062,6 +3071,9 @@
   },
   "JSON copied": {
     "value": "JSON скопирован"
+  },
+  "INI copied": {
+    "value": "INI скопирован"
   },
   "JSON must be an outbound object with \"type\" or a document with \"endpoints\"/\"outbounds\"": {
     "value": "JSON должен быть объектом outbound с «type» или документом с «endpoints»/«outbounds»"
@@ -4693,6 +4705,9 @@
   "Share": {
     "value": "Поделиться"
   },
+  "Share .conf": {
+    "value": "Поделиться .conf"
+  },
   "Share %d events (JSON)": {
     "value": {
       "one": "Поделиться %d событием (JSON)",
@@ -4795,6 +4810,9 @@
   },
   "Source replaced with JSON": {
     "value": "Источник заменён на JSON"
+  },
+  "Source replaced with INI": {
+    "value": "Источник заменён на INI"
   },
   "Source: local file": {
     "value": "Источник: локальный файл"
@@ -5144,6 +5162,9 @@
   },
   "The source will be replaced by this JSON and the node will go to the core as is. The app stops checking such a node: only the core validates it on save, and a mistake can leave it unable to connect. There is no way back to a link. Edit the source instead when you can.": {
     "value": "Источник заменится этим JSON, и узел будет уходить в ядро как есть. Приложение перестанет проверять такой узел: его проверяет только ядро при сохранении, и ошибка может оставить узел без соединения. Обратно в ссылку узел не превратится. Если можете, правьте источник."
+  },
+  "The source will be replaced by this INI. The tag and Detour stay as they are.": {
+    "value": "Источник заменится этим INI. Тег и Detour останутся прежними."
   },
   "The whole element as the provider sent it": {
     "value": "Элемент целиком, как прислал провайдер"
