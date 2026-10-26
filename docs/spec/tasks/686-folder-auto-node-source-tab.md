@@ -171,6 +171,24 @@
     [Copy] [Share .conf]   ✎ Edit INI
    ```
 
+10. **Несколько `[Peer]` в INI — допустимы** (слово владельца 26.10.2026).
+    Сейчас реестр (`wireguard.json`, `mappers.conf.ini_dialect.sections.Peer`:
+    `repeat: first_only`) берёт первую секцию, остальные снимает с кодом
+    `wgconf_extra_peer_dropped`. Ядро это не требует: у endpoint `wireguard`
+    `peers` — массив, трафик разводится по `allowed_ips`; модель LxBox тоже
+    несёт список (`WireguardSpec.peers`). Станет:
+    - каждая секция `[Peer]` → свой элемент `peers[]` с теми же параметрами
+      таблицы `conf` (PublicKey, PresharedKey, Endpoint, AllowedIPs,
+      PersistentKeepalive, Reserved …); `[Interface]` — один, как сейчас;
+    - код `wgconf_extra_peer_dropped` больше не выдаётся для INI;
+    - ссылка (`wireguard://`, `awg://`) остаётся с одним пиром — у формата
+      ссылки второго места нет;
+    - вкладка INI (п. 9) выводит все пиры тела; у тела с N пирами Edit INI
+      ничего не теряет.
+    - Норма меняется в контракте (реестр + движок разбора обеих сторон + кейс
+      корпуса `conf/wireguard/multi_peer`): ведёт лаунчер, задача ему
+      поставлена; LxBox реализует свою сторону после синка контракта.
+
 ## Вне задачи
 
 - Auto-узлы, приехавшие из подписки (не члены папки): их экран и запись не
@@ -202,5 +220,7 @@
   source…» и «Update»; подписка — оба пункта на месте.
 - Unit: ссылка WG/AWG → INI вкладки → разбор INI → то же тело узла; тело JSON
   с ключом вне таблицы переноса → ключ в «Not in INI».
+- Unit: INI с двумя `[Peer]` → `peers` из двух элементов, без
+  `wgconf_extra_peer_dropped`; вкладка INI выводит оба (после синка контракта).
 - Эмулятор: AWG-узел из ссылки → вкладка INI → Edit INI → предупреждение →
   Source с INI, Detour и Tag на Settings не изменились.
