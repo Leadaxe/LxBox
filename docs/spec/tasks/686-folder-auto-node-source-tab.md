@@ -186,11 +186,34 @@
       ссылки второго места нет;
     - вкладка INI (п. 9) выводит все пиры тела; у тела с N пирами Edit INI
       ничего не теряет.
+    - **Норма 1.1.140 (лаунчер, e1cefc3c, `TASKS_LXBOX.md` §136 «Ответ
+      лаунчера»), что делает наша сторона после синка
+      (`sync_contract.sh --to e1cefc3c`):**
+      - движок INI (`engine/ini_space.dart`): повторяемая секция `[Peer]` —
+        список экземпляров, каждый → свой `peers[]` в порядке файла;
+      - секция без обязательного ключа снимается одна кодом
+        `wgconf_peer_dropped` {index, missing}, путь `peer.<index>` (дедуп по
+        паре код+путь); экземпляр, отказавший не по `required`, — кодом самого
+        отказа + index;
+      - новый атрибут тела `peers.on_item_failure: {action: drop_item, code:
+        wg_peer_dropped, core_rejects: true}` (`schema/registry_body.schema.json`):
+        отказ внутри элемента (drop_node или required) снимает элемент, его коды
+        заменяются одним `wg_peer_dropped` {index, reason}, путь `peers[<i>]`
+        (индекс входа); не уцелел ни один — прежний отказ узла; единственный
+        элемент не изолируется. Действует на всех входах, включая тело sing-box
+        JSON;
+      - секция с ini-формой без своего `ini_dialect` берёт диалект соседней
+        секции протокола — у нас это уже так (`_withIniDialect`), теперь норма
+        схемы;
+      - корпус: `body/wgconf/ini_multi_peer` (бывший `ini_extra_peer`),
+        `ini_multi_peer_awg`, `ini_multi_peer_missing_key`,
+        `ini_multi_peer_bad_key`, `uri/wireguard/awg_conf_base64_multi_peer`;
+      - `wgconf_extra_peer_dropped` снят; старые записи с ним читаются молча.
     - До синка контракта вкладка INI уже выводит все пиры, а Edit INI у тела с
       N > 1 пирами предупреждает, что при разборе останется первый (имена
       отброшенных — по `Endpoint`). После синка это предупреждение снимается.
     - Норма меняется в контракте (реестр + движок разбора обеих сторон + кейс
-      корпуса `conf/wireguard/multi_peer`): ведёт лаунчер (запрос — `contract/TASKS_LXBOX.md` §136 в репо лаунчера, e41d2f74); LxBox реализует свою сторону после синка контракта.
+      корпуса `conf/wireguard/multi_peer`): ведёт лаунчер (запрос — `contract/TASKS_LXBOX.md` §136 в репо лаунчера, e41d2f74; сделано в 1.1.140, e1cefc3c); LxBox реализует свою сторону после синка контракта.
 
 ## Точки входа
 
