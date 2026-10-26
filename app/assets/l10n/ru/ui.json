@@ -2259,6 +2259,21 @@
   "Domain resolver": {
     "value": "Резолвер домена"
   },
+  "As subscription (%s)": {
+    "value": "Как в подписке (%s)"
+  },
+  "As subscription (off)": {
+    "value": "Как в подписке (выкл.)"
+  },
+  "As subscription — every %s": {
+    "value": "Как в подписке — каждые %s"
+  },
+  "As subscription — server sets none, every %s": {
+    "value": "Как в подписке — сервер не задаёт, каждые %s"
+  },
+  "As subscription — server disables auto-update": {
+    "value": "Как в подписке — сервер отключил автообновление"
+  },
   "Don't auto-update": {
     "value": "Не обновлять автоматически"
   },
@@ -3341,12 +3356,6 @@
   },
   "Never": {
     "value": "Никогда"
-  },
-  "Never (respect server)": {
-    "value": "Никогда (по указанию сервера)"
-  },
-  "Never (respect server) — manual only unless server sets one": {
-    "value": "Никогда (по указанию сервера) — только вручную, если сервер не задаст интервал"
   },
   "Never sleep (recommended)": {
     "value": "Никогда не засыпать (рекомендуется)"

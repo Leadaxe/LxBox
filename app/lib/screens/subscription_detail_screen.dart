@@ -1055,9 +1055,10 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
 
   Future<void> _showIntervalPicker() async {
     final list = widget.entry.list as SubscriptionServers;
-    // §129 — -1 = «Don't auto-update» (никогда, игнор серверного интервала);
-    //          0 = «Never (respect server)» (сами нет, но сервер может задать).
-    final presets = <int>[-1, 0, 1, 3, 6, 12, 24, 48, 72, 168];
+    // §129/§685 — 0 = «As subscription» (серверный интервал, первым пунктом);
+    //             -1 = «Don't auto-update»; дальше ручные значения — сервер
+    //             их не перезаписывает.
+    final presets = <int>[0, -1, 1, 3, 6, 12, 24, 48, 72, 168];
     final chosen = await showDialog<int>(
       context: context,
       builder: (ctx) => SimpleDialog(
@@ -1075,7 +1076,8 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
                   const SizedBox(width: 8),
                   Text(switch (h) {
                     < 0 => getLocalText.s("Don't auto-update"),
-                    0 => getLocalText.s("Never (respect server)"),
+                    0 => asSubscriptionIntervalLabel(
+                        list.meta?.updateIntervalHours),
                     _ => getLocalText.s("%1\$dh (%2\$s)", h, intervalHuman(h)),
                   }),
                 ],

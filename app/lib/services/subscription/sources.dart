@@ -391,15 +391,24 @@ int? parseUpdateIntervalHeader(String? raw) {
   return n == null || n < 0 ? null : n;
 }
 
-/// §129/§603 — интервал подписки после успешного фетча.
-///   -1 = «Don't auto-update» пользователя: сервер не переубедит;
-///   < -1 пользователь выставить не может — это отрицательное значение,
-///        принятое от сервера до §603; лечим: серверное (валидное) или 24;
-///   ≥ 0 — серверное значение, если есть, иначе текущее.
-int nextUpdateIntervalHours(int current, int? server) {
-  if (current == -1) return current;
-  if (current < -1) return server ?? 24;
-  return server ?? current;
+/// §685 — интервал по умолчанию, когда подписка в режиме «As subscription»,
+/// а сервер `profile-update-interval` не прислал.
+const int kDefaultSubscriptionUpdateIntervalHours = 24;
+
+/// §129/§603/§685 — настройка интервала после успешного фетча. Выбор
+/// пользователя (`-1`, `0` = «As subscription», `> 0`) заголовок сервера не
+/// перезаписывает; серверное значение живёт в `meta.updateIntervalHours`.
+/// `< -1` пользователь выставить не может — это отрицательное значение,
+/// принятое от сервера до §603; лечим в «As subscription».
+int nextUpdateIntervalHours(int current) => current < -1 ? 0 : current;
+
+/// §685 — действующий интервал: его читают автообновление, GC отметок и UI.
+///   `setting == 0` («As subscription») — серверное значение (`0` = сервер
+///   отключил автообновление), без заголовка — 24 ч;
+///   иначе `setting` (`-1` = «Don't auto-update», `> 0` = выбор пользователя).
+int effectiveUpdateIntervalHours(int setting, int? server) {
+  if (setting != 0) return setting;
+  return server ?? kDefaultSubscriptionUpdateIntervalHours;
 }
 
 SubscriptionMeta? _metaFromHeaders(Map<String, String> h) {

@@ -141,7 +141,7 @@ User-Agent и, по желанию, HWID-заголовками.
 | Send HWID | Настройки → Subscriptions | вкл/выкл | вкл (§658) |
 | HWID · `x-hwid` | там же, кнопка Regenerate | UUIDv4, генерируется при первом показе | — |
 | `x-device-os` / `x-ver-os` / `x-device-model` | там же | строка; пусто = значение устройства | `android` / версия ОС / модель |
-| Update interval (на подписке) | Подписка → Settings | `-1` Don't auto-update · `0` Never (respect server) · 1/3/6/12/24/48/72/168 ч | 24 ч (онлайн), `-1` (файл) |
+| Update interval (на подписке) | Подписка → Settings | `0` As subscription · `-1` Don't auto-update · 1/3/6/12/24/48/72/168 ч | `0` (онлайн), `-1` (файл) |
 | On update (на подписке) | Подписка → Settings; скрыта при «Auto-restart VPN on settings change» | Rebuild · Reload · Do nothing | Rebuild |
 | Custom identity (на подписке) | Подписка → Settings → Fetch identity | Default / Custom (свой UA, HWID, device-meta) | Default |
 | Import rules (на подписке) | Подписка → Filters | список правил + общий тумблер | пусто, тумблер вкл |

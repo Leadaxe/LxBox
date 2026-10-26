@@ -29,21 +29,28 @@ void main() {
     });
   });
 
-  group('§603 nextUpdateIntervalHours', () {
-    test('-1 пользователя сервер не переубедит', () {
-      expect(nextUpdateIntervalHours(-1, 12), -1);
-      expect(nextUpdateIntervalHours(-1, null), -1);
+  group('§685 nextUpdateIntervalHours', () {
+    test('выбор пользователя фетч не меняет', () {
+      expect(nextUpdateIntervalHours(-1), -1);
+      expect(nextUpdateIntervalHours(0), 0);
+      expect(nextUpdateIntervalHours(12), 12);
     });
 
-    test('записанное сервером < -1 лечится', () {
-      expect(nextUpdateIntervalHours(-7, null), 24);
-      expect(nextUpdateIntervalHours(-7, 6), 6);
+    test('записанное сервером до §603 < -1 → «As subscription»', () {
+      expect(nextUpdateIntervalHours(-7), 0);
+    });
+  });
+
+  group('§685 effectiveUpdateIntervalHours', () {
+    test('«As subscription»: серверное, без заголовка 24', () {
+      expect(effectiveUpdateIntervalHours(0, 3), 3);
+      expect(effectiveUpdateIntervalHours(0, 0), 0);
+      expect(effectiveUpdateIntervalHours(0, null), 24);
     });
 
-    test('≥ 0: серверное, иначе текущее', () {
-      expect(nextUpdateIntervalHours(24, 12), 12);
-      expect(nextUpdateIntervalHours(24, null), 24);
-      expect(nextUpdateIntervalHours(0, 5), 5);
+    test('ручное и -1 сильнее сервера', () {
+      expect(effectiveUpdateIntervalHours(12, 3), 12);
+      expect(effectiveUpdateIntervalHours(-1, 3), -1);
     });
   });
 }

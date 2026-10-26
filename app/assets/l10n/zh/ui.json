@@ -2031,6 +2031,21 @@
   "Domain resolver": {
     "value": "域名解析器"
   },
+  "As subscription (%s)": {
+    "value": "按订阅（%s）"
+  },
+  "As subscription (off)": {
+    "value": "按订阅（关闭）"
+  },
+  "As subscription — every %s": {
+    "value": "按订阅——每 %s"
+  },
+  "As subscription — server sets none, every %s": {
+    "value": "按订阅——服务器未指定，每 %s"
+  },
+  "As subscription — server disables auto-update": {
+    "value": "按订阅——服务器已关闭自动更新"
+  },
   "Don't auto-update": {
     "value": "不自动更新"
   },
@@ -3095,12 +3110,6 @@
   },
   "Never": {
     "value": "从不"
-  },
-  "Never (respect server)": {
-    "value": "从不（按服务器设置）"
-  },
-  "Never (respect server) — manual only unless server sets one": {
-    "value": "从不（按服务器设置）——除非服务器指定，否则只手动"
   },
   "Never sleep (recommended)": {
     "value": "从不休眠（推荐）"

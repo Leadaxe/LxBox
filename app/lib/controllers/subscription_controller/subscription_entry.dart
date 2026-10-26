@@ -67,6 +67,10 @@ class SubscriptionEntry extends ChangeNotifier {
       ? (_list as SubscriptionServers).updateIntervalHours
       : 0;
 
+  /// §685 — действующий интервал (настройка + серверный заголовок из `meta`).
+  int get effectiveIntervalHours => effectiveUpdateIntervalHours(
+      updateIntervalHours, meta?.updateIntervalHours);
+
   int get consecutiveFails => _list is SubscriptionServers
       ? (_list as SubscriptionServers).consecutiveFails
       : 0;

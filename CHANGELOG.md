@@ -8,6 +8,25 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **Subscription update interval: "As subscription" mode; the server no
+  longer overwrites your choice
+  ([task 685](docs/spec/tasks/685-subscription-interval-as-subscription.md)).**
+  The first item of Update interval is "As subscription": the interval comes
+  from the server's `profile-update-interval` header (24 h when the server
+  sends none). A manually chosen interval stays as chosen; before, every
+  update replaced it with the server's value. New subscriptions start in
+  "As subscription". "Never (respect server)" is removed. Existing
+  subscriptions keep their current number as a manual choice; pick "As
+  subscription" to follow the server again.
+
+### Fixed
+
+- Subscription filter rule editor showed "Совпадений: из узлов" without the
+  numbers; the "Applied — …" message after saving filters lost them too.
+- Node delay is shown as `120ms` instead of `120MS`.
+
 ---
 
 ## [2.25.17] — 2026-10-24

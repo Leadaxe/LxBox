@@ -7,7 +7,7 @@ import '../../controllers/subscription_controller.dart';
 import '../../models/server_list.dart';
 import '../app_log.dart';
 import '../settings_storage.dart';
-import 'sources.dart' show FetchResult;
+import 'sources.dart' show FetchResult, effectiveUpdateIntervalHours;
 
 /// Триггеры, по которым зовётся `maybeUpdateAll`. Нужны только для
 /// телеметрии/логов — логика решения «пора?» одинаковая.
@@ -377,10 +377,12 @@ class AutoUpdater {
 
     if (force) return true;
 
-    // §129 — updateIntervalHours == 0 = «не обновлять автоматически». Ручной
-    // Update (force) выше уже вернул true; авто-триггеры сюда доходят и должны
-    // пропустить подписку. Файловые подписки ставятся в 0 при создании.
-    if (list.updateIntervalHours <= 0) return false;
+    // §129/§685 — действующий интервал ≤ 0 = «не обновлять автоматически»
+    // (`-1` пользователя, файловые подписки, сервер прислал 0). Ручной Update
+    // (force) выше уже вернул true; авто-триггеры подписку пропускают.
+    final hours = effectiveUpdateIntervalHours(
+        list.updateIntervalHours, list.meta?.updateIntervalHours);
+    if (hours <= 0) return false;
 
     // Min-retry: не пытаться чаще 15 мин, даже если `updateIntervalHours`
     // прошёл. Защищает от fail-шторма на каждом триггере.
@@ -392,7 +394,7 @@ class AutoUpdater {
     // Основное: пора по успешному времени?
     final lastOk = list.lastUpdated;
     if (lastOk == null) return true;
-    final interval = Duration(hours: list.updateIntervalHours);
+    final interval = Duration(hours: hours);
     return now.difference(lastOk) >= interval;
   }
 }

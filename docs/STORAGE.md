@@ -522,10 +522,12 @@ the whole array (`reorderSources`).
   },
   "update": { "interval_hours": 24 },         // always written. §129 special values: -1 = never
                                               // (ignore the server header; set automatically
-                                              // for file: subscriptions), 0 = not on a
-                                              // schedule, but the server's interval is
-                                              // honoured, N>0 = every N h. AutoUpdater skips
-                                              // an interval ≤ 0. Absent on read = 24.
+                                              // for file: subscriptions), 0 = "As
+                                              // subscription" (§685: the server header from
+                                              // meta, 24 h without one), N>0 = every N h.
+                                              // A fetch never overwrites the value. AutoUpdater
+                                              // skips an effective interval ≤ 0. Absent on
+                                              // read = 24.
   "disabled": {                               // §283/§400 — per-node disable (not written when
     "NL-42": 1784368800                       // empty). The key is the node's IDENTITY (contract
   },                                          // 0.10.0): the raw provider tag, made unique within
