@@ -205,8 +205,9 @@ through the whole core pipeline on behalf of a source, streamed as a stage
 tree (Leadaxe/sing-box-lx#59; the app's Diagnostics → URL Check, task 687).
 Plus a `urltest` `selectedOutbound` data-race hotfix. The base stays sing-box
 v1.14.3 (`upstream/stable` drift of 66 commits to v1.14.4 deferred by the core
-to the sync before stable `lx.24`); toolchain and dependencies unchanged from
-lx.23. No new config keys, no contract changes. Java surface lx.23 → lx.24-rc.1:
+to the sync before stable `lx.24`); toolchain, dependencies and build tags
+(`build_libbox/main.go`) unchanged from lx.23, `kCoreBuildTagsPin` moved with
+the pin. No new config keys, no contract changes. Java surface lx.23 → lx.24-rc.1:
 additive only — 258 → 270 classes, 3583 → 3753 javap lines; added the
 `ConnectionTest*` classes (request builder, stage, finding, result, session,
 handler, iterators), `CommandClient.startConnectionTest`,
