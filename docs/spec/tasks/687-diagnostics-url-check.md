@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Done — ядро `v1.14.3-lx.24-rc.1`, эмулятор 7/7; на телефоне не проверено |
+| Статус | Done — ядро `v1.14.3-lx.24-rc.1`, эмулятор 7/7; телефон 27.10 (v2.25.18-rc.1, hysteria2 + fakeip): HTTP 200 |
 | Дата начала | 2026-10-27 |
 | Источник | issue [#176](https://github.com/Leadaxe/LxBox/issues/176), ядро [sing-box-lx#59](https://github.com/Leadaxe/sing-box-lx/issues/59) |
 | Ядро | SPEC 139 `StartConnectionTest`, релиз 1; пин `v1.14.3-lx.24-rc.1` |
@@ -150,3 +150,9 @@ Kotlin не соберётся. Порядок (слово владельца 27
 Пин поднят, javap: только добавления (258 → 270 классов). Сценарии 1, 2
 повторены на APK с этим ядром — совпадают с локальной сборкой.
 
+
+### Телефон (27.10.2026, v2.25.18-rc.1)
+
+`ipleak.net`, Full, узел hysteria2 через selector, DNS fakeip: HTTP 200 за
+415 ms; `app_dns` A/AAAA ответил `fakeip`, `route` получил домен по fakeip.
+У `dial hysteria2` нет дочерних стадий: `quic` и `auth` даёт релиз 2 SPEC 139.
