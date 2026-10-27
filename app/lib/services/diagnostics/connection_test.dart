@@ -76,6 +76,14 @@ class TestStage {
   final String error;
   final List<TestAttr> attrs;
 
+  /// Значение атрибута по ключу; пусто — нет такого.
+  String attr(String key) {
+    for (final a in attrs) {
+      if (a.key == key) return a.value;
+    }
+    return '';
+  }
+
   factory TestStage.fromMap(Map<String, dynamic> m) => TestStage(
         id: _int(m['id']),
         parent: _int(m['parent']),
@@ -209,7 +217,9 @@ class ConnectionTestTrace {
   }
 
   /// Дерево в порядке обхода: дети под родителем, внутри уровня — по
-  /// порядку появления. Стадия с неизвестным родителем — на верхний уровень.
+  /// `startMs`, при равенстве — по `id` (порядок прихода не годится: стадия
+  /// уровня запроса открывается раньше, чем роутер выбирает путь).
+  /// Стадия с неизвестным родителем — на верхний уровень.
   List<TraceRow> rows() {
     final children = <int, List<int>>{};
     final roots = <int>[];
@@ -220,6 +230,15 @@ class ConnectionTestTrace {
       } else {
         roots.add(id);
       }
+    }
+    int byStart(int a, int b) {
+      final c = _stages[a]!.startMs.compareTo(_stages[b]!.startMs);
+      return c != 0 ? c : a.compareTo(b);
+    }
+
+    roots.sort(byStart);
+    for (final l in children.values) {
+      l.sort(byStart);
     }
     final out = <TraceRow>[];
     final seen = <int>{};
@@ -271,7 +290,9 @@ String traceToText(
   for (final row in t.rows()) {
     final s = row.stage;
     final pad = '  ' * row.depth;
-    final subject = s.subject.isEmpty ? '' : ' ${s.subject}';
+    final type = s.attr('type');
+    final subject = '${type.isEmpty ? '' : ' $type'}'
+        '${s.subject.isEmpty ? '' : ' ${s.subject}'}';
     final dur = s.durationMs > 0 ? '  ${s.durationMs} ms' : '';
     b.writeln('${'${s.startMs}'.padLeft(5)}  $pad${stageMark(s.result)} '
         '${s.kind}$subject$dur');

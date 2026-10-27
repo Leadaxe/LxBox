@@ -73,6 +73,16 @@ void main() {
     expect(t.stage(7)!.result, StageResult.notEvaluated);
   });
 
+  test('siblings are ordered by start time, not by arrival', () {
+    ConnectionTestEvent at(int id, int start) => ConnectionTestEvent.fromMap(
+        {'event': 'stage', 'id': id, 'kind': 'k$id', 'start_ms': start});
+    final t = ConnectionTestTrace()
+      ..apply(at(1, 90)) // target_tls открылась раньше по приходу
+      ..apply(at(2, 10))
+      ..apply(at(3, 10));
+    expect(t.rows().map((r) => r.stage.id).toList(), [2, 3, 1]);
+  });
+
   test('stream error ends the trace', () {
     final t = ConnectionTestTrace()
       ..apply(ConnectionTestEvent.fromMap({'event': 'error', 'message': 'x'}));

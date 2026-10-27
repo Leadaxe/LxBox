@@ -168,7 +168,15 @@ class _UrlCheckTabState extends State<UrlCheckTab>
           onSubmitted: (_) {
             if (_tunnelUp && !_running) _run();
           },
+          onChanged: (_) => setState(() => _urlError = null),
           decoration: InputDecoration(
+            suffixIcon: _urlCtrl.text.isEmpty
+                ? null
+                : IconButton(
+                    tooltip: getLocalText.s("Clear"),
+                    icon: const Icon(Icons.clear),
+                    onPressed: () => setState(_urlCtrl.clear),
+                  ),
             labelText: getLocalText.s("URL"),
             hintText: getLocalText.s("example.com or https://…"),
             errorText: _urlError,
@@ -299,7 +307,7 @@ class _UrlCheckTabState extends State<UrlCheckTab>
           switch (sev) {
             BannerSeverity.success => Icons.check_circle,
             BannerSeverity.error => Icons.error,
-            _ => Icons.hourglass_top,
+            _ => _running ? Icons.hourglass_top : Icons.stop_circle_outlined,
           },
           color: color,
         ),
@@ -397,13 +405,20 @@ class _UrlCheckTabState extends State<UrlCheckTab>
                         text: s.kind,
                         style: const TextStyle(fontWeight: FontWeight.w600),
                       ),
+                      // Тип DNS-запроса (A/AAAA/HTTPS) — в строке: без него
+                      // три app_dns одного домена неразличимы.
+                      if (s.attr('type').isNotEmpty)
+                        TextSpan(
+                          text: ' ${s.attr('type')}',
+                          style: TextStyle(color: cs.onSurfaceVariant),
+                        ),
                       if (s.subject.isNotEmpty) TextSpan(text: '  ${s.subject}'),
                     ]),
                     overflow: TextOverflow.ellipsis,
                     maxLines: open ? 4 : 1,
                   ),
                 ),
-                if (s.durationMs > 0 || s.result != StageResult.running)
+                if (s.durationMs > 0)
                   Text(
                     // l10n-exempt: unit
                     '${s.durationMs} ms',
@@ -437,6 +452,13 @@ class _UrlCheckTabState extends State<UrlCheckTab>
 
   Widget _resultIcon(BuildContext context, StageResult r) {
     final cs = Theme.of(context).colorScheme;
+    // Тест остановлен или оборван: незавершённая стадия больше не идёт.
+    if (r == StageResult.running && !_running) {
+      return Tooltip(
+        message: getLocalText.s("Stopped"),
+        child: Icon(Icons.stop_circle_outlined, size: 16, color: cs.outline),
+      );
+    }
     if (r == StageResult.running) {
       return const SizedBox(
         width: 16,
