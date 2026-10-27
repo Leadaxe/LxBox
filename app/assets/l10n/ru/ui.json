@@ -6565,5 +6565,98 @@
   },
   "URL check and speed test": {
     "value": "Проверка URL и скорости"
+  },
+  "No records": {
+    "value": "Записей нет"
+  },
+  "Authority": {
+    "value": "Authority"
+  },
+  "Not run": {
+    "value": "Не выполнялся"
+  },
+  "Not run: %s failed": {
+    "value": "Не выполнялся: сбой на %s"
+  },
+  "Reused: an open connection or a cached answer": {
+    "value": "Повторно: открытое соединение или ответ из кэша"
+  },
+  "Sent; the protocol gives no confirmation": {
+    "value": "Отправлено; протокол не даёт подтверждения"
+  },
+  "From the network": {
+    "value": "Из сети"
+  },
+  "From cache": {
+    "value": "Из кэша"
+  },
+  "From cache, %d s old": {
+    "value": "Из кэша, возраст %d с"
+  },
+  "expired, refreshing": {
+    "value": "просрочен, обновляется"
+  },
+  "Local answer: fake IP or hosts": {
+    "value": "Локальный ответ: fake IP или hosts"
+  },
+  "DNS query the app makes for the site": {
+    "value": "DNS-запрос приложения к адресу сайта"
+  },
+  "Routing rule match: which outbound takes the connection": {
+    "value": "Выбор правила маршрута: какой outbound берёт соединение"
+  },
+  "Node selection inside a group": {
+    "value": "Выбор узла в группе"
+  },
+  "Chain unfolded into its nodes": {
+    "value": "Цепочка, развёрнутая в узлы"
+  },
+  "Connection through a node": {
+    "value": "Соединение через узел"
+  },
+  "Hand-off to the detour that carries this node": {
+    "value": "Передача в detour, через который идёт этот узел"
+  },
+  "Resolving the server address of a node or DNS server": {
+    "value": "Резолв адреса сервера узла или DNS-сервера"
+  },
+  "Query to a DNS server": {
+    "value": "Запрос к DNS-серверу"
+  },
+  "Waking an endpoint that was idle-suspended": {
+    "value": "Пробуждение endpoint, усыплённого по простою"
+  },
+  "TCP connection to the server": {
+    "value": "TCP-соединение с сервером"
+  },
+  "QUIC connection to the server": {
+    "value": "QUIC-соединение с сервером"
+  },
+  "TLS handshake with the server": {
+    "value": "TLS-рукопожатие с сервером"
+  },
+  "REALITY check: did the server recognize the client": {
+    "value": "Проверка REALITY: узнал ли сервер клиента"
+  },
+  "Transport over TLS: WS, gRPC, XHTTP, HTTPUpgrade or H2": {
+    "value": "Транспорт поверх TLS: WS, gRPC, XHTTP, HTTPUpgrade или H2"
+  },
+  "Authentication: the server confirms the credentials": {
+    "value": "Аутентификация: сервер подтверждает учётные данные"
+  },
+  "WireGuard handshake with the peer": {
+    "value": "Рукопожатие WireGuard с пиром"
+  },
+  "Protocol header to the server; this protocol sends no confirmation": {
+    "value": "Заголовок протокола серверу; этот протокол не присылает подтверждения"
+  },
+  "TLS with the site itself, through the tunnel": {
+    "value": "TLS с самим сайтом через туннель"
+  },
+  "First bytes of the site's response": {
+    "value": "Первые байты ответа сайта"
+  },
+  "HTTP response of the site": {
+    "value": "HTTP-ответ сайта"
   }
 }

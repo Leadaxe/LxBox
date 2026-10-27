@@ -6283,5 +6283,98 @@
   },
   "URL check and speed test": {
     "value": "URL 检查和测速"
+  },
+  "No records": {
+    "value": "无记录"
+  },
+  "Authority": {
+    "value": "Authority"
+  },
+  "Not run": {
+    "value": "未执行"
+  },
+  "Not run: %s failed": {
+    "value": "未执行：%s 失败"
+  },
+  "Reused: an open connection or a cached answer": {
+    "value": "复用：已打开的连接或缓存的应答"
+  },
+  "Sent; the protocol gives no confirmation": {
+    "value": "已发送；该协议不返回确认"
+  },
+  "From the network": {
+    "value": "来自网络"
+  },
+  "From cache": {
+    "value": "来自缓存"
+  },
+  "From cache, %d s old": {
+    "value": "来自缓存，已存 %d 秒"
+  },
+  "expired, refreshing": {
+    "value": "已过期，正在刷新"
+  },
+  "Local answer: fake IP or hosts": {
+    "value": "本地应答：fake IP 或 hosts"
+  },
+  "DNS query the app makes for the site": {
+    "value": "应用对该站点发起的 DNS 查询"
+  },
+  "Routing rule match: which outbound takes the connection": {
+    "value": "路由规则匹配：由哪个出站承载连接"
+  },
+  "Node selection inside a group": {
+    "value": "组内节点选择"
+  },
+  "Chain unfolded into its nodes": {
+    "value": "链展开为各节点"
+  },
+  "Connection through a node": {
+    "value": "通过节点建立连接"
+  },
+  "Hand-off to the detour that carries this node": {
+    "value": "交给承载该节点的 detour"
+  },
+  "Resolving the server address of a node or DNS server": {
+    "value": "解析节点或 DNS 服务器的地址"
+  },
+  "Query to a DNS server": {
+    "value": "向 DNS 服务器查询"
+  },
+  "Waking an endpoint that was idle-suspended": {
+    "value": "唤醒因空闲而挂起的 endpoint"
+  },
+  "TCP connection to the server": {
+    "value": "与服务器的 TCP 连接"
+  },
+  "QUIC connection to the server": {
+    "value": "与服务器的 QUIC 连接"
+  },
+  "TLS handshake with the server": {
+    "value": "与服务器的 TLS 握手"
+  },
+  "REALITY check: did the server recognize the client": {
+    "value": "REALITY 检查：服务器是否识别客户端"
+  },
+  "Transport over TLS: WS, gRPC, XHTTP, HTTPUpgrade or H2": {
+    "value": "TLS 之上的传输：WS、gRPC、XHTTP、HTTPUpgrade 或 H2"
+  },
+  "Authentication: the server confirms the credentials": {
+    "value": "认证：服务器确认凭据"
+  },
+  "WireGuard handshake with the peer": {
+    "value": "与对端的 WireGuard 握手"
+  },
+  "Protocol header to the server; this protocol sends no confirmation": {
+    "value": "发往服务器的协议头；该协议不返回确认"
+  },
+  "TLS with the site itself, through the tunnel": {
+    "value": "经隧道与站点本身的 TLS"
+  },
+  "First bytes of the site's response": {
+    "value": "站点响应的首批字节"
+  },
+  "HTTP response of the site": {
+    "value": "站点的 HTTP 响应"
   }
 }

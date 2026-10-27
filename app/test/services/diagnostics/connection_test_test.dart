@@ -98,4 +98,34 @@ void main() {
     expect(normalizeCheckUrl(''), isNull);
     expect(normalizeCheckUrl('a b'), isNull);
   });
+
+  test('lastPath marks the last sibling at every level', () {
+    final t = ConnectionTestTrace()
+      ..apply(_stage(1, 0, 'route', 1))
+      ..apply(_stage(2, 0, 'dial', 1))
+      ..apply(_stage(3, 2, 'lookup', 1))
+      ..apply(_stage(4, 3, 'dns', 1))
+      ..apply(_stage(5, 2, 'tcp_connect', 1));
+
+    String mark(List<bool> p) => p.map((l) => l ? 'L' : '+').join();
+    expect(t.rows().map((r) => '${r.stage.id}:${mark(r.lastPath)}').toList(),
+        ['1:+', '2:L', '3:L+', '4:L+L', '5:LL']);
+  });
+
+  test('attrsOf returns every repeated attribute in order', () {
+    final s = TestStage.fromMap({
+      'id': 1,
+      'kind': 'app_dns',
+      'attrs': [
+        {'key': 'type', 'value': 'A'},
+        {'key': 'answer', 'value': 'CNAME 300 a.example.'},
+        {'key': 'answer', 'value': 'a.example. A 300 192.0.2.1'},
+        {'key': 'source', 'value': 'cache'},
+      ],
+    });
+    expect(s.attrsOf('answer'),
+        ['CNAME 300 a.example.', 'a.example. A 300 192.0.2.1']);
+    expect(s.attrsOf('authority'), isEmpty);
+    expect(s.attr('source'), 'cache');
+  });
 }
