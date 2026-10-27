@@ -6379,5 +6379,8 @@
   },
   "UDP socket to the server; UDP has no handshake to confirm": {
     "value": "到服务器的 UDP 套接字；UDP 没有可确认的握手"
+  },
+  "No records: the core answered without asking a DNS server (a rule or the domain strategy)": {
+    "value": "无记录：内核未询问 DNS 服务器即作答（规则或域名策略）"
   }
 }

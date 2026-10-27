@@ -6661,5 +6661,8 @@
   },
   "UDP socket to the server; UDP has no handshake to confirm": {
     "value": "UDP-сокет к серверу; у UDP нет рукопожатия, подтверждать нечего"
+  },
+  "No records: the core answered without asking a DNS server (a rule or the domain strategy)": {
+    "value": "Записей нет: ядро ответило, не спрашивая DNS-сервер (правило или стратегия домена)"
   }
 }

@@ -551,7 +551,14 @@ class _UrlCheckTabState extends State<UrlCheckTab>
         out.add(SelectableText(a, style: mono));
       }
     } else if (s.kind == 'app_dns' && s.attr('rcode') == 'NOERROR') {
-      out.add(Text(getLocalText.s("No records"), style: muted));
+      // Без `source` сервер не спрашивали: ответило правило или тип
+      // отсекла стратегия домена (SPEC 139 §4).
+      out.add(Text(
+          s.attr('source').isEmpty
+              ? getLocalText.s(
+                  "No records: the core answered without asking a DNS server (a rule or the domain strategy)")
+              : getLocalText.s("No records"),
+          style: muted));
     }
     final authority = s.attrsOf('authority');
     if (authority.isNotEmpty) {
