@@ -10,6 +10,33 @@
 
 ### Added
 
+- **Diagnostics → URL Check
+  ([task 687](docs/spec/tasks/687-diagnostics-url-check.md), issue #176).**
+  Enter a site and the core makes a real request to it through your routing
+  and shows every step as a tree, as it happens: the app's DNS queries (A,
+  AAAA, HTTPS) and the server that answered, the matched rule, the group
+  choice, the node and its detours, the node's own address lookup, TCP, TLS,
+  the response. Each step has its time and result; a step the protocol does
+  not confirm (VLESS, Trojan, Shadowsocks header) is marked as sent, not
+  confirmed; a cached or reused step is marked as reused. When the path
+  breaks, the step where it broke is highlighted and named above the tree. A
+  tap on a step shows its details. Options: the app the request is made for
+  (rules by app apply), depth (Full, Connect, Route — no connection is
+  opened, DNS) and From scratch (bypass the DNS cache, open new connections).
+  Copy puts the trace as text on the clipboard. Needs a running VPN.
+  (RU: Diagnostics → URL Check. Вводите сайт — ядро делает к нему настоящий
+  запрос через вашу маршрутизацию и показывает каждый шаг деревом по мере
+  прохождения: DNS-запросы приложения (A, AAAA, HTTPS) и ответивший сервер,
+  сработавшее правило, выбор в группе, узел и его detour, резолв адреса
+  узла, TCP, TLS, ответ. У шага время и исход; шаг, который протокол не
+  подтверждает (заголовок VLESS, Trojan, Shadowsocks), помечен «отправлено,
+  без подтверждения»; взятый из кэша или готового соединения — «использовано
+  готовое». Если путь оборвался, шаг обрыва подсвечен и назван над деревом.
+  Тап по шагу раскрывает подробности. Параметры: приложение, от имени которого
+  идёт запрос (действуют правила по приложениям), глубина (Full, Connect,
+  Route — без соединений, DNS) и From scratch (мимо кэша DNS, новые
+  соединения). Copy кладёт трассу текстом в буфер. Нужен запущенный VPN.)
+
 - **INI tab for WireGuard / AmneziaWG nodes
   ([task 686](docs/spec/tasks/686-folder-auto-node-source-tab.md)).** Node
   Settings shows the node as a `.conf` whatever it was added from (link, INI
@@ -24,6 +51,24 @@
   a warning naming it.
 
 ### Changed
+
+- **Speed Test is a tab of Diagnostics (task 687).** The side menu item
+  **Speed Test** is replaced by **Diagnostics** with two tabs: URL Check and
+  Speed Test. Speed Test works as before; a running test is not interrupted
+  when switching tabs. Support links to Speed Test open the same tab.
+  (RU: Speed Test — вкладка Diagnostics. Пункт бокового меню **Speed Test**
+  заменён пунктом **Diagnostics** с вкладками URL Check и Speed Test. Speed
+  Test работает как раньше; идущий замер не прерывается при переключении
+  вкладок. Ссылки поддержки на Speed Test открывают ту же вкладку.)
+- **Core `v1.14.3-lx.23` → `v1.14.3-lx.24-rc.1`
+  ([docs/KERNEL.md](docs/KERNEL.md)).** Adds the active connection test
+  behind URL Check (Leadaxe/sing-box-lx#59) and fixes a data race in the
+  Auto (`urltest`) group's selection. No config changes. A release
+  candidate of the core: the stable `lx.24` follows the field run.
+  (RU: Ядро `v1.14.3-lx.23` → `v1.14.3-lx.24-rc.1`: активная проверка
+  соединения для URL Check и исправление гонки данных при выборе узла в
+  группе Auto (`urltest`). Конфиг не меняется. Это кандидат ядра: стабильный
+  `lx.24` выйдет после полевой проверки.)
 
 - **Auto node in a folder is edited in Node Settings
   ([task 686](docs/spec/tasks/686-folder-auto-node-source-tab.md)).** A tap

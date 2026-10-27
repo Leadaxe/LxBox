@@ -34,7 +34,7 @@ milliseconds. `startTailscaleSSHSession` is not used.
 | Called from | `scripts/build-local-apk.sh` and CI (`ci.yml` → the android job → “Fetch sing-box-lx core”) |
 | The AAR in git | NO (~110 MB as of lx.25; `app/android/app/libs/` is in `.gitignore`); `build.gradle.kts` → `implementation(files("libs/libbox.aar"))` |
 
-**The current pin: `v1.14.3-lx.23`** (see `app/android/libbox.version`) — lx.1
+**The current pin: `v1.14.3-lx.24-rc.1`** (see `app/android/libbox.version`) — lx.1
 plus XHTTP HTTP-version parity (**SPEC 104**, lx.2), Vision on top of VLESS
 Encryption (**SPEC 105**, lx.3), the runtime WG/AWG endpoint toggle
 (**SPEC 106**, lx.4: `CommandClient.setEndpointEnabled`, `endpointState =
@@ -44,7 +44,7 @@ default without `xmux` moved to `max_connections 3` (lx.6), three MASQUE hangs f
 control channel on port 443 from the first connection (**SPEC 111**, lx.9),
 the headroom Tailscale needs on a direct UDP path restored in the AWG
 wireguard-go (**SPEC 112**, lx.10), one more `stable` sync (lx.11), lx.12 and
-lx.13-rc.1, lx.13, lx.14, lx.15, lx.16–lx.18, lx.19–lx.21 and lx.22–lx.23 (below). The Java surface of lx.11 is identical to lx.8 (`javap` over both
+lx.13-rc.1, lx.13, lx.14, lx.15, lx.16–lx.18, lx.19–lx.21, lx.22–lx.23 and lx.24-rc.1 (below). The Java surface of lx.11 is identical to lx.8 (`javap` over both
 `classes.jar`). The `lx.1` layers: **SPEC 097**, **SPEC 098**, **SPEC 101** and
 the upstream sync to sing-box **1.14.2** (**SPEC 102**).
 
@@ -198,6 +198,23 @@ classes of both `classes.jar` in one call per jar, 3583 lines each, empty
 diff). `strings -a` of `libbox.so` inside the AAR reports `1.14.3-lx.21`. AAR
 sha256 `5a6c782b834d53aa8031e32a953eb9517e78b742bbc10d3474154fc05aa00e0e`
 (checked against the release `SHA256SUMS`).
+
+**`v1.14.3-lx.24-rc.1`** — one change that reaches the app: **SPEC 139**
+release 1, `CommandClient.startConnectionTest` — an active connection test
+through the whole core pipeline on behalf of a source, streamed as a stage
+tree (Leadaxe/sing-box-lx#59; the app's Diagnostics → URL Check, task 687).
+Plus a `urltest` `selectedOutbound` data-race hotfix. The base stays sing-box
+v1.14.3 (`upstream/stable` drift of 66 commits to v1.14.4 deferred by the core
+to the sync before stable `lx.24`); toolchain and dependencies unchanged from
+lx.23. No new config keys, no contract changes. Java surface lx.23 → lx.24-rc.1:
+additive only — 258 → 270 classes, 3583 → 3753 javap lines; added the
+`ConnectionTest*` classes (request builder, stage, finding, result, session,
+handler, iterators), `CommandClient.startConnectionTest`,
+`Libbox.newConnectionTestRequest` and the `ConnectionTestDepth*` /
+`ConnectionTestStage*` / `ConnectionTestFinding*` constants; nothing removed.
+AAR sha256 `6d422f54170ec7635096262e8ac73652fcf48521ec83c55bf79caaa418a48bc2`
+(checked against the release `SHA256SUMS`). ⚠️ rc: the core's notes ask for a
+field run of SPEC 139 on devices before stable `lx.24`.
 
 **`v1.14.3-lx.23`** — two releases, four changes that reach the app. lx.22:
 **SPEC 136** runs the first `ReferenceManager.update()` off the start path —
@@ -1203,7 +1220,8 @@ subscription), the core provides insurance in case the client misses something.
 
 | rc | What was added |
 |---|---|
-| **v1.14.3-lx.23** (current pin) | lx.22: SPEC 136 — start no longer waits 10–16 s for an unrelated mux handshake; SPEC 137 — masque `vhttp: auto` no longer pins the previous core instance after each reload. lx.23: SPEC 030 — fast stop with many WG/AWG endpoints again (the shutdown pre-pass was dead since `v1.14.0-lx.37`; main hypothesis of task 668), plus a 20 s close watchdog that dumps goroutines to the core log; SPEC 138 — `round_robin` skips a slot whose node failed its last probe. No new config keys. Java surface identical to lx.21. AAR sha256 `d7be8b1297f68ad8bad47e5eb766f59501100b1e9377de403d9c53cd364ecef1`. |
+| **v1.14.3-lx.24-rc.1** (current pin) | SPEC 139 release 1 — `CommandClient.startConnectionTest`: active connection test with a streamed stage tree (Diagnostics → URL Check, task 687); `urltest` `selectedOutbound` race hotfix. Base v1.14.3, upstream drift deferred. No new config keys. Java surface additive: 258 → 270 classes. AAR sha256 `6d422f54170ec7635096262e8ac73652fcf48521ec83c55bf79caaa418a48bc2`. |
+| **v1.14.3-lx.23** | lx.22: SPEC 136 — start no longer waits 10–16 s for an unrelated mux handshake; SPEC 137 — masque `vhttp: auto` no longer pins the previous core instance after each reload. lx.23: SPEC 030 — fast stop with many WG/AWG endpoints again (the shutdown pre-pass was dead since `v1.14.0-lx.37`; main hypothesis of task 668), plus a 20 s close watchdog that dumps goroutines to the core log; SPEC 138 — `round_robin` skips a slot whose node failed its last probe. No new config keys. Java surface identical to lx.21. AAR sha256 `d7be8b1297f68ad8bad47e5eb766f59501100b1e9377de403d9c53cd364ecef1`. |
 | **v1.14.3-lx.21** | **Nothing new on the Android data path.** lx.19/lx.20 (SPEC 128/129) are `lxd` daemon fixes; lx.21 adds the experimental `trusttunnel` outbound/inbound (SPEC 133) to the desktop and router binaries only — the AAR is built without `with_trusttunnel`, so the type loads as a stub. Base sing-box v1.14.3. Java surface identical to lx.18 (258 classes, 3583 javap lines). AAR sha256 `5a6c782b834d53aa8031e32a953eb9517e78b742bbc10d3474154fc05aa00e0e`. |
 | **v1.14.3-lx.18** | **The legacy `network` key of the `masque` outbound is gone (SPEC 131): a masque body with `network` fails to load, rename it to `vhttp`.** lx.16/lx.17 (SPEC 127–130) are Linux-daemon and Windows 7 changes outside `libbox`. Base sing-box v1.14.3. Java surface identical to lx.15 (258 classes, 3583 javap lines). AAR sha256 `ebd362a960a31cc876f0b3fa51790d33a42217eee4edeba94ae7cabf23e09fae`. |
 | **v1.14.3-lx.15** | **`urltest` probes every `interval` (SPEC 125), `failover` leaves a degraded node (SPEC 126), `fingerprint: random`/`randomized` safe for REALITY (SPEC 123), uTLS handshake state released (SPEC 122), gRPC security bump.** Base sing-box v1.14.3. Java surface identical to lx.14 (258 classes, 3583 javap lines). AAR sha256 `9146eeaa79b9c750e7c5747c74c4281fc07411627c6ac0dc2737f706f6224ecb`. |
