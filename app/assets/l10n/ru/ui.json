@@ -6590,9 +6590,6 @@
   "From cache": {
     "value": "Из кэша"
   },
-  "From cache, %d s old": {
-    "value": "Из кэша, возраст %d с"
-  },
   "expired, refreshing": {
     "value": "просрочен, обновляется"
   },
@@ -6658,5 +6655,11 @@
   },
   "HTTP response of the site": {
     "value": "HTTP-ответ сайта"
+  },
+  "From cache, %s old": {
+    "value": "Из кэша, возраст %s"
+  },
+  "UDP socket to the server; UDP has no handshake to confirm": {
+    "value": "UDP-сокет к серверу; у UDP нет рукопожатия, подтверждать нечего"
   }
 }

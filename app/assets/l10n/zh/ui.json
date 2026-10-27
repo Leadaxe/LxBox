@@ -6308,9 +6308,6 @@
   "From cache": {
     "value": "来自缓存"
   },
-  "From cache, %d s old": {
-    "value": "来自缓存，已存 %d 秒"
-  },
   "expired, refreshing": {
     "value": "已过期，正在刷新"
   },
@@ -6376,5 +6373,11 @@
   },
   "HTTP response of the site": {
     "value": "站点的 HTTP 响应"
+  },
+  "From cache, %s old": {
+    "value": "来自缓存，已存 %s"
+  },
+  "UDP socket to the server; UDP has no handshake to confirm": {
+    "value": "到服务器的 UDP 套接字；UDP 没有可确认的握手"
   }
 }

@@ -29,7 +29,8 @@
 - Линии дерева слева вместо голого отступа: вертикаль у предков, у
   которых ниже есть ещё братья; уголок `├`/`└` у самой строки.
 - Для `app_dns` и `dns` код ответа, отличный от `NOERROR`, виден в строке
-  без раскрытия, цветом ошибки.
+  без раскрытия, цветом ошибки; в раскрытии атрибут `rcode` и ошибка вида
+  `rcode NXDOMAIN` тогда не повторяются.
 
 ### Раскрытый этап (сверху вниз)
 
@@ -42,7 +43,7 @@
    - NOT_EVALUATED: «Not evaluated».
 3. **Источник ответа** (`source`):
    - `network` → «From the network»;
-   - `cache` → «From cache, %d s old» (`cache_age`), плюс «expired, refreshing» при `stale=true`;
+   - `cache` → «From cache, %s old» (`cache_age`: секунды до 2 мин, минуты до 2 ч, дальше часы), плюс «expired, refreshing» при `stale=true`;
    - `local` → «Local answer: fake IP or hosts».
    - Нет `source` — строки нет.
 4. **Answer** — все атрибуты `answer`, по одному на строку, моноширинно,
@@ -87,6 +88,7 @@
 | lookup | Resolving the server address of a node or DNS server |
 | dns | Query to a DNS server |
 | wake | Waking an endpoint that was idle-suspended |
+| udp | UDP socket to the server; UDP has no handshake to confirm |
 | tcp_connect | TCP connection to the server |
 | quic | QUIC connection to the server |
 | tls | TLS handshake with the server |

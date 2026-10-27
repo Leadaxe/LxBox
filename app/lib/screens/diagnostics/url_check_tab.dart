@@ -560,11 +560,15 @@ class _UrlCheckTabState extends State<UrlCheckTab>
         out.add(SelectableText(a, style: mono));
       }
     }
+    final rcode = s.attr('rcode');
+    final badRcode = rcode.isNotEmpty && rcode != 'NOERROR';
     for (final a in s.attrs) {
       if (_shownApart.contains(a.key)) continue;
+      // Код ответа уже в строке этапа.
+      if (badRcode && a.key == 'rcode') continue;
       out.add(SelectableText('${a.key}: ${a.value}', style: mono));
     }
-    if (s.error.isNotEmpty) {
+    if (s.error.isNotEmpty && !(badRcode && s.error == 'rcode $rcode')) {
       out.add(SelectableText(s.error, style: mono?.copyWith(color: cs.error)));
     }
     return out;
@@ -590,6 +594,14 @@ class _UrlCheckTabState extends State<UrlCheckTab>
     }
   }
 
+  /// Возраст записи кэша: секунды до 2 мин, минуты до 2 ч, дальше часы.
+  // l10n-exempt: units
+  static String _ageText(int sec) => sec < 120
+      ? '$sec s'
+      : sec < 7200
+          ? '${sec ~/ 60} min'
+          : '${sec ~/ 3600} h';
+
   String? _sourceText(TestStage s) {
     switch (s.attr('source')) {
       case 'network':
@@ -598,7 +610,7 @@ class _UrlCheckTabState extends State<UrlCheckTab>
         final age = int.tryParse(s.attr('cache_age'));
         final text = age == null
             ? getLocalText.s("From cache")
-            : getLocalText.s("From cache, %d s old", age);
+            : getLocalText.s("From cache, %s old", _ageText(age));
         return s.attr('stale') == 'true'
             ? '$text · ${getLocalText.s("expired, refreshing")}'
             : text;
@@ -674,6 +686,8 @@ String? stageKindText(String kind) => switch (kind) {
       'dns' => getLocalText.s("Query to a DNS server"),
       'wake' => getLocalText.s("Waking an endpoint that was idle-suspended"),
       'tcp_connect' => getLocalText.s("TCP connection to the server"),
+      'udp' => getLocalText
+          .s("UDP socket to the server; UDP has no handshake to confirm"),
       'quic' => getLocalText.s("QUIC connection to the server"),
       'tls' => getLocalText.s("TLS handshake with the server"),
       'reality' => getLocalText.s(
