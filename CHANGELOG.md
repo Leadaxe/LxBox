@@ -36,6 +36,23 @@
   идёт запрос (действуют правила по приложениям), глубина (Full, Connect,
   Route — без соединений, DNS) и From scratch (мимо кэша DNS, новые
   соединения). Copy кладёт трассу текстом в буфер. Нужен запущенный VPN.)
+- **URL Check: step details, tree lines, the DNS answer
+  ([task 688](docs/spec/tasks/688-url-check-stage-details.md)).** Every step
+  expands: a line on what the step is, why it was skipped or reused, and its
+  attributes. Lines connect each step to its parent. The app's DNS query shows
+  the answer record by record with TTL (CNAME chain, addresses, HTTPS record
+  parameters such as ALPN and ECH), the SOA on NXDOMAIN or an empty answer,
+  and where the answer came from: the network, the cache with its age, or a
+  local answer (fake IP, hosts). The failed step and an empty or failed DNS
+  answer open by themselves; a tap on a finding highlights its steps.
+  (RU: URL Check: подробности шагов, линии дерева, ответ DNS. Любой шаг
+  раскрывается: строка о том, что это за шаг, почему он пропущен или взят
+  готовым, его атрибуты. Линии соединяют шаг с родителем. DNS-запрос
+  приложения показывает ответ по записям с TTL (цепочка CNAME, адреса,
+  параметры HTTPS-записи вроде ALPN и ECH), SOA при NXDOMAIN или пустом
+  ответе и откуда ответ: из сети, из кэша с возрастом или локальный (fake IP,
+  hosts). Шаг обрыва и пустой или ошибочный ответ DNS раскрыты сразу; тап по
+  находке подсвечивает её шаги.)
 
 - **INI tab for WireGuard / AmneziaWG nodes
   ([task 686](docs/spec/tasks/686-folder-auto-node-source-tab.md)).** Node
@@ -60,13 +77,14 @@
   заменён пунктом **Diagnostics** с вкладками URL Check и Speed Test. Speed
   Test работает как раньше; идущий замер не прерывается при переключении
   вкладок. Ссылки поддержки на Speed Test открывают ту же вкладку.)
-- **Core `v1.14.3-lx.23` → `v1.14.3-lx.24-rc.1`
+- **Core `v1.14.3-lx.23` → `v1.14.3-lx.24-rc.2`
   ([docs/KERNEL.md](docs/KERNEL.md)).** Adds the active connection test
-  behind URL Check (Leadaxe/sing-box-lx#59) and fixes a data race in the
+  behind URL Check (Leadaxe/sing-box-lx#59), with the DNS answer record by
+  record since rc.2, and fixes a data race in the
   Auto (`urltest`) group's selection. No config changes. A release
   candidate of the core: the stable `lx.24` follows the field run.
-  (RU: Ядро `v1.14.3-lx.23` → `v1.14.3-lx.24-rc.1`: активная проверка
-  соединения для URL Check и исправление гонки данных при выборе узла в
+  (RU: Ядро `v1.14.3-lx.23` → `v1.14.3-lx.24-rc.2`: активная проверка
+  соединения для URL Check (с rc.2 — ответ DNS по записям) и исправление гонки данных при выборе узла в
   группе Auto (`urltest`). Конфиг не меняется. Это кандидат ядра: стабильный
   `lx.24` выйдет после полевой проверки.)
 

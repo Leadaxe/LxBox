@@ -34,7 +34,7 @@ milliseconds. `startTailscaleSSHSession` is not used.
 | Called from | `scripts/build-local-apk.sh` and CI (`ci.yml` → the android job → “Fetch sing-box-lx core”) |
 | The AAR in git | NO (~110 MB as of lx.25; `app/android/app/libs/` is in `.gitignore`); `build.gradle.kts` → `implementation(files("libs/libbox.aar"))` |
 
-**The current pin: `v1.14.3-lx.24-rc.1`** (see `app/android/libbox.version`) — lx.1
+**The current pin: `v1.14.3-lx.24-rc.2`** (see `app/android/libbox.version`) — lx.1
 plus XHTTP HTTP-version parity (**SPEC 104**, lx.2), Vision on top of VLESS
 Encryption (**SPEC 105**, lx.3), the runtime WG/AWG endpoint toggle
 (**SPEC 106**, lx.4: `CommandClient.setEndpointEnabled`, `endpointState =
@@ -44,7 +44,7 @@ default without `xmux` moved to `max_connections 3` (lx.6), three MASQUE hangs f
 control channel on port 443 from the first connection (**SPEC 111**, lx.9),
 the headroom Tailscale needs on a direct UDP path restored in the AWG
 wireguard-go (**SPEC 112**, lx.10), one more `stable` sync (lx.11), lx.12 and
-lx.13-rc.1, lx.13, lx.14, lx.15, lx.16–lx.18, lx.19–lx.21, lx.22–lx.23 and lx.24-rc.1 (below). The Java surface of lx.11 is identical to lx.8 (`javap` over both
+lx.13-rc.1, lx.13, lx.14, lx.15, lx.16–lx.18, lx.19–lx.21, lx.22–lx.23 and lx.24-rc.1/rc.2 (below). The Java surface of lx.11 is identical to lx.8 (`javap` over both
 `classes.jar`). The `lx.1` layers: **SPEC 097**, **SPEC 098**, **SPEC 101** and
 the upstream sync to sing-box **1.14.2** (**SPEC 102**).
 
@@ -197,6 +197,20 @@ tags unchanged. Java surface lx.18 → lx.21: identical (javap over all 258
 classes of both `classes.jar` in one call per jar, 3583 lines each, empty
 diff). `strings -a` of `libbox.so` inside the AAR reports `1.14.3-lx.21`. AAR
 sha256 `5a6c782b834d53aa8031e32a953eb9517e78b742bbc10d3474154fc05aa00e0e`
+(checked against the release `SHA256SUMS`).
+
+**`v1.14.3-lx.24-rc.2`** — SPEC 139 release 2, attributes only
+(Leadaxe/sing-box-lx#59 field run of rc.1): the app's DNS stage `app_dns`
+carries one `answer` per answer record (presentation format with TTL, the
+owner first when it differs from the queried name, SvcParam values quoted as
+`dig` prints them), one `authority` per record on NXDOMAIN / NODATA, and
+`source` = `network` / `cache` (with `cache_age`, `stale`) / `local`; the
+joined `answers` attr of `app_dns` is gone (on the `dns` stage `answers`
+stays a record count); a cached `dns` stage carries `cache_age`. Rendered by
+URL Check, task 688. No `.proto` or libbox change: `javap` over the full
+`classes.jar` is identical to rc.1 (270 classes, 3753 lines). Toolchain and
+build tags unchanged, `kCoreBuildTagsPin` moved with the pin. AAR sha256
+`bc4a2c6db3db1040c1283bb82c017259e947fb9d0c788ab082bfd568d9f4ef73`
 (checked against the release `SHA256SUMS`).
 
 **`v1.14.3-lx.24-rc.1`** — one change that reaches the app: **SPEC 139**
@@ -1221,7 +1235,8 @@ subscription), the core provides insurance in case the client misses something.
 
 | rc | What was added |
 |---|---|
-| **v1.14.3-lx.24-rc.1** (current pin) | SPEC 139 release 1 — `CommandClient.startConnectionTest`: active connection test with a streamed stage tree (Diagnostics → URL Check, task 687); `urltest` `selectedOutbound` race hotfix. Base v1.14.3, upstream drift deferred. No new config keys. Java surface additive: 258 → 270 classes. AAR sha256 `6d422f54170ec7635096262e8ac73652fcf48521ec83c55bf79caaa418a48bc2`. |
+| **v1.14.3-lx.24-rc.2** (current pin) | SPEC 139 release 2 — `app_dns` answer records (`answer` per record with TTL, `authority` on NXDOMAIN/NODATA, `source` network/cache/local with `cache_age`/`stale`), `cache_age` on cached `dns` stages; URL Check renders them (task 688). Attributes only: `javap` identical to rc.1. AAR sha256 `bc4a2c6db3db1040c1283bb82c017259e947fb9d0c788ab082bfd568d9f4ef73`. |
+| **v1.14.3-lx.24-rc.1** | SPEC 139 release 1 — `CommandClient.startConnectionTest`: active connection test with a streamed stage tree (Diagnostics → URL Check, task 687); `urltest` `selectedOutbound` race hotfix. Base v1.14.3, upstream drift deferred. No new config keys. Java surface additive: 258 → 270 classes. AAR sha256 `6d422f54170ec7635096262e8ac73652fcf48521ec83c55bf79caaa418a48bc2`. |
 | **v1.14.3-lx.23** | lx.22: SPEC 136 — start no longer waits 10–16 s for an unrelated mux handshake; SPEC 137 — masque `vhttp: auto` no longer pins the previous core instance after each reload. lx.23: SPEC 030 — fast stop with many WG/AWG endpoints again (the shutdown pre-pass was dead since `v1.14.0-lx.37`; main hypothesis of task 668), plus a 20 s close watchdog that dumps goroutines to the core log; SPEC 138 — `round_robin` skips a slot whose node failed its last probe. No new config keys. Java surface identical to lx.21. AAR sha256 `d7be8b1297f68ad8bad47e5eb766f59501100b1e9377de403d9c53cd364ecef1`. |
 | **v1.14.3-lx.21** | **Nothing new on the Android data path.** lx.19/lx.20 (SPEC 128/129) are `lxd` daemon fixes; lx.21 adds the experimental `trusttunnel` outbound/inbound (SPEC 133) to the desktop and router binaries only — the AAR is built without `with_trusttunnel`, so the type loads as a stub. Base sing-box v1.14.3. Java surface identical to lx.18 (258 classes, 3583 javap lines). AAR sha256 `5a6c782b834d53aa8031e32a953eb9517e78b742bbc10d3474154fc05aa00e0e`. |
 | **v1.14.3-lx.18** | **The legacy `network` key of the `masque` outbound is gone (SPEC 131): a masque body with `network` fails to load, rename it to `vhttp`.** lx.16/lx.17 (SPEC 127–130) are Linux-daemon and Windows 7 changes outside `libbox`. Base sing-box v1.14.3. Java surface identical to lx.15 (258 classes, 3583 javap lines). AAR sha256 `ebd362a960a31cc876f0b3fa51790d33a42217eee4edeba94ae7cabf23e09fae`. |
