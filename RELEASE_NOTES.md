@@ -1,31 +1,27 @@
-# L×Box v2.25.18-rc.2
+# L×Box v2.25.18-rc.3
 
-**The second release candidate on top of [v2.25.17](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.17).**
+**The third release candidate on top of [v2.25.17](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.17).**
 
 This is a pre-release on GitHub; in Google Play it goes to Open testing. It is
 not offered to users of the stable release. It contains everything from
-[v2.25.18-rc.1](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.18-rc.1);
-below are the changes since rc.1.
+[v2.25.18-rc.2](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.18-rc.2);
+below are the changes since rc.2.
 
-URL Check explains itself: every step expands with a line on what the step is
-and why it was skipped or reused, lines connect each step to its parent, and
-the app's DNS query shows the answer record by record — the CNAME chain,
-addresses with TTL, HTTPS record parameters, the SOA of a missing name, and
-whether the answer came from the network, the cache or a local answer. Core
-`v1.14.3-lx.24-rc.2`.
+The core is stable again: `v1.14.4-lx.24`, on the upstream sing-box 1.14.4
+base. URL Check gets findings about the config, reports a redirect as the
+answer instead of a false «HTTP 0», and clears the previous result when the
+check's parameters change.
 
-**Второй релиз-кандидат поверх [v2.25.17](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.17).**
+**Третий релиз-кандидат поверх [v2.25.17](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.17).**
 
 На GitHub это pre-release, в Google Play сборка уходит в открытое
 тестирование. Пользователям стабильного релиза она не предлагается. В нём
-всё из [v2.25.18-rc.1](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.18-rc.1);
-ниже — изменения относительно rc.1.
+всё из [v2.25.18-rc.2](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.18-rc.2);
+ниже — изменения относительно rc.2.
 
-URL Check объясняет себя сам: любой шаг раскрывается со строкой о том, что
-это за шаг и почему он пропущен или взят готовым, линии соединяют шаг с
-родителем, а DNS-запрос приложения показывает ответ по записям — цепочку
-CNAME, адреса с TTL, параметры HTTPS-записи, SOA несуществующего имени и
-откуда ответ: из сети, из кэша или локальный. Ядро `v1.14.3-lx.24-rc.2`.
+Ядро снова стабильное: `v1.14.4-lx.24` на базе апстримного sing-box 1.14.4.
+URL Check получил находки о конфиге, показывает редирект как ответ вместо
+ложного «HTTP 0» и стирает прошлый результат при смене параметров проверки.
 
 ---
 
@@ -34,44 +30,45 @@ CNAME, адреса с TTL, параметры HTTPS-записи, SOA несу�
 
 ## ⚠️ Read before updating
 
-- **The core is still a release candidate.** `v1.14.3-lx.24-rc.2` adds the
-  full DNS answer to the connection test behind URL Check; the stable core
-  `lx.24` follows a field run.
+- **New upstream base.** The core moves to upstream sing-box 1.14.4. Upstream
+  changed how groups are resolved; Auto (`urltest`) groups still pick a node
+  per connection as before. If a group or a WireGuard node behaves
+  differently after the update, report it.
 
 ## ✨ New
 
-- **URL Check: step details ([task 688](docs/spec/tasks/688-url-check-stage-details.md)).**
-  Every step has a chevron and expands, not only steps with attributes.
-  Inside:
-  - a line on what the step is ("TLS handshake with the server", "Resolving
-    the server address of a node or DNS server", …);
-  - why it ended that way: "Not run: tls … failed" for steps after the
-    break, "Reused: an open connection or a cached answer", "Sent; the
-    protocol gives no confirmation";
-  - the step's attributes and error.
-- **URL Check: the DNS answer record by record (task 688, Leadaxe/sing-box-lx#59).**
-  The app's DNS query lists the answer one record per line with TTL: the
-  CNAME chain, each address with the name it belongs to, HTTPS record
-  parameters such as `alpn` and `ech`. On NXDOMAIN or an empty answer the
-  **Authority** block shows the SOA. A line says where the answer came from:
-  **From the network**, **From cache, N old** (marked when the record expired
-  and is being refreshed) or **Local answer: fake IP or hosts**.
+- **URL Check: findings.** Under the result the core lists what it noticed
+  about the config, at three levels: a cause of the failure, a risk, a fact.
+  For example: a package excluded from the VPN, a node that depends on a DNS
+  server's detour outside the route, fake IP records lost after a restart,
+  REALITY not recognizing the client. A tap on a finding highlights its
+  steps.
+- **URL Check: more steps.** The REALITY verdict, the wake-up of a sleeping
+  WireGuard endpoint, the WireGuard handshake with the detour that carries
+  it, QUIC and authentication of MASQUE and TrustTunnel, and a DNS server
+  connection taken from the pool.
 
 ## 🔄 Changed
 
-- **URL Check: the tree is drawn with lines.** Each step is connected to its
-  parent, so a node's lookup, its DNS server and that server's detour read as
-  one branch.
-- **URL Check: what opens by itself.** The step where the path broke and an
-  app DNS query with an error code or an empty answer are expanded without a
-  tap; an error code other than `NOERROR` is shown in the step's row. A tap
-  on a finding highlights and expands the steps it refers to.
+- **URL Check: a redirect is the answer.** A site that answers `301`/`302`
+  shows that status and the `location` it points to; the check does not
+  follow the chain. Before, such a check ended with a green «HTTP 0».
+- **URL Check: no false success.** A full check that ends without an HTTP
+  response and without a failed step shows a yellow «No HTTP response».
+- **URL Check: the result belongs to its parameters.** Changing the URL, the
+  app, the depth or From scratch clears the previous result.
+- **URL Check: an empty answer explains itself.** When a DNS rule or the
+  domain strategy answered without asking a DNS server, the step says so
+  instead of a bare «No records».
 
 ## 🔧 Under the hood
 
-- Core `v1.14.3-lx.24-rc.2` (was `rc.1`): SPEC 139 release 2, stage
-  attributes only (`answer`, `authority`, `source`, `cache_age`, `stale`).
-  The Java surface of the core did not change.
+- Core `v1.14.4-lx.24` (was `v1.14.3-lx.24-rc.2`): SPEC 139 stable, upstream
+  sing-box 1.14.4 with Go 1.26.10, a data race in the Auto group's selection
+  fixed.
+- Below Android 10 the owner of a connection (per-app rules) is looked up by
+  the core in `/proc/net` through a call from the app; the core no longer
+  does it on its own.
 
 </details>
 
@@ -80,44 +77,43 @@ CNAME, адреса с TTL, параметры HTTPS-записи, SOA несу�
 
 ## ⚠️ Прочтите до обновления
 
-- **Ядро всё ещё релиз-кандидат.** `v1.14.3-lx.24-rc.2` добавляет в проверку
-  соединения за URL Check полный ответ DNS; стабильное ядро `lx.24` выйдет
-  после полевой проверки.
+- **Новая база апстрима.** Ядро переходит на апстримный sing-box 1.14.4.
+  Апстрим изменил разбор групп; группы Auto (`urltest`) по-прежнему выбирают
+  узел на каждое соединение. Если группа или WireGuard-узел после обновления
+  ведут себя иначе — сообщите.
 
 ## ✨ Новое
 
-- **URL Check: подробности шагов ([задача 688](docs/spec/tasks/688-url-check-stage-details.md)).**
-  У каждого шага есть шеврон, раскрывается любой шаг, а не только шаг с
-  атрибутами. Внутри:
-  - строка о том, что это за шаг («TLS handshake with the server»,
-    «Resolving the server address of a node or DNS server», …);
-  - почему такой исход: «Not run: tls … failed» у шагов после обрыва,
-    «Reused: an open connection or a cached answer», «Sent; the protocol
-    gives no confirmation»;
-  - атрибуты шага и ошибка.
-- **URL Check: ответ DNS по записям (задача 688, Leadaxe/sing-box-lx#59).**
-  DNS-запрос приложения показывает ответ по записи на строку с TTL: цепочку
-  CNAME, каждый адрес с именем, которому он принадлежит, параметры
-  HTTPS-записи вроде `alpn` и `ech`. При NXDOMAIN или пустом ответе блок
-  **Authority** показывает SOA. Строка говорит, откуда ответ: **From the
-  network**, **From cache, N old** (с пометкой, если запись просрочена и
-  обновляется) или **Local answer: fake IP or hosts**.
+- **URL Check: находки.** Под результатом ядро перечисляет, что заметило в
+  конфиге, на трёх уровнях: причина сбоя, риск, факт. Например: пакет
+  исключён из VPN, узел зависит от detour'а DNS-сервера вне маршрута, записи
+  fake IP теряются после перезапуска, REALITY не узнал клиента. Тап по
+  находке подсвечивает её шаги.
+- **URL Check: больше шагов.** Вердикт REALITY, пробуждение спящего
+  WireGuard-эндпоинта, рукопожатие WireGuard с detour'ом, который его несёт,
+  QUIC и аутентификация MASQUE и TrustTunnel, соединение с DNS-сервером из
+  пула.
 
 ## 🔄 Изменено
 
-- **URL Check: дерево нарисовано линиями.** Каждый шаг соединён с родителем,
-  так что резолв адреса узла, его DNS-сервер и detour этого сервера читаются
-  одной веткой.
-- **URL Check: что раскрыто сразу.** Шаг обрыва и DNS-запрос приложения с
-  кодом ошибки или пустым ответом раскрыты без тапа; код, отличный от
-  `NOERROR`, виден в строке шага. Тап по находке подсвечивает и раскрывает
-  её шаги.
+- **URL Check: редирект — это ответ.** Сайт, ответивший `301`/`302`,
+  показывает этот статус и адрес из `location`; по цепочке проверка не идёт.
+  Раньше такая проверка заканчивалась зелёным «HTTP 0».
+- **URL Check: без ложного успеха.** Полная проверка, закончившаяся без
+  HTTP-ответа и без упавшего шага, показывает жёлтое «No HTTP response».
+- **URL Check: результат относится к своим параметрам.** Смена URL,
+  приложения, глубины или From scratch стирает прошлый результат.
+- **URL Check: пустой ответ объясняет себя.** Когда ответило правило DNS или
+  стратегия домена, не спрашивая DNS-сервер, шаг говорит об этом, а не
+  просто «No records».
 
 ## 🔧 Под капотом
 
-- Ядро `v1.14.3-lx.24-rc.2` (было `rc.1`): SPEC 139 релиз 2, только
-  атрибуты стадий (`answer`, `authority`, `source`, `cache_age`, `stale`).
-  Java-поверхность ядра не изменилась.
+- Ядро `v1.14.4-lx.24` (было `v1.14.3-lx.24-rc.2`): SPEC 139 в стабильном
+  релизе, апстримный sing-box 1.14.4 с Go 1.26.10, исправлена гонка данных
+  при выборе узла в группе Auto.
+- Ниже Android 10 владельца соединения (правила по приложениям) ядро ищет в
+  `/proc/net` по вызову из приложения; само оно этого больше не делает.
 
 </details>
 
@@ -126,7 +122,7 @@ CNAME, адреса с TTL, параметры HTTPS-записи, SOA несу�
 ## Install / Установка
 
 ```bash
-adb install -r LxBox-v2.25.18-rc.2-arm64-v8a.apk
+adb install -r LxBox-v2.25.18-rc.3-arm64-v8a.apk
 ```
 
 Без uninstall! Поверх существующей установки. Настройки и подписки сохранятся.
@@ -136,4 +132,4 @@ are preserved.
 
 ---
 
-Previous release / Предыдущий релиз: [v2.25.18-rc.1](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.18-rc.1) · stable / стабильный: [v2.25.17](docs/releases/v2.25.17.md).
+Previous release / Предыдущий релиз: [v2.25.18-rc.2](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.18-rc.2) · stable / стабильный: [v2.25.17](docs/releases/v2.25.17.md).
