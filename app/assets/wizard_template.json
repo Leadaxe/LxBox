@@ -543,7 +543,6 @@
             {"title": "2a02:6b8::feed:a11 · Family v6", "value": "2a02:6b8::feed:a11"}
           ]
         },
-        {"name": "dns_plain_outbound", "type": "outbound", "default_value": "vpn-1", "required": true, "title": "UDP DNS outbound", "tooltip": "Which direction carries plain UDP queries to Yandex DNS"},
         {"name": "dns_encrypted_outbound", "type": "outbound", "default_value": "direct-out", "required": true, "title": "Encrypted DNS outbound", "tooltip": "Which direction carries Yandex DoT and DoH queries"},
         {"name": "geoip_enabled", "type": "bool", "default_value": "true", "title": "GeoIP IP-range fallback", "tooltip": "Match Russian-AS IPs as well as domains — catches CDN/QUIC/ECH cases where domain detection fails. Auto-downloads geoip-ru.srs (~150 KB) on first use."},
         {"name": "apps_enabled", "type": "bool", "default_value": "true", "title": "Russian apps by package", "tooltip": "Route Android apps from the legiz-ru list (banks, marketplaces, government services, Yandex/VK and others) by package name, regardless of the domains they use. Auto-downloads ru-app-list.srs (~4 KB) on first use."},
@@ -587,7 +586,7 @@
       ],
       "dns_servers": [
         {"type": "group", "tag": "dns_ru", "servers": ["yandex_udp", "yandex_dot", "yandex_doh"], "mode": "fastest", "error_ttl": "5m", "win_ttl": "5m", "description": "RU DNS group (UDP + DoT + DoH)"},
-        {"type": "udp", "tag": "yandex_udp", "server": "@dns_ip", "server_port": 53, "description": "Yandex UDP (IP from above)", "detour": "@dns_plain_outbound"},
+        {"type": "udp", "tag": "yandex_udp", "server": "@dns_ip", "server_port": 53, "description": "Yandex UDP (IP from above)", "detour": "@outbound"},
         {"type": "tls", "tag": "yandex_dot", "server": "77.88.8.88", "server_port": 853, "description": "Yandex Safe DoT", "tls": {"enabled": true, "server_name": "safe.dot.dns.yandex.net"}, "detour": "@dns_encrypted_outbound"},
         {"type": "https", "tag": "yandex_doh", "server": "77.88.8.88", "server_port": 443, "path": "/dns-query", "description": "Yandex Safe DoH", "tls": {"enabled": true, "server_name": "safe.dot.dns.yandex.net"}, "detour": "@dns_encrypted_outbound"}
       ]

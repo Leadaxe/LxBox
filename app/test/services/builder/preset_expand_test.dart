@@ -1314,10 +1314,10 @@ void main() {
       expect(grp['mode'], 'fastest');
       expect(grp.containsKey('detour'), isFalse, reason: '§319');
 
-      // §684: серверы не следуют @outbound маршрута. UDP — по
-      // `dns_plain_outbound` (дефолт vpn-1), DoT и DoH — по
-      // `dns_encrypted_outbound` (дефолт direct-out → detour снят, §117).
-      expect(byTag('ru-direct:yandex_udp')['detour'], 'vpn-1');
+      // §684 (поправка 29.10): UDP идёт Направлением пресета (@outbound),
+      // DoT и DoH — по `dns_encrypted_outbound` (дефолт direct-out → detour
+      // снят, §117).
+      expect(byTag('ru-direct:yandex_udp')['detour'], 'vpn-2');
       expect(byTag('ru-direct:yandex_dot').containsKey('detour'), isFalse,
           reason: 'direct-out → detour снят (§117)');
       expect(byTag('ru-direct:yandex_doh').containsKey('detour'), isFalse,

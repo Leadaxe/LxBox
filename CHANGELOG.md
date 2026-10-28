@@ -78,6 +78,19 @@
 
 ### Changed
 
+- **Ru internet segment: Yandex UDP DNS follows the preset's direction
+  ([task 684](docs/spec/tasks/684-dns-defaults-plain-tunnel-encrypted-direct.md)).**
+  The «UDP through the tunnel» default stays for the shared DNS servers; the
+  preset's own `yandex_udp` goes the preset's Outbound again (direct by
+  default), so Russian domains no longer resolve through `vpn-1`. The
+  «UDP DNS outbound» setting of the preset is removed; DoT and DoH keep
+  «Encrypted DNS outbound».
+  (RU: Ru internet segment: UDP-DNS Яндекса идёт Направлением пресета.
+  Умолчание «UDP через туннель» остаётся у общих DNS-серверов; собственный
+  `yandex_udp` пресета снова идёт по Outbound пресета (по умолчанию
+  напрямую), так что русские домены больше не резолвятся через `vpn-1`.
+  Настройка «UDP DNS outbound» у пресета снята; DoT и DoH по-прежнему
+  выбираются в «Encrypted DNS outbound».)
 - **Speed Test is a tab of Diagnostics (task 687).** The side menu item
   **Speed Test** is replaced by **Diagnostics** with two tabs: URL Check and
   Speed Test. Speed Test works as before; a running test is not interrupted

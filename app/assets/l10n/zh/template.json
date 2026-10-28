@@ -758,14 +758,8 @@
  "Yandex DNS IP for DNS-over-TLS (port 853). TLS SNI is pinned to common.dot.dns.yandex.net.": {
   "value": "Yandex DNS 的 DNS-over-TLS 地址（端口 853）。TLS SNI 固定为 common.dot.dns.yandex.net。"
  },
- "UDP DNS outbound": {
-  "value": "UDP DNS 出站"
- },
  "Encrypted DNS outbound": {
   "value": "加密 DNS 出站"
- },
- "Which direction carries plain UDP queries to Yandex DNS": {
-  "value": "由哪个方向把明文 UDP 查询送到 Yandex DNS"
  },
  "Which direction carries Yandex DoT and DoH queries": {
   "value": "由哪个方向把 Yandex DoT 和 DoH 查询送出"
