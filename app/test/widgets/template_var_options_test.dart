@@ -9,7 +9,7 @@ import 'package:lxbox/widgets/var_values_model.dart';
 
 /// §555 / задача 570 — `options` и `options_open` в редакторе переменных
 /// (TEMPLATE_LANG §2.1, SPEC 143 D-125): `text_list` + `options` —
-/// множественный выбор; `options_open` — своё значение сверх списка;
+/// множественный выбор; с `options_open` — комбобокс (поле + ▾, §691);
 /// закрытые `options` у `text` — только выбор из списка.
 Future<void> _pump(
   WidgetTester tester, {
@@ -47,7 +47,8 @@ WizardVar _var(String type, {bool open = false, String def = ''}) =>
     });
 
 void main() {
-  testWidgets('text_list + options — чипы, значение по строке в порядке options',
+  testWidgets(
+      'text_list + options — чипы, значение по строке в порядке options',
       (tester) async {
     final got = <String, String>{};
     await _pump(tester,
@@ -59,17 +60,33 @@ void main() {
     expect(got['x'], 'a\nc');
   });
 
-  testWidgets('text_list + options_open — свои строки после выбранных',
+  // §691 — правило UX: строка/мультистрока с подсказками — комбобокс
+  // (поле + стрелка списка), не чипы.
+  testWidgets(
+      'text_list + options_open — комбобокс: поле, ▾ добавляет и убирает строку',
       (tester) async {
     final got = <String, String>{};
     await _pump(tester,
         v: _var('text_list', open: true),
         value: 'b\nzzz',
         onChanged: (n, v) => got[n] = v);
-    expect(find.text('zzz'), findsOneWidget); // своё значение в поле
-    await tester.enterText(find.byType(TextField), 'zzz\n  yyy ');
+    expect(find.byType(FilterChip), findsNothing);
+    expect(find.byType(TextField), findsOneWidget);
+    expect(find.text('b\nzzz'), findsOneWidget); // всё значение — в поле
+
+    // Выбор подсказки, которой нет, — строка в конец.
+    await tester.tap(find.byIcon(Icons.arrow_drop_down));
     await tester.pumpAndSettle();
-    expect(got['x'], 'b\nzzz\nyyy');
+    await tester.tap(find.text('a').last);
+    await tester.pumpAndSettle();
+    expect(got['x'], 'b\nzzz\na');
+
+    // Повторный выбор уже добавленной — строка убирается.
+    await tester.tap(find.byIcon(Icons.arrow_drop_down));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('b').last);
+    await tester.pumpAndSettle();
+    expect(got['x'], 'zzz\na');
   });
 
   testWidgets('text + закрытые options — dropdown, свободного ввода нет',

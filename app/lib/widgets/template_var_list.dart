@@ -175,6 +175,23 @@ class _TemplateVarListViewState extends State<TemplateVarListView> {
       );
 
   Widget _buildControl(WizardVar v, String value) {
+    // §691 — `text_list` + `options` + `options_open`: поле списка с ▾
+    // (подсказки добавляют строку), а не чипы — чипы читались как уже
+    // введённые значения.
+    if (v.type == 'text_list' && v.options.isNotEmpty && v.optionsOpen) {
+      return VarTextField(
+        key: ValueKey('list-${v.name}'),
+        value: value,
+        label: v.title.isNotEmpty ? v.title : v.name,
+        tooltip: v.tooltip,
+        maxLines: 6,
+        listMode: true,
+        hintText: getLocalText.s("One per line, or pick from the list"),
+        suggestions: v.optionValues,
+        suggestionLabels: [for (final o in v.options) o.title],
+        onChanged: (val) => _update(v.name, val),
+      );
+    }
     // §555 — `text_list` + `options`: множественный выбор (SPEC 143, D-125).
     if (v.type == 'text_list' && v.options.isNotEmpty) {
       return _LabelledField(
@@ -391,6 +408,9 @@ class TemplateSectionHeader extends StatelessWidget {
 /// - `suggestions` — список пресетов; suffix-▾ открывает popup с ✓ на
 ///   текущем значении. Совместим только с `!obscure` (для secrets
 ///   пресетов нет).
+/// - `listMode` — значение — список строк (`text_list`): выбор из ▾
+///   добавляет строку, повторный выбор убирает её; ✓ — у строк, которые уже
+///   в значении. `suggestionLabels` — подписи пунктов (по индексу).
 class VarTextField extends StatefulWidget {
   const VarTextField({
     super.key,
@@ -406,6 +426,8 @@ class VarTextField extends StatefulWidget {
     this.errorText,
     this.maxLines = 1,
     this.hintText,
+    this.listMode = false,
+    this.suggestionLabels = const [],
   });
 
   final String value;
@@ -430,6 +452,12 @@ class VarTextField extends StatefulWidget {
 
   /// Подсказка в пустом поле.
   final String? hintText;
+
+  /// Значение — строки списка; ▾ добавляет и убирает строку.
+  final bool listMode;
+
+  /// Подписи пунктов ▾ (по индексу [suggestions]); пусто — само значение.
+  final List<String> suggestionLabels;
 
   @override
   State<VarTextField> createState() => _VarTextFieldState();
@@ -460,7 +488,20 @@ class _VarTextFieldState extends State<VarTextField> {
     super.dispose();
   }
 
+  List<String> get _lines => [
+        for (final l in _ctrl.text.split('\n'))
+          if (l.trim().isNotEmpty) l.trim(),
+      ];
+
+  bool _isChosen(String s) =>
+      widget.listMode ? _lines.contains(s) : s == _ctrl.text;
+
   void _applySuggestion(String v) {
+    if (widget.listMode) {
+      final lines = _lines;
+      lines.contains(v) ? lines.remove(v) : lines.add(v);
+      v = lines.join('\n');
+    }
     _ctrl.text = v;
     _ctrl.selection = TextSelection.collapsed(offset: v.length);
     widget.onChanged(v);
@@ -484,21 +525,22 @@ class _VarTextFieldState extends State<VarTextField> {
       position: PopupMenuPosition.under,
       onSelected: _applySuggestion,
       itemBuilder: (ctx) => [
-        for (final s in widget.suggestions)
+        for (final (i, s) in widget.suggestions.indexed)
           PopupMenuItem<String>(
             value: s,
             child: Row(
               children: [
                 SizedBox(
                   width: 20,
-                  child: s == _ctrl.text
-                      ? const Icon(Icons.check, size: 18)
-                      : null,
+                  child:
+                      _isChosen(s) ? const Icon(Icons.check, size: 18) : null,
                 ),
                 const SizedBox(width: 4),
                 Expanded(
                   child: Text(
-                    s,
+                    i < widget.suggestionLabels.length
+                        ? widget.suggestionLabels[i]
+                        : s,
                     style: const TextStyle(fontSize: 13),
                     overflow: TextOverflow.ellipsis,
                     maxLines: 1,
@@ -521,15 +563,13 @@ class _VarTextFieldState extends State<VarTextField> {
       keyboardType: widget.numeric
           ? TextInputType.number
           : (widget.maxLines > 1 ? TextInputType.multiline : null),
-      inputFormatters: widget.numeric
-          ? [FilteringTextInputFormatter.digitsOnly]
-          : null,
+      inputFormatters:
+          widget.numeric ? [FilteringTextInputFormatter.digitsOnly] : null,
       style: const TextStyle(fontSize: 13),
       decoration: InputDecoration(
         isDense: true,
         border: const OutlineInputBorder(),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
         hintText: widget.hintText,
         errorText: widget.errorText, // §161: «Required» для пустого обяз. поля
         errorStyle: const TextStyle(fontSize: 11),
@@ -577,11 +617,8 @@ class VarMultiSelect extends StatelessWidget {
   final String value;
   final ValueChanged<String> onChanged;
 
-  static List<String> _lines(String s) => s
-      .split('\n')
-      .map((l) => l.trim())
-      .where((l) => l.isNotEmpty)
-      .toList();
+  static List<String> _lines(String s) =>
+      s.split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
 
   @override
   Widget build(BuildContext context) {

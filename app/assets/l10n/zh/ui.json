@@ -6397,5 +6397,8 @@
   },
   "Query to one server of a DNS group": {
     "value": "对 DNS 组中某个服务器的查询"
+  },
+  "One per line, or pick from the list": {
+    "value": "每行一个，或从列表中选择"
   }
 }
