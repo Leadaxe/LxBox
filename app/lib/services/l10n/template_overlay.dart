@@ -77,34 +77,6 @@ class TemplateOverlay {
   // полей, которых в английском шаблоне нет.
   // ---------------------------------------------------------------------------
 
-  /// §578 — ветки элемента массива тела пресета: плоский объект — он сам;
-  /// условная обёртка `{"#if": {..., "#value": X, "#else": Y}}` или
-  /// `{"#if": [cond, X, Y]}` (§656) — `X` и,
-  /// если есть, `Y` (каждая ветка разворачивается так же: вложенный `#if`
-  /// и ветка-массив допустимы). Ветки — те же объекты шаблона, не копии: apply пишет в них.
-  static List<Map> conditionalBranches(dynamic item) {
-    if (item is List) return [for (final x in item) ...conditionalBranches(x)];
-    if (item is! Map) return const [];
-    final cond = item['#if'];
-    // §684 — map-spread: `#if` рядом с обычными полями объекта вливает ветку
-    // в сам объект, его собственные поля (description) тоже отображаемые.
-    final spread = item.keys.any((k) => k is String && !k.startsWith('#'));
-    // §656 — короткая форма `[cond, V, E?]`: ветки — элементы 1 и 2.
-    if (cond is List) {
-      if (cond.length < 2) return [item];
-      return [
-        if (spread) item,
-        for (final b in cond.skip(1)) ...conditionalBranches(b),
-      ];
-    }
-    if (cond is! Map) return [item];
-    return [
-      if (spread) item,
-      for (final key in const ['#value', '#else'])
-        ...conditionalBranches(cond[key]),
-    ];
-  }
-
   static void _walk(Map<String, dynamic> t, _Visit visit) {
     void str(dynamic node, String address, String field) {
       if (node is! Map) return;
@@ -169,25 +141,8 @@ class TemplateOverlay {
             }
           }
         }
-        final ds = r['dns_servers'];
-        if (ds is List) {
-          for (var i = 0; i < ds.length; i++) {
-            // §578 — элемент может быть условной обёрткой `#if`: отображаемые
-            // поля живут в ветках `#value`/`#else`. Тег пресета с `for_each_node`
-            // — конструкция `#tpl`, не строка: адрес тогда по индексу
-            // элемента (ключ перевода — сам английский текст, адрес только
-            // имя обхода).
-            for (final d in conditionalBranches(ds[i])) {
-              final tag = d['tag'];
-              str(
-                  d,
-                  tag is String
-                      ? 'preset.$pid.dns_server.$tag.description'
-                      : 'preset.$pid.dns_server.#$i.description',
-                  'description');
-            }
-          }
-        }
+        // dns_servers[].description пресетов не переводится: это имя
+        // сервера («Yandex Safe DoT»), слово владельца 29.10.
       }
     }
 
@@ -224,7 +179,7 @@ class TemplateOverlay {
           final server = s['server'];
           final tag = server is Map ? server['tag'] : null;
           if (tag is! String || tag.isEmpty) continue;
-          str(s, 'dns_server.$tag.description', 'description');
+          // description — имя сервера, не переводится (слово владельца 29.10).
           final vars = s['vars'];
           if (vars is List) {
             for (final v in vars) {

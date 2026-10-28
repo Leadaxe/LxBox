@@ -113,17 +113,11 @@
  "Cloudflare": {
   "value": "Cloudflare"
  },
- "Cloudflare DoT": {
-  "value": "Cloudflare DoT"
- },
  "Cloudflare Public DNS address for DNS-over-TLS (port 853).": {
   "value": "Cloudflare Public DNS 的 DNS-over-TLS 地址（端口 853）。"
  },
  "Cloudflare Public DNS address. IPv4 — universal; IPv6 — if your network supports it.": {
   "value": "Cloudflare Public DNS 地址。IPv4 —— 通用；IPv6 —— 需网络支持。"
- },
- "Cloudflare UDP": {
-  "value": "Cloudflare UDP"
  },
  "Connection and routing behavior": {
   "value": "连接与路由行为"
@@ -182,9 +176,6 @@
  "FakeIP": {
   "value": "FakeIP"
  },
- "FakeIP allocator": {
-  "value": "FakeIP 分配器"
- },
  "FakeIP server": {
   "value": "FakeIP 服务器"
  },
@@ -214,15 +205,6 @@
  },
  "Google 204": {
   "value": "Google 204"
- },
- "Google UDP": {
-  "value": "Google UDP"
- },
- "Google DoH": {
-  "value": "Google DoH"
- },
- "Google DoT": {
-  "value": "Google DoT"
  },
  "Google Public DNS IP for IP-based DoH. TLS SNI is pinned to dns.google.": {
   "value": "用于基于 IP 的 DoH 的 Google Public DNS 地址。TLS SNI 固定为 dns.google。"
@@ -371,9 +353,6 @@
  "Quad9 · anti-malware": {
   "value": "Quad9 · 防恶意软件"
  },
- "RU DNS group (UDP + DoT + DoH)": {
-  "value": "俄罗斯 DNS 分组（UDP + DoT + DoH）"
- },
  "Randomize letter case in server_name (WwW.gOoGle.CoM). Per RFC 6066 the field is case-insensitive, so servers accept either form; defeats naive exact-match matching only. Skipped on REALITY nodes — their SNI must stay byte-exact": {
   "value": "随机化 server_name 的字母大小写（WwW.gOoGle.CoM）。按 RFC 6066，该字段不区分大小写，服务器两种写法都接受；只能骗过朴素的精确匹配。REALITY 节点会跳过——它们的 SNI 必须逐字节一致"
  },
@@ -428,9 +407,6 @@
  "SOCKS5 only": {
   "value": "仅 SOCKS5"
  },
- "Safe DNS (DoT)": {
-  "value": "安全 DNS（DoT）"
- },
  "Safe profile": {
   "value": "安全配置"
  },
@@ -460,9 +436,6 @@
  },
  "Strict route": {
   "value": "严格路由"
- },
- "System DNS": {
-  "value": "系统 DNS"
  },
  "System HTTP proxy": {
   "value": "系统 HTTP 代理"
@@ -575,15 +548,6 @@
  "Yandex": {
   "value": "Yandex"
  },
- "Yandex Safe DoH": {
-  "value": "Yandex 安全 DoH"
- },
- "Yandex Safe DoT": {
-  "value": "Yandex 安全 DoT"
- },
- "Yandex UDP (IP from above)": {
-  "value": "Yandex UDP（IP 取上方设置）"
- },
  "outbound": {
   "value": "出站"
  },
@@ -592,21 +556,6 @@
  },
  "system name": {
   "value": "系统名称"
- },
- "Shield DNS (multi-provider group)": {
-  "value": "Shield DNS（多服务商分组）"
- },
- "OpenDNS UDP": {
-  "value": "OpenDNS UDP"
- },
- "OpenDNS DoH": {
-  "value": "OpenDNS DoH"
- },
- "Quad9 DoH (anti-malware)": {
-  "value": "Quad9 DoH（防恶意软件）"
- },
- "Yandex DoT": {
-  "value": "Yandex DoT"
  },
  "Google push (FCM)": {
   "value": "Google 推送（FCM）"
@@ -670,9 +619,6 @@
  },
  "Resolve tailnet names with the node's own DNS.": {
   "value": "使用节点自身的 DNS 解析 tailnet 名称。"
- },
- "MagicDNS of the tailnet": {
-  "value": "tailnet 的 MagicDNS"
  },
  "DNS cache size": {
   "value": "DNS 缓存大小"
