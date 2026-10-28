@@ -6667,5 +6667,8 @@
   },
   "No HTTP response · %d ms": {
     "value": "Нет HTTP-ответа · %d мс"
+  },
+  "Connection to the DNS server, already open: idle in the pool or opened by a parallel query": {
+    "value": "Соединение с DNS-сервером, уже открытое: из пула или открытое параллельным запросом"
   }
 }

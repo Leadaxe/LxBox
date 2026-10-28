@@ -90,6 +90,7 @@
 | detour | Hand-off to the detour that carries this node |
 | lookup | Resolving the server address of a node or DNS server |
 | dns | Query to a DNS server |
+| connection | Connection to the DNS server, already open: idle in the pool or opened by a parallel query (ядро rc.3, дочерняя `dns`, всегда REUSED) |
 | wake | Waking an endpoint that was idle-suspended |
 | udp | UDP socket to the server; UDP has no handshake to confirm |
 | tcp_connect | TCP connection to the server |

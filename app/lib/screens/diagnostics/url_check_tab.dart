@@ -726,6 +726,9 @@ String? stageKindText(String kind) => switch (kind) {
           "Resolving the server address of a node or DNS server",
         ),
       'dns' => getLocalText.s("Query to a DNS server"),
+      'connection' => getLocalText.s(
+          "Connection to the DNS server, already open: idle in the pool or opened by a parallel query",
+        ),
       'wake' => getLocalText.s("Waking an endpoint that was idle-suspended"),
       'tcp_connect' => getLocalText.s("TCP connection to the server"),
       'udp' => getLocalText

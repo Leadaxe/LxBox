@@ -6385,5 +6385,8 @@
   },
   "No HTTP response · %d ms": {
     "value": "无 HTTP 响应 · %d 毫秒"
+  },
+  "Connection to the DNS server, already open: idle in the pool or opened by a parallel query": {
+    "value": "到 DNS 服务器的连接已打开：来自连接池或由并行查询打开"
   }
 }
