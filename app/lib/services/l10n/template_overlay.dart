@@ -86,13 +86,20 @@ class TemplateOverlay {
     if (item is List) return [for (final x in item) ...conditionalBranches(x)];
     if (item is! Map) return const [];
     final cond = item['#if'];
+    // §684 — map-spread: `#if` рядом с обычными полями объекта вливает ветку
+    // в сам объект, его собственные поля (description) тоже отображаемые.
+    final spread = item.keys.any((k) => k is String && !k.startsWith('#'));
     // §656 — короткая форма `[cond, V, E?]`: ветки — элементы 1 и 2.
     if (cond is List) {
       if (cond.length < 2) return [item];
-      return [for (final b in cond.skip(1)) ...conditionalBranches(b)];
+      return [
+        if (spread) item,
+        for (final b in cond.skip(1)) ...conditionalBranches(b),
+      ];
     }
     if (cond is! Map) return [item];
     return [
+      if (spread) item,
       for (final key in const ['#value', '#else'])
         ...conditionalBranches(cond[key]),
     ];
