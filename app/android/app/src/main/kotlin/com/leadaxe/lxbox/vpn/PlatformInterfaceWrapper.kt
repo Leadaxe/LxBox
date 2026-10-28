@@ -4,7 +4,6 @@ import android.net.NetworkCapabilities
 import android.os.Build
 import android.os.Process
 import android.system.OsConstants
-import androidx.annotation.RequiresApi
 import io.nekohasekai.libbox.ConnectionOwner
 import io.nekohasekai.libbox.InterfaceUpdateListener
 import io.nekohasekai.libbox.Libbox
@@ -30,9 +29,6 @@ interface PlatformInterfaceWrapper : PlatformInterface {
 
     override fun openTun(options: TunOptions): Int = error("invalid argument")
 
-    override fun useProcFS(): Boolean = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
-
-    @RequiresApi(Build.VERSION_CODES.Q)
     override fun findConnectionOwner(
         ipProtocol: Int,
         sourceAddress: String, sourcePort: Int,
@@ -47,11 +43,20 @@ interface PlatformInterfaceWrapper : PlatformInterface {
         // INVALID_UID — sing-box трактует как «owner unknown», `find_process`
         // правило просто не матчит, routing продолжает работать.
         val uid = try {
-            BoxApplication.connectivity.getConnectionOwnerUid(
-                ipProtocol,
-                InetSocketAddress(sourceAddress, sourcePort),
-                InetSocketAddress(destinationAddress, destinationPort)
-            )
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                BoxApplication.connectivity.getConnectionOwnerUid(
+                    ipProtocol,
+                    InetSocketAddress(sourceAddress, sourcePort),
+                    InetSocketAddress(destinationAddress, destinationPort)
+                )
+            } else {
+                // До Android 10 `getConnectionOwnerUid` нет: владельца ищет ядро
+                // по /proc/net. Ядро 1.14.4 сняло `useProcFS()` и зовёт этот
+                // callback всегда, поиск по procfs — `Libbox.findConnectionOwner`.
+                Libbox.findConnectionOwner(
+                    ipProtocol, sourceAddress, sourcePort, destinationAddress, destinationPort
+                ).userId
+            }
         } catch (e: Exception) {
             android.util.Log.w("PIW", "findConnectionOwner: getConnectionOwnerUid failed: ${e.message}")
             Process.INVALID_UID

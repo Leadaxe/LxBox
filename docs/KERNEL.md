@@ -34,7 +34,7 @@ milliseconds. `startTailscaleSSHSession` is not used.
 | Called from | `scripts/build-local-apk.sh` and CI (`ci.yml` → the android job → “Fetch sing-box-lx core”) |
 | The AAR in git | NO (~110 MB as of lx.25; `app/android/app/libs/` is in `.gitignore`); `build.gradle.kts` → `implementation(files("libs/libbox.aar"))` |
 
-**The current pin: `v1.14.3-lx.24-rc.2`** (see `app/android/libbox.version`) — lx.1
+**The current pin: `v1.14.4-lx.24`** (see `app/android/libbox.version`) — lx.1
 plus XHTTP HTTP-version parity (**SPEC 104**, lx.2), Vision on top of VLESS
 Encryption (**SPEC 105**, lx.3), the runtime WG/AWG endpoint toggle
 (**SPEC 106**, lx.4: `CommandClient.setEndpointEnabled`, `endpointState =
@@ -211,6 +211,29 @@ URL Check, task 688. No `.proto` or libbox change: `javap` over the full
 `classes.jar` is identical to rc.1 (270 classes, 3753 lines). Toolchain and
 build tags unchanged, `kCoreBuildTagsPin` moved with the pin. AAR sha256
 `bc4a2c6db3db1040c1283bb82c017259e947fb9d0c788ab082bfd568d9f4ef73`
+(checked against the release `SHA256SUMS`).
+
+**`v1.14.4-lx.24`** — stable, straight after rc.3 (rc.4 was not cut). Base
+moves to upstream sing-box v1.14.4, Go 1.26.10 (SPEC 140): group resolution
+moved into the router upstream, but the router stops at our `urltest`, so
+group behavior is as in lx.23. SPEC 139 after rc.2: findings filled (15
+codes), stages `connection` (pooled DNS server connection, child of `dns`),
+`reality`, `wake`, `wg_handshake` (with the endpoint's `detour`), `quic` and
+`auth` of MASQUE/TrustTunnel; `reuse=uncontrolled` on `dial` where an
+external module keeps its own pool; a recovered failure is never the root; a
+3xx is the answer (`status` + `location`, not followed — before it an
+`https://ya.ru` check through the router ended as `http_status = 0` with no
+failed stage, task 689); DoH/DoH3 under `fresh` on a one-off client
+(`pool=detached`). Java surface: upstream `40bc411e8` removed
+`PlatformInterface.useProcFS()` and added the static
+`Libbox.findConnectionOwner(...)` (procfs search); the core now always calls
+`findConnectionOwner`, so `PlatformInterfaceWrapper` calls the static one
+below Android 10 (minSdk 24) instead of returning `useProcFS = true`.
+Otherwise `javap` over the full `classes.jar` is identical to rc.2 (270
+classes). Build tags unchanged (`build_libbox/main.go` identical to rc.2),
+`kCoreBuildTagsPin` moved with the pin. `strings -a` of `libbox.so` reports
+`1.14.4-lx.24`. AAR sha256
+`ad32839dd5ffd52ccb2cfa7ce76fe20a29995ecac1bb7ba0f23845968109634c`
 (checked against the release `SHA256SUMS`).
 
 **`v1.14.3-lx.24-rc.1`** — one change that reaches the app: **SPEC 139**
@@ -1235,7 +1258,8 @@ subscription), the core provides insurance in case the client misses something.
 
 | rc | What was added |
 |---|---|
-| **v1.14.3-lx.24-rc.2** (current pin) | SPEC 139 release 2 — `app_dns` answer records (`answer` per record with TTL, `authority` on NXDOMAIN/NODATA, `source` network/cache/local with `cache_age`/`stale`), `cache_age` on cached `dns` stages; URL Check renders them (task 688). Attributes only: `javap` identical to rc.1. AAR sha256 `bc4a2c6db3db1040c1283bb82c017259e947fb9d0c788ab082bfd568d9f4ef73`. |
+| **v1.14.4-lx.24** (current pin) | Stable SPEC 139 (connection test) on the upstream v1.14.4 base (SPEC 140, Go 1.26.10). After rc.2: findings, stages `connection`/`reality`/`wake`/`wg_handshake`/`quic`/`auth`, a 3xx is the answer with `location`, DoH/DoH3 one-off under `fresh`. Java surface: `PlatformInterface.useProcFS()` removed, static `Libbox.findConnectionOwner` added (procfs; called below Android 10). AAR sha256 `ad32839dd5ffd52ccb2cfa7ce76fe20a29995ecac1bb7ba0f23845968109634c`. |
+| **v1.14.3-lx.24-rc.2** | SPEC 139 release 2 — `app_dns` answer records (`answer` per record with TTL, `authority` on NXDOMAIN/NODATA, `source` network/cache/local with `cache_age`/`stale`), `cache_age` on cached `dns` stages; URL Check renders them (task 688). Attributes only: `javap` identical to rc.1. AAR sha256 `bc4a2c6db3db1040c1283bb82c017259e947fb9d0c788ab082bfd568d9f4ef73`. |
 | **v1.14.3-lx.24-rc.1** | SPEC 139 release 1 — `CommandClient.startConnectionTest`: active connection test with a streamed stage tree (Diagnostics → URL Check, task 687); `urltest` `selectedOutbound` race hotfix. Base v1.14.3, upstream drift deferred. No new config keys. Java surface additive: 258 → 270 classes. AAR sha256 `6d422f54170ec7635096262e8ac73652fcf48521ec83c55bf79caaa418a48bc2`. |
 | **v1.14.3-lx.23** | lx.22: SPEC 136 — start no longer waits 10–16 s for an unrelated mux handshake; SPEC 137 — masque `vhttp: auto` no longer pins the previous core instance after each reload. lx.23: SPEC 030 — fast stop with many WG/AWG endpoints again (the shutdown pre-pass was dead since `v1.14.0-lx.37`; main hypothesis of task 668), plus a 20 s close watchdog that dumps goroutines to the core log; SPEC 138 — `round_robin` skips a slot whose node failed its last probe. No new config keys. Java surface identical to lx.21. AAR sha256 `d7be8b1297f68ad8bad47e5eb766f59501100b1e9377de403d9c53cd364ecef1`. |
 | **v1.14.3-lx.21** | **Nothing new on the Android data path.** lx.19/lx.20 (SPEC 128/129) are `lxd` daemon fixes; lx.21 adds the experimental `trusttunnel` outbound/inbound (SPEC 133) to the desktop and router binaries only — the AAR is built without `with_trusttunnel`, so the type loads as a stub. Base sing-box v1.14.3. Java surface identical to lx.18 (258 classes, 3583 javap lines). AAR sha256 `5a6c782b834d53aa8031e32a953eb9517e78b742bbc10d3474154fc05aa00e0e`. |

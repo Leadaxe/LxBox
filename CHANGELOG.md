@@ -86,16 +86,19 @@
   заменён пунктом **Diagnostics** с вкладками URL Check и Speed Test. Speed
   Test работает как раньше; идущий замер не прерывается при переключении
   вкладок. Ссылки поддержки на Speed Test открывают ту же вкладку.)
-- **Core `v1.14.3-lx.23` → `v1.14.3-lx.24-rc.2`
+- **Core `v1.14.3-lx.23` → `v1.14.4-lx.24`
   ([docs/KERNEL.md](docs/KERNEL.md)).** Adds the active connection test
-  behind URL Check (Leadaxe/sing-box-lx#59), with the DNS answer record by
-  record since rc.2, and fixes a data race in the
-  Auto (`urltest`) group's selection. No config changes. A release
-  candidate of the core: the stable `lx.24` follows the field run.
-  (RU: Ядро `v1.14.3-lx.23` → `v1.14.3-lx.24-rc.2`: активная проверка
-  соединения для URL Check (с rc.2 — ответ DNS по записям) и исправление гонки данных при выборе узла в
-  группе Auto (`urltest`). Конфиг не меняется. Это кандидат ядра: стабильный
-  `lx.24` выйдет после полевой проверки.)
+  behind URL Check (Leadaxe/sing-box-lx#59): the stage tree, the DNS answer
+  record by record, findings, a redirect reported as the answer. Moves to the
+  upstream sing-box 1.14.4 base (group, WireGuard sleep and flow close
+  fixes); Auto (`urltest`) groups still pick a node per connection. Fixes a
+  data race in the Auto group's selection. No config changes.
+  (RU: Ядро `v1.14.3-lx.23` → `v1.14.4-lx.24`: активная проверка соединения
+  для URL Check (дерево стадий, ответ DNS по записям, находки, редирект как
+  ответ). База — апстримный sing-box 1.14.4 (исправления групп, сна
+  WireGuard и закрытия потоков); группы Auto (`urltest`) по-прежнему выбирают
+  узел на каждое соединение. Исправлена гонка данных при выборе узла в группе
+  Auto. Конфиг не меняется.)
 
 - **Auto node in a folder is edited in Node Settings
   ([task 686](docs/spec/tasks/686-folder-auto-node-source-tab.md)).** A tap
