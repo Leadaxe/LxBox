@@ -8,6 +8,28 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **VPN would not start after a rule made of IP ranges got a DNS option
+  ([task 692](docs/spec/tasks/692-rule-dns-option-needs-dns-visible-conditions.md)).**
+  The core stopped with «validate dns rule[N]: Legacy Address Filter Fields
+  in DNS rules is deprecated…»: a DNS rule pointing to a rule-set that holds
+  nothing but IP ranges is fatal once FakeIP or Force IPv4 is present. The
+  DNS section of a rule (dedicated server, Force IPv4, Fixed IP) now
+  appears only when the rule has a condition the DNS layer can check — a
+  domain, an app, a source address, a Wi-Fi network or an inbound — and an
+  IP-only rule no longer produces a DNS rule. Existing rules keep their DNS
+  settings; they come back once a domain or app is added.
+  (RU: VPN не стартовал после того, как правило из одних IP-диапазонов
+  получало DNS-опцию. Ядро останавливалось с «validate dns rule[N]: Legacy
+  Address Filter Fields in DNS rules is deprecated…»: DNS-правило на набор
+  из одних IP-диапазонов фатально, когда в конфиге есть FakeIP или Force
+  IPv4. Секция DNS у правила (отдельный сервер, Force IPv4, Fixed IP)
+  теперь показывается только при условии, которое DNS-слой может проверить:
+  домен, приложение, адрес источника, Wi-Fi-сеть или inbound, — и правило
+  из одних IP больше не даёт DNS-правила. Настройки DNS у существующих
+  правил сохраняются и возвращаются, когда добавлен домен или приложение.)
+
 ### Added
 
 - **Bypass the tunnel for chosen addresses

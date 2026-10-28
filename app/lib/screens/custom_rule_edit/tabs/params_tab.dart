@@ -201,7 +201,8 @@ class ParamsTab extends StatelessWidget {
               onToggle: c.toggleInbound,
             ),
           // §117 задача 3 / §683 — DNS & Resolve (только inline/srs).
-          DnsResolveSection(controller: c),
+          // §692 — только при условии, видимом DNS-слою (чисто IP — нет).
+          if (c.dnsSectionVisible) DnsResolveSection(controller: c),
         ],
         const SizedBox(height: 24),
         const Divider(),

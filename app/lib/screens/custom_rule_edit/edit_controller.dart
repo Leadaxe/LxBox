@@ -269,6 +269,29 @@ class CustomRuleEditController extends ChangeNotifier {
       _protocols.isNotEmpty ||
       _network.isNotEmpty;
 
+  /// §692: секция «DNS & Resolve» видна, только когда у правила есть
+  /// условие, видимое DNS-слою (зеркало [CustomRule.dnsLayerEligible]):
+  /// домен, приложение, источник, wifi, либо `inbound` при пустом `ip_cidr`.
+  /// Чисто IP-правило — секции нет: ядро отвергает DNS-ссылку на набор
+  /// «только IP», а матчить на DNS-слое там нечего. srs — всегда видна.
+  /// Live по текущему состоянию формы.
+  bool get dnsSectionVisible => switch (_kind) {
+        CustomRuleKind.srs => true,
+        CustomRuleKind.inline =>
+          norm.normalizedDomains(domainCtrl.text).isNotEmpty ||
+              norm
+                  .normalizedDomains(domainSuffixCtrl.text,
+                      stripLeadingDot: true)
+                  .isNotEmpty ||
+              norm.normalizedKeywords(domainKeywordCtrl.text).isNotEmpty ||
+              _packages.isNotEmpty ||
+              norm.normalizedCidrs(sourceIpCidrCtrl.text).isNotEmpty ||
+              _wifiNetworks.isNotEmpty ||
+              (norm.normalizedCidrs(ipCidrCtrl.text).isEmpty &&
+                  _inbounds.isNotEmpty),
+        _ => false,
+      };
+
   // ─── Init / dispose ──────────────────────────────────────────────────
 
   List<TextEditingController> get _allTextCtrls => [
