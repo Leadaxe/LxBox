@@ -763,5 +763,17 @@
   },
   "Send Yandex DoT and DoH through this preset's Outbound, like UDP. Off: they go direct.": {
     "value": "Отправлять DoT и DoH Яндекса через Outbound этого пресета, как UDP. Выключено — напрямую."
+  },
+  "IPv4 pool": {
+    "value": "Пул IPv4"
+  },
+  "IPv6 pool": {
+    "value": "Пул IPv6"
+  },
+  "Fake IPv4 addresses are taken from this range (CIDR). Change it if the default range is used in your network or excluded from the tunnel. Changing it resets the saved fake addresses.": {
+    "value": "Фейковые IPv4-адреса берутся из этого диапазона (CIDR). Поменяйте, если стандартный диапазон занят в вашей сети или исключён из туннеля. Смена сбрасывает сохранённые фейковые адреса."
+  },
+  "Fake IPv6 addresses are taken from this range (CIDR). Leave empty to answer AAAA queries with no address. At least one pool must be set.": {
+    "value": "Фейковые IPv6-адреса берутся из этого диапазона (CIDR). Оставьте пустым, чтобы на AAAA-запросы отвечать без адреса. Хотя бы один пул должен быть задан."
   }
 }

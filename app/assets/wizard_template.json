@@ -608,7 +608,9 @@
           }}
         },
         {"name": "dns_server", "type": "dns_servers", "default_value": "fakeip", "required": true, "wizard_ui": "hidden", "title": "FakeIP server", "tooltip": "The FakeIP allocator. Internal — bound to the fakeip DNS server."},
-        {"name": "force", "type": "bool", "default_value": "true", "title": "Block HTTPS records", "tooltip": "Reply empty to HTTPS/SVCB DNS records (RFC 9460) so apps fall back to plain A/AAAA. Keeps these queries from leaking to the fallback DNS."}
+        {"name": "force", "type": "bool", "default_value": "true", "title": "Block HTTPS records", "tooltip": "Reply empty to HTTPS/SVCB DNS records (RFC 9460) so apps fall back to plain A/AAAA. Keeps these queries from leaking to the fallback DNS."},
+        {"name": "inet4_range", "type": "text", "default_value": "198.18.0.0/15", "wizard_ui": "edit", "title": "IPv4 pool", "tooltip": "Fake IPv4 addresses are taken from this range (CIDR). Change it if the default range is used in your network or excluded from the tunnel. Changing it resets the saved fake addresses."},
+        {"name": "inet6_range", "type": "text", "default_value": "fc00::/18", "wizard_ui": "edit", "title": "IPv6 pool", "tooltip": "Fake IPv6 addresses are taken from this range (CIDR). Leave empty to answer AAAA queries with no address. At least one pool must be set."}
       ],
       "dns_rules": [
         {"#if": {"#and": ["@force"], "#value": {
@@ -619,7 +621,7 @@
         {"query_type": ["A", "AAAA"], "server": "@dns_server"}
       ],
       "dns_servers": [
-        {"type": "fakeip", "tag": "fakeip", "inet4_range": "198.18.0.0/15", "inet6_range": "fc00::/18", "description": "FakeIP allocator"}
+        {"type": "fakeip", "tag": "fakeip", "inet4_range": "@inet4_range", "inet6_range": "@inet6_range", "description": "FakeIP allocator"}
       ]
     },
     {

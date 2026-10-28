@@ -763,5 +763,17 @@
  },
  "Send Yandex DoT and DoH through this preset's Outbound, like UDP. Off: they go direct.": {
   "value": "像 UDP 一样，通过此预设的 Outbound 发送 Yandex DoT 和 DoH。关闭时直连。"
+ },
+ "IPv4 pool": {
+  "value": "IPv4 地址池"
+ },
+ "IPv6 pool": {
+  "value": "IPv6 地址池"
+ },
+ "Fake IPv4 addresses are taken from this range (CIDR). Change it if the default range is used in your network or excluded from the tunnel. Changing it resets the saved fake addresses.": {
+  "value": "伪 IPv4 地址从此范围（CIDR）分配。如果默认范围在您的网络中已被使用或被排除在隧道之外，请更改。更改会重置已保存的伪地址。"
+ },
+ "Fake IPv6 addresses are taken from this range (CIDR). Leave empty to answer AAAA queries with no address. At least one pool must be set.": {
+  "value": "伪 IPv6 地址从此范围（CIDR）分配。留空则对 AAAA 查询返回无地址的应答。至少需要设置一个地址池。"
  }
 }

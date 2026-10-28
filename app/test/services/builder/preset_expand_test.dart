@@ -1324,6 +1324,26 @@ void main() {
           reason: 'direct-out → detour снят (§117)');
     });
 
+    test('fakeip: пулы из vars — дефолт как раньше, свой, пустой IPv6 (§690)', () {
+      Map<String, dynamic> server(Map<String, String> vars) => expandPreset(
+            CustomRulePreset(name: 'FakeIP', presetId: 'fakeip', varsValues: vars),
+            realPreset('fakeip'),
+          ).dnsServers.single;
+
+      final def = server(const {});
+      expect(def['inet4_range'], '198.18.0.0/15');
+      expect(def['inet6_range'], 'fc00::/18');
+
+      final own = server(const {'inet4_range': '10.233.0.0/16', 'inet6_range': 'fd00:233::/48'});
+      expect(own['inet4_range'], '10.233.0.0/16');
+      expect(own['inet6_range'], 'fd00:233::/48');
+
+      final noV6 = server(const {'inet6_range': ''});
+      expect(noV6['inet4_range'], '198.18.0.0/15');
+      expect(noV6.containsKey('inet6_range'), isFalse,
+          reason: 'пусто = explicit none (§033), ядро отвечает на AAAA пустым NOERROR');
+    });
+
     test('ru-direct: галочка dns_encrypted_via_outbound — DoT/DoH по @outbound (§684)', () {
       final f = expandPreset(
         CustomRulePreset(

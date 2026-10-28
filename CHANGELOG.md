@@ -78,6 +78,15 @@
 
 ### Changed
 
+- **FakeIP: custom address pools
+  ([task 690](docs/spec/tasks/690-fakeip-custom-ranges.md)).** The FakeIP
+  preset gets «IPv4 pool» and «IPv6 pool» (CIDR; defaults 198.18.0.0/15 and
+  fc00::/18 as before), for networks where the default range is in use or
+  excluded from the tunnel. An empty IPv6 pool turns off fake AAAA answers.
+  (RU: FakeIP: свои пулы адресов. У пресета FakeIP появились «IPv4 pool» и
+  «IPv6 pool» (CIDR; по умолчанию 198.18.0.0/15 и fc00::/18, как раньше) —
+  для сетей, где стандартный диапазон занят или исключён из туннеля. Пустой
+  IPv6-пул выключает фейковые ответы на AAAA.)
 - **Ru internet segment: Yandex UDP DNS follows the preset's direction
   ([task 684](docs/spec/tasks/684-dns-defaults-plain-tunnel-encrypted-direct.md)).**
   The «UDP through the tunnel» default stays for the shared DNS servers; the
