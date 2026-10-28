@@ -53,6 +53,15 @@
   ответе и откуда ответ: из сети, из кэша с возрастом или локальный (fake IP,
   hosts). Шаг обрыва и пустой или ошибочный ответ DNS раскрыты сразу; тап по
   находке подсвечивает её шаги.)
+- **URL Check: no false success, no stale result
+  ([task 689](docs/spec/tasks/689-url-check-no-response-and-stale-result.md)).**
+  A Full check that ends without an HTTP response and without a failed step
+  shows a yellow «No HTTP response» instead of a green «HTTP 0». Changing the
+  URL, the app, the depth or From scratch clears the previous result.
+  (RU: URL Check: без ложного успеха и без старого результата. Полная
+  проверка, закончившаяся без HTTP-ответа и без упавшего шага, показывает
+  жёлтое «No HTTP response» вместо зелёного «HTTP 0». Смена URL, приложения,
+  глубины или From scratch снимает прошлый результат.)
 
 - **INI tab for WireGuard / AmneziaWG nodes
   ([task 686](docs/spec/tasks/686-folder-auto-node-source-tab.md)).** Node

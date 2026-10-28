@@ -6382,5 +6382,8 @@
   },
   "No records: the core answered without asking a DNS server (a rule or the domain strategy)": {
     "value": "无记录：内核未询问 DNS 服务器即作答（规则或域名策略）"
+  },
+  "No HTTP response · %d ms": {
+    "value": "无 HTTP 响应 · %d 毫秒"
   }
 }

@@ -6664,5 +6664,8 @@
   },
   "No records: the core answered without asking a DNS server (a rule or the domain strategy)": {
     "value": "Записей нет: ядро ответило, не спрашивая DNS-сервер (правило или стратегия домена)"
+  },
+  "No HTTP response · %d ms": {
+    "value": "Нет HTTP-ответа · %d мс"
   }
 }

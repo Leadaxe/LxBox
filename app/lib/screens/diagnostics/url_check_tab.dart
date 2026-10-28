@@ -124,6 +124,15 @@ class _UrlCheckTabState extends State<UrlCheckTab>
     }
   }
 
+  /// Результат относится к параметрам своего прогона: смена любого из них
+  /// снимает дерево и останавливает идущую проверку.
+  void _resetResult() {
+    _stop();
+    _trace = null;
+    _toggled.clear();
+    _focus = const {};
+  }
+
   Future<void> _pickApp() async {
     final res = await Navigator.of(context).push<AppPickerResult>(
       MaterialPageRoute(
@@ -135,10 +144,13 @@ class _UrlCheckTabState extends State<UrlCheckTab>
     if (res == null || !mounted) return;
     // Пикер множественный: берём добавленное, иначе единственное оставшееся.
     final added = res.packages.where((p) => p != _packageName).toList();
+    final picked = added.isNotEmpty
+        ? added.last
+        : (res.packages.isEmpty ? '' : res.packages.first);
+    if (picked == _packageName) return;
     setState(() {
-      _packageName = added.isNotEmpty
-          ? added.last
-          : (res.packages.isEmpty ? '' : res.packages.first);
+      _packageName = picked;
+      _resetResult();
     });
   }
 
@@ -176,14 +188,20 @@ class _UrlCheckTabState extends State<UrlCheckTab>
           onSubmitted: (_) {
             if (_tunnelUp && !_running) _run();
           },
-          onChanged: (_) => setState(() => _urlError = null),
+          onChanged: (_) => setState(() {
+            _urlError = null;
+            _resetResult();
+          }),
           decoration: InputDecoration(
             suffixIcon: _urlCtrl.text.isEmpty
                 ? null
                 : IconButton(
                     tooltip: getLocalText.s("Clear"),
                     icon: const Icon(Icons.clear),
-                    onPressed: () => setState(_urlCtrl.clear),
+                    onPressed: () => setState(() {
+                      _urlCtrl.clear();
+                      _resetResult();
+                    }),
                   ),
             labelText: getLocalText.s("URL"),
             hintText: getLocalText.s("example.com or https://…"),
@@ -217,7 +235,10 @@ class _UrlCheckTabState extends State<UrlCheckTab>
                         onPressed: _running ? null : _pickApp,
                         onDeleted: _running
                             ? null
-                            : () => setState(() => _packageName = ''),
+                            : () => setState(() {
+                                  _packageName = '';
+                                  _resetResult();
+                                }),
                       ),
               ),
             ),
@@ -245,8 +266,12 @@ class _UrlCheckTabState extends State<UrlCheckTab>
             ),
           ],
           selected: {_depth},
-          onSelectionChanged:
-              _running ? null : (s) => setState(() => _depth = s.first),
+          onSelectionChanged: _running
+              ? null
+              : (s) => setState(() {
+                    _depth = s.first;
+                    _resetResult();
+                  }),
         ),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
@@ -255,7 +280,12 @@ class _UrlCheckTabState extends State<UrlCheckTab>
             getLocalText.s("Bypass DNS cache and open new connections"),
           ),
           value: _fresh,
-          onChanged: _running ? null : (v) => setState(() => _fresh = v),
+          onChanged: _running
+              ? null
+              : (v) => setState(() {
+                    _fresh = v;
+                    _resetResult();
+                  }),
         ),
         const SizedBox(height: 4),
         FilledButton.icon(
@@ -310,6 +340,10 @@ class _UrlCheckTabState extends State<UrlCheckTab>
         '${root.kind} ${root.subject}'.trim(), // l10n-exempt: core identifiers
         root.error,
       );
+    } else if (_runDepth == ConnectionTestDepth.http && r.httpStatus == 0) {
+      // Путь не оборвался, а ответа сайта нет: ядро не довело обмен.
+      sev = BannerSeverity.warning;
+      text = getLocalText.s("No HTTP response · %d ms", r.elapsedMs);
     } else {
       sev = BannerSeverity.success;
       text = _runDepth == ConnectionTestDepth.http
@@ -324,6 +358,7 @@ class _UrlCheckTabState extends State<UrlCheckTab>
             switch (sev) {
               BannerSeverity.success => Icons.check_circle,
               BannerSeverity.error => Icons.error,
+              BannerSeverity.warning => Icons.warning_amber_rounded,
               _ => _running ? Icons.hourglass_top : Icons.stop_circle_outlined,
             },
             color: color),
