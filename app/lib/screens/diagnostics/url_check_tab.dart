@@ -460,6 +460,7 @@ class _UrlCheckTabState extends State<UrlCheckTab>
     'cache_age',
     'stale',
     'type',
+    'lost_race',
   };
 
   Widget _stageRow(BuildContext context, ConnectionTestTrace t, TraceRow row) {
@@ -619,6 +620,17 @@ class _UrlCheckTabState extends State<UrlCheckTab>
   String? _resultNote(ConnectionTestTrace t, TestStage s) {
     switch (s.result) {
       case StageResult.skipped:
+        // SPEC 139 §5.13: проиграл параллельную попытку. Номер победителя —
+        // id стадии; 0 — победитель на этом уровне неизвестен.
+        if (s.attrs.any((a) => a.key == 'lost_race')) {
+          final winner = t.stage(int.tryParse(s.attr('lost_race')) ?? 0);
+          return winner == null
+              ? getLocalText.s("Cut short: a parallel attempt answered first")
+              : getLocalText.s(
+                  "Lost the race: %s answered first",
+                  winner.subject.isEmpty ? winner.kind : winner.subject,
+                );
+        }
         final root = t.rootStage;
         if (root == null || root.id == s.id) return getLocalText.s("Not run");
         return getLocalText.s(
@@ -726,6 +738,9 @@ String? stageKindText(String kind) => switch (kind) {
           "Resolving the server address of a node or DNS server",
         ),
       'dns' => getLocalText.s("Query to a DNS server"),
+      'dns_member' => getLocalText.s(
+          "Query to one server of a DNS group",
+        ),
       'connection' => getLocalText.s(
           "Connection to the DNS server, already open: idle in the pool or opened by a parallel query",
         ),

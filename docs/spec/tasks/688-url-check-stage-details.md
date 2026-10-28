@@ -37,7 +37,12 @@
 1. **Описание шага** — одна строка по `kind` (таблица ниже). У незнакомого
    `kind` строки нет (словарь ядра открыт, SPEC 139 §4).
 2. **Пояснение исхода**, кроме OK и RUNNING:
-   - SKIPPED: «Not run: %s failed» с корневой стадией итога, без неё — «Not run».
+   - SKIPPED с `lost_race` (SPEC 139 §5.13, параллельные попытки: дозвон
+     по адресам, члены DNS-группы с lx.25): «Lost the race: %s answered
+     first» с subject победителя (по id стадии); `lost_race=0` или
+     победитель не найден — «Cut short: a parallel attempt answered first».
+     Сам атрибут в прочих не повторяется.
+   - SKIPPED без `lost_race`: «Not run: %s failed» с корневой стадией итога, без неё — «Not run».
    - REUSED: «Reused: an open connection or a cached answer».
    - NO_ACK: «Sent; the protocol gives no confirmation».
    - NOT_EVALUATED: «Not evaluated».
@@ -90,6 +95,7 @@
 | detour | Hand-off to the detour that carries this node |
 | lookup | Resolving the server address of a node or DNS server |
 | dns | Query to a DNS server |
+| dns_member | Query to one server of a DNS group (ядро lx.25: subject = тег члена, его detour/tcp/tls — дочерние) |
 | connection | Connection to the DNS server, already open: idle in the pool or opened by a parallel query (ядро rc.3, дочерняя `dns`, всегда REUSED) |
 | wake | Waking an endpoint that was idle-suspended |
 | udp | UDP socket to the server; UDP has no handshake to confirm |

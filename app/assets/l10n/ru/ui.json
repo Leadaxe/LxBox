@@ -6670,5 +6670,14 @@
   },
   "Connection to the DNS server, already open: idle in the pool or opened by a parallel query": {
     "value": "Соединение с DNS-сервером, уже открытое: из пула или открытое параллельным запросом"
+  },
+  "Cut short: a parallel attempt answered first": {
+    "value": "Прервано: параллельная попытка ответила раньше"
+  },
+  "Lost the race: %s answered first": {
+    "value": "Проиграл гонку: %s ответил раньше"
+  },
+  "Query to one server of a DNS group": {
+    "value": "Запрос к одному серверу DNS-группы"
   }
 }
