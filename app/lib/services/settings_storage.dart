@@ -177,6 +177,7 @@ class SettingsStorage {
     'tun_auto_route',
     'tun_mtu',
     'tun_name',
+    'tun_route_exclude',
     'tun_stack',
     'tun_strict_route',
     'urltest_interval',

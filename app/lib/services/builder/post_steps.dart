@@ -29,6 +29,8 @@ import 'server_list_build.dart' show groupDefaultDropped;
 //
 //   - tls_transforms.dart — applyMixedCaseSni / applyTlsFragment (§028)
 //   - tun_packages.dart   — applyTunPackages (§046)
+//   - heal_tun_route_exclude.dart — «Bypass the tunnel»: не-CIDR и адрес
+//                           самого TUN снимаются (§691)
 //   - dns_rules.dart      — applyCustomDns / resolveDnsRulesList (§061+§033)
 //   - custom_rules.dart   — applyPresetBundles / applyCustomRules /
 //                           applyAllCustomRules / _outboundToRoute (§030+§062)
@@ -38,6 +40,7 @@ import 'server_list_build.dart' show groupDefaultDropped;
 //                           висячего detour (§441/§443, SPEC 129 Н10)
 part 'post_steps/tls_transforms.dart';
 part 'post_steps/tun_packages.dart';
+part 'post_steps/heal_tun_route_exclude.dart';
 part 'post_steps/dns_rules.dart';
 part 'post_steps/custom_rules.dart';
 part 'post_steps/dns_servers.dart';

@@ -340,7 +340,16 @@
           }}
         },
         {"name": "tun_address6", "type": "text", "default_value": "fdfe:dcba:9876::1/126", "required": true, "wizard_ui": "edit", "title": "IPv6 address", "tooltip": "TUN interface IPv6 address (CIDR). Applied only when Enable IPv6 is on."},
-        {"name": "route_address_enable", "type": "bool", "default_value": "false", "required": true, "wizard_ui": "edit", "title": "Custom tunnel routes", "tooltip": "Route all IPv4 and IPv6 through the tunnel via explicit half-ranges instead of sing-box defaults. Off by default — turn on only if the default routing misbehaves."},
+        {"name": "route_address_enable", "type": "bool", "default_value": "false", "required": true, "wizard_ui": "edit", "title": "Split default route", "tooltip": "Send all traffic to the tunnel as two half-ranges per address family instead of one default route. The same traffic goes through the tunnel; turn on only if the device ignores the VPN's default route."},
+        {"name": "tun_route_exclude", "type": "text_list", "options_open": true, "wizard_ui": "edit", "title": "Bypass the tunnel", "tooltip": "Addresses (CIDR) that skip the tunnel and the core entirely, e.g. a home NAS. Their traffic goes without VPN: routing rules, DNS hijack and statistics do not see it. Do not add networks you reach through a VPN node, the FakeIP pool or the tunnel's own address. Applies after a full VPN restart.",
+          "options": [
+            {"title": "192.168.0.0/16 · home LAN", "value": "192.168.0.0/16"},
+            {"title": "10.0.0.0/8 · private", "value": "10.0.0.0/8"},
+            {"title": "172.16.0.0/12 · private", "value": "172.16.0.0/12"},
+            {"title": "169.254.0.0/16 · link-local", "value": "169.254.0.0/16"},
+            {"title": "fe80::/10 · IPv6 link-local", "value": "fe80::/10"}
+          ]
+        },
         {"name": "tun_name", "type": "text", "default_value": "lxbox", "required": true, "wizard_ui": "edit", "title": "TUN interface", "tooltip": "system name"},
         {"name": "tun_mtu", "type": "int", "default_value": "1492", "required": true, "wizard_ui": "edit", "title": "MTU", "tooltip": "1492 recommended for mobile/WiFi"},
         {"name": "tun_auto_route", "type": "bool", "default_value": "true", "required": true, "wizard_ui": "edit", "title": "Auto route", "tooltip": "Let sing-box manage routing table"},
@@ -427,6 +436,7 @@
         "#if": {"#and": ["@route_address_enable"], "#value": {
           "route_address": ["0.0.0.0/1", "128.0.0.0/1", "::/1", "8000::/1"]
         }},
+        "#if exclude": [{"@tun_route_exclude": "#notEmpty"}, {"route_exclude_address": "@tun_route_exclude"}],
         "mtu": "@tun_mtu",
         "auto_route": "@tun_auto_route",
         "strict_route": "@tun_strict_route",

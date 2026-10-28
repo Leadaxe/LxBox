@@ -119,6 +119,7 @@ wizard_template.json
 │   │       ├─ interface_name      "@tun_name"
 │   │       ├─ address             ["@tun_address", {#if @ipv6_enabled → "@tun_address6"}]  §227/§232 — v6 behind a checkbox
 │   │       ├─ {#if @route_address_enable → route_address: ["0.0.0.0/1","128.0.0.0/1","::/1","8000::/1"]}  §232 — behind a checkbox
+│   │       ├─ {#if @tun_route_exclude #notEmpty → route_exclude_address: "@tun_route_exclude"}  §691 — «Bypass the tunnel», text_list; not-CIDR and the TUN's own address are dropped at build (heal_tun_route_exclude)
 │   │       ├─ mtu                 "@tun_mtu"
 │   │       ├─ auto_route          "@tun_auto_route"
 │   │       ├─ strict_route        "@tun_strict_route"

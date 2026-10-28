@@ -131,9 +131,6 @@
   "Core packet handling: sniff the domain, hijack DNS into the tunnel, resolve destinations for routing. Applied first, before all other rules.": {
     "value": "Базовая обработка пакетов: определение домена, перехват DNS в туннель, резолв адресов назначения для маршрутизации. Применяется первым, до всех остальных правил."
   },
-  "Custom tunnel routes": {
-    "value": "Свои маршруты туннеля"
-  },
   "DNS": {
     "value": "DNS"
   },
@@ -418,9 +415,6 @@
   },
   "Route all DNS queries through the tunnel's DNS engine.\n⚠️ WARNING: turning this off disables FakeIP and all DNS rules — apps query their own DNS directly, uncontrolled. Keep on unless you know exactly why.": {
     "value": "Направлять все DNS-запросы через DNS-движок туннеля.\n⚠️ ВНИМАНИЕ: выключение отключает FakeIP и все DNS-правила — приложения будут напрямую и бесконтрольно обращаться к своим DNS. Не выключайте, если точно не знаете, зачем."
-  },
-  "Route all IPv4 and IPv6 through the tunnel via explicit half-ranges instead of sing-box defaults. Off by default — turn on only if the default routing misbehaves.": {
-    "value": "Направлять весь IPv4 и IPv6 через туннель явными полудиапазонами вместо значений sing-box по умолчанию. По умолчанию выключено — включайте, только если стандартная маршрутизация работает неправильно."
   },
   "Route private IP ranges (LAN). Direct by default, or send to a direction to reach routers/devices over a local VPN.": {
     "value": "Маршрутизация частных диапазонов IP (LAN). По умолчанию — напрямую; можно направить в Направление, чтобы добираться до роутеров и устройств через локальный VPN."
@@ -775,5 +769,32 @@
   },
   "Fake IPv6 addresses are taken from this range (CIDR). Leave empty to answer AAAA queries with no address. At least one pool must be set.": {
     "value": "Фейковые IPv6-адреса берутся из этого диапазона (CIDR). Оставьте пустым, чтобы на AAAA-запросы отвечать без адреса. Хотя бы один пул должен быть задан."
+  },
+  "Split default route": {
+    "value": "Разделённый маршрут по умолчанию"
+  },
+  "Send all traffic to the tunnel as two half-ranges per address family instead of one default route. The same traffic goes through the tunnel; turn on only if the device ignores the VPN's default route.": {
+    "value": "Направлять весь трафик в туннель двумя половинами диапазона на каждое семейство адресов вместо одного маршрута по умолчанию. Через туннель идёт тот же трафик; включайте, только если устройство игнорирует маршрут VPN по умолчанию."
+  },
+  "Bypass the tunnel": {
+    "value": "В обход туннеля"
+  },
+  "Addresses (CIDR) that skip the tunnel and the core entirely, e.g. a home NAS. Their traffic goes without VPN: routing rules, DNS hijack and statistics do not see it. Do not add networks you reach through a VPN node, the FakeIP pool or the tunnel's own address. Applies after a full VPN restart.": {
+    "value": "Адреса (CIDR), которые полностью минуют туннель и ядро, например домашний NAS. Их трафик идёт без VPN: правила маршрутизации, перехват DNS и статистика его не видят. Не добавляйте сети, доступные через VPN-узел, пул FakeIP и адрес самого туннеля. Применяется после полного перезапуска VPN."
+  },
+  "192.168.0.0/16 · home LAN": {
+    "value": "192.168.0.0/16 · домашняя сеть"
+  },
+  "10.0.0.0/8 · private": {
+    "value": "10.0.0.0/8 · частная"
+  },
+  "172.16.0.0/12 · private": {
+    "value": "172.16.0.0/12 · частная"
+  },
+  "169.254.0.0/16 · link-local": {
+    "value": "169.254.0.0/16 · link-local"
+  },
+  "fe80::/10 · IPv6 link-local": {
+    "value": "fe80::/10 · IPv6 link-local"
   }
 }

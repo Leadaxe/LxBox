@@ -10,6 +10,24 @@
 
 ### Added
 
+- **Bypass the tunnel for chosen addresses
+  ([task 691](docs/spec/tasks/691-tun-route-exclude.md)).** VPN Settings →
+  TUN gets «Bypass the tunnel»: a list of CIDR ranges (suggestions for home
+  LAN, private and link-local networks) that skip the tunnel and the core
+  entirely — e.g. large downloads from a home NAS no longer go through the
+  core. An entry that is not a CIDR or covers the tunnel's own address is
+  dropped with a build warning. Applies after a full VPN restart. The
+  checkbox «Custom tunnel routes» is renamed «Split default route» and
+  explained: it never added routes of its own.
+  (RU: Обход туннеля для выбранных адресов. В VPN Settings → TUN появилось
+  «Bypass the tunnel»: список CIDR-диапазонов (подсказки — домашняя сеть,
+  частные и link-local сети), которые полностью минуют туннель и ядро —
+  например, большие загрузки с домашнего NAS больше не идут через ядро.
+  Строка не-CIDR или накрывающая адрес самого туннеля снимается с
+  предупреждением сборки. Применяется после полного перезапуска VPN. Галка
+  «Custom tunnel routes» переименована в «Split default route» и получила
+  объяснение: своих маршрутов она никогда не добавляла.)
+
 - **Diagnostics → URL Check
   ([task 687](docs/spec/tasks/687-diagnostics-url-check.md), issue #176).**
   Enter a site and the core makes a real request to it through your routing
