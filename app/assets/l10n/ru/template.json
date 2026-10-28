@@ -758,10 +758,10 @@
   "Yandex DNS IP for DNS-over-TLS (port 853). TLS SNI is pinned to common.dot.dns.yandex.net.": {
     "value": "IP-адрес Яндекс DNS для DNS-over-TLS (порт 853). TLS SNI закреплён как common.dot.dns.yandex.net."
   },
-  "Encrypted DNS outbound": {
-    "value": "Направление для шифрованного DNS"
+  "Encrypted DNS via Outbound": {
+    "value": "Шифрованный DNS через Outbound"
   },
-  "Which direction carries Yandex DoT and DoH queries": {
-    "value": "Через какое Направление идут запросы DoT и DoH к Яндексу"
+  "Send Yandex DoT and DoH through this preset's Outbound, like UDP. Off: they go direct.": {
+    "value": "Отправлять DoT и DoH Яндекса через Outbound этого пресета, как UDP. Выключено — напрямую."
   }
 }

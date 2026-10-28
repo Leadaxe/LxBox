@@ -1315,13 +1315,29 @@ void main() {
       expect(grp.containsKey('detour'), isFalse, reason: '§319');
 
       // §684 (поправка 29.10): UDP идёт Направлением пресета (@outbound),
-      // DoT и DoH — по `dns_encrypted_outbound` (дефолт direct-out → detour
-      // снят, §117).
+      // DoT и DoH — напрямую, пока галочка `dns_encrypted_via_outbound`
+      // выключена (direct-out → detour снят, §117).
       expect(byTag('ru-direct:yandex_udp')['detour'], 'vpn-2');
       expect(byTag('ru-direct:yandex_dot').containsKey('detour'), isFalse,
           reason: 'direct-out → detour снят (§117)');
       expect(byTag('ru-direct:yandex_doh').containsKey('detour'), isFalse,
           reason: 'direct-out → detour снят (§117)');
+    });
+
+    test('ru-direct: галочка dns_encrypted_via_outbound — DoT/DoH по @outbound (§684)', () {
+      final f = expandPreset(
+        CustomRulePreset(
+          name: 'RU',
+          presetId: 'ru-direct',
+          varsValues: {'outbound': 'vpn-2', 'dns_encrypted_via_outbound': 'true'},
+        ),
+        realPreset('ru-direct'),
+      );
+      Map<String, dynamic> byTag(String t) =>
+          f.dnsServers.firstWhere((s) => s['tag'] == t);
+      expect(byTag('ru-direct:yandex_udp')['detour'], 'vpn-2');
+      expect(byTag('ru-direct:yandex_dot')['detour'], 'vpn-2');
+      expect(byTag('ru-direct:yandex_doh')['detour'], 'vpn-2');
     });
 
     // §354 — сквозь ОБА слоя: expandPreset → эмиссионный фильтр §312. Именно
