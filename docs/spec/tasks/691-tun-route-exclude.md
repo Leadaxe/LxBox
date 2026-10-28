@@ -88,3 +88,15 @@ the tunnel; turn on only if the device ignores the VPN's default route.»
 - Эмулятор: `192.168.0.0/16` в поле → в конфиге `route_exclude_address`;
   VPN поднимается; `ip route` / `dumpsys connectivity` — исключение в
   маршрутах VPN-сети.
+
+## Итог эмулятора (29.10.2026, сборка GH run 40777953843 на develop e89864e8)
+
+- VPN Settings → Core → TUN: поле «Bypass the tunnel» с чипами и «Other
+  values, one per line»; галка «Split default route» с новой подсказкой.
+- Выбраны `192.168.0.0/16`, `10.0.0.0/8`, `172.16.0.0/12`, режим VPN,
+  старт: VPN поднялся, таблица VPN (`ip route show table 1018`):
+  `default dev tun0`, `throw 10.0.0.0/8`, `throw 192.168.0.0/16`,
+  `172.16.0.0/30 dev tun0` — `172.16.0.0/12` снят защитой (накрывает
+  `172.16.0.1/30`), туннель жив.
+- Предупреждение защиты пишется в журнал приложения (`AppLog.warning`, как у
+  остальных heal-шагов), баннера на экране нет.
