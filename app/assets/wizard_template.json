@@ -345,7 +345,6 @@
           "options": [
             {"title": "192.168.0.0/16 · home LAN", "value": "192.168.0.0/16"},
             {"title": "10.0.0.0/8 · private", "value": "10.0.0.0/8"},
-            {"title": "172.16.0.0/12 · private", "value": "172.16.0.0/12"},
             {"title": "169.254.0.0/16 · link-local", "value": "169.254.0.0/16"},
             {"title": "fe80::/10 · IPv6 link-local", "value": "fe80::/10"}
           ]
