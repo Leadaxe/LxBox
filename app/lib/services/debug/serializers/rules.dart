@@ -46,6 +46,9 @@ Future<Map<String, Object?>> serializeCustomRule(CustomRule r) async {
         // с другими conditional полями (domains, packages, etc.).
         if (r.wifiSsids.isNotEmpty) 'wifi_ssids': r.wifiSsids,
         if (r.wifiBssids.isNotEmpty) 'wifi_bssids': r.wifiBssids,
+        // §694 — тип/лимитность сети.
+        if (r.networkTypes.isNotEmpty) 'network_type': r.networkTypes,
+        if (r.networkIsExpensive) 'network_is_expensive': true,
         'outbound': r.outbound,
         // §117 задача 3 — DNS-опция правила (DNS follows the rule).
         if (r.dns != null) 'dns': _serializeRuleDns(r.dns!),
@@ -73,6 +76,9 @@ Future<Map<String, Object?>> serializeCustomRule(CustomRule r) async {
         if (r.inbounds.isNotEmpty) 'inbounds': r.inbounds,
         if (r.wifiSsids.isNotEmpty) 'wifi_ssids': r.wifiSsids,
         if (r.wifiBssids.isNotEmpty) 'wifi_bssids': r.wifiBssids,
+        // §694 — тип/лимитность сети.
+        if (r.networkTypes.isNotEmpty) 'network_type': r.networkTypes,
+        if (r.networkIsExpensive) 'network_is_expensive': true,
         'outbound': r.outbound,
         if (r.dns != null) 'dns': _serializeRuleDns(r.dns!),
         if (r.resolve != null) 'resolve': _serializeRuleResolve(r.resolve!), // §247

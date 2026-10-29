@@ -167,7 +167,7 @@ class ParamsTab extends StatelessWidget {
             onTtlChanged: (v) => c.srsTtlHours = v,
             lastUpdatedText: c.srsLastUpdatedText,
           ),
-        // §225 — match-фильтры (port/protocol/wifi/inbound/dns) не применимы
+        // §225 — match-фильтры (port/protocol/network/inbound/dns) не применимы
         // к raw-JSON правилу: всё выражается в самом теле.
         if (c.kind != CustomRuleKind.json) ...[
           PortSection(
@@ -184,6 +184,10 @@ class ParamsTab extends StatelessWidget {
           if (c.kind == CustomRuleKind.inline ||
               c.kind == CustomRuleKind.srs)
             WifiSection(
+              choice: c.networkChoice,
+              onChoiceChanged: c.setNetworkChoice,
+              metered: c.networkIsExpensive,
+              onMeteredChanged: c.setNetworkIsExpensive,
               networks: c.wifiNetworks,
               onRemoveAt: c.removeWifiAt,
               onAddCurrent: actions.onAddCurrentWifi,

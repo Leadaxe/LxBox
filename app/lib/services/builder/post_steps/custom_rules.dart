@@ -434,6 +434,8 @@ List<String> _applySrsSingle(
       inbounds: cr.inbounds,
       wifiSsids: cr.wifiSsids,
       wifiBssids: cr.wifiBssids,
+      networkTypes: cr.networkTypes,
+      networkIsExpensive: cr.networkIsExpensive,
     ));
   }
   // §247 resolve-only: терминальный route не эмитится (см. inline-ветку).
@@ -454,6 +456,8 @@ List<String> _applySrsSingle(
       inbounds: cr.inbounds,
       wifiSsids: cr.wifiSsids,
       wifiBssids: cr.wifiBssids,
+      networkTypes: cr.networkTypes,
+      networkIsExpensive: cr.networkIsExpensive,
     ));
   }
   if (dnsMirrors != null &&
@@ -465,6 +469,9 @@ List<String> _applySrsSingle(
       if (cr.packages.isNotEmpty) m['package_name'] = cr.packages;
       if (cr.wifiSsids.isNotEmpty) m['wifi_ssid'] = cr.wifiSsids;
       if (cr.wifiBssids.isNotEmpty) m['wifi_bssid'] = cr.wifiBssids;
+      // §694 — DNS-правило ядра принимает тип/лимитность сети.
+      if (cr.networkTypes.isNotEmpty) m['network_type'] = cr.networkTypes;
+      if (cr.networkIsExpensive) m['network_is_expensive'] = true;
       // §030/new_fields — DNS-rule 1.14 принимает source_ip_cidr/inbound.
       if (cr.sourceIpCidrs.isNotEmpty) m['source_ip_cidr'] = cr.sourceIpCidrs;
       if (cr.inbounds.isNotEmpty) m['inbound'] = cr.inbounds;
@@ -588,6 +595,9 @@ List<String> _applyInlineSingle(
   if (cr.sourceIpCidrs.isNotEmpty) match['source_ip_cidr'] = cr.sourceIpCidrs;
   if (cr.wifiSsids.isNotEmpty) match['wifi_ssid'] = cr.wifiSsids;
   if (cr.wifiBssids.isNotEmpty) match['wifi_bssid'] = cr.wifiBssids;
+  // §694 — тип/лимитность сети: headless 1.14 принимает, рядом с wifi.
+  if (cr.networkTypes.isNotEmpty) match['network_type'] = cr.networkTypes;
+  if (cr.networkIsExpensive) match['network_is_expensive'] = true;
   // `ip_is_private`, `source_ip_is_private`, `inbound`, `protocol` НЕ
   // поддерживаются в headless rule — sing-box отрежет конфиг на парсинге.
   // Выносим на routing-rule level (там OR/AND с rule_set per default-rule
@@ -770,6 +780,8 @@ Map<String, dynamic> _outboundToRoute(
   List<String>? inbounds,
   List<String>? wifiSsids,
   List<String>? wifiBssids,
+  List<String>? networkTypes,
+  bool networkIsExpensive = false,
 }) {
   final rule = <String, dynamic>{};
   // ## 12 — `tag`: String (один набор / headless) или List<String> (srs с
@@ -812,6 +824,11 @@ Map<String, dynamic> _outboundToRoute(
   if (wifiBssids != null && wifiBssids.isNotEmpty) {
     rule['wifi_bssid'] = wifiBssids;
   }
+  // §694 — тип/лимитность сети по умолчанию; AND с остальным правилом.
+  if (networkTypes != null && networkTypes.isNotEmpty) {
+    rule['network_type'] = networkTypes;
+  }
+  if (networkIsExpensive) rule['network_is_expensive'] = true;
   if (outbound == kOutboundReject) {
     rule['action'] = 'reject';
   } else {
@@ -839,6 +856,8 @@ Map<String, dynamic> _resolveToRoute(
   List<String>? inbounds,
   List<String>? wifiSsids,
   List<String>? wifiBssids,
+  List<String>? networkTypes,
+  bool networkIsExpensive = false,
 }) {
   final rule = _outboundToRoute(
     tag,
@@ -856,6 +875,8 @@ Map<String, dynamic> _resolveToRoute(
     inbounds: inbounds,
     wifiSsids: wifiSsids,
     wifiBssids: wifiBssids,
+    networkTypes: networkTypes,
+    networkIsExpensive: networkIsExpensive,
   );
   rule.remove('outbound');
   rule['action'] = 'resolve';

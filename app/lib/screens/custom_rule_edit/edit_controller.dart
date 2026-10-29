@@ -18,6 +18,7 @@ import '../../widgets/wifi_entry.dart';
 import '../../models/dns_ref.dart';
 import '../dns_settings_screen/dns_server_resolver.dart'
     show defaultDnsServerTag;
+import 'network_choice.dart';
 import 'normalizers.dart' as norm;
 import 'sections/srs_section.dart' show SrsDownloadState;
 import 'wifi_zip.dart';
@@ -124,6 +125,10 @@ class CustomRuleEditController extends ChangeNotifier {
   late Set<String> _network;
   late List<String> _packages;
   late List<WifiEntry> _wifiNetworks;
+  // §694 — сегмент NETWORK, `network_type` при открытии, лимитность.
+  late NetworkChoice _networkChoice;
+  late List<String> _loadedNetworkTypes;
+  late bool _networkIsExpensive;
   late Map<String, String> _varsValues;
   late RuleDns? _dns;
   late RuleResolve? _resolve;
@@ -200,6 +205,8 @@ class CustomRuleEditController extends ChangeNotifier {
   Set<String> get network => _network;
   List<String> get packages => _packages;
   List<WifiEntry> get wifiNetworks => _wifiNetworks;
+  NetworkChoice get networkChoice => _networkChoice;
+  bool get networkIsExpensive => _networkIsExpensive;
   Map<String, String> get varsValues => _varsValues;
   Map<String, String> get presetSrsPaths => _presetSrsPaths;
   SrsDownloadState get srsState => _srsState;
@@ -271,8 +278,8 @@ class CustomRuleEditController extends ChangeNotifier {
 
   /// §692: секция «DNS & Resolve» видна, только когда у правила есть
   /// условие, видимое DNS-слою (зеркало [CustomRule.dnsLayerEligible]):
-  /// домен, приложение, источник, wifi, либо `inbound` при пустом `ip_cidr`.
-  /// Чисто IP-правило — секции нет: ядро отвергает DNS-ссылку на набор
+  /// домен, приложение, источник, wifi, тип/лимитность сети (§694), либо
+  /// `inbound` при пустом `ip_cidr`. Чисто IP-правило — секции нет: ядро отвергает DNS-ссылку на набор
   /// «только IP», а матчить на DNS-слое там нечего. srs — всегда видна.
   /// Live по текущему состоянию формы.
   bool get dnsSectionVisible => switch (_kind) {
@@ -286,7 +293,7 @@ class CustomRuleEditController extends ChangeNotifier {
               norm.normalizedKeywords(domainKeywordCtrl.text).isNotEmpty ||
               _packages.isNotEmpty ||
               norm.normalizedCidrs(sourceIpCidrCtrl.text).isNotEmpty ||
-              _wifiNetworks.isNotEmpty ||
+              _hasNetworkCondition ||
               (norm.normalizedCidrs(ipCidrCtrl.text).isEmpty &&
                   _inbounds.isNotEmpty),
         _ => false,
@@ -339,6 +346,10 @@ class CustomRuleEditController extends ChangeNotifier {
     _network = r.network.toSet();
     _packages = List.of(r.packages);
     _wifiNetworks = unzipWifiEntries(r.wifiSsids, r.wifiBssids);
+    _loadedNetworkTypes = List.of(r.networkTypes);
+    _networkChoice =
+        networkChoiceFor(r.networkTypes, hasWifi: _wifiNetworks.isNotEmpty);
+    _networkIsExpensive = r.networkIsExpensive;
     _varsValues = Map<String, String>.from(r.varsValues);
     _dns = r.dns;
     _fixedChosen = r.dns?.fixedMode ?? false;
@@ -703,6 +714,42 @@ class CustomRuleEditController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// §694 — список SSID при переключении сегментов не теряется, снимается
+  /// только при сохранении ([_networkSnapshot]).
+  void setNetworkChoice(NetworkChoice v) {
+    if (v == _networkChoice) return;
+    _networkChoice = v;
+    notifyListeners();
+  }
+
+  void setNetworkIsExpensive(bool v) {
+    if (v == _networkIsExpensive) return;
+    _networkIsExpensive = v;
+    notifyListeners();
+  }
+
+  /// §694 — у правила будет условие сети: SSID/BSSID, тип или лимитность.
+  bool get _hasNetworkCondition {
+    final n = _networkSnapshot();
+    return n.ssids.isNotEmpty ||
+        n.bssids.isNotEmpty ||
+        n.types.isNotEmpty ||
+        _networkIsExpensive;
+  }
+
+  /// §694 — что уйдёт в правило: `network_type` и SSID/BSSID по сегменту.
+  ({List<String> types, List<String> ssids, List<String> bssids})
+      _networkSnapshot() {
+    final wifi = zipWifiEntries(_wifiNetworks);
+    final t = networkTypesFor(_networkChoice,
+        loaded: _loadedNetworkTypes, hasWifi: _wifiNetworks.isNotEmpty);
+    return (
+      types: t.types,
+      ssids: t.keepWifi ? wifi.ssids : const <String>[],
+      bssids: t.keepWifi ? wifi.bssids : const <String>[],
+    );
+  }
+
   void setVarValue(String name, String val) {
     _putVarValue(name, val);
     notifyListeners();
@@ -1010,7 +1057,7 @@ class CustomRuleEditController extends ChangeNotifier {
           varsValues: Map<String, String>.from(_varsValues),
         );
       case CustomRuleKind.srs:
-        final wifi = zipWifiEntries(_wifiNetworks);
+        final wifi = _networkSnapshot();
         return CustomRuleSrs(
           id: initial.id,
           name: name,
@@ -1029,6 +1076,8 @@ class CustomRuleEditController extends ChangeNotifier {
           inbounds: _inbounds.toList()..sort(),
           wifiSsids: wifi.ssids,
           wifiBssids: wifi.bssids,
+          networkTypes: wifi.types,
+          networkIsExpensive: _networkIsExpensive,
           outbound: _outbound,
           dns: _effectiveDns, // §683 — адреса Fixed IP из поля
           // §247: гейт на случай snapshot до notify (сброс live в
@@ -1036,7 +1085,7 @@ class CustomRuleEditController extends ChangeNotifier {
           resolve: resolveEligible ? _effectiveResolve : null,
         );
       case CustomRuleKind.inline:
-        final wifi = zipWifiEntries(_wifiNetworks);
+        final wifi = _networkSnapshot();
         return CustomRuleInline(
           id: initial.id,
           name: name,
@@ -1059,6 +1108,8 @@ class CustomRuleEditController extends ChangeNotifier {
           inbounds: _inbounds.toList()..sort(),
           wifiSsids: wifi.ssids,
           wifiBssids: wifi.bssids,
+          networkTypes: wifi.types,
+          networkIsExpensive: _networkIsExpensive,
           outbound: _outbound,
           dns: _effectiveDns, // §683 — адреса Fixed IP из поля
           resolve: resolveEligible ? _effectiveResolve : null, // §247

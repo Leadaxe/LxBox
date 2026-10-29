@@ -335,6 +335,50 @@ void main() {
     });
   });
 
+  group('§694 — тип/лимитность сети видны DNS-слою', () {
+    const dnsOn = RuleDns(enabled: true, serverTag: 'google_udp');
+
+    test('только network_type или network_is_expensive → DNS-способно', () {
+      expect(
+        CustomRuleInline(name: 'c', networkTypes: ['cellular'], dns: dnsOn)
+            .dnsMirrorActive,
+        true,
+      );
+      expect(
+        CustomRuleInline(name: 'm', networkIsExpensive: true, dns: dnsOn)
+            .dnsLayerEligible,
+        true,
+      );
+      expect(
+        CustomRuleInline(
+                name: 'ip+c',
+                ipCidrs: ['10.0.0.0/8'],
+                networkTypes: ['cellular'],
+                dns: dnsOn)
+            .dnsLayerEligible,
+        true,
+        reason: 'набор с network_type ядро не считает «только IP»',
+      );
+    });
+
+    test('srs-зеркало несёт network_type / network_is_expensive', () {
+      final reg = RuleSetRegistry();
+      final srs = CustomRuleSrs(
+        name: 'cn-list',
+        srsUrl: 'https://e/cn.srs',
+        networkTypes: ['cellular'],
+        networkIsExpensive: true,
+        outbound: 'vpn-2',
+        dns: dnsOn,
+      );
+      final result = applyAllCustomRules(reg, [srs], const [],
+          srsPaths: {srs.id: '/tmp/cn.srs'});
+      final m = result.dnsMirrors.single;
+      expect(m.body['network_type'], ['cellular']);
+      expect(m.body['network_is_expensive'], true);
+    });
+  });
+
   group('applyAllCustomRules — сбор mirror-группы', () {
     test('inline+dns: mirror шарит headless rule_set (wifi внутри rule_set)',
         () {

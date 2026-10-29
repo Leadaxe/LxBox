@@ -47,6 +47,8 @@ const Set<String> kRuleBodyKeys = {
   'inbound',
   'wifi_ssid',
   'wifi_bssid',
+  'network_type',
+  'network_is_expensive',
   'outbound',
   'action',
   // `rule_set` намеренно НЕ в списке: в теле записи это ссылка на набор
@@ -169,6 +171,11 @@ Map<String, dynamic> _ruleBody(CustomRule r, {required bool includeMatch}) {
   if (r.inbounds.isNotEmpty) b['inbound'] = List<String>.of(r.inbounds);
   if (r.wifiSsids.isNotEmpty) b['wifi_ssid'] = List<String>.of(r.wifiSsids);
   if (r.wifiBssids.isNotEmpty) b['wifi_bssid'] = List<String>.of(r.wifiBssids);
+  // §694 — пусто/false не пишутся: правило без условия — байт в байт как было.
+  if (r.networkTypes.isNotEmpty) {
+    b['network_type'] = List<String>.of(r.networkTypes);
+  }
+  if (r.networkIsExpensive) b['network_is_expensive'] = true;
   // Пустая цель пишется как есть: сборка такое правило пропускает, а запись
   // без `outbound` читается целью по умолчанию и попала бы в конфиг.
   if (r.outbound == kOutboundReject) {
@@ -266,6 +273,8 @@ RecordRead<CustomRule> ruleFromRecord(
             inbounds: _strList(b['inbound']),
             wifiSsids: _strList(b['wifi_ssid']),
             wifiBssids: _strList(b['wifi_bssid']),
+            networkTypes: _strList(b['network_type']),
+            networkIsExpensive: b['network_is_expensive'] == true,
             outbound: outbound,
             dns: dns,
             resolve: resolve,
@@ -296,6 +305,8 @@ RecordRead<CustomRule> ruleFromRecord(
           inbounds: _strList(b['inbound']),
           wifiSsids: _strList(b['wifi_ssid']),
           wifiBssids: _strList(b['wifi_bssid']),
+          networkTypes: _strList(b['network_type']),
+          networkIsExpensive: b['network_is_expensive'] == true,
           outbound: outbound,
           dns: dns,
           resolve: resolve,

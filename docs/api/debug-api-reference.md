@@ -349,6 +349,8 @@ Rules матчатся **first-wins** сверху вниз, так что reord
   "inbounds": ["tun-in"],           // inline/srs: матч по inbound
   "wifi_ssids": ["HomeWiFi"],       // inline/srs (§051), нужны location-permissions
   "wifi_bssids": ["aa:bb:cc:dd:ee:ff"], // формат валидируется, нормализуется в lower-case
+  "network_type": ["cellular"],     // inline/srs (§694): wifi | cellular | ethernet | other, разрешений не нужно
+  "network_is_expensive": true,     // inline/srs (§694): только лимитная сеть
   "srs_url": "https://...rule-set.srs", // srs: первый набор
   "srs_urls": ["https://a.srs","https://b.srs"], // srs: все наборы по порядку; главнее srs_url
   "resolve": {"only": false, "strategy": "ipv4_only", "server_tag": "<tag>", "timeout": "5s"}, // inline/srs (§247); null — снять

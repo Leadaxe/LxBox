@@ -33,6 +33,31 @@
   работают как раньше, остальные приложения группы автоматически не
   выбираются.)
 
+- **Routing rules can match the network type and metered networks
+  ([task 694](docs/spec/tasks/694-rule-network-type-metered.md),
+  [#178](https://github.com/Leadaxe/LxBox/issues/178)).** The rule
+  editor's Wi-Fi section is now «NETWORK»: a selector Any / Wi-Fi /
+  Cellular / Ethernet (core `network_type`) and a «Metered networks only»
+  checkbox (core `network_is_expensive`: mobile data and Wi-Fi marked as
+  metered in Android). Neither needs the location permission that Wi-Fi
+  SSID matching requires. The SSID list is shown only for Wi-Fi. Rules are
+  checked when a connection opens: on a switch between Wi-Fi and mobile data
+  the app resets connections, so new ones follow the new network; when
+  Android only flips the metered flag without reconnecting, open
+  connections keep their earlier decision. Existing rules with SSIDs open
+  and save unchanged.
+  (RU: Правила маршрутизации различают тип сети и лимитные сети. Секция
+  Wi-Fi в редакторе правила стала «NETWORK»: выбор Any / Wi-Fi / Cellular /
+  Ethernet (`network_type` ядра) и флажок «Metered networks only»
+  (`network_is_expensive`: мобильные данные и Wi-Fi, отмеченные в Android
+  как лимитные). Ни то, ни другое не требует разрешения на геолокацию, как
+  условие по SSID. Список SSID виден только при Wi-Fi. Правило проверяется
+  при открытии соединения: при переходе между Wi-Fi и мобильной сетью
+  приложение сбрасывает соединения, новые идут по новой сети; если Android
+  только меняет флаг лимитности без переподключения, открытые соединения
+  живут со старым решением. Старые правила с SSID открываются и
+  сохраняются без изменений.)
+
 ## [2.25.18] — 2026-10-29
 
 ### Fixed

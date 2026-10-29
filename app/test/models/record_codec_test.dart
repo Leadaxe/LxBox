@@ -520,4 +520,60 @@ void main() {
           contains('without tag'));
     });
   });
+
+  group('§694 network_type / network_is_expensive', () {
+    test('inline: ключи ядра в теле, круг байт в байт', () {
+      final r = CustomRuleInline(
+        name: 'Big on cellular',
+        domains: ['video.example'],
+        networkTypes: ['cellular'],
+        networkIsExpensive: true,
+        outbound: kOutboundReject,
+      );
+      final rec = ruleToRecord(r);
+      expect(rec['body'], {
+        'domain': ['video.example'],
+        'network_type': ['cellular'],
+        'network_is_expensive': true,
+        'action': 'reject',
+      });
+      final back = ruleFromRecord(rec, unknownAsVerbatim: true).value!;
+      expect(back, isA<CustomRuleInline>(),
+          reason: 'ключи знакомы — не дословный JSON');
+      expect(back.networkTypes, ['cellular']);
+      expect(back.networkIsExpensive, true);
+      expect(ruleToRecord(back), rec);
+    });
+
+    test('без условия ключей нет, старое wifi-правило не меняется', () {
+      final rec = {
+        'kind': 'inline',
+        'id': 'w1',
+        'name': 'Home',
+        'enabled': true,
+        'body': {
+          'wifi_ssid': ['home'],
+          'outbound': 'direct-out',
+        },
+      };
+      final back = ruleFromRecord(rec, unknownAsVerbatim: true).value!;
+      expect(back.networkTypes, isEmpty);
+      expect(back.networkIsExpensive, false);
+      expect(ruleToRecord(back)['body'], rec['body']);
+    });
+
+    test('srs: network_type строкой читается списком', () {
+      final rec = {
+        'kind': 'srs',
+        'id': 's1',
+        'name': 'geo',
+        'enabled': true,
+        'ref': 'https://e/geo.srs',
+        'body': {'network_type': 'wifi', 'outbound': 'direct-out'},
+      };
+      final back = ruleFromRecord(rec).value! as CustomRuleSrs;
+      expect(back.networkTypes, ['wifi']);
+      expect(ruleToRecord(back)['body']['network_type'], ['wifi']);
+    });
+  });
 }

@@ -1203,4 +1203,64 @@ void main() {
       expect(CustomRuleSrs(name: 'C').resolveEligible, isTrue);
     });
   });
+
+  group('§694 network_type / network_is_expensive', () {
+    test('inline: в headless rule_set рядом с доменом', () {
+      final reg = RuleSetRegistry();
+      applyCustomRules(reg, [
+        CustomRuleInline(
+          name: 'Video on cellular',
+          domains: ['video.example'],
+          networkTypes: ['cellular'],
+          networkIsExpensive: true,
+          outbound: kOutboundReject,
+        ),
+      ]);
+      expect(reg.getRuleSets().first['rules'], [
+        {
+          'domain': ['video.example'],
+          'network_type': ['cellular'],
+          'network_is_expensive': true,
+        },
+      ]);
+      expect(reg.getRules(), [
+        {'rule_set': 'Video on cellular', 'action': 'reject'},
+      ]);
+    });
+
+    test('inline: только тип сети — правило не пустое', () {
+      final reg = RuleSetRegistry();
+      applyCustomRules(reg, [
+        CustomRuleInline(
+          name: 'All on cellular',
+          networkTypes: ['cellular'],
+          outbound: 'vpn-1',
+        ),
+      ]);
+      expect(reg.getRuleSets().first['rules'], [
+        {'network_type': ['cellular']},
+      ]);
+      expect(reg.getRules().single['outbound'], 'vpn-1');
+    });
+
+    test('srs: на routing-rule рядом с rule_set', () {
+      final reg = RuleSetRegistry();
+      final srs = CustomRuleSrs(
+        name: 'geo',
+        srsUrl: 'https://e/geo.srs',
+        networkTypes: ['wifi'],
+        networkIsExpensive: true,
+        outbound: 'direct-out',
+      );
+      applyCustomRules(reg, [srs], srsPaths: {srs.id: '/tmp/geo.srs'});
+      expect(reg.getRules(), [
+        {
+          'rule_set': 'geo',
+          'network_type': ['wifi'],
+          'network_is_expensive': true,
+          'outbound': 'direct-out',
+        },
+      ]);
+    });
+  });
 }
