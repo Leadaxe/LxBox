@@ -3428,23 +3428,8 @@
   "No Tailscale nodes yet — add one on the Servers screen first": {
     "value": "Узлов Tailscale пока нет — сначала добавьте узел на экране Servers"
   },
-  "No SSID filter — rule is active on any Wi-Fi network.": {
-    "value": "Фильтра по SSID нет — правило активно в любой сети Wi-Fi."
-  },
-  "Any": {
-    "value": "Любая"
-  },
-  "Cellular": {
-    "value": "Мобильная"
-  },
-  "Metered networks only": {
-    "value": "Только лимитные сети"
-  },
-  "Mobile data and Wi-Fi marked as metered in Android settings": {
-    "value": "Мобильные данные и Wi-Fi, отмеченные как лимитные в настройках Android"
-  },
-  "metered": {
-    "value": "лимитная"
+  "No Wi-Fi conditions — rule is active on every network.": {
+    "value": "Условий Wi-Fi нет — правило активно в любой сети."
   },
   "No WireGuard/AmneziaWG config in vpn:// link": {
     "value": "В ссылке vpn:// нет конфига WireGuard/AmneziaWG"

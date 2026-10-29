@@ -3179,23 +3179,8 @@
   "No Tailscale nodes yet — add one on the Servers screen first": {
     "value": "还没有 Tailscale 节点——请先在「服务器」页添加一个"
   },
-  "No SSID filter — rule is active on any Wi-Fi network.": {
-    "value": "没有 SSID 过滤——规则在任何 Wi-Fi 网络都生效。"
-  },
-  "Any": {
-    "value": "任意"
-  },
-  "Cellular": {
-    "value": "移动网络"
-  },
-  "Metered networks only": {
-    "value": "仅限计费网络"
-  },
-  "Mobile data and Wi-Fi marked as metered in Android settings": {
-    "value": "移动数据，以及在 Android 设置中标记为计费的 Wi-Fi"
-  },
-  "metered": {
-    "value": "计费"
+  "No Wi-Fi conditions — rule is active on every network.": {
+    "value": "没有 Wi-Fi 条件——规则在所有网络都生效。"
   },
   "No WireGuard/AmneziaWG config in vpn:// link": {
     "value": "vpn:// 链接里没有 WireGuard/AmneziaWG 配置"
