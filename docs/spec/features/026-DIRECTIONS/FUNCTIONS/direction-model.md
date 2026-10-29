@@ -40,6 +40,7 @@ the selection lists — [012-LIVE_STATE · P19](../../012-LIVE_STATE/FEATURE.md#
 | On/off | switch in the row; `vpn-1` locked on | `vpn-1` on, `vpn-2` off | a disabled Direction is not emitted |
 | Include direct-out / Include block | checkboxes | off | options `direct-out` / `block` |
 | Other directions | "only directions listed above this one" | — | option tags of other selectors |
+| Replace groups | checkboxes, one per source fold; caption: a ticked group joins even when the filter does not match it, and goes above the servers; groups never join the auto group | — | option tags of folds, in the service block before nodes ([686](../../../tasks/686-folder-auto-node-source-tab.md) item 12) |
 | Node filter (regex) + Exclude matching (invert) | case-insensitive | empty = all nodes | membership |
 | Default (regex) | "first matching node becomes default" | empty | `default` |
 | Interrupt connections on switch | on/off | on | `interrupt_exist_connections` |

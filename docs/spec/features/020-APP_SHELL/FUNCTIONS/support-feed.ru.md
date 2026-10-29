@@ -74,7 +74,8 @@ LxBox показывает полноэкранные сообщения авт�
   | X | закрыть; придёт при следующем запуске приложения | да | нет |
 
 - Экраны `route:` — servers, routing, dns, vpn-settings, app-settings,
-  speedtest, stats, config, debug, about, profiler. Незнакомое действие или
+  speedtest (Diagnostics → Speed Test), diagnostics, stats, config, debug,
+  about, profiler. Незнакомое действие или
   экран — кнопка скрыта (лента новее приложения не ломает его).
 - Сообщение без английского блока, битые ссылки и битая лента
   отбрасываются молча, без сбоя.

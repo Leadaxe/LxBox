@@ -4,6 +4,8 @@ import '../../controllers/subscription_controller.dart';
 import '../../models/server_list.dart';
 import '../../services/format_utils.dart' as fmt;
 import '../../services/l10n/locale_controller.dart';
+import '../../services/subscription/sources.dart'
+    show kDefaultSubscriptionUpdateIntervalHours;
 
 /// Pure formatting/status helpers for [SubscriptionDetailScreen].
 ///
@@ -65,6 +67,24 @@ String subscriptionStatusSubtitle(SubscriptionServers list) {
   }
   return parts.isEmpty ? '—' : parts.join(' · ');
 }
+
+/// §685 — действующий интервал режима «As subscription» в скобках пункта
+/// диалога: серверное значение, `off` при серверном 0, без заголовка — 24 ч.
+String asSubscriptionIntervalLabel(int? server) {
+  final h = server ?? kDefaultSubscriptionUpdateIntervalHours;
+  return h <= 0
+      ? getLocalText.s("As subscription (off)")
+      : getLocalText.s("As subscription (%s)", intervalHuman(h));
+}
+
+/// §685 — подпись строки «Update interval» в режиме «As subscription».
+String asSubscriptionIntervalSubtitle(int? server) => switch (server) {
+      null => getLocalText.s("As subscription — server sets none, every %s",
+          intervalHuman(kDefaultSubscriptionUpdateIntervalHours)),
+      <= 0 => getLocalText.s("As subscription — server disables auto-update"),
+      final int h =>
+        getLocalText.s("As subscription — every %s", intervalHuman(h)),
+    };
 
 String intervalHuman(int hours) {
   // Суффиксы h/d — латиница в обеих локалях (граница единиц, спека §5).

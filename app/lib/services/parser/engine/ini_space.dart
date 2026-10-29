@@ -28,12 +28,25 @@ library;
 import 'section.dart';
 import 'source_space.dart';
 
-/// Итог разбора INI: пространство плюс коды, которые поставил САМ РАЗБОР.
+/// Итог разбора INI: пространство плюс коды, которые поставил САМ РАЗБОР,
+/// плюс экземпляры секций с `repeat: each`.
 ///
 /// Коды отделены от пространства потому, что ставит их диалект, а не запись:
-/// «вторая `[Peer]` отброшена» — свойство входа, и ни одна запись таблицы о
-/// ней не узнает (её ключи до пространства не доехали вовсе).
-typedef IniParse = ({Map<String, String> space, List<String> codes});
+/// «вторая `[Peer]` отброшена» (`first_only`) — свойство входа, и ни одна
+/// запись таблицы о ней не узнает (её ключи до пространства не доехали
+/// вовсе).
+///
+/// `instances` — контракт 1.1.140: секция с `repeat: each` (`[Peer]` у
+/// wg-quick) — это СПИСОК экземпляров в порядке файла, по секции в нижнем
+/// регистре. Ключи экземпляра — те же `<section>.<key>`, что у [space]; в
+/// самом [space] от такой секции лежит только ПЕРВЫЙ экземпляр, а не слияние
+/// всех. Таблицу на каждом экземпляре исполняет движок
+/// (`interpreter.dart`, `_execEach`).
+typedef IniParse = ({
+  Map<String, String> space,
+  List<String> codes,
+  Map<String, List<Map<String, String>>> instances,
+});
 
 /// Разобрать текст INI по объявленному диалекту.
 ///
@@ -42,6 +55,11 @@ typedef IniParse = ({Map<String, String> space, List<String> codes});
 IniParse parseIniSpace(String text, IniDialect d) {
   final out = <String, String>{};
   final codes = <String>[];
+  final instances = <String, List<Map<String, String>>>{};
+
+  /// Карта, в которую идут ключи текущей секции: у `repeat: each` — её
+  /// последний экземпляр, у прочих секций — само пространство.
+  var target = out;
 
   /// Сколько раз встретилась секция с таким именем (для `repeat`).
   final seen = <String, int>{};
@@ -87,7 +105,15 @@ IniParse parseIniSpace(String text, IniDialect d) {
       seen[section] = n;
       final rule = d.sectionRule(name);
       collecting = true;
-      if (n > 1 && rule?.repeat == 'first_only') {
+      target = out;
+      if (rule?.repeat == 'each') {
+        // Первый экземпляр пишется И в пространство (его читает всё, что вне
+        // `into`, и `detect` формы), и в список; следующие — только в свой
+        // экземпляр: слияния ключей разных `[Peer]` больше нет.
+        final inst = <String, String>{};
+        (instances[section] ??= []).add(inst);
+        if (n > 1) target = inst;
+      } else if (n > 1 && rule?.repeat == 'first_only') {
         collecting = false;
         final code = rule?.onExtraCode;
         if (code != null && !codes.contains(code)) codes.add(code);
@@ -109,13 +135,19 @@ IniParse parseIniSpace(String text, IniDialect d) {
     if (value.isEmpty) continue;
 
     final path = '$section.$key';
-    if (d.repeatedKey == 'first_wins' && out.containsKey(path)) continue;
-    out[path] = value;
+    if (d.repeatedKey == 'first_wins' && target.containsKey(path)) continue;
+    target[path] = value;
+    // Первый экземпляр секции `each` пишется в пространство, а копия ключа —
+    // в его запись списка.
+    if (identical(target, out)) instances[section]?.last[path] = value;
   }
 
-  return (space: out, codes: codes);
+  return (space: out, codes: codes, instances: instances);
 }
 
 /// Построить [SourceSpace] для формы с пространством `ini`.
-SourceSpace iniSpace(String text, IniDialect d, {required String formId}) =>
-    SourceSpace(formId: formId, ini: parseIniSpace(text, d).space);
+SourceSpace iniSpace(String text, IniDialect d, {required String formId}) {
+  final parsed = parseIniSpace(text, d);
+  return SourceSpace(
+      formId: formId, ini: parsed.space, iniInstances: parsed.instances);
+}

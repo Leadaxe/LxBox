@@ -46,6 +46,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         private const val CC_DNS_CHANNEL = "lxbox/cc/dns" // §180
         private const val CC_TAILSCALE_CHANNEL = "lxbox/cc/tailscale" // §579
         private const val CC_TAILSCALE_PING_CHANNEL = "lxbox/cc/tailscale_ping" // §581
+        private const val CC_CONNECTION_TEST_CHANNEL = "lxbox/cc/connection_test" // §687
         private const val CC_OPENCONNECT_CHANNEL = "lxbox/cc/openconnect" // §654
         private const val VPN_REQUEST_CODE = 24
 
@@ -130,6 +131,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
     private lateinit var ccDnsEventChannel: EventChannel // §180
     private lateinit var ccTailscaleEventChannel: EventChannel // §579
     private lateinit var ccTailscalePingEventChannel: EventChannel // §581
+    private lateinit var ccConnectionTestEventChannel: EventChannel // §687
     private lateinit var ccOpenConnectEventChannel: EventChannel // §654
     private lateinit var context: Context
     private var activity: Activity? = null
@@ -260,6 +262,11 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             override fun onListen(args: Any?, sink: EventChannel.EventSink?) { BoxVpnService.ccTailscalePingSink = sink }
             override fun onCancel(args: Any?) { BoxVpnService.ccTailscalePingSink = null }
         })
+        ccConnectionTestEventChannel = EventChannel(binding.binaryMessenger, CC_CONNECTION_TEST_CHANNEL)
+        ccConnectionTestEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
+            override fun onListen(args: Any?, sink: EventChannel.EventSink?) { BoxVpnService.ccConnectionTestSink = sink }
+            override fun onCancel(args: Any?) { BoxVpnService.ccConnectionTestSink = null }
+        })
         // §654 C — состояние endpoint'ов openconnect (второй фактор / SSO).
         ccOpenConnectEventChannel = EventChannel(binding.binaryMessenger, CC_OPENCONNECT_CHANNEL)
         ccOpenConnectEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
@@ -293,6 +300,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         ccDnsEventChannel.setStreamHandler(null) // §180
         ccTailscaleEventChannel.setStreamHandler(null) // §579
         ccTailscalePingEventChannel.setStreamHandler(null) // §581
+        ccConnectionTestEventChannel.setStreamHandler(null) // §687
         ccOpenConnectEventChannel.setStreamHandler(null) // §654
         statusSink = null
         BoxVpnService.coreLogSink = null
@@ -881,6 +889,21 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             "ccStopTailscalePing" -> {
                 val cc = BoxService.commandClient
                 if (cc != null) pluginScope.launch(Dispatchers.IO) { cc.stopTailscalePing() }
+                result.success(true)
+            }
+            // §687 — тест соединения: события идут в EventChannel connection_test.
+            "ccStartConnectionTest" -> {
+                val cc = BoxService.commandClient
+                val link = call.argument<String>("link") ?: ""
+                val pkg = call.argument<String>("package_name") ?: ""
+                val depth = call.argument<Int>("depth") ?: 0
+                val fresh = call.argument<Boolean>("fresh") ?: false
+                if (cc != null) pluginScope.launch(Dispatchers.IO) { cc.startConnectionTest(link, pkg, depth, fresh) }
+                result.success(cc != null)
+            }
+            "ccStopConnectionTest" -> {
+                val cc = BoxService.commandClient
+                if (cc != null) pluginScope.launch(Dispatchers.IO) { cc.stopConnectionTest() }
                 result.success(true)
             }
             // §654 C — openconnect: снапшот статуса, ответ на челлендж,

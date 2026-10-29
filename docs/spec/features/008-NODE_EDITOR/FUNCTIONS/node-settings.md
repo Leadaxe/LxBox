@@ -27,7 +27,16 @@ while typing.
 | Settings | Protocol, Server (read-only); Tag with an emoji palette; Detour server with path preview; TLS (node-level overrides of the TLS Fragmentation options, written immediately); Skip Tailscale presets; Incoming connections from this tunnel |
 | Source | the source text, editable; a caption about the source kind |
 | JSON | the body the core will receive, read-only, highlighted; Copy JSON; Edit JSON |
+| INI | only for a WireGuard / AmneziaWG node — the node as a `.conf`, read-only, highlighted; Copy, Share .conf (file name from the tag); Edit INI; "Not in INI: …" under the text when the body has keys the `.conf` cannot carry |
 | Network | only for a Tailscale node — tailnet devices, Exit node choice |
+
+**Auto node of a folder** (a member `kind: auto`): Settings holds the group
+form instead of Protocol/Server/Tag, Masquerade, Detour and TLS — Name,
+Servers in the pool (All / Rule / Pick) with the pool preview, Mode,
+Selected server, Sticky session, Advanced. It is the same form as on "Add
+auto node…". The form edits the Source text, Save writes Source. Source is
+not a JSON object — the form is off with "The form is off: Source is not a
+valid JSON object." This holds for every way the screen is opened.
 | Diagnostics | node diagnostics and notifications ([009-NODE_HEALTH](../../009-NODE_HEALTH/FEATURE.md)); a mark on the tab label when there are warnings |
 
 - **Protocol**: the node's protocol; for AmneziaWG — "AmneziaWG (wireguard)".
@@ -77,6 +86,8 @@ while typing.
   added via the palette. There is no separate "detour server mark" (a ⚙
   toggle): ⚙ is an ordinary palette emoji.
 - An auto-select node (a group in a folder) has no Detour block at all.
+- A folder member and an auto node are edited only here: the member's
+  long-press menu has no "Edit…" (a broken member keeps it).
 - Folder member: the detour is personal, the folder policy on top of it; a
   refusal (to itself, a cycle) rolls the choice back with a message.
 - The JSON tab shows the body without the tag prefix, detour and build steps.
@@ -109,3 +120,4 @@ while typing.
 | 11 | [626](../../../tasks/626-unsaved-changes-everywhere.md) | Implemented | "Unsaved changes" dialog on leaving with an edited Tag or Source |
 | 12 | [636](../../../tasks/636-tls-settings-per-node-folder-subscription.md) | Implemented | TLS section between Detour and Skip presets |
 | 13 | [656](../../../tasks/656-contract-1130-tunnel-ingress.md) | In progress | Skip Tailscale presets only for Tailscale; Incoming connections from this tunnel |
+| 14 | [686](../../../tasks/686-folder-auto-node-source-tab.md) | In progress | Auto node of a folder: group form on Settings over the Source text; INI tab of a WireGuard / AmneziaWG node |

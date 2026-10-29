@@ -44,8 +44,7 @@ class PresetParamsTab extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(children: [
-                  Icon(Icons.warning_amber_outlined,
-                      color: cs.error, size: 18),
+                  Icon(Icons.warning_amber_outlined, color: cs.error, size: 18),
                   const SizedBox(width: 6),
                   Text(getLocalText.s("Preset not found"),
                       style: TextStyle(
@@ -53,7 +52,9 @@ class PresetParamsTab extends StatelessWidget {
                 ]),
                 const SizedBox(height: 4),
                 Text(
-                  getLocalText.s("Preset \"%s\" no longer exists in this version of the app. The rule will be skipped when the config is generated. Delete it or update to a newer version that still has this preset.", c.initial.presetId),
+                  getLocalText.s(
+                      "Preset \"%s\" no longer exists in this version of the app. The rule will be skipped when the config is generated. Delete it or update to a newer version that still has this preset.",
+                      c.initial.presetId),
                   style: const TextStyle(fontSize: 12),
                 ),
               ],
@@ -151,8 +152,7 @@ class PresetParamsTab extends StatelessWidget {
               if (preset.description.isNotEmpty) ...[
                 const SizedBox(height: 2),
                 Text(preset.description,
-                    style: TextStyle(
-                        fontSize: 12, color: cs.onSurfaceVariant)),
+                    style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
               ],
             ],
           ),
@@ -176,7 +176,8 @@ class PresetParamsTab extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    getLocalText.s("This rule changes DNS settings — it adds a DNS server and/or a DNS rule. See DNS Settings."),
+                    getLocalText.s(
+                        "This rule changes DNS settings — it adds a DNS server and/or a DNS rule. See DNS Settings."),
                     style: const TextStyle(fontSize: 12),
                   ),
                 ),
@@ -223,8 +224,8 @@ class PresetParamsTab extends StatelessWidget {
         if (visibleVars.isNotEmpty) ...[
           const SizedBox(height: 20),
           Text(getLocalText.s("PARAMETERS"),
-              style: theme.textTheme.titleSmall?.copyWith(
-                  color: cs.primary, fontWeight: FontWeight.w600)),
+              style: theme.textTheme.titleSmall
+                  ?.copyWith(color: cs.primary, fontWeight: FontWeight.w600)),
           const Divider(),
           for (final v in visibleVars)
             _PresetVarWidget(
@@ -292,13 +293,12 @@ class _PresetVarWidget extends StatelessWidget {
     // — список плюс своё значение; закрытые `options` у `text`/`int` — как
     // `enum` (TEMPLATE_LANG §2.1, SPEC 143 D-125).
     final kind = (v.type == 'text_list' && v.options.isNotEmpty)
-        ? 'multi'
+        ? (v.optionsOpen ? 'list' : 'multi')
         : (v.options.isNotEmpty &&
                 v.optionsOpen &&
                 const {'enum', 'text', 'int'}.contains(v.type))
             ? 'open'
-            : (v.options.isNotEmpty &&
-                    const {'text', 'int'}.contains(v.type))
+            : (v.options.isNotEmpty && const {'text', 'int'}.contains(v.type))
                 ? 'enum'
                 : (const {'text', 'int', 'text_list'}.contains(v.type)
                     ? 'open'
@@ -311,6 +311,19 @@ class _PresetVarWidget extends StatelessWidget {
           key: ValueKey('preset-multi-${v.name}'),
           v: v,
           value: currentValue(),
+          onChanged: write,
+        );
+      case 'list':
+        // §691 — список со своими значениями: поле + ▾ подсказок.
+        control = VarTextField(
+          key: ValueKey('preset-list-${v.name}'),
+          value: currentValue(),
+          label: '',
+          maxLines: 6,
+          listMode: true,
+          hintText: getLocalText.s("One per line, or pick from the list"),
+          suggestions: v.optionValues,
+          suggestionLabels: [for (final o in v.options) o.title],
           onChanged: write,
         );
       case 'open':
@@ -358,8 +371,8 @@ class _PresetVarWidget extends StatelessWidget {
           items.add(DropdownMenuItem<String>(
             value: '',
             child: Text(getLocalText.s("— (default DNS)"),
-                style: const TextStyle(
-                    fontSize: 13, fontStyle: FontStyle.italic)),
+                style:
+                    const TextStyle(fontSize: 13, fontStyle: FontStyle.italic)),
           ));
         }
         for (final s in preset.dnsServers) {
@@ -401,8 +414,8 @@ class _PresetVarWidget extends StatelessWidget {
           items.add(DropdownMenuItem<String>(
             value: '',
             child: Text(getLocalText.s("— (none)"),
-                style: const TextStyle(
-                    fontSize: 13, fontStyle: FontStyle.italic)),
+                style:
+                    const TextStyle(fontSize: 13, fontStyle: FontStyle.italic)),
           ));
         }
         for (final o in v.options) {
@@ -508,8 +521,7 @@ class _PresetVarWidget extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(top: 2),
               child: Text(subtitle,
-                  style: TextStyle(
-                      fontSize: 12, color: cs.onSurfaceVariant)),
+                  style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
             ),
           const SizedBox(height: 8),
           control,

@@ -2031,6 +2031,21 @@
   "Domain resolver": {
     "value": "域名解析器"
   },
+  "As subscription (%s)": {
+    "value": "按订阅（%s）"
+  },
+  "As subscription (off)": {
+    "value": "按订阅（关闭）"
+  },
+  "As subscription — every %s": {
+    "value": "按订阅——每 %s"
+  },
+  "As subscription — server sets none, every %s": {
+    "value": "按订阅——服务器未指定，每 %s"
+  },
+  "As subscription — server disables auto-update": {
+    "value": "按订阅——服务器已关闭自动更新"
+  },
   "Don't auto-update": {
     "value": "不自动更新"
   },
@@ -2080,6 +2095,15 @@
   },
   "Edit JSON?": {
     "value": "编辑 JSON？"
+  },
+  "Edit INI": {
+    "value": "编辑 INI"
+  },
+  "Edit INI?": {
+    "value": "编辑 INI？"
+  },
+  "Not in INI: %s": {
+    "value": "INI 中没有：%s"
   },
   "Edit auto node": {
     "value": "编辑自动节点"
@@ -2802,11 +2826,14 @@
   "JSON copied": {
     "value": "JSON 已复制"
   },
+  "INI copied": {
+    "value": "INI 已复制"
+  },
   "JSON must be an outbound object with \"type\" or a document with \"endpoints\"/\"outbounds\"": {
     "value": "JSON 必须是带「type」的出站对象，或包含「endpoints」/「outbounds」的文档"
   },
-  "JSON or JSON5 (// and /* */ comments)": {
-    "value": "JSON 或 JSON5（支持 // 与 /* */ 注释）"
+  "JSON or JSON5 (//, /* */ and # comments)": {
+    "value": "JSON 或 JSON5（支持 //、/* */ 与 # 注释）"
   },
   "JSON outbound": {
     "value": "JSON outbound"
@@ -3095,12 +3122,6 @@
   },
   "Never": {
     "value": "从不"
-  },
-  "Never (respect server)": {
-    "value": "从不（按服务器设置）"
-  },
-  "Never (respect server) — manual only unless server sets one": {
-    "value": "从不（按服务器设置）——除非服务器指定，否则只手动"
   },
   "Never sleep (recommended)": {
     "value": "从不休眠（推荐）"
@@ -4417,6 +4438,9 @@
   "Share": {
     "value": "分享"
   },
+  "Share .conf": {
+    "value": "分享 .conf"
+  },
   "Share %d events (JSON)": {
     "value": {
       "other": "分享 %d 条事件（JSON）"
@@ -4516,6 +4540,9 @@
   },
   "Source replaced with JSON": {
     "value": "来源已替换为 JSON"
+  },
+  "Source replaced with INI": {
+    "value": "来源已替换为 INI"
   },
   "Source: local file": {
     "value": "来源：本地文件"
@@ -4786,9 +4813,6 @@
   "Test actions": {
     "value": "测试动作"
   },
-  "Test download/upload speed": {
-    "value": "测试下载/上传速度"
-  },
   "Test servers list unavailable": {
     "value": "测试服务器列表不可用"
   },
@@ -4862,6 +4886,9 @@
   },
   "The source will be replaced by this JSON and the node will go to the core as is. The app stops checking such a node: only the core validates it on save, and a mistake can leave it unable to connect. There is no way back to a link. Edit the source instead when you can.": {
     "value": "来源将被替换为此 JSON，节点将原样发送给内核。应用不再检查这样的节点：只有内核会在保存时校验它，出错可能导致节点无法连接。无法再变回链接。如有可能，请改为编辑来源。"
+  },
+  "The source will be replaced by this INI. The tag and Detour stay as they are.": {
+    "value": "来源将被替换为此 INI。标签和 Detour 保持不变。"
   },
   "The whole element as the provider sent it": {
     "value": "服务商下发的完整原始元素"
@@ -5679,6 +5706,9 @@
   "a folder or subscription replaced with one group": {
     "value": "被替换为一个分组的文件夹或订阅"
   },
+  "A ticked group joins even when the filter does not match it, and goes above the servers. Groups never join the Direction's auto group.": {
+    "value": "勾选的分组即使不匹配过滤器也会加入，并排在服务器之前。分组从不加入方向的 auto 分组。"
+  },
   "A server already has this name — it will get a numeric suffix.": {
     "value": "已有服务器使用此名称——该服务器将获得数字后缀。"
   },
@@ -6130,5 +6160,245 @@
   },
   "This resolver sends queries through %s. It is used to look up server addresses while the connection is being set up, before the tunnel exists, so lookups can fail and the VPN may not connect. A direct resolver is the safest choice; for privacy pick a DoT or DoH server.": {
     "value": "此解析器通过 %s 发送查询。它在连接建立期间、隧道尚未存在时用于查找服务器地址，因此查询可能失败，VPN 可能无法连接。直连解析器最稳妥；如需隐私，请选择 DoT 或 DoH 服务器。"
+  },
+  "Members are resolved at build time": {
+    "value": "成员在构建时确定"
+  },
+  "· %s off": {
+    "value": "· %s 个已停用"
+  },
+  "Source is not a JSON object.": {
+    "value": "来源不是 JSON 对象。"
+  },
+  "\"kind\" must be \"auto\".": {
+    "value": "“kind” 必须为 “auto”。"
+  },
+  "Unknown keys: %s": {
+    "value": "未知键：%s"
+  },
+  "Enter an http or https URL": {
+    "value": "请输入 http 或 https 地址"
+  },
+  "VPN is not running": {
+    "value": "VPN 未运行"
+  },
+  "example.com or https://…": {
+    "value": "example.com 或 https://…"
+  },
+  "Any app": {
+    "value": "任意应用"
+  },
+  "Full": {
+    "value": "完整"
+  },
+  "Route": {
+    "value": "路由"
+  },
+  "From scratch": {
+    "value": "从头开始"
+  },
+  "Bypass DNS cache and open new connections": {
+    "value": "绕过 DNS 缓存并建立新连接"
+  },
+  "Start VPN to run a check": {
+    "value": "请先启动 VPN 再进行检查"
+  },
+  "Stopped": {
+    "value": "已停止"
+  },
+  "Too many checks running, try again": {
+    "value": "同时进行的检查过多，请稍后重试"
+  },
+  "Failed at %s: %s": {
+    "value": "失败于 %s：%s"
+  },
+  "HTTP %d · %d ms": {
+    "value": "HTTP %d · %d 毫秒"
+  },
+  "Completed · %d ms": {
+    "value": "完成 · %d 毫秒"
+  },
+  "trace truncated": {
+    "value": "跟踪已截断"
+  },
+  "Skipped": {
+    "value": "已跳过"
+  },
+  "Reused": {
+    "value": "已复用"
+  },
+  "Sent, not confirmed": {
+    "value": "已发送，未确认"
+  },
+  "Not evaluated": {
+    "value": "未评估"
+  },
+  "This app does not go through the VPN. The path shown is hypothetical": {
+    "value": "此应用不经过 VPN，所示路径仅为假设"
+  },
+  "The server address is resolved by DNS rules for this app; for another app the path may differ": {
+    "value": "服务器地址按此应用的 DNS 规则解析；其他应用的路径可能不同"
+  },
+  "The path depends on a server that is not on the route": {
+    "value": "路径依赖于不在路由上的服务器"
+  },
+  "Resolve cycle: a server address is resolved through itself": {
+    "value": "解析循环：服务器地址通过其自身解析"
+  },
+  "IP rules were not evaluated: the address is unknown": {
+    "value": "未评估 IP 规则：地址未知"
+  },
+  "Fake IP is not kept across restarts: apps with cached addresses fail after a restart": {
+    "value": "Fake IP 在重启后不保留：缓存了地址的应用在重启后会失败"
+  },
+  "The fake IP pool wraps faster than the answer TTL: an old address may now belong to another domain": {
+    "value": "Fake IP 池循环快于应答 TTL：旧地址可能已属于其他域名"
+  },
+  "The address is in the fake IP range but has no record": {
+    "value": "该地址在 Fake IP 范围内，但没有记录"
+  },
+  "The address now belongs to another domain": {
+    "value": "该地址当前属于另一个域名"
+  },
+  "IPv6 fake IP is returned, but the tunnel has no IPv6 address": {
+    "value": "返回了 IPv6 Fake IP，但隧道没有 IPv6 地址"
+  },
+  "HTTPS DNS queries are rejected: no ECH and no ALPN hints for the app": {
+    "value": "HTTPS 类型 DNS 查询被拒绝：应用无法获得 ECH 和 ALPN 提示"
+  },
+  "UDP 443 is rejected: browsers fall back to TCP": {
+    "value": "UDP 443 被拒绝：浏览器会回退到 TCP"
+  },
+  "The REALITY server did not recognize the client: check public key, short ID, server name": {
+    "value": "REALITY 服务器未识别客户端：请检查 public key、short ID 和服务器名称"
+  },
+  "The connection broke after an unconfirmed step: wrong UUID or password, the server cannot reach the target, or large packets are lost": {
+    "value": "连接在未确认的步骤后中断：UUID 或密码错误、服务器无法访问目标，或大数据包丢失"
+  },
+  "Some steps were reused: this does not prove the path comes up from scratch": {
+    "value": "部分步骤为复用：这不能证明路径能从头建立"
+  },
+  "URL Check": {
+    "value": "URL 检查"
+  },
+  "URL check and speed test": {
+    "value": "URL 检查和测速"
+  },
+  "No records": {
+    "value": "无记录"
+  },
+  "Authority": {
+    "value": "Authority"
+  },
+  "Not run": {
+    "value": "未执行"
+  },
+  "Not run: %s failed": {
+    "value": "未执行：%s 失败"
+  },
+  "Reused: an open connection or a cached answer": {
+    "value": "复用：已打开的连接或缓存的应答"
+  },
+  "Sent; the protocol gives no confirmation": {
+    "value": "已发送；该协议不返回确认"
+  },
+  "From the network": {
+    "value": "来自网络"
+  },
+  "From cache": {
+    "value": "来自缓存"
+  },
+  "expired, refreshing": {
+    "value": "已过期，正在刷新"
+  },
+  "Local answer: fake IP or hosts": {
+    "value": "本地应答：fake IP 或 hosts"
+  },
+  "DNS query the app makes for the site": {
+    "value": "应用对该站点发起的 DNS 查询"
+  },
+  "Routing rule match: which outbound takes the connection": {
+    "value": "路由规则匹配：由哪个出站承载连接"
+  },
+  "Node selection inside a group": {
+    "value": "组内节点选择"
+  },
+  "Chain unfolded into its nodes": {
+    "value": "链展开为各节点"
+  },
+  "Connection through a node": {
+    "value": "通过节点建立连接"
+  },
+  "Hand-off to the detour that carries this node": {
+    "value": "交给承载该节点的 detour"
+  },
+  "Resolving the server address of a node or DNS server": {
+    "value": "解析节点或 DNS 服务器的地址"
+  },
+  "Query to a DNS server": {
+    "value": "向 DNS 服务器查询"
+  },
+  "Waking an endpoint that was idle-suspended": {
+    "value": "唤醒因空闲而挂起的 endpoint"
+  },
+  "TCP connection to the server": {
+    "value": "与服务器的 TCP 连接"
+  },
+  "QUIC connection to the server": {
+    "value": "与服务器的 QUIC 连接"
+  },
+  "TLS handshake with the server": {
+    "value": "与服务器的 TLS 握手"
+  },
+  "REALITY check: did the server recognize the client": {
+    "value": "REALITY 检查：服务器是否识别客户端"
+  },
+  "Transport over TLS: WS, gRPC, XHTTP, HTTPUpgrade or H2": {
+    "value": "TLS 之上的传输：WS、gRPC、XHTTP、HTTPUpgrade 或 H2"
+  },
+  "Authentication: the server confirms the credentials": {
+    "value": "认证：服务器确认凭据"
+  },
+  "WireGuard handshake with the peer": {
+    "value": "与对端的 WireGuard 握手"
+  },
+  "Protocol header to the server; this protocol sends no confirmation": {
+    "value": "发往服务器的协议头；该协议不返回确认"
+  },
+  "TLS with the site itself, through the tunnel": {
+    "value": "经隧道与站点本身的 TLS"
+  },
+  "First bytes of the site's response": {
+    "value": "站点响应的首批字节"
+  },
+  "HTTP response of the site": {
+    "value": "站点的 HTTP 响应"
+  },
+  "From cache, %s old": {
+    "value": "来自缓存，已存 %s"
+  },
+  "UDP socket to the server; UDP has no handshake to confirm": {
+    "value": "到服务器的 UDP 套接字；UDP 没有可确认的握手"
+  },
+  "No records: the core answered without asking a DNS server (a rule or the domain strategy)": {
+    "value": "无记录：内核未询问 DNS 服务器即作答（规则或域名策略）"
+  },
+  "No HTTP response · %d ms": {
+    "value": "无 HTTP 响应 · %d 毫秒"
+  },
+  "Connection to the DNS server, already open: idle in the pool or opened by a parallel query": {
+    "value": "到 DNS 服务器的连接已打开：来自连接池或由并行查询打开"
+  },
+  "Cut short: a parallel attempt answered first": {
+    "value": "已中断：并行尝试先得到应答"
+  },
+  "Lost the race: %s answered first": {
+    "value": "竞速落败：%s 先应答"
+  },
+  "Query to one server of a DNS group": {
+    "value": "对 DNS 组中某个服务器的查询"
+  },
+  "One per line, or pick from the list": {
+    "value": "每行一个，或从列表中选择"
   }
 }

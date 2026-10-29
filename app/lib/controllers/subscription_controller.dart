@@ -956,6 +956,7 @@ class SubscriptionController extends ChangeNotifier {
           tagPrefix: '',
           detourPolicy: DetourPolicy.defaults,
           url: trimmed,
+          updateIntervalHours: 0, // §685 — «As subscription»
         );
         _entries.add(SubscriptionEntry(list: list));
         await _persist();
@@ -1480,11 +1481,11 @@ class SubscriptionController extends ChangeNotifier {
       if (old.url != newUrl) {
         await _removeCacheIfOrphan(old.url, except: entry);
       }
-      // §129 — file → interval -1 (никогда авто, сервера нет); online → если был
-      // ≤0 (пришли с файла / «не обновлять»), вернуть дефолт 24, иначе текущий.
+      // §129/§685 — file → interval -1 (никогда авто, сервера нет); с файла на
+      // URL → «As subscription» (0); URL → URL — выбор пользователя остаётся.
       final nextInterval = toFile
           ? -1
-          : (old.updateIntervalHours <= 0 ? 24 : old.updateIntervalHours);
+          : (isFileSubscription(old.url) ? 0 : old.updateIntervalHours);
       final next = old.copyWith(
         url: newUrl,
         meta: result.meta,
@@ -2149,9 +2150,10 @@ class SubscriptionController extends ChangeNotifier {
   }
 
   /// §439 — заменить группу члена-группы [memberIndex]; `enabled` члена
-  /// остаётся.
+  /// остаётся, если не задан [enabled] (§686 — Save вкладки Source пишет
+  /// запись целиком, `enabled` в ней тоже).
   Future<UiMsg?> updateAutoMemberAt(
-      int index, int memberIndex, AutoSelectSpec group) async {
+      int index, int memberIndex, AutoSelectSpec group, {bool? enabled}) async {
     if (index < 0 || index >= _entries.length) {
       return const ErrMsg(ErrKey.folderNotFound);
     }
@@ -2165,7 +2167,8 @@ class SubscriptionController extends ChangeNotifier {
     final members = [...folder.members];
     final previous = members[memberIndex].node;
     members[memberIndex] =
-        FolderMember.auto(group, enabled: members[memberIndex].enabled);
+        FolderMember.auto(group,
+            enabled: enabled ?? members[memberIndex].enabled);
     entry._replaceList(folder.copyWith(members: members));
     entry.nodeCount = entry.list.nodes.length;
     // §439 (D-113) — переименование группы переписывает ссылки на неё.
@@ -3357,14 +3360,13 @@ class SubscriptionController extends ChangeNotifier {
           ? _autoTagPrefixForName(nextName, selfId: current.id)
           : current.tagPrefix;
 
-      // §129 — семантика интервала:
-      //   -1 = «Don't auto-update», игнорируем серверный profile-update-interval;
-      //    0 = «Never (respect server)» — сами не по расписанию, но серверный
-      //        заголовок ПРИНИМАЕМ (станет реальным числом → авто по нему);
-      //   >0 = обновлять раз в N часов (сервер тоже может переопределить).
-      //   §603 — правило целиком в [nextUpdateIntervalHours].
-      final nextInterval = nextUpdateIntervalHours(
-          current.updateIntervalHours, result.meta?.updateIntervalHours);
+      // §129/§685 — семантика интервала:
+      //   -1 = «Don't auto-update»;
+      //    0 = «As subscription» — действует серверный profile-update-interval
+      //        (из `meta`), без заголовка 24 ч;
+      //   >0 = обновлять раз в N часов; сервер выбор НЕ перезаписывает.
+      //   Правило — [nextUpdateIntervalHours] / [effectiveUpdateIntervalHours].
+      final nextInterval = nextUpdateIntervalHours(current.updateIntervalHours);
       // §302 — import-rules применяем к УЖЕ РАЗОБРАННЫМ узлам (их emit-JSON):
       // REPLACE патчит узел (`patchedJson` → уходит в конфиг), DISABLE даёт
       // identity-хеши для §283. Делаем это ДО GC ниже, чтобы GC (now -
@@ -3404,7 +3406,8 @@ class SubscriptionController extends ChangeNotifier {
           : gcDisabledHashes(
               migrated,
               freshIdentities,
-              updateIntervalHours: nextInterval,
+              updateIntervalHours: effectiveUpdateIntervalHours(
+                  nextInterval, result.meta?.updateIntervalHours),
               now: ruleNow,
             );
       // §332 — итог правил поверх GC (правило > GC): ENABLE снимает отметки

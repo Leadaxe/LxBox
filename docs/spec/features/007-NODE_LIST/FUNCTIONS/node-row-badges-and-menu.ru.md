@@ -82,6 +82,9 @@ Auto ✨ (только двойник автовыбора Направлени�
   [001-SUBSCRIPTIONS](../../001-SUBSCRIPTIONS/FEATURE.ru.md)/[002-NODE_IMPORT](../../002-NODE_IMPORT/FEATURE.ru.md).
 - Экран View details, Copy URI с подтверждением для ссылок с ключом —
   [008-NODE_EDITOR](../../008-NODE_EDITOR/FEATURE.ru.md).
+- Меню долгого тапа записи на экране Servers — другое меню: у подписки есть
+  Update и Edit source…, у одиночного сервера их нет (его правят в карточке
+  по тапу) — [server-folders.ru.md](server-folders.ru.md).
 
 ## Ревизии
 

@@ -139,7 +139,7 @@ class NodeRow extends StatelessWidget {
     final delay = item.delay;
     if (delay == null) return '';
     final prefix = item.delayIsForeign ? '~' : '';
-    return delay < 0 ? '${prefix}ERR' : '$prefix${delay}MS';
+    return delay < 0 ? '${prefix}ERR' : '$prefix${delay}ms';
   }
 
   /// §535/§540 (ядро SPEC 097) — однословная подпись состояния WG/AWG-
@@ -214,7 +214,7 @@ class NodeRow extends StatelessWidget {
     return item.delayIsForeign ? base.withValues(alpha: 0.55) : base;
   }
 
-  /// `[ACTIVE] [protocol]              [50MS]` — left part flex, ping right-aligned.
+  /// `[ACTIVE] [protocol]              [50ms]` — left part flex, ping right-aligned.
   Widget _buildSubtitleRow(BuildContext context, ColorScheme cs) {
     final hasActive = item.active;
     final hasArrow = item.urltestNow != null && item.urltestNow!.isNotEmpty;

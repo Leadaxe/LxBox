@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/server_list.dart';
+import 'package:lxbox/models/subscription_meta.dart';
 import 'package:lxbox/services/subscription/auto_updater.dart';
 
 SubscriptionServers _sub({
@@ -7,6 +8,7 @@ SubscriptionServers _sub({
   DateTime? lastUpdated,
   DateTime? lastUpdateAttempt,
   int updateIntervalHours = 24,
+  int? serverIntervalHours,
 }) =>
     SubscriptionServers(
       id: 'x',
@@ -18,6 +20,9 @@ SubscriptionServers _sub({
       lastUpdated: lastUpdated,
       lastUpdateAttempt: lastUpdateAttempt,
       updateIntervalHours: updateIntervalHours,
+      meta: serverIntervalHours == null
+          ? null
+          : SubscriptionMeta(updateIntervalHours: serverIntervalHours),
     );
 
 void main() {
@@ -36,11 +41,14 @@ void main() {
       );
     });
 
-    test('§129 interval ≤ 0 → never auto (но force работает)', () {
-      // -1 = «Don't auto-update», 0 = «Never (respect server)». Оба на
-      // авто-триггере пропускаются, ручной Update (force) обновляет.
-      for (final iv in [-1, 0]) {
-        final s = _sub(updateIntervalHours: iv, lastUpdated: null);
+    test('§129 действующий interval ≤ 0 → never auto (но force работает)', () {
+      // -1 = «Don't auto-update»; 0 = «As subscription» при серверном 0
+      // (§685). Оба на авто-триггере пропускаются, ручной Update обновляет.
+      for (final (iv, server) in [(-1, 12), (0, 0)]) {
+        final s = _sub(
+            updateIntervalHours: iv,
+            serverIntervalHours: server,
+            lastUpdated: null);
         expect(
           AutoUpdater.shouldUpdatePure(
               list: s, force: false, fails: 0, now: now),
@@ -54,6 +62,27 @@ void main() {
           reason: 'interval=$iv force должен обновить',
         );
       }
+    });
+
+    test('§685 «As subscription»: серверный интервал, без заголовка 24 ч', () {
+      bool due(int setting, int? server, int agoHours) =>
+          AutoUpdater.shouldUpdatePure(
+            list: _sub(
+              updateIntervalHours: setting,
+              serverIntervalHours: server,
+              lastUpdated: now.subtract(Duration(hours: agoHours)),
+            ),
+            force: false,
+            fails: 0,
+            now: now,
+          );
+      expect(due(0, 3, 4), isTrue);
+      expect(due(0, 3, 2), isFalse);
+      expect(due(0, null, 23), isFalse);
+      expect(due(0, null, 25), isTrue);
+      // Ручной выбор сильнее сервера.
+      expect(due(12, 3, 4), isFalse);
+      expect(due(12, 3, 13), isTrue);
     });
 
     test('fails >= maxFailsPerSession без force → skip', () {

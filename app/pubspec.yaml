@@ -2,7 +2,7 @@ name: lxbox
 description: L×Box — Android VPN client (sing-box / libbox CommandClient).
 publish_to: 'none'
 
-version: 2.25.17+22517500
+version: 2.25.18+22518500
 # ↑ placeholder вида X.Y.Z-dev.N+<code> (RELEASE_PROCESS §2.2/§2.6): X.Y.Z — последний
 # стабильный тег, N — коммитов после него, code — scripts/version-code.sh; обновляется
 # при merge-back после релиза, CI-гард проверяет форму. Реальная версия вычисляется

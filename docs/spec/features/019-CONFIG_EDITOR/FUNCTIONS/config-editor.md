@@ -42,8 +42,8 @@ snackbars and errors on screen.
 - **Formatting in the background.** Opening and text substitution format JSON5
   with a 2-space indent off the main thread; while it runs — a progress bar.
   Unparseable text — as is.
-- **Saving is strict in meaning, lenient in syntax.** Comments and trailing
-  commas are allowed; compact canonical JSON goes to the core. Empty — "Config
+- **Saving is strict in meaning, lenient in syntax.** Comments (`//`, `/* */`,
+  `#` to the end of the line) and trailing commas are allowed; compact canonical JSON goes to the core. Empty — "Config
   is empty"; syntax — "Failed to parse config: …" with the position; the core
   config does not change.
 - **Substitution ≠ saving.** Paste and Load from file change only the editor
@@ -88,8 +88,8 @@ snackbars and errors on screen.
   text as JSON5, the same way Save does, and replaces it with JSON indented by
   two spaces. It is an ordinary edit: undo reverts it and the screen counts it
   as unsaved. A parse error shows "Failed to parse JSON: …" with the position
-  and leaves the text alone. JSON5 comments do not survive: if the text has
-  `//` or `/*` outside strings, the dialog "Comments will be removed" asks
+  and leaves the text alone. Comments do not survive: if the text has
+  `//`, `/*` or `#` outside strings, the dialog "Comments will be removed" asks
   first (Format / Cancel). This screen has no Format: it formats the config
   when it opens.
 - **Growing fields** (node Source, rule JSON, Edit server) grow by screen

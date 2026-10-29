@@ -194,7 +194,29 @@ sealed class CustomRule {
       ports.isEmpty &&
       portRanges.isEmpty &&
       protocols.isEmpty &&
-      network.isEmpty;
+      network.isEmpty &&
+      dnsLayerEligible;
+
+  /// §692: у правила есть условие, которое DNS-слой может проверить —
+  /// домен, приложение, источник, wifi, либо `inbound` при пустом `ip_cidr`.
+  /// Чисто IP-правило (`ip_cidr` и routing-level поля) на DNS-слое матчить
+  /// нечем: ядро 1.14 в новом DNS-режиме (у нас всегда — FakeIP/Force IPv4
+  /// несут `query_type`/`ip_version`) отвергает ссылку DNS-правила на
+  /// rule_set «только IP» на старте. `inbound` лежит на самом DNS-правиле,
+  /// не в rule_set, поэтому `ip_cidr` + `inbound` не спасает. srs — всегда
+  /// true (содержимое файла не парсим).
+  bool get dnsLayerEligible => switch (this) {
+        CustomRuleInline() => domains.isNotEmpty ||
+            domainSuffixes.isNotEmpty ||
+            domainKeywords.isNotEmpty ||
+            packages.isNotEmpty ||
+            sourceIpCidrs.isNotEmpty ||
+            wifiSsids.isNotEmpty ||
+            wifiBssids.isNotEmpty ||
+            (ipCidrs.isEmpty && inbounds.isNotEmpty),
+        CustomRuleSrs() => true,
+        _ => false,
+      };
 
   /// §117: DNS-mirror **активен** — [dnsMirrorEligible] И галка DNS включена.
   /// Build (эмиссия) и UI (lifecycle-локи серверов) используют этот предикат.
@@ -213,7 +235,8 @@ sealed class CustomRule {
       ports.isEmpty &&
       portRanges.isEmpty &&
       protocols.isEmpty &&
-      network.isEmpty;
+      network.isEmpty &&
+      dnsLayerEligible; // §692
 
   /// §256: Force IPv4 **активна** — [forceIpv4Eligible] И галка включена.
   /// Build (эмиссия serverless-mirror'а) и UI (маркер) используют этот предикат.

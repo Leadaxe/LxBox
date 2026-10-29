@@ -26,7 +26,16 @@
 | Settings | Protocol, Server (только чтение); Tag с палитрой эмодзи; Detour server с превью пути; TLS (узловое переопределение ручек TLS Fragmentation, пишется сразу); Skip Tailscale presets; Incoming connections from this tunnel |
 | Source | текст источника, редактируемый; подпись о виде источника |
 | JSON | тело, которое получит ядро, только чтение, подсветка; Copy JSON; Edit JSON |
+| INI | только у узла WireGuard / AmneziaWG — узел в виде `.conf`, только чтение, подсветка; Copy, Share .conf (имя файла от тега); Edit INI; «Not in INI: …» под текстом, если в теле есть ключи, которых `.conf` не несёт |
 | Network | только у узла Tailscale — устройства tailnet, выбор Exit node |
+
+**Auto-узел папки** (член `kind: auto`): на Settings вместо Protocol/Server/Tag,
+Masquerade, Detour и TLS — форма группы: Name, Servers in the pool (All /
+Rule / Pick) с превью состава, Mode, Selected server, Sticky session,
+Advanced. Это та же форма, что у «Add auto node…». Форма правит текст
+Source, Save пишет Source. Source не JSON-объект — форма отключена подписью
+«The form is off: Source is not a valid JSON object.» Так при любом входе
+на экран.
 | Diagnostics | диагностика и уведомления узла ([009-NODE_HEALTH](../../009-NODE_HEALTH/FEATURE.ru.md)); метка на ярлыке при предупреждениях |
 
 - **Protocol**: протокол узла; у AmneziaWG — «AmneziaWG (wireguard)».
@@ -74,6 +83,8 @@
   палитрой. Отдельной «пометки detour-сервера» (⚙-переключателя) нет: ⚙ —
   обычный эмодзи палитры.
 - У узла автовыбора (группы в папке) блока Detour нет вовсе.
+- Член папки и auto-узел правятся только здесь: в меню долгого тапа члена
+  пункта «Edit…» нет (у битого члена он остаётся).
 - Член папки: detour личный, политика папки поверх него; отказ (сам на себя,
   цикл) откатывает выбор с сообщением.
 - Вкладка JSON показывает тело без префикса тегов, detour и шагов сборки.
@@ -106,3 +117,4 @@
 | 11 | [626](../../../tasks/626-unsaved-changes-everywhere.md) | Implemented | Диалог «Unsaved changes» при выходе с правкой Tag или Source |
 | 12 | [636](../../../tasks/636-tls-settings-per-node-folder-subscription.md) | Implemented | Секция TLS между Detour и Skip presets |
 | 13 | [656](../../../tasks/656-contract-1130-tunnel-ingress.md) | В работе | Skip Tailscale presets только у Tailscale; блок Incoming connections from this tunnel |
+| 14 | [686](../../../tasks/686-folder-auto-node-source-tab.md) | В работе | Auto-узел папки: форма группы на Settings поверх текста Source; вкладка INI узла WireGuard / AmneziaWG |

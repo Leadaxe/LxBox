@@ -8,6 +8,214 @@
 
 ## [Unreleased]
 
+## [2.25.18] — 2026-10-29
+
+### Fixed
+
+- **VPN would not start after a rule made of IP ranges got a DNS option
+  ([task 692](docs/spec/tasks/692-rule-dns-option-needs-dns-visible-conditions.md)).**
+  The core stopped with «validate dns rule[N]: Legacy Address Filter Fields
+  in DNS rules is deprecated…»: a DNS rule pointing to a rule-set that holds
+  nothing but IP ranges is fatal once FakeIP or Force IPv4 is present. The
+  DNS section of a rule (dedicated server, Force IPv4, Fixed IP) now
+  appears only when the rule has a condition the DNS layer can check — a
+  domain, an app, a source address, a Wi-Fi network or an inbound — and an
+  IP-only rule no longer produces a DNS rule. Existing rules keep their DNS
+  settings; they come back once a domain or app is added.
+  (RU: VPN не стартовал после того, как правило из одних IP-диапазонов
+  получало DNS-опцию. Ядро останавливалось с «validate dns rule[N]: Legacy
+  Address Filter Fields in DNS rules is deprecated…»: DNS-правило на набор
+  из одних IP-диапазонов фатально, когда в конфиге есть FakeIP или Force
+  IPv4. Секция DNS у правила (отдельный сервер, Force IPv4, Fixed IP)
+  теперь показывается только при условии, которое DNS-слой может проверить:
+  домен, приложение, адрес источника, Wi-Fi-сеть или inbound, — и правило
+  из одних IP больше не даёт DNS-правила. Настройки DNS у существующих
+  правил сохраняются и возвращаются, когда добавлен домен или приложение.)
+
+### Added
+
+- **Bypass the tunnel for chosen addresses
+  ([task 691](docs/spec/tasks/691-tun-route-exclude.md)).** VPN Settings →
+  TUN gets «Bypass the tunnel»: a list of CIDR ranges (suggestions for home
+  LAN, private and link-local networks) that skip the tunnel and the core
+  entirely — e.g. large downloads from a home NAS no longer go through the
+  core. An entry that is not a CIDR or covers the tunnel's own address is
+  dropped with a build warning. Applies after a full VPN restart. The
+  checkbox «Custom tunnel routes» is renamed «Split default route» and
+  explained: it never added routes of its own.
+  (RU: Обход туннеля для выбранных адресов. В VPN Settings → TUN появилось
+  «Bypass the tunnel»: список CIDR-диапазонов (подсказки — домашняя сеть,
+  частные и link-local сети), которые полностью минуют туннель и ядро —
+  например, большие загрузки с домашнего NAS больше не идут через ядро.
+  Строка не-CIDR или накрывающая адрес самого туннеля снимается с
+  предупреждением сборки. Применяется после полного перезапуска VPN. Галка
+  «Custom tunnel routes» переименована в «Split default route» и получила
+  объяснение: своих маршрутов она никогда не добавляла.)
+
+- **Diagnostics → URL Check
+  ([task 687](docs/spec/tasks/687-diagnostics-url-check.md), issue #176).**
+  Enter a site and the core makes a real request to it through your routing
+  and shows every step as a tree, as it happens: the app's DNS queries (A,
+  AAAA, HTTPS) and the server that answered, the matched rule, the group
+  choice, the node and its detours, the node's own address lookup, TCP, TLS,
+  the response. Each step has its time and result; a step the protocol does
+  not confirm (VLESS, Trojan, Shadowsocks header) is marked as sent, not
+  confirmed; a cached or reused step is marked as reused. When the path
+  breaks, the step where it broke is highlighted and named above the tree. A
+  tap on a step shows its details. Options: the app the request is made for
+  (rules by app apply), depth (Full, Connect, Route — no connection is
+  opened, DNS) and From scratch (bypass the DNS cache, open new connections).
+  Copy puts the trace as text on the clipboard. Needs a running VPN.
+  (RU: Diagnostics → URL Check. Вводите сайт — ядро делает к нему настоящий
+  запрос через вашу маршрутизацию и показывает каждый шаг деревом по мере
+  прохождения: DNS-запросы приложения (A, AAAA, HTTPS) и ответивший сервер,
+  сработавшее правило, выбор в группе, узел и его detour, резолв адреса
+  узла, TCP, TLS, ответ. У шага время и исход; шаг, который протокол не
+  подтверждает (заголовок VLESS, Trojan, Shadowsocks), помечен «отправлено,
+  без подтверждения»; взятый из кэша или готового соединения — «использовано
+  готовое». Если путь оборвался, шаг обрыва подсвечен и назван над деревом.
+  Тап по шагу раскрывает подробности. Параметры: приложение, от имени которого
+  идёт запрос (действуют правила по приложениям), глубина (Full, Connect,
+  Route — без соединений, DNS) и From scratch (мимо кэша DNS, новые
+  соединения). Copy кладёт трассу текстом в буфер. Нужен запущенный VPN.)
+- **URL Check: step details, tree lines, the DNS answer
+  ([task 688](docs/spec/tasks/688-url-check-stage-details.md)).** Every step
+  expands: a line on what the step is, why it was skipped or reused, and its
+  attributes. Lines connect each step to its parent. The app's DNS query shows
+  the answer record by record with TTL (CNAME chain, addresses, HTTPS record
+  parameters such as ALPN and ECH), the SOA on NXDOMAIN or an empty answer,
+  and where the answer came from: the network, the cache with its age, or a
+  local answer (fake IP, hosts). The failed step and an empty or failed DNS
+  answer open by themselves; a tap on a finding highlights its steps.
+  (RU: URL Check: подробности шагов, линии дерева, ответ DNS. Любой шаг
+  раскрывается: строка о том, что это за шаг, почему он пропущен или взят
+  готовым, его атрибуты. Линии соединяют шаг с родителем. DNS-запрос
+  приложения показывает ответ по записям с TTL (цепочка CNAME, адреса,
+  параметры HTTPS-записи вроде ALPN и ECH), SOA при NXDOMAIN или пустом
+  ответе и откуда ответ: из сети, из кэша с возрастом или локальный (fake IP,
+  hosts). Шаг обрыва и пустой или ошибочный ответ DNS раскрыты сразу; тап по
+  находке подсвечивает её шаги.)
+- **URL Check: no false success, no stale result
+  ([task 689](docs/spec/tasks/689-url-check-no-response-and-stale-result.md)).**
+  A Full check that ends without an HTTP response and without a failed step
+  shows a yellow «No HTTP response» instead of a green «HTTP 0». Changing the
+  URL, the app, the depth or From scratch clears the previous result.
+  (RU: URL Check: без ложного успеха и без старого результата. Полная
+  проверка, закончившаяся без HTTP-ответа и без упавшего шага, показывает
+  жёлтое «No HTTP response» вместо зелёного «HTTP 0». Смена URL, приложения,
+  глубины или From scratch снимает прошлый результат.)
+
+- **INI tab for WireGuard / AmneziaWG nodes
+  ([task 686](docs/spec/tasks/686-folder-auto-node-source-tab.md)).** Node
+  Settings shows the node as a `.conf` whatever it was added from (link, INI
+  or JSON): all peers, masquerade and AmneziaWG fields, with Copy, Share .conf
+  and Edit INI. Edit INI replaces the node's source with the edited INI after
+  a warning; keys of the body that INI cannot express are listed under "Not
+  in INI".
+- **Several `[Peer]` sections in a WireGuard INI are accepted
+  ([task 686](docs/spec/tasks/686-folder-auto-node-source-tab.md)).** Each
+  section becomes its own peer of the node; before, everything after the
+  first was dropped. A peer without a public key or endpoint is dropped with
+  a warning naming it.
+
+### Changed
+
+- **FakeIP: custom address pools
+  ([task 690](docs/spec/tasks/690-fakeip-custom-ranges.md)).** The FakeIP
+  preset gets «IPv4 pool» and «IPv6 pool» (CIDR; defaults 198.18.0.0/15 and
+  fc00::/18 as before), for networks where the default range is in use or
+  excluded from the tunnel. An empty IPv6 pool turns off fake AAAA answers.
+  (RU: FakeIP: свои пулы адресов. У пресета FakeIP появились «IPv4 pool» и
+  «IPv6 pool» (CIDR; по умолчанию 198.18.0.0/15 и fc00::/18, как раньше) —
+  для сетей, где стандартный диапазон занят или исключён из туннеля. Пустой
+  IPv6-пул выключает фейковые ответы на AAAA.)
+- **Ru internet segment: Yandex UDP DNS follows the preset's direction
+  ([task 684](docs/spec/tasks/684-dns-defaults-plain-tunnel-encrypted-direct.md)).**
+  The «UDP through the tunnel» default stays for the shared DNS servers; the
+  preset's own `yandex_udp` goes the preset's Outbound again (direct by
+  default), so Russian domains no longer resolve through `vpn-1`. The
+  «UDP DNS outbound» setting of the preset is removed; «Encrypted DNS
+  outbound» became the checkbox «Encrypted DNS via Outbound»: off (default)
+  — DoT and DoH go direct, on — through the preset's Outbound too.
+  (RU: Ru internet segment: UDP-DNS Яндекса идёт Направлением пресета.
+  Умолчание «UDP через туннель» остаётся у общих DNS-серверов; собственный
+  `yandex_udp` пресета снова идёт по Outbound пресета (по умолчанию
+  напрямую), так что русские домены больше не резолвятся через `vpn-1`.
+  Настройка «UDP DNS outbound» у пресета снята; «Encrypted DNS outbound»
+  стала галочкой «Encrypted DNS via Outbound»: выключена (по умолчанию) —
+  DoT и DoH напрямую, включена — тоже через Outbound пресета.)
+- **Speed Test is a tab of Diagnostics (task 687).** The side menu item
+  **Speed Test** is replaced by **Diagnostics** with two tabs: URL Check and
+  Speed Test. Speed Test works as before; a running test is not interrupted
+  when switching tabs. Support links to Speed Test open the same tab.
+  (RU: Speed Test — вкладка Diagnostics. Пункт бокового меню **Speed Test**
+  заменён пунктом **Diagnostics** с вкладками URL Check и Speed Test. Speed
+  Test работает как раньше; идущий замер не прерывается при переключении
+  вкладок. Ссылки поддержки на Speed Test открывают ту же вкладку.)
+- **Core `v1.14.3-lx.23` → `v1.14.4-lx.25`
+  ([docs/KERNEL.md](docs/KERNEL.md)).** lx.25: XHTTP `packet-up` uploads
+  (and `auto` without REALITY) are batched and no longer wait for each
+  POST's reply, so single-stream upload speed is no longer capped by the
+  round trip (Leadaxe/sing-box-lx#58); six smaller XHTTP fixes against Xray,
+  among them a `stream-up` write that could hang after the server refused
+  the upload; URL Check shows every server a DNS group asked, and a server
+  that lost the race is skipped with the winner named instead of a failed
+  DoT/DoH. lx.24: adds the active connection test
+  behind URL Check (Leadaxe/sing-box-lx#59): the stage tree, the DNS answer
+  record by record, findings, a redirect reported as the answer. Moves to the
+  upstream sing-box 1.14.4 base (group, WireGuard sleep and flow close
+  fixes); Auto (`urltest`) groups still pick a node per connection. Fixes a
+  data race in the Auto group's selection. No config changes.
+  (RU: Ядро `v1.14.3-lx.23` → `v1.14.4-lx.25`. lx.25: выгрузка XHTTP
+  `packet-up` (и `auto` без REALITY) склеивается и не ждёт ответа на каждый
+  POST — скорость выгрузки одного потока больше не упирается в круговой
+  путь; шесть мелких правок XHTTP против Xray, среди них запись `stream-up`,
+  которая могла зависнуть после отказа сервера; URL Check показывает каждый
+  сервер, которого спросила DNS-группа, проигравший гонку — пропущен с
+  именем победителя, а не сломанный DoT/DoH. lx.24: активная проверка соединения
+  для URL Check (дерево стадий, ответ DNS по записям, находки, редирект как
+  ответ). База — апстримный sing-box 1.14.4 (исправления групп, сна
+  WireGuard и закрытия потоков); группы Auto (`urltest`) по-прежнему выбирают
+  узел на каждое соединение. Исправлена гонка данных при выборе узла в группе
+  Auto. Конфиг не меняется.)
+
+- **Auto node in a folder is edited in Node Settings
+  ([task 686](docs/spec/tasks/686-folder-auto-node-source-tab.md)).** A tap
+  opens the group form on the Settings tab (name, servers in the pool, mode,
+  advanced); Source shows the stored record and can be edited; the JSON tab
+  says "Members are resolved at build time" instead of an empty `outbounds`.
+  Before, a tap opened an empty Source, the name could not be saved and the
+  JSON tab showed no members. The pool preview no longer counts disabled
+  servers and marks them with ⏻.
+- **Long-press menu no longer offers editing that lives in Node Settings
+  ([task 686](docs/spec/tasks/686-folder-auto-node-source-tab.md)).** "Edit…"
+  of a folder member and "Edit source…" / "Update" of a standalone server are
+  removed; a tap opens the same screen.
+- **`#` comments in pasted JSON
+  ([task 686](docs/spec/tasks/686-folder-auto-node-source-tab.md)).** A node
+  JSON and the Config screen accept `#` line comments, as the core does, next
+  to `//` and `/* */`; they are stripped like the others.
+- Direction editor: a caption under "Replace groups" says what the checkbox
+  does — a ticked group joins even when the filter does not match it and goes
+  above the servers; groups never join the Direction's auto group.
+
+- **Subscription update interval: "As subscription" mode; the server no
+  longer overwrites your choice
+  ([task 685](docs/spec/tasks/685-subscription-interval-as-subscription.md)).**
+  The first item of Update interval is "As subscription": the interval comes
+  from the server's `profile-update-interval` header (24 h when the server
+  sends none). A manually chosen interval stays as chosen; before, every
+  update replaced it with the server's value. New subscriptions start in
+  "As subscription". "Never (respect server)" is removed. Existing
+  subscriptions keep their current number as a manual choice; pick "As
+  subscription" to follow the server again.
+
+### Fixed
+
+- Subscription filter rule editor showed "Совпадений: из узлов" without the
+  numbers; the "Applied — …" message after saving filters lost them too.
+- Node delay is shown as `120ms` instead of `120MS`.
+
 ---
 
 ## [2.25.17] — 2026-10-24

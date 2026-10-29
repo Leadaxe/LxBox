@@ -8,6 +8,11 @@ import io.nekohasekai.libbox.CommandClient
 import io.nekohasekai.libbox.CommandClientHandler
 import io.nekohasekai.libbox.CommandClientOptions
 import io.nekohasekai.libbox.ConnectionEvents
+import io.nekohasekai.libbox.ConnectionTestAttrIterator
+import io.nekohasekai.libbox.ConnectionTestHandler
+import io.nekohasekai.libbox.ConnectionTestResult
+import io.nekohasekai.libbox.ConnectionTestSession
+import io.nekohasekai.libbox.ConnectionTestStage
 import io.nekohasekai.libbox.Connections
 import io.nekohasekai.libbox.DnsQuery
 import io.nekohasekai.libbox.GetURLResult
@@ -285,6 +290,7 @@ class BoxCommandClient {
         disconnectClient(pingClient, "shutdownAll") // §175
         stopTailscaleStatus() // §579
         stopTailscalePing() // §581
+        stopConnectionTest() // §687
         stopOpenConnectStatus() // §654
         screenAccumulator.set(null)
         profilerAccumulator.set(null)
@@ -823,6 +829,117 @@ class BoxCommandClient {
             runCatching {
                 if (gen != tailscalePingGen.get()) return@runCatching
                 tailscalePingEmitter.offer(mapOf("error" to (message ?: "failed")))
+            }
+        }
+    }
+
+    // §687 — активный тест соединения (kernel SPEC 139). Один тест за раз;
+    // события — в `ccConnectionTestSink` (EventChannel `lxbox/cc/connection_test`)
+    // батчами без склейки: каждая стадия нужна, «последний снапшот» не годится.
+    private val connTestClient = AtomicReference<CommandClient?>(null)
+    private val connTestSession = AtomicReference<ConnectionTestSession?>(null)
+    private val connTestGen = AtomicInteger(0)
+    private val connTestEmitter = EventEmitter { BoxVpnService.ccConnectionTestSink }
+
+    fun startConnectionTest(
+        link: String,
+        packageName: String,
+        depth: Int,
+        fresh: Boolean,
+    ) {
+        stopConnectionTest()
+        val gen = connTestGen.incrementAndGet()
+        runCatching {
+            val client = CommandClient(PingHandler(), CommandClientOptions())
+            client.connect()
+            connTestClient.getAndSet(client)?.runCatching { disconnect() }
+            val request = Libbox.newConnectionTestRequest().apply {
+                setLink(link)
+                if (packageName.isNotEmpty()) setPackageName(packageName)
+                setAppDNS(true)
+                setDepth(depth)
+                setFresh(fresh)
+            }
+            val session = client.startConnectionTest(request, ConnectionTestCallback(gen))
+            connTestSession.getAndSet(session)?.runCatching { cancel() }
+        }.onFailure {
+            Log.w(TAG, "startConnectionTest failed (gen=$gen): ${it.message}")
+            connTestEmitter.offer(mapOf("event" to "error", "message" to (it.message ?: "failed")))
+        }
+    }
+
+    fun stopConnectionTest() {
+        connTestGen.incrementAndGet()
+        connTestSession.getAndSet(null)?.runCatching { cancel() }
+        disconnectClient(connTestClient, "stopConnectionTest")
+    }
+
+    private fun connTestAttrs(iter: ConnectionTestAttrIterator?): ArrayList<Map<String, String>> {
+        val out = ArrayList<Map<String, String>>()
+        while (iter != null && iter.hasNext()) {
+            val a = iter.next() ?: continue
+            out.add(mapOf("key" to (a.key() ?: ""), "value" to (a.value() ?: "")))
+        }
+        return out
+    }
+
+    /// Колбэки из Go-потока: исключения наружу не выходят (JNI abort).
+    private inner class ConnectionTestCallback(private val gen: Int) : ConnectionTestHandler {
+        override fun onStage(stage: ConnectionTestStage?) {
+            runCatching {
+                if (gen != connTestGen.get() || stage == null) return@runCatching
+                connTestEmitter.offer(mapOf(
+                    "event" to "stage",
+                    "id" to stage.id(),
+                    "parent" to stage.parent(),
+                    "kind" to (stage.kind() ?: ""),
+                    "subject" to (stage.subject() ?: ""),
+                    "start_ms" to stage.startMs(),
+                    "duration_ms" to stage.durationMs(),
+                    "result" to stage.result(),
+                    "error" to (stage.errorMessage() ?: ""),
+                    "attrs" to connTestAttrs(stage.attrs()),
+                ))
+            }
+        }
+
+        override fun onResult(result: ConnectionTestResult?) {
+            runCatching {
+                if (gen != connTestGen.get() || result == null) return@runCatching
+                val findings = ArrayList<Map<String, Any>>()
+                val it = result.findings()
+                while (it != null && it.hasNext()) {
+                    val f = it.next() ?: continue
+                    val stages = ArrayList<Int>()
+                    val si = f.stages()
+                    while (si != null && si.hasNext()) stages.add(si.next())
+                    findings.add(mapOf(
+                        "code" to (f.code() ?: ""),
+                        "level" to f.level(),
+                        "stages" to stages,
+                        "attrs" to connTestAttrs(f.attrs()),
+                    ))
+                }
+                // Тело не передаём: экран показывает статус и размер, не ответ.
+                connTestEmitter.offer(mapOf(
+                    "event" to "result",
+                    "error" to (result.errorMessage() ?: ""),
+                    "root_cause" to result.rootCause(),
+                    "findings" to findings,
+                    "http_status" to result.httpStatus(),
+                    "content_type" to (result.contentType() ?: ""),
+                    "body_bytes" to (result.body()?.size ?: 0),
+                    "truncated" to result.truncated(),
+                    "elapsed_ms" to result.elapsedMs(),
+                    "stages_truncated" to result.stagesTruncated(),
+                ))
+            }
+        }
+
+        override fun onError(message: String?) {
+            runCatching {
+                if (gen != connTestGen.get()) return@runCatching
+                connTestEmitter.offer(mapOf("event" to "error", "message" to (message ?: "failed")))
             }
         }
     }

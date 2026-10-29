@@ -1314,14 +1314,50 @@ void main() {
       expect(grp['mode'], 'fastest');
       expect(grp.containsKey('detour'), isFalse, reason: '§319');
 
-      // §684: серверы не следуют @outbound маршрута. UDP — по
-      // `dns_plain_outbound` (дефолт vpn-1), DoT и DoH — по
-      // `dns_encrypted_outbound` (дефолт direct-out → detour снят, §117).
-      expect(byTag('ru-direct:yandex_udp')['detour'], 'vpn-1');
+      // §684 (поправка 29.10): UDP идёт Направлением пресета (@outbound),
+      // DoT и DoH — напрямую, пока галочка `dns_encrypted_via_outbound`
+      // выключена (direct-out → detour снят, §117).
+      expect(byTag('ru-direct:yandex_udp')['detour'], 'vpn-2');
       expect(byTag('ru-direct:yandex_dot').containsKey('detour'), isFalse,
           reason: 'direct-out → detour снят (§117)');
       expect(byTag('ru-direct:yandex_doh').containsKey('detour'), isFalse,
           reason: 'direct-out → detour снят (§117)');
+    });
+
+    test('fakeip: пулы из vars — дефолт как раньше, свой, пустой IPv6 (§690)', () {
+      Map<String, dynamic> server(Map<String, String> vars) => expandPreset(
+            CustomRulePreset(name: 'FakeIP', presetId: 'fakeip', varsValues: vars),
+            realPreset('fakeip'),
+          ).dnsServers.single;
+
+      final def = server(const {});
+      expect(def['inet4_range'], '198.18.0.0/15');
+      expect(def['inet6_range'], 'fc00::/18');
+
+      final own = server(const {'inet4_range': '10.233.0.0/16', 'inet6_range': 'fd00:233::/48'});
+      expect(own['inet4_range'], '10.233.0.0/16');
+      expect(own['inet6_range'], 'fd00:233::/48');
+
+      final noV6 = server(const {'inet6_range': ''});
+      expect(noV6['inet4_range'], '198.18.0.0/15');
+      expect(noV6.containsKey('inet6_range'), isFalse,
+          reason: 'пусто = explicit none (§033), ядро отвечает на AAAA пустым NOERROR');
+    });
+
+    test('ru-direct: галочка dns_encrypted_via_outbound — DoT/DoH по @outbound (§684)', () {
+      final f = expandPreset(
+        CustomRulePreset(
+          name: 'RU',
+          presetId: 'ru-direct',
+          varsValues: {'outbound': 'vpn-2', 'dns_encrypted_via_outbound': 'true'},
+        ),
+        realPreset('ru-direct'),
+      );
+      Map<String, dynamic> byTag(String t) =>
+          f.dnsServers.firstWhere((s) => s['tag'] == t);
+      expect(byTag('ru-direct:yandex_udp')['detour'], 'vpn-2');
+      expect(byTag('ru-direct:yandex_dot')['detour'], 'vpn-2');
+      expect(byTag('ru-direct:yandex_doh')['detour'], 'vpn-2');
     });
 
     // §354 — сквозь ОБА слоя: expandPreset → эмиссионный фильтр §312. Именно

@@ -93,13 +93,9 @@ class _SubscriptionFiltersTabState extends State<SubscriptionFiltersTab> {
     messenger.showSnackBar(
       SnackBar(
         content: Text(disabled > 0
-            ? getLocalText
-                .s("Applied — %1\$d nodes, %2\$d disabled")
-                .replaceAll(r'%1$d', '$total')
-                .replaceAll(r'%2$d', '$disabled')
-            : getLocalText
-                .s("Applied — %d nodes")
-                .replaceAll('%d', '$total')),
+            ? getLocalText.s(
+                "Applied — %1\$d nodes, %2\$d disabled", total, disabled)
+            : getLocalText.s("Applied — %d nodes", total)),
         duration: const Duration(seconds: 4),
       ),
     );
@@ -978,10 +974,8 @@ class _RuleEditorScreenState extends State<_RuleEditorScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  getLocalText
-                      .s("%1\$d of %2\$d nodes match")
-                      .replaceAll(r'%1$d', '${hits.length}')
-                      .replaceAll(r'%2$d', '${nodes.length}'),
+                  getLocalText.s("%1\$d of %2\$d nodes match",
+                      hits.length, nodes.length),
                   style: theme.textTheme.bodyMedium,
                 ),
               ),

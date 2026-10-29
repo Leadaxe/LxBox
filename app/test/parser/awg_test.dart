@@ -805,10 +805,13 @@ void main() {
       expect(spec.rawSource, fullUri);
     });
 
-    test('второй [Interface]-блок игнорируется: один link = один узел', () {
+    test('повтор [Interface] сливается, каждая [Peer] — свой пир: один link = один узел', () {
+      // Контракт 1.1.140: `[Interface]` — одна (повтор сливается по
+      // умолчанию диалекта), `[Peer]` — `repeat: each`, и форма `conf_b64`
+      // читает диалект протокола. Две копии файла — один узел с двумя пирами.
       final two = base64.encode(utf8.encode('$conf\n$conf'));
       final spec = parseUri('awg://$two#two') as WireguardSpec?;
-      expect(spec!.peers.length, 1);
+      expect(spec!.peers.length, 2);
       expect(spec.server, '91.247.235.94');
     });
   });

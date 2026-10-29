@@ -283,6 +283,14 @@ labelled AmneziaWG.
 
 If the source sets `I1` itself, the section is off: `I1` takes priority.
 
+The **INI** tab of a WireGuard or AmneziaWG server shows it as a `.conf`
+file, whatever the source: link, `.conf` or JSON. Copy puts the text on the
+clipboard, Share .conf sends it as a file named after the tag. Every peer
+gets its own `[Peer]` section; masquerade and AmneziaWG keys are kept.
+A JSON body can hold keys a `.conf` has no place for; the tab lists them
+under the text as "Not in INI". **Edit INI** makes this text the server's
+source and opens Source; the tag and the detour server stay as they are.
+
 ### Subscription — a provider's server list that updates itself
 
 A subscription is a link from a VPN provider that stands for a whole list
@@ -339,6 +347,14 @@ by appears below it — session stickiness. The test interval and the
 Interrupt connections on switch checkbox sit in the Advanced section. The
 app has three checkboxes with that name; which one fires when is covered in
 [Directions](#interrupt-connections-on-switch--three-switches-for-three-events).
+
+A server switched off in the folder stays in the preview with the ⏻ icon
+and is not counted: `5 of 6 servers · 1 off`. In Pick you can tick it; it
+joins the pool once you switch it on.
+
+To change an existing auto node, tap it in the folder. Settings holds the
+same form, Source holds the auto node as stored (JSON), and Save writes the
+changes.
 
 An auto node admits servers by the same rules as a direction: a Tailscale
 node without an exit node never gets in, and a detour link (a server marked
@@ -2057,7 +2073,7 @@ such an edit survives a rebuild.
 
 | Element | What it does |
 |---|---|
-| Editor field | JSON with indents, line numbers and sticky block headers. Accepts JSON5: `//` and `/* */` comments. |
+| Editor field | JSON with indents, line numbers and sticky block headers. Accepts JSON5: `//` and `/* */` comments, and `#` to the end of the line, as the core reads it. |
 | Find | Searches the text; Previous match and Next match move between matches. |
 | Copy | Copies the whole text. |
 | Save | Checks the syntax and writes the config. |

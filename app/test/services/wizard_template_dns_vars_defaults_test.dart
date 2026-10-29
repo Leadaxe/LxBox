@@ -59,7 +59,7 @@ void main() {
     expect(body['domain_resolver'], 'google_doh');
   });
 
-  test('ru-direct: UDP через vpn-1, DoT/DoH напрямую, свои var', () {
+  test('ru-direct: UDP через outbound пресета, DoT/DoH напрямую или галочкой туда же', () {
     final preset = (tpl['selectable_rules'] as List)
         .cast<Map>()
         .firstWhere((p) => p['preset_id'] == 'ru-direct');
@@ -67,14 +67,26 @@ void main() {
       for (final v in (preset['vars'] as List).cast<Map>())
         v['name']: v['default_value'],
     };
-    expect(vars['dns_plain_outbound'], 'vpn-1');
-    expect(vars['dns_encrypted_outbound'], 'direct-out');
+    // §684 поправка 29.10: правило «UDP через vpn-1» — для общих серверов;
+    // UDP пресета идёт Направлением самого пресета.
+    expect(vars.containsKey('dns_plain_outbound'), isFalse);
+    expect(vars.containsKey('dns_encrypted_outbound'), isFalse);
+    expect(vars['dns_encrypted_via_outbound'], 'false');
     final servers = {
       for (final s in (preset['dns_servers'] as List).cast<Map>())
         s['tag']: s['detour'],
     };
-    expect(servers['yandex_udp'], '@dns_plain_outbound');
-    expect(servers['yandex_dot'], '@dns_encrypted_outbound');
-    expect(servers['yandex_doh'], '@dns_encrypted_outbound');
+    expect(servers['yandex_udp'], '@outbound');
+    // Без галочки detour нет (= direct-out, §117); с галочкой — @outbound.
+    final gates = {
+      for (final s in (preset['dns_servers'] as List).cast<Map>())
+        s['tag']: s['#if'],
+    };
+    for (final tag in ['yandex_dot', 'yandex_doh']) {
+      expect(servers[tag], isNull, reason: tag);
+      expect(gates[tag].toString(),
+          '[@dns_encrypted_via_outbound, {detour: @outbound}]',
+          reason: tag);
+    }
   });
 }

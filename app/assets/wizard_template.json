@@ -340,7 +340,15 @@
           }}
         },
         {"name": "tun_address6", "type": "text", "default_value": "fdfe:dcba:9876::1/126", "required": true, "wizard_ui": "edit", "title": "IPv6 address", "tooltip": "TUN interface IPv6 address (CIDR). Applied only when Enable IPv6 is on."},
-        {"name": "route_address_enable", "type": "bool", "default_value": "false", "required": true, "wizard_ui": "edit", "title": "Custom tunnel routes", "tooltip": "Route all IPv4 and IPv6 through the tunnel via explicit half-ranges instead of sing-box defaults. Off by default — turn on only if the default routing misbehaves."},
+        {"name": "route_address_enable", "type": "bool", "default_value": "false", "required": true, "wizard_ui": "edit", "title": "Split default route", "tooltip": "Send all traffic to the tunnel as two half-ranges per address family instead of one default route. The same traffic goes through the tunnel; turn on only if the device ignores the VPN's default route."},
+        {"name": "tun_route_exclude", "type": "text_list", "options_open": true, "wizard_ui": "edit", "title": "Bypass the tunnel", "tooltip": "Addresses (CIDR) that skip the tunnel and the core entirely, e.g. a home NAS. Their traffic goes without VPN: routing rules, DNS hijack and statistics do not see it. Do not add networks you reach through a VPN node, the FakeIP pool or the tunnel's own address. Applies after a full VPN restart.",
+          "options": [
+            {"title": "192.168.0.0/16 · home LAN", "value": "192.168.0.0/16"},
+            {"title": "10.0.0.0/8 · private", "value": "10.0.0.0/8"},
+            {"title": "169.254.0.0/16 · link-local", "value": "169.254.0.0/16"},
+            {"title": "fe80::/10 · IPv6 link-local", "value": "fe80::/10"}
+          ]
+        },
         {"name": "tun_name", "type": "text", "default_value": "lxbox", "required": true, "wizard_ui": "edit", "title": "TUN interface", "tooltip": "system name"},
         {"name": "tun_mtu", "type": "int", "default_value": "1492", "required": true, "wizard_ui": "edit", "title": "MTU", "tooltip": "1492 recommended for mobile/WiFi"},
         {"name": "tun_auto_route", "type": "bool", "default_value": "true", "required": true, "wizard_ui": "edit", "title": "Auto route", "tooltip": "Let sing-box manage routing table"},
@@ -427,6 +435,7 @@
         "#if": {"#and": ["@route_address_enable"], "#value": {
           "route_address": ["0.0.0.0/1", "128.0.0.0/1", "::/1", "8000::/1"]
         }},
+        "#if exclude": [{"@tun_route_exclude": "#notEmpty"}, {"route_exclude_address": "@tun_route_exclude"}],
         "mtu": "@tun_mtu",
         "auto_route": "@tun_auto_route",
         "strict_route": "@tun_strict_route",
@@ -543,8 +552,7 @@
             {"title": "2a02:6b8::feed:a11 · Family v6", "value": "2a02:6b8::feed:a11"}
           ]
         },
-        {"name": "dns_plain_outbound", "type": "outbound", "default_value": "vpn-1", "required": true, "title": "UDP DNS outbound", "tooltip": "Which direction carries plain UDP queries to Yandex DNS"},
-        {"name": "dns_encrypted_outbound", "type": "outbound", "default_value": "direct-out", "required": true, "title": "Encrypted DNS outbound", "tooltip": "Which direction carries Yandex DoT and DoH queries"},
+        {"name": "dns_encrypted_via_outbound", "type": "bool", "default_value": "false", "title": "Encrypted DNS via Outbound", "tooltip": "Send Yandex DoT and DoH through this preset's Outbound, like UDP. Off: they go direct."},
         {"name": "geoip_enabled", "type": "bool", "default_value": "true", "title": "GeoIP IP-range fallback", "tooltip": "Match Russian-AS IPs as well as domains — catches CDN/QUIC/ECH cases where domain detection fails. Auto-downloads geoip-ru.srs (~150 KB) on first use."},
         {"name": "apps_enabled", "type": "bool", "default_value": "true", "title": "Russian apps by package", "tooltip": "Route Android apps from the legiz-ru list (banks, marketplaces, government services, Yandex/VK and others) by package name, regardless of the domains they use. Auto-downloads ru-app-list.srs (~4 KB) on first use."},
         {"name": "force_ipv4", "type": "bool", "default_value": "true", "title": "Force IPv4", "tooltip": "Resolve Russian domains to IPv4 only. Prevents dead IPv6 connections on networks without working global IPv6. Works through this preset's DNS rule — keep the DNS toggle on. Turn off if your network has functional IPv6."}
@@ -587,9 +595,9 @@
       ],
       "dns_servers": [
         {"type": "group", "tag": "dns_ru", "servers": ["yandex_udp", "yandex_dot", "yandex_doh"], "mode": "fastest", "error_ttl": "5m", "win_ttl": "5m", "description": "RU DNS group (UDP + DoT + DoH)"},
-        {"type": "udp", "tag": "yandex_udp", "server": "@dns_ip", "server_port": 53, "description": "Yandex UDP (IP from above)", "detour": "@dns_plain_outbound"},
-        {"type": "tls", "tag": "yandex_dot", "server": "77.88.8.88", "server_port": 853, "description": "Yandex Safe DoT", "tls": {"enabled": true, "server_name": "safe.dot.dns.yandex.net"}, "detour": "@dns_encrypted_outbound"},
-        {"type": "https", "tag": "yandex_doh", "server": "77.88.8.88", "server_port": 443, "path": "/dns-query", "description": "Yandex Safe DoH", "tls": {"enabled": true, "server_name": "safe.dot.dns.yandex.net"}, "detour": "@dns_encrypted_outbound"}
+        {"type": "udp", "tag": "yandex_udp", "server": "@dns_ip", "server_port": 53, "description": "Yandex UDP (IP from above)", "detour": "@outbound"},
+        {"type": "tls", "tag": "yandex_dot", "server": "77.88.8.88", "server_port": 853, "description": "Yandex Safe DoT", "tls": {"enabled": true, "server_name": "safe.dot.dns.yandex.net"}, "#if": ["@dns_encrypted_via_outbound", {"detour": "@outbound"}]},
+        {"type": "https", "tag": "yandex_doh", "server": "77.88.8.88", "server_port": 443, "path": "/dns-query", "description": "Yandex Safe DoH", "tls": {"enabled": true, "server_name": "safe.dot.dns.yandex.net"}, "#if": ["@dns_encrypted_via_outbound", {"detour": "@outbound"}]}
       ]
     },
     {
@@ -609,7 +617,9 @@
           }}
         },
         {"name": "dns_server", "type": "dns_servers", "default_value": "fakeip", "required": true, "wizard_ui": "hidden", "title": "FakeIP server", "tooltip": "The FakeIP allocator. Internal — bound to the fakeip DNS server."},
-        {"name": "force", "type": "bool", "default_value": "true", "title": "Block HTTPS records", "tooltip": "Reply empty to HTTPS/SVCB DNS records (RFC 9460) so apps fall back to plain A/AAAA. Keeps these queries from leaking to the fallback DNS."}
+        {"name": "force", "type": "bool", "default_value": "true", "title": "Block HTTPS records", "tooltip": "Reply empty to HTTPS/SVCB DNS records (RFC 9460) so apps fall back to plain A/AAAA. Keeps these queries from leaking to the fallback DNS."},
+        {"name": "inet4_range", "type": "text", "default_value": "198.18.0.0/15", "wizard_ui": "edit", "title": "IPv4 pool", "tooltip": "Fake IPv4 addresses are taken from this range (CIDR). Change it if the default range is used in your network or excluded from the tunnel. Changing it resets the saved fake addresses."},
+        {"name": "inet6_range", "type": "text", "default_value": "fc00::/18", "wizard_ui": "edit", "title": "IPv6 pool", "tooltip": "Fake IPv6 addresses are taken from this range (CIDR). Leave empty to answer AAAA queries with no address. At least one pool must be set."}
       ],
       "dns_rules": [
         {"#if": {"#and": ["@force"], "#value": {
@@ -620,7 +630,7 @@
         {"query_type": ["A", "AAAA"], "server": "@dns_server"}
       ],
       "dns_servers": [
-        {"type": "fakeip", "tag": "fakeip", "inet4_range": "198.18.0.0/15", "inet6_range": "fc00::/18", "description": "FakeIP allocator"}
+        {"type": "fakeip", "tag": "fakeip", "inet4_range": "@inet4_range", "inet6_range": "@inet6_range", "description": "FakeIP allocator"}
       ]
     },
     {

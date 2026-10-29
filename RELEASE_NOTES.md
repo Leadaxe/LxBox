@@ -1,30 +1,31 @@
-# L×Box v2.25.17
+# L×Box v2.25.18
 
-**A patch on top of [v2.25.16](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.16).**
+**A patch on top of [v2.25.17](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.17).**
 
-DNS servers get new defaults: plain UDP servers go through the tunnel, DoT and
-DoH go direct, and the Shield group is now direct as a whole. The DNS server
-list is filled from the template once; template servers can be deleted, and
-new ones are added from a catalog under (+). A template or preset server can be
-duplicated into your own. A routing rule can answer its domains with a fixed IP
-address, like a hosts entry, and everything about resolving now sits in one
-**DNS & Resolve** section of the rule editor. Directions can be reordered,
-**Default traffic** moved to the bottom of the Rules tab, and on Android TV the
-app fills the screen. Stopping the VPN no longer hangs. Core
-`v1.14.3-lx.23`, contract 1.1.139.
+A new **Diagnostics** section with **URL Check**: the core makes a real
+request to a site through your routing and shows every step as a tree, from
+the app's DNS query to the HTTP response, with the step where the path broke
+and findings about the config. Speed Test moved there as the second tab.
+Chosen address ranges can bypass the tunnel entirely (a home NAS, a printer).
+FakeIP pools can be changed. WireGuard and AmneziaWG nodes get an INI tab,
+and an INI with several `[Peer]` sections keeps them all. A subscription's
+update interval can follow the server, and the server no longer overwrites
+an interval you chose. Core `v1.14.4-lx.25` on the upstream sing-box 1.14.4
+base, with faster XHTTP uploads. Contract 1.1.140.
 
-**Патч поверх [v2.25.16](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.16).**
+**Патч поверх [v2.25.17](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.17).**
 
-У DNS-серверов новые умолчания: нешифрованные UDP-серверы ходят через туннель,
-DoT и DoH — напрямую, группа Shield теперь целиком прямая. Список DNS-серверов
-заполняется из шаблона один раз; шаблонные серверы можно удалять, новые
-добавляются из каталога по (+). Шаблонный или пресетный сервер можно
-продублировать в свой. Правило маршрутизации может отвечать на свои домены
-фиксированным IP-адресом, как запись hosts, а всё про резолв собрано в одну
-секцию **DNS & Resolve** редактора правила. Направления можно переставлять,
-**Default traffic** переехал в конец вкладки Rules, на Android TV приложение
-занимает весь экран. Остановка VPN больше не зависает. Ядро
-`v1.14.3-lx.23`, контракт 1.1.139.
+Новый раздел **Diagnostics** с **URL Check**: ядро делает настоящий запрос к
+сайту через вашу маршрутизацию и показывает каждый шаг деревом — от
+DNS-запроса приложения до HTTP-ответа, с шагом, где путь оборвался, и
+находками о конфиге. Speed Test переехал туда второй вкладкой. Выбранные
+диапазоны адресов могут идти мимо туннеля целиком (домашний NAS, принтер).
+Пулы FakeIP можно менять. У узлов WireGuard и AmneziaWG появилась вкладка
+INI, а INI с несколькими секциями `[Peer]` сохраняет их все. Интервал
+обновления подписки может следовать за сервером, и сервер больше не
+перезаписывает выбранный вами интервал. Ядро `v1.14.4-lx.25` на базе
+апстримного sing-box 1.14.4, с более быстрой выгрузкой по XHTTP. Контракт
+1.1.140.
 
 ---
 
@@ -33,180 +34,144 @@ DoT и DoH — напрямую, группа Shield теперь целиком
 
 ## ⚠️ Read before updating
 
-- **DNS servers: plain UDP through the tunnel, DoT and DoH direct ([task 684](docs/spec/tasks/684-dns-defaults-plain-tunnel-encrypted-direct.md)).**
-  Template servers take their Outbound from the template on every build, so
-  the config changes for everyone who has not changed it by hand:
-  - `google_udp`, `cloudflare_udp`, `opendns_udp` — `direct-out` → `vpn-1`;
-  - `google_dot`, `cloudflare_dot`, `quad9_doh` — `vpn-1` → `direct-out`;
-  - `google_doh`, `opendns_doh`, `yandex_dot`, `safe_dns_dot` — direct, as
-    before.
-
-  The **Shield** group (`dns_shield`, six encrypted providers) is now direct
-  as a whole. `safe_dns_dot` resolves its own name through `google_doh`
-  instead of `google_udp`. Descriptions no longer name the path: "Google
-  UDP", "OpenDNS UDP", "Quad9 DoH (anti-malware)", "Yandex DoT"; the path is
-  the Outbound field in the editor.
-- **Ru internet segment: separate Outbound for its UDP and encrypted DNS (task 684).**
-  Two new preset settings: **UDP DNS outbound** (default `vpn-1`, for
-  `yandex_udp`) and **Encrypted DNS outbound** (default `direct-out`, for
-  Yandex DoT and DoH). `yandex_udp` no longer follows the preset's
-  **Outbound**, and Yandex DoT is direct by default.
-- **The DNS server list is filled from the template once ([task 680](docs/spec/tasks/680-dns-servers-catalog-seed-once.md)).**
-  An existing install keeps its list as it is. Servers that a newer template
-  brings appear in the catalog under (+) next to **DNS Servers**, not in the
-  list.
+- **New upstream base.** The core moves to upstream sing-box 1.14.4.
+  Upstream changed how groups are resolved; Auto (`urltest`) groups still
+  pick a node per connection as before. If a group or a WireGuard node
+  behaves differently after the update, report it.
+- **XHTTP nodes send more like Xray.** `packet-up` uploads (and `auto`
+  without REALITY, most nodes behind a CDN) are batched and no longer wait
+  for each POST's reply. Requests without your own `User-Agent` carry the
+  browser headers Xray sends, and HTTP/2 keep-alive pings are on by default
+  (45 s). If an XHTTP node stops working after the update, report it.
+- **Ru internet segment: Yandex UDP DNS follows the preset's Outbound again
+  ([task 684](docs/spec/tasks/684-dns-defaults-plain-tunnel-encrypted-direct.md)).**
+  In v2.25.17 the preset's `yandex_udp` went through `vpn-1`; now it goes
+  the preset's Outbound (direct by default), so Russian domains no longer
+  resolve through the tunnel. The «UDP DNS outbound» setting is removed;
+  «Encrypted DNS outbound» became the checkbox «Encrypted DNS via
+  Outbound»: off (default) — DoT and DoH go direct, on — through the
+  preset's Outbound. «UDP through the tunnel» stays for the shared DNS
+  servers.
+- **Subscription update interval.** Existing subscriptions keep their
+  current interval as a manual choice; pick «As subscription» to follow the
+  server again. «Never (respect server)» is removed.
 
 ## ✨ New
 
-- **Fixed IP answer in a rule ([task 683](docs/spec/tasks/683-rule-dns-and-resolve-section-fixed-ip.md)).**
-  Rule editor → **DNS & Resolve** → Answer → **Fixed IP** answers the rule's
-  domains with the given IPv4 or IPv6 addresses, like a hosts entry: for
-  example `nas.home` → `192.168.1.10`. "+" turns the field into a list, one
-  address per line; pasting several lines does the same. A line that is not
-  an IP address marks the field and blocks Save. With addresses of one family
-  only, queries of the other type get an empty answer. Traffic to the address
-  follows the rule's Action. On the DNS tab such a rule shows as
-  `action: predefined · answer: …` under "From routing rules", and ✕ there
-  returns it to Default.
-- **"Add DNS server" catalog (task 680).** The (+) next to **DNS Servers**
-  opens **Add DNS server**: **Custom server** and the template's servers with
-  **Add** / **Added**, and ⋮ → **Add all defaults**. A template server can be
-  deleted: long-press → **Delete** on the DNS tab, or the trash icon in the
-  editor; a preset's server cannot. A server the list depends on (a group
-  member, the DNS Final or Default Domain Resolver choice, another server's
-  name resolver) is locked and shows "used by …"; tapping its switch shows
-  "Locked: used by …". The rule editor offers only servers from the list.
-- **Duplicate a template or preset DNS server ([task 682](docs/spec/tasks/682-dns-catalog-revision-and-copy.md)).**
-  ⋮ → **Duplicate** in the server editor, or **Duplicate** in the tile's
-  long-press menu, opens a new custom server with the original's body (with
-  its current settings), tag `<tag>_copy` and description
-  `<description> (copy)`. Nothing is saved until **Save**. The editor of a
-  template or preset server now shows the **Tag** field: changing it turns
-  Save into **Save as copy**, and the original stays in the list. Groups, DNS
-  Final and rules keep pointing to the original.
-- **Outbound and address for OpenDNS UDP, OpenDNS DoH, Quad9 DoH and Yandex DoT (task 682).**
-  These four servers had a fixed body. Now their editor has **Outbound** and
-  a choice of the server address: primary or secondary, IPv4 or IPv6.
-- **Warning when Default Domain Resolver goes through a tunnel (task 682).**
-  This resolver looks up server addresses while the connection is being set
-  up, before the tunnel exists. When the selected server goes through a
-  Direction, or every member of the selected group does, an orange ⚠ appears
-  at the right of the **Default Domain Resolver** header; tapping it explains
-  the risk ("Resolver goes through a tunnel"). The choice is not changed. With
-  the default Shield the ⚠ does not appear.
-- **Reorder Directions ([task 673](docs/spec/tasks/673-directions-reorder-in-ui.md), issue #171).**
-  Each row on the **Directions** tab has a drag handle, `vpn-1` included.
-  While dragging, the rows a Direction cannot pass are tinted red: a
-  Direction that includes others must stay below them. A drop there leaves
-  the list as it was and says why.
+- **Diagnostics → URL Check ([task 687](docs/spec/tasks/687-diagnostics-url-check.md), issue #176).**
+  Enter a site and the core makes a real request to it through your
+  routing, showing every step as a tree as it happens: the app's DNS
+  queries (A, AAAA, HTTPS) and the server that answered, the matched rule,
+  the group choice, the node and its detours, the node's own address
+  lookup, TCP, TLS, the response. Each step has its time and result; a step
+  the protocol does not confirm (VLESS, Trojan, Shadowsocks header) is
+  marked as sent, a cached or reused step as reused. The step where the path
+  broke is highlighted and named above the tree. Options: the app the
+  request is made for (rules by app apply), depth (Full, Connect, Route —
+  no connection is opened, DNS) and From scratch (bypass the DNS cache, open
+  new connections). Copy puts the trace on the clipboard. Needs a running
+  VPN.
+- **URL Check: step details and the DNS answer ([task 688](docs/spec/tasks/688-url-check-stage-details.md)).**
+  Every step expands: what the step is, why it was skipped or reused, its
+  attributes. The app's DNS query shows the answer record by record with
+  TTL (CNAME chain, addresses, HTTPS record parameters such as ALPN and
+  ECH), the SOA on NXDOMAIN or an empty answer, and where the answer came
+  from: the network, the cache with its age, or a local answer (fake IP,
+  hosts). When a DNS rule or the domain strategy answered without asking a
+  server, the step says so. The failed step and an empty or failed DNS
+  answer open by themselves.
+- **URL Check: findings.** Under the result the core lists what it noticed
+  about the config, at three levels: a cause of the failure, a risk, a fact.
+  For example: a package excluded from the VPN, a node that depends on a DNS
+  server's detour outside the route, fake IP records lost after a restart,
+  REALITY not recognizing the client. A tap on a finding highlights its
+  steps.
+- **URL Check: DNS groups.** Every server a DNS group asked has its own
+  step with its tag. A server that lost the race to another member's answer
+  is shown as skipped, with the winner it lost to, instead of as a broken
+  DoT or DoH server.
+- **Bypass the tunnel ([task 691](docs/spec/tasks/691-tun-route-exclude.md)).**
+  VPN Settings → TUN → «Bypass the tunnel»: CIDR ranges that skip the
+  tunnel and the core entirely, so large transfers to a home NAS no longer
+  go through the core. Type one range per line or pick from the list
+  (home LAN, private and link-local networks). Traffic to these addresses
+  is not seen by rules, DNS interception or statistics. An entry that is not
+  a CIDR or covers the tunnel's own address is dropped with a warning in the
+  log. Applies after a full VPN restart.
+- **FakeIP: your own address pools ([task 690](docs/spec/tasks/690-fakeip-custom-ranges.md)).**
+  The FakeIP preset gets «IPv4 pool» and «IPv6 pool» (defaults
+  198.18.0.0/15 and fc00::/18, as before), for networks where the default
+  range is in use. An empty IPv6 pool turns off fake AAAA answers.
+- **INI tab for WireGuard / AmneziaWG nodes ([task 686](docs/spec/tasks/686-folder-auto-node-source-tab.md)).**
+  Node Settings shows the node as a `.conf`, whatever it was added from
+  (link, INI or JSON): all peers, masquerade and AmneziaWG fields, with
+  Copy, Share .conf and Edit INI. Keys INI cannot express are listed under
+  «Not in INI».
+- **Several `[Peer]` sections in a WireGuard INI.** Each becomes its own
+  peer of the node; before, everything after the first was dropped. A peer
+  without a public key or endpoint is dropped with a warning naming it.
+- **Subscription update interval «As subscription» ([task 685](docs/spec/tasks/685-subscription-interval-as-subscription.md)).**
+  The interval comes from the server's `profile-update-interval` header
+  (24 h when the server sends none). A manually chosen interval stays as
+  chosen; before, every update replaced it with the server's value. New
+  subscriptions start in «As subscription».
 
 ## 🔄 Changed
 
-- **Rule editor: one "DNS & Resolve" section (task 683).**
-  The "Action & Resolve" sheet and the ⚙ next to Action are gone. Action only
-  chooses where the traffic goes; **Resolve only** is now an item of its
-  list, after Reject (for rules with domains). The section at the bottom
-  holds:
-  - **Answer**: Default (queries go to DNS Final), **Dedicated server**, or
-    **Fixed IP**;
-  - **Force IPv4 (drop AAAA)**;
-  - **Resolve before routing** (formerly Resolve first) with Strategy;
-  - **Advanced**, collapsed: the DNS server for the lookup, Disable cache,
-    Disable optimistic cache, Rewrite TTL, Query timeout, Client subnet.
+- **Speed Test is a tab of Diagnostics.** The side menu item Speed Test is
+  replaced by Diagnostics with two tabs, URL Check and Speed Test. A running
+  speed test is not interrupted when switching tabs.
+- **Auto node in a folder is edited in Node Settings.** A tap opens the
+  group form on the Settings tab (name, servers in the pool, mode,
+  advanced); Source shows the stored record; the JSON tab says «Members are
+  resolved at build time» instead of an empty `outbounds`. The pool preview
+  no longer counts disabled servers and marks them with ⏻.
+- **Long-press menu** no longer offers «Edit…» of a folder member and «Edit
+  source…» / «Update» of a standalone server; a tap opens the same screen.
+- **Text fields with suggestions are comboboxes.** A list with suggestions
+  (Bypass the tunnel, list parameters of presets) is a field with an arrow
+  at the end; picking a suggestion adds the line, picking it again removes
+  it.
+- **«Custom tunnel routes» is renamed «Split default route»** and explained:
+  it sends the same traffic to the tunnel as two half-ranges, it never added
+  routes of its own.
+- **`#` comments** in a pasted node JSON and on the Config screen are
+  accepted and stripped, as the core does, next to `//` and `/* */`.
+- Direction editor: a caption under «Replace groups» says what the checkbox
+  does.
 
-  Existing rules build the same config. The **View** tab now shows the rule's
-  DNS rules too.
-- **DNS hints (task 684).** The ℹ next to **DNS Final** and **Default Domain
-  Resolver** opens a popup. It recommends `google_doh` or `cloudflare_dot` and
-  says that UDP servers are fine for DNS Final but not for Default Domain
-  Resolver. The `local_dns_resolver` banner offers **Switch to google_doh**.
-- **Default traffic is at the bottom of the Rules tab ([task 676](docs/spec/tasks/676-route-final-on-rules-tab.md)).**
-  The `route.final` picker sits after the rule list and **Add rule**, labelled
-  **Default traffic (no rule matched)**. The Directions tab no longer shows
-  it. What is written is the same.
-- **A Direction is shown by its title everywhere ([task 672](docs/spec/tasks/672-direction-label-vs-tag-consistency.md)).**
-  The notification, a home row whose member is another Direction, the
-  Direction editor header, and the route, Chain and Detour lines in Stats →
-  Connections and Live show the title, with the tag next to it, for example
-  `Germany (vpn-1)`. Renaming still does not change the tag.
-- **The Direction node filter preview works with the VPN off ([task 674](docs/spec/tasks/674-direction-filter-preview-without-tunnel.md)).**
-  The editor and the node count on the Directions tab take nodes from the
-  config build, so they match the built config whether the tunnel is up or
-  not. An empty result reads "No nodes match".
-- **On Android TV the app fills the screen ([task 679](docs/spec/tasks/679-tv-no-portrait-lock.md), issue #163).**
-  On a TV the orientation is never locked, and **Allow rotation** is hidden
-  there. The stored value is kept, so a backup from a TV does not turn
-  rotation on for a phone.
-- **Auto-ping after connect runs the group test only for Fastest groups ([task 677](docs/spec/tasks/677-autoping-tail-skips-round-robin-groups.md)).**
-  Load balance groups no longer have their pool rebuilt, and Hold until
-  failure groups no longer drop the held node after a ping. Latencies of all
-  nodes still come from the ping; **Run URLTest** in the group menu works as
-  before.
+## 🐛 Fixed
 
-## 🩹 Fixed
-
-- **Stopping the VPN no longer hangs ([task 668](docs/spec/tasks/668-stop-teardown-trace-and-timeouts.md)).**
-  With many WireGuard, AmneziaWG or WARP nodes the stop is fast again: the
-  core waited for each endpoint's receive worker one after another. Each stop
-  step also has a real time limit (core shutdown 20 s, other steps 3 s), so
-  the service reaches Stopped even when a step does not return. A step stuck
-  longer than 5 s writes `stuck at <step>` and a goroutine dump to the app
-  log, and the dump goes into the support pack.
-- **Test servers with the VPN off: Stop stops, Start starts again ([task 669](docs/spec/tasks/669-probe-session-cancel-stop-timeout-race.md), issue #171).**
-  **Stop** aborts the measurements already sent instead of waiting for their
-  timeout; the bar shows `Stopping…` meanwhile. A stuck test session no
-  longer blocks the next test or the VPN start.
-- **Load balance skips a node that failed its check.** A `round_robin` group
-  no longer sends new connections to a node that failed its last check while
-  a live node is available; a failed manual ping also takes the node out of
-  the rotation until the next group check.
-- **"Register detour in auto group" works ([task 670](docs/spec/tasks/670-register-detour-in-auto-group-dead-toggle.md)).**
-  Chain links get into a Direction's auto group only with this switch on.
-  It is disabled while **Register detour servers** is off, and a folder shows
-  both switches only when it has chain links.
-- **An auto node in a folder no longer disappears silently ([task 675](docs/spec/tasks/675-folder-auto-node-silent-drop-and-pool-gates.md)).**
-  An auto node with no members is named in the build report, and its editor
-  says it stays out of the config. Its pool follows the same rules as a
-  Direction's: Tailscale without an exit node is never in it, chain links only
-  with **Register detour servers**.
-- **The JSON preview of a DNS group skips disabled members ([task 671](docs/spec/tasks/671-dns-group-json-preview-disabled-members.md)).**
-  As the build does; a line under the preview names them: "Disabled, skipped
-  at build: …".
-- **Android TV: receiving settings with the remote ([task 622](docs/spec/tasks/622-device-transfer-phone-to-tv.md)).**
-  The receive screen fits without scrolling, the arrows move between choices
-  in the import preview, and the focus returns to the transfer card after it.
-- **Start no longer waits 10–16 s for an unrelated mux handshake**, and a
-  MASQUE node with `vhttp: auto` no longer keeps the previous core instance
-  in memory after each Stop/Start or profile switch.
+- **VPN would not start after a rule made of IP ranges got a DNS option ([task 692](docs/spec/tasks/692-rule-dns-option-needs-dns-visible-conditions.md)).**
+  The core stopped with «Legacy Address Filter Fields in DNS rules is
+  deprecated…» once FakeIP or Force IPv4 was present. The DNS section of a
+  rule now appears only when the rule has a condition the DNS layer can
+  check (a domain, an app, a source address, a Wi-Fi network or an
+  inbound), and an IP-only rule no longer produces a DNS rule. Existing
+  rules keep their DNS settings; they come back once a domain or app is
+  added.
+- **URL Check: no false success.** A Full check that ends without an HTTP
+  response and without a failed step shows a yellow «No HTTP response»; a
+  site that answers `301`/`302` shows that status and its `location`
+  instead of a green «HTTP 0». Changing the URL, the app, the depth or From
+  scratch clears the previous result.
+- **XHTTP:** single-stream upload speed in `packet-up` was capped at one
+  write per round trip (Leadaxe/sing-box-lx#58); a `stream-up` write could
+  hang after the server refused the upload; a `path` without a trailing
+  slash could get 404 with the session outside the path.
+- Subscription filter rule editor showed «Совпадений: из узлов» without the
+  numbers; the «Applied — …» message after saving filters lost them too.
+- Node delay is shown as `120ms` instead of `120MS`.
 
 ## 🔧 Under the hood
 
-- Core `v1.14.3-lx.21` → `v1.14.3-lx.23` ([docs/KERNEL.md](docs/KERNEL.md)):
-  the stop, start, MASQUE and Load balance fixes above; a stop that hangs
-  longer than 20 s writes a goroutine dump to the core log. The Java surface
-  is the same as in lx.21.
-- Launcher contract 1.1.132 → 1.1.139: the source's template catalog in LX
-  Backup (`dns.template_catalog`) with one rule for removing template DNS
-  servers on import ([task 681](docs/spec/tasks/681-dns-servers-uniform-backup-catalog.md));
-  `rules[].dns.fixedIps` for both sides.
-- LX Backup and the phone → TV transfer carry the list of template DNS
-  servers as is: a server deleted on the source is removed on the receiver,
-  unless something still refers to it (then it stays, with a warning). A DNS
-  Final or default resolver pointing to a missing server is reset to the
-  template default, and a group with no known member comes in turned off.
-  Older backups lose nothing.
-- Debug API: `POST /directions/reorder` and `include` in `POST`/`PATCH
-  /directions` that would put a Direction above one it includes get 409 with
-  the pairs in `conflicts`; rules read and write `dns.fixed_ips`.
-- The template formatter (`app/scripts/format_wizard_template.py`) accepts
-  the current template language and checks the meaning before writing;
-  `wizard_template.json` is reformatted, 2367 → 760 lines, contents
-  unchanged ([task 678](docs/spec/tasks/678-format-wizard-template-new-dialect.md)).
-- New tests: Fixed IP emission and storage, the DNS & Resolve section, DNS
-  server copy, the tunnel resolver warning, DNS defaults of the whole catalog
-  and Ru internet segment, Directions reorder zones, the filter preview pool,
-  the probe session stop, TV receive layout and D-pad focus, the `rule_dns`
-  contract corpus.
+- Core `v1.14.3-lx.23` → `v1.14.4-lx.25`: SPEC 139 (connection test), the
+  upstream sing-box 1.14.4 base with Go 1.26.10, SPEC 141/142 (XHTTP), a
+  data race in the Auto group's selection fixed.
+- Below Android 10 the owner of a connection (per-app rules) is looked up in
+  `/proc/net` through a call from the app.
+- Contract 1.1.140: WireGuard INI with several peers.
+- DNS server descriptions are no longer translated, as with node names.
 
 </details>
 
@@ -215,179 +180,143 @@ DoT и DoH — напрямую, группа Shield теперь целиком
 
 ## ⚠️ Прочтите до обновления
 
-- **DNS-серверы: UDP через туннель, DoT и DoH напрямую ([задача 684](docs/spec/tasks/684-dns-defaults-plain-tunnel-encrypted-direct.md)).**
-  Шаблонные серверы берут Outbound из шаблона на каждой сборке, поэтому
-  конфиг меняется у всех, кто не менял его руками:
-  - `google_udp`, `cloudflare_udp`, `opendns_udp` — `direct-out` → `vpn-1`;
-  - `google_dot`, `cloudflare_dot`, `quad9_doh` — `vpn-1` → `direct-out`;
-  - `google_doh`, `opendns_doh`, `yandex_dot`, `safe_dns_dot` — напрямую, как
-    и раньше.
-
-  Группа **Shield** (`dns_shield`, шесть шифрованных провайдеров) теперь
-  целиком прямая. `safe_dns_dot` резолвит своё имя через `google_doh` вместо
-  `google_udp`. В описаниях больше нет пути: «Google UDP», «OpenDNS UDP»,
-  «Quad9 DoH (anti-malware)», «Yandex DoT»; путь — поле Outbound в
-  редакторе.
-- **Ru internet segment: отдельный Outbound для UDP и шифрованного DNS (задача 684).**
-  Две новые настройки пресета: **UDP DNS outbound** (по умолчанию `vpn-1`,
-  для `yandex_udp`) и **Encrypted DNS outbound** (по умолчанию `direct-out`,
-  для Yandex DoT и DoH). `yandex_udp` больше не следует **Outbound** пресета,
-  Yandex DoT по умолчанию напрямую.
-- **Список DNS-серверов заполняется из шаблона один раз ([задача 680](docs/spec/tasks/680-dns-servers-catalog-seed-once.md)).**
-  У существующей установки список остаётся как есть. Серверы, которые
-  приносит новый шаблон, появляются в каталоге по (+) рядом с **DNS
-  Servers**, а не в списке.
+- **Новая база апстрима.** Ядро переходит на апстримный sing-box 1.14.4.
+  Апстрим изменил разбор групп; группы Auto (`urltest`) по-прежнему выбирают
+  узел на каждое соединение. Если группа или WireGuard-узел после обновления
+  ведут себя иначе — сообщите.
+- **Узлы XHTTP шлют ближе к Xray.** Выгрузка `packet-up` (и `auto` без
+  REALITY — большинство узлов за CDN) склеивается и не ждёт ответа на
+  каждый POST. Запросы без вашего `User-Agent` несут браузерные заголовки,
+  как у Xray, пинги HTTP/2 включены по умолчанию (45 с). Если узел XHTTP
+  после обновления перестал работать — сообщите.
+- **Ru internet segment: Yandex UDP DNS снова идёт по Outbound пресета
+  ([задача 684](docs/spec/tasks/684-dns-defaults-plain-tunnel-encrypted-direct.md)).**
+  В v2.25.17 `yandex_udp` пресета ходил через `vpn-1`; теперь — по Outbound
+  пресета (по умолчанию напрямую), и российские домены больше не резолвятся
+  через туннель. Настройка «UDP DNS outbound» снята; «Encrypted DNS
+  outbound» стала галочкой «Encrypted DNS via Outbound»: выключена (по
+  умолчанию) — DoT и DoH напрямую, включена — через Outbound пресета.
+  «UDP через туннель» остаётся для общих DNS-серверов.
+- **Интервал обновления подписки.** У существующих подписок текущий
+  интервал сохраняется как выбранный вручную; чтобы снова следовать за
+  сервером, выберите «As subscription». Пункт «Never (respect server)»
+  снят.
 
 ## ✨ Новое
 
-- **Ответ фиксированным IP у правила ([задача 683](docs/spec/tasks/683-rule-dns-and-resolve-section-fixed-ip.md)).**
-  Редактор правила → **DNS & Resolve** → Answer → **Fixed IP** отвечает на
-  домены правила заданными адресами IPv4 или IPv6, как запись hosts:
-  например, `nas.home` → `192.168.1.10`. «+» делает поле списком, по адресу
-  на строку; вставка нескольких строк делает то же. Строка, которая не
-  является IP-адресом, подсвечивает поле и блокирует Save. Если заданы адреса
-  только одного семейства, запросы другого типа получают пустой ответ. Трафик
-  к адресу идёт по Action правила. На вкладке DNS такое правило видно в «From
-  routing rules» строкой `action: predefined · answer: …`, ✕ там возвращает
-  его в Default.
-- **Каталог «Add DNS server» (задача 680).** (+) рядом с **DNS Servers**
-  открывает **Add DNS server**: **Custom server** и серверы шаблона с
-  **Add** / **Added**, ⋮ → **Add all defaults**. Шаблонный сервер можно
-  удалить: долгое нажатие → **Delete** на вкладке DNS или корзина в
-  редакторе; сервер пресета — нельзя. Сервер, от которого зависит список
-  (член группы, выбор DNS Final или Default Domain Resolver, резолвер имени
-  другого сервера), залочен с подписью «used by …»; тап по его переключателю
-  показывает «Locked: used by …». Редактор правила предлагает только серверы
-  из списка.
-- **Дубликат шаблонного или пресетного DNS-сервера ([задача 682](docs/spec/tasks/682-dns-catalog-revision-and-copy.md)).**
-  ⋮ → **Duplicate** в редакторе сервера или **Duplicate** в меню долгого
-  нажатия на плитке открывает новый свой сервер с телом оригинала (с его
-  текущими настройками), тегом `<tag>_copy` и описанием
-  `<description> (copy)`. До **Save** ничего не сохраняется. В редакторе
-  шаблонного или пресетного сервера теперь есть поле **Tag**: его правка
-  превращает Save в **Save as copy**, оригинал остаётся в списке. Группы,
-  DNS Final и правила по-прежнему указывают на оригинал.
-- **Outbound и адрес у OpenDNS UDP, OpenDNS DoH, Quad9 DoH и Yandex DoT (задача 682).**
-  У этих четырёх серверов тело было зашито. Теперь в редакторе есть
-  **Outbound** и выбор адреса сервера: основной или запасной, IPv4 или IPv6.
-- **Предупреждение, когда Default Domain Resolver ходит через туннель (задача 682).**
-  Этот резолвер ищет адреса серверов при установке соединения, когда туннеля
-  ещё нет. Если выбранный сервер ходит через Направление или через него ходят
-  все члены выбранной группы, у правого края заголовка **Default Domain
-  Resolver** появляется оранжевый ⚠; тап объясняет риск («Resolver goes
-  through a tunnel»). Выбор не меняется. У Shield по умолчанию ⚠ нет.
-- **Перестановка Направлений ([задача 673](docs/spec/tasks/673-directions-reorder-in-ui.md), issue #171).**
-  У каждой строки на вкладке **Directions** есть ручка перетаскивания,
-  включая `vpn-1`. Во время перетаскивания строки, за которые Направление
-  заходить не может, подсвечены красным: Направление, включающее другие,
-  должно оставаться ниже них. Сброс туда оставляет список как был и
-  объясняет причину.
+- **Diagnostics → URL Check ([задача 687](docs/spec/tasks/687-diagnostics-url-check.md), issue #176).**
+  Введите сайт, и ядро сделает к нему настоящий запрос через вашу
+  маршрутизацию, показывая каждый шаг деревом по ходу дела: DNS-запросы
+  приложения (A, AAAA, HTTPS) и ответивший сервер, сработавшее правило,
+  выбор группы, узел и его detour'ы, резолв адреса самого узла, TCP, TLS,
+  ответ. У каждого шага время и результат; шаг, который протокол не
+  подтверждает (VLESS, Trojan, заголовок Shadowsocks), помечен как
+  отправленный, взятый из кэша или переиспользованный — как
+  переиспользованный. Шаг, на котором путь оборвался, подсвечен и назван над
+  деревом. Параметры: приложение, от имени которого идёт запрос (правила по
+  приложениям применяются), глубина (Full, Connect, Route — без соединений,
+  DNS) и From scratch (мимо кэша DNS, новые соединения). Copy кладёт трассу
+  в буфер обмена. Нужен запущенный VPN.
+- **URL Check: подробности шагов и ответ DNS ([задача 688](docs/spec/tasks/688-url-check-stage-details.md)).**
+  Каждый шаг раскрывается: что это за шаг, почему пропущен или
+  переиспользован, его атрибуты. DNS-запрос приложения показывает ответ по
+  записям с TTL (цепочка CNAME, адреса, параметры HTTPS-записи вроде ALPN и
+  ECH), SOA при NXDOMAIN или пустом ответе и откуда пришёл ответ: из сети,
+  из кэша с возрастом или локально (fake IP, hosts). Когда ответило правило
+  DNS или стратегия домена, не спрашивая сервер, шаг говорит об этом. Шаг
+  обрыва и пустой или ошибочный ответ DNS раскрыты сразу.
+- **URL Check: находки.** Под результатом ядро перечисляет, что заметило в
+  конфиге, на трёх уровнях: причина сбоя, риск, факт. Например: пакет
+  исключён из VPN, узел зависит от detour'а DNS-сервера вне маршрута, записи
+  fake IP теряются после перезапуска, REALITY не узнал клиента. Тап по
+  находке подсвечивает её шаги.
+- **URL Check: DNS-группы.** У каждого сервера, которого спросила
+  DNS-группа, свой шаг с его тегом. Сервер, проигравший гонку ответу другого
+  участника, показан пропущенным, с победителем, а не сломанным DoT- или
+  DoH-сервером.
+- **Мимо туннеля ([задача 691](docs/spec/tasks/691-tun-route-exclude.md)).**
+  VPN Settings → TUN → «Bypass the tunnel»: CIDR-диапазоны, которые идут
+  мимо туннеля и мимо ядра целиком — большие передачи на домашний NAS
+  больше не проходят через ядро. По диапазону на строку или выбор из списка
+  (домашняя сеть, частные и link-local сети). Трафик к этим адресам не видят
+  правила, DNS-перехват и статистика. Строка не в формате CIDR или
+  накрывающая адрес самого туннеля снимается с предупреждением в журнале.
+  Применяется после полного перезапуска VPN.
+- **FakeIP: свои пулы адресов ([задача 690](docs/spec/tasks/690-fakeip-custom-ranges.md)).**
+  У пресета FakeIP появились «IPv4 pool» и «IPv6 pool» (по умолчанию
+  198.18.0.0/15 и fc00::/18, как раньше) — для сетей, где стандартный
+  диапазон занят. Пустой IPv6-пул выключает фейковые ответы на AAAA.
+- **Вкладка INI у узлов WireGuard / AmneziaWG ([задача 686](docs/spec/tasks/686-folder-auto-node-source-tab.md)).**
+  Node Settings показывает узел как `.conf`, откуда бы он ни был добавлен
+  (ссылка, INI или JSON): все пиры, маскарад и поля AmneziaWG, с Copy,
+  Share .conf и Edit INI. Ключи, которые INI не выражает, перечислены под
+  «Not in INI».
+- **Несколько секций `[Peer]` в INI WireGuard.** Каждая становится своим
+  пиром узла; раньше всё после первой отбрасывалось. Пир без публичного
+  ключа или endpoint снимается с предупреждением, где он назван.
+- **Интервал обновления подписки «As subscription» ([задача 685](docs/spec/tasks/685-subscription-interval-as-subscription.md)).**
+  Интервал берётся из заголовка сервера `profile-update-interval` (24 ч,
+  если сервер его не шлёт). Интервал, выбранный вручную, остаётся как
+  выбран; раньше каждое обновление заменяло его значением сервера. Новые
+  подписки начинают в режиме «As subscription».
 
 ## 🔄 Изменено
 
-- **Редактор правила: одна секция «DNS & Resolve» (задача 683).**
-  Окна «Action & Resolve» и ⚙ рядом с Action больше нет. Action выбирает
-  только, куда идёт трафик; **Resolve only** теперь пункт его списка, после
-  Reject (у правил с доменами). Секция внизу содержит:
-  - **Answer**: Default (запросы идут в DNS Final), **Dedicated server** или
-    **Fixed IP**;
-  - **Force IPv4 (drop AAAA)**;
-  - **Resolve before routing** (бывший Resolve first) со Strategy;
-  - **Advanced**, свёрнутый: DNS-сервер для резолва, Disable cache, Disable
-    optimistic cache, Rewrite TTL, Query timeout, Client subnet.
+- **Speed Test — вкладка Diagnostics.** Пункт бокового меню Speed Test
+  заменён пунктом Diagnostics с двумя вкладками, URL Check и Speed Test.
+  Идущий замер не прерывается при переключении вкладок.
+- **Auto-узел в папке редактируется в Node Settings.** Тап открывает форму
+  группы на вкладке Settings (имя, серверы в пуле, режим, дополнительно);
+  Source показывает сохранённую запись; вкладка JSON пишет «Members are
+  resolved at build time» вместо пустого `outbounds`. Превью пула больше не
+  считает выключенные серверы и помечает их ⏻.
+- **Меню по долгому тапу** больше не предлагает «Edit…» у члена папки и
+  «Edit source…» / «Update» у одиночного сервера; тап открывает тот же
+  экран.
+- **Текстовые поля с подсказками — комбобоксы.** Список с подсказками
+  (Bypass the tunnel, списковые параметры пресетов) — поле со стрелкой в
+  конце строки; выбор подсказки добавляет строку, повторный — убирает.
+- **«Custom tunnel routes» переименована в «Split default route»** и
+  объяснена: она шлёт тот же трафик в туннель двумя полудиапазонами, своих
+  маршрутов не добавляла никогда.
+- **Комментарии `#`** во вставленном JSON узла и на экране Config
+  принимаются и вырезаются, как в ядре, наряду с `//` и `/* */`.
+- Редактор Направления: подпись под «Replace groups» объясняет, что делает
+  галочка.
 
-  Существующие правила собираются в тот же конфиг. Вкладка **View** теперь
-  показывает и DNS-правила правила.
-- **Подсказки DNS (задача 684).** ℹ рядом с **DNS Final** и **Default Domain
-  Resolver** открывает попап. Он рекомендует `google_doh` или
-  `cloudflare_dot` и говорит, что UDP-серверы годятся для DNS Final, но не
-  для Default Domain Resolver. Баннер `local_dns_resolver` предлагает
-  **Switch to google_doh**.
-- **Default traffic — в конце вкладки Rules ([задача 676](docs/spec/tasks/676-route-final-on-rules-tab.md)).**
-  Выбор `route.final` стоит после списка правил и **Add rule**, с подписью
-  **Default traffic (no rule matched)**. На вкладке Directions его больше
-  нет. Записывается то же самое.
-- **Направление везде показано своим названием ([задача 672](docs/spec/tasks/672-direction-label-vs-tag-consistency.md)).**
-  Уведомление, строка на главном экране, членом которой является другое
-  Направление, заголовок редактора Направления, строки маршрута, Chain и
-  Detour в Stats → Connections и Live показывают название и рядом тег,
-  например `Germany (vpn-1)`. Переименование по-прежнему не меняет тег.
-- **Превью фильтра узлов Направления работает с выключенным VPN ([задача 674](docs/spec/tasks/674-direction-filter-preview-without-tunnel.md)).**
-  Редактор и счётчик узлов на вкладке Directions берут узлы из сборки
-  конфига, поэтому совпадают с собранным конфигом при поднятом туннеле и без
-  него. Пустой результат — «No nodes match».
-- **На Android TV приложение занимает весь экран ([задача 679](docs/spec/tasks/679-tv-no-portrait-lock.md), issue #163).**
-  На TV ориентация не фиксируется, **Allow rotation** там скрыт. Сохранённое
-  значение не меняется, поэтому бэкап с TV не включает поворот на телефоне.
-- **Автопинг после подключения запускает тест группы только у групп Fastest ([задача 677](docs/spec/tasks/677-autoping-tail-skips-round-robin-groups.md)).**
-  У групп Load balance пул больше не пересобирается, группы Hold until
-  failure больше не бросают удерживаемый узел после пинга. Задержки всех
-  узлов по-прежнему даёт пинг; **Run URLTest** в меню группы работает как
-  раньше.
+## 🐛 Исправлено
 
-## 🩹 Исправлено
-
-- **Остановка VPN больше не зависает ([задача 668](docs/spec/tasks/668-stop-teardown-trace-and-timeouts.md)).**
-  С многими узлами WireGuard, AmneziaWG или WARP остановка снова быстрая:
-  ядро ждало приёмный воркер каждого endpoint'а по очереди. У каждого шага
-  остановки теперь настоящий предел времени (остановка ядра 20 с, остальные
-  шаги 3 с), и служба доходит до Stopped, даже если шаг не вернулся. Шаг,
-  зависший дольше 5 с, пишет `stuck at <step>` и дамп горутин в журнал
-  приложения, дамп попадает в пакет для поддержки.
-- **Test servers при выключенном VPN: Stop останавливает, Start снова запускает ([задача 669](docs/spec/tasks/669-probe-session-cancel-stop-timeout-race.md), issue #171).**
-  **Stop** обрывает уже отправленные замеры, а не ждёт их таймаута; в это
-  время полоса показывает `Stopping…`. Зависшая тестовая сессия больше не
-  блокирует следующий тест и старт VPN.
-- **Load balance пропускает узел, проваливший проверку.** Группа
-  `round_robin` больше не отправляет новые соединения узлу, провалившему
-  последнюю проверку, пока есть живой; неудачный ручной пинг тоже выводит
-  узел из ротации до следующей проверки группы.
-- **«Register detour in auto group» работает ([задача 670](docs/spec/tasks/670-register-detour-in-auto-group-dead-toggle.md)).**
-  Звенья цепочек попадают в авто-группу Направления только при включённом
-  переключателе. Он неактивен, пока выключен **Register detour servers**, а
-  папка показывает оба переключателя, только если в ней есть звенья цепочек.
-- **Авто-узел в папке больше не пропадает молча ([задача 675](docs/spec/tasks/675-folder-auto-node-silent-drop-and-pool-gates.md)).**
-  Авто-узел без членов назван в отчёте сборки, а его редактор говорит, что
-  узел не попадает в конфиг. Пул следует тем же правилам, что у Направления:
-  Tailscale без exit node в него не входит, звенья цепочек — только с
-  **Register detour servers**.
-- **JSON-превью DNS-группы пропускает выключенных членов ([задача 671](docs/spec/tasks/671-dns-group-json-preview-disabled-members.md)).**
-  Как это делает сборка; строка под превью их перечисляет: «Disabled,
-  skipped at build: …».
-- **Android TV: приём настроек с пульта ([задача 622](docs/spec/tasks/622-device-transfer-phone-to-tv.md)).**
-  Экран приёма помещается без прокрутки, стрелки переключают варианты в
-  предпросмотре импорта, после него фокус возвращается на карточку передачи.
-- **Старт больше не ждёт 10–16 с чужого mux-handshake**, а MASQUE-узел с
-  `vhttp: auto` больше не держит в памяти прошлый экземпляр ядра после
-  каждого Stop/Start или смены профиля.
+- **VPN не стартовал после того, как правило из одних IP-диапазонов
+  получало DNS-опцию ([задача 692](docs/spec/tasks/692-rule-dns-option-needs-dns-visible-conditions.md)).**
+  Ядро останавливалось с «Legacy Address Filter Fields in DNS rules is
+  deprecated…», если в конфиге был FakeIP или Force IPv4. Секция DNS у
+  правила теперь показывается только при условии, которое DNS-слой может
+  проверить (домен, приложение, адрес источника, Wi-Fi-сеть или inbound), и
+  правило из одних IP больше не даёт DNS-правила. Настройки DNS у
+  существующих правил сохраняются и вернутся, когда в правило добавят домен
+  или приложение.
+- **URL Check: без ложного успеха.** Полная проверка, закончившаяся без
+  HTTP-ответа и без упавшего шага, показывает жёлтое «No HTTP response»;
+  сайт, ответивший `301`/`302`, показывает этот статус и `location`, а не
+  зелёное «HTTP 0». Смена URL, приложения, глубины или From scratch стирает
+  прошлый результат.
+- **XHTTP:** скорость выгрузки одного потока в `packet-up` упиралась в одну
+  запись за круговой путь (Leadaxe/sing-box-lx#58); запись `stream-up` могла
+  зависнуть после отказа сервера; `path` без слэша на конце мог получать 404
+  при сессии вне пути.
+- Редактор правила фильтра подписки показывал «Совпадений: из узлов» без
+  чисел; сообщение «Applied — …» после сохранения фильтров тоже их теряло.
+- Задержка узла показывается как `120ms`, а не `120MS`.
 
 ## 🔧 Под капотом
 
-- Ядро `v1.14.3-lx.21` → `v1.14.3-lx.23` ([docs/KERNEL.md](docs/KERNEL.md)):
-  исправления остановки, старта, MASQUE и Load balance выше; остановка,
-  зависшая дольше 20 с, пишет дамп горутин в лог ядра. Java-поверхность та
-  же, что в lx.21.
-- Контракт с лаунчером 1.1.132 → 1.1.139: каталог шаблона источника в LX
-  Backup (`dns.template_catalog`) и одно правило снятия шаблонных
-  DNS-серверов при импорте ([задача 681](docs/spec/tasks/681-dns-servers-uniform-backup-catalog.md));
-  `rules[].dns.fixedIps` для обеих сторон.
-- LX Backup и передача телефон → TV переносят список шаблонных DNS-серверов
-  как есть: сервер, удалённый у источника, снимается у приёмника, если на
-  него ничего не ссылается (иначе остаётся, с предупреждением). DNS Final или
-  резолвер по умолчанию, указывающий на отсутствующий сервер, сбрасывается
-  на умолчание шаблона, а группа без известных членов приезжает выключенной.
-  Старые бэкапы ничего не теряют.
-- Debug API: `POST /directions/reorder` и `include` в `POST`/`PATCH
-  /directions`, ставящие Направление выше включаемого им, получают 409 с
-  парами в `conflicts`; правила читают и пишут `dns.fixed_ips`.
-- Форматтер шаблона (`app/scripts/format_wizard_template.py`) понимает
-  текущий язык шаблона и проверяет смысл перед записью; `wizard_template.json`
-  переформатирован, 2367 → 760 строк, содержание то же ([задача 678](docs/spec/tasks/678-format-wizard-template-new-dialect.md)).
-- Новые тесты: эмиссия и хранение Fixed IP, секция DNS & Resolve, копия
-  DNS-сервера, предупреждение о резолвере через туннель, умолчания DNS всего
-  каталога и Ru internet segment, запретные зоны перестановки Направлений,
-  пул превью фильтра, остановка пробной сессии, раскладка приёма на TV и
-  фокус D-pad, корпус контракта `rule_dns`.
+- Ядро `v1.14.3-lx.23` → `v1.14.4-lx.25`: SPEC 139 (проверка соединения),
+  база апстримного sing-box 1.14.4 с Go 1.26.10, SPEC 141/142 (XHTTP),
+  исправлена гонка данных при выборе узла в группе Auto.
+- Ниже Android 10 владельца соединения (правила по приложениям) ищут в
+  `/proc/net` по вызову из приложения.
+- Контракт 1.1.140: INI WireGuard с несколькими пирами.
+- Описания DNS-серверов больше не переводятся, как и имена узлов.
 
 </details>
 
@@ -396,7 +325,7 @@ DoT и DoH — напрямую, группа Shield теперь целиком
 ## Install / Установка
 
 ```bash
-adb install -r LxBox-v2.25.17-arm64-v8a.apk
+adb install -r LxBox-v2.25.18-arm64-v8a.apk
 ```
 
 Без uninstall! Поверх существующей установки. Настройки и подписки сохранятся.
@@ -406,4 +335,4 @@ are preserved.
 
 ---
 
-Previous release / Предыдущий релиз: [v2.25.16](docs/releases/v2.25.16.md).
+Previous release / Предыдущий релиз: [v2.25.17](docs/releases/v2.25.17.md).

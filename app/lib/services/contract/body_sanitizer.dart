@@ -1056,6 +1056,20 @@ final class _Ctx {
     if (value is! List) return _invalid(f, path, value);
     final items = f.items;
     if (items == null) return _Value.keep(value);
+    // Контракт 1.1.140 — `on_item_failure: drop_item` (`wireguard.peers`):
+    // отказ внутри элемента снимает ЭЛЕМЕНТ, а не узел. Единственный элемент
+    // правилом не изолируется; не уцелел ни один — массив обходится ниже
+    // заново без изоляции, и узел получает прежний отказ первого.
+    final fail = f.raw['on_item_failure'];
+    final itemFields0 = items.fields;
+    if (fail is Map &&
+        fail['action'] == 'drop_item' &&
+        itemFields0 != null &&
+        value.length > 1) {
+      final isolated = _arrayItemsIsolated(
+          value, items, itemFields0, path, '${fail['code'] ?? ''}');
+      if (isolated != null) return _Value.keep(isolated);
+    }
     final out = <Object?>[];
     for (var i = 0; i < value.length; i++) {
       // §582 — элемент-объект со своей схемой (`wireguard.peers[]`): не
@@ -1091,6 +1105,90 @@ final class _Ctx {
     final len = f.len;
     if (len != null && out.length != len) return _invalid(f, path, value);
     return _Value.keep(out);
+  }
+
+  /// Контракт 1.1.140 — обход массива объектов с изоляцией элементов
+  /// (`on_item_failure: drop_item`, эталон — `nodeflow/sanitize.go:
+  /// arrayItemsIsolated`).
+  ///
+  /// Элемент, внутри которого случился отказ узла (`on_invalid: drop_node`)
+  /// или не хватило `required`-поля, снимается: следы его обхода (коды,
+  /// флаги отказа, снимки путей) откатываются, и вместо них на его место
+  /// встаёт ОДИН код [code] с путём элемента (`peers[1]`) и параметрами
+  /// `index` (с 1) и `reason` (код отказа). `null` — не уцелел ни один
+  /// элемент; тогда откатывается весь обход, и массив судит вызывающий.
+  List<Object?>? _arrayItemsIsolated(List<Object?> value, FieldSchema items,
+      Map<String, FieldSchema> itemFields, String path, String code) {
+    final start = _mark();
+    final out = <Object?>[];
+    for (var i = 0; i < value.length; i++) {
+      final itemPath = '$path[$i]';
+      final item = value[i];
+      if (item is! Map) {
+        warn('type_invalid', path: itemPath, value: item);
+        continue;
+      }
+      final mark = _mark();
+      dropObject = false;
+      final cleaned = sanitizeObject(item.cast<String, dynamic>(),
+          items.order ?? const [], itemFields, itemPath);
+      final reason = _failureSince(mark);
+      dropObject = false;
+      if (reason == null) {
+        out.add(cleaned);
+        continue;
+      }
+      _rollback(mark, itemPath);
+      // Код встаёт на место элемента: порядок кодов — порядок обхода.
+      warn(code,
+          path: itemPath, params: {'index': '${i + 1}', 'reason': reason});
+    }
+    if (out.isNotEmpty) return out;
+    _rollback(start, path);
+    return null;
+  }
+
+  /// Состояние накопителей перед обходом элемента массива.
+  _ItemMark _mark() => (
+        warnings: warnings.length,
+        hardPaths: hardPaths.length,
+        repairs: _repairs.length,
+        drop: _dropNode,
+        dropFrom: dropFrom,
+        explicit: explicitDropNode,
+      );
+
+  /// Код отказа, случившегося после отметки [m]: снятие узла по значению
+  /// (код снятия — [dropFrom]) или незаполненное обязательное поле (код —
+  /// последний поставленный после отметки); `null` — элемент цел.
+  String? _failureSince(_ItemMark m) {
+    if (!m.drop && _dropNode) {
+      return dropFrom >= 0 && dropFrom < warnings.length
+          ? warnings[dropFrom].code
+          : 'field_missing';
+    }
+    if (dropObject) {
+      return warnings.length > m.warnings ? warnings.last.code : 'field_missing';
+    }
+    return null;
+  }
+
+  /// Снять следы обхода под путём [prefix] с отметки [m]: коды, отказ узла,
+  /// тихие правки и снимки путей.
+  void _rollback(_ItemMark m, String prefix) {
+    warnings.removeRange(m.warnings, warnings.length);
+    hardPaths.removeRange(m.hardPaths, hardPaths.length);
+    _repairs.removeRange(m.repairs, _repairs.length);
+    _dropNode = m.drop;
+    dropFrom = m.dropFrom;
+    explicitDropNode = m.explicit;
+    bool under(String k) =>
+        k == prefix || k.startsWith('$prefix.') || k.startsWith('$prefix[');
+    sanitized.removeWhere((k, _) => under(k));
+    _fieldEnd.removeWhere((k, _) => under(k));
+    _building.removeWhere((k, _) => under(k));
+    explainedDrops.removeWhere(under);
+    switchedOff.removeWhere(under);
   }
 
   _Value _sanitizeScalar(Object? value, FieldSchema f, String path) {
@@ -2886,6 +2984,17 @@ List<int>? _parseCore(String v) {
 
 /// Результат обработки одного значения: оставить (с возможной заменой) или
 /// снять.
+/// Контракт 1.1.140 — отметка накопителей [_Ctx] перед обходом элемента
+/// массива с `on_item_failure` (откат снятого элемента).
+typedef _ItemMark = ({
+  int warnings,
+  int hardPaths,
+  int repairs,
+  bool drop,
+  int dropFrom,
+  bool explicit,
+});
+
 final class _Value {
   const _Value.keep(this.value) : keep = true;
   const _Value.drop()

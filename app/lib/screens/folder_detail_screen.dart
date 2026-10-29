@@ -1,7 +1,7 @@
 import 'dart:async';
 import '../models/node_spec.dart';
-import '../services/node_identity.dart';
 import 'auto_group_edit_screen.dart';
+import '../widgets/auto_group_form.dart' show autoPoolCandidates;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -809,7 +809,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     final folder = widget.controller.entries[idx].list;
     if (folder is! FolderServers) return;
 
-    final candidates = _poolCandidates(folder);
+    final candidates = autoPoolCandidates(folder);
     final res = await Navigator.of(context).push<AutoGroupEditResult>(
       MaterialPageRoute(
         builder: (_) => AutoGroupEditScreen(
@@ -830,58 +830,6 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
       return;
     }
     setState(() {});
-  }
-
-  /// §322 — правка существующего узла автовыбора. Кандидаты считаем без
-  /// него самого: группа не может взять в пул саму себя.
-  Future<void> _editAutoNode(int memberIndex, AutoSelectSpec node) async {
-    final idx = _index;
-    if (idx < 0) return;
-    final folder = widget.controller.entries[idx].list;
-    if (folder is! FolderServers) return;
-
-    final res = await Navigator.of(context).push<AutoGroupEditResult>(
-      MaterialPageRoute(
-        builder: (_) => AutoGroupEditScreen(
-          initial: node,
-          candidates: _poolCandidates(folder),
-          canDelete: true,
-        ),
-      ),
-    );
-    if (!mounted || res == null) return;
-
-    switch (res) {
-      case AutoGroupSaved(:final spec):
-        final err = await widget.controller
-            .updateAutoMemberAt(idx, memberIndex, spec);
-        if (!mounted) return;
-        if (err != null) {
-          await _showError(err.render());
-          return;
-        }
-      case AutoGroupDeleted():
-        await widget.controller.removeMemberAt(idx, memberIndex);
-        if (!mounted) return;
-    }
-    setState(() {});
-  }
-
-  /// Члены папки, которые могут попасть в пул: обычные узлы с адресом, без
-  /// групп (вложенность urltest в urltest бессмысленна) и без нечитаемых raw.
-  /// Член адресуется парой `{id папки, сырой тег}` (§439).
-  List<({NodeLink key, String label})> _poolCandidates(FolderServers folder) {
-    final out = <({NodeLink key, String label})>[];
-    for (final m in folder.members) {
-      final n = m.node;
-      if (n == null || n.isGroup || n.tag.isEmpty) continue;
-      if (nodeIdentityKey(n) == null) continue;
-      out.add((
-        key: NodeLink(folderId: folder.id, tag: n.tag),
-        label: n.label.isEmpty ? n.tag : n.label,
-      ));
-    }
-    return out;
   }
 
   Future<void> _addFromUrl() async {
@@ -949,13 +897,6 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     // геттер context бросит на первой же строке (showDialog).
     if (!mounted) return;
     final member = _folder.members[memberIndex];
-
-    // §322 — у узла автовыбора свой редактор: текста у группы нет (§439).
-    final node = member.node;
-    if (node is AutoSelectSpec) {
-      await _editAutoNode(memberIndex, node);
-      return;
-    }
 
     final ctl = TextEditingController(text: member.raw);
     final newRaw = await showDialog<String>(
@@ -1087,20 +1028,24 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     // сервером она стала бы пустой записью. «Move to folder…» остаётся —
     // там пары членов переписываются.
     final isGroup = _folder.members[memberIndex].node?.isGroup == true;
+    // §686 — член с узлом правят в карточке (тап → Node Settings); «Edit…»
+    // остаётся только битому члену: иначе его текст не поправить.
+    final broken = _folder.members[memberIndex].node == null;
     showAppBottomSheet<void>(
       context: context,
       builder: (ctx) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ListTile(
-              leading: const Icon(Icons.edit_outlined),
-              title: Text(getLocalText.s("Edit…")),
-              onTap: () {
-                Navigator.pop(ctx);
-                unawaited(_editMember(memberIndex));
-              },
-            ),
+            if (broken)
+              ListTile(
+                leading: const Icon(Icons.edit_outlined),
+                title: Text(getLocalText.s("Edit…")),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  unawaited(_editMember(memberIndex));
+                },
+              ),
             ListTile(
               leading: const Icon(Icons.drive_file_move_outline),
               title: Text(getLocalText.s("Move to folder…")),

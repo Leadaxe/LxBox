@@ -162,10 +162,10 @@ void main() {
     });
   });
 
-  group('1.1.30 — вторая [Peer] отброшена С КОДОМ', () {
-    // Три поведения жили на одном месте: движковый разбор сливал секции,
-    // рукописный конвертер брал первую МОЛЧА, норма требует «первая плюс код».
-    // Теперь это атрибут данных (`ini_dialect.sections.Peer`), а не код.
+  group('1.1.140 — каждая [Peer] свой пир узла', () {
+    // До 1.1.140 вторая [Peer] отбрасывалась с кодом `wgconf_extra_peer_dropped`
+    // (`repeat: first_only`). Норма теперь `repeat: each`: таблица исполняется
+    // на каждой секции, элементы `peers[]` встают в порядке файла.
     const text = '[Interface]\n'
         'PrivateKey = $_priv\n'
         'Address = 10.0.0.2/32\n'
@@ -176,33 +176,58 @@ void main() {
         '\n'
         '[Peer]\n'
         'PublicKey = AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM=\n'
-        'Endpoint = second.example.com:51821\n';
+        'Endpoint = second.example.com:51821\n'
+        'PersistentKeepalive = 25\n';
 
-    test('узлом становится первая, вторая не сливается с ней', () {
+    test('две [Peer] — два пира в порядке файла, без слияния', () {
       final r = run(text);
       expect(r, isNotNull);
       final peers = r!.body['peers'] as List;
-      expect(peers, hasLength(1));
-      expect((peers.first as Map)['address'], 'first.example.com');
-      expect((peers.first as Map)['port'], 51820);
+      expect(peers, hasLength(2));
+      expect((peers[0] as Map)['address'], 'first.example.com');
+      expect((peers[0] as Map)['port'], 51820);
+      expect((peers[0] as Map).containsKey('persistent_keepalive_interval'),
+          isFalse,
+          reason: 'ключ второй секции не сливается в первую');
+      expect((peers[1] as Map)['address'], 'second.example.com');
+      expect((peers[1] as Map)['port'], 51821);
+      expect(codes(r.warnings), isNot(contains('wgconf_peer_dropped')));
     });
 
-    test('отброс не молчит', () {
-      expect(codes(run(text)!.warnings), contains('wgconf_extra_peer_dropped'));
-    });
-
-    test('одна [Peer] кода не даёт', () {
-      const single = '[Interface]\n'
+    test('[Peer] без PublicKey снимается одна, кодом с путём peer.<index>', () {
+      const missing = '[Interface]\n'
           'PrivateKey = $_priv\n'
           'Address = 10.0.0.2/32\n'
           '\n'
           '[Peer]\n'
           'PublicKey = $_pub\n'
-          'Endpoint = first.example.com:51820\n';
-      expect(
-        codes(run(single)!.warnings),
-        isNot(contains('wgconf_extra_peer_dropped')),
-      );
+          'Endpoint = first.example.com:51820\n'
+          '\n'
+          '[Peer]\n'
+          'Endpoint = second.example.com:51821\n';
+      final r = run(missing);
+      expect(r, isNotNull);
+      expect(r!.body['peers'] as List, hasLength(1));
+      final w = r.warnings
+          .whereType<RegistryWarning>()
+          .singleWhere((w) => w.code == 'wgconf_peer_dropped');
+      expect(w.path, 'peer.2');
+      expect(w.params, {'index': '2', 'missing': 'PublicKey'});
+    });
+
+    test('ни одна [Peer] не уцелела — прежний отказ required', () {
+      const none = '[Interface]\n'
+          'PrivateKey = $_priv\n'
+          'Address = 10.0.0.2/32\n'
+          '\n'
+          '[Peer]\n'
+          'AllowedIPs = 0.0.0.0/0\n'
+          '\n'
+          '[Peer]\n'
+          'AllowedIPs = 10.0.0.0/8\n';
+      final verdict = XrayDropVerdict();
+      expect(run(none, dropped: verdict), isNull);
+      expect(verdict.reason?.code, 'field_missing');
     });
   });
 

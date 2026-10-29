@@ -38,6 +38,7 @@
 | Вкл/выкл | выключатель в строке; у `vpn-1` заперт | `vpn-1` вкл, `vpn-2` выкл | выключенное Направление не эмитится |
 | Include direct-out / Include block | галки | выкл | опции `direct-out` / `block` |
 | Other directions | «only directions listed above this one» | — | опции-теги других селекторов |
+| Replace groups | чекбокс на каждую свёртку источника; подпись: отмеченная группа входит, даже если фильтр её не пропускает, и стоит выше серверов; в auto-группу группы не входят | — | опции-теги свёрток, в служебном блоке перед узлами ([686](../../../tasks/686-folder-auto-node-source-tab.md) п.12) |
 | Node filter (regex) + Exclude matching (invert) | регистронезависимо | пусто = все узлы | состав |
 | Default (regex) | «first matching node becomes default» | пусто | `default` |
 | Interrupt connections on switch | вкл/выкл | вкл | `interrupt_exist_connections` |

@@ -147,7 +147,7 @@ on the main screen — [007-NODE_LIST](../007-NODE_LIST/FEATURE.md).
 | Send HWID | Settings → Subscriptions | on/off | on (§658) |
 | HWID · `x-hwid` | same place, Regenerate button | UUIDv4, generated on first display | — |
 | `x-device-os` / `x-ver-os` / `x-device-model` | same place | string; empty = the device value | `android` / OS version / model |
-| Update interval (per subscription) | Subscription → Settings | `-1` Don't auto-update · `0` Never (respect server) · 1/3/6/12/24/48/72/168 h | 24 h (online), `-1` (file) |
+| Update interval (per subscription) | Subscription → Settings | `0` As subscription · `-1` Don't auto-update · 1/3/6/12/24/48/72/168 h | `0` (online), `-1` (file) |
 | On update (per subscription) | Subscription → Settings; hidden with "Auto-restart VPN on settings change" | Rebuild · Reload · Do nothing | Rebuild |
 | Custom identity (per subscription) | Subscription → Settings → Fetch identity | Default / Custom (own UA, HWID, device-meta) | Default |
 | Import rules (per subscription) | Subscription → Filters | list of rules + a master toggle | empty, toggle on |

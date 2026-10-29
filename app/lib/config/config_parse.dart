@@ -3,9 +3,12 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:json5/json5.dart';
 
+import '../services/parser/json_comments.dart';
+
 /// Преобразует JSON / JSON5 / JSONC-подобный текст в канонический JSON-строку для sing-box/libbox.
 ///
-/// Используется парсер [json5Decode] (комментарии, хвостовые запятые и т.д. по спецификации JSON5).
+/// Используется парсер [json5Decode] (комментарии, хвостовые запятые и т.д. по спецификации JSON5);
+/// `#`-комментарии ядра снимаются до него ([withoutHashComments]).
 String canonicalJsonForSingbox(String text) {
   final trimmed = text.trim();
   if (trimmed.isEmpty) {
@@ -22,7 +25,7 @@ String canonicalJsonForSingbox(String text) {
 /// сохраняем: там уже есть координаты («… at line:col»).
 dynamic _json5DecodeNormalized(String text) {
   try {
-    return json5Decode(text);
+    return json5Decode(withoutHashComments(text));
   } on FormatException {
     rethrow;
   } on Exception catch (e) {
@@ -42,7 +45,7 @@ String prettyJsonForDisplay(String raw) {
   try {
     final trimmed = raw.trim();
     if (trimmed.isEmpty) return raw;
-    final dynamic parsed = json5Decode(trimmed);
+    final dynamic parsed = json5Decode(withoutHashComments(trimmed));
     return const JsonEncoder.withIndent('  ').convert(_toJsonEncodable(parsed));
   } catch (_) {
     return raw;
@@ -62,27 +65,17 @@ String formatJson5(String text) {
   return const JsonEncoder.withIndent('  ').convert(_toJsonEncodable(parsed));
 }
 
-/// Есть ли в тексте комментарии JSON5 (`//`, `/*`) вне строк — Format их
+/// §686 п.11 — ядро (sing `contextjson`) читает `#` как строчный комментарий,
+/// в JSON5 его нет: перед [json5Decode] `#` вне строк снимается тем же
+/// сканером, что у вставки ([stripJsonComments], режим JSON5); `//` и `/* */`
+/// остаются пакету `json5`. Перевод строки остаётся — номера строк в ошибке
+/// разбора не сдвигаются.
+String withoutHashComments(String text) =>
+    stripJsonComments(text, json5: true) ?? text;
+
+/// Есть ли в тексте комментарии (`//`, `/*`, `#`) вне строк — Format их
 /// теряет, перед заменой нужен диалог.
-bool hasJson5Comments(String text) {
-  int? quote;
-  for (var i = 0; i < text.length; i++) {
-    final c = text.codeUnitAt(i);
-    if (quote != null) {
-      if (c == 0x5C) {
-        i++; // экранированный символ
-      } else if (c == quote) {
-        quote = null;
-      }
-    } else if (c == 0x22 || c == 0x27) {
-      quote = c;
-    } else if (c == 0x2F && i + 1 < text.length) {
-      final n = text.codeUnitAt(i + 1);
-      if (n == 0x2F || n == 0x2A) return true;
-    }
-  }
-  return false;
-}
+bool hasJson5Comments(String text) => stripJsonComments(text) != null;
 
 // §333 — off-main-thread версии для больших конфигов (сотни КБ json5-парса
 // фризят UI). Sync-версии выше остаются для мелких вызовов и тестов.

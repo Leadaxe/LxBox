@@ -113,26 +113,17 @@
  "Cloudflare": {
   "value": "Cloudflare"
  },
- "Cloudflare DoT": {
-  "value": "Cloudflare DoT"
- },
  "Cloudflare Public DNS address for DNS-over-TLS (port 853).": {
   "value": "Cloudflare Public DNS 的 DNS-over-TLS 地址（端口 853）。"
  },
  "Cloudflare Public DNS address. IPv4 — universal; IPv6 — if your network supports it.": {
   "value": "Cloudflare Public DNS 地址。IPv4 —— 通用；IPv6 —— 需网络支持。"
  },
- "Cloudflare UDP": {
-  "value": "Cloudflare UDP"
- },
  "Connection and routing behavior": {
   "value": "连接与路由行为"
  },
  "Core packet handling: sniff the domain, hijack DNS into the tunnel, resolve destinations for routing. Applied first, before all other rules.": {
   "value": "内核数据包处理：嗅探域名、把 DNS 劫持进隧道、为路由解析目标地址。最先应用，早于所有其它规则。"
- },
- "Custom tunnel routes": {
-  "value": "自定义隧道路由"
  },
  "DNS": {
   "value": "DNS"
@@ -185,9 +176,6 @@
  "FakeIP": {
   "value": "FakeIP"
  },
- "FakeIP allocator": {
-  "value": "FakeIP 分配器"
- },
  "FakeIP server": {
   "value": "FakeIP 服务器"
  },
@@ -217,15 +205,6 @@
  },
  "Google 204": {
   "value": "Google 204"
- },
- "Google UDP": {
-  "value": "Google UDP"
- },
- "Google DoH": {
-  "value": "Google DoH"
- },
- "Google DoT": {
-  "value": "Google DoT"
  },
  "Google Public DNS IP for IP-based DoH. TLS SNI is pinned to dns.google.": {
   "value": "用于基于 IP 的 DoH 的 Google Public DNS 地址。TLS SNI 固定为 dns.google。"
@@ -374,9 +353,6 @@
  "Quad9 · anti-malware": {
   "value": "Quad9 · 防恶意软件"
  },
- "RU DNS group (UDP + DoT + DoH)": {
-  "value": "俄罗斯 DNS 分组（UDP + DoT + DoH）"
- },
  "Randomize letter case in server_name (WwW.gOoGle.CoM). Per RFC 6066 the field is case-insensitive, so servers accept either form; defeats naive exact-match matching only. Skipped on REALITY nodes — their SNI must stay byte-exact": {
   "value": "随机化 server_name 的字母大小写（WwW.gOoGle.CoM）。按 RFC 6066，该字段不区分大小写，服务器两种写法都接受；只能骗过朴素的精确匹配。REALITY 节点会跳过——它们的 SNI 必须逐字节一致"
  },
@@ -419,9 +395,6 @@
  "Route all DNS queries through the tunnel's DNS engine.\n⚠️ WARNING: turning this off disables FakeIP and all DNS rules — apps query their own DNS directly, uncontrolled. Keep on unless you know exactly why.": {
   "value": "让所有 DNS 查询都经隧道的 DNS 引擎。\n⚠️ 警告：关闭后会停用 FakeIP 和所有 DNS 规则——应用将自行直接查询 DNS，完全不受控。除非你非常清楚原因，否则请保持开启。"
  },
- "Route all IPv4 and IPv6 through the tunnel via explicit half-ranges instead of sing-box defaults. Off by default — turn on only if the default routing misbehaves.": {
-  "value": "用显式的半段地址把全部 IPv4 和 IPv6 送进隧道，而不依赖 sing-box 默认值。默认关闭——只有默认路由表现异常时才开启。"
- },
  "Route private IP ranges (LAN). Direct by default, or send to a direction to reach routers/devices over a local VPN.": {
   "value": "路由私有 IP 段（局域网）。默认直连，也可送往某个方向，以便通过本地 VPN 访问路由器/设备。"
  },
@@ -433,9 +406,6 @@
  },
  "SOCKS5 only": {
   "value": "仅 SOCKS5"
- },
- "Safe DNS (DoT)": {
-  "value": "安全 DNS（DoT）"
  },
  "Safe profile": {
   "value": "安全配置"
@@ -466,9 +436,6 @@
  },
  "Strict route": {
   "value": "严格路由"
- },
- "System DNS": {
-  "value": "系统 DNS"
  },
  "System HTTP proxy": {
   "value": "系统 HTTP 代理"
@@ -581,15 +548,6 @@
  "Yandex": {
   "value": "Yandex"
  },
- "Yandex Safe DoH": {
-  "value": "Yandex 安全 DoH"
- },
- "Yandex Safe DoT": {
-  "value": "Yandex 安全 DoT"
- },
- "Yandex UDP (IP from above)": {
-  "value": "Yandex UDP（IP 取上方设置）"
- },
  "outbound": {
   "value": "出站"
  },
@@ -598,21 +556,6 @@
  },
  "system name": {
   "value": "系统名称"
- },
- "Shield DNS (multi-provider group)": {
-  "value": "Shield DNS（多服务商分组）"
- },
- "OpenDNS UDP": {
-  "value": "OpenDNS UDP"
- },
- "OpenDNS DoH": {
-  "value": "OpenDNS DoH"
- },
- "Quad9 DoH (anti-malware)": {
-  "value": "Quad9 DoH（防恶意软件）"
- },
- "Yandex DoT": {
-  "value": "Yandex DoT"
  },
  "Google push (FCM)": {
   "value": "Google 推送（FCM）"
@@ -676,9 +619,6 @@
  },
  "Resolve tailnet names with the node's own DNS.": {
   "value": "使用节点自身的 DNS 解析 tailnet 名称。"
- },
- "MagicDNS of the tailnet": {
-  "value": "tailnet 的 MagicDNS"
  },
  "DNS cache size": {
   "value": "DNS 缓存大小"
@@ -758,16 +698,46 @@
  "Yandex DNS IP for DNS-over-TLS (port 853). TLS SNI is pinned to common.dot.dns.yandex.net.": {
   "value": "Yandex DNS 的 DNS-over-TLS 地址（端口 853）。TLS SNI 固定为 common.dot.dns.yandex.net。"
  },
- "UDP DNS outbound": {
-  "value": "UDP DNS 出站"
+ "Encrypted DNS via Outbound": {
+  "value": "加密 DNS 走 Outbound"
  },
- "Encrypted DNS outbound": {
-  "value": "加密 DNS 出站"
+ "Send Yandex DoT and DoH through this preset's Outbound, like UDP. Off: they go direct.": {
+  "value": "像 UDP 一样，通过此预设的 Outbound 发送 Yandex DoT 和 DoH。关闭时直连。"
  },
- "Which direction carries plain UDP queries to Yandex DNS": {
-  "value": "由哪个方向把明文 UDP 查询送到 Yandex DNS"
+ "IPv4 pool": {
+  "value": "IPv4 地址池"
  },
- "Which direction carries Yandex DoT and DoH queries": {
-  "value": "由哪个方向把 Yandex DoT 和 DoH 查询送出"
+ "IPv6 pool": {
+  "value": "IPv6 地址池"
+ },
+ "Fake IPv4 addresses are taken from this range (CIDR). Change it if the default range is used in your network or excluded from the tunnel. Changing it resets the saved fake addresses.": {
+  "value": "伪 IPv4 地址从此范围（CIDR）分配。如果默认范围在您的网络中已被使用或被排除在隧道之外，请更改。更改会重置已保存的伪地址。"
+ },
+ "Fake IPv6 addresses are taken from this range (CIDR). Leave empty to answer AAAA queries with no address. At least one pool must be set.": {
+  "value": "伪 IPv6 地址从此范围（CIDR）分配。留空则对 AAAA 查询返回无地址的应答。至少需要设置一个地址池。"
+ },
+ "Split default route": {
+  "value": "拆分默认路由"
+ },
+ "Send all traffic to the tunnel as two half-ranges per address family instead of one default route. The same traffic goes through the tunnel; turn on only if the device ignores the VPN's default route.": {
+  "value": "以每个地址族两个半区间代替单一默认路由，将所有流量送入隧道。经过隧道的流量不变；仅当设备忽略 VPN 默认路由时才开启。"
+ },
+ "Bypass the tunnel": {
+  "value": "绕过隧道"
+ },
+ "Addresses (CIDR) that skip the tunnel and the core entirely, e.g. a home NAS. Their traffic goes without VPN: routing rules, DNS hijack and statistics do not see it. Do not add networks you reach through a VPN node, the FakeIP pool or the tunnel's own address. Applies after a full VPN restart.": {
+  "value": "完全绕过隧道和内核的地址（CIDR），例如家用 NAS。其流量不经过 VPN：路由规则、DNS 劫持和统计都看不到。不要添加通过 VPN 节点访问的网络、FakeIP 地址池或隧道自身地址。完全重启 VPN 后生效。"
+ },
+ "192.168.0.0/16 · home LAN": {
+  "value": "192.168.0.0/16 · 家庭局域网"
+ },
+ "10.0.0.0/8 · private": {
+  "value": "10.0.0.0/8 · 私有"
+ },
+ "169.254.0.0/16 · link-local": {
+  "value": "169.254.0.0/16 · 链路本地"
+ },
+ "fe80::/10 · IPv6 link-local": {
+  "value": "fe80::/10 · IPv6 链路本地"
  }
 }

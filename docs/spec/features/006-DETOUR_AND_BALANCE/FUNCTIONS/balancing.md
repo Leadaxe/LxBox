@@ -55,9 +55,15 @@ The core keeps the Load balance pool by itself
 - At start the first `pool` nodes go into the pool without a test: nodes with
   a latency history first, fastest first, then in config order.
 - Pool tolerance `0`: each interval only pool members are tested. A node
-  outside the pool is tested only when a member fails, and only as many as
-  needed to refill the pool. A list of hundreds of nodes does not mean
-  hundreds of tests.
+  outside the pool is tested only when a member fails. The core then walks
+  the nodes outside the pool in config order, in parallel batches of `pool`
+  nodes, and stops after the batch that fills the last dead slot: one dead
+  slot can cost up to `pool` extra tests, not one. A list of hundreds of
+  nodes still does not mean hundreds of tests.
+- A WireGuard / AmneziaWG candidate brings its device up when tested, so the
+  node list shows it as "up" while it is not in the pool. A candidate the
+  pool did not take falls asleep again after its idle window. "up" / "sleep"
+  in the list is the device state, not pool membership.
 - Pool tolerance `> 0`: each interval all members are tested; the pool holds
   the fastest `pool` of them, and a member is replaced only when an outside
   node beats it by more than the tolerance.
@@ -94,6 +100,12 @@ live pool of the running core
   `<tag>-auto` (a urltest inside a urltest would measure someone else's
   choice). Disabled or missing members are cut off with the code
   `group_member_dropped`.
+- **Pool preview of an auto node** (the group form): a member switched off
+  in the folder stays in the list with the ⏻ icon (All and Rule — in place
+  of ✓/⊖, Pick — to the right of the name), the row is dimmed. It counts
+  neither in N nor in M of "N of M servers"; when there are such members,
+  "· K off" is added. In Pick it can be ticked: the choice is kept and works
+  once the server is switched on.
 - Xray import: `random`/`roundRobin`/`leastLoad` with `expected>1` → Load
   balance; `leastPing` or `expected≤1` → Fastest; `expected` → pool,
   `maxRTT` → pool_tolerance; `selector` → include rule `^(…)`; `pingConfig`
@@ -128,3 +140,4 @@ live pool of the running core
 | 10 | [611](../../../tasks/611-drop-passive-check-kernel-lx12.md) | Implemented | `passive_check` removed (core lx.12) |
 | 11 | [612](../../../tasks/612-contract-1-1-113-failover.md) | Implemented | Hold until failure (`failover`), migration from `passive_check` |
 | 12 | [677](../../../tasks/677-autoping-tail-skips-round-robin-groups.md) | Done | Auto ping on start forces a group test only for Fastest (`least_test`) |
+| 13 | [686](../../../tasks/686-folder-auto-node-source-tab.md) | In progress | Pool preview: a member switched off in the folder — ⏻, outside the count |

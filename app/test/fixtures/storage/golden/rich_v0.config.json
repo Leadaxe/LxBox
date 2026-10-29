@@ -105,8 +105,7 @@
         "type": "udp",
         "tag": "ru-direct:yandex_udp",
         "server": "77.88.8.1",
-        "server_port": 53,
-        "detour": "vpn-1"
+        "server_port": 53
       },
       {
         "type": "tls",

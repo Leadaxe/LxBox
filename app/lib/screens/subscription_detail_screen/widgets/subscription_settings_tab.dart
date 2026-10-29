@@ -596,14 +596,14 @@ class SubscriptionSettingsTab extends StatelessWidget {
             onTap: onEditSource,
           );
         }),
-        // §129 — Update interval: -1 = никогда (игнор сервера); 0 = respect
-        // server (сами не по расписанию); >0 = раз в N часов.
+        // §129/§685 — Update interval: -1 = никогда; 0 = «As subscription»
+        // (серверный заголовок, без него 24 ч); >0 = раз в N часов.
         ListTile(
           leading: const Icon(Icons.sync, size: 20),
           title: Text(getLocalText.s("Update interval")),
           subtitle: Text(switch (list.updateIntervalHours) {
             < 0 => getLocalText.s("Don't auto-update (manual only)"),
-            0 => getLocalText.s("Never (respect server) — manual only unless server sets one"),
+            0 => asSubscriptionIntervalSubtitle(list.meta?.updateIntervalHours),
             final h => getLocalText.s("%1\$dh (auto-refresh every %2\$s)", h, intervalHuman(h)),
           }),
           trailing: const Icon(Icons.edit, size: 18),

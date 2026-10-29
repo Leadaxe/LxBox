@@ -49,7 +49,7 @@ void main() {
     }
   });
 
-  const link = 'vless://u1@h1.example:443?type=ws&security=tls#Alpha';
+  const broken = 'Alpha';
   const next = 'vless://u2@h2.example:443?type=ws&security=tls#Beta';
 
   Finder unsaved() => find.text('Unsaved changes');
@@ -60,8 +60,13 @@ void main() {
     await tester.runAsync(() async {
       await c.init();
       await c.addFolder('F');
-      await c.addMembersToFolder(0, link);
     });
+    // §686 — «Edit…» в меню члена только у битого (узла нет): член с узлом
+    // правят в карточке.
+    final f = c.entries.single.list as FolderServers;
+    c.debugSetEntries([
+      SubscriptionEntry(list: f.copyWith(members: [FolderMember(raw: broken)])),
+    ]);
     await tester.pumpWidget(MaterialApp(
       home: Builder(
         builder: (context) => Scaffold(
@@ -87,7 +92,7 @@ void main() {
       (c.entries.single.list as FolderServers).members.single.raw;
 
   Future<void> openEditServer(WidgetTester tester) async {
-    await tester.longPress(find.text('Alpha').first);
+    await tester.longPress(find.text('Unreadable entry').first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Edit…'));
     await tester.pumpAndSettle();
@@ -140,7 +145,7 @@ void main() {
       expect(unsaved(), findsOneWidget);
       await choose(tester, 'Discard');
       expect(find.text('Edit server'), findsNothing);
-      expect(memberRaw(c), link);
+      expect(memberRaw(c), broken);
     });
 
     testWidgets('правка → Back → Save: записано тем же путём, что Save',

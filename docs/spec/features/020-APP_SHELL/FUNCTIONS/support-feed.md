@@ -76,7 +76,8 @@ input field with the link filled in; the system "Share"; an external browser.
   | X | close; comes again on the next app launch | yes | no |
 
 - `route:` screens — servers, routing, dns, vpn-settings, app-settings,
-  speedtest, stats, config, debug, about, profiler. An unknown action or
+  speedtest (Diagnostics → Speed Test), diagnostics, stats, config, debug,
+  about, profiler. An unknown action or
   screen — the button is hidden (a feed newer than the app does not break it).
 - A message without an English block, broken links and a broken feed are
   dropped silently, without a failure.

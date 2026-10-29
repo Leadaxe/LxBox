@@ -112,8 +112,9 @@ the node list, folders and order — [007-NODE_LIST](../007-NODE_LIST/FEATURE.md
   "renaming a root node rewrites root references", "editing a member's body
   (renaming) rewrites storage". **Mutation:** match nodes before and after by
   tag rather than by position in the body.
-- **P12. Comments and an unknown type do not get in the way.** JSON with `//`
-  and `/* */` is accepted, it goes into the source without comments with the
+- **P12. Comments and an unknown type do not get in the way.** JSON with `//`,
+  `/* */` and `#` (to the end of the line, as the core reads it; `#` inside a
+  string stays) is accepted, it goes into the source without comments with the
   message "Comments were removed."; a custom body of a type unknown to the
   application is accepted with a warning; a body without `type` — refusal.
   **Witness:** units "input with comments is accepted, source without

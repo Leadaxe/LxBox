@@ -28,7 +28,7 @@
 | Группа | Пункты |
 |--------|--------|
 | Настройка | Servers · Routing · VPN Settings · App Settings |
-| Инструменты | Speed Test · Statistics · Config Editor · Debug |
+| Инструменты | Diagnostics (URL Check, Speed Test) · Statistics · Config Editor · Debug |
 | О приложении | About |
 
 Своего пункта у DNS нет: это вкладка DNS экрана Routing (подпись «Directions,

@@ -26,7 +26,8 @@ core sees is derived from it and is not stored.
 | link (one line with `://`) | "Link: the tag goes into its fragment on save." | tag into the `#…` fragment, write |
 | WireGuard INI | "WireGuard config: saved as is. The tag is stored separately." | text as is, tag as a record field |
 
-The **Edit JSON** button is on the JSON tab.
+The **Edit JSON** button is on the JSON tab; **Edit INI** — on the INI tab
+of a WireGuard / AmneziaWG node.
 
 ## Inputs / Outputs
 
@@ -73,14 +74,31 @@ answer.
   the core checks on Save, "There is no way back to a link"); Continue
   replaces the source with the model's body and goes to Source ("Source
   replaced with JSON").
+- **Edit INI** (WireGuard / AmneziaWG). For an INI source — navigation to
+  Source. For a link and JSON — the warning "Edit INI?" ("The source will
+  be replaced by this INI. The tag and Detour stay as they are.", plus
+  "Not in INI: …" when the body has keys the `.conf` cannot carry);
+  Continue replaces the source with the text of the INI tab and goes to
+  Source ("Source replaced with INI"). The INI text is built by reversing
+  the registry's `conf` transfer table — the same table that parses a
+  `.conf` and, through shared parameter names, a link: nothing from a link
+  is lost, every peer of the body becomes its own `[Peer]`, masquerade
+  (`Ip`/`Id`/`Ib`) and AmneziaWG keys are carried over. Only body keys
+  missing from the table can be lost, and they are listed.
 - **The core's verdict** is cleared only if the node body really changed; the
   node is re-enabled then. Editing the name and whitespace does not touch
   the verdict. A node disabled by the person is not enabled by an edit (P9).
 - **A folder member and a standalone server** — transactionally: text
   without a node is not written, the record stays as it was (P10).
-- **Comments** `//` and `/* */` are stripped before parsing; a custom body
+- **Comments** `//`, `/* */` and `#` (to the end of the line, outside strings)
+  are stripped before parsing; a custom body
   type unknown to the application is accepted with a warning; a body without
   `type` — refusal (P12).
+- **Auto node of a folder.** Source is the stored record `kind: auto`
+  (formatted JSON: `tag`, `enabled`, `group`). Save parses it and writes
+  the group the same way as the group editor. Not JSON, not an object,
+  `kind` other than `auto` or unknown keys — refusal naming the key path;
+  the record and the text in the editor stay as they were.
 - After writing, the screen re-reads the node: Source — the written text,
   JSON — the new body, notifications — fresh.
 
@@ -107,3 +125,4 @@ answer.
 | 9 | [478F](../../../tasks/478F-core-rejected-node-auto-disable/spec.md) | Released in v2.25.0 | Editing the body clears the core's verdict |
 | 10 | [237](../../../tasks/237-folder-member-node-settings.md) | Implemented | Editing a folder member is transactional |
 | 11 | [603](../../../tasks/603-subscription-and-own-server-bugs.md) | Implemented | A standalone server does not save a source without a node |
+| 12 | [686](../../../tasks/686-folder-auto-node-source-tab.md) | In progress | Source of an auto node = its stored record, editable; Edit INI |

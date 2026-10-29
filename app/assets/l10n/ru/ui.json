@@ -2259,6 +2259,21 @@
   "Domain resolver": {
     "value": "Резолвер домена"
   },
+  "As subscription (%s)": {
+    "value": "Как в подписке (%s)"
+  },
+  "As subscription (off)": {
+    "value": "Как в подписке (выкл.)"
+  },
+  "As subscription — every %s": {
+    "value": "Как в подписке — каждые %s"
+  },
+  "As subscription — server sets none, every %s": {
+    "value": "Как в подписке — сервер не задаёт, каждые %s"
+  },
+  "As subscription — server disables auto-update": {
+    "value": "Как в подписке — сервер отключил автообновление"
+  },
   "Don't auto-update": {
     "value": "Не обновлять автоматически"
   },
@@ -2311,6 +2326,15 @@
   },
   "Edit JSON?": {
     "value": "Править JSON?"
+  },
+  "Edit INI": {
+    "value": "Править INI"
+  },
+  "Edit INI?": {
+    "value": "Править INI?"
+  },
+  "Not in INI: %s": {
+    "value": "Нет в INI: %s"
   },
   "Edit auto node": {
     "value": "Настройка авто-узла"
@@ -3048,11 +3072,14 @@
   "JSON copied": {
     "value": "JSON скопирован"
   },
+  "INI copied": {
+    "value": "INI скопирован"
+  },
   "JSON must be an outbound object with \"type\" or a document with \"endpoints\"/\"outbounds\"": {
     "value": "JSON должен быть объектом outbound с «type» или документом с «endpoints»/«outbounds»"
   },
-  "JSON or JSON5 (// and /* */ comments)": {
-    "value": "JSON или JSON5 (комментарии // и /* */)"
+  "JSON or JSON5 (//, /* */ and # comments)": {
+    "value": "JSON или JSON5 (комментарии //, /* */ и #)"
   },
   "JSON outbound": {
     "value": "JSON outbound"
@@ -3341,12 +3368,6 @@
   },
   "Never": {
     "value": "Никогда"
-  },
-  "Never (respect server)": {
-    "value": "Никогда (по указанию сервера)"
-  },
-  "Never (respect server) — manual only unless server sets one": {
-    "value": "Никогда (по указанию сервера) — только вручную, если сервер не задаст интервал"
   },
   "Never sleep (recommended)": {
     "value": "Никогда не засыпать (рекомендуется)"
@@ -4684,6 +4705,9 @@
   "Share": {
     "value": "Поделиться"
   },
+  "Share .conf": {
+    "value": "Поделиться .conf"
+  },
   "Share %d events (JSON)": {
     "value": {
       "one": "Поделиться %d событием (JSON)",
@@ -4786,6 +4810,9 @@
   },
   "Source replaced with JSON": {
     "value": "Источник заменён на JSON"
+  },
+  "Source replaced with INI": {
+    "value": "Источник заменён на INI"
   },
   "Source: local file": {
     "value": "Источник: локальный файл"
@@ -5056,9 +5083,6 @@
   "Test actions": {
     "value": "Действия теста"
   },
-  "Test download/upload speed": {
-    "value": "Проверка скорости загрузки и отдачи"
-  },
   "Test servers list unavailable": {
     "value": "Список тестовых серверов недоступен"
   },
@@ -5135,6 +5159,9 @@
   },
   "The source will be replaced by this JSON and the node will go to the core as is. The app stops checking such a node: only the core validates it on save, and a mistake can leave it unable to connect. There is no way back to a link. Edit the source instead when you can.": {
     "value": "Источник заменится этим JSON, и узел будет уходить в ядро как есть. Приложение перестанет проверять такой узел: его проверяет только ядро при сохранении, и ошибка может оставить узел без соединения. Обратно в ссылку узел не превратится. Если можете, правьте источник."
+  },
+  "The source will be replaced by this INI. The tag and Detour stay as they are.": {
+    "value": "Источник заменится этим INI. Тег и Detour останутся прежними."
   },
   "The whole element as the provider sent it": {
     "value": "Элемент целиком, как прислал провайдер"
@@ -5958,6 +5985,9 @@
   "a folder or subscription replaced with one group": {
     "value": "папка или подписка, заменённая одной группой"
   },
+  "A ticked group joins even when the filter does not match it, and goes above the servers. Groups never join the Direction's auto group.": {
+    "value": "Отмеченная группа входит, даже если фильтр её не пропускает, и стоит выше серверов. В auto-группу Направления группы не входят."
+  },
   "A server already has this name — it will get a numeric suffix.": {
     "value": "Это имя уже носит сервер — ему добавится числовой суффикс."
   },
@@ -6412,5 +6442,245 @@
   },
   "This resolver sends queries through %s. It is used to look up server addresses while the connection is being set up, before the tunnel exists, so lookups can fail and the VPN may not connect. A direct resolver is the safest choice; for privacy pick a DoT or DoH server.": {
     "value": "Этот резолвер отправляет запросы через %s. Он ищет адреса серверов, пока соединение устанавливается и туннеля ещё нет, поэтому запросы могут не пройти и VPN может не подключиться. Надёжнее всего прямой резолвер; для приватности выберите сервер DoT или DoH."
+  },
+  "Members are resolved at build time": {
+    "value": "Состав определяется при сборке"
+  },
+  "· %s off": {
+    "value": "· %s выкл."
+  },
+  "Source is not a JSON object.": {
+    "value": "В источнике не JSON-объект."
+  },
+  "\"kind\" must be \"auto\".": {
+    "value": "Значение «kind» должно быть «auto»."
+  },
+  "Unknown keys: %s": {
+    "value": "Незнакомые ключи: %s"
+  },
+  "Enter an http or https URL": {
+    "value": "Введите адрес http или https"
+  },
+  "VPN is not running": {
+    "value": "VPN не запущен"
+  },
+  "example.com or https://…": {
+    "value": "example.com или https://…"
+  },
+  "Any app": {
+    "value": "Любое приложение"
+  },
+  "Full": {
+    "value": "Полностью"
+  },
+  "Route": {
+    "value": "Маршрут"
+  },
+  "From scratch": {
+    "value": "С нуля"
+  },
+  "Bypass DNS cache and open new connections": {
+    "value": "Мимо кэша DNS, с новыми соединениями"
+  },
+  "Start VPN to run a check": {
+    "value": "Запустите VPN, чтобы проверить"
+  },
+  "Stopped": {
+    "value": "Остановлено"
+  },
+  "Too many checks running, try again": {
+    "value": "Слишком много проверок сразу, повторите позже"
+  },
+  "Failed at %s: %s": {
+    "value": "Сбой на %s: %s"
+  },
+  "HTTP %d · %d ms": {
+    "value": "HTTP %d · %d мс"
+  },
+  "Completed · %d ms": {
+    "value": "Готово · %d мс"
+  },
+  "trace truncated": {
+    "value": "трасса обрезана"
+  },
+  "Skipped": {
+    "value": "Пропущено"
+  },
+  "Reused": {
+    "value": "Использовано готовое"
+  },
+  "Sent, not confirmed": {
+    "value": "Отправлено, без подтверждения"
+  },
+  "Not evaluated": {
+    "value": "Не вычислено"
+  },
+  "This app does not go through the VPN. The path shown is hypothetical": {
+    "value": "Это приложение не идёт через VPN. Показанный путь условный"
+  },
+  "The server address is resolved by DNS rules for this app; for another app the path may differ": {
+    "value": "Адрес сервера резолвится правилами DNS для этого приложения; у другого приложения путь может быть иным"
+  },
+  "The path depends on a server that is not on the route": {
+    "value": "Путь зависит от сервера, которого нет в маршруте"
+  },
+  "Resolve cycle: a server address is resolved through itself": {
+    "value": "Цикл резолва: адрес сервера резолвится через него же"
+  },
+  "IP rules were not evaluated: the address is unknown": {
+    "value": "Правила по IP не проверены: адрес неизвестен"
+  },
+  "Fake IP is not kept across restarts: apps with cached addresses fail after a restart": {
+    "value": "Fake IP не сохраняется между перезапусками: приложения с закэшированными адресами после перезапуска получают отказ"
+  },
+  "The fake IP pool wraps faster than the answer TTL: an old address may now belong to another domain": {
+    "value": "Пул fake IP проходит круг быстрее TTL ответа: старый адрес может уже принадлежать другому домену"
+  },
+  "The address is in the fake IP range but has no record": {
+    "value": "Адрес из диапазона fake IP, но записи о нём нет"
+  },
+  "The address now belongs to another domain": {
+    "value": "Адрес сейчас принадлежит другому домену"
+  },
+  "IPv6 fake IP is returned, but the tunnel has no IPv6 address": {
+    "value": "Возвращается IPv6 fake IP, но у туннеля нет IPv6-адреса"
+  },
+  "HTTPS DNS queries are rejected: no ECH and no ALPN hints for the app": {
+    "value": "DNS-запросы HTTPS отклоняются: приложение не получит ECH и подсказки ALPN"
+  },
+  "UDP 443 is rejected: browsers fall back to TCP": {
+    "value": "UDP 443 отклоняется: браузеры переходят на TCP"
+  },
+  "The REALITY server did not recognize the client: check public key, short ID, server name": {
+    "value": "Сервер REALITY не узнал клиента: проверьте public key, short ID, имя сервера"
+  },
+  "The connection broke after an unconfirmed step: wrong UUID or password, the server cannot reach the target, or large packets are lost": {
+    "value": "Соединение оборвалось после неподтверждённого шага: неверный UUID или пароль, сервер не достучался до цели или теряются большие пакеты"
+  },
+  "Some steps were reused: this does not prove the path comes up from scratch": {
+    "value": "Часть шагов взята готовой: это не доказывает, что путь поднимается с нуля"
+  },
+  "URL Check": {
+    "value": "Проверка URL"
+  },
+  "URL check and speed test": {
+    "value": "Проверка URL и скорости"
+  },
+  "No records": {
+    "value": "Записей нет"
+  },
+  "Authority": {
+    "value": "Authority"
+  },
+  "Not run": {
+    "value": "Не выполнялся"
+  },
+  "Not run: %s failed": {
+    "value": "Не выполнялся: сбой на %s"
+  },
+  "Reused: an open connection or a cached answer": {
+    "value": "Повторно: открытое соединение или ответ из кэша"
+  },
+  "Sent; the protocol gives no confirmation": {
+    "value": "Отправлено; протокол не даёт подтверждения"
+  },
+  "From the network": {
+    "value": "Из сети"
+  },
+  "From cache": {
+    "value": "Из кэша"
+  },
+  "expired, refreshing": {
+    "value": "просрочен, обновляется"
+  },
+  "Local answer: fake IP or hosts": {
+    "value": "Локальный ответ: fake IP или hosts"
+  },
+  "DNS query the app makes for the site": {
+    "value": "DNS-запрос приложения к адресу сайта"
+  },
+  "Routing rule match: which outbound takes the connection": {
+    "value": "Выбор правила маршрута: какой outbound берёт соединение"
+  },
+  "Node selection inside a group": {
+    "value": "Выбор узла в группе"
+  },
+  "Chain unfolded into its nodes": {
+    "value": "Цепочка, развёрнутая в узлы"
+  },
+  "Connection through a node": {
+    "value": "Соединение через узел"
+  },
+  "Hand-off to the detour that carries this node": {
+    "value": "Передача в detour, через который идёт этот узел"
+  },
+  "Resolving the server address of a node or DNS server": {
+    "value": "Резолв адреса сервера узла или DNS-сервера"
+  },
+  "Query to a DNS server": {
+    "value": "Запрос к DNS-серверу"
+  },
+  "Waking an endpoint that was idle-suspended": {
+    "value": "Пробуждение endpoint, усыплённого по простою"
+  },
+  "TCP connection to the server": {
+    "value": "TCP-соединение с сервером"
+  },
+  "QUIC connection to the server": {
+    "value": "QUIC-соединение с сервером"
+  },
+  "TLS handshake with the server": {
+    "value": "TLS-рукопожатие с сервером"
+  },
+  "REALITY check: did the server recognize the client": {
+    "value": "Проверка REALITY: узнал ли сервер клиента"
+  },
+  "Transport over TLS: WS, gRPC, XHTTP, HTTPUpgrade or H2": {
+    "value": "Транспорт поверх TLS: WS, gRPC, XHTTP, HTTPUpgrade или H2"
+  },
+  "Authentication: the server confirms the credentials": {
+    "value": "Аутентификация: сервер подтверждает учётные данные"
+  },
+  "WireGuard handshake with the peer": {
+    "value": "Рукопожатие WireGuard с пиром"
+  },
+  "Protocol header to the server; this protocol sends no confirmation": {
+    "value": "Заголовок протокола серверу; этот протокол не присылает подтверждения"
+  },
+  "TLS with the site itself, through the tunnel": {
+    "value": "TLS с самим сайтом через туннель"
+  },
+  "First bytes of the site's response": {
+    "value": "Первые байты ответа сайта"
+  },
+  "HTTP response of the site": {
+    "value": "HTTP-ответ сайта"
+  },
+  "From cache, %s old": {
+    "value": "Из кэша, возраст %s"
+  },
+  "UDP socket to the server; UDP has no handshake to confirm": {
+    "value": "UDP-сокет к серверу; у UDP нет рукопожатия, подтверждать нечего"
+  },
+  "No records: the core answered without asking a DNS server (a rule or the domain strategy)": {
+    "value": "Записей нет: ядро ответило, не спрашивая DNS-сервер (правило или стратегия домена)"
+  },
+  "No HTTP response · %d ms": {
+    "value": "Нет HTTP-ответа · %d мс"
+  },
+  "Connection to the DNS server, already open: idle in the pool or opened by a parallel query": {
+    "value": "Соединение с DNS-сервером, уже открытое: из пула или открытое параллельным запросом"
+  },
+  "Cut short: a parallel attempt answered first": {
+    "value": "Прервано: параллельная попытка ответила раньше"
+  },
+  "Lost the race: %s answered first": {
+    "value": "Проиграл гонку: %s ответил раньше"
+  },
+  "Query to one server of a DNS group": {
+    "value": "Запрос к одному серверу DNS-группы"
+  },
+  "One per line, or pick from the list": {
+    "value": "По одному на строку или выберите из списка"
   }
 }

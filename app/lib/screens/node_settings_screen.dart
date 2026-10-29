@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../services/tag_resolver.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/codec/source_record.dart';
@@ -30,8 +33,11 @@ import '../services/tailscale_network.dart';
 import '../services/l10n/locale_controller.dart';
 import '../services/warp/warp_endpoint_picker.dart';
 import '../services/wireguard/masquerade_source.dart';
+import '../services/wireguard/wg_ini_export.dart';
 import '../widgets/masquerade_fields.dart';
 import '../widgets/tls_policy_tiles.dart';
+import '../widgets/auto_group_form.dart';
+import 'node_settings/auto_group_source.dart';
 import 'node_settings/node_document.dart';
 import 'subscriptions_screen/entry_warnings.dart';
 
@@ -40,7 +46,8 @@ import 'subscriptions_screen/entry_warnings.dart';
 /// **Source** (§455 — `origin.raw` записи как есть, единственное место
 /// правки; Save в AppBar сохраняет его), **JSON** (только чтение: то, что
 /// уйдёт в ядро; кнопка Edit после предупреждения заменяет источник этим
-/// JSON и уводит в Source) и **Diagnostics** (§392). Ручная ⚙-detour-пометка
+/// JSON и уводит в Source), у WireGuard/AmneziaWG — **INI** (§686 п. 9: узел
+/// в виде `.conf`, Edit INI заменяет им источник) и **Diagnostics** (§392). Ручная ⚙-detour-пометка
 /// убрана — detour структурный (§091/G2a), ⚙ остаётся как обычный эмодзи.
 ///
 /// §455 — узел, чей источник JSON (`origin.kind: json`), уходит в конфиг
@@ -72,8 +79,8 @@ class NodeSettingsScreen extends StatefulWidget {
   final int initialTab;
 
   /// Индекс вкладки Diagnostics: Settings, Source, JSON, Diagnostics. У узла
-  /// Tailscale перед Diagnostics стоит Network (§581) — экран сдвигает индекс
-  /// сам.
+  /// Tailscale перед Diagnostics стоит Network (§581), у WireGuard/AmneziaWG
+  /// — INI (§686 п. 9): экран сдвигает индекс сам.
   static const diagnosticsTabIndex = 3;
 
   @override
@@ -129,6 +136,13 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
   /// §581 — узел Tailscale: есть вкладка Network.
   bool _isTailscale = false;
 
+  /// §686 п. 9 — узел WireGuard/AmneziaWG: есть вкладка INI.
+  bool _isWireguard = false;
+
+  /// §686 п. 9 — `.conf` вкладки INI: обратный ход таблицы `conf` реестра
+  /// по телу вкладки JSON; `lost` — ключи тела, которых в `.conf` нет.
+  IniEmitResult? _ini;
+
   /// §623 — пул доменов маскировки (тот же, что у визарда WARP) для поля
   /// домена секции Masquerade узла WireGuard/AmneziaWG.
   WarpEndpointPicker? _picker;
@@ -143,10 +157,12 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     final first = _member?.node ??
         (widget.entry.list.nodes.isEmpty ? null : widget.entry.list.nodes.first);
     _isTailscale = first is TailscaleSpec;
-    final count = _isTailscale ? 5 : 4;
+    // §686 п. 9 — у WireGuard/AmneziaWG вкладка INI после JSON.
+    _isWireguard = first is WireguardSpec;
+    final count = 4 + (_isTailscale ? 1 : 0) + (_isWireguard ? 1 : 0);
     var initial = widget.initialTab.clamp(0, 3);
-    if (_isTailscale && initial == NodeSettingsScreen.diagnosticsTabIndex) {
-      initial = 4;
+    if (initial == NodeSettingsScreen.diagnosticsTabIndex) {
+      initial = count - 1;
     }
     _tabs = TabController(length: count, vsync: this, initialIndex: initial);
     unawaited(_load());
@@ -164,7 +180,14 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
   /// §455 — текст источника записи: raw члена папки или `rawBody` одиночного.
   String get _containerRaw {
     final member = _member;
-    if (member != null) return member.raw;
+    // §686 — у auto-узла текста нет: источник — его запись `kind: auto`.
+    if (member != null) {
+      final group = _autoGroup;
+      if (group != null) {
+        return autoGroupSourceText(member, group, _folderId);
+      }
+      return member.raw;
+    }
     final list = widget.entry.list;
     return list is UserServer ? list.rawBody : '';
   }
@@ -178,6 +201,22 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     if (mi < 0 || mi >= list.members.length) return null;
     return list.members[mi];
   }
+
+  /// §686 — группа auto-узла папки (член `kind: auto`); `null` — иной узел.
+  /// Решает тип узла, а не экран, откуда открыли карточку.
+  AutoSelectSpec? get _autoGroup {
+    final n = _member?.node;
+    return n is AutoSelectSpec ? n : null;
+  }
+
+  String get _folderId {
+    final list = widget.entry.list;
+    return list is FolderServers ? list.id : '';
+  }
+
+  /// §686 — последняя группа, разобранная из Source: пока текст не объект,
+  /// форма показывает её неактивной.
+  AutoSelectSpec? _autoLastGroup;
 
   Future<void> _load() async {
     // v2: одиночный — узел уже распарсен в entry.list.nodes.first;
@@ -228,10 +267,18 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     final raw = _containerRaw;
     _sourceCtrl.text = raw;
     _originKind = originKindOf(raw);
-    _jsonCtrl.text = const JsonEncoder.withIndent('  ').convert(
-        sourceIsSingbox(raw) && node.rawSource.trimLeft().startsWith('{')
+    final Object? preview = node is AutoSelectSpec && member != null
+        ? autoGroupJsonPreview(node) // §686
+        : sourceIsSingbox(raw) && node.rawSource.trimLeft().startsWith('{')
             ? jsonDecode(node.rawSource)
-            : node.emit(TemplateVars.empty).map);
+            : node.emit(TemplateVars.empty).map;
+    _jsonCtrl.text = const JsonEncoder.withIndent('  ').convert(preview);
+    // §686 п. 9 — `.conf` из того же тела, что показывает вкладка JSON: у
+    // тела sing-box JSON ключи вне таблицы переноса уходят в «Not in INI».
+    _ini = node is WireguardSpec && preview is Map
+        ? wireguardIniOf(Map<String, dynamic>.from(preview))
+        : null;
+    _autoLastGroup = null;
     _tagCtrl.text = _originalTag;
 
     // Detour: одиночный — `entry.detourPolicy.overrideDetour`; §237 член —
@@ -425,6 +472,33 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
                 : getLocalText.s("Saved"));
   }
 
+  /// §686 — Save вкладки Source auto-узла: запись разбирается строго и
+  /// пишется тем же путём, что Save редактора группы (`updateAutoMemberAt`).
+  /// Отказ — сообщение, запись и текст в редакторе не меняются.
+  Future<bool> _saveAutoSource() async {
+    final group = _autoGroup;
+    final mi = widget.memberIndex;
+    if (group == null || mi == null) return false;
+    final parsed = parseAutoGroupSource(_sourceCtrl.text, _folderId, group);
+    if (parsed is AutoGroupSourceRejected) {
+      _snack(parsed.message);
+      return false;
+    }
+    final ready = parsed as AutoGroupSourceReady;
+    final err = await widget.subController.updateAutoMemberAt(
+        widget.index, mi, ready.group,
+        enabled: ready.enabled);
+    if (!mounted) return err == null;
+    if (err != null) {
+      _snack(err.render());
+      return false;
+    }
+    await _load();
+    if (!mounted) return true;
+    _snack(getLocalText.s("Saved"));
+    return true;
+  }
+
   /// §581 — Save choice вкладки Network: `exit_node` = [value] (`null` —
   /// поле убирается) в теле узла, дальше тем же путём, что Save вкладки
   /// Source (тег из поля Tag, проверка ядром, запись, пересборка).
@@ -567,6 +641,64 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     _tabs.animateTo(_kSourceTab);
   }
 
+  /// §686 п. 9 — кнопка Edit INI на вкладке INI. У INI-источника менять
+  /// нечего — переход в Source. Иначе предупреждение (с ключами, которых в
+  /// `.conf` нет), источник заменяется текстом вкладки и экран уводит в
+  /// Source. Тег и Detour — поля записи, замена их не трогает.
+  Future<void> _editIni() async {
+    if (_originKind == 'wg_ini') {
+      _tabs.animateTo(_kSourceTab);
+      return;
+    }
+    final ini = _ini;
+    if (ini == null) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(getLocalText.s("Edit INI?")),
+        content: Text([
+          getLocalText.s(
+              "The source will be replaced by this INI. The tag and Detour stay as they are."),
+          if (ini.lost.isNotEmpty)
+            getLocalText.s("Not in INI: %s", ini.lost.join(', ')),
+        ].join('\n\n')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(getLocalText.s("Cancel")),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(getLocalText.s("Continue")),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final stored = await _store(ini.text,
+        nameHint: _originalTag,
+        savedMessage: () => getLocalText.s("Source replaced with INI"));
+    if (!stored || !mounted) return;
+    _tabs.animateTo(_kSourceTab);
+  }
+
+  /// §686 п. 9 — Share `.conf`: файл во временном каталоге, имя от тега.
+  Future<void> _shareIni() async {
+    final ini = _ini;
+    if (ini == null) return;
+    final name = wireguardIniFileName(_originalTag);
+    try {
+      final dir = await getTemporaryDirectory();
+      final path = '${dir.path}/$name';
+      await File(path).writeAsString(ini.text);
+      await SharePlus.instance.share(ShareParams(
+        files: [XFile(path, mimeType: 'text/plain', name: name)],
+      ));
+    } catch (e) {
+      _snack(formatUserError(e).render());
+    }
+  }
+
   void _snack(String text) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
@@ -587,7 +719,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     if (_saving) return false;
     _saving = true;
     try {
-      return await _saveSource();
+      return await (_autoGroup != null ? _saveAutoSource() : _saveSource());
     } finally {
       _saving = false;
     }
@@ -641,6 +773,8 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
               Tab(text: getLocalText.s("Source")),
               // l10n-exempt: format name, locale-invariant
               const Tab(text: 'JSON'),
+              // l10n-exempt: format name, locale-invariant
+              if (_isWireguard) const Tab(text: 'INI'),
               if (_isTailscale) Tab(text: getLocalText.s("Network")),
               NodeDiagnosticsTabLabel(warnings: _notifications),
             ],
@@ -654,6 +788,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
                   _buildSettingsTab(theme),
                   _buildSourceTab(theme),
                   _buildJsonTab(theme),
+                  if (_isWireguard) _buildIniTab(theme),
                   if (_isTailscale)
                     TailscaleNetworkTab(
                       liveTag: TagResolver.displayTag(
@@ -680,6 +815,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
   }
 
   Widget _buildSettingsTab(ThemeData theme) {
+    if (_autoGroup != null) return _buildAutoGroupSettingsTab(theme);
     return ListView(
       padding:
           EdgeInsets.fromLTRB(16, 16, 16, MediaQuery.of(context).padding.bottom + 24),
@@ -915,6 +1051,67 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     setState(() {});
   }
 
+  /// §686 — Settings auto-узла: форма группы (общая с экраном создания).
+  /// Источник истины — текст Source, как у формы OpenConnect: правка формы
+  /// переписывает `tag` и `group` записи, правка текста руками доходит до
+  /// формы; текст не объект — форма неактивна. Сохранение — Save экрана.
+  /// Info, Masquerade, Detour и TLS у группы нет.
+  Widget _buildAutoGroupSettingsTab(ThemeData theme) {
+    final list = widget.entry.list;
+    final candidates = list is FolderServers
+        ? autoPoolCandidates(list)
+        : const <AutoPoolCandidate>[];
+    return ListView(
+      padding: EdgeInsets.fromLTRB(
+          16, 16, 16, MediaQuery.of(context).padding.bottom + 24),
+      children: [
+        ListenableBuilder(
+          listenable: _sourceCtrl,
+          builder: (context, _) {
+            final member = _member;
+            final current = _autoGroup;
+            if (member == null || current == null) {
+              return const SizedBox.shrink();
+            }
+            final parsed =
+                autoGroupFromSourceText(_sourceCtrl.text, _folderId, current);
+            if (parsed != null) _autoLastGroup = parsed;
+            final shown = parsed ?? _autoLastGroup ?? current;
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (parsed == null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(
+                        getLocalText.s(
+                            "The form is off: Source is not a valid JSON object."),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant),
+                      ),
+                    ),
+                  AutoGroupForm(
+                    key: const ValueKey('node-auto-group-form'),
+                    value: shown,
+                    candidates: candidates,
+                    enabled: parsed != null,
+                    onChanged: (g) {
+                      final next = autoGroupSourceWith(
+                          _sourceCtrl.text, member, g, _folderId);
+                      if (next != _sourceCtrl.text) _sourceCtrl.text = next;
+                    },
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
   /// §654 B2 — форма OpenConnect над редактором Source (общий виджет с Add
   /// server). Источник истины — текст `_sourceCtrl`, как у секции Masquerade:
   /// правка поля переписывает текст (формат и порядок ключей прежние), правка
@@ -954,6 +1151,8 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
 
   /// §455 — вкладка Source: `origin.raw` как есть, единственное место правки.
   Widget _buildSourceTab(ThemeData theme) {
+    // §686 — у auto-узла источник — запись группы, подписи вида нет.
+    final isAuto = _autoGroup != null;
     final kindNote = switch (_originKind) {
       'json' => getLocalText.s(
           "sing-box JSON: sent to the core as is. The core checks it on save."),
@@ -984,11 +1183,13 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
               controller: _sourceCtrl,
               minLines: 12,
               language: detectCodeLanguage(_sourceCtrl.text),
-              header: Text(
-                kindNote,
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-              ),
+              header: isAuto
+                  ? null
+                  : Text(
+                      kindNote,
+                      style: theme.textTheme.bodySmall
+                          ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                    ),
             ),
           ),
         ),
@@ -1027,6 +1228,9 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
             ],
           ),
         ),
+        // §686 — у группы нет тела узла, которое можно отдать ядру
+        // дословно: правят форму или Source.
+        if (_autoGroup == null)
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           child: Align(
@@ -1035,6 +1239,67 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
               icon: const Icon(Icons.edit_outlined, size: 18),
               label: Text(getLocalText.s("Edit JSON")),
               onPressed: () => unawaited(_editJson()),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// §686 п. 9 — вкладка INI: только чтение — узел в виде `.conf`. Copy и
+  /// Share `.conf` — в строке кнопок над рамкой, как Copy у JSON; под текстом
+  /// — ключи тела, которых в `.conf` нет, и кнопка Edit INI ([_editIni]).
+  Widget _buildIniTab(ThemeData theme) {
+    final ini = _ini;
+    final lost = ini?.lost ?? const <String>[];
+    return ListView(
+      padding:
+          EdgeInsets.fromLTRB(16, 16, 16, MediaQuery.of(context).padding.bottom + 24),
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: LxJsonView(
+            text: ini?.text ?? '',
+            height: 420,
+            language: LxCodeLanguage.ini,
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.copy, size: 16),
+                tooltip: getLocalText.s("Copy"),
+                visualDensity: VisualDensity.compact,
+                onPressed: ini == null
+                    ? null
+                    : () {
+                        Clipboard.setData(ClipboardData(text: ini.text));
+                        _snack(getLocalText.s("INI copied"));
+                      },
+              ),
+              IconButton(
+                icon: const Icon(Icons.share, size: 16),
+                tooltip: getLocalText.s("Share .conf"),
+                visualDensity: VisualDensity.compact,
+                onPressed: ini == null ? null : () => unawaited(_shareIni()),
+              ),
+            ],
+          ),
+        ),
+        if (lost.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: Text(
+              getLocalText.s("Not in INI: %s", lost.join(', ')),
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+          ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              icon: const Icon(Icons.edit_outlined, size: 18),
+              label: Text(getLocalText.s("Edit INI")),
+              onPressed: ini == null ? null : () => unawaited(_editIni()),
             ),
           ),
         ),
