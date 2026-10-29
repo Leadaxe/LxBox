@@ -150,14 +150,27 @@
   заменён пунктом **Diagnostics** с вкладками URL Check и Speed Test. Speed
   Test работает как раньше; идущий замер не прерывается при переключении
   вкладок. Ссылки поддержки на Speed Test открывают ту же вкладку.)
-- **Core `v1.14.3-lx.23` → `v1.14.4-lx.24`
-  ([docs/KERNEL.md](docs/KERNEL.md)).** Adds the active connection test
+- **Core `v1.14.3-lx.23` → `v1.14.4-lx.25`
+  ([docs/KERNEL.md](docs/KERNEL.md)).** lx.25: XHTTP `packet-up` uploads
+  (and `auto` without REALITY) are batched and no longer wait for each
+  POST's reply, so single-stream upload speed is no longer capped by the
+  round trip (Leadaxe/sing-box-lx#58); six smaller XHTTP fixes against Xray,
+  among them a `stream-up` write that could hang after the server refused
+  the upload; URL Check shows every server a DNS group asked, and a server
+  that lost the race is skipped with the winner named instead of a failed
+  DoT/DoH. lx.24: adds the active connection test
   behind URL Check (Leadaxe/sing-box-lx#59): the stage tree, the DNS answer
   record by record, findings, a redirect reported as the answer. Moves to the
   upstream sing-box 1.14.4 base (group, WireGuard sleep and flow close
   fixes); Auto (`urltest`) groups still pick a node per connection. Fixes a
   data race in the Auto group's selection. No config changes.
-  (RU: Ядро `v1.14.3-lx.23` → `v1.14.4-lx.24`: активная проверка соединения
+  (RU: Ядро `v1.14.3-lx.23` → `v1.14.4-lx.25`. lx.25: выгрузка XHTTP
+  `packet-up` (и `auto` без REALITY) склеивается и не ждёт ответа на каждый
+  POST — скорость выгрузки одного потока больше не упирается в круговой
+  путь; шесть мелких правок XHTTP против Xray, среди них запись `stream-up`,
+  которая могла зависнуть после отказа сервера; URL Check показывает каждый
+  сервер, которого спросила DNS-группа, проигравший гонку — пропущен с
+  именем победителя, а не сломанный DoT/DoH. lx.24: активная проверка соединения
   для URL Check (дерево стадий, ответ DNS по записям, находки, редирект как
   ответ). База — апстримный sing-box 1.14.4 (исправления групп, сна
   WireGuard и закрытия потоков); группы Auto (`urltest`) по-прежнему выбирают

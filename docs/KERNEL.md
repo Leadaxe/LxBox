@@ -34,7 +34,7 @@ milliseconds. `startTailscaleSSHSession` is not used.
 | Called from | `scripts/build-local-apk.sh` and CI (`ci.yml` → the android job → “Fetch sing-box-lx core”) |
 | The AAR in git | NO (~110 MB as of lx.25; `app/android/app/libs/` is in `.gitignore`); `build.gradle.kts` → `implementation(files("libs/libbox.aar"))` |
 
-**The current pin: `v1.14.4-lx.24`** (see `app/android/libbox.version`) — lx.1
+**The current pin: `v1.14.4-lx.25`** (see `app/android/libbox.version`) — lx.1
 plus XHTTP HTTP-version parity (**SPEC 104**, lx.2), Vision on top of VLESS
 Encryption (**SPEC 105**, lx.3), the runtime WG/AWG endpoint toggle
 (**SPEC 106**, lx.4: `CommandClient.setEndpointEnabled`, `endpointState =
@@ -234,6 +234,29 @@ classes). Build tags unchanged (`build_libbox/main.go` identical to rc.2),
 `kCoreBuildTagsPin` moved with the pin. `strings -a` of `libbox.so` reports
 `1.14.4-lx.24`. AAR sha256
 `ad32839dd5ffd52ccb2cfa7ce76fe20a29995ecac1bb7ba0f23845968109634c`
+(checked against the release `SHA256SUMS`).
+
+**`v1.14.4-lx.25`** — the same base, three changes. **SPEC 141**
+(issue #58): XHTTP `packet-up` (and `auto` without REALITY, which resolves to
+it) no longer waits for each POST's reply before the next write; writes are
+batched up to `sc_max_each_post_bytes`, at most 16 POSTs outstanding per
+stream, a failed POST fails the stream at once, the per-POST timeout grows
+with its size. **SPEC 142**: six XHTTP gaps against Xray — a `stream-up`
+write no longer hangs after the server refused the upload, the trailing
+slash on `path` follows Xray's rule when the session or packet number lives
+in the path, idle HTTP/2 connections close after 300 s, `h_keep_alive_period`
+unset means 45 s pings (negative still turns them off), Chrome fetch()
+default headers when `headers` has no `User-Agent` (no `Content-Type` on
+`packet-up` uploads), `%` in `path` is literal. **SPEC 139**: every member a
+DNS group asks gets a `dns_member` stage (subject = tag, `type`,
+`outbound`; its detour/TCP/TLS stages sit under it); a member that ended
+after the winner answered, and its cut-short `tls`/`dns` stages, are
+`SKIPPED` with `lost_race` → the winner's `dns_member` (URL Check already
+renders both since task 687's follow-up `0f130376`). `javap` over the full
+`classes.jar` identical to lx.24, build tags identical (the `-tags=` line of
+`libbox.so` is the same), `kCoreBuildTagsPin` moved with the pin. `strings`
+of `libbox.so` reports `1.14.4-lx.25`. AAR sha256
+`442b4830ea01966dc47a35735633fd7925eb46866eaa94a82788a130ef1719d4`
 (checked against the release `SHA256SUMS`).
 
 **`v1.14.3-lx.24-rc.1`** — one change that reaches the app: **SPEC 139**
@@ -1258,7 +1281,8 @@ subscription), the core provides insurance in case the client misses something.
 
 | rc | What was added |
 |---|---|
-| **v1.14.4-lx.24** (current pin) | Stable SPEC 139 (connection test) on the upstream v1.14.4 base (SPEC 140, Go 1.26.10). After rc.2: findings, stages `connection`/`reality`/`wake`/`wg_handshake`/`quic`/`auth`, a 3xx is the answer with `location`, DoH/DoH3 one-off under `fresh`. Java surface: `PlatformInterface.useProcFS()` removed, static `Libbox.findConnectionOwner` added (procfs; called below Android 10). AAR sha256 `ad32839dd5ffd52ccb2cfa7ce76fe20a29995ecac1bb7ba0f23845968109634c`. |
+| **v1.14.4-lx.25** (current pin) | XHTTP `packet-up` uploads batched and pipelined, no longer one write per round trip (SPEC 141, issue #58); six XHTTP gaps against Xray closed (SPEC 142: `stream-up` hang on a refused upload, trailing slash, HTTP/2 idle close and 45 s pings, Chrome default headers, literal `%`); connection test: `dns_member` stage per DNS group member, losers `SKIPPED` with `lost_race` (SPEC 139). `javap` identical to lx.24. AAR sha256 `442b4830ea01966dc47a35735633fd7925eb46866eaa94a82788a130ef1719d4`. |
+| **v1.14.4-lx.24** | Stable SPEC 139 (connection test) on the upstream v1.14.4 base (SPEC 140, Go 1.26.10). After rc.2: findings, stages `connection`/`reality`/`wake`/`wg_handshake`/`quic`/`auth`, a 3xx is the answer with `location`, DoH/DoH3 one-off under `fresh`. Java surface: `PlatformInterface.useProcFS()` removed, static `Libbox.findConnectionOwner` added (procfs; called below Android 10). AAR sha256 `ad32839dd5ffd52ccb2cfa7ce76fe20a29995ecac1bb7ba0f23845968109634c`. |
 | **v1.14.3-lx.24-rc.2** | SPEC 139 release 2 — `app_dns` answer records (`answer` per record with TTL, `authority` on NXDOMAIN/NODATA, `source` network/cache/local with `cache_age`/`stale`), `cache_age` on cached `dns` stages; URL Check renders them (task 688). Attributes only: `javap` identical to rc.1. AAR sha256 `bc4a2c6db3db1040c1283bb82c017259e947fb9d0c788ab082bfd568d9f4ef73`. |
 | **v1.14.3-lx.24-rc.1** | SPEC 139 release 1 — `CommandClient.startConnectionTest`: active connection test with a streamed stage tree (Diagnostics → URL Check, task 687); `urltest` `selectedOutbound` race hotfix. Base v1.14.3, upstream drift deferred. No new config keys. Java surface additive: 258 → 270 classes. AAR sha256 `6d422f54170ec7635096262e8ac73652fcf48521ec83c55bf79caaa418a48bc2`. |
 | **v1.14.3-lx.23** | lx.22: SPEC 136 — start no longer waits 10–16 s for an unrelated mux handshake; SPEC 137 — masque `vhttp: auto` no longer pins the previous core instance after each reload. lx.23: SPEC 030 — fast stop with many WG/AWG endpoints again (the shutdown pre-pass was dead since `v1.14.0-lx.37`; main hypothesis of task 668), plus a 20 s close watchdog that dumps goroutines to the core log; SPEC 138 — `round_robin` skips a slot whose node failed its last probe. No new config keys. Java surface identical to lx.21. AAR sha256 `d7be8b1297f68ad8bad47e5eb766f59501100b1e9377de403d9c53cd364ecef1`. |
