@@ -8,6 +8,31 @@
 
 ## [Unreleased]
 
+### Added
+
+- **The app picker shows each app's UID and warns about shared UIDs
+  ([task 693](docs/spec/tasks/693-app-picker-shared-uid-hint.md),
+  [#180](https://github.com/Leadaxe/LxBox/issues/180)).** Android lets
+  several packages share one UID (on Samsung, Find My Mobile, Software
+  update, Key Chain and dozens more live under UID 1000), and both the core
+  and the system's per-app VPN tell apps apart by UID, not by package. A
+  rule or a Tunnel apps entry for one package therefore covers the whole
+  group. Rows in the app picker and in the Tunnel apps list now read
+  «package · UID n»; when the UID is shared, a line «Shared with N other
+  apps — they are routed together» opens the list of those apps. Rules and
+  Tunnel apps work as before, and the other apps of the group are not
+  selected automatically.
+  (RU: Пикер приложений показывает UID и предупреждает об общем UID.
+  Android разрешает нескольким пакетам делить один UID (на Samsung под UID
+  1000 живут Find My Mobile, Software update, Key Chain и ещё десятки), а
+  ядро и системный per-app VPN различают приложения по UID, не по пакету.
+  Поэтому правило или запись Tunnel apps на один пакет действует на всю
+  группу. Строки пикера и списка Tunnel apps теперь показывают «пакет · UID
+  n»; если UID общий, строка «Shared with N other apps — they are routed
+  together» открывает список этих приложений. Правила и Tunnel apps
+  работают как раньше, остальные приложения группы автоматически не
+  выбираются.)
+
 ## [2.25.18] — 2026-10-29
 
 ### Fixed

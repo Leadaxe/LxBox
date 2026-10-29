@@ -22,6 +22,7 @@ import 'app_picker_screen.dart';
 import 'lazy_persist_mixin.dart';
 import 'settings_screen.dart';
 import '../services/l10n/locale_controller.dart';
+import '../widgets/app_uid_subtitle.dart';
 
 class TunAppsTab extends StatefulWidget {
   const TunAppsTab({
@@ -67,6 +68,8 @@ class _TunAppsTabState extends State<TunAppsTab>
     for (final pkg in cfg.packages) {
       AppInfoCache.ensure(pkg);
     }
+    // Подсказка об общем UID считается по полному списку приложений.
+    if (cfg.packages.isNotEmpty) unawaited(AppInfoCache.loadAllApps());
   }
 
   /// §107: staging — `_cfg` в `_cache` на каждую мутацию; дисковый flush —
@@ -347,8 +350,10 @@ class _TunAppsTabState extends State<TunAppsTab>
           color: uninstalled ? cs.onSurfaceVariant : null,
         ),
       ),
-      subtitle: Text(
-        uninstalled ? getLocalText.s("%s — not installed; the system ignores it", pkg) : pkg,
+      subtitle: AppUidSubtitle(
+        text: uninstalled ? getLocalText.s("%s — not installed; the system ignores it", pkg) : pkg,
+        uid: uninstalled ? null : info?.uid,
+        peers: uninstalled ? const [] : AppInfoCache.uidPeers(pkg),
         style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
       ),
       trailing: IconButton(

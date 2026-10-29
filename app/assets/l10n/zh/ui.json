@@ -432,6 +432,9 @@
   "Add address": {
     "value": "添加地址"
   },
+  "Android identifies these apps by one UID. Routing rules and Tunnel apps apply to all of them at once.": {
+    "value": "Android 以同一个 UID 识别这些应用。路由规则和 Tunnel apps 会同时作用于它们全部。"
+  },
   "Answer": {
     "value": "应答"
   },
@@ -672,6 +675,11 @@
   },
   "Resolve before routing": {
     "value": "路由前解析"
+  },
+  "Shared with %d other apps — they are routed together": {
+    "value": {
+      "other": "与另外 %d 个应用共用 UID — 它们一起被路由"
+    }
   },
   "Used when the rule resolves before routing.": {
     "value": "在规则于路由前解析时生效。"
@@ -3171,8 +3179,23 @@
   "No Tailscale nodes yet — add one on the Servers screen first": {
     "value": "还没有 Tailscale 节点——请先在「服务器」页添加一个"
   },
-  "No Wi-Fi conditions — rule is active on every network.": {
-    "value": "没有 Wi-Fi 条件——规则在所有网络都生效。"
+  "No SSID filter — rule is active on any Wi-Fi network.": {
+    "value": "没有 SSID 过滤——规则在任何 Wi-Fi 网络都生效。"
+  },
+  "Any": {
+    "value": "任意"
+  },
+  "Cellular": {
+    "value": "移动网络"
+  },
+  "Metered networks only": {
+    "value": "仅限计费网络"
+  },
+  "Mobile data and Wi-Fi marked as metered in Android settings": {
+    "value": "移动数据，以及在 Android 设置中标记为计费的 Wi-Fi"
+  },
+  "metered": {
+    "value": "计费"
   },
   "No WireGuard/AmneziaWG config in vpn:// link": {
     "value": "vpn:// 链接里没有 WireGuard/AmneziaWG 配置"

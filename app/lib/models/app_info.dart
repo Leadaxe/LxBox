@@ -12,6 +12,7 @@ class AppInfo {
     required this.packageName,
     required this.appName,
     required this.isSystem,
+    this.uid,
     this.icon,
   });
 
@@ -25,6 +26,12 @@ class AppInfo {
 
   /// `true` для system apps (установлены OEM'ом, обычно скрыты по default).
   final bool isSystem;
+
+  /// Linux UID (`ApplicationInfo.uid`). Несколько пакетов могут делить один
+  /// UID (`sharedUserId`) — ядро и VpnService различают приложения по UID,
+  /// так что выбор одного пакета действует на всю группу. `null` — native
+  /// поле не прислал.
+  final int? uid;
 
   /// PNG-иконка, decoded base64 → bytes. `null` если native не приложил
   /// (getInstalledApps lightweight-mode без иконок) или decode упал.
@@ -48,6 +55,7 @@ class AppInfo {
       packageName: pkg,
       appName: (raw['appName'] as String?) ?? pkg,
       isSystem: (raw['isSystemApp'] as bool?) ?? false,
+      uid: raw['uid'] is int ? raw['uid'] as int : null,
       icon: bytes,
     );
   }

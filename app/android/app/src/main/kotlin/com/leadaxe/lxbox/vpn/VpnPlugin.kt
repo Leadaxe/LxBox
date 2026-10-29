@@ -593,6 +593,9 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                         "packageName" to info.packageName,
                         "appName" to (pm.getApplicationLabel(info)?.toString() ?: info.packageName),
                         "isSystemApp" to isSystem,
+                        // Общий UID (sharedUserId) — ядро и VpnService
+                        // различают приложения по UID, не по пакету.
+                        "uid" to info.uid,
                     )
                 }
                 result.success(apps)
@@ -619,6 +622,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                         "packageName" to pkg,
                         "appName" to (pm.getApplicationLabel(info)?.toString() ?: pkg),
                         "isSystemApp" to isSystem,
+                        "uid" to info.uid,
                     ))
                 } catch (_: android.content.pm.PackageManager.NameNotFoundException) {
                     result.success(mapOf("notFound" to true))

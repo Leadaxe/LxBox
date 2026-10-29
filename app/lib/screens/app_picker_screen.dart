@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../models/app_info.dart';
 import '../services/app_info_cache.dart';
 import '../services/l10n/locale_controller.dart';
+import '../widgets/app_uid_subtitle.dart';
 
 /// Screen for selecting apps. Returns updated list of package names on pop.
 class AppPickerResult {
@@ -276,10 +277,12 @@ class _AppPickerScreenState extends State<AppPickerScreen> {
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(fontSize: 14),
                           ),
-                          subtitle: Text(
-                            app.packageName,
+                          subtitle: AppUidSubtitle(
+                            text: app.packageName,
+                            uid: AppInfoCache.of(app.packageName)?.uid ??
+                                app.uid,
+                            peers: AppInfoCache.uidPeers(app.packageName),
                             maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
                             style: const TextStyle(fontSize: 11),
                           ),
                           dense: true,

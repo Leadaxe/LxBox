@@ -615,6 +615,9 @@
   "Add address": {
     "value": "Добавить адрес"
   },
+  "Android identifies these apps by one UID. Routing rules and Tunnel apps apply to all of them at once.": {
+    "value": "Android различает эти приложения по одному UID. Правила маршрутизации и Tunnel apps действуют на все сразу."
+  },
   "Answer": {
     "value": "Ответ"
   },
@@ -861,6 +864,14 @@
   },
   "Resolve before routing": {
     "value": "Резолвить до маршрутизации"
+  },
+  "Shared with %d other apps — they are routed together": {
+    "value": {
+      "one": "UID общий ещё с %d приложением — маршрутизируются вместе",
+      "few": "UID общий ещё с %d приложениями — маршрутизируются вместе",
+      "many": "UID общий ещё с %d приложениями — маршрутизируются вместе",
+      "other": "UID общий ещё с %d приложениями — маршрутизируются вместе"
+    }
   },
   "Used when the rule resolves before routing.": {
     "value": "Действуют, когда правило резолвит до маршрутизации."
@@ -3417,8 +3428,23 @@
   "No Tailscale nodes yet — add one on the Servers screen first": {
     "value": "Узлов Tailscale пока нет — сначала добавьте узел на экране Servers"
   },
-  "No Wi-Fi conditions — rule is active on every network.": {
-    "value": "Условий Wi-Fi нет — правило активно в любой сети."
+  "No SSID filter — rule is active on any Wi-Fi network.": {
+    "value": "Фильтра по SSID нет — правило активно в любой сети Wi-Fi."
+  },
+  "Any": {
+    "value": "Любая"
+  },
+  "Cellular": {
+    "value": "Мобильная"
+  },
+  "Metered networks only": {
+    "value": "Только лимитные сети"
+  },
+  "Mobile data and Wi-Fi marked as metered in Android settings": {
+    "value": "Мобильные данные и Wi-Fi, отмеченные как лимитные в настройках Android"
+  },
+  "metered": {
+    "value": "лимитная"
   },
   "No WireGuard/AmneziaWG config in vpn:// link": {
     "value": "В ссылке vpn:// нет конфига WireGuard/AmneziaWG"
