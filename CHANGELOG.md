@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [2.25.18] — 2026-10-29
+
 ### Fixed
 
 - **VPN would not start after a rule made of IP ranges got a DNS option
