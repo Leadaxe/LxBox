@@ -19,10 +19,16 @@
         "type": "group",
         "servers": [
           "my-doh",
-          "google_udp"
+          "google_udp",
+          "off-dns"
         ],
         "mode": "fastest",
         "tag": "dns-group"
+      },
+      {
+        "type": "udp",
+        "server": "192.0.2.53",
+        "tag": "off-dns"
       },
       {
         "type": "local",

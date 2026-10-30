@@ -361,7 +361,9 @@ void main() {
       expect(byTag.containsKey('google_dot'), isFalse);
       expect(byTag['google_udp']!.containsKey('detour'), isFalse,
           reason: 'direct-out снимается, как раньше');
-      expect(byTag['dns-group']!['servers'], ['google_udp']);
+      // §695 правило 5 — выключенный член `off-dns` под ссылкой группы
+      // включается нормализацией при загрузке списка и остаётся в группе.
+      expect(byTag['dns-group']!['servers'], ['google_udp', 'off-dns']);
       expect(byTag['dns_shield']!['servers'], isNot(contains('google_dot')));
 
       final rules = (dns['rules'] as List).cast<Map<String, dynamic>>();
