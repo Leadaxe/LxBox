@@ -99,12 +99,132 @@ void main() {
 
   test('domain_resolver шаблонного сервера (var dom_resolver) держит цель',
       () {
-    final list = resolve([t('google_udp'), t('safe_dns_dot', enabled: false)]);
+    final list = resolve([t('google_udp'), t('safe_dns_dot')]);
     final udp = find(list, 'google_udp');
     expect(udp.locked, isTrue);
     expect(udp.lockedByLabel, 'Safe DNS (DoT)');
     // safe_dns_dot удалён → google_udp свободен.
     expect(find(resolve([t('google_udp')]), 'google_udp').locked, isFalse);
+  });
+
+  // §695 — выключенная запись никого не держит.
+  test('выключенный safe_dns_dot не держит google_udp', () {
+    final list = resolve([t('google_udp'), t('safe_dns_dot', enabled: false)]);
+    final udp = find(list, 'google_udp');
+    expect(udp.locked, isFalse);
+    expect(canDeleteDnsServer(udp), isTrue);
+  });
+
+  test('выключенная группа без пикеров не держит членов', () {
+    final list = resolve([
+      t('google_doh'),
+      t('opendns_udp'),
+      t('dns_shield', enabled: false),
+    ]);
+    for (final tag in ['google_doh', 'opendns_udp']) {
+      expect(find(list, tag).locked, isFalse, reason: tag);
+      expect(canDeleteDnsServer(find(list, tag)), isTrue, reason: tag);
+    }
+  });
+
+  test('выключенная группа под пикерами: два живых члена свободны, сама '
+      'группа держится пикерами', () {
+    final list = resolve(
+      [t('google_doh'), t('opendns_udp'), t('dns_shield', enabled: false)],
+      dnsFinal: 'dns_shield',
+      defaultResolver: 'dns_shield',
+    );
+    expect(find(list, 'google_doh').locked, isFalse);
+    expect(find(list, 'opendns_udp').locked, isFalse);
+    expect(find(list, 'dns_shield').lockedByLabel,
+        'DNS Final, Default Domain Resolver');
+  });
+
+  test('выключенная группа под пикером: последний живой член держится с '
+      'подписью «(last member)»', () {
+    // Второй член удалён из списка.
+    var list = resolve([t('google_doh'), t('dns_shield', enabled: false)],
+        dnsFinal: 'dns_shield');
+    var doh = find(list, 'google_doh');
+    expect(doh.locked, isTrue);
+    expect(doh.lockedByLabel, 'Shield DNS (last member)');
+    expect(canDeleteDnsServer(doh), isFalse);
+
+    // Второй член выключен — живой остаётся один.
+    list = resolve([
+      t('google_doh'),
+      t('opendns_udp', enabled: false),
+      t('dns_shield', enabled: false),
+    ], defaultResolver: 'dns_shield');
+    doh = find(list, 'google_doh');
+    expect(doh.lockedByLabel, 'Shield DNS (last member)');
+    expect(find(list, 'opendns_udp').locked, isFalse);
+  });
+
+  test('выключенный член с DNS-опцией правила считается живым', () {
+    final list = resolve(
+      [
+        t('google_doh'),
+        t('opendns_udp', enabled: false),
+        t('dns_shield', enabled: false),
+      ],
+      dnsFinal: 'dns_shield',
+      ruleRefsByTag: const {'opendns_udp': 'My rule'},
+    );
+    // Живых двое — «последнего» нет.
+    expect(find(list, 'google_doh').locked, isFalse);
+    expect(find(list, 'dns_shield').groupLiveMembers, 2);
+  });
+
+  test('включённая группа держит членов, в т.ч. выключенных', () {
+    final list = resolve([
+      t('google_doh', enabled: false),
+      t('opendns_udp'),
+      t('dns_shield'),
+    ]);
+    expect(find(list, 'google_doh').lockedByLabel, 'Shield DNS');
+    expect(find(list, 'opendns_udp').lockedByLabel, 'Shield DNS');
+  });
+
+  test('счётчики членов группы — по списку', () {
+    final list = resolve([
+      t('google_doh', enabled: false),
+      t('dns_shield', enabled: false),
+    ]);
+    final shield = find(list, 'dns_shield');
+    expect(shield.groupMembersInList, 1);
+    expect(shield.groupLiveMembers, 0);
+    expect(shield.enableBlockedEmptyGroup, isTrue);
+    // Член включён — группу включить можно.
+    final ok = find(
+        resolve([t('google_doh'), t('dns_shield', enabled: false)]),
+        'dns_shield');
+    expect(ok.groupLiveMembers, 1);
+    expect(ok.enableBlockedEmptyGroup, isFalse);
+    // Включённую пустую группу выключить можно.
+    expect(find(resolve([t('dns_shield')]), 'dns_shield')
+        .enableBlockedEmptyGroup, isFalse);
+  });
+
+  test('висячий domain_resolver: цели нет в списке', () {
+    final list = resolve([t('google_doh'), t('safe_dns_dot')]);
+    expect(find(list, 'safe_dns_dot').danglingResolver, 'google_udp');
+    expect(find(list, 'google_doh').danglingResolver, isEmpty);
+    final ok = resolve([t('google_udp'), t('safe_dns_dot')]);
+    expect(find(ok, 'safe_dns_dot').danglingResolver, isEmpty);
+    // inline `{server}` — так же.
+    final inline = resolve([
+      const DnsServerInline(
+        enabled: true,
+        tag: 'my-dot',
+        body: {
+          'type': 'tls',
+          'server': 'dot.example',
+          'domain_resolver': {'server': 'gone'},
+        },
+      ),
+    ]);
+    expect(inline.single.danglingResolver, 'gone');
   });
 
   test('inline domain_resolver (строка и {server}) держит цель', () {

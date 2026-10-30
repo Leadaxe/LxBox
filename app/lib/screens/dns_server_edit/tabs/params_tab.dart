@@ -20,6 +20,13 @@ import '../../../services/l10n/locale_controller.dart';
 class DnsServerParamsTab extends StatelessWidget {
   const DnsServerParamsTab({super.key, required this.onSave});
 
+  /// §695 — группа (по сохранённому состоянию), у которой в списке нет ни
+  /// одного включённого члена.
+  static bool _emptyGroup(DnsServerEditController c) {
+    final r = c.resolved;
+    return r != null && r.isGroup && r.groupLiveMembers == 0;
+  }
+
   final VoidCallback onSave;
 
   @override
@@ -106,6 +113,16 @@ class DnsServerParamsTab extends StatelessWidget {
                     c.lockedByLabel,
                   )),
                 ))
+              // §695 — выключенную группу без живых членов в списке не
+              // включаем: сборка получила бы пустую группу.
+              : !c.enabled && !c.forceIncluded && _emptyGroup(c)
+              ? (_) => ScaffoldMessenger.of(context)
+                ..hideCurrentSnackBar()
+                ..showSnackBar(SnackBar(
+                  content: Text(getLocalText.s(
+                    "No members left in the list. Enable or add a member first.",
+                  )),
+                ))
               : c.setEnabled,
         ),
         const Divider(),
@@ -117,6 +134,12 @@ class DnsServerParamsTab extends StatelessWidget {
               showSectionHeaders: false,
               outboundOptions: c.outboundOptions,
               dnsServerTags: c.dnsServerTags,
+              // §695 — висячий `domain_resolver`: пункт-призрак с пометкой.
+              notInListDnsTags: {
+                if (c.resolved?.danglingResolver case final t?
+                    when t.isNotEmpty)
+                  t,
+              },
               onChanged: c.setVarValue,
             ),
           // §117 задача 4b: структурная форма (UDP/DoT/DoH + адрес/порт/

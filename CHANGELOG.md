@@ -58,6 +58,34 @@
   живут со старым решением. Старые правила с SSID открываются и
   сохраняются без изменений.)
 
+### Fixed
+
+- **Members of a disabled DNS group could not be turned off or deleted
+  ([task 695](docs/spec/tasks/695-dns-disabled-group-holds.md),
+  [#182](https://github.com/Leadaxe/LxBox/issues/182)).** After 2.25.17
+  every member of Shield DNS stayed locked «used by Shield DNS» even with
+  Shield itself switched off. A disabled group, and a disabled server with a
+  domain resolver, no longer lock anything. One exception: when DNS Final
+  or Default Domain Resolver points to a disabled group, its last enabled
+  member stays locked as «(last member)», since the group is still built
+  and an empty group stops the core. A disabled group with no enabled
+  members left cannot be switched on. The member count of a group now
+  counts the servers that are in the list. A server whose domain resolver
+  is no longer in the list shows a warning in the list and in the editor:
+  the hostname is resolved through Default Domain Resolver.
+  (RU: Участников выключенной DNS-группы нельзя было выключить или удалить.
+  После 2.25.17 все участники Shield DNS оставались под замком «used by
+  Shield DNS», даже когда сам Shield выключен. Выключенная группа и
+  выключенный сервер с резолвером домена больше ничего не держат.
+  Исключение: если DNS Final или Default Domain Resolver указывает на
+  выключенную группу, её последний включённый участник остаётся под замком
+  с пометкой «(last member)» — группа всё равно попадает в конфиг, а пустая
+  группа останавливает ядро. Выключенную группу без включённых участников
+  включить нельзя. Счётчик участников группы считает серверы, которые есть
+  в списке. Сервер, чей резолвер домена пропал из списка, показывает
+  предупреждение в списке и в редакторе: имя резолвится через Default
+  Domain Resolver.)
+
 ## [2.25.18] — 2026-10-29
 
 ### Fixed

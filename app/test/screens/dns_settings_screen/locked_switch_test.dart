@@ -75,4 +75,72 @@ void main() {
     await tester.pump();
     expect(toggles, [false]);
   });
+
+  // §695 — выключенная группа без живых членов: тап объясняет, не включает.
+  ResolvedServer group({
+    required bool enabled,
+    int inList = 0,
+    int live = 0,
+  }) => ResolvedServer(
+    kind: ServerKind.template,
+    tag: 'dns_shield',
+    description: 'Shield DNS',
+    enabled: enabled,
+    body: const {
+      'type': 'group',
+      'tag': 'dns_shield',
+      'mode': 'fastest',
+      'servers': ['a', 'b', 'c', 'd', 'e', 'f'],
+    },
+    groupMembersInList: inList,
+    groupLiveMembers: live,
+  );
+
+  testWidgets('empty disabled group: tap shows SnackBar, no toggle', (
+    tester,
+  ) async {
+    final toggles = await pump(tester, group(enabled: false, inList: 2));
+    await tester.tap(find.byType(Switch));
+    await tester.pump();
+    expect(toggles, isEmpty);
+    expect(find.byType(SnackBar), findsOneWidget);
+  });
+
+  testWidgets('disabled group with a live member toggles', (tester) async {
+    final toggles = await pump(
+      tester,
+      group(enabled: false, inList: 2, live: 1),
+    );
+    await tester.tap(find.byType(Switch));
+    await tester.pump();
+    expect(toggles, [true]);
+    expect(find.byType(SnackBar), findsNothing);
+  });
+
+  testWidgets('group subtitle counts members present in the list', (
+    tester,
+  ) async {
+    await pump(tester, group(enabled: true, inList: 5, live: 5));
+    expect(find.textContaining('dns_shield · group · fastest · 5'),
+        findsOneWidget);
+  });
+
+  testWidgets('dangling domain_resolver: warning line under subtitle', (
+    tester,
+  ) async {
+    await pump(
+      tester,
+      const ResolvedServer(
+        kind: ServerKind.template,
+        tag: 'safe_dns_dot',
+        description: 'Safe DNS (DoT)',
+        enabled: true,
+        body: {'type': 'tls', 'tag': 'safe_dns_dot', 'server': 'x'},
+        danglingResolver: 'google_udp',
+      ),
+    );
+    expect(find.byKey(const ValueKey('dns_dangling_resolver')), findsOneWidget);
+    await pump(tester, server(enabled: true));
+    expect(find.byKey(const ValueKey('dns_dangling_resolver')), findsNothing);
+  });
 }

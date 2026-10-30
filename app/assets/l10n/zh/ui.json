@@ -6423,5 +6423,20 @@
   },
   "One per line, or pick from the list": {
     "value": "每行一个，或从列表中选择"
+  },
+  "%s (last member)": {
+    "value": "%s（最后一个成员）"
+  },
+  "No members left in the list. Enable or add a member first.": {
+    "value": "列表中已没有成员。请先启用或添加成员。"
+  },
+  "Domain resolver \"%s\" is not in the list — Default Domain Resolver will be used": {
+    "value": "域名解析器「%s」不在列表中，将使用默认域名解析器"
+  },
+  "%s (not in list)": {
+    "value": "%s（不在列表中）"
+  },
+  "This server is not in the list — Default Domain Resolver will be used. Pick another server to resolve the hostname directly.": {
+    "value": "此服务器不在列表中，将使用默认域名解析器。请选择其他服务器以直接解析主机名。"
   }
 }

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models/parser_config.dart';
+import 'banner_palette.dart';
 import 'outbound_picker.dart';
 import 'var_values_model.dart';
 import '../services/l10n/locale_controller.dart';
@@ -44,6 +45,7 @@ class TemplateVarListView extends StatefulWidget {
     this.showSectionHeaders = true,
     this.outboundOptions = const [],
     this.dnsServerTags = const [],
+    this.notInListDnsTags = const {},
   });
 
   /// Переменные для рендеринга. Порядок и секции сохраняются.
@@ -73,6 +75,10 @@ class TemplateVarListView extends StatefulWidget {
   /// §117: DNS-сервер-теги для `type: dns_servers` vars (domain_resolver).
   /// Пусто → var рендерится текстовым полем (fallback).
   final List<String> dnsServerTags;
+
+  /// §695 — теги, которых нет в списке DNS-серверов (висячий
+  /// `domain_resolver`): пункт-призрак подписан «(not in list)», под полем ⚠.
+  final Set<String> notInListDnsTags;
 
   @override
   State<TemplateVarListView> createState() => _TemplateVarListViewState();
@@ -264,23 +270,66 @@ class _TemplateVarListViewState extends State<TemplateVarListView> {
         final tags = widget.dnsServerTags.contains(currentTag)
             ? widget.dnsServerTags
             : [currentTag, ...widget.dnsServerTags];
+        // §695 — призрак остаётся выбранным (dropdown без совпавшего
+        // значения падает), но подписан; выбор другого снимает пометку.
+        final notInList = widget.notInListDnsTags.contains(currentTag);
+        final dropdown = DropdownButton<String>(
+          isExpanded: true,
+          value: currentTag,
+          items: tags
+              .map((t) => DropdownMenuItem(
+                    value: t,
+                    child: Text(
+                        widget.notInListDnsTags.contains(t)
+                            ? getLocalText.s("%s (not in list)", t)
+                            : t,
+                        style: const TextStyle(fontSize: 13)),
+                  ))
+              .toList(),
+          onChanged: (val) {
+            if (val == null) return;
+            _update(v.name, val);
+          },
+        );
         return _LabelledField(
           label: v.title.isNotEmpty ? v.title : v.name,
           tooltip: v.tooltip,
-          field: DropdownButton<String>(
-            isExpanded: true,
-            value: currentTag,
-            items: tags
-                .map((t) => DropdownMenuItem(
-                      value: t,
-                      child: Text(t, style: const TextStyle(fontSize: 13)),
-                    ))
-                .toList(),
-            onChanged: (val) {
-              if (val == null) return;
-              _update(v.name, val);
-            },
-          ),
+          field: !notInList
+              ? dropdown
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    dropdown,
+                    const SizedBox(height: 4),
+                    Row(
+                      key: const ValueKey('dns_var_not_in_list'),
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.warning_amber_rounded,
+                          size: 14,
+                          color: bannerIconColor(
+                              context, BannerSeverity.warning),
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            getLocalText.s(
+                                "This server is not in the list — Default Domain Resolver will be used. Pick another server to resolve the hostname directly."),
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
         );
 
       default:

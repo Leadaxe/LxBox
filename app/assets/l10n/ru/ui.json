@@ -6708,5 +6708,20 @@
   },
   "One per line, or pick from the list": {
     "value": "По одному на строку или выберите из списка"
+  },
+  "%s (last member)": {
+    "value": "%s (последний участник)"
+  },
+  "No members left in the list. Enable or add a member first.": {
+    "value": "В списке не осталось участников. Сначала включите или добавьте участника."
+  },
+  "Domain resolver \"%s\" is not in the list — Default Domain Resolver will be used": {
+    "value": "Резолвера домена «%s» нет в списке — будет использован резолвер доменов по умолчанию"
+  },
+  "%s (not in list)": {
+    "value": "%s (нет в списке)"
+  },
+  "This server is not in the list — Default Domain Resolver will be used. Pick another server to resolve the hostname directly.": {
+    "value": "Этого сервера нет в списке — будет использован резолвер доменов по умолчанию. Выберите другой сервер, чтобы имя резолвилось напрямую."
   }
 }

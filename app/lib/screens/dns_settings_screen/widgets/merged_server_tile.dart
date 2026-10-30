@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../vpn/cc_channel.dart';
+import '../../../widgets/banner_palette.dart';
 import '../resolved_server.dart';
 import 'dns_badge.dart';
 import '../../../services/l10n/locale_controller.dart';
@@ -70,10 +71,11 @@ class MergedServerTile extends StatelessWidget {
             : (getLocalText.s("User"), theme.colorScheme.secondary),
     };
 
-    // §312 — у группы вместо адреса: режим + число членов.
+    // §312 — у группы вместо адреса: режим + число членов. §695 — членов,
+    // которые реально есть в списке (тело шаблонной группы всегда полное).
     final groupInfo = type == 'group'
         ? ' · ${(entry.body['mode'] as String?) ?? 'stable'}'
-              ' · ${(entry.body['servers'] as List?)?.length ?? 0}'
+              ' · ${entry.groupMembersInList}'
         : '';
     final subtitleLine =
         '${entry.tag} · $type$groupInfo${addr.isNotEmpty ? ' · $addr' : ''}'
@@ -102,6 +104,16 @@ class MergedServerTile extends StatelessWidget {
                     content: Text(getLocalText.s(
                       "Locked: used by %s. Remove the reference first.",
                       entry.lockedByLabel,
+                    )),
+                  ))
+                // §695 — выключенную группу без живых членов не включаем:
+                // сборка получила бы пустую группу.
+                : entry.enableBlockedEmptyGroup
+                ? (_) => ScaffoldMessenger.of(context)
+                  ..hideCurrentSnackBar()
+                  ..showSnackBar(SnackBar(
+                    content: Text(getLocalText.s(
+                      "No members left in the list. Enable or add a member first.",
                     )),
                   ))
                 : (v) => onToggleEnabled(entry.tag, v),
@@ -145,6 +157,34 @@ class MergedServerTile extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 11,
                         color: theme.colorScheme.primary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            // §695 — `domain_resolver` на тег вне списка: сборка снимет
+            // ключ, ядро пойдёт через Default Domain Resolver.
+            if (entry.danglingResolver.isNotEmpty)
+              Row(
+                key: const ValueKey('dns_dangling_resolver'),
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.warning_amber_rounded,
+                    size: 12,
+                    color: bannerIconColor(context, BannerSeverity.warning),
+                  ),
+                  const SizedBox(width: 4),
+                  Flexible(
+                    child: Text(
+                      getLocalText.s(
+                        "Domain resolver \"%s\" is not in the list — Default Domain Resolver will be used",
+                        entry.danglingResolver,
+                      ),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ),
