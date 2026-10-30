@@ -282,3 +282,5 @@ Default Domain Resolver без выключенных; (+) Safe DNS (DoT) → «
 Google DoH», `google_doh` залочен «used by Safe DNS (DoT)». Строка
 override после Save уезжала в конец списка — поправлено сортировкой
 `overrides ?? kind` (без эмулятора, widget-тест).
+
+31.10.2026 (CI): Analyze был красный с 5a8d30ec (три замечания, 3b3bdbbe); golden rich_v0 — выключенный член `off-dns` группы `dns-group` теперь включается правилом 5 и эмитится, эталоны и `dns_detour_fail_closed_test` обновлены (717147e3).
