@@ -126,7 +126,9 @@ List<ResolvedServer> resolveDisplayedServers(
   }
   // §044: render-order — template → preset → inline (см. ServerKind enum).
   // Stable sort: внутри каждой группы insertion-order сохраняется.
-  out.sort((a, b) => a.kind.index.compareTo(b.kind.index));
+  // §695 — override стоит на месте своей записи: ключ — вид canonical'а.
+  out.sort((a, b) =>
+      (a.overrides ?? a.kind).index.compareTo((b.overrides ?? b.kind).index));
   final listRefs = dnsServerListRefs(
     out,
     dnsFinal: dnsFinal,

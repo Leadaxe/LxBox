@@ -187,8 +187,9 @@ template), `dns_server_catalog_screen_test.dart` (цепочка правила 
 2. Редактор Shield → Params: форма состава; снять `cloudflare_dot` → Save →
    в списке Shield «Overridden», счётчик 5; `cloudflare_dot` без лока —
    выключить, удалить. `/config`: группа из пяти. Start → connected.
-3. Редактор Shield → Reset to template → запись снова Template, счётчик 6,
-   `cloudflare_dot` в списке отсутствует → лок у членов как у шаблона.
+3. Редактор Shield → Reset to template → запись снова Template, счётчик =
+   число членов, которые есть в списке (5, если `cloudflare_dot` удалён) →
+   лок у членов как у шаблона.
 4. Пикер Default Domain Resolver не показывает выключенные записи.
 5. Удалить `google_doh` (когда ссылок нет) → (+) → Safe DNS (DoT) →
    SnackBar «Also added: Google DoH …», обе записи в списке, `google_doh`
@@ -239,6 +240,8 @@ template), `dns_server_catalog_screen_test.dart` (цепочка правила 
   с тегом каталога закрывает тег от снятия template-записи приёмника.
 - Save группы с пустым `servers[]` (inline и правленая шаблонная) не
   проходит: SnackBar «A group needs at least one member.» (`groupHasNoMembers`).
+- Override шаблонной записи сортируется на месте шаблона (ключ
+  `overrides ?? kind` в `resolveDisplayedServers`), а не в конце списка.
 - Доки: пометка §695 в §680 п. 4 снята, `STORAGE.md` — override у
   `dns.servers`, CHANGELOG — запись §695 переписана.
 
@@ -267,3 +270,15 @@ template), `dns_server_catalog_screen_test.dart` (цепочка правила 
 нормализации; `backup_corpus_test`, `lx_backup_test`,
 `lx_backup_roundtrip_test`, `dns_template_vars_import_test` (ключ слияния
 бэкапа) — зелёные; hardcoded_check — 0/0.
+
+Эмулятор (30.10.2026, APK 2.25.18-dev.11 из 5a8d30ec, 5/5 PASS + гард
+пустой группы): состояние автора → после старта `dns_shield`
+`enabled:true`, лог «DNS server "dns_shield" enabled: referenced by final,
+default_domain_resolver», пикеры не тронуты; форма состава у Shield, Save
+без членов → «A group needs at least one member.»; снятый `cloudflare_dot`
+свободен (выключен, удалён), Shield «Overridden» · 5, Start → connected;
+⋮ «Duplicate» / «Reset to template» → запись снова Template; пикер
+Default Domain Resolver без выключенных; (+) Safe DNS (DoT) → «Also added:
+Google DoH», `google_doh` залочен «used by Safe DNS (DoT)». Строка
+override после Save уезжала в конец списка — поправлено сортировкой
+`overrides ?? kind` (без эмулятора, widget-тест).

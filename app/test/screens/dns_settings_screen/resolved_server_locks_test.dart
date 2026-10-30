@@ -178,6 +178,19 @@ void main() {
     expect(find(list, 'opendns_udp').locked, isFalse);
   });
 
+  test('override шаблонной записи сортируется на месте шаблона', () {
+    final list = resolve([
+      const DnsServerInline(
+          enabled: true, tag: 'mine', body: {'type': 'udp', 'server': 'x'}),
+      t('google_doh'),
+      const DnsServerInline(enabled: true, tag: 'dns_shield',
+          body: {'type': 'group', 'servers': ['google_doh']}),
+      t('opendns_udp'),
+    ]);
+    expect([for (final s in list) s.tag],
+        ['google_doh', 'dns_shield', 'opendns_udp', 'mine']);
+  });
+
   test('выключенный член с DNS-опцией правила считается живым', () {
     final list = resolve(
       [
