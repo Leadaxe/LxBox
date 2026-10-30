@@ -9713,3 +9713,48 @@ Issue Leadaxe/sing-box-lx#36: узел VLESS+XHTTP с `path=/?proxyip=…` (ре
 Задача вам: синк, разбор INI с N пирами (`ini_space.dart`), `on_item_failure` у санитайзера, прогон пяти кейсов (четыре `body/wgconf` и один `uri/wireguard`), вкладка INI.
 
 Расхождение — сюда.
+
+**Закрыто 27.10.2026.** LxBox: синк 1.1.140 на 6a613701 (e8b9a39e), сторона реализована (18baf288c: `ini_space.dart` с `repeat: each`, `on_item_failure` в санитайзере, `WireguardSpec` несёт все пиры), вкладка INI — §686 п. 9–10. Пять кейсов корпуса (`body/wgconf/ini_multi_peer*` и `uri/wireguard/awg_conf_base64_multi_peer`) зелёные у обеих сторон (CI LxBox 40399679187, лаунчера 40393072581). Расхождений нет.
+
+## 137. Контракт 1.1.141 — `trusttunnel` как известный тип outbound (29.10.2026)
+
+Повод — живой дефект лаунчера: узел `{"type":"trusttunnel", …}` (AdGuard TrustTunnel; ядро sing-box-lx с 1.14.3-lx.21, FEATURE 018: proxy CONNECT с Basic-auth внутри HTTP/2 поверх TLS либо HTTP/3 поверх QUIC) из sing-box JSON шёл слепой копией, а проверка кандидата локальным ядром старше lx.21 ложно сообщала «машина откажет на Deploy». Решение владельца: запись в реестре **без гейта по ядру** — «в новых лаунчерах будут новые ядра».
+
+Новая запись `registry/protocols/trusttunnel.json`: `kind: outbound`, источник только `singbox`, URI-формы нет, формы Add server нет (вторая очередь, как у OpenConnect до SPEC 167). Описаны все поля `option/trusttunnel.go` с правилами ядра — подробно в строке 1.1.141 `README.md`. Главное для вашей стороны:
+
+1. `username`, `password`, `tls` — `required` с `core_rejects`: узел без них снимается `field_missing` (ядро: «missing username» / «missing password» / `ErrTLSRequired`).
+2. `quic` conflicts `tls.utls.enabled` при `when {quic: true}` — `field_conflict` с `core_rejects`: снимается `quic`, узел идёт по HTTP/2, uTLS остаётся. Связь судится по собственному значению поля (`when`, контракт 1.1.56): `quic: false` рядом с uTLS ядро принимает.
+3. `quic_congestion_control` — enum `bbr|cubic|reno` (`bbr2` из naive здесь нет), `normalize: trim_lower`, негодное — `type_invalid` с `core_rejects`.
+4. `min_core` / `build_tag` — описание, не гейт: `on_core_unsupported` нет намеренно. На ядре без `with_trusttunnel` конфиг отвергается целиком, узел выключает страховка core-rejected по имени (PARSING_PRINCIPLES §9) — у вас тот же путь, что у любого «unknown outbound type».
+5. Wildcard `*` не стоит — неописанный ключ снимается `unknown_key`, как у naive/vless.
+6. Два правила ядра таблицей не выражены (записаны в `note` словами, ловит страховка): `tls.server_name` обязателен при server-IP; непустой `tls.alpn` обязан содержать `h2` (без quic) либо `h3` (с quic).
+
+Корпус `body/singbox`: `trusttunnel_outbound`, `trusttunnel_quic_utls_conflict`, `trusttunnel_missing_password_dropped`.
+
+Задача вам: синк 1.1.141, узел известного типа без своей модели (`node_spec.dart`, как openconnect/openvpn-client), прогон трёх кейсов. Норм и кодов 1.1.141 не добавляет.
+
+Расхождение — сюда.
+
+## 138. Запрос LxBox — DNS-серверы бэкапа: `user`-запись с тегом шаблона и `template`-запись — один сервер (30.10.2026)
+
+Повод — LxBox §695 (issue LxBox#182, решение владельца): шаблонные DNS-серверы и группы стали редактируемыми. Save при изменённом теле пишет запись `kind: user` **с тем же тегом**, что у шаблонной (override, как в §117: сборка берёт её тело, ссылки и пикеры по тегу не ломаются); «Reset to template» возвращает `kind: template`. Тег в списке по-прежнему один.
+
+С нормой BACKUP.md §9 п. 5 это расходится в двух местах:
+
+1. **Ключ слияния `kind`+`tag`.** Файл с `user:dns_shield` и приёмник с `template:dns_shield` не совпадают → после импорта две записи с одним тегом. Просим: у видов `template` и `user` ключ слияния — **только тег**; совпавшая запись остаётся локальной («своё сильнее», как сейчас), какого бы вида ни были обе. `kind: preset` — по `ref`, без изменений.
+2. **Снятие по `template_catalog`, условие 2** («тега нет среди записей `kind: template` файла»). У файла с override `template:dns_shield` нет, есть `user:dns_shield` → условие выполнено → приёмник снимает свою шаблонную запись, хотя источник сервер не удалял, а правил. Просим: условие 2 — «тега нет ни среди `template`, ни среди `user` записей файла».
+
+LxBox так уже делает (`dns_backup.dart`, коммит 5a8d30ec, тест `dns_backup_merge_test.dart`: override `dns_shield` из файла переживает импорт и не задваивается с локальной шаблонной записью). Норма общая (1.1.135, D-139) — запись в BACKUP.md и версия за вами; корпус бэкапа, если есть кейс на п. 5, — один кейс `user`-override с тегом каталога.
+
+Расхождение — сюда.
+
+**Ответ лаунчера — контракт 1.1.142 (31.10.2026).** Оба пункта приняты как есть.
+
+1. `docs/BACKUP.md` §9 п. 5: у видов `template` и `user` ключ слияния — только `tag`; совпавшая запись остаётся локальной, какого бы вида ни были обе. `vars` накладываются только шаблонной записью файла на шаблонную приёмника (у вас так же: `local is DnsServerTemplate`). `kind: preset` — по `ref`, без изменений.
+2. Снятие по `template_catalog`, условие 2: тега нет ни среди `template`, ни среди `user` записей файла.
+
+Добавлено с нашей стороны, у вас уже так (шаг 3 `resolveDnsServersList`, `seen` по тегу): посев каталога тегу, занятому записью `kind: user`, шаблонную запись не дописывает — иначе override, ввезённый в состояние без шаблонной записи, получил бы рядом посеянную шаблонную под тем же тегом. В Go: `core/backup/import.go` (`importDNS`, `sourceDeletedTemplateServers`), `core/state/record_vars.go` (`SeedDNSTemplateCatalog`).
+
+Кейс корпуса `corpus/backup/v10_dns_template_override.*` (фикстура шаблона + предсостояние): предсостояние `template:google_udp`, локальный override `user:google_dot`, `template:dns_shield`; файл LxBox — `template:google_udp`, `template:google_dot`, override `user:dns_shield`, каталог из трёх. Ожидание — три записи, обе совпавшие локальные (`user:google_dot`, `template:dns_shield`), предупреждений нет. Без правки у лаунчера записей четыре.
+
+Задача вам: синк, прогон кейса. Расхождение — сюда.

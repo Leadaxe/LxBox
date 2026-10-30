@@ -10,6 +10,21 @@
 
 ### Added
 
+- **Launcher contract 1.1.140 → 1.1.142
+  ([task 698](docs/spec/tasks/698-trusttunnel-registry-node.md)).**
+  `trusttunnel` (AdGuard TrustTunnel) outbounds from sing-box JSON are now a
+  known type judged by the registry: a node without `username`, `password`
+  or `tls` is dropped at parse time with `field_missing`, as the launcher
+  does, instead of staying in the list until the build. Backup import merges
+  template and user DNS servers by tag only (an edited catalog server is the
+  same server), matching task 695 on both sides.
+  (RU: Контракт лаунчера 1.1.140 → 1.1.142. Узлы `trusttunnel` из sing-box
+  JSON — известный тип по реестру: узел без `username`, `password` или `tls`
+  снимается при разборе с кодом `field_missing`, как у лаунчера, а не живёт в
+  списке до сборки. Импорт бэкапа сливает шаблонные и пользовательские
+  DNS-серверы только по тегу (правленный сервер каталога — тот же сервер),
+  как в задаче 695 с обеих сторон.)
+
 - **The app picker shows each app's UID and warns about shared UIDs
   ([task 693](docs/spec/tasks/693-app-picker-shared-uid-hint.md),
   [#180](https://github.com/Leadaxe/LxBox/issues/180)).** Android lets
