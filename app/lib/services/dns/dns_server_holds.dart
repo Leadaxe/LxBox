@@ -34,15 +34,9 @@ enum DnsHoldKind {
 
 /// Одна удерживающая ссылка: вид и источник (тег, имя правила, id пресета).
 class DnsServerHold {
-  const DnsServerHold(this.kind, [this.source = '', this.lastMember = false]);
+  const DnsServerHold(this.kind, [this.source = '']);
 
   final DnsHoldKind kind;
-
-  /// §695 — `group`: держит выключенная группа под DNS Final / Default
-  /// Domain Resolver, и это её последний живой член (пустая группа =
-  /// фатальный `EmptyDnsGroup`). На [usedBy] не влияет — только подпись
-  /// вкладки «(last member)».
-  final bool lastMember;
 
   /// `dns_rule` — тег сервера правила; `rule` — имя маршрутного правила;
   /// `group` / `server` — тег сервера-источника; `preset` — `preset_id`.
@@ -65,11 +59,10 @@ class DnsServerHold {
   bool operator ==(Object other) =>
       other is DnsServerHold &&
       other.kind == kind &&
-      other.source == source &&
-      other.lastMember == lastMember;
+      other.source == source;
 
   @override
-  int get hashCode => Object.hash(kind, source, lastMember);
+  int get hashCode => Object.hash(kind, source);
 
   @override
   String toString() => usedBy;
@@ -84,11 +77,10 @@ class DnsServerHold {
 ///
 /// §695 — группа и `domain_resolver` держат только от записей с `enabled`
 /// (вызывающий передаёт `enabled || forceIncluded`: такую запись сборка
-/// эмитит). Выключенная запись никого не держит (отменяет §680 п. 4), кроме
-/// одного случая: выключенная группа, на которую указывает [dnsFinal] или
-/// [defaultResolver] (сборка эмитит её принудительно, heal §419), держит
-/// своего последнего живого члена — единственный тег `servers[]`, который
-/// есть в списке и `enabled` ([DnsServerHold.lastMember]). [dnsFinal] /
+/// эмитит). Выключенная запись никого не держит (отменяет §680 п. 4).
+/// §696 — группа под [dnsFinal] / [defaultResolver] сборкой эмитится всегда
+/// (force-include), вызывающий передаёт её как включённую: держит всех
+/// членов; исключение §695 «(last member)» снято. [dnsFinal] /
 /// [defaultResolver] держат всегда.
 ///
 /// Импорт бэкапа ([dnsServerFirstHolds], §681, контракт 1.1.135) передаёт
@@ -109,33 +101,14 @@ Map<String, List<DnsServerHold>> dnsServerListHolds(
     if (!list.contains(hold)) list.add(hold);
   }
 
-  final list = servers.toList();
-  final liveTags = {
-    for (final s in list)
-      if (s.enabled) s.tag,
-  };
-  for (final s in list) {
+  for (final s in servers) {
+    if (!s.enabled) continue;
     if (s.body['type'] == 'group') {
-      final members = [
-        for (final m in (s.body['servers'] as List<dynamic>? ?? const []))
-          ?m?.toString(),
-      ];
-      if (s.enabled) {
-        for (final m in members) {
-          add(m, DnsServerHold(DnsHoldKind.group, s.tag), self: s.tag);
-        }
-      } else if (s.tag == dnsFinal || s.tag == defaultResolver) {
-        final live = {
-          for (final m in members)
-            if (m != s.tag && liveTags.contains(m)) m,
-        };
-        if (live.length == 1) {
-          add(live.single, DnsServerHold(DnsHoldKind.group, s.tag, true),
-              self: s.tag);
-        }
+      for (final m in (s.body['servers'] as List<dynamic>? ?? const [])) {
+        add(m?.toString(), DnsServerHold(DnsHoldKind.group, s.tag),
+            self: s.tag);
       }
     }
-    if (!s.enabled) continue;
     final dr = s.body['domain_resolver'];
     add(dr is Map ? dr['server']?.toString() : dr?.toString(),
         DnsServerHold(DnsHoldKind.server, s.tag),

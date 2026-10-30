@@ -76,6 +76,30 @@ void main() {
     expect(toggles, [false]);
   });
 
+  // §696 — член группы под пикером: выключен в хранилище, но forced
+  // (сборка эмитит) — свитч ON, тап объясняет лок.
+  testWidgets('forced member of a picker group: switch ON, tap shows '
+      'SnackBar', (tester) async {
+    final toggles = await pump(
+      tester,
+      const ResolvedServer(
+        kind: ServerKind.template,
+        tag: 'google_doh',
+        description: 'Google DoH',
+        enabled: false,
+        body: {'type': 'https', 'tag': 'google_doh', 'server': '8.8.8.8'},
+        usedByResolver: true,
+        usedByList: ['Shield DNS'],
+      ),
+    );
+    final sw = tester.widget<Switch>(find.byType(Switch));
+    expect(sw.value, isTrue);
+    await tester.tap(find.byType(Switch));
+    await tester.pump();
+    expect(toggles, isEmpty);
+    expect(find.textContaining('Locked: used by Shield DNS'), findsOneWidget);
+  });
+
   // §695 — выключенная группа без живых членов: тап объясняет, не включает.
   ResolvedServer group({
     required bool enabled,

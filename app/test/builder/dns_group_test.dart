@@ -183,6 +183,73 @@ void main() {
           '(disabled)'));
     });
 
+    // §696 — сервер пикеров DNS Final / Default Domain Resolver — третий
+    // источник force-include; у группы — рекурсивно её члены.
+    test('§696 выключенный сервер под пикером эмитится, без пикера — нет', () {
+      List<String> tags(Set<String> resolverTags) => [
+            for (final b in resolveDnsServersBodies(
+              resolved: [
+                inlineRef('a', {'type': 'udp', 'server': '1.1.1.1'},
+                    enabled: false),
+                inlineRef('b', {'type': 'udp', 'server': '8.8.8.8'}),
+              ],
+              templateByTag: const {},
+              presetServersByTag: const {},
+              resolverReferencedTags: resolverTags,
+            ))
+              b['tag'] as String,
+          ];
+      expect(tags(const {'a'}), ['a', 'b']);
+      expect(tags(const {}), ['b']);
+      expect(tags(const {'gone'}), ['b']);
+    });
+
+    test('§696 выключенная группа под пикером эмитится с выключенными '
+        'членами, вложенная группа — тоже', () {
+      final warnings = <String>[];
+      final refs = [
+        for (final t in six)
+          inlineRef(t, {'type': 'udp', 'server': '1.1.1.1'},
+              enabled: t == 'a'),
+        inlineRef('inner', groupBody(['e', 'f']), enabled: false),
+        inlineRef('shield', groupBody(['a', 'b', 'c', 'inner'],
+            mode: 'fastest'), enabled: false),
+      ];
+      final out = resolveDnsServersBodies(
+        resolved: refs,
+        templateByTag: const {},
+        presetServersByTag: const {},
+        resolverReferencedTags: const {'shield'},
+        warningsOut: warnings,
+      );
+      final emitted = [for (final b in out) b['tag']];
+      expect(emitted, containsAll(['a', 'b', 'c', 'e', 'f', 'inner',
+          'shield']));
+      expect(emitted, isNot(contains('d')));
+      final grp = out.firstWhere((b) => b['tag'] == 'shield');
+      expect(grp['servers'], ['a', 'b', 'c', 'inner']);
+      expect(out.firstWhere((b) => b['tag'] == 'inner')['servers'],
+          ['e', 'f']);
+      expect(warnings, isEmpty);
+
+      // Без пикера — группа и выключенные члены не эмитятся.
+      final plain = resolveDnsServersBodies(
+        resolved: refs,
+        templateByTag: const {},
+        presetServersByTag: const {},
+      );
+      expect([for (final b in plain) b['tag']], ['a']);
+    });
+
+    test('§696 цикл групп под пикером не зацикливает раскрытие', () {
+      final forced = dnsResolverForcedTags(['g1'], (t) => switch (t) {
+            'g1' => groupBody(['g2', 'x']),
+            'g2' => groupBody(['g1']),
+            _ => null,
+          });
+      expect(forced, {'g1', 'g2', 'x'});
+    });
+
     test('незнакомый редактору член не судится, self/повтор снимаются', () {
       final r = previewDnsGroupMembers(['a', 'x', 'a', 'shield'],
           selfTag: 'shield', emittedByTag: {'a': true});

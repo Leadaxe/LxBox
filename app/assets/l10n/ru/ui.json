@@ -6709,9 +6709,6 @@
   "One per line, or pick from the list": {
     "value": "По одному на строку или выберите из списка"
   },
-  "%s (last member)": {
-    "value": "%s (последний участник)"
-  },
   "No members left in the list. Enable or add a member first.": {
     "value": "В списке не осталось участников. Сначала включите или добавьте участника."
   },

@@ -65,10 +65,12 @@
   [#182](https://github.com/Leadaxe/LxBox/issues/182)).** After 2.25.17
   every member of Shield DNS stayed locked «used by Shield DNS» even with
   Shield itself switched off. A disabled group, and a disabled server with a
-  domain resolver, no longer lock anything. One exception: when DNS Final
-  or Default Domain Resolver points to a disabled group, its last enabled
-  member stays locked as «(last member)», since the group is still built
-  and an empty group stops the core. A disabled group with no enabled
+  domain resolver, no longer lock anything. A server picked in DNS Final or
+  Default Domain Resolver is now always built into the config, even when
+  switched off, together with all members if it is a group; it and its
+  members stay on and locked until the pickers point elsewhere. Before,
+  such a server was left out and both pickers were silently moved to the
+  first suitable server. A disabled group with no enabled
   members left cannot be switched on. The member count of a group now
   counts the servers that are in the list. A server whose domain resolver
   is no longer in the list shows a warning in the list and in the editor:
@@ -76,11 +78,12 @@
   (RU: Участников выключенной DNS-группы нельзя было выключить или удалить.
   После 2.25.17 все участники Shield DNS оставались под замком «used by
   Shield DNS», даже когда сам Shield выключен. Выключенная группа и
-  выключенный сервер с резолвером домена больше ничего не держат.
-  Исключение: если DNS Final или Default Domain Resolver указывает на
-  выключенную группу, её последний включённый участник остаётся под замком
-  с пометкой «(last member)» — группа всё равно попадает в конфиг, а пустая
-  группа останавливает ядро. Выключенную группу без включённых участников
+  выключенный сервер с резолвером домена больше ничего не держат. Сервер,
+  выбранный в DNS Final или Default Domain Resolver, теперь всегда попадает
+  в конфиг, даже выключенный, а если это группа — вместе со всеми
+  участниками; он и участники остаются включёнными и под замком, пока
+  выбор не переставят. Раньше такой сервер в конфиг не попадал, и оба
+  выбора молча переставлялись на первый подходящий сервер. Выключенную группу без включённых участников
   включить нельзя. Счётчик участников группы считает серверы, которые есть
   в списке. Сервер, чей резолвер домена пропал из списка, показывает
   предупреждение в списке и в редакторе: имя резолвится через Default

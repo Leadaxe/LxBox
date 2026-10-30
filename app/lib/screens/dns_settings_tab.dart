@@ -331,7 +331,6 @@ class _DnsSettingsTabState extends State<DnsSettingsTab>
         defaultResolver: _defaultResolver,
         dnsFinalLabel: getLocalText.s("DNS Final"),
         defaultResolverLabel: getLocalText.s("Default Domain Resolver"),
-        lastMemberLabel: (l) => getLocalText.s("%s (last member)", l),
       );
 
   /// Tags доступные в dropdown'ах (DNS Final / Default Resolver / per-rule).
@@ -351,6 +350,7 @@ class _DnsSettingsTabState extends State<DnsSettingsTab>
                 enabled: s.enabled,
                 presetReferenced: s.lockedByPreset,
                 ruleReferenced: s.usedByRule != null,
+                resolverReferenced: s.usedByResolver,
               ),
             ),
       ];

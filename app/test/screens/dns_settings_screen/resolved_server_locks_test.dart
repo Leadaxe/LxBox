@@ -127,38 +127,51 @@ void main() {
     }
   });
 
-  test('выключенная группа под пикерами: два живых члена свободны, сама '
-      'группа держится пикерами', () {
+  // §696 — группа под пикером forced: сборка эмитит её и членов всегда.
+  test('выключенная группа под пикерами: forced, держит всех членов, члены '
+      'тоже forced', () {
     final list = resolve(
-      [t('google_doh'), t('opendns_udp'), t('dns_shield', enabled: false)],
+      [
+        t('google_doh', enabled: false),
+        t('opendns_udp'),
+        t('google_udp'),
+        t('dns_shield', enabled: false),
+      ],
       dnsFinal: 'dns_shield',
       defaultResolver: 'dns_shield',
     );
-    expect(find(list, 'google_doh').locked, isFalse);
-    expect(find(list, 'opendns_udp').locked, isFalse);
-    expect(find(list, 'dns_shield').lockedByLabel,
-        'DNS Final, Default Domain Resolver');
+    final shield = find(list, 'dns_shield');
+    expect(shield.forceIncluded, isTrue);
+    expect(shield.usedByResolver, isTrue);
+    expect(shield.lockedByLabel, 'DNS Final, Default Domain Resolver');
+    for (final tag in ['google_doh', 'opendns_udp']) {
+      final m = find(list, tag);
+      expect(m.forceIncluded, isTrue, reason: tag);
+      expect(m.locked, isTrue, reason: tag);
+      expect(m.lockedByLabel, 'Shield DNS', reason: tag);
+      expect(canDeleteDnsServer(m), isFalse, reason: tag);
+    }
+    // Вне группы — не forced и свободен.
+    expect(find(list, 'google_udp').forceIncluded, isFalse);
+    expect(find(list, 'google_udp').locked, isFalse);
+    expect(shield.groupLiveMembers, 2);
   });
 
-  test('выключенная группа под пикером: последний живой член держится с '
-      'подписью «(last member)»', () {
-    // Второй член удалён из списка.
-    var list = resolve([t('google_doh'), t('dns_shield', enabled: false)],
-        dnsFinal: 'dns_shield');
-    var doh = find(list, 'google_doh');
-    expect(doh.locked, isTrue);
-    expect(doh.lockedByLabel, 'Shield DNS (last member)');
-    expect(canDeleteDnsServer(doh), isFalse);
-
-    // Второй член выключен — живой остаётся один.
-    list = resolve([
-      t('google_doh'),
-      t('opendns_udp', enabled: false),
-      t('dns_shield', enabled: false),
-    ], defaultResolver: 'dns_shield');
-    doh = find(list, 'google_doh');
-    expect(doh.lockedByLabel, 'Shield DNS (last member)');
+  test('пикеры переставлены — выключенная группа и члены свободны', () {
+    final list = resolve(
+      [
+        t('google_doh', enabled: false),
+        t('opendns_udp'),
+        t('google_udp'),
+        t('dns_shield', enabled: false),
+      ],
+      dnsFinal: 'google_udp',
+      defaultResolver: 'google_udp',
+    );
+    expect(find(list, 'dns_shield').locked, isFalse);
+    expect(find(list, 'google_doh').locked, isFalse);
     expect(find(list, 'opendns_udp').locked, isFalse);
+    expect(find(list, 'google_udp').usedByResolver, isTrue);
   });
 
   test('выключенный член с DNS-опцией правила считается живым', () {
@@ -168,10 +181,8 @@ void main() {
         t('opendns_udp', enabled: false),
         t('dns_shield', enabled: false),
       ],
-      dnsFinal: 'dns_shield',
       ruleRefsByTag: const {'opendns_udp': 'My rule'},
     );
-    // Живых двое — «последнего» нет.
     expect(find(list, 'google_doh').locked, isFalse);
     expect(find(list, 'dns_shield').groupLiveMembers, 2);
   });

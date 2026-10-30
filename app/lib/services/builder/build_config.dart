@@ -988,8 +988,8 @@ Future<BuildResult?> _buildConfig({
   for (final h in healedResolvers) {
     generatedVars[h.varName] = h.to;
     emitWarnings.add(
-        '${h.field} reset to "${h.to}": DNS server "${h.from}" is gone '
-        '(its preset was disabled or removed).');
+        '${h.field} reset to "${h.to}": DNS server "${h.from}" '
+        'is not in the list.');
   }
 
   // §246 hotfix — легаси `strategy` в dns.rules × query_type/ip_version

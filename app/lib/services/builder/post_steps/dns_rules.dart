@@ -101,6 +101,16 @@ Future<void> applyCustomDns(
     for (final m in dnsMirrors)
       if (m.ruleId != null && m.serverTag.isNotEmpty) m.serverTag,
   };
+  // §696 — серверы пикеров DNS Final / Default Domain Resolver (значения vars
+  // уже подставлены в конфиг) — третий источник force-include.
+  final route = config['route'];
+  final resolverReferencedTags = <String>{
+    if (dns['final'] is String) dns['final'] as String,
+    if (route is Map)
+      if (domainResolverServer(route['default_domain_resolver'])
+          case final String t)
+        t,
+  }..remove('');
 
   // Refs → final bodies для sing-box config.
   // §441 — теги серверов, выпавших из-за висячего detour (Н10).
@@ -111,6 +121,7 @@ Future<void> applyCustomDns(
     presetServersByTag: presetServersByTag,
     knownOutboundTags: knownOutboundTags,
     ruleReferencedTags: ruleReferencedTags,
+    resolverReferencedTags: resolverReferencedTags, // §696
     warningsOut: warningsOut,
     tailscaleEndpointTags: tailscaleEndpointTags, // §435
     detourDroppedOut: detourDropped, // §441

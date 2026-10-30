@@ -6424,9 +6424,6 @@
   "One per line, or pick from the list": {
     "value": "每行一个，或从列表中选择"
   },
-  "%s (last member)": {
-    "value": "%s（最后一个成员）"
-  },
   "No members left in the list. Enable or add a member first.": {
     "value": "列表中已没有成员。请先启用或添加成员。"
   },

@@ -2,7 +2,7 @@ import '../../models/custom_rule.dart';
 import '../../models/dns_ref.dart';
 import '../../models/parser_config.dart' show WizardVar;
 import '../../services/builder/post_steps.dart'
-    show resolveTemplateDnsServerBody;
+    show dnsResolverForcedTags, resolveTemplateDnsServerBody;
 import '../../services/builder/preset_expand.dart' show normalizeDnsDetour;
 import '../../services/dns/dns_server_holds.dart';
 import 'resolved_server.dart';
@@ -35,10 +35,8 @@ List<ResolvedServer> resolveDisplayedServers(
   String defaultResolver = '',
   String dnsFinalLabel = 'DNS Final',
   String defaultResolverLabel = 'Default Domain Resolver',
-  // §695 — подпись последнего члена выключенной группы под пикерами.
-  String Function(String label) lastMemberLabel = _defaultLastMemberLabel,
 }) {
-  final out = <ResolvedServer>[];
+  var out = <ResolvedServer>[];
   for (final ref in servers) {
     final tag = ref.tag;
     if (tag.isEmpty) continue;
@@ -129,13 +127,25 @@ List<ResolvedServer> resolveDisplayedServers(
   // §044: render-order — template → preset → inline (см. ServerKind enum).
   // Stable sort: внутри каждой группы insertion-order сохраняется.
   out.sort((a, b) => a.kind.index.compareTo(b.kind.index));
+  // §696 — серверы пикеров и члены их групп сборка эмитит всегда.
+  final bodyByTag = <String, Map<String, dynamic>>{};
+  for (final s in out) {
+    bodyByTag.putIfAbsent(s.tag, () => s.body);
+  }
+  final resolverForced =
+      dnsResolverForcedTags([dnsFinal, defaultResolver], (t) => bodyByTag[t]);
+  out = [
+    for (final s in out)
+      resolverForced.contains(s.tag)
+          ? s.withListState(usedByResolver: true)
+          : s,
+  ];
   final listRefs = dnsServerListRefs(
     out,
     dnsFinal: dnsFinal,
     defaultResolver: defaultResolver,
     dnsFinalLabel: dnsFinalLabel,
     defaultResolverLabel: defaultResolverLabel,
-    lastMemberLabel: lastMemberLabel,
   );
   // §695 — висячий `domain_resolver` и члены групп по списку.
   final listTags = {for (final s in out) s.tag};
@@ -178,16 +188,14 @@ String dnsDanglingResolver(
 /// здесь только подписи: группа и `domain_resolver` — description
 /// сервера-источника, иначе его тег; [dnsFinal] / [defaultResolver] — метки
 /// [dnsFinalLabel] / [defaultResolverLabel]. §695 — в расчёт идёт `enabled`
-/// записи (`forceIncluded` = включена): выключенная никого не держит;
-/// последний член выключенной группы под пикерами подписан
-/// [lastMemberLabel]. — pure.
+/// записи (`forceIncluded` = включена): выключенная никого не держит; §696 —
+/// группа под пикерами forced и держит всех членов. — pure.
 Map<String, List<String>> dnsServerListRefs(
   List<ResolvedServer> servers, {
   String dnsFinal = '',
   String defaultResolver = '',
   String dnsFinalLabel = 'DNS Final',
   String defaultResolverLabel = 'Default Domain Resolver',
-  String Function(String label) lastMemberLabel = _defaultLastMemberLabel,
 }) {
   final labelByTag = <String, String>{};
   for (final s in servers) {
@@ -209,8 +217,6 @@ Map<String, List<String>> dnsServerListRefs(
       final label = switch (h.kind) {
         DnsHoldKind.dnsFinal => dnsFinalLabel,
         DnsHoldKind.defaultDomainResolver => defaultResolverLabel,
-        _ when h.lastMember =>
-          lastMemberLabel(labelByTag[h.source] ?? h.source),
         _ => labelByTag[h.source] ?? h.source,
       };
       if (!labels.contains(label)) labels.add(label);
@@ -219,8 +225,6 @@ Map<String, List<String>> dnsServerListRefs(
   }
   return refs;
 }
-
-String _defaultLastMemberLabel(String label) => '$label (last member)';
 
 /// §680 — дефолтный сервер для авто-выбора (DNS-опция правила,
 /// `domain_resolver` hostname-адреса): `google_udp`, если он в [tags];
