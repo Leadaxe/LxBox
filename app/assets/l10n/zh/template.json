@@ -77,9 +77,6 @@
  "Apple": {
   "value": "Apple"
  },
- "Applies to UDP only. DoH and DoT are pinned to 77.88.8.88 with SNI safe.dot.dns.yandex.net.": {
-  "value": "仅对 UDP 生效。DoH 与 DoT 固定使用 77.88.8.88，SNI 为 safe.dot.dns.yandex.net。"
- },
  "Apply this preset's FakeIP DNS handling. Turn off to disable FakeIP without removing the preset.": {
   "value": "应用该预设的 FakeIP DNS 处理。关闭可在不移除预设的前提下停用 FakeIP。"
  },
@@ -703,6 +700,12 @@
  },
  "Send Yandex DoT and DoH through this preset's Outbound, like UDP. Off: they go direct.": {
   "value": "像 UDP 一样，通过此预设的 Outbound 发送 Yandex DoT 和 DoH。关闭时直连。"
+ },
+ "The IP sets the Yandex DNS profile: Base, Safe or Family. Off: this server is not used.": {
+  "value": "IP 决定 Yandex DNS 的配置：基础版、安全版或家庭版。关闭：不使用此服务器。"
+ },
+ "Off": {
+  "value": "关闭"
  },
  "IPv4 pool": {
   "value": "IPv4 地址池"

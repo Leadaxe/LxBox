@@ -39,14 +39,25 @@ not by editing bodies.
 | Variable | Meaning | Default |
 |---|---|---|
 | `dns_enable` ("DNS") | the preset's DNS part on/off | on |
-| `dns_ip` ("UDP server IP") | address of the UDP member: Base / Safe / Family, v4/v6 | `77.88.8.8` |
+| `dns_ip` ("UDP server IP") | address of the UDP member: Base / Safe / Family, v4/v6, or Off | `77.88.8.8` |
+| `dns_dot_ip` ("DoT server IP") | address of the DoT member: Base / Safe / Family, or Off | `77.88.8.88` |
+| `dns_doh_ip` ("DoH server IP") | address of the DoH member: Base / Safe / Family, or Off | `77.88.8.88` |
+| `dns_encrypted_via_outbound` ("Encrypted DNS via Outbound") | DoT and DoH through the preset's channel instead of direct | off |
 | `force_ipv4` ("Force IPv4") | do not return AAAA for ru domains | on |
 | `outbound` | the preset's channel (and the UDP member's) | `direct-out` |
 
-The `dns_ru` group (`fastest`, `error_ttl 5m`, `win_ttl 5m`) over three
+The Yandex profile (Base / Safe / Family) is set by the server's IP, not by
+the TLS name: DoT and DoH keep SNI `safe.dot.dns.yandex.net` on any of the
+three addresses (one certificate covers all of them).
+
+The `dns_ru` group (`fastest`, `error_ttl 5m`, `win_ttl 5m`) over up to three
 members on independent paths: `yandex_udp` (`@dns_ip`, through the preset's
-channel), `yandex_dot` (`77.88.8.88`, SNI `safe.dot.dns.yandex.net`, via
-`vpn-1`), `yandex_doh` (`77.88.8.88`, direct). The preset's DNS rules: for
+channel), `yandex_dot` (`@dns_dot_ip`), `yandex_doh` (`@dns_doh_ip`); DoT and
+DoH go direct unless "Encrypted DNS via Outbound" is on. A member set to Off
+is not emitted and is not in the group; the group is declared after its
+members. With all three Off there is no group: the preset's DNS rule is
+dropped as pointing to a missing server, and the Force IPv4 `resolve` loses
+its `server` and resolves through the general DNS. The preset's DNS rules: for
 `ru-domains` + `ru-services` with Force IPv4 —
 `{ip_version: 6, action: predefined, rcode: NOERROR}`, then
 `{server: dns_ru, action: route}`. In routing, Force IPv4 adds `resolve`

@@ -38,14 +38,25 @@ DNS работает без настройки: шифрованная груп�
 | Переменная | Смысл | Умолчание |
 |---|---|---|
 | `dns_enable` («DNS») | DNS-часть пресета вкл/выкл | вкл |
-| `dns_ip` («UDP server IP») | адрес UDP-члена: Base / Safe / Family, v4/v6 | `77.88.8.8` |
+| `dns_ip` («UDP server IP») | адрес UDP-члена: Base / Safe / Family, v4/v6, или Off | `77.88.8.8` |
+| `dns_dot_ip` («DoT server IP») | адрес DoT-члена: Base / Safe / Family или Off | `77.88.8.88` |
+| `dns_doh_ip` («DoH server IP») | адрес DoH-члена: Base / Safe / Family или Off | `77.88.8.88` |
+| `dns_encrypted_via_outbound` («Encrypted DNS via Outbound») | DoT и DoH через канал пресета, а не напрямую | выкл |
 | `force_ipv4` («Force IPv4») | AAAA для ru-доменов не отдавать | вкл |
 | `outbound` | канал пресета (и UDP-члена) | `direct-out` |
 
-Группа `dns_ru` (`fastest`, `error_ttl 5m`, `win_ttl 5m`) над тремя
-членами по независимым путям: `yandex_udp` (`@dns_ip`, через канал
-пресета), `yandex_dot` (`77.88.8.88`, SNI `safe.dot.dns.yandex.net`, через
-`vpn-1`), `yandex_doh` (`77.88.8.88`, напрямую). DNS-правила пресета: для
+Профиль Яндекса (Base / Safe / Family) задаёт IP сервера, а не имя в TLS:
+DoT и DoH на любом из трёх адресов держат SNI `safe.dot.dns.yandex.net`
+(один сертификат на все адреса).
+
+Группа `dns_ru` (`fastest`, `error_ttl 5m`, `win_ttl 5m`) над членами (до
+трёх) по независимым путям: `yandex_udp` (`@dns_ip`, через канал пресета),
+`yandex_dot` (`@dns_dot_ip`), `yandex_doh` (`@dns_doh_ip`); DoT и DoH идут
+напрямую, пока выключена галка «Encrypted DNS via Outbound». Член в
+положении Off не эмитится и в группу не входит; группа объявлена после
+членов. Если выключены все три, группы нет: DNS-правило пресета снимается
+как ссылка на отсутствующий сервер, у `resolve` Force IPv4 снимается
+`server`, и резолв идёт общим DNS. DNS-правила пресета: для
 `ru-domains` + `ru-services` при Force IPv4 —
 `{ip_version: 6, action: predefined, rcode: NOERROR}`, затем
 `{server: dns_ru, action: route}`. В маршрутизации Force IPv4 добавляет

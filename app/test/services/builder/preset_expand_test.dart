@@ -1304,8 +1304,9 @@ void main() {
         realPreset('ru-direct'),
       );
 
+      // §697 — группа объявлена последней, после членов (слово владельца).
       expect(f.dnsServers.map((s) => s['tag']),
-          ['ru-direct:dns_ru', 'ru-direct:yandex_udp', 'ru-direct:yandex_dot', 'ru-direct:yandex_doh']);
+          ['ru-direct:yandex_udp', 'ru-direct:yandex_dot', 'ru-direct:yandex_doh', 'ru-direct:dns_ru']);
       Map<String, dynamic> byTag(String t) =>
           f.dnsServers.firstWhere((s) => s['tag'] == t);
 
@@ -1313,6 +1314,16 @@ void main() {
       expect(grp['servers'], ['ru-direct:yandex_udp', 'ru-direct:yandex_dot', 'ru-direct:yandex_doh']);
       expect(grp['mode'], 'fastest');
       expect(grp.containsKey('detour'), isFalse, reason: '§319');
+      expect(grp.containsKey('#enable'), isFalse);
+
+      // §697 — дефолты прежние: UDP 77.88.8.8, DoT/DoH 77.88.8.88 с SNI safe.
+      expect(byTag('ru-direct:yandex_udp')['server'], '77.88.8.8');
+      for (final t in ['ru-direct:yandex_dot', 'ru-direct:yandex_doh']) {
+        expect(byTag(t)['server'], '77.88.8.88', reason: t);
+        expect((byTag(t)['tls'] as Map)['server_name'], 'safe.dot.dns.yandex.net',
+            reason: t);
+        expect(byTag(t).containsKey('#enable'), isFalse, reason: t);
+      }
 
       // §684 (поправка 29.10): UDP идёт Направлением пресета (@outbound),
       // DoT и DoH — напрямую, пока галочка `dns_encrypted_via_outbound`
@@ -1358,6 +1369,52 @@ void main() {
       expect(byTag('ru-direct:yandex_udp')['detour'], 'vpn-2');
       expect(byTag('ru-direct:yandex_dot')['detour'], 'vpn-2');
       expect(byTag('ru-direct:yandex_doh')['detour'], 'vpn-2');
+    });
+
+    // §697 (issue #183) — у каждого сервера Яндекса свой IP и вариант Off:
+    // выключенный не эмитится и выпадает из группы.
+    group('ru-direct: серверы с вариантом Off (§697)', () {
+      List<Map<String, dynamic>> servers(Map<String, String> vars) =>
+          expandPreset(
+            CustomRulePreset(name: 'RU', presetId: 'ru-direct', varsValues: vars),
+            realPreset('ru-direct'),
+          ).dnsServers;
+
+      test('UDP Off → группа из DoT и DoH', () {
+        final s = servers(const {'dns_ip': 'off'});
+        expect(s.map((e) => e['tag']),
+            ['ru-direct:yandex_dot', 'ru-direct:yandex_doh', 'ru-direct:dns_ru']);
+        expect(s.last['servers'], ['ru-direct:yandex_dot', 'ru-direct:yandex_doh']);
+      });
+
+      test('один DoT с IP Base → группа из одного члена', () {
+        final s = servers(const {
+          'dns_ip': 'off',
+          'dns_dot_ip': '77.88.8.8',
+          'dns_doh_ip': 'off',
+        });
+        expect(s.map((e) => e['tag']), ['ru-direct:yandex_dot', 'ru-direct:dns_ru']);
+        expect(s.first['server'], '77.88.8.8');
+        expect(s.first['server_port'], 853);
+        expect(s.last['servers'], ['ru-direct:yandex_dot']);
+      });
+
+      test('DoH Family → server 77.88.8.7, SNI прежний', () {
+        final s = servers(const {'dns_doh_ip': '77.88.8.7'});
+        final doh = s.firstWhere((e) => e['tag'] == 'ru-direct:yandex_doh');
+        expect(doh['server'], '77.88.8.7');
+        expect((doh['tls'] as Map)['server_name'], 'safe.dot.dns.yandex.net');
+      });
+
+      test('все три Off → ни серверов, ни группы', () {
+        final s = servers(const {
+          'dns_ip': 'off',
+          'dns_dot_ip': 'off',
+          'dns_doh_ip': 'off',
+        });
+        expect(s, isEmpty,
+            reason: 'пустая группа = EmptyDnsGroup, fatal до старта ядра');
+      });
     });
 
     // §354 — сквозь ОБА слоя: expandPreset → эмиссионный фильтр §312. Именно

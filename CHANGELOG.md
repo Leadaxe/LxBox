@@ -58,6 +58,29 @@
   живут со старым решением. Старые правила с SSID открываются и
   сохраняются без изменений.)
 
+- **Ru internet segment: each Yandex DNS server can be turned off, DoT and
+  DoH get a profile choice
+  ([task 697](docs/spec/tasks/697-ru-direct-dns-servers-off.md),
+  [#183](https://github.com/Leadaxe/LxBox/issues/183)).** The preset
+  resolves Russian domains through a group of three Yandex servers: plain
+  UDP, DoT and DoH. Next to «UDP server IP» there are now «DoT server IP»
+  and «DoH server IP», and each of the three lists has «Off»: that server
+  is not used and leaves the group. The address sets the Yandex profile
+  (Base, Safe or Family) for DoT and DoH as it does for UDP; before, both
+  were fixed to Safe. With all three Off the preset's DNS works as with
+  its DNS switch off. Defaults are unchanged: UDP on 77.88.8.8, DoT and DoH
+  on 77.88.8.88.
+  (RU: Ru internet segment: любой DNS-сервер Яндекса можно выключить, у DoT
+  и DoH есть выбор профиля. Пресет резолвит русские домены группой из трёх
+  серверов Яндекса: обычный UDP, DoT и DoH. Рядом с «UDP server IP»
+  появились «DoT server IP» и «DoH server IP», в каждом из трёх списков
+  есть «Выключен»: этот сервер не используется и выходит из группы. Адрес
+  задаёт профиль Яндекса (Базовый, Безопасный или Семейный) у DoT и DoH
+  так же, как у UDP; раньше оба были закреплены за Безопасным. Если
+  выключены все три, DNS пресета работает как при выключенном тумблере
+  DNS. Значения по умолчанию прежние: UDP на 77.88.8.8, DoT и DoH на
+  77.88.8.88.)
+
 ### Fixed
 
 - **Members of a disabled DNS group could not be turned off or deleted

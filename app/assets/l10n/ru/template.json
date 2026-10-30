@@ -77,9 +77,6 @@
   "Apple": {
     "value": "Apple"
   },
-  "Applies to UDP only. DoH and DoT are pinned to 77.88.8.88 with SNI safe.dot.dns.yandex.net.": {
-    "value": "Действует только для UDP. DoH и DoT закреплены за 77.88.8.88 с SNI safe.dot.dns.yandex.net."
-  },
   "Apply this preset's FakeIP DNS handling. Turn off to disable FakeIP without removing the preset.": {
     "value": "Применять FakeIP-обработку DNS этого пресета. Выключите, чтобы отключить FakeIP, не удаляя пресет."
   },
@@ -703,6 +700,12 @@
   },
   "Send Yandex DoT and DoH through this preset's Outbound, like UDP. Off: they go direct.": {
     "value": "Отправлять DoT и DoH Яндекса через Outbound этого пресета, как UDP. Выключено — напрямую."
+  },
+  "The IP sets the Yandex DNS profile: Base, Safe or Family. Off: this server is not used.": {
+    "value": "IP задаёт профиль Яндекс DNS: Базовый, Безопасный или Семейный. «Выключен» — сервер не используется."
+  },
+  "Off": {
+    "value": "Выключен"
   },
   "IPv4 pool": {
     "value": "Пул IPv4"

@@ -807,7 +807,8 @@ The other parameters:
 | Traffic Processing | Resolve destination IP | On | Resolves the domain to an IP before choosing a route, so that IP and GeoIP rules match. |
 | Traffic Processing | Resolve strategy | `ipv4_only` | Which addresses to take in that resolution; for the link with IPv6, see [IPv6 in the tunnel](#ipv6-in-the-tunnel-is-off-turn-it-on-only-if-your-network-supports-it). |
 | Ru internet segment | DNS | On | The preset's DNS group resolves the preset's domains; without it Force IPv4 does not work. |
-| Ru internet segment | UDP server IP | `77.88.8.8 · Base` | The address of the Yandex UDP server. DoH and DoT stay on `77.88.8.88`. |
+| Ru internet segment | UDP server IP | `77.88.8.8 · Base` | The address of the Yandex UDP server; the address sets the profile (Base, Safe, Family). Off: plain UDP is not used. |
+| Ru internet segment | DoT server IP, DoH server IP | `77.88.8.88 · Safe` | The same for the encrypted servers. Off: that server is not used. With all three servers Off the preset's DNS works as with the DNS switch off. |
 | Ru internet segment | GeoIP IP-range fallback | On | Also checks the IP against Russian ranges: catches connections where the domain is not detected. Downloads a 150 KB list. |
 | Ru internet segment | Russian apps by package | On | Routes Russian apps (banks, marketplaces, Gosuslugi, Yandex, VK) by package name, whatever domains they open. Downloads a 4 KB list. |
 | Ru internet segment, Russia-only services | Force IPv4 | On | Resolves the preset's domains to IPv4 only: on a network without working IPv6, connections do not hang. |

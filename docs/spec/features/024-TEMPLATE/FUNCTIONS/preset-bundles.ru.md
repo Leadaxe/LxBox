@@ -50,7 +50,7 @@ DNS-серверы и DNS-правила.
 | BitTorrent | вкл | 980 | `protocol: bittorrent` | Outbound (`direct-out`) |
 | VoWiFi (carrier calling) | вкл | 990 | `pub.3gppnetwork.org`, UDP 500/4500 | Outbound, Match IKE ports |
 | Russia-only services | выкл | 1110 | внешний список «доступно только из РФ» | Outbound, Force IPv4 |
-| Ru internet segment | вкл | 1120 | ru-TLD, сервисы, GeoIP-RU, российские приложения | Outbound, DNS, UDP server IP, GeoIP IP-range fallback, Russian apps by package, Force IPv4 |
+| Ru internet segment | вкл | 1120 | ru-TLD, сервисы, GeoIP-RU, российские приложения | Outbound, DNS, UDP server IP, DoT server IP, DoH server IP, Encrypted DNS via Outbound, GeoIP IP-range fallback, Russian apps by package, Force IPv4 |
 | FakeIP | выкл | 1130 | только DNS (см. 005) | DNS, Block HTTPS records |
 | Unknown traffic | вкл | 1150 | трафик без приложения-владельца | Outbound (`direct-out`; `reject` — строгий вариант) |
 

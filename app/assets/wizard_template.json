@@ -537,7 +537,7 @@
       "vars": [
         {"name": "outbound", "type": "outbound", "default_value": "direct-out", "required": true, "title": "Outbound", "tooltip": "Where to route traffic for Russian domains and IPs"},
         {"name": "dns_enable", "type": "bool", "default_value": "true", "title": "DNS", "tooltip": "Send matched domains to this preset's DNS server and apply DNS-level options like Force IPv4. Turn off to keep routing without DNS changes."},
-        { "name": "dns_ip", "type": "enum", "title": "UDP server IP", "tooltip": "Applies to UDP only. DoH and DoT are pinned to 77.88.8.88 with SNI safe.dot.dns.yandex.net.",
+        { "name": "dns_ip", "type": "enum", "title": "UDP server IP", "tooltip": "The IP sets the Yandex DNS profile: Base, Safe or Family. Off: this server is not used.",
           "default_value": "77.88.8.8", "required": true,
           "options": [
             {"title": "77.88.8.8 · Base", "value": "77.88.8.8"},
@@ -549,7 +549,26 @@
             {"title": "2a02:6b8:0:1::feed:bad · Safe v6 alt", "value": "2a02:6b8:0:1::feed:bad"},
             {"title": "77.88.8.7 · Family", "value": "77.88.8.7"},
             {"title": "77.88.8.3 · Family alt", "value": "77.88.8.3"},
-            {"title": "2a02:6b8::feed:a11 · Family v6", "value": "2a02:6b8::feed:a11"}
+            {"title": "2a02:6b8::feed:a11 · Family v6", "value": "2a02:6b8::feed:a11"},
+            {"title": "Off", "value": "off"}
+          ]
+        },
+        { "name": "dns_dot_ip", "type": "enum", "title": "DoT server IP", "tooltip": "The IP sets the Yandex DNS profile: Base, Safe or Family. Off: this server is not used.",
+          "default_value": "77.88.8.88", "required": true,
+          "options": [
+            {"title": "77.88.8.8 · Base", "value": "77.88.8.8"},
+            {"title": "77.88.8.88 · Safe", "value": "77.88.8.88"},
+            {"title": "77.88.8.7 · Family", "value": "77.88.8.7"},
+            {"title": "Off", "value": "off"}
+          ]
+        },
+        { "name": "dns_doh_ip", "type": "enum", "title": "DoH server IP", "tooltip": "The IP sets the Yandex DNS profile: Base, Safe or Family. Off: this server is not used.",
+          "default_value": "77.88.8.88", "required": true,
+          "options": [
+            {"title": "77.88.8.8 · Base", "value": "77.88.8.8"},
+            {"title": "77.88.8.88 · Safe", "value": "77.88.8.88"},
+            {"title": "77.88.8.7 · Family", "value": "77.88.8.7"},
+            {"title": "Off", "value": "off"}
           ]
         },
         {"name": "dns_encrypted_via_outbound", "type": "bool", "default_value": "false", "title": "Encrypted DNS via Outbound", "tooltip": "Send Yandex DoT and DoH through this preset's Outbound, like UDP. Off: they go direct."},
@@ -594,10 +613,17 @@
         {"rule_set": ["ru-domains", "ru-services"], "server": "dns_ru", "action": "route"}
       ],
       "dns_servers": [
-        {"type": "group", "tag": "dns_ru", "servers": ["yandex_udp", "yandex_dot", "yandex_doh"], "mode": "fastest", "error_ttl": "5m", "win_ttl": "5m", "description": "RU DNS group (UDP + DoT + DoH)"},
-        {"type": "udp", "tag": "yandex_udp", "server": "@dns_ip", "server_port": 53, "description": "Yandex UDP (IP from above)", "detour": "@outbound"},
-        {"type": "tls", "tag": "yandex_dot", "server": "77.88.8.88", "server_port": 853, "description": "Yandex Safe DoT", "tls": {"enabled": true, "server_name": "safe.dot.dns.yandex.net"}, "#if": ["@dns_encrypted_via_outbound", {"detour": "@outbound"}]},
-        {"type": "https", "tag": "yandex_doh", "server": "77.88.8.88", "server_port": 443, "path": "/dns-query", "description": "Yandex Safe DoH", "tls": {"enabled": true, "server_name": "safe.dot.dns.yandex.net"}, "#if": ["@dns_encrypted_via_outbound", {"detour": "@outbound"}]}
+        {"type": "udp", "tag": "yandex_udp", "#enable": {"#not": {"@dns_ip": "off"}}, "server": "@dns_ip", "server_port": 53, "description": "Yandex UDP (IP from above)", "detour": "@outbound"},
+        {"type": "tls", "tag": "yandex_dot", "#enable": {"#not": {"@dns_dot_ip": "off"}}, "server": "@dns_dot_ip", "server_port": 853, "description": "Yandex DoT (IP from above)", "tls": {"enabled": true, "server_name": "safe.dot.dns.yandex.net"}, "#if": ["@dns_encrypted_via_outbound", {"detour": "@outbound"}]},
+        {"type": "https", "tag": "yandex_doh", "#enable": {"#not": {"@dns_doh_ip": "off"}}, "server": "@dns_doh_ip", "server_port": 443, "path": "/dns-query", "description": "Yandex DoH (IP from above)", "tls": {"enabled": true, "server_name": "safe.dot.dns.yandex.net"}, "#if": ["@dns_encrypted_via_outbound", {"detour": "@outbound"}]},
+        {"type": "group", "tag": "dns_ru",
+          "#enable": {"#or": [{"#not": {"@dns_ip": "off"}}, {"#not": {"@dns_dot_ip": "off"}}, {"#not": {"@dns_doh_ip": "off"}}]},
+          "servers": [
+            {"#if": {"#and": [{"#not": {"@dns_ip": "off"}}], "#value": "yandex_udp"}},
+            {"#if": {"#and": [{"#not": {"@dns_dot_ip": "off"}}], "#value": "yandex_dot"}},
+            {"#if": {"#and": [{"#not": {"@dns_doh_ip": "off"}}], "#value": "yandex_doh"}}
+          ],
+          "mode": "fastest", "error_ttl": "5m", "win_ttl": "5m", "description": "RU DNS group (UDP + DoT + DoH)"}
       ]
     },
     {
