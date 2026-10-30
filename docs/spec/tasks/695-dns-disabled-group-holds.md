@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | In progress (итерация 3; итерации 1–2 ниже в «Истории» откатываются этой же задачей) |
+| Статус | Done (итерация 3; итерации 1–2 откатаны; эмулятор не проверен) |
 | Дата начала | 2026-10-30 |
 | Источник | issue #182 (@paratroop3r): после 2.25.17 из Shield DNS нельзя убрать лишний сервер, его члены нельзя выключить и удалить, выключение Shield ничего не меняет. Решения владельца 30.10.2026 — модель из шести правил ниже |
 | Связанные | §680 (каталог, локи «used by» по списку — остаются как были), §117 (override: inline-запись с тегом шаблона; force-include серверов пресетов и правил — не трогаем), §312 (форма состава inline-группы, фильтр членов в сборке), §419 (heal битых пикеров — остаётся для настоящего dangling), §681 (бэкап: `used_by`, template_catalog), §682 (⚠ резолвер через туннель, Duplicate), §684 (`safe_dns_dot.dom_resolver` = `google_doh`) |
@@ -208,4 +208,62 @@ template), `dns_server_catalog_screen_test.dart` (цепочка правила 
 
 ## Итог
 
-Заполняется исполнителем.
+Сделано (итерация 3, эмулятор не проверен):
+
+- Откат итераций 1–2: `dnsServerRefEmitted(resolverReferenced:)`,
+  `resolverReferencedTags`, `dnsResolverForcedTags`, чтение пикеров в
+  `applyCustomDns`; `usedByResolver`, `danglingResolver`, строка ⚠ в тайле,
+  `notInListDnsTags` / «(not in list)» и их строки ru/zh; `enabled` в
+  `dnsServerListHolds` (лок от любой записи, §680). Оставлены SnackBar пустой
+  группы, счётчик членов по списку, текст §419 «is not in the list».
+- Правило 1: у шаблонной записи на Params под vars `ServerFormSection`
+  (тело = шаблон после vars); `snapshot()` при отличии тела от шаблона с
+  текущими vars даёт `DnsServerInline` с тем же тегом; смена var после
+  правки формы переносит в тело только изменённые ей ключи. ⋮ → «Reset to
+  template» у override шаблона (`resetToTemplateSnapshot`), без
+  подтверждения. JSON-превью шаблонной записи — тело формы.
+- Правило 2: `enabledServerTags` только по `enabled`; пикер членов группы —
+  только включённые записи (`DnsMemberOption.selectable`), уже стоящий в
+  составе выключенный член виден с прежней пометкой.
+- Правило 4: `dnsCatalogDependencies` (члены группы рекурсивно, цель
+  `domain_resolver` после дефолтов vars, только теги каталога); Add и Add all
+  добавляют их включёнными, SnackBar «Also added: …».
+- Правило 5: `normalizeReferencedDnsServers` — шаг 4 в
+  `resolveDnsServersList` (новые параметры `dnsFinal`, `defaultResolver`,
+  `ruleReferencedTags`; серверы пресетов — ключи `presetServersByTag`),
+  строка `DNS server "X" enabled: referenced by …` в AppLog (словарь
+  `used_by`). Вызывающие: `applyCustomDns` (`resolverPickers` из vars
+  `build_config`) и `DnsController.load`.
+- Бэкап §681: ключ слияния inline/template — тег (`server\0<tag>`), override и
+  шаблонная запись не задваиваются, побеждает локальная; inline-запись файла
+  с тегом каталога закрывает тег от снятия template-записи приёмника.
+- Save группы с пустым `servers[]` (inline и правленая шаблонная) не
+  проходит: SnackBar «A group needs at least one member.» (`groupHasNoMembers`).
+- Доки: пометка §695 в §680 п. 4 снята, `STORAGE.md` — override у
+  `dns.servers`, CHANGELOG — запись §695 переписана.
+
+Отклонения:
+
+- Пикер detour у шаблонной записи не добавлен: detour задаёт var `outbound`
+  над формой, второй контрол того же ключа дублировал бы его. У типа вне
+  формы (`local`) формы нет: JSON шаблонной записи read-only.
+- SnackBar правила 4 перечисляет описания без роли («(domain resolver)» из
+  макета не выводится); при одиночном Add идёт второй строкой под «Added …».
+- Строка нормализации — в лог приложения на английском, в l10n не входит.
+- Правило 5: сам сервер включённого пресета ссылкой не считается и не
+  включается — его выключатель хранится как есть (сборка эмитит его
+  force-include, §117 не трогаем); иначе ломался `preset_dns_server_ref_test`
+  (выключенный preset-сервер 2.23.2 должен остаться выключенным). Пикеры,
+  группы, `domain_resolver` и правила — включают.
+- `dns_backup.dart` правился сверх списка «Файлы»: без этого кейс риска
+  (override `dns_shield` против template-записи файла) давал два сервера с
+  одним тегом.
+
+Прогоны (по одному файлу): `dns_group_test`, `resolved_server_locks_test`,
+`locked_switch_test`, `dns_server_catalog_screen_test`,
+`dns_servers_resolver_test` — зелёные; `edit_controller_test`,
+`dns_backup_merge_test` — зелёные после правки (30 и 32 теста);
+`preset_dns_server_ref_test` — зелёный после исключения пресета из
+нормализации; `backup_corpus_test`, `lx_backup_test`,
+`lx_backup_roundtrip_test`, `dns_template_vars_import_test` (ключ слияния
+бэкапа) — зелёные; hardcoded_check — 0/0.

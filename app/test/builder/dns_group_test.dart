@@ -183,71 +183,15 @@ void main() {
           '(disabled)'));
     });
 
-    // §696 — сервер пикеров DNS Final / Default Domain Resolver — третий
-    // источник force-include; у группы — рекурсивно её члены.
-    test('§696 выключенный сервер под пикером эмитится, без пикера — нет', () {
-      List<String> tags(Set<String> resolverTags) => [
-            for (final b in resolveDnsServersBodies(
-              resolved: [
-                inlineRef('a', {'type': 'udp', 'server': '1.1.1.1'},
-                    enabled: false),
-                inlineRef('b', {'type': 'udp', 'server': '8.8.8.8'}),
-              ],
-              templateByTag: const {},
-              presetServersByTag: const {},
-              resolverReferencedTags: resolverTags,
-            ))
-              b['tag'] as String,
-          ];
-      expect(tags(const {'a'}), ['a', 'b']);
-      expect(tags(const {}), ['b']);
-      expect(tags(const {'gone'}), ['b']);
-    });
-
-    test('§696 выключенная группа под пикером эмитится с выключенными '
-        'членами, вложенная группа — тоже', () {
-      final warnings = <String>[];
-      final refs = [
-        for (final t in six)
-          inlineRef(t, {'type': 'udp', 'server': '1.1.1.1'},
-              enabled: t == 'a'),
-        inlineRef('inner', groupBody(['e', 'f']), enabled: false),
-        inlineRef('shield', groupBody(['a', 'b', 'c', 'inner'],
-            mode: 'fastest'), enabled: false),
-      ];
-      final out = resolveDnsServersBodies(
-        resolved: refs,
-        templateByTag: const {},
-        presetServersByTag: const {},
-        resolverReferencedTags: const {'shield'},
-        warningsOut: warnings,
-      );
-      final emitted = [for (final b in out) b['tag']];
-      expect(emitted, containsAll(['a', 'b', 'c', 'e', 'f', 'inner',
-          'shield']));
-      expect(emitted, isNot(contains('d')));
-      final grp = out.firstWhere((b) => b['tag'] == 'shield');
-      expect(grp['servers'], ['a', 'b', 'c', 'inner']);
-      expect(out.firstWhere((b) => b['tag'] == 'inner')['servers'],
-          ['e', 'f']);
-      expect(warnings, isEmpty);
-
-      // Без пикера — группа и выключенные члены не эмитятся.
-      final plain = resolveDnsServersBodies(
-        resolved: refs,
-        templateByTag: const {},
-        presetServersByTag: const {},
-      );
-      expect([for (final b in plain) b['tag']], ['a']);
-    });
-
-    test('§696 цикл групп под пикером не зацикливает раскрытие', () {
-      final forced = dnsResolverForcedTags(['g1'], (t) => switch (t) {
-            'g1' => groupBody(['g2', 'x']),
-            'g2' => groupBody(['g1']),
-            _ => null,
-          });
-      expect(forced, {'g1', 'g2', 'x'});
+    // §695 правило 6 — сборка ничего не форсирует ради пикеров: выключенная
+    // группа не эмитится (выбранное в пикере включено нормализацией).
+    test('§695 выключенная группа и её выключенные члены не эмитятся', () {
+      final out = emit([
+        inlineRef('a', {'type': 'udp', 'server': '1.1.1.1'}),
+        inlineRef('b', {'type': 'udp', 'server': '8.8.8.8'}, enabled: false),
+        inlineRef('shield', groupBody(['a', 'b']), enabled: false),
+      ]);
+      expect([for (final b in out) b['tag']], ['a']);
     });
 
     test('незнакомый редактору член не судится, self/повтор снимаются', () {
@@ -377,6 +321,66 @@ void main() {
       expect(r.issues.whereType<BadResolverServerType>(), isEmpty);
       expect(r.issues,
           contains(const DanglingDnsServerRef('dns.final', 'ghost')));
+    });
+  });
+
+  // §695 правило 5 — на что есть ссылка, то включено.
+  group('§695 нормализация ссылок', () {
+    final tpl = <String, Map<String, dynamic>>{
+      'safe': {
+        'vars': [
+          {'name': 'dom_resolver', 'type': 'dns_servers',
+            'default_value': 'gdoh'},
+        ],
+        'server': {'type': 'tls', 'tag': 'safe', 'server': 'x.example',
+          'domain_resolver': '@dom_resolver'},
+      },
+    };
+
+    test('выключенная группа под пикерами и её члены включаются', () {
+      final r = normalizeReferencedDnsServers([
+        inlineRef('a', {'type': 'udp', 'server': '1.1.1.1'}, enabled: false),
+        inlineRef('b', {'type': 'udp', 'server': '8.8.8.8'}, enabled: false),
+        inlineRef('free', {'type': 'udp', 'server': '9.9.9.9'},
+            enabled: false),
+        inlineRef('shield', groupBody(['a', 'b']), enabled: false),
+      ], templateByTag: const {}, dnsFinal: 'shield',
+          defaultResolver: 'shield');
+      expect({for (final s in r.list) s.tag: s.enabled},
+          {'a': true, 'b': true, 'free': false, 'shield': true});
+      expect(r.enabled['shield'], ['final', 'default_domain_resolver']);
+      expect(r.enabled['a'], ['group:shield']);
+      expect(r.enabled.containsKey('free'), isFalse);
+    });
+
+    test('domain_resolver шаблона (дефолт var) и правило держат; сервер '
+        'пресета — нет (его выключатель хранится)',
+        () {
+      final r = normalizeReferencedDnsServers([
+        const DnsServerTemplate(enabled: false, tag: 'safe'),
+        inlineRef('gdoh', {'type': 'https', 'server': '8.8.8.8'},
+            enabled: false),
+        inlineRef('p:x', {'type': 'udp', 'server': '1.1.1.1'},
+            enabled: false),
+        inlineRef('r', {'type': 'udp', 'server': '1.0.0.1'}, enabled: false),
+      ], templateByTag: tpl, presetServersByTag: const {
+        'p:x': {'type': 'udp', 'server': '1.1.1.1'},
+      }, ruleReferencedTags: const {'r'});
+      expect({for (final s in r.list) s.tag: s.enabled},
+          {'safe': false, 'gdoh': true, 'p:x': false, 'r': true});
+      expect(r.enabled['gdoh'], ['server:safe']);
+    });
+
+    test('консистентный список не меняется', () {
+      final refs = [
+        inlineRef('a', {'type': 'udp', 'server': '1.1.1.1'}),
+        inlineRef('free', {'type': 'udp', 'server': '9.9.9.9'},
+            enabled: false),
+      ];
+      final r = normalizeReferencedDnsServers(refs,
+          templateByTag: const {}, dnsFinal: 'a', defaultResolver: 'gone');
+      expect(r.list, refs);
+      expect(r.enabled, isEmpty);
     });
   });
 }

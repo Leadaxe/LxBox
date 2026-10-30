@@ -143,6 +143,13 @@ class _DnsServerEditScreenState extends State<DnsServerEditScreen> {
         );
         return;
       }
+      // §695: у группы обязателен хотя бы один член.
+      if (_ctrl.groupHasNoMembers) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(getLocalText.s("A group needs at least one member."))),
+        );
+        return;
+      }
       // §435: у tailscale обязателен endpoint — без него сервер мёртв
       // (санитайзер сборки выбросит его с warning), хранить нечего.
       if (_ctrl.isTailscale && _ctrl.tailscaleEndpoint.isEmpty) {
@@ -184,8 +191,34 @@ class _DnsServerEditScreenState extends State<DnsServerEditScreen> {
         if (replace != true || !mounted) return;
       }
     }
+    // §695 — правленое тело шаблонной записи уходит override'ом: тот же
+    // гейт адреса, что у inline.
+    if (_ctrl.templateBodyEdited &&
+        _ctrl.serverMode != null &&
+        !_ctrl.isGroup &&
+        !_ctrl.isTailscale &&
+        _ctrl.addressCtrl.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(getLocalText.s("Server address is required"))),
+      );
+      return;
+    }
+    if (_ctrl.templateBodyEdited && _ctrl.groupHasNoMembers) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(getLocalText.s("A group needs at least one member."))),
+      );
+      return;
+    }
     if (!mounted) return;
     Navigator.pop(context, DnsServerEditResult.saved(_ctrl.snapshot()));
+  }
+
+  /// §695 — «Reset to template»: override снова шаблонная запись (тег,
+  /// `enabled`, description те же, vars — дефолты). Без подтверждения.
+  void _resetToTemplate() {
+    if (!_ctrl.canResetToTemplate) return;
+    Navigator.pop(
+        context, DnsServerEditResult.saved(_ctrl.resetToTemplateSnapshot()));
   }
 
   /// §682 — Duplicate: копия текущего состояния формы уходит caller'у,
@@ -315,6 +348,7 @@ class _DnsServerEditScreenState extends State<DnsServerEditScreen> {
                   PopupMenuButton<String>(
                     onSelected: (v) {
                       if (v == 'duplicate') _duplicate();
+                      if (v == 'reset_template') _resetToTemplate();
                     },
                     itemBuilder: (_) => [
                       PopupMenuItem<String>(
@@ -326,6 +360,17 @@ class _DnsServerEditScreenState extends State<DnsServerEditScreen> {
                           title: Text(getLocalText.s("Duplicate")),
                         ),
                       ),
+                      if (_ctrl.canResetToTemplate)
+                        PopupMenuItem<String>(
+                          value: 'reset_template',
+                          child: ListTile(
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            leading: const Icon(Icons.settings_backup_restore,
+                                size: 20),
+                            title: Text(getLocalText.s("Reset to template")),
+                          ),
+                        ),
                     ],
                   ),
               ],

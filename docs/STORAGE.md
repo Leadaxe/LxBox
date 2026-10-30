@@ -68,7 +68,7 @@ lxbox_settings.json                          # SettingsStorage (Dart), the main 
 │       └─ resolve               object?       §247 — {only, strategy?, serverTag?, …}
 │
 ├─ dns                           object          §044/§061/§439 — DNS records
-│   ├─ servers[]                 list          {kind: user|preset|template, …}
+│   ├─ servers[]                 list          {kind: user|preset|template, …}; user with a template tag = override (§117/§695)
 │   └─ rules[]                   list          {kind: user|preset|srs|template, …}
 │
 ├─ ping_options                  object          §040

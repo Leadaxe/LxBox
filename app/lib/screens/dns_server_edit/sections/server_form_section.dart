@@ -244,7 +244,8 @@ class _GroupSection extends StatelessWidget {
     final self = c.tagCtrl.text.trim();
     final options = [
       for (final o in c.dnsMemberOptions)
-        if (o.tag != self) o,
+        // §695 правило 2 — выключенную запись в состав не добавить.
+        if (o.tag != self && (o.selectable || members.contains(o.tag))) o,
     ];
     // Члены, которых нет среди известных опций (введены JSON-вкладкой /
     // сервер удалён) — показываем строкой, чтобы юзер мог снять.

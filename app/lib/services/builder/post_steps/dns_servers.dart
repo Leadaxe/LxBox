@@ -106,10 +106,19 @@ Map<String, dynamic>? resolveTemplateDnsServerBody(
 ///
 /// §439 A1 — записи, которые кодек не читает (незнакомый вид), сюда не
 /// приходят и сохранением не стираются: их держит репозиторий.
+///
+/// §695 правило 5 — после посева нормализация ссылок
+/// ([normalizeReferencedDnsServers]): выключенная запись, на которую есть
+/// ссылка, включается. Значения пикеров — [dnsFinal] / [defaultResolver]
+/// (пусто = не проверять), цели DNS-опций маршрутных правил —
+/// [ruleReferencedTags]. Каждое включение — строка в лог приложения.
 Future<List<DnsServerRef>> resolveDnsServersList({
   required List<Map<String, dynamic>> templateServers,
   required Map<String, Map<String, dynamic>> presetServersByTag,
   Map<String, String> presetIdByTag = const {},
+  String dnsFinal = '',
+  String defaultResolver = '',
+  Set<String> ruleReferencedTags = const {},
 }) async {
   final stored = await SettingsStorage.getDnsServers();
   // §680 — посев шаблонных серверов один раз: признак «список создан» —
@@ -155,12 +164,86 @@ Future<List<DnsServerRef>> resolveDnsServersList({
     }
   }
 
-  // Step 4: persist if changed (не писать на каждый load). Посев меняет
-  // состав — ключ записывается, и шаг 3 больше не выполняется.
-  if (!const ListEquality<DnsServerRef>().equals(stored, result)) {
-    await SettingsStorage.saveDnsServers(result);
+  // Step 4 (§695 правило 5): на что есть ссылка, то включено. Старое
+  // состояние (до 2.25.17 можно было выключить группу под пикерами) лечится
+  // здесь; у консистентного списка шаг ничего не меняет.
+  final normalized = normalizeReferencedDnsServers(
+    result,
+    templateByTag: templateByTag,
+    presetServersByTag: presetServersByTag,
+    dnsFinal: dnsFinal,
+    defaultResolver: defaultResolver,
+    ruleReferencedTags: ruleReferencedTags,
+  );
+  for (final e in normalized.enabled.entries) {
+    AppLog.I.info(
+        'DNS server "${e.key}" enabled: referenced by ${e.value.join(', ')}');
   }
-  return result;
+
+  // Step 5: persist if changed (не писать на каждый load). Посев меняет
+  // состав — ключ записывается, и шаг 3 больше не выполняется.
+  if (!const ListEquality<DnsServerRef>().equals(stored, normalized.list)) {
+    await SettingsStorage.saveDnsServers(normalized.list);
+  }
+  return normalized.list;
+}
+
+/// §695 правило 5 — выключенные записи [servers], на которые есть ссылка по
+/// правилу 3, получают `enabled: true`. Ссылки (независимо от `enabled`
+/// ссылающейся записи): член группы и `domain_resolver` другого сервера
+/// списка ([dnsServerListHolds]; тело template — после подстановки vars),
+/// [dnsFinal] / [defaultResolver], цель DNS-опции маршрутного правила
+/// ([ruleReferencedTags]). Сам сервер пресета ссылкой не считается: его
+/// выключатель хранится как есть, сборка эмитит его force-include (§117);
+/// [presetServersByTag] — только тела для ссылок. Возвращает список
+/// (порядок прежний) и включённые теги → источники в словаре `used_by`
+/// (`group:<tag>`, `final`, `rule`). — pure.
+({List<DnsServerRef> list, Map<String, List<String>> enabled})
+    normalizeReferencedDnsServers(
+  List<DnsServerRef> servers, {
+  required Map<String, Map<String, dynamic>> templateByTag,
+  Map<String, Map<String, dynamic>> presetServersByTag = const {},
+  String dnsFinal = '',
+  String defaultResolver = '',
+  Set<String> ruleReferencedTags = const {},
+}) {
+  if (servers.every((s) => s.enabled)) {
+    return (list: servers, enabled: const {});
+  }
+  final bodies = <({String tag, Map<String, dynamic> body})>[
+    for (final s in servers)
+      if (s.tag.isNotEmpty)
+        if (switch (s) {
+          DnsServerInline(:final body) => body,
+          DnsServerTemplate(:final tag, :final varValues) =>
+            switch (templateByTag[tag]) {
+              final t? => resolveTemplateDnsServerBody(t, varValues: varValues),
+              null => null,
+            },
+          DnsServerPreset(:final tag) => presetServersByTag[tag],
+        }
+            case final body?)
+          (tag: s.tag, body: body),
+  ];
+  final holds = dnsServerListHolds(bodies,
+      dnsFinal: dnsFinal, defaultResolver: defaultResolver);
+  final enabled = <String, List<String>>{};
+  final list = <DnsServerRef>[];
+  for (final s in servers) {
+    final by = s.enabled
+        ? const <String>[]
+        : [
+            for (final h in holds[s.tag] ?? const <DnsServerHold>[]) h.usedBy,
+            if (ruleReferencedTags.contains(s.tag)) 'rule',
+          ];
+    if (by.isEmpty) {
+      list.add(s);
+    } else {
+      enabled[s.tag] = by;
+      list.add(s.withEnabled(true));
+    }
+  }
+  return (list: list, enabled: enabled);
 }
 
 /// §043 + §044 + §117: Resolves ref-list в final list of sing-box server
@@ -182,10 +265,6 @@ Future<List<DnsServerRef>> resolveDnsServersList({
 ///   пресетом (tag есть в `presetServersByTag`) ИЛИ активным правилом с
 ///   DNS-опцией (tag в [ruleReferencedTags], задача 3), — **force-include**
 ///   независимо от `enabled` — иначе DNS-правило ссылается в пустоту.
-///   §696 — третий источник: сервер, выбранный в DNS Final / Default Domain
-///   Resolver ([resolverReferencedTags]); у группы force-include
-///   распространяется на её `servers[]` рекурсивно — иначе §312 опустошил бы
-///   её до фатального `EmptyDnsGroup`.
 /// - `detour` нормализуется ([normalizeDnsDetour]): `direct-out` → ключ не
 ///   пишется (§117 решение №2). §441 (SPEC 129 Н10, вторая линия
 ///   fail-closed) — `detour` на тег, которого нет в [knownOutboundTags],
@@ -208,8 +287,6 @@ List<Map<String, dynamic>> resolveDnsServersBodies({
   required Map<String, Map<String, dynamic>> presetServersByTag,
   Set<String>? knownOutboundTags,
   Set<String> ruleReferencedTags = const {},
-  // §696 — теги, выбранные в `dns.final` / `default_domain_resolver`.
-  Set<String> resolverReferencedTags = const {},
   List<String>? warningsOut,
   // §435 — эмитированные endpoint'ы `tailscale`: цели поля `endpoint`
   // DNS-сервера того же типа. `null` = проверку не делать (вызовы UI).
@@ -233,36 +310,6 @@ List<Map<String, dynamic>> resolveDnsServersBodies({
     return true;
   }
 
-  Map<String, dynamic>? bodyOf(DnsServerRef entry, List<String> unknownVars) =>
-      switch (entry) {
-        DnsServerInline(:final body) => Map<String, dynamic>.from(body),
-        DnsServerTemplate(:final varValues) =>
-          switch (templateByTag[entry.tag]) {
-            final t? => resolveTemplateDnsServerBody(t,
-                varValues: varValues,
-                globalVars: globalVars,
-                unknownVarsOut: unknownVars),
-            null => null,
-          },
-        DnsServerPreset() => switch (presetServersByTag[entry.tag]) {
-            final p? => Map<String, dynamic>.from(p),
-            null => null,
-          },
-      };
-
-  // §696 — серверы пикеров с раскрытием групп.
-  final byTag = <String, DnsServerRef>{};
-  for (final e in resolved) {
-    if (e.tag.isNotEmpty) byTag.putIfAbsent(e.tag, () => e);
-  }
-  final resolverForced = dnsResolverForcedTags(
-    resolverReferencedTags,
-    (tag) => switch (byTag[tag]) {
-      final e? => bodyOf(e, <String>[]),
-      null => null,
-    },
-  );
-
   for (final entry in resolved) {
     final tag = entry.tag;
     if (tag.isEmpty) continue;
@@ -270,13 +317,25 @@ List<Map<String, dynamic>> resolveDnsServersBodies({
       enabled: entry.enabled,
       presetReferenced: presetServersByTag.containsKey(tag),
       ruleReferenced: ruleReferencedTags.contains(tag),
-      resolverReferenced: resolverForced.contains(tag),
     )) {
       continue;
     }
     if (seen.contains(tag)) continue;
     final unknownVars = <String>[];
-    final body = bodyOf(entry, unknownVars);
+    final Map<String, dynamic>? body = switch (entry) {
+      DnsServerInline(:final body) => Map<String, dynamic>.from(body),
+      DnsServerTemplate(:final varValues) => switch (templateByTag[tag]) {
+          final t? => resolveTemplateDnsServerBody(t,
+              varValues: varValues,
+              globalVars: globalVars,
+              unknownVarsOut: unknownVars),
+          null => null,
+        },
+      DnsServerPreset() => switch (presetServersByTag[tag]) {
+          final p? => Map<String, dynamic>.from(p),
+          null => null,
+        },
+    };
     if (body == null) continue;
     for (final name in unknownVars.toSet()) {
       warningsOut?.add('DNS server "$tag": "@$name" is declared neither by '
@@ -320,39 +379,13 @@ List<Map<String, dynamic>> resolveDnsServersBodies({
 
 /// §117/§671 — эмитится ли ref-запись DNS-сервера: включённая, либо
 /// реферимая активным пресетом или правилом с DNS-опцией (force-include,
-/// locked №7), либо (§696) выбранная в DNS Final / Default Domain Resolver
-/// или член такой группы. Один критерий для сборки и превью редактора.
+/// locked №7). Один критерий для сборки и превью редактора.
 bool dnsServerRefEmitted({
   required bool enabled,
   bool presetReferenced = false,
   bool ruleReferenced = false,
-  bool resolverReferenced = false,
 }) =>
-    enabled || presetReferenced || ruleReferenced || resolverReferenced;
-
-/// §696 — теги, которые пикеры DNS Final / Default Domain Resolver
-/// ([seeds]) делают force-include: сами выбранные серверы и, если сервер —
-/// группа (`type: group`), её `servers[]` рекурсивно (вложенные группы;
-/// `seen` защищает от цикла — сам цикл ловит валидатор). [bodyOf] — тело
-/// записи списка по тегу (после подстановки vars) или `null`. Общая для
-/// сборки и вкладки DNS. — pure.
-Set<String> dnsResolverForcedTags(
-  Iterable<String> seeds,
-  Map<String, dynamic>? Function(String tag) bodyOf,
-) {
-  final seen = <String>{};
-  final queue = [...seeds];
-  while (queue.isNotEmpty) {
-    final tag = queue.removeLast();
-    if (tag.isEmpty || !seen.add(tag)) continue;
-    final body = bodyOf(tag);
-    if (body == null || body['type'] != 'group') continue;
-    for (final m in (body['servers'] as List<dynamic>? ?? const [])) {
-      if (m is String && !seen.contains(m)) queue.add(m);
-    }
-  }
-  return seen;
-}
+    enabled || presetReferenced || ruleReferenced;
 
 /// §312/§671 — причина, по которой член [member] группы [selfTag] не
 /// эмитится, или `null` (член остаётся). [kept] — уже принятые члены (повтор),

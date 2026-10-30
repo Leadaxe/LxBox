@@ -57,9 +57,7 @@ class DnsServerHold {
 
   @override
   bool operator ==(Object other) =>
-      other is DnsServerHold &&
-      other.kind == kind &&
-      other.source == source;
+      other is DnsServerHold && other.kind == kind && other.source == source;
 
   @override
   int get hashCode => Object.hash(kind, source);
@@ -74,23 +72,10 @@ class DnsServerHold {
 /// - `domain_resolver` другого сервера (строка или `{server}`; у template —
 ///   после подстановки vars, `dom_resolver` у `safe_dns_dot`);
 /// - [dnsFinal] / [defaultResolver].
-///
-/// §695 — группа и `domain_resolver` держат только от записей с `enabled`
-/// (вызывающий передаёт `enabled || forceIncluded`: такую запись сборка
-/// эмитит). Выключенная запись никого не держит (отменяет §680 п. 4).
-/// §696 — группа под [dnsFinal] / [defaultResolver] сборкой эмитится всегда
-/// (force-include), вызывающий передаёт её как включённую: держит всех
-/// членов; исключение §695 «(last member)» снято. [dnsFinal] /
-/// [defaultResolver] держат всегда.
-///
-/// Импорт бэкапа ([dnsServerFirstHolds], §681, контракт 1.1.135) передаёт
-/// все записи с `enabled: true`: там `group:<tag>` держит по наличию группы
-/// в списке файла, как у лаунчера. Расхождение с вкладкой осознанное.
-///
-/// [servers] — тег, тело в emit-форме и `enabled`, в порядке списка. Ссылка
-/// сервера на себя не считается. — pure.
+/// [servers] — тег и тело в emit-форме, в порядке списка. Ссылка сервера на
+/// себя не считается. — pure.
 Map<String, List<DnsServerHold>> dnsServerListHolds(
-  Iterable<({String tag, Map<String, dynamic> body, bool enabled})> servers, {
+  Iterable<({String tag, Map<String, dynamic> body})> servers, {
   String dnsFinal = '',
   String defaultResolver = '',
 }) {
@@ -102,7 +87,6 @@ Map<String, List<DnsServerHold>> dnsServerListHolds(
   }
 
   for (final s in servers) {
-    if (!s.enabled) continue;
     if (s.body['type'] == 'group') {
       for (final m in (s.body['servers'] as List<dynamic>? ?? const [])) {
         add(m?.toString(), DnsServerHold(DnsHoldKind.group, s.tag),
@@ -197,9 +181,7 @@ Map<String, DnsServerHold> dnsServerFirstHolds({
       for (final s in p.servers)
         if (s['tag'] case final String tag when tag.isNotEmpty) tag: s,
   };
-  // §695 — все записи как включённые: импорт держит члены по наличию
-  // группы в файле (контракт 1.1.135), `enabled` не смотрит.
-  final bodies = <({String tag, Map<String, dynamic> body, bool enabled})>[
+  final bodies = <({String tag, Map<String, dynamic> body})>[
     for (final s in servers)
       if (s.tag.isNotEmpty)
         if (switch (s) {
@@ -212,7 +194,7 @@ Map<String, DnsServerHold> dnsServerFirstHolds({
           DnsServerPreset(:final tag) => presetBodies[tag],
         }
             case final body?)
-          (tag: s.tag, body: body, enabled: true),
+          (tag: s.tag, body: body),
   ];
   for (final e in dnsServerListHolds(bodies,
           dnsFinal: dnsFinal, defaultResolver: defaultResolver)

@@ -2,7 +2,7 @@ import '../../models/custom_rule.dart';
 import '../../models/dns_ref.dart';
 import '../../models/parser_config.dart' show WizardVar;
 import '../../services/builder/post_steps.dart'
-    show dnsResolverForcedTags, resolveTemplateDnsServerBody;
+    show resolveTemplateDnsServerBody;
 import '../../services/builder/preset_expand.dart' show normalizeDnsDetour;
 import '../../services/dns/dns_server_holds.dart';
 import 'resolved_server.dart';
@@ -36,7 +36,7 @@ List<ResolvedServer> resolveDisplayedServers(
   String dnsFinalLabel = 'DNS Final',
   String defaultResolverLabel = 'Default Domain Resolver',
 }) {
-  var out = <ResolvedServer>[];
+  final out = <ResolvedServer>[];
   for (final ref in servers) {
     final tag = ref.tag;
     if (tag.isEmpty) continue;
@@ -127,19 +127,6 @@ List<ResolvedServer> resolveDisplayedServers(
   // §044: render-order — template → preset → inline (см. ServerKind enum).
   // Stable sort: внутри каждой группы insertion-order сохраняется.
   out.sort((a, b) => a.kind.index.compareTo(b.kind.index));
-  // §696 — серверы пикеров и члены их групп сборка эмитит всегда.
-  final bodyByTag = <String, Map<String, dynamic>>{};
-  for (final s in out) {
-    bodyByTag.putIfAbsent(s.tag, () => s.body);
-  }
-  final resolverForced =
-      dnsResolverForcedTags([dnsFinal, defaultResolver], (t) => bodyByTag[t]);
-  out = [
-    for (final s in out)
-      resolverForced.contains(s.tag)
-          ? s.withListState(usedByResolver: true)
-          : s,
-  ];
   final listRefs = dnsServerListRefs(
     out,
     dnsFinal: dnsFinal,
@@ -147,7 +134,7 @@ List<ResolvedServer> resolveDisplayedServers(
     dnsFinalLabel: dnsFinalLabel,
     defaultResolverLabel: defaultResolverLabel,
   );
-  // §695 — висячий `domain_resolver` и члены групп по списку.
+  // §695 — члены групп по списку.
   final listTags = {for (final s in out) s.tag};
   final liveTags = {
     for (final s in out)
@@ -157,7 +144,6 @@ List<ResolvedServer> resolveDisplayedServers(
     for (final s in out)
       s.withListState(
         usedByList: listRefs[s.tag],
-        danglingResolver: dnsDanglingResolver(s.tag, s.body, listTags),
         groupMembersInList:
             s.isGroup ? _groupMembers(s, listTags).length : 0,
         groupLiveMembers: s.isGroup ? _groupMembers(s, liveTags).length : 0,
@@ -172,24 +158,12 @@ Set<String> _groupMembers(ResolvedServer g, Set<String> tags) => {
         if (m?.toString() case final t? when t != g.tag && tags.contains(t)) t,
     };
 
-/// §695 — цель `domain_resolver` тела [body] (строка или `{server}`), если
-/// её нет среди тегов списка [listTags]; иначе пусто. Ссылка на себя
-/// ([tag]) висячей не считается. — pure.
-String dnsDanglingResolver(
-    String tag, Map<String, dynamic> body, Set<String> listTags) {
-  final dr = body['domain_resolver'];
-  final target = (dr is Map ? dr['server'] : dr)?.toString() ?? '';
-  if (target.isEmpty || target == tag || listTags.contains(target)) return '';
-  return target;
-}
-
 /// §680 — кто из самого списка ссылается на сервер: tag → метки источников.
 /// Расчёт ссылок — [dnsServerListHolds] (общий с импортом бэкапа, §681);
 /// здесь только подписи: группа и `domain_resolver` — description
 /// сервера-источника, иначе его тег; [dnsFinal] / [defaultResolver] — метки
-/// [dnsFinalLabel] / [defaultResolverLabel]. §695 — в расчёт идёт `enabled`
-/// записи (`forceIncluded` = включена): выключенная никого не держит; §696 —
-/// группа под пикерами forced и держит всех членов. — pure.
+/// [dnsFinalLabel] / [defaultResolverLabel]. Держит любая запись списка,
+/// включённая или нет (§680, §695 правило 3). — pure.
 Map<String, List<String>> dnsServerListRefs(
   List<ResolvedServer> servers, {
   String dnsFinal = '',
@@ -205,7 +179,7 @@ Map<String, List<String>> dnsServerListRefs(
   final holds = dnsServerListHolds(
     [
       for (final s in servers)
-        (tag: s.tag, body: s.body, enabled: s.enabled || s.forceIncluded),
+        (tag: s.tag, body: s.body),
     ],
     dnsFinal: dnsFinal,
     defaultResolver: defaultResolver,
@@ -243,15 +217,15 @@ String defaultDnsServerTag(
 }
 
 /// Tags доступные в dropdown'ах (DNS Final / Default Resolver / per-rule).
-/// Filter `enabled` на ref-level. §117: locked-сервер (реферится активным
-/// пресетом или правилом) build всегда force-include'ит — показываем его
-/// даже при выключенном тоггле.
+/// Filter `enabled` на ref-level. §695 правило 2: выключенное выбрать
+/// нельзя, исключений для force-include нет (выбранное включено: лок +
+/// нормализация [normalizeReferencedDnsServers]).
 ///
 /// pure.
 List<String> enabledServerTags(List<ResolvedServer> displayedServers) {
   final out = <String>[];
   for (final s in displayedServers) {
-    if (!s.enabled && !s.forceIncluded) continue;
+    if (!s.enabled) continue;
     if (s.tag.isEmpty) continue;
     out.add(s.tag);
   }

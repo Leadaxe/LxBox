@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io' show InternetAddress;
 
+import 'package:collection/collection.dart' show DeepCollectionEquality;
 import 'package:flutter/widgets.dart';
 
 import '../../config/consts.dart' show kDirectOutboundTag;
@@ -14,6 +15,7 @@ import '../dns_settings_screen/dns_server_resolver.dart'
     show defaultDnsServerTag;
 import '../../services/builder/post_steps.dart'
     show resolveTemplateDnsServerBody;
+import '../../services/builder/preset_expand.dart' show normalizeDnsDetour;
 import '../dns_settings_screen/dns_server_copy.dart';
 import '../dns_settings_screen/resolved_server.dart';
 
@@ -63,10 +65,15 @@ class DnsMemberOption {
     required this.tag,
     required this.type,
     required this.enabled,
+    this.selectable = true,
   });
   final String tag;
   final String type; // sing-box type (для подписи строки)
   final bool enabled; // false → «disabled — will be skipped» (drop-семантика)
+
+  /// §695 правило 2 — запись включена: её можно добавить в состав. Не
+  /// выбираемая показывается, только если уже стоит в составе.
+  final bool selectable;
 }
 
 /// Дефолтный порт режима (sing-box применяет его сам при отсутствии
@@ -151,6 +158,43 @@ class DnsServerEditController extends ChangeNotifier {
   bool get isUserOnly => resolved?.isUserOnly ?? true;
   List<WizardVar> get vars => resolved?.vars ?? const [];
 
+  /// §695 — override шаблонной записи (inline с тегом шаблона): в ⋮ есть
+  /// «Reset to template».
+  bool get canResetToTemplate =>
+      !isNew && kind == ServerKind.inline && overrides == ServerKind.template;
+
+  /// §695 — тело шаблонной записи правится формой: отличается от тела
+  /// шаблона с текущими vars → Save пишет override (inline с тем же тегом).
+  bool get templateBodyEdited =>
+      kind == ServerKind.template &&
+      !const DeepCollectionEquality().equals(_body, _templateBody(_varValues));
+
+  /// §695 — тело шаблонной записи с [varValues]: подстановка vars, detour в
+  /// emit-форме (как у тайла), без ref-level полей. Без обёртки — тело
+  /// display-модели.
+  Map<String, dynamic> _templateBody(Map<String, String> varValues) {
+    final wrapper = templateWrapper;
+    final body = wrapper == null
+        ? Map<String, dynamic>.from(resolved?.body ?? const {})
+        : (resolveTemplateDnsServerBody(wrapper, varValues: varValues) ??
+            <String, dynamic>{});
+    if (wrapper != null) normalizeDnsDetour(body);
+    _stripRefLevelFields(body);
+    return body;
+  }
+
+  /// §695 — «Reset to template»: override снова шаблонная запись с тем же
+  /// тегом; `enabled` и description сохраняются, vars — дефолты шаблона.
+  DnsServerTemplate resetToTemplateSnapshot() {
+    final desc = descCtrl.text.trim();
+    return DnsServerTemplate(
+      enabled: _enabled,
+      tag: initialRef.tag,
+      description:
+          desc.isNotEmpty && desc != canonicalDescription ? desc : null,
+    );
+  }
+
   /// §682 — у шаблонного/пресетного сервера (и override) есть Duplicate.
   bool get canCopy =>
       !isNew && (kind != ServerKind.inline || overrides != null);
@@ -166,12 +210,10 @@ class DnsServerEditController extends ChangeNotifier {
   /// JSON): template — обёртка с выбранными vars, preset — тело пресета,
   /// inline (override) — тело формы.
   Map<String, dynamic> currentResolvedBody() {
-    final wrapper = templateWrapper;
-    if (kind == ServerKind.template && wrapper != null) {
-      final b = resolveTemplateDnsServerBody(wrapper, varValues: _varValues);
-      if (b != null) return b;
+    // §695 — у template тело формы (vars подставлены, правки формы поверх).
+    if (kind == ServerKind.inline || kind == ServerKind.template) {
+      return Map<String, dynamic>.of(_body);
     }
-    if (kind == ServerKind.inline) return Map<String, dynamic>.of(_body);
     return Map<String, dynamic>.of(resolved?.body ?? const {});
   }
 
@@ -296,6 +338,9 @@ class DnsServerEditController extends ChangeNotifier {
           : (ref is DnsServerInline ? ref.body : const <String, dynamic>{});
       body = Map<String, dynamic>.from(src);
       _stripRefLevelFields(body);
+    } else if (kind == ServerKind.template) {
+      // §695 — форма тела у шаблонной записи: тело шаблона с vars записи.
+      body = _templateBody(_varValues);
     } else {
       body = const {};
     }
@@ -387,6 +432,8 @@ class DnsServerEditController extends ChangeNotifier {
     }
     // §643 (D-132) — `unique` у `text_list`: дубли снимаются при сохранении;
     // `internal` в запись не пишется.
+    final before =
+        kind == ServerKind.template ? _templateBody(_varValues) : null;
     final stored = recordVarValueToStore(
       value,
       decl == null
@@ -403,6 +450,22 @@ class DnsServerEditController extends ChangeNotifier {
       _varValues.remove(name);
     } else {
       _varValues[name] = stored;
+    }
+    // §695 — смена var меняет ключи тела шаблона; правки формы в других
+    // ключах остаются.
+    if (before != null) {
+      final after = _templateBody(_varValues);
+      const eq = DeepCollectionEquality();
+      for (final k in {...before.keys, ...after.keys}) {
+        if (eq.equals(before[k], after[k])) continue;
+        if (after.containsKey(k)) {
+          _body[k] = after[k];
+        } else {
+          _body.remove(k);
+        }
+      }
+      _syncFormFromBody();
+      _syncJsonFromBody();
     }
     notifyListeners();
   }
@@ -528,6 +591,10 @@ class DnsServerEditController extends ChangeNotifier {
     _syncJsonFromBody();
     notifyListeners();
   }
+
+  /// §695 — группа без членов: Save не проходит (ядро и валидатор
+  /// `EmptyDnsGroup` отвергли бы пустой `servers[]`).
+  bool get groupHasNoMembers => isGroup && groupMembers.isEmpty;
 
   /// `stable` (дефолт ядра) → ключ уходит; прочие пишутся явно.
   void setGroupMode(String mode) {
@@ -771,6 +838,13 @@ class DnsServerEditController extends ChangeNotifier {
           enabled: _enabled,
           tag: tagCtrl.text.trim(),
           description: desc.isNotEmpty ? desc : null,
+          body: Map<String, dynamic>.of(_body),
+        ),
+      // §695 — правленое тело шаблонной записи = override с тем же тегом.
+      ServerKind.template when templateBodyEdited => DnsServerInline(
+          enabled: _enabled,
+          tag: initialRef.tag,
+          description: override,
           body: Map<String, dynamic>.of(_body),
         ),
       ServerKind.template => DnsServerTemplate(

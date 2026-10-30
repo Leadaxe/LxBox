@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../../../models/codec/dns_record.dart' show dnsServerToRecord;
 import '../../../services/builder/post_steps.dart'
-    show previewDnsGroupMembers, resolveTemplateDnsServerBody;
+    show previewDnsGroupMembers;
 import '../../../services/builder/preset_expand.dart' show normalizeDnsDetour;
 import '../../dns_settings_screen/resolved_server.dart';
 import '../edit_controller.dart';
@@ -74,11 +74,10 @@ class _ReadOnlyPreview extends StatelessWidget {
     final wrapper = c.templateWrapper;
     Map<String, dynamic>? body;
     if (c.kind == ServerKind.template && wrapper != null) {
-      body = resolveTemplateDnsServerBody(wrapper, varValues: c.varValues);
-      if (body != null) {
-        normalizeDnsDetour(body);
-        body['tag'] = c.resolved?.tag ?? '';
-      }
+      // §695 — тело формы: vars подставлены, правки формы поверх.
+      body = c.currentResolvedBody();
+      normalizeDnsDetour(body);
+      body['tag'] = c.resolved?.tag ?? '';
     } else {
       body = Map<String, dynamic>.from(c.resolved?.body ?? const {});
     }

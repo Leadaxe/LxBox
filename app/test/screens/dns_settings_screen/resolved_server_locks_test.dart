@@ -107,71 +107,75 @@ void main() {
     expect(find(resolve([t('google_udp')]), 'google_udp').locked, isFalse);
   });
 
-  // §695 — выключенная запись никого не держит.
-  test('выключенный safe_dns_dot не держит google_udp', () {
+  // §695 правило 3 (§680 как было) — держит любая запись, включённая или
+  // нет.
+  test('выключенный safe_dns_dot держит google_udp', () {
     final list = resolve([t('google_udp'), t('safe_dns_dot', enabled: false)]);
     final udp = find(list, 'google_udp');
-    expect(udp.locked, isFalse);
-    expect(canDeleteDnsServer(udp), isTrue);
+    expect(udp.locked, isTrue);
+    expect(udp.lockedByLabel, 'Safe DNS (DoT)');
+    expect(canDeleteDnsServer(udp), isFalse);
   });
 
-  test('выключенная группа без пикеров не держит членов', () {
+  test('выключенная группа держит членов', () {
     final list = resolve([
       t('google_doh'),
       t('opendns_udp'),
       t('dns_shield', enabled: false),
     ]);
     for (final tag in ['google_doh', 'opendns_udp']) {
-      expect(find(list, tag).locked, isFalse, reason: tag);
-      expect(canDeleteDnsServer(find(list, tag)), isTrue, reason: tag);
+      expect(find(list, tag).locked, isTrue, reason: tag);
+      expect(find(list, tag).lockedByLabel, 'Shield DNS', reason: tag);
+      expect(canDeleteDnsServer(find(list, tag)), isFalse, reason: tag);
     }
   });
 
-  // §696 — группа под пикером forced: сборка эмитит её и членов всегда.
-  test('выключенная группа под пикерами: forced, держит всех членов, члены '
-      'тоже forced', () {
+  // §695 правило 6 — пикеры не форсируют: лок есть, force-include нет.
+  test('группа под пикерами: лок пикерами, не forced; члены — лок группой',
+      () {
     final list = resolve(
-      [
-        t('google_doh', enabled: false),
-        t('opendns_udp'),
-        t('google_udp'),
-        t('dns_shield', enabled: false),
-      ],
+      [t('google_doh'), t('opendns_udp'), t('google_udp'), t('dns_shield')],
       dnsFinal: 'dns_shield',
       defaultResolver: 'dns_shield',
     );
     final shield = find(list, 'dns_shield');
-    expect(shield.forceIncluded, isTrue);
-    expect(shield.usedByResolver, isTrue);
+    expect(shield.forceIncluded, isFalse);
+    expect(shield.locked, isTrue);
     expect(shield.lockedByLabel, 'DNS Final, Default Domain Resolver');
-    for (final tag in ['google_doh', 'opendns_udp']) {
-      final m = find(list, tag);
-      expect(m.forceIncluded, isTrue, reason: tag);
-      expect(m.locked, isTrue, reason: tag);
-      expect(m.lockedByLabel, 'Shield DNS', reason: tag);
-      expect(canDeleteDnsServer(m), isFalse, reason: tag);
-    }
-    // Вне группы — не forced и свободен.
-    expect(find(list, 'google_udp').forceIncluded, isFalse);
+    expect(find(list, 'google_doh').forceIncluded, isFalse);
+    expect(find(list, 'google_doh').lockedByLabel, 'Shield DNS');
     expect(find(list, 'google_udp').locked, isFalse);
-    expect(shield.groupLiveMembers, 2);
   });
 
-  test('пикеры переставлены — выключенная группа и члены свободны', () {
+  // §695 правило 1 — override шаблонной записи: inline с тем же тегом.
+  test('override шаблонной группы: inline/Overridden, тело своё, локи по '
+      'тегу', () {
     final list = resolve(
       [
-        t('google_doh', enabled: false),
+        t('google_doh'),
         t('opendns_udp'),
-        t('google_udp'),
-        t('dns_shield', enabled: false),
+        const DnsServerInline(
+          enabled: true,
+          tag: 'dns_shield',
+          body: {
+            'type': 'group',
+            'mode': 'fastest',
+            'servers': ['google_doh'],
+          },
+        ),
       ],
-      dnsFinal: 'google_udp',
-      defaultResolver: 'google_udp',
+      dnsFinal: 'dns_shield',
     );
-    expect(find(list, 'dns_shield').locked, isFalse);
-    expect(find(list, 'google_doh').locked, isFalse);
+    final shield = find(list, 'dns_shield');
+    expect(shield.kind, ServerKind.inline);
+    expect(shield.isOverridden, isTrue);
+    expect(shield.overrides, ServerKind.template);
+    expect(shield.description, 'Shield DNS');
+    expect(shield.groupMembersInList, 1);
+    expect(shield.lockedByLabel, 'DNS Final');
+    expect(find(list, 'google_doh').lockedByLabel, 'Shield DNS');
+    // Член, снятый из состава override, свободен.
     expect(find(list, 'opendns_udp').locked, isFalse);
-    expect(find(list, 'google_udp').usedByResolver, isTrue);
   });
 
   test('выключенный член с DNS-опцией правила считается живым', () {
@@ -183,7 +187,7 @@ void main() {
       ],
       ruleRefsByTag: const {'opendns_udp': 'My rule'},
     );
-    expect(find(list, 'google_doh').locked, isFalse);
+    expect(find(list, 'google_doh').locked, isTrue);
     expect(find(list, 'dns_shield').groupLiveMembers, 2);
   });
 
@@ -215,27 +219,6 @@ void main() {
     // Включённую пустую группу выключить можно.
     expect(find(resolve([t('dns_shield')]), 'dns_shield')
         .enableBlockedEmptyGroup, isFalse);
-  });
-
-  test('висячий domain_resolver: цели нет в списке', () {
-    final list = resolve([t('google_doh'), t('safe_dns_dot')]);
-    expect(find(list, 'safe_dns_dot').danglingResolver, 'google_udp');
-    expect(find(list, 'google_doh').danglingResolver, isEmpty);
-    final ok = resolve([t('google_udp'), t('safe_dns_dot')]);
-    expect(find(ok, 'safe_dns_dot').danglingResolver, isEmpty);
-    // inline `{server}` — так же.
-    final inline = resolve([
-      const DnsServerInline(
-        enabled: true,
-        tag: 'my-dot',
-        body: {
-          'type': 'tls',
-          'server': 'dot.example',
-          'domain_resolver': {'server': 'gone'},
-        },
-      ),
-    ]);
-    expect(inline.single.danglingResolver, 'gone');
   });
 
   test('inline domain_resolver (строка и {server}) держит цель', () {
@@ -303,5 +286,16 @@ void main() {
     ]);
     expect(find(list, 'google_doh').locked, isTrue);
     expect(enabledServerTags(list), ['opendns_udp', 'dns_shield']);
+  });
+
+  // §695 правило 2 — без исключения для force-include.
+  test('enabledServerTags: выключенный сервер правила (forced) — вне '
+      'пикеров', () {
+    final list = resolve(
+      [t('google_doh', enabled: false), t('opendns_udp')],
+      ruleRefsByTag: const {'google_doh': 'My rule'},
+    );
+    expect(find(list, 'google_doh').forceIncluded, isTrue);
+    expect(enabledServerTags(list), ['opendns_udp']);
   });
 }

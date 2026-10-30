@@ -337,8 +337,10 @@ class _DnsSettingsTabState extends State<DnsSettingsTab>
   /// Filter `enabled` на ref-level.
   List<String> get _enabledServerTags => enabledServerTags(_displayedServers);
 
-  /// §312 — опции пикера членов DNS-группы: ВСЕ серверы (disabled видимы и
-  /// помечаются — drop-семантика №3), кроме fakeip/hosts (запрет ядра).
+  /// §312 — опции пикера членов DNS-группы: ВСЕ серверы, кроме fakeip/hosts
+  /// (запрет ядра); `enabled` — эмитится ли (превью JSON). §695 правило 2 —
+  /// выбрать можно только включённую запись (`selectable`), выключенный
+  /// член, уже стоящий в составе, форма показывает с пометкой.
   /// Self-исключение делает сама секция формы (знает актуальный tag).
   List<DnsMemberOption> get _dnsMemberOptions => [
         for (final s in _displayedServers)
@@ -350,8 +352,8 @@ class _DnsSettingsTabState extends State<DnsSettingsTab>
                 enabled: s.enabled,
                 presetReferenced: s.lockedByPreset,
                 ruleReferenced: s.usedByRule != null,
-                resolverReferenced: s.usedByResolver,
               ),
+              selectable: s.enabled,
             ),
       ];
 
@@ -451,6 +453,10 @@ class _DnsSettingsTabState extends State<DnsSettingsTab>
         _templateByTag[tag]?['description']?.toString() ?? '',
       ServerKind.preset =>
         _presetServersByTag[tag]?['description']?.toString() ?? '',
+      // §695 — override шаблонной записи: Reset to template сравнивает
+      // description с шаблонным.
+      ServerKind.inline when resolved.overrides == ServerKind.template =>
+        _templateByTag[tag]?['description']?.toString() ?? '',
       ServerKind.inline => '',
     };
 

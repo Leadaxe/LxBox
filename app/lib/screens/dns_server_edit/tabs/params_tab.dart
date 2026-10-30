@@ -13,6 +13,7 @@ import '../../../services/l10n/locale_controller.dart';
 ///   пометка «used by <пресет/правило>»);
 /// - `template` → [TemplateVarListView] (vars: outbound/enum/dns_servers/…) —
 ///   перенос инлайн-тюнера с тайла, логика `varValues` без изменений;
+///   §695 — под vars форма тела [ServerFormSection] (правка → override);
 /// - `inline` → Tag (locked при edit existing) + Outbound (detour)
 ///   [OutboundPicker] → пишет/стирает `body['detour']` (inline-detour,
 ///   locked decision №10);
@@ -127,20 +128,28 @@ class DnsServerParamsTab extends StatelessWidget {
         ),
         const Divider(),
         switch (c.kind) {
-          ServerKind.template => TemplateVarListView(
-              key: ValueKey('dns-edit-vars-${c.resolved?.tag ?? ''}'),
-              vars: c.vars,
-              model: c.varModel,
-              showSectionHeaders: false,
-              outboundOptions: c.outboundOptions,
-              dnsServerTags: c.dnsServerTags,
-              // §695 — висячий `domain_resolver`: пункт-призрак с пометкой.
-              notInListDnsTags: {
-                if (c.resolved?.danglingResolver case final t?
-                    when t.isNotEmpty)
-                  t,
-              },
-              onChanged: c.setVarValue,
+          // §695 — под vars та же форма тела, что у inline: правка тела
+          // сохраняется override'ом (inline с тем же тегом). Detour у
+          // шаблонного сервера — var `outbound` выше.
+          ServerKind.template => Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TemplateVarListView(
+                  key: ValueKey('dns-edit-vars-${c.resolved?.tag ?? ''}'),
+                  vars: c.vars,
+                  model: c.varModel,
+                  showSectionHeaders: false,
+                  outboundOptions: c.outboundOptions,
+                  dnsServerTags: c.dnsServerTags,
+                  onChanged: c.setVarValue,
+                ),
+                // Тип вне формы (local) — правка только JSON-ом, а JSON у
+                // шаблонной записи read-only: формы нет.
+                if (c.serverMode != null) ...[
+                  if (c.vars.isNotEmpty) const Divider(),
+                  ServerFormSection(c: c),
+                ],
+              ],
             ),
           // §117 задача 4b: структурная форма (UDP/DoT/DoH + адрес/порт/
           // path/SNI/domain_resolver) + detour-пикер.

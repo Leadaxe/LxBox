@@ -6712,13 +6712,13 @@
   "No members left in the list. Enable or add a member first.": {
     "value": "В списке не осталось участников. Сначала включите или добавьте участника."
   },
-  "Domain resolver \"%s\" is not in the list — Default Domain Resolver will be used": {
-    "value": "Резолвера домена «%s» нет в списке — будет использован резолвер доменов по умолчанию"
+  "Reset to template": {
+    "value": "Сбросить к шаблону"
   },
-  "%s (not in list)": {
-    "value": "%s (нет в списке)"
+  "Also added: %s": {
+    "value": "Добавлены также: %s"
   },
-  "This server is not in the list — Default Domain Resolver will be used. Pick another server to resolve the hostname directly.": {
-    "value": "Этого сервера нет в списке — будет использован резолвер доменов по умолчанию. Выберите другой сервер, чтобы имя резолвилось напрямую."
+  "A group needs at least one member.": {
+    "value": "Группе нужен хотя бы один участник."
   }
 }

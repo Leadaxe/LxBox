@@ -1,9 +1,45 @@
 import 'package:flutter/material.dart';
 
 import '../../models/dns_ref.dart';
+import '../../services/builder/domain_resolver_ref.dart'
+    show domainResolverServer;
 import '../../services/builder/post_steps.dart'
     show resolveTemplateDnsServerBody, templateDnsServerTag;
 import '../../services/l10n/locale_controller.dart';
+
+/// §695 правило 4 — зависимости шаблонных записей [roots] по каталогу
+/// [templateByTag] (тег → обёртка), которых нет в [present] и среди
+/// [roots]: члены группы (рекурсивно) и цель `domain_resolver` (строка или
+/// `{server}`, после подстановки дефолтов vars), в порядке обхода. Тег вне
+/// каталога (сервер пресета) пропускается. — pure.
+List<String> dnsCatalogDependencies(
+  Iterable<String> roots,
+  Map<String, Map<String, dynamic>> templateByTag,
+  Set<String> present,
+) {
+  final seen = <String>{...present, ...roots};
+  final out = <String>[];
+  final queue = [...roots];
+  while (queue.isNotEmpty) {
+    final tag = queue.removeAt(0);
+    final wrapper = templateByTag[tag];
+    if (wrapper == null) continue;
+    final body = resolveTemplateDnsServerBody(wrapper) ?? const {};
+    final refs = <String?>[
+      if (body['type'] == 'group')
+        for (final m in (body['servers'] as List<dynamic>? ?? const []))
+          m?.toString(),
+      domainResolverServer(body['domain_resolver']),
+    ];
+    for (final t in refs) {
+      if (t == null || t.isEmpty || !templateByTag.containsKey(t)) continue;
+      if (!seen.add(t)) continue;
+      out.add(t);
+      queue.add(t);
+    }
+  }
+  return out;
+}
 
 /// §680 — что вернула страница «Add DNS server»: [custom] — пользователь
 /// выбрал строку «Custom server», вызывающий открывает inline-редактор.
@@ -56,11 +92,31 @@ class _DnsServerCatalogScreenState extends State<DnsServerCatalogScreen> {
     messenger.showSnackBar(SnackBar(content: Text(text)));
   }
 
+  late final Map<String, Map<String, dynamic>> _byTag = {
+    for (final w in widget.templateServers)
+      if (templateDnsServerTag(w) case final t?) t: w,
+  };
+
+  /// §695 правило 4 — зависимости [roots] включёнными записями каталога.
+  List<DnsServerTemplate> _dependencies(Iterable<String> roots) => [
+        for (final t in dnsCatalogDependencies(roots, _byTag, _present))
+          DnsServerTemplate(enabled: true, tag: t),
+      ];
+
+  /// «Also added: …» — подписи записей, добавленных по цепочке.
+  String _alsoAdded(List<DnsServerTemplate> deps) => getLocalText.s(
+      "Also added: %s",
+      deps.map((d) => _titleOf(_byTag[d.tag] ?? const {}, d.tag)).join(', '));
+
   void _add(Map<String, dynamic> wrapper, String tag) {
     if (_present.contains(tag)) return;
-    widget.onAdd([_refOf(wrapper, tag)]);
-    setState(() => _present.add(tag));
-    _snack(getLocalText.s("Added \"%s\"", _titleOf(wrapper, tag)));
+    final deps = _dependencies([tag]);
+    widget.onAdd([_refOf(wrapper, tag), ...deps]);
+    setState(() => _present
+      ..add(tag)
+      ..addAll(deps.map((d) => d.tag)));
+    final added = getLocalText.s("Added \"%s\"", _titleOf(wrapper, tag));
+    _snack(deps.isEmpty ? added : '$added\n${_alsoAdded(deps)}');
   }
 
   /// Досев всех отсутствующих — как посев первого запуска.
@@ -75,9 +131,15 @@ class _DnsServerCatalogScreenState extends State<DnsServerCatalogScreen> {
       _snack(getLocalText.s("All defaults are already in the list"));
       return;
     }
-    widget.onAdd(refs);
-    setState(() => _present.addAll(refs.map((r) => r.tag)));
-    _snack(getLocalText.plural("Added %d servers", refs.length));
+    // §695 правило 4 — каталог целиком, зависимости вне его не тянутся;
+    // замыкание — для единообразия (пусто, пока каталог замкнут).
+    final deps = _dependencies(refs.map((r) => r.tag));
+    widget.onAdd([...refs, ...deps]);
+    setState(() => _present
+      ..addAll(refs.map((r) => r.tag))
+      ..addAll(deps.map((d) => d.tag)));
+    final added = getLocalText.plural("Added %d servers", refs.length);
+    _snack(deps.isEmpty ? added : '$added\n${_alsoAdded(deps)}');
   }
 
   /// `tag · type · addr` — как у тайла сервера; адрес с `@`-плейсхолдером —

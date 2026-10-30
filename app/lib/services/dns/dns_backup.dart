@@ -377,9 +377,12 @@ DnsBackupApply applyDnsBackup({
             }
           : null);
   if (incoming.servers.isNotEmpty && catalog != null) {
+    // §695 — override (inline с тегом шаблона) в файле называет тот же
+    // сервер: шаблонная запись приёмника под этим тегом не снимается
+    // (иначе при «побеждает локальная» сервер пропал бы целиком).
     final fileTemplateTags = <String>{
       for (final s in incoming.servers)
-        if (s is DnsServerTemplate) s.tag,
+        if (s is DnsServerTemplate || s is DnsServerInline) s.tag,
     };
     final candidates = <String>{
       for (final s in outServers)
@@ -502,7 +505,9 @@ String _serverKey(DnsServerRef s) => switch (s) {
       // `ref` записи: у сервера из хранения (тег конфига) и из файла 0.x (тег
       // внутри пресета) он один и тот же.
       DnsServerPreset() => 'preset\u0000${dnsServerPresetRef(s)}',
-      _ => '${s.kind}\u0000${s.tag}',
+      // §695 — inline с тегом шаблона (override) и шаблонная запись — один
+      // сервер: тег в списке один, побеждает локальная запись.
+      _ => 'server\u0000${s.tag}',
     };
 
 /// Ключ DNS-правила: пользовательское — телом в каноне (ключи отсортированы),

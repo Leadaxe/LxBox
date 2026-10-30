@@ -76,30 +76,6 @@ void main() {
     expect(toggles, [false]);
   });
 
-  // §696 — член группы под пикером: выключен в хранилище, но forced
-  // (сборка эмитит) — свитч ON, тап объясняет лок.
-  testWidgets('forced member of a picker group: switch ON, tap shows '
-      'SnackBar', (tester) async {
-    final toggles = await pump(
-      tester,
-      const ResolvedServer(
-        kind: ServerKind.template,
-        tag: 'google_doh',
-        description: 'Google DoH',
-        enabled: false,
-        body: {'type': 'https', 'tag': 'google_doh', 'server': '8.8.8.8'},
-        usedByResolver: true,
-        usedByList: ['Shield DNS'],
-      ),
-    );
-    final sw = tester.widget<Switch>(find.byType(Switch));
-    expect(sw.value, isTrue);
-    await tester.tap(find.byType(Switch));
-    await tester.pump();
-    expect(toggles, isEmpty);
-    expect(find.textContaining('Locked: used by Shield DNS'), findsOneWidget);
-  });
-
   // §695 — выключенная группа без живых членов: тап объясняет, не включает.
   ResolvedServer group({
     required bool enabled,
@@ -147,24 +123,5 @@ void main() {
     await pump(tester, group(enabled: true, inList: 5, live: 5));
     expect(find.textContaining('dns_shield · group · fastest · 5'),
         findsOneWidget);
-  });
-
-  testWidgets('dangling domain_resolver: warning line under subtitle', (
-    tester,
-  ) async {
-    await pump(
-      tester,
-      const ResolvedServer(
-        kind: ServerKind.template,
-        tag: 'safe_dns_dot',
-        description: 'Safe DNS (DoT)',
-        enabled: true,
-        body: {'type': 'tls', 'tag': 'safe_dns_dot', 'server': 'x'},
-        danglingResolver: 'google_udp',
-      ),
-    );
-    expect(find.byKey(const ValueKey('dns_dangling_resolver')), findsOneWidget);
-    await pump(tester, server(enabled: true));
-    expect(find.byKey(const ValueKey('dns_dangling_resolver')), findsNothing);
   });
 }

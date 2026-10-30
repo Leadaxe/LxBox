@@ -83,34 +83,38 @@
 
 ### Fixed
 
-- **Members of a disabled DNS group could not be turned off or deleted
+- **Servers could not be removed from Shield DNS
   ([task 695](docs/spec/tasks/695-dns-disabled-group-holds.md),
-  [#182](https://github.com/Leadaxe/LxBox/issues/182)).** After 2.25.17
-  every member of Shield DNS stayed locked «used by Shield DNS» even with
-  Shield itself switched off. A disabled group, and a disabled server with a
-  domain resolver, no longer lock anything. A server picked in DNS Final or
-  Default Domain Resolver is now always built into the config, even when
-  switched off, together with all members if it is a group; it and its
-  members stay on and locked until the pickers point elsewhere. Before,
-  such a server was left out and both pickers were silently moved to the
-  first suitable server. A disabled group with no enabled
-  members left cannot be switched on. The member count of a group now
-  counts the servers that are in the list. A server whose domain resolver
-  is no longer in the list shows a warning in the list and in the editor:
-  the hostname is resolved through Default Domain Resolver.
-  (RU: Участников выключенной DNS-группы нельзя было выключить или удалить.
-  После 2.25.17 все участники Shield DNS оставались под замком «used by
-  Shield DNS», даже когда сам Shield выключен. Выключенная группа и
-  выключенный сервер с резолвером домена больше ничего не держат. Сервер,
-  выбранный в DNS Final или Default Domain Resolver, теперь всегда попадает
-  в конфиг, даже выключенный, а если это группа — вместе со всеми
-  участниками; он и участники остаются включёнными и под замком, пока
-  выбор не переставят. Раньше такой сервер в конфиг не попадал, и оба
-  выбора молча переставлялись на первый подходящий сервер. Выключенную группу без включённых участников
-  включить нельзя. Счётчик участников группы считает серверы, которые есть
-  в списке. Сервер, чей резолвер домена пропал из списка, показывает
-  предупреждение в списке и в редакторе: имя резолвится через Default
-  Domain Resolver.)
+  [#182](https://github.com/Leadaxe/LxBox/issues/182)).** After 2.25.17 the
+  members of Shield DNS stayed locked «used by Shield DNS», and the group
+  itself could not be edited. Template DNS servers and groups are now
+  editable: the editor shows the same form as for your own servers below
+  the variables, and a changed server is saved as your copy under the same
+  tag, marked «Overridden». «Reset to template» in the ⋮ menu brings the
+  template version back. DNS Final, Default Domain Resolver, the domain
+  resolver of a server and the member list of a group offer only enabled
+  servers. A server that something refers to stays on and locked, whether
+  the referring server is on or off. Adding a server from the catalog also
+  adds the servers it needs: the members of a group and its domain
+  resolver. A setup from older versions where a referenced server is off
+  is fixed on start: the server is switched on, and the app log says why.
+  A disabled group with no enabled members left cannot be switched on, and
+  the member count of a group counts the servers that are in the list.
+  (RU: Из Shield DNS нельзя было убрать сервер. После 2.25.17 участники
+  Shield DNS оставались под замком «used by Shield DNS», а саму группу
+  нельзя было изменить. Шаблонные DNS-серверы и группы теперь
+  редактируются: в редакторе под переменными та же форма, что у своих
+  серверов, а изменённый сервер сохраняется своей копией под тем же тегом
+  с пометкой «Overridden». «Reset to template» в меню ⋮ возвращает
+  шаблонную версию. DNS Final, Default Domain Resolver, резолвер домена
+  сервера и состав группы предлагают только включённые серверы. Сервер, на
+  который есть ссылка, остаётся включённым и под замком, включён ли тот,
+  кто ссылается, или нет. Добавление сервера из каталога добавляет и
+  нужные ему серверы: участников группы и резолвер домена. Состояние из
+  старых версий, где выключен сервер, на который есть ссылка, исправляется
+  при запуске: сервер включается, причина пишется в лог приложения.
+  Выключенную группу без включённых участников включить нельзя, счётчик
+  участников группы считает серверы, которые есть в списке.)
 
 ## [2.25.18] — 2026-10-29
 

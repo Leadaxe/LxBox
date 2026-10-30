@@ -331,6 +331,24 @@ void main() {
       expect(result.map((s) => s.tag), ['google_udp']);
     });
 
+    // §695 правило 5 — выбранное в пикере включается и сохраняется.
+    test('§695: выключенный сервер под пикером включается, список сохранён',
+        () async {
+      await SettingsStorage.saveDnsServers([
+        const DnsServerTemplate(enabled: false, tag: 'google_udp'),
+        const DnsServerTemplate(enabled: false, tag: 'cloudflare_udp'),
+      ]);
+      final result = await resolveDnsServersList(
+        templateServers: [tplGoogleUdp(), tplCloudflareUdp()],
+        presetServersByTag: {},
+        dnsFinal: 'google_udp',
+      );
+      expect({for (final s in result) s.tag: s.enabled},
+          {'google_udp': true, 'cloudflare_udp': false});
+      expect({for (final s in await SettingsStorage.getDnsServers())
+        s.tag: s.enabled}, {'google_udp': true, 'cloudflare_udp': false});
+    });
+
     test('§680: шаг 3 только при отсутствующем ключе — посев пишет ключ',
         () async {
       expect(await SettingsStorage.hasDnsServersList(), isFalse);

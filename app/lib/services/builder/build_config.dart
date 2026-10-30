@@ -932,6 +932,11 @@ Future<BuildResult?> _buildConfig({
     warningsOut: emitWarnings, // §312 — дропы членов DNS-групп
     resolverDefaults: resolverDefaults, // §441 — Н10
     globalVars: vars, // §555/§570 — тела шаблонных серверов видят весь шаблон
+    // §695 правило 5 — выбранное в пикерах включается в списке.
+    resolverPickers: (
+      dnsFinal: vars['dns_final'] ?? '',
+      defaultResolver: vars['dns_default_domain_resolver'] ?? '',
+    ),
   );
 
   // §119/§120: VPN-mode (tun-in/mixed-in/route-rules) теперь декларативен —

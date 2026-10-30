@@ -52,9 +52,7 @@ class ResolvedServer {
     this.vars = const [],
     this.varValues = const {},
     this.usedByRule,
-    this.usedByResolver = false,
     this.usedByList = const [],
-    this.danglingResolver = '',
     this.groupMembersInList = 0,
     this.groupLiveMembers = 0,
   });
@@ -83,22 +81,11 @@ class ResolvedServer {
   /// на этот сервер. null = правила не ссылаются.
   final String? usedByRule;
 
-  /// §696 — сервер выбран в DNS Final / Default Domain Resolver или член
-  /// (рекурсивно) такой группы: сборка эмитит его независимо от `enabled`.
-  /// Подписи лока — из [usedByList] (пикеры, группа).
-  final bool usedByResolver;
-
   /// §680 — ссылки из самого списка: группы (`servers[]`), `domain_resolver`
   /// других серверов, значения DNS Final / Default Domain Resolver. Метки
   /// источников в порядке обнаружения. Лок удаления и выключения; сборка
   /// такой сервер не форсирует (он включён — ссылка жива).
   final List<String> usedByList;
-
-  /// §695 — цель `domain_resolver` (строка или `{server}`, у template после
-  /// подстановки vars), которой нет в списке; пусто — ключа нет или цель
-  /// есть. Сборка такой ключ снимает (heal §680), ядро идёт через Default
-  /// Domain Resolver.
-  final String danglingResolver;
 
   /// §695 — у группы: сколько тегов `servers[]` реально есть в списке
   /// (независимо от `enabled`); у не-группы 0.
@@ -117,11 +104,9 @@ class ResolvedServer {
       isGroup && !enabled && !forceIncluded && groupLiveMembers == 0;
 
   /// §680/§695 — копия с состоянием относительно списка: источники ссылок,
-  /// висячий `domain_resolver`, счётчики членов группы.
+  /// счётчики членов группы.
   ResolvedServer withListState({
-    bool? usedByResolver,
     List<String>? usedByList,
-    String? danglingResolver,
     int? groupMembersInList,
     int? groupLiveMembers,
   }) =>
@@ -137,11 +122,9 @@ class ResolvedServer {
         vars: vars,
         varValues: varValues,
         usedByRule: usedByRule,
-        usedByResolver: usedByResolver ?? this.usedByResolver,
         usedByList: usedByList == null
             ? this.usedByList
             : List.unmodifiable(usedByList),
-        danglingResolver: danglingResolver ?? this.danglingResolver,
         groupMembersInList: groupMembersInList ?? this.groupMembersInList,
         groupLiveMembers: groupLiveMembers ?? this.groupLiveMembers,
       );
@@ -155,11 +138,11 @@ class ResolvedServer {
       kind == ServerKind.preset || overrides == ServerKind.preset;
 
   /// §117 lifecycle (locked №7): реферимый активным пресетом ИЛИ правилом
-  /// с DNS-опцией ИЛИ (§696) пикером DNS Final / Default Domain Resolver —
-  /// сборка эмитит его независимо от `enabled` (force-include,
-  /// [dnsServerRefEmitted]).
-  bool get forceIncluded =>
-      lockedByPreset || usedByRule != null || usedByResolver;
+  /// с DNS-опцией — сборка эмитит его независимо от `enabled`
+  /// (force-include, [dnsServerRefEmitted]). §695 — пикеры DNS Final /
+  /// Default Domain Resolver сюда не входят: выбранное включено (лок и
+  /// нормализация).
+  bool get forceIncluded => lockedByPreset || usedByRule != null;
 
   /// §117 №7 + §680: на сервер ссылаются (пресет, правило, список) — не
   /// выключается / не удаляется независимо.

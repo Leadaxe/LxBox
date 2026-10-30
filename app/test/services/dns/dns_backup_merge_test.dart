@@ -251,6 +251,63 @@ void main() {
       expect(got.applied, 0);
     });
 
+    // §695 — override шаблонной записи (inline с тегом шаблона) — обычная
+    // inline-запись: снятие по шаблону её не касается, тег один.
+    const shieldOverride = DnsServerInline(
+      enabled: true,
+      tag: 'dns_shield',
+      body: {
+        'type': 'group',
+        'mode': 'fastest',
+        'servers': ['google_doh', 'quad9_doh'],
+      },
+    );
+
+    test('override dns_shield переживает импорт файла с шаблонной записью',
+        () {
+      final local = [
+        for (final s in full()) s.tag == 'dns_shield' ? shieldOverride : s,
+      ];
+      final got = _apply(
+        const [],
+        incomingServers: full(),
+        localServers: local,
+        exportedByApp: kLxAppLxBox,
+      );
+      final shields = got.servers.where((s) => s.tag == 'dns_shield');
+      expect(shields, [shieldOverride]);
+      expect(got.servers.length, allTags.length);
+    });
+
+    test('override dns_shield в файле: локальная шаблонная запись остаётся',
+        () {
+      final got = _apply(
+        const [],
+        incomingServers: [
+          for (final s in full()) s.tag == 'dns_shield' ? shieldOverride : s,
+        ],
+        localServers: full(),
+        exportedByApp: kLxAppLxBox,
+      );
+      expect(got.servers.where((s) => s.tag == 'dns_shield'),
+          [const DnsServerTemplate(enabled: true, tag: 'dns_shield')]);
+      expect(got.servers.length, allTags.length);
+    });
+
+    test('override dns_shield из файла ввозится inline-записью', () {
+      final got = _apply(
+        const [],
+        incomingServers: [
+          for (final s in full()) s.tag == 'dns_shield' ? shieldOverride : s,
+        ],
+        localServers: full(without: {'dns_shield'}),
+        exportedByApp: kLxAppLxBox,
+      );
+      expect(got.servers.where((s) => s.tag == 'dns_shield'),
+          [shieldOverride]);
+      expect(got.servers.length, allTags.length);
+    });
+
     test('файл без exported_by — слияние, шаблонные записи остаются', () {
       final got = _apply(
         const [],

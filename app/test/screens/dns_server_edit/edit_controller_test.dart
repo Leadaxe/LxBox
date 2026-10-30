@@ -433,4 +433,159 @@ void main() {
       c.dispose();
     });
   });
+
+  // §695 правило 1 — шаблонные записи редактируемы: правка тела формой
+  // сохраняется override'ом (inline с тем же тегом), Reset to template
+  // возвращает шаблонную запись.
+  group('template → override (§695)', () {
+    const shieldWrapper = <String, dynamic>{
+      'description': 'Shield DNS',
+      'enabled': true,
+      'server': {
+        'type': 'group',
+        'tag': 'dns_shield',
+        'servers': ['google_doh', 'cloudflare_dot', 'quad9_doh'],
+        'mode': 'fastest',
+      },
+    };
+    const udpWrapper = <String, dynamic>{
+      'description': 'Google DNS',
+      'enabled': true,
+      'vars': [
+        {'name': 'outbound', 'type': 'outbound', 'default_value': 'direct-out'},
+        {'name': 'dns_ip', 'type': 'enum', 'default_value': '8.8.8.8'},
+      ],
+      'server': {
+        'type': 'udp',
+        'tag': 'google_udp',
+        'server_port': 53,
+        'server': '@dns_ip',
+        'detour': '@outbound',
+      },
+    };
+
+    DnsServerEditController make(String tag, Map<String, dynamic> wrapper,
+            Map<String, dynamic> body,
+            {bool enabled = true}) =>
+        DnsServerEditController(
+          initialRef: DnsServerTemplate(enabled: enabled, tag: tag),
+          resolved: ResolvedServer(
+            kind: ServerKind.template,
+            tag: tag,
+            description: wrapper['description'] as String,
+            enabled: enabled,
+            body: {...body, 'tag': tag},
+          ),
+          templateWrapper: wrapper,
+          canonicalDescription: wrapper['description'] as String,
+        );
+
+    test('снятый член группы → inline с тем же тегом, enabled сохранён', () {
+      final c = make('dns_shield', shieldWrapper, {
+        'type': 'group',
+        'servers': ['google_doh', 'cloudflare_dot', 'quad9_doh'],
+        'mode': 'fastest',
+      }, enabled: false);
+      expect(c.isGroup, isTrue);
+      expect(c.groupMembers, ['google_doh', 'cloudflare_dot', 'quad9_doh']);
+      expect(c.templateBodyEdited, isFalse);
+      expect(c.snapshot(), isA<DnsServerTemplate>());
+      c.toggleGroupMember('cloudflare_dot', false);
+      expect(c.templateBodyEdited, isTrue);
+      expect(c.isDirty(), isTrue);
+      final snap = c.snapshot() as DnsServerInline;
+      expect(snap.tag, 'dns_shield');
+      expect(snap.enabled, isFalse);
+      expect(snap.description, isNull);
+      expect(snap.body, {
+        'type': 'group',
+        'servers': ['google_doh', 'quad9_doh'],
+        'mode': 'fastest',
+      });
+      // Пустой состав — Save не проходит (гейт экрана).
+      expect(c.groupHasNoMembers, isFalse);
+      c.toggleGroupMember('google_doh', false);
+      c.toggleGroupMember('quad9_doh', false);
+      expect(c.groupHasNoMembers, isTrue);
+      c.toggleGroupMember('google_doh', true);
+      expect(c.groupHasNoMembers, isFalse);
+      // Вернули состав как в шаблоне — снова шаблонная запись.
+      c.toggleGroupMember('quad9_doh', false);
+      c.toggleGroupMember('cloudflare_dot', true);
+      c.toggleGroupMember('quad9_doh', true);
+      expect(c.templateBodyEdited, isFalse);
+      c.dispose();
+    });
+
+    test('тело override = тело шаблона после vars + правка; var после '
+        'правки меняет только свои ключи', () {
+      final c = make('google_udp', udpWrapper,
+          {'type': 'udp', 'server_port': 53, 'server': '8.8.8.8'});
+      expect(c.addressCtrl.text, '8.8.8.8');
+      c.onPortChanged('5353');
+      c.setVarValue('dns_ip', '8.8.4.4');
+      expect(c.addressCtrl.text, '8.8.4.4');
+      final snap = c.snapshot() as DnsServerInline;
+      expect(snap.body, {
+        'type': 'udp',
+        'server_port': 5353,
+        'server': '8.8.4.4',
+      });
+      c.dispose();
+    });
+
+    test('смена var без правки тела — шаблонная запись с varValues', () {
+      final c = make('google_udp', udpWrapper,
+          {'type': 'udp', 'server_port': 53, 'server': '8.8.8.8'});
+      c.setVarValue('dns_ip', '8.8.4.4');
+      final snap = c.snapshot() as DnsServerTemplate;
+      expect(snap.varValues, {'dns_ip': '8.8.4.4'});
+      c.dispose();
+    });
+
+    test('Reset to template: тег, enabled и description те же, vars — '
+        'дефолты', () {
+      final c = DnsServerEditController(
+        initialRef: const DnsServerInline(
+          enabled: false,
+          tag: 'dns_shield',
+          description: 'My shield',
+          body: {'type': 'group', 'servers': ['google_doh']},
+        ),
+        resolved: const ResolvedServer(
+          kind: ServerKind.inline,
+          tag: 'dns_shield',
+          description: 'My shield',
+          enabled: false,
+          body: {'type': 'group', 'tag': 'dns_shield',
+            'servers': ['google_doh']},
+          overrides: ServerKind.template,
+        ),
+        canonicalDescription: 'Shield DNS',
+      );
+      expect(c.canResetToTemplate, isTrue);
+      expect(c.resetToTemplateSnapshot(),
+          const DnsServerTemplate(
+              enabled: false, tag: 'dns_shield', description: 'My shield'));
+      c.descCtrl.text = 'Shield DNS';
+      expect(c.resetToTemplateSnapshot().description, isNull);
+      c.dispose();
+    });
+
+    test('Reset to template только у override шаблона', () {
+      final user = DnsServerEditController(
+        initialRef: const DnsServerInline(
+            enabled: true, tag: 'mine', body: {'type': 'udp'}),
+        resolved: const ResolvedServer(
+          kind: ServerKind.inline,
+          tag: 'mine',
+          description: '',
+          enabled: true,
+          body: {'type': 'udp', 'tag': 'mine'},
+        ),
+      );
+      expect(user.canResetToTemplate, isFalse);
+      user.dispose();
+    });
+  });
 }

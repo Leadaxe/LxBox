@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../../vpn/cc_channel.dart';
-import '../../../widgets/banner_palette.dart';
 import '../resolved_server.dart';
 import 'dns_badge.dart';
 import '../../../services/l10n/locale_controller.dart';
@@ -157,34 +156,6 @@ class MergedServerTile extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 11,
                         color: theme.colorScheme.primary,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            // §695 — `domain_resolver` на тег вне списка: сборка снимет
-            // ключ, ядро пойдёт через Default Domain Resolver.
-            if (entry.danglingResolver.isNotEmpty)
-              Row(
-                key: const ValueKey('dns_dangling_resolver'),
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(
-                    Icons.warning_amber_rounded,
-                    size: 12,
-                    color: bannerIconColor(context, BannerSeverity.warning),
-                  ),
-                  const SizedBox(width: 4),
-                  Flexible(
-                    child: Text(
-                      getLocalText.s(
-                        "Domain resolver \"%s\" is not in the list — Default Domain Resolver will be used",
-                        entry.danglingResolver,
-                      ),
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ),

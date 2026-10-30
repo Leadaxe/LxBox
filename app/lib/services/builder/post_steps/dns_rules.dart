@@ -53,6 +53,10 @@ Future<void> applyCustomDns(
   Map<String, String> resolverDefaults = const {},
   // §555/§570 (§66) — переменные шаблона для тел шаблонных DNS-серверов.
   Map<String, String> globalVars = const {},
+  // §695 правило 5 — значения пикеров DNS Final / Default Domain Resolver
+  // (vars после подстановки дефолтов) для нормализации списка.
+  ({String dnsFinal, String defaultResolver}) resolverPickers =
+      (dnsFinal: '', defaultResolver: ''),
 }) async {
   final dns = (config['dns'] as Map<String, dynamic>?) ?? <String, dynamic>{};
 
@@ -72,11 +76,22 @@ Future<void> applyCustomDns(
         s['tag'] as String: Map<String, dynamic>.from(s),
   };
 
-  // Auto-discover + orphan cleanup + legacy migration.
+  // §117 задача 3: серверы, реферимые активными правилами (rule-источники
+  // mirror-группы) — force-include в dns.servers (lifecycle, locked №7).
+  final ruleReferencedTags = <String>{
+    for (final m in dnsMirrors)
+      if (m.ruleId != null && m.serverTag.isNotEmpty) m.serverTag,
+  };
+
+  // Auto-discover + orphan cleanup + legacy migration + §695 нормализация
+  // ссылок (пикеры — параметрами).
   final resolvedServers = await resolveDnsServersList(
     templateServers: templateServers,
     presetServersByTag: presetServersByTag,
     presetIdByTag: extraServerPresetIds,
+    dnsFinal: resolverPickers.dnsFinal,
+    defaultResolver: resolverPickers.defaultResolver,
+    ruleReferencedTags: ruleReferencedTags,
   );
 
   // §117: known outbound-теги (outbounds + endpoints уже в конфиге на этом
@@ -95,23 +110,6 @@ Future<void> applyCustomDns(
         e['tag'] as String,
   };
 
-  // §117 задача 3: серверы, реферимые активными правилами (rule-источники
-  // mirror-группы) — force-include в dns.servers (lifecycle, locked №7).
-  final ruleReferencedTags = <String>{
-    for (final m in dnsMirrors)
-      if (m.ruleId != null && m.serverTag.isNotEmpty) m.serverTag,
-  };
-  // §696 — серверы пикеров DNS Final / Default Domain Resolver (значения vars
-  // уже подставлены в конфиг) — третий источник force-include.
-  final route = config['route'];
-  final resolverReferencedTags = <String>{
-    if (dns['final'] is String) dns['final'] as String,
-    if (route is Map)
-      if (domainResolverServer(route['default_domain_resolver'])
-          case final String t)
-        t,
-  }..remove('');
-
   // Refs → final bodies для sing-box config.
   // §441 — теги серверов, выпавших из-за висячего detour (Н10).
   final detourDropped = <String>{};
@@ -121,7 +119,6 @@ Future<void> applyCustomDns(
     presetServersByTag: presetServersByTag,
     knownOutboundTags: knownOutboundTags,
     ruleReferencedTags: ruleReferencedTags,
-    resolverReferencedTags: resolverReferencedTags, // §696
     warningsOut: warningsOut,
     tailscaleEndpointTags: tailscaleEndpointTags, // §435
     detourDroppedOut: detourDropped, // §441
