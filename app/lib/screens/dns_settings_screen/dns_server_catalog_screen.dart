@@ -94,7 +94,7 @@ class _DnsServerCatalogScreenState extends State<DnsServerCatalogScreen> {
 
   late final Map<String, Map<String, dynamic>> _byTag = {
     for (final w in widget.templateServers)
-      if (templateDnsServerTag(w) case final t?) t: w,
+      ?templateDnsServerTag(w): w,
   };
 
   /// §695 правило 4 — зависимости [roots] включёнными записями каталога.

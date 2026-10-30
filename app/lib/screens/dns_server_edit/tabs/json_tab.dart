@@ -69,10 +69,9 @@ class _ReadOnlyPreview extends StatelessWidget {
     // Отрезолвленное тело с ТЕКУЩИМИ значениями формы (live: поменял var в
     // Params → превью обновилось). Display = emit-форма (detour normalized,
     // §671 — у группы выключенные члены сняты тем же критерием, что у сборки).
-    String resolvedJson;
     var skipped = const <String>[];
     final wrapper = c.templateWrapper;
-    Map<String, dynamic>? body;
+    final Map<String, dynamic> body;
     if (c.kind == ServerKind.template && wrapper != null) {
       // §695 — тело формы: vars подставлены, правки формы поверх.
       body = c.currentResolvedBody();
@@ -81,22 +80,18 @@ class _ReadOnlyPreview extends StatelessWidget {
     } else {
       body = Map<String, dynamic>.from(c.resolved?.body ?? const {});
     }
-    if (body == null) {
-      resolvedJson = '// malformed template wrapper';
-    } else {
-      if (body['type'] == 'group' && body['servers'] is List) {
-        final members = previewDnsGroupMembers(
-          [for (final m in body['servers'] as List) m?.toString() ?? ''],
-          selfTag: c.resolved?.tag ?? body['tag']?.toString() ?? '',
-          emittedByTag: {
-            for (final o in c.dnsMemberOptions) o.tag: o.enabled,
-          },
-        );
-        body['servers'] = members.kept;
-        skipped = members.disabled;
-      }
-      resolvedJson = const JsonEncoder.withIndent('  ').convert(body);
+    if (body['type'] == 'group' && body['servers'] is List) {
+      final members = previewDnsGroupMembers(
+        [for (final m in body['servers'] as List) m?.toString() ?? ''],
+        selfTag: c.resolved?.tag ?? body['tag']?.toString() ?? '',
+        emittedByTag: {
+          for (final o in c.dnsMemberOptions) o.tag: o.enabled,
+        },
+      );
+      body['servers'] = members.kept;
+      skipped = members.disabled;
     }
+    final resolvedJson = const JsonEncoder.withIndent('  ').convert(body);
 
     // Запись хранения — кодеком (§439: у DnsServerRef нет toJson; модель в
     // JsonEncoder напрямую — «Converting object to an encodable object
