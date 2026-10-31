@@ -22,11 +22,11 @@ on:
   workflow_dispatch:
     inputs:
       run_mode:
-        description: "checks | build | release"
+        description: "checks | build | build-fast (arm64 APK only, no checks/AAB) | release"
         required: true
         default: "checks"
         type: choice
-        options: [checks, build, release]
+        options: [checks, build, build-fast, release]
       test_path:
         description: "Pinpoint run: test path(s) relative to app/ (e.g. test/screens/startup_wizard_test.dart). Empty = full suite. Skips analyze for speed."
         required: false
@@ -125,6 +125,9 @@ jobs:
           fi
 
   checks:
+    # build-fast — APK как можно быстрее: проверки пропускаются (их делает
+    # push-прогон той же головы), android стартует сразу после meta.
+    if: github.event.inputs.run_mode != 'build-fast'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -278,7 +281,7 @@ jobs:
   # не вышло, `flutter test` не пробрасывает ни --exclude-tags, ни -P).
   public-subs:
     name: PublicSubsCorpus
-    if: ${{ github.event.inputs.test_path == '' }}
+    if: ${{ github.event.inputs.test_path == '' && github.event.inputs.run_mode != 'build-fast' }}
     runs-on: ubuntu-latest
     continue-on-error: true
     defaults:
@@ -321,8 +324,14 @@ jobs:
           retention-days: 14
 
   android:
-    if: startsWith(github.ref, 'refs/tags/v') ||
-        (github.event_name == 'workflow_dispatch' && github.event.inputs.run_mode != 'checks')
+    # build-fast пропускает checks; пропущенная зависимость иначе пропустила
+    # бы и android, поэтому условие явно разбирает результат checks.
+    if: >-
+      !cancelled() && needs.meta.result == 'success' &&
+      (needs.checks.result == 'success' ||
+       (needs.checks.result == 'skipped' && github.event.inputs.run_mode == 'build-fast')) &&
+      (startsWith(github.ref, 'refs/tags/v') ||
+       (github.event_name == 'workflow_dispatch' && github.event.inputs.run_mode != 'checks'))
     needs: [meta, checks]
     runs-on: ubuntu-latest
     defaults:
@@ -479,10 +488,15 @@ jobs:
             mv "$OUT/app-release.apk" "$OUT/app-${VARIANT}-release.apk"
             echo "::endgroup::"
           }
-          build_one universal   "android-arm,android-arm64,android-x64" ""
-          build_one armeabi-v7a android-arm                             armeabi-v7a
-          build_one arm64-v8a   android-arm64                           arm64-v8a
-          build_one x86_64      android-x64                             x86_64
+          if [ "${{ github.event.inputs.run_mode }}" = "build-fast" ]; then
+            # build-fast — один таргет: arm64-v8a (телефоны, эмулятор arm64).
+            build_one arm64-v8a   android-arm64                           arm64-v8a
+          else
+            build_one universal   "android-arm,android-arm64,android-x64" ""
+            build_one armeabi-v7a android-arm                             armeabi-v7a
+            build_one arm64-v8a   android-arm64                           arm64-v8a
+            build_one x86_64      android-x64                             x86_64
+          fi
           ls -la "$OUT"/app-*-release.apk
 
       - name: Upload APKs (release)
@@ -495,6 +509,7 @@ jobs:
           retention-days: ${{ startsWith(github.ref, 'refs/tags/') && 1 || 30 }}
 
       - name: Build AAB (Google Play)
+        if: github.event.inputs.run_mode != 'build-fast'
         # Play принимает только AAB. Отдельный формат, отдельный канал:
         # в GitHub Releases по-прежнему уходят APK (шаги выше), сюда не
         # попадают — бандл забирает job google-play (§436) и отдаёт в Play API;
@@ -527,6 +542,7 @@ jobs:
           ls -la build/app/outputs/bundle/release/app-release.aab
 
       - name: Upload AAB (release)
+        if: github.event.inputs.run_mode != 'build-fast'
         uses: actions/upload-artifact@v7
         with:
           name: android-aab-release
