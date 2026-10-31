@@ -111,10 +111,9 @@ Ru internet segment, BitTorrent, VoWiFi, Tailscale networks are enabled.
   `.srs` rule is skipped whole, a preset drops the missing set (P8).
   **Witness:** unit tests "включённые правила без файлов остаются включёнными",
   "включённое правило без файла берётся в работу, выключенное — нет",
-  "§601 — включённые правила без скачанного файла: сборка без ошибки", widget
-  "§601 «ждёт скачивания»: свич включён, приглушён, ☁"
+  "§601 — включённые правила без скачанного файла: сборка без ошибки"
   (`routing_srs_cache_scan_test.dart`, `rule_set_auto_updater_test.dart`,
-  `builder/apply_all_custom_rules_test.dart`, `custom_rule_tile_display_test.dart`).
+  `builder/apply_all_custom_rules_test.dart`).
   Switch in 3 → download → enable (`_enableAfterDownload`, screen state +
   network) — manual check on a device: a disabled rule without a file → switch →
   ☁ spins → the file is downloaded → the rule is enabled. **Mutation:** the screen
