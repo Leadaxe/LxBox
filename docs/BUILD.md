@@ -25,7 +25,7 @@ flutter run   # Android device or emulator
 
 ### Local release build
 
-The script [`scripts/build-local-apk.sh`](../scripts/build-local-apk.sh) is the canonical way to produce a local release APK (minimal, arm64-only). For an APK of what is already pushed, [`scripts/ci-build-apk.sh`](#a-quick-apk-from-ci-build-fast) is usually faster (CI, one ABI, no checks):
+The script [`scripts/build-local-apk.sh`](../scripts/build-local-apk.sh) is the canonical way to produce a local release APK (minimal, arm64-only). For an APK of what is already pushed, [`build-fast` in CI](#a-quick-apk-from-ci-build-fast) is usually faster (one ABI, no checks):
 
 ```bash
 ./scripts/build-local-apk.sh
@@ -210,24 +210,14 @@ gh workflow run CI --ref develop -f run_mode=build-fast -f abi=arm64-v8a   # ○
 
 ### A quick APK from CI (`build-fast`)
 
-The fastest way to get an APK of what is pushed: one script, one ABI, no checks.
-
-```bash
-./scripts/ci-build-apk.sh                  # arm64-v8a from develop
-./scripts/ci-build-apk.sh x86_64           # emulator / Chromebook
-./scripts/ci-build-apk.sh arm64-v8a build/my-branch
-```
-
-[`scripts/ci-build-apk.sh`](../scripts/ci-build-apk.sh) `[abi] [ref]` starts
-`ci.yml` with `run_mode=build-fast -f abi=<abi>` on `ref` (default `develop`),
-waits for the run and downloads the APK into `app/build/ci-apk/<run id>/`.
-By hand it is the same as:
+The fastest way to get an APK of what is pushed: one ABI, no checks.
 
 ```bash
 gh workflow run ci.yml --ref develop -f run_mode=build-fast -f abi=arm64-v8a
 ```
 
-then `gh run watch <id>` and `gh run download <id> -n android-apks-release`.
+The APK is the `android-apks-release` artifact of the run (`gh run download
+<id> -n android-apks-release`, or the run page on GitHub).
 
 - **What is built** is the state of `ref` on GitHub, not the local tree:
   push first.
