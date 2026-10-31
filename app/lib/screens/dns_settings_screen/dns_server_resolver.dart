@@ -237,6 +237,7 @@ List<String> enabledServerTags(List<ResolvedServer> displayedServers) {
 /// §117 (задача 4b): rename тега inline-сервера — каскад по ссылкам в
 /// state'е DNS-экрана, чтобы переименование не орфанило рефы:
 /// - `domain_resolver` в body других inline-серверов;
+/// - §699: `servers` и `hosts` inline-групп (и override шаблонных);
 /// - значения vars типа `dns_servers` (dom_resolver) у template-серверов;
 /// - `server` в §061 DNS-правилах (kind inline/srs);
 /// - `dns_final` / `dns_default_domain_resolver`.
@@ -257,9 +258,28 @@ List<String> enabledServerTags(List<ResolvedServer> displayedServers) {
     final entry = servers[i];
     switch (entry) {
       case DnsServerInline(:final body):
+        var next = body;
         if (body['domain_resolver'] == oldTag) {
-          servers[i] = entry.copyWith(
-              body: {...body, 'domain_resolver': newTag});
+          next = {...next, 'domain_resolver': newTag};
+        }
+        // §699 — `servers` и `hosts` групп (inline и override шаблонной):
+        // без этого переименованный член выпадал из группы на сборке как
+        // `unknown`. Строка (Listable ядра) остаётся строкой.
+        if (body['type'] == 'group') {
+          for (final key in const ['servers', 'hosts']) {
+            final v = next[key];
+            if (v is List && v.contains(oldTag)) {
+              next = {
+                ...next,
+                key: [for (final m in v) m == oldTag ? newTag : m],
+              };
+            } else if (v == oldTag) {
+              next = {...next, key: newTag};
+            }
+          }
+        }
+        if (!identical(next, body)) {
+          servers[i] = entry.copyWith(body: next);
         }
       case DnsServerTemplate(:final varValues) when varValues.isNotEmpty:
         // Только vars типа dns_servers — enum-значение может текстуально

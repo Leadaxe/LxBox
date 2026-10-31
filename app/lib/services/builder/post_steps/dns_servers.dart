@@ -190,8 +190,9 @@ Future<List<DnsServerRef>> resolveDnsServersList({
 
 /// §695 правило 5 — выключенные записи [servers], на которые есть ссылка по
 /// правилу 3, получают `enabled: true`. Ссылки (независимо от `enabled`
-/// ссылающейся записи): член группы и `domain_resolver` другого сервера
-/// списка ([dnsServerListHolds]; тело template — после подстановки vars),
+/// ссылающейся записи): член группы (§699 — и сервер её ключа `hosts`) и
+/// `domain_resolver` другого сервера списка ([dnsServerListHolds]; тело
+/// template — после подстановки vars),
 /// [dnsFinal] / [defaultResolver], цель DNS-опции маршрутного правила
 /// ([ruleReferencedTags]). Сам сервер пресета ссылкой не считается: его
 /// выключатель хранится как есть, сборка эмитит его force-include (§117);
@@ -281,6 +282,8 @@ Future<List<DnsServerRef>> resolveDnsServersList({
 /// - `tailscale` второй линией не выпадает никогда: `detour` у типа нет
 ///   ([normalizeDnsDetour] снимает ключ), висячий `endpoint` снимает
 ///   [_sanitizeTailscaleDnsServers] прежним механизмом (NODE_SECTIONS §6).
+/// - §699: ключ `hosts` групп чистится после членов ([_filterDnsGroupHosts]),
+///   на ядре без SPEC 143 снимается целиком ([coreVersion]).
 List<Map<String, dynamic>> resolveDnsServersBodies({
   required List<DnsServerRef> resolved,
   required Map<String, Map<String, dynamic>> templateByTag,
@@ -295,6 +298,9 @@ List<Map<String, dynamic>> resolveDnsServersBodies({
   Set<String>? detourDroppedOut,
   // §555/§570 (§66) — переменные шаблона, видимые телам шаблонных серверов.
   Map<String, String> globalVars = const {},
+  // §699 — версия ядра (`BuildSettings.coreVersion`) для гейта ключа `hosts`
+  // групп; пусто — fail-open, ключ эмитится.
+  String coreVersion = '',
 }) {
   final out = <Map<String, dynamic>>[];
   final seen = <String>{};
@@ -372,6 +378,16 @@ List<Map<String, dynamic>> resolveDnsServersBodies({
     },
     detourDropped: detourDropped,
     detourDroppedOut: detourDroppedOut,
+    warningsOut: warningsOut,
+  );
+  _filterDnsGroupHosts(
+    out,
+    allRefTags: {
+      for (final e in resolved)
+        if (e.tag.isNotEmpty) e.tag,
+    },
+    detourDropped: detourDropped,
+    coreVersion: coreVersion,
     warningsOut: warningsOut,
   );
   return out;
@@ -564,5 +580,72 @@ void _filterDnsGroupMembers(
       }
     }
     body['servers'] = kept;
+  }
+}
+
+/// §699 — пост-проход ключа `hosts` DNS-групп (ядро SPEC 143), после
+/// фильтра членов ([_filterDnsGroupMembers]): правила ядра проверяются по
+/// уже очищенным `servers`. Тег остаётся, если он эмитирован, имеет тип
+/// `hosts`, не повторяется, не равен тегу группы и не стоит в её `servers`.
+/// Выпавший — warning на каждый (как у членов, [dnsGroupMemberDropReason] +
+/// `not hosts` / `also a member`); storage не мутируется. Пустой список —
+/// ключ снимается (у ядра `[]` = ключа нет). Строка (Listable ядра)
+/// пишется списком.
+///
+/// Гейт ядра — после чистки: ядро старше
+/// [kDnsGroupHostsMinCoreVersion] (`coreSupportsDnsGroupHosts`) отвергло бы
+/// конфиг целиком на `unknown field`, ключ снимается с warning'ом.
+void _filterDnsGroupHosts(
+  List<Map<String, dynamic>> out, {
+  required Set<String> allRefTags,
+  Set<String> detourDropped = const {},
+  String coreVersion = '',
+  List<String>? warningsOut,
+}) {
+  final typeByTag = <String, String>{
+    for (final b in out)
+      if (b['tag'] case final String tag) tag: b['type']?.toString() ?? '',
+  };
+  final emittedTags = typeByTag.keys.toSet();
+  final supported = coreSupportsDnsGroupHosts(coreVersion);
+  for (final body in out) {
+    if (body['type'] != 'group' || !body.containsKey('hosts')) continue;
+    final selfTag = body['tag'] as String;
+    final members = {
+      for (final m in (body['servers'] as List<dynamic>? ?? const []))
+        m?.toString() ?? '',
+    };
+    final raw = body['hosts'];
+    final kept = <String>[];
+    for (final h in raw is List ? raw : [if (raw != null && raw != '') raw]) {
+      final tag = h is String ? h : (h?.toString() ?? '');
+      final reason = dnsGroupMemberDropReason(
+            tag,
+            selfTag: selfTag,
+            kept: kept,
+            knownTags: allRefTags,
+            emittedTags: emittedTags,
+            detourDropped: detourDropped,
+          ) ??
+          (typeByTag[tag] != 'hosts'
+              ? 'not hosts'
+              : members.contains(tag)
+                  ? 'also a member'
+                  : null);
+      if (reason != null) {
+        warningsOut?.add("DNS group '$selfTag': hosts '$tag' dropped ($reason)");
+      } else {
+        kept.add(tag);
+      }
+    }
+    if (kept.isEmpty) {
+      body.remove('hosts');
+    } else if (!supported) {
+      body.remove('hosts');
+      warningsOut?.add('DNS group "$selfTag": hosts need core '
+          '$kDnsGroupHostsMinCoreVersion or newer');
+    } else {
+      body['hosts'] = kept;
+    }
   }
 }

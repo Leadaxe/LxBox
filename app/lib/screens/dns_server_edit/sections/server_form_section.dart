@@ -17,10 +17,12 @@ import '../../../services/l10n/locale_controller.dart';
 /// §435 — режим **Tailscale** (NODE_SECTIONS.md §6): MagicDNS через узел
 /// tailnet — `endpoint` выбором из узлов Tailscale + чекбокс
 /// `accept_default_resolvers`; адреса и detour нет.
+/// §699 — режим **Hosts**: записи «имя → адреса» строками + диалог; у группы
+/// — блок Hosts (ключ `hosts`, ядро SPEC 143) под Members.
 ///
 /// Поля пишут в канонический `body` контроллера — JSON-вкладка показывает
 /// то же тело live (и наоборот: валидный JSON-edit обновляет форму).
-/// `body.type` вне режимов формы (local, tcp, fakeip, hosts, dhcp, …) не выражается —
+/// `body.type` вне режимов формы (local, tcp, fakeip, dhcp, …) не выражается —
 /// показываем пометку «use JSON tab».
 class ServerFormSection extends StatelessWidget {
   const ServerFormSection({super.key, required this.c});
@@ -49,7 +51,7 @@ class ServerFormSection extends StatelessWidget {
             Expanded(
               child: Text(
                 getLocalText.s(
-                  "Custom server type \"%s\" — edit it on the JSON tab. The form supports UDP / DoT / DoH / DoQ / DoH3 / Group / Tailscale.",
+                  "Custom server type \"%s\" — edit it on the JSON tab. The form supports UDP / DoT / DoH / DoQ / DoH3 / Group / Tailscale / Hosts.",
                   c.rawServerType,
                 ),
                 style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
@@ -67,9 +69,10 @@ class ServerFormSection extends StatelessWidget {
         // §312 — режимы в сегментах. На узких экранах сегменты не влезают —
         // дропдаун (решение юзера №1). §411 — сегментов стало шесть, порог
         // поднят: на телефоне (< 520dp) всегда дропдаун, сегменты — планшет.
+        // §699 — восьмой сегмент (Hosts): порог 600dp, чтобы не сжимать подписи.
         LayoutBuilder(
           builder: (context, constraints) {
-            if (constraints.maxWidth < 520) {
+            if (constraints.maxWidth < 600) {
               return DropdownButtonFormField<String>(
                 key: ValueKey('dns-mode-$mode'),
                 initialValue: mode,
@@ -98,6 +101,10 @@ class ServerFormSection extends StatelessWidget {
                     value: 'tailscale',
                     child: Text('Tailscale'), // l10n-exempt: protocol name
                   ),
+                  DropdownMenuItem(
+                    value: 'hosts',
+                    child: Text(getLocalText.s("Hosts")),
+                  ),
                 ],
                 onChanged: (v) {
                   if (v != null) c.setServerMode(v);
@@ -124,6 +131,10 @@ class ServerFormSection extends StatelessWidget {
                   value: 'tailscale',
                   label: Text('Tailscale'), // l10n-exempt: protocol name
                 ),
+                ButtonSegment(
+                  value: 'hosts',
+                  label: Text(getLocalText.s("Hosts")),
+                ),
               ],
               selected: {mode},
               showSelectedIcon: false,
@@ -145,6 +156,9 @@ class ServerFormSection extends StatelessWidget {
             'tailscale' => getLocalText.s(
               "MagicDNS of the tailnet via a Tailscale node · no address",
             ),
+            'hosts' => getLocalText.s(
+              "Fixed addresses for chosen names, answered on the device",
+            ),
             _ => getLocalText.s("Plain UDP · port 53 · fast, unencrypted"),
           }, style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
         ),
@@ -153,6 +167,8 @@ class ServerFormSection extends StatelessWidget {
           _GroupSection(c: c),
         ] else if (mode == 'tailscale') ...[
           _TailscaleSection(c: c),
+        ] else if (mode == 'hosts') ...[
+          _HostsSection(c: c),
         ] else ...[
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -305,6 +321,8 @@ class _GroupSection extends StatelessWidget {
             ),
           ),
         const SizedBox(height: 12),
+        _GroupHostsBlock(c: c),
+        const SizedBox(height: 12),
         DropdownButtonFormField<String>(
           key: ValueKey('dns-group-mode-${c.groupMode}'),
           initialValue: c.groupMode,
@@ -376,6 +394,278 @@ class _GroupSection extends StatelessWidget {
               ),
             ],
           ],
+        ),
+      ],
+    );
+  }
+}
+
+/// §699 — блок Hosts формы группы (ядро SPEC 143): галки по серверам типа
+/// `hosts` из списка, вид — как Members (§695 правило 2: выключенный не
+/// предлагается, уже отмеченный показывается с пометкой). Ключ пишется в
+/// порядке списка ([DnsServerEditController.toggleGroupHosts]).
+class _GroupHostsBlock extends StatelessWidget {
+  const _GroupHostsBlock({required this.c});
+  final DnsServerEditController c;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final hosts = c.groupHosts;
+    final self = c.tagCtrl.text.trim();
+    final options = [
+      for (final o in c.dnsHostsOptions)
+        if (o.tag != self && (o.selectable || hosts.contains(o.tag))) o,
+    ];
+    final unknown = [
+      for (final h in hosts)
+        if (!options.any((o) => o.tag == h)) h,
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          getLocalText.s("Hosts"),
+          style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+        ),
+        const SizedBox(height: 4),
+        if (options.isEmpty && unknown.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Text(
+              getLocalText.s("No hosts servers in the list."),
+              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+            ),
+          )
+        else ...[
+          for (final o in options)
+            CheckboxListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              value: hosts.contains(o.tag),
+              onChanged: (v) => c.toggleGroupHosts(o.tag, v == true),
+              title: Text(
+                o.tag,
+                style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),
+              ),
+              subtitle: o.enabled
+                  // l10n-exempt: wire type as-is
+                  ? Text(o.type, style: const TextStyle(fontSize: 11))
+                  : Text(
+                      getLocalText.s("%s · disabled — will be skipped", o.type),
+                      style: TextStyle(fontSize: 11, color: cs.error),
+                    ),
+            ),
+          for (final h in unknown)
+            CheckboxListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              value: true,
+              onChanged: (_) => c.toggleGroupHosts(h, false),
+              title: Text(
+                h,
+                style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),
+              ),
+              subtitle: Text(
+                getLocalText.s("unknown server — will be skipped"),
+                style: TextStyle(fontSize: 11, color: cs.error),
+              ),
+            ),
+          Padding(
+            padding: const EdgeInsets.only(left: 4),
+            child: Text(
+              getLocalText.s(
+                "Names these servers know are answered first; other names go to the members.",
+              ),
+              style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// §699 — секция формы DNS-сервера `hosts`: записи `predefined` строками
+/// (имя, под ним адреса через запятую, ✕ — снять), тап и «Add host» —
+/// диалог [_HostsEntryDialog]. `path` формой не правится: есть в теле —
+/// строка «Also reads».
+class _HostsSection extends StatelessWidget {
+  const _HostsSection({required this.c});
+  final DnsServerEditController c;
+
+  Future<void> _edit(BuildContext context, [DnsHostsEntry? entry]) async {
+    final r = await showDialog<DnsHostsEntry>(
+      context: context,
+      builder: (_) => _HostsEntryDialog(c: c, entry: entry),
+    );
+    if (r == null) return;
+    c.putHostsEntry(r.name, r.addresses, replacing: entry?.name);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final paths = c.hostsPaths;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          getLocalText.s("Hosts"),
+          style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+        ),
+        for (final e in c.hostsEntries)
+          ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            onTap: () => _edit(context, e),
+            title: Text(
+              e.name,
+              style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),
+            ),
+            subtitle: Text(
+              e.addresses.join(', '),
+              style: const TextStyle(fontSize: 11, fontFamily: 'monospace'),
+            ),
+            trailing: IconButton(
+              tooltip: getLocalText.s("Remove"),
+              icon: const Icon(Icons.close, size: 18),
+              onPressed: () => c.removeHostsEntry(e.name),
+            ),
+          ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            icon: const Icon(Icons.add, size: 18),
+            label: Text(getLocalText.s("Add host")),
+            onPressed: () => _edit(context),
+          ),
+        ),
+        if (paths.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 4),
+            child: Text(
+              getLocalText.s("Also reads: %s", paths.join(', ')),
+              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+            ),
+          ),
+        Padding(
+          padding: const EdgeInsets.only(left: 4),
+          child: Text(
+            getLocalText.s(
+              "Answers only these names. Put it under Hosts of a DNS group so that other names go to the group's servers.",
+            ),
+            style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// §699 — диалог записи `hosts`: Name и Addresses (по адресу в строке, как
+/// поле Fixed IP §683). Проверки — [DnsServerEditController.hostsNameError]
+/// и [DnsServerEditController.hostsAddressesError]; ошибка поля видна, как
+/// только в нём что-то набрано, или после OK. Результат — имя в нижнем
+/// регистре и адреса списком.
+class _HostsEntryDialog extends StatefulWidget {
+  const _HostsEntryDialog({required this.c, this.entry});
+  final DnsServerEditController c;
+  final DnsHostsEntry? entry;
+
+  @override
+  State<_HostsEntryDialog> createState() => _HostsEntryDialogState();
+}
+
+class _HostsEntryDialogState extends State<_HostsEntryDialog> {
+  late final TextEditingController _name =
+      TextEditingController(text: widget.entry?.name ?? '');
+  late final TextEditingController _addresses =
+      TextEditingController(text: widget.entry?.addresses.join('\n') ?? '');
+  bool _submitted = false;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _addresses.dispose();
+    super.dispose();
+  }
+
+  String? get _nameError =>
+      widget.c.hostsNameError(_name.text, editing: widget.entry?.name);
+  String? get _addressesError =>
+      DnsServerEditController.hostsAddressesError(_addresses.text);
+
+  void _ok() {
+    if (_nameError != null || _addressesError != null) {
+      setState(() => _submitted = true);
+      return;
+    }
+    Navigator.pop<DnsHostsEntry>(context, (
+      name: DnsServerEditController.normalizeHostsName(_name.text),
+      addresses: DnsServerEditController.hostsAddressLines(_addresses.text),
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(getLocalText.s("Host")),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextField(
+              controller: _name,
+              autofocus: widget.entry == null,
+              keyboardType: TextInputType.url,
+              style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),
+              decoration: InputDecoration(
+                labelText: getLocalText.s("Name"),
+                // l10n-exempt: host name example
+                hintText: 'wg.home',
+                errorText: _submitted || _name.text.isNotEmpty
+                    ? _nameError
+                    : null,
+                border: const OutlineInputBorder(),
+                isDense: true,
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _addresses,
+              minLines: 2,
+              maxLines: 6,
+              keyboardType: TextInputType.multiline,
+              style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),
+              decoration: InputDecoration(
+                labelText: getLocalText.s("Addresses"),
+                // l10n-exempt: IP address examples
+                hintText: '203.0.113.10\n2001:db8::10',
+                helperText: getLocalText.s("One address per line, IPv4 or IPv6."),
+                errorText: _submitted || _addresses.text.isNotEmpty
+                    ? _addressesError
+                    : null,
+                border: const OutlineInputBorder(),
+                isDense: true,
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text(getLocalText.s("Cancel")),
+        ),
+        TextButton(
+          onPressed: _ok,
+          child: Text(getLocalText.s("OK")),
         ),
       ],
     );

@@ -19,6 +19,8 @@ import '../json_clone.dart';
 import '../parser/uri_utils.dart' show isValidRealityPublicKey;
 import '../parser/utls_fingerprint.dart';
 import '../settings_storage.dart' show SettingsStorage, TunAppsConfig;
+import 'core_chain_capability.dart'
+    show coreSupportsDnsGroupHosts, kDnsGroupHostsMinCoreVersion;
 import 'detour_yields.dart' show yieldToBuildDetour;
 import 'domain_resolver_ref.dart';
 import 'if_engine.dart' show Dropped, walk;

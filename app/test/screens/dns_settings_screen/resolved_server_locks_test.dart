@@ -4,6 +4,8 @@ import 'package:lxbox/models/dns_ref.dart';
 import 'package:lxbox/screens/dns_settings_screen/dns_server_delete.dart';
 import 'package:lxbox/screens/dns_settings_screen/dns_server_resolver.dart';
 import 'package:lxbox/screens/dns_settings_screen/resolved_server.dart';
+import 'package:lxbox/services/dns/dns_server_holds.dart'
+    show dnsServerFirstHolds;
 
 /// §680 — локи «used by» по ссылкам из самого списка: член группы,
 /// DNS Final, Default Domain Resolver, `domain_resolver` другого сервера.
@@ -260,6 +262,50 @@ void main() {
     ]);
     expect(find(list, 'google_udp').lockedByLabel, 'my-doh');
     expect(find(list, 'opendns_udp').lockedByLabel, 'My DoT');
+  });
+
+  // §699 п. 6 — сервер из ключа `hosts` группы держится, как член.
+  test('сервер hosts группы залочен описанием группы, в т.ч. выключенный', () {
+    final servers = <DnsServerRef>[
+      t('google_doh'),
+      const DnsServerInline(
+        enabled: false,
+        tag: 'local_hosts',
+        description: 'Home names',
+        body: {
+          'type': 'hosts',
+          'predefined': {
+            'wg.home': ['203.0.113.10'],
+          },
+        },
+      ),
+      const DnsServerInline(
+        enabled: true,
+        tag: 'my_group',
+        description: 'My group',
+        body: {
+          'type': 'group',
+          'servers': ['google_doh'],
+          'hosts': ['local_hosts'],
+        },
+      ),
+    ];
+    final list = resolve(servers);
+    final hosts = find(list, 'local_hosts');
+    expect(hosts.locked, isTrue);
+    expect(hosts.lockedByLabel, 'My group');
+    expect(canDeleteDnsServer(hosts), isFalse);
+    // Ссылка hosts — не член: счётчик членов прежний.
+    expect(find(list, 'my_group').groupMembersInList, 1);
+    // Бэкап: used_by = group:<tag>, словарь контракта не расширяется.
+    expect(
+        dnsServerFirstHolds(
+          servers: servers,
+          dnsRules: const [],
+          templateByTag: templateByTag,
+        )['local_hosts']
+            ?.usedBy,
+        'group:my_group');
   });
 
   test('больше двух источников — первые два и «+N»', () {

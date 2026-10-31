@@ -164,7 +164,8 @@ class DnsServerParamsTab extends StatelessWidget {
                 // пикер для группы не рисуем вовсе.
                 // §435 — у `tailscale` транспорт задаёт `endpoint` (узел
                 // tailnet), поля `detour` у типа нет — пикер тоже прячем.
-                if (!c.isGroup && !c.isTailscale)
+                // §699 — у `hosts` ответ локальный, dial-полей нет вовсе.
+                if (!kDnsAddresslessModes.contains(c.serverMode))
                   Padding(
                     padding: const EdgeInsets.fromLTRB(0, 16, 0, 0),
                     child: Column(

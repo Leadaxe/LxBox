@@ -357,6 +357,25 @@ class _DnsSettingsTabState extends State<DnsSettingsTab>
             ),
       ];
 
+  /// §699 — опции блока Hosts формы группы: серверы типа `hosts` в порядке
+  /// списка (он же порядок ключа `hosts`). Как у членов: выбрать можно только
+  /// включённый (`selectable`), выключенный уже отмеченный форма показывает с
+  /// пометкой.
+  List<DnsMemberOption> get _dnsHostsOptions => [
+        for (final s in _displayedServers)
+          if (s.body['type'] == 'hosts')
+            DnsMemberOption(
+              tag: s.tag,
+              type: 'hosts',
+              enabled: dnsServerRefEmitted(
+                enabled: s.enabled,
+                presetReferenced: s.lockedByPreset,
+                ruleReferenced: s.usedByRule != null,
+              ),
+              selectable: s.enabled,
+            ),
+      ];
+
   /// §312 — live-состояние DNS-групп от ядра (pull на открытии экрана,
   /// решение №2). Пусто = туннель down / ядро без метода / групп нет.
   Map<String, CcDnsGroup> _liveDnsGroups = const {};
@@ -419,6 +438,7 @@ class _DnsSettingsTabState extends State<DnsSettingsTab>
       outboundOptions: _outboundOptions,
       dnsServerTags: _enabledServerTags,
       dnsMemberOptions: _dnsMemberOptions,
+      dnsHostsOptions: _dnsHostsOptions, // §699
       tailscaleEndpoints: _tailscaleEndpoints, // §435
       existingTags: {for (final s in _servers) s.tag},
     );
@@ -471,6 +491,7 @@ class _DnsSettingsTabState extends State<DnsSettingsTab>
       // §117: dom_resolver-пикер — теги без самого сервера (петля).
       dnsServerTags: _enabledServerTags.where((t) => t != tag).toList(),
       dnsMemberOptions: _dnsMemberOptions,
+      dnsHostsOptions: _dnsHostsOptions, // §699
       tailscaleEndpoints: _tailscaleEndpoints, // §435
       // §117 задача 4b: rename-коллизии (без текущего тега).
       existingTags: {

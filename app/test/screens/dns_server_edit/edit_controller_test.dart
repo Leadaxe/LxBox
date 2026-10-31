@@ -588,4 +588,172 @@ void main() {
       user.dispose();
     });
   });
+
+  group('§699 сервер hosts', () {
+    DnsServerEditController make(Map<String, dynamic> body,
+            {List<DnsMemberOption> hostsOptions = const []}) =>
+        DnsServerEditController(
+          initialRef: DnsServerInline(enabled: true, tag: 'grp', body: body),
+          dnsHostsOptions: hostsOptions,
+        );
+
+    test('hosts — безадресный режим формы', () {
+      expect(kDnsServerModes, contains('hosts'));
+      expect(kDnsAddresslessModes, contains('hosts'));
+    });
+
+    test('вход в hosts снимает транспорт и ставит predefined: {}', () {
+      final c = make({
+        'type': 'https',
+        'server': 'dns.example',
+        'server_port': 8443,
+        'path': '/q',
+        'tls': {'enabled': true, 'server_name': 'x'},
+        'domain_resolver': 'google_udp',
+        'detour': 'vpn-1',
+      });
+      c.setServerMode('hosts');
+      expect(c.isHosts, isTrue);
+      expect(bodyOf(c), {'type': 'hosts', 'predefined': <String, dynamic>{}});
+      expect(c.hostsHasNoEntries, isTrue);
+      c.dispose();
+    });
+
+    test('выход из hosts снимает predefined и path', () {
+      final c = make({
+        'type': 'hosts',
+        'predefined': {
+          'wg.home': ['203.0.113.10'],
+        },
+        'path': ['/data/hosts'],
+      });
+      c.setServerMode('udp');
+      expect(bodyOf(c), {'type': 'udp'});
+      c.dispose();
+    });
+
+    test('записи: строка и список читаются, путь — «Also reads»', () {
+      final c = make({
+        'type': 'hosts',
+        'predefined': {
+          'wg.home': '203.0.113.10',
+          'warp.lan': ['162.159.192.1', '2606:4700:d0::a29f:c001'],
+        },
+        'path': '/data/hosts',
+      });
+      expect([for (final e in c.hostsEntries) [e.name, e.addresses]], [
+        ['wg.home', ['203.0.113.10']],
+        ['warp.lan', ['162.159.192.1', '2606:4700:d0::a29f:c001']],
+      ]);
+      expect(c.hostsPaths, ['/data/hosts']);
+      c.dispose();
+    });
+
+    test('только path — Save не блокируется', () {
+      final c = make({
+        'type': 'hosts',
+        'predefined': <String, dynamic>{},
+        'path': ['/data/hosts'],
+      });
+      expect(c.hostsHasNoEntries, isFalse);
+      c.dispose();
+    });
+
+    test('запись: имя в нижнем регистре, адреса списком; правка — на месте',
+        () {
+      final c = make({'type': 'hosts', 'predefined': <String, dynamic>{}});
+      c.putHostsEntry(' WG.Home ', ['203.0.113.10', '2001:db8::10']);
+      c.putHostsEntry('warp.lan', ['162.159.192.1']);
+      expect(bodyOf(c)['predefined'], {
+        'wg.home': ['203.0.113.10', '2001:db8::10'],
+        'warp.lan': ['162.159.192.1'],
+      });
+      expect(c.hostsHasNoEntries, isFalse);
+      // Смена имени у первой записи — позиция та же.
+      c.putHostsEntry('router.home', ['192.168.1.1'], replacing: 'wg.home');
+      expect((bodyOf(c)['predefined'] as Map).keys,
+          ['router.home', 'warp.lan']);
+      c.removeHostsEntry('router.home');
+      expect(bodyOf(c)['predefined'], {
+        'warp.lan': ['162.159.192.1'],
+      });
+      c.removeHostsEntry('warp.lan');
+      expect(bodyOf(c)['predefined'], <String, dynamic>{});
+      expect(c.hostsHasNoEntries, isTrue);
+      c.dispose();
+    });
+
+    test('проверки диалога: имя и адреса', () {
+      final c = make({
+        'type': 'hosts',
+        'predefined': {
+          'wg.home': ['203.0.113.10'],
+        },
+      });
+      expect(c.hostsNameError(''), isNotNull);
+      expect(c.hostsNameError('wg home'), isNotNull);
+      expect(c.hostsNameError('https://wg.home'), isNotNull);
+      expect(c.hostsNameError('wg.home/x'), isNotNull);
+      expect(c.hostsNameError('wg.home:53'), isNotNull);
+      expect(c.hostsNameError('WG.HOME'), isNotNull, reason: 'дубль');
+      expect(c.hostsNameError('WG.HOME', editing: 'wg.home'), isNull,
+          reason: 'своё имя при правке — не дубль');
+      expect(c.hostsNameError('warp.lan'), isNull);
+
+      expect(DnsServerEditController.hostsAddressesError(''), isNotNull);
+      expect(DnsServerEditController.hostsAddressesError('1.2.3.4\nnope'),
+          isNotNull);
+      expect(
+          DnsServerEditController.hostsAddressesError(
+              '203.0.113.10\n\n 2001:db8::10 '),
+          isNull);
+      expect(
+          DnsServerEditController.hostsAddressLines(
+              '203.0.113.10\n\n 2001:db8::10 '),
+          ['203.0.113.10', '2001:db8::10']);
+      c.dispose();
+    });
+
+    test('hosts группы — в порядке списка, не кликов; пусто — ключа нет', () {
+      const opts = [
+        DnsMemberOption(tag: 'h1', type: 'hosts', enabled: true),
+        DnsMemberOption(tag: 'h2', type: 'hosts', enabled: true),
+        DnsMemberOption(tag: 'h3', type: 'hosts', enabled: true),
+      ];
+      final c = make({
+        'type': 'group',
+        'servers': ['a'],
+      }, hostsOptions: opts);
+      c.toggleGroupHosts('h3', true);
+      c.toggleGroupHosts('h1', true);
+      expect(bodyOf(c)['hosts'], ['h1', 'h3']);
+      c.toggleGroupHosts('h2', true);
+      expect(c.groupHosts, ['h1', 'h2', 'h3']);
+      c.toggleGroupHosts('grp', true); // сама группа — нет
+      expect(c.groupHosts, ['h1', 'h2', 'h3']);
+      for (final t in ['h1', 'h2', 'h3']) {
+        c.toggleGroupHosts(t, false);
+      }
+      expect(bodyOf(c).containsKey('hosts'), isFalse);
+      expect(bodyOf(c)['servers'], ['a'], reason: 'Members не трогаются');
+      c.dispose();
+    });
+
+    test('тег вне опций (JSON-вкладка) — после известных; выход из group '
+        'снимает hosts', () {
+      final c = make({
+        'type': 'group',
+        'servers': ['a'],
+        'hosts': 'ghost',
+      }, hostsOptions: const [
+        DnsMemberOption(tag: 'h1', type: 'hosts', enabled: true),
+      ]);
+      expect(c.groupHosts, ['ghost']);
+      c.toggleGroupHosts('h1', true);
+      expect(bodyOf(c)['hosts'], ['h1', 'ghost']);
+      c.setServerMode('hosts');
+      expect(bodyOf(c), {'type': 'hosts', 'predefined': <String, dynamic>{}});
+      c.dispose();
+    });
+  });
 }

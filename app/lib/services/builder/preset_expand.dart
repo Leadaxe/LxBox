@@ -1137,7 +1137,8 @@ String? normalizeDnsDetour(
   }
   // §435 — у DNS-сервера `tailscale` транспорт задаёт `endpoint` (узел
   // tailnet), поля `detour` у типа нет: лишний ключ роняет ядро на старте.
-  if (server['type'] == 'tailscale') {
+  // §699 — у `hosts` dial-полей нет вовсе (ответ локальный): то же самое.
+  if (server['type'] == 'tailscale' || server['type'] == 'hosts') {
     server.remove('detour');
     return null;
   }

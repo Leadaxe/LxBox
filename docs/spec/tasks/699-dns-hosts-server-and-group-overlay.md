@@ -231,3 +231,41 @@ Resolver (например, override Shield §695) → в узле адрес `w
 1. Записи `hosts` — строки + диалог (п. 2 модели).
 2. Порядок ключа `hosts` — по порядку списка DNS-серверов (п. 5).
 3. Переименование чинит и `servers` групп в этой же задаче (п. 7).
+
+## Итог реализации (31.10.2026)
+
+Сделаны пп. 1–12 модели; п. 13 (бамп ядра) — отдельным коммитом.
+
+- **Форма.** `hosts` — восьмой режим (`kDnsServerModes`,
+  `kDnsAddresslessModes`); записи — `hostsEntries`, `putHostsEntry` (имя в
+  нижнем регистре, адреса списком, правка на месте), `removeHostsEntry`;
+  проверки диалога — `hostsNameError` / `hostsAddressesError`; Save —
+  `hostsHasNoEntries`. Блок Hosts группы — `groupHosts` / `toggleGroupHosts`
+  (порядок — по `dnsHostsOptions`, т. е. по списку; теги вне опций — следом).
+  Опции Hosts — `_dnsHostsOptions` вкладки DNS.
+- **Ссылки.** Listable ядра читается `dnsListableTags`
+  (`services/dns/dns_server_holds.dart`); `hosts` групп — в
+  `dnsServerListHolds` (вид `group`) и в ссылках пресетов
+  `dnsServerFirstHolds`, отсюда лок «used by», нормализация §695 и
+  `used_by: group:<tag>` бэкапа. `renameDnsServerTagRefs` переписывает
+  `servers` и `hosts` inline-групп (строка остаётся строкой).
+- **Сборка.** `_filterDnsGroupHosts` после фильтра членов; гейт
+  `coreSupportsDnsGroupHosts` (`kDnsGroupHostsMinCoreVersion =
+  1.14.4-lx.26`), версия — `BuildSettings.coreVersion` через
+  `applyCustomDns(coreVersion:)`. `normalizeDnsDetour` снимает `detour` у
+  `hosts`. Валидатор — `BadDnsGroupHosts` (`DnsGroupHostsProblem`: itself,
+  alsoMember, duplicate, notFound, notHosts — порядок проверок ядра).
+
+Отступления:
+
+- Строки блока Hosts группы — как Members в коде (тег, под ним тип), а не
+  «имя, тег справа» макета: образец соседнего блока на том же экране.
+- Подсказка поля адресов — существующая строка Fixed IP «One address per
+  line, IPv4 or IPv6.» вместо текста макета: п. 2 велит «как поле Fixed IP».
+- Порог сегментов режима поднят с 520 до 600 dp, чтобы восьмой сегмент
+  (Hosts) не сжимал подписи (на устройстве не проверялось); на телефоне
+  по-прежнему дропдаун.
+- Пометка «Custom server type … The form supports …» дополнена «/ Hosts»
+  (ключ l10n сменён).
+- Запрос лаунчеру на корпус-кейс `corpus/dns/group_prunes_hosts` не
+  отправлялся — за оркестратором.

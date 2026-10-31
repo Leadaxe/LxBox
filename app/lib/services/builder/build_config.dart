@@ -937,6 +937,7 @@ Future<BuildResult?> _buildConfig({
       dnsFinal: vars['dns_final'] ?? '',
       defaultResolver: vars['dns_default_domain_resolver'] ?? '',
     ),
+    coreVersion: settings.coreVersion, // §699 — гейт `hosts` у DNS-групп
   );
 
   // §119/§120: VPN-mode (tun-in/mixed-in/route-rules) теперь декларативен —

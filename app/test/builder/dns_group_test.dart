@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/dns_ref.dart';
 import 'package:lxbox/models/validation.dart';
+import 'package:lxbox/services/builder/core_chain_capability.dart'
+    show coreSupportsDnsGroupHosts;
 import 'package:lxbox/services/builder/post_steps.dart';
 import 'package:lxbox/services/builder/validator.dart';
 
@@ -381,6 +383,185 @@ void main() {
           templateByTag: const {}, dnsFinal: 'a', defaultResolver: 'gone');
       expect(r.list, refs);
       expect(r.enabled, isEmpty);
+    });
+
+    test('§699 сервер из hosts группы держит: включается, used_by group',
+        () {
+      final r = normalizeReferencedDnsServers([
+        inlineRef('a', {'type': 'udp', 'server': '1.1.1.1'}),
+        inlineRef('h', {'type': 'hosts', 'predefined': <String, dynamic>{}},
+            enabled: false),
+        inlineRef('shield', {
+          ...groupBody(['a']),
+          'hosts': ['h'],
+        }),
+      ], templateByTag: const {});
+      expect(r.list.firstWhere((s) => s.tag == 'h').enabled, isTrue);
+      expect(r.enabled['h'], ['group:shield']);
+    });
+  });
+
+  group('§699 ключ hosts группы — сборка', () {
+    Map<String, dynamic> hostsBody() => {
+          'type': 'hosts',
+          'predefined': {
+            'wg.home': ['203.0.113.10', '2001:db8::10'],
+          },
+        };
+
+    List<Map<String, dynamic>> emitWith(List<DnsServerRef> refs,
+            {List<String>? warnings, String coreVersion = ''}) =>
+        resolveDnsServersBodies(
+          resolved: refs,
+          templateByTag: const {},
+          presetServersByTag: const {},
+          warningsOut: warnings,
+          coreVersion: coreVersion,
+        );
+
+    test('чистка: выключен, не найден, не hosts, дубль, сама группа, член',
+        () {
+      final warnings = <String>[];
+      final out = emitWith([
+        inlineRef('a', {'type': 'udp', 'server': '1.1.1.1'}),
+        inlineRef('b', {'type': 'udp', 'server': '8.8.8.8'}),
+        inlineRef('h1', hostsBody()),
+        inlineRef('h2', hostsBody()),
+        inlineRef('off', hostsBody(), enabled: false),
+        inlineRef('grp', {
+          ...groupBody(['a', 'h2']),
+          'hosts': ['off', 'missing', 'b', 'h1', 'h1', 'grp', 'h2'],
+        }),
+      ], warnings: warnings);
+      final grp = out.firstWhere((b) => b['tag'] == 'grp');
+      expect(grp['hosts'], ['h1']);
+      expect(
+          warnings,
+          containsAll([
+            "DNS group 'grp': hosts 'off' dropped (disabled)",
+            "DNS group 'grp': hosts 'missing' dropped (unknown)",
+            "DNS group 'grp': hosts 'b' dropped (not hosts)",
+            "DNS group 'grp': hosts 'h1' dropped (duplicate)",
+            "DNS group 'grp': hosts 'grp' dropped (itself)",
+            "DNS group 'grp': hosts 'h2' dropped (also a member)",
+          ]));
+    });
+
+    test('всё выпало — ключ снят; строка (Listable) пишется списком', () {
+      final out = emitWith([
+        inlineRef('a', {'type': 'udp', 'server': '1.1.1.1'}),
+        inlineRef('h1', hostsBody()),
+        inlineRef('g1', {
+          ...groupBody(['a']),
+          'hosts': ['ghost'],
+        }),
+        inlineRef('g2', {
+          ...groupBody(['a']),
+          'hosts': 'h1',
+        }),
+        inlineRef('g3', {
+          ...groupBody(['a']),
+          'hosts': <String>[],
+        }),
+      ]);
+      Map<String, dynamic> byTag(String t) =>
+          out.firstWhere((b) => b['tag'] == t);
+      expect(byTag('g1').containsKey('hosts'), isFalse);
+      expect(byTag('g2')['hosts'], ['h1']);
+      expect(byTag('g3').containsKey('hosts'), isFalse);
+    });
+
+    test('гейт ядра: lx.25 — ключ снят с warning; lx.26 и неизвестная — есть',
+        () {
+      List<DnsServerRef> refs() => [
+            inlineRef('a', {'type': 'udp', 'server': '1.1.1.1'}),
+            inlineRef('h1', hostsBody()),
+            inlineRef('grp', {
+              ...groupBody(['a']),
+              'hosts': ['h1'],
+            }),
+          ];
+      Map<String, dynamic> grpOf(List<Map<String, dynamic>> out) =>
+          out.firstWhere((b) => b['tag'] == 'grp');
+
+      final old = <String>[];
+      final outOld =
+          emitWith(refs(), warnings: old, coreVersion: '1.14.4-lx.25');
+      expect(grpOf(outOld).containsKey('hosts'), isFalse);
+      expect(old, [
+        'DNS group "grp": hosts need core 1.14.4-lx.26 or newer',
+      ]);
+
+      for (final v in ['1.14.4-lx.26', 'v1.14.5-lx.1-rc.2', '', 'garbage']) {
+        final w = <String>[];
+        final out = emitWith(refs(), warnings: w, coreVersion: v);
+        expect(grpOf(out)['hosts'], ['h1'], reason: v);
+        expect(w, isEmpty, reason: v);
+      }
+      expect(coreSupportsDnsGroupHosts('1.14.4-lx.25'), isFalse);
+      expect(coreSupportsDnsGroupHosts('1.14.4-lx.26'), isTrue);
+    });
+
+    test('detour у сервера hosts снимается, сервер не выпадает', () {
+      final out = resolveDnsServersBodies(
+        resolved: [
+          inlineRef('h1', {...hostsBody(), 'detour': 'vpn-gone'}),
+        ],
+        templateByTag: const {},
+        presetServersByTag: const {},
+        knownOutboundTags: const {'direct-out'},
+      );
+      expect(out.single.containsKey('detour'), isFalse);
+    });
+  });
+
+  group('§699 validator — BadDnsGroupHosts', () {
+    Map<String, dynamic> cfg(List<Map<String, dynamic>> servers) => {
+          'outbounds': [
+            {'tag': 'vpn-1', 'type': 'selector', 'outbounds': ['direct-out']},
+            {'tag': 'direct-out', 'type': 'direct'},
+          ],
+          'route': {'final': 'vpn-1'},
+          'dns': {'servers': servers},
+        };
+
+    test('правила ядра SPEC 143 для ключа hosts', () {
+      final r = validateConfig(cfg([
+        {'tag': 'a', 'type': 'udp', 'server': '1.1.1.1'},
+        {'tag': 'h', 'type': 'hosts'},
+        {
+          'tag': 'grp',
+          'type': 'group',
+          'servers': ['a'],
+          'hosts': ['grp', 'a', 'h', 'h', 'missing', 'fake'],
+        },
+        {'tag': 'fake', 'type': 'fakeip'},
+      ]));
+      final issues = r.issues.whereType<BadDnsGroupHosts>().toList();
+      expect(issues, [
+        const BadDnsGroupHosts('grp', 'grp', DnsGroupHostsProblem.itself),
+        const BadDnsGroupHosts('grp', 'a', DnsGroupHostsProblem.alsoMember),
+        const BadDnsGroupHosts('grp', 'h', DnsGroupHostsProblem.duplicate),
+        const BadDnsGroupHosts('grp', 'missing', DnsGroupHostsProblem.notFound),
+        const BadDnsGroupHosts(
+            'grp', 'fake', DnsGroupHostsProblem.notHosts, 'fakeip'),
+      ]);
+      expect(issues.every((i) => i.severity == Severity.fatal), isTrue);
+    });
+
+    test('здоровый ключ (список и строка) — без замечаний', () {
+      for (final hosts in [
+        ['h'],
+        'h',
+      ]) {
+        final r = validateConfig(cfg([
+          {'tag': 'a', 'type': 'udp', 'server': '1.1.1.1'},
+          {'tag': 'h', 'type': 'hosts'},
+          {'tag': 'grp', 'type': 'group', 'servers': ['a'], 'hosts': hosts},
+        ]));
+        expect(r.issues.whereType<BadDnsGroupHosts>(), isEmpty);
+        expect(r.issues.whereType<BadDnsGroupMember>(), isEmpty);
+      }
     });
   });
 }

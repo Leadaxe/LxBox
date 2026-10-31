@@ -57,6 +57,8 @@ Future<void> applyCustomDns(
   // (vars после подстановки дефолтов) для нормализации списка.
   ({String dnsFinal, String defaultResolver}) resolverPickers =
       (dnsFinal: '', defaultResolver: ''),
+  // §699 — версия ядра для гейта ключа `hosts` DNS-групп; пусто — fail-open.
+  String coreVersion = '',
 }) async {
   final dns = (config['dns'] as Map<String, dynamic>?) ?? <String, dynamic>{};
 
@@ -123,6 +125,7 @@ Future<void> applyCustomDns(
     tailscaleEndpointTags: tailscaleEndpointTags, // §435
     detourDroppedOut: detourDropped, // §441
     globalVars: globalVars, // §555/§570
+    coreVersion: coreVersion, // §699
   );
   dns['servers'] = serverBodies;
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../services/dns/dns_server_holds.dart' show dnsListableTags;
 import '../../../vpn/cc_channel.dart';
 import '../resolved_server.dart';
 import 'dns_badge.dart';
@@ -72,12 +73,23 @@ class MergedServerTile extends StatelessWidget {
 
     // §312 — у группы вместо адреса: режим + число членов. §695 — членов,
     // которые реально есть в списке (тело шаблонной группы всегда полное).
+    // §699 — группа с ключом `hosts`: «+hosts» в конце.
+    final groupHosts = type == 'group' &&
+        dnsListableTags(entry.body['hosts']).isNotEmpty;
     final groupInfo = type == 'group'
         ? ' · ${(entry.body['mode'] as String?) ?? 'stable'}'
               ' · ${entry.groupMembersInList}'
+              // l10n-exempt: wire key `hosts`
+              '${groupHosts ? ' · +hosts' : ''}'
+        : '';
+    // §699 — сервер `hosts`: число имён (`predefined`).
+    final predefined = entry.body['predefined'];
+    final names = predefined is Map ? predefined.length : 0;
+    final hostsInfo = type == 'hosts'
+        ? ' · ${names == 1 ? getLocalText.s("1 name") : getLocalText.plural("%d names", names)}'
         : '';
     final subtitleLine =
-        '${entry.tag} · $type$groupInfo${addr.isNotEmpty ? ' · $addr' : ''}'
+        '${entry.tag} · $type$groupInfo$hostsInfo${addr.isNotEmpty ? ' · $addr' : ''}'
         '${entry.presetLabel != null && entry.presetLabel!.isNotEmpty ? ' · ${entry.presetLabel}' : ''}';
 
     final longPress = onLongPressStart;

@@ -37,6 +37,7 @@ class DnsServerEditScreen extends StatefulWidget {
     this.outboundOptions = const [],
     this.dnsServerTags = const [],
     this.dnsMemberOptions = const [],
+    this.dnsHostsOptions = const [],
     this.tailscaleEndpoints = const [],
     this.existingTags = const {},
   });
@@ -59,6 +60,9 @@ class DnsServerEditScreen extends StatefulWidget {
   /// §312 — опции пикера членов DNS-группы (все серверы кроме self и
   /// fakeip/hosts; disabled помечаются).
   final List<DnsMemberOption> dnsMemberOptions;
+
+  /// §699 — серверы `hosts` для блока Hosts формы группы (порядок списка).
+  final List<DnsMemberOption> dnsHostsOptions;
 
   /// §435 — узлы Tailscale для пикера `endpoint` сервера `tailscale`.
   final List<TailscaleEndpointOption> tailscaleEndpoints;
@@ -84,6 +88,7 @@ class _DnsServerEditScreenState extends State<DnsServerEditScreen> {
       outboundOptions: widget.outboundOptions,
       dnsServerTags: widget.dnsServerTags,
       dnsMemberOptions: widget.dnsMemberOptions,
+      dnsHostsOptions: widget.dnsHostsOptions,
       tailscaleEndpoints: widget.tailscaleEndpoints,
     );
   }
@@ -134,9 +139,9 @@ class _DnsServerEditScreenState extends State<DnsServerEditScreen> {
       // §117 задача 4b: для форменных режимов (UDP/DoT/DoH) адрес обязателен.
       // §312: КРОМЕ группы — у неё вместо адреса участники (`isGroup`).
       // §435: и КРОМЕ tailscale — у него вместо адреса endpoint.
+      // §699: и КРОМЕ hosts — у него записи (`kDnsAddresslessModes`).
       if (_ctrl.serverMode != null &&
-          !_ctrl.isGroup &&
-          !_ctrl.isTailscale &&
+          !kDnsAddresslessModes.contains(_ctrl.serverMode) &&
           _ctrl.addressCtrl.text.trim().isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(getLocalText.s("Server address is required"))),
@@ -147,6 +152,13 @@ class _DnsServerEditScreenState extends State<DnsServerEditScreen> {
       if (_ctrl.groupHasNoMembers) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(getLocalText.s("A group needs at least one member."))),
+        );
+        return;
+      }
+      // §699: у hosts обязательна хотя бы одна запись (или `path`).
+      if (_ctrl.hostsHasNoEntries) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(getLocalText.s("Add at least one host"))),
         );
         return;
       }
@@ -195,8 +207,7 @@ class _DnsServerEditScreenState extends State<DnsServerEditScreen> {
     // гейт адреса, что у inline.
     if (_ctrl.templateBodyEdited &&
         _ctrl.serverMode != null &&
-        !_ctrl.isGroup &&
-        !_ctrl.isTailscale &&
+        !kDnsAddresslessModes.contains(_ctrl.serverMode) &&
         _ctrl.addressCtrl.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(getLocalText.s("Server address is required"))),
@@ -206,6 +217,12 @@ class _DnsServerEditScreenState extends State<DnsServerEditScreen> {
     if (_ctrl.templateBodyEdited && _ctrl.groupHasNoMembers) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(getLocalText.s("A group needs at least one member."))),
+      );
+      return;
+    }
+    if (_ctrl.templateBodyEdited && _ctrl.hostsHasNoEntries) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(getLocalText.s("Add at least one host"))),
       );
       return;
     }
@@ -459,6 +476,7 @@ Future<DnsServerEditResult?> openDnsServerEditor(
   List<OutboundOption> outboundOptions = const [],
   List<String> dnsServerTags = const [],
   List<DnsMemberOption> dnsMemberOptions = const [],
+  List<DnsMemberOption> dnsHostsOptions = const [],
   List<TailscaleEndpointOption> tailscaleEndpoints = const [],
   Set<String> existingTags = const {},
 }) {
@@ -473,6 +491,7 @@ Future<DnsServerEditResult?> openDnsServerEditor(
         outboundOptions: outboundOptions,
         dnsServerTags: dnsServerTags,
         dnsMemberOptions: dnsMemberOptions,
+        dnsHostsOptions: dnsHostsOptions,
         tailscaleEndpoints: tailscaleEndpoints,
         existingTags: existingTags,
       ),

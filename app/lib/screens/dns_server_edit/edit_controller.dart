@@ -13,19 +13,24 @@ import '../../widgets/outbound_picker.dart';
 import '../../widgets/var_values_model.dart';
 import '../dns_settings_screen/dns_server_resolver.dart'
     show defaultDnsServerTag;
+import '../../models/custom_rule.dart' show RuleDns;
 import '../../services/builder/post_steps.dart'
     show resolveTemplateDnsServerBody;
+import '../../services/dns/dns_server_holds.dart' show dnsListableTags;
+import '../../services/l10n/locale_controller.dart';
 import '../../services/builder/preset_expand.dart' show normalizeDnsDetour;
 import '../dns_settings_screen/dns_server_copy.dart';
 import '../dns_settings_screen/resolved_server.dart';
 
 /// §117 задача 4b — режимы формы создания/редактирования inline-сервера.
 /// Значение = sing-box `type`. Прочие типы (`local`, `tcp`, `fakeip`,
-/// `hosts`, `dhcp`, …) формой не выражаются — редактируются на JSON-вкладке.
+/// `dhcp`, …) формой не выражаются — редактируются на JSON-вкладке.
 /// §411 — `h3` (DoH3) в форме есть.
 /// §312 — `group` (kernel SPEC 033): группа DNS-серверов с резервированием.
 /// §435 — `tailscale` (NODE_SECTIONS.md §6): MagicDNS через узел tailnet,
 /// вместо адреса — `endpoint` (тег узла), без `detour`.
+/// §699 — `hosts`: записи «имя → адреса» (`predefined`), без адреса и
+/// `detour`; в группу ставится ключом `hosts` (ядро SPEC 143).
 const kDnsServerModes = [
   'udp',
   'tls',
@@ -34,12 +39,17 @@ const kDnsServerModes = [
   'h3',
   'group',
   'tailscale',
+  'hosts',
 ];
 
 /// §435 — безадресные режимы формы: у них нет `server`/`server_port`/
 /// `path`/`tls`/`domain_resolver`/`detour` — гейт «адрес обязателен» и
-/// пикер detour их не касаются.
-const kDnsAddresslessModes = {'group', 'tailscale'};
+/// пикер detour их не касаются. §699 — `hosts` тоже (`path` у него —
+/// файлы hosts, формой не правится).
+const kDnsAddresslessModes = {'group', 'tailscale', 'hosts'};
+
+/// §699 — запись сервера `hosts`: имя и его адреса (`predefined`).
+typedef DnsHostsEntry = ({String name, List<String> addresses});
 
 /// §411 — режимы, у которых есть HTTP-path (`/dns-query`): DoH и DoH3.
 const kDnsPathModes = {'https', 'h3'};
@@ -110,6 +120,7 @@ class DnsServerEditController extends ChangeNotifier {
     this.outboundOptions = const [],
     this.dnsServerTags = const [],
     this.dnsMemberOptions = const [],
+    this.dnsHostsOptions = const [],
     this.tailscaleEndpoints = const [],
   }) {
     _init();
@@ -141,6 +152,11 @@ class DnsServerEditController extends ChangeNotifier {
   /// drop-семантика №3: выбираем, но помечаем «will be skipped»), кроме
   /// самого себя; fakeip/hosts отфильтрованы источником (запрет ядра).
   final List<DnsMemberOption> dnsMemberOptions;
+
+  /// §699 — опции блока Hosts формы группы: серверы типа `hosts` в порядке
+  /// списка DNS-серверов (вид и `selectable` — как у [dnsMemberOptions]).
+  /// Порядок опций задаёт порядок ключа `hosts` ([toggleGroupHosts]).
+  final List<DnsMemberOption> dnsHostsOptions;
 
   /// §435 — узлы Tailscale для пикера `endpoint` сервера `tailscale`
   /// (display-теги; выключенные помечаются «will be skipped» — санитайзер
@@ -291,6 +307,10 @@ class DnsServerEditController extends ChangeNotifier {
   /// задаёт `endpoint` (узел tailnet). Тот же обход гейта «адрес обязателен»
   /// и пикера detour, что у группы ([kDnsAddresslessModes]).
   bool get isTailscale => serverMode == 'tailscale';
+
+  /// §699 — это DNS-сервер `hosts`? Адреса нет, вместо него записи
+  /// `predefined` ([hostsEntries]).
+  bool get isHosts => serverMode == 'hosts';
 
   /// §435 — тег узла Tailscale (`body.endpoint`); пусто = не выбран.
   String get tailscaleEndpoint => _body['endpoint']?.toString() ?? '';
@@ -496,6 +516,8 @@ class DnsServerEditController extends ChangeNotifier {
   /// переход ИЗ группы чистит групповые.
   /// §435 — то же для `tailscale`: вход чистит транспорт (и групповые поля),
   /// уход чистит `endpoint`/`accept_default_resolvers`.
+  /// §699 — уход из группы снимает и `hosts`; вход в `hosts` ставит
+  /// `predefined: {}`, уход из него снимает `predefined` и `path`.
   void setServerMode(String mode) {
     if (!kDnsServerModes.contains(mode)) return;
     final old = serverMode;
@@ -506,6 +528,7 @@ class DnsServerEditController extends ChangeNotifier {
     if (old == 'group') {
       _body
         ..remove('servers')
+        ..remove('hosts')
         ..remove('mode')
         ..remove('error_ttl')
         ..remove('win_ttl');
@@ -517,9 +540,15 @@ class DnsServerEditController extends ChangeNotifier {
         ..remove('endpoint')
         ..remove('accept_default_resolvers');
     }
+    if (old == 'hosts') {
+      _body
+        ..remove('predefined')
+        ..remove('path');
+    }
     if (kDnsAddresslessModes.contains(mode)) {
-      // §312 — у группы только servers/mode/error_ttl/win_ttl;
-      // §435 — у tailscale только endpoint/accept_default_resolvers.
+      // §312 — у группы только servers/hosts/mode/error_ttl/win_ttl;
+      // §435 — у tailscale только endpoint/accept_default_resolvers;
+      // §699 — у hosts только predefined/path.
       _body
         ..remove('server')
         ..remove('server_port')
@@ -531,6 +560,11 @@ class DnsServerEditController extends ChangeNotifier {
         _body['servers'] = _body['servers'] is List
             ? _body['servers']
             : <String>[];
+      }
+      if (mode == 'hosts') {
+        _body['predefined'] = _body['predefined'] is Map
+            ? _body['predefined']
+            : <String, dynamic>{};
       }
       addressCtrl.text = '';
       portCtrl.text = '';
@@ -596,6 +630,41 @@ class DnsServerEditController extends ChangeNotifier {
   /// `EmptyDnsGroup` отвергли бы пустой `servers[]`).
   bool get groupHasNoMembers => isGroup && groupMembers.isEmpty;
 
+  /// §699 — серверы `hosts` группы (ключ `hosts`, ядро SPEC 143): строка или
+  /// список (Listable ядра), без пустых.
+  List<String> get groupHosts => dnsListableTags(_body['hosts']);
+
+  /// §699 — отметка сервера `hosts` в блоке Hosts группы. Ключ пишется в
+  /// порядке списка DNS-серверов ([dnsHostsOptions]), не в порядке кликов:
+  /// у ядра отвечает первый по порядку, кто знает имя. Теги вне опций
+  /// (JSON-вкладка, сервер удалён) идут следом в прежнем порядке. Пусто —
+  /// ключ снимается.
+  void toggleGroupHosts(String tag, bool on) {
+    if (tag.isEmpty || tag == tagCtrl.text.trim()) return;
+    final cur = groupHosts;
+    if (on == cur.contains(tag)) return;
+    final picked = on
+        ? {...cur, tag}.toList()
+        : {for (final t in cur) if (t != tag) t}.toList();
+    final order = <String, int>{};
+    for (final o in dnsHostsOptions) {
+      order.putIfAbsent(o.tag, () => order.length);
+    }
+    final known = [for (final t in picked) if (order.containsKey(t)) t]
+      ..sort((a, b) => order[a]!.compareTo(order[b]!));
+    final next = [
+      ...known,
+      for (final t in picked) if (!order.containsKey(t)) t,
+    ];
+    if (next.isEmpty) {
+      _body.remove('hosts');
+    } else {
+      _body['hosts'] = next;
+    }
+    _syncJsonFromBody();
+    notifyListeners();
+  }
+
   /// `stable` (дефолт ядра) → ключ уходит; прочие пишутся явно.
   void setGroupMode(String mode) {
     if (!kDnsGroupModes.contains(mode) || groupMode == mode) return;
@@ -628,6 +697,122 @@ class DnsServerEditController extends ChangeNotifier {
     } else {
       _body['win_ttl'] = v;
     }
+    _syncJsonFromBody();
+    notifyListeners();
+  }
+
+  // ─── §699 — форма DNS-сервера `hosts` ────────────────────────────────
+  // Тело: `{type: hosts, predefined: {имя: [адреса]}, path?}`. Записи форма
+  // читает из body напрямую (геттеры) — JSON-edit отражается без отдельной
+  // синхронизации. `path` формой не правится (только JSON-вкладка).
+
+  /// §699 — записи `predefined` в порядке тела; адреса — строка или список
+  /// (Listable ядра).
+  List<DnsHostsEntry> get hostsEntries {
+    final p = _body['predefined'];
+    if (p is! Map) return const [];
+    return [
+      for (final e in p.entries)
+        (name: e.key.toString(), addresses: dnsListableTags(e.value)),
+    ];
+  }
+
+  /// §699 — файлы hosts из `path` (строка или список); без `path` ядро
+  /// читает системный `/etc/hosts`.
+  List<String> get hostsPaths =>
+      isHosts ? dnsListableTags(_body['path']) : const [];
+
+  /// §699 — сервер `hosts` без записей и без `path`: Save не проходит.
+  bool get hostsHasNoEntries =>
+      isHosts && hostsEntries.isEmpty && hostsPaths.isEmpty;
+
+  /// §699 — имя записи в каноничной форме (ядро сравнивает без регистра).
+  static String normalizeHostsName(String raw) => raw.trim().toLowerCase();
+
+  /// §699 — ошибка имени в диалоге записи или null: непустое, без пробелов,
+  /// `/` и `:` (значит, и без `://`), ещё нет в списке. [editing] — имя
+  /// правимой записи: её собственное имя дублем не считается.
+  String? hostsNameError(String raw, {String? editing}) {
+    final name = normalizeHostsName(raw);
+    if (name.isEmpty) return getLocalText.s("Enter a name");
+    if (name.contains(RegExp(r'\s')) ||
+        name.contains('/') ||
+        name.contains(':')) {
+      return getLocalText.s("No spaces, \"/\" or \":\" in a name");
+    }
+    final own = editing == null ? null : normalizeHostsName(editing);
+    if (name != own &&
+        hostsEntries.any((e) => normalizeHostsName(e.name) == name)) {
+      return getLocalText.s("\"%s\" is already in the list", name);
+    }
+    return null;
+  }
+
+  /// §699 — адреса поля диалога: непустые строки.
+  static List<String> hostsAddressLines(String raw) => [
+        for (final l in raw.split('\n'))
+          if (l.trim().isNotEmpty) l.trim(),
+      ];
+
+  /// §699 — ошибка поля адресов (как Fixed IP §683): первая строка, которая
+  /// не IPv4/IPv6, или пустое поле; null — годно.
+  static String? hostsAddressesError(String raw) {
+    final lines = raw.split('\n');
+    for (var i = 0; i < lines.length; i++) {
+      final l = lines[i].trim();
+      if (l.isEmpty) continue;
+      if (RuleDns.ipRecordType(l) == null) {
+        return getLocalText.s("Line %d: not an IPv4 or IPv6 address", i + 1);
+      }
+    }
+    if (hostsAddressLines(raw).isEmpty) {
+      return getLocalText.s("Enter an IP address");
+    }
+    return null;
+  }
+
+  /// §699 — записать запись: имя в нижнем регистре, адреса списком.
+  /// [replacing] — имя правимой записи: новая встаёт на её место (в том
+  /// числе при смене имени); иначе запись с тем же именем заменяется на
+  /// месте, новая — в конец.
+  void putHostsEntry(String name, List<String> addresses,
+      {String? replacing}) {
+    final key = normalizeHostsName(name);
+    if (key.isEmpty) return;
+    final entries = <DnsHostsEntry>[...hostsEntries];
+    var idx = replacing == null
+        ? -1
+        : entries.indexWhere((e) => e.name == replacing);
+    if (idx < 0) {
+      idx = entries.indexWhere((e) => normalizeHostsName(e.name) == key);
+    }
+    final DnsHostsEntry entry =
+        (name: key, addresses: List<String>.of(addresses));
+    if (idx < 0) {
+      entries.add(entry);
+    } else {
+      entries[idx] = entry;
+      for (var i = entries.length - 1; i >= 0; i--) {
+        if (i != idx && normalizeHostsName(entries[i].name) == key) {
+          entries.removeAt(i);
+        }
+      }
+    }
+    _body['predefined'] = <String, dynamic>{
+      for (final e in entries) e.name: e.addresses,
+    };
+    _syncJsonFromBody();
+    notifyListeners();
+  }
+
+  /// §699 — снять запись [name]; `predefined` остаётся (пустым `{}`).
+  void removeHostsEntry(String name) {
+    final p = _body['predefined'];
+    if (p is! Map || !p.containsKey(name)) return;
+    _body['predefined'] = <String, dynamic>{
+      for (final e in p.entries)
+        if (e.key != name) e.key.toString(): e.value,
+    };
     _syncJsonFromBody();
     notifyListeners();
   }

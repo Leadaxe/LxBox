@@ -1939,8 +1939,8 @@
   "Custom rules, tun apps, DNS options, final outbound": {
     "value": "Свои правила, приложения туннеля, параметры DNS, финальный исходящий канал"
   },
-  "Custom server type \"%s\" — edit it on the JSON tab. The form supports UDP / DoT / DoH / DoQ / DoH3 / Group / Tailscale.": {
-    "value": "Нестандартный тип сервера «%s» — правьте его на вкладке JSON. Форма поддерживает UDP / DoT / DoH / DoQ / DoH3 / Group / Tailscale."
+  "Custom server type \"%s\" — edit it on the JSON tab. The form supports UDP / DoT / DoH / DoQ / DoH3 / Group / Tailscale / Hosts.": {
+    "value": "Нестандартный тип сервера «%s» — правьте его на вкладке JSON. Форма поддерживает UDP / DoT / DoH / DoQ / DoH3 / Group / Tailscale / Hosts."
   },
   "Dark": {
     "value": "Тёмная"
@@ -6720,5 +6720,67 @@
   },
   "A group needs at least one member.": {
     "value": "Группе нужен хотя бы один участник."
+  },
+  "Hosts": {
+    "value": "Hosts"
+  },
+  "Fixed addresses for chosen names, answered on the device": {
+    "value": "Заданные адреса для выбранных имён, ответ — на устройстве"
+  },
+  "Add host": {
+    "value": "Добавить запись"
+  },
+  "Also reads: %s": {
+    "value": "Также читает: %s"
+  },
+  "Answers only these names. Put it under Hosts of a DNS group so that other names go to the group's servers.": {
+    "value": "Отвечает только на эти имена. Поставьте его в Hosts DNS-группы — остальные имена уйдут её серверам."
+  },
+  "Addresses": {
+    "value": "Адреса"
+  },
+  "Enter a name": {
+    "value": "Введите имя"
+  },
+  "No spaces, \"/\" or \":\" in a name": {
+    "value": "В имени не должно быть пробелов, «/» и «:»"
+  },
+  "\"%s\" is already in the list": {
+    "value": "«%s» уже есть в списке"
+  },
+  "Add at least one host": {
+    "value": "Добавьте хотя бы одну запись"
+  },
+  "No hosts servers in the list.": {
+    "value": "В списке нет серверов hosts."
+  },
+  "Names these servers know are answered first; other names go to the members.": {
+    "value": "Имена, которые знают эти серверы, отвечаются сразу; остальные уходят участникам."
+  },
+  "1 name": {
+    "value": "1 имя"
+  },
+  "%d names": {
+    "value": {
+      "one": "%d имя",
+      "few": "%d имени",
+      "many": "%d имён",
+      "other": "%d имени"
+    }
+  },
+  "DNS group \"%s\" cannot contain itself.": {
+    "value": "DNS-группа «%s» не может содержать саму себя."
+  },
+  "DNS group \"%1$s\": server \"%2$s\" is listed in both servers and hosts.": {
+    "value": "DNS-группа «%1$s»: сервер «%2$s» указан и в servers, и в hosts."
+  },
+  "DNS group \"%1$s\": duplicate hosts server \"%2$s\".": {
+    "value": "DNS-группа «%1$s»: сервер hosts «%2$s» указан дважды."
+  },
+  "DNS group \"%1$s\": hosts server \"%2$s\" not found.": {
+    "value": "DNS-группа «%1$s»: сервер hosts «%2$s» не найден."
+  },
+  "DNS group \"%1$s\": hosts accepts only servers of type hosts, got \"%3$s\": \"%2$s\".": {
+    "value": "DNS-группа «%1$s»: в hosts допустимы только серверы типа hosts, а «%2$s» — типа «%3$s»."
   }
 }

@@ -1714,8 +1714,8 @@
   "Custom rules, tun apps, DNS options, final outbound": {
     "value": "自定义规则、tun 应用、DNS 选项、最终出站"
   },
-  "Custom server type \"%s\" — edit it on the JSON tab. The form supports UDP / DoT / DoH / DoQ / DoH3 / Group / Tailscale.": {
-    "value": "自定义服务器类型「%s」——请在 JSON 标签页编辑。表单支持 UDP / DoT / DoH / DoQ / DoH3 / Group / Tailscale。"
+  "Custom server type \"%s\" — edit it on the JSON tab. The form supports UDP / DoT / DoH / DoQ / DoH3 / Group / Tailscale / Hosts.": {
+    "value": "自定义服务器类型「%s」——请在 JSON 标签页编辑。表单支持 UDP / DoT / DoH / DoQ / DoH3 / Group / Tailscale / Hosts。"
   },
   "Dark": {
     "value": "深色"
@@ -6435,5 +6435,64 @@
   },
   "A group needs at least one member.": {
     "value": "分组至少需要一个成员。"
+  },
+  "Hosts": {
+    "value": "Hosts"
+  },
+  "Fixed addresses for chosen names, answered on the device": {
+    "value": "为指定名称返回固定地址，在设备上应答"
+  },
+  "Add host": {
+    "value": "添加条目"
+  },
+  "Also reads: %s": {
+    "value": "同时读取：%s"
+  },
+  "Answers only these names. Put it under Hosts of a DNS group so that other names go to the group's servers.": {
+    "value": "只应答这些名称。将其放入 DNS 组的 Hosts，其他名称交由组内服务器处理。"
+  },
+  "Addresses": {
+    "value": "地址"
+  },
+  "Enter a name": {
+    "value": "请输入名称"
+  },
+  "No spaces, \"/\" or \":\" in a name": {
+    "value": "名称中不能包含空格、“/”或“:”"
+  },
+  "\"%s\" is already in the list": {
+    "value": "「%s」已在列表中"
+  },
+  "Add at least one host": {
+    "value": "请至少添加一个条目"
+  },
+  "No hosts servers in the list.": {
+    "value": "列表中没有 hosts 服务器。"
+  },
+  "Names these servers know are answered first; other names go to the members.": {
+    "value": "这些服务器已知的名称优先应答；其他名称交给成员。"
+  },
+  "1 name": {
+    "value": "1 个名称"
+  },
+  "%d names": {
+    "value": {
+      "other": "%d 个名称"
+    }
+  },
+  "DNS group \"%s\" cannot contain itself.": {
+    "value": "DNS 组「%s」不能包含自身。"
+  },
+  "DNS group \"%1$s\": server \"%2$s\" is listed in both servers and hosts.": {
+    "value": "DNS 组「%1$s」：服务器「%2$s」同时出现在 servers 和 hosts 中。"
+  },
+  "DNS group \"%1$s\": duplicate hosts server \"%2$s\".": {
+    "value": "DNS 组「%1$s」：hosts 服务器「%2$s」重复。"
+  },
+  "DNS group \"%1$s\": hosts server \"%2$s\" not found.": {
+    "value": "DNS 组「%1$s」：未找到 hosts 服务器「%2$s」。"
+  },
+  "DNS group \"%1$s\": hosts accepts only servers of type hosts, got \"%3$s\": \"%2$s\".": {
+    "value": "DNS 组「%1$s」：hosts 只接受 hosts 类型的服务器，「%2$s」的类型是「%3$s」。"
   }
 }

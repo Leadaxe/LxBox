@@ -123,6 +123,21 @@ bool coreSupportsChain(String coreVersion) {
   return v.compareTo(min) >= 0;
 }
 
+/// §699 — минимальный релиз ядра с ключом `hosts` у DNS-группы (sing-box-lx
+/// SPEC 143): `1.14.4-lx.26` (rc у lx.26 не было). Ядро старше отвергает
+/// конфиг целиком (`unknown field "hosts"`), поэтому сборка снимает ключ.
+const String kDnsGroupHostsMinCoreVersion = '1.14.4-lx.26';
+
+/// §699 — знает ли ядро версии [coreVersion] ключ `hosts` у DNS-группы.
+/// Fail-open на неразобранной версии — как [coreSupportsChain]. Гейт
+/// остаётся и после бампа пина (§699 п. 9).
+bool coreSupportsDnsGroupHosts(String coreVersion) {
+  final v = CoreVersion.parse(coreVersion);
+  if (v == null) return true;
+  final min = CoreVersion.parse(kDnsGroupHostsMinCoreVersion)!;
+  return v.compareTo(min) >= 0;
+}
+
 /// Контракт 1.1.60 (§56) — теги сборки встроенного ядра (AAR
 /// `libbox.aar`, пин [kCoreBuildTagsPin]) для узлового гейта реестра
 /// (`build_tag` + `on_core_unsupported`, `nodeCoreRefusal`).
