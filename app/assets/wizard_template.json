@@ -350,7 +350,7 @@
           ]
         },
         {"name": "tun_name", "type": "text", "default_value": "lxbox", "required": true, "wizard_ui": "edit", "title": "TUN interface", "tooltip": "system name"},
-        {"name": "tun_mtu", "type": "int", "default_value": "1492", "required": true, "wizard_ui": "edit", "title": "MTU", "tooltip": "1492 recommended for mobile/WiFi"},
+        {"name": "tun_mtu", "type": "int", "default_value": "9000", "required": true, "wizard_ui": "edit", "title": "MTU", "tooltip": "9000 recommended (sing-box default)"},
         {"name": "tun_auto_route", "type": "bool", "default_value": "true", "required": true, "wizard_ui": "edit", "title": "Auto route", "tooltip": "Let sing-box manage routing table"},
         {"name": "tun_strict_route", "type": "bool", "default_value": "false", "required": true, "wizard_ui": "edit", "title": "Strict route", "tooltip": "May break connectivity on some devices"},
         { "name": "tun_stack", "type": "enum", "wizard_ui": "edit", "title": "Stack", "tooltip": "system (default), gvisor (userspace), mixed",

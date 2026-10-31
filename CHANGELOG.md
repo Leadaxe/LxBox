@@ -96,6 +96,18 @@
   DNS. Значения по умолчанию прежние: UDP на 77.88.8.8, DoT и DoH на
   77.88.8.88.)
 
+### Changed
+
+- **Default TUN MTU is 9000 instead of 1492
+  ([task 700](docs/spec/tasks/700-tun-mtu-default-9000.md)).** 9000 is the
+  sing-box default; the tunnel interface is virtual, and the core re-sends TCP
+  at the real network MTU, so a small value only added packets and CPU work.
+  Installs where MTU was never changed get 9000 with the next config build;
+  a value set by hand stays.
+  (RU: MTU tun по умолчанию 9000 вместо 1492 — значение sing-box; у установок,
+  где MTU не меняли, 9000 встанет со следующей сборкой конфига, заданное
+  вручную значение остаётся.)
+
 ### Fixed
 
 - **Servers could not be removed from Shield DNS

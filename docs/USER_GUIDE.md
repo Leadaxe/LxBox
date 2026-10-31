@@ -1508,7 +1508,7 @@ turned on here too, but the decision and the order of steps are described in
 | **IPv6 address** | The tunnel's IPv6 address; applies only when Enable IPv6 is on | `fdfe:dcba:9876::1/126` |
 | **Custom tunnel routes** | Sends all IPv4 and IPv6 into the tunnel with explicit range halves (`0.0.0.0/1`, `128.0.0.0/1`, `::/1`, `8000::/1`) instead of the core's default routes | Off |
 | **TUN interface** | The system name of the interface | `lxbox` |
-| **MTU** | The largest packet size in the tunnel; 1492 suits both a mobile network and Wi-Fi | `1492` |
+| **MTU** | The largest packet size on the tunnel interface; 9000 is the sing-box default and fits any network, since the core re-sends TCP at the real network MTU | `9000` |
 | **Auto route** | The core manages the routing table by itself | On |
 | **Strict route** | The on-screen hint warns: `May break connectivity on some devices` | Off |
 | **Stack** | The tunnel's network stack: `system`, `gvisor` (in user space), `mixed` | `system` |

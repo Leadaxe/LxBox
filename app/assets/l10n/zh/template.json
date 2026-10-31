@@ -11,8 +11,8 @@
  "127.0.0.1 — this device only": {
   "value": "127.0.0.1 — 仅本机"
  },
- "1492 recommended for mobile/WiFi": {
-  "value": "移动网络/WiFi 推荐 1492"
+ "9000 recommended (sing-box default)": {
+  "value": "推荐 9000（sing-box 默认值）"
  },
  "2001:4860:4860::8844 · Secondary v6": {
   "value": "2001:4860:4860::8844 · 备用 v6"

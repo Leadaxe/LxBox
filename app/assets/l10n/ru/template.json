@@ -11,8 +11,8 @@
   "127.0.0.1 — this device only": {
     "value": "127.0.0.1 — только это устройство"
   },
-  "1492 recommended for mobile/WiFi": {
-    "value": "Для мобильной сети и Wi-Fi рекомендуется 1492"
+  "9000 recommended (sing-box default)": {
+    "value": "Рекомендуется 9000 (по умолчанию в sing-box)"
   },
   "2001:4860:4860::8844 · Secondary v6": {
     "value": "2001:4860:4860::8844 · Резервный v6"
