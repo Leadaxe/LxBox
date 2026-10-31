@@ -323,6 +323,8 @@ List<Map<String, dynamic>> resolveDnsServersBodies({
       enabled: entry.enabled,
       presetReferenced: presetServersByTag.containsKey(tag),
       ruleReferenced: ruleReferencedTags.contains(tag),
+      required: entry is DnsServerTemplate &&
+          templateByTag[tag]?['required'] == true,
     )) {
       continue;
     }
@@ -396,12 +398,17 @@ List<Map<String, dynamic>> resolveDnsServersBodies({
 /// §117/§671 — эмитится ли ref-запись DNS-сервера: включённая, либо
 /// реферимая активным пресетом или правилом с DNS-опцией (force-include,
 /// locked №7). Один критерий для сборки и превью редактора.
+///
+/// §701 — [required]: `required: true` у обёртки шаблонного сервера
+/// (контракт, корпус `dns/required_ignores_state`, BACKUP.md §9 п. 5) —
+/// эмитится и при `enabled: false` в состоянии.
 bool dnsServerRefEmitted({
   required bool enabled,
   bool presetReferenced = false,
   bool ruleReferenced = false,
+  bool required = false,
 }) =>
-    enabled || presetReferenced || ruleReferenced;
+    enabled || presetReferenced || ruleReferenced || required;
 
 /// §312/§671 — причина, по которой член [member] группы [selfTag] не
 /// эмитится, или `null` (член остаётся). [kept] — уже принятые члены (повтор),

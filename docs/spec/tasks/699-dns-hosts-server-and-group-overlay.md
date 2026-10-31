@@ -269,3 +269,7 @@ Resolver (например, override Shield §695) → в узле адрес `w
   (ключ l10n сменён).
 - Запрос лаунчеру на корпус-кейс `corpus/dns/group_prunes_hosts` не
   отправлялся — за оркестратором.
+
+Раннер `corpus/dns` добавлен задачей §701: кейсы лаунчера
+`group_prunes_hosts` и `group_hosts_all_dropped` (контракт 1.1.144) проходят
+без правок кода.
