@@ -196,7 +196,7 @@ Workflow [`.github/workflows/ci.yml`](../.github/workflows/ci.yml); the full rel
 | push of a `vX.Y.Z-rc.N` tag | ✓ the same jobs, but the GitHub Release is marked pre-release, and `google-play` and `publish-manifest` are skipped (§436: a release candidate never reaches users — `/releases/latest`, `docs/latest.json` and Play do not see it) |
 | `workflow_dispatch`, `run_mode=checks` | ○ `checks` + `public-subs` only |
 | `workflow_dispatch`, `run_mode=build` | ○ `checks` + `public-subs` + `android` (APK in artifacts, no release) |
-| `workflow_dispatch`, `run_mode=build-fast` | ○ `android` right after `meta`: one arm64-v8a APK in artifacts, no `checks`, `public-subs`, other ABIs or AAB — for a quick look at a branch; the checks are the push run's job |
+| `workflow_dispatch`, `run_mode=build-fast` | ○ `android` right after `meta`: one APK in artifacts (input `abi`: `arm64-v8a` by default, `armeabi-v7a`, `x86_64`, `universal`), no `checks`, `public-subs`, other ABIs or AAB — for a quick look at a branch; the checks are the push run's job |
 | `workflow_dispatch`, `run_mode=release` | ○ a full release without a tag (emergency re-issues) |
 | `workflow_dispatch` with `test_path` | ○ pinpoint run: only the listed test files, `flutter analyze` and `public-subs` are skipped |
 
@@ -205,7 +205,7 @@ From the terminal (`gh auth login`):
 ```bash
 gh workflow run CI -f run_mode=checks   # ✓ analyze + test
 gh workflow run CI -f run_mode=build    # ○ + APK in artifacts
-gh workflow run CI --ref develop -f run_mode=build-fast   # ○ arm64 APK only, no checks (own concurrency group: does not cancel the push run)
+gh workflow run CI --ref develop -f run_mode=build-fast -f abi=arm64-v8a   # ○ one APK, no checks (own concurrency group: does not cancel the push run)
 ```
 
 The `android` job builds **release** APKs only: universal (fat, all ABIs) plus three per-ABI ones, one run per target (§379: `--split-per-abi` was removed because it broke the versionCode scheme). CI does not build debug APKs. Before building, the `Fetch sing-box-lx core` step downloads the fork core at the pin in `app/android/libbox.version` (see [“The sing-box-lx core”](#the-sing-box-lx-core-libbox)).

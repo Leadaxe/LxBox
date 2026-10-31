@@ -22,11 +22,17 @@ on:
   workflow_dispatch:
     inputs:
       run_mode:
-        description: "checks | build | build-fast (arm64 APK only, no checks/AAB) | release"
+        description: "checks | build | build-fast (one APK, see abi; no checks/AAB) | release"
         required: true
         default: "checks"
         type: choice
         options: [checks, build, build-fast, release]
+      abi:
+        description: "build-fast only: which APK to build"
+        required: false
+        default: "arm64-v8a"
+        type: choice
+        options: [arm64-v8a, armeabi-v7a, x86_64, universal]
       test_path:
         description: "Pinpoint run: test path(s) relative to app/ (e.g. test/screens/startup_wizard_test.dart). Empty = full suite. Skips analyze for speed."
         required: false
@@ -491,8 +497,13 @@ jobs:
             echo "::endgroup::"
           }
           if [ "${{ github.event.inputs.run_mode }}" = "build-fast" ]; then
-            # build-fast — один таргет: arm64-v8a (телефоны, эмулятор arm64).
-            build_one arm64-v8a   android-arm64                           arm64-v8a
+            # build-fast — один таргет из входа `abi` (по умолчанию arm64-v8a).
+            case "${{ github.event.inputs.abi }}" in
+              universal)   build_one universal   "android-arm,android-arm64,android-x64" "" ;;
+              armeabi-v7a) build_one armeabi-v7a android-arm                             armeabi-v7a ;;
+              x86_64)      build_one x86_64      android-x64                             x86_64 ;;
+              *)           build_one arm64-v8a   android-arm64                           arm64-v8a ;;
+            esac
           else
             build_one universal   "android-arm,android-arm64,android-x64" ""
             build_one armeabi-v7a android-arm                             armeabi-v7a

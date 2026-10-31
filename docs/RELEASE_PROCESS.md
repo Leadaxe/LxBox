@@ -25,7 +25,7 @@ CI (`.github/workflows/ci.yml`) triggers on:
 | PR into `develop` / `main` | `checks` |
 | `workflow_dispatch` + `run_mode=checks` | `checks` |
 | `workflow_dispatch` + `run_mode=build` | `checks` + `android` (APK in artifacts, no release) |
-| `workflow_dispatch` + `run_mode=build-fast` | `android` only: one arm64-v8a APK, no checks, no AAB, no release |
+| `workflow_dispatch` + `run_mode=build-fast` | `android` only: one APK (input `abi`, default arm64-v8a), no checks, no AAB, no release |
 | `workflow_dispatch` + `run_mode=release` | a full release (CI does not create the tag — used for emergency re-issues) |
 
 CI takes the release body from `RELEASE_NOTES.md` (sparse checkout, the
