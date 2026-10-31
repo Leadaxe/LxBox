@@ -205,7 +205,7 @@ From the terminal (`gh auth login`):
 ```bash
 gh workflow run CI -f run_mode=checks   # ✓ analyze + test
 gh workflow run CI -f run_mode=build    # ○ + APK in artifacts
-gh workflow run CI --ref build/<name> -f run_mode=build-fast   # ○ arm64 APK only, no checks
+gh workflow run CI --ref develop -f run_mode=build-fast   # ○ arm64 APK only, no checks (own concurrency group: does not cancel the push run)
 ```
 
 The `android` job builds **release** APKs only: universal (fat, all ABIs) plus three per-ABI ones, one run per target (§379: `--split-per-abi` was removed because it broke the versionCode scheme). CI does not build debug APKs. Before building, the `Fetch sing-box-lx core` step downloads the fork core at the pin in `app/android/libbox.version` (see [“The sing-box-lx core”](#the-sing-box-lx-core-libbox)).

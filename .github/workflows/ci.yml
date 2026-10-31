@@ -42,7 +42,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  # build-fast — своя группа: сборку можно запускать прямо на develop, она не
+  # отменяет push-проверки той же ветки и не отменяется ими.
+  group: ci-${{ github.workflow }}-${{ github.ref }}${{ github.event.inputs.run_mode == 'build-fast' && '-fast' || '' }}
   cancel-in-progress: true
 
 jobs:
