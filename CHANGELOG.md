@@ -123,6 +123,16 @@
 
 ### Changed
 
+- **Core `v1.14.4-lx.25` → `v1.14.4-lx.26`
+  ([docs/KERNEL.md](docs/KERNEL.md)).** A DNS group can list `hosts`
+  servers that answer the names they know before the group's servers
+  (Leadaxe/sing-box-lx#60). MTU alignment fixes: a proxy node inside a group no
+  longer lowers the MTU of a tunnel above the group, and tunnels carrying IPv6
+  are never set below 1280. No config changes.
+  (RU: Ядро `v1.14.4-lx.25` → `v1.14.4-lx.26`. DNS-группа может спрашивать
+  серверы `hosts` раньше своих серверов; поправки выравнивания MTU: прокси-узел
+  в группе больше не занижает MTU туннеля над группой, туннели с IPv6 не
+  опускаются ниже 1280. Конфиг не меняется.)
 - **Default TUN MTU is 9000 instead of 1492
   ([task 700](docs/spec/tasks/700-tun-mtu-default-9000.md)).** 9000 is the
   sing-box default; the tunnel interface is virtual, and the core re-sends TCP

@@ -147,7 +147,7 @@ The fork publishes artifacts in its own GitHub Releases (workflow `lx-release.ym
 | `libbox-legacy-<ver>.aar` (minSdk 21) | ✗ unused — our minSdk is 24, so the modern AAR (minSdk 23) is enough |
 | `SHA256SUMS` | ✓ verification of the downloaded AAR |
 
-The core version is reported by `Libbox.version()` (About/Debug) in the form `1.14.0-lx.N`; the current pin is `v1.14.0-lx.27-rc.4`.
+The core version is reported by `Libbox.version()` (About/Debug) in the form `1.14.4-lx.N`; the current pin is in `app/android/libbox.version` (`v1.14.4-lx.26`).
 
 ### How the core reaches the build ([§104](spec/tasks/104-libbox-fork-ci-fetch.md))
 

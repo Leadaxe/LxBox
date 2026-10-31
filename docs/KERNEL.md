@@ -34,7 +34,7 @@ milliseconds. `startTailscaleSSHSession` is not used.
 | Called from | `scripts/build-local-apk.sh` and CI (`ci.yml` → the android job → “Fetch sing-box-lx core”) |
 | The AAR in git | NO (~110 MB as of lx.25; `app/android/app/libs/` is in `.gitignore`); `build.gradle.kts` → `implementation(files("libs/libbox.aar"))` |
 
-**The current pin: `v1.14.4-lx.25`** (see `app/android/libbox.version`) — lx.1
+**The current pin: `v1.14.4-lx.26`** (see `app/android/libbox.version`) — lx.1
 plus XHTTP HTTP-version parity (**SPEC 104**, lx.2), Vision on top of VLESS
 Encryption (**SPEC 105**, lx.3), the runtime WG/AWG endpoint toggle
 (**SPEC 106**, lx.4: `CommandClient.setEndpointEnabled`, `endpointState =
@@ -44,7 +44,7 @@ default without `xmux` moved to `max_connections 3` (lx.6), three MASQUE hangs f
 control channel on port 443 from the first connection (**SPEC 111**, lx.9),
 the headroom Tailscale needs on a direct UDP path restored in the AWG
 wireguard-go (**SPEC 112**, lx.10), one more `stable` sync (lx.11), lx.12 and
-lx.13-rc.1, lx.13, lx.14, lx.15, lx.16–lx.18, lx.19–lx.21, lx.22–lx.23 and lx.24-rc.1/rc.2 (below). The Java surface of lx.11 is identical to lx.8 (`javap` over both
+lx.13-rc.1, lx.13, lx.14, lx.15, lx.16–lx.18, lx.19–lx.21, lx.22–lx.23, lx.24-rc.1/rc.2, lx.24, lx.25 and lx.26 (below). The Java surface of lx.11 is identical to lx.8 (`javap` over both
 `classes.jar`). The `lx.1` layers: **SPEC 097**, **SPEC 098**, **SPEC 101** and
 the upstream sync to sing-box **1.14.2** (**SPEC 102**).
 
@@ -258,6 +258,26 @@ renders both since task 687's follow-up `0f130376`). `javap` over the full
 of `libbox.so` reports `1.14.4-lx.25`. AAR sha256
 `442b4830ea01966dc47a35735633fd7925eb46866eaa94a82788a130ef1719d4`
 (checked against the release `SHA256SUMS`).
+
+**`v1.14.4-lx.26`** — the same base (upstream `v1.14.4`, drift 0, Go
+1.26.10), stable without an rc line, two changes. **SPEC 143** (issue
+sing-box-lx#60, LxBox task 699): a DNS `group` takes an optional `hosts` key —
+tags of `hosts`-type servers asked before the members, in key order; a name
+they know is answered at once (an IPv4-only entry gives an empty answer to
+AAAA, the query does not reach the network), any other name or query type goes
+to `servers` by the group's mode. `hosts`/`fakeip` inside `servers` stay a start
+error; in `hosts` only `hosts`-type tags, no duplicates, not the group itself,
+not one of its `servers`. lx.25 and older reject the key as an unknown field —
+the build drops it below this version (`coreSupportsDnsGroupHosts`). **SPEC
+144**: MTU alignment (`mtu_align`) — only IP tunnels and groups carry a
+capacity upwards, any other node is a boundary (a vless member on a WG no
+longer clamps a tunnel above the group); tunnels carrying IPv6 are never
+aligned below 1280; AWG `s4` padding counts in the WG overhead.
+`experimental/libbox` and `cmd/internal/build_libbox` are unchanged since lx.25
+(`git diff` empty), so the Java surface and the build tags are those of lx.25;
+`javap` was not rerun. `kCoreBuildTagsPin` moved with the pin. AAR
+sha256 `bcd0e8a935a11b39239f4945ae254ba6b7571919583615954d02691ba34366cc`
+(the release `SHA256SUMS`).
 
 **`v1.14.3-lx.24-rc.1`** — one change that reaches the app: **SPEC 139**
 release 1, `CommandClient.startConnectionTest` — an active connection test
@@ -1281,7 +1301,8 @@ subscription), the core provides insurance in case the client misses something.
 
 | rc | What was added |
 |---|---|
-| **v1.14.4-lx.25** (current pin) | XHTTP `packet-up` uploads batched and pipelined, no longer one write per round trip (SPEC 141, issue #58); six XHTTP gaps against Xray closed (SPEC 142: `stream-up` hang on a refused upload, trailing slash, HTTP/2 idle close and 45 s pings, Chrome default headers, literal `%`); connection test: `dns_member` stage per DNS group member, losers `SKIPPED` with `lost_race` (SPEC 139). `javap` identical to lx.24. AAR sha256 `442b4830ea01966dc47a35735633fd7925eb46866eaa94a82788a130ef1719d4`. |
+| **v1.14.4-lx.26** (current pin) | DNS group key `hosts`: `hosts`-type servers answer the names they know before the members (SPEC 143, LxBox task 699; the build drops the key below lx.26); MTU alignment: only IP tunnels and groups carry a capacity upwards, IPv6 tunnels never below 1280, AWG `s4` in the WG overhead (SPEC 144). Java surface unchanged (`experimental/libbox` identical to lx.25). AAR sha256 `bcd0e8a935a11b39239f4945ae254ba6b7571919583615954d02691ba34366cc`. |
+| **v1.14.4-lx.25** | XHTTP `packet-up` uploads batched and pipelined, no longer one write per round trip (SPEC 141, issue #58); six XHTTP gaps against Xray closed (SPEC 142: `stream-up` hang on a refused upload, trailing slash, HTTP/2 idle close and 45 s pings, Chrome default headers, literal `%`); connection test: `dns_member` stage per DNS group member, losers `SKIPPED` with `lost_race` (SPEC 139). `javap` identical to lx.24. AAR sha256 `442b4830ea01966dc47a35735633fd7925eb46866eaa94a82788a130ef1719d4`. |
 | **v1.14.4-lx.24** | Stable SPEC 139 (connection test) on the upstream v1.14.4 base (SPEC 140, Go 1.26.10). After rc.2: findings, stages `connection`/`reality`/`wake`/`wg_handshake`/`quic`/`auth`, a 3xx is the answer with `location`, DoH/DoH3 one-off under `fresh`. Java surface: `PlatformInterface.useProcFS()` removed, static `Libbox.findConnectionOwner` added (procfs; called below Android 10). AAR sha256 `ad32839dd5ffd52ccb2cfa7ce76fe20a29995ecac1bb7ba0f23845968109634c`. |
 | **v1.14.3-lx.24-rc.2** | SPEC 139 release 2 — `app_dns` answer records (`answer` per record with TTL, `authority` on NXDOMAIN/NODATA, `source` network/cache/local with `cache_age`/`stale`), `cache_age` on cached `dns` stages; URL Check renders them (task 688). Attributes only: `javap` identical to rc.1. AAR sha256 `bc4a2c6db3db1040c1283bb82c017259e947fb9d0c788ab082bfd568d9f4ef73`. |
 | **v1.14.3-lx.24-rc.1** | SPEC 139 release 1 — `CommandClient.startConnectionTest`: active connection test with a streamed stage tree (Diagnostics → URL Check, task 687); `urltest` `selectedOutbound` race hotfix. Base v1.14.3, upstream drift deferred. No new config keys. Java surface additive: 258 → 270 classes. AAR sha256 `6d422f54170ec7635096262e8ac73652fcf48521ec83c55bf79caaa418a48bc2`. |
