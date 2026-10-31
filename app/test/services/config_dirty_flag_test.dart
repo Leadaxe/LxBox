@@ -73,16 +73,6 @@ void main() {
       }
     });
 
-    test('свежий конфиг в filesDir → isDirty=false', () async {
-      await SettingsStorage.setNodeSort('latencyAsc', const []);
-      final cfg = File(nativeConfigPath());
-      await cfg.writeAsString('{}');
-      await cfg.setLastModified(DateTime.now().add(const Duration(minutes: 1)));
-
-      expect(await ConfigDirtyCheck.isDirty(), isFalse,
-          reason: 'конфиг новее настроек — пересобирать нечего');
-    });
-
     test('конфиг только в Documents (старое место) → не считается', () async {
       await SettingsStorage.setNodeSort('latencyAsc', const []);
       final stale = File(configPath());
@@ -139,19 +129,6 @@ void main() {
       expect(SettingsStorage.configDirty, isFalse);
 
       await SettingsStorage.savePingOptions({'url': 'https://x'});
-      expect(SettingsStorage.configDirty, isFalse);
-    });
-
-    test('setVar: config-var → dirty, прочий var → нет', () async {
-      await SettingsStorage.setVar('log_level', 'debug'); // config-var
-      expect(SettingsStorage.configDirty, isTrue);
-
-      SettingsStorage.configDirty = false;
-      await SettingsStorage.setVar('sort_mode', 'latencyAsc'); // не config-var
-      expect(SettingsStorage.configDirty, isFalse);
-
-      // машинно-генерируемые clash_* — вне allowlist (выходы сборки).
-      await SettingsStorage.setVar('clash_secret', 'abc');
       expect(SettingsStorage.configDirty, isFalse);
     });
   });

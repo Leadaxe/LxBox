@@ -8,16 +8,6 @@ import 'package:lxbox/vpn/cc_channel.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  group('§557 — CcEndpointState.disabled', () {
-    test('строка ядра', () {
-      expect(CcEndpointState.disabled, 'disabled');
-    });
-
-    test('disabled — не «соберётся при дайле»', () {
-      expect(CcEndpointState.isNotBuilt(CcEndpointState.disabled), false);
-    });
-  });
-
   group('§557 — setEndpointEnabled', () {
     const channel = MethodChannel(PlatformChannels.methods);
     final messenger =

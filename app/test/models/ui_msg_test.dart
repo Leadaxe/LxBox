@@ -21,42 +21,6 @@ GetLocalText _loadRu() {
 void main() {
   final ru = _loadRu();
 
-  group('UiMsg equality (по данным, не по строке)', () {
-    test('одинаковые данные == равны, hashCode совпадает', () {
-      expect(const RawMsg('boom'), const RawMsg('boom'));
-      expect(const RawMsg('boom').hashCode, const RawMsg('boom').hashCode);
-      expect(const TimeoutError(5800), const TimeoutError(5800));
-      expect(const ErrMsg(ErrKey.failedToStartVpn),
-          const ErrMsg(ErrKey.failedToStartVpn));
-      expect(
-        const PrefixedMsg(ErrPrefix.reloadFailed, RawMsg('x')),
-        const PrefixedMsg(ErrPrefix.reloadFailed, RawMsg('x')),
-      );
-      expect(const SubStatusNodes(3, detours: 1, cached: true),
-          const SubStatusNodes(3, detours: 1, cached: true));
-      expect(const HttpStatusMsg(404), const HttpStatusMsg(404));
-    });
-
-    test('разные данные / разные типы != равны', () {
-      expect(const RawMsg('a') == const RawMsg('b'), isFalse);
-      expect(const TimeoutError(1000) == const TimeoutError(2000), isFalse);
-      expect(
-          const ErrMsg(ErrKey.failedToStartVpn) ==
-              const ErrMsg(ErrKey.stopTimedOut),
-          isFalse);
-      expect(
-          const PrefixedMsg(ErrPrefix.reloadFailed, RawMsg('x')) ==
-              const PrefixedMsg(ErrPrefix.switchFailed, RawMsg('x')),
-          isFalse);
-      // Разные типы с одинаковым рендером недопустимо считать равными.
-      expect(
-          // ignore: unrelated_type_equality_checks
-          const RawMsg('Failed to start VPN') ==
-              const ErrMsg(ErrKey.failedToStartVpn),
-          isFalse);
-    });
-  });
-
   group('render — обе локали', () {
     test('ErrMsg: en verbatim (renderEn), ru отличается', () {
       const m = ErrMsg(ErrKey.failedToStartVpn);

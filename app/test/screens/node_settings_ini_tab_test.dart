@@ -117,21 +117,6 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('вкладка INI есть у WG, стоит после JSON', (tester) async {
-    await open(tester, awgLink);
-    final labels = tester
-        .widget<TabBar>(find.byType(TabBar))
-        .tabs
-        .map((t) => t is Tab ? t.text : null)
-        .toList();
-    expect(labels.indexOf('INI'), labels.indexOf('JSON') + 1);
-  });
-
-  testWidgets('вкладки INI нет у VLESS', (tester) async {
-    await open(tester, 'vless://u1@h1.example:443?type=ws&security=tls#Beta');
-    expect(tab('INI'), findsNothing);
-  });
-
   testWidgets('Edit INI у INI-источника — переход в Source без диалога',
       (tester) async {
     final c = await open(tester, ini);

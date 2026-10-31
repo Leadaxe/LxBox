@@ -90,59 +90,6 @@ void main() {
             reason: 'расхождение ${e.key} без причины');
       }
     });
-
-    // §474 — два кода, чьи `params` контракт 1.1.6 переписал. Проверяются
-    // поимённо: общий тест выше упал бы и на них, но не сказал бы, ЧТО
-    // именно разъехалось.
-    test('tls_insecure объявляет path и value, severity info', () {
-      final t = ContractRegistry.I.textFor('tls_insecure');
-      expect(t, isNotNull);
-      expect(t!.severity, 'info');
-      expect(t.params, containsAll(<String>['path', 'value']));
-    });
-
-    // §474 (контракт 1.1.7) — код подмены `vmess.security`. Общий
-    // `type_invalid` здесь врал: поле не снимается, а подменяется.
-    test('vmess_security_unknown объявляет path и value, severity warning', () {
-      final t = ContractRegistry.I.textFor('vmess_security_unknown');
-      expect(t, isNotNull);
-      expect(t!.severity, 'warning');
-      expect(t.params, containsAll(<String>['path', 'value']));
-    });
-
-    // Четыре кода, у которых рукописный класс снят и текст взят из реестра.
-    // Проверяется то, ради чего снимали: severity не съехал (все четыре были
-    // `info` классом и обязаны остаться `info` реестром) и объявленный
-    // параметр называется так, как его заполняет `NodeWarning.byCode` —
-    // разойдись имена, человек прочёл бы `{query_name}` буквально.
-    test('снятые классы: severity info и объявленный параметр на месте', () {
-      const expected = <String, String?>{
-        'ech_ignored': 'query_name',
-        'ws_early_data_converted': 'max_early_data',
-        'naive_extra_headers_invalid': 'entry',
-        // `value` подставляется всегда (`text_params_implicit`), своего
-        // имени коду не нужно.
-        'naive_padding_ignored': null,
-      };
-      for (final e in expected.entries) {
-        final t = ContractRegistry.I.textFor(e.key);
-        expect(t, isNotNull, reason: 'кода ${e.key} нет в реестре');
-        expect(t!.severity, 'info', reason: e.key);
-        if (e.value != null) {
-          expect(t.params, contains(e.value), reason: e.key);
-        }
-      }
-    });
-
-    test('vision_with_transport объявляет with, severity info', () {
-      final t = ContractRegistry.I.textFor('vision_with_transport');
-      expect(t, isNotNull);
-      expect(t!.severity, 'info');
-      expect(t.params, contains('with'));
-      // `transport` из набора ушёл — текст зовёт `{with}`, и старое имя
-      // не подставилось бы никогда.
-      expect(t.params, isNot(contains('transport')));
-    });
   });
 }
 

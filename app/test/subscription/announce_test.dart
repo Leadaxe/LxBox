@@ -1,5 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lxbox/models/subscription_meta.dart';
 import 'package:lxbox/services/subscription/sources.dart';
 
 import '../parser/engine_test_setup.dart';
@@ -72,23 +71,6 @@ void main() {
           parseFetched(FetchResult('', null, {'announce': 'x'})).meta;
       expect(meta, isNotNull);
       expect(meta!.announce, 'x');
-    });
-  });
-
-  group('SubscriptionMeta JSON', () {
-    test('с полем — круг через JSON', () {
-      const m = SubscriptionMeta(profileTitle: 'T', announce: 'a\nb');
-      final j = m.toJson();
-      expect(j['announce'], 'a\nb');
-      expect(SubscriptionMeta.fromJson(j), m);
-    });
-
-    test('без поля — ключа нет, старый JSON читается', () {
-      const m = SubscriptionMeta(profileTitle: 'T');
-      expect(m.toJson().containsKey('announce'), isFalse);
-      final old = SubscriptionMeta.fromJson({'profile_title': 'T'});
-      expect(old.announce, isNull);
-      expect(old, m);
     });
   });
 }

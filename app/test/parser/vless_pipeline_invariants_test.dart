@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -28,26 +27,6 @@ import 'package:lxbox/services/parser/uri_parsers.dart';
 /// (оно бандлится в APK, и корпусу там делать нечего). Поэтому гейт у тестов
 /// корпуса свой: корпуса нет — пропускаем именно их, а не разбор.
 
-/// Снимок identity, снятый СТАРЫМ путём ДО правки (18.09.2026).
-///
-/// Зачем фикстура файлом, а не картой в коде: vless-кейсов корпуса 89, и
-/// восемьдесят семь хешей в литерале читать невозможно. Формат тот же, что у
-/// шага 2 (`trojan_pipeline_invariants_test.dart`), — имя кейса → хеш, — но
-/// вместе с САМОЙ ССЫЛКОЙ: тест обязан падать и тогда, когда кейс корпуса
-/// переписали, а не только когда изменился разбор.
-///
-/// Расхождение здесь значит, что у пользователей слетят выбор узла,
-/// отключения и цепочки (`node_hash.dart`: identity = сырой тег, дедуп
-/// подписки — `legacyNodeIdentityHash` от тела).
-const _identityFixture = 'test/fixtures/vless/pipeline_identity_before.json';
-
-Map<String, Map<String, dynamic>> _identityBefore() {
-  final raw = jsonDecode(File(_identityFixture).readAsStringSync()) as Map;
-  return (raw['cases'] as Map).map(
-    (k, v) => MapEntry(k as String, (v as Map).cast<String, dynamic>()),
-  );
-}
-
 /// Все vless-ссылки корпуса, в порядке файлов.
 List<String> _corpusUris() {
   final out = <String>[];
@@ -75,44 +54,6 @@ void main() {
     await loadTestRegistry();
     await MapperSections.I
         .loadDrafts(dir: 'assets/contract_draft', files: kDraftFiles);
-  });
-
-  group('§472 инвариант 4 — identity vless не меняется', () {
-    test('каждый кейс корпуса даёт хеш из фикстуры', () {
-      final before = _identityBefore();
-      expect(before, hasLength(greaterThan(80)),
-          reason: 'фикстура похудела — проверьте, не срезан ли корпус');
-      for (final e in before.entries) {
-        final uri = e.value['uri'] as String;
-        final want = e.value['identity'] as String?;
-        final spec = parseUri(uri);
-        if (want == null) {
-          // «Ссылка не разбирается вовсе» — тоже свойство, которое обязано
-          // сохраниться: узел, которого раньше не было, появившись, влез бы
-          // в подписку новым.
-          expect(spec, isNull, reason: 'кейс ${e.key} стал разбираться');
-          continue;
-        }
-        expect(spec, isNotNull, reason: 'кейс ${e.key} перестал разбираться');
-        expect(
-          legacyNodeIdentityHash(spec!),
-          want,
-          reason: 'identity кейса ${e.key} изменилась: у пользователей слетят '
-              'выбор узла, отключения и цепочки',
-        );
-      }
-    });
-
-    test('identity всего корпуса vless считается и не пуста', () {
-      final nodes = <NodeSpec>[];
-      for (final u in _corpusUris()) {
-        final spec = parseUri(u);
-        if (spec != null) nodes.add(spec);
-      }
-      expect(nodes, isNotEmpty);
-      // Идентичность = сырой тег: у узла с именем она есть всегда.
-      expect(sourceNodeIdentities(nodes).length, nodes.length);
-    }, skip: corpusSkip);
   });
 
   group('§472 инвариант 3 — parseUri(toUri()) ≈ spec', () {

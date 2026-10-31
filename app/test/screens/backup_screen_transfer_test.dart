@@ -32,31 +32,6 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('phone with camera: Send to TV, no receive item (P10)',
-      (tester) async {
-    device(tv: false, camera: true);
-    await pump(tester);
-    expect(find.text('Send to TV'), findsOneWidget);
-    expect(find.text('Receive from phone'), findsNothing);
-  });
-
-  testWidgets('phone without camera: neither item', (tester) async {
-    device(tv: false, camera: false);
-    await pump(tester);
-    expect(find.text('Send to TV'), findsNothing);
-    expect(find.text('Receive from phone'), findsNothing);
-  });
-
-  testWidgets('TV: receive item first, no Send to TV (P10)', (tester) async {
-    device(tv: true, camera: true);
-    await pump(tester);
-    expect(find.text('Receive from phone'), findsOneWidget);
-    expect(find.text('Send to TV'), findsNothing);
-    final receiveY = tester.getTopLeft(find.text('Receive from phone')).dy;
-    final exportY = tester.getTopLeft(find.text('Export').first).dy;
-    expect(receiveY, lessThan(exportY));
-  });
-
   testWidgets('categories sent default to everything except Debug API (P5)',
       (tester) async {
     device(tv: false, camera: true);

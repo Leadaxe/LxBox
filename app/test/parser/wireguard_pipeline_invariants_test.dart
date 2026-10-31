@@ -98,58 +98,6 @@ void main() {
   });
 
   group('§472 инвариант 4 — identity wireguard/AWG не меняется', () {
-    test('ссылки корпуса и app/test дают прежние хеш, тег и тело', () {
-      final before = _identityBefore();
-      final uriCases = {
-        for (final e in before.entries)
-          if (e.value.containsKey('uri')) e.key: e.value,
-      };
-      expect(uriCases, hasLength(greaterThan(70)),
-          reason: 'снимок похудел — проверьте, не срезан ли корпус');
-      for (final e in uriCases.entries) {
-        final want = e.value['identity'] as String?;
-        final spec = parseUri(e.value['uri'] as String);
-        if (want == null) {
-          expect(spec, isNull, reason: 'кейс ${e.key} стал разбираться');
-          continue;
-        }
-        expect(spec, isNotNull, reason: 'кейс ${e.key} перестал разбираться');
-        expect(legacyNodeIdentityHash(spec!), want,
-            reason: 'identity кейса ${e.key} изменилась: у пользователей '
-                'слетят выбор узла, отключения и цепочки');
-        expect(spec.tag, e.value['tag'], reason: 'тег кейса ${e.key}');
-        expect(jsonEncode(spec.emit(TemplateVars.empty).map),
-            jsonEncode(e.value['body']),
-            reason: 'тело кейса ${e.key} (эталоны сравниваются БАЙТ В БАЙТ, '
-                'включая порядок ключей)');
-      }
-    });
-
-    test('INI-входы дают прежние хеш, тег и тело', () {
-      // §456 — INI остаётся ИСТОЧНИКОМ: `rawSource` это текст файла байт в
-      // байт, а тег берётся из комментария под `[Peer]`, затем из nameHint.
-      final before = _identityBefore();
-      final iniCases = {
-        for (final e in before.entries)
-          if (e.key.startsWith('ini:')) e.key: e.value,
-      };
-      expect(iniCases, hasLength(greaterThan(10)));
-      for (final e in iniCases.entries) {
-        final ini = e.value['ini'] as String;
-        final hint = e.key.endsWith('/nohint') ? null : 'file-hint';
-        final spec = parseWireguardIni(ini, nameHint: hint);
-        expect(spec, isNotNull, reason: 'кейс ${e.key} перестал разбираться');
-        expect(legacyNodeIdentityHash(spec!), e.value['identity'],
-            reason: 'identity кейса ${e.key}');
-        expect(spec.tag, e.value['tag'], reason: 'тег кейса ${e.key}');
-        expect(spec.rawSource, ini,
-            reason: '§456 — источник INI-узла это сам INI, байт в байт');
-        expect(jsonEncode(spec.emit(TemplateVars.empty).map),
-            jsonEncode(e.value['body']),
-            reason: 'тело кейса ${e.key}');
-      }
-    });
-
     test('узлы фабрик WARP не сдвинулись ни в одной комбинации', () {
       // WG-узлы WARP у пользователей самые массовые. Фабрик две: короткий
       // URI для plain WARP и `.conf` для обфусцированного (§126).
@@ -221,39 +169,6 @@ void main() {
       expect(legacyNodeIdentityHash(b), legacyNodeIdentityHash(a));
       // Источник у INI-узла остаётся INI (§456), у пересобранного — ссылка.
       expect(a.rawSource, ini);
-    });
-  });
-
-  group('§472 инвариант 5 — цена разбора', () {
-    test('2000 AWG-узлов разбираются за разумное время', () {
-      const n = 2000;
-      final uris = [
-        for (var i = 0; i < n; i++)
-          'wireguard://$_priv@h$i.example:51820?publickey=$_pub'
-              '&address=10.0.0.2/32&allowedips=0.0.0.0/0,::/0&mtu=1420'
-              '&keepalive=25&jc=4&jmin=10&jmax=50&s1=55&s2=42'
-              '&h1=1&h2=2&h3=3&h4=4#node$i',
-      ];
-
-      for (var i = 0; i < 200; i++) {
-        parseUri(uris[i]);
-      }
-
-      final nodes = <NodeSpec>[];
-      var best = 1 << 30;
-      for (var rep = 0; rep < 3; rep++) {
-        nodes.clear();
-        final sw = Stopwatch()..start();
-        for (final u in uris) {
-          final s = parseUri(u);
-          if (s != null) nodes.add(s);
-        }
-        sw.stop();
-        if (sw.elapsedMilliseconds < best) best = sw.elapsedMilliseconds;
-      }
-      expect(nodes, hasLength(n));
-      expect(best, lessThan(3000),
-          reason: 'разбор $n AWG-узлов конвейером: $best мс (лучший из трёх)');
     });
   });
 

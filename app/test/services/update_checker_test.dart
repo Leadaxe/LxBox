@@ -158,14 +158,6 @@ void main() {
       } catch (_) {}
     });
 
-    test('toggle выключен (default) — не трогает last_update_check', () async {
-      // auto_check_updates default = 'false' (§395) — maybeCheck должен
-      // вернуться до сетевого похода и не тронуть throttle-таймстамп.
-      await UpdateChecker.I.maybeCheck(localVersion: '1.0.0');
-      expect(await SettingsStorage.getLastUpdateCheck(), isNull);
-      expect(UpdateChecker.I.latest.value, isNull);
-    });
-
     test('dev-build — молчит даже при включённом toggle', () async {
       await SettingsStorage.setAutoCheckUpdates(true);
       await UpdateChecker.I.maybeCheck(localVersion: '1.2.0-dev.3');

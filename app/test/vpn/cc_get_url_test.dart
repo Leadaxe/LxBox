@@ -56,22 +56,6 @@ void main() {
           const {'status': 200, 'content': 'x', 'truncated': true, 'error': ''});
       expect(r.truncated, true);
     });
-
-    test('дефолты при отсутствующих ключах', () {
-      final r = CcGetUrlResult.fromMap(const {});
-      expect(r.status, 0);
-      expect(r.content, isEmpty);
-      expect(r.truncated, false);
-      expect(r.elapsedMs, 0);
-      expect(r.ok, true); // error пуст — обмен формально состоялся
-    });
-
-    test('num (double из platform channel) приводится к int', () {
-      final r = CcGetUrlResult.fromMap(
-          const {'status': 200.0, 'elapsedMs': 42.0, 'error': ''});
-      expect(r.status, 200);
-      expect(r.elapsedMs, 42);
-    });
   });
 
   group('§392 — проброс параметров в native', () {

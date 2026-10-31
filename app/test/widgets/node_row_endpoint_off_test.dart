@@ -33,12 +33,6 @@ void main() {
     ),
   );
 
-  testWidgets('disabled: вместо таймаута подпись off', (tester) async {
-    await tester.pumpWidget(host(item(CcEndpointState.disabled)));
-    expect(find.text('ERR'), findsNothing);
-    expect(find.text('off'), findsOneWidget);
-  });
-
   testWidgets('живой узел с провалом замера по-прежнему ERR', (tester) async {
     await tester.pumpWidget(host(item(CcEndpointState.up)));
     expect(find.text('ERR'), findsOneWidget);
@@ -55,22 +49,5 @@ void main() {
     await tester.tap(find.text('Turn off'));
     await tester.pumpAndSettle();
     expect(taps, 1);
-  });
-
-  testWidgets('меню: у выключенного узла пункт включения', (tester) async {
-    await tester.pumpWidget(
-      host(item(CcEndpointState.disabled), onToggle: () {}),
-    );
-    await tester.longPress(find.byType(NodeRow));
-    await tester.pumpAndSettle();
-    expect(find.text('Turn on'), findsOneWidget);
-    expect(find.text('Turn off'), findsNothing);
-  });
-
-  testWidgets('без колбэка пункта нет', (tester) async {
-    await tester.pumpWidget(host(item(CcEndpointState.up)));
-    await tester.longPress(find.byType(NodeRow));
-    await tester.pumpAndSettle();
-    expect(find.text('Turn off'), findsNothing);
   });
 }

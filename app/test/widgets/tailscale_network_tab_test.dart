@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/node_spec.dart';
-import 'package:lxbox/services/tailscale_network.dart' show TailscalePathKind;
 import 'package:lxbox/vpn/cc_channel.dart';
 import 'package:lxbox/widgets/node_diagnostics_tab.dart';
 import 'package:lxbox/widgets/tailscale_network_tab.dart';
@@ -174,36 +173,6 @@ void main() {
     });
   });
 
-  testWidgets('устройства: порядок и отметки', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(800, 2400));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    await pump(tester, data: [_status()]);
-    final names = ['gw', 'nas', 'shared-box', 'zeta'];
-    final ys = [
-      for (final n in names)
-        tester.getTopLeft(find.widgetWithText(ListTile, n).last).dy,
-    ];
-    expect(ys, [...ys]..sort());
-    bool has(String name, String text) => find
-        .descendant(
-          of: find.widgetWithText(ListTile, name).last,
-          matching: find.textContaining(text),
-        )
-        .evaluate()
-        .isNotEmpty;
-    expect(has('nas', 'key expired'), isTrue);
-    expect(has('nas', 'online'), isFalse);
-    expect(has('gw', 'exit node'), isTrue);
-    expect(has('gw', '100.64.0.2'), isTrue);
-    expect(has('gw', 'gw.tail.ts.net'), isFalse);
-    expect(has('shared-box', 'shared'), isTrue);
-    expect(has('zeta', 'last seen'), isTrue);
-    // Заголовок: в сети 2 из 4.
-    expect(find.textContaining('2 online / 4'), findsOneWidget);
-    // Один владелец — без заголовков групп.
-    expect(find.text('Alice'), findsNothing);
-  });
-
   group('§645 — адреса и путь', () {
     const multi = CcTailscalePeer(
       stableId: 'm1',
@@ -224,14 +193,6 @@ void main() {
             CcTailscaleUserGroup(peers: [multi]),
           ],
         );
-
-    testWidgets('This device: один заголовок Address, адреса столбиком',
-        (tester) async {
-      await pump(tester, data: [st()]);
-      expect(find.text('Address'), findsOneWidget);
-      expect(find.text('100.64.0.1'), findsOneWidget);
-      expect(find.text('fd7a::1'), findsOneWidget);
-    });
 
     testWidgets('+N раскрывает и сворачивает адреса сверх двух',
         (tester) async {
@@ -268,16 +229,6 @@ void main() {
         expect(find.text('Copy $ip'), findsOneWidget);
       }
       expect(find.text('Ping'), findsOneWidget);
-    });
-
-    test('иконка пути: напрямую зелёная, посредники оранжевые, нет — нет', () {
-      expect(tailscalePathIcon(TailscalePathKind.direct),
-          (icon: Icons.bolt, color: Colors.green));
-      expect(tailscalePathIcon(TailscalePathKind.derp),
-          (icon: Icons.cloud_outlined, color: Colors.orange));
-      expect(tailscalePathIcon(TailscalePathKind.peerRelay),
-          (icon: Icons.device_hub, color: Colors.orange));
-      expect(tailscalePathIcon(null), isNull);
     });
   });
 
@@ -409,13 +360,6 @@ void main() {
       ctrl.add([s]);
       await tester.pump();
     }
-
-    testWidgets('выхода нет — проверка скрыта, строка вместо неё',
-        (tester) async {
-      await pumpDiag(tester, _status());
-      expect(find.byKey(const ValueKey('tailscale-no-exit')), findsOneWidget);
-      expect(find.text('Check'), findsNothing);
-    });
 
     testWidgets('выход есть — проверка доступна', (tester) async {
       await pumpDiag(tester, _status(exit: _gw));

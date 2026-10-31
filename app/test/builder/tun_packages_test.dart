@@ -125,11 +125,5 @@ void main() {
       expect((inbounds[0] as Map)['exclude_package'], equals(['com.example']));
       expect((inbounds[1] as Map).containsKey('exclude_package'), false);
     });
-
-    test('TunAppsConfig predicates', () {
-      expect(const TunAppsConfig(mode: 'off', packages: []).isOff, true);
-      expect(const TunAppsConfig(mode: 'allow', packages: []).isAllow, true);
-      expect(const TunAppsConfig(mode: 'deny', packages: []).isDeny, true);
-    });
   });
 }

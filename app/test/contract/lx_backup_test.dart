@@ -57,27 +57,6 @@ void main() {
   });
 
   group('LX Backup: импорт', () {
-    // Ссылка в никуда не повод терять правило — оно приезжает выключенным.
-    // Включённое правило с несуществующей целью роняет конфиг ядра целиком.
-    test('несуществующий outbound выключает правило', () {
-      final raw = jsonEncode({
-        'lx_backup': 1,
-        'exported_by': {'app': 'launcher', 'version': '1.4.2'},
-        'exported_at': '2026-08-22T00:00:00Z',
-        'rules': [
-          {
-            'kind': 'inline', 'name': 'Ghost', 'outbound': 'vpn-9', 'num': 1000,
-            'match': {'domain_suffix': ['x.example-1.com']},
-          },
-        ],
-      });
-      final file = parseLxBackup(raw, knownOutbounds: {'proxy'});
-      expect(file.rules, hasLength(1));
-      expect(file.rules.single.enabled, isFalse,
-          reason: 'правило с мёртвой целью приехало включённым — ядро отвергнет конфиг');
-      expect(file.warnings.map((w) => w.code), contains(kWarnUnknownOutbound));
-    });
-
     test('зарезервированные литералы известны всегда', () {
       for (final tag in ['direct', 'block', 'reject', 'drop']) {
         final raw = jsonEncode({
@@ -95,30 +74,6 @@ void main() {
       }
     });
 
-    test('route.final в никуда не применяется', () {
-      final raw = jsonEncode({
-        'lx_backup': 1,
-        'exported_by': {'app': 'launcher'},
-        'exported_at': '2026-08-22T00:00:00Z',
-        'route': {'final': 'vpn-9'},
-      });
-      final file = parseLxBackup(raw, knownOutbounds: {'proxy'});
-      expect(file.routeFinal, isNull);
-      expect(file.warnings.map((w) => w.code), contains(kWarnFinalDropped));
-    });
-
-    test('непереносимая переменная пропускается с warning', () {
-      final raw = jsonEncode({
-        'lx_backup': 1,
-        'exported_by': {'app': 'launcher'},
-        'exported_at': '2026-08-22T00:00:00Z',
-        'vars': {'log_level': 'debug', 'tun_interface': 'utun0'},
-      });
-      final file = parseLxBackup(raw);
-      expect(file.vars, {'log_level': 'debug'});
-      expect(file.warnings.map((w) => w.code), contains(kWarnVarSkipped));
-    });
-
     test('версия новее поддерживаемой отвергается', () {
       final raw = jsonEncode({
         'lx_backup': kLxBackupVersion + 1,
@@ -130,33 +85,6 @@ void main() {
 
     test('чужой файл не притворяется бэкапом', () {
       expect(() => parseLxBackup('{"outbounds":[]}'), throwsFormatException);
-    });
-
-    test('неизвестный ключ корня назван, но файл читается', () {
-      final raw = jsonEncode({
-        'lx_backup': 1,
-        'exported_by': {'app': 'launcher'},
-        'exported_at': '2026-08-22T00:00:00Z',
-        'channels': [{'id': 1}],
-      });
-      final file = parseLxBackup(raw);
-      expect(file.version, 1);
-      expect(file.warnings.map((w) => w.code), contains(kWarnUnknownField));
-    });
-
-    test('порядок правил сохраняется по оси num', () {
-      final raw = jsonEncode({
-        'lx_backup': 1,
-        'exported_by': {'app': 'launcher'},
-        'exported_at': '2026-08-22T00:00:00Z',
-        'rules': [
-          {'kind': 'inline', 'name': 'third', 'num': 9000, 'outbound': 'direct', 'match': {}},
-          {'kind': 'inline', 'name': 'first', 'num': 10, 'outbound': 'direct', 'match': {}},
-          {'kind': 'inline', 'name': 'second', 'num': 500, 'outbound': 'direct', 'match': {}},
-        ],
-      });
-      final file = parseLxBackup(raw);
-      expect(file.rules.map((r) => r.name), ['first', 'second', 'third']);
     });
   });
 

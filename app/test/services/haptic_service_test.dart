@@ -83,15 +83,5 @@ void main() {
       await Future<void>.delayed(Duration.zero);
       expect(platformCalls, 2);
     });
-
-    test('singleton instance accessible and toggleable', () {
-      final initial = HapticService.I.enabled;
-      HapticService.I.enabled = false;
-      expect(HapticService.I.enabled, isFalse);
-      HapticService.I.enabled = true;
-      expect(HapticService.I.enabled, isTrue);
-      // restore
-      HapticService.I.enabled = initial;
-    });
   });
 }

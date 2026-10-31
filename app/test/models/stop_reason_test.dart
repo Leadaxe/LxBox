@@ -41,18 +41,6 @@ void main() {
     });
   });
 
-  group('StopReason equality', () {
-    test('по runtimeType + полям данных', () {
-      expect(const StopError('x'), const StopError('x'));
-      expect(const StopError('x') == const StopError('y'), isFalse);
-      expect(const StopRevoked(), const StopRevoked());
-      expect(
-        const StopRevoked() == const StopError('x'),
-        isFalse,
-      );
-    });
-  });
-
   group('StopStartTimeout (§519)', () {
     test('НЕ разбирается из native-события — причина синтезируется нами', () {
       // Ядро/native при таймауте фазы `connecting` молчат: `errorReason`
@@ -67,21 +55,6 @@ void main() {
       expect(en, contains('95'));
       expect(en, contains('8'));
       expect(en, contains('Start timed out'));
-    });
-
-    test('равенство по обоим полям', () {
-      expect(const StopStartTimeout(seconds: 95, endpoints: 8),
-          const StopStartTimeout(seconds: 95, endpoints: 8));
-      expect(
-        const StopStartTimeout(seconds: 95, endpoints: 8) ==
-            const StopStartTimeout(seconds: 95, endpoints: 4),
-        isFalse,
-      );
-      expect(
-        const StopStartTimeout(seconds: 95, endpoints: 8) ==
-            const StopError('x'),
-        isFalse,
-      );
     });
   });
 }

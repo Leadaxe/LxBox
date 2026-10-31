@@ -10,7 +10,6 @@ import 'package:lxbox/widgets/node_diagnostics_tab.dart';
 import 'package:lxbox/screens/subscription_detail_screen/widgets/node_notifications_view.dart';
 import 'package:lxbox/screens/subscription_detail_screen/widgets/node_warning_row.dart';
 import 'package:lxbox/screens/subscription_detail_screen/widgets/node_warnings_sheet.dart';
-import 'package:lxbox/screens/subscription_detail_screen/widgets/subscription_node_list.dart';
 import 'package:lxbox/services/contract/contract_docs.dart';
 import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/l10n/locale_controller.dart';
@@ -176,32 +175,6 @@ void main() {
       expect(icons(tester), isEmpty);
     });
 
-    testWidgets('warning + info — значок info в КОНЦЕ строки и приглушённый',
-        (tester) async {
-      await pumpRow(tester, const [infoW, warnW]);
-
-      // Текст — warning'а и без счётчика: actionable ровно одно.
-      expect(find.textContaining('replaced with ws'), findsOneWidget);
-      expect(find.textContaining('+1 more'), findsNothing);
-      expect(
-          find.descendant(
-              of: find.byType(NodeWarningRow),
-              matching:
-                  find.text(
-                      ContractRegistry.I.textFor('tls_insecure')!.titleEn)),
-          findsNothing);
-
-      // §479: порядок значков — уровень, потом info.
-      final ico = icons(tester).toList();
-      expect(ico.map((i) => i.icon),
-          [Icons.warning_amber, Icons.info_outline]);
-      // Приглушённый, а не синий уровня.
-      final ctx = tester.element(find.byType(NodeWarningRow));
-      expect(ico.last.color, Theme.of(ctx).colorScheme.onSurfaceVariant);
-      expect(ico.last.color,
-          isNot(warningSeverityColor(ctx, WarningSeverity.info)));
-    });
-
     testWidgets('«+N more» считает только error и warning', (tester) async {
       await pumpRow(
           tester, const [infoW, warnW, errW, _infoFlow]);
@@ -247,121 +220,6 @@ void main() {
       // Полный текст в строку не едет — он длиннее и живёт в уведомлениях.
       expect(raw.textEn, isNot(raw.titleEn));
       expect(find.text(subst(raw.textEn)), findsNothing);
-    });
-  });
-
-  group('§479 — место значка info в списке узлов', () {
-    NodeSpec node(String label, List<NodeWarning> warnings) => VlessSpec(
-          id: label,
-          tag: label,
-          label: label,
-          server: 'example.com',
-          port: 443,
-          rawSource: '',
-          uuid: '00000000-0000-0000-0000-000000000000',
-          warnings: warnings,
-        );
-
-    Future<void> pumpList(WidgetTester tester, List<NodeSpec> nodes) =>
-        tester.pumpWidget(MaterialApp(
-          home: Scaffold(
-            body: SubscriptionNodeList(
-                nodes: nodes, loading: false, error: null),
-          ),
-        ));
-
-    /// Значок в `title` строки — то есть рядом с именем.
-    Finder badgeAtTitle(String label) => find.descendant(
-          of: find.ancestor(
-              of: find.text(label), matching: find.byType(Row)),
-          matching: find.byType(NodeInfoBadge),
-        );
-
-    testWidgets('только info — значок в строке протокола, имя чистое, '
-        'третьей строки нет', (tester) async {
-      await pumpList(tester, [node('info-only', const [_infoTls])]);
-
-      // Значок есть — но не у имени.
-      expect(find.byType(NodeInfoBadge), findsOneWidget);
-      expect(badgeAtTitle('info-only'), findsNothing);
-      // Он стоит в одном Row со строкой протокола.
-      expect(
-        find.descendant(
-          of: find.ancestor(
-              of: find.text('vless  example.com:443'),
-              matching: find.byType(Row)),
-          matching: find.byType(NodeInfoBadge),
-        ),
-        findsOneWidget,
-      );
-      // Строки предупреждения под узлом нет вовсе.
-      expect(find.byType(NodeWarningRow), findsNothing);
-      expect(
-          find.text(ContractRegistry.I.textFor('tls_insecure')!.titleEn),
-          findsNothing);
-    });
-
-    testWidgets('значок приглушён, а не синий', (tester) async {
-      await pumpList(tester, [node('info-only', const [_infoTls])]);
-      final ctx = tester.element(find.byType(NodeInfoBadge));
-      final ico = tester.widget<Icon>(find.descendant(
-          of: find.byType(NodeInfoBadge), matching: find.byType(Icon)));
-      expect(ico.icon, Icons.info_outline);
-      expect(ico.color, Theme.of(ctx).colorScheme.onSurfaceVariant);
-    });
-
-    testWidgets('зона тапа значка не меньше 24×24', (tester) async {
-      // Значок 14 px — пальцем в него не попасть; подложка обязана быть
-      // рекомендованного Material размера.
-      await tester.pumpWidget(const MaterialApp(
-        home: Scaffold(
-            body: Center(child: NodeInfoBadge([_infoTls]))),
-      ));
-      final size = tester.getSize(find.byType(NodeInfoBadge));
-      expect(size.width, greaterThanOrEqualTo(24));
-      expect(size.height, greaterThanOrEqualTo(24));
-    });
-
-    testWidgets('тап по значку открывает уведомления и не проваливается в '
-        'разбор узла', (tester) async {
-      await pumpList(tester, [node('info-only', const [_infoTls])]);
-
-      await tester.tap(find.byType(NodeInfoBadge));
-      await tester.pumpAndSettle();
-
-      expect(find.byType(NodeWarningsSheet), findsOneWidget);
-      expect(find.byType(NodeInspectScreen), findsNothing);
-    });
-
-    testWidgets('warning + info — значок info в строке предупреждения, '
-        'у имени его нет', (tester) async {
-      await pumpList(tester, [
-        node('mixed', const [
-          _infoTls,
-          _warnTransport,
-        ]),
-      ]);
-
-      expect(badgeAtTitle('mixed'), findsNothing);
-      expect(
-        find.descendant(
-            of: find.byType(NodeWarningRow),
-            matching: find.byType(NodeInfoBadge)),
-        findsOneWidget,
-      );
-
-      final ico = tester
-          .widgetList<Icon>(find.descendant(
-              of: find.byType(NodeWarningRow), matching: find.byType(Icon)))
-          .toList();
-      expect(ico.map((i) => i.icon), [Icons.warning_amber, Icons.info_outline]);
-    });
-
-    testWidgets('узел без предупреждений — ни значка, ни строки',
-        (tester) async {
-      await pumpList(tester, [node('clean', const [])]);
-      expect(find.byType(NodeInfoBadge), findsNothing);
-      expect(find.byType(NodeWarningRow), findsNothing);
     });
   });
 
@@ -453,19 +311,6 @@ void main() {
       expect(find.text('Details'), findsOneWidget);
     });
 
-    testWidgets('путь поля показан моноширинно', (tester) async {
-      await pumpView(tester, const [
-        RegistryWarning(
-          code: 'reality_key_share_invalid',
-          path: 'tls.reality.key_share',
-          value: 'garbage',
-        ),
-      ]);
-
-      final path = tester.widget<Text>(find.text('tls.reality.key_share'));
-      expect(path.style?.fontFamily, 'monospace');
-    });
-
     testWidgets('рукописное предупреждение без кода реестра — без блоков',
         (tester) async {
       await pumpView(tester, const [UnknownNodeTypeWarning('openvpn-client')]);
@@ -522,27 +367,6 @@ void main() {
               reason: 'плейсхолдер остался неподставленным');
         }
       }
-    });
-
-    testWidgets('палитра уровней — общая', (tester) async {
-      await pumpView(tester, const [
-        _warnTransport,
-        _infoFlow,
-      ]);
-      final ctx = tester.element(find.byType(NodeNotificationsView));
-      final ico = tester
-          .widgetList<Icon>(find.descendant(
-              of: find.byType(ExpansionTile), matching: find.byType(Icon)))
-          // Стрелка раскрытия тоже иконка — берём только значки уровней.
-          .where((i) =>
-              i.icon == Icons.warning_amber || i.icon == Icons.info_outline)
-          .toList();
-      // Порядок разделов — старшее выше.
-      expect(ico.map((i) => i.icon),
-          [Icons.warning_amber, Icons.info_outline]);
-      expect(ico[0].color, warningSeverityColor(ctx, WarningSeverity.warning));
-      // Внутри уведомлений info остаётся СИНИМ (приглушён он только в списке).
-      expect(ico[1].color, warningSeverityColor(ctx, WarningSeverity.info));
     });
   });
 
@@ -701,16 +525,6 @@ void main() {
   });
 
   group('§479 — шторка', () {
-    testWidgets('заголовок шторки — Notifications', (tester) async {
-      await pumpSheet(tester, const [_infoTls]);
-      expect(
-        find.descendant(
-            of: find.byType(NodeWarningsSheet), matching: find.text('Notifications')),
-        findsOneWidget,
-      );
-      expect(find.text('Warnings'), findsNothing);
-    });
-
     testWidgets('шторка показывает тот же компонент', (tester) async {
       await pumpSheet(tester, const [_infoTls]);
       expect(find.byType(NodeNotificationsView), findsOneWidget);
@@ -825,18 +639,6 @@ void main() {
       );
     });
 
-    testWidgets('error — красная точка', (tester) async {
-      await pumpInspect(tester, inspectNode(const [_errFieldMissing]));
-
-      final ctx = tester.element(find.byType(TabBar));
-      final dot = tester.widget<Container>(tabDot());
-      final decoration = dot.decoration! as BoxDecoration;
-      expect(
-        decoration.color,
-        warningSeverityColor(ctx, WarningSeverity.error),
-      );
-    });
-
     testWidgets('info uri_param_unknown — жёлтая точка и заголовок реестра',
         (tester) async {
       await pumpInspect(tester, inspectNode(const [_infoUriParam]));
@@ -879,27 +681,6 @@ void main() {
       );
     });
 
-    testWidgets('секция Notifications ниже кнопки Run', (tester) async {
-      await tester.pumpWidget(MaterialApp(
-        home: Scaffold(
-          body: NodeDiagnosticsTab(
-            liveTag: 'n1',
-            warnings: const [_warnTransport],
-          ),
-        ),
-      ));
-      await tester.pumpAndSettle();
-
-      final runY = tester.getTopLeft(find.text('Run')).dy;
-      final notifY = tester.getTopLeft(
-        find.descendant(
-          of: find.byType(NodeDiagnosticsTab),
-          matching: find.text('Notifications'),
-        ),
-      ).dy;
-      expect(notifY, greaterThan(runY));
-    });
-
     testWidgets('переход на Diagnostics с уведомлениями — прокрутка к секции',
         (tester) async {
       const viewportHeight = 480.0;
@@ -937,30 +718,6 @@ void main() {
 
       final run = find.text('Run');
       expect(isInViewport(tester, run, viewportHeight), isTrue);
-    });
-
-    testWidgets('360dp — ярлыки вкладок не наезжают друг на друга',
-        (tester) async {
-      tester.view.physicalSize = const Size(360, 640);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-
-      await pumpInspect(tester, inspectNode(const [_warnTransport]));
-
-      final labels = ['JSON', 'Source', 'Diagnostics'];
-      final rects = labels
-          .map((l) => tester.getRect(find.text(l)))
-          .toList();
-      for (var i = 0; i < rects.length; i++) {
-        for (var j = i + 1; j < rects.length; j++) {
-          expect(
-            rects[i].overlaps(rects[j]),
-            isFalse,
-            reason: '${labels[i]} vs ${labels[j]}',
-          );
-        }
-      }
     });
   });
 

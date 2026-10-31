@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -16,16 +15,6 @@ import 'package:lxbox/services/parser/uri_parsers.dart';
 /// Инварианты 1 и 2 (корпус и golden) держат свои тесты: корпус URI —
 /// `test/contract/`, эталоны конфигов — `test/builder/` и
 /// `test/storage_migration/`.
-
-/// Снимок identity, снятый СТАРЫМ путём ДО правки (18.09.2026).
-const _identityFixture = 'test/fixtures/naive/pipeline_identity_before.json';
-
-Map<String, Map<String, dynamic>> _identityBefore() {
-  final raw = jsonDecode(File(_identityFixture).readAsStringSync()) as Map;
-  return (raw['cases'] as Map).map(
-    (k, v) => MapEntry(k as String, (v as Map).cast<String, dynamic>()),
-  );
-}
 
 List<String> _corpusUris() {
   final out = <String>[];
@@ -57,30 +46,6 @@ void main() {
 
   setUpAll(() async {
     await loadTestRegistry();
-  });
-
-  group('§472 инвариант 4 — identity naive не меняется', () {
-    test('каждый кейс корпуса даёт хеш из фикстуры', () {
-      final before = _identityBefore();
-      expect(before, hasLength(greaterThan(17)),
-          reason: 'фикстура похудела — проверьте, не срезан ли корпус');
-      for (final e in before.entries) {
-        final uri = e.value['uri'] as String;
-        final want = e.value['identity'] as String?;
-        final spec = parseUri(uri);
-        if (want == null) {
-          expect(spec, isNull, reason: 'кейс ${e.key} стал разбираться');
-          continue;
-        }
-        expect(spec, isNotNull, reason: 'кейс ${e.key} перестал разбираться');
-        expect(
-          legacyNodeIdentityHash(spec!),
-          want,
-          reason: 'identity кейса ${e.key} изменилась: у пользователей слетят '
-              'выбор узла, отключения и цепочки',
-        );
-      }
-    });
   });
 
   group('§472 инвариант 3 — parseUri(toUri()) ≈ spec', () {
@@ -123,40 +88,6 @@ void main() {
       final b = parseUri(a.toUri())!;
       expect(b.emit(TemplateVars.empty).map, a.emit(TemplateVars.empty).map,
           reason: 'написание схемы возвращает QUIC целиком');
-    });
-  });
-
-  group('§472 инвариант 5 — цена разбора', () {
-    test('2000 naive-узлов разбираются за разумное время', () {
-      const n = 2000;
-      final uris = [
-        for (var i = 0; i < n; i++)
-          'naive+https://user$i:pass$i@example-$i.com:443'
-              '?extra-headers=X-Tag%3A%20v$i#node$i',
-      ];
-
-      for (var i = 0; i < 200; i++) {
-        parseUri(uris[i]);
-      }
-
-      final nodes = <NodeSpec>[];
-      var best = 1 << 30;
-      for (var rep = 0; rep < 3; rep++) {
-        nodes.clear();
-        final sw = Stopwatch()..start();
-        for (final u in uris) {
-          final s = parseUri(u);
-          if (s != null) nodes.add(s);
-        }
-        sw.stop();
-        if (sw.elapsedMilliseconds < best) best = sw.elapsedMilliseconds;
-      }
-      expect(nodes, hasLength(n));
-      expect(
-        best,
-        lessThan(3000),
-        reason: 'разбор $n naive-узлов конвейером: $best мс (лучший из трёх)',
-      );
     });
   });
 

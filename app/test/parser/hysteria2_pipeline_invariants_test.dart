@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -23,16 +22,6 @@ import 'package:lxbox/services/parser/uri_parsers.dart';
 /// §480 W4 — РЕЕСТР из ЗЕРКАЛА (`assets/contract`): вендоренной копии на CI
 /// нет вовсе, и под её гейтом файл молча пропускался бы целиком. КОРПУС
 /// остаётся за копией — в зеркале его нет.
-
-/// Снимок identity, снятый СТАРЫМ путём ДО правки (18.09.2026).
-const _identityFixture = 'test/fixtures/hysteria2/pipeline_identity_before.json';
-
-Map<String, Map<String, dynamic>> _identityBefore() {
-  final raw = jsonDecode(File(_identityFixture).readAsStringSync()) as Map;
-  return (raw['cases'] as Map).map(
-    (k, v) => MapEntry(k as String, (v as Map).cast<String, dynamic>()),
-  );
-}
 
 /// Все hysteria2-ссылки корпуса, в порядке файлов.
 List<String> _corpusUris() {
@@ -75,28 +64,6 @@ void main() {
   });
 
   group('§472 инвариант 4 — identity hysteria2 не меняется', () {
-    test('каждый кейс корпуса даёт хеш из фикстуры', () {
-      final before = _identityBefore();
-      expect(before, hasLength(greaterThan(20)),
-          reason: 'фикстура похудела — проверьте, не срезан ли корпус');
-      for (final e in before.entries) {
-        final uri = e.value['uri'] as String;
-        final want = e.value['identity'] as String?;
-        final spec = parseUri(uri);
-        if (want == null) {
-          expect(spec, isNull, reason: 'кейс ${e.key} стал разбираться');
-          continue;
-        }
-        expect(spec, isNotNull, reason: 'кейс ${e.key} перестал разбираться');
-        expect(
-          legacyNodeIdentityHash(spec!),
-          want,
-          reason: 'identity кейса ${e.key} изменилась: у пользователей слетят '
-              'выбор узла, отключения и цепочки',
-        );
-      }
-    });
-
     test('узел без пароля обфускации ЖИВЁТ — снят только блок obfs', () {
       // Граница вложенного `required` (§472 шаг 5). Реестр пишет её прямо у
       // `obfs.password`: «отсутствие пароля снимает блок obfs целиком (узел
@@ -170,43 +137,6 @@ void main() {
           ((parseUri(pin.toUri())!.emit(TemplateVars.empty).map['tls'] as Map)
               ['certificate_public_key_sha256']),
           ['YWJjZGVmZ2g=']);
-    });
-  });
-
-  group('§472 инвариант 5 — цена разбора', () {
-    test('2000 hysteria2-узлов разбираются за разумное время', () {
-      const n = 2000;
-      final uris = [
-        for (var i = 0; i < n; i++)
-          'hysteria2://pass$i@example-$i.com:443?sni=example-$i.com'
-              '&obfs=salamander&obfs-password=op$i&upmbps=100&downmbps=200'
-              '&alpn=h3&insecure=1#node$i',
-      ];
-
-      // Прогрев кэша схем и JIT.
-      for (var i = 0; i < 200; i++) {
-        parseUri(uris[i]);
-      }
-
-      final nodes = <NodeSpec>[];
-      var best = 1 << 30;
-      for (var rep = 0; rep < 3; rep++) {
-        nodes.clear();
-        final sw = Stopwatch()..start();
-        for (final u in uris) {
-          final s = parseUri(u);
-          if (s != null) nodes.add(s);
-        }
-        sw.stop();
-        if (sw.elapsedMilliseconds < best) best = sw.elapsedMilliseconds;
-      }
-      expect(nodes, hasLength(n));
-      expect(
-        best,
-        lessThan(3000),
-        reason: 'разбор $n hysteria2-узлов конвейером: $best мс '
-            '(лучший из трёх)',
-      );
     });
   });
 

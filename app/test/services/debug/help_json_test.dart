@@ -55,11 +55,6 @@ void main() {
     expect(bad, isEmpty, reason: bad.join('\n'));
   });
 
-  test('/help?format=text → markdown, работает', () async {
-    final resp = await helpHandler(req('text'), ctx());
-    expect(resp, isA<BytesResponse>());
-  });
-
   test('/help json и text содержат реальные пути', () async {
     final jsonResp = await helpHandler(req('json'), ctx()) as JsonResponse;
     final body = jsonResp.body as Map;

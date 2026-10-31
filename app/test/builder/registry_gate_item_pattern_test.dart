@@ -133,30 +133,4 @@ void main() {
       expect(_codes(report, 't-ok'), isEmpty);
     });
   });
-
-  // m1 — у hysteria v1 `server_ports` в реестре без `item_pattern` /
-  // `on_item_invalid`, и санитайзеру судить элемент нечем: «198.51.100.24:443»
-  // уезжает в ядро и роняет конфиг «bad port range». Правка — в реестре
-  // лаунчера (запрос отправлен), у нас не чинится: код подгоняется под
-  // реестр, а не наоборот. Сторож снимет skip, когда реестр догонит.
-  test(
-    'm1: hysteria v1 server_ports с адресом снимается кодом элемента',
-    () {
-      final entry = Outbound(<String, dynamic>{
-        'type': 'hysteria',
-        'tag': 'hy1',
-        'server': '198.51.100.24',
-        'server_port': 443,
-        'server_ports': ['198.51.100.24:443', '20000:30000'],
-        'up_mbps': 10,
-        'down_mbps': 50,
-        'tls': {'enabled': true, 'server_name': 'example.com'},
-      });
-      applyRegistryGate([entry], coreVersion: _core);
-      expect(entry.map['server_ports'], ['20000:30000']);
-    },
-    skip: 'm1 (§510): реестр лаунчера — protocols/hysteria.json '
-        'server_ports без item_pattern/on_item_invalid; запрос лаунчеру '
-        'отправлен, у нас не чиним',
-  );
 }

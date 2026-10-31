@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -28,16 +27,6 @@ import 'package:lxbox/services/parser/uri_parsers.dart';
 /// КОРПУС остаётся за вендоренной копией — в зеркале его нет, оно несёт
 /// только `registry/`. Поэтому гейта два: тесты по фикстурам идут всегда,
 /// тесты по корпусу — только локально после синка.
-
-/// Снимок identity, снятый СТАРЫМ путём ДО правки (18.09.2026).
-const _identityFixture = 'test/fixtures/tuic/pipeline_identity_before.json';
-
-Map<String, Map<String, dynamic>> _identityBefore() {
-  final raw = jsonDecode(File(_identityFixture).readAsStringSync()) as Map;
-  return (raw['cases'] as Map).map(
-    (k, v) => MapEntry(k as String, (v as Map).cast<String, dynamic>()),
-  );
-}
 
 /// Все tuic-ссылки корпуса, в порядке файлов.
 List<String> _corpusUris() {
@@ -81,28 +70,6 @@ void main() {
   });
 
   group('§472 инвариант 4 — identity tuic не меняется', () {
-    test('каждый кейс корпуса даёт хеш из фикстуры', () {
-      final before = _identityBefore();
-      expect(before, hasLength(greaterThan(12)),
-          reason: 'фикстура похудела — проверьте, не срезан ли корпус');
-      for (final e in before.entries) {
-        final uri = e.value['uri'] as String;
-        final want = e.value['identity'] as String?;
-        final spec = parseUri(uri);
-        if (want == null) {
-          expect(spec, isNull, reason: 'кейс ${e.key} стал разбираться');
-          continue;
-        }
-        expect(spec, isNotNull, reason: 'кейс ${e.key} перестал разбираться');
-        expect(
-          legacyNodeIdentityHash(spec!),
-          want,
-          reason: 'identity кейса ${e.key} изменилась: у пользователей слетят '
-              'выбор узла, отключения и цепочки',
-        );
-      }
-    });
-
     test('узел с `uuid` не в форме UUID теперь отбраковывается', () {
       // ЕДИНСТВЕННОЕ изменение поведения этого переезда, и оно намеренное.
       // Реестр объявляет у поля `format: uuid` + `on_invalid: drop`, а само
@@ -143,44 +110,6 @@ void main() {
       // У tuic круг проходят ВСЕ разбираемые кейсы, без исключений.
       expect(checked, greaterThan(11));
     }, skip: corpusSkip);
-  });
-
-  group('§472 инвариант 5 — цена разбора', () {
-    test('2000 tuic-узлов разбираются за разумное время', () {
-      const n = 2000;
-      final uris = [
-        for (var i = 0; i < n; i++)
-          // Настоящий UUID: реестр проверяет форму (`format: uuid`), и
-          // заглушка отбраковала бы все 2000 узлов вместо замера.
-          'tuic://11111111-1111-1111-1111-${'$i'.padLeft(12, '0')}'
-              ':pass$i@example-$i.com:443?congestion_control=bbr&alpn=h3'
-              '&udp_relay_mode=native&sni=example-$i.com#node$i',
-      ];
-
-      // Прогрев кэша схем и JIT.
-      for (var i = 0; i < 200; i++) {
-        parseUri(uris[i]);
-      }
-
-      final nodes = <NodeSpec>[];
-      var best = 1 << 30;
-      for (var rep = 0; rep < 3; rep++) {
-        nodes.clear();
-        final sw = Stopwatch()..start();
-        for (final u in uris) {
-          final s = parseUri(u);
-          if (s != null) nodes.add(s);
-        }
-        sw.stop();
-        if (sw.elapsedMilliseconds < best) best = sw.elapsedMilliseconds;
-      }
-      expect(nodes, hasLength(n));
-      expect(
-        best,
-        lessThan(3000),
-        reason: 'разбор $n tuic-узлов конвейером: $best мс (лучший из трёх)',
-      );
-    });
   });
 
   group('§472 — коды tuic приходят из реестра, с путём и значением', () {

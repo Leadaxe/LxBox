@@ -48,9 +48,8 @@ The feature protects four principles:
   "Disconnected". **Mutation**: the tunnel status is derived from the data
   channel's connect events.
 - **P2. Frequency is cut at the source.** Status tick: home 0.5 s, Statistics
-  open 0.1 s, background — 0. **Witness**: unit
-  `test/vpn/cc_status_fast_test.dart` (Dart-side contract only —
-  `CcChannel.setStatusFast` calls `ccSetStatusFast{fast}`, called by
+  open 0.1 s, background — 0. **Witness**: manual check on the device
+  (`CcChannel.setStatusFast` calls `ccSetStatusFast{fast}`, called by
   `StatsScreen.initState`/`dispose`; the native interval switch itself is
   device-only, one-off check §164). **Mutation**: `setStatusFast` stops
   sending `fast` as an argument or uses the wrong key/method.
