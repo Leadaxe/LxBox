@@ -25,7 +25,7 @@ flutter run   # Android device or emulator
 
 ### Local release build
 
-The script [`scripts/build-local-apk.sh`](../scripts/build-local-apk.sh) is the canonical way to produce a local release APK (minimal, arm64-only):
+The script [`scripts/build-local-apk.sh`](../scripts/build-local-apk.sh) is the canonical way to produce a local release APK (minimal, arm64-only). For an APK of what is already pushed, [`scripts/ci-build-apk.sh`](#a-quick-apk-from-ci-build-fast) is usually faster (CI, one ABI, no checks):
 
 ```bash
 ./scripts/build-local-apk.sh
@@ -207,6 +207,49 @@ gh workflow run CI -f run_mode=checks   # ✓ analyze + test
 gh workflow run CI -f run_mode=build    # ○ + APK in artifacts
 gh workflow run CI --ref develop -f run_mode=build-fast -f abi=arm64-v8a   # ○ one APK, no checks (own concurrency group: does not cancel the push run)
 ```
+
+### A quick APK from CI (`build-fast`)
+
+The fastest way to get an APK of what is pushed: one script, one ABI, no checks.
+
+```bash
+./scripts/ci-build-apk.sh                  # arm64-v8a from develop
+./scripts/ci-build-apk.sh x86_64           # emulator / Chromebook
+./scripts/ci-build-apk.sh arm64-v8a build/my-branch
+```
+
+[`scripts/ci-build-apk.sh`](../scripts/ci-build-apk.sh) `[abi] [ref]` starts
+`ci.yml` with `run_mode=build-fast -f abi=<abi>` on `ref` (default `develop`),
+waits for the run and downloads the APK into `app/build/ci-apk/<run id>/`.
+By hand it is the same as:
+
+```bash
+gh workflow run ci.yml --ref develop -f run_mode=build-fast -f abi=arm64-v8a
+```
+
+then `gh run watch <id>` and `gh run download <id> -n android-apks-release`.
+
+- **What is built** is the state of `ref` on GitHub, not the local tree:
+  push first.
+- **`abi`**: `arm64-v8a` (default, phones), `armeabi-v7a` (old and budget
+  phones), `x86_64` (emulator, Chromebook), `universal` (all three in one
+  APK). The file is named after it: `app-<abi>-release.apk`.
+- **Skipped**: `checks`, `public-subs`, the other ABIs, the AAB. `GooglePlay`,
+  `Create Release` and `Publish docs/latest.json` stay in the graph but are
+  skipped as on any build without a tag (`is_release=false`): nothing reaches
+  Play or Releases.
+- **Concurrency**: `build-fast` has its own group
+  (`ci-CI-<ref>-fast`), so it can run on `develop` without cancelling the push
+  checks there, and they do not cancel it. Two `build-fast` runs on one ref
+  cancel each other — the last one stays.
+- **Version**: the same as `run_mode=build` — `X.Y.Z-dev.<commits since the
+  tag>`, versionCode of the last release (§186), so `adb install -r` goes over
+  a release build and back. Signed with the release key, like every CI build.
+- Time: about 2 min of setup (Java, Flutter, the core AAR) plus one
+  `flutter build apk`, against four builds and an AAB after the full test
+  suite for `run_mode=build`. On a slow link to GitHub it is also faster than
+  [the local build](#local-release-build): the 120 MB core AAR is fetched on
+  the runner, not here.
 
 The `android` job builds **release** APKs only: universal (fat, all ABIs) plus three per-ABI ones, one run per target (§379: `--split-per-abi` was removed because it broke the versionCode scheme). CI does not build debug APKs. Before building, the `Fetch sing-box-lx core` step downloads the fork core at the pin in `app/android/libbox.version` (see [“The sing-box-lx core”](#the-sing-box-lx-core-libbox)).
 
