@@ -399,7 +399,7 @@ List<Map<String, dynamic>> resolveDnsServersBodies({
 /// реферимая активным пресетом или правилом с DNS-опцией (force-include,
 /// locked №7). Один критерий для сборки и превью редактора.
 ///
-/// §701 — [required]: `required: true` у обёртки шаблонного сервера
+/// §699 — [required]: `required: true` у обёртки шаблонного сервера
 /// (контракт, корпус `dns/required_ignores_state`, BACKUP.md §9 п. 5) —
 /// эмитится и при `enabled: false` в состоянии.
 bool dnsServerRefEmitted({
