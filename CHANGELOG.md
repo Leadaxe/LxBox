@@ -8,21 +8,6 @@
 
 ## [Unreleased]
 
-### Changed
-
-- **Memory limit: Auto no longer sets a threshold
-  ([task 705](docs/spec/tasks/705-memory-limit-auto-off.md)).** The core
-  compares the limit with the memory of the whole app process, which it
-  shares with the interface and the loaded libraries, so a cap sized to the
-  phone's RAM was tripped right at start and only made the garbage collector
-  heat the phone. Auto now leaves the cap off and lets the core watch the
-  system's free memory instead; the Off option is folded into Auto. The
-  200–768 MB presets stay for an explicit choice, and the hint says what the
-  number is compared with. A value chosen earlier is kept as is. With core
-  lx.29 the limit is compared with the core's own memory rather than the
-  whole process; Statistics → Memory shows it as Core memory next to the
-  process RSS.
-
 ## [2.25.19] — 2026-11-01
 
 ### Added
