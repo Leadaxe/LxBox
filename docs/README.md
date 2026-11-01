@@ -49,11 +49,12 @@ hand”. Both describe the same operations from opposite sides.
 | [DIAGNOSTICS.md](DIAGNOSTICS.md) | The on-device diagnostics playbook: Debug API plus CommandClient/profiler endpoints, TCP/DNS analysis, `scripts/lxbox-diag.sh` |
 | [l10n.md](l10n.md) | Localization (§279/§285): natural keys, the dictionary format, adding a language, the checkers |
 | [USER_GUIDE.md](USER_GUIDE.md) · [RU](USER_GUIDE.ru.md) | User guide — how it all works: the stages traffic goes through, directions, chains of hops, detour, DNS, recipes, regex |
-| [ADVANCED_USER_GUIDE.md](ADVANCED_USER_GUIDE.md) · [RU](ADVANCED_USER_GUIDE.ru.md) | Advanced user guide — mixins (stored edits of the built config, step by step), manual config edits and Lock config, Raw JSON rules, import rules, Debug API, Automation API |
+| [ADVANCED_USER_GUIDE.md](ADVANCED_USER_GUIDE.md) · [RU](ADVANCED_USER_GUIDE.ru.md) | Advanced user guide — mixins (the Mixins tab and the form, step by step), manual config edits and Lock config, Raw JSON rules, import rules, Debug API, Automation API |
+| [MIXINS.md](MIXINS.md) · [RU](MIXINS.ru.md) | Mixins reference — the record format, the path language, the seven actions, examples, error texts, limits and the `/mixins` Debug API routes |
 | [DONATE.md](DONATE.md) · [RU](DONATE.ru.md) | Supporting the project (§362): crypto, and how to help without money. The in-app popup is sourced from `app/assets/donate.json` |
 
-> **RU/EN pairing (§360).** Seven documents are kept as pairs: README, USER_GUIDE,
-> ADVANCED_USER_GUIDE, DONATE, PRIVACY_POLICY, SECURITY and AUTOMATION. The translation is named
+> **RU/EN pairing (§360).** Eight documents are kept as pairs: README, USER_GUIDE,
+> ADVANCED_USER_GUIDE, MIXINS, DONATE, PRIVACY_POLICY, SECURITY and AUTOMATION. The translation is named
 > `X.ru.md`. On every push and PR, CI compares the pair's skeleton — the number
 > and levels of sections, and the code blocks: a section added in one language
 > only fails the “Docs parity” step. Locally: `dart run

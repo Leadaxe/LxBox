@@ -10,6 +10,7 @@ inbound, a rule, a field on a group of outbounds) without pinning the config.
 |-------|-------|
 | Feature | [019-CONFIG_EDITOR](../FEATURE.md) |
 | Promises | P12 |
+| User reference | [docs/MIXINS.md](../../../../MIXINS.md) |
 | State | ✅ written from code, 2026-11-01 |
 
 ## What it does
