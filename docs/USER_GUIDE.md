@@ -26,7 +26,7 @@ code — about the logic and the order in which to set things up.
   - [The subscription screen has four tabs: Nodes, Settings, Source, Filters](#the-subscription-screen-has-four-tabs-nodes-settings-source-filters)
   - [Replace with a group folds a subscription or folder into one group](#replace-with-a-group-folds-a-subscription-or-folder-into-one-group)
 - [2. Directions sets the exits](#2-directions-sets-the-exits)
-  - [Interrupt connections on switch — three switches for three events](#interrupt-connections-on-switch--three-switches-for-three-events)
+  - [Interrupt connections on switch — two checkboxes for two events](#interrupt-connections-on-switch--two-checkboxes-for-two-events)
 - [3. Rules sets exceptions and the default exit](#3-rules-sets-exceptions-and-the-default-exit)
   - [Presets — a catalog of ready-made rules to copy into Rules](#presets--a-catalog-of-ready-made-rules-to-copy-into-rules)
   - [A rule can assign a DNS server to its own domains](#a-rule-can-assign-a-dns-server-to-its-own-domains)
@@ -350,8 +350,8 @@ in one of three ways:
 The Mode field sets the selection mode; in Load balance mode, Sticky session
 by appears below it — session stickiness. The test interval and the
 Interrupt connections on switch checkbox sit in the Advanced section. The
-app has three checkboxes with that name; which one fires when is covered in
-[Directions](#interrupt-connections-on-switch--three-switches-for-three-events).
+app has two checkboxes with that name; which one fires when is covered in
+[Directions](#interrupt-connections-on-switch--two-checkboxes-for-two-events).
 
 A server switched off in the folder stays in the preview with the ⏻ icon
 and is not counted: `5 of 6 servers · 1 off`. In Pick you can tick it; it
@@ -524,7 +524,7 @@ one choice in the direction.
 
 Section [2. Directions](#2-directions-sets-the-exits)
 describes the auto-selection modes, and section
-[Interrupt connections on switch](#interrupt-connections-on-switch--three-switches-for-three-events)
+[Interrupt connections on switch](#interrupt-connections-on-switch--two-checkboxes-for-two-events)
 describes the Interrupt connections on switch box. The group's
 auto-selection leaves out the provider's auto nodes from the same
 subscription; manual selection lists them. Detour links of the source join
@@ -645,7 +645,7 @@ one includes, and everything over it. A drop there changes nothing and shows
 a hint such as `Cannot move: "Streaming" includes "Germany"`. The Debug API
 refuses such an order the same way, with code 409.
 
-### Interrupt connections on switch — three switches for three events
+### Interrupt connections on switch — two checkboxes for two events
 
 To move open connections to the new server as soon as the node changes, turn
 on **Interrupt connections on switch**. Without this option, open connections
@@ -653,24 +653,25 @@ keep running through the old server until they close on their own: a download
 finishes through the same exit, a messenger's long-lived socket stays where it
 is. Usually that is what you want.
 
-The option exists in three places, and each one answers its own event:
+The option exists in two places, and each one answers its own event:
 
 | Where | What it reacts to | How it works |
 |---|---|---|
-| VPN Settings → System → Interrupt connections on switch (off by default) | You tap a node on the home screen | The app closes the open connections of the switched direction. Nothing goes into the config; switches made by the core stay uncovered. |
-| Direction editor → Behavior (on by default) | The direction's choice changes from any source: a tap, Quick connect, an automation action, the API | Goes into the direction in the config; the core drops the connections. |
+| Direction editor → Behavior (on by default) | The direction's choice changes from any source: a tap on a node on the home screen, Quick connect, an automation action, the API | Goes into the direction in the config; the core drops the connections. |
 | Direction editor → Include auto (urltest), and the same box in an [auto node](#auto-node--one-list-entry-with-a-pool-of-servers-inside) (off by default) | The auto group changes node by itself: a faster node appeared or the current one failed | Goes into the auto group in the config; the core drops the connections. |
 
 From the table:
 
-- for a manual node change inside a direction, the first two switches
-  duplicate each other; either one is enough;
-- for an automatic change, only the third one works;
-- to drop connections in every case, turn on all three.
+- for a manual node change inside a direction, the first checkbox works;
+- for an automatic change, only the second one works;
+- to drop connections in both cases, turn on both.
 
-The VPN Settings switch is one for the whole app; each direction and auto node
-has its own copy of the other two. You can keep a work direction gentle and
-make a streaming one strict.
+Each direction and auto node has its own copy of these checkboxes. You can
+keep a work direction gentle and make a streaming one strict.
+
+Earlier versions also had a switch in VPN Settings → System. It duplicated the
+direction checkbox and is gone. If it was on, the update turns the checkbox on
+in every direction where it was off.
 
 ---
 
@@ -1323,7 +1324,7 @@ named under each group below. Changes take effect at different times:
 
 | What you changed | When it applies |
 |---|---|
-| Interrupt connections on switch, Memory limit, Keep VPN on exit | Immediately |
+| Memory limit, Keep VPN on exit | Immediately |
 | WireGuard connections, the Core tab, local proxy options, System HTTP proxy | After a VPN restart. These changes alter the config, and while the VPN runs the home screen shows the banner `Config changed — restart VPN to apply`. |
 | Tunnel sleep mode, Allow VPN bypass | After a VPN restart that you make yourself: the home screen shows the same banner, but Auto-restart VPN on settings change does not apply these settings. |
 
@@ -1334,11 +1335,8 @@ running VPN itself whenever the new config differs from the running one.
 ### System controls tunnel sleep and core memory
 
 The **System** tab decides how much of the phone's resources the VPN spends
-while traffic is low or absent. Where: VPN Settings → System. The top of the
-tab holds the Interrupt connections on switch switch; what it does and how it
-differs from the switches of the same name in a direction is described in
-[Interrupt connections on switch](#interrupt-connections-on-switch--three-switches-for-three-events).
-Below it are the WireGuard connections and Optimization groups.
+while traffic is low or absent. Where: VPN Settings → System. The tab holds
+two groups: WireGuard connections and Optimization.
 
 #### WireGuard connections puts idle WireGuard tunnels to sleep
 
@@ -1839,10 +1837,9 @@ Tunnel apps → Off; Default traffic = VPN; two rules in Rules: ads → Block,
 **After a node switch, a download or call keeps going through the old server.**
 Open connections stay on the server where they started until they close. To
 make a node switch break them, turn on **Interrupt connections on switch**.
-There are three switches: in VPN Settings → System for your own taps, in a
-direction for any switch, in an auto group for automatic switches. Which one to
-turn on is in the
-[Directions](#interrupt-connections-on-switch--three-switches-for-three-events)
+There are two checkboxes: in a direction for any switch, in an auto group for
+automatic switches. Which one to turn on is in the
+[Directions](#interrupt-connections-on-switch--two-checkboxes-for-two-events)
 section.
 
 **DNS queries are visible to the ISP or bypass the VPN.**
@@ -2461,7 +2458,7 @@ check box. Where: Backup & restore → Export.
 |---|---|---|
 | Server lists | Subscriptions, folders, standalone servers, hop chains. The file holds no subscription nodes: subscriptions download again. | On |
 | Routing | Rules, directions, Default traffic, Tunnel apps, operating mode (Mode), DNS settings, WireGuard connections parameters. | On |
-| App settings | App settings and VPN Settings values, ping parameters, subscription auto-update, Wi-Fi network history, WARP accounts, Interrupt connections on switch, node order. | On |
+| App settings | App settings and VPN Settings values, ping parameters, subscription auto-update, Wi-Fi network history, WARP accounts, node order. | On |
 | VPN system toggles | Autostart, Keep on exit, background mode, Allow VPN bypass, Auto redirect, Memory limit, the core log and its verbose levels. | On |
 | Debug API config | Debug API settings together with the access token. | Off |
 

@@ -23,7 +23,6 @@ connection went, and highlights hung ones.
 | Knob | Values | Default |
 |------|--------|---------|
 | Keeping closed ones | "Closed kept 30s" / "Keeping all closed" | 30 s; not saved |
-| Interrupt connections on switch (010) | on/off | off |
 
 ## Inputs / Outputs
 
@@ -65,10 +64,11 @@ route, traffic, time, app), a tap copies the value, "Copy JSON", "Close".
 - "Close all" immediately marks live ones as closed without waiting for the
   core; snackbar — "Closed N connections" / "No active connections to close" /
   "Failed to close connections (tunnel down?)".
-- Breaking on node switch: after a successful node selection, with the setting
-  on, live connections whose chain contains the group being switched are closed
-  (no longer than 5 s, errors of individual closes are ignored). Choosing the
-  already active node breaks nothing.
+- Breaking on node switch is done by the core, not by this screen: with the
+  Direction flag `interrupt_exist_connections` on, it closes the connections of
+  the switched Direction on any selection change; the application closes
+  nothing and only shows them as closed. Choosing the already active node
+  breaks nothing.
 - The list is redrawn at most once per 0.7 s; closes are accounted for on every
   snapshot.
 
@@ -77,7 +77,8 @@ route, traffic, time, app), a tap copies the value, "Copy JSON", "Close".
 - The screen lives inside Statistics; there is no separate screen.
 - History longer than the core's window (5 min) is not stored; accumulating
   "all" — only while the screen is open.
-- The break setting and the node selection itself — 010-VPN_SERVICE /
+- The Direction flag that breaks connections on switch —
+  [026-DIRECTIONS](../../026-DIRECTIONS/FEATURE.md); the node selection itself —
   007-NODE_LIST.
 
 ## Revisions
@@ -85,7 +86,7 @@ route, traffic, time, app), a tap copies the value, "Copy JSON", "Close".
 | # | Revision | Status | Essence |
 |---|----------|--------|---------|
 | 1 | [016F](../../../tasks/016F-statistics-and-connections/spec.md) | Implemented | Live list, closing one and all |
-| 2 | [143](../../../tasks/143-interrupt-connections-on-node-switch.md) | Implemented | Breaking the group's connections on node switch |
+| 2 | [143](../../../tasks/143-interrupt-connections-on-node-switch.md) | Removed 2026-11-01 (§9) | Breaking the group's connections on node switch |
 | 3 | [152](../../../tasks/152-conn-detail-sheet.md) | Done | Connection details sheet |
 | 4 | [153](../../../tasks/153-oneway-conn-highlight.md) | Done | Highlighting one-sided TCP |
 | 5 | [154](../../../tasks/154-conn-app-icon-and-i18n.md) | Done | App icon in the row |

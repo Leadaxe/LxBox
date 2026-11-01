@@ -110,7 +110,7 @@ lxbox_settings.json                          # SettingsStorage (Dart), the main 
 ├─ last_global_update            ISO-8601      LEGACY (§593) — neither written nor read; kept known for old files
 ├─ presets_migrated              bool          §159 — the "default presets have been seeded" guard (fresh-install seed)
 ├─ late_presets_seeded           List<String>  §578 — late default presets already seeded once (e.g. tailscale)
-├─ interrupt_connections_on_switch  bool       §143 — tear down the switched group's connections when the node changes (default false, NOT config-significant)
+├─ interrupt_connections_on_switch  bool       LEGACY (§143 §9) — removed toggle; the startup migration moves it into directions[] and deletes it
 ├─ node_sort_mode                string        §100 — the chosen node sort mode ('' means the template default)
 ├─ node_manual_order[]           list          §100 — the manual order of node tags (for mode=manual)
 ├─ profiler_retention_sec        int           §044 — the profiler's live-journal window, default 600 (10 min); NOT config-significant
@@ -216,7 +216,6 @@ Android SharedPreferences:
   "last_global_update": "ISO-8601",// LEGACY (§593) — present only in old files
   "presets_migrated":   true,      // §159 — the "defaults seeded" guard (fresh-install seed)
   "late_presets_seeded": [ "tailscale" ], // §578 — late default presets seeded once
-  "interrupt_connections_on_switch": false, // §143 — tear down the group's conns on a node switch (NOT config-significant)
   "node_sort_mode":     "",        // §100
   "node_manual_order":  [ … ],     // §100
   "profiler_retention_sec": 600,   // §044 — the profiler's live-journal window (NOT config-significant)
@@ -1731,7 +1730,7 @@ with a warning. A legacy 0.12 file carries a root `chains[]` section (contract 0
 | `last_global_update` | `String` (ISO-8601) | **LEGACY** (§593) — once the timestamp of the last global subscription refresh (§010F). The app neither writes nor reads it any more; it stays in the import allowlist so that an old storage file or backup carrying it is accepted without an “unknown keys” warning. |
 | `presets_migrated` | `bool` | §159 — the “default presets have been seeded” guard (the fresh-install seed). The key's name is historical (it used to drive a legacy migration) and was reused so that users who had already migrated would not be seeded twice. `SettingsStorage.seedDefaultPresets` sets it to true (§644): the seed runs at app start, before every config build and on the Routing screen, so a Connect before the first Routing visit already gets the `default: true` presets; a preset already in `rules` is not duplicated. |
 | `late_presets_seeded` | `List<String>` | §578 — the ids from `kLateDefaultPresetIds` (today `tailscale`) for which the one-time step `SettingsStorage.seedLateDefaultPresets` has run. The step adds a preset the template declares `default: true` to an install that already had its defaults seeded (`presets_migrated`), enabled and with the template's `num`, then records the id here: a preset the user deleted does not come back. A fresh install marks every late id as done in its first seed. The step runs before the build reads the rules and on the Routing screen. |
-| `interrupt_connections_on_switch` | `bool` | §143 — tear down the switched group's active connections when the node changes (default `false`, NOT config-significant). See `getInterruptOnSwitch` / `setInterruptOnSwitch`. |
+| `interrupt_connections_on_switch` | `bool` | **LEGACY** (§143 §9) — the removed VPN Settings → System toggle “Interrupt connections on switch”. The core drops a direction's connections on a switch by the direction's own `interrupt_exist_connections`. The one-time step `SettingsStorage.migrateInterruptOnSwitchIfNeeded` (in `main()` after the directions seed and in `BackupService.applyImport` after a restore) turns `interrupt_exist_connections` on in every direction where it is `false` when the key is `true`, then deletes the key whatever its value. The key stays in the import allowlist so that an old backup carrying it is accepted without an “unknown keys” warning. |
 | `node_sort_mode` | `String` | §100 — the chosen node sort mode. `''` means the template default. CRUD: `getNodeSort` / `setNodeSort` (written as a pair with `node_manual_order`). |
 | `node_manual_order` | `List<String>` | §100 — the manual order of node tags (relevant in manual mode). Written together with `node_sort_mode`. |
 | `profiler_retention_sec` | `int` | §044 — the retention window of the profiler's live journal (the rolling buffer), in seconds. Default `600` (10 minutes), the UI offers 60/600/3600, and valid values are `> 0`. **NOT** config-significant. CRUD: `getProfilerRetentionSec` / `setProfilerRetentionSec`. |

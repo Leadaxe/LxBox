@@ -147,6 +147,9 @@ void main() async {
     // least_test становится failover. ПОСЛЕ seed Направлений (чистая
     // установка получает failover и у засеянных) и ДО первого билда.
     await SettingsStorage.migrateUrltestModeIfNeeded();
+    // §143 §9 — one-shot: снятый тумблер interrupt-on-switch → галки
+    // Направлений. ПОСЛЕ seed Направлений и ДО первого билда.
+    await SettingsStorage.migrateInterruptOnSwitchIfNeeded();
     // §229 — вызов one-shot ремапа preset_id (§228) убран: миграция удалена,
     // отработала у всех, кто обновлялся начиная с v2.10.0.
     // §043 — pump sing-box logs из Kotlin EventChannel "lxbox/coreLog" в

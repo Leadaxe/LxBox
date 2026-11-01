@@ -76,7 +76,7 @@ const _topLevelAppKeys = {
   'late_presets_seeded', // §578 — guard разового seed поздних пресетов
   'warp_account',
   'masque_account', // §130 — MASQUE-WARP аккаунт (ECDSA-ключи + endpoint)
-  'interrupt_connections_on_switch',
+  'interrupt_connections_on_switch', // §143 §9 — LEGACY: не пишется; едет в старых бэкапах
   'node_sort_mode',
   'node_manual_order',
   'profiler_retention_sec', // §219/§221 — окно Live-журнала (был в allowlist, не в export)
@@ -543,6 +543,14 @@ class BackupService {
         );
       } catch (e) {
         errors.add('Directions migration: $e');
+      }
+
+      // §143 §9 — старый архив несёт снятый тумблер interrupt-on-switch:
+      // переносим его в галки Направлений. ПОСЛЕ посева Направлений.
+      try {
+        await SettingsStorage.migrateInterruptOnSwitchIfNeeded();
+      } catch (e) {
+        errors.add('Interrupt-on-switch migration: $e');
       }
 
       if (merge) {

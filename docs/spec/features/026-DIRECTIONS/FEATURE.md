@@ -124,12 +124,15 @@ no detour layers, no auto twins.
   **Witness:** units "a real Direction is selected — that Direction's list", "no real
   Directions — one pseudo-direction", "VPN off — NETWORKS is not shown"; the `route.final`
   fallback — `no witness`. **Mutation:** keep the vanished tag — an empty list.
-- **P17. Breaking connections on switch — only by the toggle.** With "Interrupt connections on
-  switch" on, after a node is selected the live connections of that Direction are closed; by
-  default — not. **Witness:** units "switchNode с Interrupt=on закрывает только живые
-  соединения переключаемой группы, не трогая другую", "switchNode с Interrupt=off не
-  закрывает ничего" — **покрыто 2026-09-30:** `test/controllers/interrupt_on_switch_test.dart`.
-  **Mutation:** ignore the toggle — always or never close.
+- **P17. Breaking connections on switch — by the Direction's flag, done by the core.** With the
+  Direction flag "Interrupt connections on switch" (`interrupt_exist_connections`) on — the
+  default — the core closes the live connections of that Direction on any selection change: a
+  tap on the home screen, Quick connect, automation, the Debug API; connections of other groups
+  stay. With the flag off they live on to the old node. The application closes nothing itself.
+  **Witness:** outside the application — the core (SPEC 064 of sing-box-lx, in the application
+  since 2.20.9), checked in the field on v1, 2026-08-13; the application's unit
+  `interrupt_on_switch_test.dart` was removed on 2026-11-01 together with the global toggle.
+  **Mutation:** emit the flag `false` regardless of the Direction — nothing breaks on switch.
 - **P18. A detour Direction is a permission, not a role.** In the detour picker the Directions
   section contains only enabled Directions with "Use as detour"; they also remain a legitimate
   target of rules and `route.final`; `vpn-1` is never a detour Direction, neither via the UI
@@ -180,7 +183,7 @@ Directions tab, in the editor and on the home screen; Debug API `/directions`; a
 
 **Outputs:** `outbounds[type=selector]` and `outbounds[type=urltest]` per Direction,
 `route.final`; build warnings and the "Directions without nodes" snackbar; the target pickers of
-rules, presets, DNS and detour; `SelectOutbound` and `CloseConnection` calls; one notification
+rules, presets, DNS and detour; the `SelectOutbound` call; one notification
 with the healed counters; the Debug API `healed` body.
 
 ## Who sees what
@@ -220,7 +223,7 @@ config build: reserve tags ─► filter (P12) ─► minus chains through itsel
       ─► empty → [block, direct-out] (P8) ─► default (P13) ─► twin (P11, P14, P21)
       ─► route.final (P9) ─► pre-start check
       ▼
-core groups ─► home screen dropdown (P16) ─► SelectOutbound (P15) ─► CloseConnection (P17)
+core groups ─► home screen dropdown (P16) ─► SelectOutbound (P15) ─► core interrupt (P17)
 ```
 
 ## Rules and guarantees

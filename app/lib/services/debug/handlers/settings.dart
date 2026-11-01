@@ -38,11 +38,6 @@ Future<DebugResponse> settingsHandler(DebugRequest req, DebugContext ctx) async 
       if (req.method != 'PUT') throw _methodNotAllowed(req.method, path);
       return _putRouteFinal(req, ctx);
 
-    case '/settings/interrupt_on_switch':
-      if (req.method == 'GET') return _getInterruptOnSwitch();
-      if (req.method == 'PUT') return _putInterruptOnSwitch(req);
-      throw _methodNotAllowed(req.method, path);
-
     case '/settings/node_sort':
       if (req.method == 'GET') return _getNodeSort();
       if (req.method == 'PUT') return _putNodeSort(req);
@@ -167,22 +162,6 @@ Future<DebugResponse> _putRouteFinal(DebugRequest req, DebugContext ctx) async {
 // ---------------------------------------------------------------------------
 // §163/§047 — top-level настройки без vars-доступа (нужен типизированный роут).
 // ---------------------------------------------------------------------------
-
-/// `GET /settings/interrupt_on_switch` → `{"enabled": bool}`.
-Future<DebugResponse> _getInterruptOnSwitch() async {
-  final v = await SettingsStorage.getInterruptOnSwitch();
-  return JsonResponse({'ok': true, 'enabled': v});
-}
-
-/// `PUT /settings/interrupt_on_switch` body `{"enabled": bool}`. Тугл рвёт
-/// активные соединения переключаемой группы при switchNode. НЕ config-significant.
-Future<DebugResponse> _putInterruptOnSwitch(DebugRequest req) async {
-  final body = req.jsonBodyAsMap();
-  final enabled = fieldBool(body, 'enabled');
-  if (enabled == null) throw const BadRequest('field "enabled" (bool) required');
-  await SettingsStorage.setInterruptOnSwitch(enabled);
-  return JsonResponse({'ok': true, 'action': 'settings-interrupt-on-switch', 'enabled': enabled});
-}
 
 /// `GET /settings/node_sort` → `{"mode": str, "order": [str]}`.
 Future<DebugResponse> _getNodeSort() async {

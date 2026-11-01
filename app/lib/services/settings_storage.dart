@@ -234,7 +234,7 @@ class SettingsStorage {
     //                        известен, чтобы старый бэкап не дал «unknown keys»
     'presets_migrated', // §159 — переиспользуется как «дефолты засеяны» (seed guard)
     'late_presets_seeded', // §578 — guard разового seed поздних дефолтных пресетов
-    'interrupt_connections_on_switch',
+    'interrupt_connections_on_switch', // §143 §9 — LEGACY: не пишется; старые архивы, переносится в Направления
     'node_sort_mode',
     'node_manual_order',
     'profiler_retention_sec', // §044/new-profiler — окно хранения Live-журнала
@@ -676,20 +676,14 @@ class SettingsStorage {
     await _save();
   }
 
-  // §143 — принудительно рвать активные соединения переключаемой группы при
-  // смене ноды. НЕ config-significant (поведение Clash-API клиента, не идёт в
-  // sing-box config) → без markConfigDirty. Default false (opt-in).
-  static Future<bool> getInterruptOnSwitch() async {
-    final c = await _load();
-    return c['interrupt_connections_on_switch'] == true;
-  }
-
-  static Future<void> setInterruptOnSwitch(bool value) async {
-    final c = await _load();
-    c['interrupt_connections_on_switch'] = value;
-    SettingsStorage._cache = c;
-    await _save();
-  }
+  /// §143 §9 — разовый перенос снятого тумблера «Interrupt connections on
+  /// switch» (`interrupt_connections_on_switch`) в галки Направлений. При
+  /// `true` у всех Направлений с выключенным `interrupt_exist_connections`
+  /// галка включается; ключ удаляется при любом значении. Признак — наличие
+  /// ключа. Зовётся из main() после посева Направлений и из
+  /// `BackupService.applyImport` после restore (старый архив несёт ключ).
+  static Future<void> migrateInterruptOnSwitchIfNeeded() =>
+      _migrateInterruptOnSwitchIfNeeded();
 
   /// §660 — лупа выделения в редакторе кода (sora). Одна на всё
   /// приложение. Не config-significant → без markConfigDirty. Default true.

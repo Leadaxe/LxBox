@@ -153,7 +153,6 @@ and traffic — [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.md).
 | Pin DIRECT to top / Pin AUTO to top | "Sort options" | on/off, per session | on / on |
 | Re-sort on manual ping | "Sort options" | on/off, per session | on |
 | Filters: Regex, Protocol, Sources, Settings | filter panel | see [filters](FUNCTIONS/node-filters.md) | all off, threshold "200" inactive |
-| Interrupt connections on switch | Settings | on/off | off |
 | Two columns on wide screens | App Settings → Appearance | on/off | on |
 | Folder: name, on, tag prefix, detour policy | Servers → folder → Settings | — | prefix empty |
 | Replace with a group | folder/subscription Settings | Manual · Auto · Both; name; auto parameters | off; name = source name |
@@ -168,8 +167,7 @@ test core.
 (`outbounds`, `default`, for a fold `interrupt_exist_connections: true`),
 `urltest` (the `<tag>-auto` twin), `route.final` (the starting Direction and
 the receiver of rules of a dropped fold). RPC: `SelectOutbound`, the group
-snapshot and stream, `CloseConnection` (breaking on switch),
-`URLTestOutbound` (the folder test in a separate session).
+snapshot and stream, `URLTestOutbound` (the folder test in a separate session).
 
 ## Inputs / Outputs
 

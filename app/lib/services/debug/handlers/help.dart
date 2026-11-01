@@ -598,7 +598,6 @@ GET /diag/pprof?profile=P&query=Q            pprof snapshot via libbox PProfServ
 === Settings (scoped writes) ===
 
 PUT    /settings/route_final                   body {"outbound":"..."}
-GET|PUT /settings/interrupt_on_switch          body {"enabled":bool} — рвать conns при switchNode
 GET|PUT /settings/node_sort                    body {"mode":"latency|manual|", "order"?:["tag",...]}
 GET|PUT /settings/enabled_groups               body {"groups":["tag",...]} (config-significant, ?rebuild)
 GET|PUT /settings/vpn_mode                     body partial {mode,proxy_protocol,proxy_port,proxy_listen,proxy_auth,proxy_user,proxy_pass} (?rebuild)
@@ -864,7 +863,6 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/diag/pprof', 'params': {'profile': 'goroutine|profile|heap|allocs|block|mutex|threadcreate', 'query': 'raw pprof query w/o ? (gc=1, debug=1, seconds=20); default per profile'}, 'description': 'pprof snapshot via libbox PProfServer (tunnel must be up)'},
     // Settings (scoped writes)
     {'method': 'PUT', 'path': '/settings/route_final', 'body': '{"outbound":"..."}', 'description': 'Set route.final outbound'},
-    {'method': 'GET|PUT', 'path': '/settings/interrupt_on_switch', 'body': '{"enabled":bool}', 'description': 'Toggle interrupt connections on node switch'},
     {'method': 'GET|PUT', 'path': '/settings/node_sort', 'body': '{"mode":"latency|manual|","order"?:[...]}', 'description': 'Node-list sort mode + manual order'},
     {'method': 'GET|PUT', 'path': '/settings/enabled_groups', 'body': '{"groups":[...]}', 'description': 'Preset selector membership (config-significant, ?rebuild)'},
     {'method': 'GET|PUT', 'path': '/settings/vpn_mode', 'body': 'partial {mode,proxy_protocol,proxy_port,proxy_listen,proxy_auth,proxy_user,proxy_pass}', 'description': 'VPN/proxy mode (config-significant, ?rebuild)'},

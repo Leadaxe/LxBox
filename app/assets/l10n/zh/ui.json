@@ -2077,9 +2077,6 @@
   "Downloaded \"%s\"": {
     "value": "已下载「%s」"
   },
-  "Drop active connections when you switch nodes, so traffic moves to the new node immediately": {
-    "value": "切换节点时断开活动连接，使流量立即转到新节点"
-  },
   "Drop existing detours — every member connects through this outbound": {
     "value": "清除已有 detour —— 所有成员都经此出站连接"
   },

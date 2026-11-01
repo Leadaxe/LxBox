@@ -2311,9 +2311,6 @@
   "Downloaded \"%s\"": {
     "value": "Скачан «%s»"
   },
-  "Drop active connections when you switch nodes, so traffic moves to the new node immediately": {
-    "value": "Сбрасывать активные соединения при переключении узла, чтобы трафик сразу пошёл через новый узел"
-  },
   "Drop existing detours — every member connects through this outbound": {
     "value": "Сбросить существующие detour — каждый член папки подключается через этот исходящий канал"
   },

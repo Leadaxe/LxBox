@@ -20,6 +20,26 @@
   200–768 MB presets stay for an explicit choice, and the hint says what the
   number is compared with. A value chosen earlier is kept as is.
 
+### Removed
+
+- **The VPN Settings → System switch "Interrupt connections on switch"
+  ([task 143](docs/spec/tasks/143-interrupt-connections-on-node-switch.md)).**
+  It closed a group's connections from the app after a node tap, because the
+  core used to ignore the direction's own checkbox of the same name. The core
+  has dropped those connections itself since 2.20.9, on any switch, so the
+  switch only duplicated the direction checkbox and could override it. If it
+  was on, the update turns the checkbox on in every direction where it was
+  off. The Debug API route `/settings/interrupt_on_switch` is gone; an old
+  backup with this setting still restores.
+  (RU: Убран тумблер «Interrupt connections on switch» в VPN Settings →
+  System. Он закрывал соединения группы из приложения после нажатия узла,
+  потому что ядро раньше не выполняло одноимённую галочку Направления. С
+  2.20.9 ядро рвёт эти соединения само при любой смене узла, и тумблер
+  только дублировал галочку и мог её перекрыть. Если он был включён, при
+  обновлении галочка включается во всех Направлениях, где была снята.
+  Маршрут Debug API `/settings/interrupt_on_switch` убран; старый бэкап с
+  этой настройкой восстанавливается.)
+
 ## [2.25.19] — 2026-11-01
 
 ### Added

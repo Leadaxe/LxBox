@@ -162,7 +162,6 @@ The feature protects three principles:
 | Keep VPN on exit | on/off (visible only with a tunnel) | on | immediately |
 | Allow VPN bypass | on/off (visible only with a tunnel) | off | next start |
 | Auto-start on boot | on/off | off | next boot |
-| Interrupt connections on switch | on/off | off | immediately |
 | Tunnel sleep mode | `never` / `lazy` / `always` | `never` | next start |
 | Suspend idle tunnels | Off / 30 s / 2 min / 5 min | 30 s | next start |
 | Suspend active-route tunnels | Off / 5 / 15 / 30 min / 1 h (only with the sleep above) | 5 min | next start |
@@ -181,9 +180,8 @@ Core config keys the feature emits (contract):
 | `lx.wg.lazy_build: true`, `lx.wg.build_max` | together with the sleep threshold, if lazy build is on |
 
 Core calls visible as a contract: `resetNetwork` (network change), `pause` /
-`wake` (tunnel sleep), `rebindStaleEndpoints` (screen on),
-`closeConnection` (breaking on node switch), the memory limit — via
-`oomMemoryLimit` of the core start parameters.
+`wake` (tunnel sleep), `rebindStaleEndpoints` (screen on);
+the memory limit — via `oomMemoryLimit` of the core start parameters.
 
 ## Inputs / Outputs
 
@@ -226,7 +224,7 @@ gesture / OS event
   disappears for ~3 s.
 - Changes of mode, address, port, authentication, sleep and suspension
   thresholds mark the config "restart needed"; the memory limit and the
-  keep/interrupt toggles do not.
+  keep toggle do not.
 - Rules with Wi-Fi conditions without a granted location permission stop the
   start with an "Open Settings" dialog, not a crash.
 - An empty config, a core that is not ready or a core rejection — a stop with a
@@ -272,7 +270,7 @@ gesture / OS event
 - [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.md) — builds the config the tunnel starts with; auto-applying settings to a live tunnel, the "restart needed" banner and tunnel interface variables (address, MTU, stack, IPv6).
 - [004-ROUTING](../004-ROUTING/FEATURE.md) — rules with Wi-Fi conditions that gate the start on the location permission.
 - [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.md) — the Direction option `interrupt_exist_connections`: the core breaking connections on a group selection change.
-- [007-NODE_LIST](../007-NODE_LIST/FEATURE.md) — node switching in groups, which the optional connection break on switch reacts to.
+- [007-NODE_LIST](../007-NODE_LIST/FEATURE.md) — node switching in groups, on which the core breaks connections by the Direction option.
 - [008-NODE_EDITOR](../008-NODE_EDITOR/FEATURE.md) — disabling/enabling an individual WG/AWG node on the fly.
 - [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.md) — the connecting-phase expiry is the start verdict for the node safety net; passive health check and URLTest intervals.
 - [011-SPLIT_TUNNELING](../011-SPLIT_TUNNELING/FEATURE.md) — which apps go through the tunnel this feature brings up.

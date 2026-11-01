@@ -1953,7 +1953,7 @@ class HomeController extends ChangeNotifier
     if (group == null || !_state.tunnelUp) return true;
     final prevNode = _state.activeInGroup;
     // §290 — уже активна: не делать re-select и не рвать соединения группы
-    // (interrupt-on-switch §143) на ровном месте. Общий путь UI + automation:
+    // (ядро по галке Направления, §143 §9) на ровном месте. Общий путь UI + automation:
     // тап по подсвеченной ноде тоже не должен дёргать сеть. Ждущему Tasker'у
     // шлём лёгкое подтверждение (gated за State), иначе Wait Event уйдёт в
     // timeout — смены нет, поэтому НЕ ACTIVE_NODE_CHANGED.
@@ -1967,26 +1967,9 @@ class HomeController extends ChangeNotifier
       // не Clash PUT /proxies/<group>.
       final ok = await _cc.selectOutbound(group, nodeTag);
       if (!ok) throw const FormatException('selectOutbound rejected');
-      // §143 — точечный обрыв соединений переключаемой группы (opt-in тугл),
-      // чтобы трафик сразу ушёл на новую ноду. §122 — через CommandClient:
-      // снапшот соединений уже в `_state` (connections-стрим), id'ы цепочки
-      // закрываем `closeConnection`. Best-effort.
-      if (await SettingsStorage.getInterruptOnSwitch()) {
-        try {
-          final ids = await _connectionIdsInGroup(group);
-          await Future(() async {
-            for (final id in ids) {
-              try {
-                await _cc.closeConnection(id);
-              } catch (_) {/* соединение уже закрылось — игнор */}
-            }
-          }).timeout(const Duration(seconds: 5), onTimeout: () {});
-          _addDebug(
-              DebugSource.app, 'Interrupted ${ids.length} conns in $group');
-        } catch (e) {
-          _addDebug(DebugSource.app, 'Interrupt-on-switch failed: $e');
-        }
-      }
+      // §143 §9 — обрыв соединений при смене узла делает ядро по галке
+      // Направления (`interrupt_exist_connections`, SPEC 064); тумблер
+      // приложения снят 01.11.2026.
       // §122/SPEC015 — после selectOutbound ТЯНЕМ свежий снапшот через
       // getGroups-pull, а не reloadProxies() поверх СТАРОГО `_state.ccGroups`
       // (там `selected` ещё прежний → горела старая нода до ручного свайпа).
@@ -2018,30 +2001,6 @@ class HomeController extends ChangeNotifier
     } finally {
       _emit(_state.copyWith(busy: false));
     }
-  }
-
-  /// §143 / §122 — id'ы активных соединений группы [group] для точечного обрыва
-  /// при switchNode (interrupt-on-switch).
-  ///
-  /// **§122-gap закрыт после §174:** `chains` (цепочка outbound'ов
-  /// selector→urltest→node) восстановлены в ядре (`Connection.chain()`-итератор,
-  /// device-verified 26.06) и приходят в `CcConnection.chains`. Матчим соединение
-  /// на selector-группу через `chains.contains(group)` — [group] = текущий
-  /// `_state.selectedGroup`, тот же selector-тег, что в `selectOutbound` и в
-  /// `chains` (urltest исключён из dropdown §078, префиксов на selector-теге нет).
-  ///
-  /// Снапшот соединений берём из `_cc.connections` — у стрима replay-кэш (§122),
-  /// поэтому `.first` отдаёт ТЕКУЩИЙ снапшот мгновенно (не ждёт нового события).
-  /// HomeState список соединений НЕ хранит (только агрегаты connectionsIn/Out).
-  /// Закрываем только живые (`!isClosed`).
-  Future<List<String>> _connectionIdsInGroup(String group) async {
-    final conns = await _cc.connections.first
-        .timeout(const Duration(seconds: 1), onTimeout: () => const []);
-    return conns
-        .where((c) => !c.isClosed && c.chains.contains(group))
-        .map((c) => c.id)
-        .where((id) => id.isNotEmpty)
-        .toList();
   }
 
   // Ping / URLTest оркестрация (runNodeUrltest, ping-option resolve chain,

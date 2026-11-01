@@ -22,7 +22,6 @@ The active node is highlighted and pinned at the top of the list.
 | Parameter | Values | Default |
 |---|---|---|
 | Direction (dropdown) | all selector groups of the core snapshot except `GLOBAL`; last — the `NETWORKS` pseudo-direction, if the config has such nodes | `route.final` if it is a selector; otherwise the first |
-| Interrupt connections on switch (Settings) | on/off | off |
 
 The Direction list includes not only the application's Directions but any
 selectable selector groups of the config: a provider `selector` from a
@@ -34,9 +33,9 @@ fold](../../007-NODE_LIST/FUNCTIONS/selector-genus-and-fold.md)).
 **Input:** the core's group stream and snapshot (tag, type, members, current
 selection); gestures — selection in the Direction list, the ▷ button on a
 row, "Use this node" in the menu, swipe down.
-**Output:** `SelectOutbound(group, node)` in the core; with the toggle on —
-`CloseConnection` for live connections whose chain contains this Direction;
-for a subscription or folder group — the saved member selection.
+**Output:** `SelectOutbound(group, node)` in the core; the live connections of
+the Direction are closed by the core itself under the Direction flag
+`interrupt_exist_connections`; for a subscription or folder group — the saved member selection.
 
 ## Rules and invariants
 
@@ -54,8 +53,9 @@ for a subscription or folder group — the saved member selection.
   snapshot did not arrive — ACTIVE is set by the selection.
 - Core refusal — the error "Switch failed: …"; the previous node stays
   active.
-- Breaking connections on switch takes no longer than 5 s; a connection that
-  has already closed is skipped.
+- Breaking connections on switch is done by the core under the Direction flag
+  "Interrupt connections on switch" (on by default), on any selection change;
+  the application closes nothing.
 - **Pinning:** the active node stands right after direct / auto-select twins
   / block under any sort; if the active node is a service node itself, it is
   not duplicated ([007-NODE_LIST · P3](../../007-NODE_LIST/FEATURE.md#promises)).
@@ -97,7 +97,7 @@ for a subscription or folder group — the saved member selection.
 | # | Revision | Status | Summary |
 |---|---|---|---|
 | 1 | [003F](../../../tasks/003F-home-screen/spec.md) | Implemented | Main screen: group, list, ACTIVE, node selection, swipe |
-| 2 | [143](../../../tasks/143-interrupt-connections-on-node-switch.md) | Implemented | Toggle for breaking group connections on node change |
+| 2 | [143](../../../tasks/143-interrupt-connections-on-node-switch.md) | Removed 2026-11-01 (§9) | Toggle for breaking group connections on node change |
 | 3 | [196](../../../tasks/196-active-node-pinned-after-direct-auto.md) | — | Active node at the top after direct/auto under any sort |
 | 4 | [203](../../../tasks/203-select-server-on-auto.md) | — | "Select server" on an auto-select node: highlight and scroll |
 | 5 | [290](../../../tasks/290-automation-node-switch-gaps.md) | — | Selecting the already active node does not poke the core and the network |

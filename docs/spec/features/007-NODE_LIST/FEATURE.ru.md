@@ -142,7 +142,6 @@ detour), четыре режима сортировки и ручной поря
 | Pin DIRECT to top / Pin AUTO to top | «Sort options» | вкл/выкл, на сессию | вкл / вкл |
 | Re-sort on manual ping | «Sort options» | вкл/выкл, на сессию | вкл |
 | Фильтры: Regex, Protocol, Sources, Settings | панель фильтров | см. [фильтры](FUNCTIONS/node-filters.ru.md) | всё выкл, порог «200» не активен |
-| Interrupt connections on switch | Settings | вкл/выкл | выкл |
 | Two columns on wide screens | App Settings → Appearance | вкл/выкл | вкл |
 | Папка: имя, вкл, префикс тегов, detour-политика | Servers → папка → Settings | — | префикс пуст |
 | Replace with a group | Settings папки/подписки | Manual · Auto · Both; имя; параметры авто | выкл; имя = имя источника |
@@ -156,8 +155,8 @@ detour), четыре режима сортировки и ручной поря
 (`outbounds`, `default`, у свёртки `interrupt_exist_connections: true`),
 `urltest` (двойник `<tag>-auto`), `route.final` (стартовое Направление и
 приёмник правил выпавшей свёртки). RPC: `SelectOutbound`, снимок и поток
-групп, `CloseConnection` (обрыв при переключении), `URLTestOutbound` (тест
-папки в отдельной сессии).
+групп, `URLTestOutbound` (тест папки
+в отдельной сессии).
 
 ## Входы / Выходы
 
