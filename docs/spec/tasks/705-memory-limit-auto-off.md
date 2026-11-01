@@ -106,9 +106,16 @@ Memory limit 200 MB и делает вывод, что лимит не рабо�
   false, мы ставим true) + lx-поле в `OOMKillerServiceOptions`; в
   heap-режиме Available-watch остаётся; пороги −5/−10 MiB и GC 4/5 не
   меняются; latch через `ReloadSetupOptions` как сейчас; тег lx.29 только с
-  этим (javap +1 геттер) — состав и срок за владельцем. Наша часть после
-  тега: пин, `OomMemoryLimitHeap = true`, строка «Core runtime: X / limit»
-  в шторке Memory. Поправка ядра к нашему тезису: soft limit 160 MiB у
+  этим (javap +1 геттер) — состав и срок за владельцем. **Ядро сделано:
+  SPEC 148, коммит sing-box-lx `0f94afdcc` (01.11.2026), issue #62 закрыт,
+  тега нет.** Сверено по коммиту: `memoryRuntime = 10` в proto,
+  `StatusMessage.MemoryRuntime int64`, `SetupOptions.OomMemoryLimitHeap`,
+  режим `runtime_limit` (`service/oomkiller/runtime_limit_lx.go`).
+  Уточнения ядра: нулевое `memory.Available()` в heap-режиме = неизвестно
+  (условие по available не применяется; на Android из `/proc/meminfo` нуля
+  не бывает); ключа конфига нет, режим только через SetupOptions. Наша
+  часть после тега: пин, `OomMemoryLimitHeap = true`, строка «Core
+  runtime: X / limit» в шторке Memory. Поправка ядра к нашему тезису: soft limit 160 MiB у
   этого пользователя не связывающий (хип 42 MB); нагрев от GC, если есть,
   — оборот аллокаций (пулы 108/16 MB, recvMsg 43 MB), не лимит.
   Rate-trigger на Android не работает (baseline только в
