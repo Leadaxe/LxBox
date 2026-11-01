@@ -124,7 +124,9 @@ The feature protects five principles:
   **Witness:** units "override by key; … a list replaced whole", "alias — one
   hop", "empty/unknown/broken region = root", "the picker cache is bound to
   the region". **Mutation:** region lists are appended to the root.
-- **P14. The "(recommended)" mark does not leak into the value.** **Mutation:** the preset suffix in the
+- **P14. The "(recommended)" mark does not leak into the value.** **Witness:**
+  widget test "§424 picking the recommended item puts the clean value into the
+  controller". **Mutation:** the preset suffix in the
   endpoint.
 - **P15. The experiment does not privilege a protocol.** Candidates are
   equally likely AWG / MASQUE h3 / MASQUE h2 among those available in the

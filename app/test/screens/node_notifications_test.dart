@@ -13,6 +13,7 @@ import 'package:lxbox/screens/subscription_detail_screen/widgets/node_warnings_s
 import 'package:lxbox/services/contract/contract_docs.dart';
 import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/l10n/locale_controller.dart';
+import 'package:lxbox/widgets/banner_palette.dart';
 
 /// §479 — уведомления узла: строка в списке подписки и общий компонент
 /// [NodeNotificationsView] (раздел на экране узла и шторка из списка).
@@ -33,6 +34,17 @@ const _warnTransport = RegistryWarning(
   code: 'transport_unsupported',
   path: 'transport.type',
   params: {'transport': 'quic', 'fallback': 'ws'},
+);
+const _errFieldMissing = RegistryWarning(
+  code: 'field_missing',
+  path: 'sni',
+  params: {'field': 'sni'},
+);
+const _infoFlow = RegistryWarning(
+  code: 'flow_deprecated',
+  path: 'flow',
+  value: 'xtls-rprx-direct',
+  params: {'flow': 'xtls-rprx-direct'},
 );
 
 void main() {
@@ -112,6 +124,73 @@ void main() {
 
       expect(tileTaps, 0, reason: 'тап провалился на ListTile под строкой');
       expect(find.text('Notifications'), findsOneWidget);
+    });
+  });
+
+  group('§479 — уровни в строке под узлом', () {
+    const infoW = _infoTls; // info
+    const warnW = _warnTransport; // warning
+    const errW = _errFieldMissing; // error
+
+    Iterable<Icon> icons(WidgetTester tester) => tester
+        .widgetList<Icon>(find.descendant(
+            of: find.byType(NodeWarningRow), matching: find.byType(Icon)));
+
+    testWidgets('только info — строки предупреждения нет вовсе',
+        (tester) async {
+      await pumpRow(tester, const [infoW]);
+
+      // Ни текста, ни значка уровня: info в списке живёт значком в строке
+      // протокола, а не третьей строкой.
+      expect(find.descendant(
+              of: find.byType(NodeWarningRow), matching: find.byType(Text)),
+          findsNothing);
+      expect(icons(tester), isEmpty);
+    });
+
+    testWidgets('«+N more» считает только error и warning', (tester) async {
+      await pumpRow(
+          tester, const [infoW, warnW, errW, _infoFlow]);
+      // Два actionable → «+1 more», два info — одним значком.
+      expect(find.textContaining('(+1 more)'), findsOneWidget);
+    });
+
+    testWidgets('error + warning — красный текст старшего, info-значка нет',
+        (tester) async {
+      await pumpRow(tester, const [warnW, errW]);
+
+      final ico = icons(tester).toList();
+      expect(ico, hasLength(1), reason: 'info-значка тут быть не должно');
+      expect(ico.single.icon, Icons.error_outline);
+
+      final ctx = tester.element(find.byType(NodeWarningRow));
+      expect(ico.single.color,
+          warningSeverityColor(ctx, WarningSeverity.error));
+      expect(
+          find.textContaining(
+              ContractRegistry.I.textFor('field_missing')!.titleEn
+                  .replaceAll('{field}', 'sni')),
+          findsOneWidget);
+      expect(find.textContaining('(+1 more)'), findsOneWidget);
+    });
+  });
+
+  group('§479 — шапка со счётчиками и подразделы', () {
+    testWidgets('счётчики по уровням, нулевых нет', (tester) async {
+      await pumpView(tester, const [
+        _errFieldMissing, // error
+        _warnTransport, // warning
+        UnknownObfsWarning('gecko'), // warning
+      ]);
+
+      // Три записи, два уровня: 1 и 2, без «0» для info.
+      expect(find.text('1'), findsOneWidget);
+      expect(find.text('2'), findsOneWidget);
+      expect(find.text('0'), findsNothing);
+      // Подзаголовков два — уровней два.
+      expect(find.text('Errors'), findsOneWidget);
+      expect(find.text('Warnings'), findsOneWidget);
+      expect(find.text('Info'), findsNothing);
     });
   });
 

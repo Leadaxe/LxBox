@@ -89,7 +89,10 @@ Principles the feature protects:
   texts", "3 nodes with one raw tag → 3 keys, all warnings in place". **Mutation:** the Debug API
   text depends on the device locale.
 - **P12. Levels are shown separately.** `error` lives in the rejects, `warning` and `info` on the
-  node; the row shows the top level, info-only is an icon. **Mutation:** info counted in `+N more`.
+  node; the row shows the top level, info-only is an icon. **Witness:** widget tests "only info —
+  no warning row at all", "error + warning — red text of the top one, no info icon", "`+N more`
+  counts only error and warning", "counters by level, no zeros". **Mutation:** info counted in
+  `+N more`.
 - **P13. Every registry code has full texts and a "Learn more" anchor.** `en` and `ru` titles and
   texts are filled; the documentation mirror has an anchor per code and names the shipped
   version. **Witness:** unit tests "every code has all texts filled in en and ru", "every registry

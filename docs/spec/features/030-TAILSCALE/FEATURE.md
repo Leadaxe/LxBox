@@ -144,8 +144,10 @@ lives in the core until "Save choice" writes it into the node.
   already there — no duplicate", "a fresh install is untouched; the first seed
   closes the step". **Mutation:** the preset re-added after deletion.
 - **P17. `skip_tailscale_presets` (until 1.1.126 `skip_presets`) survives a backup round trip.** Only `true` is stored;
-  an import that matches the node by body does not reset it. **Mutation:**
-  a missing field on import resets the flag.
+  an import that matches the node by body does not reset it. **Witness:** units
+  "own server: true from the file is set, the own true is not reset", "folder
+  member: merge within the folder" (`lx_backup_node_flags_test.dart`).
+  **Mutation:** a missing field on import resets the flag.
 - **P18. The `tailscale` DNS server picker offers the enabled Tailscale nodes
   of all sources**, with the final tag of the last build. **Witness:** units
   "an own Tailscale server — an option; non-Tailscale — none", "a disabled
@@ -161,7 +163,9 @@ lives in the core until "Save choice" writes it into the node.
 - **P20. The tab says why there is nothing to show.** VPN off — "Start VPN to
   see the network."; no core record yet — a waiting indicator; the node is not
   in the running config — "The node is not in the running config."
-  **Mutation:** an endless spinner with the VPN off.
+  **Witness:** widgets "VPN off", "no data from the core yet — waiting", "the
+  node is not in the running config". **Mutation:** an endless spinner with
+  the VPN off.
 - **P21. An exit node chosen on the fly does not touch the body.** A mismatch
   between the recorded `exit_node` and the active exit shows a warning sign
   and "Save choice"; Save choice writes the active peer's Tailscale address
