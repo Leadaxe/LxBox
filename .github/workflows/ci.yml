@@ -275,7 +275,13 @@ jobs:
             echo "::notice::Pinpoint test run: $TEST_PATH"
             flutter "${ARGS[@]}"
           else
-            flutter test
+            # Полный прогон — сборками: K точек входа вместо одной на файл
+            # (компиляция и старт каждого файла съедали бóльшую часть
+            # времени шага). Файлы из kExcluded генератора идут отдельно.
+            # Сброс глобального состояния между файлами —
+            # test/support/test_globals.dart (DEVELOPMENT_GUIDE → Testing).
+            dart run tool/gen_test_bundles.dart
+            flutter test test_bundle $(cat test_bundle/excluded.txt)
           fi
 
   # §525 — корпус публичных подписок: прогон конвейера разбора по 68 снимкам
