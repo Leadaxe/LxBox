@@ -11,7 +11,7 @@
 ## Проблема
 
 Пользователю нужен элемент конфига, которого шаблон не даёт: inbound типа
-`direct` на `127.0.0.1:5353` с правилом `hijack-dns`, чтобы отдать DNS-движок
+`direct` на `127.0.0.1:5354` с правилом `hijack-dns`, чтобы отдать DNS-движок
 sing-box внешнему приложению (Rethink). Сегодня это делается только ручной
 правкой в Config Editor с закреплением конфига (§037): после лока любое
 действие в интерфейсе в ядро не попадает, для повседневного пользования
@@ -138,7 +138,7 @@ Mixins экрана Config.
 Примеры — на golden `test/fixtures/storage/golden/rich_v0.config.json`:
 
 ```json
-{"target": "inbounds", "op": "append", "value": {"type": "direct", "tag": "dns-in", "listen": "127.0.0.1", "listen_port": 5353, "override_address": "1.1.1.1", "override_port": 53}}
+{"target": "inbounds", "op": "append", "value": {"type": "direct", "tag": "dns-in", "listen": "127.0.0.1", "listen_port": 5354, "override_address": "1.1.1.1", "override_port": 53}}
 {"target": "route.rules[action=hijack-dns]", "op": "before", "value": {"inbound": ["dns-in"], "action": "hijack-dns"}}
 {"target": "route.rules[action=resolve,strategy=prefer_ipv4]", "op": "after", "value": {"domain_suffix": [".nas.home"], "outbound": "direct-out"}}
 {"target": "outbounds[type=vless]", "op": "merge", "value": {"tcp_fast_open": true}}
@@ -262,7 +262,7 @@ Save неактивна, пока статус Target не ✓ или Value не
 - LX Backup: экспорт/импорт секции, совпадение по телу.
 - Debug API: CRUD, reorder, preview.
 - Widget: вкладки Config/Mixins, список с тумблером, форма — статус Target на фикстурном конфиге, Save неактивна при `no match`.
-- Эмулятор: сценарий zomg — миксины inbound `dns-in` + правило `hijack-dns`, `dig @127.0.0.1 -p 5353` из adb shell отвечает; выключение миксина убирает inbound из вкладки Config.
+- Эмулятор: сценарий zomg — миксины inbound `dns-in` + правило `hijack-dns`, `dig +tcp @127.0.0.1 -p 5354` через `adb forward` отвечает; выключение миксина убирает inbound из вкладки Config.
 
 ## Открытое
 
@@ -277,4 +277,6 @@ Save неактивна, пока статус Target не ✓ или Value не
 - Решено исполнителем (UI): статус Target считается в форме по базе предпросмотра, без значения; сверх макета — `✗ not a list element` для `before`/`after`. Отказы, зависящие от значения (`merge` без объекта, дубль тега), — строкой `⚠` над Preview, Save не блокируют (по §5 блокируют только статус и разбор Value). У `remove` с Keys пустой список ключей Save не даёт.
 - Решено исполнителем (UI): Save и ⋮ вкладки Config на вкладке Mixins скрыты; после пересборки от миксинов вкладка Config перечитывает конфиг, если в редакторе нет несохранённой правки; вкладка Config держится живой (keep-alive). Тумблер справа, как в макете §5 (у правил он слева).
 - Решено исполнителем (UI): `ConfigScreen.subController` необязателен — без него запись поднимает dirty без пересборки, подсказок и предпросмотра нет (старый тест экрана его не передаёт).
-- Не проверено: сценарий на эмуляторе (zomg, `dig @127.0.0.1 -p 5353`).
+- Проверено на эмуляторе 01.11 (см. «Статус»). Порт 5353 на Android может держать системный mDNS — в примерах порт 5354; у zomg на телефоне 5353 встал.
+- После перезапуска приложения до первой сборки форма показывает «No config built yet» без статуса и Preview; `lastConfigBeforeMixins` живёт только в сессии. Вариант: собирать базу при открытии формы, если её нет. По запросу.
+- Debug API: правка одного миксина — `PATCH /mixins/{id}` (в «Проверке» было написано `PUT`).
