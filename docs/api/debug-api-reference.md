@@ -81,6 +81,7 @@ auth), а не факт, что за границей всё открыто.
   - [`reveal` и `warnings` у одной записи (478)](#фича-478--reveal-и-warnings-у-одной-записи)
 - [Nodes — `/nodes/*`](#nodes--nodes)
 - [Directions CRUD — `/directions/*`](#directions-crud--directions)
+- [Mixins CRUD — `/mixins/*`](#mixins-crud--mixins)
 - [Chains CRUD — `/chains/*`](#chains-crud--chains)
 - [Folders CRUD — `/folders/*`](#folders-crud--folders)
 - [Core-rejected nodes — `/core_reject/*`](#core-rejected-nodes--core_reject)
@@ -883,6 +884,64 @@ curl -X PATCH -H "$HDR" -H "Content-Type: application/json" \
   (например невалидный regex в `node_filter`) вернёт ошибку, но Направление
   уже создано — с `label` из body (если был) и дефолтами остальных полей;
   прочие PATCH-поля body не применены.
+
+---
+
+## Mixins CRUD — `/mixins/*`
+
+§704 — миксины: хранимые операции над итоговым конфигом ядра (`mixins[]` в
+storage, `docs/STORAGE.md`). Применяются по порядку списка последним шагом
+сборки — после санитайзера графа, до валидатора. Ресурс — `Mixin.toJson()`:
+`{id, name, enabled, target, op, value}`.
+
+| Endpoint | Метод | Body |
+|---|---|---|
+| `/mixins` | GET | — (порядок = порядок применения) |
+| `/mixins/{id}` | GET | — |
+| `/mixins` | POST | `{"target":"...","op":"...","value":<json>,"name"?:"...","enabled"?:bool}` → 201, в конец списка |
+| `/mixins/{id}` | PATCH | subset: `name,enabled,target,op,value`; `id` неизменяем |
+| `/mixins/{id}` | DELETE | — |
+| `/mixins/reorder` | POST | `{"order":[id,...]}` — ровно текущие id |
+| `/mixins/{id}/preview` | GET | — |
+
+Все write'ы принимают `?rebuild=true`. Запись проверяет синтаксис пути и
+глагол: ошибка → 400 (`field "target": syntax error at N: …`, `field "op" must
+be one of append|prepend|before|after|set|merge|remove`); у `remove` значение —
+`true` или список ключей. Совпадение цели при записи НЕ требуется: цель может
+появиться после другого миксина; отказ виден при сборке.
+
+**Язык пути.** Сегменты через точку; `имя[N]` — элемент списка; `имя[f=v,g.h=w]`
+— элементы, у которых верны все условия (число с числом, `true`/`false`, иначе
+строки с учётом регистра; поле-список — «содержит»); значение — всё до `,` или
+`]`, пробелы внутри допустимы; числовой сегмент после точки — индекс
+(`outbounds.0`); пустой путь — корень; путь с `$` зарезервирован (400).
+
+**Глаголы.** `append`/`prepend` — в один список (значение-список — по
+элементам); `before`/`after` — на уровень элементов списка перед первым / после
+последнего совпавшего; `set` — замена каждого совпавшего; `merge` — слияние
+объектов вглубь (список значения заменяет список цели); `remove` — `true`
+снимает узел, список ключей (`"tls.utls"`) — только их.
+
+**Отказ на сборке** (нет совпадений, тип цели, синтаксис, дубль тега в
+`inbounds` / `outbounds`+`endpoints` / `dns.servers`) — fatal: конфиг не
+собирается, `rebuild_error` / `lastError` несут
+`Mixin "<name>": <target>: no match` или `Mixin "<name>": duplicate tag "x" in outbounds`.
+
+**Preview** — то же, что показывает форма миксина:
+
+```json
+{"id": "…", "matches": 1, "issue": null,
+ "fragment": {"parent_path": "route.rules",
+              "rows": [{"marker": " ", "text": "{\"action\":\"sniff\",…}", "value": {…}},
+                       {"marker": "+", "text": "{\"inbound\":[\"dns-in\"],…}", "value": {…}}]}}
+```
+
+`marker`: `" "` без изменений, `+` вставлен, `~` изменён, `-` удалён (у `-`
+`value` — удалённое). Цель-скаляр под `set` — одна строка `было → стало`.
+`issue` — `{reason, message}` или `null`. База — конфиг последней сборки ДО
+миксинов плюс включённые миксины выше этого (собранный конфиг уже несёт
+миксин, и предпросмотр по нему применил бы его дважды); сборки в сессии не
+было → 409.
 
 ---
 

@@ -17,6 +17,7 @@ import '../handlers/diag.dart';
 import '../handlers/files.dart';
 import '../handlers/folders.dart';
 import '../handlers/logs.dart';
+import '../handlers/mixins.dart';
 import '../handlers/help.dart';
 import '../handlers/nodes.dart';
 import '../handlers/ping.dart';
@@ -227,6 +228,7 @@ Router buildDebugRouter() {
     ..mount('/nodes', nodesHandler)
     ..mount('/directions', directionsHandler) // §238 — Направления роутинга §125
     ..mount('/chains', chainsHandler) // §393 C — источники-цепочки SPEC 110
+    ..mount('/mixins', mixinsHandler) // §704 — миксины итогового конфига
     ..mount('/folders', foldersHandler) // §238 — папки серверов §234
     // Фича 478 — страховка «отказ ядра выключает узел»: фаза автомата,
     // вердикты, плашка и диалог предела наблюдаемы и управляемы снаружи.

@@ -65,6 +65,7 @@ void main() {
     expect(paths, contains('/action/start-vpn-headless'));
     expect(paths, contains('/action/check-config'));
     expect(paths, contains('/subs/{id}'));
+    expect(paths, containsAll(['/mixins', '/mixins/{id}/preview']));
 
     final reset = endpoints.singleWhere(
       (e) => e['method'] == 'POST' && e['path'] == '/core_reject/reset',
@@ -86,6 +87,7 @@ void main() {
     final textResp = await helpHandler(req('text'), ctx()) as BytesResponse;
     final text = utf8.decode(textResp.bytes);
     expect(text, contains('POST /core_reject/reset'));
+    expect(text, contains('GET    /mixins/{id}/preview'));
     expect(text, contains('origin_kind'));
     expect(text, contains('source_kind'));
 

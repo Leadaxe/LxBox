@@ -326,6 +326,30 @@ DNS servers that named the direction — an outbound-type variable of a
 template server, body.detour of a user server: the value degrades to vpn-1
 (disable/delete), like a rule target.
 
+=== Mixins CRUD (user inserts into the final config, spec 704) ===
+
+GET    /mixins                                   List mixins in apply order
+GET    /mixins/{id}                              Single mixin
+POST   /mixins[?rebuild=true]                    Create → 201, appended last. Body {"target":"...","op":"...",
+                                                 "value":<json>,"name"?:"...","enabled"?:true}. op =
+                                                 append|prepend|before|after|set|merge|remove; remove takes
+                                                 value true (whole node) or ["key","a.b"]. A path syntax error
+                                                 or an unknown op → 400; a target without matches is accepted
+                                                 (the build reports it).
+PATCH  /mixins/{id}[?rebuild=true]               Partial update: {name,enabled,target,op,value}; id immutable.
+DELETE /mixins/{id}[?rebuild=true]               Remove.
+POST   /mixins/reorder[?rebuild=true]            Body {"order":[id,...]} — exactly the current ids.
+GET    /mixins/{id}/preview                      What the edit form shows: {matches, issue, fragment:
+                                                 {parent_path, rows:[{marker,text,value}]}} — the mixin applied
+                                                 to the last built config before mixins plus the mixins above
+                                                 it. 409 if nothing was built in this session.
+
+Path language: segments joined by "."; name[N] — list element; name[f=v,g.h=w]
+— list elements where every condition holds (number/bool/case-sensitive
+string; a list field means "contains"); empty path = the root. Mixins run in
+list order as the last build step; a failing mixin (no match, wrong target
+type, duplicate tag) is a fatal build issue "Mixin \"<name>\": <target>: <reason>".
+
 === Chains CRUD (hop chains — third source kind, SPEC 110) ===
 
 A chain is a ROUTE ("client → hop 1 → hop 2 → … → target"), not a choice
@@ -768,6 +792,14 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'PATCH', 'path': '/directions/{tag}', 'params': {'rebuild': 'true|false'}, 'body': 'Any subset: {label,enabled,include_direct,include_block,node_filter,node_filter_invert,default_filter,include,interrupt_exist_connections,auto,detour}', 'description': 'Partial update. auto merges into current urltest options; "auto":null disables the twin. tag immutable; vpn-1 cannot be disabled. detour:true = direction selectable as detour target (stays a valid rule target; include_block allowed); vpn-1+detour → 409; detour:false resets detour references to None. Toggling detour renames the direction: the reserved gear prefix is added to/stripped from the stored label — responses carry the normalized label. Mutation responses carry "healed":{rules,detours,includes,chain_positions,dns_servers}.'},
     {'method': 'DELETE', 'path': '/directions/{tag}', 'params': {'rebuild': 'true|false'}, 'description': 'Remove direction. vpn-1 not deletable (409). Rule references degrade to vpn-1; detour references reset to None; the tag is stripped from every other direction include[]; outbound-type variables of template DNS servers and rule presets, and body.detour of user DNS servers, degrade to vpn-1. Response carries "healed":{rules,detours,includes,chain_positions,dns_servers}.'},
     {'method': 'POST', 'path': '/directions/reorder', 'params': {'rebuild': 'true|false'}, 'body': '{"order":[tag,...]}', 'description': 'Reorder (exactly the current tags). Order = emit order in config.'},
+    // Mixins CRUD (spec 704)
+    {'method': 'GET', 'path': '/mixins', 'description': 'List mixins of the final config in apply order: {id,name,enabled,target,op,value}'},
+    {'method': 'GET', 'path': '/mixins/{id}', 'description': 'Single mixin (404 if unknown)'},
+    {'method': 'POST', 'path': '/mixins', 'params': {'rebuild': 'true|false'}, 'body': '{"target":"...","op":"append|prepend|before|after|set|merge|remove","value":<json>,"name"?:"...","enabled"?:bool}', 'description': 'Create mixin → 201, appended last. remove takes value true or a list of keys ("a.b" nests). Path syntax error or unknown op → 400; a target without matches is accepted — the build reports it as a fatal issue.'},
+    {'method': 'PATCH', 'path': '/mixins/{id}', 'params': {'rebuild': 'true|false'}, 'body': 'Any subset: {name,enabled,target,op,value}', 'description': 'Partial update; id immutable. Same validation as POST.'},
+    {'method': 'DELETE', 'path': '/mixins/{id}', 'params': {'rebuild': 'true|false'}, 'description': 'Remove mixin.'},
+    {'method': 'POST', 'path': '/mixins/reorder', 'params': {'rebuild': 'true|false'}, 'body': '{"order":[id,...]}', 'description': 'Reorder (exactly the current ids). Order = apply order.'},
+    {'method': 'GET', 'path': '/mixins/{id}/preview', 'description': 'Preview as in the edit form: {id, matches, issue:{reason,message}|null, fragment:{parent_path, rows:[{marker: " "|"+"|"~"|"-", text, value}]}|null}. Base = last built config before mixins + enabled mixins above this one; 409 if nothing was built in this session.'},
     // Chains CRUD (hop chains, SPEC 110)
     {'method': 'GET', 'path': '/chains', 'description': 'List hop chains in storage order: tag, enabled + source_chain.schema.json canon. The list order is normative: a chain may reference only chains declared above it.'},
     {'method': 'GET', 'path': '/chains/{tag}', 'description': 'Single chain (404 if unknown)'},

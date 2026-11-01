@@ -239,6 +239,12 @@ class SubscriptionController extends ChangeNotifier {
     _lastSourceBuildCodes = map;
   }
 
+  /// §704 — база предпросмотра миксинов без сборки (тесты Debug API и UI).
+  @visibleForTesting
+  void debugSetLastConfigBeforeMixins(Map<String, dynamic>? config) {
+    _lastConfigBeforeMixins = config;
+  }
+
   /// §274 — Направления, чей node_filter отсёк все ноды в последней УСПЕШНОЙ
   /// сборке (display-имена; Направление схлопнулось в block-fallback). [stamp]
   /// монотонно растёт на каждой сборке с непустым списком — Home дедупит
