@@ -323,8 +323,9 @@ tailscale, tag, …тело, state_directory}`; от пресета — запи
   SSH-сервер на телефоне не собирается (`ts_omit_ssh`): у Android нет оболочки
   для входящих сессий, а вход от имени других пользователей требует root
   (решение владельца 2026-11-01).
-- Taildrop, сертификаты `*.ts.net`, tailnet только по IPv6 при
-  `prefer_ipv6` и трафик по устройствам — вне фичи. Системная резервная копия
+- Taildrop — фича [032-TAILDROP](../032-TAILDROP/FEATURE.ru.md).
+  Сертификаты `*.ts.net`, tailnet только по IPv6 при `prefer_ipv6` и трафик
+  по устройствам — вне фичи. Системная резервная копия
   Android включает `files/` с ключами tailnet — штатно, так задумано
   (см. [личность устройства](FUNCTIONS/device-identity-and-state.ru.md)).
 - Вход по интерактивной ссылке, переключение exit node, Log out и Ping на

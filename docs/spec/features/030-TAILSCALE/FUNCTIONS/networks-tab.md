@@ -125,8 +125,9 @@ Diagnostics line "This node has no exit. Check devices on the Network tab."
   Diagnostics tab — [009-NODE_HEALTH](../../009-NODE_HEALTH/FEATURE.md).
 - Exit switching, Log out and Ping are not verified on a device with a live
   tailnet (DEVICE-PENDING).
-- Not shown: per-device traffic, connections through the node, SSH, Taildrop,
-  `*.ts.net` certificates.
+- Not shown: per-device traffic, connections through the node, SSH,
+  `*.ts.net` certificates. Taildrop (the inbox block and "Send file…" on
+  this tab) is [032-TAILDROP](../../032-TAILDROP/FEATURE.md).
 - An exit chosen on the fly survives a restart through the state directory
   while the body has no `exit_node`; `ephemeral: true` loses it.
 

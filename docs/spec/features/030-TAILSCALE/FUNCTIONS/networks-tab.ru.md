@@ -122,7 +122,8 @@ Diagnostics «This node has no exit. Check devices on the Network tab.»
 - Переключение выхода, Log out и Ping на устройстве с живой tailnet не
   проверены (DEVICE-PENDING).
 - Не показываются: трафик по устройствам, соединения через узел, SSH,
-  Taildrop, сертификаты `*.ts.net`.
+  сертификаты `*.ts.net`. Taildrop (блок входящих и «Send file…» на этой
+  вкладке) — [032-TAILDROP](../../032-TAILDROP/FEATURE.ru.md).
 - Выход, выбранный на ходу, переживает перезапуск через каталог состояния,
   пока в теле нет `exit_node`; `ephemeral: true` его теряет.
 

@@ -73,6 +73,7 @@ a screen. One task may be listed as a revision of several functions.
 | [029-LOCALIZATION](029-LOCALIZATION/FEATURE.md) | Localization — languages, the English-as-key model, translation workflow, native and core strings | 279 | ✅ 2026-09-29 |
 | [030-TAILSCALE](030-TAILSCALE/FEATURE.md) | Tailscale — the phone as a node of your tailnet: node, device identity and state, tailnet DNS and routes, Network tab | 435 (former feature) | ✅ 2026-09-29 |
 | [031-DEVICE_TRANSFER](031-DEVICE_TRANSFER/FEATURE.md) | Device transfer — send settings from a phone to a TV over the local network: QR code with a one-time key, encrypted backup, restore preview on the receiver | 622 | ✅ 2026-10-16 |
+| [032-TAILDROP](032-TAILDROP/FEATURE.md) | Taildrop — files and text between your own tailnet devices from "Share" or the Network tab, a per-node inbox, clipboard sync with the desktop launcher | — | ✍ 2026-11-01 (draft) |
 
 ## Process
 

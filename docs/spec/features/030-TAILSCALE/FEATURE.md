@@ -332,8 +332,9 @@ Delete node / Workspace delete → index record removed → directory removed wh
   tailnet). The SSH server on the phone is not built (`ts_omit_ssh`): Android
   has no shell for incoming sessions, and logging in as other users needs root
   (owner decision 2026-11-01).
-- Taildrop, `*.ts.net` certificates, IPv6-only tailnets under
-  `prefer_ipv6` and per-device traffic are out of scope. The Android system
+- Taildrop is feature [032-TAILDROP](../032-TAILDROP/FEATURE.md).
+  `*.ts.net` certificates, IPv6-only tailnets under `prefer_ipv6` and
+  per-device traffic are out of scope. The Android system
   backup includes `files/` with the tailnet keys — stock behaviour, by design
   (see [device identity](FUNCTIONS/device-identity-and-state.md)).
 - Sign-in with an interactive link, exit node switching, Log out and Ping have
