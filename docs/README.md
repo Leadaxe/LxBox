@@ -52,8 +52,8 @@ hand”. Both describe the same operations from opposite sides.
 | [ADVANCED_USER_GUIDE.md](ADVANCED_USER_GUIDE.md) · [RU](ADVANCED_USER_GUIDE.ru.md) | Advanced user guide — mixins (stored edits of the built config, step by step), manual config edits and Lock config, Raw JSON rules, import rules, Debug API, Automation API |
 | [DONATE.md](DONATE.md) · [RU](DONATE.ru.md) | Supporting the project (§362): crypto, and how to help without money. The in-app popup is sourced from `app/assets/donate.json` |
 
-> **RU/EN pairing (§360).** Six documents are kept as pairs: README, USER_GUIDE,
-> DONATE, PRIVACY_POLICY, SECURITY and AUTOMATION. The translation is named
+> **RU/EN pairing (§360).** Seven documents are kept as pairs: README, USER_GUIDE,
+> ADVANCED_USER_GUIDE, DONATE, PRIVACY_POLICY, SECURITY and AUTOMATION. The translation is named
 > `X.ru.md`. On every push and PR, CI compares the pair's skeleton — the number
 > and levels of sections, and the code blocks: a section added in one language
 > only fails the “Docs parity” step. Locally: `dart run
