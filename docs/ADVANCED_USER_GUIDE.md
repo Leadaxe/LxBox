@@ -6,8 +6,8 @@ This guide is for those who know the sing-box config format, edit JSON by
 hand and drive the app from a computer through the Debug API. The
 [User guide](USER_GUIDE.md) explains the interface: servers, directions,
 rules, DNS. This one covers the tools that work on the config itself and
-bypass the forms: mixins first, then manual editing, Raw JSON rules, import
-rules, the Debug API and the Automation API.
+bypass the forms: mixins, Lock config, Raw JSON, import rules, the Debug API
+and the Automation API.
 
 ## Contents
 
@@ -24,12 +24,11 @@ rules, the Debug API and the Automation API.
   - [Mixins, manual edits and Lock config](#mixins-manual-edits-and-lock-config)
   - [Backup and Debug API](#backup-and-debug-api)
   - [Limits](#limits)
-- [Other tools for advanced users](#other-tools-for-advanced-users)
-  - [Manual edit in Config Editor and Lock config](#manual-edit-in-config-editor-and-lock-config)
-  - [Lock config pins a manual config](#lock-config-pins-a-manual-config)
-  - [Raw JSON and the View tab cover fields the form lacks](#raw-json-and-the-view-tab-cover-fields-the-form-lacks)
-  - [Import rules on a subscription's Filters tab](#import-rules-on-a-subscriptions-filters-tab)
-  - [Debug API](#debug-api)
+- [Lock config pins a manual config](#lock-config-pins-a-manual-config)
+- [Raw JSON and the View tab cover fields the form lacks](#raw-json-and-the-view-tab-cover-fields-the-form-lacks)
+- [Import rules on a subscription's Filters tab](#import-rules-on-a-subscriptions-filters-tab)
+- [Debug API](#debug-api)
+- [Automation API](#automation-api)
   - [Automation: the VPN turns on by events](#automation-the-vpn-turns-on-by-events)
   - [Automation opens the VPN to commands from other apps](#automation-opens-the-vpn-to-commands-from-other-apps)
 
@@ -383,17 +382,12 @@ The formal description of the function —
 
 ---
 
-## Other tools for advanced users
-
-### Manual edit in Config Editor and Lock config
+## Lock config pins a manual config
 
 The Config tab edits the built config by hand; the edit lasts until the next
 rebuild. Lock config (debug) pins the saved config and stops rebuilds. The
 manual edit is described in the User guide:
-[Config Editor edits the core config until the next rebuild](USER_GUIDE.md#config-editor-edits-the-core-config-until-the-next-rebuild);
-Lock config — [below](#lock-config-pins-a-manual-config).
-
-### Lock config pins a manual config
+[Config Editor edits the core config until the next rebuild](USER_GUIDE.md#config-editor-edits-the-core-config-until-the-next-rebuild).
 
 The **Lock config (debug)** setting stops the app from rebuilding the
 config: interface actions change the settings, and the config file stays as
@@ -407,7 +401,9 @@ as well.
 > subscription updates do not reach the config: the VPN runs on the pinned
 > file. To make settings apply again, turn Lock config off.
 
-### Raw JSON and the View tab cover fields the form lacks
+---
+
+## Raw JSON and the View tab cover fields the form lacks
 
 You can write a rule as a sing-box `route.rules` JSON fragment: choose Raw
 JSON in Source. The JSON itself sets the action; the editor checks the syntax
@@ -416,7 +412,9 @@ as you type.
 For a form-built rule, the **View** tab shows the finished sing-box fragment
 that goes into the config.
 
-### Import rules on a subscription's Filters tab
+---
+
+## Import rules on a subscription's Filters tab
 
 The **Filters** tab holds node-processing rules; the rules apply on import
 and on every update. A rule is a set of conditions plus an action. A
@@ -436,7 +434,9 @@ everything → enable NL" works as a whitelist. The **Matches** tab in the
 rule editor shows which nodes a rule will apply to and what it will change,
 before you save.
 
-### Debug API
+---
+
+## Debug API
 
 Where: App Settings → Diagnostics → Developer → Debug API.
 
@@ -461,6 +461,10 @@ removes the pin.
 > interface rebuilds the config from the settings.
 
 The diagnostics playbook — [DIAGNOSTICS.md](DIAGNOSTICS.md).
+
+---
+
+## Automation API
 
 ### Automation: the VPN turns on by events
 
