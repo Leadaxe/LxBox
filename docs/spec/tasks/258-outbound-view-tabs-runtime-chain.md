@@ -154,3 +154,22 @@ Copy-аффорданс §099) — общий.
 - Не трогаем `detourPathHops` (§252) — редакторские превью живут на storage.
 - Не строим экран настроек подписочной ноды (решение 3).
 - Не показываем members-раскрытие групп на Overview (есть View pool §208).
+
+## Доработка 01.11.2026: Route живой
+
+Отчёт владельца (2.25.18, CPH2411): выбор в `🗽liberty` (detour узла HEL)
+переключили через Debug API (`set-group` → `switch-node`), ядро пошло через
+Германию, а Route на открытом экране HEL держал «Нидерланды · current pick»;
+Peers на том же экране обновился.
+
+Причина: цепочка считалась один раз (`initState` / `_load`) и хранилась
+полем `_hops`; выбор ядра (`SelectorInfo.I`, обновляется в
+`HomeController._applyGroups` на каждый пуш групп) экран больше не читал.
+
+Решение: `_hops` — геттер, Route и список участников группы (галка
+`_manualSelected`) обёрнуты в `ListenableBuilder` на `homeController`, как
+блок endpoint (§557). Тест — `app/test/screens/outbound_view_route_live_test.dart`
+(на старом коде падает: после смены выбора `de` не находится).
+
+Попутно: Debug API отдаёт выбор каждой группы — `GET /state` →
+`group_selected` (72512382).

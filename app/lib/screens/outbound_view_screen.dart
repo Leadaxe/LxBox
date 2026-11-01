@@ -82,9 +82,14 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
   late final TextEditingController _jsonCtrl;
 
   // §258 — Направления: подпись Направлений хопов «⚙ label» + Направление-ветка
-  // навигации. Цепочка строится после загрузки (initState → _load).
+  // навигации.
   List<Direction> _directions = const [];
-  List<RuntimeHop> _hops = const [];
+
+  /// §258 — цепочка считается на каждый build Route, не снимком при открытии:
+  /// выбор группы на пути меняется и не с этого экрана (главная, Debug API,
+  /// reselect urltest), Route слушает контроллер и читает свежий выбор ядра.
+  List<RuntimeHop> get _hops =>
+      runtimeChainOf(widget.tag, widget.config, directions: _directions);
 
   /// §344 — живой пул round_robin-группы (§208 `getPool`). `null` = ещё не
   /// спросили / клиент недоступен (туннель down, §209) — НЕ пустой пул.
@@ -205,7 +210,6 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
   void initState() {
     super.initState();
     _jsonCtrl = TextEditingController(text: widget.json);
-    _hops = runtimeChainOf(widget.tag, widget.config, directions: _directions);
     unawaited(_load());
   }
 
@@ -218,10 +222,7 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
   Future<void> _load() async {
     final directions = await SettingsStorage.getDirections();
     if (!mounted) return;
-    setState(() {
-      _directions = directions;
-      _hops = runtimeChainOf(widget.tag, widget.config, directions: directions);
-    });
+    setState(() => _directions = directions);
     // §344 — живой состав пула. Только для round_robin: у least_test пул
     // пуст по контракту ядра, спрашивать нечего.
     if (!_isBalancer) return;
@@ -481,7 +482,13 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
             ),
           ),
         ),
-        ..._routeRows(context),
+        ListenableBuilder(
+          listenable: widget.homeController,
+          builder: (context, _) => Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: _routeRows(context),
+          ),
+        ),
       ],
     );
   }
@@ -541,7 +548,12 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
       if (_isBalancer && pool != null) _kvRow(context, 'Pool', '$pool'),
       if (_isBalancer && poolTolerance is int && poolTolerance > 0)
         _kvRow(context, 'Pool tolerance', '$poolTolerance ms'),
-      if (members is List) _membersTile(context, members),
+      // Галка выбранного участника — живой выбор ядра, как Route.
+      if (members is List)
+        ListenableBuilder(
+          listenable: widget.homeController,
+          builder: (context, _) => _membersTile(context, members),
+        ),
       // §557 — состояние и выключатель слушают контроллер: heartbeat и
       // ответ выключателя обновляют их без перехода на экран заново.
       if (node.type == 'wireguard' || node.type == 'awg')

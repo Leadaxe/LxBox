@@ -167,6 +167,18 @@
 
 ### Fixed
 
+- **Route on the node screen did not follow the selector.** When the
+  selected node of a group on the path changed outside this screen (on the
+  home screen, through the Debug API, or after a urltest reselect), Route
+  kept showing the old pick until the screen was reopened. Route and the
+  checkmark in the member list of a group now update with the core's
+  selection.
+  (RU: Route на экране узла не следил за селектором. Если выбор группы на
+  пути менялся не с этого экрана (на главной, через Debug API, после
+  переселекта urltest), Route показывал старый выбор, пока экран не открыть
+  заново. Теперь Route и галка в списке участников группы обновляются
+  вместе с выбором ядра.)
+
 - **Servers could not be removed from Shield DNS
   ([task 695](docs/spec/tasks/695-dns-disabled-group-holds.md),
   [#182](https://github.com/Leadaxe/LxBox/issues/182)).** After 2.25.17 the
