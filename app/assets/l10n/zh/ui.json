@@ -5998,6 +5998,9 @@
   "no active session (last handshake %s)": {
     "value": "无活动会话（上次握手 %s）"
   },
+  "no response (last handshake %s)": {
+    "value": "无响应（上次握手 %s）"
+  },
   "asleep": {
     "value": "休眠"
   },

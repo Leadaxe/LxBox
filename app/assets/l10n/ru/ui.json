@@ -6283,6 +6283,9 @@
   "no active session (last handshake %s)": {
     "value": "нет активной сессии (последний хендшейк %s)"
   },
+  "no response (last handshake %s)": {
+    "value": "нет ответа (последний хендшейк %s)"
+  },
   "asleep": {
     "value": "спит"
   },

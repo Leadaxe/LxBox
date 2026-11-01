@@ -68,8 +68,13 @@ void main() {
       });
       expect(
         () => CcChannel.instance.getWireGuardStatus('wg-x'),
-        throwsA(isA<PlatformException>()
-            .having((e) => e.code, 'code', 'unimplemented')),
+        throwsA(
+          isA<PlatformException>().having(
+            (e) => e.code,
+            'code',
+            'unimplemented',
+          ),
+        ),
       );
     });
   });
@@ -79,14 +84,18 @@ void main() {
     CcWireGuardPeer peer(int hs) =>
         CcWireGuardPeer(publicKey: key, lastHandshakeUnix: hs);
 
-    WgPeerVerdict v(String state, int hs, {bool grew = false, int limit = 180}) =>
-        wgPeerVerdict(
-          endpointState: state,
-          peer: peer(hs),
-          rxGrew: grew,
-          nowUnix: now,
-          rejectAfterSeconds: limit,
-        );
+    WgPeerVerdict v(
+      String state,
+      int hs, {
+      bool grew = false,
+      int limit = 180,
+    }) => wgPeerVerdict(
+      endpointState: state,
+      peer: peer(hs),
+      rxGrew: grew,
+      nowUnix: now,
+      rejectAfterSeconds: limit,
+    );
 
     test('хендшейка не было — never connected', () {
       expect(v('up', 0).kind, WgPeerVerdictKind.neverConnected);
@@ -97,7 +106,10 @@ void main() {
     });
 
     test('age > порога, rx стоит — нет сессии с возрастом', () {
-      expect(v('up', now - 600), const WgPeerVerdict(WgPeerVerdictKind.noSession, 600));
+      expect(
+        v('up', now - 600),
+        const WgPeerVerdict(WgPeerVerdictKind.noSession, 600),
+      );
     });
 
     test('age > порога, rx растёт — на связи', () {
@@ -106,6 +118,29 @@ void main() {
 
     test('порог reject_after_time', () {
       expect(v('up', now - 250, limit: 300).kind, WgPeerVerdictKind.connected);
+    });
+
+    test('без ответа — выше порога и роста rx, с возрастом', () {
+      expect(
+        wgPeerVerdict(
+          endpointState: 'up',
+          peer: peer(now - 90),
+          rxGrew: false,
+          unanswered: true,
+          nowUnix: now,
+        ),
+        const WgPeerVerdict(WgPeerVerdictKind.noResponse, 90),
+      );
+      expect(
+        wgPeerVerdict(
+          endpointState: 'up',
+          peer: peer(0),
+          rxGrew: false,
+          unanswered: true,
+          nowUnix: now,
+        ).kind,
+        WgPeerVerdictKind.neverConnected,
+      );
     });
 
     test('asleep / disabled', () {
@@ -133,12 +168,55 @@ void main() {
     });
 
     test('рост rx; меньшее значение — новая база', () {
-      final t = WgRxTracker();
-      expect(t.grew(key, 100), isFalse);
-      expect(t.grew(key, 150), isTrue);
-      expect(t.grew(key, 150), isFalse);
-      expect(t.grew(key, 10), isFalse);
-      expect(t.grew(key, 20), isTrue);
+      final t = WgTrafficTracker();
+      expect(t.record(key, 100, 0, 0).rxGrew, isFalse);
+      expect(t.record(key, 150, 0, 2).rxGrew, isTrue);
+      expect(t.record(key, 150, 0, 4).rxGrew, isFalse);
+      expect(t.record(key, 10, 0, 6).rxGrew, isFalse);
+      expect(t.record(key, 20, 0, 8).rxGrew, isTrue);
+    });
+
+    test('tx растёт, rx стоит — без ответа с четвёртого роста', () {
+      final t = WgTrafficTracker();
+      t.record(key, 100, 100, 0);
+      expect(t.record(key, 100, 200, 2).unanswered, isFalse);
+      expect(t.record(key, 100, 300, 4).unanswered, isFalse);
+      expect(t.record(key, 100, 400, 6).unanswered, isFalse);
+      expect(t.record(key, 100, 500, 8).unanswered, isTrue);
+      // tx встал — ростов в окне хватает, вердикт держится.
+      expect(t.record(key, 100, 500, 10).unanswered, isTrue);
+      // rx вырос — счёт обнуляется.
+      final s = t.record(key, 200, 600, 12);
+      expect(s.rxGrew, isTrue);
+      expect(s.unanswered, isFalse);
+    });
+
+    test('keepalive раз в 25 с — не без ответа', () {
+      final t = WgTrafficTracker();
+      var tx = 0;
+      for (var now = 0; now <= 300; now += 2) {
+        if (now % 25 < 2) tx += 32;
+        expect(t.record(key, 100, tx, now).unanswered, isFalse, reason: '$now');
+      }
+    });
+
+    test('ростов tx, вышедших из окна 20 с, не считаем', () {
+      final t = WgTrafficTracker();
+      t.record(key, 100, 0, 0);
+      t.record(key, 100, 10, 2);
+      t.record(key, 100, 20, 4);
+      t.record(key, 100, 30, 6);
+      expect(t.record(key, 100, 40, 30).unanswered, isFalse);
+    });
+
+    test('сброс tx — новая база, счёт с нуля', () {
+      final t = WgTrafficTracker();
+      t.record(key, 100, 100, 0);
+      t.record(key, 100, 200, 2);
+      t.record(key, 100, 300, 4);
+      t.record(key, 100, 400, 6);
+      expect(t.record(key, 100, 50, 8).unanswered, isFalse);
+      expect(t.record(key, 100, 60, 10).unanswered, isFalse);
     });
   });
 
@@ -174,10 +252,14 @@ void main() {
         final p = CcTailscalePeer.fromMap({'stable_id': 'n1', 'path': raw});
         expect(p.path, CcTailscalePath.direct);
       }
-      expect(CcTailscalePeer.fromMap(const {'path': 'peer_relay'}).path,
-          CcTailscalePath.peerRelay);
-      expect(CcTailscalePeer.fromMap(const {'path': 'derp'}).path,
-          CcTailscalePath.derp);
+      expect(
+        CcTailscalePeer.fromMap(const {'path': 'peer_relay'}).path,
+        CcTailscalePath.peerRelay,
+      );
+      expect(
+        CcTailscalePeer.fromMap(const {'path': 'derp'}).path,
+        CcTailscalePath.derp,
+      );
     });
 
     test('ядро без пути — пустые поля', () {

@@ -44,8 +44,8 @@ class WgPeersSection extends StatefulWidget {
 
 class _WgPeersSectionState extends State<WgPeersSection> {
   CcWireGuardStatus? _status;
-  final _tracker = WgRxTracker();
-  Map<String, bool> _rxGrew = const {};
+  final _tracker = WgTrafficTracker();
+  Map<String, WgTrafficSample> _traffic = const {};
   Timer? _timer;
   bool _inFlight = false;
 
@@ -57,10 +57,12 @@ class _WgPeersSectionState extends State<WgPeersSection> {
   @override
   void initState() {
     super.initState();
-    _lifecycle = AppLifecycleListener(onStateChange: (s) {
-      _foreground = s == AppLifecycleState.resumed;
-      _sync();
-    });
+    _lifecycle = AppLifecycleListener(
+      onStateChange: (s) {
+        _foreground = s == AppLifecycleState.resumed;
+        _sync();
+      },
+    );
     _sync();
   }
 
@@ -104,17 +106,19 @@ class _WgPeersSectionState extends State<WgPeersSection> {
       final fetch = widget.fetch ?? CcChannel.instance.getWireGuardStatus;
       final st = await fetch(widget.tag);
       if (!mounted) return;
-      final grew = <String, bool>{
+      final now = _nowUnix();
+      final traffic = <String, WgTrafficSample>{
         for (final p in st.peers)
-          p.publicKey: _tracker.grew(p.publicKey, p.rxBytes),
+          p.publicKey: _tracker.record(p.publicKey, p.rxBytes, p.txBytes, now),
       };
       setState(() {
         _status = st;
-        _rxGrew = grew;
+        _traffic = traffic;
       });
     } on PlatformException catch (e) {
       if (!mounted) return;
-      final fatal = e.code == CcStatusError.unimplemented ||
+      final fatal =
+          e.code == CcStatusError.unimplemented ||
           e.code == CcStatusError.notFound ||
           e.code == CcStatusError.invalidArgument;
       if (fatal) {
@@ -157,8 +161,10 @@ class _WgPeersSectionState extends State<WgPeersSection> {
           ),
         ),
         if (st.peers.isEmpty)
-          Text(wgEmptyPeersLabel(st.endpointState),
-              style: theme.textTheme.bodySmall),
+          Text(
+            wgEmptyPeersLabel(st.endpointState),
+            style: theme.textTheme.bodySmall,
+          ),
         for (final p in st.peers)
           _peerRow(
             context,
@@ -166,7 +172,8 @@ class _WgPeersSectionState extends State<WgPeersSection> {
             wgPeerVerdict(
               endpointState: st.endpointState,
               peer: p,
-              rxGrew: _rxGrew[p.publicKey] ?? false,
+              rxGrew: _traffic[p.publicKey]?.rxGrew ?? false,
+              unanswered: _traffic[p.publicKey]?.unanswered ?? false,
               nowUnix: now,
               rejectAfterSeconds: rejectAfter,
             ),
@@ -185,12 +192,14 @@ class _WgPeersSectionState extends State<WgPeersSection> {
     final theme = Theme.of(context);
     final color = switch (v.kind) {
       WgPeerVerdictKind.connected => Colors.green,
-      WgPeerVerdictKind.noSession => Colors.orange,
+      WgPeerVerdictKind.noSession ||
+      WgPeerVerdictKind.noResponse => Colors.orange,
       _ => theme.disabledColor,
     };
     final endpoint = p.endpoint.isEmpty ? '—' : p.endpoint;
     final age = wgHandshakeAgeLabel(p.lastHandshakeUnix, now);
-    final traffic = '↓ ${formatBytes(p.rxBytes, spaced: true)}  '
+    final traffic =
+        '↓ ${formatBytes(p.rxBytes, spaced: true)}  '
         '↑ ${formatBytes(p.txBytes, spaced: true)}';
     final verdict = wgPeerVerdictLabel(v);
     final line = [p.shortKey, endpoint, age, traffic, verdict].join(' · ');
@@ -201,11 +210,7 @@ class _WgPeersSectionState extends State<WgPeersSection> {
       minLeadingWidth: 10,
       title: Text(p.shortKey, style: const TextStyle(fontFamily: 'monospace')),
       subtitle: Text(
-        [
-          '$endpoint · $age',
-          traffic,
-          verdict,
-        ].join('\n'),
+        ['$endpoint · $age', traffic, verdict].join('\n'),
         style: theme.textTheme.bodySmall,
       ),
       onLongPress: () => unawaited(_peerMenu(p, line)),
@@ -250,7 +255,8 @@ class _WgPeersSectionState extends State<WgPeersSection> {
     };
     await Clipboard.setData(ClipboardData(text: text));
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(getLocalText.s("Copied"))));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(getLocalText.s("Copied"))));
   }
 }
