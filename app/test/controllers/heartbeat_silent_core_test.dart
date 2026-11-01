@@ -2,6 +2,7 @@
 
 import 'dart:io';
 
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/controllers/home_controller.dart';
@@ -25,10 +26,10 @@ class _FakePathProvider extends PathProviderPlatform
 /// переводят туннель в `revoked` с `tunnelNotResponding` и дают штатную
 /// попытку stop (`_tryCleanStop` → `vpn.stopVPN()`).
 ///
-/// Свидетель §591 P14 (не было юнит-покрытия). Реальное время: watchdog
-/// (`heartbeat.dart`) тикает `Timer.periodic` без инъекции часов — fakeAsync
-/// в этом репозитории не используется (проверено по test/**), поэтому тест
-/// ждёт живые секунды как `stop_timeout_budget_test.dart`/`home_core_reject_test.dart`.
+/// Свидетель §591 P14 (не было юнит-покрытия). Время фиктивное: watchdog
+/// (`heartbeat.dart`) тикает `Timer.periodic`, а тишину считает по часам
+/// `HomeController.heartbeatClockForTesting` — тест подставляет часы
+/// fake-async, и прод-константы 5 с / 8 с проходят без живого ожидания.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -43,22 +44,10 @@ void main() {
   late HomeController controller;
   late int stopVpnCalls;
 
-  setUp(() async {
-    tempDir =
-        await Directory.systemTemp.createTemp('heartbeat_silent_core_test_');
-    PathProviderPlatform.instance = _FakePathProvider(tempDir.path);
-    HapticService.I.enabled = false;
-    stopVpnCalls = 0;
-    messenger.setMockMethodCallHandler(methods, (call) async {
-      switch (call.method) {
-        case 'stopVPN':
-          stopVpnCalls++;
-          return true;
-        default:
-          return null;
-      }
-    });
-    messenger.setMockMethodCallHandler(ccGroupsMethod, (call) async => null);
+  /// Регистрируется внутри fakeAsync: мок доставляет событие через свой
+  /// StreamController, и его подписка должна жить в fake-зоне, иначе
+  /// снапшот придёт только после выхода из неё.
+  void mockSilentStatusStream() {
     // §122 status-стрим: на 'listen' шлём РОВНО ОДИН снапшот (иначе
     // `_checkHeartbeat` видит `lastCcStatusAt == null` и трактует это как
     // «канал только поднимается», не считает тишину — см. heartbeat.dart),
@@ -79,6 +68,24 @@ void main() {
         onCancel: (args) {},
       ),
     );
+  }
+
+  setUp(() async {
+    tempDir =
+        await Directory.systemTemp.createTemp('heartbeat_silent_core_test_');
+    PathProviderPlatform.instance = _FakePathProvider(tempDir.path);
+    HapticService.I.enabled = false;
+    stopVpnCalls = 0;
+    messenger.setMockMethodCallHandler(methods, (call) async {
+      switch (call.method) {
+        case 'stopVPN':
+          stopVpnCalls++;
+          return true;
+        default:
+          return null;
+      }
+    });
+    messenger.setMockMethodCallHandler(ccGroupsMethod, (call) async => null);
     controller = HomeController();
   });
 
@@ -92,30 +99,39 @@ void main() {
 
   test(
       'молчание status-стрима дольше 8с дважды подряд → revoked + '
-      'tunnelNotResponding + попытка стопа', () async {
-    controller.debugHandleStatusEvent(
-      const TunnelStatusEvent(status: TunnelStatus.connected, raw: 'Started'),
-    );
-    expect(controller.state.tunnel, TunnelStatus.connected);
+      'tunnelNotResponding + попытка стопа', () {
+    fakeAsync((async) {
+      final t0 = DateTime.now();
+      HomeController.heartbeatClockForTesting = () => t0.add(async.elapsed);
+      addTearDown(() => HomeController.heartbeatClockForTesting = null);
+      mockSilentStatusStream();
 
-    // Watchdog: интервал тика 5с, порог тишины 8с, 2 неудачных тика подряд
-    // гасят туннель. Ждём с запасом на дрожание таймера в CI.
-    final deadline = DateTime.now().add(const Duration(seconds: 25));
-    while (controller.state.tunnel != TunnelStatus.revoked &&
-        DateTime.now().isBefore(deadline)) {
-      await Future<void>.delayed(const Duration(milliseconds: 200));
-    }
+      controller.debugHandleStatusEvent(
+        const TunnelStatusEvent(status: TunnelStatus.connected, raw: 'Started'),
+      );
+      async.flushMicrotasks();
+      expect(controller.state.tunnel, TunnelStatus.connected);
 
-    expect(controller.state.tunnel, TunnelStatus.revoked,
-        reason: 'ядро молчало > 8с дважды подряд — watchdog обязан признать '
-            'его немым (P14)');
-    expect(controller.state.lastError, const ErrMsg(ErrKey.tunnelNotResponding));
+      // Watchdog: интервал тика 5с, порог тишины 8с, 2 неудачных тика подряд
+      // гасят туннель. Тик 5с — тишина 5с, ещё жив.
+      async.elapse(const Duration(seconds: 6));
+      expect(controller.state.tunnel, TunnelStatus.connected,
+          reason: 'тишина 5с не превышает порога 8с');
 
-    // `_onTunnelDead` делает best-effort stop асинхронно (unawaited) — даём
-    // микрозадачам/таймеру прогнаться.
-    await Future<void>.delayed(const Duration(milliseconds: 200));
-    expect(stopVpnCalls, greaterThanOrEqualTo(1),
-        reason: 'признание немого ядра должно попытаться штатно остановить '
-            'туннель, а не просто сменить статус');
+      // Тики 10с и 15с — два неудачных подряд.
+      async.elapse(const Duration(seconds: 10));
+      expect(controller.state.tunnel, TunnelStatus.revoked,
+          reason: 'ядро молчало > 8с дважды подряд — watchdog обязан признать '
+              'его немым (P14)');
+      expect(
+          controller.state.lastError, const ErrMsg(ErrKey.tunnelNotResponding));
+
+      // `_onTunnelDead` делает best-effort stop асинхронно (unawaited) — даём
+      // микрозадачам/таймеру прогнаться.
+      async.elapse(const Duration(milliseconds: 200));
+      expect(stopVpnCalls, greaterThanOrEqualTo(1),
+          reason: 'признание немого ядра должно попытаться штатно остановить '
+              'туннель, а не просто сменить статус');
+    });
   });
 }

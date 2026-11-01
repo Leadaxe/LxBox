@@ -134,7 +134,24 @@ class HomeController extends ChangeNotifier
   /// чтобы юзер не спамил кнопками при тревоге. См. spec 030 / 031.
   DateTime? _lastReloadTap;
   DateTime? _lastResetNetworkTap;
-  static const _recoveryCooldown = Duration(seconds: 3);
+  static const _defaultRecoveryCooldown = Duration(seconds: 3);
+  static Duration _recoveryCooldown = _defaultRecoveryCooldown;
+
+  /// Только для тестов: укоротить cooldown recovery-действий, чтобы повтор
+  /// §667 не ждал живые 3 с. `null` возвращает прод-значение.
+  @visibleForTesting
+  static set recoveryCooldownForTesting(Duration? value) =>
+      _recoveryCooldown = value ?? _defaultRecoveryCooldown;
+
+  /// Часы watchdog'а (§122): метка status-снапшота и «тишина» в
+  /// `_checkHeartbeat`. Тест подменяет их часами fake-async, иначе тишину
+  /// дольше 8 с пришлось бы ждать вживую.
+  static DateTime Function() _heartbeatNow = DateTime.now;
+
+  /// Только для тестов: подменить часы watchdog'а. `null` — `DateTime.now`.
+  @visibleForTesting
+  static set heartbeatClockForTesting(DateTime Function()? now) =>
+      _heartbeatNow = now ?? DateTime.now;
 
   /// One-shot timer for auto-ping-on-connect (5s after tunnel up). Отменяется
   /// при disconnect чтобы не стрельнул в уже отключённом состоянии.
@@ -1680,7 +1697,7 @@ class HomeController extends ChangeNotifier
   /// `connectionsIn/Out` — для бейджа активных.
   void _onCcStatus(CcStatus s) {
     if (!_state.tunnelUp) return;
-    final now = DateTime.now();
+    final now = _heartbeatNow();
     // Watchdog обновляем на КАЖДЫЙ тик (дёшево, без emit) — он гейтит dead-tunnel.
     _lastCcStatusAt = now;
     _heartbeatFailures = 0;
