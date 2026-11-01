@@ -348,7 +348,7 @@ Path language: segments joined by "."; name[N] — list element; name[f=v,g.h=w]
 — list elements where every condition holds (number/bool/case-sensitive
 string; a list field means "contains"); empty path = the root. Mixins run in
 list order as the last build step; a failing mixin (no match, wrong target
-type, duplicate tag) is a fatal build issue "Mixin \"<name>\": <target>: <reason>".
+type, duplicate tag) is a fatal build issue "Mixin "<name>": <target>: <reason>".
 
 === Chains CRUD (hop chains — third source kind, SPEC 110) ===
 
