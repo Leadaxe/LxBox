@@ -5,6 +5,9 @@ code — about the logic and the order in which to set things up.
 
 > Русская версия: [USER_GUIDE.ru.md](USER_GUIDE.ru.md)
 
+> For advanced users: [Advanced user guide](ADVANCED_USER_GUIDE.md) — mixins,
+> manual config edits, Debug API.
+
 ## Contents
 
 - [What is what](#what-is-what)
@@ -2107,8 +2110,8 @@ config. A mixin is a target path, an action and a JSON value; it is applied as
 the last step of every build, so a rebuild does not lose it, unlike a manual
 edit. Example: `inbounds → append` with a `direct` inbound on
 `127.0.0.1:5354`, plus a `hijack-dns` rule for it, gives other apps a DNS
-listener. Path syntax and actions —
-[Mixins](spec/features/019-CONFIG_EDITOR/FUNCTIONS/mixins.md).
+listener. The screen step by step, path syntax, actions and examples —
+[Advanced user guide → Mixins](ADVANCED_USER_GUIDE.md#mixins).
 
 ### Lock config pins a manual config
 
