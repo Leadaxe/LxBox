@@ -142,6 +142,53 @@ Memory limit 200 MB и делает вывод, что лимит не рабо�
 Wire-протокол §189 не меняется: в prefs по-прежнему `auto` | число;
 `off` принимается на чтении. Debug API/бэкап совместимы.
 
+## Часть 2 — лимит по памяти ядра (ядро v1.14.4-lx.29, SPEC 148)
+
+Владелец 01.11.2026 (передано через сессию ядра): тег lx.29 режется только
+с SPEC 148, «как выйдет ядро — можно внедрять». Контракт в коде ядра
+зафиксирован (`0f94afdcc`), имена не изменятся до тега.
+
+### Что даёт ядро
+
+- `StatusMessage.MemoryRuntime` (int64, байты; Java `getMemoryRuntime()`):
+  память Go-рантайма = `runtime/metrics` `/memory/classes/total:bytes −
+  /memory/classes/heap/released:bytes` — ровно то, чем управляет
+  `SetMemoryLimit`. `Memory` по-прежнему RSS процесса.
+- `SetupOptions.OomMemoryLimitHeap` (bool, дефолт false): при true порог
+  oom-killer сравнивается с `MemoryRuntime`, а не с RSS; слежение за
+  `MemAvailable` при этом остаётся (нулевое `Available` = неизвестно).
+  Пороги −5/−10 MiB и GC-потолок 4/5 без изменений.
+
+### Изменения в приложении
+
+| Файл | Что |
+|---|---|
+| `BoxApplication.kt` (onCreate, `SetupOptions`) и `VpnPlugin.kt` (`setMemoryLimit` → `reloadSetupOptions`) | `oomMemoryLimitHeap = true` рядом с `oomKillerEnabled`; комментарий: порог по памяти рантайма ядра (SPEC 148), не по RSS |
+| `BoxCommandClient.kt` (`writeStatus`, snap) | `snap["memoryRuntime"] = m.getMemoryRuntime()` |
+| `app/lib/vpn/cc_channel.dart` (статус, ~1020) | поле `memoryRuntime: _int(m['memoryRuntime'])` (0, если ключа нет — старое ядро) |
+| `overview_tab.dart` | карточка «LxBox» остаётся RSS процесса (решение §242); в `showMemoryDetailSheet` передаётся `coreRuntime` |
+| `memory_detail_sheet.dart` | в группе Process после `RSS` строка **`Core runtime`** = `formatBytes(coreRuntime)`; при пресетном лимите (из `SettingsStorage.getNativeMemoryLimit()`, читается в `initState` рядом с `getMemoryInfo`) — `42.1 MB / 200 MB`; при `auto` — без дроби. Строка скрыта при `coreRuntime == 0`. Подпись строки ниже, стилем `bodySmall`/`onSurfaceVariant`, как подпись у Native heap: «Memory of the VPN core itself (Go runtime); the limit from VPN Settings applies to this figure. RSS is the whole app process.» |
+| `settings_screen.dart` подсказка | переписать: порог по памяти самого ядра VPN (его Go-рантайма), не всего процесса; выше — сброс соединений и освобождение памяти, вблизи — GC греет телефон; Auto порога не ставит; ядро при любом значении следит и за свободной памятью системы; applies immediately. Текущую цифру смотреть в Statistics → Memory → Core runtime |
+| `app/assets/l10n/{ru,zh}/ui.json` | новая подсказка, «Core runtime», подпись строки |
+| `docs/USER_GUIDE.md`, `.ru.md` | раздел Memory limit: порог по памяти ядра с lx.29; где смотреть; Auto по-прежнему без порога |
+| `docs/STORAGE.md` | комментарий `memory_limit`: threshold on the core's runtime memory (core lx.29+) |
+| `docs/spec/features/012-LIVE_STATE/FUNCTIONS/traffic-statistics.md` | пункт про «Memory = весь процесс»: добавить, что Core runtime в шторке — память ядра |
+| `CHANGELOG.md` Unreleased | дополнить запись 705: with core lx.29 the limit is compared with the core's own memory; Statistics → Memory shows Core runtime next to process RSS |
+| тесты | разбор статуса (`memoryRuntime`, отсутствие ключа → 0) в тесте cc_channel/box_vpn_client, где уже проверяется `memory`; widget-тест шторки: строка `Core runtime` с `/ 200 MB` при пресете и без дроби при `auto`, скрыта при 0 |
+
+Пин ядра (`app/android/libbox.version`, `.libbox.version`,
+`kCoreBuildTagsPin` в `core_chain_capability.dart`, `docs/KERNEL.md` с javap
+и sha256) — отдельным шагом по регламенту после публикации AAR lx.29;
+до этого код против `getMemoryRuntime()` не собирается, поэтому ветка
+исполнителя вливается в develop вместе с пином.
+
+### Проверка части 2
+
+- Эмулятор, лимит 200: лог ядра без `memory threshold reached` на старте;
+  Statistics → Memory → `Core runtime ~40 MB / 200 MB`, RSS прежний.
+- Лимит Auto: строка без дроби.
+- У пользователя с WARP-группой — то же на его устройстве (после релиза).
+
 ## Проверка
 
 - `app/test/services/native_prefs_memory_limit_test.dart` — дефолт `auto`,
