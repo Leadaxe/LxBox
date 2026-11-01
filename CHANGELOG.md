@@ -12,6 +12,28 @@
 
 ### Added
 
+- **Mixins: your own additions to the final core config
+  ([task 704](docs/spec/tasks/704-config-mixins.md)).** Config → Mixins
+  keeps operations that are applied at the end of every config build: a
+  target path (`route.rules[action=hijack-dns]`, `inbounds[tag=dns-in]`), a
+  verb (append, prepend, before, after, set, merge, remove) and a JSON value.
+  The form shows whether the target matches and a preview of the result. A
+  mixin survives rebuilds, unlike a manual edit with Lock config, travels in
+  LX Backup and is available through the Debug API (`/mixins`). A mixin that
+  does not apply or adds a duplicate tag stops the build with its name in the
+  message. Example: a `direct` inbound on `127.0.0.1:5354` with a
+  `hijack-dns` rule hands the core's DNS to another app.
+  (RU: Mixins: свои вставки в итоговый конфиг ядра. Config → Mixins хранит
+  операции, которые применяются в конце каждой сборки конфига: путь цели
+  (`route.rules[action=hijack-dns]`, `inbounds[tag=dns-in]`), глагол
+  (append, prepend, before, after, set, merge, remove) и JSON-значение.
+  Форма показывает, находит ли путь цель, и предпросмотр результата. Миксин
+  переживает пересборки, в отличие от ручной правки с Lock config, едет в LX
+  Backup и доступен через Debug API (`/mixins`). Миксин, который не
+  применяется или вносит дубль тега, останавливает сборку с его именем в
+  сообщении. Пример: inbound `direct` на `127.0.0.1:5354` с правилом
+  `hijack-dns` отдаёт DNS ядра другому приложению.)
+
 - **Hosts DNS server in the form, and Hosts in a DNS group
   ([task 699](docs/spec/tasks/699-dns-hosts-server-and-group-overlay.md),
   [#185](https://github.com/Leadaxe/LxBox/issues/185)).** The DNS server
@@ -159,7 +181,7 @@
   for an explicit choice, and a value chosen earlier is kept. Statistics →
   Memory shows the figure as Core memory next to the process RSS, with the
   limit beside it when a number is chosen.
-- **Core `v1.14.4-lx.25` → `v1.14.4-lx.28`
+- **Core `v1.14.4-lx.25` → `v1.14.4-lx.29`
   ([docs/KERNEL.md](docs/KERNEL.md)).** A DNS group can list `hosts`
   servers that answer the names they know before the group's servers
   (Leadaxe/sing-box-lx#60). MTU alignment fixes: a proxy node inside a group no
@@ -170,8 +192,10 @@
   when a MASQUE node with `detour` is being pinged or connecting at that
   moment; after a stop that did hang, the new core instance takes `cache.db`
   over by itself, keeping group selection, FakeIP and the rule-set cache
-  (Leadaxe/sing-box-lx#61). No config changes.
-  (RU: Ядро `v1.14.4-lx.25` → `v1.14.4-lx.28`. DNS-группа может спрашивать
+  (Leadaxe/sing-box-lx#61). The memory limit can be compared with the core's
+  Go runtime instead of the whole process (Leadaxe/sing-box-lx#62). No config
+  changes.
+  (RU: Ядро `v1.14.4-lx.25` → `v1.14.4-lx.29`. DNS-группа может спрашивать
   серверы `hosts` раньше своих серверов; поправки выравнивания MTU: прокси-узел
   в группе больше не занижает MTU туннеля над группой, туннели с IPv6 не
   опускаются ниже 1280. Статус пира WireGuard/AWG отдаётся по сессиям: после
@@ -179,7 +203,8 @@
   начинаются с нуля. Остановка VPN больше не зависает, если в этот момент
   пингуется или подключается узел MASQUE с `detour`; после зависшей остановки
   новое ядро само забирает `cache.db`, сохраняя выбор узлов, FakeIP и кеш
-  rule-set. Конфиг не меняется.)
+  rule-set. Лимит памяти можно сравнивать с Go-рантаймом ядра, а не со всем
+  процессом. Конфиг не меняется.)
 - **Default TUN MTU is 9000 instead of 1492
   ([task 700](docs/spec/tasks/700-tun-mtu-default-9000.md)).** 9000 is the
   sing-box default; the tunnel interface is virtual, and the core re-sends TCP

@@ -1,34 +1,28 @@
-# L×Box v2.25.19-rc.1
+# L×Box v2.25.19-rc.2
 
-**A release candidate on top of [v2.25.18](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.18).**
+**The second release candidate on top of [v2.25.18](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.18).**
 
 This is a pre-release on GitHub; in Google Play it goes to Open testing. It is
-not offered to users of the stable release.
+not offered to users of the stable release. It contains everything from
+[v2.25.19-rc.1](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.19-rc.1);
+below are the changes since rc.1.
 
-DNS gets a **Hosts** server type and a Hosts block in DNS groups: names with
-your own addresses, answered before the group's servers, so a node address
-like `wg.home` resolves to your LAN. Template DNS servers and groups are
-editable again, and servers can be removed from Shield DNS. Routing rules can
-match the network type (Wi-Fi, Cellular, Ethernet) and metered networks. A
-WireGuard/AWG peer that gets no answer is shown as «no response» instead of
-green. Stopping the VPN no longer hangs on a MASQUE node with a detour, and the
-next start no longer fails with `initialize cache-file: timeout`. Default TUN
-MTU is 9000. Core `v1.14.4-lx.28`, contract 1.1.145.
+**Mixins**: your own additions to the final core config that survive every
+rebuild. The memory limit now applies to the core's own memory, and Auto sets
+no cap. The «Interrupt connections on switch» switch is removed. Core
+`v1.14.4-lx.29`.
 
-**Релиз-кандидат поверх [v2.25.18](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.18).**
+**Второй релиз-кандидат поверх [v2.25.18](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.18).**
 
 На GitHub это pre-release, в Google Play сборка уходит в открытое
-тестирование. Пользователям стабильного релиза она не предлагается.
+тестирование. Пользователям стабильного релиза она не предлагается. В нём
+всё из [v2.25.19-rc.1](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.19-rc.1);
+ниже — изменения относительно rc.1.
 
-В DNS появился тип сервера **Hosts** и блок Hosts у DNS-групп: имена с вашими
-адресами отвечаются раньше серверов группы, и адрес узла вроде `wg.home`
-резолвится в вашу локальную сеть. Шаблонные DNS-серверы и группы снова
-редактируются, из Shield DNS можно убрать сервер. Правила маршрутизации
-различают тип сети (Wi-Fi, Cellular, Ethernet) и лимитные сети. Пир
-WireGuard/AWG, которому не отвечают, показан как «no response», а не зелёным.
-Остановка VPN больше не зависает на узле MASQUE с detour, а следующий запуск
-не падает с `initialize cache-file: timeout`. MTU tun по умолчанию 9000. Ядро
-`v1.14.4-lx.28`, контракт 1.1.145.
+**Mixins** — свои вставки в итоговый конфиг ядра, которые переживают любую
+пересборку. Лимит памяти теперь действует на память самого ядра, Auto порога
+не ставит. Тумблер «Interrupt connections on switch» убран. Ядро
+`v1.14.4-lx.29`.
 
 ---
 
@@ -37,120 +31,42 @@ WireGuard/AWG, которому не отвечают, показан как «n
 
 ## ⚠️ Read before updating
 
-- **Default TUN MTU is 9000 instead of 1492 ([task 700](docs/spec/tasks/700-tun-mtu-default-9000.md)).**
-  9000 is the sing-box default. The tunnel interface is virtual and the core
-  re-sends TCP at the real network MTU, so a small value only added packets
-  and CPU work. Installs where MTU was never changed get 9000 with the next
-  config build; a value set by hand stays.
-- **DNS servers that something refers to are switched on.** A setup from
-  older versions where a referenced DNS server is off (a group member, a
-  domain resolver, DNS Final, Default Domain Resolver) is fixed on start: the
-  server is switched on, and the app log says why.
+- **Memory limit: Auto sets no cap, Off is folded into Auto ([task 705](docs/spec/tasks/705-memory-limit-auto-off.md)).**
+  The limit is now compared with the core's own memory (its Go runtime), not
+  with the whole app process it shares with the interface and libraries: a
+  200 MB cap used to trip right at start and only made the garbage collector
+  heat the phone. The core keeps watching the phone's free memory as before.
+  The 200–768 MB presets stay for an explicit choice, and a value chosen
+  earlier is kept.
+- **«Interrupt connections on switch» is removed ([task 143](docs/spec/tasks/143-interrupt-connections-on-node-switch.md)).**
+  The switch in VPN Settings → System only duplicated each Direction's own
+  checkbox of the same name and could override it: the core has dropped a
+  Direction's connections on any node switch since 2.20.9. If it was on, the
+  update turns the checkbox on in every Direction where it was off. The Debug
+  API route `/settings/interrupt_on_switch` is gone; an old backup with this
+  setting still restores.
 
 ## ✨ New
 
-- **Hosts DNS server and Hosts in a DNS group ([task 699](docs/spec/tasks/699-dns-hosts-server-and-group-overlay.md), issue #185).**
-  The DNS server editor gets a Hosts type: names with fixed IPv4/IPv6
-  addresses, one row per name, edited in a dialog. A DNS group gets a Hosts
-  block under Members: the names these servers know are answered first, all
-  other names go to the members as before. Put such a group into Default
-  Domain Resolver and a node address like `wg.home` resolves to your own
-  addresses, with `strategy` choosing the family. A hosts server referenced
-  by a group cannot be turned off or deleted. Renaming a DNS server now
-  updates group members and Hosts too; a renamed member used to drop out of
-  its group.
-- **Rules by network type and metered networks ([task 694](docs/spec/tasks/694-rule-network-type-metered.md), issue #178).**
-  The rule editor's Wi-Fi section is now «NETWORK»: Any / Wi-Fi / Cellular /
-  Ethernet and a «Metered networks only» checkbox (mobile data and Wi-Fi
-  marked as metered in Android). Neither needs the location permission that
-  SSID matching requires; the SSID list is shown only for Wi-Fi. Rules are
-  checked when a connection opens: on a switch between Wi-Fi and mobile data
-  the app resets connections, so new ones follow the new network; when
-  Android only flips the metered flag, open connections keep their earlier
-  decision.
-- **UID in the app picker ([task 693](docs/spec/tasks/693-app-picker-shared-uid-hint.md), issue #180).**
-  Android lets several packages share one UID (on Samsung dozens of system
-  apps live under UID 1000), and the core and the system's per-app VPN tell
-  apps apart by UID, so a rule or a Tunnel apps entry for one package covers
-  the whole group. Rows in the app picker and in Tunnel apps read «package ·
-  UID n»; for a shared UID, «Shared with N other apps — they are routed
-  together» opens the list. Rules and Tunnel apps work as before.
-- **Ru internet segment: each Yandex DNS server can be turned off ([task 697](docs/spec/tasks/697-ru-direct-dns-servers-off.md), issue #183).**
-  Next to «UDP server IP» there are «DoT server IP» and «DoH server IP»,
-  and each of the three lists has «Off»: that server is not used and leaves
-  the group. The address chooses the Yandex profile (Base, Safe or Family)
-  for DoT and DoH as for UDP; before, both were fixed to Safe. With all
-  three Off the preset's DNS works as with its DNS switch off. Defaults are
-  unchanged.
-- **Full-screen node filter picker in the Direction editor ([task 702](docs/spec/tasks/702-direction-node-filter-picker.md)).**
-  A button to the right of Node filter opens a full screen: the regex field
-  with `!`, the emoji found in node names with a count for each (a tap adds
-  the emoji to the pattern, a second tap removes it), and the whole node list
-  with matched nodes on top marked ✓ and the rest marked ✗. ✓ in the top bar
-  puts the pattern back into the editor.
-- **Debug API: the selected node of every group.** `GET /state` gets
-  `group_selected`: group tag → the node the core has selected, for every
-  selector and urltest group, not only for the Direction open on the home
-  screen.
-
-## 🔄 Changed
-
-- **Template DNS servers and groups are editable ([task 695](docs/spec/tasks/695-dns-disabled-group-holds.md), issue #182).**
-  The editor shows the same form as for your own servers below the
-  variables; a changed server is saved as your copy under the same tag,
-  marked «Overridden», and «Reset to template» in the ⋮ menu brings the
-  template version back. DNS Final, Default Domain Resolver, a server's
-  domain resolver and a group's members offer only enabled servers. A
-  server that something refers to stays on and locked. Adding a server from
-  the catalog also adds the servers it needs: the members of a group and its
-  domain resolver. A disabled group with no enabled members cannot be
-  switched on.
-
-## 🐛 Fixed
-
-- **A WireGuard/AWG peer showed «connected» when the server did not answer ([task 613](docs/spec/tasks/613-wg-peers-tailscale-path-health.md)).**
-  The peer was green while its last handshake was under three minutes old,
-  so a new server in the group the node goes through that passes no traffic,
-  and a node just turned off and on, looked alive. Now a peer that sends but
-  gets nothing back for about 8 seconds is orange, «no response». After the
-  node is turned on or wakes up, the peer shows «never connected» until a new
-  handshake, and ↓/↑ count only the current session.
-- **Stopping the VPN hung on a MASQUE node with a detour.** When such a node
-  (WARP over vless+ws, for example) was being pinged or connecting at that
-  moment, the stop waited for it; the pending connection is now cancelled.
-- **Start failed with `initialize cache-file: timeout` after a stop that hung ([task 703](docs/spec/tasks/703-cache-db-lock-timeout-retry.md)).**
-  The new core instance now takes `cache.db` over by itself and keeps the
-  group selection, FakeIP assignments and rule-set cache. If that still fails,
-  the app deletes the file and retries the start once; force-stopping the app
-  or clearing the DNS cache by hand is no longer needed.
-- **The WARP endpoint picked in the wizard was replaced ([task 386](docs/spec/tasks/386-warp-endpoint-preset-combobox.md)).**
-  A picked `engage.cloudflareclient.com:2408` no longer gets replaced by a
-  random IP when obfuscation is on, by the address from Cloudflare's reply, or
-  by the endpoint of a cached registration.
-- **Route on the node screen did not follow the selector.** When the selected
-  node of a group on the path changed elsewhere (home screen, Debug API, a
-  urltest reselect), Route kept the old pick until the screen was reopened.
-  Route and the checkmark in a group's member list now follow the core.
-- **Servers could not be removed from Shield DNS.** After 2.25.17 the
-  members of Shield DNS stayed locked «used by Shield DNS», and the group
-  itself could not be edited (see Changed above).
-- **A node row jumped in height while nodes were pinged.** The row of a node
-  without a subtitle (`direct`, for example) collapsed and expanded with the
-  ping badge; it now keeps its height.
+- **Mixins ([task 704](docs/spec/tasks/704-config-mixins.md)).**
+  Config → Mixins keeps operations applied at the end of every config build:
+  a target path (`route.rules[action=hijack-dns]`, `inbounds[tag=dns-in]`), a
+  verb (append, prepend, before, after, set, merge, remove) and a JSON value.
+  The form shows whether the target matches and a preview of the result.
+  Unlike a manual edit with Lock config, a mixin survives rebuilds; it travels
+  in LX Backup and is available through the Debug API (`/mixins`). A mixin
+  that does not apply or adds a duplicate tag stops the build with its name in
+  the message. Example: a `direct` inbound on `127.0.0.1:5354` with a
+  `hijack-dns` rule hands the core's DNS to another app.
+- **Core memory in Statistics → Memory.** The core's figure is shown as «Core
+  memory» next to the process RSS, with the limit beside it when a number is
+  chosen.
 
 ## 🔧 Under the hood
 
-- Core `v1.14.4-lx.25` → `v1.14.4-lx.28`: the `hosts` key of a DNS group
-  (Leadaxe/sing-box-lx#60); MTU alignment: a proxy node inside a group no
-  longer lowers the MTU of a tunnel above the group, tunnels carrying IPv6
-  are never set below 1280; WireGuard/AWG peer status per session; a MASQUE
-  dial with a detour is cancelled on stop; `cache.db` is taken over from a
-  previous instance that hung while stopping.
-- Contract 1.1.140 → 1.1.145: `trusttunnel` outbounds are judged by the
-  registry (a node without `username`, `password` or `tls` is dropped at
-  parse time, as in the launcher); backup import merges template and user
-  DNS servers by tag; `tcp_multi_path` in a pasted sing-box node is kept as a
-  known dialer field.
+- Core `v1.14.4-lx.28` → `v1.14.4-lx.29`: the memory limit can be compared
+  with the core's Go runtime instead of the whole process, and the status
+  reports that figure (Leadaxe/sing-box-lx#62).
 
 </details>
 
@@ -159,119 +75,41 @@ WireGuard/AWG, которому не отвечают, показан как «n
 
 ## ⚠️ Прочтите до обновления
 
-- **MTU tun по умолчанию 9000 вместо 1492 ([задача 700](docs/spec/tasks/700-tun-mtu-default-9000.md)).**
-  9000 — значение sing-box. Интерфейс туннеля виртуальный, ядро пересылает
-  TCP по MTU настоящей сети, и малое значение только добавляло пакетов и
-  работы процессору. Где MTU не меняли, 9000 встанет со следующей сборкой
-  конфига; заданное вручную значение остаётся.
-- **DNS-серверы, на которые есть ссылка, включаются.** Состояние из старых
-  версий, где выключен DNS-сервер, на который ссылаются (член группы,
-  резолвер домена, DNS Final, Default Domain Resolver), исправляется при
-  запуске: сервер включается, причина пишется в лог приложения.
+- **Memory limit: Auto порога не ставит, Off слит с Auto ([задача 705](docs/spec/tasks/705-memory-limit-auto-off.md)).**
+  Лимит теперь сравнивается с памятью самого ядра (его Go-рантаймом), а не
+  всего процесса приложения, который ядро делит с интерфейсом и
+  библиотеками: порог 200 MB срабатывал сразу на старте и только заставлял
+  сборщик мусора греть телефон. За свободной памятью телефона ядро следит
+  по-прежнему. Пресеты 200–768 MB остаются для явного выбора, выбранное
+  раньше значение сохраняется.
+- **Тумблер «Interrupt connections on switch» убран ([задача 143](docs/spec/tasks/143-interrupt-connections-on-node-switch.md)).**
+  Тумблер в VPN Settings → System только дублировал одноимённую галочку
+  каждого Направления и мог её перекрыть: с 2.20.9 ядро само рвёт соединения
+  Направления при любой смене узла. Если он был включён, при обновлении
+  галочка включается во всех Направлениях, где была снята. Маршрут Debug API
+  `/settings/interrupt_on_switch` убран; старый бэкап с этой настройкой
+  восстанавливается.
 
 ## ✨ Новое
 
-- **Сервер Hosts и Hosts у DNS-группы ([задача 699](docs/spec/tasks/699-dns-hosts-server-and-group-overlay.md), issue #185).**
-  В редакторе DNS-сервера есть тип Hosts: имена с заданными адресами
-  IPv4/IPv6, строка на имя, правка в диалоге. У DNS-группы под Members
-  появился блок Hosts: имена, которые знают эти серверы, отвечаются сразу,
-  остальные уходят участникам, как раньше. Такая группа в Default Domain
-  Resolver даёт узлу с адресом `wg.home` ваши адреса, семейство выбирает
-  `strategy`. Сервер hosts, на который ссылается группа, нельзя выключить и
-  удалить. Переименование DNS-сервера теперь переписывает членов и Hosts
-  групп; раньше переименованный член выпадал из группы.
-- **Правила по типу сети и лимитным сетям ([задача 694](docs/spec/tasks/694-rule-network-type-metered.md), issue #178).**
-  Секция Wi-Fi в редакторе правила стала «NETWORK»: Any / Wi-Fi / Cellular /
-  Ethernet и флажок «Metered networks only» (мобильные данные и Wi-Fi,
-  отмеченные в Android как лимитные). Ни то, ни другое не требует
-  разрешения на геолокацию, как условие по SSID; список SSID виден только
-  при Wi-Fi. Правило проверяется при открытии соединения: при переходе
-  между Wi-Fi и мобильной сетью приложение сбрасывает соединения, новые
-  идут по новой сети; если Android только меняет флаг лимитности, открытые
-  соединения живут со старым решением.
-- **UID в пикере приложений ([задача 693](docs/spec/tasks/693-app-picker-shared-uid-hint.md), issue #180).**
-  Android разрешает нескольким пакетам делить один UID (на Samsung под UID
-  1000 живут десятки системных приложений), а ядро и системный per-app VPN
-  различают приложения по UID, поэтому правило или запись Tunnel apps на
-  один пакет действует на всю группу. Строки пикера и Tunnel apps
-  показывают «пакет · UID n»; у общего UID строка «Shared with N other apps —
-  they are routed together» открывает список. Правила и Tunnel apps работают
-  как раньше.
-- **Ru internet segment: любой DNS-сервер Яндекса можно выключить ([задача 697](docs/spec/tasks/697-ru-direct-dns-servers-off.md), issue #183).**
-  Рядом с «UDP server IP» появились «DoT server IP» и «DoH server IP», в
-  каждом из трёх списков есть «Off»: этот сервер не используется и выходит
-  из группы. Адрес задаёт профиль Яндекса (Базовый, Безопасный или
-  Семейный) у DoT и DoH так же, как у UDP; раньше оба были закреплены за
-  Безопасным. Если выключены все три, DNS пресета работает как при
-  выключенном тумблере DNS. Значения по умолчанию прежние.
-- **Полноэкранный подбор фильтра узлов в редакторе Направления ([задача 702](docs/spec/tasks/702-direction-node-filter-picker.md)).**
-  Кнопка справа от Node filter открывает экран: поле regex с `!`, эмодзи из
-  имён узлов с числом узлов у каждого (тап добавляет эмодзи в паттерн,
-  повторный убирает) и полный список узлов: совпавшие сверху с ✓,
-  остальные с ✗. ✓ в верхней панели возвращает паттерн в редактор.
-- **Debug API: выбранный узел каждой группы.** В `GET /state` добавлено поле
-  `group_selected`: тег группы → узел, выбранный ядром, для каждой selector-
-  и urltest-группы, а не только для Направления, открытого на главной.
-
-## 🔄 Изменено
-
-- **Шаблонные DNS-серверы и группы редактируются ([задача 695](docs/spec/tasks/695-dns-disabled-group-holds.md), issue #182).**
-  В редакторе под переменными та же форма, что у своих серверов;
-  изменённый сервер сохраняется своей копией под тем же тегом с пометкой
-  «Overridden», «Reset to template» в меню ⋮ возвращает шаблонную версию.
-  DNS Final, Default Domain Resolver, резолвер домена сервера и состав
-  группы предлагают только включённые серверы. Сервер, на который есть
-  ссылка, остаётся включённым и под замком. Добавление сервера из каталога
-  добавляет и нужные ему серверы: участников группы и резолвер домена.
-  Выключенную группу без включённых участников включить нельзя.
-
-## 🐛 Исправлено
-
-- **Пир WireGuard/AWG показывал «connected», когда сервер не отвечал ([задача 613](docs/spec/tasks/613-wg-peers-tailscale-path-health.md)).**
-  Пир был зелёным, пока последнему хендшейку меньше трёх минут, поэтому
-  живыми выглядели новый сервер в группе, через которую идёт узел, не
-  пропускающий трафик, и узел, который только что выключили и включили.
-  Теперь пир, который шлёт, но около 8 секунд ничего не получает в ответ,
-  оранжевый — «no response». После включения или пробуждения узла пир
-  показывает «never connected» до нового хендшейка, а ↓/↑ считают только
-  текущую сессию.
-- **Остановка VPN зависала на узле MASQUE с detour.** Если такой узел
-  (например, WARP поверх vless+ws) в этот момент пинговался или
-  подключался, остановка его ждала; теперь незавершённое подключение
-  отменяется.
-- **Запуск падал с `initialize cache-file: timeout` после зависшей остановки ([задача 703](docs/spec/tasks/703-cache-db-lock-timeout-retry.md)).**
-  Новое ядро само забирает `cache.db`, сохраняя выбор узлов в группах,
-  FakeIP и кеш rule-set. Если и это не удалось, приложение удаляет файл и
-  повторяет запуск один раз; force stop приложения и ручной сброс DNS-кэша
-  больше не нужны.
-- **Выбранный в мастере endpoint WARP подменялся ([задача 386](docs/spec/tasks/386-warp-endpoint-preset-combobox.md)).**
-  Выбранный `engage.cloudflareclient.com:2408` больше не заменяется ни
-  случайным IP при обфускации, ни адресом из ответа Cloudflare, ни
-  endpoint'ом закешированной регистрации.
-- **Route на экране узла не следил за селектором.** Если выбор группы на
-  пути менялся не с этого экрана (на главной, через Debug API, после
-  переселекта urltest), Route показывал старый выбор, пока экран не открыть
-  заново. Теперь Route и галка в списке участников группы следуют за ядром.
-- **Из Shield DNS нельзя было убрать сервер.** После 2.25.17 участники
-  Shield DNS оставались под замком «used by Shield DNS», а саму группу
-  нельзя было изменить (см. «Изменено» выше).
-- **Строка узла прыгала по высоте во время пинга.** Строка узла без
-  подзаголовка (например, `direct`) схлопывалась и раскрывалась вместе с
-  бейджем пинга; теперь высота держится.
+- **Mixins ([задача 704](docs/spec/tasks/704-config-mixins.md)).**
+  Config → Mixins хранит операции, которые применяются в конце каждой сборки
+  конфига: путь цели (`route.rules[action=hijack-dns]`, `inbounds[tag=dns-in]`),
+  глагол (append, prepend, before, after, set, merge, remove) и JSON-значение.
+  Форма показывает, находит ли путь цель, и предпросмотр результата. В
+  отличие от ручной правки с Lock config, миксин переживает пересборки, едет
+  в LX Backup и доступен через Debug API (`/mixins`). Миксин, который не
+  применяется или вносит дубль тега, останавливает сборку с его именем в
+  сообщении. Пример: inbound `direct` на `127.0.0.1:5354` с правилом
+  `hijack-dns` отдаёт DNS ядра другому приложению.
+- **Память ядра в Statistics → Memory.** Цифра ядра показана как «Core
+  memory» рядом с RSS процесса, с лимитом рядом, если выбрано число.
 
 ## 🔧 Под капотом
 
-- Ядро `v1.14.4-lx.25` → `v1.14.4-lx.28`: ключ `hosts` у DNS-группы
-  (Leadaxe/sing-box-lx#60); выравнивание MTU: прокси-узел в группе больше не
-  занижает MTU туннеля над группой, туннели с IPv6 не опускаются ниже 1280;
-  статус пира WireGuard/AWG по сессиям; подключение MASQUE с detour
-  отменяется при остановке; `cache.db` забирается у прежнего экземпляра,
-  зависшего на остановке.
-- Контракт 1.1.140 → 1.1.145: узлы `trusttunnel` судит реестр (узел без
-  `username`, `password` или `tls` снимается при разборе, как у лаунчера);
-  импорт бэкапа сливает шаблонные и пользовательские DNS-серверы по тегу;
-  `tcp_multi_path` во вставленном sing-box узле сохраняется как известное
-  поле диалера.
+- Ядро `v1.14.4-lx.28` → `v1.14.4-lx.29`: лимит памяти можно сравнивать с
+  Go-рантаймом ядра, а не со всем процессом, и статус отдаёт эту цифру
+  (Leadaxe/sing-box-lx#62).
 
 </details>
 
@@ -280,7 +118,7 @@ WireGuard/AWG, которому не отвечают, показан как «n
 ## Install / Установка
 
 ```bash
-adb install -r LxBox-v2.25.19-rc.1-arm64-v8a.apk
+adb install -r LxBox-v2.25.19-rc.2-arm64-v8a.apk
 ```
 
 Без uninstall! Поверх существующей установки. Настройки и подписки сохранятся.
@@ -290,4 +128,4 @@ are preserved.
 
 ---
 
-Previous release / Предыдущий релиз: [v2.25.18](docs/releases/v2.25.18.md).
+Previous release / Предыдущий релиз: [v2.25.19-rc.1](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.19-rc.1) · stable / стабильный: [v2.25.18](docs/releases/v2.25.18.md).
