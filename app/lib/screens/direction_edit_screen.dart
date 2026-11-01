@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/direction.dart';
 import '../services/ui_helpers.dart';
 import 'home/filter_widgets.dart' show NegateToggle;
+import 'node_filter_picker_screen.dart';
 import '../models/source_replace.dart';
 import '../services/l10n/locale_controller.dart';
 import '../widgets/safe_bottom.dart';
@@ -368,6 +369,24 @@ class _DirectionEditScreenState extends State<DirectionEditScreen> {
     }
   }
 
+  Future<void> _openFilterPicker() async {
+    final pick = await Navigator.push<NodeFilterPick>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => NodeFilterPickerScreen(
+          pattern: _nodeFilterCtrl.text,
+          invert: _nodeFilterInvert,
+          pool: _nodePool ?? const [],
+        ),
+      ),
+    );
+    if (pick == null || !mounted) return;
+    setState(() {
+      _nodeFilterCtrl.text = pick.pattern;
+      _nodeFilterInvert = pick.invert;
+    });
+  }
+
   // ── live-превью regex ──
 
   /// Компиляция regex, null при невалидном.
@@ -588,6 +607,13 @@ class _DirectionEditScreenState extends State<DirectionEditScreen> {
                     ),
                     style: const TextStyle(fontSize: 13),
                   ),
+                ),
+                // §702 — полноэкранный пикер: эмодзи пула + список ✓/✗.
+                IconButton(
+                  tooltip: getLocalText.s("Open picker"),
+                  icon: const Icon(Icons.open_in_full, size: 20),
+                  visualDensity: VisualDensity.compact,
+                  onPressed: _nodePool == null ? null : _openFilterPicker,
                 ),
               ],
             ),

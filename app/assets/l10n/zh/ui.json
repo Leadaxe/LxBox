@@ -6494,5 +6494,14 @@
   },
   "DNS group \"%1$s\": hosts accepts only servers of type hosts, got \"%3$s\": \"%2$s\".": {
     "value": "DNS 组「%1$s」：hosts 只接受 hosts 类型的服务器，「%2$s」的类型是「%3$s」。"
+  },
+  "Node filter": {
+    "value": "节点过滤"
+  },
+  "%1$s / %2$s match": {
+    "value": "匹配 %1$s / %2$s"
+  },
+  "Open picker": {
+    "value": "打开选择器"
   }
 }
