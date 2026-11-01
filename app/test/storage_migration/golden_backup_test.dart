@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/services/settings_storage.dart';
 
 import 'golden_harness.dart';
 
@@ -34,6 +35,9 @@ void main() {
       final source = await StorageSandbox.create();
       addTearDown(source.dispose);
       await source.seed(name);
+      // §143 §9 — разовый шаг старта приложения (main) идёт до любого
+      // экспорта: снятый тумблер interrupt-on-switch уже в галках Направлений.
+      await SettingsStorage.migrateInterruptOnSwitchIfNeeded();
       final exported = await exportGoldenLxBackup();
       expectGolden('$name.backup.json', _withSplitIdsMasked(exported.json));
 

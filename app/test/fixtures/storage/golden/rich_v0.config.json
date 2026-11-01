@@ -633,7 +633,7 @@
         "EU nl-1",
         "EU fr-1"
       ],
-      "interrupt_exist_connections": false,
+      "interrupt_exist_connections": true,
       "default": "PR DE-1"
     },
     {
