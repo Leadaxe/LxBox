@@ -325,7 +325,14 @@ Delete node / Workspace delete → index record removed → directory removed wh
   one, and the identity goes with it.
 - `android:allowBackup` stays at the platform default (owner decision
   2026-10-13, audit [591](../../tasks/591-spec-kit-revision-audit.md)).
-- SSH to a peer, Taildrop, `*.ts.net` certificates, IPv6-only tailnets under
+- Tailscale SSH is not a feature of the node. The client side needs nothing
+  from LxBox: any SSH client (Termux, JuiceSSH) reaches a peer's tailnet
+  address through the node, and the peer's Tailscale SSH server authorises by
+  the tailnet identity of this device (not verified on a device with a live
+  tailnet). The SSH server on the phone is not built (`ts_omit_ssh`): Android
+  has no shell for incoming sessions, and logging in as other users needs root
+  (owner decision 2026-11-01).
+- Taildrop, `*.ts.net` certificates, IPv6-only tailnets under
   `prefer_ipv6` and per-device traffic are out of scope. The Android system
   backup includes `files/` with the tailnet keys — stock behaviour, by design
   (see [device identity](FUNCTIONS/device-identity-and-state.md)).
