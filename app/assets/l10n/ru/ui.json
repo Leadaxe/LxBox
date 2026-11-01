@@ -6797,5 +6797,70 @@
   },
   "Open picker": {
     "value": "Открыть подбор"
+  },
+  "Mixins": {
+    "value": "Миксины"
+  },
+  "Mixin": {
+    "value": "Миксин"
+  },
+  "Add mixin": {
+    "value": "Добавить миксин"
+  },
+  "Delete mixin?": {
+    "value": "Удалить миксин?"
+  },
+  "Edits applied to the built config, top to bottom. They survive rebuilds.": {
+    "value": "Правки собранного конфига, применяются сверху вниз. Переживают пересборку."
+  },
+  "Target": {
+    "value": "Цель"
+  },
+  "Whole node": {
+    "value": "Узел целиком"
+  },
+  "Keys": {
+    "value": "Ключи"
+  },
+  "Keys, comma-separated": {
+    "value": "Ключи через запятую"
+  },
+  "Preview": {
+    "value": "Предпросмотр"
+  },
+  "(root)": {
+    "value": "(корень)"
+  },
+  "No config built yet": {
+    "value": "Конфиг ещё не собран"
+  },
+  "✓ 1 match": {
+    "value": "✓ 1 совпадение"
+  },
+  "✗ no match": {
+    "value": "✗ нет совпадений"
+  },
+  "✗ needs a single list": {
+    "value": "✗ нужен один список"
+  },
+  "✗ not a list element": {
+    "value": "✗ не элемент списка"
+  },
+  "✗ syntax: %s": {
+    "value": "✗ синтаксис: %s"
+  },
+  "%s → before first": {
+    "value": "%s → перед первым"
+  },
+  "%s → after last": {
+    "value": "%s → после последнего"
+  },
+  "✓ %d matches": {
+    "value": {
+      "one": "✓ %d совпадение",
+      "few": "✓ %d совпадения",
+      "many": "✓ %d совпадений",
+      "other": "✓ %d совпадения"
+    }
   }
 }

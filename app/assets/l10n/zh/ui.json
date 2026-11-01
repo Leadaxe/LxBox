@@ -6509,5 +6509,67 @@
   },
   "Open picker": {
     "value": "打开选择器"
+  },
+  "Mixins": {
+    "value": "混入"
+  },
+  "Mixin": {
+    "value": "混入"
+  },
+  "Add mixin": {
+    "value": "添加混入"
+  },
+  "Delete mixin?": {
+    "value": "删除混入？"
+  },
+  "Edits applied to the built config, top to bottom. They survive rebuilds.": {
+    "value": "对生成配置的修改，自上而下应用，重新生成后仍保留。"
+  },
+  "Target": {
+    "value": "目标"
+  },
+  "Whole node": {
+    "value": "整个节点"
+  },
+  "Keys": {
+    "value": "键"
+  },
+  "Keys, comma-separated": {
+    "value": "键，以逗号分隔"
+  },
+  "Preview": {
+    "value": "预览"
+  },
+  "(root)": {
+    "value": "（根）"
+  },
+  "No config built yet": {
+    "value": "尚未生成配置"
+  },
+  "✓ 1 match": {
+    "value": "✓ 1 个匹配"
+  },
+  "✗ no match": {
+    "value": "✗ 无匹配"
+  },
+  "✗ needs a single list": {
+    "value": "✗ 需要单个列表"
+  },
+  "✗ not a list element": {
+    "value": "✗ 不是列表元素"
+  },
+  "✗ syntax: %s": {
+    "value": "✗ 语法：%s"
+  },
+  "%s → before first": {
+    "value": "%s → 第一个之前"
+  },
+  "%s → after last": {
+    "value": "%s → 最后一个之后"
+  },
+  "✓ %d matches": {
+    "value": {
+      "other": "✓ %d 个匹配"
+    }
   }
 }

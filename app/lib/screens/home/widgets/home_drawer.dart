@@ -111,7 +111,13 @@ class HomeDrawer extends StatelessWidget {
               leading: const Icon(Icons.description_outlined),
               title: Text(getLocalText.s("Config Editor")),
               subtitle: Text(getLocalText.s("View, edit, import JSON")),
-              onTap: () => _go(context, ConfigScreen(controller: controller)),
+              onTap: () => _go(
+                context,
+                ConfigScreen(
+                  controller: controller,
+                  subController: subController,
+                ),
+              ),
             ),
             ListTile(
               leading: const Icon(Icons.bug_report_outlined),

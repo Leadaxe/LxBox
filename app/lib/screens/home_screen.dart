@@ -782,7 +782,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
           },
         );
       case 'config':
-        return ConfigScreen(controller: _controller);
+        return ConfigScreen(
+          controller: _controller,
+          subController: _subController,
+        );
       case 'debug':
         return DebugScreen(
           initialTab: switch (tab) {
