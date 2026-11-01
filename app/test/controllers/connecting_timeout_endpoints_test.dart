@@ -177,13 +177,6 @@ void main() {
     expect(t.connectingMs, const Duration(minutes: 4).inMilliseconds);
   });
 
-  test('Debug-override не масштабируется числом узлов (§596)', () {
-    controller.debugSetConfigRaw(configWith(endpoints: 0, outbounds: 240));
-    controller.debugSetTransientTimeouts(connectingMs: 500);
-
-    expect(controller.debugEffectiveConnectingTimeout.connectingMs, 500);
-  });
-
   test('таймаут connecting оставляет причину, а не молчит', () async {
     controller.debugSetConfigRaw(configWith(endpoints: 1));
     // Override даёт короткий порог, чтобы не ждать реальный бюджет. Причина

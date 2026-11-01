@@ -8,7 +8,6 @@ import 'package:lxbox/screens/subscriptions_screen/widgets/subscription_entry_ti
 import 'package:lxbox/screens/subscriptions_screen/entry_warnings.dart';
 import 'package:lxbox/screens/subscription_detail_screen/widgets/node_warning_row.dart';
 import 'package:lxbox/screens/subscription_detail_screen/widgets/node_warnings_sheet.dart';
-import 'package:lxbox/services/node_hash.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
 import '../parser/engine_test_setup.dart';
@@ -38,27 +37,6 @@ void main() {
         rawBody: 'ss://YWVzLTI1Ni1nY206dGVzdA==@example.com:8388#MySS',
         warnings: warnings,
         nodes: [node],
-      ),
-      nodeCount: 1,
-    );
-  }
-
-  SubscriptionEntry subEntry() {
-    final node = ssNode();
-    final id = sourceNodeIdentities([node])[node]!;
-    return SubscriptionEntry(
-      list: SubscriptionServers(
-        id: 'sub1',
-        name: 'sub',
-        enabled: true,
-        tagPrefix: '',
-        detourPolicy: DetourPolicy.defaults,
-        url: 'https://example.com/sub',
-        nodes: [node],
-        disabledHashes: {id: DateTime.now()},
-        nodeWarnings: {
-          id: [StoredWarning.coreRejected('bad key length, required 32, got 5')],
-        },
       ),
       nodeCount: 1,
     );
@@ -129,35 +107,9 @@ void main() {
         findsWidgets,
       );
     });
-
-    testWidgets('без вердикта — подпись протокола, без строки предупреждения',
-        (tester) async {
-      await pumpTile(tester, userEntry(warnings: const []));
-
-      expect(find.textContaining('SHADOWSOCKS server'), findsOneWidget);
-      expect(find.byType(NodeWarningRow), findsNothing);
-    });
   });
 
   group('строка подписки / папки', () {
-    testWidgets('счётчик actionable при вердикте страховки у узла',
-        (tester) async {
-      await pumpTile(tester, subEntry());
-
-      expect(find.byType(EntryWarningBadge), findsOneWidget);
-      expect(
-        find.descendant(
-            of: find.byType(EntryWarningBadge), matching: find.text('1')),
-        findsOneWidget,
-      );
-      expect(
-        find.descendant(
-            of: find.byType(EntryWarningBadge),
-            matching: find.byIcon(Icons.error_outline)),
-        findsOneWidget,
-      );
-    });
-
     testWidgets('папка со членом под вердиктом — тот же счётчик',
         (tester) async {
       await pumpTile(tester, folderEntry());

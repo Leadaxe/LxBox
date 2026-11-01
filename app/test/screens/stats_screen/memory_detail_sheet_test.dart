@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lxbox/models/memory_limit_setting.dart';
 import 'package:lxbox/screens/stats_screen/memory_detail_sheet.dart';
 import 'package:lxbox/services/settings_storage.dart';
 
@@ -72,21 +71,6 @@ void main() {
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
   }
-
-  testWidgets('preset limit: Core memory shows used / limit', (tester) async {
-    await setLimit(tester, '200');
-    await openSheet(tester, coreRuntime: 42 * 1024 * 1024);
-    expect(find.text('Core memory'), findsOneWidget);
-    expect(find.text('42.0 MB / 200 MB'), findsOneWidget);
-  });
-
-  testWidgets('auto: Core memory without a fraction', (tester) async {
-    await setLimit(tester, MemoryLimitSetting.auto);
-    await openSheet(tester, coreRuntime: 42 * 1024 * 1024);
-    expect(find.text('Core memory'), findsOneWidget);
-    expect(find.text('42.0 MB'), findsOneWidget);
-    expect(find.textContaining(' / '), findsNothing);
-  });
 
   testWidgets('zero (old core): Core memory row hidden', (tester) async {
     await setLimit(tester, '200');

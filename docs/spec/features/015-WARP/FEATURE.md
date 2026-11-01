@@ -72,14 +72,13 @@ The feature protects five principles:
 - **P5. Each "Register" adds a new node.** Previous WARP nodes are not
   deleted; a taken tag gets the suffix ` 2`, ` 3`… The tag by kind: `🔥☁️
   WARP`, `🔥⛈️ WARP (AWG 1.5)`, `🔥🎭 WARP (MASQUE)`, `+` for WARP+. **Witness:**
-  unit "§137 nodeTag: cloud/storm, +, AWG suffix"; accumulation — manual
-  check. **Mutation:** the new node replaces the previous one.
+  accumulation — manual check. **Mutation:** the new node replaces the previous one.
 - **P6. A custom WireGuard endpoint is not overwritten.** A non-default
   endpoint goes into the node both on a fresh registration (the Cloudflare
   response is ignored) and from the cache; a default one is replaced by the
   host from the response. **Witness:** units "§135 register: a custom endpoint
   is NOT overwritten", "§135 default endpoint → fallback to the host from the
-  response", "§138 copyWith(endpoint)". **Mutation:** the endpoint from the
+  response". **Mutation:** the endpoint from the
   cache beats the input.
 - **P7. A plain WARP node carries the binding to the device.** `reserved` from
   `client_id` (3 bytes), MTU 1280, all traffic in `allowed_ips`, keepalive 25
@@ -125,8 +124,7 @@ The feature protects five principles:
   **Witness:** units "override by key; … a list replaced whole", "alias — one
   hop", "empty/unknown/broken region = root", "the picker cache is bound to
   the region". **Mutation:** region lists are appended to the root.
-- **P14. The "(recommended)" mark does not leak into the value.** **Witness:**
-  unit "§424 label = clean value". **Mutation:** the preset suffix in the
+- **P14. The "(recommended)" mark does not leak into the value.** **Mutation:** the preset suffix in the
   endpoint.
 - **P15. The experiment does not privilege a protocol.** Candidates are
   equally likely AWG / MASQUE h3 / MASQUE h2 among those available in the

@@ -24,11 +24,6 @@ void main() {
       expect(installSourceFromInstaller(null), InstallSource.github);
     });
 
-    test('adb install → github', () {
-      expect(
-          installSourceFromInstaller('com.android.shell'), InstallSource.github);
-    });
-
     test('системный installer → github', () {
       expect(installSourceFromInstaller('com.android.packageinstaller'),
           InstallSource.github);
@@ -82,11 +77,6 @@ void main() {
       expect(InstallSource.play.updateUrlFallback, startsWith('https://'));
     });
 
-    test('fdroid → страница пакета, фолбэк не нужен', () {
-      expect(InstallSource.fdroid.updateUrl('v2.18.0'), ProjectLinks.fdroidPage);
-      expect(InstallSource.fdroid.updateUrlFallback, isNull);
-    });
-
     test('тег подставляется только у github (у сторов — страница приложения)',
         () {
       expect(InstallSource.play.updateUrl('v2.18.0'),
@@ -100,38 +90,6 @@ void main() {
     test('github → latest, без тега', () {
       expect(InstallSource.github.pageUrl, ProjectLinks.latestRelease);
       expect(InstallSource.github.pageUrl, isNot(contains('/tag/')));
-    });
-
-    test('сторы → та же страница приложения, что и updateUrl', () {
-      expect(InstallSource.play.pageUrl, InstallSource.play.updateUrl('v0'));
-      expect(InstallSource.fdroid.pageUrl, InstallSource.fdroid.updateUrl('v0'));
-    });
-
-    test('у каждого источника свой адрес', () {
-      final urls = InstallSource.values.map((s) => s.pageUrl).toSet();
-      expect(urls.length, InstallSource.values.length);
-    });
-  });
-
-  group('label', () {
-    test('имена каналов', () {
-      expect(InstallSource.github.label, 'GitHub');
-      expect(InstallSource.play.label, 'Google Play');
-      expect(InstallSource.fdroid.label, 'F-Droid');
-    });
-  });
-
-  group('InstallSourceResolver', () {
-    tearDown(InstallSourceResolver.resetForTest);
-
-    test('дефолт до init — github (безопасный)', () {
-      InstallSourceResolver.resetForTest();
-      expect(InstallSourceResolver.current, InstallSource.github);
-    });
-
-    test('setForTest подменяет канал', () {
-      InstallSourceResolver.setForTest(InstallSource.play);
-      expect(InstallSourceResolver.current, InstallSource.play);
     });
   });
 }

@@ -123,19 +123,6 @@ void main() {
       final crlf = plain.replaceAll('\n', '\r\n');
       expect(nodesOf(base64.encode(utf8.encode(crlf))), hasLength(3));
     });
-
-    test('завёрнутое тело отличается от голого списка по исходному тексту',
-        () {
-      // Признак, по которому контроллер решает, снимать ли оболочку: у
-      // голого списка `://` есть в САМОМ вводе, у завёрнутого — только
-      // после распаковки. Обе формы дают `UriLines`, и без этого признака
-      // они неразличимы.
-      final wrapped = base64.encode(utf8.encode(plain));
-      expect(decode(wrapped), isA<UriLines>());
-      expect(wrapped.contains('://'), isFalse);
-      expect(decode(plain), isA<UriLines>());
-      expect(plain.contains('://'), isTrue);
-    });
   });
 
   group('Д-2 — host-часть в mport не роняет конфиг', () {

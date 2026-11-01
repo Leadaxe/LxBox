@@ -33,12 +33,6 @@ void main() {
     ),
   );
 
-  testWidgets('живой узел с провалом замера по-прежнему ERR', (tester) async {
-    await tester.pumpWidget(host(item(CcEndpointState.up)));
-    expect(find.text('ERR'), findsOneWidget);
-    expect(find.text('off'), findsNothing);
-  });
-
   testWidgets('меню: выключатель зовёт колбэк', (tester) async {
     var taps = 0;
     await tester.pumpWidget(

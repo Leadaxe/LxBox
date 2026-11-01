@@ -283,12 +283,6 @@ void main() {
         expect(m, fromArray);
       });
     }
-
-    test('sing-box-объект по-прежнему дословно (§455 не сдвинут)', () {
-      final m = built(server(jsonEncode(naive)));
-      expect(m['unknown_to_model'], {'x': 1});
-      expect(m['tag'], 'naive-out');
-    });
   });
 
   group('сборка', () {

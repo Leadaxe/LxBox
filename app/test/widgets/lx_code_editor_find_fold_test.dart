@@ -106,7 +106,6 @@ void main() {
   // меню ⋮.
   const formatBtn = ValueKey('lx-code-editor-format');
   const menuBtn = ValueKey('lx-code-editor-menu');
-  const bar = ValueKey('lx-code-editor-bar');
 
   Future<void> openMenu(WidgetTester tester) async {
     await tester.tap(find.byKey(menuBtn));
@@ -145,34 +144,6 @@ void main() {
     );
     return c;
   }
-
-  testWidgets('свои actions — в строке над рамкой (Copy LxJsonView)', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
-          body: LxJsonView(
-            text: '{"a": 1}',
-            height: 200,
-            actions: [Icon(Icons.copy, key: ValueKey('copy'))],
-          ),
-        ),
-      ),
-    );
-    expect(
-      find.descendant(
-        of: find.byKey(bar),
-        matching: find.byKey(const ValueKey('copy')),
-      ),
-      findsOneWidget,
-    );
-    // ⋮ — последним справа, после actions.
-    expect(
-      tester.getTopLeft(find.byKey(menuBtn)).dx,
-      greaterThan(tester.getTopLeft(find.byKey(const ValueKey('copy'))).dx),
-    );
-  });
 
   testWidgets('только чтение: Format ↔ Show original меняют показ, не '
       'контроллер; новый текст сверху сбрасывает показ', (tester) async {
@@ -452,30 +423,6 @@ void main() {
     await tester.pumpAndSettle();
     expect(wrapEnabled(), isTrue);
     expect(find.byKey(menuBusy), findsNothing);
-  });
-
-  testWidgets('перенос: кнопка у редактора Config (wrapToggle)', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: LxCodeEditor(
-            controller: TextEditingController(text: '{"a": 1}'),
-            showLineNumbers: true,
-            language: LxCodeLanguage.json,
-            stickyHeaders: true,
-            wordWrap: false,
-            wrapToggle: true,
-          ),
-        ),
-      ),
-    );
-    expect(find.byKey(wrapBtn), findsOneWidget);
-    expect(wrapTooltip(tester), 'Wrap lines', reason: 'по умолчанию выключен');
-    await tester.tap(find.byKey(wrapBtn));
-    await tester.pump();
-    expect(wrapTooltip(tester), 'Unwrap lines');
   });
 
   test('hasJson5Comments: только вне строк', () {

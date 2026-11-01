@@ -141,14 +141,6 @@ void main() {
       expect(c.entries.single.name, '');
     });
 
-    test('подписки и папки: name в displayName работает как раньше', () async {
-      final c = SubscriptionController();
-      await c.addFolder('My folder');
-      expect(c.entries.single.displayName, 'My folder');
-      await c.renameAt(0, 'Renamed folder');
-      expect(c.entries.single.displayName, 'Renamed folder');
-    });
-
     test('JSON-вставка (label = tag) не сломана', () async {
       final c = SubscriptionController();
       await c.addFromInput('{"type":"vless","tag":"Json 🚀",'

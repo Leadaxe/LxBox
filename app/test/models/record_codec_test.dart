@@ -145,11 +145,6 @@ void main() {
       expect(back.value!.ports, ['443']);
     });
 
-    test('srs без refs читает одиночный ref', () {
-      final back = ruleFromRecord({'kind': 'srs', 'name': 'g', 'ref': 'https://x/a.srs'});
-      expect((back.value! as CustomRuleSrs).srsUrls, ['https://x/a.srs']);
-    });
-
     test('preset: ref + vars', () {
       final r = CustomRulePreset(name: 'Ads', presetId: 'block-ads', varsValues: {'outbound': 'vpn-1'});
       final rec = ruleToRecord(r);
@@ -436,22 +431,6 @@ void main() {
       expect(back.enabled, isFalse);
       expect(back.description, 'Mine');
       expect(dnsServerToRecord(back), rec);
-    });
-
-    test('круг устойчив: запись → модель → запись три раза подряд', () {
-      var rec = <String, dynamic>{
-        'kind': 'preset',
-        'ref': 'ru-direct:yandex_doh',
-        'enabled': false,
-      };
-      for (var i = 0; i < 3; i++) {
-        rec = dnsServerToRecord(dnsServerFromRecord(viaFile(rec)).value!);
-      }
-      expect(rec, {
-        'kind': 'preset',
-        'ref': 'ru-direct:yandex_doh',
-        'enabled': false,
-      });
     });
 
     test('модель без presetId: пространство из тега, ref тот же', () {

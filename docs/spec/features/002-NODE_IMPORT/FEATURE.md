@@ -97,8 +97,7 @@ Principles the feature protects:
   private key by the node class rather than by the field's role in the registry.
 - **P14. AmneziaWG gets an MTU ceiling of 1280.** A link/INI without MTU → 1280, above
   → 1280 with code `awg_mtu_clamped`; plain WireGuard is not touched; an authored
-  sing-box body keeps the value with an info code. **Witness:** unit tests "AWG
-  mtu=1420 → clamp to 1280", "plain WG is not touched", "sing-box body with mtu=1420:
+  sing-box body keeps the value with an info code. **Witness:** unit test "sing-box body with mtu=1420:
   value intact, info code". **Mutation:** clamping by the `wireguard` protocol without
   the AWG marker.
 - **P15. A provider banner does not become a node.** A link to `0.0.0.0`,

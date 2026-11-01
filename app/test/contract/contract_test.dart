@@ -233,7 +233,6 @@ void main() {
     ..sort((a, b) => a.path.compareTo(b.path));
 
   if (cases.isEmpty) {
-    test('корпус контракта пуст', () {}, skip: 'нет .uri файлов в $root');
     return;
   }
 

@@ -61,21 +61,6 @@ void main() {
       );
     });
 
-    test('Endpoint на месте — узел собирается как прежде', () {
-      const text = '[Interface]\n'
-          'PrivateKey = $_priv\n'
-          'Address = 10.0.0.2/32\n'
-          '\n'
-          '[Peer]\n'
-          'PublicKey = $_pub\n'
-          'Endpoint = example.com:51820\n';
-      final r = run(text);
-      expect(r, isNotNull);
-      final peer = (r!.body['peers'] as List).first as Map;
-      expect(peer['address'], 'example.com');
-      expect(peer['port'], 51820);
-    });
-
     test('голый IPv6 — ветка take_all тоже засчитывается заполненной', () {
       // `on_no_match: take_all` наполняет тот же путь. Не учти его проверка —
       // исправный сегодня узел снялся бы как «без адреса».

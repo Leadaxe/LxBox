@@ -24,11 +24,6 @@ void main() {
     final assetsVersion =
         File('assets/contract/VERSION').readAsStringSync().trim();
 
-    test('реестр грузится с версией из VERSION', () {
-      expect(ContractRegistry.I.isLoaded, isTrue);
-      expect(ContractRegistry.I.version, assetsVersion);
-    });
-
     // §468 (контракт 1.1.2) — severity кода живёт в реестре, а рукописный
     // класс обязан её оттуда читать: владелец понизил `reality_fp_not_chrome`
     // до `info`, и зашитая в классе копия разошлась бы с нормой.

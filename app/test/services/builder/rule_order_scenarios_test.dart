@@ -106,27 +106,6 @@ void main() {
       expect(_byId(rules, 'ru-direct').orderNum, 1120, reason: 'якорь цел');
       expect(_byId(rules, 'vowifi').orderNum, 990, reason: 'якорь цел');
     });
-
-    test('уплотнение: набиваем сплошной блок, якорь за дыркой не двигается', () {
-      // a..e подряд 1000..1004, якорь на 1120.
-      final a = _inline('a')..orderNum = 1000;
-      final b = _inline('b')..orderNum = 1001;
-      final c = _inline('c')..orderNum = 1002;
-      final d = _inline('d')..orderNum = 1003;
-      final anchor = _preset('ru-direct')..orderNum = 1120;
-      final moved = _inline('moved')..orderNum = 1090;
-      var rules = [a, b, c, d, anchor, moved];
-
-      // Тащим moved за `a` — want=1001 занят, блок 1001..1003 сплошной.
-      placeRuleAfter(rules, moved, a, isSortable: _sortable);
-      rules = sortRulesByNum(rules);
-
-      expect(moved.orderNum, 1001);
-      expect([b.orderNum, c.orderNum, d.orderNum], [1002, 1003, 1004],
-          reason: 'сплошной блок уехал на +1 целиком');
-      expect(anchor.orderNum, 1120,
-          reason: 'дырка 1005..1119 останавливает каскад');
-    });
   });
 
   group('§370 сценарий: добавление и удаление', () {

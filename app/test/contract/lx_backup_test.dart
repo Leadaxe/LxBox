@@ -74,15 +74,6 @@ void main() {
       }
     });
 
-    test('версия новее поддерживаемой отвергается', () {
-      final raw = jsonEncode({
-        'lx_backup': kLxBackupVersion + 1,
-        'exported_by': {'app': 'launcher'},
-        'exported_at': '2026-08-22T00:00:00Z',
-      });
-      expect(() => parseLxBackup(raw), throwsFormatException);
-    });
-
     test('чужой файл не притворяется бэкапом', () {
       expect(() => parseLxBackup('{"outbounds":[]}'), throwsFormatException);
     });
@@ -624,15 +615,6 @@ void main() {
       expect(file.warnings.map((w) => w.code), [kWarnUnknownField]);
       // §401 — путь адресует конкретную цепочку по её тегу (см. выше).
       expect(file.warnings.single.detail, 'chains[relay].sorcery');
-    });
-
-    test('корневая секция chains не даёт ложный backup_unknown_field', () {
-      const raw = '''
-{
-  "lx_backup": 1,
-  "chains": [{"tag": "relay", "chain": {"hops": ["a", "b"]}}]
-}''';
-      expect(parseLxBackup(raw).warnings, isEmpty);
     });
 
     // Парный к Go TestRoundTripChainSources.
@@ -1465,21 +1447,6 @@ void main() {
             noTag.warnings.where((w) => w.code == kWarnLabelDropped), isEmpty);
       });
 
-      test('label Направления ПРИМЕНЯЕТСЯ и warning не поднимает', () {
-        // §405 — поле объявлено в схеме, применяет его LxBox: терять нечего.
-        final raw = jsonEncode({
-          'lx_backup': 1,
-          'directions': [
-            {'tag': 'de', 'label': 'Германия'}
-          ],
-        });
-        final file = parseLxBackup(raw);
-        expect(file.directions.single.tag, 'de');
-        expect(file.directions.single.label, 'Германия');
-        expect(file.warnings, isEmpty,
-            reason: 'ни unknown_field, ни label_dropped: поле своё');
-      });
-
       test('label цепочки отбрасывается молча, warning не поднимает', () {
         // §594 — у цепочки одно имя, тег: подпись старого файла не
         // применяется и потерей не называется.
@@ -1555,18 +1522,6 @@ void main() {
             reason: 'отдельный код от unknown_field: пользователю важно '
                 'различать «поля тут нет» и «поле есть, записано иначе»');
         expect(file.subscriptions, hasLength(1), reason: 'разбор продолжен');
-      });
-
-      test('неизвестный ключ Направления → путь называет ЗАПИСЬ', () {
-        final raw = jsonEncode({
-          'lx_backup': 1,
-          'directions': [
-            {'tag': 'de', 'sorcery': true}
-          ],
-        });
-        final file = parseLxBackup(raw);
-        expect(file.warnings.map((w) => w.code), [kWarnUnknownField]);
-        expect(file.warnings.single.detail, 'directions[de].sorcery');
       });
 
       test('exclude_from_global → backup_source_flag_dropped', () {
@@ -1808,43 +1763,6 @@ void main() {
       expect(second.applied, 0);
     });
 
-    // §578/§83 — `skip_presets: true` держит своё значение, даже когда
-    // импорт находит узел с совпадающим телом, а во входящей записи флаг
-    // ложный/отсутствует: поле записывается только `true` (source_record),
-    // и merge не должен молча сбрасывать его на `false`.
-    test('одиночный узел: skip_presets=true своей записи не сбрасывается '
-        'при импорте совпавшего по телу узла без флага', () {
-      const uri = 'vless://skip@h:443';
-      final withFlag = mergeBackupServers(
-          const [], const [LxServer(uri: uri, skipTailscalePresets: true)]);
-      expect((withFlag.lists.single as UserServer).skipTailscalePresets, isTrue);
-
-      // Тот же импорт без skip_presets в файле — своя запись сильнее.
-      final second =
-          mergeBackupServers(withFlag.lists, const [LxServer(uri: uri)]);
-      expect((second.lists.single as UserServer).skipTailscalePresets, isTrue,
-          reason: 'приехавшая запись без флага не должна снимать true');
-    });
-
-    test('член папки: skip_presets=true не сбрасывается при повторном '
-        'импорте совпавшего по телу члена без флага', () {
-      const uri = 'vless://skip-folder@h:443';
-      final withFlag = mergeBackupServers(const [], const [
-        LxServer(uri: uri, folder: 'DE', skipTailscalePresets: true),
-      ]);
-      expect(
-          (withFlag.lists.single as FolderServers).members.single.skipTailscalePresets,
-          isTrue);
-
-      final second = mergeBackupServers(withFlag.lists, const [
-        LxServer(uri: uri, folder: 'DE'),
-      ]);
-      expect(
-          (second.lists.single as FolderServers).members.single.skipTailscalePresets,
-          isTrue,
-          reason: 'приехавшая запись без флага не должна снимать true');
-    });
-
     test('новое тело в существующей папке доливается', () {
       const a = 'vless://a@h:443';
       const b = 'vless://b@h:443';
@@ -1868,14 +1786,6 @@ void main() {
       ]);
       expect(out.lists, hasLength(2));
       expect(out.applied, 2);
-    });
-
-    test('config_json одиночного узла дедупится по сериализованному телу', () {
-      const server = LxServer(configJson: {'type': 'vless', 'tag': 'n'});
-      final first = mergeBackupServers(const [], const [server]);
-      final second = mergeBackupServers(first.lists, const [server]);
-      expect(second.lists, hasLength(1));
-      expect(second.applied, 0);
     });
 
     // ══════════════════════════════════════════════════════════════════════

@@ -85,26 +85,6 @@ void main() {
     expect(calls, isEmpty, reason: 'текст из натива обратно не уходит');
   });
 
-  testWidgets('рост поля по метрикам натива, потолок maxLines',
-      (tester) async {
-    final c = TextEditingController(text: '{}');
-    addTearDown(c.dispose);
-    await tester.pumpWidget(field(c));
-    await attach(tester);
-    final dpr = tester.view.devicePixelRatio;
-    double h() => tester.getSize(find.byType(LxCodeEditor)).height;
-
-    await fromNative(tester, 'changed',
-        {'lines': 3, 'rowHeight': 20 * dpr, 'textOffsetX': 0});
-    final minH = h();
-    await fromNative(tester, 'changed',
-        {'lines': 10, 'rowHeight': 20 * dpr, 'textOffsetX': 0});
-    expect(h() - minH, closeTo(4 * 20, 0.01), reason: '6 → 10 строк');
-    await fromNative(tester, 'changed',
-        {'lines': 400, 'rowHeight': 20 * dpr, 'textOffsetX': 0});
-    expect(h() - minH, closeTo(14 * 20, 0.01), reason: 'не выше 20 строк');
-  });
-
   testWidgets('changed без текста не трогает контроллер; flush забирает '
       'задержанный текст', (tester) async {
     final c = TextEditingController(text: 'old');

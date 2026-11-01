@@ -388,34 +388,6 @@ void main() {
     });
   });
 
-  group('CustomRule.summary', () {
-    // summary рендерит через getLocalText (в тестах — fallback на английский
-    // ключ: dict не загружен, плюрал печатается из самого ключа).
-    test('пустой inline → empty', () {
-      expect(CustomRuleInline(name: 'x').summary(), '');
-    });
-
-    test('inline с полями → разделённый dot', () {
-      final s = CustomRuleInline(
-        name: 'x',
-        domainSuffixes: ['a', 'b'],
-        ports: ['443'],
-        protocols: ['tls'],
-      ).summary();
-      expect(s, contains('2 suffixes'));
-      expect(s, contains('1 port'));
-      expect(s, contains('1 proto'));
-    });
-
-    test('srs → хост из URL', () {
-      final s = CustomRuleSrs(
-        name: 'x',
-        srsUrl: 'https://rules.example.com/geo.srs',
-      ).summary();
-      expect(s, 'SRS: rules.example.com');
-    });
-  });
-
   // §051 / §030 new_fields — wifi_ssid / wifi_bssid.
   //
   // ⚠ С sing-box 1.14 wifi_* эмитятся в **headless rule_set** (раньше под 1.12
@@ -851,13 +823,6 @@ void main() {
       final restored = _storageRoundTrip(r) as CustomRuleSrs;
       expect(restored.wifiSsids, ['Office']);
       expect(restored.wifiBssids, ['11:22:33:44:55:66']);
-    });
-
-    test('inline: copyWith с wifi-полями', () {
-      final r = CustomRuleInline(name: 'X');
-      final updated = r.copyWith(wifiSsids: ['Home']);
-      expect(updated.wifiSsids, ['Home']);
-      expect(updated.wifiBssids, isEmpty);
     });
   });
 

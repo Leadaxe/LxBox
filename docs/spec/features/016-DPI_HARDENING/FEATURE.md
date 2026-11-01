@@ -98,8 +98,7 @@ Out of the box: global techniques are off, delay `500ms`, CA store `system`.
 - **P9. A broken REALITY degrades rather than breaking the config.** An invalid
   `public_key` (not 32 bytes) → the node goes over regular TLS; a `short_id`
   that is odd-length, longer than 16 or not a string → empty; `key_share`
-  outside `hybrid`/`classical` → removed. **Witness:** units "REAL-WORLD CASE:
-  security=tls + pbk=enabled → plain TLS", "odd-length short_id → cleared, node
+  outside `hybrid`/`classical` → removed. **Witness:** units "odd-length short_id → cleared, node
   and config alive", "key_share outside the enum — field dropped silently, node
   alive". **Mutation:** truncate `short_id` to 16.
 - **P10. ECH from a link is never enabled.** `ech=` → the code `ech_ignored`, no
@@ -116,8 +115,7 @@ Out of the box: global techniques are off, delay `500ms`, CA store `system`.
   transport". **Mutation:** a new field only in the URI branch.
 - **P12. XHTTP: `extra` does not break working flat parameters.** A broken
   `extra` is ignored; an empty value in `extra` does not override the flat one;
-  `host`/`path`/`mode` are not read from `extra`. **Witness:** units "a broken
-  extra is ignored", "an empty value in extra does not override the flat field
+  `host`/`path`/`mode` are not read from `extra`. **Witness:** units "an empty value in extra does not override the flat field
   (§410)", "extra.host/path/mode do not override the flat ones". **Mutation:**
   extra-first for `path`.
 - **P13. XHTTP: an invalid mode pair does not reach the core.** Values outside
@@ -132,7 +130,7 @@ Out of the box: global techniques are off, delay `500ms`, CA store `system`.
   `flow` is not imposed; `xtls-rprx-vision` with a transport is removed with
   `vision_with_transport`, except on a node with `encryption`; `none`/deprecated
   values are not emitted. **Witness:** units "bare TCP + REALITY, no flow → flow
-  is not emitted", "XHTTP + REALITY, flow=vision → flow is dropped", "vision +
+  is not emitted", "vision +
   xhttp + encryption → flow stays (§544)". **Mutation:** default `vision` for
   REALITY.
 - **P15. VLESS `encryption`: an invalid form rejects the node.** A valid value

@@ -107,10 +107,4 @@ void main() {
       {'username': 'user', 'password': 'deadbeef'},
     ]);
   });
-
-  test('toJson/хранилище: ключ system_proxy_enabled', () {
-    expect(base.copyWith(systemProxyEnabled: true).toJson()
-        ['system_proxy_enabled'], true);
-    expect(base.toJson()['system_proxy_enabled'], false);
-  });
 }

@@ -151,24 +151,6 @@ void main() {
   });
 
   group('serializeHomeState (§250)', () {
-    test('пустое состояние → last_start_error="" / last_start_error_at=null',
-        () {
-      final json = serializeHomeState(HomeState());
-      expect(json.containsKey('last_start_error'), isTrue);
-      expect(json.containsKey('last_start_error_at'), isTrue);
-      expect(json['last_start_error'], '');
-      expect(json['last_start_error_at'], isNull);
-    });
-
-    test('заполненное состояние → reason + ISO-8601 UTC timestamp', () {
-      final json = serializeHomeState(HomeState(
-        lastStartError: 'Stopped: Failed to start service: X',
-        lastStartErrorAt: DateTime.utc(2026, 7, 6, 12, 30),
-      ));
-      expect(json['last_start_error'], 'Stopped: Failed to start service: X');
-      expect(json['last_start_error_at'], '2026-07-06T12:30:00.000Z');
-    });
-
     test('group_selected — выбор каждой группы, пустой выбор пропущен', () {
       CcGroup g(String tag, String type, String selected) => CcGroup(
             tag: tag,

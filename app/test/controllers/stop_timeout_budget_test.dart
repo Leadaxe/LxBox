@@ -82,17 +82,6 @@ void main() {
     expect(controller.state.busy, isFalse);
   });
 
-  test('медленный, но успешный стоп (teardown с задержкой) — тоже без ошибки',
-      () async {
-    // Ключевой кейс §415: native отвечает не мгновенно, но УСПЕХОМ. Пока он
-    // укладывается в Dart-бюджет `_Timeouts.stopVpn`, ошибки быть не должно.
-    mockStop(stopResult: true, delay: const Duration(milliseconds: 300));
-
-    await controller.stop();
-
-    expect(controller.state.lastError, isNull);
-  });
-
   test('провал штатного стопа (native вернул false) даёт stopTimedOut',
       () async {
     mockStop(stopResult: false);

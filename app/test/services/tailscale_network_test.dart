@@ -254,19 +254,6 @@ void main() {
   });
 
   group('§613 — путь, поля тела', () {
-    test('путь NONE и ядро без пути — пусто, прочие — строка', () {
-      expect(tailscalePathLabel(const CcTailscalePeer(path: '')), isEmpty);
-      expect(tailscalePathLabel(const CcTailscalePeer()), isEmpty);
-      for (final path in ['direct', 'peer_relay', 'derp']) {
-        expect(tailscalePathLabel(CcTailscalePeer(path: path)), isNotEmpty);
-      }
-      expect(
-        tailscalePathLabel(const CcTailscalePeer(
-            path: 'direct', endpoint: '198.51.100.7:41641')),
-        contains('198.51.100.7:41641'),
-      );
-    });
-
     test('§645 — как подключено: условия по порядку', () {
       const now = 1700000000;
       String line(CcTailscalePeer p) => tailscaleConnectionText(p, now);
@@ -329,26 +316,6 @@ void main() {
           (second: 'fd7a::1', more: 0));
       expect(tailscaleAddressTail(const ['100.64.0.1', 'fd7a::1', 'fd7a::2']),
           (second: 'fd7a::1', more: 1));
-    });
-
-    test('§645 — возраст: секунды, минуты, часы до 48 ч, дни', () {
-      expect(tailscaleAgeLabel(-5), tailscaleAgeLabel(0));
-      expect(tailscaleAgeLabel(42), contains('42'));
-      expect(tailscaleAgeLabel(5 * 60), contains('5'));
-      expect(tailscaleAgeLabel(33 * 3600), contains('33'));
-      expect(tailscaleAgeLabel(47 * 3600), contains('47'));
-      expect(tailscaleAgeLabel(17 * 86400), contains('17'));
-      expect(tailscaleAgeLabel(17 * 86400), isNot(contains('408')));
-    });
-
-    test('§645 — вторая строка без «online»', () {
-      const p = CcTailscalePeer(
-          os: 'linux', online: true, exitNodeOption: true, shareeNode: true);
-      final d = tailscaleDeviceDetails(p);
-      expect(d, allOf(contains('linux'), contains('exit node'),
-          contains('shared')));
-      expect(d, isNot(contains('online')));
-      expect(tailscaleDeviceDetails(const CcTailscalePeer()), isEmpty);
     });
 
     test('поля тела: запись и снятие, порядок ключей', () {

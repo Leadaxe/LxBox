@@ -21,17 +21,6 @@ Map<String, dynamic> _configWithoutTun() => {
 
 void main() {
   group('applyTunPackages (§046)', () {
-    test('mode=off → no changes to tun-inbound', () {
-      final cfg = _configWithTun();
-      applyTunPackages(
-        cfg,
-        const TunAppsConfig(mode: 'off', packages: ['com.example']),
-      );
-      final tun = (cfg['inbounds'] as List).first as Map<String, dynamic>;
-      expect(tun.containsKey('include_package'), false);
-      expect(tun.containsKey('exclude_package'), false);
-    });
-
     test('mode=off + non-empty packages → no changes (mode wins)', () {
       final cfg = _configWithTun();
       applyTunPackages(

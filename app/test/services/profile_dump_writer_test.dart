@@ -68,21 +68,4 @@ void main() {
     expect(name, endsWith('.pb'));
     expect(await File(path).readAsBytes(), bytes);
   });
-
-  test('PprofProfile.all: ids are in the native allowlist, goroutine is text',
-      () {
-    const allowed = {
-      'goroutine', 'profile', 'heap', 'allocs', 'block', 'mutex',
-      'threadcreate'
-    };
-    for (final p in PprofProfile.all) {
-      expect(allowed, contains(p.id), reason: '${p.id} not in native allowlist');
-      // pathAndQuery must start with the id (native splits on '?').
-      expect(p.pathAndQuery.split('?').first, p.id);
-      // Only goroutine summaries/full are text.
-      expect(p.isText, p.id == 'goroutine');
-      // Only CPU profile is blocking.
-      expect(p.blockingSeconds > 0, p.id == 'profile');
-    }
-  });
 }

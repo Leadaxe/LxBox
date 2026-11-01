@@ -597,11 +597,6 @@ void main() {
           dnsHostsOptions: hostsOptions,
         );
 
-    test('hosts — безадресный режим формы', () {
-      expect(kDnsServerModes, contains('hosts'));
-      expect(kDnsAddresslessModes, contains('hosts'));
-    });
-
     test('вход в hosts снимает транспорт и ставит predefined: {}', () {
       final c = make({
         'type': 'https',

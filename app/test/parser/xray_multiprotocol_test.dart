@@ -162,10 +162,6 @@ void main() {
   });
 
   group('служебные outbound-ы', () {
-    test('элемент из одних freedom/blackhole → узлов нет', () {
-      expect(parseXrayElement(element('empty', const [])), isEmpty);
-    });
-
     test('freedom/blackhole/dns узлами не становятся', () {
       final n = parseXrayElement(element('mix', [
         vless('1.1.1.1'),

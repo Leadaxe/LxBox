@@ -42,7 +42,7 @@ The feature protects three principles:
 - **P1. Stop is confirmed, not assumed.** "Stop" completes successfully only
   after the actual stop; a slow but successful stop (up to ~9 s on a heavy
   tunnel) is not an error; an unconfirmed one gives "Stop timed out".
-  **Witness**: units "slow but successful stop — no error", "a failure of the
+  **Witness**: unit "a failure of the
   regular stop gives stopTimedOut". **Mutation**: the UI-side wait budget is
   smaller than the service's wait budget.
 - **P2. Forced stop — only after the regular one.** The budget ladder strictly

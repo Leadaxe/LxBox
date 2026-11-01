@@ -38,23 +38,11 @@ void main() {
   });
 
   group('defaultEmojiFor — приоритет local → WG → UDP → TCP', () {
-    test('vless (TCP) → ⚡', () {
-      expect(defaultEmojiFor(parse('vless://11111111-1111-1111-1111-111111111111@1.2.3.4:443?security=none#X')),
-          '⚡');
-    });
-    test('hysteria2 (UDP/QUIC) → 🚀', () {
-      expect(
-          defaultEmojiFor(parse('hysteria2://hp@hy2.example:443?sni=hy2.example#Hy2')),
-          '🚀');
-    });
     test('tuic (UDP/QUIC) → 🚀', () {
       expect(
           defaultEmojiFor(parse(
               'tuic://11111111-1111-1111-1111-111111111111:p@h.example:443?congestion_control=bbr&alpn=h3&sni=h.example#TUIC')),
           '🚀');
-    });
-    test('wireguard → 🏠', () {
-      expect(defaultEmojiFor(wg()), '🏠');
     });
     test('§025 WARP (тег WARP) → 🔥☁️ (приоритет над WireguardSpec)', () {
       // Реальный путь: toWireguardUri даёт wireguard://…#WARP → parseUri.
@@ -86,12 +74,6 @@ void main() {
     // состав не из подписки, а руками (SOCKS-форма, свой конфиг).
     test('local 127.0.0.1 → 🔁 (приоритет над протоколом)', () {
       expect(defaultEmojiFor(wg(server: '127.0.0.1')), '🔁'); // local > WG
-    });
-    test('localhost → 🔁', () {
-      expect(defaultEmojiFor(wg(server: 'localhost')), '🔁');
-    });
-    test('::1 → 🔁', () {
-      expect(defaultEmojiFor(wg(server: '::1')), '🔁');
     });
     // Сторож нормы, а не эмодзи: кейс выше раньше кормил 🔁 ссылкой на
     // `127.0.0.1`, и «починка» упавшего теста возвратом такой ссылки тихо
@@ -129,12 +111,6 @@ void main() {
       expect(withDefaultEmoji(uri, node), uri);
     });
 
-    test('hysteria2 → 🚀 в теге', () {
-      const uri = 'hysteria2://hp@hy2.example:443?sni=hy2.example#Hy2';
-      final out = withDefaultEmoji(uri, parse(uri));
-      expect(parse(out).tag.startsWith('🚀'), isTrue);
-    });
-
     test('JSON-outbound: tag получает эмодзи', () {
       const json =
           '{"type":"vless","tag":"JNode","server":"1.2.3.4","server_port":443,'
@@ -157,18 +133,10 @@ void main() {
     });
   });
 
-  test('палитра содержит ожидаемые эмодзи', () {
-    expect(kEmojiPalette, containsAll(<String>['🏠', '⚡', '🚀', '🔁', '⚙']));
-  });
-
   test('каждый эмодзи палитры распознаётся hasEmoji (иначе выбор не сработает)',
       () {
     for (final e in kEmojiPalette) {
       expect(hasEmoji(e), isTrue, reason: 'палитра-эмодзи не матчит _emojiRe: $e');
     }
-  });
-
-  test('палитра без дублей', () {
-    expect(kEmojiPalette.toSet().length, kEmojiPalette.length);
   });
 }

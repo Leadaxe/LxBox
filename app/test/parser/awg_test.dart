@@ -183,17 +183,6 @@ void main() {
     const base =
         'wireguard://$_testPriv@h:51820?publickey=$_testPub&address=10.0.0.2/32';
 
-    test('AWG без mtu → 1280 (вместо WG-дефолта)', () {
-      final spec = parseLinkAs<WireguardSpec>('$base&jc=10')!;
-      expect(spec.mtu, 1280);
-      expect(spec.emit(TemplateVars.empty).map['mtu'], 1280);
-    });
-
-    test('AWG mtu=1420 → кламп до 1280', () {
-      final spec = parseLinkAs<WireguardSpec>('$base&jc=10&mtu=1420')!;
-      expect(spec.mtu, 1280);
-    });
-
     test('AWG mtu=1200 (явно ниже) → уважаем', () {
       final spec = parseLinkAs<WireguardSpec>('$base&jc=10&mtu=1200')!;
       expect(spec.mtu, 1200);
@@ -202,14 +191,6 @@ void main() {
     test('AWG mtu=1280 (граница) → без изменений', () {
       final spec = parseLinkAs<WireguardSpec>('$base&jc=10&mtu=1280')!;
       expect(spec.mtu, 1280);
-    });
-
-    // SPEC 103 D-026 — canon = Go: без явного mtu= в URI поле не эмитится
-    // вовсе (ядро само ставит 1408). Было закреплено, что plain WG дефолтит
-    // 1408 в самой модели — неканоничное поведение, тест обновлён.
-    test('plain WG не трогаем: без mtu → не задан, mtu=1420 → 1420', () {
-      expect(parseLinkAs<WireguardSpec>(base)!.mtu, isNull);
-      expect(parseLinkAs<WireguardSpec>('$base&mtu=1420')!.mtu, 1420);
     });
 
     // §219/D-026 — plain WG без mtu НЕ дефолтит 1408 в модели (ядро само

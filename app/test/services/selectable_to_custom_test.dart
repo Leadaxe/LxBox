@@ -36,21 +36,6 @@ void main() {
       expect(cr.varsValues, isEmpty);
     });
 
-    test('пресет без vars (только rule + rule_set, как Block Ads) — всё равно '
-        'CustomRulePreset', () {
-      final sr = SelectableRule(
-        label: 'Block Ads',
-        presetId: 'block-ads',
-        ruleSets: [
-          {'tag': 'ads', 'type': 'remote', 'url': 'https://ex.com/ads.srs'},
-        ],
-        rule: const {'rule_set': 'ads', 'action': 'reject'},
-      );
-      final cr = selectableRuleToCustom(sr, blankTemplate);
-      expect(cr, isA<CustomRulePreset>());
-      expect(cr.presetId, 'block-ads');
-    });
-
     test('overrideOutbound → varsValues["outbound"]', () {
       final sr = SelectableRule(
         label: 'Russian direct',

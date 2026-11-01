@@ -114,8 +114,7 @@ lives in the core until "Save choice" writes it into the node.
   collapsed, 63 characters in all); an empty or fully collapsed model gives
   `LxBox`. **Witness:** units "the model as is → prefix and lower case through
   dashes", "underscores and runs of separators collapse", "edges are cleaned",
-  "a model without Latin letters or digits → the bare prefix", "an empty model
-  → the bare prefix", "a long model is cut to a DNS label without a trailing
+  "a model without Latin letters or digits → the bare prefix", "a long model is cut to a DNS label without a trailing
   dash"; widget "Hostname with the LxBox default, erasing returns an empty
   body". **Mutation:** the hostname substituted at build.
 - **P12. The `tailscale` preset serves every Tailscale node in the config.**
@@ -145,9 +144,7 @@ lives in the core until "Save choice" writes it into the node.
   already there — no duplicate", "a fresh install is untouched; the first seed
   closes the step". **Mutation:** the preset re-added after deletion.
 - **P17. `skip_tailscale_presets` (until 1.1.126 `skip_presets`) survives a backup round trip.** Only `true` is stored;
-  an import that matches the node by body does not reset it. **Witness:** units
-  "a single node: skip_presets=true of the own record is not reset", "a folder
-  member: skip_presets=true is not reset on a repeated import". **Mutation:**
+  an import that matches the node by body does not reset it. **Mutation:**
   a missing field on import resets the flag.
 - **P18. The `tailscale` DNS server picker offers the enabled Tailscale nodes
   of all sources**, with the final tag of the last build. **Witness:** units
@@ -164,9 +161,7 @@ lives in the core until "Save choice" writes it into the node.
 - **P20. The tab says why there is nothing to show.** VPN off — "Start VPN to
   see the network."; no core record yet — a waiting indicator; the node is not
   in the running config — "The node is not in the running config."
-  **Witness:** widgets "VPN off", "no data from the core yet — waiting", "the
-  node is not in the running config". **Mutation:** an endless spinner with
-  the VPN off.
+  **Mutation:** an endless spinner with the VPN off.
 - **P21. An exit node chosen on the fly does not touch the body.** A mismatch
   between the recorded `exit_node` and the active exit shows a warning sign
   and "Save choice"; Save choice writes the active peer's Tailscale address

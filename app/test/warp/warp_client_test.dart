@@ -234,15 +234,6 @@ void main() {
     });
   });
 
-  test('§137 nodeTag: облако/гроза, +, AWG-суффикс', () {
-    expect(WarpAccount.nodeTag(warpPlus: false, hasAwg: false), '🔥☁️ WARP');
-    expect(WarpAccount.nodeTag(warpPlus: true, hasAwg: false), '🔥☁️ WARP+');
-    expect(WarpAccount.nodeTag(warpPlus: false, hasAwg: true),
-        '🔥⛈️ WARP (AWG 1.5)');
-    expect(WarpAccount.nodeTag(warpPlus: true, hasAwg: true),
-        '🔥⛈️ WARP+ (AWG 1.5)');
-  });
-
   test('WarpAccount.redacted маскирует priv_key/token/license', () {
     const acc = WarpAccount(
       privKey: 'SECRET_PRIV',

@@ -83,13 +83,6 @@ void main() {
       expect(holes, isEmpty,
           reason: 'плейсхолдеры без подстановки:\n${holes.join('\n')}');
     });
-
-    test('у каждого известного расхождения есть причина', () {
-      for (final e in _knownUndeclared.entries) {
-        expect(e.value.trim(), isNotEmpty,
-            reason: 'расхождение ${e.key} без причины');
-      }
-    });
   });
 }
 

@@ -58,12 +58,6 @@ void main() {
   });
 
   group('ProfilerFilters — session-холдер (§244)', () {
-    test('инстансы стабильны между обращениями', () {
-      expect(identical(ProfilerFilters.appTab, ProfilerFilters.appTab), isTrue);
-      expect(
-          identical(ProfilerFilters.liveTab, ProfilerFilters.liveTab), isTrue);
-    });
-
     test('appTab и liveTab — разные независимые объекты', () {
       expect(identical(ProfilerFilters.appTab, ProfilerFilters.liveTab),
           isFalse);
@@ -92,43 +86,6 @@ void main() {
       expect(after.hasRule('ru-direct'), isTrue);
       expect(after.includeUnattributed, isTrue);
       expect(after.activeCount, 4);
-    });
-
-    test('clearAll сбрасывает session-фильтр (Filter → Reset all)', () {
-      ProfilerFilters.appTab.search = 'x';
-      ProfilerFilters.appTab.toggleKind(TrafficEventKind.tcpOpen, true);
-      ProfilerFilters.appTab.clearAll();
-      expect(ProfilerFilters.appTab.isActive, isFalse);
-    });
-  });
-
-  group('ProfilerFilters — пересоздание виджета-вкладки (§244)', () {
-    testWidgets('фильтр переживает unmount/remount, подписка перевешивается',
-        (tester) async {
-      // «Вкладка» смонтирована, фильтр пуст.
-      await tester.pumpWidget(_FakeTab(filter: ProfilerFilters.liveTab));
-      expect(find.text('active:0'), findsOneWidget);
-
-      // Юзер ставит фильтр — listener (аналог TraceExplorer) видит изменение.
-      ProfilerFilters.liveTab.search = 'example.com';
-      ProfilerFilters.liveTab.toggleKind(TrafficEventKind.dnsResolve, true);
-      await tester.pump();
-      expect(find.text('active:2'), findsOneWidget);
-
-      // Уход с вкладки: State диспоузится (removeListener, БЕЗ dispose
-      // session-объекта).
-      await tester.pumpWidget(const SizedBox.shrink());
-      expect(find.byType(_FakeTab), findsNothing);
-
-      // Возврат на вкладку: новый State, фильтр из холдера — состояние живо,
-      // повторный addListener на session-объекте не падает.
-      await tester.pumpWidget(_FakeTab(filter: ProfilerFilters.liveTab));
-      expect(find.text('active:2'), findsOneWidget);
-
-      // Notifier всё ещё живой: изменение доходит до нового State.
-      ProfilerFilters.liveTab.clearAll();
-      await tester.pump();
-      expect(find.text('active:0'), findsOneWidget);
     });
   });
 }

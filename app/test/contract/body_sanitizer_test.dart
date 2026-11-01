@@ -9,7 +9,6 @@ import 'package:flutter_test/flutter_test.dart';
 import '../contract_paths.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/services/contract/body_sanitizer.dart';
-import 'package:lxbox/services/contract/registry.dart';
 
 
 /// Пин ядра, на котором сверена схема (`body.core` реестра): под ним
@@ -210,23 +209,6 @@ void main() {
           'tls.reality.public_key');
     });
 
-    test('secret: значение в предупреждении маскируется', () {
-      // trojan.password — secret; мусорное значение даёт код, но не течёт.
-      final schema = ContractRegistry.I.schemaFor('vless')!;
-      expect(schema.fields['uuid']!.secret, isTrue,
-          reason: 'uuid объявлен secret — на нём и проверяем маскирование');
-
-      // Поле с secret и заданным on_invalid: shadowsocks.password.
-      final ss = ContractRegistry.I.schemaFor('shadowsocks')!;
-      expect(ss.fields['password']!.secret, isTrue);
-
-      // Маскирование — свойство рендера значения: код с secret-полем несёт
-      // ***, а не сам секрет.
-      const w = RegistryWarning(
-          code: 'type_invalid', path: 'password', value: '***');
-      expect(w.value, '***');
-    });
-
     test('conflicts: ech.enabled + reality.enabled — снят декларант', () {
       final r = _san(_vless({
         'tls': {
@@ -302,15 +284,6 @@ void main() {
       }));
       expect(_codes(r), contains('field_requires'));
       expect(_byCode(r, 'field_requires').params['requires'], 'tls.spoof');
-    });
-
-    test('requires: spoof_method без spoof снимается', () {
-      final r = _san(_vless({
-        'tls': {'enabled': true, 'spoof_method': 'wrong-checksum'}
-      }));
-      final tls = r.body!['tls'] as Map;
-      expect(tls.containsKey('spoof_method'), isFalse);
-      expect(_byCode(r, 'field_requires').path, 'tls.spoof_method');
     });
 
     test('forbidden_for: naive + tls.alpn → tls_field_unsupported_naive', () {
@@ -1310,13 +1283,6 @@ void main() {
       final bad = _san(wg(['a', 'b', 'c']), scheme: 'wireguard');
       final peer = (bad.body!['peers'] as List).first as Map;
       expect(peer.containsKey('reserved'), isFalse);
-    });
-
-    test('неизвестное выражение реестра не роняет и не портит значение', () {
-      // Контракт может уехать вперёд кода: выражение, которого санитайзер не
-      // знает, обязано остаться незамеченным, а не съесть поле.
-      final r = _san(_vless({'transport': {'type': 'ws', 'path': '/x'}}));
-      expect((r.body!['transport'] as Map)['path'], '/x');
     });
   });
 

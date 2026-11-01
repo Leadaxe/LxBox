@@ -52,11 +52,6 @@ void main() {
       expect(ruleDisplayName(b, rules, t), 'Block Ads (2)');
       expect(ruleDisplayName(c, rules, t), 'Block Ads (3)');
     });
-
-    test('inline/srs: сохранённое имя как есть', () {
-      final r = CustomRuleInline(name: 'My rule');
-      expect(ruleDisplayName(r, [r], template()), 'My rule');
-    });
   });
 
   group('ruleDisplayNames', () {

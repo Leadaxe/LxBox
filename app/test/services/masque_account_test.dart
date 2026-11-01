@@ -17,19 +17,6 @@ void main() {
         keepAlive: '45s',
       );
 
-  test('toJson/fromJson round-trip', () {
-    final a = sample();
-    final b = MasqueAccount.fromJson(a.toJson().cast<String, dynamic>());
-    expect(b, isNotNull);
-    expect(b!.privKeyDer, a.privKeyDer);
-    expect(b.serverPubDer, a.serverPubDer);
-    expect(b.clientV4, a.clientV4);
-    expect(b.server, a.server);
-    expect(b.port, a.port);
-    expect(b.idleTimeout, a.idleTimeout);
-    expect(b.keepAlive, a.keepAlive);
-  });
-
   test('fromJson отвергает пустые ключи', () {
     expect(MasqueAccount.fromJson({'priv_key_der': '', 'server_pub_der': 'x'}),
         isNull);

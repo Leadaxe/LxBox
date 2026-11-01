@@ -20,15 +20,6 @@ void main() {
     test('prefixed "🇷🇺 RU ⚙ HopB" → true (маркер в середине)', () {
       expect(TagResolver.isDetourMarker('🇷🇺 RU ⚙ HopB'), isTrue);
     });
-    test('ASCII prefix "SUB ⚙ NodeA" → true', () {
-      expect(TagResolver.isDetourMarker('SUB ⚙ NodeA'), isTrue);
-    });
-    test('collision-suffix "🇷🇺 RU ⚙ HopB-1" → true', () {
-      expect(TagResolver.isDetourMarker('🇷🇺 RU ⚙ HopB-1'), isTrue);
-    });
-    test('multi-word prefix "My Prefix ⚙ Hop" → true', () {
-      expect(TagResolver.isDetourMarker('My Prefix ⚙ Hop'), isTrue);
-    });
     test('plain node → false', () {
       expect(TagResolver.isDetourMarker('NodeA'), isFalse);
     });

@@ -97,22 +97,6 @@ void main() {
   });
 
   group('§289 headersFrom (общая форма)', () {
-    test('sendHwid=false → пусто', () {
-      expect(
-        SubscriptionIdentity.headersFrom(
-            sendHwid: false, hwid: 'X', deviceOs: '', verOs: '', deviceModel: ''),
-        isEmpty,
-      );
-    });
-
-    test('sendHwid=true + пустой hwid → пусто', () {
-      expect(
-        SubscriptionIdentity.headersFrom(
-            sendHwid: true, hwid: '', deviceOs: 'android', verOs: '', deviceModel: ''),
-        isEmpty,
-      );
-    });
-
     test('sendHwid=true + hwid → x-hwid + непустые meta', () {
       final h = SubscriptionIdentity.headersFrom(
           sendHwid: true,

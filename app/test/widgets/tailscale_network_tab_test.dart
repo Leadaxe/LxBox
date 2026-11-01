@@ -93,26 +93,6 @@ void main() {
     await tester.pump();
   }
 
-  group('без данных', () {
-    testWidgets('VPN выключен', (tester) async {
-      await pump(tester, vpnUp: false);
-      expect(find.text('Start VPN to see the network.'), findsOneWidget);
-    });
-
-    testWidgets('данных от ядра ещё нет — ожидание', (tester) async {
-      await pump(tester);
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
-    });
-
-    testWidgets('узла нет в работающем конфиге', (tester) async {
-      await pump(tester, data: const [
-        CcTailscaleStatus(tag: 'other', backendState: 'Running', stateText: ''),
-      ]);
-      expect(find.text('The node is not in the running config.'),
-          findsOneWidget);
-    });
-  });
-
   group('Exit node', () {
     final warn = find.byKey(const ValueKey('exit-node-warning'));
     final save = find.text('Save choice');

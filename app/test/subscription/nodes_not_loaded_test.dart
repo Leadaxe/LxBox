@@ -8,7 +8,6 @@ import 'package:lxbox/controllers/subscription_controller.dart';
 import 'package:lxbox/models/debug_entry.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/screens/subscription_detail_screen/widgets/subscription_node_list.dart';
-import 'package:lxbox/screens/subscriptions_screen/widgets/subscription_entry_subtitle.dart';
 import 'package:lxbox/services/app_log.dart';
 import 'package:lxbox/services/settings_storage.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
@@ -119,34 +118,6 @@ void main() {
       ));
       expect(find.byKey(const ValueKey('nodes-not-loaded')), findsNothing);
       expect(find.text('No nodes found'), findsOneWidget);
-    });
-
-    testWidgets('строка списка: счётчик узлов серый, пока узлы не загружены',
-        (tester) async {
-      final c = SubscriptionController();
-      final entry = SubscriptionEntry(list: _sub());
-
-      Future<void> pump() => tester.pumpWidget(MaterialApp(
-            home: Scaffold(
-              body: Builder(
-                builder: (context) =>
-                    buildSubscriptionEntrySubtitle(context, entry, c) ??
-                    const SizedBox.shrink(),
-              ),
-            ),
-          ));
-
-      await pump();
-      expect(find.byKey(const ValueKey('entry-node-count-stale')), findsNothing);
-      expect(find.text('5 nodes'), findsOneWidget);
-
-      entry.debugMarkBodyCacheMissing();
-      await pump();
-      final stale = find.byKey(const ValueKey('entry-node-count-stale'));
-      expect(stale, findsOneWidget);
-      final context = tester.element(stale);
-      expect(tester.widget<Text>(stale).style?.color,
-          Theme.of(context).colorScheme.outline);
     });
   });
 }

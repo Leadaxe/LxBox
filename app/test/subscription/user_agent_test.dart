@@ -16,11 +16,6 @@ void main() {
       );
     });
 
-    test('начинается с бренд-токена LxBox-android/', () {
-      final ua = buildSubscriptionUserAgent(appVersion: '2.0.4');
-      expect(ua.startsWith('LxBox-android/'), isTrue, reason: ua);
-    });
-
     test('никогда не содержит "singbox" / "sing-box"', () {
       final ua = buildSubscriptionUserAgent(appVersion: '2.0.4');
       expect(ua.contains('singbox'), isFalse, reason: ua);

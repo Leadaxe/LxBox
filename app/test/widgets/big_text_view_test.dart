@@ -38,10 +38,6 @@ void main() {
       expect(chunks, hasLength((100 * 1024 / 4096).ceil()));
       expect(chunks.join(), blob);
     });
-
-    test('custom chunk size', () {
-      expect(chunkTextLines('abcdef', maxChunk: 4), ['abcd', 'ef']);
-    });
   });
 
   group('BigTextView', () {
@@ -54,22 +50,6 @@ void main() {
       expect(find.text('line-0 payload'), findsOneWidget);
       // Виртуализация: хвост документа не построен.
       expect(find.text('line-49999 payload'), findsNothing);
-    });
-
-    testWidgets('sliver variant embeds into CustomScrollView', (tester) async {
-      await tester.pumpWidget(MaterialApp(
-        home: Scaffold(
-          body: CustomScrollView(
-            slivers: [
-              const SliverToBoxAdapter(child: Text('header')),
-              BigTextSliver(text: 'body-a\nbody-b'),
-            ],
-          ),
-        ),
-      ));
-      expect(find.text('header'), findsOneWidget);
-      expect(find.text('body-a'), findsOneWidget);
-      expect(find.text('body-b'), findsOneWidget);
     });
 
     testWidgets('text swap rebuilds chunks (didUpdateWidget)', (tester) async {

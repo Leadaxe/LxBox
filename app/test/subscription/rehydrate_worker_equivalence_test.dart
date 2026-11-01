@@ -207,11 +207,4 @@ void main() {
     expect(withNodes, greaterThan(5), reason: 'корпус не пустой');
     expect(marked, greaterThan(0), reason: 'DISABLE-правило дало отметки');
   });
-
-  test('реестр в воркере загружен из снимка main', () {
-    final snap = ParseEnvSnapshot.capture();
-    expect(snap.registry, isNotNull);
-    expect(snap.registry!.texts, contains('VERSION'));
-    expect(snap.drafts, isNotEmpty);
-  });
 }

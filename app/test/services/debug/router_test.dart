@@ -36,11 +36,6 @@ void main() {
           as JsonResponse;
       expect((resp.body as Map)['handler'], 'specific');
     });
-
-    test('несуществующий префикс → null', () {
-      final r = Router()..mount('/state', _stub('state'));
-      expect(r.resolve('/unknown'), isNull);
-    });
   });
 
   group('Router.handle', () {

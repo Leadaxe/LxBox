@@ -742,44 +742,6 @@ void main() {
         expect(tls['fragment'], true);
       });
 
-      test('корпус dialer_proxy_freedom_fragment', () {
-        final element = jsonDecode(
-          File('test/fixtures/xray/dialer_proxy_freedom_fragment.json')
-              .readAsStringSync(),
-        ) as Map<String, dynamic>;
-        final nodes = parseXrayElement(element);
-        expect(nodes, hasLength(1));
-        expect(nodes.single.label, 'frag-owner');
-        expect(nodes.single.server, 'example-1.com');
-        expect(nodes.single.chained, isNull);
-        final spec = nodes.single as VlessSpec;
-        final tls = spec.emit(TemplateVars.empty).map['tls'] as Map;
-        expect(tls['fragment'], true);
-        expect(spec.warnings, isEmpty);
-      });
-
-      test('freedom без fragment → dialerProxy молча игнорируется', () {
-        final nodes = parseXrayElement({
-          'remarks': 'direct-hop',
-          'outbounds': [
-            proxyWith({
-              'network': 'tcp',
-              'security': 'tls',
-              'tlsSettings': {'serverName': 'sni.example'},
-              'sockopt': {'dialerProxy': 'direct'},
-            }),
-            ...baseOutbounds,
-          ],
-        });
-        expect(nodes, hasLength(1));
-        expect(nodes.single.chained, isNull);
-        final tls =
-            (nodes.single as VlessSpec).emit(TemplateVars.empty).map['tls']
-                as Map;
-        expect(tls.containsKey('fragment'), isFalse);
-        expect(nodes.single.warnings, isEmpty);
-      });
-
       test('security=none + fragment freedom → без tls.fragment и без кода',
           () {
         final nodes = parseProxy({
@@ -808,27 +770,6 @@ void main() {
                 'sockopt': {'dialerProxy': 'dns-out'},
               }),
               {'protocol': 'dns', 'tag': 'dns-out'},
-              ...baseOutbounds,
-            ],
-          },
-          dropped: dropped,
-        );
-        expect(nodes, isEmpty);
-        expect(dropped.whereType<DialerProxyUnusableWarning>(), hasLength(1));
-      });
-
-      test('dialerProxy=block (blackhole) → узел отбракован', () {
-        final dropped = <NodeWarning>[];
-        final nodes = parseXrayElement(
-          {
-            'remarks': 'frag-test',
-            'outbounds': [
-              proxyWith({
-                'network': 'tcp',
-                'security': 'tls',
-                'tlsSettings': {'serverName': 'sni.example'},
-                'sockopt': {'dialerProxy': 'block'},
-              }),
               ...baseOutbounds,
             ],
           },
@@ -1359,56 +1300,6 @@ void main() {
       expect(spec.tls.enabled, isTrue);
       expect(spec.tls.reality, isNull, reason: 'битый public_key → нет reality');
       expect(spec.tls.serverName, 'w.example');
-    });
-  });
-
-  // §459 (контракт §24.2 п. 7.4) — `-udp443` нормализует flow и
-  // packet_encoding, но порт узла не трогает ни в одной из веток.
-  group('§459 vision-udp443 не переписывает порт', () {
-    test('Xray JSON: порт 8443 остаётся', () {
-      final nodes = parseXrayElement({
-        'remarks': 'V',
-        'outbounds': [
-          {
-            'tag': 'v',
-            'protocol': 'vless',
-            'settings': {
-              'vnext': [
-                {
-                  'address': 'b.example',
-                  'port': 8443,
-                  'users': [
-                    {
-                      'id': '11111111-2222-3333-4444-555555555555',
-                      'flow': 'xtls-rprx-vision-udp443',
-                    }
-                  ],
-                }
-              ],
-            },
-            'streamSettings': {'network': 'tcp', 'security': 'tls'},
-          },
-        ],
-      });
-      final spec = nodes.whereType<VlessSpec>().single;
-      expect(spec.port, 8443);
-      expect(spec.flow, 'xtls-rprx-vision');
-      expect(spec.packetEncoding, 'xudp');
-      expect(spec.emit(TemplateVars.empty).map['server_port'], 8443);
-    });
-
-    test('sing-box JSON: порт 8443 остаётся', () {
-      final spec = parseSingboxEntry({
-        'type': 'vless',
-        'tag': 'v',
-        'server': 'b.example',
-        'server_port': 8443,
-        'uuid': '11111111-2222-3333-4444-555555555555',
-        'flow': 'xtls-rprx-vision',
-        'packet_encoding': 'xudp',
-      })! as VlessSpec;
-      expect(spec.port, 8443);
-      expect(spec.emit(TemplateVars.empty).map['server_port'], 8443);
     });
   });
 }

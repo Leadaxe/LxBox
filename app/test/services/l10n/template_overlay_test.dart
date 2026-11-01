@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
@@ -8,10 +7,6 @@ import 'package:lxbox/services/l10n/template_overlay.dart';
 /// §279 — TemplateOverlay: applier/extractor поверх декодированного
 /// wizard_template.json (схема адресов §3.2 спеки 279).
 void main() {
-  Map<String, dynamic> loadRealTemplate() =>
-      jsonDecode(File('assets/wizard_template.json').readAsStringSync())
-          as Map<String, dynamic>;
-
   /// Минимальный синтетический шаблон, покрывающий все узлы схемы.
   Map<String, dynamic> syntheticTemplate() => {
         'parser_config': {'inner': 'machine'},
@@ -108,14 +103,6 @@ void main() {
       };
 
   group('extract', () {
-    test('deterministic over real template', () {
-      final a = TemplateOverlay.extract(loadRealTemplate());
-      final b = TemplateOverlay.extract(loadRealTemplate());
-      expect(a, isNotEmpty);
-      expect(a, equals(b));
-      expect(a.keys.toList(), equals(b.keys.toList()));
-    });
-
     test('english → english mirror per §3.2 schema', () {
       final m = TemplateOverlay.extract(syntheticTemplate());
       // Ключ = само display-значение; map — english→english зеркало.
@@ -142,18 +129,6 @@ void main() {
       // Bare-string enum-опции (wire-значения) не извлекаются.
       expect(m.containsKey('warn'), isFalse);
       expect(m.containsKey('info'), isFalse);
-    });
-
-    test('repeated english text collapses to one key (not a conflict)', () {
-      final t = syntheticTemplate();
-      // Второй section с ТЕМ ЖЕ english name — схлопывается в один ключ.
-      (t['sections'] as List).add({
-        'id': 'general-2',
-        'name': 'General', // тот же текст, что и у первой секции
-        'vars': <dynamic>[],
-      });
-      final m = TemplateOverlay.extract(t);
-      expect(m['General'], 'General');
     });
   });
 

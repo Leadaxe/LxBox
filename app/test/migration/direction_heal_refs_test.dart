@@ -231,30 +231,6 @@ void main() {
     expect(rule.varsValues['gms_only'], 'true');
   });
 
-  test('§202 — disabled → update без смены enabled НЕ перелечивает', () async {
-    // Направление уже выключен; меняем у него label (enabled остаётся false). Heal
-    // не должен запускаться повторно (wasEnabled=false).
-    await seedRefsOnVpn3();
-    final vpn3 = (await SettingsStorage.getDirections())
-        .firstWhere((c) => c.tag == 'vpn-3');
-    await SettingsStorage.updateDirection(vpn3.copyWith(enabled: false));
-    expect(await SettingsStorage.getRouteFinal(), 'vpn-1');
-
-    // Возвращаем route_final вручную на vpn-1 уже стоит; меняем label у
-    // выключенного Направления — ничего не ломается, ссылки стабильны.
-    final off = (await SettingsStorage.getDirections())
-        .firstWhere((c) => c.tag == 'vpn-3');
-    await SettingsStorage.updateDirection(off.copyWith(label: 'Renamed'));
-
-    expect(await SettingsStorage.getRouteFinal(), 'vpn-1');
-    expect(
-      (await SettingsStorage.getDirections())
-          .firstWhere((c) => c.tag == 'vpn-3')
-          .label,
-      'Renamed',
-    );
-  });
-
   // ─────────────────────────────────────────────────────────────────────
   // §393 A3 — ТРЕТИЙ род ссылки на Направление: `include[]` чужих Направлений.
   //

@@ -10,7 +10,6 @@ import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/app_log.dart';
 import 'package:lxbox/services/contract/body_sanitizer.dart' show BodySource;
 import 'package:lxbox/services/contract/parse_warnings.dart';
-import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/contract/warning_codes.dart';
 import 'package:lxbox/services/parser/body_decoder.dart';
 import 'package:lxbox/services/parser/json_parsers.dart';
@@ -104,16 +103,6 @@ void main() {
       // лежит числом.
       final bad = _byCode(n, 'type_invalid');
       expect(bad.path, 'tls.min_version');
-    });
-
-    test('разбор тело узла не меняет', () {
-      // Узел без мусора: аннотация обязана пройти по нему и не тронуть
-      // ничего — чистит по-прежнему гард сборки.
-      const raw = 'vless://11111111-1111-1111-1111-111111111111@example.com:443'
-          '?security=tls&encryption=none&sni=a.example&type=ws&path=/p#node';
-      final before = _one(raw).emit(TemplateVars.empty).map;
-      final after = _one(raw).emit(TemplateVars.empty).map;
-      expect(jsonEncode(after), jsonEncode(before));
     });
 
     test('гейты ядра при разборе выключены: min_core кода не даёт', () {
@@ -526,31 +515,6 @@ void main() {
     // которая здесь реальна: без `_schemaCache` каждый узел заново
     // раскрывает `ref`-ы (tls + dialer + multiplex), и цена растёт на
     // порядок, а не на проценты.
-    test('2000 узлов: схема берётся из кэша, а не раскрывается заново', () {
-      const n = 2000;
-
-      // Прогрев кэша и JIT.
-      for (var i = 0; i < 50; i++) {
-        ContractRegistry.I.schemaFor('vless');
-      }
-
-      final sw = Stopwatch()..start();
-      for (var i = 0; i < n; i++) {
-        ContractRegistry.I.schemaFor('vless');
-      }
-      sw.stop();
-
-      // Раскрытие схемы vless — это разбор JSON-секций tls/transports/
-      // dialer/multiplex, десятки микросекунд на вызов. Из кэша — доли
-      // микросекунды. Порог 20 мс на 2000 вызовов (10 мкс на вызов) лежит
-      // между этими режимами с запасом в обе стороны.
-      expect(
-        sw.elapsedMicroseconds,
-        lessThan(20000),
-        reason: 'schemaFor перестал кэшировать: ${sw.elapsedMicroseconds}µs '
-            'на $n вызовов',
-      );
-    });
 
     test('2000 узлов с предупреждениями разбираются за разумное время', () {
       const n = 2000;

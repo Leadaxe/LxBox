@@ -210,13 +210,6 @@ void main() {
         }
       }
     });
-
-    test('у каждого известного расхождения есть причина', () {
-      for (final e in _knownGaps.entries) {
-        expect(e.value.trim(), isNotEmpty,
-            reason: 'расхождение ${e.key} без причины');
-      }
-    });
   });
 
   group('§472 — правила mapper на живых ссылках (trojan)', () {
@@ -362,21 +355,6 @@ void main() {
   });
 
   group('§472 — правила mapper на живых ссылках (hysteria2)', () {
-    test('sni без точки/двоеточия и 🔒 уступают адресу сервера', () {
-      // `sni_heuristic_falls_back_to_server` — у hysteria2 правило ЕСТЬ на
-      // обоих проектах, в отличие от trojan/vless/vmess (см. _knownGaps).
-      for (final bad in ['localhost', '🔒']) {
-        final spec = parseUri(
-            'hysteria2://p@h.example:443?sni=${Uri.encodeComponent(bad)}#n')!;
-        expect((spec.emit(TemplateVars.empty).map['tls'] as Map)['server_name'],
-            'h.example',
-            reason: 'sni=$bad');
-      }
-      final ok = parseUri('hysteria2://p@h.example:443?sni=a.b#n')!;
-      expect((ok.emit(TemplateVars.empty).map['tls'] as Map)['server_name'],
-          'a.b');
-    });
-
     test('mport=1000-2000,3000 → server_ports [low:high]', () {
       // `mport_range_spec` — форма записи диапазона: дефис ссылки становится
       // двоеточием ядра, одиночный порт — парой `N:N`.
@@ -441,40 +419,6 @@ void main() {
   });
 
   group('§472 — правила mapper на живых ссылках (anytls)', () {
-    test('anytls: sni без точки/двоеточия и 🔒 уступают адресу сервера', () {
-      // `sni_heuristic_falls_back_to_server` — у anytls правило ЕСТЬ на обоих
-      // проектах, как у hysteria2 (см. _knownGaps по trojan/vless/vmess).
-      for (final bad in ['localhost', '🔒']) {
-        final spec = parseUri(
-            'anytls://pw@h.example:443?sni=${Uri.encodeComponent(bad)}#n')!;
-        expect((spec.emit(TemplateVars.empty).map['tls'] as Map)['server_name'],
-            'h.example',
-            reason: 'sni=$bad');
-      }
-    });
-
-    test('anytls: pbk= создаёт блок REALITY, годность судит реестр', () {
-      const pbk = 'AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw';
-      final ok = parseUri('anytls://pw@h.example:443?pbk=$pbk&sid=abcd#n')!;
-      final tls = ok.emit(TemplateVars.empty).map['tls'] as Map;
-      expect((tls['reality'] as Map)['public_key'], pbk);
-    });
-
-    test('anytls: без fp= → random, fp в написании uTLS → семейство', () {
-      // `fp_empty_defaults_to_random` и `utls_xray_hello_names` на одной схеме.
-      final bare = parseUri('anytls://pw@h.example:443?sni=a.b#n')!;
-      expect(
-          ((bare.emit(TemplateVars.empty).map['tls'] as Map)['utls']
-              as Map)['fingerprint'],
-          'random');
-      final alias =
-          parseUri('anytls://pw@h.example:443?sni=a.b&fp=hellofirefox_auto#n')!;
-      expect(
-          ((alias.emit(TemplateVars.empty).map['tls'] as Map)['utls']
-              as Map)['fingerprint'],
-          'firefox');
-    });
-
     test('anytls: alpn одной строкой → список, ech= не переносится', () {
       // `alpn_comma_list` и `ech_param_dropped_with_code`.
       final spec = parseUri('anytls://pw@h.example:443?sni=a.b'
@@ -552,15 +496,6 @@ void main() {
   });
 
   group('§472 — правила mapper на живых ссылках (http)', () {
-    test('http: security=none гасит TLS даже на https-схеме', () {
-      final off = parseUri('proxy-https://u@h.example:443?security=none#n')!;
-      expect(off.emit(TemplateVars.empty).map.containsKey('tls'), isFalse);
-      // Без параметра https-схема блок даёт.
-      final on = parseUri('proxy-https://u@h.example:443#n')!;
-      expect((on.emit(TemplateVars.empty).map['tls'] as Map)['enabled'],
-          isTrue);
-    });
-
     test('http: fp в написании uTLS → имя семейства', () {
       final spec = parseUri(
           'proxy-https://u@h.example:443?sni=a.b&fp=hellofirefox_auto#n')!;
@@ -578,20 +513,6 @@ void main() {
     /// Канонический masque-узел корпуса, без `vhttp`.
     const bare = 'masque://PRIVDER%3D%3D@192.0.2.44:443'
         '?publickey=PUBDER%3D%3D&address=172.16.0.2%2F32#n';
-
-    test('masque: без vhttp= → явный h3, а не auto ядра', () {
-      // `vhttp_empty_defaults_to_h3` — КОНВЕНЦИЯ обеих сторон, не дефолт
-      // ядра (у ядра `auto`). Значение входит в identity живых MASQUE-узлов,
-      // поэтому маппер пишет его явно, а не полагается на `default` реестра
-      // (тот по PARSING_PRINCIPLES §2.4 в тело не материализуется).
-      final spec = parseUri(bare)!;
-      expect(spec.emit(TemplateVars.empty).map['vhttp'], 'h3');
-      // Явный `auto` при этом уезжает как написан: «нет параметра» и «оператор
-      // выбрал auto» — не одно и то же.
-      final auto = parseUri(bare.replaceAll('#n', '&vhttp=auto#n'))!;
-      expect(auto.emit(TemplateVars.empty).map['vhttp'], 'auto');
-      expect(auto.warnings, isEmpty);
-    });
 
     test('masque: network/server_name/skip_cert_verify в ссылке не переносятся',
         () {

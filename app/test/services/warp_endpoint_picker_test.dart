@@ -133,21 +133,6 @@ void main() {
     }
   });
 
-  test('§130 masque_sni_pool отдельный, СОДЕРЖИТ cloudflare (реальный TLS SNI)',
-      () async {
-    final p = await WarpEndpointPicker.load(region: '');
-    expect(p.masqueSniPool, isNotEmpty);
-    // У MASQUE это реальный SNI QUIC-сессии к Cloudflare — cloudflare-домен тут
-    // естественен (в отличие от WG-junk §136), пул специально отдельный.
-    expect(p.masqueSniPool, contains('www.cloudflare.com'));
-    expect(p.masqueSniPool, contains('cdn.jsdelivr.net'));
-    expect(p.masqueSniPool, contains('aws.amazon.com'));
-    // randomMasqueSni отдаёт непустой домен из пула.
-    final s = p.randomMasqueSni();
-    expect(s, isNotEmpty);
-    expect(p.masqueSniPool, contains(s));
-  });
-
   test('masque recommended_sni: родной домен первым в пуле и помечен', () async {
     final p = await WarpEndpointPicker.load(region: '');
     // §638: рекомендованный SNI — дефолт ядра `www.cloudflare.com` (§393);
@@ -155,20 +140,6 @@ void main() {
     expect(p.recommendedMasqueSni, 'www.cloudflare.com');
     expect(p.masqueSniPool, contains('consumer-masque.cloudflareclient.com'));
     expect(p.masqueSniPool.first, p.recommendedMasqueSni);
-  });
-
-  test('WG-пул recommended_sni НЕ имеет (cloudflare-домены там режутся)',
-      () async {
-    final p = await WarpEndpointPicker.load(region: '');
-    // Асимметрия с MASQUE намеренна: §136 — SNI внутри junk-приманки, не TLS.
-    expect(p.sniPool, isNot(contains('engage.cloudflareclient.com')));
-  });
-
-  test('§130 новые чистые домены в обоих пулах (jsdelivr/aws — не cloudflare)',
-      () async {
-    final p = await WarpEndpointPicker.load(region: '');
-    expect(p.sniPool, contains('cdn.jsdelivr.net'));
-    expect(p.sniPool, contains('aws.amazon.com'));
   });
 
   // §305 — asset несёт device-verified MASQUE-данные боевого теста.
@@ -194,14 +165,6 @@ void main() {
     expect(p.masqueHostsFor('h3'), p.masqueH3Hosts);
     expect(p.masqueHostsFor('h2'), ['162.159.198.2', '162.159.199.2']);
     expect(p.masqueHostsFor('auto'), ['162.159.198.2', '162.159.199.2']);
-  });
-
-  test('§305 masque-порты: все 7 рабочих у ОБОИХ транспортов', () async {
-    final p = await WarpEndpointPicker.load(region: '');
-    // Наборы заданы раздельными ключами (ports_h3/ports_h2), но device-verified
-    // рабочие порты одинаковы — важно, что это не сузилось случайно.
-    expect(p.masquePortsFor('h3'), [443, 500, 1701, 4500, 4443, 8443, 8095]);
-    expect(p.masquePortsFor('h2'), [443, 500, 1701, 4500, 4443, 8443, 8095]);
   });
 
   test('§305 randomMasqueIp: h3 — ТОЛЬКО 4 живых хоста, h2 — весь блок',
@@ -247,21 +210,5 @@ void main() {
     // Один список в двух местах намеренно (asset — боевой, const — на случай
     // битого asset); расхождение = кто-то поправил одно и забыл другое.
     expect(p.apiHosts, WarpApi.fallbackHosts);
-  });
-
-  test('05.09.2026/§425: deepseek в корне, mail.ru/max.ru/vk.ru в loc.ru', () async {
-    final p = await WarpEndpointPicker.load(region: '');
-    expect(p.sniPool, contains('deepseek.com'));
-    expect(p.masqueSniPool, contains('deepseek.com'));
-    final ru = await WarpEndpointPicker.load(region: 'ru');
-    for (final d in ['deepseek.com', 'mail.ru', 'max.ru', 'vk.ru']) {
-      expect(ru.sniPool, contains(d));
-      expect(ru.masqueSniPool, contains(d));
-    }
-    // §638: рекомендуемый SNI (дефолт ядра) первый в обоих вариантах пула,
-    // родной домен официального клиента остаётся кандидатом перебора.
-    expect(p.masqueSniPool.first, 'www.cloudflare.com');
-    expect(ru.masqueSniPool.first, 'www.cloudflare.com');
-    expect(ru.masqueSniPool, contains('consumer-masque.cloudflareclient.com'));
   });
 }

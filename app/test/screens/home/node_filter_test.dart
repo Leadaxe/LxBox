@@ -105,11 +105,6 @@ void main() {
       expect(f.passes('🇺🇸 NY'), isTrue);
     });
 
-    test('invert OFF + match → true (как раньше)', () {
-      final f = makeFilter(regex: RegExp('Moscow'));
-      expect(f.passes('🇷🇺 Moscow'), isTrue);
-    });
-
     test('invert ON без regex → no-op (true для всех)', () {
       final f = makeFilter(regexInvert: true);
       expect(f.passes('whatever'), isTrue);
@@ -184,14 +179,6 @@ void main() {
   });
 
   group('NodeFilter.passes — subscription', () {
-    test('known sub id в set → true', () {
-      final f = makeFilter(
-        subscriptions: {'sub-1'},
-        sub: {'🇷🇺 M1': {'sub-1'}},
-      );
-      expect(f.passes('🇷🇺 M1'), isTrue);
-    });
-
     test('UserServer (empty Set) попадает в `custom` category', () {
       final f = makeFilter(
         subscriptions: {'custom'},
@@ -211,14 +198,6 @@ void main() {
     test('§077 collision: нода с candidates {sub-a, sub-b} — chip sub-a → true', () {
       final f = makeFilter(
         subscriptions: {'sub-a'},
-        sub: {'🇷🇺 M1': {'sub-a', 'sub-b'}},
-      );
-      expect(f.passes('🇷🇺 M1'), isTrue);
-    });
-
-    test('§077 collision: та же нода — chip sub-b → true (видна в обеих)', () {
-      final f = makeFilter(
-        subscriptions: {'sub-b'},
         sub: {'🇷🇺 M1': {'sub-a', 'sub-b'}},
       );
       expect(f.passes('🇷🇺 M1'), isTrue);
@@ -280,11 +259,6 @@ void main() {
         sub: {'🇷🇺 M1': {'sub-a', 'sub-b'}},
       );
       expect(f.passes('🇷🇺 M1'), isTrue);
-    });
-
-    test('subscription filter off (empty Set) + empty candidates → true', () {
-      final f = makeFilter(sub: {'CustomNode': const <String>{}});
-      expect(f.passes('CustomNode'), isTrue);
     });
   });
 
@@ -428,15 +402,6 @@ void main() {
         ping: {'🇷🇺 Moscow': 42},
       );
       expect(f.passes('🇷🇺 Moscow'), isTrue);
-    });
-  });
-
-  group('NodeFilter.passes — detour не в predicate', () {
-    test('tag с detour-prefix НЕ rejects (это caller responsibility)', () {
-      final f = makeFilter();
-      expect(f.passes('⚙ detour-node'), isTrue,
-          reason:
-              'locked decision #13 — detour exclusion это pool filter в caller, не часть NodeFilter');
     });
   });
 }

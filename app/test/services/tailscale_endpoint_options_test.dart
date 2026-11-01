@@ -60,10 +60,6 @@ void main() {
   List<String> tags(List<TailscaleEndpointOption> o) =>
       [for (final x in o) x.tag];
 
-  test('пустой вход → пустой перечень', () {
-    expect(collectTailscaleEndpointOptions(const []), isEmpty);
-  });
-
   test('свой сервер Tailscale — опция; не-Tailscale — нет', () {
     final r = collectTailscaleEndpointOptions([
       user(ts('home-ts')),

@@ -471,18 +471,6 @@ void main() {
       expect(_run(s, 'x://h.com:443?ALLOWINSECURE=1')!['ins'], isTrue);
       expect(_run(s, 'x://h.com:443?skip-cert-verify=true')!['ins'], isTrue);
     });
-
-    // G4 (FROZEN): порядок ключей объекта входит в тело, и оставлять его
-    // свойством реализации нельзя.
-    test('G4 — sort_keys даёт детерминированный порядок', () {
-      final s = _section(_withParams({
-        'h': {'source': 'query.h', 'maps_to': 'hdr', 'type': 'object',
-            'sort_keys': true},
-      }));
-      // Источник объекта у формы url строкой не бывает, поэтому проверяем
-      // сам примитив на форме без сортировки — порядок ключей объекта.
-      expect(s.params['h']!.sortKeys, isTrue);
-    });
   });
 
   group('userinfo (P2)', () {

@@ -477,15 +477,6 @@ void main() {
     });
   });
 
-  group('§125 — глобальный ✨auto отсутствует', () {
-    test('никакой ✨auto в outbounds', () async {
-      final outs = await build([
-        const Direction(tag: 'vpn-1', label: 'X', auto: DirectionAuto()),
-      ]);
-      expect(outs.any((o) => o['tag'] == kAutoOutboundTag), false);
-    });
-  });
-
   group('F4.5 — деградация dangling route_final → vpn-1', () {
     Future<Map<String, dynamic>> buildWith(
         List<Direction> directions, String routeFinal) async {

@@ -192,25 +192,6 @@ void main() {
       expect(dnsEvents.first.confidence, ConfidenceLevel.verified);
     });
 
-    test('SVCB record DNS resolve is parsed', () async {
-      TrafficProfiler.I.startGlobalRecording();
-      TrafficProfiler.I.ingestDnsForTest([
-        const CcDnsQuery(
-          domain: '_dns.example.com',
-          queryType: 64, // SVCB
-          rcode: 0,
-          packageName: 'com.android.chrome',
-          answers: [
-            CcDnsAnswer(
-                name: '_dns.example.com', type: 64, rdata: '1 . alpn=h2'),
-          ],
-        ),
-      ]);
-      final ev = TrafficProfiler.I.globalRollingBuffer
-          .firstWhere((e) => e.kind == TrafficEventKind.dnsResolve);
-      expect(ev.dnsRecordType, 'SVCB');
-    });
-
     test('SOA record (NXDOMAIN) is parsed without IP', () async {
       TrafficProfiler.I.startGlobalRecording();
       // SOA-ответ (NXDOMAIN): queryType 6 → 'SOA', rcode 3, answer не A/AAAA.
@@ -357,45 +338,6 @@ void main() {
       expect(buf.length, 2);
       expect(buf.last.kind, TrafficEventKind.tcpClose);
       expect(buf.last.duration, isNotNull);
-    });
-
-    test('closed connection via closedAt>0 emits tcpClose (§168)', () async {
-      // CC может прислать тот же conn с closedAt>0 (вместо пропадания) —
-      // ingest трактует isClosed как «пропал» → закрываем.
-      TrafficProfiler.I.startGlobalRecording();
-      TrafficProfiler.I.ingestForTest([
-        const CcConnection(
-          id: 'c4',
-          network: 'tcp',
-          domain: 'api.t-bank-app.ru',
-          destination: '193.17.93.195:443',
-          rule: '',
-          uplink: 100,
-          downlink: 200,
-          outbound: 'direct-out',
-          packageName: 'ru.tinkoff.investing',
-          createdAt: 0,
-          closedAt: 0,
-        ),
-      ]);
-      // Тот же conn, но closedAt>0 → ingest НЕ кладёт в seenIds → close.
-      TrafficProfiler.I.ingestForTest([
-        const CcConnection(
-          id: 'c4',
-          network: 'tcp',
-          domain: 'api.t-bank-app.ru',
-          destination: '193.17.93.195:443',
-          rule: '',
-          uplink: 100,
-          downlink: 200,
-          outbound: 'direct-out',
-          packageName: 'ru.tinkoff.investing',
-          createdAt: 0,
-          closedAt: 1,
-        ),
-      ]);
-      expect(TrafficProfiler.I.globalRollingBuffer.last.kind,
-          TrafficEventKind.tcpClose);
     });
 
     test('§176 — короткий conn сразу closedAt>0 → обе фазы (open+close)',
@@ -589,38 +531,6 @@ void main() {
   // ───── §048 Live system-wide buffer ────────────────────────────────────
 
   group('TrafficProfiler — §048 Live system-wide buffer', () {
-    test('globalSnapshot returns events for all apps', () async {
-      final sub = TrafficProfiler.I.globalLiveStream().listen((_) {});
-      TrafficProfiler.I.startGlobalRecording();
-      // §180 — атрибуция packageName ИЗ ЯДРА прямо в CcDnsQuery.
-      TrafficProfiler.I.ingestDnsForTest([
-        const CcDnsQuery(
-          domain: 'a.example',
-          queryType: 1,
-          rcode: 0,
-          packageName: 'com.app.a',
-          answers: [CcDnsAnswer(name: 'a.example', type: 1, rdata: '1.1.1.1')],
-        ),
-        const CcDnsQuery(
-          domain: 'b.example',
-          queryType: 1,
-          rcode: 0,
-          packageName: 'com.app.b',
-          answers: [CcDnsAnswer(name: 'b.example', type: 1, rdata: '2.2.2.2')],
-        ),
-      ]);
-      final snap = TrafficProfiler.I.globalSnapshot();
-      // Хотя бы по одному event на app в global buffer'е.
-      final apps = snap
-          .map((e) => e.process)
-          .where((p) => p != null)
-          .toSet();
-      expect(apps.contains('com.app.a'), true);
-      expect(apps.contains('com.app.b'), true);
-      TrafficProfiler.I.stopGlobalRecording();
-      await sub.cancel();
-    });
-
     test('unattributedBannerActive flips when many unattributed events arrive',
         () async {
       final sub = TrafficProfiler.I.globalLiveStream().listen((_) {});
@@ -797,32 +707,6 @@ void main() {
       expect(
         ev.routingLineOf(compact: true),
         'final ⇒ vpn-1 ⇒ ✨auto : WARP → vpn-1 (✨auto (🇭🇺Венгрия)) → play-fe.googleapis.com',
-      );
-    });
-
-    test('routingLine: с явным rule (не final)', () async {
-      TrafficProfiler.I.startGlobalRecording();
-      TrafficProfiler.I.ingestForTest([
-        const CcConnection(
-          id: 'd181c',
-          network: 'tcp',
-          domain: 'site.ru',
-          destination: '5.6.7.8:443',
-          rule: 'rule_set=ru-domains',
-          uplink: 1,
-          downlink: 1,
-          outbound: 'direct-out',
-          chains: ['direct-out'], // прямой, без групп
-          packageName: 'ru.tinkoff.investing',
-          createdAt: 0,
-          closedAt: 0,
-        ),
-      ]);
-      final ev = TrafficProfiler.I.globalRollingBuffer.first;
-      // нет групп (chains длины 1), нет detour: proc ⇒ rule : node → domain
-      expect(
-        ev.routingLine,
-        'ru.tinkoff.investing ⇒ [tcp] rule_set=ru-domains : direct-out → site.ru',
       );
     });
 

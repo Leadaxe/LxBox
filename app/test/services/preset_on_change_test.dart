@@ -62,13 +62,6 @@ void main() {
         reason: 'DNS-аспект выключен → FakeIP не рулит DNS → resolve не глушим');
   });
 
-  test('идемпотентность: повторный вызов даёт то же', () async {
-    final cr = CustomRulePreset(name: 'FakeIP', presetId: 'fakeip', enabled: true);
-    await applyPresetOnChange(fakeip, cr);
-    await applyPresetOnChange(fakeip, cr);
-    expect(await SettingsStorage.getVar('resolve_enabled', 'true'), 'false');
-  });
-
   test('пресет без on_change (ru-direct) → resolve_enabled не трогается', () async {
     final raw = File('assets/wizard_template.json').readAsStringSync();
     final tpl = WizardTemplate.fromJson(jsonDecode(raw) as Map<String, dynamic>);

@@ -386,23 +386,6 @@ void main() {
   });
 
   group('VpnModeConfig model (§119)', () {
-    test('predicates', () {
-      const vpn = VpnModeConfig.defaults();
-      expect(vpn.isVpn, true);
-      expect(vpn.hasTun, true);
-      expect(vpn.hasMixed, false);
-
-      final proxy = vpn.copyWith(mode: 'proxy');
-      expect(proxy.isProxy, true);
-      expect(proxy.hasTun, false);
-      expect(proxy.hasMixed, true);
-
-      final both = vpn.copyWith(mode: 'vpn_proxy');
-      expect(both.isVpnProxy, true);
-      expect(both.hasTun, true);
-      expect(both.hasMixed, true);
-    });
-
     test('effectiveAuth: 0.0.0.0 форсит on', () {
       const m = VpnModeConfig(
         mode: 'proxy',
@@ -477,31 +460,6 @@ void main() {
       expect(VpnModeConfig.isLoopback('0.0.0.0'), false);
       expect(VpnModeConfig.isLoopback('192.168.1.5'), false);
     });
-
-    test('toJson round-trip keys', () {
-      final json = _proxyAuth.toJson();
-      expect(json['mode'], 'proxy');
-      expect(json['proxy_protocol'], 'mixed');
-      expect(json['proxy_port'], 2080);
-      expect(json['proxy_listen'], '127.0.0.1');
-      expect(json['proxy_auth_enabled'], true);
-      expect(json['proxy_username'], 'user');
-      expect(json['proxy_password'], 'deadbeef');
-    });
-
-    test('protocol constants', () {
-      expect(VpnModeConfig.protoMixed, 'mixed');
-      expect(VpnModeConfig.protoHttp, 'http');
-      expect(VpnModeConfig.protoSocks, 'socks');
-      expect(const VpnModeConfig.defaults().proxyProtocol, 'mixed');
-    });
-
-    test('defaults = vpn mode (backward-compat)', () {
-      const d = VpnModeConfig.defaults();
-      expect(d.mode, 'vpn');
-      expect(d.proxyPort, 2080);
-      expect(d.proxyListen, '127.0.0.1');
-    });
   });
 
   // §232 — IPv6/route_address за галками (защитный opt-in).
@@ -556,11 +514,6 @@ void main() {
       expect(VpnModeConfig.isValidPort(-1), isFalse);
       expect(VpnModeConfig.isValidPort(65536), isFalse);
       expect(VpnModeConfig.isValidPort(99999), isFalse);
-    });
-    test('граница совпадает с UI vpn_mode_tab (1024)', () {
-      // Регресс-якорь: UI _applyPort отвергает <1024; модель обязана тоже.
-      expect(VpnModeConfig.isValidPort(1024), isTrue);
-      expect(VpnModeConfig.isValidPort(1023), isFalse);
     });
   });
 

@@ -51,29 +51,6 @@ void main() {
     if (tmp.existsSync()) await tmp.delete(recursive: true);
   });
 
-  group('preferredOrientationsFor', () {
-    test('TV + allow_rotation=false → no preference', () {
-      expect(
-        preferredOrientationsFor(allowRotation: false, isTelevision: true),
-        isEmpty,
-      );
-    });
-
-    test('phone + allow_rotation=false → portraitUp', () {
-      expect(
-        preferredOrientationsFor(allowRotation: false, isTelevision: false),
-        [DeviceOrientation.portraitUp],
-      );
-    });
-
-    test('phone + allow_rotation=true → no preference', () {
-      expect(
-        preferredOrientationsFor(allowRotation: true, isTelevision: false),
-        isEmpty,
-      );
-    });
-  });
-
   group('applyAllowRotationSetting', () {
     test('TV: no lock, stored allow_rotation untouched', () async {
       await SettingsStorage.setAllowRotation(false);

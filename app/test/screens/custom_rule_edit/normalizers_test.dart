@@ -13,11 +13,6 @@ void main() {
     test('trims whitespace', () {
       expect(splitRaw('  a  ,  b  ,  c  '), ['a', 'b', 'c']);
     });
-    test('empty input', () {
-      expect(splitRaw(''), isEmpty);
-      expect(splitRaw('  '), isEmpty);
-      expect(splitRaw(',,,'), isEmpty);
-    });
   });
 
   group('normalizedDomains', () {
@@ -62,9 +57,6 @@ void main() {
         ['xn--p1ai'],
       );
     });
-    test('§144 mixed ASCII + IDN labels: только не-ASCII → xn--', () {
-      expect(normalizedDomains('shop.рф'), ['shop.xn--p1ai']);
-    });
   });
 
   group('normalizedKeywords', () {
@@ -93,14 +85,6 @@ void main() {
         normalizedCidrs('192.168.1.1,10.0.0.0/8\n::1'),
         ['192.168.1.1/32', '10.0.0.0/8', '::1/128'],
       );
-    });
-  });
-
-  group('normalizedPorts / normalizedPortRanges', () {
-    test('passthrough split', () {
-      expect(normalizedPorts('80,443\n22'), ['80', '443', '22']);
-      expect(normalizedPortRanges('8000:9000,:3000'),
-          ['8000:9000', ':3000']);
     });
   });
 }

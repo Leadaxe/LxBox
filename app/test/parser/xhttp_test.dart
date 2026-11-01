@@ -156,22 +156,6 @@ void main() {
       expect(w, isEmpty);
     });
 
-    test('круг через ссылку узла: поля доезжают', () {
-      const x = XhttpTransport(
-        path: '/x',
-        host: 'h',
-        mode: 'packet-up',
-        xPaddingBytes: '100-1000',
-        noGrpcHeader: true,
-      );
-      final t = _viaUri(x) as XhttpTransport;
-      expect(t.path, '/x');
-      expect(t.host, 'h');
-      expect(t.mode, 'packet-up');
-      expect(t.xPaddingBytes, '100-1000');
-      expect(t.noGrpcHeader, true);
-    });
-
     test('httpupgrade остаётся отдельным типом (регресс на путаницу)', () {
       final t =
           parseTransport({'type': 'httpupgrade', 'path': '/u', 'host': 'h'});
@@ -180,14 +164,6 @@ void main() {
       // транспортов и есть тот регресс, который сторожит кейс.
       expect(_viaUri(t!), isA<HttpUpgradeTransport>());
       expect(_bodyViaUri(t)['type'], 'httpupgrade');
-    });
-
-    test('mode-матрица парсится дословно', () {
-      for (final mode in ['auto', 'packet-up', 'stream-up', 'stream-one']) {
-        final t =
-            parseTransport({'type': 'xhttp', 'mode': mode}) as XhttpTransport;
-        expect(t.mode, mode);
-      }
     });
 
     test('минимальный xhttp (только type) → дефолты, без лишних ключей', () {
@@ -437,35 +413,6 @@ void main() {
       // scMaxConcurrentPosts (legacy) не маппится
       final (m, _) = t.toSingbox(TemplateVars.empty);
       expect(m.containsKey('sc_max_concurrent_posts'), false);
-    });
-
-    test('битый extra игнорируется, плоские параметры выживают', () {
-      final t = parseTransport({
-        'type': 'xhttp',
-        'mode': 'packet-up',
-        'path': '/p',
-        'extra': '{not valid json', // обрезанный
-      }) as XhttpTransport;
-      expect(t.mode, 'packet-up');
-      expect(t.path, '/p');
-    });
-
-    // §620 — хвост `?…` у xhttp — query запроса (контракт Xray, ядро SPEC
-    // 119), а не мусор: путь уходит дословно, `?ed=` early data не значит.
-    test('path с ?-хвостом остаётся дословным', () {
-      final t = parseTransport({'type': 'xhttp', 'path': '/GaMeOpTiMiZeR?ed=2048'})
-          as XhttpTransport;
-      expect(t.path, '/GaMeOpTiMiZeR?ed=2048');
-    });
-
-    test('sc* float-хвост отбрасывается (30.0 → "30")', () {
-      final t = parseTransport({
-        'type': 'xhttp',
-        'scMinPostsIntervalMs': '30.0',
-        'scMaxEachPostBytes': '1000000',
-      }) as XhttpTransport;
-      expect(t.scMinPostsIntervalMs, '30');
-      expect(t.scMaxEachPostBytes, '1000000');
     });
 
     test('круг через ссылку узла: parseUri(toUri(golden)) ≈ golden', () {

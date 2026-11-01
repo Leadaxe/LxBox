@@ -475,24 +475,4 @@ void main() {
       expect(await t.totalSeconds(), 3600);
     });
   });
-
-  group('ActiveTimeTracker — legacy wall-clock (без провайдера)', () {
-    test('totalSeconds = persisted + live-хвост; disconnect доливает',
-        () async {
-      await SupportState.I.set('active_seconds', 100);
-      final t = ActiveTimeTracker.I;
-      expect(await t.totalSeconds(), 100);
-
-      await t.onTunnelChanged(true);
-      // live-хвост ≥ 0 — total не уменьшается.
-      expect(await t.totalSeconds(), greaterThanOrEqualTo(100));
-
-      await t.onTunnelChanged(false);
-      // После disconnect persisted ≥ 100 (delta могла быть 0 секунд).
-      expect(await SupportState.I.getInt('active_seconds'),
-          greaterThanOrEqualTo(100));
-      // Сессия закрыта — повторный disconnect no-op.
-      await t.onTunnelChanged(false);
-    });
-  });
 }

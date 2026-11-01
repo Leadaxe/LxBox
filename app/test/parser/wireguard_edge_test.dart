@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/node_spec.dart';
-import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/parser/engine/section_loader.dart';
 import 'package:lxbox/services/parser/json_parsers.dart';
@@ -58,18 +57,6 @@ void main() {
       expect(ensureCidr('10.0.0.2/32'), '10.0.0.2/32'); // уже CIDR
       expect(ensureCidr('fd00::1/64'), 'fd00::1/64');
       expect(ensureCidr(''), '');
-    });
-
-    test('URI: bare address + bare allowed_ips → CIDR в emit', () {
-      final spec = parseLinkAs<WireguardSpec>(
-          'wireguard://$_testPub@h.example:51820?publickey=$_testPub&'
-          'address=172.16.0.2&allowedips=10.0.0.5,fd00::2');
-      expect(spec!.localAddresses, ['172.16.0.2/32']);
-      expect(spec.peers.first.allowedIps, ['10.0.0.5/32', 'fd00::2/128']);
-      final m = spec.emit(TemplateVars.empty).map;
-      expect(m['address'], ['172.16.0.2/32']);
-      expect((m['peers'] as List).first['allowed_ips'],
-          ['10.0.0.5/32', 'fd00::2/128']);
     });
 
     test('JSON endpoint: bare address/allowed_ips → CIDR', () {

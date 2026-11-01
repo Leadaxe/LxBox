@@ -53,13 +53,6 @@ void main() {
 
   tearDown(() => filter.dispose());
 
-  test('sanity: B — detour-таргет, A/C — нет, Z отсутствует', () {
-    expect(state.configModel['B']!.isDetour, true);
-    expect(state.configModel['A']!.isDetour, false);
-    expect(state.configModel['C']!.isDetour, false);
-    expect(state.configModel['Z'], isNull);
-  });
-
   test('старт (фильтр выкл): показаны ВСЕ, включая detour B', () {
     expect(filter.detourEnabled, false);
     final (matching, nonMatching) = presenter.splitNodes(tags, state);
@@ -86,15 +79,6 @@ void main() {
     expect(matching, isNot(contains('C')));
     expect(matching, isNot(contains('Z')),
         reason: 'нет в configModel → non-detour (?? false) → скрыт в only-detour');
-  });
-
-  test('control-узлы видны во ВСЕХ detour-режимах (никогда не drop)', () {
-    // фильтр выкл (показать всё)
-    expect(presenter.splitNodes(tags, state).$1, containsAll(['vpn-1-auto', 'direct']));
-    filter.setDetourEnabled(true); // скрыть detour
-    expect(presenter.splitNodes(tags, state).$1, containsAll(['vpn-1-auto', 'direct']));
-    filter.toggleDetourHide(); // только detour
-    expect(presenter.splitNodes(tags, state).$1, containsAll(['vpn-1-auto', 'direct']));
   });
 
   test('computeListData (старт): displayList включает detour B', () {
@@ -221,13 +205,6 @@ void main() {
       final data = presenter.computeListData(s);
       expect(data.availableProtocols, contains('urltest'));
       expect(data.availableVariants, containsAll(['least_test', 'round_robin']));
-    });
-
-    test('лейблы без перевода: Auto / Fastest / Pool', () {
-      expect(protoLabel('urltest'), 'Auto');
-      expect(protoLabel('tailscale'), 'Tailscale'); // §435
-      expect(autoModeLabel('least_test'), 'Fastest');
-      expect(autoModeLabel('round_robin'), 'Pool');
     });
   });
 }

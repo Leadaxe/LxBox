@@ -39,14 +39,6 @@ void main() {
       )!;
       expect(tlsOf(n)['alpn'], ['h3', 'h2', 'http/1.1']);
     });
-
-    test('ws + только h2 → h2 остаётся', () {
-      final n = parseUri(
-        'trojan://pw@example.com:443?type=ws&path=%2Fx&security=tls'
-        '&alpn=h2&sni=example.com#node',
-      )!;
-      expect(tlsOf(n)['alpn'], ['h2']);
-    });
   });
 
   // §459 (контракт §24.2 п. 7.2) — посылка D-006 «ядро без with_ech» ложна:

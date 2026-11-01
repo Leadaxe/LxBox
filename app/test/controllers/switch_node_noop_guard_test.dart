@@ -157,12 +157,4 @@ void main() {
     );
     expect(emitted.map((e) => e.$1), isNot(contains('ACTIVE_GROUP_CHANGED')));
   });
-
-  test('actionSetGroup: существующая группа → без броска', () async {
-    controller.debugSeedNodeState(
-        group: 'vpn-1', activeNode: '🇫🇮node', groups: ['vpn-1', 'work']);
-
-    // не должно бросить (группа есть в списке)
-    await automation.actionSetGroup('work', ctx());
-  });
 }

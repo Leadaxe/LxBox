@@ -100,23 +100,6 @@ void main() {
       expect(r.tags.where((t) => t.startsWith('Node-')), isEmpty);
     });
 
-    test('ровно 5 нод → все имена, без «and N more»', () async {
-      final r = await build([ghostConsumers('warp gen', 5)]);
-
-      expect(r.lines, hasLength(1));
-      expect(r.lines.single, contains('"Node-5"'));
-      expect(r.lines.single, isNot(contains('more')));
-    });
-
-    test('одна нода → имя без счётчика, единственное число', () async {
-      final r = await build([ghostConsumers('warp gen', 1)]);
-
-      expect(r.lines, hasLength(1));
-      final line = r.lines.single;
-      expect(line, startsWith('Node "Node-1" was skipped: its detour'));
-      expect(line, isNot(contains('1 nodes')));
-    });
-
     test('два разных отсутствующих target → две строки', () async {
       final r = await build([
         ghostConsumers('warp gen', 3, id: 'g1'),

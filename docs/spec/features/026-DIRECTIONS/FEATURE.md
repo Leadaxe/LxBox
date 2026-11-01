@@ -64,8 +64,7 @@ no detour layers, no auto twins.
 - **P5. A source prefix change follows into the filters.** Literal occurrences of the old prefix
   in Node filter and Default are rewritten in storage; an occurrence inside a regex construct
   is left with a warning. **Witness:** units "a literal occurrence: the filter is rewritten IN
-  STORAGE", "a metachar construct: the filter is NOT touched, a warning is returned", "^RU: →
-  ^DE: matches the display tag of the new prefix". **Mutation:** raw substring replace — `R.`
+  STORAGE", "a metachar construct: the filter is NOT touched, a warning is returned". **Mutation:** raw substring replace — `R.`
   gets rewritten too.
 - **P6. A stored Direction survives a round-trip.** Missing keys get defaults, garbage in
   `include` is dropped on read, an empty `include` is not written. **Witness:** units "full

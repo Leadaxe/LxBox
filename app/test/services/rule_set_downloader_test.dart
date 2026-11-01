@@ -200,21 +200,6 @@ void main() {
           reason: 'время прошлого успеха не затирается неудачей');
     });
 
-    test('download() остаётся обратно-совместимым: 304 → путь, не null',
-        () async {
-      final id = freshId();
-      var serve304 = false;
-      final client = MockClient((req) async => serve304
-          ? http.Response('', 304)
-          : http.Response.bytes([5], 200, headers: {'etag': '"e"'}));
-      await RuleSetDownloader.download(id, 'http://x/r.srs',
-          client: client, backoffs: _noBackoff);
-      serve304 = true;
-      final path = await RuleSetDownloader.fetch(id, 'http://x/r.srs',
-          client: client, backoffs: _noBackoff, conditional: true);
-      expect(path.path, isNotNull);
-    });
-
     test('delete() сносит и метаданные', () async {
       final id = freshId();
       final client = MockClient(

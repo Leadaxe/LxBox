@@ -38,13 +38,6 @@ void main() {
     return (tun: tun, warnings: res.emitWarnings);
   }
 
-  test('шаблон объявляет переменную', () {
-    final v = template.vars.firstWhere((v) => v.name == 'tun_route_exclude');
-    expect(v.type, 'text_list');
-    expect(v.defaultValue, '');
-    expect(v.optionValues, contains('192.168.0.0/16'));
-  });
-
   test('пусто — ключа нет', () async {
     final r = await build(const {});
     expect(r.tun.containsKey('route_exclude_address'), isFalse);

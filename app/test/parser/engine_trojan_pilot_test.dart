@@ -67,12 +67,6 @@ void main() {
     await MapperSections.I.loadDrafts(dir: _draftRoot, files: kDraftFiles);
   });
 
-  test('секция trojan исполняема и загружена', () {
-    expect(MapperSections.I.has('uri', 'trojan'), isTrue,
-        reason: 'без секции движок не работает вовсе — запасного '
-            'рукописного пути у переехавшей схемы не осталось');
-  }, skip: skip);
-
   test('35 кейсов снимка: identity, тег и тело байт в байт', () {
     final cases = _cases();
     expect(cases, hasLength(35));

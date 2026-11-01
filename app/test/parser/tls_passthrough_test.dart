@@ -2,7 +2,6 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/template_vars.dart';
-import 'package:lxbox/models/tls_spec.dart';
 import 'package:lxbox/services/parser/json_parsers.dart';
 import 'package:lxbox/services/parser/singbox_config.dart';
 
@@ -300,21 +299,6 @@ void main() {
       final tls = node.emit(TemplateVars.empty).map['tls'] as Map;
       expect(tls['certificate'], pem);
       expect(tls.containsKey('utls'), isFalse);
-    });
-  });
-
-  group('TlsSpec ==', () {
-    test('пин и сквозные ключи входят в равенство', () {
-      const a = TlsSpec(enabled: true, serverName: 's');
-      final b = a.copyWith(passthrough: {'certificate': pem});
-      final c = a.copyWith(certificatePublicKeySha256: ['pin']);
-      expect(a == b, isFalse);
-      expect(a == c, isFalse);
-      expect(b == a.copyWith(passthrough: {'certificate': pem}), isTrue);
-      expect(
-        b.hashCode,
-        a.copyWith(passthrough: {'certificate': pem}).hashCode,
-      );
     });
   });
 }

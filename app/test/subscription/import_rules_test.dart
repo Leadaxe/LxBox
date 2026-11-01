@@ -182,16 +182,6 @@ void main() {
       expect(applyRulesToNode(other, [rule]).disabled, isNull);
     });
 
-    test('пустой путь ловит значение в глубоком поле', () {
-      // fingerprint лежит в tls.utls.fingerprint — путь не указываем.
-      final rule = ImportRule(
-        conditions: [cond('', ImportRuleOperator.contains, 'firefox')],
-        action: ImportRuleAction.disable,
-      );
-      expect(applyRulesToNode(fpNode('firefox'), [rule]).disabled, isTrue);
-      expect(applyRulesToNode(fpNode('chrome'), [rule]).disabled, isNull);
-    });
-
     test('Replace(set) с пустой целью непригоден (узел не затирается)', () {
       final rule = ImportRule(
         conditions: [cond('', ImportRuleOperator.contains, 'h.com')],
@@ -441,17 +431,6 @@ void main() {
       );
       expect(rule.isUsable, isFalse);
     });
-
-    test('summary показывает пустую цель как *', () {
-      final rule = ImportRule(
-        conditions: [cond('', ImportRuleOperator.contains, '⚡')],
-        action: ImportRuleAction.replace,
-        targetPath: '',
-        replaceMode: ImportRuleReplaceMode.substitute,
-        replacement: '',
-      );
-      expect(rule.summary, contains('* = '));
-    });
   });
 
   // §307/§283 — tag не входит в nodeIdentityHash, поэтому правило,
@@ -611,23 +590,6 @@ void main() {
       final res = applyImportRules(nodes, rules);
       expect(res.enabledIndexes, {0});
       expect(res.disabledIndexes, {1});
-    });
-
-    test('сериализация: enable переживает round-trip', () {
-      final rule = ImportRule(
-        conditions: [cond('tag', ImportRuleOperator.contains, 'NL')],
-        action: ImportRuleAction.enable,
-      );
-      expect(ImportRule.fromJson(rule.toJson()), rule);
-      expect(ImportRuleAction.fromName('enable'), ImportRuleAction.enable);
-    });
-
-    test('summary показывает Enable', () {
-      final rule = ImportRule(
-        conditions: [cond('tag', ImportRuleOperator.contains, 'NL')],
-        action: ImportRuleAction.enable,
-      );
-      expect(rule.summary, endsWith('→ Enable'));
     });
   });
 

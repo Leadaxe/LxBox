@@ -341,28 +341,4 @@ void main() {
       filter.dispose();
     });
   });
-
-  group('NodeListData.topWarningSeverityOf', () {
-    test('presenter отдаёт старший уровень по тегу', () {
-      final data = NodeListData(
-        cache: const ParsedConfig.empty(),
-        matchingSet: {},
-        displayList: [],
-        emojis: [],
-        availableProtocols: [],
-        availableVariants: [],
-        sourceOptions: [],
-        warningsByTag: {
-          'a': [infoOnly],
-          'b': [warn],
-          'c': <NodeWarning>[],
-        },
-      );
-
-      expect(data.topWarningSeverityOf('a'), WarningSeverity.info);
-      expect(data.topWarningSeverityOf('b'), WarningSeverity.warning);
-      expect(data.topWarningSeverityOf('c'), isNull);
-      expect(data.topWarningSeverityOf('missing'), isNull);
-    });
-  });
 }

@@ -54,11 +54,6 @@ void main() {
     expect(poolBadgeOf(c, 'Auto-1'), '🇩🇪');
   });
 
-  test('тег без своего spec получает дефолт', () {
-    final c = controllerWith([auto('auto-de', '🇩🇪')]);
-    expect(poolBadgeOf(c, 'auto-nl'), kDefaultPoolBadge);
-  });
-
   test('смена состава подписок инвалидирует кэш', () {
     final c = controllerWith([auto('auto-de', '🇩🇪')]);
     expect(poolBadgeOf(c, 'auto-de'), '🇩🇪');

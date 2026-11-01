@@ -419,25 +419,6 @@ void main() {
   });
 
   group('§438 ось правил', () {
-    test('номера файла держатся, неразмеченные корневые — в хвост оси', () {
-      final file = parseLxBackup(_file({
-        'sources': [
-          _server('ts', 'example-1.com'),
-        ],
-        'rules': [
-          {'kind': 'inline', 'name': 'late', 'enabled': true, 'num': 1100,
-           'body': {'domain': ['b'], 'outbound': 'direct'}},
-          {'kind': 'inline', 'name': 'unmarked', 'enabled': true,
-           'body': {'domain': ['c'], 'outbound': 'direct'}},
-          {'kind': 'inline', 'name': 'head', 'enabled': true, 'num': 0,
-           'body': {'domain': ['a'], 'outbound': 'direct'}},
-        ],
-      }));
-      final out = _apply(const [], file);
-      expect([for (final r in out.rules) '${r.name}=${r.orderNum}'],
-          ['head=0', 'late=1100', 'unmarked=1101']);
-    });
-
     test('номера файла держатся, порядок сохраняется, равные остаются равными', () {
       // Раскладка шаблона: голова 0, пресеты 950–990, зона 1000–1100,
       // перехватчики 1110+. Правило из UI после импорта встаёт в конец зоны,

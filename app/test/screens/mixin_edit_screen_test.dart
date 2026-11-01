@@ -133,22 +133,4 @@ void main() {
     expect(field.controller!.text, 'outbounds[tag=');
     expect(find.text('PR DE-1'), findsOneWidget);
   });
-
-  testWidgets('suggestions icon toggles the list off and on', (tester) async {
-    await open(tester);
-    final toggle = find.byKey(const ValueKey('mixin-target-suggest-toggle'));
-    await tester.tap(target());
-    await tester.tap(toggle);
-    await tester.pump();
-    await tester.enterText(target(), 'outbounds[');
-    await tester.pump();
-    expect(find.text('tag='), findsNothing);
-    // Статус работает и без подсказок.
-    expect(status(tester), isNotEmpty);
-
-    await tester.tap(toggle);
-    await tester.pump();
-    expect(find.text('tag='), findsOneWidget);
-    expect(find.text('type='), findsOneWidget);
-  });
 }

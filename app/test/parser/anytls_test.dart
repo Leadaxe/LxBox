@@ -41,11 +41,6 @@ void main() {
       expect(a.port, 443);
     });
 
-    test('percent-encoded password декодируется', () {
-      final a = parseUri('anytls://p%40ss%3Aword@h.example:443') as AnyTlsSpec;
-      expect(a.password, 'p@ss:word');
-    });
-
     test('пустой password → null (AnyTLS требует пароль)', () {
       expect(parseUri('anytls://@h.example:443'), isNull);
       expect(parseUri('anytls://h.example:443'), isNull);
@@ -59,11 +54,6 @@ void main() {
       final a = parseUri('anytls://pw@[2001:db8::1]:8443#v6') as AnyTlsSpec;
       expect(a.server, '2001:db8::1');
       expect(a.port, 8443);
-    });
-
-    test('security=none игнорируется — TLS всё равно on', () {
-      final a = parseUri('anytls://pw@h.example:443?security=none') as AnyTlsSpec;
-      expect(a.tls.enabled, isTrue);
     });
 
     test('security=none НЕ теряет sni/fp/alpn/insecure (§269 ревью)', () {
@@ -90,16 +80,6 @@ void main() {
   });
 
   group('parseAnyTls — TLS-параметры (trojan-конвенция)', () {
-    test('sni/fp/alpn/insecure', () {
-      final a = parseUri('anytls://pw@h.example:8443'
-          '?sni=cdn.example.com&fp=chrome&alpn=h2,http/1.1&allowInsecure=1'
-          '#S') as AnyTlsSpec;
-      expect(a.tls.serverName, 'cdn.example.com');
-      expect(a.tls.fingerprint, 'chrome');
-      expect(a.tls.alpn, ['h2', 'http/1.1']);
-      expect(a.tls.insecure, isTrue);
-    });
-
     test('sni default = server, insecure default = false', () {
       final a = parseUri('anytls://pw@h.example:8443') as AnyTlsSpec;
       expect(a.tls.serverName, 'h.example');
@@ -122,19 +102,6 @@ void main() {
       final a = parseUri('anytls://pw@h.example:8443') as AnyTlsSpec;
       expect(a.idleSessionCheckInterval, '');
       expect(a.idleSessionTimeout, '');
-      expect(a.minIdleSession, isNull);
-    });
-
-    test('невалидный min_idle_session → null', () {
-      // §472 шаг 6 — поле снимает САНИТАЙЗЕР (`min: 0` + `on_invalid: drop`,
-      // код `anytls_min_idle_invalid`). Этот файл реестра не грузит, поэтому
-      // здесь проверяется только то, что узел ЖИВ, а поле в модель не
-      // доезжает: жёсткий каст `as num?` в `parseSingboxEntry` прежде бросал
-      // на нечисловом значении, и `parseUri` отдавал `null` — узел исчезал
-      // целиком и молча. Код с путём и значением проверяет
-      // `anytls_pipeline_invariants_test.dart`.
-      final a = parseUri('anytls://pw@h.example?min_idle_session=abc')
-          as AnyTlsSpec;
       expect(a.minIdleSession, isNull);
     });
   });

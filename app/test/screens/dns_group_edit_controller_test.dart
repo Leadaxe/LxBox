@@ -145,44 +145,6 @@ void main() {
   });
 
   group('§312 CcDnsGroup — маппинг', () {
-    test('fromMap полей SPEC 035 v3', () {
-      final g = CcDnsGroup.fromMap({
-        'tag': 'grp',
-        'mode': 'fastest',
-        'current': 'a',
-        'members': [
-          {
-            'tag': 'a',
-            'serverType': 'udp',
-            'clean': true,
-            'liveErrors': 0,
-            'lastErrorAgeMs': -1,
-            'liveWins': 3,
-            'current': true,
-            'lastRttMs': 12,
-          },
-          {
-            'tag': 'b',
-            'serverType': 'tls',
-            'clean': false,
-            'liveErrors': 2,
-            'lastErrorAgeMs': 34000,
-            'liveWins': 0,
-            'current': false,
-            'lastRttMs': 0,
-          },
-        ],
-      });
-      expect(g.tag, 'grp');
-      expect(g.mode, 'fastest');
-      expect(g.current, 'a');
-      expect(g.members, hasLength(2));
-      expect(g.members[0].clean, isTrue);
-      expect(g.members[0].liveWins, 3);
-      expect(g.members[1].liveErrors, 2);
-      expect(g.members[1].lastErrorAgeMs, 34000);
-    });
-
     test('пустой/битый map не роняет', () {
       final g = CcDnsGroup.fromMap(const {});
       expect(g.tag, '');

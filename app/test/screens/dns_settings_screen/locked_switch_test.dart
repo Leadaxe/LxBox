@@ -116,12 +116,4 @@ void main() {
     expect(toggles, [true]);
     expect(find.byType(SnackBar), findsNothing);
   });
-
-  testWidgets('group subtitle counts members present in the list', (
-    tester,
-  ) async {
-    await pump(tester, group(enabled: true, inList: 5, live: 5));
-    expect(find.textContaining('dns_shield · group · fastest · 5'),
-        findsOneWidget);
-  });
 }

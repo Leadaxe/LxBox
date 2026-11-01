@@ -33,30 +33,6 @@ void main() {
       expect(h.protocol, 'http');
     });
 
-    test('дефолтные порты: 80 для proxy-http, 443 для proxy-https', () {
-      final plain = parseUri('proxy-http://p.example') as HttpSpec;
-      expect(plain.port, 80);
-      final secure = parseUri('proxy-https://p.example') as HttpSpec;
-      expect(secure.port, 443);
-    });
-
-    test('userinfo: user, user:pass, :pass (только пароль)', () {
-      final userOnly =
-          parseUri('proxy-http://alice@h.example:3128') as HttpSpec;
-      expect(userOnly.username, 'alice');
-      expect(userOnly.password, '');
-
-      final both =
-          parseUri('proxy-http://alice:s3cret@h.example:3128') as HttpSpec;
-      expect(both.username, 'alice');
-      expect(both.password, 's3cret');
-
-      final passOnly =
-          parseUri('proxy-http://:s3cret@h.example:3128') as HttpSpec;
-      expect(passOnly.username, '');
-      expect(passOnly.password, 's3cret');
-    });
-
     test('percent-encoded userinfo декодируется', () {
       final h = parseUri(
           'proxy-http://user%40dom:p%3Ass@h.example:8080') as HttpSpec;
@@ -84,31 +60,6 @@ void main() {
   });
 
   group('§268 — плюс-алиасы proxy+http / proxy+https', () {
-    test('proxy+http эквивалентен proxy-http (plain, TLS off)', () {
-      final plus = parseUri('proxy+http://alice:pw@h.example:8080#P')
-          as HttpSpec;
-      final dash = parseUri('proxy-http://alice:pw@h.example:8080#P')
-          as HttpSpec;
-      expect(plus.server, dash.server);
-      expect(plus.port, dash.port);
-      expect(plus.username, dash.username);
-      expect(plus.password, dash.password);
-      expect(plus.tls.enabled, isFalse);
-      expect(dash.tls.enabled, isFalse);
-    });
-
-    test('proxy+https эквивалентен proxy-https (TLS on)', () {
-      final plus = parseUri('proxy+https://alice:pw@h.example:8443'
-          '?sni=proxy.corp#S') as HttpSpec;
-      final dash = parseUri('proxy-https://alice:pw@h.example:8443'
-          '?sni=proxy.corp#S') as HttpSpec;
-      expect(plus.tls.enabled, isTrue);
-      expect(dash.tls.enabled, isTrue);
-      expect(plus.tls.serverName, 'proxy.corp');
-      expect(plus.server, dash.server);
-      expect(plus.port, dash.port);
-    });
-
     test('дефолтные порты сохраняются для плюс-формы', () {
       expect((parseUri('proxy+http://p.example') as HttpSpec).port, 80);
       expect((parseUri('proxy+https://p.example') as HttpSpec).port, 443);

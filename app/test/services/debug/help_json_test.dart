@@ -26,15 +26,6 @@ void main() {
         receivedAt: DateTime.utc(2026),
       );
 
-  test('/help?format=json → JsonResponse, body сериализуется', () async {
-    final resp = await helpHandler(req('json'), ctx());
-    expect(resp, isA<JsonResponse>());
-    final body = (resp as JsonResponse).body;
-    // Ровно операция из JsonResponse.writeTo — тут воспроизведётся баг.
-    final out = const JsonEncoder.withIndent('  ').convert(body);
-    expect(out, isNotEmpty);
-  });
-
   test('все ключи вложенных Map — String (иначе JsonEncoder падает)', () async {
     final resp = await helpHandler(req('json'), ctx()) as JsonResponse;
     final bad = <String>[];

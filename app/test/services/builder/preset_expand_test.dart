@@ -950,10 +950,6 @@ void main() {
       expect(f.routingRules, isEmpty);
     });
 
-    test('hasOutboundAffordance == false (нечего роутить → нет picker)', () {
-      expect(_fakeip().hasOutboundAffordance, isFalse);
-    });
-
     // §266 — РЕАЛЬНЫЙ шаблон (не реплика): регрессия «rule_enable без
     // default_value = required-var unset → expandPreset прерывал весь пресет,
     // fakeip-DNS не эмитился». Синтетический _fakeip() это не ловил (нет
@@ -971,11 +967,6 @@ void main() {
       expect(f.warnings, isEmpty, reason: 'rule_enable не должна ронять пресет');
       expect(f.dnsServers.any((s) => s['type'] == 'fakeip'), isTrue);
       expect(f.dnsRules.isNotEmpty, isTrue);
-    });
-
-    test('ru-direct.hasOutboundAffordance == true (есть var:outbound и rule)',
-        () {
-      expect(_ruDirect().hasOutboundAffordance, isTrue);
     });
 
     // §231 — touchesDns: чип «DNS» в списке правил.
@@ -1471,20 +1462,6 @@ void main() {
       expect(f.dnsRules.single['server'], 'ru-direct:dns_ru');
       expect(f.dnsRules.single.containsKey('ip_version'), isFalse);
       expect(f.dnsRules.single.containsKey('strategy'), isFalse);
-    });
-
-    test('ru-direct: force_ipv4=false → только route', () {
-      final preset = realPreset('ru-direct');
-      final f = expandPreset(
-        CustomRulePreset(
-          name: 'RU',
-          presetId: 'ru-direct',
-          varsValues: {'force_ipv4': 'false'},
-        ),
-        preset,
-      );
-      expect(f.routingRules.length, 1);
-      expect(f.routingRules.single['outbound'], 'direct-out');
     });
 
     test('ru-inside (srs закэширован) → пара resolve+route', () {

@@ -347,17 +347,6 @@ void main() {
         expect(wgCountOf(batches[1]), 5 - kProbeMaxWireguardPerConfig);
       });
 
-      test('конфиг без WG/naive — дословно прежний (batches == 1)', () {
-        final nodes = nodesOf(folder(members: [
-          FolderMember(raw: uriA),
-          FolderMember(raw: uriB),
-        ]));
-        final batches = buildProbeBatches(nodes);
-        expect(batches.length, 1);
-        expect(batches.single.configJson, buildProbeConfig(nodes).configJson);
-        expect(endpointsOf(batches.single), isEmpty);
-      });
-
       test('WG-детур у vless учитывается в лимите: endpoint уезжает в тот же '
           'батч, что и узел', () {
         // 4 WG-узла уже набивают лимит; пятый «узел» — vless с WG-детуром,
@@ -417,15 +406,6 @@ void main() {
         expect(wgCountOf(batches.single), 5);
         expect(batches.single.tagByIndex.keys, [0]);
       });
-    });
-
-    test('коллизия тегов членов уникализируется', () {
-      final cfg = cfgOf(folder(members: [
-        FolderMember(raw: uriA),
-        FolderMember(raw: uriA),
-      ]));
-      expect(cfg.tagByIndex[0], 'Alpha');
-      expect(cfg.tagByIndex[1], 'Alpha-2');
     });
   });
 

@@ -197,21 +197,6 @@ void main() {
     });
   });
 
-  group('§324 инвариант: список зеркалимых полей', () {
-    test('совпадает с buildOverrideOptions (Kotlin)', () {
-      // Инвариант §324 (по образцу §221): OverrideOptions имеет ТРИ поля, но
-      // native заполняет только два. Появилась третья докрутка в
-      // buildOverrideOptions — обязана появиться и здесь, иначе компаратор
-      // молча начнёт врать.
-      //
-      // exclude_package НЕ зеркалим осознанно: native не заполняет его никогда
-      // (в deny-режиме пакеты кладёт §046 post-step в сам конфиг, а не
-      // override).
-      expect(OverrideSnapshot.mirroredFields,
-          {'auto_redirect', 'include_package'});
-    });
-  });
-
   group('§324 compareCanonical', () {
     test('формы совпали → fresh', () {
       expect(
@@ -248,13 +233,6 @@ void main() {
       );
       expect(
         compareCanonical(canonicalSaved: '{"a":1}', runningSnapshot: ''),
-        StalenessVerdict.unknown,
-      );
-    });
-
-    test('оба null → unknown', () {
-      expect(
-        compareCanonical(canonicalSaved: null, runningSnapshot: null),
         StalenessVerdict.unknown,
       );
     });

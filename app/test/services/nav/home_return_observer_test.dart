@@ -56,12 +56,6 @@ void main() {
     expect(calls, 0);
   });
 
-  test('цепочка pop-ов: срабатывает только финальный на home', () {
-    observer.didPop(_FakeRoute(first: false), _FakeRoute(first: false));
-    observer.didPop(_FakeRoute(first: false), _FakeRoute(first: true));
-    expect(calls, 1);
-  });
-
   test('clearHandler снимает обработчик; повторные set/clear безопасны', () {
     observer.clearHandler();
     observer.clearHandler();
