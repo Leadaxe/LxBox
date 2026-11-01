@@ -29,7 +29,8 @@ home screen, the Diagnostics tab and the Debug API.
 | Where | node screens of an own server, a folder member, a subscription node and the view screen opened from NETWORKS or "View details"; before Diagnostics |
 | Initial tab | from a NETWORKS row — Network; from "View details" — as before |
 | Exit node list | peers with `ExitNodeOption`, sorted like Devices; "None" first |
-| Save choice | visible when the active and the recorded exit differ and the node has a source record (own server or folder member) |
+| Save choice | visible in `Running` when the active and the recorded exit differ and the node has a source record (own server or folder member) |
+| Replace key | visible in `NeedsLogin` when the node has a source record; one hidden field, Save inactive while it is blank |
 | Written value | the active peer's Tailscale address, IPv4 first; without addresses — the MagicDNS name, then the host name; None removes `exit_node` |
 | Ping | up to five replies or until the sheet closes; latency, direct or relay, endpoint address or relay region |
 | Debug API | `GET /state` → `tailscale: {tag: {backend_state, devices}}` |
@@ -45,7 +46,8 @@ Ping.
 
 **Outputs:** the tab; `GetTailscaleStatus`; `SetTailscaleExitNode` (a
 `StableID` or empty), `TailscaleLogout`, `StartTailscalePing`; the node source with `exit_node`
-changed and the config rebuilt; snackbars "Copied", "Failed: …"; the
+or `auth_key` changed and the config rebuilt; after Replace key the VPN
+reloads; snackbars "Copied", "Failed: …"; the
 Diagnostics line "This node has no exit. Check devices on the Network tab."
 
 ## Rules and invariants
@@ -59,8 +61,20 @@ Diagnostics line "This node has no exit. Check devices on the Network tab."
   needed`, `stopped`, `starting`, or the core's text); Sign in appears in
   `NeedsLogin` with a non-empty `AuthURL` and opens it in the browser; Log out
   appears in `Running`, after a confirmation that says a node with a stored
-  auth key signs in again at the next start.
-- **Exit node** (P21): picking an item calls the core and switches the exit
+  auth key signs in again at the next start. "signed in with a key" shows
+  only in `Running`: offline the key may have been rejected.
+- **Replace key:** in `NeedsLogin` (a rejected key or none) a node with a
+  source record has Replace key; a subscription node has none. The dialog
+  has one hidden Auth key field with Show/Hide, as in the Add server wizard,
+  Cancel and Save; Save is inactive while the field is blank. Save writes the
+  trimmed key into `auth_key` the way Save choice writes `exit_node`, then
+  rebuilds the config and reloads the VPN (the core cannot sign in with a
+  new key on the fly yet). A failed write applies nothing.
+- **Exit node** (P21): the list, the mismatch warning and Save choice only
+  in `Running`. In any other state the core has no active exit and nothing
+  is compared: a recorded `exit_node` shows as "Saved: <value>" with
+  "Applies when the node is online.", no list and no button; nothing
+  recorded — no block. Picking an item calls the core and switches the exit
   on the fly; the body is untouched. The recorded value refers to a peer when
   it equals one of its addresses, its MagicDNS name (with or without the
   trailing dot), the base name or the host name, case-insensitively. The
@@ -73,7 +87,9 @@ Diagnostics line "This node has no exit. Check devices on the Network tab."
   core and saves the node the way Save on the Source tab does; after a
   rebuild the node moves between NETWORKS and the Direction lists. A
   subscription node shows the sign but no Save choice.
-- **This device:** Name, MagicDNS name, then a single Address heading with
+- **This device:** Name (outside `Running` an empty name or `localhost`,
+  which the core gives before sign-in, shows as `—`), MagicDNS name, then a
+  single Address heading with
   every address of the device below it, one per line in the core's order (no
   addresses — no block); a tap on an address copies that address.
 - **Devices** (P22): peers other than this device, online first then by name;
@@ -138,3 +154,4 @@ Diagnostics line "This node has no exit. Check devices on the Network tab."
 | 1 | [579](../../../tasks/579-networks-pseudo-direction.md) | Implemented, DEVICE-PENDING | The state stream bridge; NETWORKS row; the tab's follow-up decided |
 | 2 | [581](../../../tasks/581-tailscale-network-tab.md) | Implemented, DEVICE-PENDING | The Network tab, exit node on the fly and Save choice, Ping, Diagnostics line, Debug API summary |
 | 3 | [645](../../../tasks/645-tailscale-devices-path-addresses.md) | Implemented, DEVICE-PENDING | Device rows in three lines with the path as an icon, addresses in a column, This device with one Address heading, `GetTailscaleStatus` every 3 s |
+| 4 | [706](../../../tasks/706-tailscale-network-tab-logged-out.md) | Implemented, DEVICE-PENDING | Offline: the recorded exit as a line instead of the list and Save choice (it is no longer erased), the key chip only in Running, Replace key, Name `—` |

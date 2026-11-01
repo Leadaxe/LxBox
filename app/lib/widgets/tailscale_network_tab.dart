@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models/tunnel_status.dart';
+import '../services/debug/debug_registry.dart';
 import '../services/l10n/locale_controller.dart';
 import '../services/tailscale_network.dart';
 import '../services/url_launcher.dart';
@@ -33,6 +34,21 @@ class TailscaleNetworkActions {
   Future<void> stopPing() => CcChannel.instance.stopTailscalePing();
 
   Stream<CcTailscalePingResult> get pings => CcChannel.instance.tailscalePing;
+
+  /// §706 — применить новый `auth_key`, уже записанный в тело узла. Ядро не
+  /// умеет войти с новым ключом на лету (ручка запрошена у сессии ядра), пока
+  /// — пересборка конфига и перезапуск VPN тем же путём, что авто-применение
+  /// (`generateConfig` → `saveParsedConfig` → `reloadVpn`). Появится ручка —
+  /// здесь будет её вызов.
+  Future<void> applyNewKey(String tag) async {
+    final home = DebugRegistry.I.home;
+    final sub = DebugRegistry.I.sub;
+    if (home == null || sub == null) return;
+    final config = await sub.generateConfig();
+    if (config == null) return;
+    if (!await home.saveParsedConfig(config)) return;
+    await home.reloadVpn();
+  }
 }
 
 /// Задача 581 — вкладка Network узла Tailscale (экраны `node_settings_screen`
@@ -59,8 +75,9 @@ class TailscaleNetworkTab extends StatefulWidget {
   final Future<void> Function(String? value)? onSaveExitNode;
 
   /// §613 — запись полей тела узла (значение `null` убирает поле) тем же
-  /// путём, что Save choice; `null` — блока Settings нет (узел подписки).
-  final Future<void> Function(Map<String, Object?> fields)? onSaveFields;
+  /// путём, что Save choice; `null` — блока Settings и кнопки Replace key
+  /// (§706) нет (узел подписки). `true` — записано.
+  final Future<bool> Function(Map<String, Object?> fields)? onSaveFields;
 
   /// Тесты: поток состояния вместо [CcChannel.tailscaleStatus] (подписка ядра
   /// тогда не поднимается).
@@ -264,11 +281,18 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
     // там, у пункта Exit node его нет.
     final devices = sortDevices(s.peers);
     final grouped = showOwnerGroups(s);
+    // §706 — вне сети активного выхода у ядра нет: выбор и сверка с
+    // записанным только в Running, иначе — записанное значение строкой.
+    final running = s.backendState == 'Running';
+    final recordedExit = recordedExitNode(widget.body);
     final children = <Widget>[
       if (s.health.isNotEmpty) _healthBlock(context, s.health),
       _statusBlock(context, s),
-      if (s.self != null) _thisDeviceBlock(context, s.self!),
-      _exitNodeBlock(context, s),
+      if (s.self != null) _thisDeviceBlock(context, s.self!, running),
+      if (running)
+        _exitNodeBlock(context, s)
+      else if (recordedExit != null)
+        _savedExitNodeBlock(context, recordedExit),
       if (widget.onSaveFields != null) _settingsBlock(context),
       _devicesHeader(context, devices),
       if (devices.isEmpty)
@@ -361,6 +385,9 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
   Widget _statusBlock(BuildContext context, CcTailscaleStatus s) {
     final needsLogin = s.backendState == 'NeedsLogin';
     final running = s.backendState == 'Running';
+    // §706 — ключ отвергнут или его нет: заменить можно только у узла,
+    // который пишется с вкладки (узел подписки — нет).
+    final replaceKey = needsLogin && widget.onSaveFields != null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -369,11 +396,12 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
           dense: true,
           title: Text(tailscaleStateLabel(s)),
           subtitle: s.networkName.isEmpty ? null : Text(s.networkName),
-          trailing: s.keyAuth
+          // §706 — вне сети ключ мог быть отвергнут: чип только в Running.
+          trailing: s.keyAuth && running
               ? Chip(label: Text(getLocalText.s("signed in with a key")))
               : null,
         ),
-        if ((needsLogin && s.authUrl.isNotEmpty) || running)
+        if ((needsLogin && s.authUrl.isNotEmpty) || running || replaceKey)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Wrap(
@@ -388,6 +416,12 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
                   OutlinedButton(
                     onPressed: _busy ? null : () => unawaited(_logout(s)),
                     child: Text(getLocalText.s("Log out")),
+                  ),
+                if (replaceKey)
+                  OutlinedButton(
+                    key: const ValueKey('tailscale-replace-key'),
+                    onPressed: _busy ? null : () => unawaited(_replaceKey()),
+                    child: Text(getLocalText.s("Replace key")),
                   ),
               ],
             ),
@@ -430,14 +464,46 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
     if (err != null) _snack(getLocalText.s("Failed: %s", err));
   }
 
+  /// §706 — Replace key: новый ключ пишется в тело узла тем же путём, что
+  /// Save choice, затем [TailscaleNetworkActions.applyNewKey].
+  Future<void> _replaceKey() async {
+    final key = await showDialog<String>(
+      context: context,
+      builder: (_) => const _ReplaceKeyDialog(),
+    );
+    final save = widget.onSaveFields;
+    if (key == null || save == null || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      if (!await save({'auth_key': key})) return;
+      await widget.actions.applyNewKey(widget.liveTag);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   // ── This device ──
 
-  Widget _thisDeviceBlock(BuildContext context, CcTailscalePeer self) {
+  Widget _thisDeviceBlock(
+    BuildContext context,
+    CcTailscalePeer self,
+    bool running,
+  ) {
+    // §706 — вне сети ядро имени ещё не знает (или отдаёт `localhost`).
+    final unknownName =
+        !running && (self.hostName.isEmpty || self.hostName == 'localhost');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _header(context, getLocalText.s("This device")),
-        _copyTile(getLocalText.s("Name"), self.hostName),
+        if (unknownName)
+          ListTile(
+            dense: true,
+            title: Text(getLocalText.s("Name")),
+            subtitle: const Text('—'),
+          )
+        else
+          _copyTile(getLocalText.s("Name"), self.hostName),
         _copyTile(getLocalText.s("MagicDNS name"), self.dnsNameClean),
         if (self.ips.isNotEmpty) _addressTile(self.ips),
         if (self.keyExpiry > 0)
@@ -487,6 +553,23 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
   }
 
   // ── Exit node ──
+
+  /// §706 — узел не в Running: записанный `exit_node` строкой, без выбора и
+  /// без Save choice (активного выхода у ядра нет, сверять не с чем).
+  Widget _savedExitNodeBlock(BuildContext context, String recorded) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _header(context, getLocalText.s("Exit node")),
+        ListTile(
+          key: const ValueKey('tailscale-saved-exit-node'),
+          dense: true,
+          title: Text(getLocalText.s("Saved: %s", recorded)),
+          subtitle: Text(getLocalText.s("Applies when the node is online.")),
+        ),
+      ],
+    );
+  }
 
   Widget _exitNodeBlock(BuildContext context, CcTailscaleStatus s) {
     final options = exitNodeOptions(s);
@@ -987,5 +1070,85 @@ class _TailscalePingSheetState extends State<TailscalePingSheet> {
     return r.derpRegionCode.isEmpty
         ? getLocalText.s("%s ms, relay", ms)
         : getLocalText.s("%s ms, relay %s", ms, r.derpRegionCode);
+  }
+}
+
+/// §706 — диалог Replace key: одно скрытое поле (как Auth key мастера Add
+/// server → Tailscale). Возвращает ключ без пробелов по краям; пустой Save не
+/// принимает.
+class _ReplaceKeyDialog extends StatefulWidget {
+  const _ReplaceKeyDialog();
+
+  @override
+  State<_ReplaceKeyDialog> createState() => _ReplaceKeyDialogState();
+}
+
+class _ReplaceKeyDialogState extends State<_ReplaceKeyDialog> {
+  final _ctrl = TextEditingController();
+  bool _show = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final key = _ctrl.text.trim();
+    return AlertDialog(
+      title: Text(getLocalText.s("Replace key")),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextField(
+            key: const ValueKey('tailscale-replace-key-field'),
+            controller: _ctrl,
+            autofocus: true,
+            obscureText: !_show,
+            autocorrect: false,
+            enableSuggestions: false,
+            decoration: InputDecoration(
+              labelText: getLocalText.s("Auth key"),
+              // l10n-exempt: key format sample
+              hintText: 'tskey-auth-…',
+              suffixIcon: IconButton(
+                tooltip: _show
+                    ? getLocalText.s("Hide")
+                    : getLocalText.s("Show"),
+                icon: Icon(
+                  _show ? Icons.visibility_off : Icons.visibility,
+                  size: 20,
+                ),
+                onPressed: () => setState(() => _show = !_show),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            getLocalText.s("The VPN restarts to sign in with the new key."),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text(getLocalText.s("Cancel")),
+        ),
+        FilledButton(
+          key: const ValueKey('tailscale-replace-key-save'),
+          onPressed: key.isEmpty ? null : () => Navigator.pop(context, key),
+          child: Text(getLocalText.s("Save")),
+        ),
+      ],
+    );
   }
 }

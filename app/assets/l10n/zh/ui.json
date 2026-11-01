@@ -6577,5 +6577,17 @@
     "value": {
       "other": "✓ %d 个匹配"
     }
+  },
+  "Replace key": {
+    "value": "替换密钥"
+  },
+  "Saved: %s": {
+    "value": "已保存：%s"
+  },
+  "Applies when the node is online.": {
+    "value": "节点在线时生效。"
+  },
+  "The VPN restarts to sign in with the new key.": {
+    "value": "VPN 将重启以使用新密钥登录。"
   }
 }

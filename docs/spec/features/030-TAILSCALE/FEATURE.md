@@ -170,14 +170,17 @@ lives in the core until "Save choice" writes it into the node.
   between the recorded `exit_node` and the active exit shows a warning sign
   and "Save choice"; Save choice writes the active peer's Tailscale address
   (IPv4 first) or removes the field; a subscription node and a node without
-  a source record have no Save choice. **Witness:** units "match — no sign",
+  a source record have no Save choice. Outside `Running` the core has no
+  active exit: the recorded `exit_node` shows as a line, with no list, sign
+  or Save choice, so it cannot be erased by mistake (§706). **Witness:** units "match — no sign",
   "none in the node, chosen on the fly", "recorded in the node, cleared on the
   fly", "one in the node, another on the fly", "the IPv4 address is written
   into the body", "the field appears / changes with the key order kept / None
   removes it"; widgets "differ — the sign and Save choice, the address is
   written", "cleared on the fly — Save choice writes empty", "a subscription
   node — the sign, no Save choice", "picking an item switches on the fly, the
-  body is untouched", "no record: Save choice hidden". **Mutation:** Save
+  body is untouched", "no record: Save choice hidden", "the recorded exit
+  node as a line, no list and no Save choice" (§706). **Mutation:** Save
   choice writes the `StableID`.
 - **P22. Devices are listed online first, then by name, with marks.**
   **Witness:** unit "device order: online first, then by name"; widget

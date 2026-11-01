@@ -8,6 +8,16 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Tailscale Network tab of a signed-out node could erase the saved exit
+  node ([task 706](docs/spec/tasks/706-tailscale-network-tab-logged-out.md)).**
+  Offline, the tab compared the recorded `exit_node` with an exit the core did
+  not have and offered Save choice, which wrote None. Outside Running the tab
+  now shows the saved exit node as a line, hides "signed in with a key" and
+  the placeholder name `localhost`, and offers Replace key: the new auth key
+  is written into the node and the VPN restarts.
+
 ## [2.25.19] — 2026-11-01
 
 ### Added

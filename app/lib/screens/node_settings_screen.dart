@@ -507,8 +507,9 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
       });
 
   /// §613 — поля тела узла с вкладки Network (Save choice, переключатели
-  /// Settings): `null` убирает поле; запись — как Save вкладки Source.
-  Future<void> _saveTailscaleFields(Map<String, Object?> fields) async {
+  /// Settings, §706 Replace key): `null` убирает поле; запись — как Save
+  /// вкладки Source. `true` — записано.
+  Future<bool> _saveTailscaleFields(Map<String, Object?> fields) async {
     final raw = _containerRaw.trim();
     final base = raw.startsWith('{') ? raw : _jsonCtrl.text;
     final String text;
@@ -516,10 +517,10 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
       text = withBodyFields(base, fields);
     } on FormatException catch (e) {
       _snack(getLocalText.s("Invalid JSON: %s", e.message));
-      return;
+      return false;
     }
     _sourceCtrl.text = text;
-    await _saveSource();
+    return _saveSource();
   }
 
   /// §623 — выбор в секции Masquerade пишется сразу (как detour): ключи

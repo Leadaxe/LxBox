@@ -29,7 +29,8 @@ Diagnostics и Debug API.
 | Где | экраны узла своего сервера, члена папки, узла подписки и экран просмотра из NETWORKS или «View details»; перед Diagnostics |
 | Начальная вкладка | из строки NETWORKS — Network; из «View details» — прежняя |
 | Список Exit node | пиры с `ExitNodeOption`, порядок как в Devices; «None» первым |
-| Save choice | видна, когда действующий и записанный выход различаются и у узла есть запись источника (свой сервер или член папки) |
+| Save choice | видна в `Running`, когда действующий и записанный выход различаются и у узла есть запись источника (свой сервер или член папки) |
+| Replace key | видна в `NeedsLogin`, когда у узла есть запись источника; одно скрытое поле, Save неактивна, пока оно пустое |
 | Записываемое значение | адрес Tailscale действующего пира, IPv4 первым; без адресов — MagicDNS-имя, затем имя хоста; None убирает `exit_node` |
 | Ping | до пяти ответов или до закрытия листа; задержка, direct или relay, адрес endpoint'а или регион ретранслятора |
 | Debug API | `GET /state` → `tailscale: {тег: {backend_state, devices}}` |
@@ -44,7 +45,8 @@ out, Copy name, Copy MagicDNS name, Copy address, `+N`, Ping.
 
 **Выходы:** вкладка; `GetTailscaleStatus`; `SetTailscaleExitNode` (`StableID` или пусто),
 `TailscaleLogout`, `StartTailscalePing`; источник узла с изменённым
-`exit_node` и пересобранный конфиг; снекбары «Copied», «Failed: …»; строка на
+`exit_node` или `auth_key` и пересобранный конфиг; после Replace key —
+перезапуск VPN; снекбары «Copied», «Failed: …»; строка на
 Diagnostics «This node has no exit. Check devices on the Network tab.»
 
 ## Правила и инварианты
@@ -58,9 +60,22 @@ Diagnostics «This node has no exit. Check devices on the Network tab.»
   needed`, `stopped`, `starting` или текст ядра); Sign in появляется в
   `NeedsLogin` при непустом `AuthURL` и открывает его в браузере; Log out
   появляется в `Running` после подтверждения, которое говорит, что узел с
-  записанным ключом входа войдёт снова при следующем запуске.
-- **Exit node** (P21): выбор пункта зовёт ядро и переключает выход на ходу;
-  тело не трогается. Записанное значение указывает на пира, когда равно
+  записанным ключом входа войдёт снова при следующем запуске. «signed in with
+  a key» — только в `Running`: вне сети ключ мог быть отвергнут.
+- **Replace key:** в `NeedsLogin` (ключ отвергнут или его нет) у узла с
+  записью источника есть Replace key, у узла подписки нет. В диалоге одно
+  скрытое поле Auth key с Show/Hide, как в мастере Add server, и кнопки
+  Cancel и Save; Save неактивна, пока поле пустое или из пробелов. Save пишет
+  ключ без пробелов по краям в `auth_key` тем же путём, что Save choice пишет
+  `exit_node`, затем пересобирает конфиг и перезапускает VPN (ядро пока не
+  умеет войти с новым ключом на ходу). Запись не удалась — ничего не
+  применяется.
+- **Exit node** (P21): список, знак расхождения и Save choice — только в
+  `Running`. В остальных состояниях действующего выхода у ядра нет и
+  сверять не с чем: записанный `exit_node` показан строкой «Saved: <значение>»
+  с подписью «Applies when the node is online.», без списка и без кнопки;
+  ничего не записано — блока нет. Выбор пункта зовёт ядро и переключает выход
+  на ходу; тело не трогается. Записанное значение указывает на пира, когда равно
   одному из его адресов, MagicDNS-имени (с точкой в конце или без), базовому
   имени или имени хоста без учёта регистра. Случаи расхождения и тексты у
   знака: не записан, выбран на ходу — «Not saved. Traffic is not routed
@@ -71,7 +86,9 @@ Diagnostics «This node has no exit. Check devices on the Network tab.»
   проверяет конфиг ядром и сохраняет узел тем же путём, что Save на вкладке
   Source; после пересборки узел переходит между NETWORKS и списками
   Направлений. У узла подписки знак есть, Save choice нет.
-- **This device:** Name, MagicDNS name, затем один заголовок Address и под ним
+- **This device:** Name (вне `Running` пустое имя или `localhost`, которое
+  ядро отдаёт до входа, показано как `—`), MagicDNS name, затем один
+  заголовок Address и под ним
   все адреса устройства, по строке на адрес в порядке ядра (адресов нет —
   блока нет); нажатие на адрес копирует этот адрес.
 - **Devices** (P22): пиры кроме этого устройства, сначала в сети, затем по
@@ -134,3 +151,4 @@ Diagnostics «This node has no exit. Check devices on the Network tab.»
 | 1 | [579](../../../tasks/579-networks-pseudo-direction.md) | Implemented, DEVICE-PENDING | Мост потока состояния; строка NETWORKS; решение о вкладке как follow-up |
 | 2 | [581](../../../tasks/581-tailscale-network-tab.md) | Implemented, DEVICE-PENDING | Вкладка Network, exit node на ходу и Save choice, Ping, строка Diagnostics, сводка Debug API |
 | 3 | [645](../../../tasks/645-tailscale-devices-path-addresses.md) | Implemented, DEVICE-PENDING | Строки устройств в три этажа с путём иконкой, адреса столбиком, This device с одним заголовком Address, `GetTailscaleStatus` раз в 3 с |
+| 4 | [706](../../../tasks/706-tailscale-network-tab-logged-out.md) | Implemented, DEVICE-PENDING | Вне сети: записанный выход строкой вместо списка и Save choice (больше не стирается), чип ключа только в Running, Replace key, Name `—` |

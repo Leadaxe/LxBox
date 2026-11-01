@@ -11,12 +11,16 @@ import 'package:lxbox/widgets/tailscale_network_tab.dart';
 /// устройства) и правка вкладки Diagnostics.
 class _FakeActions extends TailscaleNetworkActions {
   final chosen = <String>[];
+  final applied = <String>[];
 
   @override
   Future<String?> setExitNode(String tag, String stableId) async {
     chosen.add(stableId);
     return null;
   }
+
+  @override
+  Future<void> applyNewKey(String tag) async => applied.add(tag);
 }
 
 /// §645 — опрос `getStatus`: счётчик вызовов, ответ [reply] / [result],
@@ -71,7 +75,7 @@ void main() {
     List<CcTailscaleStatus>? data,
     Map<String, dynamic> body = const {},
     Future<void> Function(String?)? onSave,
-    Future<void> Function(Map<String, Object?>)? onSaveFields,
+    Future<bool> Function(Map<String, Object?>)? onSaveFields,
     TailscaleNetworkActions actions = const TailscaleNetworkActions(),
   }) async {
     final ctrl = StreamController<List<CcTailscaleStatus>>();
@@ -411,7 +415,11 @@ void main() {
       addTearDown(() => tester.binding.setSurfaceSize(null));
       final saved = <Map<String, Object?>>[];
       await pump(tester,
-          data: [_status()], onSaveFields: (f) async => saved.add(f));
+          data: [_status()],
+          onSaveFields: (f) async {
+            saved.add(f);
+            return true;
+          });
       expect(find.byKey(const ValueKey('tailscale-exit-lan')), findsNothing);
       await tester.tap(find.byKey(const ValueKey('tailscale-advertise-exit')));
       await tester.pump();
@@ -427,7 +435,7 @@ void main() {
       await pump(tester,
           data: [_status()],
           body: const {'exit_node': 'gw'},
-          onSaveFields: (f) async {});
+          onSaveFields: (f) async => true);
       expect(tile(tester, 'tailscale-advertise-exit').onChanged, isNull);
       expect(find.byKey(const ValueKey('tailscale-exit-lan')), findsNothing);
     });
@@ -436,6 +444,152 @@ void main() {
       await pump(tester, data: [_status()]);
       expect(
           find.byKey(const ValueKey('tailscale-advertise-exit')), findsNothing);
+    });
+  });
+
+  group('§706 — узел вне сети', () {
+    const offline = CcTailscaleStatus(
+      tag: 'ts',
+      backendState: 'NeedsLogin',
+      stateText: '',
+      keyAuth: true,
+      self: CcTailscalePeer(hostName: 'localhost'),
+      health: [
+        'You are logged out. The last login error was: invalid key: API key does not exist',
+      ],
+    );
+    final replace = find.byKey(const ValueKey('tailscale-replace-key'));
+    final saveKey = find.byKey(const ValueKey('tailscale-replace-key-save'));
+
+    Future<void> big(WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 2400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+    }
+
+    testWidgets('записанный exit node — строкой, без выбора и Save choice',
+        (tester) async {
+      await big(tester);
+      await pump(tester,
+          data: const [offline],
+          body: const {'exit_node': 'gw'},
+          onSave: (_) async {},
+          onSaveFields: (_) async => true);
+      expect(find.byType(RadioListTile<String>), findsNothing);
+      expect(find.text('Save choice'), findsNothing);
+      expect(find.byKey(const ValueKey('exit-node-warning')), findsNothing);
+      expect(find.byKey(const ValueKey('tailscale-saved-exit-node')),
+          findsOneWidget);
+      expect(find.text('Saved: gw'), findsOneWidget);
+    });
+
+    testWidgets('exit node не записан — блока нет', (tester) async {
+      await big(tester);
+      await pump(tester, data: const [offline]);
+      expect(find.text('Exit node'), findsNothing);
+      expect(find.byType(RadioListTile<String>), findsNothing);
+    });
+
+    testWidgets('чипа «signed in with a key» нет, имя — прочерк',
+        (tester) async {
+      await big(tester);
+      await pump(tester, data: const [offline]);
+      expect(find.text('signed in with a key'), findsNothing);
+      expect(find.text('localhost'), findsNothing);
+      expect(find.text('—'), findsOneWidget);
+    });
+
+    testWidgets('редактируемый узел — Replace key есть', (tester) async {
+      await big(tester);
+      await pump(tester,
+          data: const [offline], onSaveFields: (_) async => true);
+      expect(replace, findsOneWidget);
+    });
+
+    testWidgets('узел подписки — Replace key нет', (tester) async {
+      await big(tester);
+      await pump(tester, data: const [offline]);
+      expect(replace, findsNothing);
+    });
+
+    testWidgets('пустой ключ — Save неактивна', (tester) async {
+      await big(tester);
+      await pump(tester,
+          data: const [offline], onSaveFields: (_) async => true);
+      await tester.tap(replace);
+      await tester.pumpAndSettle();
+      expect(tester.widget<FilledButton>(saveKey).onPressed, isNull);
+      await tester.enterText(
+          find.byKey(const ValueKey('tailscale-replace-key-field')), '   ');
+      await tester.pump();
+      expect(tester.widget<FilledButton>(saveKey).onPressed, isNull);
+    });
+
+    testWidgets('Save пишет auth_key и применяет ключ', (tester) async {
+      await big(tester);
+      final actions = _FakeActions();
+      final saved = <Map<String, Object?>>[];
+      await pump(tester,
+          data: const [offline],
+          actions: actions,
+          onSaveFields: (f) async {
+            saved.add(f);
+            return true;
+          });
+      await tester.tap(replace);
+      await tester.pumpAndSettle();
+      await tester.enterText(
+          find.byKey(const ValueKey('tailscale-replace-key-field')),
+          ' tskey-auth-new ');
+      await tester.pump();
+      await tester.tap(saveKey);
+      await tester.pumpAndSettle();
+      expect(saved, [
+        {'auth_key': 'tskey-auth-new'},
+      ]);
+      expect(actions.applied, ['ts']);
+    });
+
+    testWidgets('запись не удалась — ключ не применяется', (tester) async {
+      await big(tester);
+      final actions = _FakeActions();
+      await pump(tester,
+          data: const [offline],
+          actions: actions,
+          onSaveFields: (_) async => false);
+      await tester.tap(replace);
+      await tester.pumpAndSettle();
+      await tester.enterText(
+          find.byKey(const ValueKey('tailscale-replace-key-field')), 'k');
+      await tester.pump();
+      await tester.tap(saveKey);
+      await tester.pumpAndSettle();
+      expect(actions.applied, isEmpty);
+    });
+
+    testWidgets('Running — чип, выбор, имя и без Replace key',
+        (tester) async {
+      await big(tester);
+      const running = CcTailscaleStatus(
+        tag: 'ts',
+        backendState: 'Running',
+        stateText: '',
+        keyAuth: true,
+        self: CcTailscalePeer(hostName: 'phone', ips: ['100.64.0.1']),
+        userGroups: [
+          CcTailscaleUserGroup(peers: [_gw]),
+        ],
+      );
+      await pump(tester,
+          data: const [running],
+          body: const {'exit_node': '100.64.0.2'},
+          onSave: (_) async {},
+          onSaveFields: (_) async => true);
+      expect(find.text('signed in with a key'), findsOneWidget);
+      expect(find.byType(RadioListTile<String>), findsWidgets);
+      expect(find.text('phone'), findsOneWidget);
+      expect(replace, findsNothing);
+      expect(find.byKey(const ValueKey('tailscale-saved-exit-node')),
+          findsNothing);
     });
   });
 }

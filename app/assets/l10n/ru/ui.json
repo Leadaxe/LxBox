@@ -6868,5 +6868,17 @@
       "many": "✓ %d совпадений",
       "other": "✓ %d совпадения"
     }
+  },
+  "Replace key": {
+    "value": "Заменить ключ"
+  },
+  "Saved: %s": {
+    "value": "Записано: %s"
+  },
+  "Applies when the node is online.": {
+    "value": "Применится, когда узел будет в сети."
+  },
+  "The VPN restarts to sign in with the new key.": {
+    "value": "VPN перезапустится, чтобы войти с новым ключом."
   }
 }

@@ -154,16 +154,16 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
       });
 
   /// §613 — переключатели Settings вкладки Network пишут тем же путём.
-  Future<void> Function(Map<String, Object?>)? get _saveTailscaleFields =>
+  Future<bool> Function(Map<String, Object?>)? get _saveTailscaleFields =>
       _saveExitNode == null ? null : _storeTailscaleFields;
 
-  Future<void> _storeTailscaleFields(Map<String, Object?> fields) async {
+  Future<bool> _storeTailscaleFields(Map<String, Object?> fields) async {
     final target =
         exitNodeTargetForTag(widget.tag, widget.subController.entries);
-    if (target == null) return;
+    if (target == null) return false;
     final err =
         await storeTailscaleFields(widget.subController, target, fields);
-    if (!mounted) return;
+    if (!mounted) return err == null;
     if (err == null) {
       final body = Map<String, dynamic>.of(_networkBody);
       for (final f in fields.entries) {
@@ -177,6 +177,7 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
     }
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(err ?? getLocalText.s("Saved"))));
+    return err == null;
   }
 
   /// §565 / задача 570 — член, выбранный на этом экране, пока ядро (или
