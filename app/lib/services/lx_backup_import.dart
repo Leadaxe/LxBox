@@ -22,6 +22,7 @@ library;
 
 import '../models/custom_rule.dart';
 import '../models/direction.dart';
+import '../models/mixin.dart';
 import '../models/parser_config.dart';
 import '../models/server_list.dart';
 import '../models/source_chain.dart';
@@ -49,6 +50,7 @@ class LxImportReceiver {
     this.dnsTemplateServers = const [],
     this.dnsFinalDefault = '',
     this.dnsDefaultResolverDefault = '',
+    this.mixins = const [],
   });
 
   /// Источники приёмника в порядке списка.
@@ -98,6 +100,9 @@ class LxImportReceiver {
   /// висячие значения файла.
   final String dnsFinalDefault;
   final String dnsDefaultResolverDefault;
+
+  /// §704 — миксины приёмника до импорта, в порядке списка.
+  final List<Mixin> mixins;
 }
 
 /// План импорта: разобранный файл и всё, что импорт запишет.
@@ -118,6 +123,8 @@ class LxImportPlan {
     required this.rules,
     this.dns,
     this.sourceOrder = const [],
+    this.mixins = const [],
+    this.appliedMixins = 0,
   });
 
   /// Текст файла: запись пересчитывает план по свежему приёмнику.
@@ -169,6 +176,14 @@ class LxImportPlan {
   /// разными сейверами, и без этой перестановки смешанный порядок файла
   /// схлопывался в «цепочки, потом источники».
   final List<String> sourceOrder;
+
+  /// §704 — миксины после слияния: приёмника и приехавшие (в конце, в
+  /// порядке файла). Миксин файла с тем же телом (`target`+`op`+`value`),
+  /// что у приёмника или у записи выше в файле, — пропуск, не дубль.
+  final List<Mixin> mixins;
+
+  /// Сколько миксинов файла добавлено.
+  final int appliedMixins;
 }
 
 /// Итог записи плана: для строки результата на экране.
@@ -397,6 +412,7 @@ LxImportPlan planLxBackupImport(String raw, LxImportReceiver receiver) {
     file = file.copyWith(warnings: [...file.warnings, ...extraWarnings]);
   }
 
+  final mixins = mergeBackupMixins(receiver.mixins, file.mixins);
   return LxImportPlan(
     raw: raw,
     file: file,
@@ -419,7 +435,26 @@ LxImportPlan planLxBackupImport(String raw, LxImportReceiver receiver) {
       decoded.chainPositions,
       acceptedChainTags,
     ),
+    mixins: mixins.merged,
+    appliedMixins: mixins.added,
   );
+}
+
+/// §704 — миксины файла в конец списка приёмника; совпадение по телу —
+/// пропуск.
+({List<Mixin> merged, int added}) mergeBackupMixins(
+  List<Mixin> receiver,
+  List<Mixin> incoming,
+) {
+  final merged = receiver.toList();
+  final bodies = {for (final m in receiver) m.bodyKey};
+  var added = 0;
+  for (final m in incoming) {
+    if (!bodies.add(m.bodyKey)) continue;
+    merged.add(m);
+    added++;
+  }
+  return (merged: merged, added: added);
 }
 
 /// §511 m2 — ключи заведённых импортом записей по месту в файле.
@@ -481,6 +516,7 @@ class LxBackupImportService {
       dnsFinalDefault: templateDefault('dns_final'),
       dnsDefaultResolverDefault:
           templateDefault('dns_default_domain_resolver'),
+      mixins: await SettingsStorage.getMixins(),
     );
   }
 
@@ -605,6 +641,12 @@ class LxBackupImportService {
         await SettingsStorage.setMasqueAccount(acc, flush: false);
         applied++;
       }
+    }
+
+    // §704 — миксины: дописанные в конец, совпавшие по телу пропущены.
+    if (plan.appliedMixins > 0) {
+      await SettingsStorage.setMixins(plan.mixins, flush: false);
+      applied += plan.appliedMixins;
     }
 
     await SettingsStorage.flushToDisk();

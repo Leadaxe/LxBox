@@ -18,6 +18,7 @@ import '../models/custom_rule.dart';
 import '../models/direction.dart';
 import '../models/dns_ref.dart';
 import '../models/import_rule.dart';
+import '../models/mixin.dart';
 import '../models/node_link.dart';
 import '../models/node_spec.dart' show AutoSelectSpec, NodeSpec;
 import '../models/parser_config.dart' show kUserRuleNumStart;
@@ -706,6 +707,7 @@ class LxBackupFile {
     this.dns,
     this.warp = const [],
     this.rulesDeclared = true,
+    this.mixins = const [],
   });
 
   final int version;
@@ -783,6 +785,11 @@ class LxBackupFile {
   /// парсер не должен знать про storage.
   final List<Map<String, dynamic>> warp;
 
+  /// §704 — миксины итогового конфига в порядке файла, с новыми `id`
+  /// (в файле `id` нет). Совпадение с миксином приёмника по телу снимает
+  /// план импорта.
+  final List<Mixin> mixins;
+
   final Map<String, String> vars;
 
   /// `route.final` файла. У [decodeLxBackup] — как в файле; после
@@ -814,6 +821,7 @@ class LxBackupFile {
         folders: folders,
         dns: dns,
         warp: warp,
+        mixins: mixins,
         vars: vars,
         routeFinal: routeFinal,
         warnings: warnings ?? this.warnings,
@@ -874,6 +882,7 @@ Future<LxBackupExport> buildLxBackup({
   Map<String, dynamic>? dns,
   List<Map<String, dynamic>> warp = const [],
   RecordVarDecls recordVars = RecordVarDecls.none,
+  List<Mixin> mixins = const [],
 }) async {
   var appVersion = '';
   try {
@@ -942,6 +951,10 @@ Future<LxBackupExport> buildLxBackup({
     // §393 B8 — регистрации WARP: без них «Add WARP» на новой машине заводит
     // лишнюю device-запись в Cloudflare вместо переноса существующей.
     if (warp.isNotEmpty) 'warp': warp,
+    // §704 — миксины итогового конфига, без `id`. Наша секция: лаунчеру —
+    // запрос объявить ключ терпимым в `backup.schema.json`.
+    if (mixins.isNotEmpty)
+      'mixins': [for (final m in mixins) m.toBackupJson()],
   };
 
   return LxBackupExport(
@@ -1287,6 +1300,7 @@ LxBackupFile _parse0x(
       _parseVars(decoded, warnings, dns: dnsRaw, recordVars: recordVars);
   final routeFinal = _parseRouteFinal(decoded);
   final warp = _parseWarp(decoded, warnings);
+  final mixins = _parseMixins(decoded, warnings);
   final subscriptions = [
     for (final s in (decoded['subscriptions'] as List? ?? const []))
       if (s is Map) _subscriptionFromJson(s.cast<String, dynamic>(), warnings),
@@ -1312,6 +1326,7 @@ LxBackupFile _parse0x(
     servers: servers,
     dns: parsedVars.dns,
     warp: warp,
+    mixins: mixins,
     vars: parsedVars.vars,
     routeFinal: routeFinal,
     warnings: warnings,
@@ -1496,6 +1511,31 @@ List<Map<String, dynamic>> _parseWarp(
   return warp;
 }
 
+/// §704 — секция `mixins`: записи без `id` (новый при разборе). Запись без
+/// строковых `target`/`op` не применима — пропуск с
+/// [kWarnFieldTypeMismatch] по пути поля. Неизвестный глагол доезжает до
+/// сборки и становится её отказом, как у миксина из Debug API.
+List<Mixin> _parseMixins(
+  Map<String, dynamic> decoded,
+  List<LxBackupWarning> warnings,
+) {
+  final out = <Mixin>[];
+  final items = decoded['mixins'];
+  final list = items is List ? items : const [];
+  for (var i = 0; i < list.length; i++) {
+    final item = list[i];
+    if (item is! Map) continue;
+    final j = item.cast<String, dynamic>();
+    final bad = j['target'] is! String ? 'target' : (j['op'] is! String ? 'op' : null);
+    if (bad != null) {
+      warnings.add(LxBackupWarning(kWarnFieldTypeMismatch, 'mixins[$i].$bad'));
+      continue;
+    }
+    out.add(Mixin.fromJson({...j, 'id': null}));
+  }
+  return out;
+}
+
 /// §438 — правила по оси `num`, стабильно; неразмеченные — в хвост, в
 /// порядке файла (у них нет места на оси, и перебивать размеченных им не за
 /// что). Порядок, который разбор отдаёт превью и слиянию.
@@ -1539,6 +1579,7 @@ const Set<String> _rootKeys = {
   'vars',
   'route',
   'warp',
+  'mixins', // §704
 };
 
 const Set<String> _exportedByKeys = {'app', 'version', 'platform'};
@@ -1664,6 +1705,10 @@ const Set<String> _chainBodyKeys = {
   'strip_evasion',
 };
 
+/// §704 — запись секции `mixins`; `value` — произвольный JSON, вглубь не
+/// обходится.
+const Set<String> _mixinKeys = {'name', 'enabled', 'target', 'op', 'value'};
+
 /// Union обоих типов регистрации: запись объявляет свой `type`, и разбирать её
 /// по типу значило бы завести две почти одинаковые таблицы ради ключей,
 /// которых у чужого типа всё равно не бывает.
@@ -1775,6 +1820,7 @@ List<LxBackupWarning> _scanUnknown(Map<String, dynamic> root) {
   );
   sc.array(root, 'rules', 'rules', _ruleKeys, null, null);
   sc.array(root, 'warp', 'warp', _warpKeys, null, null);
+  sc.array(root, 'mixins', 'mixins', _mixinKeys, 'name', null); // §704
 
   return sc.warnings();
 }
@@ -2623,6 +2669,7 @@ LxBackupFile gateLxBackupTargets(LxBackupFile file, Set<String>? known) {
     folders: file.folders,
     dns: file.dns,
     warp: file.warp,
+    mixins: file.mixins,
     vars: file.vars,
     routeFinal: routeFinal,
     warnings: warnings,
@@ -2926,6 +2973,7 @@ LxBackupFile _parse10(
   final vars = parsedVars.vars;
   final routeFinal = _parseRouteFinal(decoded);
   final warp = _parseWarp(decoded, warnings);
+  final mixins = _parseMixins(decoded, warnings);
   warnings.addAll(dnsWarnings);
   final dns = parsedVars.dns;
 
@@ -2947,6 +2995,7 @@ LxBackupFile _parse10(
     folders: folders,
     dns: dns,
     warp: warp,
+    mixins: mixins,
     vars: vars,
     routeFinal: routeFinal,
     warnings: warnings,
@@ -3462,6 +3511,7 @@ const Set<String> _root10Keys = {
   'vars',
   'route',
   'warp',
+  'mixins', // §704
 };
 
 /// Общая часть узла (`$defs/node`): её несёт и корневая запись, и член папки.
@@ -3633,6 +3683,7 @@ List<LxBackupWarning> _scanUnknown10(Map<String, dynamic> root) {
   );
   sc.array(root, 'rules', 'rules', ruleKeys, 'name', null);
   sc.array(root, 'warp', 'warp', _warpKeys, null, null);
+  sc.array(root, 'mixins', 'mixins', _mixinKeys, 'name', null); // §704
 
   return sc.warnings();
 }

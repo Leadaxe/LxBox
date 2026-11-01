@@ -451,6 +451,7 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
         dns: dns,
         warp: warp,
         recordVars: recordVars,
+        mixins: await SettingsStorage.getMixins(), // §704
       );
       final json = built.json;
       exportWarnings.addAll(built.warnings);
