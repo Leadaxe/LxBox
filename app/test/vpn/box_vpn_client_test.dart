@@ -64,9 +64,16 @@ void main() {
 
     test('getMemoryLimit returns valid native value as is', () async {
       messenger.setMockMethodCallHandler(channel, (call) async {
+        return '512';
+      });
+      expect(await BoxVpnClient().getMemoryLimit(), equals('512'));
+    });
+
+    test('getMemoryLimit folds legacy off into auto (§705)', () async {
+      messenger.setMockMethodCallHandler(channel, (call) async {
         return 'off';
       });
-      expect(await BoxVpnClient().getMemoryLimit(), equals('off'));
+      expect(await BoxVpnClient().getMemoryLimit(), equals('auto'));
     });
   });
 
