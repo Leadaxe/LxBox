@@ -361,6 +361,50 @@ final class InvalidDefault extends ValidationIssue {
   );
 }
 
+/// §704 — отказ миксина: цель не нашлась, тип цели не подходит глаголу,
+/// путь не разбирается или миксин внёс дубль тега. Любая — fatal: конфиг не
+/// собирается, миксин остаётся включённым (пользователь правит его, а не
+/// ищет). Вкладка Mixins находит свою строку по [mixinId] в
+/// `SubscriptionController.lastFatalIssues`.
+final class MixinIssue extends ValidationIssue {
+  final String mixinId;
+
+  /// Имя для показа (`Mixin.displayName`).
+  final String name;
+
+  /// Путь цели как в миксине.
+  final String target;
+
+  /// Машинная причина, английская: `no match`, `needs a single list`,
+  /// `duplicate tag "x" in outbounds`…
+  final String reason;
+
+  /// Причина относится к цели (`<target>: <reason>`); у дубля тега — нет.
+  final bool aboutTarget;
+
+  const MixinIssue({
+    required this.mixinId,
+    required this.name,
+    required this.target,
+    required this.reason,
+    this.aboutTarget = true,
+  });
+
+  /// Текст без имени миксина: `<target>: <reason>` или `<reason>`.
+  String get detail =>
+      aboutTarget ? '${target.isEmpty ? '(root)' : target}: $reason' : reason;
+
+  @override
+  Severity get severity => Severity.fatal;
+
+  @override
+  List<Object?> get props => [mixinId, name, target, reason, aboutTarget];
+
+  @override
+  String messageWith(GetLocalText t) =>
+      t.s("Mixin \"%1\$s\": %2\$s", name, detail);
+}
+
 class ValidationResult {
   final List<ValidationIssue> issues;
   const ValidationResult(this.issues);

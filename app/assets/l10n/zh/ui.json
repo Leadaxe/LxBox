@@ -3053,6 +3053,9 @@
   "Metadata is missing or unreadable.": {
     "value": "元数据缺失或无法读取。"
   },
+  "Mixin \"%1$s\": %2$s": {
+    "value": "混入「%1$s」：%2$s"
+  },
   "Mode": {
     "value": "模式"
   },

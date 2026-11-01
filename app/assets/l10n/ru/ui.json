@@ -3302,6 +3302,9 @@
   "Metadata is missing or unreadable.": {
     "value": "Метаданные отсутствуют или не читаются."
   },
+  "Mixin \"%1$s\": %2$s": {
+    "value": "Миксин «%1$s»: %2$s"
+  },
   "Mode": {
     "value": "Режим"
   },
