@@ -39,15 +39,18 @@ class TailscaleNetworkActions {
   /// умеет войти с новым ключом на лету (ручка запрошена у сессии ядра), пока
   /// — пересборка конфига и перезапуск VPN тем же путём, что авто-применение
   /// (`generateConfig` → `saveParsedConfig` → `reloadVpn`). Появится ручка —
-  /// здесь будет её вызов.
-  Future<void> applyNewKey(String tag) async {
+  /// здесь будет её вызов. `false` — перезапуска не было (туннель не поднят,
+  /// cooldown, сборка не удалась): ключ записан и применится при следующем
+  /// старте VPN.
+  Future<bool> applyNewKey(String tag) async {
     final home = DebugRegistry.I.home;
     final sub = DebugRegistry.I.sub;
-    if (home == null || sub == null) return;
+    if (home == null || sub == null || !home.canReload) return false;
     final config = await sub.generateConfig();
-    if (config == null) return;
-    if (!await home.saveParsedConfig(config)) return;
+    if (config == null) return false;
+    if (!await home.saveParsedConfig(config)) return false;
     await home.reloadVpn();
+    return true;
   }
 }
 
@@ -476,7 +479,9 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
     setState(() => _busy = true);
     try {
       if (!await save({'auth_key': key})) return;
-      await widget.actions.applyNewKey(widget.liveTag);
+      if (!await widget.actions.applyNewKey(widget.liveTag)) {
+        _snack(getLocalText.s("Key saved. It applies when the VPN restarts."));
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }

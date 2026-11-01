@@ -6584,6 +6584,9 @@
   "Saved: %s": {
     "value": "已保存：%s"
   },
+  "Key saved. It applies when the VPN restarts.": {
+    "value": "密钥已保存，将在 VPN 重启时生效。"
+  },
   "Applies when the node is online.": {
     "value": "节点在线时生效。"
   },

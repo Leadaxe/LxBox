@@ -12,6 +12,7 @@ import 'package:lxbox/widgets/tailscale_network_tab.dart';
 class _FakeActions extends TailscaleNetworkActions {
   final chosen = <String>[];
   final applied = <String>[];
+  bool restarted = true;
 
   @override
   Future<String?> setExitNode(String tag, String stableId) async {
@@ -20,7 +21,10 @@ class _FakeActions extends TailscaleNetworkActions {
   }
 
   @override
-  Future<void> applyNewKey(String tag) async => applied.add(tag);
+  Future<bool> applyNewKey(String tag) async {
+    applied.add(tag);
+    return restarted;
+  }
 }
 
 /// §645 — опрос `getStatus`: счётчик вызовов, ответ [reply] / [result],
@@ -547,6 +551,26 @@ void main() {
         {'auth_key': 'tskey-auth-new'},
       ]);
       expect(actions.applied, ['ts']);
+    });
+
+    testWidgets('VPN не перезапустился — подсказка «применится при перезапуске»',
+        (tester) async {
+      await big(tester);
+      final actions = _FakeActions()..restarted = false;
+      await pump(tester,
+          data: const [offline],
+          actions: actions,
+          onSaveFields: (_) async => true);
+      await tester.tap(replace);
+      await tester.pumpAndSettle();
+      await tester.enterText(
+          find.byKey(const ValueKey('tailscale-replace-key-field')), 'k');
+      await tester.pump();
+      await tester.tap(saveKey);
+      await tester.pumpAndSettle();
+      expect(actions.applied, ['ts']);
+      expect(find.text('Key saved. It applies when the VPN restarts.'),
+          findsOneWidget);
     });
 
     testWidgets('запись не удалась — ключ не применяется', (tester) async {

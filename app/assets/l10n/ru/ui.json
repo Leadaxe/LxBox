@@ -6875,6 +6875,9 @@
   "Saved: %s": {
     "value": "Записано: %s"
   },
+  "Key saved. It applies when the VPN restarts.": {
+    "value": "Ключ сохранён. Он применится при перезапуске VPN."
+  },
   "Applies when the node is online.": {
     "value": "Применится, когда узел будет в сети."
   },

@@ -68,9 +68,9 @@ restarts to sign in with the new key.» в `ru`/`zh`.
 
 ## Risks and edge cases
 
-- `reloadVpn` молча пропускается в cooldown 3 с после прошлого reload и при
-  не-connected туннеле; ключ тогда записан и применится при следующем
-  перезапуске.
+- Перезапуска нет в cooldown 3 с после прошлого reload, при не-connected
+  туннеле и при неудачной сборке: `applyNewKey` возвращает `false`, ключ
+  записан, вкладка показывает «Key saved. It applies when the VPN restarts.».
 - Состояния кроме Running и NeedsLogin (`Starting`, `NeedsMachineAuth`,
   `Stopped`): записанный выход строкой, Replace key нет.
 - Блок Settings (advertise) не трогали.
