@@ -1378,6 +1378,8 @@ class BoxCommandClient {
                     "last_handshake_unix" to p.lastHandshakeUnix,
                     "rx_bytes" to p.rxBytes,
                     "tx_bytes" to p.txBytes,
+                    "session_rx_bytes" to p.sessionRxBytes,
+                    "session_tx_bytes" to p.sessionTxBytes,
                 ))
             }
             mapOf(

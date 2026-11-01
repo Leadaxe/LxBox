@@ -33,6 +33,8 @@
   Cloudflare, ни endpoint'ом закешированной регистрации. Невыбранным
   считается только пустое или нетронутое поле.)
 
+## [2.25.19] — 2026-11-01
+
 ### Added
 
 - **Hosts DNS server in the form, and Hosts in a DNS group
@@ -189,6 +191,12 @@
   (RU: MTU tun по умолчанию 9000 вместо 1492 — значение sing-box; у установок,
   где MTU не меняли, 9000 встанет со следующей сборкой конфига, заданное
   вручную значение остаётся.)
+- **Launcher contract 1.1.142 → 1.1.145.** `tcp_multi_path` in a pasted
+  sing-box node is kept as a known dialer field instead of being dropped as
+  an unknown key; the DNS group key `hosts` is shared with the launcher.
+  (RU: Контракт лаунчера 1.1.142 → 1.1.145. `tcp_multi_path` во вставленном
+  sing-box узле сохраняется как известное поле диалера, а не снимается как
+  неизвестный ключ; ключ `hosts` у DNS-группы общий с лаунчером.)
 
 ### Fixed
 
@@ -236,6 +244,13 @@
   при запуске: сервер включается, причина пишется в лог приложения.
   Выключенную группу без включённых участников включить нельзя, счётчик
   участников группы считает серверы, которые есть в списке.)
+
+- **A node row jumped in height while nodes were pinged.** The row of a
+  node without a subtitle (`direct`, for example) collapsed and expanded
+  with the ping badge. The row now keeps its height during a ping.
+  (RU: Строка узла прыгала по высоте во время пинга. Строка узла без
+  подзаголовка (например, `direct`) схлопывалась и раскрывалась вместе с
+  бейджем пинга; теперь высота строки во время пинга держится.)
 
 ## [2.25.18] — 2026-10-29
 

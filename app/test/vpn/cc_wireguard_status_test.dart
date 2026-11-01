@@ -32,6 +32,8 @@ void main() {
               'last_handshake_unix': 1700000000,
               'rx_bytes': 1200,
               'tx_bytes': 340,
+              'session_rx_bytes': 200,
+              'session_tx_bytes': 40,
             },
             {'public_key': 'short'},
           ],
@@ -48,10 +50,13 @@ void main() {
       expect(p.lastHandshakeUnix, 1700000000);
       expect(p.rxBytes, 1200);
       expect(p.txBytes, 340);
+      expect(p.sessionRxBytes, 200);
+      expect(p.sessionTxBytes, 40);
       expect(p.shortKey, 'RIpg…1EoX');
       final q = st.peers.last;
       expect(q.endpoint, '');
       expect(q.lastHandshakeUnix, 0);
+      expect(q.sessionRxBytes, 0);
       expect(q.shortKey, 'short');
     });
 

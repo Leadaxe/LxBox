@@ -109,7 +109,12 @@ class _WgPeersSectionState extends State<WgPeersSection> {
       final now = _nowUnix();
       final traffic = <String, WgTrafficSample>{
         for (final p in st.peers)
-          p.publicKey: _tracker.record(p.publicKey, p.rxBytes, p.txBytes, now),
+          p.publicKey: _tracker.record(
+            p.publicKey,
+            p.sessionRxBytes,
+            p.sessionTxBytes,
+            now,
+          ),
       };
       setState(() {
         _status = st;
@@ -199,8 +204,8 @@ class _WgPeersSectionState extends State<WgPeersSection> {
     final endpoint = p.endpoint.isEmpty ? '—' : p.endpoint;
     final age = wgHandshakeAgeLabel(p.lastHandshakeUnix, now);
     final traffic =
-        '↓ ${formatBytes(p.rxBytes, spaced: true)}  '
-        '↑ ${formatBytes(p.txBytes, spaced: true)}';
+        '↓ ${formatBytes(p.sessionRxBytes, spaced: true)}  '
+        '↑ ${formatBytes(p.sessionTxBytes, spaced: true)}';
     final verdict = wgPeerVerdictLabel(v);
     final line = [p.shortKey, endpoint, age, traffic, verdict].join(' · ');
     return ListTile(

@@ -1141,8 +1141,10 @@ class CcWireGuardStatus {
 }
 
 /// §613 — пир WG/AWG-узла (`PeerStatus` ядра). `lastHandshakeUnix` —
-/// Unix-секунды, 0 — хендшейка не было; счётчики — накопленные байты
-/// устройства, обнуляются при пересборке.
+/// Unix-секунды, 0 — в текущей сессии хендшейка не было; `rx`/`tx` —
+/// накопленные байты устройства, обнуляются при пересборке; `session*` — с
+/// начала сессии (ядро SPEC 145, lx.27): обнуляются ещё и при включении или
+/// пробуждении узла.
 class CcWireGuardPeer {
   const CcWireGuardPeer({
     required this.publicKey,
@@ -1150,6 +1152,8 @@ class CcWireGuardPeer {
     this.lastHandshakeUnix = 0,
     this.rxBytes = 0,
     this.txBytes = 0,
+    this.sessionRxBytes = 0,
+    this.sessionTxBytes = 0,
   });
 
   final String publicKey;
@@ -1157,6 +1161,8 @@ class CcWireGuardPeer {
   final int lastHandshakeUnix;
   final int rxBytes;
   final int txBytes;
+  final int sessionRxBytes;
+  final int sessionTxBytes;
 
   /// Ключ сокращённо, как в логе ядра: символы 0–3 и 39–42 base64.
   String get shortKey => publicKey.length < 43
@@ -1169,6 +1175,8 @@ class CcWireGuardPeer {
         lastHandshakeUnix: CcTailscalePeer._int(m['last_handshake_unix']),
         rxBytes: CcTailscalePeer._int(m['rx_bytes']),
         txBytes: CcTailscalePeer._int(m['tx_bytes']),
+        sessionRxBytes: CcTailscalePeer._int(m['session_rx_bytes']),
+        sessionTxBytes: CcTailscalePeer._int(m['session_tx_bytes']),
       );
 }
 
