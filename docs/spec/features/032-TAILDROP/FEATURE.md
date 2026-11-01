@@ -28,6 +28,13 @@ Taildrop; LxBox runs Tailscale inside its own tunnel, so it has to offer the
 same thing for its node. The clipboard sync answers the most frequent case —
 "I copied this here, I need it there" — for the pair phone + desktop launcher.
 
+What happens today, without this feature: the pinned core already carries
+Taildrop, and when Taildrop is enabled in the tailnet's admin console it
+silently accepts files from the user's own devices into a `Taildrop` folder
+under its working directory. Nobody sees them: there is no screen for them,
+finished files stay there forever, only unfinished `.partial` files older than
+an hour are removed. The feature makes this inbox visible and manageable.
+
 Principles: **own devices only** — Taildrop between machines of one owner, no
 sharing with strangers or shared-in machines; **compatible with the official
 clients** — a file or a note sent from LxBox is an ordinary Taildrop file on
@@ -113,10 +120,12 @@ never reads the clipboard on its own, only on an explicit tap.
 | "Accept clipboard from <device>" | a switch per own device, on the receiver | off |
 | Quick Settings tile "Send clipboard" | added by the user from the system tile list | not added |
 
-Core config keys the feature emits: none decided yet. Whether Taildrop needs a
-key in the `tailscale` endpoint (for example, the receive directory) is an
-open question to the core (see Maintenance notes). Core build: Taildrop
-requires a core built without the `ts_omit_taildrop` tag. Clipboard protocol:
+Core config keys: the receive directory is the endpoint's
+`taildrop_directory`; by default it is `Taildrop` relative to the core's
+working directory (not the node's `state_directory`) and is therefore shared
+by all Tailscale nodes. A per-node inbox needs a per-node `taildrop_directory`.
+Core build: the pinned core already carries Taildrop; no rebuild is needed.
+Clipboard protocol:
 the file name prefix, the size limit, the TTL and the encoding are constants of
 the launcher contract (`docs/contract` and the registry); current values —
 prefix `lxclip-`, at most 64 KiB, TTL 2 minutes, valid UTF-8 without BOM.
@@ -179,6 +188,10 @@ Node deleted   → its Taildrop directory removed with its state
 - Only while the VPN is up and the Tailscale node is running. With the VPN off
   nothing is received — unlike the official client, which keeps its own VPN up
   all the time; a file sent to the phone then fails on the sender's side.
+- Taildrop must be enabled in the tailnet's admin console: this node needs
+  the file sharing capability, and the sender must be an own untagged device
+  or hold the file-sharing-send right. Without it the feature does not work,
+  and the UI says why instead of doing nothing.
 - Taildrop in Tailscale itself is in alpha.
 - No clipboard sync with the official Tailscale clients: they receive a
   clipboard file as an ordinary file named with the prefix. The clipboard
@@ -215,26 +228,35 @@ Node deleted   → its Taildrop directory removed with its state
   tile that toggles the tunnel; "Send clipboard" is a second, separate tile.
 - [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.md) — the inbox
   is node state and stays out of the backup.
-- [021-CORE_CONTRACT](../021-CORE_CONTRACT/FEATURE.md) — the core build without
-  `ts_omit_taildrop` and the launcher contract that fixes the clipboard
+- [021-CORE_CONTRACT](../021-CORE_CONTRACT/FEATURE.md) — the pinned core that
+  already carries Taildrop and the launcher contract that fixes the clipboard
   protocol. The launcher side: clipboard on macOS, Windows and remote lxd
   (through gRPC), none on Linux classic and Windows 386; the tray item "Send
   clipboard to <phone>", no global hotkey.
 
 ## Maintenance notes
 
-- **Core build.** The Java API for Taildrop is already in the core's AAR
-  (upstream beta.15), but the Go side is cut out by the `ts_omit_taildrop`
-  build tag. A core built without that tag is required; the request is sent to
-  the core session, the size growth of the library is not measured yet.
-- **Open questions to the core:** where the root of the receive directory is
-  (and whether it is set per node through the endpoint body); whether
-  receiving (peerapi) works in the userspace network stack on Android;
-  whether sending needs a live core session (the VPN up) or can work without
-  it; whether sending accepts only a file path — then "Share" first copies the
-  shared content into a temporary folder.
-- **The launcher's core already has Taildrop**; only the Android AAR needs a
-  rebuild. Its clipboard side is its own spec.
+- **The core already has Taildrop.** sing-box has its own Taildrop (a
+  peerapi handler for `/v0/put/`), and the `ts_omit_taildrop` build tag does
+  not cut it out — the tag is a no-op for it (measured 2026-11-02: the `.so`
+  size and `classes.jar` are byte-identical with and without it). The current
+  pin needs no rebuild. The desktop launcher's core has Taildrop too; nothing
+  to do in the core on either side. Checked by the core session from the code,
+  not on a device.
+- **Receiving is automatic today** (see Purpose): files go into
+  `taildrop_directory` (default `Taildrop` under the core's working
+  directory), outside any UI; `.partial` files older than an hour are
+  removed, finished ones stay. The core also posts its own "receiving…"
+  platform notification; the implementation has to fit its notifications
+  around it.
+- **Sending** takes a file name and a size (a negative size means unknown)
+  and the app streams the content in chunks, so a shared `content://` source
+  is read directly, with no temporary copy. Sending needs the service running
+  with this node — the same as "only while the VPN is up".
+- **Open:** what happens to files the core has already put into the shared
+  default folder before the feature; whether receiving works in the userspace
+  network stack on a real device (by code — yes).
+- The launcher's clipboard side is its own spec.
 - **Clipboard protocol is the launcher contract's.** The prefix, the size
   limit, the TTL and the encoding are constants in `docs/contract` and the
   registry, the contract version is opened by the launcher; the numbers in

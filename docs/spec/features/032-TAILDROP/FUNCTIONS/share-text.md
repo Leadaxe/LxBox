@@ -39,7 +39,7 @@ needed, peer choice, progress in a notification.
   as LxBox's.
 - A share that carries files is sent as files; this function handles text
   only.
-- The temporary note file is removed after the transfer ends or fails.
+- The note is made for the transfer only and is not stored on the phone.
 
 ## Boundaries
 

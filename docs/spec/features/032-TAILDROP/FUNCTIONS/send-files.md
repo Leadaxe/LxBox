@@ -52,8 +52,10 @@ result in that notification.
 - With the VPN down or no running Tailscale node (P7) the share screen does
   not offer a peer and explains that the VPN and a Tailscale node are needed;
   nothing is queued for later.
-- A failed or cancelled transfer leaves nothing behind on the phone: any
-  temporary copy made for the transfer is removed.
+- The content is read straight from the shared source and streamed to the
+  core; nothing is copied on the phone.
+- Without Taildrop enabled in the tailnet's admin console the screen says so
+  instead of offering peers.
 - A share that carries text and no files is not handled here — see
   [share text](share-text.md).
 
@@ -62,9 +64,8 @@ result in that notification.
 - No sending to shared-in machines or other users' devices (Taildrop itself
   does not allow it).
 - No queue while the VPN is off; no retry by itself.
-- Whether the core accepts only a file path (then the shared content is first
-  copied into a temporary folder) and whether sending needs a live core
-  session are open questions to the core ([Maintenance notes](../FEATURE.md#maintenance-notes)).
+- Sending needs the service running with this node, that is the VPN up
+  ([Maintenance notes](../FEATURE.md#maintenance-notes)).
 - Not verified on a device.
 
 ## Revisions

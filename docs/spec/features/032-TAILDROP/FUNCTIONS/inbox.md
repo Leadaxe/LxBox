@@ -27,7 +27,7 @@ Network tab of the node that received the file.
 | What | Value |
 |------|-------|
 | Accepted from | own devices of the node's tailnet; no consent step |
-| Where it lands | the node's inbox, kept in the node's Taildrop directory |
+| Where it lands | the node's inbox, kept in the node's own `taildrop_directory` (the core's default is one `Taildrop` folder for all nodes) |
 | Notification while receiving | "receiving from X", Cancel |
 | Notification when received | "file from X", Save, Delete |
 | Inbox block | Network tab of the node, under Devices; per file Save, Delete |
@@ -66,9 +66,13 @@ the inbox block on the Network tab.
 - No preview or opening of a file inside LxBox; the user saves it and opens it
   with another app.
 - The inbox is not in the backup.
-- Where the core keeps the receive directory and whether receiving works in
-  the userspace network stack on Android are open questions to the core
-  ([Maintenance notes](../FEATURE.md#maintenance-notes)).
+- Receiving requires Taildrop enabled in the tailnet's admin console (the
+  file sharing capability on this node); without it the inbox block says why.
+- Today the core already accepts files silently into its default folder,
+  outside any UI; what happens to files left there before the feature is
+  open ([Maintenance notes](../FEATURE.md#maintenance-notes)). Whether
+  receiving works in the userspace network stack is confirmed by code, not on
+  a device.
 - Not verified on a device.
 
 ## Revisions

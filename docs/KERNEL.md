@@ -600,7 +600,11 @@ server address, as Xray does (report of 2026-09-14). The Java surface is
 identical to lx.38 (full `javap` diff of `io.nekohasekai.libbox.*` — empty).
 Since lx.38 the AAR carries **`with_tailscale`** plus the eleven `ts_omit_*` trims
 (§435, contract ## 13, owner decision 2026-09-14): the `tailscale` endpoint
-and the `tailscale` DNS server type are compiled in. Measured on the fork side
+and the `tailscale` DNS server type are compiled in. `ts_omit_taildrop` is a
+no-op: sing-box has its own Taildrop (`protocol/tailscale/taildrop.go`, the
+peerapi `/v0/put/` handler) that the tag does not cut, so Taildrop is in the
+AAR (measured 2026-11-02: `.so` size and `classes.jar` identical with and
+without the tag; feature 032). Measured on the fork side
 (M1 Pro, go1.26.6, NDK r28c): the AAR build time did not grow (the Tailscale
 code was already compiled through `tailssh` under `with_gvisor`; the tag adds
 only `tsnet` and the sing-box glue) and the AAR grew by 2.58 MB (116.8 →
@@ -1227,7 +1231,8 @@ ts_omit_synology, ts_omit_bird
 
 `with_tailscale` joined the AAR in **lx.38** (§435, contract ## 13; the
 `ts_omit_*` tags only trim what `with_tailscale` pulls in — the upstream
-mobile set). Before lx.38 the AAR was built without it on purpose (APK size);
+mobile set; `ts_omit_taildrop` is a no-op, sing-box's own Taildrop stays in
+the AAR, measured 2026-11-02). Before lx.38 the AAR was built without it on purpose (APK size);
 LxBox's build gate keeps a Tailscale node out of the config on such a core.
 
 libbox does not export its build tags (`Libbox.version()` is the version
