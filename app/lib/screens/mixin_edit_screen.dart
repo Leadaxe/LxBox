@@ -12,7 +12,9 @@ import '../services/mixins/mixin_path.dart';
 import '../services/mixins/mixin_preview.dart';
 import '../services/mixins/mixin_suggest.dart';
 import '../services/ui_helpers.dart';
+import '../widgets/app_bottom_sheet.dart';
 import '../widgets/lx_code_editor.dart';
+import '../widgets/safe_bottom.dart';
 
 /// Вид строки статуса поля Target.
 enum MixinTargetStatusKind { ok, error, neutral }
@@ -297,12 +299,8 @@ class _MixinEditScreenState extends State<MixinEditScreen> {
           ],
         ),
         body: ListView(
-          padding: EdgeInsets.fromLTRB(
-            12,
-            12,
-            12,
-            MediaQuery.of(context).padding.bottom + 24,
-          ),
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 24)
+              .withSafeBottom(context),
           children: [
             TextField(
               controller: _name,
@@ -491,7 +489,7 @@ class _PreviewSection extends StatelessWidget {
   void _showFull(BuildContext context, MixinPreviewRow row) {
     final text = const JsonEncoder.withIndent('  ').convert(row.value);
     unawaited(
-      showModalBottomSheet<void>(
+      showAppBottomSheet<void>(
         context: context,
         isScrollControlled: true,
         showDragHandle: true,
