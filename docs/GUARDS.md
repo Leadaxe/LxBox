@@ -595,6 +595,7 @@ rows below are the guards that do something more than reject or default.
 | Glued Xray path `/x?ed=N` in ws JSON | tail cut | silent (no warnings channel here) | `json_parsers.dart:1413-1415` | glued Xray paths reach the editor too | §303 |
 | JSON flavour unrecognised, or `clashYaml` | 0 nodes | silent | `body_decoder.dart:181-209`, `parse_all.dart:191-193` | the `xrayArray` branch works, and its classification must not shift on ambiguous input | §368 §7.1 |
 | `tcp_keep_alive` / `tcp_keep_alive_interval` not a Go-duration | field dropped, the other two survive | silent (deliberate) | `tcp_keep_alive.dart:18-22`, `json_parsers.dart:1006` | same guard as the URI branch — the value is read with `toString()`, not a cast, because a hand-edited JSON writes the duration as a number | §453 |
+| Duplicates by `nodeDedupSignature` within one config | later record skipped | silent — the survivor gets no `duplicates_collapsed` here | `singbox_config.dart:349-353` | the same key as the Xray branch and §2.3; an outbound repeated inside one config is one server | §404 D-086 |
 
 ### 2.2 Xray import (`parseXrayElement`)
 
@@ -607,7 +608,7 @@ rows below are the guards that do something more than reject or default.
 | Unusable hop in the **middle** of a multi-hop chain | whole chain → null → owner rejected | `DialerProxyUnusableWarning` | `json_parsers.dart:846-851` | a truncated path releases traffic one hop earlier than the provider intended | §404 |
 | `dialerProxy: "direct"` | chain → null → **owner rejected** | `DialerProxyUnusableWarning` | `json_parsers.dart:815-819` | differs from the sing-box branch, where the same text is silent and costs no node — here D-085 forbids substituting a direct path for a relay | §404 |
 | Rejected owner has no sibling to carry the warning | reason kept in `dropped[]`, attached to the subscription's first node | `DialerProxyUnusableWarning` | `json_parsers.dart:286-291`, `parse_all.dart:151-164` | if there is no node at all the subscription is empty and there is nobody to tell — a documented hole | §404 P3 |
-| Duplicates by `nodeDedupSignature` | skipped | silent | `json_parsers.dart:248-256` | the old key ignored transport and relay, collapsing "direct + BYPASS" pairs into one | §404 D-086 |
+| Duplicates by `nodeDedupSignature` — within one element, or a server owned by another element (§342) | collapsed into the survivor | `duplicates_collapsed` (info) on the survivor; pool members of the element are not counted | `json_parsers.dart:318-345`, survivor marked in `parse_all.dart:537-566` | the old key ignored transport and relay, collapsing "direct + BYPASS" pairs into one | §404 D-086, §589 |
 | Exception (TypeError) inside a converter | node skipped | `UnsupportedProtocolWarning(proto\|'malformed')` | `json_parsers.dart:263-271` | garbage field types (`streamSettings: "none"`) throw | §322 |
 | Several balancers in one element | first taken, rest **silently ignored** | silent | `json_parsers.dart:312-323` | the schema allows it; real configs have one | §322 |
 | Balancer `maxRTT` | clamped by `clampPoolTolerance` | silent | `json_parsers.dart:388-390` | `maxRTT` is an absolute ceiling in Xray while `pool_tolerance` is a window from the best — carried 1:1 by owner decision, since an exact conversion is impossible | §322 |
@@ -634,6 +635,21 @@ rows below are the guards that do something more than reject or default.
 | Xray `realitySettings.keyShare` | **not carried over** | silent | our overlay `assets/contract_draft/uri/tls.json` → `$key_share_not_carried` declares it read-without-write, so the key does not reach `json_field_unknown`. The registry carries no record at all | the registry's own prose says "Xray JSON has no equivalent, the converter does not read the field", and that is correct — but the read still has to be *declared*, otherwise the nested-unknown-key rule complains about a field the registry itself called non-transferable. Asked of the launcher (spec 514, §4а) | §472 step 8, §514 |
 | Nested key inside a declared container (`settings`/`streamSettings`/`mux`/…) | **field not carried** — as before | `json_field_unknown` with the **full** path (`streamSettings.wsSettings.foo`) | walked by `_reportUnknownNested` in `interpreter.dart`; silence inside is declared by `source` paths, by a **parent** path (a record reading a whole object reads each of its leaves — it cannot list them, their names belong to the subscription) and by `unknown_key.nested_quiet` (`streamSettings.sockopt`) | **§514, contract 1.1.52, D133-59.** The containers sit in `unknown_key.ignore` because their leaves are read by table records, and the consequence was worse than the disease: anything inside one that no `source` named was lost in *complete* silence. Their role is now double — silent at the top, walked inside. A leaf is a scalar or an **empty** object/array; an array index enters the path as a number; depth is capped at 12. Findings are emitted **sorted by path**: the traversal order is the subscription's key order, which would make the code set depend on how a panel laid out its JSON | §514 |
 | Xray transport selector misses the table (`network: kcp`/`quic`/`ds`) | **node dropped** | `transport_unsupported`, named in the verdict | `registry/transports.json` → `blocks.xray.$selector.network`: `value_map` names the *translatable* spellings, `allow` the ones matching the core canon verbatim, and `on_invalid: {action: drop}` covers everything else | **§514, contract 1.1.50, D133-49/Q133-17.** The declaration had stood since the move to the engine and stayed **silent**: a table miss meant "carry as-is", `kcp` reached `transport.type` verbatim, the sanitizer stripped the transport by its enum rule without a code, and the node came out as a working plain-TCP one — a server expecting mKCP will not accept it, and the human got neither code nor reason. With `quic` the same miss ended worse: the type reached the body and would have taken the *whole* config down on an unknown field. `drop` on a **selector** removes the node, on an ordinary record only its field | §514 |
+
+
+### 2.3 One `parseAll` input — duplicate records
+
+| Check | Sanitiser | User sees | Code | Why | Task |
+|---|---|---|---|---|---|
+| Records of one body with the same `nodeDedupSignature` (canonical emit without `tag`/`detour`, plus the dial path), after the registry verdict | first record stays, every later one collapses into it; groups (§322) are not compared | `duplicates_collapsed` (info, `count` + up to 10 `names`) on the survivor, the "M duplicates merged into K nodes" line in the subscription summary; nothing in `dropped[]` | `parse_all.dart:166-199` `_collapseDuplicates`, code built by `duplicatesCollapsedWarning` | a provider sends one server under many names (rrtrg: `amneziawg://` and `vpn://` of one node; panels: one server ×20 under different countries). Dedup runs after the registry verdict: a `drop_node` that hit only one form must not take the usable one with it | §538, §589 |
+
+Scope is one input: one subscription body or one import. Nothing is collapsed
+across subscriptions, between a subscription and manual nodes, between sources
+of one folder, or at config assembly — there two equal servers become two
+outbounds, and only a colliding tag is renamed with a `-N` suffix (§4.4).
+The coarse `nodeIdentityKey` (scheme+host+port+credentials) is deliberately not
+the key: it would merge one server under two SNIs. Promise:
+[002-NODE_IMPORT · P8](spec/features/002-NODE_IMPORT/FEATURE.md#promises).
 
 ## Layer 3 — node emission
 

@@ -70,10 +70,15 @@ Principles the feature protects:
 - **P6.** moved to [025-CONTRACT_REGISTRY · P2](../025-CONTRACT_REGISTRY/FEATURE.md#promises).
 - **P7.** moved to [025-CONTRACT_REGISTRY · P3](../025-CONTRACT_REGISTRY/FEATURE.md#promises).
 - **P8. A repeat within one body collapses; across sources it does not.**
-  The key is the node content without the tag and `detour`, plus the dial path. **Witness:** unit test
-  "`amneziawg://` and `vpn://` of one node — one node and `duplicate`"; unit test "dedup
-  does not cross subscription boundaries"; unit test "D-086: different SNI → TWO nodes". **Mutation:**
-  a dedup key by the "scheme+host+port+credentials" quadruple.
+  The key is the node content without the tag and `detour`, plus the dial path. The first record
+  stays and every later record with the same key collapses into it: the survivor carries
+  `duplicates_collapsed` (how many records and their names), and collapsed records do not go to
+  `dropped[]`. A body is one subscription or one import. Not collapsed: records of different
+  subscriptions, a subscription against manual nodes, different sources of one folder, nodes at
+  config assembly (there colliding tags get a `-N` suffix). **Witness:** unit test "code on the
+  survivor, dropped[] empty"; unit test "dedup does not cross subscription boundaries"; unit test
+  "D-086: different SNI → TWO nodes". **Mutation:** a dedup key by the
+  "scheme+host+port+credentials" quadruple.
 - **P9. Order and names of multi-node configs are the author's.** Nodes go in file
   order; the server name goes to a single element, not to a pool. **Witness:** unit tests
   "list order is the author's, not sorted", "a pool first in the file
