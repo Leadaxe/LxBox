@@ -586,7 +586,7 @@ class _SettingsScreenState extends State<SettingsScreen>
               ),
               const SizedBox(height: 2),
               Text(
-                getLocalText.s("Memory threshold for the whole app process: the core, the interface and the loaded libraries share it. Above the threshold the core drops its connections and frees memory, and near it the garbage collector keeps the processor busy and heats the phone. Auto sets no threshold; the core watches the system's free memory instead. Applies immediately."),
+                getLocalText.s("Memory threshold for the VPN core itself (its Go runtime), not the whole app process. Above the threshold the core drops its connections and frees memory, and near it the garbage collector keeps the processor busy and heats the phone. Auto sets no threshold. With any value the core also watches the system's free memory. Applies immediately. The current figure is in Statistics → Memory → Core memory."),
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),

@@ -128,7 +128,7 @@ lxbox_settings.json                          # SettingsStorage (Dart), the main 
     ├─ core_logs_enabled         bool          default false  — forwarding of the sing-box logs
     ├─ allow_bypass              bool          default false  — Allow VPN bypass (§069)
     ├─ auto_redirect             bool          default false  — auto-redirect
-    └─ memory_limit              string        default "auto" — §271/§705: memory threshold (whole process)
+    └─ memory_limit              string        default "auto" — §271/§705: memory threshold on the core's runtime memory (core lx.29+)
                                                  (auto|off|"200"|"384"|"512"|"768" MB)
 
 # §439 — the 2.23.2 keys (server_lists / chains / custom_rules / dns_options) and the
@@ -1418,7 +1418,7 @@ A JSON mirror of the Android prefs that historically lived **only** in the nativ
   "core_logs_enabled": false,    // forwarding of the sing-box logs into Dart
   "allow_bypass":      false,    // §069 — Allow VPN bypass
   "auto_redirect":     false,    // auto-redirect
-  "memory_limit":      "auto"    // §271/§705 — memory threshold of the whole app process: auto (none) | MB as a string; legacy "off" is read as auto
+  "memory_limit":      "auto"    // §271/§705 — memory threshold on the core's runtime memory (core lx.29+; whole process before): auto (none) | MB as a string; legacy "off" is read as auto
 }
 ```
 

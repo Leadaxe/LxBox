@@ -1383,23 +1383,26 @@ the group.
 | Every new node answers with a delay when you switch | Lazy tunnel build → off: the app stops passing lazy build to the core, and the core builds tunnels by its own rules |
 | Tunnels must not sleep at all | Suspend idle tunnels → Off |
 
-#### Memory limit is a threshold for the whole app process
+#### Memory limit is a threshold for the core's own memory
 
 The **Memory limit** setting is a memory threshold the VPN core watches.
-The number is compared with the memory of the whole app process: the core,
-the interface and the loaded libraries share one process, and the libraries
-alone take about 140 MB, so the figure on Statistics → Memory is never the
-core's alone. Where: VPN Settings → System → Optimization → Memory limit.
-The default is Auto (recommended); a change applies to the running core at
-once, without a restart.
+The number is compared with the memory of the core itself (its Go runtime),
+not with the whole app process: the core, the interface and the loaded
+libraries share one process, and the libraries alone take about 140 MB, so
+the figure on the Statistics card is never the core's alone. The core's own
+figure is in Statistics → Memory → **Core memory**, with the threshold next
+to it when a number is chosen. Where: VPN Settings → System → Optimization →
+Memory limit. The default is Auto (recommended); a change applies to the
+running core at once, without a restart.
 
 Auto sets no threshold: the core watches the free memory of the system
 instead and drops its connections only when the phone is actually running
 out of memory. 200, 384, 512 and 768 MB set the threshold explicitly: above
 it the core drops its connections and frees memory, and close to it the
-garbage collector keeps the processor busy, so the phone heats up. A value
-below the process's usual size trips once at start and then does nothing; a
-value just above it causes reconnects while you use the phone. Leave Auto
+garbage collector keeps the processor busy, so the phone heats up. With a
+number the core still watches the system's free memory as well. A value
+just above the usual Core memory figure causes reconnects while you use the
+phone. Leave Auto
 unless you know what the number is for; a value chosen earlier stays as it
 was. If the phone heats up under the VPN or core memory snapshots appear in
 Debug → OOM, set Auto first; what else to check is described in
@@ -1909,8 +1912,9 @@ Diagnostic tools, from simple to detailed:
 
 If the phone gets hot or uses too much memory, open VPN Settings → System →
 Optimization → **Memory limit**: Auto sets no threshold and is the right
-choice in most cases; a number there is compared with the whole app process,
-not the core alone. The System → WireGuard connections section puts idle
+choice in most cases; a number there is compared with the core's own
+memory, shown as Core memory in Statistics → Memory. The System →
+WireGuard connections section puts idle
 WireGuard tunnels to sleep.
 
 ---

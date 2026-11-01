@@ -1481,6 +1481,9 @@ class BoxCommandClient {
                 snap["uplinkTotal"] = m.getUplinkTotal()
                 snap["downlinkTotal"] = m.getDownlinkTotal()
                 snap["memory"] = m.getMemory()
+                // §705 (ядро lx.29, SPEC 148): память Go-рантайма ядра — то, с чем
+                // сравнивается порог Memory limit. `memory` остаётся RSS процесса.
+                snap["memoryRuntime"] = m.getMemoryRuntime()
                 snap["goroutines"] = m.getGoroutines()
                 snap["connectionsIn"] = m.getConnectionsIn()
                 snap["connectionsOut"] = m.getConnectionsOut()

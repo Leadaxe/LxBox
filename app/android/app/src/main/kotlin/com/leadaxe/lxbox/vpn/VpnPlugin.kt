@@ -686,7 +686,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             }
             "setMemoryLimit" -> {
                 // §271 — persist + мгновенное применение к работающему ядру.
-                // `reloadSetupOptions` читает ТОЛЬКО три OOM-поля (setup.go:80-96)
+                // `reloadSetupOptions` читает ТОЛЬКО OOM-поля (setup.go:80-96)
                 // и сразу вызывает debug.SetMemoryLimit — GC-потолок меняется без
                 // переподключения VPN. Порог RSS-мониторинга oom-killer-сервиса
                 // защёлкнут в CommandServer текущей сессии; BoxService создаёт
@@ -701,6 +701,8 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                         val opts = io.nekohasekai.libbox.SetupOptions().apply {
                             oomKillerEnabled = true
                             oomMemoryLimit = BoxApplication.resolveMemoryLimitBytes(appContext)
+                            // §705 (SPEC 148): порог по памяти рантайма ядра, не по RSS.
+                            oomMemoryLimitHeap = true
                         }
                         io.nekohasekai.libbox.Libbox.reloadSetupOptions(opts)
                     }.onFailure { Log.w(TAG, "reloadSetupOptions failed: ${it.message}") }

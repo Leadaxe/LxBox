@@ -994,6 +994,7 @@ class CcStatus {
     this.uplinkTotal = 0,
     this.downlinkTotal = 0,
     this.memory = 0,
+    this.memoryRuntime = 0,
     this.goroutines = 0,
     this.connectionsIn = 0,
     this.connectionsOut = 0,
@@ -1004,6 +1005,11 @@ class CcStatus {
   final int uplinkTotal;
   final int downlinkTotal;
   final int memory;
+
+  /// §705 (ядро lx.29, SPEC 148) — память Go-рантайма ядра в байтах: то, с
+  /// чем ядро сравнивает порог Memory limit. [memory] — RSS всего процесса.
+  /// 0 — старое ядро без поля.
+  final int memoryRuntime;
   final int goroutines;
   final int connectionsIn;
   final int connectionsOut;
@@ -1018,6 +1024,7 @@ class CcStatus {
     uplinkTotal: _int(m['uplinkTotal']),
     downlinkTotal: _int(m['downlinkTotal']),
     memory: _int(m['memory']),
+    memoryRuntime: _int(m['memoryRuntime']),
     goroutines: _int(m['goroutines']),
     connectionsIn: _int(m['connectionsIn']),
     connectionsOut: _int(m['connectionsOut']),

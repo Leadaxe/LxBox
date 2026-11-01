@@ -103,7 +103,7 @@ class BoxApplication : Application() {
             // Лимит настраиваемый (§271, prefs `memory_limit`): хардкод 200MB
             // (§173) душил GC на конфигах с большой кучей (WG-пулы) → GC-шторм
             // и перегрев CPU. Семантика ядра (setup.go:105-108, service/oomkiller):
-            // limit>0 → Go soft-limit = limit*4/5 И порог oom-killer по RSS
+            // limit>0 → Go soft-limit = limit*4/5 И порог oom-killer (без флага heap) по RSS
             // ВСЕГО процесса (`memory.Total()` = `/proc/self/statm`); limit=0
             // на Android = без GC-потолка (`SetMemoryLimit(MaxInt64)`),
             // oom-killer в Available-режиме (следит за свободной памятью
@@ -112,6 +112,11 @@ class BoxApplication : Application() {
             // дефолт "auto" = 0 (§705); порог по RSS — только явные пресеты.
             oomKillerEnabled = true
             oomMemoryLimit = resolveMemoryLimitBytes(context)
+            // §705 часть 2 (ядро lx.29, SPEC 148): порог oom-killer сравнивается
+            // с памятью Go-рантайма ядра (`StatusMessage.MemoryRuntime`), а не
+            // с RSS всего процесса (в нём живёт и Flutter). Слежение за
+            // MemAvailable при этом остаётся.
+            oomMemoryLimitHeap = true
             // §038/§173 — crash/stderr-канал: замена удалённому `redirectStderr`.
             // Непустой source → ядро редиректит stderr в
             // `workingPath/CrashReport-lxbox.log` (setup.go:102) — восстанавливает

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../models/memory_limit_setting.dart';
 import '../../services/format_utils.dart';
+import '../../services/settings_storage.dart';
 import '../../vpn/box_vpn_client.dart';
 import '../../services/l10n/locale_controller.dart';
 import '../../widgets/app_bottom_sheet.dart';
@@ -13,12 +15,14 @@ import '../../widgets/app_bottom_sheet.dart';
 /// ядра. Sheet разбивает её на категории: суммарный RSS/PSS из
 /// CommandClient-статуса + native `getMemoryInfo` (§507, AMS PSS-разбивка:
 /// native heap с Go-буферами ядра, Dalvik/ART, graphics, code, stack, system)
-/// + runtime-показатели ядра (goroutines, connections). Cifры inuse Go-хипа
-/// (как в Clash `/memory`) через CommandClient нет — она не экспортирована
-/// из libbox.
+/// + runtime-показатели ядра (goroutines, connections). §705 (ядро lx.29,
+/// SPEC 148): [coreRuntime] — память Go-рантайма ядра из статуса
+/// (`memoryRuntime`), именно с ней ядро сравнивает порог Memory limit;
+/// 0 у старого ядра — строка скрыта.
 Future<void> showMemoryDetailSheet(
   BuildContext context, {
   required int rss,
+  int coreRuntime = 0,
   required int goroutines,
   required int connectionsIn,
   required int connectionsOut,
@@ -28,6 +32,7 @@ Future<void> showMemoryDetailSheet(
     isScrollControlled: true,
     builder: (ctx) => _MemoryDetailSheet(
       rss: rss,
+      coreRuntime: coreRuntime,
       goroutines: goroutines,
       connectionsIn: connectionsIn,
       connectionsOut: connectionsOut,
@@ -38,12 +43,14 @@ Future<void> showMemoryDetailSheet(
 class _MemoryDetailSheet extends StatefulWidget {
   const _MemoryDetailSheet({
     required this.rss,
+    this.coreRuntime = 0,
     required this.goroutines,
     required this.connectionsIn,
     required this.connectionsOut,
   });
 
   final int rss;
+  final int coreRuntime;
   final int goroutines;
   final int connectionsIn;
   final int connectionsOut;
@@ -56,6 +63,10 @@ class _MemoryDetailSheetState extends State<_MemoryDetailSheet> {
   MemoryInfo? _info;
   bool _loading = true;
 
+  /// Memory limit из VPN Settings (wire-значение [MemoryLimitSetting]):
+  /// пресет в MB даёт дробь `/ N MB` у Core memory, `auto` — без неё.
+  String _memoryLimit = MemoryLimitSetting.auto;
+
   @override
   void initState() {
     super.initState();
@@ -63,10 +74,13 @@ class _MemoryDetailSheetState extends State<_MemoryDetailSheet> {
   }
 
   Future<void> _load() async {
+    final limitF = SettingsStorage.getNativeMemoryLimit();
     final info = await BoxVpnClient().getMemoryInfo();
+    final limit = await limitF;
     if (!mounted) return;
     setState(() {
       _info = info;
+      _memoryLimit = limit;
       _loading = false;
     });
   }
@@ -134,6 +148,10 @@ class _MemoryDetailSheetState extends State<_MemoryDetailSheet> {
     // Process — суммарные цифры процесса.
     out.addAll(_group(context, 'Process', [
       _row(context, 'RSS', formatBytes(widget.rss, spaced: true)),
+      if (widget.coreRuntime > 0) ...[
+        _row(context, getLocalText.s("Core memory"), _coreRuntimeValue()),
+        _caption(context, getLocalText.s("Memory of the VPN core itself (Go runtime); the limit from VPN Settings applies to this figure. RSS is the whole app process.")),
+      ],
       if (info != null && info.totalPss > 0)
         _row(context, 'Total PSS', formatBytes(info.totalPss, spaced: true)),
       if (info != null && info.totalSwap > 0)
@@ -183,6 +201,27 @@ class _MemoryDetailSheetState extends State<_MemoryDetailSheet> {
     }
 
     return out;
+  }
+
+  /// `42.1 MB / 200 MB` при пресетном лимите, без дроби при `auto`.
+  String _coreRuntimeValue() {
+    final used = formatBytes(widget.coreRuntime, spaced: true);
+    final mb = int.tryParse(_memoryLimit);
+    return mb == null ? used : '$used / $mb MB';
+  }
+
+  /// Пояснение под строкой — стиль подсказок настроек (bodySmall,
+  /// onSurfaceVariant).
+  Widget _caption(BuildContext context, String text) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Text(
+        text,
+        style: theme.textTheme.bodySmall
+            ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+      ),
+    );
   }
 
   List<Widget> _group(BuildContext context, String title, List<Widget?> rows) {

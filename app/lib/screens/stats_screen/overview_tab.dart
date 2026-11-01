@@ -21,6 +21,7 @@ class OverviewTab extends StatefulWidget {
     required this.totalDown,
     required this.totalConns,
     required this.memory,
+    this.memoryRuntime = 0,
     required this.goroutines,
     required this.connectionsIn,
     required this.connectionsOut,
@@ -34,6 +35,10 @@ class OverviewTab extends StatefulWidget {
   final int totalDown;
   final int totalConns;
   final int memory;
+
+  /// §705 — память Go-рантайма ядра (`CcStatus.memoryRuntime`); карточка
+  /// «LxBox» остаётся RSS процесса (§242), это число — только в шторке.
+  final int memoryRuntime;
   final int goroutines;
   final int connectionsIn;
   final int connectionsOut;
@@ -84,6 +89,7 @@ class _OverviewTabState extends State<OverviewTab> {
                   onTap: () => showMemoryDetailSheet(
                     context,
                     rss: widget.memory,
+                    coreRuntime: widget.memoryRuntime,
                     goroutines: widget.goroutines,
                     connectionsIn: widget.connectionsIn,
                     connectionsOut: widget.connectionsOut,

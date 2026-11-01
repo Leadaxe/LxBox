@@ -1535,8 +1535,14 @@
   "Cannot read the selected file": {
     "value": "Не удалось прочитать выбранный файл"
   },
-  "Memory threshold for the whole app process: the core, the interface and the loaded libraries share it. Above the threshold the core drops its connections and frees memory, and near it the garbage collector keeps the processor busy and heats the phone. Auto sets no threshold; the core watches the system's free memory instead. Applies immediately.": {
-    "value": "Порог памяти для всего процесса приложения: его делят ядро, интерфейс и загруженные библиотеки. Выше порога ядро сбрасывает свои соединения и освобождает память, а вблизи него сборщик мусора занимает процессор и греет телефон. «Авто» порог не ставит: ядро вместо этого следит за свободной памятью системы. Применяется сразу."
+  "Memory threshold for the VPN core itself (its Go runtime), not the whole app process. Above the threshold the core drops its connections and frees memory, and near it the garbage collector keeps the processor busy and heats the phone. Auto sets no threshold. With any value the core also watches the system's free memory. Applies immediately. The current figure is in Statistics → Memory → Core memory.": {
+    "value": "Порог памяти для самого ядра VPN (его рантайма Go), а не для всего процесса приложения. Выше порога ядро сбрасывает свои соединения и освобождает память, а вблизи него сборщик мусора занимает процессор и греет телефон. «Авто» порог не ставит. При любом значении ядро следит и за свободной памятью системы. Применяется сразу. Текущая цифра — в «Статистика» → «Память» → «Память ядра»."
+  },
+  "Core memory": {
+    "value": "Память ядра"
+  },
+  "Memory of the VPN core itself (Go runtime); the limit from VPN Settings applies to this figure. RSS is the whole app process.": {
+    "value": "Память самого ядра VPN (рантайм Go); к этой цифре применяется лимит из настроек VPN. RSS — весь процесс приложения."
   },
   "Capture %s": {
     "value": "Снять %s"

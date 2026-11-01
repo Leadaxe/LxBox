@@ -52,6 +52,7 @@ class _StatsScreenState extends State<StatsScreen> {
   int _totalDown = 0;
   int _totalConns = 0;
   int _memory = 0;
+  int _memoryRuntime = 0; // §705 — память рантайма ядра (lx.29+), 0 = нет
   int _goroutines = 0;
   int _connsIn = 0;
   int _connsOut = 0;
@@ -114,6 +115,7 @@ class _StatsScreenState extends State<StatsScreen> {
       _totalUp = s.uplinkTotal;
       _totalDown = s.downlinkTotal;
       _memory = s.memory;
+      _memoryRuntime = s.memoryRuntime;
       _goroutines = s.goroutines;
       _connsIn = s.connectionsIn;
       _connsOut = s.connectionsOut;
@@ -280,6 +282,7 @@ class _StatsScreenState extends State<StatsScreen> {
                 totalDown: _totalDown,
                 totalConns: _totalConns,
                 memory: _memory,
+                memoryRuntime: _memoryRuntime,
                 goroutines: _goroutines,
                 connectionsIn: _connsIn,
                 connectionsOut: _connsOut,
