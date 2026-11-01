@@ -24,6 +24,7 @@ import 'package:path_provider_platform_interface/path_provider_platform_interfac
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
 import '../parser/engine_test_setup.dart';
+import 'real_io_pump.dart';
 
 // §673 — вкладка Directions: перестановка drag-handle'ом пишет порядок в
 // хранилище тем же bulk-путём, что `POST /directions/reorder`
@@ -99,9 +100,7 @@ void main() {
   }) async {
     for (var i = 0; i < 400; i++) {
       if (await done()) return;
-      await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 20)));
-      await tester.pump(const Duration(milliseconds: 50));
+      await realIoStep(tester, fakeTime: const Duration(milliseconds: 50));
     }
     fail('не дождались: $what');
   }

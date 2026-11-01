@@ -19,6 +19,7 @@ import 'package:path_provider_platform_interface/path_provider_platform_interfac
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
 import '../parser/engine_test_setup.dart';
+import 'real_io_pump.dart';
 
 // §655 И2 — вкладка DNS пишет `custom_rules` мимо буферов Routing. После
 // ухода с неё Routing перечитывает буферы, и правка на Rules не затирает
@@ -98,9 +99,7 @@ void main() {
   }) async {
     for (var i = 0; i < 400; i++) {
       if (await done()) return;
-      await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 20)));
-      await tester.pump(const Duration(milliseconds: 50));
+      await realIoStep(tester, fakeTime: const Duration(milliseconds: 50));
     }
     fail('не дождались: $what');
   }
@@ -148,6 +147,9 @@ void main() {
     //    пропадает (DNS-опция больше не активна).
     await tester.tap(find.widgetWithText(Tab, 'Rules'));
     await tester.pump();
+    // Переход вкладок доигран: пока TabBarView листается, тапы по нему
+    // игнорируются, а перечитывание может закончиться раньше анимации.
+    await tester.pump(kTabScrollDuration);
     final tile = find.byKey(const ValueKey(_ruleId));
     await pumpUntil(
         tester,

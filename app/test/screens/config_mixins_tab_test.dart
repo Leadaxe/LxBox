@@ -13,6 +13,8 @@ import 'package:lxbox/services/settings_storage.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
+import 'real_io_pump.dart';
+
 // §704 §5 — экран Config: вкладки Config | Mixins, список миксинов с
 // тумблером; тумблер пишет в хранилище сразу и запускает пересборку.
 
@@ -107,9 +109,7 @@ void main() {
   }) async {
     for (var i = 0; i < 400; i++) {
       if (await done()) return;
-      await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 20)));
-      await tester.pump(const Duration(milliseconds: 50));
+      await realIoStep(tester, fakeTime: const Duration(milliseconds: 50));
     }
     fail('не дождались: $what');
   }

@@ -10,11 +10,13 @@ import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/screens/node_settings_screen.dart';
 import 'package:lxbox/services/settings_storage.dart';
+import 'package:lxbox/services/template_loader.dart';
 import 'package:lxbox/widgets/lx_code_editor.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
 import '../parser/engine_test_setup.dart';
+import 'real_io_pump.dart';
 
 class _FakePathProvider extends PathProviderPlatform
     with MockPlatformInterfaceMixin {
@@ -31,7 +33,14 @@ class _FakePathProvider extends PathProviderPlatform
 // updateAutoMemberAt; битый текст и незнакомые ключи ничего не пишут. JSON
 // группы-правила — без кнопки Edit JSON. Проверяется поведение, не текст.
 void main() {
-  setUpAll(loadEngineSections);
+  setUpAll(() async {
+    await loadEngineSections();
+    // Шаблон — заранее, в живой зоне. Иначе его грузит экран первого теста
+    // в fake-зоне: `rootBundle` кэширует future загрузки, тест кончается
+    // раньше неё, и в следующих тестах `TemplateLoader.load()` (перечитывание
+    // экрана после Save) ждёт этот future вечно.
+    await TemplateLoader.load();
+  });
 
   late Directory tempDir;
 
@@ -54,9 +63,7 @@ void main() {
 
   Future<void> settle(WidgetTester tester, bool Function() done) async {
     for (var i = 0; i < 300 && !done(); i++) {
-      await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 10)));
-      await tester.pump();
+      await realIoStep(tester);
     }
     await tester.pumpAndSettle();
   }
@@ -110,9 +117,13 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  // Save кончается снэкбаром в обеих ветках: отказ показывает его сразу,
+  // запись — после диска и перечитывания. Запись в контроллер (`group(c)`)
+  // идёт синхронно до первого await, так что «ничего не записано» видно и
+  // без ожидания диска.
   Future<void> save(WidgetTester tester) async {
     await tester.tap(find.byTooltip('Save'));
-    await settle(tester, () => false);
+    await settle(tester, () => find.byType(SnackBar).evaluate().isNotEmpty);
   }
 
   testWidgets('Settings — форма группы, без Info/Detour/TLS; Source — запись',

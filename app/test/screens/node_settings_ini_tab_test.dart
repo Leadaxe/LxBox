@@ -13,6 +13,7 @@ import 'package:path_provider_platform_interface/path_provider_platform_interfac
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
 import '../parser/engine_test_setup.dart';
+import 'real_io_pump.dart';
 
 class _FakePathProvider extends PathProviderPlatform
     with MockPlatformInterfaceMixin {
@@ -65,9 +66,7 @@ void main() {
   /// Ждать условие, давая реальному IO (файлы, изоляты) идти.
   Future<void> settle(WidgetTester tester, bool Function() done) async {
     for (var i = 0; i < 300 && !done(); i++) {
-      await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 10)));
-      await tester.pump();
+      await realIoStep(tester);
     }
     await tester.pumpAndSettle();
   }
