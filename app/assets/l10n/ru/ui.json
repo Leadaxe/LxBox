@@ -1535,8 +1535,8 @@
   "Cannot read the selected file": {
     "value": "Не удалось прочитать выбранный файл"
   },
-  "Caps the VPN core's memory. A cap that is too low keeps the processor busy with garbage collection and heats the phone. Auto sizes the cap to this device's RAM; Off removes the cap but keeps low-memory monitoring. Applies immediately.": {
-    "value": "Ограничивает память ядра VPN. Слишком низкий лимит занимает процессор сборкой мусора и греет телефон. «Авто» подбирает лимит под объём памяти устройства; «Выключено» снимает лимит, но сохраняет контроль нехватки памяти. Применяется сразу."
+  "Memory threshold for the whole app process: the core, the interface and the loaded libraries share it. Above the threshold the core drops its connections and frees memory, and near it the garbage collector keeps the processor busy and heats the phone. Auto sets no threshold; the core watches the system's free memory instead. Applies immediately.": {
+    "value": "Порог памяти для всего процесса приложения: его делят ядро, интерфейс и загруженные библиотеки. Выше порога ядро сбрасывает свои соединения и освобождает память, а вблизи него сборщик мусора занимает процессор и греет телефон. «Авто» порог не ставит: ядро вместо этого следит за свободной памятью системы. Применяется сразу."
   },
   "Capture %s": {
     "value": "Снять %s"

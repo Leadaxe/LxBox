@@ -605,7 +605,7 @@ class _SettingsScreenState extends State<SettingsScreen>
               ),
               const SizedBox(height: 2),
               Text(
-                getLocalText.s("Caps the VPN core's memory. A cap that is too low keeps the processor busy with garbage collection and heats the phone. Auto sizes the cap to this device's RAM; Off removes the cap but keeps low-memory monitoring. Applies immediately."),
+                getLocalText.s("Memory threshold for the whole app process: the core, the interface and the loaded libraries share it. Above the threshold the core drops its connections and frees memory, and near it the garbage collector keeps the processor busy and heats the phone. Auto sets no threshold; the core watches the system's free memory instead. Applies immediately."),
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
@@ -625,9 +625,7 @@ class _SettingsScreenState extends State<SettingsScreen>
               DropdownMenuItem<String>(
                   value: MemoryLimitSetting.auto,
                   child: Text(getLocalText.s("Auto (recommended)"))),
-              DropdownMenuItem<String>(
-                  value: MemoryLimitSetting.off,
-                  child: Text(getLocalText.s("Off"))),
+              // §705 — пункта Off нет: он давал бы тот же 0, что и Auto.
               DropdownMenuItem<String>(
                   value: '200', child: Text(getLocalText.s("%d MB", 200))),
               DropdownMenuItem<String>(

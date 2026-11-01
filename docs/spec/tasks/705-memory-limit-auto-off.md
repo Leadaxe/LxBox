@@ -1,0 +1,116 @@
+# 705 — Memory limit: Auto = без порога; порог считается по памяти всего процесса
+
+| Поле | Значение |
+|------|----------|
+| Статус | Done (код; на устройстве не проверено) |
+| Дата начала | 2026-11-01 |
+| Источник | скрины пользователя Cultsonfire (Telegram, 01.11.2026): Stats → Memory 461.8 MB при Memory limit 200 MB, «такая загрузка не должно быть»; решение владельца в чате |
+| Связанные | §271 (настраиваемый лимит, Auto-лесенка — снята здесь), §173 (oomMemoryLimit в SetupOptions), §242/§507 (память на Stats = RSS процесса), §122F §2.1 (однопроцессная модель), ядро: [sing-box-lx#62](https://github.com/Leadaxe/sing-box-lx/issues/62) — лимит по Go-хипу + хип в `Status` |
+
+## Проблема
+
+Пользователь видит «LxBox 461.8 MB» на карточке Stats при выбранном
+Memory limit 200 MB и делает вывод, что лимит не работает. Подсказка
+настройки говорит «Caps the VPN core's memory», а руководство — «задаёт
+потолок памяти ядра». Пользователь прав: ни потолком, ни «памятью ядра»
+это не является.
+
+## Диагностика (по коду ядра `sing-box-lx`, тег lx.28)
+
+1. Лимит уходит в ядро как `MemoryLimitOverride` (`daemon/instance.go:113`),
+   `policy.go:49` выбирает `policyModeMemoryLimit`.
+2. В этом режиме oom-killer сравнивает лимит с `memory.Total()`
+   (`service/oomkiller/timer.go`, `readMemorySample`) — это RSS из
+   `/proc/self/statm` (`sing/common/memory/memory_linux.go`; файлы `_linux`
+   собираются и под `GOOS=android`). Пороги: trigger = лимит − 5 MiB,
+   armed = лимит − 10 MiB (`computeLimitThresholds`, `defaultSafetyMargin`).
+3. Ядро живёт в одном процессе с Flutter (`BoxVpnService` без
+   `android:process`, §122F §2.1). В RSS входят Code ≈140 MB (`libbox.so`
+   arm64 = 83 MB, libflutter, libapp, oat), Graphics ≈40 MB, Dalvik ≈12 MB,
+   куча Dart. Процесс с открытым экраном в 200 MB не помещается пустым.
+4. Что происходит при 200 MB у этого пользователя: первый опрос через 100 мс
+   после старта → 461 > 195 → `ResetNetwork` + `FreeOSMemory` + OOM-отчёт.
+   Соединений в этот момент нет, потерь нет. Дальше гистерезис
+   (`nextPressureState`): из triggered выход только ниже 190 MB, которого не
+   будет → ядро навсегда в triggered, опрос `/proc/self/statm` каждые
+   100 мс (`defaultMinInterval`). Rate-trigger не добавляет сбросов:
+   он работает только при `usage < limit`.
+5. Мягкий потолок GC = `limit × 4/5` (`experimental/libbox/setup.go:106`),
+   не ¾, как писали комментарии в `BoxApplication.kt` и спека §271. При
+   200 MB это 160 MiB на Go-хип; живой хип с WG-пулами WARP-группы
+   (§271, §523: порядка 100 MB одни пулы) упирается в него → GC греет
+   телефон. Это и есть симптом, от которого §271 сделал настройку.
+6. Число чуть выше рабочего RSS (например 600 при 461) хуже, чем 200:
+   порог пробивается уже в работе, `ResetNetwork` рвёт все соединения,
+   после `FreeOSMemory` RSS падает ниже armed, состояние возвращается в
+   normal, и цикл повторяется. При 200 сброс один и на старте.
+7. Любой лимит > 0 **выключает** слежение за свободной памятью системы:
+   `readMemorySample` читает `memory.Available()` только в
+   `policyModeAvailable`/`policyModeNetworkExtension`. Нас убивает LMK при
+   нехватке системной памяти, а не число RSS — защита от неё есть только
+   при лимите 0.
+8. Правильного числа нет: RSS зависит от открытого экрана, ABI (32-битный
+   `libbox.so` на 8 MB меньше), числа поднятых туннелей.
+
+## Решение (владелец, 01.11.2026)
+
+- **`auto` на Android = `0`.** Ядро снимает GC-потолок
+  (`SetMemoryLimit(MaxInt64)`, `setup.go:108`), oom-killer в
+  Available-режиме: читает `MemAvailable` из `/proc/meminfo` и сбрасывает
+  сеть, когда системе остаётся меньше `max(32 MiB, min(RSS/4, 128 MiB))`
+  (`availableThresholds`). Лесенка 200/384/512 по RAM устройства снята.
+- **`off` сливается с `auto`:** оба давали бы `0`, два одинаковых пункта в
+  списке не нужны. Wire-значение `off` остаётся терпимым на чтении
+  (бэкапы, prefs старых версий) и нормализуется в `auto`.
+- Пресеты 200/384/512/768 остаются — по явному выбору, для тех, кто
+  понимает, что порог считается по всему процессу.
+- Подсказка настройки и руководство переписаны: порог памяти всего
+  процесса приложения; выше него ядро сбрасывает соединения и освобождает
+  память, вблизи него GC греет телефон; Auto порога не ставит, ядро следит
+  за свободной памятью системы.
+- Карточку Stats и шторку Memory не трогали: они показывают RSS процесса и
+  говорят об этом в заголовке шторки; сравнения с лимитом в них нет и не
+  появится, пока ядро не отдаёт Go-хип отдельно.
+
+### Отвергнуто
+
+- Дефолт 600 MB — п. 6, 7.
+- Сравнивать с памятью ядра в приложении — ядро отдаёт в `Status` только
+  `memory.Total()` = RSS; `memory.Inuse()` (Go-хип по `runtime.MemStats`)
+  есть в `sing`, но не экспортирован. Это правильный путь, но с бампом
+  ядра: в форке сравнивать лимит с `Inuse()` и отдать его в `Status`,
+  тогда «Memory limit 200 MB» значит «ядро: GC-цель 160 MiB, сброс при
+  195 MiB хипа», а в Stats появляется «Core heap: X / 200 MB». Заведено
+  [sing-box-lx#62](https://github.com/Leadaxe/sing-box-lx/issues/62),
+  владелец думает с агентом ядра.
+- Сервис в отдельном процессе `:bg` — RSS процесса сервиса ≈ ядро, UI
+  можно выгрузить; но рвёт §122F (EventChannel-push), прямые `Libbox.*`
+  из `VpnPlugin`, синхронный fd §276, Debug API в UI-процессе, prefs из
+  двух процессов. Отдельная фича, не задача.
+
+## Изменения
+
+| Файл | Что |
+|---|---|
+| `app/android/.../BoxApplication.kt` | `resolveMemoryLimitBytes`: пресетное число → MiB, всё прочее → `0`; лесенка по `totalMem` удалена; комментарии про семантику ядра исправлены (4/5, RSS процесса) |
+| `app/android/.../BootReceiver.kt` | комментарий к `KEY_MEMORY_LIMIT` |
+| `app/lib/models/memory_limit_setting.dart` | `values` без `off`; `normalize('off')` → `auto` |
+| `app/lib/screens/settings_screen.dart` | подсказка; пункт Off снят |
+| `app/assets/l10n/{ru,zh}/ui.json` | новая подсказка |
+| `docs/USER_GUIDE.md`, `docs/USER_GUIDE.ru.md` | раздел Memory limit |
+| `docs/STORAGE.md` | `memory_limit`: `off` — legacy, читается как `auto` |
+| `docs/spec/tasks/271-configurable-memory-limit.md` | пометка о снятии лесенки |
+| `CHANGELOG.md` | Unreleased → Changed |
+
+Wire-протокол §189 не меняется: в prefs по-прежнему `auto` | число;
+`off` принимается на чтении. Debug API/бэкап совместимы.
+
+## Проверка
+
+- `app/test/services/native_prefs_memory_limit_test.dart` — дефолт `auto`,
+  нормализация (`off` → `auto`).
+- На устройстве (не делалось): Auto → лог ядра на старте без
+  `memory threshold reached`; Settings → Debug → OOM reports не растут с
+  каждым подключением; Stats → Memory показывает прежний RSS (это норма).
+- У пользователя с 200 MB и RSS 461 MB после обновления ничего не меняется,
+  пока он не переключит значение на Auto — выбранное явно число уважаем.

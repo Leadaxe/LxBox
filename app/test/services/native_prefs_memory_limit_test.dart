@@ -103,9 +103,15 @@ void main() {
 
   test('apply backup: валидное значение применяется, мусор → auto', () async {
     final n1 = await SettingsStorage.applyNativePrefsBackup(
-        {'memory_limit': 'off'});
+        {'memory_limit': '384'});
     expect(n1, 1);
-    expect(await SettingsStorage.getNativeMemoryLimit(), 'off');
+    expect(await SettingsStorage.getNativeMemoryLimit(), '384');
+
+    // §705 — legacy `off` (бэкап старой версии) читается как auto.
+    final nOff = await SettingsStorage.applyNativePrefsBackup(
+        {'memory_limit': MemoryLimitSetting.off});
+    expect(nOff, 1);
+    expect(await SettingsStorage.getNativeMemoryLimit(), MemoryLimitSetting.auto);
 
     final n2 = await SettingsStorage.applyNativePrefsBackup(
         {'memory_limit': 'garbage-9000'});

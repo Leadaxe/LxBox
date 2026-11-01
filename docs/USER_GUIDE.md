@@ -1401,29 +1401,26 @@ the group.
 | Every new node answers with a delay when you switch | Lazy tunnel build → off: the app stops passing lazy build to the core, and the core builds tunnels by its own rules |
 | Tunnels must not sleep at all | Suspend idle tunnels → Off |
 
-#### Memory limit sets the core's memory ceiling
+#### Memory limit is a threshold for the whole app process
 
-The **Memory limit** setting caps the memory the VPN core can take. A ceiling
-set too low makes the core clean up memory all the time: the processor stays
-busy, and the phone heats up. Where: VPN Settings → System → Optimization →
-Memory limit. The default is Auto (recommended); a change applies to the
-running core at once, without a restart.
+The **Memory limit** setting is a memory threshold the VPN core watches.
+The number is compared with the memory of the whole app process: the core,
+the interface and the loaded libraries share one process, and the libraries
+alone take about 140 MB, so the figure on Statistics → Memory is never the
+core's alone. Where: VPN Settings → System → Optimization → Memory limit.
+The default is Auto (recommended); a change applies to the running core at
+once, without a restart.
 
-Auto picks the ceiling by the phone's memory:
-
-| Memory Android sees | Core ceiling |
-|---|---|
-| Less than 3.5 GiB | 200 MB |
-| From 3.5 to 7 GiB | 384 MB |
-| 7 GiB and more | 512 MB |
-
-Android sees a "4 GB" phone as 3.7 GiB, and Auto sets 384 MB; an "8 GB" phone
-as 7.5 GiB, and Auto sets 512 MB.
-
-The other options: Off removes the ceiling, but the core keeps watching for
-low memory in the system; 200, 384, 512 and 768 MB set the ceiling
-explicitly. Raise the ceiling if the phone heats up under the VPN or core
-memory snapshots appear in Debug → OOM; what else to check is described in
+Auto sets no threshold: the core watches the free memory of the system
+instead and drops its connections only when the phone is actually running
+out of memory. 200, 384, 512 and 768 MB set the threshold explicitly: above
+it the core drops its connections and frees memory, and close to it the
+garbage collector keeps the processor busy, so the phone heats up. A value
+below the process's usual size trips once at start and then does nothing; a
+value just above it causes reconnects while you use the phone. Leave Auto
+unless you know what the number is for; a value chosen earlier stays as it
+was. If the phone heats up under the VPN or core memory snapshots appear in
+Debug → OOM, set Auto first; what else to check is described in
 [If something goes wrong](#if-something-goes-wrong--where-to-look).
 
 #### Tunnel sleep mode pauses the whole tunnel on a screen event
@@ -1985,9 +1982,10 @@ Diagnostic tools, from simple to detailed:
 | Crashes, OOM, Profiling | Debug | Core crash reports, core memory snapshots on low memory, pprof profiles for the developer. |
 
 If the phone gets hot or uses too much memory, open VPN Settings → System →
-Optimization → **Memory limit**: in Auto mode the limit follows the device's
-RAM. The System → WireGuard connections section puts idle WireGuard tunnels
-to sleep.
+Optimization → **Memory limit**: Auto sets no threshold and is the right
+choice in most cases; a number there is compared with the whole app process,
+not the core alone. The System → WireGuard connections section puts idle
+WireGuard tunnels to sleep.
 
 ---
 

@@ -1340,8 +1340,8 @@
   "Cannot read the selected file": {
     "value": "无法读取所选文件"
   },
-  "Caps the VPN core's memory. A cap that is too low keeps the processor busy with garbage collection and heats the phone. Auto sizes the cap to this device's RAM; Off removes the cap but keeps low-memory monitoring. Applies immediately.": {
-    "value": "限制 VPN 内核的内存占用。上限过低会让处理器忙于垃圾回收并导致手机发热。「自动」按本机内存自动设定；「关闭」取消上限但保留低内存监控。立即生效。"
+  "Memory threshold for the whole app process: the core, the interface and the loaded libraries share it. Above the threshold the core drops its connections and frees memory, and near it the garbage collector keeps the processor busy and heats the phone. Auto sets no threshold; the core watches the system's free memory instead. Applies immediately.": {
+    "value": "整个应用进程的内存阈值：内核、界面和已加载的库共用这一进程。超过阈值时内核会断开自己的连接并释放内存；接近阈值时垃圾回收会占用处理器并导致手机发热。「自动」不设阈值，内核转而监控系统的可用内存。立即生效。"
   },
   "Capture %s": {
     "value": "抓取 %s"
