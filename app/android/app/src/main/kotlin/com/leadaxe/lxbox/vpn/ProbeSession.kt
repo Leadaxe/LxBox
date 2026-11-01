@@ -103,7 +103,11 @@ object ProbeSession : CommandServerHandler {
             val server = CommandServer(this, ProbePlatform)
             cs = server
             server.start()
-            server.startOrReloadService(config, OverrideOptions())
+            // §703 — cache.db может держать зависший в закрытии VPN-Box (§668
+            // отпустил остановку по потолку): удалить файл и повторить один раз.
+            CacheDbLockRetry.startOrRetry("probe") {
+                server.startOrReloadService(config, OverrideOptions())
+            }
             val client = CommandClient(ProbeClientHandler, CommandClientOptions())
             cl = client
             client.connect()

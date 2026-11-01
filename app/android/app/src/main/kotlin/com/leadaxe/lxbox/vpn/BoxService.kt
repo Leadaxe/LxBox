@@ -582,7 +582,11 @@ class BoxService(
         }
 
         try {
-            cs.startOrReloadService(config, buildOverrideOptions(config))
+            // §703 — на `initialize cache-file: timeout` (файл держит зависший
+            // в закрытии прежний Box) удалить cache.db и повторить один раз.
+            CacheDbLockRetry.startOrRetry("vpn") {
+                cs.startOrReloadService(config, buildOverrideOptions(config))
+            }
         } catch (t: Throwable) {
             // Фича 478 / Д-1 — человеку идёт локализованный шаблон, страховке
             // рядом едет СЫРОЙ `t.message` (EXTRA_CORE_ERROR). Разбирать

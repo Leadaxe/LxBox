@@ -10,6 +10,18 @@
 
 ### Fixed
 
+- **Start no longer fails with "initialize cache-file: timeout" after a
+  stop that hung.** When the previous core instance is still shutting down
+  and holds `cache.db`, the next start deletes the file and retries once
+  instead of stopping with the error; force-stopping the app or clearing the
+  DNS cache by hand is no longer needed. The retry costs the FakeIP table,
+  the selected node in groups and cached remote rule-sets for that start.
+  (RU: Старт больше не падает с «initialize cache-file: timeout» после
+  зависшей остановки. Если прежний экземпляр ядра ещё закрывается и держит
+  `cache.db`, следующий старт удаляет файл и повторяет попытку один раз, а не
+  останавливается с ошибкой; force stop приложения и ручной сброс DNS-кэша
+  больше не нужны. Ценой повтора — таблица FakeIP, выбранный узел в группах
+  и кэш удалённых rule-set на этот старт.)
 - **WARP: a picked `engage.cloudflareclient.com:2408` stays in the node.**
   Picking the default endpoint from the list in the WARP wizard no longer
   gets it replaced by a random IP when obfuscation is on, by the address from
