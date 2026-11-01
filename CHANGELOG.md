@@ -8,6 +8,19 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **WARP: a picked `engage.cloudflareclient.com:2408` stays in the node.**
+  Picking the default endpoint from the list in the WARP wizard no longer
+  gets it replaced by a random IP when obfuscation is on, by the address from
+  Cloudflare's reply, or by the endpoint of a cached registration. Only an
+  empty or untouched field counts as no choice.
+  (RU: WARP: выбранный `engage.cloudflareclient.com:2408` остаётся в узле.
+  Дефолтный endpoint, выбранный из списка в мастере WARP, больше не
+  заменяется ни случайным IP при обфускации, ни адресом из ответа
+  Cloudflare, ни endpoint'ом закешированной регистрации. Невыбранным
+  считается только пустое или нетронутое поле.)
+
 ### Added
 
 - **Hosts DNS server in the form, and Hosts in a DNS group

@@ -188,11 +188,14 @@ class WarpClient {
   /// в Cloudflare не меняется (обфускация — чисто клиентский конфиг).
   ///
   /// §136 — [randomEndpoint] (если задан): когда obfuscate=true И [endpoint]
-  /// дефолтный, endpoint заменяется на рандомный `ip:port` из зашитых
+  /// не задан, endpoint заменяется на рандомный `ip:port` из зашитых
   /// Cloudflare-блоков (заблокированный `engage…:2408` обходится без скана).
+  ///
+  /// §386 (01.11) — [endpoint] null = юзер не выбирал (дефолт, host из ответа
+  /// Cloudflare). Заданное значение, включая `engage…:2408`, — выбор юзера.
   Future<WarpAccount> register({
     String? licenseKey,
-    String endpoint = WarpAccount.defaultEndpoint,
+    String? endpoint,
     required String nowIso8601,
     bool obfuscate = false,
     QuicParams? quicParams,
@@ -225,11 +228,11 @@ class WarpClient {
       throw WarpException('bad response: not JSON');
     }
 
-    // §136 — рандомный endpoint при обфускации + дефолтном endpoint. Юзер
-    // вписал свой (не дефолт) → уважаем его (§135), рандом не применяем.
+    // §136 — рандомный endpoint при обфускации + невыбранном endpoint. Юзер
+    // выбрал свой → уважаем его (§135), рандом не применяем.
     var effectiveEndpoint = endpoint;
     if (obfuscate &&
-        endpoint == WarpAccount.defaultEndpoint &&
+        endpoint == null &&
         randomEndpoint != null &&
         randomEndpoint.isNotEmpty) {
       effectiveEndpoint = randomEndpoint;
@@ -254,7 +257,7 @@ class WarpClient {
   WarpAccount _parseReg(
     Map<String, dynamic> json, {
     required String privKey,
-    required String endpoint,
+    required String? endpoint,
     required String createdAt,
   }) {
     final deviceId = (json['id'] as String?) ?? '';
@@ -274,12 +277,12 @@ class WarpClient {
     // `engage.cloudflareclient.com:2408`; раньше он безусловно затирал ввод
     // юзера → Advanced-поле Endpoint было мёртвым (юзер вписывал
     // `188.114.97.6:988`, в конфиг шёл дефолт). Теперь: юзер явно задал
-    // не-дефолтный endpoint → уважаем его, ответ API игнорируем. Оставил
-    // дефолт → берём `host` из ответа Cloudflare как fallback.
-    final userPickedEndpoint = endpoint != WarpAccount.defaultEndpoint;
+    // endpoint (любой, включая дефолт — §386) → уважаем его, ответ API
+    // игнорируем. Не задал → берём `host` из ответа Cloudflare как fallback.
+    final userPickedEndpoint = endpoint != null;
     final peersRaw = config['peers'];
     String peerPub = '';
-    String host = endpoint;
+    String host = endpoint ?? WarpAccount.defaultEndpoint;
     if (peersRaw is List && peersRaw.isNotEmpty && peersRaw.first is Map) {
       final peer = peersRaw.first as Map;
       peerPub = (peer['public_key'] as String?) ?? '';

@@ -536,7 +536,9 @@ class SubscriptionController extends ChangeNotifier {
   /// caller показывает [lastError].
   Future<WarpAccount?> addWarp({
     String? licenseKey,
-    String endpoint = WarpAccount.defaultEndpoint,
+    // §386 (01.11) — null = юзер endpoint не выбирал. Любое значение, включая
+    // дефолтный `engage…:2408`, — выбор юзера и едет в узел как есть.
+    String? endpoint,
     bool reuse = true,
     bool forceNew = false,
     bool obfuscate = false,
@@ -566,28 +568,29 @@ class SubscriptionController extends ChangeNotifier {
       }
 
       // §143 — резолвим masquerade-домен (пустой id → рандом из пула) и
-      // рандомный endpoint (только при обфускации + дефолтном endpoint).
+      // рандомный endpoint (только при обфускации + невыбранном endpoint).
       final picker = await WarpEndpointPicker.load();
       final resolvedParams = (quicParams.sni.trim().isEmpty &&
               picker.randomSni().isNotEmpty)
           ? quicParams.copyWith(sni: picker.randomSni())
           : quicParams;
-      // §138 — endpoint, который реально должен попасть в узел. Юзер вписал
-      // свой (не дефолт) → он; обфускация+дефолт → рандомный §136; иначе дефолт.
-      final userPicked = endpoint != WarpAccount.defaultEndpoint;
+      // §138 — endpoint, который реально должен попасть в узел. Юзер выбрал
+      // (любой, включая дефолт — §386) → он; не выбрал + обфускация →
+      // рандомный §136; иначе дефолт (у свежей регистрации — host из ответа).
+      final userPicked = endpoint != null;
       // §305 — v6-endpoint только если в системе включён IPv6 (иначе мёртв).
       final allowV6 = (await SettingsStorage.getVar('ipv6_enabled', 'false'))
               .toLowerCase() ==
           'true';
-      final resolvedEndpoint = userPicked
-          ? endpoint
-          : (obfuscate
-              ? (picker.randomEndpoint(allowV6: allowV6) ?? endpoint)
-              : endpoint);
+      final String resolvedEndpoint = endpoint ??
+          (obfuscate
+              ? (picker.randomEndpoint(allowV6: allowV6) ??
+                  WarpAccount.defaultEndpoint)
+              : WarpAccount.defaultEndpoint);
 
       account ??= await warp.register(
         licenseKey: licenseKey,
-        endpoint: resolvedEndpoint,
+        endpoint: (userPicked || obfuscate) ? resolvedEndpoint : null,
         nowIso8601: DateTime.now().toUtc().toIso8601String(),
         obfuscate: obfuscate,
         quicParams: resolvedParams,
@@ -1739,7 +1742,7 @@ class SubscriptionController extends ChangeNotifier {
 
   Future<WarpAccount?> _tryRegisterWarp(WarpClient warp, String now) async {
     try {
-      final acc = await warp.register(endpoint: WarpAccount.defaultEndpoint, nowIso8601: now);
+      final acc = await warp.register(nowIso8601: now);
       await SettingsStorage.setWarpAccount(acc);
       return acc;
     } catch (e) {

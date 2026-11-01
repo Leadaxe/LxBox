@@ -40,11 +40,14 @@ Node tag: `🔥☁️ WARP`, `🔥☁️ WARP+`, `🔥⛈️ WARP (AWG 1.5)`,
 
 ## Rules and invariants
 
-- **Endpoint.** An entered non-default endpoint beats both the Cloudflare
-  response (which always returns `engage…:2408`) and the endpoint from the
-  registration cache. The default without obfuscation — the host from the
-  Cloudflare response; the default with obfuscation — a random `ip:port` (see
-  obfuscation). The applied endpoint is written to the cache. A non-empty
+- **Endpoint.** A picked or entered endpoint beats both the Cloudflare
+  response and the endpoint from the registration cache. This includes
+  `engage.cloudflareclient.com:2408` when picked from the list or typed in:
+  matching the default does not cancel the choice. Not picked means the field
+  is empty or still holds its untouched initial value: then without
+  obfuscation the host from the Cloudflare response is used, with obfuscation
+  a random `ip:port` (see obfuscation). The applied endpoint is written to the
+  cache. A non-empty
   field is checked before the request: `host:port` (a name, IPv4 or IPv6 in
   brackets; port 1–65535), otherwise the snack "Endpoint must be host:port"
   and no registration.
