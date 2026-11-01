@@ -94,6 +94,13 @@ The feature protects three principles:
   **Witness:** manual check (disabled rule → the View tab is not empty); the
   build skips disabled rules — unit "a disabled json rule is skipped
   (skipDisabled)". **Mutation:** an empty preview for a disabled rule.
+- **P12. Mixins survive rebuilds.** The Mixins tab next to Config lists
+  stored edits of the built config (target path, verb, JSON value), applied
+  at the end of the build top to bottom; a failing mixin is a fatal build
+  error with a `⚠` line under it. Details — task
+  [704](../../tasks/704-config-mixins.md). **Witness:** widget tests
+  `config_mixins_tab_test.dart`, `mixin_edit_screen_test.dart`.
+  **Mutation:** a disabled mixin lands in the config.
 
 ## Controlled parameters
 
