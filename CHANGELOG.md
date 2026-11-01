@@ -8,31 +8,6 @@
 
 ## [Unreleased]
 
-### Fixed
-
-- **Start no longer fails with "initialize cache-file: timeout" after a
-  stop that hung.** When the previous core instance is still shutting down
-  and holds `cache.db`, the next start deletes the file and retries once
-  instead of stopping with the error; force-stopping the app or clearing the
-  DNS cache by hand is no longer needed. The retry costs the FakeIP table,
-  the selected node in groups and cached remote rule-sets for that start.
-  (RU: Старт больше не падает с «initialize cache-file: timeout» после
-  зависшей остановки. Если прежний экземпляр ядра ещё закрывается и держит
-  `cache.db`, следующий старт удаляет файл и повторяет попытку один раз, а не
-  останавливается с ошибкой; force stop приложения и ручной сброс DNS-кэша
-  больше не нужны. Ценой повтора — таблица FakeIP, выбранный узел в группах
-  и кэш удалённых rule-set на этот старт.)
-- **WARP: a picked `engage.cloudflareclient.com:2408` stays in the node.**
-  Picking the default endpoint from the list in the WARP wizard no longer
-  gets it replaced by a random IP when obfuscation is on, by the address from
-  Cloudflare's reply, or by the endpoint of a cached registration. Only an
-  empty or untouched field counts as no choice.
-  (RU: WARP: выбранный `engage.cloudflareclient.com:2408` остаётся в узле.
-  Дефолтный endpoint, выбранный из списка в мастере WARP, больше не
-  заменяется ни случайным IP при обфускации, ни адресом из ответа
-  Cloudflare, ни endpoint'ом закешированной регистрации. Невыбранным
-  считается только пустое или нетронутое поле.)
-
 ## [2.25.19] — 2026-11-01
 
 ### Added
@@ -172,20 +147,27 @@
 
 ### Changed
 
-- **Core `v1.14.4-lx.25` → `v1.14.4-lx.27`
+- **Core `v1.14.4-lx.25` → `v1.14.4-lx.28`
   ([docs/KERNEL.md](docs/KERNEL.md)).** A DNS group can list `hosts`
   servers that answer the names they know before the group's servers
   (Leadaxe/sing-box-lx#60). MTU alignment fixes: a proxy node inside a group no
   longer lowers the MTU of a tunnel above the group, and tunnels carrying IPv6
   are never set below 1280. WireGuard/AWG peer status is reported per
   session: after a node is turned on or wakes up, the last handshake and the
-  session byte counters start from zero. No config changes.
-  (RU: Ядро `v1.14.4-lx.25` → `v1.14.4-lx.27`. DNS-группа может спрашивать
+  session byte counters start from zero. Stopping the VPN no longer hangs
+  when a MASQUE node with `detour` is being pinged or connecting at that
+  moment; after a stop that did hang, the new core instance takes `cache.db`
+  over by itself, keeping group selection, FakeIP and the rule-set cache
+  (Leadaxe/sing-box-lx#61). No config changes.
+  (RU: Ядро `v1.14.4-lx.25` → `v1.14.4-lx.28`. DNS-группа может спрашивать
   серверы `hosts` раньше своих серверов; поправки выравнивания MTU: прокси-узел
   в группе больше не занижает MTU туннеля над группой, туннели с IPv6 не
   опускаются ниже 1280. Статус пира WireGuard/AWG отдаётся по сессиям: после
   включения или пробуждения узла последний хендшейк и счётчики байт сессии
-  начинаются с нуля. Конфиг не меняется.)
+  начинаются с нуля. Остановка VPN больше не зависает, если в этот момент
+  пингуется или подключается узел MASQUE с `detour`; после зависшей остановки
+  новое ядро само забирает `cache.db`, сохраняя выбор узлов, FakeIP и кеш
+  rule-set. Конфиг не меняется.)
 - **Default TUN MTU is 9000 instead of 1492
   ([task 700](docs/spec/tasks/700-tun-mtu-default-9000.md)).** 9000 is the
   sing-box default; the tunnel interface is virtual, and the core re-sends TCP
