@@ -6,25 +6,16 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/memory_limit_setting.dart';
 import 'package:lxbox/screens/stats_screen/memory_detail_sheet.dart';
 import 'package:lxbox/services/settings_storage.dart';
-import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
-import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
 /// §705 (ядро lx.29, SPEC 148) — строка Core memory в шторке Memory:
 /// дробь `/ N MB` при пресетном лимите, без дроби при Auto, скрыта при 0
 /// (старое ядро без `memoryRuntime`).
-class _FakePathProvider extends PathProviderPlatform
-    with MockPlatformInterfaceMixin {
-  final String tempRoot;
-  _FakePathProvider(this.tempRoot);
-  @override
-  Future<String?> getApplicationSupportPath() async => '$tempRoot/support';
-  @override
-  Future<String?> getApplicationDocumentsPath() async => '$tempRoot/docs';
-}
-
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  // path_provider мокается каналом, как в native_prefs_memory_limit_test —
+  // platform-interface пакетов нет в pubspec, analyze их не пропускает.
+  const pathChannel = MethodChannel('plugins.flutter.io/path_provider');
   const methods = MethodChannel('com.leadaxe.lxbox/methods');
   final messenger =
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
@@ -34,12 +25,23 @@ void main() {
     tempDir = await Directory.systemTemp.createTemp('memory_sheet_');
     await Directory('${tempDir.path}/docs').create();
     await Directory('${tempDir.path}/support').create();
-    PathProviderPlatform.instance = _FakePathProvider(tempDir.path);
+    messenger.setMockMethodCallHandler(pathChannel, (call) async {
+      switch (call.method) {
+        case 'getApplicationDocumentsDirectory':
+        case 'getApplicationDocumentsPath':
+          return '${tempDir.path}/docs';
+        case 'getApplicationSupportDirectory':
+        case 'getApplicationSupportPath':
+          return '${tempDir.path}/support';
+      }
+      return null;
+    });
     SettingsStorage.resetCacheForTesting();
     messenger.setMockMethodCallHandler(methods, (call) async => null);
   });
 
   tearDown(() async {
+    messenger.setMockMethodCallHandler(pathChannel, null);
     messenger.setMockMethodCallHandler(methods, null);
     if (await tempDir.exists()) await tempDir.delete(recursive: true);
   });
