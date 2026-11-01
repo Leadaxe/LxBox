@@ -172,9 +172,9 @@ Wire-протокол §189 не меняется: в prefs по-прежнем�
 | `app/assets/l10n/{ru,zh}/ui.json` | новая подсказка, «Core memory», подпись строки |
 | `docs/USER_GUIDE.md`, `.ru.md` | раздел Memory limit: порог по памяти ядра с lx.29; где смотреть; Auto по-прежнему без порога |
 | `docs/STORAGE.md` | комментарий `memory_limit`: threshold on the core's runtime memory (core lx.29+) |
-| `docs/spec/features/012-LIVE_STATE/FUNCTIONS/traffic-statistics.md` | пункт про «Memory = весь процесс»: добавить, что Core runtime в шторке — память ядра |
-| `CHANGELOG.md` Unreleased | дополнить запись 705: with core lx.29 the limit is compared with the core's own memory; Statistics → Memory shows Core runtime next to process RSS |
-| тесты | разбор статуса (`memoryRuntime`, отсутствие ключа → 0) в тесте cc_channel/box_vpn_client, где уже проверяется `memory`; widget-тест шторки: строка `Core runtime` с `/ 200 MB` при пресете и без дроби при `auto`, скрыта при 0 |
+| `docs/spec/features/012-LIVE_STATE/FUNCTIONS/traffic-statistics.md` | пункт про «Memory = весь процесс»: добавить, что Core memory в шторке — память ядра |
+| `CHANGELOG.md` Unreleased | дополнить запись 705: with core lx.29 the limit is compared with the core's own memory; Statistics → Memory shows Core memory next to process RSS |
+| тесты | разбор статуса (`memoryRuntime`, отсутствие ключа → 0) в тесте cc_channel/box_vpn_client, где уже проверяется `memory`; widget-тест шторки: строка `Core memory` с `/ 200 MB` при пресете и без дроби при `auto`, скрыта при 0 |
 
 Пин ядра (`app/android/libbox.version`, `.libbox.version`,
 `kCoreBuildTagsPin` в `core_chain_capability.dart`, `docs/KERNEL.md` с javap
