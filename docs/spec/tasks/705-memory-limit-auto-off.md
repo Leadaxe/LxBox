@@ -98,7 +98,7 @@ Memory limit 200 MB и делает вывод, что лимит не рабо�
   есть в `sing`, но не экспортирован. Это правильный путь, но с бампом
   ядра: в форке сравнивать лимит с `Inuse()` и отдать его в `Status`,
   тогда «Memory limit 200 MB» значит «ядро: GC-цель 160 MiB, сброс при
-  195 MiB хипа», а в Stats появляется «Core runtime: X / 200 MB». Заведено
+  195 MiB хипа», а в Stats появляется «Core memory: X / 200 MB». Заведено
   [sing-box-lx#62](https://github.com/Leadaxe/sing-box-lx/issues/62);
   **контракт с ядром согласован 01.11.2026** (комментарий в issue):
   `Status.MemoryRuntime` (proto 10) = `runtime/metrics` total − released,
@@ -167,9 +167,9 @@ Wire-протокол §189 не меняется: в prefs по-прежнем�
 | `BoxCommandClient.kt` (`writeStatus`, snap) | `snap["memoryRuntime"] = m.getMemoryRuntime()` |
 | `app/lib/vpn/cc_channel.dart` (статус, ~1020) | поле `memoryRuntime: _int(m['memoryRuntime'])` (0, если ключа нет — старое ядро) |
 | `overview_tab.dart` | карточка «LxBox» остаётся RSS процесса (решение §242); в `showMemoryDetailSheet` передаётся `coreRuntime` |
-| `memory_detail_sheet.dart` | в группе Process после `RSS` строка **`Core runtime`** = `formatBytes(coreRuntime)`; при пресетном лимите (из `SettingsStorage.getNativeMemoryLimit()`, читается в `initState` рядом с `getMemoryInfo`) — `42.1 MB / 200 MB`; при `auto` — без дроби. Строка скрыта при `coreRuntime == 0`. Подпись строки ниже, стилем `bodySmall`/`onSurfaceVariant`, как подпись у Native heap: «Memory of the VPN core itself (Go runtime); the limit from VPN Settings applies to this figure. RSS is the whole app process.» |
-| `settings_screen.dart` подсказка | переписать: порог по памяти самого ядра VPN (его Go-рантайма), не всего процесса; выше — сброс соединений и освобождение памяти, вблизи — GC греет телефон; Auto порога не ставит; ядро при любом значении следит и за свободной памятью системы; applies immediately. Текущую цифру смотреть в Statistics → Memory → Core runtime |
-| `app/assets/l10n/{ru,zh}/ui.json` | новая подсказка, «Core runtime», подпись строки |
+| `memory_detail_sheet.dart` | в группе Process после `RSS` строка **`Core memory`** = `formatBytes(coreRuntime)` (не «Core runtime»: так уже называется группа горутин и соединений в той же шторке); при пресетном лимите (из `SettingsStorage.getNativeMemoryLimit()`, читается в `initState` рядом с `getMemoryInfo`) — `42.1 MB / 200 MB`; при `auto` — без дроби. Строка скрыта при `coreRuntime == 0`. Подпись строки ниже, стилем `bodySmall`/`onSurfaceVariant`, как подпись у Native heap: «Memory of the VPN core itself (Go runtime); the limit from VPN Settings applies to this figure. RSS is the whole app process.» |
+| `settings_screen.dart` подсказка | переписать: порог по памяти самого ядра VPN (его Go-рантайма), не всего процесса; выше — сброс соединений и освобождение памяти, вблизи — GC греет телефон; Auto порога не ставит; ядро при любом значении следит и за свободной памятью системы; applies immediately. Текущую цифру смотреть в Statistics → Memory → Core memory |
+| `app/assets/l10n/{ru,zh}/ui.json` | новая подсказка, «Core memory», подпись строки |
 | `docs/USER_GUIDE.md`, `.ru.md` | раздел Memory limit: порог по памяти ядра с lx.29; где смотреть; Auto по-прежнему без порога |
 | `docs/STORAGE.md` | комментарий `memory_limit`: threshold on the core's runtime memory (core lx.29+) |
 | `docs/spec/features/012-LIVE_STATE/FUNCTIONS/traffic-statistics.md` | пункт про «Memory = весь процесс»: добавить, что Core runtime в шторке — память ядра |
@@ -185,7 +185,7 @@ Wire-протокол §189 не меняется: в prefs по-прежнем�
 ### Проверка части 2
 
 - Эмулятор, лимит 200: лог ядра без `memory threshold reached` на старте;
-  Statistics → Memory → `Core runtime ~40 MB / 200 MB`, RSS прежний.
+  Statistics → Memory → `Core memory ~40 MB / 200 MB`, RSS прежний.
 - Лимит Auto: строка без дроби.
 - У пользователя с WARP-группой — то же на его устройстве (после релиза).
 
