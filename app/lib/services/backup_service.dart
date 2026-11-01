@@ -81,6 +81,7 @@ const _topLevelAppKeys = {
   'node_manual_order',
   'profiler_retention_sec', // §219/§221 — окно Live-журнала (был в allowlist, не в export)
   'editor_magnifier', // §660 — лупа выделения редактора кода
+  'mixin_target_suggestions', // §704 — подсказки поля Target формы миксина
 };
 
 /// Sub-keys внутри `vars` относящиеся к Debug API category.

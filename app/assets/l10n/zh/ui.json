@@ -6528,6 +6528,9 @@
   "Target": {
     "value": "目标"
   },
+  "Suggestions": {
+    "value": "提示"
+  },
   "Whole node": {
     "value": "整个节点"
   },

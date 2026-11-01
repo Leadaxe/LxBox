@@ -11,6 +11,7 @@ import '../services/mixins/mixin_apply.dart';
 import '../services/mixins/mixin_path.dart';
 import '../services/mixins/mixin_preview.dart';
 import '../services/mixins/mixin_suggest.dart';
+import '../services/settings_storage.dart';
 import '../services/ui_helpers.dart';
 import '../widgets/app_bottom_sheet.dart';
 import '../widgets/lx_code_editor.dart';
@@ -68,6 +69,12 @@ class _MixinEditScreenState extends State<MixinEditScreen> {
   /// Конфиг, который миксин увидит при сборке; `null` — не собирали.
   Map<String, dynamic>? _base;
 
+  /// Подсказки Target (значок в поле): одна настройка на приложение,
+  /// `null` — ещё не прочитана (считается включённой).
+  static bool? _suggestOn;
+  static Future<void>? _suggestWarm;
+  static bool get _suggestEnabled => _suggestOn ?? true;
+
   @override
   void initState() {
     super.initState();
@@ -92,6 +99,28 @@ class _MixinEditScreenState extends State<MixinEditScreen> {
     }
     _target.addListener(_onTargetChanged);
     _targetFocus.addListener(_onTargetChanged);
+    if (_suggestOn == null) unawaited(_warmSuggest());
+  }
+
+  Future<void> _warmSuggest() async {
+    await (_suggestWarm ??= () async {
+      try {
+        final v = await SettingsStorage.getMixinTargetSuggestions();
+        _suggestOn ??= v;
+      } catch (_) {}
+    }());
+    if (mounted) setState(() {});
+  }
+
+  /// Значок у Target: вкл/выкл подсказок, запоминается между открытиями.
+  void _toggleSuggest() {
+    final on = !_suggestEnabled;
+    setState(() => _suggestOn = on);
+    unawaited(() async {
+      try {
+        await SettingsStorage.setMixinTargetSuggestions(on);
+      } catch (_) {}
+    }());
   }
 
   @override
@@ -200,7 +229,7 @@ class _MixinEditScreenState extends State<MixinEditScreen> {
 
   MixinPathSuggestions _suggestions() {
     final base = _base;
-    if (base == null || !_targetFocus.hasFocus) {
+    if (base == null || !_suggestEnabled || !_targetFocus.hasFocus) {
       return MixinPathSuggestions.none;
     }
     final sel = _target.selection;
@@ -326,6 +355,14 @@ class _MixinEditScreenState extends State<MixinEditScreen> {
                 // l10n-exempt: path example
                 hintText: 'route.rules[action=hijack-dns]',
                 isDense: true,
+                suffixIcon: IconButton(
+                  key: const ValueKey('mixin-target-suggest-toggle'),
+                  tooltip: getLocalText.s("Suggestions"),
+                  icon: Icon(_suggestEnabled
+                      ? Icons.lightbulb
+                      : Icons.lightbulb_outline),
+                  onPressed: _toggleSuggest,
+                ),
               ),
             ),
             if (suggestions.items.isNotEmpty)

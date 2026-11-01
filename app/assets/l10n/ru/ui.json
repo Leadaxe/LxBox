@@ -6816,6 +6816,9 @@
   "Target": {
     "value": "Цель"
   },
+  "Suggestions": {
+    "value": "Подсказки"
+  },
   "Whole node": {
     "value": "Узел целиком"
   },

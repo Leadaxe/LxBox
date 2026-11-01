@@ -239,6 +239,7 @@ class SettingsStorage {
     'node_manual_order',
     'profiler_retention_sec', // §044/new-profiler — окно хранения Live-журнала
     'editor_magnifier', // §660 — лупа выделения редактора кода
+    'mixin_target_suggestions', // §704 — подсказки поля Target формы миксина
   };
 
   /// Var-ключи, которые живут ТОЛЬКО в коде (app feature-flags), а НЕ в
@@ -700,6 +701,20 @@ class SettingsStorage {
   static Future<void> setEditorMagnifier(bool value) async {
     final c = await _load();
     c['editor_magnifier'] = value;
+    SettingsStorage._cache = c;
+    await _save();
+  }
+
+  /// §704 — подсказки автодополнения у поля Target формы миксина (значок
+  /// справа в поле). Не config-significant → без markConfigDirty. Default true.
+  static Future<bool> getMixinTargetSuggestions() async {
+    final c = await _load();
+    return c['mixin_target_suggestions'] != false;
+  }
+
+  static Future<void> setMixinTargetSuggestions(bool value) async {
+    final c = await _load();
+    c['mixin_target_suggestions'] = value;
     SettingsStorage._cache = c;
     await _save();
   }
