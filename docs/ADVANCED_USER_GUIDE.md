@@ -26,10 +26,12 @@ rules, the Debug API and the Automation API.
   - [Limits](#limits)
 - [Other tools for advanced users](#other-tools-for-advanced-users)
   - [Manual edit in Config Editor and Lock config](#manual-edit-in-config-editor-and-lock-config)
-  - [Raw JSON rules](#raw-json-rules)
+  - [Lock config pins a manual config](#lock-config-pins-a-manual-config)
+  - [Raw JSON and the View tab cover fields the form lacks](#raw-json-and-the-view-tab-cover-fields-the-form-lacks)
   - [Import rules on a subscription's Filters tab](#import-rules-on-a-subscriptions-filters-tab)
   - [Debug API](#debug-api)
-  - [Automation API](#automation-api)
+  - [Automation: the VPN turns on by events](#automation-the-vpn-turns-on-by-events)
+  - [Automation opens the VPN to commands from other apps](#automation-opens-the-vpn-to-commands-from-other-apps)
 
 ---
 
@@ -386,40 +388,137 @@ The formal description of the function —
 ### Manual edit in Config Editor and Lock config
 
 The Config tab edits the built config by hand; the edit lasts until the next
-rebuild. Lock config (debug) pins the saved config and stops rebuilds. Both
-are described in the User guide:
-[Config Editor edits the core config until the next rebuild](USER_GUIDE.md#config-editor-edits-the-core-config-until-the-next-rebuild)
-and [Lock config pins a manual config](USER_GUIDE.md#lock-config-pins-a-manual-config).
+rebuild. Lock config (debug) pins the saved config and stops rebuilds. The
+manual edit is described in the User guide:
+[Config Editor edits the core config until the next rebuild](USER_GUIDE.md#config-editor-edits-the-core-config-until-the-next-rebuild);
+Lock config — [below](#lock-config-pins-a-manual-config).
 
-### Raw JSON rules
+### Lock config pins a manual config
 
-A rule in Rules can be written as a sing-box `route.rules` fragment, and such
-a rule survives rebuilds like any other. For one rule this is simpler than a
-mixin; a mixin is needed when the rule must stand in a specific place among
-the template's rules or change existing rules. See
-[Raw JSON and the View tab cover fields the form lacks](USER_GUIDE.md#raw-json-and-the-view-tab-cover-fields-the-form-lacks).
+The **Lock config (debug)** setting stops the app from rebuilding the
+config: interface actions change the settings, and the config file stays as
+you saved it. Where: App Settings → Diagnostics → Lock config (debug). The
+switch is visible only when Debug API is on. Off by default. When on, the
+switch reads `Pinned. UI actions skip config rebuild — useful
+when testing PUT /config overrides.` Turning Debug API off removes the pin
+as well.
+
+> ⚠️ With Lock config on, changes to rules, directions and DNS and
+> subscription updates do not reach the config: the VPN runs on the pinned
+> file. To make settings apply again, turn Lock config off.
+
+### Raw JSON and the View tab cover fields the form lacks
+
+You can write a rule as a sing-box `route.rules` JSON fragment: choose Raw
+JSON in Source. The JSON itself sets the action; the editor checks the syntax
+as you type.
+
+For a form-built rule, the **View** tab shows the finished sing-box fragment
+that goes into the config.
 
 ### Import rules on a subscription's Filters tab
 
-Import rules change nodes of a subscription as they arrive: disable, enable
-or replace a value at a path, with regex conditions. They work on one
-subscription's nodes before the build; mixins work on the whole config after
-it. See
-[The subscription screen has four tabs: Nodes, Settings, Source, Filters](USER_GUIDE.md#the-subscription-screen-has-four-tabs-nodes-settings-source-filters).
+The **Filters** tab holds node-processing rules; the rules apply on import
+and on every update. A rule is a set of conditions plus an action. A
+condition reads `path operator value`, where the operator is contains,
+equals or matches (regex). The Not and Case-sensitive checkboxes refine a
+condition, and several conditions combine by AND or OR. An empty path
+searches the whole node. There are three actions:
+
+| Action | What it does |
+|---|---|
+| Disable | Removes matching nodes from routing |
+| Enable | Brings them back, clearing manual disabling too |
+| Replace | Writes a new value at the given path — whole or in part, with `$1`, `$2`… groups from the regex: this fixes a non-standard TLS fingerprint across all nodes at once |
+
+Rules apply in order, and the last one that matched wins: the pair "disable
+everything → enable NL" works as a whitelist. The **Matches** tab in the
+rule editor shows which nodes a rule will apply to and what it will change,
+before you save.
 
 ### Debug API
 
-An HTTP server on the phone's `127.0.0.1` for reading the state, logs and
-config and for controlling the VPN from a computer over `adb forward`, with an
-access token. Where it is turned on —
-[Diagnostics shows Android permissions and turns on debugging](USER_GUIDE.md#diagnostics-shows-android-permissions-and-turns-on-debugging);
-requests — [debug-api-reference.md](api/debug-api-reference.md); the
-diagnostics playbook — [DIAGNOSTICS.md](DIAGNOSTICS.md).
+Where: App Settings → Diagnostics → Developer → Debug API.
 
-### Automation API
+**Debug API** starts an HTTP server through which a computer reads the app's
+state, logs and config and controls the VPN. The server listens only on the
+phone's `127.0.0.1` address; the computer connects to it with the command
+`adb forward tcp:9269 tcp:9269`. When you first turn it on, the app creates
+an access token. The token is visible only on this screen and stays out of
+Backup by default; Copy copies it, Regenerate creates a new one. The Port
+field accepts values from 1024 to 49151. The default port is `9269` — the
+same as in the adb forward command.
 
-Commands and events for Tasker, MacroDroid and other automation apps on the
-phone itself: no computer and no token. See
-[Automation: the VPN turns on by events](USER_GUIDE.md#automation-the-vpn-turns-on-by-events)
-and the full list of commands, events and recipes in
-[AUTOMATION.md](AUTOMATION.md).
+> 📖 [debug-api-reference.md](api/debug-api-reference.md) — Debug API
+> requests and their responses.
+
+**Lock config (debug)** pins the config loaded through the Debug API:
+actions in the interface do not rebuild it. Turning Debug API off also
+removes the pin.
+
+> ⚠️ While the config is pinned, edits in Routing, DNS and on servers do not
+> reach the tunnel. Turn off Lock config (debug), and the next action in the
+> interface rebuilds the config from the settings.
+
+The diagnostics playbook — [DIAGNOSTICS.md](DIAGNOSTICS.md).
+
+### Automation: the VPN turns on by events
+
+Automation apps — Tasker, MacroDroid, Llama, Automate — control L×Box: they
+turn the VPN on and off and switch servers by events, without the phone
+owner's involvement. Typical scenarios:
+
+- connecting to the home Wi-Fi turns the VPN off, connecting to someone else's
+  or a public one turns it on;
+- launching a specific app switches to the server or direction it needs;
+- a schedule or a geofence turns the tunnel on and off.
+
+Command intake is off by default. Where: App Settings → **Automation** →
+Accept automation commands. The same tab allows L×Box to broadcast its events:
+connected, disconnected, subscription updated. Then pick L×Box as a plugin in
+the automation app and choose a command: Start VPN, Stop VPN, Toggle VPN or
+Custom… — seven commands, Switch node and Refresh subscriptions among them.
+
+> 📖 [AUTOMATION.md](AUTOMATION.md) — the full list of commands and events and
+> ready-made recipes, including control from shell and ADB.
+
+### Automation opens the VPN to commands from other apps
+
+The **Automation** tab lets Tasker, MacroDroid and other automation apps
+control L×Box and receive its events. Scenarios and setup steps are in
+[Automation](#automation-the-vpn-turns-on-by-events); below is what the tab
+offers beyond that. Where: App Settings → Automation.
+
+The **Accept automation commands** option is off by default. Turning it on
+shows the Enable command receiver? dialog. While the option is on, any app
+on the phone can control the VPN with broadcast commands. Turn it off if you
+do not use an automation app.
+
+The **Commands (intent actions)** list holds 10 commands, each with a copy
+button. Paste the string into the automation app's Send Intent action, with
+Broadcast Receiver as the target. Four commands take a parameter:
+
+| Command | Parameter |
+|---|---|
+| `com.leadaxe.lxbox.SWITCH_NODE` | `tag` — the node tag |
+| `com.leadaxe.lxbox.SET_GROUP` | `group` — the group tag, for example `vpn-1` |
+| `com.leadaxe.lxbox.URLTEST_GROUP` | `group` — the group tag, for example `vpn-1` |
+| `com.leadaxe.lxbox.REFRESH_SUBS` | `force` |
+
+The **Outbound events (emit)** section sends L×Box events outward. There
+are three categories, all off by default:
+
+| Category | Events |
+|---|---|
+| Lifecycle | `VPN_CONNECTED`, `DISCONNECTED`, `ERROR`, `REVOKED`, `UPDATE_AVAILABLE`, `PERMISSION_NEEDED` |
+| State | `ACTIVE_NODE_CHANGED`, `ACTIVE_GROUP_CHANGED`, `NODE_ALREADY_ACTIVE` |
+| Subscription | `SUB_REFRESHED`, `SUB_REFRESH_FAILED` |
+
+Turning on a category for the first time shows the Emitting events outward
+dialog: other apps see the events, but the events carry no subscription or
+config secrets — only node tags, group names and status. For the automation
+app to learn a command's result, turn on Lifecycle and State: success
+arrives in State, failure as the `VPN_ERROR` event in Lifecycle.
+
+The **Documentation and Tasker recipes** button opens the full list of
+commands and events with ready-made recipes.
