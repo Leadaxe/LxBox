@@ -121,6 +121,19 @@
   DNS. Значения по умолчанию прежние: UDP на 77.88.8.8, DoT и DoH на
   77.88.8.88.)
 
+- **Full-screen node filter picker in the Direction editor
+  ([task 702](docs/spec/tasks/702-direction-node-filter-picker.md)).** A
+  button to the right of Node filter opens a full screen: the regex field
+  with `!`, the emoji found in the node names with a count for each (a tap
+  adds the emoji to the pattern, a second tap removes it), and the whole
+  node list with the matched nodes on top marked ✓ and the rest marked ✗.
+  ✓ in the top bar puts the pattern back into the editor.
+  (RU: Полноэкранный подбор фильтра узлов в редакторе Направления. Кнопка
+  справа от Node filter открывает экран: поле regex с `!`, эмодзи из имён
+  узлов с числом узлов у каждого (тап добавляет эмодзи в паттерн, повторный
+  убирает) и полный список узлов: совпавшие сверху с ✓, остальные с ✗. ✓ в
+  верхней панели возвращает паттерн в редактор.)
+
 ### Changed
 
 - **Core `v1.14.4-lx.25` → `v1.14.4-lx.26`
