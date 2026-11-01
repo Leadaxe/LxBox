@@ -172,16 +172,20 @@
 
 ### Changed
 
-- **Core `v1.14.4-lx.25` → `v1.14.4-lx.26`
+- **Core `v1.14.4-lx.25` → `v1.14.4-lx.27`
   ([docs/KERNEL.md](docs/KERNEL.md)).** A DNS group can list `hosts`
   servers that answer the names they know before the group's servers
   (Leadaxe/sing-box-lx#60). MTU alignment fixes: a proxy node inside a group no
   longer lowers the MTU of a tunnel above the group, and tunnels carrying IPv6
-  are never set below 1280. No config changes.
-  (RU: Ядро `v1.14.4-lx.25` → `v1.14.4-lx.26`. DNS-группа может спрашивать
+  are never set below 1280. WireGuard/AWG peer status is reported per
+  session: after a node is turned on or wakes up, the last handshake and the
+  session byte counters start from zero. No config changes.
+  (RU: Ядро `v1.14.4-lx.25` → `v1.14.4-lx.27`. DNS-группа может спрашивать
   серверы `hosts` раньше своих серверов; поправки выравнивания MTU: прокси-узел
   в группе больше не занижает MTU туннеля над группой, туннели с IPv6 не
-  опускаются ниже 1280. Конфиг не меняется.)
+  опускаются ниже 1280. Статус пира WireGuard/AWG отдаётся по сессиям: после
+  включения или пробуждения узла последний хендшейк и счётчики байт сессии
+  начинаются с нуля. Конфиг не меняется.)
 - **Default TUN MTU is 9000 instead of 1492
   ([task 700](docs/spec/tasks/700-tun-mtu-default-9000.md)).** 9000 is the
   sing-box default; the tunnel interface is virtual, and the core re-sends TCP
@@ -251,6 +255,52 @@
   (RU: Строка узла прыгала по высоте во время пинга. Строка узла без
   подзаголовка (например, `direct`) схлопывалась и раскрывалась вместе с
   бейджем пинга; теперь высота строки во время пинга держится.)
+
+- **A WireGuard/AWG peer showed «connected» when the server did not answer
+  ([task 613](docs/spec/tasks/613-wg-peers-tailscale-path-health.md)).**
+  The peer on the node screen was green while its last handshake was under
+  three minutes old, so two cases looked alive: a new server picked in the
+  group the node goes through that does not pass the traffic, and a node
+  just turned off and on, whose session had been destroyed. Now a peer that
+  sends but gets nothing back for about 8 seconds is orange, «no response».
+  After the node is turned on or wakes up, the peer shows «never connected»
+  until a new handshake, and ↓/↑ count only the current session.
+  (RU: Пир WireGuard/AWG показывал «connected», когда сервер не отвечал.
+  На экране узла пир был зелёным, пока последнему хендшейку меньше трёх
+  минут, поэтому живыми выглядели два случая: новый сервер в группе, через
+  которую идёт узел, не пропускает трафик; узел только что выключили и
+  включили, и его сессия уже уничтожена. Теперь пир, который шлёт, но
+  около 8 секунд ничего не получает в ответ, оранжевый — «no response».
+  После включения или пробуждения узла пир показывает «never connected» до
+  нового хендшейка, а ↓/↑ считают только текущую сессию.)
+
+- **Start failed with «initialize cache-file: timeout»
+  ([task 703](docs/spec/tasks/703-cache-db-lock-timeout-retry.md)).** When
+  the previous core instance hung while shutting down, it still held the
+  cache file, and the next start (also after restoring a backup) waited for
+  it and failed. On this error the app now deletes the cache file and starts
+  once more; the same applies to node checks. What the cache held is lost:
+  FakeIP addresses, the nodes selected in groups, downloaded rule sets (the
+  core fetches them again) and ping history.
+  (RU: Старт падал с «initialize cache-file: timeout». Когда прежний
+  экземпляр ядра зависал при остановке, он продолжал держать файл кэша, и
+  следующий старт (в том числе после восстановления из бэкапа) ждал его и
+  падал. На этой ошибке приложение теперь удаляет файл кэша и запускается
+  ещё раз; то же для проверки узлов. Содержимое кэша теряется: адреса
+  FakeIP, выбранные узлы в группах, скачанные rule set (ядро скачает их
+  заново) и история пингов.)
+
+- **The WARP endpoint picked in the wizard was replaced
+  ([task 386](docs/spec/tasks/386-warp-endpoint-preset-combobox.md)).**
+  Choosing `engage.cloudflareclient.com:2408` in the list was treated as
+  «nothing chosen», and the node got a random endpoint, the address from
+  the Cloudflare response or the one cached from an earlier registration.
+  An explicitly chosen endpoint is now kept.
+  (RU: Выбранный в мастере WARP-эндпоинт подменялся. Выбор
+  `engage.cloudflareclient.com:2408` в списке считался «ничего не выбрано»,
+  и узел получал случайный эндпоинт, адрес из ответа Cloudflare или
+  закешированный с прошлой регистрации. Явно выбранный эндпоинт теперь
+  сохраняется.)
 
 ## [2.25.18] — 2026-10-29
 
