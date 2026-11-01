@@ -50,3 +50,6 @@ app.*.map.json
 # SPEC 103 — вендоренная копия контракта (tool/sync_contract.sh) закоммичена
 # (решение владельца 29.09.2026): без неё CI пропускал корпус и схему.
 # Источник правды — contract/ в репозитории singbox-launcher; руками не править.
+
+# Сборки тест-файлов для CI (tool/gen_test_bundles.dart)
+/test_bundle/

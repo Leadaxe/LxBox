@@ -324,6 +324,9 @@ class SettingsStorage {
   static void resetCacheForTesting() {
     _cache = null;
     _pendingSave = null;
+    // Чтение, начатое прошлым тестом (часто в fake-async зоне testWidgets),
+    // может не завершиться никогда — следующий `_load()` ждал бы его вечно.
+    _loadInFlight = null;
     _mainIsCorrupted = false;
     _corruptionLogged = false;
     configDirty = false; // §113

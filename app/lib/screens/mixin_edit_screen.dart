@@ -42,6 +42,13 @@ class MixinEditScreen extends StatefulWidget {
     this.subController,
   });
 
+  /// Сброс кэша настройки подсказок Target — между тест-файлами в общей сборке.
+  @visibleForTesting
+  static void debugResetSuggest() {
+    _MixinEditScreenState._suggestOn = null;
+    _MixinEditScreenState._suggestWarm = null;
+  }
+
   /// `null` — новый миксин (встаёт в конец списка).
   final Mixin? initial;
 
