@@ -134,6 +134,15 @@
   убирает) и полный список узлов: совпавшие сверху с ✓, остальные с ✗. ✓ в
   верхней панели возвращает паттерн в редактор.)
 
+- **Debug API: the selected node of every group.** `GET /state` gets
+  `group_selected`: group tag → the node the core has selected, for every
+  selector and urltest group (each Direction and its `-auto` group), not
+  only for the Direction open on the home screen (`active_in_group`).
+  (RU: Debug API: выбранный узел каждой группы. В `GET /state` добавлено
+  поле `group_selected`: тег группы → узел, выбранный ядром, для каждой
+  selector- и urltest-группы (каждое Направление и его `-auto`), а не только
+  для Направления, открытого на главной (`active_in_group`).)
+
 ### Changed
 
 - **Core `v1.14.4-lx.25` → `v1.14.4-lx.26`
