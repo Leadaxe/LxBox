@@ -71,6 +71,9 @@ lxbox_settings.json                          # SettingsStorage (Dart), the main 
 │   ├─ servers[]                 list          {kind: user|preset|template, …}; user with a template tag = override (§117/§695)
 │   └─ rules[]                   list          {kind: user|preset|srs|template, …}
 │
+├─ mixins[]                      list?         §704 — user inserts into the final core config, in apply order
+│   └─ <Mixin>                   object          {id, name, enabled, target, op, value}
+│
 ├─ ping_options                  object          §040
 │   ├─ url                       string?       global default URL
 │   ├─ timeout_ms                int?          global default timeout
@@ -201,6 +204,7 @@ Android SharedPreferences:
   "sources":            [ … ],     // §439 — subscription / server / folder records, then chain records
   "rules":              [ … ],     // §439 — route rule records: inline / srs / preset
   "dns":                { … },     // §439 — {servers[], rules[]} records
+  "mixins":             [ … ],     // §704 — user inserts into the final core config (config-significant)
   "ping_options":       { … },
   "route_final":        "<tag>",   // override route.final
   "route_idle_suspend": "30s",     // §215/§128 — idle-suspend threshold (default "30s"; "" = off)
@@ -447,7 +451,7 @@ A flat `Map<String, String>` (values are stringified on read). It serves both **
 
 A full replace (`replaceRaw` with `merge=false`: backup restore in Replace mode, `POST /backup/import`) keeps some device keys from the current storage when the incoming `vars` lack them: `debug_enabled` / `debug_token` / `debug_port` (§413, `SettingsStorage.debugApiVarKeys`) and the one-shot startup prompt flags `wizard_battery_v1`, `wizard_addtile_v1`, `wizard_update_check_v1`, `notif_perm_prompted_v1` (§447, `SettingsStorage.startupPromptVarKeys`). None of the four startup prompt flags is in the import allowlist, so a file never brings them; import (both modes) skips them silently instead of reporting them as unknown keys (§600), while export still writes them.
 
-A merge (`replaceRaw` with `merge=true`: backup restore in Merge mode, `POST /backup/import?merge=true`) adds what the receiver lacks and keeps what it has (§633, `lib/services/backup_merge.dart`): `vars` and every other scalar key keep the receiver's value, a key the receiver lacks comes from the file; `rules`, `directions`, `dns.servers`, `dns.rules` and `sources` are merged by record identity (preset rule — `ref`; other rules and DNS rules — `id` or content; directions, DNS servers, chains — tag; other sources — `id`), new records are appended, new user rules get `num` past the receiver's last user rule; a preset rule is on when it is on on either side; `tun_apps` joins the packages and keeps the receiver's mode unless it is `off`. A record whose tag is taken by a receiver's chain or direction is skipped.
+A merge (`replaceRaw` with `merge=true`: backup restore in Merge mode, `POST /backup/import?merge=true`) adds what the receiver lacks and keeps what it has (§633, `lib/services/backup_merge.dart`): `vars` and every other scalar key keep the receiver's value, a key the receiver lacks comes from the file; `rules`, `directions`, `dns.servers`, `dns.rules`, `mixins` and `sources` are merged by record identity (mixin — `id` or `target`+`op`+`value`; preset rule — `ref`; other rules and DNS rules — `id` or content; directions, DNS servers, chains — tag; other sources — `id`), new records are appended, new user rules get `num` past the receiver's last user rule; a preset rule is on when it is on on either side; `tun_apps` joins the packages and keeps the receiver's mode unless it is `off`. A record whose tag is taken by a receiver's chain or direction is skipped.
 
 `removeVar(k)` is not the same as `setVar(k, '')` — an empty string can be a legitimate value, while an absent key falls back to the default.
 
@@ -1583,6 +1587,41 @@ After the migration the set of directions lives in `directions[]` and is edited 
 Specs: [`docs/spec/tasks/125F-configurable-channels/`](spec/tasks/125F-configurable-channels/),
 [`docs/spec/tasks/248F-detour-channels/`](spec/tasks/248F-detour-channels/)
 (the detour layer).
+
+---
+
+## `mixins` — §704, user inserts into the final core config
+
+A list of stored operations over the final config, applied in list order as the
+last build step (`applyMixins`, `lib/services/mixins/mixin_apply.dart`): after
+`sanitizeOutboundGraph`, before `validateConfig`. No key = no mixins (`setMixins([])`
+removes the key).
+
+```jsonc
+"mixins": [
+  {
+    "id": "uuid-v4",                          // generated; a backup import assigns a new one
+    "name": "Hijack DNS from dns-in",         // may be empty: the list shows "target → op"
+    "enabled": true,                          // a disabled mixin is skipped by the build
+    "target": "route.rules[action=hijack-dns]", // path language of spec 704 §3; "" = the root
+    "op": "before",                           // append|prepend|before|after|set|merge|remove
+    "value": {"inbound": ["dns-in"], "action": "hijack-dns"} // any JSON; remove: true or ["key", "a.b"]
+  }
+]
+```
+
+- Writes go through `SettingsStorage.setMixins` (the whole list) and mark the
+  config dirty (§113, config-significant). Reading is tolerant: a missing `id`
+  gets a new one, broken fields fall back to defaults, an unknown `op` survives
+  reading and becomes a build issue.
+- A mixin that fails (no match, wrong target type, unparsable path, a duplicate
+  tag in `inbounds` / `outbounds`+`endpoints` / `dns.servers`) is a fatal
+  `MixinIssue` (`lib/models/validation.dart`) carrying `mixinId`: the config is
+  not built, the mixin stays enabled.
+- Backup category: Routing. LX Backup: root section `mixins` without `id`.
+- Debug API: `/mixins` CRUD (`docs/api/debug-api-reference.md`).
+
+Spec: [`docs/spec/tasks/704-config-mixins.md`](spec/tasks/704-config-mixins.md).
 
 ---
 

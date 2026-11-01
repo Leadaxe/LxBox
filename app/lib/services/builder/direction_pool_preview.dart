@@ -53,6 +53,7 @@ Future<BuildSettings> readStoredBuildSettings({
       wgLazyBuild: await SettingsStorage.getWgLazyBuild(), // §542
       tailscaleStateRoot: tailscaleStateRoot,
       tailscaleStateDirs: tailscaleStateDirs,
+      mixins: await SettingsStorage.getMixins(), // §704
     );
 
 /// Списки источников так, как их видит сборка: §565 / задача 570 — выбор

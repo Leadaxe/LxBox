@@ -22,6 +22,10 @@ const String kSourcesKey = 'sources';
 /// Правила маршрута.
 const String kRulesKey = 'rules';
 
+/// §704 — миксины: пользовательские вставки в итоговый конфиг ядра,
+/// список в порядке применения.
+const String kMixinsKey = 'mixins';
+
 /// DNS-записи: объект `{servers[], rules[]}`.
 const String kDnsKey = 'dns';
 

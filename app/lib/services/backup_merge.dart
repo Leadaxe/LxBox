@@ -54,6 +54,10 @@ StorageMergeStats mergeStorageDoc(
       _mergeDns(current[key] = _map(have), value, stats);
       continue;
     }
+    if (key == kMixinsKey && value is List && have is List) {
+      _mergeMixins(current[key] = _list(have), value, stats.mixins);
+      continue;
+    }
     if (key == 'tun_apps' && value is Map && have is Map) {
       _mergeTunApps(current[key] = _map(have), value, stats.tunApps);
       continue;
@@ -126,6 +130,9 @@ class StorageMergeStats {
   final dnsServers = MergeCount();
   final dnsRules = MergeCount();
 
+  /// §704 — миксины итогового конфига.
+  final mixins = MergeCount();
+
   /// Пакеты Tunnel apps.
   final tunApps = MergeCount();
 
@@ -144,6 +151,7 @@ class StorageMergeStats {
     'dns_servers': dnsServers.toJson(),
     'dns_rules': dnsRules.toJson(),
     'tun_apps': tunApps.toJson(),
+    'mixins': mixins.toJson(),
     'keys': {'added': addedKeys.length, 'kept': keptKeys.length},
   };
 }
@@ -161,6 +169,9 @@ int? _countFor(String key, Object value, StorageMergeStats stats) {
     n = value.length;
   } else if (key == kSourcesKey && value is List) {
     c = stats.sources;
+    n = value.length;
+  } else if (key == kMixinsKey && value is List) {
+    c = stats.mixins;
     n = value.length;
   } else if (key == 'tun_apps' && value is Map) {
     c = stats.tunApps;
@@ -275,6 +286,35 @@ void _mergeDirections(
     }
     have.add(deepCloneJson(d));
     tags.add(tag);
+    c.added++;
+  }
+}
+
+// ─────────────────────────────── миксины ───────────────────────────────
+
+/// §704 — миксин файла добавляется в конец, если у получателя нет ни того
+/// же `id`, ни того же тела (`target`+`op`+`value`): своя запись остаётся.
+void _mergeMixins(List have, List incoming, MergeCount c) {
+  String body(Map m) => jsonEncode([m['target'], m['op'], m['value']]);
+  final ids = <String>{};
+  final bodies = <String>{};
+  for (final m in have) {
+    if (m is! Map) continue;
+    final id = m['id'];
+    if (id is String && id.isNotEmpty) ids.add(id);
+    bodies.add(body(m));
+  }
+  for (final m in incoming) {
+    if (m is! Map) continue;
+    final id = m['id'];
+    final b = body(m);
+    if ((id is String && ids.contains(id)) || bodies.contains(b)) {
+      c.kept++;
+      continue;
+    }
+    have.add(deepCloneJson(m));
+    if (id is String && id.isNotEmpty) ids.add(id);
+    bodies.add(b);
     c.added++;
   }
 }

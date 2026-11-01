@@ -50,6 +50,7 @@ const _topLevelRoutingKeys = {
   'tun_apps',
   'vpn_mode',
   kDnsKey,
+  kMixinsKey, // §704 — миксины итогового конфига
 };
 
 // §524 — КАТЕГОРИЯ ЭКСПОРТА ЦЕПОЧКИ: Server lists, наравне с одиночными и
@@ -664,6 +665,7 @@ class BackupService {
       stats.dnsServers,
       stats.dnsRules,
       stats.tunApps,
+      stats.mixins, // §704
     ]) {
       addTo(BackupCategory.routing, c);
     }

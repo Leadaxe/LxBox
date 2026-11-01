@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import '../../models/direction.dart';
+import '../../models/mixin.dart';
 import '../../models/custom_rule.dart';
 import '../../models/dns_ref.dart';
 import '../../models/emit_context.dart';
@@ -26,6 +27,7 @@ import '../template_loader.dart';
 import 'chain_nodes.dart';
 import 'core_chain_capability.dart';
 import 'if_engine.dart';
+import '../mixins/mixin_apply.dart';
 import 'node_link_resolve.dart';
 import 'rule_order.dart';
 import 'post_steps.dart';
@@ -86,9 +88,16 @@ class BuildResult {
   /// [nodeByEmittedTag]: группа — не узел. Экран ищет по нему значки пула.
   final Map<String, AutoSelectSpec> groupByEmittedTag;
 
+  /// §704 — конфиг до миксинов (`null` — список миксинов пуст, совпадает с
+  /// [config]). База предпросмотра и подсказок формы миксина: собранный
+  /// конфиг уже несёт включённые миксины, и предпросмотр по нему применил
+  /// бы миксин дважды.
+  final Map<String, dynamic>? configBeforeMixins;
+
   const BuildResult({
     required this.configJson,
     required this.config,
+    this.configBeforeMixins,
     required this.validation,
     required this.emitWarnings,
     required this.generatedVars,
@@ -181,6 +190,11 @@ class BuildSettings {
   /// индекса нет (тесты, сбой): имя по финальному тегу, как в 2.24.0.
   final Map<NodeSpec, String>? tailscaleStateDirs;
 
+  /// §704 — миксины итогового конфига в порядке применения (выключенные
+  /// пропускаются). Применяются последним шагом сборки, после
+  /// `sanitizeOutboundGraph`, до `validateConfig`.
+  final List<Mixin> mixins;
+
   const BuildSettings({
     this.userVars = const {},
     this.enabledGroups = const {},
@@ -198,6 +212,7 @@ class BuildSettings {
     this.wgLazyBuild = true,
     this.tailscaleStateRoot = '',
     this.tailscaleStateDirs,
+    this.mixins = const [],
   });
 }
 
@@ -1092,12 +1107,21 @@ Future<BuildResult?> _buildConfig({
     }
   }
 
-  final validation = validateConfig(config);
+  // §704 — миксины: сырой обход последним шагом. Санитайзер реестра и
+  // автоснятия их не видят, валидатор видит результат. Отказ миксина (нет
+  // совпадений, тип цели, дубль тега) — fatal-issue: конфиг не собирается.
+  final mixed = applyMixins(config, settings.mixins);
+  final built = mixed.config;
+  final checked = validateConfig(built);
+  final validation = mixed.issues.isEmpty
+      ? checked
+      : ValidationResult([...mixed.issues, ...checked.issues]);
   // §555 — записи template_degraded идут первыми (паритет с «Итогом» desktop).
   final templateItems = templateWarnings.items;
   return BuildResult(
-    configJson: jsonEncode(config),
-    config: config,
+    configJson: jsonEncode(built),
+    config: built,
+    configBeforeMixins: settings.mixins.isEmpty ? null : config,
     validation: validation,
     emitWarnings: [
       for (final w in templateItems) _renderTemplateWarning(w),

@@ -15,6 +15,7 @@ import '../models/dns_ref.dart';
 import '../models/source_chain.dart';
 import '../models/source_entry.dart';
 import '../models/memory_limit_setting.dart';
+import '../models/mixin.dart';
 import '../models/custom_rule.dart';
 import '../models/parser_config.dart';
 import '../models/server_list.dart';
@@ -36,6 +37,7 @@ part 'settings_storage/io.dart';
 part 'settings_storage/vars.dart';
 part 'settings_storage/sources_rules.dart';
 part 'settings_storage/directions.dart';
+part 'settings_storage/mixins.dart';
 part 'settings_storage/chains.dart';
 part 'settings_storage/network.dart';
 part 'settings_storage/backup_tun.dart';
@@ -209,6 +211,7 @@ class SettingsStorage {
     kSourcesKey, // §439 — источники, хвостом цепочки (§393 C2)
     kRulesKey,
     kDnsKey,
+    kMixinsKey, // §704 — миксины итогового конфига
     'ping_options',
     'route_final',
     'route_idle_suspend', // §215 — idle-suspend threshold (lx.wg.idle_suspend)
@@ -443,6 +446,14 @@ class SettingsStorage {
   // ---------------------------------------------------------------------------
 
   static Future<List<Direction>> getDirections() => _getDirections();
+
+  /// §704 — миксины итогового конфига в порядке применения.
+  static Future<List<Mixin>> getMixins() => _getMixins();
+
+  /// §704 — весь список целиком (добавление, правка, порядок, удаление —
+  /// перезапись). Config-significant: [markConfigDirty].
+  static Future<void> setMixins(List<Mixin> mixins, {bool flush = true}) =>
+      _setMixins(mixins, flush: flush);
 
   /// §292 — код приложения зовёт `DirectionMutations.bulkReplace`: bulk-overwrite
   /// мимо heal'а допустим только там, где ссылка структурно не может повиснуть

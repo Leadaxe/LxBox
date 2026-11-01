@@ -223,6 +223,7 @@ Future<GoldenBuild> buildGoldenConfig(StorageSandbox box) async {
     wgBuildMax: await SettingsStorage.getWgBuildMax(),
     wgLazyBuild: await SettingsStorage.getWgLazyBuild(),
     tailscaleStateRoot: kGoldenTailscaleStateRoot,
+    mixins: await SettingsStorage.getMixins(), // §704 — у rich_v0 ключа нет
   );
   final lists = controller.entries.map((e) => e.list).toList();
   final result = await buildConfig(lists: lists, settings: settings);
