@@ -13,9 +13,11 @@
 
 import 'dart:io';
 
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 
+import 'package:lxbox/controllers/home_controller.dart';
 import 'package:lxbox/controllers/subscription_controller.dart';
 import 'package:lxbox/screens/home/widgets/node_list.dart'
     show resetPoolBadgeCache;
@@ -102,11 +104,18 @@ void resetTestGlobals({bool binding = true}) {
   // Платформа: path_provider, HTTP, моки каналов.
   PathProviderPlatform.instance = _pathProvider;
   HttpOverrides.global = binding ? _bindingHttpOverrides : null;
+  // Кэш ассетов: загрузка, начатая в fake-async зоне прошлого теста, может
+  // не завершиться никогда, а следующий файл получил бы её future из кэша.
+  rootBundle.clear();
   final messenger =
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
   for (final name in _mockedChannels) {
     messenger.setMockMessageHandler(name, null);
   }
+
+  // Тестовые хуки контроллеров.
+  HomeController.recoveryCooldownForTesting = null;
+  HomeController.heartbeatClockForTesting = null;
 
   // Хранилище и его производные кэши.
   SettingsStorage.resetCacheForTesting();
