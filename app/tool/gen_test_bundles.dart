@@ -101,13 +101,13 @@ class _TestFile {
 
   factory _TestFile.read(String path) {
     final text = File(path).readAsStringSync();
-    var binding = _bindingRe.hasMatch(text);
+    var binding = _bindingRe.hasMatch(_code(text));
     if (!binding) {
       final dir = File(path).parent.path;
       for (final m in _relImportRe.allMatches(text)) {
         final helper = File('$dir/${m.group(1)}');
         if (helper.existsSync() &&
-            _bindingRe.hasMatch(helper.readAsStringSync())) {
+            _bindingRe.hasMatch(_code(helper.readAsStringSync()))) {
           binding = true;
           break;
         }
@@ -117,6 +117,10 @@ class _TestFile {
     return _TestFile(path, 2000 + text.length + 3000 * widgetTests, binding);
   }
 }
+
+/// Текст без строчных комментариев: «НЕ вызываем ensureInitialized» в
+/// комментарии — не признак биндинга.
+String _code(String text) => text.replaceAll(RegExp(r'//[^\n]*'), '');
 
 /// Непрерывные куски примерно равного веса.
 List<List<_TestFile>> _split(List<_TestFile> files, int k) {
