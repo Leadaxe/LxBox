@@ -98,9 +98,21 @@ Memory limit 200 MB и делает вывод, что лимит не рабо�
   есть в `sing`, но не экспортирован. Это правильный путь, но с бампом
   ядра: в форке сравнивать лимит с `Inuse()` и отдать его в `Status`,
   тогда «Memory limit 200 MB» значит «ядро: GC-цель 160 MiB, сброс при
-  195 MiB хипа», а в Stats появляется «Core heap: X / 200 MB». Заведено
-  [sing-box-lx#62](https://github.com/Leadaxe/sing-box-lx/issues/62),
-  владелец думает с агентом ядра.
+  195 MiB хипа», а в Stats появляется «Core runtime: X / 200 MB». Заведено
+  [sing-box-lx#62](https://github.com/Leadaxe/sing-box-lx/issues/62);
+  **контракт с ядром согласован 01.11.2026** (комментарий в issue):
+  `Status.MemoryRuntime` (proto 10) = `runtime/metrics` total − released,
+  `Memory` остаётся RSS; флаг `SetupOptions.OomMemoryLimitHeap` (дефолт
+  false, мы ставим true) + lx-поле в `OOMKillerServiceOptions`; в
+  heap-режиме Available-watch остаётся; пороги −5/−10 MiB и GC 4/5 не
+  меняются; latch через `ReloadSetupOptions` как сейчас; тег lx.29 только с
+  этим (javap +1 геттер) — состав и срок за владельцем. Наша часть после
+  тега: пин, `OomMemoryLimitHeap = true`, строка «Core runtime: X / limit»
+  в шторке Memory. Поправка ядра к нашему тезису: soft limit 160 MiB у
+  этого пользователя не связывающий (хип 42 MB); нагрев от GC, если есть,
+  — оборот аллокаций (пулы 108/16 MB, recvMsg 43 MB), не лимит.
+  Rate-trigger на Android не работает (baseline только в
+  `timer_darwin.go`).
 - Сервис в отдельном процессе `:bg` — RSS процесса сервиса ≈ ядро, UI
   можно выгрузить; но рвёт §122F (EventChannel-push), прямые `Libbox.*`
   из `VpnPlugin`, синхронный fd §276, Debug API в UI-процессе, prefs из
