@@ -23,26 +23,6 @@
   whole process; Statistics → Memory shows it as Core memory next to the
   process RSS.
 
-### Removed
-
-- **The VPN Settings → System switch "Interrupt connections on switch"
-  ([task 143](docs/spec/tasks/143-interrupt-connections-on-node-switch.md)).**
-  It closed a group's connections from the app after a node tap, because the
-  core used to ignore the direction's own checkbox of the same name. The core
-  has dropped those connections itself since 2.20.9, on any switch, so the
-  switch only duplicated the direction checkbox and could override it. If it
-  was on, the update turns the checkbox on in every direction where it was
-  off. The Debug API route `/settings/interrupt_on_switch` is gone; an old
-  backup with this setting still restores.
-  (RU: Убран тумблер «Interrupt connections on switch» в VPN Settings →
-  System. Он закрывал соединения группы из приложения после нажатия узла,
-  потому что ядро раньше не выполняло одноимённую галочку Направления. С
-  2.20.9 ядро рвёт эти соединения само при любой смене узла, и тумблер
-  только дублировал галочку и мог её перекрыть. Если он был включён, при
-  обновлении галочка включается во всех Направлениях, где была снята.
-  Маршрут Debug API `/settings/interrupt_on_switch` убран; старый бэкап с
-  этой настройкой восстанавливается.)
-
 ## [2.25.19] — 2026-11-01
 
 ### Added
@@ -182,6 +162,18 @@
 
 ### Changed
 
+- **Memory limit is compared with the core's own memory; Auto sets no
+  threshold ([task 705](docs/spec/tasks/705-memory-limit-auto-off.md)).**
+  Until now the core compared the limit with the memory of the whole app
+  process, which it shares with the interface and the loaded libraries: a
+  200 MB cap was tripped right at start and only made the garbage collector
+  heat the phone. With core `v1.14.4-lx.29` the limit applies to the core's
+  Go runtime (on a reporting device: 42 MB of a 461 MB process), and the
+  core keeps watching the system's free memory as well. Auto now leaves the
+  cap off, the Off option is folded into Auto, the 200–768 MB presets stay
+  for an explicit choice, and a value chosen earlier is kept. Statistics →
+  Memory shows the figure as Core memory next to the process RSS, with the
+  limit beside it when a number is chosen.
 - **Core `v1.14.4-lx.25` → `v1.14.4-lx.28`
   ([docs/KERNEL.md](docs/KERNEL.md)).** A DNS group can list `hosts`
   servers that answer the names they know before the group's servers
@@ -218,6 +210,26 @@
   (RU: Контракт лаунчера 1.1.142 → 1.1.145. `tcp_multi_path` во вставленном
   sing-box узле сохраняется как известное поле диалера, а не снимается как
   неизвестный ключ; ключ `hosts` у DNS-группы общий с лаунчером.)
+
+### Removed
+
+- **The VPN Settings → System switch "Interrupt connections on switch"
+  ([task 143](docs/spec/tasks/143-interrupt-connections-on-node-switch.md)).**
+  It closed a group's connections from the app after a node tap, because the
+  core used to ignore the direction's own checkbox of the same name. The core
+  has dropped those connections itself since 2.20.9, on any switch, so the
+  switch only duplicated the direction checkbox and could override it. If it
+  was on, the update turns the checkbox on in every direction where it was
+  off. The Debug API route `/settings/interrupt_on_switch` is gone; an old
+  backup with this setting still restores.
+  (RU: Убран тумблер «Interrupt connections on switch» в VPN Settings →
+  System. Он закрывал соединения группы из приложения после нажатия узла,
+  потому что ядро раньше не выполняло одноимённую галочку Направления. С
+  2.20.9 ядро рвёт эти соединения само при любой смене узла, и тумблер
+  только дублировал галочку и мог её перекрыть. Если он был включён, при
+  обновлении галочка включается во всех Направлениях, где была снята.
+  Маршрут Debug API `/settings/interrupt_on_switch` убран; старый бэкап с
+  этой настройкой восстанавливается.)
 
 ### Fixed
 
