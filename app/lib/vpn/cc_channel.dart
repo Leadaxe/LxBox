@@ -530,7 +530,51 @@ class CcChannel {
     }
   }
 
-  /// Узлы [tags] удалены или переименованы — их записи убираются.
+  /// §707 итер. 4 — разрешения служебных файлов Taildrop от устройства
+  /// [peerId] узла [tag]: вид команды (`kinds` реестра `service_files.json`,
+  /// список даёт натив) → разрешено. Настройка устройства (не бэкап).
+  /// `null` — канала нет (тесты, не Android).
+  Future<Map<String, bool>?> taildropPermissions(
+      String tag, String peerId) async {
+    try {
+      final r = await _methods.invokeMethod<Object?>(
+          'taildropPermissions', {'tag': tag, 'peer_id': peerId});
+      if (r is! Map) return null;
+      return {
+        for (final e in r.entries)
+          if (e.key is String) e.key as String: e.value == true,
+      };
+    } on PlatformException {
+      return null;
+    } on MissingPluginException {
+      return null;
+    }
+  }
+
+  /// Разрешить / запретить вид [kind] от устройства [peerId] узла [tag].
+  /// [peerName] — имя устройства на момент выдачи: файл без `senderID`
+  /// (ядро после перезапуска) сверяется с ним (SERVICE_FILES §5).
+  /// `true` — записано.
+  Future<bool> setTaildropPermission(String tag, String peerId,
+      String peerName, String kind, bool allowed) async {
+    try {
+      return await _methods.invokeMethod<bool>('taildropSetPermission', {
+            'tag': tag,
+            'peer_id': peerId,
+            'peer_name': peerName,
+            'kind': kind,
+            'allowed': allowed,
+          }) ==
+          true;
+    } on PlatformException {
+      return false;
+    } on MissingPluginException {
+      return false;
+    }
+  }
+
+  /// Узлы [tags] удалены или переименованы — их записи (автосохранение и
+  /// разрешения служебных файлов, §707 итер. 4) убираются.
   Future<void> forgetTaildropAutoSave(Iterable<String> tags) async {
     if (tags.isEmpty) return;
     try {

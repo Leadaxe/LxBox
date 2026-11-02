@@ -110,6 +110,7 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
   final _tsFormKey = GlobalKey<FormState>();
   bool _tsEphemeral = false;
   bool _tsAcceptRoutes = false;
+  bool _tsAllowTaildrop = false; // §707 итер. 4 — по умолчанию выкл
   bool _tsShowKey = false;
 
   // §654 B — OpenConnect tab. Поля — общий виджет [OpenConnectForm] (модель
@@ -209,6 +210,9 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
         if (_tsEphemeral) 'ephemeral': true,
         if (_tsAcceptRoutes) 'accept_routes': true,
         if (exitNode.isNotEmpty) 'exit_node': exitNode,
+        // §707 итер. 4 — вкл пишет явное `false`; без поля сборка выключает
+        // Taildrop узла (контракт 1.1.150).
+        if (_tsAllowTaildrop) 'disable_taildrop': false,
       },
     );
     // §243 — name всегда пуст: заголовок записи = tag узла.
@@ -551,6 +555,13 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
               ),
               value: _tsAcceptRoutes,
               onChanged: (v) => setState(() => _tsAcceptRoutes = v),
+            ),
+            SwitchListTile(
+              key: const ValueKey('add-tailscale-allow-taildrop'),
+              contentPadding: EdgeInsets.zero,
+              title: Text(getLocalText.s("Allow Taildrop (send and receive files)")),
+              value: _tsAllowTaildrop,
+              onChanged: (v) => setState(() => _tsAllowTaildrop = v),
             ),
             const SizedBox(height: 12),
             _label(getLocalText.s("Exit node (optional)")),

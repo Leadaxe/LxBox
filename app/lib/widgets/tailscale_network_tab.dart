@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../models/tunnel_status.dart';
 import '../screens/home/node_actions.dart' show endpointToggleErrorText;
 import '../services/debug/debug_registry.dart';
+import '../services/builder/taildrop_emit.dart' show taildropAllowedByBody;
 import '../services/format_utils.dart' show formatBytes;
 import '../services/l10n/locale_controller.dart';
 import '../services/tailscale_network.dart';
@@ -65,6 +66,16 @@ class TailscaleNetworkActions {
 
   Future<bool> setAutoSave(String tag, bool enabled) =>
       CcChannel.instance.setTaildropAutoSave(tag, enabled);
+
+  /// §707 итер. 4 — разрешения служебных файлов от устройства [peerId]:
+  /// вид команды → разрешено. `null` — канала нет.
+  Future<Map<String, bool>?> getPermissions(String tag, String peerId) =>
+      CcChannel.instance.taildropPermissions(tag, peerId);
+
+  Future<bool> setPermission(String tag, CcTailscalePeer peer, String kind,
+          bool allowed) =>
+      CcChannel.instance.setTaildropPermission(
+          tag, peer.stableId, peer.hostName, kind, allowed);
 
   /// §707 — системный выбор файлов и отправка пиру (передача — в нативе).
   Future<CcTaildropResult> sendFiles(String tag, CcTailscalePeer peer) =>
@@ -448,7 +459,7 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
         _exitNodeBlock(context, s)
       else if (recordedExit != null)
         _savedExitNodeBlock(context, recordedExit),
-      if (widget.onSaveFields != null || _autoSave != null)
+      if (widget.onSaveFields != null || (_autoSave != null && _taildropOn))
         _settingsBlock(context),
       _devicesHeader(context, devices),
       if (devices.isEmpty)
@@ -960,7 +971,7 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
     final body = widget.body;
     final hasExit = recordedExitNode(body) != null;
     final advertise = body['advertise_exit_node'] == true;
-    final autoSave = _autoSave;
+    final autoSave = _taildropOn ? _autoSave : null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -978,6 +989,19 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
           onChanged: _busy || (hasExit && !advertise)
               ? null
               : (v) => unawaited(_saveField('advertise_exit_node', v)),
+        ),
+        // §707 итер. 4 — «Allow Taildrop»: вкл пишет в тело
+        // `disable_taildrop: false`, выкл снимает поле (сборка тогда пишет
+        // `true`, контракт 1.1.150). Ядро на лету не переключает — действует
+        // после перезапуска VPN, как прочие поля узла.
+        if (widget.onSaveFields != null) SwitchListTile(
+          key: const ValueKey('tailscale-allow-taildrop'),
+          dense: true,
+          title: Text(getLocalText.s("Allow Taildrop (send and receive files)")),
+          value: _taildropOn,
+          onChanged: _busy
+              ? null
+              : (v) => unawaited(_saveTaildrop(v)),
         ),
         if (autoSave != null)
           SwitchListTile(
@@ -1015,6 +1039,22 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
         _autoSave = CcTaildropAutoSave(enabled: enabled, supported: cur.supported);
       }
     });
+  }
+
+  /// §707 итер. 4 — Taildrop узла включён: явное `disable_taildrop: false`
+  /// в теле (нет поля — выключен, контракт 1.1.150).
+  bool get _taildropOn => taildropAllowedByBody(widget.body);
+
+  /// Вкл — `false` в тело, выкл — поле снимается.
+  Future<void> _saveTaildrop(bool allow) async {
+    final save = widget.onSaveFields;
+    if (save == null) return;
+    setState(() => _busy = true);
+    try {
+      await save({'disable_taildrop': allow ? false : null});
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   /// Выключенное значение — поле убирается (по умолчанию `false`).
@@ -1203,6 +1243,18 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
   /// Строки блока Inbox: пусто и право есть — блока нет.
   List<Widget> _inboxRows(BuildContext context, CcTailscaleStatus s) {
     if (!_inboxListening) return const [];
+    // §707 итер. 4 — Taildrop узла выключен: входящих нет, вместо блока —
+    // строка (лежащие файлы остаются на диске до включения).
+    if (!_taildropOn) {
+      return [
+        ListTile(
+          key: const ValueKey('taildrop-node-off'),
+          dense: true,
+          leading: const Icon(Icons.info_outline),
+          title: Text(getLocalText.s("Taildrop is off for this node.")),
+        ),
+      ];
+    }
     final inbox = _inbox;
     final sharingOff = s.backendState == 'Running' && !s.canShareFiles;
     final empty = inbox == null || inbox.isEmpty;
@@ -1346,7 +1398,12 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
     // §707 — отправка файла: только своему устройству в сети, которое
     // принимает файлы, и только при включённом в tailnet Taildrop.
     final canSend =
-        (_status?.canShareFiles ?? false) && p.isTaildropTarget;
+        _taildropOn && (_status?.canShareFiles ?? false) && p.isTaildropTarget;
+    // §707 итер. 4 — разрешения служебных файлов от этого устройства.
+    final perms = _taildropOn && p.stableId.isNotEmpty && !p.shareeNode
+        ? await widget.actions.getPermissions(widget.liveTag, p.stableId)
+        : null;
+    if (!mounted) return;
     final action = await showAppBottomSheet<String>(
       context: context,
       builder: (ctx) => Column(
@@ -1384,6 +1441,12 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
               leading: const Icon(Icons.upload_file),
               title: Text(getLocalText.s("Send file…")),
               onTap: () => Navigator.pop(ctx, 'send'),
+            ),
+          if (perms != null && perms.isNotEmpty)
+            _PermissionSwitches(
+              initial: perms,
+              onChanged: (kind, v) =>
+                  widget.actions.setPermission(widget.liveTag, p, kind, v),
             ),
         ],
       ),
@@ -1598,4 +1661,56 @@ class _ReplaceKeyDialogState extends State<_ReplaceKeyDialog> {
       ],
     );
   }
+}
+
+/// §707 итер. 4 — переключатели разрешений служебных файлов в меню
+/// устройства. Виды — те, что вернул натив (реестр `service_files.json`);
+/// вид без подписи не показывается.
+class _PermissionSwitches extends StatefulWidget {
+  const _PermissionSwitches({required this.initial, required this.onChanged});
+
+  final Map<String, bool> initial;
+  final Future<bool> Function(String kind, bool allowed) onChanged;
+
+  @override
+  State<_PermissionSwitches> createState() => _PermissionSwitchesState();
+}
+
+class _PermissionSwitchesState extends State<_PermissionSwitches> {
+  late final Map<String, bool> _values = Map.of(widget.initial);
+  final _busy = <String>{};
+
+  static String? _label(String kind) => switch (kind) {
+    'clipboard' => getLocalText.s("Clipboard from this device"),
+    'open_url' => getLocalText.s("Links from this device"),
+    _ => null,
+  };
+
+  Future<void> _set(String kind, bool v) async {
+    setState(() => _busy.add(kind));
+    final ok = await widget.onChanged(kind, v);
+    if (!mounted) return;
+    setState(() {
+      _busy.remove(kind);
+      if (ok) _values[kind] = v;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => Column(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      for (final e in _values.entries)
+        if (_label(e.key) case final String label)
+          SwitchListTile(
+            key: ValueKey('taildrop-permission-${e.key}'),
+            dense: true,
+            title: Text(label),
+            value: e.value,
+            onChanged: _busy.contains(e.key)
+                ? null
+                : (v) => unawaited(_set(e.key, v)),
+          ),
+    ],
+  );
 }

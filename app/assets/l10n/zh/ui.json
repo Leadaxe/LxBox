@@ -6652,5 +6652,17 @@
   },
   "Needs Android 10 or later.": {
     "value": "需要 Android 10 或更高版本。"
+  },
+  "Allow Taildrop (send and receive files)": {
+    "value": "允许 Taildrop（发送和接收文件）"
+  },
+  "Taildrop is off for this node.": {
+    "value": "此节点的 Taildrop 已关闭。"
+  },
+  "Clipboard from this device": {
+    "value": "来自此设备的剪贴板"
+  },
+  "Links from this device": {
+    "value": "来自此设备的链接"
   }
 }

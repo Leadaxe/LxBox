@@ -36,6 +36,7 @@ import 'registry_gate.dart';
 import 'rule_set_registry.dart';
 import 'server_list_build.dart';
 import 'source_replace_build.dart';
+import 'taildrop_emit.dart';
 import 'validator.dart';
 
 /// Результат сборки — готовый JSON + валидация + warnings + generated-vars
@@ -716,6 +717,10 @@ Future<BuildResult?> _buildConfig({
       ep.map['taildrop_directory'] = '$state/taildrop';
     }
   }
+  // §707 итер. 4 — Taildrop узла выключен, пока в теле нет явного
+  // `disable_taildrop: false` (контракт 1.1.150); на ядре ниже `min_core`
+  // поля нет совсем. Хранимое тело не трогается.
+  applyTaildropDefault(ctx.endpoints, coreVersion: settings.coreVersion);
 
   if (ctx.endpoints.isNotEmpty) {
     final baseEndpoints = config['endpoints'] as List<dynamic>? ?? const [];

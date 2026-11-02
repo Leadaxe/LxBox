@@ -6943,5 +6943,17 @@
   },
   "Needs Android 10 or later.": {
     "value": "Нужен Android 10 или новее."
+  },
+  "Allow Taildrop (send and receive files)": {
+    "value": "Разрешить Taildrop (отправка и приём файлов)"
+  },
+  "Taildrop is off for this node.": {
+    "value": "Taildrop у этого узла выключен."
+  },
+  "Clipboard from this device": {
+    "value": "Буфер обмена с этого устройства"
+  },
+  "Links from this device": {
+    "value": "Ссылки с этого устройства"
   }
 }
