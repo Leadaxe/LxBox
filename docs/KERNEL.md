@@ -34,7 +34,7 @@ milliseconds. `startTailscaleSSHSession` is not used.
 | Called from | `scripts/build-local-apk.sh` and CI (`ci.yml` → the android job → “Fetch sing-box-lx core”) |
 | The AAR in git | NO (~110 MB as of lx.25; `app/android/app/libs/` is in `.gitignore`); `build.gradle.kts` → `implementation(files("libs/libbox.aar"))` |
 
-**The current pin: `v1.14.4-lx.30-rc.2`** (see `app/android/libbox.version`) — lx.1
+**The current pin: `v1.14.4-lx.30-rc.3`** (see `app/android/libbox.version`) — lx.1
 plus XHTTP HTTP-version parity (**SPEC 104**, lx.2), Vision on top of VLESS
 Encryption (**SPEC 105**, lx.3), the runtime WG/AWG endpoint toggle
 (**SPEC 106**, lx.4: `CommandClient.setEndpointEnabled`, `endpointState =
@@ -44,7 +44,7 @@ default without `xmux` moved to `max_connections 3` (lx.6), three MASQUE hangs f
 control channel on port 443 from the first connection (**SPEC 111**, lx.9),
 the headroom Tailscale needs on a direct UDP path restored in the AWG
 wireguard-go (**SPEC 112**, lx.10), one more `stable` sync (lx.11), lx.12 and
-lx.13-rc.1, lx.13, lx.14, lx.15, lx.16–lx.18, lx.19–lx.21, lx.22–lx.23, lx.24-rc.1/rc.2, lx.24, lx.25, lx.26, lx.27, lx.28, lx.29, lx.30-rc.1 and lx.30-rc.2 (below). The Java surface of lx.11 is identical to lx.8 (`javap` over both
+lx.13-rc.1, lx.13, lx.14, lx.15, lx.16–lx.18, lx.19–lx.21, lx.22–lx.23, lx.24-rc.1/rc.2, lx.24, lx.25, lx.26, lx.27, lx.28, lx.29, lx.30-rc.1, lx.30-rc.2 and lx.30-rc.3 (below). The Java surface of lx.11 is identical to lx.8 (`javap` over both
 `classes.jar`). The `lx.1` layers: **SPEC 097**, **SPEC 098**, **SPEC 101** and
 the upstream sync to sing-box **1.14.2** (**SPEC 102**).
 
@@ -280,6 +280,20 @@ the oom-killer mode at start (SPEC 148 §5). Java surface lx.29 → lx.30-rc.1
 release `SHA256SUMS`). Live sign-in by key and the off/on cycle against
 control are not verified on a device.
 
+**`v1.14.4-lx.30-rc.3`** — the same base, prerelease. **SPEC 151**
+(QUIC sniff decoy): root-block key `lx.quic_sniff_decoy` (bool; absent = off).
+When true the core sends one `0x00` byte on every fresh QUIC dial of `masque`
+(HTTP/3), `hysteria2` and `tuic` ahead of the first Initial, so a relay that
+sniffs UDP (Xray `sniffing` + `destOverride: quic` without `routeOnly`) drops
+QUIC sniffing for the flow and does not rewrite the destination by SNI;
+servers discard the byte. LxBox writes it from the template variable
+`quic_sniff_decoy` (default on, contract 1.1.151, task 709). Java surface
+lx.30-rc.2 → lx.30-rc.3 (`javap` over the full `classes.jar`): identical. Build
+tags identical, `kCoreBuildTagsPin` moved with the pin, `strings` of
+`libbox.so` reports `1.14.4-lx.30-rc.3`. AAR sha256
+`5ed86589a343a98e38c3893d2af938d54fb894395538506c0714dc50148d7097` (the
+release `SHA256SUMS`). Not verified on a device.
+
 **`v1.14.4-lx.30-rc.2`** — the same base, prerelease. **SPEC 149 §4**
 (LxBox task 707, iteration 4): endpoint option `disable_taildrop` (bool;
 absent or false — as upstream). When true the peer API `/v0/put/` (PUT and
@@ -436,9 +450,9 @@ then.
 `lx.wg.lazy_build` (bool — endpoints start torn down, the device is built on the
 first dial; requires `idle_suspend`), `lx.wg.build_max` (int, `0` = no cap) and
 `lx.wg.build_overflow` (`wait` \| `build`). **LxBox writes `lazy_build: true`
-and `build_max` together with `idle_suspend`** (§536, settings since §542:
+and `build_max` together with `idle_suspend`** (§536, settings since §542; template variables since §709:
 `wg_lazy_build`, default `true`, and `wg_build_max`, default `5`, VPN Settings →
-System → WireGuard connections; `0` is written as `0`, which the core reads as
+Core → WireGuard; `0` is written as `0`, which the core reads as
 no cap). With lazy build switched off neither key is written: the core would
 accept `build_max` alone, but the UI greys the limit out with the toggle, so a
 greyed-out value must not act. An empty idle threshold means no `lx` block at

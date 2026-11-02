@@ -1324,7 +1324,7 @@ the backup block nor in the `native_prefs` JSON section — it lives only in `bo
 
 `build_config.dart` merges the template's `config` section plus `selectable_rules[*]` (through `expandPreset`) and the storage state into the final config.
 
-**Idle-suspend (§128/§215, the core's SPEC 020).** Configuring the threshold (the storage key `route_idle_suspend`).
+**Idle-suspend (§128/§215, the core's SPEC 020).** Configuring the threshold (the template variable `wg_idle_suspend`, §709; until §709 the storage key `route_idle_suspend`).
 
 The storage migration (`SettingsStorage`, §439): a document without `storage_version`
 is converted inside `_load()` — the frozen 2.23.2 readers (`storage_migration/legacy_form_v0.dart`)
