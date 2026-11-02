@@ -90,6 +90,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   String _idleSuspendReachable = '';
   int _wgBuildMax = 5; // §542 — lx.wg.build_max (0 = no cap)
   bool _wgLazyBuild = true; // §542 — lx.wg.lazy_build
+  bool _quicSniffDecoy = false; // §709 — lx.quic_sniff_decoy
   // §271 — memory limit ядра (native_prefs, wire-значения MemoryLimitSetting).
   String _memoryLimit = MemoryLimitSetting.auto;
 
@@ -169,6 +170,7 @@ class _SettingsScreenState extends State<SettingsScreen>
         await SettingsStorage.getIdleSuspendReachable(); // §272
     final wgBuildMax = await SettingsStorage.getWgBuildMax(); // §542
     final wgLazyBuild = await SettingsStorage.getWgLazyBuild(); // §542
+    final quicSniffDecoy = await SettingsStorage.getQuicSniffDecoy(); // §709
     final memoryLimit = await SettingsStorage.getNativeMemoryLimit(); // §271
     setState(() {
       _template = template;
@@ -177,6 +179,7 @@ class _SettingsScreenState extends State<SettingsScreen>
       _idleSuspendReachable = idleSuspendReachable;
       _wgBuildMax = wgBuildMax;
       _wgLazyBuild = wgLazyBuild;
+      _quicSniffDecoy = quicSniffDecoy;
       _memoryLimit = memoryLimit;
       _vpnLoaded = true;
       _loading = false;
@@ -235,6 +238,21 @@ class _SettingsScreenState extends State<SettingsScreen>
     // `_onReturnToHome` чистый флаг (Д1).
     widget.subController.configDirty = true;
     await SettingsStorage.saveWgLazyBuild(value);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(getLocalText.s("Applies on next connect.")),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  Future<void> _applyQuicSniffDecoy(bool value) async {
+    if (value == _quicSniffDecoy) return;
+    setState(() => _quicSniffDecoy = value);
+    // §667 Р3 — dirty ДО await, как у §542.
+    widget.subController.configDirty = true;
+    await SettingsStorage.saveQuicSniffDecoy(value);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -568,6 +586,20 @@ class _SettingsScreenState extends State<SettingsScreen>
                     unawaited(_applyWgBuildMax(v));
                   },
           ),
+        ),
+        const Divider(height: 32),
+        // §709 — обманка от сниффинга QUIC (lx.quic_sniff_decoy, SPEC 151).
+        const TemplateSectionHeader(
+          title: 'QUIC connections',
+          description: 'MASQUE (HTTP/3), Hysteria2 and TUIC.',
+        ),
+        SwitchListTile(
+          value: _quicSniffDecoy,
+          onChanged: !_vpnLoaded
+              ? null
+              : (bool v) => unawaited(_applyQuicSniffDecoy(v)),
+          title: Text(getLocalText.s("Anti-sniff decoy")),
+          subtitle: Text(getLocalText.s("Send one junk byte before the QUIC handshake so a relay that sniffs UDP cannot redirect the connection by its SNI. Turn on if these nodes fail only through a relay or a proxy chain.")),
         ),
         const Divider(height: 32),
         const TemplateSectionHeader(

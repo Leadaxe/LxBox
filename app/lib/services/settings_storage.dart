@@ -218,6 +218,7 @@ class SettingsStorage {
     'route_idle_suspend_reachable', // §272 — reachable idle window (lx.wg.idle_suspend_reachable)
     'wg_build_max', // §542 — WG/AWG build budget (lx.wg.build_max)
     'wg_lazy_build', // §542 — WG/AWG lazy build (lx.wg.lazy_build)
+    'quic_sniff_decoy', // §709 — QUIC sniff decoy (lx.quic_sniff_decoy)
     'enabled_groups', // §125 — DEPRECATED (читается только миграцией; safe-мусор)
     'directions', // §125/§393 — Направления роутинга (template→storage)
     'directions_migrated', // §125/§393 — guard one-shot миграции
@@ -652,6 +653,13 @@ class SettingsStorage {
 
   static Future<void> saveWgLazyBuild(bool enabled, {bool flush = true}) =>
       _saveWgLazyBuild(enabled, flush: flush);
+
+  // §709 — QUIC sniff decoy (lx.quic_sniff_decoy, SPEC 151); default false
+
+  static Future<bool> getQuicSniffDecoy() => _getQuicSniffDecoy();
+
+  static Future<void> saveQuicSniffDecoy(bool enabled, {bool flush = true}) =>
+      _saveQuicSniffDecoy(enabled, flush: flush);
 
   /// §612 — один раз до первой сборки: `urltest_passive_check` (§611)
   /// true/отсутствует → автовыбор `least_test` становится `failover`; ключ

@@ -6664,5 +6664,11 @@
   },
   "Links from this device": {
     "value": "来自此设备的链接"
+  },
+  "Anti-sniff decoy": {
+    "value": "防嗅探诱饵"
+  },
+  "Send one junk byte before the QUIC handshake so a relay that sniffs UDP cannot redirect the connection by its SNI. Turn on if these nodes fail only through a relay or a proxy chain.": {
+    "value": "在 QUIC 握手前发送一个垃圾字节，使嗅探 UDP 的中继无法按 SNI 重定向连接。如果这些节点仅在经过中继或代理链时失败，请开启。"
   }
 }

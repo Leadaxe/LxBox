@@ -11,6 +11,7 @@ import '../../models/parser_config.dart';
 import '../../models/server_list.dart';
 import '../../models/source_chain.dart';
 import '../../models/tls_policy.dart';
+import '../contract/body_sanitizer.dart' show coreAtLeast;
 import '../contract/group_genus.dart';
 import '../../models/singbox_entry.dart';
 import '../../models/template_vars.dart';
@@ -179,6 +180,10 @@ class BuildSettings {
   /// без `lazy_build` принимает, но выключенный пункт не должен действовать).
   final bool wgLazyBuild;
 
+  /// §709 — `lx.quic_sniff_decoy` (ядро SPEC 151): байт-обманка перед первым
+  /// QUIC Initial (masque h3, hysteria2, tuic). `false` → ключ не пишется.
+  final bool quicSniffDecoy;
+
   /// §435 — корень для `state_directory` узлов Tailscale: native
   /// `Context.filesDir` (тот же канал, что у §316). Каталог узла —
   /// `<корень>/tailscale/<имя>` подставляется при эмиссии, если в теле поля
@@ -211,6 +216,7 @@ class BuildSettings {
     this.idleSuspendReachable = '',
     this.wgBuildMax = 5,
     this.wgLazyBuild = true,
+    this.quicSniffDecoy = false,
     this.tailscaleStateRoot = '',
     this.tailscaleStateDirs,
     this.mixins = const [],
@@ -289,6 +295,9 @@ String _renderTemplateWarning(TemplateWarning w) =>
 /// §580 — границы int-переменных шаблона, у которых они есть
 /// (TEMPLATE_LANG §6.8). Экран не сохраняет значение вне границ, сборка его
 /// не подставляет.
+/// §709 — первое ядро с `lx.quic_sniff_decoy` (SPEC 151).
+const kQuicSniffDecoyMinCore = '1.14.4-lx.30-rc.3';
+
 const Map<String, (int, int)> kVarIntBounds = {
   'dns_cache_capacity': (1024, 65535),
 };
@@ -873,6 +882,15 @@ Future<BuildResult?> _buildConfig({
       wg['build_max'] = settings.wgBuildMax < 0 ? 0 : settings.wgBuildMax;
     }
     config['lx'] = <String, dynamic>{'wg': wg};
+  }
+
+  // §709 — QUIC sniff decoy (ядро SPEC 151) рядом с `lx.wg`. На ядре старше
+  // lx.30-rc.3 ключа нет — ядро отвергло бы неизвестное поле блока `lx`.
+  if (settings.quicSniffDecoy &&
+      coreAtLeast(settings.coreVersion, kQuicSniffDecoyMinCore)) {
+    final lx = (config['lx'] as Map<String, dynamic>?) ?? <String, dynamic>{};
+    lx['quic_sniff_decoy'] = true;
+    config['lx'] = lx;
   }
 
   // §125 — деградация dangling route_final → vpn-1. Ссылка на удалённое Направление

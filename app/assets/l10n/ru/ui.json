@@ -6955,5 +6955,11 @@
   },
   "Links from this device": {
     "value": "Ссылки с этого устройства"
+  },
+  "Anti-sniff decoy": {
+    "value": "Обманка от сниффинга"
+  },
+  "Send one junk byte before the QUIC handshake so a relay that sniffs UDP cannot redirect the connection by its SNI. Turn on if these nodes fail only through a relay or a proxy chain.": {
+    "value": "Отправлять один мусорный байт перед QUIC-рукопожатием, чтобы релей, который сниффит UDP, не перенаправил соединение по SNI. Включите, если эти узлы не работают только через релей или цепочку прокси."
   }
 }

@@ -117,6 +117,27 @@ Future<void> _saveWgLazyBuild(bool enabled, {bool flush = true}) async {
 }
 
 // ---------------------------------------------------------------------------
+// §709 — QUIC sniff decoy (lx.quic_sniff_decoy, kernel SPEC 151)
+//
+// `quic_sniff_decoy` (bool, дефолт false — как в ядре): один байт перед
+// первым QUIC Initial у masque h3 / hysteria2 / tuic, чтобы сниффящий релей
+// не подменил назначение по SNI. Config-significant → markConfigDirty.
+// ---------------------------------------------------------------------------
+
+Future<bool> _getQuicSniffDecoy() async {
+  final data = await _load();
+  return (data['quic_sniff_decoy'] as bool?) ?? false;
+}
+
+Future<void> _saveQuicSniffDecoy(bool enabled, {bool flush = true}) async {
+  final data = await _load();
+  data['quic_sniff_decoy'] = enabled;
+  SettingsStorage._cache = data;
+  SettingsStorage.markConfigDirty(); // §113
+  if (flush) await _save();
+}
+
+// ---------------------------------------------------------------------------
 // §612 — миграция от passive_check (§611) к режиму `failover`
 //
 // Ядро lx.12 удалило `urltest.passive_check` и назвало `failover` его явной

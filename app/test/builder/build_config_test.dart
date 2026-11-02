@@ -335,6 +335,57 @@ void main() {
       expect(orphanRoute.containsKey('lx_idle_suspend_reachable'), false);
     });
 
+    // §709 — lx.quic_sniff_decoy (ядро SPEC 151): только по тумблеру и
+    // только на ядре, которое знает ключ; рядом с lx.wg, не вместо него.
+    test('§709 quic_sniff_decoy: тумблер, гейт ядра, соседство с lx.wg',
+        () async {
+      final wg = parseLinkAs<WireguardSpec>(
+        'wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@wg.example.com:51820?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=10.0.0.2%2F32&mtu=1420#WG',
+      )!;
+      final list = UserServer(
+        id: 'u709',
+        name: 'WG',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        origin: UserSource.paste,
+        nodes: [wg],
+      );
+      Future<Map<String, dynamic>> build(BuildSettings s) async =>
+          (await buildConfig(lists: [list], template: template, settings: s))
+              .config;
+
+      final on = await build(const BuildSettings(
+        userVars: {'clash_api': '127.0.0.1:9090'},
+        quicSniffDecoy: true,
+        coreVersion: '1.14.4-lx.30-rc.3',
+        idleSuspend: '30s',
+      ));
+      final lx = on['lx'] as Map;
+      expect(lx['quic_sniff_decoy'], true);
+      expect((lx['wg'] as Map)['idle_suspend'], '30s');
+
+      final alone = await build(const BuildSettings(
+        userVars: {'clash_api': '127.0.0.1:9090'},
+        quicSniffDecoy: true,
+        coreVersion: '1.14.4-lx.30-rc.3',
+      ));
+      expect(alone['lx'], {'quic_sniff_decoy': true});
+
+      final off = await build(const BuildSettings(
+        userVars: {'clash_api': '127.0.0.1:9090'},
+        coreVersion: '1.14.4-lx.30-rc.3',
+      ));
+      expect(off.containsKey('lx'), false);
+
+      final oldCore = await build(const BuildSettings(
+        userVars: {'clash_api': '127.0.0.1:9090'},
+        quicSniffDecoy: true,
+        coreVersion: '1.14.4-lx.30-rc.2',
+      ));
+      expect(oldCore.containsKey('lx'), false);
+    });
+
     // §536 — lazy_build/build_max едут вместе с базовым порогом, даже когда
     // reachable-окно не задано: ядро требует lazy_build при idle_suspend, а
     // build_max самостоятелен, но держим оба в одном месте.
