@@ -5,7 +5,7 @@
 | Status | In progress |
 | Start date | 2026-11-02 |
 | End date | — |
-| Commits | `0a571cd1` (тумблер на System), острова — следующий |
+| Commits | `0a571cd1` (тумблер на System), `ed385e8b` (острова), `ce61fd32` (decoy по умолчанию), итер. 2 — следующий |
 | Related specs | ядро sing-box-lx SPEC 151 (`lx.quic_sniff_decoy`), §542 (образец: тумблер `lx.wg.lazy_build`), §215 (корневой блок `lx`) |
 
 ## Problem
@@ -62,3 +62,34 @@
 - Тест: `mtu_align` clamp не пишется, fill/off пишутся строкой рядом с decoy.
 - Эмулятор: острова на Core, (i) показывает подсказку; тумблер и режим MTU
   попадают в итоговый конфиг, ядро стартует.
+
+## Итерация 2 — ключи `lx` на переменных шаблона
+
+Решение владельца 02.11.2026: шесть настроек блока `lx` — переменные
+шаблона, как TLS Fragmentation (объявлены в `wizard_template.json`, значение
+в `vars`, применяет код сборки). Миграции нет: значения старых ключей
+хранилища теряются, переменные начинают с дефолтов шаблона.
+
+| Переменная | Секция | Тип, значения | Дефолт | В конфиг |
+|---|---|---|---|---|
+| `mtu_align` | Network | enum `clamp` / `fill` / `off` | `clamp` | `lx.mtu_align`, кроме `clamp` |
+| `wg_idle_suspend` | WireGuard (новая) | enum `off` / `30s` / `2m` / `5m` | `30s` | `lx.wg.idle_suspend`, кроме `off` |
+| `wg_idle_suspend_reachable` | WireGuard | enum `off` / `5m` / `15m` / `30m` / `1h` | `5m` | `lx.wg.idle_suspend_reachable`, только при сне |
+| `wg_lazy_build` | WireGuard | bool | `true` | `lx.wg.lazy_build`, только при сне |
+| `wg_build_max` | WireGuard | enum `0` / `3` / `5` / `8` / `12` | `5` | `lx.wg.build_max` (int), только при lazy |
+| `quic_sniff_decoy` | QUIC (новая) | bool | `true` | `lx.quic_sniff_decoy: true`, ядро ≥ lx.30-rc.3 |
+
+- `off` вместо пустой строки: язык шаблона отбрасывает пустые `options`.
+- Зависимости и гейт ядра — в коде сборки (в языке шаблона их нет), как
+  было; неуместная комбинация в конфиг не пишется.
+- UI: секции WireGuard и QUIC — острова из шаблона после TLS Fragmentation.
+  Приложение передаёт `TemplateVarListView` подсказки (i) по имени
+  переменной и условия неактивности (reachable и lazy — при сне `off`,
+  build_max — при выключенном lazy). Это параметры виджета, не поле языка
+  шаблона: контракт с лаунчером не меняется.
+- Снимаются ключи хранилища `route_idle_suspend`,
+  `route_idle_suspend_reachable`, `wg_build_max`, `wg_lazy_build`,
+  `mtu_align`, `quic_sniff_decoy`, их геттеры, поля `BuildSettings` и
+  записи в allowlist / бэкапе. Значения едут в бэкапе общим `vars`.
+- Реестр контракта (`vars.json`) не трогается: переменные мобильные, в LX
+  Backup не переносимы (как раньше ключи хранилища).

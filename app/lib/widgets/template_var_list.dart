@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models/parser_config.dart';
+import '../services/builder/if_engine.dart' show evalCond, makeResolver;
 import 'outbound_picker.dart';
 import 'var_values_model.dart';
 import '../services/l10n/locale_controller.dart';
@@ -44,6 +45,7 @@ class TemplateVarListView extends StatefulWidget {
     this.showSectionHeaders = true,
     this.islands = false,
     this.sectionTrailing = const {},
+    this.hints = const {},
     this.outboundOptions = const [],
     this.dnsServerTags = const [],
   });
@@ -75,6 +77,10 @@ class TemplateVarListView extends StatefulWidget {
   /// §709 — виджеты parent'а в конце секции (по title), например
   /// настройка хранилища внутри секции шаблона.
   final Map<String, List<Widget>> sectionTrailing;
+
+  /// §709 — короткая подсказка (i) у заголовка переменной, по имени. Не поле
+  /// языка шаблона — передаёт экран.
+  final Map<String, String> hints;
 
   /// §117: Направления для `type: outbound` vars (Direct + активные Направления).
   /// Пусто → outbound-var рендерится текстовым полем (fallback).
@@ -208,10 +214,44 @@ class _TemplateVarListViewState extends State<TemplateVarListView> {
   /// §232 — каждое поле подписано на СВОЙ ключ модели: перерисовывается
   /// только оно и только на изменение своего значения (юзером или программно
   /// через on_change).
-  Widget _buildVarWidget(WizardVar v) => ValueListenableBuilder<String>(
-        valueListenable: widget.model.notifier(v.name),
-        builder: (_, value, _) => _buildControl(v, value),
-      );
+  Widget _buildVarWidget(WizardVar v) {
+    final field = ValueListenableBuilder<String>(
+      valueListenable: widget.model.notifier(v.name),
+      builder: (_, value, _) => _buildControl(v, value),
+    );
+    final gate = v.enable;
+    if (gate == null) return field;
+    // §709 — `#enable` объявления (TEMPLATE_LANG §4.6): строка неактивна,
+    // пока условие ложно; подписка — на переменные из условия.
+    final refs = <String>{};
+    _collectRefs(gate, refs);
+    return ListenableBuilder(
+      listenable: Listenable.merge([for (final r in refs) widget.model.notifier(r)]),
+      builder: (_, child) {
+        final on = evalCond(gate, makeResolver(widget.model.snapshot, _byName));
+        if (on) return child!;
+        return AbsorbPointer(
+          child: Opacity(opacity: kVarDisabledOpacity, child: child),
+        );
+      },
+      child: field,
+    );
+  }
+
+  static void _collectRefs(dynamic node, Set<String> out) {
+    if (node is String && node.startsWith('@')) {
+      out.add(node.substring(1));
+    } else if (node is List) {
+      for (final e in node) {
+        _collectRefs(e, out);
+      }
+    } else if (node is Map) {
+      for (final e in node.entries) {
+        _collectRefs(e.key, out);
+        _collectRefs(e.value, out);
+      }
+    }
+  }
 
   Widget _buildControl(WizardVar v, String value) {
     // §691 — `text_list` + `options` + `options_open`: поле списка с ▾
@@ -246,8 +286,15 @@ class _TemplateVarListViewState extends State<TemplateVarListView> {
     }
     switch (v.type) {
       case 'bool':
+        final hint = widget.hints[v.name];
+        final title = Text(v.title.isNotEmpty ? v.title : v.name);
         return SwitchListTile(
-          title: Text(v.title.isNotEmpty ? v.title : v.name),
+          title: hint == null
+              ? title
+              : Row(children: [
+                  Expanded(child: title),
+                  LxHintButton(message: hint),
+                ]),
           subtitle: v.tooltip.isNotEmpty
               ? Text(v.tooltip, style: const TextStyle(fontSize: 12))
               : null,
@@ -345,6 +392,7 @@ class _TemplateVarListViewState extends State<TemplateVarListView> {
     return _LabelledField(
       label: v.title.isNotEmpty ? v.title : v.name,
       tooltip: v.tooltip,
+      hint: widget.hints[v.name],
       field: DropdownButton<String>(
         key: ValueKey('options-${v.name}'),
         isExpanded: true,
@@ -425,6 +473,10 @@ class SettingsIsland extends StatelessWidget {
     );
   }
 }
+
+/// §709 — непрозрачность неактивной строки (`#enable` ложно) — Material 3
+/// disabled state layer, как `kDisabledRowOpacity` экрана VPN Settings.
+const double kVarDisabledOpacity = 0.38;
 
 /// §709 — значок (i) у настройки корневого блока `lx` ядра: короткая
 /// подсказка по нажатию, без перехода.
@@ -774,11 +826,15 @@ class _LabelledField extends StatelessWidget {
     required this.label,
     required this.tooltip,
     required this.field,
+    this.hint,
   });
 
   final String label;
   final String tooltip;
   final Widget field;
+
+  /// §709 — (i)-подсказка у заголовка.
+  final String? hint;
 
   @override
   Widget build(BuildContext context) {
@@ -788,7 +844,13 @@ class _LabelledField extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(label, style: theme.textTheme.bodyLarge),
+          if (hint == null)
+            Text(label, style: theme.textTheme.bodyLarge)
+          else
+            Row(children: [
+              Expanded(child: Text(label, style: theme.textTheme.bodyLarge)),
+              LxHintButton(message: hint!),
+            ]),
           if (tooltip.isNotEmpty) ...[
             const SizedBox(height: 2),
             Text(

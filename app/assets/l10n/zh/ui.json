@@ -179,11 +179,6 @@
       "other": "%d 跳"
     }
   },
-  "%d hours": {
-    "value": {
-      "other": "%d 小时"
-    }
-  },
   "%d hours left": {
     "value": {
       "other": "剩余 %d 小时"
@@ -205,11 +200,6 @@
   "%d min ago": {
     "value": {
       "other": "%d 分钟前"
-    }
-  },
-  "%d minutes": {
-    "value": {
-      "other": "%d 分钟"
     }
   },
   "%d net": {
@@ -271,11 +261,6 @@
   "%d proto": {
     "value": {
       "other": "%d 个协议"
-    }
-  },
-  "%d seconds": {
-    "value": {
-      "other": "%d 秒"
     }
   },
   "%d server lists": {
@@ -845,9 +830,6 @@
   "Already on this device": {
     "value": "本机已有"
   },
-  "Also put tunnels on the active route (pool members, the selected node) to sleep after a long quiet period — e.g. overnight. The first connection after sleep adds ~1 round trip. Default 5 min. Below the directions' idle timeout (30 min by default) a group probe can wake a sleeping tunnel for one handshake — the price of sleeping sooner. Requires \"Suspend idle tunnels\" to be on.": {
-    "value": "也可让当前路由上的隧道（连接池成员、已选节点）在长时间空闲后休眠——例如夜间。休眠后首次连接会多约一个往返。默认 5 分钟。若该值低于方向的空闲超时（默认 30 分钟），分组探测可能会唤醒休眠隧道进行一次握手——这是更早休眠的代价。需要先开启「挂起空闲隧道」。"
-  },
   "AmneziaWG 1.5 parameters: decoy packets before the WireGuard handshake.": {
     "value": "AmneziaWG 1.5 参数：WireGuard 握手前的诱饵包。"
   },
@@ -928,9 +910,6 @@
   },
   "Applies immediately. Very chatty on live traffic — enable, reproduce, grab the log, disable.": {
     "value": "立即生效。实时流量下日志非常密集——开启、复现、抓日志、关闭。"
-  },
-  "Applies on next connect.": {
-    "value": "下次连接时生效。"
   },
   "Apply": {
     "value": "应用"
@@ -3230,9 +3209,6 @@
   "No cached source data": {
     "value": "没有缓存的来源数据"
   },
-  "No configurable variables": {
-    "value": "没有可配置的变量"
-  },
   "No connection to %s — check network or URL": {
     "value": "无法连接 %s——请检查网络或链接"
   },
@@ -3899,9 +3875,6 @@
   },
   "Proxy link, WireGuard config or outbound JSON": {
     "value": "代理链接、WireGuard 配置或出站 JSON"
-  },
-  "Put unreachable WireGuard tunnels to sleep after they sit idle, freeing memory and saving battery. They wake instantly on use. Only affects tunnels not on the active route.": {
-    "value": "让不可达的 WireGuard 隧道在空闲后休眠，释放内存并省电。使用时立即唤醒。只影响不在当前路由上的隧道。"
   },
   "Query timeout": {
     "value": "查询超时"
@@ -4715,27 +4688,6 @@
   },
   "Supported: vless / vmess / trojan / ss / hy2 / tuic / socks5 / proxy-http(s) / wireguard URLs": {
     "value": "支持：vless / vmess / trojan / ss / hy2 / tuic / socks5 / proxy-http(s) / wireguard 链接"
-  },
-  "Suspend active-route tunnels": {
-    "value": "挂起当前路由上的隧道"
-  },
-  "Suspend idle tunnels": {
-    "value": "挂起空闲隧道"
-  },
-  "Lazy tunnel build": {
-    "value": "延迟构建隧道"
-  },
-  "Build a WireGuard tunnel only on first use instead of at start. Saves memory with many nodes; the first connection to a node takes a moment longer.": {
-    "value": "仅在首次使用时构建 WireGuard 隧道，而不是在启动时构建。节点较多时可节省内存；首次连接某个节点会稍慢一些。"
-  },
-  "Built tunnels limit": {
-    "value": "已构建隧道上限"
-  },
-  "Keep at most this many WireGuard tunnels built at once; the rest are torn down and rebuilt on demand. 0 = no limit.": {
-    "value": "同时最多保持这么多个已构建的 WireGuard 隧道；其余的会被拆除，需要时再重新构建。0 = 不限制。"
-  },
-  "0 (no limit)": {
-    "value": "0（不限制）"
   },
   "Switch": {
     "value": "切换"
@@ -6665,12 +6617,6 @@
   "Links from this device": {
     "value": "来自此设备的链接"
   },
-  "Anti-sniff decoy": {
-    "value": "防嗅探诱饵"
-  },
-  "Send one junk byte before the QUIC handshake so a relay that sniffs UDP cannot redirect the connection by its SNI. Turn on if these nodes fail only through a relay or a proxy chain.": {
-    "value": "在 QUIC 握手前发送一个垃圾字节，使嗅探 UDP 的中继无法按 SNI 重定向连接。如果这些节点仅在经过中继或代理链时失败，请开启。"
-  },
   "Core: lx.wg.idle_suspend. An idle WireGuard endpoint that is not on the active route is torn down and rebuilt on its next dial.": {
     "value": "内核：lx.wg.idle_suspend。不在活动路由上的空闲 WireGuard 端点会被拆除，并在下次拨号时重建。"
   },
@@ -6688,23 +6634,5 @@
   },
   "Core: lx.quic_sniff_decoy. A relay with UDP sniffing (Xray destOverride quic) rewrites the destination by the SNI of the first QUIC packet; a junk first byte makes it give up. Servers drop the byte.": {
     "value": "内核：lx.quic_sniff_decoy。带 UDP 嗅探的中继（Xray destOverride quic）按第一个 QUIC 包的 SNI 改写目标；首个垃圾字节使其放弃。服务器会丢弃该字节。"
-  },
-  "Align MTU to the path": {
-    "value": "按路径对齐 MTU"
-  },
-  "Clamp (default)": {
-    "value": "Clamp（默认）"
-  },
-  "Fill": {
-    "value": "Fill"
-  },
-  "Set the size only where it is not set; values you set are kept, a warning is logged if they do not fit.": {
-    "value": "仅在未设置处设置大小；已设置的值保持不变，放不下时在日志中警告。"
-  },
-  "Leave node values as they are.": {
-    "value": "保持节点的值不变。"
-  },
-  "Set the size where it is not set and lower values that do not fit into the tunnel below.": {
-    "value": "在未设置处设置大小，并降低放不进下层隧道的值。"
   }
 }

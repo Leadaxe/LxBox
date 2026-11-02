@@ -224,10 +224,6 @@ Future<GoldenBuild> buildGoldenConfig(StorageSandbox box) async {
     coreVersion: kGoldenCoreVersion,
     tunApps: await SettingsStorage.getTunApps(),
     vpnMode: await SettingsStorage.getVpnMode(),
-    idleSuspend: await SettingsStorage.getIdleSuspend(),
-    idleSuspendReachable: await SettingsStorage.getIdleSuspendReachable(),
-    wgBuildMax: await SettingsStorage.getWgBuildMax(),
-    wgLazyBuild: await SettingsStorage.getWgLazyBuild(),
     tailscaleStateRoot: kGoldenTailscaleStateRoot,
     mixins: await SettingsStorage.getMixins(), // §704 — у rich_v0 ключа нет
   );

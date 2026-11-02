@@ -46,13 +46,6 @@ Future<BuildSettings> readStoredBuildSettings({
       coreVersion: await CoreVersionCache.ensure(BoxVpnClient().getCoreVersion),
       tunApps: await SettingsStorage.getTunApps(),
       vpnMode: await SettingsStorage.getVpnMode(),
-      idleSuspend: await SettingsStorage.getIdleSuspend(), // §215
-      idleSuspendReachable:
-          await SettingsStorage.getIdleSuspendReachable(), // §272
-      wgBuildMax: await SettingsStorage.getWgBuildMax(), // §542
-      wgLazyBuild: await SettingsStorage.getWgLazyBuild(), // §542
-      quicSniffDecoy: await SettingsStorage.getQuicSniffDecoy(), // §709
-      mtuAlign: await SettingsStorage.getMtuAlign(), // §709
       tailscaleStateRoot: tailscaleStateRoot,
       tailscaleStateDirs: tailscaleStateDirs,
       mixins: await SettingsStorage.getMixins(), // §704

@@ -260,14 +260,6 @@
       "other": "%d хопа"
     }
   },
-  "%d hours": {
-    "value": {
-      "one": "%d час",
-      "few": "%d часа",
-      "many": "%d часов",
-      "other": "%d часа"
-    }
-  },
   "%d hours left": {
     "value": {
       "one": "остался %d час",
@@ -301,14 +293,6 @@
       "few": "%d минуты назад",
       "many": "%d минут назад",
       "other": "%d минуты назад"
-    }
-  },
-  "%d minutes": {
-    "value": {
-      "one": "%d минута",
-      "few": "%d минуты",
-      "many": "%d минут",
-      "other": "%d минуты"
     }
   },
   "%d net": {
@@ -403,14 +387,6 @@
       "few": "%d протокола",
       "many": "%d протоколов",
       "other": "%d протокола"
-    }
-  },
-  "%d seconds": {
-    "value": {
-      "one": "%d секунда",
-      "few": "%d секунды",
-      "many": "%d секунд",
-      "other": "%d секунды"
     }
   },
   "%d server lists": {
@@ -1040,9 +1016,6 @@
   "Already on this device": {
     "value": "Уже есть на этом устройстве"
   },
-  "Also put tunnels on the active route (pool members, the selected node) to sleep after a long quiet period — e.g. overnight. The first connection after sleep adds ~1 round trip. Default 5 min. Below the directions' idle timeout (30 min by default) a group probe can wake a sleeping tunnel for one handshake — the price of sleeping sooner. Requires \"Suspend idle tunnels\" to be on.": {
-    "value": "Усыплять и туннели активного маршрута (члены пула, выбранный узел) после долгого затишья — например, за ночь. Первое соединение после сна будет дольше примерно на один RTT. По умолчанию 5 минут. Если значение меньше тайм-аута простоя Направлений (по умолчанию 30 минут), проба группы может разбудить спящий туннель на одно рукопожатие — цена более раннего сна. Требует включённой настройки «Усыплять неактивные туннели»."
-  },
   "AmneziaWG 1.5 parameters: decoy packets before the WireGuard handshake.": {
     "value": "Параметры AmneziaWG 1.5: пакеты-приманки перед рукопожатием WireGuard."
   },
@@ -1123,9 +1096,6 @@
   },
   "Applies immediately. Very chatty on live traffic — enable, reproduce, grab the log, disable.": {
     "value": "Применяется сразу. Очень многословно на живом трафике — включите, воспроизведите, снимите лог, выключите."
-  },
-  "Applies on next connect.": {
-    "value": "Применится при следующем подключении."
   },
   "Apply": {
     "value": "Применить"
@@ -3479,9 +3449,6 @@
   "No cached source data": {
     "value": "Кэшированных данных источника нет"
   },
-  "No configurable variables": {
-    "value": "Настраиваемых переменных нет"
-  },
   "No connection to %s — check network or URL": {
     "value": "Нет соединения с %s — проверьте сеть или URL"
   },
@@ -4160,9 +4127,6 @@
   },
   "Proxy link, WireGuard config or outbound JSON": {
     "value": "Proxy-ссылка, конфиг WireGuard или JSON исходящего канала"
-  },
-  "Put unreachable WireGuard tunnels to sleep after they sit idle, freeing memory and saving battery. They wake instantly on use. Only affects tunnels not on the active route.": {
-    "value": "Усыплять недоступные туннели WireGuard после простоя — это освобождает память и экономит батарею. При обращении туннель просыпается мгновенно. Касается только туннелей вне активного маршрута."
   },
   "Query timeout": {
     "value": "Тайм-аут запроса"
@@ -4988,27 +4952,6 @@
   },
   "Supported: vless / vmess / trojan / ss / hy2 / tuic / socks5 / proxy-http(s) / wireguard URLs": {
     "value": "Поддерживаются ссылки vless / vmess / trojan / ss / hy2 / tuic / socks5 / proxy-http(s) / wireguard"
-  },
-  "Suspend active-route tunnels": {
-    "value": "Усыплять туннели активного маршрута"
-  },
-  "Suspend idle tunnels": {
-    "value": "Усыплять неактивные туннели"
-  },
-  "Lazy tunnel build": {
-    "value": "Ленивая сборка туннелей"
-  },
-  "Build a WireGuard tunnel only on first use instead of at start. Saves memory with many nodes; the first connection to a node takes a moment longer.": {
-    "value": "Собирать туннель WireGuard при первом использовании, а не при запуске. Экономит память, когда узлов много; первое подключение к узлу чуть дольше."
-  },
-  "Built tunnels limit": {
-    "value": "Лимит собранных туннелей"
-  },
-  "Keep at most this many WireGuard tunnels built at once; the rest are torn down and rebuilt on demand. 0 = no limit.": {
-    "value": "Сколько туннелей WireGuard держать собранными одновременно; остальные разбираются и собираются заново по требованию. 0 — без ограничения."
-  },
-  "0 (no limit)": {
-    "value": "0 (без ограничения)"
   },
   "Switch": {
     "value": "Переключиться"
@@ -6956,12 +6899,6 @@
   "Links from this device": {
     "value": "Ссылки с этого устройства"
   },
-  "Anti-sniff decoy": {
-    "value": "Обманка от сниффинга"
-  },
-  "Send one junk byte before the QUIC handshake so a relay that sniffs UDP cannot redirect the connection by its SNI. Turn on if these nodes fail only through a relay or a proxy chain.": {
-    "value": "Отправлять один мусорный байт перед QUIC-рукопожатием, чтобы релей, который сниффит UDP, не перенаправил соединение по SNI. Включите, если эти узлы не работают только через релей или цепочку прокси."
-  },
   "Core: lx.wg.idle_suspend. An idle WireGuard endpoint that is not on the active route is torn down and rebuilt on its next dial.": {
     "value": "Ядро: lx.wg.idle_suspend. Простаивающий эндпоинт WireGuard вне активного маршрута разбирается и собирается заново при следующем подключении."
   },
@@ -6979,23 +6916,5 @@
   },
   "Core: lx.quic_sniff_decoy. A relay with UDP sniffing (Xray destOverride quic) rewrites the destination by the SNI of the first QUIC packet; a junk first byte makes it give up. Servers drop the byte.": {
     "value": "Ядро: lx.quic_sniff_decoy. Релей со сниффингом UDP (Xray destOverride quic) подменяет назначение по SNI из первого QUIC-пакета; мусорный первый байт заставляет его отступиться. Серверы этот байт отбрасывают."
-  },
-  "Align MTU to the path": {
-    "value": "Выравнивание MTU по пути"
-  },
-  "Clamp (default)": {
-    "value": "Clamp (по умолчанию)"
-  },
-  "Fill": {
-    "value": "Fill"
-  },
-  "Set the size only where it is not set; values you set are kept, a warning is logged if they do not fit.": {
-    "value": "Ставить размер только там, где он не задан; заданные значения не трогаются, если не влезают — предупреждение в журнале."
-  },
-  "Leave node values as they are.": {
-    "value": "Оставлять значения узлов как есть."
-  },
-  "Set the size where it is not set and lower values that do not fit into the tunnel below.": {
-    "value": "Ставить размер там, где он не задан, и понижать значения, которые не влезают в туннель снизу."
   }
 }

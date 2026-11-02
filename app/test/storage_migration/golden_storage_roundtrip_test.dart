@@ -93,16 +93,6 @@ void main() {
             await SettingsStorage.getRouteFinal(),
             flush: false);
       }
-      if (raw.containsKey('route_idle_suspend')) {
-        await SettingsStorage.saveIdleSuspend(
-            await SettingsStorage.getIdleSuspend(),
-            flush: false);
-      }
-      if (raw.containsKey('route_idle_suspend_reachable')) {
-        await SettingsStorage.saveIdleSuspendReachable(
-            await SettingsStorage.getIdleSuspendReachable(),
-            flush: false);
-      }
       if (raw.containsKey('tun_apps')) {
         await SettingsStorage.setTunApps(await SettingsStorage.getTunApps(),
             flush: false);

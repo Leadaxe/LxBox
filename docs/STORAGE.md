@@ -82,8 +82,6 @@ lxbox_settings.json                          # SettingsStorage (Dart), the main 
 │       └─ <groupTag>            object          {url?, timeout_ms?}
 │
 ├─ route_final                   string        override sing-box route.final
-├─ route_idle_suspend            string        §215/§128 — idle-suspend threshold (lx.wg.idle_suspend);
-│                                                a duration ("30s"/"5m"), default "30s" (ENABLED), "" = off; config-significant
 ├─ enabled_groups[]              list          §125 DEPRECATED — read only by the directions[] migration. Safe debris.
 ├─ directions[]                  list          §125 — routing directions (template→storage). See below.
 │   └─ <item>                    object
@@ -208,7 +206,6 @@ Android SharedPreferences:
   "mixins":             [ … ],     // §704 — user inserts into the final core config (config-significant)
   "ping_options":       { … },
   "route_final":        "<tag>",   // override route.final
-  "route_idle_suspend": "30s",     // §215/§128 — idle-suspend threshold (default "30s"; "" = off)
   "enabled_groups":     [ … ],     // §125 DEPRECATED (read only by the directions[] migration)
   "directions":         [ … ],     // §125 — routing directions (template→storage)
   "directions_migrated": true,     // §125/§393 — the guard for the one-shot directions migration
@@ -1725,7 +1722,6 @@ with a warning. A legacy 0.12 file carries a root `chains[]` section (contract 0
 | Key | Type | Purpose |
 |---|---|---|
 | `route_final` | `String` | An override of `route.final` on top of the template (the chosen default outbound). `''` means the template default. A dangling reference (a deleted direction, or the legacy ✨auto) becomes `vpn-1` at build time (§125). |
-| `route_idle_suspend` | `String` | §215/§128 — the idle-suspend threshold (`lx.wg.idle_suspend`, kernel SPEC 020; the key lived at `route.lx_idle_suspend` until the `v1.14.2-lx.1` pin — §535). A duration string (`'30s'` / `'5m'`), **default `'30s'`** (enabled since v2.8.2); `''` means off (the `lx` block is not emitted at all). **Config-significant** (`markConfigDirty`). CRUD: `getIdleSuspend` / `saveIdleSuspend`. |
 | `enabled_groups` | `List<String>` | §125, **DEPRECATED** — replaced by `directions[]`. Read only by the one-shot migration; on disk it is harmless debris. |
 | `last_global_update` | `String` (ISO-8601) | **LEGACY** (§593) — once the timestamp of the last global subscription refresh (§010F). The app neither writes nor reads it any more; it stays in the import allowlist so that an old storage file or backup carrying it is accepted without an “unknown keys” warning. |
 | `presets_migrated` | `bool` | §159 — the “default presets have been seeded” guard (the fresh-install seed). The key's name is historical (it used to drive a legacy migration) and was reused so that users who had already migrated would not be seeded twice. `SettingsStorage.seedDefaultPresets` sets it to true (§644): the seed runs at app start, before every config build and on the Routing screen, so a Connect before the first Routing visit already gets the `default: true` presets; a preset already in `rules` is not duplicated. |
@@ -1736,11 +1732,6 @@ with a warning. A legacy 0.12 file carries a root `chains[]` section (contract 0
 | `profiler_retention_sec` | `int` | §044 — the retention window of the profiler's live journal (the rolling buffer), in seconds. Default `600` (10 minutes), the UI offers 60/600/3600, and valid values are `> 0`. **NOT** config-significant. CRUD: `getProfilerRetentionSec` / `setProfilerRetentionSec`. |
 | `editor_magnifier` | `bool` | §660 — the selection magnifier of the code editor (sora), one setting for the whole app; the ⋮ menu of any editor toggles it. Default `true` (a missing key reads as `true`). **NOT** config-significant. Travels in the backup with the app settings. CRUD: `getEditorMagnifier` / `setEditorMagnifier`. |
 | `mixin_target_suggestions` | `bool` | §704 — the autocomplete suggestions under the Target field of the mixin form; the icon at the right of the field toggles them. Default `true` (a missing key reads as `true`). **NOT** config-significant. Travels in the backup with the app settings. CRUD: `getMixinTargetSuggestions` / `setMixinTargetSuggestions`. |
-| `route_idle_suspend_reachable` | `String` | §272 — the reachable idle window (`lx.wg.idle_suspend_reachable`, §535). A duration string, default `'5m'`. **Config-significant** (`markConfigDirty`). CRUD: `getIdleSuspendReachable` / `saveIdleSuspendReachable`. |
-| `wg_build_max` | `int` | §542 — the WG/AWG build budget (`lx.wg.build_max`, core SPEC 097): how many endpoints stay built at once. Default `5`, `0` = no cap; the UI offers 0/3/5/8/12. Written to the config only together with `idle_suspend`. **Config-significant**. CRUD: `getWgBuildMax` / `saveWgBuildMax`. |
-| `wg_lazy_build` | `bool` | §542 — lazy WG/AWG build (`lx.wg.lazy_build`, core SPEC 097). Default `true`. `false` → neither `lazy_build` nor `build_max` is written. Written only together with `idle_suspend`. **Config-significant**. CRUD: `getWgLazyBuild` / `saveWgLazyBuild`. |
-| `quic_sniff_decoy` | `bool` | §709 — QUIC sniff decoy (`lx.quic_sniff_decoy`, core SPEC 151): one junk byte ahead of the first QUIC Initial of masque h3 / hysteria2 / tuic. Default `true` (owner decision 2026-11-02; the core itself defaults to off), existing installs without the key included. Written only when `true` and the core is `1.14.4-lx.30-rc.3` or newer. In LX Backup. **Config-significant**. CRUD: `getQuicSniffDecoy` / `saveQuicSniffDecoy`. |
-| `mtu_align` | `string` | §709 — MTU alignment (`lx.mtu_align`, core SPEC 120): `clamp` (default, as the core) \| `fill` \| `off`; an unknown value reads as the default. `clamp` is not written to the config, `fill`/`off` are written as a string. In LX Backup. **Config-significant**. CRUD: `getMtuAlign` / `saveMtuAlign`. |
 | `urltest_passive_check` | `bool` | **Retired (§611)** — was §272 passive health checking (`urltest.passive_check`); core lx.12 removed the key. No longer written, emitted or exported to a backup; an old backup's value is skipped silently on import (`retiredTopLevelKeys`). Read once by the §612 migration (`SettingsStorage.migrateUrltestModeIfNeeded`, before the first build), which then deletes it. |
 | `urltest_mode_migrated` | `bool` | §612 — the guard for the one-shot migration from `passive_check` to the `failover` mode. The raw `urltest_passive_check` `true` or absent (the old default) → the Directions' `auto`, the folds' `replace.auto` and the folders' `kind: auto` members (`group.strategy`, not `group_type: selector`) with `least_test` or no `mode` become `failover`; `false` → nothing changes; `round_robin` is never touched. Then `urltest_passive_check` is deleted and this key set to `true`. Exported with Routing (as `directions_migrated`): a backup made before §612 restores without it, and the next start migrates its groups. |
 

@@ -499,6 +499,7 @@ class WizardVar {
     this.onChange,
     this.ref = '',
     this.unique = false,
+    this.enable,
   });
 
   final String name;
@@ -554,6 +555,11 @@ class WizardVar {
   /// нет side-effect (обычная var). Значения — литералы (юзер потом волен
   /// переопределить вручную; это разовый эффект переключения, не форс).
   final Map<String, dynamic>? onChange;
+
+  /// §709 — `#enable` объявления (TEMPLATE_LANG §4.6): условие, при ложном
+  /// строка Settings неактивна; на значение не влияет. `null` — всегда
+  /// активна. Грамматика — та же, что у `#enable` узлов ([evalCond]).
+  final dynamic enable;
 
   /// §265 — ref-var: если непустое, эта запись `vars[]` — не декларация, а
   /// ССЫЛКА на глобальную var с именем `ref` (объявленную в секции). Значение
@@ -649,6 +655,7 @@ class WizardVar {
       // §643 — допустимость (только `text_list`, только bool) проверяет
       // загрузчик шаблона (`validateVarDeclaration`).
       unique: json['unique'] == true,
+      enable: json['#enable'],
     );
   }
 }

@@ -128,6 +128,10 @@ void validateTemplateConstructs(
       final path = 'sections[$name].vars[${v['name']}]';
       validateVarDeclaration(v, path);
       _validateOnChange(v, globals, path);
+      // §709 — `#enable` объявления (строка неактивна): тот же язык условий.
+      if (v.containsKey('#enable')) {
+        validateIfConstructs({'#enable': v['#enable']}, globals, path: path);
+      }
     }
   }
 

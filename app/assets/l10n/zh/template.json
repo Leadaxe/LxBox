@@ -742,5 +742,80 @@
  },
  "fe80::/10 · IPv6 link-local": {
   "value": "fe80::/10 · IPv6 链路本地"
- }
+ },
+  "Align MTU to the path": {
+    "value": "按路径对齐 MTU"
+  },
+  "Packet size of a node that runs over a tunnel (detour, chain). Clamp sets the size where it is not set and lowers values that do not fit; Fill only sets it where it is not set; Off leaves node values as they are.": {
+    "value": "在隧道之上运行的节点（detour、chain）的包大小。Clamp 在未设置处设置大小并降低放不下的值；Fill 仅在未设置处设置；Off 保持节点的值不变。"
+  },
+  "Clamp (default)": {
+    "value": "Clamp（默认）"
+  },
+  "Fill": {
+    "value": "Fill"
+  },
+  "WireGuard": {
+    "value": "WireGuard"
+  },
+  "Sleep WireGuard/AmneziaWG tunnels to save battery and memory. Sleeping tunnels wake automatically on first use.": {
+    "value": "让 WireGuard/AmneziaWG 隧道休眠以节省电量和内存。休眠的隧道在首次使用时自动唤醒。"
+  },
+  "Suspend idle tunnels": {
+    "value": "挂起空闲隧道"
+  },
+  "Put unreachable WireGuard tunnels to sleep after they sit idle, freeing memory and saving battery. They wake instantly on use. Only affects tunnels not on the active route.": {
+    "value": "在不可达的 WireGuard 隧道空闲后让其休眠，释放内存并节省电量。使用时立即唤醒。仅影响不在活动路由上的隧道。"
+  },
+  "30 seconds": {
+    "value": "30 秒"
+  },
+  "2 minutes": {
+    "value": "2 分钟"
+  },
+  "5 minutes": {
+    "value": "5 分钟"
+  },
+  "Suspend active-route tunnels": {
+    "value": "挂起活动路由上的隧道"
+  },
+  "Also put tunnels on the active route (pool members, the selected node) to sleep after a long quiet period — e.g. overnight. The first connection after sleep adds ~1 round trip. Below the directions' idle timeout (30 min by default) a group probe can wake a sleeping tunnel for one handshake — the price of sleeping sooner. Requires \"Suspend idle tunnels\" to be on.": {
+    "value": "在长时间空闲后（例如夜间）也让活动路由上的隧道（池成员、所选节点）休眠。休眠后的首次连接会多一次往返。低于方向的空闲超时（默认 30 分钟）时，组探测可能为一次握手唤醒休眠的隧道——这是提早休眠的代价。需要开启“挂起空闲隧道”。"
+  },
+  "15 minutes": {
+    "value": "15 分钟"
+  },
+  "30 minutes": {
+    "value": "30 分钟"
+  },
+  "1 hour": {
+    "value": "1 小时"
+  },
+  "Lazy tunnel build": {
+    "value": "延迟构建隧道"
+  },
+  "Build a WireGuard tunnel only on first use instead of at start. Saves memory with many nodes; the first connection to a node takes a moment longer.": {
+    "value": "仅在首次使用时构建 WireGuard 隧道，而不是在启动时构建。节点较多时可节省内存；首次连接某个节点会稍慢一些。"
+  },
+  "Built tunnels limit": {
+    "value": "已构建隧道上限"
+  },
+  "Keep at most this many WireGuard tunnels built at once; the rest are torn down and rebuilt on demand. Requires \"Lazy tunnel build\".": {
+    "value": "同时最多保持这么多已构建的 WireGuard 隧道；其余的会被拆除并按需重建。需要开启“延迟构建隧道”。"
+  },
+  "0 (no limit)": {
+    "value": "0（无上限）"
+  },
+  "QUIC": {
+    "value": "QUIC"
+  },
+  "MASQUE (HTTP/3), Hysteria2 and TUIC.": {
+    "value": "MASQUE (HTTP/3)、Hysteria2 和 TUIC。"
+  },
+  "Anti-sniff decoy": {
+    "value": "防嗅探诱饵"
+  },
+  "Send one junk byte before the QUIC handshake so a relay that sniffs UDP cannot redirect the connection by its SNI.": {
+    "value": "在 QUIC 握手前发送一个垃圾字节，使嗅探 UDP 的中继无法按 SNI 重定向连接。"
+  }
 }
