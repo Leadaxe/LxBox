@@ -38,6 +38,16 @@ class TaildropClipTest {
         assertTrue(TaildropServiceFiles.isCandidate(spec, b.name))
     }
 
+    /// Контракт 1.1.154 (TASKS_LXBOX §150): `lx` строкой, дробью или вне
+    /// `versions` — обычный файл, не служебный.
+    @Test
+    fun lxNotAnIntegerVersionIsAnOrdinaryFile() {
+        for (lx in listOf("\"1\"", "1.5", "99", "null")) {
+            val raw = """{"lx":$lx,"commands":[{"kind":"clipboard","text":"x"}]}"""
+            assertNull(lx, TaildropServiceFiles.parseBody(spec, raw.toByteArray(Charsets.UTF_8)))
+        }
+    }
+
     @Test
     fun labelsDifferBetweenFiles() {
         val cmds = JSONArray().put(TaildropServiceFiles.command("open_url", "https://ya.ru"))
