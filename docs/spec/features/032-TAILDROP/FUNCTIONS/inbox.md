@@ -55,7 +55,8 @@ the inbox block on the Network tab.
   inbox by itself; the notification reads "Saved to Downloads" and a tap
   opens the file. If saving fails, the file stays in the inbox and the
   "received" notification offers Save and Delete. Files already in the inbox
-  when the switch is turned on are left alone.
+  are moved the same way when the switch is turned on, when the app starts
+  and when the VPN starts.
 - A saved file leaves the inbox; Downloads holds the copy the user keeps.
 - With the VPN down or the node not running nothing is received (P7); the
   inbox block still lists what was received earlier.
