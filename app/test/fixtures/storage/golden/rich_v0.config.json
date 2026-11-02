@@ -1,4 +1,13 @@
 {
+  "lx": {
+    "quic_sniff_decoy": true,
+    "wg": {
+      "idle_suspend": "30s",
+      "lazy_build": true,
+      "build_max": 5,
+      "idle_suspend_reachable": "5m"
+    }
+  },
   "log": {
     "level": "debug",
     "timestamp": true
@@ -957,13 +966,5 @@
     {
       "type": "oom-killer"
     }
-  ],
-  "lx": {
-    "wg": {
-      "idle_suspend": "30s",
-      "idle_suspend_reachable": "5m",
-      "lazy_build": true,
-      "build_max": 5
-    }
-  }
+  ]
 }

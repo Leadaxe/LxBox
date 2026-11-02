@@ -5800,12 +5800,6 @@
   "%s online / %s": {
     "value": "%s 在线 / 共 %s"
   },
-  "Copy MagicDNS name": {
-    "value": "复制 MagicDNS 名称"
-  },
-  "Copy %s": {
-    "value": "复制 %s"
-  },
   "key expired": {
     "value": "密钥已过期"
   },
@@ -5814,9 +5808,6 @@
   },
   "exit node": {
     "value": "出口节点"
-  },
-  "Copy name": {
-    "value": "复制名称"
   },
   "Waiting for sign-in": {
     "value": "等待登录"
@@ -5862,9 +5853,6 @@
   },
   "Cannot listen on 127.0.0.1:%s: the port is busy or blocked. Close the app that uses it and try again.": {
     "value": "无法监听 127.0.0.1:%s：端口被占用或被禁止。请关闭占用该端口的应用后重试。"
-  },
-  "Copy address": {
-    "value": "复制地址"
   },
   "No reply: %s": {
     "value": "无响应：%s"
@@ -6634,5 +6622,23 @@
   },
   "Core: lx.quic_sniff_decoy. A relay with UDP sniffing (Xray destOverride quic) rewrites the destination by the SNI of the first QUIC packet; a junk first byte makes it give up. Servers drop the byte.": {
     "value": "内核：lx.quic_sniff_decoy。带 UDP 嗅探的中继（Xray destOverride quic）按第一个 QUIC 包的 SNI 改写目标；首个垃圾字节使其放弃。服务器会丢弃该字节。"
+  },
+  "Core: lx.masque.idle_timeout. The idle window for MASQUE nodes that have no idle_timeout of their own.": {
+    "value": "内核：lx.masque.idle_timeout。没有自身 idle_timeout 的 MASQUE 节点的空闲窗口。"
+  },
+  "File sharing is off in this tailnet.": {
+    "value": "此 tailnet 已关闭文件共享。"
+  },
+  "Device is offline.": {
+    "value": "设备离线。"
+  },
+  "Device belongs to another user.": {
+    "value": "设备属于其他用户。"
+  },
+  "Device can't receive files.": {
+    "value": "设备无法接收文件。"
+  },
+  "online": {
+    "value": "在线"
   }
 }

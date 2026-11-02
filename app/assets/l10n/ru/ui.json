@@ -6076,12 +6076,6 @@
   "%s online / %s": {
     "value": "в сети %s из %s"
   },
-  "Copy MagicDNS name": {
-    "value": "Копировать имя MagicDNS"
-  },
-  "Copy %s": {
-    "value": "Копировать %s"
-  },
   "key expired": {
     "value": "ключ истёк"
   },
@@ -6090,12 +6084,6 @@
   },
   "exit node": {
     "value": "exit node"
-  },
-  "Copy name": {
-    "value": "Копировать имя"
-  },
-  "Copy address": {
-    "value": "Копировать адрес"
   },
   "Waiting for sign-in": {
     "value": "ждёт входа"
@@ -6916,5 +6904,23 @@
   },
   "Core: lx.quic_sniff_decoy. A relay with UDP sniffing (Xray destOverride quic) rewrites the destination by the SNI of the first QUIC packet; a junk first byte makes it give up. Servers drop the byte.": {
     "value": "Ядро: lx.quic_sniff_decoy. Релей со сниффингом UDP (Xray destOverride quic) подменяет назначение по SNI из первого QUIC-пакета; мусорный первый байт заставляет его отступиться. Серверы этот байт отбрасывают."
+  },
+  "Core: lx.masque.idle_timeout. The idle window for MASQUE nodes that have no idle_timeout of their own.": {
+    "value": "Ядро: lx.masque.idle_timeout. Окно простоя для узлов MASQUE без собственного idle_timeout."
+  },
+  "File sharing is off in this tailnet.": {
+    "value": "Отправка файлов выключена в этом tailnet."
+  },
+  "Device is offline.": {
+    "value": "Устройство не в сети."
+  },
+  "Device belongs to another user.": {
+    "value": "Устройство принадлежит другому пользователю."
+  },
+  "Device can't receive files.": {
+    "value": "Устройство не принимает файлы."
+  },
+  "online": {
+    "value": "в сети"
   }
 }

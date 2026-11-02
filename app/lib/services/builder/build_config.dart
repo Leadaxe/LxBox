@@ -11,7 +11,6 @@ import '../../models/parser_config.dart';
 import '../../models/server_list.dart';
 import '../../models/source_chain.dart';
 import '../../models/tls_policy.dart';
-import '../contract/body_sanitizer.dart' show coreAtLeast;
 import '../contract/group_genus.dart';
 import '../../models/singbox_entry.dart';
 import '../../models/template_vars.dart';
@@ -259,54 +258,6 @@ String _renderTemplateWarning(TemplateWarning w) =>
 /// §580 — границы int-переменных шаблона, у которых они есть
 /// (TEMPLATE_LANG §6.8). Экран не сохраняет значение вне границ, сборка его
 /// не подставляет.
-/// §709 — первое ядро с `lx.quic_sniff_decoy` (SPEC 151).
-const kQuicSniffDecoyMinCore = '1.14.4-lx.30-rc.3';
-
-/// §709 итер. 2 — корневой блок `lx` из переменных шаблона. Пустая карта —
-/// блок не пишется. В enum-переменных «выключено» = `off` (язык шаблона
-/// отбрасывает пустые `options`).
-///
-/// - `lx.wg` (§215/§272/§535/§536/§542, ядро SPEC 020/097): только при
-///   включённом сне `wg_idle_suspend`; reachable и `lazy_build` ядро без
-///   него отвергает, `build_max` — только при `lazy_build`. `build_overflow`
-///   не пишем (дефолт ядра `wait`), `lx.masque.idle_timeout` тоже — у узлов
-///   WARP свой `idle_timeout`. Старые `route.lx_idle_*` не пишем: значение в
-///   обоих местах = WARN, разное = ядро не стартует.
-/// - `lx.mtu_align` (SPEC 120, ядро с lx.14): `clamp` — дефолт ядра, не
-///   пишется; `fill` / `off` — строкой.
-/// - `lx.quic_sniff_decoy` (SPEC 151): `true` только на ядре от
-///   [kQuicSniffDecoyMinCore] — старое ядро отвергло бы неизвестное поле.
-Map<String, dynamic> buildLxBlock(
-  Map<String, String> vars, {
-  required String coreVersion,
-}) {
-  final lx = <String, dynamic>{};
-  String on(String name) {
-    final v = (vars[name] ?? '').trim();
-    return v == 'off' ? '' : v;
-  }
-
-  final idle = on('wg_idle_suspend');
-  if (idle.isNotEmpty) {
-    final wg = <String, dynamic>{'idle_suspend': idle};
-    final reachable = on('wg_idle_suspend_reachable');
-    if (reachable.isNotEmpty) wg['idle_suspend_reachable'] = reachable;
-    if (vars['wg_lazy_build'] == 'true') {
-      wg['lazy_build'] = true;
-      final max = int.tryParse(vars['wg_build_max'] ?? '') ?? 5;
-      wg['build_max'] = max < 0 ? 0 : max;
-    }
-    lx['wg'] = wg;
-  }
-  final mtu = vars['mtu_align'];
-  if (mtu == 'fill' || mtu == 'off') lx['mtu_align'] = mtu;
-  if (vars['quic_sniff_decoy'] == 'true' &&
-      coreAtLeast(coreVersion, kQuicSniffDecoyMinCore)) {
-    lx['quic_sniff_decoy'] = true;
-  }
-  return lx;
-}
-
 const Map<String, (int, int)> kVarIntBounds = {
   'dns_cache_capacity': (1024, 65535),
 };
@@ -857,11 +808,11 @@ Future<BuildResult?> _buildConfig({
   route['rules'] = ruleSets.getRules();
   config['route'] = route;
 
-  // Корневой блок `lx` ядра (SPEC 098). §709 итер. 2 — значения из
-  // переменных шаблона (секции Network / WireGuard / QUIC), как TLS
-  // Fragmentation; зависимости и гейт ядра — здесь, в языке шаблона их нет.
-  final lx = buildLxBlock(vars, coreVersion: settings.coreVersion);
-  if (lx.isNotEmpty) config['lx'] = lx;
+  // Корневой блок `lx` ядра (SPEC 098) пишет `config` шаблона (§709 итер. 3,
+  // контракт 1.1.151): переменные секций Network / WireGuard / QUIC, ключ —
+  // только при значении, отличном от дефолта ядра. Пустой `lx` ядро (≥ lx.13)
+  // читает как отсутствующий — снимаем его, чтобы конфиг не менялся.
+  if (config['lx'] is Map && (config['lx'] as Map).isEmpty) config.remove('lx');
 
   // §125 — деградация dangling route_final → vpn-1. Ссылка на удалённое Направление
   // или legacy ✨auto (которого больше нет, Решение 2/3) схлопывается в vpn-1

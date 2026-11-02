@@ -159,6 +159,7 @@ class SettingsStorage {
     'dns_strategy',
     'ipv6_enabled',
     'log_level',
+    'masque_idle_timeout',
     'mtu_align',
     'proxy_auth',
     'proxy_listen',

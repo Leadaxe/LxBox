@@ -448,7 +448,7 @@
           "#enable": [{"#not": {"@wg_idle_suspend": "off"}}],
           "title": "Lazy tunnel build", "tooltip": "Build a WireGuard tunnel only on first use instead of at start. Saves memory with many nodes; the first connection to a node takes a moment longer."
         },
-        { "name": "wg_build_max", "type": "enum",
+        { "name": "wg_build_max", "type": "int",
           "default_value": "5", "required": true, "wizard_ui": "edit",
           "#enable": [{"#not": {"@wg_idle_suspend": "off"}}, "@wg_lazy_build"],
           "title": "Built tunnels limit", "tooltip": "Keep at most this many WireGuard tunnels built at once; the rest are torn down and rebuilt on demand. Requires \"Lazy tunnel build\".",
@@ -468,11 +468,44 @@
       "chapter": "core",
       "description": "MASQUE (HTTP/3), Hysteria2 and TUIC.",
       "vars": [
-        {"name": "quic_sniff_decoy", "type": "bool", "default_value": "true", "required": true, "wizard_ui": "edit", "title": "Anti-sniff decoy", "tooltip": "Send one junk byte before the QUIC handshake so a relay that sniffs UDP cannot redirect the connection by its SNI."}
+        {"name": "quic_sniff_decoy", "type": "bool", "default_value": "true", "required": true, "wizard_ui": "edit", "title": "Anti-sniff decoy", "tooltip": "Send one junk byte before the QUIC handshake so a relay that sniffs UDP cannot redirect the connection by its SNI."},
+        { "name": "masque_idle_timeout", "type": "enum",
+          "default_value": "off", "required": true, "wizard_ui": "edit", "title": "MASQUE idle timeout", "tooltip": "Close a MASQUE tunnel that carried no traffic for this long; it reconnects on next use. A node's own idle timeout wins.",
+          "options": [
+            {"title": "Off", "value": "off"},
+            {"title": "2 minutes", "value": "2m"},
+            {"title": "5 minutes", "value": "5m"},
+            {"title": "15 minutes", "value": "15m"},
+            {"title": "30 minutes", "value": "30m"}
+          ]
+        }
       ]
     }
   ],
   "config": {
+    "lx": {
+      "#if wg": [{"#not": {"@wg_idle_suspend": "off"}}, {
+        "wg": {
+          "idle_suspend": "@wg_idle_suspend",
+          "#if reachable": [{"#not": {"@wg_idle_suspend_reachable": "off"}}, {
+            "idle_suspend_reachable": "@wg_idle_suspend_reachable"
+          }],
+          "#if lazy": ["@wg_lazy_build", {
+            "lazy_build": true,
+            "build_max": "@wg_build_max"
+          }]
+        }
+      }],
+      "#if mtu_align": [{"#not": {"@mtu_align": "clamp"}}, {
+        "mtu_align": "@mtu_align"
+      }],
+      "#if quic_sniff_decoy": ["@quic_sniff_decoy", {
+        "quic_sniff_decoy": true
+      }],
+      "#if masque_idle_timeout": [{"#not": {"@masque_idle_timeout": "off"}}, {
+        "masque": {"idle_timeout": "@masque_idle_timeout"}
+      }]
+    },
     "log": {
       "level": "@log_level",
       "timestamp": true

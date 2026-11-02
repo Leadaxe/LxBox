@@ -93,3 +93,25 @@
   записи в allowlist / бэкапе. Значения едут в бэкапе общим `vars`.
 - Реестр контракта (`vars.json`) не трогается: переменные мобильные, в LX
   Backup не переносимы (как раньше ключи хранилища).
+
+## Итерация 3 — `lx` пишет `config` шаблона (контракт 1.1.151, §147)
+
+Решения владельца через лаунчер (TASKS_LXBOX §147): «что можно настроить
+шаблоном — настраивается шаблоном».
+
+- Блок `lx` — в `config` шаблона map-spread `#if` по каждой ветке
+  (`wg` с вложенными `reachable` / `lazy`, `mtu_align`, `quic_sniff_decoy`,
+  `masque_idle_timeout`); ключ только при значении, отличном от дефолта
+  ядра. Код сборки `buildLxBlock` снят; пустой `lx` сборка снимает, чтобы
+  конфиг без lx-настроек не менялся.
+- Гейта версии ядра нет: пин обеих сторон не ниже `1.14.4-lx.30-rc.3`
+  (`af989ee9`).
+- `wg_build_max` — `int` с `options` (ядро ждёт целое).
+- Седьмая переменная `masque_idle_timeout` (секция QUIC): enum `off` / `2m`
+  / `5m` / `15m` / `30m`, дефолт `off` → `lx.masque.idle_timeout`; ключ узла
+  сильнее.
+- Реестр `vars.json` 1.1.151: `mtu_align`, `quic_sniff_decoy`,
+  `masque_idle_timeout` — `in: both`; четыре `wg_*` — `in: mobile`; все
+  `portable: false`.
+- Тест — `app/test/builder/lx_block_template_test.dart` (фрагмент `lx`
+  настоящего шаблона и `#enable` объявлений).

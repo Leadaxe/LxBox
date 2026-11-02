@@ -817,5 +817,11 @@
   },
   "Send one junk byte before the QUIC handshake so a relay that sniffs UDP cannot redirect the connection by its SNI.": {
     "value": "在 QUIC 握手前发送一个垃圾字节，使嗅探 UDP 的中继无法按 SNI 重定向连接。"
+  },
+  "MASQUE idle timeout": {
+    "value": "MASQUE 空闲超时"
+  },
+  "Close a MASQUE tunnel that carried no traffic for this long; it reconnects on next use. A node's own idle timeout wins.": {
+    "value": "在 MASQUE 隧道这么长时间没有流量后将其关闭；下次使用时重新连接。节点自身的空闲超时优先。"
   }
 }
