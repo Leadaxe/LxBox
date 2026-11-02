@@ -260,7 +260,7 @@ of `libbox.so` reports `1.14.4-lx.25`. AAR sha256
 (checked against the release `SHA256SUMS`).
 
 **`v1.14.4-lx.30-rc.1`** — the same base (upstream `v1.14.4`), prerelease.
-**SPEC 149** (LxBox tasks 706/708): `CommandClient.tailscaleLogin(tag,
+**SPEC 149** (LxBox task 706, iteration 2): `CommandClient.tailscaleLogin(tag,
 authKey)` signs a Tailscale node in with a new auth key (an empty key starts
 the interactive sign-in) without restarting the core; errors:
 FailedPrecondition (service or endpoint not running, endpoint disabled,

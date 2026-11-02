@@ -2,9 +2,9 @@
 
 | Field | Value |
 |-------|-------|
-| Status | Done |
+| Status | In progress (итерация 2) |
 | Start date | 2026-11-02 |
-| End date | 2026-11-02 |
+| End date | итерация 1 — 2026-11-02 |
 | Commits | `fix(tailscale): вкладка Network вне сети — exit node не стирается, Replace key (§706)` |
 | Related specs | [030-TAILSCALE · networks-tab](../features/030-TAILSCALE/FUNCTIONS/networks-tab.ru.md), P21 |
 
@@ -86,7 +86,58 @@ restarts to sign in with the new key.» в `ru`/`zh`.
   --strict` — 0/0.
 - На устройстве не проверено (DEVICE-PENDING).
 
-## Unresolved / follow-up
+## Итерация 2 — вход без перезапуска VPN, выключение и перезапуск узла
 
-- Вход с новым ключом без перезапуска VPN — ручка ядра запрошена у сессии
-  ядра; после неё заменить тело `applyNewKey`.
+Ядро `v1.14.4-lx.30-rc.1` (SPEC 149, пин `1aad3339`):
+`CommandClient.tailscaleLogin(tag, authKey)` и `setEndpointEnabled(tag,
+enabled)` для Tailscale (WantRunning; выключенный узел отвергает дайлы сразу;
+`endpointState` up/disabled/down в `GetOutbounds`; не переживает перезапуск
+сервиса). Коды ошибок `tailscaleLogin`: `failed_precondition` (сервис или
+узел не запущен, узел выключен, уже вошёл — «log out first»), `not_found`,
+`invalid_argument`, `unavailable`; отказ ключа виден асинхронно в
+`backendState`/health.
+
+**Решение.**
+
+1. Мост: `cc_channel.dart` `tailscaleLogin(tag, authKey)` →
+   `VpnPlugin.kt` / `BoxCommandClient.kt` → `CommandClient.tailscaleLogin`;
+   ошибки ядра — `PlatformException` с кодом как у `setEndpointEnabled`
+   (gRPC-статус → `failed_precondition` / `not_found` / `invalid_argument` /
+   `unavailable` / `error`).
+2. `TailscaleNetworkActions.applyNewKey` — вместо сборки и `reloadVpn`:
+   туннель не поднят → не звать ядро, вернуть «ключ применится при старте
+   VPN»; иначе `tailscaleLogin(liveTag, key)`. Результат — тип с тремя
+   исходами (вошёл в работу / отложено до старта VPN / отказ с кодом), не
+   `bool`. Снеки: успех — «Signing in with the new key…»; отложено — «Key
+   saved. It applies when the VPN starts.»; `failed_precondition` при
+   выключенном узле — «Turn the node on first.»; прочее — «Could not sign in
+   with the new key.». Ключ в тело узла пишется как в итерации 1 (до вызова
+   ядра), чтобы пережить перезапуск. `DebugRegistry`-путь сборки и
+   `reloadVpn` из `applyNewKey` убрать.
+3. Вкладка Network, блок Status, пока туннель поднят и ядро отдало
+   `endpointStates[liveTag]`:
+   - переключатель «Node enabled» с подписью «Stays off until you turn it on
+     or stop the VPN.» — тот же текст и поведение, что у WG/AWG на экране
+     узла (`outbound_view_screen.dart` `_endpointBlock`), через
+     `HomeController.setEndpointEnabled` (множество выключенных, переприменение
+     после reload — уже там) и `toggleEndpoint`-снеки;
+   - кнопка «Restart node» рядом с Sign in / Log out / Replace key, видна при
+     узле не `disabled`: `setEndpointEnabled(false)` → `setEndpointEnabled(true)`,
+     снек «Node restarted.» или текст отказа как у `toggleEndpoint`; на время
+     вызова кнопка неактивна.
+   Связь вкладки с `HomeController` — через `TailscaleNetworkActions` (как
+   сейчас `applyNewKey`), чтобы тесты подменяли фейком.
+4. `node_actions.dart` `toggleEndpoint`: текст `invalid_argument` — «Only
+   WireGuard, AmneziaWG and Tailscale nodes can be turned off.» (старую строку
+   из l10n убрать). Пункт Turn off / Turn on в списке узлов уже общий (по
+   `endpointStates`) — Tailscale получает его без правок.
+5. l10n `ru`/`zh` для новых строк; неиспользуемые убрать («The VPN restarts
+   to sign in with the new key.», «Key saved. It applies when the VPN
+   restarts.», если больше не нужны).
+
+**Проверка.** Тесты `tailscale_network_tab_test.dart` (applyNewKey: три
+исхода и снеки; переключатель и Restart node видны только при поднятом
+туннеле и состоянии ядра; Restart зовёт off→on), тест моста при наличии
+образца. Эмулятор: узел Tailscale с живым tailnet — Replace key из NeedsLogin
+без перезапуска VPN, Turn off → трафик через узел отвергается, Turn on и
+Restart node возвращают Running (SPEC 149 п.7 TASKS — первая живая проверка).
