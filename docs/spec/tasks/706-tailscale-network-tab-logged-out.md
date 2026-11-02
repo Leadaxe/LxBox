@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Status | Done, DEVICE-PENDING (итерация 2) |
+| Status | Итерация 2: выключатель и Restart проверены на эмуляторе; Replace key ждёт исправления ядра |
 | Start date | 2026-11-02 |
 | End date | итерации 1 и 2 — 2026-11-02 |
 | Commits | `fix(tailscale): вкладка Network вне сети — exit node не стирается, Replace key (§706)`; итерация 2: `b086e8ca`, `fd3a0e61` |
@@ -178,6 +178,19 @@ Restart off→on с неактивной кнопкой; отказ выключ
 код отказа). `flutter analyze` по изменённым файлам — без замечаний.
 Kotlin локально не собирался (CI).
 
-**Не проверено (DEVICE-PENDING):** эмулятор с живым tailnet — Replace key из
-NeedsLogin без перезапуска VPN, Turn off → отказ трафика через узел, Turn on и
-Restart node → Running.
+**Эмулятор, 02.11.2026** (Android 14 arm64, ядро lx.30-rc.1, живой tailnet,
+два узла Tailscale в одном конфиге):
+- Node enabled выкл → `disabled`, backendState Stopped, Restart node скрыта;
+  вкл → `up`, Running. Restart node → `false → disabled`, `true → up`
+  (~20 мс), узел Running. Выключатель и Restart на обоих экранах
+  (настройки узла, вид узла с главной).
+- NeedsLogin после Log out: Sign in, Replace key, Restart node, имя «—».
+- **Replace key НЕ входит:** ключ записан в узел верно (сверен побайтно),
+  `tailscaleLogin` вернул успех, но узел остался в NeedsLogin с health «You
+  are logged out. The last login error was: invalid key: API key does not
+  exist», ядро ушло во вход по ссылке («Tailscale Authentication»). Тот же
+  ключ после reload VPN — Running за ~6 с. Дефект ядра SPEC 149
+  (`TailscaleLogin`: `Start` с ключом после явного Logout), передан сессии
+  ядра; ждём rc.2.
+- Мелочь: в Devices у узла в NeedsLogin пустая строка без имени («0 online /
+  1»).
