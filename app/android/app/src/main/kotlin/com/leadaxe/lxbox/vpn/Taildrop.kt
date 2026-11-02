@@ -274,7 +274,7 @@ object Taildrop {
             finished.count > 0L -> notifier.failed(L10n.str(ctx, R.string.taildrop_reason_interrupted))
             finishError.get().isNotEmpty() -> {
                 Log.w(TAG, "taildrop send failed")
-                notifier.failed(finishError.get())
+                notifier.failed(failureText(finishError.get()))
             }
             else -> notifier.sent()
         }
@@ -407,6 +407,11 @@ object Taildrop {
 
     /// Своё id на каждый файл: ядро шлёт все уведомления Taildrop с одним
     /// typeID, и снятие «receiving» иначе снимало бы и «received».
+    /// Текст отказа ядра для уведомления: без обёртки gomobile/gRPC
+    /// (`taildrop send: rpc error: code = Unknown desc = <текст>` → `<текст>`).
+    internal fun failureText(raw: String): String =
+        raw.substringAfterLast("desc = ").removePrefix("taildrop send: ").trim().ifEmpty { raw }
+
     fun coreNotificationId(identifier: String): Int =
         5000 + (identifier.hashCode() and 0x3fff)
 
