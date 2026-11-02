@@ -34,7 +34,7 @@ milliseconds. `startTailscaleSSHSession` is not used.
 | Called from | `scripts/build-local-apk.sh` and CI (`ci.yml` → the android job → “Fetch sing-box-lx core”) |
 | The AAR in git | NO (~110 MB as of lx.25; `app/android/app/libs/` is in `.gitignore`); `build.gradle.kts` → `implementation(files("libs/libbox.aar"))` |
 
-**The current pin: `v1.14.4-lx.29`** (see `app/android/libbox.version`) — lx.1
+**The current pin: `v1.14.4-lx.30-rc.1`** (see `app/android/libbox.version`) — lx.1
 plus XHTTP HTTP-version parity (**SPEC 104**, lx.2), Vision on top of VLESS
 Encryption (**SPEC 105**, lx.3), the runtime WG/AWG endpoint toggle
 (**SPEC 106**, lx.4: `CommandClient.setEndpointEnabled`, `endpointState =
@@ -44,7 +44,7 @@ default without `xmux` moved to `max_connections 3` (lx.6), three MASQUE hangs f
 control channel on port 443 from the first connection (**SPEC 111**, lx.9),
 the headroom Tailscale needs on a direct UDP path restored in the AWG
 wireguard-go (**SPEC 112**, lx.10), one more `stable` sync (lx.11), lx.12 and
-lx.13-rc.1, lx.13, lx.14, lx.15, lx.16–lx.18, lx.19–lx.21, lx.22–lx.23, lx.24-rc.1/rc.2, lx.24, lx.25, lx.26, lx.27, lx.28 and lx.29 (below). The Java surface of lx.11 is identical to lx.8 (`javap` over both
+lx.13-rc.1, lx.13, lx.14, lx.15, lx.16–lx.18, lx.19–lx.21, lx.22–lx.23, lx.24-rc.1/rc.2, lx.24, lx.25, lx.26, lx.27, lx.28, lx.29 and lx.30-rc.1 (below). The Java surface of lx.11 is identical to lx.8 (`javap` over both
 `classes.jar`). The `lx.1` layers: **SPEC 097**, **SPEC 098**, **SPEC 101** and
 the upstream sync to sing-box **1.14.2** (**SPEC 102**).
 
@@ -258,6 +258,27 @@ renders both since task 687's follow-up `0f130376`). `javap` over the full
 of `libbox.so` reports `1.14.4-lx.25`. AAR sha256
 `442b4830ea01966dc47a35735633fd7925eb46866eaa94a82788a130ef1719d4`
 (checked against the release `SHA256SUMS`).
+
+**`v1.14.4-lx.30-rc.1`** — the same base (upstream `v1.14.4`), prerelease.
+**SPEC 149** (LxBox tasks 706/708): `CommandClient.tailscaleLogin(tag,
+authKey)` signs a Tailscale node in with a new auth key (an empty key starts
+the interactive sign-in) without restarting the core; errors:
+FailedPrecondition (service or endpoint not running, endpoint disabled,
+already logged in — "log out first"), NotFound, InvalidArgument, Unavailable;
+a rejected key shows asynchronously in `backendState`/health. The existing
+`setEndpointEnabled(tag, enabled)` now also covers Tailscale (maps to
+WantRunning; while disabled a dial through the node fails at once with
+"Tailscale endpoint is disabled"; `endpointState` up/disabled/down; not
+persisted across a service restart). Also in the rc: x/net v0.62.0,
+x/crypto v0.58.0, grpc v1.83.2 (`go 1.26.0` in go.mod) and an Info line with
+the oom-killer mode at start (SPEC 148 §5). Java surface lx.29 → lx.30-rc.1
+(`javap` over the full `classes.jar`): one addition —
+`CommandClient.tailscaleLogin(String, String)`. Build tags identical (the
+`-tags=` line of `libbox.so`), `kCoreBuildTagsPin` moved with the pin,
+`strings` of `libbox.so` reports `1.14.4-lx.30-rc.1`. AAR sha256
+`8c5d99cbb9c2fc469db6b123a8c20d1312ae628eec8d92ce45a2c403522fb8ed` (the
+release `SHA256SUMS`). Live sign-in by key and the off/on cycle against
+control are not verified on a device.
 
 **`v1.14.4-lx.29`** — the same base (upstream `v1.14.4`, drift 0, Go
 1.26.10), stable without an rc line, one change. **SPEC 148** (issue
