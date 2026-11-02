@@ -24,6 +24,7 @@ import '../handlers/ping.dart';
 import '../handlers/pool.dart';
 import '../handlers/profiler.dart';
 import '../handlers/support.dart';
+import '../handlers/taildrop.dart';
 import '../handlers/rules.dart';
 import '../handlers/settings.dart';
 import '../handlers/state.dart';
@@ -164,7 +165,11 @@ class DebugServer {
         token: config.token,
         unauthenticatedPaths: config.unauthenticatedPaths,
       ),
-      timeoutMiddleware(config.requestTimeout),
+      timeoutMiddleware(config.requestTimeout, perPath: {
+        '/taildrop/send': config.requestTimeout > kTaildropSendRequestTimeout
+            ? config.requestTimeout
+            : kTaildropSendRequestTimeout,
+      }),
     ];
   }
 
@@ -237,6 +242,7 @@ Router buildDebugRouter() {
     ..mount('/settings', settingsHandler)
     ..mount('/wifi_history', wifiHistoryHandler)
     ..mount('/profiler', profilerHandler)
-    ..mount('/support', supportHandler); // §357 — тест support-ленты
+    ..mount('/support', supportHandler) // §357 — тест support-ленты
+    ..mount('/taildrop', taildropHandler); // §707 итер. 5 — Taildrop узлов
 }
 

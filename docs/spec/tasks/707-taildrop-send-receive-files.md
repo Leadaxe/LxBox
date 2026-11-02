@@ -699,3 +699,73 @@ root-доступ by design, маска — удобство).
   отправка ts-a → ts-b, автосохранение, Save/Delete, отказ при
   `allow=false`, служебный файл без и с разрешением (счётчики
   `service-files`).
+
+### Result (итерация 5)
+
+Сделано:
+- Раздел `/taildrop` Debug API (`app/lib/services/debug/handlers/taildrop.dart`,
+  смонтирован в `buildDebugRouter`): все десять маршрутов таблицы Solution.
+  Действия — через `TaildropDebugActions` (по умолчанию `CcChannel`, тот же,
+  что у вкладки Network; тесты подменяют `instance`).
+- Натив: `Taildrop.send` получил необязательный колбэк итога (`SendDone`:
+  `sent` / `cancelled` / `error` с текстом ядра без обёртки gRPC) — тот же
+  путь, что «Send file…», с уведомлением и Cancel; `Taildrop.saveToDownloads`
+  — Save с именем записи `MediaStore`; `BoxCommandClient.taildropInboxOnce` —
+  разовый снимок входящих формы потока вкладки (`taildropInboxSnapshot`
+  итерации 4 теперь на нём), у принятых файлов добавлен `sender_id`;
+  `TaildropServiceFiles.stats()` — счётчики разбора.
+- Канал: `ccTaildropSendBytes` (байты с именем или заметка `Taildrop.noteItem`,
+  ожидание итога), `ccTaildropInboxSnapshot` (снимок + sha256 файлов с диска),
+  `taildropServiceStats`; `ccTaildropSave` — флаг `downloads_only` и `name` в
+  ответе. Dart: `CcTaildropFile.senderId/sha256`, `CcTaildropResult.name`.
+- `/help` (текст и JSON), `docs/api/debug-api-reference.md` (раздел Taildrop),
+  CHANGELOG.
+
+Решения исполнителя:
+- `POST /taildrop/send` ждёт итог 60 с, а общий предел запроса Debug API —
+  30 с: у `timeoutMiddleware` появился предел по пути (`perPath`), у
+  `/taildrop/send` — 65 с. Не уложилась — `202 status:"in_progress"`
+  (передача идёт дальше). Ошибка ядра — 409 с его текстом.
+- `GET /taildrop` и `PUT /taildrop/settings` работают и при выключенном VPN
+  (поля ядра `null`); остальные маршруты — 409. Узлы — endpoint'ы
+  `tailscale` конфига работающего ядра, его нет — сохранённого.
+- `allow` — по хранимому телу (`taildropAllowedByBody`), тело ищется как у
+  Save choice (свой сервер / член папки), затем среди узлов подписок;
+  запись `allow` — только своему серверу и члену папки (`storeTailscaleFields`),
+  узел подписки — 409.
+- `peer` — stable ID, имя устройства, MagicDNS-имя или IP; не найден — 404 без
+  повтора значения (это может быть имя).
+- Индекс входящих — по времени приёма, при равенстве по имени. Save / Delete
+  принимают и `name` вместо `index` (имя известно с `reveal`). Save ниже
+  Android 10 — 409 (системный диалог маршрут не открывает).
+- Служебный файл собирается в Dart из ассета реестра (`name_prefix`,
+  `name_time_format` — поддержан только `YYYYMMDDTHHMMSSZ`, иначе 500,
+  `name_label_length`, `versions` — последняя, `max_bytes` — проверяется, как
+  у отправителя §7). Команды не проверяются: Debug API шлёт и битые, чтобы
+  проверять разбор получателя.
+- `content_base64` упирается в предел тела Debug API 1 MiB (файл до ~750 KB):
+  предел не поднимали, для больших файлов остаётся «Send file…».
+- Счётчики (только в памяти натива, с начала процесса): кроме таблицы —
+  `unknown_kind`, `skipped_scheme`, `no_handler` (у `open_url`), иначе
+  пропуск не виден. `executed.clipboard` — одна запись в буфер на пачку
+  (последний `clipboard`, §6); `expired` и `received` — по файлам, `invalid`
+  и `skipped_*` — по командам. `last` — последняя ВЫПОЛНЕННАЯ команда;
+  в ответе `sha256` значения, само значение (`value`) — с `reveal`.
+- sha256 входящих считается при каждом `GET /taildrop/inbox` чтением файла
+  целиком; на файлах в гигабайты запрос может упереться в предел 30 с.
+
+Проверено:
+- `flutter test test/services/debug/taildrop_handler_test.dart` (новый, 15:
+  поля узлов, VPN off, маска имён и `reveal`, 404/409/400, сортировка и
+  индексы входящих, три формы отправки, 202/409, имя и тело служебного
+  файла по реестру, `max_bytes`, save/delete/cancel по индексу, settings,
+  permissions, счётчики, предел по пути у таймаута),
+  `help_json_test.dart`, `server_integration_test.dart`,
+  `pipeline_test.dart` — зелёные.
+- `flutter analyze` по изменённым dart-файлам — 0;
+  `./gradlew :app:compileDebugKotlin` — без ошибок.
+
+Не проверено: эмулятор — весь сценарий Verification (цепочка `curl`
+ts-a → ts-b, автосохранение, Save/Delete, отказ при `allow=false`,
+служебный файл без и с разрешением, счётчики); Kotlin-часть (колбэк итога
+отправки, снимок с sha256, счётчики) — только компиляцией.

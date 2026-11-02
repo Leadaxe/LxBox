@@ -45,6 +45,7 @@
   ([task 706](docs/spec/tasks/706-tailscale-network-tab-logged-out.md)).**
   The Network tab has a Node enabled switch and Restart node; Turn off / Turn
   on in the node list now works for Tailscale nodes too.
+- **Debug API `/taildrop/*`** ([task 707](docs/spec/tasks/707-taildrop-send-receive-files.md#итерация-5--маршруты-debug-api-для-taildrop)): send files, notes and service files, list and manage the inbox, autosave, Allow Taildrop, per-device permissions and service-file counters without tapping the screen.
 
 ### Changed
 

@@ -9,10 +9,16 @@ import '../pipeline.dart';
 ///
 /// Сам sing-box может зависнуть на `/group/<tag>/delay` при отсутствии
 /// сети — без этого middleware curl повис бы на минуты.
-Middleware timeoutMiddleware(Duration limit) {
+///
+/// [perPath] — свой предел для отдельных путей (точное совпадение): §707
+/// итер. 5 `POST /taildrop/send` ждёт итога передачи до 60 с.
+Middleware timeoutMiddleware(
+  Duration limit, {
+  Map<String, Duration> perPath = const {},
+}) {
   return (req, ctx, next) async {
     try {
-      return await next().timeout(limit);
+      return await next().timeout(perPath[req.path] ?? limit);
     } on TimeoutException {
       throw const RequestTimeout();
     }

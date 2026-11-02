@@ -93,6 +93,7 @@ auth), а не факт, что за границей всё открыто.
 - [Backup — `/backup/*`](#backup--backup)
 - [Diagnostics — `/diag/*` (§038)](#diagnostics--diag-038)
 - [Support feed — `/support/*`](#support-feed--support)
+- [Taildrop — `/taildrop/*`](#taildrop--taildrop)
 - [Profiler — `/profiler/*`](#profiler--profiler)
 - [Common errors](#common-errors)
 - [Синхронизация с `/help`](#синхронизация-с-help)
@@ -1707,6 +1708,102 @@ curl -X POST -H "$HDR" -H "Content-Type: application/json" \
 # Прогнать ленту с нуля
 curl -X POST -H "$HDR" "$BASE/support/reset"
 ```
+
+---
+
+## Taildrop — `/taildrop/*`
+
+§707 итер. 5 — Taildrop узлов Tailscale без тапов по экрану. Маршруты зовут те
+же нативные пути, что вкладка Network узла, «Send file…» и кнопки уведомлений
+приёма (уведомления при этом показываются как обычно). Работают и при
+свёрнутом приложении.
+
+Имена файлов и устройств, текст буфера и ссылки по умолчанию не отдаются
+(правило 030); `?reveal=true` открывает их — как у `GET /state/subs`, маска —
+удобство, не граница.
+
+| Endpoint | Метод | Что делает |
+|---|---|---|
+| `/taildrop` | GET | по каждому узлу `tailscale` конфига: `tag`, `allow` (галка «Allow Taildrop» по хранимому телу; `null` — тело не найдено), `disable_taildrop` (собранный конфиг), `backend_state`, `can_share_files` (ядро), `autosave`, `autosave_supported`, `inbox_files`, `receiving`, `self_id`. VPN выключен — узлы есть, поля ядра `null` |
+| `/taildrop/peers?tag=` | GET | устройства узла: `id` (stable), `os`, `online`, `can_receive_files`, `sharee`, `permissions{clipboard,open_url}`; `name` — с `reveal` |
+| `/taildrop/inbox?tag=` | GET | `files[]`: `index`, `size`, `sha256` (файл на диске), `age_s`, `sender_id`; `receiving[]`: `index`, `size`, `received_bytes`, `progress`, `sender_id`; `name`/`sender_name` — с `reveal` |
+| `/taildrop/send` | POST | `{tag, peer, name, content_base64}` \| `{tag, peer, text}` (заметка `note-…txt`) \| `{tag, peer, commands:[…]}` (служебный файл); ждёт итог до 60 с |
+| `/taildrop/inbox/save` | POST | `{tag, index}` или `{tag, name}` — как Save (Downloads, Android 10+); имя записи в Downloads — с `reveal` |
+| `/taildrop/inbox/delete` | POST | `{tag, index}` или `{tag, name}` — как Delete |
+| `/taildrop/inbox/cancel` | POST | `{tag, index}` — индекс в `receiving`, как Cancel приёма |
+| `/taildrop/settings` | PUT | `{tag, autosave?, allow?}`; `?rebuild=true` |
+| `/taildrop/permissions` | PUT | `{tag, peer, kind, enabled}` — вид из `kinds` реестра `service_files.json` |
+| `/taildrop/service-files` | GET | счётчики разбора служебных файлов с начала процесса |
+
+```bash
+# Узлы и их состояние
+curl -s -H "$HDR" "$BASE/taildrop" | jq
+# Устройства узла ts-a с именами
+curl -s -H "$HDR" "$BASE/taildrop/peers?tag=ts-a&reveal=true" | jq
+# Отправить файл с ts-a на устройство (peer = stable ID, имя, MagicDNS-имя или IP)
+curl -s -X POST -H "$HDR" -H "Content-Type: application/json" \
+  -d "{\"tag\":\"ts-a\",\"peer\":\"lxbox-emu-b\",\"name\":\"t.bin\",\"content_base64\":\"$(base64 < t.bin)\"}" \
+  "$BASE/taildrop/send" | jq
+# → {"ok":true,"action":"taildrop-send","tag":"ts-a","peer_id":"n…CNTRL","status":"sent","bytes":N,"sha256":"…"}
+# Заметка
+curl -s -X POST -H "$HDR" -d '{"tag":"ts-a","peer":"lxbox-emu-b","text":"hello"}' "$BASE/taildrop/send"
+# Служебный файл: текст в буфер получателя (имя lx-<время>-<метка>.json собирается само)
+curl -s -X POST -H "$HDR" \
+  -d '{"tag":"ts-a","peer":"lxbox-emu-b","commands":[{"kind":"clipboard","text":"copied"}]}' \
+  "$BASE/taildrop/send"
+# Входящие ts-b, сохранить первый файл, удалить второй
+curl -s -H "$HDR" "$BASE/taildrop/inbox?tag=ts-b" | jq
+curl -s -X POST -H "$HDR" -d '{"tag":"ts-b","index":0}' "$BASE/taildrop/inbox/save?reveal=true"
+curl -s -X POST -H "$HDR" -d '{"tag":"ts-b","index":0}' "$BASE/taildrop/inbox/delete"
+# Отменить приём
+curl -s -X POST -H "$HDR" -d '{"tag":"ts-b","index":0}' "$BASE/taildrop/inbox/cancel"
+# Автосохранение (сразу, с разбором лежащего) и галка Allow Taildrop (тело узла)
+curl -s -X PUT -H "$HDR" -d '{"tag":"ts-b","autosave":true}' "$BASE/taildrop/settings"
+curl -s -X PUT -H "$HDR" -d '{"tag":"ts-b","allow":true}' "$BASE/taildrop/settings?rebuild=true"
+curl -s -X POST -H "$HDR" "$BASE/action/reload-vpn"
+# Разрешить буфер обмена от устройства
+curl -s -X PUT -H "$HDR" -d '{"tag":"ts-b","peer":"lxbox-emu-a","kind":"clipboard","enabled":true}' \
+  "$BASE/taildrop/permissions"
+# Счётчики служебных файлов (текст последней команды — с reveal)
+curl -s -H "$HDR" "$BASE/taildrop/service-files?reveal=true" | jq
+```
+
+**Отправка.** Ровно одна форма из трёх, иначе 400. `content_base64` ограничен
+телом запроса Debug API (1 MiB → файл до ~750 KB). Служебный файл: имя
+`<name_prefix><UTC YYYYMMDDTHHMMSSZ>-<метка name_label_length [a-z0-9]><name_suffix>`,
+тело `{"lx": <последняя из versions>, "commands": […]}`, константы — реестр
+`service_files.json`; команды не проверяются (можно слать битые — проверять
+разбор получателя), тело больше `max_bytes` → 400. Передача идёт тем же путём,
+что «Send file…» (уведомление с процентом и Cancel); ответ ждёт итог до 60 с
+(у маршрута свой предел запроса 65 с вместо общих 30): `200 status:"sent"`,
+`202 status:"in_progress"` (не уложилась, идёт дальше), `409` с текстом ядра
+(«Taildrop is disabled on this node», отмена у получателя и т.п.). В ответе —
+`bytes` и `sha256` отправленного (у заметки — текста), имя — с `reveal`.
+
+**Входящие.** Индексы `files` — по времени приёма, при равенстве по имени:
+стабильны, пока входящие не менялись. `sha256` считает натив по файлу в
+`taildrop_directory` узла (из последнего собранного конфига); пусто — файла на
+диске нет. `sender_id` — stable ID отправителя (ядро lx.30-rc.2+; после
+перезапуска ядра пусто). Save ниже Android 10 — 409 (системный «Сохранить
+как» маршрут не открывает).
+
+**Настройки.** `autosave` — настройка устройства, действует сразу; включение
+забирает и лежащее во входящих (как переключатель на вкладке). `allow` пишет
+`disable_taildrop: false` / снимает поле в теле узла тем же путём, что галка
+блока Settings (проверка ядром, запись); узел подписки — 409 (тело у
+подписки). Применяется после `?rebuild=true` и `POST /action/reload-vpn`.
+
+**Счётчики служебных файлов** (с начала процесса, только в памяти натива):
+`received` (файлов признано служебными), `executed.clipboard` (записей в буфер —
+одна на пачку, последний `clipboard`), `executed.open_url` (уведомлений «Link
+from …»), `skipped_no_permission`, `expired` (файлов старше `ttl_seconds`),
+`invalid` (битых команд), `unknown_kind`, `skipped_scheme`, `no_handler` (ссылку
+нечем открыть), `last` — последняя выполненная команда `{kind, at, sha256}`,
+`value` (текст или ссылка) — с `reveal`.
+
+**Отказы** — общий формат: нет узла `tailscale` с таким тегом — 404; VPN
+выключен, узел не запущен в ядре, ядро не отдало входящие (Taildrop узла
+выключен) — 409; пир не найден — 404 (значение `peer` в тексте не повторяется).
 
 ---
 

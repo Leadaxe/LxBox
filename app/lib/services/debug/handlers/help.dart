@@ -586,6 +586,26 @@ POST /support/preview                          Body = ONE feed-format message ob
                                                  ?dry=true (default) — buttons work but markRead/snooze are NOT persisted; ?dry=false — persisted.
                                                  ?snooze_hours=N — snooze_active_hours of the synthetic feed (default 10). Requires UI process (409 otherwise).
 
+=== Taildrop (§707) ===
+
+Names of files and devices, clipboard text and links are hidden unless ?reveal=true.
+409 — VPN off, node not running in the core, Taildrop off for the node (core text); 404 — no such Tailscale node.
+GET  /taildrop                                 Per Tailscale node of the config: tag, allow (node body), disable_taildrop (built config),
+                                                 backend_state, can_share_files, autosave, inbox_files, receiving, self_id. Works with VPN off.
+GET  /taildrop/peers?tag=T                     Devices: id (stable), os, online, can_receive_files, sharee, permissions{clipboard,open_url}; name with reveal.
+GET  /taildrop/inbox?tag=T                     Received files {index,size,sha256,age_s,sender_id} + receiving {index,size,received_bytes,progress}.
+POST /taildrop/send                            {tag,peer,name,content_base64} | {tag,peer,text} (note) | {tag,peer,commands:[...]} (service file).
+                                                 peer = stable ID, device name, MagicDNS name or IP. Waits up to 60 s: 200 sent, 202 in_progress, 409 core error.
+POST /taildrop/inbox/save                      {tag,index|name} → Downloads (Android 10+); name in Downloads with reveal.
+POST /taildrop/inbox/delete                    {tag,index|name}
+POST /taildrop/inbox/cancel                    {tag,index} — index into receiving.
+PUT  /taildrop/settings[?rebuild=true]         {tag,autosave?,allow?}. autosave applies at once (sweeps the inbox); allow writes the node body,
+                                                 applies after ?rebuild=true + POST /action/reload-vpn.
+PUT  /taildrop/permissions                     {tag,peer,kind:clipboard|open_url,enabled}
+GET  /taildrop/service-files                   Service-file counters since process start: received, executed{clipboard,open_url},
+                                                 skipped_no_permission, expired, invalid, unknown_kind, skipped_scheme, no_handler,
+                                                 last{kind,at,sha256} (value with reveal).
+
 === Diagnostics ===
 
 GET /diag/dump                                 Full JSON pack from DumpBuilder.build (config + vars + subs + log + stderr + exit_info + logcat).
@@ -854,6 +874,17 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/support/state', 'description': 'support_state.json (read/baseline/snooze/active) + app_version + total_active_seconds'},
     {'method': 'POST', 'path': '/support/reset', 'params': {'keep_active': 'true|false'}, 'description': 'Wipe read/baseline/snooze/cache; keep_active=false also zeroes the activity counter'},
     {'method': 'POST', 'path': '/support/preview', 'params': {'dry': 'true|false', 'snooze_hours': 'N'}, 'description': 'Body = one feed-format message → immediate fullscreen show, gates bypassed; dry=true (default) does not persist markRead/snooze'},
+    // Taildrop (§707 итер. 5)
+    {'method': 'GET', 'path': '/taildrop', 'description': 'Tailscale nodes of the config: tag, allow (body), disable_taildrop (built), backend_state, can_share_files, autosave, inbox_files, receiving, self_id'},
+    {'method': 'GET', 'path': '/taildrop/peers', 'params': {'tag': 'node tag', 'reveal': 'true|false'}, 'description': 'Node devices: id, os, online, can_receive_files, sharee, permissions; name with reveal. 409 VPN off'},
+    {'method': 'GET', 'path': '/taildrop/inbox', 'params': {'tag': 'node tag', 'reveal': 'true|false'}, 'description': 'Received files {index,size,sha256,age_s,sender_id} and receiving with progress; names with reveal'},
+    {'method': 'POST', 'path': '/taildrop/send', 'params': {'reveal': 'true|false'}, 'body': '{tag,peer,name,content_base64} | {tag,peer,text} | {tag,peer,commands:[...]}', 'description': 'Send a file, a note or a service file (SERVICE_FILES.md) the same native way as Send file…; waits up to 60 s: 200 sent, 202 in_progress, 409 core error'},
+    {'method': 'POST', 'path': '/taildrop/inbox/save', 'params': {'reveal': 'true|false'}, 'body': '{tag,index|name}', 'description': 'Save to Downloads (Android 10+), as the Save button'},
+    {'method': 'POST', 'path': '/taildrop/inbox/delete', 'body': '{tag,index|name}', 'description': 'Delete a received file'},
+    {'method': 'POST', 'path': '/taildrop/inbox/cancel', 'body': '{tag,index}', 'description': 'Cancel a file being received (index into receiving)'},
+    {'method': 'PUT', 'path': '/taildrop/settings', 'params': {'rebuild': 'true|false'}, 'body': '{tag,autosave?,allow?}', 'description': 'Autosave to Downloads (at once) and Allow Taildrop (node body; after rebuild + reload-vpn)'},
+    {'method': 'PUT', 'path': '/taildrop/permissions', 'body': '{tag,peer,kind,enabled}', 'description': 'Allow a service-file command kind (clipboard|open_url) from a device'},
+    {'method': 'GET', 'path': '/taildrop/service-files', 'params': {'reveal': 'true|false'}, 'description': 'Service-file counters since process start; last executed command {kind,at,sha256}, value with reveal'},
     // Diagnostics
     {'method': 'GET', 'path': '/diag/dump', 'description': 'Full DumpBuilder JSON-pack'},
     {'method': 'GET', 'path': '/diag/exit-info', 'description': 'ApplicationExitInfo entries (API 30+; empty on lower)'},
