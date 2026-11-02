@@ -252,7 +252,7 @@ Node deleted   → its Taildrop directory removed with its state
   media control and the like are outside the feature.
 - Tailscale SSH — see [030-TAILSCALE](../030-TAILSCALE/FEATURE.md#boundaries)
   (decided there).
-- No Debug API routes for Taildrop in this draft.
+- Debug API routes for Taildrop (`/taildrop/*`) are described in `docs/api/debug-api-reference.md` (task 707, iteration 5).
 - Not verified on a device; the device page is verified on an emulator.
 
 ## Functions
