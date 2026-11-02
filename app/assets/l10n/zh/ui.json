@@ -6626,16 +6626,19 @@
   "Core: lx.masque.idle_timeout. The idle window for MASQUE nodes that have no idle_timeout of their own.": {
     "value": "内核：lx.masque.idle_timeout。没有自身 idle_timeout 的 MASQUE 节点的空闲窗口。"
   },
-  "Copy %s": {
-    "value": "复制 %s"
+  "File sharing is off in this tailnet.": {
+    "value": "此 tailnet 已关闭文件共享。"
   },
-  "Copy MagicDNS name": {
-    "value": "复制 MagicDNS 名称"
+  "Device is offline.": {
+    "value": "设备离线。"
   },
-  "Copy address": {
-    "value": "复制地址"
+  "Device belongs to another user.": {
+    "value": "设备属于其他用户。"
   },
-  "Copy name": {
-    "value": "复制名称"
+  "Device can't receive files.": {
+    "value": "设备无法接收文件。"
+  },
+  "online": {
+    "value": "在线"
   }
 }

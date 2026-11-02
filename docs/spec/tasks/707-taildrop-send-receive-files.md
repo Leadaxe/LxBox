@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Status | Done (итерации 1–5; эмулятор 02.11.2026); итерация 6 (отправка с телефона: плитка, ссылка) — не начата |
+| Status | Done (итерации 1–6; эмулятор 02–03.11.2026); итерация 7 (отправка с телефона: плитка, ссылка) — не начата |
 | Start date | 2026-11-02 |
 | End date | 2026-11-02 |
 | Commits | `1d30e211` `feat(taildrop): отправка и приём файлов — «Поделиться», Send file…, входящие узла (§707)` |
@@ -524,7 +524,7 @@ tag, name, target)` (API 29+ → `MediaStore.Downloads`, затем файл и�
 Текст буфера, ссылки, имена файлов и устройств — не в AppLog, logcat, дамп,
 Debug API.
 
-### Out of scope (итерация 6)
+### Out of scope (итерация 7)
 
 Отправка с телефона: плитка «Send clipboard» и устройство-цель, «Поделиться»
 ссылкой → «Open on <device>» / «Send as note».
@@ -787,3 +787,85 @@ ts-a → ts-b, автосохранение, Save/Delete, отказ при `all
   (`ts-b` → `🕸️ ts-b`), если такой один.
 - Замечание: `disable_taildrop` в `GET /taildrop` у включённых узлов `null`,
   хотя в собранном конфиге `false` — читает поле только как `true`.
+
+## Итерация 6 — страница устройства вместо меню
+
+Владелец 02.11.2026: «по клике на узел давай настройки отображать а не в
+контекстом окне». Сейчас тап по устройству в списке Devices вкладки Network
+открывает нижний лист: пункты копирования, Ping, Send file… и под ними
+переключатели «Clipboard from this device» / «Links from this device». Лист
+сделан под действия; настройки устройства в нём теряются и закрываются
+случайным тапом мимо.
+
+### Solution
+
+Тап по строке устройства открывает **страницу устройства** (полноэкранная,
+со стрелкой назад); нижний лист снимается. Макет согласован с владельцем:
+
+```
+←  LexRouter
+● online · linux · exit node
+⚡ direct 192.168.1.5:41641
+  [ ⌁ Ping ]      [ ⇪ Send file… ]
+  (причина, если Send file… неактивна)
+Addresses
+Name                         LexRouter ⧉
+MagicDNS   lexrouter.tail1234.ts.net   ⧉
+IPv4                      100.89.58.52 ⧉
+IPv6        fd7a:115c:a1e0::8f2d:3a35  ⧉
+Taildrop
+Clipboard from this device        [  ○]
+Links from this device            [  ○]
+```
+
+- **Сводка:** точка и `online`/`offline`, ОС и роли (как второй этаж
+  строки); как подключено — та же иконка пути и текст, что в строке.
+- **Кнопки.** Ping — если есть адрес, открывает тот же лист проверки. Send
+  file… видна всегда; неактивна с причиной под кнопками, первая по порядку:
+  | Условие | Текст |
+  |---------|-------|
+  | Taildrop узла выключен | `Taildrop is off for this node` |
+  | ядро: узлу нельзя отправлять (`canShareFiles` false) | `File sharing is off in this tailnet` |
+  | устройство не в сети | `Device is offline` |
+  | устройство чужое (`shareeNode`) | `Device belongs to another user` |
+  | ядро: не получатель (`canReceiveFiles` false) | `Device can't receive files` |
+
+  Выключенный Allow Taildrop на той стороне заранее не виден: ядро его не
+  публикует (SPEC 149 §4 — другие видят узел получателем). Он выясняется
+  отказом при отправке, как сейчас.
+- **Addresses:** Name, MagicDNS name (если известно), каждый адрес
+  Tailscale с подписью IPv4/IPv6; тап по строке копирует значение,
+  «Copied».
+- **Taildrop:** «Clipboard from this device», «Links from this device» — при
+  прежних условиях (Taildrop узла включён, есть stable ID, не sharee); пишется
+  сразу. Нет условий — блока нет вместе с заголовком.
+- **Живое обновление:** пока страница открыта, вкладка продолжает опрос
+  `GetTailscaleStatus` раз в 3 с (как на экране) и страница берёт запись
+  устройства по stable ID. Устройство пропало из записи — остаётся последнее
+  известное.
+- **Долгий тап по строке** в списке копирует первый адрес без страницы.
+- Новые строки en/ru/zh: `Addresses`, `Actions` не нужен, `Taildrop`,
+  `online`, `offline`, `IPv4`, `IPv6`, `Name`, `MagicDNS` и пять причин.
+
+### Verification
+
+- Widget-тест вкладки: тап по устройству открывает страницу с именем в
+  заголовке, строками адресов, Ping; Send file… неактивна с причиной при
+  выключенном Taildrop узла; долгий тап копирует первый адрес; тап по `+N`
+  страницу не открывает.
+- Эмулятор: тап по устройству → страница; переключатель разрешения → `GET
+  /taildrop/peers` показывает новое значение.
+
+### Result (итерация 6)
+
+- `app/lib/widgets/tailscale_network_tab.dart`: `_openDevice` (страница
+  `_DevicePage` вместо нижнего листа), `_sendBlock` (причины по таблице),
+  `_live` + `_devicePageOpen` (опрос не останавливается, пока страница
+  открыта), долгий тап копирует первый адрес. Строки старого меню (`Copy
+  name`, `Copy MagicDNS name`, `Copy address`, `Copy %s`) сняты из словарей.
+- Тест `test/widgets/tailscale_network_tab_test.dart` — 62/62.
+- Эмулятор 03.11.2026 (ts-a): страница lxbox-emu-b и LexRouter — сводка,
+  Ping / Send file… активны, адреса с IPv4/IPv6, блок Taildrop; LxBox-cph2411
+  (не в сети) — `last seen 30m ago`, Send file… неактивна, «Device is
+  offline.»; переключатель Clipboard на странице → `GET /taildrop/peers`
+  `clipboard: true`, обратно → `false`.

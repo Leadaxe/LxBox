@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/vpn/cc_channel.dart';
@@ -210,6 +211,10 @@ CcTailscaleStatus _dropStatus({bool canShare = true}) => CcTailscaleStatus(
       ],
     );
 
+ButtonStyleButton sendButton(WidgetTester tester) =>
+    tester.widget<ButtonStyleButton>(
+        find.byKey(const ValueKey('tailscale-device-send')));
+
 void main() {
   Future<void> pump(
     WidgetTester tester, {
@@ -354,27 +359,59 @@ void main() {
       await tester.pump();
       expect(find.text('10.0.0.9'), findsOneWidget);
       expect(find.byIcon(Icons.expand_less), findsOneWidget);
-      // Меню строки при раскрытии не открылось.
+      // Страница устройства при раскрытии не открылась.
       expect(find.text('Ping'), findsNothing);
       await tester.tap(more);
       await tester.pump();
       expect(find.text('10.0.0.9'), findsNothing);
     });
 
-    testWidgets('меню: MagicDNS-имя и пункт на каждый адрес',
+    testWidgets('§707 итер. 6 — страница: имя, MagicDNS и строка на адрес',
         (tester) async {
       await tester.binding.setSurfaceSize(const Size(800, 2400));
       addTearDown(() => tester.binding.setSurfaceSize(null));
       await pump(tester, data: [st()]);
       await tester.tap(find.widgetWithText(ListTile, 'router').last);
       await tester.pumpAndSettle();
-      expect(find.text('Copy name'), findsOneWidget);
-      expect(find.text('Copy MagicDNS name'), findsOneWidget);
-      expect(find.text('Copy address'), findsNothing);
+      expect(find.widgetWithText(AppBar, 'router'), findsOneWidget);
+      expect(find.byKey(const ValueKey('tailscale-device-copy-router')),
+          findsOneWidget);
+      expect(
+          find.byKey(
+              const ValueKey('tailscale-device-copy-router.tail.ts.net')),
+          findsOneWidget);
       for (final ip in multi.ips) {
-        expect(find.text('Copy $ip'), findsOneWidget);
+        expect(find.byKey(ValueKey('tailscale-device-copy-$ip')),
+            findsOneWidget);
       }
+      expect(find.text('IPv6'), findsOneWidget);
       expect(find.text('Ping'), findsOneWidget);
+      // Taildrop узла выключен — Send file… видна, неактивна, с причиной.
+      final send = tester.widget<ButtonStyleButton>(
+          find.byKey(const ValueKey('tailscale-device-send')));
+      expect(send.onPressed, isNull);
+      expect(find.text('Taildrop is off for this node.'), findsOneWidget);
+    });
+
+    testWidgets('§707 итер. 6 — долгий тап копирует первый адрес',
+        (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 2400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final copied = <Object?>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.setData') copied.add(call.arguments);
+        return null;
+      });
+      addTearDown(() => tester.binding.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null));
+      await pump(tester, data: [st()]);
+      await tester.longPress(find.widgetWithText(ListTile, 'router').last);
+      await tester.pumpAndSettle();
+      expect(copied, [
+        {'text': '100.64.0.9'}
+      ]);
+      expect(find.byType(AppBar), findsNothing);
     });
   });
 
@@ -1045,17 +1082,25 @@ void main() {
       expect(find.byKey(const ValueKey('taildrop-sharing-off')), findsOneWidget);
       await tester.tap(find.widgetWithText(ListTile, 'laptop').last);
       await tester.pumpAndSettle();
-      expect(find.text('Send file…'), findsNothing);
+      expect(sendButton(tester).onPressed, isNull);
+      expect(find.text('File sharing is off in this tailnet.'), findsOneWidget);
     });
 
     testWidgets('Send file… только у цели отправки', (tester) async {
       final actions = _DropActions();
       await pumpDrop(tester, actions);
-      await tester.tap(find.widgetWithText(ListTile, 'tv').last);
-      await tester.pumpAndSettle();
-      expect(find.text('Send file…'), findsNothing);
-      await tester.tapAt(const Offset(10, 10));
-      await tester.pumpAndSettle();
+      for (final (name, reason) in [
+        ('tv', "Device can't receive files."),
+        ('guest', 'Device belongs to another user.'),
+        ('desk', 'Device is offline.'),
+      ]) {
+        await tester.tap(find.widgetWithText(ListTile, name).last);
+        await tester.pumpAndSettle();
+        expect(sendButton(tester).onPressed, isNull, reason: name);
+        expect(find.text(reason), findsOneWidget);
+        await tester.pageBack();
+        await tester.pumpAndSettle();
+      }
       await tester.tap(find.widgetWithText(ListTile, 'laptop').last);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Send file…'));
@@ -1078,13 +1123,14 @@ void main() {
       expect(find.text('photo.jpg'), findsNothing);
       await tester.tap(find.widgetWithText(ListTile, 'laptop').last);
       await tester.pumpAndSettle();
-      expect(find.text('Send file…'), findsNothing);
+      expect(sendButton(tester).onPressed, isNull);
+      expect(find.text('Taildrop is off for this node.'), findsOneWidget);
       expect(find.byKey(const ValueKey('taildrop-permission-clipboard')),
           findsNothing);
       expect(actions.calls.where((c) => c.startsWith('perms:')), isEmpty);
     });
 
-    testWidgets('§707 итер. 4 — разрешения устройства в его меню',
+    testWidgets('§707 итер. 4 — разрешения на странице устройства',
         (tester) async {
       final actions = _DropActions();
       await pumpDrop(tester, actions);

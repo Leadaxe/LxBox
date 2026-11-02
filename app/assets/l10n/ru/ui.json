@@ -6908,16 +6908,19 @@
   "Core: lx.masque.idle_timeout. The idle window for MASQUE nodes that have no idle_timeout of their own.": {
     "value": "Ядро: lx.masque.idle_timeout. Окно простоя для узлов MASQUE без собственного idle_timeout."
   },
-  "Copy %s": {
-    "value": "Копировать %s"
+  "File sharing is off in this tailnet.": {
+    "value": "Отправка файлов выключена в этом tailnet."
   },
-  "Copy MagicDNS name": {
-    "value": "Копировать имя MagicDNS"
+  "Device is offline.": {
+    "value": "Устройство не в сети."
   },
-  "Copy address": {
-    "value": "Копировать адрес"
+  "Device belongs to another user.": {
+    "value": "Устройство принадлежит другому пользователю."
   },
-  "Copy name": {
-    "value": "Копировать имя"
+  "Device can't receive files.": {
+    "value": "Устройство не принимает файлы."
+  },
+  "online": {
+    "value": "в сети"
   }
 }
