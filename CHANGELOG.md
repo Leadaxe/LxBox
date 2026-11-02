@@ -26,7 +26,9 @@
   the device and not in the backup) moves every received file to Downloads;
   the notification then reads "Saved to Downloads" and opens the file. Receive
   notifications got Cancel (while receiving) and Save / Delete (once received;
-  Save on Android 10+).
+  Save on Android 10+). Files already waiting in the inbox go to Downloads too:
+  when the switch is turned on, when the app starts and when the VPN starts
+  (one "Saved N files to Downloads" notification per run).
 - **Tailscale node on/off and restart on the fly
   ([task 706](docs/spec/tasks/706-tailscale-network-tab-logged-out.md)).**
   The Network tab has a Node enabled switch and Restart node; Turn off / Turn
