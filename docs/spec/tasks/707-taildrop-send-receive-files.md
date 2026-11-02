@@ -468,4 +468,75 @@ tag, name, target)` (API 29+ → `MediaStore.Downloads`, затем файл и�
 отвергло бы весь конфиг. Все `min_core` реестра ниже текущего пина — на них
 правка не влияет.
 
-Остальное ТЗ — после тега ядра.
+Ядро вышло: пин `v1.14.4-lx.30-rc.2` (`5a313f30`), контракт 1.1.150
+синкнут (`ac921a16`). Нормы — `app/contract/docs/SERVICE_FILES.md`,
+`app/contract/README.md` (строки про `disable_taildrop` и «Гейты сборки»),
+`app/contract/registry/service_files.json`, `registry/protocols/tailscale.json`.
+
+### Solution
+
+**A. Галка «Allow Taildrop».**
+- Подпись «Allow Taildrop (send and receive files)». Где: блок Settings
+  вкладки Network узла (как «Advertise this device as exit node», через
+  `onSaveFields`) и форма узла Tailscale (Add server / правка), если там есть
+  поля узла. Вкл → в тело `disable_taildrop: false`; выкл → поле снимается.
+- Сборка (config-форма, как `taildrop_directory`): нет явного
+  `disable_taildrop: false` в теле → эмитится `disable_taildrop: true`.
+  Ядро ниже `min_core` — поле снимает полевой гейт (`coreAtLeast` уже с
+  пре-релизами, `101afbd1`). Хранимое тело не трогается. Эталоны сборки
+  (golden) обновить.
+- Применяется после перезапуска VPN (ядро на лету не переключает) — тем же
+  путём, что другие поля узла (галка §338 «Auto-restart VPN on settings
+  change»).
+- Узел с выключенным Taildrop (по статусу ядра `canShareFiles == false` или
+  по телу): на вкладке Network нет блока Inbox, «Send file…» и переключателя
+  автосохранения; вместо Inbox — строка «Taildrop is off for this node.»;
+  в «Поделиться» узел не предлагается; разбор входящих и автосохранение его не
+  трогают.
+
+**B. Приём служебных файлов** (нормы SERVICE_FILES.md §2–§6, константы из
+`service_files.json`, не литералами).
+- В нативе, там же, где автосохранение и разбор входящих (итерации 2–3):
+  кандидат `lx-*.json` разбирается раньше автосохранения и уведомления
+  «принят». Служебный (по §4) → команды по §6 → файл удаляется всегда;
+  не служебный → обычный файл (автосохранение и уведомление как сейчас).
+- Отправитель: `TaildropFile.senderID` (новое поле), пусто — `senderName`
+  (§5). Для этого нативу нужна запись входящих (подписка / снимок
+  `subscribeTaildropInbox`), не только уведомление ядра.
+- `clipboard` → `ClipboardManager.setPrimaryClip` (из фона разрешено); из
+  нескольких подряд — последний по §6. `open_url` (только схемы из
+  `kinds.open_url.schemes`) → уведомление «Link from <device>» с адресом в
+  тексте, тап открывает `ACTION_VIEW`; нет обработчика — ничего.
+- Просроченный (TTL) или без разрешения — удаляется молча; битая команда —
+  warning в AppLog без текста и ссылки.
+
+**C. Разрешения.**
+- Меню устройства на вкладке Network узла (где «Send file…»): переключатели
+  «Clipboard from this device», «Links from this device». По умолчанию выкл.
+- Хранятся на устройстве (`lxbox_taildrop`), не в бэкапе; ключ — тег узла +
+  stable ID пира + вид. Для файла без `senderID` сравнивается `senderName` с
+  именем пира, записанным при выдаче разрешения (§5: имя к ID само не
+  привязывается — разрешение по ID действует и при пустом senderID только
+  если совпало имя, сохранённое вместе с ID).
+- Удаление узла / смена тега снимают его разрешения (как `goneTailscaleTags`).
+
+**D. Тексты.** en/ru/zh (`docs/l10n.md`, нативные — `values*/strings.xml`).
+Текст буфера, ссылки, имена файлов и устройств — не в AppLog, logcat, дамп,
+Debug API.
+
+### Out of scope (итерация 5)
+
+Отправка с телефона: плитка «Send clipboard» и устройство-цель, «Поделиться»
+ссылкой → «Open on <device>» / «Send as note».
+
+### Verification
+
+- Тесты на затронутые файлы: эмиссия `disable_taildrop` (нет поля → true,
+  `false` в теле → не трогается, ядро ниже min_core → снято), галка в блоке
+  Settings, скрытие Inbox/Send file у выключенного узла, корпус контракта
+  `tailscale_disable_taildrop_false`. Полный прогон — CI.
+- Эмулятор: галка выкл → отправка на узел даёт отказ «Taildrop is disabled on
+  this node»; вкл + reload → работает; служебный файл с `clipboard` при
+  выключенном разрешении — удалён, буфер не тронут; включено — буфер
+  заполнен; `open_url` — уведомление, тап открывает; битый `lx-*.json` —
+  обычный файл во входящих.
