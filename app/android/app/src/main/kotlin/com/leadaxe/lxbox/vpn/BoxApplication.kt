@@ -63,6 +63,11 @@ class BoxApplication : Application() {
         // первом WifiInfoReader.read с пройденным preflight.
         wifiStateCache = WifiStateCache(this)
 
+        // §707 итер. 3 — принятое во входящие узлов с автосохранением (без
+        // галки, до её включения, неудачи прошлых попыток) уходит в Downloads.
+        // В фоне, одной очередью с другими разборами.
+        Taildrop.sweepInboxesAsync(this)
+
         // libbox setup async в IO. К моменту start VPN setup завершён.
         // `libboxReady` — sync-барьер для VPN auto-start / QS-tile сразу
         // после boot (там race возможна).

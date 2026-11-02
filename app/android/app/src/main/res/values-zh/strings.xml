@@ -86,4 +86,10 @@
     <string name="taildrop_saved_title">已保存到“下载”：%1$s</string>
     <string name="taildrop_save_failed">无法保存：%1$s</string>
     <string name="taildrop_delete_failed">无法删除：%1$s</string>
+    <plurals name="taildrop_saved_files">
+        <item quantity="other">已将 %1$d 个文件保存到“下载”</item>
+    </plurals>
+    <plurals name="taildrop_couldnt_save_files">
+        <item quantity="other">无法保存 %1$d 个文件</item>
+    </plurals>
 </resources>

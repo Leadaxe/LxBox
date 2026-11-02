@@ -1068,6 +1068,8 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                     result.success(false)
                 } else {
                     Taildrop.setAutoSave(context, tag, enabled)
+                    // §707 итер. 3 — включили: забрать и то, что уже лежит.
+                    if (enabled) Taildrop.sweepInboxesAsync(context)
                     result.success(true)
                 }
             }

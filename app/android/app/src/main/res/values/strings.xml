@@ -90,4 +90,12 @@
     <string name="taildrop_saved_title">Saved to Downloads: %1$s</string>
     <string name="taildrop_save_failed">Couldn\'t save: %1$s</string>
     <string name="taildrop_delete_failed">Couldn\'t delete: %1$s</string>
+    <plurals name="taildrop_saved_files">
+        <item quantity="one">Saved %1$d file to Downloads</item>
+        <item quantity="other">Saved %1$d files to Downloads</item>
+    </plurals>
+    <plurals name="taildrop_couldnt_save_files">
+        <item quantity="one">Couldn\'t save %1$d file</item>
+        <item quantity="other">Couldn\'t save %1$d files</item>
+    </plurals>
 </resources>

@@ -86,4 +86,16 @@
     <string name="taildrop_saved_title">Сохранено в Загрузки: %1$s</string>
     <string name="taildrop_save_failed">Не удалось сохранить: %1$s</string>
     <string name="taildrop_delete_failed">Не удалось удалить: %1$s</string>
+    <plurals name="taildrop_saved_files">
+        <item quantity="one">Сохранён %1$d файл в Загрузки</item>
+        <item quantity="few">Сохранено %1$d файла в Загрузки</item>
+        <item quantity="many">Сохранено %1$d файлов в Загрузки</item>
+        <item quantity="other">Сохранено %1$d файла в Загрузки</item>
+    </plurals>
+    <plurals name="taildrop_couldnt_save_files">
+        <item quantity="one">Не удалось сохранить %1$d файл</item>
+        <item quantity="few">Не удалось сохранить %1$d файла</item>
+        <item quantity="many">Не удалось сохранить %1$d файлов</item>
+        <item quantity="other">Не удалось сохранить %1$d файла</item>
+    </plurals>
 </resources>

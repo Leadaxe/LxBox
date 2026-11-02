@@ -47,6 +47,10 @@ object L10n {
         if (args.isEmpty()) ctx(base).getString(id)
         else ctx(base).getString(id, *args)
 
+    /// Строка с числом (`<plurals>`): форма по [count] под выбранной локалью.
+    fun plural(base: Context, id: Int, count: Int, vararg args: Any): String =
+        ctx(base).resources.getQuantityString(id, count, *args)
+
     /// §279 (спека §6.3) — MethodChannel `setAppLanguage`: pref →
     /// LocaleManager-пуш (33+) + last_pushed_locale-зеркало → relabel всех
     /// нативных поверхностей. "system" обязан пушить ПУСТОЙ список — иначе

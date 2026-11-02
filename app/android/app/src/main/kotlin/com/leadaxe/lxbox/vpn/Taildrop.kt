@@ -1,5 +1,6 @@
 package com.leadaxe.lxbox.vpn
 
+import android.app.DownloadManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -36,6 +37,7 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLongArray
 import java.util.concurrent.atomic.AtomicReference
@@ -604,9 +606,16 @@ object Taildrop {
             runCatching { notificationManager(ctx).cancel(id) }
             return
         }
+        // Файл уже уносит разбор входящих — он и снимет это уведомление.
+        val key = inFlightKey(note.tag, note.name)
+        if (!inFlight.add(key)) return
         val saved = AtomicReference<Uri?>(null)
-        val err = runCatching { saveInternal(ctx, note.tag, note.name, null, saved) }
-            .getOrElse { it.message ?: L10n.str(ctx, R.string.taildrop_reason_cant_write) }
+        val err = try {
+            runCatching { saveInternal(ctx, note.tag, note.name, null, saved) }
+                .getOrElse { it.message ?: L10n.str(ctx, R.string.taildrop_reason_cant_write) }
+        } finally {
+            inFlight.remove(key)
+        }
         val uri = saved.get()
         if (err == null && uri != null) {
             showSaved(ctx, id, note.tag, uri, displayName(ctx, uri) ?: note.name)
@@ -639,25 +648,44 @@ object Taildrop {
     /// «Saved to Downloads: <name>»; тап открывает файл, нет обработчика —
     /// вкладку узла.
     private fun showSaved(ctx: Context, id: Int, tag: String, uri: Uri, name: String) {
+        showDone(ctx, id, L10n.str(ctx, R.string.taildrop_saved_title, name), null,
+            viewFileIntent(ctx, id, uri, name) ?: openNodeIntent(ctx, tag, id))
+    }
+
+    /// Итоговое уведомление сохранения (без кнопок, снимается по тапу).
+    private fun showDone(ctx: Context, id: Int, title: String, text: String?, content: PendingIntent?) {
         ensureChannel(ctx)
-        val view = Intent(Intent.ACTION_VIEW)
-            .setDataAndType(uri, mimeOf(name))
-            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-        val content = if (view.resolveActivity(ctx.packageManager) != null) {
-            PendingIntent.getActivity(
-                ctx, id, view,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-            )
-        } else {
-            openNodeIntent(ctx, tag, id)
-        }
         val b = NotificationCompat.Builder(ctx, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
-            .setContentTitle(L10n.str(ctx, R.string.taildrop_saved_title, name))
+            .setContentTitle(title)
             .setAutoCancel(true)
+        if (!text.isNullOrEmpty()) b.setContentText(text)
         content?.let { b.setContentIntent(it) }
         runCatching { notificationManager(ctx).notify(id, b.build()) }
             .onFailure { Log.w(TAG, "taildrop notify failed: ${it.javaClass.simpleName}") }
+    }
+
+    /// Открыть сохранённый файл; `null` — обработчика нет.
+    private fun viewFileIntent(ctx: Context, id: Int, uri: Uri, name: String): PendingIntent? {
+        val view = Intent(Intent.ACTION_VIEW)
+            .setDataAndType(uri, mimeOf(name))
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (view.resolveActivity(ctx.packageManager) == null) return null
+        return PendingIntent.getActivity(
+            ctx, id, view,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+    }
+
+    /// Системные «Загрузки»; `null` — обработчика нет.
+    private fun viewDownloadsIntent(ctx: Context, id: Int): PendingIntent? {
+        val view = Intent(DownloadManager.ACTION_VIEW_DOWNLOADS)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (view.resolveActivity(ctx.packageManager) == null) return null
+        return PendingIntent.getActivity(
+            ctx, id, view,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
     }
 
     private fun displayName(ctx: Context, uri: Uri): String? = runCatching {
@@ -760,6 +788,162 @@ object Taildrop {
             null
         }
     }
+
+    // ─────────────── разбор входящих узлов с автосохранением ───────────────
+
+    /// Уведомление итога разбора — одно на прогон, следующий его заменяет.
+    private const val SWEEP_NOTE_ID = 4999
+
+    /// Файлы, которые сейчас уносит в Downloads разбор или автосохранение
+    /// по уведомлению: второй путь их пропускает.
+    private val inFlight: MutableSet<String> = ConcurrentHashMap.newKeySet()
+    private fun inFlightKey(tag: String, name: String) = "$tag/$name"
+
+    /// Одна очередь на процесс: прогоны идут по одному.
+    private val sweepLock = Any()
+
+    /// Фоновый прогон уже ждёт очереди — новый запрос он и покроет.
+    private val sweepQueued = AtomicBoolean(false)
+
+    /// Разобрать входящие в фоне (старт процесса, включение переключателя).
+    fun sweepInboxesAsync(ctx: Context) {
+        if (!autoSaveSupported()) return
+        if (!sweepQueued.compareAndSet(false, true)) return
+        val app = ctx.applicationContext
+        scope.launch {
+            runCatching {
+                synchronized(sweepLock) {
+                    sweepQueued.set(false)
+                    sweepLocked(app, beforeCoreStart = false)
+                }
+            }.onFailure {
+                sweepQueued.set(false)
+                Log.w(TAG, "taildrop inbox sweep failed: ${it.javaClass.simpleName}")
+            }
+        }
+    }
+
+    /// Разобрать входящие из старта VPN — до старта ядра, после переноса
+    /// старой общей папки. Блокирующий — звать с IO.
+    fun sweepInboxesBeforeCoreStart(ctx: Context) {
+        if (!autoSaveSupported()) return
+        synchronized(sweepLock) { sweepLocked(ctx.applicationContext, beforeCoreStart = true) }
+    }
+
+    /// У каждого узла Tailscale последнего собранного конфига с включённым
+    /// переключателем готовые файлы входящих уходят в Downloads. VPN работает —
+    /// через ядро (выгрузка + удаление: входящие ядра не расходятся с
+    /// диском); ядра нет — прямо с диска. Ядро поднимается или гаснет, а
+    /// прогон не из старта VPN, — ничего: старт VPN разберёт сам.
+    private fun sweepLocked(ctx: Context, beforeCoreStart: Boolean) {
+        val inboxes = taildropDirectories(ConfigManager.load()).filter { isAutoSave(ctx, it.first) }
+        if (inboxes.isEmpty()) return
+        val viaCore = BoxService.commandClient != null
+        if (!viaCore && !beforeCoreStart && BoxVpnService.currentStatus != VpnStatus.Stopped) return
+        var saved = 0
+        var failed = 0
+        var lastSaved: Triple<String, Uri, String>? = null
+        var failedTag: String? = null
+        for ((tag, dir) in inboxes) {
+            for (f in readyFiles(File(dir))) {
+                val key = inFlightKey(tag, f.name)
+                if (!inFlight.add(key)) continue
+                try {
+                    // Ушёл, пока ждали очереди (Save на вкладке, автосохранение).
+                    if (!f.isFile) continue
+                    val uri = AtomicReference<Uri?>(null)
+                    val err = runCatching {
+                        if (viaCore) saveInternal(ctx, tag, f.name, null, uri)
+                        else saveFromDisk(ctx, f, uri)
+                    }.getOrElse { it.message ?: "failed" }
+                    val u = uri.get()
+                    if (err == null && u != null) {
+                        saved++
+                        lastSaved = Triple(tag, u, displayName(ctx, u) ?: f.name)
+                        dismissReceived(ctx, tag, f.name)
+                    } else {
+                        failed++
+                        if (failedTag == null) failedTag = tag
+                    }
+                } finally {
+                    inFlight.remove(key)
+                }
+            }
+        }
+        if (saved > 0 || failed > 0) {
+            Log.i(TAG, "taildrop inbox sweep: saved=$saved failed=$failed core=$viaCore")
+        }
+        showSweepResult(ctx, saved, failed, lastSaved, failedTag)
+    }
+
+    /// Ядра нет: копия в `MediaStore.Downloads`, затем файл удаляется. Не
+    /// удалился — копия снимается (иначе следующий прогон её повторит).
+    private fun saveFromDisk(ctx: Context, f: File, saved: AtomicReference<Uri?>): String? {
+        val uri = writeToDownloads(ctx, f.name, f)
+            ?: return L10n.str(ctx, R.string.taildrop_reason_cant_write)
+        if (!f.delete()) {
+            runCatching { ctx.contentResolver.delete(uri, null, null) }
+            return L10n.str(ctx, R.string.taildrop_reason_cant_write)
+        }
+        saved.set(uri)
+        return null
+    }
+
+    /// Готовые файлы каталога входящих: без недокачанных (`.partial`), меток
+    /// удаления ядра (`.deleted`) и файлов с такой меткой рядом.
+    private fun readyFiles(dir: File): List<File> {
+        val all = dir.listFiles() ?: return emptyList()
+        return all.filter { f ->
+            f.isFile &&
+                !f.name.endsWith(PARTIAL_SUFFIX) &&
+                !f.name.endsWith(DELETED_SUFFIX) &&
+                !File(dir, f.name + DELETED_SUFFIX).exists()
+        }.sortedBy { it.lastModified() }
+    }
+
+    /// Один файл — «Saved to Downloads: <имя>», тап открывает файл; больше —
+    /// «Saved N files to Downloads», тап открывает системные Загрузки (нет
+    /// обработчика — вкладку узла). Неудачи — строкой «Couldn't save N files»;
+    /// одни неудачи — заголовком, тап открывает вкладку узла (файлы там).
+    private fun showSweepResult(
+        ctx: Context,
+        saved: Int,
+        failed: Int,
+        last: Triple<String, Uri, String>?,
+        failedTag: String?,
+    ) {
+        val failText = if (failed > 0) {
+            L10n.plural(ctx, R.plurals.taildrop_couldnt_save_files, failed, failed)
+        } else {
+            null
+        }
+        when {
+            saved == 1 && last != null -> showDone(ctx, SWEEP_NOTE_ID,
+                L10n.str(ctx, R.string.taildrop_saved_title, last.third), failText,
+                viewFileIntent(ctx, SWEEP_NOTE_ID, last.second, last.third)
+                    ?: openNodeIntent(ctx, last.first, SWEEP_NOTE_ID))
+            saved > 1 && last != null -> showDone(ctx, SWEEP_NOTE_ID,
+                L10n.plural(ctx, R.plurals.taildrop_saved_files, saved, saved), failText,
+                viewDownloadsIntent(ctx, SWEEP_NOTE_ID)
+                    ?: openNodeIntent(ctx, last.first, SWEEP_NOTE_ID))
+            failText != null && failedTag != null -> showDone(ctx, SWEEP_NOTE_ID, failText, null,
+                openNodeIntent(ctx, failedTag, SWEEP_NOTE_ID))
+        }
+    }
+
+    /// Пары (тег, `taildrop_directory`) endpoint'ов `tailscale` конфига.
+    internal fun taildropDirectories(configJson: String): List<Pair<String, String>> = runCatching {
+        val eps = JSONObject(configJson).optJSONArray("endpoints") ?: return emptyList()
+        val out = ArrayList<Pair<String, String>>()
+        for (i in 0 until eps.length()) {
+            val ep = eps.optJSONObject(i) ?: continue
+            if (ep.optString("type") != "tailscale") continue
+            val tag = ep.optString("tag")
+            val dir = ep.optString("taildrop_directory")
+            if (tag.isNotEmpty() && dir.isNotEmpty()) out.add(tag to dir)
+        }
+        out
+    }.getOrDefault(emptyList())
 
     // ─────────────────── перенос старой общей папки ───────────────────
 

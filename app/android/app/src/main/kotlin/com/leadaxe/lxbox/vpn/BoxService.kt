@@ -586,6 +586,10 @@ class BoxService(
         // ещё никто не держит).
         runCatching { Taildrop.migrateLegacyInbox(service.filesDir, config) }
             .onFailure { Log.w(TAG, "taildrop legacy migration failed: ${it.javaClass.simpleName}") }
+        // §707 итер. 3 — входящие узлов с автосохранением (в том числе только
+        // что перенесённое) уходят в Downloads прямо с диска, пока ядра нет.
+        runCatching { Taildrop.sweepInboxesBeforeCoreStart(service) }
+            .onFailure { Log.w(TAG, "taildrop inbox sweep failed: ${it.javaClass.simpleName}") }
 
         try {
             // §703 — на `initialize cache-file: timeout` (файл держит зависший
