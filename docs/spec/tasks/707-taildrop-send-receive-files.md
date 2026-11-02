@@ -5,7 +5,7 @@
 | Status | Done (итерация 1; на устройстве не проверено) |
 | Start date | 2026-11-02 |
 | End date | 2026-11-02 |
-| Commits | `66ed7f20` `feat(taildrop): отправка и приём файлов — «Поделиться», Send file…, входящие узла (§707)` |
+| Commits | `1d30e211` `feat(taildrop): отправка и приём файлов — «Поделиться», Send file…, входящие узла (§707)` |
 | Related specs | [032-TAILDROP](../features/032-TAILDROP/FEATURE.ru.md): [send-files](../features/032-TAILDROP/FUNCTIONS/send-files.ru.md), [inbox](../features/032-TAILDROP/FUNCTIONS/inbox.ru.md), [share-text](../features/032-TAILDROP/FUNCTIONS/share-text.ru.md) |
 
 ## Problem
