@@ -524,7 +524,7 @@ tag, name, target)` (API 29+ → `MediaStore.Downloads`, затем файл и�
 Текст буфера, ссылки, имена файлов и устройств — не в AppLog, logcat, дамп,
 Debug API.
 
-### Out of scope (итерация 5)
+### Out of scope (итерация 6)
 
 Отправка с телефона: плитка «Send clipboard» и устройство-цель, «Поделиться»
 ссылкой → «Open on <device>» / «Send as note».
@@ -637,3 +637,44 @@ Debug API.
   `lx-*.json`).
 - Юнит-тестов Kotlin нет (в модуле нет `src/test`): разбор тела §4,
   выбор последнего `clipboard`, ключи разрешений проверены только чтением.
+
+## Итерация 5 — маршруты Debug API для Taildrop
+
+Владелец 02.11.2026: «ты много экран тыкаешь. сделай API». Проверка Taildrop
+на эмуляторе сейчас идёт через тапы по экрану и шторке; нужны маршруты,
+которыми то же делается одной командой. Пункт «Маршруты Debug API для
+Taildrop» из Out of scope итераций 1–2 снимается сюда.
+
+### Solution
+
+Раздел `/taildrop` Debug API (`app/lib/services/debug/`, по образцу соседних
+handler'ов; `/help` и `docs/api/debug-api-reference.md` обновить). Имена
+файлов и устройств, текст буфера и ссылки по умолчанию не отдаются (правило
+030); `?reveal=true` открывает их, как у `GET /state/subs` (Debug API —
+root-доступ by design, маска — удобство).
+
+| Маршрут | Что делает |
+|---------|------------|
+| `GET /taildrop` | по каждому узлу Tailscale работающего конфига: `tag`, `allow` (галка, по телу), `disable_taildrop` (собранный конфиг), `can_share_files` (ядро), `autosave`, `inbox_files`, `receiving`, `self_id` (stable ID узла) |
+| `GET /taildrop/peers?tag=` | пиры узла: `id` (stable), `os`, `online`, `can_receive_files`, `sharee`, разрешения `clipboard`/`open_url`; `name` — только с `reveal` |
+| `GET /taildrop/inbox?tag=` | файлы входящих: `index`, `size`, `sha256`, `age_s`, `sender_id`; `name`, `sender_name` — с `reveal`; и принимаемые с прогрессом |
+| `POST /taildrop/send` | `{tag, peer, name, content_base64}` или `{tag, peer, text}` (заметка) или `{tag, peer, commands:[…]}` (служебный файл по SERVICE_FILES.md, имя собирается само). Отправка тем же нативным путём, что «Send file…»; ответ — итог (`sent` / ошибка ядра), ждёт окончания до 60 с |
+| `POST /taildrop/inbox/save` `{tag, index}` | как Save (Downloads); ответ — имя в Downloads с `reveal` |
+| `POST /taildrop/inbox/delete` `{tag, index}` | как Delete |
+| `POST /taildrop/inbox/cancel` `{tag, index}` | отмена принимаемого |
+| `PUT /taildrop/settings` `{tag, autosave?, allow?}` | переключатель автосохранения (сразу, с разбором лежащего); `allow` пишет тело узла, применяется после `?rebuild=true` + `reload-vpn` |
+| `PUT /taildrop/permissions` `{tag, peer, kind, enabled}` | разрешение на вид команды от пира |
+| `GET /taildrop/service-files` | счётчики с начала процесса: `received`, `executed.{clipboard,open_url}`, `skipped_no_permission`, `expired`, `invalid`, `last` (`kind`, `at`, `sha256` текста/ссылки; сам текст — с `reveal`) |
+
+- Отказы — общий формат Debug API (`{"error":{code,message}}`): нет узла —
+  404, VPN выключен — 409, Taildrop выключен — 409 с текстом ядра.
+- Маршруты работают и при свёрнутом приложении (натив через тот же канал,
+  что вкладка Network).
+
+### Verification
+
+- Тесты handler'ов на фейке действий (по образцу соседних тестов Debug API).
+- Эмулятор: весь сценарий итераций 2–4 одной цепочкой `curl` без тапов —
+  отправка ts-a → ts-b, автосохранение, Save/Delete, отказ при
+  `allow=false`, служебный файл без и с разрешением (счётчики
+  `service-files`).
