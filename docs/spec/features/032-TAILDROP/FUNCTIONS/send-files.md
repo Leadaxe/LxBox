@@ -10,7 +10,7 @@ the Network tab of a Tailscale node.
 |-------|-------|
 | Feature | [032-TAILDROP](../FEATURE.md) |
 | Promises | P1–P3, P7 |
-| State | ✍ Draft, 2026-11-01 — not implemented |
+| State | ✅ implemented, 2026-11-02 ([707](../../../tasks/707-taildrop-send-receive-files.md)); not verified on a device |
 
 ## What it does
 
@@ -72,4 +72,4 @@ result in that notification.
 
 | # | Revision | Status | Summary |
 |---|----------|--------|---------|
-| — | — | Draft | Owner decisions 2026-11-01; no task yet |
+| 1 | [707](../../../tasks/707-taildrop-send-receive-files.md) | Implemented | Share target (system dialogs: node, device) and "Send file…" on a peer row; streamed from `content://`, progress notification with Cancel |

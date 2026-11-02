@@ -11,7 +11,7 @@ deletes them.
 |-------|-------|
 | Feature | [032-TAILDROP](../FEATURE.md) |
 | Promises | P4–P7 |
-| State | ✍ Draft, 2026-11-01 — not implemented |
+| State | ✅ partly implemented, 2026-11-02 ([707](../../../tasks/707-taildrop-send-receive-files.md)): no Cancel / Save / Delete buttons in receive notifications yet; not verified on a device |
 
 ## What it does
 
@@ -79,4 +79,4 @@ the inbox block on the Network tab.
 
 | # | Revision | Status | Summary |
 |---|----------|--------|---------|
-| — | — | Draft | Owner decisions 2026-11-01; no task yet |
+| 1 | [707](../../../tasks/707-taildrop-send-receive-files.md) | Partly implemented | Per-node inbox (`<state_directory>/taildrop`), legacy folder move, Inbox block on the Network tab (Save, Delete, cancel receiving), notification tap → the node's tab; buttons in receive notifications — next iteration |

@@ -10,7 +10,7 @@ official Tailscale clients, gets it as an ordinary file.
 |-------|-------|
 | Feature | [032-TAILDROP](../FEATURE.md) |
 | Promises | P8 |
-| State | ✍ Draft, 2026-11-01 — not implemented |
+| State | ✅ implemented, 2026-11-02 ([707](../../../tasks/707-taildrop-send-receive-files.md)); not verified on a device |
 
 ## What it does
 
@@ -51,4 +51,4 @@ needed, peer choice, progress in a notification.
 
 | # | Revision | Status | Summary |
 |---|----------|--------|---------|
-| — | — | Draft | Owner decisions 2026-11-01; no task yet |
+| 1 | [707](../../../tasks/707-taildrop-send-receive-files.md) | Implemented | Text without files → `note-YYYY-MM-DD-HHMM.txt` (UTF-8) over the same send path |

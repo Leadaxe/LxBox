@@ -8,6 +8,18 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Taildrop: send and receive files over a Tailscale node
+  ([task 707](docs/spec/tasks/707-taildrop-send-receive-files.md)).** L×Box
+  is now a Share target: files (or text, sent as a `note-…txt` file) go to one
+  of your online devices in the tailnet, with progress and Cancel in a
+  notification. The device menu on the Network tab has "Send file…". Received
+  files land in each node's own inbox and are listed in a new Inbox block on
+  the Network tab with Save (to Downloads) and Delete; tapping a receive
+  notification opens that node's Network tab. Files the core had already
+  received into its shared folder move to the first Tailscale node once.
+
 ### Fixed
 
 - **Tailscale Network tab of a signed-out node could erase the saved exit

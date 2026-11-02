@@ -2,10 +2,10 @@
 
 | Field | Value |
 |-------|-------|
-| Status | In progress |
+| Status | Done (итерация 1; на устройстве не проверено) |
 | Start date | 2026-11-02 |
-| End date | — |
-| Commits | — |
+| End date | 2026-11-02 |
+| Commits | `66ed7f20` `feat(taildrop): отправка и приём файлов — «Поделиться», Send file…, входящие узла (§707)` |
 | Related specs | [032-TAILDROP](../features/032-TAILDROP/FEATURE.ru.md): [send-files](../features/032-TAILDROP/FUNCTIONS/send-files.ru.md), [inbox](../features/032-TAILDROP/FUNCTIONS/inbox.ru.md), [share-text](../features/032-TAILDROP/FUNCTIONS/share-text.ru.md) |
 
 ## Problem
@@ -117,3 +117,40 @@ AppLog, дамп и Debug API (правило 030).
   действий), имя заметки. Только затронутые файлы, полный прогон — CI.
 - Эмулятор: отправка из «Поделиться» на устройство tailnet и приём с него —
   если есть живой tailnet; иначе DEVICE-PENDING.
+
+### Result (2026-11-02)
+
+Сделано: A (подстановка `taildrop_directory`, перенос старой папки на старте
+VPN — `Taildrop.migrateLegacyInbox` до `startOrReloadService`), B
+(`TaildropShareActivity` — цепочка системных диалогов узел → устройство,
+заметка из текста; «Send file…» в меню устройства; передача в нативе
+`Taildrop.send`, уведомление с процентом и Cancel), C (блок Inbox под
+Devices, Save/Delete/Cancel приёма, `markTaildropInboxRead`, тап по
+уведомлению ядра → вкладка Network узла).
+
+Решения исполнителя (в ТЗ не было):
+- Экран «Поделиться» — системные диалоги без Flutter (второй движок на
+  отдельной активности обнулял бы статические sink'и плагина основного).
+- Уведомления приёма ядра: свой канал `lxbox-taildrop` и своё id на файл
+  (ядро шлёт все с одним `typeID`, снятие «receiving» снимало бы и
+  «received»); тело с именами в журнал не пишется.
+- Потоки `content://` открываются до закрытия активности «Поделиться»
+  (право на URI живёт, пока жива активность).
+- Нет поля `can_share_files` в записи — право не отрицается; строка
+  причины в Inbox только у узла в Running.
+
+Проверено:
+- `flutter test test/builder/node_sections_build_test.dart` — подстановка
+  (есть/нет корня, свой `state_directory`, явный `taildrop_directory`);
+- `test/widgets/tailscale_network_tab_test.dart` — фильтр пиров, разбор
+  канала, блок Inbox (подписка, чужой тег, Save/Delete, Cancel приёма,
+  причина), «Send file…» только у цели;
+- эталоны `golden_config_test` / `golden_backup_test` (обновлён
+  `rich_v0.config.json`), тесты миксинов на этом эталоне;
+- `flutter analyze` по изменённым файлам, `hardcoded_check`, `ui_check`,
+  `kotlin_check` — 0/0; компиляция Kotlin (`compileDebugKotlin`).
+
+Не проверено: имя заметки (только Kotlin, своего тестового стенда у
+Kotlin нет); эмулятор и живой tailnet — DEVICE-PENDING (отправка из
+«Поделиться», приём, Save в Downloads, Save as на API 24–28, перенос старой
+папки, тап по уведомлению).
