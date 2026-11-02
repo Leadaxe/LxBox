@@ -638,6 +638,27 @@ Debug API.
 - Юнит-тестов Kotlin нет (в модуле нет `src/test`): разбор тела §4,
   выбор последнего `clipboard`, ключи разрешений проверены только чтением.
 
+
+**Эмулятор, итерация 4, 02.11.2026** (пин lx.30-rc.2):
+- Галки выкл.: в собранном конфиге у всех четырёх узлов `disable_taildrop:
+  true`; на вкладке Network «Taildrop is off for this node.», в меню
+  устройства нет «Send file…» и разрешений; «Поделиться» — «Taildrop is off
+  for every running Tailscale node…».
+- Галка вкл. у `ts-a`/`ts-b` → тело `disable_taildrop: false`, после
+  rebuild + reload — `false` в конфиге; заметка ts-a → ts-b дошла и
+  автосохранилась. Галка сама VPN не перезапустила (на эмуляторе выключено
+  «Auto-restart VPN on settings change»).
+- Отправка на `lxbox-emu-c` (Taildrop выкл.): «Couldn't send to lxbox-emu-c —
+  Taildrop is disabled on this node». Узел-получатель с выключенным Taildrop в
+  списке «Send to» есть: это решает control, ядро так и предупреждало.
+  `failureText` теперь берёт последнее звено цепочки Go (`…: <текст>`).
+- Служебный файл `clipboard` без разрешения — удалён, ни во входящих, ни в
+  Downloads. С разрешениями: `clipboard` + `open_url` https + `open_url`
+  file:// в одном файле → буфер «clip-WITH-perm» (вставкой в Chrome),
+  уведомление «Link from lxbox-emu-a», тап открыл ссылку; file:// пропущен.
+- Битый `lx-*.json` — обычный файл, автосохранён в Downloads.
+- Разрешения пишутся `perm.<kind>.<tag>\x01<stableID>` = имя пира.
+
 ## Итерация 5 — маршруты Debug API для Taildrop
 
 Владелец 02.11.2026: «ты много экран тыкаешь. сделай API». Проверка Taildrop

@@ -409,10 +409,12 @@ object Taildrop {
 
     /// Своё id на каждый файл: ядро шлёт все уведомления Taildrop с одним
     /// typeID, и снятие «receiving» иначе снимало бы и «received».
-    /// Текст отказа ядра для уведомления: без обёртки gomobile/gRPC
-    /// (`taildrop send: rpc error: code = Unknown desc = <текст>` → `<текст>`).
+    /// Текст отказа ядра для уведомления: без обёртки gomobile/gRPC и
+    /// цепочки контекстов Go — последнее звено после `: `
+    /// (`taildrop send: rpc error: code = Unknown desc = <текст>`,
+    /// `taildrop: send <имя>: peer responded 403 Forbidden: <текст>` → `<текст>`).
     internal fun failureText(raw: String): String =
-        raw.substringAfterLast("desc = ").removePrefix("taildrop send: ").trim().ifEmpty { raw }
+        raw.substringAfterLast("desc = ").substringAfterLast(": ").trim().ifEmpty { raw }
 
     fun coreNotificationId(identifier: String): Int =
         5000 + (identifier.hashCode() and 0x3fff)
