@@ -5682,8 +5682,8 @@
   "The running config has no node %s.": {
     "value": "运行中的配置里没有节点 %s。"
   },
-  "Only WireGuard and AmneziaWG nodes can be turned off.": {
-    "value": "只有 WireGuard 和 AmneziaWG 节点可以关闭。"
+  "Only WireGuard, AmneziaWG and Tailscale nodes can be turned off.": {
+    "value": "只能关闭 WireGuard、AmneziaWG 和 Tailscale 节点。"
   },
   "VPN is not running or is restarting. Try again.": {
     "value": "VPN 未运行或正在重启，请重试。"
@@ -6584,14 +6584,14 @@
   "Saved: %s": {
     "value": "已保存：%s"
   },
-  "Key saved. It applies when the VPN restarts.": {
-    "value": "密钥已保存，将在 VPN 重启时生效。"
+  "Key saved. It applies when the VPN starts.": {
+    "value": "密钥已保存，将在 VPN 启动时生效。"
   },
   "Applies when the node is online.": {
     "value": "节点在线时生效。"
   },
-  "The VPN restarts to sign in with the new key.": {
-    "value": "VPN 将重启以使用新密钥登录。"
+  "Signing in with the new key…": {
+    "value": "正在使用新密钥登录…"
   },
   "Send file…": {
     "value": "发送文件…"
@@ -6634,5 +6634,17 @@
   },
   "Couldn't cancel: %s": {
     "value": "无法取消：%s"
+  },
+  "Turn the node on first.": {
+    "value": "请先开启节点。"
+  },
+  "Could not sign in with the new key.": {
+    "value": "无法使用新密钥登录。"
+  },
+  "Restart node": {
+    "value": "重启节点"
+  },
+  "Node restarted.": {
+    "value": "节点已重启。"
   }
 }

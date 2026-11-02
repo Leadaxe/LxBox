@@ -531,6 +531,24 @@ class BoxCommandClient {
             .getOrElse { Log.w(TAG, "tailscaleLogout failed"); it.message ?: "failed" }
     }
 
+    /// §706 (ядро SPEC 149, lx.30) — вход узла с новым auth-ключом без
+    /// перезапуска VPN. Блокирующий gRPC — звать с `Dispatchers.IO`. No-throw:
+    /// `null` = ядро приняло вызов (отказ ключа виден позже в `backendState`),
+    /// иначе `{"error": <код>, "message": <текст>}` с кодами как у
+    /// [setEndpointEnabled]. Ключ в лог не пишется.
+    fun tailscaleLogin(tag: String, authKey: String): Map<String, String>? {
+        val client = ensurePingClient() ?: run {
+            Log.w(TAG, "tailscaleLogin: no command client (paused/down)")
+            return mapOf("error" to "error", "message" to "no command client")
+        }
+        return runCatching { client.tailscaleLogin(tag, authKey); null }
+            .getOrElse {
+                val msg = it.message ?: it.toString()
+                Log.w(TAG, "tailscaleLogin($tag) failed: $msg")
+                mapOf("error" to endpointToggleErrorCode(msg), "message" to msg)
+            }
+    }
+
     // ═══════════════════════ §707 Taildrop ═══════════════════════
     // Входящие узла — подписка `SubscribeTaildropInbox` на ОТДЕЛЬНОМ клиенте,
     // пока открыта вкладка Network (одна на всё приложение: новая снимает

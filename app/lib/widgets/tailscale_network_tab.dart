@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models/tunnel_status.dart';
+import '../screens/home/node_actions.dart' show endpointToggleErrorText;
 import '../services/debug/debug_registry.dart';
 import '../services/format_utils.dart' show formatBytes;
 import '../services/l10n/locale_controller.dart';
@@ -60,23 +61,68 @@ class TailscaleNetworkActions {
   Future<CcTaildropResult> sendFiles(String tag, CcTailscalePeer peer) =>
       CcChannel.instance.taildropPickAndSend(tag, peer.stableId, peer.hostName);
 
-  /// §706 — применить новый `auth_key`, уже записанный в тело узла. Ядро не
-  /// умеет войти с новым ключом на лету (ручка запрошена у сессии ядра), пока
-  /// — пересборка конфига и перезапуск VPN тем же путём, что авто-применение
-  /// (`generateConfig` → `saveParsedConfig` → `reloadVpn`). Появится ручка —
-  /// здесь будет её вызов. `false` — перезапуска не было (туннель не поднят,
-  /// cooldown, сборка не удалась): ключ записан и применится при следующем
-  /// старте VPN.
-  Future<bool> applyNewKey(String tag) async {
+  /// §706 (ядро SPEC 149) — войти узлом [tag] с новым ключом [authKey], уже
+  /// записанным в тело узла (переживёт перезапуск). Туннель не поднят — ядро
+  /// не зовётся, ключ применится при старте VPN.
+  Future<TailscaleKeyApply> applyNewKey(String tag, String authKey) async {
     final home = DebugRegistry.I.home;
-    final sub = DebugRegistry.I.sub;
-    if (home == null || sub == null || !home.canReload) return false;
-    final config = await sub.generateConfig();
-    if (config == null) return false;
-    if (!await home.saveParsedConfig(config)) return false;
-    await home.reloadVpn();
-    return true;
+    if (home == null || !home.state.tunnelUp) return TailscaleKeyApply.deferred;
+    try {
+      await CcChannel.instance.tailscaleLogin(tag, authKey);
+      return TailscaleKeyApply.signingIn;
+    } on PlatformException catch (e) {
+      return TailscaleKeyApply.failed(e.code);
+    } on MissingPluginException {
+      return TailscaleKeyApply.failed('error');
+    }
   }
+
+  /// §706 — изменения состояния узлов в ядре ([endpointState]); `null` — без
+  /// контроллера (тогда и состояния нет).
+  Listenable? get endpointChanges => DebugRegistry.I.home;
+
+  /// §706 — состояние узла [tag] в ядре (строки [CcEndpointState]); `null` —
+  /// туннель не поднят или ядро состояния не дало.
+  String? endpointState(String tag) {
+    final hs = DebugRegistry.I.home?.state;
+    if (hs == null || !hs.tunnelUp) return null;
+    final st = hs.endpointStates[tag] ?? '';
+    return st.isEmpty ? null : st;
+  }
+
+  /// §706 — выключатель узла тем же путём, что Turn off / Turn on списка
+  /// узлов: `null` — успех, иначе код отказа ([HomeController.setEndpointEnabled]).
+  Future<String?> setEndpointEnabled(String tag, bool enabled) async {
+    final home = DebugRegistry.I.home;
+    if (home == null) return 'failed_precondition';
+    return home.setEndpointEnabled(tag, enabled);
+  }
+}
+
+/// §706 — исход [TailscaleNetworkActions.applyNewKey].
+enum TailscaleKeyApplyKind {
+  /// Ядро приняло ключ, вход идёт (отказ ключа виден позже в статусе).
+  signingIn,
+
+  /// Туннель не поднят: ключ применится при старте VPN.
+  deferred,
+
+  /// Ядро отказало, код — [TailscaleKeyApply.code].
+  failed,
+}
+
+class TailscaleKeyApply {
+  const TailscaleKeyApply._(this.kind, [this.code = '']);
+  const TailscaleKeyApply.failed(String code)
+      : this._(TailscaleKeyApplyKind.failed, code);
+
+  static const signingIn = TailscaleKeyApply._(TailscaleKeyApplyKind.signingIn);
+  static const deferred = TailscaleKeyApply._(TailscaleKeyApplyKind.deferred);
+
+  final TailscaleKeyApplyKind kind;
+
+  /// Код отказа ядра (`failed_precondition` / `not_found` / … / `error`).
+  final String code;
 }
 
 /// Задача 581 — вкладка Network узла Tailscale (экраны `node_settings_screen`
@@ -148,6 +194,9 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
   bool _hasPending = false;
 
   bool _busy = false;
+
+  /// §706 — идёт вызов выключателя (Node enabled, Restart node).
+  bool _endpointBusy = false;
 
   // §645 — опрос `GetTailscaleStatus` раз в 3 с, пока вкладка на экране и
   // VPN включён. Ядро без метода — опрос снят до закрытия вкладки.
@@ -378,7 +427,7 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
     final recordedExit = recordedExitNode(widget.body);
     final children = <Widget>[
       if (s.health.isNotEmpty) _healthBlock(context, s.health),
-      _statusBlock(context, s),
+      _statusSection(context, s),
       if (s.self != null) _thisDeviceBlock(context, s.self!, running),
       if (running)
         _exitNodeBlock(context, s)
@@ -478,12 +527,27 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
 
   // ── Status ──
 
+  /// §706 — блок Status перерисовывается и по состоянию узла в ядре
+  /// (выключатель, Restart node), не только по статусу Tailscale.
+  Widget _statusSection(BuildContext context, CcTailscaleStatus s) {
+    final changes = widget.actions.endpointChanges;
+    if (changes == null) return _statusBlock(context, s);
+    return ListenableBuilder(
+      listenable: changes,
+      builder: (context, _) => _statusBlock(context, s),
+    );
+  }
+
   Widget _statusBlock(BuildContext context, CcTailscaleStatus s) {
     final needsLogin = s.backendState == 'NeedsLogin';
     final running = s.backendState == 'Running';
     // §706 — ключ отвергнут или его нет: заменить можно только у узла,
     // который пишется с вкладки (узел подписки — нет).
     final replaceKey = needsLogin && widget.onSaveFields != null;
+    // §706 (ядро SPEC 149) — выключатель и перезапуск узла, пока туннель
+    // поднят и ядро отдало состояние узла.
+    final ep = widget.actions.endpointState(widget.liveTag);
+    final restart = ep != null && ep != CcEndpointState.disabled;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -497,7 +561,22 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
               ? Chip(label: Text(getLocalText.s("signed in with a key")))
               : null,
         ),
-        if ((needsLogin && s.authUrl.isNotEmpty) || running || replaceKey)
+        if (ep != null)
+          SwitchListTile(
+            key: const ValueKey('tailscale-node-enabled'),
+            dense: true,
+            title: Text(getLocalText.s("Node enabled")),
+            subtitle: Text(getLocalText
+                .s("Stays off until you turn it on or stop the VPN.")),
+            value: ep != CcEndpointState.disabled,
+            onChanged: _endpointBusy
+                ? null
+                : (on) => unawaited(_setNodeEnabled(on)),
+          ),
+        if ((needsLogin && s.authUrl.isNotEmpty) ||
+            running ||
+            replaceKey ||
+            restart)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Wrap(
@@ -518,6 +597,13 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
                     key: const ValueKey('tailscale-replace-key'),
                     onPressed: _busy ? null : () => unawaited(_replaceKey()),
                     child: Text(getLocalText.s("Replace key")),
+                  ),
+                if (restart)
+                  OutlinedButton(
+                    key: const ValueKey('tailscale-restart-node'),
+                    onPressed:
+                        _endpointBusy ? null : () => unawaited(_restartNode()),
+                    child: Text(getLocalText.s("Restart node")),
                   ),
               ],
             ),
@@ -572,11 +658,54 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
     setState(() => _busy = true);
     try {
       if (!await save({'auth_key': key})) return;
-      if (!await widget.actions.applyNewKey(widget.liveTag)) {
-        _snack(getLocalText.s("Key saved. It applies when the VPN restarts."));
-      }
+      final r = await widget.actions.applyNewKey(widget.liveTag, key);
+      _snack(switch (r.kind) {
+        TailscaleKeyApplyKind.signingIn =>
+          getLocalText.s("Signing in with the new key…"),
+        TailscaleKeyApplyKind.deferred =>
+          getLocalText.s("Key saved. It applies when the VPN starts."),
+        TailscaleKeyApplyKind.failed => r.code == 'failed_precondition' &&
+                widget.actions.endpointState(widget.liveTag) ==
+                    CcEndpointState.disabled
+            ? getLocalText.s("Turn the node on first.")
+            : getLocalText.s("Could not sign in with the new key."),
+      });
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// §706 — Node enabled: тот же путь и тексты отказа, что Turn off / Turn on
+  /// списка узлов.
+  Future<void> _setNodeEnabled(bool enable) async {
+    setState(() => _endpointBusy = true);
+    try {
+      final code =
+          await widget.actions.setEndpointEnabled(widget.liveTag, enable);
+      if (code != null) {
+        _snack(endpointToggleErrorText(code, widget.liveTag, enable: enable));
+      }
+    } finally {
+      if (mounted) setState(() => _endpointBusy = false);
+    }
+  }
+
+  /// §706 — Restart node: выключить и сразу включить узел в ядре.
+  Future<void> _restartNode() async {
+    setState(() => _endpointBusy = true);
+    try {
+      final tag = widget.liveTag;
+      final off = await widget.actions.setEndpointEnabled(tag, false);
+      if (off != null) {
+        _snack(endpointToggleErrorText(off, tag, enable: false));
+        return;
+      }
+      final on = await widget.actions.setEndpointEnabled(tag, true);
+      _snack(on == null
+          ? getLocalText.s("Node restarted.")
+          : endpointToggleErrorText(on, tag, enable: true));
+    } finally {
+      if (mounted) setState(() => _endpointBusy = false);
     }
   }
 
@@ -1402,11 +1531,6 @@ class _ReplaceKeyDialogState extends State<_ReplaceKeyDialog> {
                 onPressed: () => setState(() => _show = !_show),
               ),
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            getLocalText.s("The VPN restarts to sign in with the new key."),
-            style: Theme.of(context).textTheme.bodySmall,
           ),
         ],
       ),

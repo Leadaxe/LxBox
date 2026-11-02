@@ -901,6 +901,28 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                     result.success(err)
                 }
             }
+            // §706 (ядро SPEC 149) — вход узла с новым ключом на лету. Успех →
+            // null; отказ ядра → PlatformException с кодом как у
+            // ccSetEndpointEnabled.
+            "ccTailscaleLogin" -> {
+                val cc = BoxService.commandClient
+                val tag = call.argument<String>("tag") ?: ""
+                val key = call.argument<String>("auth_key") ?: ""
+                pluginScope.launch {
+                    val r = withContext(Dispatchers.IO) {
+                        if (cc == null) {
+                            mapOf("error" to "error", "message" to "no command client")
+                        } else {
+                            cc.tailscaleLogin(tag, key)
+                        }
+                    }
+                    if (r == null) {
+                        result.success(null)
+                    } else {
+                        result.error(r["error"] ?: "error", r["message"], null)
+                    }
+                }
+            }
             "ccStartTailscalePing" -> {
                 val cc = BoxService.commandClient
                 val tag = call.argument<String>("tag") ?: ""

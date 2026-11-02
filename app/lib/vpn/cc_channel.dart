@@ -410,6 +410,17 @@ class CcChannel {
   Future<String?> tailscaleLogout(String tag) =>
       _invokeError('ccTailscaleLogout', {'tag': tag});
 
+  /// §706 (ядро SPEC 149, lx.30) — вход узла [tag] с новым auth-ключом без
+  /// перезапуска VPN. Успех — ядро приняло вызов; отказ ключа виден позже в
+  /// `backendState`/health. Отказ ядра — [PlatformException] с кодом
+  /// `failed_precondition` (сервис или узел не запущен, узел выключен, уже
+  /// вошёл) / `not_found` / `invalid_argument` / `unavailable` / `error`.
+  Future<void> tailscaleLogin(String tag, String authKey) =>
+      _methods.invokeMethod<void>('ccTailscaleLogin', {
+        'tag': tag,
+        'auth_key': authKey,
+      });
+
   /// §581 — проверка устройства: ответы идут в [tailscalePing].
   Future<void> startTailscalePing(String tag, String peerIp) async {
     try {

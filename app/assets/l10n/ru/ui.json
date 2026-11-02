@@ -5961,8 +5961,8 @@
   "The running config has no node %s.": {
     "value": "В работающем конфиге нет узла %s."
   },
-  "Only WireGuard and AmneziaWG nodes can be turned off.": {
-    "value": "Выключить можно только узлы WireGuard и AmneziaWG."
+  "Only WireGuard, AmneziaWG and Tailscale nodes can be turned off.": {
+    "value": "Выключить можно только узлы WireGuard, AmneziaWG и Tailscale."
   },
   "VPN is not running or is restarting. Try again.": {
     "value": "VPN не запущен или перезапускается. Повторите попытку."
@@ -6875,14 +6875,14 @@
   "Saved: %s": {
     "value": "Записано: %s"
   },
-  "Key saved. It applies when the VPN restarts.": {
-    "value": "Ключ сохранён. Он применится при перезапуске VPN."
+  "Key saved. It applies when the VPN starts.": {
+    "value": "Ключ сохранён. Он применится при запуске VPN."
   },
   "Applies when the node is online.": {
     "value": "Применится, когда узел будет в сети."
   },
-  "The VPN restarts to sign in with the new key.": {
-    "value": "VPN перезапустится, чтобы войти с новым ключом."
+  "Signing in with the new key…": {
+    "value": "Вход с новым ключом…"
   },
   "Send file…": {
     "value": "Отправить файл…"
@@ -6925,5 +6925,17 @@
   },
   "Couldn't cancel: %s": {
     "value": "Не удалось отменить: %s"
+  },
+  "Turn the node on first.": {
+    "value": "Сначала включите узел."
+  },
+  "Could not sign in with the new key.": {
+    "value": "Не удалось войти с новым ключом."
+  },
+  "Restart node": {
+    "value": "Перезапустить узел"
+  },
+  "Node restarted.": {
+    "value": "Узел перезапущен."
   }
 }

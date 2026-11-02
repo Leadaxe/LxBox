@@ -12,7 +12,14 @@ import 'package:lxbox/widgets/tailscale_network_tab.dart';
 class _FakeActions extends TailscaleNetworkActions {
   final chosen = <String>[];
   final applied = <String>[];
-  bool restarted = true;
+  TailscaleKeyApply apply = TailscaleKeyApply.signingIn;
+
+  /// §706 — состояние узла в ядре и журнал выключателя.
+  final changes = ValueNotifier<int>(0);
+  final states = <String, String>{};
+  final toggles = <bool>[];
+  final toggleCodes = <String?>[];
+  Completer<void>? toggleHold;
 
   @override
   Future<String?> setExitNode(String tag, String stableId) async {
@@ -21,9 +28,27 @@ class _FakeActions extends TailscaleNetworkActions {
   }
 
   @override
-  Future<bool> applyNewKey(String tag) async {
-    applied.add(tag);
-    return restarted;
+  Future<TailscaleKeyApply> applyNewKey(String tag, String authKey) async {
+    applied.add('$tag:$authKey');
+    return apply;
+  }
+
+  @override
+  Listenable get endpointChanges => changes;
+
+  @override
+  String? endpointState(String tag) => states[tag];
+
+  @override
+  Future<String?> setEndpointEnabled(String tag, bool enabled) async {
+    toggles.add(enabled);
+    await toggleHold?.future;
+    final code = toggleCodes.isEmpty ? null : toggleCodes.removeAt(0);
+    if (code == null) {
+      states[tag] = enabled ? CcEndpointState.up : CcEndpointState.disabled;
+      changes.value++;
+    }
+    return code;
   }
 }
 
@@ -626,13 +651,11 @@ void main() {
       expect(saved, [
         {'auth_key': 'tskey-auth-new'},
       ]);
-      expect(actions.applied, ['ts']);
+      expect(actions.applied, ['ts:tskey-auth-new']);
+      expect(find.text('Signing in with the new key…'), findsOneWidget);
     });
 
-    testWidgets('VPN не перезапустился — подсказка «применится при перезапуске»',
-        (tester) async {
-      await big(tester);
-      final actions = _FakeActions()..restarted = false;
+    Future<void> enterKey(WidgetTester tester, _FakeActions actions) async {
       await pump(tester,
           data: const [offline],
           actions: actions,
@@ -644,9 +667,33 @@ void main() {
       await tester.pump();
       await tester.tap(saveKey);
       await tester.pumpAndSettle();
-      expect(actions.applied, ['ts']);
-      expect(find.text('Key saved. It applies when the VPN restarts.'),
+      expect(actions.applied, ['ts:k']);
+    }
+
+    testWidgets('туннель не поднят — ключ применится при старте VPN',
+        (tester) async {
+      await big(tester);
+      await enterKey(
+          tester, _FakeActions()..apply = TailscaleKeyApply.deferred);
+      expect(find.text('Key saved. It applies when the VPN starts.'),
           findsOneWidget);
+    });
+
+    testWidgets('отказ ядра у выключенного узла — «сначала включить»',
+        (tester) async {
+      await big(tester);
+      final actions = _FakeActions()
+        ..apply = const TailscaleKeyApply.failed('failed_precondition')
+        ..states['ts'] = CcEndpointState.disabled;
+      await enterKey(tester, actions);
+      expect(find.text('Turn the node on first.'), findsOneWidget);
+    });
+
+    testWidgets('прочий отказ ядра — «не удалось войти»', (tester) async {
+      await big(tester);
+      await enterKey(tester,
+          _FakeActions()..apply = const TailscaleKeyApply.failed('not_found'));
+      expect(find.text('Could not sign in with the new key.'), findsOneWidget);
     });
 
     testWidgets('запись не удалась — ключ не применяется', (tester) async {
@@ -690,6 +737,85 @@ void main() {
       expect(replace, findsNothing);
       expect(find.byKey(const ValueKey('tailscale-saved-exit-node')),
           findsNothing);
+    });
+  });
+
+  group('§706 — выключатель и перезапуск узла', () {
+    final toggle = find.byKey(const ValueKey('tailscale-node-enabled'));
+    final restart = find.byKey(const ValueKey('tailscale-restart-node'));
+
+    Future<_FakeActions> pumpNode(WidgetTester tester, String? state) async {
+      await tester.binding.setSurfaceSize(const Size(800, 2400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final actions = _FakeActions();
+      if (state != null) actions.states['ts'] = state;
+      await pump(tester, data: [_status()], actions: actions);
+      return actions;
+    }
+
+    testWidgets('ядро не отдало состояние — ни выключателя, ни Restart',
+        (tester) async {
+      await pumpNode(tester, null);
+      expect(toggle, findsNothing);
+      expect(restart, findsNothing);
+    });
+
+    testWidgets('VPN выключен — ни выключателя, ни Restart', (tester) async {
+      final actions = _FakeActions()..states['ts'] = CcEndpointState.up;
+      await pump(tester, vpnUp: false, data: [_status()], actions: actions);
+      expect(toggle, findsNothing);
+      expect(restart, findsNothing);
+    });
+
+    testWidgets('узел работает — включён, Restart есть', (tester) async {
+      await pumpNode(tester, CcEndpointState.up);
+      expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
+      expect(restart, findsOneWidget);
+    });
+
+    testWidgets('выключатель гасит узел — Restart пропадает', (tester) async {
+      final actions = await pumpNode(tester, CcEndpointState.up);
+      await tester.tap(toggle);
+      await tester.pumpAndSettle();
+      expect(actions.toggles, [false]);
+      expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
+      expect(restart, findsNothing);
+    });
+
+    testWidgets('отказ выключателя — текст отказа', (tester) async {
+      final actions = await pumpNode(tester, CcEndpointState.up);
+      actions.toggleCodes.add('failed_precondition');
+      await tester.tap(toggle);
+      await tester.pumpAndSettle();
+      expect(find.text('VPN is not running or is restarting. Try again.'),
+          findsOneWidget);
+      expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
+    });
+
+    testWidgets('Restart — выкл, затем вкл; на время вызова неактивна',
+        (tester) async {
+      final actions = await pumpNode(tester, CcEndpointState.up);
+      final hold = Completer<void>();
+      actions.toggleHold = hold;
+      await tester.tap(restart);
+      await tester.pump();
+      expect(tester.widget<OutlinedButton>(restart).onPressed, isNull);
+      actions.toggleHold = null;
+      hold.complete();
+      await tester.pumpAndSettle();
+      expect(actions.toggles, [false, true]);
+      expect(find.text('Node restarted.'), findsOneWidget);
+      expect(tester.widget<OutlinedButton>(restart).onPressed, isNotNull);
+    });
+
+    testWidgets('Restart: выключение отказало — включения нет',
+        (tester) async {
+      final actions = await pumpNode(tester, CcEndpointState.up);
+      actions.toggleCodes.add('not_found');
+      await tester.tap(restart);
+      await tester.pumpAndSettle();
+      expect(actions.toggles, [false]);
+      expect(find.text('Node restarted.'), findsNothing);
     });
   });
 
