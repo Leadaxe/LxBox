@@ -116,14 +116,17 @@ never reads the clipboard on its own, only on an explicit tap.
 | Network tab → peer row → "Send file…" | system file picker, one or more files | — |
 | Network tab → inbox → Save / Delete | per file | — |
 | Notification → Cancel (receiving), Save / Delete (received) | per transfer | — |
-| Clipboard sync → target device | one own device of one Tailscale node, chosen once; the place of the setting on screen is open | not set |
+| Clipboard sync → target device | one own device of one Tailscale node, chosen once in the Settings block of that node's Network tab | not set |
 | "Accept clipboard from <device>" | a switch per own device, on the receiver | off |
 | Quick Settings tile "Send clipboard" | added by the user from the system tile list | not added |
 
 Core config keys: the receive directory is the endpoint's
 `taildrop_directory`; by default it is `Taildrop` relative to the core's
 working directory (not the node's `state_directory`) and is therefore shared
-by all Tailscale nodes. A per-node inbox needs a per-node `taildrop_directory`.
+by all Tailscale nodes. The build sets each node's to
+`<state_directory>/taildrop`, so a node has its own inbox and it is deleted
+with the node's state directory; an explicit `taildrop_directory` in the node
+body is left alone.
 Core build: the pinned core already carries Taildrop; no rebuild is needed.
 Clipboard protocol:
 the file name prefix, the size limit, the TTL and the encoding are constants of
@@ -179,7 +182,9 @@ Node deleted   → its Taildrop directory removed with its state
 - File names, file contents, clipboard text and device names do not reach the
   app log, the support dump or the Debug API (the same rule as
   [030-TAILSCALE](../030-TAILSCALE/FEATURE.md#rules-and-guarantees)).
-- The inbox is not part of the backup, like the node's state.
+- The inbox is not part of the backup, like the node's state. Neither are the
+  clipboard target and the "Accept clipboard from <device>" switches (owner
+  decision 2026-11-02): they are settings of this phone in this tailnet.
 
 ## Boundaries
 
@@ -253,16 +258,22 @@ Node deleted   → its Taildrop directory removed with its state
   and the app streams the content in chunks, so a shared `content://` source
   is read directly, with no temporary copy. Sending needs the service running
   with this node — the same as "only while the VPN is up".
-- **Open:** what happens to files the core has already put into the shared
-  default folder before the feature; whether receiving works in the userspace
-  network stack on a real device (by code — yes).
+- **Files received before the feature** into the core's shared default
+  folder are moved once into the inbox of the first Tailscale node in config
+  order; the shared folder is removed after the move. **Open:** whether
+  receiving works in the userspace network stack on a real device (by code —
+  yes).
 - The launcher's clipboard side is its own spec.
 - **Clipboard protocol is the launcher contract's.** The prefix, the size
   limit, the TTL and the encoding are constants in `docs/contract` and the
   registry, the contract version is opened by the launcher; the numbers in
   this spec are the current values, and the contract wins on a mismatch. The
   source of a clip is the Taildrop sender, the file name carries no marker.
-- **Open questions in the app:** whether the clipboard target and the
-  "Accept clipboard from <device>" switches go into the backup; where on
-  screen the target is chosen.
+- **Core API for the app** (present in the lx.29 pin): `subscribeTaildropInbox`,
+  `sendTaildropFiles` (+ `TaildropSendSession.writeChunk` / `finishFile`),
+  `downloadTaildropFile`, `deleteTaildropFile`, `cancelTaildropReceiving`,
+  `markTaildropInboxRead`; the node status has `canShareFiles`, a peer has
+  `canReceiveFiles` (the core already applied the send right and own/foreign).
+  The core itself sends "receiving…" and "received…" notifications with the
+  address `sing-box:taildrop?endpoint=<tag>`.
 - Nothing here has run on a device: the feature is not implemented.

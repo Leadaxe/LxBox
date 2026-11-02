@@ -27,7 +27,7 @@ Network tab of the node that received the file.
 | What | Value |
 |------|-------|
 | Accepted from | own devices of the node's tailnet; no consent step |
-| Where it lands | the node's inbox, kept in the node's own `taildrop_directory` (the core's default is one `Taildrop` folder for all nodes) |
+| Where it lands | the node's inbox, kept in `<node state_directory>/taildrop` (the core's default is one `Taildrop` folder for all nodes; the build sets its own) |
 | Notification while receiving | "receiving from X", Cancel |
 | Notification when received | "file from X", Save, Delete |
 | Inbox block | Network tab of the node, under Devices; per file Save, Delete |
@@ -69,8 +69,8 @@ the inbox block on the Network tab.
 - Receiving requires Taildrop enabled in the tailnet's admin console (the
   file sharing capability on this node); without it the inbox block says why.
 - Today the core already accepts files silently into its default folder,
-  outside any UI; what happens to files left there before the feature is
-  open ([Maintenance notes](../FEATURE.md#maintenance-notes)). Whether
+  outside any UI; files left there before the feature are moved once into the
+  inbox of the first Tailscale node ([Maintenance notes](../FEATURE.md#maintenance-notes)). Whether
   receiving works in the userspace network stack is confirmed by code, not on
   a device.
 - Not verified on a device.
