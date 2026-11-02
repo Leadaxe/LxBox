@@ -30,12 +30,20 @@ void main() {
         'lazy_build': true,
         'build_max': 5,
       },
-      'quic_sniff_decoy': true,
+      'quic_sniff_decoy': 'detour',
     });
   });
 
+  test('quic_sniff_decoy: режим строкой; off и старое bool из rc.3 ключа не дают', () {
+    expect((lx({'quic_sniff_decoy': 'all'}) as Map)['quic_sniff_decoy'], 'all');
+    expect((lx({'quic_sniff_decoy': 'direct'}) as Map)['quic_sniff_decoy'], 'direct');
+    for (final v in ['off', 'true', 'false']) {
+      expect((lx({'quic_sniff_decoy': v}) as Map).containsKey('quic_sniff_decoy'), isFalse, reason: v);
+    }
+  });
+
   test('сон off — блока wg нет, reachable и lazy не пишутся', () {
-    final r = lx({'wg_idle_suspend': 'off', 'quic_sniff_decoy': 'false'});
+    final r = lx({'wg_idle_suspend': 'off', 'quic_sniff_decoy': 'off'});
     expect(r, isEmpty);
   });
 

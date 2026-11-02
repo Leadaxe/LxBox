@@ -1,6 +1,6 @@
 {
   "lx": {
-    "quic_sniff_decoy": true,
+    "quic_sniff_decoy": "detour",
     "wg": {
       "idle_suspend": "30s",
       "lazy_build": true,

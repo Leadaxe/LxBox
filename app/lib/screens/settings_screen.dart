@@ -398,7 +398,7 @@ class _SettingsScreenState extends State<SettingsScreen>
         'wg_build_max': getLocalText.s("Core: lx.wg.build_max. Over the limit the endpoint idle for the longest is torn down."),
         'mtu_align': getLocalText.s("Core: lx.mtu_align. A node over a tunnel gets a packet size that fits into it: mtu for WireGuard and MASQUE, the initial packet size for Hysteria2 and TUIC. Values are never raised."),
         'masque_idle_timeout': getLocalText.s("Core: lx.masque.idle_timeout. The idle window for MASQUE nodes that have no idle_timeout of their own."),
-        'quic_sniff_decoy': getLocalText.s("Core: lx.quic_sniff_decoy. A relay with UDP sniffing (Xray destOverride quic) rewrites the destination by the SNI of the first QUIC packet; a junk first byte makes it give up. Servers drop the byte."),
+        'quic_sniff_decoy': getLocalText.s("Core: lx.quic_sniff_decoy. A relay with UDP sniffing (Xray destOverride quic) rewrites the destination by the SNI of the first QUIC packet; a junk first byte makes it give up. Servers drop the byte. A DPI on your own uplink may react to it, hence Through detour by default."),
       };
 
   Widget _buildCoreTab(

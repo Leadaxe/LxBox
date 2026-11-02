@@ -115,3 +115,23 @@
   `portable: false`.
 - Тест — `app/test/builder/lx_block_template_test.dart` (фрагмент `lx`
   настоящего шаблона и `#enable` объявлений).
+
+## Итерация 4 — режим обманки и стабильное ядро (контракт 1.1.152, §148)
+
+Ядро `v1.14.4-lx.30`: `lx.quic_sniff_decoy` — режим `off` / `detour` /
+`direct` / `all` (`true` / `false` из rc.3 — алиасы `all` / `off`). Владелец
+ядра: DPI собственного аплинка может среагировать на лишний байт, поэтому
+по умолчанию обманка только у соединений поверх другого узла.
+
+- `quic_sniff_decoy` — enum, options `Off` / `Through detour (default)` /
+  `Direct` / `All`, дефолт `detour`.
+- Эмиссия `"#if quic_sniff_decoy": [{"@quic_sniff_decoy": {"#in": ["detour",
+  "direct", "all"]}}, {"quic_sniff_decoy": "@quic_sniff_decoy"}]`: значение
+  `true` / `false`, оставшееся в хранилище после сборки с rc.3, ключа не
+  даёт (строку `"true"` ядро отвергло бы). Миграции нет.
+- Пин `v1.14.4-lx.30` (javap и теги совпадают с rc.3, sha256 в
+  `docs/KERNEL.md`). Ядро удалило алиасы `route.lx_idle_*`; LxBox их не
+  пишет (поиск по `app/lib`, `app/assets`, `app/test`, натив — пусто).
+- Подсказка (i) говорит про DPI своего канала.
+- Тест — тот же `lx_block_template_test.dart`: дефолт `detour`, режимы
+  строкой, `off` / `true` / `false` без ключа.

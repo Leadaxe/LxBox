@@ -468,7 +468,15 @@
       "chapter": "core",
       "description": "MASQUE (HTTP/3), Hysteria2 and TUIC.",
       "vars": [
-        {"name": "quic_sniff_decoy", "type": "bool", "default_value": "true", "required": true, "wizard_ui": "edit", "title": "Anti-sniff decoy", "tooltip": "Send one junk byte before the QUIC handshake so a relay that sniffs UDP cannot redirect the connection by its SNI."},
+        { "name": "quic_sniff_decoy", "type": "enum",
+          "default_value": "detour", "required": true, "wizard_ui": "edit", "title": "Anti-sniff decoy", "tooltip": "Send one junk byte before the QUIC handshake so a relay that sniffs UDP cannot redirect the connection by its SNI. Through detour: only connections carried by another node; Direct: only this device's own socket; All: both.",
+          "options": [
+            {"title": "Off", "value": "off"},
+            {"title": "Through detour (default)", "value": "detour"},
+            {"title": "Direct", "value": "direct"},
+            {"title": "All", "value": "all"}
+          ]
+        },
         { "name": "masque_idle_timeout", "type": "enum",
           "default_value": "off", "required": true, "wizard_ui": "edit", "title": "MASQUE idle timeout", "tooltip": "Close a MASQUE tunnel that carried no traffic for this long; it reconnects on next use. A node's own idle timeout wins.",
           "options": [
@@ -499,8 +507,8 @@
       "#if mtu_align": [{"#not": {"@mtu_align": "clamp"}}, {
         "mtu_align": "@mtu_align"
       }],
-      "#if quic_sniff_decoy": ["@quic_sniff_decoy", {
-        "quic_sniff_decoy": true
+      "#if quic_sniff_decoy": [{"@quic_sniff_decoy": {"#in": ["detour", "direct", "all"]}}, {
+        "quic_sniff_decoy": "@quic_sniff_decoy"
       }],
       "#if masque_idle_timeout": [{"#not": {"@masque_idle_timeout": "off"}}, {
         "masque": {"idle_timeout": "@masque_idle_timeout"}
