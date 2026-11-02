@@ -5,7 +5,7 @@
 | Status | Done |
 | Start date | 2026-11-02 |
 | End date | 2026-11-02 |
-| Commits | см. `git log -- app/test/services/app_log_notify_during_dispose_test.dart` |
+| Commits | `aa52ded4` `test(applog): тест троттлинга уведомлений на fakeAsync, resetForTesting гасит окно (§708)` |
 | Related specs | §622 (запись в журнал из `dispose()`), F22 part 2 (троттлинг ≤60 Гц) |
 
 ## Problem
