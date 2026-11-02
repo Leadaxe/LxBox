@@ -34,7 +34,7 @@ milliseconds. `startTailscaleSSHSession` is not used.
 | Called from | `scripts/build-local-apk.sh` and CI (`ci.yml` → the android job → “Fetch sing-box-lx core”) |
 | The AAR in git | NO (~110 MB as of lx.25; `app/android/app/libs/` is in `.gitignore`); `build.gradle.kts` → `implementation(files("libs/libbox.aar"))` |
 
-**The current pin: `v1.14.4-lx.30-rc.1`** (see `app/android/libbox.version`) — lx.1
+**The current pin: `v1.14.4-lx.30-rc.2`** (see `app/android/libbox.version`) — lx.1
 plus XHTTP HTTP-version parity (**SPEC 104**, lx.2), Vision on top of VLESS
 Encryption (**SPEC 105**, lx.3), the runtime WG/AWG endpoint toggle
 (**SPEC 106**, lx.4: `CommandClient.setEndpointEnabled`, `endpointState =
@@ -44,7 +44,7 @@ default without `xmux` moved to `max_connections 3` (lx.6), three MASQUE hangs f
 control channel on port 443 from the first connection (**SPEC 111**, lx.9),
 the headroom Tailscale needs on a direct UDP path restored in the AWG
 wireguard-go (**SPEC 112**, lx.10), one more `stable` sync (lx.11), lx.12 and
-lx.13-rc.1, lx.13, lx.14, lx.15, lx.16–lx.18, lx.19–lx.21, lx.22–lx.23, lx.24-rc.1/rc.2, lx.24, lx.25, lx.26, lx.27, lx.28, lx.29 and lx.30-rc.1 (below). The Java surface of lx.11 is identical to lx.8 (`javap` over both
+lx.13-rc.1, lx.13, lx.14, lx.15, lx.16–lx.18, lx.19–lx.21, lx.22–lx.23, lx.24-rc.1/rc.2, lx.24, lx.25, lx.26, lx.27, lx.28, lx.29, lx.30-rc.1 and lx.30-rc.2 (below). The Java surface of lx.11 is identical to lx.8 (`javap` over both
 `classes.jar`). The `lx.1` layers: **SPEC 097**, **SPEC 098**, **SPEC 101** and
 the upstream sync to sing-box **1.14.2** (**SPEC 102**).
 
@@ -279,6 +279,22 @@ the oom-killer mode at start (SPEC 148 §5). Java surface lx.29 → lx.30-rc.1
 `8c5d99cbb9c2fc469db6b123a8c20d1312ae628eec8d92ce45a2c403522fb8ed` (the
 release `SHA256SUMS`). Live sign-in by key and the off/on cycle against
 control are not verified on a device.
+
+**`v1.14.4-lx.30-rc.2`** — the same base, prerelease. **SPEC 149 §4**
+(LxBox task 707, iteration 4): endpoint option `disable_taildrop` (bool;
+absent or false — as upstream). When true the peer API `/v0/put/` (PUT and
+the resume GET) answers 403 "Taildrop is disabled on this node",
+`SendTaildropFiles` fails with FailedPrecondition, the status reports
+`canShareFiles = false` and every peer `canReceiveFiles = false`; files
+already in `taildrop_directory` stay in the inbox. It does not toggle live —
+reload only. `TaildropFile.senderID` (stable node ID; kept in memory like
+`senderName`, both empty for files found on disk after a core restart).
+Java surface lx.30-rc.1 → lx.30-rc.2 (`javap` over the full `classes.jar`):
+two additions — `TaildropFile.getSenderID()`/`setSenderID(String)`. Build
+tags identical, `kCoreBuildTagsPin` moved with the pin, `strings` of
+`libbox.so` reports `1.14.4-lx.30-rc.2`. AAR sha256
+`e393a5e9f9e031c74732dbd060a6415f09c2804d566cd37bce66067585bdef8b` (the
+release `SHA256SUMS`). Not verified on a device.
 
 **`v1.14.4-lx.29`** — the same base (upstream `v1.14.4`, drift 0, Go
 1.26.10), stable without an rc line, one change. **SPEC 148** (issue
