@@ -540,3 +540,100 @@ Debug API.
   выключенном разрешении — удалён, буфер не тронут; включено — буфер
   заполнен; `open_url` — уведомление, тап открывает; битый `lx-*.json` —
   обычный файл во входящих.
+
+### Result (итерация 4)
+
+Сделано:
+- **A. Сборка.** `services/builder/taildrop_emit.dart`
+  `applyTaildropDefault` — вызов в `buildConfig` сразу после подстановки
+  `taildrop_directory`: endpoint `tailscale` без явного `false` получает
+  `disable_taildrop: true`; `min_core` поля берётся из реестра
+  (`schemaFor('tailscale').fields['disable_taildrop'].minCore`), сравнение —
+  `coreAtLeast`. Хранимое тело не трогается.
+- **A. UI.** Вкладка Network (`tailscale_network_tab.dart`): в блоке Settings
+  своего узла — «Allow Taildrop (send and receive files)» (вкл →
+  `{disable_taildrop: false}`, выкл → `{disable_taildrop: null}` через
+  `onSaveFields`, тем же путём, что advertise). Узел выключен по телу —
+  нет автосохранения, «Send file…», разрешений и Inbox; вместо Inbox строка
+  «Taildrop is off for this node.» (ключ `taildrop-node-off`). Add server →
+  вкладка Tailscale: тот же переключатель (по умолчанию выкл, вкл пишет
+  `disable_taildrop: false`).
+- **B. Натив.** `vpn/TaildropServiceFiles.kt`: константы из ассета
+  `flutter_assets/assets/contract/registry/service_files.json` (зеркало
+  контракта); кандидат по `name_prefix`/`name_suffix`; разбор §4 (предел,
+  строгий UTF-8, `lx` из `versions`, `commands` — список); §6: возраст по
+  mtime файла, команды по порядку, `clipboard` — последний по mtime (при
+  равенстве — по времени в имени) через `ClipboardManager` на main looper,
+  `open_url` — схема из `schemes`, уведомление «Link from <device>» с адресом,
+  тап — `ACTION_VIEW` (нет обработчика — ничего); удаление всегда (через ядро,
+  нет ядра или отказ — с диска). Отправитель — `BoxCommandClient.
+  taildropInboxSnapshot` (разовая подписка `SubscribeTaildropInbox`,
+  `TaildropFile.senderID`/`senderName`). Точки входа: уведомление ядра
+  «принят» с именем-кандидатом (`Taildrop.onCoreNotification` → разбор в
+  фоне; обычный файл — дальше автосохранение/уведомление как раньше) и прогон
+  входящих `sweepLocked` (служебные — первыми, у всех узлов с включённым
+  Taildrop; автосохранение их пропускает). `taildropDirectories` не отдаёт
+  узлы с `disable_taildrop: true` — разбор и автосохранение их не трогают.
+  «Поделиться» (`TaildropShareActivity`) не предлагает такие узлы; все
+  запущенные выключены — строка `taildrop_off_all`.
+- **C. Разрешения.** Меню устройства: «Clipboard from this device», «Links
+  from this device» (виды — что вернул натив из реестра, подпись по виду в
+  Dart). Хранятся в `lxbox_taildrop`: ключ `perm.<вид>.<тег>␁<stableID>`,
+  значение — имя пира при выдаче. Файл без `senderID` сверяется с этим
+  именем. `forgetAutoSave` (удаление узла / смена тега) снимает и разрешения
+  (`TaildropServiceFiles.forgetTags`). Канал: `taildropPermissions`,
+  `taildropSetPermission`.
+- **D.** Строки en/ru/zh: `ui.json` (4), `values*/strings.xml`
+  (`taildrop_link_from`, `taildrop_off_all`). Битая команда — WARN «N
+  malformed command(s) skipped» в logcat и AppLog (`BoxService.appLogWarning`)
+  без текста, ссылки и имён.
+
+Решения исполнителя:
+- Подстановка идёт ПОСЛЕ гейта реестра с явной проверкой `min_core`, а не
+  до него полевым гейтом: гейт не применяет тихие правки (`min_core` без
+  кода) к авторскому телу (§577, `applyRegistryEdits` правит у авторского
+  только пути кодов и `hardPaths`), и явное `false` из авторского тела ушло
+  бы в ядро старше rc.2 — оно отвергло бы весь конфиг. На ядре ниже
+  `min_core` поле снимается у всех endpoint'ов `tailscale`, и явное тоже.
+  Реестр не загружен или поля в нём нет — сборка поле не пишет.
+- Golden-эталоны не менялись: версия ядра эталонов `1.14.0-lx.39` ниже
+  `min_core`, поле не эмитится — это и есть проверка ветки «старое ядро».
+  Эмиссия на пине — `node_sections_build_test`.
+- Выключен ли Taildrop узла, вкладка решает по телу (нет явного `false`):
+  статус `canShareFiles == false` при включённом теле уже даёт прежнюю строку
+  про tailnet и прячет «Send file…». Подписка на входящие у выключенного
+  узла остаётся (лежащие файлы не показываются).
+- Узел подписки: переключателя нет (тело узла — у подписки), Taildrop у него
+  выключен и из UI не включается. Включить — только через тело источника.
+- Разрешения показываются у устройств со `stableId`, не расшаренных
+  (`shareeNode`), при включённом Taildrop узла — не только у «целей
+  отправки»: пир вне сети тоже настраивается.
+- Имя пира для сверки по имени — `hostName` из статуса; что это то же, что
+  `ComputedName` (`senderName` у `TaildropFile`), не сверено.
+- Уведомление ядра «идёт приём» у кандидата не подавляется (имя ещё не
+  разобрано); «принят» у служебного не показывается.
+- До старта ядра (прогон из старта VPN) служебные файлы удаляются с диска
+  без выполнения команд: отправителя нет, разрешение не находится (§5).
+- Тело с ведущим BOM — обычный файл («JSON в UTF-8 без BOM», §3).
+- Пустой `text` у `clipboard` и поля не того типа — «битая команда»
+  (WARN-счётчик); неизвестный `kind` — пропуск молча.
+- Заголовок уведомления ссылки — `senderName`, пустой — тег узла.
+
+Проверено:
+- `flutter test`: `test/widgets/tailscale_network_tab_test.dart`,
+  `test/builder/node_sections_build_test.dart` — зелёные (новые: галка вкл/
+  выкл, выключенный узел — строка, нет Inbox/Send file/разрешений,
+  переключатели разрешений в меню, расшаренному — нет; эмиссия: нет поля →
+  true, явное false, ядро rc.1 и lx.29 — поля нет, тело не тронуто);
+  `test/storage_migration/golden_config_test.dart` — эталоны совпали;
+  `body_contract_test` кейс `singbox/tailscale_disable_taildrop_false` —
+  зелёный.
+- `flutter analyze` по изменённым dart-файлам — 0; `hardcoded_check`,
+  `kotlin_check` — 0/0; `./gradlew :app:compileDebugKotlin` — без ошибок.
+
+Не проверено:
+- Эмулятор и телефон — ни одного сценария раздела Verification (отказ
+  «Taildrop is disabled on this node», reload, буфер, ссылка, битый
+  `lx-*.json`).
+- Юнит-тестов Kotlin нет (в модуле нет `src/test`): разбор тела §4,
+  выбор последнего `clipboard`, ключи разрешений проверены только чтением.

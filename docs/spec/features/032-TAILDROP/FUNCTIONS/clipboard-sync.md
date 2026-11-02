@@ -13,7 +13,7 @@ clipboard and links from an allowed device.
 |-------|-------|
 | Feature | [032-TAILDROP](../FEATURE.md) |
 | Promises | P9–P12 |
-| State | ✍ Draft, 2026-11-02 — not implemented; the format awaits the contract |
+| State | 🟡 Partial, 2026-11-02 — receiving implemented (task 707, iteration 4: commands run, file deleted, per-device permissions); sending — iteration 5. Contract 1.1.148–1.1.150 |
 
 ## What it does
 

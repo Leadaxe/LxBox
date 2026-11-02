@@ -29,10 +29,28 @@
   Save on Android 10+). Files already waiting in the inbox go to Downloads too:
   when the switch is turned on, when the app starts and when the VPN starts
   (one "Saved N files to Downloads" notification per run).
+- **Taildrop: "Allow Taildrop" switch per node and command files
+  ([task 707](docs/spec/tasks/707-taildrop-send-receive-files.md#итерация-4--галка-узла-allow-taildrop-и-служебные-файлы)).**
+  The Settings block of a Tailscale node's Network tab and the Tailscale form
+  in Add server have "Allow Taildrop (send and receive files)"; it takes
+  effect after the VPN restarts. With it off the node refuses incoming files,
+  the tab shows "Taildrop is off for this node." instead of the Inbox, and
+  the node is not offered in Share. Received `lx-….json` command files from
+  the launcher or another L×Box are run and deleted instead of landing in the
+  Inbox: text goes to the clipboard, a link comes as a "Link from <device>"
+  notification. Each kind is allowed per device in that device's menu
+  ("Clipboard from this device", "Links from this device"; off by default,
+  kept on the device, not in the backup).
 - **Tailscale node on/off and restart on the fly
   ([task 706](docs/spec/tasks/706-tailscale-network-tab-logged-out.md)).**
   The Network tab has a Node enabled switch and Restart node; Turn off / Turn
   on in the node list now works for Tailscale nodes too.
+
+### Changed
+
+- **Taildrop is now off by default on every Tailscale node, existing ones
+  included** (contract 1.1.150): after this update a node receives and sends
+  files only once "Allow Taildrop" is turned on in its settings.
 
 ### Fixed
 
