@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Status | Done (итерации 1–3; эмулятор 02.11.2026) |
+| Status | In progress (итерация 4); итерации 1–3 — Done, эмулятор 02.11.2026 |
 | Start date | 2026-11-02 |
 | End date | 2026-11-02 |
 | Commits | `1d30e211` `feat(taildrop): отправка и приём файлов — «Поделиться», Send file…, входящие узла (§707)` |
@@ -450,3 +450,22 @@ tag, name, target)` (API 29+ → `MediaStore.Downloads`, затем файл и�
 - CI 41479836481: упал чужой тест на тайминг AppLog
   (`app_log_notify_during_dispose_test.dart:79`), итерация Dart не трогала;
   перезапущен, флейк вынесен в отдельную задачу.
+
+## Итерация 4 — галка узла «Allow Taildrop» и служебные файлы
+
+Решения владельца 02.11.2026: галка узла «Allow Taildrop» по умолчанию
+выключена; служебные файлы `lx-<время>-<метка>.json` с командами `clipboard`
+и `open_url` (функция [clipboard-sync](../features/032-TAILDROP/FUNCTIONS/clipboard-sync.ru.md)).
+Контракт: 1.1.148 (формат, TASKS_LXBOX §144), 1.1.149 (норма сборки
+`disable_taildrop`, ключ разрешения senderID, §145), 1.1.150 (поле
+`disable_taildrop`, `min_core` 1.14.4-lx.30-rc.2, гейт с пре-релизами, §146).
+Ядро: `disable_taildrop` и `TaildropFile.senderID` — тег lx.30-rc.2 (ждёт
+«да» владельца в сессии ядра).
+
+Сделано заранее: `coreAtLeast` (`body_sanitizer.dart`) учитывает пре-релиз
+(`lx.30-rc.1 < lx.30-rc.2 < lx.30`; суффикс не `-rc<K>`/`-rc.<K>` — релиз
+своего `lx.N`). Без этого поле с `min_core` rc.2 ушло бы в ядро rc.1 и ядро
+отвергло бы весь конфиг. Все `min_core` реестра ниже текущего пина — на них
+правка не влияет.
+
+Остальное ТЗ — после тега ядра.

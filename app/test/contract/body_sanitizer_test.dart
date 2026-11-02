@@ -1299,6 +1299,21 @@ void main() {
       // Версия неизвестна — гейт не применяем.
       expect(coreAtLeast('', '1.14.1-lx.4'), isTrue);
     });
+
+    test('пре-релиз: lx.30-rc.1 < lx.30-rc.2 < lx.30 (контракт 1.1.150)', () {
+      expect(coreAtLeast('1.14.4-lx.30-rc.1', '1.14.4-lx.30-rc.2'), isFalse,
+          reason: 'иначе поле rc.2 уйдёт в rc.1 и ядро отвергнет конфиг');
+      expect(coreAtLeast('v1.14.4-lx.30-rc.2', '1.14.4-lx.30-rc.2'), isTrue);
+      expect(coreAtLeast('1.14.4-lx.30', '1.14.4-lx.30-rc.2'), isTrue);
+      expect(coreAtLeast('1.14.4-lx.30-rc.9', '1.14.4-lx.30'), isFalse);
+      expect(coreAtLeast('1.14.4-lx.30-rc.10', '1.14.4-lx.30-rc.9'), isTrue);
+      expect(coreAtLeast('1.14.4-lx.30-rc2', '1.14.4-lx.30-rc.2'), isTrue);
+      // Хвост сборки не с тега: после rc — тот же rc, без rc — релиз.
+      expect(coreAtLeast('1.14.4-lx.30-rc.2-g1a2b3c4', '1.14.4-lx.30-rc.2'),
+          isTrue);
+      expect(coreAtLeast('1.14.4-lx.30-g1a2b3c4', '1.14.4-lx.30'), isTrue);
+      expect(coreAtLeast('1.14.4-lx.31-rc.1', '1.14.4-lx.30'), isTrue);
+    });
   });
 
   // §556 (контракт 1.1.57) — `on_invalid: unwrap`, общий обход атрибута.

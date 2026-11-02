@@ -2964,23 +2964,31 @@ bool coreAtLeast(String version, String required) {
   // поля из-за незнания хуже, чем оставить их ядру на разбор.
   if (a == null) return true;
   if (b == null) return true;
-  for (var i = 0; i < 4; i++) {
+  for (var i = 0; i < 5; i++) {
     if (a[i] != b[i]) return a[i] > b[i];
   }
   return true;
 }
 
+/// Контракт 1.1.150 (гейты сборки) — пре-релиз учитывается:
+/// `lx.30-rc.1 < lx.30-rc.2 < lx.30`. Суффикс не вида `-rc<K>`/`-rc.<K>`
+/// (`-g1a2b3c4` сборки не с тега) сравнивается как релиз своего `lx.N`.
 List<int>? _parseCore(String v) {
   if (v.isEmpty) return null;
-  final m = RegExp(r'^v?(\d+)\.(\d+)\.(\d+)(?:-lx\.(\d+))?').firstMatch(v.trim());
+  final m = RegExp(r'^v?(\d+)\.(\d+)\.(\d+)(?:-lx\.(\d+)(?:-rc\.?(\d+))?)?')
+      .firstMatch(v.trim());
   if (m == null) return null;
   return [
     int.parse(m.group(1)!),
     int.parse(m.group(2)!),
     int.parse(m.group(3)!),
     int.tryParse(m.group(4) ?? '0') ?? 0,
+    // Нет rc — релиз, старше любого своего rc.
+    m.group(5) == null ? _kRelease : int.parse(m.group(5)!),
   ];
 }
+
+const int _kRelease = 1 << 30;
 
 /// Результат обработки одного значения: оставить (с возможной заменой) или
 /// снять.
