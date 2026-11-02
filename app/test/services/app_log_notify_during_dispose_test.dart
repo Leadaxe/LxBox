@@ -1,6 +1,9 @@
 // §622 — запись в журнал из dispose() (экран приёма закрывает сессию и
 // пишет «session closed») не дёргает слушателей при запертом дереве.
 
+// ignore_for_file: depend_on_referenced_packages
+
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/services/app_log.dart';
@@ -61,21 +64,31 @@ void main() {
     await tester.pump(const Duration(milliseconds: 20));
   });
 
-  test('notification is not synchronous with the write', () async {
-    var notified = 0;
-    void listener() => notified++;
-    AppLog.I.addListener(listener);
-    addTearDown(() => AppLog.I.removeListener(listener));
-    await Future<void>.delayed(const Duration(milliseconds: 20));
+  // Fake time: на реальных таймерах окно (16 мс) и сон теста при опоздании
+  // изолята срабатывали одной пачкой, и микрозадача с уведомлением шла уже
+  // после проверки (§708).
+  test('notification is not synchronous with the write', () {
+    fakeAsync((async) {
+      var notified = 0;
+      void listener() => notified++;
+      AppLog.I.addListener(listener);
+      addTearDown(() => AppLog.I.removeListener(listener));
 
-    AppLog.I.info('a');
-    expect(notified, 0);
-    await Future<void>.delayed(Duration.zero);
-    expect(notified, 1);
-    // Записи в окне сливаются в одно уведомление в его конце.
-    AppLog.I.info('b');
-    AppLog.I.info('c');
-    await Future<void>.delayed(const Duration(milliseconds: 40));
-    expect(notified, 2);
+      AppLog.I.info('a');
+      expect(notified, 0);
+      async.flushMicrotasks();
+      expect(notified, 1);
+      // Записи в окне сливаются в одно уведомление в его конце.
+      AppLog.I.info('b');
+      AppLog.I.info('c');
+      async.elapse(const Duration(milliseconds: 15));
+      expect(notified, 1);
+      async.elapse(const Duration(milliseconds: 1));
+      expect(notified, 2);
+      // Окно, открытое этим уведомлением, без новых записей гаснет молча.
+      async.elapse(const Duration(milliseconds: 40));
+      expect(notified, 2);
+      expect(async.pendingTimers, isEmpty);
+    });
   });
 }

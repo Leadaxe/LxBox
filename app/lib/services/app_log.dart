@@ -413,6 +413,11 @@ class AppLog extends ChangeNotifier {
     }
     _persistDirty.clear();
     _persistInitialized = false;
+    // Окно троттлинга тоже: таймер прошлого теста (в т.ч. fake-таймер из
+    // отработавшей зоны fakeAsync) иначе проглотит первое уведомление.
+    _notifyThrottleTimer?.cancel();
+    _notifyThrottleTimer = null;
+    _notifyPending = false;
   }
 }
 
