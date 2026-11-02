@@ -6646,5 +6646,11 @@
   },
   "Node restarted.": {
     "value": "节点已重启。"
+  },
+  "Save received files to Downloads": {
+    "value": "将收到的文件保存到“下载”"
+  },
+  "Needs Android 10 or later.": {
+    "value": "需要 Android 10 或更高版本。"
   }
 }

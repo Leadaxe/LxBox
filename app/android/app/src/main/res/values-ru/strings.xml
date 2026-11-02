@@ -81,4 +81,9 @@
     <string name="taildrop_reason_cant_read">Не удалось прочитать файл</string>
     <string name="taildrop_reason_cant_write">Не удалось записать файл</string>
     <string name="taildrop_reason_interrupted">Передача прервана</string>
+    <string name="taildrop_save">Сохранить</string>
+    <string name="taildrop_delete">Удалить</string>
+    <string name="taildrop_saved_title">Сохранено в Загрузки: %1$s</string>
+    <string name="taildrop_save_failed">Не удалось сохранить: %1$s</string>
+    <string name="taildrop_delete_failed">Не удалось удалить: %1$s</string>
 </resources>

@@ -41,6 +41,7 @@ import '../services/builder/direction_pool_preview.dart'
     show readStoredBuildSettings;
 import '../services/builder/if_engine.dart' show TemplateWarning;
 import '../vpn/box_vpn_client.dart';
+import '../vpn/cc_channel.dart';
 import '../services/parser/body_decoder.dart';
 import '../services/parser/ini_parser.dart';
 import '../services/parser/json_comments.dart';
@@ -3004,6 +3005,12 @@ class SubscriptionController extends ChangeNotifier {
     Map<NodeSpec, NodeSpec> renamed,
   ) async {
     if (!hasTailscaleNodes(before) && !hasTailscaleNodes(after)) return;
+    // §707 итер. 2 — автосохранение Taildrop хранится по тегу узла: узел
+    // ушёл или сменил тег — запись снимается.
+    final goneTags = goneTailscaleTags(before, after);
+    if (goneTags.isNotEmpty) {
+      unawaited(CcChannel.instance.forgetTaildropAutoSave(goneTags));
+    }
     final root = await _tailscaleStateRoot();
     if (root.isEmpty) return;
     try {

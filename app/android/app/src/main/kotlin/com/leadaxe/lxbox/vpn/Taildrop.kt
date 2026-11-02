@@ -147,6 +147,21 @@ object Taildrop {
         return true
     }
 
+    /// Работа кнопки уведомления — вне главного потока; исключения не наружу.
+    fun runInBackground(block: () -> Unit) {
+        scope.launch {
+            runCatching(block).onFailure {
+                Log.w(TAG, "taildrop notification action failed: ${it.javaClass.simpleName}")
+            }
+        }
+    }
+
+    /// Файл ушёл из входящих не из уведомления (Save / Delete на вкладке
+    /// узла) — его уведомление «принят» больше не нужно.
+    fun dismissReceived(ctx: Context, tag: String, name: String) {
+        runCatching { notificationManager(ctx).cancel(coreNotificationId("taildrop/$tag/$name")) }
+    }
+
     /// Cancel из уведомления: закрыть сессию; ядро рвёт передачу.
     fun cancelSend(ctx: Context, id: Int) {
         val job = sends[id] ?: run { notificationManager(ctx).cancel(id); return }
@@ -408,6 +423,245 @@ object Taildrop {
         return null
     }
 
+    /// Разобранное уведомление приёма ядра.
+    sealed class CoreNote {
+        abstract val tag: String
+
+        /// Идёт приём: `taildrop/<tag>/receiving/<senderID>/<baseName>`.
+        data class Receiving(override val tag: String, val senderId: String, val name: String) : CoreNote()
+
+        /// Принят: `taildrop/<tag>/<finalName>` (имя во входящих).
+        data class Received(override val tag: String, val name: String) : CoreNote()
+    }
+
+    /// Разбор `identifier` ядра. Тег — из [openUrl] (в теге может быть `/`,
+    /// по `identifier` его границу не найти); остаток после `taildrop/<tag>/`
+    /// — форма приёма или имя файла (имена файлов и `senderID` без `/`).
+    /// `null` — форма не та (кнопок у такого уведомления нет).
+    fun parseCoreNotification(identifier: String?, openUrl: String?): CoreNote? {
+        val tag = tagFromOpenUrl(openUrl) ?: return null
+        val prefix = "taildrop/$tag/"
+        if (identifier == null || !identifier.startsWith(prefix)) return null
+        val rest = identifier.substring(prefix.length)
+        if (rest.startsWith("receiving/")) {
+            val r = rest.substring("receiving/".length)
+            val slash = r.indexOf('/')
+            if (slash <= 0 || slash == r.length - 1) return null
+            val name = r.substring(slash + 1)
+            if (name.contains('/')) return null
+            return CoreNote.Receiving(tag, r.substring(0, slash), name)
+        }
+        if (rest.isEmpty() || rest.contains('/')) return null
+        return CoreNote.Received(tag, rest)
+    }
+
+    // ─────────────── автосохранение (настройка устройства) ───────────────
+
+    /// Настройки Taildrop этого устройства: не в `lxbox_settings.json`,
+    /// значит не в бэкапе L×Box; сервис читает их без Flutter.
+    private const val PREFS = "lxbox_taildrop"
+    private const val AUTOSAVE_PREFIX = "autosave."
+
+    /// Автосохранение в Downloads — только API 29+ (MediaStore без разрешений).
+    fun autoSaveSupported(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
+
+    private fun prefs(ctx: Context) =
+        ctx.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+
+    fun isAutoSave(ctx: Context, tag: String): Boolean =
+        autoSaveSupported() && prefs(ctx).getBoolean(AUTOSAVE_PREFIX + tag, false)
+
+    /// Хранится только включённое значение; выключение убирает запись.
+    fun setAutoSave(ctx: Context, tag: String, enabled: Boolean) {
+        val e = prefs(ctx).edit()
+        if (enabled) e.putBoolean(AUTOSAVE_PREFIX + tag, true) else e.remove(AUTOSAVE_PREFIX + tag)
+        e.apply()
+    }
+
+    /// Узлы удалены или переименованы — их записи убираются.
+    fun forgetAutoSave(ctx: Context, tags: Collection<String>) {
+        if (tags.isEmpty()) return
+        val e = prefs(ctx).edit()
+        for (t in tags) e.remove(AUTOSAVE_PREFIX + t)
+        e.apply()
+    }
+
+    // ─────────────── уведомления приёма: кнопки и сохранение ───────────────
+
+    const val ACTION_CANCEL_RECEIVING = "com.leadaxe.lxbox.taildrop.CANCEL_RECEIVING"
+    const val ACTION_SAVE = "com.leadaxe.lxbox.taildrop.SAVE"
+    const val ACTION_DELETE = "com.leadaxe.lxbox.taildrop.DELETE"
+    const val EXTRA_NOTE_ID = "note_id"
+    const val EXTRA_NOTE_TAG = "note_tag"
+    const val EXTRA_NOTE_NAME = "note_name"
+    const val EXTRA_NOTE_SENDER = "note_sender"
+    const val EXTRA_NOTE_TITLE = "note_title"
+    const val EXTRA_NOTE_BODY = "note_body"
+    const val EXTRA_NOTE_SUBTITLE = "note_subtitle"
+
+    /// Тексты уведомления ядра — чтобы кнопка могла поставить его заново
+    /// (неудачный Save / Delete) без самого ядра.
+    class NoteText(val title: String, val body: String, val subtitle: String)
+
+    /// Уведомление ядра о приёме: кнопки Cancel (идёт приём) или Save /
+    /// Delete (принят; Save — только API 29+), тап открывает вкладку узла.
+    /// [reason] — причина неудачного Save / Delete, дописывается к тексту.
+    /// [withActions] = false — без кнопок (идёт автосохранение).
+    fun showCoreNotification(
+        ctx: Context,
+        id: Int,
+        note: CoreNote?,
+        text: NoteText,
+        openTag: String?,
+        reason: String? = null,
+        withActions: Boolean = true,
+    ) {
+        ensureChannel(ctx)
+        val body = if (reason.isNullOrEmpty()) text.body else text.body + "\n" + reason
+        val b = NotificationCompat.Builder(ctx, CHANNEL_ID)
+            .setSmallIcon(
+                if (note is CoreNote.Receiving) android.R.drawable.stat_sys_download
+                else android.R.drawable.stat_sys_download_done,
+            )
+            .setContentTitle(text.title)
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setAutoCancel(true)
+        if (text.subtitle.isNotBlank()) b.setSubText(text.subtitle)
+        (note?.tag ?: openTag)?.let { tag ->
+            openNodeIntent(ctx, tag, id)?.let { b.setContentIntent(it) }
+        }
+        if (withActions) {
+            when (note) {
+                is CoreNote.Receiving -> b.addAction(0, L10n.str(ctx, R.string.taildrop_cancel),
+                    noteAction(ctx, ACTION_CANCEL_RECEIVING, id, 0, note, text))
+                is CoreNote.Received -> {
+                    if (autoSaveSupported()) {
+                        b.addAction(0, L10n.str(ctx, R.string.taildrop_save),
+                            noteAction(ctx, ACTION_SAVE, id, 1, note, text))
+                    }
+                    b.addAction(0, L10n.str(ctx, R.string.taildrop_delete),
+                        noteAction(ctx, ACTION_DELETE, id, 2, note, text))
+                }
+                null -> {}
+            }
+        }
+        runCatching { notificationManager(ctx).notify(id, b.build()) }
+            .onFailure { Log.w(TAG, "taildrop notify failed: ${it.javaClass.simpleName}") }
+    }
+
+    private fun noteAction(
+        ctx: Context,
+        action: String,
+        id: Int,
+        slot: Int,
+        note: CoreNote,
+        text: NoteText,
+    ): PendingIntent {
+        val i = Intent(ctx, TaildropNoteReceiver::class.java)
+            .setAction(action)
+            .putExtra(EXTRA_NOTE_ID, id)
+            .putExtra(EXTRA_NOTE_TAG, note.tag)
+            .putExtra(EXTRA_NOTE_TITLE, text.title)
+            .putExtra(EXTRA_NOTE_BODY, text.body)
+            .putExtra(EXTRA_NOTE_SUBTITLE, text.subtitle)
+        when (note) {
+            is CoreNote.Receiving -> i.putExtra(EXTRA_NOTE_NAME, note.name)
+                .putExtra(EXTRA_NOTE_SENDER, note.senderId)
+            is CoreNote.Received -> i.putExtra(EXTRA_NOTE_NAME, note.name)
+        }
+        return PendingIntent.getBroadcast(
+            ctx, id * 4 + slot, i,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+    }
+
+    /// Уведомление ядра о приёме пришло в сервис: принятый файл узла с
+    /// включённым автосохранением уходит в Downloads, остальное — с кнопками.
+    fun onCoreNotification(ctx: Context, identifier: String, openUrl: String?, text: NoteText) {
+        val app = ctx.applicationContext
+        val id = coreNotificationId(identifier)
+        val note = parseCoreNotification(identifier, openUrl)
+        val openTag = tagFromOpenUrl(openUrl)
+        if (note is CoreNote.Received && isAutoSave(app, note.tag)) {
+            showCoreNotification(app, id, note, text, openTag, withActions = false)
+            runInBackground { saveFromNotification(app, id, note, text) }
+            return
+        }
+        showCoreNotification(app, id, note, text, openTag)
+    }
+
+    /// Save из уведомления или автосохранение: успех — «Saved to Downloads»
+    /// с открытием файла; неудача — уведомление «принят» с кнопками и
+    /// причиной, файл остаётся во входящих. Блокирующий — звать с IO.
+    internal fun saveFromNotification(ctx: Context, id: Int, note: CoreNote.Received, text: NoteText) {
+        if (BoxService.commandClient == null) {
+            runCatching { notificationManager(ctx).cancel(id) }
+            return
+        }
+        val saved = AtomicReference<Uri?>(null)
+        val err = runCatching { saveInternal(ctx, note.tag, note.name, null, saved) }
+            .getOrElse { it.message ?: L10n.str(ctx, R.string.taildrop_reason_cant_write) }
+        val uri = saved.get()
+        if (err == null && uri != null) {
+            showSaved(ctx, id, note.tag, uri, displayName(ctx, uri) ?: note.name)
+        } else {
+            showCoreNotification(ctx, id, note, text, note.tag,
+                reason = L10n.str(ctx, R.string.taildrop_save_failed, err ?: ""))
+        }
+    }
+
+    /// Delete / Cancel из уведомления. Без работающего ядра уведомление
+    /// просто снимается.
+    internal fun deleteFromNotification(ctx: Context, id: Int, note: CoreNote.Received, text: NoteText) {
+        val cc = BoxService.commandClient
+        val err = cc?.taildropDelete(note.tag, note.name)
+        if (cc == null || err == null) {
+            runCatching { notificationManager(ctx).cancel(id) }
+            return
+        }
+        showCoreNotification(ctx, id, note, text, note.tag,
+            reason = L10n.str(ctx, R.string.taildrop_delete_failed, err))
+    }
+
+    internal fun cancelReceivingFromNotification(ctx: Context, id: Int, note: CoreNote.Receiving) {
+        BoxService.commandClient?.taildropCancelReceiving(note.tag, note.senderId, note.name)
+        // Ядро само снимает «идёт приём» по концу приёма; снимаем и здесь —
+        // без ядра снимать больше некому.
+        runCatching { notificationManager(ctx).cancel(id) }
+    }
+
+    /// «Saved to Downloads: <name>»; тап открывает файл, нет обработчика —
+    /// вкладку узла.
+    private fun showSaved(ctx: Context, id: Int, tag: String, uri: Uri, name: String) {
+        ensureChannel(ctx)
+        val view = Intent(Intent.ACTION_VIEW)
+            .setDataAndType(uri, mimeOf(name))
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+        val content = if (view.resolveActivity(ctx.packageManager) != null) {
+            PendingIntent.getActivity(
+                ctx, id, view,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+        } else {
+            openNodeIntent(ctx, tag, id)
+        }
+        val b = NotificationCompat.Builder(ctx, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.stat_sys_download_done)
+            .setContentTitle(L10n.str(ctx, R.string.taildrop_saved_title, name))
+            .setAutoCancel(true)
+        content?.let { b.setContentIntent(it) }
+        runCatching { notificationManager(ctx).notify(id, b.build()) }
+            .onFailure { Log.w(TAG, "taildrop notify failed: ${it.javaClass.simpleName}") }
+    }
+
+    private fun displayName(ctx: Context, uri: Uri): String? = runCatching {
+        ctx.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+            ?.use { c ->
+                if (c.moveToFirst() && !c.isNull(0)) c.getString(0) else null
+            }
+    }.getOrNull()?.takeIf { it.isNotBlank() }
+
     // ───────────────────────── сохранение ─────────────────────────
 
     fun mimeOf(name: String): String {
@@ -421,7 +675,17 @@ object Taildrop {
     /// в `MediaStore.Downloads` (API 29+, без разрешений), затем файл
     /// уходит из входящих. Блокирующий — звать с IO. `null` — успех, иначе
     /// причина.
-    fun save(ctx: Context, tag: String, name: String, target: Uri?): String? {
+    fun save(ctx: Context, tag: String, name: String, target: Uri?): String? =
+        saveInternal(ctx, tag, name, target, null)
+
+    /// [saved] — куда положить uri записи `MediaStore` (только Downloads).
+    private fun saveInternal(
+        ctx: Context,
+        tag: String,
+        name: String,
+        target: Uri?,
+        saved: AtomicReference<Uri?>?,
+    ): String? {
         val cc = BoxService.commandClient ?: return L10n.str(ctx, R.string.taildrop_reason_vpn_off)
         val client = cc.newCallClient() ?: return L10n.str(ctx, R.string.taildrop_reason_vpn_off)
         val dir = File(ctx.cacheDir, "taildrop-save").apply { mkdirs() }
@@ -453,8 +717,9 @@ object Taildrop {
                     ?: return L10n.str(ctx, R.string.taildrop_reason_cant_write)
                 out.use { o -> tmp.inputStream().use { it.copyTo(o) } }
             } else {
-                val err = writeToDownloads(ctx, name, tmp)
-                if (err != null) return err
+                val uri = writeToDownloads(ctx, name, tmp)
+                    ?: return L10n.str(ctx, R.string.taildrop_reason_cant_write)
+                saved?.set(uri)
             }
             cc.taildropDelete(tag, name)
             return null
@@ -467,18 +732,16 @@ object Taildrop {
         }
     }
 
-    private fun writeToDownloads(ctx: Context, name: String, src: File): String? {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-            return L10n.str(ctx, R.string.taildrop_reason_cant_write)
-        }
+    /// Копия [src] в `MediaStore.Downloads`; uri записи или `null` (не вышло).
+    private fun writeToDownloads(ctx: Context, name: String, src: File): Uri? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
         val resolver = ctx.contentResolver
         val values = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, name)
             put(MediaStore.MediaColumns.MIME_TYPE, mimeOf(name))
             put(MediaStore.MediaColumns.IS_PENDING, 1)
         }
-        val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
-            ?: return L10n.str(ctx, R.string.taildrop_reason_cant_write)
+        val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values) ?: return null
         return try {
             val out = resolver.openOutputStream(uri)
                 ?: throw IOException("no output stream")
@@ -486,10 +749,10 @@ object Taildrop {
             resolver.update(uri, ContentValues().apply {
                 put(MediaStore.MediaColumns.IS_PENDING, 0)
             }, null, null)
-            null
+            uri
         } catch (e: Exception) {
             runCatching { resolver.delete(uri, null, null) }
-            L10n.str(ctx, R.string.taildrop_reason_cant_write)
+            null
         }
     }
 
@@ -546,6 +809,41 @@ object Taildrop {
             n++
         }
         return f
+    }
+}
+
+/// Кнопки уведомлений приёма ядра: Cancel (идёт приём), Save и Delete
+/// (принят). Работа — в scope Taildrop на IO, не на главном потоке.
+class TaildropNoteReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        val app = context.applicationContext
+        val id = intent.getIntExtra(Taildrop.EXTRA_NOTE_ID, -1)
+        val tag = intent.getStringExtra(Taildrop.EXTRA_NOTE_TAG)
+        val name = intent.getStringExtra(Taildrop.EXTRA_NOTE_NAME)
+        if (id < 0 || tag.isNullOrEmpty() || name.isNullOrEmpty()) return
+        val text = Taildrop.NoteText(
+            intent.getStringExtra(Taildrop.EXTRA_NOTE_TITLE) ?: "",
+            intent.getStringExtra(Taildrop.EXTRA_NOTE_BODY) ?: "",
+            intent.getStringExtra(Taildrop.EXTRA_NOTE_SUBTITLE) ?: "",
+        )
+        when (intent.action) {
+            Taildrop.ACTION_CANCEL_RECEIVING -> {
+                val sender = intent.getStringExtra(Taildrop.EXTRA_NOTE_SENDER)
+                if (sender.isNullOrEmpty()) return
+                Taildrop.runInBackground {
+                    Taildrop.cancelReceivingFromNotification(app, id, Taildrop.CoreNote.Receiving(tag, sender, name))
+                }
+            }
+            Taildrop.ACTION_SAVE -> {
+                val note = Taildrop.CoreNote.Received(tag, name)
+                // Пока идёт сохранение — без кнопок (второе нажатие некуда).
+                Taildrop.showCoreNotification(app, id, note, text, tag, withActions = false)
+                Taildrop.runInBackground { Taildrop.saveFromNotification(app, id, note, text) }
+            }
+            Taildrop.ACTION_DELETE -> Taildrop.runInBackground {
+                Taildrop.deleteFromNotification(app, id, Taildrop.CoreNote.Received(tag, name), text)
+            }
+        }
     }
 }
 

@@ -216,6 +216,11 @@
             android:name=".vpn.TaildropCancelReceiver"
             android:exported="false" />
 
+        <!-- §707 — Cancel / Save / Delete в уведомлениях приёма Taildrop. -->
+        <receiver
+            android:name=".vpn.TaildropNoteReceiver"
+            android:exported="false" />
+
         <!-- §047 Шаг 2 — Locale / Tasker plugin-стандарт (twofortyfouram).
              L×Box виден в Tasker как Plugin (Action + State). Edit-Activity
              exported (хост открывает их). Fire/Query receiver'ы БЕЗ

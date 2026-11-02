@@ -501,6 +501,48 @@ class CcChannel {
     }
   }
 
+  /// §707 итер. 2 — автосохранение принятых файлов узла [tag] в Downloads:
+  /// настройка устройства (native SharedPreferences, не бэкап). `null` —
+  /// канала нет (тесты, не Android).
+  Future<CcTaildropAutoSave?> taildropAutoSave(String tag) async {
+    try {
+      final r = await _methods
+          .invokeMethod<Object?>('taildropAutoSaveState', {'tag': tag});
+      if (r is! Map) return null;
+      return CcTaildropAutoSave.fromMap(_asMap(r));
+    } on PlatformException {
+      return null;
+    } on MissingPluginException {
+      return null;
+    }
+  }
+
+  /// `true` — записано.
+  Future<bool> setTaildropAutoSave(String tag, bool enabled) async {
+    try {
+      return await _methods.invokeMethod<bool>(
+              'taildropSetAutoSave', {'tag': tag, 'enabled': enabled}) ==
+          true;
+    } on PlatformException {
+      return false;
+    } on MissingPluginException {
+      return false;
+    }
+  }
+
+  /// Узлы [tags] удалены или переименованы — их записи убираются.
+  Future<void> forgetTaildropAutoSave(Iterable<String> tags) async {
+    if (tags.isEmpty) return;
+    try {
+      await _methods.invokeMethod<bool>(
+          'taildropForgetAutoSave', {'tags': tags.toList()});
+    } on PlatformException {
+      // best-effort
+    } on MissingPluginException {
+      // юнит-тест / не Android
+    }
+  }
+
   /// §707 — тег узла из тапа по уведомлению Taildrop; забирается один раз.
   Future<String?> takeTaildropOpenRequest() async {
     try {
@@ -1131,6 +1173,21 @@ class CcTaildropResult {
         status: '${m['status'] ?? 'error'}',
         where: '${m['where'] ?? ''}',
         error: '${m['error'] ?? ''}',
+      );
+}
+
+/// §707 итер. 2 — переключатель автосохранения узла: [enabled] — включён,
+/// [supported] — Android 10+ (MediaStore без разрешений).
+class CcTaildropAutoSave {
+  const CcTaildropAutoSave({required this.enabled, required this.supported});
+
+  final bool enabled;
+  final bool supported;
+
+  factory CcTaildropAutoSave.fromMap(Map<String, dynamic> m) =>
+      CcTaildropAutoSave(
+        enabled: m['enabled'] == true,
+        supported: m['supported'] == true,
       );
 }
 

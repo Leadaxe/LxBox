@@ -1341,28 +1341,17 @@ class BoxService(
         Log.d(TAG, "Notification cancelled: $identifier/$typeID")
     }
 
-    /// §707 — уведомление приёма Taildrop от ядра.
+    /// §707 — уведомление приёма Taildrop от ядра: кнопки Cancel / Save /
+    /// Delete и автосохранение узла с включённым переключателем — в [Taildrop].
     private fun sendTaildropNotification(
         context: Context,
         notification: io.nekohasekai.libbox.Notification,
     ) {
-        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        Taildrop.ensureChannel(context)
-        val id = Taildrop.coreNotificationId(notification.identifier)
-        val builder = NotificationCompat.Builder(context, Taildrop.CHANNEL_ID)
-            .setSmallIcon(
-                if (notification.identifier.contains("/receiving/")) android.R.drawable.stat_sys_download
-                else android.R.drawable.stat_sys_download_done,
-            )
-            .setContentTitle(notification.title)
-            .setContentText(notification.body)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(notification.body))
-            .setAutoCancel(true)
-        if (notification.subtitle.isNotBlank()) builder.setSubText(notification.subtitle)
-        Taildrop.tagFromOpenUrl(notification.openURL)?.let { tag ->
-            Taildrop.openNodeIntent(context, tag, id)?.let { builder.setContentIntent(it) }
-        }
-        runCatching { nm.notify(id, builder.build()) }
-            .onFailure { Log.w(TAG, "taildrop notify failed: ${it.javaClass.simpleName}") }
+        Taildrop.onCoreNotification(
+            context,
+            notification.identifier,
+            notification.openURL,
+            Taildrop.NoteText(notification.title ?: "", notification.body ?: "", notification.subtitle ?: ""),
+        )
     }
 }

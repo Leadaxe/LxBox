@@ -85,4 +85,9 @@
     <string name="taildrop_reason_cant_read">Can\'t read the file</string>
     <string name="taildrop_reason_cant_write">Can\'t write the file</string>
     <string name="taildrop_reason_interrupted">The transfer was interrupted</string>
+    <string name="taildrop_save">Save</string>
+    <string name="taildrop_delete">Delete</string>
+    <string name="taildrop_saved_title">Saved to Downloads: %1$s</string>
+    <string name="taildrop_save_failed">Couldn\'t save: %1$s</string>
+    <string name="taildrop_delete_failed">Couldn\'t delete: %1$s</string>
 </resources>

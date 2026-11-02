@@ -57,6 +57,15 @@ class TailscaleNetworkActions {
   Future<String?> cancelReceiving(String tag, String senderId, String name) =>
       CcChannel.instance.taildropCancelReceiving(tag, senderId, name);
 
+  /// §707 итер. 2 — автосохранение принятого в Downloads: настройка
+  /// устройства по тегу узла, не тело узла. `null` — настройки нет (канал
+  /// недоступен).
+  Future<CcTaildropAutoSave?> getAutoSave(String tag) =>
+      CcChannel.instance.taildropAutoSave(tag);
+
+  Future<bool> setAutoSave(String tag, bool enabled) =>
+      CcChannel.instance.setTaildropAutoSave(tag, enabled);
+
   /// §707 — системный выбор файлов и отправка пиру (передача — в нативе).
   Future<CcTaildropResult> sendFiles(String tag, CcTailscalePeer peer) =>
       CcChannel.instance.taildropPickAndSend(tag, peer.stableId, peer.hostName);
@@ -150,8 +159,9 @@ class TailscaleNetworkTab extends StatefulWidget {
   final Future<void> Function(String? value)? onSaveExitNode;
 
   /// §613 — запись полей тела узла (значение `null` убирает поле) тем же
-  /// путём, что Save choice; `null` — блока Settings и кнопки Replace key
-  /// (§706) нет (узел подписки). `true` — записано.
+  /// путём, что Save choice; `null` — переключателя advertise и кнопки
+  /// Replace key (§706) нет (узел подписки; блок Settings тогда только с
+  /// автосохранением Taildrop, §707). `true` — записано.
   final Future<bool> Function(Map<String, Object?> fields)? onSaveFields;
 
   /// Тесты: поток состояния вместо [CcChannel.tailscaleStatus] (подписка ядра
@@ -224,6 +234,10 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
   /// Файлы, по которым идёт Save / Delete / Cancel (кнопки неактивны).
   final _fileBusy = <String>{};
 
+  /// §707 итер. 2 — переключатель автосохранения; `null` — не показывается.
+  CcTaildropAutoSave? _autoSave;
+  bool _autoSaveBusy = false;
+
   @override
   void initState() {
     super.initState();
@@ -258,6 +272,7 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
       _acquired = true;
       unawaited(CcChannel.instance.acquireTailscaleStatus());
     }
+    unawaited(_loadAutoSave());
     final inboxSource = widget.inboxSource ??
         (widget.statusSource == null ? widget.actions.inbox : null);
     if (inboxSource != null) {
@@ -433,7 +448,8 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
         _exitNodeBlock(context, s)
       else if (recordedExit != null)
         _savedExitNodeBlock(context, recordedExit),
-      if (widget.onSaveFields != null) _settingsBlock(context),
+      if (widget.onSaveFields != null || _autoSave != null)
+        _settingsBlock(context),
       _devicesHeader(context, devices),
       if (devices.isEmpty)
         ListTile(dense: true, title: Text(getLocalText.s("No devices"))),
@@ -944,11 +960,12 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
     final body = widget.body;
     final hasExit = recordedExitNode(body) != null;
     final advertise = body['advertise_exit_node'] == true;
+    final autoSave = _autoSave;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _header(context, getLocalText.s("Settings")),
-        SwitchListTile(
+        if (widget.onSaveFields != null) SwitchListTile(
           key: const ValueKey('tailscale-advertise-exit'),
           dense: true,
           title: Text(getLocalText.s("Advertise this device as exit node")),
@@ -962,8 +979,42 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
               ? null
               : (v) => unawaited(_saveField('advertise_exit_node', v)),
         ),
+        if (autoSave != null)
+          SwitchListTile(
+            key: const ValueKey('tailscale-taildrop-autosave'),
+            dense: true,
+            title: Text(getLocalText.s("Save received files to Downloads")),
+            subtitle: autoSave.supported
+                ? null
+                : Text(getLocalText.s("Needs Android 10 or later.")),
+            value: autoSave.enabled && autoSave.supported,
+            onChanged: _autoSaveBusy || !autoSave.supported
+                ? null
+                : (v) => unawaited(_setAutoSave(v)),
+          ),
       ],
     );
+  }
+
+  /// §707 итер. 2 — настройка автосохранения узла (своя у каждого тега).
+  Future<void> _loadAutoSave() async {
+    final v = await widget.actions.getAutoSave(widget.liveTag);
+    if (!mounted || v == null) return;
+    setState(() => _autoSave = v);
+  }
+
+  Future<void> _setAutoSave(bool enabled) async {
+    final cur = _autoSave;
+    if (cur == null) return;
+    setState(() => _autoSaveBusy = true);
+    final ok = await widget.actions.setAutoSave(widget.liveTag, enabled);
+    if (!mounted) return;
+    setState(() {
+      _autoSaveBusy = false;
+      if (ok) {
+        _autoSave = CcTaildropAutoSave(enabled: enabled, supported: cur.supported);
+      }
+    });
   }
 
   /// Выключенное значение — поле убирается (по умолчанию `false`).

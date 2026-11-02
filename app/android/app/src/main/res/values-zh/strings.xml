@@ -81,4 +81,9 @@
     <string name="taildrop_reason_cant_read">无法读取文件</string>
     <string name="taildrop_reason_cant_write">无法写入文件</string>
     <string name="taildrop_reason_interrupted">传输已中断</string>
+    <string name="taildrop_save">保存</string>
+    <string name="taildrop_delete">删除</string>
+    <string name="taildrop_saved_title">已保存到“下载”：%1$s</string>
+    <string name="taildrop_save_failed">无法保存：%1$s</string>
+    <string name="taildrop_delete_failed">无法删除：%1$s</string>
 </resources>

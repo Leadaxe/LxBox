@@ -982,6 +982,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                         } else {
                             when (method) {
                                 "ccTaildropDelete" -> cc.taildropDelete(tag, name)
+                                    .also { if (it == null) Taildrop.dismissReceived(context, tag, name) }
                                 "ccTaildropCancelReceiving" -> cc.taildropCancelReceiving(tag, sender, name)
                                 else -> cc.taildropMarkRead(tag)
                             }
@@ -1050,6 +1051,30 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 val tag = BoxVpnService.taildropOpenRequest
                 BoxVpnService.taildropOpenRequest = null
                 result.success(tag)
+            }
+            // §707 итер. 2 — автосохранение принятого в Downloads: настройка
+            // устройства по тегу узла (SharedPreferences, не бэкап L×Box).
+            "taildropAutoSaveState" -> {
+                val tag = call.argument<String>("tag") ?: ""
+                result.success(mapOf(
+                    "enabled" to (tag.isNotEmpty() && Taildrop.isAutoSave(context, tag)),
+                    "supported" to Taildrop.autoSaveSupported(),
+                ))
+            }
+            "taildropSetAutoSave" -> {
+                val tag = call.argument<String>("tag") ?: ""
+                val enabled = call.argument<Boolean>("enabled") == true
+                if (tag.isEmpty() || (enabled && !Taildrop.autoSaveSupported())) {
+                    result.success(false)
+                } else {
+                    Taildrop.setAutoSave(context, tag, enabled)
+                    result.success(true)
+                }
+            }
+            "taildropForgetAutoSave" -> {
+                val tags = call.argument<List<String>>("tags") ?: emptyList()
+                Taildrop.forgetAutoSave(context, tags)
+                result.success(true)
             }
             "ccTakeOpenConnectOpenRequest" -> {
                 val tag = BoxVpnService.openConnectOpenRequest
@@ -1877,6 +1902,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             val err = withContext(Dispatchers.IO) {
                 runCatching { Taildrop.save(ctx, tag, name, target) }.getOrElse { it.message ?: "failed" }
             }
+            if (err == null) Taildrop.dismissReceived(ctx, tag, name)
             result.success(
                 if (err == null) mapOf("status" to "saved", "where" to (if (target == null) "downloads" else "document"))
                 else mapOf("status" to "error", "error" to err)

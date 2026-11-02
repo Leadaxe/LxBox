@@ -6937,5 +6937,11 @@
   },
   "Node restarted.": {
     "value": "Узел перезапущен."
+  },
+  "Save received files to Downloads": {
+    "value": "Сохранять принятые файлы в Загрузки"
+  },
+  "Needs Android 10 or later.": {
+    "value": "Нужен Android 10 или новее."
   }
 }

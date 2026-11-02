@@ -199,3 +199,24 @@ bool tailscaleKeyInContainer(String key, String id) =>
     },
   );
 }
+
+/// §707 итер. 2 — теги узлов Tailscale (финальная форма без уникализации
+/// сборки), ушедших между [before] и [after]: узел удалён, сменил тег или
+/// префикс источника. Узлы контейнеров, не разобранных в [after] (подписка
+/// без тела и т. п., см. [TailscaleStateScan.unresolvedContainers]), ушедшими
+/// не считаются. По этим тегам снимается автосохранение Taildrop.
+Set<String> goneTailscaleTags(
+  List<ServerList> before,
+  List<ServerList> after,
+) {
+  final unresolved = scanTailscaleStateNodes(after).unresolvedContainers;
+  Set<String> tagsOf(List<ServerList> lists, {Set<String> skip = const {}}) =>
+      {
+        for (final l in lists)
+          if (!skip.contains(l.id))
+            for (final n in containerNodes(l))
+              if (n is TailscaleSpec && n.tag.isNotEmpty)
+                TagResolver.displayTag(l.tagPrefix, n.tag),
+      };
+  return tagsOf(before, skip: unresolved).difference(tagsOf(after));
+}
