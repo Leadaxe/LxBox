@@ -184,6 +184,10 @@ class BuildSettings {
   /// QUIC Initial (masque h3, hysteria2, tuic). `false` → ключ не пишется.
   final bool quicSniffDecoy;
 
+  /// §709 — `lx.mtu_align` (ядро SPEC 120): `clamp` (дефолт ядра) не пишется,
+  /// `fill` / `off` пишутся строкой.
+  final String mtuAlign;
+
   /// §435 — корень для `state_directory` узлов Tailscale: native
   /// `Context.filesDir` (тот же канал, что у §316). Каталог узла —
   /// `<корень>/tailscale/<имя>` подставляется при эмиссии, если в теле поля
@@ -217,6 +221,7 @@ class BuildSettings {
     this.wgBuildMax = 5,
     this.wgLazyBuild = true,
     this.quicSniffDecoy = false,
+    this.mtuAlign = 'clamp',
     this.tailscaleStateRoot = '',
     this.tailscaleStateDirs,
     this.mixins = const [],
@@ -890,6 +895,14 @@ Future<BuildResult?> _buildConfig({
       coreAtLeast(settings.coreVersion, kQuicSniffDecoyMinCore)) {
     final lx = (config['lx'] as Map<String, dynamic>?) ?? <String, dynamic>{};
     lx['quic_sniff_decoy'] = true;
+    config['lx'] = lx;
+  }
+
+  // §709 — выравнивание MTU (ядро SPEC 120, с lx.14). Дефолт ядра `clamp`
+  // не пишем: конфиг остаётся прежним байт в байт.
+  if (settings.mtuAlign == 'fill' || settings.mtuAlign == 'off') {
+    final lx = (config['lx'] as Map<String, dynamic>?) ?? <String, dynamic>{};
+    lx['mtu_align'] = settings.mtuAlign;
     config['lx'] = lx;
   }
 

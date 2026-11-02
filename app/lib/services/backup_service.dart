@@ -47,6 +47,7 @@ const _topLevelRoutingKeys = {
   'wg_build_max', // §542 — WG/AWG build budget (lx.wg.build_max)
   'wg_lazy_build', // §542 — WG/AWG lazy build (lx.wg.lazy_build)
   'quic_sniff_decoy', // §709 — QUIC sniff decoy (lx.quic_sniff_decoy)
+  'mtu_align', // §709 — MTU alignment (lx.mtu_align)
   'enabled_groups', // §125 — DEPRECATED (legacy, читается только миграцией)
   'tun_apps',
   'vpn_mode',

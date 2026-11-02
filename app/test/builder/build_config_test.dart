@@ -384,6 +384,22 @@ void main() {
         coreVersion: '1.14.4-lx.30-rc.2',
       ));
       expect(oldCore.containsKey('lx'), false);
+
+      // mtu_align: дефолт ядра clamp не пишется, fill/off — строкой.
+      final clamp = await build(const BuildSettings(
+        userVars: {'clash_api': '127.0.0.1:9090'},
+        mtuAlign: 'clamp',
+      ));
+      expect(clamp.containsKey('lx'), false);
+      for (final mode in const ['fill', 'off']) {
+        final c = await build(BuildSettings(
+          userVars: const {'clash_api': '127.0.0.1:9090'},
+          mtuAlign: mode,
+          quicSniffDecoy: true,
+          coreVersion: '1.14.4-lx.30-rc.3',
+        ));
+        expect(c['lx'], {'quic_sniff_decoy': true, 'mtu_align': mode});
+      }
     });
 
     // §536 — lazy_build/build_max едут вместе с базовым порогом, даже когда

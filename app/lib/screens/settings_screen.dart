@@ -91,6 +91,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   int _wgBuildMax = 5; // §542 — lx.wg.build_max (0 = no cap)
   bool _wgLazyBuild = true; // §542 — lx.wg.lazy_build
   bool _quicSniffDecoy = false; // §709 — lx.quic_sniff_decoy
+  String _mtuAlign = kMtuAlignDefault; // §709 — lx.mtu_align
   // §271 — memory limit ядра (native_prefs, wire-значения MemoryLimitSetting).
   String _memoryLimit = MemoryLimitSetting.auto;
 
@@ -171,6 +172,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     final wgBuildMax = await SettingsStorage.getWgBuildMax(); // §542
     final wgLazyBuild = await SettingsStorage.getWgLazyBuild(); // §542
     final quicSniffDecoy = await SettingsStorage.getQuicSniffDecoy(); // §709
+    final mtuAlign = await SettingsStorage.getMtuAlign(); // §709
     final memoryLimit = await SettingsStorage.getNativeMemoryLimit(); // §271
     setState(() {
       _template = template;
@@ -180,6 +182,7 @@ class _SettingsScreenState extends State<SettingsScreen>
       _wgBuildMax = wgBuildMax;
       _wgLazyBuild = wgLazyBuild;
       _quicSniffDecoy = quicSniffDecoy;
+      _mtuAlign = mtuAlign;
       _memoryLimit = memoryLimit;
       _vpnLoaded = true;
       _loading = false;
@@ -238,6 +241,20 @@ class _SettingsScreenState extends State<SettingsScreen>
     // `_onReturnToHome` чистый флаг (Д1).
     widget.subController.configDirty = true;
     await SettingsStorage.saveWgLazyBuild(value);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(getLocalText.s("Applies on next connect.")),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  Future<void> _applyMtuAlign(String value) async {
+    if (value == _mtuAlign) return;
+    setState(() => _mtuAlign = value);
+    widget.subController.configDirty = true; // §667 Р3
+    await SettingsStorage.saveMtuAlign(value);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -402,305 +419,401 @@ class _SettingsScreenState extends State<SettingsScreen>
         // (TUN-зависимы → видны только в vpn / vpn_proxy режимах).
         // §143 §9 — тумблер «Interrupt connections on switch» снят: обрыв
         // соединений при смене узла — галка Направления (ядро, SPEC 064).
-        // §272 — секция WireGuard connections: оба idle-suspend порога ядра
-        // (lx.wg.idle_suspend / lx.wg.idle_suspend_reachable, SPEC 020).
-        const TemplateSectionHeader(
-          title: 'WireGuard connections',
-          description:
-              'Sleep WireGuard/AmneziaWG tunnels to save battery and memory. '
-              'Sleeping tunnels wake automatically on first use.',
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                getLocalText.s("Suspend idle tunnels"),
-                style: Theme.of(context).textTheme.bodyLarge,
-              ),
-              const SizedBox(height: 2),
-              Text(
-                getLocalText.s("Put unreachable WireGuard tunnels to sleep after they sit idle, freeing memory and saving battery. They wake instantly on use. Only affects tunnels not on the active route."),
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-              ),
-            ],
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-          child: DropdownButtonFormField<String>(
-            initialValue: _idleSuspend,
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
-              isDense: true,
-            ),
-            items: [
-              DropdownMenuItem<String>(
-                  value: '', child: Text(getLocalText.s("Off"))),
-              DropdownMenuItem<String>(
-                  value: '30s',
-                  child: Text(getLocalText.plural("%d seconds", 30))),
-              DropdownMenuItem<String>(
-                  value: '2m',
-                  child: Text(getLocalText.plural("%d minutes", 2))),
-              DropdownMenuItem<String>(
-                  value: '5m',
-                  child: Text(getLocalText.plural("%d minutes", 5))),
-            ],
-            onChanged: (String? v) {
-              if (!_vpnLoaded || v == null) return;
-              unawaited(_applyIdleSuspend(v));
-            },
-          ),
-        ),
-        // §272 — reachable idle window (lx.wg.idle_suspend_reachable):
-        // усыпление ДОСТИЖИМЫХ туннелей (члены пула, выбранный узел) после
-        // долгого простоя. Активно только при включённом idle-suspend выше
-        // (ядро отвергает reachable без базового порога — генератор и так
-        // не эмитит). §277 — зависимость выражена disabled-состоянием
-        // дропдауна, а НЕ ранним return в onChanged: немой гейт давал
-        // видимость выбора без сохранения («значение откатывается»).
-        //
-        // SPEC 393 D3 — гаснет ВСЯ строка, а не только контрол. §277 сделал
-        // серым дропдаун, но подпись и описание оставались в полную силу:
-        // выключенная настройка читалась как активная, и связь галка→поля
-        // была видна только в момент попытки её тронуть.
-        dimmedWhenDisabled(
-          enabled: _idleSuspendReachableEnabled,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  getLocalText.s("Suspend active-route tunnels"),
-                  style: Theme.of(context).textTheme.bodyLarge,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  getLocalText.s("Also put tunnels on the active route (pool members, the selected node) to sleep after a long quiet period — e.g. overnight. The first connection after sleep adds ~1 round trip. Default 5 min. Below the directions' idle timeout (30 min by default) a group probe can wake a sleeping tunnel for one handshake — the price of sleeping sooner. Requires \"Suspend idle tunnels\" to be on."),
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-          child: DropdownButtonFormField<String>(
-            initialValue: _idleSuspendReachable,
-            decoration: InputDecoration(
-              border: const OutlineInputBorder(),
-              isDense: true,
-              // §277 — зеркалит onChanged: в disabled-состоянии серым
-              // становится и рамка, не только контент.
-              enabled: _idleSuspendReachableEnabled,
-            ),
-            items: [
-              DropdownMenuItem<String>(
-                  value: '', child: Text(getLocalText.s("Off"))),
-              DropdownMenuItem<String>(
-                  value: '5m',
-                  child: Text(getLocalText.plural("%d minutes", 5))),
-              DropdownMenuItem<String>(
-                  value: '15m',
-                  child: Text(getLocalText.plural("%d minutes", 15))),
-              DropdownMenuItem<String>(
-                  value: '30m',
-                  child: Text(getLocalText.plural("%d minutes", 30))),
-              DropdownMenuItem<String>(
-                  value: '1h',
-                  child: Text(getLocalText.plural("%d hours", 1))),
-            ],
-            // §277 — onChanged: null = честный disabled (серый дропдаун),
-            // пока базовый порог выключен.
-            onChanged: !_idleSuspendReachableEnabled
-                ? null
-                : (String? v) {
-                    if (v == null) return;
-                    unawaited(_applyIdleSuspendReachable(v));
-                  },
-          ),
-        ),
-        // §542 — ленивая сборка WG/AWG (lx.wg.lazy_build, SPEC 097). Было
-        // константой true (§536). onChanged: null → честный disabled без сна.
-        SwitchListTile(
-          value: _wgLazyBuild,
-          onChanged: !_wgLazyBuildEnabled
-              ? null
-              : (bool v) => unawaited(_applyWgLazyBuild(v)),
-          title: Text(getLocalText.s("Lazy tunnel build")),
-          subtitle: Text(getLocalText.s("Build a WireGuard tunnel only on first use instead of at start. Saves memory with many nodes; the first connection to a node takes a moment longer.")),
-        ),
-        // §542 — бюджет собранных WG/AWG туннелей (lx.wg.build_max, SPEC 097).
-        // Было константой 5 (§536); 0 = без потолка. Гаснет без сна и при
-        // выключенной ленивой сборке (тогда ключ не пишется).
-        dimmedWhenDisabled(
-          enabled: _wgBuildMaxEnabled,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  getLocalText.s("Built tunnels limit"),
-                  style: Theme.of(context).textTheme.bodyLarge,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  getLocalText.s("Keep at most this many WireGuard tunnels built at once; the rest are torn down and rebuilt on demand. 0 = no limit."),
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-          child: DropdownButtonFormField<int>(
-            initialValue: const [0, 3, 5, 8, 12].contains(_wgBuildMax)
-                ? _wgBuildMax
-                : null,
-            decoration: InputDecoration(
-              border: const OutlineInputBorder(),
-              isDense: true,
-              enabled: _wgBuildMaxEnabled,
-            ),
-            items: [
-              DropdownMenuItem<int>(
-                  value: 0, child: Text(getLocalText.s("0 (no limit)"))),
-              for (final n in const [3, 5, 8, 12])
-                DropdownMenuItem<int>(value: n, child: Text(n.toString())),
-            ],
-            onChanged: !_wgBuildMaxEnabled
-                ? null
-                : (int? v) {
-                    if (v == null) return;
-                    unawaited(_applyWgBuildMax(v));
-                  },
-          ),
-        ),
-        const Divider(height: 32),
-        // §709 — обманка от сниффинга QUIC (lx.quic_sniff_decoy, SPEC 151).
-        const TemplateSectionHeader(
-          title: 'QUIC connections',
-          description: 'MASQUE (HTTP/3), Hysteria2 and TUIC.',
-        ),
-        SwitchListTile(
-          value: _quicSniffDecoy,
-          onChanged: !_vpnLoaded
-              ? null
-              : (bool v) => unawaited(_applyQuicSniffDecoy(v)),
-          title: Text(getLocalText.s("Anti-sniff decoy")),
-          subtitle: Text(getLocalText.s("Send one junk byte before the QUIC handshake so a relay that sniffs UDP cannot redirect the connection by its SNI. Turn on if these nodes fail only through a relay or a proxy chain.")),
-        ),
-        const Divider(height: 32),
-        const TemplateSectionHeader(
+        // §709 — WireGuard и QUIC переехали на Core островами.
+        SettingsIsland(
           title: 'Optimization',
           description: 'Health checks, memory and VPN lifecycle',
-        ),
-        // §271 — memory limit ядра. Применяется к работающему ядру сразу.
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                getLocalText.s("Memory limit"),
-                style: Theme.of(context).textTheme.bodyLarge,
+          children: [
+            // §271 — memory limit ядра. Применяется к работающему ядру сразу.
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    getLocalText.s("Memory limit"),
+                    style: Theme.of(context).textTheme.bodyLarge,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    getLocalText.s("Memory threshold for the VPN core itself (its Go runtime), not the whole app process. Above the threshold the core drops its connections and frees memory, and near it the garbage collector keeps the processor busy and heats the phone. Auto sets no threshold. With any value the core also watches the system's free memory. Applies immediately. The current figure is in Statistics → Memory → Core memory."),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 2),
-              Text(
-                getLocalText.s("Memory threshold for the VPN core itself (its Go runtime), not the whole app process. Above the threshold the core drops its connections and frees memory, and near it the garbage collector keeps the processor busy and heats the phone. Auto sets no threshold. With any value the core also watches the system's free memory. Applies immediately. The current figure is in Statistics → Memory → Core memory."),
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-              ),
-            ],
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-          child: DropdownButtonFormField<String>(
-            initialValue: _memoryLimit,
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
-              isDense: true,
             ),
-            items: [
-              DropdownMenuItem<String>(
-                  value: MemoryLimitSetting.auto,
-                  child: Text(getLocalText.s("Auto (recommended)"))),
-              // §705 — пункта Off нет: он давал бы тот же 0, что и Auto.
-              DropdownMenuItem<String>(
-                  value: '200', child: Text(getLocalText.s("%d MB", 200))),
-              DropdownMenuItem<String>(
-                  value: '384', child: Text(getLocalText.s("%d MB", 384))),
-              DropdownMenuItem<String>(
-                  value: '512', child: Text(getLocalText.s("%d MB", 512))),
-              DropdownMenuItem<String>(
-                  value: '768', child: Text(getLocalText.s("%d MB", 768))),
-            ],
-            onChanged: (String? v) {
-              if (!_vpnLoaded || v == null) return;
-              unawaited(_applyMemoryLimit(v));
-            },
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                getLocalText.s("Tunnel sleep mode"),
-                style: Theme.of(context).textTheme.bodyLarge,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+              child: DropdownButtonFormField<String>(
+                initialValue: _memoryLimit,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+                items: [
+                  DropdownMenuItem<String>(
+                      value: MemoryLimitSetting.auto,
+                      child: Text(getLocalText.s("Auto (recommended)"))),
+                  // §705 — пункта Off нет: он давал бы тот же 0, что и Auto.
+                  DropdownMenuItem<String>(
+                      value: '200', child: Text(getLocalText.s("%d MB", 200))),
+                  DropdownMenuItem<String>(
+                      value: '384', child: Text(getLocalText.s("%d MB", 384))),
+                  DropdownMenuItem<String>(
+                      value: '512', child: Text(getLocalText.s("%d MB", 512))),
+                  DropdownMenuItem<String>(
+                      value: '768', child: Text(getLocalText.s("%d MB", 768))),
+                ],
+                onChanged: (String? v) {
+                  if (!_vpnLoaded || v == null) return;
+                  unawaited(_applyMemoryLimit(v));
+                },
               ),
-              const SizedBox(height: 2),
-              Text(
-                getLocalText.s("When to pause the tunnel to save battery. Takes effect on next VPN connect."),
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    getLocalText.s("Tunnel sleep mode"),
+                    style: Theme.of(context).textTheme.bodyLarge,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    getLocalText.s("When to pause the tunnel to save battery. Takes effect on next VPN connect."),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                  ),
+                ],
               ),
-            ],
-          ),
-        ),
-        RadioGroup<BackgroundMode>(
-          groupValue: _backgroundMode,
-          onChanged: (BackgroundMode? m) {
-            if (!_vpnLoaded) return;
-            unawaited(_applyBackgroundMode(m));
-          },
-          child: Column(
-            children: [
-              RadioListTile<BackgroundMode>(
-                value: BackgroundMode.never,
-                title: Text(getLocalText.s("Never sleep (recommended)")),
-                subtitle: Text(getLocalText.s("Tunnel is always active. Best reliability — pushes and long-lived sockets survive. Higher battery use.")),
+            ),
+            RadioGroup<BackgroundMode>(
+              groupValue: _backgroundMode,
+              onChanged: (BackgroundMode? m) {
+                if (!_vpnLoaded) return;
+                unawaited(_applyBackgroundMode(m));
+              },
+              child: Column(
+                children: [
+                  RadioListTile<BackgroundMode>(
+                    value: BackgroundMode.never,
+                    title: Text(getLocalText.s("Never sleep (recommended)")),
+                    subtitle: Text(getLocalText.s("Tunnel is always active. Best reliability — pushes and long-lived sockets survive. Higher battery use.")),
+                  ),
+                  RadioListTile<BackgroundMode>(
+                    value: BackgroundMode.lazy,
+                    title: Text(getLocalText.s("Lazy sleep")),
+                    subtitle: Text(getLocalText.s("Pause only in deep Doze (screen off for a long time + no motion). Balanced.")),
+                  ),
+                  RadioListTile<BackgroundMode>(
+                    value: BackgroundMode.always,
+                    title: Text(getLocalText.s("Aggressive battery saving")),
+                    subtitle: Text(getLocalText.s("Pause tunnel whenever screen turns off. Max battery savings, but pushes, incoming calls and background sync stop until the screen turns on again.")),
+                  ),
+                ],
               ),
-              RadioListTile<BackgroundMode>(
-                value: BackgroundMode.lazy,
-                title: Text(getLocalText.s("Lazy sleep")),
-                subtitle: Text(getLocalText.s("Pause only in deep Doze (screen off for a long time + no motion). Balanced.")),
-              ),
-              RadioListTile<BackgroundMode>(
-                value: BackgroundMode.always,
-                title: Text(getLocalText.s("Aggressive battery saving")),
-                subtitle: Text(getLocalText.s("Pause tunnel whenever screen turns off. Max battery savings, but pushes, incoming calls and background sync stop until the screen turns on again.")),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ],
     );
+  }
+
+  /// §709 — заголовок настройки корневого блока `lx` с (i)-подсказкой.
+  /// [inTile] — заголовок SwitchListTile (стиль плитки), иначе bodyLarge
+  /// (строка над дропдауном).
+  Widget _lxTitle(
+    BuildContext context,
+    String text,
+    String hint, {
+    bool inTile = false,
+  }) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            text,
+            style: inTile ? null : Theme.of(context).textTheme.bodyLarge,
+          ),
+        ),
+        LxHintButton(message: hint),
+      ],
+    );
+  }
+
+  /// §709 — MTU в острове Network (lx.mtu_align, ядро SPEC 120).
+  List<Widget> _buildMtuAlign(BuildContext context) {
+    return [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+        child: _lxTitle(
+          context,
+          getLocalText.s("Align MTU to the path"),
+          getLocalText.s("Core: lx.mtu_align. A node over a tunnel gets a packet size that fits into it: mtu for WireGuard and MASQUE, the initial packet size for Hysteria2 and TUIC. Values are never raised."),
+        ),
+      ),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+        child: DropdownButtonFormField<String>(
+          initialValue: _mtuAlign,
+          isExpanded: true,
+          decoration: const InputDecoration(
+            border: OutlineInputBorder(),
+            isDense: true,
+          ),
+          items: [
+            DropdownMenuItem<String>(
+                value: 'clamp', child: Text(getLocalText.s("Clamp (default)"))),
+            DropdownMenuItem<String>(
+                value: 'fill', child: Text(getLocalText.s("Fill"))),
+            DropdownMenuItem<String>(
+                value: 'off', child: Text(getLocalText.s("Off"))),
+          ],
+          onChanged: !_vpnLoaded
+              ? null
+              : (String? v) {
+                  if (v == null) return;
+                  unawaited(_applyMtuAlign(v));
+                },
+        ),
+      ),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+        child: Text(
+          switch (_mtuAlign) {
+            'fill' => getLocalText.s("Set the size only where it is not set; values you set are kept, a warning is logged if they do not fit."),
+            'off' => getLocalText.s("Leave node values as they are."),
+            _ => getLocalText.s("Set the size where it is not set and lower values that do not fit into the tunnel below."),
+          },
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+        ),
+      ),
+    ];
+  }
+
+  /// §709 — острова lx-настроек после секций шаблона на Core. WireGuard
+  /// (§215/§272/§542) переехал с System без изменений логики.
+  List<Widget> _buildLxIslands(BuildContext context) {
+    return [
+      SettingsIsland(
+        title: 'WireGuard',
+        description:
+            'Sleep WireGuard/AmneziaWG tunnels to save battery and memory. '
+            'Sleeping tunnels wake automatically on first use.',
+        children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _lxTitle(
+                    context,
+                    getLocalText.s("Suspend idle tunnels"),
+                    getLocalText.s("Core: lx.wg.idle_suspend. An idle WireGuard endpoint that is not on the active route is torn down and rebuilt on its next dial."),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    getLocalText.s("Put unreachable WireGuard tunnels to sleep after they sit idle, freeing memory and saving battery. They wake instantly on use. Only affects tunnels not on the active route."),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+              child: DropdownButtonFormField<String>(
+                initialValue: _idleSuspend,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+                items: [
+                  DropdownMenuItem<String>(
+                      value: '', child: Text(getLocalText.s("Off"))),
+                  DropdownMenuItem<String>(
+                      value: '30s',
+                      child: Text(getLocalText.plural("%d seconds", 30))),
+                  DropdownMenuItem<String>(
+                      value: '2m',
+                      child: Text(getLocalText.plural("%d minutes", 2))),
+                  DropdownMenuItem<String>(
+                      value: '5m',
+                      child: Text(getLocalText.plural("%d minutes", 5))),
+                ],
+                onChanged: (String? v) {
+                  if (!_vpnLoaded || v == null) return;
+                  unawaited(_applyIdleSuspend(v));
+                },
+              ),
+            ),
+            // §272 — reachable idle window (lx.wg.idle_suspend_reachable):
+            // усыпление ДОСТИЖИМЫХ туннелей (члены пула, выбранный узел) после
+            // долгого простоя. Активно только при включённом idle-suspend выше
+            // (ядро отвергает reachable без базового порога — генератор и так
+            // не эмитит). §277 — зависимость выражена disabled-состоянием
+            // дропдауна, а НЕ ранним return в onChanged: немой гейт давал
+            // видимость выбора без сохранения («значение откатывается»).
+            //
+            // SPEC 393 D3 — гаснет ВСЯ строка, а не только контрол. §277 сделал
+            // серым дропдаун, но подпись и описание оставались в полную силу:
+            // выключенная настройка читалась как активная, и связь галка→поля
+            // была видна только в момент попытки её тронуть.
+            dimmedWhenDisabled(
+              enabled: _idleSuspendReachableEnabled,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _lxTitle(
+                      context,
+                      getLocalText.s("Suspend active-route tunnels"),
+                      getLocalText.s("Core: lx.wg.idle_suspend_reachable. The same sleep for endpoints on the active route, after a longer quiet period."),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      getLocalText.s("Also put tunnels on the active route (pool members, the selected node) to sleep after a long quiet period — e.g. overnight. The first connection after sleep adds ~1 round trip. Default 5 min. Below the directions' idle timeout (30 min by default) a group probe can wake a sleeping tunnel for one handshake — the price of sleeping sooner. Requires \"Suspend idle tunnels\" to be on."),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+              child: DropdownButtonFormField<String>(
+                initialValue: _idleSuspendReachable,
+                decoration: InputDecoration(
+                  border: const OutlineInputBorder(),
+                  isDense: true,
+                  // §277 — зеркалит onChanged: в disabled-состоянии серым
+                  // становится и рамка, не только контент.
+                  enabled: _idleSuspendReachableEnabled,
+                ),
+                items: [
+                  DropdownMenuItem<String>(
+                      value: '', child: Text(getLocalText.s("Off"))),
+                  DropdownMenuItem<String>(
+                      value: '5m',
+                      child: Text(getLocalText.plural("%d minutes", 5))),
+                  DropdownMenuItem<String>(
+                      value: '15m',
+                      child: Text(getLocalText.plural("%d minutes", 15))),
+                  DropdownMenuItem<String>(
+                      value: '30m',
+                      child: Text(getLocalText.plural("%d minutes", 30))),
+                  DropdownMenuItem<String>(
+                      value: '1h',
+                      child: Text(getLocalText.plural("%d hours", 1))),
+                ],
+                // §277 — onChanged: null = честный disabled (серый дропдаун),
+                // пока базовый порог выключен.
+                onChanged: !_idleSuspendReachableEnabled
+                    ? null
+                    : (String? v) {
+                        if (v == null) return;
+                        unawaited(_applyIdleSuspendReachable(v));
+                      },
+              ),
+            ),
+            // §542 — ленивая сборка WG/AWG (lx.wg.lazy_build, SPEC 097). Было
+            // константой true (§536). onChanged: null → честный disabled без сна.
+            SwitchListTile(
+              value: _wgLazyBuild,
+              onChanged: !_wgLazyBuildEnabled
+                  ? null
+                  : (bool v) => unawaited(_applyWgLazyBuild(v)),
+              title: _lxTitle(
+                context,
+                getLocalText.s("Lazy tunnel build"),
+                getLocalText.s("Core: lx.wg.lazy_build. An endpoint is built on its first dial instead of at core start."),
+                inTile: true,
+              ),
+              subtitle: Text(getLocalText.s("Build a WireGuard tunnel only on first use instead of at start. Saves memory with many nodes; the first connection to a node takes a moment longer.")),
+            ),
+            // §542 — бюджет собранных WG/AWG туннелей (lx.wg.build_max, SPEC 097).
+            // Было константой 5 (§536); 0 = без потолка. Гаснет без сна и при
+            // выключенной ленивой сборке (тогда ключ не пишется).
+            dimmedWhenDisabled(
+              enabled: _wgBuildMaxEnabled,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _lxTitle(
+                      context,
+                      getLocalText.s("Built tunnels limit"),
+                      getLocalText.s("Core: lx.wg.build_max. Over the limit the endpoint idle for the longest is torn down."),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      getLocalText.s("Keep at most this many WireGuard tunnels built at once; the rest are torn down and rebuilt on demand. 0 = no limit."),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+              child: DropdownButtonFormField<int>(
+                initialValue: const [0, 3, 5, 8, 12].contains(_wgBuildMax)
+                    ? _wgBuildMax
+                    : null,
+                decoration: InputDecoration(
+                  border: const OutlineInputBorder(),
+                  isDense: true,
+                  enabled: _wgBuildMaxEnabled,
+                ),
+                items: [
+                  DropdownMenuItem<int>(
+                      value: 0, child: Text(getLocalText.s("0 (no limit)"))),
+                  for (final n in const [3, 5, 8, 12])
+                    DropdownMenuItem<int>(value: n, child: Text(n.toString())),
+                ],
+                onChanged: !_wgBuildMaxEnabled
+                    ? null
+                    : (int? v) {
+                        if (v == null) return;
+                        unawaited(_applyWgBuildMax(v));
+                      },
+              ),
+            ),
+        ],
+      ),
+      SettingsIsland(
+        title: 'QUIC',
+        description: 'MASQUE (HTTP/3), Hysteria2 and TUIC.',
+        children: [
+            SwitchListTile(
+              value: _quicSniffDecoy,
+              onChanged: !_vpnLoaded
+                  ? null
+                  : (bool v) => unawaited(_applyQuicSniffDecoy(v)),
+              title: _lxTitle(
+                context,
+                getLocalText.s("Anti-sniff decoy"),
+                getLocalText.s("Core: lx.quic_sniff_decoy. A relay with UDP sniffing (Xray destOverride quic) rewrites the destination by the SNI of the first QUIC packet; a junk first byte makes it give up. Servers drop the byte."),
+                inTile: true,
+              ),
+              subtitle: Text(getLocalText.s("Send one junk byte before the QUIC handshake so a relay that sniffs UDP cannot redirect the connection by its SNI. Turn on if these nodes fail only through a relay or a proxy chain.")),
+            ),
+        ],
+      ),
+    ];
   }
 
   Widget _buildCoreTab(
@@ -708,9 +821,6 @@ class _SettingsScreenState extends State<SettingsScreen>
     WizardTemplate template,
     List<WizardVar> editableVars,
   ) {
-    if (editableVars.isEmpty) {
-      return Center(child: Text(getLocalText.s("No configurable variables")));
-    }
     final sectionDescriptions = {
       for (final s in template.sectionsFor('core')) s.title: s.description,
     };
@@ -718,12 +828,17 @@ class _SettingsScreenState extends State<SettingsScreen>
     return ListView(
       padding: EdgeInsets.fromLTRB(12, 12, 12, bottomPad),
       children: [
-        TemplateVarListView(
-          vars: editableVars,
-          model: _model!,
-          sectionDescriptions: sectionDescriptions,
-          onChanged: _onVarChanged,
-        ),
+        if (editableVars.isNotEmpty)
+          TemplateVarListView(
+            vars: editableVars,
+            model: _model!,
+            sectionDescriptions: sectionDescriptions,
+            onChanged: _onVarChanged,
+            // §709 — секции островами, MTU внутри Network.
+            islands: true,
+            sectionTrailing: {'Network': _buildMtuAlign(context)},
+          ),
+        ..._buildLxIslands(context),
       ],
     );
   }

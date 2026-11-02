@@ -1,11 +1,11 @@
-# 709 — Тумблер «QUIC sniff decoy» в VPN Settings (ядро SPEC 151)
+# 709 — Острова VPN Settings → Core: WireGuard, MTU, QUIC (ядро SPEC 151, SPEC 120)
 
 | Field | Value |
 |-------|-------|
 | Status | In progress |
 | Start date | 2026-11-02 |
 | End date | — |
-| Commits | — |
+| Commits | `0a571cd1` (тумблер на System), острова — следующий |
 | Related specs | ядро sing-box-lx SPEC 151 (`lx.quic_sniff_decoy`), §542 (образец: тумблер `lx.wg.lazy_build`), §215 (корневой блок `lx`) |
 
 ## Problem
@@ -19,30 +19,45 @@
 
 ## Solution
 
-- Настройка `quic_sniff_decoy` (bool, по умолчанию `false` — как в ядре) в
-  `lxbox_settings.json`; запись помечает конфиг грязным (как §542). Ключ едет в
-  LX Backup.
-- VPN Settings → System: секция «QUIC connections» с тумблером
-  «Anti-sniff decoy», после секции WireGuard. Тумблер не зависит от сна
-  туннелей (в отличие от «Lazy tunnel build»).
-- Сборка: при `true` пишется `lx.quic_sniff_decoy: true` рядом с `lx.wg`
-  (блок `lx` создаётся, если его нет). При `false` ключ не пишется. На ядре
-  старше `1.14.4-lx.30-rc.3` ключ не пишется (ядро отвергло бы неизвестное
-  поле блока `lx`).
+Решения владельца 02.11.2026: настройки блока `lx` — на вкладке Core, все
+секции вкладки островами (как карточки экрана Backup), у каждой lx-настройки
+значок (i) с короткой подсказкой по нажатию, без перехода; MTU — всеми тремя
+режимами.
+
+- Core: острова General / Network / TUN / TLS Fragmentation (секции шаблона,
+  `TemplateVarListView(islands: true)`), затем WireGuard и QUIC.
+- **WireGuard** — четыре настройки §215/§272/§542 переехали с System без
+  изменений логики (ключи хранилища, бэкап, правила неактивности те же).
+- **MTU** — последним в острове Network (`sectionTrailing`): «Align MTU to
+  the path» — Clamp (default) / Fill / Off, подпись по выбранному режиму.
+  Настройка `mtu_align` (string, дефолт `clamp`, чужое значение = дефолт),
+  в LX Backup. `clamp` в конфиг не пишется (дефолт ядра, конфиг прежний байт
+  в байт), `fill`/`off` → `lx.mtu_align` строкой. Ключ в ядре с lx.14 —
+  гейта нет. `except` в UI не выносится.
+- **QUIC** — «Anti-sniff decoy», настройка `quic_sniff_decoy` (bool, дефолт
+  `false` — как в ядре), в LX Backup. При `true` и ядре не старше
+  `1.14.4-lx.30-rc.3` → `lx.quic_sniff_decoy: true`, иначе ключ не пишется
+  (ядро отвергло бы неизвестное поле блока `lx`).
+- System: остался остров Optimization (лимит памяти, фоновый режим).
+- Не вынесены (сознательно): `lx.wg.idle_teardown`, `lx.wg.build_overflow`
+  (дефолт ядра `wait`), `lx.masque.idle_timeout` (у узлов WARP свой),
+  `lx.trusttunnel.idle_timeout`, `lx.mtu_align.except`.
 
 ## Files
 
 - `app/lib/services/settings_storage/network.dart`, `settings_storage.dart` — геттер/сеттер, ключ в allowlist
 - `app/lib/services/backup_service.dart` — ключ в бэкапе
 - `app/lib/services/builder/build_config.dart`, `direction_pool_preview.dart` — поле `BuildSettings.quicSniffDecoy`, эмиссия
-- `app/lib/screens/settings_screen.dart` — тумблер
+- `app/lib/screens/settings_screen.dart` — острова, перенос WireGuard, MTU, QUIC
+- `app/lib/widgets/template_var_list.dart` — `islands`, `sectionTrailing`, `SettingsIsland`, `LxHintButton`
 - `app/assets/l10n/{ru,zh}/ui.json` — строки
 - `docs/STORAGE.md` — ключ
-- `app/test/builder/build_config_test.dart` — тест эмиссии «§709»
+- `app/test/builder/build_config_test.dart` — тест эмиссии «§709» (decoy + mtu_align)
 
 ## Verification
 
 - Тест: ключ есть при `true` и ядре rc.3, нет при `false`, нет на ядре rc.2;
   сосуществует с `lx.wg`.
-- Эмулятор: тумблер включается, в итоговом конфиге `lx.quic_sniff_decoy: true`,
-  ядро стартует.
+- Тест: `mtu_align` clamp не пишется, fill/off пишутся строкой рядом с decoy.
+- Эмулятор: острова на Core, (i) показывает подсказку; тумблер и режим MTU
+  попадают в итоговый конфиг, ядро стартует.

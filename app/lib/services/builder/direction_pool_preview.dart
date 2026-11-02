@@ -52,6 +52,7 @@ Future<BuildSettings> readStoredBuildSettings({
       wgBuildMax: await SettingsStorage.getWgBuildMax(), // §542
       wgLazyBuild: await SettingsStorage.getWgLazyBuild(), // §542
       quicSniffDecoy: await SettingsStorage.getQuicSniffDecoy(), // §709
+      mtuAlign: await SettingsStorage.getMtuAlign(), // §709
       tailscaleStateRoot: tailscaleStateRoot,
       tailscaleStateDirs: tailscaleStateDirs,
       mixins: await SettingsStorage.getMixins(), // §704

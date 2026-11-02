@@ -42,6 +42,8 @@ class TemplateVarListView extends StatefulWidget {
     required this.onChanged,
     this.sectionDescriptions = const {},
     this.showSectionHeaders = true,
+    this.islands = false,
+    this.sectionTrailing = const {},
     this.outboundOptions = const [],
     this.dnsServerTags = const [],
   });
@@ -65,6 +67,14 @@ class TemplateVarListView extends StatefulWidget {
   /// заголовок (например, routing_screen показывает одну секцию под своей
   /// шапкой).
   final bool showSectionHeaders;
+
+  /// §709 — каждая секция в своей карточке ([SettingsIsland]); VPN
+  /// Settings → Core.
+  final bool islands;
+
+  /// §709 — виджеты parent'а в конце секции (по title), например
+  /// настройка хранилища внутри секции шаблона.
+  final Map<String, List<Widget>> sectionTrailing;
 
   /// §117: Направления для `type: outbound` vars (Direct + активные Направления).
   /// Пусто → outbound-var рендерится текстовым полем (fallback).
@@ -139,6 +149,7 @@ class _TemplateVarListViewState extends State<TemplateVarListView> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.islands) return _buildIslands(context);
     final children = <Widget>[];
     String lastSection = '';
 
@@ -156,6 +167,34 @@ class _TemplateVarListViewState extends State<TemplateVarListView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: children,
+    );
+  }
+
+  /// §709 — секции подряд, каждая — [SettingsIsland]; порядок секций — по
+  /// первому появлению var'а.
+  Widget _buildIslands(BuildContext context) {
+    final order = <String>[];
+    final bySection = <String, List<Widget>>{};
+    for (final v in widget.vars) {
+      final list = bySection.putIfAbsent(v.section, () {
+        order.add(v.section);
+        return <Widget>[];
+      });
+      list.add(_buildVarWidget(v));
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final section in order)
+          SettingsIsland(
+            title: section,
+            description: widget.sectionDescriptions[section] ?? '',
+            children: [
+              ...bySection[section]!,
+              ...?widget.sectionTrailing[section],
+            ],
+          ),
+      ],
     );
   }
 
@@ -351,6 +390,60 @@ class _TemplateVarListViewState extends State<TemplateVarListView> {
     final n = int.tryParse(raw);
     if (n == null) return raw; // formatter уже отсёк не-цифры; defensive
     return n.clamp(0, 65535).toString();
+  }
+}
+
+/// §709 — остров настроек: карточка по образцу экрана Backup с заголовком
+/// секции внутри. Пустой [title] — карточка без заголовка.
+class SettingsIsland extends StatelessWidget {
+  const SettingsIsland({
+    super.key,
+    required this.title,
+    this.description = '',
+    required this.children,
+  });
+
+  final String title;
+  final String description;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      child: Padding(
+        padding: const EdgeInsets.only(top: 8, bottom: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (title.isNotEmpty)
+              TemplateSectionHeader(title: title, description: description),
+            ...children,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// §709 — значок (i) у настройки корневого блока `lx` ядра: короткая
+/// подсказка по нажатию, без перехода.
+class LxHintButton extends StatelessWidget {
+  const LxHintButton({super.key, required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: message,
+      triggerMode: TooltipTriggerMode.tap,
+      showDuration: const Duration(seconds: 8),
+      child: const Padding(
+        padding: EdgeInsets.all(8),
+        child: Icon(Icons.info_outline, size: 20),
+      ),
+    );
   }
 }
 

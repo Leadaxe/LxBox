@@ -6961,5 +6961,41 @@
   },
   "Send one junk byte before the QUIC handshake so a relay that sniffs UDP cannot redirect the connection by its SNI. Turn on if these nodes fail only through a relay or a proxy chain.": {
     "value": "Отправлять один мусорный байт перед QUIC-рукопожатием, чтобы релей, который сниффит UDP, не перенаправил соединение по SNI. Включите, если эти узлы не работают только через релей или цепочку прокси."
+  },
+  "Core: lx.wg.idle_suspend. An idle WireGuard endpoint that is not on the active route is torn down and rebuilt on its next dial.": {
+    "value": "Ядро: lx.wg.idle_suspend. Простаивающий эндпоинт WireGuard вне активного маршрута разбирается и собирается заново при следующем подключении."
+  },
+  "Core: lx.wg.idle_suspend_reachable. The same sleep for endpoints on the active route, after a longer quiet period.": {
+    "value": "Ядро: lx.wg.idle_suspend_reachable. Такой же сон для эндпоинтов на активном маршруте, после более долгого простоя."
+  },
+  "Core: lx.wg.lazy_build. An endpoint is built on its first dial instead of at core start.": {
+    "value": "Ядро: lx.wg.lazy_build. Эндпоинт собирается при первом подключении, а не на старте ядра."
+  },
+  "Core: lx.wg.build_max. Over the limit the endpoint idle for the longest is torn down.": {
+    "value": "Ядро: lx.wg.build_max. Сверх лимита разбирается эндпоинт, простаивающий дольше всех."
+  },
+  "Core: lx.mtu_align. A node over a tunnel gets a packet size that fits into it: mtu for WireGuard and MASQUE, the initial packet size for Hysteria2 and TUIC. Values are never raised.": {
+    "value": "Ядро: lx.mtu_align. Узел поверх туннеля получает размер пакета, который в туннель влезает: mtu у WireGuard и MASQUE, начальный размер пакета у Hysteria2 и TUIC. Значения никогда не повышаются."
+  },
+  "Core: lx.quic_sniff_decoy. A relay with UDP sniffing (Xray destOverride quic) rewrites the destination by the SNI of the first QUIC packet; a junk first byte makes it give up. Servers drop the byte.": {
+    "value": "Ядро: lx.quic_sniff_decoy. Релей со сниффингом UDP (Xray destOverride quic) подменяет назначение по SNI из первого QUIC-пакета; мусорный первый байт заставляет его отступиться. Серверы этот байт отбрасывают."
+  },
+  "Align MTU to the path": {
+    "value": "Выравнивание MTU по пути"
+  },
+  "Clamp (default)": {
+    "value": "Clamp (по умолчанию)"
+  },
+  "Fill": {
+    "value": "Fill"
+  },
+  "Set the size only where it is not set; values you set are kept, a warning is logged if they do not fit.": {
+    "value": "Ставить размер только там, где он не задан; заданные значения не трогаются, если не влезают — предупреждение в журнале."
+  },
+  "Leave node values as they are.": {
+    "value": "Оставлять значения узлов как есть."
+  },
+  "Set the size where it is not set and lower values that do not fit into the tunnel below.": {
+    "value": "Ставить размер там, где он не задан, и понижать значения, которые не влезают в туннель снизу."
   }
 }

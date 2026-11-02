@@ -124,6 +124,31 @@ Future<void> _saveWgLazyBuild(bool enabled, {bool flush = true}) async {
 // не подменил назначение по SNI. Config-significant → markConfigDirty.
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// §709 — MTU alignment (lx.mtu_align, kernel SPEC 120)
+//
+// `mtu_align` (string `clamp` | `fill` | `off`, дефолт `clamp` — как в ядре):
+// размер пакета узла над туннелем (detour, chain). Чужое значение читается
+// как дефолт. Config-significant → markConfigDirty.
+// ---------------------------------------------------------------------------
+
+const String kMtuAlignDefault = 'clamp';
+const List<String> kMtuAlignModes = ['clamp', 'fill', 'off'];
+
+Future<String> _getMtuAlign() async {
+  final data = await _load();
+  final v = data['mtu_align'];
+  return (v is String && kMtuAlignModes.contains(v)) ? v : kMtuAlignDefault;
+}
+
+Future<void> _saveMtuAlign(String mode, {bool flush = true}) async {
+  final data = await _load();
+  data['mtu_align'] = mode;
+  SettingsStorage._cache = data;
+  SettingsStorage.markConfigDirty(); // §113
+  if (flush) await _save();
+}
+
 Future<bool> _getQuicSniffDecoy() async {
   final data = await _load();
   return (data['quic_sniff_decoy'] as bool?) ?? false;
