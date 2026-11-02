@@ -15,7 +15,8 @@ the fly, sign in, log out and ping a device.
 ## What it does
 
 Turns the core's tailnet state stream into a screen: the Status block (state,
-network name, "signed in with a key", Sign in, Log out), This device (name,
+network name, "signed in with a key", Sign in, Log out, Replace key, Node
+enabled, Restart node), This device (name,
 MagicDNS name, addresses, key expiry), Exit node (the peers that offer an
 exit, None first, with "Save choice" when the active exit differs from the
 recorded one), Devices (online first, grouped by owner when there are several)
@@ -31,6 +32,7 @@ home screen, the Diagnostics tab and the Debug API.
 | Exit node list | peers with `ExitNodeOption`, sorted like Devices; "None" first |
 | Save choice | visible in `Running` when the active and the recorded exit differ and the node has a source record (own server or folder member) |
 | Replace key | visible in `NeedsLogin` when the node has a source record; one hidden field, Save inactive while it is blank |
+| Node enabled, Restart node | while the VPN is up and the core reports the node's state; Restart node only while the node is on |
 | Written value | the active peer's Tailscale address, IPv4 first; without addresses — the MagicDNS name, then the host name; None removes `exit_node` |
 | Ping | up to five replies or until the sheet closes; latency, direct or relay, endpoint address or relay region |
 | Debug API | `GET /state` → `tailscale: {tag: {backend_state, devices}}` |
@@ -41,13 +43,14 @@ home screen, the Diagnostics tab and the Debug API.
 `NetworkName`, `MagicDNSSuffix`, `KeyAuth`, self, exit node, peers by owner);
 the reply of `GetTailscaleStatus(tag)` (the same record, every 3 seconds while
 the tab is open); the tunnel status; the node body; taps: a list item, Save
-choice, Sign in, Log out, Copy name, Copy MagicDNS name, Copy address, `+N`,
+choice, Sign in, Log out, Replace key, Node enabled, Restart node, Copy name, Copy MagicDNS name, Copy address, `+N`,
 Ping.
 
 **Outputs:** the tab; `GetTailscaleStatus`; `SetTailscaleExitNode` (a
-`StableID` or empty), `TailscaleLogout`, `StartTailscalePing`; the node source with `exit_node`
-or `auth_key` changed and the config rebuilt; after Replace key the VPN
-reloads; snackbars "Copied", "Failed: …"; the
+`StableID` or empty), `TailscaleLogout`, `TailscaleLogin(tag, key)`,
+`SetEndpointEnabled(tag, on/off)`, `StartTailscalePing`; the node source with
+`exit_node` or `auth_key` changed and the config rebuilt; snackbars "Copied",
+"Failed: …", the Replace key and Restart node outcomes; the
 Diagnostics line "This node has no exit. Check devices on the Network tab."
 
 ## Rules and invariants
@@ -67,9 +70,22 @@ Diagnostics line "This node has no exit. Check devices on the Network tab."
   source record has Replace key; a subscription node has none. The dialog
   has one hidden Auth key field with Show/Hide, as in the Add server wizard,
   Cancel and Save; Save is inactive while the field is blank. Save writes the
-  trimmed key into `auth_key` the way Save choice writes `exit_node`, then
-  rebuilds the config and reloads the VPN (the core cannot sign in with a
-  new key on the fly yet). A failed write applies nothing.
+  trimmed key into `auth_key` the way Save choice writes `exit_node` (so it
+  survives a restart), then the node signs in with it without restarting the
+  VPN. The snackbar says "Signing in with the new key…"; with the tunnel down
+  the core is not called and it says "Key saved. It applies when the VPN
+  starts."; the core refusing a disabled node — "Turn the node on first.";
+  any other refusal — "Could not sign in with the new key.". A rejected key
+  shows later in the state and health lines, not in the snackbar. A failed
+  write applies nothing.
+- **Node enabled and Restart node:** while the VPN is up and the core reports
+  the node's state, the Status block has the Node enabled switch ("Stays off
+  until you turn it on or stop the VPN.") with the same behaviour and refusal
+  texts as Turn off / Turn on in the node list and the switch of a WireGuard
+  node. A node turned off rejects connections through it at once. Restart
+  node, beside Sign in / Log out / Replace key, shows while the node is on:
+  it turns the node off and on again, says "Node restarted." or the refusal
+  text, and is inactive while the call runs.
 - **Exit node** (P21): the list, the mismatch warning and Save choice only
   in `Running`. In any other state the core has no active exit and nothing
   is compared: a recorded `exit_node` shows as "Saved: <value>" with
@@ -139,8 +155,9 @@ Diagnostics line "This node has no exit. Check devices on the Network tab."
 - The NETWORKS row itself and the state mapping —
   [012-LIVE_STATE · P19](../../012-LIVE_STATE/FEATURE.md#promises); the
   Diagnostics tab — [009-NODE_HEALTH](../../009-NODE_HEALTH/FEATURE.md).
-- Exit switching, Log out and Ping are not verified on a device with a live
-  tailnet (DEVICE-PENDING).
+- Exit switching, Log out, Ping, Replace key without a restart, Node enabled
+  and Restart node are not verified on a device with a live tailnet
+  (DEVICE-PENDING).
 - Not shown: per-device traffic, connections through the node, SSH,
   `*.ts.net` certificates. Taildrop (the inbox block and "Send file…" on
   this tab) is [032-TAILDROP](../../032-TAILDROP/FEATURE.md).
@@ -155,3 +172,4 @@ Diagnostics line "This node has no exit. Check devices on the Network tab."
 | 2 | [581](../../../tasks/581-tailscale-network-tab.md) | Implemented, DEVICE-PENDING | The Network tab, exit node on the fly and Save choice, Ping, Diagnostics line, Debug API summary |
 | 3 | [645](../../../tasks/645-tailscale-devices-path-addresses.md) | Implemented, DEVICE-PENDING | Device rows in three lines with the path as an icon, addresses in a column, This device with one Address heading, `GetTailscaleStatus` every 3 s |
 | 4 | [706](../../../tasks/706-tailscale-network-tab-logged-out.md) | Implemented, DEVICE-PENDING | Offline: the recorded exit as a line instead of the list and Save choice (it is no longer erased), the key chip only in Running, Replace key, Name `—` |
+| 5 | [706](../../../tasks/706-tailscale-network-tab-logged-out.md) iteration 2 | Implemented, DEVICE-PENDING | Replace key signs in without restarting the VPN (core SPEC 149), Node enabled switch and Restart node in Status |

@@ -19,6 +19,10 @@
   the Network tab with Save (to Downloads) and Delete; tapping a receive
   notification opens that node's Network tab. Files the core had already
   received into its shared folder move to the first Tailscale node once.
+- **Tailscale node on/off and restart on the fly
+  ([task 706](docs/spec/tasks/706-tailscale-network-tab-logged-out.md)).**
+  The Network tab has a Node enabled switch and Restart node; Turn off / Turn
+  on in the node list now works for Tailscale nodes too.
 
 ### Fixed
 
@@ -28,7 +32,8 @@
   not have and offered Save choice, which wrote None. Outside Running the tab
   now shows the saved exit node as a line, hides "signed in with a key" and
   the placeholder name `localhost`, and offers Replace key: the new auth key
-  is written into the node and the VPN restarts.
+  is written into the node and the node signs in with it without restarting
+  the VPN.
 
 ## [2.25.19] — 2026-11-01
 

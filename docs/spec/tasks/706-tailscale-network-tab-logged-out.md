@@ -2,10 +2,10 @@
 
 | Field | Value |
 |-------|-------|
-| Status | In progress (итерация 2) |
+| Status | Done, DEVICE-PENDING (итерация 2) |
 | Start date | 2026-11-02 |
-| End date | итерация 1 — 2026-11-02 |
-| Commits | `fix(tailscale): вкладка Network вне сети — exit node не стирается, Replace key (§706)` |
+| End date | итерации 1 и 2 — 2026-11-02 |
+| Commits | `fix(tailscale): вкладка Network вне сети — exit node не стирается, Replace key (§706)`; итерация 2: `b086e8ca`, `fd3a0e61` |
 | Related specs | [030-TAILSCALE · networks-tab](../features/030-TAILSCALE/FUNCTIONS/networks-tab.ru.md), P21 |
 
 ## Problem
@@ -141,3 +141,43 @@ enabled)` для Tailscale (WantRunning; выключенный узел отв�
 образца. Эмулятор: узел Tailscale с живым tailnet — Replace key из NeedsLogin
 без перезапуска VPN, Turn off → трафик через узел отвергается, Turn on и
 Restart node возвращают Running (SPEC 149 п.7 TASKS — первая живая проверка).
+
+**Сделано** (`b086e8ca` код + l10n + тесты вкладки, `fd3a0e61` тест моста):
+
+1. Мост: `CcChannel.tailscaleLogin(tag, authKey)` → `ccTailscaleLogin`
+   (`VpnPlugin.kt`) → `BoxCommandClient.tailscaleLogin` → ядро; отказ —
+   `PlatformException` с кодом из `endpointToggleErrorCode` (как у
+   `setEndpointEnabled`). Ключ в лог не пишется.
+2. `applyNewKey(tag, key)` → `TailscaleKeyApply` (`signingIn` / `deferred` /
+   `failed(code)`); туннель не поднят (`HomeController.state.tunnelUp`) —
+   ядро не зовётся. Путь через `DebugRegistry` к сборке и `reloadVpn` снят.
+   Снеки по ТЗ; «Turn the node on first.» — при `failed_precondition` и
+   состоянии узла `disabled`. Подсказка «The VPN restarts…» в диалоге снята.
+3. `TailscaleNetworkActions`: `endpointChanges` (сам `HomeController`),
+   `endpointState(tag)` (только при `tunnelUp`), `setEndpointEnabled` →
+   `HomeController.setEndpointEnabled`. Блок Status под `ListenableBuilder`:
+   переключатель Node enabled (ключ `tailscale-node-enabled`) при известном
+   состоянии, Restart node (`tailscale-restart-node`) при состоянии не
+   `disabled`; на время вызова оба неактивны; Restart — off→on, при отказе
+   выключения включения нет.
+4. `node_actions.dart`: тексты отказа вынесены в
+   `endpointToggleErrorText(code, tag, enable:)` (общий для списка узлов и
+   вкладки); `invalid_argument` — «Only WireGuard, AmneziaWG and Tailscale
+   nodes can be turned off.».
+5. l10n `ru`/`zh`: три ключа переименованы (старые «Only WireGuard and
+   AmneziaWG…», «Key saved… VPN restarts.», «The VPN restarts to sign in…»
+   ушли), четыре новых. `ui_check --strict`, `hardcoded_check --strict` —
+   0/0.
+
+**Проверено.** `flutter test test/widgets/tailscale_network_tab_test.dart` —
+50 зелёных (applyNewKey: три исхода и снеки; новая группа «§706 —
+выключатель и перезапуск узла», 7 случаев: нет состояния / VPN выключен —
+ни выключателя, ни Restart; выключение гасит Restart; текст отказа;
+Restart off→on с неактивной кнопкой; отказ выключения — без включения);
+`test/vpn/cc_endpoint_toggle_test.dart` — 5 зелёных (проброс tag/ключа,
+код отказа). `flutter analyze` по изменённым файлам — без замечаний.
+Kotlin локально не собирался (CI).
+
+**Не проверено (DEVICE-PENDING):** эмулятор с живым tailnet — Replace key из
+NeedsLogin без перезапуска VPN, Turn off → отказ трафика через узел, Turn on и
+Restart node → Running.

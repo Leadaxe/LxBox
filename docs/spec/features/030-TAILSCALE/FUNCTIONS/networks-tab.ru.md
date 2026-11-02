@@ -15,7 +15,8 @@
 ## Что делает
 
 Превращает поток состояния tailnet от ядра в экран: блок Status (состояние,
-имя сети, «signed in with a key», Sign in, Log out), This device (имя,
+имя сети, «signed in with a key», Sign in, Log out, Replace key, Node enabled,
+Restart node), This device (имя,
 MagicDNS-имя, адреса, срок ключа), Exit node (пиры, предлагающие выход, None
 первым, с «Save choice», когда действующий выход отличается от записанного),
 Devices (сначала в сети, группы по владельцам, когда их несколько) и Ping через
@@ -31,6 +32,7 @@ Diagnostics и Debug API.
 | Список Exit node | пиры с `ExitNodeOption`, порядок как в Devices; «None» первым |
 | Save choice | видна в `Running`, когда действующий и записанный выход различаются и у узла есть запись источника (свой сервер или член папки) |
 | Replace key | видна в `NeedsLogin`, когда у узла есть запись источника; одно скрытое поле, Save неактивна, пока оно пустое |
+| Node enabled, Restart node | пока VPN поднят и ядро отдаёт состояние узла; Restart node — только у включённого узла |
 | Записываемое значение | адрес Tailscale действующего пира, IPv4 первым; без адресов — MagicDNS-имя, затем имя хоста; None убирает `exit_node` |
 | Ping | до пяти ответов или до закрытия листа; задержка, direct или relay, адрес endpoint'а или регион ретранслятора |
 | Debug API | `GET /state` → `tailscale: {тег: {backend_state, devices}}` |
@@ -41,12 +43,13 @@ Diagnostics и Debug API.
 `MagicDNSSuffix`, `KeyAuth`, свой узел, exit node, пиры по владельцам); ответ
 `GetTailscaleStatus(tag)` (та же запись, раз в 3 с, пока вкладка открыта);
 статус туннеля; тело узла; нажатия: пункт списка, Save choice, Sign in, Log
-out, Copy name, Copy MagicDNS name, Copy address, `+N`, Ping.
+out, Replace key, Node enabled, Restart node, Copy name, Copy MagicDNS name, Copy address, `+N`, Ping.
 
 **Выходы:** вкладка; `GetTailscaleStatus`; `SetTailscaleExitNode` (`StableID` или пусто),
-`TailscaleLogout`, `StartTailscalePing`; источник узла с изменённым
-`exit_node` или `auth_key` и пересобранный конфиг; после Replace key —
-перезапуск VPN; снекбары «Copied», «Failed: …»; строка на
+`TailscaleLogout`, `TailscaleLogin(tag, key)`, `SetEndpointEnabled(tag,
+вкл/выкл)`, `StartTailscalePing`; источник узла с изменённым `exit_node` или
+`auth_key` и пересобранный конфиг; снекбары «Copied», «Failed: …», исходы
+Replace key и Restart node; строка на
 Diagnostics «This node has no exit. Check devices on the Network tab.»
 
 ## Правила и инварианты
@@ -67,9 +70,21 @@ Diagnostics «This node has no exit. Check devices on the Network tab.»
   скрытое поле Auth key с Show/Hide, как в мастере Add server, и кнопки
   Cancel и Save; Save неактивна, пока поле пустое или из пробелов. Save пишет
   ключ без пробелов по краям в `auth_key` тем же путём, что Save choice пишет
-  `exit_node`, затем пересобирает конфиг и перезапускает VPN (ядро пока не
-  умеет войти с новым ключом на ходу). Запись не удалась — ничего не
-  применяется.
+  `exit_node` (чтобы ключ пережил перезапуск), затем узел входит с ним без
+  перезапуска VPN. Снекбар — «Signing in with the new key…»; туннель не
+  поднят — ядро не зовётся, снекбар «Key saved. It applies when the VPN
+  starts.»; отказ ядра у выключенного узла — «Turn the node on first.»;
+  прочий отказ — «Could not sign in with the new key.». Отвергнутый ключ
+  виден позже в строках состояния и health, не в снекбаре. Запись не
+  удалась — ничего не применяется.
+- **Node enabled и Restart node:** пока VPN поднят и ядро отдаёт состояние
+  узла, в блоке Status есть переключатель Node enabled («Stays off until you
+  turn it on or stop the VPN.») с тем же поведением и текстами отказа, что
+  Turn off / Turn on в списке узлов и переключатель узла WireGuard.
+  Выключенный узел сразу отвергает соединения через себя. Restart node рядом
+  с Sign in / Log out / Replace key виден, пока узел включён: выключает и
+  снова включает узел, снекбар «Node restarted.» или текст отказа, на время
+  вызова кнопка неактивна.
 - **Exit node** (P21): список, знак расхождения и Save choice — только в
   `Running`. В остальных состояниях действующего выхода у ядра нет и
   сверять не с чем: записанный `exit_node` показан строкой «Saved: <значение>»
@@ -136,8 +151,9 @@ Diagnostics «This node has no exit. Check devices on the Network tab.»
 - Сама строка NETWORKS и таблица состояний —
   [012-LIVE_STATE · P19](../../012-LIVE_STATE/FEATURE.ru.md#обещания); вкладка
   Diagnostics — [009-NODE_HEALTH](../../009-NODE_HEALTH/FEATURE.ru.md).
-- Переключение выхода, Log out и Ping на устройстве с живой tailnet не
-  проверены (DEVICE-PENDING).
+- Переключение выхода, Log out, Ping, Replace key без перезапуска, Node
+  enabled и Restart node на устройстве с живой tailnet не проверены
+  (DEVICE-PENDING).
 - Не показываются: трафик по устройствам, соединения через узел, SSH,
   сертификаты `*.ts.net`. Taildrop (блок входящих и «Send file…» на этой
   вкладке) — [032-TAILDROP](../../032-TAILDROP/FEATURE.ru.md).
@@ -152,3 +168,4 @@ Diagnostics «This node has no exit. Check devices on the Network tab.»
 | 2 | [581](../../../tasks/581-tailscale-network-tab.md) | Implemented, DEVICE-PENDING | Вкладка Network, exit node на ходу и Save choice, Ping, строка Diagnostics, сводка Debug API |
 | 3 | [645](../../../tasks/645-tailscale-devices-path-addresses.md) | Implemented, DEVICE-PENDING | Строки устройств в три этажа с путём иконкой, адреса столбиком, This device с одним заголовком Address, `GetTailscaleStatus` раз в 3 с |
 | 4 | [706](../../../tasks/706-tailscale-network-tab-logged-out.md) | Implemented, DEVICE-PENDING | Вне сети: записанный выход строкой вместо списка и Save choice (больше не стирается), чип ключа только в Running, Replace key, Name `—` |
+| 5 | [706](../../../tasks/706-tailscale-network-tab-logged-out.md), итерация 2 | Implemented, DEVICE-PENDING | Replace key входит без перезапуска VPN (ядро SPEC 149), переключатель Node enabled и Restart node в Status |
