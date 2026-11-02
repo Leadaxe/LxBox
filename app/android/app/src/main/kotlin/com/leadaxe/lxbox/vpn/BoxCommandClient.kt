@@ -610,6 +610,7 @@ class BoxCommandClient {
             files.add(mapOf(
                 "name" to (f.name ?: ""),
                 "size" to f.size,
+                "sender_id" to (f.senderID ?: ""),
                 "sender_name" to (f.senderName ?: ""),
                 "modified_at" to f.modifiedAt,
             ))
@@ -633,29 +634,36 @@ class BoxCommandClient {
         )
     }
 
-    /// §707 итер. 4 — разовый снимок входящих узла [tag] (первое обновление
-    /// `SubscribeTaildropInbox` на своём клиенте): имя файла → (senderID,
-    /// senderName). Нужен разбору служебных файлов: уведомление ядра
-    /// отправителя не несёт. Блокирует до [timeoutMs]; `null` — клиента нет
-    /// или ядро не ответило. Имена в журнал не пишутся.
+    /// §707 итер. 4 — разовый снимок входящих узла [tag]: имя файла →
+    /// (senderID, senderName). Нужен разбору служебных файлов: уведомление
+    /// ядра отправителя не несёт. Блокирует до [timeoutMs]; `null` — клиента
+    /// нет или ядро не ответило. Имена в журнал не пишутся.
     fun taildropInboxSnapshot(tag: String, timeoutMs: Long): Map<String, Pair<String, String>>? {
+        val inbox = taildropInboxOnce(tag, timeoutMs) ?: return null
+        val m = HashMap<String, Pair<String, String>>()
+        @Suppress("UNCHECKED_CAST")
+        for (f in inbox["files"] as List<Map<String, Any>>) {
+            val name = f["name"] as? String ?: continue
+            m[name] = (f["sender_id"] as? String ?: "") to (f["sender_name"] as? String ?: "")
+        }
+        return m
+    }
+
+    /// §707 итер. 5 — разовый снимок входящих узла [tag] той же формы, что
+    /// поток вкладки Network (`taildropInboxMap`): первое обновление
+    /// `SubscribeTaildropInbox` на своём клиенте. Блокирует до [timeoutMs];
+    /// `null` — клиента нет или ядро не ответило.
+    fun taildropInboxOnce(tag: String, timeoutMs: Long): Map<String, Any>? {
         val client = newCallClient() ?: return null
         val latch = java.util.concurrent.CountDownLatch(1)
-        val out = AtomicReference<Map<String, Pair<String, String>>?>(null)
+        val out = AtomicReference<Map<String, Any>?>(null)
         var sub: TaildropInboxSubscription? = null
         try {
             sub = client.subscribeTaildropInbox(tag, object : TaildropInboxHandler {
                 override fun onInboxUpdate(inbox: TaildropInbox?) {
                     runCatching {
                         if (inbox == null || latch.count == 0L) return@runCatching
-                        val m = HashMap<String, Pair<String, String>>()
-                        val fi = inbox.files()
-                        while (fi != null && fi.hasNext()) {
-                            val f = fi.next() ?: continue
-                            val name = f.name ?: continue
-                            m[name] = (f.senderID ?: "") to (f.senderName ?: "")
-                        }
-                        out.set(m)
+                        out.set(taildropInboxMap(inbox, tag))
                         latch.countDown()
                     }
                 }
@@ -666,7 +674,7 @@ class BoxCommandClient {
             })
             latch.await(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
         } catch (t: Exception) {
-            Log.w(TAG, "taildropInboxSnapshot failed: ${t.javaClass.simpleName}")
+            Log.w(TAG, "taildropInboxOnce failed: ${t.javaClass.simpleName}")
         } finally {
             sub?.runCatching { close() }
             client.runCatching { disconnect() }

@@ -996,6 +996,9 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 val name = call.argument<String>("name") ?: ""
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
                     taildropSave(tag, name, null, result)
+                } else if (call.argument<Boolean>("downloads_only") == true) {
+                    // §707 итер. 5 — Debug API: без системного «Сохранить как».
+                    result.success(mapOf("status" to "error", "error" to "needs Android 10 or later"))
                 } else {
                     val act = activity
                     if (act == null) {
@@ -1047,6 +1050,62 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                     }
                 }
             }
+            // §707 итер. 5 — Debug API: отправка из байтов / заметки тем же
+            // путём, что «Send file…» (уведомление, Cancel), с ожиданием итога.
+            "ccTaildropSendBytes" -> {
+                val tag = call.argument<String>("tag") ?: ""
+                val peerId = call.argument<String>("peer_id") ?: ""
+                val peerName = call.argument<String>("peer_name") ?: ""
+                val text = call.argument<String>("text")
+                val bytes = call.argument<ByteArray>("bytes")
+                val name = call.argument<String>("name") ?: ""
+                val waitMs = (call.argument<Number>("wait_ms") ?: 60_000).toLong()
+                val item = when {
+                    text != null -> Taildrop.noteItem(text)
+                    bytes != null && name.isNotEmpty() ->
+                        Taildrop.Item(name, bytes.size.toLong(), java.io.ByteArrayInputStream(bytes))
+                    else -> null
+                }
+                if (item == null || tag.isEmpty() || peerId.isEmpty()) {
+                    result.success(mapOf("status" to "error", "error" to "bad arguments"))
+                } else {
+                    val ctx = context
+                    pluginScope.launch {
+                        val out = withContext(Dispatchers.IO) {
+                            val latch = java.util.concurrent.CountDownLatch(1)
+                            val outcome = java.util.concurrent.atomic.AtomicReference<Pair<String, String?>>(null)
+                            val started = Taildrop.send(ctx, tag, peerId, peerName, listOf(item)) { status, err ->
+                                outcome.set(status to err)
+                                latch.countDown()
+                            }
+                            if (!started) {
+                                mapOf("status" to "error", "error" to "vpn_off", "name" to item.name)
+                            } else if (!latch.await(waitMs, java.util.concurrent.TimeUnit.MILLISECONDS)) {
+                                mapOf("status" to "in_progress", "name" to item.name)
+                            } else {
+                                val (status, err) = outcome.get()
+                                mapOf("status" to status, "error" to (err ?: ""), "name" to item.name)
+                            }
+                        }
+                        result.success(out)
+                    }
+                }
+            }
+            // §707 итер. 5 — Debug API: снимок входящих узла с sha256 файлов
+            // на диске (каталог узла — из последнего собранного конфига).
+            "ccTaildropInboxSnapshot" -> {
+                val cc = BoxService.commandClient
+                val tag = call.argument<String>("tag") ?: ""
+                if (cc == null || tag.isEmpty()) {
+                    result.success(null)
+                } else {
+                    pluginScope.launch {
+                        val snap = withContext(Dispatchers.IO) { taildropInboxWithHashes(cc, tag) }
+                        result.success(snap)
+                    }
+                }
+            }
+            "taildropServiceStats" -> result.success(TaildropServiceFiles.stats())
             "ccTakeTaildropOpenRequest" -> {
                 val tag = BoxVpnService.taildropOpenRequest
                 BoxVpnService.taildropOpenRequest = null
@@ -1917,20 +1976,57 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
     // -------------------------------------------------------------------------
 
     /// §707 — сохранить принятый файл (в Downloads или в [target]) и
-    /// ответить Dart `{status, where?, error?}`.
+    /// ответить Dart `{status, where?, name?, error?}`; `name` — имя записи
+    /// в Downloads (итер. 5, Debug API).
     private fun taildropSave(tag: String, name: String, target: android.net.Uri?, result: MethodChannel.Result) {
         val ctx = context
         pluginScope.launch {
-            val err = withContext(Dispatchers.IO) {
-                runCatching { Taildrop.save(ctx, tag, name, target) }.getOrElse { it.message ?: "failed" }
+            val (err, savedName) = withContext(Dispatchers.IO) {
+                runCatching {
+                    if (target == null) Taildrop.saveToDownloads(ctx, tag, name)
+                    else Taildrop.save(ctx, tag, name, target) to null
+                }.getOrElse { (it.message ?: "failed") to null }
             }
             if (err == null) Taildrop.dismissReceived(ctx, tag, name)
             result.success(
-                if (err == null) mapOf("status" to "saved", "where" to (if (target == null) "downloads" else "document"))
+                if (err == null) mapOf(
+                    "status" to "saved",
+                    "where" to (if (target == null) "downloads" else "document"),
+                    "name" to (savedName ?: ""),
+                )
                 else mapOf("status" to "error", "error" to err)
             )
         }
     }
+
+    /// §707 итер. 5 — снимок входящих [tag] (форма потока вкладки Network) +
+    /// `sha256` у каждого принятого файла (пусто — файла на диске нет или
+    /// каталог узла неизвестен). Блокирующий — звать с IO.
+    private fun taildropInboxWithHashes(cc: BoxCommandClient, tag: String): Map<String, Any>? {
+        val snap = cc.taildropInboxOnce(tag, 3000L) ?: return null
+        val dir = Taildrop.taildropDirectories(ConfigManager.load()).firstOrNull { it.first == tag }?.second
+        @Suppress("UNCHECKED_CAST")
+        val files = (snap["files"] as? List<Map<String, Any>>).orEmpty().map { f ->
+            val name = f["name"] as? String ?: ""
+            val hash = if (dir == null || name.isEmpty()) "" else sha256Hex(java.io.File(dir, name))
+            f + ("sha256" to hash)
+        }
+        return snap + ("files" to files)
+    }
+
+    private fun sha256Hex(f: java.io.File): String = runCatching {
+        if (!f.isFile) return ""
+        val md = java.security.MessageDigest.getInstance("SHA-256")
+        f.inputStream().use { input ->
+            val buf = ByteArray(64 * 1024)
+            while (true) {
+                val n = input.read(buf)
+                if (n < 0) break
+                md.update(buf, 0, n)
+            }
+        }
+        md.digest().joinToString("") { "%02x".format(it) }
+    }.getOrDefault("")
 
     /// §707 — ответы выбора файлов и «Сохранить как».
     private fun onTaildropResult(requestCode: Int, resultCode: Int, data: Intent?) {

@@ -127,14 +127,22 @@ object Taildrop {
 
     // ───────────────────────── отправка ─────────────────────────
 
+    /// Итог передачи для [send]: `sent`, `cancelled` или `error` с причиной
+    /// (текст ядра без обёртки gRPC или своя строка).
+    fun interface SendDone {
+        fun onDone(status: String, error: String?)
+    }
+
     /// Запустить передачу [items] пиру [peerId] узла [tag]. `false` — VPN
-    /// не поднят (потоки закрыты, ничего не откладывается).
+    /// не поднят (потоки закрыты, ничего не откладывается). [onDone] — итог
+    /// после уведомления (§707 итер. 5, Debug API ждёт его).
     fun send(
         ctx: Context,
         tag: String,
         peerId: String,
         peerName: String,
         items: List<Item>,
+        onDone: SendDone? = null,
     ): Boolean {
         val cc = BoxService.commandClient
         if (cc == null || items.isEmpty()) {
@@ -145,7 +153,7 @@ object Taildrop {
         val id = SEND_ID_BASE + (nextId.getAndIncrement() and 0xfff)
         val job = SendJob()
         sends[id] = job
-        scope.launch { runSend(app, cc, id, job, tag, peerId, peerName, items) }
+        scope.launch { runSend(app, cc, id, job, tag, peerId, peerName, items, onDone) }
         return true
     }
 
@@ -180,15 +188,21 @@ object Taildrop {
         peerId: String,
         peerName: String,
         items: List<Item>,
+        onDone: SendDone?,
     ) {
+        fun done(status: String, error: String?) {
+            runCatching { onDone?.onDone(status, error) }
+        }
         val total = if (items.all { it.size >= 0 }) items.sumOf { it.size } else -1L
         val notifier = SendNotifier(ctx, id, peerName, items.size, total)
         notifier.progress(0, 0L, force = true)
         val client = cc.newCallClient()
         if (client == null) {
-            notifier.failed(L10n.str(ctx, R.string.taildrop_reason_vpn_off))
+            val reason = L10n.str(ctx, R.string.taildrop_reason_vpn_off)
+            notifier.failed(reason)
             closeAll(items)
             sends.remove(id)
+            done("error", reason)
             return
         }
         val finished = CountDownLatch(1)
@@ -271,14 +285,29 @@ object Taildrop {
             sends.remove(id)
         }
         when {
-            job.cancelled -> notifier.cancel()
-            readError != null -> notifier.failed(readError!!)
-            finished.count > 0L -> notifier.failed(L10n.str(ctx, R.string.taildrop_reason_interrupted))
+            job.cancelled -> {
+                notifier.cancel()
+                done("cancelled", null)
+            }
+            readError != null -> {
+                notifier.failed(readError!!)
+                done("error", readError)
+            }
+            finished.count > 0L -> {
+                val reason = L10n.str(ctx, R.string.taildrop_reason_interrupted)
+                notifier.failed(reason)
+                done("error", reason)
+            }
             finishError.get().isNotEmpty() -> {
                 Log.w(TAG, "taildrop send failed")
-                notifier.failed(failureText(finishError.get()))
+                val reason = failureText(finishError.get())
+                notifier.failed(reason)
+                done("error", reason)
             }
-            else -> notifier.sent()
+            else -> {
+                notifier.sent()
+                done("sent", null)
+            }
         }
     }
 
@@ -746,6 +775,16 @@ object Taildrop {
     /// причина.
     fun save(ctx: Context, tag: String, name: String, target: Uri?): String? =
         saveInternal(ctx, tag, name, target, null)
+
+    /// §707 итер. 5 — [save] в Downloads с именем записи `MediaStore` (оно
+    /// может отличаться: занятое имя получает суффикс). Пара (причина
+    /// неудачи, имя); успех — причина `null`.
+    fun saveToDownloads(ctx: Context, tag: String, name: String): Pair<String?, String?> {
+        val uri = AtomicReference<Uri?>(null)
+        val err = saveInternal(ctx, tag, name, null, uri)
+        val saved = uri.get()
+        return err to saved?.let { displayName(ctx, it) ?: name }
+    }
 
     /// [saved] — куда положить uri записи `MediaStore` (только Downloads).
     private fun saveInternal(

@@ -17,6 +17,7 @@ import java.io.File
 import java.nio.ByteBuffer
 import java.nio.charset.CodingErrorAction
 import java.nio.charset.StandardCharsets
+import java.util.concurrent.atomic.AtomicInteger
 
 /// §707 итер. 4 — служебные файлы поверх Taildrop (контракт 1.1.148–1.1.150,
 /// `docs/SERVICE_FILES.md`): `lx-<время>-<метка>.json` с командами
@@ -175,6 +176,48 @@ object TaildropServiceFiles {
         e.apply()
     }
 
+    // ─────────────────────────── счётчики ───────────────────────────
+
+    /// §707 итер. 5 — счётчики разбора с начала процесса для Debug API
+    /// (`GET /taildrop/service-files`). Только в памяти; текст последней
+    /// выполненной команды отдаётся Debug API лишь с `?reveal=true`.
+    private object Stats {
+        val received = AtomicInteger(0)
+        val clipboard = AtomicInteger(0)
+        val openUrl = AtomicInteger(0)
+        val noPermission = AtomicInteger(0)
+        val expired = AtomicInteger(0)
+        val invalid = AtomicInteger(0)
+        val unknownKind = AtomicInteger(0)
+        val badScheme = AtomicInteger(0)
+        val noHandler = AtomicInteger(0)
+        @Volatile var last: Triple<String, Long, String>? = null
+    }
+
+    private fun executed(kind: String, value: String) {
+        Stats.last = Triple(kind, System.currentTimeMillis(), value)
+    }
+
+    /// Снимок счётчиков для канала: `last` — вид, время (мс), значение
+    /// (текст буфера или ссылка).
+    fun stats(): Map<String, Any?> {
+        val last = Stats.last
+        return mapOf(
+            "received" to Stats.received.get(),
+            "executed" to mapOf(
+                "clipboard" to Stats.clipboard.get(),
+                "open_url" to Stats.openUrl.get(),
+            ),
+            "skipped_no_permission" to Stats.noPermission.get(),
+            "expired" to Stats.expired.get(),
+            "invalid" to Stats.invalid.get(),
+            "unknown_kind" to Stats.unknownKind.get(),
+            "skipped_scheme" to Stats.badScheme.get(),
+            "no_handler" to Stats.noHandler.get(),
+            "last" to last?.let { mapOf("kind" to it.first, "at_ms" to it.second, "value" to it.third) },
+        )
+    }
+
     // ─────────────────────────── обработка ───────────────────────────
 
     /// Принятый файл входящих: имя и путь на диске.
@@ -204,18 +247,28 @@ object TaildropServiceFiles {
             val bytes = runCatching { f.readBytes() }.getOrNull() ?: continue
             val commands = parseBody(spec, bytes) ?: continue
             handled.add(item.name)
+            Stats.received.incrementAndGet()
             val modifiedAt = f.lastModified() / 1000
-            if (nowSec - modifiedAt <= spec.ttlSeconds && commands.isNotEmpty()) {
+            val fresh = nowSec - modifiedAt <= spec.ttlSeconds
+            if (!fresh) Stats.expired.incrementAndGet()
+            if (fresh && commands.isNotEmpty()) {
                 if (senders == null) senders = cc?.taildropInboxSnapshot(tag, SNAPSHOT_TIMEOUT_MS) ?: emptyMap()
                 val (senderId, senderName) = senders[item.name] ?: ("" to "")
                 for (cmd in commands) {
                     val kindName = cmd.opt("kind") as? String
-                    val kind = kindName?.let { spec.kinds[it] } ?: continue // неизвестный — пропуск
+                    val kind = kindName?.let { spec.kinds[it] }
+                    if (kind == null) { // неизвестный — пропуск
+                        Stats.unknownKind.incrementAndGet()
+                        continue
+                    }
                     if (!fieldsOk(cmd, kind)) {
                         bad++
                         continue
                     }
-                    if (!allowed(app, tag, kindName, senderId, senderName)) continue
+                    if (!allowed(app, tag, kindName, senderId, senderName)) {
+                        Stats.noPermission.incrementAndGet()
+                        continue
+                    }
                     when (kindName) {
                         "clipboard" -> {
                             val text = cmd.getString("text").removePrefix("﻿")
@@ -231,8 +284,16 @@ object TaildropServiceFiles {
                             val url = cmd.getString("url")
                             val scheme = Uri.parse(url).scheme?.lowercase()
                             val schemes = kind.schemes
-                            if (scheme == null || schemes == null || scheme !in schemes) continue
-                            showLink(app, tag, item.name, senderName, url)
+                            if (scheme == null || schemes == null || scheme !in schemes) {
+                                Stats.badScheme.incrementAndGet()
+                                continue
+                            }
+                            if (showLink(app, tag, item.name, senderName, url)) {
+                                Stats.openUrl.incrementAndGet()
+                                executed(kindName, url)
+                            } else {
+                                Stats.noHandler.incrementAndGet()
+                            }
                         }
                     }
                 }
@@ -241,8 +302,13 @@ object TaildropServiceFiles {
             val err = cc?.taildropDelete(tag, item.name)
             if (cc == null || err != null) runCatching { f.delete() }
         }
-        lastClip?.let { setClipboard(app, it.text) }
+        lastClip?.let {
+            setClipboard(app, it.text)
+            Stats.clipboard.incrementAndGet()
+            executed("clipboard", it.text)
+        }
         if (bad > 0) {
+            Stats.invalid.addAndGet(bad)
             val line = "taildrop service file: $bad malformed command(s) skipped"
             Log.w(TAG, line)
             BoxService.appLogWarning(line)
@@ -277,9 +343,9 @@ object TaildropServiceFiles {
 
     /// «Link from <device>» с адресом в тексте; тап открывает `ACTION_VIEW`.
     /// Обработчика нет — ничего.
-    private fun showLink(ctx: Context, tag: String, name: String, sender: String, url: String) {
+    private fun showLink(ctx: Context, tag: String, name: String, sender: String, url: String): Boolean {
         val view = Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        if (view.resolveActivity(ctx.packageManager) == null) return
+        if (view.resolveActivity(ctx.packageManager) == null) return false
         val id = 6000 + ("$tag/$name/$url".hashCode() and 0x3fff)
         val pi = PendingIntent.getActivity(
             ctx, id, view,
@@ -296,5 +362,6 @@ object TaildropServiceFiles {
         runCatching {
             (ctx.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager).notify(id, b.build())
         }.onFailure { Log.w(TAG, "link notify failed: ${it.javaClass.simpleName}") }
+        return true
     }
 }
