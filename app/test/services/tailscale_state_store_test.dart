@@ -193,6 +193,23 @@ void main() {
       expect(d.gone, {'U'});
       expect(d.goneContainers, {'U'});
     });
+
+    test('§707 — ушедшие теги: удаление, смена тега и префикса', () {
+      final a = server('A', ts('a'));
+      final b = server('B', ts('b'), prefix: 'p');
+      final f = folder('F', ['x', 'y']);
+      final gone = goneTailscaleTags(
+        [a, b, f],
+        [b.copyWith(tagPrefix: 'q'), folder('F', ['x', 'y2'])],
+      );
+      expect(gone, {'a', 'p b', 'y'});
+    });
+
+    test('§707 — неразобранная подписка тегов не теряет', () {
+      final s = subscription('S', [ts('s1')]);
+      expect(goneTailscaleTags([s], [subscription('S', const [])]), isEmpty);
+      expect(goneTailscaleTags([s], const []), {'s1'});
+    });
   });
 
   group('сборка и миграция', () {
