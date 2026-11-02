@@ -1812,6 +1812,7 @@ Not part of `lxbox_settings.json`. It serves two categories: **pre-Flutter boot 
 | `boxvpn_boot.has_tun` | `Boolean` | Kotlin (mirrors `vpn_mode`) | [§192] | **Computed**, default `true`. Gates `VpnService.prepare()`; not stored in the JSON. |
 | `boxvpn_boot.app_language` | `String` | Kotlin (mirrors `vars.app_language`) | [§279] | `system` \| `en` \| `ru`. A derived cache for the native surfaces. |
 | `boxvpn_boot.last_pushed_locale` | `String` | Kotlin | [§279] | The last value the app itself pushed into `LocaleManager` (Android 13+). |
+| `lxbox_taildrop` file: `autosave.<node tag>` | `Boolean` (only `true` is stored) | Kotlin (`Taildrop`); Flutter writes it over the method channel | §707 | Taildrop auto-save to Downloads per Tailscale node tag. A device setting: not in `lxbox_settings.json`, so not in the backup; read by the VPN service without Flutter. The record goes when the node is deleted or its tag changes. |
 
 ---
 

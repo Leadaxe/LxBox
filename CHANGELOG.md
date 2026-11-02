@@ -19,6 +19,14 @@
   the Network tab with Save (to Downloads) and Delete; tapping a receive
   notification opens that node's Network tab. Files the core had already
   received into its shared folder move to the first Tailscale node once.
+- **Taildrop: auto-save and buttons in receive notifications
+  ([task 707](docs/spec/tasks/707-taildrop-send-receive-files.md#итерация-2--автосохранение-в-downloads-и-кнопки-в-уведомлениях-приёма)).**
+  A "Save received files to Downloads" switch in the Settings block of a
+  Tailscale node's Network tab (per node, off by default, Android 10+, kept on
+  the device and not in the backup) moves every received file to Downloads;
+  the notification then reads "Saved to Downloads" and opens the file. Receive
+  notifications got Cancel (while receiving) and Save / Delete (once received;
+  Save on Android 10+).
 - **Tailscale node on/off and restart on the fly
   ([task 706](docs/spec/tasks/706-tailscale-network-tab-logged-out.md)).**
   The Network tab has a Node enabled switch and Restart node; Turn off / Turn

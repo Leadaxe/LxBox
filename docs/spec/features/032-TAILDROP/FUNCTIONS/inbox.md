@@ -11,7 +11,7 @@ deletes them.
 |-------|-------|
 | Feature | [032-TAILDROP](../FEATURE.md) |
 | Promises | P4–P7 |
-| State | ✅ partly implemented, 2026-11-02 ([707](../../../tasks/707-taildrop-send-receive-files.md)): no Cancel / Save / Delete buttons in receive notifications yet; not verified on a device |
+| State | ✅ implemented, 2026-11-02 ([707](../../../tasks/707-taildrop-send-receive-files.md)): iterations 1–2 — per-node inbox, Cancel / Save / Delete in receive notifications (Save there on Android 10+ only), auto-save switch; notification buttons and auto-save not verified on a device |
 
 ## What it does
 

@@ -257,3 +257,63 @@ tag, name, target)` (API 29+ → `MediaStore.Downloads`, затем файл и�
   уведомление «Saved to Downloads», тап открывает файл; выключить → кнопки
   Save/Delete в уведомлении работают; Cancel приёма — большим файлом
   (≥ 500 МБ).
+
+### Result (итерация 2)
+
+Сделано:
+- **A.** Переключатель «Save received files to Downloads» в блоке Settings
+  вкладки Network; блок показывается и без `onSaveFields` (узел подписки),
+  если натив отдал настройку. Хранение — отдельный файл SharedPreferences
+  `lxbox_taildrop`, ключ `autosave.<тег>`, хранится только `true`
+  (`Taildrop.isAutoSave/setAutoSave/forgetAutoSave`, методы канала
+  `taildropAutoSaveState` / `taildropSetAutoSave` / `taildropForgetAutoSave`).
+  Принятый файл узла с включённым переключателем — `Taildrop.save` в фоне,
+  успех — «Saved to Downloads: <имя>» (имя записи `MediaStore`, тап —
+  `ACTION_VIEW`, нет обработчика — вкладка узла); неудача — «принят» с
+  кнопками и строкой «Couldn't save: <причина>».
+- **B.** `Taildrop.parseCoreNotification` (тег из `openURL`, остаток —
+  `receiving/<senderID>/<baseName>` или имя), кнопки на
+  `TaildropNoteReceiver` (неэкспортируемый): Cancel → `cancelTaildropReceiving`,
+  Save (API 29+) → `Taildrop.save`, Delete → `deleteTaildropFile`; работа —
+  в scope Taildrop на IO. Без ядра кнопка снимает уведомление.
+- **C.** Нативные строки `taildrop_save/delete/saved_title/save_failed/
+  delete_failed` (en/ru/zh), строки Flutter «Save received files to
+  Downloads», «Needs Android 10 or later.» (ru/zh). Имена файлов — только
+  в уведомлениях и экстрах их интентов, в журнал не пишутся.
+
+Решения исполнителя (в ТЗ не было):
+- Пока идёт автосохранение или Save из уведомления, уведомление «принят»
+  стоит без кнопок (второе нажатие некуда), потом заменяется итогом.
+- Тексты уведомления ядра (заголовок, тело, подзаголовок) едут в экстрах
+  интентов кнопок — чтобы при неудаче Save/Delete поставить его заново без
+  ядра.
+- Save / Delete на вкладке Network снимают уведомление «принят» этого файла
+  (`Taildrop.dismissReceived`), иначе оно висело бы с кнопками на ушедший
+  файл.
+- Удаление узла: запись снимается в `_relinkTailscaleState` по
+  `goneTailscaleTags` (теги до/после операции; узлы неразобранных
+  контейнеров — подписка без тела — ушедшими не считаются). Ключ — тег без
+  уникализации сборки (`префикс тег`); у тёзки, которому сборка дописала
+  суффикс, запись по живому тегу при удалении не снимается (остаётся
+  сиротой; новый узел с тем же живым тегом её унаследует). Смена префикса
+  источника = смена тега, переключатель теряется.
+- Переключатель в блоке Settings только у узла с данными ядра (VPN включён):
+  блок Settings целиком живёт в ветке «узел в работающем конфиге».
+- Автобэкап Android (`allowBackup` по умолчанию) не трогали: он касается всех
+  SharedPreferences одинаково; «не в бэкапе» = не в бэкапе L×Box.
+- Тест разбора `identifier` не написан: разбор живёт в Kotlin (сервис без
+  Flutter), тестового стенда у Kotlin нет.
+
+Проверено:
+- `flutter test test/widgets/tailscale_network_tab_test.dart
+  test/services/tailscale_state_store_test.dart` — 84/84: переключатель без
+  `onSaveFields` (запись по тегу), рядом с advertise, неактивен на API < 29
+  (фейк), разбор настройки из канала, `goneTailscaleTags` (удаление, смена
+  тега и префикса, неразобранная подписка);
+- `flutter analyze` по изменённым dart-файлам — 0; `hardcoded_check`,
+  `ui_check`, `kotlin_check` — 0/0; `compileDebugKotlin` — успешно.
+
+Не проверено (эмулятор, DEVICE-PENDING): автосохранение и уведомление
+«Saved to Downloads» с открытием файла, кнопки Save/Delete/Cancel в
+уведомлениях, поведение кнопок при выключенном VPN, снятие записи при
+удалении узла на устройстве.
