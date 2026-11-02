@@ -704,6 +704,17 @@ Future<BuildResult?> _buildConfig({
       ep.map['state_directory'] =
           '$stateRoot/tailscale/${name ?? tailscaleStateDirName(ep.tag)}';
     }
+    // §707 — входящие Taildrop на узел: `<state_directory>/taildrop` (дефолт
+    // ядра — общая папка `Taildrop` на все узлы). Явный ключ тела не
+    // трогается; в хранимое тело не пишется, как и `state_directory`.
+    for (final ep in ctx.endpoints) {
+      if (ep.map['type'] != 'tailscale') continue;
+      final cur = ep.map['taildrop_directory'];
+      if (cur is String && cur.isNotEmpty) continue;
+      final state = ep.map['state_directory'];
+      if (state is! String || state.isEmpty) continue;
+      ep.map['taildrop_directory'] = '$state/taildrop';
+    }
   }
 
   if (ctx.endpoints.isNotEmpty) {

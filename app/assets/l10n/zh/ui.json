@@ -6592,5 +6592,47 @@
   },
   "The VPN restarts to sign in with the new key.": {
     "value": "VPN 将重启以使用新密钥登录。"
+  },
+  "Send file…": {
+    "value": "发送文件…"
+  },
+  "Sending to %s": {
+    "value": "正在发送到 %s"
+  },
+  "Couldn't send: %s": {
+    "value": "无法发送：%s"
+  },
+  "the VPN is off": {
+    "value": "VPN 已关闭"
+  },
+  "can't read the file": {
+    "value": "无法读取文件"
+  },
+  "no file picker on this device": {
+    "value": "此设备没有文件选择器"
+  },
+  "Inbox": {
+    "value": "收件箱"
+  },
+  "File sharing is off for this tailnet. Turn on Taildrop in the Tailscale admin console.": {
+    "value": "此 tailnet 已关闭文件共享。请在 Tailscale 管理控制台中开启 Taildrop。"
+  },
+  "%s of %s": {
+    "value": "%s / %s"
+  },
+  "from %s": {
+    "value": "来自 %s"
+  },
+  "Saved to Downloads": {
+    "value": "已保存到“下载”"
+  },
+  "Couldn't save: %s": {
+    "value": "无法保存：%s"
+  },
+  "Couldn't delete: %s": {
+    "value": "无法删除：%s"
+  },
+  "Couldn't cancel: %s": {
+    "value": "无法取消：%s"
   }
 }

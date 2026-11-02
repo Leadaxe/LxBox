@@ -72,6 +72,82 @@ CcTailscaleStatus _status({CcTailscalePeer? exit}) => CcTailscaleStatus(
       ],
     );
 
+
+/// §707 — действия Taildrop: журнал вызовов, ответы по умолчанию — успех.
+class _DropActions extends TailscaleNetworkActions {
+  final calls = <String>[];
+  CcTaildropResult saveResult =
+      const CcTaildropResult(status: 'saved', where: 'downloads');
+  CcTaildropResult sendResult = const CcTaildropResult(status: 'started');
+
+  @override
+  Future<void> startInbox(String tag) async => calls.add('start:$tag');
+
+  @override
+  Future<void> stopInbox() async => calls.add('stop');
+
+  @override
+  Future<String?> markInboxRead(String tag) async {
+    calls.add('read:$tag');
+    return null;
+  }
+
+  @override
+  Future<CcTaildropResult> saveFile(String tag, String name) async {
+    calls.add('save:$name');
+    return saveResult;
+  }
+
+  @override
+  Future<String?> deleteFile(String tag, String name) async {
+    calls.add('delete:$name');
+    return null;
+  }
+
+  @override
+  Future<String?> cancelReceiving(
+      String tag, String senderId, String name) async {
+    calls.add('cancel:$senderId/$name');
+    return null;
+  }
+
+  @override
+  Future<CcTaildropResult> sendFiles(String tag, CcTailscalePeer peer) async {
+    calls.add('send:${peer.stableId}');
+    return sendResult;
+  }
+}
+
+const _laptop = CcTailscalePeer(
+  stableId: 'n5',
+  hostName: 'laptop',
+  online: true,
+  canReceiveFiles: true,
+  ips: ['100.64.0.5'],
+);
+
+CcTailscaleStatus _dropStatus({bool canShare = true}) => CcTailscaleStatus(
+      tag: 'ts',
+      backendState: 'Running',
+      stateText: '',
+      canShareFiles: canShare,
+      userGroups: const [
+        CcTailscaleUserGroup(displayName: 'Alice', peers: [
+          _laptop,
+          // В сети, но не принимает файлы; расшаренный; не в сети.
+          CcTailscalePeer(stableId: 'n6', hostName: 'tv', online: true),
+          CcTailscalePeer(
+              stableId: 'n7',
+              hostName: 'guest',
+              online: true,
+              canReceiveFiles: true,
+              shareeNode: true),
+          CcTailscalePeer(
+              stableId: 'n8', hostName: 'desk', canReceiveFiles: true),
+        ]),
+      ],
+    );
+
 void main() {
   Future<void> pump(
     WidgetTester tester, {
@@ -614,6 +690,153 @@ void main() {
       expect(replace, findsNothing);
       expect(find.byKey(const ValueKey('tailscale-saved-exit-node')),
           findsNothing);
+    });
+  });
+
+  group('§707 — Taildrop', () {
+    Future<StreamController<CcTaildropInbox>> pumpDrop(
+      WidgetTester tester,
+      _DropActions actions, {
+      bool canShare = true,
+    }) async {
+      await tester.binding.setSurfaceSize(const Size(800, 3000));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final status = StreamController<List<CcTailscaleStatus>>();
+      final inbox = StreamController<CcTaildropInbox>();
+      addTearDown(status.close);
+      addTearDown(inbox.close);
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: TailscaleNetworkTab(
+            liveTag: 'ts',
+            body: const {},
+            statusSource: status.stream,
+            inboxSource: inbox.stream,
+            vpnUp: true,
+            actions: actions,
+          ),
+        ),
+      ));
+      status.add([_dropStatus(canShare: canShare)]);
+      await tester.pump();
+      return inbox;
+    }
+
+    test('цель отправки: в сети, принимает файлы, не расшарен', () {
+      final targets = _dropStatus()
+          .peers
+          .where((p) => p.isTaildropTarget)
+          .map((p) => p.hostName);
+      expect(targets, ['laptop']);
+    });
+
+    test('разбор входящих и статуса из канала', () {
+      final inbox = CcTaildropInbox.fromMap({
+        'tag': 'ts',
+        'files': [
+          {'name': 'a.jpg', 'size': 2048, 'sender_name': 'laptop', 'modified_at': 5},
+        ],
+        'receiving': [
+          {'name': 'b.zip', 'size': 100, 'received_bytes': 25, 'sender_id': 's1', 'sender_name': 'desk'},
+        ],
+      });
+      expect(inbox.files.single.size, 2048);
+      expect(inbox.receiving.single.progress, 0.25);
+      final st = CcTailscaleStatus.fromMap({
+        'tag': 'ts',
+        'can_share_files': false,
+        'unread_file_count': 3,
+      });
+      expect(st.canShareFiles, isFalse);
+      expect(st.unreadFileCount, 3);
+      // Нет поля — право не отрицается.
+      expect(CcTailscaleStatus.fromMap({'tag': 'ts'}).canShareFiles, isTrue);
+      expect(
+          CcTailscalePeer.fromMap({'can_receive_files': true}).canReceiveFiles,
+          isTrue);
+    });
+
+    testWidgets('подписка на входящие с вкладкой; пусто — блока нет',
+        (tester) async {
+      final actions = _DropActions();
+      final inbox = await pumpDrop(tester, actions);
+      expect(actions.calls, ['start:ts']);
+      inbox.add(const CcTaildropInbox(tag: 'ts'));
+      await tester.pump();
+      await tester.pump(); // снапшот приходит микрозадачей после кадра
+      expect(find.text('Inbox'), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+      expect(actions.calls.last, 'stop');
+    });
+
+    testWidgets('принятый файл: строка, Save и Delete, просмотр отмечен',
+        (tester) async {
+      final actions = _DropActions();
+      final inbox = await pumpDrop(tester, actions);
+      inbox.add(const CcTaildropInbox(tag: 'other', files: [
+        CcTaildropFile(name: 'alien.txt'),
+      ]));
+      await tester.pump();
+      await tester.pump(); // снапшот приходит микрозадачей после кадра
+      expect(find.text('alien.txt'), findsNothing);
+      inbox.add(const CcTaildropInbox(tag: 'ts', files: [
+        CcTaildropFile(name: 'photo.jpg', size: 2048, senderName: 'laptop'),
+      ]));
+      await tester.pump();
+      await tester.pump(); // снапшот приходит микрозадачей после кадра
+      expect(find.text('Inbox'), findsOneWidget);
+      expect(find.text('photo.jpg'), findsOneWidget);
+      expect(actions.calls, contains('read:ts'));
+      await tester.tap(find.byTooltip('Save'));
+      await tester.pump();
+      expect(actions.calls, contains('save:photo.jpg'));
+      expect(find.text('Saved to Downloads'), findsOneWidget);
+      await tester.tap(find.byTooltip('Delete'));
+      await tester.pump();
+      expect(actions.calls, contains('delete:photo.jpg'));
+    });
+
+    testWidgets('файл в приёме: прогресс и Cancel', (tester) async {
+      final actions = _DropActions();
+      final inbox = await pumpDrop(tester, actions);
+      inbox.add(const CcTaildropInbox(tag: 'ts', receiving: [
+        CcTaildropReceiving(
+            name: 'big.iso', size: 100, receivedBytes: 40, senderId: 's1'),
+      ]));
+      await tester.pump();
+      await tester.pump(); // снапшот приходит микрозадачей после кадра
+      final bar = tester.widget<LinearProgressIndicator>(
+          find.byType(LinearProgressIndicator));
+      expect(bar.value, 0.4);
+      await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+      await tester.pump();
+      expect(actions.calls, contains('cancel:s1/big.iso'));
+    });
+
+    testWidgets('Taildrop выключен в tailnet — причина, Send file… нет',
+        (tester) async {
+      final actions = _DropActions();
+      await pumpDrop(tester, actions, canShare: false);
+      expect(find.byKey(const ValueKey('taildrop-sharing-off')), findsOneWidget);
+      await tester.tap(find.widgetWithText(ListTile, 'laptop').last);
+      await tester.pumpAndSettle();
+      expect(find.text('Send file…'), findsNothing);
+    });
+
+    testWidgets('Send file… только у цели отправки', (tester) async {
+      final actions = _DropActions();
+      await pumpDrop(tester, actions);
+      await tester.tap(find.widgetWithText(ListTile, 'tv').last);
+      await tester.pumpAndSettle();
+      expect(find.text('Send file…'), findsNothing);
+      await tester.tapAt(const Offset(10, 10));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ListTile, 'laptop').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Send file…'));
+      await tester.pumpAndSettle();
+      expect(actions.calls, contains('send:n5'));
+      expect(find.text('Sending to laptop'), findsOneWidget);
     });
   });
 }

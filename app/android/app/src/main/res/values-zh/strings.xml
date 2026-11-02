@@ -62,4 +62,23 @@
     <string name="sora_editor_clip_text_length_too_large">文本过大，无法复制</string>
     <string name="openconnect_sign_in_title">需要登录：%1$s</string>
     <string name="openconnect_sign_in_text">网关正在等待验证码或浏览器登录。点按继续。</string>
+    <!-- §707 — Taildrop -->
+    <string name="taildrop_channel_name">Taildrop</string>
+    <string name="taildrop_share_label">Taildrop</string>
+    <string name="taildrop_sending_title">正在发送到 %1$s</string>
+    <string name="taildrop_sent_title">已发送到 %1$s</string>
+    <string name="taildrop_failed_title">无法发送到 %1$s</string>
+    <string name="taildrop_files_progress">第 %1$d 个，共 %2$d 个文件</string>
+    <string name="taildrop_cancel">取消</string>
+    <string name="taildrop_close">关闭</string>
+    <string name="taildrop_need_vpn">请先启动带有 Tailscale 节点的 VPN 再发送文件。</string>
+    <string name="taildrop_choose_node">选择 Tailscale 节点</string>
+    <string name="taildrop_send_to">发送到</string>
+    <string name="taildrop_sharing_off">此 tailnet 已关闭文件共享。请在 Tailscale 管理控制台中开启 Taildrop。</string>
+    <string name="taildrop_no_devices">目前没有可接收文件的设备。</string>
+    <string name="taildrop_nothing_to_send">没有可发送的内容</string>
+    <string name="taildrop_reason_vpn_off">VPN 已关闭</string>
+    <string name="taildrop_reason_cant_read">无法读取文件</string>
+    <string name="taildrop_reason_cant_write">无法写入文件</string>
+    <string name="taildrop_reason_interrupted">传输已中断</string>
 </resources>

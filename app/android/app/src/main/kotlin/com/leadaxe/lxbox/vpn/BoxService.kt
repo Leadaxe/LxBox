@@ -581,6 +581,12 @@ class BoxService(
             return
         }
 
+        // §707 — принятое ядром до фичи в общую папку `Taildrop` один раз
+        // уезжает во входящие первого узла Tailscale (до старта ядра: папку
+        // ещё никто не держит).
+        runCatching { Taildrop.migrateLegacyInbox(service.filesDir, config) }
+            .onFailure { Log.w(TAG, "taildrop legacy migration failed: ${it.javaClass.simpleName}") }
+
         try {
             // §703 — на `initialize cache-file: timeout` (файл держит зависший
             // в закрытии прежний Box) удалить cache.db и повторить один раз.
@@ -1251,6 +1257,13 @@ class BoxService(
     /// который форвардит сюда.
     fun sendNotification(notification: io.nekohasekai.libbox.Notification) {
         val context = service.applicationContext
+        // §707 — приём Taildrop: свой канал, своё id на файл, тап открывает
+        // вкладку Network узла. Тело несёт имена файла и устройства — в
+        // журнал не пишется.
+        if (Taildrop.isCoreNotification(notification.identifier)) {
+            sendTaildropNotification(context, notification)
+            return
+        }
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         val channelId = notification.identifier.ifBlank { "lxbox-core" }
@@ -1316,11 +1329,40 @@ class BoxService(
     fun cancelNotification(identifier: String, typeID: Int) {
         val context = service.applicationContext
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (Taildrop.isCoreNotification(identifier)) {
+            runCatching { nm.cancel(Taildrop.coreNotificationId(identifier)) }
+            return
+        }
         runCatching {
             nm.cancel(typeID)
         }.onFailure {
             Log.e(TAG, "cancelNotification failed", it)
         }
         Log.d(TAG, "Notification cancelled: $identifier/$typeID")
+    }
+
+    /// §707 — уведомление приёма Taildrop от ядра.
+    private fun sendTaildropNotification(
+        context: Context,
+        notification: io.nekohasekai.libbox.Notification,
+    ) {
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        Taildrop.ensureChannel(context)
+        val id = Taildrop.coreNotificationId(notification.identifier)
+        val builder = NotificationCompat.Builder(context, Taildrop.CHANNEL_ID)
+            .setSmallIcon(
+                if (notification.identifier.contains("/receiving/")) android.R.drawable.stat_sys_download
+                else android.R.drawable.stat_sys_download_done,
+            )
+            .setContentTitle(notification.title)
+            .setContentText(notification.body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(notification.body))
+            .setAutoCancel(true)
+        if (notification.subtitle.isNotBlank()) builder.setSubText(notification.subtitle)
+        Taildrop.tagFromOpenUrl(notification.openURL)?.let { tag ->
+            Taildrop.openNodeIntent(context, tag, id)?.let { builder.setContentIntent(it) }
+        }
+        runCatching { nm.notify(id, builder.build()) }
+            .onFailure { Log.w(TAG, "taildrop notify failed: ${it.javaClass.simpleName}") }
     }
 }

@@ -54,4 +54,6 @@ class PlatformChannels {
   static const ccConnectionTest = 'lxbox/cc/connection_test';
   /// §654 C — состояние endpoint'ов openconnect (`SubscribeOpenConnectStatus`).
   static const ccOpenConnect = 'lxbox/cc/openconnect';
+  /// §707 — входящие Taildrop узла (`SubscribeTaildropInbox`).
+  static const ccTaildropInbox = 'lxbox/cc/taildrop_inbox';
 }

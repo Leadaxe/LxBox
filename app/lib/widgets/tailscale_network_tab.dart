@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../models/tunnel_status.dart';
 import '../services/debug/debug_registry.dart';
+import '../services/format_utils.dart' show formatBytes;
 import '../services/l10n/locale_controller.dart';
 import '../services/tailscale_network.dart';
 import '../services/url_launcher.dart';
@@ -34,6 +35,30 @@ class TailscaleNetworkActions {
   Future<void> stopPing() => CcChannel.instance.stopTailscalePing();
 
   Stream<CcTailscalePingResult> get pings => CcChannel.instance.tailscalePing;
+
+  /// §707 — входящие Taildrop: поток, подписка ядра, действия над файлами.
+  Stream<CcTaildropInbox> get inbox => CcChannel.instance.taildropInbox;
+
+  Future<void> startInbox(String tag) =>
+      CcChannel.instance.startTaildropInbox(tag);
+
+  Future<void> stopInbox() => CcChannel.instance.stopTaildropInbox();
+
+  Future<String?> markInboxRead(String tag) =>
+      CcChannel.instance.taildropMarkRead(tag);
+
+  Future<CcTaildropResult> saveFile(String tag, String name) =>
+      CcChannel.instance.taildropSave(tag, name);
+
+  Future<String?> deleteFile(String tag, String name) =>
+      CcChannel.instance.taildropDelete(tag, name);
+
+  Future<String?> cancelReceiving(String tag, String senderId, String name) =>
+      CcChannel.instance.taildropCancelReceiving(tag, senderId, name);
+
+  /// §707 — системный выбор файлов и отправка пиру (передача — в нативе).
+  Future<CcTaildropResult> sendFiles(String tag, CcTailscalePeer peer) =>
+      CcChannel.instance.taildropPickAndSend(tag, peer.stableId, peer.hostName);
 
   /// §706 — применить новый `auth_key`, уже записанный в тело узла. Ядро не
   /// умеет войти с новым ключом на лету (ручка запрошена у сессии ядра), пока
@@ -69,6 +94,7 @@ class TailscaleNetworkTab extends StatefulWidget {
     this.onSaveExitNode,
     this.onSaveFields,
     this.statusSource,
+    this.inboxSource,
     this.vpnUp,
     this.actions = const TailscaleNetworkActions(),
   });
@@ -86,6 +112,11 @@ class TailscaleNetworkTab extends StatefulWidget {
   /// тогда не поднимается).
   @visibleForTesting
   final Stream<List<CcTailscaleStatus>>? statusSource;
+
+  /// §707 — тесты: поток входящих вместо [TailscaleNetworkActions.inbox].
+  /// При заданном [statusSource] без него входящие не слушаются.
+  @visibleForTesting
+  final Stream<CcTaildropInbox>? inboxSource;
 
   /// Тесты: VPN включён / выключен без обращения к сервису.
   @visibleForTesting
@@ -130,6 +161,20 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
   /// Устройства (`stableId`), у которых раскрыты адреса сверх двух.
   final _expanded = <String>{};
 
+  // §707 — входящие Taildrop узла: подписка ядра, пока вкладка открыта и
+  // VPN включён. [_inboxListening] — слушаем ли вообще (тесты без
+  // [TailscaleNetworkTab.inboxSource] — нет).
+  StreamSubscription<CcTaildropInbox>? _inboxSub;
+  CcTaildropInbox? _inbox;
+  bool _inboxListening = false;
+  bool _inboxStarted = false;
+
+  /// Сколько принятых файлов было, когда входящие отметили прочитанными.
+  int _markedFiles = 0;
+
+  /// Файлы, по которым идёт Save / Delete / Cancel (кнопки неактивны).
+  final _fileBusy = <String>{};
+
   @override
   void initState() {
     super.initState();
@@ -145,12 +190,14 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
           if (!mounted) return;
           setState(() => _vpnUp = s.isUp);
           _syncPolling();
+          _syncInbox();
         }),
       );
       _vpnSub = BoxVpnClient.I.onStatusChanged.listen((e) {
         if (!mounted) return;
         setState(() => _vpnUp = e.status.isUp);
         _syncPolling();
+        _syncInbox();
       });
     }
     final source = widget.statusSource;
@@ -162,6 +209,43 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
       _acquired = true;
       unawaited(CcChannel.instance.acquireTailscaleStatus());
     }
+    final inboxSource = widget.inboxSource ??
+        (widget.statusSource == null ? widget.actions.inbox : null);
+    if (inboxSource != null) {
+      _inboxListening = true;
+      _inboxSub = inboxSource.listen(_onInbox);
+      _syncInbox();
+    }
+  }
+
+  /// §707 — подписка ядра на входящие: поднята, пока VPN включён; после
+  /// перезапуска VPN — заново (клиент прежнего сервиса умер).
+  void _syncInbox() {
+    if (!_inboxListening) return;
+    if (_vpnUp && !_inboxStarted) {
+      _inboxStarted = true;
+      unawaited(widget.actions.startInbox(widget.liveTag));
+    } else if (!_vpnUp && _inboxStarted) {
+      _inboxStarted = false;
+    }
+  }
+
+  void _onInbox(CcTaildropInbox inbox) {
+    if (!mounted || inbox.tag != widget.liveTag) return;
+    setState(() => _inbox = inbox);
+    _markReadIfShown();
+  }
+
+  /// Блок на экране и принятых стало больше — ядру «просмотрено».
+  void _markReadIfShown() {
+    final files = _inbox?.files.length ?? 0;
+    if (files == 0) {
+      _markedFiles = 0;
+      return;
+    }
+    if (!_onScreen || !_appResumed || files <= _markedFiles) return;
+    _markedFiles = files;
+    unawaited(widget.actions.markInboxRead(widget.liveTag));
   }
 
   @override
@@ -170,12 +254,14 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
     // Маршрут перекрыт другим или вкладка за кадром — тикеры выключены.
     _onScreen = TickerMode.valuesOf(context).enabled;
     _syncPolling();
+    _markReadIfShown();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _appResumed = state == AppLifecycleState.resumed;
     _syncPolling();
+    _markReadIfShown();
   }
 
   @override
@@ -185,6 +271,8 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
     _redrawTimer?.cancel();
     unawaited(_sub?.cancel());
     unawaited(_vpnSub?.cancel());
+    unawaited(_inboxSub?.cancel());
+    if (_inboxStarted) unawaited(widget.actions.stopInbox());
     if (_acquired) unawaited(CcChannel.instance.releaseTailscaleStatus());
     super.dispose();
   }
@@ -312,11 +400,16 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
     } else {
       rows.addAll(devices);
     }
+    // §707 — входящие под Devices.
+    final inbox = _inboxRows(context, s);
     return ListView.builder(
       padding: const EdgeInsets.only(bottom: 24).withSafeBottom(context),
-      itemCount: children.length + rows.length,
+      itemCount: children.length + rows.length + inbox.length,
       itemBuilder: (ctx, i) {
         if (i < children.length) return children[i];
+        if (i >= children.length + rows.length) {
+          return inbox[i - children.length - rows.length];
+        }
         final r = rows[i - children.length];
         if (r is String) return _groupTitle(ctx, r);
         return _deviceRow(ctx, s, r as CcTailscalePeer);
@@ -904,10 +997,176 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
     );
   }
 
+  // ── Taildrop (§707) ──
+
+  Future<void> _sendFiles(CcTailscalePeer p) async {
+    final r = await widget.actions.sendFiles(widget.liveTag, p);
+    if (!mounted) return;
+    switch (r.status) {
+      case 'started':
+        _snack(getLocalText.s("Sending to %s", p.hostName));
+      case 'cancelled':
+        break;
+      default:
+        _snack(getLocalText.s("Couldn't send: %s", _reason(r.error)));
+    }
+  }
+
+  /// Причина отказа из натива: коды — подписью, прочее — текстом ядра.
+  static String _reason(String code) => switch (code) {
+    'vpn_off' => getLocalText.s("the VPN is off"),
+    'cant_read' => getLocalText.s("can't read the file"),
+    'no file picker' => getLocalText.s("no file picker on this device"),
+    _ => code, // l10n-exempt: core error text as is
+  };
+
+  /// Строки блока Inbox: пусто и право есть — блока нет.
+  List<Widget> _inboxRows(BuildContext context, CcTailscaleStatus s) {
+    if (!_inboxListening) return const [];
+    final inbox = _inbox;
+    final sharingOff = s.backendState == 'Running' && !s.canShareFiles;
+    final empty = inbox == null || inbox.isEmpty;
+    if (empty && !sharingOff) return const [];
+    return [
+      _header(context, getLocalText.s("Inbox")),
+      if (sharingOff)
+        ListTile(
+          key: const ValueKey('taildrop-sharing-off'),
+          dense: true,
+          leading: const Icon(Icons.info_outline),
+          title: Text(getLocalText.s(
+            "File sharing is off for this tailnet. Turn on Taildrop in the "
+            "Tailscale admin console.",
+          )),
+        ),
+      if (inbox != null) ...[
+        for (final r in inbox.receiving) _receivingRow(context, r),
+        for (final f in inbox.files) _fileRow(context, f),
+      ],
+    ];
+  }
+
+  Widget _receivingRow(BuildContext context, CcTaildropReceiving r) {
+    final small = Theme.of(context).textTheme.bodySmall;
+    final key = 'rx:${r.senderId}/${r.name}';
+    final amount = r.size > 0
+        ? getLocalText.s(
+            "%s of %s",
+            formatBytes(r.receivedBytes, spaced: true),
+            formatBytes(r.size, spaced: true),
+          )
+        : formatBytes(r.receivedBytes, spaced: true);
+    return ListTile(
+      key: ValueKey('taildrop-receiving-${r.senderId}-${r.name}'),
+      dense: true,
+      leading: const Icon(Icons.downloading),
+      title: Text(r.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            r.senderName.isEmpty
+                ? amount
+                : '$amount · ${getLocalText.s("from %s", r.senderName)}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: small,
+          ),
+          const SizedBox(height: 4),
+          LinearProgressIndicator(value: r.progress),
+        ],
+      ),
+      trailing: TextButton(
+        onPressed: _fileBusy.contains(key)
+            ? null
+            : () => unawaited(_cancelReceiving(r, key)),
+        child: Text(getLocalText.s("Cancel")),
+      ),
+    );
+  }
+
+  Widget _fileRow(BuildContext context, CcTaildropFile f) {
+    final small = Theme.of(context).textTheme.bodySmall;
+    final key = 'file:${f.name}';
+    final busy = _fileBusy.contains(key);
+    final size = formatBytes(f.size, spaced: true);
+    return ListTile(
+      key: ValueKey('taildrop-file-${f.name}'),
+      dense: true,
+      leading: const Icon(Icons.insert_drive_file_outlined),
+      title: Text(f.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+      subtitle: Text(
+        f.senderName.isEmpty
+            ? size
+            : '$size · ${getLocalText.s("from %s", f.senderName)}',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: small,
+      ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            tooltip: getLocalText.s("Save"),
+            icon: const Icon(Icons.download),
+            onPressed: busy ? null : () => unawaited(_saveFile(f, key)),
+          ),
+          IconButton(
+            tooltip: getLocalText.s("Delete"),
+            icon: const Icon(Icons.delete_outline),
+            onPressed: busy ? null : () => unawaited(_deleteFile(f, key)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _withBusy(String key, Future<void> Function() body) async {
+    setState(() => _fileBusy.add(key));
+    try {
+      await body();
+    } finally {
+      if (mounted) setState(() => _fileBusy.remove(key));
+    }
+  }
+
+  Future<void> _saveFile(CcTaildropFile f, String key) => _withBusy(key, () async {
+    final r = await widget.actions.saveFile(widget.liveTag, f.name);
+    if (!mounted) return;
+    switch (r.status) {
+      case 'saved':
+        _snack(r.where == 'downloads'
+            ? getLocalText.s("Saved to Downloads")
+            : getLocalText.s("Saved"));
+      case 'cancelled':
+        break;
+      default:
+        _snack(getLocalText.s("Couldn't save: %s", _reason(r.error)));
+    }
+  });
+
+  Future<void> _deleteFile(CcTaildropFile f, String key) => _withBusy(key, () async {
+    final err = await widget.actions.deleteFile(widget.liveTag, f.name);
+    if (!mounted || err == null) return;
+    _snack(getLocalText.s("Couldn't delete: %s", err));
+  });
+
+  Future<void> _cancelReceiving(CcTaildropReceiving r, String key) =>
+      _withBusy(key, () async {
+        final err = await widget.actions
+            .cancelReceiving(widget.liveTag, r.senderId, r.name);
+        if (!mounted || err == null) return;
+        _snack(getLocalText.s("Couldn't cancel: %s", err));
+      });
+
   /// Меню устройства: имя, MagicDNS-имя, по пункту на адрес, проверка по
   /// первому адресу.
   Future<void> _deviceMenu(CcTailscalePeer p) async {
     final single = p.ips.length == 1;
+    // §707 — отправка файла: только своему устройству в сети, которое
+    // принимает файлы, и только при включённом в tailnet Taildrop.
+    final canSend =
+        (_status?.canShareFiles ?? false) && p.isTaildropTarget;
     final action = await showAppBottomSheet<String>(
       context: context,
       builder: (ctx) => Column(
@@ -940,6 +1199,12 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
               title: Text(getLocalText.s("Ping")),
               onTap: () => Navigator.pop(ctx, 'ping'),
             ),
+          if (canSend)
+            ListTile(
+              leading: const Icon(Icons.upload_file),
+              title: Text(getLocalText.s("Send file…")),
+              onTap: () => Navigator.pop(ctx, 'send'),
+            ),
         ],
       ),
     );
@@ -953,6 +1218,8 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
         await _copy(p.hostName);
       case 'dns':
         await _copy(p.dnsNameClean);
+      case 'send':
+        await _sendFiles(p);
       case 'ping':
         await showAppBottomSheet<void>(
           context: context,

@@ -66,4 +66,23 @@
     <string name="sora_editor_clip_text_length_too_large">Text is too large to copy</string>
     <string name="openconnect_sign_in_title">Sign-in required: %1$s</string>
     <string name="openconnect_sign_in_text">The gateway is waiting for a code or a browser sign-in. Tap to continue.</string>
+    <!-- §707 — Taildrop -->
+    <string name="taildrop_channel_name">Taildrop</string>
+    <string name="taildrop_share_label">Taildrop</string>
+    <string name="taildrop_sending_title">Sending to %1$s</string>
+    <string name="taildrop_sent_title">Sent to %1$s</string>
+    <string name="taildrop_failed_title">Couldn\'t send to %1$s</string>
+    <string name="taildrop_files_progress">File %1$d of %2$d</string>
+    <string name="taildrop_cancel">Cancel</string>
+    <string name="taildrop_close">Close</string>
+    <string name="taildrop_need_vpn">Start the VPN with a Tailscale node to send files.</string>
+    <string name="taildrop_choose_node">Choose a Tailscale node</string>
+    <string name="taildrop_send_to">Send to</string>
+    <string name="taildrop_sharing_off">File sharing is off for this tailnet. Turn on Taildrop in the Tailscale admin console.</string>
+    <string name="taildrop_no_devices">None of your devices can receive files right now.</string>
+    <string name="taildrop_nothing_to_send">Nothing to send</string>
+    <string name="taildrop_reason_vpn_off">The VPN is off</string>
+    <string name="taildrop_reason_cant_read">Can\'t read the file</string>
+    <string name="taildrop_reason_cant_write">Can\'t write the file</string>
+    <string name="taildrop_reason_interrupted">The transfer was interrupted</string>
 </resources>

@@ -193,6 +193,29 @@
             </intent-filter>
         </receiver>
 
+        <!-- §707 — цель «Поделиться» для Taildrop: отдельная активность без
+             Flutter, MainActivity (singleTop, точка входа лаунчера) не трогается. -->
+        <activity
+            android:name=".vpn.TaildropShareActivity"
+            android:exported="true"
+            android:label="@string/taildrop_share_label"
+            android:icon="@mipmap/ic_launcher"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+        </activity>
+        <!-- §707 — Cancel в уведомлении отправки Taildrop. -->
+        <receiver
+            android:name=".vpn.TaildropCancelReceiver"
+            android:exported="false" />
+
         <!-- §047 Шаг 2 — Locale / Tasker plugin-стандарт (twofortyfouram).
              L×Box виден в Tasker как Plugin (Action + State). Edit-Activity
              exported (хост открывает их). Fire/Query receiver'ы БЕЗ

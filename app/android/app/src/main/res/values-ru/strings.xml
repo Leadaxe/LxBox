@@ -62,4 +62,23 @@
     <string name="sora_editor_clip_text_length_too_large">Текст слишком большой для копирования</string>
     <string name="openconnect_sign_in_title">Нужен вход: %1$s</string>
     <string name="openconnect_sign_in_text">Шлюз ждёт код или вход через браузер. Нажмите, чтобы продолжить.</string>
+    <!-- §707 — Taildrop -->
+    <string name="taildrop_channel_name">Taildrop</string>
+    <string name="taildrop_share_label">Taildrop</string>
+    <string name="taildrop_sending_title">Отправка на %1$s</string>
+    <string name="taildrop_sent_title">Отправлено на %1$s</string>
+    <string name="taildrop_failed_title">Не удалось отправить на %1$s</string>
+    <string name="taildrop_files_progress">Файл %1$d из %2$d</string>
+    <string name="taildrop_cancel">Отмена</string>
+    <string name="taildrop_close">Закрыть</string>
+    <string name="taildrop_need_vpn">Для отправки файлов включите VPN с узлом Tailscale.</string>
+    <string name="taildrop_choose_node">Выберите узел Tailscale</string>
+    <string name="taildrop_send_to">Отправить на</string>
+    <string name="taildrop_sharing_off">В этой сети tailnet обмен файлами выключен. Включите Taildrop в админке Tailscale.</string>
+    <string name="taildrop_no_devices">Сейчас ни одно ваше устройство не может принять файлы.</string>
+    <string name="taildrop_nothing_to_send">Нечего отправлять</string>
+    <string name="taildrop_reason_vpn_off">VPN выключен</string>
+    <string name="taildrop_reason_cant_read">Не удалось прочитать файл</string>
+    <string name="taildrop_reason_cant_write">Не удалось записать файл</string>
+    <string name="taildrop_reason_interrupted">Передача прервана</string>
 </resources>

@@ -218,6 +218,29 @@ void main() {
       expect(endpoints(r2).single['state_directory'], '/own');
     });
 
+    // §707 — входящие Taildrop на узел.
+    test('taildrop_directory = <state_directory>/taildrop; без корня нет; свой не трогается',
+        () async {
+      final node = ts(tag: 'home');
+      const rooted = BuildSettings(enabledGroups: {'vpn-1'}, tailscaleStateRoot: '/root');
+      final r = await buildConfig(lists: [user(node)], template: template, settings: rooted);
+      final ep = endpoints(r).single;
+      expect(ep['taildrop_directory'], '${ep['state_directory']}/taildrop');
+      expect(node.body.containsKey('taildrop_directory'), isFalse);
+
+      final r1 = await buildConfig(lists: [user(ts())], template: template, settings: settings);
+      expect(endpoints(r1).single.containsKey('taildrop_directory'), isFalse);
+
+      final ownState = TailscaleSpec(id: 'x', tag: 'x', label: 'x', body: {'state_directory': '/own'});
+      final r2 = await buildConfig(lists: [user(ownState)], template: template, settings: rooted);
+      expect(endpoints(r2).single['taildrop_directory'], '/own/taildrop');
+
+      final ownDrop = TailscaleSpec(
+          id: 'y', tag: 'y', label: 'y', body: {'taildrop_directory': '/sdcard/drop'});
+      final r3 = await buildConfig(lists: [user(ownDrop)], template: template, settings: rooted);
+      expect(endpoints(r3).single['taildrop_directory'], '/sdcard/drop');
+    });
+
     test('гейт ядра по тегу сборки (§56): без with_tailscale узел снят с кодом; '
         'с тегом — эмиссия', () async {
       final noTs = kCoreBuildTags.difference({'with_tailscale'});

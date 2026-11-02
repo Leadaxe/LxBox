@@ -6883,5 +6883,47 @@
   },
   "The VPN restarts to sign in with the new key.": {
     "value": "VPN перезапустится, чтобы войти с новым ключом."
+  },
+  "Send file…": {
+    "value": "Отправить файл…"
+  },
+  "Sending to %s": {
+    "value": "Отправка на %s"
+  },
+  "Couldn't send: %s": {
+    "value": "Не удалось отправить: %s"
+  },
+  "the VPN is off": {
+    "value": "VPN выключен"
+  },
+  "can't read the file": {
+    "value": "не удалось прочитать файл"
+  },
+  "no file picker on this device": {
+    "value": "на устройстве нет выбора файлов"
+  },
+  "Inbox": {
+    "value": "Входящие"
+  },
+  "File sharing is off for this tailnet. Turn on Taildrop in the Tailscale admin console.": {
+    "value": "В этой сети tailnet обмен файлами выключен. Включите Taildrop в админке Tailscale."
+  },
+  "%s of %s": {
+    "value": "%s из %s"
+  },
+  "from %s": {
+    "value": "от %s"
+  },
+  "Saved to Downloads": {
+    "value": "Сохранено в Загрузки"
+  },
+  "Couldn't save: %s": {
+    "value": "Не удалось сохранить: %s"
+  },
+  "Couldn't delete: %s": {
+    "value": "Не удалось удалить: %s"
+  },
+  "Couldn't cancel: %s": {
+    "value": "Не удалось отменить: %s"
   }
 }

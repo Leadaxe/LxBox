@@ -22,6 +22,7 @@ import com.leadaxe.lxbox.vpn.L10n
 import com.leadaxe.lxbox.vpn.PermissionUtils
 import com.leadaxe.lxbox.vpn.QuickShortcuts
 import com.leadaxe.lxbox.vpn.ServiceNotification
+import com.leadaxe.lxbox.vpn.Taildrop
 import com.leadaxe.lxbox.vpn.VpnPlugin
 import com.leadaxe.lxbox.vpn.VpnStatus
 import com.leadaxe.lxbox.vpn.WifiHistoryBridge
@@ -327,6 +328,12 @@ class MainActivity : FlutterActivity() {
         intent?.getStringExtra(ServiceNotification.EXTRA_OPENCONNECT_TAG)?.let { tag ->
             BoxVpnService.openConnectOpenRequest = tag
             intent.removeExtra(ServiceNotification.EXTRA_OPENCONNECT_TAG)
+        }
+        // §707 — тап по уведомлению Taildrop: Dart заберёт тег и откроет
+        // вкладку Network узла.
+        intent?.getStringExtra(Taildrop.EXTRA_TAG)?.let { tag ->
+            BoxVpnService.taildropOpenRequest = tag
+            intent.removeExtra(Taildrop.EXTRA_TAG)
         }
         val action = intent?.getStringExtra(EXTRA_ACTION) ?: return
         Log.d(TAG, "handleQuickAction action=$action currentStatus=${BoxVpnService.currentStatus.name}")

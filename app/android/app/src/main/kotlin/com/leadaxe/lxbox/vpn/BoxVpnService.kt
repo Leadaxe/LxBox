@@ -235,6 +235,13 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
         /// челлендж показать. Dart забирает его на старте и при возврате.
         @Volatile
         var openConnectOpenRequest: String? = null
+        /// §707 — снапшот входящих Taildrop узла (`SubscribeTaildropInbox`).
+        @Volatile
+        var ccTaildropInboxSink: io.flutter.plugin.common.EventChannel.EventSink? = null
+        /// §707 — тап по уведомлению Taildrop: тег узла, чью вкладку Network
+        /// открыть. Dart забирает его на старте и при возврате.
+        @Volatile
+        var taildropOpenRequest: String? = null
 
         fun start(context: Context) {
             Log.d(TAG, "[vpn] companion.start() → startForegroundService, current status=${currentStatus.name}")

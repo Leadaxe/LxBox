@@ -55,6 +55,9 @@ class CcChannel {
   static const EventChannel _openConnectChannel = EventChannel(
     PlatformChannels.ccOpenConnect,
   ); // §654
+  static const EventChannel _taildropInboxChannel = EventChannel(
+    PlatformChannels.ccTaildropInbox,
+  ); // §707
 
   // ─────────────────────────── Streams ───────────────────────────
   //
@@ -136,6 +139,17 @@ class CcChannel {
 
   /// §581 — поток ответов [startTailscalePing]. Слушать до старта.
   Stream<CcTailscalePingResult> get tailscalePing => _tailscalePingStream;
+
+  // §707 — входящие Taildrop узла: снапшот на каждое изменение. Без кэша —
+  // новая подписка получает свежий снапшот от ядра.
+  late final Stream<CcTaildropInbox> _taildropInboxStream =
+      _taildropInboxChannel.receiveBroadcastStream().map(
+            (e) => CcTaildropInbox.fromMap(_asMap(e)),
+          );
+
+  /// §707 — поток входящих узла, поднятого [startTaildropInbox]. Слушать до
+  /// старта.
+  Stream<CcTaildropInbox> get taildropInbox => _taildropInboxStream;
 
   // §687 — события теста соединения. Нативная сторона шлёт батчи (список
   // карт), здесь они разворачиваются в одиночные события без кэша.
@@ -411,6 +425,81 @@ class CcChannel {
   }
 
   Future<void> stopTailscalePing() => _invoke('ccStopTailscalePing');
+
+  /// §707 — подписка на входящие Taildrop узла [tag] (одна на приложение).
+  Future<void> startTaildropInbox(String tag) async {
+    try {
+      await _methods.invokeMethod<void>('ccStartTaildropInbox', {'tag': tag});
+    } on PlatformException {
+      // сервис не поднят — снапшотов не будет
+    } on MissingPluginException {
+      // юнит-тест / native не готов
+    }
+  }
+
+  Future<void> stopTaildropInbox() => _invoke('ccStopTaildropInbox');
+
+  /// §707 — удалить принятый файл. `null` — успех, иначе текст ошибки.
+  Future<String?> taildropDelete(String tag, String name) =>
+      _invokeError('ccTaildropDelete', {'tag': tag, 'name': name});
+
+  /// §707 — прервать приём файла.
+  Future<String?> taildropCancelReceiving(
+    String tag,
+    String senderId,
+    String name,
+  ) =>
+      _invokeError('ccTaildropCancelReceiving', {
+        'tag': tag,
+        'sender_id': senderId,
+        'name': name,
+      });
+
+  /// §707 — входящие узла просмотрены (счётчик непрочитанных ядра).
+  Future<String?> taildropMarkRead(String tag) =>
+      _invokeError('ccTaildropMarkRead', {'tag': tag});
+
+  /// §707 — сохранить принятый файл: API 29+ — в Downloads, ниже —
+  /// системным «Сохранить как». Сохранённый уходит из входящих.
+  Future<CcTaildropResult> taildropSave(String tag, String name) =>
+      _taildropCall('ccTaildropSave', {'tag': tag, 'name': name});
+
+  /// §707 — системный выбор файлов и отправка выбранного пиру.
+  Future<CcTaildropResult> taildropPickAndSend(
+    String tag,
+    String peerId,
+    String peerName,
+  ) =>
+      _taildropCall('ccTaildropPickAndSend', {
+        'tag': tag,
+        'peer_id': peerId,
+        'peer_name': peerName,
+      });
+
+  Future<CcTaildropResult> _taildropCall(
+    String method,
+    Map<String, Object> args,
+  ) async {
+    try {
+      final r = await _methods.invokeMethod<Object?>(method, args);
+      return CcTaildropResult.fromMap(_asMap(r));
+    } on PlatformException catch (e) {
+      return CcTaildropResult(status: 'error', error: e.message ?? e.code);
+    } on MissingPluginException {
+      return const CcTaildropResult(status: 'error', error: 'not available');
+    }
+  }
+
+  /// §707 — тег узла из тапа по уведомлению Taildrop; забирается один раз.
+  Future<String?> takeTaildropOpenRequest() async {
+    try {
+      return await _methods.invokeMethod<String>('ccTakeTaildropOpenRequest');
+    } on PlatformException {
+      return null;
+    } on MissingPluginException {
+      return null;
+    }
+  }
 
   /// §687 — тест соединения через роутер (kernel SPEC 139). События идут в
   /// [connectionTest]. false — сервис не поднят, событий не будет.
@@ -750,6 +839,8 @@ class CcTailscaleStatus {
     this.exitNode,
     this.userGroups = const [],
     this.health = const [],
+    this.canShareFiles = true,
+    this.unreadFileCount = 0,
   });
 
   final String tag;
@@ -772,6 +863,13 @@ class CcTailscaleStatus {
   /// §613 (ядро SPEC 115) — предупреждения бэкенда (нет DERP, exit node
   /// офлайн и т.п.), текст ядра; пусто — предупреждать не о чем.
   final List<String> health;
+
+  /// §707 — у узла есть право Taildrop (file sharing включён в админке
+  /// tailnet). Нет поля в записи — считается, что есть.
+  final bool canShareFiles;
+
+  /// §707 — принятые, но не просмотренные файлы.
+  final int unreadFileCount;
 
   /// Все устройства сети без своего узла.
   List<CcTailscalePeer> get peers => [
@@ -800,6 +898,8 @@ class CcTailscaleStatus {
         for (final h in CcChannel._asList(m['health']))
           if (h != null && '$h'.isNotEmpty) '$h',
       ],
+      canShareFiles: m['can_share_files'] != false,
+      unreadFileCount: CcTailscalePeer._int(m['unread_file_count']),
     );
   }
 
@@ -847,6 +947,7 @@ class CcTailscalePeer {
     this.peerRelay = '',
     this.derpRegionCode = '',
     this.lastHandshake = 0,
+    this.canReceiveFiles = false,
   });
 
   final String stableId;
@@ -882,6 +983,13 @@ class CcTailscalePeer {
   /// Unix-секунды последнего хендшейка, 0 — не было.
   final int lastHandshake;
 
+  /// §707 — устройство принимает файлы Taildrop (своё и с правом).
+  final bool canReceiveFiles;
+
+  /// §707 — цель отправки файлов: в сети, принимает файлы, не расшарено
+  /// извне (то же правило у экрана «Поделиться»).
+  bool get isTaildropTarget => online && canReceiveFiles && !shareeNode;
+
   /// MagicDNS-имя без точки в конце.
   String get dnsNameClean =>
       dnsName.endsWith('.') ? dnsName.substring(0, dnsName.length - 1) : dnsName;
@@ -912,6 +1020,106 @@ class CcTailscalePeer {
         peerRelay: '${m['peer_relay'] ?? ''}',
         derpRegionCode: '${m['derp_region_code'] ?? ''}',
         lastHandshake: _int(m['last_handshake']),
+        canReceiveFiles: m['can_receive_files'] == true,
+      );
+}
+
+/// §707 — входящие Taildrop узла (`TaildropInbox` ядра).
+class CcTaildropInbox {
+  const CcTaildropInbox({
+    required this.tag,
+    this.files = const [],
+    this.receiving = const [],
+  });
+
+  final String tag;
+
+  /// Принятые файлы.
+  final List<CcTaildropFile> files;
+
+  /// Файлы, которые принимаются сейчас.
+  final List<CcTaildropReceiving> receiving;
+
+  bool get isEmpty => files.isEmpty && receiving.isEmpty;
+
+  factory CcTaildropInbox.fromMap(Map<String, dynamic> m) => CcTaildropInbox(
+        tag: '${m['tag'] ?? ''}',
+        files: [
+          for (final f in CcChannel._asList(m['files']))
+            if (f is Map) CcTaildropFile.fromMap(CcChannel._asMap(f)),
+        ],
+        receiving: [
+          for (final f in CcChannel._asList(m['receiving']))
+            if (f is Map) CcTaildropReceiving.fromMap(CcChannel._asMap(f)),
+        ],
+      );
+}
+
+/// §707 — принятый файл. [modifiedAt] — Unix-секунды ядра.
+class CcTaildropFile {
+  const CcTaildropFile({
+    required this.name,
+    this.size = 0,
+    this.senderName = '',
+    this.modifiedAt = 0,
+  });
+
+  final String name;
+  final int size;
+  final String senderName;
+  final int modifiedAt;
+
+  factory CcTaildropFile.fromMap(Map<String, dynamic> m) => CcTaildropFile(
+        name: '${m['name'] ?? ''}',
+        size: CcTailscalePeer._int(m['size']),
+        senderName: '${m['sender_name'] ?? ''}',
+        modifiedAt: CcTailscalePeer._int(m['modified_at']),
+      );
+}
+
+/// §707 — файл в приёме. [size] ≤ 0 — размер неизвестен.
+class CcTaildropReceiving {
+  const CcTaildropReceiving({
+    required this.name,
+    this.size = 0,
+    this.receivedBytes = 0,
+    this.senderId = '',
+    this.senderName = '',
+  });
+
+  final String name;
+  final int size;
+  final int receivedBytes;
+  final String senderId;
+  final String senderName;
+
+  /// Доля принятого 0…1; `null` — размер неизвестен.
+  double? get progress =>
+      size > 0 ? (receivedBytes / size).clamp(0.0, 1.0).toDouble() : null;
+
+  factory CcTaildropReceiving.fromMap(Map<String, dynamic> m) =>
+      CcTaildropReceiving(
+        name: '${m['name'] ?? ''}',
+        size: CcTailscalePeer._int(m['size']),
+        receivedBytes: CcTailscalePeer._int(m['received_bytes']),
+        senderId: '${m['sender_id'] ?? ''}',
+        senderName: '${m['sender_name'] ?? ''}',
+      );
+}
+
+/// §707 — ответ сохранения / выбора файлов: `status` — `saved`, `started`,
+/// `cancelled` или `error`; [where] у сохранения — `downloads` | `document`.
+class CcTaildropResult {
+  const CcTaildropResult({required this.status, this.where = '', this.error = ''});
+
+  final String status;
+  final String where;
+  final String error;
+
+  factory CcTaildropResult.fromMap(Map<String, dynamic> m) => CcTaildropResult(
+        status: '${m['status'] ?? 'error'}',
+        where: '${m['where'] ?? ''}',
+        error: '${m['error'] ?? ''}',
       );
 }
 

@@ -244,7 +244,8 @@
       "auth_key": "tskey-auth-000000000000",
       "hostname": "lxbox-test",
       "accept_routes": true,
-      "state_directory": "/data/user/0/com.leadaxe.lxbox/files/tailscale/home-ts"
+      "state_directory": "/data/user/0/com.leadaxe.lxbox/files/tailscale/home-ts",
+      "taildrop_directory": "/data/user/0/com.leadaxe.lxbox/files/tailscale/home-ts/taildrop"
     },
     {
       "type": "wireguard",
