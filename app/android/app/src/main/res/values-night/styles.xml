@@ -15,4 +15,9 @@
     <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
         <item name="android:windowBackground">?android:colorBackground</item>
     </style>
+    <!-- §707 итер. 7 — окно «Send clipboard»: диалог внизу экрана, тап вне
+         окна закрывает. -->
+    <style name="ClipWindowTheme" parent="@android:style/Theme.DeviceDefault.Dialog.NoActionBar">
+        <item name="android:windowCloseOnTouchOutside">true</item>
+    </style>
 </resources>

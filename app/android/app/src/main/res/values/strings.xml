@@ -17,7 +17,6 @@
     <string name="notification_status_starting">Starting...</string>
     <string name="status_connected">Connected</string>
     <string name="notification_action_stop">Stop</string>
-    <string name="notification_action_reconnect">Reconnect</string>
     <string name="notification_error_title">Error</string>
     <!-- §036 core notification channel fallback name (typeName blank) -->
     <string name="core_channel_fallback_name">Core notifications</string>
@@ -100,4 +99,21 @@
         <item quantity="one">Couldn\'t save %1$d file</item>
         <item quantity="other">Couldn\'t save %1$d files</item>
     </plurals>
+
+    <!-- §707 итер. 7 — окно «Send clipboard». -->
+    <string name="notification_action_send_clipboard">📋 Send clipboard</string>
+    <string name="clip_window_label">Send clipboard</string>
+    <string name="clip_process_text_label">Send to device</string>
+    <string name="clip_to">To: %1$s ▾</string>
+    <string name="clip_more">More options</string>
+    <string name="clip_clear">Clear</string>
+    <string name="clip_hint">Text to send</string>
+    <string name="clip_send">Send</string>
+    <string name="clip_open_on">Open on %1$s</string>
+    <string name="clip_need_vpn">Start VPN to send</string>
+    <string name="clip_taildrop_off">Taildrop is off for this node.</string>
+    <string name="clip_no_devices">No devices accept files</string>
+    <string name="clip_offline">Device is offline.</string>
+    <string name="clip_too_large">Too large to send</string>
+    <string name="clip_copied">Copied</string>
 </resources>

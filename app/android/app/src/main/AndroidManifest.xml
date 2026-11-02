@@ -195,8 +195,11 @@
 
         <!-- §707 — цель «Поделиться» для Taildrop: отдельная активность без
              Flutter, MainActivity (singleTop, точка входа лаунчера) не трогается. -->
+        <!-- §707 итер. 7 (C3) — выключена по умолчанию: включается, пока VPN
+             поднят и есть узел Tailscale с Allow Taildrop (TaildropClip). -->
         <activity
             android:name=".vpn.TaildropShareActivity"
+            android:enabled="false"
             android:exported="true"
             android:label="@string/taildrop_share_label"
             android:icon="@mipmap/ic_launcher"
@@ -211,6 +214,35 @@
                 <data android:mimeType="*/*" />
             </intent-filter>
         </activity>
+        <!-- §707 итер. 7 — окно «Send clipboard» (кнопка уведомления VPN,
+             «Поделиться» текстом): поверх текущего приложения, своя задача,
+             без Flutter; главное окно не поднимается. -->
+        <activity
+            android:name=".vpn.TaildropClipActivity"
+            android:exported="false"
+            android:label="@string/clip_window_label"
+            android:icon="@mipmap/ic_launcher"
+            android:excludeFromRecents="true"
+            android:taskAffinity="com.leadaxe.lxbox.taildrop.clip"
+            android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustResize|stateHidden"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode"
+            android:theme="@style/ClipWindowTheme" />
+        <!-- §707 итер. 7 (C2) — «Send to device» в меню выделения текста; то же
+             окно, результат в исходное приложение не возвращается. Выключен по
+             умолчанию, как «Поделиться» (C3). -->
+        <activity-alias
+            android:name=".vpn.TaildropProcessTextActivity"
+            android:targetActivity=".vpn.TaildropClipActivity"
+            android:enabled="false"
+            android:exported="true"
+            android:label="@string/clip_process_text_label">
+            <intent-filter>
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity-alias>
         <!-- §707 — Cancel в уведомлении отправки Taildrop. -->
         <receiver
             android:name=".vpn.TaildropCancelReceiver"

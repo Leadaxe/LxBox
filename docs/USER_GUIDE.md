@@ -2392,8 +2392,10 @@ The app icon shortcut does the same: a long press on the icon shows
 **Connect** or **Disconnect**, depending on the VPN state.
 Shortcuts work on Android 11 and newer.
 
-While connected, the notification carries **Stop** and **Reconnect** buttons:
-reconnect straight from the shade.
+While connected, the notification carries a **Stop** button. With a running
+Tailscale node that allows Taildrop it also carries **📋 Send clipboard**: a
+small window over the current app sends the clipboard text (or a link, to open
+it there) to one of your devices.
 
 Automation apps — Tasker, MacroDroid and others — turn the VPN on and off
 and switch servers by events: [Advanced user guide → Automation](ADVANCED_USER_GUIDE.md#automation-the-vpn-turns-on-by-events).
@@ -2411,7 +2413,7 @@ Appearance → Language.
 | English, Русский, 中文（简体） | The chosen language regardless of the system. |
 
 The language switches at once, without restarting the app or the VPN. System
-surfaces are translated too: the notification with Stop and Reconnect buttons,
+surfaces are translated too: the VPN notification and its buttons,
 the Quick Settings tile, the shortcuts. Logs, Debug API and automation events
 stay in English under any choice.
 

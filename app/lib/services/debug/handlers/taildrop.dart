@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
@@ -183,7 +182,13 @@ class TaildropDebugActions {
     return (root['service_files'] as Map).cast<String, dynamic>();
   }
 
-  Random random() => Random.secure();
+  /// §707 итер. 7 — служебный файл собирает натив; `null` — канала нет.
+  Future<CcServiceFile?> buildServiceFile(List<Object?> commands) =>
+      CcChannel.instance.taildropBuildServiceFile(commands);
+
+  /// §707 итер. 7 — получатель окна «Send clipboard» и ленты.
+  Future<Map<String, dynamic>?> clipState() =>
+      CcChannel.instance.taildropClipState();
 }
 
 // ─────────────────────────────── узлы ───────────────────────────────
@@ -236,7 +241,32 @@ Future<DebugResponse> _nodes(
       'self_id': st?.self?.stableId,
     });
   }
-  return JsonResponse({'tunnel_up': up, 'nodes': out});
+  // §707 итер. 7 — окно «Send clipboard»: получатель (имя — с reveal) и
+  // число сообщений лент; текст сообщений не отдаётся.
+  final clip = await a.clipState();
+  final target = clip?['target'];
+  final feeds = clip?['feeds'];
+  return JsonResponse({
+    'tunnel_up': up,
+    'nodes': out,
+    'clip_target': target is Map
+        ? {
+            'tag': target['tag'],
+            'peer_id': target['peer_id'],
+            if (req.qBool('reveal')) 'name': target['name'],
+          }
+        : null,
+    'clip_feeds': [
+      if (feeds is List)
+        for (final f in feeds)
+          if (f is Map)
+            {
+              'tag': f['tag'],
+              'peer_id': f['peer_id'],
+              'messages': f['messages'],
+            },
+    ],
+  });
 }
 
 /// Тег узла из запроса: есть в конфиге, иначе 404. Без префикса источника
@@ -466,10 +496,25 @@ Future<DebugResponse> _send(
     if (cmds is! List || cmds.isEmpty) {
       throw const BadRequest('field "commands" must be a non-empty array');
     }
-    final file = buildServiceFile(await a.serviceFilesRegistry(), cmds,
-        now: ctx.now(), random: a.random());
+    // §707 итер. 7 — собирает натив (формат один с окном «Send clipboard»);
+    // команды не проверяются (Debug API шлёт и битые — проверять разбор
+    // получателя), предел max_bytes — проверяется, как у отправителя (§7).
+    final file = await a.buildServiceFile(cmds);
+    if (file == null) throw const Conflict('native channel not available');
+    switch (file.error) {
+      case '':
+        break;
+      case 'too_large':
+        throw BadRequest('service file is ${file.size} bytes, '
+            'over max_bytes ${file.maxBytes}');
+      default:
+        throw InternalError('service file not built: ${file.error}');
+    }
     name = file.name;
     bytes = file.bytes;
+    if (name.isEmpty || bytes == null) {
+      throw const InternalError('service file not built');
+    }
   }
   _requireTunnel(ctx, a);
   final st = await _requireStatus(a, tag);
@@ -497,60 +542,6 @@ Future<DebugResponse> _send(
     default:
       throw Conflict(r.error.isEmpty ? r.status : r.error);
   }
-}
-
-/// Служебный файл по SERVICE_FILES.md §2–§3: имя
-/// `<name_prefix><время><-метка><name_suffix>`, тело `{"lx", "commands"}`.
-/// Константы — из реестра [spec]. Команды не проверяются (Debug API шлёт и
-/// битые — проверять разбор получателя); предел `max_bytes` — проверяется,
-/// как у отправителя (§7).
-@visibleForTesting
-({String name, Uint8List bytes}) buildServiceFile(
-  Map<String, dynamic> spec,
-  List<Object?> commands, {
-  required DateTime now,
-  required Random random,
-}) {
-  Object? value(String key) {
-    final v = spec[key];
-    return v is Map ? v['value'] : null;
-  }
-
-  final prefix = value('name_prefix');
-  final suffix = value('name_suffix');
-  final format = value('name_time_format');
-  final labelLen = value('name_label_length');
-  final maxBytes = value('max_bytes');
-  final versions = value('versions');
-  if (prefix is! String ||
-      suffix is! String ||
-      labelLen is! int ||
-      maxBytes is! int ||
-      versions is! List ||
-      versions.isEmpty) {
-    throw const InternalError('service_files registry has unexpected shape');
-  }
-  if (format != 'YYYYMMDDTHHMMSSZ') {
-    throw InternalError('unsupported name_time_format: $format');
-  }
-  final t = now.toUtc();
-  String two(int v) => v.toString().padLeft(2, '0');
-  final stamp = '${t.year.toString().padLeft(4, '0')}${two(t.month)}'
-      '${two(t.day)}T${two(t.hour)}${two(t.minute)}${two(t.second)}Z';
-  const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
-  final label = String.fromCharCodes([
-    for (var i = 0; i < labelLen; i++)
-      alphabet.codeUnitAt(random.nextInt(alphabet.length)),
-  ]);
-  final bytes = utf8.encode(jsonEncode({
-    'lx': versions.last,
-    'commands': commands,
-  }));
-  if (bytes.length > maxBytes) {
-    throw BadRequest('service file is ${bytes.length} bytes, '
-        'over max_bytes $maxBytes');
-  }
-  return (name: '$prefix$stamp-$label$suffix', bytes: bytes);
 }
 
 // ──────────────────────────── настройки ────────────────────────────

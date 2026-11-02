@@ -535,6 +535,36 @@ class CcChannel {
     }
   }
 
+  /// §707 итер. 7 — служебный файл с командами [commands] (SERVICE_FILES
+  /// §2–§3) собирает натив — тот же сборщик, что окно «Send clipboard».
+  /// `null` — канала нет (тесты, не Android).
+  Future<CcServiceFile?> taildropBuildServiceFile(
+      List<Object?> commands) async {
+    try {
+      final r = await _methods.invokeMethod<Object?>(
+          'taildropBuildServiceFile', {'commands': commands});
+      return r is Map ? CcServiceFile.fromMap(_asMap(r)) : null;
+    } on PlatformException {
+      return null;
+    } on MissingPluginException {
+      return null;
+    }
+  }
+
+  /// §707 итер. 7 — окно «Send clipboard»: запомненный получатель
+  /// (`target`: `tag`, `peer_id`, `name`) и число сообщений лент (`feeds`).
+  /// `null` — канала нет.
+  Future<Map<String, dynamic>?> taildropClipState() async {
+    try {
+      final r = await _methods.invokeMethod<Object?>('taildropClipState');
+      return r is Map ? _asMap(r) : null;
+    } on PlatformException {
+      return null;
+    } on MissingPluginException {
+      return null;
+    }
+  }
+
   /// §707 — системный выбор файлов и отправка выбранного пиру.
   Future<CcTaildropResult> taildropPickAndSend(
     String tag,
@@ -1299,6 +1329,38 @@ class CcTaildropResult {
         error: '${m['error'] ?? ''}',
         name: '${m['name'] ?? ''}',
       );
+}
+
+/// §707 итер. 7 — служебный файл от натива: [name] и [bytes], либо
+/// [error] (`too_large` — тело [size] байт больше [maxBytes]).
+class CcServiceFile {
+  const CcServiceFile({
+    this.name = '',
+    this.bytes,
+    this.error = '',
+    this.size = 0,
+    this.maxBytes = 0,
+  });
+
+  final String name;
+  final Uint8List? bytes;
+  final String error;
+  final int size;
+  final int maxBytes;
+
+  factory CcServiceFile.fromMap(Map<String, dynamic> m) {
+    final b = m['bytes'];
+    int n(Object? v) => v is int ? v : 0;
+    return CcServiceFile(
+      name: '${m['name'] ?? ''}',
+      bytes: b is Uint8List
+          ? b
+          : (b is List ? Uint8List.fromList(b.cast<int>()) : null),
+      error: '${m['error'] ?? ''}',
+      size: n(m['size']),
+      maxBytes: n(m['max_bytes']),
+    );
+  }
 }
 
 /// §707 итер. 2 — переключатель автосохранения узла: [enabled] — включён,

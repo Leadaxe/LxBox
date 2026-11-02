@@ -704,6 +704,11 @@ class BoxService(
         setStatus(VpnStatus.Started)
         // §637 — старт удался: ошибка прошлой попытки (id=2) больше не актуальна.
         notification.cancelAlert()
+        // §707 итер. 7 — «📋 Send clipboard», «Поделиться» и «Send to device»:
+        // есть ли узел Tailscale с Allow Taildrop (уведомление ниже
+        // рисуется уже с этим знанием).
+        runCatching { TaildropClip.onConfig(service, config) }
+            .onFailure { Log.w(TAG, "taildrop clip surfaces failed: ${it.javaClass.simpleName}") }
 
         // §122 Фаза 0 — поднять CommandClient-канал. ПОСЛЕ startCommandServer()
         // и Started: command.sock существует только когда сервер запущен. statusClient
@@ -1054,6 +1059,22 @@ class BoxService(
                     // §654 C — после reload прежний стрим статуса мог
                     // закончиться молча, а состав endpoint'ов — смениться.
                     runCatching { commandClient?.syncOpenConnectStatus(config) }
+                    // §707 итер. 7 — узел с Allow Taildrop появился или
+                    // пропал: пункты и кнопка уведомления — следом.
+                    runCatching {
+                        if (TaildropClip.onConfig(service, config) && status == VpnStatus.Started) {
+                            serviceScope.launch(Dispatchers.Main) {
+                                if (status == VpnStatus.Started) {
+                                    notification.show(
+                                        ConfigManager.notificationTitle,
+                                        ConfigManager.notificationText.ifEmpty {
+                                            L10n.str(service, R.string.status_connected)
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                    }.onFailure { Log.w(TAG, "taildrop clip surfaces failed: ${it.javaClass.simpleName}") }
                 }
                 .onFailure {
                     Log.e(TAG, "serviceReload failed", it)

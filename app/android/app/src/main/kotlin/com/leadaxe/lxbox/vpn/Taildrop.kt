@@ -135,13 +135,15 @@ object Taildrop {
 
     /// Запустить передачу [items] пиру [peerId] узла [tag]. `false` — VPN
     /// не поднят (потоки закрыты, ничего не откладывается). [onDone] — итог
-    /// после уведомления (§707 итер. 5, Debug API ждёт его).
+    /// после уведомления (§707 итер. 5, Debug API ждёт его). [quiet] — без
+    /// уведомлений отправки (§707 итер. 7: итог показывает лента окна).
     fun send(
         ctx: Context,
         tag: String,
         peerId: String,
         peerName: String,
         items: List<Item>,
+        quiet: Boolean = false,
         onDone: SendDone? = null,
     ): Boolean {
         val cc = BoxService.commandClient
@@ -153,7 +155,7 @@ object Taildrop {
         val id = SEND_ID_BASE + (nextId.getAndIncrement() and 0xfff)
         val job = SendJob()
         sends[id] = job
-        scope.launch { runSend(app, cc, id, job, tag, peerId, peerName, items, onDone) }
+        scope.launch { runSend(app, cc, id, job, tag, peerId, peerName, items, quiet, onDone) }
         return true
     }
 
@@ -188,13 +190,14 @@ object Taildrop {
         peerId: String,
         peerName: String,
         items: List<Item>,
+        quiet: Boolean,
         onDone: SendDone?,
     ) {
         fun done(status: String, error: String?) {
             runCatching { onDone?.onDone(status, error) }
         }
         val total = if (items.all { it.size >= 0 }) items.sumOf { it.size } else -1L
-        val notifier = SendNotifier(ctx, id, peerName, items.size, total)
+        val notifier = SendNotifier(ctx, id, peerName, items.size, total, quiet)
         notifier.progress(0, 0L, force = true)
         val client = cc.newCallClient()
         if (client == null) {
@@ -357,6 +360,7 @@ object Taildrop {
         private val peerName: String,
         private val count: Int,
         private val total: Long,
+        private val quiet: Boolean,
     ) {
         private var lastAt = 0L
 
@@ -425,6 +429,7 @@ object Taildrop {
         }
 
         private fun notify(b: NotificationCompat.Builder) {
+            if (quiet) return
             runCatching { notificationManager(ctx).notify(id, b.build()) }
                 .onFailure { Log.w(TAG, "notify failed: ${it.javaClass.simpleName}") }
         }

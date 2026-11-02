@@ -15,7 +15,6 @@
     <string name="notification_status_starting">Запуск…</string>
     <string name="status_connected">Подключено</string>
     <string name="notification_action_stop">Остановить</string>
-    <string name="notification_action_reconnect">Переподключить</string>
     <string name="notification_error_title">Ошибка</string>
     <string name="core_channel_fallback_name">Уведомления ядра</string>
 
@@ -100,4 +99,21 @@
         <item quantity="many">Не удалось сохранить %1$d файлов</item>
         <item quantity="other">Не удалось сохранить %1$d файла</item>
     </plurals>
+
+    <!-- §707 итер. 7 — окно «Send clipboard». -->
+    <string name="notification_action_send_clipboard">📋 Отправить буфер</string>
+    <string name="clip_window_label">Отправить буфер</string>
+    <string name="clip_process_text_label">Отправить на устройство</string>
+    <string name="clip_to">Кому: %1$s ▾</string>
+    <string name="clip_more">Ещё</string>
+    <string name="clip_clear">Очистить</string>
+    <string name="clip_hint">Текст для отправки</string>
+    <string name="clip_send">Отправить</string>
+    <string name="clip_open_on">Открыть на %1$s</string>
+    <string name="clip_need_vpn">Запустите VPN, чтобы отправить</string>
+    <string name="clip_taildrop_off">Taildrop для этого узла выключен.</string>
+    <string name="clip_no_devices">Нет устройств, принимающих файлы</string>
+    <string name="clip_offline">Устройство не в сети.</string>
+    <string name="clip_too_large">Слишком большой для отправки</string>
+    <string name="clip_copied">Скопировано</string>
 </resources>

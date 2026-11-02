@@ -15,6 +15,11 @@ import com.leadaxe.lxbox.R
 /// → устройство → передача уходит в [Taildrop.send] и активность
 /// закрывается; прогресс — в уведомлении. VPN выключен или нет работающего
 /// узла — причина и Close, ничего не откладывается (P7).
+///
+/// §707 итер. 7 — текст (не файлы) открывает окно «Send clipboard» с этим
+/// текстом в поле. Пункт «Поделиться» виден, только пока VPN поднят и есть
+/// узел с Allow Taildrop ([TaildropClip.available], компонент включается и
+/// выключается).
 class TaildropShareActivity : Activity() {
 
     private val uris = ArrayList<Uri>()
@@ -25,6 +30,11 @@ class TaildropShareActivity : Activity() {
         readIntent(intent)
         if (uris.isEmpty() && text.isNullOrEmpty()) {
             toast(L10n.str(this, R.string.taildrop_nothing_to_send))
+            finish()
+            return
+        }
+        if (uris.isEmpty()) {
+            startActivity(TaildropClipActivity.intent(this).putExtra(TaildropClipActivity.EXTRA_TEXT, text))
             finish()
             return
         }
@@ -100,7 +110,7 @@ class TaildropShareActivity : Activity() {
     }
 
     private fun onPeer(tag: String, peer: Map<String, Any>) {
-        val items = text?.let { listOf(Taildrop.noteItem(it)) } ?: Taildrop.openUris(this, uris)
+        val items = Taildrop.openUris(this, uris)
         if (items.isEmpty()) {
             message(L10n.str(this, R.string.taildrop_reason_cant_read))
             return

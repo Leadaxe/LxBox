@@ -1106,6 +1106,31 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 }
             }
             "taildropServiceStats" -> result.success(TaildropServiceFiles.stats())
+            // §707 итер. 7 — служебный файл собирает натив (тот же сборщик,
+            // что окно «Send clipboard»): Debug API `POST /taildrop/send` с
+            // `commands`. Команды не проверяются; предел max_bytes — да.
+            "taildropBuildServiceFile" -> {
+                val commands = call.argument<List<Any?>>("commands") ?: emptyList()
+                val spec = TaildropServiceFiles.spec(context)
+                result.success(
+                    if (spec == null) {
+                        mapOf("error" to "no_registry")
+                    } else {
+                        when (val b = TaildropServiceFiles.build(
+                            spec, org.json.JSONArray(commands), System.currentTimeMillis(),
+                            java.security.SecureRandom(),
+                        )) {
+                            is TaildropServiceFiles.Built.Ok -> mapOf("name" to b.name, "bytes" to b.bytes)
+                            is TaildropServiceFiles.Built.TooLarge ->
+                                mapOf("error" to "too_large", "size" to b.size, "max_bytes" to b.maxBytes)
+                            TaildropServiceFiles.Built.Unsupported -> mapOf("error" to "unsupported_format")
+                        }
+                    },
+                )
+            }
+            // §707 итер. 7 — окно «Send clipboard» для Debug API: запомненный
+            // получатель и число сообщений лент (текст не отдаётся).
+            "taildropClipState" -> result.success(TaildropClip.state(context))
             "ccTakeTaildropOpenRequest" -> {
                 val tag = BoxVpnService.taildropOpenRequest
                 BoxVpnService.taildropOpenRequest = null

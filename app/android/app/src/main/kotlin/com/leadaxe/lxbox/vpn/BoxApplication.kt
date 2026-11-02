@@ -68,6 +68,10 @@ class BoxApplication : Application() {
         // В фоне, одной очередью с другими разборами.
         Taildrop.sweepInboxesAsync(this)
 
+        // §707 итер. 7 — VPN этого процесса ещё не поднят: «Поделиться» и
+        // «Send to device», оставшиеся включёнными после падения, скрываются.
+        runCatching { TaildropClip.syncOnProcessStart(this) }
+
         // libbox setup async в IO. К моменту start VPN setup завершён.
         // `libboxReady` — sync-барьер для VPN auto-start / QS-tile сразу
         // после boot (там race возможна).

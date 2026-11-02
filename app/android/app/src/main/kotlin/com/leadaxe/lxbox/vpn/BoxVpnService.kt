@@ -157,7 +157,14 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
                     if (tunnelStartedElapsedMs == 0L) {
                         tunnelStartedElapsedMs = SystemClock.elapsedRealtime()
                     }
-                VpnStatus.Stopped -> tunnelStartedElapsedMs = 0L
+                VpnStatus.Stopped -> {
+                    tunnelStartedElapsedMs = 0L
+                    // §707 итер. 7 — ленты окна «Send clipboard» живут, пока
+                    // работает VPN; «Поделиться» и «Send to device» скрываются.
+                    runCatching {
+                        TaildropClip.onVpnStopped(runCatching { BoxApplication.application }.getOrNull())
+                    }
+                }
                 else -> { /* Starting/Stopping — не трогаем */ }
             }
         }

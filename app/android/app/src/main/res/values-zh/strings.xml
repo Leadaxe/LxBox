@@ -15,7 +15,6 @@
     <string name="notification_status_starting">正在启动…</string>
     <string name="status_connected">已连接</string>
     <string name="notification_action_stop">停止</string>
-    <string name="notification_action_reconnect">重新连接</string>
     <string name="notification_error_title">错误</string>
     <!-- §036 core notification channel fallback name (typeName blank) -->
     <string name="core_channel_fallback_name">内核通知</string>
@@ -94,4 +93,21 @@
     <plurals name="taildrop_couldnt_save_files">
         <item quantity="other">无法保存 %1$d 个文件</item>
     </plurals>
+
+    <!-- §707 итер. 7 — окно «Send clipboard». -->
+    <string name="notification_action_send_clipboard">📋 发送剪贴板</string>
+    <string name="clip_window_label">发送剪贴板</string>
+    <string name="clip_process_text_label">发送到设备</string>
+    <string name="clip_to">发送至：%1$s ▾</string>
+    <string name="clip_more">更多选项</string>
+    <string name="clip_clear">清除</string>
+    <string name="clip_hint">要发送的文本</string>
+    <string name="clip_send">发送</string>
+    <string name="clip_open_on">在 %1$s 上打开</string>
+    <string name="clip_need_vpn">启动 VPN 后才能发送</string>
+    <string name="clip_taildrop_off">此节点的 Taildrop 已关闭。</string>
+    <string name="clip_no_devices">没有可接收文件的设备</string>
+    <string name="clip_offline">设备离线。</string>
+    <string name="clip_too_large">内容过大，无法发送</string>
+    <string name="clip_copied">已复制</string>
 </resources>

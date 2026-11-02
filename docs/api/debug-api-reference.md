@@ -1724,7 +1724,7 @@ curl -X POST -H "$HDR" "$BASE/support/reset"
 
 | Endpoint | Метод | Что делает |
 |---|---|---|
-| `/taildrop` | GET | по каждому узлу `tailscale` конфига: `tag`, `allow` (галка «Allow Taildrop» по хранимому телу; `null` — тело не найдено), `disable_taildrop` (собранный конфиг), `backend_state`, `can_share_files` (ядро), `autosave`, `autosave_supported`, `inbox_files`, `receiving`, `self_id`. VPN выключен — узлы есть, поля ядра `null` |
+| `/taildrop` | GET | по каждому узлу `tailscale` конфига: `tag`, `allow` (галка «Allow Taildrop» по хранимому телу; `null` — тело не найдено), `disable_taildrop` (собранный конфиг), `backend_state`, `can_share_files` (ядро), `autosave`, `autosave_supported`, `inbox_files`, `receiving`, `self_id`. VPN выключен — узлы есть, поля ядра `null`. На верхнем уровне — окно «Send clipboard» (§707 итер. 7): `clip_target` (`tag`, `peer_id`; `name` — с `reveal`; `null` — получатель не выбирался) и `clip_feeds[]` (`tag`, `peer_id`, `messages` — число сообщений ленты; текст не отдаётся) |
 | `/taildrop/peers?tag=` | GET | устройства узла: `id` (stable), `os`, `online`, `can_receive_files`, `sharee`, `permissions{clipboard,open_url}`; `name` — с `reveal` |
 | `/taildrop/inbox?tag=` | GET | `files[]`: `index`, `size`, `sha256` (файл на диске), `age_s`, `sender_id`; `receiving[]`: `index`, `size`, `received_bytes`, `progress`, `sender_id`; `name`/`sender_name` — с `reveal` |
 | `/taildrop/send` | POST | `{tag, peer, name, content_base64}` \| `{tag, peer, text}` (заметка `note-…txt`) \| `{tag, peer, commands:[…]}` (служебный файл); ждёт итог до 60 с |
@@ -1771,8 +1771,9 @@ curl -s -H "$HDR" "$BASE/taildrop/service-files?reveal=true" | jq
 **Отправка.** Ровно одна форма из трёх, иначе 400. `content_base64` ограничен
 телом запроса Debug API (1 MiB → файл до ~750 KB). Служебный файл: имя
 `<name_prefix><UTC YYYYMMDDTHHMMSSZ>-<метка name_label_length [a-z0-9]><name_suffix>`,
-тело `{"lx": <последняя из versions>, "commands": […]}`, константы — реестр
-`service_files.json`; команды не проверяются (можно слать битые — проверять
+тело `{"lx": <старшая из versions>, "commands": […]}`, константы — реестр
+`service_files.json`; собирает натив — тот же сборщик, что окно «Send
+clipboard» (§707 итер. 7); команды не проверяются (можно слать битые — проверять
 разбор получателя), тело больше `max_bytes` → 400. Передача идёт тем же путём,
 что «Send file…» (уведомление с процентом и Cancel); ответ ждёт итог до 60 с
 (у маршрута свой предел запроса 65 с вместо общих 30): `200 status:"sent"`,
@@ -1800,6 +1801,11 @@ from …»), `skipped_no_permission`, `expired` (файлов старше `ttl_
 `invalid` (битых команд), `unknown_kind`, `skipped_scheme`, `no_handler` (ссылку
 нечем открыть), `last` — последняя выполненная команда `{kind, at, sha256}`,
 `value` (текст или ссылка) — с `reveal`.
+
+**Окно «Send clipboard»** (§707 итер. 7). Ленты — только в памяти, пока
+работает VPN: остановка VPN их стирает, `clip_feeds` тогда пуст. Отправка
+из окна в `executed`/`last` не попадает (это счётчики приёма); команды,
+выполненные приёмом, дописываются в ленту устройства-отправителя.
 
 **Отказы** — общий формат: нет узла `tailscale` с таким тегом — 404; VPN
 выключен, узел не запущен в ядре, ядро не отдало входящие (Taildrop узла

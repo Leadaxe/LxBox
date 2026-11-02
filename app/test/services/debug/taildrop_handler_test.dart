@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
@@ -69,6 +68,13 @@ void main() {
     expect(bNode['autosave'], true);
     expect(bNode['inbox_files'], 2);
     expect(bNode['receiving'], 1);
+    expect(b['clip_target'], {'tag': 'ts-b', 'peer_id': 'nPEER1'});
+    expect(b['clip_feeds'], [
+      {'tag': 'ts-b', 'peer_id': 'nPEER1', 'messages': 3},
+    ]);
+    expect(jsonEncode(b), isNot(contains('laptop')));
+    final r = await call('GET', '/taildrop?reveal=true');
+    expect((r['clip_target'] as Map)['name'], 'laptop');
   });
 
   test('GET /taildrop with VPN off lists nodes without core fields', () async {
@@ -171,32 +177,39 @@ void main() {
         throwsA(isA<NotFound>()));
   });
 
-  test('POST /taildrop/send commands builds a service file from the registry',
+  test('POST /taildrop/send commands: the native builder makes the file',
       () async {
-    await call('POST', '/taildrop/send', {
+    final b = await call('POST', '/taildrop/send', {
       'tag': 'ts-b',
       'peer': 'nPEER1',
       'commands': [
         {'kind': 'clipboard', 'text': 'copied'},
       ],
     });
+    expect(fake.built.single, [
+      {'kind': 'clipboard', 'text': 'copied'},
+    ]);
     final s = fake.sent.single;
-    expect(s.$4, matches(RegExp(r'^lx-20261102T143005Z-[a-z0-9]{5}\.json$')));
-    expect(jsonDecode(utf8.decode(s.$5!)), {
-      'lx': 1,
-      'commands': [
-        {'kind': 'clipboard', 'text': 'copied'},
-      ],
-    });
+    expect(s.$4, 'lx-20261102T143005Z-k3x9p.json');
+    expect(s.$5, fake.builtBytes);
+    expect(b['sha256'], sha256.convert(fake.builtBytes).toString());
   });
 
-  test('buildServiceFile refuses a body over max_bytes', () async {
-    final spec = await fake.serviceFilesRegistry();
-    expect(
-        () => buildServiceFile(spec, [
-              {'kind': 'clipboard', 'text': 'x' * 70000},
-            ], now: now, random: Random(1)),
-        throwsA(isA<BadRequest>()));
+  test('POST /taildrop/send commands over max_bytes: 400, nothing sent',
+      () async {
+    fake.buildResult = const CcServiceFile(
+        error: 'too_large', size: 70100, maxBytes: 65536);
+    await expectLater(
+        call('POST', '/taildrop/send', {
+          'tag': 'ts-b',
+          'peer': 'nPEER1',
+          'commands': [
+            {'kind': 'clipboard', 'text': 'x'},
+          ],
+        }),
+        throwsA(isA<BadRequest>()
+            .having((e) => e.message, 'message', contains('65536'))));
+    expect(fake.sent, isEmpty);
   });
 
   test('inbox save / delete / cancel pick the file by index', () async {
@@ -286,6 +299,10 @@ class _FakeActions extends TaildropDebugActions {
   CcTaildropResult sendResult = const CcTaildropResult(status: 'sent');
 
   final sent = <(String, String, String, String?, Uint8List?, String?)>[];
+  final built = <List<Object?>>[];
+  final builtBytes = Uint8List.fromList(
+      utf8.encode('{"lx":1,"commands":[{"kind":"clipboard"}]}'));
+  CcServiceFile? buildResult;
   final saved = <(String, String)>[];
   final deleted = <(String, String)>[];
   final cancelled = <(String, String, String)>[];
@@ -406,6 +423,22 @@ class _FakeActions extends TaildropDebugActions {
     sent.add((tag, peerId, peerName, name, bytes, text));
     return sendResult;
   }
+
+  @override
+  Future<CcServiceFile?> buildServiceFile(List<Object?> commands) async {
+    built.add(commands);
+    return buildResult ??
+        CcServiceFile(
+            name: 'lx-20261102T143005Z-k3x9p.json', bytes: builtBytes);
+  }
+
+  @override
+  Future<Map<String, dynamic>?> clipState() async => {
+        'target': {'tag': 'ts-b', 'peer_id': 'nPEER1', 'name': 'laptop'},
+        'feeds': [
+          {'tag': 'ts-b', 'peer_id': 'nPEER1', 'messages': 3},
+        ],
+      };
 
   @override
   Future<Map<String, dynamic>?> serviceStats() async => {
