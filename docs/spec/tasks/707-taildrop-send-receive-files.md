@@ -953,6 +953,13 @@ VPN; она открывает окно поверх текущего прило
 открывает окно п. B с этим текстом в поле вместо буфера. Файлы — как
 сейчас.
 
+**C2. Пункт в меню выделения текста** (владелец 03.11.2026): Activity с
+intent-filter `android.intent.action.PROCESS_TEXT` (`text/plain`), подпись
+«Send to device» (en/ru/zh). Выделил текст в любом приложении → пункт в
+панели выделения (или под ⋮) → окно п. B с `EXTRA_PROCESS_TEXT` в поле
+вместо буфера. Текст в исходном приложении не меняется (результат не
+возвращается, `EXTRA_PROCESS_TEXT_READONLY` не важен).
+
 **D. Служебный файл** собирается в Kotlin по контракту: имя
 `<name_prefix><UTC YYYYMMDDTHHMMSSZ>-<5 [a-z0-9]><name_suffix>`, тело
 `{"lx":1,"commands":[…]}`; константы — из `service_files.json`
@@ -976,4 +983,5 @@ file…». Сборщик Debug API (`POST /taildrop/send` с `commands`) пер
   приёме `GET /taildrop/service-files` `executed.clipboard` +1, `last`
   совпал, в ленте справа ✓; ссылка → «Open on» → на приёме уведомление
   «Link from …»; приём от lxbox-emu-b в окне ts-b слева; Reconnect в
-  уведомлении нет; «Поделиться» текстом → окно с этим текстом.
+  уведомлении нет; «Поделиться» текстом → окно с этим текстом; выделение
+  текста → «Send to device» → окно с выделенным текстом.
