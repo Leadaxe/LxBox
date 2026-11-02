@@ -1078,6 +1078,26 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 Taildrop.forgetAutoSave(context, tags)
                 result.success(true)
             }
+            // §707 итер. 4 — разрешения служебных файлов от устройства:
+            // настройка устройства (SharedPreferences, не бэкап L×Box).
+            "taildropPermissions" -> {
+                val tag = call.argument<String>("tag") ?: ""
+                val peerId = call.argument<String>("peer_id") ?: ""
+                result.success(
+                    if (tag.isEmpty() || peerId.isEmpty()) emptyMap()
+                    else TaildropServiceFiles.permissions(context, tag, peerId),
+                )
+            }
+            "taildropSetPermission" -> {
+                result.success(TaildropServiceFiles.setPermission(
+                    context,
+                    call.argument<String>("tag") ?: "",
+                    call.argument<String>("peer_id") ?: "",
+                    call.argument<String>("peer_name") ?: "",
+                    call.argument<String>("kind") ?: "",
+                    call.argument<Boolean>("allowed") == true,
+                ))
+            }
             "ccTakeOpenConnectOpenRequest" -> {
                 val tag = BoxVpnService.openConnectOpenRequest
                 BoxVpnService.openConnectOpenRequest = null

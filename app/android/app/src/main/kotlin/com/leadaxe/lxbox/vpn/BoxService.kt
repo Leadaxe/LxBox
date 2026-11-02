@@ -79,6 +79,16 @@ class BoxService(
         @Volatile
         var commandClient: BoxCommandClient? = null
             private set
+
+        /// §707 итер. 4 — работающий сервис: строка в журнал приложения
+        /// (AppLog) из нативных разборов вне сервиса (служебные файлы Taildrop).
+        @Volatile
+        private var current: BoxService? = null
+
+        /// WARN-строка в AppLog; сервиса нет — только logcat у вызывающего.
+        fun appLogWarning(text: String) {
+            current?.appLogLine("WARN $text")
+        }
     }
 
     /// Scoped to service lifetime — all child coroutines are cancelled in onDestroy / doStop.
@@ -512,6 +522,7 @@ class BoxService(
         runCatching { commandClient?.shutdownAll() }
             .onFailure { Log.w(TAG, "closeCommandServerAtomic($reason): commandClient shutdown failed: ${it.message}") }
         commandClient = null
+        if (current === this) current = null
         val cs = commandServer.getAndSet(null) ?: return
 
         // §330 — `close()` идёт ПЕРЕД `closeService()`, а не после. Причина: на
@@ -700,6 +711,7 @@ class BoxService(
         runCatching {
             val cc = BoxCommandClient()
             commandClient = cc
+            current = this
             cc.startStatus()
             // §654 C — статус openconnect (второй фактор / SSO): подписка, если
             // в конфиге есть такой endpoint; Dart для этого не нужен.

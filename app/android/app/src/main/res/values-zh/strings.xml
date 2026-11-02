@@ -86,6 +86,8 @@
     <string name="taildrop_saved_title">已保存到“下载”：%1$s</string>
     <string name="taildrop_save_failed">无法保存：%1$s</string>
     <string name="taildrop_delete_failed">无法删除：%1$s</string>
+    <string name="taildrop_link_from">来自 %1$s 的链接</string>
+    <string name="taildrop_off_all">所有运行中的 Tailscale 节点均已关闭 Taildrop。请在节点设置中开启“允许 Taildrop”。</string>
     <plurals name="taildrop_saved_files">
         <item quantity="other">已将 %1$d 个文件保存到“下载”</item>
     </plurals>

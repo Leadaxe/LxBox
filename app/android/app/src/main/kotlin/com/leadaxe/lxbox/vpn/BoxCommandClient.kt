@@ -633,6 +633,47 @@ class BoxCommandClient {
         )
     }
 
+    /// §707 итер. 4 — разовый снимок входящих узла [tag] (первое обновление
+    /// `SubscribeTaildropInbox` на своём клиенте): имя файла → (senderID,
+    /// senderName). Нужен разбору служебных файлов: уведомление ядра
+    /// отправителя не несёт. Блокирует до [timeoutMs]; `null` — клиента нет
+    /// или ядро не ответило. Имена в журнал не пишутся.
+    fun taildropInboxSnapshot(tag: String, timeoutMs: Long): Map<String, Pair<String, String>>? {
+        val client = newCallClient() ?: return null
+        val latch = java.util.concurrent.CountDownLatch(1)
+        val out = AtomicReference<Map<String, Pair<String, String>>?>(null)
+        var sub: TaildropInboxSubscription? = null
+        try {
+            sub = client.subscribeTaildropInbox(tag, object : TaildropInboxHandler {
+                override fun onInboxUpdate(inbox: TaildropInbox?) {
+                    runCatching {
+                        if (inbox == null || latch.count == 0L) return@runCatching
+                        val m = HashMap<String, Pair<String, String>>()
+                        val fi = inbox.files()
+                        while (fi != null && fi.hasNext()) {
+                            val f = fi.next() ?: continue
+                            val name = f.name ?: continue
+                            m[name] = (f.senderID ?: "") to (f.senderName ?: "")
+                        }
+                        out.set(m)
+                        latch.countDown()
+                    }
+                }
+
+                override fun onError(message: String?) {
+                    runCatching { latch.countDown() }
+                }
+            })
+            latch.await(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
+        } catch (t: Exception) {
+            Log.w(TAG, "taildropInboxSnapshot failed: ${t.javaClass.simpleName}")
+        } finally {
+            sub?.runCatching { close() }
+            client.runCatching { disconnect() }
+        }
+        return out.get()
+    }
+
     /// Удалить принятый файл. `null` = успех, иначе текст ошибки ядра.
     fun taildropDelete(tag: String, name: String): String? {
         val client = ensurePingClient() ?: return "no command client"

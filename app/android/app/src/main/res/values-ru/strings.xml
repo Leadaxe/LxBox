@@ -86,6 +86,8 @@
     <string name="taildrop_saved_title">Сохранено в Загрузки: %1$s</string>
     <string name="taildrop_save_failed">Не удалось сохранить: %1$s</string>
     <string name="taildrop_delete_failed">Не удалось удалить: %1$s</string>
+    <string name="taildrop_link_from">Ссылка с устройства %1$s</string>
+    <string name="taildrop_off_all">Taildrop выключен у всех запущенных узлов Tailscale. Включите «Разрешить Taildrop» в настройках узла.</string>
     <plurals name="taildrop_saved_files">
         <item quantity="one">Сохранён %1$d файл в Загрузки</item>
         <item quantity="few">Сохранено %1$d файла в Загрузки</item>

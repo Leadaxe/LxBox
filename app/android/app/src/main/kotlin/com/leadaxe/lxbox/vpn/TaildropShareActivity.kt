@@ -35,7 +35,9 @@ class TaildropShareActivity : Activity() {
         }
         Thread {
             val snapshot = runCatching { cc.tailscaleSnapshot(4000) }.getOrNull()
-            runOnUiThread { if (!isFinishing) onSnapshot(snapshot) }
+            // §707 итер. 4 — узлы с выключенным Taildrop не предлагаются.
+            val off = runCatching { Taildrop.taildropOffTags(ConfigManager.load()) }.getOrDefault(emptySet())
+            runOnUiThread { if (!isFinishing) onSnapshot(snapshot, off) }
         }.start()
     }
 
@@ -62,9 +64,11 @@ class TaildropShareActivity : Activity() {
         }
     }
 
-    private fun onSnapshot(snapshot: List<Map<String, Any>>?) {
-        val nodes = snapshot.orEmpty().filter { it["backend_state"] == "Running" }
+    private fun onSnapshot(snapshot: List<Map<String, Any>>?, off: Set<String>) {
+        val running = snapshot.orEmpty().filter { it["backend_state"] == "Running" }
+        val nodes = running.filter { "${it["tag"] ?: ""}" !in off }
         when {
+            running.isNotEmpty() && nodes.isEmpty() -> message(L10n.str(this, R.string.taildrop_off_all))
             nodes.isEmpty() -> message(L10n.str(this, R.string.taildrop_need_vpn))
             nodes.size == 1 -> onNode(nodes.first())
             else -> {
