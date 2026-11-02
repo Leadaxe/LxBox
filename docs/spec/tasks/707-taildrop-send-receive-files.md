@@ -1001,3 +1001,59 @@ file…». Сборщик Debug API (`POST /taildrop/send` с `commands`) пер
   текста → «Send to device» → окно с выделенным текстом; VPN выключен —
   ни «Send to device», ни L×Box в «Поделиться» нет; включён, но у всех узлов
   Tailscale Allow Taildrop выключен — тоже нет; включён и галка есть — есть.
+
+### Result (итерация 7)
+
+Коммит `0f0838f7` `feat(taildrop): окно «Send clipboard» … (§707 итер. 7)`.
+
+- **A.** `ServiceNotification.buildNotification`: `Stop` и `📋 Send clipboard`
+  (окно п. B, `PendingIntent.getActivity`); `Reconnect` и строка
+  `notification_action_reconnect` сняты, `ACTION_RECONNECT` остался. Кнопка
+  есть по условию C3 (указание оператора 03.11.2026: без узла с Allow
+  Taildrop её нет).
+- **B.** `vpn/TaildropClipActivity.kt` — нативная Activity без Flutter
+  (`ClipWindowTheme` = DeviceDefault Dialog, светлая/тёмная; низ экрана,
+  половина высоты; `singleTask`, своя `taskAffinity`, `excludeFromRecents`):
+  `To: … ▾` (запоминается в `lxbox_taildrop`: `clip.tag`/`clip.peer`/
+  `clip.name`), лента, причина над полем по таблице, поле с буфером (читается
+  в `onWindowFocusChanged`; клип с `EXTRA_IS_SENSITIVE` — как любой), ➤ и
+  «Open on <device>», ⋮ → Clear, тап по сообщению копирует. Получатели —
+  каждые 10 с и при фокусе (`tailscaleSnapshot`). После ➤ поле очищается
+  (как в чате). Отправка из окна — `Taildrop.send(…, quiet = true)`: без
+  уведомлений отправки, итог (✓ / текст ошибки) — в ленте.
+  `vpn/TaildropClip.kt`: ленты `ClipFeeds` (только в памяти, 50 на
+  устройство, ключ тег + stable ID; стираются в
+  `BoxVpnService.setCurrentStatus(Stopped)`), получатели по снимку,
+  отправка, видимость пунктов, состояние для Debug API.
+- **C / C2 / C3.** `TaildropShareActivity`: текст → окно с этим текстом,
+  файлы — как раньше. `activity-alias` `.vpn.TaildropProcessTextActivity`
+  (PROCESS_TEXT, `text/plain`, «Send to device») на то же окно. Оба
+  компонента в манифесте `enabled="false"`; `TaildropClip.onConfig`
+  включает их при `Started` и после reload, если в конфиге есть `tailscale`
+  без `disable_taildrop: true` (reload, поменявший видимость, перерисовывает
+  уведомление), `onVpnStopped` выключает, `BoxApplication.onCreate` —
+  выключает (VPN нового процесса ещё не поднят).
+- **D.** `TaildropServiceFiles.build` / `body` / `command` / `singleUrl`
+  (константы — реестр, `Spec` получил `timeFormat` и `labelLength`); приём
+  дописывает выполненные `clipboard` и `open_url` в ленту отправителя
+  (`senderID`, пустой — ID из разрешения по имени). Debug API `POST
+  /taildrop/send` с `commands` — через канал `taildropBuildServiceFile`,
+  Dart-сборщик `buildServiceFile` снят.
+- **E.** Строки en/ru/zh в `values*/strings.xml`; текст буфера и ссылок в
+  журнал не пишется. `GET /taildrop`: `clip_target` (`name` — с `reveal`),
+  `clip_feeds[]` (канал `taildropClipState`). `docs/api/debug-api-reference.md`
+  и USER_GUIDE (en/ru, кнопки уведомления) обновлены.
+- **Тесты.** JVM-тесты натива появились впервые: `app/android/app/src/test/
+  kotlin/com/leadaxe/lxbox/vpn/TaildropClipTest.kt` (junit 4 + org.json в
+  `testImplementation`) — сборщик (имя, метка, тело, `max_bytes`), «ссылка
+  целиком», ленты (50 на устройство, очистка при остановке VPN), узел с Allow
+  Taildrop в конфиге, получатели и порядок отказов — 8/8
+  (`./gradlew :app:testDebugUnitTest --tests …TaildropClipTest`). В CI этот
+  прогон не входит. `test/services/debug/taildrop_handler_test.dart` — 16/16.
+  `flutter build apk --debug` собирается; `kotlin_check` / `ui_check --strict`
+  — 0/0.
+- **Не проверено:** всё на устройстве и эмуляторе (окно, чтение буфера по
+  фокусу, PROCESS_TEXT, включение/выключение компонентов, кнопка в
+  уведомлении, лента у получателя). Спеки фичи 032 (`clipboard-sync`,
+  `share-text`) и 014 (кнопки уведомления) ещё описывают плитку / Reconnect —
+  не правились (вне раздела Result).
