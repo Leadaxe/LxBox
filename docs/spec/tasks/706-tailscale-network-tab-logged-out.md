@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Status | Итерация 2: выключатель и Restart проверены на эмуляторе; Replace key ждёт исправления ядра |
+| Status | Done (итерация 2; эмулятор 02.11.2026) |
 | Start date | 2026-11-02 |
 | End date | итерации 1 и 2 — 2026-11-02 |
 | Commits | `fix(tailscale): вкладка Network вне сети — exit node не стирается, Replace key (§706)`; итерация 2: `b086e8ca`, `fd3a0e61` |
@@ -185,12 +185,17 @@ Kotlin локально не собирался (CI).
   (~20 мс), узел Running. Выключатель и Restart на обоих экранах
   (настройки узла, вид узла с главной).
 - NeedsLogin после Log out: Sign in, Replace key, Restart node, имя «—».
-- **Replace key НЕ входит:** ключ записан в узел верно (сверен побайтно),
-  `tailscaleLogin` вернул успех, но узел остался в NeedsLogin с health «You
-  are logged out. The last login error was: invalid key: API key does not
-  exist», ядро ушло во вход по ссылке («Tailscale Authentication»). Тот же
-  ключ после reload VPN — Running за ~6 с. Дефект ядра SPEC 149
-  (`TailscaleLogin`: `Start` с ключом после явного Logout), передан сессии
-  ядра; ждём rc.2.
+- **Replace key входит без перезапуска VPN** (оба сценария, ключ перед Save
+  сверен побайтно): после Log out → Running за ~2 с; узел, стартовавший с
+  отвергнутым ключом («invalid key: unable to validate API key») → Running за
+  ~2 с. Первые неудачи — обрезанный ключ: `adb input text` под нагрузкой терял
+  символы (в узлах оказались ключи длиной 55 и 20); один ранний отказ с
+  полным ключом («API key does not exist») не воспроизвёлся. Разбор trace с
+  сессией ядра: reload ключ не проверяет (узел с node key из state входит
+  без него), `tailscaleLogin` повторяет последовательность tsnet; дефекта
+  ядра нет.
+- Наблюдение (не дефект фичи): при `log_level=trace` + forward + verbose логов
+  ядра приложение ловит ANR — каждая строка ядра уходит в `Log.d` на главном
+  потоке (стек ANR: `Log.println_native` из Handler).
 - Мелочь: в Devices у узла в NeedsLogin пустая строка без имени («0 online /
   1»).
