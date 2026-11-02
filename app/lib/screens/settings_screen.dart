@@ -90,7 +90,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   String _idleSuspendReachable = '';
   int _wgBuildMax = 5; // §542 — lx.wg.build_max (0 = no cap)
   bool _wgLazyBuild = true; // §542 — lx.wg.lazy_build
-  bool _quicSniffDecoy = false; // §709 — lx.quic_sniff_decoy
+  bool _quicSniffDecoy = true; // §709 — lx.quic_sniff_decoy
   String _mtuAlign = kMtuAlignDefault; // §709 — lx.mtu_align
   // §271 — memory limit ядра (native_prefs, wire-значения MemoryLimitSetting).
   String _memoryLimit = MemoryLimitSetting.auto;

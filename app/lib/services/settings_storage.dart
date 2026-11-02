@@ -662,7 +662,7 @@ class SettingsStorage {
   static Future<void> saveMtuAlign(String mode, {bool flush = true}) =>
       _saveMtuAlign(mode, flush: flush);
 
-  // §709 — QUIC sniff decoy (lx.quic_sniff_decoy, SPEC 151); default false
+  // §709 — QUIC sniff decoy (lx.quic_sniff_decoy, SPEC 151); default true
 
   static Future<bool> getQuicSniffDecoy() => _getQuicSniffDecoy();
 

@@ -119,7 +119,8 @@ Future<void> _saveWgLazyBuild(bool enabled, {bool flush = true}) async {
 // ---------------------------------------------------------------------------
 // §709 — QUIC sniff decoy (lx.quic_sniff_decoy, kernel SPEC 151)
 //
-// `quic_sniff_decoy` (bool, дефолт false — как в ядре): один байт перед
+// `quic_sniff_decoy` (bool, дефолт true — решение владельца 02.11.2026; у
+// ядра без ключа выключено): один байт перед
 // первым QUIC Initial у masque h3 / hysteria2 / tuic, чтобы сниффящий релей
 // не подменил назначение по SNI. Config-significant → markConfigDirty.
 // ---------------------------------------------------------------------------
@@ -151,7 +152,7 @@ Future<void> _saveMtuAlign(String mode, {bool flush = true}) async {
 
 Future<bool> _getQuicSniffDecoy() async {
   final data = await _load();
-  return (data['quic_sniff_decoy'] as bool?) ?? false;
+  return (data['quic_sniff_decoy'] as bool?) ?? true;
 }
 
 Future<void> _saveQuicSniffDecoy(bool enabled, {bool flush = true}) async {
