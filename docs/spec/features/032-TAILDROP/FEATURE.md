@@ -111,6 +111,7 @@ never reads the clipboard on its own, only on an explicit tap.
 
 | Knob | Values | Default |
 |------|--------|---------|
+| Node → "Allow Taildrop" (files and command files) | on / off; off — the core refuses incoming and outgoing transfers, the node is not in Share, no inbox and no "Send file…", commands are not handled; a node field in the core config, in the backup; needs a core option (requested 2026-11-02) | off (owner decision 2026-11-02) |
 | Share screen → Node | a running Tailscale node; asked only when there are several | the only one |
 | Share screen → Device | an online own device of that node's tailnet | — |
 | Network tab → peer row → "Send file…" | system file picker, one or more files | — |
