@@ -141,7 +141,26 @@ class _DropActions extends TailscaleNetworkActions {
     calls.add('send:${peer.stableId}');
     return sendResult;
   }
+
+  /// §707 итер. 4 — разрешения служебных файлов.
+  Map<String, bool>? perms = {'clipboard': false, 'open_url': true};
+
+  @override
+  Future<Map<String, bool>?> getPermissions(String tag, String peerId) async {
+    calls.add('perms:$peerId');
+    return perms;
+  }
+
+  @override
+  Future<bool> setPermission(
+      String tag, CcTailscalePeer peer, String kind, bool allowed) async {
+    calls.add('perm:${peer.stableId}:$kind:$allowed');
+    return true;
+  }
 }
+
+/// §707 итер. 4 — тело узла с включённым Taildrop.
+const _dropOn = <String, dynamic>{'disable_taildrop': false};
 
 /// §707 итер. 2 — настройка автосохранения на фейке: [state] — что отдаёт
 /// натив, [writes] — журнал записи `тег:значение`.
@@ -587,7 +606,7 @@ void main() {
       addTearDown(() => tester.binding.setSurfaceSize(null));
       final actions = _AutoSaveActions(
           const CcTaildropAutoSave(enabled: false, supported: true));
-      await pump(tester, data: [_status()], actions: actions);
+      await pump(tester, data: [_status()], actions: actions, body: _dropOn);
       await tester.pump();
       expect(
           find.byKey(const ValueKey('tailscale-advertise-exit')), findsNothing);
@@ -608,6 +627,7 @@ void main() {
       await pump(tester,
           data: [_status()],
           actions: actions,
+          body: _dropOn,
           onSaveFields: (f) async => true);
       await tester.pump();
       expect(find.byKey(const ValueKey('tailscale-advertise-exit')),
@@ -621,7 +641,7 @@ void main() {
       addTearDown(() => tester.binding.setSurfaceSize(null));
       final actions = _AutoSaveActions(
           const CcTaildropAutoSave(enabled: true, supported: false));
-      await pump(tester, data: [_status()], actions: actions);
+      await pump(tester, data: [_status()], actions: actions, body: _dropOn);
       await tester.pump();
       final t = tile(tester, 'tailscale-taildrop-autosave');
       expect(t.onChanged, isNull);
@@ -902,6 +922,7 @@ void main() {
       WidgetTester tester,
       _DropActions actions, {
       bool canShare = true,
+      Map<String, dynamic> body = _dropOn,
     }) async {
       await tester.binding.setSurfaceSize(const Size(800, 3000));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -913,7 +934,7 @@ void main() {
         home: Scaffold(
           body: TailscaleNetworkTab(
             liveTag: 'ts',
-            body: const {},
+            body: body,
             statusSource: status.stream,
             inboxSource: inbox.stream,
             vpnUp: true,
@@ -1041,6 +1062,115 @@ void main() {
       await tester.pumpAndSettle();
       expect(actions.calls, contains('send:n5'));
       expect(find.text('Sending to laptop'), findsOneWidget);
+    });
+
+    testWidgets('§707 итер. 4 — Taildrop узла выключен: строка вместо Inbox, '
+        'Send file… и разрешений нет', (tester) async {
+      final actions = _DropActions();
+      final inbox = await pumpDrop(tester, actions, body: const {});
+      inbox.add(const CcTaildropInbox(tag: 'ts', files: [
+        CcTaildropFile(name: 'photo.jpg'),
+      ]));
+      await tester.pump();
+      await tester.pump(); // снапшот приходит микрозадачей после кадра
+      expect(find.byKey(const ValueKey('taildrop-node-off')), findsOneWidget);
+      expect(find.text('Inbox'), findsNothing);
+      expect(find.text('photo.jpg'), findsNothing);
+      await tester.tap(find.widgetWithText(ListTile, 'laptop').last);
+      await tester.pumpAndSettle();
+      expect(find.text('Send file…'), findsNothing);
+      expect(find.byKey(const ValueKey('taildrop-permission-clipboard')),
+          findsNothing);
+      expect(actions.calls.where((c) => c.startsWith('perms:')), isEmpty);
+    });
+
+    testWidgets('§707 итер. 4 — разрешения устройства в его меню',
+        (tester) async {
+      final actions = _DropActions();
+      await pumpDrop(tester, actions);
+      await tester.tap(find.widgetWithText(ListTile, 'laptop').last);
+      await tester.pumpAndSettle();
+      expect(actions.calls, contains('perms:n5'));
+      final clip = find.byKey(const ValueKey('taildrop-permission-clipboard'));
+      final link = find.byKey(const ValueKey('taildrop-permission-open_url'));
+      expect(tester.widget<SwitchListTile>(clip).value, isFalse);
+      expect(tester.widget<SwitchListTile>(link).value, isTrue);
+      await tester.tap(clip);
+      await tester.pump();
+      expect(actions.calls, contains('perm:n5:clipboard:true'));
+      expect(tester.widget<SwitchListTile>(clip).value, isTrue);
+    });
+
+    testWidgets('§707 итер. 4 — расшаренному устройству разрешений нет',
+        (tester) async {
+      final actions = _DropActions();
+      await pumpDrop(tester, actions);
+      await tester.tap(find.widgetWithText(ListTile, 'guest').last);
+      await tester.pumpAndSettle();
+      expect(actions.calls.where((c) => c.startsWith('perms:')), isEmpty);
+      expect(find.byKey(const ValueKey('taildrop-permission-clipboard')),
+          findsNothing);
+    });
+  });
+
+  group('§707 итер. 4 — Allow Taildrop', () {
+    testWidgets('вкл пишет disable_taildrop: false, выкл снимает поле',
+        (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 2400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final saved = <Map<String, Object?>>[];
+      Future<bool> save(Map<String, Object?> f) async {
+        saved.add(f);
+        return true;
+      }
+
+      await pump(tester, data: [_status()], onSaveFields: save);
+      final key = find.byKey(const ValueKey('tailscale-allow-taildrop'));
+      expect(tester.widget<SwitchListTile>(key).value, isFalse);
+      await tester.tap(key);
+      await tester.pump();
+      expect(saved.last, {'disable_taildrop': false});
+    });
+
+    testWidgets('включён — выкл снимает поле', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 2400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final saved = <Map<String, Object?>>[];
+      await pump(tester,
+          data: [_status()],
+          body: _dropOn,
+          onSaveFields: (f) async {
+            saved.add(f);
+            return true;
+          });
+      final key = find.byKey(const ValueKey('tailscale-allow-taildrop'));
+      expect(tester.widget<SwitchListTile>(key).value, isTrue);
+      await tester.tap(key);
+      await tester.pump();
+      expect(saved.last, {'disable_taildrop': null});
+    });
+
+    testWidgets('выключен — автосохранения нет', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 2400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final actions = _AutoSaveActions(
+          const CcTaildropAutoSave(enabled: true, supported: true));
+      await pump(tester,
+          data: [_status()], actions: actions, onSaveFields: (f) async => true);
+      await tester.pump();
+      expect(find.byKey(const ValueKey('tailscale-allow-taildrop')),
+          findsOneWidget);
+      expect(find.byKey(const ValueKey('tailscale-taildrop-autosave')),
+          findsNothing);
+    });
+
+    testWidgets('узел подписки с выключенным Taildrop — блока Settings нет',
+        (tester) async {
+      final actions = _AutoSaveActions(
+          const CcTaildropAutoSave(enabled: true, supported: true));
+      await pump(tester, data: [_status()], actions: actions);
+      await tester.pump();
+      expect(find.text('Settings'), findsNothing);
     });
   });
 }
