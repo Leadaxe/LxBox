@@ -95,6 +95,12 @@ void main() {
     expect((r['peers'] as List).cast<Map>().first['name'], 'laptop');
   });
 
+  test('tag without or with another source prefix finds the node', () async {
+    final r = await call(
+        'GET', '/taildrop/peers?tag=${Uri.encodeQueryComponent('🕸️ ts-b')}');
+    expect(r['tag'], 'ts-b');
+  });
+
   test('refusals: unknown node 404, VPN off 409, no tag 400', () async {
     expect(() => call('GET', '/taildrop/peers?tag=nope'),
         throwsA(isA<NotFound>()));

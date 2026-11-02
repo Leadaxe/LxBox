@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Status | In progress (итерация 4); итерации 1–3 — Done, эмулятор 02.11.2026 |
+| Status | Done (итерации 1–5; эмулятор 02.11.2026); итерация 6 (отправка с телефона: плитка, ссылка) — не начата |
 | Start date | 2026-11-02 |
 | End date | 2026-11-02 |
 | Commits | `1d30e211` `feat(taildrop): отправка и приём файлов — «Поделиться», Send file…, входящие узла (§707)` |
@@ -769,3 +769,21 @@ root-доступ by design, маска — удобство).
 ts-a → ts-b, автосохранение, Save/Delete, отказ при `allow=false`,
 служебный файл без и с разрешением, счётчики); Kotlin-часть (колбэк итога
 отправки, снимок с sha256, счётчики) — только компиляцией.
+
+**Эмулятор, итерация 5, 02.11.2026** (только `curl`, без экрана):
+- `GET /taildrop`: четыре узла, `allow`/`can_share_files`/`self_id` верны.
+- `PUT /taildrop/settings` autosave=false → `POST /taildrop/send` 300 KB
+  ts-a → lxbox-emu-b: `sent`, sha256 в ответе = sha256 во
+  `GET /taildrop/inbox` = sha256 исходника; `inbox/save` → `Download/api.bin`,
+  sha256 совпал; заметка + `inbox/delete` → входящие пусты.
+- Отправка на `lxbox-emu-c` (Taildrop выкл.) → 409 «Taildrop is disabled on
+  this node».
+- `PUT /taildrop/permissions` clipboard=false → команда `clipboard` →
+  `skipped_no_permission: 1`, `executed.clipboard: 0`; clipboard=true →
+  `clipboard` + `open_url ftp://` + `kind: bogus` → `executed.clipboard: 1`,
+  `skipped_scheme: 1`, `unknown_kind: 1`, `last.value` = отправленный текст;
+  служебные файлы во входящих не остались.
+- Правка после проверки: `tag` находит узел и без префикса источника
+  (`ts-b` → `🕸️ ts-b`), если такой один.
+- Замечание: `disable_taildrop` в `GET /taildrop` у включённых узлов `null`,
+  хотя в собранном конфиге `false` — читает поле только как `true`.

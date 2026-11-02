@@ -239,15 +239,23 @@ Future<DebugResponse> _nodes(
   return JsonResponse({'tunnel_up': up, 'nodes': out});
 }
 
-/// Тег узла из запроса: есть в конфиге, иначе 404.
+/// Тег узла из запроса: есть в конфиге, иначе 404. Без префикса источника
+/// (эмодзи и пробелы перед именем) — тоже, если такой узел один:
+/// `ts-b` → `🕸️ ts-b`.
 String _requireNode(DebugContext ctx, TaildropDebugActions a, String? tag) {
   final t = (tag ?? '').trim();
   if (t.isEmpty) throw const BadRequest('param "tag" required');
-  if (!_configNodes(a.configJson(ctx)).containsKey(t)) {
-    throw NotFound('tailscale node by tag: $t');
-  }
-  return t;
+  final nodes = _configNodes(a.configJson(ctx));
+  if (nodes.containsKey(t)) return t;
+  final bare = _bareTag(t);
+  final hits = nodes.keys.where((k) => _bareTag(k) == bare).toList();
+  if (hits.length == 1) return hits.single;
+  throw NotFound('tailscale node by tag: $t');
 }
+
+/// Тег без ведущих символов, не являющихся буквой или цифрой.
+String _bareTag(String tag) =>
+    tag.replaceFirst(RegExp(r'^[^\p{L}\p{N}]+', unicode: true), '');
 
 void _requireTunnel(DebugContext ctx, TaildropDebugActions a) {
   if (!a.tunnelUp(ctx)) throw const Conflict('VPN is not running');
