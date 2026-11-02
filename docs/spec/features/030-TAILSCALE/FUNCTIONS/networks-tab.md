@@ -124,14 +124,33 @@ Diagnostics line "This node has no exit. Check devices on the Network tab."
      known last-seen time — `last seen 33h ago` (relative: `42s`, `5m`, `33h`
      up to 48 hours, then `17d`); otherwise nothing. `key expired` is
      appended; an empty line is not drawn. The handshake age is not shown here.
-  The row menu offers Copy name (the host name), Copy MagicDNS name (when
-  known), Copy address — one item, or `Copy <address>` per address when
-  there are several — and Ping (first address). Owner groups appear only with
+  A tap on a row opens the device page; a long press copies the first
+  address (the host name when there is none) without opening it; a tap on
+  `+N` only unfolds the addresses. Owner groups appear only with
   more than one owner; profile pictures are not loaded.
+- **Device page:** a full screen with a back arrow and the host name as the
+  title. On top a summary — the dot with `online` / `offline`, OS and roles
+  as in the row's second line, the path line as in the row's third line.
+  Then the buttons: Ping (when the device has an address; the same check
+  sheet as before) and Send file…, which is always shown and, when it cannot
+  send, is disabled with the reason under the buttons — the first that
+  applies: `Taildrop is off for this node`, `File sharing is off in this
+  tailnet`, `Device is offline`, `Device belongs to another user`, `Device
+  can't receive files`. Allow Taildrop switched off on the other side is not
+  visible in advance (the core does not publish it); it shows up as a refusal
+  when sending. **Addresses:** Name, MagicDNS (when known) and every Tailscale
+  address labelled IPv4 / IPv6; a tap copies the value, "Copied".
+  **Taildrop:** the "Clipboard from this device" and "Links from this device"
+  switches ([032-TAILDROP · clipboard-sync](../../032-TAILDROP/FUNCTIONS/clipboard-sync.md)),
+  only when the node's Taildrop is on, the device has a stable ID and is not
+  a shared-in machine; written at once; otherwise the block and its heading
+  are absent. While the page is open the status calls go on and the page
+  follows the device by stable ID; a device that left the record keeps its
+  last known state. There is no bottom sheet with Copy items any more.
 - **The active exit** in the Exit node list shows its path with the same icon
   and colour, plus the handshake age.
-- **Live status:** while the tab is on screen, the app is in the foreground
-  and the VPN is up, the tab calls the core's `GetTailscaleStatus(tag)` at
+- **Live status:** while the tab or a device page is on screen, the app is
+  in the foreground and the VPN is up, the tab calls the core's `GetTailscaleStatus(tag)` at
   once and then every 3 seconds. The reply is the full endpoint record (self,
   exit node, peers by owner, health) and the whole tab is built from it; until
   it arrives the tab shows what the stream gave. The record shown is the one
@@ -173,3 +192,4 @@ Diagnostics line "This node has no exit. Check devices on the Network tab."
 | 3 | [645](../../../tasks/645-tailscale-devices-path-addresses.md) | Implemented, DEVICE-PENDING | Device rows in three lines with the path as an icon, addresses in a column, This device with one Address heading, `GetTailscaleStatus` every 3 s |
 | 4 | [706](../../../tasks/706-tailscale-network-tab-logged-out.md) | Implemented, DEVICE-PENDING | Offline: the recorded exit as a line instead of the list and Save choice (it is no longer erased), the key chip only in Running, Replace key, Name `—` |
 | 5 | [706](../../../tasks/706-tailscale-network-tab-logged-out.md) iteration 2 | Implemented, DEVICE-PENDING | Replace key signs in without restarting the VPN (core SPEC 149), Node enabled switch and Restart node in Status |
+| 6 | [707](../../../tasks/707-taildrop-send-receive-files.md) iteration 6 | Implemented, emulator-verified | 2026-11-03: a tap on a device opens the device page (summary, Ping and Send file… with the reason, Addresses with copy on tap, Taildrop permissions) instead of the row menu; a long press copies the first address |

@@ -6,29 +6,54 @@ A Taildrop file of a special form carries commands. LxBox or the desktop
 launcher (singbox-launcher) receiving it from an allowed device runs the
 commands and deletes the file; such a file never reaches the inbox or
 Downloads. Two commands exist: put text on the clipboard and open a link.
-Phone → PC: the "Send clipboard" tile and "Share" with a link. PC → phone:
-clipboard and links from an allowed device.
+Phone → PC: the Send clipboard window, opened from the "📋 Send clipboard"
+button in the VPN notification, from "Share" with text or from "Send to
+device" in the text selection menu. PC → phone: clipboard and links from an
+allowed device.
 
 | Field | Value |
 |-------|-------|
 | Feature | [032-TAILDROP](../FEATURE.md) |
 | Promises | P9–P12 |
-| State | 🟡 Partial, 2026-11-02 — receiving implemented (task 707, iteration 4: commands run, file deleted, per-device permissions); sending — iteration 5. Contract 1.1.148–1.1.150 |
+| State | ✅ implemented, 2026-11-03 — receiving (task 707, iteration 4: commands run, file deleted, per-device permissions), permissions on the device page (iteration 6), sending from the Send clipboard window (iteration 7); the window not verified on a device. Contract 1.1.148–1.1.150 |
 
 ## What it does
 
-**Phone → PC, clipboard.** The user adds the "Send clipboard" tile to Quick
-Settings. A tap opens a transparent window for a split second: Android 10+
-lets an app read the clipboard only from a foreground window. The window
-reads the clipboard, checks it, sends it to the target device as a command
-file with a `clipboard` command and closes; a notification says "Sent to
-<PC>". The target device is chosen once in the Settings block of the node's
-Network tab.
+**Phone → PC: the Send clipboard window.** The VPN notification has the
+"📋 Send clipboard" button. It opens a chat-like window over the current app
+(the lower half of the screen, its own task: the main LxBox window does not
+come up). Android 10+ lets an app read the clipboard only from a foreground
+window, so the window reads it when it gets focus and puts the text into the
+field; an empty clipboard or a non-text clip leaves the field empty.
 
-**Phone → PC, link.** "Share" with text that is exactly one `http(s)` link.
-After the device is chosen the phone asks "Open on <device>" or "Send as
-note". The first sends an `open_url` command, the second a note as today
-(P8).
+```
+📋  To: LexRouter ▾          ⋮    ✕
+                  https://ya.ru      sent · 12:40 ✓
+ssh root@10.0.0.5                    from LexRouter · 12:42
+[ text from the clipboard, editable ]  [➤]
+[ Open on LexRouter ]   ← only for one link
+```
+
+- **Recipient** `To: … ▾` — own devices that accept files, from all running
+  Tailscale nodes with Allow Taildrop; with several nodes a device is shown
+  with its node. The choice is remembered and comes back next time; a
+  remembered device that is not in the list gives way to the first one.
+- **➤** sends the field as a command file with a `clipboard` command; the
+  field is cleared, the window stays open.
+- **Open on <device>** appears under the field only when the text is exactly
+  one `http(s)` link (after trimming, no spaces inside) and sends `open_url`.
+- **Feed** — the conversation with the chosen device: what was sent is on the
+  right with the time, ✓ on success or the error text under the message;
+  what came from that device and was run by permission (`clipboard`,
+  `open_url`) is on the left. A tap on a message copies its text, "Copied".
+  `⋮ → Clear` clears the feed with this device.
+- The window closes with ✕, Back or a tap outside it.
+
+**Phone → PC: shared and selected text.** "Share" with text (no files) opens
+the same window with that text in the field instead of the clipboard
+([share text](share-text.md)). Text selected in any app and sent with "Send
+to device" from the selection menu does the same; the text in the source app
+does not change.
 
 **PC → phone.** A file arrives whose name matches the command-file format and
 whose body parses. Each command runs if the receiver allows that kind from
@@ -74,13 +99,15 @@ the launcher decides.
 
 | What | Value |
 |------|-------|
-| Tile | "Send clipboard", separate from the tunnel tile |
-| Clipboard target device | one own device of one Tailscale node; chosen once in the Settings block of the node's Network tab |
-| Permissions | on the receiver, per own device and per kind: "Clipboard from <device>", "Links from <device>"; off by default; in the device menu on the node's Network tab |
+| Notification button | "📋 Send clipboard" next to Stop; there is no Quick Settings tile (owner decision 2026-11-03) |
+| Where the window and its entries exist | "📋 Send clipboard", "Send to device" and LxBox in "Share" — only while the VPN is up and the running config has a Tailscale node with Allow Taildrop |
+| Recipient | `To: … ▾` in the window: own devices that accept files, from all such nodes; remembered on this phone |
+| Feed | in memory only while the VPN runs; at most 50 messages per device (node + device); `⋮ → Clear` |
+| Permissions | on the receiver, per own device and per kind: "Clipboard from this device", "Links from this device"; off by default; in the Taildrop block of the device page on the node's Network tab |
 | Freshness (TTL) | 2 minutes by the receiver's clock from receipt; older — deleted without running |
 | Size | at most 64 KiB |
-| Backup | the target and the permissions are not in the backup (owner decision 2026-11-02) |
-| Send confirmation | notification "Sent to <PC>" |
+| Backup | the remembered recipient and the permissions are not in the backup (owner decision 2026-11-02) |
+| Send confirmation | ✓ or the error text under the message in the feed; no separate notification |
 
 Prefix, suffix, size limit, TTL and format version are constants of the
 contract with the launcher (`docs/contract` and the registry). The format
@@ -89,21 +116,35 @@ implemented.
 
 ## Inputs / Outputs
 
-**Inputs:** a tile tap and the clipboard at that moment; "Share" with a link;
-incoming command files and their Taildrop sender; the chosen target;
-permissions.
+**Inputs:** a tap on "📋 Send clipboard" and the clipboard when the window
+gets focus; "Share" with text; "Send to device" with selected text; ➤ and
+"Open on <device>"; incoming command files and their Taildrop sender; the
+chosen recipient; permissions.
 
-**Outputs:** a command file to the target device; a "Sent to <PC>"
-notification or a refusal with the reason; the phone clipboard; a link
-notification; a warning in the app log about a broken command file.
+**Outputs:** a command file to the chosen device; ✓ or the error in the
+feed, or a refusal reason above the field; the phone clipboard; a link
+notification; incoming commands that ran, in the feed of their sender; a
+warning in the app log about a broken command file.
 
 ## Rules and invariants
 
-- **Sending the clipboard.** The clipboard is read only on a tile tap;
-  nothing is sent on copy. The tile does not send and shows the reason when
-  the clip is empty, over the limit, not valid UTF-8 or marked sensitive by
-  Android (passwords, P11); and when no target is chosen, the target is
-  offline, the VPN is off or the node is not running.
+- **Sending.** The clipboard is read only when the window gets focus;
+  nothing is sent on copy and nothing leaves without ➤ or "Open on <device>"
+  (P11). A clip that Android marks as sensitive (a password) is shown in the
+  field like any other: everything is visible before sending (owner decision
+  2026-11-03; the contract rule "do not send a sensitive clip" is about
+  sending without showing).
+- **Refusals.** ➤ and "Open on" are disabled and the reason stands above the
+  field, the first that applies: the VPN is off or no Tailscale node runs —
+  `Start VPN to send`; no node has Allow Taildrop — `Taildrop is off for this
+  node.`; no device accepts files — `No devices accept files`; the recipient
+  is offline — `Device is offline.`; the text is over the size limit — `Too
+  large to send`. An empty field disables the buttons without a reason. A
+  core error during the send shows under the message in the feed.
+- **Feed.** Only in memory: a VPN stop and the death of the process wipe it;
+  there is no file. Clipboard text and links in it never reach the app log
+  or the Debug API; the Debug API shows only the remembered recipient (its
+  name with `reveal`) and the number of messages per feed.
 - **Receiving** (P12). A command runs only if its kind is allowed for its
   sender. The sender is the Taildrop sender.
 - **Interception.** A command file is handled before auto-save and the
@@ -127,16 +168,23 @@ notification; a warning in the app log about a broken command file.
 
 - Between LxBox and the launcher only. The official Tailscale client shows a
   command file as an ordinary `.json`.
-- No background clipboard reading and no automatic sending on copy.
+- No background clipboard reading and no automatic sending on copy; no Quick
+  Settings tile for the clipboard.
 - Text only; images and other clip types are not sent.
 - VPN control and adding subscriptions are not in this version.
 - The launcher side is its own spec: clipboard on macOS, Windows and remote
   lxd (over gRPC), none on Linux classic and Windows 386; sending from the PC
   is a tray item "Send clipboard to <phone>", no global hotkey.
-- Not verified on a device.
+- Not verified on a device: the window, reading the clipboard on focus, the
+  selection menu entry, switching the entries on and off, the notification
+  button. The window logic is covered by JVM unit tests (task 707,
+  iteration 7).
 
 ## Revisions
 
 | # | Revision | Status | Summary |
 |---|----------|--------|---------|
 | — | — | Draft | 2026-11-01: clipboard via `lxclip-*` (contract 1.1.146). 2026-11-02: one command-file format for all commands, no pairing, commands — clipboard and link |
+| 1 | [707](../../../tasks/707-taildrop-send-receive-files.md) iteration 4 | Implemented | Receiving: commands run by per-device permission, the file is deleted |
+| 2 | [707](../../../tasks/707-taildrop-send-receive-files.md) iteration 6 | Implemented, emulator-verified | 2026-11-03: the permissions moved from the row menu to the device page |
+| 3 | [707](../../../tasks/707-taildrop-send-receive-files.md) iteration 7 | Implemented, not verified on a device | 2026-11-03: the Send clipboard window from the notification button instead of the tile and the target in Settings; shared and selected text open it; a sensitive clip is shown and sent only on ➤; the feed in memory |

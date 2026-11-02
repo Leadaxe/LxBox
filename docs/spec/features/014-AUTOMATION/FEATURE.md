@@ -181,7 +181,12 @@ tile touch / menu item / command / plugin
 - `ACTIVE_NODE_CHANGED` comes only on an explicit node choice, `reason` is
   always `user`; changes by auto-select and automation with `reason` `urltest` /
   `automation` (`047F`) are not planned (owner decision 2026-09-29, audit [591](../../tasks/591-spec-kit-revision-audit.md)).
-- The service notification with Stop / Reconnect buttons — 010-VPN_SERVICE.
+- The service notification with the Stop and "📋 Send clipboard" buttons —
+  010-VPN_SERVICE and 032-TAILDROP; it has had no Reconnect button since task
+  707 (iteration 7). There is no reconnect command in the Intent API either:
+  from outside, reconnect goes through the Debug API (`POST /action/reconnect`).
+- The Quick Settings tile is one, the tunnel toggle; there is no "Send
+  clipboard" tile (owner decision 2026-11-03).
 - Remote control over HTTP with a token — Debug API,
   [027-DEBUG_API](../027-DEBUG_API/FEATURE.md).
 - **Depends on OS capabilities:** the shade tile, the dynamic icon menu, the
@@ -204,7 +209,7 @@ tile touch / menu item / command / plugin
 
 - [010-VPN_SERVICE](../010-VPN_SERVICE/FEATURE.md) — the tunnel service that
   external start/stop drives directly; owns the service notification with Stop
-  / Reconnect.
+  (and "📋 Send clipboard" from 032-TAILDROP).
 - [027-DEBUG_API](../027-DEBUG_API/FEATURE.md) — the Debug API, whose
   handlers and error codes the commands reuse; remote control over HTTP
   ([automation-recipes](../027-DEBUG_API/FUNCTIONS/automation-recipes.md)).
