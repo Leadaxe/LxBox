@@ -960,6 +960,15 @@ intent-filter `android.intent.action.PROCESS_TEXT` (`text/plain`), подпис�
 вместо буфера. Текст в исходном приложении не меняется (результат не
 возвращается, `EXTRA_PROCESS_TEXT_READONLY` не важен).
 
+**C3. Пункты видны только при поднятом VPN** (владелец 03.11.2026): «Send to
+device» (C2) и L×Box в системном «Поделиться» (`TaildropShareActivity`, и
+файлы, и текст) включаются при старте VPN и выключаются при остановке —
+`PackageManager.setComponentEnabledSetting(..., DONT_KILL_APP)`. При старте
+процесса (`BoxApplication.onCreate`) состояние сверяется с фактическим
+состоянием VPN: после падения процесса пункты не остаются видимыми.
+Компонент выключен, а интент уже пришёл (гонка) — окно показывает «Start
+VPN to send».
+
 **D. Служебный файл** собирается в Kotlin по контракту: имя
 `<name_prefix><UTC YYYYMMDDTHHMMSSZ>-<5 [a-z0-9]><name_suffix>`, тело
 `{"lx":1,"commands":[…]}`; константы — из `service_files.json`
@@ -984,4 +993,5 @@ file…». Сборщик Debug API (`POST /taildrop/send` с `commands`) пер
   совпал, в ленте справа ✓; ссылка → «Open on» → на приёме уведомление
   «Link from …»; приём от lxbox-emu-b в окне ts-b слева; Reconnect в
   уведомлении нет; «Поделиться» текстом → окно с этим текстом; выделение
-  текста → «Send to device» → окно с выделенным текстом.
+  текста → «Send to device» → окно с выделенным текстом; VPN выключен —
+  ни «Send to device», ни L×Box в «Поделиться» нет, включён — есть.
