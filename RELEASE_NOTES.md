@@ -1,28 +1,28 @@
-# L×Box v2.25.19-rc.2
+# L×Box v2.25.19-rc.3
 
-**The second release candidate on top of [v2.25.18](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.18).**
+**The third release candidate on top of [v2.25.18](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.18).**
 
 This is a pre-release on GitHub; in Google Play it goes to Open testing. It is
 not offered to users of the stable release. It contains everything from
-[v2.25.19-rc.1](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.19-rc.1);
-below are the changes since rc.1.
+[v2.25.19-rc.2](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.19-rc.2);
+below are the changes since rc.2.
 
-**Mixins**: your own additions to the final core config that survive every
-rebuild. The memory limit now applies to the core's own memory, and Auto sets
-no cap. The «Interrupt connections on switch» switch is removed. Core
-`v1.14.4-lx.29`.
+**Taildrop**: send and receive files over a Tailscale node, and «Send
+clipboard» from the VPN notification. VPN Settings →
+Core is rebuilt as cards, with new WireGuard, MTU and QUIC settings. Core
+`v1.14.4-lx.30`.
 
-**Второй релиз-кандидат поверх [v2.25.18](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.18).**
+**Третий релиз-кандидат поверх [v2.25.18](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.18).**
 
 На GitHub это pre-release, в Google Play сборка уходит в открытое
 тестирование. Пользователям стабильного релиза она не предлагается. В нём
-всё из [v2.25.19-rc.1](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.19-rc.1);
-ниже — изменения относительно rc.1.
+всё из [v2.25.19-rc.2](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.19-rc.2);
+ниже — изменения относительно rc.2.
 
-**Mixins** — свои вставки в итоговый конфиг ядра, которые переживают любую
-пересборку. Лимит памяти теперь действует на память самого ядра, Auto порога
-не ставит. Тумблер «Interrupt connections on switch» убран. Ядро
-`v1.14.4-lx.29`.
+**Taildrop** — отправка и приём файлов через узел Tailscale и «Send
+clipboard» из уведомления VPN. VPN Settings →
+Core переделан карточками, в нём новые настройки WireGuard, MTU и QUIC. Ядро
+`v1.14.4-lx.30`.
 
 ---
 
@@ -31,42 +31,78 @@ no cap. The «Interrupt connections on switch» switch is removed. Core
 
 ## ⚠️ Read before updating
 
-- **Memory limit: Auto sets no cap, Off is folded into Auto ([task 705](docs/spec/tasks/705-memory-limit-auto-off.md)).**
-  The limit is now compared with the core's own memory (its Go runtime), not
-  with the whole app process it shares with the interface and libraries: a
-  200 MB cap used to trip right at start and only made the garbage collector
-  heat the phone. The core keeps watching the phone's free memory as before.
-  The 200–768 MB presets stay for an explicit choice, and a value chosen
-  earlier is kept.
-- **«Interrupt connections on switch» is removed ([task 143](docs/spec/tasks/143-interrupt-connections-on-node-switch.md)).**
-  The switch in VPN Settings → System only duplicated each Direction's own
-  checkbox of the same name and could override it: the core has dropped a
-  Direction's connections on any node switch since 2.20.9. If it was on, the
-  update turns the checkbox on in every Direction where it was off. The Debug
-  API route `/settings/interrupt_on_switch` is gone; an old backup with this
-  setting still restores.
+- **Taildrop is off on every Tailscale node, existing ones included
+  ([task 707](docs/spec/tasks/707-taildrop-send-receive-files.md)).** A node
+  receives and sends files only after «Allow Taildrop» is turned on in its
+  settings; it takes effect after the VPN restarts.
+- **The VPN notification has no Reconnect button
+  ([task 707](docs/spec/tasks/707-taildrop-send-receive-files.md#итерация-7--окно-send-clipboard-буфер-и-ссылки-с-телефона)).** Its buttons are Stop and
+  «📋 Send clipboard»; Reconnect stays in the ⟳ menu on the home screen.
+- **WireGuard sleep settings moved to VPN Settings → Core and start from the
+  defaults ([task 709](docs/spec/tasks/709-quic-sniff-decoy-toggle.md)).**
+  Suspend idle tunnels 30 seconds, Suspend active-route tunnels 5 minutes,
+  Lazy tunnel build on, Built tunnels limit 5. Values chosen earlier on the
+  System tab are not carried over: set them again if they differed.
 
 ## ✨ New
 
-- **Mixins ([task 704](docs/spec/tasks/704-config-mixins.md)).**
-  Config → Mixins keeps operations applied at the end of every config build:
-  a target path (`route.rules[action=hijack-dns]`, `inbounds[tag=dns-in]`), a
-  verb (append, prepend, before, after, set, merge, remove) and a JSON value.
-  The form shows whether the target matches and a preview of the result.
-  Unlike a manual edit with Lock config, a mixin survives rebuilds; it travels
-  in LX Backup and is available through the Debug API (`/mixins`). A mixin
-  that does not apply or adds a duplicate tag stops the build with its name in
-  the message. Example: a `direct` inbound on `127.0.0.1:5354` with a
-  `hijack-dns` rule hands the core's DNS to another app.
-- **Core memory in Statistics → Memory.** The core's figure is shown as «Core
-  memory» next to the process RSS, with the limit beside it when a number is
-  chosen.
+- **Taildrop: send and receive files over a Tailscale node
+  ([task 707](docs/spec/tasks/707-taildrop-send-receive-files.md)).** L×Box
+  is a Share target for files: they go to one of your online devices in the
+  tailnet, with progress and Cancel in a notification. A tap on a device on
+  the Network tab opens its page: Ping, Send file…, addresses (a tap copies)
+  and the device's permissions; a long tap on the row copies its first
+  address. Received files land in the node's Inbox on the Network tab with
+  Save (to Downloads) and Delete; «Save received files to Downloads» moves
+  every received file there by itself (Android 10+). The Debug API has
+  `/taildrop/*`.
+- **Send clipboard: text and links to your devices
+  ([task 707](docs/spec/tasks/707-taildrop-send-receive-files.md#итерация-7--окно-send-clipboard-буфер-и-ссылки-с-телефона)).** «📋 Send clipboard» in the
+  VPN notification opens a chat-like window over the current app with the
+  clipboard text in the field: ➤ puts it into the device's clipboard, «Open
+  on <device>» opens a single link there. Shared text and «Send to device» in
+  the text selection menu open the same window. The window keeps the exchange
+  with each device while the VPN runs. The other side is the desktop launcher
+  or another L×Box; what they send runs only from devices allowed on the
+  device page (Clipboard from this device, Links from this device; off by
+  default). The button, Share and «Send to device» appear only while the VPN
+  runs a Tailscale node with Allow Taildrop.
+- **Tailscale node on/off and restart on the fly
+  ([task 706](docs/spec/tasks/706-tailscale-network-tab-logged-out.md)).**
+  The Network tab has Node enabled and Restart node; Turn off / Turn on in the
+  node list works for Tailscale nodes too. Replace key signs the node in with
+  the new key without restarting the VPN.
+- **VPN Settings → Core as cards
+  ([task 709](docs/spec/tasks/709-quic-sniff-decoy-toggle.md)).** General,
+  Network, TUN, TLS Fragmentation, WireGuard and QUIC are separate cards. The
+  core's own settings have an (i) with a short hint.
+  - **WireGuard** — the four sleep and build settings, moved from System.
+    Rows that depend on sleeping are greyed out while it is off.
+  - **Network → Align MTU to the path** — Clamp (default), Fill or Off: how a
+    node that runs over a tunnel (detour, chain) gets a packet size that fits.
+  - **QUIC → Anti-sniff decoy** — Off, Through detour (default), Direct or
+    All: one junk byte before the QUIC handshake of MASQUE (HTTP/3),
+    Hysteria2 and TUIC, so a relay that sniffs UDP does not redirect the
+    connection by its SNI. Servers drop the byte. By default only connections
+    carried by another node get it: a DPI on your own uplink may react to it.
+  - **QUIC → MASQUE idle timeout** — Off by default; closes an idle MASQUE
+    tunnel, a node's own idle timeout wins.
+
+## 🐞 Fixed
+
+- **The Network tab of a signed-out Tailscale node could erase the saved exit
+  node ([task 706](docs/spec/tasks/706-tailscale-network-tab-logged-out.md)).**
+  Outside Running the tab now shows the saved exit node as a line and offers
+  Replace key.
 
 ## 🔧 Under the hood
 
-- Core `v1.14.4-lx.28` → `v1.14.4-lx.29`: the memory limit can be compared
-  with the core's Go runtime instead of the whole process, and the status
-  reports that figure (Leadaxe/sing-box-lx#62).
+- Core `v1.14.4-lx.29` → `v1.14.4-lx.30`: sign-in with a new key and
+  on/off for Tailscale endpoints without a restart, `disable_taildrop` and the
+  sender of a received file (SPEC 149), the QUIC sniff decoy (SPEC 151).
+- Contract 1.1.152 → 1.1.156: the core's root `lx` keys are template
+  variables written by the template, the same names on the desktop launcher;
+  command files (clipboard, links) in one format on both sides.
 
 </details>
 
@@ -75,41 +111,80 @@ no cap. The «Interrupt connections on switch» switch is removed. Core
 
 ## ⚠️ Прочтите до обновления
 
-- **Memory limit: Auto порога не ставит, Off слит с Auto ([задача 705](docs/spec/tasks/705-memory-limit-auto-off.md)).**
-  Лимит теперь сравнивается с памятью самого ядра (его Go-рантаймом), а не
-  всего процесса приложения, который ядро делит с интерфейсом и
-  библиотеками: порог 200 MB срабатывал сразу на старте и только заставлял
-  сборщик мусора греть телефон. За свободной памятью телефона ядро следит
-  по-прежнему. Пресеты 200–768 MB остаются для явного выбора, выбранное
-  раньше значение сохраняется.
-- **Тумблер «Interrupt connections on switch» убран ([задача 143](docs/spec/tasks/143-interrupt-connections-on-node-switch.md)).**
-  Тумблер в VPN Settings → System только дублировал одноимённую галочку
-  каждого Направления и мог её перекрыть: с 2.20.9 ядро само рвёт соединения
-  Направления при любой смене узла. Если он был включён, при обновлении
-  галочка включается во всех Направлениях, где была снята. Маршрут Debug API
-  `/settings/interrupt_on_switch` убран; старый бэкап с этой настройкой
-  восстанавливается.
+- **Taildrop выключен на каждом узле Tailscale, включая существующие
+  ([задача 707](docs/spec/tasks/707-taildrop-send-receive-files.md)).** Узел
+  принимает и отправляет файлы только после включения «Allow Taildrop» в его
+  настройках; действует после перезапуска VPN.
+- **В уведомлении VPN нет кнопки Reconnect
+  ([задача 707](docs/spec/tasks/707-taildrop-send-receive-files.md#итерация-7--окно-send-clipboard-буфер-и-ссылки-с-телефона)).** Кнопки — Stop и
+  «📋 Send clipboard»; Reconnect остался в меню ⟳ на главном экране.
+- **Настройки сна WireGuard переехали в VPN Settings → Core и начинают с
+  дефолтов ([задача 709](docs/spec/tasks/709-quic-sniff-decoy-toggle.md)).**
+  Suspend idle tunnels 30 секунд, Suspend active-route tunnels 5 минут, Lazy
+  tunnel build включена, Built tunnels limit 5. Значения, выбранные раньше на
+  вкладке System, не переносятся: если они отличались, выставьте заново.
 
 ## ✨ Новое
 
-- **Mixins ([задача 704](docs/spec/tasks/704-config-mixins.md)).**
-  Config → Mixins хранит операции, которые применяются в конце каждой сборки
-  конфига: путь цели (`route.rules[action=hijack-dns]`, `inbounds[tag=dns-in]`),
-  глагол (append, prepend, before, after, set, merge, remove) и JSON-значение.
-  Форма показывает, находит ли путь цель, и предпросмотр результата. В
-  отличие от ручной правки с Lock config, миксин переживает пересборки, едет
-  в LX Backup и доступен через Debug API (`/mixins`). Миксин, который не
-  применяется или вносит дубль тега, останавливает сборку с его именем в
-  сообщении. Пример: inbound `direct` на `127.0.0.1:5354` с правилом
-  `hijack-dns` отдаёт DNS ядра другому приложению.
-- **Память ядра в Statistics → Memory.** Цифра ядра показана как «Core
-  memory» рядом с RSS процесса, с лимитом рядом, если выбрано число.
+- **Taildrop: отправка и приём файлов через узел Tailscale
+  ([задача 707](docs/spec/tasks/707-taildrop-send-receive-files.md)).** L×Box
+  — цель «Поделиться» для файлов: они уходят на одно из ваших устройств
+  tailnet в сети, с прогрессом и Cancel в уведомлении. Тап по устройству на
+  вкладке Network открывает его страницу: Ping, Send file…, адреса (тап
+  копирует) и разрешения устройства; долгий тап по строке копирует первый
+  адрес. Принятое ложится во входящие узла на вкладке Network с Save (в
+  Downloads) и Delete; «Save received files to Downloads» переносит туда всё
+  принятое само (Android 10+). В Debug API есть `/taildrop/*`.
+- **Send clipboard: текст и ссылки на свои устройства
+  ([задача 707](docs/spec/tasks/707-taildrop-send-receive-files.md#итерация-7--окно-send-clipboard-буфер-и-ссылки-с-телефона)).** «📋 Send clipboard» в
+  уведомлении VPN открывает окно-чат поверх текущего приложения с текстом
+  буфера в поле: ➤ кладёт его в буфер устройства, «Open on <device>»
+  открывает там одну ссылку. Текст из «Поделиться» и пункт «Send to device»
+  в меню выделения текста открывают то же окно. Окно хранит переписку с
+  каждым устройством, пока работает VPN. На другой стороне — десктопный
+  лаунчер или другой L×Box; присланное ими выполняется только с устройств,
+  разрешённых на странице устройства (Clipboard from this device, Links from
+  this device; по умолчанию выключены). Кнопка, «Поделиться» и «Send to
+  device» есть, только пока VPN держит узел Tailscale с Allow Taildrop.
+- **Узел Tailscale включается, выключается и перезапускается на ходу
+  ([задача 706](docs/spec/tasks/706-tailscale-network-tab-logged-out.md)).**
+  На вкладке Network есть Node enabled и Restart node; Turn off / Turn on в
+  списке узлов работают и для Tailscale. Replace key входит новым ключом без
+  перезапуска VPN.
+- **VPN Settings → Core карточками
+  ([задача 709](docs/spec/tasks/709-quic-sniff-decoy-toggle.md)).** General,
+  Network, TUN, TLS Fragmentation, WireGuard и QUIC — отдельные карточки. У
+  собственных настроек ядра (i) с короткой подсказкой.
+  - **WireGuard** — четыре настройки сна и сборки, переехали с System.
+    Строки, зависящие от сна, серые, пока он выключен.
+  - **Network → Align MTU to the path** — Clamp (по умолчанию), Fill или Off:
+    как узел поверх туннеля (detour, chain) получает влезающий в него размер
+    пакета.
+  - **QUIC → Anti-sniff decoy** — Off, Through detour (по умолчанию), Direct
+    или All: один мусорный байт перед QUIC-рукопожатием MASQUE (HTTP/3),
+    Hysteria2 и TUIC, чтобы релей со сниффингом UDP не перенаправил
+    соединение по SNI. Серверы этот байт отбрасывают. По умолчанию байт
+    получают только соединения поверх другого узла: DPI своего канала может
+    на него среагировать.
+  - **QUIC → MASQUE idle timeout** — по умолчанию Off; закрывает простаивающий
+    туннель MASQUE, собственный таймаут узла сильнее.
+
+## 🐞 Исправлено
+
+- **Вкладка Network узла Tailscale без входа могла стереть сохранённый exit
+  node ([задача 706](docs/spec/tasks/706-tailscale-network-tab-logged-out.md)).**
+  Вне Running вкладка показывает сохранённый exit node строкой и предлагает
+  Replace key.
 
 ## 🔧 Под капотом
 
-- Ядро `v1.14.4-lx.28` → `v1.14.4-lx.29`: лимит памяти можно сравнивать с
-  Go-рантаймом ядра, а не со всем процессом, и статус отдаёт эту цифру
-  (Leadaxe/sing-box-lx#62).
+- Ядро `v1.14.4-lx.29` → `v1.14.4-lx.30`: вход новым ключом и
+  включение/выключение эндпоинтов Tailscale без перезапуска,
+  `disable_taildrop` и отправитель принятого файла (SPEC 149), обманка от
+  сниффинга QUIC (SPEC 151).
+- Контракт 1.1.152 → 1.1.156: корневые ключи `lx` ядра — переменные
+  шаблона, их пишет шаблон, имена те же, что у десктопного лаунчера;
+  служебные файлы (буфер, ссылки) в одном формате у обеих сторон.
 
 </details>
 
@@ -118,7 +193,7 @@ no cap. The «Interrupt connections on switch» switch is removed. Core
 ## Install / Установка
 
 ```bash
-adb install -r LxBox-v2.25.19-rc.2-arm64-v8a.apk
+adb install -r LxBox-v2.25.19-rc.3-arm64-v8a.apk
 ```
 
 Без uninstall! Поверх существующей установки. Настройки и подписки сохранятся.
@@ -128,4 +203,4 @@ are preserved.
 
 ---
 
-Previous release / Предыдущий релиз: [v2.25.19-rc.1](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.19-rc.1) · stable / стабильный: [v2.25.18](docs/releases/v2.25.18.md).
+Previous release / Предыдущий релиз: [v2.25.19-rc.2](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.19-rc.2) · stable / стабильный: [v2.25.18](docs/releases/v2.25.18.md).

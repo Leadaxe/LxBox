@@ -8,13 +8,16 @@
 
 ## [Unreleased]
 
+## [2.25.19] — 2026-11-02
+
 ### Added
 
 - **Taildrop: send and receive files over a Tailscale node
   ([task 707](docs/spec/tasks/707-taildrop-send-receive-files.md)).** L×Box
-  is now a Share target: files (or text, sent as a `note-…txt` file) go to one
-  of your online devices in the tailnet, with progress and Cancel in a
-  notification. The device menu on the Network tab has "Send file…". Received
+  is now a Share target for files: they go to one of your online devices in
+  the tailnet, with progress and Cancel in a notification. A tap on a device
+  on the Network tab opens its page (Ping, Send file…, addresses with copy on
+  tap, the device's permissions); a long tap copies its first address. Received
   files land in each node's own inbox and are listed in a new Inbox block on
   the Network tab with Save (to Downloads) and Delete; tapping a receive
   notification opens that node's Network tab. Files the core had already
@@ -38,35 +41,48 @@
   the node is not offered in Share. Received `lx-….json` command files from
   the launcher or another L×Box are run and deleted instead of landing in the
   Inbox: text goes to the clipboard, a link comes as a "Link from <device>"
-  notification. Each kind is allowed per device in that device's menu
+  notification. Each kind is allowed per device on that device's page
   ("Clipboard from this device", "Links from this device"; off by default,
   kept on the device, not in the backup).
+- **Send clipboard: text and links to your devices
+  ([task 707](docs/spec/tasks/707-taildrop-send-receive-files.md#итерация-7--окно-send-clipboard-буфер-и-ссылки-с-телефона)).**
+  "📋 Send clipboard" in the VPN notification opens a chat-like window over
+  the current app with the clipboard text in the field: ➤ sends it to the
+  device's clipboard, "Open on <device>" opens a single http(s) link there.
+  Shared text and "Send to device" in the text selection menu open the same
+  window. The exchange with each device is kept in memory while the VPN runs
+  (50 messages per device). The button, Share and "Send to device" are there
+  only while the VPN runs a Tailscale node with Allow Taildrop.
 - **Tailscale node on/off and restart on the fly
   ([task 706](docs/spec/tasks/706-tailscale-network-tab-logged-out.md)).**
   The Network tab has a Node enabled switch and Restart node; Turn off / Turn
   on in the node list now works for Tailscale nodes too.
 - **Debug API `/taildrop/*`** ([task 707](docs/spec/tasks/707-taildrop-send-receive-files.md#итерация-5--маршруты-debug-api-для-taildrop)): send files, notes and service files, list and manage the inbox, autosave, Allow Taildrop, per-device permissions and service-file counters without tapping the screen.
-
-### Changed
-
-- **Taildrop is now off by default on every Tailscale node, existing ones
-  included** (contract 1.1.150): after this update a node receives and sends
-  files only once "Allow Taildrop" is turned on in its settings.
-
-### Fixed
-
-- **Tailscale Network tab of a signed-out node could erase the saved exit
-  node ([task 706](docs/spec/tasks/706-tailscale-network-tab-logged-out.md)).**
-  Offline, the tab compared the recorded `exit_node` with an exit the core did
-  not have and offered Save choice, which wrote None. Outside Running the tab
-  now shows the saved exit node as a line, hides "signed in with a key" and
-  the placeholder name `localhost`, and offers Replace key: the new auth key
-  is written into the node and the node signs in with it without restarting
-  the VPN.
-
-## [2.25.19] — 2026-11-01
-
-### Added
+- **VPN Settings → Core as cards; WireGuard, MTU and QUIC settings
+  ([task 709](docs/spec/tasks/709-quic-sniff-decoy-toggle.md)).** General,
+  Network, TUN, TLS Fragmentation, WireGuard and QUIC are separate cards, the
+  core's own settings have an (i) with a short hint. WireGuard holds the four
+  sleep and build settings (moved from System; rows that depend on sleeping
+  are greyed out while it is off). Network has «Align MTU to the path»:
+  Clamp (default), Fill or Off (`lx.mtu_align`). QUIC has «Anti-sniff decoy»,
+  Through detour by default (Off / Through detour / Direct / All): one junk byte before the QUIC handshake of MASQUE (HTTP/3),
+  Hysteria2 and TUIC so a relay that sniffs UDP does not redirect the
+  connection by its SNI; by default only connections carried by another node
+  get it, since a DPI on your own uplink may react to the byte
+  (`lx.quic_sniff_decoy`, core SPEC 151), and «MASQUE
+  idle timeout», Off by default (`lx.masque.idle_timeout`). All of them are
+  template variables; the template writes the `lx` block (contract 1.1.152).
+  (RU: VPN Settings → Core карточками: General, Network, TUN, TLS
+  Fragmentation, WireGuard и QUIC; у собственных настроек ядра (i) с
+  подсказкой. WireGuard — четыре настройки сна и сборки, переехали с System;
+  строки, зависящие от сна, серые, пока он выключен. В Network — «Align MTU
+  to the path»: Clamp (по умолчанию), Fill или Off. В QUIC — «Anti-sniff
+  decoy», по умолчанию Through detour (Off / Through detour / Direct / All):
+  один мусорный байт перед QUIC-рукопожатием
+  MASQUE, Hysteria2 и TUIC, чтобы релей со сниффингом UDP не перенаправил
+  соединение по SNI; по умолчанию байт получают только соединения поверх
+  другого узла — DPI своего канала может на него среагировать; и «MASQUE idle timeout», по умолчанию Off. Всё это —
+  переменные шаблона, блок `lx` пишет шаблон.)
 
 - **Mixins: your own additions to the final core config
   ([task 704](docs/spec/tasks/704-config-mixins.md)).** Config → Mixins
@@ -225,6 +241,21 @@
 
 ### Changed
 
+- **Taildrop is now off by default on every Tailscale node, existing ones
+  included** (contract 1.1.150): after this update a node receives and sends
+  files only once "Allow Taildrop" is turned on in its settings.
+- **The VPN notification has Stop and "📋 Send clipboard"; Reconnect is gone
+  from it ([task 707](docs/spec/tasks/707-taildrop-send-receive-files.md#итерация-7--окно-send-clipboard-буфер-и-ссылки-с-телефона)).** Reconnect stays in the
+  ⟳ menu on the home screen.
+- **WireGuard sleep settings start from the defaults
+  ([task 709](docs/spec/tasks/709-quic-sniff-decoy-toggle.md)).** They moved
+  from storage keys to template variables without migration: Suspend idle
+  tunnels 30 seconds, Suspend active-route tunnels 5 minutes, Lazy tunnel
+  build on, Built tunnels limit 5. Values chosen earlier are not carried over.
+  (RU: Настройки сна WireGuard начинают с дефолтов: перенесены из ключей
+  хранилища в переменные шаблона без миграции — 30 секунд, 5 минут, ленивая
+  сборка включена, лимит 5. Значения, выбранные раньше, не переносятся.)
+
 - **Memory limit is compared with the core's own memory; Auto sets no
   threshold ([task 705](docs/spec/tasks/705-memory-limit-auto-off.md)).**
   Until now the core compared the limit with the memory of the whole app
@@ -237,7 +268,7 @@
   for an explicit choice, and a value chosen earlier is kept. Statistics →
   Memory shows the figure as Core memory next to the process RSS, with the
   limit beside it when a number is chosen.
-- **Core `v1.14.4-lx.25` → `v1.14.4-lx.29`
+- **Core `v1.14.4-lx.25` → `v1.14.4-lx.30`
   ([docs/KERNEL.md](docs/KERNEL.md)).** A DNS group can list `hosts`
   servers that answer the names they know before the group's servers
   (Leadaxe/sing-box-lx#60). MTU alignment fixes: a proxy node inside a group no
@@ -249,9 +280,11 @@
   moment; after a stop that did hang, the new core instance takes `cache.db`
   over by itself, keeping group selection, FakeIP and the rule-set cache
   (Leadaxe/sing-box-lx#61). The memory limit can be compared with the core's
-  Go runtime instead of the whole process (Leadaxe/sing-box-lx#62). No config
-  changes.
-  (RU: Ядро `v1.14.4-lx.25` → `v1.14.4-lx.29`. DNS-группа может спрашивать
+  Go runtime instead of the whole process (Leadaxe/sing-box-lx#62). Tailscale
+  endpoints sign in with a new key and turn on/off without a restart,
+  `disable_taildrop` and the sender of a received file (SPEC 149); QUIC sniff
+  decoy (SPEC 151).
+  (RU: Ядро `v1.14.4-lx.25` → `v1.14.4-lx.30`. DNS-группа может спрашивать
   серверы `hosts` раньше своих серверов; поправки выравнивания MTU: прокси-узел
   в группе больше не занижает MTU туннеля над группой, туннели с IPv6 не
   опускаются ниже 1280. Статус пира WireGuard/AWG отдаётся по сессиям: после
@@ -260,7 +293,9 @@
   пингуется или подключается узел MASQUE с `detour`; после зависшей остановки
   новое ядро само забирает `cache.db`, сохраняя выбор узлов, FakeIP и кеш
   rule-set. Лимит памяти можно сравнивать с Go-рантаймом ядра, а не со всем
-  процессом. Конфиг не меняется.)
+  процессом. Эндпоинты Tailscale входят новым ключом и включаются/выключаются
+  без перезапуска, `disable_taildrop` и отправитель принятого файла
+  (SPEC 149); обманка от сниффинга QUIC (SPEC 151).)
 - **Default TUN MTU is 9000 instead of 1492
   ([task 700](docs/spec/tasks/700-tun-mtu-default-9000.md)).** 9000 is the
   sing-box default; the tunnel interface is virtual, and the core re-sends TCP
@@ -298,6 +333,15 @@
   этой настройкой восстанавливается.)
 
 ### Fixed
+
+- **Tailscale Network tab of a signed-out node could erase the saved exit
+  node ([task 706](docs/spec/tasks/706-tailscale-network-tab-logged-out.md)).**
+  Offline, the tab compared the recorded `exit_node` with an exit the core did
+  not have and offered Save choice, which wrote None. Outside Running the tab
+  now shows the saved exit node as a line, hides "signed in with a key" and
+  the placeholder name `localhost`, and offers Replace key: the new auth key
+  is written into the node and the node signs in with it without restarting
+  the VPN.
 
 - **Route on the node screen did not follow the selector.** When the
   selected node of a group on the path changed outside this screen (on the
