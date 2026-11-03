@@ -120,15 +120,18 @@ void main() {
     addTearDown(tester.view.reset);
     final home = HomeController()..debugSetConfigRaw('{"log":{}}');
     addTearDown(home.dispose);
-    await tester.pumpWidget(MaterialApp(
-      home: ConfigScreen(controller: home, subController: sub),
-    ));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ConfigScreen(controller: home, subController: sub),
+      ),
+    );
     await tester.pump();
     return home;
   }
 
-  testWidgets('tabs Config and Mixins; list shows mixin, issue and toggle',
-      (tester) async {
+  testWidgets('tabs Config and Mixins; list shows mixin, issue and toggle', (
+    tester,
+  ) async {
     sub.issues = const [
       MixinIssue(
         mixinId: _dropId,
@@ -147,8 +150,11 @@ void main() {
     // индикатор загрузки).
     await tester.pump(const Duration(milliseconds: 500));
     final row = find.text('DNS listener for Rethink');
-    await pumpUntil(tester, () async => row.evaluate().isNotEmpty,
-        what: 'строка миксина на вкладке Mixins');
+    await pumpUntil(
+      tester,
+      () async => row.evaluate().isNotEmpty,
+      what: 'строка миксина на вкладке Mixins',
+    );
     expect(find.text('inbounds → append'), findsOneWidget);
     // Пустое имя — `target → op` строкой имени.
     expect(find.text('route.rules[rule_set=Ads] → remove'), findsOneWidget);
@@ -169,8 +175,13 @@ void main() {
     // индикатор загрузки).
     await tester.pump(const Duration(milliseconds: 500));
     final switches = find.byType(Switch);
-    await pumpUntil(tester, () async => switches.evaluate().length == 2,
-        what: 'тумблеры миксинов');
+    await pumpUntil(
+      tester,
+      () async => switches.evaluate().length == 2,
+      what: 'тумблеры миксинов',
+    );
+    // Вход без базы уже собрал её — считаем пересборку тумблера сверх неё.
+    final before = sub.generateCalls;
 
     await tester.tap(switches.first);
     await tester.pump();
@@ -179,12 +190,49 @@ void main() {
       return stored != null &&
           stored.firstWhere((m) => m.id == _listenerId).enabled == false;
     }, what: 'миксин выключен в хранилище');
-    await pumpUntil(tester, () async => sub.generateCalls > 0,
-        what: 'пересборка после тумблера');
+    await pumpUntil(
+      tester,
+      () async => sub.generateCalls > before,
+      what: 'пересборка после тумблера',
+    );
 
     final stored = await tester.runAsync(SettingsStorage.getMixins);
     expect(stored!.map((m) => m.id), [_listenerId, _dropId]);
     expect(stored.last.enabled, isTrue);
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 1));
+  });
+
+  Future<void> enterMixins(WidgetTester tester) async {
+    await open(tester);
+    expect(sub.generateCalls, 0, reason: 'вкладка Config базу не собирает');
+    await tester.tap(find.widgetWithText(Tab, 'Mixins'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    await pumpUntil(
+      tester,
+      () async => find.byType(Switch).evaluate().length == 2,
+      what: 'тумблеры миксинов',
+    );
+  }
+
+  testWidgets('entering Mixins without a preview base builds it once', (
+    tester,
+  ) async {
+    await enterMixins(tester);
+    expect(sub.generateCalls, 1);
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 1));
+  });
+
+  testWidgets('entering Mixins with a preview base does not build', (
+    tester,
+  ) async {
+    sub.debugSetLastConfigBeforeMixins(const {'inbounds': []});
+    await enterMixins(tester);
+    expect(sub.generateCalls, 0);
 
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(seconds: 1));

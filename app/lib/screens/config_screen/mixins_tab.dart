@@ -47,11 +47,31 @@ class _ConfigMixinsTabState extends State<ConfigMixinsTab> {
   Future<void>? _rebuild;
   bool _rebuildAgain = false;
 
+  /// Сборка базы предпросмотра при входе на вкладку; `null` — не идёт.
+  Future<void>? _baseBuild;
+
   @override
   void initState() {
     super.initState();
     widget.subController?.addListener(_onSubChanged);
     unawaited(_load());
+    _ensureBase();
+  }
+
+  /// Базы предпросмотра нет (процесс перезапущен, сборки в нём не было) —
+  /// собрать конфиг в память: без сохранения и без применения. Правка во
+  /// время сборки встаёт повтором, как у [_requestRebuild].
+  void _ensureBase() {
+    final sub = widget.subController;
+    if (sub == null || sub.lastConfigBeforeMixins != null) return;
+    final build = sub.generateConfig().then<void>((_) {}, onError: (_) {});
+    _baseBuild = build;
+    _rebuild = build.whenComplete(() {
+      _rebuild = null;
+      _baseBuild = null;
+      if (_rebuildAgain) _requestRebuild();
+    });
+    unawaited(_rebuild);
   }
 
   @override
@@ -137,6 +157,7 @@ class _ConfigMixinsTabState extends State<ConfigMixinsTab> {
           initial: initial,
           mixins: _mixins,
           subController: widget.subController,
+          baseBuild: _baseBuild,
         ),
       ),
     );

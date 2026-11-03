@@ -1,4 +1,5 @@
 // ignore_for_file: depend_on_referenced_packages
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -40,10 +41,13 @@ void main() {
   late Map<String, dynamic> config;
 
   setUpAll(() {
-    config = jsonDecode(
-      File('test/fixtures/storage/golden/rich_v0.config.json')
-          .readAsStringSync(),
-    ) as Map<String, dynamic>;
+    config =
+        jsonDecode(
+              File(
+                'test/fixtures/storage/golden/rich_v0.config.json',
+              ).readAsStringSync(),
+            )
+            as Map<String, dynamic>;
   });
 
   setUp(() async {
@@ -71,9 +75,11 @@ void main() {
     tester.view.physicalSize = const Size(1080, 2400);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
-    await tester.pumpWidget(MaterialApp(
-      home: MixinEditScreen(mixins: const [], subController: sub),
-    ));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MixinEditScreen(mixins: const [], subController: sub),
+      ),
+    );
     await tester.pump();
   }
 
@@ -97,8 +103,9 @@ void main() {
     expect(status(tester), '✓ 1 match');
   });
 
-  testWidgets('before on hijack-dns rule: ✓ 1 match, Save after Value',
-      (tester) async {
+  testWidgets('before on hijack-dns rule: ✓ 1 match, Save after Value', (
+    tester,
+  ) async {
     await open(tester);
     await tester.tap(find.text('append'));
     await tester.pumpAndSettle();
@@ -132,5 +139,41 @@ void main() {
     final field = tester.widget<TextField>(target());
     expect(field.controller!.text, 'outbounds[tag=');
     expect(find.text('PR DE-1'), findsOneWidget);
+  });
+
+  testWidgets('base being built: Building config..., then status', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    sub.debugSetLastConfigBeforeMixins(null);
+    final build = Completer<void>();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MixinEditScreen(
+          mixins: const [],
+          subController: sub,
+          baseBuild: build.future,
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.enterText(target(), 'route.rules');
+    await tester.pump();
+    expect(status(tester), 'Building config...');
+
+    sub.debugSetLastConfigBeforeMixins(config);
+    build.complete();
+    await tester.pump();
+    expect(status(tester), '✓ 1 match');
+  });
+
+  testWidgets('no base and no build: No config built yet', (tester) async {
+    sub.debugSetLastConfigBeforeMixins(null);
+    await open(tester);
+    await tester.enterText(target(), 'route.rules');
+    await tester.pump();
+    expect(status(tester), 'No config built yet');
   });
 }

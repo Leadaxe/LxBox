@@ -40,6 +40,7 @@ class MixinEditScreen extends StatefulWidget {
     this.initial,
     required this.mixins,
     this.subController,
+    this.baseBuild,
   });
 
   /// Сброс кэша настройки подсказок Target — между тест-файлами в общей сборке.
@@ -58,6 +59,9 @@ class MixinEditScreen extends StatefulWidget {
   /// Источник базы (`lastConfigBeforeMixins`); `null` — базы нет.
   final SubscriptionController? subController;
 
+  /// Сборка базы, начатая вкладкой Mixins; по завершении форма берёт базу.
+  final Future<void>? baseBuild;
+
   @override
   State<MixinEditScreen> createState() => _MixinEditScreenState();
 }
@@ -75,6 +79,9 @@ class _MixinEditScreenState extends State<MixinEditScreen> {
 
   /// Конфиг, который миксин увидит при сборке; `null` — не собирали.
   Map<String, dynamic>? _base;
+
+  /// Базы нет, но вкладка её собирает ([MixinEditScreen.baseBuild]).
+  bool _baseBuilding = false;
 
   /// Подсказки Target (значок в поле): одна настройка на приложение,
   /// `null` — ещё не прочитана (считается включённой).
@@ -100,9 +107,19 @@ class _MixinEditScreenState extends State<MixinEditScreen> {
         _value.text = const JsonEncoder.withIndent('  ').convert(v);
       }
     }
-    final base = widget.subController?.lastConfigBeforeMixins;
-    if (base != null) {
-      _base = mixinPreviewBase(base, widget.mixins, beforeId: m?.id);
+    _takeBase();
+    final build = widget.baseBuild;
+    if (_base == null && build != null) {
+      _baseBuilding = true;
+      unawaited(
+        build.whenComplete(() {
+          if (!mounted) return;
+          setState(() {
+            _baseBuilding = false;
+            _takeBase();
+          });
+        }),
+      );
     }
     _target.addListener(_onTargetChanged);
     _targetFocus.addListener(_onTargetChanged);
@@ -128,6 +145,17 @@ class _MixinEditScreenState extends State<MixinEditScreen> {
         await SettingsStorage.setMixinTargetSuggestions(on);
       } catch (_) {}
     }());
+  }
+
+  void _takeBase() {
+    final base = widget.subController?.lastConfigBeforeMixins;
+    if (base != null) {
+      _base = mixinPreviewBase(
+        base,
+        widget.mixins,
+        beforeId: widget.initial?.id,
+      );
+    }
   }
 
   @override
@@ -189,7 +217,9 @@ class _MixinEditScreenState extends State<MixinEditScreen> {
     if (base == null) {
       return MixinTargetStatus(
         MixinTargetStatusKind.neutral,
-        getLocalText.s("No config built yet"),
+        _baseBuilding
+            ? getLocalText.s("Building config...")
+            : getLocalText.s("No config built yet"),
       );
     }
     final matches = (parsed as MixinPath).resolve(base);
@@ -335,8 +365,12 @@ class _MixinEditScreenState extends State<MixinEditScreen> {
           ],
         ),
         body: ListView(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 24)
-              .withSafeBottom(context),
+          padding: const EdgeInsets.fromLTRB(
+            12,
+            12,
+            12,
+            24,
+          ).withSafeBottom(context),
           children: [
             TextField(
               controller: _name,
@@ -365,9 +399,9 @@ class _MixinEditScreenState extends State<MixinEditScreen> {
                 suffixIcon: IconButton(
                   key: const ValueKey('mixin-target-suggest-toggle'),
                   tooltip: getLocalText.s("Suggestions"),
-                  icon: Icon(_suggestEnabled
-                      ? Icons.lightbulb
-                      : Icons.lightbulb_outline),
+                  icon: Icon(
+                    _suggestEnabled ? Icons.lightbulb : Icons.lightbulb_outline,
+                  ),
                   onPressed: _toggleSuggest,
                 ),
               ),
