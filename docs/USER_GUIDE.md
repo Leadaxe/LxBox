@@ -877,6 +877,8 @@ After that the app does not add or return servers by itself.
   **Added**. The **⋮** menu → **Add all defaults** adds every template server
   missing from the list. Servers that a new app version brings appear here,
   not in your list.
+- **Reorder servers**: drag a row by the strip on its left, as with DNS
+  rules. The order is kept; locked servers move too.
 - **Locked servers**: a server something depends on shows **used by …** with
   a lock — its switch and Delete are unavailable. It is held by a preset, a
   routing rule's DNS option, a group in the list, the **DNS Final** or

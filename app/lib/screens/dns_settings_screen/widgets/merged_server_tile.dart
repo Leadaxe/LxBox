@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../services/dns/dns_server_holds.dart' show dnsListableTags;
 import '../../../vpn/cc_channel.dart';
+import '../../../widgets/reorder_grab_strip.dart';
 import '../resolved_server.dart';
 import 'dns_badge.dart';
 import '../../../services/l10n/locale_controller.dart';
@@ -26,6 +27,7 @@ class MergedServerTile extends StatelessWidget {
     required this.onTap,
     this.onLongPressStart,
     this.liveGroup,
+    this.dragIndex,
   });
 
   final ResolvedServer entry;
@@ -40,6 +42,10 @@ class MergedServerTile extends StatelessWidget {
   /// §312 — live-состояние DNS-группы от ядра (SPEC 035); null = туннель
   /// down / ядро без метода / сервер не группа. Рисуется доп. строкой.
   final CcDnsGroup? liveGroup;
+
+  /// §710 — индекс в `ReorderableListView`; задан → слева полоса
+  /// `ReorderGrabStrip` (как у `DnsRuleTile`), null → тайл прежний.
+  final int? dragIndex;
 
   @override
   Widget build(BuildContext context) {
@@ -93,7 +99,7 @@ class MergedServerTile extends StatelessWidget {
         '${entry.presetLabel != null && entry.presetLabel!.isNotEmpty ? ' · ${entry.presetLabel}' : ''}';
 
     final longPress = onLongPressStart;
-    return GestureDetector(
+    final tile = GestureDetector(
       onLongPressStart: longPress == null
           ? null
           : (d) => longPress(entry.tag, d.globalPosition),
@@ -180,6 +186,23 @@ class MergedServerTile extends StatelessWidget {
         trailing: DnsBadge(badgeText, badgeColor),
       ),
       ),
+    );
+
+    if (dragIndex == null) return tile;
+    // §710 — полоса 18px + горизонтальные margin 6+6 = 30px gutter слева.
+    return Stack(
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 30),
+          child: tile,
+        ),
+        Positioned(
+          left: 0,
+          top: 0,
+          bottom: 0,
+          child: ReorderGrabStrip(index: dragIndex!),
+        ),
+      ],
     );
   }
 }

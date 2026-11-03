@@ -8,6 +8,12 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Reorder DNS servers ([task 710](docs/spec/tasks/710-dns-servers-reorder.md)).**
+  Servers on the DNS tab move by dragging the strip on the left of a row, as
+  DNS rules do; the order is saved in the template's server list.
+
 ## [2.25.19] — 2026-11-02
 
 ### Added

@@ -743,6 +743,36 @@ class _DnsSettingsTabState extends State<DnsSettingsTab>
     });
   }
 
+  /// §710: reorder серверов. Индексы — в display-списке
+  /// (`resolveDisplayedServers` идёт по `_servers` по порядку, пропуская
+  /// пустые теги), в `_servers` переводятся по тегу. Семантика newIndex как у
+  /// `_onReorderRules` (`onReorderItem`: уже без перетаскиваемого).
+  void _onReorderServers(
+      List<ResolvedServer> displayed, int oldIndex, int newIndex) {
+    if (oldIndex < 0 || oldIndex >= displayed.length) return;
+    final tags = [for (final e in displayed) e.tag];
+    final movedTag = tags.removeAt(oldIndex);
+    tags.insert(newIndex.clamp(0, tags.length), movedTag);
+    final from = _servers.indexWhere((s) => s.tag == movedTag);
+    if (from < 0) return;
+    setState(() {
+      final moved = _servers.removeAt(from);
+      // Ставим перед тем, кто идёт следом в новом display-порядке; если
+      // следом никого — после предыдущего (или в конец).
+      final pos = tags.indexOf(movedTag);
+      int at = _servers.length;
+      if (pos + 1 < tags.length) {
+        final next = _servers.indexWhere((s) => s.tag == tags[pos + 1]);
+        if (next >= 0) at = next;
+      } else if (pos > 0) {
+        final prev = _servers.indexWhere((s) => s.tag == tags[pos - 1]);
+        if (prev >= 0) at = prev + 1;
+      }
+      _servers.insert(at, moved);
+      _markDirty();
+    });
+  }
+
   Future<void> _showUserRuleEditor(int index) async {
     final isNew = index < 0;
     // Редактор открывается только у inline-тайла (DnsRuleTile).
@@ -804,13 +834,26 @@ class _DnsSettingsTabState extends State<DnsSettingsTab>
         const SizedBox(height: 4),
         // §042: единый render через 3-tier merged list. §117 задача 4:
         // тайл — только switch + тап→полноэкранный редактор.
-        ...displayed.map((entry) => MergedServerTile(
+        // §710: перестановка перетаскиванием за полосу слева, как у правил.
+        ReorderableListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          buildDefaultDragHandles: false,
+          itemCount: displayed.length,
+          onReorderItem: (o, n) => _onReorderServers(displayed, o, n),
+          itemBuilder: (ctx, i) {
+            final entry = displayed[i];
+            return MergedServerTile(
+              key: ValueKey('dns-server-${entry.tag}'),
+              dragIndex: i,
               entry: entry,
               onToggleEnabled: _toggleServerEnabled,
               onTap: _editServer,
               onLongPressStart: _showServerContextMenu,
               liveGroup: _liveDnsGroups[entry.tag], // §312
-            )),
+            );
+          },
+        ),
         const Divider(height: 32),
 
         // --- Strategy ---
