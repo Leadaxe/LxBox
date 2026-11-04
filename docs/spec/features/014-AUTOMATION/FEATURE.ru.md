@@ -166,10 +166,9 @@ LxBox может запускать и останавливать VPN без о�
 - `ACTIVE_NODE_CHANGED` приходит только на явный выбор узла, `reason` всегда
   `user`; смены автовыбором и автоматизацией с `reason` `urltest` / `automation`
   (`047F`) — не планируются (решение владельца 2026-09-29, аудит [591](../../tasks/591-spec-kit-revision-audit.md)).
-- Уведомление службы с кнопками Stop и «📋 Send clipboard» — 010-VPN_SERVICE и
-  032-TAILDROP; кнопки Reconnect в нём нет с задачи 707 (итерация 7). Команды
-  переподключения нет и в Intent API: снаружи переподключение идёт через
-  Debug API (`POST /action/reconnect`).
+- Уведомление службы с кнопками Stop и «📋 Send» — 010-VPN_SERVICE и
+  032-TAILDROP. Команды переподключения нет в Intent API: снаружи
+  переподключение идёт через Debug API (`POST /action/reconnect`).
 - Плитка быстрых настроек одна — переключатель туннеля; плитки «Send
   clipboard» нет (решение владельца 2026-11-03).
 - Удалённое управление по HTTP с токеном — Debug API,
@@ -194,7 +193,7 @@ LxBox может запускать и останавливать VPN без о�
 
 - [010-VPN_SERVICE](../010-VPN_SERVICE/FEATURE.ru.md) — служба туннеля,
   которой внешний старт/стоп управляет напрямую; её уведомление с кнопкой
-  Stop (и «📋 Send clipboard» из 032-TAILDROP).
+  Stop (и «📋 Send» из 032-TAILDROP).
 - [027-DEBUG_API](../027-DEBUG_API/FEATURE.ru.md) — Debug API, чьи
   обработчики и коды ошибок переиспользуют команды; удалённое управление по
   HTTP ([automation-recipes](../027-DEBUG_API/FUNCTIONS/automation-recipes.ru.md)).

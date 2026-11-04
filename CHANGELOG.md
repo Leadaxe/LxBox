@@ -52,7 +52,7 @@
   kept on the device, not in the backup).
 - **Send clipboard: text and links to your devices
   ([task 707](docs/spec/tasks/707-taildrop-send-receive-files.md#итерация-7--окно-send-clipboard-буфер-и-ссылки-с-телефона)).**
-  "📋 Send clipboard" in the VPN notification opens a chat-like window over
+  "📋 Send" in the VPN notification opens a chat-like window over
   the current app with the clipboard text in the field: ➤ sends it to the
   device's clipboard, "Open on <device>" opens a single http(s) link there.
   Shared text and "Send to device" in the text selection menu open the same
@@ -250,9 +250,10 @@
 - **Taildrop is now off by default on every Tailscale node, existing ones
   included** (contract 1.1.150): after this update a node receives and sends
   files only once "Allow Taildrop" is turned on in its settings.
-- **The VPN notification has Stop and "📋 Send clipboard"; Reconnect is gone
-  from it ([task 707](docs/spec/tasks/707-taildrop-send-receive-files.md#итерация-7--окно-send-clipboard-буфер-и-ссылки-с-телефона)).** Reconnect stays in the
-  ⟳ menu on the home screen.
+- **The VPN notification has Stop, "🔄 Restart" and "📋 Send"
+  ([task 707](docs/spec/tasks/707-taildrop-send-receive-files.md#итерация-8--кнопки-уведомления-vpn-restart-вернулся-список-в-настройках)).**
+  App Settings → General → Quick connect chooses which of them are shown; all
+  by default. "📋 Send" exists only while a Tailscale node has Allow Taildrop.
 - **WireGuard sleep settings start from the defaults
   ([task 709](docs/spec/tasks/709-quic-sniff-decoy-toggle.md)).** They moved
   from storage keys to template variables without migration: Suspend idle

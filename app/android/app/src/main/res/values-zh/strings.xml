@@ -15,6 +15,7 @@
     <string name="notification_status_starting">正在启动…</string>
     <string name="status_connected">已连接</string>
     <string name="notification_action_stop">停止</string>
+    <string name="notification_action_reconnect">🔄 重连</string>
     <string name="notification_error_title">错误</string>
     <!-- §036 core notification channel fallback name (typeName blank) -->
     <string name="core_channel_fallback_name">内核通知</string>
@@ -95,7 +96,7 @@
     </plurals>
 
     <!-- §707 итер. 7 — окно «Send clipboard». -->
-    <string name="notification_action_send_clipboard">📋 发送剪贴板</string>
+    <string name="notification_action_send_clipboard">📋 发送</string>
     <string name="clip_window_label">发送剪贴板</string>
     <string name="clip_process_text_label">发送到设备</string>
     <string name="clip_to">发送至：%1$s ▾</string>

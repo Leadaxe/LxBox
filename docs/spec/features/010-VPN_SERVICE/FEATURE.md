@@ -145,15 +145,15 @@ The feature protects three principles:
   unit "switchNode to the already active node — no-op". **Mutation**: breaking
   connections before comparing with the active node.
 - **P20. The service notification controls the tunnel without the app.** While
-  the tunnel is up, the shade holds a notification with the active node and a
-  Stop button that works with the app closed; when the running config has a
-  Tailscale node with Allow Taildrop, a second button "📋 Send clipboard" opens
+  the tunnel is up, the shade holds a notification with the active node and the
+  Stop and "🔄 Restart" buttons, which work with the app closed; when the running
+  config has a Tailscale node with Allow Taildrop, a third button "📋 Send" opens
   the clipboard window over the current app
-  ([032-TAILDROP](../032-TAILDROP/FEATURE.md#promises)). Since task 707
-  (iteration 7) the notification has no Reconnect button; reconnect stays in the
-  app and in the Debug API ([027-DEBUG_API](../027-DEBUG_API/FEATURE.md)).
-  **Witness**: manual check (§182 device-verified; Stop / Send clipboard —
-  task 707, iteration 7, not verified on a device). **Mutation**: Stop via the
+  ([032-TAILDROP](../032-TAILDROP/FEATURE.md#promises)). App Settings → General →
+  Quick connect chooses which of them are shown; all by default (task 707,
+  iteration 8).
+  **Witness**: manual check (§182 device-verified; buttons and their list —
+  task 707, iteration 8, not verified on a device). **Mutation**: Stop via the
   UI process.
 
 ## Controlled parameters
@@ -263,7 +263,7 @@ gesture / OS event
 
 | Function | What it does | Promises | File |
 |----------|--------------|----------|------|
-| Tunnel control | Starts, stops, reloads and reconnects the tunnel from the app (stop also from the notification), with a deadline for every transitional phase. | P1–P4, P20 | [tunnel-control.md](FUNCTIONS/tunnel-control.md) |
+| Tunnel control | Starts, stops, reloads and reconnects the tunnel from the app (stop and restart also from the notification), with a deadline for every transitional phase. | P1–P4, P20 | [tunnel-control.md](FUNCTIONS/tunnel-control.md) |
 | Operating modes | Chooses the VPN, Proxy or VPN+Proxy mode, configures the local proxy port and its authentication, and decides whether apps may bypass the tunnel. | P5, P6 | [operating-modes.md](FUNCTIONS/operating-modes.md) |
 | Coexisting with another VPN | Asks before taking the system VPN slot from another VPN and recognizes when another VPN has taken it. | P7–P9 | [foreign-vpn.md](FUNCTIONS/foreign-vpn.md) |
 | Autostart and exiting the app | Starts the tunnel after the device boots and defines whether it survives closing the app. | P10, P11 | [autostart-and-exit.md](FUNCTIONS/autostart-and-exit.md) |

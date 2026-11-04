@@ -8,7 +8,7 @@ the system "Share" menu of any app or from a device page on the node's
 Network tab; incoming files from the user's own devices land in that node's
 inbox without a consent step. On top of the same transport the app exchanges
 the clipboard and links with the desktop launcher (singbox-launcher): the
-"📋 Send clipboard" button in the VPN notification opens a chat-like window
+"📋 Send" button in the VPN notification opens a chat-like window
 over the current app that sends the phone's clipboard (or shared or selected
 text) to the PC, and text from a PC the user allowed lands in the phone's
 clipboard by itself.
@@ -96,7 +96,7 @@ clipboard window, and sends nothing without an explicit send.
   manual check: share text and select text, the window shows it).
   **Mutation:** shared text sent without the window, or turned into a note
   file.
-- **P9. "📋 Send clipboard" in the VPN notification sends the clipboard to
+- **P9. "📋 Send" in the VPN notification sends the clipboard to
   the chosen device.** The button opens a window over the current app: the
   recipient `To: … ▾`, the feed with that device, the field filled with the
   clipboard text. ➤ sends the field as a `clipboard` command; "Open on
@@ -139,7 +139,7 @@ clipboard window, and sends nothing without an explicit send.
 | Network tab → device page → "Send file…" | system file picker, one or more files; disabled with the reason when the device does not qualify | — |
 | Network tab → inbox → Save / Delete | per file | — |
 | Notification → Cancel (receiving), Save / Delete (received) | per transfer | — |
-| VPN notification → "📋 Send clipboard" | shown while the VPN is up and the running config has a Tailscale node with Allow Taildrop; opens the Send clipboard window | — |
+| VPN notification → "📋 Send" | shown while the VPN is up and the running config has a Tailscale node with Allow Taildrop; opens the Send clipboard window | — |
 | Send clipboard window → `To: … ▾` | own devices that accept files, from all running Tailscale nodes with Allow Taildrop (with the node's name when there are several nodes); the choice is remembered | the remembered one, else the first |
 | Send clipboard window → ⋮ → Clear | clears the feed with the chosen device | — |
 | Text selection menu → "Send to device" | opens the Send clipboard window with the selected text; shown under the same condition as the notification button | — |
@@ -184,7 +184,7 @@ Incoming       → core accepts from an own device → clipboard prefix and send
                  yes → fresh, valid, last of a burst? → content → phone clipboard · file deleted either way
                  no  → node inbox (node's Taildrop directory) → "receiving from X" (Cancel) → "file from X" (Save, Delete)
 Inbox          → Network tab block under Devices → Save → Downloads · Delete → removed
-Notification   → "📋 Send clipboard" → window over the current app reads the clipboard into the field on focus
+Notification   → "📋 Send" → window over the current app reads the clipboard into the field on focus
                  → no VPN / no Allow Taildrop / no recipients / recipient offline / too big? reason above the field
                  : ➤ → clipboard command · "Open on <device>" → open_url → recipient → ✓ or error in the feed
 Incoming run   → executed clipboard / open_url from that device → left side of the window's feed
@@ -216,7 +216,7 @@ Node deleted   → its Taildrop directory removed with its state
 - The window's feed lives only in memory while the VPN runs: a VPN stop or
   the death of the process wipes it; at most 50 messages per device, a tap on
   a message copies its text.
-- "📋 Send clipboard", "Send to device" and LxBox in "Share" exist only while
+- "📋 Send", "Send to device" and LxBox in "Share" exist only while
   the VPN is up and the running config has a Tailscale node with Allow
   Taildrop; they follow the VPN start, stop and config reload, and are off
   after a process restart until the VPN is up again.
@@ -273,7 +273,7 @@ Node deleted   → its Taildrop directory removed with its state
   (networks-tab).
 - [010-VPN_SERVICE](../010-VPN_SERVICE/FEATURE.md) — the tunnel must be up for
   anything to move ([P7](#promises)); its notification carries the
-  "📋 Send clipboard" button ([010-VPN_SERVICE · P20](../010-VPN_SERVICE/FEATURE.md#promises)).
+  "📋 Send" button ([010-VPN_SERVICE · P20](../010-VPN_SERVICE/FEATURE.md#promises)).
 - [014-AUTOMATION](../014-AUTOMATION/FEATURE.md) — the Quick Settings tile
   stays one, the tunnel toggle; there is no "Send clipboard" tile (owner
   decision 2026-11-03).

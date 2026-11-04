@@ -17,6 +17,7 @@
     <string name="notification_status_starting">Starting...</string>
     <string name="status_connected">Connected</string>
     <string name="notification_action_stop">Stop</string>
+    <string name="notification_action_reconnect">🔄 Restart</string>
     <string name="notification_error_title">Error</string>
     <!-- §036 core notification channel fallback name (typeName blank) -->
     <string name="core_channel_fallback_name">Core notifications</string>
@@ -101,7 +102,7 @@
     </plurals>
 
     <!-- §707 итер. 7 — окно «Send clipboard». -->
-    <string name="notification_action_send_clipboard">📋 Send clipboard</string>
+    <string name="notification_action_send_clipboard">📋 Send</string>
     <string name="clip_window_label">Send clipboard</string>
     <string name="clip_process_text_label">Send to device</string>
     <string name="clip_to">To: %1$s ▾</string>

@@ -70,9 +70,8 @@ permission denied. Open L×Box to retry.".
 - There is no choice of node, group or mode from the tile — only the global
   toggle.
 - There is no home screen widget.
-- The Stop and "📋 Send clipboard" buttons in the service notification —
-  010-VPN_SERVICE and 032-TAILDROP; no Reconnect button there since task 707
-  (iteration 7).
+- The Stop and "📋 Send" buttons in the service notification —
+  010-VPN_SERVICE and 032-TAILDROP.
 - No second tile: there is no "Send clipboard" tile (owner decision
   2026-11-03), the clipboard window opens from the notification.
 - Depends on OS capabilities: presence of the Quick Settings shade and the

@@ -285,6 +285,30 @@ class BoxVpnClient {
     return ok ?? false;
   }
 
+  /// §707 итер. 8 — кнопки уведомления VPN: `stop`, `restart`, `send`.
+  /// Канал не ответил — пусто, вызывающий считает все включёнными.
+  Future<Map<String, bool>> getNotificationButtons() async {
+    final r = await _invoke<Map<dynamic, dynamic>>(
+      _Methods.getNotificationButtons,
+      timeout: _Timeouts.settings,
+      onTimeoutValue: null,
+    );
+    return {
+      for (final e in (r ?? const {}).entries)
+        if (e.value is bool) '${e.key}': e.value as bool,
+    };
+  }
+
+  Future<bool> setNotificationButton(String button, bool enabled) async {
+    final ok = await _invoke<bool>(
+      _Methods.setNotificationButton,
+      args: {'button': button, 'enabled': enabled},
+      timeout: _Timeouts.settings,
+      onTimeoutValue: false,
+    );
+    return ok ?? false;
+  }
+
   /// §043: forward sing-box логов в наш AppLog как `DebugSource.core`.
   /// Default false. Изменение применяется только после restart Service'а
   /// (Libbox.setup читает значение один раз при инициализации).

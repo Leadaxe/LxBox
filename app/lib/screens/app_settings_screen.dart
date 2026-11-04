@@ -53,6 +53,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
   bool _haptic = true;
   bool _batteryWhitelisted = false;
   bool _notificationsEnabled = true;
+  Map<String, bool> _notificationButtons = const {};
   bool _backgroundLocationGranted = false;
   bool _nearbyWifiGranted = false;
   String? _wifiLocationIssue;
@@ -161,6 +162,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     final bgLocation = await ul.UrlLauncher.checkBackgroundLocationPermission();
     final nearbyWifi = await ul.UrlLauncher.checkNearbyWifiPermission();
     final wifiLocationIssue = await _readWifiLocationIssue();
+    final notificationButtons = await _vpn.getNotificationButtons();
     final autoUpdateSubs = await SettingsStorage.getAutoUpdateSubs();
     final autoUpdateDisabledSubs =
         await SettingsStorage.getAutoUpdateDisabledSubs();
@@ -200,6 +202,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
         _verOs = verOs;
         _deviceModel = deviceModel;
         _autoStart = auto;
+        _notificationButtons = notificationButtons;
         _haptic = haptic != 'false';
         _autoPing = autoPing != 'false';
         _batteryWhitelisted = battery;
@@ -749,6 +752,12 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
       region: _region,
       detectedRegion: _detectedRegion,
       onEditRegion: () => unawaited(_editRegion()),
+      notificationButtons: _notificationButtons,
+      onNotificationButtonChanged: (button, val) {
+        setState(() =>
+            _notificationButtons = {..._notificationButtons, button: val});
+        unawaited(_vpn.setNotificationButton(button, val));
+      },
     );
   }
 

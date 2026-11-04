@@ -15,6 +15,7 @@
     <string name="notification_status_starting">Запуск…</string>
     <string name="status_connected">Подключено</string>
     <string name="notification_action_stop">Остановить</string>
+    <string name="notification_action_reconnect">🔄 Рестарт</string>
     <string name="notification_error_title">Ошибка</string>
     <string name="core_channel_fallback_name">Уведомления ядра</string>
 
@@ -101,7 +102,7 @@
     </plurals>
 
     <!-- §707 итер. 7 — окно «Send clipboard». -->
-    <string name="notification_action_send_clipboard">📋 Отправить буфер</string>
+    <string name="notification_action_send_clipboard">📋 Отправить</string>
     <string name="clip_window_label">Отправить буфер</string>
     <string name="clip_process_text_label">Отправить на устройство</string>
     <string name="clip_to">Кому: %1$s ▾</string>

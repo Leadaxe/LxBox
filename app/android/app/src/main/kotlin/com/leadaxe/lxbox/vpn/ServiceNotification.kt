@@ -187,16 +187,25 @@ class ServiceNotification(private val service: Service) {
         // §182 — кнопка Stop прямо в шторке (фидбэк #180/#261).
         // icon=0: на Android 7+ action-иконки в развёрнутом уведомлении
         // compat-стиль скрывает, текст-лейбла достаточно.
-        // §707 итер. 7 — Reconnect снят (ACTION_RECONNECT остаётся для
-        // автоматизации, §047); «📋 Send clipboard» — пока есть узел
-        // Tailscale с Allow Taildrop, открывает окно поверх текущего
-        // приложения.
-        builder.addAction(
-            0,
-            L10n.str(service, R.string.notification_action_stop),
-            broadcastPI(BoxVpnService.ACTION_STOP, 1),
-        )
-        if (TaildropClip.available) {
+        // §707 итер. 7 — «📋 Send» пока есть узел Tailscale с Allow Taildrop,
+        // открывает окно поверх текущего приложения. Значки кнопок система
+        // не показывает, поэтому эмодзи — в подписи.
+        // §707 итер. 8 — какие из них показывать, решает App Settings.
+        if (NotificationButtons.enabled(service, NotificationButtons.STOP)) {
+            builder.addAction(
+                0,
+                L10n.str(service, R.string.notification_action_stop),
+                broadcastPI(BoxVpnService.ACTION_STOP, 1),
+            )
+        }
+        if (NotificationButtons.enabled(service, NotificationButtons.RESTART)) {
+            builder.addAction(
+                0,
+                L10n.str(service, R.string.notification_action_reconnect),
+                broadcastPI(BoxVpnService.ACTION_RECONNECT, 2),
+            )
+        }
+        if (TaildropClip.available && NotificationButtons.enabled(service, NotificationButtons.SEND)) {
             builder.addAction(
                 0,
                 L10n.str(service, R.string.notification_action_send_clipboard),

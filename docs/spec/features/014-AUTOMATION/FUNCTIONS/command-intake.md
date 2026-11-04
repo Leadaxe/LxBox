@@ -84,8 +84,7 @@ only in the system log under the `LxBoxIntent` tag.
   (documented in the Intent API reference, `docs/AUTOMATION.md`).
 - There is no "same call" answer: the result is learned only from events.
 - There is no sender check and no per-command permissions.
-- There is no reconnect command; the notification has had no Reconnect button
-  since task 707 (iteration 7). Reconnect from outside goes through the Debug
+- There is no reconnect command. Reconnect from outside goes through the Debug
   API (`POST /action/reconnect`).
 - Depends on OS capabilities: delivery of broadcast commands, autostart bans
   in firmwares.

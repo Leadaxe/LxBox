@@ -2394,10 +2394,11 @@ The app icon shortcut does the same: a long press on the icon shows
 **Connect** or **Disconnect**, depending on the VPN state.
 Shortcuts work on Android 11 and newer.
 
-While connected, the notification carries a **Stop** button. With a running
-Tailscale node that allows Taildrop it also carries **📋 Send clipboard**: a
+While connected, the notification carries **Stop** and **🔄 Restart** buttons.
+With a running Tailscale node that allows Taildrop it also carries **📋 Send**: a
 small window over the current app sends the clipboard text (or a link, to open
-it there) to one of your devices.
+it there) to one of your devices. App Settings → General → Quick connect chooses
+which buttons are shown; all by default.
 
 Automation apps — Tasker, MacroDroid and others — turn the VPN on and off
 and switch servers by events: [Advanced user guide → Automation](ADVANCED_USER_GUIDE.md#automation-the-vpn-turns-on-by-events).

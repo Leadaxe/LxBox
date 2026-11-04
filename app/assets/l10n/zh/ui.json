@@ -6640,5 +6640,14 @@
   },
   "online": {
     "value": "在线"
+  },
+  "VPN notification buttons": {
+    "value": "VPN 通知按钮"
+  },
+  "Restart": {
+    "value": "重连"
+  },
+  "Appears only while a Tailscale node has Allow Taildrop.": {
+    "value": "仅当 Tailscale 节点启用 Allow Taildrop 时显示。"
   }
 }

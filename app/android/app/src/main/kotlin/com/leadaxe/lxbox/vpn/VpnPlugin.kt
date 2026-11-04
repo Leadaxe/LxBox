@@ -492,6 +492,19 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             "getKeepOnExit" -> {
                 result.success(BootReceiver.isKeepOnExit(context))
             }
+            // §707 итер. 8 — кнопки уведомления VPN (настройка устройства).
+            "getNotificationButtons" -> {
+                result.success(NotificationButtons.all(context))
+            }
+            "setNotificationButton" -> {
+                val ok = NotificationButtons.set(
+                    context,
+                    call.argument<String>("button") ?: "",
+                    call.argument<Boolean>("enabled") ?: true,
+                )
+                if (ok) BoxVpnService.updateNotification(context)
+                result.success(ok)
+            }
             "setCoreLogsEnabled" -> {
                 val enabled = call.argument<Boolean>("enabled") ?: false
                 BootReceiver.setCoreLogsEnabled(context, enabled)

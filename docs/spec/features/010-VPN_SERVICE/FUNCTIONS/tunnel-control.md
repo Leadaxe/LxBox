@@ -2,8 +2,8 @@
 
 # Tunnel control — starting, stopping and reconnecting the VPN with an honest status
 
-Start, stop, core reload and reconnect are available from the app; stop is
-also in the service notification. Every transitional phase ends by a deadline
+Start, stop, core reload and reconnect are available from the app; stop and
+restart are also in the service notification. Every transitional phase ends by a deadline
 with a stated reason.
 
 | Field | Value |
@@ -14,8 +14,8 @@ with a stated reason.
 
 ## What it does
 
-Start, stop, core reload and reconnect of the tunnel — from the app; stop also
-from the service notification. Keeps an honest status: every transitional phase has
+Start, stop, core reload and reconnect of the tunnel — from the app; stop and
+restart also from the service notification. Keeps an honest status: every transitional phase has
 a deadline, after which a hung core is forcibly shut down and the user gets
 the reason.
 
@@ -39,7 +39,7 @@ app; Stop in the notification; the saved core config.
 **Outputs:** the tunnel status and the stop reason; the persistent
 notification "L×Box [final = <route.final>]" with the caption
 "<group>: <node>" (or the status "Connected" if the node is unknown) and the Stop
-button; "📋 Send clipboard" is the second button when the running config has a
+button; "📋 Send" is the second button when the running config has a
 Tailscale node with Allow Taildrop
 ([032-TAILDROP](../../032-TAILDROP/FEATURE.md)).
 
@@ -56,9 +56,9 @@ Tailscale node with Allow Taildrop
   ([009-NODE_HEALTH](../../009-NODE_HEALTH/FEATURE.md)).
 - Reconnect = confirmed stop → start; if the stop was not confirmed, the start
   is cancelled ("Stop timed out — reconnect aborted"); a repeated request during
-  a reconnect is ignored. The notification has had no Reconnect button since
-  task 707 (iteration 7): reconnect stays in the app and in the Debug API
-  (`POST /action/reconnect`).
+  a reconnect is ignored. The notification has a "🔄 Restart" button unless it is
+  turned off in App Settings (task 707, iteration 8); the app and the Debug API
+  (`POST /action/reconnect`) always have reconnect.
 - A start cancelled by a stop while waiting for the core cannot later announce
   itself "Started" (a late start is dropped).
 - Core reload — only with the tunnel connected, no more than once per 3 s,
@@ -103,4 +103,5 @@ Tailscale node with Allow Taildrop
 | 17 | [415](../../../tasks/415-stop-timeout-budget.md) | Done | Stop budget ladder 9 < 10 < 12 s |
 | 18 | [519](../../../tasks/519-connecting-timeout-post-start.md) | Released v2.25.3 | The connecting deadline grows with the number of WG/AWG nodes |
 | 19 | [605](../../../tasks/605-service-live-automation-workspaces-bugs.md) | Implemented | The start error notification is not removed together with the persistent one |
-| 20 | [707](../../../tasks/707-taildrop-send-receive-files.md), iteration 7 | Implemented, not verified on a device | 2026-11-03: notification buttons Stop / 📋 Send clipboard; Reconnect removed from the notification |
+| 20 | [707](../../../tasks/707-taildrop-send-receive-files.md), iteration 7 | Implemented, not verified on a device | 2026-11-03: notification buttons Stop / 📋 Send; Reconnect removed from the notification |
+| 21 | [707](../../../tasks/707-taildrop-send-receive-files.md), iteration 8 | Implemented, not verified on a device | 2026-11-04: Restart back in the notification; button list in App Settings |

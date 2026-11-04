@@ -31,7 +31,7 @@ Native texts by surface:
 
 | Surface | Texts |
 |---------|-------|
-| Service notification | channel name and description, "Starting…", "Connected", Stop, 📋 Send clipboard, error title, core notification channel name |
+| Service notification | channel name and description, "Starting…", "Connected", Stop, 🔄 Restart, 📋 Send, error title, core notification channel name |
 | Stop alerts | unknown error, core init failed, empty configuration, command server not initialized, failed to start service, "VPN stopped" after a restart storm |
 | Quick Settings tile | Connecting…, Stopping…, Disconnected |
 | Quick connect shortcuts | Connect, Disconnect, one-time permission prompt, permission denied |
@@ -99,4 +99,4 @@ English render of stored errors and warnings for machine surfaces.
 | 4 | [460F](../../../tasks/460F-contract-registry-bundle/spec.md) | — | Warning registry bundled with English and Russian texts |
 | 5 | [591](../../../tasks/591-spec-kit-revision-audit.md) | Open | Audit: core locale follows the device until the first language change |
 | 6 | [607](../../../tasks/607-l10n-backup-shell-bugs-from-591.md) | Done; device check pending | The core locale at process start comes from the saved app language |
-| 7 | [707](../../../tasks/707-taildrop-send-receive-files.md) iteration 7 | Implemented | 2026-11-03: the notification's Reconnect string removed, "📋 Send clipboard" and the Send clipboard window strings added (en/ru/zh) |
+| 7 | [707](../../../tasks/707-taildrop-send-receive-files.md) iteration 7 | Implemented | 2026-11-03: the notification's Reconnect string removed, "📋 Send" and the Send clipboard window strings added (en/ru/zh) |

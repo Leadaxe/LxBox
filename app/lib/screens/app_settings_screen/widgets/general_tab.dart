@@ -29,6 +29,8 @@ class GeneralTab extends StatelessWidget {
     required this.region,
     required this.detectedRegion,
     required this.onEditRegion,
+    this.notificationButtons = const {},
+    this.onNotificationButtonChanged,
   });
 
   final bool loaded;
@@ -55,6 +57,21 @@ class GeneralTab extends StatelessWidget {
   /// §425 — автоопределённая страна (`''` — не определилась).
   final String detectedRegion;
   final VoidCallback onEditRegion;
+
+  /// §707 итер. 8 — кнопки уведомления VPN; ключа нет — кнопка включена.
+  final Map<String, bool> notificationButtons;
+  final void Function(String button, bool enabled)? onNotificationButtonChanged;
+
+  Widget _notificationButton(String button, String title, {String? subtitle}) =>
+      SwitchListTile(
+        key: ValueKey('notification-button-$button'),
+        title: Text(title),
+        subtitle: subtitle == null ? null : Text(subtitle),
+        value: notificationButtons[button] ?? true,
+        onChanged: loaded && onNotificationButtonChanged != null
+            ? (v) => onNotificationButtonChanged!(button, v)
+            : null,
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -130,6 +147,17 @@ class GeneralTab extends StatelessWidget {
           leading: const Icon(Icons.touch_app_outlined),
           title: Text(getLocalText.s("Home-screen shortcut")),
           subtitle: Text(getLocalText.s("Long-press the L×Box icon on your home screen → \"Connect\" when the VPN is off, \"Disconnect\" when it is on. Android 11 and newer.")),
+        ),
+        ListTile(
+          leading: const Icon(Icons.notifications_outlined),
+          title: Text(getLocalText.s("VPN notification buttons")),
+        ),
+        _notificationButton('stop', getLocalText.s("Stop")),
+        _notificationButton('restart', getLocalText.s("Restart")),
+        _notificationButton(
+          'send',
+          getLocalText.s("Send"),
+          subtitle: getLocalText.s("Appears only while a Tailscale node has Allow Taildrop."),
         ),
         const Divider(height: 32),
         Text(getLocalText.s("Updates"),

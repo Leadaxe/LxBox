@@ -6,7 +6,7 @@ A Taildrop file of a special form carries commands. LxBox or the desktop
 launcher (singbox-launcher) receiving it from an allowed device runs the
 commands and deletes the file; such a file never reaches the inbox or
 Downloads. Two commands exist: put text on the clipboard and open a link.
-Phone → PC: the Send clipboard window, opened from the "📋 Send clipboard"
+Phone → PC: the Send clipboard window, opened from the "📋 Send"
 button in the VPN notification, from "Share" with text or from "Send to
 device" in the text selection menu. PC → phone: clipboard and links from an
 allowed device.
@@ -20,7 +20,7 @@ allowed device.
 ## What it does
 
 **Phone → PC: the Send clipboard window.** The VPN notification has the
-"📋 Send clipboard" button. It opens a chat-like window over the current app
+"📋 Send" button. It opens a chat-like window over the current app
 (the lower half of the screen, its own task: the main LxBox window does not
 come up). Android 10+ lets an app read the clipboard only from a foreground
 window, so the window reads it when it gets focus and puts the text into the
@@ -99,8 +99,8 @@ the launcher decides.
 
 | What | Value |
 |------|-------|
-| Notification button | "📋 Send clipboard" next to Stop; there is no Quick Settings tile (owner decision 2026-11-03) |
-| Where the window and its entries exist | "📋 Send clipboard", "Send to device" and LxBox in "Share" — only while the VPN is up and the running config has a Tailscale node with Allow Taildrop |
+| Notification button | "📋 Send" next to Stop; there is no Quick Settings tile (owner decision 2026-11-03) |
+| Where the window and its entries exist | "📋 Send", "Send to device" and LxBox in "Share" — only while the VPN is up and the running config has a Tailscale node with Allow Taildrop |
 | Recipient | `To: … ▾` in the window: own devices that accept files, from all such nodes; remembered on this phone |
 | Feed | in memory only while the VPN runs; at most 50 messages per device (node + device); `⋮ → Clear` |
 | Permissions | on the receiver, per own device and per kind: "Clipboard from this device", "Links from this device"; off by default; in the Taildrop block of the device page on the node's Network tab |
@@ -116,7 +116,7 @@ implemented.
 
 ## Inputs / Outputs
 
-**Inputs:** a tap on "📋 Send clipboard" and the clipboard when the window
+**Inputs:** a tap on "📋 Send" and the clipboard when the window
 gets focus; "Share" with text; "Send to device" with selected text; ➤ and
 "Open on <device>"; incoming command files and their Taildrop sender; the
 chosen recipient; permissions.

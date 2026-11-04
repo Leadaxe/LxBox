@@ -39,6 +39,8 @@ class _Methods {
   static const getAutoStart = 'getAutoStart';
   static const setKeepOnExit = 'setKeepOnExit';
   static const getKeepOnExit = 'getKeepOnExit';
+  static const getNotificationButtons = 'getNotificationButtons';
+  static const setNotificationButton = 'setNotificationButton';
 
   // §043 core logs forwarding toggle
   static const setCoreLogsEnabled = 'setCoreLogsEnabled';
