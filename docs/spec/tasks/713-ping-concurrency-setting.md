@@ -5,7 +5,7 @@
 | Status | Done |
 | Start date | 2026-11-04 |
 | End date | 2026-11-04 |
-| Commits | — |
+| Commits | f712ad53, dea3d2fc (тесты), 8e8753bf (предел 100) |
 | Related specs | §040 (ping_options), §209 (mass ping через pingclient), §236/§518 (ProbeRunner), features/009-NODE_HEALTH |
 
 ## Problem
@@ -47,7 +47,13 @@ Issue #192 (paratroop3r, 02.11.2026): при большой подписке м�
 
 - `test/services/settings_storage_ping_concurrency_test.dart`: чтение
   дефолта, clamp сверху/снизу, мусор в storage → дефолт, `null` снимает ключ.
-- Эмулятор: не проверялось в этой сессии.
+- Эмулятор (сборка 2.25.19-rc.3-dev.14, 04.11.2026): строка Parallel checks
+  в General → Feedback; ввод 3 → кнопка сброса активна, сброс → 10 и кнопка
+  гаснет; значение 2 ложится в `ping_options.concurrency` (GET
+  `/settings/ping_options`); PUT с `"concurrency":"x"` → 400; mass ping через
+  `POST /action/urltest?all=true` пишет в лог «Mass ping started (10 nodes,
+  concurrency=2)» и завершается. ProbeRunner на эмуляторе отдельно не
+  гоняли — тот же резолвер, покрыт тестами.
 
 ## Documentation
 
