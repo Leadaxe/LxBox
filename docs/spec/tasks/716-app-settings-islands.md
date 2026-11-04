@@ -47,4 +47,9 @@ Appearance, Subscriptions, Automation не тронуты.
 
 - `dart analyze lib/screens/app_settings_screen` — без замечаний.
 - Тестов, искавших заголовки этих вкладок, нет.
-- Эмулятор НЕ проверен.
+- Эмулятор (emulator-5554, сборка 2.25.19-rc.3-dev.28, 04.11.2026): General — шесть карточек
+  Region / Behavior / Quick connect / Updates / Feedback / Backup & restore; Diagnostics — три
+  карточки System setup / Developer / Wi-Fi networks. Лишних разделителей нет, под каждым
+  заголовком одна линия, текст не обрезан, тайл Backup & restore с тем же отступом, что и
+  остальные (e08bce56). Пояснения под тумблерами (Wi-Fi networks, строка «Last check» в Updates)
+  по-прежнему с отступом 72 под текст тайла — как было до островов, не трогали.
