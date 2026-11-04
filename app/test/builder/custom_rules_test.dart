@@ -1228,4 +1228,100 @@ void main() {
       ]);
     });
   });
+
+  // §712 — package_name_regex / domain_regex.
+  group('§712 package_name_regex / domain_regex', () {
+    const dnsOn = RuleDns(enabled: true, serverTag: 'google_udp');
+
+    test('inline: оба ключа в headless rule_set', () {
+      final reg = RuleSetRegistry();
+      applyCustomRules(reg, [
+        CustomRuleInline(
+          name: 'Oplus',
+          packageRegexes: [r'^com\.oplus\.'],
+          domainRegexes: [r'(^|\.)example\.com$'],
+          outbound: 'vpn-1',
+        ),
+      ]);
+      expect(reg.getRuleSets().first['rules'], [
+        {
+          'domain_regex': [r'(^|\.)example\.com$'],
+          'package_name_regex': [r'^com\.oplus\.'],
+        },
+      ]);
+      expect(reg.getRules().single,
+          {'rule_set': 'Oplus', 'outbound': 'vpn-1'});
+    });
+
+    test('inline: только регулярка пакета — DNS-способно, зеркало на тот же rule_set',
+        () {
+      final rule = CustomRuleInline(
+        name: 'Oplus',
+        packageRegexes: [r'^com\.oplus\.'],
+        outbound: 'vpn-1',
+        dns: dnsOn,
+      );
+      expect(rule.dnsLayerEligible, true);
+      expect(rule.dnsMirrorActive, true);
+      expect(rule.summary(), isNotEmpty);
+      final reg = RuleSetRegistry();
+      final result = applyAllCustomRules(reg, [rule], const []);
+      expect(reg.getRuleSets().single['rules'], [
+        {'package_name_regex': [r'^com\.oplus\.']},
+      ]);
+      expect(result.dnsMirrors.single.body['rule_set'], 'Oplus');
+    });
+
+    test('inline: domain regex делает правило resolve-способным', () {
+      expect(
+        CustomRuleInline(name: 'r', domainRegexes: ['^a']).resolveEligible,
+        true,
+      );
+    });
+
+    test('srs: package_name_regex на routing-rule и в DNS-зеркале', () {
+      final reg = RuleSetRegistry();
+      final srs = CustomRuleSrs(
+        name: 'geo',
+        srsUrl: 'https://e/geo.srs',
+        packageRegexes: [r'^com\.oplus\.'],
+        outbound: 'vpn-1',
+        dns: dnsOn,
+      );
+      final result = applyAllCustomRules(reg, [srs], const [],
+          srsPaths: {srs.id: '/tmp/geo.srs'});
+      expect(reg.getRules().single, {
+        'rule_set': 'geo',
+        'package_name_regex': [r'^com\.oplus\.'],
+        'outbound': 'vpn-1',
+      });
+      expect(result.dnsMirrors.single.body['package_name_regex'],
+          [r'^com\.oplus\.']);
+    });
+
+    test('кодек: round-trip обоих ключей, ключи sing-box в теле записи', () {
+      final src = CustomRuleInline(
+        id: 'id-re',
+        name: 'Re',
+        packageRegexes: [r'^com\.oplus\.', r'^com\.coloros\.'],
+        domainRegexes: [r'\.example\.com$'],
+        outbound: 'direct-out',
+      );
+      final rec = ruleToRecord(src);
+      final body = rec['body'] as Map;
+      expect(body['package_name_regex'],
+          [r'^com\.oplus\.', r'^com\.coloros\.']);
+      expect(body['domain_regex'], [r'\.example\.com$']);
+      final back = _storageRoundTrip(src);
+      expect(back, src);
+      final srs = CustomRuleSrs(
+        id: 'id-srs',
+        name: 'S',
+        srsUrl: 'https://e/x.srs',
+        packageRegexes: ['^a'],
+        outbound: 'vpn-1',
+      );
+      expect(_storageRoundTrip(srs), srs);
+    });
+  });
 }

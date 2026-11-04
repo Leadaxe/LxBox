@@ -426,6 +426,7 @@ List<String> _applySrsSingle(
       ports: cr.intPorts,
       portRanges: cr.portRanges,
       packages: cr.packages,
+      packageRegexes: cr.packageRegexes,
       protocols: cr.protocols,
       network: cr.network,
       ipIsPrivate: cr.ipIsPrivate,
@@ -446,6 +447,7 @@ List<String> _applySrsSingle(
       ports: cr.intPorts,
       portRanges: cr.portRanges,
       packages: cr.packages,
+      packageRegexes: cr.packageRegexes,
       protocols: cr.protocols,
       network: cr.network,
       ipIsPrivate: cr.ipIsPrivate,
@@ -467,6 +469,10 @@ List<String> _applySrsSingle(
     Map<String, dynamic> srsMatch() {
       final m = <String, dynamic>{'rule_set': tag};
       if (cr.packages.isNotEmpty) m['package_name'] = cr.packages;
+      // §712 — DNS-правило ядра принимает package_name_regex.
+      if (cr.packageRegexes.isNotEmpty) {
+        m['package_name_regex'] = cr.packageRegexes;
+      }
       if (cr.wifiSsids.isNotEmpty) m['wifi_ssid'] = cr.wifiSsids;
       if (cr.wifiBssids.isNotEmpty) m['wifi_bssid'] = cr.wifiBssids;
       // §694 — DNS-правило ядра принимает тип/лимитность сети.
@@ -583,11 +589,16 @@ List<String> _applyInlineSingle(
   if (cr.domainKeywords.isNotEmpty) {
     match['domain_keyword'] = cr.domainKeywords;
   }
+  // §712 — Go RE2, не anchored; headless 1.14 принимает.
+  if (cr.domainRegexes.isNotEmpty) match['domain_regex'] = cr.domainRegexes;
   if (cr.ipCidrs.isNotEmpty) match['ip_cidr'] = cr.ipCidrs;
   final intPorts = cr.intPorts;
   if (intPorts.isNotEmpty) match['port'] = intPorts;
   if (cr.portRanges.isNotEmpty) match['port_range'] = cr.portRanges;
   if (cr.packages.isNotEmpty) match['package_name'] = cr.packages;
+  if (cr.packageRegexes.isNotEmpty) {
+    match['package_name_regex'] = cr.packageRegexes;
+  }
   // §030/new_fields — sing-box 1.14 (`DefaultHeadlessRule`) ПРИНИМАЕТ в
   // headless: `source_ip_cidr`, `wifi_ssid`, `wifi_bssid`. Раньше (§051, под
   // 1.12) wifi выносился на routing-rule level — теперь кладём прямо в match.
@@ -772,6 +783,7 @@ Map<String, dynamic> _outboundToRoute(
   List<int>? ports,
   List<String>? portRanges,
   List<String>? packages,
+  List<String>? packageRegexes,
   List<String>? protocols,
   List<String>? network,
   bool ipIsPrivate = false,
@@ -793,6 +805,9 @@ Map<String, dynamic> _outboundToRoute(
     rule['port_range'] = portRanges;
   }
   if (packages != null && packages.isNotEmpty) rule['package_name'] = packages;
+  if (packageRegexes != null && packageRegexes.isNotEmpty) {
+    rule['package_name_regex'] = packageRegexes;
+  }
   if (protocols != null && protocols.isNotEmpty) rule['protocol'] = protocols;
   // §240 — L4-транспорт. AND с protocol/rule_set, OR внутри списка.
   if (network != null && network.isNotEmpty) rule['network'] = network;
@@ -848,6 +863,7 @@ Map<String, dynamic> _resolveToRoute(
   List<int>? ports,
   List<String>? portRanges,
   List<String>? packages,
+  List<String>? packageRegexes,
   List<String>? protocols,
   List<String>? network,
   bool ipIsPrivate = false,
@@ -865,6 +881,7 @@ Map<String, dynamic> _resolveToRoute(
     ports: ports,
     portRanges: portRanges,
     packages: packages,
+    packageRegexes: packageRegexes,
     protocols: protocols,
     // §240×§247 — матч resolve-правила обязан совпадать с терминальным,
     // иначе резолв цеплял бы трафик другого транспорта.

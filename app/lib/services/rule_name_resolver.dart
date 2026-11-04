@@ -227,7 +227,8 @@ class RuleNameResolver {
 
   /// §165 — построить эталонную строку УСЛОВИЙ правила (как `rule.String()`
   /// ядра, но БЕЗ обрезки — полная). Порядок полей как в sing-box
-  /// `rule_item_*`: domain → suffix → keyword → ip_cidr → port → package →
+  /// `rule_item_*`: domain → suffix → keyword → regex → ip_cidr → port → package →
+  /// package_regex →
   /// protocol → network_type → network_is_expensive → wifi_ssid → wifi_bssid.
   /// Формат: `key=val` / `key=[a b c]`.
   static String _ruleConditionString(CustomRule r) {
@@ -240,8 +241,10 @@ class RuleNameResolver {
     add('domain', r.domains);
     add('domain_suffix', r.domainSuffixes);
     add('domain_keyword', r.domainKeywords);
+    add('domain_regex', r.domainRegexes); // §712
     add('ip_cidr', r.ipCidrs);
     add('package_name', r.packages);
+    add('package_name_regex', r.packageRegexes); // §712
     add('protocol', r.protocols);
     // §694 — в ядре network_type / network_is_expensive идут перед wifi.
     add('network_type', r.networkTypes);

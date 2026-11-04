@@ -21,6 +21,7 @@ import '../dns_settings_screen/dns_server_resolver.dart'
 import 'network_choice.dart';
 import 'normalizers.dart' as norm;
 import 'sections/srs_section.dart' show SrsDownloadState;
+import 'validators.dart' as val;
 import 'wifi_zip.dart';
 
 export 'sections/srs_section.dart' show SrsDownloadState;
@@ -91,6 +92,11 @@ class CustomRuleEditController extends ChangeNotifier {
   late final TextEditingController domainCtrl;
   late final TextEditingController domainSuffixCtrl;
   late final TextEditingController domainKeywordCtrl;
+
+  /// §712 — `domain_regex` (inline) и `package_name_regex` (inline/srs),
+  /// по регулярке на строку.
+  late final TextEditingController domainRegexCtrl;
+  late final TextEditingController packageRegexCtrl;
   late final TextEditingController ipCidrCtrl;
   late final TextEditingController sourceIpCidrCtrl;
   late final TextEditingController portCtrl;
@@ -259,7 +265,8 @@ class CustomRuleEditController extends ChangeNotifier {
                   .normalizedDomains(domainSuffixCtrl.text,
                       stripLeadingDot: true)
                   .isNotEmpty ||
-              norm.normalizedKeywords(domainKeywordCtrl.text).isNotEmpty,
+              norm.normalizedKeywords(domainKeywordCtrl.text).isNotEmpty ||
+              norm.normalizedRegexes(domainRegexCtrl.text).isNotEmpty,
         _ => false,
       };
 
@@ -291,7 +298,9 @@ class CustomRuleEditController extends ChangeNotifier {
                       stripLeadingDot: true)
                   .isNotEmpty ||
               norm.normalizedKeywords(domainKeywordCtrl.text).isNotEmpty ||
+              norm.normalizedRegexes(domainRegexCtrl.text).isNotEmpty ||
               _packages.isNotEmpty ||
+              norm.normalizedRegexes(packageRegexCtrl.text).isNotEmpty ||
               norm.normalizedCidrs(sourceIpCidrCtrl.text).isNotEmpty ||
               _hasNetworkCondition ||
               (norm.normalizedCidrs(ipCidrCtrl.text).isEmpty &&
@@ -306,6 +315,8 @@ class CustomRuleEditController extends ChangeNotifier {
         domainCtrl,
         domainSuffixCtrl,
         domainKeywordCtrl,
+        domainRegexCtrl,
+        packageRegexCtrl,
         ipCidrCtrl,
         sourceIpCidrCtrl,
         portCtrl,
@@ -326,6 +337,9 @@ class CustomRuleEditController extends ChangeNotifier {
         TextEditingController(text: r.domainSuffixes.join('\n'));
     domainKeywordCtrl =
         TextEditingController(text: r.domainKeywords.join('\n'));
+    domainRegexCtrl = TextEditingController(text: r.domainRegexes.join('\n'));
+    packageRegexCtrl =
+        TextEditingController(text: r.packageRegexes.join('\n'));
     ipCidrCtrl = TextEditingController(text: r.ipCidrs.join('\n'));
     sourceIpCidrCtrl = TextEditingController(text: r.sourceIpCidrs.join('\n'));
     portCtrl = TextEditingController(text: r.ports.join('\n'));
@@ -1082,6 +1096,7 @@ class CustomRuleEditController extends ChangeNotifier {
           ports: norm.normalizedPorts(portCtrl.text),
           portRanges: norm.normalizedPortRanges(portRangeCtrl.text),
           packages: List.of(_packages),
+          packageRegexes: norm.normalizedRegexes(packageRegexCtrl.text),
           protocols: _protocols.toList()..sort(),
           network: _network.toList()..sort(),
           ipIsPrivate: _ipIsPrivate,
@@ -1110,10 +1125,12 @@ class CustomRuleEditController extends ChangeNotifier {
               domainSuffixCtrl.text,
               stripLeadingDot: true),
           domainKeywords: norm.normalizedKeywords(domainKeywordCtrl.text),
+          domainRegexes: norm.normalizedRegexes(domainRegexCtrl.text),
           ipCidrs: norm.normalizedCidrs(ipCidrCtrl.text),
           ports: norm.normalizedPorts(portCtrl.text),
           portRanges: norm.normalizedPortRanges(portRangeCtrl.text),
           packages: List.of(_packages),
+          packageRegexes: norm.normalizedRegexes(packageRegexCtrl.text),
           protocols: _protocols.toList()..sort(),
           network: _network.toList()..sort(),
           ipIsPrivate: _ipIsPrivate,
@@ -1143,6 +1160,7 @@ class CustomRuleEditController extends ChangeNotifier {
   /// трогается — пользователь исправляет набранное.
   String? get saveBlockReason =>
       jsonError ??
+      regexError ??
       // §683 — поле Fixed IP и Advanced-поля резолва.
       (_kind == CustomRuleKind.inline || _kind == CustomRuleKind.srs
           ? (fixedIpError ??
@@ -1152,6 +1170,29 @@ class CustomRuleEditController extends ChangeNotifier {
                       resolveSubnetError)
                   : null))
           : null);
+
+  /// §712 — первая невалидная регулярка в полях Package name regex /
+  /// Domain regex (поле, видимое у текущего вида правила). Ядро на битой
+  /// регулярке не стартует — Save блокируется.
+  String? get regexError {
+    String? check(String label, TextEditingController ctrl) {
+      final bad = norm
+          .normalizedRegexes(ctrl.text)
+          .where((r) => !val.isValidRegex(r))
+          .firstOrNull;
+      if (bad == null) return null;
+      return getLocalText.s("%1\$s: invalid regex %2\$s", label, bad);
+    }
+
+    return switch (_kind) {
+      CustomRuleKind.inline =>
+        check(getLocalText.s("Package name regex"), packageRegexCtrl) ??
+            check(getLocalText.s("Domain regex"), domainRegexCtrl),
+      CustomRuleKind.srs =>
+        check(getLocalText.s("Package name regex"), packageRegexCtrl),
+      _ => null,
+    };
+  }
 
   /// §225 — валиден ли текущий текст json-правила (для inline-хелпера в
   /// JsonSection и гейта Save). `null` = ок (нет ошибки), иначе краткое

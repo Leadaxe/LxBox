@@ -215,4 +215,18 @@ void main() {
       expect(isValidBssid('zz:2c:4a:cf:6d:5c'), isFalse);
     });
   });
+
+  group('isValidRegex (§712)', () {
+    test('accepts anchored and unanchored patterns', () {
+      expect(isValidRegex(r'^com\.oplus\.'), isTrue);
+      expect(isValidRegex(r'(^|\.)example\.com$'), isTrue);
+      expect(isValidRegex('a{1,3}'), isTrue);
+    });
+    test('rejects empty, newline and broken syntax', () {
+      expect(isValidRegex(''), isFalse);
+      expect(isValidRegex('a\nb'), isFalse);
+      expect(isValidRegex('(unclosed'), isFalse);
+      expect(isValidRegex('[a-'), isFalse);
+    });
+  });
 }

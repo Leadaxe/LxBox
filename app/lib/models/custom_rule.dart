@@ -87,6 +87,11 @@ sealed class CustomRule {
         CustomRuleInline(:final domainKeywords) => domainKeywords,
         _ => const [],
       };
+  /// §712 — `domain_regex`. Только inline.
+  List<String> get domainRegexes => switch (this) {
+        CustomRuleInline(:final domainRegexes) => domainRegexes,
+        _ => const [],
+      };
   List<String> get ipCidrs => switch (this) {
         CustomRuleInline(:final ipCidrs) => ipCidrs,
         _ => const [],
@@ -104,6 +109,13 @@ sealed class CustomRule {
   List<String> get packages => switch (this) {
         CustomRuleInline(:final packages) => packages,
         CustomRuleSrs(:final packages) => packages,
+        _ => const [],
+      };
+  /// §712 — `package_name_regex`. Inline — в headless match, srs — на
+  /// routing-rule level рядом с `package_name`.
+  List<String> get packageRegexes => switch (this) {
+        CustomRuleInline(:final packageRegexes) => packageRegexes,
+        CustomRuleSrs(:final packageRegexes) => packageRegexes,
         _ => const [],
       };
   List<String> get protocols => switch (this) {
@@ -226,7 +238,9 @@ sealed class CustomRule {
         CustomRuleInline() => domains.isNotEmpty ||
             domainSuffixes.isNotEmpty ||
             domainKeywords.isNotEmpty ||
+            domainRegexes.isNotEmpty ||
             packages.isNotEmpty ||
+            packageRegexes.isNotEmpty ||
             sourceIpCidrs.isNotEmpty ||
             wifiSsids.isNotEmpty ||
             wifiBssids.isNotEmpty ||
@@ -284,7 +298,8 @@ sealed class CustomRule {
   bool get resolveEligible => switch (this) {
         CustomRuleInline() => domains.isNotEmpty ||
             domainSuffixes.isNotEmpty ||
-            domainKeywords.isNotEmpty,
+            domainKeywords.isNotEmpty ||
+            domainRegexes.isNotEmpty,
         CustomRuleSrs() => true,
         _ => false,
       };
@@ -635,10 +650,12 @@ class CustomRuleInline extends CustomRule {
     this.domains = const [],
     this.domainSuffixes = const [],
     this.domainKeywords = const [],
+    this.domainRegexes = const [],
     this.ipCidrs = const [],
     this.ports = const [],
     this.portRanges = const [],
     this.packages = const [],
+    this.packageRegexes = const [],
     this.protocols = const [],
     this.network = const [],
     this.ipIsPrivate = false,
@@ -661,6 +678,10 @@ class CustomRuleInline extends CustomRule {
   List<String> domainSuffixes;
   @override
   List<String> domainKeywords;
+  /// §712 — `domain_regex` (Go RE2, не anchored). В headless match, OR
+  /// внутри поля.
+  @override
+  List<String> domainRegexes;
   @override
   List<String> ipCidrs;
 
@@ -673,6 +694,9 @@ class CustomRuleInline extends CustomRule {
   // OR-группа #3 (package_name). AND с остальными.
   @override
   List<String> packages;
+  /// §712 — `package_name_regex` (Go RE2, не anchored), рядом с [packages].
+  @override
+  List<String> packageRegexes;
 
   // Routing-rule-level AND (не в headless).
   @override
@@ -737,6 +761,9 @@ class CustomRuleInline extends CustomRule {
     if (domainKeywords.isNotEmpty) {
       parts.add(getLocalText.plural("%d keywords", domainKeywords.length));
     }
+    if (domainRegexes.isNotEmpty) {
+      parts.add(getLocalText.plural("%d domain regex", domainRegexes.length));
+    }
     if (ipCidrs.isNotEmpty) parts.add(getLocalText.plural("%d cidrs", ipCidrs.length));
     if (ipIsPrivate) parts.add(getLocalText.s("private ip"));
     if (sourceIpCidrs.isNotEmpty) {
@@ -746,6 +773,9 @@ class CustomRuleInline extends CustomRule {
     final totalPorts = ports.length + portRanges.length;
     if (totalPorts > 0) parts.add(getLocalText.plural("%d ports", totalPorts));
     if (packages.isNotEmpty) parts.add(getLocalText.plural("%d apps", packages.length));
+    if (packageRegexes.isNotEmpty) {
+      parts.add(getLocalText.plural("%d package regex", packageRegexes.length));
+    }
     if (protocols.isNotEmpty) parts.add(getLocalText.plural("%d proto", protocols.length));
     if (network.isNotEmpty) parts.add(getLocalText.plural("%d net", network.length));
     if (inbounds.isNotEmpty) parts.add(getLocalText.s("%d in", inbounds.length));
@@ -763,10 +793,12 @@ class CustomRuleInline extends CustomRule {
     List<String>? domains,
     List<String>? domainSuffixes,
     List<String>? domainKeywords,
+    List<String>? domainRegexes,
     List<String>? ipCidrs,
     List<String>? ports,
     List<String>? portRanges,
     List<String>? packages,
+    List<String>? packageRegexes,
     List<String>? protocols,
     List<String>? network,
     bool? ipIsPrivate,
@@ -795,10 +827,12 @@ class CustomRuleInline extends CustomRule {
         domains: domains ?? this.domains,
         domainSuffixes: domainSuffixes ?? this.domainSuffixes,
         domainKeywords: domainKeywords ?? this.domainKeywords,
+        domainRegexes: domainRegexes ?? this.domainRegexes,
         ipCidrs: ipCidrs ?? this.ipCidrs,
         ports: ports ?? this.ports,
         portRanges: portRanges ?? this.portRanges,
         packages: packages ?? this.packages,
+        packageRegexes: packageRegexes ?? this.packageRegexes,
         protocols: protocols ?? this.protocols,
         network: network ?? this.network,
         ipIsPrivate: ipIsPrivate ?? this.ipIsPrivate,
@@ -825,10 +859,12 @@ class CustomRuleInline extends CustomRule {
           _listEq(domains, other.domains) &&
           _listEq(domainSuffixes, other.domainSuffixes) &&
           _listEq(domainKeywords, other.domainKeywords) &&
+          _listEq(domainRegexes, other.domainRegexes) &&
           _listEq(ipCidrs, other.ipCidrs) &&
           _listEq(ports, other.ports) &&
           _listEq(portRanges, other.portRanges) &&
           _listEq(packages, other.packages) &&
+          _listEq(packageRegexes, other.packageRegexes) &&
           _listEq(protocols, other.protocols) &&
           _listEq(network, other.network) &&
           ipIsPrivate == other.ipIsPrivate &&
@@ -852,10 +888,12 @@ class CustomRuleInline extends CustomRule {
         Object.hashAll(domains),
         Object.hashAll(domainSuffixes),
         Object.hashAll(domainKeywords),
+        Object.hashAll(domainRegexes),
         Object.hashAll(ipCidrs),
         Object.hashAll(ports),
         Object.hashAll(portRanges),
         Object.hashAll(packages),
+        Object.hashAll(packageRegexes),
         Object.hashAll(protocols),
         Object.hashAll(network),
         ipIsPrivate,
@@ -895,6 +933,7 @@ class CustomRuleSrs extends CustomRule {
     this.ports = const [],
     this.portRanges = const [],
     this.packages = const [],
+    this.packageRegexes = const [],
     this.protocols = const [],
     this.network = const [],
     this.ipIsPrivate = false,
@@ -950,6 +989,9 @@ class CustomRuleSrs extends CustomRule {
   List<String> portRanges;
   @override
   List<String> packages;
+  /// §712 — `package_name_regex` (Go RE2, не anchored), рядом с [packages].
+  @override
+  List<String> packageRegexes;
   @override
   List<String> protocols;
   /// §240 — L4-транспорт (subset of kKnownNetworks). Routing-rule level.
@@ -1026,6 +1068,7 @@ class CustomRuleSrs extends CustomRule {
     List<String>? ports,
     List<String>? portRanges,
     List<String>? packages,
+    List<String>? packageRegexes,
     List<String>? protocols,
     List<String>? network,
     bool? ipIsPrivate,
@@ -1054,6 +1097,7 @@ class CustomRuleSrs extends CustomRule {
         ports: ports ?? this.ports,
         portRanges: portRanges ?? this.portRanges,
         packages: packages ?? this.packages,
+        packageRegexes: packageRegexes ?? this.packageRegexes,
         protocols: protocols ?? this.protocols,
         network: network ?? this.network,
         ipIsPrivate: ipIsPrivate ?? this.ipIsPrivate,
@@ -1083,6 +1127,7 @@ class CustomRuleSrs extends CustomRule {
           _listEq(ports, other.ports) &&
           _listEq(portRanges, other.portRanges) &&
           _listEq(packages, other.packages) &&
+          _listEq(packageRegexes, other.packageRegexes) &&
           _listEq(protocols, other.protocols) &&
           _listEq(network, other.network) &&
           ipIsPrivate == other.ipIsPrivate &&
@@ -1108,6 +1153,7 @@ class CustomRuleSrs extends CustomRule {
         Object.hashAll(ports),
         Object.hashAll(portRanges),
         Object.hashAll(packages),
+        Object.hashAll(packageRegexes),
         Object.hashAll(protocols),
         Object.hashAll(network),
         ipIsPrivate,

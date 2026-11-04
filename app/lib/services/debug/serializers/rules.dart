@@ -30,10 +30,12 @@ Future<Map<String, Object?>> serializeCustomRule(CustomRule r) async {
         if (r.domains.isNotEmpty) 'domains': r.domains,
         if (r.domainSuffixes.isNotEmpty) 'domain_suffixes': r.domainSuffixes,
         if (r.domainKeywords.isNotEmpty) 'domain_keywords': r.domainKeywords,
+        if (r.domainRegexes.isNotEmpty) 'domain_regexes': r.domainRegexes,
         if (r.ipCidrs.isNotEmpty) 'ip_cidrs': r.ipCidrs,
         if (r.ports.isNotEmpty) 'ports': r.ports,
         if (r.portRanges.isNotEmpty) 'port_ranges': r.portRanges,
         if (r.packages.isNotEmpty) 'packages': r.packages,
+        if (r.packageRegexes.isNotEmpty) 'package_regexes': r.packageRegexes,
         if (r.protocols.isNotEmpty) 'protocols': r.protocols,
         // §240 — L4-транспорт (tcp/udp/icmp).
         if (r.network.isNotEmpty) 'network': r.network,
@@ -66,6 +68,7 @@ Future<Map<String, Object?>> serializeCustomRule(CustomRule r) async {
         if (r.ports.isNotEmpty) 'ports': r.ports,
         if (r.portRanges.isNotEmpty) 'port_ranges': r.portRanges,
         if (r.packages.isNotEmpty) 'packages': r.packages,
+        if (r.packageRegexes.isNotEmpty) 'package_regexes': r.packageRegexes,
         if (r.protocols.isNotEmpty) 'protocols': r.protocols,
         // §240 — L4-транспорт (tcp/udp/icmp).
         if (r.network.isNotEmpty) 'network': r.network,

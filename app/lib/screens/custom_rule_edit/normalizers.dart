@@ -18,6 +18,18 @@ List<String> splitRaw(String text) => text
     .where((s) => s.isNotEmpty)
     .toList();
 
+/// §712 — split только по `\n`: в регулярке запятая значимая (`{1,3}`).
+/// Trim, пустые строки отбрасываются.
+List<String> splitLines(String text) => text
+    .split('\n')
+    .map((s) => s.trim())
+    .where((s) => s.isNotEmpty)
+    .toList();
+
+/// §712 — `package_name_regex` / `domain_regex`: по строке на регулярку,
+/// регистр не трогаем (в RE2 он значим).
+List<String> normalizedRegexes(String raw) => splitLines(raw);
+
 /// Normalized domains:
 /// - lower-case (Unicode-aware: `Ü`→`ü` до punycode)
 /// - strip `http://` / `https://` префикса (юзер мог скопировать URL)

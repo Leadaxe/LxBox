@@ -78,6 +78,9 @@
   "%1$s · %2$d events": {
     "value": "%1$s · %2$d соб."
   },
+  "%1$s: invalid regex %2$s": {
+    "value": "%1$s: неверная регулярка %2$s"
+  },
   "%d app settings": {
     "value": {
       "one": "%d настройка приложения",
@@ -100,6 +103,14 @@
       "few": "%d в цепочке",
       "many": "%d в цепочке",
       "other": "%d в цепочке"
+    }
+  },
+  "%d domain regex": {
+    "value": {
+      "one": "%d regex домена",
+      "few": "%d regex домена",
+      "many": "%d regex домена",
+      "other": "%d regex домена"
     }
   },
   "%d elements": {
@@ -356,6 +367,14 @@
   },
   "%d ok": {
     "value": "%d ок"
+  },
+  "%d package regex": {
+    "value": {
+      "one": "%d regex пакета",
+      "few": "%d regex пакета",
+      "many": "%d regex пакета",
+      "other": "%d regex пакета"
+    }
   },
   "%d packages copied": {
     "value": {
@@ -808,11 +827,20 @@
   "Custom server": {
     "value": "Свой сервер"
   },
+  "Domain regex": {
+    "value": "Regex домена"
+  },
   "Enter an IP address": {
     "value": "Введите IP-адрес"
   },
   "Fixed IP": {
     "value": "Фиксированный IP"
+  },
+  "Go RE2, matched anywhere in the domain, e.g. %s": {
+    "value": "Go RE2, совпадение в любом месте домена, например %s"
+  },
+  "Go RE2, matched anywhere in the package name, e.g. %s": {
+    "value": "Go RE2, совпадение в любом месте имени пакета, например %s"
   },
   "How domains matched by this rule are resolved.": {
     "value": "Как резолвятся домены, совпавшие с этим правилом."
@@ -837,6 +865,9 @@
   },
   "One address per line, IPv4 or IPv6.": {
     "value": "По адресу на строку, IPv4 или IPv6."
+  },
+  "Package name regex": {
+    "value": "Regex имени пакета"
   },
   "Resolve before routing": {
     "value": "Резолвить до маршрутизации"

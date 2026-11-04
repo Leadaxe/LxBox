@@ -63,6 +63,9 @@
   "%1$s · %2$d events": {
     "value": "%1$s · %2$d 个事件"
   },
+  "%1$s: invalid regex %2$s": {
+    "value": "%1$s：无效的正则 %2$s"
+  },
   "%d app settings": {
     "value": {
       "other": "%d 项应用设置"
@@ -76,6 +79,11 @@
   "%d chained": {
     "value": {
       "other": "%d 个链式"
+    }
+  },
+  "%d domain regex": {
+    "value": {
+      "other": "%d 个域名正则"
     }
   },
   "%d elements": {
@@ -242,6 +250,11 @@
   },
   "%d ok": {
     "value": "%d 正常"
+  },
+  "%d package regex": {
+    "value": {
+      "other": "%d 个包名正则"
+    }
   },
   "%d packages copied": {
     "value": {
@@ -628,11 +641,20 @@
   "Custom server": {
     "value": "自定义服务器"
   },
+  "Domain regex": {
+    "value": "域名正则"
+  },
   "Enter an IP address": {
     "value": "请输入 IP 地址"
   },
   "Fixed IP": {
     "value": "固定 IP"
+  },
+  "Go RE2, matched anywhere in the domain, e.g. %s": {
+    "value": "Go RE2，匹配域名中的任意位置，例如 %s"
+  },
+  "Go RE2, matched anywhere in the package name, e.g. %s": {
+    "value": "Go RE2，匹配包名中的任意位置，例如 %s"
   },
   "How domains matched by this rule are resolved.": {
     "value": "如何解析与此规则匹配的域名。"
@@ -657,6 +679,9 @@
   },
   "One address per line, IPv4 or IPv6.": {
     "value": "每行一个地址，IPv4 或 IPv6。"
+  },
+  "Package name regex": {
+    "value": "包名正则"
   },
   "Resolve before routing": {
     "value": "路由前解析"

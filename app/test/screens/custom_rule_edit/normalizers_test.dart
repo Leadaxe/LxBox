@@ -87,4 +87,10 @@ void main() {
       );
     });
   });
+
+  group('normalizedRegexes (§712)', () {
+    test('splits on newline only, keeps commas and case', () {
+      expect(normalizedRegexes(' ^A{1,3}\n\n  b,c  \n'), ['^A{1,3}', 'b,c']);
+    });
+  });
 }

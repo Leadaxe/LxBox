@@ -20,6 +20,13 @@
 
 ### Added
 
+- **Regex conditions in routing rules ([task 712](docs/spec/tasks/712-package-name-regex-domain-regex-rules.md)).**
+  A rule now takes package name regex (under the app picker) and domain regex
+  (under Domain keyword), one Go RE2 pattern per line, emitted as
+  `package_name_regex` and `domain_regex`. One pattern such as
+  `^com\.oplus\.` replaces picking every system package of a vendor. Remote
+  `.srs` rules take the package regex too. Issue #193.
+
 - **Reorder DNS servers ([task 710](docs/spec/tasks/710-dns-servers-reorder.md)).**
   Servers on the DNS tab move by dragging the strip on the left of a row, as
   DNS rules do; the order is saved in the template's server list.
