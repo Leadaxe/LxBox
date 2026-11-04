@@ -149,7 +149,7 @@ bool coreSupportsDnsGroupHosts(String coreVersion) {
 /// `test/contract/node_core_gate_test.dart`: он падает, пока [kCoreBuildTagsPin]
 /// не совпадёт с `app/android/libbox.version`, но сам набор тегов не сверяет
 /// (биндингу его негде взять). Бамп ядра обязан перечитать список руками.
-const String kCoreBuildTagsPin = 'v1.14.4-lx.30';
+const String kCoreBuildTagsPin = 'v1.14.4-lx.31';
 
 const Set<String> kCoreBuildTags = {
   'with_gvisor',
@@ -166,6 +166,7 @@ const Set<String> kCoreBuildTags = {
   'with_lx_chain',
   'with_openvpn',
   'with_openconnect',
+  'with_trusttunnel',
   'with_tailscale',
   'ts_omit_logtail',
   'ts_omit_ssh',
