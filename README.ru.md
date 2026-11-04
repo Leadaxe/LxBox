@@ -394,6 +394,7 @@ Auto-группа Направления умеет не только выбир
 | SOCKS       | `socks://` / `socks5://`           | TCP, auth                                      |
 | WireGuard / **AmneziaWG** | `wireguard://`, `awg://`, INI / `.conf`, **Amnezia `vpn://`** | UDP, multi-peer, **обфускация AWG 1.x/2.0** (jc/jmin/jmax, s1–s4, h1–h4 вкл. **диапазоны `N-M`**, i1–i5), авто-MTU 1280 |
 | **MASQUE** (Cloudflare WARP) | `masque://` | QUIC / HTTP-3 (RFC 9484 CONNECT-IP), fallback HTTP/2, pinning ECDSA P-256 |
+| **TrustTunnel** (AdGuard) | `tt://` | HTTP/2 или HTTP/3 (QUIC) поверх TLS, Basic auth; ссылка может нести самоподписанный сертификат |
 | **Tailscale** | sing-box JSON, визард | WireGuard mesh, MagicDNS, exit node, ретрансляторы DERP |
 
 **XHTTP** — нативный транспорт (Xray splithttp: `mode` auto/packet-up/stream-up/stream-one) с полным клиентским набором полей: placement'ы session/seq/uplink (path/query/header/cookie), ключи, метод upload, X-Padding obfs-режим (`repeat-x`/`tokenish`) и packet-up-tuning — читаются из плоских query-параметров и из `extra` (URL-encoded JSON). Работает с TLS и Reality, несовместим с XTLS-Vision (ограничение протокола).

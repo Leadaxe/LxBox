@@ -8,7 +8,35 @@
 
 ## [Unreleased]
 
+## [2.25.19] — 2026-11-05
+
 ### Added
+
+- **TrustTunnel `tt://` links ([task 717](docs/spec/tasks/717-trusttunnel-deeplink-uri.md)).**
+  A `tt://` link (the deep link of the AdGuard TrustTunnel client: base64url
+  over a binary TLV) is recognized when pasted from the clipboard, in a list of
+  links and in a subscription, and becomes a `trusttunnel` node: the first
+  address as `server`/`server_port`, `username`, `password`, `quic` for HTTP/3,
+  `tls.server_name` from the custom SNI or the host name, `tls.insecure`, the
+  certificate as PEM. Fields the node body has no place for (more addresses,
+  DNS upstreams, `anti_dpi`, client random) are dropped softly with
+  `tt_field_unsupported`; a broken link is dropped with `tt_deeplink_invalid`,
+  a link with only `subscription_url` with `tt_subscription_only`. The
+  `mappers.uri` section is a draft until the launcher's registry ships its own
+  (contract request §157). Not yet: TrustTunnel subscriptions
+  (`subscription_url`) and encoding a node back into `tt://`. Issue #194.
+  (RU: Ссылки `tt://` TrustTunnel: ссылка (deep-link клиента AdGuard
+  TrustTunnel, base64url над бинарным TLV) распознаётся при вставке из буфера,
+  в списке ссылок и в подписке и становится узлом `trusttunnel`: первый адрес —
+  `server`/`server_port`, `username`, `password`, `quic` для HTTP/3,
+  `tls.server_name` из своего SNI или имени хоста, `tls.insecure`, сертификат
+  в PEM. Поля, которым в теле узла нет места (дополнительные адреса,
+  DNS-апстримы, `anti_dpi`, client random), снимаются мягко с
+  `tt_field_unsupported`; битая ссылка снимается с `tt_deeplink_invalid`,
+  ссылка с одним `subscription_url` — с `tt_subscription_only`. Секция
+  `mappers.uri` — черновик, пока реестр лаунчера не привезёт свою (запрос
+  контракта §157). Пока нет: подписки TrustTunnel (`subscription_url`) и
+  обратного кодирования узла в `tt://`. Issue #194.)
 
 - **Parallel checks setting ([task 713](docs/spec/tasks/713-ping-concurrency-setting.md)).**
   App Settings → General → Parallel checks sets how many servers the mass ping
@@ -44,31 +72,6 @@
   like a measurement from another Direction. The app's own ping and a
   measurement from another Direction take precedence. Issue #191.
 
-### Fixed
-
-- **Auto card in Load balance showed the protocol instead of the pool ([task 715](docs/spec/tasks/715-auto-twin-pool-label-core-delays.md)).**
-  The Direction's Auto twin in Load balance had neither the arrow nor the pool
-  label, so the row fell back to the protocol of the core's `now`, which
-  `round_robin` does not keep as a current pick. The card now shows
-  `🔀 [N/M]` with the pool badges, or the slot names when no member yields a
-  badge, the same as an auto-select node. Issue #191.
-
-- **Ru internet segment resolved its domains through the default resolver with
-  Force IPv4 off ([task 711](docs/spec/tasks/711-ru-direct-resolve-always-dedicated-sets-resolve.md)).**
-  The box removed the whole resolve rule instead of only the IPv4 strategy, so
-  with FakeIP above the preset the Yandex DNS group was not used. The resolve
-  rule is now always present; the box controls only the address family.
-  Choosing a dedicated DNS server in a rule's editor now also turns on Resolve
-  before routing with that server, for the same reason; the box can be cleared.
-
-- **FakeIP: fake IPv6 addresses could not be turned off ([task 690](docs/spec/tasks/690-fakeip-custom-ranges.md)).**
-  An emptied IPv6 pool could not be saved: the field refilled with the default
-  `fc00::/18`. The preset now has a "Fake IPv6 addresses" toggle; when it is
-  off, the server has no IPv6 pool and AAAA queries get an answer with no
-  address, while the IPv4 pool stays in use. Issue #181.
-
-### Added
-
 - **Regex conditions in routing rules ([task 712](docs/spec/tasks/712-package-name-regex-domain-regex-rules.md)).**
   A rule now takes package name regex (under the app picker) and domain regex
   (under Domain keyword), one Go RE2 pattern per line, emitted as
@@ -79,20 +82,6 @@
 - **Reorder DNS servers ([task 710](docs/spec/tasks/710-dns-servers-reorder.md)).**
   Servers on the DNS tab move by dragging the strip on the left of a row, as
   DNS rules do; the order is saved in the template's server list.
-
-### Changed
-
-- **Taildrop and notification settings in storage ([task 707](docs/spec/tasks/707-taildrop-send-receive-files.md)).**
-  The Taildrop settings of a node (accept clipboard and links from my devices,
-  save received files to Downloads) and the VPN notification buttons moved
-  into `lxbox_settings.json` and the backup. Both Taildrop settings are on by
-  default when Taildrop is allowed on the node; the auto-save choice from
-  2.25.19-rc.3 is not carried over. Per-device Taildrop permissions are
-  removed. The app theme mode is backed up.
-
-## [2.25.19] — 2026-11-02
-
-### Added
 
 - **Taildrop: send and receive files over a Tailscale node
   ([task 707](docs/spec/tasks/707-taildrop-send-receive-files.md)).** L×Box
@@ -323,6 +312,25 @@
 
 ### Changed
 
+- **Taildrop and notification settings in storage ([task 707](docs/spec/tasks/707-taildrop-send-receive-files.md)).**
+  The Taildrop settings of a node (accept clipboard and links from my devices,
+  save received files to Downloads) and the VPN notification buttons moved
+  into `lxbox_settings.json` and the backup. Both Taildrop settings are on by
+  default when Taildrop is allowed on the node; the auto-save choice from
+  2.25.19-rc.3 is not carried over. Per-device Taildrop permissions are
+  removed. The app theme mode is backed up.
+
+- **App Settings → General and Diagnostics as islands
+  ([task 716](docs/spec/tasks/716-app-settings-islands.md)).** Each section of
+  both tabs (Region, Behavior, Quick connect, Updates, Feedback, Backup &
+  restore; System setup, Developer) is a `SettingsIsland` card with its title,
+  as VPN Settings → System/Core since task 709; the old headers and dividers
+  are gone. Tiles, texts and actions are unchanged.
+  (RU: App Settings → General и Diagnostics островами: каждая секция обеих
+  вкладок — карточка `SettingsIsland` с заголовком, как VPN Settings →
+  System/Core с задачи 709; прежние заголовки и разделители сняты. Тайлы,
+  тексты и действия не менялись.)
+
 - **Taildrop is now off by default on every Tailscale node, existing ones
   included** (contract 1.1.150): after this update a node receives and sends
   files only once "Allow Taildrop" is turned on in its settings.
@@ -351,7 +359,7 @@
   for an explicit choice, and a value chosen earlier is kept. Statistics →
   Memory shows the figure as Core memory next to the process RSS, with the
   limit beside it when a number is chosen.
-- **Core `v1.14.4-lx.25` → `v1.14.4-lx.30`
+- **Core `v1.14.4-lx.25` → `v1.14.4-lx.31`
   ([docs/KERNEL.md](docs/KERNEL.md)).** A DNS group can list `hosts`
   servers that answer the names they know before the group's servers
   (Leadaxe/sing-box-lx#60). MTU alignment fixes: a proxy node inside a group no
@@ -366,8 +374,18 @@
   Go runtime instead of the whole process (Leadaxe/sing-box-lx#62). Tailscale
   endpoints sign in with a new key and turn on/off without a restart,
   `disable_taildrop` and the sender of a received file (SPEC 149); QUIC sniff
-  decoy (SPEC 151).
-  (RU: Ядро `v1.14.4-lx.25` → `v1.14.4-lx.30`. DNS-группа может спрашивать
+  decoy (SPEC 151). lx.31: the Android AAR is built with `with_trusttunnel`,
+  so `trusttunnel` nodes are no longer rejected as not included in the build;
+  AWG masquerade by path, root key `lx.awg_masquerade` (default `direct`: the
+  masquerade burst only on the device's own socket, a plain handshake through
+  a `detour`), and `lx.quic_sniff_decoy` reaches AWG (SPEC 153,
+  Leadaxe/sing-box-lx#64); the session underlay of masque, trusttunnel,
+  hysteria2 and tuic is dialled as an internal connection, so a selector
+  switch closes it (SPEC 152); upstream/stable v1.14.4 + 9 commits: DNS
+  transport setup no longer blocks the TUN packet loop, OpenVPN/OpenConnect
+  reopen UDP on address change (SPEC 154). The pin moves to lx.31 in a
+  separate commit once the AAR is published.
+  (RU: Ядро `v1.14.4-lx.25` → `v1.14.4-lx.31`. DNS-группа может спрашивать
   серверы `hosts` раньше своих серверов; поправки выравнивания MTU: прокси-узел
   в группе больше не занижает MTU туннеля над группой, туннели с IPv6 не
   опускаются ниже 1280. Статус пира WireGuard/AWG отдаётся по сессиям: после
@@ -378,7 +396,17 @@
   rule-set. Лимит памяти можно сравнивать с Go-рантаймом ядра, а не со всем
   процессом. Эндпоинты Tailscale входят новым ключом и включаются/выключаются
   без перезапуска, `disable_taildrop` и отправитель принятого файла
-  (SPEC 149); обманка от сниффинга QUIC (SPEC 151).)
+  (SPEC 149); обманка от сниффинга QUIC (SPEC 151). lx.31: Android AAR
+  собран с `with_trusttunnel`, узлы `trusttunnel` больше не отвергаются как
+  не включённые в сборку; маскировка AWG по пути, корневой ключ
+  `lx.awg_masquerade` (по умолчанию `direct`: маскировочная пачка только с
+  собственного сокета устройства, через `detour` — обычное рукопожатие), и
+  `lx.quic_sniff_decoy` достаёт до AWG (SPEC 153); подложка сессии masque,
+  trusttunnel, hysteria2 и tuic диалится как внутреннее соединение, и
+  переключение селектора её закрывает (SPEC 152); апстрим v1.14.4 + 9
+  коммитов: установка DNS-транспорта не тормозит пакетный цикл TUN,
+  OpenVPN/OpenConnect переоткрывают UDP при смене адресов (SPEC 154). Пин
+  поднимается до lx.31 отдельным коммитом после выхода AAR.)
 - **Default TUN MTU is 9000 instead of 1492
   ([task 700](docs/spec/tasks/700-tun-mtu-default-9000.md)).** 9000 is the
   sing-box default; the tunnel interface is virtual, and the core re-sends TCP
@@ -388,12 +416,23 @@
   (RU: MTU tun по умолчанию 9000 вместо 1492 — значение sing-box; у установок,
   где MTU не меняли, 9000 встанет со следующей сборкой конфига, заданное
   вручную значение остаётся.)
-- **Launcher contract 1.1.142 → 1.1.145.** `tcp_multi_path` in a pasted
+- **Launcher contract 1.1.142 → 1.1.160.** `tcp_multi_path` in a pasted
   sing-box node is kept as a known dialer field instead of being dropped as
-  an unknown key; the DNS group key `hosts` is shared with the launcher.
-  (RU: Контракт лаунчера 1.1.142 → 1.1.145. `tcp_multi_path` во вставленном
+  an unknown key; the DNS group key `hosts` is shared with the launcher; the
+  core's root `lx` keys are template variables (1.1.152); command files
+  (clipboard, links) in one format on both sides and the `native_prefs`
+  backup section (1.1.157–1.1.158); `disable_taildrop_commands` /
+  `disable_taildrop_autosave` (1.1.159); a Tailscale node's `state_dir_id` is
+  carried through a backup without loss, `taildrop_double_copy` is known and
+  skipped (1.1.160).
+  (RU: Контракт лаунчера 1.1.142 → 1.1.160. `tcp_multi_path` во вставленном
   sing-box узле сохраняется как известное поле диалера, а не снимается как
-  неизвестный ключ; ключ `hosts` у DNS-группы общий с лаунчером.)
+  неизвестный ключ; ключ `hosts` у DNS-группы общий с лаунчером; корневые
+  ключи `lx` ядра — переменные шаблона (1.1.152); служебные файлы (буфер,
+  ссылки) в одном формате у обеих сторон и секция бэкапа `native_prefs`
+  (1.1.157–1.1.158); `disable_taildrop_commands` / `disable_taildrop_autosave`
+  (1.1.159); `state_dir_id` узла Tailscale переносится бэкапом без потерь,
+  `taildrop_double_copy` известен и пропускается (1.1.160).)
 
 ### Removed
 
@@ -416,6 +455,27 @@
   этой настройкой восстанавливается.)
 
 ### Fixed
+
+- **Auto card in Load balance showed the protocol instead of the pool ([task 715](docs/spec/tasks/715-auto-twin-pool-label-core-delays.md)).**
+  The Direction's Auto twin in Load balance had neither the arrow nor the pool
+  label, so the row fell back to the protocol of the core's `now`, which
+  `round_robin` does not keep as a current pick. The card now shows
+  `🔀 [N/M]` with the pool badges, or the slot names when no member yields a
+  badge, the same as an auto-select node. Issue #191.
+
+- **Ru internet segment resolved its domains through the default resolver with
+  Force IPv4 off ([task 711](docs/spec/tasks/711-ru-direct-resolve-always-dedicated-sets-resolve.md)).**
+  The box removed the whole resolve rule instead of only the IPv4 strategy, so
+  with FakeIP above the preset the Yandex DNS group was not used. The resolve
+  rule is now always present; the box controls only the address family.
+  Choosing a dedicated DNS server in a rule's editor now also turns on Resolve
+  before routing with that server, for the same reason; the box can be cleared.
+
+- **FakeIP: fake IPv6 addresses could not be turned off ([task 690](docs/spec/tasks/690-fakeip-custom-ranges.md)).**
+  An emptied IPv6 pool could not be saved: the field refilled with the default
+  `fc00::/18`. The preset now has a "Fake IPv6 addresses" toggle; when it is
+  off, the server has no IPv6 pool and AAAA queries get an answer with no
+  address, while the IPv4 pool stays in use. Issue #181.
 
 - **Tailscale Network tab of a signed-out node could erase the saved exit
   node ([task 706](docs/spec/tasks/706-tailscale-network-tab-logged-out.md)).**
