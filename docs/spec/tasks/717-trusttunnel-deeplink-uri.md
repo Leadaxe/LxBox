@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Status | In progress |
+| Status | Done (итерация 1: разбор ссылки; Share-энкодер, подписка и финальные коды — после записи лаунчера §157) |
 | Start date | 2026-11-04 |
 | Source | issue #194 (вставка `tt://` из буфера не распознаётся); решение владельца: «поддержка формата tt://, с ним в паре сделать поддержку ссылок» |
 | Related specs | §698 (узел `trusttunnel` из реестра, тип без своей модели), §585/§586 (`UnknownTypeSpec`), §562 (имена схем только из реестра); контракт — запрос лаунчеру `TASKS_LXBOX.md` §157 |
@@ -182,3 +182,12 @@ base64url без padding над бинарным TLV (tag и длина — QUIC
   черновики (`mapper_sections_w4_test`, `document_registry_test`,
   `engine_w4_protocols_test`) и корпус; эмулятор/вставка из буфера на
   устройстве; энкодер Share из тела и подписка (п. 6) — не делались по ТЗ.
+
+**04.11.2026, CI.** Коммиты b9c6a09a (код), 8e397ebb (`_delta_id`
+`D533-tt-deeplink-form` у записей черновика — `draft_overlays_have_delta_id_test`),
+0fed7a36 (ключи-пометки `_…` не попадают в `defaults`/`scheme_sets` секции —
+иначе `_delta_id` уезжал в тело и давал `unknown_key`). CI run 41905642962 на
+0fed7a36 зелёный (7587 тестов). Эмулятор не проверялся: на Android AAR без
+`with_trusttunnel` узел всё равно выключит страховка core-rejected.
+Запрос лаунчеру — `TASKS_LXBOX.md` §157 (dad60135, f6f169b3: varint QUIC, не
+LEB128).
