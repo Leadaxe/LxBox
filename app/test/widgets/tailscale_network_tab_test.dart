@@ -200,7 +200,7 @@ void main() {
     Map<String, dynamic> body = const {},
     Future<void> Function(String?)? onSave,
     Future<bool> Function(Map<String, Object?>)? onSaveFields,
-    ({bool commands, bool autosave})? taildropFlags,
+    ({bool commandsOff, bool autosaveOff})? taildropFlags,
     Future<bool> Function(NodeRecordFlag, bool)? onSaveRecordFlag,
     TailscaleNetworkActions actions = const TailscaleNetworkActions(),
   }) async {
@@ -609,7 +609,8 @@ void main() {
     });
 
     testWidgets(
-        '§707 итер. 9 — поля записи: оба переключателя пишут через запись узла',
+        '§707 итер. 9 — поля записи: по умолчанию включены, выключение '
+        'пишет disable_* = true через запись узла',
         (tester) async {
       await tester.binding.setSurfaceSize(const Size(800, 2400));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -619,7 +620,7 @@ void main() {
           actions: _AutoSaveActions(),
           body: _dropOn,
           onSaveFields: (f) async => true,
-          taildropFlags: (commands: false, autosave: false),
+          taildropFlags: (commandsOff: false, autosaveOff: false),
           onSaveRecordFlag: (f, v) async {
             writes.add((f, v));
             return true;
@@ -627,19 +628,24 @@ void main() {
       await tester.pump();
       final cmd = find.byKey(const ValueKey('tailscale-taildrop-commands'));
       final auto = find.byKey(const ValueKey('tailscale-taildrop-autosave'));
-      expect(tester.widget<SwitchListTile>(cmd).value, isFalse);
+      expect(tester.widget<SwitchListTile>(cmd).value, isTrue);
       expect(tester.widget<SwitchListTile>(cmd).subtitle, isNotNull);
-      expect(tester.widget<SwitchListTile>(auto).value, isFalse);
+      expect(tester.widget<SwitchListTile>(auto).value, isTrue);
       await tester.tap(cmd);
       await tester.pump();
       await tester.tap(auto);
       await tester.pump();
       expect(writes, [
-        (NodeRecordFlag.taildropCommands, true),
-        (NodeRecordFlag.taildropAutosave, true),
+        (NodeRecordFlag.disableTaildropCommands, true),
+        (NodeRecordFlag.disableTaildropAutosave, true),
       ]);
+      expect(tester.widget<SwitchListTile>(cmd).value, isFalse);
+      expect(tester.widget<SwitchListTile>(auto).value, isFalse);
+      // Обратно: включение снимает поле (false).
+      await tester.tap(cmd);
+      await tester.pump();
+      expect(writes.last, (NodeRecordFlag.disableTaildropCommands, false));
       expect(tester.widget<SwitchListTile>(cmd).value, isTrue);
-      expect(tester.widget<SwitchListTile>(auto).value, isTrue);
     });
 
     testWidgets('§707 итер. 9 — отказ записи: переключатель остаётся',
@@ -651,7 +657,7 @@ void main() {
           actions: _AutoSaveActions(),
           body: _dropOn,
           onSaveFields: (f) async => true,
-          taildropFlags: (commands: true, autosave: true),
+          taildropFlags: (commandsOff: false, autosaveOff: false),
           onSaveRecordFlag: (f, v) async => false);
       await tester.pump();
       await tester.tap(find.byKey(const ValueKey('tailscale-taildrop-commands')));
@@ -680,7 +686,7 @@ void main() {
           actions: _AutoSaveActions(supported: false),
           body: _dropOn,
           onSaveFields: (f) async => true,
-          taildropFlags: (commands: false, autosave: true),
+          taildropFlags: (commandsOff: true, autosaveOff: false),
           onSaveRecordFlag: (f, v) async => true);
       await tester.pump();
       final t = tile(tester, 'tailscale-taildrop-autosave');
@@ -1185,7 +1191,7 @@ void main() {
           data: [_status()],
           actions: _AutoSaveActions(),
           onSaveFields: (f) async => true,
-          taildropFlags: (commands: true, autosave: true),
+          taildropFlags: (commandsOff: false, autosaveOff: false),
           onSaveRecordFlag: (f, v) async => true);
       await tester.pump();
       expect(find.byKey(const ValueKey('tailscale-allow-taildrop')),

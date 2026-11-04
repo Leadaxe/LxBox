@@ -1330,8 +1330,8 @@ SharedPreferences (Android), shared_prefs/:
 │   │   notification_send                # a copy of the native_prefs JSON section;
 │   │                                    # the truth lives in lxbox_settings.json
 │   └── has_tun, app_language,
-│       taildrop_commands_tags,
-│       taildrop_autosave_tags           # derived from settings, live only here
+│       taildrop_commands_off_tags,
+│       taildrop_autosave_off_tags       # derived from settings, live only here
 └── lxbox_native_cache                   # Kotlin's own cache, Kotlin writes and reads, not backed up
     ├── clip_tag, clip_peer, clip_name   #   the last recipient of the Send window
     └── vpn_desired, sticky_restart_count, sticky_restart_window_start,

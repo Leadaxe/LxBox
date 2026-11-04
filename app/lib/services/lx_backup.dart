@@ -431,8 +431,8 @@ class LxServer {
     this.allowLocal = false,
     this.allowLan = false,
     this.allowGateway = false,
-    this.taildropCommands = false,
-    this.taildropAutosave = false,
+    this.disableTaildropCommands = false,
+    this.disableTaildropAutosave = false,
     this.detour,
     this.position = 0,
     this.autoGroup,
@@ -485,10 +485,10 @@ class LxServer {
   final bool allowLan;
   final bool allowGateway;
 
-  /// §707 итер. 9 (контракт 1.1.157) — `taildrop_commands` /
-  /// `taildrop_autosave`, те же правила, что у полей выше.
-  final bool taildropCommands;
-  final bool taildropAutosave;
+  /// §707 итер. 9 (контракт 1.1.159) — `disable_taildrop_commands` /
+  /// `disable_taildrop_autosave`, те же правила, что у полей выше.
+  final bool disableTaildropCommands;
+  final bool disableTaildropAutosave;
 
   /// §656 — флаги записи файла поверх своих: только `true` (слияние
   /// совпавшего узла). Все поля уже стоят — null.
@@ -497,23 +497,23 @@ class LxServer {
     bool local,
     bool lan,
     bool gateway,
-    bool commands,
-    bool autosave
+    bool commandsOff,
+    bool autosaveOff
   })? flagsOver({
     required bool skip,
     required bool local,
     required bool lan,
     required bool gateway,
-    required bool commands,
-    required bool autosave,
+    required bool commandsOff,
+    required bool autosaveOff,
   }) {
     final r = (
       skip: skip || skipTailscalePresets,
       local: local || allowLocal,
       lan: lan || allowLan,
       gateway: gateway || allowGateway,
-      commands: commands || taildropCommands,
-      autosave: autosave || taildropAutosave,
+      commandsOff: commandsOff || disableTaildropCommands,
+      autosaveOff: autosaveOff || disableTaildropAutosave,
     );
     return r ==
             (
@@ -521,8 +521,8 @@ class LxServer {
               local: local,
               lan: lan,
               gateway: gateway,
-              commands: commands,
-              autosave: autosave
+              commandsOff: commandsOff,
+              autosaveOff: autosaveOff
             )
         ? null
         : r;
@@ -3175,8 +3175,8 @@ LxServer? _server10(
     allowLocal: node.allowLocal,
     allowLan: node.allowLan,
     allowGateway: node.allowGateway,
-    taildropCommands: node.taildropCommands,
-    taildropAutosave: node.taildropAutosave,
+    disableTaildropCommands: node.disableTaildropCommands,
+    disableTaildropAutosave: node.disableTaildropAutosave,
     tls: _carries(folder == null ? BackupRecord.server : BackupRecord.folderNode,
             j, 'tls')
         ? node.tls
@@ -3607,9 +3607,9 @@ const Set<String> _node10Keys = {
   'allow_local',
   'allow_lan',
   'allow_gateway',
-  // §707 итер. 9 (контракт 1.1.157) — Taildrop узла; пишется только true.
-  'taildrop_commands',
-  'taildrop_autosave',
+  // §707 итер. 9 (контракт 1.1.159) — Taildrop узла, знак «выключено»; пишется только true.
+  'disable_taildrop_commands',
+  'disable_taildrop_autosave',
   // Фича 478 — вердикт на члене папки. Ключ известен обходу, чтобы старый
   // файл с `core_rejected` не давал `backup_unknown_field`; содержимое
   // срезает санитизация §489.
@@ -4262,8 +4262,8 @@ BackupServerMerge mergeBackupServers(
           local: local.allowLocal,
           lan: local.allowLan,
           gateway: local.allowGateway,
-          commands: local.taildropCommands,
-          autosave: local.taildropAutosave,
+          commandsOff: local.disableTaildropCommands,
+          autosaveOff: local.disableTaildropAutosave,
         );
         if (side || rec != null) {
           merged[hit] = local.copyWith(
@@ -4273,8 +4273,8 @@ BackupServerMerge mergeBackupServers(
             allowLocal: rec?.local,
             allowLan: rec?.lan,
             allowGateway: rec?.gateway,
-            taildropCommands: rec?.commands,
-            taildropAutosave: rec?.autosave,
+            disableTaildropCommands: rec?.commandsOff,
+            disableTaildropAutosave: rec?.autosaveOff,
           );
           applied++;
         }
@@ -4297,8 +4297,8 @@ BackupServerMerge mergeBackupServers(
         allowLocal: srv.allowLocal,
         allowLan: srv.allowLan,
         allowGateway: srv.allowGateway,
-        taildropCommands: srv.taildropCommands,
-        taildropAutosave: srv.taildropAutosave,
+        disableTaildropCommands: srv.disableTaildropCommands,
+        disableTaildropAutosave: srv.disableTaildropAutosave,
       ));
       pendingLinks.add((
         at: merged.length - 1,
@@ -4562,8 +4562,8 @@ int _mergeFolderMember(
       local: own.allowLocal,
       lan: own.allowLan,
       gateway: own.allowGateway,
-      commands: own.taildropCommands,
-      autosave: own.taildropAutosave,
+      commandsOff: own.disableTaildropCommands,
+      autosaveOff: own.disableTaildropAutosave,
     );
     if (rec == null) return 0;
     final members = folder.members.toList();
@@ -4572,8 +4572,8 @@ int _mergeFolderMember(
       allowLocal: rec.local,
       allowLan: rec.lan,
       allowGateway: rec.gateway,
-      taildropCommands: rec.commands,
-      taildropAutosave: rec.autosave,
+      disableTaildropCommands: rec.commandsOff,
+      disableTaildropAutosave: rec.autosaveOff,
     );
     merged[folderAt] = folder.copyWith(members: members);
     return 1;
@@ -4589,8 +4589,8 @@ int _mergeFolderMember(
     allowLocal: srv.allowLocal,
     allowLan: srv.allowLan,
     allowGateway: srv.allowGateway,
-    taildropCommands: srv.taildropCommands,
-    taildropAutosave: srv.taildropAutosave,
+    disableTaildropCommands: srv.disableTaildropCommands,
+    disableTaildropAutosave: srv.disableTaildropAutosave,
     tls: srv.tls ?? TlsPolicy.none, // §636
   );
   final here = member.node?.tag ?? '';

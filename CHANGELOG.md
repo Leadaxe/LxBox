@@ -29,8 +29,10 @@
 - **Taildrop and notification settings in storage ([task 707](docs/spec/tasks/707-taildrop-send-receive-files.md)).**
   The Taildrop settings of a node (accept clipboard and links from my devices,
   save received files to Downloads) and the VPN notification buttons moved
-  into `lxbox_settings.json` and the backup. Per-device Taildrop permissions
-  are removed. The app theme mode is backed up.
+  into `lxbox_settings.json` and the backup. Both Taildrop settings are on by
+  default when Taildrop is allowed on the node; the auto-save choice from
+  2.25.19-rc.3 is not carried over. Per-device Taildrop permissions are
+  removed. The app theme mode is backed up.
 
 ## [2.25.19] — 2026-11-02
 

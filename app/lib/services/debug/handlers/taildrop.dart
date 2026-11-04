@@ -32,8 +32,8 @@ import '_shared.dart';
 /// - `GET  /taildrop/inbox?tag=` — входящие узла (принятые и принимаемые)
 /// - `POST /taildrop/send` — отправка файла / заметки / служебного файла
 /// - `POST /taildrop/inbox/save|delete|cancel` — как Save / Delete / Cancel
-/// - `PUT  /taildrop/settings` — поля записи узла `taildrop_autosave` /
-///   `taildrop_commands`, галка «Allow Taildrop»
+/// - `PUT  /taildrop/settings` — поля записи узла `disable_taildrop_autosave` /
+///   `disable_taildrop_commands`, галка «Allow Taildrop»
 /// - `GET  /taildrop/service-files` — счётчики разбора служебных файлов
 Future<DebugResponse> taildropHandler(
     DebugRequest req, DebugContext ctx) async {
@@ -133,19 +133,23 @@ class TaildropDebugActions {
   Future<CcTailscaleStatus?> status(String tag) async =>
       (await CcChannel.instance.getTailscaleStatus(tag)).status;
 
-  /// §707 итер. 9 — поля Taildrop записи узла [tag]; `null` — у узла нет
-  /// своей записи (подписка) или он не найден.
+  /// §707 итер. 9 — настройки Taildrop записи узла [tag] в смысле
+  /// «включено» (в записи хранится выключение, контракт 1.1.159); `null` — у
+  /// узла нет своей записи (подписка) или он не найден.
   ({bool commands, bool autosave})? recordFlags(DebugContext ctx, String tag) {
     final sub = ctx.sub;
     if (sub == null) return null;
     final r = taildropRecordForTag(
         tag, [for (final e in sub.entries) e.list],
         emitted: sub.lastEmittedTagMap);
-    return r == null ? null : (commands: r.commands, autosave: r.autosave);
+    return r == null
+        ? null
+        : (commands: !r.commandsOff, autosave: !r.autosaveOff);
   }
 
   /// Поле записи узла [tag] тем же путём, что вкладка Network
-  /// (`setNodeRecordFlag`: запись, пуш тегов в зеркало). `null` — записано.
+  /// (`setNodeRecordFlag`: запись, пуш тегов в зеркало); [value] — в знаке
+  /// поля (`true` = выключено). `null` — записано.
   Future<String?> setRecordFlag(
       DebugContext ctx, String tag, NodeRecordFlag flag, bool value) async {
     final sub = ctx.requireSub();
@@ -579,14 +583,15 @@ Future<DebugResponse> _settings(
     if (autosave && !await a.autoSaveSupported()) {
       throw const Conflict('saving to Downloads needs Android 10 or later');
     }
+    // «Включено» в запросе → поле выключения в записи.
     final err = await a.setRecordFlag(
-        ctx, tag, NodeRecordFlag.taildropAutosave, autosave);
+        ctx, tag, NodeRecordFlag.disableTaildropAutosave, !autosave);
     if (err != null) throw Conflict(err);
     out['autosave'] = autosave;
   }
   if (commands != null) {
     final err = await a.setRecordFlag(
-        ctx, tag, NodeRecordFlag.taildropCommands, commands);
+        ctx, tag, NodeRecordFlag.disableTaildropCommands, !commands);
     if (err != null) throw Conflict(err);
     out['commands'] = commands;
   }

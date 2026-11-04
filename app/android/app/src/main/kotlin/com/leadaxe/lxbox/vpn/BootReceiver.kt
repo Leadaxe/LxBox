@@ -63,11 +63,13 @@ class BootReceiver : BroadcastReceiver() {
         /// L10n.ctx в момент рендера нативных поверхностей (без Flutter).
         private const val KEY_APP_LANGUAGE = "app_language"
 
-        /// §707 итер. 9 — производные множества итоговых тегов узлов с галками
-        /// Taildrop (`taildrop_commands` / `taildrop_autosave` записи узла).
-        /// Зеркало из Dart (§189), заменяется целиком каналом setTaildropTags.
-        private const val KEY_TAILDROP_COMMANDS_TAGS = "taildrop_commands_tags"
-        private const val KEY_TAILDROP_AUTOSAVE_TAGS = "taildrop_autosave_tags"
+        /// §707 итер. 9 (контракт 1.1.159) — производные множества итоговых
+        /// тегов узлов, у которых функция Taildrop ВЫКЛЮЧЕНА
+        /// (`disable_taildrop_commands` / `disable_taildrop_autosave` записи
+        /// узла). Тега нет в множестве — включено. Зеркало из Dart (§189),
+        /// заменяется целиком каналом setTaildropTags.
+        private const val KEY_TAILDROP_COMMANDS_OFF_TAGS = "taildrop_commands_off_tags"
+        private const val KEY_TAILDROP_AUTOSAVE_OFF_TAGS = "taildrop_autosave_off_tags"
 
         /// §707 итер. 9 — кнопки уведомления VPN (native_prefs), дефолт true.
         private const val KEY_NOTIFICATION_STOP = "notification_stop"
@@ -150,26 +152,31 @@ class BootReceiver : BroadcastReceiver() {
         fun isShortcutRelabelPending(context: Context): Boolean =
             NativeCache.isShortcutRelabelPending(context)
 
-        /// §707 итер. 9 — заменить оба множества целиком. Возвращает `true`,
-        /// если в autosave-множестве появился тег, которого не было.
-        fun setTaildropTags(context: Context, commands: Collection<String>, autosave: Collection<String>): Boolean {
-            val before = taildropAutosaveTags(context)
-            val newAutosave = autosave.toSet()
+        /// §707 итер. 9 — заменить оба множества выключенных целиком.
+        /// Возвращает `true`, если из autosave_off ушёл хоть один тег (у узла
+        /// автосохранение включили) — вызывающий досохраняет входящие.
+        fun setTaildropTags(
+            context: Context,
+            commandsOff: Collection<String>,
+            autosaveOff: Collection<String>,
+        ): Boolean {
+            val before = taildropAutosaveOffTags(context)
+            val newAutosaveOff = autosaveOff.toSet()
             context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE).edit()
-                .putStringSet(KEY_TAILDROP_COMMANDS_TAGS, commands.toSet())
-                .putStringSet(KEY_TAILDROP_AUTOSAVE_TAGS, newAutosave)
+                .putStringSet(KEY_TAILDROP_COMMANDS_OFF_TAGS, commandsOff.toSet())
+                .putStringSet(KEY_TAILDROP_AUTOSAVE_OFF_TAGS, newAutosaveOff)
                 .apply()
-            return !before.containsAll(newAutosave)
+            return !newAutosaveOff.containsAll(before)
         }
 
         /// Копия: множество из getStringSet менять нельзя.
-        fun taildropCommandsTags(context: Context): Set<String> =
+        fun taildropCommandsOffTags(context: Context): Set<String> =
             context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
-                .getStringSet(KEY_TAILDROP_COMMANDS_TAGS, null)?.toSet() ?: emptySet()
+                .getStringSet(KEY_TAILDROP_COMMANDS_OFF_TAGS, null)?.toSet() ?: emptySet()
 
-        fun taildropAutosaveTags(context: Context): Set<String> =
+        fun taildropAutosaveOffTags(context: Context): Set<String> =
             context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
-                .getStringSet(KEY_TAILDROP_AUTOSAVE_TAGS, null)?.toSet() ?: emptySet()
+                .getStringSet(KEY_TAILDROP_AUTOSAVE_OFF_TAGS, null)?.toSet() ?: emptySet()
 
         /// §707 итер. 9 — кнопки уведомления VPN, зеркало native_prefs.
         /// Default true. После записи уведомление обновляет вызывающий.

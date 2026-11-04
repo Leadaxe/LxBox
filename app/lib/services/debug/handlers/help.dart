@@ -600,8 +600,9 @@ POST /taildrop/send                            {tag,peer,name,content_base64} | 
 POST /taildrop/inbox/save                      {tag,index|name} → Downloads (Android 10+); name in Downloads with reveal.
 POST /taildrop/inbox/delete                    {tag,index|name}
 POST /taildrop/inbox/cancel                    {tag,index} — index into receiving.
-PUT  /taildrop/settings[?rebuild=true]         {tag,autosave?,commands?,allow?}. autosave / commands = node record fields taildrop_autosave /
-                                                 taildrop_commands (own server or folder member), apply at once; allow writes the node body,
+PUT  /taildrop/settings[?rebuild=true]         {tag,autosave?,commands?,allow?}. autosave / commands = enabled (default true); stored inverted as
+                                                 disable_taildrop_autosave / disable_taildrop_commands (own server or folder member), apply at once;
+                                                 allow writes the node body,
                                                  applies after ?rebuild=true + POST /action/reload-vpn.
 GET  /taildrop/service-files                   Service-file counters since process start: received, executed{clipboard,open_url},
                                                  skipped_no_permission, expired, invalid, unknown_kind, skipped_scheme, no_handler,
@@ -883,7 +884,7 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'POST', 'path': '/taildrop/inbox/save', 'params': {'reveal': 'true|false'}, 'body': '{tag,index|name}', 'description': 'Save to Downloads (Android 10+), as the Save button'},
     {'method': 'POST', 'path': '/taildrop/inbox/delete', 'body': '{tag,index|name}', 'description': 'Delete a received file'},
     {'method': 'POST', 'path': '/taildrop/inbox/cancel', 'body': '{tag,index}', 'description': 'Cancel a file being received (index into receiving)'},
-    {'method': 'PUT', 'path': '/taildrop/settings', 'params': {'rebuild': 'true|false'}, 'body': '{tag,autosave?,commands?,allow?}', 'description': 'Node record fields taildrop_autosave / taildrop_commands (at once) and Allow Taildrop (node body; after rebuild + reload-vpn)'},
+    {'method': 'PUT', 'path': '/taildrop/settings', 'params': {'rebuild': 'true|false'}, 'body': '{tag,autosave?,commands?,allow?}', 'description': 'autosave / commands = enabled, stored inverted as node record fields disable_taildrop_autosave / disable_taildrop_commands (at once) and Allow Taildrop (node body; after rebuild + reload-vpn)'},
     {'method': 'GET', 'path': '/taildrop/service-files', 'params': {'reveal': 'true|false'}, 'description': 'Service-file counters since process start; last executed command {kind,at,sha256}, value with reveal'},
     // Diagnostics
     {'method': 'GET', 'path': '/diag/dump', 'description': 'Full DumpBuilder JSON-pack'},

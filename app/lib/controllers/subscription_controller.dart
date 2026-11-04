@@ -1675,8 +1675,8 @@ class SubscriptionController extends ChangeNotifier {
         allowLocal: m.allowLocal,
         allowLan: m.allowLan,
         allowGateway: m.allowGateway,
-        taildropCommands: m.taildropCommands, // §707 итер. 9
-        taildropAutosave: m.taildropAutosave,
+        disableTaildropCommands: m.disableTaildropCommands, // §707 итер. 9
+        disableTaildropAutosave: m.disableTaildropAutosave,
         tls: m.tls, // §636 — узловая политика едет с узлом
         nodes: [if (m.node != null) m.node!],
       );
@@ -2483,8 +2483,9 @@ class SubscriptionController extends ChangeNotifier {
                 allowLocal: server.allowLocal,
                 allowLan: server.allowLan,
                 allowGateway: server.allowGateway,
-                taildropCommands: server.taildropCommands, // §707 итер. 9
-                taildropAutosave: server.taildropAutosave,
+                // §707 итер. 9
+                disableTaildropCommands: server.disableTaildropCommands,
+                disableTaildropAutosave: server.disableTaildropAutosave,
                 tls: server.tls), // §636
           ]
         : _bindAutoMembers([
@@ -2499,8 +2500,9 @@ class SubscriptionController extends ChangeNotifier {
                   allowLocal: server.allowLocal,
                   allowLan: server.allowLan,
                   allowGateway: server.allowGateway,
-                  taildropCommands: server.taildropCommands, // §707 итер. 9
-                  taildropAutosave: server.taildropAutosave,
+                  // §707 итер. 9
+                  disableTaildropCommands: server.disableTaildropCommands,
+                  disableTaildropAutosave: server.disableTaildropAutosave,
                   tls: server.tls), // §636
           ], server.nodes, folder.id);
     folderEntry._replaceList(

@@ -1284,6 +1284,24 @@ taildrop_autosave_tags`. Если `autosave`-множество выросло �
 с её ключами лаунчер объявляет в «Поля стороны LxBox» `BACKUP.md` (запрос
 отправлен; контракт 1.1.157 `e8a744ad` уже несёт §5 и два поля узла).
 
+**Дополнение 04.11.2026 (решение владельца, контракт 1.1.159 `be1c2bca`,
+D-142): «по умолчанию если разрешён Taildrop, то и всё остальное разрешено
+(сохранение в Downloads и команды); при миграции старые перестать читать, а
+новые дефолт сделать по умолчанию».** Поля записи узла меняют имя и знак:
+`disable_taildrop_commands`, `disable_taildrop_autosave` (bool, пишется
+только `true`, отсутствие = включено; у узла подписки полей нет, в конфиг не
+идут). Имена `taildrop_commands` / `taildrop_autosave` из 1.1.157 не читаются:
+версия в релиз не выходила. Переноса `autosave.<тег>` из rc.3 нет: на старте
+только `deleteLegacyPrefs`, канал `taildropLegacyAutosaveTags` снимается.
+Доставка до Kotlin (C) — множества ВЫКЛЮЧЕННЫХ: `taildrop_commands_off_tags`,
+`taildrop_autosave_off_tags`; Kotlin: разрешено = Allow Taildrop у узла в
+конфиге (как сейчас, `taildropDirectories`) и тег ∉ множества; расхождение
+тега при дедупе теперь даёт умолчание «включено», что и требуется. Сброс
+`autosave_off` для тега (включили) → `sweepInboxesAsync`. Переключатели на
+панели и Debug API (`/taildrop/settings`: `autosave`, `commands`) остаются в
+смысле «включено»: хранилище хранит знак наоборот. Норма отправителя ниже
+без изменений и при включённом по умолчанию приёме — единственный барьер.
+
 **Норма отправителя (контракт 1.1.157).** Команда служебного файла
 выполняется, только если тег узла в `taildrop_commands_tags`, `senderID`
 непустой, пир с этим `senderID` есть в статусе узла и он не sharee. Отказ без
@@ -1387,3 +1405,14 @@ Taildrop конфиг грязным не делают (`keepDirtyFlag`); при
 на `NativeCache` нет (в тестах нет контекста/Robolectric).
 Открыто у лаунчера: `taildrop_double_copy` (двойное копирование, не в бэкапе)
 — решение владельца; перевод лаунчера на новые поля — его отдельная задача.
+
+Переделка под 1.1.159 (тот же день, следующим коммитом): поля
+`disable_taildrop_commands` / `disable_taildrop_autosave`, имена 1.1.157 не
+читаются (тесты «не читаются» в `skip_presets_record_test` и
+`lx_backup_node_flags_test`); зеркало — `taildrop_commands_off_tags` /
+`taildrop_autosave_off_tags`, канал `setTaildropTags(commands_off, autosave_off)`;
+`taildropLegacyAutosaveTags` снят, на старте только `deleteLegacyPrefs`;
+переключатели и Debug API — в смысле «включено», по умолчанию включены; до
+первого пуша из Dart множества пусты и Kotlin считает обе функции
+включёнными у всех узлов с Allow Taildrop. Точечные тесты (7 файлов, 157)
+зелёные, `dart analyze` чистый; Kotlin — CI.

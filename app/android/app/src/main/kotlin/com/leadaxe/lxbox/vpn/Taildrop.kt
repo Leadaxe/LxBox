@@ -503,10 +503,12 @@ object Taildrop {
     /// Автосохранение в Downloads — только API 29+ (MediaStore без разрешений).
     fun autoSaveSupported(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
 
-    /// §707 итер. 9 — галка `taildrop_autosave` записи узла; Kotlin видит её
-    /// как итоговый тег в зеркале `taildrop_autosave_tags` (наполняет Dart).
+    /// §707 итер. 9 (контракт 1.1.159) — по умолчанию включено (узел с Allow
+    /// Taildrop); выключает поле `disable_taildrop_autosave` записи узла,
+    /// Kotlin видит его как итоговый тег в зеркале `taildrop_autosave_off_tags`
+    /// (наполняет Dart).
     fun isAutoSave(ctx: Context, tag: String): Boolean =
-        autoSaveSupported() && tag in BootReceiver.taildropAutosaveTags(ctx)
+        autoSaveSupported() && tag !in BootReceiver.taildropAutosaveOffTags(ctx)
 
     // ─────────────── уведомления приёма: кнопки и сохранение ───────────────
 

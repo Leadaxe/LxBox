@@ -112,7 +112,7 @@ Map<String, dynamic> _serverToRecord(UserServer u) {
     ..._detourLinkToRecord(u.detourPolicy),
     // §578/§656 — пишется только `true` и только новые ключи.
     ..._recordFlagsToRecord(u.skipTailscalePresets, u.allowLocal, u.allowLan,
-        u.allowGateway, u.taildropCommands, u.taildropAutosave),
+        u.allowGateway, u.disableTaildropCommands, u.disableTaildropAutosave),
     // L — настройки LxBox.
     ..._detourPolicyToRecord(u.detourPolicy),
     ..._tlsToRecord(u.tls),
@@ -156,7 +156,7 @@ Map<String, dynamic> _memberToRecord(FolderMember m, String folderId) {
     if (node == null) 'reason': kMemberUnparsedReason,
     // §578/§656 — пишется только `true` и только новые ключи.
     ..._recordFlagsToRecord(m.skipTailscalePresets, m.allowLocal, m.allowLan,
-        m.allowGateway, m.taildropCommands, m.taildropAutosave),
+        m.allowGateway, m.disableTaildropCommands, m.disableTaildropAutosave),
     ..._tlsToRecord(m.tls),
   };
 }
@@ -165,15 +165,17 @@ Map<String, dynamic> _memberToRecord(FolderMember m, String folderId) {
 /// `skip_presets` не пишется никогда.
 Map<String, dynamic> _recordFlagsToRecord(
         bool skipTailscalePresets, bool allowLocal, bool allowLan,
-        bool allowGateway, bool taildropCommands, bool taildropAutosave) =>
+        bool allowGateway,
+        bool disableTaildropCommands,
+        bool disableTaildropAutosave) =>
     {
       if (skipTailscalePresets) 'skip_tailscale_presets': true,
       if (allowLocal) 'allow_local': true,
       if (allowLan) 'allow_lan': true,
       if (allowGateway) 'allow_gateway': true,
       // §707 итер. 9 — Taildrop узла, тоже только `true`.
-      if (taildropCommands) 'taildrop_commands': true,
-      if (taildropAutosave) 'taildrop_autosave': true,
+      if (disableTaildropCommands) 'disable_taildrop_commands': true,
+      if (disableTaildropAutosave) 'disable_taildrop_autosave': true,
     };
 
 /// §656 — терпимое чтение: `skip_presets` (до 1.1.126) читается как
@@ -352,7 +354,8 @@ const Set<String> _subscriptionKeys = {
 const Set<String> _serverKeys = {
   'kind', 'id', 'tag', 'enabled', 'warnings', 'origin', 'body', 'detour',
   'sections', 'skip_presets', 'skip_tailscale_presets', 'allow_local',
-  'allow_lan', 'allow_gateway', 'taildrop_commands', 'taildrop_autosave',
+  'allow_lan', 'allow_gateway', 'disable_taildrop_commands',
+  'disable_taildrop_autosave',
   'detour_policy', 'tag_policy', 'tls',
 };
 
@@ -364,7 +367,8 @@ const Set<String> _folderKeys = {
 const Set<String> _memberKeys = {
   'kind', 'tag', 'enabled', 'warnings', 'origin', 'body', 'detour', 'reason',
   'sections', 'skip_presets', 'skip_tailscale_presets', 'allow_local',
-  'allow_lan', 'allow_gateway', 'taildrop_commands', 'taildrop_autosave',
+  'allow_lan', 'allow_gateway', 'disable_taildrop_commands',
+  'disable_taildrop_autosave',
   'tls',
 };
 
@@ -501,8 +505,8 @@ UserServer _serverFromRecord(
     allowLocal: _bool(j['allow_local'], false),
     allowLan: _bool(j['allow_lan'], false),
     allowGateway: _bool(j['allow_gateway'], false),
-    taildropCommands: _bool(j['taildrop_commands'], false),
-    taildropAutosave: _bool(j['taildrop_autosave'], false),
+    disableTaildropCommands: _bool(j['disable_taildrop_commands'], false),
+    disableTaildropAutosave: _bool(j['disable_taildrop_autosave'], false),
     // Список растущий: контроллер дописывает узлы на месте (как fromJson).
     nodes: [...nodes],
   );
@@ -593,8 +597,8 @@ FolderMember? _memberFromRecord(
     allowLocal: _bool(j['allow_local'], false),
     allowLan: _bool(j['allow_lan'], false),
     allowGateway: _bool(j['allow_gateway'], false),
-    taildropCommands: _bool(j['taildrop_commands'], false),
-    taildropAutosave: _bool(j['taildrop_autosave'], false),
+    disableTaildropCommands: _bool(j['disable_taildrop_commands'], false),
+    disableTaildropAutosave: _bool(j['disable_taildrop_autosave'], false),
     tls: TlsPolicy.fromJson(j['tls']),
   );
   if (hint == null) _checkTag(j, member.node?.tag, where, notes);

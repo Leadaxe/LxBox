@@ -645,8 +645,8 @@ The `nodes` of a subscription are **not stored**: they are re-parsed from `sub_c
   "allow_local":   true,                      // §656 — optional, only `true` is written; see below
   "allow_lan":     true,                      // §656
   "allow_gateway": true,                      // §656
-  "taildrop_commands": true,                  // §707 — optional, only `true` is written; see below
-  "taildrop_autosave": true,                  // §707
+  "disable_taildrop_commands": true,          // §707 — optional, only `true` is written; see below
+  "disable_taildrop_autosave": true,          // §707
   "detour_policy": { … },                     // LxBox, only when a flag is not default
   "tag_policy":    { "prefix": "Home " }      // LxBox, only when set. The prefix is part of the
                                               // server's root address: changing it rewrites the
@@ -718,20 +718,25 @@ does not reset the local value (only `true` is stored, so absence cannot be
 told from `false`). The Debug API returns them in the node record
 (read-only).
 
-**Taildrop node fields (§707).** Two more bool fields of a server and of a
-folder member, by the same rules: only `true` is written, a missing field is
-`false`, they do not go into the config, they travel in a backup, and a
-subscription node has no record and no fields. `disable_taildrop` stays in the
-node body as a core field.
+**Taildrop node fields (§707, contract 1.1.159).** Two more bool fields of a
+server and of a folder member, by the same rules: only `true` is written, a
+missing field is `false`, they do not go into the config, they travel in a
+backup, and a subscription node has no record and no fields. The fields turn a
+feature off: when Taildrop is allowed on the node, both features are on unless
+the field says otherwise. `disable_taildrop` stays in the node body as a core
+field.
 
-- `taildrop_commands` — accept clipboard and links sent from the user's own
-  devices (sharees do not count as own). Default off.
-- `taildrop_autosave` — save received files to Downloads without asking.
-  Default off; Android 10+.
+- `disable_taildrop_commands` — do not accept clipboard and links sent from
+  the user's own devices (sharees never count as own). Absent = accepted.
+- `disable_taildrop_autosave` — do not save received files to Downloads
+  without asking. Absent = saved; Android 10+.
 
-Kotlin does not read these fields. Dart computes from them two sets of final
-tags and mirrors them into `boxvpn_boot` (`taildrop_commands_tags`,
-`taildrop_autosave_tags`, see [SharedPreferences](#sharedpreferences-android)).
+The names `taildrop_commands` / `taildrop_autosave` of contract 1.1.157 are not
+read (that version was never released). Kotlin does not read these fields.
+Dart computes from them two sets of final tags of the nodes where a feature is
+off and mirrors them into `boxvpn_boot` (`taildrop_commands_off_tags`,
+`taildrop_autosave_off_tags`, see [SharedPreferences](#sharedpreferences-android)).
+A tag missing from a set means the feature is on.
 
 #### Node sections — removed (§575)
 
@@ -767,7 +772,7 @@ detour. A subscription cannot be put into a folder, and there is no nesting.
       "origin": { "kind": "uri", "raw": "vless://…#Alpha" },
       "detour": { "folder_id": "<this folder id>", "tag": "Jump" },    // §237 — personal detour
       "skip_tailscale_presets": true,                                  // §578/§656 — as on a server
-      "taildrop_autosave": true },                                     // Taildrop — as on a server
+      "disable_taildrop_autosave": true },                             // Taildrop — as on a server
     { "kind": "server", "tag": "Beta", "enabled": false,
       "origin": { "kind": "wg_ini", "raw": "[Interface]\n…" },
       "warnings": [ { "code": "core_rejected",
@@ -1830,7 +1835,7 @@ Not part of `lxbox_settings.json`. It serves two categories: **pre-Flutter boot 
 | `boxvpn_boot.has_tun` | `Boolean` | Kotlin (mirrors `vpn_mode`) | [§192] | **Computed**, default `true`. Gates `VpnService.prepare()`; not stored in the JSON. |
 | `boxvpn_boot.app_language` | `String` | Kotlin (mirrors `vars.app_language`) | [§279] | `system` \| `en` \| `ru`. A derived cache for the native surfaces. |
 | `boxvpn_boot.notification_stop` / `notification_restart` / `notification_send` | `Boolean` | Kotlin (mirrors the JSON) | §707 | The buttons of the VPN notification, default `true`. The truth lives in `native_prefs`. |
-| `boxvpn_boot.taildrop_commands_tags` / `taildrop_autosave_tags` | `StringSet` | Kotlin (mirrors the node fields) | §707 | **Computed**: the final tags of the nodes with `taildrop_commands` / `taildrop_autosave`. Pushed after a config build, on a switch change and at startup; not stored in the JSON. |
+| `boxvpn_boot.taildrop_commands_off_tags` / `taildrop_autosave_off_tags` | `StringSet` | Kotlin (mirrors the node fields) | §707 | **Computed**: the final tags of the nodes with `disable_taildrop_commands` / `disable_taildrop_autosave`; a tag not in the set has the feature on. Pushed after a config build, on a switch change and at startup; not stored in the JSON. |
 | `lxbox_native_cache.clip_tag` / `clip_peer` / `clip_name` | `String` | Kotlin (`NativeCache`) | §707 | The last recipient of the Send window. Kotlin's own cache, not in the backup. |
 | `lxbox_native_cache.vpn_desired`, `sticky_restart_count`, `sticky_restart_window_start`, `shortcut_relabel_pending` | — | Kotlin (`NativeCache`) | §707 | Kotlin's run state, moved out of `boxvpn_boot`; old values there are not carried over. |
 | `lxbox_native_cache.last_pushed_locale` | `String` | Kotlin (`NativeCache`) | [§279] | The last value the app itself pushed into `LocaleManager` (Android 13+). |

@@ -1163,26 +1163,16 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             // галками Taildrop (зеркало boxvpn_boot), заменяются целиком.
             // Множество autosave выросло — забрать и то, что уже лежит.
             "setTaildropTags" -> {
-                val commands = call.argument<List<String>>("commands") ?: emptyList()
-                val autosave = call.argument<List<String>>("autosave") ?: emptyList()
-                val grew = BootReceiver.setTaildropTags(context, commands, autosave)
-                if (grew && Taildrop.autoSaveSupported()) Taildrop.sweepInboxesAsync(context)
+                // §707 итер. 9 (контракт 1.1.159) — множества ВЫКЛЮЧЕННЫХ тегов.
+                val commandsOff = call.argument<List<String>>("commands_off") ?: emptyList()
+                val autosaveOff = call.argument<List<String>>("autosave_off") ?: emptyList()
+                val enabled = BootReceiver.setTaildropTags(context, commandsOff, autosaveOff)
+                if (enabled && Taildrop.autoSaveSupported()) Taildrop.sweepInboxesAsync(context)
                 result.success(true)
             }
-            // §707 итер. 9 — перенос из rc.3: итоговые теги с `autosave.*` из
-            // старого файла настроек Taildrop; файла нет — пустой список.
-            "taildropLegacyAutosaveTags" -> {
-                val prefix = "autosave."
-                val tags = runCatching {
-                    context.getSharedPreferences(LEGACY_TAILDROP_PREFS, Context.MODE_PRIVATE).all
-                        .filter { (k, v) -> k.startsWith(prefix) && v == true }
-                        .keys.map { it.removePrefix(prefix) }
-                        .filter { it.isNotEmpty() }
-                }.getOrDefault(emptyList())
-                result.success(tags)
-            }
-            // §707 итер. 9 — после переноса: старые файлы SharedPreferences
-            // Taildrop и кнопок уведомления удаляются.
+            // §707 итер. 9 — старые файлы SharedPreferences Taildrop и кнопок
+            // уведомления удаляются (настройки Taildrop из rc.3 не переносятся,
+            // контракт 1.1.159).
             "deleteLegacyPrefs" -> {
                 val ok = runCatching {
                     context.deleteSharedPreferences(LEGACY_TAILDROP_PREFS)

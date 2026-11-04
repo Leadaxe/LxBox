@@ -165,13 +165,14 @@ class TailscaleNetworkTab extends StatefulWidget {
   /// автосохранением Taildrop, §707). `true` — записано.
   final Future<bool> Function(Map<String, Object?> fields)? onSaveFields;
 
-  /// §707 итер. 9 — поля записи узла `taildrop_commands` /
-  /// `taildrop_autosave`; `null` — у узла нет своей записи (подписка), и
-  /// переключателей нет.
-  final ({bool commands, bool autosave})? taildropFlags;
+  /// §707 итер. 9 (контракт 1.1.159) — поля записи узла
+  /// `disable_taildrop_commands` / `disable_taildrop_autosave` в знаке
+  /// хранилища (`true` = выключено); переключатели показывают обратное.
+  /// `null` — у узла нет своей записи (подписка), и переключателей нет.
+  final ({bool commandsOff, bool autosaveOff})? taildropFlags;
 
   /// Запись поля записи узла (тем же путём, что прочие поля записи на
-  /// экране узла). `true` — записано.
+  /// экране узла), значение — в знаке поля. `true` — записано.
   final Future<bool> Function(NodeRecordFlag flag, bool value)?
       onSaveRecordFlag;
 
@@ -252,7 +253,7 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
 
   /// §707 итер. 9 — поля Taildrop записи узла (после записи — свои, пока
   /// экран не передаст новые); `null` — переключателей нет.
-  late ({bool commands, bool autosave})? _flags = widget.taildropFlags;
+  late ({bool commandsOff, bool autosaveOff})? _flags = widget.taildropFlags;
   bool _flagBusy = false;
 
   /// Android 10+: автосохранение доступно (до ответа — считается да).
@@ -1026,9 +1027,9 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
               ? null
               : (v) => unawaited(_saveTaildrop(v)),
         ),
-        // §707 итер. 9 — поля записи узла; выключаются вместе с Allow
-        // Taildrop. Sharee (устройства других пользователей) своими не
-        // считаются.
+        // §707 итер. 9 — поля записи узла; видны при Allow Taildrop и по
+        // умолчанию включены (в записи хранится выключение, отсюда `!`).
+        // Sharee (устройства других пользователей) своими не считаются.
         if (flags != null) ...[
           SwitchListTile(
             key: const ValueKey('tailscale-taildrop-commands'),
@@ -1037,11 +1038,11 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
                 .s("Accept clipboard and links from my devices")),
             subtitle: Text(getLocalText
                 .s("Devices shared by other users are not counted as yours.")),
-            value: flags.commands,
+            value: !flags.commandsOff,
             onChanged: _flagBusy
                 ? null
                 : (v) => unawaited(
-                    _setFlag(NodeRecordFlag.taildropCommands, v)),
+                    _setFlag(NodeRecordFlag.disableTaildropCommands, !v)),
           ),
           SwitchListTile(
             key: const ValueKey('tailscale-taildrop-autosave'),
@@ -1050,11 +1051,11 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
             subtitle: _autoSaveSupported
                 ? null
                 : Text(getLocalText.s("Needs Android 10 or later.")),
-            value: flags.autosave && _autoSaveSupported,
+            value: !flags.autosaveOff && _autoSaveSupported,
             onChanged: _flagBusy || !_autoSaveSupported
                 ? null
                 : (v) => unawaited(
-                    _setFlag(NodeRecordFlag.taildropAutosave, v)),
+                    _setFlag(NodeRecordFlag.disableTaildropAutosave, !v)),
           ),
         ],
       ],
@@ -1081,9 +1082,9 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
     setState(() {
       _flagBusy = false;
       if (ok) {
-        _flags = flag == NodeRecordFlag.taildropCommands
-            ? (commands: value, autosave: cur.autosave)
-            : (commands: cur.commands, autosave: value);
+        _flags = flag == NodeRecordFlag.disableTaildropCommands
+            ? (commandsOff: value, autosaveOff: cur.autosaveOff)
+            : (commandsOff: cur.commandsOff, autosaveOff: value);
       }
     });
   }

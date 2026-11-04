@@ -121,10 +121,12 @@ clipboard window, and sends nothing without an explicit send.
   `no witness`; planned manual check — copy from a password manager, open the
   window, nothing reaches the PC until ➤. **Mutation:** the window sending on
   open.
-- **P12. The clipboard is accepted only when the user turned it on for the
-  node.** "Accept clipboard and links from my devices" on the node is off by
-  default and covers own devices only (sharees do not count); without it the
-  command is not run and the file is deleted. A received clip is never sent back on its own.
+- **P12. The clipboard is accepted only while the node's receive setting is
+  on.** "Accept clipboard and links from my devices" is on by default when
+  Taildrop is allowed on the node (owner decision 2026-11-04) and covers own
+  devices only (sharees do not count); the sender check is then the only
+  barrier. With the setting off the command is not run and the file is
+  deleted. A received clip is never sent back on its own.
   **Witness:** `no witness`; planned manual check — switch off, send from the
   launcher, the clipboard is untouched and nothing shows in the inbox.
   **Mutation:** the phone's clipboard overwritten while the setting is off.
@@ -143,7 +145,7 @@ clipboard window, and sends nothing without an explicit send.
 | Send clipboard window → `To: … ▾` | own devices that accept files, from all running Tailscale nodes with Allow Taildrop (with the node's name when there are several nodes); the choice is remembered | the remembered one, else the first |
 | Send clipboard window → ⋮ → Clear | clears the feed with the chosen device | — |
 | Text selection menu → "Send to device" | opens the Send clipboard window with the selected text; shown under the same condition as the notification button | — |
-| Network tab → Taildrop → "Accept clipboard and links from my devices" | one switch per node, on the receiver; own devices only; a node record field, in the backup | off |
+| Network tab → Taildrop → "Accept clipboard and links from my devices" | one switch per node, on the receiver; own devices only; turning it off writes a node record field, in the backup | on when Taildrop is allowed (owner decision 2026-11-04) |
 
 Core config keys: the receive directory is the endpoint's
 `taildrop_directory`; by default it is `Taildrop` relative to the core's

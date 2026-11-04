@@ -46,9 +46,8 @@ class _Methods {
   static const getNotificationRestart = 'getNotificationRestart';
   static const setNotificationSend = 'setNotificationSend';
   static const getNotificationSend = 'getNotificationSend';
-  // §707 итер. 9 — производные множества тегов Taildrop и перенос из rc.3.
+  // §707 итер. 9 — производные множества выключенных тегов Taildrop и удаление файлов rc.3.
   static const setTaildropTags = 'setTaildropTags';
-  static const taildropLegacyAutosaveTags = 'taildropLegacyAutosaveTags';
   static const deleteLegacyPrefs = 'deleteLegacyPrefs';
 
   // §043 core logs forwarding toggle

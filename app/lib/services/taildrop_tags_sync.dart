@@ -1,10 +1,12 @@
 // §707 итер. 9 — производные множества итоговых тегов Taildrop.
 //
-// Настройки Taildrop узла — поля записи `taildrop_commands` /
-// `taildrop_autosave` (свой сервер в корне и член папки). Kotlin сравнивает
-// итоговый тег от ядра со строкой, поэтому Dart кладёт в зеркало
-// `boxvpn_boot` два множества итоговых тегов (`setTaildropTags`). Пушится
-// после успешной сборки конфига, при переключении галки и на старте.
+// Настройки Taildrop узла — поля записи `disable_taildrop_commands` /
+// `disable_taildrop_autosave` (свой сервер в корне и член папки, контракт
+// 1.1.159): `true` = функция выключена, отсутствие = включена при Allow
+// Taildrop. Kotlin сравнивает итоговый тег от ядра со строкой, поэтому Dart
+// кладёт в зеркало `boxvpn_boot` два множества итоговых тегов ВЫКЛЮЧЕННЫХ
+// (`setTaildropTags`). Пушится после успешной сборки конфига, при
+// переключении галки и на старте.
 
 import 'dart:io' show Platform;
 
@@ -15,37 +17,38 @@ import '../models/node_spec.dart';
 import '../models/server_list.dart';
 import '../vpn/box_vpn_client.dart';
 import 'app_log.dart';
-import 'settings_storage.dart';
 import 'tag_resolver.dart';
 
-/// Два множества итоговых тегов: `taildrop_commands_tags` и
-/// `taildrop_autosave_tags` зеркала.
+/// Два множества итоговых тегов выключенных: `taildrop_commands_off_tags` и
+/// `taildrop_autosave_off_tags` зеркала. Тега нет в множестве — включено.
 @immutable
 class TaildropTagSets {
-  const TaildropTagSets({required this.commands, required this.autosave});
+  const TaildropTagSets({required this.commandsOff, required this.autosaveOff});
 
-  final List<String> commands;
-  final List<String> autosave;
+  final List<String> commandsOff;
+  final List<String> autosaveOff;
 
   @override
   bool operator ==(Object other) =>
       other is TaildropTagSets &&
-      listEquals(other.commands, commands) &&
-      listEquals(other.autosave, autosave);
+      listEquals(other.commandsOff, commandsOff) &&
+      listEquals(other.autosaveOff, autosaveOff);
 
   @override
-  int get hashCode => Object.hash(Object.hashAll(commands), Object.hashAll(autosave));
+  int get hashCode =>
+      Object.hash(Object.hashAll(commandsOff), Object.hashAll(autosaveOff));
 
   @override
-  String toString() => 'TaildropTagSets(commands: $commands, autosave: $autosave)';
+  String toString() =>
+      'TaildropTagSets(commandsOff: $commandsOff, autosaveOff: $autosaveOff)';
 }
 
 /// Узел Tailscale записи с её полями Taildrop и префиксом `tag_policy`.
 typedef TaildropRecordNode = ({
   TailscaleSpec node,
   String prefix,
-  bool commands,
-  bool autosave,
+  bool commandsOff,
+  bool autosaveOff,
   int entryIndex,
   int? memberIndex,
 });
@@ -65,8 +68,8 @@ List<TaildropRecordNode> taildropRecordNodes(List<ServerList> lists) {
           out.add((
             node: n,
             prefix: u.tagPrefix,
-            commands: u.taildropCommands,
-            autosave: u.taildropAutosave,
+            commandsOff: u.disableTaildropCommands,
+            autosaveOff: u.disableTaildropAutosave,
             entryIndex: ei,
             memberIndex: null,
           ));
@@ -79,8 +82,8 @@ List<TaildropRecordNode> taildropRecordNodes(List<ServerList> lists) {
           out.add((
             node: n,
             prefix: f.tagPrefix,
-            commands: m.taildropCommands,
-            autosave: m.taildropAutosave,
+            commandsOff: m.disableTaildropCommands,
+            autosaveOff: m.disableTaildropAutosave,
             entryIndex: ei,
             memberIndex: mi,
           ));
@@ -99,8 +102,8 @@ List<TaildropRecordNode> taildropRecordNodes(List<ServerList> lists) {
 /// присвоила именно этому узлу (с суффиксом дедупликации `-N`, если был).
 /// Карты нет (до первой сборки за сессию) или узел в ней не найден по
 /// идентичности — `TagResolver.displayTag(prefix, тег)`. При дедупе это
-/// значение с тегом ядра не совпадёт, и галка не действует до следующей
-/// сборки (безопасный отказ).
+/// значение с тегом ядра не совпадёт, и до следующей сборки ядро видит
+/// умолчание «включено» (контракт 1.1.159).
 String taildropFinalTag(TaildropRecordNode r, Map<String, NodeSpec>? emitted) {
   final display = TagResolver.displayTag(r.prefix, r.node.tag);
   if (emitted == null || emitted.isEmpty) return display;
@@ -114,27 +117,28 @@ String taildropFinalTag(TaildropRecordNode r, Map<String, NodeSpec>? emitted) {
   return display;
 }
 
-/// Множества тегов для зеркала.
+/// Множества тегов выключенных для зеркала.
 TaildropTagSets taildropTagSets(List<ServerList> lists,
     {Map<String, NodeSpec>? emitted}) {
-  final commands = <String>{};
-  final autosave = <String>{};
+  final commandsOff = <String>{};
+  final autosaveOff = <String>{};
   for (final r in taildropRecordNodes(lists)) {
-    if (!r.commands && !r.autosave) continue;
+    if (!r.commandsOff && !r.autosaveOff) continue;
     final tag = taildropFinalTag(r, emitted);
-    if (r.commands) commands.add(tag);
-    if (r.autosave) autosave.add(tag);
+    if (r.commandsOff) commandsOff.add(tag);
+    if (r.autosaveOff) autosaveOff.add(tag);
   }
   return TaildropTagSets(
-    commands: commands.toList()..sort(),
-    autosave: autosave.toList()..sort(),
+    commandsOff: commandsOff.toList()..sort(),
+    autosaveOff: autosaveOff.toList()..sort(),
   );
 }
 
-/// Поля Taildrop записи узла по итоговому тегу [tag] (тот же поиск, что у
-/// вкладки Network: префикс записи, суффикс дедупа); `null` — у узла нет
-/// своей записи (подписка) или узел не найден.
-({int entryIndex, int? memberIndex, bool commands, bool autosave})?
+/// Поля Taildrop записи узла по итоговому тегу [tag] в знаке записи
+/// (`true` = выключено; тот же поиск, что у вкладки Network: префикс записи,
+/// суффикс дедупа); `null` — у узла нет своей записи (подписка) или узел не
+/// найден.
+({int entryIndex, int? memberIndex, bool commandsOff, bool autosaveOff})?
     taildropRecordForTag(String tag, List<ServerList> lists,
         {Map<String, NodeSpec>? emitted}) {
   final nodes = taildropRecordNodes(lists);
@@ -143,8 +147,8 @@ TaildropTagSets taildropTagSets(List<ServerList> lists,
       return (
         entryIndex: r.entryIndex,
         memberIndex: r.memberIndex,
-        commands: r.commands,
-        autosave: r.autosave,
+        commandsOff: r.commandsOff,
+        autosaveOff: r.autosaveOff,
       );
     }
   }
@@ -187,54 +191,21 @@ Future<void> pushTaildropTags(List<ServerList> lists,
     return;
   }
   try {
-    await BoxVpnClient()
-        .setTaildropTags(commands: sets.commands, autosave: sets.autosave);
+    await BoxVpnClient().setTaildropTags(
+        commandsOff: sets.commandsOff, autosaveOff: sets.autosaveOff);
   } catch (e) {
     AppLog.I.debug('taildrop tags: push skipped ($e)');
   }
 }
 
-/// §707 итер. 9 H — перенос из rc.3: теги с `autosave.*` старого файла
-/// `lxbox_taildrop` → поле `taildrop_autosave: true` записи с тем же
-/// итоговым тегом; затем старые файлы удаляются (`deleteLegacyPrefs`, один
-/// раз на каждом старте, пока файлы есть — повтор безвреден). Возвращает
-/// число отмеченных записей.
-Future<int> migrateLegacyTaildropPrefs({BoxVpnClient? client}) async {
-  final vpn = client ?? BoxVpnClient();
-  List<String> tags;
+/// §707 итер. 9 H (контракт 1.1.159) — старые файлы rc.3 (`lxbox_taildrop`
+/// и пр.) удаляются без переноса: `autosave.<тег>` не читается, умолчание
+/// новых полей — «включено». Один раз на каждом старте, пока файлы есть —
+/// повтор безвреден.
+Future<void> migrateLegacyTaildropPrefs({BoxVpnClient? client}) async {
   try {
-    tags = await vpn.taildropLegacyAutosaveTags();
-  } catch (_) {
-    return 0;
-  }
-  var marked = 0;
-  if (tags.isNotEmpty) {
-    final want = tags.toSet();
-    final lists = [...await SettingsStorage.getServerLists()];
-    for (final r in taildropRecordNodes(lists)) {
-      if (r.autosave || !want.contains(taildropFinalTag(r, null))) continue;
-      final list = lists[r.entryIndex];
-      final mi = r.memberIndex;
-      if (list is UserServer && mi == null) {
-        lists[r.entryIndex] = list.copyWith(taildropAutosave: true);
-      } else if (list is FolderServers && mi != null) {
-        final members = [...list.members];
-        members[mi] = members[mi].copyWith(taildropAutosave: true);
-        lists[r.entryIndex] = list.copyWith(members: members);
-      } else {
-        continue;
-      }
-      marked++;
-    }
-    if (marked > 0) {
-      await SettingsStorage.saveServerLists(lists);
-      AppLog.I.info('taildrop: autosave moved to $marked node record(s)');
-    }
-  }
-  try {
-    await vpn.deleteLegacyPrefs();
+    await (client ?? BoxVpnClient()).deleteLegacyPrefs();
   } catch (_) {
     // Канала нет — файлов тоже.
   }
-  return marked;
 }

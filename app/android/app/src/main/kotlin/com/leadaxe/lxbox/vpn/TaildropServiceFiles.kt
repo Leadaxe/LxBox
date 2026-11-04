@@ -184,14 +184,15 @@ object TaildropServiceFiles {
 
     // ─────────────────────────── разрешение ───────────────────────────
 
-    /// §707 итер. 9, контракт SERVICE_FILES §5 (1.1.157) — команда выполняется,
-    /// только если у узла [tag] стоит галка `taildrop_commands` (тег в зеркале
-    /// `taildrop_commands_tags`), `senderID` файла непустой и пир с этим ID
+    /// §707 итер. 9, контракт SERVICE_FILES §5 (1.1.159) — команда выполняется,
+    /// только если у узла [tag] приём не выключен полем
+    /// `disable_taildrop_commands` (тега нет в зеркале
+    /// `taildrop_commands_off_tags`), `senderID` файла непустой и пир с этим ID
     /// есть в статусе узла [ownPeers] — свои устройства, без sharee. Fallback по
     /// имени нет: после перезапуска ядра `senderID` пуст — команды не
     /// выполняются, файл удаляется как всегда.
     internal fun allowed(ctx: Context, tag: String, senderId: String, ownPeers: Set<String>): Boolean =
-        senderId.isNotEmpty() && senderId in ownPeers && tag in BootReceiver.taildropCommandsTags(ctx)
+        senderId.isNotEmpty() && senderId in ownPeers && tag !in BootReceiver.taildropCommandsOffTags(ctx)
 
     /// Stable ID своих устройств узла [tag] по снимку ядра: пиры всех групп
     /// пользователя без признака `sharee_node` (как получатели окна Send).
@@ -283,9 +284,9 @@ object TaildropServiceFiles {
             if (!fresh) Stats.expired.incrementAndGet()
             if (fresh && commands.isNotEmpty()) {
                 if (senders == null) senders = cc?.taildropInboxSnapshot(tag, SNAPSHOT_TIMEOUT_MS) ?: emptyMap()
-                // Снимок статуса — только если у узла стоит галка команд.
+                // Снимок статуса — только если приём команд у узла не выключен.
                 if (own == null) {
-                    own = if (tag !in BootReceiver.taildropCommandsTags(app)) emptySet()
+                    own = if (tag in BootReceiver.taildropCommandsOffTags(app)) emptySet()
                     else ownPeers(runCatching { cc?.tailscaleSnapshot(SNAPSHOT_TIMEOUT_MS) }.getOrNull(), tag)
                 }
                 val (senderId, senderName) = senders[item.name] ?: ("" to "")

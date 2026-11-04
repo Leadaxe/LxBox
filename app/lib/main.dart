@@ -116,9 +116,8 @@ void main() async {
     // последующие — sync JSON⇒native (диск-истина перезаливает оперативку).
     // ДО UI (UI читает native-тумблеры из JSON-зеркала) и ДО возможного
     // авто-старта VPN. best-effort: ошибка не валит запуск (try выше).
-    // §707 итер. 9 H — перенос из rc.3: autosave.* из lxbox_taildrop в поле
-    // записи узла, затем старые файлы prefs удаляются. ДО пуша тегов
-    // Taildrop внутри bootstrapAndSyncNativePrefs.
+    // §707 итер. 9 H — старые файлы prefs rc.3 удаляются без переноса
+    // (контракт 1.1.159: умолчание новых полей — «включено»).
     await migrateLegacyTaildropPrefs();
     await SettingsStorage.bootstrapAndSyncNativePrefs();
     // §707 итер. 9 — тема из хранилища (перенос из SharedPreferences один

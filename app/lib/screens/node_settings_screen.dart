@@ -801,10 +801,10 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
                       onSaveFields: _saveTailscaleFields,
                       // §707 итер. 9 — поля Taildrop записи узла.
                       taildropFlags: (
-                        commands:
-                            _recordFlag(NodeRecordFlag.taildropCommands),
-                        autosave:
-                            _recordFlag(NodeRecordFlag.taildropAutosave),
+                        commandsOff:
+                            _recordFlag(NodeRecordFlag.disableTaildropCommands),
+                        autosaveOff:
+                            _recordFlag(NodeRecordFlag.disableTaildropAutosave),
                       ),
                       onSaveRecordFlag: _saveTaildropFlag,
                     ),

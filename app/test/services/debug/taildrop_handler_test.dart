@@ -242,11 +242,22 @@ void main() {
     expect(b['autosave'], true);
     expect(b['commands'], true);
     expect(b['allow'], true);
+    // «Включено» в запросе — поле выключения записи `false` (контракт
+    // 1.1.159).
     expect(fake.flagWrites, [
-      ('ts-a', NodeRecordFlag.taildropAutosave, true),
-      ('ts-a', NodeRecordFlag.taildropCommands, true),
+      ('ts-a', NodeRecordFlag.disableTaildropAutosave, false),
+      ('ts-a', NodeRecordFlag.disableTaildropCommands, false),
     ]);
     expect(fake.allowWrites.single, ('ts-a', true));
+
+    fake.flagWrites.clear();
+    final off = await call('PUT', '/taildrop/settings',
+        {'tag': 'ts-a', 'autosave': false, 'commands': false});
+    expect([off['autosave'], off['commands']], [false, false]);
+    expect(fake.flagWrites, [
+      ('ts-a', NodeRecordFlag.disableTaildropAutosave, true),
+      ('ts-a', NodeRecordFlag.disableTaildropCommands, true),
+    ]);
 
     fake.supported = false;
     await expectLater(

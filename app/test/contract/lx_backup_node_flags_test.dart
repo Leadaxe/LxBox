@@ -238,19 +238,19 @@ void main() {
     }
   });
 
-  // §707 итер. 9 (контракт 1.1.157) — поля Taildrop узла.
-  group('taildrop_commands / taildrop_autosave', () {
+  // §707 итер. 9 (контракт 1.1.159) — поля Taildrop узла, знак «выключено».
+  group('disable_taildrop_commands / disable_taildrop_autosave', () {
     test('импорт: новый узел и член папки получают поля, без предупреждений',
         () {
       final file = parseLxBackup(
         _file([
-          _node('a', {'taildrop_commands': true}),
+          _node('a', {'disable_taildrop_commands': true}),
           {
             'kind': 'folder',
             'id': 'f1',
             'name': 'F',
             'nodes': [
-              _node('m', {'taildrop_autosave': true}),
+              _node('m', {'disable_taildrop_autosave': true}),
             ],
           },
         ]),
@@ -261,26 +261,39 @@ void main() {
       );
       final lists = _apply(const [], file);
       final u = lists.whereType<UserServer>().single;
-      expect([u.taildropCommands, u.taildropAutosave], [true, false]);
+      expect([u.disableTaildropCommands, u.disableTaildropAutosave],
+          [true, false]);
       final m = lists.whereType<FolderServers>().single.members.single;
-      expect([m.taildropCommands, m.taildropAutosave], [false, true]);
+      expect([m.disableTaildropCommands, m.disableTaildropAutosave],
+          [false, true]);
     });
 
     test('совпавший узел: true из файла ставится, отсутствие не сбрасывает',
         () {
       final first = _apply(
         const [],
-        parseLxBackup(_file([_node('a', {'taildrop_autosave': true})])),
+        parseLxBackup(_file([_node('a', {'disable_taildrop_autosave': true})])),
       );
       final second = _apply(
         first,
-        parseLxBackup(_file([_node('a', {'taildrop_commands': true})])),
+        parseLxBackup(_file([_node('a', {'disable_taildrop_commands': true})])),
       );
       final u = second.single as UserServer;
-      expect([u.taildropCommands, u.taildropAutosave], [true, true]);
+      expect([u.disableTaildropCommands, u.disableTaildropAutosave],
+          [true, true]);
       final third = _apply(second, parseLxBackup(_file([_node('a', {})])));
       final v = third.single as UserServer;
-      expect([v.taildropCommands, v.taildropAutosave], [true, true]);
+      expect([v.disableTaildropCommands, v.disableTaildropAutosave],
+          [true, true]);
+    });
+
+    test('имена 1.1.157 не читаются: умолчание «включено»', () {
+      final file = parseLxBackup(_file([
+        _node('a', {'taildrop_commands': true, 'taildrop_autosave': true}),
+      ]));
+      final u = _apply(const [], file).single as UserServer;
+      expect([u.disableTaildropCommands, u.disableTaildropAutosave],
+          [false, false]);
     });
 
     test('экспорт: только true', () async {
@@ -299,7 +312,7 @@ void main() {
             tagPrefix: '',
             detourPolicy: DetourPolicy.defaults,
             rawBody: raw,
-            taildropAutosave: true,
+            disableTaildropAutosave: true,
           ),
         ],
         rules: const [],
@@ -308,8 +321,8 @@ void main() {
       final server = ((jsonDecode(out.json) as Map)['sources'] as List)
           .cast<Map>()
           .single;
-      expect(server['taildrop_autosave'], true);
-      expect(server.containsKey('taildrop_commands'), isFalse);
+      expect(server['disable_taildrop_autosave'], true);
+      expect(server.containsKey('disable_taildrop_commands'), isFalse);
     });
   });
 

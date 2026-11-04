@@ -349,31 +349,21 @@ class BoxVpnClient {
     return ok ?? true;
   }
 
-  /// §707 итер. 9 — итоговые теги узлов с включёнными полями записи
-  /// `taildrop_commands` / `taildrop_autosave`: оба множества зеркала
-  /// `boxvpn_boot` заменяются целиком. `true` — записано.
+  /// §707 итер. 9 (контракт 1.1.159) — итоговые теги узлов, у которых в
+  /// записи стоит `disable_taildrop_commands` / `disable_taildrop_autosave`:
+  /// оба множества выключенных в зеркале `boxvpn_boot` заменяются целиком.
+  /// `true` — записано.
   Future<bool> setTaildropTags({
-    required List<String> commands,
-    required List<String> autosave,
+    required List<String> commandsOff,
+    required List<String> autosaveOff,
   }) async {
     final ok = await _invoke<bool>(
       _Methods.setTaildropTags,
-      args: {'commands': commands, 'autosave': autosave},
+      args: {'commands_off': commandsOff, 'autosave_off': autosaveOff},
       timeout: _Timeouts.settings,
       onTimeoutValue: false,
     );
     return ok ?? false;
-  }
-
-  /// §707 итер. 9 — перенос из rc.3: итоговые теги с `autosave.*` старого
-  /// файла `lxbox_taildrop`. Файла или канала нет — пусто.
-  Future<List<String>> taildropLegacyAutosaveTags() async {
-    final r = await _invoke<List<dynamic>>(
-      _Methods.taildropLegacyAutosaveTags,
-      timeout: _Timeouts.settings,
-      onTimeoutValue: null,
-    );
-    return [for (final t in r ?? const []) if (t is String) t];
   }
 
   /// §707 итер. 9 — удалить старые файлы `lxbox_taildrop` и

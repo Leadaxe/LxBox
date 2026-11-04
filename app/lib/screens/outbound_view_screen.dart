@@ -184,7 +184,7 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
 
   /// §707 итер. 9 — запись узла (свой сервер или член папки) по тегу
   /// собранного конфига; `null` — узел подписки или без записи.
-  ({int entryIndex, int? memberIndex, bool commands, bool autosave})?
+  ({int entryIndex, int? memberIndex, bool commandsOff, bool autosaveOff})?
       get _taildropRecord => taildropRecordForTag(
           widget.tag, [for (final e in widget.subController.entries) e.list],
           emitted: widget.subController.lastEmittedTagMap);
@@ -385,8 +385,8 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
                   taildropFlags: _taildropRecord == null
                       ? null
                       : (
-                          commands: _taildropRecord!.commands,
-                          autosave: _taildropRecord!.autosave,
+                          commandsOff: _taildropRecord!.commandsOff,
+                          autosaveOff: _taildropRecord!.autosaveOff,
                         ),
                   onSaveRecordFlag:
                       _taildropRecord == null ? null : _saveTaildropFlag,

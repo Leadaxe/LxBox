@@ -104,7 +104,7 @@ the launcher decides.
 | Where the window and its entries exist | "📋 Send", "Send to device" and LxBox in "Share" — only while the VPN is up and the running config has a Tailscale node with Allow Taildrop |
 | Recipient | `To: … ▾` in the window: own devices that accept files, from all such nodes; remembered on this phone |
 | Feed | in memory only while the VPN runs; at most 50 messages per device (node + device); `⋮ → Clear` |
-| Receive setting | one per receiving node: "Accept clipboard and links from my devices" in the Taildrop panel of the Network tab; the node record field `taildrop_commands`; off by default; in the backup; sharees do not count as own; a subscription node has no such setting |
+| Receive setting | one per receiving node: "Accept clipboard and links from my devices" in the Taildrop panel of the Network tab; on by default when Taildrop is allowed on the node; turning it off writes the node record field `disable_taildrop_commands`; in the backup; sharees do not count as own; a subscription node has no such setting |
 | Freshness (TTL) | 2 minutes by the receiver's clock from receipt; older — deleted without running |
 | Size | at most 64 KiB |
 | Backup | the remembered recipient is Kotlin's cache on this phone, not in the backup; the receive setting is in the backup |
@@ -148,7 +148,9 @@ warning in the app log about a broken command file.
   name with `reveal`) and the number of messages per feed.
 - **Receiving** (P12). A command runs only if the receiving node has the
   receive setting on and the sender is an own device. The sender is the
-  Taildrop sender; a sharee does not count as own.
+  Taildrop sender; a sharee does not count as own. The setting is on by
+  default, so the sender check is the only barrier: a command file whose
+  sender is empty or not among the node's own devices never runs.
 - **Interception.** A command file is handled before auto-save and the
   "received" notification ([inbox](inbox.md)): once parsed it reaches neither
   Downloads nor the inbox (P10).
