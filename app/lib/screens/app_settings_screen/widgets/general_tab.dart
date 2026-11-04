@@ -62,9 +62,15 @@ class GeneralTab extends StatelessWidget {
   final Map<String, bool> notificationButtons;
   final void Function(String button, bool enabled)? onNotificationButtonChanged;
 
-  Widget _notificationButton(String button, String title, {String? subtitle}) =>
+  Widget _notificationButton(
+    String button,
+    IconData icon,
+    String title, {
+    String? subtitle,
+  }) =>
       SwitchListTile(
         key: ValueKey('notification-button-$button'),
+        secondary: Icon(icon),
         title: Text(title),
         subtitle: subtitle == null ? null : Text(subtitle),
         value: notificationButtons[button] ?? true,
@@ -152,10 +158,11 @@ class GeneralTab extends StatelessWidget {
           leading: const Icon(Icons.notifications_outlined),
           title: Text(getLocalText.s("VPN notification buttons")),
         ),
-        _notificationButton('stop', getLocalText.s("Stop")),
-        _notificationButton('restart', getLocalText.s("Restart")),
+        _notificationButton('stop', Icons.stop_outlined, getLocalText.s("Stop")),
+        _notificationButton('restart', Icons.refresh, getLocalText.s("Restart")),
         _notificationButton(
           'send',
+          Icons.content_paste,
           getLocalText.s("Send"),
           subtitle: getLocalText.s("Appears only while a Tailscale node has Allow Taildrop."),
         ),

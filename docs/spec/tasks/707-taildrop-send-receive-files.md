@@ -1106,3 +1106,20 @@ file…». Сборщик Debug API (`POST /taildrop/send` с `commands`) пер
 `lxbox_notification_buttons`, `vpn/NotificationButtons.kt`; не в
 `lxbox_settings.json` и не в бэкапе L×Box, как разрешения Taildrop. Каналы
 `getNotificationButtons`, `setNotificationButton`. Контракт не меняется.
+
+### Result (итерация 8)
+
+Коммит `41674819`, значки строк списка — следующим коммитом. Новый файл
+`vpn/NotificationButtons.kt`; виджет-тест
+`test/screens/general_tab_notification_buttons_test.dart`.
+
+Эмулятор 04.11.2026 (сборка CI 41805444635, English): развёрнутое уведомление
+показывает `Stop`, `🔄 Restart`, `📋 Send` в одну строку с запасом. Нажатие
+`🔄 Restart`: `ACTION_RECONNECT`, остановка, туннель снова `connected`.
+Выключение по одному на живом уведомлении без перезапуска VPN: `Stop 📋 Send` →
+`Stop` → кнопок нет. После `force-stop` и нового старта VPN кнопок нет, в
+настройках все три выключены: значения сохраняются. Включение возвращает все
+три.
+
+Не проверено: телефон; подписи на ru и zh (`🔄 Рестарт`, `📋 Отправить`) на узком
+экране. Значки строк добавлены после прогона на эмуляторе и глазами не смотрены.
