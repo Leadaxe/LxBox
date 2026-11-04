@@ -5,7 +5,7 @@
 | Status | In progress |
 | Start date | 2026-11-04 |
 | End date | — |
-| Commits | — |
+| Commits | 6a43ab9d (ветка worktree-agent-ab87118fd334efa76) |
 | Related specs | features/001-SUBSCRIPTIONS, features/007-NODE_LIST, §446 (тормоза на большом списке), §652 (разбор в изоляте), §430 (stale-уведомление), §705 (лимит памяти ядра) |
 
 ## Problem
@@ -92,6 +92,73 @@ Issue #190 (horvickk, 02.11.2026): подписка-агрегатор на 7 00
 - Умный отбор узлов (по пингу, стране) — нет.
 - Поддержка `max_nodes` лаунчера как лимита на подписку — нет.
 
+## Solution
+
+- **Чистые функции** — `app/lib/services/subscription/node_budget.dart`:
+  `countManualBudgetNodes` (:40; включённые `UserServer` + включённые члены
+  включённых папок, без `AutoSelectSpec` и `tailscale`), `splitNodeBudget`
+  (:67, water-filling, остаток деления — по порядку `sources`),
+  `nodeBudgetQuotas` (:122, доли по списку источников; выключенные не
+  участвуют, кроме разбираемой `includeId`), `collectProtectedNodeTags`
+  (:195; правила — `CustomRule.outbound`, цепочки — `hops` как финальный
+  тег или `folderId`+сырой тег, Направления — `defaultFilter` включённых),
+  `cutNodesToQuota` (:235; группы и Tailscale не режутся и не считаются,
+  защищённые первыми, добор по порядку, порядок выдачи сохраняется).
+  `ProtectedNodeTags.forSource` добавляет `group_defaults` подписки (выбранный
+  член группы ручного рода).
+- **Воркер** — `cache_rehydrate.dart`: `quota`/`protected` во входах
+  `CacheParseInput` / `FetchParseInput`, `totalNodeCount` в результатах;
+  обрезка после import-правил (:137, :262).
+- **Контроллер** — part `subscription_controller/node_budget_ops.dart`:
+  доля разбираемой подписки считается с её размером «без потолка»
+  (`kNodeBudgetUnknownSize`; `min(размер, доля)` = итог раздачи по известному
+  размеру), пересчёт `_rebalanceNodeBudget` — один проход за раз, перерезка
+  `_recutFromCache` из кэша тела только у подписок, где `min(размер, доля)`
+  сменился. Пересчёт заводится из `_persist` (`subscription_controller.dart:3830`
+  — покрывает включение/выключение, ручные серверы, члены папок, новые
+  размеры) и слушателем `SettingsStorage.nodeBudget` (:130). Входы в разбор:
+  регидрация :446, смена источника :1544, обновление :3370, файл :1481.
+  Пустота после обрезки (доля 0) — не пустой разбор: проверки «0 узлов»
+  переведены на `totalNodeCount` (:458, :1481, :1555, :3409).
+- **Модель** — `SubscriptionServers.totalNodeCount` (`total_node_count` в
+  кодеке, рантайм, `_r` в `lx_backup_slice.dart`), `nodeCountBeforeCut`.
+- **Карточка** — `subscription_entry_subtitle.dart:70` «%2$d of %1$d nodes»
+  (счётчик plural — M, для согласования «из M узлов»), ⚠ с подсказкой «Node
+  budget in App settings», при доле 0 из-за ручных — текст «Budget used by
+  manual servers» (:142).
+- **Настройка** — `SettingsStorage.getNodeBudget`/`setNodeBudget`
+  (`settings_storage.dart:773/:784`, ключ `kNodeBudgetKey`, allowlist,
+  `ValueNotifier nodeBudget`), `NodeBudgetTile`
+  (`general_tab.dart:389`) рядом с `PingConcurrencyTile`.
+- **Бэкап** — `node_budget` в `_topLevelAppKeys` (`backup_service.dart`).
+- **Debug API** — `GET/PUT /settings/node_budget`
+  (`debug/handlers/settings.dart:528/:541`).
+- **Документация** — FUNCTIONS `node-budget.md`/`.ru.md`, строки в FEATURE,
+  STORAGE.md, debug-api-reference.md, USER_GUIDE (EN/RU), CHANGELOG, l10n
+  ru/zh.
+
+## Risks
+
+- **LX Backup (п.11) не сделан как написан.** У переносимого формата
+  (`contract/schema/backup.schema.json`, копия только для чтения) нет места
+  под настройки приложения; `node_budget` едет только в полном бэкапе
+  (`BackupService`, категория App settings). Записать «наш ключ» в
+  `docs/contract` нельзя — это зеркало генератора лаунчера; заявка лаунчеру
+  (TASKS_LXBOX) — за сессией-владельцем.
+- **Направление: «закреплённый/выбранный узел».** Выбранный узел селектора
+  Направления у нас не хранится (живёт в ядре); защищается первый узел под
+  `defaultFilter` включённого Направления и выбранный член группы ручного
+  рода подписки (`group_defaults`). Ссылки detour (`overrideDetour`,
+  `FolderMember.detour`) спекой не названы и не защищаются: срезанная цель
+  detour даёт fail-closed выпадение носителя при сборке.
+- **GC отметок выключения.** Сетевой refresh считает «узел в теле» по уже
+  обрезанной выдаче: отметка выключения у срезанного узла не продлевается и
+  истечёт по TTL (§283).
+- Смена ссылок (новое правило на срезанный узел) перерезку не заводит —
+  только ближайшее обновление/пересчёт долей.
+- Ручные серверы считаются только включённые (спека говорит «ручные серверы»
+  без оговорки).
+
 ## Verification
 
 Unit (один файл на блок, без полного прогона):
@@ -107,6 +174,20 @@ Unit (один файл на блок, без полного прогона):
 Эмулятор: подписка из 2 000 узлов (сгенерировать файл) + ручной сервер →
 карточка «999 of 2000 nodes» с ⚠, туннель стартует, mass-ping не больше
 999; поднять бюджет до 3000 → после refresh 2000. Пункт 13 по сценарию.
+
+Итог (04.11.2026, исполнитель):
+- `test/subscription/node_budget_split_test.dart` — 10/10 зелёные (a–e,
+  остаток деления, ручное по включённым, defaultFilter, квота 0).
+- `test/subscription/fetch_parse_worker_test.dart` — 8/8 (квота режет,
+  `totalNodeCount` до обрезки, защищённые первыми, финальный тег с
+  префиксом; контроллер: refresh режет по доле, смена бюджета перерезает из
+  кэша).
+- `test/services/settings_storage_node_budget_test.dart` — 5/5.
+- `test/screens/general_tab_notification_buttons_test.dart` — 3/3.
+- `flutter analyze` по изменённым файлам — 0; `hardcoded_check --strict` — 0/0.
+- Эмулятор и п.13 — **не проверены**: на emulator-5554 открыт несохранённый
+  редактор правила другой сессии (dev-сборка 2.25.19-rc.3-dev.14); убийство
+  процесса уничтожило бы чужую работу. Код по п.13 не менялся.
 
 ## Documentation
 
