@@ -61,6 +61,12 @@
   Choosing a dedicated DNS server in a rule's editor now also turns on Resolve
   before routing with that server, for the same reason; the box can be cleared.
 
+- **FakeIP: fake IPv6 addresses could not be turned off ([task 690](docs/spec/tasks/690-fakeip-custom-ranges.md)).**
+  An emptied IPv6 pool could not be saved: the field refilled with the default
+  `fc00::/18`. The preset now has a "Fake IPv6 addresses" toggle; when it is
+  off, the server has no IPv6 pool and AAAA queries get an answer with no
+  address, while the IPv4 pool stays in use. Issue #181.
+
 ### Added
 
 - **Regex conditions in routing rules ([task 712](docs/spec/tasks/712-package-name-regex-domain-regex-rules.md)).**

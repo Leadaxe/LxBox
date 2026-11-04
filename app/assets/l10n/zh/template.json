@@ -716,8 +716,14 @@
  "Fake IPv4 addresses are taken from this range (CIDR). Change it if the default range is used in your network or excluded from the tunnel. Changing it resets the saved fake addresses.": {
   "value": "伪 IPv4 地址从此范围（CIDR）分配。如果默认范围在您的网络中已被使用或被排除在隧道之外，请更改。更改会重置已保存的伪地址。"
  },
- "Fake IPv6 addresses are taken from this range (CIDR). Leave empty to answer AAAA queries with no address. At least one pool must be set.": {
-  "value": "伪 IPv6 地址从此范围（CIDR）分配。留空则对 AAAA 查询返回无地址的应答。至少需要设置一个地址池。"
+ "Fake IPv6 addresses": {
+  "value": "伪 IPv6 地址"
+ },
+ "Answer AAAA queries with a fake address from the IPv6 pool. Turn off to answer AAAA queries with no address; the IPv4 pool stays in use.": {
+  "value": "用 IPv6 地址池中的伪地址应答 AAAA 查询。关闭后对 AAAA 查询返回无地址的应答；IPv4 地址池继续使用。"
+ },
+ "Fake IPv6 addresses are taken from this range (CIDR). Used while \"Fake IPv6 addresses\" is on. Changing it resets the saved fake addresses.": {
+  "value": "伪 IPv6 地址从此范围（CIDR）分配。仅在“伪 IPv6 地址”开启时使用。更改会重置已保存的伪地址。"
  },
  "Split default route": {
   "value": "拆分默认路由"

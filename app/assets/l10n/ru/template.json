@@ -716,8 +716,14 @@
   "Fake IPv4 addresses are taken from this range (CIDR). Change it if the default range is used in your network or excluded from the tunnel. Changing it resets the saved fake addresses.": {
     "value": "Фейковые IPv4-адреса берутся из этого диапазона (CIDR). Поменяйте, если стандартный диапазон занят в вашей сети или исключён из туннеля. Смена сбрасывает сохранённые фейковые адреса."
   },
-  "Fake IPv6 addresses are taken from this range (CIDR). Leave empty to answer AAAA queries with no address. At least one pool must be set.": {
-    "value": "Фейковые IPv6-адреса берутся из этого диапазона (CIDR). Оставьте пустым, чтобы на AAAA-запросы отвечать без адреса. Хотя бы один пул должен быть задан."
+  "Fake IPv6 addresses": {
+    "value": "Фейковые IPv6-адреса"
+  },
+  "Answer AAAA queries with a fake address from the IPv6 pool. Turn off to answer AAAA queries with no address; the IPv4 pool stays in use.": {
+    "value": "Отвечать на AAAA-запросы фейковым адресом из пула IPv6. Выключите, чтобы на AAAA-запросы отвечать без адреса; пул IPv4 продолжает работать."
+  },
+  "Fake IPv6 addresses are taken from this range (CIDR). Used while \"Fake IPv6 addresses\" is on. Changing it resets the saved fake addresses.": {
+    "value": "Фейковые IPv6-адреса берутся из этого диапазона (CIDR). Действует, пока включено «Фейковые IPv6-адреса». Смена сбрасывает сохранённые фейковые адреса."
   },
   "Split default route": {
     "value": "Разделённый маршрут по умолчанию"

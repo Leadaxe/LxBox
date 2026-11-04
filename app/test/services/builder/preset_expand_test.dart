@@ -1330,7 +1330,7 @@ void main() {
           reason: 'direct-out → detour снят (§117)');
     });
 
-    test('fakeip: пулы из vars — дефолт как раньше, свой, пустой IPv6 (§690)', () {
+    test('fakeip: пулы из vars — дефолт как раньше, свой, IPv6 выключен (§690, #181)', () {
       Map<String, dynamic> server(Map<String, String> vars) => expandPreset(
             CustomRulePreset(name: 'FakeIP', presetId: 'fakeip', varsValues: vars),
             realPreset('fakeip'),
@@ -1344,10 +1344,21 @@ void main() {
       expect(own['inet4_range'], '10.233.0.0/16');
       expect(own['inet6_range'], 'fd00:233::/48');
 
-      final noV6 = server(const {'inet6_range': ''});
+      expect(def, {
+        'type': 'fakeip',
+        'tag': 'fakeip',
+        'inet4_range': '198.18.0.0/15',
+        'description': 'FakeIP allocator',
+        'inet6_range': 'fc00::/18',
+      }, reason: 'тело по умолчанию — прежние поля, `#if` снят');
+
+      // #181 — пустой пул сохранить нельзя (Н3/Н4 контракта): IPv6 гасится
+      // тумблером, ключ выпадает map-spread `#if` без else.
+      final noV6 = server(const {'inet6_enabled': 'false', 'inet6_range': 'fd00:233::/48'});
       expect(noV6['inet4_range'], '198.18.0.0/15');
       expect(noV6.containsKey('inet6_range'), isFalse,
-          reason: 'пусто = explicit none (§033), ядро отвечает на AAAA пустым NOERROR');
+          reason: 'тумблер выключен — ядро отвечает на AAAA пустым NOERROR');
+      expect(noV6.keys.where((k) => k.startsWith('#')), isEmpty);
     });
 
     test('ru-direct: галочка dns_encrypted_via_outbound — DoT/DoH по @outbound (§684)', () {
