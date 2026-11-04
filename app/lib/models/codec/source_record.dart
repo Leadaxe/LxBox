@@ -93,6 +93,7 @@ Map<String, dynamic> _subscriptionToRecord(SubscriptionServers s) => {
       if (s.lastUpdateStatus != UpdateStatus.never)
         'last_update_status': s.lastUpdateStatus.name,
       if (s.lastNodeCount != 0) 'last_node_count': s.lastNodeCount,
+      if (s.totalNodeCount != 0) 'total_node_count': s.totalNodeCount,
       if (s.consecutiveFails != 0) 'consecutive_fails': s.consecutiveFails,
     };
 
@@ -355,7 +356,7 @@ const Set<String> _subscriptionKeys = {
   'disabled', 'warnings', 'detour', 'detour_policy', 'import_rules',
   'import_rules_enabled', 'on_update_action', 'meta', 'last_updated',
   'last_update_attempt', 'last_update_status', 'last_node_count',
-  'consecutive_fails', 'replace', 'group_defaults', 'tls',
+  'total_node_count', 'consecutive_fails', 'replace', 'group_defaults', 'tls',
 };
 
 const Set<String> _serverKeys = {
@@ -460,6 +461,7 @@ SubscriptionServers _subscriptionFromRecord(
     ),
     updateIntervalHours: interval is num ? interval.toInt() : 24,
     lastNodeCount: _int(j['last_node_count'], 0),
+    totalNodeCount: _int(j['total_node_count'], 0),
     consecutiveFails: _int(j['consecutive_fails'], 0),
     disabledHashes: _disabledFromRecord(j['disabled']),
     nodeWarnings: storedWarningsMapFromJson(j['warnings']),

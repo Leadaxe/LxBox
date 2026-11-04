@@ -34,3 +34,7 @@ const String kDnsServersKey = 'servers';
 
 /// Правила внутри [kDnsKey].
 const String kDnsRulesKey = 'rules';
+
+/// Бюджет узлов — общий лимит узлов приложения (ручные + включённые члены
+/// папок + доли подписок). Нет ключа — дефолт `1000`.
+const String kNodeBudgetKey = 'node_budget';

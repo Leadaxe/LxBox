@@ -244,6 +244,7 @@ app start: read sources → "updating" → failed
 | Disabling subscription nodes | Switches single subscription nodes off by name; the mark survives updates and restarts and expires by TTL once the node is gone. | P9, P10 | [node-disable.md](FUNCTIONS/node-disable.md) |
 | Subscription import rules | Disables, enables or edits subscription nodes with rules applied to every parse of the subscription body. | P12 | [import-rules.md](FUNCTIONS/import-rules.md) |
 | Subscription metadata | Shows traffic, expiry, name, support links and the recommended interval from the provider's headers or body comments. | P4, P13 | [subscription-meta.md](FUNCTIONS/subscription-meta.md) |
+| Node budget | Keeps manual servers, folder members and enabled subscriptions within one app-wide node limit; subscriptions share the rest, the extra nodes are cut at parse. | — | [node-budget.md](FUNCTIONS/node-budget.md) |
 
 ## Related features
 

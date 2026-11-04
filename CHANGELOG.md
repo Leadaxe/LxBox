@@ -16,6 +16,28 @@
   button). Stored as `ping_options.concurrency`, travels with the backup,
   exposed through the Debug API. Issue #192.
 
+- **Node budget ([task 714](docs/spec/tasks/714-node-budget-subscription-cut.md)).**
+  One app-wide limit on nodes, App Settings → General → Node budget (default
+  1000, from 1, no upper limit). Manual servers and enabled folder members are
+  taken first and never cut; the rest is shared between enabled subscriptions
+  equally, and what a small subscription does not need goes to the others. A
+  subscription above its share keeps its first nodes when its body is parsed;
+  nodes a rule, a chain or a Direction's default filter points to stay first.
+  The card shows «N of M nodes» with ⚠. Enabling a subscription, editing manual
+  servers or folders and changing the budget re-cut subscriptions from the
+  cache, without network. Travels with the backup, exposed through the Debug API
+  (`/settings/node_budget`). Issue #190.
+  (RU: Бюджет узлов: один лимит узлов на приложение, App Settings → General →
+  Node budget (по умолчанию 1000, от 1, без верхнего потолка). Ручные серверы
+  и включённые члены папок берутся первыми и не режутся никогда; остаток
+  делится между включёнными подписками поровну, а то, что не нужно маленькой
+  подписке, уходит остальным. Подписка сверх доли оставляет первые узлы при
+  разборе тела; узлы, на которые ссылаются правило, цепочка или default-фильтр
+  Направления, остаются первыми. Карточка показывает «N of M nodes» с ⚠.
+  Включение подписки, правка ручных серверов и папок и смена бюджета
+  перерезают подписки из кэша, без сети. Едет в бэкапе, доступен через Debug API
+  (`/settings/node_budget`). Issue #190.)
+
 ### Fixed
 
 - **Ru internet segment resolved its domains through the default resolver with

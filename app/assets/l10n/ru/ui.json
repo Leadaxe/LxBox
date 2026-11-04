@@ -1185,6 +1185,26 @@
   "How many servers the ping and Test servers measure at once. Fewer requests look quieter to the network, more finish faster. Range %1$d..%2$d, default %3$d": {
     "value": "Сколько серверов пинг и «Test servers» меряют одновременно. Меньше запросов — тише для сети, больше — быстрее. Диапазон %1$d..%2$d, по умолчанию %3$d"
   },
+  "Node budget": {
+    "value": "Бюджет узлов"
+  },
+  "Above %d the app may freeze or be killed by the system": {
+    "value": "Больше %d — приложение может зависнуть или быть закрыто системой"
+  },
+  "%2$d of %1$d nodes": {
+    "value": {
+      "one": "%2$d из %1$d узла",
+      "few": "%2$d из %1$d узлов",
+      "many": "%2$d из %1$d узлов",
+      "other": "%2$d из %1$d узла"
+    }
+  },
+  "Node budget in App settings": {
+    "value": "Бюджет узлов — в настройках приложения"
+  },
+  "Budget used by manual servers": {
+    "value": "Бюджет занят ручными серверами"
+  },
   "Auto-record is off": {
     "value": "Автозапись выключена"
   },

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../controllers/subscription_controller.dart';
 import '../../../models/node_warning.dart';
 import '../../../models/server_list.dart';
+import '../../../models/ui_msg.dart';
 import '../../../services/subscription/input_helpers.dart';
 import '../../../services/l10n/locale_controller.dart';
 import '../../subscription_detail_screen/widgets/node_warning_row.dart';
@@ -65,6 +66,12 @@ Widget? buildSubscriptionEntrySubtitle(
     statusText =
         entry.nodeCount > 0 ? getLocalText.plural("%d nodes", entry.nodeCount) : '';
   }
+  // Бюджет узлов — выдача обрезана по доле подписки: «N of M nodes».
+  final cut = entry.budgetCut;
+  if (cut != null && (entry.status == null || entry.status is SubStatusNodes)) {
+    statusText =
+        getLocalText.plural("%2\$d of %1\$d nodes", cut.total, cut.kept);
+  }
   if (statusText.isNotEmpty) {
     // §615 — узлы не загружены (тела в кэше нет): число — с прошлого
     // обновления, показываем его серым как устаревшее.
@@ -121,6 +128,21 @@ Widget? buildSubscriptionEntrySubtitle(
         getLocalText.plural("%d dropped", dropped),
         style: textStyle,
       ));
+    }
+
+    // Бюджет узлов — значок обрезки; доля 0 из-за ручных серверов
+    // объясняется словами.
+    if (cut != null) {
+      parts.add(Tooltip(
+        key: const ValueKey('entry-node-budget-cut'),
+        message: getLocalText.s("Node budget in App settings"),
+        child: Icon(Icons.warning_amber_rounded,
+            size: 12, color: entry.enabled ? scheme.error : muted),
+      ));
+      if (cut.kept == 0 && subController.nodeBudgetUsedByManual) {
+        parts.add(Text(getLocalText.s("Budget used by manual servers"),
+            style: textStyle));
+      }
     }
   }
 

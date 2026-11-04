@@ -1592,6 +1592,7 @@ App Settings → General.
 | Home-screen shortcut | A hint without a switch: shortcuts on the app icon. | — |
 | Check for updates on launch | Asks github.com for a new version once every 24 hours. | set by your answer to the question on first launch |
 | Auto-ping after connect | Pings the nodes of the current direction 5 seconds after connecting. | on |
+| Node budget | How many nodes the app holds in all: manual servers and folder members first, the rest is shared between enabled subscriptions. A subscription above its share keeps its first nodes and shows «N of M nodes» with ⚠. Above 1000 the app may freeze or be killed by the system. | 1000 |
 | Haptic feedback | Vibrates when you tap the connect button, pick a node, refresh a subscription by hand, and when the core stops responding. | on |
 | Backup & restore | Opens the screen that moves settings through a file. | — |
 

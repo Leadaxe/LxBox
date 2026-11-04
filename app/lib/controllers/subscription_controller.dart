@@ -54,6 +54,7 @@ import '../services/settings_storage.dart';
 import '../services/subscription/auto_updater.dart';
 import '../services/subscription/http_cache.dart';
 import '../services/subscription/input_helpers.dart';
+import '../services/subscription/node_budget.dart';
 import '../services/subscription/sources.dart';
 import '../services/subscription/subscription_identity.dart';
 import '../services/warp/masque_account.dart';
@@ -71,6 +72,7 @@ import '../services/workspaces/workspace_store.dart';
 // Та же библиотека (`part`), поэтому library-private доступ
 // (`_replaceList`, `_formatAgo`) к/между основным файлом и part'ом доступен.
 part 'subscription_controller/subscription_entry.dart';
+part 'subscription_controller/node_budget_ops.dart';
 
 /// §368 — исход добавления JSON-формы. Три состояния, а не bool: «форму не
 /// узнали» и «форму узнали, но узлов не собралось» дают разные сообщения, и
@@ -111,7 +113,32 @@ class SubscriptionController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    SettingsStorage.nodeBudget.removeListener(_onNodeBudgetChanged);
     super.dispose();
+  }
+
+  /// Бюджет узлов — идёт пересчёт долей ([_scheduleNodeBudgetRebalance]).
+  bool _budgetRebalancing = false;
+
+  /// Бюджет узлов — запрос пересчёта пришёл во время прохода.
+  bool _budgetRebalanceAgain = false;
+
+  /// Бюджет узлов — последний запущенный пересчёт долей.
+  @visibleForTesting
+  Future<void>? lastNodeBudgetRebalanceForTesting;
+
+  void _onNodeBudgetChanged() => _scheduleNodeBudgetRebalance();
+
+  /// Бюджет узлов — ручное (серверы, включённые члены папок) занимает весь
+  /// бюджет: подпискам не остаётся ничего.
+  bool get nodeBudgetUsedByManual =>
+      countManualBudgetNodes(_entries.map((e) => e.list)) >=
+      SettingsStorage.nodeBudget.value;
+
+  /// Бюджет узлов — пересчитать доли и перерезать подписки из кэша тела.
+  Future<void> rebalanceNodeBudget() {
+    _scheduleNodeBudgetRebalance();
+    return lastNodeBudgetRebalanceForTesting ?? Future<void>.value();
   }
 
   /// §515 — disposed-контроллер молчит вместо `assert`-падения. У контроллера
@@ -294,6 +321,11 @@ class SubscriptionController extends ChangeNotifier {
 
   Future<void> _initBody() async {
     final lists = await SettingsStorage.getServerLists();
+    // Бюджет узлов — значение для долей разбора; смена бюджета перерезает
+    // подписки из кэша.
+    await SettingsStorage.getNodeBudget();
+    SettingsStorage.nodeBudget.removeListener(_onNodeBudgetChanged);
+    SettingsStorage.nodeBudget.addListener(_onNodeBudgetChanged);
     _entries = lists.map((l) => SubscriptionEntry(list: l)).toList();
     // §076: bootstrap mtime compare — restore in-memory configDirty после
     // possible kill mid-session. Если settings новее чем saved config →
@@ -410,14 +442,20 @@ class SubscriptionController extends ChangeNotifier {
         entry._markBodyCacheMissing();
         return;
       }
+      // Бюджет узлов — доля подписки и узлы со ссылками режутся в воркере.
+      final budget = await _nodeBudgetInputFor(list);
+      if (stale) return;
       var parsed = await _parseCachedBody(CacheParseInput(
         body: body,
         rules: list.activeImportRules,
         disabledHashes: list.disabledHashes,
         nodeWarnings: list.nodeWarnings,
+        quota: budget.quota,
+        protected: budget.protected,
       ), shortUrl);
       if (stale) return;
-      if (parsed.nodes.isEmpty) {
+      // Бюджет узлов — пусто после обрезки (доля 0) — не пустой разбор.
+      if (parsed.totalNodeCount == 0) {
         // §101 — раньше скипали молча; UI-счётчик при этом показывает
         // stale lastNodeCount. Логируем с подсказкой, что в кеше.
         final hint = parsed.emptyHint;
@@ -449,18 +487,22 @@ class SubscriptionController extends ChangeNotifier {
           rules: cur.activeImportRules,
           disabledHashes: cur.disabledHashes,
           nodeWarnings: cur.nodeWarnings,
+          quota: budget.quota,
+          protected: budget.protected,
         ));
-        if (parsed.nodes.isEmpty) return;
+        if (parsed.totalNodeCount == 0) return;
       }
       final nodes = parsed.nodes;
       final migrated = parsed.migrated;
       final next = cur.copyWith(
         nodes: nodes,
         lastNodeCount: nodes.length,
+        totalNodeCount: parsed.totalNodeCount,
         disabledHashes: migrated ?? cur.disabledHashes,
         dropped: parsed.dropped,
       );
       entry._replaceList(next);
+      entry._budgetQuota = budget.quota;
       // §400 — результат миграции обязан лечь на диск: иначе legacy-ключи
       // прогоняются заново на каждом старте. Метаданные — флаг пересборки
       // не поднимаем (регидрация состав конфига не меняет).
@@ -470,6 +512,11 @@ class SubscriptionController extends ChangeNotifier {
       entry.status =
           SubStatusNodes(nodes.length, detours: detours, cached: true);
       AppLog.I.info('Re-hydrated ${nodes.length} nodes from cache: $shortUrl');
+      // Бюджет узлов — полный размер мог смениться (тело, import-правила):
+      // доли остальных подписок пересчитываются.
+      if (parsed.totalNodeCount != list.nodeCountBeforeCut) {
+        _scheduleNodeBudgetRebalance();
+      }
     } catch (e) {
       AppLog.I.warning(
           'Re-hydrate failed for $shortUrl: ${humanizeError(e).renderEn()}');
@@ -1416,16 +1463,28 @@ class SubscriptionController extends ChangeNotifier {
   /// (caller должен упасть на старое поведение `addFromInput`).
   Future<bool> addFileSubscription(String body, String fileName) async {
     // §652 C — тело подписки разбирается в isolate.
-    final result = (await _parseFetchedBody(
-            FetchParseInput(fetch: FetchResult(body)), 'file "$fileName"'))
-        .result;
-    if (result.nodes.length <= 1) return false; // ≤1 → не файловая (spec 129)
+    // Бюджет узлов — новой подписки ещё нет в списке: доля по остальным.
+    final probe = SubscriptionServers(
+      id: newUuidV4(),
+      name: '',
+      enabled: true,
+      tagPrefix: '',
+      detourPolicy: DetourPolicy.defaults,
+      url: '',
+    );
+    final quota = _nodeBudgetQuotaFor(probe);
+    final parsed = await _parseFetchedBody(
+        FetchParseInput(fetch: FetchResult(body), quota: quota),
+        'file "$fileName"');
+    final result = parsed.result;
+    // ≤1 → не файловая (spec 129); считается выдача до обрезки по бюджету.
+    if (parsed.totalNodeCount <= 1) return false;
 
     final url = 'file:${newUuidV4()}';
     await HttpCache.save(url, body, const {});
     final name = result.meta?.profileTitle ?? _stripExt(fileName);
     final list = SubscriptionServers(
-      id: newUuidV4(),
+      id: probe.id,
       name: name,
       enabled: true,
       // §647 — имя известно сразу: префикс из его эмодзи.
@@ -1436,11 +1495,13 @@ class SubscriptionController extends ChangeNotifier {
       lastUpdated: DateTime.now(),
       lastUpdateStatus: UpdateStatus.ok,
       lastNodeCount: result.nodes.length,
+      totalNodeCount: parsed.totalNodeCount,
       updateIntervalHours: -1, // §129 — файловая: никогда не обновлять авто (-1)
       dropped: summaryDropped(result.dropped),
       nodes: result.nodes,
     );
-    final entry = SubscriptionEntry(list: list, nodeCount: result.nodes.length);
+    final entry = SubscriptionEntry(list: list, nodeCount: result.nodes.length)
+      .._budgetQuota = quota;
     _entries.add(entry);
     await _persist();
     notifyListeners();
@@ -1479,12 +1540,19 @@ class SubscriptionController extends ChangeNotifier {
           ? FetchResult(fileBody)
           : await fetchRaw(UrlSource(newUrl, identity: old.identity),
               client: httpClientForTesting);
-      final result = (await _parseFetchedBody(
-              FetchParseInput(fetch: fetched), maskSubscriptionUrl(newUrl)))
-          .result;
+      // Бюджет узлов — доля подписки и узлы со ссылками режутся в воркере.
+      final budget = await _nodeBudgetInputFor(old);
+      final parsed = await _parseFetchedBody(
+          FetchParseInput(
+              fetch: fetched,
+              quota: budget.quota,
+              protected: budget.protected),
+          maskSubscriptionUrl(newUrl));
+      final result = parsed.result;
 
       // 2. Успех нового = > 0 нод. Иначе — полный откат (§101-инвариант).
-      if (result.nodes.isEmpty) {
+      // Бюджет узлов — считается выдача до обрезки.
+      if (parsed.totalNodeCount == 0) {
         return const ErrMsg(ErrKey.couldNotLoadNewSource);
       }
 
@@ -1510,12 +1578,14 @@ class SubscriptionController extends ChangeNotifier {
         lastUpdated: DateTime.now(),
         lastUpdateStatus: UpdateStatus.ok,
         lastNodeCount: result.nodes.length,
+        totalNodeCount: parsed.totalNodeCount,
         consecutiveFails: 0,
         updateIntervalHours: nextInterval,
         dropped: summaryDropped(result.dropped),
         nodes: result.nodes,
       );
       entry._replaceList(next);
+      entry._budgetQuota = budget.quota;
       entry.nodeCount = result.nodes.length;
       await _persist();
       notifyListeners();
@@ -3296,9 +3366,14 @@ class SubscriptionController extends ChangeNotifier {
         return false;
       }
       final ruleSource = entry.list as SubscriptionServers;
+      // Бюджет узлов — доля подписки и узлы со ссылками режутся в воркере.
+      final budget = await _nodeBudgetInputFor(ruleSource);
       final parsed = await _parseFetchedBody(
           FetchParseInput(
-              fetch: fetched, rules: ruleSource.activeImportRules),
+              fetch: fetched,
+              rules: ruleSource.activeImportRules,
+              quota: budget.quota,
+              protected: budget.protected),
           shortUrl);
       // §515 / §101 — и после воркера: пространство могли переключить,
       // запись — удалить или перевести на другой источник (Edit source).
@@ -3330,7 +3405,8 @@ class SubscriptionController extends ChangeNotifier {
       // DDoS-challenge, чужой формат). Это failure, не success: НЕ затираем
       // рабочий кеш на диске и in-memory ноды последнего удачного fetch'а.
       // Parse hint (night T3-3) диагностирует, что пришло вместо подписки.
-      if (result.nodes.isEmpty) {
+      // Бюджет узлов — пусто после обрезки (доля 0) — не пустой ответ.
+      if (parsed.totalNodeCount == 0) {
         final hint = diagnoseEmptyParse(result.rawBody);
         if (hint != null) AppLog.I.warning('Parse hint: $hint');
         AppLog.I.warning(
@@ -3488,6 +3564,7 @@ class SubscriptionController extends ChangeNotifier {
         lastUpdateAttempt: attemptAt,
         lastUpdateStatus: UpdateStatus.ok,
         lastNodeCount: result.nodes.length,
+        totalNodeCount: parsed.totalNodeCount,
         consecutiveFails: 0,
         updateIntervalHours: nextInterval,
         disabledHashes: verdicts.disabled,
@@ -3496,6 +3573,7 @@ class SubscriptionController extends ChangeNotifier {
         nodes: result.nodes,
       );
       entry._replaceList(next);
+      entry._budgetQuota = budget.quota;
       // §331 — состав узлов тот же ⇒ пересобирать конфиг не из чего, синюю
       // плашку «Settings changed» не поднимаем. На диск пишем всё равно:
       // last_updated / last_update_attempt / GC-отметки обновиться должны.
@@ -3747,6 +3825,9 @@ class SubscriptionController extends ChangeNotifier {
     }
     if (!keepDirtyFlag) configDirty = true;
     await SettingsStorage.saveServerLists(_entries.map((e) => e.list).toList());
+    // Бюджет узлов — запись источников могла сменить доли (включение
+    // подписки, ручные серверы, члены папок, новый размер выдачи).
+    _scheduleNodeBudgetRebalance();
   }
 
   /// §248 — ресинк in-memory `_entries` после storage-heal detour-ссылок

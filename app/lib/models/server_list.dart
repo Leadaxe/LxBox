@@ -180,6 +180,13 @@ final class SubscriptionServers extends ServerList {
   final UpdateStatus lastUpdateStatus;
   final int updateIntervalHours;
   final int lastNodeCount;
+
+  /// Бюджет узлов — число узлов выдачи после разбора и import-правил, ДО
+  /// обрезки по доле подписки ([lastNodeCount] — после). `0` — обрезки не
+  /// было или запись старше поля: тогда полный размер = [lastNodeCount]
+  /// ([nodeCountBeforeCut]). Рантайм машины, в бэкап не едет.
+  final int totalNodeCount;
+
   /// Подряд фейлов с последнего успеха. Персистится, чтобы после рестарта
   /// показать юзеру "(3 fails)". Сбрасывается в 0 на успех. **Не используется
   /// для фризинга** — для этого есть in-memory `_failCounts` в `AutoUpdater`
@@ -263,6 +270,7 @@ final class SubscriptionServers extends ServerList {
     this.lastUpdateStatus = UpdateStatus.never,
     this.updateIntervalHours = 24,
     this.lastNodeCount = 0,
+    this.totalNodeCount = 0,
     this.consecutiveFails = 0,
     this.disabledHashes = const {},
     this.nodeWarnings = const {},
@@ -300,6 +308,10 @@ final class SubscriptionServers extends ServerList {
   List<ImportRule> get activeImportRules =>
       importRulesEnabled ? importRules.where((r) => r.isUsable).toList() : const [];
 
+  /// Бюджет узлов — размер выдачи до обрезки (см. [totalNodeCount]).
+  int get nodeCountBeforeCut =>
+      totalNodeCount > lastNodeCount ? totalNodeCount : lastNodeCount;
+
   @override
   String get type => 'subscription';
 
@@ -316,6 +328,7 @@ final class SubscriptionServers extends ServerList {
     UpdateStatus? lastUpdateStatus,
     int? updateIntervalHours,
     int? lastNodeCount,
+    int? totalNodeCount,
     int? consecutiveFails,
     Map<String, DateTime>? disabledHashes,
     Map<String, List<StoredWarning>>? nodeWarnings,
@@ -344,6 +357,7 @@ final class SubscriptionServers extends ServerList {
         lastUpdateStatus: lastUpdateStatus ?? this.lastUpdateStatus,
         updateIntervalHours: updateIntervalHours ?? this.updateIntervalHours,
         lastNodeCount: lastNodeCount ?? this.lastNodeCount,
+        totalNodeCount: totalNodeCount ?? this.totalNodeCount,
         consecutiveFails: consecutiveFails ?? this.consecutiveFails,
         disabledHashes: disabledHashes ?? this.disabledHashes,
         nodeWarnings: nodeWarnings ?? this.nodeWarnings,
@@ -378,6 +392,7 @@ final class SubscriptionServers extends ServerList {
           lastUpdateStatus == other.lastUpdateStatus &&
           updateIntervalHours == other.updateIntervalHours &&
           lastNodeCount == other.lastNodeCount &&
+          totalNodeCount == other.totalNodeCount &&
           consecutiveFails == other.consecutiveFails &&
           _eq.equals(_disabledSeconds(disabledHashes),
               _disabledSeconds(other.disabledHashes)) &&
@@ -404,6 +419,7 @@ final class SubscriptionServers extends ServerList {
         lastUpdateStatus,
         updateIntervalHours,
         lastNodeCount,
+        totalNodeCount,
         consecutiveFails,
         _eq.hash(_disabledSeconds(disabledHashes)),
         _eq.hash(nodeWarnings),

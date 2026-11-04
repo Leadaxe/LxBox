@@ -993,6 +993,23 @@
   "How many servers the ping and Test servers measure at once. Fewer requests look quieter to the network, more finish faster. Range %1$d..%2$d, default %3$d": {
     "value": "Ping 和「Test servers」同时测量的服务器数量。越少对网络越安静，越多完成越快。范围 %1$d..%2$d，默认 %3$d"
   },
+  "Node budget": {
+    "value": "节点预算"
+  },
+  "Above %d the app may freeze or be killed by the system": {
+    "value": "超过 %d 时应用可能卡死或被系统关闭"
+  },
+  "%2$d of %1$d nodes": {
+    "value": {
+      "other": "%2$d / %1$d 个节点"
+    }
+  },
+  "Node budget in App settings": {
+    "value": "节点预算位于应用设置"
+  },
+  "Budget used by manual servers": {
+    "value": "预算已被手动服务器占满"
+  },
   "Auto-record is off": {
     "value": "自动记录已关闭"
   },

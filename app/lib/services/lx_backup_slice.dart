@@ -106,6 +106,8 @@ const List<BackupField> kBackupFields = [
   BackupField(BackupRecord.subscription, 'last_update_attempt', _r),
   BackupField(BackupRecord.subscription, 'last_update_status', _r),
   BackupField(BackupRecord.subscription, 'last_node_count', _r),
+  // Бюджет узлов — размер выдачи до обрезки; рантайм машины.
+  BackupField(BackupRecord.subscription, 'total_node_count', _r),
   BackupField(BackupRecord.subscription, 'consecutive_fails', _r),
   // §565 / задача 570 — выбор члена групп ручного рода подписки: у
   // `sourceSubscription` схемы поля нет; выбор — рантайм машины (как выбор

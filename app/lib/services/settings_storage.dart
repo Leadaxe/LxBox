@@ -244,6 +244,7 @@ class SettingsStorage {
     'profiler_retention_sec', // §044/new-profiler — окно хранения Live-журнала
     'editor_magnifier', // §660 — лупа выделения редактора кода
     'mixin_target_suggestions', // §704 — подсказки поля Target формы миксина
+    kNodeBudgetKey, // бюджет узлов приложения
   };
 
   /// Var-ключи, которые живут ТОЛЬКО в коде (app feature-flags), а НЕ в
@@ -756,6 +757,44 @@ class SettingsStorage {
   /// §713 — `null` снимает ключ (= дефолт).
   static Future<void> setPingConcurrency(int? value) =>
       _setPingConcurrency(value);
+
+  /// Бюджет узлов приложения (верхнеуровневый `node_budget`): сколько узлов
+  /// всего держат ручные серверы, включённые члены папок и подписки.
+  /// Минимум 1, верхнего потолка нет.
+  static const int nodeBudgetDefault = 1000;
+  static const int nodeBudgetMin = 1;
+
+  /// Текущее значение бюджета для подписчиков (контроллер подписок
+  /// перерезает доли при смене). Обновляется чтением и записью.
+  static final ValueNotifier<int> nodeBudget =
+      ValueNotifier<int>(nodeBudgetDefault);
+
+  /// Значение из storage; нет/мусор → дефолт, ниже минимума → минимум.
+  static Future<int> getNodeBudget() async {
+    final c = await _load();
+    final raw = c[kNodeBudgetKey];
+    final v = raw is num
+        ? (raw.toInt() < nodeBudgetMin ? nodeBudgetMin : raw.toInt())
+        : nodeBudgetDefault;
+    nodeBudget.value = v;
+    return v;
+  }
+
+  /// `null` снимает ключ (= дефолт); число ниже минимума → минимум.
+  static Future<void> setNodeBudget(int? value) async {
+    final c = await _load();
+    final int effective;
+    if (value == null) {
+      c.remove(kNodeBudgetKey);
+      effective = nodeBudgetDefault;
+    } else {
+      effective = value < nodeBudgetMin ? nodeBudgetMin : value;
+      c[kNodeBudgetKey] = effective;
+    }
+    SettingsStorage._cache = c;
+    await _save();
+    nodeBudget.value = effective;
+  }
 
   /// Sugared: установить global timeout (ms) без затирания url / groups.
   static Future<void> setGlobalPingTimeout(int timeoutMs) =>

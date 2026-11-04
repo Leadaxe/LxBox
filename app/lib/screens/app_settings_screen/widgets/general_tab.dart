@@ -39,6 +39,7 @@ class GeneralTab extends StatelessWidget {
     required this.autoCheckUpdates,
     required this.autoPing,
     required this.pingConcurrency,
+    required this.nodeBudget,
     required this.haptic,
     required this.autoReloadOnChange,
     required this.padding,
@@ -46,6 +47,7 @@ class GeneralTab extends StatelessWidget {
     required this.onAutoCheckUpdatesChanged,
     required this.onAutoPingChanged,
     required this.onPingConcurrencyChanged,
+    required this.onNodeBudgetChanged,
     required this.onHapticChanged,
     required this.onAutoReloadOnChangeChanged,
     required this.onAddQuickSettingsTile,
@@ -64,6 +66,9 @@ class GeneralTab extends StatelessWidget {
 
   /// §713 — параллельность проверки серверов (`ping_options.concurrency`).
   final int pingConcurrency;
+
+  /// Бюджет узлов приложения (`node_budget`).
+  final int nodeBudget;
   final bool haptic;
 
   /// §338 — автоперезапуск VPN при любом изменении конфига (жизнь без плашек).
@@ -76,6 +81,9 @@ class GeneralTab extends StatelessWidget {
 
   /// §713 — `null` = сброс к дефолту.
   final ValueChanged<int?> onPingConcurrencyChanged;
+
+  /// Бюджет узлов — `null` = сброс к дефолту.
+  final ValueChanged<int?> onNodeBudgetChanged;
   final ValueChanged<bool> onHapticChanged;
   final ValueChanged<bool> onAutoReloadOnChangeChanged;
   final VoidCallback onAddQuickSettingsTile;
@@ -224,6 +232,11 @@ class GeneralTab extends StatelessWidget {
           value: pingConcurrency,
           onChanged: onPingConcurrencyChanged,
         ),
+        NodeBudgetTile(
+          enabled: loaded,
+          value: nodeBudget,
+          onChanged: onNodeBudgetChanged,
+        ),
         SwitchListTile(
           title: Text(getLocalText.s("Haptic feedback")),
           subtitle: Text(getLocalText.s("Vibrate on connect, disconnect and errors. Respects system \"Touch feedback\" setting")),
@@ -360,6 +373,129 @@ class _PingConcurrencyTileState extends State<PingConcurrencyTile> {
             onPressed: widget.enabled && !isDefault
                 ? () {
                     _ctl.text = '${SettingsStorage.pingConcurrencyDefault}';
+                    widget.onChanged(null);
+                  }
+                : null,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Строка «Node budget»: общий лимит узлов приложения, числовое поле + сброс
+/// к дефолту (образец — [PingConcurrencyTile]). Пустое поле = дефолт, ниже
+/// минимума → минимум, верхнего потолка нет.
+class NodeBudgetTile extends StatefulWidget {
+  const NodeBudgetTile({
+    super.key,
+    required this.enabled,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final bool enabled;
+  final int value;
+  final ValueChanged<int?> onChanged;
+
+  @override
+  State<NodeBudgetTile> createState() => _NodeBudgetTileState();
+}
+
+class _NodeBudgetTileState extends State<NodeBudgetTile> {
+  late final TextEditingController _ctl =
+      TextEditingController(text: '${widget.value}');
+  final _focus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _focus.addListener(() {
+      if (!_focus.hasFocus) _commit(_ctl.text);
+    });
+  }
+
+  @override
+  void didUpdateWidget(NodeBudgetTile old) {
+    super.didUpdateWidget(old);
+    if (old.value != widget.value && !_focus.hasFocus) {
+      _ctl.text = '${widget.value}';
+    }
+  }
+
+  @override
+  void dispose() {
+    _focus.dispose();
+    _ctl.dispose();
+    super.dispose();
+  }
+
+  void _commit(String raw) {
+    final text = raw.trim();
+    if (text.isEmpty) {
+      widget.onChanged(null);
+      _ctl.text = '${SettingsStorage.nodeBudgetDefault}';
+      return;
+    }
+    final parsed = int.tryParse(text);
+    if (parsed == null) {
+      _ctl.text = '${widget.value}';
+      return;
+    }
+    final clamped = parsed < SettingsStorage.nodeBudgetMin
+        ? SettingsStorage.nodeBudgetMin
+        : parsed;
+    _ctl.text = '$clamped';
+    if (clamped != widget.value) widget.onChanged(clamped);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDefault = widget.value == SettingsStorage.nodeBudgetDefault;
+    final scheme = Theme.of(context).colorScheme;
+    return ListTile(
+      key: const ValueKey('node-budget'),
+      leading: const Icon(Icons.dns_outlined),
+      title: Text(getLocalText.s("Node budget")),
+      subtitle: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 2, right: 4),
+            child: Icon(Icons.warning_amber_rounded,
+                size: 14, color: scheme.error),
+          ),
+          Expanded(
+            child: Text(getLocalText.s(
+                "Above %d the app may freeze or be killed by the system",
+                SettingsStorage.nodeBudgetDefault)),
+          ),
+        ],
+      ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 72,
+            child: TextField(
+              controller: _ctl,
+              focusNode: _focus,
+              enabled: widget.enabled,
+              keyboardType: TextInputType.number,
+              textAlign: TextAlign.center,
+              decoration: const InputDecoration(
+                isDense: true,
+                border: OutlineInputBorder(),
+              ),
+              onSubmitted: _commit,
+            ),
+          ),
+          IconButton(
+            tooltip: getLocalText.s("Reset to default"),
+            icon: const Icon(Icons.restart_alt),
+            onPressed: widget.enabled && !isDefault
+                ? () {
+                    _ctl.text = '${SettingsStorage.nodeBudgetDefault}';
                     widget.onChanged(null);
                   }
                 : null,

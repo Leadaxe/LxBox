@@ -29,6 +29,7 @@ import '../../services/parser/body_decoder.dart';
 import '../../services/parser/engine/section_loader.dart';
 import '../../services/parser/parse_all.dart';
 import '../../services/subscription/import_rules.dart';
+import '../../services/subscription/node_budget.dart';
 import '../../services/subscription/sources.dart';
 import 'core_reject_ops.dart';
 
@@ -39,9 +40,17 @@ final class CacheParseInput {
     required this.rules,
     required this.disabledHashes,
     required this.nodeWarnings,
+    this.quota,
+    this.protected = const SourceProtectedTags(),
   });
 
   final String body;
+
+  /// Бюджет узлов — доля подписки; `null` — без обрезки.
+  final int? quota;
+
+  /// Бюджет узлов — узлы со ссылками, держатся сверх очереди.
+  final SourceProtectedTags protected;
 
   /// `SubscriptionServers.activeImportRules` (§302).
   final List<ImportRule> rules;
@@ -63,8 +72,12 @@ final class CacheParseResult {
     required this.migrated,
     required this.dropped,
     required this.emptyHint,
+    this.totalNodeCount = 0,
     this.logs = const [],
   });
+
+  /// Бюджет узлов — размер выдачи после import-правил, до обрезки.
+  final int totalNodeCount;
 
   /// Узлы после import-правил (§302) с дописанными вердиктами (фича 478).
   /// Пусто — тело разобралось в 0 узлов, см. [emptyHint].
@@ -88,6 +101,7 @@ final class CacheParseResult {
         migrated: migrated,
         dropped: dropped,
         emptyHint: emptyHint,
+        totalNodeCount: totalNodeCount,
         logs: logs,
       );
 }
@@ -118,14 +132,18 @@ CacheParseResult parseCachedBody(CacheParseInput input) {
   // §400 (IDENTITY.md §5.1) — регидрация кэша это тоже первый разбор
   // источника: legacy-ключи опознаются, не дожидаясь сетевого refresh.
   final migrated = migrateLegacyDisabledKeys(input.disabledHashes, nodes);
+  // Бюджет узлов — обрезка до доли подписки после import-правил: дальше
+  // лишних узлов не видят ни хранилище, ни конфиг, ни автовыбор.
+  final cut = cutNodesToQuota(nodes, input.quota, input.protected);
   // Фича 478 — вердикт ядра пересчётом по телу не воспроизводится:
   // дописываем его на разобранные узлы.
-  stampStoredVerdicts(nodes, input.nodeWarnings);
+  stampStoredVerdicts(cut.nodes, input.nodeWarnings);
   return CacheParseResult(
-    nodes: nodes,
+    nodes: cut.nodes,
     migrated: identical(migrated, input.disabledHashes) ? null : migrated,
     dropped: summaryDropped(dropped),
     emptyHint: null,
+    totalNodeCount: cut.total,
   );
 }
 
@@ -190,9 +208,20 @@ Future<(R, List<CapturedLog>)> _workerMain<R>(
 /// §652 C — вход разбора ответа источника подписки (сеть, снапшот файловой,
 /// ответ того же URL в проходе автообновления, тело нового файла).
 final class FetchParseInput {
-  const FetchParseInput({required this.fetch, this.rules = const []});
+  const FetchParseInput({
+    required this.fetch,
+    this.rules = const [],
+    this.quota,
+    this.protected = const SourceProtectedTags(),
+  });
 
   final FetchResult fetch;
+
+  /// Бюджет узлов — доля подписки; `null` — без обрезки.
+  final int? quota;
+
+  /// Бюджет узлов — узлы со ссылками, держатся сверх очереди.
+  final SourceProtectedTags protected;
 
   /// `SubscriptionServers.activeImportRules` на момент старта разбора
   /// (§302). Пусто — правила не применяются (новая подписка, смена
@@ -206,10 +235,15 @@ final class FetchParseResult {
   const FetchParseResult({
     required this.result,
     required this.ruleMarks,
+    this.totalNodeCount = 0,
     this.logs = const [],
   });
 
+  /// Узлы в [ParseResult.nodes] — уже обрезанные по доле подписки.
   final ParseResult result;
+
+  /// Бюджет узлов — размер выдачи после import-правил, до обрезки.
+  final int totalNodeCount;
 
   /// [applyRulesToNodes] над [ParseResult.nodes].
   final ({Set<String> disable, Set<String> enable}) ruleMarks;
@@ -224,7 +258,14 @@ final class FetchParseResult {
 FetchParseResult parseFetchedWithRules(FetchParseInput input) {
   final result = parseFetched(input.fetch);
   final marks = applyRulesToNodes(result.nodes, input.rules);
-  return FetchParseResult(result: result, ruleMarks: marks);
+  // Бюджет узлов — обрезка до доли подписки после import-правил.
+  final cut = cutNodesToQuota(result.nodes, input.quota, input.protected);
+  final kept = identical(cut.nodes, result.nodes)
+      ? result
+      : ParseResult(cut.nodes, result.decoded, result.meta, result.rawBody,
+          result.headers, result.dropped);
+  return FetchParseResult(
+      result: kept, ruleMarks: marks, totalNodeCount: cut.total);
 }
 
 /// [parseFetchedWithRules] в отдельном isolate — тот же механизм, что у
@@ -234,7 +275,10 @@ Future<FetchParseResult> parseFetchedInIsolate(
   final (value, logs) =
       await _runInWorker(() => parseFetchedWithRules(input), env, 'fetch-parse');
   return FetchParseResult(
-      result: value.result, ruleMarks: value.ruleMarks, logs: logs);
+      result: value.result,
+      ruleMarks: value.ruleMarks,
+      totalNodeCount: value.totalNodeCount,
+      logs: logs);
 }
 
 /// Воспроизводит на main записи журнала, сделанные разбором в воркере.
