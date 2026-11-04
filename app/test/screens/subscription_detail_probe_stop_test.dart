@@ -92,7 +92,9 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.byIcon(Icons.speed));
-    await _until(tester, () => fake.pendingCount == 6, what: 'замеры в полёте');
+    // §713 — экран берёт параллельность из storage (в тесте его нет →
+    // дефолт 10), так что все 8 узлов уходят в полёт разом.
+    await _until(tester, () => fake.pendingCount == 8, what: 'замеры в полёте');
     expect(find.textContaining('Testing…'), findsOneWidget);
 
     // closeService «долгий»: probeStop висит, пока тест его не отпустит.
@@ -118,7 +120,7 @@ void main() {
 
     // Новый прогон — своя сессия; старый его индикатор не гасит.
     await tester.tap(find.byIcon(Icons.speed));
-    await _until(tester, () => fake.pendingCount == 6,
+    await _until(tester, () => fake.pendingCount == 8,
         what: 'новый прогон в полёте');
     expect(fake.live, 2);
     expect(find.textContaining('Testing…'), findsOneWidget);
