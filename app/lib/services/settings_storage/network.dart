@@ -260,6 +260,29 @@ Future<void> _setGlobalPingUrl(String url) async {
   await SettingsStorage.savePingOptions(opts);
 }
 
+/// §713 — параллельность проверки серверов (mass ping и ProbeRunner).
+/// Хранится в `ping_options.concurrency`; мусор или отсутствие → дефолт,
+/// выход за диапазон → граница.
+Future<int> _getPingConcurrency() async {
+  final opts = await SettingsStorage.getPingOptions();
+  final raw = opts['concurrency'];
+  if (raw is! num) return SettingsStorage.pingConcurrencyDefault;
+  return raw.toInt().clamp(
+      SettingsStorage.pingConcurrencyMin, SettingsStorage.pingConcurrencyMax);
+}
+
+/// §713 — `null` снимает ключ (= дефолт); число приводится к диапазону.
+Future<void> _setPingConcurrency(int? value) async {
+  final opts = await SettingsStorage.getPingOptions();
+  if (value == null) {
+    opts.remove('concurrency');
+  } else {
+    opts['concurrency'] = value.clamp(SettingsStorage.pingConcurrencyMin,
+        SettingsStorage.pingConcurrencyMax);
+  }
+  await SettingsStorage.savePingOptions(opts);
+}
+
 Future<void> _setGlobalPingTimeout(int timeoutMs) async {
   final opts = await SettingsStorage.getPingOptions();
   opts['timeout_ms'] = timeoutMs;

@@ -58,6 +58,8 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
   bool _nearbyWifiGranted = false;
   String? _wifiLocationIssue;
   bool _autoPing = true;
+  // §713 — параллельность проверки серверов.
+  int _pingConcurrency = SettingsStorage.pingConcurrencyDefault;
   bool _autoUpdateSubs = true;
   bool _autoUpdateDisabledSubs = false;
   bool _autoReloadOnChange = false;
@@ -157,6 +159,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     final auto = await SettingsStorage.getNativeBool(NativePrefsKeys.autoStart);
     final haptic = await SettingsStorage.getVar(HapticService.prefsKey, 'true');
     final autoPing = await SettingsStorage.getVar('auto_ping_on_start', 'true');
+    final pingConcurrency = await SettingsStorage.getPingConcurrency();
     final battery = await _vpn.isIgnoringBatteryOptimizations();
     final notifications = await _vpn.areNotificationsEnabled();
     final bgLocation = await ul.UrlLauncher.checkBackgroundLocationPermission();
@@ -205,6 +208,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
         _notificationButtons = notificationButtons;
         _haptic = haptic != 'false';
         _autoPing = autoPing != 'false';
+        _pingConcurrency = pingConcurrency;
         _batteryWhitelisted = battery;
         _notificationsEnabled = notifications;
         _backgroundLocationGranted = bgLocation;
@@ -714,6 +718,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
       autoStart: _autoStart,
       autoCheckUpdates: _autoCheckUpdates,
       autoPing: _autoPing,
+      pingConcurrency: _pingConcurrency,
       haptic: _haptic,
       autoReloadOnChange: _autoReloadOnChange, // §338
       padding: _tabPadding(context),
@@ -736,6 +741,12 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
         setState(() => _autoPing = val);
         unawaited(SettingsStorage.setVar(
             'auto_ping_on_start', val.toString()));
+      },
+      // §713 — null = сброс к дефолту (ключ снимается).
+      onPingConcurrencyChanged: (val) {
+        setState(() =>
+            _pingConcurrency = val ?? SettingsStorage.pingConcurrencyDefault);
+        unawaited(SettingsStorage.setPingConcurrency(val));
       },
       onHapticChanged: (val) {
         setState(() => _haptic = val);

@@ -204,7 +204,9 @@ mixin _PingMixin on ChangeNotifier {
     _pingOptions = await SettingsStorage.getPingOptions();
   }
 
-  static const _pingConcurrency = 10;
+  /// §713 — параллельность mass ping читается из storage на каждом старте
+  /// прогона (`SettingsStorage.getPingConcurrency`, дефолт 10): App Settings
+  /// пишет её без доступа к контроллеру, кэш `_pingOptions` тут не годится.
 
   /// §286 — интервал батч-флаша mass-ping результатов в UI. ~120мс = ~8 ребилдов
   /// в секунду вместо ребилда на каждую из ~150 нод. Достаточно плавно для глаза,
@@ -266,7 +268,7 @@ mixin _PingMixin on ChangeNotifier {
   }
 
   /// Mass URLTest на всех нодах активной группы — параллельные
-  /// `urlTestOutbound` с concurrency cap (`_pingConcurrency`). Не путать с
+  /// `urlTestOutbound` с concurrency cap (`ping_options.concurrency`, §713). Не путать с
   /// [runGroupUrltest] (§308: единый групповой RPC, тест+переселект в ядре).
   /// Использует per-group resolved url/timeout (§040). Повторный вызов во
   /// время running — cancel.
@@ -319,7 +321,9 @@ mixin _PingMixin on ChangeNotifier {
       direction: massPingDirection,
     );
     _emit(_state.copyWith(delayByDirection: clearedDelay, pingBusy: busyMap));
-    _addDebug(DebugSource.app, 'Mass ping started (${nodes.length} nodes, concurrency=$_pingConcurrency)');
+    final concurrency = await SettingsStorage.getPingConcurrency();
+    if (_massPingEpoch != epoch) return;
+    _addDebug(DebugSource.app, 'Mass ping started (${nodes.length} nodes, concurrency=$concurrency)');
 
     // Parallel ping with limited concurrency
     var index = 0;
@@ -372,7 +376,7 @@ mixin _PingMixin on ChangeNotifier {
     }
 
     final workers = List.generate(
-      _pingConcurrency.clamp(1, nodes.length),
+      concurrency.clamp(1, nodes.length),
       (_) => worker(),
     );
     try {

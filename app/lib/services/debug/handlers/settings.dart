@@ -541,10 +541,14 @@ Future<DebugResponse> _putPingOptions(
   if (body.containsKey('groups') && body['groups'] is! Map) {
     throw const BadRequest('field "groups" must be object if present');
   }
+  // §713 — параллельность проверки серверов; диапазон приводит читатель.
+  if (body.containsKey('concurrency') && body['concurrency'] is! num) {
+    throw const BadRequest('field "concurrency" must be number if present');
+  }
   // §159 — strip unknown subkeys: пишем только известные поля ping_options
   // (url/timeout_ms/presets/groups), чтобы произвольный ключ тела не замусоривал
   // storage. Это вход данных → default-deny, как в backup-import allowlist.
-  const allowedPingKeys = {'url', 'timeout_ms', 'presets', 'groups'};
+  const allowedPingKeys = {'url', 'timeout_ms', 'presets', 'groups', 'concurrency'};
   final clean = <String, dynamic>{
     for (final e in body.entries)
       if (allowedPingKeys.contains(e.key)) e.key: e.value,

@@ -8,6 +8,14 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Parallel checks setting ([task 713](docs/spec/tasks/713-ping-concurrency-setting.md)).**
+  App Settings → General → Parallel checks sets how many servers the mass ping
+  and a folder's Test servers measure at once (1..32, default 10, with a reset
+  button). Stored as `ping_options.concurrency`, travels with the backup,
+  exposed through the Debug API. Issue #192.
+
 ### Fixed
 
 - **Ru internet segment resolved its domains through the default resolver with

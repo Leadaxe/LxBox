@@ -987,6 +987,12 @@
   "Auto-ping after connect": {
     "value": "连接后自动测速"
   },
+  "Parallel checks": {
+    "value": "并行检测"
+  },
+  "How many servers the ping and Test servers measure at once. Fewer requests look quieter to the network, more finish faster. Range %1$d..%2$d, default %3$d": {
+    "value": "Ping 和「Test servers」同时测量的服务器数量。越少对网络越安静，越多完成越快。范围 %1$d..%2$d，默认 %3$d"
+  },
   "Auto-record is off": {
     "value": "自动记录已关闭"
   },

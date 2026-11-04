@@ -2039,7 +2039,7 @@ user data, and the OS/core payloads (the `RawMsg.detail` passthrough). The units
 
 | Controller | Responsibility |
 |-----------|---------------|
-| `HomeController` | VPN lifecycle, CommandClient (groups/status/connections), nodes, ping (10 concurrent — `_pingConcurrency`), heartbeat, traffic, configChangedNeedRestart, autoUpdater wiring, haptic on transitions |
+| `HomeController` | VPN lifecycle, CommandClient (groups/status/connections), nodes, ping (parallel checks from `ping_options.concurrency`, default 10 — §713), heartbeat, traffic, configChangedNeedRestart, autoUpdater wiring, haptic on transitions |
 | `SubscriptionController` | CRUD entries (`sources[]` records), `refreshEntry`/persist, node-link registry calls on rename/move/delete (§439), `generateConfig` (no HTTP), `bindAutoUpdater`, init sweep (inProgress→failed). **§524** — `sourceEntries()` returns the WHOLE list (every genus, disk order); `applySourceOrder(keys)` writes the order ONCE, for keys of any genus |
 | `ThemeNotifier` | Theme mode, SharedPreferences persistence |
 | `HapticService` (singleton) | Event-based haptic with 100 ms throttle, respects system setting (spec 029) |
@@ -2103,7 +2103,7 @@ HomeScreen
 | File-based config storage | Large JSON configs don't belong in SharedPreferences |
 | serviceScope vs GlobalScope | Structured concurrency — coroutines die with service |
 | libbox CommandClient for management (§122) | A server-stream push instead of Timer polling; the Clash HTTP API is gone |
-| 10 concurrent mass pings (`_pingConcurrency`) | Sequential was too slow for 50+ nodes; the cap balances speed against load |
+| Mass ping / Test servers run `ping_options.concurrency` checks at once (default 10, App Settings → Parallel checks, §713) | Sequential was too slow for 50+ nodes; the cap balances speed against load, and the user lowers it when a quieter sweep matters |
 | SRS rules off by default | Require download, may fail offline |
 | App list caching | getInstalledApps (~5s) called once, reused |
 | profile-title from headers + content-disposition fallback | Auto-name subscriptions even without profile-title |

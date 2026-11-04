@@ -744,6 +744,19 @@ class SettingsStorage {
   /// Sugared: установить global URL без затирания timeout / groups.
   static Future<void> setGlobalPingUrl(String url) => _setGlobalPingUrl(url);
 
+  /// §713 — параллельность проверки серверов (`ping_options.concurrency`):
+  /// сколько узлов mass ping и «Test servers» меряют одновременно.
+  static const int pingConcurrencyDefault = 10;
+  static const int pingConcurrencyMin = 1;
+  static const int pingConcurrencyMax = 32;
+
+  /// §713 — значение из storage, приведённое к диапазону; нет/мусор → дефолт.
+  static Future<int> getPingConcurrency() => _getPingConcurrency();
+
+  /// §713 — `null` снимает ключ (= дефолт).
+  static Future<void> setPingConcurrency(int? value) =>
+      _setPingConcurrency(value);
+
   /// Sugared: установить global timeout (ms) без затирания url / groups.
   static Future<void> setGlobalPingTimeout(int timeoutMs) =>
       _setGlobalPingTimeout(timeoutMs);

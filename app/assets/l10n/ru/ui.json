@@ -1179,6 +1179,12 @@
   "Auto-ping after connect": {
     "value": "Автопинг после подключения"
   },
+  "Parallel checks": {
+    "value": "Параллельные проверки"
+  },
+  "How many servers the ping and Test servers measure at once. Fewer requests look quieter to the network, more finish faster. Range %1$d..%2$d, default %3$d": {
+    "value": "Сколько серверов пинг и «Test servers» меряют одновременно. Меньше запросов — тише для сети, больше — быстрее. Диапазон %1$d..%2$d, по умолчанию %3$d"
+  },
   "Auto-record is off": {
     "value": "Автозапись выключена"
   },

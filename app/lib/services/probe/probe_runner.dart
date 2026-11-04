@@ -5,6 +5,7 @@ import '../../models/tls_policy.dart';
 import '../../vpn/box_vpn_client.dart';
 import '../../vpn/cc_channel.dart';
 import '../app_log.dart';
+import '../settings_storage.dart';
 import '../builder/core_chain_capability.dart';
 import 'probe_config.dart';
 import 'probe_lifecycle.dart';
@@ -54,7 +55,13 @@ class ProbeResult {
 /// шёл бы поверх активного детура/цепочки, а не по чистой ноде, и выключенные
 /// ноды выпадали бы из конфига — вводило в заблуждение (§236 UI-rework).
 class ProbeRunner {
-  ProbeRunner({CcChannel? cc}) : _cc = cc ?? CcChannel.instance;
+  /// §713 — `concurrency` задаёт параллельность прогона напрямую (тесты,
+  /// Debug API); без него берётся `SettingsStorage.getPingConcurrency()`.
+  ProbeRunner({CcChannel? cc, int? concurrency})
+      : _cc = cc ?? CcChannel.instance,
+        _concurrencyOverride = concurrency;
+
+  final int? _concurrencyOverride;
 
   final CcChannel _cc;
   bool _cancelled = false;
@@ -66,7 +73,17 @@ class ProbeRunner {
 
   /// Конкурентность пула: ядро меряет по одной ноде synchronous+stateless
   /// (SPEC 014), мультиплекс на одном клиенте — как mass-ping §209.
-  static const _concurrency = 6;
+  /// §713 — значение общее с mass ping (`ping_options.concurrency`, дефолт
+  /// 10; до §713 здесь была константа 6). Storage недоступен (тесты без
+  /// path_provider) → дефолт.
+  Future<int> _resolveConcurrency() async {
+    if (_concurrencyOverride != null) return _concurrencyOverride;
+    try {
+      return await SettingsStorage.getPingConcurrency();
+    } catch (_) {
+      return SettingsStorage.pingConcurrencyDefault;
+    }
+  }
 
   /// Отмена прогона. §669 — кроме флага рвёт начатые замеры в ядре
   /// (`probeCancel`, образец §175): до шести параллельных dial'ов возвращаются
@@ -212,8 +229,9 @@ class ProbeRunner {
       }
     }
 
+    final concurrency = await _resolveConcurrency();
     await Future.wait([
-      for (var w = 0; w < _concurrency; w++) worker(),
+      for (var w = 0; w < concurrency; w++) worker(),
     ]);
   }
 }

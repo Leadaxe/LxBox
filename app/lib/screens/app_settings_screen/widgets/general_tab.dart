@@ -38,12 +38,14 @@ class GeneralTab extends StatelessWidget {
     required this.autoStart,
     required this.autoCheckUpdates,
     required this.autoPing,
+    required this.pingConcurrency,
     required this.haptic,
     required this.autoReloadOnChange,
     required this.padding,
     required this.onAutoStartChanged,
     required this.onAutoCheckUpdatesChanged,
     required this.onAutoPingChanged,
+    required this.onPingConcurrencyChanged,
     required this.onHapticChanged,
     required this.onAutoReloadOnChangeChanged,
     required this.onAddQuickSettingsTile,
@@ -59,6 +61,9 @@ class GeneralTab extends StatelessWidget {
   final bool autoStart;
   final bool autoCheckUpdates;
   final bool autoPing;
+
+  /// §713 — параллельность проверки серверов (`ping_options.concurrency`).
+  final int pingConcurrency;
   final bool haptic;
 
   /// §338 — автоперезапуск VPN при любом изменении конфига (жизнь без плашек).
@@ -68,6 +73,9 @@ class GeneralTab extends StatelessWidget {
   final ValueChanged<bool> onAutoStartChanged;
   final ValueChanged<bool> onAutoCheckUpdatesChanged;
   final ValueChanged<bool> onAutoPingChanged;
+
+  /// §713 — `null` = сброс к дефолту.
+  final ValueChanged<int?> onPingConcurrencyChanged;
   final ValueChanged<bool> onHapticChanged;
   final ValueChanged<bool> onAutoReloadOnChangeChanged;
   final VoidCallback onAddQuickSettingsTile;
@@ -211,6 +219,11 @@ class GeneralTab extends StatelessWidget {
           value: autoPing,
           onChanged: loaded ? onAutoPingChanged : null,
         ),
+        PingConcurrencyTile(
+          enabled: loaded,
+          value: pingConcurrency,
+          onChanged: onPingConcurrencyChanged,
+        ),
         SwitchListTile(
           title: Text(getLocalText.s("Haptic feedback")),
           subtitle: Text(getLocalText.s("Vibrate on connect, disconnect and errors. Respects system \"Touch feedback\" setting")),
@@ -243,5 +256,116 @@ class GeneralTab extends StatelessWidget {
           : getLocalText.s("Auto · %s", detected.toUpperCase());
     }
     return region.toUpperCase();
+  }
+}
+
+/// §713 — строка «Parallel checks»: числовое поле + сброс к дефолту.
+/// Значение фиксируется по Enter и по потере фокуса; пустое поле = дефолт,
+/// выход за диапазон приводится к границе.
+class PingConcurrencyTile extends StatefulWidget {
+  const PingConcurrencyTile({
+    super.key,
+    required this.enabled,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final bool enabled;
+  final int value;
+  final ValueChanged<int?> onChanged;
+
+  @override
+  State<PingConcurrencyTile> createState() => _PingConcurrencyTileState();
+}
+
+class _PingConcurrencyTileState extends State<PingConcurrencyTile> {
+  late final TextEditingController _ctl =
+      TextEditingController(text: '${widget.value}');
+  final _focus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _focus.addListener(() {
+      if (!_focus.hasFocus) _commit(_ctl.text);
+    });
+  }
+
+  @override
+  void didUpdateWidget(PingConcurrencyTile old) {
+    super.didUpdateWidget(old);
+    if (old.value != widget.value && !_focus.hasFocus) {
+      _ctl.text = '${widget.value}';
+    }
+  }
+
+  @override
+  void dispose() {
+    _focus.dispose();
+    _ctl.dispose();
+    super.dispose();
+  }
+
+  void _commit(String raw) {
+    final text = raw.trim();
+    if (text.isEmpty) {
+      widget.onChanged(null);
+      _ctl.text = '${SettingsStorage.pingConcurrencyDefault}';
+      return;
+    }
+    final parsed = int.tryParse(text);
+    if (parsed == null) {
+      _ctl.text = '${widget.value}';
+      return;
+    }
+    final clamped = parsed.clamp(SettingsStorage.pingConcurrencyMin,
+        SettingsStorage.pingConcurrencyMax);
+    _ctl.text = '$clamped';
+    if (clamped != widget.value) widget.onChanged(clamped);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDefault = widget.value == SettingsStorage.pingConcurrencyDefault;
+    return ListTile(
+      key: const ValueKey('ping-concurrency'),
+      leading: const Icon(Icons.stacked_line_chart),
+      title: Text(getLocalText.s("Parallel checks")),
+      subtitle: Text(getLocalText.s(
+          "How many servers the ping and Test servers measure at once. Fewer requests look quieter to the network, more finish faster. Range %1\$d..%2\$d, default %3\$d",
+          SettingsStorage.pingConcurrencyMin,
+          SettingsStorage.pingConcurrencyMax,
+          SettingsStorage.pingConcurrencyDefault)),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 56,
+            child: TextField(
+              controller: _ctl,
+              focusNode: _focus,
+              enabled: widget.enabled,
+              keyboardType: TextInputType.number,
+              textAlign: TextAlign.center,
+              decoration: const InputDecoration(
+                isDense: true,
+                border: OutlineInputBorder(),
+              ),
+              onSubmitted: _commit,
+            ),
+          ),
+          IconButton(
+            tooltip: getLocalText.s("Reset to default"),
+            icon: const Icon(Icons.restart_alt),
+            onPressed: widget.enabled && !isDefault
+                ? () {
+                    _ctl.text = '${SettingsStorage.pingConcurrencyDefault}';
+                    widget.onChanged(null);
+                  }
+                : null,
+          ),
+        ],
+      ),
+    );
   }
 }

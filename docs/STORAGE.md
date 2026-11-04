@@ -1221,6 +1221,7 @@ part of the contract's record shape; an old file carrying `false` is read as a p
 {
   "url":        "https://…",          // global default URL
   "timeout_ms": <int>,                 // global default timeout
+  "concurrency": <int>,                // [§713] parallel checks, 1..32; absent = 10
   "presets":   [ … ],                  // pre-built URL-options (template-side)
   "groups": {                          // a per-group override (optional)
     "<groupTag>": {
@@ -1233,7 +1234,9 @@ part of the contract's record shape; an old file carrying `false` is read as a p
 
 The resolve chain in `HomeController`: `groups[tag]` → root → the template default.
 
-CRUD helpers: `setGlobalPingUrl`, `setGlobalPingTimeout`, `setGroupPing`, `clearGroupPing`. All of them are sugar over `getPingOptions` / `savePingOptions`, which read and write the whole object.
+CRUD helpers: `setGlobalPingUrl`, `setGlobalPingTimeout`, `setPingConcurrency`, `setGroupPing`, `clearGroupPing`. All of them are sugar over `getPingOptions` / `savePingOptions`, which read and write the whole object.
+
+**`concurrency` — [§713].** How many servers the home-screen mass ping and the folder's Test servers measure at once. `getPingConcurrency` clamps a stored value into `1..32` and returns `10` when the key is absent or not a number; `setPingConcurrency(null)` removes the key (App Settings → General → Parallel checks → Reset to default). It is global only, there is no per-group override.
 
 **The keys of `groups` are direction tags — [§408] holds them to living ones.** A key
 counts as living when a direction with that `tag` exists (in any state, enabled or not)
