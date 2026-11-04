@@ -12,13 +12,13 @@ import 'package:lxbox/vpn/cc_channel.dart';
 /// генерит билдер Направления), а не тип.
 void main() {
   CcGroup ccGroup(String tag, String type, {String selected = ''}) => CcGroup(
-    tag: tag,
-    type: type,
-    selectable: type == 'selector',
-    selected: selected,
-    isExpand: false,
-    items: const [],
-  );
+        tag: tag,
+        type: type,
+        selectable: type == 'selector',
+        selected: selected,
+        isExpand: false,
+        items: const [],
+      );
 
   /// Узлы + их типы: всё, что похоже на группу, объявляем `urltest`.
   HomeState stateWith({
@@ -26,22 +26,23 @@ void main() {
     required Set<String> autoTags,
     Set<String> directionAutoTags = const {},
     bool pinAuto = true,
-  }) => HomeState(
-    nodes: nodes,
-    directionAutoTags: directionAutoTags,
-    pinAuto: pinAuto,
-    // Пин смотрит ТИП из конфига (§311 activeModel), не из ccGroups.
-    configRaw: jsonEncode({
-      'outbounds': [
-        for (final n in nodes)
-          {'tag': n, 'type': autoTags.contains(n) ? 'urltest' : 'vless'},
-      ],
-    }),
-    ccGroups: [
-      for (final n in nodes)
-        ccGroup(n, autoTags.contains(n) ? 'urltest' : 'vless'),
-    ],
-  );
+  }) =>
+      HomeState(
+        nodes: nodes,
+        directionAutoTags: directionAutoTags,
+        pinAuto: pinAuto,
+        // Пин смотрит ТИП из конфига (§311 activeModel), не из ccGroups.
+        configRaw: jsonEncode({
+          'outbounds': [
+            for (final n in nodes)
+              {'tag': n, 'type': autoTags.contains(n) ? 'urltest' : 'vless'},
+          ],
+        }),
+        ccGroups: [
+          for (final n in nodes)
+            ccGroup(n, autoTags.contains(n) ? 'urltest' : 'vless'),
+        ],
+      );
 
   group('пин в верхнюю секцию', () {
     test('auto-двойник Направления пинится', () {
@@ -152,11 +153,8 @@ void main() {
     test('произвольный regexp пользователя', () {
       // Не только флаги: например, код страны в скобках.
       expect(
-        poolBadges(const [
-          'Node (DE)',
-          'Node (NL)',
-          'Node (DE)',
-        ], r'\(([A-Z]{2})\)'),
+        poolBadges(const ['Node (DE)', 'Node (NL)', 'Node (DE)'],
+            r'\(([A-Z]{2})\)'),
         '(DE)[2], (NL)',
       );
     });
@@ -172,19 +170,17 @@ void main() {
 
   test('balancer в конфиге — гейт «View pool» для группы §322', () {
     // round_robin эмитит `balancer{}`; least_test — нет (ядро SPEC 019).
-    final pc = ParsedConfig.parse(
-      jsonEncode({
-        'outbounds': [
-          {
-            'tag': 'L: 🇪🇺 Авто',
-            'type': 'urltest',
-            'mode': 'round_robin',
-            'balancer': {'pool': 7},
-          },
-          {'tag': 'L: БС', 'type': 'urltest'},
-        ],
-      }),
-    );
+    final pc = ParsedConfig.parse(jsonEncode({
+      'outbounds': [
+        {
+          'tag': 'L: 🇪🇺 Авто',
+          'type': 'urltest',
+          'mode': 'round_robin',
+          'balancer': {'pool': 7},
+        },
+        {'tag': 'L: БС', 'type': 'urltest'},
+      ],
+    }));
     expect(pc.rawOf('L: 🇪🇺 Авто')?['balancer'], isNotNull);
     expect(pc.rawOf('L: БС')?['balancer'], isNull);
   });
@@ -193,11 +189,7 @@ void main() {
     const flag = kDefaultPoolBadge;
     test('значки нашлись → значки, имён нет', () {
       expect(
-        poolLabelSuffix(const [
-          'L: 🇩🇪 DE',
-          'L: 🇳🇱 NL-1',
-          'L: 🇳🇱 NL-2',
-        ], flag),
+        poolLabelSuffix(const ['L: 🇩🇪 DE', 'L: 🇳🇱 NL-1', 'L: 🇳🇱 NL-2'], flag),
         '🇩🇪, 🇳🇱[2]',
       );
     });

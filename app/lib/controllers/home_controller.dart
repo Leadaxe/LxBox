@@ -34,8 +34,8 @@ class HomeController extends ChangeNotifier
   HomeController({
     AutoUpdater? autoUpdater,
     RuleSetAutoUpdater? ruleSetAutoUpdater,
-  }) : _autoUpdater = autoUpdater,
-       _ruleSetAutoUpdater = ruleSetAutoUpdater;
+  })  : _autoUpdater = autoUpdater,
+        _ruleSetAutoUpdater = ruleSetAutoUpdater;
 
   @override
   final BoxVpnClient _vpn = BoxVpnClient();
@@ -219,10 +219,8 @@ class HomeController extends ChangeNotifier
     if (stoppingMs != null) {
       _stoppingTimeout = Duration(milliseconds: stoppingMs);
     }
-    _addDebug(
-      DebugSource.app,
-      '[vpn] transient timeouts set: connecting=${_connectingTimeout.inMilliseconds}ms stopping=${_stoppingTimeout.inMilliseconds}ms',
-    );
+    _addDebug(DebugSource.app,
+        '[vpn] transient timeouts set: connecting=${_connectingTimeout.inMilliseconds}ms stopping=${_stoppingTimeout.inMilliseconds}ms');
     return (
       connectingMs: _connectingTimeout.inMilliseconds,
       stoppingMs: _stoppingTimeout.inMilliseconds,
@@ -231,9 +229,9 @@ class HomeController extends ChangeNotifier
 
   /// §140 — debug-only: текущие transient-пороги (мс), для `GET`-чтения.
   ({int connectingMs, int stoppingMs}) get debugTransientTimeouts => (
-    connectingMs: _connectingTimeout.inMilliseconds,
-    stoppingMs: _stoppingTimeout.inMilliseconds,
-  );
+        connectingMs: _connectingTimeout.inMilliseconds,
+        stoppingMs: _stoppingTimeout.inMilliseconds,
+      );
 
   /// §140 — debug-only: напрямую дёрнуть force-stop native-сервиса (минуя
   /// transient-таймаут). Для on-device проверки `doForceStop`-пути (порт 63130).
@@ -257,11 +255,9 @@ class HomeController extends ChangeNotifier
     _handleStatusEvent(TunnelStatusEvent(status: pulled, raw: pulled.name));
     // §654 C — подписку openconnect держит натив; здесь только слушатель и
     // текущий снапшот (висящий челлендж при открытии приложения).
-    _openConnectSub ??= _cc.openConnectStatus.listen(
-      _onOpenConnect,
-      onError: (Object e) =>
-          _addDebug(DebugSource.app, 'cc openconnect stream error: $e'),
-    );
+    _openConnectSub ??= _cc.openConnectStatus.listen(_onOpenConnect,
+        onError: (Object e) =>
+            _addDebug(DebugSource.app, 'cc openconnect stream error: $e'));
     unawaited(refreshOpenConnect());
   }
 
@@ -294,7 +290,9 @@ class HomeController extends ChangeNotifier
     if (_disposed) return;
     // §248/§274 — detour-Направление получает ⚙-префикс (display-only,
     // централизован в displayLabel): маркер «разрешён как detour-мишень».
-    _directionLabels = {for (final c in directions) c.tag: c.displayLabel};
+    _directionLabels = {
+      for (final c in directions) c.tag: c.displayLabel,
+    };
     // §322 — auto-теги всех Направлений (различитель «двойник Направления vs группа»).
     _directionAutoTags = {for (final c in directions) c.autoTag};
     // §208 — auto-теги round_robin-Направлений (для гейта «View pool»).
@@ -308,13 +306,10 @@ class HomeController extends ChangeNotifier
     SelectorInfo.I.setFallbackTags([
       for (final c in directions) ...[c.tag, c.autoTag],
     ]);
-    _emit(
-      _state.copyWith(
-        groupLabels: _directionLabels,
-        directionAutoTags:
-            _directionAutoTags, // §322 — гейт пина в верхнюю секцию
-      ),
-    );
+    _emit(_state.copyWith(
+      groupLabels: _directionLabels,
+      directionAutoTags: _directionAutoTags, // §322 — гейт пина в верхнюю секцию
+    ));
   }
 
   /// §322 — true, если [tag] — auto-двойник НАПРАВЛЕНИЯ (`vpn-N-auto`), а не наша
@@ -432,35 +427,29 @@ class HomeController extends ChangeNotifier
     }
     // §122 — Dart-слушатель ДО старта подписки: иначе первый снапшот ядра
     // придёт при пустом native sink и потеряется.
-    _tailnetSub ??= _cc.tailscaleStatus.listen(
-      (list) {
-        if (_tailnetKey == null) return;
-        // §581 — поток несёт и устройства сети; главному экрану нужны состояние
-        // узла и число устройств (Debug API), перерисовка — только при их смене.
-        // §608 — плюс exit node (имя, доступность) и срок ключа для строки узла.
-        final prev = _state.tailscaleStatus;
-        final same =
-            prev.length == list.length &&
-            list.every((e) {
-              final p = prev[e.tag];
-              return p != null &&
-                  p.backendState == e.backendState &&
-                  p.stateText == e.stateText &&
-                  p.peers.length == e.peers.length &&
-                  p.exitNode?.stableId == e.exitNode?.stableId &&
-                  p.exitNode?.hostName == e.exitNode?.hostName &&
-                  p.exitNode?.online == e.exitNode?.online &&
-                  p.self?.keyExpiry == e.self?.keyExpiry;
-            });
-        if (same) return;
-        _emit(
-          _state.copyWith(tailscaleStatus: {for (final e in list) e.tag: e}),
-        );
-      },
-      onError: (Object e) {
-        _addDebug(DebugSource.app, 'cc tailscale stream error: $e');
-      },
-    );
+    _tailnetSub ??= _cc.tailscaleStatus.listen((list) {
+      if (_tailnetKey == null) return;
+      // §581 — поток несёт и устройства сети; главному экрану нужны состояние
+      // узла и число устройств (Debug API), перерисовка — только при их смене.
+      // §608 — плюс exit node (имя, доступность) и срок ключа для строки узла.
+      final prev = _state.tailscaleStatus;
+      final same = prev.length == list.length &&
+          list.every((e) {
+            final p = prev[e.tag];
+            return p != null &&
+                p.backendState == e.backendState &&
+                p.stateText == e.stateText &&
+                p.peers.length == e.peers.length &&
+                p.exitNode?.stableId == e.exitNode?.stableId &&
+                p.exitNode?.hostName == e.exitNode?.hostName &&
+                p.exitNode?.online == e.exitNode?.online &&
+                p.self?.keyExpiry == e.self?.keyExpiry;
+          });
+      if (same) return;
+      _emit(_state.copyWith(tailscaleStatus: {for (final e in list) e.tag: e}));
+    }, onError: (Object e) {
+      _addDebug(DebugSource.app, 'cc tailscale stream error: $e');
+    });
     if (wasActive) {
       _addDebug(DebugSource.app, 'Tailscale status: resubscribe');
       unawaited(_cc.restartTailscaleStatus());
@@ -506,28 +495,23 @@ class HomeController extends ChangeNotifier
     bool tunnelUp = true,
     List<String>? groups,
     Map<String, Map<String, int>>? delayByDirection,
-  }) => _emit(
-    _state.copyWith(
-      tunnel: tunnelUp ? TunnelStatus.connected : TunnelStatus.disconnected,
-      selectedGroup: group,
-      activeInGroup: activeNode,
-      highlightedNode: activeNode,
-      groups: groups ?? <String>[group],
-      delayByDirection: delayByDirection,
-    ),
-  );
+  }) =>
+      _emit(_state.copyWith(
+        tunnel: tunnelUp ? TunnelStatus.connected : TunnelStatus.disconnected,
+        selectedGroup: group,
+        activeInGroup: activeNode,
+        highlightedNode: activeNode,
+        groups: groups ?? <String>[group],
+        delayByDirection: delayByDirection,
+      ));
 
   void _handleStatusEvent(TunnelStatusEvent event) {
     final tunnel = event.status;
     final prevTunnel = _state.tunnel;
-    _addDebug(
-      DebugSource.core,
-      'status=${event.raw}${event.errorReason != null ? " reason=${event.errorReason}" : ""}',
-    );
-    _addDebug(
-      DebugSource.app,
-      '[vpn] _handleStatusEvent raw="${event.raw}" tunnel=${tunnel.name} prev=${prevTunnel.name} need_restart_before=${_state.configChangedNeedRestart}',
-    );
+    _addDebug(DebugSource.core,
+        'status=${event.raw}${event.errorReason != null ? " reason=${event.errorReason}" : ""}');
+    _addDebug(DebugSource.app,
+        '[vpn] _handleStatusEvent raw="${event.raw}" tunnel=${tunnel.name} prev=${prevTunnel.name} need_restart_before=${_state.configChangedNeedRestart}');
 
     // Все мутации state складываем в **одно** copyWith в конце — было три
     // отдельных _emit (tunnel; then connectedSince+stale; then cleanup-
@@ -537,23 +521,21 @@ class HomeController extends ChangeNotifier
     if (tunnel == TunnelStatus.connected) {
       // Фича 478 — ядро приняло конфиг: сигнальный/финальный старт удался.
       _settleStartOutcome(null);
-      _emit(
-        _state.copyWith(
-          tunnel: tunnel,
-          connectedSince: DateTime.now(),
-          configChangedNeedRestart: false,
-          // §311 — новая сессия ядра → старый снапшот протух; захват ниже.
-          // На ДУБЛЕ connected (broadcast + §187-pull) НЕ сбрасываем: сессия та
-          // же, иначе теряли бы уже захваченный снапшот и слали лишний RPC.
-          runningConfigRaw: prevTunnel == TunnelStatus.connected
-              ? _state.runningConfigRaw
-              : _invalidateRunningConfig(),
-          // §250 — успешный старт = ЕДИНСТВЕННОЕ место очистки lastStartError
-          // (clearError/оптимистичные lastError: null его не трогают).
-          lastStartError: '',
-          lastStartErrorAt: null,
-        ),
-      );
+      _emit(_state.copyWith(
+        tunnel: tunnel,
+        connectedSince: DateTime.now(),
+        configChangedNeedRestart: false,
+        // §311 — новая сессия ядра → старый снапшот протух; захват ниже.
+        // На ДУБЛЕ connected (broadcast + §187-pull) НЕ сбрасываем: сессия та
+        // же, иначе теряли бы уже захваченный снапшот и слали лишний RPC.
+        runningConfigRaw: prevTunnel == TunnelStatus.connected
+            ? _state.runningConfigRaw
+            : _invalidateRunningConfig(),
+        // §250 — успешный старт = ЕДИНСТВЕННОЕ место очистки lastStartError
+        // (clearError/оптимистичные lastError: null его не трогают).
+        lastStartError: '',
+        lastStartErrorAt: null,
+      ));
       // §187 — на cold-start (swipe-reopen) `connected` приходит pull'ом и
       // connectedSince выше = «сейчас», теряя реальное время старта. Подтянуть
       // native-uptime (переживает swipe) и скорректировать назад. Свежий старт →
@@ -573,14 +555,9 @@ class HomeController extends ChangeNotifier
       // (раз connected) → правила те же, что зашиты в running-конфиг.
       // §279 — template даёт live-label'ы preset-правил (локализованный кэш;
       // холодный кэш → fallback на name-снапшоты, relocalize догонит).
-      unawaited(
-        SettingsStorage.getCustomRules().then(
-          (r) => RuleNameResolver.I.setRules(
-            r,
-            template: TemplateLoader.cachedOrNull(),
-          ),
-        ),
-      );
+      unawaited(SettingsStorage.getCustomRules().then((r) =>
+          RuleNameResolver.I
+              .setRules(r, template: TemplateLoader.cachedOrNull())));
       _startHeartbeat();
       _heartbeatFailNotified = false;
       HapticService.I.onVpnConnected();
@@ -601,10 +578,8 @@ class HomeController extends ChangeNotifier
       // error-несущего повтора, который native пропускает.
       if (prevTunnel == TunnelStatus.disconnected ||
           prevTunnel == TunnelStatus.revoked) {
-        _addDebug(
-          DebugSource.app,
-          '[vpn] stale terminal ignored (tunnel=${tunnel.name} prev=${prevTunnel.name})',
-        );
+        _addDebug(DebugSource.app,
+            '[vpn] stale terminal ignored (tunnel=${tunnel.name} prev=${prevTunnel.name})');
         // Обновим только tunnel-статус (revoked поверх disconnected — важно для
         // haptic/UI), но НЕ трогаем groups/nodes/streams.
         if (tunnel != prevTunnel) _emit(_state.copyWith(tunnel: tunnel));
@@ -642,9 +617,8 @@ class HomeController extends ChangeNotifier
       // типу, не по подстрокам. lastError хранит типизированный UiMsg
       // (рендер в build); машинный дубль (Debug API/AppLog) — renderEn().
       final stopReason = StopReason.fromEvent(
-        revoked: tunnel == TunnelStatus.revoked,
-        errorReason: event.errorReason,
-      );
+          revoked: tunnel == TunnelStatus.revoked,
+          errorReason: event.errorReason);
       final reasonEn = stopReason?.renderEn() ?? '';
       // Фича 478 — отказ ядра: отдать его текст ждущей страховке. Берём
       // ДОСЛОВНЫЙ текст native-события, а не отрендеренную строку: разбор
@@ -671,12 +645,10 @@ class HomeController extends ChangeNotifier
           // Пустой reason (чистый user-stop) НЕ затирает предыдущее значение —
           // симметрично поведению lastError строкой выше. Всегда English
           // (wire-поверхность, spec §4.4).
-          lastStartError: reasonEn.isNotEmpty
-              ? reasonEn
-              : _state.lastStartError,
-          lastStartErrorAt: reasonEn.isNotEmpty
-              ? DateTime.now()
-              : _state.lastStartErrorAt,
+          lastStartError:
+              reasonEn.isNotEmpty ? reasonEn : _state.lastStartError,
+          lastStartErrorAt:
+              reasonEn.isNotEmpty ? DateTime.now() : _state.lastStartErrorAt,
           ccGroups: const <CcGroup>[],
           groups: <String>[],
           nodes: <String>[],
@@ -684,8 +656,7 @@ class HomeController extends ChangeNotifier
           traffic: TrafficSnapshot.zero,
           connectedSince: null,
           configChangedNeedRestart: false,
-          runningConfigRaw:
-              _invalidateRunningConfig(), // §311 — running перестал существовать
+          runningConfigRaw: _invalidateRunningConfig(), // §311 — running перестал существовать
           // §557 — без ядра состояний узлов нет; «off» не должен пережить сеанс.
           endpointStates: const <String, String>{},
           endpointIdleSince: const <String, int>{},
@@ -713,16 +684,12 @@ class HomeController extends ChangeNotifier
         AutomationEventEmitter.I.emitVpnRevoked();
         AutomationEventEmitter.I.emitVpnDisconnected('revoked');
       } else if (event.errorReason != null) {
-        AutomationEventEmitter.I.emitVpnError(
-          'tunnel_error',
-          event.errorReason!,
-        );
+        AutomationEventEmitter.I.emitVpnError('tunnel_error', event.errorReason!);
         AutomationEventEmitter.I.emitVpnDisconnected('error');
       } else {
         AutomationEventEmitter.I.emitVpnDisconnected('user');
       }
-    } else if (tunnel == TunnelStatus.stopping ||
-        tunnel == TunnelStatus.connecting) {
+    } else if (tunnel == TunnelStatus.stopping || tunnel == TunnelStatus.connecting) {
       _stopHeartbeat();
       _emit(_state.copyWith(tunnel: tunnel));
       _armTransientTimeout(tunnel);
@@ -786,7 +753,8 @@ class HomeController extends ChangeNotifier
     }
     final byNodes = _connectingTimeoutPerNode * _configNodeCount;
     final base = byNodes > _connectingTimeout ? byNodes : _connectingTimeout;
-    final scaled = base + _connectingTimeoutPerEndpoint * _configEndpointCount;
+    final scaled =
+        base + _connectingTimeoutPerEndpoint * _configEndpointCount;
     return scaled > _connectingTimeoutCap ? _connectingTimeoutCap : scaled;
   }
 
@@ -794,11 +762,11 @@ class HomeController extends ChangeNotifier
   /// `connecting` в мс вместе с числом узлов и endpoint'ов, из которых он
   /// выведен.
   ({int connectingMs, int nodes, int endpoints})
-  get debugEffectiveConnectingTimeout => (
-    connectingMs: _effectiveConnectingTimeout.inMilliseconds,
-    nodes: _configNodeCount,
-    endpoints: _configEndpointCount,
-  );
+      get debugEffectiveConnectingTimeout => (
+            connectingMs: _effectiveConnectingTimeout.inMilliseconds,
+            nodes: _configNodeCount,
+            endpoints: _configEndpointCount,
+          );
 
   /// §596 — ожидание вердикта страховки (фича 478) не короче порога
   /// `connecting`: иначе на большой подписке страховка бросила бы ждать
@@ -816,7 +784,8 @@ class HomeController extends ChangeNotifier
   /// в unit-тесте это стенд, а не предмет проверки). Порог `connecting`
   /// выводится ровно из этого поля, поэтому тесту нужен именно он.
   @visibleForTesting
-  void debugSetConfigRaw(String raw) => _emit(_state.copyWith(configRaw: raw));
+  void debugSetConfigRaw(String raw) =>
+      _emit(_state.copyWith(configRaw: raw));
 
   /// §667 — засеять снапшот работающего конфига (§311) без RPC к ядру: тесты
   /// `saveParsedConfig` проверяют вердикт §324 против известного running.
@@ -846,17 +815,14 @@ class HomeController extends ChangeNotifier
     final endpointsAtArm = _configEndpointCount;
     if (expected == TunnelStatus.connecting) {
       _addDebug(
-        DebugSource.app,
-        '[vpn] connecting timeout armed: ${timeout.inMilliseconds}ms '
-        '(nodes=$_configNodeCount endpoints=$endpointsAtArm)',
-      );
+          DebugSource.app,
+          '[vpn] connecting timeout armed: ${timeout.inMilliseconds}ms '
+          '(nodes=$_configNodeCount endpoints=$endpointsAtArm)');
     }
     _transientTimeoutTimer = Timer(timeout, () async {
       if (_state.tunnel != expected) return;
       _addDebug(
-        DebugSource.app,
-        'Timeout in ${expected.name}, forcing disconnect',
-      );
+          DebugSource.app, 'Timeout in ${expected.name}, forcing disconnect');
       // §129 — таймаут transient-фазы = ядро НЕ отдало Stopped само (зависло
       // вхолостую: detour AWG→WG #2 — tun0 жив, 0 трафика, dial заклинен).
       // Раньше тут был только _emit(disconnected) — UI «disconnected», а
@@ -866,10 +832,7 @@ class HomeController extends ChangeNotifier
       // виснет. forceStopVPN — fire-and-forget. После — синхронизируем UI.
       await _vpn.forceStopVPN();
       if (_disposed) return; // §219 — могли dispose'нуться за await → не эмитим
-      _addDebug(
-        DebugSource.app,
-        '[vpn] forceStopVPN sent (timeout in ${expected.name})',
-      );
+      _addDebug(DebugSource.app, '[vpn] forceStopVPN sent (timeout in ${expected.name})');
       if (_state.tunnel != expected) return;
       // §251 — синтезированный tunnel-down: настоящий Stopped потом проглотит
       // stale-terminal guard, его clearSelected недостижим — чистим здесь.
@@ -885,39 +848,32 @@ class HomeController extends ChangeNotifier
       final timedOutStart = expected == TunnelStatus.connecting;
       final reason = timedOutStart
           ? StopStartTimeout(
-              seconds: timeout.inSeconds,
-              endpoints: endpointsAtArm,
-            )
+              seconds: timeout.inSeconds, endpoints: endpointsAtArm)
           : null;
       if (reason != null) {
         _addDebug(DebugSource.app, reason.renderEn());
       }
       _disabledEndpoints.clear(); // §557 — сеанс VPN кончился (А1)
-      _emit(
-        _state.copyWith(
-          tunnel: TunnelStatus.disconnected,
-          lastError: reason != null
-              ? StopReasonMsg(reason)
-              : const ErrMsg(ErrKey.connectionTimedOut),
-          stopReason: reason ?? _state.stopReason,
-          // §250 — машинный дубль для Debug API/дампа: всегда English.
-          lastStartError: reason?.renderEn() ?? _state.lastStartError,
-          lastStartErrorAt: reason != null
-              ? DateTime.now()
-              : _state.lastStartErrorAt,
-          ccGroups: const <CcGroup>[],
-          groups: <String>[],
-          nodes: <String>[],
-          traffic: TrafficSnapshot.zero,
-          connectedSince: null,
-          configChangedNeedRestart: false,
-          runningConfigRaw:
-              _invalidateRunningConfig(), // §311 — синтезированный down
-          // §557 — без ядра состояний узлов нет; «off» не должен пережить сеанс.
-          endpointStates: const <String, String>{},
-          endpointIdleSince: const <String, int>{},
-        ),
-      );
+      _emit(_state.copyWith(
+        tunnel: TunnelStatus.disconnected,
+        lastError: reason != null
+            ? StopReasonMsg(reason)
+            : const ErrMsg(ErrKey.connectionTimedOut),
+        stopReason: reason ?? _state.stopReason,
+        // §250 — машинный дубль для Debug API/дампа: всегда English.
+        lastStartError: reason?.renderEn() ?? _state.lastStartError,
+        lastStartErrorAt: reason != null ? DateTime.now() : _state.lastStartErrorAt,
+        ccGroups: const <CcGroup>[],
+        groups: <String>[],
+        nodes: <String>[],
+        traffic: TrafficSnapshot.zero,
+        connectedSince: null,
+        configChangedNeedRestart: false,
+        runningConfigRaw: _invalidateRunningConfig(), // §311 — синтезированный down
+        // §557 — без ядра состояний узлов нет; «off» не должен пережить сеанс.
+        endpointStates: const <String, String>{},
+        endpointIdleSince: const <String, int>{},
+      ));
       // Фича 478 — страховка ждёт вердикта старта; таймаут — тоже вердикт.
       // Без этого completer висел до своих 45с, а узел не выключался.
       if (timedOutStart) _settleStartOutcome(reason!.renderEn());
@@ -1046,7 +1002,9 @@ class HomeController extends ChangeNotifier
   /// Фича 478 — реальный старт ядра с ожиданием вердикта. `null` — принято;
   /// строка — текст отказа ядра (её разбирает PARSING_PRINCIPLES §9). Таймаут отдаёт
   /// пустую строку: ответить нечем, страховка деградирует консервативно.
-  Future<String?> startAndAwaitVerdict({Duration? timeout}) async {
+  Future<String?> startAndAwaitVerdict({
+    Duration? timeout,
+  }) async {
     final effectiveTimeout = timeout ?? _startVerdictTimeout;
     final existing = _startOutcome;
     if (existing != null && !existing.isCompleted) {
@@ -1066,24 +1024,23 @@ class HomeController extends ChangeNotifier
       _settleStartOutcome(_state.lastError!.renderEn());
       return c.future;
     }
-    return c.future.timeout(
-      effectiveTimeout,
-      onTimeout: () {
-        // Завершаем ИМЕННО этот completer: иначе join-ожидающий висит, а
-        // поздний Stopped не выключит узел; чужой (новый) _startOutcome не трогаем.
-        if (!c.isCompleted) {
-          if (_startOutcome == c) _startOutcome = null;
-          c.complete('');
-        }
-        return '';
-      },
-    );
+    return c.future.timeout(effectiveTimeout, onTimeout: () {
+      // Завершаем ИМЕННО этот completer: иначе join-ожидающий висит, а
+      // поздний Stopped не выключит узел; чужой (новый) _startOutcome не трогаем.
+      if (!c.isCompleted) {
+        if (_startOutcome == c) _startOutcome = null;
+        c.complete('');
+      }
+      return '';
+    });
   }
 
   /// §494 — ожидание вердикта headless-старта (`startVpnHeadless`). Тот же
   /// completer, что [startAndAwaitVerdict], но без Activity: для
   /// `POST /action/start-vpn-headless?guard=true`.
-  Future<String?> startAndAwaitVerdictHeadless({Duration? timeout}) async {
+  Future<String?> startAndAwaitVerdictHeadless({
+    Duration? timeout,
+  }) async {
     final effectiveTimeout = timeout ?? _startVerdictTimeout;
     final existing = _startOutcome;
     if (existing != null && !existing.isCompleted) {
@@ -1102,16 +1059,13 @@ class HomeController extends ChangeNotifier
       _settleStartOutcome(null);
       return null;
     }
-    return c.future.timeout(
-      effectiveTimeout,
-      onTimeout: () {
-        if (!c.isCompleted) {
-          if (_startOutcome == c) _startOutcome = null;
-          c.complete('');
-        }
-        return '';
-      },
-    );
+    return c.future.timeout(effectiveTimeout, onTimeout: () {
+      if (!c.isCompleted) {
+        if (_startOutcome == c) _startOutcome = null;
+        c.complete('');
+      }
+      return '';
+    });
   }
 
   Future<bool> _startInternal() async {
@@ -1131,9 +1085,7 @@ class HomeController extends ChangeNotifier
     try {
       final ok = await _startInternal();
       if (!ok) {
-        _emit(
-          _state.copyWith(lastError: const ErrMsg(ErrKey.failedToStartVpn)),
-        );
+        _emit(_state.copyWith(lastError: const ErrMsg(ErrKey.failedToStartVpn)));
       }
     } catch (e) {
       _emit(_state.copyWith(lastError: formatUserError(e)));
@@ -1207,11 +1159,8 @@ class HomeController extends ChangeNotifier
       _lastReloadTap = prevReloadTap; // откат cooldown
       _addDebug(DebugSource.app, '[vpn] reload error: $e');
       if (!_disposed) {
-        _emit(
-          _state.copyWith(
-            lastError: PrefixedMsg(ErrPrefix.reloadFailed, formatUserError(e)),
-          ),
-        );
+        _emit(_state.copyWith(
+            lastError: PrefixedMsg(ErrPrefix.reloadFailed, formatUserError(e))));
       }
       return;
     }
@@ -1297,9 +1246,11 @@ class HomeController extends ChangeNotifier
     if (!canReload) {
       if (_state.tunnel == TunnelStatus.connected && _lastReloadTap != null) {
         _scheduleAutoApplyRetry();
-        AppLog.I.warning('§338: reload skipped — cooldown, retry scheduled');
+        AppLog.I.warning(
+            '§338: reload skipped — cooldown, retry scheduled');
       } else {
-        AppLog.I.warning('§338: reload skipped — not connected, banner stays');
+        AppLog.I.warning(
+            '§338: reload skipped — not connected, banner stays');
       }
       return false;
     }
@@ -1321,8 +1272,7 @@ class HomeController extends ChangeNotifier
 
   /// §667 — тестовый мост: ждёт ли повтор авто-применения.
   @visibleForTesting
-  bool get autoApplyRetryPendingForTesting =>
-      _autoApplyRetry?.isActive ?? false;
+  bool get autoApplyRetryPendingForTesting => _autoApplyRetry?.isActive ?? false;
 
   void _scheduleAutoApplyRetry() {
     if (_autoApplyRetry?.isActive ?? false) return;
@@ -1359,8 +1309,7 @@ class HomeController extends ChangeNotifier
   ///
   /// Если туннель уже down — просто делегируем в `start()`.
   Future<void> reconnect() async {
-    final wasUp =
-        _state.tunnel == TunnelStatus.connected ||
+    final wasUp = _state.tunnel == TunnelStatus.connected ||
         _state.tunnel == TunnelStatus.connecting;
     if (!wasUp) {
       await start();
@@ -1370,19 +1319,14 @@ class HomeController extends ChangeNotifier
     try {
       final stopped = await _stopInternal();
       if (!stopped) {
-        _emit(
-          _state.copyWith(
-            lastError: const ErrMsg(ErrKey.stopTimedOutReconnectAborted),
-          ),
-        );
+        _emit(_state.copyWith(
+            lastError: const ErrMsg(ErrKey.stopTimedOutReconnectAborted)));
         _addDebug(DebugSource.app, 'reconnect: stop timed out, aborting start');
         return;
       }
       final started = await _startInternal();
       if (!started) {
-        _emit(
-          _state.copyWith(lastError: const ErrMsg(ErrKey.failedToStartVpn)),
-        );
+        _emit(_state.copyWith(lastError: const ErrMsg(ErrKey.failedToStartVpn)));
       }
     } catch (e) {
       _emit(_state.copyWith(lastError: formatUserError(e)));
@@ -1427,18 +1371,12 @@ class HomeController extends ChangeNotifier
     // Иначе race: connectScreen() поднимает screenClient, ядро эмитит РАЗОВЫЙ
     // снапшот groups до того как Dart-подписка успела встать → снапшот
     // отбрасывается (sink ещё null) → «главный экран пустой при старте».
-    _ccStatusSub = _cc.status.listen(
-      _onCcStatus,
-      onError: (Object e) {
-        _addDebug(DebugSource.app, 'cc status stream error: $e');
-      },
-    );
-    _ccGroupsSub = _cc.groups.listen(
-      _onCcGroups,
-      onError: (Object e) {
-        _addDebug(DebugSource.app, 'cc groups stream error: $e');
-      },
-    );
+    _ccStatusSub = _cc.status.listen(_onCcStatus, onError: (Object e) {
+      _addDebug(DebugSource.app, 'cc status stream error: $e');
+    });
+    _ccGroupsSub = _cc.groups.listen(_onCcGroups, onError: (Object e) {
+      _addDebug(DebugSource.app, 'cc groups stream error: $e');
+    });
     // §185 — cold-start после swipe-keep: native screenRefs протух (PERSISTENT
     // поле CC, пережил swipe; Dart-движок умер без disconnectScreen). Сбросить
     // refcount/паузу + закрыть осиротевший screen/profiler-клиент ПЕРЕД
@@ -1541,18 +1479,14 @@ class HomeController extends ChangeNotifier
         // от СТАРОГО box'а, коммитить нельзя. Свой захват уже запущен новой
         // сессией — эта петля просто уходит.
         if (epoch != _runningConfigEpoch) {
-          _addDebug(
-            DebugSource.app,
-            '[cc] running config dropped (epoch $epoch → $_runningConfigEpoch)',
-          );
+          _addDebug(DebugSource.app,
+              '[cc] running config dropped (epoch $epoch → $_runningConfigEpoch)');
           return;
         }
         if (raw != null && raw != staleRaw) {
           _emit(_state.copyWith(runningConfigRaw: raw));
-          _addDebug(
-            DebugSource.app,
-            '[cc] running config captured (${raw.length} bytes)',
-          );
+          _addDebug(DebugSource.app,
+              '[cc] running config captured (${raw.length} bytes)');
           _reapplyDisabledEndpoints(); // §557 — новый box стартовал
           return;
         }
@@ -1568,16 +1502,12 @@ class HomeController extends ChangeNotifier
       // «Config changed» становится неснимаемой (device-verified на эмуляторе).
       if (echoedRaw != null && epoch == _runningConfigEpoch && !_disposed) {
         _emit(_state.copyWith(runningConfigRaw: echoedRaw));
-        _addDebug(
-          DebugSource.app,
-          '[cc] running config unchanged after reload (${echoedRaw.length} bytes)',
-        );
+        _addDebug(DebugSource.app,
+            '[cc] running config unchanged after reload (${echoedRaw.length} bytes)');
         _reapplyDisabledEndpoints(); // §557 — новый box стартовал
       } else if (!_disposed) {
-        _addDebug(
-          DebugSource.app,
-          '[cc] running config unavailable after $_groupsPullMaxAttempts attempts',
-        );
+        _addDebug(DebugSource.app,
+            '[cc] running config unavailable after $_groupsPullMaxAttempts attempts');
       }
     } finally {
       _fetchingRunningConfig = false;
@@ -1589,8 +1519,7 @@ class HomeController extends ChangeNotifier
   // шагами, ПОКА не получим снапшот. Не «N попыток и сдаёмся»: pull дешёвый и
   // детерминированный, тянем до успеха либо до ухода из connected.
   static const _groupsPullStep = Duration(milliseconds: 400);
-  static const _groupsPullMaxAttempts =
-      12; // ~5с суммарно — щедрый STARTED- window
+  static const _groupsPullMaxAttempts = 12; // ~5с суммарно — щедрый STARTED- window
 
   void _startGroupsPull([int attempt = 0]) {
     _groupsPullTimer?.cancel();
@@ -1605,27 +1534,20 @@ class HomeController extends ChangeNotifier
         if (attempt + 1 < _groupsPullMaxAttempts) {
           _startGroupsPull(attempt + 1);
         } else {
-          _addDebug(
-            DebugSource.app,
-            '[cc] getGroups still unavailable after $_groupsPullMaxAttempts attempts',
-          );
+          _addDebug(DebugSource.app,
+              '[cc] getGroups still unavailable after $_groupsPullMaxAttempts attempts');
         }
         return;
       }
       if (groups.isEmpty) {
         // STARTED, но групп реально нет (конфиг без selector'ов) — применим как
         // есть (один раз), повторно не тянем.
-        _addDebug(
-          DebugSource.app,
-          '[cc] getGroups → empty (no selector groups)',
-        );
+        _addDebug(DebugSource.app, '[cc] getGroups → empty (no selector groups)');
         _applyGroups(groups);
         return;
       }
-      _addDebug(
-        DebugSource.app,
-        '[cc] getGroups pull → ${groups.length} groups',
-      );
+      _addDebug(DebugSource.app,
+          '[cc] getGroups pull → ${groups.length} groups');
       _applyGroups(groups);
     });
   }
@@ -1672,8 +1594,7 @@ class HomeController extends ChangeNotifier
     // Ровно те же карты — не будим UI лишним emit'ом (тик идёт каждые 5 с).
     final prev = _state.endpointStates;
     final prevIdle = _state.endpointIdleSince;
-    final prevCore =
-        _state.delayByDirection[HomeState.coreDirection] ??
+    final prevCore = _state.delayByDirection[HomeState.coreDirection] ??
         const <String, int>{};
     if (next.length == prev.length &&
         next.entries.every((e) => prev[e.key] == e.value) &&
@@ -1689,13 +1610,11 @@ class HomeController extends ChangeNotifier
     } else {
       delays[HomeState.coreDirection] = core;
     }
-    _emit(
-      _state.copyWith(
-        endpointStates: next,
-        endpointIdleSince: idle,
-        delayByDirection: delays,
-      ),
-    );
+    _emit(_state.copyWith(
+      endpointStates: next,
+      endpointIdleSince: idle,
+      delayByDirection: delays,
+    ));
   }
 
   /// §557 (ядро SPEC 106) — теги WG/AWG-узлов, выключенных пользователем в
@@ -1719,10 +1638,8 @@ class HomeController extends ChangeNotifier
       st = await _cc.setEndpointEnabled(tag, enabled);
     } on PlatformException catch (e) {
       if (enabled && e.code != 'not_found') _disabledEndpoints.add(tag);
-      _addDebug(
-        DebugSource.app,
-        '[cc] setEndpointEnabled($tag, $enabled) → ${e.code}: ${e.message}',
-      );
+      _addDebug(DebugSource.app,
+          '[cc] setEndpointEnabled($tag, $enabled) → ${e.code}: ${e.message}');
       return e.code;
     } on MissingPluginException {
       if (enabled) _disabledEndpoints.add(tag);
@@ -1766,10 +1683,8 @@ class HomeController extends ChangeNotifier
         if (e.code == 'not_found' || e.code == 'invalid_argument') {
           _disabledEndpoints.remove(tag);
         }
-        _addDebug(
-          DebugSource.app,
-          '[cc] re-disable $tag → ${e.code}: ${e.message}',
-        );
+        _addDebug(DebugSource.app,
+            '[cc] re-disable $tag → ${e.code}: ${e.message}');
       } on MissingPluginException {
         return;
       }
@@ -1813,21 +1728,19 @@ class HomeController extends ChangeNotifier
       return;
     }
     _lastTrafficEmitAt = now;
-    _emit(
-      _state.copyWith(
-        traffic: TrafficSnapshot(
-          uploadTotal: s.uplinkTotal,
-          downloadTotal: s.downlinkTotal,
-          activeConnections: s.connectionsIn + s.connectionsOut,
-          connectionsIn: s.connectionsIn, // §194 — раздельно для шапки ↑In ↓Out
-          connectionsOut: s.connectionsOut,
-          memory: s.memory,
-          // byRule/byApp — из connections-стрима (stats-экран), не из status.
-          byRule: _state.traffic.byRule,
-          byApp: _state.traffic.byApp,
-        ),
+    _emit(_state.copyWith(
+      traffic: TrafficSnapshot(
+        uploadTotal: s.uplinkTotal,
+        downloadTotal: s.downlinkTotal,
+        activeConnections: s.connectionsIn + s.connectionsOut,
+        connectionsIn: s.connectionsIn, // §194 — раздельно для шапки ↑In ↓Out
+        connectionsOut: s.connectionsOut,
+        memory: s.memory,
+        // byRule/byApp — из connections-стрима (stats-экран), не из status.
+        byRule: _state.traffic.byRule,
+        byApp: _state.traffic.byApp,
       ),
-    );
+    ));
   }
 
   /// §2.4 — снапшот дерева групп из CommandClient. Кладём в `state.ccGroups`
@@ -1847,10 +1760,8 @@ class HomeController extends ChangeNotifier
     // push'ей и при наличии pull (не «обезьянье тыканье»: пустых групп при
     // connected не бывает).
     if (groups.isEmpty && _state.ccGroups.isNotEmpty) {
-      _addDebug(
-        DebugSource.app,
-        '[cc] empty groups push ignored (have ${_state.ccGroups.length} live)',
-      );
+      _addDebug(DebugSource.app,
+          '[cc] empty groups push ignored (have ${_state.ccGroups.length} live)');
       return;
     }
     _applyGroups(groups);
@@ -1893,13 +1804,8 @@ class HomeController extends ChangeNotifier
       }
     }
 
-    _emit(
-      next.copyWith(
-        groups: groups,
-        groupLabels: _directionLabels,
-        selectedGroup: initial,
-      ),
-    );
+    _emit(next.copyWith(
+        groups: groups, groupLabels: _directionLabels, selectedGroup: initial));
     unawaited(applyGroup(initial));
     // §355 — выбор групп сменился → пересчитать граф зависимостей (мёртвая
     // нода могла стать/перестать быть корнем беды через выбор Направления).
@@ -1971,7 +1877,8 @@ class HomeController extends ChangeNotifier
       }
       if (banner != null) break;
     }
-    final hasDnsVictims = sick.values.any((list) => list.any((d) => d.isDns));
+    final hasDnsVictims =
+        sick.values.any((list) => list.any((d) => d.isDns));
     if (banner != null) {
       _addDebug(DebugSource.app, banner.renderEn());
       _emit(_state.copyWith(sickRoots: sick, lastError: banner));
@@ -2028,7 +1935,11 @@ class HomeController extends ChangeNotifier
     final nodes = group.items.map((e) => e.tag).toList();
     final now = group.selected.isEmpty ? null : group.selected;
     _emit(
-      _state.copyWith(nodes: nodes, activeInGroup: now, highlightedNode: now),
+      _state.copyWith(
+        nodes: nodes,
+        activeInGroup: now,
+        highlightedNode: now,
+      ),
     );
     // §047 Шаг 2 — mirror в native-кеш: активная нода/группа (для condition-
     // плагина) + списки нод текущей группы и всех групп (для Spinner'а выбора
@@ -2115,21 +2026,14 @@ class HomeController extends ChangeNotifier
       onMemberSelected?.call(group, nodeTag);
       // §047 — outgoing state event (gated, default OFF). reason=user: явный
       // выбор ноды (через UI или automation SWITCH_NODE — оба идут сюда).
-      AutomationEventEmitter.I.emitNodeChanged(
-        prevNode,
-        nodeTag,
-        group,
-        'user',
-      );
+      AutomationEventEmitter.I
+          .emitNodeChanged(prevNode, nodeTag, group, 'user');
       // §047 Шаг 2 — mirror в native-кеш для Locale condition-плагина.
       BoxVpnClient.I.setAutomationActiveState(node: nodeTag, group: group);
       return true;
     } catch (e) {
-      _emit(
-        _state.copyWith(
-          lastError: PrefixedMsg(ErrPrefix.switchFailed, formatUserError(e)),
-        ),
-      );
+      _emit(_state.copyWith(
+          lastError: PrefixedMsg(ErrPrefix.switchFailed, formatUserError(e))));
       _addDebug(DebugSource.app, 'Node switch error: $e');
       return false;
     } finally {
@@ -2150,13 +2054,11 @@ class HomeController extends ChangeNotifier
     final prevGroup = _state.selectedGroup;
     // §070: bump cache gen — group switch = новый pool, sort заново.
     // Задача 579 — выбор настоящего направления уводит с NETWORKS.
-    _emit(
-      _state.copyWith(
-        selectedGroup: group,
-        pingBatchGen: _state.pingBatchGen + 1,
-        networksOpen: false,
-      ),
-    );
+    _emit(_state.copyWith(
+      selectedGroup: group,
+      pingBatchGen: _state.pingBatchGen + 1,
+      networksOpen: false,
+    ));
     // §047 — outgoing state event (gated, default OFF). Эмитим только на
     // реальную смену группы (не повторный select той же).
     if (group != null && group != prevGroup) {
@@ -2187,8 +2089,7 @@ class HomeController extends ChangeNotifier
   /// §100 — персист текущего режима + manual-порядка в `lxbox_settings.json`.
   void _persistSort() {
     unawaited(
-      SettingsStorage.setNodeSort(_state.sortMode.name, _state.manualOrder),
-    );
+        SettingsStorage.setNodeSort(_state.sortMode.name, _state.manualOrder));
   }
 
   // §070 — sort options setters (per-session toggle'ы).
@@ -2213,12 +2114,10 @@ class HomeController extends ChangeNotifier
   /// [newOrder] — полный non-pinned порядок (без direct/auto если они pinned).
   /// Заодно переключает sortMode на `manual`.
   void commitManualReorder(List<String> newOrder) {
-    _emit(
-      _state.copyWith(
-        sortMode: NodeSortMode.manual,
-        manualOrder: List<String>.unmodifiable(newOrder),
-      ),
-    );
+    _emit(_state.copyWith(
+      sortMode: NodeSortMode.manual,
+      manualOrder: List<String>.unmodifiable(newOrder),
+    ));
     _persistSort(); // §100 — сохранить порядок ручной сортировки
   }
 
@@ -2272,10 +2171,8 @@ class HomeController extends ChangeNotifier
     try {
       final native = await _vpn.getVpnStatus();
       if (native != _state.tunnel) {
-        _addDebug(
-          DebugSource.app,
-          '[vpn] onAppResumed: divergence native=${native.name} state=${_state.tunnel.name} — re-sync',
-        );
+        _addDebug(DebugSource.app,
+            '[vpn] onAppResumed: divergence native=${native.name} state=${_state.tunnel.name} — re-sync');
         _handleStatusEvent(TunnelStatusEvent(status: native, raw: native.name));
       }
     } catch (e) {
@@ -2295,10 +2192,8 @@ class HomeController extends ChangeNotifier
       // (§141/§164, экономия батареи). Пишем в лог явный маркер, чтобы «тишина»
       // после сна не читалась как сбой, и взводим грейс — первый heartbeat-тик
       // не штрафуем, ждём восстановления стрима.
-      _addDebug(
-        DebugSource.app,
-        'Resumed from background — re-syncing tunnel (heartbeat/streams were paused)',
-      );
+      _addDebug(DebugSource.app,
+          'Resumed from background — re-syncing tunnel (heartbeat/streams were paused)');
       _skipNextHeartbeatFail = true;
       _startHeartbeat();
       unawaited(_checkHeartbeat());

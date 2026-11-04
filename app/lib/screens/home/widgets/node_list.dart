@@ -49,7 +49,8 @@ bool showAddServerGuide({
   required bool configEmpty,
   required int configNodeCount,
   required bool anyServerNodes,
-}) => !tunnelUp && (configEmpty || (configNodeCount == 0 && !anyServerNodes));
+}) =>
+    !tunnelUp && (configEmpty || (configNodeCount == 0 && !anyServerNodes));
 
 /// §537 — порог широкого окна для двух колонок списка узлов (issue #134).
 /// 600 dp — граница Material «compact → medium»: телефон в портрете остаётся
@@ -68,9 +69,10 @@ int nodeListColumnCount(
   double width, {
   required bool isManual,
   bool twoColumnsEnabled = true,
-}) => (twoColumnsEnabled && !isManual && width >= kNodeListTwoColumnsMinWidth)
-    ? 2
-    : 1;
+}) =>
+    (twoColumnsEnabled && !isManual && width >= kNodeListTwoColumnsMinWidth)
+        ? 2
+        : 1;
 
 /// Node-list секция главного экрана.
 ///
@@ -169,20 +171,15 @@ class HomeNodeList extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    Icons.dns_outlined,
-                    size: 48,
-                    color: cs.onSurfaceVariant.withAlpha(120),
-                  ),
+                  Icon(Icons.dns_outlined,
+                      size: 48, color: cs.onSurfaceVariant.withAlpha(120)),
                   const SizedBox(height: 12),
                   Text(
-                    getLocalText.s(
-                      "No nodes in this direction.\nTry another one.",
-                    ),
+                    getLocalText.s("No nodes in this direction.\nTry another one."),
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: cs.onSurfaceVariant,
-                    ),
+                          color: cs.onSurfaceVariant,
+                        ),
                   ),
                 ],
               ),
@@ -192,8 +189,7 @@ class HomeNodeList extends StatelessWidget {
       }
       // Конфиг есть, не подключены — большая кликабельная Start-зона.
       // Тап = тот же путь что и FilledButton Start в _buildControls.
-      final canStart =
-          !state.busy &&
+      final canStart = !state.busy &&
           state.tunnel != TunnelStatus.connecting &&
           state.tunnel != TunnelStatus.stopping;
       return Expanded(
@@ -209,26 +205,20 @@ class HomeNodeList extends StatelessWidget {
                     }
                   : null,
               child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 16,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      Icons.play_circle_outline,
-                      size: 64,
-                      color: cs.primary,
-                    ),
+                    Icon(Icons.play_circle_outline,
+                        size: 64, color: cs.primary),
                     const SizedBox(height: 12),
                     Text(
                       getLocalText.s("Tap to connect"),
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: cs.primary,
-                        fontWeight: FontWeight.w600,
-                      ),
+                            color: cs.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
                     ),
                   ],
                 ),
@@ -253,11 +243,10 @@ class HomeNodeList extends StatelessWidget {
               sourceOptions: data.sourceOptions,
               // §195 — 💾 показываем только когда активное Направление валиден
               // (selectedGroup ∈ groups). Иначе некуда сохранять → null скрывает.
-              onSaveRegex:
-                  (state.selectedGroup != null &&
+              onSaveRegex: (state.selectedGroup != null &&
                       state.groups.contains(state.selectedGroup))
                   ? (pattern, invert) =>
-                        _saveRegexToDirection(context, pattern, invert)
+                      _saveRegexToDirection(context, pattern, invert)
                   : null,
             ),
           Expanded(
@@ -306,19 +295,14 @@ class HomeNodeList extends StatelessWidget {
   /// узла (как «View details»), выбора узла и замера задержки нет; на месте
   /// задержки — состояние узла из потока ядра.
   Widget _buildNetworksList(BuildContext context) {
-    final dividerColor = Theme.of(
-      context,
-    ).colorScheme.outlineVariant.withAlpha(128);
+    final dividerColor =
+        Theme.of(context).colorScheme.outlineVariant.withAlpha(128);
     final model = state.activeModel;
     final tags = state.networksNodes;
-    void openDetails(String tag) => viewOutboundJson(
-      context,
-      tag,
-      state,
-      subController: subController,
-      homeController: controller,
-      openNetwork: true,
-    );
+    void openDetails(String tag) => viewOutboundJson(context, tag, state,
+        subController: subController,
+        homeController: controller,
+        openNetwork: true);
     return Expanded(
       child: ListView.builder(
         key: const ValueKey('networks-list'),
@@ -409,9 +393,8 @@ class HomeNodeList extends StatelessWidget {
       pinnedCount++;
     }
 
-    final dividerColor = Theme.of(
-      context,
-    ).colorScheme.outlineVariant.withAlpha(128);
+    final dividerColor =
+        Theme.of(context).colorScheme.outlineVariant.withAlpha(128);
 
     // §098 — видимый grab-strip (как в routing) показываем ТОЛЬКО в ручной
     // сортировке. В остальных режимах drag-аффорданс — прежний transparent
@@ -443,13 +426,11 @@ class HomeNodeList extends StatelessWidget {
             .viewSortedNodes(state)
             .where((t) => !pinnedTags.contains(t))
             .toList();
-        controller.commitManualReorder(
-          mergeManualReorder(
-            fullOrder: fullOrder,
-            visibleReordered: restOnly,
-            moved: moved,
-          ),
-        );
+        controller.commitManualReorder(mergeManualReorder(
+          fullOrder: fullOrder,
+          visibleReordered: restOnly,
+          moved: moved,
+        ));
       },
       itemBuilder: (ctx, i) {
         final tag = displayList[i];
@@ -535,9 +516,8 @@ class HomeNodeList extends StatelessWidget {
     required Set<String> matchingSet,
     required Map<String, List<NodeWarning>> warningsByTag,
   }) {
-    final dividerColor = Theme.of(
-      context,
-    ).colorScheme.outlineVariant.withAlpha(128);
+    final dividerColor =
+        Theme.of(context).colorScheme.outlineVariant.withAlpha(128);
     final rows = (displayList.length + columns - 1) ~/ columns;
     return ListView.builder(
       controller: scrollController,
@@ -557,21 +537,18 @@ class HomeNodeList extends StatelessWidget {
                   dividerColor: dividerColor,
                 )
               : const SizedBox.shrink();
-          cells.add(
-            Expanded(
-              child: c < columns - 1
-                  // Вертикальный разделитель между колонками.
-                  ? DecoratedBox(
-                      decoration: BoxDecoration(
-                        border: Border(
-                          right: BorderSide(color: dividerColor, width: 1),
-                        ),
-                      ),
-                      child: cell,
-                    )
-                  : cell,
-            ),
-          );
+          cells.add(Expanded(
+            child: c < columns - 1
+                // Вертикальный разделитель между колонками.
+                ? DecoratedBox(
+                    decoration: BoxDecoration(
+                      border: Border(
+                          right: BorderSide(color: dividerColor, width: 1)),
+                    ),
+                    child: cell,
+                  )
+                : cell,
+          ));
         }
         return IntrinsicHeight(
           key: ValueKey('node-row-${displayList[r * columns]}'),
@@ -607,8 +584,8 @@ class HomeNodeList extends StatelessWidget {
     final protoSrc = cache.protocolOf(tag) != null
         ? tag
         : (urltestNow != null && cache.protocolOf(urltestNow) != null
-              ? urltestNow
-              : null);
+            ? urltestNow
+            : null);
     final protoSrcNode = protoSrc != null ? cache[protoSrc] : null;
     final protoType = protoSrc != null ? cache.protocolOf(protoSrc) : null;
     final transport = protoSrcNode?.transportLabel;
@@ -632,8 +609,7 @@ class HomeNodeList extends StatelessWidget {
         ? state.openConnect.endpoints[tag]
         : null;
     final ocRow = openConnectRowState(openConnect);
-    final ocTap =
-        ocRow.kind == OpenConnectRowKind.waiting &&
+    final ocTap = ocRow.kind == OpenConnectRowKind.waiting &&
             openConnect?.challenge != null &&
             onOpenConnectTap != null
         ? () => onOpenConnectTap!(tag)
@@ -645,7 +621,9 @@ class HomeNodeList extends StatelessWidget {
     );
     final row = DecoratedBox(
       decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: dividerColor, width: 1)),
+        border: Border(
+          bottom: BorderSide(color: dividerColor, width: 1),
+        ),
       ),
       child: NodeRow(
         item: NodeViewItem(
@@ -665,7 +643,8 @@ class HomeNodeList extends StatelessWidget {
           // §322 — у round_robin одного «выбранного» нет: трафик
           // раскладывается по пулу. Стрелку не рисуем — вместо неё
           // значки живого пула в метке.
-          urltestNow: cache.rawOf(tag)?['balancer'] != null ? null : urltestNow,
+          urltestNow:
+              cache.rawOf(tag)?['balancer'] != null ? null : urltestNow,
           hasDetour: cache[tag]?.detour != null,
           outboundType: outboundType, // §125 — точный тип из конфига
           notificationWarnings: notificationWarnings,
@@ -679,8 +658,9 @@ class HomeNodeList extends StatelessWidget {
           // ядра («SOCKS», issue #191). Метка та же, что у узла автовыбора.
           autoGroupLabel:
               isDirectionAuto && cache.rawOf(tag)?['balancer'] == null
-              ? null
-              : _autoLabelWithBadges(controller, subController, cache, tag),
+                  ? null
+                  : _autoLabelWithBadges(
+                      controller, subController, cache, tag),
           protocolLabel: protoType == null
               ? (showDirLabel ? tag : null)
               : [
@@ -709,22 +689,17 @@ class HomeNodeList extends StatelessWidget {
         onPing: () => unawaited(controller.runNodeUrltest(tag)),
         // §466 — copyNodeUri стал async (диалог подтверждения у узла с
         // приватным ключом в ссылке); пункт меню — VoidCallback.
-        onCopyUri: () => unawaited(copyNodeUri(context, tag, subController)),
-        onViewJson: () => viewOutboundJson(
-          context,
-          tag,
-          state,
-          subController: subController,
-          homeController: controller,
-        ),
+        onCopyUri: () =>
+            unawaited(copyNodeUri(context, tag, subController)),
+        onViewJson: () => viewOutboundJson(context, tag, state,
+            subController: subController, homeController: controller),
         onRunUrltest: isUrltestGroup
             ? () => unawaited(controller.runGroupUrltest(tag))
             : null,
         // §203 — для auto/urltest-ноды с текущим выбором: «перейти к
         // выбранному серверу» (подсветка + scroll). Иначе null → пункт скрыт.
-        onSelectServer: urltestNow != null
-            ? () => onSelectServer(urltestNow)
-            : null,
+        onSelectServer:
+            urltestNow != null ? () => onSelectServer(urltestNow) : null,
         // §208 — «View pool» только для auto-ноды round_robin-Направления
         // (у least_test пула нет). tag здесь = auto-тег группы.
         onViewPool: (isUrltestGroup && controller.isRoundRobinAuto(tag))
@@ -736,17 +711,13 @@ class HomeNodeList extends StatelessWidget {
         // состояние (значит, узел — endpoint) и туннель поднят.
         onToggleEndpoint:
             state.tunnelUp && (state.endpointStates[tag] ?? '').isNotEmpty
-            ? () => unawaited(toggleEndpoint(context, controller, tag))
-            : null,
+                ? () => unawaited(toggleEndpoint(context, controller, tag))
+                : null,
         onSickTap: state.sickRoots.containsKey(tag)
-            ? () => viewOutboundJson(
-                context,
-                tag,
-                state,
+            ? () => viewOutboundJson(context, tag, state,
                 subController: subController,
                 homeController: controller,
-                openDependents: true,
-              )
+                openDependents: true)
             : null,
         onOpenConnectTap: ocTap,
       ),
@@ -762,10 +733,7 @@ class HomeNodeList extends StatelessWidget {
   /// может доредактировать и сохранить явно. Результат применяем здесь (на
   /// главной нет routing-стейта, который пишет direction-edit).
   Future<void> _saveRegexToDirection(
-    BuildContext context,
-    String pattern,
-    bool invert,
-  ) async {
+      BuildContext context, String pattern, bool invert) async {
     final tag = state.selectedGroup;
     if (tag == null) return;
     final directions = await SettingsStorage.getDirections();
@@ -817,9 +785,8 @@ class HomeNodeList extends StatelessWidget {
       initial: seeded,
       canDelete: !direction.isRequired,
       // §674 — пул от сборщика, как в Routing: превью без туннеля.
-      nodePool: directionPoolPreview([
-        for (final e in subController.entries) e.list,
-      ]),
+      nodePool: directionPoolPreview(
+          [for (final e in subController.entries) e.list]),
       // §393 A3 + §568 — те же кандидаты опций, что в Routing: без них
       // сохранение отсюда вычёркивало бы опции Направления.
       directionsAbove: idx <= 0 ? const [] : directions.sublist(0, idx),
@@ -834,10 +801,7 @@ class HomeNodeList extends StatelessWidget {
     // §275 — DirectionMutations зеркалит detour-heal в _entries: generateConfig
     // ниже идёт от in-memory контроллера, без ресинка он воскресил бы
     // вылеченный storage.
-    final healed = await DirectionMutations.update(
-      result.saved!,
-      subController,
-    );
+    final healed = await DirectionMutations.update(result.saved!, subController);
     await controller.refreshDirectionLabels();
     if (!context.mounted) return;
     final config = await subController.generateConfig();
@@ -858,16 +822,10 @@ class HomeNodeList extends StatelessWidget {
     final healedParts = DirectionMutations.healMessageParts(healed);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-          healedParts.isEmpty
+          content: Text(healedParts.isEmpty
               ? getLocalText.s("Saved direction \"%s\"", label)
-              : getLocalText.s(
-                  "Saved direction \"%1\$s\" — %2\$s",
-                  label,
-                  healedParts.join('; '),
-                ),
-        ),
-      ),
+              : getLocalText.s("Saved direction \"%1\$s\" — %2\$s", label,
+                  healedParts.join('; ')))),
     );
     // §338/§667 — просить рестарт только когда гейт reload не запустил, а
     // применять есть что (туннель up, saved разошёлся с running — §324).
@@ -896,6 +854,7 @@ class HomeNodeList extends StatelessWidget {
     }
     return warnings ?? const [];
   }
+
 }
 
 /// §322 — метка режима + значки живого пула: `🔀 [15/7] 🇩🇪, 🇳🇱[2]`.
@@ -916,9 +875,8 @@ String? _autoLabelWithBadges(
   final slots = controller.poolSlots(tag);
   if (slots == null || slots.isEmpty) return base;
   // §715 — значки, а без них имена слотов (как в View pool).
-  final suffix = poolLabelSuffix([
-    for (final s in slots) s.tag,
-  ], poolBadgeOf(subs, tag));
+  final suffix =
+      poolLabelSuffix([for (final s in slots) s.tag], poolBadgeOf(subs, tag));
   return suffix.isEmpty ? base : '$base $suffix';
 }
 
@@ -957,10 +915,9 @@ List<(String, String)> _autoSpecsOf(SubscriptionController subs) {
   if (cached != null &&
       cachedPrefixes != null &&
       cached.length == source.length &&
-      Iterable<int>.generate(source.length).every(
-        (i) =>
-            identical(cached[i], source[i]) && cachedPrefixes[i] == prefixes[i],
-      )) {
+      Iterable<int>.generate(source.length).every((i) =>
+          identical(cached[i], source[i]) &&
+          cachedPrefixes[i] == prefixes[i])) {
     return _autoSpecs;
   }
   _autoSpecsSource = source;
@@ -1001,8 +958,7 @@ class _NodeListColumns extends StatefulWidget {
     BuildContext context,
     int columns,
     ScrollController scrollController,
-  )
-  builder;
+  ) builder;
 
   @override
   State<_NodeListColumns> createState() => _NodeListColumnsState();
