@@ -29,7 +29,8 @@ extension _NodeBudgetOps on SubscriptionController {
     return quotas[target.id] ?? 0;
   }
 
-  /// Узлы подписки со ссылками (Направления, цепочки, правила). Ошибка
+  /// Узлы подписки со ссылками (Направления, цепочки, правила, detour
+  /// источников и членов папок). Ошибка
   /// чтения хранилища — без защищённых: обрезка тогда идёт по порядку.
   Future<SourceProtectedTags> _protectedNodeTagsFor(
       SubscriptionServers s) async {
@@ -38,6 +39,7 @@ extension _NodeBudgetOps on SubscriptionController {
         directions: await SettingsStorage.getDirections(),
         chains: await SettingsStorage.getChains(),
         rules: await SettingsStorage.getCustomRules(),
+        sources: [for (final e in _entries) e.list],
       );
       return all.forSource(s);
     } catch (e) {

@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/parser/body_decoder.dart';
@@ -106,6 +107,27 @@ void main() {
     final cut = cutNodesToQuota(
         vless(10), 1, const SourceProtectedTags(defaultPatterns: ['n[4-9]']));
     expect(cut.nodes.map((n) => n.tag), ['N4']);
+  });
+
+  test('цель detour за пределами доли остаётся', () {
+    final target = sub('s', 10);
+    final server = UserServer(
+      id: 'srv',
+      name: '',
+      enabled: true,
+      tagPrefix: '',
+      detourPolicy: const DetourPolicy(
+          overrideDetour: NodeLink(folderId: 's', tag: 'N9')),
+      nodes: vless(1, prefix: 'M'),
+    );
+    final protected = collectProtectedNodeTags(
+      directions: const [],
+      chains: const [],
+      rules: const [],
+      sources: [server, target],
+    ).forSource(target);
+    final cut = cutNodesToQuota(vless(10), 2, protected);
+    expect(cut.nodes.map((n) => n.tag), ['N0', 'N9']);
   });
 
   test('квота 0 — пусто, total сохраняется', () {

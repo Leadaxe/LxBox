@@ -17,6 +17,7 @@ library;
 
 import '../../models/custom_rule.dart';
 import '../../models/direction.dart';
+import '../../models/node_link.dart';
 import '../../models/node_spec.dart';
 import '../../models/server_list.dart';
 import '../../models/source_chain.dart';
@@ -153,10 +154,12 @@ final class ProtectedNodeTags {
 
   static const empty = ProtectedNodeTags();
 
-  /// Финальные теги конфига: outbound правил, корневые позиции цепочек.
+  /// Финальные теги конфига: outbound правил, корневые ссылки цепочек и
+  /// detour.
   final Set<String> finalTags;
 
-  /// `id` подписки → сырые теги её узлов (позиции цепочек с контейнером).
+  /// `id` подписки → сырые теги её узлов (ссылки цепочек и detour с
+  /// контейнером).
   final Map<String, Set<String>> rawBySource;
 
   /// `defaultFilter` включённых Направлений: первый подходящий узел
@@ -192,20 +195,35 @@ final class SourceProtectedTags {
 }
 
 /// Сборщик ссылок на узлы — одно место для обрезки по бюджету.
+///
+/// Ссылки: позиции цепочек, outbound правил, `defaultFilter` включённых
+/// Направлений и detour — `overrideDetour` политики любого источника
+/// (сервер, подписка, папка) и `detour` членов папок из [sources].
 ProtectedNodeTags collectProtectedNodeTags({
   required List<Direction> directions,
   required List<SourceChain> chains,
   required List<CustomRule> rules,
+  List<ServerList> sources = const [],
 }) {
   final finalTags = <String>{};
   final raw = <String, Set<String>>{};
+  void link(NodeLink l) {
+    if (l.isEmpty) return;
+    if (l.isRoot) {
+      finalTags.add(l.tag);
+    } else {
+      (raw[l.folderId] ??= <String>{}).add(l.tag);
+    }
+  }
+
   for (final c in chains) {
-    for (final h in c.hops) {
-      if (h.isEmpty) continue;
-      if (h.isRoot) {
-        finalTags.add(h.tag);
-      } else {
-        (raw[h.folderId] ??= <String>{}).add(h.tag);
+    c.hops.forEach(link);
+  }
+  for (final s in sources) {
+    link(s.detourPolicy.overrideDetour);
+    if (s is FolderServers) {
+      for (final m in s.members) {
+        link(m.detour);
       }
     }
   }
