@@ -1082,7 +1082,7 @@ void main() {
       expect(f.warnings, isEmpty, reason: 'без второй строки (§570)');
     });
 
-    test('force_ipv4=false → resolve-элемент выпадает, остаётся только route',
+    test('force_ipv4=false → resolve остаётся без strategy, затем route',
         () {
       final f = expandPreset(
         CustomRulePreset(
@@ -1094,9 +1094,13 @@ void main() {
       );
 
       expect(f.warnings, isEmpty);
-      expect(f.routingRules.single,
-          {'rule_set': 'ru-direct:ru-domains', 'outbound': 'direct-out'},
-          reason: 'галка off → ipv4-резолв не эмитится (юзер сам решил)');
+      expect(f.routingRules.length, 2,
+          reason: 'map-spread #if (4 ключа) не array-element: правило не выпадает');
+      expect(f.routingRules[0],
+          {'rule_set': 'ru-direct:ru-domains', 'action': 'resolve'},
+          reason: 'галка off → resolve без strategy (общая dns.strategy)');
+      expect(f.routingRules[1],
+          {'rule_set': 'ru-direct:ru-domains', 'outbound': 'direct-out'});
     });
 
     test('force_ipv4=true (дефолт) → resolve ipv4_only + route', () {
@@ -1443,8 +1447,8 @@ void main() {
       expect(warnings, isEmpty, reason: 'дропов быть не должно');
     });
 
-    test('ru-direct: force_ipv4=false → route без resolve, DNS без AAAA-гейта',
-        () {
+    test('ru-direct: force_ipv4=false → resolve без strategy + route, '
+        'DNS без AAAA-гейта', () {
       final preset = realPreset('ru-direct');
       final f = expandPreset(
         CustomRulePreset(
@@ -1454,9 +1458,14 @@ void main() {
         ),
         preset,
       );
-      // Галка off → resolve-элемент выпал, остался только терминальный route.
-      expect(f.routingRules.length, 1);
-      expect(f.routingRules.single['outbound'], 'direct-out');
+      // Галка off → resolve остаётся (под галкой только strategy), затем route.
+      expect(f.routingRules.length, 2);
+      expect(f.routingRules[0], {
+        'rule_set': ['ru-direct:ru-domains', 'ru-direct:ru-services'],
+        'action': 'resolve',
+        'server': 'ru-direct:dns_ru',
+      });
+      expect(f.routingRules[1]['outbound'], 'direct-out');
       // §253: AAAA-гейт выпал целиком (array-element #if), маршрут остался.
       expect(f.dnsRules.length, 1);
       expect(f.dnsRules.single['server'], 'ru-direct:dns_ru');
@@ -1721,7 +1730,8 @@ void main() {
 }
 
 /// §246: реплика `ru-direct` с гейтом resolve по bool-var `force_ipv4`
-/// (default true). Галка off → resolve-элемент выпадает.
+/// (default true). Под галкой только `strategy` (map-spread `#if`, §711):
+/// галка off → resolve без strategy.
 SelectableRule _ruDirectForceIpv4() => SelectableRule(
       label: 'Russian domains & IPs',
       presetId: 'ru-direct',
@@ -1752,13 +1762,11 @@ SelectableRule _ruDirectForceIpv4() => SelectableRule(
       ],
       rule: const [
         {
+          'rule_set': 'ru-domains',
+          'action': 'resolve',
           '#if': {
-            'and': ['@force_ipv4'],
-            'value': {
-              'rule_set': 'ru-domains',
-              'action': 'resolve',
-              'strategy': 'ipv4_only',
-            },
+            '#and': ['@force_ipv4'],
+            '#value': {'strategy': 'ipv4_only'},
           },
         },
         {'rule_set': 'ru-domains', 'outbound': '@outbound'},

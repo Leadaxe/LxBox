@@ -8,6 +8,16 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Ru internet segment resolved its domains through the default resolver with
+  Force IPv4 off ([task 711](docs/spec/tasks/711-ru-direct-resolve-always-dedicated-sets-resolve.md)).**
+  The box removed the whole resolve rule instead of only the IPv4 strategy, so
+  with FakeIP above the preset the Yandex DNS group was not used. The resolve
+  rule is now always present; the box controls only the address family.
+  Choosing a dedicated DNS server in a rule's editor now also turns on Resolve
+  before routing with that server, for the same reason; the box can be cleared.
+
 ### Added
 
 - **Reorder DNS servers ([task 710](docs/spec/tasks/710-dns-servers-reorder.md)).**

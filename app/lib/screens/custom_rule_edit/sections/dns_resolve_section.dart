@@ -331,6 +331,8 @@ class _DnsResolveSectionState extends State<DnsResolveSection> {
                 left: 0),
           ),
         DropdownButtonFormField<String>(
+          // §711 — сервер резолва меняется извне (выбор в Answer).
+          key: ValueKey('resolve-server-$serverTag'),
           initialValue: serverTag,
           decoration: InputDecoration(
             border: const OutlineInputBorder(),

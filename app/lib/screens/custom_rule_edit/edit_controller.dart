@@ -821,7 +821,20 @@ class CustomRuleEditController extends ChangeNotifier {
     _fixedChosen = m == DnsAnswerMode.fixedIp;
     if (!_fixedChosen && fixedIpCtrl.text.isNotEmpty) fixedIpCtrl.clear();
     _dns = next.isEmpty && _dns == null ? null : next;
+    if (m == DnsAnswerMode.dedicated) _linkResolveToAnswer(next.serverTag);
     notifyListeners();
+  }
+
+  /// §711 — выбор Dedicated server и сервера в Answer всегда включает
+  /// «Resolve before routing» (при Resolve only резолв уже есть) и ставит
+  /// сервер резолва = сервер Answer. Strategy и Advanced-поля не трогаются.
+  /// Только для kind'ов, где resolve применим (inline/srs; живой гейт по
+  /// доменам — в snapshot). Гидрация правила сюда не ходит.
+  void _linkResolveToAnswer(String serverTag) {
+    if (_kind != CustomRuleKind.inline && _kind != CustomRuleKind.srs) return;
+    final base = _resolve ?? _resolveKeep.copyWith(only: false);
+    _resolve = base.copyWith(serverTag: serverTag);
+    _resolveKeep = _resolve!;
   }
 
   /// §683 — адреса поля Fixed IP: непустые строки.
@@ -861,6 +874,7 @@ class CustomRuleEditController extends ChangeNotifier {
   /// §117: выбор DNS-сервера для mirror'а (по tag из существующих).
   void setDnsServerTag(String tag) {
     _dns = (_dns ?? const RuleDns()).copyWith(serverTag: tag);
+    _linkResolveToAnswer(tag);
     notifyListeners();
   }
 

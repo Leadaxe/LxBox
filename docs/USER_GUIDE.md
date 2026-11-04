@@ -802,7 +802,7 @@ The other parameters:
 | Ru internet segment | DoT server IP, DoH server IP | `77.88.8.88 · Safe` | The same for the encrypted servers. Off: that server is not used. With all three servers Off the preset's DNS works as with the DNS switch off. |
 | Ru internet segment | GeoIP IP-range fallback | On | Also checks the IP against Russian ranges: catches connections where the domain is not detected. Downloads a 150 KB list. |
 | Ru internet segment | Russian apps by package | On | Routes Russian apps (banks, marketplaces, Gosuslugi, Yandex, VK) by package name, whatever domains they open. Downloads a 4 KB list. |
-| Ru internet segment, Russia-only services | Force IPv4 | On | Resolves the preset's domains to IPv4 only: on a network without working IPv6, connections do not hang. |
+| Ru internet segment, Russia-only services | Force IPv4 | On | Resolves the preset's domains to IPv4 only: on a network without working IPv6, connections do not hang. The box changes only the address family; Ru internet segment resolves its domains through its Yandex DNS group either way. |
 | FakeIP | DNS | On | Turns on substitute addresses; turning it off removes FakeIP without deleting the preset. |
 | FakeIP | Block HTTPS records | On | Answers HTTPS and SVCB DNS records with an empty response, and apps fall back to plain A and AAAA. |
 | Tailscale networks | DNS | On | The node's DNS resolves the Tailscale network's names. |
@@ -832,7 +832,10 @@ To have one rule decide both where traffic goes and which server resolves its
 domains, turn on **Send DNS to dedicated server** in the DNS section of the
 rule editor. The box adds a paired DNS rule: DNS queries for this rule's
 domains go to the chosen server, `google_udp` by default. You do not build the
-DNS rule by hand.
+DNS rule by hand. Choosing a dedicated server also turns on **Resolve before
+routing** with the same server: with FakeIP above the rule, the DNS rule alone
+never sees the query, and the resolver that matters is the one used before
+routing. Clear the box if you do not want that.
 
 In the same section, the **Force IPv4 (drop AAAA)** box answers AAAA queries
 for the rule's domains locally, and traffic goes over IPv4. It needs no

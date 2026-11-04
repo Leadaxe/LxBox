@@ -701,12 +701,12 @@
         }
       ],
       "rules": [
-        {"#if": {"#and": ["@force_ipv4"], "#value": {
+        {
           "rule_set": ["ru-domains", "ru-services"],
           "action": "resolve",
           "server": "dns_ru",
-          "strategy": "ipv4_only"
-        }}},
+          "#if": {"#and": ["@force_ipv4"], "#value": {"strategy": "ipv4_only"}}
+        },
         {"rule_set": ["ru-domains", "ru-services", "geoip-ru", "ru-apps"], "outbound": "@outbound"}
       ],
       "dns_rules": [
