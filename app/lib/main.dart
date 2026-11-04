@@ -290,10 +290,13 @@ class _FallbackErrorWidget extends StatelessWidget {
 ///
 /// §707 итер. 9 — тема хранится ключом `native_prefs.app_theme_mode`
 /// (`lxbox_settings.json`, едет в бэкапе; в зеркало `boxvpn_boot` не идёт).
-/// [load] зовётся на старте после загрузки хранилища.
+/// [load] зовётся на старте после загрузки хранилища; дальше тема
+/// перечитывается по [SettingsStorage.nativePrefsGeneration] — после импорта
+/// бэкапа и смены Workspaces, без перезапуска.
 class ThemeNotifier extends ChangeNotifier {
   ThemeMode _mode = ThemeMode.system;
   ThemeMode get mode => _mode;
+  bool _hooked = false;
 
   /// Ключ прежнего места — `FlutterSharedPreferences` (до итерации 9).
   static const _legacyKey = 'app_theme_mode';
@@ -313,6 +316,10 @@ class ThemeNotifier extends ChangeNotifier {
   /// Перенос один раз: ключа в хранилище нет, а в SharedPreferences есть —
   /// значение переезжает, ключ из prefs удаляется. Затем чтение хранилища.
   Future<void> load() async {
+    if (!_hooked) {
+      _hooked = true;
+      SettingsStorage.nativePrefsGeneration.addListener(_reload);
+    }
     if (!await SettingsStorage.hasNativeThemeMode()) {
       try {
         final prefs = await SharedPreferences.getInstance();
@@ -325,6 +332,14 @@ class ThemeNotifier extends ChangeNotifier {
         // prefs недоступны — остаётся значение по умолчанию.
       }
     }
+    final mode = _fromWire(await SettingsStorage.getNativeThemeMode());
+    if (mode == _mode) return;
+    _mode = mode;
+    notifyListeners();
+  }
+
+  /// Перечитать тему из хранилища (поколение `native_prefs` выросло).
+  Future<void> _reload() async {
     final mode = _fromWire(await SettingsStorage.getNativeThemeMode());
     if (mode == _mode) return;
     _mode = mode;

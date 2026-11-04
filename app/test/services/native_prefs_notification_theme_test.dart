@@ -174,6 +174,33 @@ void main() {
       expect(prefs.getString('app_theme_mode'), 'dark');
     });
 
+    test('хук: импорт бэкапа и пересинк перечитывают тему без перезапуска',
+        () async {
+      SharedPreferences.setMockInitialValues({});
+      final t = ThemeNotifier();
+      await t.load();
+      expect(t.mode, ThemeMode.system);
+      var notified = 0;
+      t.addListener(() => notified++);
+
+      final g0 = SettingsStorage.nativePrefsGeneration.value;
+      await SettingsStorage.applyNativePrefsBackup({'app_theme_mode': 'dark'});
+      expect(SettingsStorage.nativePrefsGeneration.value, g0 + 1);
+      await pumpEventQueue();
+      expect(t.mode, ThemeMode.dark);
+      expect(notified, 1);
+
+      // Смена Workspaces: файл подменён, затем пересинк — тема из нового файла.
+      await seedFile({
+        'native_prefs': {'app_theme_mode': 'light'},
+      });
+      await SettingsStorage.bootstrapAndSyncNativePrefs();
+      expect(SettingsStorage.nativePrefsGeneration.value, g0 + 2);
+      await pumpEventQueue();
+      expect(t.mode, ThemeMode.light);
+      expect(notified, 2);
+    });
+
     test('setMode пишет в хранилище', () async {
       SharedPreferences.setMockInitialValues({});
       final t = ThemeNotifier();

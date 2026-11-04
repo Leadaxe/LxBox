@@ -1379,9 +1379,11 @@ Taildrop конфиг грязным не делают (`keepDirtyFlag`); при
 `dart analyze lib test` чистый.
 
 Не проверено: компиляция Kotlin (Gradle локально не гоняли — CI), эмулятор
-(четыре сценария из Verification), телефон. Известные ограничения: тема после
-импорта бэкапа и переключения Workspaces применяется после перезапуска
-(`ThemeNotifier` живёт в `main.dart`, хука из `workspace_controller` нет);
-Kotlin-теста на `NativeCache` нет (в тестах нет контекста/Robolectric).
+(четыре сценария из Verification), телефон. Тема после импорта бэкапа и
+смены Workspaces перечитывается без перезапуска (решение владельца «хук»):
+`SettingsStorage.nativePrefsGeneration` растёт в `applyNativePrefsBackup` и
+`bootstrapAndSyncNativePrefs`, `ThemeNotifier` слушает его (тест в
+`native_prefs_notification_theme_test`). Известное ограничение: Kotlin-теста
+на `NativeCache` нет (в тестах нет контекста/Robolectric).
 Открыто у лаунчера: `taildrop_double_copy` (двойное копирование, не в бэкапе)
 — решение владельца; перевод лаунчера на новые поля — его отдельная задача.
