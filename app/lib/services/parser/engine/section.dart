@@ -734,11 +734,12 @@ final class MapperSection {
       overlays: ((j['overlays'] as List?) ?? const [])
           .map((o) => OverlaySpec.fromJson((o as Map).cast<String, dynamic>()))
           .toList(),
-      schemeSets:
-          ((j['scheme_sets'] as Map?) ?? const {}).cast<String, dynamic>(),
+      // §717: ключи с подчёркиванием (`_delta_id`, `_why`) — пометки
+      // черновика, не грамматика; в теле и в наборах схем им не место.
+      schemeSets: _withoutMeta(j['scheme_sets']),
       typeSynonyms:
           ((j['type_synonyms'] as Map?) ?? const {}).cast<String, String>(),
-      defaults: ((j['defaults'] as Map?) ?? const {}).cast<String, dynamic>(),
+      defaults: _withoutMeta(j['defaults']),
       unknownKeyAction: uk?['action'] as String? ?? 'drop',
       unknownKeyCode: uk?['code'] as String?,
       ignoredKeys: <String>{
@@ -841,4 +842,14 @@ List<String> _stringList(dynamic v, {required List<String> fallback}) {
   if (v is String) return [v];
   if (v is List) return v.cast<String>();
   return fallback;
+}
+
+/// Карта секции без ключей-пометок черновика (`_delta_id`, `_why`, …):
+/// всё, что начинается с `_`, — не грамматика (§717).
+Map<String, dynamic> _withoutMeta(Object? raw) {
+  final m = (raw as Map?) ?? const {};
+  return {
+    for (final e in m.entries)
+      if (!e.key.toString().startsWith('_')) e.key.toString(): e.value,
+  };
 }
