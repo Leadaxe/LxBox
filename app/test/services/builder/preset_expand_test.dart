@@ -1346,7 +1346,7 @@ void main() {
 
       expect(def, {
         'type': 'fakeip',
-        'tag': 'fakeip',
+        'tag': 'fakeip:fakeip',
         'inet4_range': '198.18.0.0/15',
         'description': 'FakeIP allocator',
         'inet6_range': 'fc00::/18',
@@ -1846,7 +1846,7 @@ SelectableRule _fakeip() => SelectableRule(
       dnsServers: [
         {
           'type': 'fakeip',
-          'tag': 'fakeip',
+          'tag': 'fakeip:fakeip',
           'inet4_range': '198.18.0.0/15',
           'inet6_range': 'fc00::/18',
           'description': 'FakeIP allocator',
