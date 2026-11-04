@@ -1314,7 +1314,7 @@ client:
 with_gvisor, with_quic, with_wireguard, with_utls, with_naive_outbound,
 badlinkname, tfogo_checklinkname0,
 with_xhttp, with_awg, with_lx_command, with_lx_idle_suspend, with_lx_chain,
-with_openvpn, with_openconnect,
+with_openvpn, with_openconnect, with_trusttunnel,
 with_tailscale, ts_omit_logtail, ts_omit_ssh, ts_omit_drive, ts_omit_taildrop,
 ts_omit_webclient, ts_omit_doctor, ts_omit_capture, ts_omit_kube, ts_omit_aws,
 ts_omit_synology, ts_omit_bird
@@ -1334,7 +1334,9 @@ re-check the list and move `kCoreBuildTagsPin`; `node_core_gate_test` fails
 until the pin matches `app/android/libbox.version`.
 
 `with_clash_api` is deliberately absent (§122 — CommandClient instead of Clash
-HTTP), and so is `with_usbip` (server-side). `with_openvpn` / `with_openconnect`
+HTTP), and so is `with_usbip` (server-side). `with_trusttunnel` is **in** since
+**lx.31** (`lx:begin trusttunnel` in `build_libbox`): before it the type loaded
+as a stub and a config with a `trusttunnel` node failed to start (task 717). `with_openvpn` / `with_openconnect`
 are **in** since the SPEC 051 upstream merge (owner's decision 2026-08-05): each
 tag gates one package holding client and server behind the same tag, and the
 server half is accepted as the price of the client — see the `lx:begin openvpn`
