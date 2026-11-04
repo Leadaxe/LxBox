@@ -23,7 +23,7 @@ Issue #192 (paratroop3r, 02.11.2026): при большой подписке м�
 
 ## Solution
 
-Одна настройка `ping_options.concurrency` (целое, 1..32, по умолчанию 10),
+Одна настройка `ping_options.concurrency` (целое, 1..100, по умолчанию 10),
 общая для mass ping и ProbeRunner. Хранится рядом с `url` / `timeout_ms`
 в объекте `ping_options`, поэтому в бэкап едет без отдельной работы
 (`ping_options` целиком в allowlist §221).

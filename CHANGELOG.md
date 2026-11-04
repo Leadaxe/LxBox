@@ -12,7 +12,7 @@
 
 - **Parallel checks setting ([task 713](docs/spec/tasks/713-ping-concurrency-setting.md)).**
   App Settings → General → Parallel checks sets how many servers the mass ping
-  and a folder's Test servers measure at once (1..32, default 10, with a reset
+  and a folder's Test servers measure at once (1..100, default 10, with a reset
   button). Stored as `ping_options.concurrency`, travels with the backup,
   exposed through the Debug API. Issue #192.
 
@@ -38,7 +38,20 @@
   перерезают подписки из кэша, без сети. Едет в бэкапе, доступен через Debug API
   (`/settings/node_budget`). Issue #190.)
 
+- **Core URL test results in the node list ([task 715](docs/spec/tasks/715-auto-twin-pool-label-core-delays.md)).**
+  While the tunnel is up, the result of the core's URL test (`getOutbounds`)
+  shows in the node list as a foreign measurement: dimmed, with the `~` prefix,
+  like a measurement from another Direction. The app's own ping and a
+  measurement from another Direction take precedence. Issue #191.
+
 ### Fixed
+
+- **Auto card in Load balance showed the protocol instead of the pool ([task 715](docs/spec/tasks/715-auto-twin-pool-label-core-delays.md)).**
+  The Direction's Auto twin in Load balance had neither the arrow nor the pool
+  label, so the row fell back to the protocol of the core's `now`, which
+  `round_robin` does not keep as a current pick. The card now shows
+  `🔀 [N/M]` with the pool badges, or the slot names when no member yields a
+  badge, the same as an auto-select node. Issue #191.
 
 - **Ru internet segment resolved its domains through the default resolver with
   Force IPv4 off ([task 711](docs/spec/tasks/711-ru-direct-resolve-always-dedicated-sets-resolve.md)).**

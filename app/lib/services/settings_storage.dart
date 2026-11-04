@@ -749,7 +749,7 @@ class SettingsStorage {
   /// сколько узлов mass ping и «Test servers» меряют одновременно.
   static const int pingConcurrencyDefault = 10;
   static const int pingConcurrencyMin = 1;
-  static const int pingConcurrencyMax = 32;
+  static const int pingConcurrencyMax = 100;
 
   /// §713 — значение из storage, приведённое к диапазону; нет/мусор → дефолт.
   static Future<int> getPingConcurrency() => _getPingConcurrency();
