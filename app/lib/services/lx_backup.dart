@@ -3,6 +3,7 @@
 library;
 
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:package_info_plus/package_info_plus.dart';
 
@@ -433,6 +434,7 @@ class LxServer {
     this.allowGateway = false,
     this.disableTaildropCommands = false,
     this.disableTaildropAutosave = false,
+    this.stateDirId = '',
     this.detour,
     this.position = 0,
     this.autoGroup,
@@ -489,6 +491,11 @@ class LxServer {
   /// `disable_taildrop_autosave`, те же правила, что у полей выше.
   final bool disableTaildropCommands;
   final bool disableTaildropAutosave;
+
+  /// §707 (контракт 1.1.160) — `state_dir_id` записи файла как есть (пусто —
+  /// поля нет). Только перенос: совпавший узел держит своё, новый с занятым
+  /// именем получает другое ([mergeBackupServers]).
+  final String stateDirId;
 
   /// §656 — флаги записи файла поверх своих: только `true` (слияние
   /// совпавшего узла). Все поля уже стоят — null.
@@ -3177,6 +3184,7 @@ LxServer? _server10(
     allowGateway: node.allowGateway,
     disableTaildropCommands: node.disableTaildropCommands,
     disableTaildropAutosave: node.disableTaildropAutosave,
+    stateDirId: node.stateDirId,
     tls: _carries(folder == null ? BackupRecord.server : BackupRecord.folderNode,
             j, 'tls')
         ? node.tls
@@ -3610,6 +3618,10 @@ const Set<String> _node10Keys = {
   // §707 итер. 9 (контракт 1.1.159) — Taildrop узла, знак «выключено»; пишется только true.
   'disable_taildrop_commands',
   'disable_taildrop_autosave',
+  // §707 (контракт 1.1.160): `state_dir_id` переносится как есть;
+  // `taildrop_double_copy` — поле лаунчера, молча пропускается.
+  'state_dir_id',
+  'taildrop_double_copy',
   // Фича 478 — вердикт на члене папки. Ключ известен обходу, чтобы старый
   // файл с `core_rejected` не давал `backup_unknown_field`; содержимое
   // срезает санитизация §489.
@@ -4065,6 +4077,7 @@ BackupServerMerge mergeBackupServers(
 }) {
   final merged = lists.toList();
   final takenIds = <String>{for (final l in merged) l.id};
+  final stateDirs = StateDirNames.of(merged);
   var applied = 0;
   final touched = <BackupNodeRef>[];
   // Заведённые этим импортом источники → место в файле (подписки приходят
@@ -4237,7 +4250,7 @@ BackupServerMerge mergeBackupServers(
       final count = (merged[at] as FolderServers).members.length;
       applied += _mergeFolderMember(
           merged, at, srv, body, NodeLink.none, touched,
-          landings: landings);
+          landings: landings, stateDirs: stateDirs);
       if ((merged[at] as FolderServers).members.length > count) {
         pendingLinks
             .add((at: at, member: count, link: srv.detour, count: false));
@@ -4299,6 +4312,7 @@ BackupServerMerge mergeBackupServers(
         allowGateway: srv.allowGateway,
         disableTaildropCommands: srv.disableTaildropCommands,
         disableTaildropAutosave: srv.disableTaildropAutosave,
+        stateDirId: stateDirs.adopt(srv.stateDirId),
       ));
       pendingLinks.add((
         at: merged.length - 1,
@@ -4317,7 +4331,7 @@ BackupServerMerge mergeBackupServers(
     final at =
         _folder0xAt(merged, srv, folderByName, takenIds, added, position);
     applied += _mergeFolderMember(merged, at, srv, body, NodeLink.none, touched,
-        landings: landings);
+        landings: landings, stateDirs: stateDirs);
   }
 
   applied += _bindBackupAutoGroups(merged, autoGroups, linkIds, landings);
@@ -4544,6 +4558,7 @@ int _mergeFolderMember(
   NodeLink detour,
   List<BackupNodeRef> touched, {
   Map<(int, String), String>? landings,
+  StateDirNames? stateDirs,
 }) {
   final folder = merged[folderAt] as FolderServers;
   final canon = canonicalNodeBody(body);
@@ -4591,6 +4606,7 @@ int _mergeFolderMember(
     allowGateway: srv.allowGateway,
     disableTaildropCommands: srv.disableTaildropCommands,
     disableTaildropAutosave: srv.disableTaildropAutosave,
+    stateDirId: stateDirs?.adopt(srv.stateDirId) ?? srv.stateDirId,
     tls: srv.tls ?? TlsPolicy.none, // §636
   );
   final here = member.node?.tag ?? '';
@@ -4600,6 +4616,45 @@ int _mergeFolderMember(
   merged[folderAt] = folder.copyWith(members: [...folder.members, member]);
   touched.add((list: folderAt, member: folder.members.length));
   return 1;
+}
+
+/// §707 (контракт 1.1.160) — занятые имена `state_dir_id` хранимых узлов.
+/// Новый узел импорта со своим именем держит его, если оно свободно; занятое
+/// заменяется на `ts-` + 6 символов [a-z0-9]. Совпавший по телу узел сюда не
+/// ходит: у него своё имя, файл его не трогает.
+class StateDirNames {
+  StateDirNames(this._taken, {Random? random})
+      : _random = random ?? Random.secure();
+
+  /// Имена всех хранимых узлов (корень и члены папок).
+  factory StateDirNames.of(Iterable<ServerList> lists, {Random? random}) =>
+      StateDirNames({
+        for (final l in lists)
+          if (l is UserServer && l.stateDirId.isNotEmpty)
+            l.stateDirId
+          else if (l is FolderServers)
+            for (final m in l.members)
+              if (m.stateDirId.isNotEmpty) m.stateDirId,
+      }, random: random);
+
+  final Set<String> _taken;
+  final Random _random;
+
+  static const _alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
+
+  /// Имя для нового узла: пусто → пусто (своим без поля не генерируется).
+  String adopt(String name) {
+    if (name.isEmpty) return '';
+    var out = name;
+    while (_taken.contains(out)) {
+      out = 'ts-${String.fromCharCodes([
+            for (var i = 0; i < 6; i++)
+              _alphabet.codeUnitAt(_random.nextInt(_alphabet.length)),
+          ])}';
+    }
+    _taken.add(out);
+    return out;
+  }
 }
 
 /// Папка члена 0.x [srv] по имени; заведённая им же папка находится по

@@ -1677,6 +1677,7 @@ class SubscriptionController extends ChangeNotifier {
         allowGateway: m.allowGateway,
         disableTaildropCommands: m.disableTaildropCommands, // §707 итер. 9
         disableTaildropAutosave: m.disableTaildropAutosave,
+        stateDirId: m.stateDirId, // §707 1.1.160 — тот же узел, имя то же
         tls: m.tls, // §636 — узловая политика едет с узлом
         nodes: [if (m.node != null) m.node!],
       );
@@ -2486,10 +2487,11 @@ class SubscriptionController extends ChangeNotifier {
                 // §707 итер. 9
                 disableTaildropCommands: server.disableTaildropCommands,
                 disableTaildropAutosave: server.disableTaildropAutosave,
+                stateDirId: server.stateDirId, // §707 1.1.160
                 tls: server.tls), // §636
           ]
         : _bindAutoMembers([
-            for (final n in server.nodes)
+            for (final (i, n) in server.nodes.indexed)
               FolderMember(
                   raw: n.rawSource,
                   nameHint: memberNameHintFor(n),
@@ -2503,6 +2505,9 @@ class SubscriptionController extends ChangeNotifier {
                   // §707 итер. 9
                   disableTaildropCommands: server.disableTaildropCommands,
                   disableTaildropAutosave: server.disableTaildropAutosave,
+                  // §707 1.1.160 — имя каталога одно на узел: только первому,
+                  // иначе у членов совпадёт.
+                  stateDirId: i == 0 ? server.stateDirId : '',
                   tls: server.tls), // §636
           ], server.nodes, folder.id);
     folderEntry._replaceList(

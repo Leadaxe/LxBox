@@ -240,60 +240,84 @@ void main() {
 
   // §707 итер. 9 (контракт 1.1.159) — поля Taildrop узла, знак «выключено».
   group('disable_taildrop_commands / disable_taildrop_autosave', () {
-    test('импорт: новый узел и член папки получают поля, без предупреждений',
-        () {
-      final file = parseLxBackup(
-        _file([
-          _node('a', {'disable_taildrop_commands': true}),
-          {
-            'kind': 'folder',
-            'id': 'f1',
-            'name': 'F',
-            'nodes': [
-              _node('m', {'disable_taildrop_autosave': true}),
-            ],
-          },
-        ]),
-      );
-      expect(
-        file.warnings.where((w) => w.detail.contains('taildrop_')),
-        isEmpty,
-      );
-      final lists = _apply(const [], file);
-      final u = lists.whereType<UserServer>().single;
-      expect([u.disableTaildropCommands, u.disableTaildropAutosave],
-          [true, false]);
-      final m = lists.whereType<FolderServers>().single.members.single;
-      expect([m.disableTaildropCommands, m.disableTaildropAutosave],
-          [false, true]);
-    });
+    test(
+      'импорт: новый узел и член папки получают поля, без предупреждений',
+      () {
+        final file = parseLxBackup(
+          _file([
+            _node('a', {'disable_taildrop_commands': true}),
+            {
+              'kind': 'folder',
+              'id': 'f1',
+              'name': 'F',
+              'nodes': [
+                _node('m', {'disable_taildrop_autosave': true}),
+              ],
+            },
+          ]),
+        );
+        expect(
+          file.warnings.where((w) => w.detail.contains('taildrop_')),
+          isEmpty,
+        );
+        final lists = _apply(const [], file);
+        final u = lists.whereType<UserServer>().single;
+        expect(
+          [u.disableTaildropCommands, u.disableTaildropAutosave],
+          [true, false],
+        );
+        final m = lists.whereType<FolderServers>().single.members.single;
+        expect(
+          [m.disableTaildropCommands, m.disableTaildropAutosave],
+          [false, true],
+        );
+      },
+    );
 
-    test('совпавший узел: true из файла ставится, отсутствие не сбрасывает',
-        () {
-      final first = _apply(
-        const [],
-        parseLxBackup(_file([_node('a', {'disable_taildrop_autosave': true})])),
-      );
-      final second = _apply(
-        first,
-        parseLxBackup(_file([_node('a', {'disable_taildrop_commands': true})])),
-      );
-      final u = second.single as UserServer;
-      expect([u.disableTaildropCommands, u.disableTaildropAutosave],
-          [true, true]);
-      final third = _apply(second, parseLxBackup(_file([_node('a', {})])));
-      final v = third.single as UserServer;
-      expect([v.disableTaildropCommands, v.disableTaildropAutosave],
-          [true, true]);
-    });
+    test(
+      'совпавший узел: true из файла ставится, отсутствие не сбрасывает',
+      () {
+        final first = _apply(
+          const [],
+          parseLxBackup(
+            _file([
+              _node('a', {'disable_taildrop_autosave': true}),
+            ]),
+          ),
+        );
+        final second = _apply(
+          first,
+          parseLxBackup(
+            _file([
+              _node('a', {'disable_taildrop_commands': true}),
+            ]),
+          ),
+        );
+        final u = second.single as UserServer;
+        expect(
+          [u.disableTaildropCommands, u.disableTaildropAutosave],
+          [true, true],
+        );
+        final third = _apply(second, parseLxBackup(_file([_node('a', {})])));
+        final v = third.single as UserServer;
+        expect(
+          [v.disableTaildropCommands, v.disableTaildropAutosave],
+          [true, true],
+        );
+      },
+    );
 
     test('имена 1.1.157 не читаются: умолчание «включено»', () {
-      final file = parseLxBackup(_file([
-        _node('a', {'taildrop_commands': true, 'taildrop_autosave': true}),
-      ]));
+      final file = parseLxBackup(
+        _file([
+          _node('a', {'taildrop_commands': true, 'taildrop_autosave': true}),
+        ]),
+      );
       final u = _apply(const [], file).single as UserServer;
-      expect([u.disableTaildropCommands, u.disableTaildropAutosave],
-          [false, false]);
+      expect(
+        [u.disableTaildropCommands, u.disableTaildropAutosave],
+        [false, false],
+      );
     });
 
     test('экспорт: только true', () async {
@@ -326,6 +350,169 @@ void main() {
     });
   });
 
+  // §707 (контракт 1.1.160) — `state_dir_id` только переносится,
+  // `taildrop_double_copy` (поле лаунчера) молча пропускается.
+  group('state_dir_id / taildrop_double_copy', () {
+    final idRe = RegExp(r'^ts-[a-z0-9]{6}$');
+
+    test('импорт: новый узел и член папки получают имя из файла', () {
+      final file = parseLxBackup(
+        _file([
+          _node('a', {'state_dir_id': 'home'}),
+          {
+            'kind': 'folder',
+            'id': 'f1',
+            'name': 'F',
+            'nodes': [
+              _node('m', {'state_dir_id': 'ts-abc123'}),
+            ],
+          },
+        ]),
+      );
+      expect(
+        file.warnings.where((w) => w.detail.contains('state_dir_id')),
+        isEmpty,
+      );
+      final lists = _apply(const [], file);
+      expect(lists.whereType<UserServer>().single.stateDirId, 'home');
+      expect(
+        lists.whereType<FolderServers>().single.members.single.stateDirId,
+        'ts-abc123',
+      );
+    });
+
+    test('совпавший узел своё имя не меняет, отсутствие не сбрасывает', () {
+      final first = _apply(
+        const [],
+        parseLxBackup(
+          _file([
+            _node('a', {'state_dir_id': 'own'}),
+          ]),
+        ),
+      );
+      final second = _apply(
+        first,
+        parseLxBackup(
+          _file([
+            _node('a', {'state_dir_id': 'other'}),
+          ]),
+        ),
+      );
+      expect((second.single as UserServer).stateDirId, 'own');
+      final third = _apply(second, parseLxBackup(_file([_node('a', {})])));
+      expect((third.single as UserServer).stateDirId, 'own');
+      // Свой узел без поля имени не получает.
+      final bare = _apply(const [], parseLxBackup(_file([_node('b', {})])));
+      final fromFile = _apply(
+        bare,
+        parseLxBackup(
+          _file([
+            _node('b', {'state_dir_id': 'x'}),
+          ]),
+        ),
+      );
+      expect((fromFile.single as UserServer).stateDirId, '');
+    });
+
+    test('новый узел с занятым именем получает другое ts-xxxxxx', () {
+      final first = _apply(
+        const [],
+        parseLxBackup(
+          _file([
+            _node('a', {'state_dir_id': 'home'}),
+          ]),
+        ),
+      );
+      final lists = _apply(
+        first,
+        parseLxBackup(
+          _file([
+            _node('b', {'state_dir_id': 'home'}),
+            {
+              'kind': 'folder',
+              'id': 'f1',
+              'name': 'F',
+              'nodes': [
+                _node('m', {'state_dir_id': 'home'}),
+              ],
+            },
+          ]),
+        ),
+      );
+      final servers = lists.whereType<UserServer>().toList();
+      expect(servers.first.stateDirId, 'home');
+      final b = servers[1].stateDirId;
+      final m = lists
+          .whereType<FolderServers>()
+          .single
+          .members
+          .single
+          .stateDirId;
+      expect(b, matches(idRe));
+      expect(m, matches(idRe));
+      expect(b, isNot(m));
+    });
+
+    test('StateDirNames: пустое не генерирует, свободное держит', () {
+      final names = StateDirNames({'a'});
+      expect(names.adopt(''), '');
+      expect(names.adopt('b'), 'b');
+      expect(names.adopt('b'), matches(idRe));
+    });
+
+    test('taildrop_double_copy: без предупреждения, не применяется', () {
+      final file = parseLxBackup(
+        _file([
+          _node('a', {
+            'taildrop_double_copy': {'peer_id': 'n1', 'peer_name': 'pc'},
+          }),
+        ]),
+      );
+      expect(
+        file.warnings.where((w) => w.detail.contains('taildrop_double')),
+        isEmpty,
+      );
+      expect(_apply(const [], file).single, isA<UserServer>());
+    });
+
+    test('экспорт: state_dir_id как есть, taildrop_double_copy нет', () async {
+      const raw =
+          '[Interface]\nPrivateKey = '
+          'yAnz5TF+lXXJte14tji3zlMNq+hd2rYUIgJBgB3fBmk=\n'
+          'Address = 10.8.0.2/32\n\n[Peer]\n'
+          'PublicKey = xTIBA5rboUvnH4htodjb6e697QjLERt1NAB4mZqp8Dg=\n'
+          'Endpoint = 203.0.113.1:51820\nAllowedIPs = 0.0.0.0/0\n';
+      UserServer srv(String id, String dir) => UserServer(
+        id: id,
+        name: '',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        rawBody: raw,
+        stateDirId: dir,
+      );
+      final out = await buildLxBackup(
+        lists: [srv('s1', 'ts-q1w2e3')],
+        rules: const [],
+        vars: const {},
+      );
+      final server = ((jsonDecode(out.json) as Map)['sources'] as List)
+          .cast<Map>()
+          .single;
+      expect(server['state_dir_id'], 'ts-q1w2e3');
+      expect(server.containsKey('taildrop_double_copy'), isFalse);
+      final none = await buildLxBackup(
+        lists: [srv('s2', '')],
+        rules: const [],
+        vars: const {},
+      );
+      final s2 = ((jsonDecode(none.json) as Map)['sources'] as List)
+          .cast<Map>()
+          .single;
+      expect(s2.containsKey('state_dir_id'), isFalse);
+    });
+  });
+
   // §707 итер. 9 (контракт 1.1.158, D-141) — секция native_prefs.
   group('native_prefs', () {
     test('экспорт: объект с ключами секции', () async {
@@ -351,10 +538,15 @@ void main() {
     });
 
     test('экспорт без секции — ключа нет', () async {
-      final out =
-          await buildLxBackup(lists: const [], rules: const [], vars: const {});
-      expect((jsonDecode(out.json) as Map).containsKey('native_prefs'),
-          isFalse);
+      final out = await buildLxBackup(
+        lists: const [],
+        rules: const [],
+        vars: const {},
+      );
+      expect(
+        (jsonDecode(out.json) as Map).containsKey('native_prefs'),
+        isFalse,
+      );
     });
 
     test('импорт: известные ключи с типом схемы, без backup_unknown_field', () {
@@ -373,10 +565,7 @@ void main() {
         'notification_send': false,
         'app_theme_mode': 'light',
       });
-      expect(
-        file.warnings.where((w) => w.code == kWarnUnknownField),
-        isEmpty,
-      );
+      expect(file.warnings.where((w) => w.code == kWarnUnknownField), isEmpty);
       expect(
         file.warnings
             .where((w) => w.detail == 'native_prefs.auto_start')

@@ -11,27 +11,28 @@ import '../parser/engine_test_setup.dart';
 void main() {
   setUpAll(loadEngineSections);
 
-  const raw = 'vless://11111111-1111-1111-1111-111111111111@1.2.3.4:443'
+  const raw =
+      'vless://11111111-1111-1111-1111-111111111111@1.2.3.4:443'
       '?security=none#v1';
 
   UserServer server({bool skip = false}) => UserServer(
-        id: 's1',
-        name: '',
-        enabled: true,
-        tagPrefix: '',
-        detourPolicy: DetourPolicy.defaults,
-        rawBody: raw,
-        skipTailscalePresets: skip,
-      );
+    id: 's1',
+    name: '',
+    enabled: true,
+    tagPrefix: '',
+    detourPolicy: DetourPolicy.defaults,
+    rawBody: raw,
+    skipTailscalePresets: skip,
+  );
 
   FolderServers folder({bool skip = false}) => FolderServers(
-        id: 'f1',
-        name: 'F',
-        enabled: true,
-        tagPrefix: '',
-        detourPolicy: DetourPolicy.defaults,
-        members: [FolderMember(raw: raw, skipTailscalePresets: skip)],
-      );
+    id: 'f1',
+    name: 'F',
+    enabled: true,
+    tagPrefix: '',
+    detourPolicy: DetourPolicy.defaults,
+    members: [FolderMember(raw: raw, skipTailscalePresets: skip)],
+  );
 
   test('сервер: true пишется и читается', () {
     final rec = sourceToRecord(server(skip: true));
@@ -44,7 +45,10 @@ void main() {
   test('сервер: false не пишется, отсутствие читается как false', () {
     final rec = sourceToRecord(server());
     expect(rec.containsKey('skip_tailscale_presets'), isFalse);
-    expect((sourceFromRecord(rec).value as UserServer).skipTailscalePresets, isFalse);
+    expect(
+      (sourceFromRecord(rec).value as UserServer).skipTailscalePresets,
+      isFalse,
+    );
   });
 
   test('член папки: true пишется и читается, false не пишется', () {
@@ -55,8 +59,12 @@ void main() {
     expect(back.members.single.skipTailscalePresets, isTrue);
 
     final off = sourceToRecord(folder());
-    expect(((off['nodes'] as List).single as Map).containsKey('skip_tailscale_presets'),
-        isFalse);
+    expect(
+      ((off['nodes'] as List).single as Map).containsKey(
+        'skip_tailscale_presets',
+      ),
+      isFalse,
+    );
   });
 
   test('поле не даёт предупреждения о неизвестном ключе', () {
@@ -71,16 +79,25 @@ void main() {
     expect(sliced.record?['skip_tailscale_presets'], true);
     expect(sliced.dropped, isNot(contains('skip_tailscale_presets')));
     expect(
-        stripUndeclaredBackupFields(BackupRecord.server, rec)['skip_tailscale_presets'],
-        true);
+      stripUndeclaredBackupFields(
+        BackupRecord.server,
+        rec,
+      )['skip_tailscale_presets'],
+      true,
+    );
 
     final f = sourceToRecord(folder(skip: true));
     final fs = sliceBackupRecord(BackupRecord.folder, f);
     final member = (fs.record?['nodes'] as List).single as Map;
     expect(member['skip_tailscale_presets'], true);
     final m = (f['nodes'] as List).single as Map<String, dynamic>;
-    expect(stripUndeclaredBackupFields(BackupRecord.folderNode, m)['skip_tailscale_presets'],
-        true);
+    expect(
+      stripUndeclaredBackupFields(
+        BackupRecord.folderNode,
+        m,
+      )['skip_tailscale_presets'],
+      true,
+    );
   });
 
   // §656 (контракт 1.1.126) — терпимое чтение старого ключа: `skip_presets`
@@ -100,13 +117,17 @@ void main() {
       final rec = sourceToRecord(server())
         ..['skip_presets'] = false
         ..['skip_tailscale_presets'] = true;
-      expect((sourceFromRecord(rec).value as UserServer).skipTailscalePresets,
-          isTrue);
+      expect(
+        (sourceFromRecord(rec).value as UserServer).skipTailscalePresets,
+        isTrue,
+      );
       final rec2 = sourceToRecord(server())
         ..['skip_presets'] = true
         ..['skip_tailscale_presets'] = false;
-      expect((sourceFromRecord(rec2).value as UserServer).skipTailscalePresets,
-          isTrue);
+      expect(
+        (sourceFromRecord(rec2).value as UserServer).skipTailscalePresets,
+        isTrue,
+      );
     });
 
     test('член папки: старый ключ читается без предупреждения', () {
@@ -139,8 +160,10 @@ void main() {
     final m = (frec['nodes'] as List).single as Map;
     expect(m['allow_lan'], true);
     expect(m.containsKey('allow_local'), isFalse);
-    expect((sourceFromRecord(frec).value as FolderServers).members.single,
-        f.members.single);
+    expect(
+      (sourceFromRecord(frec).value as FolderServers).members.single,
+      f.members.single,
+    );
   });
 
   // §707 итер. 9 (контракт 1.1.159) — поля Taildrop узла, знак «выключено»:
@@ -148,7 +171,9 @@ void main() {
   group('disable_taildrop_commands / disable_taildrop_autosave', () {
     test('сервер: true пишется и читается, false не пишется', () {
       final u = server().copyWith(
-          disableTaildropCommands: true, disableTaildropAutosave: true);
+        disableTaildropCommands: true,
+        disableTaildropAutosave: true,
+      );
       final rec = sourceToRecord(u);
       expect(rec['disable_taildrop_commands'], true);
       expect(rec['disable_taildrop_autosave'], true);
@@ -190,8 +215,7 @@ void main() {
       expect(back.disableTaildropAutosave, isFalse);
     });
 
-    test('имена 1.1.157 не читаются: неизвестные ключи, поля по умолчанию',
-        () {
+    test('имена 1.1.157 не читаются: неизвестные ключи, поля по умолчанию', () {
       final rec = sourceToRecord(server())
         ..['taildrop_commands'] = true
         ..['taildrop_autosave'] = true;
@@ -199,13 +223,19 @@ void main() {
       final back = read.value as UserServer;
       expect(back.disableTaildropCommands, isFalse);
       expect(back.disableTaildropAutosave, isFalse);
-      expect(read.unknownKeys,
-          containsAll(['taildrop_autosave', 'taildrop_commands']));
+      expect(
+        read.unknownKeys,
+        containsAll(['taildrop_autosave', 'taildrop_commands']),
+      );
     });
 
     test('резервная копия: поля едут и не снимаются на импорте', () {
-      final rec = sourceToRecord(server().copyWith(
-          disableTaildropCommands: true, disableTaildropAutosave: true));
+      final rec = sourceToRecord(
+        server().copyWith(
+          disableTaildropCommands: true,
+          disableTaildropAutosave: true,
+        ),
+      );
       final sliced = sliceBackupRecord(BackupRecord.server, rec);
       expect(sliced.record?['disable_taildrop_commands'], true);
       expect(sliced.record?['disable_taildrop_autosave'], true);
@@ -218,6 +248,77 @@ void main() {
       expect(NodeRecordFlag.disableTaildropCommands.inConfig, isFalse);
       expect(NodeRecordFlag.disableTaildropAutosave.inConfig, isFalse);
       expect(NodeRecordFlag.allowLan.inConfig, isTrue);
+    });
+  });
+
+  // §707 (контракт 1.1.160) — `state_dir_id` только переносится,
+  // `taildrop_double_copy` известен и молча пропускается.
+  group('state_dir_id / taildrop_double_copy', () {
+    test('сервер: state_dir_id пишется и читается как есть', () {
+      final u = server().copyWith(stateDirId: 'ts-ab12cd');
+      final rec = sourceToRecord(u);
+      expect(rec['state_dir_id'], 'ts-ab12cd');
+      expect(sourceFromRecord(rec).value, u);
+    });
+
+    test('пустое и не строка не пишутся и читаются как отсутствие', () {
+      expect(sourceToRecord(server()).containsKey('state_dir_id'), isFalse);
+      for (final v in <Object>['', 5, true]) {
+        final rec = sourceToRecord(server())..['state_dir_id'] = v;
+        final back = sourceFromRecord(rec).value as UserServer;
+        expect(back.stateDirId, '');
+        expect(sourceToRecord(back).containsKey('state_dir_id'), isFalse);
+      }
+    });
+
+    test('член папки: state_dir_id пишется и читается', () {
+      final f = FolderServers(
+        id: 'f1',
+        name: 'F',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        members: [FolderMember(raw: raw, stateDirId: 'home')],
+      );
+      final frec = sourceToRecord(f);
+      final m = (frec['nodes'] as List).single as Map;
+      expect(m['state_dir_id'], 'home');
+      final back = sourceFromRecord(frec).value as FolderServers;
+      expect(back.members.single, f.members.single);
+    });
+
+    test('taildrop_double_copy: известен, не провозится', () {
+      final rec = sourceToRecord(server())
+        ..['taildrop_double_copy'] = {'peer_id': 'n1', 'peer_name': 'pc'};
+      final read = sourceFromRecord(rec);
+      expect(read.unknownKeys, isNot(contains('taildrop_double_copy')));
+      expect(
+        sourceToRecord(read.value!).containsKey('taildrop_double_copy'),
+        isFalse,
+      );
+
+      final f = FolderServers(
+        id: 'f1',
+        name: 'F',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        members: [FolderMember(raw: raw)],
+      );
+      final frec = sourceToRecord(f);
+      ((frec['nodes'] as List).single as Map)['taildrop_double_copy'] = {
+        'peer_id': 'n1',
+      };
+      final fread = sourceFromRecord(frec);
+      expect(fread.unknownKeys, isNot(contains('taildrop_double_copy')));
+      final m = (sourceToRecord(fread.value!)['nodes'] as List).single as Map;
+      expect(m.containsKey('taildrop_double_copy'), isFalse);
+    });
+
+    test('резервная копия: state_dir_id едет', () {
+      final rec = sourceToRecord(server().copyWith(stateDirId: 'ts-000001'));
+      final sliced = sliceBackupRecord(BackupRecord.server, rec);
+      expect(sliced.record?['state_dir_id'], 'ts-000001');
     });
   });
 }

@@ -457,6 +457,12 @@ final class UserServer extends ServerList {
   final bool disableTaildropCommands;
   final bool disableTaildropAutosave;
 
+  /// §707 (контракт 1.1.160) — поле записи `state_dir_id`: имя каталога
+  /// состояния узла tailscale у лаунчера. У нас НЕ применяется (каталог
+  /// состояния держит индекс §445 по `id` записи), только переносится без
+  /// потерь. Пусто — поля нет.
+  final String stateDirId;
+
   UserServer({
     required super.id,
     required super.name,
@@ -473,6 +479,7 @@ final class UserServer extends ServerList {
     this.allowGateway = false,
     this.disableTaildropCommands = false,
     this.disableTaildropAutosave = false,
+    this.stateDirId = '',
     super.nodes,
   });
 
@@ -495,6 +502,7 @@ final class UserServer extends ServerList {
     bool? allowGateway,
     bool? disableTaildropCommands,
     bool? disableTaildropAutosave,
+    String? stateDirId,
   }) =>
       UserServer(
         id: id,
@@ -514,6 +522,7 @@ final class UserServer extends ServerList {
             disableTaildropCommands ?? this.disableTaildropCommands,
         disableTaildropAutosave:
             disableTaildropAutosave ?? this.disableTaildropAutosave,
+        stateDirId: stateDirId ?? this.stateDirId,
         nodes: nodes ?? this.nodes,
       );
 
@@ -535,12 +544,14 @@ final class UserServer extends ServerList {
           allowLan == other.allowLan &&
           allowGateway == other.allowGateway &&
           disableTaildropCommands == other.disableTaildropCommands &&
-          disableTaildropAutosave == other.disableTaildropAutosave);
+          disableTaildropAutosave == other.disableTaildropAutosave &&
+          stateDirId == other.stateDirId);
 
   @override
   int get hashCode => Object.hash(id, enabled, tagPrefix, detourPolicy, tls,
       rawBody, _eq.hash(warnings), skipTailscalePresets, allowLocal, allowLan,
-      allowGateway, disableTaildropCommands, disableTaildropAutosave);
+      allowGateway, disableTaildropCommands, disableTaildropAutosave,
+      stateDirId);
 }
 
 /// §234 — член папки: самодостаточный парсируемый фрагмент (URI-строка,
@@ -579,6 +590,10 @@ final class FolderMember {
   final bool disableTaildropCommands;
   final bool disableTaildropAutosave;
 
+  /// §707 (контракт 1.1.160) — `state_dir_id`, как у `UserServer`: только
+  /// перенос, не применяется (§445).
+  final String stateDirId;
+
   /// §636 — узловое переопределение TLS-ручек члена.
   final TlsPolicy tls;
 
@@ -598,6 +613,7 @@ final class FolderMember {
     this.allowGateway = false,
     this.disableTaildropCommands = false,
     this.disableTaildropAutosave = false,
+    this.stateDirId = '',
     this.tls = TlsPolicy.none,
     NodeSpec? node,
   }) : node = node ?? _parseFirst(raw, nameHint);
@@ -635,6 +651,7 @@ final class FolderMember {
     bool? allowGateway,
     bool? disableTaildropCommands,
     bool? disableTaildropAutosave,
+    String? stateDirId,
     TlsPolicy? tls,
   }) =>
       FolderMember(
@@ -651,6 +668,7 @@ final class FolderMember {
             disableTaildropCommands ?? this.disableTaildropCommands,
         disableTaildropAutosave:
             disableTaildropAutosave ?? this.disableTaildropAutosave,
+        stateDirId: stateDirId ?? this.stateDirId,
         tls: tls ?? this.tls,
         // Смена raw или имени → re-parse в конструкторе; иначе нода та же.
         node: raw == null && nameHint == null ? node : null,
@@ -673,6 +691,7 @@ final class FolderMember {
           allowGateway == other.allowGateway &&
           disableTaildropCommands == other.disableTaildropCommands &&
           disableTaildropAutosave == other.disableTaildropAutosave &&
+          stateDirId == other.stateDirId &&
           tls == other.tls &&
           _sameGroup(node, other.node));
 
@@ -693,6 +712,7 @@ final class FolderMember {
       allowGateway,
       disableTaildropCommands,
       disableTaildropAutosave,
+      stateDirId,
       tls);
 }
 

@@ -647,6 +647,7 @@ The `nodes` of a subscription are **not stored**: they are re-parsed from `sub_c
   "allow_gateway": true,                      // §656
   "disable_taildrop_commands": true,          // §707 — optional, only `true` is written; see below
   "disable_taildrop_autosave": true,          // §707
+  "state_dir_id":  "ts-ab12cd",               // §707, contract 1.1.160 — carried, not applied; see below
   "detour_policy": { … },                     // LxBox, only when a flag is not default
   "tag_policy":    { "prefix": "Home " }      // LxBox, only when set. The prefix is part of the
                                               // server's root address: changing it rewrites the
@@ -737,6 +738,26 @@ Dart computes from them two sets of final tags of the nodes where a feature is
 off and mirrors them into `boxvpn_boot` (`taildrop_commands_off_tags`,
 `taildrop_autosave_off_tags`, see [SharedPreferences](#sharedpreferences-android)).
 A tag missing from a set means the feature is on.
+
+Two more fields of a tailscale node record (contract 1.1.160), on a root
+server and on a folder member alike; a subscription node has no record and no
+fields:
+
+- `state_dir_id` (string) — the launcher's name for the node's state
+  directory. LxBox does **not** apply it: our state directory is not tied to
+  the tag or to this field, it is found through the index of §445
+  (`tailscale_state.json` by the record `id`). The field is only carried:
+  read and written as is (an empty string or a non-string = no field), goes
+  into a backup unchanged. On import a node that matches by body keeps its own
+  value (a value in the file does not overwrite it, a missing field does not
+  clear it); a new node whose name is already held by another stored node gets
+  a fresh `ts-` + 6 chars `[a-z0-9]`. Nodes without the field never get one
+  generated. Moving a node between the root and a folder keeps the value; a
+  root server split into several folder members keeps it on the first member
+  only.
+- `taildrop_double_copy` (`{peer_id, peer_name?}`) — applied by the launcher
+  only. A known key (no unknown-field warning in storage or in a backup), not
+  stored and not carried: it is dropped silently on read.
 
 #### Node sections — removed (§575)
 
