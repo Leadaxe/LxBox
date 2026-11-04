@@ -259,7 +259,6 @@ class GeneralTab extends StatelessWidget {
               title: Text(getLocalText.s("Backup & restore")),
               subtitle: Text(getLocalText.s("Export subscriptions, routing setup and preferences as JSON.")),
               trailing: const Icon(Icons.chevron_right),
-              contentPadding: EdgeInsets.zero,
               onTap: onOpenBackup,
             ),
           ],
