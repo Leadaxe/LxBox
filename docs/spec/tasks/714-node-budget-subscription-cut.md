@@ -2,10 +2,10 @@
 
 | Field | Value |
 |-------|-------|
-| Status | In progress |
+| Status | Done (эмулятор и п.13 не проверены) |
 | Start date | 2026-11-04 |
-| End date | — |
-| Commits | 6a43ab9d (ветка worktree-agent-ab87118fd334efa76) |
+| End date | 2026-11-04 |
+| Commits | 6a43ab9d код, 962b3bcc спека, f89d26b8 detour, fe64f816 merge develop |
 | Related specs | features/001-SUBSCRIPTIONS, features/007-NODE_LIST, §446 (тормоза на большом списке), §652 (разбор в изоляте), §430 (stale-уведомление), §705 (лимит памяти ядра) |
 
 ## Problem
