@@ -32,7 +32,7 @@ Save и Delete. На вкладке Network узла под Devices есть б�
 | Уведомление по завершении | «file from X», Save, Delete |
 | Блок входящих | вкладка Network узла, под Devices; у каждого файла Save, Delete |
 | Куда сохраняет Save | Downloads |
-| Автосохранение | переключатель «Save received files to Downloads» в блоке Settings вкладки Network узла; свой у каждого узла; по умолчанию выкл.; на устройстве, не в бэкапе; Android 10+ |
+| Автосохранение | переключатель «Save received files to Downloads» в блоке Settings вкладки Network узла; поле записи узла (`taildrop_autosave`), свой у каждого узла; по умолчанию выкл.; в бэкапе; Android 10+ |
 | Тап по уведомлению | вкладка Network узла-получателя |
 
 ## Входы / Выходы

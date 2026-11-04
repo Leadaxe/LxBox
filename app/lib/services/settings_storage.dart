@@ -29,6 +29,7 @@ import 'selectable_to_custom.dart';
 import 'settings_storage_keys.dart';
 import 'storage_migration/migrate_storage.dart';
 import 'subscription/http_cache.dart';
+import 'taildrop_tags_sync.dart' show pushTaildropTags;
 import 'template_loader.dart';
 import 'warp/masque_account.dart';
 import 'warp/warp_account.dart';
@@ -1224,6 +1225,11 @@ class SettingsStorage {
   static Future<String> getNativeMemoryLimit() => _getNativeMemoryLimit();
   static Future<void> setNativeMemoryLimit(String wireValue) =>
       _setNativeMemoryLimit(wireValue);
+  // §707 итер. 9 — тема приложения (AppThemeModeSetting): только JSON.
+  static Future<String> getNativeThemeMode() => _getNativeThemeMode();
+  static Future<void> setNativeThemeMode(String value) =>
+      _setNativeThemeMode(value);
+  static Future<bool> hasNativeThemeMode() => _hasNativeThemeMode();
 
   /// Старт: bootstrap (первый запуск §189 — seed native⇒JSON) или sync
   /// (JSON⇒native). Зовётся из app init до UI.

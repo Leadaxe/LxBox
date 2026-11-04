@@ -10,8 +10,8 @@ inbox without a consent step. On top of the same transport the app exchanges
 the clipboard and links with the desktop launcher (singbox-launcher): the
 "📋 Send" button in the VPN notification opens a chat-like window
 over the current app that sends the phone's clipboard (or shared or selected
-text) to the PC, and text from a PC the user allowed lands in the phone's
-clipboard by itself.
+text) to the PC, and text from the user's own PC lands in the phone's
+clipboard by itself when the node accepts it.
 
 | Field | Value |
 |-------|-------|
@@ -107,7 +107,7 @@ clipboard window, and sends nothing without an explicit send.
   "one link", feed, recipients and refusal order — task 707, iteration 7);
   the window itself `no witness` on a device. **Mutation:** a send to a
   device other than the one in `To:`.
-- **P10. Clipboard text from an allowed PC goes straight into the phone's
+- **P10. Clipboard text from an own PC goes straight into the phone's
   clipboard.** The clipboard file is consumed: its content is put into the
   clipboard, the file is deleted and never shows in the inbox; of several in
   a row the last one wins, a stale one is dropped. **Witness:** `no witness`;
@@ -121,13 +121,13 @@ clipboard window, and sends nothing without an explicit send.
   `no witness`; planned manual check — copy from a password manager, open the
   window, nothing reaches the PC until ➤. **Mutation:** the window sending on
   open.
-- **P12. The clipboard is accepted only from a device the user allowed.**
-  "Clipboard from this device" (and "Links from this device" for links) on
-  the device page is off by default; without it the command is not run and
-  the file is deleted. A received clip is never sent back on its own.
+- **P12. The clipboard is accepted only when the user turned it on for the
+  node.** "Accept clipboard and links from my devices" on the node is off by
+  default and covers own devices only (sharees do not count); without it the
+  command is not run and the file is deleted. A received clip is never sent back on its own.
   **Witness:** `no witness`; planned manual check — switch off, send from the
   launcher, the clipboard is untouched and nothing shows in the inbox.
-  **Mutation:** the phone's clipboard overwritten by a device nobody allowed.
+  **Mutation:** the phone's clipboard overwritten while the setting is off.
 
 ## Controlled parameters
 
@@ -143,7 +143,7 @@ clipboard window, and sends nothing without an explicit send.
 | Send clipboard window → `To: … ▾` | own devices that accept files, from all running Tailscale nodes with Allow Taildrop (with the node's name when there are several nodes); the choice is remembered | the remembered one, else the first |
 | Send clipboard window → ⋮ → Clear | clears the feed with the chosen device | — |
 | Text selection menu → "Send to device" | opens the Send clipboard window with the selected text; shown under the same condition as the notification button | — |
-| Device page → Taildrop → "Clipboard from this device", "Links from this device" | a switch per own device and per kind, on the receiver | off |
+| Network tab → Taildrop → "Accept clipboard and links from my devices" | one switch per node, on the receiver; own devices only; a node record field, in the backup | off |
 
 Core config keys: the receive directory is the endpoint's
 `taildrop_directory`; by default it is `Taildrop` relative to the core's
@@ -180,7 +180,7 @@ Share (files)  → share screen → node (if several running) → own online pee
 Share (text)   → Send clipboard window with that text in the field
 Selection menu → "Send to device" → Send clipboard window with the selected text
 Network tab    → tap on a device → device page "Send file…" → system picker → Taildrop send → progress notification
-Incoming       → core accepts from an own device → clipboard prefix and sender allowed?
+Incoming       → core accepts from an own device → clipboard prefix and node accepts commands?
                  yes → fresh, valid, last of a burst? → content → phone clipboard · file deleted either way
                  no  → node inbox (node's Taildrop directory) → "receiving from X" (Cancel) → "file from X" (Save, Delete)
 Inbox          → Network tab block under Devices → Save → Downloads · Delete → removed
@@ -203,9 +203,10 @@ Node deleted   → its Taildrop directory removed with its state
 - Receiving has no consent step for own devices, as in Tailscale. What arrives
   stays in the inbox until the user saves or deletes it, or the node is
   deleted.
-- A command file that parses is never shown in the inbox: its commands run by
-  the sender's permissions ("Clipboard / Links from this device"), or are
-  dropped as stale, not allowed or superseded, and the file is deleted. One
+- A command file that parses is never shown in the inbox: its commands run when
+  the receiving node accepts them from own devices ("Accept clipboard and
+  links from my devices"), or are dropped as stale, not accepted or
+  superseded, and the file is deleted. One
   that does not parse stays an ordinary inbox file. A received clip is never
   sent back.
 - The clipboard is read only when the Send clipboard window gets focus. There
@@ -223,10 +224,11 @@ Node deleted   → its Taildrop directory removed with its state
 - File names, file contents, clipboard text and device names do not reach the
   app log, the support dump or the Debug API (the same rule as
   [030-TAILSCALE](../030-TAILSCALE/FEATURE.md#rules-and-guarantees)).
-- The inbox is not part of the backup, like the node's state. Neither are the
-  window's remembered recipient and the "Clipboard / Links from this device"
-  switches (owner
-  decision 2026-11-02): they are settings of this phone in this tailnet.
+- The inbox is not part of the backup, like the node's state. Neither is the
+  window's remembered recipient: it is Kotlin's cache on this phone. The
+  node settings "Accept clipboard and links from my devices" and "Save
+  received files to Downloads" are fields of the node record and travel in
+  the backup.
 
 ## Boundaries
 
@@ -262,14 +264,14 @@ Node deleted   → its Taildrop directory removed with its state
 | Send files | Sends files to an own online device from the system "Share" menu or from the device page on the Network tab, with node and peer choice and progress in a notification. | P1–P3, P7 | [send-files.md](FUNCTIONS/send-files.md) |
 | Inbox | Accepts files from own devices without a prompt into the node's inbox, notifies with Cancel / Save / Delete, shows the inbox on the Network tab and deletes it with the node. | P4–P7 | [inbox.md](FUNCTIONS/inbox.md) |
 | Share text | Opens the Send clipboard window with text from "Share" or from "Send to device" in the selection menu. | P8 | [share-text.md](FUNCTIONS/share-text.md) |
-| Command files (clipboard, links) | Sends the clipboard and links to the chosen device as command files from the Send clipboard window (the notification button); runs clipboard and link commands from an allowed device. | P9–P12 | [clipboard-sync.md](FUNCTIONS/clipboard-sync.md) |
+| Command files (clipboard, links) | Sends the clipboard and links to the chosen device as command files from the Send clipboard window (the notification button); runs clipboard and link commands from own devices when the node accepts them. | P9–P12 | [clipboard-sync.md](FUNCTIONS/clipboard-sync.md) |
 
 ## Related features
 
 - [030-TAILSCALE](../030-TAILSCALE/FEATURE.md) — the Tailscale node, its state
   directory that the Taildrop directory lives next to and leaves with
   (device-identity-and-state), and the Network tab that gets the inbox block
-  and the device page with "Send file…" and the Taildrop permissions
+  and the device page with "Send file…", and the Taildrop switches of the node
   (networks-tab).
 - [010-VPN_SERVICE](../010-VPN_SERVICE/FEATURE.md) — the tunnel must be up for
   anything to move ([P7](#promises)); its notification carries the

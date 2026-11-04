@@ -24,6 +24,7 @@ import 'services/subscription/subscription_identity.dart';
 import 'services/debug/bootstrap.dart' as debug_bootstrap;
 import 'services/nav/home_return_observer.dart';
 import 'services/settings_storage.dart';
+import 'services/taildrop_tags_sync.dart' show migrateLegacyTaildropPrefs;
 import 'services/template_loader.dart';
 import 'services/url_launcher.dart';
 import 'services/version_info.dart';
@@ -115,7 +116,14 @@ void main() async {
     // последующие — sync JSON⇒native (диск-истина перезаливает оперативку).
     // ДО UI (UI читает native-тумблеры из JSON-зеркала) и ДО возможного
     // авто-старта VPN. best-effort: ошибка не валит запуск (try выше).
+    // §707 итер. 9 H — перенос из rc.3: autosave.* из lxbox_taildrop в поле
+    // записи узла, затем старые файлы prefs удаляются. ДО пуша тегов
+    // Taildrop внутри bootstrapAndSyncNativePrefs.
+    await migrateLegacyTaildropPrefs();
     await SettingsStorage.bootstrapAndSyncNativePrefs();
+    // §707 итер. 9 — тема из хранилища (перенос из SharedPreferences один
+    // раз) ДО первого кадра.
+    await themeNotifier.load();
     // §279 — язык приложения: применить сохранённую настройку ДО runApp
     // (первый кадр локализован) и ДО seed-миграций ниже (seed-time метки
     // резолвятся через активную локаль — TemplateLoader.load() кладёт кэш
@@ -279,36 +287,54 @@ class _FallbackErrorWidget extends StatelessWidget {
 }
 
 /// Global theme notifier — allows changing theme from anywhere.
+///
+/// §707 итер. 9 — тема хранится ключом `native_prefs.app_theme_mode`
+/// (`lxbox_settings.json`, едет в бэкапе; в зеркало `boxvpn_boot` не идёт).
+/// [load] зовётся на старте после загрузки хранилища.
 class ThemeNotifier extends ChangeNotifier {
-  ThemeNotifier() {
-    _load();
-  }
-
   ThemeMode _mode = ThemeMode.system;
   ThemeMode get mode => _mode;
 
-  static const _key = 'app_theme_mode';
+  /// Ключ прежнего места — `FlutterSharedPreferences` (до итерации 9).
+  static const _legacyKey = 'app_theme_mode';
 
-  Future<void> _load() async {
-    final prefs = await SharedPreferences.getInstance();
-    final stored = prefs.getString(_key);
-    _mode = switch (stored) {
-      'light' => ThemeMode.light,
-      'dark' => ThemeMode.dark,
-      _ => ThemeMode.system,
-    };
+  static ThemeMode _fromWire(String v) => switch (v) {
+        AppThemeModeSetting.light => ThemeMode.light,
+        AppThemeModeSetting.dark => ThemeMode.dark,
+        _ => ThemeMode.system,
+      };
+
+  static String _toWire(ThemeMode m) => switch (m) {
+        ThemeMode.light => AppThemeModeSetting.light,
+        ThemeMode.dark => AppThemeModeSetting.dark,
+        ThemeMode.system => AppThemeModeSetting.system,
+      };
+
+  /// Перенос один раз: ключа в хранилище нет, а в SharedPreferences есть —
+  /// значение переезжает, ключ из prefs удаляется. Затем чтение хранилища.
+  Future<void> load() async {
+    if (!await SettingsStorage.hasNativeThemeMode()) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final old = prefs.getString(_legacyKey);
+        if (old != null) {
+          await SettingsStorage.setNativeThemeMode(old);
+          await prefs.remove(_legacyKey);
+        }
+      } catch (_) {
+        // prefs недоступны — остаётся значение по умолчанию.
+      }
+    }
+    final mode = _fromWire(await SettingsStorage.getNativeThemeMode());
+    if (mode == _mode) return;
+    _mode = mode;
     notifyListeners();
   }
 
   Future<void> setMode(ThemeMode mode) async {
     _mode = mode;
     notifyListeners();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_key, switch (mode) {
-      ThemeMode.light => 'light',
-      ThemeMode.dark => 'dark',
-      ThemeMode.system => 'system',
-    });
+    await SettingsStorage.setNativeThemeMode(_toWire(mode));
   }
 }
 

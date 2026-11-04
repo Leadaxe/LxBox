@@ -6881,11 +6881,11 @@
   "Taildrop is off for this node.": {
     "value": "Taildrop у этого узла выключен."
   },
-  "Clipboard from this device": {
-    "value": "Буфер обмена с этого устройства"
+  "Accept clipboard and links from my devices": {
+    "value": "Принимать буфер обмена и ссылки с моих устройств"
   },
-  "Links from this device": {
-    "value": "Ссылки с этого устройства"
+  "Devices shared by other users are not counted as yours.": {
+    "value": "Устройства, которыми поделились другие пользователи, вашими не считаются."
   },
   "Core: lx.wg.idle_suspend. An idle WireGuard endpoint that is not on the active route is torn down and rebuilt on its next dial.": {
     "value": "Ядро: lx.wg.idle_suspend. Простаивающий эндпоинт WireGuard вне активного маршрута разбирается и собирается заново при следующем подключении."

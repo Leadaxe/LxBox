@@ -10,6 +10,7 @@ link, not a copy.
 | Architecture, config pipeline, detour, module map | [`ARCHITECTURE.md`](ARCHITECTURE.md) |
 | Sanitiser/guard registry | [`GUARDS.md`](GUARDS.md) |
 | Storage format, NodeLink | [`STORAGE.md`](STORAGE.md) |
+| Where a setting lives (JSON, native mirror, Kotlin cache) | [`ARCHITECTURE.md`](ARCHITECTURE.md#where-a-setting-lives) §5 |
 | `wizard_template.json` | [`TEMPLATE.md`](TEMPLATE.md) |
 | Localization | [`l10n.md`](l10n.md) |
 | Build, signing, CI jobs, worktree bootstrap | [`BUILD.md`](BUILD.md) |
@@ -49,6 +50,9 @@ Owner's decision, 2026-09-24.
   `docs/spec/tasks/NNN-title.md`, template and criteria in
   [`docs/spec/tasks/README.md`](spec/tasks/README.md).
 - Features describe a capability; tasks log one work cycle.
+- A new setting starts as a field in `lxbox_settings.json`; Kotlin gets it
+  through the `boxvpn_boot` mirror
+  ([ARCHITECTURE §5](ARCHITECTURE.md#where-a-setting-lives)).
 - Index of features: [`docs/spec/features/README.md`](spec/features/README.md);
   legacy feature specs (pre Spec Kit): [`docs/spec/tasks/F-INDEX.md`](spec/tasks/F-INDEX.md).
   Demoted/superseded specs live in `docs/spec/tasks/` (§054).

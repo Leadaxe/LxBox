@@ -799,6 +799,14 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
                           : const {},
                       onSaveExitNode: _saveExitNode,
                       onSaveFields: _saveTailscaleFields,
+                      // §707 итер. 9 — поля Taildrop записи узла.
+                      taildropFlags: (
+                        commands:
+                            _recordFlag(NodeRecordFlag.taildropCommands),
+                        autosave:
+                            _recordFlag(NodeRecordFlag.taildropAutosave),
+                      ),
+                      onSaveRecordFlag: _saveTaildropFlag,
                     ),
                   // §392/§501 — диагностика + уведомления узла.
                   NodeDiagnosticsTab(
@@ -1039,6 +1047,19 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
               "Peers route any traffic through this device; it leaves through the outbound chosen in the Tunnel ingress preset.")),
       const SizedBox(height: 16),
     ];
+  }
+
+  /// §707 итер. 9 — поле Taildrop записи с вкладки Network: тот же путь,
+  /// что прочие поля записи. `true` — записано.
+  Future<bool> _saveTaildropFlag(NodeRecordFlag flag, bool value) async {
+    final err = await widget.subController
+        .setNodeRecordFlag(widget.index, widget.memberIndex, flag, value);
+    if (!mounted) return err == null;
+    if (err != null) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(err.render())));
+    }
+    return err == null;
   }
 
   Future<void> _setRecordFlag(NodeRecordFlag flag, bool value) async {

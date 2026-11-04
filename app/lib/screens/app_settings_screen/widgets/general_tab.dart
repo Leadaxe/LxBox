@@ -1,7 +1,29 @@
 import 'package:flutter/material.dart';
 
 import '../../../services/l10n/locale_controller.dart';
+import '../../../services/settings_storage.dart';
 import 'update_status_row.dart';
+
+/// §707 итер. 9 — кнопка уведомления VPN → её ключ секции `native_prefs`
+/// (JSON-истина, зеркало `boxvpn_boot` пишет SettingsStorage).
+const Map<String, String> kNotificationButtonPrefKeys = {
+  'stop': NativePrefsKeys.notificationStop,
+  'restart': NativePrefsKeys.notificationRestart,
+  'send': NativePrefsKeys.notificationSend,
+};
+
+/// Кнопки уведомления из хранилища (дефолт — все включены).
+Future<Map<String, bool>> loadNotificationButtons() async => {
+      for (final e in kNotificationButtonPrefKeys.entries)
+        e.key: await SettingsStorage.getNativeBool(e.value),
+    };
+
+/// Записать кнопку уведомления: JSON + зеркало, уведомление обновляет натив.
+Future<void> saveNotificationButton(String button, bool enabled) async {
+  final key = kNotificationButtonPrefKeys[button];
+  if (key == null) return;
+  await SettingsStorage.setNativeBool(key, enabled);
+}
 
 /// General tab для App Settings.
 ///

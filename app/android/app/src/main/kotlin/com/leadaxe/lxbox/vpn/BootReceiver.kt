@@ -63,27 +63,20 @@ class BootReceiver : BroadcastReceiver() {
         /// L10n.ctx в момент рендера нативных поверхностей (без Flutter).
         private const val KEY_APP_LANGUAGE = "app_language"
 
-        /// §279 — зеркало последнего значения, которое МЫ запушили в
-        /// LocaleManager (33+): "" = пустой список (system), "en"/"ru" — явный
-        /// выбор; отсутствие ключа = ещё не пушили. Нужен трёхстороннему
-        /// reconciliation на Dart-старте (спека 279 §6.4): расхождение
-        /// getApplicationLocales с этим зеркалом = юзер менял язык в системных
-        /// Settings → система побеждает.
-        private const val KEY_LAST_PUSHED_LOCALE = "last_pushed_locale"
+        /// §707 итер. 9 — производные множества итоговых тегов узлов с галками
+        /// Taildrop (`taildrop_commands` / `taildrop_autosave` записи узла).
+        /// Зеркало из Dart (§189), заменяется целиком каналом setTaildropTags.
+        private const val KEY_TAILDROP_COMMANDS_TAGS = "taildrop_commands_tags"
+        private const val KEY_TAILDROP_AUTOSAVE_TAGS = "taildrop_autosave_tags"
 
-        /// §279 — updateShortcuts отработал под rate-limit (locale-change в
-        /// background) → гарантированный retry из MainActivity.onResume
-        /// (foreground, rate-limit не применяется).
-        private const val KEY_SHORTCUT_RELABEL_PENDING = "shortcut_relabel_pending"
-        /// §428 — предохранитель от шторма `START_STICKY`-рестартов: сколько
-        /// раз система пересоздала сервис с null-intent в текущем окне и когда
-        /// окно открылось. Сбрасывается успешным `Started`.
-        private const val KEY_STICKY_RESTART_COUNT = "sticky_restart_count"
-        private const val KEY_STICKY_RESTART_WINDOW_START = "sticky_restart_window_start"
+        /// §707 итер. 9 — кнопки уведомления VPN (native_prefs), дефолт true.
+        private const val KEY_NOTIFICATION_STOP = "notification_stop"
+        private const val KEY_NOTIFICATION_RESTART = "notification_restart"
+        private const val KEY_NOTIFICATION_SEND = "notification_send"
+
+        /// §428 — окно предохранителя от шторма `START_STICKY`-рестартов.
+        /// Счётчик, начало окна и «туннель желателен» — в [NativeCache].
         const val STICKY_RESTART_WINDOW_MS = 5 * 60 * 1000L
-        /// §428 — «туннель желателен»: true с момента Started до явного
-        /// setStatus(Stopped). Читает VpnWatchdogReceiver в свежем процессе.
-        private const val KEY_VPN_DESIRED = "vpn_desired"
         const val STICKY_RESTART_LIMIT = 3
 
         /// Три режима фоновой работы tunnel'а. По умолчанию "never" — максимум
@@ -109,59 +102,105 @@ class BootReceiver : BroadcastReceiver() {
                 .getString(KEY_APP_LANGUAGE, "system") ?: "system"
         }
 
-        /// §279 — см. KEY_LAST_PUSHED_LOCALE. null = ещё не пушили.
+        /// Зеркало `boxvpn_boot` — для NativeCache (одноразовая чистка ключей
+        /// состояния, переехавших в кэш).
+        internal fun prefs(context: Context) =
+            context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+
+        /// §279 — последнее значение, которое МЫ запушили в LocaleManager (33+):
+        /// "" = пустой список (system), "en"/"ru" — явный выбор; null = ещё не
+        /// пушили. Нужен трёхстороннему reconciliation на Dart-старте (спека 279
+        /// §6.4). Хранится в [NativeCache].
         fun setLastPushedLocale(context: Context, value: String) {
-            context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
-                .edit().putString(KEY_LAST_PUSHED_LOCALE, value).apply()
+            NativeCache.setLastPushedLocale(context, value)
         }
 
-        fun getLastPushedLocale(context: Context): String? {
-            return context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
-                .getString(KEY_LAST_PUSHED_LOCALE, null)
-        }
+        fun getLastPushedLocale(context: Context): String? = NativeCache.lastPushedLocale(context)
 
-        /// §279 — см. KEY_SHORTCUT_RELABEL_PENDING.
+        /// §279 — updateShortcuts отработал под rate-limit (locale-change в
+        /// background) → гарантированный retry из MainActivity.onResume.
+        /// Хранится в [NativeCache].
         fun setShortcutRelabelPending(context: Context, pending: Boolean) {
-            context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
-                .edit().putBoolean(KEY_SHORTCUT_RELABEL_PENDING, pending).apply()
+            NativeCache.setShortcutRelabelPending(context, pending)
         }
 
         /// §428 — зафиксировать sticky-рестарт; возвращает номер рестарта в
         /// текущем окне (1 = первый). Окно старше STICKY_RESTART_WINDOW_MS
-        /// открывается заново.
+        /// открывается заново. Сбрасывается успешным `Started`.
         fun noteStickyRestart(context: Context, now: Long = System.currentTimeMillis()): Int {
-            val prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
-            val windowStart = prefs.getLong(KEY_STICKY_RESTART_WINDOW_START, 0L)
+            val windowStart = NativeCache.stickyRestartWindowStart(context)
             val inWindow = windowStart > 0L && now - windowStart < STICKY_RESTART_WINDOW_MS
-            val count = if (inWindow) prefs.getInt(KEY_STICKY_RESTART_COUNT, 0) + 1 else 1
-            prefs.edit()
-                .putInt(KEY_STICKY_RESTART_COUNT, count)
-                .putLong(KEY_STICKY_RESTART_WINDOW_START, if (inWindow) windowStart else now)
-                .apply()
+            val count = if (inWindow) NativeCache.stickyRestartCount(context) + 1 else 1
+            NativeCache.setStickyRestarts(context, count, if (inWindow) windowStart else now)
             return count
         }
 
+        /// §428 — «туннель желателен»: true с момента Started до явного
+        /// setStatus(Stopped). Читает VpnWatchdogReceiver в свежем процессе.
         fun setVpnDesired(context: Context, desired: Boolean) {
-            context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
-                .edit().putBoolean(KEY_VPN_DESIRED, desired).apply()
+            NativeCache.setVpnDesired(context, desired)
         }
 
-        fun isVpnDesired(context: Context): Boolean {
-            return context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
-                .getBoolean(KEY_VPN_DESIRED, false)
-        }
+        fun isVpnDesired(context: Context): Boolean = NativeCache.isVpnDesired(context)
 
         fun resetStickyRestarts(context: Context) {
-            context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
-                .edit()
-                .remove(KEY_STICKY_RESTART_COUNT)
-                .remove(KEY_STICKY_RESTART_WINDOW_START)
-                .apply()
+            NativeCache.resetStickyRestarts(context)
         }
 
-        fun isShortcutRelabelPending(context: Context): Boolean {
+        fun isShortcutRelabelPending(context: Context): Boolean =
+            NativeCache.isShortcutRelabelPending(context)
+
+        /// §707 итер. 9 — заменить оба множества целиком. Возвращает `true`,
+        /// если в autosave-множестве появился тег, которого не было.
+        fun setTaildropTags(context: Context, commands: Collection<String>, autosave: Collection<String>): Boolean {
+            val before = taildropAutosaveTags(context)
+            val newAutosave = autosave.toSet()
+            context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE).edit()
+                .putStringSet(KEY_TAILDROP_COMMANDS_TAGS, commands.toSet())
+                .putStringSet(KEY_TAILDROP_AUTOSAVE_TAGS, newAutosave)
+                .apply()
+            return !before.containsAll(newAutosave)
+        }
+
+        /// Копия: множество из getStringSet менять нельзя.
+        fun taildropCommandsTags(context: Context): Set<String> =
+            context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+                .getStringSet(KEY_TAILDROP_COMMANDS_TAGS, null)?.toSet() ?: emptySet()
+
+        fun taildropAutosaveTags(context: Context): Set<String> =
+            context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+                .getStringSet(KEY_TAILDROP_AUTOSAVE_TAGS, null)?.toSet() ?: emptySet()
+
+        /// §707 итер. 9 — кнопки уведомления VPN, зеркало native_prefs.
+        /// Default true. После записи уведомление обновляет вызывающий.
+        fun setNotificationStop(context: Context, enabled: Boolean) {
+            context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+                .edit().putBoolean(KEY_NOTIFICATION_STOP, enabled).apply()
+        }
+
+        fun isNotificationStop(context: Context): Boolean {
             return context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
-                .getBoolean(KEY_SHORTCUT_RELABEL_PENDING, false)
+                .getBoolean(KEY_NOTIFICATION_STOP, true)
+        }
+
+        fun setNotificationRestart(context: Context, enabled: Boolean) {
+            context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+                .edit().putBoolean(KEY_NOTIFICATION_RESTART, enabled).apply()
+        }
+
+        fun isNotificationRestart(context: Context): Boolean {
+            return context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+                .getBoolean(KEY_NOTIFICATION_RESTART, true)
+        }
+
+        fun setNotificationSend(context: Context, enabled: Boolean) {
+            context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+                .edit().putBoolean(KEY_NOTIFICATION_SEND, enabled).apply()
+        }
+
+        fun isNotificationSend(context: Context): Boolean {
+            return context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+                .getBoolean(KEY_NOTIFICATION_SEND, true)
         }
 
         fun setMemoryLimit(context: Context, value: String) {

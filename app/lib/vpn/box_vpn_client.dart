@@ -285,24 +285,102 @@ class BoxVpnClient {
     return ok ?? false;
   }
 
-  /// §707 итер. 8 — кнопки уведомления VPN: `stop`, `restart`, `send`.
-  /// Канал не ответил — пусто, вызывающий считает все включёнными.
-  Future<Map<String, bool>> getNotificationButtons() async {
-    final r = await _invoke<Map<dynamic, dynamic>>(
-      _Methods.getNotificationButtons,
+  /// §707 итер. 9 — кнопки уведомления VPN: зеркало ключей `native_prefs`
+  /// `notification_stop` / `notification_restart` / `notification_send` в
+  /// `boxvpn_boot` (как core_logs_verbose). Писатели — только через
+  /// `SettingsStorage.setNativeBool`.
+  Future<bool> setNotificationStop(bool enabled) async {
+    final ok = await _invoke<bool>(
+      _Methods.setNotificationStop,
+      args: {'enabled': enabled},
+      timeout: _Timeouts.settings,
+      onTimeoutValue: false,
+    );
+    return ok ?? false;
+  }
+
+  /// Канал не ответил — кнопка считается включённой (дефолт).
+  Future<bool> getNotificationStop() async {
+    final ok = await _invoke<bool>(
+      _Methods.getNotificationStop,
+      timeout: _Timeouts.settings,
+      onTimeoutValue: true,
+    );
+    return ok ?? true;
+  }
+
+  Future<bool> setNotificationRestart(bool enabled) async {
+    final ok = await _invoke<bool>(
+      _Methods.setNotificationRestart,
+      args: {'enabled': enabled},
+      timeout: _Timeouts.settings,
+      onTimeoutValue: false,
+    );
+    return ok ?? false;
+  }
+
+  /// Канал не ответил — кнопка считается включённой (дефолт).
+  Future<bool> getNotificationRestart() async {
+    final ok = await _invoke<bool>(
+      _Methods.getNotificationRestart,
+      timeout: _Timeouts.settings,
+      onTimeoutValue: true,
+    );
+    return ok ?? true;
+  }
+
+  Future<bool> setNotificationSend(bool enabled) async {
+    final ok = await _invoke<bool>(
+      _Methods.setNotificationSend,
+      args: {'enabled': enabled},
+      timeout: _Timeouts.settings,
+      onTimeoutValue: false,
+    );
+    return ok ?? false;
+  }
+
+  /// Канал не ответил — кнопка считается включённой (дефолт).
+  Future<bool> getNotificationSend() async {
+    final ok = await _invoke<bool>(
+      _Methods.getNotificationSend,
+      timeout: _Timeouts.settings,
+      onTimeoutValue: true,
+    );
+    return ok ?? true;
+  }
+
+  /// §707 итер. 9 — итоговые теги узлов с включёнными полями записи
+  /// `taildrop_commands` / `taildrop_autosave`: оба множества зеркала
+  /// `boxvpn_boot` заменяются целиком. `true` — записано.
+  Future<bool> setTaildropTags({
+    required List<String> commands,
+    required List<String> autosave,
+  }) async {
+    final ok = await _invoke<bool>(
+      _Methods.setTaildropTags,
+      args: {'commands': commands, 'autosave': autosave},
+      timeout: _Timeouts.settings,
+      onTimeoutValue: false,
+    );
+    return ok ?? false;
+  }
+
+  /// §707 итер. 9 — перенос из rc.3: итоговые теги с `autosave.*` старого
+  /// файла `lxbox_taildrop`. Файла или канала нет — пусто.
+  Future<List<String>> taildropLegacyAutosaveTags() async {
+    final r = await _invoke<List<dynamic>>(
+      _Methods.taildropLegacyAutosaveTags,
       timeout: _Timeouts.settings,
       onTimeoutValue: null,
     );
-    return {
-      for (final e in (r ?? const {}).entries)
-        if (e.value is bool) '${e.key}': e.value as bool,
-    };
+    return [for (final t in r ?? const []) if (t is String) t];
   }
 
-  Future<bool> setNotificationButton(String button, bool enabled) async {
+  /// §707 итер. 9 — удалить старые файлы `lxbox_taildrop` и
+  /// `lxbox_notification_buttons`. `true` — удалено (или их не было).
+  Future<bool> deleteLegacyPrefs() async {
     final ok = await _invoke<bool>(
-      _Methods.setNotificationButton,
-      args: {'button': button, 'enabled': enabled},
+      _Methods.deleteLegacyPrefs,
       timeout: _Timeouts.settings,
       onTimeoutValue: false,
     );

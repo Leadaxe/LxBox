@@ -21,6 +21,7 @@ import '../models/tls_policy.dart';
 import '../models/tunnel_status.dart';
 import '../models/validation.dart';
 import '../services/app_log.dart';
+import '../services/taildrop_tags_sync.dart' show pushTaildropTags;
 import 'subscription_controller/cache_rehydrate.dart';
 import 'subscription_controller/core_reject_ops.dart';
 import '../services/core_reject/core_reject_guard.dart';
@@ -41,7 +42,6 @@ import '../services/builder/direction_pool_preview.dart'
     show readStoredBuildSettings;
 import '../services/builder/if_engine.dart' show TemplateWarning;
 import '../vpn/box_vpn_client.dart';
-import '../vpn/cc_channel.dart';
 import '../services/parser/body_decoder.dart';
 import '../services/parser/ini_parser.dart';
 import '../services/parser/json_comments.dart';
@@ -1675,6 +1675,8 @@ class SubscriptionController extends ChangeNotifier {
         allowLocal: m.allowLocal,
         allowLan: m.allowLan,
         allowGateway: m.allowGateway,
+        taildropCommands: m.taildropCommands, // §707 итер. 9
+        taildropAutosave: m.taildropAutosave,
         tls: m.tls, // §636 — узловая политика едет с узлом
         nodes: [if (m.node != null) m.node!],
       );
@@ -2481,6 +2483,8 @@ class SubscriptionController extends ChangeNotifier {
                 allowLocal: server.allowLocal,
                 allowLan: server.allowLan,
                 allowGateway: server.allowGateway,
+                taildropCommands: server.taildropCommands, // §707 итер. 9
+                taildropAutosave: server.taildropAutosave,
                 tls: server.tls), // §636
           ]
         : _bindAutoMembers([
@@ -2495,6 +2499,8 @@ class SubscriptionController extends ChangeNotifier {
                   allowLocal: server.allowLocal,
                   allowLan: server.allowLan,
                   allowGateway: server.allowGateway,
+                  taildropCommands: server.taildropCommands, // §707 итер. 9
+                  taildropAutosave: server.taildropAutosave,
                   tls: server.tls), // §636
           ], server.nodes, folder.id);
     folderEntry._replaceList(
@@ -2931,6 +2937,10 @@ class SubscriptionController extends ChangeNotifier {
       // записей: поколение они не двигают.
       final config = await SettingsStorage.withoutDirtyBump(_generate);
       _lastGeneratedConfig = config;
+      // §707 итер. 9 — итоговые теги узлов с полями Taildrop: теги этой
+      // сборки (с суффиксом дедупа), в зеркало boxvpn_boot.
+      unawaited(pushTaildropTags(_entries.map((e) => e.list).toList(),
+          emitted: _lastTagMap));
       if (SettingsStorage.configDirtyGeneration == generation) {
         configDirty = false;
       } else {
@@ -3005,12 +3015,6 @@ class SubscriptionController extends ChangeNotifier {
     Map<NodeSpec, NodeSpec> renamed,
   ) async {
     if (!hasTailscaleNodes(before) && !hasTailscaleNodes(after)) return;
-    // §707 итер. 2 — автосохранение Taildrop хранится по тегу узла: узел
-    // ушёл или сменил тег — запись снимается.
-    final goneTags = goneTailscaleTags(before, after);
-    if (goneTags.isNotEmpty) {
-      unawaited(CcChannel.instance.forgetTaildropAutoSave(goneTags));
-    }
     final root = await _tailscaleStateRoot();
     if (root.isEmpty) return;
     try {
@@ -3067,7 +3071,13 @@ class SubscriptionController extends ChangeNotifier {
       members[memberIndex] = flag.onMember(members[memberIndex], value);
       entry._replaceList(list.copyWith(members: members));
     }
-    await _persist();
+    // §707 итер. 9 — поля Taildrop в конфиг не идут: конфиг не грязнеет,
+    // множества тегов уходят в зеркало сразу (без пересборки).
+    await _persist(keepDirtyFlag: !flag.inConfig);
+    if (!flag.inConfig) {
+      await pushTaildropTags(_entries.map((e) => e.list).toList(),
+          emitted: _lastTagMap);
+    }
     notifyListeners();
     return null;
   }

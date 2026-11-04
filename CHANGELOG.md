@@ -14,6 +14,14 @@
   Servers on the DNS tab move by dragging the strip on the left of a row, as
   DNS rules do; the order is saved in the template's server list.
 
+### Changed
+
+- **Taildrop and notification settings in storage ([task 707](docs/spec/tasks/707-taildrop-send-receive-files.md)).**
+  The Taildrop settings of a node (accept clipboard and links from my devices,
+  save received files to Downloads) and the VPN notification buttons moved
+  into `lxbox_settings.json` and the backup. Per-device Taildrop permissions
+  are removed. The app theme mode is backed up.
+
 ## [2.25.19] — 2026-11-02
 
 ### Added

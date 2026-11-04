@@ -1194,6 +1194,49 @@ L×Box's state lives in two places with different semantics:
 - **`wizard_template.json`** is the **catalog**: what exists at all (the presets, vars, sections and defaults).
 - **`lxbox_settings.json`** is the **user state**: what the user chose and configured (the vars overrides, sources, rules, and so on). Since §439 sources, chains, rules and DNS records are stored as contract 1.0 records ([STORAGE.md](STORAGE.md#storage-form-and-migration-439)).
 
+#### Where a setting lives
+
+1. A setting is anything the user chooses. Every setting lives in
+   `lxbox_settings.json`. A setting of a node, folder, subscription or rule is
+   a field of its record. The backup, the import, the Debug API and the UI know
+   this file and nothing else.
+2. Kotlin runs without Flutter: at boot, in the VPN service, in the
+   notification. It reads one mirror, the SharedPreferences file `boxvpn_boot`,
+   and Dart fills it: the JSON first, then the mirror, with a full resync on
+   every start. Kotlin does not write a setting and does not open the JSON. A
+   value Kotlin needs that is computed from settings (`has_tun`, the final tags
+   of the nodes with Taildrop options) goes into the same mirror and nowhere
+   else.
+3. Kotlin's internal cache is one SharedPreferences file, `lxbox_native_cache`:
+   what Kotlin chose or remembered by itself and the user never configured.
+   Kotlin writes and reads it, Dart does not know about it, it is not backed
+   up. A broken or empty file is an empty cache.
+4. `shared_prefs/` holds exactly two files: `boxvpn_boot` and
+   `lxbox_native_cache`. A new key for Kotlin is a line in the key list of the
+   mirror or of the cache, not a new `getSharedPreferences`.
+5. Dart's state and caches (`sub_cache/`, logs, `support_state.json`) are
+   files of their own and do not go into the JSON.
+
+```
+   UI · Debug API · backup import
+              │ write
+              ▼
+     lxbox_settings.json ─────────── the only place a setting lives;
+       (SettingsStorage)             an entity's setting = a field of its record
+          │           │
+   read   │           │ push: the keys Kotlin needs + values computed from them
+   (Dart) ▼           ▼
+   in-memory cache   SharedPreferences boxvpn_boot ── the only mirror, Dart writes
+                              │ read only
+                              ▼
+                 Kotlin without Flutter: boot auto-start · VPN service · notification
+                              │ its own choices (last recipient, restart guard, …)
+                              ▼
+                   SharedPreferences lxbox_native_cache ── Kotlin's cache, Kotlin writes
+
+   not settings → memory / own files: sub_cache/, applog, in-flight Taildrop files
+```
+
 #### Catalog (template, bundled in APK)
 
 ```
@@ -1279,20 +1322,32 @@ the README names the version that ships in the APK.
 └── sub_cache/              # HttpCache — the raw body plus headers of the subscriptions;
     └── <url.hashCode>{,.headers}   # the only persisted source of subscription nodes (§027/§129)
 
-SharedPreferences (Android):
-├── app_theme_mode                       # Flutter UI prefs (haptic_enabled → vars, §159)
-└── boxvpn_boot.{auto_start_vpn, keep_vpn_on_exit, background_mode,
-                 core_logs_enabled, allow_bypass, auto_redirect,
-                 has_tun}                # §189 — a MIRROR of the native_prefs JSON section
-                                         # (a working copy in memory). The truth lives in the
-                                         # lxbox_settings.json. has_tun (§192) —
-                                         # JSON; has_tun is computed from vpn_mode and lives only here.
+SharedPreferences (Android), shared_prefs/:
+├── boxvpn_boot                          # the MIRROR, Dart writes, Kotlin reads
+│   ├── auto_start_vpn, keep_vpn_on_exit, background_mode,
+│   │   core_logs_enabled, core_logs_verbose, allow_bypass, auto_redirect,
+│   │   memory_limit, notification_stop, notification_restart,
+│   │   notification_send                # a copy of the native_prefs JSON section;
+│   │                                    # the truth lives in lxbox_settings.json
+│   └── has_tun, app_language,
+│       taildrop_commands_tags,
+│       taildrop_autosave_tags           # derived from settings, live only here
+└── lxbox_native_cache                   # Kotlin's own cache, Kotlin writes and reads, not backed up
+    ├── clip_tag, clip_peer, clip_name   #   the last recipient of the Send window
+    └── vpn_desired, sticky_restart_count, sticky_restart_window_start,
+        last_pushed_locale, shortcut_relabel_pending
+
+lxbox_automation, FlutterSharedPreferences — reviewed separately.
 ```
 
-##### The three storage levels of the native prefs (§189 / §192)
+##### The three storage levels of the native prefs
 
-Six Android settings (`auto_start`, `keep_on_exit`, `background_mode`,
-`core_logs_enabled`, `allow_bypass`, `auto_redirect`) live at three levels:
+The Android settings of the `native_prefs` section (`auto_start`, `keep_on_exit`,
+`background_mode`, `core_logs_enabled`, `core_logs_verbose`, `allow_bypass`,
+`auto_redirect`, `memory_limit`, and the notification buttons
+`notification_stop`, `notification_restart`, `notification_send`) live at
+three levels (§189 / §192). `native_prefs` holds the phone's own settings; the
+keys Kotlin needs are mirrored, `app_theme_mode` is not.
 
 | Level | Where | Role |
 |---|---|---|
@@ -1301,7 +1356,7 @@ Six Android settings (`auto_start`, `keep_on_exit`, `background_mode`,
 | **in-memory** | `SettingsStorage._cache` | a lazily loaded cache of the JSON inside the Dart process |
 
 **Why a native copy is needed:** some code runs when the Flutter engine is
-unavailable and there is nothing to read the JSON with — `BOOT_COMPLETED` (the
+unavailable, and Kotlin reads the mirror only, never the JSON — `BOOT_COMPLETED` (the
 `BootReceiver` auto-start), a swipe `onTaskRemoved` (the keep-on-exit decision),
 and `openTun`/`establish` (allow_bypass, per-app). These points read the native copy **synchronously**.
 
@@ -1314,7 +1369,7 @@ repairs itself). Every writer (the UI, the `backup_service` import, the Debug AP
 through this layer — direct native writes are ephemeral (the sync rolls them back).
 [`lib/services/settings_storage/native_prefs.dart`](../app/lib/services/settings_storage/native_prefs.dart).
 
-**`has_tun` (§192)** is a seventh native key, **derived** from `vpn_mode` (§119):
+**`has_tun` (§192)** is a mirror key **derived** from `vpn_mode` (§119):
 `vpn` and `vpn_proxy` yield `true`, `proxy` yields `false`. It is mirrored on a mode change and
 at startup; it gates `VpnService.prepare()` (in proxy mode `prepare` is never called — it would
 pointlessly claim the VPN slot and revoke another active VPN). Being computed, it is neither in

@@ -32,7 +32,7 @@ Network tab of the node that received the file.
 | Notification when received | "file from X", Save, Delete |
 | Inbox block | Network tab of the node, under Devices; per file Save, Delete |
 | Save target | Downloads |
-| Auto-save | switch "Save received files to Downloads" in the Settings block of the node's Network tab; per node; off by default; kept on the device, not in the backup; Android 10+ |
+| Auto-save | switch "Save received files to Downloads" in the Settings block of the node's Network tab; a field of the node record (`taildrop_autosave`), per node; off by default; in the backup; Android 10+ |
 | Tap on a notification | the Network tab of the receiving node |
 
 ## Inputs / Outputs

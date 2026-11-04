@@ -182,71 +182,27 @@ object TaildropServiceFiles {
         return out
     }
 
-    // ─────────────────────────── разрешения ───────────────────────────
+    // ─────────────────────────── разрешение ───────────────────────────
 
-    /// В тех же настройках устройства, что автосохранение (`lxbox_taildrop`,
-    /// не бэкап). Ключ — вид + тег узла + stable ID пира; значение — имя пира
-    /// при выдаче (файл без `senderID` сверяется с ним, §5).
-    private const val PREFS = "lxbox_taildrop"
-    private const val PERM_PREFIX = "perm."
-    private const val SEP = '\u0001'
+    /// §707 итер. 9, контракт SERVICE_FILES §5 (1.1.157) — команда выполняется,
+    /// только если у узла [tag] стоит галка `taildrop_commands` (тег в зеркале
+    /// `taildrop_commands_tags`), `senderID` файла непустой и пир с этим ID
+    /// есть в статусе узла [ownPeers] — свои устройства, без sharee. Fallback по
+    /// имени нет: после перезапуска ядра `senderID` пуст — команды не
+    /// выполняются, файл удаляется как всегда.
+    internal fun allowed(ctx: Context, tag: String, senderId: String, ownPeers: Set<String>): Boolean =
+        senderId.isNotEmpty() && senderId in ownPeers && tag in BootReceiver.taildropCommandsTags(ctx)
 
-    private fun prefs(ctx: Context) =
-        ctx.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-
-    private fun permKey(kind: String, tag: String, peerId: String) = "$PERM_PREFIX$kind.$tag$SEP$peerId"
-
-    /// Вид → разрешено, по всем видам реестра.
-    fun permissions(ctx: Context, tag: String, peerId: String): Map<String, Boolean> {
-        val spec = spec(ctx) ?: return emptyMap()
-        val p = prefs(ctx)
-        return spec.kinds.keys.associateWith { p.contains(permKey(it, tag, peerId)) }
-    }
-
-    /// `false` — вид неизвестен реестру или нет ID пира.
-    fun setPermission(ctx: Context, tag: String, peerId: String, peerName: String, kind: String, allowed: Boolean): Boolean {
-        val spec = spec(ctx) ?: return false
-        if (tag.isEmpty() || peerId.isEmpty() || kind !in spec.kinds) return false
-        val e = prefs(ctx).edit()
-        if (allowed) e.putString(permKey(kind, tag, peerId), peerName) else e.remove(permKey(kind, tag, peerId))
-        e.apply()
-        return true
-    }
-
-    /// §5 — разрешение по `senderID`; пустой — по имени, записанному вместе с
-    /// ID при выдаче (имя само к ID не привязывается).
-    internal fun allowed(ctx: Context, tag: String, kind: String, senderId: String, senderName: String): Boolean {
-        val p = prefs(ctx)
-        if (senderId.isNotEmpty()) return p.contains(permKey(kind, tag, senderId))
-        if (senderName.isEmpty()) return false
-        val prefix = "$PERM_PREFIX$kind.$tag$SEP"
-        return p.all.any { (k, v) -> k.startsWith(prefix) && v == senderName }
-    }
-
-    /// ID пира для ленты окна: `senderID` файла; пустой (ядро после
-    /// перезапуска) — ID из разрешения, выданного устройству с этим именем.
-    private fun feedPeer(ctx: Context, tag: String, kind: String, senderId: String, senderName: String): String {
-        if (senderId.isNotEmpty() || senderName.isEmpty()) return senderId
-        val prefix = "$PERM_PREFIX$kind.$tag$SEP"
-        return prefs(ctx).all.entries
-            .firstOrNull { (k, v) -> k.startsWith(prefix) && v == senderName }
-            ?.key?.removePrefix(prefix) ?: ""
-    }
-
-    /// Узлы удалены или переименованы — их разрешения снимаются.
-    fun forgetTags(ctx: Context, tags: Collection<String>) {
-        if (tags.isEmpty()) return
-        val p = prefs(ctx)
-        val gone = tags.toSet()
-        // Ключ `perm.<вид>.<тег>␁<пир>`: в имени вида точки нет.
-        val drop = p.all.keys.filter { k ->
-            k.startsWith(PERM_PREFIX) && k.contains(SEP) &&
-                k.removePrefix(PERM_PREFIX).substringBefore(SEP).substringAfter('.') in gone
-        }
-        if (drop.isEmpty()) return
-        val e = p.edit()
-        for (k in drop) e.remove(k)
-        e.apply()
+    /// Stable ID своих устройств узла [tag] по снимку ядра: пиры всех групп
+    /// пользователя без признака `sharee_node` (как получатели окна Send).
+    @Suppress("UNCHECKED_CAST")
+    private fun ownPeers(snapshot: List<Map<String, Any>>?, tag: String): Set<String> {
+        val node = snapshot.orEmpty().firstOrNull { "${it["tag"] ?: ""}" == tag } ?: return emptySet()
+        val groups = node["user_groups"] as? List<Map<String, Any>> ?: return emptySet()
+        return groups.flatMap { (it["peers"] as? List<Map<String, Any>>).orEmpty() }
+            .filter { it["sharee_node"] != true }
+            .mapNotNull { p -> "${p["stable_id"] ?: ""}".takeIf { it.isNotEmpty() } }
+            .toSet()
     }
 
     // ─────────────────────────── счётчики ───────────────────────────
@@ -310,6 +266,7 @@ object TaildropServiceFiles {
         val app = ctx.applicationContext
         val cc = if (viaCore) BoxService.commandClient else null
         var senders: Map<String, Pair<String, String>>? = null
+        var own: Set<String>? = null
         val handled = LinkedHashSet<String>()
         var lastClip: Clip? = null
         var bad = 0
@@ -326,6 +283,11 @@ object TaildropServiceFiles {
             if (!fresh) Stats.expired.incrementAndGet()
             if (fresh && commands.isNotEmpty()) {
                 if (senders == null) senders = cc?.taildropInboxSnapshot(tag, SNAPSHOT_TIMEOUT_MS) ?: emptyMap()
+                // Снимок статуса — только если у узла стоит галка команд.
+                if (own == null) {
+                    own = if (tag !in BootReceiver.taildropCommandsTags(app)) emptySet()
+                    else ownPeers(runCatching { cc?.tailscaleSnapshot(SNAPSHOT_TIMEOUT_MS) }.getOrNull(), tag)
+                }
                 val (senderId, senderName) = senders[item.name] ?: ("" to "")
                 for (cmd in commands) {
                     val kindName = cmd.opt("kind") as? String
@@ -338,7 +300,7 @@ object TaildropServiceFiles {
                         bad++
                         continue
                     }
-                    if (!allowed(app, tag, kindName, senderId, senderName)) {
+                    if (!allowed(app, tag, senderId, own ?: emptySet())) {
                         Stats.noPermission.incrementAndGet()
                         continue
                     }
@@ -349,7 +311,7 @@ object TaildropServiceFiles {
                                 bad++
                                 continue
                             }
-                            val c = Clip(text, modifiedAt, item.name, feedPeer(app, tag, kindName, senderId, senderName))
+                            val c = Clip(text, modifiedAt, item.name, senderId)
                             val prev = lastClip
                             if (prev == null || later(spec, c, prev)) lastClip = c
                         }
@@ -366,7 +328,7 @@ object TaildropServiceFiles {
                                 executed(kindName, url)
                                 // §707 итер. 7 — в ленту окна «Send clipboard».
                                 TaildropClip.addIncoming(
-                                    tag, feedPeer(app, tag, kindName, senderId, senderName), kindName, url,
+                                    tag, senderId, kindName, url,
                                 )
                             } else {
                                 Stats.noHandler.incrementAndGet()

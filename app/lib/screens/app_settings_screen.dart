@@ -162,7 +162,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     final bgLocation = await ul.UrlLauncher.checkBackgroundLocationPermission();
     final nearbyWifi = await ul.UrlLauncher.checkNearbyWifiPermission();
     final wifiLocationIssue = await _readWifiLocationIssue();
-    final notificationButtons = await _vpn.getNotificationButtons();
+    final notificationButtons = await loadNotificationButtons();
     final autoUpdateSubs = await SettingsStorage.getAutoUpdateSubs();
     final autoUpdateDisabledSubs =
         await SettingsStorage.getAutoUpdateDisabledSubs();
@@ -756,7 +756,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
       onNotificationButtonChanged: (button, val) {
         setState(() =>
             _notificationButtons = {..._notificationButtons, button: val});
-        unawaited(_vpn.setNotificationButton(button, val));
+        unawaited(saveNotificationButton(button, val));
       },
     );
   }

@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Status | Done (итерации 1–7, эмулятор 02–03.11.2026); итерация 8 — реализована |
+| Status | Done (итерации 1–7, эмулятор 02–03.11.2026); итерация 8 — реализована; итерация 9 — In progress (04.11.2026) |
 | Start date | 2026-11-02 |
 | End date | 2026-11-02 |
 | Commits | `1d30e211` `feat(taildrop): отправка и приём файлов — «Поделиться», Send file…, входящие узла (§707)` |
@@ -1123,3 +1123,265 @@ file…». Сборщик Debug API (`POST /taildrop/send` с `commands`) пер
 
 Не проверено: телефон; подписи на ru и zh (`🔄 Рестарт`, `📋 Отправить`) на узком
 экране. Значки строк добавлены после прогона на эмуляторе и глазами не смотрены.
+
+## Итерация 9 — настройки Taildrop и кнопок уведомления: из SharedPreferences в хранилище
+
+### Problem
+
+Итерации 4–8 завели настройки в неожиданном месте: файлы
+`shared_prefs/lxbox_taildrop.xml` (разрешения по устройствам `perm.*`,
+автосохранение `autosave.<итоговый тег>`, последний получатель окна `clip.*`) и
+`shared_prefs/lxbox_notification_buttons.xml` (кнопки Stop / Restart / Send).
+О них не знают ни `lxbox_settings.json`, ни бэкап, ни Debug API; при
+переименовании узла значение теряется, удаление узла требует ручной чистки
+(`forgetTags`). Владелец 04.11.2026: архитектурная ошибка. Та же ошибка
+старше: тема `app_theme_mode` лежит в `FlutterSharedPreferences.xml`
+(`main.dart`, `ThemeNotifier`), вне хранилища и бэкапа.
+
+Правило, которое нарушено, в проекте было описано только как механизм §189
+(«три уровня native prefs»), а не как принцип. Разбор с владельцем — отдельная
+сессия 04.11.2026, решения ниже.
+
+### Diagnosis
+
+Единственное место настроек — `lxbox_settings.json`; Kotlin без Flutter
+(автостарт при загрузке, сервис VPN, уведомление) читает одно зеркало
+`boxvpn_boot`, которое наполняет Dart (§189); производные от настроек Dart
+кладёт туда же (`has_tun`, `app_language`). `boxvpn_boot` при этом хранит и
+пять ключей состояния самого Kotlin (`vpn_desired`, `sticky_restart_count`,
+`sticky_restart_window_start`, `last_pushed_locale`,
+`shortcut_relabel_pending`) — им место в кэше Kotlin, не в файле зеркала.
+Kotlin уже разбирает `singbox_config.json` ради `disable_taildrop` и
+`taildrop_directory`; читать `lxbox_settings.json` ему незачем — вопрос
+закрыт правилом.
+
+### Solution
+
+**A. Правило «Где живут настройки»** — `docs/ARCHITECTURE.md`, раздел
+«5. Persistent storage», первым подразделом, без номеров задач в тексте,
+читается сверху вниз: правило → схема → дерево диска → механизм зеркала
+(нынешний текст про три уровня остаётся как описание механизма, номера §189/§192
+— в конец абзаца). Формулировка (русский черновик, в документе по-английски):
+
+1. Настройка — всё, что выбирает пользователь. Все настройки — в
+   `lxbox_settings.json`; настройка узла, папки, подписки, правила — поле её
+   записи. Бэкап, импорт, Debug API и интерфейс знают этот файл и больше ничего.
+2. Kotlin работает без Flutter: при загрузке, в сервисе VPN, в уведомлении. Он
+   читает одно зеркало — SharedPreferences `boxvpn_boot`, и наполняет его Dart:
+   сначала JSON, потом зеркало, полный пересинк на каждом старте. Kotlin
+   настройку не пишет и JSON не открывает. Значение, которое Kotlin нужно и
+   которое вычисляется из настроек (`has_tun`, итоговые теги узлов с опциями
+   Taildrop), идёт в то же зеркало и никуда больше.
+3. Внутренний кэш Kotlin — один файл SharedPreferences `lxbox_native_cache`:
+   то, что Kotlin выбрал или запомнил сам и чего пользователь не настраивал.
+   Пишет и читает Kotlin, Dart о нём не знает, в бэкап не идёт, битый или
+   пустой файл = пустой кэш.
+4. В `shared_prefs/` ровно два файла: `boxvpn_boot` и `lxbox_native_cache`.
+   Новый ключ для Kotlin — строка в списке ключей зеркала или кэша, а не новый
+   `getSharedPreferences`.
+5. Состояние и кэши Dart (`sub_cache/`, логи, `support_state.json`) — свои
+   файлы, в JSON не идут.
+
+Схема в стиле ASCII-деревьев раздела:
+
+```
+   UI · Debug API · backup import
+              │ write
+              ▼
+     lxbox_settings.json ─────────── the only place a setting lives;
+       (SettingsStorage)             an entity's setting = a field of its record
+          │           │
+   read   │           │ push: the keys Kotlin needs + values computed from them
+   (Dart) ▼           ▼
+   in-memory cache   SharedPreferences boxvpn_boot ── the only mirror, Dart writes
+                              │ read only
+                              ▼
+                 Kotlin without Flutter: boot auto-start · VPN service · notification
+                              │ its own choices (last recipient, restart guard, …)
+                              ▼
+                   SharedPreferences lxbox_native_cache ── Kotlin's cache, Kotlin writes
+
+   not settings → memory / own files: sub_cache/, applog, in-flight Taildrop files
+```
+
+`STORAGE.md` — только факты (новые поля записи, новые ключи `native_prefs` и
+`vars`, «в `shared_prefs/` два файла»). `DEVELOPMENT_GUIDE.md` — строка в
+таблицу «куда смотреть» и фраза в процесс: новая настройка — сначала поле в
+JSON. Дерево диска в `ARCHITECTURE.md` (блок `SharedPreferences (Android)`)
+перечисляет оба файла с их ключами; `lxbox_automation` и
+`FlutterSharedPreferences` в этой итерации не трогаются, записаны там как
+«проверить отдельно» (решение владельца).
+
+**B. Taildrop — поля записи узла.** Разрешения по устройствам снимаются
+(решение владельца 04.11.2026: детализация лишняя). Два новых поля записи
+узла `server` (в корне и член папки), рядом с `skip_tailscale_presets` /
+`allow_lan`, те же правила: пишется только `true`, в конфиг не идут, едут в
+бэкапе, у узла подписки записи нет — полей нет:
+
+- `taildrop_commands` — принимать буфер и ссылки от своих устройств (sharee не
+  считаются своими); по умолчанию выключено;
+- `taildrop_autosave` — сохранять принятое в Downloads без вопроса; по
+  умолчанию выключено; Android 10+ как раньше.
+
+`disable_taildrop` остаётся в теле как поле ядра. Модель: `UserServer` /
+член папки, `source_record.dart` (`_recordFlagsToRecord`, `_serverKeys`,
+`_memberKeys`), терпимое чтение по образцу `allow_lan`. Контракт `BACKUP.md` и
+`SERVICE_FILES.md` §5 правит лаунчер (запрос отправлен сессии «Desktop
+Tailscale drop» 04.11.2026); `app/contract` здесь не трогать, синк —
+`git archive` после их коммита.
+
+**C. Доставка до Kotlin.** Kotlin по-прежнему сравнивает итоговый тег от ядра
+со строкой. Dart кладёт в зеркало `boxvpn_boot` два производных множества
+итоговых тегов: `taildrop_commands_tags`, `taildrop_autosave_tags`
+(`StringSet`). Один канал `setTaildropTags {commands: [...], autosave: [...]}`
+заменяет оба множества целиком. Пушится: после каждой успешной сборки конфига
+(там же, где уходит `has_tun`), при переключении любой из галок сразу (без
+пересборки, при работающем VPN должно действовать немедленно) и на старте
+Dart в `bootstrapAndSyncNativePrefs` (как `app_language`). Итоговый тег — тот,
+что сборка присваивает записи; если на пути переключения галки сборка
+недоступна — `TagResolver.displayTag(prefix папки, тег)`; расхождение при
+дедупе тегов сборкой — безопасный отказ (галка не действует), если такое
+найдётся — в Result. Kotlin на событии ядра: `TaildropServiceFiles.allowed`
+→ `tag ∈ taildrop_commands_tags`; `Taildrop.isAutoSave` → `tag ∈
+taildrop_autosave_tags`. Если `autosave`-множество выросло — `sweepInboxesAsync`
+(поведение прежнего `taildropSetAutoSave(enabled=true)`).
+
+Удаляется: `perm.*`, `permissions`/`setPermission`/`forgetTags` в
+`TaildropServiceFiles.kt`; `autosave.*`, `setAutoSave`/`forgetAutoSave` в
+`Taildrop.kt`; каналы `taildropSetAutoSave`, `taildropAutoSave`,
+`taildropPermissions`, `taildropSetPermission`, `taildropForgetAutoSave` с обеих
+сторон; переключатели разрешений на странице устройства (итерация 6);
+маршруты Debug API разрешений (итерация 5), маршрут автосохранения читает и
+пишет поле записи; вызовы `forgetAutoSave` при переименовании/удалении узла.
+
+**D. Панель Taildrop вкладки Network.** Два переключателя у своего узла:
+«Accept clipboard and links from my devices» (новый, подпись о sharee) и
+«Save received files to Downloads» (как был). Оба читают и пишут поле записи
+через тот же путь, что `allow_lan` на этой вкладке (`onSaveFields` /
+сохранение записи), по образцу соседних блоков, без своих Save. У узла
+подписки (`node_inspect_screen`) переключателей нет. Галка выключается вместе
+с Allow Taildrop, как сейчас у автосохранения.
+
+**E. Кнопки уведомления.** Три bool-ключа секции `native_prefs`:
+`notification_stop`, `notification_restart`, `notification_send`, по умолчанию
+`true`, в бэкапе; зеркало в `boxvpn_boot` теми же именами по образцу
+`core_logs_verbose` (§345: `NativePrefsKeys`, дефолты, `_syncJsonToNative`,
+геттер/сеттер в `BootReceiver`, каналы). `NotificationButtons.kt` читает
+зеркало; `lxbox_notification_buttons`, каналы `getNotificationButtons` /
+`setNotificationButton` удаляются, вкладка General пишет через
+`SettingsStorage.setNativeBool`; уведомление обновляется сразу, как в итерации 8.
+Переноса нет: файл не выходил в релиз.
+
+**F. Тема.** Ключ секции `native_prefs`: `app_theme_mode` (`system` | `light`
+| `dark`, дефолт `system`), по образцу `memory_limit`, в бэкапе. Не `vars`: в
+бэкап из `vars` выходят только portable-переменные шаблона
+(`lx_backup.dart`), `app_language` туда не попадает, а тема должна (совет
+лаунчера 04.11.2026). `ThemeNotifier` читает и пишет через `SettingsStorage`.
+Перенос один раз на старте: если в `native_prefs` ключа нет, а в
+`FlutterSharedPreferences` есть `app_theme_mode` — взять его и ключ из prefs
+удалить. В зеркало `boxvpn_boot` не идёт: Kotlin его не читает, нативное окно
+берёт ночной режим из системы (`TaildropClipActivity`). Секцию `native_prefs`
+с её ключами лаунчер объявляет в «Поля стороны LxBox» `BACKUP.md` (запрос
+отправлен; контракт 1.1.157 `e8a744ad` уже несёт §5 и два поля узла).
+
+**Норма отправителя (контракт 1.1.157).** Команда служебного файла
+выполняется, только если тег узла в `taildrop_commands_tags`, `senderID`
+непустой, пир с этим `senderID` есть в статусе узла и он не sharee. Отказ без
+подстановки по `senderName`: после перезапуска ядра у лежащих файлов
+`senderID` пуст — команды не выполняются. Устройства не запоминаются.
+
+**G. Кэш Kotlin.** Новый объект `vpn/NativeCache.kt`, файл
+`lxbox_native_cache`. Переезжают: последний получатель окна Send
+(`clip_tag`, `clip_peer`, `clip_name` из `TaildropClip.kt`) и пять ключей
+состояния из `BootReceiver.kt` (`vpn_desired`, `sticky_restart_count`,
+`sticky_restart_window_start`, `last_pushed_locale`,
+`shortcut_relabel_pending`) — публичные геттеры/сеттеры `BootReceiver`
+остаются и делегируют, смысл не меняется. Старые значения этих пяти ключей в
+`boxvpn_boot` не переносятся (состояние одного запуска) и удаляются при первом
+обращении.
+
+**H. Перенос из rc.3 и чистка.** Канал `taildropLegacyAutosaveTags()` — список
+итоговых тегов с `autosave.*` из `lxbox_taildrop` (или пустой). Dart на старте
+после загрузки хранилища: для каждого тега найти запись, чей итоговый тег
+совпадает (та же функция, что считает множества в C), поставить
+`taildrop_autosave: true`; затем канал `deleteLegacyPrefs()` —
+`Context.deleteSharedPreferences` для `lxbox_taildrop` и
+`lxbox_notification_buttons` (minSdk 24, API есть). Файла нет → канал даёт
+пустой список, перенос не повторяется. `perm.*` не переносятся: смысл иной.
+
+**I. Доки фичи.** `032-TAILDROP/FUNCTIONS/inbox*.md` (строка «Автосохранение»:
+поле записи, в бэкапе), `clipboard-sync*.md` (таблица: разрешения → одна
+настройка узла; строка «Бэкап»; состояние), `USER_GUIDE*.md`, если там есть
+разрешения по устройствам; CHANGELOG Unreleased.
+
+### Verification
+
+Точечно, не каталогами (правила CI): `test/models/skip_presets_record_test.dart`
+— два новых поля (чтение, запись только `true`, отсутствие = `false`);
+`test/contract/lx_backup_node_flags_test.dart` — поля в бэкапе;
+`test/services/native_prefs_memory_limit_test.dart` как образец — три ключа
+кнопок и перенос темы; новый тест производных множеств (запись в корне, член
+папки с `tag_policy`, выключенный узел, узел подписки — не входит);
+`test/screens/general_tab_notification_buttons_test.dart` — на новый путь;
+Kotlin `TaildropClipTest.kt` — запомненный получатель из `NativeCache`.
+Golden-фикстуры `rich_v0`/`avd_v0` трогать только если падают из-за новых
+ключей `native_prefs`.
+
+Эмулятор (владелец или исполнитель, 4 сценария): 1) галка Save to Downloads у
+узла в папке → переименовать папку → файл с другого устройства сохраняется
+без вопроса; 2) автостарт при загрузке без открытия приложения → файл с
+командой clipboard выполняется при включённой галке и игнорируется при
+выключенной; 3) обновление с rc.3 с включённым autosave → галка стоит, файла
+`lxbox_taildrop.xml` нет; 4) кнопки уведомления переключаются на живом
+уведомлении, после `force-stop` значения те же, `lxbox_notification_buttons.xml`
+нет.
+
+### Result (итерация 9)
+
+Реализовано 04.11.2026, ещё не закоммичено (коммит — по слову владельца).
+Контракт 1.1.157 (`e8a744ad`: `SERVICE_FILES` §5, два поля узла, норма
+отправителя) и 1.1.158 (`b8d9bdc1`: секция `native_prefs` с 12 ключами в
+«Поля стороны LxBox») синхронизированы, корпус `v10_lxbox_fields` проходит.
+
+Dart: `services/taildrop_tags_sync.dart` (новый), `source_record.dart`,
+`server_list.dart`, `subscription_controller.dart`, `settings_storage.dart` +
+`native_prefs.dart`, `box_vpn_client.dart` + `method_names.dart`,
+`cc_channel.dart` (пять методов и `CcTaildropAutoSave` сняты),
+`tailscale_network_tab.dart`, экраны узла и General, Debug API
+(`/taildrop/permissions` снят, `/taildrop/settings` принимает `autosave` и
+`commands`), LX-бэкап (`native_prefs` в `_rootKeys`/`_root10Keys`, экспорт,
+импорт через `applyNativePrefsBackup`), `main.dart` (перенос темы и autosave
+из rc.3 до `bootstrapAndSyncNativePrefs`), строки ru/zh. Kotlin:
+`vpn/NativeCache.kt` (новый), `BootReceiver.kt` (множества тегов, три ключа
+кнопок, делегирование состояния в кэш), `NotificationButtons.kt`,
+`Taildrop.kt`, `TaildropClip.kt`, `TaildropServiceFiles.kt`
+(`allowed(ctx, tag, senderId, ownPeers)`), `VpnPlugin.kt`. Доки:
+`ARCHITECTURE.md` § 5 «Where a setting lives» + схема, `STORAGE.md`,
+`DEVELOPMENT_GUIDE.md`, фича 032 (FEATURE + FUNCTIONS), CHANGELOG.
+
+Решения исполнителей: итоговый тег записи берётся из карты последней сборки
+(`lastEmittedTagMap`, учитывает суффикс `-N` дедупа), до первой сборки —
+`TagResolver.displayTag` (при дедупе галка не действует до пересборки —
+безопасный отказ, тест есть); выключенные узлы в множества не входят; галки
+Taildrop конфиг грязным не делают (`keepDirtyFlag`); признак Android 10+ —
+`device_info_plus`; команда выполняется, только если `senderID` непустой и
+есть среди пиров узла без `sharee_node` (снимок статуса берётся лениво, раз на
+пачку, только при включённой галке). `goneTailscaleTags` и обработчик
+`taildropAutoSaveState` сняты как мёртвые.
+
+Тесты точечно, все зелёные: `taildrop_tags_sync_test` (новый),
+`native_prefs_notification_theme_test` (новый), `skip_presets_record_test`,
+`lx_backup_node_flags_test`, `backup_corpus_test` + `lx_backup_roundtrip_test`
+(`json_schema_lite.dart` получил `pattern` — без него падал
+`native_prefs.memory_limit` из корпуса), `general_tab_notification_buttons_test`,
+`taildrop_handler_test`, `tailscale_network_tab_test`, `golden_backup_test`,
+`backup_service_test`, `folder_test`, `tailscale_state_store_test`;
+`dart analyze lib test` чистый.
+
+Не проверено: компиляция Kotlin (Gradle локально не гоняли — CI), эмулятор
+(четыре сценария из Verification), телефон. Известные ограничения: тема после
+импорта бэкапа и переключения Workspaces применяется после перезапуска
+(`ThemeNotifier` живёт в `main.dart`, хука из `workspace_controller` нет);
+Kotlin-теста на `NativeCache` нет (в тестах нет контекста/Robolectric).
+Открыто у лаунчера: `taildrop_double_copy` (двойное копирование, не в бэкапе)
+— решение владельца; перевод лаунчера на новые поля — его отдельная задача.

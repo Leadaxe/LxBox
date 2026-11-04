@@ -87,12 +87,6 @@ class ClipTargets(val block: Int?, val online: List<ClipTarget>, val all: List<C
 object TaildropClip {
     private const val TAG = "TaildropClip"
 
-    /// Тот же файл настроек, что автосохранение и разрешения (не бэкап).
-    private const val PREFS = "lxbox_taildrop"
-    private const val KEY_TAG = "clip.tag"
-    private const val KEY_PEER = "clip.peer"
-    private const val KEY_NAME = "clip.name"
-
     /// «Send to device» (PROCESS_TEXT) — alias окна.
     private const val PROCESS_TEXT_ALIAS = "com.leadaxe.lxbox.vpn.TaildropProcessTextActivity"
 
@@ -133,23 +127,12 @@ object TaildropClip {
 
     // ───────────────────────── получатель ─────────────────────────
 
-    private fun prefs(ctx: Context) =
-        ctx.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-
-    /// Запомненный получатель: (тег, ID, имя) или `null`.
-    fun remembered(ctx: Context): Triple<String, String, String>? {
-        val p = prefs(ctx)
-        val tag = p.getString(KEY_TAG, null) ?: return null
-        val peer = p.getString(KEY_PEER, null) ?: return null
-        return Triple(tag, peer, p.getString(KEY_NAME, "") ?: "")
-    }
+    /// Запомненный получатель: (тег, ID, имя) или `null`. Кэш Kotlin
+    /// ([NativeCache]), не настройка: в бэкап не идёт.
+    fun remembered(ctx: Context): Triple<String, String, String>? = NativeCache.clipTarget(ctx)
 
     fun remember(ctx: Context, t: ClipTarget) {
-        prefs(ctx).edit()
-            .putString(KEY_TAG, t.tag)
-            .putString(KEY_PEER, t.peerId)
-            .putString(KEY_NAME, t.name)
-            .apply()
+        NativeCache.setClipTarget(ctx, t.tag, t.peerId, t.name)
     }
 
     /// Причины, по которым отправлять нельзя совсем (по порядку таблицы

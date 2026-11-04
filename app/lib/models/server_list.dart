@@ -449,6 +449,12 @@ final class UserServer extends ServerList {
   final bool allowLan;
   final bool allowGateway;
 
+  /// §707 итер. 9 — поля записи `taildrop_commands` (принимать буфер и
+  /// ссылки от своих устройств) и `taildrop_autosave` (принятое — в
+  /// Downloads без вопроса). В конфиг не идут; хранится только `true`.
+  final bool taildropCommands;
+  final bool taildropAutosave;
+
   UserServer({
     required super.id,
     required super.name,
@@ -463,6 +469,8 @@ final class UserServer extends ServerList {
     this.allowLocal = false,
     this.allowLan = false,
     this.allowGateway = false,
+    this.taildropCommands = false,
+    this.taildropAutosave = false,
     super.nodes,
   });
 
@@ -483,6 +491,8 @@ final class UserServer extends ServerList {
     bool? allowLocal,
     bool? allowLan,
     bool? allowGateway,
+    bool? taildropCommands,
+    bool? taildropAutosave,
   }) =>
       UserServer(
         id: id,
@@ -498,6 +508,8 @@ final class UserServer extends ServerList {
         allowLocal: allowLocal ?? this.allowLocal,
         allowLan: allowLan ?? this.allowLan,
         allowGateway: allowGateway ?? this.allowGateway,
+        taildropCommands: taildropCommands ?? this.taildropCommands,
+        taildropAutosave: taildropAutosave ?? this.taildropAutosave,
         nodes: nodes ?? this.nodes,
       );
 
@@ -517,12 +529,14 @@ final class UserServer extends ServerList {
           skipTailscalePresets == other.skipTailscalePresets &&
           allowLocal == other.allowLocal &&
           allowLan == other.allowLan &&
-          allowGateway == other.allowGateway);
+          allowGateway == other.allowGateway &&
+          taildropCommands == other.taildropCommands &&
+          taildropAutosave == other.taildropAutosave);
 
   @override
   int get hashCode => Object.hash(id, enabled, tagPrefix, detourPolicy, tls,
       rawBody, _eq.hash(warnings), skipTailscalePresets, allowLocal, allowLan,
-      allowGateway);
+      allowGateway, taildropCommands, taildropAutosave);
 }
 
 /// §234 — член папки: самодостаточный парсируемый фрагмент (URI-строка,
@@ -555,6 +569,11 @@ final class FolderMember {
   final bool allowLan;
   final bool allowGateway;
 
+  /// §707 итер. 9 — `taildrop_commands` / `taildrop_autosave`, как у
+  /// `UserServer`.
+  final bool taildropCommands;
+  final bool taildropAutosave;
+
   /// §636 — узловое переопределение TLS-ручек члена.
   final TlsPolicy tls;
 
@@ -572,6 +591,8 @@ final class FolderMember {
     this.allowLocal = false,
     this.allowLan = false,
     this.allowGateway = false,
+    this.taildropCommands = false,
+    this.taildropAutosave = false,
     this.tls = TlsPolicy.none,
     NodeSpec? node,
   }) : node = node ?? _parseFirst(raw, nameHint);
@@ -607,6 +628,8 @@ final class FolderMember {
     bool? allowLocal,
     bool? allowLan,
     bool? allowGateway,
+    bool? taildropCommands,
+    bool? taildropAutosave,
     TlsPolicy? tls,
   }) =>
       FolderMember(
@@ -619,6 +642,8 @@ final class FolderMember {
         allowLocal: allowLocal ?? this.allowLocal,
         allowLan: allowLan ?? this.allowLan,
         allowGateway: allowGateway ?? this.allowGateway,
+        taildropCommands: taildropCommands ?? this.taildropCommands,
+        taildropAutosave: taildropAutosave ?? this.taildropAutosave,
         tls: tls ?? this.tls,
         // Смена raw или имени → re-parse в конструкторе; иначе нода та же.
         node: raw == null && nameHint == null ? node : null,
@@ -639,6 +664,8 @@ final class FolderMember {
           allowLocal == other.allowLocal &&
           allowLan == other.allowLan &&
           allowGateway == other.allowGateway &&
+          taildropCommands == other.taildropCommands &&
+          taildropAutosave == other.taildropAutosave &&
           tls == other.tls &&
           _sameGroup(node, other.node));
 
@@ -657,6 +684,8 @@ final class FolderMember {
       allowLocal,
       allowLan,
       allowGateway,
+      taildropCommands,
+      taildropAutosave,
       tls);
 }
 
@@ -925,13 +954,24 @@ enum NodeRecordFlag {
   skipTailscalePresets,
   allowLocal,
   allowLan,
-  allowGateway;
+  allowGateway,
+
+  /// §707 итер. 9 — Taildrop: в конфиг не идут (правка не поднимает
+  /// `configDirty`), итоговые теги уходят в зеркало `boxvpn_boot`.
+  taildropCommands,
+  taildropAutosave;
+
+  /// Поле влияет на собранный конфиг (через пресеты).
+  bool get inConfig =>
+      this != taildropCommands && this != taildropAutosave;
 
   bool ofServer(UserServer u) => switch (this) {
         skipTailscalePresets => u.skipTailscalePresets,
         allowLocal => u.allowLocal,
         allowLan => u.allowLan,
         allowGateway => u.allowGateway,
+        taildropCommands => u.taildropCommands,
+        taildropAutosave => u.taildropAutosave,
       };
 
   bool ofMember(FolderMember m) => switch (this) {
@@ -939,6 +979,8 @@ enum NodeRecordFlag {
         allowLocal => m.allowLocal,
         allowLan => m.allowLan,
         allowGateway => m.allowGateway,
+        taildropCommands => m.taildropCommands,
+        taildropAutosave => m.taildropAutosave,
       };
 
   UserServer onServer(UserServer u, bool v) => switch (this) {
@@ -946,6 +988,8 @@ enum NodeRecordFlag {
         allowLocal => u.copyWith(allowLocal: v),
         allowLan => u.copyWith(allowLan: v),
         allowGateway => u.copyWith(allowGateway: v),
+        taildropCommands => u.copyWith(taildropCommands: v),
+        taildropAutosave => u.copyWith(taildropAutosave: v),
       };
 
   FolderMember onMember(FolderMember m, bool v) => switch (this) {
@@ -953,5 +997,7 @@ enum NodeRecordFlag {
         allowLocal => m.copyWith(allowLocal: v),
         allowLan => m.copyWith(allowLan: v),
         allowGateway => m.copyWith(allowGateway: v),
+        taildropCommands => m.copyWith(taildropCommands: v),
+        taildropAutosave => m.copyWith(taildropAutosave: v),
       };
 }

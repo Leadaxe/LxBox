@@ -3,19 +3,20 @@
 # Command files — clipboard and links between the phone and the launcher
 
 A Taildrop file of a special form carries commands. LxBox or the desktop
-launcher (singbox-launcher) receiving it from an allowed device runs the
+launcher (singbox-launcher) receiving it from an own device runs the
 commands and deletes the file; such a file never reaches the inbox or
 Downloads. Two commands exist: put text on the clipboard and open a link.
 Phone → PC: the Send clipboard window, opened from the "📋 Send"
 button in the VPN notification, from "Share" with text or from "Send to
-device" in the text selection menu. PC → phone: clipboard and links from an
-allowed device.
+device" in the text selection menu. PC → phone: clipboard and links from own
+devices, when the receiving node has "Accept clipboard and links from my
+devices" on.
 
 | Field | Value |
 |-------|-------|
 | Feature | [032-TAILDROP](../FEATURE.md) |
 | Promises | P9–P12 |
-| State | ✅ implemented, 2026-11-03 — receiving (task 707, iteration 4: commands run, file deleted, per-device permissions), permissions on the device page (iteration 6), sending from the Send clipboard window (iteration 7); the window not verified on a device. Contract 1.1.148–1.1.150 |
+| State | ✅ implemented, 2026-11-03 — receiving (task 707, iteration 4: commands run, file deleted, per-device permissions), permissions on the device page (iteration 6), sending from the Send clipboard window (iteration 7); iteration 9: settings in the node record, per-device permissions removed; the window not verified on a device. Contract 1.1.148–1.1.150 |
 
 ## What it does
 
@@ -44,7 +45,7 @@ ssh root@10.0.0.5                    from LexRouter · 12:42
   one `http(s)` link (after trimming, no spaces inside) and sends `open_url`.
 - **Feed** — the conversation with the chosen device: what was sent is on the
   right with the time, ✓ on success or the error text under the message;
-  what came from that device and was run by permission (`clipboard`,
+  what came from that device and was run by the node setting (`clipboard`,
   `open_url`) is on the left. A tap on a message copies its text, "Copied".
   `⋮ → Clear` clears the feed with this device.
 - The window closes with ✕, Back or a tap outside it.
@@ -56,8 +57,8 @@ to device" from the selection menu does the same; the text in the source app
 does not change.
 
 **PC → phone.** A file arrives whose name matches the command-file format and
-whose body parses. Each command runs if the receiver allows that kind from
-that sender. Then the file is deleted, whatever happened to the commands. If
+whose body parses. The commands run if the sender is an own device and the
+receiving node has "Accept clipboard and links from my devices" on. Then the file is deleted, whatever happened to the commands. If
 the name matches but the body does not parse or the version is unknown, the
 file stays an ordinary inbox file.
 
@@ -103,10 +104,10 @@ the launcher decides.
 | Where the window and its entries exist | "📋 Send", "Send to device" and LxBox in "Share" — only while the VPN is up and the running config has a Tailscale node with Allow Taildrop |
 | Recipient | `To: … ▾` in the window: own devices that accept files, from all such nodes; remembered on this phone |
 | Feed | in memory only while the VPN runs; at most 50 messages per device (node + device); `⋮ → Clear` |
-| Permissions | on the receiver, per own device and per kind: "Clipboard from this device", "Links from this device"; off by default; in the Taildrop block of the device page on the node's Network tab |
+| Receive setting | one per receiving node: "Accept clipboard and links from my devices" in the Taildrop panel of the Network tab; the node record field `taildrop_commands`; off by default; in the backup; sharees do not count as own; a subscription node has no such setting |
 | Freshness (TTL) | 2 minutes by the receiver's clock from receipt; older — deleted without running |
 | Size | at most 64 KiB |
-| Backup | the remembered recipient and the permissions are not in the backup (owner decision 2026-11-02) |
+| Backup | the remembered recipient is Kotlin's cache on this phone, not in the backup; the receive setting is in the backup |
 | Send confirmation | ✓ or the error text under the message in the feed; no separate notification |
 
 Prefix, suffix, size limit, TTL and format version are constants of the
@@ -119,7 +120,7 @@ implemented.
 **Inputs:** a tap on "📋 Send" and the clipboard when the window
 gets focus; "Share" with text; "Send to device" with selected text; ➤ and
 "Open on <device>"; incoming command files and their Taildrop sender; the
-chosen recipient; permissions.
+chosen recipient; the node's receive setting.
 
 **Outputs:** a command file to the chosen device; ✓ or the error in the
 feed, or a refusal reason above the field; the phone clipboard; a link
@@ -145,19 +146,20 @@ warning in the app log about a broken command file.
   there is no file. Clipboard text and links in it never reach the app log
   or the Debug API; the Debug API shows only the remembered recipient (its
   name with `reveal`) and the number of messages per feed.
-- **Receiving** (P12). A command runs only if its kind is allowed for its
-  sender. The sender is the Taildrop sender.
+- **Receiving** (P12). A command runs only if the receiving node has the
+  receive setting on and the sender is an own device. The sender is the
+  Taildrop sender; a sharee does not count as own.
 - **Interception.** A command file is handled before auto-save and the
   "received" notification ([inbox](inbox.md)): once parsed it reaches neither
   Downloads nor the inbox (P10).
 - **Deletion.** After handling the file is always deleted, even if no command
-  ran (no permission, expired).
+  ran (setting off, sender not own, expired).
 - **Freshness.** A file older than the TTL when the receiver finds it is
   deleted without running.
 - **Bursts.** Of several `clipboard` commands in a row the last received
   wins.
 - **Security.** Tailscale authenticates the sender: files come only from own
-  devices (or an ACL grant). Any program on an allowed device can send a
+  devices (or an ACL grant). Any program on an own device can send a
   command file — hence only harmless commands. No arbitrary commands,
   scripts, paths or intents in the body.
 - **No loop back.** A received command is never forwarded on its own.
@@ -188,3 +190,4 @@ warning in the app log about a broken command file.
 | 1 | [707](../../../tasks/707-taildrop-send-receive-files.md) iteration 4 | Implemented | Receiving: commands run by per-device permission, the file is deleted |
 | 2 | [707](../../../tasks/707-taildrop-send-receive-files.md) iteration 6 | Implemented, emulator-verified | 2026-11-03: the permissions moved from the row menu to the device page |
 | 3 | [707](../../../tasks/707-taildrop-send-receive-files.md) iteration 7 | Implemented, not verified on a device | 2026-11-03: the Send clipboard window from the notification button instead of the tile and the target in Settings; shared and selected text open it; a sensitive clip is shown and sent only on ➤; the feed in memory |
+| 4 | [707](../../../tasks/707-taildrop-send-receive-files.md) iteration 9 | In progress | 2026-11-04: per-device permissions removed; one node setting "Accept clipboard and links from my devices" — a record field, in the backup |

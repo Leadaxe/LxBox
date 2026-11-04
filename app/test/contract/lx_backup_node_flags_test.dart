@@ -237,4 +237,147 @@ void main() {
       expect(member.containsKey(k), isFalse, reason: k);
     }
   });
+
+  // §707 итер. 9 (контракт 1.1.157) — поля Taildrop узла.
+  group('taildrop_commands / taildrop_autosave', () {
+    test('импорт: новый узел и член папки получают поля, без предупреждений',
+        () {
+      final file = parseLxBackup(
+        _file([
+          _node('a', {'taildrop_commands': true}),
+          {
+            'kind': 'folder',
+            'id': 'f1',
+            'name': 'F',
+            'nodes': [
+              _node('m', {'taildrop_autosave': true}),
+            ],
+          },
+        ]),
+      );
+      expect(
+        file.warnings.where((w) => w.detail.contains('taildrop_')),
+        isEmpty,
+      );
+      final lists = _apply(const [], file);
+      final u = lists.whereType<UserServer>().single;
+      expect([u.taildropCommands, u.taildropAutosave], [true, false]);
+      final m = lists.whereType<FolderServers>().single.members.single;
+      expect([m.taildropCommands, m.taildropAutosave], [false, true]);
+    });
+
+    test('совпавший узел: true из файла ставится, отсутствие не сбрасывает',
+        () {
+      final first = _apply(
+        const [],
+        parseLxBackup(_file([_node('a', {'taildrop_autosave': true})])),
+      );
+      final second = _apply(
+        first,
+        parseLxBackup(_file([_node('a', {'taildrop_commands': true})])),
+      );
+      final u = second.single as UserServer;
+      expect([u.taildropCommands, u.taildropAutosave], [true, true]);
+      final third = _apply(second, parseLxBackup(_file([_node('a', {})])));
+      final v = third.single as UserServer;
+      expect([v.taildropCommands, v.taildropAutosave], [true, true]);
+    });
+
+    test('экспорт: только true', () async {
+      const raw =
+          '[Interface]\nPrivateKey = '
+          'yAnz5TF+lXXJte14tji3zlMNq+hd2rYUIgJBgB3fBmk=\n'
+          'Address = 10.8.0.2/32\n\n[Peer]\n'
+          'PublicKey = xTIBA5rboUvnH4htodjb6e697QjLERt1NAB4mZqp8Dg=\n'
+          'Endpoint = 203.0.113.1:51820\nAllowedIPs = 0.0.0.0/0\n';
+      final out = await buildLxBackup(
+        lists: [
+          UserServer(
+            id: 's1',
+            name: '',
+            enabled: true,
+            tagPrefix: '',
+            detourPolicy: DetourPolicy.defaults,
+            rawBody: raw,
+            taildropAutosave: true,
+          ),
+        ],
+        rules: const [],
+        vars: const {},
+      );
+      final server = ((jsonDecode(out.json) as Map)['sources'] as List)
+          .cast<Map>()
+          .single;
+      expect(server['taildrop_autosave'], true);
+      expect(server.containsKey('taildrop_commands'), isFalse);
+    });
+  });
+
+  // §707 итер. 9 (контракт 1.1.158, D-141) — секция native_prefs.
+  group('native_prefs', () {
+    test('экспорт: объект с ключами секции', () async {
+      final out = await buildLxBackup(
+        lists: const [],
+        rules: const [],
+        vars: const {},
+        nativePrefs: const {
+          'auto_start': true,
+          'memory_limit': 'auto',
+          'notification_restart': false,
+          'app_theme_mode': 'dark',
+          'not_a_key': 1,
+        },
+      );
+      final np = (jsonDecode(out.json) as Map)['native_prefs'] as Map;
+      expect(np, {
+        'auto_start': true,
+        'memory_limit': 'auto',
+        'notification_restart': false,
+        'app_theme_mode': 'dark',
+      });
+    });
+
+    test('экспорт без секции — ключа нет', () async {
+      final out =
+          await buildLxBackup(lists: const [], rules: const [], vars: const {});
+      expect((jsonDecode(out.json) as Map).containsKey('native_prefs'),
+          isFalse);
+    });
+
+    test('импорт: известные ключи с типом схемы, без backup_unknown_field', () {
+      final raw = jsonDecode(_file(const [])) as Map<String, dynamic>;
+      raw['native_prefs'] = {
+        'keep_on_exit': false,
+        'background_mode': 'lazy',
+        'notification_send': false,
+        'app_theme_mode': 'light',
+        'auto_start': 'yes', // не тот тип
+      };
+      final file = parseLxBackup(jsonEncode(raw));
+      expect(file.nativePrefs, {
+        'keep_on_exit': false,
+        'background_mode': 'lazy',
+        'notification_send': false,
+        'app_theme_mode': 'light',
+      });
+      expect(
+        file.warnings.where((w) => w.code == kWarnUnknownField),
+        isEmpty,
+      );
+      expect(
+        file.warnings
+            .where((w) => w.detail == 'native_prefs.auto_start')
+            .map((w) => w.code),
+        [kWarnFieldTypeMismatch],
+      );
+    });
+
+    test('импорт: неизвестный ключ секции — backup_unknown_field', () {
+      final raw = jsonDecode(_file(const [])) as Map<String, dynamic>;
+      raw['native_prefs'] = {'shiny': true};
+      final file = parseLxBackup(jsonEncode(raw));
+      expect(file.nativePrefs, isEmpty);
+      expect(file.warnings.map((w) => w.code), contains(kWarnUnknownField));
+    });
+  });
 }

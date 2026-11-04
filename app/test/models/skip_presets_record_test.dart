@@ -142,4 +142,68 @@ void main() {
     expect((sourceFromRecord(frec).value as FolderServers).members.single,
         f.members.single);
   });
+
+  // §707 итер. 9 — поля Taildrop узла: те же правила, что у allow_*.
+  group('taildrop_commands / taildrop_autosave', () {
+    test('сервер: true пишется и читается, false не пишется', () {
+      final u =
+          server().copyWith(taildropCommands: true, taildropAutosave: true);
+      final rec = sourceToRecord(u);
+      expect(rec['taildrop_commands'], true);
+      expect(rec['taildrop_autosave'], true);
+      expect(sourceFromRecord(rec).value, u);
+
+      final off = sourceToRecord(server());
+      expect(off.containsKey('taildrop_commands'), isFalse);
+      expect(off.containsKey('taildrop_autosave'), isFalse);
+      final back = sourceFromRecord(off).value as UserServer;
+      expect(back.taildropCommands, isFalse);
+      expect(back.taildropAutosave, isFalse);
+    });
+
+    test('член папки: true пишется и читается, без предупреждений', () {
+      final f = FolderServers(
+        id: 'f1',
+        name: 'F',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        members: [FolderMember(raw: raw, taildropAutosave: true)],
+      );
+      final frec = sourceToRecord(f);
+      final m = (frec['nodes'] as List).single as Map;
+      expect(m['taildrop_autosave'], true);
+      expect(m.containsKey('taildrop_commands'), isFalse);
+      final notes = <String>[];
+      final back = sourceFromRecord(frec, notes: notes).value as FolderServers;
+      expect(back.members.single, f.members.single);
+      expect(notes, isEmpty);
+    });
+
+    test('терпимое чтение: не bool — как отсутствие', () {
+      final rec = sourceToRecord(server())
+        ..['taildrop_commands'] = 'yes'
+        ..['taildrop_autosave'] = 1;
+      final back = sourceFromRecord(rec).value as UserServer;
+      expect(back.taildropCommands, isFalse);
+      expect(back.taildropAutosave, isFalse);
+    });
+
+    test('резервная копия: поля едут и не снимаются на импорте', () {
+      final rec = sourceToRecord(
+          server().copyWith(taildropCommands: true, taildropAutosave: true));
+      final sliced = sliceBackupRecord(BackupRecord.server, rec);
+      expect(sliced.record?['taildrop_commands'], true);
+      expect(sliced.record?['taildrop_autosave'], true);
+      final kept = stripUndeclaredBackupFields(BackupRecord.server, rec);
+      expect(kept['taildrop_commands'], true);
+      expect(kept['taildrop_autosave'], true);
+    });
+
+    test('поля в конфиг не идут: inConfig = false', () {
+      expect(NodeRecordFlag.taildropCommands.inConfig, isFalse);
+      expect(NodeRecordFlag.taildropAutosave.inConfig, isFalse);
+      expect(NodeRecordFlag.allowLan.inConfig, isTrue);
+    });
+  });
 }

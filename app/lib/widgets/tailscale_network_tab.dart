@@ -10,7 +10,9 @@ import '../services/debug/debug_registry.dart';
 import '../services/builder/taildrop_emit.dart' show taildropAllowedByBody;
 import '../services/format_utils.dart' show formatBytes;
 import '../services/l10n/locale_controller.dart';
+import '../models/server_list.dart' show NodeRecordFlag;
 import '../services/tailscale_network.dart';
+import '../services/taildrop_tags_sync.dart' show taildropAutosaveSupported;
 import '../services/url_launcher.dart';
 import '../services/wg_peer_status.dart' show wgAgeLabel;
 import '../vpn/box_vpn_client.dart';
@@ -59,24 +61,9 @@ class TailscaleNetworkActions {
   Future<String?> cancelReceiving(String tag, String senderId, String name) =>
       CcChannel.instance.taildropCancelReceiving(tag, senderId, name);
 
-  /// §707 итер. 2 — автосохранение принятого в Downloads: настройка
-  /// устройства по тегу узла, не тело узла. `null` — настройки нет (канал
-  /// недоступен).
-  Future<CcTaildropAutoSave?> getAutoSave(String tag) =>
-      CcChannel.instance.taildropAutoSave(tag);
-
-  Future<bool> setAutoSave(String tag, bool enabled) =>
-      CcChannel.instance.setTaildropAutoSave(tag, enabled);
-
-  /// §707 итер. 4 — разрешения служебных файлов от устройства [peerId]:
-  /// вид команды → разрешено. `null` — канала нет.
-  Future<Map<String, bool>?> getPermissions(String tag, String peerId) =>
-      CcChannel.instance.taildropPermissions(tag, peerId);
-
-  Future<bool> setPermission(String tag, CcTailscalePeer peer, String kind,
-          bool allowed) =>
-      CcChannel.instance.setTaildropPermission(
-          tag, peer.stableId, peer.hostName, kind, allowed);
+  /// §707 итер. 9 — сохранение в Downloads без разрешений есть только на
+  /// Android 10+.
+  Future<bool> autoSaveSupported() => taildropAutosaveSupported();
 
   /// §707 — системный выбор файлов и отправка пиру (передача — в нативе).
   Future<CcTaildropResult> sendFiles(String tag, CcTailscalePeer peer) =>
@@ -160,6 +147,8 @@ class TailscaleNetworkTab extends StatefulWidget {
     required this.body,
     this.onSaveExitNode,
     this.onSaveFields,
+    this.taildropFlags,
+    this.onSaveRecordFlag,
     this.statusSource,
     this.inboxSource,
     this.vpnUp,
@@ -175,6 +164,16 @@ class TailscaleNetworkTab extends StatefulWidget {
   /// Replace key (§706) нет (узел подписки; блок Settings тогда только с
   /// автосохранением Taildrop, §707). `true` — записано.
   final Future<bool> Function(Map<String, Object?> fields)? onSaveFields;
+
+  /// §707 итер. 9 — поля записи узла `taildrop_commands` /
+  /// `taildrop_autosave`; `null` — у узла нет своей записи (подписка), и
+  /// переключателей нет.
+  final ({bool commands, bool autosave})? taildropFlags;
+
+  /// Запись поля записи узла (тем же путём, что прочие поля записи на
+  /// экране узла). `true` — записано.
+  final Future<bool> Function(NodeRecordFlag flag, bool value)?
+      onSaveRecordFlag;
 
   /// Тесты: поток состояния вместо [CcChannel.tailscaleStatus] (подписка ядра
   /// тогда не поднимается).
@@ -251,9 +250,21 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
   /// Файлы, по которым идёт Save / Delete / Cancel (кнопки неактивны).
   final _fileBusy = <String>{};
 
-  /// §707 итер. 2 — переключатель автосохранения; `null` — не показывается.
-  CcTaildropAutoSave? _autoSave;
-  bool _autoSaveBusy = false;
+  /// §707 итер. 9 — поля Taildrop записи узла (после записи — свои, пока
+  /// экран не передаст новые); `null` — переключателей нет.
+  late ({bool commands, bool autosave})? _flags = widget.taildropFlags;
+  bool _flagBusy = false;
+
+  /// Android 10+: автосохранение доступно (до ответа — считается да).
+  bool _autoSaveSupported = true;
+
+  @override
+  void didUpdateWidget(TailscaleNetworkTab old) {
+    super.didUpdateWidget(old);
+    if (old.taildropFlags != widget.taildropFlags) {
+      _flags = widget.taildropFlags;
+    }
+  }
 
   @override
   void initState() {
@@ -289,7 +300,7 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
       _acquired = true;
       unawaited(CcChannel.instance.acquireTailscaleStatus());
     }
-    unawaited(_loadAutoSave());
+    unawaited(_loadAutoSaveSupported());
     final inboxSource = widget.inboxSource ??
         (widget.statusSource == null ? widget.actions.inbox : null);
     if (inboxSource != null) {
@@ -471,7 +482,7 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
         _exitNodeBlock(context, s)
       else if (recordedExit != null)
         _savedExitNodeBlock(context, recordedExit),
-      if (widget.onSaveFields != null || (_autoSave != null && _taildropOn))
+      if (widget.onSaveFields != null || _hasTaildropSwitches)
         _settingsBlock(context),
       _devicesHeader(context, devices),
       if (devices.isEmpty)
@@ -983,7 +994,7 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
     final body = widget.body;
     final hasExit = recordedExitNode(body) != null;
     final advertise = body['advertise_exit_node'] == true;
-    final autoSave = _taildropOn ? _autoSave : null;
+    final flags = _hasTaildropSwitches ? _flags : null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1015,40 +1026,64 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
               ? null
               : (v) => unawaited(_saveTaildrop(v)),
         ),
-        if (autoSave != null)
+        // §707 итер. 9 — поля записи узла; выключаются вместе с Allow
+        // Taildrop. Sharee (устройства других пользователей) своими не
+        // считаются.
+        if (flags != null) ...[
+          SwitchListTile(
+            key: const ValueKey('tailscale-taildrop-commands'),
+            dense: true,
+            title: Text(getLocalText
+                .s("Accept clipboard and links from my devices")),
+            subtitle: Text(getLocalText
+                .s("Devices shared by other users are not counted as yours.")),
+            value: flags.commands,
+            onChanged: _flagBusy
+                ? null
+                : (v) => unawaited(
+                    _setFlag(NodeRecordFlag.taildropCommands, v)),
+          ),
           SwitchListTile(
             key: const ValueKey('tailscale-taildrop-autosave'),
             dense: true,
             title: Text(getLocalText.s("Save received files to Downloads")),
-            subtitle: autoSave.supported
+            subtitle: _autoSaveSupported
                 ? null
                 : Text(getLocalText.s("Needs Android 10 or later.")),
-            value: autoSave.enabled && autoSave.supported,
-            onChanged: _autoSaveBusy || !autoSave.supported
+            value: flags.autosave && _autoSaveSupported,
+            onChanged: _flagBusy || !_autoSaveSupported
                 ? null
-                : (v) => unawaited(_setAutoSave(v)),
+                : (v) => unawaited(
+                    _setFlag(NodeRecordFlag.taildropAutosave, v)),
           ),
+        ],
       ],
     );
   }
 
-  /// §707 итер. 2 — настройка автосохранения узла (своя у каждого тега).
-  Future<void> _loadAutoSave() async {
-    final v = await widget.actions.getAutoSave(widget.liveTag);
-    if (!mounted || v == null) return;
-    setState(() => _autoSave = v);
+  /// Переключатели полей Taildrop: своя запись есть и Taildrop узла включён.
+  bool get _hasTaildropSwitches =>
+      _flags != null && widget.onSaveRecordFlag != null && _taildropOn;
+
+  Future<void> _loadAutoSaveSupported() async {
+    final v = await widget.actions.autoSaveSupported();
+    if (!mounted || v == _autoSaveSupported) return;
+    setState(() => _autoSaveSupported = v);
   }
 
-  Future<void> _setAutoSave(bool enabled) async {
-    final cur = _autoSave;
-    if (cur == null) return;
-    setState(() => _autoSaveBusy = true);
-    final ok = await widget.actions.setAutoSave(widget.liveTag, enabled);
+  Future<void> _setFlag(NodeRecordFlag flag, bool value) async {
+    final save = widget.onSaveRecordFlag;
+    final cur = _flags;
+    if (save == null || cur == null) return;
+    setState(() => _flagBusy = true);
+    final ok = await save(flag, value);
     if (!mounted) return;
     setState(() {
-      _autoSaveBusy = false;
+      _flagBusy = false;
       if (ok) {
-        _autoSave = CcTaildropAutoSave(enabled: enabled, supported: cur.supported);
+        _flags = flag == NodeRecordFlag.taildropCommands
+            ? (commands: value, autosave: cur.autosave)
+            : (commands: cur.commands, autosave: value);
       }
     });
   }
@@ -1406,12 +1441,8 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
       });
 
   /// §707 итер. 6 — страница устройства: сводка, Ping и Send file…,
-  /// адреса с копированием, разрешения служебных файлов от устройства.
+  /// адреса с копированием.
   Future<void> _openDevice(CcTailscalePeer p) async {
-    final perms = _taildropOn && p.stableId.isNotEmpty && !p.shareeNode
-        ? await widget.actions.getPermissions(widget.liveTag, p.stableId)
-        : null;
-    if (!mounted) return;
     _live.value = _status;
     _devicePageOpen = true;
     _syncPolling();
@@ -1423,12 +1454,9 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
             live: _live,
             tag: widget.liveTag,
             actions: widget.actions,
-            permissions: perms,
             sendBlock: _sendBlock,
             onSend: _sendFiles,
             onCopy: _copy,
-            onPermission: (kind, v) =>
-                widget.actions.setPermission(widget.liveTag, p, kind, v),
           ),
         ),
       );
@@ -1641,8 +1669,7 @@ class _ReplaceKeyDialogState extends State<_ReplaceKeyDialog> {
 }
 
 /// §707 итер. 6 — страница устройства (макет — в задаче 707): сводка,
-/// Ping и Send file…, адреса с копированием по тапу, разрешения служебных
-/// файлов. Запись устройства берётся из [live] по stable ID; пропало из
+/// Ping и Send file…, адреса с копированием по тапу. Запись устройства берётся из [live] по stable ID; пропало из
 /// записи — остаётся последнее известное.
 class _DevicePage extends StatefulWidget {
   const _DevicePage({
@@ -1650,22 +1677,18 @@ class _DevicePage extends StatefulWidget {
     required this.live,
     required this.tag,
     required this.actions,
-    required this.permissions,
     required this.sendBlock,
     required this.onSend,
     required this.onCopy,
-    required this.onPermission,
   });
 
   final CcTailscalePeer initial;
   final ValueListenable<CcTailscaleStatus?> live;
   final String tag;
   final TailscaleNetworkActions actions;
-  final Map<String, bool>? permissions;
   final String? Function(CcTailscalePeer) sendBlock;
   final Future<void> Function(CcTailscalePeer) onSend;
   final Future<void> Function(String) onCopy;
-  final Future<bool> Function(String kind, bool allowed) onPermission;
 
   @override
   State<_DevicePage> createState() => _DevicePageState();
@@ -1702,7 +1725,6 @@ class _DevicePageState extends State<_DevicePage> {
       if (tailscaleDeviceDetails(p) case final d when d.isNotEmpty) d,
     ].join(' · '); // l10n-exempt: separator
     final block = widget.sendBlock(p);
-    final perms = widget.permissions;
     return Scaffold(
       appBar: AppBar(title: Text(p.hostName)),
       body: ListView(
@@ -1779,13 +1801,6 @@ class _DevicePageState extends State<_DevicePage> {
                   : 'IPv4', // l10n-exempt: protocol name
               ip,
             ),
-          if (perms != null && perms.isNotEmpty) ...[
-            _header(context, 'Taildrop'), // l10n-exempt: product name
-            _PermissionSwitches(
-              initial: perms,
-              onChanged: widget.onPermission,
-            ),
-          ],
         ],
       ),
     );
@@ -1832,56 +1847,4 @@ class _DevicePageState extends State<_DevicePage> {
       ),
     );
   }
-}
-
-/// §707 итер. 4 — переключатели разрешений служебных файлов на странице
-/// устройства. Виды — те, что вернул натив (реестр `service_files.json`);
-/// вид без подписи не показывается.
-class _PermissionSwitches extends StatefulWidget {
-  const _PermissionSwitches({required this.initial, required this.onChanged});
-
-  final Map<String, bool> initial;
-  final Future<bool> Function(String kind, bool allowed) onChanged;
-
-  @override
-  State<_PermissionSwitches> createState() => _PermissionSwitchesState();
-}
-
-class _PermissionSwitchesState extends State<_PermissionSwitches> {
-  late final Map<String, bool> _values = Map.of(widget.initial);
-  final _busy = <String>{};
-
-  static String? _label(String kind) => switch (kind) {
-    'clipboard' => getLocalText.s("Clipboard from this device"),
-    'open_url' => getLocalText.s("Links from this device"),
-    _ => null,
-  };
-
-  Future<void> _set(String kind, bool v) async {
-    setState(() => _busy.add(kind));
-    final ok = await widget.onChanged(kind, v);
-    if (!mounted) return;
-    setState(() {
-      _busy.remove(kind);
-      if (ok) _values[kind] = v;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) => Column(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      for (final e in _values.entries)
-        if (_label(e.key) case final String label)
-          SwitchListTile(
-            key: ValueKey('taildrop-permission-${e.key}'),
-            dense: true,
-            title: Text(label),
-            value: e.value,
-            onChanged: _busy.contains(e.key)
-                ? null
-                : (v) => unawaited(_set(e.key, v)),
-          ),
-    ],
-  );
 }

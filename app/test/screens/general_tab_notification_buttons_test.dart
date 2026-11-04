@@ -1,9 +1,16 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/screens/app_settings_screen/widgets/general_tab.dart';
+import 'package:lxbox/services/settings_storage.dart';
 
 // §707 итер. 8 — список кнопок уведомления VPN на вкладке General: по
 // умолчанию все включены, переключатель сообщает свою кнопку и значение.
+// §707 итер. 9 — значения живут в native_prefs (`notification_*`), вкладка
+// читает и пишет через SettingsStorage.
 
 void main() {
   Future<void> pump(
@@ -72,5 +79,53 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('notification-button-send')));
     await tester.pump();
     expect(calls, [('restart', true), ('send', false)]);
+  });
+
+  group('§707 итер. 9 — хранилище', () {
+    late Directory tmp;
+    const pathChannel = MethodChannel('plugins.flutter.io/path_provider');
+    const methodsChannel = MethodChannel('com.leadaxe.lxbox/methods');
+    final calls = <MethodCall>[];
+
+    setUp(() async {
+      tmp = await Directory.systemTemp.createTemp('lxbox_general_tab_707_');
+      calls.clear();
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(pathChannel, (call) async => tmp.path);
+      messenger.setMockMethodCallHandler(methodsChannel, (call) async {
+        calls.add(call);
+        return true;
+      });
+      SettingsStorage.resetCacheForTesting();
+    });
+
+    tearDown(() async {
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(pathChannel, null);
+      messenger.setMockMethodCallHandler(methodsChannel, null);
+      if (tmp.existsSync()) await tmp.delete(recursive: true);
+    });
+
+    testWidgets('по умолчанию все включены; запись — ключ native_prefs',
+        (tester) async {
+      await tester.runAsync(() async {
+        expect(await loadNotificationButtons(),
+            {'stop': true, 'restart': true, 'send': true});
+        await saveNotificationButton('send', false);
+        expect(await loadNotificationButtons(),
+            {'stop': true, 'restart': true, 'send': false});
+        final f = File('${tmp.path}/lxbox_settings.json');
+        final data = jsonDecode(await f.readAsString()) as Map;
+        expect((data['native_prefs'] as Map)['notification_send'], false);
+        expect(
+            calls
+                .where((c) => c.method == 'setNotificationSend')
+                .single
+                .arguments,
+            {'enabled': false});
+      });
+    });
   });
 }

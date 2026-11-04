@@ -591,92 +591,6 @@ class CcChannel {
     }
   }
 
-  /// §707 итер. 2 — автосохранение принятых файлов узла [tag] в Downloads:
-  /// настройка устройства (native SharedPreferences, не бэкап). `null` —
-  /// канала нет (тесты, не Android).
-  Future<CcTaildropAutoSave?> taildropAutoSave(String tag) async {
-    try {
-      final r = await _methods
-          .invokeMethod<Object?>('taildropAutoSaveState', {'tag': tag});
-      if (r is! Map) return null;
-      return CcTaildropAutoSave.fromMap(_asMap(r));
-    } on PlatformException {
-      return null;
-    } on MissingPluginException {
-      return null;
-    }
-  }
-
-  /// `true` — записано.
-  Future<bool> setTaildropAutoSave(String tag, bool enabled) async {
-    try {
-      return await _methods.invokeMethod<bool>(
-              'taildropSetAutoSave', {'tag': tag, 'enabled': enabled}) ==
-          true;
-    } on PlatformException {
-      return false;
-    } on MissingPluginException {
-      return false;
-    }
-  }
-
-  /// §707 итер. 4 — разрешения служебных файлов Taildrop от устройства
-  /// [peerId] узла [tag]: вид команды (`kinds` реестра `service_files.json`,
-  /// список даёт натив) → разрешено. Настройка устройства (не бэкап).
-  /// `null` — канала нет (тесты, не Android).
-  Future<Map<String, bool>?> taildropPermissions(
-      String tag, String peerId) async {
-    try {
-      final r = await _methods.invokeMethod<Object?>(
-          'taildropPermissions', {'tag': tag, 'peer_id': peerId});
-      if (r is! Map) return null;
-      return {
-        for (final e in r.entries)
-          if (e.key is String) e.key as String: e.value == true,
-      };
-    } on PlatformException {
-      return null;
-    } on MissingPluginException {
-      return null;
-    }
-  }
-
-  /// Разрешить / запретить вид [kind] от устройства [peerId] узла [tag].
-  /// [peerName] — имя устройства на момент выдачи: файл без `senderID`
-  /// (ядро после перезапуска) сверяется с ним (SERVICE_FILES §5).
-  /// `true` — записано.
-  Future<bool> setTaildropPermission(String tag, String peerId,
-      String peerName, String kind, bool allowed) async {
-    try {
-      return await _methods.invokeMethod<bool>('taildropSetPermission', {
-            'tag': tag,
-            'peer_id': peerId,
-            'peer_name': peerName,
-            'kind': kind,
-            'allowed': allowed,
-          }) ==
-          true;
-    } on PlatformException {
-      return false;
-    } on MissingPluginException {
-      return false;
-    }
-  }
-
-  /// Узлы [tags] удалены или переименованы — их записи (автосохранение и
-  /// разрешения служебных файлов, §707 итер. 4) убираются.
-  Future<void> forgetTaildropAutoSave(Iterable<String> tags) async {
-    if (tags.isEmpty) return;
-    try {
-      await _methods.invokeMethod<bool>(
-          'taildropForgetAutoSave', {'tags': tags.toList()});
-    } on PlatformException {
-      // best-effort
-    } on MissingPluginException {
-      // юнит-тест / не Android
-    }
-  }
-
   /// §707 — тег узла из тапа по уведомлению Taildrop; забирается один раз.
   Future<String?> takeTaildropOpenRequest() async {
     try {
@@ -1361,21 +1275,6 @@ class CcServiceFile {
       maxBytes: n(m['max_bytes']),
     );
   }
-}
-
-/// §707 итер. 2 — переключатель автосохранения узла: [enabled] — включён,
-/// [supported] — Android 10+ (MediaStore без разрешений).
-class CcTaildropAutoSave {
-  const CcTaildropAutoSave({required this.enabled, required this.supported});
-
-  final bool enabled;
-  final bool supported;
-
-  factory CcTaildropAutoSave.fromMap(Map<String, dynamic> m) =>
-      CcTaildropAutoSave(
-        enabled: m['enabled'] == true,
-        supported: m['supported'] == true,
-      );
 }
 
 /// §613 (ядро SPEC 115) — значения `TailscalePeer.path`. Строки ядра

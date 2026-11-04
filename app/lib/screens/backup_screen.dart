@@ -452,6 +452,8 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
         warp: warp,
         recordVars: recordVars,
         mixins: await SettingsStorage.getMixins(), // §704
+        // §707 итер. 9 (контракт 1.1.158) — настройки телефона.
+        nativePrefs: await SettingsStorage.exportNativePrefsBackup(),
       );
       final json = built.json;
       exportWarnings.addAll(built.warnings);

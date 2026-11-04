@@ -10,7 +10,9 @@ import '../models/config_node.dart';
 import '../models/dependency_graph.dart';
 import '../services/probe/chain_layer_probe.dart';
 import '../services/runtime_chain.dart';
+import '../models/server_list.dart' show NodeRecordFlag;
 import '../services/settings_storage.dart';
+import '../services/taildrop_tags_sync.dart' show taildropRecordForTag;
 import '../vpn/cc_channel.dart';
 import '../widgets/chain_positions_block.dart';
 import '../widgets/lx_code_editor.dart';
@@ -177,6 +179,26 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
     }
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(err ?? getLocalText.s("Saved"))));
+    return err == null;
+  }
+
+  /// §707 итер. 9 — запись узла (свой сервер или член папки) по тегу
+  /// собранного конфига; `null` — узел подписки или без записи.
+  ({int entryIndex, int? memberIndex, bool commands, bool autosave})?
+      get _taildropRecord => taildropRecordForTag(
+          widget.tag, [for (final e in widget.subController.entries) e.list],
+          emitted: widget.subController.lastEmittedTagMap);
+
+  Future<bool> _saveTaildropFlag(NodeRecordFlag flag, bool value) async {
+    final r = _taildropRecord;
+    if (r == null) return false;
+    final err = await widget.subController
+        .setNodeRecordFlag(r.entryIndex, r.memberIndex, flag, value);
+    if (!mounted) return err == null;
+    if (err != null) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(err.render())));
+    }
     return err == null;
   }
 
@@ -359,6 +381,15 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
                   body: _networkBody,
                   onSaveExitNode: _saveExitNode,
                   onSaveFields: _saveTailscaleFields,
+                  // §707 итер. 9 — поля Taildrop записи узла (по тегу).
+                  taildropFlags: _taildropRecord == null
+                      ? null
+                      : (
+                          commands: _taildropRecord!.commands,
+                          autosave: _taildropRecord!.autosave,
+                        ),
+                  onSaveRecordFlag:
+                      _taildropRecord == null ? null : _saveTaildropFlag,
                 ),
               // §392 — экран знает узел ТОЛЬКО по тегу собранного конфига
               // (NodeSpec тут нет), поэтому probe-ветка недоступна: при

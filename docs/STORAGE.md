@@ -126,8 +126,12 @@ lxbox_settings.json                          # SettingsStorage (Dart), the main 
     ├─ core_logs_enabled         bool          default false  — forwarding of the sing-box logs
     ├─ allow_bypass              bool          default false  — Allow VPN bypass (§069)
     ├─ auto_redirect             bool          default false  — auto-redirect
-    └─ memory_limit              string        default "auto" — §271/§705: memory threshold on the core's runtime memory (core lx.29+)
-                                                 (auto|off|"200"|"384"|"512"|"768" MB)
+    ├─ memory_limit              string        default "auto" — §271/§705: memory threshold on the core's runtime memory (core lx.29+)
+    │                                            (auto|off|"200"|"384"|"512"|"768" MB)
+    ├─ notification_stop         bool          default true   — §707: the Stop button in the VPN notification
+    ├─ notification_restart      bool          default true   — §707: the Restart button
+    ├─ notification_send         bool          default true   — §707: the Send button (Taildrop)
+    └─ app_theme_mode            string        default "system" — §707: system|light|dark; not mirrored to Kotlin
 
 # §439 — the 2.23.2 keys (server_lists / chains / custom_rules / dns_options) and the
 # keys with no readers (excluded_nodes / preset_ids_remapped / proxy_sources /
@@ -170,9 +174,8 @@ Context.filesDir/                           # native `files/` = Dart getApplicat
     ├── <url.hashCode>
     └── <url.hashCode>.headers
 
-Android SharedPreferences:
-├── Flutter prefs                # app_theme_mode, haptic_enabled, …
-└── boxvpn_boot.*                # pre-Flutter boot flags
+Android SharedPreferences (shared_prefs/):  # two files, boxvpn_boot and lxbox_native_cache —
+                                            #   see ARCHITECTURE §5 "Persistent storage"
 ```
 
 `[workspace]` — part of a saved workspace (§417): copied into `workspaces/<name>/` on Save as and back on Load. `[device]` — stays with the device, never copied.
@@ -642,6 +645,8 @@ The `nodes` of a subscription are **not stored**: they are re-parsed from `sub_c
   "allow_local":   true,                      // §656 — optional, only `true` is written; see below
   "allow_lan":     true,                      // §656
   "allow_gateway": true,                      // §656
+  "taildrop_commands": true,                  // §707 — optional, only `true` is written; see below
+  "taildrop_autosave": true,                  // §707
   "detour_policy": { … },                     // LxBox, only when a flag is not default
   "tag_policy":    { "prefix": "Home " }      // LxBox, only when set. The prefix is part of the
                                               // server's root address: changing it rewrites the
@@ -713,6 +718,21 @@ does not reset the local value (only `true` is stored, so absence cannot be
 told from `false`). The Debug API returns them in the node record
 (read-only).
 
+**Taildrop node fields (§707).** Two more bool fields of a server and of a
+folder member, by the same rules: only `true` is written, a missing field is
+`false`, they do not go into the config, they travel in a backup, and a
+subscription node has no record and no fields. `disable_taildrop` stays in the
+node body as a core field.
+
+- `taildrop_commands` — accept clipboard and links sent from the user's own
+  devices (sharees do not count as own). Default off.
+- `taildrop_autosave` — save received files to Downloads without asking.
+  Default off; Android 10+.
+
+Kotlin does not read these fields. Dart computes from them two sets of final
+tags and mirrors them into `boxvpn_boot` (`taildrop_commands_tags`,
+`taildrop_autosave_tags`, see [SharedPreferences](#sharedpreferences-android)).
+
 #### Node sections — removed (§575)
 
 A free node no longer carries a config fragment of its own: the `sections` key
@@ -746,7 +766,8 @@ detour. A subscription cannot be put into a folder, and there is no nesting.
     { "kind": "server", "tag": "Alpha", "enabled": true,
       "origin": { "kind": "uri", "raw": "vless://…#Alpha" },
       "detour": { "folder_id": "<this folder id>", "tag": "Jump" },    // §237 — personal detour
-      "skip_tailscale_presets": true },                                // §578/§656 — as on a server
+      "skip_tailscale_presets": true,                                  // §578/§656 — as on a server
+      "taildrop_autosave": true },                                     // Taildrop — as on a server
     { "kind": "server", "tag": "Beta", "enabled": false,
       "origin": { "kind": "wg_ini", "raw": "[Interface]\n…" },
       "warnings": [ { "code": "core_rejected",
@@ -1415,7 +1436,12 @@ A JSON mirror of the Android prefs that historically lived **only** in the nativ
   "core_logs_enabled": false,    // forwarding of the sing-box logs into Dart
   "allow_bypass":      false,    // §069 — Allow VPN bypass
   "auto_redirect":     false,    // auto-redirect
-  "memory_limit":      "auto"    // §271/§705 — memory threshold on the core's runtime memory (core lx.29+; whole process before): auto (none) | MB as a string; legacy "off" is read as auto
+  "memory_limit":      "auto",   // §271/§705 — memory threshold on the core's runtime memory (core lx.29+; whole process before): auto (none) | MB as a string; legacy "off" is read as auto
+  "notification_stop":    true,  // §707 — the buttons of the VPN notification; the notification
+  "notification_restart": true,  //   updates at once on a change
+  "notification_send":    true,
+  "app_theme_mode":    "system"  // §707 — system | light | dark; in the backup, not mirrored to Kotlin
+                                 //   (the native window follows the system night mode)
 }
 ```
 
@@ -1465,8 +1491,8 @@ setting.
 > [`vars.app_language`](#vars--template-vars--app-flags) var (the JSON var is the source
 > of truth; the cache is re-pushed by `setAppLanguage` and
 > `bootstrapAndSyncNativePrefs`); the native surfaces (the notification shade, the QS
-> tile, the shortcuts) need it while Flutter is dead. `boxvpn_boot.last_pushed_locale`
-> mirrors the last value the app itself pushed into `LocaleManager` (Android 13+) and
+> tile, the shortcuts) need it while Flutter is dead. `last_pushed_locale` (in Kotlin's
+> cache `lxbox_native_cache` since §707) holds the last value the app itself pushed into `LocaleManager` (Android 13+) and
 > anchors the three-way “system versus storage” reconciliation. Both are a documented
 > exception from `NativePrefsKeys`: membership would export them into the backup's
 > `vpn_settings` block as a second representation of one setting (the backup home of
@@ -1778,9 +1804,9 @@ with a warning. A legacy 0.12 file carries a root `chains[]` section (contract 0
 
 Not part of `lxbox_settings.json`. It serves two categories: **pre-Flutter boot flags** (read by Kotlin before the engine starts) and **UI preferences** (written by Flutter through `shared_preferences`).
 
-> **§189 — `boxvpn_boot.*` is now a MIRROR, not the original.** The six native prefs
+> **§189 — `boxvpn_boot.*` is now a MIRROR, not the original.** The native prefs
 > (`auto_start` / `keep_vpn_on_exit` / `background_mode` / `core_logs_enabled` /
-> `allow_bypass` / `auto_redirect`) are a **working copy in memory** for the Dart-less
+> `allow_bypass` / `auto_redirect` / the notification buttons, …) are a **working copy in memory** for the Dart-less
 > moments (boot, a swipe `onTaskRemoved`, `openTun`). **The source of truth is the
 > [`native_prefs`](#native_prefs--189-a-mirror-of-boxvpn_boot) section of
 > `lxbox_settings.json` (the disk)**: every write is write-through (the JSON first, then
@@ -1795,7 +1821,6 @@ Not part of `lxbox_settings.json`. It serves two categories: **pre-Flutter boot 
 
 | Key | Type | Source | Spec | Purpose |
 |---|---|---|---|---|
-| `app_theme_mode` | `"system"` / `"light"` / `"dark"` | Flutter | — | UI theme. |
 | `boxvpn_boot.auto_start_vpn` | `Boolean` | Kotlin (mirrors the JSON) | [§189] | Auto-start the VPN at boot (when it was running before). |
 | `boxvpn_boot.keep_vpn_on_exit` | `Boolean` | Kotlin (mirrors the JSON) | [§189]/§188 | Do not kill the tun on a swipe-kill. |
 | `boxvpn_boot.background_mode` | `String` | Kotlin (mirrors the JSON) | [§189] | The foreground-service mode (`never` / `lazy` / `always`). |
@@ -1804,8 +1829,13 @@ Not part of `lxbox_settings.json`. It serves two categories: **pre-Flutter boot 
 | `boxvpn_boot.auto_redirect` | `Boolean` | Kotlin (mirrors the JSON) | [§189] | Auto-redirect. The truth lives in `native_prefs`. |
 | `boxvpn_boot.has_tun` | `Boolean` | Kotlin (mirrors `vpn_mode`) | [§192] | **Computed**, default `true`. Gates `VpnService.prepare()`; not stored in the JSON. |
 | `boxvpn_boot.app_language` | `String` | Kotlin (mirrors `vars.app_language`) | [§279] | `system` \| `en` \| `ru`. A derived cache for the native surfaces. |
-| `boxvpn_boot.last_pushed_locale` | `String` | Kotlin | [§279] | The last value the app itself pushed into `LocaleManager` (Android 13+). |
-| `lxbox_taildrop` file: `autosave.<node tag>` | `Boolean` (only `true` is stored) | Kotlin (`Taildrop`); Flutter writes it over the method channel | §707 | Taildrop auto-save to Downloads per Tailscale node tag. A device setting: not in `lxbox_settings.json`, so not in the backup; read by the VPN service without Flutter. The record goes when the node is deleted or its tag changes. |
+| `boxvpn_boot.notification_stop` / `notification_restart` / `notification_send` | `Boolean` | Kotlin (mirrors the JSON) | §707 | The buttons of the VPN notification, default `true`. The truth lives in `native_prefs`. |
+| `boxvpn_boot.taildrop_commands_tags` / `taildrop_autosave_tags` | `StringSet` | Kotlin (mirrors the node fields) | §707 | **Computed**: the final tags of the nodes with `taildrop_commands` / `taildrop_autosave`. Pushed after a config build, on a switch change and at startup; not stored in the JSON. |
+| `lxbox_native_cache.clip_tag` / `clip_peer` / `clip_name` | `String` | Kotlin (`NativeCache`) | §707 | The last recipient of the Send window. Kotlin's own cache, not in the backup. |
+| `lxbox_native_cache.vpn_desired`, `sticky_restart_count`, `sticky_restart_window_start`, `shortcut_relabel_pending` | — | Kotlin (`NativeCache`) | §707 | Kotlin's run state, moved out of `boxvpn_boot`; old values there are not carried over. |
+| `lxbox_native_cache.last_pushed_locale` | `String` | Kotlin (`NativeCache`) | [§279] | The last value the app itself pushed into `LocaleManager` (Android 13+). |
+
+`lxbox_automation` and the Flutter `shared_preferences` file are reviewed separately. The app theme is `native_prefs.app_theme_mode`, not mirrored here.
 
 ---
 

@@ -649,6 +649,12 @@ class LxBackupImportService {
       applied += plan.appliedMixins;
     }
 
+    // §707 итер. 9 (контракт 1.1.158) — настройки телефона через слой
+    // native_prefs (JSON + зеркало); ключа нет в файле — своё остаётся.
+    if (file.nativePrefs.isNotEmpty) {
+      applied += await SettingsStorage.applyNativePrefsBackup(file.nativePrefs);
+    }
+
     await SettingsStorage.flushToDisk();
     return applied;
   }
