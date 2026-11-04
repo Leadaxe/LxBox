@@ -29,6 +29,7 @@ import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import '../../../models/node_warning.dart';
 import '../drop_verdict.dart';
+import '../tt_deeplink.dart';
 import 'decoders.dart';
 import 'ini_space.dart';
 import 'lexer.dart';
@@ -123,7 +124,7 @@ final class EngineResult {
 /// (`required`) не нашла значения. Тем же `null` отвечали рукописные мапперы.
 EngineResult? runSection(MapperSection section, String text,
     {MapperTrace? trace, XrayDropVerdict? dropped}) {
-  final space = _selectForm(section, text);
+  final space = _selectForm(section, text, dropped: dropped);
   if (space == null) {
     // §512 (контракт 1.1.49, PARSING_PRINCIPLES §4.1) — ФОРМА не опознана: схему секция
     // ведёт, но ни одна её форма текст не прочитала (оболочка не раскрылась,
@@ -436,10 +437,16 @@ SourceSpace? _selectIniForm(MapperSection section, String text) {
 /// Формы пробуются ПО ПОРЯДКУ, первая, чей `detect` сработал, выигрывает;
 /// `detect.default` — ветка «всё остальное» и пробуется последней, где бы ни
 /// стояла в списке ([formsInTrialOrder]).
-SourceSpace? _selectForm(MapperSection section, String text) {
+///
+/// [dropped] — §717: именованный декодер, который ОТКАЗАЛ с кодом, объявленным
+/// шагом формы (`tt_deeplink`), называет причину здесь; ставится она, только
+/// если не ответила ни одна форма.
+SourceSpace? _selectForm(MapperSection section, String text,
+    {XrayDropVerdict? dropped}) {
   final forms = section.forms.isEmpty
       ? const [MapperForm(id: 'url', space: 'url')]
       : formsInTrialOrder(section.forms);
+  RegistryWarning? decoderFailure;
   for (final form in forms) {
     // Текстовый `detect` формы с оболочкой судится по ДВУМ текстам (unwrap →
     // redetect, MAPPER_ENGINE §1): сырому пэйлоаду и раскрытому. Предикаты
@@ -515,7 +522,22 @@ SourceSpace? _selectForm(MapperSection section, String text) {
         // декодирование сводится к тому же шагу над пэйлоадом.
         final unwrapped = _applyScopedDecodeToPayload(form, decoded);
         if (unwrapped == null) continue;
-        final doc = _decodeFormJson(form, unwrapped);
+        // §717 — именованный декодер БИНАРНОЙ оболочки (`tt_deeplink`): сам
+        // снимает base64url и разбирает TLV в объект. Отдельным шагом
+        // `base64url` перед ним это не выразить — общий шаг отдаёт ТЕКСТ, а
+        // байты TLV в UTF-8 не живут.
+        final ttStep = _namedDecoderStep(form, kTtDeeplinkDecoder);
+        Map<String, dynamic>? doc;
+        if (ttStep != null) {
+          final r = _decodeTtDeeplinkStep(ttStep, unwrapped);
+          if (r.failure != null) {
+            decoderFailure ??= r.failure;
+            continue;
+          }
+          doc = r.doc;
+        } else {
+          doc = _decodeFormJson(form, unwrapped);
+        }
         if (doc == null) continue;
         if (!detectMatchesJson(form.detect, doc)) continue;
         return SourceSpace(
@@ -540,7 +562,50 @@ SourceSpace? _selectForm(MapperSection section, String text) {
         continue;
     }
   }
+  if (dropped != null && dropped.reason == null && decoderFailure != null) {
+    dropped.reason = decoderFailure;
+  }
   return null;
+}
+
+/// Шаг `decode` формы с декодером по имени [name] (`{"decoder": name, …}`
+/// либо голая строка); `null` — шага нет.
+Map<String, dynamic>? _namedDecoderStep(MapperForm form, String name) {
+  for (final step in form.decode) {
+    if (step == name) return const {};
+    if (step is Map && step['decoder'] == name) {
+      return step.cast<String, dynamic>();
+    }
+  }
+  return null;
+}
+
+/// §717 — шаг `tt_deeplink`: пэйлоад после схемы (ведущий `?` снимается) →
+/// base64url → TLV → объект. Коды отказа объявляет ШАГ (`on_invalid.code`,
+/// `on_subscription_only.code`); не объявлен — `form_unrecognized`.
+({Map<String, dynamic>? doc, RegistryWarning? failure}) _decodeTtDeeplinkStep(
+    Map<String, dynamic> step, String text) {
+  final split = _splitScheme(text);
+  var payload = split?.payload ?? text;
+  final hash = payload.indexOf('#');
+  if (hash >= 0) payload = payload.substring(0, hash);
+  if (payload.startsWith('?')) payload = payload.substring(1);
+  RegistryWarning fail(String key) {
+    final code = (step[key] as Map?)?['code'] as String? ?? 'form_unrecognized';
+    final scheme = split?.scheme ?? '';
+    return RegistryWarning(
+        code: code, path: '', value: scheme, params: {'scheme': scheme});
+  }
+
+  final bytes = _RunDecode.bytes(payload.trim());
+  if (bytes == null) return (doc: null, failure: fail('on_invalid'));
+  final r = decodeTtPayload(bytes);
+  return switch (r.failure) {
+    null => (doc: r.doc, failure: null),
+    TtFailure.invalid => (doc: null, failure: fail('on_invalid')),
+    TtFailure.subscriptionOnly =>
+      (doc: null, failure: fail('on_subscription_only')),
+  };
 }
 
 /// Ссылочная форма с пространством `ini` (`<схема>://<base64 .conf>#метка`):

@@ -16,8 +16,8 @@
 `scheme_unsupported`.
 
 Формат ссылки — не URL. `tt://?<payload>`: authority и путь пустые, payload —
-base64url без padding над бинарным TLV (tag 1 байт, длина LEB128 varint,
-значение). Референс — крейт `deeplink` репозитория
+base64url без padding над бинарным TLV (tag и длина — QUIC-varint RFC 9000
+§16, не LEB128: `varint.rs` референса; затем значение). Референс — крейт `deeplink` репозитория
 <https://github.com/TrustTunnel/TrustTunnel> (`deeplink/src/{types,encode,decode}.rs`);
 текстовой спеки у AdGuard нет. Теги и обязательные поля — в §157 контракта
 (п. 3–4). Движок `mappers.uri` декларативно TLV не читает: нужен именованный
@@ -89,15 +89,26 @@ base64url без padding над бинарным TLV (tag 1 байт, длина
 
 ## Файлы
 
-- `app/lib/services/parser/engine/decoders.dart` (+ `section.dart`, если список
-  имён декодеров там) — п. 1.
-- `app/lib/services/parser/tt_deeplink.dart` (новый: varint, TLV, DER→PEM,
-  разбор host:port; без имени схемы в логике диспетчеризации) — п. 1/4.
-- `app/assets/contract_draft/uri/trusttunnel.json`, `draft_sections.dart`
-  (`kDraftFiles`) — п. 2.
-- `app/lib/services/parser/mappers/uri_pipeline.dart`,
-  `app/lib/services/parser/singbox_config.dart` — п. 3.
-- `app/test/parser/tt_deeplink_test.dart` (новый) — п. «Проверка».
+- `app/lib/services/parser/tt_deeplink.dart` (новый) — QUIC-varint
+  (`readVarint`/`writeVarint`), TLV (`encodeTlv`, `encodeStringArray`),
+  DER↔PEM (`derToPem`/`pemToDer`), `splitHostPort`, `decodeTtPayload` →
+  объект либо `TtFailure.invalid|subscriptionOnly`. Без имени схемы.
+- `app/lib/services/parser/engine/decoders.dart` — константа имени декодера
+  `kTtDeeplinkDecoder`; `engine/section.dart` — имя в списке декодеров (doc).
+- `app/lib/services/parser/engine/interpreter.dart` — ветка `space: json`
+  `_selectForm`: шаг `tt_deeplink` (`_namedDecoderStep`,
+  `_decodeTtDeeplinkStep`), коды отказа из шага формы в `dropped.reason`
+  (только если ни одна форма не ответила).
+- `app/assets/contract_draft/uri/trusttunnel.json` (новый) — полная секция
+  `mappers.uri`; `mappers/draft_sections.dart` — `'trusttunnel'` в
+  `kDraftFiles`.
+- `app/lib/services/parser/singbox_config.dart` — общий
+  `unknownTypeNodeFromBody` (из `_ownUnknownTypeNode`);
+  `mappers/uri_pipeline.dart` — откат `_registryTypeNode` после
+  `parseSingboxEntry`.
+- `app/test/parser/tt_deeplink_test.dart` (новый);
+  `app/test/parser/engine_no_scheme_names_test.dart` — `tt`, `trusttunnel` в
+  списке написаний-литералов диспетчера.
 - `docs/USER_GUIDE.md` / `docs/contract/protocols/trusttunnel.md` — после
   записи лаунчера (генерируемый документ не править руками).
 
@@ -127,4 +138,47 @@ base64url без padding над бинарным TLV (tag 1 байт, длина
 
 ## Итог
 
-—
+Сделано (Solution п. 1–5, Проверка п. 1–7), рабочее дерево, без коммита.
+
+- **Декодер** `tt_deeplink` — единственный шаг `decode` формы `deeplink`
+  (`space: json`, не `tt`): сам снимает ведущий `?` и base64url (ленивый
+  `_RunDecode.bytes`, четыре алфавита) и разбирает TLV. Отступление от
+  п. 1/2: шага `{"decoder":"base64url","scope":"query"}` перед ним нет —
+  общий шаг base64 отдаёт ТЕКСТ (UTF-8), а байты TLV и DER в нём не живут;
+  scope `query` лексер для ссылки без authority не поддерживает, и вводить
+  его ради одного формата не стал. Пространство — обычное `json`
+  (источники `json.<ключ>`), как у формы-контейнера vmess: отдельный
+  `space: tt` потребовал бы второй ветки чтения источников при той же
+  грамматике.
+- **Varint — QUIC (RFC 9000), не LEB128**, как стояло в Problem (исправлено):
+  `varint.rs` референса. Tag тоже varint. bool — строго `0x00`/`0x01`,
+  протокол — `0x01`/`0x02`, иначе отказ; не-UTF-8 строка — отказ.
+- **Объект пространства** — отступление от п. 1: вместо `addresses[]` —
+  `address` (первый) + производные `server`/`server_port` + `extra_addresses`
+  (со второго, только если есть); булевы `has_ipv6`/`anti_dpi`/
+  `skip_verification` кладутся только при значении, отличном от умолчания
+  формата (иначе каждая ссылка с явным `has_ipv6=true` шумела бы кодом).
+- **Коды** — черновика `warnings` механизм не поддерживает
+  (`registry.dart` читает только `registry/warnings.json`), взяты
+  существующие; имена кодов отказа объявлены в ШАГЕ формы
+  (`on_invalid.code`, `on_subscription_only.code`), при синке переименование
+  — правка JSON, не кода:
+  - `tt_deeplink_invalid` → `form_unrecognized`;
+  - `tt_subscription_only` → `service_record_ignored` (параметр `scheme`);
+  - `tt_field_unsupported` и `tt_subscription_ignored` → `uri_param_unknown`
+    (`query_name` = имя поля) через `unknown_key` секции, `action: drop` — в
+    тело не едут. Поля, которые секция не читает, называются автоматически,
+    без перечня.
+- **Узел**: `parseSingboxEntry` → `null` для `trusttunnel` → откат
+  `_registryTypeNode` в `_runPipeline` (тип известен реестру и без модели) →
+  `UnknownTypeSpec` через общий `unknownTypeNodeFromBody`; `rawSource` —
+  исходная ссылка, `toUri()` её и отдаёт (Copy link). Тег-фолбэк —
+  `trusttunnel-<server>-<port>`.
+- **Страж** `engine_no_scheme_names_test`: `tt`/`trusttunnel` добавлены в
+  литералы диспетчера; в Dart-коде имени схемы нет.
+- Локально: `flutter test` двух своих файлов — зелёные (12 + 2);
+  `flutter analyze` по изменённым файлам — 0 замечаний.
+- **Не проверено**: полный прогон (CI) — в частности тесты, обходящие
+  черновики (`mapper_sections_w4_test`, `document_registry_test`,
+  `engine_w4_protocols_test`) и корпус; эмулятор/вставка из буфера на
+  устройстве; энкодер Share из тела и подписка (п. 6) — не делались по ТЗ.

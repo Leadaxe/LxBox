@@ -65,7 +65,7 @@ final class MapperForm {
   final Map<String, dynamic>? detect;
 
   /// Конвейер декодеров оболочки: `url`, `percent`, `base64`, `base64url`,
-  /// `base64?`, `json`, `ini`, `{reparse: url|authority}`.
+  /// `base64?`, `json`, `ini`, `tt_deeplink` (§717), `{reparse: url|authority}`.
   final List<dynamic> decode;
 
   /// Итоговое пространство источников: `url` | `json` | `ini`.
