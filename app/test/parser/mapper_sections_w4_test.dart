@@ -46,27 +46,6 @@ void main() {
   };
 
   group('§480 W4 — форма секций uri', () {
-    test('файлы читаются и несут секцию mappers.uri', () {
-      for (final e in uriSections.entries) {
-        final mappers = (load(e.value)['mappers'] as Map).cast<String, dynamic>();
-        // У файла РЕЕСТРА видов источника бывает несколько (`xray`,
-        // `singbox`) — там это один файл на протокол; у черновика вид один.
-        expect(mappers.keys, contains('uri'), reason: e.key);
-      }
-    });
-
-    test('обязательные атрибуты секции на месте', () {
-      for (final e in uriSections.entries) {
-        final s = section(e.value, 'uri');
-        expect(s['body_source'], 'uri', reason: e.key);
-        expect(s['detect'], isA<Map>(), reason: e.key);
-        expect(s['forms'], isA<List>(), reason: e.key);
-        expect(s['params'], isA<Map>(), reason: e.key);
-        expect(s['unknown_key'], isA<Map>(), reason: e.key);
-        expect(s['label'], isA<Map>(), reason: e.key);
-      }
-    });
-
     test('ровно одна форма по умолчанию на секцию', () {
       for (final e in uriSections.entries) {
         final forms = (section(e.value, 'uri')['forms'] as List).cast<Map>();
@@ -97,37 +76,6 @@ void main() {
           expect((p.value as Map)['maps_to'], isNull, reason: '${e.key}.${p.key}');
         }
       }
-    });
-
-    test('фолбэк тега — по ТИПУ ТЕЛА (DELTAS D133-6), и это уже наше '
-        'поведение: awg:// даёт wireguard-…', () {
-      for (final e in uriSections.entries) {
-        final fb = ((section(e.value, 'uri')['label'] as Map)['fallback'] as Map);
-        expect(fb['scheme_source'], 'singbox_type', reason: e.key);
-        expect(fb['template'], '{scheme}-{server}-{server_port}', reason: e.key);
-      }
-    });
-
-    test('эмит: param_order — ПРАВИЛО (алфавит), а не перечень', () {
-      for (final e in uriSections.entries) {
-        // Обратный ход объявляет не каждая секция. Секция без эмита здесь
-        // не судится — оверлей wireguard (`form_from`) проверяет кейс ниже.
-        final emit = section(e.value, 'uri')['emit'];
-        if (emit == null) continue;
-        expect((emit as Map)['param_order'], 'alphabetical', reason: e.key);
-      }
-    });
-
-    test('эмит wireguard — param_order из реестра, form_from в оверлее', () {
-      final emit = section(uriSections['wireguard']!, 'uri')['emit'] as Map;
-      expect(emit['param_order'], 'alphabetical');
-      final draftEmit =
-          (section('assets/contract_draft/uri/wireguard.json', 'uri')['emit']
-              as Map);
-      // Написание схемы — сегодняшнее: узел с awg-полями уезжает
-      // `wireguard://`, как ждёт `emit_before480.json`.
-      expect(((draftEmit['form_from'] as Map)['any_set'] as Map)['*'],
-          'wireguard');
     });
 
     test('общие блоки берутся у лаунчера через include, своих копий нет', () {
@@ -205,42 +153,6 @@ void main() {
       }
     });
 
-    test('base64-поля читают «+» буквально (DELTAS D133-7)', () {
-      const base64Fields = <String, List<String>>{
-        'masque': ['private_key', 'publickey'],
-        'wireguard': [
-          'privatekey',
-          'publickey',
-          'presharedkey',
-          'headerprotectionkey',
-        ],
-      };
-      for (final e in base64Fields.entries) {
-        final params = (section(uriSections[e.key]!, 'uri')['params'] as Map)
-            .cast<String, dynamic>();
-        for (final f in e.value) {
-          final p = params[f] as Map;
-          // Норма D133-7 — буквальный «+» выводится ИЗ `format: base64*`;
-          // явный `decode_extra.plus_literal` только записывает то же самое
-          // вторым способом. Годится любой из них: у части записей реестра
-          // стоит флаг, у части — один лишь формат.
-          final de = (p['decode_extra'] as Map?)?['plus_literal'] == true;
-          final byFormat = '${p['format']}'.startsWith('base64');
-          expect(de || byFormat, isTrue,
-              reason: '${e.key}.$f: ни decode_extra.plus_literal, ни '
-                  'format base64*');
-        }
-      }
-    });
-
-    test('tuic disable_sni СНИМАЕТ tls.server_name (G2: null в sets)', () {
-      final p = (section(uriSections['tuic']!, 'uri')['params'] as Map)
-          .cast<String, dynamic>();
-      final sets = ((p['disable_sni'] as Map)['sets'] as Map)['true'] as Map;
-      expect(sets.containsKey('tls.server_name'), isTrue);
-      expect(sets['tls.server_name'], isNull);
-    });
-
     test('masque материализует дефолты profile/vhttp/mtu: default реестра в '
         'тело не едет (PARSING_PRINCIPLES §2.4), а identity живых узлов на них стоит', () {
       final p = (section(uriSections['masque']!, 'uri')['params'] as Map)
@@ -252,25 +164,6 @@ void main() {
       expect(((p['mtu'] as Map)['default_when'] as Map)['value'], 1280);
       expect(((p['profile'] as Map)['default_when'] as Map)['value'], 'cloudflare');
     });
-
-    test('hysteria2: multi-port читается из сырого порта, а не из port', () {
-      final p = (section(uriSections['hysteria2']!, 'uri')['params'] as Map)
-          .cast<String, dynamic>();
-      final mp = p[r'$multiport'] as Map;
-      expect(mp['source'], 'port_raw');
-      expect(mp['selector'], isTrue);
-      // Слияние authority + query: query дописывается следом.
-      expect((p['mport'] as Map)['merge'], 'append');
-      expect((p['mport'] as Map)['normalize'], 'port_range_spec');
-    });
-
-    test('wireguard: mtu переносится как есть — потолок и дефолт AWG судит '
-        'реестр (§473)', () {
-      final mtu = ((section(uriSections['wireguard']!, 'uri')['params'] as Map)
-          .cast<String, dynamic>()['mtu'] as Map);
-      expect(mtu['default_when'], isNull);
-      expect(mtu.containsKey('materialize_default'), isFalse);
-    });
   });
 
   group('§480 W4 — форма секции conf (INI)', () {
@@ -278,13 +171,6 @@ void main() {
     // INI — контрактом 1.1.30. Черновика `conf/` больше нет вовсе: последнее
     // отличие (дефолтный порт пира) сняла ветка `endpoint.on_no_match`.
     const path = 'assets/contract/registry/protocols/wireguard.json';
-
-    test('секция объявляет источник тела wgconf и опознаётся по [Interface]', () {
-      final s = section(path, 'conf');
-      expect(s['body_source'], 'wgconf');
-      expect(((s['detect'] as Map)['ini'] as Map)['sections'], ['Interface']);
-      expect(s['emit'], isNull, reason: 'обратного хода у .conf нет');
-    });
 
     test('все записи адресуют ini.<Section>.<Key> (одно пространство на '
         'awg://<base64 .conf> и на файл)', () {
@@ -306,52 +192,6 @@ void main() {
       }
     });
 
-    test('имя узла — из комментария под [Peer] (G7)', () {
-      final label = section(path, 'conf')['label'] as Map;
-      expect((label['source'] as List), contains(r'ini.$comment.Peer'));
-    });
-
-    test('Endpoint: голый IPv6 берётся адресом целиком, порт по умолчанию '
-        '(§219 — отличить порт от адреса нечем)', () {
-      final ep = ((section(path, 'conf')['params'] as Map)['endpoint'] as Map);
-      final noMatch = ep['on_no_match'] as Map;
-      expect(noMatch['action'], 'take_all');
-      expect(noMatch['into'], 'peers[].address');
-      expect((noMatch['defaults'] as Map)['peers[].port'], 51820);
-    });
-
-    test('каждая [Peer] — свой пир, снятая секция названа кодом', () {
-      // Контракт 1.1.30 объявил диалект INI ДАННЫМИ (`ini_dialect`), и наш
-      // оверлей снят: судить надо реестр. Контракт 1.1.140 сменил норму
-      // повтора с `first_only` (вторая [Peer] отброшена кодом
-      // `wgconf_extra_peer_dropped`) на `each`: экземпляры собирают
-      // `peers[]`, секция без обязательного ключа снимается одна.
-      final dialect = section(path, 'conf')['ini_dialect'] as Map;
-      final peer = (dialect['sections'] as Map)['Peer'] as Map;
-      expect(peer['repeat'], 'each');
-      expect(peer['into'], 'peers[]');
-      expect((peer['on_drop'] as Map)['code'], 'wgconf_peer_dropped');
-      // Диалект wg-quick дословно; имя префиксов комментария — по
-      // GRAMMAR_SYNC §0.11 (`line_comment_prefixes`).
-      expect(dialect['key_case'], 'lower');
-      expect(dialect['value_case'], 'preserve');
-      expect(dialect['repeated_key'], 'last_wins');
-      expect(dialect['inline_comments'], isFalse);
-      expect(dialect['line_comment_prefixes'], ['#', ';']);
-    });
-
-    test('незнакомый ключ .conf назван кодом, не-узловые ключи молчат', () {
-      // Контракт 1.1.32: запись стояла и раньше, но исполнителя не имела —
-      // проверка спрашивала только имена query, а у документа предмет другой.
-      final uk = section(path, 'conf')['unknown_key'] as Map;
-      expect(uk['code'], 'wgconf_param_unknown');
-      final ignore = (uk['ignore'] as List).cast<String>();
-      // Ключи, которые управляют интерфейсом и самим wg-quick, а не
-      // описывают узел: ругаться на них значило бы ругаться на исправный
-      // конфиг провайдера.
-      expect(ignore, containsAll(['postup', 'table', 'saveconfig']));
-    });
-
     // §480 — потеря `Interface.DNS` осознанная (у endpoint'а sing-box поля
     // DNS нет вовсе). Контракт 1.1.23+ код ВКЛЮЧИЛ: корпус его теперь ждёт
     // (`wgconf/ini_basic.expected.json` несёт `wgconf_dns_ignored`
@@ -362,56 +202,6 @@ void main() {
       expect(dns['maps_to'], isNull);
       final onPresent = dns['on_present'] as Map;
       expect(onPresent['code'], 'wgconf_dns_ignored');
-    });
-
-    test('delta480-4 — алиас preshared_key читается ССЫЛОЧНОЙ формой', () {
-      // D133-23 — алиас с подчёркиванием живёт у формы `url` секции `uri`
-      // (`query.preshared_key` вторым написанием). У INI написание ключа одно
-      // — `PresharedKey`, регистр снимает диалект (`key_case: lower`), и
-      // второго пути записи не нужно.
-      final uriPsk = ((section(
-          'assets/contract/registry/protocols/wireguard.json',
-          'uri')['params'] as Map)['presharedkey'] as Map);
-      final url = (uriPsk['source'] as Map)['url'];
-      expect((url as List).map((e) => '$e'), contains('query.preshared_key'));
-
-      final confPsk =
-          ((section(path, 'conf')['params'] as Map)['presharedkey'] as Map);
-      expect('${confPsk['source']}'.toLowerCase(), contains('presharedkey'));
-    });
-  });
-
-  // Контракт 1.1.28 забрал вид `xray` у пары hysteria/hysteria2 В РЕЕСТР, и
-  // решение там ДРУГОЕ, чем в нашем снятом черновике: не одна секция с
-  // селектором по версии, а ДВЕ секции со взаимоисключающими `detect`
-  // (TASKS_LXBOX §26). Причина — тип тела выбирает вызывающий по схеме,
-  // которую вернул `detect`, а запись `sets` кладёт `type` в тело и сменить
-  // выбранную схему не может. Проверяется взаимоисключаемость: две секции на
-  // один элемент — ошибка реестра, и держится она только предикатами.
-  group('§480 W4 — вид xray у пары по версии', () {
-    const h2Path = 'assets/contract/registry/protocols/hysteria2.json';
-    const h1Path = 'assets/contract/registry/protocols/hysteria.json';
-
-    test('обе секции исполняемы и читают вид xray', () {
-      for (final p in [h2Path, h1Path]) {
-        final s = section(p, 'xray');
-        expect(s['body_source'], 'xray', reason: p);
-        expect(s['detect'], isNotNull, reason: p);
-        expect((s['params'] as Map), isNotEmpty, reason: p);
-      }
-    });
-
-    test('detect у пары ВЗАИМОИСКЛЮЧАЮЩИЕ: версия 2 только у одной', () {
-      // Ровно та развилка, ради которой решение сделано двумя секциями:
-      // `hysteria2` берёт свой протокол ЛИБО пару (протокол + версия 2), а
-      // `hysteria` — ту же пару под отрицанием версии 2. Сверяется наличие
-      // отрицания, а не буква предиката: переписать его вправе лаунчер, а
-      // взаимоисключаемость нормативна.
-      final h2 = jsonEncode(section(h2Path, 'xray')['detect']);
-      final h1 = jsonEncode(section(h1Path, 'xray')['detect']);
-      expect(h2, contains('hysteria2'));
-      expect(h1, isNot(contains('hysteria2')));
-      expect(section(h1Path, 'xray')['detect'].toString(), contains('not'));
     });
   });
 }

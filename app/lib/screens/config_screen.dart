@@ -8,12 +8,14 @@ import 'package:share_plus/share_plus.dart';
 
 import '../config/config_parse.dart';
 import '../controllers/home_controller.dart';
+import '../controllers/subscription_controller.dart';
 import '../services/error_format.dart';
 import '../services/l10n/locale_controller.dart';
 import '../widgets/lx_code_editor.dart';
 import '../services/file_import.dart';
 import '../services/ui_helpers.dart';
 import '../widgets/safe_bottom.dart';
+import 'config_screen/mixins_tab.dart';
 
 /// §333 — страховочный порог: выше него редактор открывается read-only.
 /// Даже построчному редактору многомегабайтный конфиг на слабом устройстве
@@ -26,16 +28,28 @@ const int kConfigEditMaxChars = 1024 * 1024;
 bool configTooLargeToEdit(String raw) => raw.length > kConfigEditMaxChars;
 
 class ConfigScreen extends StatefulWidget {
-  const ConfigScreen({super.key, required this.controller});
+  const ConfigScreen({super.key, required this.controller, this.subController});
 
   final HomeController controller;
+
+  /// §704 — вкладка Mixins: пересборка после правки, отказы миксинов
+  /// последней сборки, база формы. `null` — без пересборки (dirty подхватит
+  /// воронка главного экрана).
+  final SubscriptionController? subController;
 
   @override
   State<ConfigScreen> createState() => _ConfigScreenState();
 }
 
-class _ConfigScreenState extends State<ConfigScreen> {
+class _ConfigScreenState extends State<ConfigScreen>
+    with SingleTickerProviderStateMixin {
   final TextEditingController _textController = TextEditingController();
+
+  /// §704 — вкладки Config | Mixins.
+  late final TabController _tabController = TabController(
+    length: 2,
+    vsync: this,
+  );
 
   /// §624 — длинный текст натив отдаёт с задержкой: перед Save / Copy /
   /// Share забираем его через [LxCodeEditorState.flush].
@@ -68,8 +82,23 @@ class _ConfigScreenState extends State<ConfigScreen> {
 
   @override
   void dispose() {
+    _tabController.dispose();
     _textController.dispose();
     super.dispose();
+  }
+
+  /// §704 — правка миксинов пересобрала конфиг: вкладка Config показывает
+  /// новый, если в редакторе нет несохранённой правки.
+  Future<void> _reloadAfterMixins() async {
+    if (_loading || _readOnly) return;
+    await _flush();
+    if (!mounted || _textController.text != _baseline) return;
+    final raw = widget.controller.state.configRaw;
+    if (configTooLargeToEdit(raw)) return;
+    final pretty = await prettyJsonForDisplayAsync(raw);
+    if (!mounted || _textController.text != _baseline) return;
+    _textController.text = pretty;
+    _baseline = pretty;
   }
 
   Future<void> _flush() async => _editorKey.currentState?.flush();
@@ -250,116 +279,176 @@ class _ConfigScreenState extends State<ConfigScreen> {
           child: Scaffold(
             appBar: AppBar(
               title: Text(getLocalText.s("Config")),
+              // §704 — Save и ⋮ относятся к вкладке Config.
               actions: [
-                TextButton(
-                  onPressed: (busy || _readOnly) ? null : _save,
-                  child: Text(getLocalText.s("Save")),
-                ),
-                PopupMenuButton<String>(
-                  onSelected: (v) {
-                    switch (v) {
-                      case 'paste':
-                        unawaited(_pasteFromClipboard());
-                      case 'file':
-                        unawaited(_loadFromFile());
-                      case 'copy':
-                        unawaited(_copy());
-                      case 'share':
-                        unawaited(_share());
+                AnimatedBuilder(
+                  animation: _tabController.animation!,
+                  builder: (context, _) {
+                    if (_tabController.animation!.value.round() != 0) {
+                      return const SizedBox.shrink();
                     }
+                    return Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        TextButton(
+                          onPressed: (busy || _readOnly) ? null : _save,
+                          child: Text(getLocalText.s("Save")),
+                        ),
+                        PopupMenuButton<String>(
+                          onSelected: (v) {
+                            switch (v) {
+                              case 'paste':
+                                unawaited(_pasteFromClipboard());
+                              case 'file':
+                                unawaited(_loadFromFile());
+                              case 'copy':
+                                unawaited(_copy());
+                              case 'share':
+                                unawaited(_share());
+                            }
+                          },
+                          itemBuilder: (_) => [
+                            PopupMenuItem(
+                              value: 'paste',
+                              child: Text(
+                                getLocalText.s("Paste from clipboard"),
+                              ),
+                            ),
+                            PopupMenuItem(
+                              value: 'file',
+                              child: Text(getLocalText.s("Load from file")),
+                            ),
+                            const PopupMenuDivider(),
+                            PopupMenuItem(
+                              value: 'copy',
+                              child: Text(getLocalText.s("Copy to clipboard")),
+                            ),
+                            PopupMenuItem(
+                              value: 'share',
+                              child: Text(getLocalText.s("Share")),
+                            ),
+                          ],
+                        ),
+                      ],
+                    );
                   },
-                  itemBuilder: (_) => [
-                    PopupMenuItem(
-                      value: 'paste',
-                      child: Text(getLocalText.s("Paste from clipboard")),
-                    ),
-                    PopupMenuItem(
-                      value: 'file',
-                      child: Text(getLocalText.s("Load from file")),
-                    ),
-                    const PopupMenuDivider(),
-                    PopupMenuItem(
-                      value: 'copy',
-                      child: Text(getLocalText.s("Copy to clipboard")),
-                    ),
-                    PopupMenuItem(
-                      value: 'share',
-                      child: Text(getLocalText.s("Share")),
-                    ),
-                  ],
                 ),
               ],
+              bottom: TabBar(
+                controller: _tabController,
+                tabs: [
+                  Tab(text: getLocalText.s("Config")),
+                  Tab(text: getLocalText.s("Mixins")),
+                ],
+              ),
             ),
-            body: Padding(
-              padding: const EdgeInsets.all(12).withSafeBottom(context),
-              child: Column(
-                children: [
-                  if (_readOnly)
-                    Container(
-                      width: double.infinity,
-                      margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: cs.surfaceContainerHighest,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        getLocalText.s(
-                          "Config is too large to edit on device. Share it, edit it elsewhere, then pick the edited file in Load from file: it is saved right away.",
-                        ),
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: cs.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                  if (_loading) const LinearProgressIndicator(),
-                  Expanded(
-                    // §614 — Copy теперь кнопка самого поля, рядом с поиском.
-                    child: LxCodeEditor(
-                      key: _editorKey,
-                      controller: _textController,
-                      readOnly: _readOnly,
-                      hint: getLocalText.s(
-                        "JSON or JSON5 (//, /* */ and # comments)",
-                      ),
-                      showLineNumbers: true,
-                      language: LxCodeLanguage.json,
-                      stickyHeaders: true,
-                      // §624 — липкие заголовки sora рисует только без переноса
-                      // строк (решение владельца 11.10: перенос на Config выключен).
-                      wordWrap: false,
-                      // §649 — перенос включается кнопкой, выбор не хранится.
-                      wrapToggle: true,
-                      actions: [
-                        IconButton(
-                          icon: const Icon(Icons.copy, size: 16),
-                          tooltip: getLocalText.s("Copy"),
-                          visualDensity: VisualDensity.compact,
-                          onPressed: () async {
-                            // §219 — await + mounted перед snackbar (как _copy():40),
-                            // иначе гонка Future/context.
-                            await _flush();
-                            await Clipboard.setData(
-                              ClipboardData(text: _textController.text),
-                            );
-                            if (!context.mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(getLocalText.s("Config copied")),
+            body: TabBarView(
+              controller: _tabController,
+              children: [
+                _KeepAlive(
+                  child: Padding(
+                    padding: const EdgeInsets.all(12).withSafeBottom(context),
+                    child: Column(
+                      children: [
+                        if (_readOnly)
+                          Container(
+                            width: double.infinity,
+                            margin: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: cs.surfaceContainerHighest,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              getLocalText.s(
+                                "Config is too large to edit on device. Share it, edit it elsewhere, then pick the edited file in Load from file: it is saved right away.",
                               ),
-                            );
-                          },
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: cs.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                        if (_loading) const LinearProgressIndicator(),
+                        Expanded(
+                          // §614 — Copy теперь кнопка самого поля, рядом с поиском.
+                          child: LxCodeEditor(
+                            key: _editorKey,
+                            controller: _textController,
+                            readOnly: _readOnly,
+                            hint: getLocalText.s(
+                              "JSON or JSON5 (//, /* */ and # comments)",
+                            ),
+                            showLineNumbers: true,
+                            language: LxCodeLanguage.json,
+                            stickyHeaders: true,
+                            // §624 — липкие заголовки sora рисует только без переноса
+                            // строк (решение владельца 11.10: перенос на Config выключен).
+                            wordWrap: false,
+                            // §649 — перенос включается кнопкой, выбор не хранится.
+                            wrapToggle: true,
+                            actions: [
+                              IconButton(
+                                icon: const Icon(Icons.copy, size: 16),
+                                tooltip: getLocalText.s("Copy"),
+                                visualDensity: VisualDensity.compact,
+                                onPressed: () async {
+                                  // §219 — await + mounted перед snackbar (как _copy():40),
+                                  // иначе гонка Future/context.
+                                  await _flush();
+                                  await Clipboard.setData(
+                                    ClipboardData(text: _textController.text),
+                                  );
+                                  if (!context.mounted) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        getLocalText.s("Config copied"),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
                   ),
-                ],
-              ),
+                ),
+                ConfigMixinsTab(
+                  homeController: widget.controller,
+                  subController: widget.subController,
+                  onConfigRebuilt: () => unawaited(_reloadAfterMixins()),
+                ),
+              ],
             ),
           ),
         );
       },
     );
+  }
+}
+
+/// Вкладка Config не пересоздаётся при уходе на Mixins: редактор держит
+/// текст и курсор (§624 — натив отдаёт длинный текст с задержкой).
+class _KeepAlive extends StatefulWidget {
+  const _KeepAlive({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_KeepAlive> createState() => _KeepAliveState();
+}
+
+class _KeepAliveState extends State<_KeepAlive>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return widget.child;
   }
 }

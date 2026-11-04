@@ -15,6 +15,7 @@ import '../models/dns_ref.dart';
 import '../models/source_chain.dart';
 import '../models/source_entry.dart';
 import '../models/memory_limit_setting.dart';
+import '../models/mixin.dart';
 import '../models/custom_rule.dart';
 import '../models/parser_config.dart';
 import '../models/server_list.dart';
@@ -28,6 +29,7 @@ import 'selectable_to_custom.dart';
 import 'settings_storage_keys.dart';
 import 'storage_migration/migrate_storage.dart';
 import 'subscription/http_cache.dart';
+import 'taildrop_tags_sync.dart' show pushTaildropTags;
 import 'template_loader.dart';
 import 'warp/masque_account.dart';
 import 'warp/warp_account.dart';
@@ -36,6 +38,7 @@ part 'settings_storage/io.dart';
 part 'settings_storage/vars.dart';
 part 'settings_storage/sources_rules.dart';
 part 'settings_storage/directions.dart';
+part 'settings_storage/mixins.dart';
 part 'settings_storage/chains.dart';
 part 'settings_storage/network.dart';
 part 'settings_storage/backup_tun.dart';
@@ -157,12 +160,15 @@ class SettingsStorage {
     'dns_strategy',
     'ipv6_enabled',
     'log_level',
+    'masque_idle_timeout',
+    'mtu_align',
     'proxy_auth',
     'proxy_listen',
     'proxy_pass',
     'proxy_port',
     'proxy_type',
     'proxy_user',
+    'quic_sniff_decoy',
     'resolve_enabled',
     'resolve_strategy',
     'route_address_enable',
@@ -184,6 +190,10 @@ class SettingsStorage {
     'urltest_tolerance',
     'urltest_url',
     'vpn_mode',
+    'wg_build_max',
+    'wg_idle_suspend',
+    'wg_idle_suspend_reachable',
+    'wg_lazy_build',
   };
 
   // ---------------------------------------------------------------------------
@@ -209,12 +219,9 @@ class SettingsStorage {
     kSourcesKey, // §439 — источники, хвостом цепочки (§393 C2)
     kRulesKey,
     kDnsKey,
+    kMixinsKey, // §704 — миксины итогового конфига
     'ping_options',
     'route_final',
-    'route_idle_suspend', // §215 — idle-suspend threshold (lx.wg.idle_suspend)
-    'route_idle_suspend_reachable', // §272 — reachable idle window (lx.wg.idle_suspend_reachable)
-    'wg_build_max', // §542 — WG/AWG build budget (lx.wg.build_max)
-    'wg_lazy_build', // §542 — WG/AWG lazy build (lx.wg.lazy_build)
     'enabled_groups', // §125 — DEPRECATED (читается только миграцией; safe-мусор)
     'directions', // §125/§393 — Направления роутинга (template→storage)
     'directions_migrated', // §125/§393 — guard one-shot миграции
@@ -231,11 +238,13 @@ class SettingsStorage {
     //                        известен, чтобы старый бэкап не дал «unknown keys»
     'presets_migrated', // §159 — переиспользуется как «дефолты засеяны» (seed guard)
     'late_presets_seeded', // §578 — guard разового seed поздних дефолтных пресетов
-    'interrupt_connections_on_switch',
+    'interrupt_connections_on_switch', // §143 §9 — LEGACY: не пишется; старые архивы, переносится в Направления
     'node_sort_mode',
     'node_manual_order',
     'profiler_retention_sec', // §044/new-profiler — окно хранения Live-журнала
     'editor_magnifier', // §660 — лупа выделения редактора кода
+    'mixin_target_suggestions', // §704 — подсказки поля Target формы миксина
+    kNodeBudgetKey, // бюджет узлов приложения
   };
 
   /// Var-ключи, которые живут ТОЛЬКО в коде (app feature-flags), а НЕ в
@@ -320,6 +329,9 @@ class SettingsStorage {
   static void resetCacheForTesting() {
     _cache = null;
     _pendingSave = null;
+    // Чтение, начатое прошлым тестом (часто в fake-async зоне testWidgets),
+    // может не завершиться никогда — следующий `_load()` ждал бы его вечно.
+    _loadInFlight = null;
     _mainIsCorrupted = false;
     _corruptionLogged = false;
     configDirty = false; // §113
@@ -443,6 +455,14 @@ class SettingsStorage {
   // ---------------------------------------------------------------------------
 
   static Future<List<Direction>> getDirections() => _getDirections();
+
+  /// §704 — миксины итогового конфига в порядке применения.
+  static Future<List<Mixin>> getMixins() => _getMixins();
+
+  /// §704 — весь список целиком (добавление, правка, порядок, удаление —
+  /// перезапись). Config-significant: [markConfigDirty].
+  static Future<void> setMixins(List<Mixin> mixins, {bool flush = true}) =>
+      _setMixins(mixins, flush: flush);
 
   /// §292 — код приложения зовёт `DirectionMutations.bulkReplace`: bulk-overwrite
   /// мимо heal'а допустим только там, где ссылка структурно не может повиснуть
@@ -609,35 +629,6 @@ class SettingsStorage {
   static Future<void> saveRouteFinal(String outbound, {bool flush = true}) =>
       _saveRouteFinal(outbound, flush: flush);
 
-  // §215 — idle-suspend threshold (lx.wg.idle_suspend, kernel SPEC 020)
-
-  static Future<String> getIdleSuspend() => _getIdleSuspend();
-
-  static Future<void> saveIdleSuspend(String threshold, {bool flush = true}) =>
-      _saveIdleSuspend(threshold, flush: flush);
-
-  // §272 — reachable idle window (lx.wg.idle_suspend_reachable, SPEC 020)
-
-  static Future<String> getIdleSuspendReachable() => _getIdleSuspendReachable();
-
-  static Future<void> saveIdleSuspendReachable(String threshold,
-          {bool flush = true}) =>
-      _saveIdleSuspendReachable(threshold, flush: flush);
-
-  // §542 — WG/AWG build budget (lx.wg.build_max, SPEC 097); 0 = no cap
-
-  static Future<int> getWgBuildMax() => _getWgBuildMax();
-
-  static Future<void> saveWgBuildMax(int value, {bool flush = true}) =>
-      _saveWgBuildMax(value, flush: flush);
-
-  // §542 — WG/AWG lazy build (lx.wg.lazy_build, SPEC 097); default true
-
-  static Future<bool> getWgLazyBuild() => _getWgLazyBuild();
-
-  static Future<void> saveWgLazyBuild(bool enabled, {bool flush = true}) =>
-      _saveWgLazyBuild(enabled, flush: flush);
-
   /// §612 — один раз до первой сборки: `urltest_passive_check` (§611)
   /// true/отсутствует → автовыбор `least_test` становится `failover`; ключ
   /// снимается, ставится маркер `urltest_mode_migrated`. Идемпотентна.
@@ -664,20 +655,14 @@ class SettingsStorage {
     await _save();
   }
 
-  // §143 — принудительно рвать активные соединения переключаемой группы при
-  // смене ноды. НЕ config-significant (поведение Clash-API клиента, не идёт в
-  // sing-box config) → без markConfigDirty. Default false (opt-in).
-  static Future<bool> getInterruptOnSwitch() async {
-    final c = await _load();
-    return c['interrupt_connections_on_switch'] == true;
-  }
-
-  static Future<void> setInterruptOnSwitch(bool value) async {
-    final c = await _load();
-    c['interrupt_connections_on_switch'] = value;
-    SettingsStorage._cache = c;
-    await _save();
-  }
+  /// §143 §9 — разовый перенос снятого тумблера «Interrupt connections on
+  /// switch» (`interrupt_connections_on_switch`) в галки Направлений. При
+  /// `true` у всех Направлений с выключенным `interrupt_exist_connections`
+  /// галка включается; ключ удаляется при любом значении. Признак — наличие
+  /// ключа. Зовётся из main() после посева Направлений и из
+  /// `BackupService.applyImport` после restore (старый архив несёт ключ).
+  static Future<void> migrateInterruptOnSwitchIfNeeded() =>
+      _migrateInterruptOnSwitchIfNeeded();
 
   /// §660 — лупа выделения в редакторе кода (sora). Одна на всё
   /// приложение. Не config-significant → без markConfigDirty. Default true.
@@ -689,6 +674,20 @@ class SettingsStorage {
   static Future<void> setEditorMagnifier(bool value) async {
     final c = await _load();
     c['editor_magnifier'] = value;
+    SettingsStorage._cache = c;
+    await _save();
+  }
+
+  /// §704 — подсказки автодополнения у поля Target формы миксина (значок
+  /// справа в поле). Не config-significant → без markConfigDirty. Default true.
+  static Future<bool> getMixinTargetSuggestions() async {
+    final c = await _load();
+    return c['mixin_target_suggestions'] != false;
+  }
+
+  static Future<void> setMixinTargetSuggestions(bool value) async {
+    final c = await _load();
+    c['mixin_target_suggestions'] = value;
     SettingsStorage._cache = c;
     await _save();
   }
@@ -745,6 +744,57 @@ class SettingsStorage {
 
   /// Sugared: установить global URL без затирания timeout / groups.
   static Future<void> setGlobalPingUrl(String url) => _setGlobalPingUrl(url);
+
+  /// §713 — параллельность проверки серверов (`ping_options.concurrency`):
+  /// сколько узлов mass ping и «Test servers» меряют одновременно.
+  static const int pingConcurrencyDefault = 10;
+  static const int pingConcurrencyMin = 1;
+  static const int pingConcurrencyMax = 100;
+
+  /// §713 — значение из storage, приведённое к диапазону; нет/мусор → дефолт.
+  static Future<int> getPingConcurrency() => _getPingConcurrency();
+
+  /// §713 — `null` снимает ключ (= дефолт).
+  static Future<void> setPingConcurrency(int? value) =>
+      _setPingConcurrency(value);
+
+  /// Бюджет узлов приложения (верхнеуровневый `node_budget`): сколько узлов
+  /// всего держат ручные серверы, включённые члены папок и подписки.
+  /// Минимум 1, верхнего потолка нет.
+  static const int nodeBudgetDefault = 1000;
+  static const int nodeBudgetMin = 1;
+
+  /// Текущее значение бюджета для подписчиков (контроллер подписок
+  /// перерезает доли при смене). Обновляется чтением и записью.
+  static final ValueNotifier<int> nodeBudget =
+      ValueNotifier<int>(nodeBudgetDefault);
+
+  /// Значение из storage; нет/мусор → дефолт, ниже минимума → минимум.
+  static Future<int> getNodeBudget() async {
+    final c = await _load();
+    final raw = c[kNodeBudgetKey];
+    final v = raw is num
+        ? (raw.toInt() < nodeBudgetMin ? nodeBudgetMin : raw.toInt())
+        : nodeBudgetDefault;
+    nodeBudget.value = v;
+    return v;
+  }
+
+  /// `null` снимает ключ (= дефолт); число ниже минимума → минимум.
+  static Future<void> setNodeBudget(int? value) async {
+    final c = await _load();
+    final int effective;
+    if (value == null) {
+      c.remove(kNodeBudgetKey);
+      effective = nodeBudgetDefault;
+    } else {
+      effective = value < nodeBudgetMin ? nodeBudgetMin : value;
+      c[kNodeBudgetKey] = effective;
+    }
+    SettingsStorage._cache = c;
+    await _save();
+    nodeBudget.value = effective;
+  }
 
   /// Sugared: установить global timeout (ms) без затирания url / groups.
   static Future<void> setGlobalPingTimeout(int timeoutMs) =>
@@ -1227,11 +1277,26 @@ class SettingsStorage {
   static Future<String> getNativeMemoryLimit() => _getNativeMemoryLimit();
   static Future<void> setNativeMemoryLimit(String wireValue) =>
       _setNativeMemoryLimit(wireValue);
+  // §707 итер. 9 — тема приложения (AppThemeModeSetting): только JSON.
+  static Future<String> getNativeThemeMode() => _getNativeThemeMode();
+  static Future<void> setNativeThemeMode(String value) =>
+      _setNativeThemeMode(value);
+  static Future<bool> hasNativeThemeMode() => _hasNativeThemeMode();
 
   /// Старт: bootstrap (первый запуск §189 — seed native⇒JSON) или sync
   /// (JSON⇒native). Зовётся из app init до UI.
-  static Future<void> bootstrapAndSyncNativePrefs() =>
-      _bootstrapAndSyncNativePrefs();
+  static Future<void> bootstrapAndSyncNativePrefs() async {
+    await _bootstrapAndSyncNativePrefs();
+    nativePrefsGeneration.value++;
+  }
+
+  /// §707 итер. 9 — поколение секции `native_prefs`: растёт после импорта
+  /// бэкапа ([applyNativePrefsBackup]) и после пересинка на старте или при
+  /// смене Workspaces ([bootstrapAndSyncNativePrefs]). Слушатели, живущие в
+  /// памяти (тема в `ThemeNotifier`), перечитывают хранилище по нему, а не
+  /// по перезапуску. Обычные сеттеры поколение не трогают: их вызывает тот
+  /// же экран, что и держит значение.
+  static final ValueNotifier<int> nativePrefsGeneration = ValueNotifier<int>(0);
 
   /// §189 — единая сериализация backup-блока vpn_settings (состав/дефолты/типы
   /// в одном месте). backup_service и Debug-handler делегируют сюда.
@@ -1241,11 +1306,14 @@ class SettingsStorage {
   /// §633 — [onlyMissing]: Merge — применяются только ключи, которых нет в
   /// зеркале `native_prefs` получателя; прочие отдаются в [onKept].
   static Future<int> applyNativePrefsBackup(Map<String, dynamic> data,
-          {void Function(String, Object)? onError,
-          bool onlyMissing = false,
-          void Function(String key)? onKept}) =>
-      _applyFromBackupMap(data,
-          onError: onError, onlyMissing: onlyMissing, onKept: onKept);
+      {void Function(String, Object)? onError,
+      bool onlyMissing = false,
+      void Function(String key)? onKept}) async {
+    final n = await _applyFromBackupMap(data,
+        onError: onError, onlyMissing: onlyMissing, onKept: onKept);
+    nativePrefsGeneration.value++;
+    return n;
+  }
 
   /// §192 — зеркалить has_tun (производное от vpn_mode) в native. Гейтит
   /// VpnService.prepare(). Зовётся при смене режима в Mode-вкладке.

@@ -653,10 +653,14 @@ class HomeNodeList extends StatelessWidget {
           // §322 — метка режима узла автовыбора (`🎯 [3]` / `🔀 [15/7]`)
           // в подзаголовке. Двойник Направления сюда не попадает — у него уже
           // есть подменённое имя «✨ Auto».
-          autoGroupLabel: isDirectionAuto
-              ? null
-              : _autoLabelWithBadges(
-                  controller, subController, cache, tag),
+          // §715 — исключение: двойник в Load balance. Стрелки у него нет
+          // (§322), и без метки в подписи оставался голый протокол выбора
+          // ядра («SOCKS», issue #191). Метка та же, что у узла автовыбора.
+          autoGroupLabel:
+              isDirectionAuto && cache.rawOf(tag)?['balancer'] == null
+                  ? null
+                  : _autoLabelWithBadges(
+                      controller, subController, cache, tag),
           protocolLabel: protoType == null
               ? (showDirLabel ? tag : null)
               : [
@@ -868,12 +872,12 @@ String? _autoLabelWithBadges(
   if (base == null) return null;
   // Тег в конфиге — с префиксом контейнера и, возможно, суффиксом
   // уникализации; группа ищется по точному итоговому тегу (§675).
-  final badge = poolBadgeOf(subs, tag);
-  if (badge.isEmpty) return base;
   final slots = controller.poolSlots(tag);
   if (slots == null || slots.isEmpty) return base;
-  final badges = poolBadges([for (final s in slots) s.tag], badge);
-  return badges.isEmpty ? base : '$base $badges';
+  // §715 — значки, а без них имена слотов (как в View pool).
+  final suffix =
+      poolLabelSuffix([for (final s in slots) s.tag], poolBadgeOf(subs, tag));
+  return suffix.isEmpty ? base : '$base $suffix';
 }
 
 /// §446 — плоский срез spec'ов автовыбора из всех подписок: пара

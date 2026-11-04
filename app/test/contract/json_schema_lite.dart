@@ -1,7 +1,8 @@
 // §438 — проверка документа по JSON Schema в объёме, который использует
 // `contract/schema/backup.schema.json`: `$ref` на `#/$defs/…`, `type`,
 // `properties`, `required`, `additionalProperties`, `enum`, `const`, `items`,
-// `allOf`, `anyOf`, `if`/`then`, `minimum`/`maximum`, `minLength`. `format`,
+// `allOf`, `anyOf`, `if`/`then`, `minimum`/`maximum`, `minLength`, `pattern`
+// (контракт 1.1.158: `native_prefs.memory_limit`). `format`,
 // `default`, `title`, `description` проверки не несут.
 //
 // Библиотеки валидатора в зависимостях проекта нет, а тянуть её ради одного
@@ -32,6 +33,7 @@ const Set<String> _known = {
   'minimum',
   'maximum',
   'minLength',
+  'pattern',
 };
 
 /// Ошибки документа [value] по схеме [root]; пусто — документ валиден.
@@ -101,6 +103,10 @@ void _validate(
     final minLength = schema['minLength'];
     if (minLength is int && value.length < minLength) {
       errors.add('$at: shorter than $minLength');
+    }
+    final pattern = schema['pattern'];
+    if (pattern is String && !RegExp(pattern).hasMatch(value)) {
+      errors.add('$at: "$value" does not match $pattern');
     }
   }
 

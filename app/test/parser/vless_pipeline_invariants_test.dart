@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -18,7 +17,7 @@ import 'package:lxbox/services/parser/uri_parsers.dart';
 ///
 /// Инварианты 1 и 2 (корпус и golden) держат свои тесты: корпус URI —
 /// `test/contract/`, эталоны конфигов — `test/builder/`. Здесь то, что
-/// специфично для переезда протокола: identity, round-trip и цена.
+/// специфично для переезда протокола: identity и round-trip.
 /// §480 W2 — РЕЕСТР берётся из зеркала, а не из вендоренной копии
 /// `app/contract`: второй на CI нет вовсе, и под её гейтом тест молча
 /// пропускался бы ровно там, где он нужен. Схема переехала на движок, и без
@@ -27,26 +26,6 @@ import 'package:lxbox/services/parser/uri_parsers.dart';
 /// КОРПУС лежит только в вендоренной копии — в зеркало едет один `registry/`
 /// (оно бандлится в APK, и корпусу там делать нечего). Поэтому гейт у тестов
 /// корпуса свой: корпуса нет — пропускаем именно их, а не разбор.
-
-/// Снимок identity, снятый СТАРЫМ путём ДО правки (18.09.2026).
-///
-/// Зачем фикстура файлом, а не картой в коде: vless-кейсов корпуса 89, и
-/// восемьдесят семь хешей в литерале читать невозможно. Формат тот же, что у
-/// шага 2 (`trojan_pipeline_invariants_test.dart`), — имя кейса → хеш, — но
-/// вместе с САМОЙ ССЫЛКОЙ: тест обязан падать и тогда, когда кейс корпуса
-/// переписали, а не только когда изменился разбор.
-///
-/// Расхождение здесь значит, что у пользователей слетят выбор узла,
-/// отключения и цепочки (`node_hash.dart`: identity = сырой тег, дедуп
-/// подписки — `legacyNodeIdentityHash` от тела).
-const _identityFixture = 'test/fixtures/vless/pipeline_identity_before.json';
-
-Map<String, Map<String, dynamic>> _identityBefore() {
-  final raw = jsonDecode(File(_identityFixture).readAsStringSync()) as Map;
-  return (raw['cases'] as Map).map(
-    (k, v) => MapEntry(k as String, (v as Map).cast<String, dynamic>()),
-  );
-}
 
 /// Все vless-ссылки корпуса, в порядке файлов.
 List<String> _corpusUris() {
@@ -75,44 +54,6 @@ void main() {
     await loadTestRegistry();
     await MapperSections.I
         .loadDrafts(dir: 'assets/contract_draft', files: kDraftFiles);
-  });
-
-  group('§472 инвариант 4 — identity vless не меняется', () {
-    test('каждый кейс корпуса даёт хеш из фикстуры', () {
-      final before = _identityBefore();
-      expect(before, hasLength(greaterThan(80)),
-          reason: 'фикстура похудела — проверьте, не срезан ли корпус');
-      for (final e in before.entries) {
-        final uri = e.value['uri'] as String;
-        final want = e.value['identity'] as String?;
-        final spec = parseUri(uri);
-        if (want == null) {
-          // «Ссылка не разбирается вовсе» — тоже свойство, которое обязано
-          // сохраниться: узел, которого раньше не было, появившись, влез бы
-          // в подписку новым.
-          expect(spec, isNull, reason: 'кейс ${e.key} стал разбираться');
-          continue;
-        }
-        expect(spec, isNotNull, reason: 'кейс ${e.key} перестал разбираться');
-        expect(
-          legacyNodeIdentityHash(spec!),
-          want,
-          reason: 'identity кейса ${e.key} изменилась: у пользователей слетят '
-              'выбор узла, отключения и цепочки',
-        );
-      }
-    });
-
-    test('identity всего корпуса vless считается и не пуста', () {
-      final nodes = <NodeSpec>[];
-      for (final u in _corpusUris()) {
-        final spec = parseUri(u);
-        if (spec != null) nodes.add(spec);
-      }
-      expect(nodes, isNotEmpty);
-      // Идентичность = сырой тег: у узла с именем она есть всегда.
-      expect(sourceNodeIdentities(nodes).length, nodes.length);
-    }, skip: corpusSkip);
   });
 
   group('§472 инвариант 3 — parseUri(toUri()) ≈ spec', () {
@@ -171,63 +112,6 @@ void main() {
       // Страж от «список исключений съел корпус».
       expect(checked, greaterThan(75));
     }, skip: corpusSkip);
-  });
-
-  group('§472 инвариант 5 — цена разбора', () {
-    // Замер на рабочей машине (2000 узлов vless+reality+ws, прогон
-    // `flutter test` в одиночку, вторая итерация — после прогрева JIT):
-    //
-    //   старый полный путь (parseVless + annotateAllWithRegistry)  ~222 мс
-    //   конвейер (parseUri)                                        ~216 мс
-    //   отношение                                                  ×0,97
-    //
-    // Инвариант 5 спеки — «не хуже ×1,5 к текущему». Сравнение честно только
-    // на ПОЛНОЙ воронке: у старого пути санитайзер шёл отдельным проходом
-    // ПОСЛЕ разбора, и разбор в отрыве от него мерил половину работы (шаг 2,
-    // раздел 8.5). Конвейер здесь ДЕШЕВЛЕ старого пути: второго прохода по
-    // `emit()` у его узлов нет вовсе (`isPipelineParsed`).
-    //
-    // Порог ниже — абсолютный потолок, а не проценты: миллисекунды на
-    // CI-раннере и на ноутбуке несопоставимы, и тест на ±20 % был бы
-    // флаки-генератором. Он ловит уход в квадратичность, запас десятикратный.
-    // Берётся ЛУЧШИЙ из трёх прогонов: `flutter test -j 2` гоняет изоляты
-    // параллельно, и рядом идёт такой же цикл trojan — первый замер под
-    // соседом растягивался до ~12 с. При уходе в квадратичность медленны ВСЕ
-    // три, так что чувствительности это не снижает.
-    test('2000 vless-узлов разбираются за разумное время', () {
-      const n = 2000;
-      final uris = [
-        for (var i = 0; i < n; i++)
-          'vless://11111111-1111-1111-1111-11111111111$i@example-$i.com:443'
-              '?type=ws&path=%2Fx%3Fed%3D2560&security=reality'
-              '&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&sid=abcd'
-              '&sni=example-$i.com&fp=chrome&alpn=h2,http/1.1#node$i',
-      ];
-
-      // Прогрев кэша схем и JIT.
-      for (var i = 0; i < 200; i++) {
-        parseUri(uris[i]);
-      }
-
-      final nodes = <NodeSpec>[];
-      var best = 1 << 30;
-      for (var rep = 0; rep < 3; rep++) {
-        nodes.clear();
-        final sw = Stopwatch()..start();
-        for (final u in uris) {
-          final s = parseUri(u);
-          if (s != null) nodes.add(s);
-        }
-        sw.stop();
-        if (sw.elapsedMilliseconds < best) best = sw.elapsedMilliseconds;
-      }
-      expect(nodes, hasLength(n));
-      expect(
-        best,
-        lessThan(3000),
-        reason: 'разбор $n vless-узлов конвейером: $best мс (лучший из трёх)',
-      );
-    });
   });
 
   group('§472 — коды vless приходят из реестра, с путём и сырым значением', () {

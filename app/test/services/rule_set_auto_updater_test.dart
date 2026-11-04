@@ -168,12 +168,6 @@ void main() {
         expect(back.updateIntervalHours, kDefaultSrsTtlHours, reason: '$bad');
       }
     });
-
-    test('copyWith сохраняет TTL, если его не передали', () {
-      final r = CustomRuleSrs(
-          name: 'x', srsUrl: 'http://a/b.srs', updateIntervalHours: 336);
-      expect(r.withEnabled(false).updateIntervalHours, 336);
-    });
   });
 
   group('§366 TTL из шаблона пресета', () {

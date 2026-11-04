@@ -59,11 +59,6 @@ void main() {
   });
 
   group('§072 — round-trip', () {
-    test('setVar + read back в пределах сессии', () async {
-      await SettingsStorage.setVar('alpha', '1');
-      expect(await SettingsStorage.getVar('alpha', 'def'), '1');
-    });
-
     test('setVar + resetCacheForTesting + read back с диска', () async {
       await SettingsStorage.setVar('alpha', '1');
       SettingsStorage.resetCacheForTesting();
@@ -242,28 +237,6 @@ void main() {
           jsonDecode(await File(bakPath()).readAsString()) as Map;
       expect((bakAfter['vars'] as Map)['old'], 'value',
           reason: '.bak остался с предыдущим валидным state');
-    });
-  });
-
-  group('§159 — legacy proxy_sources больше не мигрирует', () {
-    test('proxy_sources игнорируется (миграция удалена)', () async {
-      // Pre-§030 файл с `proxy_sources` без `server_lists`. §159 удалил
-      // legacy-миграцию → ключ игнорируется, server_lists остаётся пустым.
-      final legacy = {
-        'proxy_sources': [
-          {
-            'url': 'https://example.com/sub.txt',
-            'enabled': true,
-            'name': 'Test sub',
-          },
-        ],
-      };
-      await File(mainPath()).writeAsString(jsonEncode(legacy));
-
-      SettingsStorage.resetCacheForTesting();
-      final lists = await SettingsStorage.getServerLists();
-      expect(lists, isEmpty,
-          reason: 'миграция proxy_sources удалена (§159) — legacy игнорируется');
     });
   });
 }

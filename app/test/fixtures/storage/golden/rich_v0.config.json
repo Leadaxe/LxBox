@@ -1,4 +1,13 @@
 {
+  "lx": {
+    "quic_sniff_decoy": "detour",
+    "wg": {
+      "idle_suspend": "30s",
+      "lazy_build": true,
+      "build_max": 5,
+      "idle_suspend_reachable": "5m"
+    }
+  },
   "log": {
     "level": "debug",
     "timestamp": true
@@ -19,10 +28,16 @@
         "type": "group",
         "servers": [
           "my-doh",
-          "google_udp"
+          "google_udp",
+          "off-dns"
         ],
         "mode": "fastest",
         "tag": "dns-group"
+      },
+      {
+        "type": "udp",
+        "server": "192.0.2.53",
+        "tag": "off-dns"
       },
       {
         "type": "local",
@@ -238,7 +253,8 @@
       "auth_key": "tskey-auth-000000000000",
       "hostname": "lxbox-test",
       "accept_routes": true,
-      "state_directory": "/data/user/0/com.leadaxe.lxbox/files/tailscale/home-ts"
+      "state_directory": "/data/user/0/com.leadaxe.lxbox/files/tailscale/home-ts",
+      "taildrop_directory": "/data/user/0/com.leadaxe.lxbox/files/tailscale/home-ts/taildrop"
     },
     {
       "type": "wireguard",
@@ -627,7 +643,7 @@
         "EU nl-1",
         "EU fr-1"
       ],
-      "interrupt_exist_connections": false,
+      "interrupt_exist_connections": true,
       "default": "PR DE-1"
     },
     {
@@ -950,13 +966,5 @@
     {
       "type": "oom-killer"
     }
-  ],
-  "lx": {
-    "wg": {
-      "idle_suspend": "1m",
-      "idle_suspend_reachable": "10m",
-      "lazy_build": true,
-      "build_max": 5
-    }
-  }
+  ]
 }

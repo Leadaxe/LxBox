@@ -12,11 +12,15 @@ import '../../models/node_warning.dart' show RegistryWarning;
 import '../../models/tls_policy.dart';
 import '../contract/body_edit.dart' show editBodyPath;
 import '../contract/body_sanitizer.dart' show fieldAllowedOn;
+import '../app_log.dart';
 import '../core_duration.dart';
+import '../dns/dns_server_holds.dart' show DnsServerHold, dnsServerListHolds;
 import '../json_clone.dart';
 import '../parser/uri_utils.dart' show isValidRealityPublicKey;
 import '../parser/utls_fingerprint.dart';
 import '../settings_storage.dart' show SettingsStorage, TunAppsConfig;
+import 'core_chain_capability.dart'
+    show coreSupportsDnsGroupHosts, kDnsGroupHostsMinCoreVersion;
 import 'detour_yields.dart' show yieldToBuildDetour;
 import 'domain_resolver_ref.dart';
 import 'if_engine.dart' show Dropped, walk;

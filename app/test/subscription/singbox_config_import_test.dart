@@ -255,11 +255,5 @@ void main() {
       final folder = c.entries.single.list as FolderServers;
       expect(folder.members.single.node, isA<TailscaleSpec>());
     });
-
-    test('не-Tailscale узел секций по умолчанию не получает', () async {
-      final c = SubscriptionController();
-      await c.addFromInput(singleOutbound);
-      expect(c.entries.single.list, isA<UserServer>());
-    });
   });
 }

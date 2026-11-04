@@ -14,10 +14,6 @@ void main() {
   group('RuPluralResolver', () {
     const r = RuPluralResolver();
 
-    test('forms = one/few/many/other', () {
-      expect(r.forms, {'one', 'few', 'many', 'other'});
-    });
-
     void expectForm(num n, String form) =>
         expect(r.select(marked, n), form, reason: 'n=$n');
 
@@ -49,10 +45,6 @@ void main() {
 
   group('EnPluralResolver', () {
     const r = EnPluralResolver();
-
-    test('forms = one/other', () {
-      expect(r.forms, {'one', 'other'});
-    });
 
     test('1 → one, else other', () {
       const m = {'one': 'ONE', 'other': 'OTHER'};

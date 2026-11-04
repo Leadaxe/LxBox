@@ -27,6 +27,7 @@ import '_shared.dart';
 /// - `GET|PUT /settings/vpn/allow_bypass`        body `{"enabled":bool}`
 /// - `GET|PUT /settings/vpn/keep_on_exit`        body `{"enabled":bool}`
 /// - `GET|PUT /settings/vpn/background_mode`     body `{"mode":"never|lazy|always"}`
+/// - `GET|PUT /settings/node_budget`             body `{"value":int|null}`
 /// - `POST   /settings/rebuild-config`          alias `/action/rebuild-config`
 ///
 /// Все `PUT`/`POST` принимают `?rebuild=true`.
@@ -37,11 +38,6 @@ Future<DebugResponse> settingsHandler(DebugRequest req, DebugContext ctx) async 
     case '/settings/route_final':
       if (req.method != 'PUT') throw _methodNotAllowed(req.method, path);
       return _putRouteFinal(req, ctx);
-
-    case '/settings/interrupt_on_switch':
-      if (req.method == 'GET') return _getInterruptOnSwitch();
-      if (req.method == 'PUT') return _putInterruptOnSwitch(req);
-      throw _methodNotAllowed(req.method, path);
 
     case '/settings/node_sort':
       if (req.method == 'GET') return _getNodeSort();
@@ -82,6 +78,11 @@ Future<DebugResponse> settingsHandler(DebugRequest req, DebugContext ctx) async 
     case '/settings/core_logs_verbose':
       if (req.method == 'GET') return _getCoreLogsVerbose();
       if (req.method == 'PUT') return _putCoreLogsVerbose(req);
+      throw _methodNotAllowed(req.method, path);
+
+    case '/settings/node_budget':
+      if (req.method == 'GET') return _getNodeBudget();
+      if (req.method == 'PUT') return _putNodeBudget(req);
       throw _methodNotAllowed(req.method, path);
 
     case '/settings/ping_options':
@@ -167,22 +168,6 @@ Future<DebugResponse> _putRouteFinal(DebugRequest req, DebugContext ctx) async {
 // ---------------------------------------------------------------------------
 // §163/§047 — top-level настройки без vars-доступа (нужен типизированный роут).
 // ---------------------------------------------------------------------------
-
-/// `GET /settings/interrupt_on_switch` → `{"enabled": bool}`.
-Future<DebugResponse> _getInterruptOnSwitch() async {
-  final v = await SettingsStorage.getInterruptOnSwitch();
-  return JsonResponse({'ok': true, 'enabled': v});
-}
-
-/// `PUT /settings/interrupt_on_switch` body `{"enabled": bool}`. Тугл рвёт
-/// активные соединения переключаемой группы при switchNode. НЕ config-significant.
-Future<DebugResponse> _putInterruptOnSwitch(DebugRequest req) async {
-  final body = req.jsonBodyAsMap();
-  final enabled = fieldBool(body, 'enabled');
-  if (enabled == null) throw const BadRequest('field "enabled" (bool) required');
-  await SettingsStorage.setInterruptOnSwitch(enabled);
-  return JsonResponse({'ok': true, 'action': 'settings-interrupt-on-switch', 'enabled': enabled});
-}
 
 /// `GET /settings/node_sort` → `{"mode": str, "order": [str]}`.
 Future<DebugResponse> _getNodeSort() async {
@@ -536,6 +521,39 @@ Future<DebugResponse> _putCoreLogsVerbose(DebugRequest req) async {
 }
 
 // ---------------------------------------------------------------------------
+// node_budget — общий лимит узлов приложения.
+// ---------------------------------------------------------------------------
+
+/// `GET /settings/node_budget` → `{"value": int, "default": int, "min": int}`.
+Future<DebugResponse> _getNodeBudget() async {
+  final v = await SettingsStorage.getNodeBudget();
+  return JsonResponse({
+    'ok': true,
+    'value': v,
+    'default': SettingsStorage.nodeBudgetDefault,
+    'min': SettingsStorage.nodeBudgetMin,
+  });
+}
+
+/// `PUT /settings/node_budget` body `{"value": int|null}`: `null` снимает
+/// ключ (= дефолт), ниже минимума → минимум. Подписки перерезаются из кэша
+/// тела контроллером подписок (слушает значение бюджета).
+Future<DebugResponse> _putNodeBudget(DebugRequest req) async {
+  final body = req.jsonBodyAsMap();
+  if (!body.containsKey('value')) {
+    throw const BadRequest('field "value" (number or null) required');
+  }
+  final raw = body['value'];
+  if (raw != null && raw is! num) {
+    throw const BadRequest('field "value" must be number or null');
+  }
+  await SettingsStorage.setNodeBudget((raw as num?)?.toInt());
+  final v = await SettingsStorage.getNodeBudget();
+  return JsonResponse(
+      {'ok': true, 'action': 'settings-node-budget', 'value': v});
+}
+
+// ---------------------------------------------------------------------------
 // ping_options (§040) — global + per-group test settings.
 // ---------------------------------------------------------------------------
 
@@ -562,10 +580,14 @@ Future<DebugResponse> _putPingOptions(
   if (body.containsKey('groups') && body['groups'] is! Map) {
     throw const BadRequest('field "groups" must be object if present');
   }
+  // §713 — параллельность проверки серверов; диапазон приводит читатель.
+  if (body.containsKey('concurrency') && body['concurrency'] is! num) {
+    throw const BadRequest('field "concurrency" must be number if present');
+  }
   // §159 — strip unknown subkeys: пишем только известные поля ping_options
   // (url/timeout_ms/presets/groups), чтобы произвольный ключ тела не замусоривал
   // storage. Это вход данных → default-deny, как в backup-import allowlist.
-  const allowedPingKeys = {'url', 'timeout_ms', 'presets', 'groups'};
+  const allowedPingKeys = {'url', 'timeout_ms', 'presets', 'groups', 'concurrency'};
   final clean = <String, dynamic>{
     for (final e in body.entries)
       if (allowedPingKeys.contains(e.key)) e.key: e.value,

@@ -73,7 +73,7 @@ mixin _HeartbeatMixin on ChangeNotifier {
     // не штрафуем. Первый снапшот придёт в пределах ~1s.
     if (last == null) return;
 
-    final silence = DateTime.now().difference(last);
+    final silence = HomeController._heartbeatNow().difference(last);
     if (silence <= _heartbeatTimeout) {
       _heartbeatFailures = 0;
       _skipNextHeartbeatFail = false;

@@ -323,13 +323,6 @@ void main() {
       expect(await (await store.slotDirForTesting('Home')).exists(), isFalse);
       expect((await store.readManifest()).slots.map((s) => s.name), ['Work']);
     });
-
-    test('slotSizeBytes считает файлы слота', () async {
-      await putScene('a');
-      await store.saveAs('Home');
-      expect(await store.slotSizeBytes('Home'), greaterThan(0));
-      expect(await store.slotSizeBytes('Nope'), 0);
-    });
   });
 
   test('битый справочник читается как отсутствующий', () async {

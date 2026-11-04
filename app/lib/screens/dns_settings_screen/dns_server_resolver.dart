@@ -126,7 +126,9 @@ List<ResolvedServer> resolveDisplayedServers(
   }
   // §044: render-order — template → preset → inline (см. ServerKind enum).
   // Stable sort: внутри каждой группы insertion-order сохраняется.
-  out.sort((a, b) => a.kind.index.compareTo(b.kind.index));
+  // §695 — override стоит на месте своей записи: ключ — вид canonical'а.
+  out.sort((a, b) =>
+      (a.overrides ?? a.kind).index.compareTo((b.overrides ?? b.kind).index));
   final listRefs = dnsServerListRefs(
     out,
     dnsFinal: dnsFinal,
@@ -134,18 +136,36 @@ List<ResolvedServer> resolveDisplayedServers(
     dnsFinalLabel: dnsFinalLabel,
     defaultResolverLabel: defaultResolverLabel,
   );
-  if (listRefs.isEmpty) return out;
+  // §695 — члены групп по списку.
+  final listTags = {for (final s in out) s.tag};
+  final liveTags = {
+    for (final s in out)
+      if (s.enabled || s.forceIncluded) s.tag,
+  };
   return [
     for (final s in out)
-      if (listRefs[s.tag] case final refs?) s.withUsedByList(refs) else s,
+      s.withListState(
+        usedByList: listRefs[s.tag],
+        groupMembersInList:
+            s.isGroup ? _groupMembers(s, listTags).length : 0,
+        groupLiveMembers: s.isGroup ? _groupMembers(s, liveTags).length : 0,
+      ),
   ];
 }
+
+/// §695 — члены группы [g] (теги `servers[]`, без себя), которые есть в
+/// [tags].
+Set<String> _groupMembers(ResolvedServer g, Set<String> tags) => {
+      for (final m in (g.body['servers'] as List<dynamic>? ?? const []))
+        if (m?.toString() case final t? when t != g.tag && tags.contains(t)) t,
+    };
 
 /// §680 — кто из самого списка ссылается на сервер: tag → метки источников.
 /// Расчёт ссылок — [dnsServerListHolds] (общий с импортом бэкапа, §681);
 /// здесь только подписи: группа и `domain_resolver` — description
 /// сервера-источника, иначе его тег; [dnsFinal] / [defaultResolver] — метки
-/// [dnsFinalLabel] / [defaultResolverLabel]. — pure.
+/// [dnsFinalLabel] / [defaultResolverLabel]. Держит любая запись списка,
+/// включённая или нет (§680, §695 правило 3). — pure.
 Map<String, List<String>> dnsServerListRefs(
   List<ResolvedServer> servers, {
   String dnsFinal = '',
@@ -159,7 +179,10 @@ Map<String, List<String>> dnsServerListRefs(
         s.tag, () => s.description.isNotEmpty ? s.description : s.tag);
   }
   final holds = dnsServerListHolds(
-    [for (final s in servers) (tag: s.tag, body: s.body)],
+    [
+      for (final s in servers)
+        (tag: s.tag, body: s.body),
+    ],
     dnsFinal: dnsFinal,
     defaultResolver: defaultResolver,
   );
@@ -196,15 +219,15 @@ String defaultDnsServerTag(
 }
 
 /// Tags доступные в dropdown'ах (DNS Final / Default Resolver / per-rule).
-/// Filter `enabled` на ref-level. §117: locked-сервер (реферится активным
-/// пресетом или правилом) build всегда force-include'ит — показываем его
-/// даже при выключенном тоггле.
+/// Filter `enabled` на ref-level. §695 правило 2: выключенное выбрать
+/// нельзя, исключений для force-include нет (выбранное включено: лок +
+/// нормализация [normalizeReferencedDnsServers]).
 ///
 /// pure.
 List<String> enabledServerTags(List<ResolvedServer> displayedServers) {
   final out = <String>[];
   for (final s in displayedServers) {
-    if (!s.enabled && !s.forceIncluded) continue;
+    if (!s.enabled) continue;
     if (s.tag.isEmpty) continue;
     out.add(s.tag);
   }
@@ -214,6 +237,7 @@ List<String> enabledServerTags(List<ResolvedServer> displayedServers) {
 /// §117 (задача 4b): rename тега inline-сервера — каскад по ссылкам в
 /// state'е DNS-экрана, чтобы переименование не орфанило рефы:
 /// - `domain_resolver` в body других inline-серверов;
+/// - §699: `servers` и `hosts` inline-групп (и override шаблонных);
 /// - значения vars типа `dns_servers` (dom_resolver) у template-серверов;
 /// - `server` в §061 DNS-правилах (kind inline/srs);
 /// - `dns_final` / `dns_default_domain_resolver`.
@@ -234,9 +258,28 @@ List<String> enabledServerTags(List<ResolvedServer> displayedServers) {
     final entry = servers[i];
     switch (entry) {
       case DnsServerInline(:final body):
+        var next = body;
         if (body['domain_resolver'] == oldTag) {
-          servers[i] = entry.copyWith(
-              body: {...body, 'domain_resolver': newTag});
+          next = {...next, 'domain_resolver': newTag};
+        }
+        // §699 — `servers` и `hosts` групп (inline и override шаблонной):
+        // без этого переименованный член выпадал из группы на сборке как
+        // `unknown`. Строка (Listable ядра) остаётся строкой.
+        if (body['type'] == 'group') {
+          for (final key in const ['servers', 'hosts']) {
+            final v = next[key];
+            if (v is List && v.contains(oldTag)) {
+              next = {
+                ...next,
+                key: [for (final m in v) m == oldTag ? newTag : m],
+              };
+            } else if (v == oldTag) {
+              next = {...next, key: newTag};
+            }
+          }
+        }
+        if (!identical(next, body)) {
+          servers[i] = entry.copyWith(body: next);
         }
       case DnsServerTemplate(:final varValues) when varValues.isNotEmpty:
         // Только vars типа dns_servers — enum-значение может текстуально

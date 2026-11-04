@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Через Debug API: добавить новый узел Tailscale с auth key, выключить старый,
 # пересобрать конфиг и перезапустить VPN. Ключ вводится с клавиатуры (не
-# попадает в историю shell и в аргументы процесса).
+# попадает в историю shell и в аргументы процесса) или берётся из
+# `.keys/tailscale-emulator-authkey`.
 #
 #   scripts/debug-api-swap-tailscale.sh <старый-id> [hostname] [exit_node]
 #
@@ -20,7 +21,14 @@ H="Authorization: Bearer $TOKEN"
 
 adb -s "$DEV" forward "tcp:$PORT" tcp:9269 >/dev/null
 
-read -rsp "Tailscale auth key: " KEY; echo
+# Ключ для эмуляторов (reusable) — в `.keys/` (gitignored); путь меняет
+# LXBOX_TS_KEY_FILE. Нет файла — спросить с клавиатуры.
+KEY_FILE="${LXBOX_TS_KEY_FILE:-$(dirname "$0")/../.keys/tailscale-emulator-authkey}"
+if [[ -r "$KEY_FILE" ]]; then
+  KEY=$(tr -d '[:space:]' < "$KEY_FILE")
+else
+  read -rsp "Tailscale auth key: " KEY; echo
+fi
 [[ "$KEY" == tskey-* ]] || { echo "ключ должен начинаться с tskey-" >&2; exit 1; }
 
 BODY=$(KEY="$KEY" HN="$HOSTNAME_NEW" EN="$EXIT_NODE" python3 -c '

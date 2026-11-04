@@ -33,6 +33,32 @@ typedef DirectionHealResult = ({
   int dnsServers,
 });
 
+/// §143 §9 — ключ снятого глобального тумблера (LEGACY, только чтение для
+/// миграции и импорта старых архивов).
+const _kLegacyInterruptOnSwitchKey = 'interrupt_connections_on_switch';
+
+Future<void> _migrateInterruptOnSwitchIfNeeded() async {
+  final data = await _load();
+  if (!data.containsKey(_kLegacyInterruptOnSwitchKey)) return;
+  final wasOn = data[_kLegacyInterruptOnSwitchKey] == true;
+  var changed = 0;
+  final directions = data['directions'];
+  if (wasOn && directions is List) {
+    for (final d in directions) {
+      if (d is Map && d['interrupt_exist_connections'] == false) {
+        d['interrupt_exist_connections'] = true;
+        changed++;
+      }
+    }
+  }
+  data.remove(_kLegacyInterruptOnSwitchKey);
+  SettingsStorage._cache = data;
+  if (changed > 0) SettingsStorage.markConfigDirty();
+  await _save();
+  AppLog.I.info('SettingsStorage: interrupt-on-switch migration (§143 §9): '
+      'toggle=$wasOn, $changed direction(s) switched to interrupt');
+}
+
 Future<List<Direction>> _getDirections() async {
   final data = await _load();
   final raw = data['directions'] as List<dynamic>? ?? const [];

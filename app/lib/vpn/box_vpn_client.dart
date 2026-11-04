@@ -285,6 +285,98 @@ class BoxVpnClient {
     return ok ?? false;
   }
 
+  /// §707 итер. 9 — кнопки уведомления VPN: зеркало ключей `native_prefs`
+  /// `notification_stop` / `notification_restart` / `notification_send` в
+  /// `boxvpn_boot` (как core_logs_verbose). Писатели — только через
+  /// `SettingsStorage.setNativeBool`.
+  Future<bool> setNotificationStop(bool enabled) async {
+    final ok = await _invoke<bool>(
+      _Methods.setNotificationStop,
+      args: {'enabled': enabled},
+      timeout: _Timeouts.settings,
+      onTimeoutValue: false,
+    );
+    return ok ?? false;
+  }
+
+  /// Канал не ответил — кнопка считается включённой (дефолт).
+  Future<bool> getNotificationStop() async {
+    final ok = await _invoke<bool>(
+      _Methods.getNotificationStop,
+      timeout: _Timeouts.settings,
+      onTimeoutValue: true,
+    );
+    return ok ?? true;
+  }
+
+  Future<bool> setNotificationRestart(bool enabled) async {
+    final ok = await _invoke<bool>(
+      _Methods.setNotificationRestart,
+      args: {'enabled': enabled},
+      timeout: _Timeouts.settings,
+      onTimeoutValue: false,
+    );
+    return ok ?? false;
+  }
+
+  /// Канал не ответил — кнопка считается включённой (дефолт).
+  Future<bool> getNotificationRestart() async {
+    final ok = await _invoke<bool>(
+      _Methods.getNotificationRestart,
+      timeout: _Timeouts.settings,
+      onTimeoutValue: true,
+    );
+    return ok ?? true;
+  }
+
+  Future<bool> setNotificationSend(bool enabled) async {
+    final ok = await _invoke<bool>(
+      _Methods.setNotificationSend,
+      args: {'enabled': enabled},
+      timeout: _Timeouts.settings,
+      onTimeoutValue: false,
+    );
+    return ok ?? false;
+  }
+
+  /// Канал не ответил — кнопка считается включённой (дефолт).
+  Future<bool> getNotificationSend() async {
+    final ok = await _invoke<bool>(
+      _Methods.getNotificationSend,
+      timeout: _Timeouts.settings,
+      onTimeoutValue: true,
+    );
+    return ok ?? true;
+  }
+
+  /// §707 итер. 9 (контракт 1.1.159) — итоговые теги узлов, у которых в
+  /// записи стоит `disable_taildrop_commands` / `disable_taildrop_autosave`:
+  /// оба множества выключенных в зеркале `boxvpn_boot` заменяются целиком.
+  /// `true` — записано.
+  Future<bool> setTaildropTags({
+    required List<String> commandsOff,
+    required List<String> autosaveOff,
+  }) async {
+    final ok = await _invoke<bool>(
+      _Methods.setTaildropTags,
+      args: {'commands_off': commandsOff, 'autosave_off': autosaveOff},
+      timeout: _Timeouts.settings,
+      onTimeoutValue: false,
+    );
+    return ok ?? false;
+  }
+
+  /// §707 итер. 9 — удалить старые файлы `lxbox_taildrop` и
+  /// `lxbox_notification_buttons`. `true` — удалено (или их не было).
+  Future<bool> deleteLegacyPrefs() async {
+    final ok = await _invoke<bool>(
+      _Methods.deleteLegacyPrefs,
+      timeout: _Timeouts.settings,
+      onTimeoutValue: false,
+    );
+    return ok ?? false;
+  }
+
   /// §043: forward sing-box логов в наш AppLog как `DebugSource.core`.
   /// Default false. Изменение применяется только после restart Service'а
   /// (Libbox.setup читает значение один раз при инициализации).

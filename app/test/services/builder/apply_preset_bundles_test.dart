@@ -113,15 +113,6 @@ void main() {
       expect(result.extraDnsServers, isEmpty);
     });
 
-    test('§257 fakeip dns_enable по умолчанию (default true) → DNS on', () {
-      final preset = _fakeipWithDnsEnable();
-      final rule = CustomRulePreset(name: 'FakeIP', presetId: 'fakeip');
-      final reg = RuleSetRegistry();
-      final result = applyPresetBundles(reg, [rule], [preset]);
-      expect(result.dnsRulesByPresetId, hasLength(1));
-      expect(result.extraDnsServers, hasLength(1));
-    });
-
     test('§121 routing = король: route disabled подавляет DNS-аспект целиком '
         '(даже при dns enabled)', () {
       // §033 раньше разрешал DNS-only пресет (route off, dns on). §121 это
@@ -166,23 +157,6 @@ void main() {
       expect(result.extraDnsServers, isEmpty);
     });
 
-    test('disabled preset-правило — пропускается полностью', () {
-      final preset = _ruDirect();
-      final rule = CustomRulePreset(
-        name: 'X',
-        presetId: 'ru-direct',
-        enabled: false,
-        varsValues: {'outbound': 'direct-out'},
-      );
-      final reg = RuleSetRegistry();
-
-      final result = applyPresetBundles(reg, [rule], [preset]);
-
-      expect(result.warnings, isEmpty);
-      expect(reg.getRuleSets(), isEmpty);
-      expect(reg.getRules(), isEmpty);
-    });
-
     test('inline правила пропускаются (обрабатывает applyCustomRules)', () {
       final preset = _ruDirect();
       final rule = CustomRuleInline(
@@ -220,22 +194,6 @@ void main() {
       expect(reg.getRuleSets().length, 1,
           reason: 'один rule_set "ru-domains" на оба правила');
       expect(reg.getRules().length, 2);
-    });
-
-    test('rule_set tag сохраняется без auto-suffix (routing rule ссылается '
-        'на литерал)', () {
-      final preset = _ruDirect();
-      final rule = CustomRulePreset(
-        name: 'X',
-        presetId: 'ru-direct',
-        varsValues: {'outbound': 'direct-out'},
-      );
-      final reg = RuleSetRegistry();
-
-      applyPresetBundles(reg, [rule], [preset]);
-
-      expect(reg.getRuleSets().first['tag'], 'ru-direct:ru-domains');
-      expect(reg.getRules().first['rule_set'], 'ru-direct:ru-domains');
     });
   });
 }

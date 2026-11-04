@@ -145,10 +145,12 @@ CustomRule _patchRule(CustomRule current, Map<String, dynamic> body) {
   final domains = fieldStringList(body, 'domains');
   final domainSuffixes = fieldStringList(body, 'domain_suffixes');
   final domainKeywords = fieldStringList(body, 'domain_keywords');
+  final domainRegexes = fieldStringList(body, 'domain_regexes'); // §712
   final ipCidrs = fieldStringList(body, 'ip_cidrs');
   final ports = fieldStringList(body, 'ports');
   final portRanges = fieldStringList(body, 'port_ranges');
   final packages = fieldStringList(body, 'packages');
+  final packageRegexes = fieldStringList(body, 'package_regexes'); // §712
   final protocols = fieldStringList(body, 'protocols');
   // §240 — L4-транспорт (tcp/udp/icmp).
   final network = fieldStringList(body, 'network');
@@ -162,6 +164,9 @@ CustomRule _patchRule(CustomRule current, Map<String, dynamic> body) {
   final wifiSsids = fieldStringList(body, 'wifi_ssids');
   final rawBssids = fieldStringList(body, 'wifi_bssids');
   final wifiBssids = rawBssids == null ? null : _validateBssids(rawBssids);
+  // §694 — тип/лимитность сети.
+  final networkTypes = fieldStringList(body, 'network_type');
+  final networkIsExpensive = fieldBool(body, 'network_is_expensive');
   // ## 12 — `srs_urls` (список) главнее `srs_url`; одиночный `srs_url`
   // заменяет весь список одним набором.
   final srsUrlList = fieldStringList(body, 'srs_urls');
@@ -185,10 +190,12 @@ CustomRule _patchRule(CustomRule current, Map<String, dynamic> body) {
         domains: domains,
         domainSuffixes: domainSuffixes,
         domainKeywords: domainKeywords,
+        domainRegexes: domainRegexes,
         ipCidrs: ipCidrs,
         ports: ports,
         portRanges: portRanges,
         packages: packages,
+        packageRegexes: packageRegexes,
         protocols: protocols,
         network: network,
         ipIsPrivate: ipIsPrivate,
@@ -197,6 +204,8 @@ CustomRule _patchRule(CustomRule current, Map<String, dynamic> body) {
         inbounds: inbounds,
         wifiSsids: wifiSsids,
         wifiBssids: wifiBssids,
+        networkTypes: networkTypes,
+        networkIsExpensive: networkIsExpensive,
         outbound: outbound,
         dns: dns,
         clearDns: clearDns,
@@ -210,6 +219,7 @@ CustomRule _patchRule(CustomRule current, Map<String, dynamic> body) {
         ports: ports,
         portRanges: portRanges,
         packages: packages,
+        packageRegexes: packageRegexes,
         protocols: protocols,
         network: network,
         ipIsPrivate: ipIsPrivate,
@@ -218,6 +228,8 @@ CustomRule _patchRule(CustomRule current, Map<String, dynamic> body) {
         inbounds: inbounds,
         wifiSsids: wifiSsids,
         wifiBssids: wifiBssids,
+        networkTypes: networkTypes,
+        networkIsExpensive: networkIsExpensive,
         outbound: outbound,
         dns: dns,
         clearDns: clearDns,
@@ -256,10 +268,12 @@ CustomRule _retype(CustomRule r, CustomRuleKind kind) {
         domains: r.domains,
         domainSuffixes: r.domainSuffixes,
         domainKeywords: r.domainKeywords,
+        domainRegexes: r.domainRegexes,
         ipCidrs: r.ipCidrs,
         ports: r.ports,
         portRanges: r.portRanges,
         packages: r.packages,
+        packageRegexes: r.packageRegexes,
         protocols: r.protocols,
         network: r.network,
         ipIsPrivate: r.ipIsPrivate,
@@ -268,6 +282,8 @@ CustomRule _retype(CustomRule r, CustomRuleKind kind) {
         inbounds: r.inbounds,
         wifiSsids: r.wifiSsids,
         wifiBssids: r.wifiBssids,
+        networkTypes: r.networkTypes,
+        networkIsExpensive: r.networkIsExpensive,
         outbound: outbound,
         dns: r.dns,
         resolve: r.resolve,
@@ -281,6 +297,7 @@ CustomRule _retype(CustomRule r, CustomRuleKind kind) {
         ports: r.ports,
         portRanges: r.portRanges,
         packages: r.packages,
+        packageRegexes: r.packageRegexes,
         protocols: r.protocols,
         network: r.network,
         ipIsPrivate: r.ipIsPrivate,
@@ -289,6 +306,8 @@ CustomRule _retype(CustomRule r, CustomRuleKind kind) {
         inbounds: r.inbounds,
         wifiSsids: r.wifiSsids,
         wifiBssids: r.wifiBssids,
+        networkTypes: r.networkTypes,
+        networkIsExpensive: r.networkIsExpensive,
         outbound: outbound,
         dns: r.dns,
         resolve: r.resolve,
@@ -492,6 +511,9 @@ CustomRule _ruleFromJsonStrict(Map<String, dynamic> j) {
   final wifiSsids = fieldStringList(j, 'wifi_ssids') ?? const [];
   final wifiBssidsRaw = fieldStringList(j, 'wifi_bssids') ?? const [];
   final wifiBssids = _validateBssids(wifiBssidsRaw);
+  // §694 — тип/лимитность сети (inline/srs).
+  final networkTypes = fieldStringList(j, 'network_type') ?? const [];
+  final networkIsExpensive = fieldBool(j, 'network_is_expensive') ?? false;
   // §030/new_fields — source-ось + inbound (inline/srs).
   final sourceIpCidrs = fieldStringList(j, 'source_ip_cidrs') ?? const [];
   final sourceIpIsPrivate = fieldBool(j, 'source_ip_is_private') ?? false;
@@ -509,10 +531,12 @@ CustomRule _ruleFromJsonStrict(Map<String, dynamic> j) {
         domains: fieldStringList(j, 'domains') ?? const [],
         domainSuffixes: fieldStringList(j, 'domain_suffixes') ?? const [],
         domainKeywords: fieldStringList(j, 'domain_keywords') ?? const [],
+        domainRegexes: fieldStringList(j, 'domain_regexes') ?? const [],
         ipCidrs: fieldStringList(j, 'ip_cidrs') ?? const [],
         ports: fieldStringList(j, 'ports') ?? const [],
         portRanges: fieldStringList(j, 'port_ranges') ?? const [],
         packages: fieldStringList(j, 'packages') ?? const [],
+        packageRegexes: fieldStringList(j, 'package_regexes') ?? const [],
         protocols: fieldStringList(j, 'protocols') ?? const [],
         network: fieldStringList(j, 'network') ?? const [],
         ipIsPrivate: fieldBool(j, 'ip_is_private') ?? false,
@@ -521,6 +545,8 @@ CustomRule _ruleFromJsonStrict(Map<String, dynamic> j) {
         inbounds: inbounds,
         wifiSsids: wifiSsids,
         wifiBssids: wifiBssids,
+        networkTypes: networkTypes,
+        networkIsExpensive: networkIsExpensive,
         outbound: outbound,
         dns: dns,
         resolve: resolve,
@@ -534,6 +560,7 @@ CustomRule _ruleFromJsonStrict(Map<String, dynamic> j) {
         ports: fieldStringList(j, 'ports') ?? const [],
         portRanges: fieldStringList(j, 'port_ranges') ?? const [],
         packages: fieldStringList(j, 'packages') ?? const [],
+        packageRegexes: fieldStringList(j, 'package_regexes') ?? const [],
         protocols: fieldStringList(j, 'protocols') ?? const [],
         network: fieldStringList(j, 'network') ?? const [],
         ipIsPrivate: fieldBool(j, 'ip_is_private') ?? false,
@@ -542,6 +569,8 @@ CustomRule _ruleFromJsonStrict(Map<String, dynamic> j) {
         inbounds: inbounds,
         wifiSsids: wifiSsids,
         wifiBssids: wifiBssids,
+        networkTypes: networkTypes,
+        networkIsExpensive: networkIsExpensive,
         outbound: outbound,
         dns: dns,
         resolve: resolve,

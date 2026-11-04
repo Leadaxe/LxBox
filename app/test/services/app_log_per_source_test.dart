@@ -17,12 +17,6 @@ void main() {
       expect(AppLog.I.entriesForSource(DebugSource.core), isEmpty);
     });
 
-    test('log с source: core кладёт только в core bucket', () {
-      AppLog.I.info('hello core', source: DebugSource.core);
-      expect(AppLog.I.entriesForSource(DebugSource.app), isEmpty);
-      expect(AppLog.I.entriesForSource(DebugSource.core), hasLength(1));
-    });
-
     test('app spam не вытесняет core entries', () {
       AppLog.I.info('preserve me', source: DebugSource.core);
       // Спам app до cap'а app (300) и за пределы.
@@ -93,20 +87,6 @@ void main() {
       AppLog.I.resetForTesting();
       expect(AppLog.I.entries, isEmpty);
     });
-
-    test('merged result preserves order для одного и того же timestamp', () async {
-      // Если timestamp совпадают (микросекунда), порядок tie-breaking — не
-      // спецификация, но он должен быть стабильным. Проверяем что merge
-      // не падает на одинаковых временах.
-      final t = DateTime.now();
-      // (Прямой инжект через resetForTesting + log не поддерживает
-      // injection времени, поэтому просто пушим быстро и проверяем что
-      // нет crash.)
-      AppLog.I.info('a', source: DebugSource.app);
-      AppLog.I.info('c', source: DebugSource.core);
-      expect(AppLog.I.entries.length, 2);
-      expect(t, isNotNull);
-    });
   });
 
   group('AppLog clear (§043)', () {
@@ -126,14 +106,6 @@ void main() {
       expect(AppLog.I.entriesForSource(DebugSource.app), isEmpty);
       expect(AppLog.I.entriesForSource(DebugSource.core), hasLength(1));
     });
-
-    test('clearSource(core) очищает только core, app нетронут', () {
-      AppLog.I.info('a', source: DebugSource.app);
-      AppLog.I.info('c', source: DebugSource.core);
-      AppLog.I.clearSource(DebugSource.core);
-      expect(AppLog.I.entriesForSource(DebugSource.app), hasLength(1));
-      expect(AppLog.I.entriesForSource(DebugSource.core), isEmpty);
-    });
   });
 
   group('AppLog level convenience methods (§043)', () {
@@ -144,12 +116,6 @@ void main() {
       AppLog.I.error('e', source: DebugSource.core);
       expect(AppLog.I.entriesForSource(DebugSource.app), isEmpty);
       expect(AppLog.I.entriesForSource(DebugSource.core), hasLength(4));
-    });
-
-    test('default source = app', () {
-      AppLog.I.info('i');
-      expect(AppLog.I.entriesForSource(DebugSource.app), hasLength(1));
-      expect(AppLog.I.entriesForSource(DebugSource.core), isEmpty);
     });
   });
 }

@@ -214,6 +214,14 @@ class HomeState {
   /// иначе такие замеры присвоил бы себе случайный Направление.
   static const String scratchDirection = '\u0000scratch';
 
+  /// §715 — псевдо-Направление для замеров ЯДРА: `urlTestDelay` из
+  /// `getOutbounds` (heartbeat §535). Это URL-тест группы через туннель, а не
+  /// пробник приложения на цель из Ping Settings, поэтому в показе он всегда
+  /// «чужой» (`~`, приглушённо) и стоит последним в фоллбэке [delayOf].
+  /// Падение туннеля ключ не снимает: живёт как любой чужой замер §325, пока
+  /// первый heartbeat следующего сеанса не перезапишет карту.
+  static const String coreDirection = '\u0000core';
+
   /// §325 — ключ Направления, в который пишутся новые замеры.
   String get delayDirectionKey => selectedGroup ?? scratchDirection;
 
@@ -232,11 +240,15 @@ class HomeState {
     final own = _ownDelays[tag];
     if (own != null) return own;
     for (final entry in delayByDirection.entries) {
-      if (entry.key == delayDirectionKey) continue;
+      if (entry.key == delayDirectionKey || entry.key == coreDirection) {
+        continue;
+      }
       final v = entry.value[tag];
       if (v != null) return v;
     }
-    return null;
+    // §715 — замер ядра последним: другое Направление мерило той же
+    // методикой, что и своё, ядро — другой.
+    return delayByDirection[coreDirection]?[tag];
   }
 
   /// §325 — показанный [delayOf] пришёл из ДРУГОГО Направления (в текущем ноду не

@@ -66,9 +66,21 @@ class DnsServerHold {
   String toString() => usedBy;
 }
 
+/// §699 — значение Listable ядра (`badoption.Listable[string]`: строка или
+/// список строк) списком; пустые и не-строки отбрасываются. — pure.
+List<String> dnsListableTags(Object? value) => switch (value) {
+      final String s when s.isNotEmpty => [s],
+      final List<dynamic> l => [
+          for (final e in l)
+            if (e is String && e.isNotEmpty) e,
+        ],
+      _ => const [],
+    };
+
 /// §680 — ссылки из самого списка: tag → ссылки в порядке обнаружения.
 /// Источники (только записи [servers] — группа вне списка никого не держит):
-/// - группа (`type: group`) — каждый член `servers[]`;
+/// - группа (`type: group`) — каждый член `servers[]` и, §699, каждый сервер
+///   ключа `hosts` (ядро SPEC 143; вид тот же — `group:<tag>`);
 /// - `domain_resolver` другого сервера (строка или `{server}`; у template —
 ///   после подстановки vars, `dom_resolver` у `safe_dns_dot`);
 /// - [dnsFinal] / [defaultResolver].
@@ -91,6 +103,9 @@ Map<String, List<DnsServerHold>> dnsServerListHolds(
       for (final m in (s.body['servers'] as List<dynamic>? ?? const [])) {
         add(m?.toString(), DnsServerHold(DnsHoldKind.group, s.tag),
             self: s.tag);
+      }
+      for (final h in dnsListableTags(s.body['hosts'])) {
+        add(h, DnsServerHold(DnsHoldKind.group, s.tag), self: s.tag);
       }
     }
     final dr = s.body['domain_resolver'];
@@ -226,6 +241,9 @@ Map<String, DnsServerHold> dnsServerFirstHolds({
       if (s['type'] == 'group') {
         for (final m in (s['servers'] as List<dynamic>? ?? const [])) {
           add(m?.toString(), hold);
+        }
+        for (final h in dnsListableTags(s['hosts'])) {
+          add(h, hold);
         }
       }
       final dr = s['domain_resolver'];

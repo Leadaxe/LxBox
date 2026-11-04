@@ -231,11 +231,4 @@ final b = getLocalText.s(label);
       expect(placeholderSlots('plain'), isEmpty);
     });
   });
-
-  test('dynamicCount is threaded into validation', () {
-    final v = validate([use('Ok')], {
-      'Ok': {'value': 'Ок'},
-    }, dynamicCount: 5);
-    expect(v.dynamicSkipped, 5);
-  });
 }

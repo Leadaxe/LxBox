@@ -47,7 +47,7 @@ void main() {
   test('cancel() во время прогона рвёт начатые замеры и закрывает свою сессию',
       () async {
     final results = <int, ProbeResult>{};
-    final runner = ProbeRunner();
+    final runner = ProbeRunner(concurrency: 6);
     final done = runner.run(nodes,
         url: 'https://example.com/gen204',
         timeoutMs: 5000,
@@ -68,7 +68,7 @@ void main() {
   });
 
   test('cancel() до старта сессии: замеров нет, сессия закрыта', () async {
-    final runner = ProbeRunner();
+    final runner = ProbeRunner(concurrency: 6);
     final done = runner.run(nodes,
         url: '', timeoutMs: 0, onResult: (_, _) {});
     runner.cancel();
@@ -80,13 +80,13 @@ void main() {
   test('probeStop старого прогона не закрывает сессию нового', () async {
     final oldResults = <int, ProbeResult>{};
     final newResults = <int, ProbeResult>{};
-    final oldRunner = ProbeRunner();
+    final oldRunner = ProbeRunner(concurrency: 6);
     final oldDone = oldRunner.run(nodes,
         url: '', timeoutMs: 0, onResult: (i, r) => oldResults[i] = r);
     await _until(() => fake.pendingCount == 6, what: 'старый прогон в полёте');
 
     // Новый прогон поднимает свою сессию поверх старой (рестарт).
-    final newRunner = ProbeRunner();
+    final newRunner = ProbeRunner(concurrency: 6);
     final newDone = newRunner.run(nodes,
         url: '', timeoutMs: 0, onResult: (i, r) => newResults[i] = r);
 

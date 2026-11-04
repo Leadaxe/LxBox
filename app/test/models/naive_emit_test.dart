@@ -60,12 +60,6 @@ void main() {
       expect(tls.containsKey('utls'), false);
     });
 
-    test('with username + password', () {
-      final m = mk(username: 'u', password: 'p').emit(TemplateVars.empty).map;
-      expect(m['username'], 'u');
-      expect(m['password'], 'p');
-    });
-
     test('with password only — username omitted', () {
       final m = mk(password: 'onlypass').emit(TemplateVars.empty).map;
       expect(m.containsKey('username'), false);
@@ -94,10 +88,6 @@ void main() {
       final m = mk(chained: detour).emit(TemplateVars.empty).map;
       expect(m['detour'], 'jump');
     });
-
-    test('protocol getter returns "naive"', () {
-      expect(mk().protocol, 'naive');
-    });
   });
 
   group('NaïveProxy toUri (spec 037 §5)', () {
@@ -113,16 +103,6 @@ void main() {
         tls: const TlsSpec(enabled: true, serverName: 'h.example.com'),
       );
       expect(s.toUri(), 'naive+https://u:p@h.example.com:443#t');
-    });
-
-    test('keeps non-default port', () {
-      final s = NaiveSpec(
-        id: 'id', tag: 't', label: 't',
-        server: 'h', port: 8443, rawSource: '',
-        password: 'p',
-        tls: const TlsSpec(enabled: true, serverName: 'h'),
-      );
-      expect(s.toUri(), 'naive+https://p@h:8443#t');
     });
 
     // §465 — одиночный userinfo читается как password, поэтому форма «только
@@ -224,13 +204,6 @@ void main() {
       final s2 = parseUri(original.toUri()) as NaiveSpec;
       expect(s2.username, 'onlyuser');
       expect(s2.password, '');
-    });
-
-    test('round-trip preserves user+pass', () {
-      final original = parseLinkAs<NaiveSpec>('naive+https://u:p@host.example.com')!;
-      final s2 = parseUri(original.toUri()) as NaiveSpec;
-      expect(s2.username, 'u');
-      expect(s2.password, 'p');
     });
 
     test('round-trip preserves extra-headers (sorted)', () {

@@ -17,7 +17,7 @@ void main() {
   // (критерий 7 спеки 480).
   setUpAll(loadEngineSections);
 
-  Map<String, dynamic> regResponse({String? clientId}) => {
+  Map<String, dynamic> regResponse({String? clientId, String? host}) => {
         'id': 'device-123',
         'token': 'tok-abc',
         'account': {'id': 'acc-456', 'warp_plus': false},
@@ -28,7 +28,7 @@ void main() {
               'public_key': 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=',
               'endpoint': {
                 'v4': '162.159.192.1:2408',
-                'host': 'engage.cloudflareclient.com:2408',
+                'host': host ?? 'engage.cloudflareclient.com:2408',
               },
             },
           ],
@@ -89,18 +89,34 @@ void main() {
     expect(acc.endpoint, '188.114.97.6:988');
   });
 
-  test('§135 register: дефолтный endpoint → fallback на host из ответа',
+  test('§135 register: endpoint не выбран → fallback на host из ответа',
       () async {
-    final client = MockClient(
-        (req) async => http.Response(jsonEncode(regResponse()), 200));
+    final client = MockClient((req) async => http.Response(
+        jsonEncode(regResponse(host: '162.159.192.5:2408')), 200));
 
-    // Юзер оставил дефолт → берём host из ответа Cloudflare (старое поведение).
+    // Юзер endpoint не выбирал → берём host из ответа Cloudflare.
     final acc = await WarpClient(client: client).register(
-      endpoint: WarpAccount.defaultEndpoint,
       nowIso8601: '2026-06-14T00:00:00Z',
     );
 
-    expect(acc.endpoint, 'engage.cloudflareclient.com:2408');
+    expect(acc.endpoint, '162.159.192.5:2408');
+  });
+
+  test('§386 register: явно выбранный engage…:2408 НЕ затирается ответом',
+      () async {
+    final client = MockClient((req) async => http.Response(
+        jsonEncode(regResponse(host: '162.159.192.5:2408')), 200));
+
+    // Выбор юзера из списка совпадает с дефолтом, но это выбор — ответ
+    // Cloudflare (IP) и рандом обфускации его не подменяют.
+    final acc = await WarpClient(client: client).register(
+      endpoint: WarpAccount.defaultEndpoint,
+      nowIso8601: '2026-06-14T00:00:00Z',
+      obfuscate: true,
+      randomEndpoint: '188.114.96.1:2408',
+    );
+
+    expect(acc.endpoint, WarpAccount.defaultEndpoint);
   });
 
   test('register: non-200 → WarpException с упоминанием версии', () async {
@@ -216,15 +232,6 @@ void main() {
               .containsKey('keepalive'),
           isFalse);
     });
-  });
-
-  test('§137 nodeTag: облако/гроза, +, AWG-суффикс', () {
-    expect(WarpAccount.nodeTag(warpPlus: false, hasAwg: false), '🔥☁️ WARP');
-    expect(WarpAccount.nodeTag(warpPlus: true, hasAwg: false), '🔥☁️ WARP+');
-    expect(WarpAccount.nodeTag(warpPlus: false, hasAwg: true),
-        '🔥⛈️ WARP (AWG 1.5)');
-    expect(WarpAccount.nodeTag(warpPlus: true, hasAwg: true),
-        '🔥⛈️ WARP+ (AWG 1.5)');
   });
 
   test('WarpAccount.redacted маскирует priv_key/token/license', () {

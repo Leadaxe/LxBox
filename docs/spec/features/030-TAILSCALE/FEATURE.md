@@ -114,8 +114,7 @@ lives in the core until "Save choice" writes it into the node.
   collapsed, 63 characters in all); an empty or fully collapsed model gives
   `LxBox`. **Witness:** units "the model as is → prefix and lower case through
   dashes", "underscores and runs of separators collapse", "edges are cleaned",
-  "a model without Latin letters or digits → the bare prefix", "an empty model
-  → the bare prefix", "a long model is cut to a DNS label without a trailing
+  "a model without Latin letters or digits → the bare prefix", "a long model is cut to a DNS label without a trailing
   dash"; widget "Hostname with the LxBox default, erasing returns an empty
   body". **Mutation:** the hostname substituted at build.
 - **P12. The `tailscale` preset serves every Tailscale node in the config.**
@@ -146,9 +145,9 @@ lives in the core until "Save choice" writes it into the node.
   closes the step". **Mutation:** the preset re-added after deletion.
 - **P17. `skip_tailscale_presets` (until 1.1.126 `skip_presets`) survives a backup round trip.** Only `true` is stored;
   an import that matches the node by body does not reset it. **Witness:** units
-  "a single node: skip_presets=true of the own record is not reset", "a folder
-  member: skip_presets=true is not reset on a repeated import". **Mutation:**
-  a missing field on import resets the flag.
+  "own server: true from the file is set, the own true is not reset", "folder
+  member: merge within the folder" (`lx_backup_node_flags_test.dart`).
+  **Mutation:** a missing field on import resets the flag.
 - **P18. The `tailscale` DNS server picker offers the enabled Tailscale nodes
   of all sources**, with the final tag of the last build. **Witness:** units
   "an own Tailscale server — an option; non-Tailscale — none", "a disabled
@@ -171,14 +170,17 @@ lives in the core until "Save choice" writes it into the node.
   between the recorded `exit_node` and the active exit shows a warning sign
   and "Save choice"; Save choice writes the active peer's Tailscale address
   (IPv4 first) or removes the field; a subscription node and a node without
-  a source record have no Save choice. **Witness:** units "match — no sign",
+  a source record have no Save choice. Outside `Running` the core has no
+  active exit: the recorded `exit_node` shows as a line, with no list, sign
+  or Save choice, so it cannot be erased by mistake (§706). **Witness:** units "match — no sign",
   "none in the node, chosen on the fly", "recorded in the node, cleared on the
   fly", "one in the node, another on the fly", "the IPv4 address is written
   into the body", "the field appears / changes with the key order kept / None
   removes it"; widgets "differ — the sign and Save choice, the address is
   written", "cleared on the fly — Save choice writes empty", "a subscription
   node — the sign, no Save choice", "picking an item switches on the fly, the
-  body is untouched", "no record: Save choice hidden". **Mutation:** Save
+  body is untouched", "no record: Save choice hidden", "the recorded exit
+  node as a line, no list and no Save choice" (§706). **Mutation:** Save
   choice writes the `StableID`.
 - **P22. Devices are listed online first, then by name, with marks.**
   **Witness:** unit "device order: online first, then by name"; widget
@@ -326,8 +328,16 @@ Delete node / Workspace delete → index record removed → directory removed wh
   one, and the identity goes with it.
 - `android:allowBackup` stays at the platform default (owner decision
   2026-10-13, audit [591](../../tasks/591-spec-kit-revision-audit.md)).
-- SSH to a peer, Taildrop, `*.ts.net` certificates, IPv6-only tailnets under
-  `prefer_ipv6` and per-device traffic are out of scope. The Android system
+- Tailscale SSH is not a feature of the node. The client side needs nothing
+  from LxBox: any SSH client (Termux, JuiceSSH) reaches a peer's tailnet
+  address through the node, and the peer's Tailscale SSH server authorises by
+  the tailnet identity of this device (not verified on a device with a live
+  tailnet). The SSH server on the phone is not built (`ts_omit_ssh`): Android
+  has no shell for incoming sessions, and logging in as other users needs root
+  (owner decision 2026-11-01).
+- Taildrop is feature [032-TAILDROP](../032-TAILDROP/FEATURE.md).
+  `*.ts.net` certificates, IPv6-only tailnets under `prefer_ipv6` and
+  per-device traffic are out of scope. The Android system
   backup includes `files/` with the tailnet keys — stock behaviour, by design
   (see [device identity](FUNCTIONS/device-identity-and-state.md)).
 - Sign-in with an interactive link, exit node switching, Log out and Ping have

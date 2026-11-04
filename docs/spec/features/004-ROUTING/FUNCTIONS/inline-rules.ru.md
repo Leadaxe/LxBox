@@ -26,12 +26,14 @@ Wi-Fi — и куда его отправить. Это вид правила п
 | MATCH | Domain | `domain` | headless rule_set |
 | | Domain suffix | `domain_suffix` | headless |
 | | Domain keyword | `domain_keyword` | headless |
+| | Domain regex (one per line) | `domain_regex` | headless |
 | | IP CIDR (быстрые вставки: Localhost, Wi-Fi subnet, All) | `ip_cidr` | headless |
 | | Private IP | `ip_is_private` | правило маршрута |
 | | Source IP CIDR | `source_ip_cidr` | headless |
 | | Private source IP | `source_ip_is_private` | правило маршрута |
 | PORT | Port / Port range (`8000:9000`, `:3000`, `4000:`) | `port` / `port_range` | headless |
 | APPS | выбор приложений | `package_name` | headless |
+| | Package name regex (one per line) | `package_name_regex` | headless (Remote .srs: правило маршрута) |
 | NETWORK & PROTOCOL | `tcp` · `udp` · `icmp`; `bittorrent` `dns` `dtls` `http` `ntp` `quic` `rdp` `ssh` `stun` `tls` | `network`, `protocol` | правило маршрута |
 | INBOUND | `tun-in` · `mixed-in` | `inbound` | правило маршрута |
 | WI-FI NETWORK | см. [wifi-conditions](wifi-conditions.ru.md) | `wifi_ssid`/`wifi_bssid` | headless |
@@ -58,6 +60,14 @@ headless-матче — правило маршрута без `rule_set`.
   диапазон с хотя бы одной границей и `lo ≤ hi`. Невалидные элементы
   подсвечиваются счётчиком «N · M invalid», нечисловые порты в конфиг не
   попадают.
+- Поля-регулярки (`domain_regex`, `package_name_regex`) — по шаблону на
+  строку, запятая входит в шаблон. Ядро компилирует Go RE2 и ищет совпадение
+  в любом месте строки (`com\.oplus\.` ловит любой пакет с этой подстрокой;
+  привязка — `^`/`$`). Внутри поля ИЛИ, с остальными категориями И — как у
+  `package_name`. Правило из одной регулярки — обычное правило, не match-all.
+  Синтаксис проверяется при вводе; битый шаблон блокирует Save — ядро такой
+  конфиг не примет. Оба ключа видны DNS-слою: у правила из одной регулярки
+  секция DNS & Resolve остаётся, regex домена включает Resolve before routing.
 - Правило без единого условия сохраняется, но в конфиг не идёт; в списке
   подпись «Tap to add match fields».
 - Выключенное правило не даёт ни rule_set, ни правила маршрута.

@@ -233,7 +233,7 @@ Future<void> copyNodeUri(BuildContext context, String tag,
   }
 }
 
-/// §557 (ядро SPEC 106) — «Turn off» / «Turn on» WG/AWG-узла на лету: вызов
+/// §557 (ядро SPEC 106) — «Turn off» / «Turn on» WG/AWG/Tailscale-узла на лету: вызов
 /// контроллера и snackbar при отказе ядра. Направление — по текущему
 /// состоянию узла: выключенный включаем, остальные выключаем.
 Future<void> toggleEndpoint(
@@ -242,17 +242,24 @@ Future<void> toggleEndpoint(
       controller.state.endpointStates[tag] == CcEndpointState.disabled;
   final code = await controller.setEndpointEnabled(tag, enable);
   if (code == null || !context.mounted) return;
-  final text = switch (code) {
-    'not_found' => getLocalText.s("The running config has no node %s.", tag),
-    'invalid_argument' =>
-      getLocalText.s("Only WireGuard and AmneziaWG nodes can be turned off."),
-    'failed_precondition' =>
-      getLocalText.s("VPN is not running or is restarting. Try again."),
-    'unavailable' => getLocalText.s(
-        "The node did not wake up. The next connection through it will retry."),
-    _ => enable
-        ? getLocalText.s("Could not turn the node on.")
-        : getLocalText.s("Could not turn the node off."),
-  };
-  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(endpointToggleErrorText(code, tag, enable: enable))));
 }
+
+/// §557 — текст отказа выключателя узла по коду контроллера
+/// ([HomeController.setEndpointEnabled]); общий для списка узлов, экрана узла
+/// и вкладки Network Tailscale (§706).
+String endpointToggleErrorText(String code, String tag,
+        {required bool enable}) =>
+    switch (code) {
+      'not_found' => getLocalText.s("The running config has no node %s.", tag),
+      'invalid_argument' => getLocalText.s(
+          "Only WireGuard, AmneziaWG and Tailscale nodes can be turned off."),
+      'failed_precondition' =>
+        getLocalText.s("VPN is not running or is restarting. Try again."),
+      'unavailable' => getLocalText.s(
+          "The node did not wake up. The next connection through it will retry."),
+      _ => enable
+          ? getLocalText.s("Could not turn the node on.")
+          : getLocalText.s("Could not turn the node off."),
+    };

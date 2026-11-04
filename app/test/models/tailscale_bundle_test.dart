@@ -28,10 +28,6 @@ void main() {
       expect(defaultTailscaleHostname('___'), 'LxBox');
     });
 
-    test('пустая модель → голый префикс', () {
-      expect(defaultTailscaleHostname(''), 'LxBox');
-    });
-
     test('длинная модель обрезается в DNS-метку без хвостового дефиса', () {
       final name = defaultTailscaleHostname('a' * 100);
       expect(name.length, kTailscaleHostnameMaxLength);

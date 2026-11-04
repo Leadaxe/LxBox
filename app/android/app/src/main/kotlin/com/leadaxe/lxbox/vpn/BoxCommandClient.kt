@@ -38,6 +38,9 @@ import io.nekohasekai.libbox.TailscalePingSession
 import io.nekohasekai.libbox.TailscaleStatusHandler
 import io.nekohasekai.libbox.TailscaleStatusSubscription
 import io.nekohasekai.libbox.TailscaleStatusUpdate
+import io.nekohasekai.libbox.TaildropInbox
+import io.nekohasekai.libbox.TaildropInboxHandler
+import io.nekohasekai.libbox.TaildropInboxSubscription
 import io.nekohasekai.libbox.URLTestOutboundResult
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.atomic.AtomicBoolean
@@ -290,6 +293,7 @@ class BoxCommandClient {
         disconnectClient(pingClient, "shutdownAll") // §175
         stopTailscaleStatus() // §579
         stopTailscalePing() // §581
+        stopTaildropInbox() // §707
         stopConnectionTest() // §687
         stopOpenConnectStatus() // §654
         screenAccumulator.set(null)
@@ -450,6 +454,11 @@ class BoxCommandClient {
         val hi = e.health()
         while (hi != null && hi.hasNext()) hi.next()?.let { health.add(it) }
         m["health"] = health
+        // §707 — Taildrop: право узла на обмен файлами и счётчики входящих.
+        m["can_share_files"] = e.canShareFiles
+        m["waiting_file_count"] = e.waitingFileCount
+        m["receiving_file_count"] = e.receivingFileCount
+        m["unread_file_count"] = e.unreadFileCount
         return m
     }
 
@@ -502,6 +511,8 @@ class BoxCommandClient {
             "peer_relay" to (p.peerRelay ?: ""),
             "derp_region_code" to (p.derpRegionCode ?: ""),
             "last_handshake" to p.lastHandshake,
+            // §707 — пир принимает файлы Taildrop (своё устройство, право есть).
+            "can_receive_files" to p.canReceiveFiles,
         )
     }
 
@@ -518,6 +529,216 @@ class BoxCommandClient {
         val client = ensurePingClient() ?: return "no command client"
         return runCatching { client.tailscaleLogout(tag); null }
             .getOrElse { Log.w(TAG, "tailscaleLogout failed"); it.message ?: "failed" }
+    }
+
+    /// §706 (ядро SPEC 149, lx.30) — вход узла с новым auth-ключом без
+    /// перезапуска VPN. Блокирующий gRPC — звать с `Dispatchers.IO`. No-throw:
+    /// `null` = ядро приняло вызов (отказ ключа виден позже в `backendState`),
+    /// иначе `{"error": <код>, "message": <текст>}` с кодами как у
+    /// [setEndpointEnabled]. Ключ в лог не пишется.
+    fun tailscaleLogin(tag: String, authKey: String): Map<String, String>? {
+        val client = ensurePingClient() ?: run {
+            Log.w(TAG, "tailscaleLogin: no command client (paused/down)")
+            return mapOf("error" to "error", "message" to "no command client")
+        }
+        return runCatching { client.tailscaleLogin(tag, authKey); null }
+            .getOrElse {
+                val msg = it.message ?: it.toString()
+                Log.w(TAG, "tailscaleLogin($tag) failed: $msg")
+                mapOf("error" to endpointToggleErrorCode(msg), "message" to msg)
+            }
+    }
+
+    // ═══════════════════════ §707 Taildrop ═══════════════════════
+    // Входящие узла — подписка `SubscribeTaildropInbox` на ОТДЕЛЬНОМ клиенте,
+    // пока открыта вкладка Network (одна на всё приложение: новая снимает
+    // прежнюю). Снапшот входящих — в `ccTaildropInboxSink`. Имена файлов и
+    // устройств в журнал не пишутся.
+
+    private val taildropInboxClient = AtomicReference<CommandClient?>(null)
+    private val taildropInboxSub = AtomicReference<TaildropInboxSubscription?>(null)
+    private val taildropInboxGen = AtomicInteger(0)
+    private val taildropInboxEmitter = SnapshotEmitter { BoxVpnService.ccTaildropInboxSink }
+
+    /// Новый подключённый клиент без подписок — под поток одной передачи
+    /// (отправка, выгрузка файла), чтобы его закрытие не задевало другие.
+    /// Блокирующий connect — звать не с main.
+    fun newCallClient(): CommandClient? = runCatching {
+        CommandClient(PingHandler(), CommandClientOptions()).also { it.connect() }
+    }.getOrElse { Log.w(TAG, "newCallClient failed: ${it.message}"); null }
+
+    fun startTaildropInbox(tag: String) {
+        stopTaildropInbox()
+        val gen = taildropInboxGen.incrementAndGet()
+        runCatching {
+            val client = CommandClient(PingHandler(), CommandClientOptions())
+            client.connect()
+            taildropInboxClient.getAndSet(client)?.runCatching { disconnect() }
+            val sub = client.subscribeTaildropInbox(tag, TaildropInboxCallback(gen, tag))
+            taildropInboxSub.getAndSet(sub)?.runCatching { close() }
+        }.onFailure { Log.w(TAG, "startTaildropInbox failed (gen=$gen): ${it.javaClass.simpleName}") }
+    }
+
+    fun stopTaildropInbox() {
+        taildropInboxGen.incrementAndGet()
+        taildropInboxSub.getAndSet(null)?.runCatching { close() }
+        disconnectClient(taildropInboxClient, "stopTaildropInbox")
+    }
+
+    /// Колбэки из Go-потока: исключения наружу не выходят (JNI abort).
+    private inner class TaildropInboxCallback(
+        private val gen: Int,
+        private val tag: String,
+    ) : TaildropInboxHandler {
+        override fun onInboxUpdate(inbox: TaildropInbox?) {
+            runCatching {
+                if (gen != taildropInboxGen.get() || inbox == null) return@runCatching
+                taildropInboxEmitter.offer(taildropInboxMap(inbox, tag))
+            }.onFailure { Log.w(TAG, "taildrop onInboxUpdate failed: ${it.javaClass.simpleName}") }
+        }
+
+        override fun onError(message: String?) {
+            runCatching { Log.w(TAG, "taildrop inbox stream error (gen=$gen)") }
+        }
+    }
+
+    private fun taildropInboxMap(inbox: TaildropInbox, tag: String): Map<String, Any> {
+        val files = ArrayList<Map<String, Any>>()
+        val fi = inbox.files()
+        while (fi != null && fi.hasNext()) {
+            val f = fi.next() ?: continue
+            files.add(mapOf(
+                "name" to (f.name ?: ""),
+                "size" to f.size,
+                "sender_id" to (f.senderID ?: ""),
+                "sender_name" to (f.senderName ?: ""),
+                "modified_at" to f.modifiedAt,
+            ))
+        }
+        val receiving = ArrayList<Map<String, Any>>()
+        val ri = inbox.receiving()
+        while (ri != null && ri.hasNext()) {
+            val f = ri.next() ?: continue
+            receiving.add(mapOf(
+                "name" to (f.name ?: ""),
+                "size" to f.size,
+                "received_bytes" to f.receivedBytes,
+                "sender_id" to (f.senderID ?: ""),
+                "sender_name" to (f.senderName ?: ""),
+            ))
+        }
+        return mapOf(
+            "tag" to (inbox.endpointTag?.takeIf { it.isNotEmpty() } ?: tag),
+            "files" to files,
+            "receiving" to receiving,
+        )
+    }
+
+    /// §707 итер. 4 — разовый снимок входящих узла [tag]: имя файла →
+    /// (senderID, senderName). Нужен разбору служебных файлов: уведомление
+    /// ядра отправителя не несёт. Блокирует до [timeoutMs]; `null` — клиента
+    /// нет или ядро не ответило. Имена в журнал не пишутся.
+    fun taildropInboxSnapshot(tag: String, timeoutMs: Long): Map<String, Pair<String, String>>? {
+        val inbox = taildropInboxOnce(tag, timeoutMs) ?: return null
+        val m = HashMap<String, Pair<String, String>>()
+        @Suppress("UNCHECKED_CAST")
+        for (f in inbox["files"] as List<Map<String, Any>>) {
+            val name = f["name"] as? String ?: continue
+            m[name] = (f["sender_id"] as? String ?: "") to (f["sender_name"] as? String ?: "")
+        }
+        return m
+    }
+
+    /// §707 итер. 5 — разовый снимок входящих узла [tag] той же формы, что
+    /// поток вкладки Network (`taildropInboxMap`): первое обновление
+    /// `SubscribeTaildropInbox` на своём клиенте. Блокирует до [timeoutMs];
+    /// `null` — клиента нет или ядро не ответило.
+    fun taildropInboxOnce(tag: String, timeoutMs: Long): Map<String, Any>? {
+        val client = newCallClient() ?: return null
+        val latch = java.util.concurrent.CountDownLatch(1)
+        val out = AtomicReference<Map<String, Any>?>(null)
+        var sub: TaildropInboxSubscription? = null
+        try {
+            sub = client.subscribeTaildropInbox(tag, object : TaildropInboxHandler {
+                override fun onInboxUpdate(inbox: TaildropInbox?) {
+                    runCatching {
+                        if (inbox == null || latch.count == 0L) return@runCatching
+                        out.set(taildropInboxMap(inbox, tag))
+                        latch.countDown()
+                    }
+                }
+
+                override fun onError(message: String?) {
+                    runCatching { latch.countDown() }
+                }
+            })
+            latch.await(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
+        } catch (t: Exception) {
+            Log.w(TAG, "taildropInboxOnce failed: ${t.javaClass.simpleName}")
+        } finally {
+            sub?.runCatching { close() }
+            client.runCatching { disconnect() }
+        }
+        return out.get()
+    }
+
+    /// Удалить принятый файл. `null` = успех, иначе текст ошибки ядра.
+    fun taildropDelete(tag: String, name: String): String? {
+        val client = ensurePingClient() ?: return "no command client"
+        return runCatching { client.deleteTaildropFile(tag, name); null }
+            .getOrElse { Log.w(TAG, "deleteTaildropFile failed"); it.message ?: "failed" }
+    }
+
+    /// Прервать приём файла. `null` = успех, иначе текст ошибки ядра.
+    fun taildropCancelReceiving(tag: String, senderID: String, name: String): String? {
+        val client = ensurePingClient() ?: return "no command client"
+        return runCatching { client.cancelTaildropReceiving(tag, senderID, name); null }
+            .getOrElse { Log.w(TAG, "cancelTaildropReceiving failed"); it.message ?: "failed" }
+    }
+
+    fun taildropMarkRead(tag: String): String? {
+        val client = ensurePingClient() ?: return "no command client"
+        return runCatching { client.markTaildropInboxRead(tag); null }
+            .getOrElse { Log.w(TAG, "markTaildropInboxRead failed"); it.message ?: "failed" }
+    }
+
+    /// Разовый снимок узлов Tailscale работающего конфига (первое обновление
+    /// подписки `SubscribeTailscaleStatus` на своём клиенте) — экрану
+    /// «Поделиться», у которого нет Flutter. Блокирует до [timeoutMs];
+    /// `null` — клиента нет или ядро не ответило.
+    fun tailscaleSnapshot(timeoutMs: Long): List<Map<String, Any>>? {
+        val client = newCallClient() ?: return null
+        val latch = java.util.concurrent.CountDownLatch(1)
+        val out = AtomicReference<List<Map<String, Any>>?>(null)
+        var sub: TailscaleStatusSubscription? = null
+        try {
+            sub = client.subscribeTailscaleStatus(object : TailscaleStatusHandler {
+                override fun onStatusUpdate(update: TailscaleStatusUpdate?) {
+                    runCatching {
+                        if (update == null || latch.count == 0L) return@runCatching
+                        val list = ArrayList<Map<String, Any>>()
+                        val iter = update.endpoints()
+                        while (iter != null && iter.hasNext()) {
+                            val e = iter.next() ?: continue
+                            list.add(tailscaleEndpointMap(e))
+                        }
+                        out.set(list)
+                        latch.countDown()
+                    }
+                }
+
+                override fun onError(message: String?) {
+                    runCatching { latch.countDown() }
+                }
+            })
+            latch.await(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
+        } catch (t: Exception) {
+            Log.w(TAG, "tailscaleSnapshot failed: ${t.javaClass.simpleName}")
+        } finally {
+            sub?.runCatching { close() }
+            client.runCatching { disconnect() }
+        }
+        return out.get()
     }
 
     // ═══════════════════════ §654 OpenConnect status ═══════════════════════
@@ -1378,6 +1599,8 @@ class BoxCommandClient {
                     "last_handshake_unix" to p.lastHandshakeUnix,
                     "rx_bytes" to p.rxBytes,
                     "tx_bytes" to p.txBytes,
+                    "session_rx_bytes" to p.sessionRxBytes,
+                    "session_tx_bytes" to p.sessionTxBytes,
                 ))
             }
             mapOf(
@@ -1479,6 +1702,9 @@ class BoxCommandClient {
                 snap["uplinkTotal"] = m.getUplinkTotal()
                 snap["downlinkTotal"] = m.getDownlinkTotal()
                 snap["memory"] = m.getMemory()
+                // §705 (ядро lx.29, SPEC 148): память Go-рантайма ядра — то, с чем
+                // сравнивается порог Memory limit. `memory` остаётся RSS процесса.
+                snap["memoryRuntime"] = m.getMemoryRuntime()
                 snap["goroutines"] = m.getGoroutines()
                 snap["connectionsIn"] = m.getConnectionsIn()
                 snap["connectionsOut"] = m.getConnectionsOut()

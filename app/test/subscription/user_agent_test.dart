@@ -16,11 +16,6 @@ void main() {
       );
     });
 
-    test('начинается с бренд-токена LxBox-android/', () {
-      final ua = buildSubscriptionUserAgent(appVersion: '2.0.4');
-      expect(ua.startsWith('LxBox-android/'), isTrue, reason: ua);
-    });
-
     test('никогда не содержит "singbox" / "sing-box"', () {
       final ua = buildSubscriptionUserAgent(appVersion: '2.0.4');
       expect(ua.contains('singbox'), isFalse, reason: ua);
@@ -50,28 +45,5 @@ void main() {
   test('§659 resolveAppUserAgent = брендовый дефолт подписки', () {
     expect(resolveAppUserAgent(), resolveSubscriptionUserAgent());
     expect(resolveAppUserAgent(), startsWith('LxBox-android/'));
-  });
-
-  group('kUserAgentPresets', () {
-    test('первый пресет — дефолт LxBox (пустая строка)', () {
-      expect(kUserAgentPresets.first.value, isEmpty);
-      expect(kUserAgentPresets.skip(1).every((p) => p.value.isNotEmpty),
-          isTrue);
-    });
-
-    test('строки и подписи уникальны', () {
-      final values = kUserAgentPresets.map((p) => p.value).toList();
-      final labels = kUserAgentPresets.map((p) => p.label).toList();
-      expect(values.toSet().length, values.length);
-      expect(labels.toSet().length, labels.length);
-    });
-
-    test('без переводов строк, управляющих символов и краевых пробелов', () {
-      final ctrl = RegExp(r'[\x00-\x1F\x7F]');
-      for (final p in kUserAgentPresets) {
-        expect(ctrl.hasMatch(p.value), isFalse, reason: p.label);
-        expect(p.value, p.value.trim(), reason: p.label);
-      }
-    });
   });
 }

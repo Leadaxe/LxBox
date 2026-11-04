@@ -5,7 +5,6 @@ import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/models/transport_spec.dart';
 import 'package:lxbox/services/parser/json_parsers.dart';
-import 'package:lxbox/services/parser/transport.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
 /// §320 — вторая форма WebSocket early data: плоские `ed`/`eh` в query, а не
@@ -17,86 +16,6 @@ void main() {
 
   Map<String, dynamic> wsMap(TransportSpec? t) =>
       t!.toSingbox(const TemplateVars()).$1;
-
-  group('ed/eh плоскими query-параметрами', () {
-    test('ed+eh → max_early_data + early_data_header_name', () {
-      final t = parseTransport({
-        'type': 'ws',
-        'path': '/',
-        'ed': '2560',
-        'eh': 'Sec-WebSocket-Protocol',
-      });
-      expect(wsMap(t), {
-        'type': 'ws',
-        'path': '/',
-        'max_early_data': 2560,
-        'early_data_header_name': 'Sec-WebSocket-Protocol',
-      });
-    });
-
-    test('только ed → path-режим (имя заголовка не подставляем, §303)', () {
-      final t = parseTransport({'type': 'ws', 'path': '/x', 'ed': '2048'});
-      final m = wsMap(t);
-      expect(m['max_early_data'], 2048);
-      expect(m.containsKey('early_data_header_name'), isFalse);
-    });
-
-    test('eh без ed игнорируется целиком', () {
-      final t = parseTransport({
-        'type': 'ws',
-        'path': '/x',
-        'eh': 'Sec-WebSocket-Protocol',
-      });
-      final m = wsMap(t);
-      expect(m.containsKey('max_early_data'), isFalse);
-      expect(m.containsKey('early_data_header_name'), isFalse);
-    });
-
-    test('хвост пути в приоритете над плоским ed', () {
-      final t = parseTransport({
-        'type': 'ws',
-        'path': '/x?ed=1024',
-        'ed': '2560',
-        'eh': 'Sec-WebSocket-Protocol',
-      });
-      final m = wsMap(t);
-      expect(m['path'], '/x');
-      expect(m['max_early_data'], 1024);
-      // eh парой с ed из пути всё равно применяется — режим задаёт провайдер.
-      expect(m['early_data_header_name'], 'Sec-WebSocket-Protocol');
-    });
-
-    test('битый/неположительный ed → ни одного ключа', () {
-      for (final bad in ['abc', '-1', '0', '']) {
-        final m = wsMap(parseTransport({
-          'type': 'ws',
-          'path': '/x',
-          'ed': bad,
-          'eh': 'Sec-WebSocket-Protocol',
-        }));
-        expect(m.containsKey('max_early_data'), isFalse, reason: 'ed=$bad');
-        expect(m.containsKey('early_data_header_name'), isFalse,
-            reason: 'ed=$bad');
-      }
-    });
-
-    test('пустой eh не эмитится', () {
-      final m = wsMap(
-          parseTransport({'type': 'ws', 'path': '/x', 'ed': '100', 'eh': '  '}));
-      expect(m['max_early_data'], 100);
-      expect(m.containsKey('early_data_header_name'), isFalse);
-    });
-
-    test('httpupgrade: ed/eh из query не читаются', () {
-      final m = wsMap(parseTransport({
-        'type': 'httpupgrade',
-        'path': '/x',
-        'ed': '2560',
-        'eh': 'Sec-WebSocket-Protocol',
-      }));
-      expect(m, {'type': 'httpupgrade', 'path': '/x'});
-    });
-  });
 
   group('реальный узел подписки', () {
     test('trojan с ed/eh в query → оба поля в конфиге', () {

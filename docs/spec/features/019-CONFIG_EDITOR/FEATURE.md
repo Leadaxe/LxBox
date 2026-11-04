@@ -94,6 +94,13 @@ The feature protects three principles:
   **Witness:** manual check (disabled rule → the View tab is not empty); the
   build skips disabled rules — unit "a disabled json rule is skipped
   (skipDisabled)". **Mutation:** an empty preview for a disabled rule.
+- **P12. Mixins survive rebuilds.** The Mixins tab next to Config lists
+  stored edits of the built config (target path, verb, JSON value), applied
+  at the end of the build top to bottom; a failing mixin is a fatal build
+  error with a `⚠` line under it. Details — task
+  [704](../../tasks/704-config-mixins.md). **Witness:** widget tests
+  `config_mixins_tab_test.dart`, `mixin_edit_screen_test.dart`.
+  **Mutation:** a disabled mixin lands in the config.
 
 ## Controlled parameters
 
@@ -155,6 +162,7 @@ any UI action → [pinned?] ─ no  → rebuild from settings (edit erased)
 | Final config editor | Shows the saved core config as formatted JSON and lets the user edit, import, export and save it, with a selection menu. | P1–P5, P8, P9 | [config-editor.md](FUNCTIONS/config-editor.md) |
 | Config pinning | Writes a custom config through the Debug API or the editor and pins it so that rebuilds do not overwrite it. | P6, P7 | [config-pin.md](FUNCTIONS/config-pin.md) |
 | Config JSON fragment view | Shows a node's JSON with copying of its detour chain and a preview of how a rule lands in the config. | P10, P11 | [json-fragment-view.md](FUNCTIONS/json-fragment-view.md) |
+| Mixins | Stores edits of the built config (target path, action, JSON value) and applies them as the last build step, so they survive rebuilds; path syntax, actions, examples, errors. | P12 | [mixins.md](FUNCTIONS/mixins.md) |
 
 ## Related features
 

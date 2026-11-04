@@ -96,8 +96,10 @@ The feature keeps four principles:
   **Mutation:** axes joined by OR.
 - **P11. The filter lives for the whole app session.** Switching tabs and
   leaving statistics do not reset it; reset — "Reset all" or a restart.
-  **Witness:** units "the filter survives unmount/remount", "clearAll resets
-  the session filter". **Mutation:** the filter is a field of the screen.
+  **Witness:** units "the state is visible to the "new State" (simulated tab
+  re-creation)" (`profiler_filters_test.dart`), "activeCount counts the axes" —
+  `clearAll` zeroes the count (`profiler_filter_test.dart`). **Mutation:** the
+  filter is a field of the screen.
 - **P12. Aggregates are honest, export is complete.** Events without an owner
   do not enter the by-domain and by-IP summaries; the export contains the
   event list and recomputed summaries. **Witness:** units "serialises the

@@ -27,6 +27,15 @@ class NativePrefsKeys {
   static const autoRedirect = 'auto_redirect';
   static const memoryLimit = 'memory_limit'; // §271 — String (auto/off/МБ строкой)
 
+  /// §707 итер. 9 — кнопки уведомления VPN (Stop / Restart / Send).
+  static const notificationStop = 'notification_stop';
+  static const notificationRestart = 'notification_restart';
+  static const notificationSend = 'notification_send';
+
+  /// §707 итер. 9 — тема приложения (`system` | `light` | `dark`). Только
+  /// JSON и бэкап: в зеркало `boxvpn_boot` не идёт (Kotlin её не читает).
+  static const appThemeMode = 'app_theme_mode';
+
   static const bools = <String>{
     autoStart,
     keepOnExit,
@@ -34,6 +43,9 @@ class NativePrefsKeys {
     coreLogsVerbose,
     allowBypass,
     autoRedirect,
+    notificationStop,
+    notificationRestart,
+    notificationSend,
   };
   static const all = <String>{
     autoStart,
@@ -44,7 +56,23 @@ class NativePrefsKeys {
     allowBypass,
     autoRedirect,
     memoryLimit,
+    notificationStop,
+    notificationRestart,
+    notificationSend,
+    appThemeMode,
   };
+}
+
+/// §707 итер. 9 — допустимые значения [NativePrefsKeys.appThemeMode];
+/// неизвестное (ручная правка, чужой бэкап) читается как `system`.
+class AppThemeModeSetting {
+  static const system = 'system';
+  static const light = 'light';
+  static const dark = 'dark';
+  static const values = <String>{system, light, dark};
+
+  static String normalize(Object? v) =>
+      v is String && values.contains(v) ? v : system;
 }
 
 // Реализации — приватные top-level (как _getVpnMode/_setVpnMode). Публичные
@@ -59,6 +87,10 @@ const Map<String, Object> _nativePrefsDefaults = {
   NativePrefsKeys.allowBypass: false,
   NativePrefsKeys.autoRedirect: false,
   NativePrefsKeys.memoryLimit: MemoryLimitSetting.auto, // §271
+  NativePrefsKeys.notificationStop: true, // §707 итер. 9
+  NativePrefsKeys.notificationRestart: true,
+  NativePrefsKeys.notificationSend: true,
+  NativePrefsKeys.appThemeMode: AppThemeModeSetting.system,
 };
 
 /// Весь снимок секции `native_prefs` (для UI / бэкапа). Пусто → дефолты.
@@ -115,6 +147,23 @@ Future<void> _setNativeMemoryLimit(String wireValue) async {
   await BoxVpnClient().setMemoryLimit(v);
 }
 
+/// §707 итер. 9 — тема приложения из JSON (не зеркалится в native).
+Future<String> _getNativeThemeMode() async {
+  final p = await _getNativePrefs();
+  return AppThemeModeSetting.normalize(p[NativePrefsKeys.appThemeMode]);
+}
+
+/// Записать тему: только JSON (Kotlin её не читает).
+Future<void> _setNativeThemeMode(String value) =>
+    _writeNativeJson(
+        NativePrefsKeys.appThemeMode, AppThemeModeSetting.normalize(value));
+
+/// Ключ темы уже записан в секции (перенос из SharedPreferences не нужен).
+Future<bool> _hasNativeThemeMode() async {
+  final raw = (await _load())['native_prefs'];
+  return raw is Map && raw.containsKey(NativePrefsKeys.appThemeMode);
+}
+
 // ──────────────────── backup-блок (единая сериализация) ────────────────────
 // Единственное место, знающее состав/дефолты/типы блока vpn_settings бэкапа.
 // backup_service И debug-handler делегируют сюда (без дублей). Wire-ключи =
@@ -157,6 +206,9 @@ Future<int> _applyFromBackupMap(
         // §271 — нормализация через MemoryLimitSetting (мусор → auto).
         await _setNativeMemoryLimit(
             MemoryLimitSetting.normalize(data[key]?.toString()));
+      } else if (key == NativePrefsKeys.appThemeMode) {
+        // §707 итер. 9 — мусор → system.
+        await _setNativeThemeMode(AppThemeModeSetting.normalize(data[key]));
       } else {
         await _setNativeBool(key, data[key] == true);
       }
@@ -188,6 +240,9 @@ Future<void> _bootstrapAndSyncNativePrefs() async {
   // §279 — app_language: пере-пуш derived cache на каждом старте (как sync
   // выше — диск-истина перезаливает native-копию).
   await _mirrorAppLanguageToNative(await SettingsStorage.getAppLanguage());
+  // §707 итер. 9 — итоговые теги узлов с полями Taildrop (производное, как
+  // has_tun): до первой сборки за сессию — по префиксу записи.
+  await pushTaildropTags(await SettingsStorage.getServerLists());
 }
 
 /// §279 Phase 6 — применить решение чистой функции [reconcileAppLanguage].
@@ -272,6 +327,15 @@ Future<void> _mirrorBoolToNative(String key, bool value) async {
     case NativePrefsKeys.autoRedirect:
       await vpn.setAutoRedirect(value);
       break;
+    case NativePrefsKeys.notificationStop: // §707 итер. 9
+      await vpn.setNotificationStop(value);
+      break;
+    case NativePrefsKeys.notificationRestart:
+      await vpn.setNotificationRestart(value);
+      break;
+    case NativePrefsKeys.notificationSend:
+      await vpn.setNotificationSend(value);
+      break;
   }
 }
 
@@ -287,6 +351,10 @@ Future<void> _bootstrapFromNative() async {
     NativePrefsKeys.allowBypass: await vpn.getAllowBypass(),
     NativePrefsKeys.autoRedirect: await vpn.getAutoRedirect(),
     NativePrefsKeys.memoryLimit: await vpn.getMemoryLimit(), // §271
+    // §707 итер. 9 — кнопки уведомления; тему переносит main.dart.
+    NativePrefsKeys.notificationStop: await vpn.getNotificationStop(),
+    NativePrefsKeys.notificationRestart: await vpn.getNotificationRestart(),
+    NativePrefsKeys.notificationSend: await vpn.getNotificationSend(),
   };
   final data = await _load();
   data['native_prefs'] = section;
@@ -334,6 +402,12 @@ Future<bool> _nativeGetBool(BoxVpnClient vpn, String key) async {
       return vpn.getAllowBypass();
     case NativePrefsKeys.autoRedirect:
       return vpn.getAutoRedirect();
+    case NativePrefsKeys.notificationStop: // §707 итер. 9
+      return vpn.getNotificationStop();
+    case NativePrefsKeys.notificationRestart:
+      return vpn.getNotificationRestart();
+    case NativePrefsKeys.notificationSend:
+      return vpn.getNotificationSend();
     default:
       return false;
   }

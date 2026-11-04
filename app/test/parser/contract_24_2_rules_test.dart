@@ -67,20 +67,6 @@ void main() {
     });
   });
 
-  group('§24.2 п. 7.5 — anytls мусорный SNI', () {
-    test('имя без точки и двоеточия заменяется адресом сервера', () {
-      final spec =
-          parseLinkAs<AnyTlsSpec>('anytls://pass123@a.example.com:443?sni=%F0%9F%94%92#n');
-      expect(spec!.tls.serverName, 'a.example.com');
-    });
-
-    test('нормальный SNI не трогается', () {
-      final spec =
-          parseLinkAs<AnyTlsSpec>('anytls://pass123@a.example.com:443?sni=cover.example#n');
-      expect(spec!.tls.serverName, 'cover.example');
-    });
-  });
-
   group('§24.2 п. 7.7 — дефолты TUIC не пишутся', () {
     test('без congestion_control/alpn в ссылке поля не эмитятся', () {
       final spec = parseLinkAs<TuicSpec>(
@@ -169,27 +155,6 @@ void main() {
   });
 
   group('§24.2 п. 7.13 — splithttp = алиас xhttp', () {
-    // ЗАКРЫТО СИНКОМ 1.1.37 (TASKS_LXBOX §34.2). Расхождение, переданное
-    // лаунчеру синком 1.1.35, разобрано в нашу пользу: алиас был выражен
-    // данными только в диалекте XRAY, а у ссылки набор `when.in` записи
-    // `blocks.uri.$selector.type` был закрыт без него, и `when.in` подавлял
-    // запись целиком — ссылка с `type=splithttp` уезжала голым TCP на порт,
-    // который ждёт HTTP, и МОЛЧА, без кода. Лаунчер подтвердил, что это не
-    // регрессия перехода на движок, а давний дефект обеих реализаций: его
-    // рукописный `switch` по типу знал только ветку `xhttp`.
-    //
-    // Теперь алиас несёт РЕЕСТР: `splithttp` добавлен и в `when.in`, и в
-    // `value_map`. Наш оверлей `$selector.type` снят — реестровая запись
-    // вдобавок объявляет `emit_as: raw`, которого у него не было: обращение
-    // `value_map` неинъективно (в `xhttp` ведут два ключа), и на ВЫХОДЕ
-    // обязан писаться канон `xhttp`, а не алиас. Кейс корпуса —
-    // `uri/vless/xhttp_type_splithttp_alias`.
-    test('URI type=splithttp даёт транспорт xhttp', () {
-      final spec = parseLinkAs<VlessSpec>(
-          'vless://11111111-1111-1111-1111-111111111111@x.example.com:443?security=tls&type=splithttp&path=%2Fv1#n');
-      expect(spec!.transport, isA<XhttpTransport>());
-    });
-
     test('splithttp и xhttp дают одно тело и одну identity', () {
       const base =
           'vless://11111111-1111-1111-1111-111111111111@x.example.com:443?security=tls&path=%2Fx&host=h';

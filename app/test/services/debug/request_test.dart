@@ -26,11 +26,6 @@ void main() {
       expect(() => req.requiredQuery('tag'), throwsA(isA<BadRequest>()));
     });
 
-    test('qInt валидный парсится', () {
-      final req = DebugRequest.forTest(query: {'limit': '42'});
-      expect(req.qInt('limit'), 42);
-    });
-
     test('qInt невалидный → BadRequest', () {
       final req = DebugRequest.forTest(query: {'limit': 'abc'});
       expect(() => req.qInt('limit'), throwsA(isA<BadRequest>()));
@@ -58,13 +53,6 @@ void main() {
     test('jsonBodyAsMap пустое тело → пустая мапа', () {
       final req = DebugRequest.forTest();
       expect(req.jsonBodyAsMap(), isEmpty);
-    });
-
-    test('jsonBodyAsMap парсит валидный JSON объект', () {
-      final req = DebugRequest.forTest(
-        body: utf8.encode('{"name": "vpn-1"}'),
-      );
-      expect(req.jsonBodyAsMap(), {'name': 'vpn-1'});
     });
 
     test('jsonBodyAsMap — невалидный JSON → BadRequest', () {

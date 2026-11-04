@@ -158,7 +158,7 @@ class ServiceNotification(private val service: Service) {
 
     /// §182/§279 — builder реконструируется ЦЕЛИКОМ на каждый show():
     /// `addAction` НЕ идемпотентен (на переиспользуемом builder'е кнопки
-    /// Stop/Reconnect стекались бы на каждый апдейт), а лейблы обязаны
+    /// стекались бы на каждый апдейт), а лейблы обязаны
     /// перечитываться из ресурсов на активной локали в момент рендера
     /// (§279: relabel при смене языка = обычный show()-путь через
     /// ACTION_UPDATE_NOTIFICATION). show() зовётся редко (connect / смена
@@ -184,20 +184,37 @@ class ServiceNotification(private val service: Service) {
 
         if (pendingIntent != null) builder.setContentIntent(pendingIntent)
 
-        // §182 — кнопки Stop / Reconnect прямо в шторке (фидбэк #180/#261).
+        // §182 — кнопка Stop прямо в шторке (фидбэк #180/#261).
         // icon=0: на Android 7+ action-иконки в развёрнутом уведомлении
         // compat-стиль скрывает, текст-лейбла достаточно.
-        builder
-            .addAction(
+        // §707 итер. 7 — «📋 Send» пока есть узел Tailscale с Allow Taildrop,
+        // открывает окно поверх текущего приложения. Значки кнопок система
+        // не показывает, поэтому эмодзи — в подписи.
+        // §707 итер. 8 — какие из них показывать, решает App Settings.
+        if (NotificationButtons.enabled(service, NotificationButtons.STOP)) {
+            builder.addAction(
                 0,
                 L10n.str(service, R.string.notification_action_stop),
                 broadcastPI(BoxVpnService.ACTION_STOP, 1),
             )
-            .addAction(
+        }
+        if (NotificationButtons.enabled(service, NotificationButtons.RESTART)) {
+            builder.addAction(
                 0,
                 L10n.str(service, R.string.notification_action_reconnect),
                 broadcastPI(BoxVpnService.ACTION_RECONNECT, 2),
             )
+        }
+        if (TaildropClip.available && NotificationButtons.enabled(service, NotificationButtons.SEND)) {
+            builder.addAction(
+                0,
+                L10n.str(service, R.string.notification_action_send_clipboard),
+                PendingIntent.getActivity(
+                    service, 3, TaildropClipActivity.intent(service),
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                ),
+            )
+        }
         return builder.build()
     }
 

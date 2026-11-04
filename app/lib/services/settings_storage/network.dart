@@ -1,6 +1,6 @@
 part of '../settings_storage.dart';
 
-// Route final / idle-suspend / passive check / DNS servers+rules (репозиторий
+// Route final / passive check / DNS servers+rules (репозиторий
 // моделей DNS, §439) / ping-options для [SettingsStorage].
 //
 // Вынесено `part`'ом — та же библиотека, тот же доступ к `_load`/`_save`/
@@ -18,99 +18,6 @@ Future<String> _getRouteFinal() async {
 Future<void> _saveRouteFinal(String outbound, {bool flush = true}) async {
   final data = await _load();
   data['route_final'] = outbound;
-  SettingsStorage._cache = data;
-  SettingsStorage.markConfigDirty(); // §113
-  if (flush) await _save();
-}
-
-// ---------------------------------------------------------------------------
-// §215 — idle-suspend threshold (lx.wg.idle_suspend, kernel SPEC 020)
-//
-// Duration-строка ("30s", "5m"). Пусто = feature off (поле не попадёт в
-// route, idle-тик ядра не запустится). Config-significant → markConfigDirty.
-// Дефолт (нет сохранённого значения) = "30s": включено по умолчанию.
-// ---------------------------------------------------------------------------
-
-Future<String> _getIdleSuspend() async {
-  final data = await _load();
-  return (data['route_idle_suspend'] as String?) ?? '30s';
-}
-
-Future<void> _saveIdleSuspend(String threshold, {bool flush = true}) async {
-  final data = await _load();
-  data['route_idle_suspend'] = threshold;
-  SettingsStorage._cache = data;
-  SettingsStorage.markConfigDirty(); // §113
-  if (flush) await _save();
-}
-
-// ---------------------------------------------------------------------------
-// §272 — reachable idle-suspend window (lx.wg.idle_suspend_reachable,
-// kernel SPEC 020 rev. 2026-07-15)
-//
-// Второе, ДЛИННОЕ окно простоя для ДОСТИЖИМЫХ эндпоинтов (члены пула,
-// выбранный узел, final): после него они тоже гасятся; пробуждение — лениво
-// первым дайлом (+1 RTT). Duration-строка. Пусто = выключено (достижимые не
-// засыпают — поведение до §272). Дефолт "5m" (решение владельца, 2026-07-15):
-// агрессивная экономия; цена — при значении < idle_timeout каналов возможны
-// 1-2 probe-флапа в хвосте засыпания (пробы ещё живы, когда туннель уже спит)
-// — не поломка, см. docs-lx/lx-energy.ru.md §8 ядра.
-// Ядро требует idle_suspend включённым и reachable >= idle_suspend —
-// генератор эмитит поле только при непустом базовом пороге.
-// ---------------------------------------------------------------------------
-
-Future<String> _getIdleSuspendReachable() async {
-  final data = await _load();
-  return (data['route_idle_suspend_reachable'] as String?) ?? '5m';
-}
-
-Future<void> _saveIdleSuspendReachable(String threshold,
-    {bool flush = true}) async {
-  final data = await _load();
-  data['route_idle_suspend_reachable'] = threshold;
-  SettingsStorage._cache = data;
-  SettingsStorage.markConfigDirty(); // §113
-  if (flush) await _save();
-}
-
-// ---------------------------------------------------------------------------
-// §542 — WG/AWG lazy build + build budget (lx.wg.lazy_build / build_max,
-// kernel SPEC 097)
-//
-// `wg_lazy_build` (bool, дефолт true): эндпоинт собирается при первом дайле.
-// false → в конфиг не пишутся ни lazy_build, ни build_max.
-//
-// Сколько WG/AWG эндпоинтов ядро держит собранными одновременно; сверх лимита
-// самый давний разбирается и пересобирается по требованию. `0` = без потолка.
-// Дефолт 5 (значение бывшей константы §536). Пишется в конфиг только вместе
-// с idle_suspend (ядро требует его для lazy_build/build_max).
-// Config-significant → markConfigDirty.
-// ---------------------------------------------------------------------------
-
-const int kWgBuildMaxDefault = 5;
-
-Future<int> _getWgBuildMax() async {
-  final data = await _load();
-  final v = data['wg_build_max'];
-  return (v is int && v >= 0) ? v : kWgBuildMaxDefault;
-}
-
-Future<void> _saveWgBuildMax(int value, {bool flush = true}) async {
-  final data = await _load();
-  data['wg_build_max'] = value;
-  SettingsStorage._cache = data;
-  SettingsStorage.markConfigDirty(); // §113
-  if (flush) await _save();
-}
-
-Future<bool> _getWgLazyBuild() async {
-  final data = await _load();
-  return (data['wg_lazy_build'] as bool?) ?? true;
-}
-
-Future<void> _saveWgLazyBuild(bool enabled, {bool flush = true}) async {
-  final data = await _load();
-  data['wg_lazy_build'] = enabled;
   SettingsStorage._cache = data;
   SettingsStorage.markConfigDirty(); // §113
   if (flush) await _save();
@@ -350,6 +257,29 @@ Future<void> _savePingOptions(Map<String, dynamic> options) async {
 Future<void> _setGlobalPingUrl(String url) async {
   final opts = await SettingsStorage.getPingOptions();
   opts['url'] = url;
+  await SettingsStorage.savePingOptions(opts);
+}
+
+/// §713 — параллельность проверки серверов (mass ping и ProbeRunner).
+/// Хранится в `ping_options.concurrency`; мусор или отсутствие → дефолт,
+/// выход за диапазон → граница.
+Future<int> _getPingConcurrency() async {
+  final opts = await SettingsStorage.getPingOptions();
+  final raw = opts['concurrency'];
+  if (raw is! num) return SettingsStorage.pingConcurrencyDefault;
+  return raw.toInt().clamp(
+      SettingsStorage.pingConcurrencyMin, SettingsStorage.pingConcurrencyMax);
+}
+
+/// §713 — `null` снимает ключ (= дефолт); число приводится к диапазону.
+Future<void> _setPingConcurrency(int? value) async {
+  final opts = await SettingsStorage.getPingOptions();
+  if (value == null) {
+    opts.remove('concurrency');
+  } else {
+    opts['concurrency'] = value.clamp(SettingsStorage.pingConcurrencyMin,
+        SettingsStorage.pingConcurrencyMax);
+  }
   await SettingsStorage.savePingOptions(opts);
 }
 

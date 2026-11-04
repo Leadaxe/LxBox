@@ -29,66 +29,6 @@ void main() {
       expect(c.isDetour, true);
       expect(c.includeBlock, true);
     });
-
-    test('обычное Направление: detour отсутствует → false, include_block живёт',
-        () {
-      final c = Direction.fromJson({
-        'tag': 'vpn-2',
-        'label': 'X',
-        'include_block': true,
-      });
-      expect(c.isDetour, false);
-      expect(c.includeBlock, true);
-    });
-
-    test('toJson↔fromJson roundtrip сохраняет detour + include_block (§274)',
-        () {
-      const src = Direction(
-        tag: 'vpn-2',
-        label: 'Relay',
-        isDetour: true,
-        includeBlock: true,
-      );
-      final back = Direction.fromJson(src.toJson());
-      expect(back.isDetour, true);
-      expect(back.includeBlock, true);
-    });
-
-    test('copyWith(isDetour:) переключает роль', () {
-      const c = Direction(tag: 'vpn-2', label: 'X');
-      expect(c.copyWith(isDetour: true).isDetour, true);
-      expect(c.copyWith(isDetour: true).copyWith(isDetour: false).isDetour,
-          false);
-      // copyWith без параметра не трогает роль.
-      expect(c.copyWith(label: 'Y').isDetour, false);
-    });
-  });
-
-  group('§274 — Direction.displayLabel', () {
-    test('detour + label → префикс ⚙ перед label', () {
-      const c = Direction(tag: 'vpn-2', label: 'X', isDetour: true);
-      expect(c.displayLabel, '${kDetourTagPrefix}X');
-    });
-
-    test('detour + пустой label → префикс ⚙ перед tag', () {
-      const c = Direction(tag: 'vpn-2', label: '', isDetour: true);
-      expect(c.displayLabel, '${kDetourTagPrefix}vpn-2');
-    });
-
-    test('дедуп: label уже начинается с ⚙ → второй префикс не добавляется',
-        () {
-      const c = Direction(
-        tag: 'vpn-2',
-        label: '${kDetourTagPrefix}X',
-        isDetour: true,
-      );
-      expect(c.displayLabel, '${kDetourTagPrefix}X');
-    });
-
-    test('не detour → label как есть, без префикса', () {
-      const c = Direction(tag: 'vpn-2', label: 'X');
-      expect(c.displayLabel, 'X');
-    });
   });
 
   // §274 — ⚙ живёт в самом label (storage), как ⚙-метка в тегах

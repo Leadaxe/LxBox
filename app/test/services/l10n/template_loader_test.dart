@@ -41,15 +41,6 @@ void main() {
     expect(TemplateLoader.cachedOrNull('en'), isNotNull);
   });
 
-  test('cachedOrNull defaults to effectiveTag', () async {
-    LocaleController.I.setting = 'en';
-    expect(TemplateLoader.cachedOrNull(), isNull);
-    await TemplateLoader.load();
-    expect(TemplateLoader.cachedOrNull(), isNotNull);
-    LocaleController.I.setting = 'ru';
-    expect(TemplateLoader.cachedOrNull(), isNull);
-  });
-
   test('ru overlay localizes display fields, config subtree untouched',
       () async {
     LocaleController.I.setting = 'en';

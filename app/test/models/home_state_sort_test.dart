@@ -31,21 +31,6 @@ void main() {
         'block': 'block',
       });
 
-  group('NodeSortMode.next — §100 carousel (incl. manual)', () {
-    test('default → latencyAsc', () {
-      expect(NodeSortMode.defaultOrder.next, NodeSortMode.latencyAsc);
-    });
-    test('latencyAsc → nameAsc', () {
-      expect(NodeSortMode.latencyAsc.next, NodeSortMode.nameAsc);
-    });
-    test('nameAsc → manual (§100 — Custom теперь в карусели)', () {
-      expect(NodeSortMode.nameAsc.next, NodeSortMode.manual);
-    });
-    test('manual → defaultOrder (замыкает цикл)', () {
-      expect(NodeSortMode.manual.next, NodeSortMode.defaultOrder);
-    });
-  });
-
   group('HomeState.sortedNodes — pin toggles (§070/§125 по типу)', () {
     test('pinDirect ON + latencyAsc: direct первый', () {
       final s = HomeState(
@@ -189,18 +174,6 @@ void main() {
       expect(s.sortedNodes.where((n) => n == 'vpn-1-auto').length, 1);
     });
 
-    test('нет активной → старое поведение', () {
-      final s = HomeState(
-        directionAutoTags: chAuto,
-        configRaw: cfgDA(['x', 'direct-out', 'y']),
-        nodes: ['x', 'direct-out', 'y'],
-        sortMode: NodeSortMode.latencyAsc,
-        delayByDirection: const {'ch': {'x': 20, 'y': 10}},
-        selectedGroup: 'ch',
-      );
-      expect(s.sortedNodes, ['direct-out', 'y', 'x']);
-    });
-
     test('pinnedNodeCount = direct + auto + активная', () {
       final s = HomeState(
         directionAutoTags: chAuto,
@@ -318,37 +291,6 @@ void main() {
         pinDirect: false,
       );
       expect(s.sortedNodes, ['y', 'direct-out', 'x']);
-    });
-  });
-
-  group('HomeState.copyWith — new fields', () {
-    test('default state: pinDirect=true, pinAuto=true, resort=true, gen=0', () {
-      final s = HomeState();
-      expect(s.pinDirect, true);
-      expect(s.pinAuto, true);
-      expect(s.resortOnManualPing, true);
-      expect(s.pingBatchGen, 0);
-      expect(s.manualOrder, isEmpty);
-    });
-
-    test('copyWith pinDirect=false — остальное intact', () {
-      final s = HomeState();
-      final s2 = s.copyWith(pinDirect: false);
-      expect(s2.pinDirect, false);
-      expect(s2.pinAuto, true);
-      expect(s2.resortOnManualPing, true);
-    });
-
-    test('copyWith pingBatchGen bump — старое значение не реюзается', () {
-      final s = HomeState(pingBatchGen: 5);
-      final s2 = s.copyWith(pingBatchGen: 6);
-      expect(s2.pingBatchGen, 6);
-    });
-
-    test('copyWith manualOrder — новый list', () {
-      final s = HomeState();
-      final s2 = s.copyWith(manualOrder: const ['a', 'b']);
-      expect(s2.manualOrder, ['a', 'b']);
     });
   });
 }

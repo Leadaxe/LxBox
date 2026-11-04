@@ -90,6 +90,8 @@ void main() {
       'proxy-http', 'proxy-https', 'proxy+http', 'proxy+https',
       'vpn', 'incy', 'happ',
       'http', 'https', 'chain', 'group', 'tailscale',
+      // §717 — схема deep-link TrustTunnel живёт только в черновике секции.
+      'tt', 'trusttunnel',
     ];
     final literal = RegExp(r"'([^'\\]*)'" '|' r'"([^"\\]*)"');
     final hits = <String>[];

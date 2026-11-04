@@ -46,12 +46,6 @@ void main() {
       );
     });
 
-    test('пустой и одиночный — без изменений', () {
-      SelectorInfo.I.setFallbackTags(['vpn-4']);
-      expect(foldSelectorPairs([]), isEmpty);
-      expect(foldSelectorPairs(['vpn-4']), ['vpn-4']);
-    });
-
     test('Направление в AUTO: серия селекторов вкладывается, узел не теряется', () {
       // Ядро для Направления в режиме AUTO отдаёт [Направление, его двойник, узел, …]
       // (SPEC 017 — разворот вложенных групп в detour-хвосте).

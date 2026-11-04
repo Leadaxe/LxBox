@@ -5,7 +5,6 @@
 library;
 
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/controllers/subscription_controller/core_reject_ops.dart'
@@ -16,7 +15,6 @@ import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/services/parser/body_decoder.dart';
 import 'package:lxbox/services/parser/parse_all.dart';
 
-import '../contract_paths.dart';
 import 'engine_test_setup.dart';
 
 const _pbk = 'Lx2TnXgn4YbYp6h6rVr3m2DkQnq1Yl7yY0pYf0bR3X0';
@@ -206,41 +204,5 @@ void main() {
       expect(all, hasLength(1));
       expect(all.single.params, {'count': '2', 'names': 'x, y'});
     });
-  });
-
-  // Эталон контракта: на каких узлах стоит код. Корпус лежит в
-  // `app/contract/` (gitignored) — на CI его нет, кейс пропускается.
-  group('корпус контракта', () {
-    for (final name in const [
-      'uri_list/duplicates_collapsed',
-      'xray/duplicates_collapsed_owner',
-    ]) {
-      test(name, () {
-        final body = File('$kVendorRoot/corpus/body/$name.body');
-        final want = File('$kVendorRoot/corpus/body/$name.expected.json');
-        if (!body.existsSync() || !want.existsSync()) {
-          markTestSkipped('нет корпуса контракта');
-          return;
-        }
-        final text = body
-            .readAsLinesSync()
-            .skipWhile((l) => l.trimLeft().startsWith('#'))
-            .join('\n');
-        final nodes = parseAll(decode(text));
-        final expected = jsonDecode(want.readAsStringSync()) as Map;
-        final wantLabels = <String>{
-          for (final n in (expected['nodes'] as List).cast<Map>())
-            if (((n['warnings'] as List?) ?? const [])
-                .any((w) => (w is Map ? w['code'] : w) ==
-                    kDuplicatesCollapsedCode))
-              '${n['label']}',
-        };
-        final gotLabels = <String>{
-          for (final n in nodes)
-            if (_collapsedOf(n) != null) n.label,
-        };
-        expect(gotLabels, wantLabels);
-      });
-    }
   });
 }

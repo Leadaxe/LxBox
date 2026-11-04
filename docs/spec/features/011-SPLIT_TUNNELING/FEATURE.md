@@ -35,8 +35,8 @@ The feature protects two principles:
 ## Promises
 
 - **P1. Off does not touch the tunnel.** In Off mode nothing is written to the
-  tunnel input, even if the list is not empty. **Witness**: units "mode=off →
-  no changes", "mode=off + non-empty packages → no changes (mode wins)".
+  tunnel input, even if the list is not empty. **Witness**: unit
+  "mode=off + non-empty packages → no changes (mode wins)".
   **Mutation**: writing the list without checking the mode.
 - **P2. The mode unambiguously sets the core field.** Allow-list →
   `include_package` = the list; Deny-list → `exclude_package` = the list; the

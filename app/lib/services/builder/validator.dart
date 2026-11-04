@@ -129,7 +129,8 @@ ValidationResult validateConfig(Map<String, dynamic> config) {
   }
 
   // §312 — DNS-группы (kernel SPEC 033): пустая после эмиссионного фильтра /
-  // недопустимый тип члена (fakeip/hosts) / циклы групп. Всё зеркалит fatal'ы
+  // недопустимый тип члена (fakeip/hosts) / циклы групп / §699 правила ключа
+  // `hosts` (BadDnsGroupHosts). Всё зеркалит fatal'ы
   // ядра — падаем ДО старта (§254-принцип). Dangling-члены здесь НЕ ловим:
   // билдер их уже выкинул с warning'ом (drop-семантика §312 №3).
   final dnsServerList = (dns?['servers'] as List<dynamic>? ?? const [])
@@ -172,6 +173,32 @@ ValidationResult validateConfig(Map<String, dynamic> config) {
       final mt = dnsTypeByTag[m];
       if (mt == 'fakeip' || mt == 'hosts') {
         issues.add(BadDnsGroupMember(tag, m, mt!));
+      }
+    }
+    // §699 — ключ `hosts` (ядро SPEC 143 §2.2 п. 7), порядок проверок ядра.
+    // Listable ядра: строка или список строк.
+    final rawHosts = s['hosts'];
+    final hostsTags = switch (rawHosts) {
+      final String h when h.isNotEmpty => [h],
+      final List<dynamic> l => l.whereType<String>(),
+      _ => const <String>[],
+    };
+    final seenHosts = <String>{};
+    for (final h in hostsTags) {
+      final problem = h == tag
+          ? DnsGroupHostsProblem.itself
+          : members.contains(h)
+              ? DnsGroupHostsProblem.alsoMember
+              : !seenHosts.add(h)
+                  ? DnsGroupHostsProblem.duplicate
+                  : !dnsTypeByTag.containsKey(h)
+                      ? DnsGroupHostsProblem.notFound
+                      : dnsTypeByTag[h] != 'hosts'
+                          ? DnsGroupHostsProblem.notHosts
+                          : null;
+      if (problem != null) {
+        issues.add(BadDnsGroupHosts(tag, h, problem,
+            problem == DnsGroupHostsProblem.notHosts ? dnsTypeByTag[h]! : ''));
       }
     }
     // Рёбра цикл-графа: только члены-ГРУППЫ (лист цикл не образует).

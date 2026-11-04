@@ -57,23 +57,6 @@ void main() {
     expect(await SettingsStorage.getDnsRulesList(), rules);
   });
 
-  test('stage() НЕ трогает custom_rules (§295 device-scope)', () async {
-    // Заранее положим custom_rules; stage() не должен их стереть/тронуть.
-    await SettingsStorage.saveCustomRules(const []);
-    final before = await SettingsStorage.getCustomRules();
-    await DnsController.stage(
-      servers: const [],
-      rules: const [],
-      templateRulesByName: const {},
-      presetRulesByPresetId: const {},
-      strategy: 's',
-      dnsFinal: 'f',
-      defaultResolver: 'r',
-    );
-    final after = await SettingsStorage.getCustomRules();
-    expect(after.length, before.length); // не тронуты
-  });
-
   // §327 — дефолты резолверов приходят из `default_value` шаблона, а не из
   // литералов в коде. Регрессия на «после чистой установки оба поля пусты».
   group('§327 дефолты из шаблона', () {

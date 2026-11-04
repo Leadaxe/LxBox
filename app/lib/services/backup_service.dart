@@ -42,14 +42,11 @@ const _topLevelRoutingKeys = {
   // §612 — guard миграции режима автовыбора едет с Направлениями: архив без
   // него (до §612) после восстановления мигрирует заново.
   kUrltestModeMigratedKey,
-  'route_idle_suspend', // §215 — idle-suspend threshold (lx.wg.idle_suspend)
-  'route_idle_suspend_reachable', // §272 — reachable idle window
-  'wg_build_max', // §542 — WG/AWG build budget (lx.wg.build_max)
-  'wg_lazy_build', // §542 — WG/AWG lazy build (lx.wg.lazy_build)
   'enabled_groups', // §125 — DEPRECATED (legacy, читается только миграцией)
   'tun_apps',
   'vpn_mode',
   kDnsKey,
+  kMixinsKey, // §704 — миксины итогового конфига
 };
 
 // §524 — КАТЕГОРИЯ ЭКСПОРТА ЦЕПОЧКИ: Server lists, наравне с одиночными и
@@ -75,11 +72,13 @@ const _topLevelAppKeys = {
   'late_presets_seeded', // §578 — guard разового seed поздних пресетов
   'warp_account',
   'masque_account', // §130 — MASQUE-WARP аккаунт (ECDSA-ключи + endpoint)
-  'interrupt_connections_on_switch',
+  'interrupt_connections_on_switch', // §143 §9 — LEGACY: не пишется; едет в старых бэкапах
   'node_sort_mode',
   'node_manual_order',
   'profiler_retention_sec', // §219/§221 — окно Live-журнала (был в allowlist, не в export)
   'editor_magnifier', // §660 — лупа выделения редактора кода
+  'mixin_target_suggestions', // §704 — подсказки поля Target формы миксина
+  kNodeBudgetKey, // бюджет узлов приложения
 };
 
 /// Sub-keys внутри `vars` относящиеся к Debug API category.
@@ -543,6 +542,14 @@ class BackupService {
         errors.add('Directions migration: $e');
       }
 
+      // §143 §9 — старый архив несёт снятый тумблер interrupt-on-switch:
+      // переносим его в галки Направлений. ПОСЛЕ посева Направлений.
+      try {
+        await SettingsStorage.migrateInterruptOnSwitchIfNeeded();
+      } catch (e) {
+        errors.add('Interrupt-on-switch migration: $e');
+      }
+
       if (merge) {
         // §633 — для Merge счётчик категории — сколько добавлено.
         final m = mergeCounts ?? const <BackupCategory, MergeCount>{};
@@ -664,6 +671,7 @@ class BackupService {
       stats.dnsServers,
       stats.dnsRules,
       stats.tunApps,
+      stats.mixins, // §704
     ]) {
       addTo(BackupCategory.routing, c);
     }

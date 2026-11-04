@@ -35,6 +35,7 @@ import '../../contract/registry.dart';
 import '../../../services/parser/engine/engine_mapper.dart';
 import '../engine/section_loader.dart' show MapperSections;
 import '../json_parsers.dart';
+import '../singbox_config.dart' show unknownTypeNodeFromBody;
 import '../uri_utils.dart';
 import 'uri_mapper.dart';
 
@@ -482,7 +483,8 @@ NodeSpec? _runPipeline(
     label: mapping.label,
     wsEarlyDataHeaderImplicit: mapping.wsEarlyDataHeaderImplicit,
     sanitizedFrom: mapping.bodySource,
-  );
+  ) ??
+      _registryTypeNode(body, source, mapping.label);
   if (node == null) return null;
 
   // §560 — поле, которое модель не держит, дельта тела возвращает узлу
@@ -501,6 +503,27 @@ NodeSpec? _runPipeline(
   node.warnings.addAll(warnings);
   markPipelineParsed(node);
   return node;
+}
+
+/// §717 — откат для типа, который реестр знает, а модель приложения нет
+/// (`parseSingboxEntry` даёт `null`): узел [UnknownTypeSpec] из очищенного
+/// тела. `rawSource` — исходная ссылка, `toUri()` отдаёт её же. Тип вне
+/// реестра и тип с моделью сюда не доходят: у первого секции нет, второй
+/// не вернул бы `null` без причины.
+NodeSpec? _registryTypeNode(
+    Map<String, dynamic> body, String source, String label) {
+  final type = body['type'];
+  if (type is! String || isAppKnownSingboxType(type)) return null;
+  if (!ContractRegistry.I.knowsType(type)) return null;
+  final tag = body['tag'];
+  return unknownTypeNodeFromBody(
+    type: type,
+    body: {...body}..remove('tag'),
+    label: tag is String && tag.isNotEmpty ? tag : label,
+    rawSource: source,
+    server: body['server'],
+    port: body['server_port'],
+  );
 }
 
 /// Узел, разобранный конвейером: его коды реестра уже стоят, по `emit()`

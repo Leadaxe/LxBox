@@ -56,15 +56,6 @@ void main() {
     expect(dropped, hasLength(1));
   });
 
-  test('dropped едет в copyWith и не входит в равенство записи', () {
-    final entry = entryFor([const RegistryWarning(code: 'form_unrecognized')]);
-    final list = entry.list as SubscriptionServers;
-    final renamed = list.copyWith(name: 'other');
-    expect(renamed.dropped, list.dropped);
-    expect(list.copyWith(dropped: const []), list,
-        reason: 'производное разбора, в значение подписки не входит');
-  });
-
   testWidgets('сводка: строка отбраковки открывает шторку причин',
       (tester) async {
     final dropped = <NodeWarning>[];

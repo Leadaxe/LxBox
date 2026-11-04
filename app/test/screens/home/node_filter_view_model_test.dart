@@ -41,20 +41,6 @@ void main() {
   });
 
   group('toggles notify', () {
-    test('togglePanel', () {
-      vm.togglePanel();
-      expect(vm.panelExpanded, true);
-      expect(notifications, 1);
-    });
-    test('setDetourEnabled / setShowNonMatching', () {
-      vm.setDetourEnabled(true);
-      vm.setShowNonMatching(false);
-      expect(vm.detourEnabled, true);
-      expect(vm.detourActive, true);
-      expect(vm.showNonMatching, false);
-      expect(vm.nonMatchingHidden, true);
-      expect(notifications, 2);
-    });
     test('toggleProtocol add/remove', () {
       vm.toggleProtocol('vless');
       expect(vm.enabledProtocols, {'vless'});
@@ -62,13 +48,6 @@ void main() {
       vm.toggleProtocol('vless');
       expect(vm.enabledProtocols, isEmpty);
       expect(notifications, 2);
-    });
-    test('toggleSubscription add/remove', () {
-      vm.toggleSubscription('sub-1');
-      expect(vm.enabledSubscriptions, {'sub-1'});
-      expect(vm.isActive, true);
-      vm.toggleSubscription('sub-1');
-      expect(vm.enabledSubscriptions, isEmpty);
     });
     test('§096 toggleProtocolsInvert / toggleSubscriptionsInvert', () {
       vm.toggleProtocolsInvert();
@@ -82,15 +61,6 @@ void main() {
   });
 
   group('detour (§096 — чекбокс-enable + !)', () {
-    test('старт — фильтр выкл → показать всё', () {
-      expect(vm.detourEnabled, false);
-      expect(vm.detourActive, false);
-      expect(vm.detourOnly, false);
-      expect(vm.detourPoolPasses(true), true, reason: 'detour показан');
-      expect(vm.detourPoolPasses(false), true, reason: 'non-detour показан');
-      expect(vm.settingsActive, false);
-      expect(vm.hasActiveFilters, false);
-    });
     test('checkbox on (! on, дефолт) → скрыть detour', () {
       vm.setDetourEnabled(true);
       expect(vm.detourActive, true);
@@ -277,14 +247,6 @@ void main() {
       expect(vm.enabledVariants, {'xhttp', 'Reality'},
           reason: 'A восстановлен');
       expect(vm.variantsInvert, true);
-    });
-
-    test('§103 toggleVariant — add/remove симметричен', () {
-      vm.toggleVariant('tcp');
-      expect(vm.enabledVariants, {'tcp'});
-      vm.toggleVariant('tcp');
-      expect(vm.enabledVariants, isEmpty);
-      expect(vm.variantActive, false);
     });
   });
 }

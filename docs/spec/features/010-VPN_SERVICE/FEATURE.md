@@ -42,7 +42,7 @@ The feature protects three principles:
 - **P1. Stop is confirmed, not assumed.** "Stop" completes successfully only
   after the actual stop; a slow but successful stop (up to ~9 s on a heavy
   tunnel) is not an error; an unconfirmed one gives "Stop timed out".
-  **Witness**: units "slow but successful stop — no error", "a failure of the
+  **Witness**: unit "a failure of the
   regular stop gives stopTimedOut". **Mutation**: the UI-side wait budget is
   smaller than the service's wait budget.
 - **P2. Forced stop — only after the regular one.** The budget ladder strictly
@@ -145,9 +145,16 @@ The feature protects three principles:
   unit "switchNode to the already active node — no-op". **Mutation**: breaking
   connections before comparing with the active node.
 - **P20. The service notification controls the tunnel without the app.** While
-  the tunnel is up, the shade holds a notification with the active node and
-  Stop / Reconnect buttons that work with the app closed. **Witness**: manual
-  check (§182 device-verified). **Mutation**: Reconnect via the UI process.
+  the tunnel is up, the shade holds a notification with the active node and the
+  Stop and "🔄 Restart" buttons, which work with the app closed; when the running
+  config has a Tailscale node with Allow Taildrop, a third button "📋 Send" opens
+  the clipboard window over the current app
+  ([032-TAILDROP](../032-TAILDROP/FEATURE.md#promises)). App Settings → General →
+  Quick connect chooses which of them are shown; all by default (task 707,
+  iteration 8).
+  **Witness**: manual check (§182 device-verified; buttons and their list —
+  task 707, iteration 8, not verified on a device). **Mutation**: Stop via the
+  UI process.
 
 ## Controlled parameters
 
@@ -162,7 +169,6 @@ The feature protects three principles:
 | Keep VPN on exit | on/off (visible only with a tunnel) | on | immediately |
 | Allow VPN bypass | on/off (visible only with a tunnel) | off | next start |
 | Auto-start on boot | on/off | off | next boot |
-| Interrupt connections on switch | on/off | off | immediately |
 | Tunnel sleep mode | `never` / `lazy` / `always` | `never` | next start |
 | Suspend idle tunnels | Off / 30 s / 2 min / 5 min | 30 s | next start |
 | Suspend active-route tunnels | Off / 5 / 15 / 30 min / 1 h (only with the sleep above) | 5 min | next start |
@@ -181,13 +187,12 @@ Core config keys the feature emits (contract):
 | `lx.wg.lazy_build: true`, `lx.wg.build_max` | together with the sleep threshold, if lazy build is on |
 
 Core calls visible as a contract: `resetNetwork` (network change), `pause` /
-`wake` (tunnel sleep), `rebindStaleEndpoints` (screen on),
-`closeConnection` (breaking on node switch), the memory limit — via
-`oomMemoryLimit` of the core start parameters.
+`wake` (tunnel sleep), `rebindStaleEndpoints` (screen on);
+the memory limit — via `oomMemoryLimit` of the core start parameters.
 
 ## Inputs / Outputs
 
-**Inputs:** user gestures (Start, Stop, core reload, Reconnect and Stop in the
+**Inputs:** user gestures (Start, Stop, core reload, Stop in the
 notification); the built core config; OS events — device boot, swiping the app
 away, process death, change/loss of the default network, screen on/off, deep
 device sleep, takeover of the VPN slot by another app; core replies — start/stop
@@ -226,7 +231,7 @@ gesture / OS event
   disappears for ~3 s.
 - Changes of mode, address, port, authentication, sleep and suspension
   thresholds mark the config "restart needed"; the memory limit and the
-  keep/interrupt toggles do not.
+  keep toggle do not.
 - Rules with Wi-Fi conditions without a granted location permission stop the
   start with an "Open Settings" dialog, not a crash.
 - An empty config, a core that is not ready or a core rejection — a stop with a
@@ -258,7 +263,7 @@ gesture / OS event
 
 | Function | What it does | Promises | File |
 |----------|--------------|----------|------|
-| Tunnel control | Starts, stops, reloads and reconnects the tunnel from the app and the notification, with a deadline for every transitional phase. | P1–P4, P20 | [tunnel-control.md](FUNCTIONS/tunnel-control.md) |
+| Tunnel control | Starts, stops, reloads and reconnects the tunnel from the app (stop and restart also from the notification), with a deadline for every transitional phase. | P1–P4, P20 | [tunnel-control.md](FUNCTIONS/tunnel-control.md) |
 | Operating modes | Chooses the VPN, Proxy or VPN+Proxy mode, configures the local proxy port and its authentication, and decides whether apps may bypass the tunnel. | P5, P6 | [operating-modes.md](FUNCTIONS/operating-modes.md) |
 | Coexisting with another VPN | Asks before taking the system VPN slot from another VPN and recognizes when another VPN has taken it. | P7–P9 | [foreign-vpn.md](FUNCTIONS/foreign-vpn.md) |
 | Autostart and exiting the app | Starts the tunnel after the device boots and defines whether it survives closing the app. | P10, P11 | [autostart-and-exit.md](FUNCTIONS/autostart-and-exit.md) |
@@ -272,7 +277,7 @@ gesture / OS event
 - [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.md) — builds the config the tunnel starts with; auto-applying settings to a live tunnel, the "restart needed" banner and tunnel interface variables (address, MTU, stack, IPv6).
 - [004-ROUTING](../004-ROUTING/FEATURE.md) — rules with Wi-Fi conditions that gate the start on the location permission.
 - [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.md) — the Direction option `interrupt_exist_connections`: the core breaking connections on a group selection change.
-- [007-NODE_LIST](../007-NODE_LIST/FEATURE.md) — node switching in groups, which the optional connection break on switch reacts to.
+- [007-NODE_LIST](../007-NODE_LIST/FEATURE.md) — node switching in groups, on which the core breaks connections by the Direction option.
 - [008-NODE_EDITOR](../008-NODE_EDITOR/FEATURE.md) — disabling/enabling an individual WG/AWG node on the fly.
 - [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.md) — the connecting-phase expiry is the start verdict for the node safety net; passive health check and URLTest intervals.
 - [011-SPLIT_TUNNELING](../011-SPLIT_TUNNELING/FEATURE.md) — which apps go through the tunnel this feature brings up.

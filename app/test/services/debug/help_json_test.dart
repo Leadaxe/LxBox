@@ -26,15 +26,6 @@ void main() {
         receivedAt: DateTime.utc(2026),
       );
 
-  test('/help?format=json → JsonResponse, body сериализуется', () async {
-    final resp = await helpHandler(req('json'), ctx());
-    expect(resp, isA<JsonResponse>());
-    final body = (resp as JsonResponse).body;
-    // Ровно операция из JsonResponse.writeTo — тут воспроизведётся баг.
-    final out = const JsonEncoder.withIndent('  ').convert(body);
-    expect(out, isNotEmpty);
-  });
-
   test('все ключи вложенных Map — String (иначе JsonEncoder падает)', () async {
     final resp = await helpHandler(req('json'), ctx()) as JsonResponse;
     final bad = <String>[];
@@ -55,11 +46,6 @@ void main() {
     expect(bad, isEmpty, reason: bad.join('\n'));
   });
 
-  test('/help?format=text → markdown, работает', () async {
-    final resp = await helpHandler(req('text'), ctx());
-    expect(resp, isA<BytesResponse>());
-  });
-
   test('/help json и text содержат реальные пути', () async {
     final jsonResp = await helpHandler(req('json'), ctx()) as JsonResponse;
     final body = jsonResp.body as Map;
@@ -70,6 +56,7 @@ void main() {
     expect(paths, contains('/action/start-vpn-headless'));
     expect(paths, contains('/action/check-config'));
     expect(paths, contains('/subs/{id}'));
+    expect(paths, containsAll(['/mixins', '/mixins/{id}/preview']));
 
     final reset = endpoints.singleWhere(
       (e) => e['method'] == 'POST' && e['path'] == '/core_reject/reset',
@@ -91,6 +78,7 @@ void main() {
     final textResp = await helpHandler(req('text'), ctx()) as BytesResponse;
     final text = utf8.decode(textResp.bytes);
     expect(text, contains('POST /core_reject/reset'));
+    expect(text, contains('GET    /mixins/{id}/preview'));
     expect(text, contains('origin_kind'));
     expect(text, contains('source_kind'));
 

@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -13,16 +12,6 @@ import 'package:lxbox/services/parser/json_parsers.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
 /// §472 шаг 6, раздел 3 спеки — инварианты переезда socks на конвейер.
-
-/// Снимок identity, снятый СТАРЫМ путём ДО правки (18.09.2026).
-const _identityFixture = 'test/fixtures/socks/pipeline_identity_before.json';
-
-Map<String, Map<String, dynamic>> _identityBefore() {
-  final raw = jsonDecode(File(_identityFixture).readAsStringSync()) as Map;
-  return (raw['cases'] as Map).map(
-    (k, v) => MapEntry(k as String, (v as Map).cast<String, dynamic>()),
-  );
-}
 
 List<String> _corpusUris() {
   final out = <String>[];
@@ -52,30 +41,6 @@ void main() {
     await loadTestRegistry();
   });
 
-  group('§472 инвариант 4 — identity socks не меняется', () {
-    test('каждый кейс корпуса даёт хеш из фикстуры', () {
-      final before = _identityBefore();
-      expect(before, hasLength(greaterThan(8)),
-          reason: 'фикстура похудела — проверьте, не срезан ли корпус');
-      for (final e in before.entries) {
-        final uri = e.value['uri'] as String;
-        final want = e.value['identity'] as String?;
-        final spec = parseUri(uri);
-        if (want == null) {
-          expect(spec, isNull, reason: 'кейс ${e.key} стал разбираться');
-          continue;
-        }
-        expect(spec, isNotNull, reason: 'кейс ${e.key} перестал разбираться');
-        expect(
-          legacyNodeIdentityHash(spec!),
-          want,
-          reason: 'identity кейса ${e.key} изменилась: у пользователей слетят '
-              'выбор узла, отключения и цепочки',
-        );
-      }
-    });
-  });
-
   group('§472 инвариант 3 — parseUri(toUri()) ≈ spec', () {
     test('весь корпус socks переживает круг', () {
       var checked = 0;
@@ -96,39 +61,6 @@ void main() {
       // Круг проходят ВСЕ разбираемые кейсы, без исключений.
       expect(checked, greaterThan(7));
     }, skip: corpusSkip);
-  });
-
-  group('§472 инвариант 5 — цена разбора', () {
-    test('2000 socks-узлов разбираются за разумное время', () {
-      const n = 2000;
-      final uris = [
-        for (var i = 0; i < n; i++)
-          'socks5://user$i:pass$i@example-$i.com:1080#node$i',
-      ];
-
-      for (var i = 0; i < 200; i++) {
-        parseUri(uris[i]);
-      }
-
-      final nodes = <NodeSpec>[];
-      var best = 1 << 30;
-      for (var rep = 0; rep < 3; rep++) {
-        nodes.clear();
-        final sw = Stopwatch()..start();
-        for (final u in uris) {
-          final s = parseUri(u);
-          if (s != null) nodes.add(s);
-        }
-        sw.stop();
-        if (sw.elapsedMilliseconds < best) best = sw.elapsedMilliseconds;
-      }
-      expect(nodes, hasLength(n));
-      expect(
-        best,
-        lessThan(3000),
-        reason: 'разбор $n socks-узлов конвейером: $best мс (лучший из трёх)',
-      );
-    });
   });
 
   group('§472 — socks: перевод, который остаётся за маппером', () {

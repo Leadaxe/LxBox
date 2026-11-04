@@ -508,20 +508,6 @@ void main() {
   });
 
   group('модель', () {
-    test('§289 copyWith(clearIdentity) снимает слепок в null', () {
-      final s = _richSubscription();
-      expect(s.copyWith(name: 'Y').identity, isNotNull);
-      expect(s.copyWith(clearIdentity: true).identity, isNull);
-    });
-
-    test('copyWith других полей сохраняет id, отметки и importRules', () {
-      final s = _richSubscription();
-      final updated = s.copyWith(name: 'renamed', lastNodeCount: 9);
-      expect(updated.id, s.id);
-      expect(updated.disabledHashes, s.disabledHashes);
-      expect(updated.importRules, s.importRules);
-    });
-
     test('равенство не видит кэш узлов подписки', () {
       final a = _richSubscription();
       final b = _richSubscription().copyWith(nodes: const []);

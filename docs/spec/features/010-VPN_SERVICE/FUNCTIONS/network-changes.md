@@ -16,16 +16,12 @@ core drops or rebinds stale connections so apps do not hang on dead sockets.
 Keeps apps from hanging on connections that died together with the old network
 or the old node: on a real network change it resets the core's connections, on
 screen-on it asks the core to rebind stale WireGuard sessions, on a node change
-(optionally) it breaks the connections of the group being switched.
+the core itself breaks the connections of the switched Direction (the Direction
+option `interrupt_exist_connections`); the application closes nothing.
 
 ## Parameters
 
-| Setting | Where | Values | Default |
-|---------|-------|--------|---------|
-| Interrupt connections on switch | VPN settings → System | on/off | off |
-
-Fixed values: quiet before a reset on network change — 1.5 s; budget for
-breaking connections on node change — 5 s.
+No user settings. Fixed value: quiet before a reset on network change — 1.5 s.
 
 ## Inputs / Outputs
 
@@ -33,9 +29,8 @@ breaking connections on node change — 5 s.
 physical one, not our own tunnel); screen on; choosing another node in a
 group.
 **Outputs:** core calls `resetNetwork` (close connections, reset the DNS
-cache, rebind outbounds), `rebindStaleEndpoints`, `closeConnection` for each
-connection of the group; telling the core about the current interface or its
-absence.
+cache, rebind outbounds), `rebindStaleEndpoints`; telling the core about the
+current interface or its absence.
 
 ## Rules and invariants
 
@@ -53,11 +48,12 @@ absence.
 - Screen-on in any sleep mode asks the core to rebind only provably stale
   WG/AWG sessions; the decision and debounce are on the core side, the call
   does not block.
-- Breaking on node change: performed only if the toggle is on and the core
-  accepted the node choice; only live connections whose chain contains the
-  group being switched are broken; errors of individual connections are
-  ignored, overall budget 5 s. Choosing the already active node does nothing
-  and breaks nothing.
+- Breaking on node change: done by the core, not by the application. With the
+  Direction option `interrupt_exist_connections` on (the default), the core
+  closes the connections of that Direction's selector on any selection change:
+  a tap on the main screen, Quick connect, automation, the Debug API. Other
+  groups' connections are not touched. Choosing the already active node does
+  nothing and breaks nothing.
 - A manual network reset exists only in the Debug API: with the tunnel
   connected, no more than once per 3 s.
 
@@ -82,6 +78,6 @@ absence.
 | 4 | [087](../../../tasks/087-network-change-force-reset.md) | ✅ Implemented | Connection reset on a real interface change with debounce |
 | 5 | [119](../../../tasks/119-default-network-not-vpn.md) | Code-complete | The default network is never our own tunnel |
 | 6 | [122](../../../tasks/122-default-network-null-onlost.md) | Won't-fix | Without a network local DNS fails at once, we do not add a wait |
-| 7 | [143-interrupt](../../../tasks/143-interrupt-connections-on-node-switch.md) | Implemented | Optional breaking of the group's connections on node change |
+| 7 | [143-interrupt](../../../tasks/143-interrupt-connections-on-node-switch.md) | Removed 2026-11-01 (§9) | Optional breaking of the group's connections on node change |
 | 8 | [290](../../../tasks/290-automation-node-switch-gaps.md) | — | Choosing the already active node — no break and no reselection |
 | 9 | [340](../../../tasks/340-user-present-rebind-stale-endpoints.md) | v2 (SCREEN_ON) shipped | Screen on → rebind stale WG/AWG |

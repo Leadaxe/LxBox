@@ -96,6 +96,15 @@ String poolBadges(List<String> memberLabels, String badge) {
       .join(', ');
 }
 
+/// §715 — хвост метки пула: значки по [badge], а когда ни один член значка не
+/// дал (узлы без флага в имени, пустой или битый regexp) — имена слотов через
+/// запятую в порядке пула, как в окне View pool. Пустой пул → пусто.
+String poolLabelSuffix(List<String> memberLabels, String badge) {
+  if (memberLabels.isEmpty) return '';
+  final badges = poolBadges(memberLabels, badge);
+  return badges.isNotEmpty ? badges : memberLabels.join(', ');
+}
+
 String? autoGroupLabel(Map<String, dynamic>? raw) {
   if (raw == null || raw['type'] != 'urltest') return null;
   final members = (raw['outbounds'] as List?)?.length ?? 0;

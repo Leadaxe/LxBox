@@ -11,8 +11,8 @@
   "127.0.0.1 — this device only": {
     "value": "127.0.0.1 — только это устройство"
   },
-  "1492 recommended for mobile/WiFi": {
-    "value": "Для мобильной сети и Wi-Fi рекомендуется 1492"
+  "9000 recommended (sing-box default)": {
+    "value": "Рекомендуется 9000 (по умолчанию в sing-box)"
   },
   "2001:4860:4860::8844 · Secondary v6": {
     "value": "2001:4860:4860::8844 · Резервный v6"
@@ -76,9 +76,6 @@
   },
   "Apple": {
     "value": "Apple"
-  },
-  "Applies to UDP only. DoH and DoT are pinned to 77.88.8.88 with SNI safe.dot.dns.yandex.net.": {
-    "value": "Действует только для UDP. DoH и DoT закреплены за 77.88.8.88 с SNI safe.dot.dns.yandex.net."
   },
   "Apply this preset's FakeIP DNS handling. Turn off to disable FakeIP without removing the preset.": {
     "value": "Применять FakeIP-обработку DNS этого пресета. Выключите, чтобы отключить FakeIP, не удаляя пресет."
@@ -704,6 +701,12 @@
   "Send Yandex DoT and DoH through this preset's Outbound, like UDP. Off: they go direct.": {
     "value": "Отправлять DoT и DoH Яндекса через Outbound этого пресета, как UDP. Выключено — напрямую."
   },
+  "The IP sets the Yandex DNS profile: Base, Safe or Family. Off: this server is not used.": {
+    "value": "IP задаёт профиль Яндекс DNS: Базовый, Безопасный или Семейный. «Выключен» — сервер не используется."
+  },
+  "Off": {
+    "value": "Выключен"
+  },
   "IPv4 pool": {
     "value": "Пул IPv4"
   },
@@ -713,8 +716,14 @@
   "Fake IPv4 addresses are taken from this range (CIDR). Change it if the default range is used in your network or excluded from the tunnel. Changing it resets the saved fake addresses.": {
     "value": "Фейковые IPv4-адреса берутся из этого диапазона (CIDR). Поменяйте, если стандартный диапазон занят в вашей сети или исключён из туннеля. Смена сбрасывает сохранённые фейковые адреса."
   },
-  "Fake IPv6 addresses are taken from this range (CIDR). Leave empty to answer AAAA queries with no address. At least one pool must be set.": {
-    "value": "Фейковые IPv6-адреса берутся из этого диапазона (CIDR). Оставьте пустым, чтобы на AAAA-запросы отвечать без адреса. Хотя бы один пул должен быть задан."
+  "Fake IPv6 addresses": {
+    "value": "Фейковые IPv6-адреса"
+  },
+  "Answer AAAA queries with a fake address from the IPv6 pool. Turn off to answer AAAA queries with no address; the IPv4 pool stays in use.": {
+    "value": "Отвечать на AAAA-запросы фейковым адресом из пула IPv6. Выключите, чтобы на AAAA-запросы отвечать без адреса; пул IPv4 продолжает работать."
+  },
+  "Fake IPv6 addresses are taken from this range (CIDR). Used while \"Fake IPv6 addresses\" is on. Changing it resets the saved fake addresses.": {
+    "value": "Фейковые IPv6-адреса берутся из этого диапазона (CIDR). Действует, пока включено «Фейковые IPv6-адреса». Смена сбрасывает сохранённые фейковые адреса."
   },
   "Split default route": {
     "value": "Разделённый маршрут по умолчанию"
@@ -739,5 +748,92 @@
   },
   "fe80::/10 · IPv6 link-local": {
     "value": "fe80::/10 · IPv6 link-local"
+  },
+  "Align MTU to the path": {
+    "value": "Выравнивание MTU по пути"
+  },
+  "Packet size of a node that runs over a tunnel (detour, chain). Clamp sets the size where it is not set and lowers values that do not fit; Fill only sets it where it is not set; Off leaves node values as they are.": {
+    "value": "Размер пакета узла, который идёт поверх туннеля (detour, chain). Clamp ставит размер, где он не задан, и понижает значения, которые не влезают; Fill только ставит, где не задан; Off оставляет значения узлов как есть."
+  },
+  "Clamp (default)": {
+    "value": "Clamp (по умолчанию)"
+  },
+  "Fill": {
+    "value": "Fill"
+  },
+  "WireGuard": {
+    "value": "WireGuard"
+  },
+  "Sleep WireGuard/AmneziaWG tunnels to save battery and memory. Sleeping tunnels wake automatically on first use.": {
+    "value": "Усыплять туннели WireGuard/AmneziaWG, чтобы экономить батарею и память. Спящие туннели просыпаются сами при первом использовании."
+  },
+  "Suspend idle tunnels": {
+    "value": "Усыплять неактивные туннели"
+  },
+  "Put unreachable WireGuard tunnels to sleep after they sit idle, freeing memory and saving battery. They wake instantly on use. Only affects tunnels not on the active route.": {
+    "value": "Усыплять недостижимые туннели WireGuard после простоя, освобождая память и экономя батарею. Просыпаются мгновенно при использовании. Касается только туннелей вне активного маршрута."
+  },
+  "30 seconds": {
+    "value": "30 секунд"
+  },
+  "2 minutes": {
+    "value": "2 минуты"
+  },
+  "5 minutes": {
+    "value": "5 минут"
+  },
+  "Suspend active-route tunnels": {
+    "value": "Усыплять туннели активного маршрута"
+  },
+  "Also put tunnels on the active route (pool members, the selected node) to sleep after a long quiet period — e.g. overnight. The first connection after sleep adds ~1 round trip. Below the directions' idle timeout (30 min by default) a group probe can wake a sleeping tunnel for one handshake — the price of sleeping sooner. Requires \"Suspend idle tunnels\" to be on.": {
+    "value": "Усыплять и туннели на активном маршруте (члены пула, выбранный узел) после долгого простоя — например, ночью. Первое подключение после сна добавляет ~1 круг. Ниже таймаута простоя направлений (по умолчанию 30 мин) проба группы может разбудить спящий туннель на одно рукопожатие — цена более раннего сна. Требует включённого «Усыплять неактивные туннели»."
+  },
+  "15 minutes": {
+    "value": "15 минут"
+  },
+  "30 minutes": {
+    "value": "30 минут"
+  },
+  "1 hour": {
+    "value": "1 час"
+  },
+  "Lazy tunnel build": {
+    "value": "Ленивая сборка туннелей"
+  },
+  "Build a WireGuard tunnel only on first use instead of at start. Saves memory with many nodes; the first connection to a node takes a moment longer.": {
+    "value": "Собирать туннель WireGuard при первом использовании, а не при запуске. Экономит память, когда узлов много; первое подключение к узлу чуть дольше."
+  },
+  "Built tunnels limit": {
+    "value": "Лимит собранных туннелей"
+  },
+  "Keep at most this many WireGuard tunnels built at once; the rest are torn down and rebuilt on demand. Requires \"Lazy tunnel build\".": {
+    "value": "Держать собранными одновременно не больше стольких туннелей WireGuard; остальные разбираются и собираются заново по требованию. Требует «Ленивая сборка туннелей»."
+  },
+  "0 (no limit)": {
+    "value": "0 (без лимита)"
+  },
+  "QUIC": {
+    "value": "QUIC"
+  },
+  "MASQUE (HTTP/3), Hysteria2 and TUIC.": {
+    "value": "MASQUE (HTTP/3), Hysteria2 и TUIC."
+  },
+  "Anti-sniff decoy": {
+    "value": "Обманка от сниффинга"
+  },
+  "MASQUE idle timeout": {
+    "value": "Таймаут простоя MASQUE"
+  },
+  "Close a MASQUE tunnel that carried no traffic for this long; it reconnects on next use. A node's own idle timeout wins.": {
+    "value": "Закрывать туннель MASQUE, по которому столько времени не было трафика; он переподключится при следующем использовании. Собственный таймаут простоя узла сильнее."
+  },
+  "Send one junk byte before the QUIC handshake so a relay that sniffs UDP cannot redirect the connection by its SNI. Through detour: only connections carried by another node; Direct: only this device's own socket; All: both.": {
+    "value": "Отправлять один мусорный байт перед QUIC-рукопожатием, чтобы релей, который сниффит UDP, не перенаправил соединение по SNI. Through detour — только соединения, которые несёт другой узел; Direct — только собственный сокет устройства; All — оба случая."
+  },
+  "Through detour (default)": {
+    "value": "Через detour (по умолчанию)"
+  },
+  "All": {
+    "value": "Все"
   }
 }

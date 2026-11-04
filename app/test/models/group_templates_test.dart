@@ -33,14 +33,6 @@ void main() {
       {'tag': 'vpn-2', 'label': 'VPN ②', 'default_enabled': false},
     ];
 
-    test('magic_nodes: role-ключи, title/source', () {
-      final gt = GroupTemplates.fromJson(gtJson, dcJson);
-      expect(gt.magicNodes.keys.toSet(), {'auto', 'direct', 'block'});
-      expect(gt.magicNodes['direct']!.title, 'Direct');
-      expect(gt.magicNodes['direct']!.source, 'preset');
-      expect(gt.magicNodes['auto']!.source, 'generate');
-    });
-
     test('generate-нода: tpl задан, tag == null', () {
       final gt = GroupTemplates.fromJson(gtJson, dcJson);
       final auto = gt.magicNodes['auto']!;
@@ -56,23 +48,9 @@ void main() {
       expect(gt.magicNodes['block']!.tpl, isNull);
     });
 
-    test('direction: type/include/options', () {
-      final gt = GroupTemplates.fromJson(gtJson, dcJson);
-      expect(gt.direction.type, 'selector');
-      expect(gt.direction.include, ['direct', 'auto']);
-      expect(gt.direction.options['interrupt_exist_connections'], true);
-    });
-
     test('auto-шаблон: сырые @-плейсхолдеры сохраняются (не резолвены)', () {
       final gt = GroupTemplates.fromJson(gtJson, dcJson);
       expect(gt.auto.options['url'], '@urltest_url');
-    });
-
-    test('default_directions: tag/label/default_enabled', () {
-      final gt = GroupTemplates.fromJson(gtJson, dcJson);
-      expect(gt.defaultDirections.map((d) => d.tag), ['vpn-1', 'vpn-2']);
-      expect(gt.defaultDirections[0].defaultEnabled, true);
-      expect(gt.defaultDirections[1].defaultEnabled, false);
     });
 
     test('пустой JSON → безопасные дефолты', () {

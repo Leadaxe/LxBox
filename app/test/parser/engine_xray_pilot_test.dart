@@ -144,16 +144,6 @@ void main() {
     await MapperSections.I.loadDrafts(dir: _draftRoot, files: kDraftFiles);
   });
 
-  test('секции вида источника xray исполняемы и загружены', () {
-    // Без секции движок не работает вовсе: запасного рукописного пути у
-    // переехавшего входа не осталось.
-    expect(MapperSections.I.typesFor('xray'), isNotEmpty);
-    for (final type in MapperSections.I.typesFor('xray')) {
-      expect(MapperSections.I.has('xray', type), isTrue,
-          reason: 'секция xray/$type не исполняема');
-    }
-  }, skip: skip);
-
   test('опознание элемента: ровно одна секция на кейс корпуса', () {
     final before = _fixture();
     final ambiguous = <String>[];

@@ -4,7 +4,7 @@
 > номером — [`143-warp-masquerade-id-ip-ib.md`](143-warp-masquerade-id-ip-ib.md) («§143-warp»).
 > Не перенумеровано намеренно — см. [README §«Известные коллизии»](README.md#известные-коллизии-номеров).
 
-**Статус:** Implemented (§122-gap закрыт 2026-06-27)
+**Статус:** Снята 2026-11-01 — глобальный тумблер удалён, см. [§9](#9-снятие-глобального-тумблера-2026-11-01) (до этого Implemented, §122-gap закрыт 2026-06-27)
 **Дата:** 2026-06-17
 **Тип:** task (bug-fix + новая настройка)
 **Связь:** §087 (resetNetwork на смену интерфейса), §119 (vpn_mode), §123 (activeInGroup), §078 (control-outbounds), §122 (CommandClient-миграция), §174 (chains восстановлены)
@@ -276,3 +276,103 @@ Future<void> switchNode(String nodeTag) async {
 - Вариант обрыва: **точечный DELETE /{id} по chains** (не close-all/resetNetwork),
   чтобы не рвать чужой трафик и DNS-кэш.
 - Управляется **туглом** (английское название), **default OFF**.
+
+---
+
+## 9. Снятие глобального тумблера (2026-11-01)
+
+### 9.1 Повод
+
+Вопрос пользователя в Telegram (paratroop3r, 01.11.2026): в VPN Settings → System
+и в редакторе Направления → Behavior есть галки с одним именем «Interrupt
+connections on switch» — одно ли это, и как они взаимодействуют. Разбор показал,
+что глобальный тумблер этой задачи после исправления ядра дублирует галку
+Направления.
+
+### 9.2 Диагноз §2 был неверен
+
+§2 объяснял жалобу так: `interrupt_exist_connections` по замыслу sing-box рвёт
+только inbound-плечо, а upstream-сокеты к серверу доживают сами. Это прочтение
+документации, не поведение кода. Настоящая причина — дефект sing-box, живший с
+появления interrupt (c320be75a, 2023-09-15, v1.10.0):
+
+- `Selector.SelectOutbound` закрывает соединения из списка своей `interrupt.Group`;
+- список пополнялся только в `Selector.DialContext` / `ListenPacket`;
+- роутер отдаёт трафик селектору через `ConnectionHandler` → `Selector.NewConnection`,
+  а тот передавал соединение дальше выбранному узлу, мимо собственного `DialContext`;
+- итог: при смене узла список пуст, флаг `true` стоит в конфиге, но ничего не рвёт.
+
+### 9.3 Хронология
+
+| Дата | Где | Что |
+|---|---|---|
+| 2026-06-17 | LxBox [`1d75b78bb`](https://github.com/Leadaxe/LxBox/commit/1d75b78bb) | §143: глобальный тумблер, обрыв соединений группы из приложения после `selectOutbound` |
+| 2026-06-27 | LxBox [`0dae5b780`](https://github.com/Leadaxe/LxBox/commit/0dae5b780) | §143 восстановлен после миграции на CommandClient (§122, §174) |
+| 2026-08-13 | ядро [`bbbf186df`](https://github.com/Leadaxe/sing-box-lx/commit/bbbf186df) | SPEC 064 v1: найден корень §9.2, жалоба лаунчера и LxBox; проверено в поле на `lx.25-rc.7` |
+| 2026-08-13 | ядро [`e3ebbbaf9`](https://github.com/Leadaxe/sing-box-lx/commit/e3ebbbaf9) | SPEC 064 v2: обёртка входящего соединения, покрывает вложенные группы |
+| 2026-08-14 | LxBox 2.20.9 | пин ядра `lx.27-rc.1` — исправление у пользователей |
+| 2026-09-08 | sing-box [`515a73e4e`](https://github.com/SagerNet/sing-box/commit/515a73e4e) | апстрим исправил то же самое (подход из [PR #4285](https://github.com/SagerNet/sing-box/pull/4285)) |
+| 2026-09-14 | ядро [`08aecaf6c`](https://github.com/Leadaxe/sing-box-lx/commit/08aecaf6c) | SPEC 084: ABBA-дедлок вложенных селекторов после 064 v2 ([issue #20](https://github.com/Leadaxe/sing-box-lx/issues/20)); в LxBox 2.23.2 |
+| позже | sing-box [`0ed951aa0`](https://github.com/SagerNet/sing-box/commit/0ed951aa0) | апстрим принял тот же фикс дедлока, наш патч снят синком SPEC 109 |
+
+Спеки ядра: [064](https://github.com/Leadaxe/sing-box-lx/blob/lx/SPECS/TASKS/064-SELECTOR_INTERRUPT_DEAD_ON_INBOUND/SPEC.md),
+[084](https://github.com/Leadaxe/sing-box-lx/blob/lx/SPECS/TASKS/084-INTERRUPT_GROUP_ABBA_DEADLOCK/SPEC.md).
+
+### 9.4 Что покрывал тумблер после 2026-08-14
+
+Ядро с SPEC 064 при `interrupt_exist_connections: true` закрывает обе стороны
+соединения селектора при ЛЮБОЙ смене выбора: тап, Quick connect, автоматизация,
+Debug API. Тумблер §143 срабатывал только на `HomeController.switchNode` и
+закрывал соединения, чья `chains` содержит `selectedGroup`. Пересечение:
+
+| Галка Направления | Тумблер §143 | Итог при ручной смене |
+|---|---|---|
+| вкл (дефолт шаблона) | любой | рвёт ядро, тумблер — дубль |
+| выкл | вкл | рвёт приложение, галка Направления перекрыта |
+| выкл | выкл | соединения доживают на старом узле |
+
+Собственной работы у тумблера осталась только вторая строка — перекрыть снятую
+галку Направления. Это путает (вопрос §9.1) и не даёт сделать одно Направление
+мягким, пока тумблер включён.
+
+### 9.5 Решение
+
+Решение владельца 01.11.2026: глобальный тумблер удалить, обрыв соединений —
+только галкой Направления (ядро).
+
+- **Код.** Снять блок обрыва в `HomeController.switchNode` и `_connectionIdsInGroup`,
+  тумблер на VPN Settings → System, `SettingsStorage.get/setInterruptOnSwitch`,
+  Debug API `GET|PUT /settings/interrupt_on_switch` и его строки в `/help`.
+- **Миграция.** Разовый шаг `SettingsStorage.migrateInterruptOnSwitchIfNeeded`
+  в `main()` после посева Направлений и в `BackupService.applyImport` после
+  restore. Признак — наличие ключа `interrupt_connections_on_switch`, отдельного
+  флага нет. При `true` у всех Направлений, где галка снята,
+  `interrupt_exist_connections` ставится в `true` (ручная смена рвёт, как
+  раньше), конфиг помечается dirty. Ключ удаляется при любом значении.
+- **Бэкап.** Ключ остаётся в allowlist импорта и в категории App settings как
+  LEGACY: старый архив восстанавливается без строки «dropped unknown key», его
+  значение уходит в Направления тем же шагом. Экспорт ключ больше не несёт —
+  в живом хранении его нет.
+- **Тесты.** `test/controllers/interrupt_on_switch_test.dart` удалён вместе с
+  поведением; новый `test/services/interrupt_on_switch_migration_test.dart` —
+  три случая миграции (true / false / ключа нет).
+- **Доки.** USER_GUIDE (EN+RU): таблица «три тумблера» → два, ссылки из VPN
+  Settings и раздела бэкапа; STORAGE.md (ключ — LEGACY, миграция);
+  debug-api-reference; фичи 012 (P22) и 026; CHANGELOG Unreleased.
+
+### 9.6 Риски
+
+- Пользователь с тумблером ВКЛ и снятой галкой Направления получает галку
+  включённой — поведение ручной смены сохраняется, но теперь ядро рвёт и при
+  смене из автоматизации/API. Это и есть заявленное поведение галки.
+- Вторая версия SPEC 064 и фикс 084 отдельно на устройстве не гонялись (064 v1
+  проверена в поле 13.08). Тумблер не страховал от их дефекта: ядро обрывает
+  до того, как приложение успело бы что-то закрыть.
+
+### 9.7 Проверка
+
+- CI по коммиту.
+- Эмулятор, сценарий: галка Направления вкл, долгое соединение (загрузка),
+  смена узла на главном экране → соединение закрыто в Connections. Не гонялся
+  при снятии (на устройстве не проверено).
+

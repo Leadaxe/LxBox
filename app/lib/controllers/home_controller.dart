@@ -134,7 +134,24 @@ class HomeController extends ChangeNotifier
   /// чтобы юзер не спамил кнопками при тревоге. См. spec 030 / 031.
   DateTime? _lastReloadTap;
   DateTime? _lastResetNetworkTap;
-  static const _recoveryCooldown = Duration(seconds: 3);
+  static const _defaultRecoveryCooldown = Duration(seconds: 3);
+  static Duration _recoveryCooldown = _defaultRecoveryCooldown;
+
+  /// Только для тестов: укоротить cooldown recovery-действий, чтобы повтор
+  /// §667 не ждал живые 3 с. `null` возвращает прод-значение.
+  @visibleForTesting
+  static set recoveryCooldownForTesting(Duration? value) =>
+      _recoveryCooldown = value ?? _defaultRecoveryCooldown;
+
+  /// Часы watchdog'а (§122): метка status-снапшота и «тишина» в
+  /// `_checkHeartbeat`. Тест подменяет их часами fake-async, иначе тишину
+  /// дольше 8 с пришлось бы ждать вживую.
+  static DateTime Function() _heartbeatNow = DateTime.now;
+
+  /// Только для тестов: подменить часы watchdog'а. `null` — `DateTime.now`.
+  @visibleForTesting
+  static set heartbeatClockForTesting(DateTime Function()? now) =>
+      _heartbeatNow = now ?? DateTime.now;
 
   /// One-shot timer for auto-ping-on-connect (5s after tunnel up). Отменяется
   /// при disconnect чтобы не стрельнул в уже отключённом состоянии.
@@ -1551,7 +1568,14 @@ class HomeController extends ChangeNotifier
     if (list == null) return; // недоступно — прошлую карту не трогаем
     final next = <String, String>{};
     final idle = <String, int>{};
+    // §715 — замеры URL-теста ядра (история узла, общая для всех групп):
+    // в псевдо-Направление `coreDirection`, в показе — «чужой» замер §325.
+    // 0 при ненулевом времени теста = ядро мерило и не дождалось → ERR.
+    final core = <String, int>{};
     for (final o in list) {
+      if (o.urlTestTime > 0) {
+        core[o.tag] = o.urlTestDelay > 0 ? o.urlTestDelay : -1;
+      }
       if (o.endpointState.isEmpty) continue;
       next[o.tag] = o.endpointState;
       // §540 — простой нужен только спящим (свойства узла: «idle for N s»).
@@ -1570,13 +1594,27 @@ class HomeController extends ChangeNotifier
     // Ровно те же карты — не будим UI лишним emit'ом (тик идёт каждые 5 с).
     final prev = _state.endpointStates;
     final prevIdle = _state.endpointIdleSince;
+    final prevCore = _state.delayByDirection[HomeState.coreDirection] ??
+        const <String, int>{};
     if (next.length == prev.length &&
         next.entries.every((e) => prev[e.key] == e.value) &&
         idle.length == prevIdle.length &&
-        idle.entries.every((e) => prevIdle[e.key] == e.value)) {
+        idle.entries.every((e) => prevIdle[e.key] == e.value) &&
+        core.length == prevCore.length &&
+        core.entries.every((e) => prevCore[e.key] == e.value)) {
       return;
     }
-    _emit(_state.copyWith(endpointStates: next, endpointIdleSince: idle));
+    final delays = Map<String, Map<String, int>>.of(_state.delayByDirection);
+    if (core.isEmpty) {
+      delays.remove(HomeState.coreDirection);
+    } else {
+      delays[HomeState.coreDirection] = core;
+    }
+    _emit(_state.copyWith(
+      endpointStates: next,
+      endpointIdleSince: idle,
+      delayByDirection: delays,
+    ));
   }
 
   /// §557 (ядро SPEC 106) — теги WG/AWG-узлов, выключенных пользователем в
@@ -1680,7 +1718,7 @@ class HomeController extends ChangeNotifier
   /// `connectionsIn/Out` — для бейджа активных.
   void _onCcStatus(CcStatus s) {
     if (!_state.tunnelUp) return;
-    final now = DateTime.now();
+    final now = _heartbeatNow();
     // Watchdog обновляем на КАЖДЫЙ тик (дёшево, без emit) — он гейтит dead-tunnel.
     _lastCcStatusAt = now;
     _heartbeatFailures = 0;
@@ -1953,7 +1991,7 @@ class HomeController extends ChangeNotifier
     if (group == null || !_state.tunnelUp) return true;
     final prevNode = _state.activeInGroup;
     // §290 — уже активна: не делать re-select и не рвать соединения группы
-    // (interrupt-on-switch §143) на ровном месте. Общий путь UI + automation:
+    // (ядро по галке Направления, §143 §9) на ровном месте. Общий путь UI + automation:
     // тап по подсвеченной ноде тоже не должен дёргать сеть. Ждущему Tasker'у
     // шлём лёгкое подтверждение (gated за State), иначе Wait Event уйдёт в
     // timeout — смены нет, поэтому НЕ ACTIVE_NODE_CHANGED.
@@ -1967,26 +2005,9 @@ class HomeController extends ChangeNotifier
       // не Clash PUT /proxies/<group>.
       final ok = await _cc.selectOutbound(group, nodeTag);
       if (!ok) throw const FormatException('selectOutbound rejected');
-      // §143 — точечный обрыв соединений переключаемой группы (opt-in тугл),
-      // чтобы трафик сразу ушёл на новую ноду. §122 — через CommandClient:
-      // снапшот соединений уже в `_state` (connections-стрим), id'ы цепочки
-      // закрываем `closeConnection`. Best-effort.
-      if (await SettingsStorage.getInterruptOnSwitch()) {
-        try {
-          final ids = await _connectionIdsInGroup(group);
-          await Future(() async {
-            for (final id in ids) {
-              try {
-                await _cc.closeConnection(id);
-              } catch (_) {/* соединение уже закрылось — игнор */}
-            }
-          }).timeout(const Duration(seconds: 5), onTimeout: () {});
-          _addDebug(
-              DebugSource.app, 'Interrupted ${ids.length} conns in $group');
-        } catch (e) {
-          _addDebug(DebugSource.app, 'Interrupt-on-switch failed: $e');
-        }
-      }
+      // §143 §9 — обрыв соединений при смене узла делает ядро по галке
+      // Направления (`interrupt_exist_connections`, SPEC 064); тумблер
+      // приложения снят 01.11.2026.
       // §122/SPEC015 — после selectOutbound ТЯНЕМ свежий снапшот через
       // getGroups-pull, а не reloadProxies() поверх СТАРОГО `_state.ccGroups`
       // (там `selected` ещё прежний → горела старая нода до ручного свайпа).
@@ -2018,30 +2039,6 @@ class HomeController extends ChangeNotifier
     } finally {
       _emit(_state.copyWith(busy: false));
     }
-  }
-
-  /// §143 / §122 — id'ы активных соединений группы [group] для точечного обрыва
-  /// при switchNode (interrupt-on-switch).
-  ///
-  /// **§122-gap закрыт после §174:** `chains` (цепочка outbound'ов
-  /// selector→urltest→node) восстановлены в ядре (`Connection.chain()`-итератор,
-  /// device-verified 26.06) и приходят в `CcConnection.chains`. Матчим соединение
-  /// на selector-группу через `chains.contains(group)` — [group] = текущий
-  /// `_state.selectedGroup`, тот же selector-тег, что в `selectOutbound` и в
-  /// `chains` (urltest исключён из dropdown §078, префиксов на selector-теге нет).
-  ///
-  /// Снапшот соединений берём из `_cc.connections` — у стрима replay-кэш (§122),
-  /// поэтому `.first` отдаёт ТЕКУЩИЙ снапшот мгновенно (не ждёт нового события).
-  /// HomeState список соединений НЕ хранит (только агрегаты connectionsIn/Out).
-  /// Закрываем только живые (`!isClosed`).
-  Future<List<String>> _connectionIdsInGroup(String group) async {
-    final conns = await _cc.connections.first
-        .timeout(const Duration(seconds: 1), onTimeout: () => const []);
-    return conns
-        .where((c) => !c.isClosed && c.chains.contains(group))
-        .map((c) => c.id)
-        .where((id) => id.isNotEmpty)
-        .toList();
   }
 
   // Ping / URLTest оркестрация (runNodeUrltest, ping-option resolve chain,

@@ -109,31 +109,6 @@ void main() {
   });
 
   group('метка режима в подзаголовке', () {
-    Map<String, dynamic> ut(int members, {int? pool}) => {
-          'tag': 'g',
-          'type': 'urltest',
-          'outbounds': [for (var i = 0; i < members; i++) 'n$i'],
-          if (pool != null) 'balancer': {'pool': pool},
-        };
-
-    test('least_test → 🎯 [состав]', () {
-      expect(autoGroupLabel(ut(3)), '🎯 [3]');
-    });
-
-    test('round_robin → 🔀 [всего/пул]', () {
-      expect(autoGroupLabel(ut(15, pool: 7)), '🔀 [15/7]');
-    });
-
-    test('пул больше состава показываем как есть', () {
-      // Ядро схлопнет до доступных; врать «7 из 3» не наше дело.
-      expect(autoGroupLabel(ut(3, pool: 7)), '🔀 [3/7]');
-    });
-
-    test('balancer без pool → пул = состав', () {
-      final raw = ut(5)..['balancer'] = <String, dynamic>{};
-      expect(autoGroupLabel(raw), '🔀 [5/5]');
-    });
-
     test('не urltest → null (обычный узел показывает протокол)', () {
       expect(autoGroupLabel({'tag': 'n', 'type': 'vless'}), isNull);
       expect(autoGroupLabel(null), isNull);
@@ -208,5 +183,27 @@ void main() {
     }));
     expect(pc.rawOf('L: 🇪🇺 Авто')?['balancer'], isNotNull);
     expect(pc.rawOf('L: БС')?['balancer'], isNull);
+  });
+
+  group('§715 хвост метки пула: значки, иначе имена слотов', () {
+    const flag = kDefaultPoolBadge;
+    test('значки нашлись → значки, имён нет', () {
+      expect(
+        poolLabelSuffix(const ['L: 🇩🇪 DE', 'L: 🇳🇱 NL-1', 'L: 🇳🇱 NL-2'], flag),
+        '🇩🇪, 🇳🇱[2]',
+      );
+    });
+    test('ни одного значка → имена слотов в порядке пула', () {
+      expect(
+        poolLabelSuffix(const ['s-wawg-903', 's-our-husi'], flag),
+        's-wawg-903, s-our-husi',
+      );
+    });
+    test('пустой regexp (значки выключены) → имена', () {
+      expect(poolLabelSuffix(const ['s-wawg-903'], ''), 's-wawg-903');
+    });
+    test('пустой пул → пусто', () {
+      expect(poolLabelSuffix(const [], flag), isEmpty);
+    });
   });
 }

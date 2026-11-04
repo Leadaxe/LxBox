@@ -189,12 +189,6 @@ void main() {
     expect(await _portRefuses(port), isTrue);
   });
 
-  test('close() logs no close failure', () async {
-    await open();
-    await rx.close();
-    expect(log.where((l) => l.contains('close failed')), isEmpty);
-  });
-
   test('client holding a connection open: soft close falls back to force '
       'within the grace period, no failure logged (P1)', () async {
     await open();

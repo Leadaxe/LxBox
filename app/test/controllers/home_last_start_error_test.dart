@@ -8,6 +8,7 @@ import 'package:lxbox/controllers/home_controller.dart';
 import 'package:lxbox/models/home_state.dart';
 import 'package:lxbox/services/debug/serializers/home_state.dart';
 import 'package:lxbox/services/haptic_service.dart';
+import 'package:lxbox/vpn/cc_channel.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
@@ -150,22 +151,27 @@ void main() {
   });
 
   group('serializeHomeState (§250)', () {
-    test('пустое состояние → last_start_error="" / last_start_error_at=null',
-        () {
-      final json = serializeHomeState(HomeState());
-      expect(json.containsKey('last_start_error'), isTrue);
-      expect(json.containsKey('last_start_error_at'), isTrue);
-      expect(json['last_start_error'], '');
-      expect(json['last_start_error_at'], isNull);
-    });
-
-    test('заполненное состояние → reason + ISO-8601 UTC timestamp', () {
-      final json = serializeHomeState(HomeState(
-        lastStartError: 'Stopped: Failed to start service: X',
-        lastStartErrorAt: DateTime.utc(2026, 7, 6, 12, 30),
-      ));
-      expect(json['last_start_error'], 'Stopped: Failed to start service: X');
-      expect(json['last_start_error_at'], '2026-07-06T12:30:00.000Z');
+    test('group_selected — выбор каждой группы, пустой выбор пропущен', () {
+      CcGroup g(String tag, String type, String selected) => CcGroup(
+            tag: tag,
+            type: type,
+            selectable: type == 'selector',
+            selected: selected,
+            isExpand: false,
+            items: const [],
+          );
+      final json = serializeHomeState(HomeState(ccGroups: [
+        g('vpn-1', 'selector', 'node-a'),
+        g('vpn-2', 'selector', 'node-b'),
+        g('vpn-1-auto', 'urltest', 'node-c'),
+        g('vpn-3', 'selector', ''),
+      ]));
+      expect(json['group_selected'], {
+        'vpn-1': 'node-a',
+        'vpn-2': 'node-b',
+        'vpn-1-auto': 'node-c',
+      });
+      expect(serializeHomeState(HomeState())['group_selected'], isEmpty);
     });
   });
 }

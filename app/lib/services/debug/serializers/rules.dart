@@ -30,10 +30,12 @@ Future<Map<String, Object?>> serializeCustomRule(CustomRule r) async {
         if (r.domains.isNotEmpty) 'domains': r.domains,
         if (r.domainSuffixes.isNotEmpty) 'domain_suffixes': r.domainSuffixes,
         if (r.domainKeywords.isNotEmpty) 'domain_keywords': r.domainKeywords,
+        if (r.domainRegexes.isNotEmpty) 'domain_regexes': r.domainRegexes,
         if (r.ipCidrs.isNotEmpty) 'ip_cidrs': r.ipCidrs,
         if (r.ports.isNotEmpty) 'ports': r.ports,
         if (r.portRanges.isNotEmpty) 'port_ranges': r.portRanges,
         if (r.packages.isNotEmpty) 'packages': r.packages,
+        if (r.packageRegexes.isNotEmpty) 'package_regexes': r.packageRegexes,
         if (r.protocols.isNotEmpty) 'protocols': r.protocols,
         // §240 — L4-транспорт (tcp/udp/icmp).
         if (r.network.isNotEmpty) 'network': r.network,
@@ -46,6 +48,9 @@ Future<Map<String, Object?>> serializeCustomRule(CustomRule r) async {
         // с другими conditional полями (domains, packages, etc.).
         if (r.wifiSsids.isNotEmpty) 'wifi_ssids': r.wifiSsids,
         if (r.wifiBssids.isNotEmpty) 'wifi_bssids': r.wifiBssids,
+        // §694 — тип/лимитность сети.
+        if (r.networkTypes.isNotEmpty) 'network_type': r.networkTypes,
+        if (r.networkIsExpensive) 'network_is_expensive': true,
         'outbound': r.outbound,
         // §117 задача 3 — DNS-опция правила (DNS follows the rule).
         if (r.dns != null) 'dns': _serializeRuleDns(r.dns!),
@@ -63,6 +68,7 @@ Future<Map<String, Object?>> serializeCustomRule(CustomRule r) async {
         if (r.ports.isNotEmpty) 'ports': r.ports,
         if (r.portRanges.isNotEmpty) 'port_ranges': r.portRanges,
         if (r.packages.isNotEmpty) 'packages': r.packages,
+        if (r.packageRegexes.isNotEmpty) 'package_regexes': r.packageRegexes,
         if (r.protocols.isNotEmpty) 'protocols': r.protocols,
         // §240 — L4-транспорт (tcp/udp/icmp).
         if (r.network.isNotEmpty) 'network': r.network,
@@ -73,6 +79,9 @@ Future<Map<String, Object?>> serializeCustomRule(CustomRule r) async {
         if (r.inbounds.isNotEmpty) 'inbounds': r.inbounds,
         if (r.wifiSsids.isNotEmpty) 'wifi_ssids': r.wifiSsids,
         if (r.wifiBssids.isNotEmpty) 'wifi_bssids': r.wifiBssids,
+        // §694 — тип/лимитность сети.
+        if (r.networkTypes.isNotEmpty) 'network_type': r.networkTypes,
+        if (r.networkIsExpensive) 'network_is_expensive': true,
         'outbound': r.outbound,
         if (r.dns != null) 'dns': _serializeRuleDns(r.dns!),
         if (r.resolve != null) 'resolve': _serializeRuleResolve(r.resolve!), // §247

@@ -46,13 +46,9 @@ Future<BuildSettings> readStoredBuildSettings({
       coreVersion: await CoreVersionCache.ensure(BoxVpnClient().getCoreVersion),
       tunApps: await SettingsStorage.getTunApps(),
       vpnMode: await SettingsStorage.getVpnMode(),
-      idleSuspend: await SettingsStorage.getIdleSuspend(), // §215
-      idleSuspendReachable:
-          await SettingsStorage.getIdleSuspendReachable(), // §272
-      wgBuildMax: await SettingsStorage.getWgBuildMax(), // §542
-      wgLazyBuild: await SettingsStorage.getWgLazyBuild(), // §542
       tailscaleStateRoot: tailscaleStateRoot,
       tailscaleStateDirs: tailscaleStateDirs,
+      mixins: await SettingsStorage.getMixins(), // §704
     );
 
 /// Списки источников так, как их видит сборка: §565 / задача 570 — выбор

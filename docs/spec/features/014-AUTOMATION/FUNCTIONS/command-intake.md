@@ -84,6 +84,8 @@ only in the system log under the `LxBoxIntent` tag.
   (documented in the Intent API reference, `docs/AUTOMATION.md`).
 - There is no "same call" answer: the result is learned only from events.
 - There is no sender check and no per-command permissions.
+- There is no reconnect command. Reconnect from outside goes through the Debug
+  API (`POST /action/reconnect`).
 - Depends on OS capabilities: delivery of broadcast commands, autostart bans
   in firmwares.
 
@@ -100,3 +102,4 @@ only in the system log under the `LxBoxIntent` tag.
 | 7 | [510](../../../tasks/510-review-findings-after-v2251.md) | Released v2.25.2 | "Stop" by command shuts down the node safeguard cycle |
 | 8 | [605](../../../tasks/605-service-live-automation-workspaces-bugs.md) | Implemented | Intake follows the saved toggle after a backup restore and a set load |
 | 9 | [605](../../../tasks/605-service-live-automation-workspaces-bugs.md) | Implemented | The core rejecting an accepted `SWITCH_NODE` → `VPN_ERROR(switch_failed)` |
+| 10 | [707](../../../tasks/707-taildrop-send-receive-files.md), iteration 7 | Implemented | 2026-11-03: Reconnect removed from the notification; no reconnect command, the Debug API keeps it |

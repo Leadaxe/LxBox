@@ -507,8 +507,9 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
       });
 
   /// §613 — поля тела узла с вкладки Network (Save choice, переключатели
-  /// Settings): `null` убирает поле; запись — как Save вкладки Source.
-  Future<void> _saveTailscaleFields(Map<String, Object?> fields) async {
+  /// Settings, §706 Replace key): `null` убирает поле; запись — как Save
+  /// вкладки Source. `true` — записано.
+  Future<bool> _saveTailscaleFields(Map<String, Object?> fields) async {
     final raw = _containerRaw.trim();
     final base = raw.startsWith('{') ? raw : _jsonCtrl.text;
     final String text;
@@ -516,10 +517,10 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
       text = withBodyFields(base, fields);
     } on FormatException catch (e) {
       _snack(getLocalText.s("Invalid JSON: %s", e.message));
-      return;
+      return false;
     }
     _sourceCtrl.text = text;
-    await _saveSource();
+    return _saveSource();
   }
 
   /// §623 — выбор в секции Masquerade пишется сразу (как detour): ключи
@@ -798,6 +799,14 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
                           : const {},
                       onSaveExitNode: _saveExitNode,
                       onSaveFields: _saveTailscaleFields,
+                      // §707 итер. 9 — поля Taildrop записи узла.
+                      taildropFlags: (
+                        commandsOff:
+                            _recordFlag(NodeRecordFlag.disableTaildropCommands),
+                        autosaveOff:
+                            _recordFlag(NodeRecordFlag.disableTaildropAutosave),
+                      ),
+                      onSaveRecordFlag: _saveTaildropFlag,
                     ),
                   // §392/§501 — диагностика + уведомления узла.
                   NodeDiagnosticsTab(
@@ -1038,6 +1047,19 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
               "Peers route any traffic through this device; it leaves through the outbound chosen in the Tunnel ingress preset.")),
       const SizedBox(height: 16),
     ];
+  }
+
+  /// §707 итер. 9 — поле Taildrop записи с вкладки Network: тот же путь,
+  /// что прочие поля записи. `true` — записано.
+  Future<bool> _saveTaildropFlag(NodeRecordFlag flag, bool value) async {
+    final err = await widget.subController
+        .setNodeRecordFlag(widget.index, widget.memberIndex, flag, value);
+    if (!mounted) return err == null;
+    if (err != null) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(err.render())));
+    }
+    return err == null;
   }
 
   Future<void> _setRecordFlag(NodeRecordFlag flag, bool value) async {

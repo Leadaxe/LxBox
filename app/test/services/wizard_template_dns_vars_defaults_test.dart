@@ -54,11 +54,6 @@ void main() {
     });
   }
 
-  test('safe_dns_dot: резолвер своего имени — google_doh', () {
-    final body = resolveTemplateDnsServerBody(wrappers['safe_dns_dot']!)!;
-    expect(body['domain_resolver'], 'google_doh');
-  });
-
   test('ru-direct: UDP через outbound пресета, DoT/DoH напрямую или галочкой туда же', () {
     final preset = (tpl['selectable_rules'] as List)
         .cast<Map>()

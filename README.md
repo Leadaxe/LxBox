@@ -427,6 +427,7 @@ View and edit the raw sing-box JSON config. The editor is line-based (§333): on
 | SOCKS | `socks://` / `socks5://` | TCP, auth |
 | WireGuard / **AmneziaWG** | `wireguard://`, `awg://`, INI / `.conf`, **Amnezia `vpn://`** | UDP, multi-peer, **AWG 1.x/2.0 obfuscation** (jc/jmin/jmax, s1–s4, h1–h4 incl. **`N-M` ranges**, i1–i5), auto-MTU 1280 |
 | **MASQUE** (Cloudflare WARP) | `masque://` | QUIC / HTTP-3 (RFC 9484 CONNECT-IP), HTTP/2 fallback, ECDSA P-256 pinning |
+| **TrustTunnel** (AdGuard) | `tt://` | HTTP/2 or HTTP/3 (QUIC) over TLS, Basic auth; the link may carry a self-signed certificate |
 | **Tailscale** | sing-box JSON, wizard | WireGuard mesh, MagicDNS, exit node, DERP relays |
 
 **XHTTP** is a native transport (Xray splithttp: `mode` auto/packet-up/stream-up/stream-one) with the full client-side param set: session/seq/uplink placements (path/query/header/cookie), keys, upload method, X-Padding obfs mode (`repeat-x`/`tokenish`) and packet-up tuning — read both from flat query params and from the `extra` (URL-encoded JSON) parameter. Works with TLS and Reality, incompatible with XTLS-Vision (protocol limitation).

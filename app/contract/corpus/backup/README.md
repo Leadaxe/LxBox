@@ -508,6 +508,7 @@ Side-specific ожидание LxBox (ответ на вопрос 5, `TASKS_LXB
 `backup_group_degraded`); перечень — `TASKS_LXBOX.md` §16.7.
 
 **`v10_lxbox_fields`** — все объявленные поля стороны LxBox в одном файле:
+`native_prefs` в корне (1.1.158),
 `detour_policy` / `import_rules` / `import_rules_enabled` / `on_update_action`
 у подписки, `detour_policy` и `tag_policy {prefix}` у корневого сервера,
 `detour_policy` / `ping_url` / `ping_timeout_ms` у папки, `label` у цепочки,
@@ -618,3 +619,13 @@ Side-specific ожидание LxBox (ответ на вопрос 5, `TASKS_LXB
   ввезена выключенной (`backup_dns_group_empty`). Сломать кейс: снять
   удерживаемую запись, тронуть тег вне каталога файла, снять без каталога
   или оставить пустую группу включённой.
+- **`v10_dns_template_override`** (контракт 1.1.142, LxBox §138) — правка
+  сервера каталога (`kind: user` с тегом шаблонного) — тот же сервер.
+  Предсостояние: `template:google_udp`, локальный override `user:google_dot`,
+  `template:dns_shield`. Файл LxBox: `template:google_udp`,
+  `template:google_dot`, override `user:dns_shield`, каталог из всех трёх.
+  Ключ слияния template/user — тег: обе совпавшие записи остаются локальными
+  (`user:google_dot`, `template:dns_shield`), задвоенного тега нет;
+  `dns_shield` не снимается по каталогу — в файле он есть записью `user`.
+  Сломать кейс: вернуть вид в ключ слияния (после импорта четыре записи) или
+  считать удалёнными теги, у которых в файле только `user`-запись.

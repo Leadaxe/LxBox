@@ -194,6 +194,19 @@ class SubscriptionEntry extends ChangeNotifier {
   Future<void>? _hydration;
   String? _hydrationUrl;
 
+  /// Бюджет узлов — доля, с которой разобраны узлы подписки; `null` — узлы
+  /// ещё не разбирались с долей (не загружены или собраны мимо воркера).
+  int? _budgetQuota;
+
+  /// Бюджет узлов — выдача подписки обрезана: `kept` узлов из `total`.
+  /// `null` — обрезки нет (или запись не подписка).
+  ({int kept, int total})? get budgetCut {
+    final l = _list;
+    if (l is! SubscriptionServers) return null;
+    if (l.totalNodeCount <= l.lastNodeCount) return null;
+    return (kept: l.lastNodeCount, total: l.totalNodeCount);
+  }
+
   void _markBodyCacheMissing() {
     if (_bodyCacheMissing) return;
     _bodyCacheMissing = true;

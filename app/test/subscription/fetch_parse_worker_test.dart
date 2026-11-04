@@ -12,6 +12,8 @@ import 'package:lxbox/models/import_rule.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/app_log.dart';
 import 'package:lxbox/services/settings_storage.dart';
+import 'package:lxbox/services/subscription/node_budget.dart';
+import 'package:lxbox/services/subscription/sources.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
@@ -154,5 +156,67 @@ void main() {
     expect(nodes, hasLength(3));
     expect(nodes.map((n) => n.patchedJson?['server']),
         [null, null, 'new.example']);
+  });
+
+  group('бюджет узлов: доля в FetchParseInput', () {
+    test('квота режет, totalNodeCount — до обрезки', () {
+      final r = parseFetchedWithRules(
+          const FetchParseInput(fetch: FetchResult(body), quota: 2));
+      expect(r.result.nodes.map((n) => n.tag), ['A1', 'A2']);
+      expect(r.totalNodeCount, 3);
+    });
+
+    test('без квоты и при квоте не меньше размера — без обрезки', () {
+      final none =
+          parseFetchedWithRules(const FetchParseInput(fetch: FetchResult(body)));
+      expect(none.result.nodes, hasLength(3));
+      expect(none.totalNodeCount, 3);
+      final wide = parseFetchedWithRules(
+          const FetchParseInput(fetch: FetchResult(body), quota: 3));
+      expect(wide.result.nodes, hasLength(3));
+    });
+
+    test('защищённые теги берутся первыми, добор по порядку', () {
+      final r = parseFetchedWithRules(const FetchParseInput(
+        fetch: FetchResult(body),
+        quota: 2,
+        protected: SourceProtectedTags(rawTags: {'B3'}),
+      ));
+      // Порядок выдачи сохраняется: защищённый B3 и первый по очереди A1.
+      expect(r.result.nodes.map((n) => n.tag), ['A1', 'B3']);
+      expect(r.totalNodeCount, 3);
+    });
+
+    test('refresh режет по доле, смена бюджета перерезает из кэша', () async {
+      await SettingsStorage.setNodeBudget(2);
+      addTearDown(() => SettingsStorage.setNodeBudget(null));
+      final c = await boot();
+      c.cacheParseWorkerForTesting = (input, env) async =>
+          parseCachedBody(input);
+      final entry = c.entries.single;
+      expect(await c.refreshEntry(entry), isTrue);
+      await c.lastCacheSaveForTesting;
+      var list = entry.list as SubscriptionServers;
+      expect(list.nodes.map((n) => n.tag), ['A1', 'A2']);
+      expect(list.lastNodeCount, 2);
+      expect(list.totalNodeCount, 3);
+      expect(entry.budgetCut, (kept: 2, total: 3));
+
+      await SettingsStorage.setNodeBudget(3);
+      await c.lastNodeBudgetRebalanceForTesting;
+      list = entry.list as SubscriptionServers;
+      expect(list.nodes, hasLength(3));
+      expect(list.lastNodeCount, 3);
+      expect(entry.budgetCut, isNull);
+    });
+
+    test('финальный тег правила с префиксом подписки защищает узел', () {
+      final r = parseFetchedWithRules(const FetchParseInput(
+        fetch: FetchResult(body),
+        quota: 1,
+        protected: SourceProtectedTags(tagPrefix: 'P', finalTags: {'P A2'}),
+      ));
+      expect(r.result.nodes.map((n) => n.tag), ['A2']);
+    });
   });
 }

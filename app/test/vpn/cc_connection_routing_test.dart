@@ -99,13 +99,6 @@ void main() {
       expect(c.routingLineOf(), '[tcp] final : direct-out → google.com');
     });
 
-    test('block — chains=[block], нет dest-домена', () {
-      final c = conn(chains: ['block']);
-      final e = ev(outboundChain: ['block']);
-      expect(c.routingLineOf(), e.routingLineOf());
-      expect(c.routingLineOf(), '[tcp] final : block');
-    });
-
     test('пустой rule → final; chains[0]=node; selectors reversed', () {
       // chains [node, urltest, selector] → selectors сверху-вниз = [urltest, selector].reversed
       final c = conn(

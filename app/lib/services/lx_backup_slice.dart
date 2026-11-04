@@ -106,6 +106,8 @@ const List<BackupField> kBackupFields = [
   BackupField(BackupRecord.subscription, 'last_update_attempt', _r),
   BackupField(BackupRecord.subscription, 'last_update_status', _r),
   BackupField(BackupRecord.subscription, 'last_node_count', _r),
+  // Бюджет узлов — размер выдачи до обрезки; рантайм машины.
+  BackupField(BackupRecord.subscription, 'total_node_count', _r),
   BackupField(BackupRecord.subscription, 'consecutive_fails', _r),
   // §565 / задача 570 — выбор члена групп ручного рода подписки: у
   // `sourceSubscription` схемы поля нет; выбор — рантайм машины (как выбор
@@ -134,6 +136,11 @@ const List<BackupField> kBackupFields = [
   BackupField(BackupRecord.server, 'allow_local', _c),
   BackupField(BackupRecord.server, 'allow_lan', _c),
   BackupField(BackupRecord.server, 'allow_gateway', _c),
+  // §707 итер. 9 (контракт 1.1.159) — Taildrop узла, знак «выключено».
+  BackupField(BackupRecord.server, 'disable_taildrop_commands', _c),
+  BackupField(BackupRecord.server, 'disable_taildrop_autosave', _c),
+  // §707 (контракт 1.1.160) — имя каталога состояния лаунчера: едет как есть.
+  BackupField(BackupRecord.server, 'state_dir_id', _c),
   BackupField(BackupRecord.server, 'detour_policy', _s, declared: true),
   BackupField(BackupRecord.server, 'tag_policy', _s, declared: true),
   BackupField(BackupRecord.server, 'tls', _s,
@@ -171,6 +178,10 @@ const List<BackupField> kBackupFields = [
   BackupField(BackupRecord.folderNode, 'allow_local', _c),
   BackupField(BackupRecord.folderNode, 'allow_lan', _c),
   BackupField(BackupRecord.folderNode, 'allow_gateway', _c),
+  // §707 итер. 9 (контракт 1.1.159) — Taildrop узла, знак «выключено».
+  BackupField(BackupRecord.folderNode, 'disable_taildrop_commands', _c),
+  BackupField(BackupRecord.folderNode, 'disable_taildrop_autosave', _c),
+  BackupField(BackupRecord.folderNode, 'state_dir_id', _c), // §707 1.1.160
   BackupField(BackupRecord.folderNode, 'tls', _s,
       declared: true), // §636
   // Член-группа `kind: auto` (§439 N2): состав и стратегия — `group`; поля

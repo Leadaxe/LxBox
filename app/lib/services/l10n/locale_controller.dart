@@ -94,6 +94,15 @@ class LocaleController extends ChangeNotifier with WidgetsBindingObserver {
     if (now != _lastApplied) unawaited(_applyLocale(now));
   }
 
+  /// Сброс к состоянию свежего процесса — между тест-файлами в общей сборке.
+  @visibleForTesting
+  void resetForTesting() {
+    setting = 'system';
+    _lastApplied = null;
+    _text = GetLocalText(null, const EnPluralResolver());
+    Intl.defaultLocale = null;
+  }
+
   Future<void> set(String v) async {
     setting = SettingsStorage.appLanguageValues.contains(v) ? v : 'system';
     // JSON-var + best-effort native-зеркало — внутри setAppLanguage.

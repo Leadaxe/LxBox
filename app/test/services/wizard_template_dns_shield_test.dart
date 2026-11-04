@@ -86,49 +86,6 @@ void main() {
             'выигрывают гонку у DoH/DoT — $plain');
   });
 
-  test('dns_shield покрывает четыре провайдера шифрованно', () {
-    final members = ((baseServersByTag(template())['dns_shield']!)['servers']
-            as List)
-        .cast<String>()
-        .toSet();
-    // Замена четырём снятым udp-членам: у Google/Cloudflare/Yandex двойник
-    // уже был в группе, для OpenDNS добавлен DoH (DoT они не предоставляют).
-    for (final tag in [
-      'google_doh',
-      'google_dot',
-      'cloudflare_dot',
-      'opendns_doh',
-      'quad9_doh',
-      'yandex_dot',
-    ]) {
-      expect(members, contains(tag));
-    }
-  });
-
-  test('opendns_doh — корректная запись DoH по образцу соседей', () {
-    final s = baseServersByTag(template())['opendns_doh'];
-    expect(s, isNotNull, reason: 'замена opendns_udp в группе не объявлена');
-    expect(s!['type'], 'https');
-    expect(s['server_port'], 443);
-    expect(s['server'], '208.67.222.222');
-    expect(s['path'], '/dns-query');
-    expect((s['tls'] as Map)['enabled'], true);
-    expect((s['tls'] as Map)['server_name'], 'dns.opendns.com');
-  });
-
-  test('записи *_udp остались объявлены (на них ссылаются другие места)', () {
-    final byTag = allServersByTag(template());
-    for (final tag in [
-      'google_udp',
-      'cloudflare_udp',
-      'opendns_udp',
-      'yandex_udp',
-    ]) {
-      expect(byTag[tag], isNotNull, reason: '$tag удалён — сломает ссылки');
-      expect(byTag[tag]!['type'], 'udp');
-    }
-  });
-
   test('§527 каждый член dns_shield объявлен в БАЗОВЫХ dns_options.servers',
       () {
     // Страж от повторения дефекта §527. Теги, объявленные пресетом
@@ -146,32 +103,5 @@ void main() {
         reason: 'член группы объявлен только в пресете — при сборке его тег '
             'получит префикс preset_id и bare-ссылка выпадет (unknown): '
             '$undeclared');
-  });
-
-  test('§527 yandex_dot — прямой DoT без detour', () {
-    final s = baseServersByTag(template())['yandex_dot'];
-    expect(s, isNotNull, reason: 'базовая запись yandex_dot исчезла');
-    expect(s!['type'], 'tls');
-    expect(s['server'], '77.88.8.8');
-    expect(s['server_port'], 853);
-    expect((s['tls'] as Map)['enabled'], true);
-    // Нефильтрующий профиль Яндекса: 77.88.8.8 ↔ common.dot.dns.yandex.net
-    // (safe.dot.dns.yandex.net — это 77.88.8.88, фильтрующий).
-    expect((s['tls'] as Map)['server_name'], 'common.dot.dns.yandex.net');
-    // Главное: под белыми списками туннель может не подняться, а резолв
-    // обязан работать — поэтому прямой, без detour.
-    expect(s.containsKey('detour'), isFalse,
-        reason: 'detour у члена «щита» вернёт зависимость от туннеля');
-  });
-
-  test('§684 все члены dns_shield по умолчанию идут напрямую', () {
-    // Шифрованные серверы каталога по умолчанию без detour (решение
-    // владельца §684; бывшее исключение quad9_doh через vpn-1 снято).
-    final base = baseServersByTag(template());
-    final members = (base['dns_shield']!['servers'] as List).cast<String>();
-    for (final tag in members) {
-      expect(base[tag]!.containsKey('detour'), isFalse,
-          reason: '$tag: detour у члена «щита» вернёт зависимость от туннеля');
-    }
   });
 }

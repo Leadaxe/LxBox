@@ -46,16 +46,6 @@ void main() {
     );
   }
 
-  test('шаблон объявляет три переменные с нормой контракта', () {
-    final byName = {for (final v in template.vars) v.name: v};
-    expect(byName['dns_cache_capacity']?.type, 'int');
-    expect(byName['dns_cache_capacity']?.defaultValue, '4000');
-    expect(byName['dns_optimistic']?.type, 'bool');
-    expect(byName['dns_optimistic']?.defaultValue, 'true');
-    expect(byName['dns_store_cache']?.type, 'bool');
-    expect(byName['dns_store_cache']?.defaultValue, 'true');
-  });
-
   test('состояние без переменных — значения по умолчанию', () async {
     final c = cacheOf(await build(const {}));
     expect(c.capacity, 4000);

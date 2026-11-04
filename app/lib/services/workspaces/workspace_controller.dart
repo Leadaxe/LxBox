@@ -55,6 +55,16 @@ class WorkspaceController extends ChangeNotifier {
 
   /// Одноразовый флаг «VPN был поднят до загрузки — поднять снова». Читает
   /// новый `HomeScreen` после bootstrap-пересборки.
+  /// Сброс к состоянию свежего процесса — между тест-файлами в общей сборке.
+  @visibleForTesting
+  void resetForTesting() {
+    _manifest = WorkspaceManifest.initial();
+    _generation = 0;
+    _busy = false;
+    _loadingName = null;
+    _pendingAutoConnect = false;
+  }
+
   bool takePendingAutoConnect() {
     final v = _pendingAutoConnect;
     _pendingAutoConnect = false;

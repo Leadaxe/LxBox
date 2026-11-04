@@ -132,4 +132,73 @@ void main() {
     await tester.pumpAndSettle();
     expect(result, DnsServerCatalogResult.custom);
   });
+
+  // §695 правило 4 — добавление тянет зависимости по цепочке.
+  group('§695 зависимости каталога', () {
+    final chain = <Map<String, dynamic>>[
+      {
+        'description': 'Google DoH',
+        'enabled': false,
+        'server': {'type': 'https', 'tag': 'google_doh', 'server': '8.8.8.8'},
+      },
+      {
+        'description': 'Safe DNS (DoT)',
+        'enabled': true,
+        'vars': [
+          {'name': 'dom_resolver', 'type': 'dns_servers',
+            'default_value': 'google_doh'},
+        ],
+        'server': {'type': 'tls', 'tag': 'safe_dns_dot',
+          'server': 'safe.example', 'domain_resolver': '@dom_resolver'},
+      },
+      {
+        'description': 'Inner',
+        'enabled': true,
+        'server': {'type': 'group', 'tag': 'inner',
+          'servers': ['safe_dns_dot', 'ru-direct:yandex_udp']},
+      },
+      {
+        'description': 'Shield DNS',
+        'enabled': true,
+        'server': {'type': 'group', 'tag': 'dns_shield',
+          'servers': ['inner', 'google_doh', 'dns_shield']},
+      },
+    ];
+    final byTag = {
+      for (final w in chain) (w['server'] as Map)['tag'] as String: w,
+    };
+
+    test('группа рекурсивно и domain_resolver после дефолта var; пресет и '
+        'присутствующие пропускаются', () {
+      expect(dnsCatalogDependencies(['dns_shield'], byTag, const {}),
+          ['inner', 'google_doh', 'safe_dns_dot']);
+      expect(dnsCatalogDependencies(['dns_shield'], byTag, const {'inner'}),
+          ['google_doh']);
+      expect(dnsCatalogDependencies(['safe_dns_dot'], byTag, const {}),
+          ['google_doh']);
+      expect(dnsCatalogDependencies(['google_doh'], byTag, const {}),
+          isEmpty);
+    });
+
+    testWidgets('Add тянет цель domain_resolver включённой, SnackBar '
+        '«Also added»', (tester) async {
+      final added = <DnsServerTemplate>[];
+      await tester.pumpWidget(MaterialApp(
+        home: DnsServerCatalogScreen(
+          templateServers: chain,
+          presentTags: const {},
+          onAdd: added.addAll,
+        ),
+      ));
+      await tester.tap(rowButton('safe_dns_dot'));
+      await tester.pump();
+      expect(added, [
+        const DnsServerTemplate(enabled: true, tag: 'safe_dns_dot'),
+        const DnsServerTemplate(enabled: true, tag: 'google_doh'),
+      ]);
+      expect(find.textContaining('Also added: Google DoH'), findsOneWidget);
+      expect(tester.widget<TextButton>(rowButton('google_doh')).onPressed,
+          isNull);
+    });
+  });
 }

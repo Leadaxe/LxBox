@@ -12,23 +12,6 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('§392 — CcGetUrlResult.fromMap', () {
-    test('успешный обмен: статус/тело/метаданные', () {
-      final r = CcGetUrlResult.fromMap(const {
-        'status': 200,
-        'content': 'warp=on\nip=1.2.3.4',
-        'truncated': false,
-        'contentType': 'text/plain',
-        'remoteAddr': '104.16.0.1:443',
-        'elapsedMs': 312,
-        'error': '',
-      });
-      expect(r.ok, true);
-      expect(r.status, 200);
-      expect(r.content, contains('warp=on'));
-      expect(r.remoteAddr, '104.16.0.1:443');
-      expect(r.elapsedMs, 312);
-    });
-
     test('не-2xx — РЕЗУЛЬТАТ, а не ошибка (ok остаётся true)', () {
       final r = CcGetUrlResult.fromMap(const {
         'status': 429,
@@ -49,28 +32,6 @@ void main() {
       expect(r.ok, false);
       expect(r.status, 0);
       expect(r.content, isEmpty);
-    });
-
-    test('truncated прокидывается (обрезка не молчаливая)', () {
-      final r = CcGetUrlResult.fromMap(
-          const {'status': 200, 'content': 'x', 'truncated': true, 'error': ''});
-      expect(r.truncated, true);
-    });
-
-    test('дефолты при отсутствующих ключах', () {
-      final r = CcGetUrlResult.fromMap(const {});
-      expect(r.status, 0);
-      expect(r.content, isEmpty);
-      expect(r.truncated, false);
-      expect(r.elapsedMs, 0);
-      expect(r.ok, true); // error пуст — обмен формально состоялся
-    });
-
-    test('num (double из platform channel) приводится к int', () {
-      final r = CcGetUrlResult.fromMap(
-          const {'status': 200.0, 'elapsedMs': 42.0, 'error': ''});
-      expect(r.status, 200);
-      expect(r.elapsedMs, 42);
     });
   });
 

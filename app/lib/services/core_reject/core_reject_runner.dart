@@ -15,6 +15,8 @@ library;
 
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
+
 import '../../controllers/home_controller.dart';
 import '../../controllers/subscription_controller.dart';
 import '../app_log.dart';
@@ -23,6 +25,10 @@ import 'core_reject_host.dart';
 import 'core_reject_state.dart';
 
 Completer<CoreRejectRun>? _activeGuardRun;
+
+/// Сброс незавершённого прогона страховки — между тест-файлами в общей сборке.
+@visibleForTesting
+void resetCoreRejectRunnerForTesting() => _activeGuardRun = null;
 
 /// Тихая пересборка конфига без экрана: то же, что делает `_rebuildConfig`
 /// экрана в `silent`-режиме, но без снэкбаров и `mounted`-проверок.

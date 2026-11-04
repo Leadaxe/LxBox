@@ -121,8 +121,8 @@ The feature protects two principles:
   the absolute number of failures without the activity gate.
 - **P22. Same-kind notifications collapse.** Notifications of one code at one
   level form one group with a count and a list of entries; the header counters
-  count entries. **Witness:** widget tests "seven entries of one code → one
-  tile", "the header counter counts entries, not groups". **Mutation:**
+  count entries. **Witness:** widget test "seven entries of one code → one
+  tile". **Mutation:**
   grouping across levels.
 - **P23. A core notification with a link leads to the link.** Tapping a system
   notification that came from the core opens its address; the address is

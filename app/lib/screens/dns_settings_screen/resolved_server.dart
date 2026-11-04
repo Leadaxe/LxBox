@@ -53,6 +53,8 @@ class ResolvedServer {
     this.varValues = const {},
     this.usedByRule,
     this.usedByList = const [],
+    this.groupMembersInList = 0,
+    this.groupLiveMembers = 0,
   });
 
   final ServerKind kind;
@@ -85,8 +87,30 @@ class ResolvedServer {
   /// такой сервер не форсирует (он включён — ссылка жива).
   final List<String> usedByList;
 
-  /// §680 — копия с источниками ссылок из списка.
-  ResolvedServer withUsedByList(List<String> refs) => ResolvedServer(
+  /// §695 — у группы: сколько тегов `servers[]` реально есть в списке
+  /// (независимо от `enabled`); у не-группы 0.
+  final int groupMembersInList;
+
+  /// §695 — у группы: сколько тегов `servers[]` есть в списке и включены
+  /// (или `forceIncluded`) — столько членов оставит сборка (§312); у
+  /// не-группы 0.
+  final int groupLiveMembers;
+
+  bool get isGroup => body['type'] == 'group';
+
+  /// §695 — выключенную группу без живых членов включить нельзя: сборка
+  /// получила бы пустую группу (фатальный `EmptyDnsGroup`).
+  bool get enableBlockedEmptyGroup =>
+      isGroup && !enabled && !forceIncluded && groupLiveMembers == 0;
+
+  /// §680/§695 — копия с состоянием относительно списка: источники ссылок,
+  /// счётчики членов группы.
+  ResolvedServer withListState({
+    List<String>? usedByList,
+    int? groupMembersInList,
+    int? groupLiveMembers,
+  }) =>
+      ResolvedServer(
         kind: kind,
         tag: tag,
         description: description,
@@ -98,7 +122,11 @@ class ResolvedServer {
         vars: vars,
         varValues: varValues,
         usedByRule: usedByRule,
-        usedByList: List.unmodifiable(refs),
+        usedByList: usedByList == null
+            ? this.usedByList
+            : List.unmodifiable(usedByList),
+        groupMembersInList: groupMembersInList ?? this.groupMembersInList,
+        groupLiveMembers: groupLiveMembers ?? this.groupLiveMembers,
       );
 
   bool get isOverridden => kind == ServerKind.inline && overrides != null;
@@ -111,7 +139,9 @@ class ResolvedServer {
 
   /// §117 lifecycle (locked №7): реферимый активным пресетом ИЛИ правилом
   /// с DNS-опцией — сборка эмитит его независимо от `enabled`
-  /// (force-include, [dnsServerRefEmitted]).
+  /// (force-include, [dnsServerRefEmitted]). §695 — пикеры DNS Final /
+  /// Default Domain Resolver сюда не входят: выбранное включено (лок и
+  /// нормализация).
   bool get forceIncluded => lockedByPreset || usedByRule != null;
 
   /// §117 №7 + §680: на сервер ссылаются (пресет, правило, список) — не

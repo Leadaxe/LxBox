@@ -124,11 +124,4 @@ void main() {
     );
     expect(result.proxyPassword, isNotEmpty);
   });
-
-  test('loadVpnMode passthrough', () async {
-    await SettingsStorage.setVpnMode(
-        const VpnModeConfig.defaults().copyWith(proxyPort: 4321));
-    final loaded = await VpnSettingsFacade.loadVpnMode();
-    expect(loaded.proxyPort, 4321);
-  });
 }

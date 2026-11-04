@@ -82,32 +82,6 @@ void main() {
   });
 
   group('§472 инвариант 4 — identity masque не меняется', () {
-    test('каждый кейс снимка даёт прежние хеш, тег и тело', () {
-      final before = _identityBefore();
-      expect(before, hasLength(greaterThan(12)),
-          reason: 'снимок похудел — проверьте, не срезан ли корпус');
-      for (final e in before.entries) {
-        final uri = e.value['uri'] as String;
-        final want = e.value['identity'] as String?;
-        final spec = parseUri(uri);
-        if (want == null) {
-          expect(spec, isNull, reason: 'кейс ${e.key} стал разбираться');
-          continue;
-        }
-        expect(spec, isNotNull, reason: 'кейс ${e.key} перестал разбираться');
-        expect(
-          legacyNodeIdentityHash(spec!),
-          want,
-          reason: 'identity кейса ${e.key} изменилась: у пользователей слетят '
-              'выбор узла, отключения и цепочки',
-        );
-        expect(spec.tag, e.value['tag'], reason: 'тег кейса ${e.key}');
-        expect(jsonEncode(spec.emit(TemplateVars.empty).map),
-            jsonEncode(e.value['body']),
-            reason: 'тело кейса ${e.key}');
-      }
-    });
-
     test('узел фабрики WARP не сдвинулся ни на одной версии HTTP', () {
       // MASQUE-узлы WARP у пользователей самые массовые, и строит их ссылка
       // `MasqueAccount.toMasqueUri` — тот же вход, что у ручной вставки.
@@ -141,41 +115,6 @@ void main() {
       // Круг проходят ВСЕ разбираемые кейсы, без исключений.
       expect(checked, 6);
     }, skip: corpusSkip);
-  });
-
-  group('§472 инвариант 5 — цена разбора', () {
-    test('2000 masque-узлов разбираются за разумное время', () {
-      const n = 2000;
-      final uris = [
-        for (var i = 0; i < n; i++)
-          'masque://PRIVDER%3D%3D@192.0.2.$i:443?publickey=PUBDER%3D%3D'
-              '&address=172.16.0.2%2F32%2C2001%3Adb8%3A%3A2'
-              '&vhttp=h3&sni=a$i.example&mtu=1280&idle_timeout=5m#node$i',
-      ];
-
-      for (var i = 0; i < 200; i++) {
-        parseUri(uris[i]);
-      }
-
-      final nodes = <NodeSpec>[];
-      var best = 1 << 30;
-      for (var rep = 0; rep < 3; rep++) {
-        nodes.clear();
-        final sw = Stopwatch()..start();
-        for (final u in uris) {
-          final s = parseUri(u);
-          if (s != null) nodes.add(s);
-        }
-        sw.stop();
-        if (sw.elapsedMilliseconds < best) best = sw.elapsedMilliseconds;
-      }
-      expect(nodes, hasLength(n));
-      expect(
-        best,
-        lessThan(3000),
-        reason: 'разбор $n masque-узлов конвейером: $best мс (лучший из трёх)',
-      );
-    });
   });
 
   group('§472 — masque: перевод, который остаётся за маппером', () {

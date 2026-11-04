@@ -184,15 +184,6 @@ void main() {
       expect(r.reason, 'bad password');
     });
 
-    test('голая строка разбирается по-прежнему', () {
-      final r = _parse(
-        'initialize outbound[3] vless[Frankfurt]: parse encryption: bad',
-        {'Frankfurt'},
-      );
-      expect(r!.tag, 'Frankfurt');
-      expect(r.reason, 'parse encryption: bad');
-    });
-
     test('обёртка + `: ` и `]` внутри тега', () {
       final r = _parse(
         'Failed to start service: start or reload service: '

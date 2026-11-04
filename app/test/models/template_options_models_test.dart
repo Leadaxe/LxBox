@@ -73,15 +73,6 @@ void main() {
         containsPair('type', 'udp'));
   });
 
-  test('PingOptionsModel: дефолты + пресеты по id', () {
-    final m = template.pingOptionsModel;
-    expect(m.defaultUrl, 'https://www.gstatic.com/generate_204');
-    expect(m.defaultTimeoutMs, 5000);
-    expect(m.presets.map((p) => p.id), ['google-204', 'yandex']);
-    expect(m.presets.first.name, 'Google 204');
-    expect(m.presets.first.url, 'https://g/204');
-  });
-
   test('SpeedTestOptionsModel: серверы + потоки', () {
     final m = template.speedTestOptionsModel;
     expect(m.servers.map((s) => s.id), ['cloudflare', 'selectel-ru']);

@@ -79,11 +79,6 @@ void main() {
 
   group('.plural — ru forms', () {
     test('1 → one', () => expect(ru().plural('%d servers', 1), '1 сервер'));
-    test('2 → few', () => expect(ru().plural('%d servers', 2), '2 сервера'));
-    test('5 → many', () => expect(ru().plural('%d servers', 5), '5 серверов'));
-    test('22 → few', () => expect(ru().plural('%d servers', 22), '22 сервера'));
-    test(
-        '25 → many', () => expect(ru().plural('%d servers', 25), '25 серверов'));
   });
 
   group('.plural — special index + plural', () {

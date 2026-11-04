@@ -23,6 +23,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
+
 import '../../models/node_spec.dart';
 import '../../models/server_list.dart';
 import '../app_log.dart';
@@ -39,6 +41,11 @@ class TailscaleStateStore {
 
   Future<void> _lock = Future<void>.value();
   int _tmpSeq = 0;
+
+  /// Сброс замка: операция прошлого теста (fake-async зона) могла его не
+  /// отпустить — следующая ждала бы вечно.
+  @visibleForTesting
+  void resetForTesting() => _lock = Future<void>.value();
 
   // ---------------------------------------------------------------------------
   // Сборка

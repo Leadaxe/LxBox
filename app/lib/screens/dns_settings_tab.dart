@@ -337,8 +337,10 @@ class _DnsSettingsTabState extends State<DnsSettingsTab>
   /// Filter `enabled` на ref-level.
   List<String> get _enabledServerTags => enabledServerTags(_displayedServers);
 
-  /// §312 — опции пикера членов DNS-группы: ВСЕ серверы (disabled видимы и
-  /// помечаются — drop-семантика №3), кроме fakeip/hosts (запрет ядра).
+  /// §312 — опции пикера членов DNS-группы: ВСЕ серверы, кроме fakeip/hosts
+  /// (запрет ядра); `enabled` — эмитится ли (превью JSON). §695 правило 2 —
+  /// выбрать можно только включённую запись (`selectable`), выключенный
+  /// член, уже стоящий в составе, форма показывает с пометкой.
   /// Self-исключение делает сама секция формы (знает актуальный tag).
   List<DnsMemberOption> get _dnsMemberOptions => [
         for (final s in _displayedServers)
@@ -351,6 +353,26 @@ class _DnsSettingsTabState extends State<DnsSettingsTab>
                 presetReferenced: s.lockedByPreset,
                 ruleReferenced: s.usedByRule != null,
               ),
+              selectable: s.enabled,
+            ),
+      ];
+
+  /// §699 — опции блока Hosts формы группы: серверы типа `hosts` в порядке
+  /// списка (он же порядок ключа `hosts`). Как у членов: выбрать можно только
+  /// включённый (`selectable`), выключенный уже отмеченный форма показывает с
+  /// пометкой.
+  List<DnsMemberOption> get _dnsHostsOptions => [
+        for (final s in _displayedServers)
+          if (s.body['type'] == 'hosts')
+            DnsMemberOption(
+              tag: s.tag,
+              type: 'hosts',
+              enabled: dnsServerRefEmitted(
+                enabled: s.enabled,
+                presetReferenced: s.lockedByPreset,
+                ruleReferenced: s.usedByRule != null,
+              ),
+              selectable: s.enabled,
             ),
       ];
 
@@ -416,6 +438,7 @@ class _DnsSettingsTabState extends State<DnsSettingsTab>
       outboundOptions: _outboundOptions,
       dnsServerTags: _enabledServerTags,
       dnsMemberOptions: _dnsMemberOptions,
+      dnsHostsOptions: _dnsHostsOptions, // §699
       tailscaleEndpoints: _tailscaleEndpoints, // §435
       existingTags: {for (final s in _servers) s.tag},
     );
@@ -450,6 +473,10 @@ class _DnsSettingsTabState extends State<DnsSettingsTab>
         _templateByTag[tag]?['description']?.toString() ?? '',
       ServerKind.preset =>
         _presetServersByTag[tag]?['description']?.toString() ?? '',
+      // §695 — override шаблонной записи: Reset to template сравнивает
+      // description с шаблонным.
+      ServerKind.inline when resolved.overrides == ServerKind.template =>
+        _templateByTag[tag]?['description']?.toString() ?? '',
       ServerKind.inline => '',
     };
 
@@ -464,6 +491,7 @@ class _DnsSettingsTabState extends State<DnsSettingsTab>
       // §117: dom_resolver-пикер — теги без самого сервера (петля).
       dnsServerTags: _enabledServerTags.where((t) => t != tag).toList(),
       dnsMemberOptions: _dnsMemberOptions,
+      dnsHostsOptions: _dnsHostsOptions, // §699
       tailscaleEndpoints: _tailscaleEndpoints, // §435
       // §117 задача 4b: rename-коллизии (без текущего тега).
       existingTags: {
@@ -715,6 +743,36 @@ class _DnsSettingsTabState extends State<DnsSettingsTab>
     });
   }
 
+  /// §710: reorder серверов. Индексы — в display-списке
+  /// (`resolveDisplayedServers` идёт по `_servers` по порядку, пропуская
+  /// пустые теги), в `_servers` переводятся по тегу. Семантика newIndex как у
+  /// `_onReorderRules` (`onReorderItem`: уже без перетаскиваемого).
+  void _onReorderServers(
+      List<ResolvedServer> displayed, int oldIndex, int newIndex) {
+    if (oldIndex < 0 || oldIndex >= displayed.length) return;
+    final tags = [for (final e in displayed) e.tag];
+    final movedTag = tags.removeAt(oldIndex);
+    tags.insert(newIndex.clamp(0, tags.length), movedTag);
+    final from = _servers.indexWhere((s) => s.tag == movedTag);
+    if (from < 0) return;
+    setState(() {
+      final moved = _servers.removeAt(from);
+      // Ставим перед тем, кто идёт следом в новом display-порядке; если
+      // следом никого — после предыдущего (или в конец).
+      final pos = tags.indexOf(movedTag);
+      int at = _servers.length;
+      if (pos + 1 < tags.length) {
+        final next = _servers.indexWhere((s) => s.tag == tags[pos + 1]);
+        if (next >= 0) at = next;
+      } else if (pos > 0) {
+        final prev = _servers.indexWhere((s) => s.tag == tags[pos - 1]);
+        if (prev >= 0) at = prev + 1;
+      }
+      _servers.insert(at, moved);
+      _markDirty();
+    });
+  }
+
   Future<void> _showUserRuleEditor(int index) async {
     final isNew = index < 0;
     // Редактор открывается только у inline-тайла (DnsRuleTile).
@@ -776,13 +834,26 @@ class _DnsSettingsTabState extends State<DnsSettingsTab>
         const SizedBox(height: 4),
         // §042: единый render через 3-tier merged list. §117 задача 4:
         // тайл — только switch + тап→полноэкранный редактор.
-        ...displayed.map((entry) => MergedServerTile(
+        // §710: перестановка перетаскиванием за полосу слева, как у правил.
+        ReorderableListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          buildDefaultDragHandles: false,
+          itemCount: displayed.length,
+          onReorderItem: (o, n) => _onReorderServers(displayed, o, n),
+          itemBuilder: (ctx, i) {
+            final entry = displayed[i];
+            return MergedServerTile(
+              key: ValueKey('dns-server-${entry.tag}'),
+              dragIndex: i,
               entry: entry,
               onToggleEnabled: _toggleServerEnabled,
               onTap: _editServer,
               onLongPressStart: _showServerContextMenu,
               liveGroup: _liveDnsGroups[entry.tag], // §312
-            )),
+            );
+          },
+        ),
         const Divider(height: 32),
 
         // --- Strategy ---

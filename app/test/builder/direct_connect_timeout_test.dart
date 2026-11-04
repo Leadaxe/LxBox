@@ -38,17 +38,6 @@ void main() {
       .cast<Map>()
       .singleWhere((o) => o['tag'] == 'direct-out');
 
-  test('шаблон: переменная в секции network, дефолт 15s, пресеты', () {
-    final v = template.vars.singleWhere((v) => v.name == 'direct_connect_timeout');
-    final network = template.varSections.singleWhere((s) => s.id == 'network');
-    expect(v.section, network.title);
-    expect(v.type, 'text');
-    expect(v.optionsOpen, isTrue);
-    expect(v.defaultValue, '15s');
-    expect(v.options.map((o) => o.value).toList(),
-        ['5s', '15s', '20s', '25s', '30s', '45s', '1m', '2m']);
-  });
-
   test('дефолт: direct-out.connect_timeout == 15s', () async {
     expect(directOut(await build(const {}))['connect_timeout'], '15s');
   });

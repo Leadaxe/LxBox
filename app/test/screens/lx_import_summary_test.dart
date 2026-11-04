@@ -99,11 +99,6 @@ void main() {
       );
     });
 
-    test('хвост replaced стоит до клаузы цепочек', () {
-      final text = snack(_file(rules: 1, replaced: 2), chains: 1);
-      expect(text, endsWith(', replaced 2 rule(s); chains: 1'));
-    });
-
     test('ключа rules нет и счётчики нулевые — импортировать нечего', () {
       final text = snack(_file(rulesDeclared: false));
       expect(

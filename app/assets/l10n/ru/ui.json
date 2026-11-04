@@ -78,6 +78,9 @@
   "%1$s · %2$d events": {
     "value": "%1$s · %2$d соб."
   },
+  "%1$s: invalid regex %2$s": {
+    "value": "%1$s: неверная регулярка %2$s"
+  },
   "%d app settings": {
     "value": {
       "one": "%d настройка приложения",
@@ -100,6 +103,14 @@
       "few": "%d в цепочке",
       "many": "%d в цепочке",
       "other": "%d в цепочке"
+    }
+  },
+  "%d domain regex": {
+    "value": {
+      "one": "%d regex домена",
+      "few": "%d regex домена",
+      "many": "%d regex домена",
+      "other": "%d regex домена"
     }
   },
   "%d elements": {
@@ -260,14 +271,6 @@
       "other": "%d хопа"
     }
   },
-  "%d hours": {
-    "value": {
-      "one": "%d час",
-      "few": "%d часа",
-      "many": "%d часов",
-      "other": "%d часа"
-    }
-  },
   "%d hours left": {
     "value": {
       "one": "остался %d час",
@@ -301,14 +304,6 @@
       "few": "%d минуты назад",
       "many": "%d минут назад",
       "other": "%d минуты назад"
-    }
-  },
-  "%d minutes": {
-    "value": {
-      "one": "%d минута",
-      "few": "%d минуты",
-      "many": "%d минут",
-      "other": "%d минуты"
     }
   },
   "%d net": {
@@ -373,6 +368,14 @@
   "%d ok": {
     "value": "%d ок"
   },
+  "%d package regex": {
+    "value": {
+      "one": "%d regex пакета",
+      "few": "%d regex пакета",
+      "many": "%d regex пакета",
+      "other": "%d regex пакета"
+    }
+  },
   "%d packages copied": {
     "value": {
       "one": "%d пакет скопирован",
@@ -403,14 +406,6 @@
       "few": "%d протокола",
       "many": "%d протоколов",
       "other": "%d протокола"
-    }
-  },
-  "%d seconds": {
-    "value": {
-      "one": "%d секунда",
-      "few": "%d секунды",
-      "many": "%d секунд",
-      "other": "%d секунды"
     }
   },
   "%d server lists": {
@@ -614,6 +609,9 @@
   },
   "Add address": {
     "value": "Добавить адрес"
+  },
+  "Android identifies these apps by one UID. Routing rules and Tunnel apps apply to all of them at once.": {
+    "value": "Android различает эти приложения по одному UID. Правила маршрутизации и Tunnel apps действуют на все сразу."
   },
   "Answer": {
     "value": "Ответ"
@@ -829,11 +827,20 @@
   "Custom server": {
     "value": "Свой сервер"
   },
+  "Domain regex": {
+    "value": "Regex домена"
+  },
   "Enter an IP address": {
     "value": "Введите IP-адрес"
   },
   "Fixed IP": {
     "value": "Фиксированный IP"
+  },
+  "Go RE2, matched anywhere in the domain, e.g. %s": {
+    "value": "Go RE2, совпадение в любом месте домена, например %s"
+  },
+  "Go RE2, matched anywhere in the package name, e.g. %s": {
+    "value": "Go RE2, совпадение в любом месте имени пакета, например %s"
   },
   "How domains matched by this rule are resolved.": {
     "value": "Как резолвятся домены, совпавшие с этим правилом."
@@ -859,8 +866,19 @@
   "One address per line, IPv4 or IPv6.": {
     "value": "По адресу на строку, IPv4 или IPv6."
   },
+  "Package name regex": {
+    "value": "Regex имени пакета"
+  },
   "Resolve before routing": {
     "value": "Резолвить до маршрутизации"
+  },
+  "Shared with %d other apps — they are routed together": {
+    "value": {
+      "one": "UID общий ещё с %d приложением — маршрутизируются вместе",
+      "few": "UID общий ещё с %d приложениями — маршрутизируются вместе",
+      "many": "UID общий ещё с %d приложениями — маршрутизируются вместе",
+      "other": "UID общий ещё с %d приложениями — маршрутизируются вместе"
+    }
   },
   "Used when the rule resolves before routing.": {
     "value": "Действуют, когда правило резолвит до маршрутизации."
@@ -1029,9 +1047,6 @@
   "Already on this device": {
     "value": "Уже есть на этом устройстве"
   },
-  "Also put tunnels on the active route (pool members, the selected node) to sleep after a long quiet period — e.g. overnight. The first connection after sleep adds ~1 round trip. Default 5 min. Below the directions' idle timeout (30 min by default) a group probe can wake a sleeping tunnel for one handshake — the price of sleeping sooner. Requires \"Suspend idle tunnels\" to be on.": {
-    "value": "Усыплять и туннели активного маршрута (члены пула, выбранный узел) после долгого затишья — например, за ночь. Первое соединение после сна будет дольше примерно на один RTT. По умолчанию 5 минут. Если значение меньше тайм-аута простоя Направлений (по умолчанию 30 минут), проба группы может разбудить спящий туннель на одно рукопожатие — цена более раннего сна. Требует включённой настройки «Усыплять неактивные туннели»."
-  },
   "AmneziaWG 1.5 parameters: decoy packets before the WireGuard handshake.": {
     "value": "Параметры AmneziaWG 1.5: пакеты-приманки перед рукопожатием WireGuard."
   },
@@ -1113,9 +1128,6 @@
   "Applies immediately. Very chatty on live traffic — enable, reproduce, grab the log, disable.": {
     "value": "Применяется сразу. Очень многословно на живом трафике — включите, воспроизведите, снимите лог, выключите."
   },
-  "Applies on next connect.": {
-    "value": "Применится при следующем подключении."
-  },
   "Apply": {
     "value": "Применить"
   },
@@ -1166,6 +1178,32 @@
   },
   "Auto-ping after connect": {
     "value": "Автопинг после подключения"
+  },
+  "Parallel checks": {
+    "value": "Параллельные проверки"
+  },
+  "How many servers the ping and Test servers measure at once. Fewer requests look quieter to the network, more finish faster. Range %1$d..%2$d, default %3$d": {
+    "value": "Сколько серверов пинг и «Test servers» меряют одновременно. Меньше запросов — тише для сети, больше — быстрее. Диапазон %1$d..%2$d, по умолчанию %3$d"
+  },
+  "Node budget": {
+    "value": "Бюджет узлов"
+  },
+  "Above %d the app may freeze or be killed by the system": {
+    "value": "Больше %d — приложение может зависнуть или быть закрыто системой"
+  },
+  "%2$d of %1$d nodes": {
+    "value": {
+      "one": "%2$d из %1$d узла",
+      "few": "%2$d из %1$d узлов",
+      "many": "%2$d из %1$d узлов",
+      "other": "%2$d из %1$d узла"
+    }
+  },
+  "Node budget in App settings": {
+    "value": "Бюджет узлов — в настройках приложения"
+  },
+  "Budget used by manual servers": {
+    "value": "Бюджет занят ручными серверами"
   },
   "Auto-record is off": {
     "value": "Автозапись выключена"
@@ -1524,8 +1562,14 @@
   "Cannot read the selected file": {
     "value": "Не удалось прочитать выбранный файл"
   },
-  "Caps the VPN core's memory. A cap that is too low keeps the processor busy with garbage collection and heats the phone. Auto sizes the cap to this device's RAM; Off removes the cap but keeps low-memory monitoring. Applies immediately.": {
-    "value": "Ограничивает память ядра VPN. Слишком низкий лимит занимает процессор сборкой мусора и греет телефон. «Авто» подбирает лимит под объём памяти устройства; «Выключено» снимает лимит, но сохраняет контроль нехватки памяти. Применяется сразу."
+  "Memory threshold for the VPN core itself (its Go runtime), not the whole app process. Above the threshold the core drops its connections and frees memory, and near it the garbage collector keeps the processor busy and heats the phone. Auto sets no threshold. With any value the core also watches the system's free memory. Applies immediately. The current figure is in Statistics → Memory → Core memory.": {
+    "value": "Порог памяти для самого ядра VPN (его рантайма Go), а не для всего процесса приложения. Выше порога ядро сбрасывает свои соединения и освобождает память, а вблизи него сборщик мусора занимает процессор и греет телефон. «Авто» порог не ставит. При любом значении ядро следит и за свободной памятью системы. Применяется сразу. Текущая цифра — в «Статистика» → «Память» → «Память ядра»."
+  },
+  "Core memory": {
+    "value": "Память ядра"
+  },
+  "Memory of the VPN core itself (Go runtime); the limit from VPN Settings applies to this figure. RSS is the whole app process.": {
+    "value": "Память самого ядра VPN (рантайм Go); к этой цифре применяется лимит из настроек VPN. RSS — весь процесс приложения."
   },
   "Capture %s": {
     "value": "Снять %s"
@@ -1928,8 +1972,8 @@
   "Custom rules, tun apps, DNS options, final outbound": {
     "value": "Свои правила, приложения туннеля, параметры DNS, финальный исходящий канал"
   },
-  "Custom server type \"%s\" — edit it on the JSON tab. The form supports UDP / DoT / DoH / DoQ / DoH3 / Group / Tailscale.": {
-    "value": "Нестандартный тип сервера «%s» — правьте его на вкладке JSON. Форма поддерживает UDP / DoT / DoH / DoQ / DoH3 / Group / Tailscale."
+  "Custom server type \"%s\" — edit it on the JSON tab. The form supports UDP / DoT / DoH / DoQ / DoH3 / Group / Tailscale / Hosts.": {
+    "value": "Нестандартный тип сервера «%s» — правьте его на вкладке JSON. Форма поддерживает UDP / DoT / DoH / DoQ / DoH3 / Group / Tailscale / Hosts."
   },
   "Dark": {
     "value": "Тёмная"
@@ -2299,9 +2343,6 @@
   },
   "Downloaded \"%s\"": {
     "value": "Скачан «%s»"
-  },
-  "Drop active connections when you switch nodes, so traffic moves to the new node immediately": {
-    "value": "Сбрасывать активные соединения при переключении узла, чтобы трафик сразу пошёл через новый узел"
   },
   "Drop existing detours — every member connects through this outbound": {
     "value": "Сбросить существующие detour — каждый член папки подключается через этот исходящий канал"
@@ -3291,6 +3332,9 @@
   "Metadata is missing or unreadable.": {
     "value": "Метаданные отсутствуют или не читаются."
   },
+  "Mixin \"%1$s\": %2$s": {
+    "value": "Миксин «%1$s»: %2$s"
+  },
   "Mode": {
     "value": "Режим"
   },
@@ -3417,8 +3461,23 @@
   "No Tailscale nodes yet — add one on the Servers screen first": {
     "value": "Узлов Tailscale пока нет — сначала добавьте узел на экране Servers"
   },
-  "No Wi-Fi conditions — rule is active on every network.": {
-    "value": "Условий Wi-Fi нет — правило активно в любой сети."
+  "No SSID filter — rule is active on any Wi-Fi network.": {
+    "value": "Фильтра по SSID нет — правило активно в любой сети Wi-Fi."
+  },
+  "Any": {
+    "value": "Любая"
+  },
+  "Cellular": {
+    "value": "Мобильная"
+  },
+  "Metered networks only": {
+    "value": "Только лимитные сети"
+  },
+  "Mobile data and Wi-Fi marked as metered in Android settings": {
+    "value": "Мобильные данные и Wi-Fi, отмеченные как лимитные в настройках Android"
+  },
+  "metered": {
+    "value": "лимитная"
   },
   "No WireGuard/AmneziaWG config in vpn:// link": {
     "value": "В ссылке vpn:// нет конфига WireGuard/AmneziaWG"
@@ -3446,9 +3505,6 @@
   },
   "No cached source data": {
     "value": "Кэшированных данных источника нет"
-  },
-  "No configurable variables": {
-    "value": "Настраиваемых переменных нет"
   },
   "No connection to %s — check network or URL": {
     "value": "Нет соединения с %s — проверьте сеть или URL"
@@ -4128,9 +4184,6 @@
   },
   "Proxy link, WireGuard config or outbound JSON": {
     "value": "Proxy-ссылка, конфиг WireGuard или JSON исходящего канала"
-  },
-  "Put unreachable WireGuard tunnels to sleep after they sit idle, freeing memory and saving battery. They wake instantly on use. Only affects tunnels not on the active route.": {
-    "value": "Усыплять недоступные туннели WireGuard после простоя — это освобождает память и экономит батарею. При обращении туннель просыпается мгновенно. Касается только туннелей вне активного маршрута."
   },
   "Query timeout": {
     "value": "Тайм-аут запроса"
@@ -4957,27 +5010,6 @@
   "Supported: vless / vmess / trojan / ss / hy2 / tuic / socks5 / proxy-http(s) / wireguard URLs": {
     "value": "Поддерживаются ссылки vless / vmess / trojan / ss / hy2 / tuic / socks5 / proxy-http(s) / wireguard"
   },
-  "Suspend active-route tunnels": {
-    "value": "Усыплять туннели активного маршрута"
-  },
-  "Suspend idle tunnels": {
-    "value": "Усыплять неактивные туннели"
-  },
-  "Lazy tunnel build": {
-    "value": "Ленивая сборка туннелей"
-  },
-  "Build a WireGuard tunnel only on first use instead of at start. Saves memory with many nodes; the first connection to a node takes a moment longer.": {
-    "value": "Собирать туннель WireGuard при первом использовании, а не при запуске. Экономит память, когда узлов много; первое подключение к узлу чуть дольше."
-  },
-  "Built tunnels limit": {
-    "value": "Лимит собранных туннелей"
-  },
-  "Keep at most this many WireGuard tunnels built at once; the rest are torn down and rebuilt on demand. 0 = no limit.": {
-    "value": "Сколько туннелей WireGuard держать собранными одновременно; остальные разбираются и собираются заново по требованию. 0 — без ограничения."
-  },
-  "0 (no limit)": {
-    "value": "0 (без ограничения)"
-  },
   "Switch": {
     "value": "Переключиться"
   },
@@ -5537,6 +5569,9 @@
   "Why it happens": {
     "value": "Почему так"
   },
+  "Wi-Fi networks": {
+    "value": "Сети Wi-Fi"
+  },
   "Wi-Fi rules need permissions": {
     "value": "Правилам Wi-Fi нужны разрешения"
   },
@@ -5929,8 +5964,8 @@
   "The running config has no node %s.": {
     "value": "В работающем конфиге нет узла %s."
   },
-  "Only WireGuard and AmneziaWG nodes can be turned off.": {
-    "value": "Выключить можно только узлы WireGuard и AmneziaWG."
+  "Only WireGuard, AmneziaWG and Tailscale nodes can be turned off.": {
+    "value": "Выключить можно только узлы WireGuard, AmneziaWG и Tailscale."
   },
   "VPN is not running or is restarting. Try again.": {
     "value": "VPN не запущен или перезапускается. Повторите попытку."
@@ -6101,12 +6136,6 @@
   "%s online / %s": {
     "value": "в сети %s из %s"
   },
-  "Copy MagicDNS name": {
-    "value": "Копировать имя MagicDNS"
-  },
-  "Copy %s": {
-    "value": "Копировать %s"
-  },
   "key expired": {
     "value": "ключ истёк"
   },
@@ -6115,12 +6144,6 @@
   },
   "exit node": {
     "value": "exit node"
-  },
-  "Copy name": {
-    "value": "Копировать имя"
-  },
-  "Copy address": {
-    "value": "Копировать адрес"
   },
   "Waiting for sign-in": {
     "value": "ждёт входа"
@@ -6256,6 +6279,9 @@
   },
   "no active session (last handshake %s)": {
     "value": "нет активной сессии (последний хендшейк %s)"
+  },
+  "no response (last handshake %s)": {
+    "value": "нет ответа (последний хендшейк %s)"
   },
   "asleep": {
     "value": "спит"
@@ -6682,5 +6708,288 @@
   },
   "One per line, or pick from the list": {
     "value": "По одному на строку или выберите из списка"
+  },
+  "No members left in the list. Enable or add a member first.": {
+    "value": "В списке не осталось участников. Сначала включите или добавьте участника."
+  },
+  "Reset to template": {
+    "value": "Сбросить к шаблону"
+  },
+  "Also added: %s": {
+    "value": "Добавлены также: %s"
+  },
+  "A group needs at least one member.": {
+    "value": "Группе нужен хотя бы один участник."
+  },
+  "Hosts": {
+    "value": "Hosts"
+  },
+  "Fixed addresses for chosen names, answered on the device": {
+    "value": "Заданные адреса для выбранных имён, ответ — на устройстве"
+  },
+  "Add host": {
+    "value": "Добавить запись"
+  },
+  "Also reads: %s": {
+    "value": "Также читает: %s"
+  },
+  "Answers only these names. Put it under Hosts of a DNS group so that other names go to the group's servers.": {
+    "value": "Отвечает только на эти имена. Поставьте его в Hosts DNS-группы — остальные имена уйдут её серверам."
+  },
+  "Addresses": {
+    "value": "Адреса"
+  },
+  "Enter a name": {
+    "value": "Введите имя"
+  },
+  "No spaces, \"/\" or \":\" in a name": {
+    "value": "В имени не должно быть пробелов, «/» и «:»"
+  },
+  "\"%s\" is already in the list": {
+    "value": "«%s» уже есть в списке"
+  },
+  "Add at least one host": {
+    "value": "Добавьте хотя бы одну запись"
+  },
+  "No hosts servers in the list.": {
+    "value": "В списке нет серверов hosts."
+  },
+  "Names these servers know are answered first; other names go to the members.": {
+    "value": "Имена, которые знают эти серверы, отвечаются сразу; остальные уходят участникам."
+  },
+  "1 name": {
+    "value": "1 имя"
+  },
+  "%d names": {
+    "value": {
+      "one": "%d имя",
+      "few": "%d имени",
+      "many": "%d имён",
+      "other": "%d имени"
+    }
+  },
+  "DNS group \"%s\" cannot contain itself.": {
+    "value": "DNS-группа «%s» не может содержать саму себя."
+  },
+  "DNS group \"%1$s\": server \"%2$s\" is listed in both servers and hosts.": {
+    "value": "DNS-группа «%1$s»: сервер «%2$s» указан и в servers, и в hosts."
+  },
+  "DNS group \"%1$s\": duplicate hosts server \"%2$s\".": {
+    "value": "DNS-группа «%1$s»: сервер hosts «%2$s» указан дважды."
+  },
+  "DNS group \"%1$s\": hosts server \"%2$s\" not found.": {
+    "value": "DNS-группа «%1$s»: сервер hosts «%2$s» не найден."
+  },
+  "DNS group \"%1$s\": hosts accepts only servers of type hosts, got \"%3$s\": \"%2$s\".": {
+    "value": "DNS-группа «%1$s»: в hosts допустимы только серверы типа hosts, а «%2$s» — типа «%3$s»."
+  },
+  "Node filter": {
+    "value": "Фильтр узлов"
+  },
+  "%1$s / %2$s match": {
+    "value": "совпало %1$s из %2$s"
+  },
+  "Open picker": {
+    "value": "Открыть подбор"
+  },
+  "Mixins": {
+    "value": "Миксины"
+  },
+  "Mixin": {
+    "value": "Миксин"
+  },
+  "Add mixin": {
+    "value": "Добавить миксин"
+  },
+  "Delete mixin?": {
+    "value": "Удалить миксин?"
+  },
+  "Edits applied to the built config, top to bottom. They survive rebuilds.": {
+    "value": "Правки собранного конфига, применяются сверху вниз. Переживают пересборку."
+  },
+  "Target": {
+    "value": "Цель"
+  },
+  "Suggestions": {
+    "value": "Подсказки"
+  },
+  "Whole node": {
+    "value": "Узел целиком"
+  },
+  "Keys": {
+    "value": "Ключи"
+  },
+  "Keys, comma-separated": {
+    "value": "Ключи через запятую"
+  },
+  "Preview": {
+    "value": "Предпросмотр"
+  },
+  "(root)": {
+    "value": "(корень)"
+  },
+  "No config built yet": {
+    "value": "Конфиг ещё не собран"
+  },
+  "✓ 1 match": {
+    "value": "✓ 1 совпадение"
+  },
+  "✗ no match": {
+    "value": "✗ нет совпадений"
+  },
+  "✗ needs a single list": {
+    "value": "✗ нужен один список"
+  },
+  "✗ not a list element": {
+    "value": "✗ не элемент списка"
+  },
+  "✗ syntax: %s": {
+    "value": "✗ синтаксис: %s"
+  },
+  "%s → before first": {
+    "value": "%s → перед первым"
+  },
+  "%s → after last": {
+    "value": "%s → после последнего"
+  },
+  "✓ %d matches": {
+    "value": {
+      "one": "✓ %d совпадение",
+      "few": "✓ %d совпадения",
+      "many": "✓ %d совпадений",
+      "other": "✓ %d совпадения"
+    }
+  },
+  "Replace key": {
+    "value": "Заменить ключ"
+  },
+  "Saved: %s": {
+    "value": "Записано: %s"
+  },
+  "Key saved. It applies when the VPN starts.": {
+    "value": "Ключ сохранён. Он применится при запуске VPN."
+  },
+  "Applies when the node is online.": {
+    "value": "Применится, когда узел будет в сети."
+  },
+  "Signing in with the new key…": {
+    "value": "Вход с новым ключом…"
+  },
+  "Send file…": {
+    "value": "Отправить файл…"
+  },
+  "Sending to %s": {
+    "value": "Отправка на %s"
+  },
+  "Couldn't send: %s": {
+    "value": "Не удалось отправить: %s"
+  },
+  "the VPN is off": {
+    "value": "VPN выключен"
+  },
+  "can't read the file": {
+    "value": "не удалось прочитать файл"
+  },
+  "no file picker on this device": {
+    "value": "на устройстве нет выбора файлов"
+  },
+  "Inbox": {
+    "value": "Входящие"
+  },
+  "File sharing is off for this tailnet. Turn on Taildrop in the Tailscale admin console.": {
+    "value": "В этой сети tailnet обмен файлами выключен. Включите Taildrop в админке Tailscale."
+  },
+  "%s of %s": {
+    "value": "%s из %s"
+  },
+  "from %s": {
+    "value": "от %s"
+  },
+  "Saved to Downloads": {
+    "value": "Сохранено в Загрузки"
+  },
+  "Couldn't save: %s": {
+    "value": "Не удалось сохранить: %s"
+  },
+  "Couldn't delete: %s": {
+    "value": "Не удалось удалить: %s"
+  },
+  "Couldn't cancel: %s": {
+    "value": "Не удалось отменить: %s"
+  },
+  "Turn the node on first.": {
+    "value": "Сначала включите узел."
+  },
+  "Could not sign in with the new key.": {
+    "value": "Не удалось войти с новым ключом."
+  },
+  "Restart node": {
+    "value": "Перезапустить узел"
+  },
+  "Node restarted.": {
+    "value": "Узел перезапущен."
+  },
+  "Save received files to Downloads": {
+    "value": "Сохранять принятые файлы в Загрузки"
+  },
+  "Needs Android 10 or later.": {
+    "value": "Нужен Android 10 или новее."
+  },
+  "Allow Taildrop (send and receive files)": {
+    "value": "Разрешить Taildrop (отправка и приём файлов)"
+  },
+  "Taildrop is off for this node.": {
+    "value": "Taildrop у этого узла выключен."
+  },
+  "Accept clipboard and links from my devices": {
+    "value": "Принимать буфер обмена и ссылки с моих устройств"
+  },
+  "Devices shared by other users are not counted as yours.": {
+    "value": "Устройства, которыми поделились другие пользователи, вашими не считаются."
+  },
+  "Core: lx.wg.idle_suspend. An idle WireGuard endpoint that is not on the active route is torn down and rebuilt on its next dial.": {
+    "value": "Ядро: lx.wg.idle_suspend. Простаивающий эндпоинт WireGuard вне активного маршрута разбирается и собирается заново при следующем подключении."
+  },
+  "Core: lx.wg.idle_suspend_reachable. The same sleep for endpoints on the active route, after a longer quiet period.": {
+    "value": "Ядро: lx.wg.idle_suspend_reachable. Такой же сон для эндпоинтов на активном маршруте, после более долгого простоя."
+  },
+  "Core: lx.wg.lazy_build. An endpoint is built on its first dial instead of at core start.": {
+    "value": "Ядро: lx.wg.lazy_build. Эндпоинт собирается при первом подключении, а не на старте ядра."
+  },
+  "Core: lx.wg.build_max. Over the limit the endpoint idle for the longest is torn down.": {
+    "value": "Ядро: lx.wg.build_max. Сверх лимита разбирается эндпоинт, простаивающий дольше всех."
+  },
+  "Core: lx.mtu_align. A node over a tunnel gets a packet size that fits into it: mtu for WireGuard and MASQUE, the initial packet size for Hysteria2 and TUIC. Values are never raised.": {
+    "value": "Ядро: lx.mtu_align. Узел поверх туннеля получает размер пакета, который в туннель влезает: mtu у WireGuard и MASQUE, начальный размер пакета у Hysteria2 и TUIC. Значения никогда не повышаются."
+  },
+  "Core: lx.quic_sniff_decoy. A relay with UDP sniffing (Xray destOverride quic) rewrites the destination by the SNI of the first QUIC packet; a junk first byte makes it give up. Servers drop the byte. A DPI on your own uplink may react to it, hence Through detour by default.": {
+    "value": "Ядро: lx.quic_sniff_decoy. Релей со сниффингом UDP (Xray destOverride quic) подменяет назначение по SNI из первого QUIC-пакета; мусорный первый байт заставляет его отступиться. Серверы этот байт отбрасывают. DPI вашего собственного канала может на него среагировать, поэтому по умолчанию — Through detour."
+  },
+  "Core: lx.masque.idle_timeout. The idle window for MASQUE nodes that have no idle_timeout of their own.": {
+    "value": "Ядро: lx.masque.idle_timeout. Окно простоя для узлов MASQUE без собственного idle_timeout."
+  },
+  "File sharing is off in this tailnet.": {
+    "value": "Отправка файлов выключена в этом tailnet."
+  },
+  "Device is offline.": {
+    "value": "Устройство не в сети."
+  },
+  "Device belongs to another user.": {
+    "value": "Устройство принадлежит другому пользователю."
+  },
+  "Device can't receive files.": {
+    "value": "Устройство не принимает файлы."
+  },
+  "online": {
+    "value": "в сети"
+  },
+  "VPN notification buttons": {
+    "value": "Кнопки уведомления VPN"
+  },
+  "Restart": {
+    "value": "Рестарт"
+  },
+  "Appears only while a Tailscale node has Allow Taildrop.": {
+    "value": "Есть, только пока у узла Tailscale включён Allow Taildrop."
   }
 }

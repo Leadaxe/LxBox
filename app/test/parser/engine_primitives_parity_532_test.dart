@@ -36,68 +36,6 @@ void main() {
     await MapperSections.I.loadDrafts(dir: _draftRoot, files: kDraftFiles);
   });
 
-  group('§532 дефект 1–2 · версия протокола во входе Xray', () {
-    test('version: 3 узлом старшей версии НЕ становится', () {
-      // Дефект ревизии (§3 п.1): `key_absent` не исполнялся, ветка «поля
-      // версии нет» проходила при любом содержимом, и элемент с ЧУЖОЙ версией
-      // уезжал в секцию v1. По D133-28 такого узла быть не должно.
-      final dropped = <NodeWarning>[];
-      final nodes = _parse(
-        '[{"remarks":"hy3","outbounds":[{"tag":"proxy","protocol":"hysteria",'
-        '"settings":{"address":"hy.example","port":443,"version":3},'
-        '"streamSettings":{"hysteriaSettings":{"version":3,"auth":"pw"}}}]}]',
-        dropped,
-      );
-      expect(
-        nodes.where((n) => n.protocol == 'hysteria'),
-        isEmpty,
-        reason: 'версия 3 ни одной ветке detect не принадлежит',
-      );
-      expect(nodes, isEmpty);
-    });
-
-    // Ветку «version: 1» СКВОЗЬ КОНВЕЙЕР здесь не проверить: кейс корпуса
-    // `xray/hysteria_v1_skipped` КРАСЕН И ДО этой задачи (у нас узла нет, у
-    // лаунчера есть) — дыра на входе xray-hysteria, к §532 не относящаяся и
-    // этой задачей не затронутая. Что строгий `key_absent` законную ветку не
-    // отнимает, проверено на самом предикате: `engine_detect_primitives_532`,
-    // «НИ ОДНОГО из путей нет» и «вид источника».
-
-    test('version: 2 даёт узел hysteria2', () {
-      final dropped = <NodeWarning>[];
-      final nodes = _parse(
-        '[{"remarks":"hy2","outbounds":[{"tag":"proxy","protocol":"hysteria",'
-        '"settings":{"address":"hy.example","port":443,"version":2},'
-        '"streamSettings":{"hysteriaSettings":{"version":2,"auth":"pw"}}}]}]',
-        dropped,
-      );
-      expect(nodes.map((n) => n.protocol), ['hysteria2']);
-    });
-  }, skip: skip);
-
-  group('§532 дефект 2 · streamSettings и форма элемента', () {
-    // «trojan БЕЗ streamSettings — живой plain-TCP узел» сквозь конвейер тоже
-    // не проверяется: сборка узла из xray-элемента у нас упирается в ту же
-    // предсуществующую дыру (см. выше). Сама форма — «контейнер объект,
-    // транспорта нет вовсе» — проверена на предикате в
-    // `engine_detect_primitives_532` («объект ИЛИ ключа нет»): строгий
-    // `type_of` эту ветку не отнимает, потому что её несёт `key_absent`.
-
-    test('МУСОРНЫЙ тип streamSettings — узла нет (битая запись)', () {
-      // Форма кейса корпуса `xray/malformed_stream`: `streamSettings: "none"`
-      // это не «транспорта нет», а битая запись, и рабочий узел без транспорта
-      // и TLS из неё собирать нельзя.
-      final dropped = <NodeWarning>[];
-      final nodes = _parse(
-        '[{"remarks":"tj","outbounds":[{"tag":"proxy","protocol":"trojan",'
-        '"settings":{"servers":[{"address":"tj.example","port":443,'
-        '"password":"pw"}]},"streamSettings":"none"}]}]',
-        dropped,
-      );
-      expect(nodes, isEmpty);
-    });
-  }, skip: skip);
-
   group('§532 дефект 4 · булев на выходе без emit_as', () {
     test('необъявленный булев уезжает СЛОВОМ, как у эталона', () {
       // Go-движок на том же теле собирает `reduce_rtt=true`

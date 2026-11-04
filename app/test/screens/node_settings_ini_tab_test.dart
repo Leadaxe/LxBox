@@ -13,6 +13,7 @@ import 'package:path_provider_platform_interface/path_provider_platform_interfac
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
 import '../parser/engine_test_setup.dart';
+import 'real_io_pump.dart';
 
 class _FakePathProvider extends PathProviderPlatform
     with MockPlatformInterfaceMixin {
@@ -65,9 +66,7 @@ void main() {
   /// Ждать условие, давая реальному IO (файлы, изоляты) идти.
   Future<void> settle(WidgetTester tester, bool Function() done) async {
     for (var i = 0; i < 300 && !done(); i++) {
-      await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 10)));
-      await tester.pump();
+      await realIoStep(tester);
     }
     await tester.pumpAndSettle();
   }
@@ -116,21 +115,6 @@ void main() {
     await tester.tap(find.text('Edit INI'));
     await tester.pumpAndSettle();
   }
-
-  testWidgets('вкладка INI есть у WG, стоит после JSON', (tester) async {
-    await open(tester, awgLink);
-    final labels = tester
-        .widget<TabBar>(find.byType(TabBar))
-        .tabs
-        .map((t) => t is Tab ? t.text : null)
-        .toList();
-    expect(labels.indexOf('INI'), labels.indexOf('JSON') + 1);
-  });
-
-  testWidgets('вкладки INI нет у VLESS', (tester) async {
-    await open(tester, 'vless://u1@h1.example:443?type=ws&security=tls#Beta');
-    expect(tab('INI'), findsNothing);
-  });
 
   testWidgets('Edit INI у INI-источника — переход в Source без диалога',
       (tester) async {

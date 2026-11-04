@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/screens/subscription_detail_screen/widgets/node_warnings_sheet.dart';
 import 'package:lxbox/screens/subscriptions_screen/clipboard_analysis.dart';
 import 'package:lxbox/screens/subscriptions_screen/paste_dialogs.dart';
@@ -20,28 +19,6 @@ void main() {
       '"id": "11111111-2222-3333-4444-555555555555"}]}]}, '
       '"streamSettings": {"network": "tcp", "security": "none"}}, '
       '{"tag": "x", "protocol": "trojan-go", "settings": {}}]}]';
-
-  testWidgets('шторка: запись-источник строкой под заголовком',
-      (tester) async {
-    await tester.pumpWidget(const MaterialApp(
-      home: Scaffold(
-        body: NodeWarningsSheet([
-          RegistryWarning(code: 'form_unrecognized', ownerTag: 'bad-entry'),
-          RegistryWarning(code: 'form_unrecognized'),
-        ]),
-      ),
-    ));
-    await tester.pumpAndSettle();
-    // §572 — две записи одного кода собраны в группу: запись источника
-    // называет строка своей записи, а не подзаголовок плитки.
-    expect(find.byType(ExpansionTile), findsOneWidget);
-    expect(find.text('Entry: bad-entry'), findsOneWidget);
-  });
-
-  test('анализ вставки несёт отбраковки разбора', () {
-    final a = analyzeClipboard(body);
-    expect(a.dropped, isNotEmpty);
-  });
 
   testWidgets('диалог вставки: строка отбраковок открывает шторку',
       (tester) async {

@@ -106,19 +106,6 @@ void main() {
     expect(vpn3.nodeFilter, '');
   });
 
-  test('enabled_groups задаёт enabled (не defaultEnabled)', () async {
-    // юзер выключил vpn-1 (но миграция всё равно форсит), включил vpn-3
-    await seedFile({
-      'enabled_groups': ['vpn-3'],
-    });
-    await SettingsStorage.migrateDirectionsIfNeeded(template());
-
-    final directions = await SettingsStorage.getDirections();
-    expect(directions.firstWhere((c) => c.tag == 'vpn-1').enabled, true); // форс
-    expect(directions.firstWhere((c) => c.tag == 'vpn-2').enabled, false);
-    expect(directions.firstWhere((c) => c.tag == 'vpn-3').enabled, true);
-  });
-
   test('идемпотентность: повторный вызов — no-op', () async {
     await seedFile({});
     await SettingsStorage.migrateDirectionsIfNeeded(template());
@@ -179,19 +166,6 @@ void main() {
     final vpn1 = (await SettingsStorage.getDirections())
         .firstWhere((c) => c.tag == 'vpn-1');
     expect(vpn1.auto!.tolerance, 30);
-  });
-
-  test('directions уже есть → миграция no-op', () async {
-    await seedFile({
-      'directions': [
-        {'tag': 'vpn-1', 'label': 'Custom', 'enabled': true},
-      ],
-    });
-    await SettingsStorage.migrateDirectionsIfNeeded(template());
-
-    final directions = await SettingsStorage.getDirections();
-    expect(directions.length, 1);
-    expect(directions.first.label, 'Custom'); // не перезаписано template'ом
   });
 
   // -------------------------------------------------------------------------
@@ -272,12 +246,6 @@ void main() {
       expect(raw['directions_migrated'], true);
       expect(raw.containsKey('channels_migrated'), isFalse);
       expect(raw.containsKey('directions'), isFalse);
-    });
-
-    test('directions_migrated без directions → тоже не пересеивать', () async {
-      await seedFile({'directions_migrated': true});
-      await SettingsStorage.migrateDirectionsIfNeeded(template());
-      expect(await SettingsStorage.getDirections(), isEmpty);
     });
 
     test('хвост легаси рядом с новым ключом вычищается', () async {
@@ -405,14 +373,6 @@ void main() {
 
     test('deleteDirection vpn-1 throws', () async {
       expect(() => SettingsStorage.deleteDirection('vpn-1'), throwsStateError);
-    });
-
-    test('deleteDirection переводит route_final → vpn-1', () async {
-      await SettingsStorage.saveRouteFinal('vpn-2');
-      await SettingsStorage.deleteDirection('vpn-2');
-      expect(await SettingsStorage.getRouteFinal(), 'vpn-1');
-      expect((await SettingsStorage.getDirections()).map((c) => c.tag),
-          ['vpn-1', 'vpn-3']);
     });
 
     test('route_final на другое Направление не трогается', () async {

@@ -59,7 +59,7 @@ base64 от целого `.conf`, профиль Amnezia `vpn://`. AmneziaWG —
 - **`awg://<base64 .conf>`**: один link — один узел, второй `[Interface]`
   игнорируется; base64 без `[Interface]` — отбраковка.
 - Одинаковый узел строкой `amneziawg://` и профилем `vpn://` в одном теле
-  схлопывается в один с кодом `duplicate`.
+  схлопывается в один; выживший несёт `duplicates_collapsed` (P8).
 
 ## Границы
 

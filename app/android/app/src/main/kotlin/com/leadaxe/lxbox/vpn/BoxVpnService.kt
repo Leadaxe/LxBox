@@ -157,7 +157,14 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
                     if (tunnelStartedElapsedMs == 0L) {
                         tunnelStartedElapsedMs = SystemClock.elapsedRealtime()
                     }
-                VpnStatus.Stopped -> tunnelStartedElapsedMs = 0L
+                VpnStatus.Stopped -> {
+                    tunnelStartedElapsedMs = 0L
+                    // §707 итер. 7 — ленты окна «Send clipboard» живут, пока
+                    // работает VPN; «Поделиться» и «Send to device» скрываются.
+                    runCatching {
+                        TaildropClip.onVpnStopped(runCatching { BoxApplication.application }.getOrNull())
+                    }
+                }
                 else -> { /* Starting/Stopping — не трогаем */ }
             }
         }
@@ -235,6 +242,13 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
         /// челлендж показать. Dart забирает его на старте и при возврате.
         @Volatile
         var openConnectOpenRequest: String? = null
+        /// §707 — снапшот входящих Taildrop узла (`SubscribeTaildropInbox`).
+        @Volatile
+        var ccTaildropInboxSink: io.flutter.plugin.common.EventChannel.EventSink? = null
+        /// §707 — тап по уведомлению Taildrop: тег узла, чью вкладку Network
+        /// открыть. Dart забирает его на старте и при возврате.
+        @Volatile
+        var taildropOpenRequest: String? = null
 
         fun start(context: Context) {
             Log.d(TAG, "[vpn] companion.start() → startForegroundService, current status=${currentStatus.name}")

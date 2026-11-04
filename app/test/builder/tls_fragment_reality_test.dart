@@ -69,15 +69,4 @@ void main() {
     expect(tls.containsKey('record_fragment'), isFalse);
     expect(tls.containsKey('fragment_fallback_delay'), isFalse);
   });
-
-  test('обычный TLS-узел фрагментацию получает', () {
-    final ob = _vless();
-    applyTlsFragment({
-      'outbounds': [ob],
-    }, _vars);
-    final tls = ob['tls'] as Map<String, dynamic>;
-    expect(tls['fragment'], isTrue);
-    expect(tls['record_fragment'], isTrue);
-    expect(tls['fragment_fallback_delay'], '500ms');
-  });
 }

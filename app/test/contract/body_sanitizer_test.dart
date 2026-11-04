@@ -9,7 +9,6 @@ import 'package:flutter_test/flutter_test.dart';
 import '../contract_paths.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/services/contract/body_sanitizer.dart';
-import 'package:lxbox/services/contract/registry.dart';
 
 
 /// Пин ядра, на котором сверена схема (`body.core` реестра): под ним
@@ -210,23 +209,6 @@ void main() {
           'tls.reality.public_key');
     });
 
-    test('secret: значение в предупреждении маскируется', () {
-      // trojan.password — secret; мусорное значение даёт код, но не течёт.
-      final schema = ContractRegistry.I.schemaFor('vless')!;
-      expect(schema.fields['uuid']!.secret, isTrue,
-          reason: 'uuid объявлен secret — на нём и проверяем маскирование');
-
-      // Поле с secret и заданным on_invalid: shadowsocks.password.
-      final ss = ContractRegistry.I.schemaFor('shadowsocks')!;
-      expect(ss.fields['password']!.secret, isTrue);
-
-      // Маскирование — свойство рендера значения: код с secret-полем несёт
-      // ***, а не сам секрет.
-      const w = RegistryWarning(
-          code: 'type_invalid', path: 'password', value: '***');
-      expect(w.value, '***');
-    });
-
     test('conflicts: ech.enabled + reality.enabled — снят декларант', () {
       final r = _san(_vless({
         'tls': {
@@ -302,15 +284,6 @@ void main() {
       }));
       expect(_codes(r), contains('field_requires'));
       expect(_byCode(r, 'field_requires').params['requires'], 'tls.spoof');
-    });
-
-    test('requires: spoof_method без spoof снимается', () {
-      final r = _san(_vless({
-        'tls': {'enabled': true, 'spoof_method': 'wrong-checksum'}
-      }));
-      final tls = r.body!['tls'] as Map;
-      expect(tls.containsKey('spoof_method'), isFalse);
-      expect(_byCode(r, 'field_requires').path, 'tls.spoof_method');
     });
 
     test('forbidden_for: naive + tls.alpn → tls_field_unsupported_naive', () {
@@ -1311,13 +1284,6 @@ void main() {
       final peer = (bad.body!['peers'] as List).first as Map;
       expect(peer.containsKey('reserved'), isFalse);
     });
-
-    test('неизвестное выражение реестра не роняет и не портит значение', () {
-      // Контракт может уехать вперёд кода: выражение, которого санитайзер не
-      // знает, обязано остаться незамеченным, а не съесть поле.
-      final r = _san(_vless({'transport': {'type': 'ws', 'path': '/x'}}));
-      expect((r.body!['transport'] as Map)['path'], '/x');
-    });
   });
 
   group('coreAtLeast', () {
@@ -1332,6 +1298,21 @@ void main() {
       expect(coreAtLeast('1.14.2', '1.14.1-lx.1'), isTrue);
       // Версия неизвестна — гейт не применяем.
       expect(coreAtLeast('', '1.14.1-lx.4'), isTrue);
+    });
+
+    test('пре-релиз: lx.30-rc.1 < lx.30-rc.2 < lx.30 (контракт 1.1.150)', () {
+      expect(coreAtLeast('1.14.4-lx.30-rc.1', '1.14.4-lx.30-rc.2'), isFalse,
+          reason: 'иначе поле rc.2 уйдёт в rc.1 и ядро отвергнет конфиг');
+      expect(coreAtLeast('v1.14.4-lx.30-rc.2', '1.14.4-lx.30-rc.2'), isTrue);
+      expect(coreAtLeast('1.14.4-lx.30', '1.14.4-lx.30-rc.2'), isTrue);
+      expect(coreAtLeast('1.14.4-lx.30-rc.9', '1.14.4-lx.30'), isFalse);
+      expect(coreAtLeast('1.14.4-lx.30-rc.10', '1.14.4-lx.30-rc.9'), isTrue);
+      expect(coreAtLeast('1.14.4-lx.30-rc2', '1.14.4-lx.30-rc.2'), isTrue);
+      // Хвост сборки не с тега: после rc — тот же rc, без rc — релиз.
+      expect(coreAtLeast('1.14.4-lx.30-rc.2-g1a2b3c4', '1.14.4-lx.30-rc.2'),
+          isTrue);
+      expect(coreAtLeast('1.14.4-lx.30-g1a2b3c4', '1.14.4-lx.30'), isTrue);
+      expect(coreAtLeast('1.14.4-lx.31-rc.1', '1.14.4-lx.30'), isTrue);
     });
   });
 

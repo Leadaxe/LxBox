@@ -234,13 +234,16 @@ class NodeRow extends StatelessWidget {
     // правый бейдж узкий и моноширинный, фраза туда не влезает.
     final stateLabel = _isBlock ? '' : _endpointStateLabel;
 
-    if (!hasActive &&
+    // Пингуемая строка держит подзаголовок и пустой: иначе у узла без
+    // бейджей (direct) «PING…» вставляет строку, и центрированный заголовок
+    // прыгает вверх-вниз. Схлопывается только block — его не пингуют.
+    if (_isBlock &&
+        !hasActive &&
         !hasArrow &&
         !hasProto &&
         !hasAuto &&
         !hasNotificationBadge &&
-        stateLabel.isEmpty &&
-        dl.isEmpty) {
+        stateLabel.isEmpty) {
       return const SizedBox.shrink();
     }
 
@@ -329,19 +332,19 @@ class NodeRow extends StatelessWidget {
           )
         : null;
 
-    final right = dl.isEmpty
-        ? const SizedBox.shrink()
-        : Text(
-            dl,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.5,
-              color: _isTailnet
-                  ? _tailnetColor(cs)
-                  : _delayColor(context) ?? cs.onSurfaceVariant,
-            ),
-          );
+    // Пустой Text, а не SizedBox.shrink: высота строки одна и та же, есть
+    // замер или нет.
+    final right = Text(
+      dl,
+      style: TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 0.5,
+        color: _isTailnet
+            ? _tailnetColor(cs)
+            : _delayColor(context) ?? cs.onSurfaceVariant,
+      ),
+    );
 
     // Пинг (`right`) ВСЕГДА прижат к правому краю строки. Вся левая часть
     // (active / arrow / proto) живёт в одном Expanded, который съедает остаток

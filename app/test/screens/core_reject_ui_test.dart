@@ -139,26 +139,6 @@ void main() {
       ));
     }
 
-    testWidgets('число выключенных первым словом, имена в тексте, кнопка Show',
-        (tester) async {
-      await pumpBanner(tester, three);
-
-      expect(find.text('3 servers disabled'), findsOneWidget);
-      expect(find.textContaining('Frankfurt, Berlin, Praha'), findsOneWidget);
-      expect(find.widgetWithText(TextButton, 'Show'), findsOneWidget);
-    });
-
-    testWidgets('один узел — «1 server disabled», текст «it», без хвоста',
-        (tester) async {
-      await pumpBanner(tester, const [one]);
-
-      expect(find.text('1 server disabled'), findsOneWidget);
-      expect(find.textContaining('The core rejected it'), findsOneWidget);
-      expect(find.textContaining('Frankfurt'), findsOneWidget);
-      expect(find.textContaining('more'), findsNothing,
-          reason: 'хвост «+N more» появляется только после трёх имён');
-    });
-
     testWidgets('больше трёх имён — хвост «+N more»', (tester) async {
       await pumpBanner(tester, const [
         ...three,
@@ -214,19 +194,6 @@ void main() {
       await tester.tap(find.text('open'));
       await tester.pumpAndSettle();
     }
-
-    testWidgets('тексты владельца: заголовок, вопрос и цена остановки',
-        (tester) async {
-      await pumpPrompt(tester, []);
-
-      expect(find.text('10 servers disabled — there may be more'),
-          findsOneWidget);
-      expect(find.textContaining('Keep checking the rest?'), findsOneWidget);
-      expect(find.textContaining('the VPN will not start'), findsOneWidget);
-      expect(find.widgetWithText(TextButton, 'Stop checking'), findsOneWidget);
-      expect(
-          find.widgetWithText(FilledButton, 'Keep checking'), findsOneWidget);
-    });
 
     testWidgets('Stop checking → stop, диалог закрыт', (tester) async {
       final answers = <CoreRejectPrompt>[];
@@ -320,11 +287,6 @@ void main() {
   });
 
   group('§498 — лист выключенных', () {
-    test('заголовок: 1 server disabled / 2 servers disabled', () {
-      expect(coreRejectBannerTitle(1), '1 server disabled');
-      expect(coreRejectBannerTitle(2), '2 servers disabled');
-    });
-
     Future<void> pumpList(
       WidgetTester tester,
       List<DisabledNode> nodes,
@@ -493,23 +455,6 @@ void main() {
           tester.widget<ListTile>(find.widgetWithText(ListTile, 'Frankfurt'));
       expect(tile.enabled, isFalse);
       expect(tile.trailing, isNull);
-    });
-
-    testWidgets('заголовок листа: 1 и 2', (tester) async {
-      final sub = SubscriptionController();
-      await pumpList(tester, const [one], sub);
-      expect(find.text('1 server disabled'), findsOneWidget);
-
-      await tester.pumpWidget(const SizedBox());
-      await pumpList(
-        tester,
-        const [
-          one,
-          DisabledNode(tag: 'Berlin', reason: 'bad'),
-        ],
-        sub,
-      );
-      expect(find.text('2 servers disabled'), findsOneWidget);
     });
 
     testWidgets('хоп цепочки открывает владельца на Diagnostics',

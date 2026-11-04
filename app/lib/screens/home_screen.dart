@@ -42,6 +42,8 @@ import 'home/home_dialogs.dart';
 import 'home/node_filter_view_model.dart';
 import 'home/node_list_presenter.dart';
 import 'home/openconnect_auth_ui.dart';
+import 'home/node_actions.dart' show viewOutboundJson;
+import '../vpn/cc_channel.dart' show CcChannel;
 import 'home/restore_backup.dart';
 import '../services/url_launcher.dart';
 import 'home/startup_wizard.dart';
@@ -272,6 +274,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       // §654 C — холодный старт тапом по «Sign-in required».
       unawaited(_controllerInit.then((_) {
         if (mounted) unawaited(_openConnectAuth.handleOpenRequest(context));
+        if (mounted) unawaited(_openTaildropRequest()); // §707
       }));
     });
     // Update check (§036 + §390): снек показываем ТОЛЬКО из кеша, на старте.
@@ -594,6 +597,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   DateTime? _pausedAt;
   static const _bgSnackThreshold = Duration(seconds: 30);
 
+  /// §707 — тап по уведомлению Taildrop: вкладка Network узла-получателя.
+  /// Узла нет в работающем конфиге — экран сам скажет «Not found».
+  Future<void> _openTaildropRequest() async {
+    final tag = await CcChannel.instance.takeTaildropOpenRequest();
+    if (tag == null || tag.isEmpty || !mounted) return;
+    viewOutboundJson(context, tag, _controller.state,
+        subController: _subController,
+        homeController: _controller,
+        openNetwork: true);
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _lifecycle = state;
@@ -601,6 +615,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       _controller.onAppResumed();
       // §654 C — тап по «Sign-in required» или челлендж, пришедший в фоне.
       unawaited(_openConnectAuth.handleOpenRequest(context));
+      unawaited(_openTaildropRequest()); // §707
       _openConnectAuth.onState(context, foreground: true);
       _ruleSetAutoUpdater.onAppResumed(); // §366
       // §291 — досмотреть подписки на возврате из фона: periodic-таймер спит
@@ -782,7 +797,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
           },
         );
       case 'config':
-        return ConfigScreen(controller: _controller);
+        return ConfigScreen(
+          controller: _controller,
+          subController: _subController,
+        );
       case 'debug':
         return DebugScreen(
           initialTab: switch (tab) {

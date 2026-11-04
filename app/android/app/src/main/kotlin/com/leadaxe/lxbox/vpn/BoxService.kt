@@ -79,6 +79,16 @@ class BoxService(
         @Volatile
         var commandClient: BoxCommandClient? = null
             private set
+
+        /// §707 итер. 4 — работающий сервис: строка в журнал приложения
+        /// (AppLog) из нативных разборов вне сервиса (служебные файлы Taildrop).
+        @Volatile
+        private var current: BoxService? = null
+
+        /// WARN-строка в AppLog; сервиса нет — только logcat у вызывающего.
+        fun appLogWarning(text: String) {
+            current?.appLogLine("WARN $text")
+        }
     }
 
     /// Scoped to service lifetime — all child coroutines are cancelled in onDestroy / doStop.
@@ -512,6 +522,7 @@ class BoxService(
         runCatching { commandClient?.shutdownAll() }
             .onFailure { Log.w(TAG, "closeCommandServerAtomic($reason): commandClient shutdown failed: ${it.message}") }
         commandClient = null
+        if (current === this) current = null
         val cs = commandServer.getAndSet(null) ?: return
 
         // §330 — `close()` идёт ПЕРЕД `closeService()`, а не после. Причина: на
@@ -581,8 +592,22 @@ class BoxService(
             return
         }
 
+        // §707 — принятое ядром до фичи в общую папку `Taildrop` один раз
+        // уезжает во входящие первого узла Tailscale (до старта ядра: папку
+        // ещё никто не держит).
+        runCatching { Taildrop.migrateLegacyInbox(service.filesDir, config) }
+            .onFailure { Log.w(TAG, "taildrop legacy migration failed: ${it.javaClass.simpleName}") }
+        // §707 итер. 3 — входящие узлов с автосохранением (в том числе только
+        // что перенесённое) уходят в Downloads прямо с диска, пока ядра нет.
+        runCatching { Taildrop.sweepInboxesBeforeCoreStart(service) }
+            .onFailure { Log.w(TAG, "taildrop inbox sweep failed: ${it.javaClass.simpleName}") }
+
         try {
-            cs.startOrReloadService(config, buildOverrideOptions(config))
+            // §703 — на `initialize cache-file: timeout` (файл держит зависший
+            // в закрытии прежний Box) удалить cache.db и повторить один раз.
+            CacheDbLockRetry.startOrRetry("vpn") {
+                cs.startOrReloadService(config, buildOverrideOptions(config))
+            }
         } catch (t: Throwable) {
             // Фича 478 / Д-1 — человеку идёт локализованный шаблон, страховке
             // рядом едет СЫРОЙ `t.message` (EXTRA_CORE_ERROR). Разбирать
@@ -679,6 +704,11 @@ class BoxService(
         setStatus(VpnStatus.Started)
         // §637 — старт удался: ошибка прошлой попытки (id=2) больше не актуальна.
         notification.cancelAlert()
+        // §707 итер. 7 — «📋 Send clipboard», «Поделиться» и «Send to device»:
+        // есть ли узел Tailscale с Allow Taildrop (уведомление ниже
+        // рисуется уже с этим знанием).
+        runCatching { TaildropClip.onConfig(service, config) }
+            .onFailure { Log.w(TAG, "taildrop clip surfaces failed: ${it.javaClass.simpleName}") }
 
         // §122 Фаза 0 — поднять CommandClient-канал. ПОСЛЕ startCommandServer()
         // и Started: command.sock существует только когда сервер запущен. statusClient
@@ -686,6 +716,7 @@ class BoxService(
         runCatching {
             val cc = BoxCommandClient()
             commandClient = cc
+            current = this
             cc.startStatus()
             // §654 C — статус openconnect (второй фактор / SSO): подписка, если
             // в конфиге есть такой endpoint; Dart для этого не нужен.
@@ -1028,6 +1059,22 @@ class BoxService(
                     // §654 C — после reload прежний стрим статуса мог
                     // закончиться молча, а состав endpoint'ов — смениться.
                     runCatching { commandClient?.syncOpenConnectStatus(config) }
+                    // §707 итер. 7 — узел с Allow Taildrop появился или
+                    // пропал: пункты и кнопка уведомления — следом.
+                    runCatching {
+                        if (TaildropClip.onConfig(service, config) && status == VpnStatus.Started) {
+                            serviceScope.launch(Dispatchers.Main) {
+                                if (status == VpnStatus.Started) {
+                                    notification.show(
+                                        ConfigManager.notificationTitle,
+                                        ConfigManager.notificationText.ifEmpty {
+                                            L10n.str(service, R.string.status_connected)
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                    }.onFailure { Log.w(TAG, "taildrop clip surfaces failed: ${it.javaClass.simpleName}") }
                 }
                 .onFailure {
                     Log.e(TAG, "serviceReload failed", it)
@@ -1247,6 +1294,13 @@ class BoxService(
     /// который форвардит сюда.
     fun sendNotification(notification: io.nekohasekai.libbox.Notification) {
         val context = service.applicationContext
+        // §707 — приём Taildrop: свой канал, своё id на файл, тап открывает
+        // вкладку Network узла. Тело несёт имена файла и устройства — в
+        // журнал не пишется.
+        if (Taildrop.isCoreNotification(notification.identifier)) {
+            sendTaildropNotification(context, notification)
+            return
+        }
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         val channelId = notification.identifier.ifBlank { "lxbox-core" }
@@ -1312,11 +1366,29 @@ class BoxService(
     fun cancelNotification(identifier: String, typeID: Int) {
         val context = service.applicationContext
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (Taildrop.isCoreNotification(identifier)) {
+            runCatching { nm.cancel(Taildrop.coreNotificationId(identifier)) }
+            return
+        }
         runCatching {
             nm.cancel(typeID)
         }.onFailure {
             Log.e(TAG, "cancelNotification failed", it)
         }
         Log.d(TAG, "Notification cancelled: $identifier/$typeID")
+    }
+
+    /// §707 — уведомление приёма Taildrop от ядра: кнопки Cancel / Save /
+    /// Delete и автосохранение узла с включённым переключателем — в [Taildrop].
+    private fun sendTaildropNotification(
+        context: Context,
+        notification: io.nekohasekai.libbox.Notification,
+    ) {
+        Taildrop.onCoreNotification(
+            context,
+            notification.identifier,
+            notification.openURL,
+            Taildrop.NoteText(notification.title ?: "", notification.body ?: "", notification.subtitle ?: ""),
+        )
     }
 }

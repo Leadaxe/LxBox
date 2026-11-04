@@ -426,6 +426,7 @@ List<String> _applySrsSingle(
       ports: cr.intPorts,
       portRanges: cr.portRanges,
       packages: cr.packages,
+      packageRegexes: cr.packageRegexes,
       protocols: cr.protocols,
       network: cr.network,
       ipIsPrivate: cr.ipIsPrivate,
@@ -434,6 +435,8 @@ List<String> _applySrsSingle(
       inbounds: cr.inbounds,
       wifiSsids: cr.wifiSsids,
       wifiBssids: cr.wifiBssids,
+      networkTypes: cr.networkTypes,
+      networkIsExpensive: cr.networkIsExpensive,
     ));
   }
   // §247 resolve-only: терминальный route не эмитится (см. inline-ветку).
@@ -444,6 +447,7 @@ List<String> _applySrsSingle(
       ports: cr.intPorts,
       portRanges: cr.portRanges,
       packages: cr.packages,
+      packageRegexes: cr.packageRegexes,
       protocols: cr.protocols,
       network: cr.network,
       ipIsPrivate: cr.ipIsPrivate,
@@ -454,6 +458,8 @@ List<String> _applySrsSingle(
       inbounds: cr.inbounds,
       wifiSsids: cr.wifiSsids,
       wifiBssids: cr.wifiBssids,
+      networkTypes: cr.networkTypes,
+      networkIsExpensive: cr.networkIsExpensive,
     ));
   }
   if (dnsMirrors != null &&
@@ -463,8 +469,15 @@ List<String> _applySrsSingle(
     Map<String, dynamic> srsMatch() {
       final m = <String, dynamic>{'rule_set': tag};
       if (cr.packages.isNotEmpty) m['package_name'] = cr.packages;
+      // §712 — DNS-правило ядра принимает package_name_regex.
+      if (cr.packageRegexes.isNotEmpty) {
+        m['package_name_regex'] = cr.packageRegexes;
+      }
       if (cr.wifiSsids.isNotEmpty) m['wifi_ssid'] = cr.wifiSsids;
       if (cr.wifiBssids.isNotEmpty) m['wifi_bssid'] = cr.wifiBssids;
+      // §694 — DNS-правило ядра принимает тип/лимитность сети.
+      if (cr.networkTypes.isNotEmpty) m['network_type'] = cr.networkTypes;
+      if (cr.networkIsExpensive) m['network_is_expensive'] = true;
       // §030/new_fields — DNS-rule 1.14 принимает source_ip_cidr/inbound.
       if (cr.sourceIpCidrs.isNotEmpty) m['source_ip_cidr'] = cr.sourceIpCidrs;
       if (cr.inbounds.isNotEmpty) m['inbound'] = cr.inbounds;
@@ -576,11 +589,16 @@ List<String> _applyInlineSingle(
   if (cr.domainKeywords.isNotEmpty) {
     match['domain_keyword'] = cr.domainKeywords;
   }
+  // §712 — Go RE2, не anchored; headless 1.14 принимает.
+  if (cr.domainRegexes.isNotEmpty) match['domain_regex'] = cr.domainRegexes;
   if (cr.ipCidrs.isNotEmpty) match['ip_cidr'] = cr.ipCidrs;
   final intPorts = cr.intPorts;
   if (intPorts.isNotEmpty) match['port'] = intPorts;
   if (cr.portRanges.isNotEmpty) match['port_range'] = cr.portRanges;
   if (cr.packages.isNotEmpty) match['package_name'] = cr.packages;
+  if (cr.packageRegexes.isNotEmpty) {
+    match['package_name_regex'] = cr.packageRegexes;
+  }
   // §030/new_fields — sing-box 1.14 (`DefaultHeadlessRule`) ПРИНИМАЕТ в
   // headless: `source_ip_cidr`, `wifi_ssid`, `wifi_bssid`. Раньше (§051, под
   // 1.12) wifi выносился на routing-rule level — теперь кладём прямо в match.
@@ -588,6 +606,9 @@ List<String> _applyInlineSingle(
   if (cr.sourceIpCidrs.isNotEmpty) match['source_ip_cidr'] = cr.sourceIpCidrs;
   if (cr.wifiSsids.isNotEmpty) match['wifi_ssid'] = cr.wifiSsids;
   if (cr.wifiBssids.isNotEmpty) match['wifi_bssid'] = cr.wifiBssids;
+  // §694 — тип/лимитность сети: headless 1.14 принимает, рядом с wifi.
+  if (cr.networkTypes.isNotEmpty) match['network_type'] = cr.networkTypes;
+  if (cr.networkIsExpensive) match['network_is_expensive'] = true;
   // `ip_is_private`, `source_ip_is_private`, `inbound`, `protocol` НЕ
   // поддерживаются в headless rule — sing-box отрежет конфиг на парсинге.
   // Выносим на routing-rule level (там OR/AND с rule_set per default-rule
@@ -762,6 +783,7 @@ Map<String, dynamic> _outboundToRoute(
   List<int>? ports,
   List<String>? portRanges,
   List<String>? packages,
+  List<String>? packageRegexes,
   List<String>? protocols,
   List<String>? network,
   bool ipIsPrivate = false,
@@ -770,6 +792,8 @@ Map<String, dynamic> _outboundToRoute(
   List<String>? inbounds,
   List<String>? wifiSsids,
   List<String>? wifiBssids,
+  List<String>? networkTypes,
+  bool networkIsExpensive = false,
 }) {
   final rule = <String, dynamic>{};
   // ## 12 — `tag`: String (один набор / headless) или List<String> (srs с
@@ -781,6 +805,9 @@ Map<String, dynamic> _outboundToRoute(
     rule['port_range'] = portRanges;
   }
   if (packages != null && packages.isNotEmpty) rule['package_name'] = packages;
+  if (packageRegexes != null && packageRegexes.isNotEmpty) {
+    rule['package_name_regex'] = packageRegexes;
+  }
   if (protocols != null && protocols.isNotEmpty) rule['protocol'] = protocols;
   // §240 — L4-транспорт. AND с protocol/rule_set, OR внутри списка.
   if (network != null && network.isNotEmpty) rule['network'] = network;
@@ -812,6 +839,11 @@ Map<String, dynamic> _outboundToRoute(
   if (wifiBssids != null && wifiBssids.isNotEmpty) {
     rule['wifi_bssid'] = wifiBssids;
   }
+  // §694 — тип/лимитность сети по умолчанию; AND с остальным правилом.
+  if (networkTypes != null && networkTypes.isNotEmpty) {
+    rule['network_type'] = networkTypes;
+  }
+  if (networkIsExpensive) rule['network_is_expensive'] = true;
   if (outbound == kOutboundReject) {
     rule['action'] = 'reject';
   } else {
@@ -831,6 +863,7 @@ Map<String, dynamic> _resolveToRoute(
   List<int>? ports,
   List<String>? portRanges,
   List<String>? packages,
+  List<String>? packageRegexes,
   List<String>? protocols,
   List<String>? network,
   bool ipIsPrivate = false,
@@ -839,6 +872,8 @@ Map<String, dynamic> _resolveToRoute(
   List<String>? inbounds,
   List<String>? wifiSsids,
   List<String>? wifiBssids,
+  List<String>? networkTypes,
+  bool networkIsExpensive = false,
 }) {
   final rule = _outboundToRoute(
     tag,
@@ -846,6 +881,7 @@ Map<String, dynamic> _resolveToRoute(
     ports: ports,
     portRanges: portRanges,
     packages: packages,
+    packageRegexes: packageRegexes,
     protocols: protocols,
     // §240×§247 — матч resolve-правила обязан совпадать с терминальным,
     // иначе резолв цеплял бы трафик другого транспорта.
@@ -856,6 +892,8 @@ Map<String, dynamic> _resolveToRoute(
     inbounds: inbounds,
     wifiSsids: wifiSsids,
     wifiBssids: wifiBssids,
+    networkTypes: networkTypes,
+    networkIsExpensive: networkIsExpensive,
   );
   rule.remove('outbound');
   rule['action'] = 'resolve';

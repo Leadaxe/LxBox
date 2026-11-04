@@ -220,10 +220,33 @@ class DnsController {
     // override схлопывается обратно в preset-ref).
     presetServersByTag.forEach(
         (tag, s) => s['_preset_id'] = presetIdByServerTag[tag]);
+    // §695 правило 5 — нормализация списка: выбранное в пикерах и цели
+    // DNS-опций правил включаются (те же ссылки, что и у сборки).
+    final templateDefaults = <String, String>{
+      for (final v in template.vars) v.name: v.defaultValue,
+    };
+    String defaultOf(String name) => templateDefaults[name] ?? '';
+    // Пустая строка (а не отсутствие ключа) — тоже «не задано»: `stage()`
+    // пишет все три var разом, поэтому в storage мог осесть `''`.
+    final storedFinal = vars['dns_final'] ?? '';
+    final storedResolver = vars['dns_default_domain_resolver'] ?? '';
+    var dnsFinal =
+        storedFinal.isNotEmpty ? storedFinal : defaultOf('dns_final');
+    var defaultResolver = storedResolver.isNotEmpty
+        ? storedResolver
+        : defaultOf('dns_default_domain_resolver');
+    final ruleRefsByTag = <String, String>{
+      for (final cr in activeRules)
+        if (cr.dnsMirrorActive)
+          cr.dns!.serverTag: cr.name.isNotEmpty ? cr.name : 'rule',
+    };
     final resolvedServers = await resolveDnsServersList(
       templateServers: templateServersRaw,
       presetServersByTag: presetServersByTag,
       presetIdByTag: storedPresetIdByTag,
+      dnsFinal: dnsFinal,
+      defaultResolver: defaultResolver,
+      ruleReferencedTags: ruleRefsByTag.keys.toSet(),
     );
 
     // §117: реальные тела DNS-mirror'ов (rule-источники) для превью.
@@ -260,11 +283,6 @@ class DnsController {
 
     // §121: автосброс DNS Final / Default Resolver на template-дефолт, если
     // выбранный сервер исчез из каталога.
-    final ruleRefsByTag = <String, String>{
-      for (final cr in activeRules)
-        if (cr.dnsMirrorActive)
-          cr.dns!.serverTag: cr.name.isNotEmpty ? cr.name : 'rule',
-    };
     final availableTags = enabledServerTags(resolveDisplayedServers(
         resolvedServers, templateByTag, presetServersByTag,
         ruleRefsByTag: ruleRefsByTag));
@@ -273,20 +291,7 @@ class DnsController {
     // автосбросе, `dns_shield` в шаблоне) — экран показывал «выберите» на
     // чистой установке, хотя билдер собирал конфиг с шаблонным дефолтом
     // (`build_config.dart` — `userVars[name] ?? defaultValue`).
-    final templateDefaults = <String, String>{
-      for (final v in template.vars) v.name: v.defaultValue,
-    };
-    String defaultOf(String name) => templateDefaults[name] ?? '';
-
-    // Пустая строка (а не отсутствие ключа) — тоже «не задано»: `stage()`
-    // пишет все три var разом, поэтому в storage мог осесть `''`.
-    final storedFinal = vars['dns_final'] ?? '';
-    final storedResolver = vars['dns_default_domain_resolver'] ?? '';
-    var dnsFinal =
-        storedFinal.isNotEmpty ? storedFinal : defaultOf('dns_final');
-    var defaultResolver = storedResolver.isNotEmpty
-        ? storedResolver
-        : defaultOf('dns_default_domain_resolver');
+    // `defaultOf` / `dnsFinal` / `defaultResolver` — выше (§695).
     var resolverReset = false;
     if (dnsFinal.isNotEmpty && !availableTags.contains(dnsFinal)) {
       dnsFinal = defaultOf('dns_final');

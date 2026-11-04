@@ -70,10 +70,15 @@ Principles the feature protects:
 - **P6.** moved to [025-CONTRACT_REGISTRY · P2](../025-CONTRACT_REGISTRY/FEATURE.md#promises).
 - **P7.** moved to [025-CONTRACT_REGISTRY · P3](../025-CONTRACT_REGISTRY/FEATURE.md#promises).
 - **P8. A repeat within one body collapses; across sources it does not.**
-  The key is the node content without the tag and `detour`, plus the dial path. **Witness:** unit test
-  "`amneziawg://` and `vpn://` of one node — one node and `duplicate`"; unit test "dedup
-  does not cross subscription boundaries"; unit test "D-086: different SNI → TWO nodes". **Mutation:**
-  a dedup key by the "scheme+host+port+credentials" quadruple.
+  The key is the node content without the tag and `detour`, plus the dial path. The first record
+  stays and every later record with the same key collapses into it: the survivor carries
+  `duplicates_collapsed` (how many records and their names), and collapsed records do not go to
+  `dropped[]`. A body is one subscription or one import. Not collapsed: records of different
+  subscriptions, a subscription against manual nodes, different sources of one folder, nodes at
+  config assembly (there colliding tags get a `-N` suffix). **Witness:** unit test "code on the
+  survivor, dropped[] empty"; unit test "dedup does not cross subscription boundaries"; unit test
+  "D-086: different SNI → TWO nodes". **Mutation:** a dedup key by the
+  "scheme+host+port+credentials" quadruple.
 - **P9. Order and names of multi-node configs are the author's.** Nodes go in file
   order; the server name goes to a single element, not to a pool. **Witness:** unit tests
   "list order is the author's, not sorted", "a pool first in the file
@@ -92,8 +97,7 @@ Principles the feature protects:
   private key by the node class rather than by the field's role in the registry.
 - **P14. AmneziaWG gets an MTU ceiling of 1280.** A link/INI without MTU → 1280, above
   → 1280 with code `awg_mtu_clamped`; plain WireGuard is not touched; an authored
-  sing-box body keeps the value with an info code. **Witness:** unit tests "AWG
-  mtu=1420 → clamp to 1280", "plain WG is not touched", "sing-box body with mtu=1420:
+  sing-box body keeps the value with an info code. **Witness:** unit test "sing-box body with mtu=1420:
   value intact, info code". **Mutation:** clamping by the `wireguard` protocol without
   the AWG marker.
 - **P15. A provider banner does not become a node.** A link to `0.0.0.0`,

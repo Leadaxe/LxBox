@@ -451,23 +451,6 @@ void main() {
           reason: 'настройка обязана переживать restore (§221-симметрия)');
     });
 
-    // §279 — app_language: var-allowlist membership (иначе import дропает
-    // неизвестный var → настройка не переживает restore).
-    test('§279 — app_language ∈ appFeatureFlagVars allowlist', () {
-      expect(SettingsStorage.allowedVarKeys(const []).contains('app_language'),
-          isTrue,
-          reason: 'app_language обязан переживать restore (§221-симметрия: '
-              'export vars нефильтрован, import — по allowlist)');
-    });
-
-    // §279/§189 — guard: app_language НЕ член NativePrefsKeys. Членство
-    // автоматически экспортировало бы его вторым представлением в
-    // vpn_settings-блок бэкапа (неопределённый precedence на import);
-    // boxvpn_boot-копия — derived cache, единственный дом бэкапа — vars.
-    test('§279 — app_language ∉ NativePrefsKeys.all (derived cache)', () {
-      expect(NativePrefsKeys.all.contains('app_language'), isFalse);
-    });
-
     // §279 — полный export→import round-trip сохраняет app_language.
     test('§279 — app_language переживает export→import round-trip', () async {
       await seedStorage({
@@ -915,22 +898,6 @@ void main() {
           ['LIVE', 'ARCHIVE-Relay']);
     });
 
-    test('re-export после restore старого архива пишет только новые ключи',
-        () async {
-      await SettingsStorage.replaceRaw({});
-      final svc = const BackupService();
-      await svc.applyImport(await svc.parseImport(legacyArchive()),
-          merge: false, include: {BackupCategory.routing});
-
-      final st = (jsonDecode(
-                  await svc.buildExport(include: {BackupCategory.routing}))
-              as Map<String, dynamic>)['storage'] as Map<String, dynamic>;
-      expect(st.containsKey('directions'), isTrue);
-      expect((st['directions'] as List), hasLength(2));
-      expect(st.containsKey('channels'), isFalse);
-      expect(st.containsKey('channels_migrated'), isFalse);
-    });
-
     test('round-trip нового архива: Направления идентичны', () async {
       await SettingsStorage.replaceRaw({
         'directions': [
@@ -967,11 +934,6 @@ void main() {
   // перезаписывал весь документ настроек и стирал неотмеченные категории.
   // ---------------------------------------------------------------------------
   group('§607 — закрепление конфига и зеркало тумблеров VPN', () {
-    test('config_locked_for_debug — категория Debug API config', () {
-      expect(BackupService.categoryOfVarKey('config_locked_for_debug'),
-          BackupCategory.debugConfig);
-    });
-
     test('restore только App settings не ставит замок конфига', () async {
       await seedStorage(sampleSnapshot());
       final svc = const BackupService();

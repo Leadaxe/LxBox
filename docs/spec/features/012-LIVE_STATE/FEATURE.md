@@ -48,9 +48,8 @@ The feature protects four principles:
   "Disconnected". **Mutation**: the tunnel status is derived from the data
   channel's connect events.
 - **P2. Frequency is cut at the source.** Status tick: home 0.5 s, Statistics
-  open 0.1 s, background — 0. **Witness**: unit
-  `test/vpn/cc_status_fast_test.dart` (Dart-side contract only —
-  `CcChannel.setStatusFast` calls `ccSetStatusFast{fast}`, called by
+  open 0.1 s, background — 0. **Witness**: manual check on the device
+  (`CcChannel.setStatusFast` calls `ccSetStatusFast{fast}`, called by
   `StatsScreen.initState`/`dispose`; the native interval switch itself is
   device-only, one-off check §164). **Mutation**: `setStatusFast` stops
   sending `fast` as an argument or uses the wrong key/method.
@@ -121,21 +120,22 @@ The feature protects four principles:
   reload", "after reload the snapshot is re-captured with retries", "tunnel
   down with a live snapshot → configModel". **Mutation**: a snapshot not bound
   to the session.
-- **P22. Breaking on node switch — only the switched group.** With "Interrupt
-  connections on switch" the live connections with that group in the chain are
-  closed; in Conns they become closed. **Witness**: unit
-  `test/controllers/interrupt_on_switch_test.dart` — with the toggle on,
-  `switchNode` closes only live connections whose `chains` contains the
-  switched group (not closed ones, not other groups' connections); with the
-  toggle off, nothing closes. **Mutation**: `_connectionIdsInGroup` stops
-  filtering by `chains.contains(group)` (e.g. closes all live connections).
+- **P22. Breaking on node switch — only the switched Direction, by the core.**
+  With the Direction flag "Interrupt connections on switch" on (the default),
+  the core closes the live connections of that Direction's selector on any
+  selection change; connections of other groups stay; in Conns the closed ones
+  show as closed. The application closes nothing itself. **Witness**: outside
+  the application — the core (SPEC 064 of sing-box-lx, in the application since
+  2.20.9), checked in the field on v1, 2026-08-13; the application's own unit
+  `interrupt_on_switch_test.dart` was removed on 2026-11-01 together with the
+  global toggle. The flag belongs to
+  [026-DIRECTIONS](../026-DIRECTIONS/FEATURE.md).
 
 ## Controlled parameters
 
 | Setting | Values | Default | Where |
 |---------|--------|---------|-------|
 | Showing closed connections | 30 s / all until turned off | 30 s | a toggle in the Conns tab; only while the screen is open |
-| Interrupt connections on switch | on/off | off | belongs to 010-VPN_SERVICE; here — the observable effect |
 
 Fixed values (not configurable): status tick 0.5 s / 0.1 s / 0 in the
 background; home-screen counters redrawn at most once per 1 s; statistics
@@ -224,7 +224,7 @@ tunnel service ──status──► Connected/Disconnected (independent of the 
 | Status and traffic bar | Shows the tunnel state and the traffic bar on the home screen: volume, app and server connections, connection time and the VPN bypass warning. | P1, P4 | [connection-status.md](FUNCTIONS/connection-status.md) |
 | Core data channels and energy model | Delivers core subscriptions to the screens at the rate the user sees, sleeps in the background and recovers after the app is reopened. | P2, P3, P5 | [data-channels.md](FUNCTIONS/data-channels.md) |
 | Traffic statistics | Shows the session volume, the number of live connections, process memory and traffic per routing rule down to a single connection. | P6 | [traffic-statistics.md](FUNCTIONS/traffic-statistics.md) |
-| Live connections | Lists live and recently closed connections with the routing line, highlights one-way ones and closes one, all, or those of a switched group. | P7, P8, P22 | [live-connections.md](FUNCTIONS/live-connections.md) |
+| Live connections | Lists live and recently closed connections with the routing line, highlights one-way ones and closes one or all. | P7, P8, P22 | [live-connections.md](FUNCTIONS/live-connections.md) |
 | NETWORKS pseudo-direction | Shows Tailscale nodes without `exit_node` as a separate row on the home screen, with their live state instead of latency. | P19 | [networks-direction.md](FUNCTIONS/networks-direction.md) |
 | Running config and freshness verdict | Keeps a snapshot of the config the core runs and answers whether the saved config matches it: "matches", "stale" or "don't know". | P20, P21 | [running-config.md](FUNCTIONS/running-config.md) |
 
@@ -244,8 +244,7 @@ DNS query trace moved to [028-TRAFFIC_PROFILER](../028-TRAFFIC_PROFILER/FEATURE.
 - [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.md) — latency measurement and
   the node probe; the speed test defers home-screen speed to this feature.
 - [010-VPN_SERVICE](../010-VPN_SERVICE/FEATURE.md) — the tunnel service that
-  owns the status, "Connection lost" on status silence and the "Interrupt
-  connections on switch" setting.
+  owns the status and "Connection lost" on status silence.
 - [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.md) — app and core logs,
   crash reports.
 - [019-CONFIG_EDITOR](../019-CONFIG_EDITOR/FEATURE.md) — viewing the resulting config.

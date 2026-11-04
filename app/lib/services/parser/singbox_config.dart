@@ -414,9 +414,33 @@ NodeSpec? _ownUnknownTypeNode(
   final known = ContractRegistry.I.knowsType(type);
   if (!known && !parsingOwnSource) return null;
   final body = known && clean != null ? _withOriginalTag(clean, ob) : ob;
+  return unknownTypeNodeFromBody(
+    type: type,
+    body: body,
+    label: label,
+    rawSource: rawSource,
+    server: ob['server'],
+    port: ob['server_port'],
+    warnings: known ? [] : [UnknownNodeTypeWarning(type)],
+  );
+}
+
+/// §717 — узел типа без своей модели ([UnknownTypeSpec]) из готового тела.
+///
+/// Общий конструктор двух входов: sing-box-JSON ([_ownUnknownTypeNode]) и
+/// конвейер ссылки (`uri_pipeline.dart`), когда тип известен реестру, а
+/// `parseSingboxEntry` модели для него не знает. Тег — [label], пустой —
+/// имя типа; адрес — [server]/[port], если это строка и число.
+UnknownTypeSpec unknownTypeNodeFromBody({
+  required String type,
+  required Map<String, dynamic> body,
+  required String label,
+  required String rawSource,
+  Object? server,
+  Object? port,
+  List<NodeWarning>? warnings,
+}) {
   final tag = label.isNotEmpty ? label : type;
-  final server = ob['server'];
-  final port = ob['server_port'];
   return UnknownTypeSpec(
     id: newUuidV4(),
     tag: tag,
@@ -426,7 +450,7 @@ NodeSpec? _ownUnknownTypeNode(
     server: server is String ? server : '',
     port: port is num ? port.toInt() : 0,
     rawSource: rawSource,
-    warnings: known ? [] : [UnknownNodeTypeWarning(type)],
+    warnings: warnings ?? [],
   );
 }
 

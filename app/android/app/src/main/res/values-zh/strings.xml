@@ -15,7 +15,7 @@
     <string name="notification_status_starting">正在启动…</string>
     <string name="status_connected">已连接</string>
     <string name="notification_action_stop">停止</string>
-    <string name="notification_action_reconnect">重新连接</string>
+    <string name="notification_action_reconnect">🔄 重连</string>
     <string name="notification_error_title">错误</string>
     <!-- §036 core notification channel fallback name (typeName blank) -->
     <string name="core_channel_fallback_name">内核通知</string>
@@ -62,4 +62,53 @@
     <string name="sora_editor_clip_text_length_too_large">文本过大，无法复制</string>
     <string name="openconnect_sign_in_title">需要登录：%1$s</string>
     <string name="openconnect_sign_in_text">网关正在等待验证码或浏览器登录。点按继续。</string>
+    <!-- §707 — Taildrop -->
+    <string name="taildrop_channel_name">Taildrop</string>
+    <string name="taildrop_share_label">Taildrop</string>
+    <string name="taildrop_sending_title">正在发送到 %1$s</string>
+    <string name="taildrop_sent_title">已发送到 %1$s</string>
+    <string name="taildrop_failed_title">无法发送到 %1$s</string>
+    <string name="taildrop_files_progress">第 %1$d 个，共 %2$d 个文件</string>
+    <string name="taildrop_cancel">取消</string>
+    <string name="taildrop_close">关闭</string>
+    <string name="taildrop_need_vpn">请先启动带有 Tailscale 节点的 VPN 再发送文件。</string>
+    <string name="taildrop_choose_node">选择 Tailscale 节点</string>
+    <string name="taildrop_send_to">发送到</string>
+    <string name="taildrop_sharing_off">此 tailnet 已关闭文件共享。请在 Tailscale 管理控制台中开启 Taildrop。</string>
+    <string name="taildrop_no_devices">目前没有可接收文件的设备。</string>
+    <string name="taildrop_nothing_to_send">没有可发送的内容</string>
+    <string name="taildrop_reason_vpn_off">VPN 已关闭</string>
+    <string name="taildrop_reason_cant_read">无法读取文件</string>
+    <string name="taildrop_reason_cant_write">无法写入文件</string>
+    <string name="taildrop_reason_interrupted">传输已中断</string>
+    <string name="taildrop_save">保存</string>
+    <string name="taildrop_delete">删除</string>
+    <string name="taildrop_saved_title">已保存到“下载”：%1$s</string>
+    <string name="taildrop_save_failed">无法保存：%1$s</string>
+    <string name="taildrop_delete_failed">无法删除：%1$s</string>
+    <string name="taildrop_link_from">来自 %1$s 的链接</string>
+    <string name="taildrop_off_all">所有运行中的 Tailscale 节点均已关闭 Taildrop。请在节点设置中开启“允许 Taildrop”。</string>
+    <plurals name="taildrop_saved_files">
+        <item quantity="other">已将 %1$d 个文件保存到“下载”</item>
+    </plurals>
+    <plurals name="taildrop_couldnt_save_files">
+        <item quantity="other">无法保存 %1$d 个文件</item>
+    </plurals>
+
+    <!-- §707 итер. 7 — окно «Send clipboard». -->
+    <string name="notification_action_send_clipboard">📋 发送</string>
+    <string name="clip_window_label">发送剪贴板</string>
+    <string name="clip_process_text_label">发送到设备</string>
+    <string name="clip_to">发送至：%1$s ▾</string>
+    <string name="clip_more">更多选项</string>
+    <string name="clip_clear">清除</string>
+    <string name="clip_hint">要发送的文本</string>
+    <string name="clip_send">发送</string>
+    <string name="clip_open_on">在 %1$s 上打开</string>
+    <string name="clip_need_vpn">启动 VPN 后才能发送</string>
+    <string name="clip_taildrop_off">此节点的 Taildrop 已关闭。</string>
+    <string name="clip_no_devices">没有可接收文件的设备</string>
+    <string name="clip_offline">设备离线。</string>
+    <string name="clip_too_large">内容过大，无法发送</string>
+    <string name="clip_copied">已复制</string>
 </resources>

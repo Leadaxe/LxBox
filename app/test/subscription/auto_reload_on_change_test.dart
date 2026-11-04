@@ -88,10 +88,16 @@ void main() {
 
     int reloads() => calls.where((m) => m == 'reloadVPN').length;
 
+    // Cooldown recovery-действий укорочен с прод-3 с: повтор §667 ждёт его
+    // вживую (между ним — дисковый I/O хранилища, fake-async не годится).
+    // Логика гейта от длины cooldown не зависит.
+    const cooldown = Duration(milliseconds: 500);
+
     setUp(() async {
       tempDir = await Directory.systemTemp.createTemp('auto_reload_gate_');
       PathProviderPlatform.instance = _FakePathProvider(tempDir.path);
       SettingsStorage.resetCacheForTesting();
+      HomeController.recoveryCooldownForTesting = cooldown;
       HapticService.I.enabled = false;
       calls = <String>[];
       messenger.setMockMethodCallHandler(methods, (call) async {
@@ -108,6 +114,7 @@ void main() {
     tearDown(() async {
       controller.cancelMassPing();
       controller.dispose();
+      HomeController.recoveryCooldownForTesting = null;
       await Future<void>.delayed(const Duration(milliseconds: 50));
       for (final ch in [methods, ccStatus, ccGroups]) {
         messenger.setMockMethodCallHandler(ch, null);
@@ -166,7 +173,7 @@ void main() {
       // Занять cooldown: ручной reload (кнопка) только что был.
       await controller.reloadVpn();
       expect(reloads(), 1);
-      controller.markConfigChangedNeedRestart(); // новая правка в пределах 3 с
+      controller.markConfigChangedNeedRestart(); // новая правка в пределах cooldown
 
       expect(await controller.applyIfAutoReload(), isFalse,
           reason: 'в cooldown reload не уходит');
@@ -184,8 +191,8 @@ void main() {
       }
       expect(reloads(), 2, reason: 'повтор ушёл после cooldown');
       expect(controller.autoApplyRetryPendingForTesting, isFalse);
-      // Удержание: повторов больше нет.
-      await Future<void>.delayed(const Duration(milliseconds: 300));
+      // Удержание дольше cooldown: повтор не перепланировал себя.
+      await Future<void>.delayed(cooldown + const Duration(milliseconds: 300));
       expect(reloads(), 2, reason: 'ровно один повтор, не цикл');
     });
 

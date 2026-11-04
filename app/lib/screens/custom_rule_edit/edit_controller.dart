@@ -18,8 +18,10 @@ import '../../widgets/wifi_entry.dart';
 import '../../models/dns_ref.dart';
 import '../dns_settings_screen/dns_server_resolver.dart'
     show defaultDnsServerTag;
+import 'network_choice.dart';
 import 'normalizers.dart' as norm;
 import 'sections/srs_section.dart' show SrsDownloadState;
+import 'validators.dart' as val;
 import 'wifi_zip.dart';
 
 export 'sections/srs_section.dart' show SrsDownloadState;
@@ -90,6 +92,11 @@ class CustomRuleEditController extends ChangeNotifier {
   late final TextEditingController domainCtrl;
   late final TextEditingController domainSuffixCtrl;
   late final TextEditingController domainKeywordCtrl;
+
+  /// §712 — `domain_regex` (inline) и `package_name_regex` (inline/srs),
+  /// по регулярке на строку.
+  late final TextEditingController domainRegexCtrl;
+  late final TextEditingController packageRegexCtrl;
   late final TextEditingController ipCidrCtrl;
   late final TextEditingController sourceIpCidrCtrl;
   late final TextEditingController portCtrl;
@@ -124,6 +131,10 @@ class CustomRuleEditController extends ChangeNotifier {
   late Set<String> _network;
   late List<String> _packages;
   late List<WifiEntry> _wifiNetworks;
+  // §694 — сегмент NETWORK, `network_type` при открытии, лимитность.
+  late NetworkChoice _networkChoice;
+  late List<String> _loadedNetworkTypes;
+  late bool _networkIsExpensive;
   late Map<String, String> _varsValues;
   late RuleDns? _dns;
   late RuleResolve? _resolve;
@@ -200,6 +211,8 @@ class CustomRuleEditController extends ChangeNotifier {
   Set<String> get network => _network;
   List<String> get packages => _packages;
   List<WifiEntry> get wifiNetworks => _wifiNetworks;
+  NetworkChoice get networkChoice => _networkChoice;
+  bool get networkIsExpensive => _networkIsExpensive;
   Map<String, String> get varsValues => _varsValues;
   Map<String, String> get presetSrsPaths => _presetSrsPaths;
   SrsDownloadState get srsState => _srsState;
@@ -252,7 +265,8 @@ class CustomRuleEditController extends ChangeNotifier {
                   .normalizedDomains(domainSuffixCtrl.text,
                       stripLeadingDot: true)
                   .isNotEmpty ||
-              norm.normalizedKeywords(domainKeywordCtrl.text).isNotEmpty,
+              norm.normalizedKeywords(domainKeywordCtrl.text).isNotEmpty ||
+              norm.normalizedRegexes(domainRegexCtrl.text).isNotEmpty,
         _ => false,
       };
 
@@ -271,8 +285,8 @@ class CustomRuleEditController extends ChangeNotifier {
 
   /// §692: секция «DNS & Resolve» видна, только когда у правила есть
   /// условие, видимое DNS-слою (зеркало [CustomRule.dnsLayerEligible]):
-  /// домен, приложение, источник, wifi, либо `inbound` при пустом `ip_cidr`.
-  /// Чисто IP-правило — секции нет: ядро отвергает DNS-ссылку на набор
+  /// домен, приложение, источник, wifi, тип/лимитность сети (§694), либо
+  /// `inbound` при пустом `ip_cidr`. Чисто IP-правило — секции нет: ядро отвергает DNS-ссылку на набор
   /// «только IP», а матчить на DNS-слое там нечего. srs — всегда видна.
   /// Live по текущему состоянию формы.
   bool get dnsSectionVisible => switch (_kind) {
@@ -284,9 +298,11 @@ class CustomRuleEditController extends ChangeNotifier {
                       stripLeadingDot: true)
                   .isNotEmpty ||
               norm.normalizedKeywords(domainKeywordCtrl.text).isNotEmpty ||
+              norm.normalizedRegexes(domainRegexCtrl.text).isNotEmpty ||
               _packages.isNotEmpty ||
+              norm.normalizedRegexes(packageRegexCtrl.text).isNotEmpty ||
               norm.normalizedCidrs(sourceIpCidrCtrl.text).isNotEmpty ||
-              _wifiNetworks.isNotEmpty ||
+              _hasNetworkCondition ||
               (norm.normalizedCidrs(ipCidrCtrl.text).isEmpty &&
                   _inbounds.isNotEmpty),
         _ => false,
@@ -299,6 +315,8 @@ class CustomRuleEditController extends ChangeNotifier {
         domainCtrl,
         domainSuffixCtrl,
         domainKeywordCtrl,
+        domainRegexCtrl,
+        packageRegexCtrl,
         ipCidrCtrl,
         sourceIpCidrCtrl,
         portCtrl,
@@ -319,6 +337,9 @@ class CustomRuleEditController extends ChangeNotifier {
         TextEditingController(text: r.domainSuffixes.join('\n'));
     domainKeywordCtrl =
         TextEditingController(text: r.domainKeywords.join('\n'));
+    domainRegexCtrl = TextEditingController(text: r.domainRegexes.join('\n'));
+    packageRegexCtrl =
+        TextEditingController(text: r.packageRegexes.join('\n'));
     ipCidrCtrl = TextEditingController(text: r.ipCidrs.join('\n'));
     sourceIpCidrCtrl = TextEditingController(text: r.sourceIpCidrs.join('\n'));
     portCtrl = TextEditingController(text: r.ports.join('\n'));
@@ -339,6 +360,10 @@ class CustomRuleEditController extends ChangeNotifier {
     _network = r.network.toSet();
     _packages = List.of(r.packages);
     _wifiNetworks = unzipWifiEntries(r.wifiSsids, r.wifiBssids);
+    _loadedNetworkTypes = List.of(r.networkTypes);
+    _networkChoice =
+        networkChoiceFor(r.networkTypes, hasWifi: _wifiNetworks.isNotEmpty);
+    _networkIsExpensive = r.networkIsExpensive;
     _varsValues = Map<String, String>.from(r.varsValues);
     _dns = r.dns;
     _fixedChosen = r.dns?.fixedMode ?? false;
@@ -703,6 +728,42 @@ class CustomRuleEditController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// §694 — список SSID при переключении сегментов не теряется, снимается
+  /// только при сохранении ([_networkSnapshot]).
+  void setNetworkChoice(NetworkChoice v) {
+    if (v == _networkChoice) return;
+    _networkChoice = v;
+    notifyListeners();
+  }
+
+  void setNetworkIsExpensive(bool v) {
+    if (v == _networkIsExpensive) return;
+    _networkIsExpensive = v;
+    notifyListeners();
+  }
+
+  /// §694 — у правила будет условие сети: SSID/BSSID, тип или лимитность.
+  bool get _hasNetworkCondition {
+    final n = _networkSnapshot();
+    return n.ssids.isNotEmpty ||
+        n.bssids.isNotEmpty ||
+        n.types.isNotEmpty ||
+        _networkIsExpensive;
+  }
+
+  /// §694 — что уйдёт в правило: `network_type` и SSID/BSSID по сегменту.
+  ({List<String> types, List<String> ssids, List<String> bssids})
+      _networkSnapshot() {
+    final wifi = zipWifiEntries(_wifiNetworks);
+    final t = networkTypesFor(_networkChoice,
+        loaded: _loadedNetworkTypes, hasWifi: _wifiNetworks.isNotEmpty);
+    return (
+      types: t.types,
+      ssids: t.keepWifi ? wifi.ssids : const <String>[],
+      bssids: t.keepWifi ? wifi.bssids : const <String>[],
+    );
+  }
+
   void setVarValue(String name, String val) {
     _putVarValue(name, val);
     notifyListeners();
@@ -774,7 +835,20 @@ class CustomRuleEditController extends ChangeNotifier {
     _fixedChosen = m == DnsAnswerMode.fixedIp;
     if (!_fixedChosen && fixedIpCtrl.text.isNotEmpty) fixedIpCtrl.clear();
     _dns = next.isEmpty && _dns == null ? null : next;
+    if (m == DnsAnswerMode.dedicated) _linkResolveToAnswer(next.serverTag);
     notifyListeners();
+  }
+
+  /// §711 — выбор Dedicated server и сервера в Answer всегда включает
+  /// «Resolve before routing» (при Resolve only резолв уже есть) и ставит
+  /// сервер резолва = сервер Answer. Strategy и Advanced-поля не трогаются.
+  /// Только для kind'ов, где resolve применим (inline/srs; живой гейт по
+  /// доменам — в snapshot). Гидрация правила сюда не ходит.
+  void _linkResolveToAnswer(String serverTag) {
+    if (_kind != CustomRuleKind.inline && _kind != CustomRuleKind.srs) return;
+    final base = _resolve ?? _resolveKeep.copyWith(only: false);
+    _resolve = base.copyWith(serverTag: serverTag);
+    _resolveKeep = _resolve!;
   }
 
   /// §683 — адреса поля Fixed IP: непустые строки.
@@ -814,6 +888,7 @@ class CustomRuleEditController extends ChangeNotifier {
   /// §117: выбор DNS-сервера для mirror'а (по tag из существующих).
   void setDnsServerTag(String tag) {
     _dns = (_dns ?? const RuleDns()).copyWith(serverTag: tag);
+    _linkResolveToAnswer(tag);
     notifyListeners();
   }
 
@@ -1010,7 +1085,7 @@ class CustomRuleEditController extends ChangeNotifier {
           varsValues: Map<String, String>.from(_varsValues),
         );
       case CustomRuleKind.srs:
-        final wifi = zipWifiEntries(_wifiNetworks);
+        final wifi = _networkSnapshot();
         return CustomRuleSrs(
           id: initial.id,
           name: name,
@@ -1021,6 +1096,7 @@ class CustomRuleEditController extends ChangeNotifier {
           ports: norm.normalizedPorts(portCtrl.text),
           portRanges: norm.normalizedPortRanges(portRangeCtrl.text),
           packages: List.of(_packages),
+          packageRegexes: norm.normalizedRegexes(packageRegexCtrl.text),
           protocols: _protocols.toList()..sort(),
           network: _network.toList()..sort(),
           ipIsPrivate: _ipIsPrivate,
@@ -1029,6 +1105,8 @@ class CustomRuleEditController extends ChangeNotifier {
           inbounds: _inbounds.toList()..sort(),
           wifiSsids: wifi.ssids,
           wifiBssids: wifi.bssids,
+          networkTypes: wifi.types,
+          networkIsExpensive: _networkIsExpensive,
           outbound: _outbound,
           dns: _effectiveDns, // §683 — адреса Fixed IP из поля
           // §247: гейт на случай snapshot до notify (сброс live в
@@ -1036,7 +1114,7 @@ class CustomRuleEditController extends ChangeNotifier {
           resolve: resolveEligible ? _effectiveResolve : null,
         );
       case CustomRuleKind.inline:
-        final wifi = zipWifiEntries(_wifiNetworks);
+        final wifi = _networkSnapshot();
         return CustomRuleInline(
           id: initial.id,
           name: name,
@@ -1047,10 +1125,12 @@ class CustomRuleEditController extends ChangeNotifier {
               domainSuffixCtrl.text,
               stripLeadingDot: true),
           domainKeywords: norm.normalizedKeywords(domainKeywordCtrl.text),
+          domainRegexes: norm.normalizedRegexes(domainRegexCtrl.text),
           ipCidrs: norm.normalizedCidrs(ipCidrCtrl.text),
           ports: norm.normalizedPorts(portCtrl.text),
           portRanges: norm.normalizedPortRanges(portRangeCtrl.text),
           packages: List.of(_packages),
+          packageRegexes: norm.normalizedRegexes(packageRegexCtrl.text),
           protocols: _protocols.toList()..sort(),
           network: _network.toList()..sort(),
           ipIsPrivate: _ipIsPrivate,
@@ -1059,6 +1139,8 @@ class CustomRuleEditController extends ChangeNotifier {
           inbounds: _inbounds.toList()..sort(),
           wifiSsids: wifi.ssids,
           wifiBssids: wifi.bssids,
+          networkTypes: wifi.types,
+          networkIsExpensive: _networkIsExpensive,
           outbound: _outbound,
           dns: _effectiveDns, // §683 — адреса Fixed IP из поля
           resolve: resolveEligible ? _effectiveResolve : null, // §247
@@ -1078,6 +1160,7 @@ class CustomRuleEditController extends ChangeNotifier {
   /// трогается — пользователь исправляет набранное.
   String? get saveBlockReason =>
       jsonError ??
+      regexError ??
       // §683 — поле Fixed IP и Advanced-поля резолва.
       (_kind == CustomRuleKind.inline || _kind == CustomRuleKind.srs
           ? (fixedIpError ??
@@ -1087,6 +1170,29 @@ class CustomRuleEditController extends ChangeNotifier {
                       resolveSubnetError)
                   : null))
           : null);
+
+  /// §712 — первая невалидная регулярка в полях Package name regex /
+  /// Domain regex (поле, видимое у текущего вида правила). Ядро на битой
+  /// регулярке не стартует — Save блокируется.
+  String? get regexError {
+    String? check(String label, TextEditingController ctrl) {
+      final bad = norm
+          .normalizedRegexes(ctrl.text)
+          .where((r) => !val.isValidRegex(r))
+          .firstOrNull;
+      if (bad == null) return null;
+      return getLocalText.s("%1\$s: invalid regex %2\$s", label, bad);
+    }
+
+    return switch (_kind) {
+      CustomRuleKind.inline =>
+        check(getLocalText.s("Package name regex"), packageRegexCtrl) ??
+            check(getLocalText.s("Domain regex"), domainRegexCtrl),
+      CustomRuleKind.srs =>
+        check(getLocalText.s("Package name regex"), packageRegexCtrl),
+      _ => null,
+    };
+  }
 
   /// §225 — валиден ли текущий текст json-правила (для inline-хелпера в
   /// JsonSection и гейта Save). `null` = ок (нет ошибки), иначе краткое

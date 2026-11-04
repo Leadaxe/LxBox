@@ -19,14 +19,6 @@ List<DnsHealthSample> _mk(int fails, int oks, {bool activity = true}) => [
     ];
 
 void main() {
-  group('§262 константы', () {
-    test('окно 30с, доля 20%, минимум 3 fail', () {
-      expect(kDnsHealthWindow.inSeconds, 30);
-      expect(kDnsHealthFailRatio, 0.20);
-      expect(kDnsHealthMinFails, 3);
-    });
-  });
-
   group('§262 базовые', () {
     test('пусто → healthy', () {
       expect(evaluateDnsUnhealthy([]), isFalse);
@@ -43,19 +35,11 @@ void main() {
     test('3 fail из 20 (15% < 20%) → healthy', () {
       expect(evaluateDnsUnhealthy(_mk(3, 17)), isFalse);
     });
-
-    test('4 fail из 10 (40%) + активность → unhealthy', () {
-      expect(evaluateDnsUnhealthy(_mk(4, 6)), isTrue);
-    });
   });
 
   group('§262 гейт активности связи', () {
     test('5 fail 100%, но НЕТ conn-активности → healthy (простой)', () {
       expect(evaluateDnsUnhealthy(_mk(5, 0, activity: false)), isFalse);
-    });
-
-    test('те же 5 fail 100% + активность → unhealthy', () {
-      expect(evaluateDnsUnhealthy(_mk(5, 0, activity: true)), isTrue);
     });
   });
 

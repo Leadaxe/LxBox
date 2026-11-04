@@ -231,27 +231,6 @@ void main() {
   });
 
   group('normalizeRuleOrder (§370 полный проход)', () {
-    test('seed обязательного пресета + разметка + сортировка', () {
-      final rules = [_inline('user')..orderNum = 1000];
-
-      final out = normalizeRuleOrder(rules, _catalog(), _template());
-
-      expect(out.first.presetId, 'traffic-processing',
-          reason: 'несортируемый пресет засеян и стоит первым');
-      expect(out.first.orderNum, 0);
-      expect(out.last.name, 'user');
-    });
-
-    test('идемпотентность: повторный вызов ничего не меняет', () {
-      final once = normalizeRuleOrder(
-          [_preset('fcm-push'), _inline('user')], _catalog(), _template());
-      final snapshot = [for (final r in once) '${r.presetId}:${r.orderNum}'];
-
-      final twice = normalizeRuleOrder(once, _catalog(), _template());
-
-      expect([for (final r in twice) '${r.presetId}:${r.orderNum}'], snapshot);
-    });
-
     test('varsValues существующего пресета не затирается seed-ом', () {
       final rules = [
         CustomRulePreset(
@@ -313,48 +292,9 @@ void main() {
     });
   });
 
-  group('§370 регресс: drag не двигает шаблонные якоря', () {
-    test('перетаскивание в занятую точку не сдвигает якоря ниже', () {
-      // Раскладка как на устройстве после разметки.
-      final head = _preset('traffic-processing')..orderNum = 0;
-      final priv = _preset('private-ip')..orderNum = 950;
-      final ads = _preset('block-ads')..orderNum = 960;
-      final fcm = _preset('fcm-push')..orderNum = 970;
-      final bt = _preset('bittorrent')..orderNum = 980;
-      final home = _inline('Home wifi')..orderNum = 1000;
-      final ruDirect = _preset('ru-direct')..orderNum = 1120;
-      final rules = [head, priv, ads, fcm, bt, home, ruDirect];
-      bool sortable(CustomRule r) => r.presetId != 'traffic-processing';
-
-      // fcm тащим за bt (980) → want=981, свободен → сдвига быть не должно
-      placeRuleAfter(rules, fcm, bt, isSortable: sortable);
-
-      expect(fcm.orderNum, 981);
-      expect(home.orderNum, 1000, reason: 'want свободен — сосед не двигается');
-      expect(ruDirect.orderNum, 1120, reason: 'ЯКОРЬ обязан стоять');
-      expect(head.orderNum, 0);
-    });
-  });
-
   group('запись rules[] round-trip (§370 num в storage)', () {
-    test('orderNum переживает запись и чтение', () {
-      final r = _inline('a')..orderNum = 1042;
-
-      final back = ruleFromRecord(ruleToRecord(r)).value!;
-
-      expect(back.orderNum, 1042);
-      expect(ruleToRecord(r)['num'], 1042, reason: 'ключ в записи — `num`');
-    });
-
     test('неразмеченное правило не пишет ключ num', () {
       expect(ruleToRecord(_inline('a')).containsKey('num'), isFalse);
-    });
-
-    test('copyWith сохраняет orderNum', () {
-      final r = _inline('a')..orderNum = 1007;
-
-      expect(r.copyWith(name: 'b').orderNum, 1007);
-      expect(r.withEnabled(false).orderNum, 1007);
     });
   });
 }

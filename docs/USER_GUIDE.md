@@ -5,6 +5,10 @@ code — about the logic and the order in which to set things up.
 
 > Русская версия: [USER_GUIDE.ru.md](USER_GUIDE.ru.md)
 
+> Advanced tools — Lock config, Raw JSON rules, import rules, Debug API,
+> Automation API, mixins — are described in the
+> [Advanced user guide](ADVANCED_USER_GUIDE.md).
+
 ## Contents
 
 - [What is what](#what-is-what)
@@ -22,11 +26,11 @@ code — about the logic and the order in which to set things up.
   - [The subscription screen has four tabs: Nodes, Settings, Source, Filters](#the-subscription-screen-has-four-tabs-nodes-settings-source-filters)
   - [Replace with a group folds a subscription or folder into one group](#replace-with-a-group-folds-a-subscription-or-folder-into-one-group)
 - [2. Directions sets the exits](#2-directions-sets-the-exits)
-  - [Interrupt connections on switch — three switches for three events](#interrupt-connections-on-switch--three-switches-for-three-events)
+  - [Interrupt connections on switch — two checkboxes for two events](#interrupt-connections-on-switch--two-checkboxes-for-two-events)
 - [3. Rules sets exceptions and the default exit](#3-rules-sets-exceptions-and-the-default-exit)
   - [Presets — a catalog of ready-made rules to copy into Rules](#presets--a-catalog-of-ready-made-rules-to-copy-into-rules)
   - [A rule can assign a DNS server to its own domains](#a-rule-can-assign-a-dns-server-to-its-own-domains)
-  - [Raw JSON and the View tab cover fields the form lacks](#raw-json-and-the-view-tab-cover-fields-the-form-lacks)
+  - [Raw JSON and the View tab cover fields the form lacks](ADVANCED_USER_GUIDE.md#raw-json-and-the-view-tab-cover-fields-the-form-lacks)
 - [4. DNS decides which server resolves each name](#4-dns-decides-which-server-resolves-each-name)
   - [Group and Shield DNS combine several servers under one tag](#group-and-shield-dns-combine-several-servers-under-one-tag)
   - [DNS Rules assign a DNS server to a domain](#dns-rules-assign-a-dns-server-to-a-domain)
@@ -55,12 +59,13 @@ code — about the logic and the order in which to set things up.
   - [Appearance changes the theme, layout and language](#appearance-changes-the-theme-layout-and-language)
   - [Subscriptions sets when subscriptions download and which client fetches them](#subscriptions-sets-when-subscriptions-download-and-which-client-fetches-them)
   - [Diagnostics shows Android permissions and turns on debugging](#diagnostics-shows-android-permissions-and-turns-on-debugging)
-  - [Automation opens the VPN to commands from other apps](#automation-opens-the-vpn-to-commands-from-other-apps)
+  - [Automation opens the VPN to commands from other apps](ADVANCED_USER_GUIDE.md#automation-opens-the-vpn-to-commands-from-other-apps)
 - [Common problems: symptom, cause, action](#common-problems-symptom-cause-action)
 - [If something goes wrong — where to look](#if-something-goes-wrong--where-to-look)
 - [Speed Test measures speed to a test server over the current route](#speed-test-measures-speed-to-a-test-server-over-the-current-route)
 - [Config Editor edits the core config until the next rebuild](#config-editor-edits-the-core-config-until-the-next-rebuild)
-  - [Lock config pins a manual config](#lock-config-pins-a-manual-config)
+  - [Mixins keep your edits through rebuilds](#mixins-keep-your-edits-through-rebuilds)
+  - [Lock config pins a manual config](ADVANCED_USER_GUIDE.md#lock-config-pins-a-manual-config)
 - [Recipes](#recipes)
   - [Share the VPN with other devices over Wi-Fi](#share-the-vpn-with-other-devices-over-wi-fi)
   - [ByeDPI and other local proxies connect as an ordinary server](#byedpi-and-other-local-proxies-connect-as-an-ordinary-server)
@@ -74,7 +79,7 @@ code — about the logic and the order in which to set things up.
   - [Lookahead and lookbehind negate part of a condition](#lookahead-and-lookbehind-negate-part-of-a-condition)
   - [The filter ignores case and matches anywhere in the name](#the-filter-ignores-case-and-matches-anywhere-in-the-name)
 - [Quick connect: the VPN turns on without opening the app](#quick-connect-the-vpn-turns-on-without-opening-the-app)
-- [Automation: the VPN turns on by events](#automation-the-vpn-turns-on-by-events)
+- [Automation: the VPN turns on by events](ADVANCED_USER_GUIDE.md#automation-the-vpn-turns-on-by-events)
 - [App language](#app-language)
 - [Workspaces — named sets of settings](#workspaces--named-sets-of-settings)
 - [Backup moves settings to another device](#backup-moves-settings-to-another-device)
@@ -345,8 +350,8 @@ in one of three ways:
 The Mode field sets the selection mode; in Load balance mode, Sticky session
 by appears below it — session stickiness. The test interval and the
 Interrupt connections on switch checkbox sit in the Advanced section. The
-app has three checkboxes with that name; which one fires when is covered in
-[Directions](#interrupt-connections-on-switch--three-switches-for-three-events).
+app has two checkboxes with that name; which one fires when is covered in
+[Directions](#interrupt-connections-on-switch--two-checkboxes-for-two-events).
 
 A server switched off in the folder stays in the preview with the ⏻ icon
 and is not counted: `5 of 6 servers · 1 off`. In Pick you can tick it; it
@@ -491,23 +496,8 @@ The **Source** tab shows the provider's raw response. If the body is
 base64-encoded, the Decode base64 checkbox expands it into the form the
 subscription parser works with.
 
-The **Filters** tab holds node-processing rules; the rules apply on import
-and on every update. A rule is a set of conditions plus an action. A
-condition reads `path operator value`, where the operator is contains,
-equals or matches (regex). The Not and Case-sensitive checkboxes refine a
-condition, and several conditions combine by AND or OR. An empty path
-searches the whole node. There are three actions:
-
-| Action | What it does |
-|---|---|
-| Disable | Removes matching nodes from routing |
-| Enable | Brings them back, clearing manual disabling too |
-| Replace | Writes a new value at the given path — whole or in part, with `$1`, `$2`… groups from the regex: this fixes a non-standard TLS fingerprint across all nodes at once |
-
-Rules apply in order, and the last one that matched wins: the pair "disable
-everything → enable NL" works as a whitelist. The **Matches** tab in the
-rule editor shows which nodes a rule will apply to and what it will change,
-before you save.
+The **Filters** tab holds import rules: they disable, enable or change nodes
+on every update — [Advanced user guide → Import rules](ADVANCED_USER_GUIDE.md#import-rules-on-a-subscriptions-filters-tab).
 
 ### Replace with a group folds a subscription or folder into one group
 
@@ -534,7 +524,7 @@ one choice in the direction.
 
 Section [2. Directions](#2-directions-sets-the-exits)
 describes the auto-selection modes, and section
-[Interrupt connections on switch](#interrupt-connections-on-switch--three-switches-for-three-events)
+[Interrupt connections on switch](#interrupt-connections-on-switch--two-checkboxes-for-two-events)
 describes the Interrupt connections on switch box. The group's
 auto-selection leaves out the provider's auto nodes from the same
 subscription; manual selection lists them. Detour links of the source join
@@ -655,7 +645,7 @@ one includes, and everything over it. A drop there changes nothing and shows
 a hint such as `Cannot move: "Streaming" includes "Germany"`. The Debug API
 refuses such an order the same way, with code 409.
 
-### Interrupt connections on switch — three switches for three events
+### Interrupt connections on switch — two checkboxes for two events
 
 To move open connections to the new server as soon as the node changes, turn
 on **Interrupt connections on switch**. Without this option, open connections
@@ -663,24 +653,25 @@ keep running through the old server until they close on their own: a download
 finishes through the same exit, a messenger's long-lived socket stays where it
 is. Usually that is what you want.
 
-The option exists in three places, and each one answers its own event:
+The option exists in two places, and each one answers its own event:
 
 | Where | What it reacts to | How it works |
 |---|---|---|
-| VPN Settings → System → Interrupt connections on switch (off by default) | You tap a node on the home screen | The app closes the open connections of the switched direction. Nothing goes into the config; switches made by the core stay uncovered. |
-| Direction editor → Behavior (on by default) | The direction's choice changes from any source: a tap, Quick connect, an automation action, the API | Goes into the direction in the config; the core drops the connections. |
+| Direction editor → Behavior (on by default) | The direction's choice changes from any source: a tap on a node on the home screen, Quick connect, an automation action, the API | Goes into the direction in the config; the core drops the connections. |
 | Direction editor → Include auto (urltest), and the same box in an [auto node](#auto-node--one-list-entry-with-a-pool-of-servers-inside) (off by default) | The auto group changes node by itself: a faster node appeared or the current one failed | Goes into the auto group in the config; the core drops the connections. |
 
 From the table:
 
-- for a manual node change inside a direction, the first two switches
-  duplicate each other; either one is enough;
-- for an automatic change, only the third one works;
-- to drop connections in every case, turn on all three.
+- for a manual node change inside a direction, the first checkbox works;
+- for an automatic change, only the second one works;
+- to drop connections in both cases, turn on both.
 
-The VPN Settings switch is one for the whole app; each direction and auto node
-has its own copy of the other two. You can keep a work direction gentle and
-make a streaming one strict.
+Each direction and auto node has its own copy of these checkboxes. You can
+keep a work direction gentle and make a streaming one strict.
+
+Earlier versions also had a switch in VPN Settings → System. It duplicated the
+direction checkbox and is gone. If it was on, the update turns the checkbox on
+in every direction where it was off.
 
 ---
 
@@ -807,10 +798,11 @@ The other parameters:
 | Traffic Processing | Resolve destination IP | On | Resolves the domain to an IP before choosing a route, so that IP and GeoIP rules match. |
 | Traffic Processing | Resolve strategy | `ipv4_only` | Which addresses to take in that resolution; for the link with IPv6, see [IPv6 in the tunnel](#ipv6-in-the-tunnel-is-off-turn-it-on-only-if-your-network-supports-it). |
 | Ru internet segment | DNS | On | The preset's DNS group resolves the preset's domains; without it Force IPv4 does not work. |
-| Ru internet segment | UDP server IP | `77.88.8.8 · Base` | The address of the Yandex UDP server. DoH and DoT stay on `77.88.8.88`. |
+| Ru internet segment | UDP server IP | `77.88.8.8 · Base` | The address of the Yandex UDP server; the address sets the profile (Base, Safe, Family). Off: plain UDP is not used. |
+| Ru internet segment | DoT server IP, DoH server IP | `77.88.8.88 · Safe` | The same for the encrypted servers. Off: that server is not used. With all three servers Off the preset's DNS works as with the DNS switch off. |
 | Ru internet segment | GeoIP IP-range fallback | On | Also checks the IP against Russian ranges: catches connections where the domain is not detected. Downloads a 150 KB list. |
 | Ru internet segment | Russian apps by package | On | Routes Russian apps (banks, marketplaces, Gosuslugi, Yandex, VK) by package name, whatever domains they open. Downloads a 4 KB list. |
-| Ru internet segment, Russia-only services | Force IPv4 | On | Resolves the preset's domains to IPv4 only: on a network without working IPv6, connections do not hang. |
+| Ru internet segment, Russia-only services | Force IPv4 | On | Resolves the preset's domains to IPv4 only: on a network without working IPv6, connections do not hang. The box changes only the address family; Ru internet segment resolves its domains through its Yandex DNS group either way. |
 | FakeIP | DNS | On | Turns on substitute addresses; turning it off removes FakeIP without deleting the preset. |
 | FakeIP | Block HTTPS records | On | Answers HTTPS and SVCB DNS records with an empty response, and apps fall back to plain A and AAAA. |
 | Tailscale networks | DNS | On | The node's DNS resolves the Tailscale network's names. |
@@ -840,7 +832,10 @@ To have one rule decide both where traffic goes and which server resolves its
 domains, turn on **Send DNS to dedicated server** in the DNS section of the
 rule editor. The box adds a paired DNS rule: DNS queries for this rule's
 domains go to the chosen server, `google_udp` by default. You do not build the
-DNS rule by hand.
+DNS rule by hand. Choosing a dedicated server also turns on **Resolve before
+routing** with the same server: with FakeIP above the rule, the DNS rule alone
+never sees the query, and the resolver that matters is the one used before
+routing. Clear the box if you do not want that.
 
 In the same section, the **Force IPv4 (drop AAAA)** box answers AAAA queries
 for the rule's domains locally, and traffic goes over IPv4. It needs no
@@ -853,14 +848,8 @@ Limitations the editor itself warns about:
 - with a rule-set the pairing works only if the list contains domains: IP-only
   lists do not match DNS queries.
 
-### Raw JSON and the View tab cover fields the form lacks
-
-You can write a rule as a sing-box `route.rules` JSON fragment: choose Raw
-JSON in Source. The JSON itself sets the action; the editor checks the syntax
-as you type.
-
-For a form-built rule, the **View** tab shows the finished sing-box fragment
-that goes into the config.
+A rule can also be written as a raw sing-box JSON fragment (Raw JSON in
+Source): [Advanced user guide → Raw JSON](ADVANCED_USER_GUIDE.md#raw-json-and-the-view-tab-cover-fields-the-form-lacks).
 
 ---
 
@@ -891,6 +880,8 @@ After that the app does not add or return servers by itself.
   **Added**. The **⋮** menu → **Add all defaults** adds every template server
   missing from the list. Servers that a new app version brings appear here,
   not in your list.
+- **Reorder servers**: drag a row by the strip on its left, as with DNS
+  rules. The order is kept; locked servers move too.
 - **Locked servers**: a server something depends on shows **used by …** with
   a lock — its switch and Delete are unavailable. It is held by a preset, a
   routing rule's DNS option, a group in the list, the **DNS Final** or
@@ -1338,7 +1329,7 @@ named under each group below. Changes take effect at different times:
 
 | What you changed | When it applies |
 |---|---|
-| Interrupt connections on switch, Memory limit, Keep VPN on exit | Immediately |
+| Memory limit, Keep VPN on exit | Immediately |
 | WireGuard connections, the Core tab, local proxy options, System HTTP proxy | After a VPN restart. These changes alter the config, and while the VPN runs the home screen shows the banner `Config changed — restart VPN to apply`. |
 | Tunnel sleep mode, Allow VPN bypass | After a VPN restart that you make yourself: the home screen shows the same banner, but Auto-restart VPN on settings change does not apply these settings. |
 
@@ -1349,11 +1340,8 @@ running VPN itself whenever the new config differs from the running one.
 ### System controls tunnel sleep and core memory
 
 The **System** tab decides how much of the phone's resources the VPN spends
-while traffic is low or absent. Where: VPN Settings → System. The top of the
-tab holds the Interrupt connections on switch switch; what it does and how it
-differs from the switches of the same name in a direction is described in
-[Interrupt connections on switch](#interrupt-connections-on-switch--three-switches-for-three-events).
-Below it are the WireGuard connections and Optimization groups.
+while traffic is low or absent. Where: VPN Settings → System. The tab holds
+two groups: WireGuard connections and Optimization.
 
 #### WireGuard connections puts idle WireGuard tunnels to sleep
 
@@ -1400,29 +1388,29 @@ the group.
 | Every new node answers with a delay when you switch | Lazy tunnel build → off: the app stops passing lazy build to the core, and the core builds tunnels by its own rules |
 | Tunnels must not sleep at all | Suspend idle tunnels → Off |
 
-#### Memory limit sets the core's memory ceiling
+#### Memory limit is a threshold for the core's own memory
 
-The **Memory limit** setting caps the memory the VPN core can take. A ceiling
-set too low makes the core clean up memory all the time: the processor stays
-busy, and the phone heats up. Where: VPN Settings → System → Optimization →
+The **Memory limit** setting is a memory threshold the VPN core watches.
+The number is compared with the memory of the core itself (its Go runtime),
+not with the whole app process: the core, the interface and the loaded
+libraries share one process, and the libraries alone take about 140 MB, so
+the figure on the Statistics card is never the core's alone. The core's own
+figure is in Statistics → Memory → **Core memory**, with the threshold next
+to it when a number is chosen. Where: VPN Settings → System → Optimization →
 Memory limit. The default is Auto (recommended); a change applies to the
 running core at once, without a restart.
 
-Auto picks the ceiling by the phone's memory:
-
-| Memory Android sees | Core ceiling |
-|---|---|
-| Less than 3.5 GiB | 200 MB |
-| From 3.5 to 7 GiB | 384 MB |
-| 7 GiB and more | 512 MB |
-
-Android sees a "4 GB" phone as 3.7 GiB, and Auto sets 384 MB; an "8 GB" phone
-as 7.5 GiB, and Auto sets 512 MB.
-
-The other options: Off removes the ceiling, but the core keeps watching for
-low memory in the system; 200, 384, 512 and 768 MB set the ceiling
-explicitly. Raise the ceiling if the phone heats up under the VPN or core
-memory snapshots appear in Debug → OOM; what else to check is described in
+Auto sets no threshold: the core watches the free memory of the system
+instead and drops its connections only when the phone is actually running
+out of memory. 200, 384, 512 and 768 MB set the threshold explicitly: above
+it the core drops its connections and frees memory, and close to it the
+garbage collector keeps the processor busy, so the phone heats up. With a
+number the core still watches the system's free memory as well. A value
+just above the usual Core memory figure causes reconnects while you use the
+phone. Leave Auto
+unless you know what the number is for; a value chosen earlier stays as it
+was. If the phone heats up under the VPN or core memory snapshots appear in
+Debug → OOM, set Auto first; what else to check is described in
 [If something goes wrong](#if-something-goes-wrong--where-to-look).
 
 #### Tunnel sleep mode pauses the whole tunnel on a screen event
@@ -1507,7 +1495,7 @@ turned on here too, but the decision and the order of steps are described in
 | **IPv6 address** | The tunnel's IPv6 address; applies only when Enable IPv6 is on | `fdfe:dcba:9876::1/126` |
 | **Custom tunnel routes** | Sends all IPv4 and IPv6 into the tunnel with explicit range halves (`0.0.0.0/1`, `128.0.0.0/1`, `::/1`, `8000::/1`) instead of the core's default routes | Off |
 | **TUN interface** | The system name of the interface | `lxbox` |
-| **MTU** | The largest packet size in the tunnel; 1492 suits both a mobile network and Wi-Fi | `1492` |
+| **MTU** | The largest packet size on the tunnel interface; 9000 is the sing-box default and fits any network, since the core re-sends TCP at the real network MTU | `9000` |
 | **Auto route** | The core manages the routing table by itself | On |
 | **Strict route** | The on-screen hint warns: `May break connectivity on some devices` | Off |
 | **Stack** | The tunnel's network stack: `system`, `gvisor` (in user space), `mixed` | `system` |
@@ -1604,6 +1592,7 @@ App Settings → General.
 | Home-screen shortcut | A hint without a switch: shortcuts on the app icon. | — |
 | Check for updates on launch | Asks github.com for a new version once every 24 hours. | set by your answer to the question on first launch |
 | Auto-ping after connect | Pings the nodes of the current direction 5 seconds after connecting. | on |
+| Node budget | How many nodes the app holds in all: manual servers and folder members first, the rest is shared between enabled subscriptions. A subscription above its share keeps its first nodes and shows «N of M nodes» with ⚠. Above 1000 the app may freeze or be killed by the system. | 1000 |
 | Haptic feedback | Vibrates when you tap the connect button, pick a node, refresh a subscription by hand, and when the core stops responding. | on |
 | Backup & restore | Opens the screen that moves settings through a file. | — |
 
@@ -1794,25 +1783,8 @@ developer's request in an issue:
 | Verbose (TRACE/DEBUG) | Adds the detailed TRACE and DEBUG levels to the core log. The switch is active while Forward sing-box logs is on; no lines appear until the app restarts after Forward sing-box logs is turned on. | off |
 | Auto-record visited Wi-Fi networks | Remembers Wi-Fi networks for WI-FI NETWORK rules. | off |
 
-**Debug API** starts an HTTP server through which a computer reads the app's
-state, logs and config and controls the VPN. The server listens only on the
-phone's `127.0.0.1` address; the computer connects to it with the command
-`adb forward tcp:9269 tcp:9269`. When you first turn it on, the app creates
-an access token. The token is visible only on this screen and stays out of
-Backup by default; Copy copies it, Regenerate creates a new one. The Port
-field accepts values from 1024 to 49151. The default port is `9269` — the
-same as in the adb forward command.
-
-> 📖 [debug-api-reference.md](api/debug-api-reference.md) — Debug API
-> requests and their responses.
-
-**Lock config (debug)** pins the config loaded through the Debug API:
-actions in the interface do not rebuild it. Turning Debug API off also
-removes the pin.
-
-> ⚠️ While the config is pinned, edits in Routing, DNS and on servers do not
-> reach the tunnel. Turn off Lock config (debug), and the next action in the
-> interface rebuilds the config from the settings.
+**Debug API** and **Lock config (debug)** serve debugging from a computer:
+the server, token, port and config pin — [Advanced user guide → Debug API](ADVANCED_USER_GUIDE.md#debug-api).
 
 **Forward sing-box logs** writes the core log into the app's common log.
 The core reads this option once, when the process starts, so a VPN restart
@@ -1846,46 +1818,8 @@ the Add current and Manual buttons add to it.
 > recorded networks. Remove a network with the Remove from history cross in
 > the Pick saved list.
 
-### Automation opens the VPN to commands from other apps
-
-The **Automation** tab lets Tasker, MacroDroid and other automation apps
-control L×Box and receive its events. Scenarios and setup steps are in
-[Automation](#automation-the-vpn-turns-on-by-events); below is what the tab
-offers beyond that. Where: App Settings → Automation.
-
-The **Accept automation commands** option is off by default. Turning it on
-shows the Enable command receiver? dialog. While the option is on, any app
-on the phone can control the VPN with broadcast commands. Turn it off if you
-do not use an automation app.
-
-The **Commands (intent actions)** list holds 10 commands, each with a copy
-button. Paste the string into the automation app's Send Intent action, with
-Broadcast Receiver as the target. Four commands take a parameter:
-
-| Command | Parameter |
-|---|---|
-| `com.leadaxe.lxbox.SWITCH_NODE` | `tag` — the node tag |
-| `com.leadaxe.lxbox.SET_GROUP` | `group` — the group tag, for example `vpn-1` |
-| `com.leadaxe.lxbox.URLTEST_GROUP` | `group` — the group tag, for example `vpn-1` |
-| `com.leadaxe.lxbox.REFRESH_SUBS` | `force` |
-
-The **Outbound events (emit)** section sends L×Box events outward. There
-are three categories, all off by default:
-
-| Category | Events |
-|---|---|
-| Lifecycle | `VPN_CONNECTED`, `DISCONNECTED`, `ERROR`, `REVOKED`, `UPDATE_AVAILABLE`, `PERMISSION_NEEDED` |
-| State | `ACTIVE_NODE_CHANGED`, `ACTIVE_GROUP_CHANGED`, `NODE_ALREADY_ACTIVE` |
-| Subscription | `SUB_REFRESHED`, `SUB_REFRESH_FAILED` |
-
-Turning on a category for the first time shows the Emitting events outward
-dialog: other apps see the events, but the events carry no subscription or
-config secrets — only node tags, group names and status. For the automation
-app to learn a command's result, turn on Lifecycle and State: success
-arrives in State, failure as the `VPN_ERROR` event in Lifecycle.
-
-The **Documentation and Tasker recipes** button opens the full list of
-commands and events with ready-made recipes.
+The **Automation** tab opens the VPN to commands and events of Tasker,
+MacroDroid and other apps: [Advanced user guide → Automation tab](ADVANCED_USER_GUIDE.md#automation-opens-the-vpn-to-commands-from-other-apps).
 
 ---
 
@@ -1912,10 +1846,9 @@ Tunnel apps → Off; Default traffic = VPN; two rules in Rules: ads → Block,
 **After a node switch, a download or call keeps going through the old server.**
 Open connections stay on the server where they started until they close. To
 make a node switch break them, turn on **Interrupt connections on switch**.
-There are three switches: in VPN Settings → System for your own taps, in a
-direction for any switch, in an auto group for automatic switches. Which one to
-turn on is in the
-[Directions](#interrupt-connections-on-switch--three-switches-for-three-events)
+There are two checkboxes: in a direction for any switch, in an auto group for
+automatic switches. Which one to turn on is in the
+[Directions](#interrupt-connections-on-switch--two-checkboxes-for-two-events)
 section.
 
 **DNS queries are visible to the ISP or bypass the VPN.**
@@ -1984,9 +1917,11 @@ Diagnostic tools, from simple to detailed:
 | Crashes, OOM, Profiling | Debug | Core crash reports, core memory snapshots on low memory, pprof profiles for the developer. |
 
 If the phone gets hot or uses too much memory, open VPN Settings → System →
-Optimization → **Memory limit**: in Auto mode the limit follows the device's
-RAM. The System → WireGuard connections section puts idle WireGuard tunnels
-to sleep.
+Optimization → **Memory limit**: Auto sets no threshold and is the right
+choice in most cases; a number there is compared with the core's own
+memory, shown as Core memory in Statistics → Memory. The System →
+WireGuard connections section puts idle
+WireGuard tunnels to sleep.
 
 ---
 
@@ -2068,7 +2003,7 @@ subscription update builds the config again, and the edit is lost.
 The screen serves to see what exactly the core received, to check a field
 the forms lack, or to attach the config to an issue. For rule fields the
 form lacks, the rule editor has Raw JSON, see
-[Raw JSON and the View tab cover fields the form lacks](#raw-json-and-the-view-tab-cover-fields-the-form-lacks);
+[Raw JSON and the View tab cover fields the form lacks](ADVANCED_USER_GUIDE.md#raw-json-and-the-view-tab-cover-fields-the-form-lacks);
 such an edit survives a rebuild.
 
 | Element | What it does |
@@ -2100,19 +2035,18 @@ the same as for Save. As with Save, Lock config does not block this save; with
 Lock config on, the next rebuild does not overwrite the saved file. The
 screen stays read-only until you open it again.
 
-### Lock config pins a manual config
+### Mixins keep your edits through rebuilds
 
-The **Lock config (debug)** setting stops the app from rebuilding the
-config: interface actions change the settings, and the config file stays as
-you saved it. Where: App Settings → Diagnostics → Lock config (debug). The
-switch is visible only when Debug API is on. Off by default. When on, the
-switch reads `Pinned. UI actions skip config rebuild — useful
-when testing PUT /config overrides.` Turning Debug API off removes the pin
-as well.
+The **Mixins** tab on the Config screen holds stored edits of the built
+config. A mixin is a target path, an action and a JSON value; it is applied as
+the last step of every build, so a rebuild does not lose it, unlike a manual
+edit. Example: `inbounds → append` with a `direct` inbound on
+`127.0.0.1:5354`, plus a `hijack-dns` rule for it, gives other apps a DNS
+listener. The screen step by step, path syntax, actions and examples —
+[Advanced user guide → Mixins](ADVANCED_USER_GUIDE.md#mixins).
 
-> ⚠️ With Lock config on, changes to rules, directions and DNS and
-> subscription updates do not reach the config: the VPN runs on the pinned
-> file. To make settings apply again, turn Lock config off.
+**Lock config (debug)** pins a manually saved config so that rebuilds do not
+overwrite it: [Advanced user guide → Lock config](ADVANCED_USER_GUIDE.md#lock-config-pins-a-manual-config).
 
 ---
 
@@ -2464,30 +2398,14 @@ The app icon shortcut does the same: a long press on the icon shows
 **Connect** or **Disconnect**, depending on the VPN state.
 Shortcuts work on Android 11 and newer.
 
-While connected, the notification carries **Stop** and **Reconnect** buttons:
-reconnect straight from the shade.
+While connected, the notification carries **Stop** and **🔄 Restart** buttons.
+With a running Tailscale node that allows Taildrop it also carries **📋 Send**: a
+small window over the current app sends the clipboard text (or a link, to open
+it there) to one of your devices. App Settings → General → Quick connect chooses
+which buttons are shown; all by default.
 
----
-
-## Automation: the VPN turns on by events
-
-Automation apps — Tasker, MacroDroid, Llama, Automate — control L×Box: they
-turn the VPN on and off and switch servers by events, without the phone
-owner's involvement. Typical scenarios:
-
-- connecting to the home Wi-Fi turns the VPN off, connecting to someone else's
-  or a public one turns it on;
-- launching a specific app switches to the server or direction it needs;
-- a schedule or a geofence turns the tunnel on and off.
-
-Command intake is off by default. Where: App Settings → **Automation** →
-Accept automation commands. The same tab allows L×Box to broadcast its events:
-connected, disconnected, subscription updated. Then pick L×Box as a plugin in
-the automation app and choose a command: Start VPN, Stop VPN, Toggle VPN or
-Custom… — seven commands, Switch node and Refresh subscriptions among them.
-
-> 📖 [AUTOMATION.md](AUTOMATION.md) — the full list of commands and events and
-> ready-made recipes, including control from shell and ADB.
+Automation apps — Tasker, MacroDroid and others — turn the VPN on and off
+and switch servers by events: [Advanced user guide → Automation](ADVANCED_USER_GUIDE.md#automation-the-vpn-turns-on-by-events).
 
 ---
 
@@ -2502,7 +2420,7 @@ Appearance → Language.
 | English, Русский, 中文（简体） | The chosen language regardless of the system. |
 
 The language switches at once, without restarting the app or the VPN. System
-surfaces are translated too: the notification with Stop and Reconnect buttons,
+surfaces are translated too: the VPN notification and its buttons,
 the Quick Settings tile, the shortcuts. Logs, Debug API and automation events
 stay in English under any choice.
 
@@ -2553,7 +2471,7 @@ check box. Where: Backup & restore → Export.
 |---|---|---|
 | Server lists | Subscriptions, folders, standalone servers, hop chains. The file holds no subscription nodes: subscriptions download again. | On |
 | Routing | Rules, directions, Default traffic, Tunnel apps, operating mode (Mode), DNS settings, WireGuard connections parameters. | On |
-| App settings | App settings and VPN Settings values, ping parameters, subscription auto-update, Wi-Fi network history, WARP accounts, Interrupt connections on switch, node order. | On |
+| App settings | App settings and VPN Settings values, ping parameters, subscription auto-update, Wi-Fi network history, WARP accounts, node order. | On |
 | VPN system toggles | Autostart, Keep on exit, background mode, Allow VPN bypass, Auto redirect, Memory limit, the core log and its verbose levels. | On |
 | Debug API config | Debug API settings together with the access token. | Off |
 

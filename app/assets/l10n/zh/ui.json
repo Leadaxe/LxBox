@@ -63,6 +63,9 @@
   "%1$s · %2$d events": {
     "value": "%1$s · %2$d 个事件"
   },
+  "%1$s: invalid regex %2$s": {
+    "value": "%1$s：无效的正则 %2$s"
+  },
   "%d app settings": {
     "value": {
       "other": "%d 项应用设置"
@@ -76,6 +79,11 @@
   "%d chained": {
     "value": {
       "other": "%d 个链式"
+    }
+  },
+  "%d domain regex": {
+    "value": {
+      "other": "%d 个域名正则"
     }
   },
   "%d elements": {
@@ -179,11 +187,6 @@
       "other": "%d 跳"
     }
   },
-  "%d hours": {
-    "value": {
-      "other": "%d 小时"
-    }
-  },
   "%d hours left": {
     "value": {
       "other": "剩余 %d 小时"
@@ -205,11 +208,6 @@
   "%d min ago": {
     "value": {
       "other": "%d 分钟前"
-    }
-  },
-  "%d minutes": {
-    "value": {
-      "other": "%d 分钟"
     }
   },
   "%d net": {
@@ -253,6 +251,11 @@
   "%d ok": {
     "value": "%d 正常"
   },
+  "%d package regex": {
+    "value": {
+      "other": "%d 个包名正则"
+    }
+  },
   "%d packages copied": {
     "value": {
       "other": "已复制 %d 个应用"
@@ -271,11 +274,6 @@
   "%d proto": {
     "value": {
       "other": "%d 个协议"
-    }
-  },
-  "%d seconds": {
-    "value": {
-      "other": "%d 秒"
     }
   },
   "%d server lists": {
@@ -431,6 +429,9 @@
   },
   "Add address": {
     "value": "添加地址"
+  },
+  "Android identifies these apps by one UID. Routing rules and Tunnel apps apply to all of them at once.": {
+    "value": "Android 以同一个 UID 识别这些应用。路由规则和 Tunnel apps 会同时作用于它们全部。"
   },
   "Answer": {
     "value": "应答"
@@ -640,11 +641,20 @@
   "Custom server": {
     "value": "自定义服务器"
   },
+  "Domain regex": {
+    "value": "域名正则"
+  },
   "Enter an IP address": {
     "value": "请输入 IP 地址"
   },
   "Fixed IP": {
     "value": "固定 IP"
+  },
+  "Go RE2, matched anywhere in the domain, e.g. %s": {
+    "value": "Go RE2，匹配域名中的任意位置，例如 %s"
+  },
+  "Go RE2, matched anywhere in the package name, e.g. %s": {
+    "value": "Go RE2，匹配包名中的任意位置，例如 %s"
   },
   "How domains matched by this rule are resolved.": {
     "value": "如何解析与此规则匹配的域名。"
@@ -670,8 +680,16 @@
   "One address per line, IPv4 or IPv6.": {
     "value": "每行一个地址，IPv4 或 IPv6。"
   },
+  "Package name regex": {
+    "value": "包名正则"
+  },
   "Resolve before routing": {
     "value": "路由前解析"
+  },
+  "Shared with %d other apps — they are routed together": {
+    "value": {
+      "other": "与另外 %d 个应用共用 UID — 它们一起被路由"
+    }
   },
   "Used when the rule resolves before routing.": {
     "value": "在规则于路由前解析时生效。"
@@ -837,9 +855,6 @@
   "Already on this device": {
     "value": "本机已有"
   },
-  "Also put tunnels on the active route (pool members, the selected node) to sleep after a long quiet period — e.g. overnight. The first connection after sleep adds ~1 round trip. Default 5 min. Below the directions' idle timeout (30 min by default) a group probe can wake a sleeping tunnel for one handshake — the price of sleeping sooner. Requires \"Suspend idle tunnels\" to be on.": {
-    "value": "也可让当前路由上的隧道（连接池成员、已选节点）在长时间空闲后休眠——例如夜间。休眠后首次连接会多约一个往返。默认 5 分钟。若该值低于方向的空闲超时（默认 30 分钟），分组探测可能会唤醒休眠隧道进行一次握手——这是更早休眠的代价。需要先开启「挂起空闲隧道」。"
-  },
   "AmneziaWG 1.5 parameters: decoy packets before the WireGuard handshake.": {
     "value": "AmneziaWG 1.5 参数：WireGuard 握手前的诱饵包。"
   },
@@ -921,9 +936,6 @@
   "Applies immediately. Very chatty on live traffic — enable, reproduce, grab the log, disable.": {
     "value": "立即生效。实时流量下日志非常密集——开启、复现、抓日志、关闭。"
   },
-  "Applies on next connect.": {
-    "value": "下次连接时生效。"
-  },
   "Apply": {
     "value": "应用"
   },
@@ -974,6 +986,29 @@
   },
   "Auto-ping after connect": {
     "value": "连接后自动测速"
+  },
+  "Parallel checks": {
+    "value": "并行检测"
+  },
+  "How many servers the ping and Test servers measure at once. Fewer requests look quieter to the network, more finish faster. Range %1$d..%2$d, default %3$d": {
+    "value": "Ping 和「Test servers」同时测量的服务器数量。越少对网络越安静，越多完成越快。范围 %1$d..%2$d，默认 %3$d"
+  },
+  "Node budget": {
+    "value": "节点预算"
+  },
+  "Above %d the app may freeze or be killed by the system": {
+    "value": "超过 %d 时应用可能卡死或被系统关闭"
+  },
+  "%2$d of %1$d nodes": {
+    "value": {
+      "other": "%2$d / %1$d 个节点"
+    }
+  },
+  "Node budget in App settings": {
+    "value": "节点预算位于应用设置"
+  },
+  "Budget used by manual servers": {
+    "value": "预算已被手动服务器占满"
   },
   "Auto-record is off": {
     "value": "自动记录已关闭"
@@ -1332,8 +1367,14 @@
   "Cannot read the selected file": {
     "value": "无法读取所选文件"
   },
-  "Caps the VPN core's memory. A cap that is too low keeps the processor busy with garbage collection and heats the phone. Auto sizes the cap to this device's RAM; Off removes the cap but keeps low-memory monitoring. Applies immediately.": {
-    "value": "限制 VPN 内核的内存占用。上限过低会让处理器忙于垃圾回收并导致手机发热。「自动」按本机内存自动设定；「关闭」取消上限但保留低内存监控。立即生效。"
+  "Memory threshold for the VPN core itself (its Go runtime), not the whole app process. Above the threshold the core drops its connections and frees memory, and near it the garbage collector keeps the processor busy and heats the phone. Auto sets no threshold. With any value the core also watches the system's free memory. Applies immediately. The current figure is in Statistics → Memory → Core memory.": {
+    "value": "VPN 内核自身（其 Go 运行时）的内存阈值，而非整个应用进程。超过阈值时内核会断开自己的连接并释放内存；接近阈值时垃圾回收会占用处理器并导致手机发热。「自动」不设阈值。无论取何值，内核都会同时监控系统的可用内存。立即生效。当前数值见「统计」→「内存」→「内核内存」。"
+  },
+  "Core memory": {
+    "value": "内核内存"
+  },
+  "Memory of the VPN core itself (Go runtime); the limit from VPN Settings applies to this figure. RSS is the whole app process.": {
+    "value": "VPN 内核自身的内存（Go 运行时）；VPN 设置中的限制作用于此数值。RSS 为整个应用进程。"
   },
   "Capture %s": {
     "value": "抓取 %s"
@@ -1706,8 +1747,8 @@
   "Custom rules, tun apps, DNS options, final outbound": {
     "value": "自定义规则、tun 应用、DNS 选项、最终出站"
   },
-  "Custom server type \"%s\" — edit it on the JSON tab. The form supports UDP / DoT / DoH / DoQ / DoH3 / Group / Tailscale.": {
-    "value": "自定义服务器类型「%s」——请在 JSON 标签页编辑。表单支持 UDP / DoT / DoH / DoQ / DoH3 / Group / Tailscale。"
+  "Custom server type \"%s\" — edit it on the JSON tab. The form supports UDP / DoT / DoH / DoQ / DoH3 / Group / Tailscale / Hosts.": {
+    "value": "自定义服务器类型「%s」——请在 JSON 标签页编辑。表单支持 UDP / DoT / DoH / DoQ / DoH3 / Group / Tailscale / Hosts。"
   },
   "Dark": {
     "value": "深色"
@@ -2068,9 +2109,6 @@
   },
   "Downloaded \"%s\"": {
     "value": "已下载「%s」"
-  },
-  "Drop active connections when you switch nodes, so traffic moves to the new node immediately": {
-    "value": "切换节点时断开活动连接，使流量立即转到新节点"
   },
   "Drop existing detours — every member connects through this outbound": {
     "value": "清除已有 detour —— 所有成员都经此出站连接"
@@ -3045,6 +3083,9 @@
   "Metadata is missing or unreadable.": {
     "value": "元数据缺失或无法读取。"
   },
+  "Mixin \"%1$s\": %2$s": {
+    "value": "混入「%1$s」：%2$s"
+  },
   "Mode": {
     "value": "模式"
   },
@@ -3171,8 +3212,23 @@
   "No Tailscale nodes yet — add one on the Servers screen first": {
     "value": "还没有 Tailscale 节点——请先在「服务器」页添加一个"
   },
-  "No Wi-Fi conditions — rule is active on every network.": {
-    "value": "没有 Wi-Fi 条件——规则在所有网络都生效。"
+  "No SSID filter — rule is active on any Wi-Fi network.": {
+    "value": "没有 SSID 过滤——规则在任何 Wi-Fi 网络都生效。"
+  },
+  "Any": {
+    "value": "任意"
+  },
+  "Cellular": {
+    "value": "移动网络"
+  },
+  "Metered networks only": {
+    "value": "仅限计费网络"
+  },
+  "Mobile data and Wi-Fi marked as metered in Android settings": {
+    "value": "移动数据，以及在 Android 设置中标记为计费的 Wi-Fi"
+  },
+  "metered": {
+    "value": "计费"
   },
   "No WireGuard/AmneziaWG config in vpn:// link": {
     "value": "vpn:// 链接里没有 WireGuard/AmneziaWG 配置"
@@ -3200,9 +3256,6 @@
   },
   "No cached source data": {
     "value": "没有缓存的来源数据"
-  },
-  "No configurable variables": {
-    "value": "没有可配置的变量"
   },
   "No connection to %s — check network or URL": {
     "value": "无法连接 %s——请检查网络或链接"
@@ -3870,9 +3923,6 @@
   },
   "Proxy link, WireGuard config or outbound JSON": {
     "value": "代理链接、WireGuard 配置或出站 JSON"
-  },
-  "Put unreachable WireGuard tunnels to sleep after they sit idle, freeing memory and saving battery. They wake instantly on use. Only affects tunnels not on the active route.": {
-    "value": "让不可达的 WireGuard 隧道在空闲后休眠，释放内存并省电。使用时立即唤醒。只影响不在当前路由上的隧道。"
   },
   "Query timeout": {
     "value": "查询超时"
@@ -4687,27 +4737,6 @@
   "Supported: vless / vmess / trojan / ss / hy2 / tuic / socks5 / proxy-http(s) / wireguard URLs": {
     "value": "支持：vless / vmess / trojan / ss / hy2 / tuic / socks5 / proxy-http(s) / wireguard 链接"
   },
-  "Suspend active-route tunnels": {
-    "value": "挂起当前路由上的隧道"
-  },
-  "Suspend idle tunnels": {
-    "value": "挂起空闲隧道"
-  },
-  "Lazy tunnel build": {
-    "value": "延迟构建隧道"
-  },
-  "Build a WireGuard tunnel only on first use instead of at start. Saves memory with many nodes; the first connection to a node takes a moment longer.": {
-    "value": "仅在首次使用时构建 WireGuard 隧道，而不是在启动时构建。节点较多时可节省内存；首次连接某个节点会稍慢一些。"
-  },
-  "Built tunnels limit": {
-    "value": "已构建隧道上限"
-  },
-  "Keep at most this many WireGuard tunnels built at once; the rest are torn down and rebuilt on demand. 0 = no limit.": {
-    "value": "同时最多保持这么多个已构建的 WireGuard 隧道；其余的会被拆除，需要时再重新构建。0 = 不限制。"
-  },
-  "0 (no limit)": {
-    "value": "0（不限制）"
-  },
   "Switch": {
     "value": "切换"
   },
@@ -5264,6 +5293,9 @@
   "Why it happens": {
     "value": "为什么会这样"
   },
+  "Wi-Fi networks": {
+    "value": "Wi-Fi 网络"
+  },
   "Wi-Fi rules need permissions": {
     "value": "Wi-Fi 规则需要权限"
   },
@@ -5653,8 +5685,8 @@
   "The running config has no node %s.": {
     "value": "运行中的配置里没有节点 %s。"
   },
-  "Only WireGuard and AmneziaWG nodes can be turned off.": {
-    "value": "只有 WireGuard 和 AmneziaWG 节点可以关闭。"
+  "Only WireGuard, AmneziaWG and Tailscale nodes can be turned off.": {
+    "value": "只能关闭 WireGuard、AmneziaWG 和 Tailscale 节点。"
   },
   "VPN is not running or is restarting. Try again.": {
     "value": "VPN 未运行或正在重启，请重试。"
@@ -5819,12 +5851,6 @@
   "%s online / %s": {
     "value": "%s 在线 / 共 %s"
   },
-  "Copy MagicDNS name": {
-    "value": "复制 MagicDNS 名称"
-  },
-  "Copy %s": {
-    "value": "复制 %s"
-  },
   "key expired": {
     "value": "密钥已过期"
   },
@@ -5833,9 +5859,6 @@
   },
   "exit node": {
     "value": "出口节点"
-  },
-  "Copy name": {
-    "value": "复制名称"
   },
   "Waiting for sign-in": {
     "value": "等待登录"
@@ -5881,9 +5904,6 @@
   },
   "Cannot listen on 127.0.0.1:%s: the port is busy or blocked. Close the app that uses it and try again.": {
     "value": "无法监听 127.0.0.1:%s：端口被占用或被禁止。请关闭占用该端口的应用后重试。"
-  },
-  "Copy address": {
-    "value": "复制地址"
   },
   "No reply: %s": {
     "value": "无响应：%s"
@@ -5974,6 +5994,9 @@
   },
   "no active session (last handshake %s)": {
     "value": "无活动会话（上次握手 %s）"
+  },
+  "no response (last handshake %s)": {
+    "value": "无响应（上次握手 %s）"
   },
   "asleep": {
     "value": "休眠"
@@ -6400,5 +6423,282 @@
   },
   "One per line, or pick from the list": {
     "value": "每行一个，或从列表中选择"
+  },
+  "No members left in the list. Enable or add a member first.": {
+    "value": "列表中已没有成员。请先启用或添加成员。"
+  },
+  "Reset to template": {
+    "value": "恢复为模板"
+  },
+  "Also added: %s": {
+    "value": "同时添加：%s"
+  },
+  "A group needs at least one member.": {
+    "value": "分组至少需要一个成员。"
+  },
+  "Hosts": {
+    "value": "Hosts"
+  },
+  "Fixed addresses for chosen names, answered on the device": {
+    "value": "为指定名称返回固定地址，在设备上应答"
+  },
+  "Add host": {
+    "value": "添加条目"
+  },
+  "Also reads: %s": {
+    "value": "同时读取：%s"
+  },
+  "Answers only these names. Put it under Hosts of a DNS group so that other names go to the group's servers.": {
+    "value": "只应答这些名称。将其放入 DNS 组的 Hosts，其他名称交由组内服务器处理。"
+  },
+  "Addresses": {
+    "value": "地址"
+  },
+  "Enter a name": {
+    "value": "请输入名称"
+  },
+  "No spaces, \"/\" or \":\" in a name": {
+    "value": "名称中不能包含空格、“/”或“:”"
+  },
+  "\"%s\" is already in the list": {
+    "value": "「%s」已在列表中"
+  },
+  "Add at least one host": {
+    "value": "请至少添加一个条目"
+  },
+  "No hosts servers in the list.": {
+    "value": "列表中没有 hosts 服务器。"
+  },
+  "Names these servers know are answered first; other names go to the members.": {
+    "value": "这些服务器已知的名称优先应答；其他名称交给成员。"
+  },
+  "1 name": {
+    "value": "1 个名称"
+  },
+  "%d names": {
+    "value": {
+      "other": "%d 个名称"
+    }
+  },
+  "DNS group \"%s\" cannot contain itself.": {
+    "value": "DNS 组「%s」不能包含自身。"
+  },
+  "DNS group \"%1$s\": server \"%2$s\" is listed in both servers and hosts.": {
+    "value": "DNS 组「%1$s」：服务器「%2$s」同时出现在 servers 和 hosts 中。"
+  },
+  "DNS group \"%1$s\": duplicate hosts server \"%2$s\".": {
+    "value": "DNS 组「%1$s」：hosts 服务器「%2$s」重复。"
+  },
+  "DNS group \"%1$s\": hosts server \"%2$s\" not found.": {
+    "value": "DNS 组「%1$s」：未找到 hosts 服务器「%2$s」。"
+  },
+  "DNS group \"%1$s\": hosts accepts only servers of type hosts, got \"%3$s\": \"%2$s\".": {
+    "value": "DNS 组「%1$s」：hosts 只接受 hosts 类型的服务器，「%2$s」的类型是「%3$s」。"
+  },
+  "Node filter": {
+    "value": "节点过滤"
+  },
+  "%1$s / %2$s match": {
+    "value": "匹配 %1$s / %2$s"
+  },
+  "Open picker": {
+    "value": "打开选择器"
+  },
+  "Mixins": {
+    "value": "混入"
+  },
+  "Mixin": {
+    "value": "混入"
+  },
+  "Add mixin": {
+    "value": "添加混入"
+  },
+  "Delete mixin?": {
+    "value": "删除混入？"
+  },
+  "Edits applied to the built config, top to bottom. They survive rebuilds.": {
+    "value": "对生成配置的修改，自上而下应用，重新生成后仍保留。"
+  },
+  "Target": {
+    "value": "目标"
+  },
+  "Suggestions": {
+    "value": "提示"
+  },
+  "Whole node": {
+    "value": "整个节点"
+  },
+  "Keys": {
+    "value": "键"
+  },
+  "Keys, comma-separated": {
+    "value": "键，以逗号分隔"
+  },
+  "Preview": {
+    "value": "预览"
+  },
+  "(root)": {
+    "value": "（根）"
+  },
+  "No config built yet": {
+    "value": "尚未生成配置"
+  },
+  "✓ 1 match": {
+    "value": "✓ 1 个匹配"
+  },
+  "✗ no match": {
+    "value": "✗ 无匹配"
+  },
+  "✗ needs a single list": {
+    "value": "✗ 需要单个列表"
+  },
+  "✗ not a list element": {
+    "value": "✗ 不是列表元素"
+  },
+  "✗ syntax: %s": {
+    "value": "✗ 语法：%s"
+  },
+  "%s → before first": {
+    "value": "%s → 第一个之前"
+  },
+  "%s → after last": {
+    "value": "%s → 最后一个之后"
+  },
+  "✓ %d matches": {
+    "value": {
+      "other": "✓ %d 个匹配"
+    }
+  },
+  "Replace key": {
+    "value": "替换密钥"
+  },
+  "Saved: %s": {
+    "value": "已保存：%s"
+  },
+  "Key saved. It applies when the VPN starts.": {
+    "value": "密钥已保存，将在 VPN 启动时生效。"
+  },
+  "Applies when the node is online.": {
+    "value": "节点在线时生效。"
+  },
+  "Signing in with the new key…": {
+    "value": "正在使用新密钥登录…"
+  },
+  "Send file…": {
+    "value": "发送文件…"
+  },
+  "Sending to %s": {
+    "value": "正在发送到 %s"
+  },
+  "Couldn't send: %s": {
+    "value": "无法发送：%s"
+  },
+  "the VPN is off": {
+    "value": "VPN 已关闭"
+  },
+  "can't read the file": {
+    "value": "无法读取文件"
+  },
+  "no file picker on this device": {
+    "value": "此设备没有文件选择器"
+  },
+  "Inbox": {
+    "value": "收件箱"
+  },
+  "File sharing is off for this tailnet. Turn on Taildrop in the Tailscale admin console.": {
+    "value": "此 tailnet 已关闭文件共享。请在 Tailscale 管理控制台中开启 Taildrop。"
+  },
+  "%s of %s": {
+    "value": "%s / %s"
+  },
+  "from %s": {
+    "value": "来自 %s"
+  },
+  "Saved to Downloads": {
+    "value": "已保存到“下载”"
+  },
+  "Couldn't save: %s": {
+    "value": "无法保存：%s"
+  },
+  "Couldn't delete: %s": {
+    "value": "无法删除：%s"
+  },
+  "Couldn't cancel: %s": {
+    "value": "无法取消：%s"
+  },
+  "Turn the node on first.": {
+    "value": "请先开启节点。"
+  },
+  "Could not sign in with the new key.": {
+    "value": "无法使用新密钥登录。"
+  },
+  "Restart node": {
+    "value": "重启节点"
+  },
+  "Node restarted.": {
+    "value": "节点已重启。"
+  },
+  "Save received files to Downloads": {
+    "value": "将收到的文件保存到“下载”"
+  },
+  "Needs Android 10 or later.": {
+    "value": "需要 Android 10 或更高版本。"
+  },
+  "Allow Taildrop (send and receive files)": {
+    "value": "允许 Taildrop（发送和接收文件）"
+  },
+  "Taildrop is off for this node.": {
+    "value": "此节点的 Taildrop 已关闭。"
+  },
+  "Accept clipboard and links from my devices": {
+    "value": "接受来自我的设备的剪贴板和链接"
+  },
+  "Devices shared by other users are not counted as yours.": {
+    "value": "其他用户共享的设备不算作你的设备。"
+  },
+  "Core: lx.wg.idle_suspend. An idle WireGuard endpoint that is not on the active route is torn down and rebuilt on its next dial.": {
+    "value": "内核：lx.wg.idle_suspend。不在活动路由上的空闲 WireGuard 端点会被拆除，并在下次拨号时重建。"
+  },
+  "Core: lx.wg.idle_suspend_reachable. The same sleep for endpoints on the active route, after a longer quiet period.": {
+    "value": "内核：lx.wg.idle_suspend_reachable。对活动路由上的端点进行同样的休眠，空闲时间更长。"
+  },
+  "Core: lx.wg.lazy_build. An endpoint is built on its first dial instead of at core start.": {
+    "value": "内核：lx.wg.lazy_build。端点在首次拨号时构建，而不是在内核启动时。"
+  },
+  "Core: lx.wg.build_max. Over the limit the endpoint idle for the longest is torn down.": {
+    "value": "内核：lx.wg.build_max。超出上限时，空闲最久的端点会被拆除。"
+  },
+  "Core: lx.mtu_align. A node over a tunnel gets a packet size that fits into it: mtu for WireGuard and MASQUE, the initial packet size for Hysteria2 and TUIC. Values are never raised.": {
+    "value": "内核：lx.mtu_align。隧道之上的节点获得能放入隧道的包大小：WireGuard 和 MASQUE 为 mtu，Hysteria2 和 TUIC 为初始包大小。数值只降不升。"
+  },
+  "Core: lx.quic_sniff_decoy. A relay with UDP sniffing (Xray destOverride quic) rewrites the destination by the SNI of the first QUIC packet; a junk first byte makes it give up. Servers drop the byte. A DPI on your own uplink may react to it, hence Through detour by default.": {
+    "value": "内核：lx.quic_sniff_decoy。带 UDP 嗅探的中继（Xray destOverride quic）按第一个 QUIC 包的 SNI 改写目标；首个垃圾字节使其放弃。服务器会丢弃该字节。 您自身上行链路上的 DPI 可能对其作出反应，因此默认为 Through detour。"
+  },
+  "Core: lx.masque.idle_timeout. The idle window for MASQUE nodes that have no idle_timeout of their own.": {
+    "value": "内核：lx.masque.idle_timeout。没有自身 idle_timeout 的 MASQUE 节点的空闲窗口。"
+  },
+  "File sharing is off in this tailnet.": {
+    "value": "此 tailnet 已关闭文件共享。"
+  },
+  "Device is offline.": {
+    "value": "设备离线。"
+  },
+  "Device belongs to another user.": {
+    "value": "设备属于其他用户。"
+  },
+  "Device can't receive files.": {
+    "value": "设备无法接收文件。"
+  },
+  "online": {
+    "value": "在线"
+  },
+  "VPN notification buttons": {
+    "value": "VPN 通知按钮"
+  },
+  "Restart": {
+    "value": "重连"
+  },
+  "Appears only while a Tailscale node has Allow Taildrop.": {
+    "value": "仅当 Tailscale 节点启用 Allow Taildrop 时显示。"
   }
 }

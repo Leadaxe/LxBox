@@ -83,6 +83,8 @@ Tasker «Send Intent», цель — Broadcast Receiver) и исполняет �
   (записано в справке Intent API, `docs/AUTOMATION.ru.md`).
 - Нет ответа «в тот же вызов»: результат узнаётся только из событий.
 - Нет проверки отправителя и нет разрешений по командам.
+- Команды переподключения нет. Снаружи переподключение идёт через Debug API
+  (`POST /action/reconnect`).
 - Зависит от возможностей ОС: доставка широковещательных команд, запрет
   автозапуска в прошивках.
 
@@ -99,3 +101,4 @@ Tasker «Send Intent», цель — Broadcast Receiver) и исполняет �
 | 7 | [510](../../../tasks/510-review-findings-after-v2251.md) | Released v2.25.2 | «Стоп» командой гасит цикл страховки узлов |
 | 8 | [605](../../../tasks/605-service-live-automation-workspaces-bugs.md) | Реализовано | Приём следует сохранённому тумблеру после восстановления бэкапа и загрузки набора |
 | 9 | [605](../../../tasks/605-service-live-automation-workspaces-bugs.md) | Реализовано | Отказ ядра после принятого `SWITCH_NODE` → `VPN_ERROR(switch_failed)` |
+| 10 | [707](../../../tasks/707-taildrop-send-receive-files.md), итерация 7 | Реализовано | 2026-11-03: Reconnect из уведомления снят; команды переподключения нет, в Debug API она есть |

@@ -433,4 +433,322 @@ void main() {
       c.dispose();
     });
   });
+
+  // §695 правило 1 — шаблонные записи редактируемы: правка тела формой
+  // сохраняется override'ом (inline с тем же тегом), Reset to template
+  // возвращает шаблонную запись.
+  group('template → override (§695)', () {
+    const shieldWrapper = <String, dynamic>{
+      'description': 'Shield DNS',
+      'enabled': true,
+      'server': {
+        'type': 'group',
+        'tag': 'dns_shield',
+        'servers': ['google_doh', 'cloudflare_dot', 'quad9_doh'],
+        'mode': 'fastest',
+      },
+    };
+    const udpWrapper = <String, dynamic>{
+      'description': 'Google DNS',
+      'enabled': true,
+      'vars': [
+        {'name': 'outbound', 'type': 'outbound', 'default_value': 'direct-out'},
+        {'name': 'dns_ip', 'type': 'enum', 'default_value': '8.8.8.8'},
+      ],
+      'server': {
+        'type': 'udp',
+        'tag': 'google_udp',
+        'server_port': 53,
+        'server': '@dns_ip',
+        'detour': '@outbound',
+      },
+    };
+
+    DnsServerEditController make(String tag, Map<String, dynamic> wrapper,
+            Map<String, dynamic> body,
+            {bool enabled = true}) =>
+        DnsServerEditController(
+          initialRef: DnsServerTemplate(enabled: enabled, tag: tag),
+          resolved: ResolvedServer(
+            kind: ServerKind.template,
+            tag: tag,
+            description: wrapper['description'] as String,
+            enabled: enabled,
+            body: {...body, 'tag': tag},
+          ),
+          templateWrapper: wrapper,
+          canonicalDescription: wrapper['description'] as String,
+        );
+
+    test('снятый член группы → inline с тем же тегом, enabled сохранён', () {
+      final c = make('dns_shield', shieldWrapper, {
+        'type': 'group',
+        'servers': ['google_doh', 'cloudflare_dot', 'quad9_doh'],
+        'mode': 'fastest',
+      }, enabled: false);
+      expect(c.isGroup, isTrue);
+      expect(c.groupMembers, ['google_doh', 'cloudflare_dot', 'quad9_doh']);
+      expect(c.templateBodyEdited, isFalse);
+      expect(c.snapshot(), isA<DnsServerTemplate>());
+      c.toggleGroupMember('cloudflare_dot', false);
+      expect(c.templateBodyEdited, isTrue);
+      expect(c.isDirty(), isTrue);
+      final snap = c.snapshot() as DnsServerInline;
+      expect(snap.tag, 'dns_shield');
+      expect(snap.enabled, isFalse);
+      expect(snap.description, isNull);
+      expect(snap.body, {
+        'type': 'group',
+        'servers': ['google_doh', 'quad9_doh'],
+        'mode': 'fastest',
+      });
+      // Пустой состав — Save не проходит (гейт экрана).
+      expect(c.groupHasNoMembers, isFalse);
+      c.toggleGroupMember('google_doh', false);
+      c.toggleGroupMember('quad9_doh', false);
+      expect(c.groupHasNoMembers, isTrue);
+      c.toggleGroupMember('google_doh', true);
+      expect(c.groupHasNoMembers, isFalse);
+      // Вернули состав как в шаблоне — снова шаблонная запись.
+      c.toggleGroupMember('quad9_doh', false);
+      c.toggleGroupMember('cloudflare_dot', true);
+      c.toggleGroupMember('quad9_doh', true);
+      expect(c.templateBodyEdited, isFalse);
+      c.dispose();
+    });
+
+    test('тело override = тело шаблона после vars + правка; var после '
+        'правки меняет только свои ключи', () {
+      final c = make('google_udp', udpWrapper,
+          {'type': 'udp', 'server_port': 53, 'server': '8.8.8.8'});
+      expect(c.addressCtrl.text, '8.8.8.8');
+      c.onPortChanged('5353');
+      c.setVarValue('dns_ip', '8.8.4.4');
+      expect(c.addressCtrl.text, '8.8.4.4');
+      final snap = c.snapshot() as DnsServerInline;
+      expect(snap.body, {
+        'type': 'udp',
+        'server_port': 5353,
+        'server': '8.8.4.4',
+      });
+      c.dispose();
+    });
+
+    test('смена var без правки тела — шаблонная запись с varValues', () {
+      final c = make('google_udp', udpWrapper,
+          {'type': 'udp', 'server_port': 53, 'server': '8.8.8.8'});
+      c.setVarValue('dns_ip', '8.8.4.4');
+      final snap = c.snapshot() as DnsServerTemplate;
+      expect(snap.varValues, {'dns_ip': '8.8.4.4'});
+      c.dispose();
+    });
+
+    test('Reset to template: тег, enabled и description те же, vars — '
+        'дефолты', () {
+      final c = DnsServerEditController(
+        initialRef: const DnsServerInline(
+          enabled: false,
+          tag: 'dns_shield',
+          description: 'My shield',
+          body: {'type': 'group', 'servers': ['google_doh']},
+        ),
+        resolved: const ResolvedServer(
+          kind: ServerKind.inline,
+          tag: 'dns_shield',
+          description: 'My shield',
+          enabled: false,
+          body: {'type': 'group', 'tag': 'dns_shield',
+            'servers': ['google_doh']},
+          overrides: ServerKind.template,
+        ),
+        canonicalDescription: 'Shield DNS',
+      );
+      expect(c.canResetToTemplate, isTrue);
+      expect(c.resetToTemplateSnapshot(),
+          const DnsServerTemplate(
+              enabled: false, tag: 'dns_shield', description: 'My shield'));
+      c.descCtrl.text = 'Shield DNS';
+      expect(c.resetToTemplateSnapshot().description, isNull);
+      c.dispose();
+    });
+
+    test('Reset to template только у override шаблона', () {
+      final user = DnsServerEditController(
+        initialRef: const DnsServerInline(
+            enabled: true, tag: 'mine', body: {'type': 'udp'}),
+        resolved: const ResolvedServer(
+          kind: ServerKind.inline,
+          tag: 'mine',
+          description: '',
+          enabled: true,
+          body: {'type': 'udp', 'tag': 'mine'},
+        ),
+      );
+      expect(user.canResetToTemplate, isFalse);
+      user.dispose();
+    });
+  });
+
+  group('§699 сервер hosts', () {
+    DnsServerEditController make(Map<String, dynamic> body,
+            {List<DnsMemberOption> hostsOptions = const []}) =>
+        DnsServerEditController(
+          initialRef: DnsServerInline(enabled: true, tag: 'grp', body: body),
+          dnsHostsOptions: hostsOptions,
+        );
+
+    test('вход в hosts снимает транспорт и ставит predefined: {}', () {
+      final c = make({
+        'type': 'https',
+        'server': 'dns.example',
+        'server_port': 8443,
+        'path': '/q',
+        'tls': {'enabled': true, 'server_name': 'x'},
+        'domain_resolver': 'google_udp',
+        'detour': 'vpn-1',
+      });
+      c.setServerMode('hosts');
+      expect(c.isHosts, isTrue);
+      expect(bodyOf(c), {'type': 'hosts', 'predefined': <String, dynamic>{}});
+      expect(c.hostsHasNoEntries, isTrue);
+      c.dispose();
+    });
+
+    test('выход из hosts снимает predefined и path', () {
+      final c = make({
+        'type': 'hosts',
+        'predefined': {
+          'wg.home': ['203.0.113.10'],
+        },
+        'path': ['/data/hosts'],
+      });
+      c.setServerMode('udp');
+      expect(bodyOf(c), {'type': 'udp'});
+      c.dispose();
+    });
+
+    test('записи: строка и список читаются, путь — «Also reads»', () {
+      final c = make({
+        'type': 'hosts',
+        'predefined': {
+          'wg.home': '203.0.113.10',
+          'warp.lan': ['162.159.192.1', '2606:4700:d0::a29f:c001'],
+        },
+        'path': '/data/hosts',
+      });
+      expect([for (final e in c.hostsEntries) [e.name, e.addresses]], [
+        ['wg.home', ['203.0.113.10']],
+        ['warp.lan', ['162.159.192.1', '2606:4700:d0::a29f:c001']],
+      ]);
+      expect(c.hostsPaths, ['/data/hosts']);
+      c.dispose();
+    });
+
+    test('только path — Save не блокируется', () {
+      final c = make({
+        'type': 'hosts',
+        'predefined': <String, dynamic>{},
+        'path': ['/data/hosts'],
+      });
+      expect(c.hostsHasNoEntries, isFalse);
+      c.dispose();
+    });
+
+    test('запись: имя в нижнем регистре, адреса списком; правка — на месте',
+        () {
+      final c = make({'type': 'hosts', 'predefined': <String, dynamic>{}});
+      c.putHostsEntry(' WG.Home ', ['203.0.113.10', '2001:db8::10']);
+      c.putHostsEntry('warp.lan', ['162.159.192.1']);
+      expect(bodyOf(c)['predefined'], {
+        'wg.home': ['203.0.113.10', '2001:db8::10'],
+        'warp.lan': ['162.159.192.1'],
+      });
+      expect(c.hostsHasNoEntries, isFalse);
+      // Смена имени у первой записи — позиция та же.
+      c.putHostsEntry('router.home', ['192.168.1.1'], replacing: 'wg.home');
+      expect((bodyOf(c)['predefined'] as Map).keys,
+          ['router.home', 'warp.lan']);
+      c.removeHostsEntry('router.home');
+      expect(bodyOf(c)['predefined'], {
+        'warp.lan': ['162.159.192.1'],
+      });
+      c.removeHostsEntry('warp.lan');
+      expect(bodyOf(c)['predefined'], <String, dynamic>{});
+      expect(c.hostsHasNoEntries, isTrue);
+      c.dispose();
+    });
+
+    test('проверки диалога: имя и адреса', () {
+      final c = make({
+        'type': 'hosts',
+        'predefined': {
+          'wg.home': ['203.0.113.10'],
+        },
+      });
+      expect(c.hostsNameError(''), isNotNull);
+      expect(c.hostsNameError('wg home'), isNotNull);
+      expect(c.hostsNameError('https://wg.home'), isNotNull);
+      expect(c.hostsNameError('wg.home/x'), isNotNull);
+      expect(c.hostsNameError('wg.home:53'), isNotNull);
+      expect(c.hostsNameError('WG.HOME'), isNotNull, reason: 'дубль');
+      expect(c.hostsNameError('WG.HOME', editing: 'wg.home'), isNull,
+          reason: 'своё имя при правке — не дубль');
+      expect(c.hostsNameError('warp.lan'), isNull);
+
+      expect(DnsServerEditController.hostsAddressesError(''), isNotNull);
+      expect(DnsServerEditController.hostsAddressesError('1.2.3.4\nnope'),
+          isNotNull);
+      expect(
+          DnsServerEditController.hostsAddressesError(
+              '203.0.113.10\n\n 2001:db8::10 '),
+          isNull);
+      expect(
+          DnsServerEditController.hostsAddressLines(
+              '203.0.113.10\n\n 2001:db8::10 '),
+          ['203.0.113.10', '2001:db8::10']);
+      c.dispose();
+    });
+
+    test('hosts группы — в порядке списка, не кликов; пусто — ключа нет', () {
+      const opts = [
+        DnsMemberOption(tag: 'h1', type: 'hosts', enabled: true),
+        DnsMemberOption(tag: 'h2', type: 'hosts', enabled: true),
+        DnsMemberOption(tag: 'h3', type: 'hosts', enabled: true),
+      ];
+      final c = make({
+        'type': 'group',
+        'servers': ['a'],
+      }, hostsOptions: opts);
+      c.toggleGroupHosts('h3', true);
+      c.toggleGroupHosts('h1', true);
+      expect(bodyOf(c)['hosts'], ['h1', 'h3']);
+      c.toggleGroupHosts('h2', true);
+      expect(c.groupHosts, ['h1', 'h2', 'h3']);
+      c.toggleGroupHosts('grp', true); // сама группа — нет
+      expect(c.groupHosts, ['h1', 'h2', 'h3']);
+      for (final t in ['h1', 'h2', 'h3']) {
+        c.toggleGroupHosts(t, false);
+      }
+      expect(bodyOf(c).containsKey('hosts'), isFalse);
+      expect(bodyOf(c)['servers'], ['a'], reason: 'Members не трогаются');
+      c.dispose();
+    });
+
+    test('тег вне опций (JSON-вкладка) — после известных; выход из group '
+        'снимает hosts', () {
+      final c = make({
+        'type': 'group',
+        'servers': ['a'],
+        'hosts': 'ghost',
+      }, hostsOptions: const [
+        DnsMemberOption(tag: 'h1', type: 'hosts', enabled: true),
+      ]);
+      expect(c.groupHosts, ['ghost']);
+      c.toggleGroupHosts('h1', true);
+      expect(bodyOf(c)['hosts'], ['h1', 'ghost']);
+      c.setServerMode('hosts');
+      expect(bodyOf(c), {'type': 'hosts', 'predefined': <String, dynamic>{}});
+      c.dispose();
+    });
+  });
 }

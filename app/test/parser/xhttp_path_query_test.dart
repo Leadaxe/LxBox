@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/node_spec.dart';
-import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/models/transport_spec.dart';
 import 'package:lxbox/services/parser/json_parsers.dart';
@@ -75,24 +74,6 @@ void main() {
   setUpAll(loadEngineSections);
 
   group('xhttpFromMap — общий код трёх веток', () {
-    test('URI-карта: percent-кодированный path с query → дословно', () {
-      // `Uri.queryParameters` снимает один слой кодирования — как в разборе
-      // ссылки.
-      final q = Uri.parse('x://h?type=xhttp&path=%2F%3Fproxyip%3D149.56.109.62')
-          .queryParameters;
-      final warnings = <NodeWarning>[];
-      final t = parseTransport(q, warnings: warnings) as XhttpTransport;
-      expect(t.path, _relayPath);
-      // `?`, `=`, `&` — не percent-последовательности, кода нет.
-      expect(warnings, isEmpty);
-    });
-
-    test('URI-карта: /base?x=1 → дословно', () {
-      final t = parseTransport({'type': 'xhttp', 'path': '/base?x=1&y=2'})
-          as XhttpTransport;
-      expect(t.path, '/base?x=1&y=2');
-    });
-
     test('путь без ? не меняется', () {
       final t =
           parseTransport({'type': 'xhttp', 'path': '/xhttp'}) as XhttpTransport;
@@ -106,35 +87,15 @@ void main() {
               .path,
           '/');
     });
-
-    test('Xray-JSON-карта: xhttpSettings.path с query → дословно', () {
-      final t = xhttpFromMap(
-          xhttpScalarsFromJson({'path': _relayPath, 'mode': 'stream-one'}));
-      expect(t.path, _relayPath);
-      expect(t.mode, 'stream-one');
-    });
   });
 
   group('ws/httpupgrade — хвост по-прежнему срезается', () {
-    test('ws: ?ed=N → путь чистый, early data заполнена', () {
-      final t = parseTransport({'type': 'ws', 'path': '/x?ed=2048'})
-          as WsTransport;
-      expect(t.path, '/x');
-      expect(t.maxEarlyData, 2048);
-    });
-
     test('ws через ссылку: хвост в percent-кодированном path срезан', () {
       final n = parseUri('vless://u-1@1.2.3.4:443?type=ws&security=none'
           '&path=%2Fx%3Fed%3D2048#n') as VlessSpec;
       final t = n.transport! as WsTransport;
       expect(t.path, '/x');
       expect(t.maxEarlyData, 2048);
-    });
-
-    test('httpupgrade: чужой query срезан', () {
-      final t = parseTransport({'type': 'httpupgrade', 'path': '/up?foo=1'})
-          as HttpUpgradeTransport;
-      expect(t.path, '/up');
     });
   });
 

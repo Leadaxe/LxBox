@@ -50,7 +50,7 @@ sets, several route rules, DNS servers and DNS rules at once.
 | BitTorrent | on | 980 | `protocol: bittorrent` | Outbound (`direct-out`) |
 | VoWiFi (carrier calling) | on | 990 | `pub.3gppnetwork.org`, UDP 500/4500 | Outbound, Match IKE ports |
 | Russia-only services | off | 1110 | an external list "available only from Russia" | Outbound, Force IPv4 |
-| Ru internet segment | on | 1120 | ru TLDs, services, GeoIP-RU, Russian apps | Outbound, DNS, UDP server IP, GeoIP IP-range fallback, Russian apps by package, Force IPv4 |
+| Ru internet segment | on | 1120 | ru TLDs, services, GeoIP-RU, Russian apps | Outbound, DNS, UDP server IP, DoT server IP, DoH server IP, Encrypted DNS via Outbound, GeoIP IP-range fallback, Russian apps by package, Force IPv4 |
 | FakeIP | off | 1130 | DNS only (see 005) | DNS, Block HTTPS records |
 | Unknown traffic | on | 1150 | traffic without an owning app | Outbound (`direct-out`; `reject` as the strict option) |
 

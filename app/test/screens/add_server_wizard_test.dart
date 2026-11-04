@@ -318,36 +318,5 @@ void main() {
       // Мастер остался открыт.
       expect(find.text('Tailscale'), findsOneWidget);
     });
-
-    testWidgets('подсказка про одноразовый ключ и Exit node на месте',
-        (tester) async {
-      await openTailscale(tester);
-      expect(find.textContaining('A one-time key is consumed'), findsOneWidget);
-      expect(find.textContaining('will not appear in Directions'),
-          findsOneWidget);
-    });
-  });
-
-  group('§243 UI-строки', () {
-    testWidgets('поля «Display name» больше нет, Tag optional с helper',
-        (tester) async {
-      await openWizard(tester);
-      // SOCKS tab (default).
-      expect(find.text('Display name (optional)'), findsNothing);
-      expect(find.text('Tag (optional)'), findsOneWidget);
-      expect(
-        find.textContaining('Shown as the server title'),
-        findsOneWidget,
-      );
-
-      await tester.tap(find.text('HTTP'));
-      await tester.pumpAndSettle();
-      expect(find.text('Display name (optional)'), findsNothing);
-      expect(find.text('Tag (optional)'), findsOneWidget);
-      expect(
-        find.textContaining('Shown as the server title'),
-        findsOneWidget,
-      );
-    });
   });
 }

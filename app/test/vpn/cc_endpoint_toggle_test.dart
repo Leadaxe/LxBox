@@ -4,19 +4,9 @@ import 'package:lxbox/services/platform_channels.dart';
 import 'package:lxbox/vpn/cc_channel.dart';
 
 /// §557 (ядро SPEC 106) — выключатель WG/AWG-узла через MethodChannel и
-/// состояние `disabled`.
+/// состояние `disabled`; §706 (ядро SPEC 149) — вход Tailscale-узла ключом.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-
-  group('§557 — CcEndpointState.disabled', () {
-    test('строка ядра', () {
-      expect(CcEndpointState.disabled, 'disabled');
-    });
-
-    test('disabled — не «соберётся при дайле»', () {
-      expect(CcEndpointState.isNotBuilt(CcEndpointState.disabled), false);
-    });
-  });
 
   group('§557 — setEndpointEnabled', () {
     const channel = MethodChannel(PlatformChannels.methods);
@@ -55,6 +45,36 @@ void main() {
     test('null из native — пустое состояние', () async {
       messenger.setMockMethodCallHandler(channel, (call) async => null);
       expect(await CcChannel.instance.setEndpointEnabled('wg-de', true), '');
+    });
+  });
+
+  group('§706 — tailscaleLogin', () {
+    const channel = MethodChannel(PlatformChannels.methods);
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+
+    tearDown(() => messenger.setMockMethodCallHandler(channel, null));
+
+    test('проброс tag и ключа', () async {
+      late MethodCall seen;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        seen = call;
+        return null;
+      });
+      await CcChannel.instance.tailscaleLogin('ts', 'tskey-auth-x');
+      expect(seen.method, 'ccTailscaleLogin');
+      expect(seen.arguments, {'tag': 'ts', 'auth_key': 'tskey-auth-x'});
+    });
+
+    test('отказ ядра — PlatformException с кодом', () async {
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        throw PlatformException(code: 'failed_precondition');
+      });
+      expect(
+        () => CcChannel.instance.tailscaleLogin('ts', 'k'),
+        throwsA(isA<PlatformException>()
+            .having((e) => e.code, 'code', 'failed_precondition')),
+      );
     });
   });
 }

@@ -160,6 +160,10 @@ dependencies {
     implementation("io.github.Rosemoe.sora-editor:language-textmate")
     // java.time и пр. для API < 26 (Google Maven; см. compileOptions).
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
+    // §707 итер. 7 — JVM-тесты чистой логики натива (src/test): org.json
+    // настоящий, у android.jar в юнит-тестах он заглушка.
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
 }
 
 flutter {

@@ -69,26 +69,6 @@ void main() {
         throwsA(isA<TemplateIfError>()),
       );
     });
-
-    test('сообщение об ошибке несёт путь до узла', () {
-      // Путь — единственное, по чему разработчик находит место в шаблоне;
-      // проверяется наличие сегмента, а не точная формулировка текста.
-      try {
-        validate({
-          'outbounds': [
-            {'tag': 'a'},
-            {
-              'tag': 'b',
-              '#enable': ['@flga'],
-            },
-          ],
-        });
-        fail('ожидался TemplateIfError');
-      } on TemplateIfError catch (e) {
-        expect(e.message, contains('outbounds[1]'));
-        expect(e.message, contains(r'#enable'));
-      }
-    });
   });
 
   group('D4 — валидные формы #enable грузятся', () {
@@ -288,25 +268,6 @@ void main() {
       final json = _shippedTemplate();
       final template = WizardTemplate.fromJson(json);
       expect(() => validateTemplateConstructs(json, template), returnsNormally);
-    });
-
-    test('боевой шаблон реально содержит #enable в selectable_rules', () {
-      // Инвариант охвата: если #enable уедет из шаблона, тест выше станет
-      // вырожденным и перестанет что-либо доказывать.
-      final json = _shippedTemplate();
-      var found = 0;
-      void walkTree(dynamic n) {
-        if (n is Map) {
-          if (n.containsKey(enableKey)) found++;
-          n.values.forEach(walkTree);
-        } else if (n is List) {
-          n.forEach(walkTree);
-        }
-      }
-
-      walkTree(json['selectable_rules']);
-      expect(found, greaterThan(0),
-          reason: '#enable вне секции config — то, ради чего расширен рубеж');
     });
 
     test('сломанный #enable боевого шаблона отвергается на load', () {

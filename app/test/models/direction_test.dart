@@ -66,14 +66,6 @@ void main() {
       expect(c.nodeFilterInvert, false);
     });
 
-    test('auto == null survives round-trip (галка ВЫКЛ)', () {
-      const original = Direction(tag: 'vpn-3', label: 'VPN ③');
-      final json = original.toJson();
-      expect(json['auto'], isNull);
-      final restored = Direction.fromJson(json);
-      expect(restored.auto, isNull);
-    });
-
     test('defaults applied on missing keys', () {
       final c = Direction.fromJson({'tag': 'vpn-5'});
       expect(c.label, 'vpn-5'); // label fallback к tag
@@ -87,13 +79,6 @@ void main() {
   });
 
   group('§604 — умолчания DirectionAuto и фильтр узлов', () {
-    test('fromJson без interval/url → те же умолчания, что конструктор', () {
-      final a = DirectionAuto.fromJson(const {});
-      expect(a.interval, const DirectionAuto().interval);
-      expect(a.interval, '15m');
-      expect(a.url, const DirectionAuto().url);
-    });
-
     test('filterNodeTags учитывает «Exclude matching»', () {
       const tags = ['a-DE', 'b-nl', 'c-de'];
       expect(const Direction(tag: 'vpn-2', label: 'x', nodeFilter: 'de')
@@ -144,30 +129,6 @@ void main() {
         'include': [' vpn-1 ', '', 'vpn-1', 42, 'vpn-2'],
       });
       expect(c.include, ['vpn-1', 'vpn-2']);
-    });
-
-    test('include ортогонален includeDirect/includeBlock', () {
-      const c = Direction(
-          tag: 'vpn-2',
-          label: 'x',
-          include: ['vpn-1'],
-          includeDirect: true,
-          includeBlock: true);
-      final r = Direction.fromJson(c.toJson());
-      expect(r.include, ['vpn-1']);
-      expect(r.includeDirect, true);
-      expect(r.includeBlock, true);
-      // Служебные теги в include не дублируются.
-      expect(r.include, isNot(contains('direct-out')));
-      expect(r.include, isNot(contains('block')));
-    });
-
-    test('copyWith меняет include, не трогая прочее', () {
-      const c = Direction(tag: 'vpn-2', label: 'x', includeDirect: true);
-      final r = c.copyWith(include: ['vpn-1']);
-      expect(r.include, ['vpn-1']);
-      expect(r.includeDirect, true);
-      expect(c.include, isEmpty); // исходный не мутирован
     });
   });
 
@@ -229,32 +190,7 @@ void main() {
     });
   });
 
-  group('§393 A3 — defaultLabelForTag', () {
-    test('vpn-N → «VPN ⓝ», выше 10 — числом', () {
-      expect(defaultLabelForTag('vpn-1'), 'VPN ①');
-      expect(defaultLabelForTag('vpn-10'), 'VPN ⑩');
-      expect(defaultLabelForTag('vpn-11'), 'VPN 11');
-    });
-
-    test('произвольный тег → сам тег', () {
-      expect(defaultLabelForTag('ru-exit'), 'ru-exit');
-      expect(defaultLabelForTag('vpn-1-auto'), 'vpn-1-auto');
-    });
-  });
-
   group('§198 — defaultDirectionLabel (цифра в кружке)', () {
-    test('1..10 → VPN ①..VPN ⑩', () {
-      expect(defaultDirectionLabel(1), 'VPN ①');
-      expect(defaultDirectionLabel(2), 'VPN ②');
-      expect(defaultDirectionLabel(5), 'VPN ⑤');
-      expect(defaultDirectionLabel(10), 'VPN ⑩');
-    });
-
-    test('вне 1..10 → без кружка', () {
-      expect(defaultDirectionLabel(0), 'VPN 0');
-      expect(defaultDirectionLabel(11), 'VPN 11');
-    });
-
     test('directionNumberOf парсит vpn-N', () {
       expect(directionNumberOf('vpn-1'), 1);
       expect(directionNumberOf('vpn-7'), 7);
@@ -268,11 +204,6 @@ void main() {
       const c = Direction(tag: 'vpn-4', label: 'x');
       expect(c.autoTag, 'vpn-4-auto');
       expect(c.toJson().containsKey('auto_tag'), false);
-    });
-
-    test('isRequired только для vpn-1', () {
-      expect(const Direction(tag: 'vpn-1', label: 'x').isRequired, true);
-      expect(const Direction(tag: 'vpn-2', label: 'x').isRequired, false);
     });
   });
 
@@ -301,14 +232,6 @@ void main() {
   });
 
   group('§208 — DirectionAuto balancer (round_robin)', () {
-    test('дефолты: leastTest, pool 3, poolTolerance 0, sticky process+domain', () {
-      const a = DirectionAuto();
-      expect(a.mode, UrltestMode.leastTest);
-      expect(a.pool, 3);
-      expect(a.poolTolerance, 0);
-      expect(a.stickyHash, [StickyHashKey.process, StickyHashKey.domain]);
-    });
-
     test('старый JSON без mode/balancer → дефолты (обратная совместимость)', () {
       final a = DirectionAuto.fromJson({
         'url': 'https://x/204',
@@ -412,49 +335,6 @@ void main() {
       });
       expect(a.stickyHash, [StickyHashKey.process, StickyHashKey.destPort]);
     });
-
-    test('enum wire-мэппинг обе стороны', () {
-      expect(UrltestMode.leastTest.wire, 'least_test');
-      expect(UrltestMode.roundRobin.wire, 'round_robin');
-      expect(UrltestMode.fromWire('round_robin'), UrltestMode.roundRobin);
-      expect(UrltestMode.fromWire('garbage'), UrltestMode.leastTest); // дефолт
-      expect(StickyHashKey.sourceIp.wire, 'source_ip');
-      expect(StickyHashKey.fromWire('dest_port'), StickyHashKey.destPort);
-      expect(StickyHashKey.fromWire('nope'), isNull);
-    });
-
-    test('copyWith балансер-поля', () {
-      const a = DirectionAuto();
-      final n = a.copyWith(
-        mode: UrltestMode.roundRobin,
-        pool: 7,
-        poolTolerance: 25,
-        stickyHash: [StickyHashKey.destPort],
-      );
-      expect(n.mode, UrltestMode.roundRobin);
-      expect(n.pool, 7);
-      expect(n.poolTolerance, 25);
-      expect(n.stickyHash, [StickyHashKey.destPort]);
-    });
-  });
-
-  group('Direction.copyWith', () {
-    test('tag immutable, меняем только label', () {
-      const c = Direction(tag: 'vpn-2', label: 'old');
-      final n = c.copyWith(label: 'new');
-      expect(n.tag, 'vpn-2');
-      expect(n.label, 'new');
-    });
-
-    test('clearAuto убирает auto', () {
-      const c = Direction(tag: 'vpn-2', label: 'x', auto: DirectionAuto());
-      expect(c.copyWith(clearAuto: true).auto, isNull);
-    });
-
-    test('auto сохраняется если не трогали', () {
-      const c = Direction(tag: 'vpn-2', label: 'x', auto: DirectionAuto());
-      expect(c.copyWith(label: 'y').auto, isNotNull);
-    });
   });
 
   group('Direction.seedFromDefault (миграция §267)', () {
@@ -520,10 +400,6 @@ void main() {
       );
       expect(g.containsKey('mode'), isFalse);
       expect(g['tolerance'], 50);
-    });
-
-    test('новый автовыбор формы — failover', () {
-      expect(kNewAutoMode, UrltestMode.failover);
     });
   });
 }

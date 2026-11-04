@@ -146,7 +146,12 @@ class NodeFilter {
   ///
   /// Для UI: emoji chip row — юзер тапает chip → emoji вставляется в regex
   /// field как character class (one-tap «🇷🇺» → only RU nodes).
-  static List<String> extractEmojis(List<String> tags) {
+  static List<String> extractEmojis(List<String> tags) =>
+      emojiCounts(tags).map((e) => e.key).toList();
+
+  /// §702 — то же, что [extractEmojis], но с частотой: сколько раз эмодзи
+  /// встретился во всех тегах (пикер фильтра Направления показывает число).
+  static List<MapEntry<String, int>> emojiCounts(List<String> tags) {
     final freq = <String, int>{};
     for (final tag in tags) {
       for (final m in _emojiRe.allMatches(tag)) {
@@ -154,11 +159,10 @@ class NodeFilter {
         freq[e] = (freq[e] ?? 0) + 1;
       }
     }
-    final list = freq.entries.toList()
+    return freq.entries.toList()
       ..sort((a, b) {
         final byFreq = b.value.compareTo(a.value);
         return byFreq != 0 ? byFreq : a.key.compareTo(b.key);
       });
-    return list.map((e) => e.key).toList();
   }
 }

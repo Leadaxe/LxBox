@@ -69,7 +69,7 @@ Principles the feature protects:
   removed `for_each`, both loop keys in one preset, an unknown key inside the
   loop, a variable named `node`) fails the load of the whole template; the
   former soft drop of a single preset (§83) is gone. **Witness:** unit tests
-  "the real bundled wizard_template.json passes validation", "a broken #enable
+  "a broken #enable
   of the shipped template is rejected at load", "for_each is a load error of
   the whole template (D-130, §83 cancelled)", "a global variable node.* or
   unique on a non-text_list is an error", "the live tailscale preset passes

@@ -112,7 +112,7 @@ The feature protects three principles:
   `conflict`, 413 `payload_too_large`, 502 `upstream_error`, 504 `timeout`;
   an unclassified exception is 500 `internal` with the stack in the app log,
   not in the response. **Witness:** units "the shape is {error: {code,
-  message}}", "codes are stable (API contract)", "an ordinary exception →
+  message}}", "an ordinary exception →
   InternalError (500)". **Mutation:** a renamed code; the stack in the
   response.
 - **P12. Input is validated uniformly.** A missing or empty required query
