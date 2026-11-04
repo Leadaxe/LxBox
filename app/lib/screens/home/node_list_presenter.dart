@@ -19,33 +19,33 @@ String protoLabel(String type) => type == GroupGenus.manual
     // §565 — группа ручного рода (selector). l10n-exempt, как 'Auto' ниже.
     ? 'Manual'
     : switch (type) {
-      'vless' => 'VLESS',
-      'vmess' => 'VMess',
-      'trojan' => 'Trojan',
-      'shadowsocks' => 'SS',
-      'hysteria2' => 'Hy2',
-      'tuic' => 'TUIC',
-      'wireguard' => 'WG',
-      'masque' => 'MASQUE', // §130 — WARP-транспорт
-      'anytls' => 'AnyTLS', // §269
-      'ssh' => 'SSH',
-      'socks' => 'SOCKS',
-      'http' => 'HTTP',
-      'tailscale' => 'Tailscale', // §435 — l10n-exempt: protocol name
-      // §359 — узел автовыбора подписки (§322) как протокол в чипах фильтра.
-      // l10n-exempt: протокольный термин, латиница во всех локалях (как VLESS/Hy2).
-      'urltest' => 'Auto',
-      _ => type.toUpperCase(),
-    };
+        'vless' => 'VLESS',
+        'vmess' => 'VMess',
+        'trojan' => 'Trojan',
+        'shadowsocks' => 'SS',
+        'hysteria2' => 'Hy2',
+        'tuic' => 'TUIC',
+        'wireguard' => 'WG',
+        'masque' => 'MASQUE', // §130 — WARP-транспорт
+        'anytls' => 'AnyTLS', // §269
+        'ssh' => 'SSH',
+        'socks' => 'SOCKS',
+        'http' => 'HTTP',
+        'tailscale' => 'Tailscale', // §435 — l10n-exempt: protocol name
+        // §359 — узел автовыбора подписки (§322) как протокол в чипах фильтра.
+        // l10n-exempt: протокольный термин, латиница во всех локалях (как VLESS/Hy2).
+        'urltest' => 'Auto',
+        _ => type.toUpperCase(),
+      };
 
 /// §359 — метка режима автовыбора для transport-чипа фильтра.
 /// l10n-exempt: протокольные термины, латиница во всех локалях.
 String autoModeLabel(String mode) => switch (mode) {
-      'least_test' => 'Fastest',
-      'round_robin' => 'Pool',
-      'failover' => 'Hold', // §612
-      _ => mode,
-    };
+  'least_test' => 'Fastest',
+  'round_robin' => 'Pool',
+  'failover' => 'Hold', // §612
+  _ => mode,
+};
 
 /// §322 — метка узла автовыбора для подзаголовка (перед «→ выбранный»).
 ///
@@ -74,9 +74,9 @@ String autoModeLabel(String mode) => switch (mode) {
 final Map<String, RegExp?> _badgeRegexCache = {};
 
 RegExp? _cachedBadgeRegex(String badge) => _badgeRegexCache.putIfAbsent(
-      badge,
-      () => tryCompileRegex(badge, unicode: true),
-    );
+  badge,
+  () => tryCompileRegex(badge, unicode: true),
+);
 
 String poolBadges(List<String> memberLabels, String badge) {
   if (badge.isEmpty || memberLabels.isEmpty) return '';
@@ -94,6 +94,15 @@ String poolBadges(List<String> memberLabels, String badge) {
   return counts.entries
       .map((e) => e.value > 1 ? '${e.key}[${e.value}]' : e.key)
       .join(', ');
+}
+
+/// §715 — хвост метки пула: значки по [badge], а когда ни один член значка не
+/// дал (узлы без флага в имени, пустой или битый regexp) — имена слотов через
+/// запятую в порядке пула, как в окне View pool. Пустой пул → пусто.
+String poolLabelSuffix(List<String> memberLabels, String badge) {
+  if (memberLabels.isEmpty) return '';
+  final badges = poolBadges(memberLabels, badge);
+  return badges.isNotEmpty ? badges : memberLabels.join(', ');
 }
 
 String? autoGroupLabel(Map<String, dynamic>? raw) {
@@ -139,7 +148,7 @@ class NodeListPresenter {
   // config rebuild сбрасывает через `state.pingBatchGen` bump.
   List<String>? _cachedSorted;
   ({NodeSortMode mode, int gen, int nodesLen, bool pinD, bool pinA})?
-      _cachedSortKey;
+  _cachedSortKey;
 
   /// §359 — узел автовыбора подписки/папки (§322): тип `urltest`, но НЕ шасси
   /// приложения. У него свой протокол (`urltest`) и свой транспорт (режим),
@@ -194,10 +203,7 @@ class NodeListPresenter {
       if (n != null && (n.isControl || n.type.isEmpty)) n = null;
     }
     if (n == null) return const <String>{};
-    return {
-      ?n.transportLabel,
-      ?n.securityLabel,
-    };
+    return {?n.transportLabel, ?n.securityLabel};
   }
 
   /// §103 — канонический порядок variant-чипов: транспорты, затем security;
@@ -239,29 +245,31 @@ class NodeListPresenter {
   /// §085 R3 — единый `NodeFilter` из view-model + state-зависимых lookup'ов.
   /// Используется и `computeDisplayList`, и node-list (был дубль §078).
   NodeFilter buildNodeFilter(HomeState state) => NodeFilter(
-        regex: filter.activeRegex,
-        regexInvert: filter.regexInvert,
-        protocols: filter.enabledProtocols,
-        protocolsInvert: filter.protocolsInvert,
-        variants: filter.enabledVariants,
-        variantsInvert: filter.variantsInvert,
-        subscriptions: filter.enabledSubscriptions,
-        subscriptionsInvert: filter.subscriptionsInvert,
-        maxPingMs: filter.activeMaxPingMs,
-        protocolOf: (t) => protocolOfTag(t, state),
-        variantsOf: (t) => variantsOfTag(t, state),
-        subscriptionsOf: _sourcesOfTag,
-        // §325 — фильтр по пингу видит то же число, что показано в строке
-        // (свой замер Направления либо фоллбэк из другого).
-        pingOf: state.delayOf,
-      );
+    regex: filter.activeRegex,
+    regexInvert: filter.regexInvert,
+    protocols: filter.enabledProtocols,
+    protocolsInvert: filter.protocolsInvert,
+    variants: filter.enabledVariants,
+    variantsInvert: filter.variantsInvert,
+    subscriptions: filter.enabledSubscriptions,
+    subscriptionsInvert: filter.subscriptionsInvert,
+    maxPingMs: filter.activeMaxPingMs,
+    protocolOf: (t) => protocolOfTag(t, state),
+    variantsOf: (t) => variantsOfTag(t, state),
+    subscriptionsOf: _sourcesOfTag,
+    // §325 — фильтр по пингу видит то же число, что показано в строке
+    // (свой замер Направления либо фоллбэк из другого).
+    pingOf: state.delayOf,
+  );
 
   /// §446 — phase 1 фильтра (§048): отсев detour. Был выписан дважды —
   /// в `computeListData` и в `splitNodes`, слово в слово.
   List<String> poolOf(List<String> sortedNodes, HomeState state) => sortedNodes
-      .where((t) =>
-          state.isSystemControlTag(t) || // §359
-          filter.detourPoolPasses(state.activeModel[t]?.isDetour ?? false)) // §311
+      .where(
+        (t) =>
+            state.isSystemControlTag(t) || // §359
+            filter.detourPoolPasses(state.activeModel[t]?.isDetour ?? false),
+      ) // §311
       .toList();
 
   /// §085 R3 — pool (detour-фильтр) → split на matching/non-matching.
@@ -272,8 +280,10 @@ class NodeListPresenter {
   /// видны, даже если случайно isDetour) и короткозамкнуты в matching.
   /// Возвращает `(matching, nonMatching)`.
   (List<String>, List<String>) splitNodes(
-      List<String> sortedNodes, HomeState state,
-      {List<String>? pool}) {
+    List<String> sortedNodes,
+    HomeState state, {
+    List<String>? pool,
+  }) {
     // §446 — [pool] передаёт уже посчитанный pool: `computeListData` строил
     // его сам, а затем этот же проход повторялся здесь один в один.
     pool ??= poolOf(sortedNodes, state);
@@ -281,7 +291,8 @@ class NodeListPresenter {
     final matching = <String>[];
     final nonMatching = <String>[];
     for (final tag in pool) {
-      if (state.isSystemControlTag(tag) || f.passes(tag)) { // §359
+      if (state.isSystemControlTag(tag) || f.passes(tag)) {
+        // §359
         matching.add(tag);
       } else {
         nonMatching.add(tag);
@@ -295,9 +306,7 @@ class NodeListPresenter {
   List<String> computeDisplayList(HomeState state) {
     _prefixIndex = null; // §446 — см. `computeListData`
     final (matching, nonMatching) = splitNodes(viewSortedNodes(state), state);
-    return filter.showNonMatching
-        ? [...matching, ...nonMatching]
-        : matching;
+    return filter.showNonMatching ? [...matching, ...nonMatching] : matching;
   }
 
   /// §070 — frozen sort при `resortOnManualPing == false`. Cache hit ↔
@@ -344,7 +353,9 @@ class NodeListPresenter {
   int debugWarningsPasses = 0;
 
   Map<String, List<NodeWarning>> _warningsByTagFor(
-      List<String> tags, HomeState state) {
+    List<String> tags,
+    HomeState state,
+  ) {
     final entries = subController.entries;
     final emittedTagMap = subController.lastEmittedTagMap;
     final buildWarnings = subController.lastBuildWarningsByTag;

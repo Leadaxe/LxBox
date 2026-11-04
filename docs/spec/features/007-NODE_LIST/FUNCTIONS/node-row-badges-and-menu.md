@@ -48,7 +48,7 @@ ones.
 |---|---|---|
 | `ACTIVE` | the node is selected in the Direction | green pill; bolder name, stripe on the left |
 | Notification icon | the node has notifications | ⓘ / ⚠ / ⊗ by the highest level; tap — the notification sheet |
-| Auto-select mode and choice | auto-select group | `🎯 [N] → node` or `🔀 [N/M]` + pool badges (`🇩🇪, 🇳🇱[2]`) |
+| Auto-select mode and choice | auto-select group | `🎯 [N] → node` or `🔀 [N/M]` + pool badges (`🇩🇪, 🇳🇱[2]`); in Load balance the label is shown on the Direction's Auto twin too, and without badges it lists the pool slot names |
 | Protocol·transport·security | a node with a protocol | `VLESS·xhttp·Reality+Vision`, `WG·awg2`, `Hy2·TLS`; not shown for auto-select |
 | WG/AWG state | the core returned the endpoint state | `up` / `sleep` / `down` / `off` (orange) |
 | Ping | on the right, always at the edge | `NNMS`, `ERR`, `PING…`; `~` — a measurement of another Direction, dimmed |
@@ -106,3 +106,4 @@ ones.
 | 11 | [540](../../../tasks/540-endpoint-state-short-label-node-properties.md) | Done | Endpoint state in one word |
 | 12 | [557](../../../tasks/557-kernel-lx4-wg-endpoint-toggle.md) | — | Turn off / Turn on of a WG node, the `off` state |
 | 13 | [572](../../../tasks/572-notifications-group-by-code.md) | Released v2.25.7 | Node notifications grouped by code |
+| 14 | [715](../../../tasks/715-auto-twin-pool-label-core-delays.md) | Done | Load balance Auto twin shows the pool label; slot names when no badge |

@@ -59,6 +59,13 @@ recalculation of the "root causes" for detour.
   of the run. A node without its own measurement shows the last known one from
   another Direction with the `~` prefix in a dimmed color. Measurements outside
   a Direction live in a separate map.
+- **Core URL test results.** The core's URL test result (`getOutbounds`,
+  every 5 s while the tunnel is up) is shown as a foreign measurement (`~`,
+  dimmed), below the node's own measurement and below a measurement from
+  another Direction. It is a different measurement (the `url` of the group,
+  through the tunnel, versus the Ping Settings target), so it never takes the
+  main badge. It survives the tunnel going down like any foreign measurement
+  and is overwritten by the next session's first update.
 - **Cancellation.** A second tap during a run is stop: results stop being
   applied at once, `PING…` is removed from all nodes, and measurements already
   sent to the core are aborted by breaking the separate ping channel (status
@@ -106,3 +113,4 @@ recalculation of the "root causes" for detour.
 | 11 | [367](../../../tasks/367-autoping-after-inplace-reload.md) | ✅ Fixed | Auto-ping also after a config reload on a live tunnel |
 | 12 | [557](../../../tasks/557-kernel-lx4-wg-endpoint-toggle.md) | Implemented | A disabled endpoint — a dash instead of a measurement |
 | 13 | [677](../../../tasks/677-autoping-tail-skips-round-robin-groups.md) | Done | The end of a run forces a group test only for Fastest (`least_test`) |
+| 14 | [715](../../../tasks/715-auto-twin-pool-label-core-delays.md) | Done | Core URL test results shown as a foreign `~` measurement |

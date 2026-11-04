@@ -34,20 +34,20 @@ enum NodeSortMode {
   /// §279 — display-label режима (рендер по локали в момент показа).
   /// Персист/Debug API используют `.name` (wire), не label.
   String label() => switch (this) {
-        defaultOrder => getLocalText.s("Default"),
-        latencyAsc => getLocalText.s("Ping"),
-        nameAsc => getLocalText.s("A–Z"),
-        manual => getLocalText.s("Custom"),
-      };
+    defaultOrder => getLocalText.s("Default"),
+    latencyAsc => getLocalText.s("Ping"),
+    nameAsc => getLocalText.s("A–Z"),
+    manual => getLocalText.s("Custom"),
+  };
 
   /// §100: cycle включает все 4 режима (carousel) —
   /// default → ping → A–Z → Custom(manual) → default.
   NodeSortMode get next => switch (this) {
-        NodeSortMode.defaultOrder => NodeSortMode.latencyAsc,
-        NodeSortMode.latencyAsc => NodeSortMode.nameAsc,
-        NodeSortMode.nameAsc => NodeSortMode.manual,
-        NodeSortMode.manual => NodeSortMode.defaultOrder,
-      };
+    NodeSortMode.defaultOrder => NodeSortMode.latencyAsc,
+    NodeSortMode.latencyAsc => NodeSortMode.nameAsc,
+    NodeSortMode.nameAsc => NodeSortMode.manual,
+    NodeSortMode.manual => NodeSortMode.defaultOrder,
+  };
 }
 
 class HomeState {
@@ -95,11 +95,12 @@ class HomeState {
     this.networksOpen = false,
     this.tailscaleStatus = const <String, CcTailscaleStatus>{},
     this.openConnect = CcOpenConnectSnapshot.empty,
-  })  : configModel = configModel ?? ParsedConfig.parse(configRaw),
-        runningModel = runningModel ??
-            (runningConfigRaw != null
-                ? ParsedConfig.parse(runningConfigRaw)
-                : null);
+  }) : configModel = configModel ?? ParsedConfig.parse(configRaw),
+       runningModel =
+           runningModel ??
+           (runningConfigRaw != null
+               ? ParsedConfig.parse(runningConfigRaw)
+               : null);
 
   /// Сохранённый конфиг (файл `singbox_config.json`) — то, что редактируется
   /// и с чем стартует СЛЕДУЮЩИЙ запуск. §311 — при живом туннеле может
@@ -171,6 +172,7 @@ class HomeState {
   final List<String> nodes;
   final String? activeInGroup;
   final String? highlightedNode;
+
   /// §325 — замеры пинга **по Направлениям**: `Направление → тег ноды → ms`.
   ///
   /// Раньше это была одна плоская карта на всё приложение, и mass-ping,
@@ -214,6 +216,14 @@ class HomeState {
   /// иначе такие замеры присвоил бы себе случайный Направление.
   static const String scratchDirection = '\u0000scratch';
 
+  /// §715 — псевдо-Направление для замеров ЯДРА: `urlTestDelay` из
+  /// `getOutbounds` (heartbeat §535). Это URL-тест группы через туннель, а не
+  /// пробник приложения на цель из Ping Settings, поэтому в показе он всегда
+  /// «чужой» (`~`, приглушённо) и стоит последним в фоллбэке [delayOf].
+  /// Падение туннеля ключ не снимает: живёт как любой чужой замер §325, пока
+  /// первый heartbeat следующего сеанса не перезапишет карту.
+  static const String coreDirection = '\u0000core';
+
   /// §325 — ключ Направления, в который пишутся новые замеры.
   String get delayDirectionKey => selectedGroup ?? scratchDirection;
 
@@ -232,11 +242,15 @@ class HomeState {
     final own = _ownDelays[tag];
     if (own != null) return own;
     for (final entry in delayByDirection.entries) {
-      if (entry.key == delayDirectionKey) continue;
+      if (entry.key == delayDirectionKey || entry.key == coreDirection) {
+        continue;
+      }
       final v = entry.value[tag];
       if (v != null) return v;
     }
-    return null;
+    // §715 — замер ядра последним: другое Направление мерило той же
+    // методикой, что и своё, ядро — другой.
+    return delayByDirection[coreDirection]?[tag];
   }
 
   /// §325 — показанный [delayOf] пришёл из ДРУГОГО Направления (в текущем ноду не
@@ -245,24 +259,29 @@ class HomeState {
       !_ownDelays.containsKey(tag) && delayOf(tag) != null;
   final List<DebugEntry> debugEvents;
   final NodeSortMode sortMode;
+
   /// §070 — pin direct/auto в pinned section. Действует при ЛЮБОМ sortMode,
   /// включая `defaultOrder`: режим сортировки решает только порядок `rest`
   /// (см. `_computeSortedNodes`, тест `home_state_sort_test`).
   final bool pinDirect;
   final bool pinAuto;
+
   /// §070 — pересчитывать sort при manual `runNodeUrltest` (single tag delay
   /// update). False → UI-cache держит frozen sort до `pingBatchGen` bump.
   final bool resortOnManualPing;
+
   /// §070 — counter, bumped в HomeController на mass URLtest finish /
   /// runGroupUrltest / group switch / config rebuild. Pure UI-cache signal,
   /// в `_computeSortedNodes` не используется.
   final int pingBatchGen;
+
   /// §071 — user-defined order для `NodeSortMode.manual`. Empty = mode
   /// неактивен или не настроен. Filtering: `manualOrder.where(nodes.contains)`
   /// + новые ноды (subscription update) в конце.
   final List<String> manualOrder;
   final TrafficSnapshot traffic;
   final DateTime? connectedSince;
+
   /// §076 (rename from `configStaleSinceStart`): True, если `saveParsedConfig`
   /// был вызван при работающем туннеле — running config теперь устарел
   /// относительно saved, нужен restart чтобы native перечитал.
@@ -324,9 +343,7 @@ class HomeState {
   /// Узлы пропали (узел удалён или стал выходом) — снова видно выбранное
   /// настоящее направление.
   bool get showingNetworks =>
-      tunnelUp &&
-      (networksOpen || groups.isEmpty) &&
-      networksNodes.isNotEmpty;
+      tunnelUp && (networksOpen || groups.isEmpty) && networksNodes.isNotEmpty;
 
   // ─────────────── §122 — типизированный доступ к ccGroups ───────────────
   // Чистые методы на нативных CommandClient-моделях (заменили статические
@@ -354,9 +371,9 @@ class HomeState {
   /// Теги selector-групп (для dropdown'а выбора). URLTest-группы НЕ включаются
   /// (выбор в них автоматический). `selectable` от ядра = ровно selector'ы.
   List<String> get selectorGroupTags => [
-        for (final g in ccGroups)
-          if (g.selectable && _isSelector(g.type)) g.tag,
-      ];
+    for (final g in ccGroups)
+      if (g.selectable && _isSelector(g.type)) g.tag,
+  ];
 
   /// Для urltest-группы — её авто-выбранный член (`selected`). Для не-urltest
   /// или отсутствующей — `null`. Заменяет `ClashApiClient.urltestNow`.
@@ -448,11 +465,15 @@ class HomeState {
           n,
     };
     final pinned = [
-      ...nodes.where((n) => pinnedSet.contains(n) && model[n]?.type == 'direct'),
-      ...nodes.where((n) =>
-          pinnedSet.contains(n) &&
-          model[n]?.type == 'urltest' &&
-          directionAutoTags.contains(n)),
+      ...nodes.where(
+        (n) => pinnedSet.contains(n) && model[n]?.type == 'direct',
+      ),
+      ...nodes.where(
+        (n) =>
+            pinnedSet.contains(n) &&
+            model[n]?.type == 'urltest' &&
+            directionAutoTags.contains(n),
+      ),
       ...nodes.where((n) => pinnedSet.contains(n) && model[n]?.type == 'block'),
     ];
     // §196 — активная нода группы сразу ПОСЛЕ direct/auto, при ЛЮБОЙ сортировке
@@ -560,15 +581,16 @@ class HomeState {
       // configModel пересчитываем ТОЛЬКО при смене configRaw. Иначе шарим
       // тот же immutable объект — несколько copyWith без configRaw не
       // делают jsonDecode.
-      configModel:
-          configRaw != null ? ParsedConfig.parse(configRaw) : configModel,
+      configModel: configRaw != null
+          ? ParsedConfig.parse(configRaw)
+          : configModel,
       // §311 — та же parse-once дисциплина для снапшота ядра: новый raw →
       // парс; явный null → сброс модели; _unset → шарим текущий объект.
       runningModel: identical(runningConfigRaw, _unset)
           ? runningModel
           : (runningConfigRaw is String
-              ? ParsedConfig.parse(runningConfigRaw)
-              : null),
+                ? ParsedConfig.parse(runningConfigRaw)
+                : null),
       tunnel: tunnel ?? this.tunnel,
       lastError: identical(lastError, _unset)
           ? this.lastError
@@ -609,7 +631,8 @@ class HomeState {
       connectedSince: identical(connectedSince, _unset)
           ? this.connectedSince
           : connectedSince as DateTime?,
-      configChangedNeedRestart: configChangedNeedRestart ?? this.configChangedNeedRestart,
+      configChangedNeedRestart:
+          configChangedNeedRestart ?? this.configChangedNeedRestart,
       autoApplying: autoApplying ?? this.autoApplying,
       configLoadError: configLoadError ?? this.configLoadError,
       lastStartError: lastStartError ?? this.lastStartError,

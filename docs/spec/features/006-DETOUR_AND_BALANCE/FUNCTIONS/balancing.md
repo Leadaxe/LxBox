@@ -84,6 +84,11 @@ failure does not drop the held node because of auto-ping.
 (Fastest) / `🔀 [N/pool]` (Load balance) / `📌 [N]` (Hold until failure); the
 live pool of the running core
 ("connect to see the live pool").
+The `🔀 [N/pool]` label carries the pool badges matched by the badge regex;
+when no member yields a badge, it lists the names of the pool slots in the
+core's order instead. One rule for the Direction's Auto twin and for an
+auto-select node. Load balance has no `→ node` arrow: `round_robin` has no
+single current pick.
 
 ## Rules and invariants
 
@@ -141,3 +146,4 @@ live pool of the running core
 | 11 | [612](../../../tasks/612-contract-1-1-113-failover.md) | Implemented | Hold until failure (`failover`), migration from `passive_check` |
 | 12 | [677](../../../tasks/677-autoping-tail-skips-round-robin-groups.md) | Done | Auto ping on start forces a group test only for Fastest (`least_test`) |
 | 13 | [686](../../../tasks/686-folder-auto-node-source-tab.md) | In progress | Pool preview: a member switched off in the folder — ⏻, outside the count |
+| 14 | [715](../../../tasks/715-auto-twin-pool-label-core-delays.md) | Done | Load balance twin shows the pool label; slot names when no badge |
