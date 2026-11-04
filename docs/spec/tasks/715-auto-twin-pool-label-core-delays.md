@@ -5,7 +5,7 @@
 | Status | Done |
 | Start date | 2026-11-04 |
 | End date | 2026-11-04 |
-| Commits | — |
+| Commits | 725182db (код, доки, тесты); CHANGELOG — в 8e8753bf |
 | Related specs | §322 (метка режима и значки пула), §325 (замеры по Направлениям, чужой замер `~`), §535 (pull `getOutbounds` с heartbeat), §208 (View pool), features/006 balancing, features/007 node-row, features/009 node-ping |
 
 ## Problem
