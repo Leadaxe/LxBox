@@ -43,8 +43,10 @@ MASQUE, Hysteria2 и TUIC.
   хранилища (значение живёт там же, где остальные переменные шаблона).
 - Тексты decoy: тултип переменной `quic_sniff_decoy`, подсказка (i) и описание
   секции QUIC дополнены словами про AWG с маскировкой под QUIC (`ip=quic`).
-- Контракт: запись `awg_masquerade` в `registry/vars.json` (`enum`,
-  `portable: false`) — запрос лаунчеру, `contract/TASKS_LXBOX.md` §159.
+- Контракт 1.1.162 (лаунчер `8d13b511`, синк `3144f21e`, `TASKS_LXBOX` §159 →
+  §160): `awg_masquerade` в `registry/vars.json` — `enum`, options `all` /
+  `direct`, дефолт `all`, `portable: false`, `in: mobile` (пин лаунчера lx.30,
+  переменную он не берёт).
 
 ## Files
 
