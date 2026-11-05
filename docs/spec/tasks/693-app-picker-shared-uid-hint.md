@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Done (на устройстве не проверено) |
+| Статус | Done, итерация 2 (на устройстве не проверено) |
 | Дата начала | 2026-10-29 |
 | Источник | issue [#180](https://github.com/Leadaxe/LxBox/issues/180) (@usgrnk): на Samsung правило «block com.samsung.android.fmm» заблокировало всю группу UID 1000 — проверка обновлений системы не прошла, в Stats заблокированным значился Key Chain |
 | Связанные | §053 (секция APPS редактора правила), §107/§109 (Tunnel apps, AppInfoCache), §412 (тап по строке пикера не меняет выбор) |
@@ -69,6 +69,47 @@ Android раздаёт одному UID несколько пакетов (`andr
   пакета группы.
 - Ответ native без `uid` — без UID и без подсказки, без падений.
 
+## Итерация 2 — вылет вкладки Tunnel apps (2026-11-05)
+
+### Проблема
+
+С v2.25.19 вкладка Tunnel apps (Routing → вкладка приложений) у
+пользователей с большим числом приложений вылетает при открытии, чаще
+свайпом с вкладки DNS. В логе приложения — пачка
+`BoxVpnClient: getAppIcon timed out after 5s` с одной и той же миллисекундой.
+
+### Диагностика
+
+- f7bb07e1 (пункт 4 выше) добавил в `_load()` вкладки вызов
+  `AppInfoCache.loadAllApps()` — подсказке об общем UID нужен полный список.
+- Native `getInstalledApps` обходил все приложения и читал
+  `getApplicationLabel` на главном потоке — секунды на сотнях приложений.
+- `getAppIcon` → `encodeAppIcon` (отрисовка, PNG, base64) тоже шёл на главном
+  потоке. Запросы иконок всех сохранённых пакетов уходят разом, встают в
+  очередь за списком и истекают по 5 с одновременно — отсюда одинаковая
+  миллисекунда в логе. Главный поток занят секунды → ANR. Сам вылет по logcat
+  не подтверждён — это гипотеза.
+- В `encodeAppIcon` ветка `BitmapDrawable` отдавала битмап в родном размере
+  (бывает 192–512 px), ловился только `Exception` — `OutOfMemoryError` уходил
+  наверх.
+
+### Решение
+
+1. `VpnPlugin.kt`: `getInstalledApps`, `getAppIcon`, `getAppInfo` работают с
+   PackageManager на `Dispatchers.IO` (`pluginScope.launch` +
+   `withContext`), `result.success/error` — на главном. Контракт ответов
+   прежний (`notFound`, `APP_INFO_ERROR` у `getAppInfo`); сбой фоновой части
+   у `getInstalledApps` отвечает `INSTALLED_APPS_ERROR`, result без ответа не
+   остаётся.
+2. `encodeAppIcon`: `BitmapDrawable` больше 96 px по любой стороне
+   уменьшается до 96×96 (`createScaledBitmap`, filter); ветка 48×48 для
+   остальных drawable прежняя; ловится `Throwable` → пустая строка.
+3. Dart: `Image.memory` иконки на вкладке Tunnel apps и в пикере декодирует в
+   108×108 (`cacheWidth/cacheHeight`), битая картинка → та же заглушка, что
+   без иконки (`errorBuilder`); на вкладке добавлен `gaplessPlayback`.
+
+Не менялись: таймауты, `AppInfoCache`, построение списка вкладки.
+
 ## Проверка
 
 - `test/screens/app_picker_shared_uid_test.dart` — 3/3: UID в подзаголовке,
@@ -78,3 +119,7 @@ Android раздаёт одному UID несколько пакетов (`andr
 - `test/screens/app_picker_row_tap_test.dart` (§412) — зелёный.
 - Эмулятор и телефон не гоняли: AVD на машине не запущен; на Samsung UID
   1000 проверит только владелец/автор issue.
+- Итерация 2 — на устройстве не проверено. Сценарий: 300+ установленных
+  приложений, несколько выбранных в Tunnel apps; открыть вкладку свайпом с
+  DNS — без вылета, иконки появляются, в логе нет `getAppIcon timed out`.
+  Kotlin и Dart проверит CI.

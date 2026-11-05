@@ -625,23 +625,44 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 // Lightweight metadata only — иконки лениво подгружаются
                 // через getAppIcon по пакету. PNG-encode всех иконок в одном
                 // проходе — 500*20ms = 10s блокировки UI, недопустимо.
+                // 693 итер. 2: обход PackageManager и getApplicationLabel — на
+                // Dispatchers.IO, ответ — на главном. На сотнях приложений это
+                // секунды; на главном потоке за ними вставали все getAppIcon
+                // (таймауты 5 с) и грозил ANR.
                 val pm = context.packageManager
-                val apps = pm.getInstalledApplications(0).map { info ->
-                    val isSystem = (info.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0
-                    mapOf(
-                        "packageName" to info.packageName,
-                        "appName" to (pm.getApplicationLabel(info)?.toString() ?: info.packageName),
-                        "isSystemApp" to isSystem,
-                        // Общий UID (sharedUserId) — ядро и VpnService
-                        // различают приложения по UID, не по пакету.
-                        "uid" to info.uid,
-                    )
+                pluginScope.launch {
+                    val apps = try {
+                        withContext(Dispatchers.IO) {
+                            pm.getInstalledApplications(0).map { info ->
+                                val isSystem = (info.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0
+                                mapOf(
+                                    "packageName" to info.packageName,
+                                    "appName" to (pm.getApplicationLabel(info)?.toString() ?: info.packageName),
+                                    "isSystemApp" to isSystem,
+                                    // Общий UID (sharedUserId) — ядро и VpnService
+                                    // различают приложения по UID, не по пакету.
+                                    "uid" to info.uid,
+                                )
+                            }
+                        }
+                    } catch (e: Throwable) {
+                        Log.w(TAG, "getInstalledApps failed", e)
+                        null
+                    }
+                    if (apps != null) {
+                        result.success(apps)
+                    } else {
+                        result.error("INSTALLED_APPS_ERROR", "getInstalledApps failed", null)
+                    }
                 }
-                result.success(apps)
             }
             "getAppIcon" -> {
                 val pkg = call.argument<String>("packageName") ?: ""
-                result.success(encodeAppIcon(pkg))
+                // 693 итер. 2: отрисовка + PNG + base64 — вне главного потока.
+                pluginScope.launch {
+                    val icon = withContext(Dispatchers.IO) { encodeAppIcon(pkg) }
+                    result.success(icon)
+                }
             }
             "getAppInfo" -> {
                 // §109: metadata-only — иконку НЕ тащим (PNG-encode на main
@@ -653,20 +674,30 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 //   result.error(...)   — проверить не удалось, Dart считает
                 //                         retryable (НЕ «не установлен»)
                 val pkg = call.argument<String>("packageName") ?: ""
+                // 693 итер. 2: запрос к PackageManager — на Dispatchers.IO,
+                // ответ (тот же контракт) — на главном.
                 val pm = context.packageManager
-                try {
-                    val info = pm.getApplicationInfo(pkg, 0)
-                    val isSystem = (info.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0
-                    result.success(mapOf(
-                        "packageName" to pkg,
-                        "appName" to (pm.getApplicationLabel(info)?.toString() ?: pkg),
-                        "isSystemApp" to isSystem,
-                        "uid" to info.uid,
-                    ))
-                } catch (_: android.content.pm.PackageManager.NameNotFoundException) {
-                    result.success(mapOf("notFound" to true))
-                } catch (e: Exception) {
-                    result.error("APP_INFO_ERROR", e.message, null)
+                pluginScope.launch {
+                    val reply: Result<Map<String, Any>> = withContext(Dispatchers.IO) {
+                        try {
+                            val info = pm.getApplicationInfo(pkg, 0)
+                            val isSystem = (info.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0
+                            Result.success(mapOf<String, Any>(
+                                "packageName" to pkg,
+                                "appName" to (pm.getApplicationLabel(info)?.toString() ?: pkg),
+                                "isSystemApp" to isSystem,
+                                "uid" to info.uid,
+                            ))
+                        } catch (_: android.content.pm.PackageManager.NameNotFoundException) {
+                            Result.success(mapOf<String, Any>("notFound" to true))
+                        } catch (e: Throwable) {
+                            Result.failure(e)
+                        }
+                    }
+                    reply.fold(
+                        onSuccess = { result.success(it) },
+                        onFailure = { result.error("APP_INFO_ERROR", it.message, null) },
+                    )
                 }
             }
             "isIgnoringBatteryOptimizations" -> {
@@ -1856,7 +1887,14 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             val pm = context.packageManager
             val drawable = pm.getApplicationIcon(pkg)
             val bitmap = if (drawable is android.graphics.drawable.BitmapDrawable) {
-                drawable.bitmap
+                // 693 итер. 2: родной битмап бывает 192–512 px — в пикере
+                // хватает 96, крупнее только тратит память и PNG-encode.
+                val src = drawable.bitmap
+                if (src.width > 96 || src.height > 96) {
+                    android.graphics.Bitmap.createScaledBitmap(src, 96, 96, true)
+                } else {
+                    src
+                }
             } else {
                 val bmp = android.graphics.Bitmap.createBitmap(
                     48, 48, android.graphics.Bitmap.Config.ARGB_8888
@@ -1869,7 +1907,8 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             val stream = java.io.ByteArrayOutputStream()
             bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 80, stream)
             android.util.Base64.encodeToString(stream.toByteArray(), android.util.Base64.NO_WRAP)
-        } catch (_: Exception) {
+        } catch (_: Throwable) {
+            // Throwable, а не Exception: OutOfMemoryError на огромной иконке.
             ""
         }
     }

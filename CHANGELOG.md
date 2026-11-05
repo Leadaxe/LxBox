@@ -8,6 +8,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Tunnel apps crashed on open with many installed apps ([task 693](docs/spec/tasks/693-app-picker-shared-uid-hint.md)).** The app list and icons are now read off the main thread, large icons are scaled down to 96 px, and the tab no longer stalls with a burst of `getAppIcon timed out` in the log.
+
 ## [2.25.20] — 2026-11-05
 
 ### Added

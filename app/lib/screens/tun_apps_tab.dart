@@ -325,21 +325,32 @@ class _TunAppsTabState extends State<TunAppsTab>
 
     Widget leading;
     final icon = info?.icon;
+    final placeholder = CircleAvatar(
+      radius: 18,
+      backgroundColor: cs.surfaceContainerHighest,
+      child: Icon(
+        uninstalled ? Icons.help_outline : Icons.android,
+        size: 20,
+        color: cs.onSurfaceVariant,
+      ),
+    );
     if (icon != null) {
+      // 693 итер. 2: декодировать в размер плитки (36 dp × 3), битая
+      // картинка → та же заглушка.
       leading = Opacity(
         opacity: uninstalled ? 0.4 : 1.0,
-        child: Image.memory(icon, width: 36, height: 36),
-      );
-    } else {
-      leading = CircleAvatar(
-        radius: 18,
-        backgroundColor: cs.surfaceContainerHighest,
-        child: Icon(
-          uninstalled ? Icons.help_outline : Icons.android,
-          size: 20,
-          color: cs.onSurfaceVariant,
+        child: Image.memory(
+          icon,
+          width: 36,
+          height: 36,
+          cacheWidth: 108,
+          cacheHeight: 108,
+          gaplessPlayback: true,
+          errorBuilder: (_, _, _) => placeholder,
         ),
       );
+    } else {
+      leading = placeholder;
     }
 
     return ListTile(
