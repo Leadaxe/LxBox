@@ -42,6 +42,14 @@ void main() {
     }
   });
 
+  test('720 — awg_masquerade: all (дефолт ядра с lx.32) ключа не даёт, direct пишется строкой', () {
+    expect((lx({}) as Map).containsKey('awg_masquerade'), isFalse);
+    expect((lx({'awg_masquerade': 'all'}) as Map).containsKey('awg_masquerade'), isFalse);
+    expect((lx({'awg_masquerade': 'direct'}) as Map)['awg_masquerade'], 'direct');
+    // чужое значение ядру не уходит: блок lx строгий, неизвестный режим валит старт
+    expect((lx({'awg_masquerade': 'detour'}) as Map).containsKey('awg_masquerade'), isFalse);
+  });
+
   test('сон off — блока wg нет, reachable и lazy не пишутся', () {
     final r = lx({'wg_idle_suspend': 'off', 'quic_sniff_decoy': 'off'});
     expect(r, isEmpty);

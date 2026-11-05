@@ -872,6 +872,7 @@ the base sniff/hijack-dns/resolve rules.
 | `bittorrent` | true | — | — | ✓ (outbound) | — | ✓ (`protocol: bittorrent` → `@outbound`) | — | — |
 | `private-ip` | (false) | — | — | ✓ (outbound) | — | ✓ (`ip_is_private` → `@outbound`) | — | — |
 | `unknown-traffic` | true | — | — | ✓ (`outbound`=direct) | ✓ (inline `unknown-apps`, invert `package_name_regex: "^"`) | ✓ (`@outbound`) | — | — |
+| `tunnel-routes` (§718) | true | — | 943 | ✓ (dns_enable) | — | ✓ per node with `own_routes` (wireguard / openvpn-client / openconnect): `[resolve → <node>-dns #if @dns_enable and not wireguard, preferred_by → @node]` | ✓ per node (`preferred_by` → `<node>-dns`, #if @dns_enable, openvpn-client / openconnect) | ✓ per node (type `openvpn` / `openconnect`, `endpoint: @node`, #if @dns_enable) |
 | `tailscale` (§578) | true | — | 945 | ✓ (dns_enable) | — | ✓ per node: `[resolve → <node>-dns #if @dns_enable, preferred_by → @node]` | ✓ per node (`preferred_by` → `<node>-dns`, #if @dns_enable) | ✓ per node (type `tailscale`, `endpoint: @node`, #if @dns_enable) |
 | `fcm-push` (§364) | false | — | 970 | ✓ (outbound=direct-out, gms_only) | — | ✓ one logical `and` rule: `[package_name gms #if @gms_only, or(domain mtalk/android.apis, domain_suffix firebase…)]` → `@outbound` | — | — |
 | `vowifi` (§371) | true | — | 990 | ✓ (outbound=direct-out, ike_ports) | ✓ (inline `vowifi-epdg`: `domain_suffix pub.3gppnetwork.org`) | ✓ an array: `[rule_set vowifi-epdg → @outbound, udp 500/4500 → @outbound #if @ike_ports]` | — | — |

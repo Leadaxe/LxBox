@@ -608,6 +608,15 @@
  "Outbound for peers allowed to use this device as a gateway.": {
   "value": "允许将此设备用作网关的对等方所用的出站。"
  },
+ "Tunnel routes": {
+  "value": "隧道路由"
+ },
+ "Send to each client tunnel only the networks it announces: WireGuard allowed IPs, routes pushed by an OpenVPN or OpenConnect server. Everything else follows the rules below. Turned on per tunnel, in the tunnel's own settings.": {
+  "value": "每个客户端隧道只接收它自己公布的网络：WireGuard 的 allowed IPs，OpenVPN 或 OpenConnect 服务器推送的路由。其余流量按下方规则处理。在各隧道自己的设置中逐个开启。"
+ },
+ "Resolve the names a tunnel announces with the tunnel's own DNS.": {
+  "value": "使用隧道自身的 DNS 解析该隧道公布的域名。"
+ },
  "Tailscale networks": {
   "value": "Tailscale 网络"
  },
@@ -815,14 +824,26 @@
   "QUIC": {
     "value": "QUIC"
   },
-  "MASQUE (HTTP/3), Hysteria2 and TUIC.": {
-    "value": "MASQUE (HTTP/3)、Hysteria2 和 TUIC。"
+  "AWG masquerade": {
+    "value": "AWG 伪装"
+  },
+  "When an AmneziaWG node sends its masquerade packets (ip=quic, i1…) before the handshake. All paths: always, also through another node. Direct only: when the node dials from this device's own socket; through another node a single handshake packet goes out.": {
+    "value": "AmneziaWG 节点何时在握手前发送伪装数据包（ip=quic、i1…）。All paths：始终发送，包括经由其他节点时。Direct only：仅当节点从本设备自身的套接字拨号时；经由其他节点时只发送一个握手包。"
+  },
+  "Direct only": {
+    "value": "仅直连"
+  },
+  "All paths (default)": {
+    "value": "所有路径（默认）"
+  },
+  "MASQUE (HTTP/3), Hysteria2, TUIC and AWG with QUIC masquerade (ip=quic).": {
+    "value": "MASQUE (HTTP/3)、Hysteria2、TUIC 以及伪装成 QUIC（ip=quic）的 AWG。"
   },
   "Anti-sniff decoy": {
     "value": "防嗅探诱饵"
   },
-  "Send one junk byte before the QUIC handshake so a relay that sniffs UDP cannot redirect the connection by its SNI. Through detour: only connections carried by another node; Direct: only this device's own socket; All: both.": {
-    "value": "在 QUIC 握手前发送一个垃圾字节，使嗅探 UDP 的中继无法按 SNI 重定向连接。Through detour：仅由其他节点承载的连接；Direct：仅本设备自身的套接字；All：两者皆有。"
+  "Send one junk byte before the QUIC handshake so a relay that sniffs UDP cannot redirect the connection by its SNI. Through detour: only connections carried by another node; Direct: only this device's own socket; All: both. Also covers AWG nodes whose masquerade imitates QUIC (ip=quic).": {
+    "value": "在 QUIC 握手前发送一个垃圾字节，使嗅探 UDP 的中继无法按 SNI 重定向连接。Through detour：仅由其他节点承载的连接；Direct：仅本设备自身的套接字；All：两者皆有。也适用于伪装成 QUIC（ip=quic）的 AWG 节点。"
   },
   "MASQUE idle timeout": {
     "value": "MASQUE 空闲超时"

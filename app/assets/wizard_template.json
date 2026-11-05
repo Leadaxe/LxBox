@@ -459,6 +459,14 @@
             "8",
             "12"
           ]
+        },
+        { "name": "awg_masquerade", "type": "enum",
+          "default_value": "all", "required": true, "wizard_ui": "edit",
+          "title": "AWG masquerade", "tooltip": "When an AmneziaWG node sends its masquerade packets (ip=quic, i1…) before the handshake. All paths: always, also through another node. Direct only: when the node dials from this device's own socket; through another node a single handshake packet goes out.",
+          "options": [
+            {"title": "All paths (default)", "value": "all"},
+            {"title": "Direct only", "value": "direct"}
+          ]
         }
       ]
     },
@@ -466,10 +474,10 @@
       "id": "quic",
       "name": "QUIC",
       "chapter": "core",
-      "description": "MASQUE (HTTP/3), Hysteria2 and TUIC.",
+      "description": "MASQUE (HTTP/3), Hysteria2, TUIC and AWG with QUIC masquerade (ip=quic).",
       "vars": [
         { "name": "quic_sniff_decoy", "type": "enum",
-          "default_value": "detour", "required": true, "wizard_ui": "edit", "title": "Anti-sniff decoy", "tooltip": "Send one junk byte before the QUIC handshake so a relay that sniffs UDP cannot redirect the connection by its SNI. Through detour: only connections carried by another node; Direct: only this device's own socket; All: both.",
+          "default_value": "detour", "required": true, "wizard_ui": "edit", "title": "Anti-sniff decoy", "tooltip": "Send one junk byte before the QUIC handshake so a relay that sniffs UDP cannot redirect the connection by its SNI. Through detour: only connections carried by another node; Direct: only this device's own socket; All: both. Also covers AWG nodes whose masquerade imitates QUIC (ip=quic).",
           "options": [
             {"title": "Off", "value": "off"},
             {"title": "Through detour (default)", "value": "detour"},
@@ -506,6 +514,9 @@
       }],
       "#if mtu_align": [{"#not": {"@mtu_align": "clamp"}}, {
         "mtu_align": "@mtu_align"
+      }],
+      "#if awg_masquerade": [{"@awg_masquerade": "direct"}, {
+        "awg_masquerade": "direct"
       }],
       "#if quic_sniff_decoy": [{"@quic_sniff_decoy": {"#in": ["detour", "direct", "all"]}}, {
         "quic_sniff_decoy": "@quic_sniff_decoy"
@@ -873,6 +884,42 @@
           "inbound": "@closed_nodes",
           "action": "reject"
         }]}
+      ]
+    },
+    {
+      "preset_id": "tunnel-routes",
+      "for_each_node": {"#filter": {"#and": [
+        {"@node.body.type": {"#in": ["wireguard", "openvpn-client", "openconnect"]}},
+        "@node.own_routes"
+      ]}},
+      "ui": {"label": "Tunnel routes", "description": "Send to each client tunnel only the networks it announces: WireGuard allowed IPs, routes pushed by an OpenVPN or OpenConnect server. Everything else follows the rules below. Turned on per tunnel, in the tunnel's own settings.", "default": true, "num": 943, "isSortable": true},
+      "vars": [
+        {"name": "dns_enable", "type": "bool", "default_value": "true", "title": "DNS", "tooltip": "Resolve the names a tunnel announces with the tunnel's own DNS."}
+      ],
+      "rules": [
+        {"#if": [
+          {"#and": ["@dns_enable", {"@node.body.type": {"#in": ["openvpn-client", "openconnect"]}}]},
+          {"preferred_by": ["@node"], "action": "resolve", "server": {"#tpl": "@{node}-dns"}}
+        ]},
+        {"preferred_by": ["@node"], "outbound": "@node"}
+      ],
+      "dns_servers": [
+        {"#if": [
+          {"#and": ["@dns_enable", {"@node.body.type": "openvpn-client"}]},
+          {"type": "openvpn", "tag": {"#tpl": "@{node}-dns"}, "endpoint": "@node",
+           "description": "DNS announced by the tunnel"}
+        ]},
+        {"#if": [
+          {"#and": ["@dns_enable", {"@node.body.type": "openconnect"}]},
+          {"type": "openconnect", "tag": {"#tpl": "@{node}-dns"}, "endpoint": "@node",
+           "description": "DNS announced by the tunnel"}
+        ]}
+      ],
+      "dns_rules": [
+        {"#if": [
+          {"#and": ["@dns_enable", {"@node.body.type": {"#in": ["openvpn-client", "openconnect"]}}]},
+          {"preferred_by": [{"#tpl": "@{node}-dns"}], "server": {"#tpl": "@{node}-dns"}}
+        ]}
       ]
     },
     {

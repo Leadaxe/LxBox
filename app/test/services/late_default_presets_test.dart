@@ -49,7 +49,8 @@ void main() {
     writeDoc({'presets_migrated': true});
     expect(await SettingsStorage.seedLateDefaultPresets(template), isTrue);
     final rules = await SettingsStorage.getCustomRules();
-    expect(await presetIds(), unorderedEquals(['tailscale', 'tunnel-ingress']));
+    expect(await presetIds(),
+        unorderedEquals(['tailscale', 'tunnel-ingress', 'tunnel-routes']));
     final ts = rules
         .whereType<CustomRulePreset>()
         .singleWhere((r) => r.presetId == 'tailscale');
@@ -69,7 +70,7 @@ void main() {
       () async {
     writeDoc({
       'presets_migrated': true,
-      'late_presets_seeded': ['tailscale'],
+      'late_presets_seeded': ['tailscale', 'tunnel-routes'],
     });
     expect(await SettingsStorage.seedLateDefaultPresets(template), isTrue);
     final ti = (await SettingsStorage.getCustomRules())
@@ -91,9 +92,11 @@ void main() {
     await SettingsStorage.saveCustomRules([
       CustomRulePreset(name: 'x', presetId: 'tailscale', enabled: false),
       CustomRulePreset(name: 'y', presetId: 'tunnel-ingress', enabled: false),
+      CustomRulePreset(name: 'z', presetId: 'tunnel-routes', enabled: false),
     ]);
     expect(await SettingsStorage.seedLateDefaultPresets(template), isFalse);
-    expect(await presetIds(), ['tailscale', 'tunnel-ingress']);
+    expect(
+        await presetIds(), ['tailscale', 'tunnel-ingress', 'tunnel-routes']);
   });
 
   test('свежая установка не трогается; первый seed закрывает шаг', () async {
@@ -114,7 +117,8 @@ void main() {
 
     test('свежая установка: все default-пресеты, поздние закрыты', () async {
       expect(defaults,
-          containsAll(['bittorrent', 'tailscale', 'tunnel-ingress']));
+          containsAll(
+              ['bittorrent', 'tailscale', 'tunnel-ingress', 'tunnel-routes']));
       expect(await SettingsStorage.seedDefaultPresets(template), isTrue);
       expect(await presetIds(), defaults);
       expect(await SettingsStorage.hasDefaultsSeeded(), isTrue);

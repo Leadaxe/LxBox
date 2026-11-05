@@ -106,6 +106,7 @@ Map<String, Object?> serializeSubEntry(
       'allow_local': list.allowLocal,
       'allow_lan': list.allowLan,
       'allow_gateway': list.allowGateway,
+      'own_routes': list.ownRoutes,
     },
     // §636 — TLS-политика: у подписки и папки — уровень источника, у
     // одиночного сервера — узловой.
@@ -326,6 +327,7 @@ Map<String, Object?> serializeFolderMember(
       'allow_local': m.allowLocal,
       'allow_lan': m.allowLan,
       'allow_gateway': m.allowGateway,
+      'own_routes': m.ownRoutes,
       'tls': serializeTlsPolicy(m.tls), // §636 — узловая политика члена
     };
 

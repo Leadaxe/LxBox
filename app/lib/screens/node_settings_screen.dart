@@ -132,6 +132,8 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
   /// §656 — блок `Incoming connections from this tunnel` виден (см.
   /// [tunnelIngressTogglesVisible]).
   bool _tunnelIngressVisible = false;
+  // WireGuard с 0.0.0.0/0 или ::/0 в allowed_ips: нотис под `own_routes`.
+  bool _announcesDefaultRoute = false;
 
   /// §581 — узел Tailscale: есть вкладка Network.
   bool _isTailscale = false;
@@ -298,6 +300,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
       isMember: member != null,
       nodeBody: nodeBody,
     );
+    _announcesDefaultRoute = wireguardAnnouncesDefaultRoute(nodeBody);
 
     // §578/§643/§656 — видимость `Skip Tailscale presets`: узел `tailscale`
     // и пресеты с обходом узлов из шаблона, чей `#filter` принимает узел.
@@ -1045,6 +1048,25 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
           getLocalText.s("Allow as gateway"),
           getLocalText.s(
               "Peers route any traffic through this device; it leaves through the outbound chosen in the Tunnel ingress preset.")),
+      // Пресет `tunnel-routes`: в узел только его собственные сети.
+      flag(
+          'node-own-routes',
+          Icons.call_split_outlined,
+          NodeRecordFlag.ownRoutes,
+          getLocalText.s("Only its own networks"),
+          getLocalText.s(
+              "Send to this tunnel only the networks it announces. It works alongside the selected server and does not need to be chosen as a direction.")),
+      if (_announcesDefaultRoute && _recordFlag(NodeRecordFlag.ownRoutes))
+        Padding(
+          key: const ValueKey('node-own-routes-default-route'),
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Text(
+            getLocalText.s(
+                "This tunnel announces the default route, so it takes all traffic."),
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.error),
+          ),
+        ),
       const SizedBox(height: 16),
     ];
   }

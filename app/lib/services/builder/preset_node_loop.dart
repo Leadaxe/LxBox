@@ -107,12 +107,14 @@ const Set<String> kPresetNodeRecordFieldNames = {
   'allow_local',
   'allow_lan',
   'allow_gateway',
+  // Пресет `tunnel-routes`: в узел только его собственные сети.
+  'own_routes',
 };
 
 /// Область видимости с именами узла обхода (§6.6): `@node` (тег, text),
 /// поля записи [kPresetNodeRecordFieldNames] (bool, §656:
-/// `skip_tailscale_presets`, `allow_local`, `allow_lan`, `allow_gateway`),
-/// `@node.body.<путь>` (поле тела, text). Путь
+/// `skip_tailscale_presets`, `allow_local`, `allow_lan`, `allow_gateway`;
+/// `own_routes`), `@node.body.<путь>` (поле тела, text). Путь
 /// тела заранее не известен, поэтому имена узла вычисляются при обращении,
 /// а не перечисляются.
 class PresetNodeScope extends MapBase<String, WizardVar> {

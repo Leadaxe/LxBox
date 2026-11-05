@@ -8,6 +8,50 @@
 
 ## [Unreleased]
 
+## [2.25.20] — 2026-11-05
+
+### Added
+
+- **Tunnel routes preset and the "Only its own networks" switch ([task 718](docs/spec/tasks/718-tunnel-routes-preset.md)).**
+  A WireGuard / AWG, OpenVPN or OpenConnect node can be marked to receive only
+  the networks it announces (WireGuard allowed IPs, routes pushed by the
+  OpenVPN or OpenConnect server) through `preferred_by`; everything else
+  follows the other rules. For OpenVPN and OpenConnect the tunnel's own DNS
+  resolves the domains it announces (the DNS variable of the preset). The
+  preset is on by default and does nothing until the switch is set on a node;
+  the node record gains the `own_routes` field (storage, LX backup, Debug API
+  `subs`).
+
+- **AWG masquerade setting ([task 720](docs/spec/tasks/720-awg-masquerade-setting.md)).**
+  VPN Settings → Core → WireGuard gains "AWG masquerade": "All paths"
+  (default) sends the masquerade packets of an AmneziaWG node (`ip=quic`,
+  `i1`…) on every path, through another node as well; "Direct only" sends
+  them only when the node dials from the device's own socket (core key
+  `lx.awg_masquerade`, written only for "Direct only").
+
+### Changed
+
+- **Core `v1.14.4-lx.31` → `v1.14.4-lx.32`; AWG behind another node masquerades again.**
+  The default of `lx.awg_masquerade` is flipped in the core: an absent key now
+  means `all`. In 2.25.19 (core lx.31) an AWG node behind another node sent a
+  single handshake packet without the masquerade; now the masquerade goes out
+  on every path, and "Anti-sniff decoy" keeps a sniffing relay from redirecting
+  it. "Direct" of `lx.awg_masquerade` and of `lx.quic_sniff_decoy` now also
+  covers a detour to a group (selector / urltest) whose current choice is
+  direct. Java surface and build tags are unchanged.
+- **"Anti-sniff decoy" texts name AWG.** The tooltip, the hint and the
+  description of the QUIC section say that the decoy also covers AWG nodes
+  whose masquerade imitates QUIC (`ip=quic`).
+- **Contract 1.1.160 → 1.1.162.** 1.1.161: the node record field `own_routes`
+  and the `tunnel-routes` preset; 1.1.162: the template variable
+  `awg_masquerade` in the registry (mobile only).
+
+### Under the hood
+
+- **F-Droid build watch ([task 719](docs/spec/tasks/719-fdroid-mr-watch.md)).**
+  A daily CI job checks that the build of our merge request in fdroiddata
+  passed and reopens the issue when it did not.
+
 ## [2.25.19] — 2026-11-05
 
 ### Added

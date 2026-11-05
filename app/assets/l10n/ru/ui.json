@@ -4656,6 +4656,15 @@
   "Peers route any traffic through this device; it leaves through the outbound chosen in the Tunnel ingress preset.": {
     "value": "Пиры пускают через устройство любой трафик; он уходит в исходящий канал, выбранный в пресете «Входящие из туннелей»."
   },
+  "Only its own networks": {
+    "value": "Только свои сети"
+  },
+  "Send to this tunnel only the networks it announces. It works alongside the selected server and does not need to be chosen as a direction.": {
+    "value": "В этот туннель идут только сети, которые он объявляет. Работает вместе с выбранным сервером, выбирать туннель Направлением не нужно."
+  },
+  "This tunnel announces the default route, so it takes all traffic.": {
+    "value": "Туннель объявляет маршрут по умолчанию и забирает весь трафик."
+  },
   "No matching nodes": {
     "value": "Нет подходящих узлов"
   },
@@ -6962,8 +6971,11 @@
   "Core: lx.mtu_align. A node over a tunnel gets a packet size that fits into it: mtu for WireGuard and MASQUE, the initial packet size for Hysteria2 and TUIC. Values are never raised.": {
     "value": "Ядро: lx.mtu_align. Узел поверх туннеля получает размер пакета, который в туннель влезает: mtu у WireGuard и MASQUE, начальный размер пакета у Hysteria2 и TUIC. Значения никогда не повышаются."
   },
-  "Core: lx.quic_sniff_decoy. A relay with UDP sniffing (Xray destOverride quic) rewrites the destination by the SNI of the first QUIC packet; a junk first byte makes it give up. Servers drop the byte. A DPI on your own uplink may react to it, hence Through detour by default.": {
-    "value": "Ядро: lx.quic_sniff_decoy. Релей со сниффингом UDP (Xray destOverride quic) подменяет назначение по SNI из первого QUIC-пакета; мусорный первый байт заставляет его отступиться. Серверы этот байт отбрасывают. DPI вашего собственного канала может на него среагировать, поэтому по умолчанию — Through detour."
+  "Core: lx.awg_masquerade. The masquerade burst of an AWG endpoint (ip=quic, i1…) precedes the handshake. Through a detour a relay may take it for a QUIC flow and redirect it by SNI; Anti-sniff decoy guards against that. Direct only drops the burst on such paths.": {
+    "value": "Ядро: lx.awg_masquerade. Маскировочная пачка эндпоинта AWG (ip=quic, i1…) идёт перед рукопожатием. Через detour релей может принять её за QUIC-поток и перенаправить по SNI; от этого защищает Anti-sniff decoy. Direct only убирает пачку на таких путях."
+  },
+  "Core: lx.quic_sniff_decoy. A relay with UDP sniffing (Xray destOverride quic) rewrites the destination by the SNI of the first QUIC packet; a junk first byte makes it give up. Servers drop the byte. A DPI on your own uplink may react to it, hence Through detour by default. Also covers the AWG masquerade burst that imitates QUIC (ip=quic).": {
+    "value": "Ядро: lx.quic_sniff_decoy. Релей со сниффингом UDP (Xray destOverride quic) подменяет назначение по SNI из первого QUIC-пакета; мусорный первый байт заставляет его отступиться. Серверы этот байт отбрасывают. DPI вашего собственного канала может на него среагировать, поэтому по умолчанию — Through detour. Действует и на маскировочную пачку AWG под QUIC (ip=quic)."
   },
   "Core: lx.masque.idle_timeout. The idle window for MASQUE nodes that have no idle_timeout of their own.": {
     "value": "Ядро: lx.masque.idle_timeout. Окно простоя для узлов MASQUE без собственного idle_timeout."

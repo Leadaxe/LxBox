@@ -113,7 +113,8 @@ Map<String, dynamic> _serverToRecord(UserServer u) {
     ..._detourLinkToRecord(u.detourPolicy),
     // §578/§656 — пишется только `true` и только новые ключи.
     ..._recordFlagsToRecord(u.skipTailscalePresets, u.allowLocal, u.allowLan,
-        u.allowGateway, u.disableTaildropCommands, u.disableTaildropAutosave),
+        u.allowGateway, u.ownRoutes, u.disableTaildropCommands,
+        u.disableTaildropAutosave),
     // §707 (контракт 1.1.160) — имя каталога состояния лаунчера, как есть.
     if (u.stateDirId.isNotEmpty) 'state_dir_id': u.stateDirId,
     // L — настройки LxBox.
@@ -159,7 +160,8 @@ Map<String, dynamic> _memberToRecord(FolderMember m, String folderId) {
     if (node == null) 'reason': kMemberUnparsedReason,
     // §578/§656 — пишется только `true` и только новые ключи.
     ..._recordFlagsToRecord(m.skipTailscalePresets, m.allowLocal, m.allowLan,
-        m.allowGateway, m.disableTaildropCommands, m.disableTaildropAutosave),
+        m.allowGateway, m.ownRoutes, m.disableTaildropCommands,
+        m.disableTaildropAutosave),
     if (m.stateDirId.isNotEmpty) 'state_dir_id': m.stateDirId, // §707 1.1.160
     ..._tlsToRecord(m.tls),
   };
@@ -170,6 +172,7 @@ Map<String, dynamic> _memberToRecord(FolderMember m, String folderId) {
 Map<String, dynamic> _recordFlagsToRecord(
         bool skipTailscalePresets, bool allowLocal, bool allowLan,
         bool allowGateway,
+        bool ownRoutes,
         bool disableTaildropCommands,
         bool disableTaildropAutosave) =>
     {
@@ -177,6 +180,8 @@ Map<String, dynamic> _recordFlagsToRecord(
       if (allowLocal) 'allow_local': true,
       if (allowLan) 'allow_lan': true,
       if (allowGateway) 'allow_gateway': true,
+      // Пресет `tunnel-routes` — только `true`.
+      if (ownRoutes) 'own_routes': true,
       // §707 итер. 9 — Taildrop узла, тоже только `true`.
       if (disableTaildropCommands) 'disable_taildrop_commands': true,
       if (disableTaildropAutosave) 'disable_taildrop_autosave': true,
@@ -362,7 +367,7 @@ const Set<String> _subscriptionKeys = {
 const Set<String> _serverKeys = {
   'kind', 'id', 'tag', 'enabled', 'warnings', 'origin', 'body', 'detour',
   'sections', 'skip_presets', 'skip_tailscale_presets', 'allow_local',
-  'allow_lan', 'allow_gateway', 'disable_taildrop_commands',
+  'allow_lan', 'allow_gateway', 'own_routes', 'disable_taildrop_commands',
   'disable_taildrop_autosave',
   // §707 (контракт 1.1.160): `state_dir_id` переносится; `taildrop_double_copy`
   // применяет только лаунчер — известен, но молча пропускается.
@@ -378,7 +383,7 @@ const Set<String> _folderKeys = {
 const Set<String> _memberKeys = {
   'kind', 'tag', 'enabled', 'warnings', 'origin', 'body', 'detour', 'reason',
   'sections', 'skip_presets', 'skip_tailscale_presets', 'allow_local',
-  'allow_lan', 'allow_gateway', 'disable_taildrop_commands',
+  'allow_lan', 'allow_gateway', 'own_routes', 'disable_taildrop_commands',
   'disable_taildrop_autosave',
   'state_dir_id', 'taildrop_double_copy', // §707 (контракт 1.1.160)
   'tls',
@@ -518,6 +523,7 @@ UserServer _serverFromRecord(
     allowLocal: _bool(j['allow_local'], false),
     allowLan: _bool(j['allow_lan'], false),
     allowGateway: _bool(j['allow_gateway'], false),
+    ownRoutes: _bool(j['own_routes'], false),
     disableTaildropCommands: _bool(j['disable_taildrop_commands'], false),
     disableTaildropAutosave: _bool(j['disable_taildrop_autosave'], false),
     stateDirId: stateDirIdOf(j['state_dir_id']),
@@ -611,6 +617,7 @@ FolderMember? _memberFromRecord(
     allowLocal: _bool(j['allow_local'], false),
     allowLan: _bool(j['allow_lan'], false),
     allowGateway: _bool(j['allow_gateway'], false),
+    ownRoutes: _bool(j['own_routes'], false),
     disableTaildropCommands: _bool(j['disable_taildrop_commands'], false),
     disableTaildropAutosave: _bool(j['disable_taildrop_autosave'], false),
     stateDirId: stateDirIdOf(j['state_dir_id']),

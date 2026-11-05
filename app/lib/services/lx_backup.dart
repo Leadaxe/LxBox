@@ -432,6 +432,7 @@ class LxServer {
     this.allowLocal = false,
     this.allowLan = false,
     this.allowGateway = false,
+    this.ownRoutes = false,
     this.disableTaildropCommands = false,
     this.disableTaildropAutosave = false,
     this.stateDirId = '',
@@ -487,6 +488,9 @@ class LxServer {
   final bool allowLan;
   final bool allowGateway;
 
+  /// `own_routes` (пресет `tunnel-routes`), те же правила.
+  final bool ownRoutes;
+
   /// §707 итер. 9 (контракт 1.1.159) — `disable_taildrop_commands` /
   /// `disable_taildrop_autosave`, те же правила, что у полей выше.
   final bool disableTaildropCommands;
@@ -504,6 +508,7 @@ class LxServer {
     bool local,
     bool lan,
     bool gateway,
+    bool ownRoutes,
     bool commandsOff,
     bool autosaveOff
   })? flagsOver({
@@ -511,6 +516,7 @@ class LxServer {
     required bool local,
     required bool lan,
     required bool gateway,
+    required bool ownRoutes,
     required bool commandsOff,
     required bool autosaveOff,
   }) {
@@ -519,6 +525,7 @@ class LxServer {
       local: local || allowLocal,
       lan: lan || allowLan,
       gateway: gateway || allowGateway,
+      ownRoutes: ownRoutes || this.ownRoutes,
       commandsOff: commandsOff || disableTaildropCommands,
       autosaveOff: autosaveOff || disableTaildropAutosave,
     );
@@ -528,6 +535,7 @@ class LxServer {
               local: local,
               lan: lan,
               gateway: gateway,
+              ownRoutes: ownRoutes,
               commandsOff: commandsOff,
               autosaveOff: autosaveOff
             )
@@ -3182,6 +3190,7 @@ LxServer? _server10(
     allowLocal: node.allowLocal,
     allowLan: node.allowLan,
     allowGateway: node.allowGateway,
+    ownRoutes: node.ownRoutes,
     disableTaildropCommands: node.disableTaildropCommands,
     disableTaildropAutosave: node.disableTaildropAutosave,
     stateDirId: node.stateDirId,
@@ -3615,6 +3624,7 @@ const Set<String> _node10Keys = {
   'allow_local',
   'allow_lan',
   'allow_gateway',
+  'own_routes',
   // §707 итер. 9 (контракт 1.1.159) — Taildrop узла, знак «выключено»; пишется только true.
   'disable_taildrop_commands',
   'disable_taildrop_autosave',
@@ -4275,6 +4285,7 @@ BackupServerMerge mergeBackupServers(
           local: local.allowLocal,
           lan: local.allowLan,
           gateway: local.allowGateway,
+          ownRoutes: local.ownRoutes,
           commandsOff: local.disableTaildropCommands,
           autosaveOff: local.disableTaildropAutosave,
         );
@@ -4286,6 +4297,7 @@ BackupServerMerge mergeBackupServers(
             allowLocal: rec?.local,
             allowLan: rec?.lan,
             allowGateway: rec?.gateway,
+            ownRoutes: rec?.ownRoutes,
             disableTaildropCommands: rec?.commandsOff,
             disableTaildropAutosave: rec?.autosaveOff,
           );
@@ -4310,6 +4322,7 @@ BackupServerMerge mergeBackupServers(
         allowLocal: srv.allowLocal,
         allowLan: srv.allowLan,
         allowGateway: srv.allowGateway,
+        ownRoutes: srv.ownRoutes,
         disableTaildropCommands: srv.disableTaildropCommands,
         disableTaildropAutosave: srv.disableTaildropAutosave,
         stateDirId: stateDirs.adopt(srv.stateDirId),
@@ -4577,6 +4590,7 @@ int _mergeFolderMember(
       local: own.allowLocal,
       lan: own.allowLan,
       gateway: own.allowGateway,
+      ownRoutes: own.ownRoutes,
       commandsOff: own.disableTaildropCommands,
       autosaveOff: own.disableTaildropAutosave,
     );
@@ -4587,6 +4601,7 @@ int _mergeFolderMember(
       allowLocal: rec.local,
       allowLan: rec.lan,
       allowGateway: rec.gateway,
+      ownRoutes: rec.ownRoutes,
       disableTaildropCommands: rec.commandsOff,
       disableTaildropAutosave: rec.autosaveOff,
     );
@@ -4604,6 +4619,7 @@ int _mergeFolderMember(
     allowLocal: srv.allowLocal,
     allowLan: srv.allowLan,
     allowGateway: srv.allowGateway,
+    ownRoutes: srv.ownRoutes,
     disableTaildropCommands: srv.disableTaildropCommands,
     disableTaildropAutosave: srv.disableTaildropAutosave,
     stateDirId: stateDirs?.adopt(srv.stateDirId) ?? srv.stateDirId,

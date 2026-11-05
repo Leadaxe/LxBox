@@ -136,6 +136,8 @@ const List<BackupField> kBackupFields = [
   BackupField(BackupRecord.server, 'allow_local', _c),
   BackupField(BackupRecord.server, 'allow_lan', _c),
   BackupField(BackupRecord.server, 'allow_gateway', _c),
+  // Пресет `tunnel-routes` — поле записи узла.
+  BackupField(BackupRecord.server, 'own_routes', _c),
   // §707 итер. 9 (контракт 1.1.159) — Taildrop узла, знак «выключено».
   BackupField(BackupRecord.server, 'disable_taildrop_commands', _c),
   BackupField(BackupRecord.server, 'disable_taildrop_autosave', _c),
@@ -178,6 +180,8 @@ const List<BackupField> kBackupFields = [
   BackupField(BackupRecord.folderNode, 'allow_local', _c),
   BackupField(BackupRecord.folderNode, 'allow_lan', _c),
   BackupField(BackupRecord.folderNode, 'allow_gateway', _c),
+  // Пресет `tunnel-routes` — поле записи узла.
+  BackupField(BackupRecord.folderNode, 'own_routes', _c),
   // §707 итер. 9 (контракт 1.1.159) — Taildrop узла, знак «выключено».
   BackupField(BackupRecord.folderNode, 'disable_taildrop_commands', _c),
   BackupField(BackupRecord.folderNode, 'disable_taildrop_autosave', _c),

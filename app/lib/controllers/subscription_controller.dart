@@ -1745,6 +1745,7 @@ class SubscriptionController extends ChangeNotifier {
         allowLocal: m.allowLocal,
         allowLan: m.allowLan,
         allowGateway: m.allowGateway,
+        ownRoutes: m.ownRoutes,
         disableTaildropCommands: m.disableTaildropCommands, // §707 итер. 9
         disableTaildropAutosave: m.disableTaildropAutosave,
         stateDirId: m.stateDirId, // §707 1.1.160 — тот же узел, имя то же
@@ -2554,6 +2555,7 @@ class SubscriptionController extends ChangeNotifier {
                 allowLocal: server.allowLocal,
                 allowLan: server.allowLan,
                 allowGateway: server.allowGateway,
+                ownRoutes: server.ownRoutes,
                 // §707 итер. 9
                 disableTaildropCommands: server.disableTaildropCommands,
                 disableTaildropAutosave: server.disableTaildropAutosave,
@@ -2572,6 +2574,7 @@ class SubscriptionController extends ChangeNotifier {
                   allowLocal: server.allowLocal,
                   allowLan: server.allowLan,
                   allowGateway: server.allowGateway,
+                  ownRoutes: server.ownRoutes,
                   // §707 итер. 9
                   disableTaildropCommands: server.disableTaildropCommands,
                   disableTaildropAutosave: server.disableTaildropAutosave,
