@@ -11,6 +11,7 @@
 ### Fixed
 
 - **Tunnel apps crashed on open with many installed apps ([task 693](docs/spec/tasks/693-app-picker-shared-uid-hint.md)).** The app list and icons are now read off the main thread, large icons are scaled down to 96 px, and the tab no longer stalls with a burst of `getAppIcon timed out` in the log. The list builds only the rows on screen and asks for their icons as they scroll into view; at most four icons are encoded at a time.
+- **A narrow tunnel showed ERR on every ping ([task 718](docs/spec/tasks/718-tunnel-routes-preset.md)).** The ping is a URL test to an internet address, and a tunnel without a route there fails it while working fine. Such a node (WireGuard / AWG without a default route in allowed IPs, OpenVPN or OpenConnect with Only its own networks) is no longer pinged and shows `no route` instead of a latency. The WireGuard default-route notice now also counts the `0.0.0.0/1` + `128.0.0.0/1` pair.
 
 ## [2.25.20] — 2026-11-05
 

@@ -135,6 +135,9 @@ class NodeRow extends StatelessWidget {
     // не сбой узла. Вместо пинга, таймаута и PING… — нейтральный прочерк,
     // слева подпись «off».
     if (_isDisabled) return '—'; // l10n-exempt: dash placeholder, not text
+    // §718 — узел без маршрута в интернет не меряется: старый ERR/-1 не
+    // показываем, только нейтральную отметку.
+    if (item.noInternetRoute) return getLocalText.s("no route");
     if (item.pingBusy) return 'PING…';
     final delay = item.delay;
     if (delay == null) return '';
@@ -196,7 +199,8 @@ class NodeRow extends StatelessWidget {
       );
 
   Color? _delayColor(BuildContext context) {
-    if (_isDisabled) return null; // §557 — прочерк нейтральным цветом
+    // §557 — прочерк нейтральным цветом; §718 — «no route» тоже.
+    if (_isDisabled || item.noInternetRoute) return null;
     final delay = item.delay;
     if (delay == null || item.pingBusy) return null;
     final Color base;
@@ -416,7 +420,12 @@ class NodeRow extends StatelessWidget {
 
   Future<void> _openLongPressMenu(BuildContext context) async {
     // §201 — block не пингуется (всегда ERR): пункт Ping disabled.
-    final canPing = item.tunnelUp && !item.busy && !item.pingBusy && !_isBlock;
+    // §718 — узел без маршрута в интернет тоже.
+    final canPing = item.tunnelUp &&
+        !item.busy &&
+        !item.pingBusy &&
+        !_isBlock &&
+        !item.noInternetRoute;
     final canActivate = item.tunnelUp && !item.busy && !item.active;
     // §322 — у группы автовыбора ссылки для копирования нет: её члены —
     // узлы своего контейнера (§439: запись `kind: auto`, а не текст). Гейт по

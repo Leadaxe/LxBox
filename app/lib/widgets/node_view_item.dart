@@ -30,6 +30,7 @@ class NodeViewItem {
     required this.hasDetour,
     required this.protocolLabel,
     this.outboundType,
+    this.noInternetRoute = false,
     this.isDirectionAuto = false,
     this.autoGroupLabel,
     this.matches = true,
@@ -111,6 +112,10 @@ class NodeViewItem {
   /// `direct` / `urltest` → служебная нода (подменяется label «Direct»/«Auto»
   /// + иконкой). `null` или иной тип → обычная прокси-нода (показываем tag).
   final String? outboundType;
+
+  /// §718 — узел без маршрута в интернет (`ParsedConfig.hasNoInternetRoute`):
+  /// не пингуется, вместо задержки — «no route».
+  final bool noInternetRoute;
 
   /// §048 — результат фильтра: `false` → render с opacity 0.4 (non-matching
   /// под фильтром, юзер видит весь pool но понимает что подходит).

@@ -7003,5 +7003,8 @@
   },
   "Appears only while a Tailscale node has Allow Taildrop.": {
     "value": "Есть, только пока у узла Tailscale включён Allow Taildrop."
+  },
+  "no route": {
+    "value": "нет маршрута"
   }
 }

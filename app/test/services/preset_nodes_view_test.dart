@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/config_node.dart';
 import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/parser_config.dart';
@@ -253,6 +254,53 @@ void main() {
           tunnelIngressTogglesVisible(
               list: user(ts('a')), isMember: false, nodeBody: vlessBody),
           isFalse);
+    });
+  });
+
+  // §718 (доработка) — узел без маршрута в интернет не меряется.
+  group('nodeHasNoInternetRoute', () {
+    Map<String, dynamic> wg(List<List<String>> peers) => {
+          'type': 'wireguard',
+          'peers': [
+            for (final ips in peers) {'allowed_ips': ips},
+          ],
+        };
+
+    test('WireGuard by allowed_ips, tunnels by own_routes, others never', () {
+      bool f(Map<String, dynamic> b, {bool own = false}) =>
+          nodeHasNoInternetRoute(b, ownRoutes: own);
+      expect(f(wg([['10.0.0.0/24'], ['192.168.1.0/24']])), isTrue);
+      expect(f(wg([['10.0.0.0/24']]), own: true), isTrue);
+      expect(f(wg([['10.0.0.0/24', '0.0.0.0/0']])), isFalse);
+      expect(f(wg([['0.0.0.0/1'], ['128.0.0.0/1']])), isFalse);
+      expect(f(wg([['::/1', '8000::/1']])), isFalse);
+      expect(f(wg([['0.0.0.0/1']])), isTrue);
+      expect(f(wg([['::/0']])), isFalse);
+      expect(f(wg([['0.0.0.0/0']]), own: true), isFalse);
+      expect(f({'type': 'openvpn-client'}, own: true), isTrue);
+      expect(f({'type': 'openvpn-client'}), isFalse);
+      expect(f({'type': 'openconnect'}, own: true), isTrue);
+      expect(f({'type': 'vless'}, own: true), isFalse);
+    });
+
+    test('ParsedConfig takes own_routes from preferred_by route rules', () {
+      final cfg = ParsedConfig.parse(jsonEncode({
+        'endpoints': [
+          {'type': 'openvpn-client', 'tag': 'office'},
+          {'type': 'openvpn-client', 'tag': 'home'},
+        ],
+        'route': {
+          'rules': [
+            {
+              'preferred_by': ['office'],
+              'outbound': 'office',
+            },
+          ],
+        },
+      }));
+      expect(cfg.hasNoInternetRoute('office'), isTrue);
+      expect(cfg.hasNoInternetRoute('home'), isFalse);
+      expect(cfg.hasNoInternetRoute('missing'), isFalse);
     });
   });
 }

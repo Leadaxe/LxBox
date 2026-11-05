@@ -6712,5 +6712,8 @@
   },
   "Appears only while a Tailscale node has Allow Taildrop.": {
     "value": "仅当 Tailscale 节点启用 Allow Taildrop 时显示。"
+  },
+  "no route": {
+    "value": "无路由"
   }
 }

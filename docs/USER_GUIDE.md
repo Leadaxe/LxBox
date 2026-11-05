@@ -1909,7 +1909,7 @@ Diagnostic tools, from simple to detailed:
 
 | Tool | Where | What it shows |
 |---|---|---|
-| Ping and the ⚠ icon | Home screen | ERR: the node does not answer. ⚠: other servers go out through the node and fail with it; tap to see which ones. |
+| Ping and the ⚠ icon | Home screen | ERR: the node does not answer. ⚠: other servers go out through the node and fail with it; tap to see which ones. `no route`: a tunnel without a route to the internet (WireGuard without `0.0.0.0/0` or `::/0` in allowed IPs, OpenVPN or OpenConnect with Only its own networks); the ping goes to an internet address, so such a node is not pinged. |
 | Stats | Statistics, while the VPN is on | Traffic per direction: where the bytes go. |
 | Conns | Statistics | Live connections: app, host, rule, chain of exits. Connections with traffic in one direction only are highlighted: replies get lost on the way, for example when the carrier cuts the protocol. |
 | Profiler | Statistics | A real-time recording of connections and DNS resolves, with filters by app, domain and IP: which domain fails to resolve, which direction a request took, where an app connects. For DNS groups you see which members answered and which stayed silent. |

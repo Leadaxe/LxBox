@@ -177,17 +177,40 @@ bool tunnelIngressTogglesVisible({
 /// Тумблер `own_routes` (пресет `tunnel-routes`): WireGuard, чьи allowed_ips
 /// содержат маршрут по умолчанию, со включённым флагом заберёт весь трафик —
 /// форма показывает нотис. У OpenVPN (`redirect-gateway`) это заранее не видно.
+///
+/// Маршрут по умолчанию — `0.0.0.0/0`, `::/0` или пара половин
+/// `0.0.0.0/1` + `128.0.0.0/1` (`::/1` + `8000::/1`); половины считаются по
+/// всем пирам вместе (§718, доработка «no route»).
 bool wireguardAnnouncesDefaultRoute(Map<String, dynamic> nodeBody) {
   if (nodeBody['type'] != 'wireguard') return false;
   final peers = nodeBody['peers'];
   if (peers is! List) return false;
+  final all = <String>{};
   for (final p in peers) {
-    final ips = p is Map ? p['allowed_ips'] : null;
+    final raw = p is Map ? p['allowed_ips'] : null;
+    // Listable ядра: одна строка вместо списка тоже допустима.
+    final ips = raw is String ? [raw] : raw;
     if (ips is! List) continue;
     for (final ip in ips) {
-      if (ip == '0.0.0.0/0' || ip == '::/0') return true;
+      if (ip is String) all.add(ip.trim().toLowerCase());
     }
   }
+  if (all.contains('0.0.0.0/0') || all.contains('::/0')) return true;
+  if (all.contains('0.0.0.0/1') && all.contains('128.0.0.0/1')) return true;
+  return all.contains('::/1') && all.contains('8000::/1');
+}
+
+/// §718 (доработка) — узел без маршрута в интернет: пинг (URL-тест на
+/// интернет-адрес) через него не пройдёт и на исправном туннеле, поэтому
+/// узел не меряют, а строка показывает «no route».
+/// WireGuard / AWG — по allowed_ips ([wireguardAnnouncesDefaultRoute]),
+/// флаг не влияет; `openvpn-client` / `openconnect` — маршруты присылает
+/// сервер, решает [ownRoutes] (тумблер «Only its own networks»).
+bool nodeHasNoInternetRoute(Map<String, dynamic> nodeBody,
+    {required bool ownRoutes}) {
+  final type = nodeBody['type'];
+  if (type == 'wireguard') return !wireguardAnnouncesDefaultRoute(nodeBody);
+  if (type == 'openvpn-client' || type == 'openconnect') return ownRoutes;
   return false;
 }
 

@@ -27,6 +27,8 @@ mixin _PingMixin on ChangeNotifier {
     if (!_state.tunnelUp) return;
     // §201 — block дропает трафик: urltest всегда ERR, мерить нечего.
     if (_state.activeModel[nodeTag]?.type == 'block') return; // §311 — срез ядра
+    // §718 — узел без маршрута в интернет: URL-тест всегда ERR, строка «no route».
+    if (_state.activeModel.hasNoInternetRoute(nodeTag)) return;
     final pingBusy = Map<String, String>.from(_state.pingBusy)..[nodeTag] = '…';
     _emit(_state.copyWith(pingBusy: pingBusy));
     final group = _state.selectedGroup;
@@ -290,6 +292,7 @@ mixin _PingMixin on ChangeNotifier {
     // вернёт ERR. Исключаем из набора (и из single-node, и из mass-ping).
     final nodes = List<String>.from(order ?? _state.nodes)
         .where((t) => _state.activeModel[t]?.type != 'block') // §311
+        .where((t) => !_state.activeModel.hasNoInternetRoute(t)) // §718
         .toList();
     if (nodes.isEmpty) return;
 
