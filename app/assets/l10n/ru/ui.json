@@ -4656,6 +4656,15 @@
   "Peers route any traffic through this device; it leaves through the outbound chosen in the Tunnel ingress preset.": {
     "value": "Пиры пускают через устройство любой трафик; он уходит в исходящий канал, выбранный в пресете «Входящие из туннелей»."
   },
+  "Only its own networks": {
+    "value": "Только свои сети"
+  },
+  "Send to this tunnel only the networks it announces. It works alongside the selected server and does not need to be chosen as a direction.": {
+    "value": "В этот туннель идут только сети, которые он объявляет. Работает вместе с выбранным сервером, выбирать туннель Направлением не нужно."
+  },
+  "This tunnel announces the default route, so it takes all traffic.": {
+    "value": "Туннель объявляет маршрут по умолчанию и забирает весь трафик."
+  },
   "No matching nodes": {
     "value": "Нет подходящих узлов"
   },

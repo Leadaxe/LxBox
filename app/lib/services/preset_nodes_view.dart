@@ -61,7 +61,8 @@ List<PresetNode> presetNodesForView(
       [bool skip = false,
       bool allowLocal = false,
       bool allowLan = false,
-      bool allowGateway = false]) {
+      bool allowGateway = false,
+      bool ownRoutes = false]) {
     if (nodeTypes != null && !nodeTypes.contains(node.protocol)) return;
     final Map<String, dynamic> body;
     try {
@@ -77,6 +78,7 @@ List<PresetNode> presetNodesForView(
       allowLocal: allowLocal,
       allowLan: allowLan,
       allowGateway: allowGateway,
+      ownRoutes: ownRoutes,
     ));
   }
 
@@ -86,14 +88,14 @@ List<PresetNode> presetNodesForView(
       case UserServer u:
         for (final n in u.nodes) {
           add(n, u.tagPrefix, u.skipTailscalePresets, u.allowLocal,
-              u.allowLan, u.allowGateway);
+              u.allowLan, u.allowGateway, u.ownRoutes);
         }
       case FolderServers f:
         for (final m in f.members) {
           final node = m.node;
           if (!m.enabled || node == null) continue;
           add(node, f.tagPrefix, m.skipTailscalePresets, m.allowLocal,
-              m.allowLan, m.allowGateway);
+              m.allowLan, m.allowGateway, m.ownRoutes);
         }
       case SubscriptionServers s:
         final identities =
@@ -171,6 +173,23 @@ bool tunnelIngressTogglesVisible({
 }) =>
     _hasNodeRecord(list, isMember) &&
     kTunnelIngressNodeTypes.contains(nodeBody['type']);
+
+/// Тумблер `own_routes` (пресет `tunnel-routes`): WireGuard, чьи allowed_ips
+/// содержат маршрут по умолчанию, со включённым флагом заберёт весь трафик —
+/// форма показывает нотис. У OpenVPN (`redirect-gateway`) это заранее не видно.
+bool wireguardAnnouncesDefaultRoute(Map<String, dynamic> nodeBody) {
+  if (nodeBody['type'] != 'wireguard') return false;
+  final peers = nodeBody['peers'];
+  if (peers is! List) return false;
+  for (final p in peers) {
+    final ips = p is Map ? p['allowed_ips'] : null;
+    if (ips is! List) continue;
+    for (final ip in ips) {
+      if (ip == '0.0.0.0/0' || ip == '::/0') return true;
+    }
+  }
+  return false;
+}
 
 /// Запись узла есть у своего сервера и у члена папки; у подписки — нет.
 bool _hasNodeRecord(ServerList list, bool isMember) => switch (list) {

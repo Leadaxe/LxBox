@@ -876,6 +876,42 @@
       ]
     },
     {
+      "preset_id": "tunnel-routes",
+      "for_each_node": {"#filter": {"#and": [
+        {"@node.body.type": {"#in": ["wireguard", "openvpn-client", "openconnect"]}},
+        "@node.own_routes"
+      ]}},
+      "ui": {"label": "Tunnel routes", "description": "Send to each client tunnel only the networks it announces: WireGuard allowed IPs, routes pushed by an OpenVPN or OpenConnect server. Everything else follows the rules below. Turned on per tunnel, in the tunnel's own settings.", "default": true, "num": 943, "isSortable": true},
+      "vars": [
+        {"name": "dns_enable", "type": "bool", "default_value": "true", "title": "DNS", "tooltip": "Resolve the names a tunnel announces with the tunnel's own DNS."}
+      ],
+      "rules": [
+        {"#if": [
+          {"#and": ["@dns_enable", {"@node.body.type": {"#in": ["openvpn-client", "openconnect"]}}]},
+          {"preferred_by": ["@node"], "action": "resolve", "server": {"#tpl": "@{node}-dns"}}
+        ]},
+        {"preferred_by": ["@node"], "outbound": "@node"}
+      ],
+      "dns_servers": [
+        {"#if": [
+          {"#and": ["@dns_enable", {"@node.body.type": "openvpn-client"}]},
+          {"type": "openvpn", "tag": {"#tpl": "@{node}-dns"}, "endpoint": "@node",
+           "description": "DNS announced by the tunnel"}
+        ]},
+        {"#if": [
+          {"#and": ["@dns_enable", {"@node.body.type": "openconnect"}]},
+          {"type": "openconnect", "tag": {"#tpl": "@{node}-dns"}, "endpoint": "@node",
+           "description": "DNS announced by the tunnel"}
+        ]}
+      ],
+      "dns_rules": [
+        {"#if": [
+          {"#and": ["@dns_enable", {"@node.body.type": {"#in": ["openvpn-client", "openconnect"]}}]},
+          {"preferred_by": [{"#tpl": "@{node}-dns"}], "server": {"#tpl": "@{node}-dns"}}
+        ]}
+      ]
+    },
+    {
       "preset_id": "tailscale",
       "for_each_node": {"#filter": {"#and": [{"@node.body.type": "tailscale"}, {"#not": "@node.skip_tailscale_presets"}]}},
       "ui": {"label": "Tailscale networks", "description": "Route each tailnet through its Tailscale node and resolve its names with the node's own DNS.", "default": true, "num": 945, "isSortable": true},

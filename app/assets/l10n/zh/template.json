@@ -608,6 +608,15 @@
  "Outbound for peers allowed to use this device as a gateway.": {
   "value": "允许将此设备用作网关的对等方所用的出站。"
  },
+ "Tunnel routes": {
+  "value": "隧道路由"
+ },
+ "Send to each client tunnel only the networks it announces: WireGuard allowed IPs, routes pushed by an OpenVPN or OpenConnect server. Everything else follows the rules below. Turned on per tunnel, in the tunnel's own settings.": {
+  "value": "每个客户端隧道只接收它自己公布的网络：WireGuard 的 allowed IPs，OpenVPN 或 OpenConnect 服务器推送的路由。其余流量按下方规则处理。在各隧道自己的设置中逐个开启。"
+ },
+ "Resolve the names a tunnel announces with the tunnel's own DNS.": {
+  "value": "使用隧道自身的 DNS 解析该隧道公布的域名。"
+ },
  "Tailscale networks": {
   "value": "Tailscale 网络"
  },

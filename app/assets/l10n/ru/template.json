@@ -608,6 +608,15 @@
   "Outbound for peers allowed to use this device as a gateway.": {
     "value": "Исходящий канал для пиров, которым разрешено ходить через устройство как через шлюз."
   },
+  "Tunnel routes": {
+    "value": "Сети туннелей"
+  },
+  "Send to each client tunnel only the networks it announces: WireGuard allowed IPs, routes pushed by an OpenVPN or OpenConnect server. Everything else follows the rules below. Turned on per tunnel, in the tunnel's own settings.": {
+    "value": "Каждому клиентскому туннелю — только сети, которые он объявляет: allowed IPs у WireGuard, маршруты от сервера OpenVPN или OpenConnect. Остальное идёт по правилам ниже. Включается у каждого туннеля в его собственных настройках."
+  },
+  "Resolve the names a tunnel announces with the tunnel's own DNS.": {
+    "value": "Разрешать имена, которые объявляет туннель, через DNS самого туннеля."
+  },
   "Tailscale networks": {
     "value": "Сети Tailscale"
   },

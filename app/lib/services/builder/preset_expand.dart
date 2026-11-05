@@ -506,6 +506,7 @@ class PresetNode {
     this.allowLocal = false,
     this.allowLan = false,
     this.allowGateway = false,
+    this.ownRoutes = false,
   });
 
   final String tag;
@@ -519,12 +520,16 @@ class PresetNode {
   final bool allowLan;
   final bool allowGateway;
 
+  /// `own_routes` (пресет `tunnel-routes`).
+  final bool ownRoutes;
+
   /// Поле записи по имени из [kPresetNodeRecordFields]; иное — null.
   bool? recordField(String name) => switch (name) {
         'skip_tailscale_presets' => skipTailscalePresets,
         'allow_local' => allowLocal,
         'allow_lan' => allowLan,
         'allow_gateway' => allowGateway,
+        'own_routes' => ownRoutes,
         _ => null,
       };
 }

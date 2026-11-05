@@ -166,6 +166,41 @@ void main() {
     );
   });
 
+  // Пресет `tunnel-routes` — поле `own_routes`, правила те же, что у allow_*.
+  test('own_routes: только true пишется, читается и едет в бэкап', () {
+    final u = server().copyWith(ownRoutes: true);
+    final rec = sourceToRecord(u);
+    expect(rec['own_routes'], true);
+    expect(sourceToRecord(server()).containsKey('own_routes'), isFalse);
+    final notes = <String>[];
+    expect(sourceFromRecord(rec, notes: notes).value, u);
+    expect(notes, isEmpty);
+    expect(
+      stripUndeclaredBackupFields(BackupRecord.server, rec)['own_routes'],
+      true,
+    );
+
+    final f = FolderServers(
+      id: 'f1',
+      name: 'F',
+      enabled: true,
+      tagPrefix: '',
+      detourPolicy: DetourPolicy.defaults,
+      members: [FolderMember(raw: raw, ownRoutes: true)],
+    );
+    final frec = sourceToRecord(f);
+    final m = (frec['nodes'] as List).single as Map<String, dynamic>;
+    expect(m['own_routes'], true);
+    expect(
+      (sourceFromRecord(frec).value as FolderServers).members.single,
+      f.members.single,
+    );
+    expect(
+      stripUndeclaredBackupFields(BackupRecord.folderNode, m)['own_routes'],
+      true,
+    );
+  });
+
   // §707 итер. 9 (контракт 1.1.159) — поля Taildrop узла, знак «выключено»:
   // те же правила, что у allow_*.
   group('disable_taildrop_commands / disable_taildrop_autosave', () {

@@ -8,6 +8,18 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Tunnel routes preset and the "Only its own networks" switch ([task 718](docs/spec/tasks/718-tunnel-routes-preset.md)).**
+  A WireGuard / AWG, OpenVPN or OpenConnect node can be marked to receive only
+  the networks it announces (WireGuard allowed IPs, routes pushed by the
+  OpenVPN or OpenConnect server) through `preferred_by`; everything else
+  follows the other rules. For OpenVPN and OpenConnect the tunnel's own DNS
+  resolves the domains it announces (the DNS variable of the preset). The
+  preset is on by default and does nothing until the switch is set on a node;
+  the node record gains the `own_routes` field (storage, LX backup, Debug API
+  `subs`).
+
 ## [2.25.19] — 2026-11-05
 
 ### Added

@@ -1100,7 +1100,8 @@ Future<BuildResult?> _buildConfig({
 /// `endpoints`). Берутся только записи узлов из источников, у которых есть
 /// финальный тег в `emittedTagByNode`: выключенный, снятый гейтом реестра,
 /// ядра или detour-проходом узел туда не попадает. Поля записи (§656:
-/// `skip_tailscale_presets`, `allow_local`, `allow_lan`, `allow_gateway`) —
+/// `skip_tailscale_presets`, `allow_local`, `allow_lan`, `allow_gateway`,
+/// `own_routes`) —
 /// у своего сервера или члена папки; у узла подписки записи нет — `false`.
 List<PresetNode> _collectPresetNodes(List<ServerList> lists, _BuildCtx ctx) {
   final record = <NodeSpec, PresetNode Function(String, Map<String, dynamic>)>{};
@@ -1115,6 +1116,7 @@ List<PresetNode> _collectPresetNodes(List<ServerList> lists, _BuildCtx ctx) {
                 allowLocal: u.allowLocal,
                 allowLan: u.allowLan,
                 allowGateway: u.allowGateway,
+                ownRoutes: u.ownRoutes,
               );
         }
       case FolderServers f:
@@ -1128,6 +1130,7 @@ List<PresetNode> _collectPresetNodes(List<ServerList> lists, _BuildCtx ctx) {
                 allowLocal: m.allowLocal,
                 allowLan: m.allowLan,
                 allowGateway: m.allowGateway,
+                ownRoutes: m.ownRoutes,
               );
         }
       case SubscriptionServers():
