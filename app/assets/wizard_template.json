@@ -461,11 +461,11 @@
           ]
         },
         { "name": "awg_masquerade", "type": "enum",
-          "default_value": "direct", "required": true, "wizard_ui": "edit",
-          "title": "AWG masquerade", "tooltip": "When an AmneziaWG node sends its masquerade packets (ip=quic, i1…) before the handshake. Direct only: when the node dials from this device's own socket; through another node a single handshake packet goes out. All paths: always.",
+          "default_value": "all", "required": true, "wizard_ui": "edit",
+          "title": "AWG masquerade", "tooltip": "When an AmneziaWG node sends its masquerade packets (ip=quic, i1…) before the handshake. All paths: always, also through another node. Direct only: when the node dials from this device's own socket; through another node a single handshake packet goes out.",
           "options": [
-            {"title": "Direct only (default)", "value": "direct"},
-            {"title": "All paths", "value": "all"}
+            {"title": "All paths (default)", "value": "all"},
+            {"title": "Direct only", "value": "direct"}
           ]
         }
       ]
@@ -515,8 +515,8 @@
       "#if mtu_align": [{"#not": {"@mtu_align": "clamp"}}, {
         "mtu_align": "@mtu_align"
       }],
-      "#if awg_masquerade": [{"@awg_masquerade": "all"}, {
-        "awg_masquerade": "all"
+      "#if awg_masquerade": [{"@awg_masquerade": "direct"}, {
+        "awg_masquerade": "direct"
       }],
       "#if quic_sniff_decoy": [{"@quic_sniff_decoy": {"#in": ["detour", "direct", "all"]}}, {
         "quic_sniff_decoy": "@quic_sniff_decoy"

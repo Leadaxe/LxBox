@@ -11,11 +11,14 @@
 ### Added
 
 - **AWG masquerade setting ([task 720](docs/spec/tasks/720-awg-masquerade-setting.md)).**
-  VPN Settings → Core → WireGuard gains "AWG masquerade": "Direct only"
-  (default, as before) sends the masquerade packets of an AmneziaWG node
-  (`ip=quic`, `i1`…) only when the node dials from the device's own socket;
-  "All paths" sends them through another node as well (core key
-  `lx.awg_masquerade`). The description of "Anti-sniff decoy" and of the QUIC
+  VPN Settings → Core → WireGuard gains "AWG masquerade": "All paths"
+  (default) sends the masquerade packets of an AmneziaWG node (`ip=quic`,
+  `i1`…) on every path, through another node as well; "Direct only" sends
+  them only when the node dials from the device's own socket (core key
+  `lx.awg_masquerade`). **Behaviour change with core v1.14.4-lx.32:** in
+  2.25.19 (core lx.31) an AWG node behind another node sent a single
+  handshake packet without the masquerade; now it masquerades again, and
+  "Anti-sniff decoy" keeps a sniffing relay from redirecting it. The description of "Anti-sniff decoy" and of the QUIC
   section now says that the decoy also covers AWG nodes with the QUIC
   masquerade (`ip=quic`).
 

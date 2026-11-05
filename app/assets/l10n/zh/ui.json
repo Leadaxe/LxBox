@@ -6680,8 +6680,8 @@
   "Core: lx.mtu_align. A node over a tunnel gets a packet size that fits into it: mtu for WireGuard and MASQUE, the initial packet size for Hysteria2 and TUIC. Values are never raised.": {
     "value": "内核：lx.mtu_align。隧道之上的节点获得能放入隧道的包大小：WireGuard 和 MASQUE 为 mtu，Hysteria2 和 TUIC 为初始包大小。数值只降不升。"
   },
-  "Core: lx.awg_masquerade. The masquerade burst of an AWG endpoint (ip=quic, i1…) precedes the handshake. Through a detour the relay sees it as a QUIC flow and may redirect it by SNI, so by default it goes out only on the device's own socket.": {
-    "value": "内核：lx.awg_masquerade。AWG 端点的伪装数据包（ip=quic、i1…）先于握手发送。经由 detour 时，中继会将其视为 QUIC 流并可能按 SNI 重定向，因此默认仅从本设备自身的套接字发送。"
+  "Core: lx.awg_masquerade. The masquerade burst of an AWG endpoint (ip=quic, i1…) precedes the handshake. Through a detour a relay may take it for a QUIC flow and redirect it by SNI; Anti-sniff decoy guards against that. Direct only drops the burst on such paths.": {
+    "value": "内核：lx.awg_masquerade。AWG 端点的伪装数据包（ip=quic、i1…）先于握手发送。经由 detour 时，中继可能将其视为 QUIC 流并按 SNI 重定向；Anti-sniff decoy 可防止这种情况。Direct only 会在此类路径上去掉伪装数据包。"
   },
   "Core: lx.quic_sniff_decoy. A relay with UDP sniffing (Xray destOverride quic) rewrites the destination by the SNI of the first QUIC packet; a junk first byte makes it give up. Servers drop the byte. A DPI on your own uplink may react to it, hence Through detour by default. Also covers the AWG masquerade burst that imitates QUIC (ip=quic).": {
     "value": "内核：lx.quic_sniff_decoy。带 UDP 嗅探的中继（Xray destOverride quic）按第一个 QUIC 包的 SNI 改写目标；首个垃圾字节使其放弃。服务器会丢弃该字节。 您自身上行链路上的 DPI 可能对其作出反应，因此默认为 Through detour。也适用于伪装成 QUIC（ip=quic）的 AWG 伪装数据包。"

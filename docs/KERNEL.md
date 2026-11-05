@@ -280,6 +280,24 @@ the oom-killer mode at start (SPEC 148 §5). Java surface lx.29 → lx.30-rc.1
 release `SHA256SUMS`). Live sign-in by key and the off/on cycle against
 control are not verified on a device.
 
+**`v1.14.4-lx.32`** — the same base (upstream `stable` v1.14.4 plus 9
+commits, Go 1.26.10). **The default of `lx.awg_masquerade` is flipped** (owner's
+decision, 2026-11-05): an absent key now means `"all"` (lx.31: `"direct"`); the
+values are the same, `"all"` | `"direct"` (bool accepted: true = all). LxBox
+task 720: template variable `awg_masquerade` (VPN Settings → Core → WireGuard,
+enum `all` / `direct`, default `all`), only `direct` is emitted — on lx.31 the
+same template would behave the opposite way, so the variable and the pin move
+together. `"direct"` of `lx.awg_masquerade` and of `lx.quic_sniff_decoy` now
+also covers a detour to a group (selector / urltest of any depth) whose current
+choice is direct; a group switched to a proxy counts as a detour from the next
+dial. No new `lx` keys; `lx.quic_sniff_decoy` unchanged. Java surface and build
+tags: the lx.31..lx.32 diff touches neither `experimental/libbox`,
+`cmd/internal/build_libbox`, `Makefile.lx`, `go.mod` nor submodules (reported by
+the core session; `javap` not re-run). AAR sha256
+`3560531d17d0a0334120d2be739aea3e874457bfce8f82f79ffbaf3776e3adf9` (legacy
+`138a6fa135730fcf07509e9123ce88c71af83ba7614869ffc971aa6f07f308a0`), matches the
+release `SHA256SUMS`. Not verified on a device or emulator.
+
 **`v1.14.4-lx.31`** — the same base, upstream `stable` v1.14.4 plus 9 commits
 (SPEC 154: DNS transport setup no longer blocks the TUN packet loop,
 OpenVPN / OpenConnect reopen UDP sockets when the tunnel addresses change,
@@ -297,10 +315,7 @@ direct) sends the AWG masquerade burst (`ip=quic`, `i1`…) only when the
 endpoint dials on the device's own socket, through a `detour` a single
 handshake initiation goes out without the burst; `"all"` — the burst on every
 path, as before. `lx.quic_sniff_decoy` now also covers the AWG burst. LxBox
-wrote no `lx.awg_masquerade` until task 720; since then it is the template
-variable `awg_masquerade` (VPN Settings → Core → WireGuard, enum `direct` /
-`all`, default `direct`; only `all` is emitted, so the default config is
-unchanged). Java surface lx.30 →
+wrote no `lx.awg_masquerade` on lx.31; the setting came with lx.32 (below). Java surface lx.30 →
 lx.31 (`javap -p` over all 270 classes of both `classes.jar`, 3903 lines each):
 identical. `strings` of `libbox.so` reports `1.14.4-lx.31`. AAR sha256
 `d862d20c0bbbf6e9e26c3cdfffd3c2d972501a5b05240b1dbd6998dc38daae85` (the

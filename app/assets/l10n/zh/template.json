@@ -827,14 +827,14 @@
   "AWG masquerade": {
     "value": "AWG 伪装"
   },
-  "When an AmneziaWG node sends its masquerade packets (ip=quic, i1…) before the handshake. Direct only: when the node dials from this device's own socket; through another node a single handshake packet goes out. All paths: always.": {
-    "value": "AmneziaWG 节点何时在握手前发送伪装数据包（ip=quic、i1…）。Direct only：仅当节点从本设备自身的套接字拨号时；经由其他节点时只发送一个握手包。All paths：始终发送。"
+  "When an AmneziaWG node sends its masquerade packets (ip=quic, i1…) before the handshake. All paths: always, also through another node. Direct only: when the node dials from this device's own socket; through another node a single handshake packet goes out.": {
+    "value": "AmneziaWG 节点何时在握手前发送伪装数据包（ip=quic、i1…）。All paths：始终发送，包括经由其他节点时。Direct only：仅当节点从本设备自身的套接字拨号时；经由其他节点时只发送一个握手包。"
   },
-  "Direct only (default)": {
-    "value": "仅直连（默认）"
+  "Direct only": {
+    "value": "仅直连"
   },
-  "All paths": {
-    "value": "所有路径"
+  "All paths (default)": {
+    "value": "所有路径（默认）"
   },
   "MASQUE (HTTP/3), Hysteria2, TUIC and AWG with QUIC masquerade (ip=quic).": {
     "value": "MASQUE (HTTP/3)、Hysteria2、TUIC 以及伪装成 QUIC（ip=quic）的 AWG。"
