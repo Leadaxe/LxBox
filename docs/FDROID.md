@@ -8,7 +8,7 @@ Related: [`RELEASE_PROCESS.md`](RELEASE_PROCESS.md), [`BUILD.md`](BUILD.md).
 | Fork for CI runs | `gitlab.com/leadaxe/fdroiddata`, branch `com.leadaxe.lxbox` |
 | MR | [fdroiddata!44731](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/44731) |
 | Open MR | [fdroiddata!50151](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/50151) (2026-09-26): 2.25.5, submodules by directory pathspec, cronet-go ref derived from the core's `go.mod`. Replaces the failed bot MR !49202 (2.24.2, missing `submodules/utls`) |
-| Open MR | [fdroiddata!55894](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/55894) (2026-11-05): 2.25.19, `cronet-go` srclib pin moved to a live commit after upstream rewrote the `go` branch. Replaces the failed bot MR !55831 (issue #196) |
+| Last manual MR | [fdroiddata!55894](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/55894) (merged 2026-11-05): 2.25.19, `cronet-go` srclib pin moved to a live commit after upstream rewrote the `go` branch. Replaces the failed bot MR !55831 (issue #196) |
 | RFP | [rfp#4218](https://gitlab.com/fdroid/rfp/-/work_items/4218) |
 
 F-Droid builds from source at `commit:`, including `libbox.aar` from
