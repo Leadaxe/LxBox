@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Status | In progress |
+| Status | Released (v2.25.20) |
 | Start date | 2026-11-05 |
 | Source | решение владельца 05.11.2026: настройка — в секции WireGuard вкладки Core; в описание `quic_sniff_decoy` дописать AWG (ip=quic) |
 | Related specs | ядро sing-box-lx SPEC 153 (issue sing-box-lx#64), §709 (острова Core, переменные корневого `lx`), контракт 1.1.151 (ключи `lx` — переменные шаблона) |

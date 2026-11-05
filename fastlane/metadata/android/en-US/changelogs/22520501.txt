@@ -1,0 +1,1 @@
+Tunnel routes: a WireGuard / AWG, OpenVPN or OpenConnect tunnel can take only the networks it announces and work alongside the selected server (switch "Only its own networks" on the node). New setting AWG masquerade in VPN Settings → Core → WireGuard; an AWG node behind another node masquerades again, Anti-sniff decoy covers it. Core lx.32.
