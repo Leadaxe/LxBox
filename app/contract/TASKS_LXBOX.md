@@ -10008,3 +10008,94 @@ LxBox задача 710: серверы шаблона на вкладке DNS п
 Лаунчер теперь применяет `disable_taildrop_commands` и `disable_taildrop_autosave` и проверку отправителя из `SERVICE_FILES.md` §5.
 
 Задача вам: синк 1.1.160, ответ по `state_dir_id`.
+
+**Ответ LxBox (04.11.2026) — §156 закрыт по составу полей.** Синк с 1351dd6e, код — fe19967d (CI на момент ответа шёл). `state_dir_id` только переносят: каталог у них держит индекс `tailscale_state.json` по id записи (§445 LxBox), к тегу не привязан; совпавший узел своё не меняет, новый с занятым именем получает `ts-xxxxxx`, своим узлам без поля ничего не генерируют. `taildrop_double_copy` молча пропускают и не провозят: после импорта и экспорта через LxBox устройство теряется.
+
+## 157. Запрос LxBox — URI-форма `tt://` у `trusttunnel` (04.11.2026)
+
+Повод — LxBox issue #194: пользователь вставил из буфера ссылку `tt://…`, приложение её не узнало (`scheme_unsupported`). Решение владельца: поддержать ссылку в паре с лаунчером. Запись реестра `protocols/trusttunnel.json` (1.1.141) заявляет `uri: null`, `emit.share_uri: false`; просим заменить на форму ниже. Задача LxBox — 717.
+
+**Формат (референс — код, текстовой спеки у AdGuard нет).** Крейт `deeplink` репозитория https://github.com/TrustTunnel/TrustTunnel (`deeplink/src/{types,encode,decode}.rs`, тесты `deeplink/tests/roundtrip.rs`), генерирует `trusttunnel_endpoint`, читают все клиенты AdGuard (`TrustTunnelClient/trusttunnel/deeplink-ffi`).
+
+1. Вид `tt://?<payload>`: authority и путь пустые, весь payload — строка query без имени и знака `=`.
+2. `payload` = base64url **без padding** над бинарным TLV: tag — varint, длина — varint, значение. Varint — **QUIC-стиль (RFC 9000 §16, `deeplink/src/varint.rs`)**: два старших бита первого байта задают ширину 1/2/4/8 байт, big-endian, а НЕ LEB128 (исправлено 04.11 после сверки с кодом: `64` → `40 40`, `16384` → `80 00 40 00`). Теги < 64 занимают один байт. Неизвестный tag пропускается (вперёд-совместимость).
+3. Теги: `0x00 version` (varint; сейчас 2, 1 — без подписки), `0x01 hostname` (UTF-8), `0x02 address` (UTF-8 `host:port`, IPv6 в скобках; **повторяется**), `0x03 custom_sni`, `0x04 has_ipv6` (1 байт 0/1), `0x05 username`, `0x06 password`, `0x07 skip_verification` (0/1), `0x08 certificate` (**DER**, байты), `0x09 upstream_protocol` (1 байт: `0x01` http2, `0x02` http3; отсутствует = http2), `0x0A anti_dpi` (0/1), `0x0B client_random_prefix`, `0x0C name`, `0x0D dns_upstreams` (последовательность varint-длина + UTF-8), `0x0E subscription_url` (с версии 2), `0x0F client_random_auth_key`.
+4. Обязательны `hostname`, хотя бы один `address`, `username`, `password` — **либо** один `subscription_url` (`https://user:pass@host/path`; ссылка-подписка, узла в ней может не быть). Подписка отвечает JSON-объектом (`version: 1`, те же поля, `address` одной строкой) — **в этот запрос не входит**, вторая очередь.
+
+**Предложение записи.** Декларативно TLV ни один движок не выразит, поэтому — именованный декодер, как `ini` у WireGuard: `mappers.uri.detect.scheme_in: ["tt"]`, одна форма `deeplink` с `decode: [{"decoder":"base64url","scope":"query"}, "tt_deeplink"]`, `space: "tt"`. Выход декодера — объект, который дальше читают обычные `params` (`source: "tt.<ключ>"`):
+
+- `version` int; `hostname`, `custom_sni`, `username`, `password`, `name`, `client_random_prefix`, `client_random_auth_key`, `subscription_url` — строки (ключа нет, если тега нет); `addresses` string[]; `has_ipv6`, `skip_verification`, `anti_dpi` — bool; `upstream_protocol` — `"http2"`/`"http3"`; `certificate` — **PEM-строка** (декодер переводит DER → PEM, тело `tls.certificate` ждёт PEM); `dns_upstreams` string[].
+- Производные от первого `address`: `server`, `server_port` (лексер host:port общий, IPv6 без скобок — как `$multiport`/vmess legacy).
+
+Маппинг в тело `trusttunnel`: `server`, `server_port` ← первый адрес; `username`, `password`; `quic` ← `upstream_protocol == http3`; `tls.enabled: true`, `tls.server_name` ← `custom_sni`, иначе `hostname`; `tls.insecure` ← `skip_verification`; `tls.certificate` ← `certificate`; label ← `name`, fallback `{scheme}-{server}-{server_port}`. Правила тела (required/`core_rejects` username/password, конфликт quic/utls) — как есть, снятие узла при разборе (§137/§138).
+
+Чего в теле нет — снимаем с предупреждением, узел живёт: `has_ipv6`, `anti_dpi`, `client_random_prefix`, `client_random_auth_key`, `dns_upstreams`, адреса со второго — один мягкий код `tt_field_unsupported` (параметр `field`). `subscription_url` при полном узле — мягкий `tt_subscription_ignored`. Снятие узла: только `subscription_url` без полей узла — `tt_subscription_only`; битый base64/TLV, `version` > 2, обязательных нет — `tt_deeplink_invalid`. Имена кодов — ваши, нам нужны именно четыре различимых случая.
+
+**Эмит** (`emit.share_uri: true`, форма `deeplink`, порядок тегов как у энкодера AdGuard: version=2, hostname, address, custom_sni, has_ipv6, username, password, skip_verification, anti_dpi, certificate, upstream_protocol, client_random_prefix, name, dns_upstreams, subscription_url, client_random_auth_key — только непустые, bool только `true`, `upstream_protocol` только http3): `hostname` ← `tls.server_name`, иначе `server`; `address` ← `server:server_port` (IPv6 в скобках); `custom_sni` не пишем; `skip_verification` ← `tls.insecure`; `certificate` ← `tls.certificate` PEM → DER; `upstream_protocol` http3 ← `quic`; `name` ← тег. Критерий паритета: round-trip `tt → тело → tt` байт в байт для ссылки без неподдерживаемых полей.
+
+**Корпус** `corpus/uri/tt/`: полный узел http2 (hostname + адрес IPv4 + Let's Encrypt без сертификата), http3 + `custom_sni` + самоподписанный DER + `skip_verification`, два адреса (v4 + v6) + `dns_upstreams` + `anti_dpi` (мягкие коды), только `subscription_url` (drop), битый payload (drop), `version` 1. Ссылки для кейсов соберём мы энкодером Dart и приложим TOML-эквивалент — или вы своим Go, как удобнее; сверить можно `trusttunnel_client --export-deeplink`.
+
+**Что уже сделано у LxBox (04.11, задача 717, черновик `assets/contract_draft/uri/trusttunnel.json`) — ориентир, не требование.** Декодер `tt_deeplink` снимает `?`, сам раскрывает base64url (общий шаг base64 отдаёт UTF-8 и ломает DER) и кладёт объект в существующее пространство `json` (как форма v2rayN у vmess), а не в новое `tt`: ключи `version`, `hostname`, `address` (первый), `server`/`server_port` (из него), `extra_addresses` (со второго, только если есть), `custom_sni`, `username`, `password`, `name`, `certificate` (PEM), `upstream_protocol`, `dns_upstreams`, `subscription_url`, `client_random_prefix`, `client_random_auth_key`; bool `has_ipv6`/`anti_dpi`/`skip_verification` — только когда отличаются от умолчания формата. Коды пока существующие: битый payload → `form_unrecognized`; только `subscription_url` → `service_record_ignored`; неподдерживаемые поля → `uri_param_unknown` (`query_name` = поле) через `unknown_key: drop` секции. Если ваша запись назовёт иначе — переименуем при синке.
+
+LxBox начинает Dart-сторону сразу по этой записи как черновику (`assets/contract_draft/uri/trusttunnel.json`, пока реестр не привезёт секцию); имена кодов и ключей объекта `tt` подправим под вашу запись при синке. Отдельно: Android AAR ядра собран без `with_trusttunnel` (KERNEL.md, lx.21+) — узел из ссылки у LxBox сейчас выключит страховка core-rejected; это вопрос к ядру, не к контракту.
+
+Расхождение — сюда.
+
+## 158. Контракт 1.1.161 — поле записи узла `own_routes`, пресет `tunnel-routes` (05.11.2026)
+
+Запрос ваш (задача 718, спека `docs/spec/tasks/718-tunnel-routes-preset.md`, develop d64a94df), решения владельца, D-144. У лаунчера — SPEC 180, реализовано в этой же версии. Норма — `docs/TEMPLATE_LANG.md` **§6.5.3 (новый: пресет целиком)**, §6.6 (поле записи), §6.7.5 (поздние дефолты), §9 (строка D-144); `docs/BACKUP.md` (таблица полей узла); `schema/backup.schema.json` (`$defs/sourceServer`, `$defs/node`); `registry/presets.json` (`tunnel-routes`, `in: both`). Параграф написан так, чтобы реализовать без чтения Go лаунчера. Имя поля `own_routes` принято вашим.
+
+### 1. Поле записи `own_routes`
+
+- Bool, **по умолчанию `false`, пишется только `true`**, отсутствие = `false` — в состоянии и в LX Backup, как `allow_local`.
+- Носитель — свой сервер в корне `sources[]` и член папки (`kind: server`). У узла подписки записи нет: значение всегда ложь, поле не ставится и не читается.
+- В пространстве обхода — `@node.own_routes`. Закрытый перечень полей записи теперь: `skip_tailscale_presets`, `allow_local`, `allow_lan`, `allow_gateway`, `own_routes`.
+- **Импорт бэкапа** — как у `allow_*`: новый узел получает значение файла; узел, совпавший по телу с имеющимся, получает `true` из файла; отсутствие поля своё `true` не сбрасывает. Экспорт — только `true`.
+- Переключатель показывается у узлов с `body.type` ∈ {`wireguard`, `openvpn-client`, `openconnect`} — тот же набор, что у `allow_*`. У узла другого типа поле, если оно приехало, хранится и переносится, пресет его не читает (фильтр по типу).
+- Английские тексты лаунчера: заголовок блока «Routing through this tunnel», переключатель «Only its own networks», подсказка «Send to this tunnel only the networks it announces. It works alongside the selected server and does not need to be chosen as a direction.», предупреждение у WireGuard с префиксом `/0` в `allowed_ips` под включённым переключателем — «This tunnel announces the default route, so it takes all traffic.» Переключатель не блокируется. У лаунчера блок стоит отдельно от «Incoming connections from this tunnel», выше него: тот про входящее, этот про исходящее.
+
+### 2. Пресет `tunnel-routes` (§6.5.3)
+
+Тело перенесено из вашей спеки (раздел B) без изменений; в норме оно записано в оболочке лаунчера (`id`, `label`, `description`, `default_enabled`, `num`, `vars[].default`), у вас остаётся ваша (`preset_id`, `ui{}`, `vars[].default_value`), D-046. `for_each_node`, `vars`, `rules`, `dns_servers`, `dns_rules` совпадают символ в символ. `num: 943`, включён по умолчанию, сортируемый, поздний дефолт: в список `kLateDefaultPresetIds` добавляется `tunnel-routes` (у лаунчера `LateDefaultPresetIDs`), §6.7.5.
+
+Что выдаёт на узел, прошедший фильтр:
+
+| Тип узла | `route.rules` | `dns.servers` | `dns.rules` |
+|---|---|---|---|
+| `wireguard` | `{preferred_by: [T], outbound: T}` | — | — |
+| `openvpn-client` | `{preferred_by: [T], action: resolve, server: T-dns}`, `{preferred_by: [T], outbound: T}` | `{type: openvpn, tag: T-dns, endpoint: T}` | `{preferred_by: [T-dns], server: T-dns}` |
+| `openconnect` | то же | `{type: openconnect, tag: T-dns, endpoint: T}` | то же |
+
+`dns_enable = false` — у всех типов остаётся только правило маршрута. Поле не поднято, узел подписки, узел другого типа — пусто. Пространство тегов пресета не действует (`T-dns`, как у `tailscale`).
+
+### 3. Корпус
+
+`corpus/template/for_each_node/tunnel_routes_*`, 7 кейсов, тело пресета целиком; в `nodes[]` кейса новое необязательное поле `own_routes` (отсутствие = `false`):
+
+| Кейс | Проверяет |
+|---|---|
+| `tunnel_routes_wireguard` | одно правило маршрута, DNS-части нет |
+| `tunnel_routes_openvpn` | `resolve`, маршрут, DNS-сервер `openvpn`, DNS-правило |
+| `tunnel_routes_openconnect` | то же с типом `openconnect` |
+| `tunnel_routes_dns_disabled` | `dns_enable=false`, три типа — только правила маршрута |
+| `tunnel_routes_flag_off` | поля нет и явное `false` — пусто |
+| `tunnel_routes_subscription_node` | узлы без записи и `vless` с полем — пусто |
+| `tunnel_routes_two_nodes` | два узла с полем и один без между ними — порядок по конфигу |
+
+Раннер лаунчера — `TestContractCorpusNodeLoops`, зелёный.
+
+### 4. Что проверено по ядру (`v1.14.4-lx.30`, файлы совпадают с веткой 1.15)
+
+**(а) DNS-сервер типа `openvpn` / `openconnect`, которому сервер не прислал DNS.** Конфиг принимается, старт не падает. OpenVPN: при установке транспорта и при каждой смене конфигурации туннеля одна строка уровня info — `updated 0 DNS routes, 0 search domains and 0 default resolvers`; OpenConnect — info `cleared DNS configuration` (до подключения транспорт молчит). Запрос, дошедший до такого сервера, получает `NXDOMAIN`, но дойти ему нечем: DNS-правило пресета не совпадает ни с одним именем. Шум уровня error даёт только противоречивый push у OpenVPN, на каждой смене конфигурации: search domains без DNS-серверов (`search domains require pushed DNS servers`), `DOMAIN-ROUTE` без DNS, `DNSSEC yes`, неизвестный транспорт; старт это не валит, резолверы сбрасываются.
+
+**(б) Место DNS-правила относительно FakeIP.** Ядро берёт первое совпавшее правило `dns.rules`, поэтому порядок решает сторона. По §6.10 (контракт 1.1.127, ваш §124) DNS-слот пресета встаёт по оси маршрутного правила: `tunnel-routes` (943) — перед первым стоящим слотом с бо́льшим номером, то есть после `tunnel-ingress` (940), перед `tailscale` (945) и перед `fakeip` (1130). Домены туннеля в FakeIP не уходят. У лаунчера это закрыто тестом `TestTunnelRoutesDNSRuleBeforeFakeIP` на боевом шаблоне. Оговорка та же, что у остальных слотов: уже стоящие слоты не переупорядочиваются, пользователь может перетащить `fakeip` выше сам.
+
+### 5. Расхождения и оговорки к вашей спеке
+
+Тело с нормой языка и с ядром не расходится. Три вещи, которых в вашей спеке нет:
+
+1. **DNS туннеля работает только для объявленных доменов.** `preferred_by` в DNS-правиле — это `DNSTransport.PreferredDomain`, он смотрит DNS-маршруты и search domains (у OpenVPN ещё `ResolveDomains` первого по приоритету сервера, у OpenConnect — split-DNS). Самый частый push — один адрес DNS без единого домена — даёт пустой набор: DNS-правило не совпадает ни с чем, имена внутренних хостов резолвятся обычными серверами. Это следствие принятого решения «только свои домены» (`accept_default_resolvers` по умолчанию), но в USER_GUIDE об этом стоит сказать.
+2. **Один DNS-сервер на endpoint.** Ядро не запускает второй DNS-сервер типа `openvpn` / `openconnect` с тем же `endpoint` и другим тегом (`only one DNS server is allowed for an endpoint`, отказ старта). Свой сервер пользователя на тот же узел и DNS-часть пресета несовместимы. В норму записано как ограничение; если у вас форма DNS-сервера умеет типы `openvpn` / `openconnect`, нужна проверка или подсказка. У лаунчера таких типов в форме нет, только сырой JSON.
+3. **Строка таблицы `openconnect` в вашей спеке** называет поле ядра `preferredDomains` — верно; набор тот же, что видит DNS-транспорт (split-DNS, search domains).
+
+Задачи вам: синк 1.1.161; поле `own_routes` в записи, бэкапе, перечне обхода и Debug API; пресет в шаблон и в список поздних дефолтов; раннер на `tunnel_routes_*`; переключатель у узла. Расхождение — сюда.
