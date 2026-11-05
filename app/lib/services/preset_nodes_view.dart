@@ -13,6 +13,8 @@
 /// виджетов.
 library;
 
+import 'dart:math' show pow;
+
 import '../models/custom_rule.dart';
 import '../models/node_spec.dart';
 import '../models/parser_config.dart';
@@ -203,15 +205,53 @@ bool wireguardAnnouncesDefaultRoute(Map<String, dynamic> nodeBody) {
 /// §718 (доработка) — узел без маршрута в интернет: пинг (URL-тест на
 /// интернет-адрес) через него не пройдёт и на исправном туннеле, поэтому
 /// узел не меряют, а строка показывает «no route».
-/// WireGuard / AWG — по allowed_ips ([wireguardAnnouncesDefaultRoute]),
+/// WireGuard / AWG — по покрытию allowed_ips ([wireguardCoversInternet]),
 /// флаг не влияет; `openvpn-client` / `openconnect` — маршруты присылает
 /// сервер, решает [ownRoutes] (тумблер «Only its own networks»).
 bool nodeHasNoInternetRoute(Map<String, dynamic> nodeBody,
     {required bool ownRoutes}) {
   final type = nodeBody['type'];
-  if (type == 'wireguard') return !wireguardAnnouncesDefaultRoute(nodeBody);
+  if (type == 'wireguard') return !wireguardCoversInternet(nodeBody);
   if (type == 'openvpn-client' || type == 'openconnect') return ownRoutes;
   return false;
+}
+
+final _ipv4Addr = RegExp(r'^\d{1,3}(\.\d{1,3}){3}$');
+final _ipv6Addr = RegExp(r'^[0-9a-f:.]*:[0-9a-f:.]*$');
+
+/// §718 — allowed_ips всех пиров вместе покрывают не меньше половины
+/// IPv4-пространства (сумма 2^(32−len) ≥ 2^31) или IPv6 (сумма 2^−len ≥ ½).
+/// Так «весь интернет, кроме локальных сетей» из калькулятора (десятки
+/// префиксов без `0.0.0.0/0`) считается интернетом, а пара частных сетей —
+/// нет. Пересечения префиксов не вычитаются: хватает суммы. Адрес без `/len`
+/// — /32 (/128), нераспознанная строка пропускается.
+bool wireguardCoversInternet(Map<String, dynamic> nodeBody) {
+  final peers = nodeBody['peers'];
+  if (peers is! List) return false;
+  var v4 = 0; // адресов IPv4, до 2^32 на префикс — в int помещается
+  var v6 = 0.0; // доля IPv6-пространства
+  for (final p in peers) {
+    final raw = p is Map ? p['allowed_ips'] : null;
+    final ips = raw is String ? [raw] : raw;
+    if (ips is! List) continue;
+    for (final ip in ips) {
+      if (ip is! String) continue;
+      final parts = ip.trim().toLowerCase().split('/');
+      if (parts.length > 2) continue;
+      final addr = parts[0];
+      final isV4 = _ipv4Addr.hasMatch(addr);
+      if (!isV4 && !_ipv6Addr.hasMatch(addr)) continue;
+      final max = isV4 ? 32 : 128;
+      final len = parts.length == 2 ? int.tryParse(parts[1]) : max;
+      if (len == null || len < 0 || len > max) continue;
+      if (isV4) {
+        v4 += 1 << (32 - len);
+      } else {
+        v6 += 1 / pow(2, len);
+      }
+    }
+  }
+  return v4 >= (1 << 31) || v6 >= 0.5;
 }
 
 /// Запись узла есть у своего сервера и у члена папки; у подписки — нет.
