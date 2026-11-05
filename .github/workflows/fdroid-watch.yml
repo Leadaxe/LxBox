@@ -1,0 +1,30 @@
+# Сторож сборки F-Droid (задача 719, docs/spec/tasks/719-fdroid-mr-watch.md).
+#
+# Раз в сутки смотрит пайплайн самого нового открытого MR com.leadaxe.lxbox*
+# в fdroiddata; упал — комментарий в issue FDROID_WATCH_ISSUE (переоткрыть).
+# schedule работает только из файла на ветке по умолчанию (main).
+
+name: F-Droid watch
+
+on:
+  schedule:
+    # бот F-Droid ~05:00 UTC, сборка до трёх часов
+    - cron: "30 9 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Check fdroiddata MR pipeline
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FDROID_WATCH_ISSUE: "196"
+        run: scripts/fdroid-mr-watch.sh

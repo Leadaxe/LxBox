@@ -8,6 +8,7 @@ Related: [`RELEASE_PROCESS.md`](RELEASE_PROCESS.md), [`BUILD.md`](BUILD.md).
 | Fork for CI runs | `gitlab.com/leadaxe/fdroiddata`, branch `com.leadaxe.lxbox` |
 | MR | [fdroiddata!44731](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/44731) |
 | Open MR | [fdroiddata!50151](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/50151) (2026-09-26): 2.25.5, submodules by directory pathspec, cronet-go ref derived from the core's `go.mod`. Replaces the failed bot MR !49202 (2.24.2, missing `submodules/utls`) |
+| Open MR | [fdroiddata!55894](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/55894) (2026-11-05): 2.25.19, `cronet-go` srclib pin moved to a live commit after upstream rewrote the `go` branch. Replaces the failed bot MR !55831 (issue #196) |
 | RFP | [rfp#4218](https://gitlab.com/fdroid/rfp/-/work_items/4218) |
 
 F-Droid builds from source at `commit:`, including `libbox.aar` from
@@ -55,6 +56,15 @@ Checklist for a manual edit:
 Changelog for the new version goes into the **release commit**
 (`fastlane/metadata/android/<locale>/changelogs/<versionCode>.txt`, ≤ 500
 characters). Fastlane is read from the build commit, not from the branch.
+
+### Build watchdog
+
+`.github/workflows/fdroid-watch.yml` runs `scripts/fdroid-mr-watch.sh` daily at
+09:30 UTC: it checks the head pipeline of the newest open `com.leadaxe.lxbox*`
+MR in fdroiddata. On `failed` it reopens issue `FDROID_WATCH_ISSUE` and comments
+once per pipeline. `DRY_RUN=1` prints instead of writing; `FDROID_WATCH_MR=<iid>`
+picks the MR. The schedule only runs from `main`. Spec:
+[`719`](spec/tasks/719-fdroid-mr-watch.md).
 
 ## Fastlane
 
