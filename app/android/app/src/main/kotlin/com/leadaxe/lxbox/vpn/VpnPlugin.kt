@@ -19,6 +19,7 @@ import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.PluginRegistry
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.cancel
@@ -154,6 +155,14 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
     /// для stopVPN (async wait на setStatus(Stopped)), но переиспользуем
     /// для любых будущих awaitable операций. Отменяется в onDetachedFromEngine.
     private val pluginScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    /// 693 итер. 3: кодирование иконок (отрисовка + PNG + base64) — не больше
+    /// 4 одновременно. Вкладка Tunnel apps и пикер просят иконки пачкой;
+    /// без предела десятки битмапов рисуются разом на общем IO-пуле.
+    /// getInstalledApps / getAppInfo идут на Dispatchers.IO и в эту очередь
+    /// не встают.
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val appIconDispatcher = Dispatchers.IO.limitedParallelism(4)
 
     private val statusReceiver = object : BroadcastReceiver() {
         override fun onReceive(ctx: Context?, intent: Intent?) {
@@ -658,9 +667,10 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             }
             "getAppIcon" -> {
                 val pkg = call.argument<String>("packageName") ?: ""
-                // 693 итер. 2: отрисовка + PNG + base64 — вне главного потока.
+                // 693 итер. 2: отрисовка + PNG + base64 — вне главного потока;
+                // итер. 3: не больше 4 иконок одновременно (appIconDispatcher).
                 pluginScope.launch {
-                    val icon = withContext(Dispatchers.IO) { encodeAppIcon(pkg) }
+                    val icon = withContext(appIconDispatcher) { encodeAppIcon(pkg) }
                     result.success(icon)
                 }
             }

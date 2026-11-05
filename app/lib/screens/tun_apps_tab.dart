@@ -65,9 +65,9 @@ class _TunAppsTabState extends State<TunAppsTab>
       _cfg = cfg;
       _loading = false;
     });
-    for (final pkg in cfg.packages) {
-      AppInfoCache.ensure(pkg);
-    }
+    // 693 итер. 3: данные и иконку приложения запрашивает сама плитка, когда
+    // появляется на экране (_TunAppTile.initState), а не вкладка для всех
+    // пакетов разом. Имена и UID всех приложений даёт один loadAllApps.
     // Подсказка об общем UID считается по полному списку приложений.
     if (cfg.packages.isNotEmpty) unawaited(AppInfoCache.loadAllApps());
   }
@@ -99,9 +99,6 @@ class _TunAppsTabState extends State<TunAppsTab>
     setState(() {
       _cfg = _cfg.copyWith(packages: newPackages);
     });
-    for (final pkg in newPackages) {
-      AppInfoCache.ensure(pkg);
-    }
     markDirty();
   }
 
@@ -190,9 +187,12 @@ class _TunAppsTabState extends State<TunAppsTab>
     // «Apply / Restart» глобально через configDirty + configChangedNeedRestart.
     final bottomPad = MediaQuery.of(context).padding.bottom + 24;
 
-    return ListView(
-      padding: EdgeInsets.fromLTRB(16, 16, 16, bottomPad),
-      children: [
+    // 693 итер. 3: список ленивый — плитки строятся только для видимых
+    // строк. Сортировка — один раз на build, не на плитку.
+    final sorted = _cfg.isOff || _cfg.packages.isEmpty
+        ? const <String>[]
+        : _sortedPackages();
+    final head = <Widget>[
         // ─── Header: Mode + tooltip + overflow ───
         Row(
           children: [
@@ -295,11 +295,29 @@ class _TunAppsTabState extends State<TunAppsTab>
                 textAlign: TextAlign.center,
                 style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
               ),
-            )
-          else
-            ..._sortedPackages().map(_buildAppTile),
+            ),
         ],
-      ],
+    ];
+    final indexOf = <String, int>{
+      for (var i = 0; i < sorted.length; i++) sorted[i]: head.length + i,
+    };
+
+    return ListView.builder(
+      padding: EdgeInsets.fromLTRB(16, 16, 16, bottomPad),
+      itemCount: head.length + sorted.length,
+      // Плитка держит своё состояние (запрос уже сделан), когда строка
+      // сдвигается после прихода имён и пересортировки.
+      findChildIndexCallback: (key) =>
+          key is ValueKey<String> ? indexOf[key.value] : null,
+      itemBuilder: (context, i) {
+        if (i < head.length) return head[i];
+        final pkg = sorted[i - head.length];
+        return _TunAppTile(
+          key: ValueKey<String>(pkg),
+          pkg: pkg,
+          onRemove: () => _removeApp(pkg),
+        );
+      },
     );
   }
 
@@ -313,7 +331,48 @@ class _TunAppsTabState extends State<TunAppsTab>
     return list;
   }
 
-  Widget _buildAppTile(String pkg) {
+  String _modeDescription(String mode) {
+    switch (mode) {
+      case 'allow':
+        return 'Only selected apps go through VPN. Others bypass via cellular/wifi.';
+      case 'deny':
+        return 'Selected apps bypass VPN. Others go through.';
+      default:
+        return 'All apps go through VPN (default).';
+    }
+  }
+}
+
+/// 693 итер. 3: плитка сохранённого приложения. Данные и иконку запрашивает
+/// при появлении на экране — один раз в initState, не на каждый пересбор по
+/// [AppInfoCache.revision]: иначе приложение без иконки (пустой ответ)
+/// запрашивалось бы по кругу. Ушла с экрана и вернулась — одна новая попытка.
+class _TunAppTile extends StatefulWidget {
+  const _TunAppTile({super.key, required this.pkg, required this.onRemove});
+
+  final String pkg;
+  final VoidCallback onRemove;
+
+  @override
+  State<_TunAppTile> createState() => _TunAppTileState();
+}
+
+class _TunAppTileState extends State<_TunAppTile> {
+  @override
+  void initState() {
+    super.initState();
+    AppInfoCache.ensure(widget.pkg);
+  }
+
+  @override
+  void didUpdateWidget(covariant _TunAppTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.pkg != widget.pkg) AppInfoCache.ensure(widget.pkg);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pkg = widget.pkg;
     final info = AppInfoCache.of(pkg);
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
@@ -370,19 +429,8 @@ class _TunAppsTabState extends State<TunAppsTab>
       trailing: IconButton(
         icon: const Icon(Icons.close, size: 20),
         tooltip: getLocalText.s("Remove"),
-        onPressed: () => _removeApp(pkg),
+        onPressed: widget.onRemove,
       ),
     );
-  }
-
-  String _modeDescription(String mode) {
-    switch (mode) {
-      case 'allow':
-        return 'Only selected apps go through VPN. Others bypass via cellular/wifi.';
-      case 'deny':
-        return 'Selected apps bypass VPN. Others go through.';
-      default:
-        return 'All apps go through VPN (default).';
-    }
   }
 }
