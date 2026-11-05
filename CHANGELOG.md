@@ -10,6 +10,15 @@
 
 ### Added
 
+- **AWG masquerade setting ([task 720](docs/spec/tasks/720-awg-masquerade-setting.md)).**
+  VPN Settings → Core → WireGuard gains "AWG masquerade": "Direct only"
+  (default, as before) sends the masquerade packets of an AmneziaWG node
+  (`ip=quic`, `i1`…) only when the node dials from the device's own socket;
+  "All paths" sends them through another node as well (core key
+  `lx.awg_masquerade`). The description of "Anti-sniff decoy" and of the QUIC
+  section now says that the decoy also covers AWG nodes with the QUIC
+  masquerade (`ip=quic`).
+
 - **Tunnel routes preset and the "Only its own networks" switch ([task 718](docs/spec/tasks/718-tunnel-routes-preset.md)).**
   A WireGuard / AWG, OpenVPN or OpenConnect node can be marked to receive only
   the networks it announces (WireGuard allowed IPs, routes pushed by the

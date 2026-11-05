@@ -459,6 +459,14 @@
             "8",
             "12"
           ]
+        },
+        { "name": "awg_masquerade", "type": "enum",
+          "default_value": "direct", "required": true, "wizard_ui": "edit",
+          "title": "AWG masquerade", "tooltip": "When an AmneziaWG node sends its masquerade packets (ip=quic, i1…) before the handshake. Direct only: when the node dials from this device's own socket; through another node a single handshake packet goes out. All paths: always.",
+          "options": [
+            {"title": "Direct only (default)", "value": "direct"},
+            {"title": "All paths", "value": "all"}
+          ]
         }
       ]
     },
@@ -466,10 +474,10 @@
       "id": "quic",
       "name": "QUIC",
       "chapter": "core",
-      "description": "MASQUE (HTTP/3), Hysteria2 and TUIC.",
+      "description": "MASQUE (HTTP/3), Hysteria2, TUIC and AWG with QUIC masquerade (ip=quic).",
       "vars": [
         { "name": "quic_sniff_decoy", "type": "enum",
-          "default_value": "detour", "required": true, "wizard_ui": "edit", "title": "Anti-sniff decoy", "tooltip": "Send one junk byte before the QUIC handshake so a relay that sniffs UDP cannot redirect the connection by its SNI. Through detour: only connections carried by another node; Direct: only this device's own socket; All: both.",
+          "default_value": "detour", "required": true, "wizard_ui": "edit", "title": "Anti-sniff decoy", "tooltip": "Send one junk byte before the QUIC handshake so a relay that sniffs UDP cannot redirect the connection by its SNI. Through detour: only connections carried by another node; Direct: only this device's own socket; All: both. Also covers AWG nodes whose masquerade imitates QUIC (ip=quic).",
           "options": [
             {"title": "Off", "value": "off"},
             {"title": "Through detour (default)", "value": "detour"},
@@ -506,6 +514,9 @@
       }],
       "#if mtu_align": [{"#not": {"@mtu_align": "clamp"}}, {
         "mtu_align": "@mtu_align"
+      }],
+      "#if awg_masquerade": [{"@awg_masquerade": "all"}, {
+        "awg_masquerade": "all"
       }],
       "#if quic_sniff_decoy": [{"@quic_sniff_decoy": {"#in": ["detour", "direct", "all"]}}, {
         "quic_sniff_decoy": "@quic_sniff_decoy"

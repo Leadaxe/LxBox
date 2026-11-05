@@ -149,6 +149,7 @@ class SettingsStorage {
   static const configVarKeys = _configVarKeys;
   static const _configVarKeys = <String>{
     'auto_detect_interface',
+    'awg_masquerade',
     'certificate_store',
     'direct_connect_timeout',
     'dns_cache_capacity',

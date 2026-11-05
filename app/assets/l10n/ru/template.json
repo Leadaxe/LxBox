@@ -824,8 +824,20 @@
   "QUIC": {
     "value": "QUIC"
   },
-  "MASQUE (HTTP/3), Hysteria2 and TUIC.": {
-    "value": "MASQUE (HTTP/3), Hysteria2 и TUIC."
+  "AWG masquerade": {
+    "value": "Маскировка AWG"
+  },
+  "When an AmneziaWG node sends its masquerade packets (ip=quic, i1…) before the handshake. Direct only: when the node dials from this device's own socket; through another node a single handshake packet goes out. All paths: always.": {
+    "value": "Когда узел AmneziaWG отправляет маскировочные пакеты (ip=quic, i1…) перед рукопожатием. Direct only — когда узел звонит с собственного сокета устройства; через другой узел уходит один пакет рукопожатия. All paths — всегда."
+  },
+  "Direct only (default)": {
+    "value": "Только напрямую (по умолчанию)"
+  },
+  "All paths": {
+    "value": "Все пути"
+  },
+  "MASQUE (HTTP/3), Hysteria2, TUIC and AWG with QUIC masquerade (ip=quic).": {
+    "value": "MASQUE (HTTP/3), Hysteria2, TUIC и AWG с маскировкой под QUIC (ip=quic)."
   },
   "Anti-sniff decoy": {
     "value": "Обманка от сниффинга"
@@ -836,8 +848,8 @@
   "Close a MASQUE tunnel that carried no traffic for this long; it reconnects on next use. A node's own idle timeout wins.": {
     "value": "Закрывать туннель MASQUE, по которому столько времени не было трафика; он переподключится при следующем использовании. Собственный таймаут простоя узла сильнее."
   },
-  "Send one junk byte before the QUIC handshake so a relay that sniffs UDP cannot redirect the connection by its SNI. Through detour: only connections carried by another node; Direct: only this device's own socket; All: both.": {
-    "value": "Отправлять один мусорный байт перед QUIC-рукопожатием, чтобы релей, который сниффит UDP, не перенаправил соединение по SNI. Through detour — только соединения, которые несёт другой узел; Direct — только собственный сокет устройства; All — оба случая."
+  "Send one junk byte before the QUIC handshake so a relay that sniffs UDP cannot redirect the connection by its SNI. Through detour: only connections carried by another node; Direct: only this device's own socket; All: both. Also covers AWG nodes whose masquerade imitates QUIC (ip=quic).": {
+    "value": "Отправлять один мусорный байт перед QUIC-рукопожатием, чтобы релей, который сниффит UDP, не перенаправил соединение по SNI. Through detour — только соединения, которые несёт другой узел; Direct — только собственный сокет устройства; All — оба случая. Действует и на узлы AWG с маскировкой под QUIC (ip=quic)."
   },
   "Through detour (default)": {
     "value": "Через detour (по умолчанию)"

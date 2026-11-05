@@ -297,7 +297,10 @@ direct) sends the AWG masquerade burst (`ip=quic`, `i1`…) only when the
 endpoint dials on the device's own socket, through a `detour` a single
 handshake initiation goes out without the burst; `"all"` — the burst on every
 path, as before. `lx.quic_sniff_decoy` now also covers the AWG burst. LxBox
-writes no `lx.awg_masquerade` (the core default applies). Java surface lx.30 →
+wrote no `lx.awg_masquerade` until task 720; since then it is the template
+variable `awg_masquerade` (VPN Settings → Core → WireGuard, enum `direct` /
+`all`, default `direct`; only `all` is emitted, so the default config is
+unchanged). Java surface lx.30 →
 lx.31 (`javap -p` over all 270 classes of both `classes.jar`, 3903 lines each):
 identical. `strings` of `libbox.so` reports `1.14.4-lx.31`. AAR sha256
 `d862d20c0bbbf6e9e26c3cdfffd3c2d972501a5b05240b1dbd6998dc38daae85` (the

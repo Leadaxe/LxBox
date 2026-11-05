@@ -824,14 +824,26 @@
   "QUIC": {
     "value": "QUIC"
   },
-  "MASQUE (HTTP/3), Hysteria2 and TUIC.": {
-    "value": "MASQUE (HTTP/3)、Hysteria2 和 TUIC。"
+  "AWG masquerade": {
+    "value": "AWG 伪装"
+  },
+  "When an AmneziaWG node sends its masquerade packets (ip=quic, i1…) before the handshake. Direct only: when the node dials from this device's own socket; through another node a single handshake packet goes out. All paths: always.": {
+    "value": "AmneziaWG 节点何时在握手前发送伪装数据包（ip=quic、i1…）。Direct only：仅当节点从本设备自身的套接字拨号时；经由其他节点时只发送一个握手包。All paths：始终发送。"
+  },
+  "Direct only (default)": {
+    "value": "仅直连（默认）"
+  },
+  "All paths": {
+    "value": "所有路径"
+  },
+  "MASQUE (HTTP/3), Hysteria2, TUIC and AWG with QUIC masquerade (ip=quic).": {
+    "value": "MASQUE (HTTP/3)、Hysteria2、TUIC 以及伪装成 QUIC（ip=quic）的 AWG。"
   },
   "Anti-sniff decoy": {
     "value": "防嗅探诱饵"
   },
-  "Send one junk byte before the QUIC handshake so a relay that sniffs UDP cannot redirect the connection by its SNI. Through detour: only connections carried by another node; Direct: only this device's own socket; All: both.": {
-    "value": "在 QUIC 握手前发送一个垃圾字节，使嗅探 UDP 的中继无法按 SNI 重定向连接。Through detour：仅由其他节点承载的连接；Direct：仅本设备自身的套接字；All：两者皆有。"
+  "Send one junk byte before the QUIC handshake so a relay that sniffs UDP cannot redirect the connection by its SNI. Through detour: only connections carried by another node; Direct: only this device's own socket; All: both. Also covers AWG nodes whose masquerade imitates QUIC (ip=quic).": {
+    "value": "在 QUIC 握手前发送一个垃圾字节，使嗅探 UDP 的中继无法按 SNI 重定向连接。Through detour：仅由其他节点承载的连接；Direct：仅本设备自身的套接字；All：两者皆有。也适用于伪装成 QUIC（ip=quic）的 AWG 节点。"
   },
   "MASQUE idle timeout": {
     "value": "MASQUE 空闲超时"
