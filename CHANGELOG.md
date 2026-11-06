@@ -8,6 +8,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Android assistants can turn the VPN on or off and read its status ([task 721](docs/spec/tasks/721-appfunctions-vpn-toggle-status.md)).** On Android 16+ the app declares the AppFunctions `startVpn`, `stopVpn` and `getVpnStatus` (`androidx.appfunctions` 1.0.0-rc01). They work only after App Settings → Automation → **AI assistant control** is turned on (off by default, hidden below Android 16). Connecting needs a VPN permission granted earlier; the answer is only the tunnel state. The app module now builds with `compileSdk 37` and KSP. The API is experimental: Gemini calls only apps from Google's early access programme for now.
+
 ### Fixed
 
 - **Tunnel apps crashed on open with many installed apps ([task 693](docs/spec/tasks/693-app-picker-shared-uid-hint.md)).** The app list and icons are now read off the main thread, large icons are scaled down to 96 px, and the tab no longer stalls with a burst of `getAppIcon timed out` in the log. The list builds only the rows on screen and asks for their icons as they scroll into view; at most four icons are encoded at a time.

@@ -131,6 +131,79 @@ KDoc функций и `appfn:instructions` — на английском, оп�
 - Фича как чёрный ящик — в описание фичи автоматизации в `docs/spec/features/`
   (найти существующую по §047; новую папку не заводить, если есть куда дописать).
 
+### Сделано (ветка `build/721-appfunctions`, 06.11.2026)
+
+Сверено с самим артефактом rc01 (javap по `appfunctions-1.0.0-rc01.aar` и
+`appfunctions-compiler-1.0.0-rc01.jar`), а не только с документацией.
+
+**Файлы.**
+
+- Сборка: `app/android/settings.gradle.kts` — плагин
+  `com.google.devtools.ksp` **2.3.10** (с 2.3.0 версии KSP2 не привязаны к
+  Kotlin; та же версия, что в образце android/appfunctions);
+  `app/android/app/build.gradle.kts` — `id("com.google.devtools.ksp")`,
+  `compileSdk = 37`, `appfunctions` + `ksp(appfunctions-compiler)` 1.0.0-rc01.
+  KSP-аргументы не нужны (`appfunctions:aggregateAppFunctions` из образца в
+  rc01-процессоре отсутствует; модуль один).
+  `app/android/gradle.properties` — `android.suppressUnsupportedCompileSdk=37.0`
+  (AGP 9.1.0 проверен до 36.1). `.github/workflows/ci.yml` — шаг установки
+  `platforms;android-37.0` до сборки: AGP сам докачивает платформу
+  (каталог `android-37.0`), но в том же прогоне падает «Failed to find target
+  with hash string 'android-37'»; со второго прогона находит.
+- Локально 06.11: `:app:compileDebugKotlin` (с KSP) — BUILD SUCCESSFUL;
+  порождены `LxBoxAppFunctionService.kt` и `assets/lxbox_app_functions.xml`
+  (id `…LxBoxAppFunctions#startVpn` и т. д., `enabledByDefault=false`);
+  `AppFunctionsLogicTest` — 6/6. Релизная сборка с R8 локально не гонялась.
+- Манифест: сервис `.appfunctions.LxBoxAppFunctionService` (порождается KSP),
+  свойства `schema` = `app_functions_schema.xsd`, `v2` =
+  `lxbox_app_functions.xml`; на уровне application — `app_metadata` →
+  `res/xml/app_metadata.xml` (`appfn:instructions` +
+  `appfn:displayDescription` = `@string/appfunctions_display_description`,
+  en/ru/zh).
+- Kotlin, пакет `com.leadaxe.lxbox.appfunctions`:
+  `LxBoxAppFunctions.kt` (entry point, три функции), `VpnState.kt`,
+  `AppFunctionsLogic.kt` (чистая логика: строка статуса, решение старта,
+  условие конца ожидания, идентификаторы функций), `AppFunctionsGate.kt`
+  (тумблер). `BootReceiver` — ключ зеркала `appfunctions_enabled`;
+  `VpnPlugin` — метод `setAppFunctionsEnabled`.
+- Dart: var `appfunctions_enabled` (allowlist бэкапа рядом с
+  `automation_*`, геттер/сеттер в `SettingsStorage`), `BoxVpnClient.setAppFunctionsEnabled`,
+  `syncAutomationFromStorage` шлёт значение в натив (старт, набор, восстановление
+  бэкапа), строка в `automation_tab.dart` (видна при `sdkInt >= 36`).
+  Debug API — общий `/settings/vars`, отдельной ручки нет (как у автоматизации).
+- Тесты: `app/android/app/src/test/.../appfunctions/AppFunctionsLogicTest.kt`,
+  два кейса в `test/services/automation/automation_sync_test.dart`.
+
+**Гейт — способ (б) плюс проверка в коде** (эмулятора не было, поэтому (а)
+не проверялся и не выбран). Функции объявлены
+`@AppFunctionDeclaration(isDescribedByKDoc = true, isEnabled = false)`;
+тумблер зовёт `AppFunctionManager.setAppFunctionEnabled(id, ENABLED|DISABLED)`
+для каждой функции. Идентификатор — `<FQN класса с объявлением>#<имя>`
+(`com.leadaxe.lxbox.appfunctions.LxBoxAppFunctions#startVpn`), так его
+строит процессор rc01 (`AnnotatedAppFunction.getAppFunctionIdentifier`).
+Гарантию «выключено — не исполняется» держит вторая линия: каждая функция
+первой строкой читает зеркало `boxvpn_boot.appfunctions_enabled` и при
+`false` бросает `AppFunctionDisabledException`. Так функция не исполняется
+даже после `adb … set-enabled --state enable` или если система не приняла
+`setAppFunctionEnabled`.
+
+**Классы исключений.** Нет согласия — `AppFunctionPermissionRequiredException`;
+нет конфига — `AppFunctionElementNotFoundException` (в rc01 есть и
+`AppFunctionNotSupportedException`, но «нет нужного элемента» ближе к
+отсутствию конфига); тумблер выключен — `AppFunctionDisabledException`.
+
+**Расхождения со спекой.**
+
+- Хранение: настройка автоматизации живёт в `vars` `lxbox_settings.json`,
+  натив — состояние компонентов. Нашей функции нужно читать значение из
+  холодного процесса, поэтому var зеркалится в `boxvpn_boot` (правило
+  ARCHITECTURE § 5, п. 2), а не только в состояние системы.
+- R8: правила едут с библиотекой (`proguard.txt` AAR: keepnames для
+  `@AppFunctionSerializable`, keep для инвентаря); сервис держит манифест.
+  Своих правил не добавлено — подтвердит релизная сборка CI.
+- Ожидание переходного состояния — опрос `currentStatus` раз в 200 мс
+  (подписки на статус в нативе без Flutter нет).
+
 ## Требования Google Play (раздел AppFunctions API, с 14.04.2027)
 
 | Требование | Как выполнено |

@@ -262,6 +262,55 @@ Task "Switch to Russia with confirmation":
 
 ---
 
+## ИИ-ассистенты (AppFunctions)
+
+На Android 16+ L×Box объявляет три
+[AppFunctions](https://developer.android.com/ai/appfunctions), которые
+системный ассистент (например, Gemini) вызывает от имени пользователя:
+
+| Функция | Параметры | Результат |
+|---------|-----------|-----------|
+| `startVpn` | — | `VpnState`; ждёт установки туннеля до 15 с |
+| `stopVpn` | — | `VpnState`; ждёт до 15 с |
+| `getVpnStatus` | — | `VpnState` |
+
+У `VpnState` одно поле `status`: `stopped`, `starting`, `started` или
+`stopping`. Имена узлов не возвращаются.
+
+**Как включить.** App Settings → Automation → **AI assistant control**.
+По умолчанию выключено, строка видна только на Android 16+. Пока тумблер
+выключен, функции помечены для системы выключенными, а любой вызов
+завершается `AppFunctionDisabledException`. Настройка хранится рядом с
+остальными настройками автоматизации и входит в LX Backup.
+
+**Ошибки.** `startVpn` приложение не открывает:
+
+- согласие на VPN ещё не выдано (режим TUN) —
+  `AppFunctionPermissionRequiredException` «VPN permission is not granted.
+  Open L×Box and connect once.»;
+- конфиг не сохранён — `AppFunctionElementNotFoundException`
+  «No configuration. Open L×Box and add a server.»
+
+**Проверка через adb** (на устройстве должна быть служба `app_function`:
+`adb shell cmd app_function help`):
+
+```sh
+adb shell cmd app_function list-app-functions --package com.leadaxe.lxbox
+adb shell cmd app_function execute-app-function --package com.leadaxe.lxbox \
+  --function 'com.leadaxe.lxbox.appfunctions.LxBoxAppFunctions#getVpnStatus' \
+  --parameters '{}'
+```
+
+`startVpn` и `stopVpn` вызываются так же. Если идентификатор отличается —
+скопируйте его из вывода `list-app-functions`.
+
+**Статус.** API AppFunctions экспериментальный (`androidx.appfunctions`
+1.0.0-rc01). Сейчас из Gemini вызываются только приложения из программы
+раннего доступа Google, поэтому на большинстве устройств тумблер пока ничего
+заметного не меняет.
+
+---
+
 ## Troubleshooting
 
 | Симптом | Причина | Решение |

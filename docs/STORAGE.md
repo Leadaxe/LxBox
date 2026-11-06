@@ -429,6 +429,7 @@ A flat `Map<String, String>` (values are stringified on read). It serves both **
 | `probe_ms_orange` | `'700'` | §236 | Test servers: the upper bound of the “orange” latency, in ms; anything above is red. |
 | `wifi_history` | `'[]'` | [§051] Phase 3 | A JSON-encoded `[{ssid, bssid, last_seen}]` (see its own section below). |
 | `automation_receive_enabled` | `'false'` | §047 | The Public Intent API: accepting broadcasts from Tasker and friends. Default OFF. |
+| `appfunctions_enabled` | `'false'` | §721 | AI assistant control: Android AppFunctions (16+) `startVpn` / `stopVpn` / `getVpnStatus`. Default OFF. Mirrored to `boxvpn_boot.appfunctions_enabled`. |
 | `automation_emit_lifecycle` | `'false'` | §047 | Emitting lifecycle events outwards. Default OFF. |
 | `automation_emit_state` | `'false'` | §047 | Emitting state events. Default OFF. |
 | `automation_emit_subs` | `'false'` | §047 | Emitting subscription events. Default OFF. |
