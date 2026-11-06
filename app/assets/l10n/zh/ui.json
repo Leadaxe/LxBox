@@ -599,6 +599,15 @@
   "About": {
     "value": "关于"
   },
+  "AI assistant control": {
+    "value": "AI 助手控制"
+  },
+  "AI assistants": {
+    "value": "AI 助手"
+  },
+  "Let Android assistants turn the VPN on or off and read its status (Android 16+)": {
+    "value": "允许 Android 助手开启或关闭 VPN 并读取其状态（Android 16+）"
+  },
   "Accept automation commands": {
     "value": "接受自动化指令"
   },

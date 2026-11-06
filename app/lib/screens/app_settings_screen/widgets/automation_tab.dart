@@ -1,3 +1,6 @@
+import 'dart:io' show Platform;
+
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -52,6 +55,9 @@ class _AutomationTabState extends State<AutomationTab> {
   bool _emitLifecycle = false;
   bool _emitState = false;
   bool _emitSubs = false;
+  // §721 — Android AppFunctions: строка видна только на Android 16+ (API 36).
+  bool _appFunctionsSupported = false;
+  bool _appFunctionsEnabled = false;
 
   @override
   void initState() {
@@ -64,14 +70,33 @@ class _AutomationTabState extends State<AutomationTab> {
     final lifecycle = await SettingsStorage.getAutomationEmitLifecycle();
     final state = await SettingsStorage.getAutomationEmitState();
     final subs = await SettingsStorage.getAutomationEmitSubs();
+    final appFunctions = await SettingsStorage.getAppFunctionsEnabled();
+    final appFunctionsSupported = await _isAndroid16OrNewer();
     if (!mounted) return;
     setState(() {
       _receiveEnabled = receive;
       _emitLifecycle = lifecycle;
       _emitState = state;
       _emitSubs = subs;
+      _appFunctionsEnabled = appFunctions;
+      _appFunctionsSupported = appFunctionsSupported;
       _loaded = true;
     });
+  }
+
+  static Future<bool> _isAndroid16OrNewer() async {
+    try {
+      if (!Platform.isAndroid) return false;
+      return (await DeviceInfoPlugin().androidInfo).version.sdkInt >= 36;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _onAppFunctionsChanged(bool value) async {
+    setState(() => _appFunctionsEnabled = value);
+    await SettingsStorage.setAppFunctionsEnabled(value);
+    await BoxVpnClient.I.setAppFunctionsEnabled(value);
   }
 
   // ─── Master toggle ──────────────────────────────────────────────────────────
@@ -187,6 +212,26 @@ class _AutomationTabState extends State<AutomationTab> {
           value: _receiveEnabled,
           onChanged: _loaded ? _onReceiveChanged : null,
         ),
+
+        // ─── AI assistants (Android AppFunctions, 16+) ───
+        if (_appFunctionsSupported) ...[
+          const Divider(height: 28),
+          Text(
+            getLocalText.s("AI assistants"),
+            style: theme.textTheme.titleSmall,
+          ),
+          SwitchListTile(
+            title: Text(getLocalText.s("AI assistant control")),
+            subtitle: Text(
+              getLocalText.s(
+                "Let Android assistants turn the VPN on or off and read its status (Android 16+)",
+              ),
+            ),
+            secondary: const Icon(Icons.assistant),
+            value: _appFunctionsEnabled,
+            onChanged: _loaded ? _onAppFunctionsChanged : null,
+          ),
+        ],
 
         const Divider(height: 28),
 

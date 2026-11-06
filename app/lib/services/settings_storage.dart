@@ -288,6 +288,7 @@ class SettingsStorage {
     'automation_emit_subs',
     'automation_emit_health',
     'automation_explainer_shown_v1',
+    'appfunctions_enabled', // §721 — AI assistant control (Android AppFunctions)
     // Subscription identity headers
     'subscription_user_agent',
     'subscription_send_hwid',
@@ -1110,6 +1111,15 @@ class SettingsStorage {
 
   static Future<void> setAutomationExplainerShown(bool shown) =>
       setVar('automation_explainer_shown_v1', shown ? 'true' : 'false');
+
+  /// §721 — тумблер «AI assistant control»: Android AppFunctions (16+)
+  /// startVpn / stopVpn / getVpnStatus. Default OFF. Native — зеркало
+  /// `boxvpn_boot.appfunctions_enabled` + состояние функций в системе.
+  static Future<bool> getAppFunctionsEnabled() async =>
+      (await getVar('appfunctions_enabled', 'false')) == 'true';
+
+  static Future<void> setAppFunctionsEnabled(bool enabled) =>
+      setVar('appfunctions_enabled', enabled ? 'true' : 'false');
 
   // ---------------------------------------------------------------------------
   // Backup snapshot (§031) — dump/export/replace всего `lxbox_settings.json`.

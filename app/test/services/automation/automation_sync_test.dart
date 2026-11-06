@@ -40,6 +40,22 @@ void main() {
     });
   }
 
+  // §721 — тумблер AppFunctions уходит в native тем же синком (бэкап/набор).
+  for (final stored in [true, false]) {
+    test(
+      'в хранилище AppFunctions=$stored → native получает $stored',
+      () async {
+        await SettingsStorage.setAppFunctionsEnabled(stored);
+        final seen = <bool>[];
+        await syncAutomationFromStorage(
+          setReceiver: (_) async {},
+          setAppFunctions: (v) async => seen.add(v),
+        );
+        expect(seen, [stored]);
+      },
+    );
+  }
+
   test('гейты эмиттера перечитываются из хранилища', () async {
     await SettingsStorage.setAutomationEmitLifecycle(true);
     final sent = <String>[];

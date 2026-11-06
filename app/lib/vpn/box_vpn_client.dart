@@ -1036,6 +1036,18 @@ class BoxVpnClient {
     );
   }
 
+  /// §721 — тумблер «AI assistant control»: native пишет зеркало
+  /// `boxvpn_boot.appfunctions_enabled` и на Android 16+ включает/выключает
+  /// функции в `AppFunctionManager`.
+  Future<void> setAppFunctionsEnabled(bool enabled) async {
+    await _invoke<void>(
+      _Methods.setAppFunctionsEnabled,
+      args: {'enabled': enabled},
+      timeout: _Timeouts.settings,
+      onTimeoutValue: null,
+    );
+  }
+
   /// §047 Шаг 2 — зеркалит в native-кеш активную ноду/группу (для
   /// `LocaleConditionReceiver` — синхронный ответ на `QUERY_CONDITION`) и
   /// списки нод/групп (для Spinner'а выбора в edit-Activity плагина вместо

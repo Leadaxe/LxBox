@@ -785,6 +785,15 @@
   "About": {
     "value": "О приложении"
   },
+  "AI assistant control": {
+    "value": "Управление ИИ-ассистентом"
+  },
+  "AI assistants": {
+    "value": "ИИ-ассистенты"
+  },
+  "Let Android assistants turn the VPN on or off and read its status (Android 16+)": {
+    "value": "Ассистенты Android смогут включать и выключать VPN и узнавать его статус (Android 16+)"
+  },
   "Accept automation commands": {
     "value": "Принимать команды автоматизации"
   },
