@@ -72,6 +72,11 @@ const Set<String> _kNonNodeTypes = {
   'urltest',
 };
 
+const Set<String> _kNonNodeTypesXRay = {
+  'freedom',
+  'blackhole',
+};
+
 /// Ключи документа, где лежат узлы.
 const Set<String> _kNodeListKeys = {'outbounds', 'endpoints'};
 
@@ -98,6 +103,80 @@ NodeDocumentPrep prepareNodeDocumentForSave(String text, String tag) {
         commentsRemoved: true),
     NodeDocumentRejected() => prep,
   };
+}
+
+NodeDocumentPrep prepareXRayDocumentForSave(String text, String tag) {
+  // §585 — комментарии снимаются до разбора; в источник уходит текст без них.
+  final uncommented = uncommentedJson(text);
+  if (uncommented == null) return _prepareXRay(text, tag);
+  final prep = _prepareXRay(uncommented, tag);
+  return switch (prep) {
+    NodeDocumentReady r => NodeDocumentReady(r.text,
+        isDocument: r.isDocument,
+        droppedExtras: r.droppedExtras,
+        commentsRemoved: true),
+    NodeDocumentRejected() => prep,
+  };
+}
+
+NodeDocumentPrep _prepareXRay(String text, String tag) {
+  final Object? parsed;
+  try {
+    parsed = jsonDecode(text);
+  } on FormatException catch (e) {
+    return NodeDocumentRejected(
+        getLocalText.s("Invalid JSON: %s", e.message));
+  }
+
+  final newTag = tag.trim();
+
+  if (parsed is List) {
+    if (parsed.isEmpty) {
+      return NodeDocumentRejected(getLocalText.s("Invalid JSON: empty array"));
+    }
+    final first = parsed.first;
+    if (first is! Map || first['protocol'] is! String) {
+      return NodeDocumentRejected(getLocalText.s(
+          "JSON must be an outbound object with \"protocol\" or a document with \"outbounds\""));
+    }
+    return NodeDocumentReady(
+      _bodyTextXRay(first.cast<String, dynamic>(), newTag),
+      isDocument: false,
+      droppedExtras: parsed.length > 1,
+    );
+  }
+  if (parsed is! Map) {
+    return NodeDocumentRejected(getLocalText.s(
+          "JSON must be an outbound object with \"protocol\" or a document with \"outbounds\""));
+  }
+  final map = parsed.cast<String, dynamic>();
+
+  if (map['protocol'] is String) {
+    if (newTag.isEmpty || map['tag'] == newTag) {
+      return NodeDocumentReady(text, isDocument: false);
+    }
+    map['tag'] = newTag;
+    return NodeDocumentReady(jsonEncode(map), isDocument: false);
+  }
+
+  final entries = map['outbounds'];
+  if (entries is! List) {
+    return NodeDocumentRejected(getLocalText.s(
+          "JSON must be an outbound object with \"protocol\" or a document with \"outbounds\""));
+  }
+
+  final body = _firstXRayNodeBody(entries);
+  if (body == null) {
+    return NodeDocumentRejected(
+        getLocalText.s("The document has no node to save."));
+  }
+  final restNotKept = entries.length > 1 ||
+      map.keys.any((k) => !_kNodeListKeys.contains(k));
+  return NodeDocumentReady(
+    _bodyTextXRay(body, newTag),
+    isDocument: true,
+    droppedExtras: restNotKept,
+  );
 }
 
 NodeDocumentPrep _prepare(String text, String tag) {
@@ -173,6 +252,25 @@ String _bodyText(Map<String, dynamic> body, String newTag) {
   return const JsonEncoder.withIndent('  ').convert(out);
 }
 
+String _bodyTextXRay(Map<String, dynamic> body, String newTag) {
+  final out = Map<String, dynamic>.from(body);
+  if (newTag.isNotEmpty) {
+    final outbounds = out['outbounds'];
+    if (outbounds == null)
+    {
+      out['tag'] = newTag;
+    }
+    else
+    {
+      final idx = _firstXRayNodeBodyIndex(outbounds);
+      if (idx != null) {
+        out['outbounds'][idx]['tag'] = newTag;
+      }
+    }
+  }
+  return const JsonEncoder.withIndent('  ').convert(out);
+}
+
 /// §455 — полезная нагрузка для `Libbox.checkConfig()`: минимальный конфиг
 /// из одного узла — тело источника (`rawSource` первого узла, §454: оригинал
 /// outbound'а и у голого тела, и у документа) без `detour` (ссылка на чужой
@@ -225,6 +323,30 @@ Map<String, dynamic>? _firstNodeBody(List<Object?> entries) {
     final type = e['type'];
     if (type is! String || _kNonNodeTypes.contains(type)) continue;
     return e.cast<String, dynamic>();
+  }
+  return null;
+}
+
+/// Первый элемент, похожий на тело узла: объект с `type`, не служебный и
+/// не группа. `null` — тела нет (контроллер сам скажет, что узлов не вышло).
+Map<String, dynamic>? _firstXRayNodeBody(List<Object?>? entries) {
+  if (entries == null) return null;
+  final i = _firstXRayNodeBodyIndex(entries);
+  if (i == null) {
+    return null;
+  }
+  final e = entries[i];
+  if (e is! Map) return null;
+  return e.cast<String, dynamic>();
+}
+
+int? _firstXRayNodeBodyIndex(List<Object?>? entries) {
+  if (entries == null) return null;
+  for (final (i, e) in entries.indexed) {
+    if (e is! Map) continue;
+    final type = e['protocol'];
+    if (type is! String || _kNonNodeTypesXRay.contains(type)) continue;
+    return i;
   }
   return null;
 }

@@ -269,6 +269,9 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     final raw = _containerRaw;
     _sourceCtrl.text = raw;
     _originKind = originKindOf(raw);
+    if (_originKind == 'json' && !sourceIsSingbox(raw)) {
+      _originKind = 'xray_json';
+    }
     final Object? preview = node is AutoSelectSpec && member != null
         ? autoGroupJsonPreview(node) // §686
         : sourceIsSingbox(raw) && node.rawSource.trimLeft().startsWith('{')
@@ -435,7 +438,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     final String toStore;
     var droppedExtras = false;
     var commentsRemoved = false;
-    if (isJsonSourceText(text)) {
+    if (isJsonSourceText(text) && sourceIsSingbox(text)) {
       // §435 — голое тело или документ; тег из поля Tag уходит в тело узла.
       // §575 — `dns`/`route`/`sections` документа не сохраняются.
       final prep = prepareNodeDocumentForSave(text, _tagCtrl.text);
@@ -458,6 +461,18 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
           return false;
         }
       }
+    } else if (isJsonSourceText(text)) {
+      // §435 — голое тело или документ; тег из поля Tag уходит в тело узла.
+      // §575 — `dns`/`route`/`sections` документа не сохраняются.
+      final prep = prepareXRayDocumentForSave(text, _tagCtrl.text);
+      if (prep is NodeDocumentRejected) {
+        _snack(prep.message);
+        return false;
+      }
+      final ready = prep as NodeDocumentReady;
+      toStore = ready.text;
+      droppedExtras = ready.droppedExtras;
+      commentsRemoved = ready.commentsRemoved;
     } else if (!text.contains('\n') && text.contains('://')) {
       toStore = SubscriptionController.rawWithName(text, _tagCtrl.text.trim());
     } else {
@@ -616,7 +631,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
   /// заменяется предпросмотром (emit модели с тегом — валиден по построению,
   /// ворота ядра не нужны) и экран уводит в Source.
   Future<void> _editJson() async {
-    if (_originKind == 'json') {
+    if (_originKind == 'json' || _originKind == 'xray_json') {
       _tabs.animateTo(_kSourceTab);
       return;
     }
@@ -1200,6 +1215,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     final kindNote = switch (_originKind) {
       'json' => getLocalText.s(
           "sing-box JSON: sent to the core as is. The core checks it on save."),
+      'xray_json' => getLocalText.s("X-Ray JSON. The core doesn't validate it on save."),
       'wg_ini' => getLocalText.s(
           "WireGuard config: saved as is. The tag is stored separately."),
       _ => getLocalText.s("Link: the tag goes into its fragment on save."),
