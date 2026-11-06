@@ -818,6 +818,13 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 LxBoxIntentReceiver.setEnabled(context, enabled)
                 result.success(true)
             }
+            // §721 — тумблер «AI assistant control»: зеркало + состояние
+            // функций в AppFunctionManager (Android 16+; ниже — только зеркало).
+            "setAppFunctionsEnabled" -> {
+                val enabled = call.argument<Boolean>("enabled") ?: false
+                com.leadaxe.lxbox.appfunctions.AppFunctionsGate.setEnabled(context, enabled)
+                result.success(true)
+            }
             "sendAutomationBroadcast" -> {
                 val action = call.argument<String>("action") ?: ""
                 @Suppress("UNCHECKED_CAST")

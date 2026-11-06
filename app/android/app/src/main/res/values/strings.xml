@@ -117,4 +117,7 @@
     <string name="clip_offline">Device is offline.</string>
     <string name="clip_too_large">Too large to send</string>
     <string name="clip_copied">Copied</string>
+
+    <!-- §721 AppFunctions: user-visible app description for assistants -->
+    <string name="appfunctions_display_description">Turn the VPN on or off and check whether it is connected.</string>
 </resources>

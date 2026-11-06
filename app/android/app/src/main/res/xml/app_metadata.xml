@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- §721 — описание приложения для индексатора AppFunctions (Android 16+).
+     Только то, что делают функции; без указаний агенту о других приложениях
+     и о выборе инструментов (правила Google Play, раздел AppFunctions API). -->
+<AppFunctionAppMetadata xmlns:appfn="http://schemas.android.com/apk/androidx.appfunctions"
+    appfn:instructions="L×Box is a VPN client. startVpn connects the VPN tunnel with the configuration selected in the app. stopVpn disconnects it. getVpnStatus reports the tunnel state: stopped, starting, started or stopping. Connecting requires that the user has already granted the VPN permission and added a server in the app."
+    appfn:displayDescription="@string/appfunctions_display_description" />
