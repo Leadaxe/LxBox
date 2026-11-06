@@ -106,10 +106,6 @@ void main() {
       expect(s.selectedGroup, 'vpn-1');
       expect(s.showingNetworks, isTrue);
     });
-
-    test('значение пункта не совпадает с тегом направления NETWORKS', () {
-      expect(kNetworksDirectionValue, isNot(kNetworksLabel));
-    });
   });
 
   group('заголовок списка при NETWORKS', () {

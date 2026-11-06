@@ -109,6 +109,11 @@ The feature protects three principles:
   SUB_REFRESHED.sub_id замаскирован», «провал fetch:
   SUB_REFRESH_FAILED.sub_id замаскирован». **Mutation:** the raw
   subscription URL is passed as `sub_id` instead of the masked host.
+- **P14. A tunnel error does not reveal the server address.** The `message`
+  of `VPN_ERROR(tunnel_error)` is the core error text with IP addresses and
+  host names replaced by `***` (§638). **Witness:** unit
+  `test/services/automation/event_emitter_test` "VPN_ERROR(tunnel_error)
+  hides server address". **Mutation:** the raw `errorReason` is broadcast.
 
 ## Controlled parameters
 
@@ -176,7 +181,12 @@ tile touch / menu item / command / plugin
 - `ACTIVE_NODE_CHANGED` comes only on an explicit node choice, `reason` is
   always `user`; changes by auto-select and automation with `reason` `urltest` /
   `automation` (`047F`) are not planned (owner decision 2026-09-29, audit [591](../../tasks/591-spec-kit-revision-audit.md)).
-- The service notification with Stop / Reconnect buttons — 010-VPN_SERVICE.
+- The service notification with the Stop and "📋 Send" buttons —
+  010-VPN_SERVICE and 032-TAILDROP. There is no reconnect command in the Intent
+  API: from outside, reconnect goes through the Debug API
+  (`POST /action/reconnect`).
+- The Quick Settings tile is one, the tunnel toggle; there is no "Send
+  clipboard" tile (owner decision 2026-11-03).
 - Remote control over HTTP with a token — Debug API,
   [027-DEBUG_API](../027-DEBUG_API/FEATURE.md).
 - **Depends on OS capabilities:** the shade tile, the dynamic icon menu, the
@@ -192,14 +202,14 @@ tile touch / menu item / command / plugin
 |----------|--------------|----------|------|
 | Quick toggle | Turns the tunnel on or off with one touch from the Quick Settings tile or the app icon menu; both show the current state. | P1–P4, P11 | [quick-toggle.md](FUNCTIONS/quick-toggle.md) |
 | Command intake | Executes public `com.leadaxe.lxbox.*` commands behind one main toggle, checks preconditions and answers a failure with an error event. | P5–P8, P11 | [command-intake.md](FUNCTIONS/command-intake.md) |
-| Outbound events | Sends `com.leadaxe.lxbox.event.*` broadcasts for enabled categories with rate limiting, and confirms or rejects commands in request-response scenarios. | P7–P10, P13 | [outbound-events.md](FUNCTIONS/outbound-events.md) |
+| Outbound events | Sends `com.leadaxe.lxbox.event.*` broadcasts for enabled categories with rate limiting, and confirms or rejects commands in request-response scenarios. | P7–P10, P13, P14 | [outbound-events.md](FUNCTIONS/outbound-events.md) |
 | Automation plugin | Adds LxBox actions and conditions to Tasker-compatible apps, with node and group pick lists and condition answers without starting the UI. | P5, P12 | [automation-plugin.md](FUNCTIONS/automation-plugin.md) |
 
 ## Related features
 
 - [010-VPN_SERVICE](../010-VPN_SERVICE/FEATURE.md) — the tunnel service that
   external start/stop drives directly; owns the service notification with Stop
-  / Reconnect.
+  (and "📋 Send" from 032-TAILDROP).
 - [027-DEBUG_API](../027-DEBUG_API/FEATURE.md) — the Debug API, whose
   handlers and error codes the commands reuse; remote control over HTTP
   ([automation-recipes](../027-DEBUG_API/FUNCTIONS/automation-recipes.md)).

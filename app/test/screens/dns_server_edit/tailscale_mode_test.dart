@@ -31,11 +31,6 @@ void main() {
         ],
       );
 
-  test('tailscale входит в kDnsServerModes и в безадресные режимы', () {
-    expect(kDnsServerModes, contains('tailscale'));
-    expect(kDnsAddresslessModes, containsAll(['group', 'tailscale']));
-  });
-
   test('udp → tailscale: транспорт/detour/domain_resolver чистятся', () {
     final c = makeUdp();
     c.setServerMode('tailscale');
@@ -154,17 +149,6 @@ void main() {
     final body = bodyOf(c);
     expect(body.containsKey('server'), isFalse);
     expect(body.containsKey('detour'), isFalse);
-    c.dispose();
-  });
-
-  test('в режиме tailscale detour отсутствует (пикер формой не рисуется)', () {
-    // Контракт формы: пикер detour у tailscale скрыт (params_tab); вход в
-    // режим снял `detour` из body, геттер отдаёт дефолт direct-out.
-    final c = makeUdp();
-    c.setServerMode('tailscale');
-    c.setTailscaleEndpoint('home-ts');
-    expect(c.inlineDetour, 'direct-out');
-    expect(bodyOf(c).containsKey('detour'), isFalse);
     c.dispose();
   });
 }

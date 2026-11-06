@@ -40,7 +40,17 @@ With Use and Fill missing — toggles (stored independently of the mode):
 | Knob | Default | Effect |
 |---|---|---|
 | Register detour servers | off | links get into Direction selectors (visible in the node list) |
-| Register detour in auto group | off | links get into `<tag>-auto` |
+| Register detour in auto group | off | links registered in Direction selectors also get into `<tag>-auto` |
+
+The second toggle depends on the first: a link gets into `<tag>-auto` only
+when it is in the Direction's selector too, so with "Register detour servers"
+off the second toggle is disabled. A folded source (Replace with a group)
+reads the second toggle on its own: it decides whether links join the fold's
+auto group. A link is a native chain hop, a node tagged `⚙`, or a folder
+member that another member of the same folder uses as its personal detour.
+A folder whose members only use detours outside the folder has no links, and
+the folder settings do not show the two toggles (the detour mode choice
+stays).
 
 A source without native chains shows a single **Detour server** row ("None —
 nodes connect directly" or `Phone → X → Nodes → Internet`) — the same
@@ -62,8 +72,9 @@ outbounds; the membership of selectors and `<tag>-auto`.
 - An Xray `dialerProxy` link may itself go through the next one; service
   `freedom`/`blackhole`/`dns` are never links; an invalid link in the middle
   brings down its owner — a truncated path is not built.
-- A node whose tag starts with `⚙ ` and a folder member that another
-  member's personal detour points to behave as a link: into node selection
+- A node whose tag starts with `⚙ ` (the prefix is still read as a link
+  marker, although new links no longer get it since 404) and a folder member
+  that another member's personal detour points to behave as a link: into node selection
   and auto-select — only via the register toggles.
 - Folder: a member's personal detour is kept with Use and Fill missing; with
   Replace all it is overridden by the folder's. If the folder override

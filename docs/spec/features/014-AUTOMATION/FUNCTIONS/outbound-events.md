@@ -7,7 +7,7 @@ Each event category is off until the user enables it.
 | Field | Value |
 |-------|-------|
 | Feature | [014-AUTOMATION](../FEATURE.md) |
-| Promises | P7, P8, P9, P10, P13 |
+| Promises | P7, P8, P9, P10, P13, P14 |
 | State | ✅ written from code, 2026-09-28 |
 
 ## What it does
@@ -55,9 +55,9 @@ subscription update results; the update check; command failures.
 - A stop on error yields the pair `VPN_ERROR(tunnel_error)` +
   `VPN_DISCONNECTED(error)`; a slot takeover — `VPN_REVOKED` +
   `VPN_DISCONNECTED(revoked)`; a normal stop — `VPN_DISCONNECTED(user)`.
-- `message` of `VPN_ERROR(tunnel_error)` is the raw core error text, not
-  masked: the automation app gets what the log gets (owner's decision
-  2026-09-29).
+- `message` of `VPN_ERROR(tunnel_error)` is the core error text with IP
+  addresses and host names replaced by `***`; the port and the rest of the
+  text stay (owner's decision 2026-10-13, §638).
 - Request-response: a command's success arrives in State
   (`ACTIVE_NODE_CHANGED` / `NODE_ALREADY_ACTIVE` / `ACTIVE_GROUP_CHANGED`), a
   failure — `VPN_ERROR` in Lifecycle. The settings explicitly suggest enabling
@@ -97,3 +97,4 @@ subscription update results; the update check; command failures.
 | 5 | [219](../../../tasks/219-deep-audit-2026-07.md) | Done (audit) | The rate-limit unit does not check the exact one-minute boundary |
 | 6 | [290](../../../tasks/290-automation-node-switch-gaps.md) | complete | `NODE_ALREADY_ACTIVE`, `VPN_ERROR` on command failure, the "enable both categories" hint |
 | 7 | [605](../../../tasks/605-service-live-automation-workspaces-bugs.md) | Implemented | The dead Health toggle removed; `switch_failed` code |
+| 8 | [638](../../../tasks/638-audit-591-four-defects.md) | Done | `VPN_ERROR(tunnel_error)` masks addresses in `message` (P14) |

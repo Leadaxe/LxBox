@@ -24,10 +24,19 @@ while typing.
 
 | Tab | Contents |
 |---|---|
-| Settings | Protocol, Server (read-only); Tag with an emoji palette; Detour server with path preview; Skip presets |
+| Settings | Protocol, Server (read-only); Tag with an emoji palette; Detour server with path preview; TLS (node-level overrides of the TLS Fragmentation options, written immediately); Skip Tailscale presets; Incoming connections from this tunnel |
 | Source | the source text, editable; a caption about the source kind |
 | JSON | the body the core will receive, read-only, highlighted; Copy JSON; Edit JSON |
+| INI | only for a WireGuard / AmneziaWG node — the node as a `.conf`, read-only, highlighted; Copy, Share .conf (file name from the tag); Edit INI; "Not in INI: …" under the text when the body has keys the `.conf` cannot carry |
 | Network | only for a Tailscale node — tailnet devices, Exit node choice |
+
+**Auto node of a folder** (a member `kind: auto`): Settings holds the group
+form instead of Protocol/Server/Tag, Masquerade, Detour and TLS — Name,
+Servers in the pool (All / Rule / Pick) with the pool preview, Mode,
+Selected server, Sticky session, Advanced. It is the same form as on "Add
+auto node…". The form edits the Source text, Save writes Source. Source is
+not a JSON object — the form is off with "The form is off: Source is not a
+valid JSON object." This holds for every way the screen is opened.
 | Diagnostics | node diagnostics and notifications ([009-NODE_HEALTH](../../009-NODE_HEALTH/FEATURE.md)); a mark on the tab label when there are warnings |
 
 - **Protocol**: the node's protocol; for AmneziaWG — "AmneziaWG (wireguard)".
@@ -39,9 +48,19 @@ while typing.
   directly to this server." or "Phone → … → <tag> → Internet" — the full path
   along the detour chain. Selection, prohibitions and policy —
   [006](../../006-DETOUR_AND_BALANCE/FEATURE.md).
-- **Skip presets**: "Presets will not add routing or DNS rules for this
-  node." Visible only if the template has a preset with `for_each` for the
-  node type; never for a subscription.
+- **Skip Tailscale presets**: "Presets will not add routing or DNS rules for
+  this node." Visible only for a `tailscale` node and only if the template has
+  a node-loop preset whose `#filter` accepts it; never for a subscription
+  node. Record field `skip_tailscale_presets` (until 1.1.126 —
+  `skip_presets`).
+- **Incoming connections from this tunnel** (§656): a header with "Peers on
+  the other side of this tunnel can open connections to this device. Without
+  the switches below they are rejected." and three switches — **Allow access
+  to this device** (`allow_local`), **Expose local network** (`allow_lan`),
+  **Allow as gateway** (`allow_gateway`), read by the Tunnel ingress preset.
+  Visible only for a server or folder member of type `wireguard` (and AWG),
+  `openvpn-client`, `openconnect`; never for a subscription node or
+  Tailscale.
 
 ## Inputs / Outputs
 
@@ -51,15 +70,24 @@ while typing.
 
 ## Rules and invariants
 
-- Detour and Skip presets are written immediately on selection; Tag and
-  Source — only with the Save button in the header. There is no confirmation
-  when leaving with an unsaved Tag.
+- Detour, Skip Tailscale presets and the incoming-connection switches are
+  written immediately on selection; Tag and
+  Source — only with the Save button in the header.
+- **Leaving with unsaved edits.** An edit is a Tag field or Source text that
+  differs from what is saved; changing it back is not an edit. Back (system,
+  gesture, AppBar arrow) with an edit shows the shared "Unsaved changes"
+  dialog: Save — same as the Save button (if the save is refused — empty
+  Source, the core rejects the node — the screen stays open with the
+  message); Discard — leave without saving; Keep or dismiss — stay. No edit or
+  still loading — leave without the dialog.
 - Save re-saves the Source text with the tag from the Tag field: a link —
   into the fragment, JSON — into the `tag` field, INI — into a record field.
 - An emoji is not substituted into the tag automatically on edit; it is
   added via the palette. There is no separate "detour server mark" (a ⚙
   toggle): ⚙ is an ordinary palette emoji.
 - An auto-select node (a group in a folder) has no Detour block at all.
+- A folder member and an auto node are edited only here: the member's
+  long-press menu has no "Edit…" (a broken member keeps it).
 - Folder member: the detour is personal, the folder policy on top of it; a
   refusal (to itself, a cycle) rolls the choice back with a message.
 - The JSON tab shows the body without the tag prefix, detour and build steps.
@@ -89,3 +117,7 @@ while typing.
 | 8 | [501](../../../tasks/501-diagnostics-notifications-merge.md) | Released in v2.25.0 | Notifications inside Diagnostics |
 | 9 | [578](../../../tasks/578-tailscale-preset-template-for-each.md) | Spec, implementation started | Skip presets toggle |
 | 10 | [581](../../../tasks/581-tailscale-network-tab.md) | Implemented | Network tab of a Tailscale node |
+| 11 | [626](../../../tasks/626-unsaved-changes-everywhere.md) | Implemented | "Unsaved changes" dialog on leaving with an edited Tag or Source |
+| 12 | [636](../../../tasks/636-tls-settings-per-node-folder-subscription.md) | Implemented | TLS section between Detour and Skip presets |
+| 13 | [656](../../../tasks/656-contract-1130-tunnel-ingress.md) | In progress | Skip Tailscale presets only for Tailscale; Incoming connections from this tunnel |
+| 14 | [686](../../../tasks/686-folder-auto-node-source-tab.md) | In progress | Auto node of a folder: group form on Settings over the Source text; INI tab of a WireGuard / AmneziaWG node |

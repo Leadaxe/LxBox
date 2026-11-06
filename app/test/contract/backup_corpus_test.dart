@@ -248,6 +248,8 @@ class _State {
         lists: lists,
         directions: directions,
         chains: chains,
+        // §640 — правила сцены: файл без ключа `rules` их не трогает.
+        rules: rules,
         receiverTargets: sceneTargets,
         dns: LxDns(
           servers: dnsServers,

@@ -4,6 +4,10 @@ import 'package:flutter/services.dart';
 
 import '../services/platform_channels.dart';
 import '../services/selector_info.dart'; // §251 — fold «селектор (выбор)»
+import '../services/diagnostics/connection_test.dart';
+import 'cc_openconnect.dart';
+
+export 'cc_openconnect.dart';
 
 /// §122 Фаза 1a — Dart-клиент нативного libbox `CommandClient`-канала
 /// (`BoxCommandClient.kt`, Фаза 0). Замена `ClashApiClient` (HTTP-петли).
@@ -45,6 +49,15 @@ class CcChannel {
   static const EventChannel _tailscalePingChannel = EventChannel(
     PlatformChannels.ccTailscalePing,
   ); // §581
+  static const EventChannel _connectionTestChannel = EventChannel(
+    PlatformChannels.ccConnectionTest,
+  ); // §687
+  static const EventChannel _openConnectChannel = EventChannel(
+    PlatformChannels.ccOpenConnect,
+  ); // §654
+  static const EventChannel _taildropInboxChannel = EventChannel(
+    PlatformChannels.ccTaildropInbox,
+  ); // §707
 
   // ─────────────────────────── Streams ───────────────────────────
   //
@@ -126,6 +139,30 @@ class CcChannel {
 
   /// §581 — поток ответов [startTailscalePing]. Слушать до старта.
   Stream<CcTailscalePingResult> get tailscalePing => _tailscalePingStream;
+
+  // §707 — входящие Taildrop узла: снапшот на каждое изменение. Без кэша —
+  // новая подписка получает свежий снапшот от ядра.
+  late final Stream<CcTaildropInbox> _taildropInboxStream =
+      _taildropInboxChannel.receiveBroadcastStream().map(
+            (e) => CcTaildropInbox.fromMap(_asMap(e)),
+          );
+
+  /// §707 — поток входящих узла, поднятого [startTaildropInbox]. Слушать до
+  /// старта.
+  Stream<CcTaildropInbox> get taildropInbox => _taildropInboxStream;
+
+  // §687 — события теста соединения. Нативная сторона шлёт батчи (список
+  // карт), здесь они разворачиваются в одиночные события без кэша.
+  late final Stream<ConnectionTestEvent> _connectionTestStream =
+      _connectionTestChannel.receiveBroadcastStream().expand(
+            (e) => [
+              for (final m in e is List ? e : [e])
+                if (m is Map) ConnectionTestEvent.fromMap(_asMap(m)),
+            ],
+          );
+
+  /// §687 — поток событий [startConnectionTest]. Слушать до старта.
+  Stream<ConnectionTestEvent> get connectionTest => _connectionTestStream;
 
   /// §122 — shared-стрим с КЭШЕМ последнего снапшота.
   ///
@@ -238,6 +275,83 @@ class CcChannel {
   /// status/screen/profiler-стримы. Следующий urlTestOutbound поднимет свежий.
   Future<void> cancelPing() => _invoke('ccCancelPing');
 
+  // ─────────────────────── §654 C — OpenConnect ───────────────────────
+  // Подписку в ядре держит натив (старт VPN / reload по составу конфига);
+  // здесь — поток снапшотов, текущий снапшот и ответы на челлендж.
+
+  late final Stream<CcOpenConnectSnapshot> _openConnectStream =
+      _sharedStream<CcOpenConnectSnapshot>(
+        _openConnectChannel,
+        CcOpenConnectSnapshot.fromObject,
+      );
+
+  /// §654 C — состояние endpoint'ов openconnect и слушателя SSO.
+  Stream<CcOpenConnectSnapshot> get openConnectStatus => _openConnectStream;
+
+  /// §654 C — текущий снапшот (висящий челлендж при открытии приложения).
+  /// `null` — канала нет (VPN выключен, натив недоступен).
+  Future<CcOpenConnectSnapshot?> getOpenConnectStatus() async {
+    try {
+      final r = await _methods.invokeMethod<Object?>('ccGetOpenConnectStatus');
+      return r == null ? null : CcOpenConnectSnapshot.fromObject(r);
+    } on PlatformException {
+      return null;
+    } on MissingPluginException {
+      return null;
+    }
+  }
+
+  /// §654 C — тег узла из тапа по уведомлению «Sign-in required»; забирается
+  /// один раз.
+  Future<String?> takeOpenConnectOpenRequest() async {
+    try {
+      return await _methods.invokeMethod<String>('ccTakeOpenConnectOpenRequest');
+    } on PlatformException {
+      return null;
+    } on MissingPluginException {
+      return null;
+    }
+  }
+
+  /// §654 C — ответ формой: пары ключ → значение в порядке полей. `null` —
+  /// успех, иначе текст ошибки.
+  Future<String?> submitOpenConnectForm(
+    String tag,
+    String challengeId,
+    List<MapEntry<String, String>> values,
+  ) =>
+      _invokeError('ccSubmitOpenConnectForm', {
+        'tag': tag,
+        'challenge_id': challengeId,
+        'values': [
+          for (final v in values) {'key': v.key, 'value': v.value},
+        ],
+      });
+
+  /// §654 C — отмена челленджа: ядро логинится заново (новый код).
+  Future<String?> cancelOpenConnectChallenge(String tag, String challengeId) =>
+      _invokeError('ccCancelOpenConnectChallenge', {
+        'tag': tag,
+        'challenge_id': challengeId,
+      });
+
+  /// §654 C — слушатель SSO на `127.0.0.1:port`; URL редиректа натив сам
+  /// отдаёт ядру. `null` — слушает, иначе текст ошибки (порт занят).
+  Future<String?> startOpenConnectCallback(
+    String tag,
+    String challengeId,
+    int port,
+    List<String> prefixes,
+  ) =>
+      _invokeError('ccStartOpenConnectCallback', {
+        'tag': tag,
+        'challenge_id': challengeId,
+        'port': port,
+        'prefixes': prefixes,
+      });
+
+  Future<void> stopOpenConnectCallback() => _invoke('ccStopOpenConnectCallback');
+
   /// §579 — поднять / снять подписку ядра на состояние узлов Tailscale.
   Future<void> startTailscaleStatus() => _invoke('ccStartTailscaleStatus');
   Future<void> stopTailscaleStatus() => _invoke('ccStopTailscaleStatus');
@@ -269,9 +383,43 @@ class CcChannel {
         'stable_id': stableId,
       });
 
+  /// §645 — одиночный `GetTailscaleStatus(tag)` ядра: свежая запись
+  /// endpoint'а (путь до устройств — на момент вызова, у потока — на момент
+  /// последнего события). Тег не найден, endpoint не запущен, сервис не поднят
+  /// — [CcTailscaleStatusPoll.skip]; ядро или native без метода —
+  /// [CcTailscaleStatusPoll.notSupported].
+  Future<CcTailscaleStatusPoll> getTailscaleStatus(String tag) async {
+    try {
+      final r = await _methods.invokeMethod<Object?>('ccGetTailscaleStatus', {
+        'tag': tag,
+      });
+      if (r is! Map) return CcTailscaleStatusPoll.skip;
+      final m = _asMap(r);
+      if ('${m['tag'] ?? ''}'.isEmpty) m['tag'] = tag;
+      return CcTailscaleStatusPoll(status: CcTailscaleStatus.fromMap(m));
+    } on PlatformException catch (e) {
+      return e.code == 'unimplemented'
+          ? CcTailscaleStatusPoll.notSupported
+          : CcTailscaleStatusPoll.skip;
+    } on MissingPluginException {
+      return CcTailscaleStatusPoll.notSupported;
+    }
+  }
+
   /// §581 — выход узла из аккаунта. `null` — успех, иначе текст ошибки.
   Future<String?> tailscaleLogout(String tag) =>
       _invokeError('ccTailscaleLogout', {'tag': tag});
+
+  /// §706 (ядро SPEC 149, lx.30) — вход узла [tag] с новым auth-ключом без
+  /// перезапуска VPN. Успех — ядро приняло вызов; отказ ключа виден позже в
+  /// `backendState`/health. Отказ ядра — [PlatformException] с кодом
+  /// `failed_precondition` (сервис или узел не запущен, узел выключен, уже
+  /// вошёл) / `not_found` / `invalid_argument` / `unavailable` / `error`.
+  Future<void> tailscaleLogin(String tag, String authKey) =>
+      _methods.invokeMethod<void>('ccTailscaleLogin', {
+        'tag': tag,
+        'auth_key': authKey,
+      });
 
   /// §581 — проверка устройства: ответы идут в [tailscalePing].
   Future<void> startTailscalePing(String tag, String peerIp) async {
@@ -288,6 +436,196 @@ class CcChannel {
   }
 
   Future<void> stopTailscalePing() => _invoke('ccStopTailscalePing');
+
+  /// §707 — подписка на входящие Taildrop узла [tag] (одна на приложение).
+  Future<void> startTaildropInbox(String tag) async {
+    try {
+      await _methods.invokeMethod<void>('ccStartTaildropInbox', {'tag': tag});
+    } on PlatformException {
+      // сервис не поднят — снапшотов не будет
+    } on MissingPluginException {
+      // юнит-тест / native не готов
+    }
+  }
+
+  Future<void> stopTaildropInbox() => _invoke('ccStopTaildropInbox');
+
+  /// §707 — удалить принятый файл. `null` — успех, иначе текст ошибки.
+  Future<String?> taildropDelete(String tag, String name) =>
+      _invokeError('ccTaildropDelete', {'tag': tag, 'name': name});
+
+  /// §707 — прервать приём файла.
+  Future<String?> taildropCancelReceiving(
+    String tag,
+    String senderId,
+    String name,
+  ) =>
+      _invokeError('ccTaildropCancelReceiving', {
+        'tag': tag,
+        'sender_id': senderId,
+        'name': name,
+      });
+
+  /// §707 — входящие узла просмотрены (счётчик непрочитанных ядра).
+  Future<String?> taildropMarkRead(String tag) =>
+      _invokeError('ccTaildropMarkRead', {'tag': tag});
+
+  /// §707 — сохранить принятый файл: API 29+ — в Downloads, ниже —
+  /// системным «Сохранить как». Сохранённый уходит из входящих.
+  /// [downloadsOnly] (итер. 5, Debug API) — ниже API 29 отказ вместо
+  /// системного диалога.
+  Future<CcTaildropResult> taildropSave(String tag, String name,
+          {bool downloadsOnly = false}) =>
+      _taildropCall('ccTaildropSave', {
+        'tag': tag,
+        'name': name,
+        if (downloadsOnly) 'downloads_only': true,
+      });
+
+  /// §707 итер. 5 — отправка пиру из байтов ([bytes] с именем [name]) или
+  /// заметкой ([text], имя даёт натив) тем же нативным путём, что «Send
+  /// file…»; ждёт итога до [wait]. `status` — `sent`, `cancelled`,
+  /// `in_progress` (не уложилась в [wait], передача идёт) или `error`;
+  /// [CcTaildropResult.name] — имя отправленного файла.
+  Future<CcTaildropResult> taildropSendBytes(
+    String tag,
+    String peerId,
+    String peerName, {
+    String? name,
+    Uint8List? bytes,
+    String? text,
+    Duration wait = const Duration(seconds: 60),
+  }) =>
+      _taildropCall('ccTaildropSendBytes', {
+        'tag': tag,
+        'peer_id': peerId,
+        'peer_name': peerName,
+        'name': ?name,
+        'bytes': ?bytes,
+        'text': ?text,
+        'wait_ms': wait.inMilliseconds,
+      });
+
+  /// §707 итер. 5 — разовый снимок входящих узла [tag] (форма потока
+  /// [taildropInbox]) с `sha256` принятых файлов. `null` — VPN не поднят,
+  /// ядро не ответило или канала нет.
+  Future<CcTaildropInbox?> taildropInboxSnapshot(String tag) async {
+    try {
+      final r = await _methods
+          .invokeMethod<Object?>('ccTaildropInboxSnapshot', {'tag': tag});
+      if (r is! Map) return null;
+      return CcTaildropInbox.fromMap(_asMap(r));
+    } on PlatformException {
+      return null;
+    } on MissingPluginException {
+      return null;
+    }
+  }
+
+  /// §707 итер. 5 — счётчики разбора служебных файлов с начала процесса
+  /// (натив, только в памяти). `null` — канала нет.
+  Future<Map<String, dynamic>?> taildropServiceStats() async {
+    try {
+      final r = await _methods.invokeMethod<Object?>('taildropServiceStats');
+      return r is Map ? _asMap(r) : null;
+    } on PlatformException {
+      return null;
+    } on MissingPluginException {
+      return null;
+    }
+  }
+
+  /// §707 итер. 7 — служебный файл с командами [commands] (SERVICE_FILES
+  /// §2–§3) собирает натив — тот же сборщик, что окно «Send clipboard».
+  /// `null` — канала нет (тесты, не Android).
+  Future<CcServiceFile?> taildropBuildServiceFile(
+      List<Object?> commands) async {
+    try {
+      final r = await _methods.invokeMethod<Object?>(
+          'taildropBuildServiceFile', {'commands': commands});
+      return r is Map ? CcServiceFile.fromMap(_asMap(r)) : null;
+    } on PlatformException {
+      return null;
+    } on MissingPluginException {
+      return null;
+    }
+  }
+
+  /// §707 итер. 7 — окно «Send clipboard»: запомненный получатель
+  /// (`target`: `tag`, `peer_id`, `name`) и число сообщений лент (`feeds`).
+  /// `null` — канала нет.
+  Future<Map<String, dynamic>?> taildropClipState() async {
+    try {
+      final r = await _methods.invokeMethod<Object?>('taildropClipState');
+      return r is Map ? _asMap(r) : null;
+    } on PlatformException {
+      return null;
+    } on MissingPluginException {
+      return null;
+    }
+  }
+
+  /// §707 — системный выбор файлов и отправка выбранного пиру.
+  Future<CcTaildropResult> taildropPickAndSend(
+    String tag,
+    String peerId,
+    String peerName,
+  ) =>
+      _taildropCall('ccTaildropPickAndSend', {
+        'tag': tag,
+        'peer_id': peerId,
+        'peer_name': peerName,
+      });
+
+  Future<CcTaildropResult> _taildropCall(
+    String method,
+    Map<String, Object> args,
+  ) async {
+    try {
+      final r = await _methods.invokeMethod<Object?>(method, args);
+      return CcTaildropResult.fromMap(_asMap(r));
+    } on PlatformException catch (e) {
+      return CcTaildropResult(status: 'error', error: e.message ?? e.code);
+    } on MissingPluginException {
+      return const CcTaildropResult(status: 'error', error: 'not available');
+    }
+  }
+
+  /// §707 — тег узла из тапа по уведомлению Taildrop; забирается один раз.
+  Future<String?> takeTaildropOpenRequest() async {
+    try {
+      return await _methods.invokeMethod<String>('ccTakeTaildropOpenRequest');
+    } on PlatformException {
+      return null;
+    } on MissingPluginException {
+      return null;
+    }
+  }
+
+  /// §687 — тест соединения через роутер (kernel SPEC 139). События идут в
+  /// [connectionTest]. false — сервис не поднят, событий не будет.
+  Future<bool> startConnectionTest({
+    required String link,
+    String packageName = '',
+    ConnectionTestDepth depth = ConnectionTestDepth.http,
+    bool fresh = false,
+  }) async {
+    try {
+      final ok = await _methods.invokeMethod<bool>('ccStartConnectionTest', {
+        'link': link,
+        'package_name': packageName,
+        'depth': depth.wire,
+        'fresh': fresh,
+      });
+      return ok == true;
+    } on PlatformException {
+      return false;
+    } on MissingPluginException {
+      return false;
+    }
+  }
+
+  Future<void> stopConnectionTest() => _invoke('ccStopConnectionTest');
 
   Future<String?> _invokeError(String method, Map<String, Object> args) async {
     try {
@@ -345,47 +683,70 @@ class CcChannel {
 
   // ─── §236 — headless probe-сессия (Test servers при выключенном VPN) ───
 
-  /// Стартует probe-инстанс ядра (конфиг БЕЗ tun). Возвращает '' при успехе,
-  /// текст ошибки иначе (в т.ч. «VPN is running…» — тогда caller уходит на
-  /// ветку [urlTestOutbound] через боевое ядро).
-  Future<String> probeStart(String config) async {
-    final r = await _methods.invokeMethod<String>('probeStart', {
+  /// Стартует probe-инстанс ядра (конфиг БЕЗ tun). [CcProbeStart.error] — ''
+  /// при успехе, текст ошибки иначе (в т.ч. «VPN is running…» — тогда caller
+  /// уходит на ветку [urlTestOutbound] через боевое ядро).
+  ///
+  /// §669 — [CcProbeStart.runId] — владелец сессии: остальные probe-вызовы
+  /// несут его, а с чужим/устаревшим id ничего не делают ([kProbeStaleRun]).
+  /// Новый старт поверх живой сессии её закрывает — старый прогон уже не
+  /// может закрыть новую.
+  Future<CcProbeStart> probeStart(String config) async {
+    final r = await _methods.invokeMethod<Map<dynamic, dynamic>>('probeStart', {
       'config': config,
     });
-    return r ?? '';
+    return CcProbeStart.fromMap(_asMap(r ?? const {}));
   }
 
   /// Тест одной ноды в probe-сессии. Семантика результата как у
   /// [urlTestOutbound] (Variant B: провал — только в `error`).
   Future<CcDelayResult> probeUrlTest(
     String tag, {
+    required int runId,
     String link = '',
     int timeoutMs = 0,
   }) async {
     final r = await _methods.invokeMethod<Map<dynamic, dynamic>>(
       'probeUrlTest',
-      {'tag': tag, 'link': link, 'timeoutMs': timeoutMs},
+      {'runId': runId, 'tag': tag, 'link': link, 'timeoutMs': timeoutMs},
     );
     return CcDelayResult.fromMap(_asMap(r ?? const {}));
   }
+
+  /// §669 — обрыв начатых замеров прогона [runId] (как [cancelPing] §175:
+  /// disconnect клиента сессии → ядро отменяет контексты dial'ов). Сессия
+  /// остаётся до [probeStop]. Чужой id — no-op.
+  Future<void> probeCancel(int runId) =>
+      _methods.invokeMethod<void>('probeCancel', {'runId': runId});
 
   /// §392 — диагностический GET через узел в probe-сессии (VPN выключен).
   /// Семантика результата — см. [getUrlViaOutbound].
   Future<CcGetUrlResult> probeGetUrl(
     String tag, {
+    required int runId,
     required String link,
     int timeoutMs = 0,
     int maxBytes = 0,
+    String userAgent = '',
   }) async {
     final r = await _methods.invokeMethod<Map<dynamic, dynamic>>(
       'probeGetUrl',
-      {'tag': tag, 'link': link, 'timeoutMs': timeoutMs, 'maxBytes': maxBytes},
+      {
+        'runId': runId,
+        'tag': tag,
+        'link': link,
+        'timeoutMs': timeoutMs,
+        'maxBytes': maxBytes,
+        'userAgent': userAgent,
+      },
     );
     return CcGetUrlResult.fromMap(_asMap(r ?? const {}));
   }
 
-  /// Гасит probe-сессию (идемпотентно).
-  Future<void> probeStop() => _methods.invokeMethod<void>('probeStop');
+  /// Гасит probe-сессию прогона [runId] (идемпотентно; чужой/устаревший id —
+  /// no-op, §669). Kotlin закрывает сервер под потолком 3 с.
+  Future<void> probeStop(int runId) =>
+      _methods.invokeMethod<void>('probeStop', {'runId': runId});
 
   /// §392 — диагностический HTTP GET через узел боевого ядра, адресуемый тегом
   /// (kernel SPEC 058). В отличие от [urlTestOutbound] возвращает ТЕЛО ответа:
@@ -395,15 +756,24 @@ class CcChannel {
   /// `maxBytes` 0 → дефолт ядра 256 KiB (потолок 1 MiB); `timeoutMs` 0 →
   /// ограничен только вызовом. Реальный трафик через узел — зовётся ТОЛЬКО по
   /// явному действию юзера, фоновые обходы списка запрещены (kernel SPEC 058 §5).
+  ///
+  /// §659 — `userAgent` пустой → заголовков нет, ядро шлёт `Go-http-client`.
   Future<CcGetUrlResult> getUrlViaOutbound(
     String tag, {
     required String link,
     int timeoutMs = 0,
     int maxBytes = 0,
+    String userAgent = '',
   }) async {
     final r = await _methods.invokeMethod<Map<dynamic, dynamic>>(
       'ccGetUrlViaOutbound',
-      {'tag': tag, 'link': link, 'timeoutMs': timeoutMs, 'maxBytes': maxBytes},
+      {
+        'tag': tag,
+        'link': link,
+        'timeoutMs': timeoutMs,
+        'maxBytes': maxBytes,
+        'userAgent': userAgent,
+      },
     );
     return CcGetUrlResult.fromMap(_asMap(r ?? const {}));
   }
@@ -570,6 +940,8 @@ class CcTailscaleStatus {
     this.exitNode,
     this.userGroups = const [],
     this.health = const [],
+    this.canShareFiles = true,
+    this.unreadFileCount = 0,
   });
 
   final String tag;
@@ -592,6 +964,13 @@ class CcTailscaleStatus {
   /// §613 (ядро SPEC 115) — предупреждения бэкенда (нет DERP, exit node
   /// офлайн и т.п.), текст ядра; пусто — предупреждать не о чем.
   final List<String> health;
+
+  /// §707 — у узла есть право Taildrop (file sharing включён в админке
+  /// tailnet). Нет поля в записи — считается, что есть.
+  final bool canShareFiles;
+
+  /// §707 — принятые, но не просмотренные файлы.
+  final int unreadFileCount;
 
   /// Все устройства сети без своего узла.
   List<CcTailscalePeer> get peers => [
@@ -620,6 +999,8 @@ class CcTailscaleStatus {
         for (final h in CcChannel._asList(m['health']))
           if (h != null && '$h'.isNotEmpty) '$h',
       ],
+      canShareFiles: m['can_share_files'] != false,
+      unreadFileCount: CcTailscalePeer._int(m['unread_file_count']),
     );
   }
 
@@ -630,6 +1011,20 @@ class CcTailscaleStatus {
           if (m is Map)
             CcTailscaleStatus.fromMap(CcChannel._asMap(m)),
       ].where((s) => s.tag.isNotEmpty).toList();
+}
+
+/// §645 — ответ [CcChannel.getTailscaleStatus]: запись endpoint'а; без неё —
+/// пропуск тика ([skip]) или метод не поддержан ([notSupported]).
+class CcTailscaleStatusPoll {
+  const CcTailscaleStatusPoll({this.status, this.unsupported = false});
+
+  final CcTailscaleStatus? status;
+
+  /// Ядро или native без `GetTailscaleStatus`: опрашивать дальше незачем.
+  final bool unsupported;
+
+  static const skip = CcTailscaleStatusPoll();
+  static const notSupported = CcTailscaleStatusPoll(unsupported: true);
 }
 
 /// §581 — устройство сети Tailscale (`TailscalePeer` ядра). Времена —
@@ -653,6 +1048,7 @@ class CcTailscalePeer {
     this.peerRelay = '',
     this.derpRegionCode = '',
     this.lastHandshake = 0,
+    this.canReceiveFiles = false,
   });
 
   final String stableId;
@@ -688,6 +1084,13 @@ class CcTailscalePeer {
   /// Unix-секунды последнего хендшейка, 0 — не было.
   final int lastHandshake;
 
+  /// §707 — устройство принимает файлы Taildrop (своё и с правом).
+  final bool canReceiveFiles;
+
+  /// §707 — цель отправки файлов: в сети, принимает файлы, не расшарено
+  /// извне (то же правило у экрана «Поделиться»).
+  bool get isTaildropTarget => online && canReceiveFiles && !shareeNode;
+
   /// MagicDNS-имя без точки в конце.
   String get dnsNameClean =>
       dnsName.endsWith('.') ? dnsName.substring(0, dnsName.length - 1) : dnsName;
@@ -713,22 +1116,177 @@ class CcTailscalePeer {
           for (final ip in CcChannel._asList(m['ips']))
             if (ip != null && '$ip'.isNotEmpty) '$ip',
         ],
-        path: '${m['path'] ?? ''}',
+        path: '${m['path'] ?? ''}'.toLowerCase(),
         endpoint: '${m['endpoint'] ?? ''}',
         peerRelay: '${m['peer_relay'] ?? ''}',
         derpRegionCode: '${m['derp_region_code'] ?? ''}',
         lastHandshake: _int(m['last_handshake']),
+        canReceiveFiles: m['can_receive_files'] == true,
       );
 }
 
-/// §613 (ядро SPEC 115) — значения `TailscalePeer.path`. Строки ядра.
+/// §707 — входящие Taildrop узла (`TaildropInbox` ядра).
+class CcTaildropInbox {
+  const CcTaildropInbox({
+    required this.tag,
+    this.files = const [],
+    this.receiving = const [],
+  });
+
+  final String tag;
+
+  /// Принятые файлы.
+  final List<CcTaildropFile> files;
+
+  /// Файлы, которые принимаются сейчас.
+  final List<CcTaildropReceiving> receiving;
+
+  bool get isEmpty => files.isEmpty && receiving.isEmpty;
+
+  factory CcTaildropInbox.fromMap(Map<String, dynamic> m) => CcTaildropInbox(
+        tag: '${m['tag'] ?? ''}',
+        files: [
+          for (final f in CcChannel._asList(m['files']))
+            if (f is Map) CcTaildropFile.fromMap(CcChannel._asMap(f)),
+        ],
+        receiving: [
+          for (final f in CcChannel._asList(m['receiving']))
+            if (f is Map) CcTaildropReceiving.fromMap(CcChannel._asMap(f)),
+        ],
+      );
+}
+
+/// §707 — принятый файл. [modifiedAt] — Unix-секунды ядра.
+class CcTaildropFile {
+  const CcTaildropFile({
+    required this.name,
+    this.size = 0,
+    this.senderId = '',
+    this.senderName = '',
+    this.modifiedAt = 0,
+    this.sha256 = '',
+  });
+
+  final String name;
+  final int size;
+
+  /// Stable ID отправителя (ядро lx.30-rc.2+, пусто после перезапуска ядра).
+  final String senderId;
+  final String senderName;
+  final int modifiedAt;
+
+  /// §707 итер. 5 — sha256 файла на диске, только у
+  /// [CcChannel.taildropInboxSnapshot]; пусто — не считался.
+  final String sha256;
+
+  factory CcTaildropFile.fromMap(Map<String, dynamic> m) => CcTaildropFile(
+        name: '${m['name'] ?? ''}',
+        size: CcTailscalePeer._int(m['size']),
+        senderId: '${m['sender_id'] ?? ''}',
+        senderName: '${m['sender_name'] ?? ''}',
+        modifiedAt: CcTailscalePeer._int(m['modified_at']),
+        sha256: '${m['sha256'] ?? ''}',
+      );
+}
+
+/// §707 — файл в приёме. [size] ≤ 0 — размер неизвестен.
+class CcTaildropReceiving {
+  const CcTaildropReceiving({
+    required this.name,
+    this.size = 0,
+    this.receivedBytes = 0,
+    this.senderId = '',
+    this.senderName = '',
+  });
+
+  final String name;
+  final int size;
+  final int receivedBytes;
+  final String senderId;
+  final String senderName;
+
+  /// Доля принятого 0…1; `null` — размер неизвестен.
+  double? get progress =>
+      size > 0 ? (receivedBytes / size).clamp(0.0, 1.0).toDouble() : null;
+
+  factory CcTaildropReceiving.fromMap(Map<String, dynamic> m) =>
+      CcTaildropReceiving(
+        name: '${m['name'] ?? ''}',
+        size: CcTailscalePeer._int(m['size']),
+        receivedBytes: CcTailscalePeer._int(m['received_bytes']),
+        senderId: '${m['sender_id'] ?? ''}',
+        senderName: '${m['sender_name'] ?? ''}',
+      );
+}
+
+/// §707 — ответ сохранения / выбора файлов: `status` — `saved`, `started`,
+/// `cancelled` или `error`; [where] у сохранения — `downloads` | `document`.
+class CcTaildropResult {
+  const CcTaildropResult({
+    required this.status,
+    this.where = '',
+    this.error = '',
+    this.name = '',
+  });
+
+  final String status;
+  final String where;
+  final String error;
+
+  /// §707 итер. 5 — имя файла: у сохранения в Downloads — имя записи
+  /// (занятое получает суффикс), у отправки из байтов — отправленное.
+  final String name;
+
+  factory CcTaildropResult.fromMap(Map<String, dynamic> m) => CcTaildropResult(
+        status: '${m['status'] ?? 'error'}',
+        where: '${m['where'] ?? ''}',
+        error: '${m['error'] ?? ''}',
+        name: '${m['name'] ?? ''}',
+      );
+}
+
+/// §707 итер. 7 — служебный файл от натива: [name] и [bytes], либо
+/// [error] (`too_large` — тело [size] байт больше [maxBytes]).
+class CcServiceFile {
+  const CcServiceFile({
+    this.name = '',
+    this.bytes,
+    this.error = '',
+    this.size = 0,
+    this.maxBytes = 0,
+  });
+
+  final String name;
+  final Uint8List? bytes;
+  final String error;
+  final int size;
+  final int maxBytes;
+
+  factory CcServiceFile.fromMap(Map<String, dynamic> m) {
+    final b = m['bytes'];
+    int n(Object? v) => v is int ? v : 0;
+    return CcServiceFile(
+      name: '${m['name'] ?? ''}',
+      bytes: b is Uint8List
+          ? b
+          : (b is List ? Uint8List.fromList(b.cast<int>()) : null),
+      error: '${m['error'] ?? ''}',
+      size: n(m['size']),
+      maxBytes: n(m['max_bytes']),
+    );
+  }
+}
+
+/// §613 (ядро SPEC 115) — значения `TailscalePeer.path`. Строки ядра
+/// (`command_types_tailscale.go`): строчные, «никогда не слал» — пустая
+/// строка; разбор приводит к нижнему регистру (§645).
 abstract final class CcTailscalePath {
-  static const direct = 'DIRECT';
-  static const peerRelay = 'PEER_RELAY';
-  static const derp = 'DERP';
+  static const direct = 'direct';
+  static const peerRelay = 'peer_relay';
+  static const derp = 'derp';
 
   /// Узел ни разу не слал устройству.
-  static const none = 'NONE';
+  static const none = '';
 }
 
 /// §581 — владелец устройств сети (`TailscaleUserGroup` ядра).
@@ -798,6 +1356,7 @@ class CcStatus {
     this.uplinkTotal = 0,
     this.downlinkTotal = 0,
     this.memory = 0,
+    this.memoryRuntime = 0,
     this.goroutines = 0,
     this.connectionsIn = 0,
     this.connectionsOut = 0,
@@ -808,6 +1367,11 @@ class CcStatus {
   final int uplinkTotal;
   final int downlinkTotal;
   final int memory;
+
+  /// §705 (ядро lx.29, SPEC 148) — память Go-рантайма ядра в байтах: то, с
+  /// чем ядро сравнивает порог Memory limit. [memory] — RSS всего процесса.
+  /// 0 — старое ядро без поля.
+  final int memoryRuntime;
   final int goroutines;
   final int connectionsIn;
   final int connectionsOut;
@@ -822,6 +1386,7 @@ class CcStatus {
     uplinkTotal: _int(m['uplinkTotal']),
     downlinkTotal: _int(m['downlinkTotal']),
     memory: _int(m['memory']),
+    memoryRuntime: _int(m['memoryRuntime']),
     goroutines: _int(m['goroutines']),
     connectionsIn: _int(m['connectionsIn']),
     connectionsOut: _int(m['connectionsOut']),
@@ -945,8 +1510,10 @@ class CcWireGuardStatus {
 }
 
 /// §613 — пир WG/AWG-узла (`PeerStatus` ядра). `lastHandshakeUnix` —
-/// Unix-секунды, 0 — хендшейка не было; счётчики — накопленные байты
-/// устройства, обнуляются при пересборке.
+/// Unix-секунды, 0 — в текущей сессии хендшейка не было; `rx`/`tx` —
+/// накопленные байты устройства, обнуляются при пересборке; `session*` — с
+/// начала сессии (ядро SPEC 145, lx.27): обнуляются ещё и при включении или
+/// пробуждении узла.
 class CcWireGuardPeer {
   const CcWireGuardPeer({
     required this.publicKey,
@@ -954,6 +1521,8 @@ class CcWireGuardPeer {
     this.lastHandshakeUnix = 0,
     this.rxBytes = 0,
     this.txBytes = 0,
+    this.sessionRxBytes = 0,
+    this.sessionTxBytes = 0,
   });
 
   final String publicKey;
@@ -961,6 +1530,8 @@ class CcWireGuardPeer {
   final int lastHandshakeUnix;
   final int rxBytes;
   final int txBytes;
+  final int sessionRxBytes;
+  final int sessionTxBytes;
 
   /// Ключ сокращённо, как в логе ядра: символы 0–3 и 39–42 base64.
   String get shortKey => publicKey.length < 43
@@ -973,6 +1544,8 @@ class CcWireGuardPeer {
         lastHandshakeUnix: CcTailscalePeer._int(m['last_handshake_unix']),
         rxBytes: CcTailscalePeer._int(m['rx_bytes']),
         txBytes: CcTailscalePeer._int(m['tx_bytes']),
+        sessionRxBytes: CcTailscalePeer._int(m['session_rx_bytes']),
+        sessionTxBytes: CcTailscalePeer._int(m['session_tx_bytes']),
       );
 }
 
@@ -1020,6 +1593,9 @@ class CcConnection {
     required this.network,
     required this.domain,
     required this.destination,
+    this.source = '',
+    this.inbound = '',
+    this.inboundType = '',
     required this.rule,
     required this.uplink,
     required this.downlink,
@@ -1041,6 +1617,21 @@ class CcConnection {
   final String domain;
   final String destination;
   final String rule;
+
+  /// §661 — источник `ip:port` и вход (тег/тип inbound). При эндпоинтах и
+  /// локальных прокси мы шлюз: соединение приходит не только из `tun-in`.
+  /// Пусто на старом нативе.
+  final String source;
+  final String inbound;
+  final String inboundType;
+
+  /// §661 — стандартный вход: TUN устройства (или натив не отдал inbound).
+  bool get isStandardInbound => inbound.isEmpty || inbound == 'tun-in';
+
+  /// §661 — `source / inbound` для нестандартного входа, иначе `''`.
+  String get sourceLabel => isStandardInbound
+      ? ''
+      : (source.isNotEmpty ? '$source / $inbound' : inbound);
 
   /// Накопленный итог за соединение (всего передано). `getUplinkTotal`.
   final int uplink;
@@ -1092,7 +1683,13 @@ class CcConnection {
   /// [ruleLabel] — резолвленное человекочитаемое имя правила (UI-слой
   /// `RuleNameResolver`); если передано — используется вместо сырого `rule`
   /// (модель vpn не знает про резолвер). Пусто → берётся `rule` или `final`.
-  String routingLineOf({bool compact = false, String? ruleLabel}) {
+  /// [labels] — `tag Направления → label` от UI (модель storage не знает):
+  /// Направления подписаны `label (tag)` ([directionTagDisplay]).
+  String routingLineOf({
+    bool compact = false,
+    String? ruleLabel,
+    Map<String, String> labels = const {},
+  }) {
     final sb = StringBuffer();
     // Ось решения (⇒): [net] rule → селекторы (сверху вниз = chains[1:].reversed).
     final inner = <String>[];
@@ -1102,21 +1699,28 @@ class CcConnection {
     inner.add(
       !compact && network.isNotEmpty ? '[$network] $ruleText' : ruleText,
     );
-    if (chains.length > 1) inner.addAll(chains.sublist(1).reversed);
+    if (chains.length > 1) {
+      inner.addAll(chains
+          .sublist(1)
+          .reversed
+          .map((t) => directionTagDisplay(t, labels)));
+    }
     sb.write(inner.join(' ⇒ '));
     // §252 — физический путь (→ по ходу пакета): транспорт изнутри наружу
     // (detour-ось развёрнута: вход первым) → выход ОДНИМ элементом
     // `селектор (…вложенно… (node))` (свёртка ПО СТРУКТУРЕ chains
     // `[node, …selectors]`, не через SelectorInfo; пустые chains —
     // outbound-fallback) → назначение.
-    final phys = <String>[...foldSelectorPairs(detours).reversed];
+    final phys = <String>[
+      ...foldSelectorPairs(detours, labels: labels).reversed,
+    ];
     final exitChain = chains.isNotEmpty
         ? chains
         : (outbound.isNotEmpty ? [outbound] : null);
     if (exitChain != null) {
-      var exit = exitChain.first;
+      var exit = directionTagDisplay(exitChain.first, labels);
       for (final sel in exitChain.skip(1)) {
-        exit = '$sel ($exit)';
+        exit = '${directionTagDisplay(sel, labels)} ($exit)';
       }
       phys.add(exit);
     }
@@ -1143,6 +1747,9 @@ class CcConnection {
     network: m['network']?.toString() ?? '',
     domain: m['domain']?.toString() ?? '',
     destination: m['destination']?.toString() ?? '',
+    source: m['source']?.toString() ?? '',
+    inbound: m['inbound']?.toString() ?? '',
+    inboundType: m['inboundType']?.toString() ?? '',
     rule: m['rule']?.toString() ?? '',
     uplink: _int(m['uplink']),
     downlink: _int(m['downlink']),
@@ -1377,6 +1984,27 @@ class CcDelayResult {
   factory CcDelayResult.fromMap(Map<String, dynamic> m) => CcDelayResult(
     delay: _int(m['delay']),
     error: m['error']?.toString() ?? '',
+  );
+}
+
+/// §669 — ответ probe-сессии на вызов с чужим/устаревшим runId: прогон вытеснен
+/// новым (`ProbeSession.STALE_RUN` на Kotlin-стороне, сверка дословная).
+const kProbeStaleRun = 'stale run';
+
+/// §669 — результат `probeStart`: [error] '' при успехе, иначе текст ошибки;
+/// [runId] — владелец поднятой сессии (0 при ошибке). Его несут
+/// `probeUrlTest`/`probeGetUrl`/`probeCancel`/`probeStop`.
+class CcProbeStart {
+  const CcProbeStart({required this.error, required this.runId});
+
+  final String error;
+  final int runId;
+
+  bool get ok => error.isEmpty;
+
+  factory CcProbeStart.fromMap(Map<String, dynamic> m) => CcProbeStart(
+    error: m['error']?.toString() ?? '',
+    runId: _int(m['runId']),
   );
 }
 

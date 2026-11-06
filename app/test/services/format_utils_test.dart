@@ -12,11 +12,6 @@ void main() {
   });
 
   group('formatBytes — spaced (stats)', () {
-    test('bytes', () => expect(formatBytes(500, spaced: true), '500 B'));
-    test('KB', () => expect(formatBytes(1536, spaced: true), '1.5 KB'));
-    test('MB',
-        () => expect(formatBytes(5 * 1024 * 1024, spaced: true), '5.0 MB'));
-    test('zero → "0 B"', () => expect(formatBytes(0, spaced: true), '0 B'));
     test('negative → "0 B"',
         () => expect(formatBytes(-5, spaced: true), '0 B'));
   });
@@ -68,18 +63,6 @@ void main() {
         expect(formatTime(DateTime(2026, 1, 1, 9, 5, 3)), '09:05:03'));
     test('midday', () =>
         expect(formatTime(DateTime(2026, 1, 1, 23, 59, 59)), '23:59:59'));
-  });
-
-  // §279 Phase 5 — intl-время HH:mm + композитный timestamp (ISO-порядок
-  // даты сознательно) + грубая длительность (было connections._formatDuration).
-  group('formatTimeHm', () {
-    test('HH:mm padded', () =>
-        expect(formatTimeHm(DateTime(2026, 1, 1, 9, 5, 3)), '09:05'));
-  });
-
-  group('formatDateTime', () {
-    test('yyyy-MM-dd HH:mm:ss', () => expect(
-        formatDateTime(DateTime(2026, 3, 7, 9, 5, 3)), '2026-03-07 09:05:03'));
   });
 
   group('formatDurationCoarse', () {

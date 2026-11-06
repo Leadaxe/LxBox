@@ -361,7 +361,9 @@ void main() {
       expect(byTag.containsKey('google_dot'), isFalse);
       expect(byTag['google_udp']!.containsKey('detour'), isFalse,
           reason: 'direct-out снимается, как раньше');
-      expect(byTag['dns-group']!['servers'], ['google_udp']);
+      // §695 правило 5 — выключенный член `off-dns` под ссылкой группы
+      // включается нормализацией при загрузке списка и остаётся в группе.
+      expect(byTag['dns-group']!['servers'], ['google_udp', 'off-dns']);
       expect(byTag['dns_shield']!['servers'], isNot(contains('google_dot')));
 
       final rules = (dns['rules'] as List).cast<Map<String, dynamic>>();
@@ -382,7 +384,9 @@ void main() {
           reason: 'final был на выпавшем my-doh: ключ снят');
       expect(rules.last, {'action': 'reject'},
           reason: 'заглушка reject последним DNS-правилом');
-      expect((config['route'] as Map)['default_domain_resolver'], 'dns_shield');
+      // §643 — резолвер из шаблона в объектной форме; лечение меняет только `server`.
+      expect((config['route'] as Map)['default_domain_resolver'],
+          {'server': 'dns_shield', 'disable_optimistic_cache': true});
 
       expect(build.warnings,
           contains('DNS server "my-doh" dropped: its detour "vpn-ghost" is not in the config.'));
@@ -426,8 +430,8 @@ void main() {
       final dot = (await SettingsStorage.getDnsServers())
           .whereType<DnsServerTemplate>()
           .firstWhere((s) => s.tag == 'google_dot');
-      expect(dot.varValues, isEmpty,
-          reason: 'vpn-1 — умолчание шаблона: ключ снят (Н4)');
+      // §684: умолчание google_dot — direct-out, поэтому vpn-1 хранится явно.
+      expect(dot.varValues, {'outbound': 'vpn-1'});
       expect(DirectionMutations.healMessageParts(healed),
           contains('1 DNS server(s) switched to vpn-1'));
 

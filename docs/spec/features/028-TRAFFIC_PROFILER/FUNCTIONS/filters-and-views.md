@@ -78,9 +78,9 @@ snackbar.
 
 ## Boundaries
 
-- Export uploads the whole log, not the filtered list, although the
-  serialiser is meant for the filtered one
-  ([591](../../../tasks/591-spec-kit-revision-audit.md)).
+- Export hands over the whole log regardless of the active filter; the share
+  caption names the number of events in the file. Kept as is (audit
+  [591](../../../tasks/591-spec-kit-revision-audit.md), 2026-10-13).
 - Rules are not created from the log (no "Add to ru-direct", "Block this
   domain").
 - There is no comparison of two recordings and no per-domain latency.

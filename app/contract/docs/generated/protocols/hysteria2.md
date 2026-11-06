@@ -6,7 +6,7 @@
 
 `hysteria2` — an outbound, sing-box type `hysteria2`. Also written as `hy2`. Accepted from: share link, sing-box JSON, Xray JSON.
 
-<sub>Schema checked against core `1.14.2-lx.11` · the link fragment (`#…`) is the node `label`</sub>
+<sub>Schema checked against core `1.14.3-lx.17` · the link fragment (`#…`) is the node `label`</sub>
 
 | Field | Value |
 |---|---|
@@ -15,7 +15,7 @@
 | `kind` | `outbound` |
 | `aliases` | `hy2` |
 | `sources` | `uri`, `singbox`, `xray` |
-| Core the schema was checked against | `1.14.2-lx.11` |
+| Core the schema was checked against | `1.14.3-lx.17` |
 | URI fragment | `label` |
 
 ## How to read this page
@@ -130,27 +130,33 @@ The node body itself — the sing-box JSON kept in the launcher state. The path 
   - Required: the node is dropped without it
   - Set by link parameter: [`host`](#link-common-host)
   - If invalid: node dropped → [`field_missing`](../warnings.md#field_missing)
+  - Form: block `connection`, required
 - <a id="body-server-port"></a>**`server_port`** — Server port.
   - Type: uint16, format `port`, `1–65535`
   - Required: the node is dropped without it
   - Set by link parameter: [`port`](#link-common-port)
   - If invalid: node dropped → [`port_invalid`](../warnings.md#port_invalid)
+  - Form: block `connection`, required
 - <a id="body-server-ports"></a>**`server_ports`** — Port ranges used for port hopping.
   - Type: listable_string
   - Set by link parameter: [`mport`](#link-proto-mport)
   - Conflicts with: `realm`
+  - Form: block `advanced`
 - <a id="body-hop-interval"></a>**`hop_interval`** — Interval between port hops.
   - Type: duration
+  - Form: block `advanced`
 - <a id="body-hop-interval-max"></a>**`hop_interval_max`** — Upper bound of the randomized hop interval.
   - Type: duration
 - <a id="body-up-mbps"></a>**`up_mbps`** — Upload bandwidth in Mbps.
   - Type: int, `0–…`
   - Set by link parameter: [`upmbps`](#link-proto-upmbps)
   - If invalid: removed → [`type_invalid`](../warnings.md#type_invalid)
+  - Form: block `advanced`
 - <a id="body-down-mbps"></a>**`down_mbps`** — Download bandwidth in Mbps.
   - Type: int, `0–…`
   - Set by link parameter: [`downmbps`](#link-proto-downmbps)
   - If invalid: removed → [`type_invalid`](../warnings.md#type_invalid)
+  - Form: block `advanced`
 - <a id="body-obfs"></a>**`obfs`** — Obfuscation settings.
   - Type: object
 - <a id="body-obfs-type"></a>**`obfs.type`** — Obfuscation algorithm.
@@ -158,10 +164,12 @@ The node body itself — the sing-box JSON kept in the launcher state. The path 
   - Required: the node is dropped without it
   - Set by link parameter: [`obfs`](#link-proto-obfs)
   - If invalid: removed → [`obfs_unknown`](../warnings.md#obfs_unknown)
+  - Form: block `obfs`
 - <a id="body-obfs-password"></a>**`obfs.password`** — Obfuscation password.
   - Type: string, secret
   - Required: the node is dropped without it
   - Set by link parameter: [`obfs-password`](#link-proto-obfs-password)
+  - Form: block `obfs`, required, shown when any of `obfs.type` is set
 - <a id="body-obfs-min-packet-size"></a>**`obfs.min_packet_size`** — Minimum packet size, gecko only.
   - Type: int, `0–…`
   - Set by link parameter: [`obfs-min-packet-size`](#link-proto-obfs-min-packet-size)
@@ -175,14 +183,17 @@ The node body itself — the sing-box JSON kept in the launcher state. The path 
 - <a id="body-password"></a>**`password`** — Account password.
   - Type: string, secret, role `credential`
   - Set by link parameter: [`userinfo`](#link-common-userinfo)
+  - Form: block `connection`
 - <a id="body-network"></a>**`network`** — Networks this outbound handles.
   - Type: listable_string, `tcp`, `udp`, normalized: `trim_lower`
   - If invalid: removed → [`type_invalid`](../warnings.md#type_invalid)
 - <a id="body-tls"></a>**`tls`** — TLS settings.
   - Shared sub-schema, expanded below · reference page: [_tls](_tls.md)
+  - Form: block `tls`
 - <a id="body-tls-enabled"></a>**`tls.enabled`** — Enable TLS for this outbound.
   - Type: bool
   - Default: `false`
+  - Form: block of the connecting `ref` field, or drawn by a choice group
 - <a id="body-tls-engine"></a>**`tls.engine`** — TLS implementation used for the handshake.
   - Type: enum, `""`, `go`, `apple`, `windows`, normalized: `trim_lower`
   - Default: `go`
@@ -195,14 +206,17 @@ The node body itself — the sing-box JSON kept in the launcher state. The path 
   - Type: string, format `host`
   - Set by link parameter: [`sni`](#link-proto-sni)
   - If invalid: removed → [`type_invalid`](../warnings.md#type_invalid)
+  - Form: block of the connecting `ref` field, or drawn by a choice group, shown when `tls.enabled` is `true`
 - <a id="body-tls-insecure"></a>**`tls.insecure`** — Skip server certificate verification.
   - Type: bool
   - Default: `false`
   - Set by link parameter: [`insecure`](#link-proto-insecure)
   - Accepted with a notice for `true` → [`tls_insecure`](../warnings.md#tls_insecure)
+  - Form: block of the connecting `ref` field, or drawn by a choice group, shown when `tls.enabled` is `true`
 - <a id="body-tls-alpn"></a>**`tls.alpn`** — ALPN protocols offered in the handshake.
   - Type: listable_string, normalized: `trim`
   - Set by link parameter: [`alpn`](#link-proto-alpn)
+  - Form: block of the connecting `ref` field, or drawn by a choice group, shown when `tls.enabled` is `true`
 - <a id="body-tls-min-version"></a>**`tls.min_version`** — Minimum accepted TLS version.
   - Type: enum, `1.0`, `1.1`, `1.2`, `1.3`
   - If invalid: removed → [`type_invalid`](../warnings.md#type_invalid)
@@ -237,14 +251,17 @@ The node body itself — the sing-box JSON kept in the launcher state. The path 
 - <a id="body-tls-fragment"></a>**`tls.fragment`** — Split the ClientHello across TCP segments.
   - Type: bool
   - Default: `false`
+  - Not applicable to `hysteria2`: removed → [`tls_not_applicable_quic`](../warnings.md#tls_not_applicable_quic)
   - Conflicts with: `vhttp` when `vhttp` is `h3`
   - Conflicts with: `tls.engine` when `tls.engine` is one of `apple`, `windows`
   - Conflicts with: `detour`
 - <a id="body-tls-fragment-fallback-delay"></a>**`tls.fragment_fallback_delay`** — Delay before falling back when fragmenting.
   - Type: duration
+  - Not applicable to `hysteria2`: removed → [`tls_not_applicable_quic`](../warnings.md#tls_not_applicable_quic)
 - <a id="body-tls-record-fragment"></a>**`tls.record_fragment`** — Split the ClientHello across TLS records.
   - Type: bool
   - Default: `false`
+  - Not applicable to `hysteria2`: removed → [`tls_not_applicable_quic`](../warnings.md#tls_not_applicable_quic)
   - Conflicts with: `vhttp` when `vhttp` is `h3`
   - Conflicts with: `tls.engine` when `tls.engine` is one of `apple`, `windows`
 - <a id="body-tls-spoof"></a>**`tls.spoof`** — Domain used for the spoofed ClientHello.
@@ -290,7 +307,7 @@ The node body itself — the sing-box JSON kept in the launcher state. The path 
   - Type: bool
   - Default: `false`
 - <a id="body-tls-utls-fingerprint"></a>**`tls.utls.fingerprint`** — Browser fingerprint used for the ClientHello.
-  - Type: enum, `""`, `chrome`, `chrome_psk`, `chrome_psk_shuffle`, `chrome_padding_psk_shuffle`, `chrome_pq`, `chrome_pq_psk`, `firefox`, `edge`, `safari`, `360`, `qq`, `ios`, `android`, `random`, `randomized`, normalized: `trim_lower`
+  - Type: enum, `""`, `chrome`, `chrome_psk`, `chrome_psk_shuffle`, `chrome_padding_psk_shuffle`, `chrome_pq`, `chrome_pq_psk`, `chrome_155`, `firefox`, `edge`, `safari`, `360`, `qq`, `ios`, `android`, `random`, `randomized`, normalized: `trim_lower`
   - Default: `chrome`
   - Set by link parameter: [`fp`](#link-proto-fp)
 - <a id="body-tls-reality"></a>**`tls.reality`** — REALITY settings.
@@ -362,6 +379,9 @@ The node body itself — the sing-box JSON kept in the launcher state. The path 
 - <a id="body-tcp-fast-open"></a>**`tcp_fast_open`** — Use TCP Fast Open.
   - Type: bool
   - Default: `false`
+- <a id="body-tcp-multi-path"></a>**`tcp_multi_path`** — Use Multipath TCP (MPTCP). The core and the OS judge whether it works.
+  - Type: bool
+  - Default: `false`
 - <a id="body-disable-tcp-keep-alive"></a>**`disable_tcp_keep_alive`** — Disable TCP keepalive on this connection.
   - Type: bool
   - Default: `false`
@@ -382,12 +402,17 @@ The node body itself — the sing-box JSON kept in the launcher state. The path 
 - <a id="body-fallback-delay"></a>**`fallback_delay`** — Delay before falling back to the secondary network type.
   - Type: duration
 
+### Form layout
+
+Read by the node forms only; the sanitizer ignores it. A hidden field stays in the body as written.
+
+- Blocks: `connection`, `obfs`, `tls`, `advanced`
+- Always written, not drawn: `tls.enabled = true`
+
 ## Diagnosed problems
 
 Every code that can be raised on a node of this scheme, including the ones coming from the shared TLS, transport, multiplex and dialer sub-schemas. Follow a code for what it means and what to do about it.
 
-- [`detour_with_tls_fragment`](../warnings.md#detour_with_tls_fragment)
-  - [`tls.fragment`](#body-tls-fragment) — conflicts with `detour` → removed
 - [`field_conflict`](../warnings.md#field_conflict)
   - [`server_ports`](#body-server-ports) — conflicts with `realm` → removed
   - [`tls.disable_sni`](#body-tls-disable-sni) — conflicts with `tls.reality.enabled` → removed
@@ -409,21 +434,18 @@ Every code that can be raised on a node of this scheme, including the ones comin
   - [`tls.client_certificate`](#body-tls-client-certificate) — set without `tls.client_key` → removed
   - [`tls.client_key`](#body-tls-client-key) — set without `tls.client_certificate` → removed
   - [`tls.spoof_method`](#body-tls-spoof-method) — set without `tls.spoof` → removed
-- [`masque_tls_fragment_h3`](../warnings.md#masque_tls_fragment_h3)
-  - [`tls.fragment`](#body-tls-fragment) — conflicts with `vhttp` when `vhttp` is `h3` → removed
-  - [`tls.record_fragment`](#body-tls-record-fragment) — conflicts with `vhttp` when `vhttp` is `h3` → removed
 - [`obfs_password_missing`](../warnings.md#obfs_password_missing)
   - [`obfs.password`](#body-obfs-password) — the field is present
 - [`obfs_unknown`](../warnings.md#obfs_unknown)
   - [`obfs.type`](#body-obfs-type) — the value does not fit the field → removed
 - [`port_invalid`](../warnings.md#port_invalid)
   - [`server_port`](#body-server-port) — the value does not fit the field → node dropped
-- [`tls_fragment_system_engine`](../warnings.md#tls_fragment_system_engine)
-  - [`tls.fragment`](#body-tls-fragment) — conflicts with `tls.engine` when `tls.engine` is one of `apple`, `windows` → removed
-  - [`tls.record_fragment`](#body-tls-record-fragment) — conflicts with `tls.engine` when `tls.engine` is one of `apple`, `windows` → removed
 - [`tls_insecure`](../warnings.md#tls_insecure)
   - [`tls.insecure`](#body-tls-insecure) — the value is `true` → kept with a notice
 - [`tls_not_applicable_quic`](../warnings.md#tls_not_applicable_quic)
+  - [`tls.fragment`](#body-tls-fragment) — not supported by `hysteria2` → removed
+  - [`tls.fragment_fallback_delay`](#body-tls-fragment-fallback-delay) — not supported by `hysteria2` → removed
+  - [`tls.record_fragment`](#body-tls-record-fragment) — not supported by `hysteria2` → removed
   - [`tls.utls`](#body-tls-utls) — not supported by `hysteria2` → removed
   - [`tls.reality`](#body-tls-reality) — not supported by `hysteria2` → removed
 - [`type_invalid`](../warnings.md#type_invalid)
@@ -522,11 +544,12 @@ Every code that can be raised on a node of this scheme, including the ones comin
 - `tls.disable_sni` — conflicts with another field of the same node
 - `tls.ech.enabled` — conflicts with another field of the same node
 - `tls.engine` — invalid value
-- `tls.fragment` — conflicts with another field of the same node
+- `tls.fragment_fallback_delay` — not supported by this protocol
+- `tls.fragment` — not supported by this protocol
 - `tls.max_version` — invalid value
 - `tls.min_version` — invalid value
 - `tls.reality` — not supported by this protocol
-- `tls.record_fragment` — conflicts with another field of the same node
+- `tls.record_fragment` — not supported by this protocol
 - `tls.server_name` — invalid value
 - `tls.spoof_method` — conflicts with another field of the same node
 - `tls.spoof_method` — invalid value

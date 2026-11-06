@@ -14,6 +14,7 @@ class AppearanceTab extends StatelessWidget {
     super.key,
     required this.loaded,
     required this.allowRotation,
+    this.showAllowRotation = true,
     required this.nodeListTwoColumns,
     required this.padding,
     required this.onAllowRotationChanged,
@@ -22,6 +23,9 @@ class AppearanceTab extends StatelessWidget {
 
   final bool loaded;
   final bool allowRotation;
+
+  /// §679 — на TV ориентация не фиксируется никогда, переключатель скрыт.
+  final bool showAllowRotation;
 
   /// §541 — две колонки списка узлов на широком окне (§537).
   final bool nodeListTwoColumns;
@@ -67,14 +71,15 @@ class AppearanceTab extends StatelessWidget {
             style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
         // §220 — снятие портретной фиксации (планшетный фидбэк). Применяется
-        // сразу, без рестарта; уважает системный auto-rotate.
-        SwitchListTile(
-          title: Text(getLocalText.s("Allow rotation")),
-          subtitle: Text(getLocalText.s("Rotate to landscape when the device turns — handy on tablets. Follows the system auto-rotate setting.")),
-          secondary: const Icon(Icons.screen_rotation),
-          value: allowRotation,
-          onChanged: loaded ? onAllowRotationChanged : null,
-        ),
+        // сразу, без рестарта; уважает системный auto-rotate. §679 — не на TV.
+        if (showAllowRotation)
+          SwitchListTile(
+            title: Text(getLocalText.s("Allow rotation")),
+            subtitle: Text(getLocalText.s("Rotate to landscape when the device turns — handy on tablets. Follows the system auto-rotate setting.")),
+            secondary: const Icon(Icons.screen_rotation),
+            value: allowRotation,
+            onChanged: loaded ? onAllowRotationChanged : null,
+          ),
         // §541 — гейт двухколоночной раскладки §537; применяется сразу через
         // SettingsStorage.nodeListTwoColumns.
         SwitchListTile(

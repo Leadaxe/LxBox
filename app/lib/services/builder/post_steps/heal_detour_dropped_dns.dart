@@ -92,11 +92,7 @@ List<String> healDetourDroppedDnsRefs(
   void heal(Map<String, dynamic> owner, String key, String where,
       {String except = '', bool dropOnly = false}) {
     final value = owner[key];
-    final target = switch (value) {
-      String s => s,
-      Map m when m['server'] is String => m['server'] as String,
-      _ => null,
-    };
+    final target = domainResolverServer(value);
     if (target == null || !detourDropped.contains(target)) return;
     final to =
         dropOnly ? null : pool?.replacement(preferred, except: except);
@@ -109,11 +105,7 @@ List<String> healDetourDroppedDnsRefs(
               'is not in the config) and no DNS server can replace it.');
       return;
     }
-    if (value is Map) {
-      owner[key] = <String, dynamic>{...value.cast<String, dynamic>(), 'server': to};
-    } else {
-      owner[key] = to;
-    }
+    owner[key] = withDomainResolverServer(value, to);
     warnings.add('$where: $key switched to "$to", DNS server "$target" was '
         'dropped (detour is not in the config).');
   }

@@ -5,16 +5,17 @@ import '../../../services/l10n/locale_controller.dart';
 
 /// §047 — banner который показывается под `Default Domain Resolver` когда
 /// выбран `local_dns_resolver`. Объясняет риск + предлагает quick-fix
-/// «Switch to cloudflare_udp» если этот server существует в catalog'е.
+/// «Switch to google_doh» если этот server есть в списке (§684: шифрованный
+/// прямой; UDP-серверы ходят через туннель и как резолвер не годятся).
 class LocalResolverWarningBanner extends StatelessWidget {
   const LocalResolverWarningBanner({
     super.key,
-    required this.hasCloudflareUdp,
-    required this.onSwitchToCloudflareUdp,
+    required this.hasGoogleDoh,
+    required this.onSwitchToGoogleDoh,
   });
 
-  final bool hasCloudflareUdp;
-  final VoidCallback onSwitchToCloudflareUdp;
+  final bool hasGoogleDoh;
+  final VoidCallback onSwitchToGoogleDoh;
 
   @override
   Widget build(BuildContext context) {
@@ -53,14 +54,14 @@ class LocalResolverWarningBanner extends StatelessWidget {
             getLocalText.s("Hostnames sing-box resolves internally (your VPN server addresses, custom outbound endpoints) will go through your ISP's DNS, bypassing the VPN tunnel. Pick a regular DNS server for full privacy."),
             style: TextStyle(fontSize: 12, color: c.foreground),
           ),
-          if (hasCloudflareUdp) ...[
+          if (hasGoogleDoh) ...[
             const SizedBox(height: 8),
             Align(
               alignment: Alignment.centerRight,
               child: TextButton.icon(
                 icon: const Icon(Icons.bolt, size: 16),
-                label: Text(getLocalText.s("Switch to cloudflare_udp")),
-                onPressed: onSwitchToCloudflareUdp,
+                label: Text(getLocalText.s("Switch to google_doh")),
+                onPressed: onSwitchToGoogleDoh,
                 style: TextButton.styleFrom(
                   foregroundColor: c.action,
                   padding: const EdgeInsets.symmetric(

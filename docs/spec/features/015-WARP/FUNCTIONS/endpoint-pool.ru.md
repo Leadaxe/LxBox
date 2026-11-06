@@ -34,7 +34,7 @@
 | `masque` | `hosts_preset`, `recommended_host` | Хосты, где живут и h3, и h2 |
 | | `h3.hosts_extra`, `h3.ports` | Хосты только для h3, порты h3 |
 | | `h2.v4_cidr`, `h2.exclude`, `h2.ports` | Блок h2 и исключённые из него адреса |
-| | `sni_pool`, `recommended_sni` | SNI MASQUE (домены Cloudflare допустимы) |
+| | `sni_pool`, `recommended_sni` | SNI MASQUE (домены Cloudflare допустимы); рекомендуемый — `www.cloudflare.com`, дефолт ядра |
 | `loc.<cc>` | любые ключи выше или `alias` | Поправки для региона |
 
 Настройка «Usage region» (App Settings → General): Auto (страна сети
@@ -68,8 +68,10 @@ JSON-окно эксперимента (тот же формат).
   битый — встроенный запасной список (совпадает с файлом).
 - **Битый пул** — мастер работает на дефолтах (endpoint регистрации, пустые
   пресеты), кнопка эксперимента скрыта.
-- **Живые данные (на 2026-09).** WG: `162.159.192/193/195.0/24`,
-  `188.114.96.0/22`. MASQUE: `.198.2`, `.199.2` — оба транспорта; `.198.1`,
+- **Живые данные (на 2026-10).** WG: `162.159.192/193/195.0/24`,
+  `188.114.96.0/22`, `8.6.112`, `8.34.70`, `8.34.146`, `8.35.211`, `8.39.125`,
+  `8.39.204`, `8.39.214`, `8.47.69` (`/24`); замеры по блокам —
+  [§651](../../../tasks/651-warp-8x-blocks-return.md). MASQUE: `.198.2`, `.199.2` — оба транспорта; `.198.1`,
   `.199.1` — только h3; прочее в `162.159.198/199.0/24` — только h2; порты
   обоих — 443/500/1701/4500/4443/8443/8095. Регион `ru` добавляет
   российские домены в оба SNI-пула.
@@ -93,3 +95,4 @@ JSON-окно эксперимента (тот же формат).
 | 6 | [420](../../../tasks/420-masque-pool-per-transport.md) | Done (unit) · DEVICE-PENDING | `hosts_preset`, `h3.hosts_extra`, `h2.exclude` |
 | 7 | [424](../../../tasks/424-warp-preset-recommended-mark-leak.md) | Implemented (unit + widget test) | Пометка только в меню |
 | 8 | [425](../../../tasks/425-warp-pool-region-loc.md) | Implemented, device-verified | Настройка региона и секции `loc.<cc>` |
+| 9 | [638](../../../tasks/638-audit-591-four-defects.md) | Done | `recommended_sni` = `www.cloudflare.com`: с `consumer-masque.cloudflareclient.com` h3 не встаёт на RU-каналах (§393) |

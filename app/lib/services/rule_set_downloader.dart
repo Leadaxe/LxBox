@@ -5,6 +5,8 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 
+import 'subscription/user_agent.dart';
+
 /// Исход попытки скачивания (§366). До §366 метод возвращал `String?`, где
 /// `null` = ошибка; условный GET добавил третий исход — `304 Not Modified`,
 /// который **успех**, но файл не переписан. Смешивать его с ошибкой нельзя:
@@ -257,7 +259,7 @@ class RuleSetDownloader {
         final f = await _file(id);
         final tmp = File('${f.path}.tmp');
 
-        final headers = <String, String>{'User-Agent': 'LxBox'};
+        final headers = <String, String>{'User-Agent': resolveAppUserAgent()};
         // Условный GET имеет смысл только когда файл реально лежит: с
         // etag'ом от снесённого кэша сервер ответил бы 304 на пустоту.
         final etag = prev.etag;

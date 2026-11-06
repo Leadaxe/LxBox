@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/node_spec.dart';
+import 'package:lxbox/models/server_list.dart' show NodeRecordFlag;
 import 'package:lxbox/vpn/cc_channel.dart';
 import 'package:lxbox/widgets/node_diagnostics_tab.dart';
 import 'package:lxbox/widgets/tailscale_network_tab.dart';
@@ -11,11 +13,63 @@ import 'package:lxbox/widgets/tailscale_network_tab.dart';
 /// устройства) и правка вкладки Diagnostics.
 class _FakeActions extends TailscaleNetworkActions {
   final chosen = <String>[];
+  final applied = <String>[];
+  TailscaleKeyApply apply = TailscaleKeyApply.signingIn;
+
+  /// §706 — состояние узла в ядре и журнал выключателя.
+  final changes = ValueNotifier<int>(0);
+  final states = <String, String>{};
+  final toggles = <bool>[];
+  final toggleCodes = <String?>[];
+  Completer<void>? toggleHold;
 
   @override
   Future<String?> setExitNode(String tag, String stableId) async {
     chosen.add(stableId);
     return null;
+  }
+
+  @override
+  Future<TailscaleKeyApply> applyNewKey(String tag, String authKey) async {
+    applied.add('$tag:$authKey');
+    return apply;
+  }
+
+  @override
+  Listenable get endpointChanges => changes;
+
+  @override
+  String? endpointState(String tag) => states[tag];
+
+  @override
+  Future<String?> setEndpointEnabled(String tag, bool enabled) async {
+    toggles.add(enabled);
+    await toggleHold?.future;
+    final code = toggleCodes.isEmpty ? null : toggleCodes.removeAt(0);
+    if (code == null) {
+      states[tag] = enabled ? CcEndpointState.up : CcEndpointState.disabled;
+      changes.value++;
+    }
+    return code;
+  }
+}
+
+/// §645 — опрос `getStatus`: счётчик вызовов, ответ [reply] / [result],
+/// [hold] — вызов не возвращается, пока его не завершат.
+class _PollActions extends TailscaleNetworkActions {
+  int calls = 0;
+  CcTailscaleStatus? reply;
+  CcTailscaleStatusPoll? result;
+  Completer<CcTailscaleStatusPoll>? hold;
+
+  @override
+  Future<CcTailscaleStatusPoll> getStatus(String tag) async {
+    calls++;
+    final h = hold;
+    if (h != null) return h.future;
+    final r = reply;
+    if (r != null) return CcTailscaleStatusPoll(status: r);
+    return result ?? CcTailscaleStatusPoll.skip;
   }
 }
 
@@ -45,6 +99,99 @@ CcTailscaleStatus _status({CcTailscalePeer? exit}) => CcTailscaleStatus(
       ],
     );
 
+
+/// §707 — действия Taildrop: журнал вызовов, ответы по умолчанию — успех.
+class _DropActions extends TailscaleNetworkActions {
+  final calls = <String>[];
+  CcTaildropResult saveResult =
+      const CcTaildropResult(status: 'saved', where: 'downloads');
+  CcTaildropResult sendResult = const CcTaildropResult(status: 'started');
+
+  @override
+  Future<void> startInbox(String tag) async => calls.add('start:$tag');
+
+  @override
+  Future<void> stopInbox() async => calls.add('stop');
+
+  @override
+  Future<String?> markInboxRead(String tag) async {
+    calls.add('read:$tag');
+    return null;
+  }
+
+  @override
+  Future<CcTaildropResult> saveFile(String tag, String name) async {
+    calls.add('save:$name');
+    return saveResult;
+  }
+
+  @override
+  Future<String?> deleteFile(String tag, String name) async {
+    calls.add('delete:$name');
+    return null;
+  }
+
+  @override
+  Future<String?> cancelReceiving(
+      String tag, String senderId, String name) async {
+    calls.add('cancel:$senderId/$name');
+    return null;
+  }
+
+  @override
+  Future<CcTaildropResult> sendFiles(String tag, CcTailscalePeer peer) async {
+    calls.add('send:${peer.stableId}');
+    return sendResult;
+  }
+}
+
+/// §707 итер. 4 — тело узла с включённым Taildrop.
+const _dropOn = <String, dynamic>{'disable_taildrop': false};
+
+/// §707 итер. 9 — Android 10+ на фейке ([supported]).
+class _AutoSaveActions extends TailscaleNetworkActions {
+  _AutoSaveActions({this.supported = true});
+
+  final bool supported;
+
+  @override
+  Future<bool> autoSaveSupported() async => supported;
+}
+
+const _laptop = CcTailscalePeer(
+  stableId: 'n5',
+  hostName: 'laptop',
+  online: true,
+  canReceiveFiles: true,
+  ips: ['100.64.0.5'],
+);
+
+CcTailscaleStatus _dropStatus({bool canShare = true}) => CcTailscaleStatus(
+      tag: 'ts',
+      backendState: 'Running',
+      stateText: '',
+      canShareFiles: canShare,
+      userGroups: const [
+        CcTailscaleUserGroup(displayName: 'Alice', peers: [
+          _laptop,
+          // В сети, но не принимает файлы; расшаренный; не в сети.
+          CcTailscalePeer(stableId: 'n6', hostName: 'tv', online: true),
+          CcTailscalePeer(
+              stableId: 'n7',
+              hostName: 'guest',
+              online: true,
+              canReceiveFiles: true,
+              shareeNode: true),
+          CcTailscalePeer(
+              stableId: 'n8', hostName: 'desk', canReceiveFiles: true),
+        ]),
+      ],
+    );
+
+ButtonStyleButton sendButton(WidgetTester tester) =>
+    tester.widget<ButtonStyleButton>(
+        find.byKey(const ValueKey('tailscale-device-send')));
+
 void main() {
   Future<void> pump(
     WidgetTester tester, {
@@ -52,7 +199,9 @@ void main() {
     List<CcTailscaleStatus>? data,
     Map<String, dynamic> body = const {},
     Future<void> Function(String?)? onSave,
-    Future<void> Function(Map<String, Object?>)? onSaveFields,
+    Future<bool> Function(Map<String, Object?>)? onSaveFields,
+    ({bool commandsOff, bool autosaveOff})? taildropFlags,
+    Future<bool> Function(NodeRecordFlag, bool)? onSaveRecordFlag,
     TailscaleNetworkActions actions = const TailscaleNetworkActions(),
   }) async {
     final ctrl = StreamController<List<CcTailscaleStatus>>();
@@ -64,6 +213,8 @@ void main() {
           body: body,
           onSaveExitNode: onSave,
           onSaveFields: onSaveFields,
+          taildropFlags: taildropFlags,
+          onSaveRecordFlag: onSaveRecordFlag,
           statusSource: ctrl.stream,
           vpnUp: vpnUp,
           actions: actions,
@@ -154,27 +305,206 @@ void main() {
     });
   });
 
-  testWidgets('устройства: порядок и отметки', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(800, 2400));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    await pump(tester, data: [_status()]);
-    final names = ['gw', 'nas', 'shared-box', 'zeta'];
-    final ys = [
-      for (final n in names)
-        tester.getTopLeft(find.widgetWithText(ListTile, n).last).dy,
-    ];
-    expect(ys, [...ys]..sort());
-    String sub(String name) => (tester
-            .widget<ListTile>(find.widgetWithText(ListTile, name).last)
-            .subtitle as Text)
-        .data!;
-    expect(sub('nas'), contains('key expired'));
-    expect(sub('nas'), contains('online'));
-    expect(sub('gw'), contains('exit node'));
-    expect(sub('shared-box'), contains('shared'));
-    expect(sub('zeta'), contains('last seen'));
-    // Один владелец — без заголовков групп.
-    expect(find.text('Alice'), findsNothing);
+  group('§645 — адреса и путь', () {
+    const multi = CcTailscalePeer(
+      stableId: 'm1',
+      hostName: 'router',
+      dnsName: 'router.tail.ts.net.',
+      online: true,
+      path: 'direct',
+      endpoint: '198.51.100.7:41641',
+      ips: ['100.64.0.9', 'fd7a::9', '10.0.0.9'],
+    );
+    CcTailscaleStatus st() => const CcTailscaleStatus(
+          tag: 'ts',
+          backendState: 'Running',
+          stateText: '',
+          self: CcTailscalePeer(
+              hostName: 'phone', ips: ['100.64.0.1', 'fd7a::1']),
+          userGroups: [
+            CcTailscaleUserGroup(peers: [multi]),
+          ],
+        );
+
+    testWidgets('+N раскрывает и сворачивает адреса сверх двух',
+        (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 2400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await pump(tester, data: [st()]);
+      expect(find.text('fd7a::9'), findsOneWidget);
+      expect(find.text('+1'), findsOneWidget);
+      expect(find.text('10.0.0.9'), findsNothing);
+      expect(find.byIcon(Icons.bolt), findsOneWidget);
+      final more = find.byKey(const ValueKey('tailscale-more-m1'));
+      await tester.tap(more);
+      await tester.pump();
+      expect(find.text('10.0.0.9'), findsOneWidget);
+      expect(find.byIcon(Icons.expand_less), findsOneWidget);
+      // Страница устройства при раскрытии не открылась.
+      expect(find.text('Ping'), findsNothing);
+      await tester.tap(more);
+      await tester.pump();
+      expect(find.text('10.0.0.9'), findsNothing);
+    });
+
+    testWidgets('§707 итер. 6 — страница: имя, MagicDNS и строка на адрес',
+        (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 2400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await pump(tester, data: [st()]);
+      await tester.tap(find.widgetWithText(ListTile, 'router').last);
+      await tester.pumpAndSettle();
+      expect(find.widgetWithText(AppBar, 'router'), findsOneWidget);
+      expect(find.byKey(const ValueKey('tailscale-device-copy-router')),
+          findsOneWidget);
+      expect(
+          find.byKey(
+              const ValueKey('tailscale-device-copy-router.tail.ts.net')),
+          findsOneWidget);
+      for (final ip in multi.ips) {
+        expect(find.byKey(ValueKey('tailscale-device-copy-$ip')),
+            findsOneWidget);
+      }
+      expect(find.text('IPv6'), findsOneWidget);
+      expect(find.text('Ping'), findsOneWidget);
+      // Taildrop узла выключен — Send file… видна, неактивна, с причиной.
+      final send = tester.widget<ButtonStyleButton>(
+          find.byKey(const ValueKey('tailscale-device-send')));
+      expect(send.onPressed, isNull);
+      expect(find.text('Taildrop is off for this node.'), findsOneWidget);
+    });
+
+    testWidgets('§707 итер. 6 — долгий тап копирует первый адрес',
+        (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 2400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final copied = <Object?>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.setData') copied.add(call.arguments);
+        return null;
+      });
+      addTearDown(() => tester.binding.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null));
+      await pump(tester, data: [st()]);
+      await tester.longPress(find.widgetWithText(ListTile, 'router').last);
+      await tester.pumpAndSettle();
+      expect(copied, [
+        {'text': '100.64.0.9'}
+      ]);
+      expect(find.byType(AppBar), findsNothing);
+    });
+  });
+
+  group('§645 — опрос статуса', () {
+    Future<void> pumpPoll(
+      WidgetTester tester,
+      _PollActions actions, {
+      bool vpnUp = true,
+      StreamController<List<CcTailscaleStatus>>? ctrl,
+    }) async {
+      final c = ctrl ?? StreamController<List<CcTailscaleStatus>>();
+      addTearDown(c.close);
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: TailscaleNetworkTab(
+            key: const ValueKey('tab'),
+            liveTag: 'ts',
+            body: const {},
+            statusSource: c.stream,
+            vpnUp: vpnUp,
+            actions: actions,
+          ),
+        ),
+      ));
+      await tester.pump();
+    }
+
+    testWidgets('первый вызов сразу, ответ строит вкладку, дальше раз в 3 с',
+        (tester) async {
+      final a = _PollActions()..reply = _status();
+      await pumpPoll(tester, a);
+      expect(a.calls, 1);
+      expect(find.text('This device'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 3));
+      expect(a.calls, 2);
+      await tester.pump(const Duration(seconds: 3));
+      expect(a.calls, 3);
+    });
+
+    testWidgets('VPN выключен — опроса нет', (tester) async {
+      final a = _PollActions();
+      await pumpPoll(tester, a, vpnUp: false);
+      await tester.pump(const Duration(seconds: 7));
+      expect(a.calls, 0);
+    });
+
+    testWidgets('вкладка ушла с экрана — опрос стоит, вернулась — сразу',
+        (tester) async {
+      // С данными: без них крутится индикатор и переход не «оседает».
+      final a = _PollActions()..reply = _status();
+      await pumpPoll(tester, a);
+      expect(a.calls, 1);
+      final ctx = tester.element(find.byKey(const ValueKey('tab')));
+      unawaited(Navigator.of(ctx).push(MaterialPageRoute<void>(
+        builder: (_) => const Scaffold(body: Text('over')),
+      )));
+      await tester.pumpAndSettle();
+      final before = a.calls;
+      await tester.pump(const Duration(seconds: 7));
+      expect(a.calls, before);
+      Navigator.of(tester.element(find.text('over'))).pop();
+      await tester.pumpAndSettle();
+      expect(a.calls, before + 1);
+    });
+
+    testWidgets('вкладка закрыта — таймер снят', (tester) async {
+      final a = _PollActions();
+      await pumpPoll(tester, a);
+      await tester.pumpWidget(const MaterialApp(home: SizedBox()));
+      await tester.pump(const Duration(seconds: 7));
+      expect(a.calls, 1);
+    });
+
+    testWidgets('ядро без метода — опрос остановлен, поток работает',
+        (tester) async {
+      final a = _PollActions()..result = CcTailscaleStatusPoll.notSupported;
+      final ctrl = StreamController<List<CcTailscaleStatus>>();
+      await pumpPoll(tester, a, ctrl: ctrl);
+      await tester.pump(const Duration(seconds: 7));
+      expect(a.calls, 1);
+      ctrl.add([_status()]);
+      await tester.pump();
+      expect(find.text('This device'), findsOneWidget);
+    });
+
+    testWidgets('вызов не вернулся — тик пропускается', (tester) async {
+      final a = _PollActions()..hold = Completer<CcTailscaleStatusPoll>();
+      await pumpPoll(tester, a);
+      await tester.pump(const Duration(seconds: 7));
+      expect(a.calls, 1);
+      a.hold!.complete(CcTailscaleStatusPoll.skip);
+      a.hold = null;
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 3));
+      expect(a.calls, 2);
+    });
+
+    testWidgets('на экране — пришедшая последней запись', (tester) async {
+      final a = _PollActions()..result = CcTailscaleStatusPoll.skip;
+      final ctrl = StreamController<List<CcTailscaleStatus>>();
+      await pumpPoll(tester, a, ctrl: ctrl);
+      ctrl.add(const [
+        CcTailscaleStatus(
+            tag: 'ts', backendState: 'NeedsLogin', stateText: ''),
+      ]);
+      await tester.pump();
+      expect(find.text('sign-in needed'), findsOneWidget);
+      a.reply = _status();
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('running'), findsOneWidget);
+    });
   });
 
   group('Diagnostics у узла Tailscale', () {
@@ -194,13 +524,6 @@ void main() {
       ctrl.add([s]);
       await tester.pump();
     }
-
-    testWidgets('выхода нет — проверка скрыта, строка вместо неё',
-        (tester) async {
-      await pumpDiag(tester, _status());
-      expect(find.byKey(const ValueKey('tailscale-no-exit')), findsOneWidget);
-      expect(find.text('Check'), findsNothing);
-    });
 
     testWidgets('выход есть — проверка доступна', (tester) async {
       await pumpDiag(tester, _status(exit: _gw));
@@ -232,24 +555,32 @@ void main() {
       expect(find.text('no home relay'), findsOneWidget);
     });
 
-    testWidgets('выход не дублируется в Devices', (tester) async {
+    testWidgets('выход есть и в Devices, из его строки доступен пинг',
+        (tester) async {
       await tester.binding.setSurfaceSize(const Size(800, 2400));
       addTearDown(() => tester.binding.setSurfaceSize(null));
       await pump(tester, data: [_status(exit: _gw)]);
       expect(find.widgetWithText(RadioListTile<String>, 'gw'), findsOneWidget);
-      // Единственная плитка с именем — пункт Exit node (RadioListTile
-      // строится на ListTile); в Devices строки нет.
-      expect(find.widgetWithText(ListTile, 'gw'), findsOneWidget);
+      // Пункт Exit node (RadioListTile строится на ListTile) и строка Devices.
+      final rows = find.widgetWithText(ListTile, 'gw');
+      expect(rows, findsNWidgets(2));
+      await tester.tap(rows.last);
+      await tester.pumpAndSettle();
+      expect(find.text('Ping'), findsOneWidget);
     });
 
-    testWidgets('Settings без выхода: LAN неактивен, advertise пишется',
+    testWidgets('Settings без выхода: advertise пишется, LAN-переключателя нет',
         (tester) async {
       await tester.binding.setSurfaceSize(const Size(800, 2400));
       addTearDown(() => tester.binding.setSurfaceSize(null));
       final saved = <Map<String, Object?>>[];
       await pump(tester,
-          data: [_status()], onSaveFields: (f) async => saved.add(f));
-      expect(tile(tester, 'tailscale-exit-lan').onChanged, isNull);
+          data: [_status()],
+          onSaveFields: (f) async {
+            saved.add(f);
+            return true;
+          });
+      expect(find.byKey(const ValueKey('tailscale-exit-lan')), findsNothing);
       await tester.tap(find.byKey(const ValueKey('tailscale-advertise-exit')));
       await tester.pump();
       expect(saved, [
@@ -264,15 +595,618 @@ void main() {
       await pump(tester,
           data: [_status()],
           body: const {'exit_node': 'gw'},
-          onSaveFields: (f) async {});
+          onSaveFields: (f) async => true);
       expect(tile(tester, 'tailscale-advertise-exit').onChanged, isNull);
-      expect(tile(tester, 'tailscale-exit-lan').onChanged, isNotNull);
+      expect(find.byKey(const ValueKey('tailscale-exit-lan')), findsNothing);
     });
 
     testWidgets('узел подписки — блока Settings нет', (tester) async {
       await pump(tester, data: [_status()]);
       expect(
           find.byKey(const ValueKey('tailscale-advertise-exit')), findsNothing);
+      expect(find.byKey(const ValueKey('tailscale-taildrop-autosave')),
+          findsNothing);
+    });
+
+    testWidgets(
+        '§707 итер. 9 — поля записи: по умолчанию включены, выключение '
+        'пишет disable_* = true через запись узла',
+        (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 2400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final writes = <(NodeRecordFlag, bool)>[];
+      await pump(tester,
+          data: [_status()],
+          actions: _AutoSaveActions(),
+          body: _dropOn,
+          onSaveFields: (f) async => true,
+          taildropFlags: (commandsOff: false, autosaveOff: false),
+          onSaveRecordFlag: (f, v) async {
+            writes.add((f, v));
+            return true;
+          });
+      await tester.pump();
+      final cmd = find.byKey(const ValueKey('tailscale-taildrop-commands'));
+      final auto = find.byKey(const ValueKey('tailscale-taildrop-autosave'));
+      expect(tester.widget<SwitchListTile>(cmd).value, isTrue);
+      expect(tester.widget<SwitchListTile>(cmd).subtitle, isNotNull);
+      expect(tester.widget<SwitchListTile>(auto).value, isTrue);
+      await tester.tap(cmd);
+      await tester.pump();
+      await tester.tap(auto);
+      await tester.pump();
+      expect(writes, [
+        (NodeRecordFlag.disableTaildropCommands, true),
+        (NodeRecordFlag.disableTaildropAutosave, true),
+      ]);
+      expect(tester.widget<SwitchListTile>(cmd).value, isFalse);
+      expect(tester.widget<SwitchListTile>(auto).value, isFalse);
+      // Обратно: включение снимает поле (false).
+      await tester.tap(cmd);
+      await tester.pump();
+      expect(writes.last, (NodeRecordFlag.disableTaildropCommands, false));
+      expect(tester.widget<SwitchListTile>(cmd).value, isTrue);
+    });
+
+    testWidgets('§707 итер. 9 — отказ записи: переключатель остаётся',
+        (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 2400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await pump(tester,
+          data: [_status()],
+          actions: _AutoSaveActions(),
+          body: _dropOn,
+          onSaveFields: (f) async => true,
+          taildropFlags: (commandsOff: false, autosaveOff: false),
+          onSaveRecordFlag: (f, v) async => false);
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('tailscale-taildrop-commands')));
+      await tester.pump();
+      expect(tile(tester, 'tailscale-taildrop-commands').value, isTrue);
+      expect(tile(tester, 'tailscale-taildrop-autosave').value, isTrue);
+    });
+
+    testWidgets('§707 итер. 9 — узел подписки: переключателей Taildrop нет',
+        (tester) async {
+      await pump(tester,
+          data: [_status()], actions: _AutoSaveActions(), body: _dropOn);
+      await tester.pump();
+      expect(find.byKey(const ValueKey('tailscale-taildrop-commands')),
+          findsNothing);
+      expect(find.byKey(const ValueKey('tailscale-taildrop-autosave')),
+          findsNothing);
+    });
+
+    testWidgets('§707 — Android ниже 10: переключатель неактивен',
+        (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 2400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await pump(tester,
+          data: [_status()],
+          actions: _AutoSaveActions(supported: false),
+          body: _dropOn,
+          onSaveFields: (f) async => true,
+          taildropFlags: (commandsOff: true, autosaveOff: false),
+          onSaveRecordFlag: (f, v) async => true);
+      await tester.pump();
+      final t = tile(tester, 'tailscale-taildrop-autosave');
+      expect(t.onChanged, isNull);
+      expect(t.value, isFalse);
+      expect(t.subtitle, isNotNull);
+      expect(tile(tester, 'tailscale-taildrop-commands').onChanged, isNotNull);
+    });
+  });
+
+  group('§706 — узел вне сети', () {
+    const offline = CcTailscaleStatus(
+      tag: 'ts',
+      backendState: 'NeedsLogin',
+      stateText: '',
+      keyAuth: true,
+      self: CcTailscalePeer(hostName: 'localhost'),
+      health: [
+        'You are logged out. The last login error was: invalid key: API key does not exist',
+      ],
+    );
+    final replace = find.byKey(const ValueKey('tailscale-replace-key'));
+    final saveKey = find.byKey(const ValueKey('tailscale-replace-key-save'));
+
+    Future<void> big(WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 2400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+    }
+
+    testWidgets('записанный exit node — строкой, без выбора и Save choice',
+        (tester) async {
+      await big(tester);
+      await pump(tester,
+          data: const [offline],
+          body: const {'exit_node': 'gw'},
+          onSave: (_) async {},
+          onSaveFields: (_) async => true);
+      expect(find.byType(RadioListTile<String>), findsNothing);
+      expect(find.text('Save choice'), findsNothing);
+      expect(find.byKey(const ValueKey('exit-node-warning')), findsNothing);
+      expect(find.byKey(const ValueKey('tailscale-saved-exit-node')),
+          findsOneWidget);
+      expect(find.text('Saved: gw'), findsOneWidget);
+    });
+
+    testWidgets('exit node не записан — блока нет', (tester) async {
+      await big(tester);
+      await pump(tester, data: const [offline]);
+      expect(find.text('Exit node'), findsNothing);
+      expect(find.byType(RadioListTile<String>), findsNothing);
+    });
+
+    testWidgets('чипа «signed in with a key» нет, имя — прочерк',
+        (tester) async {
+      await big(tester);
+      await pump(tester, data: const [offline]);
+      expect(find.text('signed in with a key'), findsNothing);
+      expect(find.text('localhost'), findsNothing);
+      expect(find.text('—'), findsOneWidget);
+    });
+
+    testWidgets('редактируемый узел — Replace key есть', (tester) async {
+      await big(tester);
+      await pump(tester,
+          data: const [offline], onSaveFields: (_) async => true);
+      expect(replace, findsOneWidget);
+    });
+
+    testWidgets('узел подписки — Replace key нет', (tester) async {
+      await big(tester);
+      await pump(tester, data: const [offline]);
+      expect(replace, findsNothing);
+    });
+
+    testWidgets('пустой ключ — Save неактивна', (tester) async {
+      await big(tester);
+      await pump(tester,
+          data: const [offline], onSaveFields: (_) async => true);
+      await tester.tap(replace);
+      await tester.pumpAndSettle();
+      expect(tester.widget<FilledButton>(saveKey).onPressed, isNull);
+      await tester.enterText(
+          find.byKey(const ValueKey('tailscale-replace-key-field')), '   ');
+      await tester.pump();
+      expect(tester.widget<FilledButton>(saveKey).onPressed, isNull);
+    });
+
+    testWidgets('Save пишет auth_key и применяет ключ', (tester) async {
+      await big(tester);
+      final actions = _FakeActions();
+      final saved = <Map<String, Object?>>[];
+      await pump(tester,
+          data: const [offline],
+          actions: actions,
+          onSaveFields: (f) async {
+            saved.add(f);
+            return true;
+          });
+      await tester.tap(replace);
+      await tester.pumpAndSettle();
+      await tester.enterText(
+          find.byKey(const ValueKey('tailscale-replace-key-field')),
+          ' tskey-auth-new ');
+      await tester.pump();
+      await tester.tap(saveKey);
+      await tester.pumpAndSettle();
+      expect(saved, [
+        {'auth_key': 'tskey-auth-new'},
+      ]);
+      expect(actions.applied, ['ts:tskey-auth-new']);
+      expect(find.text('Signing in with the new key…'), findsOneWidget);
+    });
+
+    Future<void> enterKey(WidgetTester tester, _FakeActions actions) async {
+      await pump(tester,
+          data: const [offline],
+          actions: actions,
+          onSaveFields: (_) async => true);
+      await tester.tap(replace);
+      await tester.pumpAndSettle();
+      await tester.enterText(
+          find.byKey(const ValueKey('tailscale-replace-key-field')), 'k');
+      await tester.pump();
+      await tester.tap(saveKey);
+      await tester.pumpAndSettle();
+      expect(actions.applied, ['ts:k']);
+    }
+
+    testWidgets('туннель не поднят — ключ применится при старте VPN',
+        (tester) async {
+      await big(tester);
+      await enterKey(
+          tester, _FakeActions()..apply = TailscaleKeyApply.deferred);
+      expect(find.text('Key saved. It applies when the VPN starts.'),
+          findsOneWidget);
+    });
+
+    testWidgets('отказ ядра у выключенного узла — «сначала включить»',
+        (tester) async {
+      await big(tester);
+      final actions = _FakeActions()
+        ..apply = const TailscaleKeyApply.failed('failed_precondition')
+        ..states['ts'] = CcEndpointState.disabled;
+      await enterKey(tester, actions);
+      expect(find.text('Turn the node on first.'), findsOneWidget);
+    });
+
+    testWidgets('прочий отказ ядра — «не удалось войти»', (tester) async {
+      await big(tester);
+      await enterKey(tester,
+          _FakeActions()..apply = const TailscaleKeyApply.failed('not_found'));
+      expect(find.text('Could not sign in with the new key.'), findsOneWidget);
+    });
+
+    testWidgets('запись не удалась — ключ не применяется', (tester) async {
+      await big(tester);
+      final actions = _FakeActions();
+      await pump(tester,
+          data: const [offline],
+          actions: actions,
+          onSaveFields: (_) async => false);
+      await tester.tap(replace);
+      await tester.pumpAndSettle();
+      await tester.enterText(
+          find.byKey(const ValueKey('tailscale-replace-key-field')), 'k');
+      await tester.pump();
+      await tester.tap(saveKey);
+      await tester.pumpAndSettle();
+      expect(actions.applied, isEmpty);
+    });
+
+    testWidgets('Running — чип, выбор, имя и без Replace key',
+        (tester) async {
+      await big(tester);
+      const running = CcTailscaleStatus(
+        tag: 'ts',
+        backendState: 'Running',
+        stateText: '',
+        keyAuth: true,
+        self: CcTailscalePeer(hostName: 'phone', ips: ['100.64.0.1']),
+        userGroups: [
+          CcTailscaleUserGroup(peers: [_gw]),
+        ],
+      );
+      await pump(tester,
+          data: const [running],
+          body: const {'exit_node': '100.64.0.2'},
+          onSave: (_) async {},
+          onSaveFields: (_) async => true);
+      expect(find.text('signed in with a key'), findsOneWidget);
+      expect(find.byType(RadioListTile<String>), findsWidgets);
+      expect(find.text('phone'), findsOneWidget);
+      expect(replace, findsNothing);
+      expect(find.byKey(const ValueKey('tailscale-saved-exit-node')),
+          findsNothing);
+    });
+  });
+
+  group('§706 — выключатель и перезапуск узла', () {
+    final toggle = find.byKey(const ValueKey('tailscale-node-enabled'));
+    final restart = find.byKey(const ValueKey('tailscale-restart-node'));
+
+    Future<_FakeActions> pumpNode(WidgetTester tester, String? state) async {
+      await tester.binding.setSurfaceSize(const Size(800, 2400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final actions = _FakeActions();
+      if (state != null) actions.states['ts'] = state;
+      await pump(tester, data: [_status()], actions: actions);
+      return actions;
+    }
+
+    testWidgets('ядро не отдало состояние — ни выключателя, ни Restart',
+        (tester) async {
+      await pumpNode(tester, null);
+      expect(toggle, findsNothing);
+      expect(restart, findsNothing);
+    });
+
+    testWidgets('VPN выключен — ни выключателя, ни Restart', (tester) async {
+      final actions = _FakeActions()..states['ts'] = CcEndpointState.up;
+      await pump(tester, vpnUp: false, data: [_status()], actions: actions);
+      expect(toggle, findsNothing);
+      expect(restart, findsNothing);
+    });
+
+    testWidgets('узел работает — включён, Restart есть', (tester) async {
+      await pumpNode(tester, CcEndpointState.up);
+      expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
+      expect(restart, findsOneWidget);
+    });
+
+    testWidgets('выключатель гасит узел — Restart пропадает', (tester) async {
+      final actions = await pumpNode(tester, CcEndpointState.up);
+      await tester.tap(toggle);
+      await tester.pumpAndSettle();
+      expect(actions.toggles, [false]);
+      expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
+      expect(restart, findsNothing);
+    });
+
+    testWidgets('отказ выключателя — текст отказа', (tester) async {
+      final actions = await pumpNode(tester, CcEndpointState.up);
+      actions.toggleCodes.add('failed_precondition');
+      await tester.tap(toggle);
+      await tester.pumpAndSettle();
+      expect(find.text('VPN is not running or is restarting. Try again.'),
+          findsOneWidget);
+      expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
+    });
+
+    testWidgets('Restart — выкл, затем вкл; на время вызова неактивна',
+        (tester) async {
+      final actions = await pumpNode(tester, CcEndpointState.up);
+      final hold = Completer<void>();
+      actions.toggleHold = hold;
+      await tester.tap(restart);
+      await tester.pump();
+      expect(tester.widget<OutlinedButton>(restart).onPressed, isNull);
+      actions.toggleHold = null;
+      hold.complete();
+      await tester.pumpAndSettle();
+      expect(actions.toggles, [false, true]);
+      expect(find.text('Node restarted.'), findsOneWidget);
+      expect(tester.widget<OutlinedButton>(restart).onPressed, isNotNull);
+    });
+
+    testWidgets('Restart: выключение отказало — включения нет',
+        (tester) async {
+      final actions = await pumpNode(tester, CcEndpointState.up);
+      actions.toggleCodes.add('not_found');
+      await tester.tap(restart);
+      await tester.pumpAndSettle();
+      expect(actions.toggles, [false]);
+      expect(find.text('Node restarted.'), findsNothing);
+    });
+  });
+
+  group('§707 — Taildrop', () {
+    Future<StreamController<CcTaildropInbox>> pumpDrop(
+      WidgetTester tester,
+      _DropActions actions, {
+      bool canShare = true,
+      Map<String, dynamic> body = _dropOn,
+    }) async {
+      await tester.binding.setSurfaceSize(const Size(800, 3000));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final status = StreamController<List<CcTailscaleStatus>>();
+      final inbox = StreamController<CcTaildropInbox>();
+      addTearDown(status.close);
+      addTearDown(inbox.close);
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: TailscaleNetworkTab(
+            liveTag: 'ts',
+            body: body,
+            statusSource: status.stream,
+            inboxSource: inbox.stream,
+            vpnUp: true,
+            actions: actions,
+          ),
+        ),
+      ));
+      status.add([_dropStatus(canShare: canShare)]);
+      await tester.pump();
+      return inbox;
+    }
+
+    test('цель отправки: в сети, принимает файлы, не расшарен', () {
+      final targets = _dropStatus()
+          .peers
+          .where((p) => p.isTaildropTarget)
+          .map((p) => p.hostName);
+      expect(targets, ['laptop']);
+    });
+
+    test('разбор входящих и статуса из канала', () {
+      final inbox = CcTaildropInbox.fromMap({
+        'tag': 'ts',
+        'files': [
+          {'name': 'a.jpg', 'size': 2048, 'sender_name': 'laptop', 'modified_at': 5},
+        ],
+        'receiving': [
+          {'name': 'b.zip', 'size': 100, 'received_bytes': 25, 'sender_id': 's1', 'sender_name': 'desk'},
+        ],
+      });
+      expect(inbox.files.single.size, 2048);
+      expect(inbox.receiving.single.progress, 0.25);
+      final st = CcTailscaleStatus.fromMap({
+        'tag': 'ts',
+        'can_share_files': false,
+        'unread_file_count': 3,
+      });
+      expect(st.canShareFiles, isFalse);
+      expect(st.unreadFileCount, 3);
+      // Нет поля — право не отрицается.
+      expect(CcTailscaleStatus.fromMap({'tag': 'ts'}).canShareFiles, isTrue);
+      expect(
+          CcTailscalePeer.fromMap({'can_receive_files': true}).canReceiveFiles,
+          isTrue);
+    });
+
+    testWidgets('подписка на входящие с вкладкой; пусто — блока нет',
+        (tester) async {
+      final actions = _DropActions();
+      final inbox = await pumpDrop(tester, actions);
+      expect(actions.calls, ['start:ts']);
+      inbox.add(const CcTaildropInbox(tag: 'ts'));
+      await tester.pump();
+      await tester.pump(); // снапшот приходит микрозадачей после кадра
+      expect(find.text('Inbox'), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+      expect(actions.calls.last, 'stop');
+    });
+
+    testWidgets('принятый файл: строка, Save и Delete, просмотр отмечен',
+        (tester) async {
+      final actions = _DropActions();
+      final inbox = await pumpDrop(tester, actions);
+      inbox.add(const CcTaildropInbox(tag: 'other', files: [
+        CcTaildropFile(name: 'alien.txt'),
+      ]));
+      await tester.pump();
+      await tester.pump(); // снапшот приходит микрозадачей после кадра
+      expect(find.text('alien.txt'), findsNothing);
+      inbox.add(const CcTaildropInbox(tag: 'ts', files: [
+        CcTaildropFile(name: 'photo.jpg', size: 2048, senderName: 'laptop'),
+      ]));
+      await tester.pump();
+      await tester.pump(); // снапшот приходит микрозадачей после кадра
+      expect(find.text('Inbox'), findsOneWidget);
+      expect(find.text('photo.jpg'), findsOneWidget);
+      expect(actions.calls, contains('read:ts'));
+      await tester.tap(find.byTooltip('Save'));
+      await tester.pump();
+      expect(actions.calls, contains('save:photo.jpg'));
+      expect(find.text('Saved to Downloads'), findsOneWidget);
+      await tester.tap(find.byTooltip('Delete'));
+      await tester.pump();
+      expect(actions.calls, contains('delete:photo.jpg'));
+    });
+
+    testWidgets('файл в приёме: прогресс и Cancel', (tester) async {
+      final actions = _DropActions();
+      final inbox = await pumpDrop(tester, actions);
+      inbox.add(const CcTaildropInbox(tag: 'ts', receiving: [
+        CcTaildropReceiving(
+            name: 'big.iso', size: 100, receivedBytes: 40, senderId: 's1'),
+      ]));
+      await tester.pump();
+      await tester.pump(); // снапшот приходит микрозадачей после кадра
+      final bar = tester.widget<LinearProgressIndicator>(
+          find.byType(LinearProgressIndicator));
+      expect(bar.value, 0.4);
+      await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+      await tester.pump();
+      expect(actions.calls, contains('cancel:s1/big.iso'));
+    });
+
+    testWidgets('Taildrop выключен в tailnet — причина, Send file… нет',
+        (tester) async {
+      final actions = _DropActions();
+      await pumpDrop(tester, actions, canShare: false);
+      expect(find.byKey(const ValueKey('taildrop-sharing-off')), findsOneWidget);
+      await tester.tap(find.widgetWithText(ListTile, 'laptop').last);
+      await tester.pumpAndSettle();
+      expect(sendButton(tester).onPressed, isNull);
+      expect(find.text('File sharing is off in this tailnet.'), findsOneWidget);
+    });
+
+    testWidgets('Send file… только у цели отправки', (tester) async {
+      final actions = _DropActions();
+      await pumpDrop(tester, actions);
+      for (final (name, reason) in [
+        ('tv', "Device can't receive files."),
+        ('guest', 'Device belongs to another user.'),
+        ('desk', 'Device is offline.'),
+      ]) {
+        await tester.tap(find.widgetWithText(ListTile, name).last);
+        await tester.pumpAndSettle();
+        expect(sendButton(tester).onPressed, isNull, reason: name);
+        expect(find.text(reason), findsOneWidget);
+        await tester.pageBack();
+        await tester.pumpAndSettle();
+      }
+      await tester.tap(find.widgetWithText(ListTile, 'laptop').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Send file…'));
+      await tester.pumpAndSettle();
+      expect(actions.calls, contains('send:n5'));
+      expect(find.text('Sending to laptop'), findsOneWidget);
+    });
+
+    testWidgets('§707 итер. 4 — Taildrop узла выключен: строка вместо Inbox, '
+        'Send file… и разрешений нет', (tester) async {
+      final actions = _DropActions();
+      final inbox = await pumpDrop(tester, actions, body: const {});
+      inbox.add(const CcTaildropInbox(tag: 'ts', files: [
+        CcTaildropFile(name: 'photo.jpg'),
+      ]));
+      await tester.pump();
+      await tester.pump(); // снапшот приходит микрозадачей после кадра
+      expect(find.byKey(const ValueKey('taildrop-node-off')), findsOneWidget);
+      expect(find.text('Inbox'), findsNothing);
+      expect(find.text('photo.jpg'), findsNothing);
+      await tester.tap(find.widgetWithText(ListTile, 'laptop').last);
+      await tester.pumpAndSettle();
+      expect(sendButton(tester).onPressed, isNull);
+      expect(find.text('Taildrop is off for this node.'), findsOneWidget);
+    });
+
+    testWidgets('§707 итер. 9 — на странице устройства разрешений нет',
+        (tester) async {
+      final actions = _DropActions();
+      await pumpDrop(tester, actions);
+      await tester.tap(find.widgetWithText(ListTile, 'laptop').last);
+      await tester.pumpAndSettle();
+      expect(find.byType(SwitchListTile), findsNothing);
+    });
+  });
+
+  group('§707 итер. 4 — Allow Taildrop', () {
+    testWidgets('вкл пишет disable_taildrop: false, выкл снимает поле',
+        (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 2400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final saved = <Map<String, Object?>>[];
+      Future<bool> save(Map<String, Object?> f) async {
+        saved.add(f);
+        return true;
+      }
+
+      await pump(tester, data: [_status()], onSaveFields: save);
+      final key = find.byKey(const ValueKey('tailscale-allow-taildrop'));
+      expect(tester.widget<SwitchListTile>(key).value, isFalse);
+      await tester.tap(key);
+      await tester.pump();
+      expect(saved.last, {'disable_taildrop': false});
+    });
+
+    testWidgets('включён — выкл снимает поле', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 2400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final saved = <Map<String, Object?>>[];
+      await pump(tester,
+          data: [_status()],
+          body: _dropOn,
+          onSaveFields: (f) async {
+            saved.add(f);
+            return true;
+          });
+      final key = find.byKey(const ValueKey('tailscale-allow-taildrop'));
+      expect(tester.widget<SwitchListTile>(key).value, isTrue);
+      await tester.tap(key);
+      await tester.pump();
+      expect(saved.last, {'disable_taildrop': null});
+    });
+
+    testWidgets('выключен — полей Taildrop нет', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 2400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await pump(tester,
+          data: [_status()],
+          actions: _AutoSaveActions(),
+          onSaveFields: (f) async => true,
+          taildropFlags: (commandsOff: false, autosaveOff: false),
+          onSaveRecordFlag: (f, v) async => true);
+      await tester.pump();
+      expect(find.byKey(const ValueKey('tailscale-allow-taildrop')),
+          findsOneWidget);
+      expect(find.byKey(const ValueKey('tailscale-taildrop-autosave')),
+          findsNothing);
+      expect(find.byKey(const ValueKey('tailscale-taildrop-commands')),
+          findsNothing);
+    });
+
+    testWidgets('узел подписки с выключенным Taildrop — блока Settings нет',
+        (tester) async {
+      await pump(tester, data: [_status()], actions: _AutoSaveActions());
+      await tester.pump();
+      expect(find.text('Settings'), findsNothing);
     });
   });
 }

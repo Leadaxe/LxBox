@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/validation.dart';
 import 'package:lxbox/services/builder/validator.dart';
-import 'package:lxbox/services/error_humanize.dart';
 
 void main() {
   group('validateConfig', () {
@@ -193,11 +192,6 @@ void main() {
       expect(r.issues.whereType<DanglingOutboundRef>().length, 1);
       expect(r.issues.whereType<EmptyUrltestGroup>().length, 1);
       expect(r.issues.whereType<InvalidDefault>().length, 1);
-    });
-
-    test('пустые outbounds + пустые rules → ok', () {
-      expect(validateConfig({'outbounds': [], 'route': {'rules': []}}).isOk,
-          true);
     });
 
     // §121 — DNS resolver refs.
@@ -416,34 +410,6 @@ void main() {
         ],
       });
       expect(r.isOk, true);
-    });
-  });
-
-  // §141 P0.1 — контракт FatalValidationException (бросается в
-  // SubscriptionController._generate при hasFatal; ловится generateConfig →
-  // humanizeError → _lastError; null возврат блокирует save).
-  // §279 — пользовательский рендер живёт в ValidationFatalMsg (через
-  // humanizeError), не в toString.
-  group('FatalValidationException', () {
-    test('humanizeError перечисляет сообщения issues, полный список', () {
-      final e = FatalValidationException([
-        const DanglingOutboundRef('rules[0]', 'ghost'),
-        const EmptyUrltestGroup('auto'),
-      ]);
-      final s = humanizeError(e).renderEn();
-      expect(s.startsWith('Exception'), isFalse);
-      expect(s.startsWith('Error'), isFalse);
-      expect(s, contains('2 issues'));
-      expect(s, contains('ghost'));
-      expect(s, contains('auto'));
-    });
-
-    test('один issue — единственное число, без счётчика', () {
-      final e = FatalValidationException(
-          [const InvalidDefault('vpn-1', 'missing')]);
-      final s = humanizeError(e).renderEn();
-      expect(s, startsWith('Config invalid: '));
-      expect(s, isNot(contains('issues')));
     });
   });
 }

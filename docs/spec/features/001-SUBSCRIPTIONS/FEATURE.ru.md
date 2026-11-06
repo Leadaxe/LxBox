@@ -138,10 +138,10 @@ User-Agent и, по желанию, HWID-заголовками.
 | Auto-update subscriptions | Настройки → Subscriptions; дубль в меню экрана источников | вкл/выкл | вкл |
 | Update disabled subscriptions | там же; активна только при включённом автообновлении | вкл/выкл | выкл |
 | Custom User-Agent (глобальный) | Настройки → Subscriptions | строка или пресет клиента; пусто = `LxBox-android/<версия>` | пусто |
-| Send HWID | Настройки → Subscriptions | вкл/выкл | выкл |
+| Send HWID | Настройки → Subscriptions | вкл/выкл | вкл (§658) |
 | HWID · `x-hwid` | там же, кнопка Regenerate | UUIDv4, генерируется при первом показе | — |
 | `x-device-os` / `x-ver-os` / `x-device-model` | там же | строка; пусто = значение устройства | `android` / версия ОС / модель |
-| Update interval (на подписке) | Подписка → Settings | `-1` Don't auto-update · `0` Never (respect server) · 1/3/6/12/24/48/72/168 ч | 24 ч (онлайн), `-1` (файл) |
+| Update interval (на подписке) | Подписка → Settings | `0` As subscription · `-1` Don't auto-update · 1/3/6/12/24/48/72/168 ч | `0` (онлайн), `-1` (файл) |
 | On update (на подписке) | Подписка → Settings; скрыта при «Auto-restart VPN on settings change» | Rebuild · Reload · Do nothing | Rebuild |
 | Custom identity (на подписке) | Подписка → Settings → Fetch identity | Default / Custom (свой UA, HWID, device-meta) | Default |
 | Import rules (на подписке) | Подписка → Filters | список правил + общий тумблер | пусто, тумблер вкл |
@@ -218,6 +218,9 @@ User-Agent и, по желанию, HWID-заголовками.
   [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.ru.md).
 - Выбор файла и камера для QR — зависят от возможностей ОС (на ТВ без
   файлового менеджера — подсказка вместо выбора).
+- Лимит реестра `max_nodes_per_subscription=3000` не применяется: подписка
+  любого размера принимается, код `max_nodes_exceeded` живёт только в общем
+  словаре предупреждений.
 - Не планируется (решение владельца 2026-09-29, аудит [591](../../tasks/591-spec-kit-revision-audit.md)): Quick Start «Get Free VPN» и обновление подписок
   по интервалу при нажатии Start (`§010F`) — подписки обновляются триггерами
   автообновления.
@@ -235,6 +238,7 @@ User-Agent и, по желанию, HWID-заголовками.
 | Отключение узлов подписки | Выключает отдельные узлы подписки по имени; отметка переживает обновления и перезапуски и истекает по TTL, когда узла больше нет. | P9, P10 | [node-disable.md](FUNCTIONS/node-disable.ru.md) |
 | Правила импорта подписки | Выключает, включает или правит узлы подписки правилами, которые применяются к каждому разбору тела подписки. | P12 | [import-rules.md](FUNCTIONS/import-rules.ru.md) |
 | Метаданные подписки | Показывает трафик, срок действия, имя, ссылки поддержки и рекомендованный интервал из заголовков провайдера или комментариев тела. | P4, P13 | [subscription-meta.md](FUNCTIONS/subscription-meta.ru.md) |
+| Бюджет узлов | Держит ручные серверы, члены папок и включённые подписки в одном лимите узлов на приложение; подписки делят остаток, лишние узлы режутся при разборе. | — | [node-budget.md](FUNCTIONS/node-budget.ru.md) |
 
 ## Связанные фичи
 

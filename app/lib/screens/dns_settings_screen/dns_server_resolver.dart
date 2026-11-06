@@ -4,6 +4,7 @@ import '../../models/parser_config.dart' show WizardVar;
 import '../../services/builder/post_steps.dart'
     show resolveTemplateDnsServerBody;
 import '../../services/builder/preset_expand.dart' show normalizeDnsDetour;
+import '../../services/dns/dns_server_holds.dart';
 import 'resolved_server.dart';
 
 /// §044: render list — typed `ResolvedServer` для каждой ref-записи.
@@ -28,6 +29,12 @@ List<ResolvedServer> resolveDisplayedServers(
   // §117 задача 3: tag → имя routing-правила с активной DNS-опцией
   // (lifecycle-лок «used by <правило>»).
   Map<String, String> ruleRefsByTag = const {},
+  // §680 — значения пикеров вкладки: сервер под ними залочен с меткой
+  // [dnsFinalLabel] / [defaultResolverLabel] (caller передаёт локализованные).
+  String dnsFinal = '',
+  String defaultResolver = '',
+  String dnsFinalLabel = 'DNS Final',
+  String defaultResolverLabel = 'Default Domain Resolver',
 }) {
   final out = <ResolvedServer>[];
   for (final ref in servers) {
@@ -119,20 +126,108 @@ List<ResolvedServer> resolveDisplayedServers(
   }
   // §044: render-order — template → preset → inline (см. ServerKind enum).
   // Stable sort: внутри каждой группы insertion-order сохраняется.
-  out.sort((a, b) => a.kind.index.compareTo(b.kind.index));
-  return out;
+  // §695 — override стоит на месте своей записи: ключ — вид canonical'а.
+  out.sort((a, b) =>
+      (a.overrides ?? a.kind).index.compareTo((b.overrides ?? b.kind).index));
+  final listRefs = dnsServerListRefs(
+    out,
+    dnsFinal: dnsFinal,
+    defaultResolver: defaultResolver,
+    dnsFinalLabel: dnsFinalLabel,
+    defaultResolverLabel: defaultResolverLabel,
+  );
+  // §695 — члены групп по списку.
+  final listTags = {for (final s in out) s.tag};
+  final liveTags = {
+    for (final s in out)
+      if (s.enabled || s.forceIncluded) s.tag,
+  };
+  return [
+    for (final s in out)
+      s.withListState(
+        usedByList: listRefs[s.tag],
+        groupMembersInList:
+            s.isGroup ? _groupMembers(s, listTags).length : 0,
+        groupLiveMembers: s.isGroup ? _groupMembers(s, liveTags).length : 0,
+      ),
+  ];
+}
+
+/// §695 — члены группы [g] (теги `servers[]`, без себя), которые есть в
+/// [tags].
+Set<String> _groupMembers(ResolvedServer g, Set<String> tags) => {
+      for (final m in (g.body['servers'] as List<dynamic>? ?? const []))
+        if (m?.toString() case final t? when t != g.tag && tags.contains(t)) t,
+    };
+
+/// §680 — кто из самого списка ссылается на сервер: tag → метки источников.
+/// Расчёт ссылок — [dnsServerListHolds] (общий с импортом бэкапа, §681);
+/// здесь только подписи: группа и `domain_resolver` — description
+/// сервера-источника, иначе его тег; [dnsFinal] / [defaultResolver] — метки
+/// [dnsFinalLabel] / [defaultResolverLabel]. Держит любая запись списка,
+/// включённая или нет (§680, §695 правило 3). — pure.
+Map<String, List<String>> dnsServerListRefs(
+  List<ResolvedServer> servers, {
+  String dnsFinal = '',
+  String defaultResolver = '',
+  String dnsFinalLabel = 'DNS Final',
+  String defaultResolverLabel = 'Default Domain Resolver',
+}) {
+  final labelByTag = <String, String>{};
+  for (final s in servers) {
+    labelByTag.putIfAbsent(
+        s.tag, () => s.description.isNotEmpty ? s.description : s.tag);
+  }
+  final holds = dnsServerListHolds(
+    [
+      for (final s in servers)
+        (tag: s.tag, body: s.body),
+    ],
+    dnsFinal: dnsFinal,
+    defaultResolver: defaultResolver,
+  );
+  final refs = <String, List<String>>{};
+  for (final e in holds.entries) {
+    final labels = <String>[];
+    for (final h in e.value) {
+      final label = switch (h.kind) {
+        DnsHoldKind.dnsFinal => dnsFinalLabel,
+        DnsHoldKind.defaultDomainResolver => defaultResolverLabel,
+        _ => labelByTag[h.source] ?? h.source,
+      };
+      if (!labels.contains(label)) labels.add(label);
+    }
+    refs[e.key] = labels;
+  }
+  return refs;
+}
+
+/// §680 — дефолтный сервер для авто-выбора (DNS-опция правила,
+/// `domain_resolver` hostname-адреса): `google_udp`, если он в [tags];
+/// иначе первый пригодный ([eligible] — не fakeip/hosts); иначе пусто.
+/// [tags] — только теги списка: сервер вне списка дал бы висящую ссылку.
+/// — pure.
+String defaultDnsServerTag(
+  List<String> tags, {
+  bool Function(String tag)? eligible,
+}) {
+  if (tags.contains('google_udp')) return 'google_udp';
+  for (final t in tags) {
+    if (t.isNotEmpty && (eligible == null || eligible(t))) return t;
+  }
+  return '';
 }
 
 /// Tags доступные в dropdown'ах (DNS Final / Default Resolver / per-rule).
-/// Filter `enabled` на ref-level. §117: locked-сервер (реферится активным
-/// пресетом или правилом) build всегда force-include'ит — показываем его
-/// даже при выключенном тоггле.
+/// Filter `enabled` на ref-level. §695 правило 2: выключенное выбрать
+/// нельзя, исключений для force-include нет (выбранное включено: лок +
+/// нормализация [normalizeReferencedDnsServers]).
 ///
 /// pure.
 List<String> enabledServerTags(List<ResolvedServer> displayedServers) {
   final out = <String>[];
   for (final s in displayedServers) {
-    if (!s.enabled && !s.locked) continue;
+    if (!s.enabled) continue;
     if (s.tag.isEmpty) continue;
     out.add(s.tag);
   }
@@ -142,6 +237,7 @@ List<String> enabledServerTags(List<ResolvedServer> displayedServers) {
 /// §117 (задача 4b): rename тега inline-сервера — каскад по ссылкам в
 /// state'е DNS-экрана, чтобы переименование не орфанило рефы:
 /// - `domain_resolver` в body других inline-серверов;
+/// - §699: `servers` и `hosts` inline-групп (и override шаблонных);
 /// - значения vars типа `dns_servers` (dom_resolver) у template-серверов;
 /// - `server` в §061 DNS-правилах (kind inline/srs);
 /// - `dns_final` / `dns_default_domain_resolver`.
@@ -162,9 +258,28 @@ List<String> enabledServerTags(List<ResolvedServer> displayedServers) {
     final entry = servers[i];
     switch (entry) {
       case DnsServerInline(:final body):
+        var next = body;
         if (body['domain_resolver'] == oldTag) {
-          servers[i] = entry.copyWith(
-              body: {...body, 'domain_resolver': newTag});
+          next = {...next, 'domain_resolver': newTag};
+        }
+        // §699 — `servers` и `hosts` групп (inline и override шаблонной):
+        // без этого переименованный член выпадал из группы на сборке как
+        // `unknown`. Строка (Listable ядра) остаётся строкой.
+        if (body['type'] == 'group') {
+          for (final key in const ['servers', 'hosts']) {
+            final v = next[key];
+            if (v is List && v.contains(oldTag)) {
+              next = {
+                ...next,
+                key: [for (final m in v) m == oldTag ? newTag : m],
+              };
+            } else if (v == oldTag) {
+              next = {...next, key: newTag};
+            }
+          }
+        }
+        if (!identical(next, body)) {
+          servers[i] = entry.copyWith(body: next);
         }
       case DnsServerTemplate(:final varValues) when varValues.isNotEmpty:
         // Только vars типа dns_servers — enum-значение может текстуально
@@ -253,4 +368,44 @@ List<DnsRuleRef> cleanDnsRulesForPersist(
               presetRulesByPresetId.containsKey(presetId),
           })
       .toList();
+}
+
+/// §682 — Default Domain Resolver через туннель: резолвер ищет адреса узлов,
+/// пока туннеля ещё нет, и запрос через `detour` ждёт сам себя. Возвращает
+/// тег Направления, когда предупреждать, иначе null:
+/// - одиночный сервер — его `detour` после нормализации (`direct-out` = нет);
+/// - группа — только если ВСЕ эмитируемые члены (есть в списке, включены или
+///   залочены) с `detour`; тег — первого из них. Хоть один прямой член,
+///   член-группа или ни одного эмитируемого — null.
+/// Тела берутся из [servers] (template — с подставленными vars). — pure.
+String? defaultResolverTunnelDetour(
+  String resolverTag,
+  List<ResolvedServer> servers,
+) {
+  final byTag = {for (final s in servers) s.tag: s};
+  String? detourOf(ResolvedServer s) {
+    if (s.body['type'] == 'group') return null;
+    final body = Map<String, dynamic>.of(s.body);
+    normalizeDnsDetour(body);
+    final d = body['detour'];
+    return d is String && d.isNotEmpty ? d : null;
+  }
+
+  final selected = byTag[resolverTag];
+  if (selected == null) return null;
+  if (selected.body['type'] != 'group') return detourOf(selected);
+  final members = selected.body['servers'];
+  if (members is! List) return null;
+  String? first;
+  var emitted = 0;
+  for (final m in members) {
+    final member = byTag[m?.toString() ?? ''];
+    if (member == null || member.tag == selected.tag) continue;
+    if (!member.enabled && !member.forceIncluded) continue;
+    emitted++;
+    final d = detourOf(member);
+    if (d == null) return null;
+    first ??= d;
+  }
+  return emitted == 0 ? null : first;
 }

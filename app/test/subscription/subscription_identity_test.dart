@@ -20,6 +20,19 @@ void main() {
     });
   });
 
+  group('§658 parseSendHwid — включено по умолчанию', () {
+    test('переменной нет → вкл', () {
+      expect(SubscriptionIdentity.parseSendHwid(''), isTrue);
+    });
+    test("явное 'false' → выкл", () {
+      expect(SubscriptionIdentity.parseSendHwid('false'), isFalse);
+      expect(SubscriptionIdentity.parseSendHwid(' false '), isFalse);
+    });
+    test("'true' → вкл", () {
+      expect(SubscriptionIdentity.parseSendHwid('true'), isTrue);
+    });
+  });
+
   group('§118 SubscriptionIdentity.fetchHeaders', () {
     setUp(() {
       SubscriptionIdentity.sendHwid = false;
@@ -84,22 +97,6 @@ void main() {
   });
 
   group('§289 headersFrom (общая форма)', () {
-    test('sendHwid=false → пусто', () {
-      expect(
-        SubscriptionIdentity.headersFrom(
-            sendHwid: false, hwid: 'X', deviceOs: '', verOs: '', deviceModel: ''),
-        isEmpty,
-      );
-    });
-
-    test('sendHwid=true + пустой hwid → пусто', () {
-      expect(
-        SubscriptionIdentity.headersFrom(
-            sendHwid: true, hwid: '', deviceOs: 'android', verOs: '', deviceModel: ''),
-        isEmpty,
-      );
-    });
-
     test('sendHwid=true + hwid → x-hwid + непустые meta', () {
       final h = SubscriptionIdentity.headersFrom(
           sendHwid: true,

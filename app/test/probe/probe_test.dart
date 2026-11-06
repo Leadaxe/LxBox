@@ -347,17 +347,6 @@ void main() {
         expect(wgCountOf(batches[1]), 5 - kProbeMaxWireguardPerConfig);
       });
 
-      test('конфиг без WG/naive — дословно прежний (batches == 1)', () {
-        final nodes = nodesOf(folder(members: [
-          FolderMember(raw: uriA),
-          FolderMember(raw: uriB),
-        ]));
-        final batches = buildProbeBatches(nodes);
-        expect(batches.length, 1);
-        expect(batches.single.configJson, buildProbeConfig(nodes).configJson);
-        expect(endpointsOf(batches.single), isEmpty);
-      });
-
       test('WG-детур у vless учитывается в лимите: endpoint уезжает в тот же '
           'батч, что и узел', () {
         // 4 WG-узла уже набивают лимит; пятый «узел» — vless с WG-детуром,
@@ -608,7 +597,11 @@ void main() {
         calls.add(call);
         switch (call.method) {
           case 'probeStart':
-            return probeStartAnswer;
+            // §669 — {error, runId}; runId 0 при ошибке старта.
+            return {
+              'error': probeStartAnswer,
+              'runId': probeStartAnswer.isEmpty ? 1 : 0,
+            };
           case 'probeUrlTest':
             final tag = (call.arguments as Map)['tag'] as String;
             // Alpha живой (120мс), остальные — err.

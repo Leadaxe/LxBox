@@ -9,14 +9,20 @@ import '../../models/dns_ref.dart';
 import '../../models/parser_config.dart';
 import '../../models/source_chain.dart' show kChainOutboundType;
 import '../../models/node_warning.dart' show RegistryWarning;
+import '../../models/tls_policy.dart';
 import '../contract/body_edit.dart' show editBodyPath;
 import '../contract/body_sanitizer.dart' show fieldAllowedOn;
+import '../app_log.dart';
 import '../core_duration.dart';
+import '../dns/dns_server_holds.dart' show DnsServerHold, dnsServerListHolds;
 import '../json_clone.dart';
 import '../parser/uri_utils.dart' show isValidRealityPublicKey;
 import '../parser/utls_fingerprint.dart';
 import '../settings_storage.dart' show SettingsStorage, TunAppsConfig;
+import 'core_chain_capability.dart'
+    show coreSupportsDnsGroupHosts, kDnsGroupHostsMinCoreVersion;
 import 'detour_yields.dart' show yieldToBuildDetour;
+import 'domain_resolver_ref.dart';
 import 'if_engine.dart' show Dropped, walk;
 import 'preset_expand.dart';
 import 'rule_set_registry.dart';
@@ -27,6 +33,8 @@ import 'server_list_build.dart' show groupDefaultDropped;
 //
 //   - tls_transforms.dart — applyMixedCaseSni / applyTlsFragment (§028)
 //   - tun_packages.dart   — applyTunPackages (§046)
+//   - heal_tun_route_exclude.dart — «Bypass the tunnel»: не-CIDR и адрес
+//                           самого TUN снимаются (§691)
 //   - dns_rules.dart      — applyCustomDns / resolveDnsRulesList (§061+§033)
 //   - custom_rules.dart   — applyPresetBundles / applyCustomRules /
 //                           applyAllCustomRules / _outboundToRoute (§030+§062)
@@ -36,12 +44,14 @@ import 'server_list_build.dart' show groupDefaultDropped;
 //                           висячего detour (§441/§443, SPEC 129 Н10)
 part 'post_steps/tls_transforms.dart';
 part 'post_steps/tun_packages.dart';
+part 'post_steps/heal_tun_route_exclude.dart';
 part 'post_steps/dns_rules.dart';
 part 'post_steps/custom_rules.dart';
 part 'post_steps/dns_servers.dart';
 part 'post_steps/heal_preset_tag_prefix.dart';
 part 'post_steps/heal_dangling_resolve_servers.dart';
 part 'post_steps/heal_dangling_dns_resolvers.dart';
+part 'post_steps/heal_dangling_dns_server_resolver.dart';
 part 'post_steps/heal_detour_dropped_dns.dart';
 part 'post_steps/heal_legacy_dns_strategy.dart';
 part 'post_steps/heal_unknown_utls_fingerprints.dart';

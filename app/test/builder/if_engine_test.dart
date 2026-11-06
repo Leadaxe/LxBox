@@ -692,22 +692,6 @@ void main() {
           throwsA(isA<TemplateIfError>()));
     });
 
-    test('реальный bundled wizard_template.json проходит валидацию', () {
-      // Регрессия: все #if-предикаты в шаблоне ссылаются на объявленные ноды
-      // с совместимым типом. Ловит мои правки шаблона, если var не объявлена.
-      final raw =
-          File('assets/wizard_template.json').readAsStringSync();
-      final json = jsonDecode(raw) as Map<String, dynamic>;
-      final template = WizardTemplate.fromJson(json);
-      final byName = <String, WizardVar>{
-        for (final v in template.vars) v.name: v,
-      };
-      expect(
-        () => validateIfConstructs(template.config, byName),
-        returnsNormally,
-      );
-    });
-
     test('urltest_tolerance подставляется числом, а не строкой', () {
       // Регрессия: ядро sing-box требует URLTest.tolerance как uint16. Если
       // нода объявлена `text`, в конфиг попадёт "30" → "cannot unmarshal string

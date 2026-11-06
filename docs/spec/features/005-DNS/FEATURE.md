@@ -23,7 +23,9 @@ queries), availability (whether the server is alive) and route correctness
 (which IP a Russian site ends up on). The feature lets the user manage it
 without hand-written JSON: a server catalog with channel selection, custom
 servers of any core type, DNS rules, strategy, groups with failover,
-FakeIP, cache.
+FakeIP, cache. All of it lives on the DNS tab of the Routing screen
+(Routing → DNS, after Rules); there is no separate DNS screen or menu item
+(§655).
 
 The feature protects two principles. First, **a config built from the DNS
 settings is either accepted by the core or not built at all — with a clear
@@ -129,7 +131,7 @@ domains (with the `ru-direct` preset, enabled by default) get their own
   cleared — reloading", FakeIP addresses are allocated anew. No autotest,
   not confirmed on a device (§263). **Mutation:** delete only the FakeIP
   part.
-- **P15. Live group state — a snapshot on screen open.** With the tunnel up,
+- **P15. Live group state — a snapshot on opening the DNS tab.** With the tunnel up,
   the current target and per-member ✓/✗, RTT, errors are shown under the
   group; a core without the method or a tunnel down — no line, the screen
   does not break. **Witness:** unit "empty/broken map does not crash"
@@ -149,7 +151,7 @@ domains (with the `ru-direct` preset, enabled by default) get their own
 
 ## Controlled parameters
 
-| Setting (DNS screen) | Values | Default | Core config key |
+| Setting (Routing → DNS tab) | Values | Default | Core config key |
 |---|---|---|---|
 | Servers: on/off, custom, overrides | list | template catalog (see [servers](FUNCTIONS/dns-servers.md)) | `dns.servers[]` |
 | Strategy | `prefer_ipv4` · `prefer_ipv6` · `ipv4_only` · `ipv6_only` | `ipv4_only` | `dns.strategy` |
@@ -225,8 +227,9 @@ template (servers, presets)   user records   routing rules
   members.
 - A rule's DNS option references a server by tag; the rule does not touch
   its detour.
-- Changes on the screen mark the config for rebuild; writing to disk is
-  deferred, on leaving the screen.
+- Changes on the DNS tab mark the config for rebuild; writing to disk is
+  deferred, on leaving the tab or the Routing screen. Every entry to the tab
+  reads storage afresh, so edits made on the other Routing tabs show at once.
 
 ## Boundaries
 

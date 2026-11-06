@@ -46,6 +46,9 @@ public_key "…" — node degraded to plain TLS."
 - `short_id` during parsing: lower-cased, non-hex characters are stripped;
   a result of odd length or longer than 16 → empty, the node lives.
   Truncation to 16 is not done: it would produce someone else's identifier.
+  Stripping is not fitting: `0x1a2` → `01a2` (only the `x` goes, the hex
+  digits stay as they were); padding or cutting the length — the fitting
+  task 343 forbids — never happens.
 - `key_share`: case and whitespace are normalised; outside the enum → the
   field is removed silently, the node lives; without a valid `pbk` the
   parameter is ignored; the "link → node → link" round trip preserves it.

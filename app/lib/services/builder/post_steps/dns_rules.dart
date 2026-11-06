@@ -53,6 +53,12 @@ Future<void> applyCustomDns(
   Map<String, String> resolverDefaults = const {},
   // §555/§570 (§66) — переменные шаблона для тел шаблонных DNS-серверов.
   Map<String, String> globalVars = const {},
+  // §695 правило 5 — значения пикеров DNS Final / Default Domain Resolver
+  // (vars после подстановки дефолтов) для нормализации списка.
+  ({String dnsFinal, String defaultResolver}) resolverPickers =
+      (dnsFinal: '', defaultResolver: ''),
+  // §699 — версия ядра для гейта ключа `hosts` DNS-групп; пусто — fail-open.
+  String coreVersion = '',
 }) async {
   final dns = (config['dns'] as Map<String, dynamic>?) ?? <String, dynamic>{};
 
@@ -72,11 +78,22 @@ Future<void> applyCustomDns(
         s['tag'] as String: Map<String, dynamic>.from(s),
   };
 
-  // Auto-discover + orphan cleanup + legacy migration.
+  // §117 задача 3: серверы, реферимые активными правилами (rule-источники
+  // mirror-группы) — force-include в dns.servers (lifecycle, locked №7).
+  final ruleReferencedTags = <String>{
+    for (final m in dnsMirrors)
+      if (m.ruleId != null && m.serverTag.isNotEmpty) m.serverTag,
+  };
+
+  // Auto-discover + orphan cleanup + legacy migration + §695 нормализация
+  // ссылок (пикеры — параметрами).
   final resolvedServers = await resolveDnsServersList(
     templateServers: templateServers,
     presetServersByTag: presetServersByTag,
     presetIdByTag: extraServerPresetIds,
+    dnsFinal: resolverPickers.dnsFinal,
+    defaultResolver: resolverPickers.defaultResolver,
+    ruleReferencedTags: ruleReferencedTags,
   );
 
   // §117: known outbound-теги (outbounds + endpoints уже в конфиге на этом
@@ -95,13 +112,6 @@ Future<void> applyCustomDns(
         e['tag'] as String,
   };
 
-  // §117 задача 3: серверы, реферимые активными правилами (rule-источники
-  // mirror-группы) — force-include в dns.servers (lifecycle, locked №7).
-  final ruleReferencedTags = <String>{
-    for (final m in dnsMirrors)
-      if (m.ruleId != null && m.serverTag.isNotEmpty) m.serverTag,
-  };
-
   // Refs → final bodies для sing-box config.
   // §441 — теги серверов, выпавших из-за висячего detour (Н10).
   final detourDropped = <String>{};
@@ -115,6 +125,7 @@ Future<void> applyCustomDns(
     tailscaleEndpointTags: tailscaleEndpointTags, // §435
     detourDroppedOut: detourDropped, // §441
     globalVars: globalVars, // §555/§570
+    coreVersion: coreVersion, // §699
   );
   dns['servers'] = serverBodies;
 
@@ -157,24 +168,8 @@ Future<void> applyCustomDns(
     if (mirrorGroupEmitted) return;
     mirrorGroupEmitted = true;
     for (final m in dnsMirrors) {
-      if (m.presetId != null) {
-        // Preset-источник: body несёт server (serverless-действия §253 —
-        // predefined/reject — без него, эмитятся как есть). Defensive:
-        // dangling server (преcет-сервер не дожил до dns.servers) → тихо
-        // пропускаем.
-        final srv = m.body['server'];
-        if (srv is String && !emittedServerTags.contains(srv)) continue;
-        outRules.add(m.body);
-      } else if (m.serverless) {
-        // §256 — Rule-источник, serverless (Force IPv4 predefined): тело
-        // самодостаточно, server не подставляем и не режем по его отсутствию.
-        outRules.add(m.body);
-      } else {
-        // Rule-источник: пропавший сервер → DNS-rule тихо не эмитится
-        // (решение №3).
-        if (!emittedServerTags.contains(m.serverTag)) continue;
-        outRules.add({...m.body, 'server': m.serverTag});
-      }
+      final rule = dnsMirrorRule(m, emittedServerTags);
+      if (rule != null) outRules.add(rule);
     }
   }
 
@@ -385,8 +380,8 @@ Map<String, dynamic>? cleanDanglingDnsRuleSet(
 /// §439 A1 — записи, которые модель не выражает (незнакомый вид, формы §032),
 /// сюда не приходят и сохранением не стираются: их держит репозиторий.
 ///
-/// Используется и `applyCustomDns` (build pipeline), и `DnsSettingsScreen`
-/// (UI load) — единая точка истины.
+/// Используется и `applyCustomDns` (build pipeline), и `DnsSettingsTab`
+/// (вкладка DNS экрана Routing, UI load) — единая точка истины.
 Future<List<DnsRuleRef>> resolveDnsRulesList({
   required List<Map<String, dynamic>> templateRules,
   required Set<String> activePresetIdsWithDnsRule,
@@ -474,4 +469,30 @@ Future<List<DnsRuleRef>> resolveDnsRulesList({
     await SettingsStorage.saveDnsRulesList(result);
   }
   return result;
+}
+
+/// Итоговое DNS-правило одного mirror'а в `dns.rules` или `null`, если оно
+/// не эмитится (сервер не попал в [emittedServerTags]). Вынесено из
+/// `applyCustomDns` для раннера корпуса `rule_dns` (§135 контракта).
+Map<String, dynamic>? dnsMirrorRule(
+    DnsMirrorEntry m, Set<String> emittedServerTags) {
+  if (m.presetId != null) {
+    // Preset-источник: body несёт server (serverless-действия §253 —
+    // predefined/reject — без него, эмитятся как есть). Defensive:
+    // dangling server (преcет-сервер не дожил до dns.servers) → тихо
+    // пропускаем.
+    final srv = m.body['server'];
+    if (srv is String && !emittedServerTags.contains(srv)) return null;
+    return m.body;
+  }
+  if (m.serverless) {
+    // §256 — Rule-источник, serverless (Force IPv4 predefined, §683 Fixed
+    // IP): тело самодостаточно, server не подставляем и не режем по его
+    // отсутствию.
+    return m.body;
+  }
+  // Rule-источник: пропавший сервер → DNS-rule тихо не эмитится
+  // (решение №3).
+  if (!emittedServerTags.contains(m.serverTag)) return null;
+  return {...m.body, 'server': m.serverTag};
 }

@@ -60,7 +60,10 @@ reference; an on-screen warning about the system resolver.
   choice comes back.
 - `local_dns_resolver` as Default Domain Resolver — a yellow warning "System
   DNS leaks lookups to your ISP" with a "Switch to cloudflare_udp" button
-  (if such a server exists). As DNS Final it is allowed.
+  (if such a server exists). As DNS Final it is allowed. The button is a
+  fixed shortcut to `cloudflare_udp`, not to the template default
+  (`dns_shield`); this is intentional — any other resolver is picked from the
+  list.
 - A Strategy outside the four values is displayed on the screen as
   `ipv4_only`.
 

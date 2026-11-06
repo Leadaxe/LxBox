@@ -17,6 +17,7 @@ import '../services/parser/body_decoder.dart';
 import '../services/probe/probe_controller.dart';
 import '../services/probe/probe_runner.dart';
 import '../services/settings_storage.dart';
+import '../services/ui_helpers.dart';
 import '../services/subscription/sources.dart';
 import '../services/subscription/subscription_identity.dart'; // §289 — generateUuidV4
 import '../widgets/detour_target_picker.dart';
@@ -33,6 +34,7 @@ import 'subscription_detail_screen/widgets/subscription_node_list.dart';
 import 'subscription_detail_screen/widgets/subscription_settings_tab.dart';
 import 'subscription_detail_screen/widgets/subscription_source_tab.dart';
 import '../services/l10n/locale_controller.dart';
+import '../services/telegram_link.dart'; // §657
 
 class SubscriptionDetailScreen extends StatefulWidget {
   const SubscriptionDetailScreen({
@@ -109,6 +111,9 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
   final Map<String, ProbeResult> _probe = {};
   Timer? _probeFlushTimer;
   bool _testing = false;
+  // §669 — Stop нажат, прогон ещё доходит до finally (как в папке):
+  // кнопка неактивна, подпись «Stopping…».
+  bool _stopping = false;
   ProbeRunner? _probeRunner;
   ProbeThresholds _probeThresholds = ProbeThresholds.defaults;
 
@@ -213,6 +218,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
     'support-url',
     'subscription-userinfo',
     'content-type',
+    'announce', // §648
   };
 
   @override
@@ -241,6 +247,8 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
   @override
   void dispose() {
     widget.entry.removeListener(_onEntryChanged); // §283
+    // §669 — как в папке: отмена доводит run() до finally → probeStop.
+    _probeRunner?.cancel();
     _probeFlushTimer?.cancel(); // §339/§286
     _probeFlushTimer = null;
     _tabCtrl.dispose();
@@ -266,11 +274,11 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
   }
 
   Future<void> _toggleProbeTest() async {
+    if (_stopping) return;
     if (_testing) {
+      // §669 — `_testing` гасит только сам прогон, дойдя до конца (см. папку).
       _probeRunner?.cancel();
-      _probeFlushTimer?.cancel();
-      _probeFlushTimer = null;
-      setState(() => _testing = false);
+      setState(() => _stopping = true);
       return;
     }
     if (widget.entry.list.nodes.isEmpty) return;
@@ -303,18 +311,27 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
     _probeRunner = runner;
     final err = await runner.run(
       nodes,
+      // §636 — проба фрагментирует так же, как туннель.
+      tlsByIndex: ProbeController.probeTlsOf(widget.entry.list),
       url: url,
       timeoutMs: timeoutMs,
       onResult: (i, r) {
         if (!mounted) return;
+        if (!identical(_probeRunner, runner)) return; // §669 — вытеснен
         if (i < probeKeys.length) _probe[probeKeys[i]] = r;
         _scheduleProbeFlush();
       },
     );
+    // §669 — состояние экрана гасит только активный прогон.
+    if (!identical(_probeRunner, runner)) return;
+    _probeRunner = null;
     _probeFlushTimer?.cancel();
     _probeFlushTimer = null;
     if (!mounted) return;
-    setState(() => _testing = false);
+    setState(() {
+      _testing = false;
+      _stopping = false;
+    });
     // §236-гонка — VPN стартовал между гейтом и probeStart: тот же попап.
     if (err == kProbeVpnRunning) {
       if (mounted && await onProbeVpnRaceGate()) await _runProbe();
@@ -510,7 +527,9 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
     final muted = theme.colorScheme.onSurfaceVariant;
     final s = _probeSummary();
     final String? info;
-    if (_testing) {
+    if (_stopping) {
+      info = getLocalText.s("Stopping…"); // §669
+    } else if (_testing) {
       info = getLocalText.s("Testing… %d done", s.ok + s.dead);
     } else if (_probe.isNotEmpty) {
       info = [
@@ -555,14 +574,17 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
                 ? Text(info, style: TextStyle(fontSize: 12, color: muted))
                 : const SizedBox.shrink(),
           ),
+          // §669 — на время «Stopping…» кнопка неактивна (как без узлов).
           GestureDetector(
-            onTap: hasNodes ? () => unawaited(_toggleProbeTest()) : null,
+            onTap: hasNodes && !_stopping
+                ? () => unawaited(_toggleProbeTest())
+                : null,
             child: Padding(
               padding: const EdgeInsets.all(8),
               child: Icon(
                 _testing ? Icons.stop_circle_outlined : Icons.speed,
                 size: 22,
-                color: hasNodes ? null : theme.disabledColor,
+                color: hasNodes && !_stopping ? null : theme.disabledColor,
               ),
             ),
           ),
@@ -641,6 +663,13 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
         // §219 — index по ссылке (список мог сместиться от reorder).
         final idx = widget.controller.entries.indexOf(widget.entry);
         if (idx >= 0) await widget.controller.updateAt(idx);
+      } else {
+        // §652 (г) — выключенная подписка на старте не разбиралась: узлы
+        // догружаются из кэша здесь, пока идёт индикатор (вместо «No nodes
+        // found»). Вкладки Nodes / Filters и сводка `dropped` читают тот же
+        // entry.list.
+        await widget.controller.ensureHydrated(widget.entry);
+        if (!mounted) return;
       }
       // v2: узлы уже распарсены в entry.list.nodes. Детоур-узлы показываем
       // отдельной строкой под родителем.
@@ -686,7 +715,8 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
   }
 
   Future<void> _openUrl(String url) async {
-    final opened = await UrlLauncher.open(url);
+    final opened =
+        await UrlLauncher.open(url, fallbackUrl: telegramWebFallback(url));
     if (!opened && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(getLocalText.s("Copied: %s", url))),
@@ -705,12 +735,39 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
     setState(() => _editing = !_editing);
   }
 
+  /// §626 — Back (системный, жест, стрелка AppBar) при открытом
+  /// переименовании с изменённым именем: общий диалог Discard / Keep / Save
+  /// (§219). Остальные правки экрана пишутся сразу.
+  Future<void> _handleBack() async {
+    final dirty =
+        _editing && _nameCtrl.text.trim() != widget.entry.name.trim();
+    if (!dirty) {
+      Navigator.pop(context);
+      return;
+    }
+    final action = await showUnsavedChangesDialog(context); // §219
+    if (!mounted) return;
+    if (action == 'save') {
+      _toggleEdit();
+      Navigator.pop(context);
+    } else if (action == 'discard') {
+      Navigator.pop(context);
+    }
+    // 'keep' / null (dismiss) — остаёмся.
+  }
+
   @override
   Widget build(BuildContext context) {
     final entry = widget.entry;
     final theme = Theme.of(context);
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        unawaited(_handleBack());
+      },
+      child: Scaffold(
       appBar: AppBar(
         title: _editing
             ? TextField(
@@ -808,6 +865,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
           ),
         ],
       ),
+      ),
     );
   }
 
@@ -845,6 +903,11 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
         unawaited(widget.controller.persistSources());
       },
       onShowOverrideDetourPicker: () => _showOverrideDetourPicker(),
+      // §636 — TLS-политика источника: запись сразу, как у detour.
+      onTlsChanged: (v) {
+        setState(() => widget.entry.tls = v);
+        unawaited(widget.controller.persistSources());
+      },
       onReplaceDetourChainChanged: (val) {
         setState(() => widget.entry.replaceDetourChain = val);
         unawaited(widget.controller.persistSources());
@@ -992,9 +1055,10 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
 
   Future<void> _showIntervalPicker() async {
     final list = widget.entry.list as SubscriptionServers;
-    // §129 — -1 = «Don't auto-update» (никогда, игнор серверного интервала);
-    //          0 = «Never (respect server)» (сами нет, но сервер может задать).
-    final presets = <int>[-1, 0, 1, 3, 6, 12, 24, 48, 72, 168];
+    // §129/§685 — 0 = «As subscription» (серверный интервал, первым пунктом);
+    //             -1 = «Don't auto-update»; дальше ручные значения — сервер
+    //             их не перезаписывает.
+    final presets = <int>[0, -1, 1, 3, 6, 12, 24, 48, 72, 168];
     final chosen = await showDialog<int>(
       context: context,
       builder: (ctx) => SimpleDialog(
@@ -1012,7 +1076,8 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
                   const SizedBox(width: 8),
                   Text(switch (h) {
                     < 0 => getLocalText.s("Don't auto-update"),
-                    0 => getLocalText.s("Never (respect server)"),
+                    0 => asSubscriptionIntervalLabel(
+                        list.meta?.updateIntervalHours),
                     _ => getLocalText.s("%1\$dh (%2\$s)", h, intervalHuman(h)),
                   }),
                 ],

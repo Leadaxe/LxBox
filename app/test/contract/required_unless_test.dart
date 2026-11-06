@@ -57,11 +57,6 @@ void main() {
       expect(peer.containsKey('address'), isFalse, reason: 'тело не меняется');
     });
 
-    test('absent: без адреса порт не обязателен и молчит (кода нет)', () {
-      final r = _san(_wg(listenPort: 51822));
-      expect(_codes(r).where((c) => c.contains('port')), isEmpty);
-    });
-
     test('не снято: нет ни адреса, ни listen_port — field_missing, узел снят',
         () {
       final r = _san(_wg());

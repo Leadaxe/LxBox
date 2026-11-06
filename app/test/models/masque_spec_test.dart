@@ -109,14 +109,14 @@ void main() {
     expect(m.containsKey('tls'), isFalse);
   });
 
-  test('§393/0.8.0 (D-078) — URI пишет vhttp=, legacy network= НЕ принимает', () {
+  test('§393/1.1.118 (D-129) — URI пишет vhttp=, network= НЕ читает', () {
     final uri = spec().toUri();
     expect(uri, contains('vhttp=h3'));
     expect(uri, isNot(contains('network=')));
 
-    // Директива оператора 25.08: legacy-имя больше не читается — URI,
-    // выпущенный до миграции, парсится, но параметр игнорируется (узел
-    // живёт на дефолте, а не на значении из ссылки).
+    // Контракт 1.1.118 (D-129): `network` — не имя vhttp, старые ссылки с
+    // ним не поддерживаются и не мигрируются — URI парсится, параметр
+    // остаётся неизвестным (узел живёт на дефолте, а не на значении).
     final legacy = uri.replaceAll('vhttp=h3', 'network=h2');
     expect(parseLinkAs<MasqueSpec>(legacy)!.vhttp, 'h3');
 

@@ -218,6 +218,57 @@ void main() {
       expect(endpoints(r2).single['state_directory'], '/own');
     });
 
+    // §707 — входящие Taildrop на узел.
+    test('taildrop_directory = <state_directory>/taildrop; без корня нет; свой не трогается',
+        () async {
+      final node = ts(tag: 'home');
+      const rooted = BuildSettings(enabledGroups: {'vpn-1'}, tailscaleStateRoot: '/root');
+      final r = await buildConfig(lists: [user(node)], template: template, settings: rooted);
+      final ep = endpoints(r).single;
+      expect(ep['taildrop_directory'], '${ep['state_directory']}/taildrop');
+      expect(node.body.containsKey('taildrop_directory'), isFalse);
+
+      final r1 = await buildConfig(lists: [user(ts())], template: template, settings: settings);
+      expect(endpoints(r1).single.containsKey('taildrop_directory'), isFalse);
+
+      final ownState = TailscaleSpec(id: 'x', tag: 'x', label: 'x', body: {'state_directory': '/own'});
+      final r2 = await buildConfig(lists: [user(ownState)], template: template, settings: rooted);
+      expect(endpoints(r2).single['taildrop_directory'], '/own/taildrop');
+
+      final ownDrop = TailscaleSpec(
+          id: 'y', tag: 'y', label: 'y', body: {'taildrop_directory': '/sdcard/drop'});
+      final r3 = await buildConfig(lists: [user(ownDrop)], template: template, settings: rooted);
+      expect(endpoints(r3).single['taildrop_directory'], '/sdcard/drop');
+    });
+
+    // §707 итер. 4 (контракт 1.1.150) — «Allow Taildrop» по умолчанию выкл.
+    test('disable_taildrop: нет поля → true; явное false проходит; '
+        'ядро ниже min_core — поля нет; тело не трогается', () async {
+      const pin = BuildSettings(
+          enabledGroups: {'vpn-1'}, coreVersion: '1.14.4-lx.30-rc.2');
+      final plain = ts(tag: 'plain');
+      final r = await buildConfig(
+          lists: [user(plain)], template: template, settings: pin);
+      expect(endpoints(r).single['disable_taildrop'], isTrue);
+      expect(plain.body.containsKey('disable_taildrop'), isFalse);
+
+      final on = TailscaleSpec(
+          id: 'on', tag: 'on', label: 'on', body: {'disable_taildrop': false});
+      final r1 = await buildConfig(
+          lists: [user(on)], template: template, settings: pin);
+      expect(endpoints(r1).single['disable_taildrop'], isFalse);
+
+      for (final old in ['1.14.4-lx.30-rc.1', '1.14.4-lx.29']) {
+        final s = BuildSettings(enabledGroups: const {'vpn-1'}, coreVersion: old);
+        final r2 = await buildConfig(
+            lists: [user(ts(tag: 'a')), user(on)], template: template, settings: s);
+        for (final ep in endpoints(r2)) {
+          expect(ep.containsKey('disable_taildrop'), isFalse, reason: old);
+        }
+      }
+      expect(on.body['disable_taildrop'], isFalse);
+    });
+
     test('гейт ядра по тегу сборки (§56): без with_tailscale узел снят с кодом; '
         'с тегом — эмиссия', () async {
       final noTs = kCoreBuildTags.difference({'with_tailscale'});

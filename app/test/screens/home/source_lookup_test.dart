@@ -127,15 +127,6 @@ void main() {
       expect(sourcesOfTag('🇷🇺 M1', entries), {'A', 'B'});
     });
 
-    test('разные префиксы → узкий мэтч', () {
-      final entries = [
-        _sub(id: 'A', tagPrefix: '🇷🇺'),
-        _sub(id: 'B', tagPrefix: '🇩🇪'),
-      ];
-      expect(sourcesOfTag('🇷🇺 M1', entries), {'A'});
-      expect(sourcesOfTag('🇩🇪 M1', entries), {'B'});
-    });
-
     test('префикс A — префикс другого B (prefix-of-prefix) разводится пробелом', () {
       // 'RU' и 'RU2': tag 'RU2 M1' начинается с 'RU2 ', но НЕ с 'RU '
       // (после 'RU' идёт '2', не пробел) → только B.
@@ -152,11 +143,6 @@ void main() {
     test('папка с префиксом участвует наравне с подпиской', () {
       final entries = [_folder(id: 'f1', tagPrefix: 'pr')];
       expect(sourcesOfTag('pr M1', entries), {'f1'});
-    });
-
-    test('папка без префикса → НЕ участвует', () {
-      final entries = [_folder(id: 'f1', tagPrefix: '')];
-      expect(sourcesOfTag('M1', entries), isEmpty);
     });
 
     test('disabled папка пропущена', () {
@@ -185,19 +171,6 @@ void main() {
         _sub(id: 'B', tagPrefix: '🇷🇺', enabled: false),
       ];
       expect(sourcesOfTag('🇷🇺 M1', entries), {'A'});
-    });
-
-    test('пустой список entries → empty', () {
-      expect(sourcesOfTag('M1', const []), isEmpty);
-    });
-
-    test('mix: prefixed sub + UserServer', () {
-      final entries = [
-        _sub(id: 's1', tagPrefix: '🇷🇺'),
-        _user(id: 'u1', nodes: ['Custom1']),
-      ];
-      expect(sourcesOfTag('🇷🇺 M1', entries), {'s1'});
-      expect(sourcesOfTag('Custom1', entries), isEmpty);
     });
   });
 

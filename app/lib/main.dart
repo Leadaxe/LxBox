@@ -24,7 +24,9 @@ import 'services/subscription/subscription_identity.dart';
 import 'services/debug/bootstrap.dart' as debug_bootstrap;
 import 'services/nav/home_return_observer.dart';
 import 'services/settings_storage.dart';
+import 'services/taildrop_tags_sync.dart' show migrateLegacyTaildropPrefs;
 import 'services/template_loader.dart';
+import 'services/url_launcher.dart';
 import 'services/version_info.dart';
 import 'services/workspaces/workspace_controller.dart';
 import 'services/workspaces/workspace_store.dart';
@@ -114,7 +116,13 @@ void main() async {
     // последующие — sync JSON⇒native (диск-истина перезаливает оперативку).
     // ДО UI (UI читает native-тумблеры из JSON-зеркала) и ДО возможного
     // авто-старта VPN. best-effort: ошибка не валит запуск (try выше).
+    // §707 итер. 9 H — старые файлы prefs rc.3 удаляются без переноса
+    // (контракт 1.1.159: умолчание новых полей — «включено»).
+    await migrateLegacyTaildropPrefs();
     await SettingsStorage.bootstrapAndSyncNativePrefs();
+    // §707 итер. 9 — тема из хранилища (перенос из SharedPreferences один
+    // раз) ДО первого кадра.
+    await themeNotifier.load();
     // §279 — язык приложения: применить сохранённую настройку ДО runApp
     // (первый кадр локализован) и ДО seed-миграций ниже (seed-time метки
     // резолвятся через активную локаль — TemplateLoader.load() кладёт кэш
@@ -139,10 +147,16 @@ void main() async {
         for (final v in directionsTemplate.vars) v.name: v.defaultValue,
       },
     );
+    // §644 — первый seed дефолтных пресетов шаблона (`default: true`), один
+    // раз на установку, ДО первого билда: Connect без открытия Routing.
+    await SettingsStorage.seedDefaultPresets(directionsTemplate);
     // §612 — one-shot: passive_check (§611) true/отсутствует → автовыбор
     // least_test становится failover. ПОСЛЕ seed Направлений (чистая
     // установка получает failover и у засеянных) и ДО первого билда.
     await SettingsStorage.migrateUrltestModeIfNeeded();
+    // §143 §9 — one-shot: снятый тумблер interrupt-on-switch → галки
+    // Направлений. ПОСЛЕ seed Направлений и ДО первого билда.
+    await SettingsStorage.migrateInterruptOnSwitchIfNeeded();
     // §229 — вызов one-shot ремапа preset_id (§228) убран: миграция удалена,
     // отработала у всех, кто обновлялся начиная с v2.10.0.
     // §043 — pump sing-box logs из Kotlin EventChannel "lxbox/coreLog" в
@@ -201,17 +215,35 @@ void main() async {
 /// своему auto-rotate (уважает системный rotation-lock). Вызывается на
 /// старте (до runApp) и из App Settings при переключении toggle'а —
 /// применяется мгновенно, рестарт не нужен.
+///
+/// §679 — на TV фиксации нет никогда, флаг не читается и не пишется. Признак
+/// TV ждём до `setPreferredOrientations`: на старте вызов идёт до runApp,
+/// поэтому портретной колонки на TV не бывает и на первом кадре.
 Future<void> applyAllowRotationSetting() async {
+  final tv = await UrlLauncher.isTelevision();
   var allow = false;
-  try {
-    allow = await SettingsStorage.getAllowRotation();
-  } catch (_) {
-    // Storage недоступен — безопасный дефолт (портрет).
+  if (!tv) {
+    try {
+      allow = await SettingsStorage.getAllowRotation();
+    } catch (_) {
+      // Storage недоступен — безопасный дефолт (портрет).
+    }
   }
   await SystemChrome.setPreferredOrientations(
-    allow ? const <DeviceOrientation>[] : const [DeviceOrientation.portraitUp],
+    preferredOrientationsFor(allowRotation: allow, isTelevision: tv),
   );
 }
+
+/// §220/§679 — список предпочтений ориентации: пустой (решает система) на TV
+/// и при включённом «Allow rotation», иначе portraitUp.
+@visibleForTesting
+List<DeviceOrientation> preferredOrientationsFor({
+  required bool allowRotation,
+  required bool isTelevision,
+}) =>
+    isTelevision || allowRotation
+        ? const <DeviceOrientation>[]
+        : const [DeviceOrientation.portraitUp];
 
 /// Fallback-widget для UI-ошибок (replace Flutter's red screen).
 /// Показывает краткое описание + подсказку открыть Debug → Logs.
@@ -254,36 +286,69 @@ class _FallbackErrorWidget extends StatelessWidget {
 }
 
 /// Global theme notifier — allows changing theme from anywhere.
+///
+/// §707 итер. 9 — тема хранится ключом `native_prefs.app_theme_mode`
+/// (`lxbox_settings.json`, едет в бэкапе; в зеркало `boxvpn_boot` не идёт).
+/// [load] зовётся на старте после загрузки хранилища; дальше тема
+/// перечитывается по [SettingsStorage.nativePrefsGeneration] — после импорта
+/// бэкапа и смены Workspaces, без перезапуска.
 class ThemeNotifier extends ChangeNotifier {
-  ThemeNotifier() {
-    _load();
-  }
-
   ThemeMode _mode = ThemeMode.system;
   ThemeMode get mode => _mode;
+  bool _hooked = false;
 
-  static const _key = 'app_theme_mode';
+  /// Ключ прежнего места — `FlutterSharedPreferences` (до итерации 9).
+  static const _legacyKey = 'app_theme_mode';
 
-  Future<void> _load() async {
-    final prefs = await SharedPreferences.getInstance();
-    final stored = prefs.getString(_key);
-    _mode = switch (stored) {
-      'light' => ThemeMode.light,
-      'dark' => ThemeMode.dark,
-      _ => ThemeMode.system,
-    };
+  static ThemeMode _fromWire(String v) => switch (v) {
+        AppThemeModeSetting.light => ThemeMode.light,
+        AppThemeModeSetting.dark => ThemeMode.dark,
+        _ => ThemeMode.system,
+      };
+
+  static String _toWire(ThemeMode m) => switch (m) {
+        ThemeMode.light => AppThemeModeSetting.light,
+        ThemeMode.dark => AppThemeModeSetting.dark,
+        ThemeMode.system => AppThemeModeSetting.system,
+      };
+
+  /// Перенос один раз: ключа в хранилище нет, а в SharedPreferences есть —
+  /// значение переезжает, ключ из prefs удаляется. Затем чтение хранилища.
+  Future<void> load() async {
+    if (!_hooked) {
+      _hooked = true;
+      SettingsStorage.nativePrefsGeneration.addListener(_reload);
+    }
+    if (!await SettingsStorage.hasNativeThemeMode()) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final old = prefs.getString(_legacyKey);
+        if (old != null) {
+          await SettingsStorage.setNativeThemeMode(old);
+          await prefs.remove(_legacyKey);
+        }
+      } catch (_) {
+        // prefs недоступны — остаётся значение по умолчанию.
+      }
+    }
+    final mode = _fromWire(await SettingsStorage.getNativeThemeMode());
+    if (mode == _mode) return;
+    _mode = mode;
+    notifyListeners();
+  }
+
+  /// Перечитать тему из хранилища (поколение `native_prefs` выросло).
+  Future<void> _reload() async {
+    final mode = _fromWire(await SettingsStorage.getNativeThemeMode());
+    if (mode == _mode) return;
+    _mode = mode;
     notifyListeners();
   }
 
   Future<void> setMode(ThemeMode mode) async {
     _mode = mode;
     notifyListeners();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_key, switch (mode) {
-      ThemeMode.light => 'light',
-      ThemeMode.dark => 'dark',
-      ThemeMode.system => 'system',
-    });
+    await SettingsStorage.setNativeThemeMode(_toWire(mode));
   }
 }
 

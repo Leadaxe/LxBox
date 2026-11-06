@@ -22,6 +22,10 @@ const String kSourcesKey = 'sources';
 /// Правила маршрута.
 const String kRulesKey = 'rules';
 
+/// §704 — миксины: пользовательские вставки в итоговый конфиг ядра,
+/// список в порядке применения.
+const String kMixinsKey = 'mixins';
+
 /// DNS-записи: объект `{servers[], rules[]}`.
 const String kDnsKey = 'dns';
 
@@ -30,3 +34,7 @@ const String kDnsServersKey = 'servers';
 
 /// Правила внутри [kDnsKey].
 const String kDnsRulesKey = 'rules';
+
+/// Бюджет узлов — общий лимит узлов приложения (ручные + включённые члены
+/// папок + доли подписок). Нет ключа — дефолт `1000`.
+const String kNodeBudgetKey = 'node_budget';

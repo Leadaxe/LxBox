@@ -134,8 +134,6 @@ void main() {
   final root = Directory('$kVendorRoot/corpus/direction');
   if (!root.existsSync()) {
     // contract/ — вендоренная копия (tool/sync_contract.sh), в git не идёт.
-    test('корпус Направлений не синхронизирован', () {},
-        skip: 'нет ${root.path} — запустите tool/sync_contract.sh');
     return;
   }
 

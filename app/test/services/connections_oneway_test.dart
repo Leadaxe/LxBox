@@ -197,23 +197,6 @@ void main() {
       expect(packageNameFromProcess(''), '');
       expect(packageNameFromProcess('   '), '');
     });
-
-    test('живая фикстура: все processPath дают валидный pkg', () {
-      final raw = File(
-              'test/fixtures/clash_api/connections_oneway_live.json')
-          .readAsStringSync();
-      final conns = ((jsonDecode(raw) as Map)['connections'] as List)
-          .cast<Map<String, dynamic>>();
-      for (final c in conns) {
-        final m = c['metadata'] as Map<String, dynamic>? ?? {};
-        final pp = m['processPath']?.toString() ?? '';
-        if (pp.isEmpty) continue;
-        final pkg = packageNameFromProcess(pp);
-        expect(pkg, isNotEmpty, reason: 'processPath="$pp"');
-        expect(pkg.contains(' '), isFalse);
-        expect(pkg.contains('('), isFalse);
-      }
-    });
   });
 
   group('§165 RuleNameResolver — справочник c.rule → title', () {

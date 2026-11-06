@@ -21,17 +21,6 @@ Map<String, dynamic> _configWithoutTun() => {
 
 void main() {
   group('applyTunPackages (§046)', () {
-    test('mode=off → no changes to tun-inbound', () {
-      final cfg = _configWithTun();
-      applyTunPackages(
-        cfg,
-        const TunAppsConfig(mode: 'off', packages: ['com.example']),
-      );
-      final tun = (cfg['inbounds'] as List).first as Map<String, dynamic>;
-      expect(tun.containsKey('include_package'), false);
-      expect(tun.containsKey('exclude_package'), false);
-    });
-
     test('mode=off + non-empty packages → no changes (mode wins)', () {
       final cfg = _configWithTun();
       applyTunPackages(
@@ -124,12 +113,6 @@ void main() {
       final inbounds = cfg['inbounds'] as List;
       expect((inbounds[0] as Map)['exclude_package'], equals(['com.example']));
       expect((inbounds[1] as Map).containsKey('exclude_package'), false);
-    });
-
-    test('TunAppsConfig predicates', () {
-      expect(const TunAppsConfig(mode: 'off', packages: []).isOff, true);
-      expect(const TunAppsConfig(mode: 'allow', packages: []).isAllow, true);
-      expect(const TunAppsConfig(mode: 'deny', packages: []).isDeny, true);
     });
   });
 }

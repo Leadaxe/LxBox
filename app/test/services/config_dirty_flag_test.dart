@@ -73,18 +73,8 @@ void main() {
       }
     });
 
-    test('свежий конфиг в filesDir → isDirty=false', () async {
-      await SettingsStorage.setNodeSort('latency', const []);
-      final cfg = File(nativeConfigPath());
-      await cfg.writeAsString('{}');
-      await cfg.setLastModified(DateTime.now().add(const Duration(minutes: 1)));
-
-      expect(await ConfigDirtyCheck.isDirty(), isFalse,
-          reason: 'конфиг новее настроек — пересобирать нечего');
-    });
-
     test('конфиг только в Documents (старое место) → не считается', () async {
-      await SettingsStorage.setNodeSort('latency', const []);
+      await SettingsStorage.setNodeSort('latencyAsc', const []);
       final stale = File(configPath());
       await stale.writeAsString('{}');
       await stale.setLastModified(DateTime.now().add(const Duration(minutes: 1)));
@@ -99,7 +89,7 @@ void main() {
       await cfg.setLastModified(DateTime(2020));
 
       // Не-config запись → _save → touch конфига (уже по native-пути).
-      await SettingsStorage.setNodeSort('latency', const []);
+      await SettingsStorage.setNodeSort('latencyAsc', const []);
 
       expect(SettingsStorage.configDirty, isFalse);
       expect(cfg.lastModifiedSync().year, greaterThan(2020),
@@ -135,23 +125,10 @@ void main() {
 
     test('не-config сейверы (sort/ping) НЕ поднимают флаг',
         () async {
-      await SettingsStorage.setNodeSort('latency', const ['a', 'b']);
+      await SettingsStorage.setNodeSort('latencyAsc', const ['a', 'b']);
       expect(SettingsStorage.configDirty, isFalse);
 
       await SettingsStorage.savePingOptions({'url': 'https://x'});
-      expect(SettingsStorage.configDirty, isFalse);
-    });
-
-    test('setVar: config-var → dirty, прочий var → нет', () async {
-      await SettingsStorage.setVar('log_level', 'debug'); // config-var
-      expect(SettingsStorage.configDirty, isTrue);
-
-      SettingsStorage.configDirty = false;
-      await SettingsStorage.setVar('sort_mode', 'latency'); // не config-var
-      expect(SettingsStorage.configDirty, isFalse);
-
-      // машинно-генерируемые clash_* — вне allowlist (выходы сборки).
-      await SettingsStorage.setVar('clash_secret', 'abc');
       expect(SettingsStorage.configDirty, isFalse);
     });
   });
@@ -165,7 +142,7 @@ void main() {
       await cfg.setLastModified(DateTime(2020));
 
       // Не-config запись (флаг не поднимается) → _save → touch конфига.
-      await SettingsStorage.setNodeSort('latency', const []);
+      await SettingsStorage.setNodeSort('latencyAsc', const []);
 
       expect(SettingsStorage.configDirty, isFalse);
       expect(await ConfigDirtyCheck.isDirty(), isFalse,

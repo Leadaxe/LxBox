@@ -6,14 +6,14 @@
 
 `chain` — an outbound, sing-box type `chain`.
 
-<sub>Schema checked against core `1.14.2-lx.11`</sub>
+<sub>Schema checked against core `1.14.3-lx.17`</sub>
 
 | Field | Value |
 |---|---|
 | `scheme` | `chain` |
 | `singbox_type` | `chain` |
 | `kind` | `outbound` |
-| Core the schema was checked against | `1.14.2-lx.11` |
+| Core the schema was checked against | `1.14.3-lx.17` |
 
 ## How to read this page
 
@@ -80,6 +80,9 @@ The node body itself — the sing-box JSON kept in the launcher state. The path 
 - <a id="body-connect-timeout"></a>**`connect_timeout`** — Timeout for establishing the connection.
   - Type: duration
 - <a id="body-tcp-fast-open"></a>**`tcp_fast_open`** — Use TCP Fast Open.
+  - Type: bool
+  - Default: `false`
+- <a id="body-tcp-multi-path"></a>**`tcp_multi_path`** — Use Multipath TCP (MPTCP). The core and the OS judge whether it works.
   - Type: bool
   - Default: `false`
 - <a id="body-disable-tcp-keep-alive"></a>**`disable_tcp_keep_alive`** — Disable TCP keepalive on this connection.

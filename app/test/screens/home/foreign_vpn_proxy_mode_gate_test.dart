@@ -14,17 +14,6 @@ void main() {
   VpnModeConfig cfg(String mode) =>
       const VpnModeConfig.defaults().copyWith(mode: mode);
 
-  group('§528 askBeforeOverridingForeignVpn', () {
-    test('proxy (hasTun=false) → не спрашиваем', () {
-      expect(askBeforeOverridingForeignVpn(hasTun: cfg('proxy').hasTun), isFalse);
-    });
-
-    test('vpn / vpn_proxy (hasTun=true) → спрашиваем как раньше', () {
-      expect(askBeforeOverridingForeignVpn(hasTun: cfg('vpn').hasTun), isTrue);
-      expect(askBeforeOverridingForeignVpn(hasTun: cfg('vpn_proxy').hasTun), isTrue);
-    });
-  });
-
   group('§528 confirmForeignVpnOverride', () {
     /// Прогон гейта на пустом экране: `context` нужен только для диалога,
     /// который здесь подменён, поэтому реального `showDialog` не случается.

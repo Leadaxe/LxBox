@@ -49,6 +49,9 @@ modal "Loading workspace…" indicator.
   full; a file on the scene is never half-written.
 - **The settings backup copy is removed** after a load — it is a snapshot of
   the previous slot.
+- **A pinned config is not rebuilt.** With the debug "Lock config" on, a load
+  swaps the settings but the pinned config stays until it is unpinned; there
+  is no warning about it. Kept as is (audit 591, 2026-10-13).
 - **Start after a load — only on its own config.** If the rebuild failed and
   the config stayed "stale", the tunnel is not started; the log says
   "auto-connect skipped". The start goes the same way as the Start button —

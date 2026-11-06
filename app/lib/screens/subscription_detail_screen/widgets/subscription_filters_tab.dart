@@ -9,6 +9,7 @@ import '../../../models/server_list.dart';
 import '../../../services/l10n/locale_controller.dart';
 import '../../../services/node_hash.dart' show disabledNodeCount;
 import '../../../services/subscription/import_rules.dart';
+import '../../../services/ui_helpers.dart';
 import '../../../widgets/safe_bottom.dart';
 
 /// §302 — «Filters» tab: per-subscription import-rules (REPLACE + DISABLE +
@@ -92,13 +93,9 @@ class _SubscriptionFiltersTabState extends State<SubscriptionFiltersTab> {
     messenger.showSnackBar(
       SnackBar(
         content: Text(disabled > 0
-            ? getLocalText
-                .s("Applied — %1\$d nodes, %2\$d disabled")
-                .replaceAll(r'%1$d', '$total')
-                .replaceAll(r'%2$d', '$disabled')
-            : getLocalText
-                .s("Applied — %d nodes")
-                .replaceAll('%d', '$total')),
+            ? getLocalText.s(
+                "Applied — %1\$d nodes, %2\$d disabled", total, disabled)
+            : getLocalText.s("Applied — %d nodes", total)),
         duration: const Duration(seconds: 4),
       ),
     );
@@ -476,7 +473,12 @@ class _RuleEditorScreenState extends State<_RuleEditorScreen> {
     _substitute = TextEditingController(text: r?.substitutePattern ?? '')
       ..addListener(_onChanged);
     _replaceMode = r?.replaceMode ?? ImportRuleReplaceMode.set;
+    _baseline = _current();
   }
+
+  /// §626 — правило, с которым редактор открылся: Back при отличии от него
+  /// спрашивает общий диалог Unsaved changes (§219).
+  late final ImportRule _baseline;
 
   void _onChanged() => setState(() {});
 
@@ -542,17 +544,47 @@ class _RuleEditorScreenState extends State<_RuleEditorScreen> {
     Navigator.of(context).pop(_current());
   }
 
+  /// §626 — Back (системный, жест, крестик AppBar): при правках общий диалог
+  /// Discard / Keep / Save. Save с причиной блокировки — экран остаётся,
+  /// причина снеком (её же показывает форма).
+  Future<void> _handleBack() async {
+    if (_current() == _baseline) {
+      Navigator.of(context).pop();
+      return;
+    }
+    final action = await showUnsavedChangesDialog(context); // §219
+    if (!mounted) return;
+    if (action == 'save') {
+      final blocker = _saveBlocker;
+      if (blocker == null) {
+        _save();
+      } else {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(blocker)));
+      }
+    } else if (action == 'discard') {
+      Navigator.of(context).pop();
+    }
+    // 'keep' / null (dismiss) — остаёмся.
+  }
+
   @override
   Widget build(BuildContext context) {
     final blocker = _saveBlocker;
-    return DefaultTabController(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        unawaited(_handleBack());
+      },
+      child: DefaultTabController(
       length: 2,
       child: Scaffold(
         appBar: AppBar(
           leading: IconButton(
             icon: const Icon(Icons.close),
             tooltip: getLocalText.s("Cancel"),
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () => unawaited(_handleBack()),
           ),
           title: Text(widget.initial == null
               ? getLocalText.s("Add rule")
@@ -576,6 +608,7 @@ class _RuleEditorScreenState extends State<_RuleEditorScreen> {
             _matchesTab(context),
           ],
         ),
+      ),
       ),
     );
   }
@@ -941,10 +974,8 @@ class _RuleEditorScreenState extends State<_RuleEditorScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  getLocalText
-                      .s("%1\$d of %2\$d nodes match")
-                      .replaceAll(r'%1$d', '${hits.length}')
-                      .replaceAll(r'%2$d', '${nodes.length}'),
+                  getLocalText.s("%1\$d of %2\$d nodes match",
+                      hits.length, nodes.length),
                   style: theme.textTheme.bodyMedium,
                 ),
               ),

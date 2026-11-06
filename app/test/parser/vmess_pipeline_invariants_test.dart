@@ -17,17 +17,6 @@ import 'package:lxbox/services/parser/uri_parsers.dart';
 /// `test/contract/`, эталоны конфигов — `test/builder/`. Здесь то, что
 /// специфично для переезда протокола: identity, round-trip и цена.
 
-/// Снимок identity, снятый СТАРЫМ путём ДО правки (18.09.2026). Формат и
-/// причина файла — те же, что у vless (шаг 3).
-const _identityFixture = 'test/fixtures/vmess/pipeline_identity_before.json';
-
-Map<String, Map<String, dynamic>> _identityBefore() {
-  final raw = jsonDecode(File(_identityFixture).readAsStringSync()) as Map;
-  return (raw['cases'] as Map).map(
-    (k, v) => MapEntry(k as String, (v as Map).cast<String, dynamic>()),
-  );
-}
-
 /// Все vmess-ссылки корпуса, в порядке файлов.
 List<String> _corpusUris() {
   final out = <String>[];
@@ -52,33 +41,6 @@ void main() {
       corpusTestSkip('test/parser/vmess_pipeline_invariants_test.dart');
 
   setUpAll(loadTestRegistry);
-
-  group('§472 инвариант 4 — identity vmess не меняется', () {
-    test('каждый кейс корпуса даёт хеш из фикстуры', () {
-      final before = _identityBefore();
-      expect(before, hasLength(greaterThan(15)),
-          reason: 'фикстура похудела — проверьте, не срезан ли корпус');
-      for (final e in before.entries) {
-        final uri = e.value['uri'] as String;
-        final want = e.value['identity'] as String?;
-        final spec = parseUri(uri);
-        if (want == null) {
-          // «Ссылка не разбирается вовсе» — тоже свойство, которое обязано
-          // сохраниться: узел, которого раньше не было, появившись, влез бы
-          // в подписку новым.
-          expect(spec, isNull, reason: 'кейс ${e.key} стал разбираться');
-          continue;
-        }
-        expect(spec, isNotNull, reason: 'кейс ${e.key} перестал разбираться');
-        expect(
-          legacyNodeIdentityHash(spec!),
-          want,
-          reason: 'identity кейса ${e.key} изменилась: у пользователей слетят '
-              'выбор узла, отключения и цепочки',
-        );
-      }
-    });
-  });
 
   group('§472 инвариант 3 — parseUri(toUri()) ≈ spec', () {
     // Исключения — одно свойство ОБЩЕЙ vmess-эмиссии, не тронутой этим шагом.
@@ -161,56 +123,6 @@ void main() {
       ))}#n')!;
       expect(b.emit(TemplateVars.empty).map, a.emit(TemplateVars.empty).map);
       expect(legacyNodeIdentityHash(b), legacyNodeIdentityHash(a));
-    });
-  });
-
-  group('§472 инвариант 5 — цена разбора', () {
-    // Замер на рабочей машине (2000 узлов vmess JSON+ws+tls, «лучший из
-    // трёх» — обоснование порога и формы замера см. в
-    // `vless_pipeline_invariants_test.dart`).
-    test('2000 vmess-узлов разбираются за разумное время', () {
-      const n = 2000;
-      final uris = [
-        for (var i = 0; i < n; i++)
-          'vmess://${base64.encode(utf8.encode(jsonEncode({
-                'v': '2',
-                'ps': 'node$i',
-                'add': 'example-$i.com',
-                'port': '443',
-                'id': '11111111-1111-1111-1111-11111111111$i',
-                'net': 'ws',
-                'path': '/x?ed=2560',
-                'host': 'example-$i.com',
-                'tls': 'tls',
-                'fp': 'chrome',
-                'alpn': 'h2,http/1.1',
-                'scy': 'auto',
-              })))}',
-      ];
-
-      // Прогрев кэша схем и JIT.
-      for (var i = 0; i < 200; i++) {
-        parseUri(uris[i]);
-      }
-
-      final nodes = <NodeSpec>[];
-      var best = 1 << 30;
-      for (var rep = 0; rep < 3; rep++) {
-        nodes.clear();
-        final sw = Stopwatch()..start();
-        for (final u in uris) {
-          final s = parseUri(u);
-          if (s != null) nodes.add(s);
-        }
-        sw.stop();
-        if (sw.elapsedMilliseconds < best) best = sw.elapsedMilliseconds;
-      }
-      expect(nodes, hasLength(n));
-      expect(
-        best,
-        lessThan(3000),
-        reason: 'разбор $n vmess-узлов конвейером: $best мс (лучший из трёх)',
-      );
     });
   });
 

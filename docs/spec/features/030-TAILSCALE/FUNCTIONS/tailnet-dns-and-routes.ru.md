@@ -29,8 +29,8 @@ presets».
 | Пресет `tailscale` («Tailscale networks») | включён по умолчанию, `num` 945, сортируемый; `for_each` по `node_type: tailscale` с `filter: not skip_presets`; переменная «DNS» (`dns_enable`, вкл) |
 | Записи на узел | `route.rules`: `{preferred_by: [<узел>], action: resolve, server: <узел>-dns}`, затем `{preferred_by: [<узел>], outbound: <узел>}`; `dns.servers`: `{type: tailscale, tag: <узел>-dns, endpoint: <узел>, description: "MagicDNS of the tailnet"}`; `dns.rules`: `{preferred_by: [<узел>-dns], server: <узел>-dns}` |
 | `dns_enable` выкл | только правило маршрута |
-| Поле записи `skip_presets` | свой сервер и член папки; хранится только `true`; узел подписки обслуживается всегда |
-| Переключатель «Skip presets» | на экране узла; виден, когда в шаблоне есть пресет с `for_each` под тип узла |
+| Поле записи `skip_tailscale_presets` (до 1.1.126 `skip_presets`) | свой сервер и член папки; хранится только `true`; узел подписки обслуживается всегда |
+| Переключатель «Skip Tailscale presets» | на экране узла Tailscale; виден, когда в шаблоне есть пресет с обходом, который его принимает |
 | Тип DNS-сервера `tailscale` | `endpoint` — узел Tailscale (обязателен), `accept_default_resolvers`; без адреса, без `detour` |
 | Позднее сеяние | список поздних дефолтных пресетов (`tailscale`); уже засеянные id запоминаются |
 

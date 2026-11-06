@@ -324,16 +324,5 @@ void main() {
       expect(matches(xray, doc), isFalse);
       expect(matches(sbConfig, doc), isFalse);
     });
-
-    test('sing-box конфиг с endpoints', () {
-      final doc = {
-        'endpoints': [
-          {'type': 'wireguard'}
-        ]
-      };
-      expect(matches(sbConfig, doc), isTrue);
-      expect(matches(sbOutbound, doc), isFalse);
-      expect(matches(xray, doc), isFalse);
-    });
   });
 }

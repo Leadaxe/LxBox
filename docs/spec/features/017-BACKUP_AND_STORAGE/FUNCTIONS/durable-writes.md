@@ -8,7 +8,7 @@ the previous copy and never lets a stale controller overwrite newer settings.
 | Field | Value |
 |-------|-------|
 | Feature | [017-BACKUP_AND_STORAGE](../FEATURE.md) |
-| Promises | P21–P24 |
+| Promises | P21–P23 (P24 → [018-WORKSPACES · P8](../../018-WORKSPACES/FEATURE.md#promises)) |
 | State | ✅ written from code, 2026-09-28 |
 
 ## What it does
@@ -63,7 +63,7 @@ or default settings with a corruption flag in the log.
   outlived a settings-set switch does not write into the new set — neither a
   deferred fetch nor a node toggle; a disposed controller does not write; a
   halted auto-update pass is interrupted between subscriptions and starts no
-  new ones (P24).
+  new ones ([018-WORKSPACES · P8](../../018-WORKSPACES/FEATURE.md#promises)).
 - The transfer import writes all sections to memory and flushes to disk
   once.
 

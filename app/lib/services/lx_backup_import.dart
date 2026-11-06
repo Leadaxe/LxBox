@@ -22,6 +22,7 @@ library;
 
 import '../models/custom_rule.dart';
 import '../models/direction.dart';
+import '../models/mixin.dart';
 import '../models/parser_config.dart';
 import '../models/server_list.dart';
 import '../models/source_chain.dart';
@@ -40,11 +41,16 @@ class LxImportReceiver {
     this.lists = const [],
     this.directions = const [],
     this.chains = const [],
+    this.rules = const [],
     this.systemTags = const {},
     this.selectableRules = const [],
     this.receiverTargets = const {},
     this.dns = const LxDns(),
     this.recordVars = RecordVarDecls.none,
+    this.dnsTemplateServers = const [],
+    this.dnsFinalDefault = '',
+    this.dnsDefaultResolverDefault = '',
+    this.mixins = const [],
   });
 
   /// Источники приёмника в порядке списка.
@@ -55,6 +61,12 @@ class LxImportReceiver {
 
   /// Цепочки приёмника в порядке списка.
   final List<SourceChain> chains;
+
+  /// §640 — правила приёмника до импорта: весь список, который замещает
+  /// [SettingsStorage.saveCustomRules] (пользовательские и пресеты). Файл без
+  /// ключа `rules` оставляет их как есть; файл с ключом снимает, и их число —
+  /// `count` предупреждения [kWarnRulesReplaced] (BACKUP.md §9 п. 7).
+  final List<CustomRule> rules;
 
   /// Служебные теги шаблона приёмника ([templateSystemTags]). Пусто — шаблона
   /// нет, действуют [kLxImportDefaultSystemTags].
@@ -77,6 +89,20 @@ class LxImportReceiver {
   /// §441 — объявления переменных записей шаблона приёмника (SPEC 129 Н2,
   /// Н4, Н8). [RecordVarDecls.none] — шаблона нет, нормализации нет.
   final RecordVarDecls recordVars;
+
+  /// §681 — обёртки `dns_options.servers` шаблона приёмника в порядке
+  /// шаблона: каталог переходной ветки, тела для удерживающих ссылок,
+  /// `required`. Пусто — шаблона нет (раннер корпуса).
+  final List<Map<String, dynamic>> dnsTemplateServers;
+
+  /// §681 — `default_value` переменных `dns_final` /
+  /// `dns_default_domain_resolver` шаблона приёмника: на них сбрасываются
+  /// висячие значения файла.
+  final String dnsFinalDefault;
+  final String dnsDefaultResolverDefault;
+
+  /// §704 — миксины приёмника до импорта, в порядке списка.
+  final List<Mixin> mixins;
 }
 
 /// План импорта: разобранный файл и всё, что импорт запишет.
@@ -97,6 +123,8 @@ class LxImportPlan {
     required this.rules,
     this.dns,
     this.sourceOrder = const [],
+    this.mixins = const [],
+    this.appliedMixins = 0,
   });
 
   /// Текст файла: запись пересчитывает план по свежему приёмнику.
@@ -137,6 +165,7 @@ class LxImportPlan {
   final int appliedChains;
 
   /// Корневые правила на оси порядка (полная замена, BACKUP.md §9 п. 7).
+  /// §640 — файл без ключа `rules`: правила приёмника как есть, без записи.
   final List<CustomRule> rules;
 
   /// §393 B9 + §441 — DNS после слияния; `null` — секции DNS в файле нет.
@@ -147,6 +176,14 @@ class LxImportPlan {
   /// разными сейверами, и без этой перестановки смешанный порядок файла
   /// схлопывался в «цепочки, потом источники».
   final List<String> sourceOrder;
+
+  /// §704 — миксины после слияния: приёмника и приехавшие (в конце, в
+  /// порядке файла). Миксин файла с тем же телом (`target`+`op`+`value`),
+  /// что у приёмника или у записи выше в файле, — пропуск, не дубль.
+  final List<Mixin> mixins;
+
+  /// Сколько миксинов файла добавлено.
+  final int appliedMixins;
 }
 
 /// Итог записи плана: для строки результата на экране.
@@ -291,27 +328,46 @@ LxImportPlan planLxBackupImport(String raw, LxImportReceiver receiver) {
       if (acceptedChainTags.contains(c.tag)) c,
   ];
 
-  // §438 — ось порядка одним проходом по корневым правилам и правилам узлов,
-  // пришедших или узнанных этим импортом (BACKUP.md §9 п. 7).
-  var rules = renumberBackupAxis(file.rules);
-  // D-117 — несортируемый пресет встаёт на номер шаблона приёмника, откуда бы
-  // номер ни приехал.
-  if (pinRequiredRuleNums(rules, receiver.selectableRules)) {
-    rules = sortRulesByAxis(rules);
-  }
-
-  // §441 (SPEC 129 §5.4) — `vars` правил-пресетов против шаблона приёмника:
-  // необъявленное имя снимается с предупреждением (Н2), умолчание — молча
-  // (Н4). Пресет, которого в шаблоне нет, — прежнее `backup_unknown_preset`,
-  // его `vars` не трогаются.
   final extraWarnings = <LxBackupWarning>[];
-  rules = normalizePresetRulesVars(
-    rules,
-    receiver.recordVars,
-    onUndeclared: (presetId, name) => extraWarnings.add(LxBackupWarning(
-        kWarnVarSkipped, 'preset:$presetId.vars.$name',
-        reason: kVarSkippedUndeclared)),
-  );
+  final List<CustomRule> rules;
+  if (!file.rulesDeclared) {
+    // §640 (контракт 1.1.116, BACKUP.md §9 п. 7) — ключа `rules` нет: файл о
+    // правилах молчит, правила приёмника остаются как были. Ось, D-117 и
+    // нормализация `vars` над ними не прогоняются — трогать нечего.
+    rules = receiver.rules;
+  } else {
+    // §640 — ключ есть (пусть `[]`): правила приёмника снимаются целиком, и
+    // снятые называются одним предупреждением, только когда их было.
+    if (receiver.rules.isNotEmpty) {
+      extraWarnings.add(LxBackupWarning(
+          kWarnRulesReplaced, 'rules: ${receiver.rules.length}'));
+    }
+    // §438 — ось порядка одним проходом по корневым правилам и правилам узлов,
+    // пришедших или узнанных этим импортом (BACKUP.md §9 п. 7).
+    var axis = renumberBackupAxis(file.rules);
+    // D-117 — несортируемый пресет встаёт на номер шаблона приёмника, откуда
+    // бы номер ни приехал.
+    if (pinRequiredRuleNums(axis, receiver.selectableRules)) {
+      axis = sortRulesByAxis(axis);
+    }
+
+    // §441 (SPEC 129 §5.4) — `vars` правил-пресетов против шаблона приёмника:
+    // необъявленное имя снимается с предупреждением (Н2), умолчание — молча
+    // (Н4). Пресет, которого в шаблоне нет, — прежнее `backup_unknown_preset`,
+    // его `vars` не трогаются.
+    rules = normalizePresetRulesVars(
+      axis,
+      receiver.recordVars,
+      onUndeclared: (presetId, name) => extraWarnings.add(LxBackupWarning(
+          kWarnVarSkipped, 'preset:$presetId.vars.$name',
+          reason: kVarSkippedUndeclared)),
+      // §643 (D-132) — имя `wizard_ui: internal`: значение файла не данные
+      // пользователя, снимается и называется.
+      onInternal: (presetId, name) => extraWarnings.add(LxBackupWarning(
+          kWarnVarSkipped, 'preset:$presetId.vars.$name',
+          reason: kVarSkippedInternal)),
+    );
+  }
 
   // §393 B9 + §441 — DNS: слияние §5.2, Н2/Н4 против шаблона приёмника, Н9
   // по тому же единому списку целей, что у правил.
@@ -320,8 +376,15 @@ LxImportPlan planLxBackupImport(String raw, LxImportReceiver receiver) {
   // (Н2/Н3/Н4 над `vars` template-серверов, молча), ПОТОМ наложение файла:
   // слияние работает с записями в той форме, в которой их запишет
   // репозиторий, и план (превью, раннер корпуса) показывает нормализованными
-  // и записи, которых файл не коснулся. `rules[]` приёмника в план не входят:
-  // секция замещается правилами файла, их `vars` нормализуются выше.
+  // и записи, которых файл не коснулся. `rules[]` приёмника в план входят
+  // только у файла без ключа `rules` (§640) — как есть; иначе секция
+  // замещается правилами файла, их `vars` нормализуются выше.
+  //
+  // §681 — точка после правил намеренно: удерживающие ссылки на шаблонные
+  // серверы считаются по состоянию ПОСЛЕ импорта, а `rules` выше — уже
+  // итоговые маршрутные правила (у файла с ключом `rules` правила приёмника
+  // замещены). Переменные корня (`file.vars`) на DNS не влияют: секция
+  // пишется после них и её скаляры замещают одноимённые var.
   final incomingDns = file.dns;
   final dns = incomingDns == null || incomingDns.isEmpty
       ? null
@@ -336,11 +399,20 @@ LxImportPlan planLxBackupImport(String raw, LxImportReceiver receiver) {
           recordVars: receiver.recordVars,
           knownTargets: known,
           warnings: extraWarnings,
+          exportedByApp: file.exportedByApp,
+          scene: DnsImportScene(
+            templateServers: receiver.dnsTemplateServers,
+            routingRules: rules,
+            presets: receiver.selectableRules,
+            finalDefault: receiver.dnsFinalDefault,
+            defaultResolverDefault: receiver.dnsDefaultResolverDefault,
+          ),
         );
   if (extraWarnings.isNotEmpty) {
     file = file.copyWith(warnings: [...file.warnings, ...extraWarnings]);
   }
 
+  final mixins = mergeBackupMixins(receiver.mixins, file.mixins);
   return LxImportPlan(
     raw: raw,
     file: file,
@@ -363,7 +435,26 @@ LxImportPlan planLxBackupImport(String raw, LxImportReceiver receiver) {
       decoded.chainPositions,
       acceptedChainTags,
     ),
+    mixins: mixins.merged,
+    appliedMixins: mixins.added,
   );
+}
+
+/// §704 — миксины файла в конец списка приёмника; совпадение по телу —
+/// пропуск.
+({List<Mixin> merged, int added}) mergeBackupMixins(
+  List<Mixin> receiver,
+  List<Mixin> incoming,
+) {
+  final merged = receiver.toList();
+  final bodies = {for (final m in receiver) m.bodyKey};
+  var added = 0;
+  for (final m in incoming) {
+    if (!bodies.add(m.bodyKey)) continue;
+    merged.add(m);
+    added++;
+  }
+  return (merged: merged, added: added);
 }
 
 /// §511 m2 — ключи заведённых импортом записей по месту в файле.
@@ -397,10 +488,18 @@ class LxBackupImportService {
   Future<LxImportReceiver> loadReceiver() async {
     final template = await TemplateLoader.load();
     final vars = await SettingsStorage.getAllVars();
+    String templateDefault(String name) {
+      for (final v in template.vars) {
+        if (v.name == name) return v.defaultValue;
+      }
+      return '';
+    }
+
     return LxImportReceiver(
       lists: await SettingsStorage.getServerLists(),
       directions: await SettingsStorage.getDirections(),
       chains: await SettingsStorage.getChains(),
+      rules: await SettingsStorage.getCustomRules(),
       systemTags: templateSystemTags(template),
       selectableRules: template.selectableRules,
       dns: LxDns(
@@ -411,6 +510,13 @@ class LxBackupImportService {
         defaultDomainResolver: vars['dns_default_domain_resolver'] ?? '',
       ),
       recordVars: RecordVarDecls.fromTemplate(template),
+      dnsTemplateServers: [
+        for (final s in template.dnsOptionsModel.servers) s.wrapper,
+      ],
+      dnsFinalDefault: templateDefault('dns_final'),
+      dnsDefaultResolverDefault:
+          templateDefault('dns_default_domain_resolver'),
+      mixins: await SettingsStorage.getMixins(),
     );
   }
 
@@ -438,7 +544,8 @@ class LxBackupImportService {
       );
     }
     if (plan.appliedChains > 0) await SettingsStorage.setChains(plan.chains);
-    await SettingsStorage.saveCustomRules(plan.rules);
+    // §640 — файл без ключа `rules` правил не трогает: записи нет вовсе.
+    if (file.rulesDeclared) await SettingsStorage.saveCustomRules(plan.rules);
 
     final settings = await _applySections(plan);
     await _placeImportedSources(plan.sourceOrder);
@@ -534,6 +641,18 @@ class LxBackupImportService {
         await SettingsStorage.setMasqueAccount(acc, flush: false);
         applied++;
       }
+    }
+
+    // §704 — миксины: дописанные в конец, совпавшие по телу пропущены.
+    if (plan.appliedMixins > 0) {
+      await SettingsStorage.setMixins(plan.mixins, flush: false);
+      applied += plan.appliedMixins;
+    }
+
+    // §707 итер. 9 (контракт 1.1.158) — настройки телефона через слой
+    // native_prefs (JSON + зеркало); ключа нет в файле — своё остаётся.
+    if (file.nativePrefs.isNotEmpty) {
+      applied += await SettingsStorage.applyNativePrefsBackup(file.nativePrefs);
     }
 
     await SettingsStorage.flushToDisk();

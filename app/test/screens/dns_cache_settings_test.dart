@@ -10,7 +10,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/controllers/home_controller.dart';
 import 'package:lxbox/controllers/subscription_controller.dart';
-import 'package:lxbox/screens/dns_settings_screen.dart';
+import 'package:lxbox/screens/dns_settings_tab.dart';
 import 'package:lxbox/services/l10n/locale_controller.dart';
 import 'package:lxbox/services/settings_storage.dart';
 import 'package:lxbox/services/template_loader.dart';
@@ -19,8 +19,8 @@ import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
 import '../parser/engine_test_setup.dart';
 
-// §580 — экран DNS: три настройки кэша видны, изменение помечает конфиг,
-// размер вне границ не сохраняется.
+// §580 — вкладка DNS (§655: в составе Routing): три настройки кэша видны,
+// изменение помечает конфиг, размер вне границ не сохраняется.
 
 class _FakePathProvider extends PathProviderPlatform
     with MockPlatformInterfaceMixin {
@@ -87,7 +87,9 @@ void main() {
         GlobalCupertinoLocalizations.delegate,
       ],
       supportedLocales: LocaleController.supportedLocales,
-      home: DnsSettingsScreen(subController: sub, homeController: home),
+      home: Scaffold(
+        body: DnsSettingsTab(subController: sub, homeController: home),
+      ),
     ));
     // Загрузка экрана читает шаблон и хранилище — настоящая зона.
     for (var i = 0;
@@ -169,6 +171,25 @@ void main() {
         await tester.runAsync(
             () => SettingsStorage.getVar('dns_cache_capacity', '')),
         '8192');
+    await close(tester);
+  });
+
+  // §643 (TEMPLATE_LANG §6.9) — переключатель под резолвером по умолчанию:
+  // по умолчанию включён, снятие помечает конфиг и сохраняет `false`.
+  testWidgets('резолвер без устаревших ответов: по умолчанию вкл, сохраняется',
+      (tester) async {
+    await openScreen(tester);
+    final sw = find.byKey(const ValueKey('dns_resolver_no_stale'));
+    expect(tester.widget<SwitchListTile>(sw).value, isTrue);
+    SettingsStorage.configDirty = false;
+    await tester.tap(sw);
+    await tester.pump();
+    await settle(tester);
+    expect(SettingsStorage.configDirty, isTrue);
+    expect(
+        await tester.runAsync(
+            () => SettingsStorage.getVar('dns_resolver_no_stale', '')),
+        'false');
     await close(tester);
   });
 }

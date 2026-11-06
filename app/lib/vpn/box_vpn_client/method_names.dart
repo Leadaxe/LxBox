@@ -39,6 +39,16 @@ class _Methods {
   static const getAutoStart = 'getAutoStart';
   static const setKeepOnExit = 'setKeepOnExit';
   static const getKeepOnExit = 'getKeepOnExit';
+  // §707 итер. 9 — кнопки уведомления (зеркало native_prefs).
+  static const setNotificationStop = 'setNotificationStop';
+  static const getNotificationStop = 'getNotificationStop';
+  static const setNotificationRestart = 'setNotificationRestart';
+  static const getNotificationRestart = 'getNotificationRestart';
+  static const setNotificationSend = 'setNotificationSend';
+  static const getNotificationSend = 'getNotificationSend';
+  // §707 итер. 9 — производные множества выключенных тегов Taildrop и удаление файлов rc.3.
+  static const setTaildropTags = 'setTaildropTags';
+  static const deleteLegacyPrefs = 'deleteLegacyPrefs';
 
   // §043 core logs forwarding toggle
   static const setCoreLogsEnabled = 'setCoreLogsEnabled';

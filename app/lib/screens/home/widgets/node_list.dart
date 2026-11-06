@@ -8,12 +8,15 @@ import '../../../models/home_state.dart';
 import '../../../models/node_warning.dart';
 import '../../../services/direction_mutations.dart';
 import '../../../services/settings_storage.dart';
+import '../../../services/tag_resolver.dart';
 import '../../../services/haptic_service.dart';
 import '../../../services/networks_direction.dart';
+import '../../../services/openconnect_auth.dart';
 import '../../../services/subscription/auto_updater.dart';
 import '../../../widgets/node_row.dart';
 import '../../../widgets/node_view_item.dart';
 import '../../../widgets/reorder_grab_strip.dart';
+import '../../../services/builder/direction_pool_preview.dart';
 import '../../direction_edit_screen.dart';
 import '../node_actions.dart';
 import '../node_filter_view_model.dart';
@@ -90,10 +93,12 @@ class HomeNodeList extends StatelessWidget {
     required this.state,
     required this.showEmptyGuide,
     required this.onRestoreFromBackup,
+    this.onReceiveFromPhone,
     required this.onTapToConnect,
     required this.rowKeyFor,
     required this.onSelectServer,
     required this.onViewPool,
+    this.onOpenConnectTap,
   });
 
   final HomeController controller;
@@ -107,6 +112,9 @@ class HomeNodeList extends StatelessWidget {
   /// (там же гейтит контролы — решение одно на весь экран).
   final bool showEmptyGuide;
   final Future<void> Function() onRestoreFromBackup;
+
+  /// §622 — приём настроек с телефона в гайде пустого экрана; null вне TV.
+  final VoidCallback? onReceiveFromPhone;
   final VoidCallback onTapToConnect;
 
   /// §203 — per-tag GlobalKey строки (для scroll-to-node) + колбэк «перейти к
@@ -116,6 +124,9 @@ class HomeNodeList extends StatelessWidget {
 
   /// §208 — открыть попап пула round_robin-Направления по его auto-тегу (View pool).
   final void Function(String autoTag) onViewPool;
+
+  /// §654 C — открыть диалог висящего челленджа openconnect узла.
+  final void Function(String tag)? onOpenConnectTap;
 
   @override
   Widget build(BuildContext context) {
@@ -129,6 +140,7 @@ class HomeNodeList extends StatelessWidget {
           subController: subController,
           autoUpdater: autoUpdater,
           onRestoreFromBackup: onRestoreFromBackup,
+          onReceiveFromPhone: onReceiveFromPhone,
         ),
       );
     }
@@ -145,6 +157,7 @@ class HomeNodeList extends StatelessWidget {
             subController: subController,
             autoUpdater: autoUpdater,
             onRestoreFromBackup: onRestoreFromBackup,
+            onReceiveFromPhone: onReceiveFromPhone,
           ),
         );
       }
@@ -578,6 +591,10 @@ class HomeNodeList extends StatelessWidget {
     final transport = protoSrcNode?.transportLabel;
     final security = protoSrcNode?.securityLabel;
     final outboundType = cache[tag]?.type;
+    // Член-Направление (`vpn-2` в списке `vpn-1`): заголовок строки — label,
+    // tag — первым звеном подзаголовка, как на плитке Routing.
+    final dirLabel = state.groupLabels[tag];
+    final showDirLabel = dirLabel != null && dirLabel != tag;
     // §608 — Tailscale-узел с exit node: через какое устройство идёт трафик,
     // живо ли оно и не истекает ли ключ. Записи ядра нет — строка как была.
     final tailnet = outboundType == 'tailscale' && state.tunnelUp
@@ -586,6 +603,17 @@ class HomeNodeList extends StatelessWidget {
     final exitName = tailnetExitName(tailnet);
     // §613 — ядро lx.12 отдаёт путь до exit-пира в потоке состояния.
     final exitPath = exitName == null ? null : tailnetExitPath(tailnet);
+    // §654 C — узел openconnect: ждёт входа (второй фактор / SSO) или
+    // ошибка ядра. Записи ядра нет — строка как была.
+    final openConnect = state.tunnelUp
+        ? state.openConnect.endpoints[tag]
+        : null;
+    final ocRow = openConnectRowState(openConnect);
+    final ocTap = ocRow.kind == OpenConnectRowKind.waiting &&
+            openConnect?.challenge != null &&
+            onOpenConnectTap != null
+        ? () => onOpenConnectTap!(tag)
+        : null;
     final notificationWarnings = _notificationWarningsForRow(
       outboundType: outboundType,
       isDirectionAuto: isDirectionAuto,
@@ -600,6 +628,7 @@ class HomeNodeList extends StatelessWidget {
       child: NodeRow(
         item: NodeViewItem(
           tag: tag,
+          displayLabel: showDirLabel ? dirLabel : null,
           active: tag == state.activeInGroup,
           highlighted: tag == state.highlightedNode,
           delay: state.delayOf(tag),
@@ -624,13 +653,18 @@ class HomeNodeList extends StatelessWidget {
           // §322 — метка режима узла автовыбора (`🎯 [3]` / `🔀 [15/7]`)
           // в подзаголовке. Двойник Направления сюда не попадает — у него уже
           // есть подменённое имя «✨ Auto».
-          autoGroupLabel: isDirectionAuto
-              ? null
-              : _autoLabelWithBadges(
-                  controller, subController, cache, tag),
+          // §715 — исключение: двойник в Load balance. Стрелки у него нет
+          // (§322), и без метки в подписи оставался голый протокол выбора
+          // ядра («SOCKS», issue #191). Метка та же, что у узла автовыбора.
+          autoGroupLabel:
+              isDirectionAuto && cache.rawOf(tag)?['balancer'] == null
+                  ? null
+                  : _autoLabelWithBadges(
+                      controller, subController, cache, tag),
           protocolLabel: protoType == null
-              ? null
+              ? (showDirLabel ? tag : null)
               : [
+                  if (showDirLabel) tag,
                   protoLabel(protoType),
                   ?transport,
                   ?security,
@@ -643,6 +677,8 @@ class HomeNodeList extends StatelessWidget {
             now: DateTime.now(),
             withExit: true,
           ),
+          openConnectKind: ocRow.kind,
+          openConnectText: ocRow.text,
           matches: matchingSet.contains(tag),
           // §355 — мёртвая нода с зависимыми (DNS/ноды через detour):
           // ⚠-метка, тап по ней — sheet со списком пострадавших.
@@ -683,6 +719,7 @@ class HomeNodeList extends StatelessWidget {
                 homeController: controller,
                 openDependents: true)
             : null,
+        onOpenConnectTap: ocTap,
       ),
     );
     // §203 — GlobalKey на сам row (для Scrollable.ensureVisible); reorder-key
@@ -743,12 +780,13 @@ class HomeNodeList extends StatelessWidget {
     final seeded = choice == 'node'
         ? direction.copyWith(nodeFilter: pattern, nodeFilterInvert: invert)
         : direction.copyWith(defaultFilter: pattern);
-    final allNodeTags = _allNodeTagsFromState();
     final result = await openDirectionEditor(
       context,
       initial: seeded,
       canDelete: !direction.isRequired,
-      allNodeTags: allNodeTags,
+      // §674 — пул от сборщика, как в Routing: превью без туннеля.
+      nodePool: directionPoolPreview(
+          [for (final e in subController.entries) e.list]),
       // §393 A3 + §568 — те же кандидаты опций, что в Routing: без них
       // сохранение отсюда вычёркивало бы опции Направления.
       directionsAbove: idx <= 0 ? const [] : directions.sublist(0, idx),
@@ -767,8 +805,13 @@ class HomeNodeList extends StatelessWidget {
     await controller.refreshDirectionLabels();
     if (!context.mounted) return;
     final config = await subController.generateConfig();
+    var applied = false;
     if (config != null && context.mounted) {
       await controller.saveParsedConfig(config);
+      // §667 Д2 — редактор Направления pushed-route: `_onReturnToHome` уже
+      // отработал с чистым флагом, воронка home эту правку не увидит. Гейт
+      // авто-применения зовём сами — он один для всех путей.
+      applied = await controller.applyIfAutoReload();
     }
     if (!context.mounted) return;
     // §248 Q3 — heal молчаливым не бывает: flag-unset из этого пути лечит
@@ -784,10 +827,11 @@ class HomeNodeList extends StatelessWidget {
               : getLocalText.s("Saved direction \"%1\$s\" — %2\$s", label,
                   healedParts.join('; ')))),
     );
-    // §338 — при включённой галке пересборка на возврате на home применит
-    // правку сама: просить рестарт нельзя, это прямая ложь.
-    if (state.tunnelUp && !await SettingsStorage.getAutoReloadOnChange()) {
-      if (!context.mounted) return;
+    // §338/§667 — просить рестарт только когда гейт reload не запустил, а
+    // применять есть что (туннель up, saved разошёлся с running — §324).
+    if (!applied &&
+        controller.state.tunnelUp &&
+        controller.state.configChangedNeedRestart) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(getLocalText.s("Restart VPN to apply changes"))),
       );
@@ -811,20 +855,6 @@ class HomeNodeList extends StatelessWidget {
     return warnings ?? const [];
   }
 
-  /// §195 — снимок всех node-тегов из ccGroups (union, без самих групп) для
-  /// live-превью фильтров в редакторе. Пусто = туннель не поднят.
-  List<String> _allNodeTagsFromState() {
-    final groupTags = state.ccGroups.map((g) => g.tag).toSet();
-    final seen = <String>{};
-    final out = <String>[];
-    for (final g in state.ccGroups) {
-      for (final item in g.items) {
-        if (groupTags.contains(item.tag)) continue;
-        if (seen.add(item.tag)) out.add(item.tag);
-      }
-    }
-    return out;
-  }
 }
 
 /// §322 — метка режима + значки живого пула: `🔀 [15/7] 🇩🇪, 🇳🇱[2]`.
@@ -841,26 +871,28 @@ String? _autoLabelWithBadges(
   final base = autoGroupLabel(cache.rawOf(tag));
   if (base == null) return null;
   // Тег в конфиге — с префиксом контейнера и, возможно, суффиксом
-  // уникализации; ищем группу, чей базовый тег в нём содержится.
-  final badge = poolBadgeOf(subs, tag);
-  if (badge.isEmpty) return base;
+  // уникализации; группа ищется по точному итоговому тегу (§675).
   final slots = controller.poolSlots(tag);
   if (slots == null || slots.isEmpty) return base;
-  final badges = poolBadges([for (final s in slots) s.tag], badge);
-  return badges.isEmpty ? base : '$base $badges';
+  // §715 — значки, а без них имена слотов (как в View pool).
+  final suffix =
+      poolLabelSuffix([for (final s in slots) s.tag], poolBadgeOf(subs, tag));
+  return suffix.isEmpty ? base : '$base $suffix';
 }
 
 /// §446 — плоский срез spec'ов автовыбора из всех подписок: пара
-/// `(тег, regexp значков)` в том же порядке обхода, что был у линейного
-/// поиска. Пересобирается только когда сменился состав подписок.
+/// `(показанный тег, regexp значков)` в порядке обхода источников.
+/// Пересобирается только когда сменился состав подписок или префикс.
 ///
-/// Матчинг суффиксный (`tag.endsWith(spec.tag)`), поэтому Map по тегу здесь
-/// не годится — итоговый тег несёт префикс контейнера и суффикс
-/// уникализации. Зато сам срез теперь короткий: узлов автовыбора единицы,
-/// а прежний обход шёл по ВСЕМ узлам всех подписок (сотни при большой
-/// сборной подписке) — и делал это на каждую видимую строку каждый кадр.
+/// §675 — показанный тег = `TagResolver.displayTag(префикс, spec.tag)`, без
+/// суффикса уникализации: срез — запасной путь до первой сборки, точный
+/// итоговый тег даёт карта сборки (`lastEmittedGroupMap`). Прежний суффиксный
+/// матчинг (`endsWith`) не находил `Auto-1` и ловил чужие группы.
+/// Узлов автовыбора единицы, а прежний обход шёл по ВСЕМ узлам всех подписок
+/// — на каждую видимую строку каждый кадр.
 List<(String, String)> _autoSpecs = const [];
 List<List<NodeSpec>>? _autoSpecsSource;
+List<String>? _autoSpecsPrefixes;
 
 /// Сброс кэша между тестами: кэш держит ссылки на списки узлов, и соседний
 /// тест с другим набором подписок получил бы чужие значки (§290 — глобальное
@@ -869,34 +901,46 @@ List<List<NodeSpec>>? _autoSpecsSource;
 void resetPoolBadgeCache() {
   _autoSpecs = const [];
   _autoSpecsSource = null;
+  _autoSpecsPrefixes = null;
 }
 
 List<(String, String)> _autoSpecsOf(SubscriptionController subs) {
   // Ключ — identity самих списков узлов: `_replaceList` ставит новый список,
-  // мутация на месте состав spec'ов не меняет.
+  // мутация на месте состав spec'ов не меняет. Префикс входит в показанный
+  // тег — его смена тоже сбрасывает срез.
   final source = [for (final e in subs.entries) e.list.nodes];
+  final prefixes = [for (final e in subs.entries) e.list.tagPrefix];
   final cached = _autoSpecsSource;
+  final cachedPrefixes = _autoSpecsPrefixes;
   if (cached != null &&
+      cachedPrefixes != null &&
       cached.length == source.length &&
-      Iterable<int>.generate(source.length)
-          .every((i) => identical(cached[i], source[i]))) {
+      Iterable<int>.generate(source.length).every((i) =>
+          identical(cached[i], source[i]) &&
+          cachedPrefixes[i] == prefixes[i])) {
     return _autoSpecs;
   }
   _autoSpecsSource = source;
+  _autoSpecsPrefixes = prefixes;
   _autoSpecs = [
-    for (final nodes in source)
-      for (final n in nodes)
-        if (n is AutoSelectSpec) (n.tag, n.poolBadge),
+    for (var i = 0; i < source.length; i++)
+      for (final n in source[i])
+        if (n is AutoSelectSpec)
+          (TagResolver.displayTag(prefixes[i], n.tag), n.poolBadge),
   ];
   return _autoSpecs;
 }
 
-/// §322 — regexp значков у группы с итоговым тегом [tag]. Дефолт, если группа
-/// не нашлась (узел мог приехать из конфиг-редактора, минуя подписки).
+/// §322 — regexp значков у группы с итоговым тегом [tag]. §675 — сравнение
+/// по точному тегу: сначала карта последней сборки (тег с префиксом и
+/// суффиксом уникализации), до неё — показанный тег spec'а. Дефолт, если
+/// группа не нашлась (узел мог приехать из конфиг-редактора, минуя подписки).
 @visibleForTesting
 String poolBadgeOf(SubscriptionController subs, String tag) {
-  for (final (specTag, badge) in _autoSpecsOf(subs)) {
-    if (tag.endsWith(specTag)) return badge;
+  final built = subs.lastEmittedGroupMap[tag];
+  if (built != null) return built.poolBadge;
+  for (final (shown, badge) in _autoSpecsOf(subs)) {
+    if (shown == tag) return badge;
   }
   return kDefaultPoolBadge;
 }

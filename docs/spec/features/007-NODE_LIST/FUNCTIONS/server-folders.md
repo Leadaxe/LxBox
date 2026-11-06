@@ -59,6 +59,16 @@ the folder record in the single source list.
   no "Keep servers".
 - **Move out of folder** — the member becomes a standalone server right
   after the folder; an auto-select group has no such item.
+- **Tap and long press on a member.** A tap opens the node card (an auto
+  node too: its Settings is the group form). The long-press menu: Move to
+  folder…, Move out of folder, Delete; "Edit…" (the raw text dialog) only
+  for a broken member — otherwise its text cannot be fixed.
+- **Auto node pool:** the same members that may enter Direction selectors —
+  Tailscale without an exit node never, a chain link (a member that another
+  member uses as its personal detour) only with "Register detour servers".
+  An auto node with no members is left out of the config and the build report
+  says so; with the folder replaced by an Auto group the auto node is built
+  but reachable from no group, and the report says that too.
 - **Standalone server → folder:** its personal prefix and detour policy are
   discarded, the folder's apply. A member's personal detour survives moves
   between folders and moving out.
@@ -98,3 +108,5 @@ the folder record in the single source list.
 | 7 | [509](../../../tasks/509-mixed-source-reorder.md) | Released v2.25.1 | A chain is sorted together with its neighbours |
 | 8 | [524](../../../tasks/524-unified-source-entries.md) | Released v2.25.3 | Single list of source records, one writer |
 | 9 | [568](../../../tasks/568-source-replace-fold.md) | Implemented, awaiting merge | Replace with a group for a folder |
+| 10 | [675](../../../tasks/675-folder-auto-node-silent-drop-and-pool-gates.md) | Done | Auto node: report on an empty or unreachable group, pool gates as in Directions |
+| 11 | [686](../../../tasks/686-folder-auto-node-source-tab.md) | In progress | A member is edited in its card; "Edit…" only for a broken member |

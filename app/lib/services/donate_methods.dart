@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 
 import 'app_log.dart';
 import 'settings_storage.dart';
+import 'subscription/user_agent.dart';
 
 /// §362 — способы поддержки проекта. До этого адреса кошельков были вшиты в
 /// разметку донат-попапа (About): добавить сеть значило править виджет и
@@ -97,7 +98,7 @@ class DonateMethods {
     final client = httpClientForTesting ?? http.Client();
     try {
       final resp = await client
-          .get(Uri.parse(_url), headers: {'User-Agent': 'LxBox/1.x'})
+          .get(Uri.parse(_url), headers: {'User-Agent': resolveAppUserAgent()})
           .timeout(_httpTimeout);
       if (resp.statusCode == 200) {
         final parsed = _parse(resp.body);

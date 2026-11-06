@@ -79,19 +79,39 @@ class SelectorInfo {
 /// вкладываются: `vpn-4 (vpn-4-auto (узел))`, и реальный узел не остаётся
 /// «лишним хопом». Селектор последним элементом (без выбора рядом) не
 /// трогается. Исходный список не мутируется.
-List<String> foldSelectorPairs(List<String> chain) {
-  if (chain.length < 2) return chain;
+///
+/// [labels] — карта `tag Направления → label` (снаружи, модель её не знает):
+/// элемент-Направление показывается [directionTagDisplay]. Признак селектора
+/// проверяется по сырому тегу.
+List<String> foldSelectorPairs(List<String> chain,
+    {Map<String, String> labels = const {}}) {
+  if (chain.length < 2) {
+    return labels.isEmpty
+        ? chain
+        : [for (final t in chain) directionTagDisplay(t, labels)];
+  }
   final out = <String>[];
   String? carry;
   for (var i = chain.length - 1; i >= 0; i--) {
     final t = chain[i];
+    final shown = directionTagDisplay(t, labels);
     if (carry != null && SelectorInfo.I.isSelector(t)) {
-      carry = '$t ($carry)'; // селектор поглощает уже-сфолженный выбор
+      carry = '$shown ($carry)'; // селектор поглощает уже-сфолженный выбор
     } else {
       if (carry != null) out.add(carry);
-      carry = t;
+      carry = shown;
     }
   }
   if (carry != null) out.add(carry);
   return out.reversed.toList();
+}
+
+/// Подпись тега в Stats/Live: у Направления `label (tag)` (tag оставлен для
+/// сверки с Debug API и правилами), иначе сам tag. [labels] — `tag → label`
+/// (`HomeState.groupLabels`); label, совпадающий с tag, не дублируется.
+String directionTagDisplay(String tag, Map<String, String> labels) {
+  final label = labels[tag];
+  return (label == null || label.isEmpty || label == tag)
+      ? tag
+      : '$label ($tag)';
 }

@@ -12,7 +12,9 @@ import '../../services/error_format.dart';
 import '../../services/subscription/auto_updater.dart';
 import '../../services/l10n/locale_controller.dart';
 import '../../services/file_import.dart';
+import '../backup_screen/restore_flow.dart';
 import '../backup_screen/restore_summary.dart';
+import '../transfer_receive_screen.dart';
 
 /// Empty-state quick-restore flow.
 ///
@@ -111,6 +113,40 @@ Future<void> restoreFromBackup(
         content: Text(summary),
         duration: const Duration(seconds: 6),
       ),
+    );
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text(getLocalText.s(
+                "Restore failed: %s", formatUserError(e).render()))),
+      );
+    }
+  }
+}
+
+/// §622 — пустой главный экран на TV: приём настроек с телефона.
+///
+/// В отличие от [restoreFromBackup] предпросмотр показывается: содержимое
+/// пришло по сети, и без подтверждения на TV ничего не применяется (фича 031
+/// P4). После применения подписки перечитываются и скачиваются, как там.
+Future<void> receiveFromPhone(
+  BuildContext context,
+  SubscriptionController subController,
+  AutoUpdater autoUpdater,
+) async {
+  final contents = await openTransferReceiveScreen(context);
+  if (contents == null || !context.mounted) return;
+  try {
+    await restoreFromContents(
+      context,
+      contents,
+      fetchingSubscriptions: true,
+      onApplied: () async {
+        await subController.init();
+        unawaited(
+            autoUpdater.maybeUpdateAll(UpdateTrigger.manual, force: true));
+      },
     );
   } catch (e) {
     if (context.mounted) {

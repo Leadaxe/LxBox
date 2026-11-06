@@ -12,6 +12,8 @@
     ]
   },
   "migrated_file_is_report_doc": true,
-  "content_diff": [],
+  "content_diff": [
+    "$.vpn_mode.system_proxy_enabled: <absent> → false"
+  ],
   "bytes_identical": false
 }

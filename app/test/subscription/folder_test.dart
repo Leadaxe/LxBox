@@ -412,33 +412,44 @@ void main() {
       expect(back.detourPolicy.overrideDetour, const NodeLink(tag: 'Jump2'));
     });
 
-    test('§578 setSkipPresets: одиночный и член папки, персист и пометка',
+    test('§578/§656 setNodeRecordFlag: одиночный и член папки, персист и пометка',
         () async {
       final c = await makeController();
       await c.addFromInput(uriA);
       c.configDirty = false;
-      expect(await c.setSkipPresets(0, null, true), isNull);
-      expect((c.entries.single.list as UserServer).skipPresets, isTrue);
+      expect(await c.setNodeRecordFlag(0, null, NodeRecordFlag.skipTailscalePresets, true), isNull);
+      expect((c.entries.single.list as UserServer).skipTailscalePresets, isTrue);
       expect(c.configDirty, isTrue);
       expect(
           ((await SettingsStorage.getServerLists()).single as UserServer)
-              .skipPresets,
+              .skipTailscalePresets,
           isTrue);
 
       await c.addFolder('F');
       await c.moveServerToFolder(0, 1);
       c.configDirty = false;
-      expect(await c.setSkipPresets(0, 0, false), isNull);
+      expect(await c.setNodeRecordFlag(0, 0, NodeRecordFlag.skipTailscalePresets, false), isNull);
       var folder = c.entries.single.list as FolderServers;
-      expect(folder.members.single.skipPresets, isFalse);
+      expect(folder.members.single.skipTailscalePresets, isFalse);
       expect(c.configDirty, isTrue);
-      expect(await c.setSkipPresets(0, 0, true), isNull);
+      expect(await c.setNodeRecordFlag(0, 0, NodeRecordFlag.skipTailscalePresets, true), isNull);
       final saved =
           (await SettingsStorage.getServerLists()).single as FolderServers;
-      expect(saved.members.single.skipPresets, isTrue);
+      expect(saved.members.single.skipTailscalePresets, isTrue);
       // Член вне диапазона и папка как одиночный — ошибка, без записи.
-      expect(await c.setSkipPresets(0, 5, true), isNotNull);
-      expect(await c.setSkipPresets(0, null, true), isNotNull);
+      expect(await c.setNodeRecordFlag(0, 5, NodeRecordFlag.skipTailscalePresets, true), isNotNull);
+      expect(await c.setNodeRecordFlag(0, null, NodeRecordFlag.skipTailscalePresets, true), isNotNull);
+
+      // §656 — поля allow_* тем же путём, каждое своё.
+      expect(
+          await c.setNodeRecordFlag(0, 0, NodeRecordFlag.allowGateway, true),
+          isNull);
+      final m = ((await SettingsStorage.getServerLists()).single
+              as FolderServers)
+          .members
+          .single;
+      expect([m.allowLocal, m.allowLan, m.allowGateway, m.skipTailscalePresets],
+          [false, false, true, true]);
     });
 
     test('§239 setMemberDetour: self и цикл отклоняются, интра хранится парой',

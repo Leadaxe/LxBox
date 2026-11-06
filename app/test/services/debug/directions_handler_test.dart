@@ -559,6 +559,109 @@ void main() {
         throwsA(isA<BadRequest>()),
       );
     });
+
+    // §673 — правило 026 «Other directions — только выше» держит и reorder.
+    test('§673 — порядок со ссылкой include вниз → 409 с парами, '
+        'хранилище не меняется; без нарушения → 200', () async {
+      await directionsHandler(req('POST', '/directions'), ctx()); // vpn-2
+      await directionsHandler(
+        req('POST', '/directions', body: {
+          'include': ['vpn-2'],
+        }),
+        ctx(),
+      ); // vpn-3 includes vpn-2
+
+      Conflict? err;
+      try {
+        await directionsHandler(
+          req('POST', '/directions/reorder', body: {
+            'order': ['vpn-1', 'vpn-3', 'vpn-2'],
+          }),
+          ctx(),
+        );
+      } on Conflict catch (e) {
+        err = e;
+      }
+      expect(err, isNotNull);
+      expect(err!.status, 409);
+      expect(err.toJson()['conflicts'], [
+        {'direction': 'vpn-3', 'includes': 'vpn-2', 'reason': 'not_above'},
+      ]);
+      expect((await SettingsStorage.getDirections()).map((c) => c.tag),
+          ['vpn-1', 'vpn-2', 'vpn-3']);
+
+      final r = await directionsHandler(
+        req('POST', '/directions/reorder', body: {
+          'order': ['vpn-2', 'vpn-3', 'vpn-1'],
+        }),
+        ctx(),
+      );
+      expect(r.status, 200);
+      expect((await SettingsStorage.getDirections()).map((c) => c.tag),
+          ['vpn-2', 'vpn-3', 'vpn-1']);
+    });
+
+    test('§673 — ссылка вниз из старого бэкапа reorder не блокирует',
+        () async {
+      await SettingsStorage.setDirections(const [
+        Direction(tag: 'vpn-1', label: 'A', include: ['vpn-3']),
+        Direction(tag: 'vpn-2', label: 'B'),
+        Direction(tag: 'vpn-3', label: 'C'),
+      ]);
+      final r = await directionsHandler(
+        req('POST', '/directions/reorder', body: {
+          'order': ['vpn-2', 'vpn-1', 'vpn-3'],
+        }),
+        ctx(),
+      );
+      expect(r.status, 200);
+    });
+  });
+
+  group('§673 — include в PATCH/POST только на Направления выше', () {
+    test('PATCH include вниз / сам себя / неизвестный → 409, не пишется',
+        () async {
+      await directionsHandler(req('POST', '/directions'), ctx()); // vpn-2
+      await directionsHandler(req('POST', '/directions'), ctx()); // vpn-3
+
+      Future<Conflict> patch(List<String> include) async {
+        try {
+          await directionsHandler(
+            req('PATCH', '/directions/vpn-2', body: {'include': include}),
+            ctx(),
+          );
+        } on Conflict catch (e) {
+          return e;
+        }
+        fail('ожидался 409 для $include');
+      }
+
+      final e = await patch(['vpn-1', 'vpn-3', 'vpn-2', 'nope']);
+      expect(e.status, 409);
+      expect(e.toJson()['conflicts'], [
+        {'direction': 'vpn-2', 'includes': 'vpn-3', 'reason': 'not_above'},
+        {'direction': 'vpn-2', 'includes': 'vpn-2', 'reason': 'self'},
+        {'direction': 'vpn-2', 'includes': 'nope', 'reason': 'unknown'},
+      ]);
+      final vpn2 = (await SettingsStorage.getDirections())
+          .firstWhere((c) => c.tag == 'vpn-2');
+      expect(vpn2.include, isEmpty);
+    });
+
+    test('POST с include на несуществующий тег → 409, не создаётся',
+        () async {
+      await expectLater(
+        directionsHandler(
+          req('POST', '/directions', body: {
+            'include': ['vpn-7'],
+          }),
+          ctx(),
+        ),
+        throwsA(isA<Conflict>()),
+      );
+      expect((await SettingsStorage.getDirections()).map((c) => c.tag),
+          ['vpn-1']);
+    });
   });
 
   /// §275 — зеркальный ресинк `_entries` контроллера после storage-heal

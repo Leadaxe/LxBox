@@ -30,9 +30,9 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
 - [`chain_unsupported_by_core`](#chain_unsupported_by_core) · `error` — Chains are unavailable in core {version}
 - [`core_rejected`](#core_rejected) · `error` — The core rejected this server
 - [`detour_chain_too_deep`](#detour_chain_too_deep) · `warning` — Chain shortened to {limit} hops
-- [`detour_cycle_broken`](#detour_cycle_broken) · `warning` — Loop in the chain broken
-- [`detour_target_missing`](#detour_target_missing) · `warning` — Chain cut: {target} not found
-- [`detour_to_group`](#detour_to_group) · `warning` — Chain cut: {target} is a group
+- [`detour_cycle_broken`](#detour_cycle_broken) · `error` — Node dropped: detour loop through {target}
+- [`detour_target_missing`](#detour_target_missing) · `error` — Node dropped: detour target {target} not found
+- [`detour_to_group`](#detour_to_group) · `error` — Node dropped: detour target {target} is a group
 - [`detour_with_listen_port`](#detour_with_listen_port) · `warning` — {tag}: listening port removed for the hop
 - [`detour_with_tls_fragment`](#detour_with_tls_fragment) · `info` — {tag}: TLS fragmentation removed for the hop
 - [`dialer_proxy_unusable`](#dialer_proxy_unusable) · `error` — Preceding proxy {target} is unusable
@@ -64,10 +64,16 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
 - [`obfs_object_flattened`](#obfs_object_flattened) · `info` — Obfuscation password taken from an object
 - [`obfs_password_missing`](#obfs_password_missing) · `warning` — Obfuscation removed: no password
 - [`obfs_unknown`](#obfs_unknown) · `warning` — Unknown obfuscation removed
+- [`openconnect_core_unsupported`](#openconnect_core_unsupported) · `warning` — OpenConnect is unavailable in this core
+- [`openconnect_fingerprint_invalid`](#openconnect_fingerprint_invalid) · `warning` — OpenConnect: bogus certificate fingerprint dropped
+- [`openconnect_flavor_invalid`](#openconnect_flavor_invalid) · `warning` — OpenConnect: unknown gateway type {value}
+- [`openconnect_insecure_crypto`](#openconnect_insecure_crypto) · `info` — OpenConnect: legacy crypto allowed
+- [`openconnect_mtu_invalid`](#openconnect_mtu_invalid) · `warning` — OpenConnect: MTU {value} removed
 - [`openvpn_core_unsupported`](#openvpn_core_unsupported) · `warning` — OpenVPN is unavailable in this core
 - [`packet_encoding_unknown`](#packet_encoding_unknown) · `warning` — Field removed: unknown packet_encoding
 - [`password_empty`](#password_empty) · `warning` — Password is empty
 - [`port_invalid`](#port_invalid) · `error` — Invalid port {value}
+- [`protocol_extension_unsupported`](#protocol_extension_unsupported) · `error` — Protocol {scheme} is not supported in this app
 - [`protocol_unsupported`](#protocol_unsupported) · `error` — Protocol {scheme} is not supported
 - [`provider_banner_link`](#provider_banner_link) · `info` — Subscription: provider notice instead of a server
 - [`reality_fp_not_chrome`](#reality_fp_not_chrome) · `info` — REALITY: fingerprint {value} may not connect
@@ -112,10 +118,11 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
 - [`vless_encryption_invalid`](#vless_encryption_invalid) · `error` — VLESS encryption string is malformed
 - [`vmess_security_unknown`](#vmess_security_unknown) · `warning` — VMess: unknown cipher replaced with auto
 - [`wg_key_invalid`](#wg_key_invalid) · `error` — WireGuard: invalid key
+- [`wg_peer_dropped`](#wg_peer_dropped) · `warning` — WireGuard: peer dropped
 - [`wg_peer_incoming`](#wg_peer_incoming) · `info` — Waits for an incoming connection
 - [`wgconf_dns_ignored`](#wgconf_dns_ignored) · `info` — WireGuard: DNS from the configuration not applied
-- [`wgconf_extra_peer_dropped`](#wgconf_extra_peer_dropped) · `warning` — WireGuard: extra [Peer] sections dropped
 - [`wgconf_param_unknown`](#wgconf_param_unknown) · `info` — WireGuard: unknown key {query_name}
+- [`wgconf_peer_dropped`](#wgconf_peer_dropped) · `warning` — WireGuard: [Peer] section skipped
 - [`ws_early_data_converted`](#ws_early_data_converted) · `info` — WebSocket: early data converted
 - [`xhttp_mode_forced_packet_up`](#xhttp_mode_forced_packet_up) · `warning` — XHTTP mode set to packet-up
 - [`xhttp_param_reset`](#xhttp_param_reset) · `warning` — XHTTP: field {field} removed
@@ -498,15 +505,15 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
 <a id="detour_cycle_broken"></a>
 ### detour_cycle_broken
 
-**severity:** `warning` · **params:** `target`
+**severity:** `error` · **params:** `target`
 
-**Loop in the chain broken**
+**Node dropped: detour loop through {target}**
 
-- **What happened:** The detour chain of this node looped back on itself through {target}. The closing link was removed, because the core rejects such a config and would refuse to start it; the node keeps working with a shortened chain.
+- **What happened:** The detour chain of this node loops back on itself through {target}. The node was dropped: the core rejects such a config and would refuse to start it, and a node whose route has degraded must not quietly connect by another path.
 - **Why it happens:** An imported sing-box config described chains that close on themselves — the node goes through a hop that in turn goes back through this node. Hand-assembled configs and merged subscriptions collect such loops easily.
 - **What you can do:**
-  - Nothing to do if the node works: it now connects with a shortened chain.
-  - If you need the full chain, fix the detour links in the source config.
+  - Fix the detour links in the source config so that the chain does not loop, then refresh the subscription.
+  - Pick another node from this subscription.
 
 **Where it comes from:**
 
@@ -515,15 +522,15 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
 <a id="detour_target_missing"></a>
 ### detour_target_missing
 
-**severity:** `warning` · **params:** `target`
+**severity:** `error` · **params:** `target`
 
-**Chain cut: {target} not found**
+**Node dropped: detour target {target} not found**
 
-- **What happened:** The imported config sends this node through {target}, but there is no such node in it. The chain was cut, because the core rejects a reference to a missing tag and would refuse to start the whole config; the node connects directly.
+- **What happened:** The imported config sends this node through {target}, but there is no usable node with that tag in it. The node was dropped: the core rejects a reference to a missing tag and would refuse to start the whole config, and a node whose route has degraded must not quietly connect directly.
 - **Why it happens:** The imported config references a hop by tag, but the node with that tag did not make it into the import — it was dropped as unsupported, or the provider exports only part of their own config.
 - **What you can do:**
-  - Nothing to do if the node works: it now connects directly.
-  - If the traffic has to go through that hop, ask the provider for a config with all the nodes it references.
+  - Ask the provider for a config with all the nodes it references, then refresh the subscription.
+  - Pick another node from this subscription.
 
 **Where it comes from:**
 
@@ -532,15 +539,15 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
 <a id="detour_to_group"></a>
 ### detour_to_group
 
-**severity:** `warning` · **params:** `target`
+**severity:** `error` · **params:** `target`
 
-**Chain cut: {target} is a group**
+**Node dropped: detour target {target} is a group**
 
-- **What happened:** This node was routed through {target}, which is a group rather than a server. The chain was cut, because a group cannot be a hop and the core would refuse to start the whole config; the node connects directly.
+- **What happened:** This node was routed through {target}, which is a group rather than a server. The node was dropped: a group cannot be a hop, the core would refuse to start the whole config, and a node whose route has degraded must not quietly connect directly.
 - **Why it happens:** The imported config points a node's detour at a selector or urltest group. Other clients tolerate that spelling, but in sing-box a group is a choice between routes, not a hop in one.
 - **What you can do:**
-  - Nothing to do if the node works: it now connects directly.
-  - If you need a chain, point the detour at a specific node instead of a group.
+  - Point the detour at a specific node instead of a group in the source config, then refresh the subscription.
+  - Pick another node from this subscription.
 
 **Where it comes from:**
 
@@ -670,6 +677,11 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
   - [`realm`](protocols/hysteria2.md#body-realm) — conflicts with `server_ports` → removed
   - [`realm`](protocols/hysteria2.md#body-realm) — conflicts with `server` → removed
   - [`server_ports`](protocols/hysteria2.md#body-server-ports) — conflicts with `realm` → removed
+- [`openconnect`](protocols/openconnect.md)
+  - [`tls.certificate_authority_path`](protocols/openconnect.md#body-tls-certificate-authority-path) — conflicts with `tls.certificate_authority` → removed
+  - [`tls.client_certificate_path`](protocols/openconnect.md#body-tls-client-certificate-path) — conflicts with `tls.client_certificate` → removed
+  - [`tls.client_key_path`](protocols/openconnect.md#body-tls-client-key-path) — conflicts with `tls.client_key` → removed
+  - [`token.secret_path`](protocols/openconnect.md#body-token-secret-path) — conflicts with `token.secret` → removed
 - [`tailscale`](protocols/tailscale.md)
   - [`exit_node`](protocols/tailscale.md#body-exit-node) — conflicts with `advertise_exit_node` → removed
 - [`tls`](protocols/_tls.md)
@@ -684,6 +696,8 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
   - [`spoof`](protocols/_tls.md#body-spoof) — conflicts with `tls.reality.enabled` → removed
 - [`transports`](protocols/_transports.md)
   - [`xhttp.xmux.max_concurrency`](protocols/_transports.md#body-xhttp-xmux-max-concurrency) — conflicts with `transport.xmux.max_connections` → removed
+- [`trusttunnel`](protocols/trusttunnel.md)
+  - [`quic`](protocols/trusttunnel.md#body-quic) — conflicts with `tls.utls.enabled` when `quic` is `true` → removed
 - [`tuic`](protocols/tuic.md)
   - [`udp_relay_mode`](protocols/tuic.md#body-udp-relay-mode) — conflicts with `udp_over_stream` → removed
 - [`wireguard`](protocols/wireguard.md)
@@ -724,10 +738,18 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
   - [`public_key`](protocols/masque.md#body-public-key) — the value does not fit the field → node dropped
 - [`naive`](protocols/naive.md)
   - [`tls`](protocols/naive.md#body-tls) — required and missing → node dropped
+- [`openconnect`](protocols/openconnect.md)
+  - [`server`](protocols/openconnect.md#body-server) — required and missing → node dropped
+  - [`token.mode`](protocols/openconnect.md#body-token-mode) — required and missing → node dropped
+  - [`token.secret`](protocols/openconnect.md#body-token-secret) — required and missing → node dropped
 - [`shadowsocks`](protocols/shadowsocks.md)
   - [`password`](protocols/shadowsocks.md#body-password) — required and missing → node dropped
 - [`trojan`](protocols/trojan.md)
   - [`password`](protocols/trojan.md#body-password) — required and missing → node dropped
+- [`trusttunnel`](protocols/trusttunnel.md)
+  - [`password`](protocols/trusttunnel.md#body-password) — required and missing → node dropped
+  - [`tls`](protocols/trusttunnel.md#body-tls) — required and missing → node dropped
+  - [`username`](protocols/trusttunnel.md#body-username) — required and missing → node dropped
 - [`tuic`](protocols/tuic.md)
   - [`tls`](protocols/tuic.md#body-tls) — required and missing → node dropped
 - [`vless`](protocols/vless.md)
@@ -759,6 +781,9 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
 - [`masque`](protocols/masque.md)
   - [`private_key`](protocols/masque.md#body-private-key) — set without `public_key` → removed
   - [`public_key`](protocols/masque.md#body-public-key) — set without `private_key` → removed
+- [`openconnect`](protocols/openconnect.md)
+  - [`tls.client_certificate_path`](protocols/openconnect.md#body-tls-client-certificate-path) — set without `tls.client_key_path` (unless `tls.client_key` is set) → removed
+  - [`tls.client_key_path`](protocols/openconnect.md#body-tls-client-key-path) — set without `tls.client_certificate_path` (unless `tls.client_certificate` is set) → removed
 - [`shadowsocks`](protocols/shadowsocks.md)
   - [`plugin_opts`](protocols/shadowsocks.md#body-plugin-opts) — set without `plugin` → removed
 - [`tailscale`](protocols/tailscale.md)
@@ -1162,6 +1187,95 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
 - [`hysteria2`](protocols/hysteria2.md)
   - [`obfs.type`](protocols/hysteria2.md#body-obfs-type) — the value does not fit the field → removed
 
+<a id="openconnect_core_unsupported"></a>
+### openconnect_core_unsupported
+
+**severity:** `warning` · **params:** `reason`
+
+**OpenConnect is unavailable in this core**
+
+- **What happened:** The node uses OpenConnect, which this core cannot run ({reason}). The node was excluded from the config, because the core rejects such a value and would refuse to start the whole config; the remaining nodes work.
+- **Why it happens:** OpenConnect is an extension of the lx fork: it needs a core built with the with_openconnect tag, version 1.14.0-lx.10 or newer. A core without it rejects the whole config as soon as such a node appears in it.
+- **What you can do:**
+  - Update the core to 1.14.0-lx.10 or newer, built with the with_openconnect tag.
+  - Use another node until the core is updated.
+
+**Where it comes from:**
+
+- Node or subscription level: no field in the registry points at this code, so it is raised while the entry as a whole is being read.
+
+<a id="openconnect_fingerprint_invalid"></a>
+### openconnect_fingerprint_invalid
+
+**severity:** `warning` · **params:** `path`, `value`
+
+**OpenConnect: bogus certificate fingerprint dropped**
+
+- **What happened:** The certificate fingerprint {value} at {path} is not in a form the core accepts. It was removed, because the core rejects such a value and would refuse to start the whole config; the remaining fingerprints were kept.
+- **Why it happens:** The core accepts a hex SHA-1 of the certificate without a prefix, sha1:<hex>, sha256:<hex> or pin-sha256:<base64>. Fingerprints copied with colons between bytes, with spaces, or truncated do not match any of these forms.
+- **What you can do:**
+  - Write the fingerprint in one of the accepted forms, for example sha256: followed by hex digits without colons.
+  - If no valid fingerprint is left, the gateway certificate is checked against the system CAs.
+
+**Where it comes from:**
+
+- [`openconnect`](protocols/openconnect.md)
+  - [`tls.peer_fingerprint`](protocols/openconnect.md#body-tls-peer-fingerprint) — the value does not fit the field → removed
+
+<a id="openconnect_flavor_invalid"></a>
+### openconnect_flavor_invalid
+
+**severity:** `warning` · **params:** `path`, `value`
+
+**OpenConnect: unknown gateway type {value}**
+
+- **What happened:** The OpenConnect node names gateway type {value} at {path}, which the core does not know. The node was excluded from the config, because the core rejects such a value and would refuse to start the whole config; the remaining nodes work.
+- **Why it happens:** The core knows six gateway types: fortinet, anyconnect, gp, f5, pulse and nc. Another value is a typo or a name from another client (for example "forti" or "globalprotect"). Removing just the key is not an option: without it the core silently talks AnyConnect to the gateway.
+- **What you can do:**
+  - Set flavor to one of fortinet, anyconnect, gp, f5, pulse, nc in the node body.
+  - Ask the provider which gateway type the server runs.
+
+**Where it comes from:**
+
+- [`openconnect`](protocols/openconnect.md)
+  - [`flavor`](protocols/openconnect.md#body-flavor) — the value does not fit the field → node dropped
+
+<a id="openconnect_insecure_crypto"></a>
+### openconnect_insecure_crypto
+
+**severity:** `info` · **params:** `path`, `value`
+
+**OpenConnect: legacy crypto allowed**
+
+- **What happened:** The node sets {path} to {value}, so the connection to the gateway may use legacy ciphers and TLS 1.0. The value was kept as written; such a connection is weaker than a modern one.
+- **Why it happens:** Old gateways only speak TLS 1.0 and legacy ciphers, and the setting was turned on to reach one of them — or it was copied from another profile without need.
+- **What you can do:**
+  - Nothing to do if the gateway is old and needs it.
+  - If the gateway is modern, turn the setting off: the node connects without it.
+
+**Where it comes from:**
+
+- [`openconnect`](protocols/openconnect.md)
+  - [`allow_insecure_crypto`](protocols/openconnect.md#body-allow-insecure-crypto) — the value is `true` → kept with a notice
+
+<a id="openconnect_mtu_invalid"></a>
+### openconnect_mtu_invalid
+
+**severity:** `warning` · **params:** `path`, `value`
+
+**OpenConnect: MTU {value} removed**
+
+- **What happened:** The MTU {value} at {path} is outside what the core accepts (0 to 65535). It was removed, because the core rejects such a value and would refuse to start the whole config; the gateway's own MTU is used instead.
+- **Why it happens:** The value is negative, fractional, too large, or not a number at all — usually a typo in a hand-written body.
+- **What you can do:**
+  - Nothing to do if the tunnel works: the gateway's MTU applies.
+  - If HTTPS stalls through the tunnel, set mtu between 576 and 1500 in the node body.
+
+**Where it comes from:**
+
+- [`openconnect`](protocols/openconnect.md)
+  - [`mtu`](protocols/openconnect.md#body-mtu) — the value does not fit the field → removed
+
 <a id="openvpn_core_unsupported"></a>
 ### openvpn_core_unsupported
 
@@ -1236,6 +1350,23 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
 - [`wireguard`](protocols/wireguard.md)
   - [`peers.port`](protocols/wireguard.md#body-peers-port) — the value does not fit the field → node dropped
 
+<a id="protocol_extension_unsupported"></a>
+### protocol_extension_unsupported
+
+**severity:** `error` · **params:** `scheme`, `alternative`
+
+**Protocol {scheme} is not supported in this app**
+
+- **What happened:** The entry uses {scheme}, which this application does not implement: in the shared registry the protocol is an extension of the other side. The node was dropped. Use {alternative} instead.
+- **Why it happens:** The subscription carries a protocol that only one of the two applications supports (registry/protocols/<scheme>.json: extension). The core could run it, but this application has no parser for it.
+- **What you can do:**
+  - Ask the provider for a link to the same server over {alternative}.
+  - Pick another node from this subscription.
+
+**Where it comes from:**
+
+- Node or subscription level: no field in the registry points at this code, so it is raised while the entry as a whole is being read.
+
 <a id="protocol_unsupported"></a>
 ### protocol_unsupported
 
@@ -1287,7 +1418,7 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
 **Where it comes from:**
 
 - [`tls`](protocols/_tls.md)
-  - [`utls.fingerprint`](protocols/_tls.md#body-utls-fingerprint) — the value is anything except `chrome`, `chrome_psk`, `chrome_psk_shuffle`, `chrome_padding_psk_shuffle`, `chrome_pq`, `chrome_pq_psk`, `firefox`, `safari`, `random` → kept with a notice
+  - [`utls.fingerprint`](protocols/_tls.md#body-utls-fingerprint) — the value is anything except `chrome`, `chrome_psk`, `chrome_psk_shuffle`, `chrome_padding_psk_shuffle`, `chrome_pq`, `chrome_pq_psk`, `chrome_155`, `firefox`, `safari`, `random` → kept with a notice
 
 <a id="reality_fp_random_pinned"></a>
 ### reality_fp_random_pinned
@@ -1733,8 +1864,8 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
   - [`curve_preferences`](protocols/_tls.md#body-curve-preferences) — not supported by `naive` → removed
   - [`disable_sni`](protocols/_tls.md#body-disable-sni) — not supported by `naive` → removed
   - [`engine`](protocols/_tls.md#body-engine) — not supported by `naive` → removed
-  - [`fragment`](protocols/_tls.md#body-fragment) — not supported by `naive` → removed
-  - [`fragment_fallback_delay`](protocols/_tls.md#body-fragment-fallback-delay) — not supported by `naive` → removed
+  - [`fragment`](protocols/_tls.md#body-fragment) — not supported by `naive`, `hysteria`, `hysteria2`, `tuic` → removed
+  - [`fragment_fallback_delay`](protocols/_tls.md#body-fragment-fallback-delay) — not supported by `naive`, `hysteria`, `hysteria2`, `tuic` → removed
   - [`handshake_timeout`](protocols/_tls.md#body-handshake-timeout) — not supported by `naive` → removed
   - [`insecure`](protocols/_tls.md#body-insecure) — not supported by `naive` → removed
   - [`kernel_rx`](protocols/_tls.md#body-kernel-rx) — not supported by `naive`, `masque` → removed
@@ -1743,7 +1874,7 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
   - [`min_version`](protocols/_tls.md#body-min-version) — not supported by `naive` → removed
   - [`reality`](protocols/_tls.md#body-reality) — not supported by `naive`, `hysteria`, `hysteria2`, `tuic`, `masque` → removed
   - [`reality.enabled`](protocols/_tls.md#body-reality-enabled) — not supported by `naive` → removed
-  - [`record_fragment`](protocols/_tls.md#body-record-fragment) — not supported by `naive` → removed
+  - [`record_fragment`](protocols/_tls.md#body-record-fragment) — not supported by `naive`, `hysteria`, `hysteria2`, `tuic` → removed
   - [`spoof`](protocols/_tls.md#body-spoof) — not supported by `naive` → removed
   - [`spoof_method`](protocols/_tls.md#body-spoof-method) — not supported by `naive` → removed
   - [`utls`](protocols/_tls.md#body-utls) — not supported by `naive`, `hysteria`, `hysteria2`, `tuic`, `masque` → removed
@@ -1783,6 +1914,8 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
 
 **Where it comes from:**
 
+- [`openconnect`](protocols/openconnect.md)
+  - [`tls.insecure`](protocols/openconnect.md#body-tls-insecure) — the value is `true` → kept with a notice
 - [`tls`](protocols/_tls.md)
   - [`insecure`](protocols/_tls.md#body-insecure) — the value is `true` → kept with a notice
 
@@ -1793,8 +1926,8 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
 
 **QUIC: TLS field {path} not applicable**
 
-- **What happened:** This protocol runs over QUIC, where the core cannot use a uTLS fingerprint or REALITY at all. The field {path} was removed; the node connects exactly as it would have anyway.
-- **Why it happens:** The subscription applies one TLS template to every protocol, so a QUIC node (hysteria, hysteria2, tuic, masque) was handed a fingerprint or REALITY keys. QUIC carries TLS 1.3 inside itself and the core builds it through the standard engine, which neither uTLS nor REALITY can provide — with such a block the outbound would not start at all.
+- **What happened:** This protocol runs over QUIC, where the core cannot use a uTLS fingerprint, REALITY or TLS fragmentation at all. The field {path} was removed; the node connects exactly as it would have anyway.
+- **Why it happens:** The subscription applies one TLS template to every protocol, so a QUIC node (hysteria, hysteria2, tuic, masque) was handed a fingerprint, REALITY keys or fragmentation flags. QUIC carries TLS 1.3 inside itself and the core builds it through the standard engine, which neither uTLS nor REALITY can provide — with such a block the outbound would not start at all; fragmentation splits TCP records, and QUIC has none.
 - **What you can do:**
   - Nothing to do: the node works, and the removed settings have no meaning over QUIC.
   - If you need a fingerprint or REALITY, take a node on a TCP protocol — vless, trojan, vmess or anytls.
@@ -1928,6 +2061,8 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
   - [`quic_session_receive_window`](protocols/naive.md#body-quic-session-receive-window) — the value does not fit the field → removed
   - [`stream_receive_window`](protocols/naive.md#body-stream-receive-window) — the value does not fit the field → removed
   - [`udp_over_tcp.version`](protocols/naive.md#body-udp-over-tcp-version) — the value does not fit the field → removed
+- [`openconnect`](protocols/openconnect.md)
+  - [`user_agent`](protocols/openconnect.md#body-user-agent) — the value does not fit the field → removed
 - [`shadowsocks`](protocols/shadowsocks.md)
   - [`udp_over_tcp.version`](protocols/shadowsocks.md#body-udp-over-tcp-version) — the value does not fit the field → removed
 - [`socks`](protocols/socks.md)
@@ -1949,6 +2084,8 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
   - [`spoof_method`](protocols/_tls.md#body-spoof-method) — the value does not fit the field → removed
 - [`transports`](protocols/_transports.md)
   - [`ws.max_early_data`](protocols/_transports.md#body-ws-max-early-data) — the value does not fit the field → removed
+- [`trusttunnel`](protocols/trusttunnel.md)
+  - [`quic_congestion_control`](protocols/trusttunnel.md#body-quic-congestion-control) — the value does not fit the field → removed
 - [`tuic`](protocols/tuic.md)
   - [`connection_receive_window`](protocols/tuic.md#body-connection-receive-window) — the value does not fit the field → removed
   - [`initial_packet_size`](protocols/tuic.md#body-initial-packet-size) — the value does not fit the field → removed
@@ -2111,6 +2248,22 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
   - [`peers.public_key`](protocols/wireguard.md#body-peers-public-key) — the value does not fit the field → node dropped
   - [`private_key`](protocols/wireguard.md#body-private-key) — the value does not fit the field → node dropped
 
+<a id="wg_peer_dropped"></a>
+### wg_peer_dropped
+
+**severity:** `warning` · **params:** `index`, `reason`
+
+**WireGuard: peer dropped**
+
+- **What happened:** Peer {index} was dropped ({reason}). The other peers of the node remain.
+- **Why it happens:** One of the node's peers has a value the core rejects, such as a key that is not 32 bytes of base64, or no address to connect to. With a single peer the whole node would be dropped; with several, only the broken one is.
+- **What you can do:**
+  - Check that peer against the configuration your provider gave you and correct the value named in the reason.
+
+**Where it comes from:**
+
+- Node or subscription level: no field in the registry points at this code, so it is raised while the entry as a whole is being read.
+
 <a id="wg_peer_incoming"></a>
 ### wg_peer_incoming
 
@@ -2145,23 +2298,6 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
 
 - Node or subscription level: no field in the registry points at this code, so it is raised while the entry as a whole is being read.
 
-<a id="wgconf_extra_peer_dropped"></a>
-### wgconf_extra_peer_dropped
-
-**severity:** `warning` · **params:** `count`
-
-**WireGuard: extra [Peer] sections dropped**
-
-- **What happened:** The configuration holds {count} [Peer] sections. Only the first one became a node, because one node here is one peer; the rest were dropped, and any traffic those peers were meant to carry will not go through this node.
-- **Why it happens:** wg-quick lets one interface hold several peers and splits traffic between them by AllowedIPs. A node in the launcher is a single server, so there is no place to put the second peer. Such a file usually comes from a site-to-site setup, or from a provider that packed several locations into one configuration.
-- **What you can do:**
-  - Check that the first peer is the one you need: it is the one that became the node.
-  - If you need the others, import each peer as its own configuration, with the same [Interface] and one [Peer] each.
-
-**Where it comes from:**
-
-- Node or subscription level: no field in the registry points at this code, so it is raised while the entry as a whole is being read.
-
 <a id="wgconf_param_unknown"></a>
 ### wgconf_param_unknown
 
@@ -2175,6 +2311,22 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
   - Nothing to do if the node works: the key had no effect here anyway.
   - If you edited the file yourself, check the spelling of the key.
   - If the key belongs to a newer AmneziaWG, update the core.
+
+**Where it comes from:**
+
+- Node or subscription level: no field in the registry points at this code, so it is raised while the entry as a whole is being read.
+
+<a id="wgconf_peer_dropped"></a>
+### wgconf_peer_dropped
+
+**severity:** `warning` · **params:** `index`, `missing`
+
+**WireGuard: [Peer] section skipped**
+
+- **What happened:** [Peer] section {index} has no {missing}, so that peer was skipped. The other peers of the configuration are in the node.
+- **Why it happens:** Without the peer's public key the handshake cannot start, and without Endpoint there is nowhere to connect. Such a section usually comes from a hand-edited file or a cut-off copy.
+- **What you can do:**
+  - Add the missing key to that [Peer] section and import the configuration again.
 
 **Where it comes from:**
 

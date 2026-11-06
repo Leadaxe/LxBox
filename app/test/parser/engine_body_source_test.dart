@@ -30,19 +30,6 @@ void main() {
   });
 
   group('BodySource.byRegistryName — словарь sources реестра', () {
-    const cases = <String, BodySource>{
-      'uri': BodySource.uri,
-      'singbox': BodySource.singbox,
-      'xray': BodySource.xray,
-      'wgconf': BodySource.wgconf,
-      'amnezia': BodySource.amnezia,
-    };
-    cases.forEach((name, want) {
-      test('«$name» → $want', () {
-        expect(BodySource.byRegistryName(name), want);
-      });
-    });
-
     // Реестр вправе уехать вперёд кода (24.1): новый вид источника обязан
     // вести себя как «вход себя не назвал», а не ронять разбор.
     test('незнакомое имя — other, без падения', () {
@@ -50,15 +37,5 @@ void main() {
       expect(BodySource.byRegistryName(''), BodySource.other);
       expect(BodySource.byRegistryName(null), BodySource.other);
     });
-  });
-
-  test('расширение набора не трогает правило except_sources', () {
-    // Сравнение идёт по имени из реестра, поэтому новые значения под список
-    // `["singbox"]` не подпадают — ровно как не подпадал `other`.
-    const except = ['singbox'];
-    expect(except.contains(BodySource.uri.registryName), isFalse);
-    expect(except.contains(BodySource.wgconf.registryName), isFalse);
-    expect(except.contains(BodySource.other.registryName), isFalse);
-    expect(except.contains(BodySource.singbox.registryName), isTrue);
   });
 }

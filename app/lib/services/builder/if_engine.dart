@@ -446,12 +446,14 @@ dynamic _walkMap(Map<String, dynamic> obj, VarResolver resolve) {
   for (final key in ifKeys) {
     final raw = obj[key];
     obj.remove(key);
-    if (raw is! Map<String, dynamic>) {
-      // Тело #if не объект — конструкция не распознана (§4.1), не молча.
+    final form = normalizeIfForm(raw);
+    if (form == null) {
+      // Форма значения `#if…` не распознана (§4.1, §656) — ветка не
+      // выбрана, но не молча.
       reportTemplateWarning(templateWarnUnknownDirective, {'key': key});
       continue;
     }
-    final branch = _selectBranch(raw, resolve, key); // Map | null (drop, no else)
+    final branch = _selectBranch(form, resolve, key); // Map | null (drop, no else)
     if (branch != null) {
       // branch уже прошёл walk внутри _selectBranch; мерджим поля в родителя.
       branch.forEach((k, v) {
@@ -471,23 +473,27 @@ dynamic _walkList(List<dynamic> list, VarResolver resolve) {
     if (elem is Map<String, dynamic> && elem.length == 1) {
       final key = elem.keys.first;
       if (isIfKey(key)) {
-        final body = elem[key];
-        if (body is Map<String, dynamic>) {
-          final taken = _selectArrayBranch(body, resolve, key);
-          if (identical(taken, Dropped.instance)) continue;
-          // Сплайс на один уровень (TEMPLATE_LANG §4.4, SPEC 143 D-123, N13):
-          // ветка-массив вливается в родителя, не-массив встаёт элементом.
-          // Литерал и ссылка на text_list не различаются — решает только
-          // форма результата, типы переменных здесь не смотрятся. Вложенный
-          // массив автор пишет двойными скобками: `[[…]]` после сплайса
-          // одного уровня даёт один элемент-массив. Паритет с Go.
-          if (taken is List) {
-            out.addAll(taken);
-          } else {
-            out.add(taken);
-          }
+        final form = normalizeIfForm(elem[key]);
+        if (form == null) {
+          // §656 — элемент целиком `#if…` невалидной формы: ветка не
+          // выбрана, элемент выпадает + warning.
+          reportTemplateWarning(templateWarnUnknownDirective, {'key': key});
           continue;
         }
+        final taken = _selectArrayBranch(form, resolve, key);
+        if (identical(taken, Dropped.instance)) continue;
+        // Сплайс на один уровень (TEMPLATE_LANG §4.4, SPEC 143 D-123, N13):
+        // ветка-массив вливается в родителя, не-массив встаёт элементом.
+        // Литерал и ссылка на text_list не различаются — решает только
+        // форма результата, типы переменных здесь не смотрятся. Вложенный
+        // массив автор пишет двойными скобками: `[[…]]` после сплайса
+        // одного уровня даёт один элемент-массив. Паритет с Go.
+        if (taken is List) {
+          out.addAll(taken);
+        } else {
+          out.add(taken);
+        }
+        continue;
       }
     }
     // Голая ссылка "@list_var" в позиции элемента массива СПЛАЙСИТСЯ в
@@ -515,59 +521,135 @@ dynamic _walkList(List<dynamic> list, VarResolver resolve) {
   return list;
 }
 
-/// Map-spread branch: возвращает резолвленный объект `value`/`else`, либо null
+/// §656 (контракт 1.1.125, TEMPLATE_LANG §4.1, D-133) — форма `#if…`,
+/// прочитанная по ТИПУ значения ключа:
+///   • массив `[cond, V]` / `[cond, V, E]` — короткая (канон): [cond] —
+///     условие без обёртки (грамматика `#filter`/`#enable`, но не массив);
+///   • объект с `#value` (легаси `value`) — длинная: [cond] — сам объект,
+///     условие — его `#and`/`#or`.
+class IfForm {
+  const IfForm._({
+    required this.isShort,
+    required this.cond,
+    required this.value,
+    required this.hasElse,
+    this.elseValue,
+  });
+
+  final bool isShort;
+  final dynamic cond;
+  final dynamic value;
+  final bool hasElse;
+  final dynamic elseValue;
+}
+
+/// §656 — ЕДИНСТВЕННОЕ место, где читается форма `#if…` (map-spread,
+/// array-element, [evalIfScalar], операция `#do`). null — форма невалидна:
+/// длина массива не 2–3, массив в `[0]`, `null` в ветке, строка / число /
+/// bool / `null` / объект без `#value`. На загрузке это ошибка
+/// ([validateIfConstructs]), в рантайме — ветка не выбрана +
+/// `template_unknown_directive`.
+IfForm? normalizeIfForm(dynamic raw) {
+  if (raw is List) {
+    if (raw.length < 2 || raw.length > 3) return null;
+    final cond = raw[0];
+    if (cond is List) return null;
+    if (raw[1] == null) return null;
+    if (raw.length == 3 && raw[2] == null) return null;
+    return IfForm._(
+      isShort: true,
+      cond: cond,
+      value: raw[1],
+      hasElse: raw.length == 3,
+      elseValue: raw.length == 3 ? raw[2] : null,
+    );
+  }
+  if (raw is Map<String, dynamic>) {
+    if (!hasCondKey(raw, 'value')) return null;
+    final value = condKey(raw, 'value');
+    if (value == null) return null;
+    final hasElse = hasCondKey(raw, 'else');
+    final elseValue = condKey(raw, 'else');
+    if (hasElse && elseValue == null) return null;
+    return IfForm._(
+      isShort: false,
+      cond: raw,
+      value: value,
+      hasElse: hasElse,
+      elseValue: elseValue,
+    );
+  }
+  return null;
+}
+
+/// §656 — условие формы [form]: короткая — [evalCond] без обёртки (тот же
+/// вычислитель, что у `#filter`/`#enable`), длинная — `#and`/`#or` объекта.
+bool evalIfFormCond(IfForm form, VarResolver resolve, {String key = '#if'}) {
+  if (!form.isShort) {
+    return _evalCondition(
+        form.cond as Map<String, dynamic>, resolve, key: key);
+  }
+  if (!condFormValid(form.cond)) {
+    // Скаляр вместо условия — fail-closed, но не молча (как у `#enable`).
+    reportTemplateWarning(templateWarnUnknownDirective, {'key': key});
+    return false;
+  }
+  return evalCond(form.cond, resolve);
+}
+
+/// §656 — выбранная ветка [form] без вычисления подстановок: (взята, ветка).
+/// Ложь без `E` — (false, null).
+(bool, dynamic) selectIfBranch(IfForm form, VarResolver resolve,
+    {String key = '#if'}) {
+  if (evalIfFormCond(form, resolve, key: key)) return (true, form.value);
+  if (form.hasElse) return (true, form.elseValue);
+  return (false, null);
+}
+
+/// Map-spread branch: возвращает резолвленный объект `V`/`E`, либо null
 /// (false без else → ничего не мерджить).
 Map<String, dynamic>? _selectBranch(
-  Map<String, dynamic> body,
+  IfForm form,
   VarResolver resolve,
   String key,
 ) {
-  final ok = _evalCondition(body, resolve, key: key);
-  final picked = ok ? condKey(body, 'value') : condKey(body, 'else');
-  if (picked == null) {
-    // Условие истинно, но обязательной ветки value нет (§4.1) — конструкция
-    // пропускается + warning. Отсутствие else на false-ветке — штатный случай
-    // «не мерджить», он молчит.
-    if (ok) reportTemplateWarning(templateWarnUnknownDirective, {'key': key});
-    return null;
-  }
-  // Резолвим ТОЛЬКО выбранную ветку (lazy). value — объект (валидатор проверил).
+  final (taken, picked) = selectIfBranch(form, resolve, key: key);
+  if (!taken) return null;
+  // Резолвим ТОЛЬКО выбранную ветку (lazy). Ветка-не-объект мерджить некуда.
   final walked = walk(_clone(picked), resolve);
   return walked is Map<String, dynamic> ? walked : null;
 }
 
-/// Array-element branch: возвращает резолвленный `value`/`else` (любой тип),
+/// Array-element branch: возвращает резолвленный `V`/`E` (любой тип),
 /// либо [Dropped.instance] (false без else → элемент выпадает).
 dynamic _selectArrayBranch(
-  Map<String, dynamic> body,
+  IfForm form,
   VarResolver resolve, [
   String key = '#if',
 ]) {
-  final ok = _evalCondition(body, resolve, key: key);
-  if (ok) {
-    return walk(_clone(condKey(body, 'value')), resolve);
-  }
-  if (hasCondKey(body, 'else')) {
-    return walk(_clone(condKey(body, 'else')), resolve);
-  }
-  return Dropped.instance;
+  final (taken, picked) = selectIfBranch(form, resolve, key: key);
+  if (!taken) return Dropped.instance;
+  return walk(_clone(picked), resolve);
 }
 
-/// §232 — вычисляет одиночный `{"#if": {...}}`-узел до его СКАЛЯРНОГО
-/// value/else. Нужен для `on_change.set`: bare-Map, скормленный [walk],
+/// §232 — вычисляет одиночный `{"#if": …}`-узел (любой формы §656) до его
+/// СКАЛЯРНОГО V/E. Нужен для `on_change.set`: bare-Map, скормленный [walk],
 /// уходит в map-spread режим и схлопывает скаляр в `{}` (ветка мержится
 /// в родителя, скаляр мержить некуда). Здесь — тот же array-element путь
 /// ([_selectArrayBranch]), который отдаёт ветку любого типа.
 ///
-/// Возвращает null, если узел не `{"#if": ...}`, ветка выпала (false без
-/// else) или разрезолвилась не в скаляр-строку.
+/// Возвращает null, если узел не `{"#if": ...}`, форма невалидна (+ warning),
+/// ветка выпала (false без else) или разрезолвилась не в скаляр-строку.
 String? evalIfScalar(Map<String, dynamic> node, VarResolver resolve) {
   if (node.length != 1) return null;
   final key = node.keys.first;
   if (!isIfKey(key)) return null;
-  final body = node[key];
-  if (body is! Map<String, dynamic>) return null;
-  final picked = _selectArrayBranch(body, resolve, key);
+  final form = normalizeIfForm(node[key]);
+  if (form == null) {
+    reportTemplateWarning(templateWarnUnknownDirective, {'key': key});
+    return null;
+  }
+  final picked = _selectArrayBranch(form, resolve, key);
   return picked is String ? picked : null;
 }
 
@@ -924,12 +1006,43 @@ void _validateIfBody(
   Map<String, WizardVar> byName,
   String path,
 ) {
+  // §656 (контракт 1.1.125, D-133) — форма читается по типу значения:
+  // массив — короткая `[cond, V, E?]`, объект — длинная с `#value`.
+  if (body is List) {
+    if (body.length < 2 || body.length > 3) {
+      throw TemplateIfError('$path: short form `[cond, V, E]` takes 2 or 3 '
+          'elements, got ${body.length}');
+    }
+    if (body[0] is List) {
+      throw TemplateIfError('$path: condition of the short form is never an '
+          'array (use `{"#and": […]}`)');
+    }
+    if (body[1] == null) {
+      throw TemplateIfError('$path: value `V` of the short form is null');
+    }
+    if (body.length == 3 && body[2] == null) {
+      throw TemplateIfError('$path: else `E` of the short form is null');
+    }
+    validateCondNode(body[0], byName, '$path[0]');
+    validateIfConstructs(body[1], byName, path: '$path[1]');
+    if (body.length == 3) {
+      validateIfConstructs(body[2], byName, path: '$path[2]');
+    }
+    return;
+  }
   if (body is! Map<String, dynamic>) {
-    throw TemplateIfError('$path: тело #if должно быть объектом');
+    throw TemplateIfError('$path: value of #if must be an array '
+        '`[cond, V, E]` or an object with `#value`');
   }
   _validateCondObjLists(body, byName, path);
   if (!hasCondKey(body, 'value')) {
     throw TemplateIfError('$path: `value` обязателен');
+  }
+  if (condKey(body, 'value') == null) {
+    throw TemplateIfError('$path: `#value` is null');
+  }
+  if (hasCondKey(body, 'else') && condKey(body, 'else') == null) {
+    throw TemplateIfError('$path: `#else` is null');
   }
   // Закрытая схема тела: and/or/value/else в канонической помеченной форме
   // (`#and`, `#or`, `#value`, `#else`, SPEC 107) либо в легаси без `#`.

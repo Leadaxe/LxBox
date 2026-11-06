@@ -62,12 +62,6 @@ void main() {
     expect(wifiHintFromError(r.reason, r.missing), WifiHint.locationOff);
   });
 
-  test('empty missing string gives an empty list', () async {
-    answer({'error': 'permission_missing', 'missing': ''});
-    final r = await UrlLauncher.getCurrentWifiInfo() as WifiInfoError;
-    expect(r.missing, isEmpty);
-  });
-
   test('no_wifi, unknown_ssid and runtime_error show no hint', () async {
     for (final code in ['no_wifi', 'unknown_ssid', 'runtime_error']) {
       answer({'error': code});

@@ -62,7 +62,9 @@ responding".
   check after returning from the background is not penalized; one vibration
   per series of failures.
 - Liveness loss: node probes stop, session data is cleared, a regular stop is
-  attempted. This does not count as a slot takeover.
+  attempted. It is shown through the same `revoked` status as a slot takeover,
+  distinguished only by the text "Connection lost — VPN tunnel is not
+  responding"; there is no separate status for it.
 
 ## Boundaries
 

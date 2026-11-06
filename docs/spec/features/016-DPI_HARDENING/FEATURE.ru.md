@@ -93,8 +93,7 @@ LxBox защищает TLS-узлы VPN (VLESS, Trojan, AnyTLS и другие) 
 - **P9. Битый REALITY деградирует, а не валит конфиг.** Невалидный
   `public_key` (не 32 байта) → узел идёт обычным TLS; `short_id`
   нечётный, длиннее 16 или не строка → пустой; `key_share` вне
-  `hybrid`/`classical` → снят. Свидетель: юниты «БОЕВОЙ КЕЙС:
-  security=tls + pbk=enabled → plain TLS», «нечётный short_id → очищен, нода и конфиг
+  `hybrid`/`classical` → снят. Свидетель: юниты «нечётный short_id → очищен, нода и конфиг
   живы», «key_share вне enum — поле отброшено молча, узел жив». Мутация:
   обрезать `short_id` до 16.
 - **P10. ECH из ссылки не включается никогда.** `ech=` → код
@@ -113,7 +112,7 @@ LxBox защищает TLS-узлы VPN (VLESS, Trojan, AnyTLS и другие) 
 - **P12. XHTTP: `extra` не ломает рабочие плоские параметры.** Битый
   `extra` игнорируется; пустое значение в `extra` не перекрывает
   плоское; `host`/`path`/`mode` из `extra` не читаются. Свидетель: юниты
-  «битый extra игнорируется», «пустое значение в extra не перекрывает
+  «пустое значение в extra не перекрывает
   плоское поле (§410)», «extra.host/path/mode не перекрывают плоские».
   Мутация: extra-first для `path`.
 - **P13. XHTTP: недопустимая пара режима не доходит до ядра.** Значения
@@ -128,8 +127,7 @@ LxBox защищает TLS-узлы VPN (VLESS, Trojan, AnyTLS и другие) 
   `flow` не навязывается; `xtls-rprx-vision` при транспорте снимается с
   `vision_with_transport`, кроме узла с `encryption`; `none`/устаревшие
   значения не эмитятся. Свидетель: юниты «bare TCP + REALITY, без flow →
-  flow не эмитится», «XHTTP + REALITY, flow=vision → flow гасится»,
-  «vision + xhttp + encryption → flow остаётся (§544)». Мутация: дефолт
+  flow не эмитится», «vision + xhttp + encryption → flow остаётся (§544)». Мутация: дефолт
   `vision` для REALITY.
 - **P15. VLESS `encryption`: негодная форма отбраковывает узел.**
   Годное значение едет дословно (края обрезаны); пусто и точное `none` —

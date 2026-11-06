@@ -130,6 +130,13 @@ snapshot plus `stage()` over the DNS section, leaving the screen thin), and
 auth-force and `has_tun`-mirror invariants for the UI **and** for Debug). The typed storage models are the sealed `DnsServerRef` and `DnsRuleRef` (§294).
 The full invariant plus the strangler plan is in `docs/spec/tasks/291F-layered-architecture-facades/`.
 
+**Known layer violations (debt, no user-visible effect; audit 591, 2026-10-13):**
+`services/dns/dns_controller.dart` and `services/debug/handlers/chains.dart` import
+from `screens/` (the DNS server resolver of the DNS screen; the chain form validation,
+hop candidates and hop targets of the chain editor). They are recorded here rather than
+fixed: the owner's rule is not to touch what works; a fix moves those pure helpers down
+to `services/` without changing behavior.
+
 **The event brokers (push, bottom-up):** §122 moved the UI's control channel onto the
 libbox **CommandClient** (a server-stream push instead of Timer polling). The push channels:
 the native status `Stream<TunnelStatusEvent>` (the tunnel's lifecycle), the `lxbox/coreLog`
@@ -724,15 +731,18 @@ home/widgets/                   # node_list · home_controls · home_drawer (the
                              #   · add_server_cta
 routing_screen.dart          # the routing config (598 lines) plus LazyPersistMixin and _RoutingSrsCacheMixin (a part)
 routing_screen/                 # widgets/ (custom_rule/preset_catalog/route_final/routing_group/srs_status) + menus
-dns_settings_screen.dart     # the DNS settings (592 lines) plus the editor sheets, dns_server_resolver and widgets/
+dns_settings_tab.dart        # the DNS tab of Routing (§655; was the DNS Settings screen) plus DnsTabWrites;
+                             #   dns_settings_screen/ holds the editors, dns_server_resolver and widgets/
 custom_rule_edit_screen.dart # CustomRule editor (456) + custom_rule_edit/ (edit_controller, tabs/, sections/, widgets/)
 subscription_detail_screen.dart # a subscription's details (431 lines, a TabController) plus widgets/ (settings/source/meta)
 subscriptions_screen.dart    # the subscription list (445 lines) plus widgets/ and the helpers (clipboard/paste/share/context)
 stats_screen.dart            # the TabBarView host: Overview + Connections + LiveEvents (§288 removed PerAppTrace)
 stats_screen/overview_tab.dart  # the Overview tab plus overview_models
 stats_screen/                   # §264-266 Traffic Processing: trace_explorer + profiler_filter(+_sheet,
-                             #   profiler_filters) + traffic_event_detail_sheet · aggregate_detail_sheet ·
+                             #   profiler_filters) + aggregate_detail_sheet ·
                              #   memory_detail_sheet · routing_section (the details are in features/044)
+connection_detail/              # §662 one connection card for Conns and the profiler feed:
+                             #   detail_data (adapters from CcConnection / TrafficEvent) + detail_sheet
 live_events_tab.dart         # the Stats “Profiler” subtab (371 lines): event_tile/recording_header/unattributed_banner
 tun_apps_tab.dart            # the per-app VPN routing subtab (384 lines) — shared by Stats and Routing
 app_settings_screen.dart     # the application settings (516 lines): the General and Diagnostics tabs plus update_section
@@ -975,6 +985,8 @@ wifi_entry.dart · wifi_manual_add_dialog.dart · wifi_permission_dialog.dart ·
 ```
 MainActivity.kt              # a FlutterActivity: it registers VpnPlugin; the /utils and /wifi_history channels
                              #   VPN-consent flow; QS-tile/shortcut quick actions
+editor/SoraEditorPlatformView.kt # §624 — the native code editor (sora-editor) as a platform view behind
+                             #   every JSON field; the factory is registered in MainActivity; see “Native code editor”
 vpn/VpnPlugin.kt             # the Flutter plugin (1084 lines, see the Overview): the MethodCallHandler for every /method;
                              #   the status and coreLog EventChannel sinks; the §122 cc methods (ccConnectScreen/
                              #   ccUrlTestOutbound/ccGetGroups/…) + lxbox/cc/* EventChannel sinks;
@@ -1182,6 +1194,49 @@ L×Box's state lives in two places with different semantics:
 - **`wizard_template.json`** is the **catalog**: what exists at all (the presets, vars, sections and defaults).
 - **`lxbox_settings.json`** is the **user state**: what the user chose and configured (the vars overrides, sources, rules, and so on). Since §439 sources, chains, rules and DNS records are stored as contract 1.0 records ([STORAGE.md](STORAGE.md#storage-form-and-migration-439)).
 
+#### Where a setting lives
+
+1. A setting is anything the user chooses. Every setting lives in
+   `lxbox_settings.json`. A setting of a node, folder, subscription or rule is
+   a field of its record. The backup, the import, the Debug API and the UI know
+   this file and nothing else.
+2. Kotlin runs without Flutter: at boot, in the VPN service, in the
+   notification. It reads one mirror, the SharedPreferences file `boxvpn_boot`,
+   and Dart fills it: the JSON first, then the mirror, with a full resync on
+   every start. Kotlin does not write a setting and does not open the JSON. A
+   value Kotlin needs that is computed from settings (`has_tun`, the final tags
+   of the nodes with Taildrop options) goes into the same mirror and nowhere
+   else.
+3. Kotlin's internal cache is one SharedPreferences file, `lxbox_native_cache`:
+   what Kotlin chose or remembered by itself and the user never configured.
+   Kotlin writes and reads it, Dart does not know about it, it is not backed
+   up. A broken or empty file is an empty cache.
+4. `shared_prefs/` holds exactly two files: `boxvpn_boot` and
+   `lxbox_native_cache`. A new key for Kotlin is a line in the key list of the
+   mirror or of the cache, not a new `getSharedPreferences`.
+5. Dart's state and caches (`sub_cache/`, logs, `support_state.json`) are
+   files of their own and do not go into the JSON.
+
+```
+   UI · Debug API · backup import
+              │ write
+              ▼
+     lxbox_settings.json ─────────── the only place a setting lives;
+       (SettingsStorage)             an entity's setting = a field of its record
+          │           │
+   read   │           │ push: the keys Kotlin needs + values computed from them
+   (Dart) ▼           ▼
+   in-memory cache   SharedPreferences boxvpn_boot ── the only mirror, Dart writes
+                              │ read only
+                              ▼
+                 Kotlin without Flutter: boot auto-start · VPN service · notification
+                              │ its own choices (last recipient, restart guard, …)
+                              ▼
+                   SharedPreferences lxbox_native_cache ── Kotlin's cache, Kotlin writes
+
+   not settings → memory / own files: sub_cache/, applog, in-flight Taildrop files
+```
+
 #### Catalog (template, bundled in APK)
 
 ```
@@ -1267,20 +1322,32 @@ the README names the version that ships in the APK.
 └── sub_cache/              # HttpCache — the raw body plus headers of the subscriptions;
     └── <url.hashCode>{,.headers}   # the only persisted source of subscription nodes (§027/§129)
 
-SharedPreferences (Android):
-├── app_theme_mode                       # Flutter UI prefs (haptic_enabled → vars, §159)
-└── boxvpn_boot.{auto_start_vpn, keep_vpn_on_exit, background_mode,
-                 core_logs_enabled, allow_bypass, auto_redirect,
-                 has_tun}                # §189 — a MIRROR of the native_prefs JSON section
-                                         # (a working copy in memory). The truth lives in the
-                                         # lxbox_settings.json. has_tun (§192) —
-                                         # JSON; has_tun is computed from vpn_mode and lives only here.
+SharedPreferences (Android), shared_prefs/:
+├── boxvpn_boot                          # the MIRROR, Dart writes, Kotlin reads
+│   ├── auto_start_vpn, keep_vpn_on_exit, background_mode,
+│   │   core_logs_enabled, core_logs_verbose, allow_bypass, auto_redirect,
+│   │   memory_limit, notification_stop, notification_restart,
+│   │   notification_send                # a copy of the native_prefs JSON section;
+│   │                                    # the truth lives in lxbox_settings.json
+│   └── has_tun, app_language,
+│       taildrop_commands_off_tags,
+│       taildrop_autosave_off_tags       # derived from settings, live only here
+└── lxbox_native_cache                   # Kotlin's own cache, Kotlin writes and reads, not backed up
+    ├── clip_tag, clip_peer, clip_name   #   the last recipient of the Send window
+    └── vpn_desired, sticky_restart_count, sticky_restart_window_start,
+        last_pushed_locale, shortcut_relabel_pending
+
+lxbox_automation, FlutterSharedPreferences — reviewed separately.
 ```
 
-##### The three storage levels of the native prefs (§189 / §192)
+##### The three storage levels of the native prefs
 
-Six Android settings (`auto_start`, `keep_on_exit`, `background_mode`,
-`core_logs_enabled`, `allow_bypass`, `auto_redirect`) live at three levels:
+The Android settings of the `native_prefs` section (`auto_start`, `keep_on_exit`,
+`background_mode`, `core_logs_enabled`, `core_logs_verbose`, `allow_bypass`,
+`auto_redirect`, `memory_limit`, and the notification buttons
+`notification_stop`, `notification_restart`, `notification_send`) live at
+three levels (§189 / §192). `native_prefs` holds the phone's own settings; the
+keys Kotlin needs are mirrored, `app_theme_mode` is not.
 
 | Level | Where | Role |
 |---|---|---|
@@ -1289,7 +1356,7 @@ Six Android settings (`auto_start`, `keep_on_exit`, `background_mode`,
 | **in-memory** | `SettingsStorage._cache` | a lazily loaded cache of the JSON inside the Dart process |
 
 **Why a native copy is needed:** some code runs when the Flutter engine is
-unavailable and there is nothing to read the JSON with — `BOOT_COMPLETED` (the
+unavailable, and Kotlin reads the mirror only, never the JSON — `BOOT_COMPLETED` (the
 `BootReceiver` auto-start), a swipe `onTaskRemoved` (the keep-on-exit decision),
 and `openTun`/`establish` (allow_bypass, per-app). These points read the native copy **synchronously**.
 
@@ -1302,7 +1369,7 @@ repairs itself). Every writer (the UI, the `backup_service` import, the Debug AP
 through this layer — direct native writes are ephemeral (the sync rolls them back).
 [`lib/services/settings_storage/native_prefs.dart`](../app/lib/services/settings_storage/native_prefs.dart).
 
-**`has_tun` (§192)** is a seventh native key, **derived** from `vpn_mode` (§119):
+**`has_tun` (§192)** is a mirror key **derived** from `vpn_mode` (§119):
 `vpn` and `vpn_proxy` yield `true`, `proxy` yields `false`. It is mirrored on a mode change and
 at startup; it gates `VpnService.prepare()` (in proxy mode `prepare` is never called — it would
 pointlessly claim the VPN slot and revoke another active VPN). Being computed, it is neither in
@@ -1312,7 +1379,7 @@ the backup block nor in the `native_prefs` JSON section — it lives only in `bo
 
 `build_config.dart` merges the template's `config` section plus `selectable_rules[*]` (through `expandPreset`) and the storage state into the final config.
 
-**Idle-suspend (§128/§215, the core's SPEC 020).** Configuring the threshold (the storage key `route_idle_suspend`).
+**Idle-suspend (§128/§215, the core's SPEC 020).** Configuring the threshold (the template variable `wg_idle_suspend`, §709; until §709 the storage key `route_idle_suspend`).
 
 The storage migration (`SettingsStorage`, §439): a document without `storage_version`
 is converted inside `_load()` — the frozen 2.23.2 readers (`storage_migration/legacy_form_v0.dart`)
@@ -1591,6 +1658,10 @@ BoxService (per instance, recreated with every new BoxVpnService)
 
 **`AtomicReference` for fileDescriptor and commandServer** (§049 F2/F3): `getAndSet(null)?.close()` guarantees a single close.
 
+**Force-stop has two delivery channels** (§663): while the stop receiver is registered, `BoxVpnService.forceStop` sends the `ACTION_FORCE_STOP` broadcast; once it is gone (`doStop` unregisters it before the core teardown, as do `onRevoke`/`exit`), it calls `startService(ACTION_FORCE_STOP)`, and `onStartCommand` routes it to `doForceStop()` ahead of the foreground notification and the `status != Stopped` guard. Without the second channel a teardown stuck in Go left the service in `Stopping` for good.
+
+**Stop steps are traced and capped** (§668): `doStop` and `doForceStop` run each teardown step (`closeFileDescriptor`, `DefaultNetworkMonitor.stop`, `closeCommandServerAtomic`) through `StopTrace.step` — the call runs on its own daemon thread and the coroutine waits with `withTimeoutOrNull`, because `withTimeout` around a blocking JNI call caps nothing. Ceilings: 3 / 3 / 20 s for `doStop` (the last one at least 15 s, §287), 2 s each for `doForceStop`. Begin/done marks and a context snapshot (WG endpoint count, time since the last pause/wake/resetNetwork/reload, Doze) go to logcat and to the app log over the core-log channel; a step past 5 s logs `stuck at <step>` at WARN, takes `PProfClient.goroutineDump()` once and writes `filesDir/stop_stuck_goroutines.txt`, which the support pack carries as `stop_stuck_goroutines`. `doStop` runs on `forceStopScope`; after the steps it sets `Stopped` + `stopSelf()` only if the instance is not destroyed and still `Stopping`. An abandoned Go call keeps its thread and may still hold core locks or ports, the same risk as force-stop.
+
 ### Channel Contract
 
 The three Flutter–Android channels live in `VpnPlugin.kt`:
@@ -1647,6 +1718,50 @@ The three Flutter–Android channels live in `VpnPlugin.kt`:
 **The `coreLog` EventChannel** carries the sing-box log lines, one line per event. The filter skips TRACE and DEBUG.
 
 ---
+
+### Native code editor (sora-editor, §624)
+
+Every JSON field of the app (`LxCodeEditor`, `LxTextCodeField`, `LxJsonView` in
+[`lx_code_editor.dart`](../app/lib/widgets/lx_code_editor.dart)) is a native
+`io.github.rosemoe.sora.widget.CodeEditor` (sora-editor 0.23.6, LGPL-2.1, Maven
+Central) shown through a platform view in **hybrid composition**
+(`initExpensiveAndroidView`; without it the keyboard does not work in the view).
+It replaced `re_editor`, which gave the IME only the cursor line: custom
+keyboards' arrows closed the keyboard, the keyboard's Copy took one line, the
+cursor line stayed under the keyboard. The native view has a full
+`InputConnection` like `EditText` and still lays out only the visible lines
+(§333: configs of hundreds of KB).
+
+| Side | What |
+|---|---|
+| Kotlin | [`SoraEditorPlatformView.kt`](../app/android/app/src/main/kotlin/com/leadaxe/lxbox/editor/SoraEditorPlatformView.kt): view type `lxbox/sora_editor`, a `MethodChannel` per view `com.leadaxe.lxbox/sora_editor_<id>` |
+| Assets | `app/android/app/src/main/assets/sora/`: TextMate grammars JSON, INI (VS Code, MIT) and URI (own), token themes `lx-light/lx-dark.json`; TextMate registries are process singletons |
+| R8 | [`proguard-sora.pro`](../app/android/app/proguard-sora.pro): keep for jcodings/joni/tm4e/sora — the TextMate engine loads classes by name |
+| Not Android | `flutter test` and desktop draw a `TextField` stub with the same layout (gate `Platform.isAndroid`, not `defaultTargetPlatform`) |
+
+Channel: Dart → native `setText`, `getText`, `setReadOnly`, `setDark` (+ the
+`ColorScheme` colors), `setLanguage`, `search*`; native → Dart `changed`
+{text?, lines, rowHeight, textOffsetX}, `cursor` {y, rowHeight, focused},
+`searchResult`, `disposed`. Creation params also carry `wordWrap`, `language`,
+`locale` (the app language — the native selection menu takes its strings from
+the view context), `autofocus`, `stickyHeaders`. sora-editor draws sticky
+headers only without line wrapping, so the fields that have them (Config, the
+node JSON, a JSON subscription Source) do not wrap.
+
+The text's source of truth is the Dart `TextEditingController`: a recreated view
+(leaving a tab, theme change) gets the current text in the creation params. Text
+over 256 KB reaches Dart 300 ms after the last edit; the delayed text is flushed
+on focus loss, on `getText` and in the native `dispose` (before the channel is
+removed — the channel holder outlives the `State` for that final `changed`). The
+Config screen calls `LxCodeEditorState.flush()` before Save / Copy / Share.
+
+Layout: the field color, text, line numbers, selection and caret come from the
+app `ColorScheme` (the background — the nearest `Material` surface, so the field
+blends with a screen, a sheet or a dialog); the token colors — from the themes.
+The highlight language is picked by the screen through `detectCodeLanguage`
+(JSON / INI / URI / none). A field that fits its text gives vertical swipes to
+the page; otherwise the editor takes them. The caret line is kept above the
+keyboard: the native side reports `cursor`, Dart calls `showOnScreen`.
 
 ### Permissions (Manifest + runtime)
 
@@ -1924,7 +2039,7 @@ user data, and the OS/core payloads (the `RawMsg.detail` passthrough). The units
 
 | Controller | Responsibility |
 |-----------|---------------|
-| `HomeController` | VPN lifecycle, CommandClient (groups/status/connections), nodes, ping (10 concurrent — `_pingConcurrency`), heartbeat, traffic, configChangedNeedRestart, autoUpdater wiring, haptic on transitions |
+| `HomeController` | VPN lifecycle, CommandClient (groups/status/connections), nodes, ping (parallel checks from `ping_options.concurrency`, default 10 — §713), heartbeat, traffic, configChangedNeedRestart, autoUpdater wiring, haptic on transitions |
 | `SubscriptionController` | CRUD entries (`sources[]` records), `refreshEntry`/persist, node-link registry calls on rename/move/delete (§439), `generateConfig` (no HTTP), `bindAutoUpdater`, init sweep (inProgress→failed). **§524** — `sourceEntries()` returns the WHOLE list (every genus, disk order); `applySourceOrder(keys)` writes the order ONCE, for keys of any genus |
 | `ThemeNotifier` | Theme mode, SharedPreferences persistence |
 | `HapticService` (singleton) | Event-based haptic with 100 ms throttle, respects system setting (spec 029) |
@@ -1937,7 +2052,9 @@ Pattern: `ChangeNotifier` + `AnimatedBuilder`. `HomeState` is immutable with `co
 **§323/§324 update — the pink banner is no longer purely sticky.** Two things clear it early:
 
 - **§323** — an identical rebuild (`changed == false`) *clears* the flag instead of preserving it. Rationale: if the saved config matches the previous one byte-for-byte, the running instance cannot be stale, regardless of flag history. A successful `reloadVpn()` also clears it (the core re-read the file, so running == saved).
-- **§324** — a text diff answers "did the file change", not "is the running instance stale". When the diff says *changed* and the tunnel is up, the core is asked instead: `formatConfig(saved + OverrideOptions)` vs `runningConfigRaw` (§311 snapshot). Both sides pass through the same core parser+encoder (kernel SPEC 037 §3), so field order / `omitempty` / `[] → null` collapse **inside the core** — no client-side list of "differences to ignore". The verdict can only *clear* a false banner, never raise one; `unknown` (core unreachable, snapshot absent, old kernel) keeps the banner. See `services/config_staleness.dart` — it mirrors `OverrideOptions` because `formatConfig` does not apply them while the snapshot is post-override.
+- **§324** — a text diff answers "did the file change", not "is the running instance stale". When the tunnel is up and a running snapshot exists, the core is asked instead: `formatConfig(saved + OverrideOptions)` vs `runningConfigRaw` (§311 snapshot). Both sides pass through the same core parser+encoder (kernel SPEC 037 §3), so field order / `omitempty` / `[] → null` collapse **inside the core** — no client-side list of "differences to ignore". **§667 update:** the verdict decides in both directions (`stale` raises, `fresh` clears) regardless of the text diff with the previous write — a second identical write used to clear the flag while the core still ran the old config. The §323 text diff with its sticky rule remains only when there is no snapshot (tunnel down, `unknown`: core unreachable, old kernel). See `services/config_staleness.dart` — it mirrors `OverrideOptions` because `formatConfig` does not apply them while the snapshot is post-override.
+
+**§338/§667 — auto-apply gate.** The checkbox «Auto-restart VPN on settings change» is decided in one place, `HomeController.applyIfAutoReload()`: checkbox on, tunnel up, `configChangedNeedRestart` (§324 verdict), `canReload` (connected + 3 s cooldown). Every rebuild path only reports "config saved" to it: the home funnel `_rebuildAndClearDirty` (return to home §076, retry-when-idle §107, subscription reaction §323, Start gate, bootstrap), `regenerateSourcesConfig` (§558: chain edit, adding a source on Servers) and the Direction editor opened from home. A miss on cooldown alone schedules one retry at cooldown expiry; a miss on not-connected does not (Start picks the config up). `HomeState.autoApplying` covers the window from the decision to the end of `reloadVpn` and suppresses the pink banner on any path. `SettingsStorage.configDirtyGeneration` grows on every `configDirty = true`; `generateConfig` clears the flag only if the generation is unchanged on exit, so an edit of any source made under a rebuild in flight survives it (replaces the §360 composition signature). The build's own storage writes (preset seeds, DNS lists in `buildConfig`, `generatedVars`) run inside `SettingsStorage.withoutDirtyBump` — a Dart zone whose async chain does not move the generation; user edits arrive from the UI zone and count.
 
 ---
 
@@ -1950,8 +2067,8 @@ HomeScreen
   │   │              ├─ onTap UserServer → NodeSettingsScreen (editable Tag, Mark as detour)
   │   │              └─ onTap SubscriptionServers → SubscriptionDetailScreen
   │   │                     (Nodes / Settings / Source tabs)
-  │   ├─ Routing → RoutingScreen
-  │   ├─ DNS Settings → DnsSettingsScreen
+  │   ├─ Routing → RoutingScreen — Directions · Presets · Rules · DNS · Tunnel apps
+  │   │       (§655: DNS is the DnsSettingsTab; no menu item of its own)
   │   ├─ VPN Settings → SettingsScreen — 2 tabs (§052):
   │   │       • System — Tunnel sleep mode (`BackgroundMode`)
   │   │                 (§188 — “Allow VPN bypass” and “Keep VPN on exit” moved to the Mode tab)
@@ -1986,7 +2103,7 @@ HomeScreen
 | File-based config storage | Large JSON configs don't belong in SharedPreferences |
 | serviceScope vs GlobalScope | Structured concurrency — coroutines die with service |
 | libbox CommandClient for management (§122) | A server-stream push instead of Timer polling; the Clash HTTP API is gone |
-| 10 concurrent mass pings (`_pingConcurrency`) | Sequential was too slow for 50+ nodes; the cap balances speed against load |
+| Mass ping / Test servers run `ping_options.concurrency` checks at once (default 10, App Settings → Parallel checks, §713) | Sequential was too slow for 50+ nodes; the cap balances speed against load, and the user lowers it when a quieter sweep matters |
 | SRS rules off by default | Require download, may fail offline |
 | App list caching | getInstalledApps (~5s) called once, reused |
 | profile-title from headers + content-disposition fallback | Auto-name subscriptions even without profile-title |

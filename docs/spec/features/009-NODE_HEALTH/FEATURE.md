@@ -106,9 +106,8 @@ The feature protects five principles:
   **Mutation**: all nodes of the list in one config.
 - **P11. A test result is bound to the node.** Deleting or inserting a
   neighbour does not shift badges; a subscription update with the same node
-  keeps its result. **Witness**: units "the key does not depend on position:
-  deleting a neighbour does not move the others", "the key is a function of
-  identity: re-parse gives the same key". **Mutation**: the result key is the
+  keeps its result. **Witness**: unit "the key does not depend on position:
+  deleting a neighbour does not move the others". **Mutation**: the result key is the
   position in the list.
 - **P12. A group node is not "unreachable".** An auto-select node gets the
   neutral verdict `auto`, is not tested and is not caught by "Disable
@@ -269,8 +268,10 @@ rejection:   Start → core start → rejection names the node → disable + ver
 - **The group test is a separate RPC.** A measurement "through a group" by its
   tag does no reselection; the bug lived for months disguised as "Auto keeps a
   dead node" (§308).
-- **Folder test and home ping use different scales.** The home list colors by
-  200/500 ms with no setting, list tests by the configurable 250/500/700.
+- **Folder test and home ping use different scales.** The home list and the
+  pool view color by 200/500 ms with no setting, list tests by the
+  configurable 250/500/700 — three places, two scales. Kept as is (audit
+  591, 2026-10-13).
 - **The core rejection arrives wrapped.** Parsing looks for `initialize `
   anywhere in the string: Go prefixes and a localized template on top are
   normal; in the first version the safety net never fired because of them

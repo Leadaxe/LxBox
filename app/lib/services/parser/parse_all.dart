@@ -281,6 +281,18 @@ NodeWarning _dropReasonOf(NodeSpec node) {
       ownerTag: node.tag,
     );
   }
+  // §654 — код снятия не `error` (`openconnect_flavor_invalid`): тот, что
+  // санитайзер поставил первым кодом снятия.
+  final reason = registryDropReasonOf(node);
+  if (reason != null) {
+    return RegistryWarning(
+      code: reason.code,
+      path: reason.path,
+      value: reason.value,
+      params: reason.params,
+      ownerTag: node.tag,
+    );
+  }
   return RegistryWarning(code: 'type_invalid', ownerTag: node.tag);
 }
 

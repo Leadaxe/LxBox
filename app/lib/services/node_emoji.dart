@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:characters/characters.dart';
+
 import '../models/node_spec.dart';
 
 /// §090 G2b — эмодзи-теги серверов.
@@ -112,4 +114,102 @@ String _prependToUriFragment(String uri, String emoji) {
   if (hasEmoji(decoded)) return uri;
   final base = uri.substring(0, idx + 1); // включая '#'
   return '$base${Uri.encodeComponent('$emoji ')}$frag';
+}
+
+// ---------------------------------------------------------------------------
+// §647 — префикс тегов подписки из эмодзи её названия.
+// ---------------------------------------------------------------------------
+
+/// Класс графемного кластера для [emojiPrefixFromTitle].
+enum _TitleCluster { emoji, text, other }
+
+// valid_regexps подавлен по той же причине, что и у [_emojiRe]: анализатор не
+// разбирает \p{...}, движок с unicode: true их поддерживает.
+final RegExp _emojiPresentationRe =
+    // ignore: valid_regexps
+    RegExp(r'\p{Emoji_Presentation}', unicode: true);
+final RegExp _extPictographicRe =
+    // ignore: valid_regexps
+    RegExp(r'\p{Extended_Pictographic}', unicode: true);
+final RegExp _regionalPairRe =
+    // ignore: valid_regexps
+    RegExp(r'^\p{Regional_Indicator}\p{Regional_Indicator}', unicode: true);
+final RegExp _letterOrDigitStartRe =
+    // ignore: valid_regexps
+    RegExp(r'^[\p{L}\p{N}]', unicode: true);
+
+/// Максимум кластеров в группе (индекс дедупликации идёт сверх лимита).
+const int _kTitlePrefixMaxClusters = 4;
+
+/// Серия из стольких разделителей и длиннее рвёт группу.
+const int _kTitlePrefixMaxGap = 3;
+
+_TitleCluster _classifyTitleCluster(String c) {
+  // Эмодзи: флаг (пара Regional Indicator), keycap (U+20E3), символ с
+  // Emoji_Presentation, Extended_Pictographic с U+FE0F. ZWJ-склейки и тоны
+  // кожи — один кластер, сюда приходят целиком. `©`, `™`, `★` без U+FE0F —
+  // не эмодзи.
+  if (_regionalPairRe.hasMatch(c) ||
+      c.contains('⃣') ||
+      _emojiPresentationRe.hasMatch(c) ||
+      (c.contains('️') && _extPictographicRe.hasMatch(c))) {
+    return _TitleCluster.emoji;
+  }
+  if (_letterOrDigitStartRe.hasMatch(c)) return _TitleCluster.text;
+  return _TitleCluster.other;
+}
+
+/// §647 — группа эмодзи из названия подписки для `tagPrefix`.
+///
+/// Группа начинается с первого эмодзи-кластера и тянется вправо: эмодзи
+/// подряд, а также эмодзи после серии короче [_kTitlePrefixMaxGap]
+/// разделителей (пробел, `·`, `|` …). Текст, конец строки, длинная серия
+/// разделителей или серия без эмодзи за ней — конец группы. Не больше
+/// [_kTitlePrefixMaxClusters] кластеров; на краях разделителей не бывает.
+/// Эмодзи нет — пустая строка.
+String emojiPrefixFromTitle(String title) {
+  final cs = title.characters.toList();
+  final cls = cs.map(_classifyTitleCluster).toList();
+  var i = cls.indexOf(_TitleCluster.emoji);
+  if (i < 0) return '';
+  final group = <String>[cs[i]];
+  i++;
+  while (i < cs.length) {
+    if (cls[i] == _TitleCluster.emoji) {
+      if (group.length + 1 > _kTitlePrefixMaxClusters) break;
+      group.add(cs[i]);
+      i++;
+      continue;
+    }
+    if (cls[i] != _TitleCluster.other) break;
+    var j = i;
+    while (j < cs.length && cls[j] == _TitleCluster.other) {
+      j++;
+    }
+    final gap = j - i;
+    if (gap >= _kTitlePrefixMaxGap ||
+        j >= cs.length ||
+        cls[j] != _TitleCluster.emoji) {
+      break;
+    }
+    // Серия вместе с эмодзи за ней не влезает в лимит — стоп на набранном
+    // (хвостовые разделители в группу так и не попадают).
+    if (group.length + gap + 1 > _kTitlePrefixMaxClusters) break;
+    group.addAll(cs.sublist(i, j + 1));
+    i = j + 1;
+  }
+  return group.join();
+}
+
+/// §647 — свободный вариант префикса: [candidate], если его нет среди
+/// [taken], иначе первый свободный из `candidate2`, `candidate3`, …
+/// (индекс без пробела, лимит кластеров на него не действует). Сравнение —
+/// точное совпадение строк.
+String dedupTagPrefix(String candidate, Iterable<String> taken) {
+  final used = taken.toSet();
+  if (!used.contains(candidate)) return candidate;
+  for (var n = 2;; n++) {
+    final next = '$candidate$n';
+    if (!used.contains(next)) return next;
+  }
 }

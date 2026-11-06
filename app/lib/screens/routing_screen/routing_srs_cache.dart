@@ -48,7 +48,9 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
     _invalidateOutboundOptions(); // §219 — сброс кэша после load Направлений
 
     _routeFinal = storedFinal.isNotEmpty ? storedFinal : 'vpn-1';
+    // §644 — первый seed дефолтных пресетов (обычно уже прошёл при старте);
     // §578 — разовый шаг до чтения правил: поздний дефолтный пресет.
+    await SettingsStorage.seedDefaultPresets(template);
     await SettingsStorage.seedLateDefaultPresets(template);
     _customRules.addAll(await SettingsStorage.getCustomRules());
 
@@ -56,8 +58,6 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
     // ищет `SelectableRule` в `_template.selectableRules`, иначе получит
     // null и не увидит кэш preset-правил с remote rule_set'ами (task 011).
     _template = template;
-
-    await _seedDefaultPresets(template);
 
     // §265/§266 — вычистить осиротевшие ref-var значения из varsValues пресетов
     // (напр. resolve_enabled застряла в varsValues с тех пор, как была обычной
@@ -68,7 +68,7 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
     final strippedChanged = !identical(stripped, _customRules);
 
     // §370 — нормализация порядка по оси `num` на UI/storage-уровне.
-    // `_seedDefaultPresets` сидит дефолты только при первой установке
+    // `SettingsStorage.seedDefaultPresets` сидит дефолты только при первой установке
     // (`hasDefaultsSeeded` guard); у существующих юзеров обязательный пресет
     // (traffic-processing) НЕ засеется и не появится в списке правил, хотя
     // билдер добавляет его правила в route.rules на лету. Здесь же случается
@@ -142,23 +142,6 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
       if (a[i].id != b[i].id) return false;
     }
     return true;
-  }
-
-  /// Fresh-install seed: засеять `_customRules` из `template.selectableRules`
-  /// с `default: true`. One-shot — защищаемся флагом `defaultsSeeded` (тот же
-  /// storage-ключ `presets_migrated`: §159 удалил legacy-миграцию
-  /// `enabled_rules`/`rule_outbounds`, но флаг переиспользуем, чтобы юзеры,
-  /// которые ранее уже мигрировали/засеялись, НЕ получили повторный seed).
-  Future<void> _seedDefaultPresets(WizardTemplate template) async {
-    if (await SettingsStorage.hasDefaultsSeeded()) return;
-
-    for (final sr in template.selectableRules) {
-      if (!sr.defaultEnabled) continue;
-      _customRules.add(selectableRuleToCustom(sr, template));
-    }
-
-    await SettingsStorage.saveCustomRules(_customRules);
-    await SettingsStorage.markDefaultsSeeded();
   }
 
   /// Качает SRS и при успехе включает правило. Вызывается из Switch'а

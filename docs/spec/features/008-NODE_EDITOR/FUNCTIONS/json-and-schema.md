@@ -44,6 +44,11 @@ The function has no settings of its own.
   the model's body. Without the tag prefix, detour and build steps.
 - Fields absent from the application's model are preserved in a custom JSON
   body and go to the core (P8).
+- **Auto node of a folder.** A rule-based pool (All, Rule) has
+  `"outbounds": "Members are resolved at build time"` instead of an empty
+  array: the members are known only to the build. A picked pool (Pick) —
+  the raw tags of the picked members. There is no Edit JSON button: the
+  group has no node body to hand to the core verbatim.
 - **TLS/SNI are edited only as text.** A node has no separate TLS form, so a
   custom node's `tls` object changes exactly as the person wrote it. The
   HTTP wizard with HTTPS on writes `tls: {enabled: true, server_name:
@@ -91,3 +96,4 @@ The place of the schema-based editor in navigation is not decided.
 | 3 | [530](../../../tasks/530-dns-server-raw-json-tls-preserved.md) | Spec (no code written) | Replacing the whole `tls` in the DNS server form — a precedent for schema-based forms |
 | 4 | [554F](../../../tasks/554F-schema-driven-node-editor/spec.md) | Idea, phase 1: only highlighting done | Editor driven by the registry schema |
 | 5 | [577](../../../tasks/577-authored-json-registry-reports-only.md) | Done | The registry on an author body reports, does not edit |
+| 6 | [686](../../../tasks/686-folder-auto-node-source-tab.md) | In progress | JSON of an auto node: a line instead of an empty `outbounds`, no Edit JSON |

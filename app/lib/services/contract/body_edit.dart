@@ -254,6 +254,10 @@ bool _fieldRuleCoreRejects(FieldSchema f, String code) {
     see(oi['code'] ?? 'type_invalid', oi['core_rejects']);
     see(oi['else_code'], oi['core_rejects']);
   }
+  // Контракт 1.1.140 — снятие элемента массива (`peers.on_item_failure`):
+  // код `wg_peer_dropped` адресован элементом, правило — у поля-массива.
+  final oif = r['on_item_failure'];
+  if (oif is Map) see(oif['code'], oif['core_rejects']);
   for (final k in const ['default_when', 'max_when', 'min_when', 'coerce_when']) {
     final m = r[k];
     if (m is Map) see(m['code'], m['core_rejects']);

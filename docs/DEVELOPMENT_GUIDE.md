@@ -10,6 +10,7 @@ link, not a copy.
 | Architecture, config pipeline, detour, module map | [`ARCHITECTURE.md`](ARCHITECTURE.md) |
 | Sanitiser/guard registry | [`GUARDS.md`](GUARDS.md) |
 | Storage format, NodeLink | [`STORAGE.md`](STORAGE.md) |
+| Where a setting lives (JSON, native mirror, Kotlin cache) | [`ARCHITECTURE.md`](ARCHITECTURE.md#where-a-setting-lives) §5 |
 | `wizard_template.json` | [`TEMPLATE.md`](TEMPLATE.md) |
 | Localization | [`l10n.md`](l10n.md) |
 | Build, signing, CI jobs, worktree bootstrap | [`BUILD.md`](BUILD.md) |
@@ -49,6 +50,9 @@ Owner's decision, 2026-09-24.
   `docs/spec/tasks/NNN-title.md`, template and criteria in
   [`docs/spec/tasks/README.md`](spec/tasks/README.md).
 - Features describe a capability; tasks log one work cycle.
+- A new setting starts as a field in `lxbox_settings.json`; Kotlin gets it
+  through the `boxvpn_boot` mirror
+  ([ARCHITECTURE §5](ARCHITECTURE.md#where-a-setting-lives)).
 - Index of features: [`docs/spec/features/README.md`](spec/features/README.md);
   legacy feature specs (pre Spec Kit): [`docs/spec/tasks/F-INDEX.md`](spec/tasks/F-INDEX.md).
   Demoted/superseded specs live in `docs/spec/tasks/` (§054).
@@ -65,6 +69,10 @@ Operator's decision, 2026-07-24.
 - Unfinished/unchecked work is not committed: code → check first (for device
   features: APK → operator confirmation).
 - Push to `develop` is fine together with finishing the work.
+- An executor sub-agent in its own worktree makes one commit to its branch
+  and does not push; the orchestrator pushes that branch into `develop`. In
+  the main tree an executor does not commit, the orchestrator commits its
+  files by pathspec. Details — [`SUBAGENT_BRIEF.md`](SUBAGENT_BRIEF.md) → “Git”.
 - **Only on the operator's explicit command:**
   - `git push --force` and any rewrite of published history;
   - anything touching `main` and `vX.Y.Z` tags (the release process —
@@ -134,6 +142,26 @@ Operator's decision, 2026-07-24.
 - This applies only to product text in the app. Docs are English; code
   comments, commits and chat may be Russian.
 
+### Text fields with suggestions are comboboxes
+
+Owner's rule (29.10.2026, §691):
+
+- A string or multi-line value that comes with suggestions is a **combobox**:
+  the input field plus the standard drop-down arrow at the end of the line
+  (`Icons.arrow_drop_down`). The suggestions live in the drop-down list, not as chips or buttons around the field — chips beside a field
+  read as values already entered.
+- One value (`text`, `int` with `options_open`): picking a suggestion replaces
+  the value; ✓ marks the current one.
+- A list, one value per line (`text_list` with `options_open`): picking a
+  suggestion adds its line, picking it again removes it; ✓ marks the lines
+  already in the field. The list items carry their titles («192.168.0.0/16 ·
+  home LAN»), the field holds the bare values.
+- Chips stay only for a closed multiple choice with no values of one's own
+  (`text_list` with `options` and without `options_open`).
+- The control is `VarTextField` (`suggestions`, `listMode`,
+  `suggestionLabels`) in `app/lib/widgets/template_var_list.dart`; a new screen
+  reuses it instead of drawing its own.
+
 ---
 
 ## Testing
@@ -181,6 +209,16 @@ Owner's decision, 2026-09-18.
   through the API by `head_sha`, not a local run (`RELEASE_PROCESS.md` §2.1).
 - Test tree mirrors `lib/` by area (models, parser, builder, subscription,
   contract, …); the case count is in the CI log.
+- CI runs the full suite in bundles: `app/tool/gen_test_bundles.dart` imports
+  many test files into each of a few entry points (`app/test_bundle/`, generated,
+  not in git), so test files share one isolate. Before and after each file the
+  bundle calls `resetTestGlobals()` from `app/test/support/test_globals.dart`
+  (path_provider, channel mocks, storage cache, `.I` singletons back to a fresh
+  process). A new test cleans up the global state it touches (`tearDown` for
+  every mock and override it installs); a new global cache in `lib/` gets a
+  `@visibleForTesting` reset called from `resetTestGlobals`. A file that cannot
+  share an isolate goes into the generator's `kExcluded` with a reason and runs
+  on its own.
 
 ### Who reads the test and linter output
 

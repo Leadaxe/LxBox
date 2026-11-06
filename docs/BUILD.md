@@ -15,7 +15,7 @@
 
 The **`app/`** directory is the L×Box project. Dependencies come from `flutter pub get`. The native VPN lives in `app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/` (our own `BoxVpnService`, not a Flutter plugin). libbox on Android is the **[`Leadaxe/sing-box-lx`](https://github.com/Leadaxe/sing-box-lx)** fork (branch `lx-1.14`): AWG/AWG2 (AmneziaWG) + native XHTTP ([§097](spec/tasks/097F-awg2-amneziawg2/spec.md)) + MASQUE / idle-suspend / balancer. The AAR is wired in as the file `app/android/app/libs/libbox.aar` (a relative `files("libs/libbox.aar")` in `build.gradle`); downloading it and pinning the version is [§104](spec/tasks/104-libbox-fork-ci-fetch.md) — see [“The sing-box-lx core (libbox)”](#the-sing-box-lx-core-libbox). Pin history: stock `com.github.singbox-android:libbox:1.13.11` from JitPack ([task §060](spec/tasks/060-libbox-1-13-migration/spec.md)) ← `io.github.sagernet:libbox:1.12.12`.
 
-Config import via the **Read** button accepts **JSON** or **JSON5/JSONC** (`//` and `/* */` comments — the `json5` parser); canonical JSON is then handed to the core. The source is either the clipboard or the system file picker.
+Config import via the **Read** button accepts **JSON** or **JSON5/JSONC** (`//` and `/* */` comments — the `json5` parser; `#` to the end of the line, as the core reads it, is stripped before it); canonical JSON is then handed to the core. The source is either the clipboard or the system file picker.
 
 ```bash
 cd app
@@ -25,7 +25,7 @@ flutter run   # Android device or emulator
 
 ### Local release build
 
-The script [`scripts/build-local-apk.sh`](../scripts/build-local-apk.sh) is the canonical way to produce a local release APK (minimal, arm64-only):
+The script [`scripts/build-local-apk.sh`](../scripts/build-local-apk.sh) is the canonical way to produce a local release APK (minimal, arm64-only). For an APK of what is already pushed, [`build-fast` in CI](#a-quick-apk-from-ci-build-fast) is usually faster (one ABI, no checks):
 
 ```bash
 ./scripts/build-local-apk.sh
@@ -59,6 +59,14 @@ the channel is determined at runtime from the installer. See
 | `DONATE_URL` | URL | manually | source for `app/assets/donate.json` |
 
 Requires `git` and a JDK (for Gradle); the script downloads the core `app/android/app/libs/libbox.aar` itself.
+
+**Native Maven dependencies.** Besides the core, Gradle pulls the native code
+editor from Maven Central: `io.github.Rosemoe.sora-editor` (BOM `0.23.6`,
+`editor` + `language-textmate`; LGPL-2.1) with its transitive tm4e, joni and
+jcodings — pure JVM artifacts, no prebuilt `.so`. The release build runs R8 with
+the keep rules from `app/android/app/proguard-sora.pro`: the TextMate engine
+loads classes by name, and without them a release APK crashes on opening any
+JSON field (§624). Bumping sora-editor = re-check a release APK on a device.
 
 ### Git worktree bootstrap
 
@@ -139,7 +147,7 @@ The fork publishes artifacts in its own GitHub Releases (workflow `lx-release.ym
 | `libbox-legacy-<ver>.aar` (minSdk 21) | ✗ unused — our minSdk is 24, so the modern AAR (minSdk 23) is enough |
 | `SHA256SUMS` | ✓ verification of the downloaded AAR |
 
-The core version is reported by `Libbox.version()` (About/Debug) in the form `1.14.0-lx.N`; the current pin is `v1.14.0-lx.27-rc.4`.
+The core version is reported by `Libbox.version()` (About/Debug) in the form `1.14.4-lx.N`; the current pin is in `app/android/libbox.version` (`v1.14.4-lx.26`).
 
 ### How the core reaches the build ([§104](spec/tasks/104-libbox-fork-ci-fetch.md))
 
@@ -188,6 +196,7 @@ Workflow [`.github/workflows/ci.yml`](../.github/workflows/ci.yml); the full rel
 | push of a `vX.Y.Z-rc.N` tag | ✓ the same jobs, but the GitHub Release is marked pre-release, and `google-play` and `publish-manifest` are skipped (§436: a release candidate never reaches users — `/releases/latest`, `docs/latest.json` and Play do not see it) |
 | `workflow_dispatch`, `run_mode=checks` | ○ `checks` + `public-subs` only |
 | `workflow_dispatch`, `run_mode=build` | ○ `checks` + `public-subs` + `android` (APK in artifacts, no release) |
+| `workflow_dispatch`, `run_mode=build-fast` | ○ `android` right after `meta`: one APK in artifacts (input `abi`: `arm64-v8a` by default, `armeabi-v7a`, `x86_64`, `universal`), no `checks`, `public-subs`, other ABIs or AAB — for a quick look at a branch; the checks are the push run's job |
 | `workflow_dispatch`, `run_mode=release` | ○ a full release without a tag (emergency re-issues) |
 | `workflow_dispatch` with `test_path` | ○ pinpoint run: only the listed test files, `flutter analyze` and `public-subs` are skipped |
 
@@ -196,7 +205,41 @@ From the terminal (`gh auth login`):
 ```bash
 gh workflow run CI -f run_mode=checks   # ✓ analyze + test
 gh workflow run CI -f run_mode=build    # ○ + APK in artifacts
+gh workflow run CI --ref develop -f run_mode=build-fast -f abi=arm64-v8a   # ○ one APK, no checks (own concurrency group: does not cancel the push run)
 ```
+
+### A quick APK from CI (`build-fast`)
+
+The fastest way to get an APK of what is pushed: one ABI, no checks.
+
+```bash
+gh workflow run ci.yml --ref develop -f run_mode=build-fast -f abi=arm64-v8a
+```
+
+The APK is the `android-apks-release` artifact of the run (`gh run download
+<id> -n android-apks-release`, or the run page on GitHub).
+
+- **What is built** is the state of `ref` on GitHub, not the local tree:
+  push first.
+- **`abi`**: `arm64-v8a` (default, phones), `armeabi-v7a` (old and budget
+  phones), `x86_64` (emulator, Chromebook), `universal` (all three in one
+  APK). The file is named after it: `app-<abi>-release.apk`.
+- **Skipped**: `checks`, `public-subs`, the other ABIs, the AAB. `GooglePlay`,
+  `Create Release` and `Publish docs/latest.json` stay in the graph but are
+  skipped as on any build without a tag (`is_release=false`): nothing reaches
+  Play or Releases.
+- **Concurrency**: `build-fast` has its own group
+  (`ci-CI-<ref>-fast`), so it can run on `develop` without cancelling the push
+  checks there, and they do not cancel it. Two `build-fast` runs on one ref
+  cancel each other — the last one stays.
+- **Version**: the same as `run_mode=build` — `X.Y.Z-dev.<commits since the
+  tag>`, versionCode of the last release (§186), so `adb install -r` goes over
+  a release build and back. Signed with the release key, like every CI build.
+- Time: about 2 min of setup (Java, Flutter, the core AAR) plus one
+  `flutter build apk`, against four builds and an AAB after the full test
+  suite for `run_mode=build`. On a slow link to GitHub it is also faster than
+  [the local build](#local-release-build): the 120 MB core AAR is fetched on
+  the runner, not here.
 
 The `android` job builds **release** APKs only: universal (fat, all ABIs) plus three per-ABI ones, one run per target (§379: `--split-per-abi` was removed because it broke the versionCode scheme). CI does not build debug APKs. Before building, the `Fetch sing-box-lx core` step downloads the fork core at the pin in `app/android/libbox.version` (see [“The sing-box-lx core”](#the-sing-box-lx-core-libbox)).
 

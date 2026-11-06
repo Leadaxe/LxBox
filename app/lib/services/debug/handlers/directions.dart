@@ -24,7 +24,8 @@ import '_shared.dart';
 /// - `POST   /directions`            → create (body: `{"label":"...",
 ///                                    "tag":"..."}` + опционально любые
 ///                                    PATCH-поля; `tag` только при создании)
-/// - `POST   /directions/reorder`    → reorder (body: `{"order":[tag,...]}`)
+/// - `POST   /directions/reorder`    → reorder (body: `{"order":[tag,...]}`;
+///                                    ссылка include «вниз» → 409, §673)
 /// - `GET    /directions/{tag}`      → single
 /// - `PATCH  /directions/{tag}`      → partial update
 /// - `DELETE /directions/{tag}`      → remove
@@ -84,6 +85,13 @@ Future<DebugResponse> _create(DebugRequest req, DebugContext ctx) async {
   // свободный `vpn-N`. Валидацию (пустой/служебный/дубль/тёзка `<tag>-auto`)
   // делает storage — одна точка для UI и API.
   final tag = fieldString(body, 'tag');
+  // §673 — include проверяется ДО создания: новое Направление встаёт
+  // последним, законны цели-Направления (все выше) и свёртки источников.
+  final include = fieldStringList(body, 'include');
+  if (include != null) {
+    _requireIncludeAbove(await SettingsStorage.getDirections(),
+        tag ?? '(new)', include, ctx);
+  }
   final Direction created;
   try {
     created = await DirectionMutations.add(label: label, tag: tag);
@@ -131,6 +139,13 @@ Future<DebugResponse> _update(String tag, DebugRequest req, DebugContext ctx) as
   if (ch == null) throw NotFound('direction: $tag');
 
   final next = _applyPatch(ch, body) ?? ch;
+  // §673 — правка include, нарушающая правило «только выше», отвергается,
+  // а не лечится. Проверяется только переданный include: старые ссылки
+  // вниз (бэкап) PATCH других полей не блокируют — их снимает сборка.
+  final include = fieldStringList(body, 'include');
+  if (include != null) {
+    _requireIncludeAbove(directions, tag, include, ctx);
+  }
   final healed = await DirectionMutations.update(next, ctx.registry.sub);
   final extras = await maybeRebuild(req, ctx);
   // §238-паттерн «снапшот в ответе»: healed-счётчики — API-аналог
@@ -205,7 +220,19 @@ Future<DebugResponse> _reorder(DebugRequest req, DebugContext ctx) async {
     );
   }
   final byTag = {for (final c in directions) c.tag: c};
-  await DirectionMutations.bulkReplace([for (final t in order) byTag[t]!]);
+  final next = [for (final t in order) byTag[t]!];
+  // §673 — порядок, ставящий ссылку include «вниз», отвергается (правило 026,
+  // то же, что запретные зоны на вкладке Directions); хранилище не меняется.
+  // Ссылки, стоявшие вниз и до перестановки (старый бэкап), не мешают.
+  final conflicts = directionOrderConflicts(next, before: directions);
+  if (conflicts.isNotEmpty) {
+    throw Conflict(
+      'order puts an "include" reference below its direction: '
+      'a direction may include only directions listed above it',
+      conflicts: conflicts.map(directionIncludeConflictJson).toList(),
+    );
+  }
+  await DirectionMutations.bulkReplace(next);
   final extras = await maybeRebuild(req, ctx);
   return JsonResponse({
     'ok': true,
@@ -271,11 +298,10 @@ Direction? _applyPatch(Direction ch, Map<String, dynamic> body,
   final includeDirect = fieldBool(body, 'include_direct');
   final includeBlock = fieldBool(body, 'include_block');
   // §393 A3 — `include`: теги других Направлений опциями селектора. Здесь
-  // проверяем только ФОРМУ (список строк): «стоит ли цель выше по списку»
-  // зависит от порядка, а порядок меняет отдельный `/directions/reorder` —
-  // санитайзить хранилище на каждый чих значило бы молча стирать ссылку,
-  // которую вернёт следующий reorder. Инвариант деградирует ВЫХЛОП: билдер
-  // не эмитит ссылку вниз и предупреждает (см. `_buildDirectionGroups`).
+  // проверяется ФОРМА (список строк); правило «цель выше по списку»
+  // (§673) проверяют вызывающие (`_update`/`_create`) — им нужен список
+  // Направлений. Сборщик снимает ссылку вниз с предупреждением только как
+  // последний гард для данных старых бэкапов (`_buildDirectionGroups`).
   final include = fieldStringList(body, 'include');
   final nodeFilterInvert = fieldBool(body, 'node_filter_invert');
   final interrupt = fieldBool(body, 'interrupt_exist_connections');
@@ -318,6 +344,26 @@ Direction? _applyPatch(Direction ch, Map<String, dynamic> body,
     auto: auto,
     clearAuto: clearAuto,
     isDetour: detour,
+  );
+}
+
+/// §673 — `include` Направления [tag] по правилу 026: цель — Направление
+/// ВЫШЕ по списку или свёртка источника; самоссылка, цель ниже и
+/// несуществующий тег → 409 с перечнем `conflicts`.
+void _requireIncludeAbove(List<Direction> directions, String tag,
+    List<String> include, DebugContext ctx) {
+  final foldTags = <String>{
+    for (final e in ctx.registry.sub?.entries ?? const [])
+      if (e.list.replace != null && e.list.replace!.tag.trim().isNotEmpty)
+        e.list.replace!.tag,
+  };
+  final conflicts =
+      directionIncludeConflicts(directions, tag, include, foldTags: foldTags);
+  if (conflicts.isEmpty) return;
+  throw Conflict(
+    '"include" may name only directions listed above this one '
+    'or source replace groups',
+    conflicts: conflicts.map(directionIncludeConflictJson).toList(),
   );
 }
 

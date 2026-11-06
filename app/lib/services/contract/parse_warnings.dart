@@ -37,7 +37,7 @@ import '../../models/template_vars.dart';
 import '../parser/authored_scope.dart'
     show parsingAuthoredBody, singboxBodySource;
 import '../parser/mappers/uri_pipeline.dart' show isPipelineParsed;
-import 'body_edit.dart' show settleSanitized;
+import 'body_edit.dart' show ruleIsHard, settleSanitized;
 import 'body_sanitizer.dart';
 import 'registry.dart';
 import 'warning_codes.dart';
@@ -136,8 +136,12 @@ bool annotateFromRawBody(NodeSpec node) {
   if (chained != null) annotateFromRawBody(chained);
 
   if (node.isGroup) return false;
-  // §585 — тип приложению незнаком: схемы нет, тело не проверяется.
-  if (node is UnknownTypeSpec) return false;
+  // §585 — тип вне реестра: схемы нет, тело не проверяется. Контракт
+  // 1.1.122 — тип со схемой без своей модели (`openconnect`) судится по
+  // дословной карте, как остальные: коды полей и снятие записи.
+  if (node is UnknownTypeSpec && !ContractRegistry.I.knowsType(node.type)) {
+    return false;
+  }
 
   // §472 шаг 8 — узел конвейера санитайзер уже прошёл, по карте, которую
   // построил маппер. Второй раз идти незачем, и та же отметка избавляет от
@@ -183,8 +187,35 @@ bool annotateFromRawBody(NodeSpec node) {
   // — ядро такое тело не примет, и Go снимает его при разборе
   // (`dropped[]`, корпус `authored/hard_tuic_uuid_invalid_removed`). Тело
   // подписки — по-прежнему только явный `drop_node`.
-  return res.explicitDropNode || (parsingAuthoredBody && res.body == null);
+  //
+  // §698 (контракт 1.1.141, `trusttunnel_missing_password_dropped`) — у типа
+  // без своей модели (`UnknownTypeSpec` со схемой в реестре: `openconnect`,
+  // `openvpn-client`, `trusttunnel`) тело судит ТОЛЬКО реестр, и нет
+  // обязательного поля с `core_rejects` = ядро отвергает весь конфиг; Go
+  // снимает такую запись при разборе (`dropped[]`, `field_missing`). Своей
+  // модели, которая «показывала бы узел веками», у этих типов нет — снимаем
+  // так же, из любого источника. Типы с моделью — по-прежнему только на
+  // сборке (§477).
+  final registryOnly = node is UnknownTypeSpec && res.body == null &&
+      res.dropFrom >= 0 && res.dropFrom < res.warnings.length &&
+      ruleIsHard(type, res.warnings[res.dropFrom]);
+  final drops = res.explicitDropNode ||
+      (parsingAuthoredBody && res.body == null) ||
+      registryOnly;
+  if (drops && res.dropFrom >= 0 && res.dropFrom < res.warnings.length) {
+    _dropReason[node] = res.warnings[res.dropFrom];
+  }
+  return drops;
 }
+
+/// Код, которым санитайзер снял запись (первый код снятия, `dropFrom`).
+final _dropReason = Expando<RegistryWarning>('registryDropReason');
+
+/// §654 (контракт 1.1.122) — код, которым проход по дословной карте снял
+/// узел ([annotateFromRawBody] вернул `true`); `null` — не снимал. Нужен
+/// `dropped[]`, когда код снятия не `error` (`openconnect_flavor_invalid` —
+/// warning: снят узел, остальные работают).
+RegistryWarning? registryDropReasonOf(NodeSpec node) => _dropReason[node];
 
 /// §473 — вход, которым приехало тело узла.
 ///

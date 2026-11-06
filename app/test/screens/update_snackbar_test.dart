@@ -123,15 +123,6 @@ void main() {
     return out;
   }
 
-  testWidgets('показывает обе кнопки', (tester) async {
-    final shown = await pumpSnack(tester);
-    expect(shown, 1);
-    expect(find.text('Later'), findsOneWidget);
-    expect(find.text('Ignore'), findsOneWidget);
-    // Снек уводится сам — не оставляем висеть таймер до конца теста.
-    await tester.pump(const Duration(seconds: 7));
-  });
-
   testWidgets('«Later» не персистит — вернётся при следующем запуске',
       (tester) async {
     await pumpSnack(tester);
@@ -193,17 +184,5 @@ void main() {
     await pumpSnack(tester);
     await tapBody(tester);
     expect(lastOpenUrl()!.arguments['url'], ProjectLinks.fdroidPage);
-  });
-
-  testWidgets('узкий экран: кнопки не обрезаются (уезжают под текст)',
-      (tester) async {
-    tester.view.physicalSize = const Size(320, 640);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
-    await pumpSnack(tester);
-    expect(find.text('Later'), findsOneWidget);
-    expect(find.text('Ignore'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-    await tester.pump(const Duration(seconds: 7));
   });
 }

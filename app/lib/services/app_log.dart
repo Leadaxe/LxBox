@@ -163,6 +163,11 @@ class AppLog extends ChangeNotifier {
 
   // ─── Public write API ─────────────────────────────────────────
 
+  /// §652 — перехват записей вместо буфера. Ставит его воркер регидрации
+  /// подписок (отдельный isolate): своего журнала у воркера нет, записи
+  /// разбора собираются и воспроизводятся на main после возврата.
+  void Function(DebugLevel level, String message, DebugSource source)? capture;
+
   void log(
     DebugLevel level,
     String message, {
@@ -170,6 +175,11 @@ class AppLog extends ChangeNotifier {
   }) {
     final line = message.trim();
     if (line.isEmpty) return;
+    final sink = capture;
+    if (sink != null) {
+      sink(level, line, source);
+      return;
+    }
     final queue = _entriesBySource[source];
     if (queue == null) return; // unknown source — silently ignore
     _appendOne(queue, source, level, line);
@@ -234,16 +244,22 @@ class AppLog extends ChangeNotifier {
   Timer? _notifyThrottleTimer;
   bool _notifyPending = false;
 
-  /// Leading-edge throttle: первый вызов сразу `notifyListeners()`,
+  /// Leading-edge throttle: первый вызов — `notifyListeners()` микрозадачей,
   /// последующие в окне 16ms объединяются и emit'ятся одним notify в
   /// конце окна. На устойчивом core-log потоке (100+ строк/сек) UI
   /// rebuild ≤ 60Hz вместо `freq(write)`.
+  ///
+  /// Запись бывает из build/layout/dispose (лог `dispose()` экрана, ошибка
+  /// фреймворка через `FlutterError.onError`). Синхронный notify там =
+  /// `setState` слушателя при запертом дереве → новая ошибка → новая запись
+  /// → новый notify (debug-сборка уходила в лавину). Поэтому окно ставится
+  /// ДО уведомления, а само уведомление — после текущей задачи, когда кадр
+  /// уже отпустил дерево.
   void _scheduleNotify() {
     if (_notifyThrottleTimer != null) {
       _notifyPending = true;
       return;
     }
-    notifyListeners();
     _notifyThrottleTimer = Timer(_notifyWindow, () {
       _notifyThrottleTimer = null;
       if (_notifyPending) {
@@ -251,6 +267,7 @@ class AppLog extends ChangeNotifier {
         _scheduleNotify();
       }
     });
+    scheduleMicrotask(notifyListeners);
   }
 
   void debug(String message, {DebugSource source = DebugSource.app}) =>
@@ -396,6 +413,11 @@ class AppLog extends ChangeNotifier {
     }
     _persistDirty.clear();
     _persistInitialized = false;
+    // Окно троттлинга тоже: таймер прошлого теста (в т.ч. fake-таймер из
+    // отработавшей зоны fakeAsync) иначе проглотит первое уведомление.
+    _notifyThrottleTimer?.cancel();
+    _notifyThrottleTimer = null;
+    _notifyPending = false;
   }
 }
 

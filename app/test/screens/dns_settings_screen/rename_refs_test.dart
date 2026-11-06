@@ -106,6 +106,63 @@ void main() {
       expect(updated.dnsFinal, 'google_udp');
       expect(updated.defaultResolver, 'cloudflare_udp');
     });
+
+    // §699 п. 7 — переименованный член молча выпадал из группы на сборке
+    // («unknown»): `servers` групп каскад не трогал. Теперь — и `servers`, и
+    // `hosts` (строка Listable остаётся строкой).
+    test('§699 servers и hosts групп переписываются', () {
+      final servers = <DnsServerRef>[
+        const DnsServerInline(
+          enabled: true,
+          tag: 'g1',
+          body: {
+            'type': 'group',
+            'servers': ['a', 'my-dns'],
+            'hosts': ['h'],
+          },
+        ),
+        const DnsServerInline(
+          enabled: true,
+          tag: 'g2',
+          body: {
+            'type': 'group',
+            'servers': ['a'],
+            'hosts': 'my-dns',
+          },
+        ),
+        const DnsServerInline(
+          enabled: true,
+          tag: 'u',
+          // не группа — `servers` не ссылка
+          body: {'type': 'udp', 'server': '1.1.1.1', 'servers': ['my-dns']},
+        ),
+      ];
+      renameDnsServerTagRefs(
+        servers: servers,
+        rules: <DnsRuleRef>[],
+        templateByTag: const {},
+        oldTag: 'my-dns',
+        newTag: 'home',
+        dnsFinal: '',
+        defaultResolver: '',
+      );
+      expect((servers[0] as DnsServerInline).body,
+          {'type': 'group', 'servers': ['a', 'home'], 'hosts': ['h']});
+      expect((servers[1] as DnsServerInline).body,
+          {'type': 'group', 'servers': ['a'], 'hosts': 'home'});
+      expect((servers[2] as DnsServerInline).body['servers'], ['my-dns']);
+
+      renameDnsServerTagRefs(
+        servers: servers,
+        rules: <DnsRuleRef>[],
+        templateByTag: const {},
+        oldTag: 'h',
+        newTag: 'local_hosts',
+        dnsFinal: '',
+        defaultResolver: '',
+      );
+      expect((servers[0] as DnsServerInline).body['hosts'], ['local_hosts']);
+    });
   });
 
   group('renameRuleDnsServerTag', () {

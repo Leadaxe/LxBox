@@ -2,6 +2,7 @@ import '../../../controllers/subscription_controller.dart';
 import '../../../models/codec/node_link_record.dart';
 import '../../../models/server_list.dart';
 import '../../node_link_address.dart';
+import '../../probe/probe_controller.dart' show ProbeController;
 import '../../probe/probe_runner.dart';
 import '../../settings_storage.dart';
 import '../context.dart';
@@ -29,7 +30,7 @@ import '_shared.dart';
 /// - `POST   /folders/{id}/members`             → add: `{"input":"..."}` (paste,
 ///                                                опц. `name_fallback`) ИЛИ
 ///                                                `{"url":"..."}` (URL-снапшот)
-/// - `PATCH  /folders/{id}/members/{idx}`       → subset `{raw,enabled,detour}`
+/// - `PATCH  /folders/{id}/members/{idx}`       → subset `{raw,enabled,detour,tls}`
 /// - `DELETE /folders/{id}/members/{idx}`       → remove member
 /// - `POST   /folders/{id}/members/reorder`     → `{"order":[старые индексы]}`
 /// - `POST   /folders/{id}/members/{idx}/ungroup` → член → одиночный сервер
@@ -240,9 +241,14 @@ Future<DebugResponse> _updateMember(
   // §439 (D-112) — ссылка `{folder_id?, tag}`; строка читается терпимо:
   // сырой тег соседа по папке — парой (S1), иначе корневой ссылкой.
   final detourField = fieldNodeLink(body, 'detour');
-  if (raw == null && enabled == null && detourField == null) {
-    throw const BadRequest(
-        'body must contain at least one of "raw", "enabled", "detour"');
+  // §636 — узловая TLS-политика члена; проверка до любых записей.
+  final tlsField = fieldTlsPatch(body, folder.members[i].tls);
+  if (raw == null &&
+      enabled == null &&
+      detourField == null &&
+      tlsField == null) {
+    throw const BadRequest('body must contain at least one of "raw", '
+        '"enabled", "detour", "tls"');
   }
 
   if (raw != null) {
@@ -259,6 +265,10 @@ Future<DebugResponse> _updateMember(
     // §239 — контроллер отклоняет self/цикл интра-рёбер; пробрасываем отказ.
     final err = await sub.setMemberDetour(idx, i, detour);
     if (err != null) throw BadRequest('detour rejected: ${err.renderEn()}');
+  }
+  if (tlsField != null) {
+    final err = await sub.setMemberTls(idx, i, tlsField);
+    if (err != null) throw BadRequest('tls rejected: ${err.renderEn()}');
   }
 
   final reveal = req.qBool('reveal');
@@ -424,6 +434,7 @@ Future<DebugResponse> _probe(String id, DebugRequest req, DebugContext ctx) asyn
   // ответ строится по тем же folder.members[i]).
   final err = await ProbeRunner().run(
     [for (final m in folder.members) m.node],
+    tlsByIndex: ProbeController.probeTlsOf(folder), // §636
     url: url,
     timeoutMs: timeoutMs,
     onResult: (i, r) => results[i] = r,

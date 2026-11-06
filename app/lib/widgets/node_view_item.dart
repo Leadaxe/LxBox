@@ -1,5 +1,8 @@
 import '../models/node_warning.dart';
 import '../services/networks_direction.dart' show TailnetNote, TailnetRowState;
+import '../services/openconnect_auth.dart' show OpenConnectRowKind;
+
+export '../services/openconnect_auth.dart' show OpenConnectRowKind;
 
 /// Immutable view-model для одной node row на главной (или другом screen'е
 /// который захочет переиспользовать `NodeRow`).
@@ -15,6 +18,7 @@ import '../services/networks_direction.dart' show TailnetNote, TailnetRowState;
 class NodeViewItem {
   const NodeViewItem({
     required this.tag,
+    this.displayLabel,
     required this.active,
     required this.highlighted,
     required this.delay,
@@ -34,10 +38,16 @@ class NodeViewItem {
     this.endpointState = '',
     this.tailnetState,
     this.tailnetNote,
+    this.openConnectKind = OpenConnectRowKind.none,
+    this.openConnectText = '',
   });
 
   /// Tag ноды или group selector (например `vpn-1`, `✨auto`).
   final String tag;
+
+  /// Имя строки для показа, когда член списка — другое Направление: его label
+  /// (`Germany`), а [tag] уходит в подзаголовок. `null` → показываем [tag].
+  final String? displayLabel;
 
   /// `tag == state.activeInGroup` — выделение selected outbound в группе.
   final bool active;
@@ -128,4 +138,9 @@ class NodeViewItem {
   /// В строке узла с exit — на месте подписи состояния endpoint'а, в строке
   /// NETWORKS — на месте `running`. `null` — предупреждать не о чем.
   final TailnetNote? tailnetNote;
+
+  /// §654 C — метка узла openconnect: ждёт входа (второй фактор / SSO) или
+  /// ошибка ядра ([openConnectText]). На месте подписи состояния endpoint'а.
+  final OpenConnectRowKind openConnectKind;
+  final String openConnectText;
 }

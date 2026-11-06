@@ -81,6 +81,7 @@ auth), а не факт, что за границей всё открыто.
   - [`reveal` и `warnings` у одной записи (478)](#фича-478--reveal-и-warnings-у-одной-записи)
 - [Nodes — `/nodes/*`](#nodes--nodes)
 - [Directions CRUD — `/directions/*`](#directions-crud--directions)
+- [Mixins CRUD — `/mixins/*`](#mixins-crud--mixins)
 - [Chains CRUD — `/chains/*`](#chains-crud--chains)
 - [Folders CRUD — `/folders/*`](#folders-crud--folders)
 - [Core-rejected nodes — `/core_reject/*`](#core-rejected-nodes--core_reject)
@@ -92,6 +93,7 @@ auth), а не факт, что за границей всё открыто.
 - [Backup — `/backup/*`](#backup--backup)
 - [Diagnostics — `/diag/*` (§038)](#diagnostics--diag-038)
 - [Support feed — `/support/*`](#support-feed--support)
+- [Taildrop — `/taildrop/*`](#taildrop--taildrop)
 - [Profiler — `/profiler/*`](#profiler--profiler)
 - [Common errors](#common-errors)
 - [Синхронизация с `/help`](#синхронизация-с-help)
@@ -105,6 +107,7 @@ auth), а не факт, что за границей всё открыто.
 | `GET /ping` | `{pong,server,uptime_seconds}` — **без auth** |
 | `GET /help` | `?format=text\|json` — самодокументируемая карта всей поверхности API. **Без auth** (второй no-auth endpoint). `json` — для auto-tooling, `text` (default) — human-readable cheatsheet. |
 | `GET /state` | full HomeState: tunnel/busy/config_length/**running_config_length** (§311: null = снапшота ядра нет; вместе с `config_length` показывает расхождение running↔saved)/active_in_group/selected_group/last_delay/ping_busy/traffic/… **§250** — `last_start_error` + `last_start_error_at` (ISO-8601 / null): last VPN start/stop failure reason; cleared only by a successful start; in-memory (empty after process restart). В отличие от `last_error` не затирается UI-consume (`clearError`) — живёт до следующего успешного старта. |
+| `GET /state` (поле `group_selected`) | `тег группы → выбранный узел` для **каждой** selector/urltest-группы (Направления и их `-auto`-двойники) из дерева групп ядра; `active_in_group` — то же, но только для `selected_group`. Пустой объект — туннель down или дерево групп ещё не пришло; группа без выбора не попадает. |
 | `GET /state` (поле `tailscale`) | **§581** — узлы Tailscale: `тег → {backend_state, devices}` (состояние узла из `SubscribeTailscaleStatus` и число устройств сети). Имён устройств, адресов, имени сети, владельцев и ссылки входа нет (раздел 9 спеки 581). Пусто — VPN выключен или подписка не поднята (нет узла NETWORKS и не открыта вкладка Network). |
 | `GET /state` (поле `endpoint_states`) | **§535** (ядро SPEC 097) — карта `тег → состояние` WG/AWG-endpoint'ов: `never_built` / `building` / `up` / `asleep` / `torn_down` / `down`. Снимается unary-pull'ом `GetOutbounds` на heartbeat-тике (5 с) — единственный путь, где ядро эти поля заполняет (поток `SubscribeOutbounds` и дерево групп их не несут). Пусто = туннель down, ядро не отдало, либо endpoint'ов в конфиге нет. |
 | `GET /state/subs` | массив подписок (без цепочек — §524, весь список у `GET /subs`), `?reveal=true` показывает clear URLs |
@@ -228,7 +231,8 @@ curl -X POST -H "$HDR" "$BASE/logs/clear?source=core"
 
 | Endpoint | Query | Что делает |
 |---|---|---|
-| `POST /action/urltest` | `tag=<node>` \| `group=<tag>` \| `all=true` \| `cancel=1` | единый URLTest-диспатч (ровно один scope): `tag` — single-node; `group` — групповой URLTest ядра (§308: force-тест ВСЕХ членов + переселект на живой узел; fire-and-forget — `ok` значит «команда принята», результат смотреть через `GET /state` → `active_in_group`; URL — из конфига группы, не из ping settings; 409 если tunnel down); `all` — mass-ping всех нод активной группы (concurrency 10); `cancel=1` — отмена in-flight mass-ping (§163, epoch-bump; уже запущенные групповые прогоны в ядре не отменяет). → `{ok,action,scope,...}` |
+| `POST /action/urltest` | `tag=<node>` \| `group=<tag>` \| `all=true` \| `cancel=1` | единый URLTest-диспатч (ровно один scope): `tag` — single-node; `group` — групповой URLTest ядра (§308: force-тест ВСЕХ членов + переселект на живой узел; fire-and-forget — `ok` значит «команда принята», результат смотреть через `GET /state` → `active_in_group`; URL — из конфига группы, не из ping settings; 409 если tunnel down); `all` — mass-ping всех нод активной группы (параллельность `ping_options.concurrency`, §713); `cancel=1` — отмена in-flight mass-ping (§163, epoch-bump; уже запущенные групповые прогоны в ядре не отменяет). → `{ok,action,scope,...}` |
+| `POST /action/urltest-all` | — | §625: групповой URLTest ядра (как `urltest?group=`, §308) для **каждой** urltest-группы текущего состояния, последовательно; fire-and-forget. Не mass-ping узлов (`urltest?all=true`), селекторы Направлений не трогает. Общий обработчик с Intent `URLTEST_ALL` и командой плагина `urltest-all`. 409 если tunnel down; нет urltest-групп — не ошибка (`groups:0`). → `{ok, action:"urltest-all", groups:N}` |
 | `POST /action/switch-node` | `tag=<tag>` | selector switch на node. 409 если не выбрана группа |
 | `POST /action/set-group` | `group=<tag>` | смена активной группы |
 | `POST /action/start-vpn` | — | `runCoreRejectGuard(guard=false)` → прежний `home.start()` через Activity (может показать consent-диалог), **без** цикла страховки. Публичный Intent API (§047) этот путь не зовёт — native `LxBoxIntentReceiver` идёт в `BoxVpnService.start` напрямую |
@@ -332,7 +336,7 @@ Rules матчатся **first-wins** сверху вниз, так что reord
   "num": 42,                        // только в ответе (§370, ось порядка; null — ещё не размечено); двигать — /rules/move
   "preset_id": "<id>",              // required при kind=preset
   "vars_values": {"var":"val"},     // preset-only: overrides шаблонных vars
-  "dns": {"enabled": true, "server_tag": "<tag>", "force_ipv4": false}, // inline/srs DNS-опция: dedicated server + Force IPv4 (drop AAAA); поля независимы, server_tag обязателен лишь при enabled=true
+  "dns": {"enabled": true, "server_tag": "<tag>", "force_ipv4": false, "fixed_ips": ["192.168.1.10"]}, // inline/srs DNS-опция: dedicated server + Force IPv4 (drop AAAA) + ответ фиксированным IP (непустой fixed_ips, приоритетнее enabled; отдельного флага нет); поля независимы, server_tag обязателен лишь при enabled=true
   "domains": ["exact.domain"],
   "domain_suffixes": [".ru","xn--p1ai"],
   "domain_keywords": ["tracker"],
@@ -348,6 +352,8 @@ Rules матчатся **first-wins** сверху вниз, так что reord
   "inbounds": ["tun-in"],           // inline/srs: матч по inbound
   "wifi_ssids": ["HomeWiFi"],       // inline/srs (§051), нужны location-permissions
   "wifi_bssids": ["aa:bb:cc:dd:ee:ff"], // формат валидируется, нормализуется в lower-case
+  "network_type": ["cellular"],     // inline/srs (§694): wifi | cellular | ethernet | other, разрешений не нужно
+  "network_is_expensive": true,     // inline/srs (§694): только лимитная сеть
   "srs_url": "https://...rule-set.srs", // srs: первый набор
   "srs_urls": ["https://a.srs","https://b.srs"], // srs: все наборы по порядку; главнее srs_url
   "resolve": {"only": false, "strategy": "ipv4_only", "server_tag": "<tag>", "timeout": "5s"}, // inline/srs (§247); null — снять
@@ -371,15 +377,39 @@ Rules матчатся **first-wins** сверху вниз, так что reord
 Подписки + inline user-servers. §575 — поля `sections` в ответе нет: секции
 узла упразднены.
 
-§578 — у `UserServer` и у члена папки (`GET /folders/{id}`) есть поле записи
-`skip_presets` (bool): `true` — узел не обслуживают пресеты с `for_each`
-(пресет `tailscale`). Read-only, PATCH его не принимает; меняется переключателем
-Skip presets на экране узла.
+§578/§656 — у `UserServer` и у члена папки (`GET /folders/{id}`) есть поля
+записи (bool, read-only, PATCH их не принимает):
+
+- `skip_tailscale_presets` (до контракта 1.1.126 — `skip_presets`): `true` —
+  узел не обслуживает пресет `tailscale`; меняется переключателем
+  Skip Tailscale presets на экране узла;
+- `allow_local`, `allow_lan`, `allow_gateway` — что пресет `tunnel-ingress`
+  разрешает пирам туннеля (WireGuard, OpenVPN, OpenConnect); меняются
+  тумблерами блока Incoming connections from this tunnel.
 
 ```bash
-# узлы с отметкой «пропустить пресеты»
+# узлы с отметкой «пропустить пресеты Tailscale»
 curl -s -H "$HDR" "$BASE/subs" \
-  | jq '.[] | select(.kind=="UserServer") | {id, skip_presets}'
+  | jq '.[] | select(.kind=="UserServer") | {id, skip_tailscale_presets}'
+```
+
+§636 — у каждой записи `/subs` (подписка, папка, одиночный сервер) и у члена
+папки есть поле `tls` — переопределение ручек раздела TLS Fragmentation:
+`{fragment, record_fragment, fallback_delay, mixed_case_sni}`, не заданное
+поле — `null`, запись без политики — `{}`. У подписки и папки это уровень
+источника, у одиночного сервера и члена папки — узловой. Сборка разрешает
+каждое поле отдельно: узел → источник → глобальные `vars`.
+
+`PATCH /subs/{id}` и `PATCH /folders/{id}/members/{idx}` принимают `tls` —
+объект: ключа нет — поле не меняется, `null` — сброс в «наследовать».
+Неизвестный ключ, значение не того типа или `fallback_delay`, которую ядро не
+разберёт как длительность (`500`, `fast`), → 400, ничего не меняется.
+Config-significant → `?rebuild=true`, чтобы применить.
+
+```bash
+# выключить фрагментацию одному члену папки при глобально включённой
+curl -s -X PATCH -H "$HDR" "$BASE/folders/$FID/members/0?rebuild=true" \
+  -d '{"tls":{"fragment":false,"record_fragment":false}}' | jq '.member.tls'
 ```
 
 **§524 — `GET /subs` отдаёт ВЕСЬ список источников** в порядке `sources[]`, тот
@@ -397,6 +427,9 @@ curl -s -H "$HDR" "$BASE/subs" \
 | `SourceChain` | цепочка (§524 — такая же запись списка) | `id` = тег, `title`, `enabled`, `nodes_count` = `hops_count` = число позиций |
 | `Unreadable` | запись, которую кодек не читает (§141 P1.8c) | `record_kind` — её `kind` с диска, `enabled: false` |
 
+У `SubscriptionServers` в записи есть `announce` — описание подписки из
+заголовка `announce` (§648), расшифрованное и нормализованное; нет — `""`.
+
 Маршрут цепочки (позиции, `strip`, `rewrite`) здесь НЕ разворачивается: его
 читает и правит `/chains/{tag}` — `/subs` отвечает за состав и порядок списка.
 
@@ -408,7 +441,7 @@ curl -s -H "$HDR" "$BASE/subs" \
 | `/subs` | GET | `?reveal=true` — clear URLs |
 | `/subs` | POST | `{"input":"<url\|URI\|WG-ini\|JSON-outbound>"}` |
 | `/subs/{id}` | GET | `?reveal=true`, `?warnings=true` — см. ниже |
-| `/subs/{id}` | PATCH | subset: name/enabled/tag_prefix/update_interval_hours/override_detour/register_detour_{servers,in_auto}/use_detour_servers/replace_detour_chain/url + **§346**: on_update_action/import_rules_enabled/identity. **§439:** `override_detour` — ссылка на узел `{folder_id?, tag}`, `null` снимает |
+| `/subs/{id}` | PATCH | subset: name/enabled/tag_prefix/update_interval_hours/override_detour/register_detour_{servers,in_auto}/use_detour_servers/replace_detour_chain/url + **§346**: on_update_action/import_rules_enabled/identity + **§636**: `tls` (частичная правка, `null` — наследовать). **§439:** `override_detour` — ссылка на узел `{folder_id?, tag}`, `null` снимает |
 | `/subs/{id}` | DELETE | — |
 | `/subs/{id}/refresh` | POST | trigger fetch. 409 для UserServer |
 | `/subs/reorder` | POST | **§524** `{"order":[source_key,...]}` — ключи ЛЮБОГО рода (`id:<uuid>` / `chain:<tag>`), состав обязан совпасть с текущим списком. Голый uuid тоже принимается (форма до §524). Одна запись на диск |
@@ -755,7 +788,7 @@ storage-JSON Направления (`Direction.toJson()`, snake_case), вклю
 | `/directions` | POST | опц. `{"label":"...","tag":"..."}` + любые PATCH-поля; без `tag` — первый свободный `vpn-N`, 201 |
 | `/directions/{tag}` | PATCH | subset: `label,enabled,include_direct,include_block,node_filter,node_filter_invert,default_filter,include,interrupt_exist_connections,auto,detour` |
 | `/directions/{tag}` | DELETE | — |
-| `/directions/reorder` | POST | `{"order":["vpn-1",...]}` — ровно текущие теги |
+| `/directions/reorder` | POST | `{"order":["vpn-1",...]}` — ровно текущие теги; ссылка `include` вниз → 409 |
 
 Все write'ы принимают `?rebuild=true` (порядок Направлений = порядок эмита в
 конфиге, так что reorder тоже config-significant).
@@ -802,9 +835,16 @@ curl -X PATCH -H "$HDR" -H "Content-Type: application/json" \
   Полный reset — прислать все поля явно. `"auto": null` — снять галку.
 - `tag` immutable (системный id) → передан в PATCH → 400. Юзер-имя — `label`.
 - `include` (§393) — теги **других** Направлений, предлагаемых опциями внутри
-  этого. Эмитятся только цели, объявленные **выше** по списку (порядок задаёт
-  `/directions/reorder`) — порядок и исключает циклы. Ссылка вниз по списку
-  молча не попадает в конфиг.
+  этого (и группы свёрток источников). Законны только Направления **выше** по
+  списку — UX-правило, порядок исключает циклы (§673). `include` в
+  POST/PATCH, называющий Направление не выше, само Направление или
+  неизвестный тег, → 409 `conflict`; `/directions/reorder`, ставящий
+  существующую ссылку вниз, → 409 `conflict`; хранилище не меняется. Тело
+  409 рядом с `error` несёт нарушенные пары:
+  `{"conflicts":[{"direction":"vpn-2","includes":"vpn-3","reason":"not_above"}]}`
+  (`reason`: `not_above` / `self` / `unknown`; у reorder — только
+  `not_above`). Ссылка вниз из старого бэкапа reorder не блокирует, сборка
+  снимает её с предупреждением.
 - `PATCH vpn-1 {"enabled":false}` и `DELETE /directions/vpn-1` → 409 `conflict`.
 - `detour` (§248/§274): `PATCH vpn-1 {"detour":true}` → 409 `conflict`
   (vpn-1 — главное Направление и heal-резерв, продуктовое решение).
@@ -845,6 +885,64 @@ curl -X PATCH -H "$HDR" -H "Content-Type: application/json" \
   (например невалидный regex в `node_filter`) вернёт ошибку, но Направление
   уже создано — с `label` из body (если был) и дефолтами остальных полей;
   прочие PATCH-поля body не применены.
+
+---
+
+## Mixins CRUD — `/mixins/*`
+
+§704 — миксины: хранимые операции над итоговым конфигом ядра (`mixins[]` в
+storage, `docs/STORAGE.md`). Применяются по порядку списка последним шагом
+сборки — после санитайзера графа, до валидатора. Ресурс — `Mixin.toJson()`:
+`{id, name, enabled, target, op, value}`.
+
+| Endpoint | Метод | Body |
+|---|---|---|
+| `/mixins` | GET | — (порядок = порядок применения) |
+| `/mixins/{id}` | GET | — |
+| `/mixins` | POST | `{"target":"...","op":"...","value":<json>,"name"?:"...","enabled"?:bool}` → 201, в конец списка |
+| `/mixins/{id}` | PATCH | subset: `name,enabled,target,op,value`; `id` неизменяем |
+| `/mixins/{id}` | DELETE | — |
+| `/mixins/reorder` | POST | `{"order":[id,...]}` — ровно текущие id |
+| `/mixins/{id}/preview` | GET | — |
+
+Все write'ы принимают `?rebuild=true`. Запись проверяет синтаксис пути и
+глагол: ошибка → 400 (`field "target": syntax error at N: …`, `field "op" must
+be one of append|prepend|before|after|set|merge|remove`); у `remove` значение —
+`true` или список ключей. Совпадение цели при записи НЕ требуется: цель может
+появиться после другого миксина; отказ виден при сборке.
+
+**Язык пути.** Сегменты через точку; `имя[N]` — элемент списка; `имя[f=v,g.h=w]`
+— элементы, у которых верны все условия (число с числом, `true`/`false`, иначе
+строки с учётом регистра; поле-список — «содержит»); значение — всё до `,` или
+`]`, пробелы внутри допустимы; числовой сегмент после точки — индекс
+(`outbounds.0`); пустой путь — корень; путь с `$` зарезервирован (400).
+
+**Глаголы.** `append`/`prepend` — в один список (значение-список — по
+элементам); `before`/`after` — на уровень элементов списка перед первым / после
+последнего совпавшего; `set` — замена каждого совпавшего; `merge` — слияние
+объектов вглубь (список значения заменяет список цели); `remove` — `true`
+снимает узел, список ключей (`"tls.utls"`) — только их.
+
+**Отказ на сборке** (нет совпадений, тип цели, синтаксис, дубль тега в
+`inbounds` / `outbounds`+`endpoints` / `dns.servers`) — fatal: конфиг не
+собирается, `rebuild_error` / `lastError` несут
+`Mixin "<name>": <target>: no match` или `Mixin "<name>": duplicate tag "x" in outbounds`.
+
+**Preview** — то же, что показывает форма миксина:
+
+```json
+{"id": "…", "matches": 1, "issue": null,
+ "fragment": {"parent_path": "route.rules",
+              "rows": [{"marker": " ", "text": "{\"action\":\"sniff\",…}", "value": {…}},
+                       {"marker": "+", "text": "{\"inbound\":[\"dns-in\"],…}", "value": {…}}]}}
+```
+
+`marker`: `" "` без изменений, `+` вставлен, `~` изменён, `-` удалён (у `-`
+`value` — удалённое). Цель-скаляр под `set` — одна строка `было → стало`.
+`issue` — `{reason, message}` или `null`. База — конфиг последней сборки ДО
+миксинов плюс включённые миксины выше этого (собранный конфиг уже несёт
+миксин, и предпросмотр по нему применил бы его дважды); сборки в сессии не
+было → 409.
 
 ---
 
@@ -1003,7 +1101,7 @@ credentials (URI/ключи) → по умолчанию скрыт, `?reveal=tr
 | `/folders/{id}` | GET | — |
 | `/folders/{id}` | DELETE | `?keep_servers=true` — вынести членов одиночными серверами (default false — удалить совсем) |
 | `/folders/{id}/members` | POST | ровно одно из: `{"input":"<uri\|WG-ini\|JSON>","name_fallback"?}` (paste) или `{"url":"..."}` (одноразовый снапшот: URL не хранится, авто-обновления нет) |
-| `/folders/{id}/members/{idx}` | PATCH | subset `{raw,enabled,detour}` — §578: `skip_presets` в GET read-only, PATCH не принимает |
+| `/folders/{id}/members/{idx}` | PATCH | subset `{raw,enabled,detour,tls}` (§636: `tls` — узловая политика, правила как у `PATCH /subs/{id}`) — §578/§656: `skip_tailscale_presets` и `allow_*` в GET read-only, PATCH не принимает |
 | `/folders/{id}/members/{idx}` | DELETE | — |
 | `/folders/{id}/members/reorder` | POST | `{"order":[старые индексы в новом порядке]}` — полная перестановка |
 | `/folders/{id}/members/{idx}/ungroup` | POST | член → одиночный сервер сразу после папки |
@@ -1233,8 +1331,6 @@ Scoped writes на `SettingsStorage`. Generic `PUT /state/storage?key=X` **на�
 | Endpoint | Метод | Body |
 |---|---|---|
 | `/settings/route_final` | PUT | `{"outbound":"<tag>"}` (пустая строка = дефолт) |
-| `/settings/interrupt_on_switch` | GET | →`{"ok":true,"enabled":bool}` — §163 тугл «рвать активные соединения при switchNode». **НЕ** config-significant. |
-| `/settings/interrupt_on_switch` | PUT | `{"enabled": true\|false}`. → `{ok, action:"settings-interrupt-on-switch", enabled}`. |
 | `/settings/node_sort` | GET | →`{"ok":true,"mode":"<str>","order":["tag",...]}` — режим сортировки списка нод + ручной порядок. |
 | `/settings/node_sort` | PUT | `{"mode": "<str>", "order"?: ["tag",...]}`. `mode` = `""`/`latency`/`manual`; `order` опц. (для manual). UI-only (не config-significant). → `{ok, action:"settings-node-sort", mode, order_count}`. |
 | `/settings/enabled_groups` | GET | →`{"ok":true,"groups":["tag",...]}` — членство preset-групп в selector'е. **§125 legacy** — см. PUT-примечание. |
@@ -1250,8 +1346,10 @@ Scoped writes на `SettingsStorage`. Generic `PUT /state/storage?key=X` **на�
 | `/settings/core_logs_enabled` | PUT | `{"enabled": true\|false}` — §043 включить/выключить forward. **Требует полного рестарта процесса** (`am force-stop` + relaunch, либо UI Quit & reopen) — `Libbox.setup` one-shot per process, stop/start VPN **не** перечитывает флаг. Default false. Storage в SharedPreferences (`boxvpn_boot.core_logs_enabled`), не в `lxbox_settings.json`. |
 | `/settings/core_logs_verbose` | GET | →`{"enabled": bool}` — §345 состояние live-снятия TRACE/DEBUG-фильтра ядра. |
 | `/settings/core_logs_verbose` | PUT | `{"enabled": true\|false}` — §345 пропускать TRACE/DEBUG-строки ядра в `/logs/core`. В отличие от `core_logs_enabled` **применяется мгновенно** (volatile в BoxService, без рестарта); бессилен при выключенном `core_logs_enabled` (ядро не форвардит вообще). Буфер core (500 строк) на живом трафике в verbose живёт секунды — включать точечно, снимать лог сразу. Default false. Storage в SharedPreferences (`boxvpn_boot.core_logs_verbose`). |
-| `/settings/ping_options` | GET | →URLTest defaults `{url?, timeout_ms?, groups?}` (пустой map если не set'нуто — caller fall-through на template default). |
-| `/settings/ping_options` | PUT | body `{url?, timeout_ms?, groups?}` — **overwrite целиком** (не merge). Unknown-подключи strip'аются (allowlist `url/timeout_ms/presets/groups`). `url` — string, `timeout_ms` — number, `groups` — object (иначе 400). → `{ok, action:"settings-ping-options", url, timeout_ms, groups_count}`. |
+| `/settings/ping_options` | GET | →URLTest defaults `{url?, timeout_ms?, concurrency?, groups?}` (пустой map если не set'нуто — caller fall-through на template default). |
+| `/settings/ping_options` | PUT | body `{url?, timeout_ms?, concurrency?, groups?}` — **overwrite целиком** (не merge). Unknown-подключи strip'аются (allowlist `url/timeout_ms/presets/groups/concurrency`). `concurrency` (§713) — number, читатель приводит к 1..100. `url` — string, `timeout_ms` — number, `groups` — object (иначе 400). → `{ok, action:"settings-ping-options", url, timeout_ms, groups_count}`. |
+| `/settings/node_budget` | GET | →`{ok, value, default, min}` — бюджет узлов приложения (§714): `value` — действующее значение (нет ключа = `default` 1000), `min` = 1, верхнего потолка нет. |
+| `/settings/node_budget` | PUT | body `{"value": <number>\|null}` — `null` снимает ключ (= 1000), число меньше 1 → 1, не число → 400. Контроллер подписок пересчитывает доли и перерезает подписки из кэша тела (без сети). → `{ok, action:"settings-node-budget", value}`. |
 | `/settings/ping_options/groups/{tag}` | GET | override этой группы или **404** если override нет. |
 | `/settings/ping_options/groups/{tag}` | PUT | body `{url?, timeout_ms?}` — минимум одно поле (read-modify-write). → `{ok, action:"settings-ping-options-group-put", group, ...}`. |
 | `/settings/ping_options/groups/{tag}` | DELETE | снять override группы. → `{ok, action:"settings-ping-options-group-delete", group}`. |
@@ -1517,7 +1615,7 @@ curl -X POST -H "$HDR" -H "Content-Type: application/json" \
   --data-binary @/tmp/lxbox-backup.json \
   "$BASE/backup/import?rebuild=true"
 
-# Merge mode — top-level upsert (vars upsert, остальные ключи overwrite, отсутствующие в файле — keep)
+# Merge mode — слияние §633: добавляется то, чего нет; своё остаётся (счётчики — applied.merge)
 curl -X POST -H "$HDR" -H "Content-Type: application/json" \
   --data-binary @/tmp/lxbox-backup.json \
   "$BASE/backup/import?merge=true"
@@ -1549,7 +1647,7 @@ curl -s -H "$HDR" "$BASE/backup/export?include=storage&from=v0_bak" > /tmp/lxbox
 
 ⚠ Источники в памяти приложения (экран Servers) после `POST /backup/import` не перечитываются до холодного рестарта. Так и в 2.23.2, к §439 не относится.
 
-`merge=false` (default) — replace всего документа (категорий у запроса нет; замена по категориям §599 — только у UI-импорта); `merge=true` — top-level upsert. Кеши (cache.db, stderr.log, SRS-blob, runtime node-tags) в backup не входят — restore их пересоздаёт.
+`merge=false` (default) — replace всего документа (категорий у запроса нет; замена по категориям §599 — только у UI-импорта); `merge=true` — слияние §633, то же, что Merge в UI: списки по идентичности записи (источники по `id`, цепочки / Направления / DNS-серверы по тегу, правила по `ref` пресета, `id` или содержимому; новые — в конец, правила — в конец пользовательской зоны `num`), Tunnel apps — объединение пакетов, режим получателя, если не `off`; скаляры, `vars` и `vpn_settings` — значение получателя, отсутствующий ключ — из файла. Ответ: `applied.merge` = `{sources, rules, directions, dns_servers, dns_rules, tun_apps, keys}` по `{added, kept}`, `applied.vpn_settings_kept`. Кеши (cache.db, stderr.log, SRS-blob, runtime node-tags) в backup не входят — restore их пересоздаёт.
 
 ---
 
@@ -1612,6 +1710,108 @@ curl -X POST -H "$HDR" -H "Content-Type: application/json" \
 # Прогнать ленту с нуля
 curl -X POST -H "$HDR" "$BASE/support/reset"
 ```
+
+---
+
+## Taildrop — `/taildrop/*`
+
+§707 итер. 5 — Taildrop узлов Tailscale без тапов по экрану. Маршруты зовут те
+же нативные пути, что вкладка Network узла, «Send file…» и кнопки уведомлений
+приёма (уведомления при этом показываются как обычно). Работают и при
+свёрнутом приложении.
+
+Имена файлов и устройств, текст буфера и ссылки по умолчанию не отдаются
+(правило 030); `?reveal=true` открывает их — как у `GET /state/subs`, маска —
+удобство, не граница.
+
+| Endpoint | Метод | Что делает |
+|---|---|---|
+| `/taildrop` | GET | по каждому узлу `tailscale` конфига: `tag`, `allow` (галка «Allow Taildrop» по хранимому телу; `null` — тело не найдено), `disable_taildrop` (собранный конфиг), `backend_state`, `can_share_files` (ядро), `autosave`, `autosave_supported`, `inbox_files`, `receiving`, `self_id`. VPN выключен — узлы есть, поля ядра `null`. На верхнем уровне — окно «Send clipboard» (§707 итер. 7): `clip_target` (`tag`, `peer_id`; `name` — с `reveal`; `null` — получатель не выбирался) и `clip_feeds[]` (`tag`, `peer_id`, `messages` — число сообщений ленты; текст не отдаётся) |
+| `/taildrop/peers?tag=` | GET | устройства узла: `id` (stable), `os`, `online`, `can_receive_files`, `sharee`, `permissions{clipboard,open_url}`; `name` — с `reveal` |
+| `/taildrop/inbox?tag=` | GET | `files[]`: `index`, `size`, `sha256` (файл на диске), `age_s`, `sender_id`; `receiving[]`: `index`, `size`, `received_bytes`, `progress`, `sender_id`; `name`/`sender_name` — с `reveal` |
+| `/taildrop/send` | POST | `{tag, peer, name, content_base64}` \| `{tag, peer, text}` (заметка `note-…txt`) \| `{tag, peer, commands:[…]}` (служебный файл); ждёт итог до 60 с |
+| `/taildrop/inbox/save` | POST | `{tag, index}` или `{tag, name}` — как Save (Downloads, Android 10+); имя записи в Downloads — с `reveal` |
+| `/taildrop/inbox/delete` | POST | `{tag, index}` или `{tag, name}` — как Delete |
+| `/taildrop/inbox/cancel` | POST | `{tag, index}` — индекс в `receiving`, как Cancel приёма |
+| `/taildrop/settings` | PUT | `{tag, autosave?, allow?}`; `?rebuild=true` |
+| `/taildrop/permissions` | PUT | `{tag, peer, kind, enabled}` — вид из `kinds` реестра `service_files.json` |
+| `/taildrop/service-files` | GET | счётчики разбора служебных файлов с начала процесса |
+
+```bash
+# Узлы и их состояние
+curl -s -H "$HDR" "$BASE/taildrop" | jq
+# Устройства узла ts-a с именами
+curl -s -H "$HDR" "$BASE/taildrop/peers?tag=ts-a&reveal=true" | jq
+# Отправить файл с ts-a на устройство (peer = stable ID, имя, MagicDNS-имя или IP)
+curl -s -X POST -H "$HDR" -H "Content-Type: application/json" \
+  -d "{\"tag\":\"ts-a\",\"peer\":\"lxbox-emu-b\",\"name\":\"t.bin\",\"content_base64\":\"$(base64 < t.bin)\"}" \
+  "$BASE/taildrop/send" | jq
+# → {"ok":true,"action":"taildrop-send","tag":"ts-a","peer_id":"n…CNTRL","status":"sent","bytes":N,"sha256":"…"}
+# Заметка
+curl -s -X POST -H "$HDR" -d '{"tag":"ts-a","peer":"lxbox-emu-b","text":"hello"}' "$BASE/taildrop/send"
+# Служебный файл: текст в буфер получателя (имя lx-<время>-<метка>.json собирается само)
+curl -s -X POST -H "$HDR" \
+  -d '{"tag":"ts-a","peer":"lxbox-emu-b","commands":[{"kind":"clipboard","text":"copied"}]}' \
+  "$BASE/taildrop/send"
+# Входящие ts-b, сохранить первый файл, удалить второй
+curl -s -H "$HDR" "$BASE/taildrop/inbox?tag=ts-b" | jq
+curl -s -X POST -H "$HDR" -d '{"tag":"ts-b","index":0}' "$BASE/taildrop/inbox/save?reveal=true"
+curl -s -X POST -H "$HDR" -d '{"tag":"ts-b","index":0}' "$BASE/taildrop/inbox/delete"
+# Отменить приём
+curl -s -X POST -H "$HDR" -d '{"tag":"ts-b","index":0}' "$BASE/taildrop/inbox/cancel"
+# Автосохранение (сразу, с разбором лежащего) и галка Allow Taildrop (тело узла)
+curl -s -X PUT -H "$HDR" -d '{"tag":"ts-b","autosave":true}' "$BASE/taildrop/settings"
+curl -s -X PUT -H "$HDR" -d '{"tag":"ts-b","allow":true}' "$BASE/taildrop/settings?rebuild=true"
+curl -s -X POST -H "$HDR" "$BASE/action/reload-vpn"
+# Разрешить буфер обмена от устройства
+curl -s -X PUT -H "$HDR" -d '{"tag":"ts-b","peer":"lxbox-emu-a","kind":"clipboard","enabled":true}' \
+  "$BASE/taildrop/permissions"
+# Счётчики служебных файлов (текст последней команды — с reveal)
+curl -s -H "$HDR" "$BASE/taildrop/service-files?reveal=true" | jq
+```
+
+**Отправка.** Ровно одна форма из трёх, иначе 400. `content_base64` ограничен
+телом запроса Debug API (1 MiB → файл до ~750 KB). Служебный файл: имя
+`<name_prefix><UTC YYYYMMDDTHHMMSSZ>-<метка name_label_length [a-z0-9]><name_suffix>`,
+тело `{"lx": <старшая из versions>, "commands": […]}`, константы — реестр
+`service_files.json`; собирает натив — тот же сборщик, что окно «Send
+clipboard» (§707 итер. 7); команды не проверяются (можно слать битые — проверять
+разбор получателя), тело больше `max_bytes` → 400. Передача идёт тем же путём,
+что «Send file…» (уведомление с процентом и Cancel); ответ ждёт итог до 60 с
+(у маршрута свой предел запроса 65 с вместо общих 30): `200 status:"sent"`,
+`202 status:"in_progress"` (не уложилась, идёт дальше), `409` с текстом ядра
+(«Taildrop is disabled on this node», отмена у получателя и т.п.). В ответе —
+`bytes` и `sha256` отправленного (у заметки — текста), имя — с `reveal`.
+
+**Входящие.** Индексы `files` — по времени приёма, при равенстве по имени:
+стабильны, пока входящие не менялись. `sha256` считает натив по файлу в
+`taildrop_directory` узла (из последнего собранного конфига); пусто — файла на
+диске нет. `sender_id` — stable ID отправителя (ядро lx.30-rc.2+; после
+перезапуска ядра пусто). Save ниже Android 10 — 409 (системный «Сохранить
+как» маршрут не открывает).
+
+**Настройки.** `autosave` — настройка устройства, действует сразу; включение
+забирает и лежащее во входящих (как переключатель на вкладке). `allow` пишет
+`disable_taildrop: false` / снимает поле в теле узла тем же путём, что галка
+блока Settings (проверка ядром, запись); узел подписки — 409 (тело у
+подписки). Применяется после `?rebuild=true` и `POST /action/reload-vpn`.
+
+**Счётчики служебных файлов** (с начала процесса, только в памяти натива):
+`received` (файлов признано служебными), `executed.clipboard` (записей в буфер —
+одна на пачку, последний `clipboard`), `executed.open_url` (уведомлений «Link
+from …»), `skipped_no_permission`, `expired` (файлов старше `ttl_seconds`),
+`invalid` (битых команд), `unknown_kind`, `skipped_scheme`, `no_handler` (ссылку
+нечем открыть), `last` — последняя выполненная команда `{kind, at, sha256}`,
+`value` (текст или ссылка) — с `reveal`.
+
+**Окно «Send clipboard»** (§707 итер. 7). Ленты — только в памяти, пока
+работает VPN: остановка VPN их стирает, `clip_feeds` тогда пуст. Отправка
+из окна в `executed`/`last` не попадает (это счётчики приёма); команды,
+выполненные приёмом, дописываются в ленту устройства-отправителя.
+
+**Отказы** — общий формат: нет узла `tailscale` с таким тегом — 404; VPN
+выключен, узел не запущен в ядре, ядро не отдало входящие (Taildrop узла
+выключен) — 409; пир не найден — 404 (значение `peer` в тексте не повторяется).
 
 ---
 

@@ -17,13 +17,15 @@ detour chain.
 Shows a piece of the final config where it is needed: the JSON tab on the node
 details screen (with copying of the node and its detour chain) and the View
 tab of the custom rule editor (how the rule will land in the config). The view
-is read-only, with highlighting and the same selection menu as the editor.
+is read-only, with highlighting and the same selection menu as the editor; in
+the node JSON up to three lines of the enclosing blocks stay pinned while
+scrolling.
 
 ## Parameters
 
 | Place | Action | What is copied |
 |-------|--------|----------------|
-| Node without detour | "Copy JSON" icon | the node's outbound without the `detour` field |
+| Node without detour | "Copy JSON" icon in the row above the field | the node's outbound without the `detour` field |
 | Node with detour | "Copy server JSON" | the node's outbound without `detour` |
 | — | "Copy detour" | the first detour hop without `detour`; no hop — "No detour for this node" |
 | — | "Copy server + detour" / "+ detours(N)" | an array: the node and the whole hop chain, each without `detour` |
@@ -44,6 +46,24 @@ data for the tag".
   from the saved one; no tag — a message, not silence.
 - **The node's JSON tab** shows the outbound itself, and with a detour — the
   "node + hops" array.
+- **The Copy button sits above the field, on the right** (node JSON tab,
+  subscription node inspector), not over the text, like the buttons of the
+  editable fields. The ⋮ menu comes last on the right.
+- **Format in the viewer** (a ⋮ menu item when the text is JSON) formats
+  only what is shown; the stored body does not change. The item turns into
+  Show original, which brings the source text back. The choice is not
+  remembered; new text (say, after Re-fetch) is shown as is. JSON5 comments
+  are dropped from the view without a question — the source stays intact. A
+  body over 64 KB is formatted in the background. Broken JSON — a snackbar
+  "Failed to parse JSON: …". While formatting and layout run, the ⋮ menu and
+  the wrap button are busy (an indicator instead of the icon).
+- **Magnifier** (a ⋮ menu item) — the selection magnifier on/off, one saved
+  setting for the whole app.
+- **Line-wrap button** — in the row above the field, after search, only in
+  a JSON viewer with sticky headers (wrapping is off there by default).
+  Turns wrapping on and off on the fly; the choice is not remembered — the
+  next time the screen opens wrapping is off again. With wrapping on there
+  are no sticky headers and no current-line highlight.
 - **Copies are self-contained:** the `detour` field is removed from every
   element so that a paste does not refer to a missing tag.
 - **The rule preview does not filter by `enabled`:** a disabled rule shows
@@ -68,3 +88,6 @@ data for the tag".
 | 3 | [258](../../../tasks/258-outbound-view-tabs-runtime-chain.md) | done | Node screen with Overview and JSON tabs |
 | 4 | [311](../../../tasks/311-running-config-from-kernel.md) | implemented | Node JSON from a snapshot of the running core; the editor — from the file |
 | 5 | [554F](../../../tasks/554F-schema-driven-node-editor/spec.md) | Idea; only highlighting done | Highlighted JSON view instead of plain text |
+| 6 | [624](../../../tasks/624-sora-editor-for-json-fields.md) | Implemented | Native viewer, sticky headers in the node JSON |
+| 7 | [649](../../../tasks/649-json-view-wrap-toggle.md) | Implemented | Line-wrap button in the JSON viewer |
+| 8 | [660](../../../tasks/660-editor-overflow-menu.md) | Implemented | The ⋮ menu: Format / Show original in the viewer, the magnifier |

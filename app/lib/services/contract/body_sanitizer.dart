@@ -342,9 +342,10 @@ final class RegistrySanitizer {
     Set<String> kinds = const {},
   }) {
     final schema = ContractRegistry.I.schemaFor(scheme);
-    // Контракт 1.1.99 — у схемы с `fields_unchecked` правил нет: тело как
-    // написано, без кодов.
-    if (schema == null || schema.fieldsUnchecked) {
+    // Контракт 1.1.122 — снятый `fields_unchecked` выражен wildcard `*`
+    // (`order: ["*"]`): такое тело обходится общим путём и уходит как
+    // написано, без кодов (ключи сборки на своих местах).
+    if (schema == null) {
       return SanitizeResult(body, const []);
     }
 
@@ -402,6 +403,26 @@ final class RegistrySanitizer {
     return _truncateWarningValue(_renderWarningScalar(value));
   }
 }
+
+/// Контракт 1.1.122 — глубокая копия сквозного значения wildcard: санитайзер
+/// переписывает карты, и результат не должен делить вложенные объекты с
+/// исходным телом.
+Object? _deepCopy(Object? v) {
+  if (v is Map) {
+    return <String, dynamic>{
+      for (final e in v.entries) '${e.key}': _deepCopy(e.value),
+    };
+  }
+  if (v is List) return [for (final e in v) _deepCopy(e)];
+  return v;
+}
+
+/// Условие грамматики `condition` (без `source_kind`) по телу — общий суд
+/// для читателей вне санитайзера: `visible_when` модели формы (контракт
+/// 1.1.122). `any_set` = поле задано и не пустая строка; предикат по значению
+/// на отсутствующем пути: равенство и `in` ложны, `not_in` истинен.
+bool registryConditionHolds(Object? when, Map<String, dynamic> body) =>
+    _Ctx.conditionOnFinalBody(when, body);
 
 /// Печать значения по канону корпуса (см. [RegistrySanitizer.renderWarningValue]).
 String _renderWarningScalar(Object? value) {
@@ -622,10 +643,18 @@ final class _Ctx {
     // значит нет и его флага — печатаем как есть, ровно как вторая сторона.
     // Контракт 1.1.57 — неизвестные ключи судятся по алфавиту (корпус
     // `masque_legacy_flat_keys`), а не в порядке прибытия.
-    for (final key in src.keys.toList()..sort()) {
-      if (fields.containsKey(key)) continue;
-      if (prefix.isEmpty && _kBuildManagedKeys.contains(key)) continue;
-      warn('unknown_key', path: _join(prefix, key), value: src[key]);
+    //
+    // Контракт 1.1.122 — wildcard `*` в `order` ЭТОГО объекта: неописанный
+    // ключ не снимается и не судится, а копируется как есть (хвост
+    // [_sanitizeObjectBody]). Не наследуется: вложенный описанный объект без
+    // своего `*` строгий.
+    final wildcard = order.contains(kWildcardField);
+    if (!wildcard) {
+      for (final key in src.keys.toList()..sort()) {
+        if (fields.containsKey(key)) continue;
+        if (prefix.isEmpty && _kBuildManagedKeys.contains(key)) continue;
+        warn('unknown_key', path: _join(prefix, key), value: src[key]);
+      }
     }
 
     // 2. Значения — по одному, в порядке схемы: и результат, и список
@@ -800,6 +829,17 @@ final class _Ctx {
       written[e.key] = path;
       sanitized[path] = e.value;
     }
+    // Контракт 1.1.122 — сквозные ключи wildcard видны связям так же, как
+    // описанные (`unless_set: ["tls.client_key"]` на неописанном пути): без
+    // записи в снимке разобранная ветка читалась бы «ключ снят».
+    final wildcard = order.contains(kWildcardField);
+    if (wildcard) {
+      for (final key in src.keys) {
+        if (fields.containsKey(key)) continue;
+        if (prefix.isEmpty && _kBuildManagedKeys.contains(key)) continue;
+        sanitized[_join(prefix, key)] = src[key];
+      }
+    }
 
     // 3. Связи между полями — когда состав уже известен: `requires` смотрит
     // на соседей, `conflicts` снимает декларанта (§474).
@@ -821,11 +861,16 @@ final class _Ctx {
     // Ключи сборки (`type`/`tag`/`detour`) идут здесь же, на своих местах:
     // схема их не описывает, но снимать их нельзя — без `tag` запись
     // безымянна, без `detour` рушится маршрут.
+    //
+    // Контракт 1.1.122 — сквозные ключи wildcard идут как есть (глубокая
+    // копия), тоже на своих местах.
     for (final key in src.keys) {
       if (kept.containsKey(key)) {
         out[key] = kept[key];
       } else if (prefix.isEmpty && _kBuildManagedKeys.contains(key)) {
         out[key] = src[key];
+      } else if (wildcard && !fields.containsKey(key)) {
+        out[key] = _deepCopy(src[key]);
       }
     }
     // Ключи, появившиеся в санитайзинге (дефолты all_or_nothing лежат внутри
@@ -940,6 +985,14 @@ final class _Ctx {
     final disc = f.discriminator ?? 'type';
     final map = value.cast<String, dynamic>();
     final type = map[disc];
+    if (!map.containsKey(disc)) {
+      // Контракт 1.1.124 (PARSING_PRINCIPLES §6.4, `variantObject` лаунчера) —
+      // без дискриминатора варианта нет: `transport: {}` → `field_missing`
+      // на `transport.type`, объект снимается целиком, узел живёт.
+      final dp = _join(path, disc);
+      warn('field_missing', path: dp, params: {'field': dp});
+      return const _Value.drop();
+    }
     if (type is! String) {
       // Транспорт без `type` ядро не разберёт вовсе — тот же тип-фатал.
       return _invalid(f, path, value);
@@ -977,6 +1030,14 @@ final class _Ctx {
       dropObject = false;
       return const _Value.drop();
     }
+    // Контракт 1.1.124 (PARSING_PRINCIPLES §6.4, `nodeflow.objectField`
+    // лаунчера: пустой результат — объекта нет) — описанный объект, пустой
+    // после обхода, в тело не идёт, без кода: опустошён правилами (связь
+    // сняла единственное поле: `tls.client_certificate_path` без ключа) или
+    // пришёл как `{}` (`tls.ech: {}`). Для ядра пустой объект и отсутствие
+    // ключа одно и то же. Сквозной ключ под `*` сюда не попадает: его
+    // копирует [_sanitizeObjectBody] как написан, `{}` в том числе.
+    if (cleaned.isEmpty) return const _Value.drop();
 
     // §467 — `all_or_nothing` НЕ влечёт действия санитайзера.
     //
@@ -995,6 +1056,20 @@ final class _Ctx {
     if (value is! List) return _invalid(f, path, value);
     final items = f.items;
     if (items == null) return _Value.keep(value);
+    // Контракт 1.1.140 — `on_item_failure: drop_item` (`wireguard.peers`):
+    // отказ внутри элемента снимает ЭЛЕМЕНТ, а не узел. Единственный элемент
+    // правилом не изолируется; не уцелел ни один — массив обходится ниже
+    // заново без изоляции, и узел получает прежний отказ первого.
+    final fail = f.raw['on_item_failure'];
+    final itemFields0 = items.fields;
+    if (fail is Map &&
+        fail['action'] == 'drop_item' &&
+        itemFields0 != null &&
+        value.length > 1) {
+      final isolated = _arrayItemsIsolated(
+          value, items, itemFields0, path, '${fail['code'] ?? ''}');
+      if (isolated != null) return _Value.keep(isolated);
+    }
     final out = <Object?>[];
     for (var i = 0; i < value.length; i++) {
       // §582 — элемент-объект со своей схемой (`wireguard.peers[]`): не
@@ -1030,6 +1105,90 @@ final class _Ctx {
     final len = f.len;
     if (len != null && out.length != len) return _invalid(f, path, value);
     return _Value.keep(out);
+  }
+
+  /// Контракт 1.1.140 — обход массива объектов с изоляцией элементов
+  /// (`on_item_failure: drop_item`, эталон — `nodeflow/sanitize.go:
+  /// arrayItemsIsolated`).
+  ///
+  /// Элемент, внутри которого случился отказ узла (`on_invalid: drop_node`)
+  /// или не хватило `required`-поля, снимается: следы его обхода (коды,
+  /// флаги отказа, снимки путей) откатываются, и вместо них на его место
+  /// встаёт ОДИН код [code] с путём элемента (`peers[1]`) и параметрами
+  /// `index` (с 1) и `reason` (код отказа). `null` — не уцелел ни один
+  /// элемент; тогда откатывается весь обход, и массив судит вызывающий.
+  List<Object?>? _arrayItemsIsolated(List<Object?> value, FieldSchema items,
+      Map<String, FieldSchema> itemFields, String path, String code) {
+    final start = _mark();
+    final out = <Object?>[];
+    for (var i = 0; i < value.length; i++) {
+      final itemPath = '$path[$i]';
+      final item = value[i];
+      if (item is! Map) {
+        warn('type_invalid', path: itemPath, value: item);
+        continue;
+      }
+      final mark = _mark();
+      dropObject = false;
+      final cleaned = sanitizeObject(item.cast<String, dynamic>(),
+          items.order ?? const [], itemFields, itemPath);
+      final reason = _failureSince(mark);
+      dropObject = false;
+      if (reason == null) {
+        out.add(cleaned);
+        continue;
+      }
+      _rollback(mark, itemPath);
+      // Код встаёт на место элемента: порядок кодов — порядок обхода.
+      warn(code,
+          path: itemPath, params: {'index': '${i + 1}', 'reason': reason});
+    }
+    if (out.isNotEmpty) return out;
+    _rollback(start, path);
+    return null;
+  }
+
+  /// Состояние накопителей перед обходом элемента массива.
+  _ItemMark _mark() => (
+        warnings: warnings.length,
+        hardPaths: hardPaths.length,
+        repairs: _repairs.length,
+        drop: _dropNode,
+        dropFrom: dropFrom,
+        explicit: explicitDropNode,
+      );
+
+  /// Код отказа, случившегося после отметки [m]: снятие узла по значению
+  /// (код снятия — [dropFrom]) или незаполненное обязательное поле (код —
+  /// последний поставленный после отметки); `null` — элемент цел.
+  String? _failureSince(_ItemMark m) {
+    if (!m.drop && _dropNode) {
+      return dropFrom >= 0 && dropFrom < warnings.length
+          ? warnings[dropFrom].code
+          : 'field_missing';
+    }
+    if (dropObject) {
+      return warnings.length > m.warnings ? warnings.last.code : 'field_missing';
+    }
+    return null;
+  }
+
+  /// Снять следы обхода под путём [prefix] с отметки [m]: коды, отказ узла,
+  /// тихие правки и снимки путей.
+  void _rollback(_ItemMark m, String prefix) {
+    warnings.removeRange(m.warnings, warnings.length);
+    hardPaths.removeRange(m.hardPaths, hardPaths.length);
+    _repairs.removeRange(m.repairs, _repairs.length);
+    _dropNode = m.drop;
+    dropFrom = m.dropFrom;
+    explicitDropNode = m.explicit;
+    bool under(String k) =>
+        k == prefix || k.startsWith('$prefix.') || k.startsWith('$prefix[');
+    sanitized.removeWhere((k, _) => under(k));
+    _fieldEnd.removeWhere((k, _) => under(k));
+    _building.removeWhere((k, _) => under(k));
+    explainedDrops.removeWhere(under);
+    switchedOff.removeWhere(under);
   }
 
   _Value _sanitizeScalar(Object? value, FieldSchema f, String path) {
@@ -2805,26 +2964,45 @@ bool coreAtLeast(String version, String required) {
   // поля из-за незнания хуже, чем оставить их ядру на разбор.
   if (a == null) return true;
   if (b == null) return true;
-  for (var i = 0; i < 4; i++) {
+  for (var i = 0; i < 5; i++) {
     if (a[i] != b[i]) return a[i] > b[i];
   }
   return true;
 }
 
+/// Контракт 1.1.150 (гейты сборки) — пре-релиз учитывается:
+/// `lx.30-rc.1 < lx.30-rc.2 < lx.30`. Суффикс не вида `-rc<K>`/`-rc.<K>`
+/// (`-g1a2b3c4` сборки не с тега) сравнивается как релиз своего `lx.N`.
 List<int>? _parseCore(String v) {
   if (v.isEmpty) return null;
-  final m = RegExp(r'^v?(\d+)\.(\d+)\.(\d+)(?:-lx\.(\d+))?').firstMatch(v.trim());
+  final m = RegExp(r'^v?(\d+)\.(\d+)\.(\d+)(?:-lx\.(\d+)(?:-rc\.?(\d+))?)?')
+      .firstMatch(v.trim());
   if (m == null) return null;
   return [
     int.parse(m.group(1)!),
     int.parse(m.group(2)!),
     int.parse(m.group(3)!),
     int.tryParse(m.group(4) ?? '0') ?? 0,
+    // Нет rc — релиз, старше любого своего rc.
+    m.group(5) == null ? _kRelease : int.parse(m.group(5)!),
   ];
 }
 
+const int _kRelease = 1 << 30;
+
 /// Результат обработки одного значения: оставить (с возможной заменой) или
 /// снять.
+/// Контракт 1.1.140 — отметка накопителей [_Ctx] перед обходом элемента
+/// массива с `on_item_failure` (откат снятого элемента).
+typedef _ItemMark = ({
+  int warnings,
+  int hardPaths,
+  int repairs,
+  bool drop,
+  int dropFrom,
+  bool explicit,
+});
+
 final class _Value {
   const _Value.keep(this.value) : keep = true;
   const _Value.drop()

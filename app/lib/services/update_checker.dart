@@ -8,6 +8,7 @@ import 'app_log.dart';
 import 'project_links.dart';
 import 'automation/event_emitter.dart';
 import 'settings_storage.dart';
+import 'subscription/user_agent.dart';
 
 /// Light-weight GitHub Releases polling. Pings `/releases/latest` once a day
 /// max, surfaces new versions via [latest] notifier. UI subscribes and shows
@@ -27,7 +28,6 @@ class UpdateChecker {
   /// Schema контролируем сами; raw-endpoint cdn-cached, anti-abuse лояльнее.
   static const _repoFallback =
       'https://raw.githubusercontent.com/Leadaxe/LxBox/main/docs/latest.json';
-  static const _userAgent = 'LxBox';
   static const _httpTimeout = Duration(seconds: 10);
   static const _minCheckInterval = Duration(hours: 24);
 
@@ -140,7 +140,7 @@ class UpdateChecker {
     try {
       final resp = await http
           .get(Uri.parse(_repoApi), headers: {
-            'User-Agent': '$_userAgent/${_userAgentSafeVersion()}',
+            'User-Agent': resolveAppUserAgent(),
             'Accept': 'application/vnd.github+json',
           })
           .timeout(_httpTimeout);
@@ -182,7 +182,7 @@ class UpdateChecker {
     try {
       final resp = await http
           .get(Uri.parse(_repoFallback), headers: {
-            'User-Agent': '$_userAgent/${_userAgentSafeVersion()}',
+            'User-Agent': resolveAppUserAgent(),
           })
           .timeout(_httpTimeout);
       if (resp.statusCode != 200) {
@@ -214,12 +214,6 @@ class UpdateChecker {
       AppLog.I.warning('UpdateChecker[$source]: fallback $e');
       return null;
     }
-  }
-
-  /// §219 — возвращает фиксированный `'1.x'` для User-Agent: точную версию не
-  /// утекаем (privacy). Параметр не принимается, ничего не «strips».
-  String _userAgentSafeVersion() {
-    return '1.x'; // stable UA, не утекаем точную версию (privacy chrome)
   }
 
   /// Persist «не показывать этот релиз» + clear notifier. Read-guard

@@ -133,9 +133,9 @@
           "default": "",
           "aliases": [],
           "maps_to": "transport.path",
-          "desc_en": "XHTTP request path.",
-          "desc_ru": "Путь запроса XHTTP.",
-          "impl": "Хвост '?…' срезается (SPEC 002 §4.1; ed у xhttp не существует, значение отбрасывается). Берётся ТОЛЬКО из плоского параметра — одноимённый ключ в extra игнорируется (D-097)."
+          "desc_en": "XHTTP request path. Anything after the first `?` is sent as the request query, as Xray does.",
+          "desc_ru": "Путь запроса XHTTP. Всё после первого `?` уходит query запроса, как у Xray.",
+          "impl": "Берётся дословно, хвост '?…' сохраняется: по норме Xray это query запроса, ядро sing-box-lx шлёт его так с SPEC 119 (issue Leadaxe/sing-box-lx#36). Прежний срез хвоста (SPEC 002 §4.1) снят в контракте 1.1.115. Берётся ТОЛЬКО из плоского параметра — одноимённый ключ в extra игнорируется (D-097)."
         },
         "host": {
           "type": "string",
@@ -496,7 +496,7 @@
     ]
   },
   "body": {
-    "core": "1.14.2-lx.11",
+    "core": "1.14.3-lx.17",
     "discriminator": "type",
     "values": [
       "http",
@@ -520,6 +520,7 @@
         "fields": {
           "host": {
             "type": "listable_string",
+            "form": {},
             "desc_en": "Host header values, picked at random per request.",
             "desc_ru": "Значения заголовка Host, выбираются случайно на запрос.",
             "impl": "В отличие от httpupgrade здесь listable."
@@ -528,6 +529,7 @@
             "type": "string",
             "format": "url_path",
             "default": "/",
+            "form": {},
             "desc_en": "Request path.",
             "desc_ru": "Путь запроса.",
             "impl": "Ведущий «/» дописывается ядром. Путь разбирается url.Parse: битое percent-кодирование («/x%zz») = «invalid URL escape» и отказ ВСЕГО конфига (проверено `sing-box check` на 1.14.0-lx.39). Отсюда format url_path — SPEC 131 W2c.",
@@ -572,6 +574,7 @@
             "type": "string",
             "format": "url_path",
             "default": "/",
+            "form": {},
             "desc_en": "WebSocket request path.",
             "desc_ru": "Путь запроса WebSocket.",
             "impl": "Хвост «?ed=N» из Xray-ссылок в путь не пишется: он разбирается в max_early_data + early_data_header_name (issue #96). Путь разбирается url.Parse: битое percent-кодирование («/x%zz») = «invalid URL escape» и отказ ВСЕГО конфига (проверено `sing-box check` на 1.14.0-lx.39). Отсюда format url_path — SPEC 131 W2c.",
@@ -579,6 +582,24 @@
           },
           "headers": {
             "type": "object",
+            "order": [
+              "Host",
+              "*"
+            ],
+            "fields": {
+              "Host": {
+                "type": "listable_string",
+                "form": {},
+                "desc_en": "Host header value.",
+                "desc_ru": "Значение заголовка Host.",
+                "impl": "Ключ карты badoption.HTTPHeader, значение строкой или массивом строк. Описан ради формы (контракт 1.1.123): правило значения то же, что у свободной карты, — приведение к listable без проверок."
+              },
+              "*": {
+                "desc_en": "Other headers pass through as written.",
+                "desc_ru": "Прочие заголовки проходят как написаны.",
+                "impl": "Wildcard (контракт 1.1.122): неописанные ключи карты копируются как есть, без unknown_key."
+              }
+            },
             "desc_en": "Extra HTTP headers sent with each request.",
             "desc_ru": "Дополнительные HTTP-заголовки в каждом запросе.",
             "impl": "badoption.HTTPHeader: map[string]listable_string — значение строкой или массивом строк."
@@ -619,6 +640,7 @@
           "service_name": {
             "type": "string",
             "default": "",
+            "form": {},
             "desc_en": "gRPC service name in the request path. A leading \"/\" makes the value a ready-made request path in Xray's absolute-path form (core >= 1.14.1-lx.8): \"/a/b/Tun\" goes on the wire as \"/a/b/Tun\", each segment escaped on its own. Without a leading \"/\" it is a service name and the core appends \"/Tun\" itself (\"a/b\" -> \"/a%2Fb/Tun\"). The value is passed to the core unchanged in either form.",
             "desc_ru": "Имя gRPC-сервиса в пути запроса. Ведущий «/» означает, что значение — готовый путь запроса в Xray-форме «абсолютного пути» (ядро ≥ 1.14.1-lx.8): «/a/b/Tun» уезжает на провод как «/a/b/Tun», каждый сегмент экранируется отдельно. Без ведущего «/» это имя сервиса, и ядро само дописывает «/Tun» («a/b» → «/a%2Fb/Tun»). Значение передаётся ядру как есть в любой форме — лаунчер его не меняет.",
             "impl": "option/v2ray_transport.go V2RayGRPCOptions.ServiceName; enum нет. Ядро sing-box-lx ≥ 1.14.1-lx.8 (SPEC 093 ядра) разбирает ведущий «/» как custom path Xray: сегменты между слэшами экранируются по отдельности, хвост «|…» (вторая половина серверной записи Xray, имя потока TunMulti) отбрасывается. Без ведущего «/» — прежнее поведение: имя сервиса целиком экранируется одним сегментом и ядро дописывает «/Tun». Нормализации НЕТ ни у одной стороны: значение едет в конфиг как есть (прежний перевод «/service/Tun» → «service», issue #130, снят целиком с пином lx.8 — контракт 1.1.3). Парсер share-URI percent-декодирует serviceName, поэтому «%2F» внутри сегмента после разбора становится разделителем — ровно так же, как у Xray."
@@ -653,6 +675,7 @@
         "fields": {
           "host": {
             "type": "string",
+            "form": {},
             "desc_en": "Host header value.",
             "desc_ru": "Значение заголовка Host.",
             "impl": "Здесь НЕ listable — в отличие от транспорта http."
@@ -661,6 +684,7 @@
             "type": "string",
             "format": "url_path",
             "default": "/",
+            "form": {},
             "desc_en": "Request path.",
             "desc_ru": "Путь запроса.",
             "impl": "option/v2ray_transport.go V2RayHTTPUpgradeOptions.Path. Путь разбирается url.Parse: битое percent-кодирование («/x%zz») = «invalid URL escape» и отказ ВСЕГО конфига (проверено `sing-box check` на 1.14.0-lx.39). Отсюда format url_path — SPEC 131 W2c.",
@@ -668,6 +692,23 @@
           },
           "headers": {
             "type": "object",
+            "order": [
+              "Host",
+              "*"
+            ],
+            "fields": {
+              "Host": {
+                "type": "listable_string",
+                "desc_en": "Host header value.",
+                "desc_ru": "Значение заголовка Host.",
+                "impl": "Ключ карты badoption.HTTPHeader, значение строкой или массивом строк. Описан ради формы (контракт 1.1.123): правило значения то же, что у свободной карты, — приведение к listable без проверок."
+              },
+              "*": {
+                "desc_en": "Other headers pass through as written.",
+                "desc_ru": "Прочие заголовки проходят как написаны.",
+                "impl": "Wildcard (контракт 1.1.122): неописанные ключи карты копируются как есть, без unknown_key."
+              }
+            },
             "desc_en": "Extra HTTP headers sent with each request.",
             "desc_ru": "Дополнительные HTTP-заголовки в каждом запросе.",
             "impl": "badoption.HTTPHeader: map[string]listable_string — значение строкой или массивом строк."
@@ -710,15 +751,17 @@
           "host": {
             "type": "string",
             "default": "",
+            "form": {},
             "desc_en": "Host header value.",
             "desc_ru": "Значение заголовка Host.",
             "impl": "Пусто → берётся SNI, иначе адрес сервера."
           },
           "path": {
             "type": "string",
-            "desc_en": "Base request path.",
-            "desc_ru": "Базовый путь запроса.",
-            "impl": "К пути дописывается идентификатор сессии (и номер пакета в режиме packet-up)."
+            "form": {},
+            "desc_en": "Base request path. Anything after the first `?` is sent as the request query, as Xray does.",
+            "desc_ru": "Базовый путь запроса. Всё после первого `?` уходит query запроса, как у Xray.",
+            "impl": "К пути дописывается идентификатор сессии (и номер пакета в режиме packet-up); хвост '?…' ядро sing-box-lx шлёт query запроса с SPEC 119 (issue Leadaxe/sing-box-lx#36), старое ядро клеит его в путь."
           },
           "mode": {
             "type": "enum",
@@ -748,6 +791,7 @@
                 }
               }
             },
+            "form": {},
             "desc_en": "XHTTP transfer mode.",
             "desc_ru": "Режим передачи XHTTP.",
             "impl": "Иное значение = ошибка старта. Коды деградации — xhttp_mode_forced_packet_up, xhttp_param_reset. default_when (контракт 1.1.56, LxBox §546): режим не назван, а uplink_data_placement ∈ {header, cookie} → materialize packet-up с кодом — то же, что делает `implies` записи uplinkDataPlacement в блоках uri/xray, только на входе singbox; без режима пара «header + дефолт auto» роняет ВЕСЬ конфиг ядра (transport/v2rayxhttp/meta.go). body/auto ядро принимает в любом режиме — им режим не дописывается (решение LxBox/владельца 25.09.2026). Пустая строка placement — «не задано». mode идёт в order раньше uplink_data_placement, поэтому связь `requires … equals: packet-up` у placement уже видит материализованный режим."
@@ -1296,16 +1340,11 @@
             "mode": "path",
             "passes": 2
           },
-          "extract": {
-            "re": "^(?P<path>[^?]*)",
-            "into": {
-              "path": "transport.path"
-            }
-          },
+          "maps_to": "transport.path",
           "when": {
             "transport.type": "xhttp"
           },
-          "impl": "Хвост '?…' срезается целиком (SPEC 002 §4.1): early data у xhttp не существует, и любой хвост запроса ломает маршрут — сервер отвечает 404. Группа одна, без ed: значение хвоста отбрасывается, а не раскладывается (в отличие от ws). mode:path — оба прохода path-семантика, '+' литерален."
+          "impl": "Путь берётся ДОСЛОВНО, вместе с хвостом '?…' (контракт 1.1.115, issue Leadaxe/sing-box-lx#36). Норма Xray (transport/internet/splithttp/config.go: GetNormalizedPath/GetNormalizedQuery): всё после первого '?' в path — query запроса, клиент шлёт его как есть; на этом держатся релеи Cloudflare Worker (edgetunnel берёт proxyip из query). Ядро sing-box-lx делает так же с SPEC 119. Прежний extract срезал хвост по образцу ws '?ed=N' с пометкой «иначе 404» (SPEC 002 §4.1) — у xhttp нет early data, а 404 давало ядро до SPEC 119: оно клеило хвост в путь ('/%3Fproxyip=…/'). На таком ядре узел с хвостом по-прежнему получает 404 — разбор старое ядро не обходит. Записи ws и httpupgrade хвост срезают как прежде. mode:path — оба прохода path-семантика, '+' литерален. Обратный ход пишет '?' внутри значения параметра закодированным (%3F), и хвост не смешивается с query самой ссылки."
         },
         "host": {
           "source": "query.host",
@@ -1971,16 +2010,11 @@
             "json.streamSettings.splithttpSettings.path",
             "json.streamSettings.splithttpSettings.path"
           ],
-          "extract": {
-            "re": "^(?P<path>[^?]*)",
-            "into": {
-              "path": "transport.path"
-            }
-          },
+          "maps_to": "transport.path",
           "when": {
             "transport.type": "xhttp"
           },
-          "impl": "Базовая тройка: читается ТОЛЬКО плоский слой, одноимённый ключ из extra игнорируется целиком — см. $note_extra."
+          "impl": "Базовая тройка: читается ТОЛЬКО плоский слой, одноимённый ключ из extra игнорируется целиком — см. $note_extra. Путь дословно, с хвостом '?…': по норме Xray (GetNormalizedPath/GetNormalizedQuery) это query запроса — см. запись path блока uri/xhttp (issue Leadaxe/sing-box-lx#36, ядро sing-box-lx SPEC 119)."
         },
         "host": {
           "source": [

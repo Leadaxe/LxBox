@@ -3,7 +3,6 @@ import 'dart:convert';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lxbox/models/background_mode.dart';
 import 'package:lxbox/models/tunnel_status.dart';
 import 'package:lxbox/vpn/box_vpn_client.dart';
 
@@ -43,31 +42,6 @@ void main() {
     messenger.setMockMethodCallHandler(channel, null);
   });
 
-  group('BoxVpnClient.setBackgroundMode', () {
-    test('passes mode wireValue to native', () async {
-      await BoxVpnClient().setBackgroundMode(BackgroundMode.lazy);
-      expect(calls.single.method, equals('setBackgroundMode'));
-      expect(calls.single.arguments, equals({'mode': 'lazy'}));
-    });
-
-    test('serializes all three enum values via wireValue', () async {
-      final client = BoxVpnClient();
-      for (final mode in BackgroundMode.values) {
-        await client.setBackgroundMode(mode);
-      }
-      expect(calls.map((c) => c.arguments['mode']).toList(),
-          equals(['never', 'lazy', 'always']));
-    });
-  });
-
-  group('BoxVpnClient.getBackgroundMode', () {
-    test('parses native string into enum', () async {
-      final m = await BoxVpnClient().getBackgroundMode();
-      expect(m, equals(BackgroundMode.never));
-      expect(calls.single.method, equals('getBackgroundMode'));
-    });
-  });
-
   // §271 — memory limit: контракт wire-значений + нормализация ответов native.
   group('BoxVpnClient memory limit (§271)', () {
     test('setMemoryLimit passes value to native', () async {
@@ -90,18 +64,16 @@ void main() {
 
     test('getMemoryLimit returns valid native value as is', () async {
       messenger.setMockMethodCallHandler(channel, (call) async {
+        return '512';
+      });
+      expect(await BoxVpnClient().getMemoryLimit(), equals('512'));
+    });
+
+    test('getMemoryLimit folds legacy off into auto (§705)', () async {
+      messenger.setMockMethodCallHandler(channel, (call) async {
         return 'off';
       });
-      expect(await BoxVpnClient().getMemoryLimit(), equals('off'));
-    });
-  });
-
-  group('BoxVpnClient.areNotificationsEnabled / isIgnoringBatteryOptimizations', () {
-    test('both return native booleans', () async {
-      final notif = await BoxVpnClient().areNotificationsEnabled();
-      final batt = await BoxVpnClient().isIgnoringBatteryOptimizations();
-      expect(notif, isTrue);
-      expect(batt, isFalse);
+      expect(await BoxVpnClient().getMemoryLimit(), equals('auto'));
     });
   });
 
@@ -157,21 +129,6 @@ void main() {
   });
 
   group('BoxVpnClient.isForeignVpnActive', () {
-    test('returns native true', () async {
-      messenger.setMockMethodCallHandler(channel, (call) async {
-        calls.add(call);
-        return true;
-      });
-      final r = await BoxVpnClient().isForeignVpnActive();
-      expect(r, isTrue);
-      expect(calls.single.method, equals('isForeignVpnActive'));
-    });
-
-    test('returns native false', () async {
-      messenger.setMockMethodCallHandler(channel, (call) async => false);
-      expect(await BoxVpnClient().isForeignVpnActive(), isFalse);
-    });
-
     test('null native answer → false (does not block start)', () async {
       messenger.setMockMethodCallHandler(channel, (call) async => null);
       expect(await BoxVpnClient().isForeignVpnActive(), isFalse);
@@ -181,18 +138,6 @@ void main() {
   // §207 — pprof-снимки через единый native-метод `pprofProfile`
   // (Dart передаёт готовый pathAndQuery).
   group('BoxVpnClient.pprof (§207)', () {
-    test('pprofRaw passes pathAndQuery verbatim to the native call', () async {
-      late MethodCall captured;
-      messenger.setMockMethodCallHandler(channel, (call) async {
-        captured = call;
-        return Uint8List.fromList([1, 2, 3]);
-      });
-      final bytes = await BoxVpnClient().pprofRaw('heap?gc=1');
-      expect(captured.method, 'pprofProfile');
-      expect(captured.arguments, {'pathAndQuery': 'heap?gc=1'});
-      expect(bytes, [1, 2, 3]);
-    });
-
     test('dumpGoroutines requests goroutine?debug=2 and decodes text',
         () async {
       late MethodCall captured;

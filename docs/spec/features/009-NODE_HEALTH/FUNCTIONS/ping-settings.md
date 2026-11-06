@@ -48,6 +48,9 @@ the global values.
   timeout count as unset.
 - The override stores the URL and timeout independently: setting one field
   does not require setting the other.
+- The template default (5000 ms) is what the user normally gets. Without a
+  template value the fallbacks differ by place: 10000 ms for the home-screen
+  ping, 3000 ms for list tests. Kept as is (audit 591, 2026-10-13).
 - The sheet opens in Direction mode if the Direction already has an override,
   and shows its values; otherwise — the global ones.
 - **Deleting a Direction** removes its override; overrides of other Directions

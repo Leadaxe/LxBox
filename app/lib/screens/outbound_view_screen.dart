@@ -10,7 +10,9 @@ import '../models/config_node.dart';
 import '../models/dependency_graph.dart';
 import '../services/probe/chain_layer_probe.dart';
 import '../services/runtime_chain.dart';
+import '../models/server_list.dart' show NodeRecordFlag;
 import '../services/settings_storage.dart';
+import '../services/taildrop_tags_sync.dart' show taildropRecordForTag;
 import '../vpn/cc_channel.dart';
 import '../widgets/chain_positions_block.dart';
 import '../widgets/lx_code_editor.dart';
@@ -82,9 +84,14 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
   late final TextEditingController _jsonCtrl;
 
   // §258 — Направления: подпись Направлений хопов «⚙ label» + Направление-ветка
-  // навигации. Цепочка строится после загрузки (initState → _load).
+  // навигации.
   List<Direction> _directions = const [];
-  List<RuntimeHop> _hops = const [];
+
+  /// §258 — цепочка считается на каждый build Route, не снимком при открытии:
+  /// выбор группы на пути меняется и не с этого экрана (главная, Debug API,
+  /// reselect urltest), Route слушает контроллер и читает свежий выбор ядра.
+  List<RuntimeHop> get _hops =>
+      runtimeChainOf(widget.tag, widget.config, directions: _directions);
 
   /// §344 — живой пул round_robin-группы (§208 `getPool`). `null` = ещё не
   /// спросили / клиент недоступен (туннель down, §209) — НЕ пустой пул.
@@ -149,16 +156,16 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
       });
 
   /// §613 — переключатели Settings вкладки Network пишут тем же путём.
-  Future<void> Function(Map<String, Object?>)? get _saveTailscaleFields =>
+  Future<bool> Function(Map<String, Object?>)? get _saveTailscaleFields =>
       _saveExitNode == null ? null : _storeTailscaleFields;
 
-  Future<void> _storeTailscaleFields(Map<String, Object?> fields) async {
+  Future<bool> _storeTailscaleFields(Map<String, Object?> fields) async {
     final target =
         exitNodeTargetForTag(widget.tag, widget.subController.entries);
-    if (target == null) return;
+    if (target == null) return false;
     final err =
         await storeTailscaleFields(widget.subController, target, fields);
-    if (!mounted) return;
+    if (!mounted) return err == null;
     if (err == null) {
       final body = Map<String, dynamic>.of(_networkBody);
       for (final f in fields.entries) {
@@ -172,6 +179,27 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
     }
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(err ?? getLocalText.s("Saved"))));
+    return err == null;
+  }
+
+  /// §707 итер. 9 — запись узла (свой сервер или член папки) по тегу
+  /// собранного конфига; `null` — узел подписки или без записи.
+  ({int entryIndex, int? memberIndex, bool commandsOff, bool autosaveOff})?
+      get _taildropRecord => taildropRecordForTag(
+          widget.tag, [for (final e in widget.subController.entries) e.list],
+          emitted: widget.subController.lastEmittedTagMap);
+
+  Future<bool> _saveTaildropFlag(NodeRecordFlag flag, bool value) async {
+    final r = _taildropRecord;
+    if (r == null) return false;
+    final err = await widget.subController
+        .setNodeRecordFlag(r.entryIndex, r.memberIndex, flag, value);
+    if (!mounted) return err == null;
+    if (err != null) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(err.render())));
+    }
+    return err == null;
   }
 
   /// §565 / задача 570 — член, выбранный на этом экране, пока ядро (или
@@ -205,7 +233,6 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
   void initState() {
     super.initState();
     _jsonCtrl = TextEditingController(text: widget.json);
-    _hops = runtimeChainOf(widget.tag, widget.config, directions: _directions);
     unawaited(_load());
   }
 
@@ -218,10 +245,7 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
   Future<void> _load() async {
     final directions = await SettingsStorage.getDirections();
     if (!mounted) return;
-    setState(() {
-      _directions = directions;
-      _hops = runtimeChainOf(widget.tag, widget.config, directions: directions);
-    });
+    setState(() => _directions = directions);
     // §344 — живой состав пула. Только для round_robin: у least_test пул
     // пуст по контракту ядра, спрашивать нечего.
     if (!_isBalancer) return;
@@ -357,6 +381,15 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
                   body: _networkBody,
                   onSaveExitNode: _saveExitNode,
                   onSaveFields: _saveTailscaleFields,
+                  // §707 итер. 9 — поля Taildrop записи узла (по тегу).
+                  taildropFlags: _taildropRecord == null
+                      ? null
+                      : (
+                          commandsOff: _taildropRecord!.commandsOff,
+                          autosaveOff: _taildropRecord!.autosaveOff,
+                        ),
+                  onSaveRecordFlag:
+                      _taildropRecord == null ? null : _saveTaildropFlag,
                 ),
               // §392 — экран знает узел ТОЛЬКО по тегу собранного конфига
               // (NodeSpec тут нет), поэтому probe-ветка недоступна: при
@@ -481,7 +514,13 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
             ),
           ),
         ),
-        ..._routeRows(context),
+        ListenableBuilder(
+          listenable: widget.homeController,
+          builder: (context, _) => Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: _routeRows(context),
+          ),
+        ),
       ],
     );
   }
@@ -541,7 +580,12 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
       if (_isBalancer && pool != null) _kvRow(context, 'Pool', '$pool'),
       if (_isBalancer && poolTolerance is int && poolTolerance > 0)
         _kvRow(context, 'Pool tolerance', '$poolTolerance ms'),
-      if (members is List) _membersTile(context, members),
+      // Галка выбранного участника — живой выбор ядра, как Route.
+      if (members is List)
+        ListenableBuilder(
+          listenable: widget.homeController,
+          builder: (context, _) => _membersTile(context, members),
+        ),
       // §557 — состояние и выключатель слушают контроллер: heartbeat и
       // ответ выключателя обновляют их без перехода на экран заново.
       if (node.type == 'wireguard' || node.type == 'awg')

@@ -10,7 +10,15 @@
       "162.159.192.0/24",
       "162.159.193.0/24",
       "162.159.195.0/24",
-      "188.114.96.0/22"
+      "188.114.96.0/22",
+      "8.6.112.0/24",
+      "8.34.70.0/24",
+      "8.34.146.0/24",
+      "8.35.211.0/24",
+      "8.39.125.0/24",
+      "8.39.204.0/24",
+      "8.39.214.0/24",
+      "8.47.69.0/24"
     ],
     "v6_cidr": [
       "2606:4700:d0::/64",
@@ -53,9 +61,9 @@
       "exclude": ["162.159.198.1", "162.159.199.1"],
       "ports": [443, 500, 1701, 4500, 4443, 8443, 8095]
     },
-    "recommended_sni": "consumer-masque.cloudflareclient.com",
+    "recommended_sni": "www.cloudflare.com",
     "sni_pool": [
-      "consumer-masque.cloudflareclient.com", "www.cloudflare.com", "www.google.com",
+      "www.cloudflare.com", "consumer-masque.cloudflareclient.com", "www.google.com",
       "www.microsoft.com", "www.bing.com", "www.apple.com", "www.wikipedia.org",
       "cdn.jsdelivr.net", "aws.amazon.com", "deepseek.com"
     ]
@@ -81,7 +89,7 @@
       },
       "masque": {
         "sni_pool": [
-          "consumer-masque.cloudflareclient.com", "www.cloudflare.com", "yandex.ru",
+          "www.cloudflare.com", "consumer-masque.cloudflareclient.com", "yandex.ru",
           "telemost.yandex.ru", "ozon.ru", "rutube.ru", "gosuslugi.ru", "mail.ru",
           "max.ru", "vk.ru", "www.google.com", "www.microsoft.com", "www.bing.com",
           "www.apple.com", "www.wikipedia.org", "cdn.jsdelivr.net", "aws.amazon.com",

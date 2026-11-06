@@ -10,6 +10,7 @@ import '../../../services/builder/preset_expand.dart';
 import '../../../services/builder/rule_set_registry.dart';
 import '../edit_controller.dart';
 import '../../../services/l10n/locale_controller.dart';
+import '../../../widgets/lx_code_editor.dart';
 
 /// §053 Stage 3 — View tab: showcase storage JSON + sing-box config preview.
 ///
@@ -40,7 +41,7 @@ class ViewTab extends StatelessWidget {
             preset,
             srsPaths: c.presetSrsPaths,
             globalVars: c.globalVars, // §264 — @vpn_mode/@resolve_strategy в превью
-            nodes: c.presetNodes, // §578 — `for_each` раскрывается по узлам
+            nodes: c.presetNodes, // §578/§643 — обход раскрывается по узлам
           );
           warnings = fragments.warnings;
           // §264 — показываем только НЕПУСТЫЕ секции: пресет без DNS/rule_set
@@ -80,11 +81,20 @@ class ViewTab extends StatelessWidget {
         // skipDisabled: false — preview показывает «что родит правило при
         // включении», не отфильтровывая по `enabled`. Юзер открыл editor
         // именно для inspect'а формы; Switch — отдельная UX-плоскость.
+        // §683 — DNS-правила правила (сервер / Force IPv4 / Fixed IP).
+        final mirrors = <DnsMirrorEntry>[];
         warnings = applyCustomRules(reg, [c.snapshot()],
-            srsPaths: srsPaths, skipDisabled: false);
+            srsPaths: srsPaths, skipDisabled: false, dnsMirrors: mirrors);
         json = const JsonEncoder.withIndent('  ').convert({
           'rule_set': reg.getRuleSets(),
           'rules': reg.getRules(),
+          if (mirrors.isNotEmpty)
+            'dns_rules': [
+              for (final m in mirrors)
+                m.serverless || m.serverTag.isEmpty
+                    ? m.body
+                    : {...m.body, 'server': m.serverTag},
+            ],
         });
       }
     } catch (e) {
@@ -106,45 +116,18 @@ class ViewTab extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // ─── Storage shape ───
-          Row(
-            children: [
-              Expanded(
-                child: Text(getLocalText.s("storage shape (lxbox_settings.json)"),
-                    style: theme.textTheme.labelSmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant)),
-              ),
-              _CopyButton(text: storageJson),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            constraints: const BoxConstraints(maxHeight: 180),
-            child: SingleChildScrollView(
-              child: SelectableText(
-                storageJson,
-                style:
-                    const TextStyle(fontFamily: 'monospace', fontSize: 12),
-              ),
-            ),
+          // Подпись и Copy — в строке над рамкой просмотрщика; JSON с
+          // подсветкой, как у остальных JSON-полей (§624).
+          LxJsonView(
+            text: storageJson,
+            height: 180,
+            header: Text(getLocalText.s("storage shape (lxbox_settings.json)"),
+                style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant)),
+            actions: [_CopyButton(text: storageJson)],
           ),
           const SizedBox(height: 12),
           // ─── Sing-box config preview ───
-          Row(
-            children: [
-              Expanded(
-                child: Text(getLocalText.s("sing-box config preview"),
-                    style: theme.textTheme.labelSmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant)),
-              ),
-              _CopyButton(text: json),
-            ],
-          ),
-          const SizedBox(height: 4),
           if (warnings.isNotEmpty) ...[
             Container(
               padding: const EdgeInsets.all(8),
@@ -160,19 +143,12 @@ class ViewTab extends StatelessWidget {
             const SizedBox(height: 8),
           ],
           Expanded(
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: SingleChildScrollView(
-                child: SelectableText(
-                  json,
-                  style: const TextStyle(
-                      fontFamily: 'monospace', fontSize: 12),
-                ),
-              ),
+            child: LxJsonView(
+              text: json,
+              header: Text(getLocalText.s("sing-box config preview"),
+                  style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant)),
+              actions: [_CopyButton(text: json)],
             ),
           ),
         ],

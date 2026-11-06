@@ -63,6 +63,10 @@ the patched node JSON (goes into the config); traces of replacements "path: was 
 - Rehydration at start applies Replace to nodes from the cache; the
   Disable/Enable marks are recomputed only on a successful network update.
 - The editor's "Matches" tab previews matches on the current nodes.
+- Leaving the rule editor (Back, the close cross) with a rule that differs
+  from the one it opened with shows the shared "Unsaved changes" dialog: Save
+  — same as the Save button (if Save is blocked, the editor stays open and
+  shows the reason); Discard — leave without saving; Keep — stay.
 
 ## Boundaries
 
@@ -79,3 +83,4 @@ the patched node JSON (goes into the config); traces of replacements "path: was 
 | 4 | [400](../../../tasks/400-identity-tag-mirror.md) | Implemented, DEVICE-PENDING | Replace no longer breaks the mark |
 | 5 | [346](../../../tasks/346-subs-full-crud-debug-api.md) | — | CRUD of rules via the Debug API |
 | 6 | [603](../../../tasks/603-subscription-and-own-server-bugs.md) | Implemented | Apply counts disabled nodes of the current list; rules apply to a file subscription |
+| 7 | [626](../../../tasks/626-unsaved-changes-everywhere.md) | Implemented | "Unsaved changes" dialog on leaving the rule editor with an edit |

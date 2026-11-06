@@ -150,6 +150,7 @@ POST /action/urltest?tag=<node>                Single-node URLTest (CommandClien
 POST /action/urltest?group=<group>             Group URLTest (CommandClient, requires tunnel)
 POST /action/urltest?all=true                  Mass URLTest of all nodes in the active group (concurrency 10)
 POST /action/urltest?cancel=1                  Cancel in-flight mass URLTest (epoch-bump)
+POST /action/urltest-all                       Group URLTest of every urltest group, sequential (requires tunnel)
 POST /action/switch-node?tag=<tag>             HomeController.switchNode
 POST /action/set-group?group=<tag>             Change the active group
 POST /action/rebuild-config                    SubscriptionController.generateConfig + saveParsedConfig
@@ -213,7 +214,7 @@ POST   /subs[?rebuild=true]                    Create. Body {"input":"<url|URI|W
 PATCH  /subs/{id}[?rebuild=true][?reveal=true] Update meta, any subset: {enabled,name,url,tag_prefix,
                                                  update_interval_hours,override_detour,register_detour_servers,
                                                  register_detour_in_auto,use_detour_servers,replace_detour_chain,
-                                                 on_update_action,import_rules_enabled,identity}.
+                                                 on_update_action,import_rules_enabled,identity,tls}.
                                                  url applies to SubscriptionServers only (no-op for UserServer).
                                                  override_detour = node link {"folder_id"?:"...","tag":"..."}
                                                  (null clears): a folder member or subscription node is
@@ -230,6 +231,12 @@ PATCH  /subs/{id}[?rebuild=true][?reveal=true] Update meta, any subset: {enabled
                                                  {user_agent,send_hwid,hwid,device_os,ver_os,device_model}.
                                                  So {"identity":{"send_hwid":true,"hwid":"<uuid>"}} enables
                                                  HWID for this subscription only, leaving globals untouched.
+                                                 tls = TLS overrides {fragment,record_fragment,fallback_delay,
+                                                 mixed_case_sni}: source level for a subscription or folder,
+                                                 node level for a standalone server. A missing key keeps the
+                                                 field, null resets it to inherit (node → source → global).
+                                                 fallback_delay must be a core duration (500ms, 1s) → else 400.
+                                                 Responses carry "tls": all four keys, or {} when nothing is set.
 DELETE /subs/{id}[?rebuild=true]               Remove
 POST   /subs/{id}/refresh                      Force HTTP re-fetch (SubscriptionServers only). Fire-and-forget.
 POST   /subs/reorder                           Body {"order":[id1,id2,...]} — exactly the current ids
@@ -318,6 +325,30 @@ group). Every mutation response carries
 DNS servers that named the direction — an outbound-type variable of a
 template server, body.detour of a user server: the value degrades to vpn-1
 (disable/delete), like a rule target.
+
+=== Mixins CRUD (user inserts into the final config, spec 704) ===
+
+GET    /mixins                                   List mixins in apply order
+GET    /mixins/{id}                              Single mixin
+POST   /mixins[?rebuild=true]                    Create → 201, appended last. Body {"target":"...","op":"...",
+                                                 "value":<json>,"name"?:"...","enabled"?:true}. op =
+                                                 append|prepend|before|after|set|merge|remove; remove takes
+                                                 value true (whole node) or ["key","a.b"]. A path syntax error
+                                                 or an unknown op → 400; a target without matches is accepted
+                                                 (the build reports it).
+PATCH  /mixins/{id}[?rebuild=true]               Partial update: {name,enabled,target,op,value}; id immutable.
+DELETE /mixins/{id}[?rebuild=true]               Remove.
+POST   /mixins/reorder[?rebuild=true]            Body {"order":[id,...]} — exactly the current ids.
+GET    /mixins/{id}/preview                      What the edit form shows: {matches, issue, fragment:
+                                                 {parent_path, rows:[{marker,text,value}]}} — the mixin applied
+                                                 to the last built config before mixins plus the mixins above
+                                                 it. 409 if nothing was built in this session.
+
+Path language: segments joined by "."; name[N] — list element; name[f=v,g.h=w]
+— list elements where every condition holds (number/bool/case-sensitive
+string; a list field means "contains"); empty path = the root. Mixins run in
+list order as the last build step; a failing mixin (no match, wrong target
+type, duplicate tag) is a fatal build issue "Mixin "<name>": <target>: <reason>".
 
 === Chains CRUD (hop chains — third source kind, SPEC 110) ===
 
@@ -426,7 +457,9 @@ POST   /folders/{id}/members[?rebuild=true]    Add members. Body: exactly one of
                                                  or {"url":"..."} (one-shot snapshot: fetch → static members,
                                                  URL is not stored, no auto-update)
 PATCH  /folders/{id}/members/{idx}[?rebuild=true]
-                                               Subset {raw,enabled,detour}. raw must parse (400 keeps old);
+                                               Subset {raw,enabled,detour,tls}. raw must parse (400 keeps old);
+                                                 tls = node-level TLS overrides of the member, same shape and
+                                                 rules as PATCH /subs/{id} tls;
                                                  detour = personal member detour as a node link
                                                  {"folder_id"?:"...","tag":"..."} (null clears). A plain string
                                                  is read as a sibling member's raw tag when one matches, else as
@@ -553,6 +586,28 @@ POST /support/preview                          Body = ONE feed-format message ob
                                                  ?dry=true (default) — buttons work but markRead/snooze are NOT persisted; ?dry=false — persisted.
                                                  ?snooze_hours=N — snooze_active_hours of the synthetic feed (default 10). Requires UI process (409 otherwise).
 
+=== Taildrop (§707) ===
+
+Names of files and devices, clipboard text and links are hidden unless ?reveal=true.
+409 — VPN off, node not running in the core, Taildrop off for the node (core text); 404 — no such Tailscale node.
+GET  /taildrop                                 Per Tailscale node of the config: tag, allow (node body), disable_taildrop (built config),
+                                                 backend_state, can_share_files, autosave, commands (node record; null for a subscription node),
+                                                 autosave_supported, inbox_files, receiving, self_id. Works with VPN off.
+GET  /taildrop/peers?tag=T                     Devices: id (stable), os, online, can_receive_files, sharee; name with reveal.
+GET  /taildrop/inbox?tag=T                     Received files {index,size,sha256,age_s,sender_id} + receiving {index,size,received_bytes,progress}.
+POST /taildrop/send                            {tag,peer,name,content_base64} | {tag,peer,text} (note) | {tag,peer,commands:[...]} (service file).
+                                                 peer = stable ID, device name, MagicDNS name or IP. Waits up to 60 s: 200 sent, 202 in_progress, 409 core error.
+POST /taildrop/inbox/save                      {tag,index|name} → Downloads (Android 10+); name in Downloads with reveal.
+POST /taildrop/inbox/delete                    {tag,index|name}
+POST /taildrop/inbox/cancel                    {tag,index} — index into receiving.
+PUT  /taildrop/settings[?rebuild=true]         {tag,autosave?,commands?,allow?}. autosave / commands = enabled (default true); stored inverted as
+                                                 disable_taildrop_autosave / disable_taildrop_commands (own server or folder member), apply at once;
+                                                 allow writes the node body,
+                                                 applies after ?rebuild=true + POST /action/reload-vpn.
+GET  /taildrop/service-files                   Service-file counters since process start: received, executed{clipboard,open_url},
+                                                 skipped_no_permission, expired, invalid, unknown_kind, skipped_scheme, no_handler,
+                                                 last{kind,at,sha256} (value with reveal).
+
 === Diagnostics ===
 
 GET /diag/dump                                 Full JSON pack from DumpBuilder.build (config + vars + subs + log + stderr + exit_info + logcat).
@@ -565,7 +620,6 @@ GET /diag/pprof?profile=P&query=Q            pprof snapshot via libbox PProfServ
 === Settings (scoped writes) ===
 
 PUT    /settings/route_final                   body {"outbound":"..."}
-GET|PUT /settings/interrupt_on_switch          body {"enabled":bool} — рвать conns при switchNode
 GET|PUT /settings/node_sort                    body {"mode":"latency|manual|", "order"?:["tag",...]}
 GET|PUT /settings/enabled_groups               body {"groups":["tag",...]} (config-significant, ?rebuild)
 GET|PUT /settings/vpn_mode                     body partial {mode,proxy_protocol,proxy_port,proxy_listen,proxy_auth,proxy_user,proxy_pass} (?rebuild)
@@ -715,6 +769,7 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'POST', 'path': '/action/reset-network', 'description': 'Light recovery: closeAll + DNS flush + dialer rebind (spec 031). Requires tunnel up.'},
     {'method': 'POST', 'path': '/action/quic-knobs', 'params': {'gso': 'on|off (optional)', 'ecn': 'on|off (optional)'}, 'description': '§341: quic-go env knobs (GSO/ECN) via static Libbox call; affects new QUIC sockets, follow with reload-vpn/reset-network. At least one param.'},
     {'method': 'POST', 'path': '/action/urltest', 'params': {'tag': 'node tag (single)', 'group': 'group tag (group urltest, URL-encode emoji)', 'all': 'true (mass urltest)', 'cancel': '1 (abort in-flight mass urltest)'}, 'description': 'URLTest dispatch by query: one of tag/group/all/cancel'},
+    {'method': 'POST', 'path': '/action/urltest-all', 'description': 'Group URLTest of every urltest group, sequential, fire-and-forget (requires tunnel) → {ok,action,groups}'},
     {'method': 'POST', 'path': '/action/switch-node', 'params': {'tag': 'node tag'}, 'description': 'Selector switch via HomeController'},
     {'method': 'POST', 'path': '/action/set-group', 'params': {'group': 'group tag'}, 'description': 'Change active group'},
     {'method': 'POST', 'path': '/action/rebuild-config', 'description': 'Regenerate sing-box config'},
@@ -738,7 +793,7 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/subs', 'params': {'reveal': 'true|false (default false → URLs masked)'}, 'description': 'Alias /state/subs'},
     {'method': 'GET', 'path': '/subs/{id}', 'params': {'reveal': 'true|false', 'warnings': 'true|false (default false)'}, 'description': 'Single entry. warnings=true (feature 478): adds origin_kind, source_kind and per-node PARSE warnings under `warnings` — {tag: [{code, severity, path, value, params, title_en, text_en}]}, pinned English; every node present, empty list when none. code/path/value/title_en are null for app-local warnings; text_en is always there. Off by default — on 500 nodes it is dead weight.'},
     {'method': 'POST', 'path': '/subs', 'params': {'rebuild': 'true|false'}, 'body': '{"input":"<url|URI|WG-conf|JSON-outbounds>"}', 'description': 'Create via parser pipeline (JSON may create several entries). Rejected input → 400 with top-level dropped[] (parse reasons), nothing created'},
-    {'method': 'PATCH', 'path': '/subs/{id}', 'params': {'rebuild': 'true|false', 'reveal': 'true|false'}, 'body': 'Any subset: {enabled,name,url,tag_prefix,update_interval_hours,override_detour,register_detour_servers,register_detour_in_auto,use_detour_servers,replace_detour_chain,on_update_action,import_rules_enabled,identity}', 'description': 'Update meta. url is SubscriptionServers-only (no-op for UserServer). override_detour = node link {folder_id?, tag} (null clears; a string is read as {tag}). on_update_action: rebuild|reload|none. identity is a tristate: omit = keep, null = Default (global identity), object = Custom. The object patches the snapshot (initialised from globals on switch to Custom): {user_agent,send_hwid,hwid,device_os,ver_os,device_model} — so {"identity":{"send_hwid":true,"hwid":"<uuid>"}} enables HWID for this subscription only, leaving globals untouched.'},
+    {'method': 'PATCH', 'path': '/subs/{id}', 'params': {'rebuild': 'true|false', 'reveal': 'true|false'}, 'body': 'Any subset: {enabled,name,url,tag_prefix,update_interval_hours,override_detour,register_detour_servers,register_detour_in_auto,use_detour_servers,replace_detour_chain,on_update_action,import_rules_enabled,identity,tls}', 'description': 'Update meta. tls (§636) = {fragment,record_fragment,fallback_delay,mixed_case_sni}: missing key keeps the field, null resets it to inherit (node → source → global); a bad fallback_delay → 400. Source level for a subscription/folder, node level for a standalone server. url is SubscriptionServers-only (no-op for UserServer). override_detour = node link {folder_id?, tag} (null clears; a string is read as {tag}). on_update_action: rebuild|reload|none. identity is a tristate: omit = keep, null = Default (global identity), object = Custom. The object patches the snapshot (initialised from globals on switch to Custom): {user_agent,send_hwid,hwid,device_os,ver_os,device_model} — so {"identity":{"send_hwid":true,"hwid":"<uuid>"}} enables HWID for this subscription only, leaving globals untouched.'},
     {'method': 'DELETE', 'path': '/subs/{id}', 'params': {'rebuild': 'true|false'}, 'description': 'Remove entry'},
     {'method': 'POST', 'path': '/subs/{id}/refresh', 'description': 'Force HTTP re-fetch (SubscriptionServers only). Fire-and-forget.'},
     {'method': 'POST', 'path': '/subs/reorder', 'body': '{"order":[id,...]}', 'description': 'Reorder (exactly the current ids)'},
@@ -758,6 +813,14 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'PATCH', 'path': '/directions/{tag}', 'params': {'rebuild': 'true|false'}, 'body': 'Any subset: {label,enabled,include_direct,include_block,node_filter,node_filter_invert,default_filter,include,interrupt_exist_connections,auto,detour}', 'description': 'Partial update. auto merges into current urltest options; "auto":null disables the twin. tag immutable; vpn-1 cannot be disabled. detour:true = direction selectable as detour target (stays a valid rule target; include_block allowed); vpn-1+detour → 409; detour:false resets detour references to None. Toggling detour renames the direction: the reserved gear prefix is added to/stripped from the stored label — responses carry the normalized label. Mutation responses carry "healed":{rules,detours,includes,chain_positions,dns_servers}.'},
     {'method': 'DELETE', 'path': '/directions/{tag}', 'params': {'rebuild': 'true|false'}, 'description': 'Remove direction. vpn-1 not deletable (409). Rule references degrade to vpn-1; detour references reset to None; the tag is stripped from every other direction include[]; outbound-type variables of template DNS servers and rule presets, and body.detour of user DNS servers, degrade to vpn-1. Response carries "healed":{rules,detours,includes,chain_positions,dns_servers}.'},
     {'method': 'POST', 'path': '/directions/reorder', 'params': {'rebuild': 'true|false'}, 'body': '{"order":[tag,...]}', 'description': 'Reorder (exactly the current tags). Order = emit order in config.'},
+    // Mixins CRUD (spec 704)
+    {'method': 'GET', 'path': '/mixins', 'description': 'List mixins of the final config in apply order: {id,name,enabled,target,op,value}'},
+    {'method': 'GET', 'path': '/mixins/{id}', 'description': 'Single mixin (404 if unknown)'},
+    {'method': 'POST', 'path': '/mixins', 'params': {'rebuild': 'true|false'}, 'body': '{"target":"...","op":"append|prepend|before|after|set|merge|remove","value":<json>,"name"?:"...","enabled"?:bool}', 'description': 'Create mixin → 201, appended last. remove takes value true or a list of keys ("a.b" nests). Path syntax error or unknown op → 400; a target without matches is accepted — the build reports it as a fatal issue.'},
+    {'method': 'PATCH', 'path': '/mixins/{id}', 'params': {'rebuild': 'true|false'}, 'body': 'Any subset: {name,enabled,target,op,value}', 'description': 'Partial update; id immutable. Same validation as POST.'},
+    {'method': 'DELETE', 'path': '/mixins/{id}', 'params': {'rebuild': 'true|false'}, 'description': 'Remove mixin.'},
+    {'method': 'POST', 'path': '/mixins/reorder', 'params': {'rebuild': 'true|false'}, 'body': '{"order":[id,...]}', 'description': 'Reorder (exactly the current ids). Order = apply order.'},
+    {'method': 'GET', 'path': '/mixins/{id}/preview', 'description': 'Preview as in the edit form: {id, matches, issue:{reason,message}|null, fragment:{parent_path, rows:[{marker: " "|"+"|"~"|"-", text, value}]}|null}. Base = last built config before mixins + enabled mixins above this one; 409 if nothing was built in this session.'},
     // Chains CRUD (hop chains, SPEC 110)
     {'method': 'GET', 'path': '/chains', 'description': 'List hop chains in storage order: tag, enabled + source_chain.schema.json canon. The list order is normative: a chain may reference only chains declared above it.'},
     {'method': 'GET', 'path': '/chains/{tag}', 'description': 'Single chain (404 if unknown)'},
@@ -771,7 +834,7 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/folders/{id}', 'params': {'reveal': 'true|false'}, 'description': 'Single folder + members'},
     {'method': 'DELETE', 'path': '/folders/{id}', 'params': {'keep_servers': 'true|false (default false)', 'rebuild': 'true|false'}, 'description': 'Delete folder. keep_servers=true → members become standalone single servers in place; auto nodes are deleted either way.'},
     {'method': 'POST', 'path': '/folders/{id}/members', 'params': {'rebuild': 'true|false', 'reveal': 'true|false'}, 'body': 'exactly one of {"input":"<uri|WG-ini|JSON>","name_fallback"?} (paste) or {"url":"..."} (one-shot snapshot)', 'description': 'Add members. Snapshot: fetch → static members, URL not stored.'},
-    {'method': 'PATCH', 'path': '/folders/{id}/members/{idx}', 'params': {'rebuild': 'true|false', 'reveal': 'true|false'}, 'body': 'Any subset: {raw,enabled,detour}', 'description': 'Edit member. raw must parse (400 keeps old); detour = personal member detour, node link {folder_id?, tag} (null clears; a string is read as a sibling raw tag or a root {tag}).'},
+    {'method': 'PATCH', 'path': '/folders/{id}/members/{idx}', 'params': {'rebuild': 'true|false', 'reveal': 'true|false'}, 'body': 'Any subset: {raw,enabled,detour,tls}', 'description': 'Edit member. tls = node-level TLS overrides (same rules as PATCH /subs/{id}). raw must parse (400 keeps old); detour = personal member detour, node link {folder_id?, tag} (null clears; a string is read as a sibling raw tag or a root {tag}).'},
     {'method': 'DELETE', 'path': '/folders/{id}/members/{idx}', 'params': {'rebuild': 'true|false'}, 'description': 'Remove member (indexes shift — use the returned folder snapshot)'},
     {'method': 'POST', 'path': '/folders/{id}/members/reorder', 'params': {'rebuild': 'true|false'}, 'body': '{"order":[old indexes in new order]}', 'description': 'Reorder members (full permutation required)'},
     {'method': 'POST', 'path': '/folders/{id}/members/{idx}/ungroup', 'params': {'rebuild': 'true|false'}, 'description': 'Member → standalone single server after the folder (personal detour → override_detour); 409 for an auto node'},
@@ -813,6 +876,16 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/support/state', 'description': 'support_state.json (read/baseline/snooze/active) + app_version + total_active_seconds'},
     {'method': 'POST', 'path': '/support/reset', 'params': {'keep_active': 'true|false'}, 'description': 'Wipe read/baseline/snooze/cache; keep_active=false also zeroes the activity counter'},
     {'method': 'POST', 'path': '/support/preview', 'params': {'dry': 'true|false', 'snooze_hours': 'N'}, 'description': 'Body = one feed-format message → immediate fullscreen show, gates bypassed; dry=true (default) does not persist markRead/snooze'},
+    // Taildrop (§707 итер. 5)
+    {'method': 'GET', 'path': '/taildrop', 'description': 'Tailscale nodes of the config: tag, allow (body), disable_taildrop (built), backend_state, can_share_files, autosave, commands, autosave_supported, inbox_files, receiving, self_id'},
+    {'method': 'GET', 'path': '/taildrop/peers', 'params': {'tag': 'node tag', 'reveal': 'true|false'}, 'description': 'Node devices: id, os, online, can_receive_files, sharee; name with reveal. 409 VPN off'},
+    {'method': 'GET', 'path': '/taildrop/inbox', 'params': {'tag': 'node tag', 'reveal': 'true|false'}, 'description': 'Received files {index,size,sha256,age_s,sender_id} and receiving with progress; names with reveal'},
+    {'method': 'POST', 'path': '/taildrop/send', 'params': {'reveal': 'true|false'}, 'body': '{tag,peer,name,content_base64} | {tag,peer,text} | {tag,peer,commands:[...]}', 'description': 'Send a file, a note or a service file (SERVICE_FILES.md) the same native way as Send file…; waits up to 60 s: 200 sent, 202 in_progress, 409 core error'},
+    {'method': 'POST', 'path': '/taildrop/inbox/save', 'params': {'reveal': 'true|false'}, 'body': '{tag,index|name}', 'description': 'Save to Downloads (Android 10+), as the Save button'},
+    {'method': 'POST', 'path': '/taildrop/inbox/delete', 'body': '{tag,index|name}', 'description': 'Delete a received file'},
+    {'method': 'POST', 'path': '/taildrop/inbox/cancel', 'body': '{tag,index}', 'description': 'Cancel a file being received (index into receiving)'},
+    {'method': 'PUT', 'path': '/taildrop/settings', 'params': {'rebuild': 'true|false'}, 'body': '{tag,autosave?,commands?,allow?}', 'description': 'autosave / commands = enabled, stored inverted as node record fields disable_taildrop_autosave / disable_taildrop_commands (at once) and Allow Taildrop (node body; after rebuild + reload-vpn)'},
+    {'method': 'GET', 'path': '/taildrop/service-files', 'params': {'reveal': 'true|false'}, 'description': 'Service-file counters since process start; last executed command {kind,at,sha256}, value with reveal'},
     // Diagnostics
     {'method': 'GET', 'path': '/diag/dump', 'description': 'Full DumpBuilder JSON-pack'},
     {'method': 'GET', 'path': '/diag/exit-info', 'description': 'ApplicationExitInfo entries (API 30+; empty on lower)'},
@@ -822,7 +895,6 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/diag/pprof', 'params': {'profile': 'goroutine|profile|heap|allocs|block|mutex|threadcreate', 'query': 'raw pprof query w/o ? (gc=1, debug=1, seconds=20); default per profile'}, 'description': 'pprof snapshot via libbox PProfServer (tunnel must be up)'},
     // Settings (scoped writes)
     {'method': 'PUT', 'path': '/settings/route_final', 'body': '{"outbound":"..."}', 'description': 'Set route.final outbound'},
-    {'method': 'GET|PUT', 'path': '/settings/interrupt_on_switch', 'body': '{"enabled":bool}', 'description': 'Toggle interrupt connections on node switch'},
     {'method': 'GET|PUT', 'path': '/settings/node_sort', 'body': '{"mode":"latency|manual|","order"?:[...]}', 'description': 'Node-list sort mode + manual order'},
     {'method': 'GET|PUT', 'path': '/settings/enabled_groups', 'body': '{"groups":[...]}', 'description': 'Preset selector membership (config-significant, ?rebuild)'},
     {'method': 'GET|PUT', 'path': '/settings/vpn_mode', 'body': 'partial {mode,proxy_protocol,proxy_port,proxy_listen,proxy_auth,proxy_user,proxy_pass}', 'description': 'VPN/proxy mode (config-significant, ?rebuild)'},

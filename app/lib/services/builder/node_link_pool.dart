@@ -180,6 +180,12 @@ class _PoolCtx implements EmitContext {
   void noteEmittedAlias(String finalTag, node) {}
 
   @override
+  void noteGroupEmitted(group, String finalTag) {}
+
+  @override
+  void noteTls(String finalTag, layers) {}
+
+  @override
   void warn(String line) {}
 
   @override

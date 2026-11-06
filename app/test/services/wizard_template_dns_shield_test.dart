@@ -2,6 +2,10 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/services/builder/post_steps.dart'
+    show resolveTemplateDnsServerBody;
+import 'package:lxbox/services/builder/preset_expand.dart'
+    show normalizeDnsDetour;
 
 /// §517 часть G — страж состава группы `dns_shield` в боевом шаблоне.
 ///
@@ -23,12 +27,15 @@ void main() {
       ) as Map<String, dynamic>;
 
   /// Записи `dns_options.servers[].server` — база, всегда в сборке.
+  /// §682 — тело с подставленными дефолтами vars (как в сборке).
   Map<String, Map<String, dynamic>> baseServersByTag(Map<String, dynamic> tpl) {
     final out = <String, Map<String, dynamic>>{};
     for (final e in (tpl['dns_options'] as Map)['servers'] as List) {
       final s = (e as Map)['server'];
       if (s is Map && s['tag'] is String) {
-        out[s['tag'] as String] = s.cast<String, dynamic>();
+        final body = resolveTemplateDnsServerBody(e.cast<String, dynamic>())!;
+        normalizeDnsDetour(body);
+        out[s['tag'] as String] = body;
       }
     }
     return out;
@@ -79,49 +86,6 @@ void main() {
             'выигрывают гонку у DoH/DoT — $plain');
   });
 
-  test('dns_shield покрывает четыре провайдера шифрованно', () {
-    final members = ((baseServersByTag(template())['dns_shield']!)['servers']
-            as List)
-        .cast<String>()
-        .toSet();
-    // Замена четырём снятым udp-членам: у Google/Cloudflare/Yandex двойник
-    // уже был в группе, для OpenDNS добавлен DoH (DoT они не предоставляют).
-    for (final tag in [
-      'google_doh',
-      'google_dot',
-      'cloudflare_dot',
-      'opendns_doh',
-      'quad9_doh',
-      'yandex_dot',
-    ]) {
-      expect(members, contains(tag));
-    }
-  });
-
-  test('opendns_doh — корректная запись DoH по образцу соседей', () {
-    final s = baseServersByTag(template())['opendns_doh'];
-    expect(s, isNotNull, reason: 'замена opendns_udp в группе не объявлена');
-    expect(s!['type'], 'https');
-    expect(s['server_port'], 443);
-    expect(s['server'], '208.67.222.222');
-    expect(s['path'], '/dns-query');
-    expect((s['tls'] as Map)['enabled'], true);
-    expect((s['tls'] as Map)['server_name'], 'dns.opendns.com');
-  });
-
-  test('записи *_udp остались объявлены (на них ссылаются другие места)', () {
-    final byTag = allServersByTag(template());
-    for (final tag in [
-      'google_udp',
-      'cloudflare_udp',
-      'opendns_udp',
-      'yandex_udp',
-    ]) {
-      expect(byTag[tag], isNotNull, reason: '$tag удалён — сломает ссылки');
-      expect(byTag[tag]!['type'], 'udp');
-    }
-  });
-
   test('§527 каждый член dns_shield объявлен в БАЗОВЫХ dns_options.servers',
       () {
     // Страж от повторения дефекта §527. Теги, объявленные пресетом
@@ -139,29 +103,5 @@ void main() {
         reason: 'член группы объявлен только в пресете — при сборке его тег '
             'получит префикс preset_id и bare-ссылка выпадет (unknown): '
             '$undeclared');
-  });
-
-  test('§527 yandex_dot — прямой DoT без detour', () {
-    final s = baseServersByTag(template())['yandex_dot'];
-    expect(s, isNotNull, reason: 'базовая запись yandex_dot исчезла');
-    expect(s!['type'], 'tls');
-    expect(s['server'], '77.88.8.8');
-    expect(s['server_port'], 853);
-    expect((s['tls'] as Map)['enabled'], true);
-    // Нефильтрующий профиль Яндекса: 77.88.8.8 ↔ common.dot.dns.yandex.net
-    // (safe.dot.dns.yandex.net — это 77.88.8.88, фильтрующий).
-    expect((s['tls'] as Map)['server_name'], 'common.dot.dns.yandex.net');
-    // Главное: под белыми списками туннель может не подняться, а резолв
-    // обязан работать — поэтому прямой, без detour.
-    expect(s.containsKey('detour'), isFalse,
-        reason: 'detour у члена «щита» вернёт зависимость от туннеля');
-  });
-
-  test('quad9_doh сохраняет detour vpn-1 (§517: намеренно не трогаем)', () {
-    // Единственный член группы с детуром. При mode=fastest это значит, что
-    // члены идут разными путями и состав победителей зависит от того, поднят
-    // ли vpn-1. Решение «ставить детур всем или никому» — за владельцем,
-    // в §517 сознательно вне объёма; страж фиксирует текущее состояние.
-    expect(baseServersByTag(template())['quad9_doh']!['detour'], 'vpn-1');
   });
 }

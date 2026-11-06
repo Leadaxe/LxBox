@@ -27,8 +27,8 @@ Future<void> _open(WidgetTester tester, AutoSelectSpec initial) async {
               builder: (_) => AutoGroupEditScreen(
                 initial: initial,
                 candidates: const [
-                  (key: _a, label: 'Alpha'),
-                  (key: _b, label: 'Beta'),
+                  AutoPoolCandidate(key: _a, label: 'Alpha'),
+                  AutoPoolCandidate(key: _b, label: 'Beta'),
                 ],
                 canDelete: false,
               ),
@@ -72,8 +72,8 @@ void main() {
                 builder: (_) => AutoGroupEditScreen(
                   initial: initial,
                   candidates: const [
-                    (key: _a, label: 'Alpha'),
-                    (key: _b, label: 'Beta'),
+                    AutoPoolCandidate(key: _a, label: 'Alpha'),
+                    AutoPoolCandidate(key: _b, label: 'Beta'),
                   ],
                   canDelete: false,
                 ),
@@ -129,8 +129,8 @@ void main() {
                   initial:
                       AutoSelectSpec(id: 'g', tag: 'Auto', label: 'Auto'),
                   candidates: const [
-                    (key: _a, label: 'Alpha'),
-                    (key: _b, label: 'Beta'),
+                    AutoPoolCandidate(key: _a, label: 'Alpha'),
+                    AutoPoolCandidate(key: _b, label: 'Beta'),
                   ],
                   canDelete: false,
                 ),

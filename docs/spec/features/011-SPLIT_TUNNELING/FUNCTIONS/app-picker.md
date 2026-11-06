@@ -58,6 +58,10 @@ system "back"; the tab replaces its list with it.
 ## Boundaries
 
 - Our own app is not highlighted or blocked separately.
+- A selected app hidden by the search or the system filter is not shown in
+  the list (it stays selected and is counted). Showing the selected ones
+  regardless of filters is future work (owner, audit 591, 2026-10-13), not a
+  promise.
 - Depends on OS capabilities: visibility of the full list of installed apps
   (without it the picker shows an incomplete list).
 

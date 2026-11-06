@@ -30,6 +30,7 @@ void showEntryContextMenu(
     _showFolderContextMenu(context, index, entry, subController);
     return;
   }
+  final isServer = entry.list is UserServer;
   showAppBottomSheet(
     context: context,
     builder: (ctx) => SafeArea(
@@ -67,6 +68,9 @@ void showEntryContextMenu(
                     text: entry.url, subject: 'LxBox subscription'));
               },
             ),
+          // §686 — «Update» и «Edit source…» — действия над источником
+          // подписки; у одиночного сервера сети нет, правят в карточке (тап).
+          if (!isServer)
           ListTile(
             leading: const Icon(Icons.refresh),
             title: Text(getLocalText.s("Update")),
@@ -79,6 +83,7 @@ void showEntryContextMenu(
           // Транзакционно: старый источник сбрасывается только после успеха
           // нового (см. updateSourceAt). Для file-подписки это ещё и «обновить»
           // (выбрать файл заново).
+          if (!isServer)
           ListTile(
             leading: const Icon(Icons.edit_outlined),
             title: Text(getLocalText.s("Edit source…")),

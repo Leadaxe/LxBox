@@ -81,7 +81,7 @@ gives the hint "App connections" / "Outbound connections to servers".
 | # | Revision | Status | Essence |
 |---|----------|--------|---------|
 | 1 | [016F](../../../tasks/016F-statistics-and-connections/spec.md) | Implemented | Traffic bar on the home screen, navigation to Statistics |
-| 2 | [123F](../../../tasks/123F-subscription-model/spec.md) | Implemented | Tunnel status — from the service, not from the core data channel |
+| 2 | [123F](../../../tasks/123F-subscription-model/spec.md) | Implemented | Tunnel status — from the service, not from the core data channel; its "↑/↓ speed" wording is obsolete — the bar shows session totals |
 | 3 | [069](../../../tasks/069-current-session-allow-bypass.md) | Released v1.9.0 | VPN bypass warning in the current session |
 | 4 | [187](../../../tasks/187-uptime-survives-swipe.md) | ✅ Implemented | Connection time survives swiping from recents |
 | 5 | [194](../../../tasks/194-connection-counters-clarity.md) | ✅ Implemented, device-verify pending | App connections and connections to servers — separately |

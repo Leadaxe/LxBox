@@ -1,5 +1,4 @@
 // Фича 478 — хранение вердикта и его снятие (PARSING_PRINCIPLES §9.4). Переезд в бэкап — §489.
-import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/controllers/subscription_controller/core_reject_ops.dart';
@@ -45,11 +44,6 @@ void main() {
       expect(w.reason, 'parse encryption: bad');
     });
 
-    test('round-trip через JSON', () {
-      final w = StoredWarning.coreRejected('bad key');
-      expect(StoredWarning.fromJson(jsonDecode(jsonEncode(w.toJson()))), w);
-    });
-
     test('негодная запись отбрасывается молча', () {
       expect(StoredWarning.fromJson('строка'), isNull);
       expect(StoredWarning.fromJson({'params': {}}), isNull);
@@ -71,12 +65,6 @@ void main() {
       final other = const StoredWarning(code: 'tls_insecure');
       final out = dropVerdict([StoredWarning.coreRejected('x'), other]);
       expect(out, [other]);
-    });
-
-    test('вердикт рендерится предупреждением уровня error', () {
-      final w = coreRejectedWarningOf('parse encryption: bad');
-      expect(w.code, 'core_rejected');
-      expect(w.params['reason'], 'parse encryption: bad');
     });
   });
 

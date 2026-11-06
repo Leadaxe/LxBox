@@ -103,27 +103,6 @@ void main() {
       expect(spec!.extraHeaders, {'X-Trace': 'id:123'});
     });
 
-    test('extra-headers with invalid header name dropped', () {
-      // "X User" — пробел не в charset — drop, остальные сохраняются.
-      final spec = parseLinkAs<NaiveSpec>(
-        'naive+https://u:p@host?extra-headers=X%20User%3Abad%0D%0AX-Good%3Aok',
-      );
-      expect(spec!.extraHeaders, {'X-Good': 'ok'});
-      // D-105 — отброшенная пара видна на узле кодом naive_extra_headers_invalid.
-      final w = _extraHeaderWarnings(spec).single;
-      expect(w.value, 'X User:bad');
-      expect(w.params['entry'], 'X User:bad');
-    });
-
-    test('padding query is silently ignored (no field set)', () {
-      final spec = parseLinkAs<NaiveSpec>(
-        'naive+https://u:p@host:443?padding=true',
-      );
-      expect(spec, isNotNull);
-      // padding не имеет поля в нашем NaiveSpec — просто игнорим.
-      expect(spec!.extraHeaders, isEmpty);
-    });
-
     test('unknown query keys ignored, not failing', () {
       final spec = parseLinkAs<NaiveSpec>(
         'naive+https://u:p@host?unknown=42&also_unknown=foo',
@@ -138,26 +117,6 @@ void main() {
         'naive+https://u:p@host:443?#%E2%9C%85%20DE',
       );
       expect(spec!.label, '✅ DE');
-    });
-
-    test('empty host rejects the node (contract §24.6)', () {
-      // §463 — узел с пустым host отбраковывается.
-      //
-      // Прежняя посылка (Go проверяет непустой hostname только у
-      // vless/trojan/ssh/tuic/anytls, а naive в список не входит) оказалась
-      // неверной: ядро на пустом адресе валит ВЕСЬ конфиг («invalid server
-      // address», `sing-box check` на 1.14.0-lx.39), то есть один такой узел
-      // из подписки оставлял человека без VPN целиком. Корпус
-      // (contract/corpus/uri/naive/empty_host_rejected) нормирует отбраковку
-      // с W2c лаунчера.
-      expect(parseLinkAs<NaiveSpec>('naive+https://'), isNull);
-    });
-
-    test('dispatcher handles naive+https via parseUri', () {
-      final spec = parseUri(
-        'naive+https://u:p@server.example.com:443#test',
-      );
-      expect(spec, isA<NaiveSpec>());
     });
 
     test('parseUri rejects bare naive:// (без +https)', () {

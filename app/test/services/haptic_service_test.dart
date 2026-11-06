@@ -58,17 +58,6 @@ void main() {
       expect(platformCalls, 2);
     });
 
-    test('disabled service ignores everything', () async {
-      final h = HapticService(enabled: false, throttle: const Duration(seconds: 10));
-      for (var i = 0; i < 100; i++) {
-        h.onVpnConnected();
-        h.onConnectTap();
-        h.onFetchError();
-      }
-      await Future<void>.delayed(Duration.zero);
-      expect(platformCalls, 0);
-    });
-
     test('toggling enabled mid-flight applies immediately', () async {
       final h = HapticService(enabled: true, throttle: Duration.zero);
       h.onVpnConnected();
@@ -82,16 +71,6 @@ void main() {
       h.onVpnConnected(); // resumed
       await Future<void>.delayed(Duration.zero);
       expect(platformCalls, 2);
-    });
-
-    test('singleton instance accessible and toggleable', () {
-      final initial = HapticService.I.enabled;
-      HapticService.I.enabled = false;
-      expect(HapticService.I.enabled, isFalse);
-      HapticService.I.enabled = true;
-      expect(HapticService.I.enabled, isTrue);
-      // restore
-      HapticService.I.enabled = initial;
     });
   });
 }

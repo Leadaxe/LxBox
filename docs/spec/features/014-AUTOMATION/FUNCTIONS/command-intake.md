@@ -36,6 +36,7 @@ Commands (prefix `com.leadaxe.lxbox.`):
 | `REFRESH_SUBS` | `force` (Bool) | update subscriptions | the updater is ready |
 | `RESET_NETWORK` | — | reset connections, DNS, reconnect sockets | tunnel up |
 | `URLTEST_GROUP` | `group` (String) | URL test of a group | tunnel up |
+| `URLTEST_ALL` | — | URL test of every urltest group in turn (no group selection; extras ignored) | tunnel up |
 
 ## Inputs / Outputs
 
@@ -54,7 +55,8 @@ only in the system log under the `LxBoxIntent` tag.
 - `START_VPN`, `STOP_VPN`, `TOGGLE_VPN` are executed without the app UI.
   `TOGGLE_VPN` without the VPN permission opens the app for consent (like the
   tile); `START_VPN` does not request consent — a start without the permission
-  ends in a tunnel error.
+  ends in `VPN_ERROR`. The asymmetry is kept: only `TOGGLE_VPN` opens the app
+  (audit 591, 2026-10-13).
 - Other commands are executed by the shared handlers with Debug API error
   codes: an empty `tag`/`group` → `bad_request`; no group, tunnel down, config
   lock, app not ready → `conflict`; no group with that name → `not_found`; a
@@ -74,12 +76,16 @@ only in the system log under the `LxBoxIntent` tag.
 ## Boundaries
 
 - Commands without a required extra (`SWITCH_NODE` without `tag`, etc.) and
-  unknown commands are dropped with an entry in the system log, without
-  `VPN_ERROR`.
-- Commands other than start/stop/toggle require the app UI to be loaded;
-  otherwise they are skipped without an answer.
+  unknown commands sent as a direct broadcast are dropped with an entry in
+  the system log, without `VPN_ERROR`; the `bad_request` answer of P6 is the
+  plugin path. Kept as is (audit 591, 2026-10-13).
+- Commands other than start/stop/toggle, and all outgoing events, require
+  the app UI to be loaded; otherwise they are skipped without an answer
+  (documented in the Intent API reference, `docs/AUTOMATION.md`).
 - There is no "same call" answer: the result is learned only from events.
 - There is no sender check and no per-command permissions.
+- There is no reconnect command. Reconnect from outside goes through the Debug
+  API (`POST /action/reconnect`).
 - Depends on OS capabilities: delivery of broadcast commands, autostart bans
   in firmwares.
 
@@ -96,3 +102,4 @@ only in the system log under the `LxBoxIntent` tag.
 | 7 | [510](../../../tasks/510-review-findings-after-v2251.md) | Released v2.25.2 | "Stop" by command shuts down the node safeguard cycle |
 | 8 | [605](../../../tasks/605-service-live-automation-workspaces-bugs.md) | Implemented | Intake follows the saved toggle after a backup restore and a set load |
 | 9 | [605](../../../tasks/605-service-live-automation-workspaces-bugs.md) | Implemented | The core rejecting an accepted `SWITCH_NODE` → `VPN_ERROR(switch_failed)` |
+| 10 | [707](../../../tasks/707-taildrop-send-receive-files.md), iteration 7 | Implemented | 2026-11-03: Reconnect removed from the notification; no reconnect command, the Debug API keeps it |

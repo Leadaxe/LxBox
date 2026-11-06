@@ -6,7 +6,7 @@
 
 `tailscale` — an endpoint (a tunnel interface, not a plain outbound), sing-box type `tailscale`. Accepted from: sing-box JSON.
 
-<sub>Schema checked against core `1.14.2-lx.11`</sub>
+<sub>Schema checked against core `1.14.3-lx.17`</sub>
 
 | Field | Value |
 |---|---|
@@ -14,7 +14,7 @@
 | `singbox_type` | `tailscale` |
 | `kind` | `endpoint` |
 | `sources` | `singbox` |
-| Core the schema was checked against | `1.14.2-lx.11` |
+| Core the schema was checked against | `1.14.3-lx.17` |
 | Core requirement | build tag `with_tailscale`; on a core that lacks it the node is dropped at build: `tailscale_core_unsupported` |
 | Exit to the internet (Direction pools) | only when any of `exit_node` is set |
 
@@ -109,6 +109,10 @@ The node body itself — the sing-box JSON kept in the launcher state. The path 
 - <a id="body-taildrop-directory"></a>**`taildrop_directory`** — Directory receiving Taildrop files.
   - Type: string
   - Default: `Taildrop`
+- <a id="body-disable-taildrop"></a>**`disable_taildrop`** — Turn Taildrop off on this node: incoming files are refused, sending is not allowed.
+  - Type: bool
+  - Default: `false`
+  - Only written when: core ≥ `1.14.4-lx.30-rc.2`
 - <a id="body-detour"></a>**`detour`** — Tag of the outbound this connection is routed through.
   - Type: string, set by config build
 - <a id="body-bind-interface"></a>**`bind_interface`** — Network interface the connection is bound to.
@@ -121,6 +125,9 @@ The node body itself — the sing-box JSON kept in the launcher state. The path 
 - <a id="body-connect-timeout"></a>**`connect_timeout`** — Timeout for establishing the connection.
   - Type: duration
 - <a id="body-tcp-fast-open"></a>**`tcp_fast_open`** — Use TCP Fast Open.
+  - Type: bool
+  - Default: `false`
+- <a id="body-tcp-multi-path"></a>**`tcp_multi_path`** — Use Multipath TCP (MPTCP). The core and the OS judge whether it works.
   - Type: bool
   - Default: `false`
 - <a id="body-disable-tcp-keep-alive"></a>**`disable_tcp_keep_alive`** — Disable TCP keepalive on this connection.
@@ -179,4 +186,8 @@ Every code that can be raised on a node of this scheme, including the ones comin
 - `listen_port` — invalid value
 - `relay_server_port` — invalid value
 - `system_interface_mtu` — invalid value
+
+**Left out when the running core is too old**
+
+- `disable_taildrop` — needs core ≥ `1.14.4-lx.30-rc.2`
 

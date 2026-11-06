@@ -7,6 +7,7 @@ import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/node_identity.dart';
+import 'package:lxbox/services/contract/warning_codes.dart';
 import 'package:lxbox/services/parser/body_decoder.dart';
 import 'package:lxbox/services/parser/parse_all.dart';
 import 'package:lxbox/services/parser/singbox_config.dart';
@@ -27,6 +28,12 @@ Map<String, dynamic> vless(String tag, String server,
 Map<String, dynamic> cfg(List<Map<String, dynamic>> outbounds,
         {Map<String, dynamic>? extra}) =>
     {'outbounds': outbounds, ...?extra};
+
+/// §561 / D-128 — теги отбракованных записей с кодом [code], по порядку.
+List<String> refs(List<NodeWarning> dropped, String code) => [
+      for (final w in dropped)
+        if (warningCodeOf(w) == code) w.ownerTag,
+    ];
 
 List<NodeSpec> parse(List<Map<String, dynamic>> configs,
         [List<NodeWarning>? dropped]) =>
@@ -266,11 +273,6 @@ void main() {
 
   // §561 — отбраковка записи живёт только в `dropped[]`: сосед чист.
   group('§368 P5 — ничего не теряется молча', () {
-    List<String> refs(List<NodeWarning> dropped, String code) => [
-          for (final w in dropped.whereType<RegistryWarning>())
-            if (w.code == code) w.ownerTag,
-        ];
-
     test('неизвестный type → запись в dropped, сосед чист', () {
       final dropped = <NodeWarning>[];
       final r = parse([
@@ -378,67 +380,97 @@ void main() {
       expect(r[1].chained?.server, 'jump.com');
     });
 
-    test('цикл A → B → A: ребро снято, узлы не исчезают', () {
+    // Контракт 1.1.118 (D-128) — непригодная цепочка = fail-closed: носитель
+    // не эмитится, запись в `dropped[]` с кодом и тегом носителя.
+    test('цикл A → B → A: оба участника отбракованы', () {
+      final dropped = <NodeWarning>[];
       final r = parse([
         cfg([
           vless('a', 'a.com', detour: 'b', uuid: 'u-a'),
           vless('b', 'b.com', detour: 'a', uuid: 'u-b'),
+          vless('other', 'o.com', uuid: 'u-o'),
         ])
-      ]);
-      // Кольцо рвётся на первом обойдённом узле (`a`), поэтому `a` остаётся
-      // самостоятельным узлом, а `b` приезжает его звеном. Молчаливой потери
-      // нет: серверы из конфига доехали оба.
-      final servers = <String>{};
-      for (var n in r) {
-        servers.add(n.server);
-        for (var c = n.chained; c != null; c = c.chained) {
-          servers.add(c.server);
-        }
-      }
-      expect(servers, {'a.com', 'b.com'});
-      expect(r, isNotEmpty);
+      ], dropped);
+      expect(r.map((n) => n.server), ['o.com']);
+      expect(refs(dropped, 'detour_cycle_broken'), ['a', 'b']);
+      expect(dropped.every((w) => w.severity == WarningSeverity.error), isTrue);
     });
 
-    test('цикл A → B → C → A: все три сервера доезжают', () {
+    test('цикл A → B → C → A: все три участника отбракованы', () {
+      final dropped = <NodeWarning>[];
       final r = parse([
         cfg([
           vless('a', 'a.com', detour: 'b', uuid: 'u-a'),
           vless('b', 'b.com', detour: 'c', uuid: 'u-b'),
           vless('c', 'c.com', detour: 'a', uuid: 'u-c'),
         ])
-      ]);
-      final servers = <String>{};
-      for (var n in r) {
-        servers.add(n.server);
-        for (var c = n.chained; c != null; c = c.chained) {
-          servers.add(c.server);
-        }
-      }
-      expect(servers, {'a.com', 'b.com', 'c.com'});
+      ], dropped);
+      expect(r, isEmpty);
+      expect(refs(dropped, 'detour_cycle_broken'), ['a', 'b', 'c']);
     });
 
-    test('самоссылка → warning, узел жив', () {
+    test('узел, ведущий в кольцо, отбракован тем же кодом', () {
+      final dropped = <NodeWarning>[];
+      final r = parse([
+        cfg([
+          vless('x', 'x.com', detour: 'a', uuid: 'u-x'),
+          vless('a', 'a.com', detour: 'b', uuid: 'u-a'),
+          vless('b', 'b.com', detour: 'a', uuid: 'u-b'),
+        ])
+      ], dropped);
+      expect(r, isEmpty);
+      expect(refs(dropped, 'detour_cycle_broken'), ['x', 'a', 'b']);
+    });
+
+    test('самоссылка → узел отбракован, сосед жив', () {
+      final dropped = <NodeWarning>[];
       final r = parse([
         cfg([
           vless('a', 'a.com', detour: 'a'),
           vless('other', 'o.com', uuid: 'u-o'),
         ])
-      ]);
-      final a = r.firstWhere((n) => n.server == 'a.com');
-      expect(a.chained, isNull);
-      expect(a.warnings.whereType<DetourCycleBrokenWarning>(), isNotEmpty);
+      ], dropped);
+      expect(r.map((n) => n.server), ['o.com']);
+      expect(refs(dropped, 'detour_cycle_broken'), ['a']);
     });
 
-    test('висячая ссылка → узел без цепочки + warning', () {
+    test('висячая ссылка → узел отбракован', () {
+      final dropped = <NodeWarning>[];
       final r = parse([
         cfg([vless('a', 'a.com', detour: 'nonexistent')])
-      ]);
-      expect(r.single.chained, isNull);
-      expect(r.single.warnings,
-          contains(const DetourTargetMissingWarning('nonexistent')));
+      ], dropped);
+      expect(r, isEmpty);
+      expect(dropped,
+          [const DetourTargetMissingWarning('nonexistent', ownerTag: 'a')]);
+      expect(dropped.single.ownerTag, 'a');
     });
 
-    test('detour на группу → без цепочки + warning', () {
+    test('хоп, который узлом не стал → detour_target_missing', () {
+      final dropped = <NodeWarning>[];
+      final r = parse([
+        cfg([
+          vless('a', 'a.com', detour: 'st'),
+          {'type': 'shadowtls', 'tag': 'st'},
+        ])
+      ], dropped);
+      expect(r, isEmpty);
+      expect(refs(dropped, 'detour_target_missing'), ['a']);
+    });
+
+    test('обрыв в глубине цепочки роняет носителя', () {
+      final dropped = <NodeWarning>[];
+      final r = parse([
+        cfg([
+          vless('a', 'a.com', detour: 'b', uuid: 'u-a'),
+          vless('b', 'b.com', detour: 'gone', uuid: 'u-b'),
+        ])
+      ], dropped);
+      expect(r, isEmpty);
+      expect(refs(dropped, 'detour_target_missing'), ['a']);
+    });
+
+    test('detour на группу → носитель отбракован, группа и члены живут', () {
+      final dropped = <NodeWarning>[];
       final r = parse([
         cfg([
           vless('a', 'a.com', detour: 'auto'),
@@ -449,10 +481,11 @@ void main() {
             'outbounds': ['m'],
           },
         ])
-      ]);
-      final a = r.firstWhere((n) => n.server == 'a.com');
-      expect(a.chained, isNull);
-      expect(a.warnings, contains(const DetourToGroupWarning('auto')));
+      ], dropped);
+      expect(r.where((n) => n.server == 'a.com'), isEmpty);
+      expect(r.where((n) => n.server == 'm.com'), hasLength(1));
+      expect(r.whereType<AutoSelectSpec>(), hasLength(1));
+      expect(refs(dropped, 'detour_to_group'), ['a']);
     });
 
     test('detour: direct — не звено и не ошибка, молча', () {

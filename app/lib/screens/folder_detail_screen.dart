@@ -1,7 +1,7 @@
 import 'dart:async';
 import '../models/node_spec.dart';
-import '../services/node_identity.dart';
 import 'auto_group_edit_screen.dart';
+import '../widgets/auto_group_form.dart' show autoPoolCandidates;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -12,6 +12,7 @@ import '../models/direction.dart';
 import '../models/node_warning.dart';
 import '../models/node_link.dart';
 import '../models/server_list.dart';
+import '../services/builder/server_list_build.dart' show folderHasDetourLinks;
 import '../services/error_format.dart';
 import '../services/node_link_address.dart';
 import '../services/probe/probe_controller.dart';
@@ -34,6 +35,7 @@ import 'subscriptions_screen/entry_warnings.dart';
 import '../widgets/reorder_grab_strip.dart';
 import '../services/l10n/locale_controller.dart';
 import '../services/file_import.dart';
+import '../services/ui_helpers.dart';
 import '../widgets/app_bottom_sheet.dart';
 
 /// §234 — экран папки серверов. Зеркалит SubscriptionDetailScreen: вкладка
@@ -75,6 +77,10 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
   // пачкой), а этот throttle сливает их в один setState раз в ~120мс.
   Timer? _probeFlushTimer;
   bool _testing = false;
+  // §669 — Stop нажат, прогон ещё доходит до finally (обрыв замеров +
+  // закрытие сессии): кнопка неактивна, подпись «Stopping…». Start снова
+  // доступен только после фактического завершения прогона.
+  bool _stopping = false;
   ProbeThresholds _thresholds = const ProbeThresholds();
 
   // §236 UI-rework — локальный фильтр членов (как на главном: regex +
@@ -269,11 +275,12 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
   }
 
   Future<void> _toggleTest() async {
+    if (_stopping) return;
     if (_testing) {
+      // §669 — `_testing` гасит только сам прогон, дойдя до конца: иначе
+      // новый Start поднял бы сессию, которую закрыл бы finally старого.
       _runner?.cancel();
-      _probeFlushTimer?.cancel();
-      _probeFlushTimer = null;
-      setState(() => _testing = false);
+      setState(() => _stopping = true);
       return;
     }
     if (_folder.members.isEmpty) return;
@@ -316,6 +323,8 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     // отфильтрован до enabled+parsed).
     final err = await runner.run(
       [for (final m in _folder.members) m.node],
+      // §636 — проба фрагментирует так же, как туннель.
+      tlsByIndex: ProbeController.probeTlsOf(_folder),
       url: url,
       timeoutMs: timeoutMs,
       onResult: (i, r) {
@@ -323,14 +332,22 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
         // §286 — накапливаем без setState-на-члена; throttle сольёт в один
         // ребилд (~120мс). Иначе «WARP GENERATOR» (~100 членов) даёт ~100
         // setState пачкой → главный поток лагает.
+        if (!identical(_runner, runner)) return; // §669 — вытеснен
         if (i < probeKeys.length) _probe[probeKeys[i]] = r;
         _scheduleProbeFlush();
       },
     );
+    // §669 — состояние экрана гасит только активный прогон: завершение
+    // вытесненного не трогает индикатор нового.
+    if (!identical(_runner, runner)) return;
+    _runner = null;
     _probeFlushTimer?.cancel();
     _probeFlushTimer = null;
     if (!mounted) return;
-    setState(() => _testing = false);
+    setState(() {
+      _testing = false;
+      _stopping = false;
+    });
     // §236 — VPN стартовал между гейтом и probeStart (гонка): runner вернул
     // маркер → тот же гейт-попап, не текст ошибки.
     if (err == kProbeVpnRunning) {
@@ -665,6 +682,27 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     setState(() => _editing = !_editing);
   }
 
+  /// §626 — Back (системный, жест, стрелка AppBar) при открытом
+  /// переименовании с изменённым именем: общий диалог Discard / Keep / Save
+  /// (§219). Остальные правки экрана пишутся сразу.
+  Future<void> _handleBack() async {
+    final dirty =
+        _editing && _nameCtrl.text.trim() != widget.entry.name.trim();
+    if (!dirty) {
+      Navigator.pop(context);
+      return;
+    }
+    final action = await showUnsavedChangesDialog(context); // §219
+    if (!mounted) return;
+    if (action == 'save') {
+      _toggleEdit();
+      Navigator.pop(context);
+    } else if (action == 'discard') {
+      Navigator.pop(context);
+    }
+    // 'keep' / null (dismiss) — остаёмся.
+  }
+
   Future<void> _delete() async {
     // Три исхода: cancel / вынести серверы одиночными / удалить всё.
     final choice =
@@ -771,7 +809,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     final folder = widget.controller.entries[idx].list;
     if (folder is! FolderServers) return;
 
-    final candidates = _poolCandidates(folder);
+    final candidates = autoPoolCandidates(folder);
     final res = await Navigator.of(context).push<AutoGroupEditResult>(
       MaterialPageRoute(
         builder: (_) => AutoGroupEditScreen(
@@ -792,58 +830,6 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
       return;
     }
     setState(() {});
-  }
-
-  /// §322 — правка существующего узла автовыбора. Кандидаты считаем без
-  /// него самого: группа не может взять в пул саму себя.
-  Future<void> _editAutoNode(int memberIndex, AutoSelectSpec node) async {
-    final idx = _index;
-    if (idx < 0) return;
-    final folder = widget.controller.entries[idx].list;
-    if (folder is! FolderServers) return;
-
-    final res = await Navigator.of(context).push<AutoGroupEditResult>(
-      MaterialPageRoute(
-        builder: (_) => AutoGroupEditScreen(
-          initial: node,
-          candidates: _poolCandidates(folder),
-          canDelete: true,
-        ),
-      ),
-    );
-    if (!mounted || res == null) return;
-
-    switch (res) {
-      case AutoGroupSaved(:final spec):
-        final err = await widget.controller
-            .updateAutoMemberAt(idx, memberIndex, spec);
-        if (!mounted) return;
-        if (err != null) {
-          await _showError(err.render());
-          return;
-        }
-      case AutoGroupDeleted():
-        await widget.controller.removeMemberAt(idx, memberIndex);
-        if (!mounted) return;
-    }
-    setState(() {});
-  }
-
-  /// Члены папки, которые могут попасть в пул: обычные узлы с адресом, без
-  /// групп (вложенность urltest в urltest бессмысленна) и без нечитаемых raw.
-  /// Член адресуется парой `{id папки, сырой тег}` (§439).
-  List<({NodeLink key, String label})> _poolCandidates(FolderServers folder) {
-    final out = <({NodeLink key, String label})>[];
-    for (final m in folder.members) {
-      final n = m.node;
-      if (n == null || n.isGroup || n.tag.isEmpty) continue;
-      if (nodeIdentityKey(n) == null) continue;
-      out.add((
-        key: NodeLink(folderId: folder.id, tag: n.tag),
-        label: n.label.isEmpty ? n.tag : n.label,
-      ));
-    }
-    return out;
   }
 
   Future<void> _addFromUrl() async {
@@ -912,20 +898,31 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     if (!mounted) return;
     final member = _folder.members[memberIndex];
 
-    // §322 — у узла автовыбора свой редактор: текста у группы нет (§439).
-    final node = member.node;
-    if (node is AutoSelectSpec) {
-      await _editAutoNode(memberIndex, node);
-      return;
-    }
-
     final ctl = TextEditingController(text: member.raw);
     final newRaw = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      // §626 — Back и тап по фону с правкой спрашивают общий диалог
+      // Unsaved changes (§219); Save — тот же путь, что кнопка Save.
+      builder: (ctx) => PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, _) async {
+          if (didPop) return;
+          if (ctl.text == member.raw) {
+            Navigator.pop(ctx);
+            return;
+          }
+          final action = await showUnsavedChangesDialog(ctx);
+          if (!ctx.mounted) return;
+          if (action == 'save') {
+            Navigator.pop(ctx, ctl.text);
+          } else if (action == 'discard') {
+            Navigator.pop(ctx);
+          }
+        },
+        child: AlertDialog(
         title: Text(getLocalText.s("Edit server")),
-        // §615 — редактор с подсветкой, как Source узла (§614): JSON —
-        // по `{` на лету, ссылка и WireGuard INI — без подсветки. Ширина
+        // §615 — редактор с подсветкой, как Source узла (§614): язык по
+        // виду текста на лету (§624: JSON / INI / ссылка). Ширина
         // задана явно: AlertDialog меряет содержимое через IntrinsicWidth.
         content: SizedBox(
           width: double.maxFinite,
@@ -938,9 +935,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
               minLines: 3,
               maxLines: 8,
               hint: getLocalText.s("Proxy link, WireGuard config or outbound JSON"),
-              language: ctl.text.trimLeft().startsWith('{')
-                  ? LxCodeLanguage.json
-                  : null,
+              language: detectCodeLanguage(ctl.text),
             ),
           ),
         ),
@@ -954,8 +949,12 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
           ),
         ],
       ),
+      ),
     );
-    ctl.dispose();
+    // §624 — `ctl` не освобождаем: `showDialog` возвращается в начале
+    // анимации закрытия, а поле в уходящем диалоге ещё читает контроллер
+    // (и нативный редактор присылает в него финальный текст при dispose).
+    // Слушателей у него нет — уйдёт со сборкой мусора.
     if (newRaw == null || !mounted) return;
     final idx = _index;
     if (idx < 0) return;
@@ -1029,20 +1028,24 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     // сервером она стала бы пустой записью. «Move to folder…» остаётся —
     // там пары членов переписываются.
     final isGroup = _folder.members[memberIndex].node?.isGroup == true;
+    // §686 — член с узлом правят в карточке (тап → Node Settings); «Edit…»
+    // остаётся только битому члену: иначе его текст не поправить.
+    final broken = _folder.members[memberIndex].node == null;
     showAppBottomSheet<void>(
       context: context,
       builder: (ctx) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ListTile(
-              leading: const Icon(Icons.edit_outlined),
-              title: Text(getLocalText.s("Edit…")),
-              onTap: () {
-                Navigator.pop(ctx);
-                unawaited(_editMember(memberIndex));
-              },
-            ),
+            if (broken)
+              ListTile(
+                leading: const Icon(Icons.edit_outlined),
+                title: Text(getLocalText.s("Edit…")),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  unawaited(_editMember(memberIndex));
+                },
+              ),
             ListTile(
               leading: const Icon(Icons.drive_file_move_outline),
               title: Text(getLocalText.s("Move to folder…")),
@@ -1091,7 +1094,13 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return AnimatedBuilder(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        unawaited(_handleBack());
+      },
+      child: AnimatedBuilder(
       animation: widget.entry,
       builder: (context, _) => Scaffold(
         appBar: AppBar(
@@ -1171,6 +1180,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
             _buildSettingsTab(theme),
           ],
         ),
+      ),
       ),
     );
   }
@@ -1322,7 +1332,9 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     final muted = theme.colorScheme.onSurfaceVariant;
     final s = _probeSummary();
     final String info;
-    if (_testing) {
+    if (_stopping) {
+      info = getLocalText.s("Stopping…"); // §669
+    } else if (_testing) {
       info = getLocalText.s("Testing… %d done", s.ok + s.dead);
     } else if (_probe.isNotEmpty) {
       info = [
@@ -1347,8 +1359,10 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
           ),
           // Кнопка теста — как mass-ping на главном (Icons.speed / stop),
           // long-press = настройки теста (URL/timeout + пороги шкалы).
+          // §669 — на время «Stopping…» кнопка неактивна (как при пустой
+          // папке): Start доступен только после завершения прогона.
           GestureDetector(
-            onTap: _folder.members.isEmpty
+            onTap: _folder.members.isEmpty || _stopping
                 ? null
                 : () => unawaited(_toggleTest()),
             onLongPress: _showTestSettings,
@@ -1357,7 +1371,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
               child: Icon(
                 _testing ? Icons.stop_circle_outlined : Icons.speed,
                 size: 22,
-                color: _folder.members.isEmpty
+                color: _folder.members.isEmpty || _stopping
                     ? Theme.of(context).disabledColor
                     : null,
               ),
@@ -1544,6 +1558,9 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
               ? widget.entry.list as FolderServers
               : null),
       hasDetour: hasDetour,
+      // §670 — галки register только при звеньях: тот же предикат, что у
+      // сборщика.
+      hasDetourLinks: folderHasDetourLinks(_folder),
       detourMode: _detourMode,
       onTagPrefixChanged: (val) {
         widget.entry.tagPrefix = val.trim();
@@ -1568,6 +1585,11 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
         unawaited(widget.controller.persistSources());
       },
       onShowOverrideDetourPicker: () => _showOverrideDetourPicker(),
+      // §636 — TLS-политика источника: запись сразу, как у detour.
+      onTlsChanged: (v) {
+        setState(() => widget.entry.tls = v);
+        unawaited(widget.controller.persistSources());
+      },
       onReplaceDetourChainChanged: (val) {
         setState(() => widget.entry.replaceDetourChain = val);
         unawaited(widget.controller.persistSources());

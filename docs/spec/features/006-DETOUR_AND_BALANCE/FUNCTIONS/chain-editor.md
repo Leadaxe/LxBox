@@ -29,7 +29,7 @@ much each hop costs.
 | Positions | caption "In packet order: the first position is the hop closest to you, the last one is what the destination sees."; each position shows its kind (node, group, direction, chain, built-in, loading…, not found) |
 | Add position | picker: sections **Directions** (only with "Use as detour") and **Servers** (nodes of the built config alphabetically, `TYPE · server:port`); those already used are excluded; nothing to add — "Nothing left to add…" |
 | Advanced | Idle timeout; "Strip evasion tricks from links"; "Per-key overrides" — a three-state checkbox per catalog key with the result "stripped"/"kept" |
-| Deletion | "Delete hop chain?" with confirmation |
+| Deletion | "Delete hop chain?" with confirmation; the text warns that chains using it will be rebuilt without it |
 | Leaving with unsaved edits | Save / Keep / Discard |
 
 ## Inputs / Outputs
@@ -84,3 +84,4 @@ measurements.
 | 1 | [018F](../../../tasks/018F-detour-server-management/spec.md) | Policy in 026 | First sketch of the Chain Editor |
 | 2 | [393F](../../../tasks/393F-directions/spec.md) | released v2.21.0 | C6–C7: form checks, chain screen, position picker |
 | 3 | [558](../../../tasks/558-chain-owner-navigation.md) | Done | Navigation to the chain from the node window |
+| 4 | [638](../../../tasks/638-audit-591-four-defects.md) | Done | The delete confirmation tells the truth: chains using it are rebuilt without it (P10) |

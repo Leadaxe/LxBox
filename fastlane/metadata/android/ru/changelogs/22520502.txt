@@ -1,0 +1,1 @@
+Tunnel routes: туннель WireGuard / AWG, OpenVPN или OpenConnect может брать только сети, которые сам объявляет, и работать рядом с выбранным сервером (переключатель «Only its own networks» на узле). Новая настройка AWG masquerade в VPN Settings → Core → WireGuard; узел AWG за другим узлом снова маскируется, Anti-sniff decoy его прикрывает. Ядро lx.32.

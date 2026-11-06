@@ -8,6 +8,7 @@ import '../../models/node_link.dart';
 import '../../models/node_spec.dart';
 import '../../models/node_warning.dart' show RegistryWarning;
 import '../../models/singbox_entry.dart';
+import '../../models/tls_policy.dart';
 import '../contract/body_sanitizer.dart' show exitCapableByRegistry;
 import '../node_hash.dart';
 import '../node_identity.dart';
@@ -106,6 +107,15 @@ extension ServerListBuild on ServerList {
     final autoSelects = <(AutoSelectSpec, int)>[];
     final resolvedTags = <NodeSpec, String>{};
 
+    // §636 — TLS-политики: у подписки и папки — уровень источника, у
+    // одиночного сервера — узловой (сервер = свой источник), у члена папки —
+    // узловой поверх папочного.
+    final sourceTls = this is UserServer ? TlsPolicy.none : tls;
+    final memberTls = switch (this) {
+      final FolderServers f => f.nodeTls,
+      _ => null,
+    };
+
     for (var i = 0; i < nodes.length; i++) {
       final server = nodes[i];
       // Узел без идентичности (группа §322, безымянный) в карте отсутствует —
@@ -160,14 +170,26 @@ extension ServerListBuild on ServerList {
       final mainBase = main.tag;
       main.map['tag'] =
           ctx.allocateTag(TagResolver.displayTag(tagPrefix, mainBase));
-      // §322 — итоговый тег нужен второму проходу: пул автовыбора ссылается
-      // на членов уже ПОСЛЕ префикса и уникализации.
-      resolvedTags[server] = main.map['tag'] as String;
-      // §578 — тот же финальный тег нужен узлам `for_each` пресетов.
+      // §578 — тот же финальный тег нужен узлам пресетов с обходом.
       ctx.noteEmitted(server, main.map['tag'] as String);
       // §439 — адрес узла, затем звеньев его родной цепочки (сырой тег узла
       // сильнее тёзки-звена).
       noteAddress(server, mainBase, main.tag);
+      // §636 — уровни TLS узла и его родной цепочки по итоговым тегам.
+      final tlsLayers = TlsLayers(
+        node: this is UserServer
+            ? tls
+            : (memberTls != null && i < memberTls.length
+                ? memberTls[i]
+                : TlsPolicy.none),
+        source: sourceTls,
+      );
+      if (!tlsLayers.isEmpty) {
+        ctx.noteTls(main.tag, tlsLayers);
+        for (final d in detours) {
+          ctx.noteTls(d.tag, tlsLayers);
+        }
+      }
       for (var k = 0; k < detours.length; k++) {
         if (this is UserServer) {
           targets?.noteRootNode(detours[k].tag);
@@ -228,19 +250,23 @@ extension ServerListBuild on ServerList {
       // Направлений не идёт ни при какой политике. В `endpoints[]` он
       // эмитирован (`addEntry` выше) — законная цель `detour`, `outbound`
       // правила узла и позиции цепочки.
-      final tailnetOnly = !exitCapableByRegistry(main.map);
-      if (tailnetOnly) {
-        // ничего: ни selector, ни auto
-      } else if (!isMainAsDetour) {
-        toSelector(i, main);
-        toAuto(i, main);
-      } else {
-        if (detourPolicy.registerDetourServers) toSelector(i, main);
-        if (detourPolicy.registerDetourInAuto) toAuto(i, main);
-      }
+      final admit = poolAdmission(
+        tailnetOnly: !exitCapableByRegistry(main.map),
+        detourLink: isMainAsDetour,
+        policy: detourPolicy,
+      );
+      if (admit.selector) toSelector(i, main);
+      if (admit.auto) toAuto(i, main);
+      // §322 — итоговый тег нужен второму проходу: пул автовыбора ссылается
+      // на членов уже ПОСЛЕ префикса и уникализации. §675 — в пул идёт тот,
+      // кого гейты пускают в селекторы Направлений: Tailscale без exit node
+      // и звено цепочки при выключенной «Register detour servers» — нет.
+      if (admit.selector) resolvedTags[server] = main.tag;
+      final hop = poolAdmission(
+          tailnetOnly: false, detourLink: true, policy: detourPolicy);
       for (final d in detours) {
-        if (detourPolicy.registerDetourServers) toSelector(i, d);
-        if (detourPolicy.registerDetourInAuto) toAuto(i, d);
+        if (hop.selector) toSelector(i, d);
+        if (hop.auto) toAuto(i, d);
       }
     }
 
@@ -266,15 +292,24 @@ extension ServerListBuild on ServerList {
       );
       // Пустой urltest роняет старт ядра (validator.dart) — достижимо, если
       // все члены выключены (§283) или подписка обновилась и пул опустел.
-      // Не эмитим вовсе: безопаснее, чем пустая группа. Явный состав, не
-      // давший ни одного члена, называется (NODE_LINK §5.1); правило, ничего
-      // не поймавшее, — законная настройка.
+      // Не эмитим вовсе: безопаснее, чем пустая группа. §675 — о снятии
+      // говорит отчёт при любом режиме: явный состав, не давший ни одного
+      // члена (NODE_LINK §5.1), и правило / «все», ничего не поймавшие
+      // (пустая папка, все члены выключены, нет совпадений).
       if (members.isEmpty) {
-        if (spec.membership is ExplicitMembers) {
-          ctx.warn('Auto node "$shown" was skipped: none of its members '
-              'resolved, an empty group would stop the VPN core');
-        }
+        ctx.warn(spec.membership is ExplicitMembers
+            ? 'Auto node "$shown" was skipped: none of its members '
+                'resolved, an empty group would stop the VPN core'
+            : 'Auto node "$shown" was skipped: it has no members, an empty '
+                'group would stop the VPN core');
         continue;
+      }
+      // §675 — у свёртки Auto ручного селектора нет, а провайдерская группа
+      // идёт только в него (§74 п.3): узел собран, но ни в одну группу не
+      // входит. Поведение свёртки прежнее, о недостижимости говорит отчёт.
+      if (fold != null && !fold.hasSelector) {
+        ctx.warn('Auto node "$shown" is unreachable: its source is replaced '
+            'with an Auto group, which does not include auto nodes');
       }
 
       // §565 — тело разбора + параметры замера, которых источник не объявил.
@@ -284,6 +319,8 @@ extension ServerListBuild on ServerList {
       entry.map['tag'] =
           ctx.allocateTag(TagResolver.displayTag(tagPrefix, spec.tag));
       noteAddress(spec, spec.tag, entry.tag, group: true);
+      // §675 — итоговый тег группы для экрана (значки пула по точному тегу).
+      ctx.noteGroupEmitted(spec, entry.tag);
       entry.map['outbounds'] = members;
       // §565 — `default` ручного рода: сырой тег члена → итоговый. Член не
       // разрешился — поле снимается, ядро берёт первого живого члена.
@@ -329,6 +366,42 @@ extension ServerListBuild on ServerList {
       ctx.addReplacePlan(plan);
     }
   }
+}
+
+/// §670 — допуск узла источника в пулы по политике detour. Одна функция на
+/// все пулы: селекторы Направлений, `<tag>-auto` и (§675) пул auto-узла
+/// источника.
+///
+/// - [tailnetOnly] — реестр не считает узел выходом (§435, Tailscale без
+///   `exit_node`): ни в один пул.
+/// - Не звено ([detourLink] false) — в оба.
+/// - Звено цепочки (`⚙`, хоп родной цепочки, `isChainLink` папки):
+///   `selector` — по «Register detour servers»; `auto` — по «Register detour
+///   in auto group». В `<tag>-auto` Направлений запись идёт только вместе с
+///   `selector` (сверка в `buildConfig`); свёртка §565 читает `auto` как есть.
+({bool selector, bool auto}) poolAdmission({
+  required bool tailnetOnly,
+  required bool detourLink,
+  required DetourPolicy policy,
+}) {
+  if (tailnetOnly) return (selector: false, auto: false);
+  if (!detourLink) return (selector: true, auto: true);
+  return (
+    selector: policy.registerDetourServers,
+    auto: policy.registerDetourInAuto,
+  );
+}
+
+/// §670 — есть ли у папки звенья, которые регистрируют галки «Register
+/// detour …»: член с родной цепочкой, член с `⚙`-тегом или член-цель
+/// личного detour другого члена ЭТОЙ папки ([FolderDetourPlan.isChainLink]).
+/// Личный detour на узел вне папки звена в папке не даёт.
+bool folderHasDetourLinks(FolderServers folder) {
+  for (final n in folder.nodes) {
+    if (n is AutoSelectSpec) continue;
+    if (n.chained != null || n.tag.startsWith(kDetourTagPrefix)) return true;
+  }
+  return FolderDetourPlan(folder).hasChainLinks;
 }
 
 /// §322 §3.3 — состав пула по режиму членства.
@@ -537,6 +610,9 @@ class FolderDetourPlan {
 
   /// Член-цель чужого интра-detour → регистрируется как звено (⚙-семантика).
   bool isChainLink(int i) => _chainLinks.contains(i);
+
+  /// §670 — хотя бы один член — звено интра-цепочки.
+  bool get hasChainLinks => _chainLinks.isNotEmpty;
 
   /// Эффективная политика ноды [i] поверх папочной [base] (§237-семантика +
   /// §239 exempt).

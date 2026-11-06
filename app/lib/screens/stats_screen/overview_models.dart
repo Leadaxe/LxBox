@@ -18,6 +18,7 @@ class Connection {
     this.upload = 0,
     this.download = 0,
     this.start = 0,
+    this.sourceLabel = '',
   });
 
   /// ≈ `CcConnection.domain`.
@@ -32,4 +33,8 @@ class Connection {
 
   /// Epoch ms (`CcConnection.createdAt`). 0 = неизвестно.
   final int start;
+
+  /// §661 — `CcConnection.sourceLabel`: `source / inbound` для входа не
+  /// через tun-in, иначе пусто.
+  final String sourceLabel;
 }

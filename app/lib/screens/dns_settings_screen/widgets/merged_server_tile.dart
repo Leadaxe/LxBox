@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../services/dns/dns_server_holds.dart' show dnsListableTags;
 import '../../../vpn/cc_channel.dart';
+import '../../../widgets/reorder_grab_strip.dart';
 import '../resolved_server.dart';
 import 'dns_badge.dart';
 import '../../../services/l10n/locale_controller.dart';
@@ -23,7 +25,9 @@ class MergedServerTile extends StatelessWidget {
     required this.entry,
     required this.onToggleEnabled,
     required this.onTap,
+    this.onLongPressStart,
     this.liveGroup,
+    this.dragIndex,
   });
 
   final ResolvedServer entry;
@@ -32,9 +36,16 @@ class MergedServerTile extends StatelessWidget {
   /// Тап по тайлу — открыть редактор сервера.
   final void Function(String tag) onTap;
 
+  /// §680 — long-press: контекстное меню (Delete) в точке нажатия.
+  final void Function(String tag, Offset globalPosition)? onLongPressStart;
+
   /// §312 — live-состояние DNS-группы от ядра (SPEC 035); null = туннель
   /// down / ядро без метода / сервер не группа. Рисуется доп. строкой.
   final CcDnsGroup? liveGroup;
+
+  /// §710 — индекс в `ReorderableListView`; задан → слева полоса
+  /// `ReorderGrabStrip` (как у `DnsRuleTile`), null → тайл прежний.
+  final int? dragIndex;
 
   @override
   Widget build(BuildContext context) {
@@ -42,6 +53,10 @@ class MergedServerTile extends StatelessWidget {
     final addr = entry.body['server']?.toString() ?? '';
     final theme = Theme.of(context);
     final locked = entry.locked;
+    // §117: force-include сборки → показываем ON. §680: лок ссылкой из
+    // списка держит включённый сервер включённым; выключенный (состояние
+    // до §680) остаётся выключенным, но включить его можно.
+    final switchOn = entry.enabled || entry.forceIncluded;
 
     // Короткие labels (§044).
     final (String badgeText, Color badgeColor) = switch (entry.kind) {
@@ -62,24 +77,63 @@ class MergedServerTile extends StatelessWidget {
             : (getLocalText.s("User"), theme.colorScheme.secondary),
     };
 
-    // §312 — у группы вместо адреса: режим + число членов.
+    // §312 — у группы вместо адреса: режим + число членов. §695 — членов,
+    // которые реально есть в списке (тело шаблонной группы всегда полное).
+    // §699 — группа с ключом `hosts`: «+hosts» в конце.
+    final groupHosts = type == 'group' &&
+        dnsListableTags(entry.body['hosts']).isNotEmpty;
     final groupInfo = type == 'group'
         ? ' · ${(entry.body['mode'] as String?) ?? 'stable'}'
-              ' · ${(entry.body['servers'] as List?)?.length ?? 0}'
+              ' · ${entry.groupMembersInList}'
+              // l10n-exempt: wire key `hosts`
+              '${groupHosts ? ' · +hosts' : ''}'
+        : '';
+    // §699 — сервер `hosts`: число имён (`predefined`).
+    final predefined = entry.body['predefined'];
+    final names = predefined is Map ? predefined.length : 0;
+    final hostsInfo = type == 'hosts'
+        ? ' · ${names == 1 ? getLocalText.s("1 name") : getLocalText.plural("%d names", names)}'
         : '';
     final subtitleLine =
-        '${entry.tag} · $type$groupInfo${addr.isNotEmpty ? ' · $addr' : ''}'
+        '${entry.tag} · $type$groupInfo$hostsInfo${addr.isNotEmpty ? ' · $addr' : ''}'
         '${entry.presetLabel != null && entry.presetLabel!.isNotEmpty ? ' · ${entry.presetLabel}' : ''}';
 
-    return Card(
+    final longPress = onLongPressStart;
+    final tile = GestureDetector(
+      onLongPressStart: longPress == null
+          ? null
+          : (d) => longPress(entry.tag, d.globalPosition),
+      child: Card(
       child: ListTile(
         onTap: () => onTap(entry.tag),
         leading: SizedBox(
           width: 40,
           child: Switch(
             // §117: locked-сервер build force-include'ит — показываем ON.
-            value: entry.enabled || locked,
-            onChanged: locked ? null : (v) => onToggleEnabled(entry.tag, v),
+            value: switchOn,
+            // §680: залоченный включённый — активный и ON (disabled Material
+            // рисует серым, строка читалась как выключенная); тап объясняет
+            // лок вместо переключения.
+            onChanged: locked && switchOn
+                ? (_) => ScaffoldMessenger.of(context)
+                  ..hideCurrentSnackBar()
+                  ..showSnackBar(SnackBar(
+                    content: Text(getLocalText.s(
+                      "Locked: used by %s. Remove the reference first.",
+                      entry.lockedByLabel,
+                    )),
+                  ))
+                // §695 — выключенную группу без живых членов не включаем:
+                // сборка получила бы пустую группу.
+                : entry.enableBlockedEmptyGroup
+                ? (_) => ScaffoldMessenger.of(context)
+                  ..hideCurrentSnackBar()
+                  ..showSnackBar(SnackBar(
+                    content: Text(getLocalText.s(
+                      "No members left in the list. Enable or add a member first.",
+                    )),
+                  ))
+                : (v) => onToggleEnabled(entry.tag, v),
           ),
         ),
         title: Text(
@@ -87,7 +141,7 @@ class MergedServerTile extends StatelessWidget {
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w500,
-            color: entry.enabled || locked
+            color: switchOn
                 ? null
                 : theme.colorScheme.onSurfaceVariant,
           ),
@@ -112,11 +166,15 @@ class MergedServerTile extends StatelessWidget {
                     color: theme.colorScheme.primary,
                   ),
                   const SizedBox(width: 4),
-                  Text(
-                    getLocalText.s("used by %s", entry.lockedByLabel),
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: theme.colorScheme.primary,
+                  // §680 — источников может быть несколько: длинная подпись
+                  // переносится, а не переполняет строку.
+                  Flexible(
+                    child: Text(
+                      getLocalText.s("used by %s", entry.lockedByLabel),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: theme.colorScheme.primary,
+                      ),
                     ),
                   ),
                 ],
@@ -127,6 +185,24 @@ class MergedServerTile extends StatelessWidget {
         ),
         trailing: DnsBadge(badgeText, badgeColor),
       ),
+      ),
+    );
+
+    if (dragIndex == null) return tile;
+    // §710 — полоса 18px + горизонтальные margin 6+6 = 30px gutter слева.
+    return Stack(
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 30),
+          child: tile,
+        ),
+        Positioned(
+          left: 0,
+          top: 0,
+          bottom: 0,
+          child: ReorderGrabStrip(index: dragIndex!),
+        ),
+      ],
     );
   }
 }

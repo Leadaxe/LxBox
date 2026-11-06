@@ -53,16 +53,22 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
   bool _haptic = true;
   bool _batteryWhitelisted = false;
   bool _notificationsEnabled = true;
+  Map<String, bool> _notificationButtons = const {};
   bool _backgroundLocationGranted = false;
   bool _nearbyWifiGranted = false;
   String? _wifiLocationIssue;
   bool _autoPing = true;
+  // §713 — параллельность проверки серверов.
+  int _pingConcurrency = SettingsStorage.pingConcurrencyDefault;
+  int _nodeBudget = SettingsStorage.nodeBudgetDefault;
   bool _autoUpdateSubs = true;
   bool _autoUpdateDisabledSubs = false;
   bool _autoReloadOnChange = false;
   bool _autoCheckUpdates = true;
   // §220 — снятие портретной фиксации (default OFF = портрет).
   bool _allowRotation = false;
+  // §679 — на TV ориентация не фиксируется, переключатель поворота скрыт.
+  bool _isTelevision = false;
   // §541 — две колонки списка узлов на широком окне (default ON).
   bool _nodeListTwoColumns = true;
   bool _loaded = false;
@@ -104,6 +110,9 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     WidgetsBinding.instance.addObserver(this);
     _debugPortCtl = TextEditingController();
     unawaited(_loadAutoStart());
+    unawaited(ul.UrlLauncher.isTelevision().then((tv) {
+      if (tv && mounted) setState(() => _isTelevision = true);
+    }));
     if (widget.highlightCoreLogs) {
       // Tile живёт в Diagnostics tab (initialTab=3). Tab сам строит
       // children когда юзер на нём — postFrame этого build'а гарантирует
@@ -151,11 +160,14 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     final auto = await SettingsStorage.getNativeBool(NativePrefsKeys.autoStart);
     final haptic = await SettingsStorage.getVar(HapticService.prefsKey, 'true');
     final autoPing = await SettingsStorage.getVar('auto_ping_on_start', 'true');
+    final pingConcurrency = await SettingsStorage.getPingConcurrency();
+    final nodeBudget = await SettingsStorage.getNodeBudget();
     final battery = await _vpn.isIgnoringBatteryOptimizations();
     final notifications = await _vpn.areNotificationsEnabled();
     final bgLocation = await ul.UrlLauncher.checkBackgroundLocationPermission();
     final nearbyWifi = await ul.UrlLauncher.checkNearbyWifiPermission();
     final wifiLocationIssue = await _readWifiLocationIssue();
+    final notificationButtons = await loadNotificationButtons();
     final autoUpdateSubs = await SettingsStorage.getAutoUpdateSubs();
     final autoUpdateDisabledSubs =
         await SettingsStorage.getAutoUpdateDisabledSubs();
@@ -172,10 +184,8 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     final autoRecordWifi = await SettingsStorage.getAutoRecordWifi();
     final userAgent =
         await SettingsStorage.getVar(SubscriptionIdentity.varUserAgent, '');
-    final sendHwid =
-        (await SettingsStorage.getVar(SubscriptionIdentity.varSendHwid,
-            'false')) ==
-            'true';
+    final sendHwid = SubscriptionIdentity.parseSendHwid(
+        await SettingsStorage.getVar(SubscriptionIdentity.varSendHwid, ''));
     final hwid =
         await SettingsStorage.getVar(SubscriptionIdentity.varHwid, '');
     final deviceOs =
@@ -197,8 +207,11 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
         _verOs = verOs;
         _deviceModel = deviceModel;
         _autoStart = auto;
+        _notificationButtons = notificationButtons;
         _haptic = haptic != 'false';
         _autoPing = autoPing != 'false';
+        _pingConcurrency = pingConcurrency;
+        _nodeBudget = nodeBudget;
         _batteryWhitelisted = battery;
         _notificationsEnabled = notifications;
         _backgroundLocationGranted = bgLocation;
@@ -691,6 +704,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     return AppearanceTab(
       loaded: _loaded,
       allowRotation: _allowRotation,
+      showAllowRotation: !_isTelevision,
       nodeListTwoColumns: _nodeListTwoColumns,
       padding: _tabPadding(context),
       onAllowRotationChanged: (val) => unawaited(_toggleAllowRotation(val)),
@@ -707,6 +721,8 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
       autoStart: _autoStart,
       autoCheckUpdates: _autoCheckUpdates,
       autoPing: _autoPing,
+      pingConcurrency: _pingConcurrency,
+      nodeBudget: _nodeBudget,
       haptic: _haptic,
       autoReloadOnChange: _autoReloadOnChange, // §338
       padding: _tabPadding(context),
@@ -730,6 +746,21 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
         unawaited(SettingsStorage.setVar(
             'auto_ping_on_start', val.toString()));
       },
+      // §713 — null = сброс к дефолту (ключ снимается).
+      onPingConcurrencyChanged: (val) {
+        setState(() =>
+            _pingConcurrency = val ?? SettingsStorage.pingConcurrencyDefault);
+        unawaited(SettingsStorage.setPingConcurrency(val));
+      },
+      // Бюджет узлов — null = сброс к дефолту; подписки перерезаются из кэша.
+      onNodeBudgetChanged: (val) {
+        setState(() => _nodeBudget = val == null
+            ? SettingsStorage.nodeBudgetDefault
+            : (val < SettingsStorage.nodeBudgetMin
+                ? SettingsStorage.nodeBudgetMin
+                : val));
+        unawaited(SettingsStorage.setNodeBudget(val));
+      },
       onHapticChanged: (val) {
         setState(() => _haptic = val);
         HapticService.I.enabled = val;
@@ -745,6 +776,12 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
       region: _region,
       detectedRegion: _detectedRegion,
       onEditRegion: () => unawaited(_editRegion()),
+      notificationButtons: _notificationButtons,
+      onNotificationButtonChanged: (button, val) {
+        setState(() =>
+            _notificationButtons = {..._notificationButtons, button: val});
+        unawaited(saveNotificationButton(button, val));
+      },
     );
   }
 

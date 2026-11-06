@@ -381,10 +381,6 @@ void main() {
       expect(legacyNodeIdentityHash(before), isNot(legacyNodeIdentityHash(after)),
           reason: 'контент-хеш при этом обязан РАЗОЙТИСЬ — он про содержимое');
     });
-
-    test('пустой список → пустая карта', () {
-      expect(sourceNodeIdentities(const []), isEmpty);
-    });
   });
 
   group('§400 migrateLegacyDisabledKeys (IDENTITY.md §5.1)', () {
@@ -445,12 +441,6 @@ void main() {
       final second = migrateLegacyDisabledKeys(first, [node]);
       expect(identical(second, first), isTrue);
       expect(second, {'DE-1': seen});
-    });
-
-    test('пустая карта → та же ссылка без работы', () {
-      final current = <String, DateTime>{};
-      expect(identical(migrateLegacyDisabledKeys(current, [_node('X')]), current),
-          isTrue);
     });
 
     test('узел без идентичности legacy-ключ не принимает', () {

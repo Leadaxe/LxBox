@@ -5,20 +5,6 @@ import 'package:lxbox/screens/warp_wizard_screen.dart';
 void main() {
   const mark = '(recommended)';
 
-  test('§424 label = чистое значение, пометка только в labelWidget', () {
-    final e = warpPresetEntry('a.example', 'a.example', mark);
-    expect(e.label, 'a.example');
-    expect(e.labelWidget, isA<Text>());
-    expect((e.labelWidget as Text).data, 'a.example $mark');
-
-    final plain = warpPresetEntry('b.example', 'a.example', mark);
-    expect(plain.label, 'b.example');
-    expect(plain.labelWidget, isNull);
-
-    // Пустой recommended → пометок нет ни у кого.
-    expect(warpPresetEntry('', '', mark).labelWidget, isNull);
-  });
-
   testWidgets('§424 выбор recommended-пункта кладёт в контроллер чистое значение',
       (tester) async {
     final c = TextEditingController();

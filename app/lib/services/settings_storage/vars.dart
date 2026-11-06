@@ -14,7 +14,16 @@ Future<String> _getVar(String name, String defaultValue) async {
 Future<void> _setVar(String name, String value, {bool flush = true}) async {
   final data = await _load();
   final vars = (data['vars'] as Map<String, dynamic>?) ?? {};
-  vars[name] = value;
+  // §643 (D-132) — объявление глобальной переменной в загруженном шаблоне:
+  // `internal` в состояние не пишется (ключ снимается молча), `unique` у
+  // `text_list` — значение без дублей. Шаблон ещё не загружен — как есть
+  // (сборка значение `internal` всё равно не читает).
+  final decl = TemplateLoader.cachedOrNull()?.globalVar(name);
+  if (decl != null && decl.isInternal) {
+    vars.remove(name);
+  } else {
+    vars[name] = applyVarUnique(decl, value);
+  }
   data['vars'] = vars;
   SettingsStorage._cache = data;
   // §113 — config-var → конфиг устарел. Прочие var (сортировка, таймстемпы

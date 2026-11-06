@@ -21,6 +21,7 @@ import '../../services/parser/parse_all.dart';
 import '../import_rule.dart';
 import '../node_link.dart';
 import '../node_spec.dart';
+import '../tls_policy.dart';
 import '../record_codec.dart' show RecordRead;
 import '../core_reject_verdict.dart';
 import '../server_list.dart';
@@ -73,6 +74,7 @@ Map<String, dynamic> _subscriptionToRecord(SubscriptionServers s) => {
       if (s.replace != null) 'replace': sourceReplaceToRecord(s.replace!),
       // L — настройки LxBox.
       ..._detourPolicyToRecord(s.detourPolicy),
+      ..._tlsToRecord(s.tls),
       // §565 / задача 570 — выбор члена групп ручного рода: сырой тег группы
       // → сырой тег члена. В бэкап не едет (lx_backup_slice, рантайм).
       if (s.groupDefaults.isNotEmpty)
@@ -91,6 +93,7 @@ Map<String, dynamic> _subscriptionToRecord(SubscriptionServers s) => {
       if (s.lastUpdateStatus != UpdateStatus.never)
         'last_update_status': s.lastUpdateStatus.name,
       if (s.lastNodeCount != 0) 'last_node_count': s.lastNodeCount,
+      if (s.totalNodeCount != 0) 'total_node_count': s.totalNodeCount,
       if (s.consecutiveFails != 0) 'consecutive_fails': s.consecutiveFails,
     };
 
@@ -108,10 +111,15 @@ Map<String, dynamic> _serverToRecord(UserServer u) {
     if (u.warnings.isNotEmpty) 'warnings': storedWarningsToJson(u.warnings),
     if (u.rawBody.isNotEmpty) 'origin': _originToRecord(u.rawBody),
     ..._detourLinkToRecord(u.detourPolicy),
-    // §578 — пишется только `true`; отсутствие = `false`.
-    if (u.skipPresets) 'skip_presets': true,
+    // §578/§656 — пишется только `true` и только новые ключи.
+    ..._recordFlagsToRecord(u.skipTailscalePresets, u.allowLocal, u.allowLan,
+        u.allowGateway, u.ownRoutes, u.disableTaildropCommands,
+        u.disableTaildropAutosave),
+    // §707 (контракт 1.1.160) — имя каталога состояния лаунчера, как есть.
+    if (u.stateDirId.isNotEmpty) 'state_dir_id': u.stateDirId,
     // L — настройки LxBox.
     ..._detourPolicyToRecord(u.detourPolicy),
+    ..._tlsToRecord(u.tls),
     if (u.tagPrefix.isNotEmpty) 'tag_policy': _tagPolicyToRecord(u.tagPrefix),
   };
 }
@@ -127,6 +135,7 @@ Map<String, dynamic> _folderToRecord(FolderServers f) => {
       if (f.replace != null) 'replace': sourceReplaceToRecord(f.replace!),
       // L — настройки LxBox.
       ..._detourPolicyToRecord(f.detourPolicy),
+      ..._tlsToRecord(f.tls),
       if (f.pingUrl != null) 'ping_url': f.pingUrl,
       if (f.pingTimeoutMs != null) 'ping_timeout_ms': f.pingTimeoutMs,
       // L — момент создания: его отдаёт Debug API `/folders`.
@@ -149,10 +158,47 @@ Map<String, dynamic> _memberToRecord(FolderMember m, String folderId) {
     if (m.raw.isNotEmpty) 'origin': _originToRecord(m.raw),
     if (m.detour.isNotEmpty) 'detour': nodeLinkToRecord(m.detour),
     if (node == null) 'reason': kMemberUnparsedReason,
-    // §578 — пишется только `true`; отсутствие = `false`.
-    if (m.skipPresets) 'skip_presets': true,
+    // §578/§656 — пишется только `true` и только новые ключи.
+    ..._recordFlagsToRecord(m.skipTailscalePresets, m.allowLocal, m.allowLan,
+        m.allowGateway, m.ownRoutes, m.disableTaildropCommands,
+        m.disableTaildropAutosave),
+    if (m.stateDirId.isNotEmpty) 'state_dir_id': m.stateDirId, // §707 1.1.160
+    ..._tlsToRecord(m.tls),
   };
 }
+
+/// §656 (контракт 1.1.126) — поля записи узла: только `true`; старый ключ
+/// `skip_presets` не пишется никогда.
+Map<String, dynamic> _recordFlagsToRecord(
+        bool skipTailscalePresets, bool allowLocal, bool allowLan,
+        bool allowGateway,
+        bool ownRoutes,
+        bool disableTaildropCommands,
+        bool disableTaildropAutosave) =>
+    {
+      if (skipTailscalePresets) 'skip_tailscale_presets': true,
+      if (allowLocal) 'allow_local': true,
+      if (allowLan) 'allow_lan': true,
+      if (allowGateway) 'allow_gateway': true,
+      // Пресет `tunnel-routes` — только `true`.
+      if (ownRoutes) 'own_routes': true,
+      // §707 итер. 9 — Taildrop узла, тоже только `true`.
+      if (disableTaildropCommands) 'disable_taildrop_commands': true,
+      if (disableTaildropAutosave) 'disable_taildrop_autosave': true,
+    };
+
+/// §707 (контракт 1.1.160) — `state_dir_id`: строка как есть; пустая или не
+/// строка — поля нет. Общий разбор хранения и LX-бэкапа.
+String stateDirIdOf(Object? v) => v is String ? v : '';
+
+/// §656 — терпимое чтение: `skip_presets` (до 1.1.126) читается как
+/// `skip_tailscale_presets`; оба ключа — `true`, если хоть один `true`.
+bool _skipTailscalePresetsOf(Map<String, dynamic> j) =>
+    _bool(j['skip_tailscale_presets'], false) || _bool(j['skip_presets'], false);
+
+/// §636 — TLS-политика: только заданные поля, пустая не пишется.
+Map<String, dynamic> _tlsToRecord(TlsPolicy p) =>
+    p.isEmpty ? const {} : {'tls': p.toJson()};
 
 /// §439 п. 9 — у контракта разделитель внутри префикса, у модели снаружи.
 Map<String, dynamic> _tagPolicyToRecord(String prefix) => {'prefix': '$prefix '};
@@ -315,23 +361,32 @@ const Set<String> _subscriptionKeys = {
   'disabled', 'warnings', 'detour', 'detour_policy', 'import_rules',
   'import_rules_enabled', 'on_update_action', 'meta', 'last_updated',
   'last_update_attempt', 'last_update_status', 'last_node_count',
-  'consecutive_fails', 'replace', 'group_defaults',
+  'total_node_count', 'consecutive_fails', 'replace', 'group_defaults', 'tls',
 };
 
 const Set<String> _serverKeys = {
   'kind', 'id', 'tag', 'enabled', 'warnings', 'origin', 'body', 'detour',
-  'sections', 'skip_presets',
-  'detour_policy', 'tag_policy',
+  'sections', 'skip_presets', 'skip_tailscale_presets', 'allow_local',
+  'allow_lan', 'allow_gateway', 'own_routes', 'disable_taildrop_commands',
+  'disable_taildrop_autosave',
+  // §707 (контракт 1.1.160): `state_dir_id` переносится; `taildrop_double_copy`
+  // применяет только лаунчер — известен, но молча пропускается.
+  'state_dir_id', 'taildrop_double_copy',
+  'detour_policy', 'tag_policy', 'tls',
 };
 
 const Set<String> _folderKeys = {
   'kind', 'id', 'name', 'enabled', 'tag_policy', 'detour', 'detour_policy',
-  'ping_url', 'ping_timeout_ms', 'created_at', 'nodes', 'replace',
+  'ping_url', 'ping_timeout_ms', 'created_at', 'nodes', 'replace', 'tls',
 };
 
 const Set<String> _memberKeys = {
   'kind', 'tag', 'enabled', 'warnings', 'origin', 'body', 'detour', 'reason',
-  'sections', 'skip_presets',
+  'sections', 'skip_presets', 'skip_tailscale_presets', 'allow_local',
+  'allow_lan', 'allow_gateway', 'own_routes', 'disable_taildrop_commands',
+  'disable_taildrop_autosave',
+  'state_dir_id', 'taildrop_double_copy', // §707 (контракт 1.1.160)
+  'tls',
 };
 
 const Set<String> _detourPolicyKeys = {
@@ -400,6 +455,7 @@ SubscriptionServers _subscriptionFromRecord(
     enabled: _bool(j['enabled'], true),
     tagPrefix: _prefixFromRecord(j['tag_policy'], unknown),
     detourPolicy: _detourPolicyFromRecord(j, unknown),
+    tls: TlsPolicy.fromJson(j['tls']),
     url: _string(j['url']),
     meta: _metaFromRecord(j['meta'], where, notes),
     lastUpdated: _date(j['last_updated']),
@@ -410,6 +466,7 @@ SubscriptionServers _subscriptionFromRecord(
     ),
     updateIntervalHours: interval is num ? interval.toInt() : 24,
     lastNodeCount: _int(j['last_node_count'], 0),
+    totalNodeCount: _int(j['total_node_count'], 0),
     consecutiveFails: _int(j['consecutive_fails'], 0),
     disabledHashes: _disabledFromRecord(j['disabled']),
     nodeWarnings: storedWarningsMapFromJson(j['warnings']),
@@ -460,8 +517,16 @@ UserServer _serverFromRecord(
     warnings: storedWarningsFromJson(j['warnings']),
     tagPrefix: _prefixFromRecord(j['tag_policy'], unknown),
     detourPolicy: _detourPolicyFromRecord(j, unknown),
+    tls: TlsPolicy.fromJson(j['tls']),
     rawBody: raw,
-    skipPresets: _bool(j['skip_presets'], false),
+    skipTailscalePresets: _skipTailscalePresetsOf(j),
+    allowLocal: _bool(j['allow_local'], false),
+    allowLan: _bool(j['allow_lan'], false),
+    allowGateway: _bool(j['allow_gateway'], false),
+    ownRoutes: _bool(j['own_routes'], false),
+    disableTaildropCommands: _bool(j['disable_taildrop_commands'], false),
+    disableTaildropAutosave: _bool(j['disable_taildrop_autosave'], false),
+    stateDirId: stateDirIdOf(j['state_dir_id']),
     // Список растущий: контроллер дописывает узлы на месте (как fromJson).
     nodes: [...nodes],
   );
@@ -491,6 +556,7 @@ FolderServers _folderFromRecord(
     enabled: _bool(j['enabled'], true),
     tagPrefix: _prefixFromRecord(j['tag_policy'], unknown),
     detourPolicy: _detourPolicyFromRecord(j, unknown),
+    tls: TlsPolicy.fromJson(j['tls']),
     members: members,
     // Пустой адрес — «брать глобальный», как у legacy-чтения.
     pingUrl: pingUrl is String && pingUrl.trim().isNotEmpty
@@ -547,7 +613,15 @@ FolderMember? _memberFromRecord(
     warnings: storedWarningsFromJson(j['warnings']),
     detour: nodeLinkFromRecord(j['detour']) ?? NodeLink.none,
     nameHint: hint ?? '',
-    skipPresets: _bool(j['skip_presets'], false),
+    skipTailscalePresets: _skipTailscalePresetsOf(j),
+    allowLocal: _bool(j['allow_local'], false),
+    allowLan: _bool(j['allow_lan'], false),
+    allowGateway: _bool(j['allow_gateway'], false),
+    ownRoutes: _bool(j['own_routes'], false),
+    disableTaildropCommands: _bool(j['disable_taildrop_commands'], false),
+    disableTaildropAutosave: _bool(j['disable_taildrop_autosave'], false),
+    stateDirId: stateDirIdOf(j['state_dir_id']),
+    tls: TlsPolicy.fromJson(j['tls']),
   );
   if (hint == null) _checkTag(j, member.node?.tag, where, notes);
   return member;

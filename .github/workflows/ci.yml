@@ -22,11 +22,17 @@ on:
   workflow_dispatch:
     inputs:
       run_mode:
-        description: "checks | build | release"
+        description: "checks | build | build-fast (one APK, see abi; no checks/AAB) | release"
         required: true
         default: "checks"
         type: choice
-        options: [checks, build, release]
+        options: [checks, build, build-fast, release]
+      abi:
+        description: "build-fast only: which APK to build"
+        required: false
+        default: "arm64-v8a"
+        type: choice
+        options: [arm64-v8a, armeabi-v7a, x86_64, universal]
       test_path:
         description: "Pinpoint run: test path(s) relative to app/ (e.g. test/screens/startup_wizard_test.dart). Empty = full suite. Skips analyze for speed."
         required: false
@@ -42,7 +48,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  # build-fast — своя группа: сборку можно запускать прямо на develop, она не
+  # отменяет push-проверки той же ветки и не отменяется ими.
+  group: ci-${{ github.workflow }}-${{ github.ref }}${{ github.event.inputs.run_mode == 'build-fast' && '-fast' || '' }}
   cancel-in-progress: true
 
 jobs:
@@ -58,7 +66,7 @@ jobs:
       is_prerelease: ${{ steps.meta.outputs.is_prerelease }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Compute version
@@ -111,11 +119,12 @@ jobs:
             echo "tag=" >> "$GITHUB_OUTPUT"
             echo "is_release=false" >> "$GITHUB_OUTPUT"
           fi
-          # §436 — релиз-кандидат (vX.Y.Z-rc.N) до пользователей не доходит:
-          # GitHub-релиз помечается pre-release (/releases/latest, куда ходит
-          # UpdateChecker, его не видит), docs/latest.json не обновляется, в
-          # Google Play не уходит. Hotfix (vX.Y.Z-hotfixN) — полноценный релиз,
-          # флаг false.
+          # §436 — релиз-кандидат (vX.Y.Z-rc.N) до пользователей stable не
+          # доходит: GitHub-релиз помечается pre-release (/releases/latest, куда
+          # ходит UpdateChecker, его не видит), docs/latest.json не обновляется.
+          # §619 — в Google Play rc уходит, но в открытое тестирование (трек
+          # beta), не в production: выбор трека — шаг target job google-play.
+          # Hotfix (vX.Y.Z-hotfixN) — полноценный релиз, флаг false.
           # Других суффиксов не бывает: version-code.sh падает на неизвестном.
           if [[ "$VERSION" == *-rc.* ]]; then
             echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
@@ -124,13 +133,16 @@ jobs:
           fi
 
   checks:
+    # build-fast — APK как можно быстрее: проверки пропускаются (их делает
+    # push-прогон той же головы), android стартует сразу после meta.
+    if: github.event.inputs.run_mode != 'build-fast'
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: app
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Flutter version pin
         id: flutter_pin
@@ -263,7 +275,13 @@ jobs:
             echo "::notice::Pinpoint test run: $TEST_PATH"
             flutter "${ARGS[@]}"
           else
-            flutter test
+            # Полный прогон — сборками: K точек входа вместо одной на файл
+            # (компиляция и старт каждого файла съедали бóльшую часть
+            # времени шага). Файлы из kExcluded генератора идут отдельно.
+            # Сброс глобального состояния между файлами —
+            # test/support/test_globals.dart (DEVELOPMENT_GUIDE → Testing).
+            dart run tool/gen_test_bundles.dart
+            flutter test test_bundle $(cat test_bundle/excluded.txt)
           fi
 
   # §525 — корпус публичных подписок: прогон конвейера разбора по 68 снимкам
@@ -277,7 +295,7 @@ jobs:
   # не вышло, `flutter test` не пробрасывает ни --exclude-tags, ни -P).
   public-subs:
     name: PublicSubsCorpus
-    if: ${{ github.event.inputs.test_path == '' }}
+    if: ${{ github.event.inputs.test_path == '' && github.event.inputs.run_mode != 'build-fast' }}
     runs-on: ubuntu-latest
     continue-on-error: true
     defaults:
@@ -285,7 +303,7 @@ jobs:
         working-directory: app
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Flutter version pin
         id: flutter_pin
@@ -320,8 +338,14 @@ jobs:
           retention-days: 14
 
   android:
-    if: startsWith(github.ref, 'refs/tags/v') ||
-        (github.event_name == 'workflow_dispatch' && github.event.inputs.run_mode != 'checks')
+    # build-fast пропускает checks; пропущенная зависимость иначе пропустила
+    # бы и android, поэтому условие явно разбирает результат checks.
+    if: >-
+      !cancelled() && needs.meta.result == 'success' &&
+      (needs.checks.result == 'success' ||
+       (needs.checks.result == 'skipped' && github.event.inputs.run_mode == 'build-fast')) &&
+      (startsWith(github.ref, 'refs/tags/v') ||
+       (github.event_name == 'workflow_dispatch' && github.event.inputs.run_mode != 'checks'))
     needs: [meta, checks]
     runs-on: ubuntu-latest
     defaults:
@@ -329,7 +353,7 @@ jobs:
         working-directory: app
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           # §379 — versionCode считается из версии, история для него больше не
           # нужна. Полные refs оставлены для git-зависимых шагов (describe).
@@ -478,10 +502,20 @@ jobs:
             mv "$OUT/app-release.apk" "$OUT/app-${VARIANT}-release.apk"
             echo "::endgroup::"
           }
-          build_one universal   "android-arm,android-arm64,android-x64" ""
-          build_one armeabi-v7a android-arm                             armeabi-v7a
-          build_one arm64-v8a   android-arm64                           arm64-v8a
-          build_one x86_64      android-x64                             x86_64
+          if [ "${{ github.event.inputs.run_mode }}" = "build-fast" ]; then
+            # build-fast — один таргет из входа `abi` (по умолчанию arm64-v8a).
+            case "${{ github.event.inputs.abi }}" in
+              universal)   build_one universal   "android-arm,android-arm64,android-x64" "" ;;
+              armeabi-v7a) build_one armeabi-v7a android-arm                             armeabi-v7a ;;
+              x86_64)      build_one x86_64      android-x64                             x86_64 ;;
+              *)           build_one arm64-v8a   android-arm64                           arm64-v8a ;;
+            esac
+          else
+            build_one universal   "android-arm,android-arm64,android-x64" ""
+            build_one armeabi-v7a android-arm                             armeabi-v7a
+            build_one arm64-v8a   android-arm64                           arm64-v8a
+            build_one x86_64      android-x64                             x86_64
+          fi
           ls -la "$OUT"/app-*-release.apk
 
       - name: Upload APKs (release)
@@ -494,6 +528,7 @@ jobs:
           retention-days: ${{ startsWith(github.ref, 'refs/tags/') && 1 || 30 }}
 
       - name: Build AAB (Google Play)
+        if: github.event.inputs.run_mode != 'build-fast'
         # Play принимает только AAB. Отдельный формат, отдельный канал:
         # в GitHub Releases по-прежнему уходят APK (шаги выше), сюда не
         # попадают — бандл забирает job google-play (§436) и отдаёт в Play API;
@@ -526,6 +561,7 @@ jobs:
           ls -la build/app/outputs/bundle/release/app-release.aab
 
       - name: Upload AAB (release)
+        if: github.event.inputs.run_mode != 'build-fast'
         uses: actions/upload-artifact@v7
         with:
           name: android-aab-release
@@ -537,8 +573,9 @@ jobs:
     name: GooglePlay
     needs: [meta, android]
     runs-on: ubuntu-latest
-    # Релиз-кандидаты (-rc.N) в Play не идут: job пропускается (skipped).
-    if: needs.meta.outputs.is_release == 'true' && needs.meta.outputs.is_prerelease != 'true'
+    # §619 — релиз-кандидаты (-rc.N) тоже идут в Play, но на свой трек
+    # (открытое тестирование), см. шаг target.
+    if: needs.meta.outputs.is_release == 'true'
     # §436 — AAB из job android уезжает в Play Console через Google Play
     # Developer API от имени сервисного аккаунта (секрет
     # PLAY_SERVICE_ACCOUNT_JSON = JSON-ключ целиком; права в Play Console —
@@ -548,15 +585,20 @@ jobs:
     # Параллелен release и publish-manifest, они от него НЕ зависят: провал
     # заливки в Play не должен снимать GitHub-релиз.
     #
-    # Трек и статус — repo variables, переключаются без коммита:
-    #   PLAY_TRACK           production | internal | alpha | beta   (default production)
-    #   PLAY_RELEASE_STATUS  draft | completed                       (default draft)
+    # Трек и статус — repo variables, переключаются без коммита. Релиз и
+    # hotfix читают PLAY_*, релиз-кандидат — PLAY_RC_*:
+    #   PLAY_TRACK              production | internal | alpha | beta   (default production)
+    #   PLAY_RELEASE_STATUS     draft | completed                       (default draft)
+    #   PLAY_RC_TRACK           production | internal | alpha | beta   (default beta = открытое тестирование)
+    #   PLAY_RC_RELEASE_STATUS  draft | completed                       (default completed)
     # draft: выпуск ложится в консоль черновиком, Publish жмёт человек.
-    # completed: уходит на проверку Google сам.
+    # completed: уходит на проверку Google сам. Открытое тестирование
+    # проходит проверку Google так же, как production; страница Open testing
+    # должна быть заведена в консоли, иначе API отвергнет трек.
     #   gh variable set PLAY_RELEASE_STATUS -b completed
     steps:
       - name: Checkout (changelogs + version-code.sh)
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           sparse-checkout: |
             scripts/version-code.sh
@@ -575,9 +617,31 @@ jobs:
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Play track and status
+        id: target
+        if: steps.gate.outputs.enabled == 'true'
+        shell: bash
+        env:
+          IS_PRERELEASE: ${{ needs.meta.outputs.is_prerelease }}
+          RC_TRACK: ${{ vars.PLAY_RC_TRACK || 'beta' }}
+          RC_STATUS: ${{ vars.PLAY_RC_RELEASE_STATUS || 'completed' }}
+          REL_TRACK: ${{ vars.PLAY_TRACK || 'production' }}
+          REL_STATUS: ${{ vars.PLAY_RELEASE_STATUS || 'draft' }}
+        run: |
+          set -euo pipefail
+          # §619 — rc в открытое тестирование, релиз/hotfix — как раньше.
+          if [ "$IS_PRERELEASE" = "true" ]; then
+            TRACK="$RC_TRACK"; STATUS="$RC_STATUS"
+          else
+            TRACK="$REL_TRACK"; STATUS="$REL_STATUS"
+          fi
+          echo "track=$TRACK" >> "$GITHUB_OUTPUT"
+          echo "status=$STATUS" >> "$GITHUB_OUTPUT"
+          echo "track=$TRACK status=$STATUS"
+
       - name: Download AAB
         if: steps.gate.outputs.enabled == 'true'
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: android-aab-release
           path: play
@@ -592,6 +656,11 @@ jobs:
           # Тот же код, что зашит в AAB (шаг Build AAB: universal, ABI=0).
           BASE=$(scripts/version-code.sh "$VERSION" universal)
           echo "versionCode (AAB) = $BASE"
+          RBASE=""
+          if [[ "$VERSION" == *-rc.* ]]; then
+            RBASE=$(scripts/version-code.sh "${VERSION%%-rc.*}" universal)
+            echo "versionCode релиза той же версии (фоллбэк changelog) = $RBASE"
+          fi
           mkdir -p play/whatsnew
           # Каталог fastlane `ru` — соглашение F-Droid; Play ждёт ru-RU.
           for PAIR in en-US:en-US ru:ru-RU; do
@@ -605,8 +674,19 @@ jobs:
               CAND="$DIR/$((BASE + SUFFIX)).txt"
               if [ -f "$CAND" ]; then FILE="$CAND"; break; fi
             done
+            # §619 — у кандидата своих файлов обычно нет: заметки пишутся
+            # заранее под код финального релиза той же версии (PRE=50).
+            if [ -z "$FILE" ] && [ -n "$RBASE" ]; then
+              for SUFFIX in 0 2 1 4; do
+                CAND="$DIR/$((RBASE + SUFFIX)).txt"
+                if [ -f "$CAND" ]; then FILE="$CAND"; break; fi
+              done
+              if [ -n "$FILE" ]; then
+                echo "$SRC: нет changelog под кодом кандидата, взят файл релиза $FILE"
+              fi
+            fi
             if [ -z "$FILE" ]; then
-              echo "::warning::Нет changelog для $SRC (коды $BASE…$((BASE + 4))) — выпуск в Play уйдёт без описания для $LOCALE; допишите его в консоли."
+              echo "::warning::Нет changelog для $SRC (коды $BASE…$((BASE + 4))${RBASE:+, $RBASE…$((RBASE + 4))}) — выпуск в Play уйдёт без описания для $LOCALE; допишите его в консоли."
               continue
             fi
             # Лимит 500 уже проверен в job checks на каждом файле; здесь
@@ -629,8 +709,8 @@ jobs:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: com.leadaxe.lxbox
           releaseFiles: play/app-release.aab
-          track: ${{ vars.PLAY_TRACK || 'production' }}
-          status: ${{ vars.PLAY_RELEASE_STATUS || 'draft' }}
+          track: ${{ steps.target.outputs.track }}
+          status: ${{ steps.target.outputs.status }}
           whatsNewDirectory: play/whatsnew
 
   release:
@@ -642,13 +722,13 @@ jobs:
     if: needs.meta.outputs.is_release == 'true'
     steps:
       - name: Checkout (for release notes)
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           sparse-checkout: RELEASE_NOTES.md
           sparse-checkout-cone-mode: false
 
       - name: Download APKs
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: android-apks-release
           path: release-artifacts
@@ -696,7 +776,7 @@ jobs:
     if: needs.meta.outputs.is_release == 'true' && needs.meta.outputs.is_prerelease != 'true'
     steps:
       - name: Checkout main
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           ref: main
           fetch-depth: 0

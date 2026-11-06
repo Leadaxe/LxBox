@@ -57,6 +57,13 @@ class ServiceNotification(private val service: Service) {
             BoxApplication.notificationManager.activeNotifications.any { it.id == NOTIFICATION_ID }
         }.getOrDefault(false)
 
+        /// §639 — страховочное снятие уведомления id=1 перед убийством
+        /// процесса в Quit. После штатного `stopForeground` это no-op; если
+        /// сервис ещё foreground, NMS cancel отбросит (см. §430) — вреда нет.
+        fun cancelServiceNotification() {
+            runCatching { BoxApplication.notificationManager.cancel(NOTIFICATION_ID) }
+        }
+
         /// §428 — обычное уведомление на том же канале, живёт после stopSelf()
         /// и без сервиса (зовётся и из VpnWatchdogReceiver). Без
         /// POST_NOTIFICATIONS (API 33+) система молча его не покажет — это
@@ -83,6 +90,66 @@ class ServiceNotification(private val service: Service) {
                     .notify(ALERT_NOTIFICATION_ID, builder.build())
             }
         }
+
+        /// §637 — снять уведомление об ошибке (id=2) при новом явном старте и
+        /// при успешном переходе в Started: после отказа старта страховка
+        /// «core rejected node» отключает узел и повторяет старт, и без снятия
+        /// «Error: Failed to start service …» висело бы рядом с живым VPN.
+        /// Трогает только id=2; постоянное уведомление id=1 не пересобирается.
+        fun cancelAlert(ctx: Context) {
+            runCatching {
+                (ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+                    .cancel(ALERT_NOTIFICATION_ID)
+            }
+        }
+
+        /// §654 C — экстра интента MainActivity: тег узла openconnect, чей
+        /// челлендж показать после тапа по уведомлению.
+        const val EXTRA_OPENCONNECT_TAG = "openconnect_tag"
+
+        /// §654 C — id уведомления «Sign-in required» на узел: своё на каждый
+        /// тег, вне id 1/2.
+        private fun signInId(tag: String): Int = 1000 + (tag.hashCode() and 0x7fff)
+
+        /// §654 C — шлюз openconnect ждёт второй фактор или вход через
+        /// браузер. Тап открывает приложение с диалогом этого узла. Канал
+        /// тот же, что у уведомления VPN.
+        fun showSignIn(ctx: Context, tag: String) {
+            runCatching {
+                createChannel(ctx)
+                val openIntent = ctx.packageManager.getLaunchIntentForPackage(ctx.packageName)
+                    ?.apply {
+                        putExtra(EXTRA_OPENCONNECT_TAG, tag)
+                        addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                    }
+                val text = L10n.str(ctx, R.string.openconnect_sign_in_text)
+                val builder = NotificationCompat.Builder(ctx, CHANNEL_ID)
+                    .setSmallIcon(android.R.drawable.ic_lock_lock)
+                    .setContentTitle(L10n.str(ctx, R.string.openconnect_sign_in_title, tag))
+                    .setContentText(text)
+                    .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+                    .setCategory(NotificationCompat.CATEGORY_STATUS)
+                    .setAutoCancel(true)
+                if (openIntent != null) {
+                    builder.setContentIntent(
+                        PendingIntent.getActivity(
+                            ctx, signInId(tag), openIntent,
+                            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                        )
+                    )
+                }
+                (ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+                    .notify(signInId(tag), builder.build())
+            }
+        }
+
+        /// §654 C — челлендж узла закрыт (ответ, отмена, остановка VPN).
+        fun cancelSignIn(ctx: Context, tag: String) {
+            runCatching {
+                (ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+                    .cancel(signInId(tag))
+            }
+        }
     }
 
     init {
@@ -91,7 +158,7 @@ class ServiceNotification(private val service: Service) {
 
     /// §182/§279 — builder реконструируется ЦЕЛИКОМ на каждый show():
     /// `addAction` НЕ идемпотентен (на переиспользуемом builder'е кнопки
-    /// Stop/Reconnect стекались бы на каждый апдейт), а лейблы обязаны
+    /// стекались бы на каждый апдейт), а лейблы обязаны
     /// перечитываться из ресурсов на активной локали в момент рендера
     /// (§279: relabel при смене языка = обычный show()-путь через
     /// ACTION_UPDATE_NOTIFICATION). show() зовётся редко (connect / смена
@@ -117,20 +184,37 @@ class ServiceNotification(private val service: Service) {
 
         if (pendingIntent != null) builder.setContentIntent(pendingIntent)
 
-        // §182 — кнопки Stop / Reconnect прямо в шторке (фидбэк #180/#261).
+        // §182 — кнопка Stop прямо в шторке (фидбэк #180/#261).
         // icon=0: на Android 7+ action-иконки в развёрнутом уведомлении
         // compat-стиль скрывает, текст-лейбла достаточно.
-        builder
-            .addAction(
+        // §707 итер. 7 — «📋 Send» пока есть узел Tailscale с Allow Taildrop,
+        // открывает окно поверх текущего приложения. Значки кнопок система
+        // не показывает, поэтому эмодзи — в подписи.
+        // §707 итер. 8 — какие из них показывать, решает App Settings.
+        if (NotificationButtons.enabled(service, NotificationButtons.STOP)) {
+            builder.addAction(
                 0,
                 L10n.str(service, R.string.notification_action_stop),
                 broadcastPI(BoxVpnService.ACTION_STOP, 1),
             )
-            .addAction(
+        }
+        if (NotificationButtons.enabled(service, NotificationButtons.RESTART)) {
+            builder.addAction(
                 0,
                 L10n.str(service, R.string.notification_action_reconnect),
                 broadcastPI(BoxVpnService.ACTION_RECONNECT, 2),
             )
+        }
+        if (TaildropClip.available && NotificationButtons.enabled(service, NotificationButtons.SEND)) {
+            builder.addAction(
+                0,
+                L10n.str(service, R.string.notification_action_send_clipboard),
+                PendingIntent.getActivity(
+                    service, 3, TaildropClipActivity.intent(service),
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                ),
+            )
+        }
         return builder.build()
     }
 
@@ -163,6 +247,8 @@ class ServiceNotification(private val service: Service) {
     }
 
     fun showAlert(title: String, text: String) = showAlert(service, title, text)
+
+    fun cancelAlert() = cancelAlert(service)
 
     fun stop() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {

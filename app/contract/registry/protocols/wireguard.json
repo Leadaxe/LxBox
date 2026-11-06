@@ -992,11 +992,12 @@
         "repeated_key": "last_wins",
         "sections": {
           "Peer": {
-            "repeat": "first_only",
-            "on_extra": {
-              "code": "wgconf_extra_peer_dropped"
+            "repeat": "each",
+            "into": "peers[]",
+            "on_drop": {
+              "code": "wgconf_peer_dropped"
             },
-            "impl": "Узел sing-box — это ОДИН peer, и вторая [Peer] в него не помещается по построению. Прежний путь брал ключи только первой и отбрасывал остальные МОЛЧА (прежний разбор профиля vpn://), движковый parseINI сливал вторую с первой (ключи второй перезаписывали ключи первой) — три разных поведения на одном месте, пока решение жило в коде. Норма: первая становится узлом, повторы отброшены с кодом (core/config/linkmap/detect.go:parseINIDialect)."
+            "impl": "Контракт 1.1.140 (LxBox §686 п. 10, слово владельца 26.10.2026: «много peer допустимо в INI»). Каждая [Peer] — свой элемент peers[] в порядке файла: у endpoint wireguard поле peers — массив, трафик между пирами ядро разводит по allowed_ips, пересечение префиксов решает само (wireguard-go: побеждает последний добавленный) — реестр его не судит. Таблица исполняется на каждой [Peer] отдельно (core/config/linkmap/exec.go:execEach), [Interface] у всех общая. [Peer] без обязательного ключа (PublicKey, Endpoint) снимается одна с кодом on_drop; не осталось ни одной — узел получает прежний отказ required. До 1.1.140 норма была first_only с кодом wgconf_extra_peer_dropped (вторая [Peer] отбрасывалась)."
           }
         },
         "impl": "КАК читать ini, а не что куда класть. Значения не трогаем (value_case preserve): Id маскировки — это домен, и регистр в нём значим. inline_comments=false, потому что у wg-quick \"#\" законен ВНУТРИ значения: имя узла «US-FREE#137» провайдеры пишут именно так, и резать хвост по маркеру нельзя."
@@ -1772,7 +1773,7 @@
     ]
   },
   "body": {
-    "core": "1.14.2-lx.11",
+    "core": "1.14.3-lx.17",
     "order": [
       "system",
       "name",
@@ -1816,6 +1817,13 @@
       "disable_cookies",
       "__dialer"
     ],
+    "form": {
+      "blocks": [
+        "connection",
+        "amnezia",
+        "advanced"
+      ]
+    },
     "fields": {
       "system": {
         "type": "bool",
@@ -1923,6 +1931,9 @@
             ]
           }
         },
+        "form": {
+          "block": "advanced"
+        },
         "desc_en": "Tunnel MTU in bytes.",
         "desc_ru": "MTU туннеля в байтах.",
         "impl": "uint32, дефолт ядра 1408; при s4 > 0 дефолт 1280. Ядро предупреждает при mtu > 1492-60-s4. У AmneziaWG-узлов слишком большой mtu даёт «sendmsg: message too long» при успешном рукопожатии (память awg-mtu-too-high): рукопожатие проходит, данные не идут. Потолок 1280 для ЛЮБОГО AmneziaWG-узла — решение владельца 05.09.2026; условие «узел AWG» читается ДВУМЯ способами через ИЛИ. Первый — `source_kind`: род объявил ВХОД (`kind_when` маппера по написанию `awg://`), и это единственный способ узнать род, когда ни одно awg-поле не уцелело: негодные значения снимает правило поля, и к проверке потолка тело становится неотличимо от обычного WireGuard, хотя протокол автор просил AmneziaWG (кейсы awg_bad_numeric_skipped, awg_jc_invalid_dropped — в теле только mtu). Второй — прежний `any_set` по awg-ключам корня (тот же набор, что был у hasAWGParams/hasAWG3Params в Go); он остаётся НАВСЕГДА, потому что у входа `singbox` рода от входа нет вовсе и судить можно только по телу. Условие смотрит на НАЛИЧИЕ ключа, а не на непустоту: jc=0 — законное «мусор выключен» у настоящего AWG-узла (кейс awg_jc_zero_explicit). Род переживает перезапуск наравне с body_source: пересчёт кодов идёт по сохранённому телу без повторного разбора ссылки, поэтому род лежит в Origin (launcher-only расширение), у старых узлов выводится перепарсом Origin.Raw, а иначе работает any_set — contract/docs/MAPPER_ENGINE.md, «Контекст санитайзера: body_source + kind». Прежде правило жило кодом в парсере ссылки (прежний awgMaxMTU, удалён вместе с рукописным парсером wireguard) и потому НЕ применялось к телу из sing-box-импорта — расхождение входов, находка №5 LEGACY_AUDIT; с контрактом 1.1.5 оно правило реестра. ИСКЛЮЧЕНИЕ ПО ВХОДУ (решение владельца 18.09.2026): вход `singbox` получает только авторское тело (свой сервер или член папки с источником singbox_outbound, контракт 1.1.87, PARSING_PRINCIPLES §10) — значение сохраняется, узел получает info-код awg_mtu_high; на прочих входах (ссылка wg/awg, .conf, awg://base64, форма AWG) значение заменяется на 1280 с кодом awg_mtu_clamped. Парность входов здесь нарушена НАМЕРЕННО (DRIFT §7.23). Подстановка 1280 при отсутствии mtu кода НЕ даёт (это дефолт, а не замена) и действует на ВСЕХ входах, включая singbox. Plain WG правило не трогает: без awg-ключей mtu не эмитится, ядро берёт свой 1408."
@@ -1936,6 +1947,10 @@
           "code": "type_invalid"
         },
         "required": true,
+        "form": {
+          "block": "connection",
+          "required": true
+        },
         "desc_en": "Addresses assigned to the tunnel interface.",
         "desc_ru": "Адреса, назначенные интерфейсу туннеля.",
         "impl": "listable CIDR; json-тег без omitempty. Голый адрес достраивается маской-хостом (10.0.0.2 → 10.0.0.2/32, IPv6 → /128): ядро требует префикс, а подписки пишут адрес голым. Прежде операция жила рукописным normalizeWGPrefixes (удалён) и потому не работала на входе singbox; normalize реестра действует на всех входах (SPEC 133 §6.0; core/config/nodeflow/coerce.go:normalize)."
@@ -1952,6 +1967,10 @@
         },
         "required": true,
         "secret": true,
+        "form": {
+          "block": "connection",
+          "required": true
+        },
         "desc_en": "Local private key.",
         "desc_ru": "Локальный закрытый ключ.",
         "impl": "Без omitempty; пустой = «missing private key». Отсутствие поля даёт field_missing, негодное ЗНАЧЕНИЕ — wg_key_invalid (контракт 1.1.11). Годность судит ТОЛЬКО реестр: маппер переводит написание ключа (url-safe/без паддинга → std-base64) и больше ничего не решает — прежде проверка стояла в парсере ссылки, роняла узел МОЛЧА и не работала на входе singbox (находка №4 LEGACY_AUDIT, решение владельца 19.09.2026). Успешное рукопожатие без трафика = ключ занят другим клиентом либо испорчен на сервере (память wg-handshake-ok-no-data-shared-key). Секрет."
@@ -1978,6 +1997,11 @@
       },
       "peers": {
         "type": "array",
+        "on_item_failure": {
+          "action": "drop_item",
+          "code": "wg_peer_dropped",
+          "core_rejects": true
+        },
         "items": {
           "type": "object",
           "order": [
@@ -2004,6 +2028,10 @@
                 ],
                 "code": "wg_peer_incoming"
               },
+              "form": {
+                "block": "connection",
+                "required": true
+              },
               "desc_en": "Peer endpoint address.",
               "desc_ru": "Адрес точки подключения пира.",
               "impl": "option/wireguard.go WireGuardPeer.Address. Обязателен, КРОМЕ узла с listen_port (контракт 1.1.110): пир без адреса подключается К НАМ — узел слушает listen_port, ядро ставит пиру endpoint только при годном адресе (transport/wireguard/endpoint.go NewEndpoint), и через такой узел ходят в интернет; о снятии говорит wg_peer_incoming (info). Нет ни адреса, ни listen_port — рукопожатие не начнёт никто: field_missing, у авторского тела мягко (узел остаётся с ошибкой), у подписки пир снимается, и узел без пиров выпадает."
@@ -2024,6 +2052,10 @@
                   "address"
                 ]
               },
+              "form": {
+                "block": "connection",
+                "required": true
+              },
               "desc_en": "Peer endpoint port.",
               "desc_ru": "Порт точки подключения пира.",
               "impl": "option/wireguard.go WireGuardPeer.Port. Обязателен при заданном address (контракт 1.1.110): без адреса подключаться некуда, и порт не нужен. На входах ссылки и .conf порт и так материализуется 51820."
@@ -2038,6 +2070,10 @@
               },
               "required": true,
               "normalize": "base64_std",
+              "form": {
+                "block": "connection",
+                "required": true
+              },
               "desc_en": "Peer public key.",
               "desc_ru": "Публичный ключ пира.",
               "impl": "base64; невалидный = ошибка декодирования на весь конфиг. Отсутствие поля даёт field_missing, негодное ЗНАЧЕНИЕ — wg_key_invalid (контракт 1.1.11). Секретом НЕ помечен: публичный ключ пира тайной не является, и показать его в предупреждении — единственный способ дать человеку сверить значение с тем, что выдал провайдер."
@@ -2052,6 +2088,9 @@
               },
               "secret": true,
               "normalize": "base64_std",
+              "form": {
+                "block": "advanced"
+              },
               "desc_en": "Optional pre-shared key.",
               "desc_ru": "Необязательный общий предварительный ключ.",
               "impl": "base64. Поле НЕобязательное, но негодное значение роняет УЗЕЛ наравне с private_key и public_key (решение владельца 19.09.2026, контракт 1.1.11): сервер ждёт PSK, и туннель без него — тихо сломанный туннель, рукопожатие не пройдёт. Прежнее правило (`drop`/type_invalid) снимало ПОЛЕ и давало узел, который выглядит рабочим и молчит; оно же расходилось с парсером ссылки, где узел дропался. Секрет."
@@ -2073,6 +2112,9 @@
                 ]
               },
               "required": true,
+              "form": {
+                "block": "advanced"
+              },
               "desc_en": "Prefixes routed to this peer.",
               "desc_ru": "Префиксы, маршрутизируемые в этого пира.",
               "impl": "Пустой список = «missing allowed ips for peer N» на весь конфиг. Отсутствие ключа = «маршрутизировать всё» у любого клиента WireGuard, поэтому реестр материализует 0.0.0.0/0,::/0 (D-022); кода нет — это дефолт-конвенция, а не замена значения. Прежде дефолт стоял ДВУМЯ копиями в парсерах ссылки и профиля Amnezia и на входе singbox не работал вовсе (находка №27 LEGACY_AUDIT, контракт 1.1.11)."
@@ -2087,6 +2129,9 @@
                   "action": "drop_node",
                   "code": "awg3_core_unsupported"
                 }
+              },
+              "form": {
+                "block": "advanced"
               },
               "desc_en": "Keepalive interval in seconds, number or range.",
               "desc_ru": "Интервал keepalive в секундах: число или диапазон.",
@@ -2111,9 +2156,12 @@
           "impl": "option/wireguard.go WireGuardPeer."
         },
         "required": true,
+        "form": {
+          "block": "connection"
+        },
         "desc_en": "List of WireGuard peers.",
         "desc_ru": "Список пиров WireGuard.",
-        "impl": "Пустой список = узел не собирается."
+        "impl": "Пустой список = узел не собирается. Пиров несколько (контракт 1.1.140): отказ внутри пира (негодный ключ, нет адреса) снимает ЭТОТ пир с кодом wg_peer_dropped, остальные остаются; не осталось ни одного — узел получает прежний отказ первого пира. core_rejects: пир с негодным ключом ядро не примет, поэтому снятие жёсткое и для авторского тела."
       },
       "udp_timeout": {
         "type": "duration",
@@ -2166,6 +2214,9 @@
         "min_core": "1.13.13-lx.1",
         "build_tag": "with_awg",
         "level": "awg",
+        "form": {
+          "block": "amnezia"
+        },
         "desc_en": "Number of junk packets sent before the handshake.",
         "desc_ru": "Сколько мусорных пакетов слать перед рукопожатием.",
         "impl": "AmneziaWG, встроено в корень endpoint'а плоско (option/wireguard_awg.go). Без сборки с with_awg ЛЮБОЕ заданное поле = ошибка старта «AmneziaWG (awg) support is not included in this build»."
@@ -2188,6 +2239,9 @@
             "core_rejects": true
           }
         ],
+        "form": {
+          "block": "amnezia"
+        },
         "desc_en": "Minimum size of a junk packet.",
         "desc_ru": "Минимальный размер мусорного пакета.",
         "impl": "AmneziaWG, встроено в корень endpoint'а плоско (option/wireguard_awg.go). Без сборки с with_awg ЛЮБОЕ заданное поле = ошибка старта «AmneziaWG (awg) support is not included in this build». jmin БЕЗ jmax = фатал на весь конфиг («jmin (N) must be <= jmax (0)», проверено `sing-box check`): ядро читает отсутствующий jmax как 0. Поэтому requires jmax — в одиночку поле бессмысленно и смертельно (SPEC 131 W2c). Порядок пары jmin ≤ jmax — связь `ordered` в body.relations (контракт 1.1.63, SPEC 142 C8): прежде его держала только форма обфускации."
@@ -2203,6 +2257,9 @@
         "min_core": "1.13.13-lx.1",
         "build_tag": "with_awg",
         "level": "awg",
+        "form": {
+          "block": "amnezia"
+        },
         "desc_en": "Maximum size of a junk packet.",
         "desc_ru": "Максимальный размер мусорного пакета.",
         "impl": "AmneziaWG, встроено в корень endpoint'а плоско (option/wireguard_awg.go). Без сборки с with_awg ЛЮБОЕ заданное поле = ошибка старта «AmneziaWG (awg) support is not included in this build». Требование jmin <= jmax — связь `ordered` в body.relations."
@@ -2230,6 +2287,9 @@
         "min_core": "1.13.13-lx.1",
         "build_tag": "with_awg",
         "level": "awg",
+        "form": {
+          "block": "amnezia"
+        },
         "desc_en": "Junk prepended to the handshake initiation packet.",
         "desc_ru": "Мусор перед пакетом инициации рукопожатия.",
         "impl": "AmneziaWG, встроено в корень endpoint'а плоско (option/wireguard_awg.go). Без сборки с with_awg ЛЮБОЕ заданное поле = ошибка старта «AmneziaWG (awg) support is not included in this build». Мусор перед пакетом инициации рукопожатия. min_when: при заданном header_protection_key значение не ниже 12 — nonce шифра заголовка берётся из первых 12 байт паддинга, и ядро отвергает такую пару на загрузке ВСЕГО конфига (docs-lx §2.9/§2.10), поэтому action=drop_node, а не снятие поля. absent_is_zero: незаданный паддинг ядро читает как 0, и «ключ есть, паддинга нет» так же фатально, как «ключ + паддинг 5». Прежде правило жило рукописным validateAWG3 (удалён), роняло узел МОЛЧА и не работало на входе singbox (находка №8 LEGACY_AUDIT, контракт 1.1.11)."
@@ -2257,6 +2317,9 @@
         "min_core": "1.13.13-lx.1",
         "build_tag": "with_awg",
         "level": "awg",
+        "form": {
+          "block": "amnezia"
+        },
         "desc_en": "Junk prepended to the handshake response packet.",
         "desc_ru": "Мусор перед пакетом ответа на рукопожатие.",
         "impl": "AmneziaWG, встроено в корень endpoint'а плоско (option/wireguard_awg.go). Без сборки с with_awg ЛЮБОЕ заданное поле = ошибка старта «AmneziaWG (awg) support is not included in this build». Мусор перед пакетом ответа на рукопожатие. Порог при header_protection_key — как у s1 (min_when 12, drop_node, absent_is_zero)."
@@ -2284,6 +2347,9 @@
         "min_core": "1.13.13-lx.1",
         "build_tag": "with_awg",
         "level": "awg2",
+        "form": {
+          "block": "amnezia"
+        },
         "desc_en": "Junk prepended to the cookie reply packet.",
         "desc_ru": "Мусор перед пакетом cookie-reply.",
         "impl": "AmneziaWG, встроено в корень endpoint'а плоско (option/wireguard_awg.go). Без сборки с with_awg ЛЮБОЕ заданное поле = ошибка старта «AmneziaWG (awg) support is not included in this build». Мусор перед пакетом cookie-reply. На MTU НЕ влияет. Порог при header_protection_key — как у s1 (min_when 12, drop_node, absent_is_zero)."
@@ -2311,6 +2377,9 @@
         "min_core": "1.13.13-lx.1",
         "build_tag": "with_awg",
         "level": "awg2",
+        "form": {
+          "block": "amnezia"
+        },
         "desc_en": "Junk prepended to every transport packet.",
         "desc_ru": "Мусор перед каждым транспортным пакетом.",
         "impl": "AmneziaWG, встроено в корень endpoint'а плоско (option/wireguard_awg.go). Без сборки с with_awg ЛЮБОЕ заданное поле = ошибка старта «AmneziaWG (awg) support is not included in this build». Мусор перед каждым транспортным пакетом. Влияет на MTU: при s4 > 0 дефолт mtu становится 1280. Порог при header_protection_key — как у s1 (min_when 12, drop_node, absent_is_zero)."
@@ -2329,6 +2398,9 @@
         "level": "awg",
         "range_form": {
           "level": "awg2"
+        },
+        "form": {
+          "block": "amnezia"
         },
         "desc_en": "Magic header of the handshake initiation packet.",
         "desc_ru": "Магический заголовок пакета инициации рукопожатия.",
@@ -2349,6 +2421,9 @@
         "range_form": {
           "level": "awg2"
         },
+        "form": {
+          "block": "amnezia"
+        },
         "desc_en": "Magic header of the handshake response packet.",
         "desc_ru": "Магический заголовок пакета ответа на рукопожатие.",
         "impl": "AmneziaWG, встроено в корень endpoint'а плоско (option/wireguard_awg.go). Без сборки с with_awg ЛЮБОЕ заданное поле = ошибка старта «AmneziaWG (awg) support is not included in this build». MagicHeader = AWGRange, правила как у h1: границы uint32, normalize range_order (тихий своп), on_invalid awg_header_invalid, связь ranges_disjoint."
@@ -2368,6 +2443,9 @@
         "range_form": {
           "level": "awg2"
         },
+        "form": {
+          "block": "amnezia"
+        },
         "desc_en": "Magic header of the cookie reply packet.",
         "desc_ru": "Магический заголовок пакета cookie-reply.",
         "impl": "AmneziaWG, встроено в корень endpoint'а плоско (option/wireguard_awg.go). Без сборки с with_awg ЛЮБОЕ заданное поле = ошибка старта «AmneziaWG (awg) support is not included in this build». MagicHeader = AWGRange, правила как у h1: границы uint32, normalize range_order (тихий своп), on_invalid awg_header_invalid, связь ranges_disjoint."
@@ -2386,6 +2464,9 @@
         "level": "awg",
         "range_form": {
           "level": "awg2"
+        },
+        "form": {
+          "block": "amnezia"
         },
         "desc_en": "Magic header of the transport packet.",
         "desc_ru": "Магический заголовок транспортного пакета.",
@@ -2411,6 +2492,9 @@
             "code": "field_conflict"
           }
         ],
+        "form": {
+          "block": "amnezia"
+        },
         "desc_en": "First custom junk packet.",
         "desc_ru": "Первый пользовательский мусорный пакет.",
         "impl": "AmneziaWG, встроено в корень endpoint'а плоско (option/wireguard_awg.go). Без сборки с with_awg ЛЮБОЕ заданное поле = ошибка старта «AmneziaWG (awg) support is not included in this build». Конфликтует с маскировкой (id/ip/ib) — «masquerade conflicts with an explicit i1» (sing-box-lx transport/wireguard/masque_awg.go masqueI1)."
@@ -2427,6 +2511,9 @@
             "code": "field_conflict"
           }
         ],
+        "form": {
+          "block": "amnezia"
+        },
         "desc_en": "Second custom junk packet.",
         "desc_ru": "Второй пользовательский мусорный пакет.",
         "impl": "AmneziaWG, встроено в корень endpoint'а плоско (option/wireguard_awg.go). Без сборки с with_awg ЛЮБОЕ заданное поле = ошибка старта «AmneziaWG (awg) support is not included in this build». Конфликтует с ip=sip — «sip masquerade fills i2» (sing-box-lx transport/wireguard/device_awg.go awgIpcLines)."
@@ -2437,6 +2524,9 @@
         "min_core": "1.13.13-lx.1",
         "build_tag": "with_awg",
         "level": "awg1.5",
+        "form": {
+          "block": "amnezia"
+        },
         "desc_en": "Third custom junk packet.",
         "desc_ru": "Третий пользовательский мусорный пакет.",
         "impl": "AmneziaWG, встроено в корень endpoint'а плоско (option/wireguard_awg.go). Без сборки с with_awg ЛЮБОЕ заданное поле = ошибка старта «AmneziaWG (awg) support is not included in this build»."
@@ -2447,6 +2537,9 @@
         "min_core": "1.13.13-lx.1",
         "build_tag": "with_awg",
         "level": "awg1.5",
+        "form": {
+          "block": "amnezia"
+        },
         "desc_en": "Fourth custom junk packet.",
         "desc_ru": "Четвёртый пользовательский мусорный пакет.",
         "impl": "AmneziaWG, встроено в корень endpoint'а плоско (option/wireguard_awg.go). Без сборки с with_awg ЛЮБОЕ заданное поле = ошибка старта «AmneziaWG (awg) support is not included in this build»."
@@ -2457,6 +2550,9 @@
         "min_core": "1.13.13-lx.1",
         "build_tag": "with_awg",
         "level": "awg1.5",
+        "form": {
+          "block": "amnezia"
+        },
         "desc_en": "Fifth custom junk packet.",
         "desc_ru": "Пятый пользовательский мусорный пакет.",
         "impl": "AmneziaWG, встроено в корень endpoint'а плоско (option/wireguard_awg.go). Без сборки с with_awg ЛЮБОЕ заданное поле = ошибка старта «AmneziaWG (awg) support is not included in this build»."

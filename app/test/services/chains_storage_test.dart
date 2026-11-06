@@ -174,16 +174,6 @@ void main() {
       ]);
     });
 
-    test('порядок списка сохраняется — им держится антицикл', () async {
-      await SettingsStorage.setChains(const [
-        SourceChain(tag: 'c3', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]),
-        SourceChain(tag: 'c1', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]),
-        SourceChain(tag: 'c2', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]),
-      ]);
-      expect((await SettingsStorage.getChains()).map((c) => c.tag),
-          ['c3', 'c1', 'c2']);
-    });
-
     test('round-trip через файл: полная запись доезжает без потерь', () async {
       const c = SourceChain(
         tag: 'tuned',

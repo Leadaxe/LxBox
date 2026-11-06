@@ -59,7 +59,7 @@ wizard_template.json
 │
 ├─ speed_test_options              object{3 keys}       (§015)
 │   ├─ servers[]                   list[10]      Cloudflare, Selectel, Hetzner, OVH, etc.
-│   │   └─ {id, name, download_url, upload_url, upload_method, ping_url}
+│   │   └─ {id, name, download_url, upload_url, upload_method, upload_chunk_bytes, ping_url}
 │   ├─ stream_options              list[3]       parallel-streams choices (e.g. [1,4,10])
 │   └─ default_streams             int           default 4
 │
@@ -119,6 +119,7 @@ wizard_template.json
 │   │       ├─ interface_name      "@tun_name"
 │   │       ├─ address             ["@tun_address", {#if @ipv6_enabled → "@tun_address6"}]  §227/§232 — v6 behind a checkbox
 │   │       ├─ {#if @route_address_enable → route_address: ["0.0.0.0/1","128.0.0.0/1","::/1","8000::/1"]}  §232 — behind a checkbox
+│   │       ├─ {#if @tun_route_exclude #notEmpty → route_exclude_address: "@tun_route_exclude"}  §691 — «Bypass the tunnel», text_list; not-CIDR and the TUN's own address are dropped at build (heal_tun_route_exclude)
 │   │       ├─ mtu                 "@tun_mtu"
 │   │       ├─ auto_route          "@tun_auto_route"
 │   │       ├─ strict_route        "@tun_strict_route"
@@ -129,7 +130,7 @@ wizard_template.json
 │   │   └─ {type:"block",  tag:"block"}        §201 — the drop-out; a direction selector option and a route_final
 │   ├─ route                       object{5 keys}
 │   │   ├─ find_process            bool          true enables package_name detection
-│   │   ├─ default_domain_resolver "@dns_default_domain_resolver"
+│   │   ├─ default_domain_resolver {server: "@dns_default_domain_resolver", disable_optimistic_cache: "@dns_resolver_no_stale"}  §643
 │   │   ├─ rules[]                 list[0]       [] — §264: sniff/hijack-dns/resolve
 │   │   │                                         MOVED into the locked traffic-processing preset
 │   │   │                                         (num:0 → first in route.rules).
@@ -231,6 +232,16 @@ The default DNS configuration for a fresh install. It is stockpiled into the sto
 
 ### `dns_options.servers[i]` — a DNS server catalog entry (§117)
 
+**Catalog, seeded once (§680).** The section is a catalog, like
+`selectable_rules`: the template says what exists, the user's list says what
+is in use. Its servers are seeded into the storage `dns.servers` only while
+that key is absent (the first launch); after that the list belongs to the
+user — a deleted template server is not re-added, and servers that a newer
+template brings appear only in the catalog under (+) on the DNS tab
+("Add DNS server"). `enabled` of the wrapper is the state on seeding and on
+adding from the catalog. The body is still a reference: the record keeps the
+tag, `enabled` and `vars`, the body comes from the template on every build.
+
 The wrapper is `{description, enabled, vars?, server}`, where `server` is a sing-box body carrying
 `@var` placeholders, and `vars` holds the same definitions as preset vars (§033).
 The tag lives in `server.tag` (there is no top-level `tag` any more — see `templateDnsServerTag`).
@@ -239,10 +250,10 @@ The builder (`resolveTemplateDnsServerBody`) substitutes the vars with the user'
 
 ```jsonc
 {
-  "description": "Google DNS (direct)",
-  "enabled":     true,               // default-enabled for auto-discovery
+  "description": "Google UDP",
+  "enabled":     true,               // state on seeding / on adding from the catalog (§680)
   "vars": [                          // optional (local_dns_resolver has none)
-    {"name": "outbound", "type": "outbound", "default_value": "direct-out",
+    {"name": "outbound", "type": "outbound", "default_value": "vpn-1",
      "title": "Outbound", "tooltip": "Which direction carries DNS queries…"},
     {"name": "dns_ip", "type": "enum", "default_value": "8.8.8.8",
      "title": "UDP server IP", "options": [ {"title": "…", "value": "8.8.8.8"}, … ]}
@@ -261,8 +272,10 @@ The conventions (§117):
   written by default (`normalizeDnsDetour`: `direct-out`, an empty value and a direction
   unknown to the builder all erase the key; “no detour” is both the default and the fallback).
 - For domain-addressed servers (the address is a hostname): `domain_resolver: "@dom_resolver"` plus
-  the var `{type: dns_servers, default_value: "google_udp"}` decides what resolves the
+  the var `{type: dns_servers, default_value: "google_doh"}` decides what resolves the
   DNS server's own hostname.
+- §684 default directions: plain UDP servers go through the tunnel (`vpn-1`), encrypted
+  ones (DoT/DoH) go direct; the path is chosen by the `outbound` var, not written in the description.
 
 The seven default servers in the current template:
 
@@ -333,6 +346,13 @@ The endpoints for the speed-test screen. The user does not override them (though
 The current template holds ten servers (Cloudflare, Selectel, Hetzner, OVH and others).
 `id` is a stable machine id (§279): the runtime choice of server on the speed-test screen
 is keyed by it rather than by index; an unknown id falls back to the default (the first server).
+
+`upload_url` is set only for a server with a published endpoint that accepts a request body
+(§634); a request counts when the server answers below 400. Without `upload_url` the screen
+shows Upload as `n/a` and sends nothing. `upload_method` is `PUT` (default) or `POST`.
+`upload_chunk_bytes` caps one request (the 5 MB per stream goes as several requests in a
+row) for servers with a body-size limit, e.g. 1000000 for the Hostkey LibreSpeed servers,
+which answer 413 above about 1 MB. Sources per server — task 634.
 
 ---
 
@@ -491,7 +511,7 @@ vars stay in `template.vars`, so the builder and the ref resolution still see th
 |---|---|---|
 | `core` | VPN Settings (App Settings → Configuration) | General, Network, TUN, VPN Mode, DPI Bypass |
 | `routing` | Routing screen | Auto Proxy |
-| `dns` | DNS Settings screen | DNS |
+| `dns` | DNS tab of the Routing screen | DNS |
 | `internal` | **nowhere** (§265) | Internal |
 
 ### `internal` — the service section (§265)
@@ -642,7 +662,7 @@ The current semantics of the IPv6 toggle (§249): both strategy vars default to
 `ipv4_only` (IPv6 on the tun is off by default — applications do not need AAAA); enabling
 IPv6 moves resolution to `prefer_ipv4` (v6 is available, but v4 first — on networks with
 half-working v6, `prefer_ipv6` produced dead direct connections, see §246); disabling it
-forces `ipv4_only`. Fine tuning lives in DNS Settings → Strategy (the toggle is a one-off
+forces `ipv4_only`. Fine tuning lives in Routing → DNS → Strategy (the toggle is a one-off
 effect, not a lock).
 
 The semantics:
@@ -660,9 +680,11 @@ The semantics:
   `evalIfScalar` (`if_engine.dart`) and NOT through `walk` directly: a bare map
   `{"#if":…}` sent through `walk` falls into map-spread mode and collapses the scalar to `{}`.
 - **Cross-screen targets** (for example `dns_strategy`, chapter `dns`, rendered on the
-  DNS Settings screen): there is NO live update on the other screen (the model is
-  per-screen); the value arrives through the cache the next time that screen opens. The
-  screens are never co-mounted, so the user never sees the divergence.
+  DNS tab of the Routing screen): there is NO live update on the other screen or tab (the
+  model is per-screen); the value arrives through the cache the next time it opens. The
+  DNS tab is mounted only while shown and rereads storage on every entry (§655), and
+  Routing rereads its rules and vars after leaving it, so the user never sees the
+  divergence.
 
 ### A preset's `on_change` — reacting to being enabled or disabled (§266)
 
@@ -713,8 +735,8 @@ The semantics:
 - **It is called from ALL five places** where `rule_enable` / `dns_enable` change:
   creating a preset (`routing_screen._copyPreset`), the routing switch toggle
   (`routing_screen` plus the editor's `edit_controller.onBoolVarToggle`), the dns_enable
-  toggle in the rule editor, and the one **in DNS Settings**
-  (`dns_settings_screen._togglePresetDnsEnable`). Miss any of them and the target is not
+  toggle in the rule editor, and the one **on the DNS tab of Routing**
+  (`dns_settings_tab._togglePresetDnsEnable`). Miss any of them and the target is not
   recomputed along that path.
 - **It is idempotent** — `setVar` overwrites, so calling it again with the same state
   yields the same value.
@@ -756,7 +778,7 @@ The base of the final sing-box config. It carries `@var` placeholders; the subst
   ],
   "route": {
     "find_process":            true,
-    "default_domain_resolver": "@dns_default_domain_resolver",
+    "default_domain_resolver": {"server": "@dns_default_domain_resolver", "disable_optimistic_cache": "@dns_resolver_no_stale"},
     "rules": [
       // §264: route.rules is EMPTY in the template. The base sniff/hijack-dns/resolve
       // rules MOVED into the locked traffic-processing preset (first in selectable_rules,
@@ -844,21 +866,22 @@ the base sniff/hijack-dns/resolve rules.
 |---|---|---|---|---|---|---|---|---|
 | `traffic-processing` | true | true | 0 | ✓ (sniff_enabled, sniff_timeout §264 enum 100ms/300ms/500ms/1s/3s, hijack_dns_enabled §264 bool with a WARNING tooltip, `{"ref":"resolve_enabled"}` + `{"ref":"resolve_strategy"}` §265 — both ref the `internal` section) | — | ✓ an array: `[sniff #if @sniff_enabled, hijack-dns, resolve strategy:@resolve_strategy #if @resolve_enabled]` | — | — |
 | `block-ads` | false | — | — | — | ✓ (remote ads-all) | ✓ (action: reject) | — | — |
-| `ru-direct` | true | — | — | ✓ (outbound, dns_enable §257, dns_server, dns_ip, geoip_enabled, force_ipv4) | ✓ (inline `.ru` suffixes) | ✓ an array: `[resolve ipv4_only #if @force_ipv4, @outbound]` (§246) | ✓ an array: `[predefined-NOERROR ip_version:6 #if @force_ipv4, → @dns_server]` (§253) | ✓ (yandex_udp/doh/dot) |
-| `fakeip` | false | — | — | ✓ (rule_enable §266 pseudo + on_change, dns_enable §257 + on_change, dns_server — **hidden**) | — | — | ✓ (`query_type: [A,AAAA]` → `@dns_server`) | ✓ (type `fakeip`, ranges 198.18/15 + fc00::/18) |
+| `ru-direct` | true | — | — | ✓ (outbound, dns_enable §257, dns_server, dns_ip, dns_dot_ip, dns_doh_ip §697 (IP или `off`; `off` снимает сервер `#enable` и член группы `#if`), dns_encrypted_via_outbound §684 (UDP — через `outbound` пресета, DoT/DoH — галочкой туда же), geoip_enabled, force_ipv4) | ✓ (inline `.ru` suffixes) | ✓ an array: `[resolve ipv4_only #if @force_ipv4, @outbound]` (§246) | ✓ an array: `[predefined-NOERROR ip_version:6 #if @force_ipv4, → @dns_server]` (§253) | ✓ (yandex_udp/doh/dot) |
+| `fakeip` | false | — | — | ✓ (rule_enable §266 pseudo + on_change, dns_enable §257 + on_change, dns_server — **hidden**, inet4_range / inet6_range §690 — пулы, inet6_enabled — тумблер фейковых AAAA) | — | — | ✓ (`query_type: [A,AAAA]` → `@dns_server`) | ✓ (type `fakeip`, ranges `@inet4_range` / `@inet6_range`, defaults 198.18/15 + fc00::/18; `inet6_range` под map-spread `#if @inet6_enabled`) |
 | `ru-inside` | (false) | — | — | ✓ (outbound, force_ipv4) | ✓ (remote ru-inside) | ✓ an array: `[resolve ipv4_only #if @force_ipv4, @outbound]` (§246) | — | — |
 | `bittorrent` | true | — | — | ✓ (outbound) | — | ✓ (`protocol: bittorrent` → `@outbound`) | — | — |
 | `private-ip` | (false) | — | — | ✓ (outbound) | — | ✓ (`ip_is_private` → `@outbound`) | — | — |
-| `unknown-traffic` | false | — | — | ✓ (`outbound`=reject) | ✓ (inline `unknown-apps`, invert `package_name_regex: "^"`) | ✓ (`@outbound`) | — | — |
+| `unknown-traffic` | true | — | — | ✓ (`outbound`=direct) | ✓ (inline `unknown-apps`, invert `package_name_regex: "^"`) | ✓ (`@outbound`) | — | — |
+| `tunnel-routes` (§718) | true | — | 943 | ✓ (dns_enable) | — | ✓ per node with `own_routes` (wireguard / openvpn-client / openconnect): `[resolve → <node>-dns #if @dns_enable and not wireguard, preferred_by → @node]` | ✓ per node (`preferred_by` → `<node>-dns`, #if @dns_enable, openvpn-client / openconnect) | ✓ per node (type `openvpn` / `openconnect`, `endpoint: @node`, #if @dns_enable) |
 | `tailscale` (§578) | true | — | 945 | ✓ (dns_enable) | — | ✓ per node: `[resolve → <node>-dns #if @dns_enable, preferred_by → @node]` | ✓ per node (`preferred_by` → `<node>-dns`, #if @dns_enable) | ✓ per node (type `tailscale`, `endpoint: @node`, #if @dns_enable) |
 | `fcm-push` (§364) | false | — | 970 | ✓ (outbound=direct-out, gms_only) | — | ✓ one logical `and` rule: `[package_name gms #if @gms_only, or(domain mtalk/android.apis, domain_suffix firebase…)]` → `@outbound` | — | — |
 | `vowifi` (§371) | true | — | 990 | ✓ (outbound=direct-out, ike_ports) | ✓ (inline `vowifi-epdg`: `domain_suffix pub.3gppnetwork.org`) | ✓ an array: `[rule_set vowifi-epdg → @outbound, udp 500/4500 → @outbound #if @ike_ports]` | — | — |
 
 **`traffic-processing` (§264/§370)** is a locked, unsortable preset and the FIRST in `selectable_rules`. It carries the base route rules `sniff`, `hijack-dns` and `resolve`, which before §264 lived directly in `config.route.rules` (now empty). `num:0` plus `isSortable:false` guarantee its rules come first.
 
-`unknown-traffic` is reject or direct for traffic inside the tunnel that is attributed to no installed application (background or foreign processes). Its inline `rule_set` `unknown-apps` matches “everything that is NOT an application” through `invert: true` plus `package_name_regex: "^"`.
+`unknown-traffic` is reject or direct for traffic inside the tunnel that is attributed to no installed application (background or foreign processes). Its inline `rule_set` `unknown-apps` matches “everything that is NOT an application” through `invert: true` plus `package_name_regex: "^"`. The rule is pinned to `inbound: ["tun-in"]`: it judges only traffic that entered through the tunnel. Connections arriving at `mixed-in` (Proxy and VPN+Proxy modes, including LAN clients) are not touched, and in pure Proxy mode the rule never matches because there is no `tun-in` inbound.
 
-**The `reject`→`action` backstop.** `unknown-traffic` has the var default `outbound: "reject"` and `rule.outbound: "@outbound"`. In sing-box `reject` is an `action`, NOT an outbound tag: the literal `{outbound: "reject"}` is rejected by the validator as a dangling ref and the core will not start. That is why `preset_expand.dart` normalises it UNCONDITIONALLY.
+**The `reject`→`action` backstop.** `unknown-traffic` offers `reject` as a value of its `outbound` var (the default is `direct`) and has `rule.outbound: "@outbound"`. In sing-box `reject` is an `action`, NOT an outbound tag: the literal `{outbound: "reject"}` is rejected by the validator as a dangling ref and the core will not start. That is why `preset_expand.dart` normalises it UNCONDITIONALLY.
 
 **`fakeip` (§228)** is FakeIP DNS: `dns_servers` supplies a server of `type: fakeip` (the ranges 198.18.0.0/15 and fc00::/18), and `dns_rule` routes every `A` and `AAAA` query to it. The application receives a placeholder IP instantly (zero latency, no pre-tunnel DNS leak), while the real domain resolution happens inside the tunnel.
 
@@ -870,7 +893,7 @@ The names of preset vars are **not arbitrary**: several of them carry special se
 |---|---|---|---|
 | `dns_server` (`type: dns_servers`) | `preset_expand.dart` | **Selects** which of the preset's `dns_servers[]` is poured into `config.dns.servers`. The builder emits EXACTLY ONE server — the one whose `tag == varsValues['dns_server']` (or the `default_value`). | every server of the preset would be emitted |
 | `outbound` (`type: outbound`) | `preset_expand.dart` plus the Routing UI | The value for `@outbound` in `rule` and `dns_servers.detour`. The UI draws an outbound picker on the preset's row (see `hasOutboundAffordance`). A default of `"reject"` goes through the backstop normalisation. | the picker would vanish from the row |
-| `dns_enable` (`type: bool`) | `custom_rules.dart` (`presetDnsEnableVar`) plus the DNS Settings UI | §257: the **master toggle of the preset's DNS block** (dns_servers plus dns_rules plus the mirror group). The builder gates the DNS aspect on the var's value. | the DNS block could not be turned off separately |
+| `dns_enable` (`type: bool`) | `custom_rules.dart` (`presetDnsEnableVar`) plus the DNS tab of Routing | §257: the **master toggle of the preset's DNS block** (dns_servers plus dns_rules plus the mirror group). The builder gates the DNS aspect on the var's value. | the DNS block could not be turned off separately |
 | `rule_enable` (`type: bool`, a pseudo-var) | `preset_on_change.dart` | §266: the **pseudo-var** of an on_change formula. It is never stored — the resolver substitutes `cr.enabled` (the preset is on, via the switch). It carries the `on_change`. | the formula would never fire |
 
 **§265 — ref-vars (`{"ref": "<global>"}`).** An element of a preset's `vars[]` may be a **reference** to a global var (one from a section, including `internal`).
@@ -975,38 +998,71 @@ The vars declared in a preset are **visible only while the preset is enabled**. 
 
 The universal `outbound` override (spec [§033], Expansion §5): when `varsValues['outbound']` holds a non-empty value, it replaces the rule's outbound.
 
-### `for_each` — one body per node (§578)
+### Node loops — `for_each_node` / `for_each_node_do` (§578, §643)
 
-A preset with `for_each` repeats its body (`rules`, `dns_servers`, `dns_rules`)
-for every config node that matches. The shipped example is the `tailscale`
-preset.
+A preset walks the config nodes with exactly one of two keys (contract
+1.1.119, the norm is `TEMPLATE_LANG.md` §6.5–§6.7):
+
+| Key | Body (`rules`, `rule_set`, `dns_servers`, `dns_rules`) | Purpose |
+|---|---|---|
+| `for_each_node` | repeated for every node that passes, `@node` in scope | per-node fragments; the shipped example is the `tailscale` preset |
+| `for_each_node_do` | expanded **once after the walk**, no `@node` | collect values from the nodes into the preset's own vars |
 
 ```jsonc
-"for_each": {
-  "node_type": "tailscale",                    // required: the `type` field of the node body
-  "as": "node",                                // required: the name the node goes by in the body
-  "filter": { "#not": "@node.skip_presets" }   // optional: a condition in the `#if` language
-}
+"for_each_node":    { "#filter": { "#and": [ { "@node.body.type": "tailscale" },
+                                             { "#not": "@node.skip_tailscale_presets" } ] } }
+
+"for_each_node_do": { "#filter": { "@node.body.server": "#notEmpty" },
+                      "#do":     { "@domains": { "#append": "@node.body.server" } },
+                      "#final":  { "@domains": { "#unique": true, "#sort": true, "#limit": 200 } } }
 ```
 
-A node is served when all of these hold: its body `type` equals `node_type`,
-the node is enabled, it made it into the config (not dropped by the registry
-gate, the core gate or a degradation), and `filter` is true. The container
-does not matter: a user server, a folder member and a subscription node are all
-served. Repeats follow the order of the nodes in the config; no nodes means the
-preset emits nothing. A preset without `for_each` works as before.
+The keys inside are a closed list: `#filter` (both, optional — a full `#if`
+condition without the `#if`/`#value` wrapper), `#do` (only `for_each_node_do`,
+required), `#final` (only `for_each_node_do`, optional). Any other key,
+unmarked `filter`/`do`/`final`, both loop keys in one preset and the removed
+`for_each` (with `node_type`/`as`) fail the template load. There is no soft
+drop of a single preset any more (§83 is gone with `for_each`).
 
-**Node access** (`node` here is the `as` name):
+A node is walked when all of these hold: the node is enabled, it made it into
+the config (not dropped by the registry gate, the core gate or a
+degradation), and `#filter` is true (a missing value is false). The node type
+is just a condition on `@node.body.type`. The container does not matter: a
+user server, a folder member and a subscription node are all walked. The
+order is the order of the nodes in the config. A preset without a loop works
+as before.
+
+**`#do` / `#final`.** `#do` maps `"@name"` to exactly one verb; the only verb
+is `#append`, the name must be a `text_list` declared in this preset's `vars`,
+the right side is a reference string or `{"#tpl": …}` evaluated per node
+(an empty value skips the node; no dedup). `#final` applies `#unique` →
+`#sort` (byte order) → `#limit` (int > 0) once after the walk, in that order
+whatever the key order. The build: base value (user value or
+`default_value`) → walk → `#do` → `#final` → `unique` of the declaration →
+body once. The collected list lives only in a copy for the build and is never
+stored. An empty result becomes `[]`; a rule left with no condition is dropped
+with `template_fragment_dropped`.
+
+**Declaration fields** (`TEMPLATE_LANG.md` §2.1): `unique: true` (only
+`text_list`) keeps the value free of duplicates — user input on save, the
+stored value on read, `default_value` and the collected result.
+`wizard_ui: "internal"` is a build-only var: no row in any form, the stored
+and backup values are ignored (the base is `default_value`), it is never
+written to the state nor exported, and import drops it with
+`backup_var_skipped {reason: internal}`. A var named `node` or `node.*`
+(global or preset) is a load error.
+
+**Node access** (§6.6; the name is fixed):
 
 | Reference | Value |
 |---|---|
 | `@node` | the node's final tag in the config |
-| `@node.<field>` | a field of the node's storage record; the closed list today is `skip_presets` |
+| `@node.<field>` | a field of the node's storage record; the closed list is `skip_tailscale_presets`, `allow_local`, `allow_lan`, `allow_gateway` (contract 1.1.126) |
 | `@node.body.<path>` | a field of the node body, a dot path |
 
 A missing field yields the empty value: false in a condition, and the key or
 element is dropped from the body, as with an optional var. A subscription node
-has no record, so `@node.skip_presets` is always false for it.
+has no record, so all four fields are always false for it.
 
 **`#tpl`** builds a string from pieces: `{"#tpl": "@{node}-dns"}`. It is allowed
 in a value position (an object field, an array element, inside `#value`), not
@@ -1015,18 +1071,33 @@ a value any number of times; a bare `@name` inside the string is a literal. An
 unknown name or an empty value drops the whole value. An object carrying `#tpl`
 next to other keys is a template error.
 
-**Tags.** The tags of a `for_each` preset are not namespaced
+**Tags.** The tags of a `for_each_node` preset are not namespaced
 (`<preset_id>:<tag>`, §103 C7): the node tag already makes them unique, so the
 DNS server of `tailscale` is `<node tag>-dns`. Its storage record keeps `ref`
 equal to the tag and carries no `preset_id` (otherwise `DnsServerPreset` would
 rebuild the tag as `tailscale:<tag>-dns`). The DNS screen learns the owner from
-the expanded body instead.
+the expanded body instead. A `for_each_node_do` body is expanded once without
+a node, so its tags are namespaced like those of a plain preset.
 
 **Screens.** The routing and DNS screens and the rule editor's View tab expand
-the preset over the nodes of the sources (`presetNodesForView`): the tag is the
-final tag of the last build when the node was in it, otherwise the display tag.
-The preset row lists the served tags, comma separated, or says there are no
-matching nodes. The probe does not expand presets at all.
+the preset over the nodes of the sources (`presetNodesForView`; only node types
+the `#filter` can let through are emitted): the tag is the final tag of the
+last build when the node was in it, otherwise the display tag. A
+`for_each_node` row lists the served tags, comma separated, or says there are
+no matching nodes; a `for_each_node_do` row has no such note. The **Skip
+Tailscale presets** switch on the node screen shows for a `tailscale` node
+when some loop preset's `#filter` accepts it with
+`skip_tailscale_presets = false`. The probe does not expand
+presets at all.
+
+**Default domain resolver** (`TEMPLATE_LANG.md` §6.9).
+`route.default_domain_resolver` is the core's object form
+`{"server": "@dns_default_domain_resolver", "disable_optimistic_cache": "@dns_resolver_no_stale"}`.
+`dns_resolver_no_stale` (bool, default `true`, portable, travels in the backup
+`vars` like `dns_optimistic`) is the DNS screen switch **Never serve stale
+answers for node hostnames** under the default resolver. Readers of the key
+accept a string or an object with `server`; whoever replaces the resolver
+(the heal steps of the build) changes only `server`.
 
 **The `tailscale` preset.** For every Tailscale node: a `resolve` rule and a
 DNS rule pointing at the node's own DNS server `<node>-dns` (`type: tailscale`,
@@ -1034,9 +1105,27 @@ DNS rule pointing at the node's own DNS server `<node>-dns` (`type: tailscale`,
 part follows the `dns_enable` var. `preferred_by` asks the node whether an
 address or name is its own; Tailscale answers from the live tailnet state, so
 the preset carries no fixed subnets. A node opts out with the record field
-`skip_presets` (the **Skip presets** switch on the node screen, see
-[STORAGE.md](STORAGE.md)). Existing installs get the preset once through
+`skip_tailscale_presets` (the **Skip Tailscale presets** switch on the node
+screen, see [STORAGE.md](STORAGE.md)). Existing installs get the preset once through
 `SettingsStorage.seedLateDefaultPresets` (the `late_presets_seeded` key).
+
+**The `tunnel-ingress` preset** (`num` 940, on by default, a late default like
+`tailscale`; contract 1.1.126–1.1.129, TEMPLATE_LANG §6.5.2). A client
+endpoint — `wireguard` (and AWG), `openvpn-client`, `openconnect` — is a
+two-way channel: a peer on the other side can open a connection to any
+address. The preset walks those nodes with `for_each_node_do` into five
+`internal` lists and emits rules keyed by `inbound: [<node tags>]`: loopback
+for `allow_local` and `ip_is_private` for `allow_lan` go to `allowed_out`
+(`direct-out`), `allow_gateway` goes to `gateway_out` (`vpn-1`, our
+`route.final`; the launcher's default is its `proxy-out`), everything else
+from those tunnels goes to `closed_out` (`reject`; `reject`/`drop` become
+an action). A DNS rule rejects queries of the peers without `allow_gateway`
+while `closed_out` is `reject` or `drop`. Each rule is gated by `#notEmpty`,
+so a user without tunnel nodes gets nothing. The node fields are the
+**Incoming connections from this tunnel** switches on the node screen. The
+route rule sits right after the `traffic-processing` head, before
+`tailscale` and `private-ip`; its DNS slot is placed by the route axis, so the
+reject comes before `fakeip`'s catch-all A/AAAA rule.
 
 ---
 
@@ -1058,7 +1147,7 @@ See the implementation in `app/lib/services/builder/build_config.dart` and `pres
 
 ## The `#if` construct (§120)
 
-Declarative conditionals right inside the `config` and preset bodies. They are resolved during the substitution phase. The language as a whole (constructs, predicates, `#enable`, `#on_change`, `for_each`, `#tpl`) is specified in [024-TEMPLATE → template-language](./spec/features/024-TEMPLATE/FUNCTIONS/template-language.md); this section is the schema-level view of `#if`.
+Declarative conditionals right inside the `config` and preset bodies. They are resolved during the substitution phase. The language as a whole (constructs, predicates, `#enable`, `#on_change`, node loops `for_each_node` / `for_each_node_do`, `#tpl`) is specified in [024-TEMPLATE → template-language](./spec/features/024-TEMPLATE/FUNCTIONS/template-language.md); this section is the schema-level view of `#if`.
 
 ```jsonc
 "#if": {
@@ -1081,9 +1170,11 @@ The legacy spellings without `#` (`and`, `or`, `value`, `else`, and `enabled: "@
 
 An example (the §119 inbounds, see `wizard_template.json`):
 ```jsonc
-{"#if": {"and": [{"@vpn_mode": {"#in": ["proxy", "vpn_proxy"]}}], "value": {
-  "type": "@proxy_type", "tag": "mixed-in", "listen_port": "@proxy_port",
-  "#if": {"and": ["@proxy_auth"], "value": {
+{"#if": {"#and": [{"@vpn_mode": {"#in": ["proxy", "vpn_proxy"]}}], "#value": {
+  "type": "@proxy_type",
+  "tag": "mixed-in",
+  "listen_port": "@proxy_port",
+  "#if": {"#and": ["@proxy_auth"], "#value": {
     "users": [{"username": "@proxy_user", "password": "@proxy_pass"}]
   }}
 }}}
@@ -1098,6 +1189,12 @@ of keys and the line breaks **do not affect** the loader or the builder — they
 The semantics (`#if`, the magic vars, the rule order) are mandatory; the formatting is not, but keep it
 uniform. Custom or imported templates may ignore this section.
 
+The layout is applied by `app/scripts/format_wizard_template.py`
+(`python3 -I app/scripts/format_wizard_template.py [path]`). It keeps the order of keys and array
+elements, re-parses its own output and refuses to write the file when the result differs from the
+input in any value or key order. A `#` construct it does not know is written on one line, with a
+warning naming the path to the node.
+
 ### The general principle
 
 **Compact** (one line) for literals and small metadata objects. **Expanded**
@@ -1109,10 +1206,13 @@ placeholder or a nested `#if` is expanded; pure literals may be squeezed.
 | Part of a var | Layout |
 |---|---|
 | The “header” — `name`, `type`, `wizard_ui`, `title`, `tooltip` | **Line 1** (together) |
-| `default_value` | **Its own line**, indented |
-| `options[]` | **Multiline** — one element per line (`{title,value}` or a bare string) |
+| `default_value` | **Starts a new line**, indented; the scalar keys after it stay on that line |
+| `options[]` | Bare strings — one line; `{title,value}` objects — one element per line |
+| `#on_change` | `"#on_change": {"#set": {` on its own line, one target var per line, closing `}}` |
 | A ref-var (§265) `{"ref": "<name>"}` | **One line** in full (it carries no metadata) |
-| A simple bool var with no options | **One line** in full |
+| A simple var with no options (only header keys and `default_value`) | **One line** in full |
+
+The keys keep the order they have in the file; the layout only decides where a line breaks.
 
 ```jsonc
 { "name": "resolve_strategy", "type": "enum", "wizard_ui": "edit", "title": "Resolve strategy", "tooltip": "IP version preference for DNS resolution",
@@ -1138,40 +1238,79 @@ defaults); `num` is always written — it is part of the axis layout.
 
 | Context | Rule |
 |---|---|
-| Fields holding an `@` placeholder | **one field per line** |
-| Literals (`type`, `tag`, `auto_route`, `server_port`) | may share one line |
-| Small structs of two or three literals (`direct-out`, hijack-dns) | **one line** |
-| Large objects (`dns_options.servers[]`, a preset's `dns_servers[]`) | **multiline** — one field per line |
-| `options` and `filters` **without** an `@` | **one line** |
+| An object whose values are scalars (literals or `@` placeholders) and flat lists | **one line**, whatever its length — e.g. a DNS server's `server` body, an outbound, a rule |
+| An object holding a nested object, an `#if`/`#do` construct or a list of objects | **multiline** — one field per line |
+| The wrapper of a `dns_options.servers[]` / `dns_servers[]` entry (`description`, `enabled`, `vars`, `server`) | **multiline** — one field per line; the `server` body inside follows the first row |
+| `options` and `filters` | **one line** per element |
 
 ### The `#if` construct (§120)
 
-| `value` / `else` | Layout |
+The canonical keys are `#and` / `#or` / `#not` / `#value` / `#else`; the legacy spellings without
+`#` are laid out the same way. The condition (`#and`, `#or`, `#not`, the first element of the
+short form) is always one line.
+
+| Form and branch | Layout |
 |---|---|
-| **A scalar** | `{"#if": {"and": [...], "value": "..."}}` — one line |
-| **An object** | the condition plus `"value": {` on line 1; the body below; closing with `}}}` |
+| `#value` / `#else` **a scalar** | `{"#if": {"#and": [...], "#value": "..."}}` — one line |
+| `#value` **an object** | the condition plus `"#value": {` on line 1; the body below, one field per line; closing with `}}}` |
+| `#value` and `#else` **objects** | `}, "#else": {` between the two bodies; closing with `}}}` |
+| Short form `#if: [cond, V, E]`, `V` **a scalar** | `{"#if": ["@flag", "..."]}` — one line |
+| Short form, `V` **an object** | `{"#if": [cond, {` on line 1; the body below; closing with `}]}` (with `E`: `}, E]}`) |
+| `#if` as a map-spread key (`"#if"`, `"#if <label>"`) | the same rules, written as a field of the parent object |
+
+A branch that is a single operator object (`{"#append": "@node"}`, `{"#tpl": "…"}`) counts as a
+scalar.
 
 ```jsonc
-{"#if": {"and": ["@force_ipv4"], "value": {
-  "rule_set": ["ru-domains", "ru-services"], "ip_version": 6,
-  "action": "predefined", "rcode": "NOERROR"
-}}}
+{"#if": {"#and": ["@force_ipv4"], "#value": {
+  "rule_set": ["ru-domains", "ru-services"],
+  "ip_version": 6,
+  "action": "predefined",
+  "rcode": "NOERROR"
+}}},
+{"#if": [{"@allow_lan_nodes": "#notEmpty"}, {
+  "inbound": "@allow_lan_nodes",
+  "ip_is_private": true,
+  "outbound": "@allowed_out"
+}]}
+```
+
+### `#tpl`, `#do`, `#filter`, node loops
+
+| Construct | Layout |
+|---|---|
+| `{"#tpl": "…"}` | always one line |
+| `#filter` | the predicate on one line |
+| `for_each_node` / `for_each_node_do` with only `#filter` | one line |
+| `#do` | one target var per line; each `{"#append": …}` or short `#if` on that line |
+
+```jsonc
+"for_each_node_do": {
+  "#filter": {"@node.body.type": {"#in": ["wireguard", "openvpn-client", "openconnect"]}},
+  "#do": {
+    "@all_nodes": {"#append": "@node"},
+    "@allow_lan_nodes": {"#if": ["@node.allow_lan", {"#append": "@node"}]}
+  }
+}
 ```
 
 ### A preset's rules (`rule`/`rules`, `dns_rule`/`dns_rules`)
 
 | Case | Layout |
 |---|---|
-| A single literal rule (no `#if`, no `@`) | **one line** |
+| A rule without `#if` | **one line** |
 | A rule under an `#if` with a scalar | one line |
-| A rule under an `#if` with an object `value` | multiline (condition → body → `}}}`) |
+| A rule under an `#if` with an object `#value` | multiline (condition → body → `}}}`) |
+| A rule holding a nested `#if` (a `logical` rule) | one field per line |
 | `rule_set[]`, inline or remote | line 1: the metadata (`tag`/`type`/`format`); line 2: `rules`/`url` |
 | Long inline suffix lists | one line when it fits; otherwise wrapped |
 
 ```jsonc
 "dns_rules": [
-  {"#if": {"and": ["@force_ipv4"], "value": {
-    "query_type": ["HTTPS", "SVCB"], "action": "predefined", "rcode": "NOERROR"
+  {"#if": {"#and": ["@force_ipv4"], "#value": {
+    "query_type": ["HTTPS", "SVCB"],
+    "action": "predefined",
+    "rcode": "NOERROR"
   }}},
   {"rule_set": ["ru-domains", "ru-services"], "server": "@dns_server", "action": "route"}
 ]
@@ -1187,8 +1326,11 @@ defaults); `num` is always written — it is part of the axis layout.
 | ref-var `{"ref":...}` | ✓ | — |
 | A preset's `ui` object | ✓ (when it fits) | the flags below |
 | An `@` field in a payload | — | ✓ (per field) |
-| `#if` plus an object `value` | the condition | the body |
+| `#if` plus an object `#value` | the condition | the body |
 | `#if` plus a scalar | ✓ | — |
+| Short `#if` plus an object `V` | the condition | the body |
+| `{"#tpl": …}` | ✓ | — |
+| `#do` | — | ✓ (per target var) |
 | A preset's literal rule | ✓ | — |
 
 > **A gotcha:** do NOT put comment keys (`"//": "..."`) into the `config` block — sing-box's
@@ -1294,7 +1436,7 @@ The magic pseudo-var (`rule_enable` / `dns_enable`) carries `on_change: {"set":{
 Mandatory: (1) a `default_value` plus `required:false` on the pseudo-var (otherwise the preset
 silently fails to emit — the `29fe61c` gotcha); (2) the target is an existing global (usually in
 `internal`); (3) call `applyPresetOnChange` from **every** point where the preset's state
-changes (the routing switch, the DNS toggle, the editor, DNS Settings — five places today). If
+changes (the routing switch, the DNS toggle, the editor, the DNS tab — five places today). If
 the formula depends on both the routing and the DNS state, hang an **identical** on_change
 on both pseudo-vars (`rule_enable` AND `dns_enable`), so it fires along either path.
 
@@ -1302,7 +1444,7 @@ on both pseudo-vars (`rule_enable` AND `dns_enable`), so it fires along either p
 
 ## Related documents
 
-- [024-TEMPLATE](./spec/features/024-TEMPLATE/FEATURE.md) — the feature: the template language (`#if`, `#enable`, `for_each`, `#tpl`, typed variables) and the preset language; this file is the schema reference for `wizard_template.json`
+- [024-TEMPLATE](./spec/features/024-TEMPLATE/FEATURE.md) — the feature: the template language (`#if`, `#enable`, `for_each_node` / `for_each_node_do`, `#tpl`, typed variables) and the preset language; this file is the schema reference for `wizard_template.json`
 - [`STORAGE.md`](./STORAGE.md) — the user state in `lxbox_settings.json` (what the user changes, including the directions)
 - [§058 config generator v1 (superseded)](./spec/tasks/058-config-generator-wizard-v1-superseded/spec.md) — substitution and expansion (formerly feature §005x, superseded by §026)
 - [§026 parser v2](./spec/tasks/026F-parser-v2/spec.md) — `parser_config.version`

@@ -6,6 +6,7 @@ import '../../../models/node_warning.dart';
 import '../../../models/server_list.dart';
 import '../../../models/source_chain.dart';
 import '../../../models/source_entry.dart';
+import '../../../models/tls_policy.dart';
 import '../../contract/registry_warning.dart';
 import '../../node_link_address.dart';
 import '../../url_mask.dart';
@@ -98,8 +99,18 @@ Map<String, Object?> serializeSubEntry(
     // §346 — настройки, живущие только у SubscriptionServers. У UserServer /
     // FolderServers полей нет (их никто не фетчит) — ключи не кладём вовсе,
     // чтобы `null` не читался как «Default identity» у записи, где режима нет.
-    // §578 — поле записи «пропустить пресеты», read-only.
-    if (list is UserServer) 'skip_presets': list.skipPresets,
+    // §578/§656 — поля записи узла, read-only (контракт 1.1.126:
+    // `skip_presets` → `skip_tailscale_presets`).
+    if (list is UserServer) ...{
+      'skip_tailscale_presets': list.skipTailscalePresets,
+      'allow_local': list.allowLocal,
+      'allow_lan': list.allowLan,
+      'allow_gateway': list.allowGateway,
+      'own_routes': list.ownRoutes,
+    },
+    // §636 — TLS-политика: у подписки и папки — уровень источника, у
+    // одиночного сервера — узловой.
+    'tls': serializeTlsPolicy(list.tls),
     // Фича 478 — `raw` одиночного узла под `reveal=true`. Раньше сырое тело
     // отдавал только член папки (`serializeFolderMember`), и проверить, что
     // именно лежит у одиночной записи, снаружи было нечем — при разборе
@@ -116,6 +127,8 @@ Map<String, Object?> serializeSubEntry(
       // Сам список — под-ресурс /subs/{id}/rules: у подписки правил может быть
       // много, а это общий листинг.
       'import_rules_count': list.importRules.length,
+      // §648 — описание подписки из заголовка `announce`; нет — пустая строка.
+      'announce': e.announce,
     },
   };
 }
@@ -309,5 +322,21 @@ Map<String, Object?> serializeFolderMember(
       'protocol': m.node?.protocol,
       'broken': m.node == null,
       if (reveal) 'raw': m.raw,
-      'skip_presets': m.skipPresets, // §578 — read-only
+      // §578/§656 — поля записи узла, read-only.
+      'skip_tailscale_presets': m.skipTailscalePresets,
+      'allow_local': m.allowLocal,
+      'allow_lan': m.allowLan,
+      'allow_gateway': m.allowGateway,
+      'own_routes': m.ownRoutes,
+      'tls': serializeTlsPolicy(m.tls), // §636 — узловая политика члена
     };
+
+/// §636 — TLS-политика: четыре ключа, не заданное — `null`; пустая — `{}`.
+Map<String, Object?> serializeTlsPolicy(TlsPolicy p) => p.isEmpty
+    ? const {}
+    : {
+        'fragment': p.fragment,
+        'record_fragment': p.recordFragment,
+        'fallback_delay': p.fallbackDelay,
+        'mixed_case_sni': p.mixedCaseSni,
+      };

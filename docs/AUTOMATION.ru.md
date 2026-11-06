@@ -125,10 +125,17 @@ Profile активируется, пока условие истинно. Host �
 | `REFRESH_SUBS` | `force` (Bool) | Обновить подписки |
 | `RESET_NETWORK` | — | closeAll + DNS flush + dialer rebind (нужен tunnel up) |
 | `URLTEST_GROUP` | `group` (String) | Форсировать URLTest группы (нужен tunnel up) |
+| `URLTEST_ALL` | — | Форсировать URLTest auto-группы каждого Направления по очереди; ядро в каждой переселектит на живой узел (нужен tunnel up; extras игнорируются) |
 
 > **`START_VPN` первый раз** требует системного VPN-consent — его можно дать
 > только из UI. Нажмите Connect в приложении один раз; дальше automation
 > работает без диалога.
+
+> **Без загруженного приложения работают только `START_VPN`, `STOP_VPN` и
+> `TOGGLE_VPN`.** Остальным командам и всем исходящим событиям нужен процесс
+> приложения с поднятым UI-движком (приложение открывали после загрузки
+> устройства и его не убили). Без него такая команда пропускается молча, без
+> `VPN_ERROR`.
 
 ---
 
@@ -245,6 +252,9 @@ Task "Switch to Russia with confirmation":
 ### 6. Auto reset-network при высоком ping
 - Profile: Variable `%CURR_PING > 1000` (set externally)
 - Task: Send Intent `RESET_NETWORK`
+
+### 6a. Встряхивание — перепроверить все Направления (MacroDroid)
+- Trigger: Shake Device; Action: Send Intent `URLTEST_ALL`
 
 ### 7. Notification на часы при падении VPN
 - Profile: Event Received `com.leadaxe.lxbox.event.VPN_ERROR`

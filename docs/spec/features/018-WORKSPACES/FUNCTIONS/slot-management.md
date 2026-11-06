@@ -55,7 +55,9 @@ relative save date and on-disk size; the current name on the button.
 ## Boundaries
 
 - A deleted slot cannot be restored; there is no trash.
-- "Default" cannot be renamed before the first "Save as" — it has no copy.
+- "Default" is not renamed: it is the name of the state without a copy,
+  not a slot; a named copy appears only through "Save as". Kept as is
+  (audit 591, 2026-10-13).
 
 ## Revisions
 

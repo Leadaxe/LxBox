@@ -6,7 +6,7 @@
 
 `openvpn-client` — an endpoint (a tunnel interface, not a plain outbound), sing-box type `openvpn-client`. Accepted from: sing-box JSON.
 
-<sub>Schema checked against core `1.14.2-lx.11`</sub>
+<sub>Schema checked against core `1.14.3-lx.17`</sub>
 
 | Field | Value |
 |---|---|
@@ -14,7 +14,7 @@
 | `singbox_type` | `openvpn-client` |
 | `kind` | `endpoint` |
 | `sources` | `singbox` |
-| Core the schema was checked against | `1.14.2-lx.11` |
+| Core the schema was checked against | `1.14.3-lx.17` |
 | Core requirement | core ≥ `1.14.0-lx.10`, build tag `with_openvpn`; on a core that lacks it the node is dropped at build: `openvpn_core_unsupported` |
 
 ## How to read this page
@@ -41,6 +41,8 @@ The scheme has no link form: it comes from sing-box JSON only.
 
 The node body itself — the sing-box JSON kept in the launcher state. The path is the one used in that body.
 
+- <a id="body-other-keys"></a>**`*`** — All core keys pass through as written.
+  - Other keys of this object pass through as written: no rules, no `unknown_key`; emitted here in alphabetical order. Not inherited by nested objects
 
 ## Diagnosed problems
 

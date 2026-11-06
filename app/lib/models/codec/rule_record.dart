@@ -35,10 +35,12 @@ const Set<String> kRuleBodyKeys = {
   'domain',
   'domain_suffix',
   'domain_keyword',
+  'domain_regex',
   'ip_cidr',
   'port',
   'port_range',
   'package_name',
+  'package_name_regex',
   'protocol',
   'network',
   'ip_is_private',
@@ -47,6 +49,8 @@ const Set<String> kRuleBodyKeys = {
   'inbound',
   'wifi_ssid',
   'wifi_bssid',
+  'network_type',
+  'network_is_expensive',
   'outbound',
   'action',
   // `rule_set` намеренно НЕ в списке: в теле записи это ссылка на набор
@@ -151,6 +155,9 @@ Map<String, dynamic> _ruleBody(CustomRule r, {required bool includeMatch}) {
     if (r.domainKeywords.isNotEmpty) {
       b['domain_keyword'] = List<String>.of(r.domainKeywords);
     }
+    if (r.domainRegexes.isNotEmpty) {
+      b['domain_regex'] = List<String>.of(r.domainRegexes);
+    }
     if (r.ipCidrs.isNotEmpty) b['ip_cidr'] = List<String>.of(r.ipCidrs);
   }
   // Типы sing-box: `port` — числа (нечисловые отбрасываются, сборка их тоже
@@ -159,6 +166,9 @@ Map<String, dynamic> _ruleBody(CustomRule r, {required bool includeMatch}) {
   if (ports.isNotEmpty) b['port'] = ports;
   if (r.portRanges.isNotEmpty) b['port_range'] = List<String>.of(r.portRanges);
   if (r.packages.isNotEmpty) b['package_name'] = List<String>.of(r.packages);
+  if (r.packageRegexes.isNotEmpty) {
+    b['package_name_regex'] = List<String>.of(r.packageRegexes);
+  }
   if (r.protocols.isNotEmpty) b['protocol'] = List<String>.of(r.protocols);
   if (r.network.isNotEmpty) b['network'] = List<String>.of(r.network);
   if (r.ipIsPrivate) b['ip_is_private'] = true;
@@ -169,6 +179,11 @@ Map<String, dynamic> _ruleBody(CustomRule r, {required bool includeMatch}) {
   if (r.inbounds.isNotEmpty) b['inbound'] = List<String>.of(r.inbounds);
   if (r.wifiSsids.isNotEmpty) b['wifi_ssid'] = List<String>.of(r.wifiSsids);
   if (r.wifiBssids.isNotEmpty) b['wifi_bssid'] = List<String>.of(r.wifiBssids);
+  // §694 — пусто/false не пишутся: правило без условия — байт в байт как было.
+  if (r.networkTypes.isNotEmpty) {
+    b['network_type'] = List<String>.of(r.networkTypes);
+  }
+  if (r.networkIsExpensive) b['network_is_expensive'] = true;
   // Пустая цель пишется как есть: сборка такое правило пропускает, а запись
   // без `outbound` читается целью по умолчанию и попала бы в конфиг.
   if (r.outbound == kOutboundReject) {
@@ -254,10 +269,12 @@ RecordRead<CustomRule> ruleFromRecord(
             domains: _strList(b['domain']),
             domainSuffixes: _strList(b['domain_suffix']),
             domainKeywords: _strList(b['domain_keyword']),
+            domainRegexes: _strList(b['domain_regex']),
             ipCidrs: _strList(b['ip_cidr']),
             ports: _portList(b['port']),
             portRanges: _strList(b['port_range']),
             packages: _strList(b['package_name']),
+            packageRegexes: _strList(b['package_name_regex']),
             protocols: _strList(b['protocol']),
             network: _strList(b['network']),
             ipIsPrivate: b['ip_is_private'] == true,
@@ -266,6 +283,8 @@ RecordRead<CustomRule> ruleFromRecord(
             inbounds: _strList(b['inbound']),
             wifiSsids: _strList(b['wifi_ssid']),
             wifiBssids: _strList(b['wifi_bssid']),
+            networkTypes: _strList(b['network_type']),
+            networkIsExpensive: b['network_is_expensive'] == true,
             outbound: outbound,
             dns: dns,
             resolve: resolve,
@@ -288,6 +307,7 @@ RecordRead<CustomRule> ruleFromRecord(
           ports: _portList(b['port']),
           portRanges: _strList(b['port_range']),
           packages: _strList(b['package_name']),
+          packageRegexes: _strList(b['package_name_regex']),
           protocols: _strList(b['protocol']),
           network: _strList(b['network']),
           ipIsPrivate: b['ip_is_private'] == true,
@@ -296,6 +316,8 @@ RecordRead<CustomRule> ruleFromRecord(
           inbounds: _strList(b['inbound']),
           wifiSsids: _strList(b['wifi_ssid']),
           wifiBssids: _strList(b['wifi_bssid']),
+          networkTypes: _strList(b['network_type']),
+          networkIsExpensive: b['network_is_expensive'] == true,
           outbound: outbound,
           dns: dns,
           resolve: resolve,

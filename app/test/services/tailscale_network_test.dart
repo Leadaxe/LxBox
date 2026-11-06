@@ -253,43 +253,69 @@ void main() {
     }
   });
 
-  group('§613 — путь, Devices без выхода, поля тела', () {
-    const gw = CcTailscalePeer(stableId: 'n2', hostName: 'gw');
-    const nas = CcTailscalePeer(stableId: 'n3', hostName: 'nas');
-
-    test('путь NONE и ядро без пути — пусто, прочие — строка', () {
-      expect(tailscalePathLabel(const CcTailscalePeer(path: 'NONE')), isEmpty);
-      expect(tailscalePathLabel(const CcTailscalePeer()), isEmpty);
-      for (final path in ['DIRECT', 'PEER_RELAY', 'DERP']) {
-        expect(tailscalePathLabel(CcTailscalePeer(path: path)), isNotEmpty);
-      }
+  group('§613 — путь, поля тела', () {
+    test('§645 — как подключено: условия по порядку', () {
+      const now = 1700000000;
+      String line(CcTailscalePeer p) => tailscaleConnectionText(p, now);
+      // 1. DIRECT с адресом и без.
       expect(
-        tailscalePathLabel(const CcTailscalePeer(
-            path: 'DIRECT', endpoint: '198.51.100.7:41641')),
-        contains('198.51.100.7:41641'),
+        line(const CcTailscalePeer(
+            path: 'direct', endpoint: '198.51.100.7:41641', online: true)),
+        allOf(contains('direct'), contains('198.51.100.7:41641')),
       );
+      expect(line(const CcTailscalePeer(path: 'direct')),
+          tailscalePathLabel(const CcTailscalePeer(path: 'direct')));
+      // 2. DERP с кодом и без.
+      expect(line(const CcTailscalePeer(path: 'derp', derpRegionCode: 'ams')),
+          contains('ams'));
+      expect(line(const CcTailscalePeer(path: 'derp')), isNotEmpty);
+      // 3. PEER_RELAY.
+      expect(line(const CcTailscalePeer(path: 'peer_relay')), isNotEmpty);
+      // Путь важнее last seen.
+      expect(
+        line(const CcTailscalePeer(path: 'derp', lastSeen: now - 3600)),
+        isNot(contains('last seen')),
+      );
+      // 4. Пути нет, не в сети, lastSeen > 0 — относительный возраст.
+      expect(
+        line(const CcTailscalePeer(path: '', lastSeen: now - 33 * 3600)),
+        allOf(contains('last seen'), contains(tailscaleAgeLabel(33 * 3600))),
+      );
+      // 5. Иначе — ничего: в сети без пути, не в сети без lastSeen.
+      expect(
+        line(const CcTailscalePeer(
+            path: '', online: true, lastSeen: now - 60)),
+        isEmpty,
+      );
+      expect(line(const CcTailscalePeer()), isEmpty);
+      // key expired дописывается и стоит один, если прочего нет.
+      expect(
+        line(const CcTailscalePeer(path: 'direct', expired: true)),
+        allOf(contains('direct'), contains('key expired')),
+      );
+      expect(line(const CcTailscalePeer(online: true, expired: true)),
+          'key expired');
     });
 
-    test('действующий выход в Devices не повторяется', () {
-      const s = CcTailscaleStatus(
-        tag: 'ts',
-        backendState: 'Running',
-        stateText: '',
-        exitNode: gw,
-        userGroups: [
-          CcTailscaleUserGroup(peers: [gw, nas]),
-        ],
-      );
-      expect(withoutActiveExit(s.peers, s).map((p) => p.stableId), ['n3']);
-      const none = CcTailscaleStatus(
-        tag: 'ts',
-        backendState: 'Running',
-        stateText: '',
-        userGroups: [
-          CcTailscaleUserGroup(peers: [gw, nas]),
-        ],
-      );
-      expect(withoutActiveExit(none.peers, none), hasLength(2));
+    test('§645 — вид пути', () {
+      expect(tailscalePathKind(const CcTailscalePeer(path: 'direct')),
+          TailscalePathKind.direct);
+      expect(tailscalePathKind(const CcTailscalePeer(path: 'derp')),
+          TailscalePathKind.derp);
+      expect(tailscalePathKind(const CcTailscalePeer(path: 'peer_relay')),
+          TailscalePathKind.peerRelay);
+      for (final path in ['none', '', 'something_new']) {
+        expect(tailscalePathKind(CcTailscalePeer(path: path)), isNull);
+      }
+    });
+
+    test('§645 — правая часть второй строки по числу адресов', () {
+      expect(tailscaleAddressTail(const []), (second: '', more: 0));
+      expect(tailscaleAddressTail(const ['100.64.0.1']), (second: '', more: 0));
+      expect(tailscaleAddressTail(const ['100.64.0.1', 'fd7a::1']),
+          (second: 'fd7a::1', more: 0));
+      expect(tailscaleAddressTail(const ['100.64.0.1', 'fd7a::1', 'fd7a::2']),
+          (second: 'fd7a::1', more: 1));
     });
 
     test('поля тела: запись и снятие, порядок ключей', () {

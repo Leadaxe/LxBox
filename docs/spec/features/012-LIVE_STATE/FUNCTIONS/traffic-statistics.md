@@ -36,7 +36,7 @@ chain under a card).
 | Summary | Upload, Download (volume), Connections (number of live ones; tap → Conns), LxBox (memory; tap → breakdown) |
 | Traffic by Rule | a card per rule: ↑/↓ total, number of connections, under the name — the `↳ via …` detour chain; sorted by volume; expanding — connections `host:port`, TCP/UDP, rule, age, ↑/↓ |
 | By routing rule | distribution of the number of connections across rules as bars |
-| Memory | a sheet: process RSS/PSS, breakdown by OS memory categories, core goroutines, `connectionsIn` / `connectionsOut`; a tap on a row copies it |
+| Memory | a sheet: process RSS/PSS, Core memory (the core's own memory, with the Memory limit next to it when a number is chosen), breakdown by OS memory categories, core goroutines, `connectionsIn` / `connectionsOut`; a tap on a row copies it |
 
 ## Rules and invariants
 
@@ -47,9 +47,14 @@ chain under a card).
   lists); not found or empty — `final`; the result is cached.
 - The connection host is the domain if there is one, otherwise the host from
   the destination address.
-- "Memory" is that of the whole app process, not only the core: the core lives
-  in the same process. The size of the core's Go heap is not available
-  separately.
+- Cards are grouped by rule, not by node; the `↳ via …` line appears only
+  when the rule's traffic went through a detour chain, so a plain setup
+  shows no such line. Kept as is (audit 591, 2026-10-13).
+- "Memory" on the card is that of the whole app process, not only the core:
+  the core lives in the same process. The core's own memory (its Go runtime,
+  core lx.29+) is the Core memory row in the sheet; the Memory limit is
+  compared with that figure. An older core does not report it, and the row
+  is hidden.
 - Cards are recomputed at most once per 0.7 s, the window counts from the end
   of the previous recomputation; the first snapshot — at once.
 - Until the first snapshot arrives — a loading indicator; no connections —

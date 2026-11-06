@@ -143,14 +143,6 @@ void main() {
       expect(parseLinkAs<VlessSpec>(spec.toUri())!.tls.reality!.keyShare, 'classical');
     });
 
-    test('key_share=hybrid — то же', () {
-      final spec = parseLinkAs<VlessSpec>(
-          'vless://u@h:443?type=tcp&security=reality&pbk=$_validPbk'
-          '&key_share=hybrid#L')!;
-      expect(spec.tls.reality!.keyShare, 'hybrid');
-      expect(spec.toUri(), contains('key_share=hybrid'));
-    });
-
     test('key_share без валидного pbk — игнорируется', () {
       final spec = parseLinkAs<VlessSpec>(
           'vless://u@h:443?type=tcp&security=reality&pbk=enabled'
@@ -199,19 +191,6 @@ void main() {
   });
 
   group('§457 модель', () {
-    test('key_share входит в равенство', () {
-      const a = RealitySpec(publicKey: _validPbk, shortId: '');
-      const b = RealitySpec(
-          publicKey: _validPbk, shortId: '', keyShare: 'hybrid');
-      expect(a == b, isFalse);
-      expect(a.hashCode == b.hashCode, isFalse);
-      expect(
-          b ==
-              const RealitySpec(
-                  publicKey: _validPbk, shortId: '', keyShare: 'hybrid'),
-          isTrue);
-    });
-
     test('пустая строка не эмитится (omitempty ядра)', () {
       const r =
           RealitySpec(publicKey: _validPbk, shortId: '', keyShare: '');

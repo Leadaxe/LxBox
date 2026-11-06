@@ -26,8 +26,9 @@ Google Play с тремя несовместимыми подписями. Зд�
    коды ломают установку поверх в обе стороны.
 3. **Зелёный CI — единственный тестовый гейт.** Полный набор тестов локально не
    гоняется; вердикт берётся по `head_sha` через API, а не по «последнему прогону».
-4. **Кандидат до пользователей не доходит.** `-rc.N` — только pre-release на
-   GitHub для тестеров: не Latest, не в `docs/latest.json`, не в Play, не в F-Droid.
+4. **Кандидат до пользователей stable не доходит.** `-rc.N` — pre-release на
+   GitHub для тестеров и выпуск в открытом тестировании Play: не Latest, не в
+   `docs/latest.json`, не на рабочем треке Play, не в F-Droid.
 5. **Сборка воспроизводима побайтно**, иначе F-Droid не опубликует релиз под
    нашей подписью.
 
@@ -38,7 +39,7 @@ Google Play с тремя несовместимыми подписями. Зд�
 | Событие | Что запускается |
 |---------|-----------------|
 | push тега `vX.Y.Z` / `vX.Y.Z-hotfixN` | `meta` → `checks` → `android` → `release` + `google-play` + `publish-manifest` |
-| push тега `vX.Y.Z-rc.N` | то же, но `release` — pre-release; `google-play` и `publish-manifest` пропускаются |
+| push тега `vX.Y.Z-rc.N` | то же, но `release` — pre-release, `google-play` заливает в открытое тестирование (`PLAY_RC_TRACK`, по умолчанию `beta`); `publish-manifest` пропускается |
 | push в `develop` / `main`, PR в них | `checks` + `PublicSubsCorpus` |
 | `workflow_dispatch`, `run_mode=checks` | `checks` (с `test_path` / `test_name` — точечный прогон без analyze) |
 | `workflow_dispatch`, `run_mode=build` | + `android`: APK в артефактах, версия `X.Y.Z-dev.N` от последнего тега |
@@ -51,7 +52,7 @@ Google Play с тремя несовместимыми подписями. Зд�
 | `PublicSubsCorpus` | разбор корпуса публичных подписок (без ядра и сети), отчёт артефактом | `continue-on-error`: эталон правит человек |
 | `android` | fetch ядра по пину; версия и базовый код в pubspec; подпись из секретов; **четыре APK** отдельными прогонами (universal, `armeabi-v7a`, `arm64-v8a`, `x86_64`) с сужением нативных библиотек ядра; AAB | `--split-per-abi` не используется; `LXBOX_DISTRIBUTION=play` — **только** у AAB |
 | `release` | GitHub Release: `LxBox-vX.Y.Z-{arm64-v8a,armeabi-v7a,x86_64,universal}.apk`, тело — `RELEASE_NOTES.md` | не зависит от `google-play` |
-| `google-play` | AAB в Play Console; «что нового» — из changelog'ов fastlane (`en-US`, `ru` → `ru-RU`) | без секрета `PLAY_SERVICE_ACCOUNT_JSON` — предупреждение и пропуск; трек `PLAY_TRACK` (по умолчанию `production`), статус `PLAY_RELEASE_STATUS` (по умолчанию `draft` — Publish жмёт человек) |
+| `google-play` | AAB в Play Console; «что нового» — из changelog'ов fastlane (`en-US`, `ru` → `ru-RU`) | без секрета `PLAY_SERVICE_ACCOUNT_JSON` — предупреждение и пропуск; трек `PLAY_TRACK` (по умолчанию `production`), статус `PLAY_RELEASE_STATUS` (по умолчанию `draft` — Publish жмёт человек); кандидат — `PLAY_RC_TRACK` (по умолчанию `beta`) и `PLAY_RC_RELEASE_STATUS` (по умолчанию `completed`) |
 | `publish-manifest` | переписывает `docs/latest.json` в `main` бот-коммитом `[skip ci]` | единственный автоматический коммит в `main` |
 
 ## Реестр: версия и код сборки

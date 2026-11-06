@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models/parser_config.dart';
+import '../services/builder/if_engine.dart' show evalCond, makeResolver;
 import 'outbound_picker.dart';
 import 'var_values_model.dart';
 import '../services/l10n/locale_controller.dart';
@@ -42,6 +43,9 @@ class TemplateVarListView extends StatefulWidget {
     required this.onChanged,
     this.sectionDescriptions = const {},
     this.showSectionHeaders = true,
+    this.islands = false,
+    this.sectionTrailing = const {},
+    this.hints = const {},
     this.outboundOptions = const [],
     this.dnsServerTags = const [],
   });
@@ -65,6 +69,18 @@ class TemplateVarListView extends StatefulWidget {
   /// заголовок (например, routing_screen показывает одну секцию под своей
   /// шапкой).
   final bool showSectionHeaders;
+
+  /// §709 — каждая секция в своей карточке ([SettingsIsland]); VPN
+  /// Settings → Core.
+  final bool islands;
+
+  /// §709 — виджеты parent'а в конце секции (по title), например
+  /// настройка хранилища внутри секции шаблона.
+  final Map<String, List<Widget>> sectionTrailing;
+
+  /// §709 — короткая подсказка (i) у заголовка переменной, по имени. Не поле
+  /// языка шаблона — передаёт экран.
+  final Map<String, String> hints;
 
   /// §117: Направления для `type: outbound` vars (Direct + активные Направления).
   /// Пусто → outbound-var рендерится текстовым полем (fallback).
@@ -139,6 +155,7 @@ class _TemplateVarListViewState extends State<TemplateVarListView> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.islands) return _buildIslands(context);
     final children = <Widget>[];
     String lastSection = '';
 
@@ -159,6 +176,34 @@ class _TemplateVarListViewState extends State<TemplateVarListView> {
     );
   }
 
+  /// §709 — секции подряд, каждая — [SettingsIsland]; порядок секций — по
+  /// первому появлению var'а.
+  Widget _buildIslands(BuildContext context) {
+    final order = <String>[];
+    final bySection = <String, List<Widget>>{};
+    for (final v in widget.vars) {
+      final list = bySection.putIfAbsent(v.section, () {
+        order.add(v.section);
+        return <Widget>[];
+      });
+      list.add(_buildVarWidget(v));
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final section in order)
+          SettingsIsland(
+            title: section,
+            description: widget.sectionDescriptions[section] ?? '',
+            children: [
+              ...bySection[section]!,
+              ...?widget.sectionTrailing[section],
+            ],
+          ),
+      ],
+    );
+  }
+
   Widget _buildSectionHeader(BuildContext context, String title) {
     return TemplateSectionHeader(
       title: title,
@@ -169,12 +214,63 @@ class _TemplateVarListViewState extends State<TemplateVarListView> {
   /// §232 — каждое поле подписано на СВОЙ ключ модели: перерисовывается
   /// только оно и только на изменение своего значения (юзером или программно
   /// через on_change).
-  Widget _buildVarWidget(WizardVar v) => ValueListenableBuilder<String>(
-        valueListenable: widget.model.notifier(v.name),
-        builder: (_, value, _) => _buildControl(v, value),
-      );
+  Widget _buildVarWidget(WizardVar v) {
+    final field = ValueListenableBuilder<String>(
+      valueListenable: widget.model.notifier(v.name),
+      builder: (_, value, _) => _buildControl(v, value),
+    );
+    final gate = v.enable;
+    if (gate == null) return field;
+    // §709 — `#enable` объявления (TEMPLATE_LANG §4.6): строка неактивна,
+    // пока условие ложно; подписка — на переменные из условия.
+    final refs = <String>{};
+    _collectRefs(gate, refs);
+    return ListenableBuilder(
+      listenable: Listenable.merge([for (final r in refs) widget.model.notifier(r)]),
+      builder: (_, child) {
+        final on = evalCond(gate, makeResolver(widget.model.snapshot, _byName));
+        if (on) return child!;
+        return AbsorbPointer(
+          child: Opacity(opacity: kVarDisabledOpacity, child: child),
+        );
+      },
+      child: field,
+    );
+  }
+
+  static void _collectRefs(dynamic node, Set<String> out) {
+    if (node is String && node.startsWith('@')) {
+      out.add(node.substring(1));
+    } else if (node is List) {
+      for (final e in node) {
+        _collectRefs(e, out);
+      }
+    } else if (node is Map) {
+      for (final e in node.entries) {
+        _collectRefs(e.key, out);
+        _collectRefs(e.value, out);
+      }
+    }
+  }
 
   Widget _buildControl(WizardVar v, String value) {
+    // §691 — `text_list` + `options` + `options_open`: поле списка с ▾
+    // (подсказки добавляют строку), а не чипы — чипы читались как уже
+    // введённые значения.
+    if (v.type == 'text_list' && v.options.isNotEmpty && v.optionsOpen) {
+      return VarTextField(
+        key: ValueKey('list-${v.name}'),
+        value: value,
+        label: v.title.isNotEmpty ? v.title : v.name,
+        tooltip: v.tooltip,
+        maxLines: 6,
+        listMode: true,
+        hintText: getLocalText.s("One per line, or pick from the list"),
+        suggestions: v.optionValues,
+        suggestionLabels: [for (final o in v.options) o.title],
+        onChanged: (val) => _update(v.name, val),
+      );
+    }
     // §555 — `text_list` + `options`: множественный выбор (SPEC 143, D-125).
     if (v.type == 'text_list' && v.options.isNotEmpty) {
       return _LabelledField(
@@ -190,8 +286,15 @@ class _TemplateVarListViewState extends State<TemplateVarListView> {
     }
     switch (v.type) {
       case 'bool':
+        final hint = widget.hints[v.name];
+        final title = Text(v.title.isNotEmpty ? v.title : v.name);
         return SwitchListTile(
-          title: Text(v.title.isNotEmpty ? v.title : v.name),
+          title: hint == null
+              ? title
+              : Row(children: [
+                  Expanded(child: title),
+                  LxHintButton(message: hint),
+                ]),
           subtitle: v.tooltip.isNotEmpty
               ? Text(v.tooltip, style: const TextStyle(fontSize: 12))
               : null,
@@ -289,6 +392,7 @@ class _TemplateVarListViewState extends State<TemplateVarListView> {
     return _LabelledField(
       label: v.title.isNotEmpty ? v.title : v.name,
       tooltip: v.tooltip,
+      hint: widget.hints[v.name],
       field: DropdownButton<String>(
         key: ValueKey('options-${v.name}'),
         isExpanded: true,
@@ -334,6 +438,64 @@ class _TemplateVarListViewState extends State<TemplateVarListView> {
     final n = int.tryParse(raw);
     if (n == null) return raw; // formatter уже отсёк не-цифры; defensive
     return n.clamp(0, 65535).toString();
+  }
+}
+
+/// §709 — остров настроек: карточка по образцу экрана Backup с заголовком
+/// секции внутри. Пустой [title] — карточка без заголовка.
+class SettingsIsland extends StatelessWidget {
+  const SettingsIsland({
+    super.key,
+    required this.title,
+    this.description = '',
+    required this.children,
+  });
+
+  final String title;
+  final String description;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      child: Padding(
+        padding: const EdgeInsets.only(top: 8, bottom: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (title.isNotEmpty)
+              TemplateSectionHeader(title: title, description: description),
+            ...children,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// §709 — непрозрачность неактивной строки (`#enable` ложно) — Material 3
+/// disabled state layer, как `kDisabledRowOpacity` экрана VPN Settings.
+const double kVarDisabledOpacity = 0.38;
+
+/// §709 — значок (i) у настройки корневого блока `lx` ядра: короткая
+/// подсказка по нажатию, без перехода.
+class LxHintButton extends StatelessWidget {
+  const LxHintButton({super.key, required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: message,
+      triggerMode: TooltipTriggerMode.tap,
+      showDuration: const Duration(seconds: 8),
+      child: const Padding(
+        padding: EdgeInsets.all(8),
+        child: Icon(Icons.info_outline, size: 20),
+      ),
+    );
   }
 }
 
@@ -391,6 +553,9 @@ class TemplateSectionHeader extends StatelessWidget {
 /// - `suggestions` — список пресетов; suffix-▾ открывает popup с ✓ на
 ///   текущем значении. Совместим только с `!obscure` (для secrets
 ///   пресетов нет).
+/// - `listMode` — значение — список строк (`text_list`): выбор из ▾
+///   добавляет строку, повторный выбор убирает её; ✓ — у строк, которые уже
+///   в значении. `suggestionLabels` — подписи пунктов (по индексу).
 class VarTextField extends StatefulWidget {
   const VarTextField({
     super.key,
@@ -406,6 +571,8 @@ class VarTextField extends StatefulWidget {
     this.errorText,
     this.maxLines = 1,
     this.hintText,
+    this.listMode = false,
+    this.suggestionLabels = const [],
   });
 
   final String value;
@@ -430,6 +597,12 @@ class VarTextField extends StatefulWidget {
 
   /// Подсказка в пустом поле.
   final String? hintText;
+
+  /// Значение — строки списка; ▾ добавляет и убирает строку.
+  final bool listMode;
+
+  /// Подписи пунктов ▾ (по индексу [suggestions]); пусто — само значение.
+  final List<String> suggestionLabels;
 
   @override
   State<VarTextField> createState() => _VarTextFieldState();
@@ -460,7 +633,20 @@ class _VarTextFieldState extends State<VarTextField> {
     super.dispose();
   }
 
+  List<String> get _lines => [
+        for (final l in _ctrl.text.split('\n'))
+          if (l.trim().isNotEmpty) l.trim(),
+      ];
+
+  bool _isChosen(String s) =>
+      widget.listMode ? _lines.contains(s) : s == _ctrl.text;
+
   void _applySuggestion(String v) {
+    if (widget.listMode) {
+      final lines = _lines;
+      lines.contains(v) ? lines.remove(v) : lines.add(v);
+      v = lines.join('\n');
+    }
     _ctrl.text = v;
     _ctrl.selection = TextSelection.collapsed(offset: v.length);
     widget.onChanged(v);
@@ -484,21 +670,22 @@ class _VarTextFieldState extends State<VarTextField> {
       position: PopupMenuPosition.under,
       onSelected: _applySuggestion,
       itemBuilder: (ctx) => [
-        for (final s in widget.suggestions)
+        for (final (i, s) in widget.suggestions.indexed)
           PopupMenuItem<String>(
             value: s,
             child: Row(
               children: [
                 SizedBox(
                   width: 20,
-                  child: s == _ctrl.text
-                      ? const Icon(Icons.check, size: 18)
-                      : null,
+                  child:
+                      _isChosen(s) ? const Icon(Icons.check, size: 18) : null,
                 ),
                 const SizedBox(width: 4),
                 Expanded(
                   child: Text(
-                    s,
+                    i < widget.suggestionLabels.length
+                        ? widget.suggestionLabels[i]
+                        : s,
                     style: const TextStyle(fontSize: 13),
                     overflow: TextOverflow.ellipsis,
                     maxLines: 1,
@@ -521,15 +708,13 @@ class _VarTextFieldState extends State<VarTextField> {
       keyboardType: widget.numeric
           ? TextInputType.number
           : (widget.maxLines > 1 ? TextInputType.multiline : null),
-      inputFormatters: widget.numeric
-          ? [FilteringTextInputFormatter.digitsOnly]
-          : null,
+      inputFormatters:
+          widget.numeric ? [FilteringTextInputFormatter.digitsOnly] : null,
       style: const TextStyle(fontSize: 13),
       decoration: InputDecoration(
         isDense: true,
         border: const OutlineInputBorder(),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
         hintText: widget.hintText,
         errorText: widget.errorText, // §161: «Required» для пустого обяз. поля
         errorStyle: const TextStyle(fontSize: 11),
@@ -577,11 +762,8 @@ class VarMultiSelect extends StatelessWidget {
   final String value;
   final ValueChanged<String> onChanged;
 
-  static List<String> _lines(String s) => s
-      .split('\n')
-      .map((l) => l.trim())
-      .where((l) => l.isNotEmpty)
-      .toList();
+  static List<String> _lines(String s) =>
+      s.split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
 
   @override
   Widget build(BuildContext context) {
@@ -644,11 +826,15 @@ class _LabelledField extends StatelessWidget {
     required this.label,
     required this.tooltip,
     required this.field,
+    this.hint,
   });
 
   final String label;
   final String tooltip;
   final Widget field;
+
+  /// §709 — (i)-подсказка у заголовка.
+  final String? hint;
 
   @override
   Widget build(BuildContext context) {
@@ -658,7 +844,13 @@ class _LabelledField extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(label, style: theme.textTheme.bodyLarge),
+          if (hint == null)
+            Text(label, style: theme.textTheme.bodyLarge)
+          else
+            Row(children: [
+              Expanded(child: Text(label, style: theme.textTheme.bodyLarge)),
+              LxHintButton(message: hint!),
+            ]),
           if (tooltip.isNotEmpty) ...[
             const SizedBox(height: 2),
             Text(

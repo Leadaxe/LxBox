@@ -2,6 +2,7 @@
 
 import 'dart:io';
 
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/controllers/home_controller.dart';
@@ -177,34 +178,32 @@ void main() {
     expect(t.connectingMs, const Duration(minutes: 4).inMilliseconds);
   });
 
-  test('Debug-override не масштабируется числом узлов (§596)', () {
-    controller.debugSetConfigRaw(configWith(endpoints: 0, outbounds: 240));
-    controller.debugSetTransientTimeouts(connectingMs: 500);
+  test('таймаут connecting оставляет причину, а не молчит', () {
+    fakeAsync((async) {
+      controller.debugSetConfigRaw(configWith(endpoints: 1));
+      // Override даёт короткий порог, чтобы не ждать реальный бюджет. Причина
+      // при этом обязана нести ИМЕННО его значение — текст не должен врать.
+      controller.debugSetTransientTimeouts(connectingMs: 2000);
+      controller.debugHandleStatusEvent(connecting());
 
-    expect(controller.debugEffectiveConnectingTimeout.connectingMs, 500);
-  });
+      // Таймер фазы — обычный Timer: в fake-async порог пережидается без
+      // живого ожидания. До порога туннель ещё в connecting.
+      async.elapse(const Duration(milliseconds: 1900));
+      expect(controller.state.tunnel, TunnelStatus.connecting);
+      async.elapse(const Duration(milliseconds: 500));
 
-  test('таймаут connecting оставляет причину, а не молчит', () async {
-    controller.debugSetConfigRaw(configWith(endpoints: 1));
-    // Override даёт короткий порог, чтобы не ждать реальный бюджет. Причина
-    // при этом обязана нести ИМЕННО его значение — текст не должен врать.
-    controller.debugSetTransientTimeouts(connectingMs: 2000);
-    controller.debugHandleStatusEvent(connecting());
-
-    // Таймер ставится Timer'ом реального времени — пережидаем порог.
-    await Future<void>.delayed(const Duration(milliseconds: 2400));
-
-    expect(controller.state.tunnel, TunnelStatus.disconnected);
-    expect(controller.state.stopReason,
-        const StopStartTimeout(seconds: 2, endpoints: 1),
-        reason: 'до §519 stopReason оставался null — «молча не соединяется»');
-    // Машинный дубль для Debug API / дампа: непустой и по-английски.
-    expect(controller.state.lastStartError, isNotEmpty);
-    expect(controller.state.lastStartError, contains('Start timed out'));
-    expect(controller.state.lastStartError, contains('1 endpoints'));
-    expect(controller.state.lastStartErrorAt, isNotNull);
-    // UI-строка — та же причина, а не generic «Connection timed out».
-    expect(controller.state.lastError,
-        const StopReasonMsg(StopStartTimeout(seconds: 2, endpoints: 1)));
+      expect(controller.state.tunnel, TunnelStatus.disconnected);
+      expect(controller.state.stopReason,
+          const StopStartTimeout(seconds: 2, endpoints: 1),
+          reason: 'до §519 stopReason оставался null — «молча не соединяется»');
+      // Машинный дубль для Debug API / дампа: непустой и по-английски.
+      expect(controller.state.lastStartError, isNotEmpty);
+      expect(controller.state.lastStartError, contains('Start timed out'));
+      expect(controller.state.lastStartError, contains('1 endpoints'));
+      expect(controller.state.lastStartErrorAt, isNotNull);
+      // UI-строка — та же причина, а не generic «Connection timed out».
+      expect(controller.state.lastError,
+          const StopReasonMsg(StopStartTimeout(seconds: 2, endpoints: 1)));
+    });
   });
 }

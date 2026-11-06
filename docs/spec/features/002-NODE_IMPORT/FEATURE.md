@@ -70,10 +70,15 @@ Principles the feature protects:
 - **P6.** moved to [025-CONTRACT_REGISTRY · P2](../025-CONTRACT_REGISTRY/FEATURE.md#promises).
 - **P7.** moved to [025-CONTRACT_REGISTRY · P3](../025-CONTRACT_REGISTRY/FEATURE.md#promises).
 - **P8. A repeat within one body collapses; across sources it does not.**
-  The key is the node content without the tag and `detour`, plus the dial path. **Witness:** unit test
-  "`amneziawg://` and `vpn://` of one node — one node and `duplicate`"; unit test "dedup
-  does not cross subscription boundaries"; unit test "D-086: different SNI → TWO nodes". **Mutation:**
-  a dedup key by the "scheme+host+port+credentials" quadruple.
+  The key is the node content without the tag and `detour`, plus the dial path. The first record
+  stays and every later record with the same key collapses into it: the survivor carries
+  `duplicates_collapsed` (how many records and their names), and collapsed records do not go to
+  `dropped[]`. A body is one subscription or one import. Not collapsed: records of different
+  subscriptions, a subscription against manual nodes, different sources of one folder, nodes at
+  config assembly (there colliding tags get a `-N` suffix). **Witness:** unit test "code on the
+  survivor, dropped[] empty"; unit test "dedup does not cross subscription boundaries"; unit test
+  "D-086: different SNI → TWO nodes". **Mutation:** a dedup key by the
+  "scheme+host+port+credentials" quadruple.
 - **P9. Order and names of multi-node configs are the author's.** Nodes go in file
   order; the server name goes to a single element, not to a pool. **Witness:** unit tests
   "list order is the author's, not sorted", "a pool first in the file
@@ -92,8 +97,7 @@ Principles the feature protects:
   private key by the node class rather than by the field's role in the registry.
 - **P14. AmneziaWG gets an MTU ceiling of 1280.** A link/INI without MTU → 1280, above
   → 1280 with code `awg_mtu_clamped`; plain WireGuard is not touched; an authored
-  sing-box body keeps the value with an info code. **Witness:** unit tests "AWG
-  mtu=1420 → clamp to 1280", "plain WG is not touched", "sing-box body with mtu=1420:
+  sing-box body keeps the value with an info code. **Witness:** unit test "sing-box body with mtu=1420:
   value intact, info code". **Mutation:** clamping by the `wireguard` protocol without
   the AWG marker.
 - **P15. A provider banner does not become a node.** A link to `0.0.0.0`,
@@ -101,9 +105,10 @@ Principles the feature protects:
   after `#` travels as a message. **Witness:** unit tests "a banner as the ONLY entry of
   the body: no nodes, the reason is named", "the PORT is NOT a marker". **Mutation:**
   checking by port `1`.
-- **P16. An OpenVPN `.ovpn` profile is accepted.** `no witness` — the format is not
-  implemented (owner's decision: postponed); only a ready core body
-  `openvpn-client` is accepted (see the sing-box JSON function).
+- **P16. Withdrawn** (audit [591](../../tasks/591-spec-kit-revision-audit.md), 2026-10-13).
+  An OpenVPN `.ovpn` profile is not supported: only a ready core body
+  `openvpn-client` is accepted (see the sing-box JSON function). A pasted
+  profile yields no nodes, and the reject sheet names the reason (`§500`).
 
 ## Controlled parameters
 
@@ -192,7 +197,10 @@ node ─► emit by the registry emit section ─► share link (or rejection)
   [025-CONTRACT_REGISTRY](../025-CONTRACT_REGISTRY/FEATURE.md); the core pin —
   [021-CORE_CONTRACT](../021-CORE_CONTRACT/FEATURE.md).
 - Does not do: `.ovpn`, Clash YAML (recognized, yields no nodes), hysteria v1
-  as a node, Amnezia containers other than WG/AWG, network checks of a node.
+  as a node (`hysteria://`/`hy://` and `type: hysteria` — the registry marks
+  them `extension: desktop`, no node is created, the reject is named by
+  `protocol_extension_unsupported` with the hint `hysteria2`; the schemes live
+  in the registry shared with the launcher), Amnezia containers other than WG/AWG, network checks of a node.
 - Not planned (owner decision 2026-09-29, audit [591](../../tasks/591-spec-kit-revision-audit.md)): recognizing the format by the file
   extension (`584F`) — the format is recognized by text only.
 

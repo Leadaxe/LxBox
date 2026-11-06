@@ -3,9 +3,12 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:json5/json5.dart';
 
+import '../services/parser/json_comments.dart';
+
 /// Преобразует JSON / JSON5 / JSONC-подобный текст в канонический JSON-строку для sing-box/libbox.
 ///
-/// Используется парсер [json5Decode] (комментарии, хвостовые запятые и т.д. по спецификации JSON5).
+/// Используется парсер [json5Decode] (комментарии, хвостовые запятые и т.д. по спецификации JSON5);
+/// `#`-комментарии ядра снимаются до него ([withoutHashComments]).
 String canonicalJsonForSingbox(String text) {
   final trimmed = text.trim();
   if (trimmed.isEmpty) {
@@ -22,7 +25,7 @@ String canonicalJsonForSingbox(String text) {
 /// сохраняем: там уже есть координаты («… at line:col»).
 dynamic _json5DecodeNormalized(String text) {
   try {
-    return json5Decode(text);
+    return json5Decode(withoutHashComments(text));
   } on FormatException {
     rethrow;
   } on Exception catch (e) {
@@ -42,12 +45,37 @@ String prettyJsonForDisplay(String raw) {
   try {
     final trimmed = raw.trim();
     if (trimmed.isEmpty) return raw;
-    final dynamic parsed = json5Decode(trimmed);
+    final dynamic parsed = json5Decode(withoutHashComments(trimmed));
     return const JsonEncoder.withIndent('  ').convert(_toJsonEncodable(parsed));
   } catch (_) {
     return raw;
   }
 }
+
+/// §624 — кнопка Format JSON-полей: тот же разбор JSON5, что Save Config
+/// ([canonicalJsonForSingbox]), вывод — с отступом 2 пробела, как Config
+/// при открытии ([prettyJsonForDisplay]). Ошибка разбора — [FormatException]
+/// с позицией в сообщении.
+String formatJson5(String text) {
+  final trimmed = text.trim();
+  if (trimmed.isEmpty) {
+    throw const FormatException('Empty input');
+  }
+  final dynamic parsed = _json5DecodeNormalized(trimmed);
+  return const JsonEncoder.withIndent('  ').convert(_toJsonEncodable(parsed));
+}
+
+/// §686 п.11 — ядро (sing `contextjson`) читает `#` как строчный комментарий,
+/// в JSON5 его нет: перед [json5Decode] `#` вне строк снимается тем же
+/// сканером, что у вставки ([stripJsonComments], режим JSON5); `//` и `/* */`
+/// остаются пакету `json5`. Перевод строки остаётся — номера строк в ошибке
+/// разбора не сдвигаются.
+String withoutHashComments(String text) =>
+    stripJsonComments(text, json5: true) ?? text;
+
+/// Есть ли в тексте комментарии (`//`, `/*`, `#`) вне строк — Format их
+/// теряет, перед заменой нужен диалог.
+bool hasJson5Comments(String text) => stripJsonComments(text) != null;
 
 // §333 — off-main-thread версии для больших конфигов (сотни КБ json5-парса
 // фризят UI). Sync-версии выше остаются для мелких вызовов и тестов.

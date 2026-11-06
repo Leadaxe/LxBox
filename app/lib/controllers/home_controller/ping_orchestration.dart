@@ -204,7 +204,9 @@ mixin _PingMixin on ChangeNotifier {
     _pingOptions = await SettingsStorage.getPingOptions();
   }
 
-  static const _pingConcurrency = 10;
+  /// §713 — параллельность mass ping читается из storage на каждом старте
+  /// прогона (`SettingsStorage.getPingConcurrency`, дефолт 10): App Settings
+  /// пишет её без доступа к контроллеру, кэш `_pingOptions` тут не годится.
 
   /// §286 — интервал батч-флаша mass-ping результатов в UI. ~120мс = ~8 ребилдов
   /// в секунду вместо ребилда на каждую из ~150 нод. Достаточно плавно для глаза,
@@ -266,7 +268,7 @@ mixin _PingMixin on ChangeNotifier {
   }
 
   /// Mass URLTest на всех нодах активной группы — параллельные
-  /// `urlTestOutbound` с concurrency cap (`_pingConcurrency`). Не путать с
+  /// `urlTestOutbound` с concurrency cap (`ping_options.concurrency`, §713). Не путать с
   /// [runGroupUrltest] (§308: единый групповой RPC, тест+переселект в ядре).
   /// Использует per-group resolved url/timeout (§040). Повторный вызов во
   /// время running — cancel.
@@ -319,7 +321,9 @@ mixin _PingMixin on ChangeNotifier {
       direction: massPingDirection,
     );
     _emit(_state.copyWith(delayByDirection: clearedDelay, pingBusy: busyMap));
-    _addDebug(DebugSource.app, 'Mass ping started (${nodes.length} nodes, concurrency=$_pingConcurrency)');
+    final concurrency = await SettingsStorage.getPingConcurrency();
+    if (_massPingEpoch != epoch) return;
+    _addDebug(DebugSource.app, 'Mass ping started (${nodes.length} nodes, concurrency=$concurrency)');
 
     // Parallel ping with limited concurrency
     var index = 0;
@@ -372,7 +376,7 @@ mixin _PingMixin on ChangeNotifier {
     }
 
     final workers = List.generate(
-      _pingConcurrency.clamp(1, nodes.length),
+      concurrency.clamp(1, nodes.length),
       (_) => worker(),
     );
     try {
@@ -393,7 +397,7 @@ mixin _PingMixin on ChangeNotifier {
       // т.п.): свежая mass-ping-история выбор группы НЕ меняет (ядро
       // пересчитывает его только собственным прогоном), поэтому ядро
       // тестит членов заново и делает переселект. Дубль-пробы — цена
-      // переселекта на текущем ядре.
+      // переселекта на текущем ядре. §677 — только Fastest (см. ниже).
       unawaited(_runAllUrltestGroups(epoch));
     }
   }
@@ -401,7 +405,28 @@ mixin _PingMixin on ChangeNotifier {
   Future<void> _runAllUrltestGroups(int epoch) async {
     // §122 — snapshot тегов до цикла: state.ccGroups может смениться стримом
     // во время await'ов, а нам нужен стабильный список urltest-групп.
-    final tags = _state.urltestGroups.map((g) => g.tag).toList();
+    // §677 — хвост §308 только для Fastest (без `mode` или
+    // `mode: least_test`): ему нужен переселект самого быстрого. round_robin
+    // пропускаем — force-тест пула тестирует ВСЕХ членов и пересобирает пул,
+    // сводя на нет «тестируем только пул» балансировщика (§208). failover
+    // пропускаем — force = полный прогон и перевыбор, удерживаемый узел
+    // сменился бы без отказа (контракт режима §612); отказ ядро ловит само.
+    // Режим — из конфига, который знает приложение (activeModel §311: срез
+    // ядра при живом туннеле, иначе собранный). Без RPC к ядру.
+    final model = _state.activeModel;
+    final tags = <String>[];
+    for (final g in _state.urltestGroups) {
+      final mode = model[g.tag]?.raw['mode'];
+      if (mode != null && mode != 'least_test') {
+        final why = mode == 'round_robin'
+            ? 'core tests the pool'
+            : 'no reselect outside failure';
+        _addDebug(
+            DebugSource.app, 'Group URLTest skipped: ${g.tag} ($mode, $why)');
+        continue;
+      }
+      tags.add(g.tag);
+    }
     for (final tag in tags) {
       // Bug 2 fix: проверяем epoch на каждой итерации — если юзер нажал
       // cancel пока крутятся urltest-группы, прерываемся (auto-группа была

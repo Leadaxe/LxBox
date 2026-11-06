@@ -5,6 +5,7 @@ import '../../../models/direction.dart';
 import '../../../models/node_link.dart';
 import '../../../models/server_list.dart';
 import '../../../models/source_replace.dart';
+import '../../../models/tls_policy.dart';
 import '../../source_replace_screen.dart';
 import '../../../services/subscription/input_helpers.dart';
 import '../../../services/subscription/user_agent.dart';
@@ -13,6 +14,7 @@ import '../detour_mode.dart';
 import '../subscription_detail_format.dart';
 import '../../../services/l10n/locale_controller.dart';
 import '../../../widgets/safe_bottom.dart';
+import '../../../widgets/tls_policy_tiles.dart';
 
 /// Settings tab: tag-prefix field, detour-mode radio group (+ sub-options) and
 /// the subscription-info block. Extracted verbatim from `_buildSettingsTab` /
@@ -26,6 +28,7 @@ class SubscriptionSettingsTab extends StatelessWidget {
     this.directions = const [],
     this.detourPathHopsOf,
     required this.hasDetour,
+    this.hasDetourLinks,
     required this.detourMode,
     required this.onTagPrefixChanged,
     this.onTagPrefixCommitted,
@@ -51,7 +54,12 @@ class SubscriptionSettingsTab extends StatelessWidget {
     this.onEditIdentityDeviceModel,
     this.onReplaceChanged,
     this.otherSources = const [],
+    this.onTlsChanged,
   });
+
+  /// §636 — TLS-политика источника изменена (запись сразу). Нет колбэка —
+  /// секция не рисуется.
+  final ValueChanged<TlsPolicy>? onTlsChanged;
 
   /// Фича 565 фаза B — свёртка источника в группу сохранена (`null` — снята).
   /// Нет колбэка — секция не рисуется.
@@ -79,6 +87,12 @@ class SubscriptionSettingsTab extends StatelessWidget {
   /// с controller'ом экрана). null → показываем один хоп (как раньше).
   final List<String> Function(NodeLink stored)? detourPathHopsOf;
   final bool hasDetour;
+
+  /// §670 — есть ли звенья, которые регистрируют галки «Register detour …».
+  /// null — те же, что [hasDetour] (подписка: родные цепочки). Папка
+  /// передаёт `folderHasDetourLinks`: личный detour на узел вне папки
+  /// радио Detour даёт, а звена — нет.
+  final bool? hasDetourLinks;
   final DetourMode detourMode;
 
   final ValueChanged<String> onTagPrefixChanged;
@@ -257,7 +271,9 @@ class SubscriptionSettingsTab extends StatelessWidget {
                     : getLocalText.s("Nodes connect through detour servers")),
               ),
               // §096 — register-тоглы под Use (нативные детуры используются).
-              if (detourMode == DetourMode.use) _registerToggles(context),
+              if (detourMode == DetourMode.use &&
+                  (hasDetourLinks ?? hasDetour))
+                _registerToggles(context),
               RadioListTile<DetourMode>(
                 value: DetourMode.override,
                 title: Text(getLocalText.s("Add detour")),
@@ -310,7 +326,9 @@ class SubscriptionSettingsTab extends StatelessWidget {
                 // §096 — в режиме Fill missing (append) нативные детуры
                 // подписки сохраняются в цепочке → register-тоглы
                 // осмысленны и тут.
-                if (!entry.replaceDetourChain) _registerToggles(context),
+                if (!entry.replaceDetourChain &&
+                    (hasDetourLinks ?? hasDetour))
+                  _registerToggles(context),
               ],
               RadioListTile<DetourMode>(
                 value: DetourMode.none,
@@ -351,6 +369,25 @@ class SubscriptionSettingsTab extends StatelessWidget {
             trailing: const Icon(Icons.chevron_right),
             onTap: onShowOverrideDetourPicker,
           ),
+        ],
+        // §636 — TLS: переопределение ручек «TLS Fragmentation» для всех
+        // серверов источника. У одиночного сервера — на экране узла.
+        if (onTlsChanged != null && entry.list is! UserServer) ...[
+          const SizedBox(height: 24),
+          Text(getLocalText.s("TLS"), style: theme.textTheme.titleSmall?.copyWith(
+            color: theme.colorScheme.primary,
+            fontWeight: FontWeight.bold,
+          )),
+          const SizedBox(height: 4),
+          Text(
+            folderMode
+                ? getLocalText.s("Override the global TLS settings for all servers of this folder.")
+                : getLocalText.s("Override the global TLS settings for all servers of this subscription."),
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          ),
+          const Divider(),
+          TlsPolicyTiles(policy: entry.tls, onChanged: onTlsChanged!),
         ],
         if (entry.list is SubscriptionServers) ...[
           const SizedBox(height: 24),
@@ -413,7 +450,7 @@ class SubscriptionSettingsTab extends StatelessWidget {
         ),
         SwitchListTile(
           title: Text(getLocalText.s("Send HWID")),
-          subtitle: Text(getLocalText.s("Send x-hwid + device headers on every subscription fetch — for panels with HWID device limits (Remnawave). Off by default.")),
+          subtitle: Text(getLocalText.s("Send x-hwid + device headers on every subscription fetch — for panels with HWID device limits (Remnawave). On by default.")),
           secondary: const Icon(Icons.devices_outlined),
           value: id.sendHwid,
           onChanged: onIdentitySendHwidChanged,
@@ -510,9 +547,13 @@ class SubscriptionSettingsTab extends StatelessWidget {
           ),
           SwitchListTile(
             title: Text(getLocalText.s("Register detour in auto group")),
-            subtitle: Text(getLocalText.s("Include detour servers in auto-proxy-out urltest")),
+            subtitle: Text(getLocalText.s("Include detour servers in the Direction's auto group")),
             value: entry.registerDetourInAuto,
-            onChanged: onRegisterDetourInAutoChanged,
+            // §670 — в `-auto` звено идёт только из селектора: без первой
+            // галки второй нечего добавлять.
+            onChanged: entry.registerDetourServers
+                ? onRegisterDetourInAutoChanged
+                : null,
           ),
         ]),
       );
@@ -555,14 +596,14 @@ class SubscriptionSettingsTab extends StatelessWidget {
             onTap: onEditSource,
           );
         }),
-        // §129 — Update interval: -1 = никогда (игнор сервера); 0 = respect
-        // server (сами не по расписанию); >0 = раз в N часов.
+        // §129/§685 — Update interval: -1 = никогда; 0 = «As subscription»
+        // (серверный заголовок, без него 24 ч); >0 = раз в N часов.
         ListTile(
           leading: const Icon(Icons.sync, size: 20),
           title: Text(getLocalText.s("Update interval")),
           subtitle: Text(switch (list.updateIntervalHours) {
             < 0 => getLocalText.s("Don't auto-update (manual only)"),
-            0 => getLocalText.s("Never (respect server) — manual only unless server sets one"),
+            0 => asSubscriptionIntervalSubtitle(list.meta?.updateIntervalHours),
             final h => getLocalText.s("%1\$dh (auto-refresh every %2\$s)", h, intervalHuman(h)),
           }),
           trailing: const Icon(Icons.edit, size: 18),

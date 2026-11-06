@@ -51,6 +51,7 @@ the app's own process; goroutine stacks of the live core.
 | `exit_info` | process exit reasons |
 | `logcat_tail` | the system log tail of the app's own process |
 | `goroutines_stack` | goroutine stacks, only while the tunnel is up |
+| `stop_stuck_goroutines` | stop trace and goroutine stacks from the last stop that hung longer than 5 s; absent if none did |
 
 ## Rules and invariants
 

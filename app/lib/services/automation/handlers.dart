@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import '../../vpn/box_vpn_client.dart';
+import '../app_log.dart';
 import '../core_reject/core_reject_runner.dart';
 import '../debug/context.dart';
 import '../debug/contract/errors.dart';
@@ -120,6 +121,29 @@ Future<void> actionUrltestGroup(String group, DebugContext ctx) async {
     throw const Conflict('tunnel not connected');
   }
   unawaited(home.runGroupUrltest(group));
+}
+
+/// `urltest-all` — групповой URLTest (§308) каждой urltest-группы текущего
+/// состояния, последовательно; fire-and-forget. Возвращает число групп,
+/// которым отправлена команда (0 — не ошибка). Ошибка отдельной группы
+/// обрабатывается внутри `runGroupUrltest` и обход не прерывает.
+Future<int> actionUrltestAll(DebugContext ctx) async {
+  final home = ctx.requireHome();
+  if (!home.state.tunnelUp) {
+    throw const Conflict('tunnel not connected');
+  }
+  // Снимок тегов до обхода: ccGroups может смениться стримом во время await.
+  final tags = home.state.urltestGroups.map((g) => g.tag).toList();
+  if (tags.isEmpty) {
+    AppLog.I.info('[automation] urltest-all: no urltest groups');
+    return 0;
+  }
+  unawaited(() async {
+    for (final tag in tags) {
+      await home.runGroupUrltest(tag);
+    }
+  }());
+  return tags.length;
 }
 
 /// `start-vpn` — запросить старт VPN (идемпотентно: noop если up).

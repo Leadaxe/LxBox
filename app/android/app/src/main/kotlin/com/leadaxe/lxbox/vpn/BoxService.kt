@@ -32,8 +32,8 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeout
 import io.nekohasekai.libbox.StringIterator
 import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicReference
@@ -79,6 +79,16 @@ class BoxService(
         @Volatile
         var commandClient: BoxCommandClient? = null
             private set
+
+        /// §707 итер. 4 — работающий сервис: строка в журнал приложения
+        /// (AppLog) из нативных разборов вне сервиса (служебные файлы Taildrop).
+        @Volatile
+        private var current: BoxService? = null
+
+        /// WARN-строка в AppLog; сервиса нет — только logcat у вызывающего.
+        fun appLogWarning(text: String) {
+            current?.appLogLine("WARN $text")
+        }
     }
 
     /// Scoped to service lifetime — all child coroutines are cancelled in onDestroy / doStop.
@@ -87,13 +97,15 @@ class BoxService(
     /// §428 — тикер сторожа (VpnWatchdog.startTicker) на serviceScope.
     private var watchdogJob: kotlinx.coroutines.Job? = null
 
-    /// §140 — отдельный scope ТОЛЬКО для `doForceStop`-teardown'а. КРИТИЧНО, что
+    /// §140 — отдельный scope для teardown'а `doForceStop` и (§668) `doStop`. КРИТИЧНО, что
     /// его НЕ отменяет `onDestroy`: `doForceStop` вызывает `stopSelf()` → onDestroy
     /// → `serviceScope.cancel()`, и если teardown крутился бы на `serviceScope`, он
     /// был бы отменён на полпути, не успев закрыть Clash-порт 63130 (`bind: address
     /// already in use` на след. старте — см. §129 регресс, §140). Этот scope живёт
     /// независимо: teardown сам делает `stopSelf()` ПОСЛЕ закрытия порта.
     /// Пересоздаётся в `resetScope` вместе с `serviceScope`.
+    /// §668 — `doStop` тоже здесь: брошенный по потолку шаг не должен лишить
+    /// остановку финального `setStatus(Stopped)` + `stopSelf()`.
     private var forceStopScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private fun resetScope() {
@@ -127,6 +139,20 @@ class BoxService(
             BoxVpnService.setStopReceiverAlive(value)
         }
     private var status = VpnStatus.Stopped
+
+    /// §668 — `onDestroy` уже был. Поздний финал остановки (шаг вернулся
+    /// после потолка или после force-stop) не трогает статус: он глобальный
+    /// (`BoxVpnService.setCurrentStatus`) и принадлежал бы уже новой службе.
+    @Volatile
+    private var destroyed = false
+
+    /// §668 — когда (elapsedRealtime, 0 = не было) последний раз звали ядро с
+    /// pause / wake / resetNetwork / serviceReload. Идут в снимок контекста
+    /// на входе остановки: долгий простой копит ровно эти события.
+    @Volatile private var lastPauseAt = 0L
+    @Volatile private var lastWakeAt = 0L
+    @Volatile private var lastResetNetworkAt = 0L
+    @Volatile private var lastReloadAt = 0L
 
     private val notification: ServiceNotification by lazy { ServiceNotification(service) }
 
@@ -184,6 +210,7 @@ class BoxService(
                     // §373 — unary-RPC в ядро, тоже не на main (см. ACTION_RELOAD).
                     Log.d(TAG, "[vpn] receiver: ACTION_RESET_NETWORK → cs.resetNetwork() (off-main)")
                     offloadFromMain("ACTION_RESET_NETWORK") {
+                        lastResetNetworkAt = SystemClock.elapsedRealtime()
                         commandServer.get()?.resetNetwork()
                     }
                 }
@@ -224,6 +251,7 @@ class BoxService(
                 }
                 Intent.ACTION_SCREEN_OFF -> {
                     Log.d(TAG, "[vpn] SCREEN_OFF → pause")
+                    lastPauseAt = SystemClock.elapsedRealtime()
                     commandServer.get()?.pause()
                 }
                 Intent.ACTION_SCREEN_ON -> {
@@ -231,6 +259,7 @@ class BoxService(
                     // (§215). В прочих режимах pause не звучал, будить нечего.
                     if (BootReceiver.getBackgroundMode(service) == BootReceiver.BG_MODE_ALWAYS) {
                         Log.d(TAG, "[vpn] SCREEN_ON → wake")
+                        lastWakeAt = SystemClock.elapsedRealtime()
                         commandServer.get()?.wake()
                     }
                     // §340 — wake-нудж SPEC 041 v2: ядро ребиндит только доказуемо
@@ -309,6 +338,21 @@ class BoxService(
             Log.w(TAG, "[vpn §430] bounce done — foreground shown and removed, stopSelf($startId)")
             return Service.START_NOT_STICKY
         }
+        if (intent?.action == BoxVpnService.ACTION_FORCE_STOP) {
+            // §663 — сюда force-stop приходит startService'ом, когда приёмник
+            // уже снят: doStop снимает его до teardown'а ядра, и если Go-вызов
+            // повис, broadcast ACTION_FORCE_STOP ловить некому, а служба
+            // навсегда в Stopping. Ветка стоит до notification.show и до гарда
+            // `status != Stopped`. Пустой экземпляр (статус Stopped) — no-op и
+            // stopSelf(startId), чтобы не оставить started-сервис.
+            if (status == VpnStatus.Stopped) {
+                Log.d(TAG, "[vpn §663] ACTION_FORCE_STOP via startService — already Stopped, stopSelf($startId)")
+                service.stopSelf(startId)
+            } else {
+                doForceStop()
+            }
+            return Service.START_NOT_STICKY
+        }
         if (intent == null) {
             val n = BootReceiver.noteStickyRestart(service)
             Log.w(TAG, "[vpn §428] sticky restart #$n (limit=${BootReceiver.STICKY_RESTART_LIMIT} per ${BootReceiver.STICKY_RESTART_WINDOW_MS / 1000}s)")
@@ -320,6 +364,11 @@ class BoxService(
                 service.stopSelf()
                 return Service.START_NOT_STICKY
             }
+        } else {
+            // §637 — явный старт (кнопка, плитка, Intent API): ошибка прошлой
+            // попытки снимается; если этот старт тоже упадёт, stopAndAlert
+            // покажет новую.
+            notification.cancelAlert()
         }
         try {
             notification.show(
@@ -392,6 +441,7 @@ class BoxService(
 
     fun onDestroy() {
         Log.d(TAG, "[vpn] onDestroy status=${status.name} receiverRegistered=$receiverRegistered")
+        destroyed = true
         serviceScope.cancel()
         if (receiverRegistered) {
             runCatching { service.unregisterReceiver(receiver) }
@@ -464,18 +514,21 @@ class BoxService(
             ?.onFailure { Log.w(TAG, "closeFileDescriptor($reason): close failed: ${it.message}") }
     }
 
-    private fun closeCommandServerAtomic(reason: String) {
+    /// [trace] (§668) — подшаги в журнал приложения: какая из двух половин
+    /// закрытия висит, видно и без logcat.
+    private fun closeCommandServerAtomic(reason: String, trace: StopTrace? = null) {
         // §122 Фаза 0 — сначала закрыть CommandClient-канал (его сокет-соединения к
         // CommandServer), потом сам сервер. Идемпотентно (getAndSet-паттерн внутри).
         runCatching { commandClient?.shutdownAll() }
             .onFailure { Log.w(TAG, "closeCommandServerAtomic($reason): commandClient shutdown failed: ${it.message}") }
         commandClient = null
+        if (current === this) current = null
         val cs = commandServer.getAndSet(null) ?: return
 
         // §330 — `close()` идёт ПЕРЕД `closeService()`, а не после. Причина: на
-        // force-пути `closeService()` под `withTimeout(2с)`, а этот таймаут
-        // кооперативен — блокирующий JNI-вызов он НЕ прерывает, только отпускает
-        // корутину. При старом порядке залипший `closeService()` (10-17с на
+        // force-пути `closeService()` под потолком 2 с (§668: поток шага
+        // StopTrace; блокирующий JNI-вызов потолок НЕ прерывает, только
+        // отпускает остановку). При старом порядке залипший `closeService()` (10-17с на
         // конфигах с многими WG, §287) не отдавал управление следующей строке, и
         // `close()` не вызывался вовсе — слушающий сокет (Clash-порт 63130 +
         // command.sock) оставался занят на всё это время, хотя `stopSelf()` уже
@@ -483,18 +536,22 @@ class BoxService(
         // открыть не может» (§287 отпустила это как «WG биндит эфемерные сокеты» —
         // верно для WG, но не для фиксированного 63130).
         //
-        // Развязка безопасна — проверено по ядру (v1.14.0-lx.17-rc.4):
-        // `CommandServer.Close()` (command_server.go:180) трогает только
-        // grpcServer/listener/subscriber'ы и НЕ берёт `serviceAccess`, тогда как
-        // `CloseService()` (daemon/started_service.go:245) держит этот мьютекс на
-        // всё время `instance.Close()`. Общего состояния нет, порядок между ними
-        // ядру безразличен.
+        // Общий мьютекс у них в lx.21 ЕСТЬ (§668; прежний текст здесь
+        // опирался на lx.17-rc.4 и утверждал обратное): `CommandServer.Close()` (command_server.go)
+        // зовёт `StartedService.Close()` (daemon/started_service.go:318), а тот
+        // берёт `serviceAccess` — как и `CloseService()`. Порядок от этого не
+        // меняется: `CloseService()` отпускает `serviceAccess` до долгого
+        // `instance.Close()`, а если мьютекс залип, порт не освободит ни один
+        // порядок. Для разбора это разделитель: нет строки `[fd §330] listener
+        // closed` — завис уже `close()` на `serviceAccess`; есть, а шаг
+        // closeCommandServer не закончился — завис `instance.Close()`.
         //
         // Обратный порядок ничего не ломает и на штатном `doStop`: `closeService()`
         // не ходит в gRPC-транспорт, а CommandClient-канал уже разорван выше.
         runCatching { cs.close() }
             .onFailure { Log.w(TAG, "closeCommandServerAtomic($reason): close failed: ${it.message}") }
         Log.w(TAG, "[fd §330] listener closed($reason) at=${SystemClock.elapsedRealtime()}ms")
+        trace?.mark("closeCommandServer: listener closed, closeService begin")
 
         runCatching { cs.closeService() }.onFailure {
             Log.e(TAG, "closeCommandServerAtomic($reason): closeService failed", it)
@@ -522,6 +579,7 @@ class BoxService(
         // NIC, иначе app виснет на них до TCP-таймаута. См. docs/spec/tasks/087.
         DefaultNetworkMonitor.start(serviceScope) {
             Log.d(TAG, "[vpn] interface switch → resetNetwork()")
+            lastResetNetworkAt = SystemClock.elapsedRealtime()
             runCatching { commandServer.get()?.resetNetwork() }
                 .onFailure { Log.e(TAG, "auto resetNetwork failed", it) }
         }
@@ -534,8 +592,22 @@ class BoxService(
             return
         }
 
+        // §707 — принятое ядром до фичи в общую папку `Taildrop` один раз
+        // уезжает во входящие первого узла Tailscale (до старта ядра: папку
+        // ещё никто не держит).
+        runCatching { Taildrop.migrateLegacyInbox(service.filesDir, config) }
+            .onFailure { Log.w(TAG, "taildrop legacy migration failed: ${it.javaClass.simpleName}") }
+        // §707 итер. 3 — входящие узлов с автосохранением (в том числе только
+        // что перенесённое) уходят в Downloads прямо с диска, пока ядра нет.
+        runCatching { Taildrop.sweepInboxesBeforeCoreStart(service) }
+            .onFailure { Log.w(TAG, "taildrop inbox sweep failed: ${it.javaClass.simpleName}") }
+
         try {
-            cs.startOrReloadService(config, buildOverrideOptions(config))
+            // §703 — на `initialize cache-file: timeout` (файл держит зависший
+            // в закрытии прежний Box) удалить cache.db и повторить один раз.
+            CacheDbLockRetry.startOrRetry("vpn") {
+                cs.startOrReloadService(config, buildOverrideOptions(config))
+            }
         } catch (t: Throwable) {
             // Фича 478 / Д-1 — человеку идёт локализованный шаблон, страховке
             // рядом едет СЫРОЙ `t.message` (EXTRA_CORE_ERROR). Разбирать
@@ -630,6 +702,13 @@ class BoxService(
             return
         }
         setStatus(VpnStatus.Started)
+        // §637 — старт удался: ошибка прошлой попытки (id=2) больше не актуальна.
+        notification.cancelAlert()
+        // §707 итер. 7 — «📋 Send clipboard», «Поделиться» и «Send to device»:
+        // есть ли узел Tailscale с Allow Taildrop (уведомление ниже
+        // рисуется уже с этим знанием).
+        runCatching { TaildropClip.onConfig(service, config) }
+            .onFailure { Log.w(TAG, "taildrop clip surfaces failed: ${it.javaClass.simpleName}") }
 
         // §122 Фаза 0 — поднять CommandClient-канал. ПОСЛЕ startCommandServer()
         // и Started: command.sock существует только когда сервер запущен. statusClient
@@ -637,7 +716,11 @@ class BoxService(
         runCatching {
             val cc = BoxCommandClient()
             commandClient = cc
+            current = this
             cc.startStatus()
+            // §654 C — статус openconnect (второй фактор / SSO): подписка, если
+            // в конфиге есть такой endpoint; Dart для этого не нужен.
+            cc.syncOpenConnectStatus(ConfigManager.load())
         }.onFailure { Log.w(TAG, "BoxCommandClient.startStatus failed: ${it.message}") }
 
         // §223 Часть B (#23) — если UI не открывался (старт с QS-плитки → нет
@@ -699,17 +782,64 @@ class BoxService(
         }
         notification.stop()
 
-        serviceScope.launch {
-            closeFileDescriptor("doStop")
-            DefaultNetworkMonitor.stop()
-            closeCommandServerAtomic("doStop")
+        // §668 — каждый шаг в своём потоке с потолком времени и сторожем
+        // (StopTrace): зависший Go-вызов больше не держит службу в Stopping, а
+        // журнал приложения называет шаг и получает дамп горутин. Потолок
+        // closeCommandServer НЕ МЕНЬШЕ 15 с: штатное закрытие конфига с многими
+        // WG длится 10–17 с (§287), короткий потолок объявил бы Stopped раньше,
+        // чем ядро отпустит порты. Scope — forceStopScope: onDestroy его не
+        // отменяет.
+        val trace = newStopTrace("doStop")
+        forceStopScope.launch {
+            trace.mark(stopSnapshot())
+            trace.step("closeFileDescriptor", 3_000) { closeFileDescriptor("doStop") }
+            trace.step("DefaultNetworkMonitor.stop", 3_000) {
+                runBlocking { DefaultNetworkMonitor.stop() }
+            }
+            trace.step("closeCommandServer", 20_000) { closeCommandServerAtomic("doStop", trace) }
 
             withContext(Dispatchers.Main) {
-                Log.d(TAG, "[vpn] doStop cleanup done → setStatus(Stopped) + stopSelf()")
+                // Force-stop мог опередить (статус уже Stopped), служба могла
+                // быть уничтожена — тогда статус не наш, не трогаем.
+                if (destroyed || status != VpnStatus.Stopping) {
+                    trace.mark("finish skipped: destroyed=$destroyed status=${status.name}")
+                    return@withContext
+                }
+                trace.mark("cleanup done → setStatus(Stopped) + stopSelf()")
                 setStatus(VpnStatus.Stopped)
                 service.stopSelf()
             }
         }
+    }
+
+    /// §668 — трасса остановки. Строки идут в logcat и в журнал приложения
+    /// (поток core-лога → AppLog). warn-строки — `Log.e`: `logcat_tail` пака
+    /// поддержки снимается с уровнем E.
+    private fun newStopTrace(path: String) =
+        StopTrace(path, service.filesDir) { line, warn ->
+            if (warn) Log.e(TAG, line) else Log.i(TAG, line)
+            appLogLine("${if (warn) "WARN" else "INFO"} $line")
+        }
+
+    /// §668 — снимок контекста на входе остановки. Читается вне Main
+    /// (конфиг — файл).
+    private fun stopSnapshot(): String {
+        val now = SystemClock.elapsedRealtime()
+        fun ago(t: Long) = if (t == 0L) "never" else "${(now - t) / 1000}s"
+        var wg = -1
+        var total = -1
+        runCatching {
+            val eps = JSONObject(ConfigManager.load()).optJSONArray("endpoints")
+            total = eps?.length() ?: 0
+            // WG, AWG и WARP — один тип ядра `wireguard`.
+            wg = (0 until total).count { eps!!.optJSONObject(it)?.optString("type") == "wireguard" }
+        }
+        val idle = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            runCatching { BoxApplication.powerManager.isDeviceIdleMode.toString() }.getOrDefault("?")
+        } else "n/a"
+        return "snapshot status=${status.name} wg_endpoints=$wg endpoints=$total " +
+            "since: pause=${ago(lastPauseAt)} wake=${ago(lastWakeAt)} " +
+            "reset_network=${ago(lastResetNetworkAt)} reload=${ago(lastReloadAt)} device_idle=$idle"
     }
 
     /// §129 — жёсткая остановка, когда ядро ЗАВИСЛО вхолостую (detour AWG→WG, #2):
@@ -727,8 +857,8 @@ class BoxService(
     ///      немедленно, НЕ ждём ядро (замысел §129 сохранён).
     ///   2. teardown ядра + `stopSelf()` — на `forceStopScope` (его `onDestroy` НЕ
     ///      отменяет!). `stopSelf()` вызывается ПОСЛЕ `closeCommandServerAtomic`,
-    ///      как в `doStop`. Зависший Go-вызов отваливается по `withTimeout(2с)` и
-    ///      не блокирует ни `stopSelf()`, ни уже разблокированный UI.
+    ///      как в `doStop`. Зависший Go-вызов бросается по потолку 2 с (§668:
+    ///      поток шага StopTrace) и не блокирует ни `stopSelf()`, ни уже разблокированный UI.
     ///   3. НЕТ guard'а на `Stopping` — force обязан пройти, даже когда `doStop`
     ///      уже застрял в `Stopping`.
     ///
@@ -753,20 +883,27 @@ class BoxService(
 
         // 2. Teardown ядра, затем stopSelf() — на forceStopScope (onDestroy его НЕ
         // отменяет). stopSelf() ПОСЛЕ закрытия Clash-порта 63130, иначе он зависнет
-        // на след. старте (§140 регресс-фикс; порядок как в doStop). Зависший
-        // Go-вызов отвалится по withTimeout и не заблокирует stopSelf().
+        // на след. старте (§140 регресс-фикс; порядок как в doStop).
+        //
+        // §668 — шаги через StopTrace: прежний `withTimeout(2_000)` вокруг
+        // блокирующего JNI-вызова не ограничивал ничего (таймаут кооперативный,
+        // возвращается только вместе с вызовом). Теперь 2 с действуют.
+        val trace = newStopTrace("doForceStop")
         forceStopScope.launch {
-            runCatching {
-                withTimeout(2_000) { closeFileDescriptor("doForceStop") }
-            }.onFailure { Log.w(TAG, "doForceStop: closeFileDescriptor timeout/fail: ${it.message}") }
-            runCatching {
-                withTimeout(2_000) { DefaultNetworkMonitor.stop() }
-            }.onFailure { Log.w(TAG, "doForceStop: DefaultNetworkMonitor.stop timeout/fail: ${it.message}") }
-            runCatching {
-                withTimeout(2_000) { closeCommandServerAtomic("doForceStop") }
-            }.onFailure { Log.w(TAG, "doForceStop: closeCommandServer timeout/fail: ${it.message}") }
-            Log.d(TAG, "[vpn] doForceStop — teardown done → stopSelf()")
-            withContext(Dispatchers.Main) { service.stopSelf() }
+            trace.mark(stopSnapshot())
+            trace.step("closeFileDescriptor", 2_000) { closeFileDescriptor("doForceStop") }
+            trace.step("DefaultNetworkMonitor.stop", 2_000) {
+                runBlocking { DefaultNetworkMonitor.stop() }
+            }
+            trace.step("closeCommandServer", 2_000) { closeCommandServerAtomic("doForceStop", trace) }
+            withContext(Dispatchers.Main) {
+                if (destroyed) {
+                    trace.mark("finish skipped: destroyed")
+                    return@withContext
+                }
+                trace.mark("teardown done → stopSelf()")
+                service.stopSelf()
+            }
         }
     }
 
@@ -880,7 +1017,13 @@ class BoxService(
     @RequiresApi(Build.VERSION_CODES.M)
     private fun onIdleModeChanged() {
         val cs = commandServer.get() ?: return
-        if (BoxApplication.powerManager.isDeviceIdleMode) cs.pause() else cs.wake()
+        if (BoxApplication.powerManager.isDeviceIdleMode) {
+            lastPauseAt = SystemClock.elapsedRealtime()
+            cs.pause()
+        } else {
+            lastWakeAt = SystemClock.elapsedRealtime()
+            cs.wake()
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -897,6 +1040,7 @@ class BoxService(
     /// throw пролетел бы через JNI = `Runtime::Abort` всего процесса. Оборачиваем
     /// всё тело внешним runCatching.
     override fun serviceReload() {
+        lastReloadAt = SystemClock.elapsedRealtime()
         runCatching {
             val cs = commandServer.get() ?: run {
                 Log.w(TAG, "serviceReload: commandServer == null, treating as fresh start")
@@ -911,6 +1055,27 @@ class BoxService(
                 return@runCatching
             }
             runCatching { cs.startOrReloadService(config, buildOverrideOptions(config)) }
+                .onSuccess {
+                    // §654 C — после reload прежний стрим статуса мог
+                    // закончиться молча, а состав endpoint'ов — смениться.
+                    runCatching { commandClient?.syncOpenConnectStatus(config) }
+                    // §707 итер. 7 — узел с Allow Taildrop появился или
+                    // пропал: пункты и кнопка уведомления — следом.
+                    runCatching {
+                        if (TaildropClip.onConfig(service, config) && status == VpnStatus.Started) {
+                            serviceScope.launch(Dispatchers.Main) {
+                                if (status == VpnStatus.Started) {
+                                    notification.show(
+                                        ConfigManager.notificationTitle,
+                                        ConfigManager.notificationText.ifEmpty {
+                                            L10n.str(service, R.string.status_connected)
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                    }.onFailure { Log.w(TAG, "taildrop clip surfaces failed: ${it.javaClass.simpleName}") }
+                }
                 .onFailure {
                     Log.e(TAG, "serviceReload failed", it)
                     runCatching { cs.setError("android: reload: ${it.message}") }
@@ -1052,6 +1217,21 @@ class BoxService(
         }
     }
 
+    /// §668 — своя строка в журнал приложения тем же каналом, что core-лог,
+    /// но без ANSI-strip и без фильтра TRACE/DEBUG: в стеках горутин эти
+    /// слова не должны глушить запись.
+    private fun appLogLine(text: String) {
+        if (BoxVpnService.coreLogSink == null) return
+        if (coreLogQueue.size >= LOG_QUEUE_MAX) {
+            coreLogDrops.incrementAndGet()
+            return
+        }
+        coreLogQueue.offer(text)
+        if (drainerScheduled.compareAndSet(false, true)) {
+            coreLogMainHandler.post(coreLogDrainer)
+        }
+    }
+
     // §171 — ANSI-strip. Sing-box оборачивает уровень и conn_id в ГОЛЫЕ
     // ESC-байты (`<ESC>`), НЕ в классические CSI-цвета: реальная строка =
     // `<ESC>INFO<ESC>[0617] [<ESC>759645927<ESC> 20ms] dns: exchanged ...`.
@@ -1114,6 +1294,13 @@ class BoxService(
     /// который форвардит сюда.
     fun sendNotification(notification: io.nekohasekai.libbox.Notification) {
         val context = service.applicationContext
+        // §707 — приём Taildrop: свой канал, своё id на файл, тап открывает
+        // вкладку Network узла. Тело несёт имена файла и устройства — в
+        // журнал не пишется.
+        if (Taildrop.isCoreNotification(notification.identifier)) {
+            sendTaildropNotification(context, notification)
+            return
+        }
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         val channelId = notification.identifier.ifBlank { "lxbox-core" }
@@ -1179,11 +1366,29 @@ class BoxService(
     fun cancelNotification(identifier: String, typeID: Int) {
         val context = service.applicationContext
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (Taildrop.isCoreNotification(identifier)) {
+            runCatching { nm.cancel(Taildrop.coreNotificationId(identifier)) }
+            return
+        }
         runCatching {
             nm.cancel(typeID)
         }.onFailure {
             Log.e(TAG, "cancelNotification failed", it)
         }
         Log.d(TAG, "Notification cancelled: $identifier/$typeID")
+    }
+
+    /// §707 — уведомление приёма Taildrop от ядра: кнопки Cancel / Save /
+    /// Delete и автосохранение узла с включённым переключателем — в [Taildrop].
+    private fun sendTaildropNotification(
+        context: Context,
+        notification: io.nekohasekai.libbox.Notification,
+    ) {
+        Taildrop.onCoreNotification(
+            context,
+            notification.identifier,
+            notification.openURL,
+            Taildrop.NoteText(notification.title ?: "", notification.body ?: "", notification.subtitle ?: ""),
+        )
     }
 }

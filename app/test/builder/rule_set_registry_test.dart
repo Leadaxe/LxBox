@@ -4,20 +4,6 @@ import 'package:lxbox/services/builder/rule_set_registry.dart';
 
 void main() {
   group('RuleSetRegistry', () {
-    test('empty registry → empty getters', () {
-      final r = RuleSetRegistry();
-      expect(r.getRuleSets(), isEmpty);
-      expect(r.getRules(), isEmpty);
-    });
-
-    test('addRuleSet returns requested tag when free', () {
-      final r = RuleSetRegistry();
-      final tag = r.addRuleSet({'tag': 'my-rule', 'type': 'inline'});
-      expect(tag, 'my-rule');
-      expect(r.getRuleSets(), hasLength(1));
-      expect(r.getRuleSets().first['tag'], 'my-rule');
-    });
-
     test('addRuleSet auto-suffixes on collision: (2), (3), …', () {
       final r = RuleSetRegistry();
       final t1 = r.addRuleSet({'tag': 'Russian', 'type': 'inline'});

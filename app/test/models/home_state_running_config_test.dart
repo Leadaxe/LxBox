@@ -103,12 +103,6 @@ void main() {
       expect(identical(s3.runningModel, s1.runningModel), isFalse,
           reason: 'явная передача raw → честный ре-парс');
     });
-
-    test('configModel не зависит от снапшота', () {
-      final s1 = HomeState(configRaw: saved);
-      final s2 = s1.copyWith(runningConfigRaw: running);
-      expect(identical(s2.configModel, s1.configModel), isTrue);
-    });
   });
 
   group('§311 kernel-style JSON (re-marshal форма SPEC 036)', () {

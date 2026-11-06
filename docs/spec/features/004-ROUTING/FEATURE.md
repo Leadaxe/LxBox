@@ -90,8 +90,11 @@ Ru internet segment, BitTorrent, VoWiFi, Tailscale networks are enabled.
   TTL, "Never" is not touched, a conditional GET; once per session, 30 s after
   app start or tunnel bring-up, only in the foreground.
   **Witness:** unit tests "TTL 0 = Never", "a fresh cache within the TTL →
-  skip", "If-None-Match goes into the request"; the schedule — `no
-  witness`. **Mutation:** a background timer.
+  skip", "If-None-Match goes into the request"; the schedule — unit tests
+  `rule_set_auto_updater_schedule_test.dart` "app start → one attempt in 30 s",
+  "going to the background cancels the planned attempt", "in the background
+  triggers plan nothing"; "once per session" (sleep after a successful pass) —
+  manual check on a device (the pass goes to the network). **Mutation:** a background timer.
 - **P11. The Routing screen never turns a rule off by itself.** `enabled` is only the
   user's intent; a missing file is a separate state of the row:
 
@@ -107,9 +110,11 @@ Ru internet segment, BitTorrent, VoWiFi, Tailscale networks are enabled.
   download, enabled on full success. "In the config — no" is about the set: an own
   `.srs` rule is skipped whole, a preset drops the missing set (P8).
   **Witness:** unit tests "включённые правила без файлов остаются включёнными",
-  "включённое правило без файла берётся в работу, выключенное — нет",
-  "§601 — включённые правила без скачанного файла: сборка без ошибки", widget
-  "§601 «ждёт скачивания»: свич включён, приглушён, ☁". **Mutation:** the screen
+  "включённое правило без файла берётся в работу, выключенное — нет"
+  (`routing_srs_cache_scan_test.dart`, `rule_set_auto_updater_test.dart`).
+  Switch in 3 → download → enable (`_enableAfterDownload`, screen state +
+  network) — manual check on a device: a disabled rule without a file → switch →
+  ☁ spins → the file is downloaded → the rule is enabled. **Mutation:** the screen
   writes `enabled=false` for a rule without a file — auto-update skips it forever.
 - **P12. Raw JSON does not break the build:** a broken/empty body — skipped with
   a warning, `//…` keys are removed; the editor does not save invalid JSON or
@@ -199,6 +204,9 @@ rule list ─► NORMALIZATION: seeding the head, numbers, sorting, preset dedup
 - Changing a rule's URL or kind wipes the cache and disables the rule; `vpn-1` cannot be
   disabled or deleted.
 - An edit on the screen marks the config for rebuild; the write — on leaving.
+- An edit on the DNS tab and a later edit on Rules or Presets both reach the
+  config: after leaving the DNS tab the screen rereads its rules from storage
+  (§655).
 
 ## Boundaries
 
@@ -214,6 +222,9 @@ rule list ─► NORMALIZATION: seeding the head, numbers, sorting, preset dedup
   references, node selection on the main screen — [026-DIRECTIONS](../026-DIRECTIONS/FEATURE.md);
   here a Direction is only a rule target. The NETWORKS pseudo-direction —
   [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.md).
+- The DNS tab of this screen (after Rules: Directions · Presets · Rules · DNS
+  · Tunnel apps). The screen is shared; what the tab does — servers, DNS
+  rules, strategy, cache — is described in [005-DNS](../005-DNS/FEATURE.md).
 - Which apps go into the tunnel at all (the Tunnel apps tab) —
   [011-SPLIT_TUNNELING](../011-SPLIT_TUNNELING/FEATURE.md). A rule by
   package here acts inside the core and sees only traffic that already got into the

@@ -136,4 +136,30 @@ void main() {
     final r = await actionHandler(post('?all=1'), ctx());
     expect(body(r)['scope'], 'mass');
   });
+
+  // ─── /action/urltest-all (общий обработчик с Automation) ───
+
+  DebugRequest postAll() => DebugRequest(
+        method: 'POST',
+        uri: Uri.parse('http://127.0.0.1:9269/action/urltest-all'),
+        headers: const {},
+        body: Uint8List(0),
+        receivedAt: DateTime.utc(2026),
+      );
+
+  test('urltest-all, tunnel down → Conflict', () async {
+    controller.debugSeedNodeState(
+        group: 'vpn-1', activeNode: 'n', tunnelUp: false);
+    await expectLater(
+      actionHandler(postAll(), ctx()),
+      throwsA(isA<Conflict>()),
+    );
+  });
+
+  test('urltest-all, tunnel up, нет urltest-групп → ok(groups:0)', () async {
+    controller.debugSeedNodeState(group: 'vpn-1', activeNode: 'n');
+    final r = await actionHandler(postAll(), ctx());
+    expect(body(r)['action'], 'urltest-all');
+    expect(body(r)['groups'], 0);
+  });
 }

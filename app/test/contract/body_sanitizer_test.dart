@@ -9,7 +9,6 @@ import 'package:flutter_test/flutter_test.dart';
 import '../contract_paths.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/services/contract/body_sanitizer.dart';
-import 'package:lxbox/services/contract/registry.dart';
 
 
 /// Пин ядра, на котором сверена схема (`body.core` реестра): под ним
@@ -210,23 +209,6 @@ void main() {
           'tls.reality.public_key');
     });
 
-    test('secret: значение в предупреждении маскируется', () {
-      // trojan.password — secret; мусорное значение даёт код, но не течёт.
-      final schema = ContractRegistry.I.schemaFor('vless')!;
-      expect(schema.fields['uuid']!.secret, isTrue,
-          reason: 'uuid объявлен secret — на нём и проверяем маскирование');
-
-      // Поле с secret и заданным on_invalid: shadowsocks.password.
-      final ss = ContractRegistry.I.schemaFor('shadowsocks')!;
-      expect(ss.fields['password']!.secret, isTrue);
-
-      // Маскирование — свойство рендера значения: код с secret-полем несёт
-      // ***, а не сам секрет.
-      const w = RegistryWarning(
-          code: 'type_invalid', path: 'password', value: '***');
-      expect(w.value, '***');
-    });
-
     test('conflicts: ech.enabled + reality.enabled — снят декларант', () {
       final r = _san(_vless({
         'tls': {
@@ -251,7 +233,9 @@ void main() {
       // не пострадало ни в корпусе, ни в golden: пар, где заданы обе стороны,
       // там нет вовсе — единственный `field_conflict` корпуса
       // (`certificate_public_key_sha256`) обе семантики решают одинаково.
-      expect((tls['ech'] as Map).containsKey('enabled'), isFalse);
+      // §654 (контракт 1.1.122) — объект, который санитайзер опустошил, в
+      // тело не идёт (как у лаунчера): `ech` без `enabled` снимается целиком.
+      expect(tls.containsKey('ech'), isFalse);
       expect((tls['reality'] as Map)['enabled'], isTrue);
       // Код ровно ОДИН: снятый декларант перестаёт быть соседом, и второй
       // участник пары своего правила не исполняет.
@@ -300,15 +284,6 @@ void main() {
       }));
       expect(_codes(r), contains('field_requires'));
       expect(_byCode(r, 'field_requires').params['requires'], 'tls.spoof');
-    });
-
-    test('requires: spoof_method без spoof снимается', () {
-      final r = _san(_vless({
-        'tls': {'enabled': true, 'spoof_method': 'wrong-checksum'}
-      }));
-      final tls = r.body!['tls'] as Map;
-      expect(tls.containsKey('spoof_method'), isFalse);
-      expect(_byCode(r, 'field_requires').path, 'tls.spoof_method');
     });
 
     test('forbidden_for: naive + tls.alpn → tls_field_unsupported_naive', () {
@@ -1309,13 +1284,6 @@ void main() {
       final peer = (bad.body!['peers'] as List).first as Map;
       expect(peer.containsKey('reserved'), isFalse);
     });
-
-    test('неизвестное выражение реестра не роняет и не портит значение', () {
-      // Контракт может уехать вперёд кода: выражение, которого санитайзер не
-      // знает, обязано остаться незамеченным, а не съесть поле.
-      final r = _san(_vless({'transport': {'type': 'ws', 'path': '/x'}}));
-      expect((r.body!['transport'] as Map)['path'], '/x');
-    });
   });
 
   group('coreAtLeast', () {
@@ -1330,6 +1298,21 @@ void main() {
       expect(coreAtLeast('1.14.2', '1.14.1-lx.1'), isTrue);
       // Версия неизвестна — гейт не применяем.
       expect(coreAtLeast('', '1.14.1-lx.4'), isTrue);
+    });
+
+    test('пре-релиз: lx.30-rc.1 < lx.30-rc.2 < lx.30 (контракт 1.1.150)', () {
+      expect(coreAtLeast('1.14.4-lx.30-rc.1', '1.14.4-lx.30-rc.2'), isFalse,
+          reason: 'иначе поле rc.2 уйдёт в rc.1 и ядро отвергнет конфиг');
+      expect(coreAtLeast('v1.14.4-lx.30-rc.2', '1.14.4-lx.30-rc.2'), isTrue);
+      expect(coreAtLeast('1.14.4-lx.30', '1.14.4-lx.30-rc.2'), isTrue);
+      expect(coreAtLeast('1.14.4-lx.30-rc.9', '1.14.4-lx.30'), isFalse);
+      expect(coreAtLeast('1.14.4-lx.30-rc.10', '1.14.4-lx.30-rc.9'), isTrue);
+      expect(coreAtLeast('1.14.4-lx.30-rc2', '1.14.4-lx.30-rc.2'), isTrue);
+      // Хвост сборки не с тега: после rc — тот же rc, без rc — релиз.
+      expect(coreAtLeast('1.14.4-lx.30-rc.2-g1a2b3c4', '1.14.4-lx.30-rc.2'),
+          isTrue);
+      expect(coreAtLeast('1.14.4-lx.30-g1a2b3c4', '1.14.4-lx.30'), isTrue);
+      expect(coreAtLeast('1.14.4-lx.31-rc.1', '1.14.4-lx.30'), isTrue);
     });
   });
 
@@ -1443,6 +1426,75 @@ void main() {
       final tls = body['tls'] as Map;
       expect(tls.containsKey('fragment'), isFalse);
       expect(tls['record_fragment'], true);
+    });
+  });
+  group('контракт 1.1.140 — peers.on_item_failure снимает пир, а не узел', () {
+    const pubA = 'cHVibGljS2V5QmFzZTY0RXhhbXBsZVZhbHVlMTIzNDU=';
+    Map<String, dynamic> peer(String host, String pub) => {
+          'address': host,
+          'port': 51820,
+          'public_key': pub,
+          'allowed_ips': ['0.0.0.0/0'],
+        };
+    Map<String, dynamic> wg(List<Map<String, dynamic>> peers) => {
+          'type': 'wireguard',
+          'tag': 'wg1',
+          'address': ['10.0.0.2/32'],
+          'private_key': 'cHJpdmF0ZUtleUJhc2U2NEV4YW1wbGVWYWx1ZTEyMzQ=',
+          'peers': peers,
+        };
+
+    test('негодный ключ второго из трёх — пиры 1 и 3, один wg_peer_dropped', () {
+      final r = _san(
+          wg([
+            peer('a.example.com', pubA),
+            peer('b.example.com', 'not-a-key'),
+            peer('c.example.com', pubA),
+          ]),
+          scheme: 'wireguard');
+      expect(r.body, isNotNull);
+      final peers = (r.body!['peers'] as List).cast<Map>();
+      expect([for (final p in peers) p['address']],
+          ['a.example.com', 'c.example.com']);
+      expect(_codes(r), ['wg_peer_dropped'],
+          reason: 'коды обхода снятого пира заменены одним');
+      final w = _byCode(r, 'wg_peer_dropped');
+      expect(w.path, 'peers[1]');
+      expect(w.params, {'index': '2', 'reason': 'wg_key_invalid'});
+    });
+
+    test('пир без адреса снимается один (required внутри элемента)', () {
+      final r = _san(
+          wg([
+            peer('a.example.com', pubA),
+            {'public_key': pubA, 'allowed_ips': ['0.0.0.0/0']},
+          ]),
+          scheme: 'wireguard');
+      expect(r.body, isNotNull);
+      expect(r.body!['peers'] as List, hasLength(1));
+      expect(_byCode(r, 'wg_peer_dropped').path, 'peers[1]');
+    });
+
+    test('единственный негодный пир не изолируется — узел снят прежним кодом',
+        () {
+      final r = _san(wg([peer('a.example.com', 'not-a-key')]),
+          scheme: 'wireguard');
+      expect(r.body, isNull);
+      expect(_codes(r), contains('wg_key_invalid'));
+      expect(_codes(r), isNot(contains('wg_peer_dropped')));
+    });
+
+    test('не уцелел ни один из двух — прежний отказ узла, без wg_peer_dropped',
+        () {
+      final r = _san(
+          wg([
+            peer('a.example.com', 'not-a-key'),
+            peer('b.example.com', 'also-bad'),
+          ]),
+          scheme: 'wireguard');
+      expect(r.body, isNull);
+      expect(_codes(r), contains('wg_key_invalid'));
+      expect(_codes(r), isNot(contains('wg_peer_dropped')));
     });
   });
 }

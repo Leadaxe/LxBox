@@ -100,19 +100,6 @@ void main() {
     });
   });
 
-  group('chainUnsupportedByCoreLine', () {
-    test('называет версию ядра и порог — иначе следующий шаг не сделать', () {
-      final line = chainUnsupportedByCoreLine('via-de', '1.14.0-lx.27-rc.4');
-      expect(line, contains('via-de'));
-      expect(line, contains('1.14.0-lx.27-rc.4'));
-      expect(line, contains(kChainMinCoreVersion));
-    });
-
-    test('пустая версия не превращается в пустые скобки', () {
-      expect(chainUnsupportedByCoreLine('c', ''), contains('unknown version'));
-    });
-  });
-
   group('CoreVersionCache', () {
     setUp(CoreVersionCache.resetForTest);
 

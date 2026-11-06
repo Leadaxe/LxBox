@@ -32,6 +32,7 @@ class NodeRow extends StatelessWidget {
     this.onViewPool,
     this.onSickTap,
     this.onToggleEndpoint,
+    this.onOpenConnectTap,
   });
 
   final NodeViewItem item;
@@ -64,6 +65,10 @@ class NodeRow extends StatelessWidget {
   /// для WG/AWG-узла (ядро отдало `endpointState`) при живом туннеле; иначе
   /// пункта нет. Направление переключения — по [NodeViewItem.endpointState].
   final VoidCallback? onToggleEndpoint;
+
+  /// §654 C — тап по метке «Waiting for sign-in» узла openconnect: диалог
+  /// висящего челленджа. `null` — челленджа нет, метка не нажимается.
+  final VoidCallback? onOpenConnectTap;
 
   /// Right-side delay label (или PING… / ERR), цвет по latency.
   ///
@@ -134,7 +139,7 @@ class NodeRow extends StatelessWidget {
     final delay = item.delay;
     if (delay == null) return '';
     final prefix = item.delayIsForeign ? '~' : '';
-    return delay < 0 ? '${prefix}ERR' : '$prefix${delay}MS';
+    return delay < 0 ? '${prefix}ERR' : '$prefix${delay}ms';
   }
 
   /// §535/§540 (ядро SPEC 097) — однословная подпись состояния WG/AWG-
@@ -152,7 +157,20 @@ class NodeRow extends StatelessWidget {
       item.endpointState != CcEndpointState.disabled &&
       item.endpointState != CcEndpointState.building;
 
+  /// §654 C — метка openconnect подменяет up/sleep/down, но не `off`.
+  bool get _openConnectShown =>
+      !_isTailnet &&
+      item.openConnectKind != OpenConnectRowKind.none &&
+      item.endpointState != CcEndpointState.disabled;
+
   String get _endpointStateLabel {
+    if (_openConnectShown) {
+      return item.openConnectKind == OpenConnectRowKind.waiting
+          ? getLocalText.s("Waiting for sign-in")
+          : item.openConnectText.isNotEmpty
+              ? item.openConnectText // l10n-exempt: core error text as is
+              : getLocalText.s("error");
+    }
     if (_endpointNoteShown) return _tailnetNoteLabel;
     final st = item.endpointState;
     // §557 — выключен вручную: отдельная подпись, не сон и не «down».
@@ -196,7 +214,7 @@ class NodeRow extends StatelessWidget {
     return item.delayIsForeign ? base.withValues(alpha: 0.55) : base;
   }
 
-  /// `[ACTIVE] [protocol]              [50MS]` — left part flex, ping right-aligned.
+  /// `[ACTIVE] [protocol]              [50ms]` — left part flex, ping right-aligned.
   Widget _buildSubtitleRow(BuildContext context, ColorScheme cs) {
     final hasActive = item.active;
     final hasArrow = item.urltestNow != null && item.urltestNow!.isNotEmpty;
@@ -216,13 +234,16 @@ class NodeRow extends StatelessWidget {
     // правый бейдж узкий и моноширинный, фраза туда не влезает.
     final stateLabel = _isBlock ? '' : _endpointStateLabel;
 
-    if (!hasActive &&
+    // Пингуемая строка держит подзаголовок и пустой: иначе у узла без
+    // бейджей (direct) «PING…» вставляет строку, и центрированный заголовок
+    // прыгает вверх-вниз. Схлопывается только block — его не пингуют.
+    if (_isBlock &&
+        !hasActive &&
         !hasArrow &&
         !hasProto &&
         !hasAuto &&
         !hasNotificationBadge &&
-        stateLabel.isEmpty &&
-        dl.isEmpty) {
+        stateLabel.isEmpty) {
       return const SizedBox.shrink();
     }
 
@@ -264,14 +285,24 @@ class NodeRow extends StatelessWidget {
 
     // §557 — выключенный узел: «off» оранжевым (тот же оранжевый, что у
     // пинга 200–500 мс), курсивом, как соседние up/sleep/down.
+    // §654 C — openconnect: ждёт входа оранжевым (тап — диалог челленджа),
+    // ошибка ядра — цветом ошибки.
+    final Color stateColor = _openConnectShown
+        ? (item.openConnectKind == OpenConnectRowKind.waiting
+            ? Colors.orange
+            : cs.error)
+        : _isDisabled || _endpointNoteShown
+            ? Colors.orange
+            : cs.onSurfaceVariant;
     final Widget? endpointStateText = stateLabel.isEmpty
         ? null
         : Flexible(
-            child: _endpointStateLabelText(
-                stateLabel,
-                _isDisabled || _endpointNoteShown
-                    ? Colors.orange
-                    : cs.onSurfaceVariant),
+            child: _openConnectShown && onOpenConnectTap != null
+                ? GestureDetector(
+                    onTap: onOpenConnectTap,
+                    child: _endpointStateLabelText(stateLabel, stateColor),
+                  )
+                : _endpointStateLabelText(stateLabel, stateColor),
           );
 
     final Widget? proto = (hasProto || hasNotificationBadge)
@@ -301,19 +332,19 @@ class NodeRow extends StatelessWidget {
           )
         : null;
 
-    final right = dl.isEmpty
-        ? const SizedBox.shrink()
-        : Text(
-            dl,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.5,
-              color: _isTailnet
-                  ? _tailnetColor(cs)
-                  : _delayColor(context) ?? cs.onSurfaceVariant,
-            ),
-          );
+    // Пустой Text, а не SizedBox.shrink: высота строки одна и та же, есть
+    // замер или нет.
+    final right = Text(
+      dl,
+      style: TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 0.5,
+        color: _isTailnet
+            ? _tailnetColor(cs)
+            : _delayColor(context) ?? cs.onSurfaceVariant,
+      ),
+    );
 
     // Пинг (`right`) ВСЕГДА прижат к правому краю строки. Вся левая часть
     // (active / arrow / proto) живёт в одном Expanded, который съедает остаток
@@ -582,7 +613,9 @@ class NodeRow extends StatelessWidget {
                       // подменённым label'ом + иконкой; тип берём ТОЧНО из
                       // конфига (item.outboundType), не по маске имени.
                       final special = _special;
-                      final displayText = special?.label ?? item.tag;
+                      // Член-Направление — label вместо tag (tag в подзаголовке).
+                      final displayText =
+                          special?.label ?? item.displayLabel ?? item.tag;
                       return Row(
                         children: [
                           if (special != null) ...[

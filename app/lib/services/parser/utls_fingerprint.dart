@@ -25,6 +25,9 @@ const Set<String> kUtlsFingerprints = {
   'chrome_padding_psk_shuffle',
   'chrome_pq',
   'chrome_pq_psk',
+  // Контракт 1.1.118 — пресет Chrome 155 (ядро >= 1.14.2-lx.13, SPEC 118
+  // ядра); `chrome` остаётся Chrome 133.
+  'chrome_155',
   'firefox',
   'edge',
   'safari',
@@ -66,6 +69,9 @@ const Set<String> kRealityHybridFingerprints = {
   'chrome_padding_psk_shuffle',
   'chrome_pq',
   'chrome_pq_psk',
+  // Контракт 1.1.118 — Chrome 155 (ядро lx.13+), в исключениях advisory
+  // `reality_fp_not_chrome` реестра.
+  'chrome_155',
   // SPEC 086 (ядро lx.2) — Firefox 148.
   'firefox',
   // SPEC 087 (ядро lx.3) — Safari 26.3.

@@ -57,39 +57,4 @@ void main() {
       expect(out.warnings, isEmpty);
     });
   });
-  group('§575 импорт 1.0: секции сняты', () {
-    test('свой сервер с секциями: узел на месте, предупреждение not_allowed',
-        () {
-      final raw = jsonEncode({
-        'lx_backup': 2,
-        'exported_by': {'app': 'launcher', 'version': '0'},
-        'sources': [
-          {
-            'kind': 'server',
-            'tag': 'home-ts',
-            'enabled': true,
-            'origin': {
-              'kind': 'json',
-              'raw': '{"type":"tailscale","tag":"home-ts","auth_key":"k"}',
-            },
-            'sections': {
-              'rules': [
-                {'kind': 'inline', 'name': 'n', 'enabled': true,
-                 'body': {'ip_cidr': ['100.64.0.0/10']}},
-              ],
-            },
-          },
-        ],
-      });
-      final file = parseLxBackup(raw);
-      final w = file.warnings.single;
-      expect(w.code, kWarnSectionRecordDropped);
-      expect(w.reason, kSectionDropReasonNotAllowed);
-      expect(w.kind, 'server');
-      expect(file.servers.single.name, 'home-ts');
-      final merged = mergeBackupServers(const [], file.servers).lists;
-      final server = merged.single as UserServer;
-      expect(server.rawBody, contains('"auth_key":"k"'));
-    });
-  });
 }

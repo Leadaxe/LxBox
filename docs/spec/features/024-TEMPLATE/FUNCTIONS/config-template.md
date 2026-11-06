@@ -9,7 +9,7 @@ core config skeleton and the preset catalog.
 |------|----------|
 | Feature | [024-TEMPLATE](../FEATURE.md) |
 | Promises | P4 P14 |
-| State | ✅ written from code, 2026-09-28 |
+| State | ✅ written from code, 2026-09-28; contract 1.1.119 ([643](../../../tasks/643-contract-1-1-119-node-loops.md)), 2026-10-14 |
 
 ## What it does
 
@@ -37,7 +37,9 @@ A section's `chapter` decides which screen draws it: `core` — VPN Settings,
 `routing` — the routing screen, `dns` — the DNS screen, `internal` — nowhere
 (global variables edited only via a preset by reference).
 A variable's `wizard_ui`: `edit` — a field, `fix` — read-only in the shared
-list (edited on its own screen), `hidden` — not shown.
+list (edited on its own screen), `hidden` — not shown, `internal` — not shown
+and not stored (a build-only variable, see [template language](template-language.md);
+unrelated to the `internal` section, whose variables are stored).
 
 Current sections: General, Network, Internal, Auto Proxy, DNS, TUN, VPN Mode,
 TLS Fragmentation. There are 11 presets; the first is `traffic-processing` (pinned,
@@ -46,7 +48,17 @@ cannot be disabled or moved, its rules go first in `route.rules`).
 Preset metadata is the `ui` object: `label`, `description`, `default`
 (enabled on a clean install), `locked`, `num` (place on the order axis),
 `isSortable`. Preset body: `vars`, `rule_set`, `rule`/`rules`,
-`dns_rule`/`dns_rules`, `dns_servers`, `for_each`.
+`dns_rule`/`dns_rules`, `dns_servers`, and at most one node loop key,
+`for_each_node` or `for_each_node_do`.
+
+In the skeleton `route.default_domain_resolver` is an object
+`{server, disable_optimistic_cache}` (`TEMPLATE_LANG.md` §6.9): `server` takes
+`@dns_default_domain_resolver`, `disable_optimistic_cache` takes the global
+`@dns_resolver_no_stale` (bool, `true` by default) — the DNS screen switch
+"Never serve stale answers for node hostnames". With it on, a node server name
+whose cached answer has expired is resolved again instead of being served from
+the optimistic cache; app DNS queries are not affected. The variable is
+portable and travels in a backup like `dns_optimistic`.
 
 ## Inputs / Outputs
 
@@ -64,11 +76,15 @@ on a malformed construct.
   overlay — silently the English text; an unreadable overlay file as a whole —
   an error in the log and the English template instead of a crash.
 - At load all conditional constructs (`#if`, `#enable`,
-  `#on_change`, `for_each.filter`, DNS server body placeholders) are checked against the
+  `#on_change`, the loop's `#filter`, DNS server body placeholders) are checked against the
   declared variables. A violation is a load error: it is a defect of the
   shipment, not of user data.
-- Exception: a preset whose `for_each` has no `node_type` or `as`
-  is removed from the list alone, with a log entry; the template works.
+- A node loop is checked at load as strictly: the removed `for_each`, both
+  loop keys in one preset, an unknown or unmarked key inside a loop, a wrong
+  `#do` / `#final`, a variable named `node` or `node.*`, `unique` on a type
+  other than `text_list` — each fails the load of the whole template. There
+  is no exception any more: the soft drop of a single preset with an
+  incomplete `for_each` (§83) is gone.
 - A template DNS server's variable is visible only to its body; global
   variables are not visible to the server body.
 - The `internal` section does not appear on screens, but its variables take part
@@ -103,5 +119,6 @@ links to the launcher norm and corpus are in the feature's
 | 5 | [279F](../../../tasks/279F-localization/spec.md) | — | Overlay of template display texts by language |
 | 6 | [370](../../../tasks/370-rule-order-num-axis.md) | Spec (implementation in the task) | The order axis `ui.num` and `ui.isSortable` |
 | 7 | [555](../../../tasks/555-template-lang-spec143-parity.md) | Done (items 1–6) | Template language parity with the launcher |
-| 8 | [578](../../../tasks/578-tailscale-preset-template-for-each.md) | Spec. Implementation started | An incomplete `for_each` removes only its own preset |
+| 8 | [578](../../../tasks/578-tailscale-preset-template-for-each.md) | Released v2.25.8, superseded by 643 | An incomplete `for_each` removed only its own preset |
 | 9 | [580](../../../tasks/580-dns-cache-settings.md) | Done | DNS cache variables with bounds |
+| 10 | [643](../../../tasks/643-contract-1-1-119-node-loops.md) | Released v2.25.14 | A loop error fails the whole template; the object `default_domain_resolver` and `dns_resolver_no_stale` |

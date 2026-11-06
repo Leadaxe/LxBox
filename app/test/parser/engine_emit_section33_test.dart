@@ -43,34 +43,6 @@ void main() {
         's://h:443?tls=1',
       );
     });
-
-    test('emit.names сильнее source', () {
-      expect(
-        _emit(
-          {
-            'emit': {
-              'form': 'url',
-              'names': {'insecure': 'allowInsecure'},
-            },
-            'params': {
-              'server': {'source': 'host', 'maps_to': 'server'},
-              'server_port': {'source': 'port', 'maps_to': 'server_port'},
-              'insecure': {
-                'source': ['query.insecure', 'query.allowInsecure'],
-                'maps_to': 'tls.insecure',
-                'type': 'bool_spelled',
-              },
-            },
-          },
-          {
-            'server': 'h',
-            'server_port': 1,
-            'tls': {'insecure': true},
-          },
-        ),
-        'x://h:1?allowInsecure=true',
-      );
-    });
   });
 
   group('§495 Q133-71 · пустой ключ sets не пишется', () {

@@ -16,6 +16,8 @@ import 'folder_detail_screen.dart';
 import 'warp_experiment_screen.dart';
 import '../services/l10n/locale_controller.dart';
 import '../widgets/safe_bottom.dart';
+import '../widgets/masquerade_fields.dart';
+import '../services/wireguard/masquerade_source.dart';
 
 /// §025 — Full-screen визард «Get WARP». Открывается из overflow-меню
 /// Subscriptions. Один тап «Register» для free; license/endpoint опциональны
@@ -89,11 +91,14 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
   bool? _includeReserved;
 
   WarpEndpointPicker? _picker; // §136 — для рандома endpoint/SNI
-  bool _endpointAutoFilled = false; // §136 — endpoint в поле = наш авто-рандом
-  // §386 — значение последнего авто-рандома. Комбобокс не даёт onChanged, поэтому
+  // §136 — endpoint в поле = наше авто-значение (стартовый дефолт или
+  // рандом), а не выбор юзера. §386 (01.11) — стартовый дефолт тоже авто:
+  // выбранный из списка `engage…:2408` после рандома уже выбор юзера.
+  bool _endpointAutoFilled = true;
+  // §386 — последнее авто-значение. Комбобокс не даёт onChanged, поэтому
   // ручную правку/выбор из списка ловит listener на контроллере: текст ушёл от
-  // последнего авто-значения → это уже не наш рандом, флаг снимается.
-  String _lastAutoEndpoint = '';
+  // последнего авто-значения → это уже не наше, флаг снимается.
+  String _lastAutoEndpoint = WarpAccount.defaultEndpoint;
   // §386 — пресеты для combobox'ов (endpoint WG / IP MASQUE), из asset.
   List<String> _endpointsPreset = const [];
   // §305 — v6-endpoint подставляем только если в системе включён IPv6.
@@ -228,12 +233,11 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
   DropdownMenuEntry<String> _presetEntry(String value, String recommended) =>
       warpPresetEntry(value, recommended, getLocalText.s("(recommended)"));
 
-  /// true если в поле endpoint — дефолт/пусто/наш авто-рандом (не вписан юзером
-  /// вручную → можно перезаписать).
-  bool get _endpointReplaceable {
-    final v = _endpoint.text.trim();
-    return v.isEmpty || v == WarpAccount.defaultEndpoint || _endpointAutoFilled;
-  }
+  /// true если в поле endpoint — пусто/наше авто-значение (не выбран и не
+  /// вписан юзером → можно перезаписать). §386 (01.11) — сравнение с дефолтом
+  /// снято: выбранный из списка `engage…:2408` — выбор, его не рандомим.
+  bool get _endpointReplaceable =>
+      _endpoint.text.trim().isEmpty || _endpointAutoFilled;
 
   /// §136 — снятие галки обфускации → все обфускация-поля в стандарт.
   /// Endpoint возвращаем к дефолту только если он был НАШИМ авто-рандомом
@@ -242,8 +246,8 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
   void _resetObfuscationFields() {
     setState(() {
       if (_endpointAutoFilled) {
+        _lastAutoEndpoint = WarpAccount.defaultEndpoint;
         _endpoint.text = WarpAccount.defaultEndpoint;
-        _endpointAutoFilled = false;
       }
       _includeReserved = null; // §142 — вернуть к дефолту по галке
       _sni.text = _picker?.randomSni() ?? ''; // свежий случайный домен
@@ -393,11 +397,16 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
         await _registerMasque();
         return;
       }
-      final endpoint = _endpoint.text.trim().isEmpty
-          ? WarpAccount.defaultEndpoint
-          : _endpoint.text.trim();
+      // §386 (01.11) — null = юзер endpoint не выбирал (пусто или нетронутый
+      // стартовый дефолт): addWarp сам решит (рандом при обфускации / ответ
+      // Cloudflare). Выбранное значение, включая `engage…:2408`, едет как есть.
+      final text = _endpoint.text.trim();
+      final String? endpoint = text.isEmpty ||
+              (_endpointAutoFilled && text == WarpAccount.defaultEndpoint)
+          ? null
+          : text;
       // §606 — форма host:port проверяется до запроса (обещание 025F).
-      if (!WarpAccount.isValidEndpoint(endpoint)) {
+      if (endpoint != null && !WarpAccount.isValidEndpoint(endpoint)) {
         showSnack(getLocalText.s("Endpoint must be host:port"));
         return;
       }
@@ -741,10 +750,12 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                       const SizedBox(height: 12),
                       _label('SNI'),
                       // combo-box: пункты из sni_pool + свободный ввод. Пусто →
-                      // дефолт ядра (consumer-masque.cloudflareclient.com); он
-                      // же ПЕРВЫМ пунктом пула и помечен recommended — DPI
+                      // дефолт ядра (www.cloudflare.com, с lx.25-rc.4); он же
+                      // помечен recommended (§638: с родным
+                      // consumer-masque.cloudflareclient.com h3 не встаёт на
+                      // RU-каналах, §393). Родной домен остаётся в пуле — DPI
                       // умеет резать по несовпадению SNI с блоком (§143), так
-                      // что родной домен перебирается наравне, включая кубик.
+                      // что он перебирается наравне, включая кубик.
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [

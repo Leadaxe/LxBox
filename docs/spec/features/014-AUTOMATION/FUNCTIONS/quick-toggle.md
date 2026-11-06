@@ -70,7 +70,10 @@ permission denied. Open L×Box to retry.".
 - There is no choice of node, group or mode from the tile — only the global
   toggle.
 - There is no home screen widget.
-- Stop / Reconnect buttons in the service notification — 010-VPN_SERVICE.
+- The Stop and "📋 Send" buttons in the service notification —
+  010-VPN_SERVICE and 032-TAILDROP.
+- No second tile: there is no "Send clipboard" tile (owner decision
+  2026-11-03), the clipboard window opens from the notification.
 - Depends on OS capabilities: presence of the Quick Settings shade and the
   dynamic icon menu, the system request to add the tile (Android 13+), the
   tile look in a particular firmware. Live updates of the tile and the menu —
@@ -93,3 +96,4 @@ permission denied. Open L×Box to retry.".
 | 10 | [233](../../../tasks/233-minsdk-24.md) | — | The tile is available from Android 7, live updates — from Android 11 |
 | 11 | [279F](../../../tasks/279F-localization/spec.md) | phases 0–7 done | Tile and menu labels in the app language, renaming on language change |
 | 12 | [510](../../../tasks/510-review-findings-after-v2251.md) | Released v2.25.2 | A stop from the tile shuts down the node safeguard cycle |
+| 13 | [707](../../../tasks/707-taildrop-send-receive-files.md), iteration 7 | Implemented, not verified on a device | 2026-11-03: no "Send clipboard" tile, the button lives in the notification; Reconnect removed from the notification |

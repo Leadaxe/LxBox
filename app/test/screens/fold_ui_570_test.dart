@@ -23,7 +23,7 @@ void main() {
               ctx,
               initial: initial,
               canDelete: true,
-              allNodeTags: const [],
+              nodePool: Future.value(const []),
               foldCandidates: foldCandidatesOf(const [
                 (name: 'My sub', replace: SourceReplace(mode: ReplaceMode.manual, tag: 'FOLD')),
                 (name: 'Off', replace: null),

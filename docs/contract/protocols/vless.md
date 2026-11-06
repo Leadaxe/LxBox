@@ -6,7 +6,7 @@
 
 `vless` — an outbound, sing-box type `vless`. Accepted from: share link, sing-box JSON, Xray JSON.
 
-<sub>Schema checked against core `1.14.2-lx.11` · the link fragment (`#…`) is the node `label`</sub>
+<sub>Schema checked against core `1.14.3-lx.17` · the link fragment (`#…`) is the node `label`</sub>
 
 | Field | Value |
 |---|---|
@@ -14,7 +14,7 @@
 | `singbox_type` | `vless` |
 | `kind` | `outbound` |
 | `sources` | `uri`, `singbox`, `xray` |
-| Core the schema was checked against | `1.14.2-lx.11` |
+| Core the schema was checked against | `1.14.3-lx.17` |
 | URI fragment | `label` |
 
 ## How to read this page
@@ -95,9 +95,9 @@ Shared across every scheme that carries a TLS block; the reference page is [`_tl
   - Accepted with a notice for `true` → [`tls_insecure`](../warnings.md#tls_insecure)
 - <a id="link-tls-fp"></a>**`fp`** — Browser fingerprint mimicked in the ClientHello.
   - Also spelled: `fingerprint`
-  - Type: enum (other spellings of the same value are accepted): `chrome`, `chrome_psk`, `chrome_psk_shuffle`, `chrome_padding_psk_shuffle`, `chrome_pq`, `chrome_pq_psk`, `firefox`, `edge`, `safari`, `360`, `qq`, `ios`, `android`, `random`, `randomized` (allowlist `utls_fingerprints`) · Default: `""`
+  - Type: enum (other spellings of the same value are accepted): `chrome`, `chrome_psk`, `chrome_psk_shuffle`, `chrome_padding_psk_shuffle`, `chrome_pq`, `chrome_pq_psk`, `chrome_155`, `firefox`, `edge`, `safari`, `360`, `qq`, `ios`, `android`, `random`, `randomized` (allowlist `utls_fingerprints`) · Default: `""`
   - Maps to: [`tls.utls.fingerprint`](#body-tls-utls-fingerprint)
-  - If invalid: replaced with `chrome` → [`utls_fp_unknown`](../warnings.md#utls_fp_unknown) · Accepted with a notice for anything except `chrome`, `chrome_psk`, `chrome_psk_shuffle`, `chrome_padding_psk_shuffle`, `chrome_pq`, `chrome_pq_psk`, `firefox`, `safari`, `random`, when `tls.reality.enabled` is set → [`reality_fp_not_chrome`](../warnings.md#reality_fp_not_chrome) · Replaced: `random` → `chrome` when `tls.reality.enabled` is `true` → [`reality_fp_random_pinned`](../warnings.md#reality_fp_random_pinned)
+  - If invalid: replaced with `chrome` → [`utls_fp_unknown`](../warnings.md#utls_fp_unknown) · Accepted with a notice for anything except `chrome`, `chrome_psk`, `chrome_psk_shuffle`, `chrome_padding_psk_shuffle`, `chrome_pq`, `chrome_pq_psk`, `chrome_155`, `firefox`, `safari`, `random`, when `tls.reality.enabled` is set → [`reality_fp_not_chrome`](../warnings.md#reality_fp_not_chrome) · Replaced: `random` → `chrome` when `tls.reality.enabled` is `true` → [`reality_fp_random_pinned`](../warnings.md#reality_fp_random_pinned)
 - <a id="link-tls-ech"></a>**`ech`** — Encrypted Client Hello parameters in the Xray form.
   - Also spelled: `echfq`
   - Type: string · Default: `""`
@@ -125,7 +125,7 @@ Read when the link says `type=ws`; the reference page is [`_transports.md`](_tra
 - <a id="link-tr-ws-host"></a>**`host`** — Host header of the WebSocket request.
   - Also spelled: `sni`, `obfsParam`
   - Type: string · Default: `""`
-  - Maps to: `transport.ws.headers.Host`
+  - Maps to: [`transport.ws.headers.Host`](#body-transport-ws-headers-host)
 - <a id="link-tr-ws-ed"></a>**`ed`** — WebSocket early data size, in bytes.
   - Type: int
   - Maps to: [`transport.ws.max_early_data`](#body-transport-ws-max-early-data), [`transport.ws.early_data_header_name`](#body-transport-ws-early-data-header-name)
@@ -171,7 +171,7 @@ Read when the link says `type=httpupgrade`; the reference page is [`_transports.
 
 Read when the link says `type=xhttp`; the reference page is [`_transports.md`](_transports.md).
 
-- <a id="link-tr-xhttp-path"></a>**`path`** — XHTTP request path.
+- <a id="link-tr-xhttp-path"></a>**`path`** — XHTTP request path. Anything after the first `?` is sent as the request query, as Xray does.
   - Type: string · Default: `""`
   - Maps to: [`transport.xhttp.path`](#body-transport-xhttp-path)
 - <a id="link-tr-xhttp-host"></a>**`host`** — Host of the XHTTP request.
@@ -288,26 +288,31 @@ The node body itself — the sing-box JSON kept in the launcher state. The path 
   - Required: the node is dropped without it
   - Set by link parameter: [`host`](#link-common-host)
   - If invalid: node dropped → [`field_missing`](../warnings.md#field_missing)
+  - Form: block `connection`, required
 - <a id="body-server-port"></a>**`server_port`** — Server port.
   - Type: uint16, format `port`, `1–65535`
   - Required: the node is dropped without it
   - Set by link parameter: [`port`](#link-common-port)
   - If invalid: node dropped → [`port_invalid`](../warnings.md#port_invalid)
+  - Form: block `connection`, required
 - <a id="body-uuid"></a>**`uuid`** — User identifier.
   - Type: string, secret, role `credential`
   - Required: the node is dropped without it
   - Set by link parameter: [`userinfo`](#link-common-userinfo)
+  - Form: block `connection`, required
 - <a id="body-flow"></a>**`flow`** — XTLS flow control mode.
   - Type: enum, `""`, `xtls-rprx-vision`, normalized: `trim_lower`
   - Default: `""`
   - Set by link parameter: [`flow`](#link-proto-flow)
   - If invalid: removed → [`flow_deprecated`](../warnings.md#flow_deprecated)
   - Conflicts with: `transport` (unless `encryption` is set)
+  - Form: block `connection`
 - <a id="body-encryption"></a>**`encryption`** — Post-quantum encryption layer.
   - Type: string, must match `^mlkem768x25519plus(\.[^.]+){3,}$`, means "not set": `none`, normalized: `trim`
   - Set by link parameter: [`encryption`](#link-proto-encryption)
   - If invalid: node dropped → [`vless_encryption_invalid`](../warnings.md#vless_encryption_invalid)
   - Only written when: core ≥ `1.14.0-lx.18`, lx fork only
+  - Form: block `advanced`
 - <a id="body-network"></a>**`network`** — Networks this outbound handles.
   - Type: listable_string, `tcp`, `udp`, normalized: `trim_lower`
   - If invalid: removed → [`type_invalid`](../warnings.md#type_invalid)
@@ -316,12 +321,15 @@ The node body itself — the sing-box JSON kept in the launcher state. The path 
   - Default: `xudp`
   - Set by link parameter: [`packetEncoding`](#link-proto-packetencoding)
   - If invalid: removed → [`packet_encoding_unknown`](../warnings.md#packet_encoding_unknown)
+  - Form: block `advanced`
 - <a id="body-tls"></a>**`tls`** — TLS settings.
   - Shared sub-schema, expanded below · reference page: [_tls](_tls.md)
+  - Form: block `tls`
 - <a id="body-tls-enabled"></a>**`tls.enabled`** — Enable TLS for this outbound.
   - Type: bool
   - Default: `false`
   - Set by link parameter: [`security`](#link-proto-security)
+  - Form: block of the connecting `ref` field, or drawn by a choice group
 - <a id="body-tls-engine"></a>**`tls.engine`** — TLS implementation used for the handshake.
   - Type: enum, `""`, `go`, `apple`, `windows`, normalized: `trim_lower`
   - Default: `go`
@@ -334,14 +342,17 @@ The node body itself — the sing-box JSON kept in the launcher state. The path 
   - Type: string, format `host`
   - Set by link parameter: [`sni`](#link-tls-sni)
   - If invalid: removed → [`type_invalid`](../warnings.md#type_invalid)
+  - Form: block of the connecting `ref` field, or drawn by a choice group, shown when `tls.enabled` is `true`
 - <a id="body-tls-insecure"></a>**`tls.insecure`** — Skip server certificate verification.
   - Type: bool
   - Default: `false`
   - Set by link parameter: [`insecure`](#link-tls-insecure)
   - Accepted with a notice for `true` → [`tls_insecure`](../warnings.md#tls_insecure)
+  - Form: block of the connecting `ref` field, or drawn by a choice group, shown when `tls.enabled` is `true`
 - <a id="body-tls-alpn"></a>**`tls.alpn`** — ALPN protocols offered in the handshake.
   - Type: listable_string, normalized: `trim`
   - Set by link parameter: [`alpn`](#link-tls-alpn)
+  - Form: block of the connecting `ref` field, or drawn by a choice group, shown when `tls.enabled` is `true`
 - <a id="body-tls-min-version"></a>**`tls.min_version`** — Minimum accepted TLS version.
   - Type: enum, `1.0`, `1.1`, `1.2`, `1.3`
   - If invalid: removed → [`type_invalid`](../warnings.md#type_invalid)
@@ -427,12 +438,13 @@ The node body itself — the sing-box JSON kept in the launcher state. The path 
   - Type: bool
   - Default: `false`
 - <a id="body-tls-utls-fingerprint"></a>**`tls.utls.fingerprint`** — Browser fingerprint used for the ClientHello.
-  - Type: enum, `""`, `chrome`, `chrome_psk`, `chrome_psk_shuffle`, `chrome_padding_psk_shuffle`, `chrome_pq`, `chrome_pq_psk`, `firefox`, `edge`, `safari`, `360`, `qq`, `ios`, `android`, `random`, `randomized`, normalized: `trim_lower`
+  - Type: enum, `""`, `chrome`, `chrome_psk`, `chrome_psk_shuffle`, `chrome_padding_psk_shuffle`, `chrome_pq`, `chrome_pq_psk`, `chrome_155`, `firefox`, `edge`, `safari`, `360`, `qq`, `ios`, `android`, `random`, `randomized`, normalized: `trim_lower`
   - Default: `chrome`
   - Set by link parameter: [`fp`](#link-tls-fp)
   - If invalid: replaced with `chrome` → [`utls_fp_unknown`](../warnings.md#utls_fp_unknown)
-  - Accepted with a notice for anything except `chrome`, `chrome_psk`, `chrome_psk_shuffle`, `chrome_padding_psk_shuffle`, `chrome_pq`, `chrome_pq_psk`, `firefox`, `safari`, `random`, when `tls.reality.enabled` is set → [`reality_fp_not_chrome`](../warnings.md#reality_fp_not_chrome)
+  - Accepted with a notice for anything except `chrome`, `chrome_psk`, `chrome_psk_shuffle`, `chrome_padding_psk_shuffle`, `chrome_pq`, `chrome_pq_psk`, `chrome_155`, `firefox`, `safari`, `random`, when `tls.reality.enabled` is set → [`reality_fp_not_chrome`](../warnings.md#reality_fp_not_chrome)
   - Replaced: `random` → `chrome` when `tls.reality.enabled` is `true` → [`reality_fp_random_pinned`](../warnings.md#reality_fp_random_pinned)
+  - Form: block of the connecting `ref` field, or drawn by a choice group, shown when `tls.enabled` is `true`
 - <a id="body-tls-reality"></a>**`tls.reality`** — REALITY settings.
   - Type: object, dropped entirely and silently when `enabled` is `false` (the object then counts as "not set" for every presence check)
 - <a id="body-tls-reality-enabled"></a>**`tls.reality.enabled`** — Enable REALITY handshake camouflage.
@@ -442,17 +454,20 @@ The node body itself — the sing-box JSON kept in the launcher state. The path 
   - Conflicts with: `tls.disable_sni`
   - Conflicts with: `tls.spoof`
   - Requires: `tls.utls.enabled` — if missing, filled in with `true`
+  - Form: block of the connecting `ref` field, or drawn by a choice group
 - <a id="body-tls-reality-public-key"></a>**`tls.reality.public_key`** — Server REALITY public key (x25519).
   - Type: string, format `base64_32`, normalized: `base64_rawurl`
   - Required: the node is dropped without it
   - Set by link parameter: [`pbk`](#link-tls-pbk)
   - If invalid: removed → [`reality_pbk_invalid`](../warnings.md#reality_pbk_invalid)
+  - Form: block of the connecting `ref` field, or drawn by a choice group, required, shown when `tls.reality.enabled` is `true`
 - <a id="body-tls-reality-short-id"></a>**`tls.reality.short_id`** — REALITY short ID (hex, even length).
   - Type: string, format `hex`, `…–16`, len `even`, normalized: `hex_only`
   - Set by link parameter: [`sid`](#link-tls-sid)
   - If invalid: removed → [`reality_short_id_invalid`](../warnings.md#reality_short_id_invalid)
   - If the value had to be cleaned up: [`reality_short_id_invalid`](../warnings.md#reality_short_id_invalid)
   - Meaningless without: `tls.reality.public_key`
+  - Form: block of the connecting `ref` field, or drawn by a choice group, shown when `tls.reality.enabled` is `true`
 - <a id="body-tls-reality-key-share"></a>**`tls.reality.key_share`** — Key exchange used in the REALITY ClientHello.
   - Type: enum, `""`, `hybrid`, `classical`, normalized: `trim_lower`
   - Default: `""`
@@ -499,10 +514,12 @@ The node body itself — the sing-box JSON kept in the launcher state. The path 
   - If invalid: removed → [`type_invalid`](../warnings.md#type_invalid)
 - <a id="body-transport"></a>**`transport`** — V2Ray transport settings.
   - Shared sub-schema, expanded below · reference page: [_transports](_transports.md)
+  - Form: block `transport`, variants not offered `quic`
 - <a id="body-transport-grpc-service-name"></a>**`transport.grpc.service_name`** — gRPC service name in the request path. A leading "/" makes the value a ready-made request path in Xray's absolute-path form (core >= 1.14.1-lx.8): "/a/b/Tun" goes on the wire as "/a/b/Tun", each segment escaped on its own. Without a leading "/" it is a service name and the core appends "/Tun" itself ("a/b" -> "/a%2Fb/Tun"). The value is passed to the core unchanged in either form.
   - Type: string
   - Default: `""`
   - Set by link parameter: [`serviceName`](#link-tr-grpc-servicename)
+  - Form: block of the connecting `ref` field, or drawn by a choice group
 - <a id="body-transport-grpc-idle-timeout"></a>**`transport.grpc.idle_timeout`** — Close the stream after this idle period.
   - Type: duration
 - <a id="body-transport-grpc-ping-timeout"></a>**`transport.grpc.ping_timeout`** — Timeout waiting for a keepalive ping reply.
@@ -513,10 +530,12 @@ The node body itself — the sing-box JSON kept in the launcher state. The path 
 - <a id="body-transport-http-host"></a>**`transport.http.host`** — Host header values, picked at random per request.
   - Type: listable_string
   - Set by link parameter: [`host`](#link-tr-http-host)
+  - Form: block of the connecting `ref` field, or drawn by a choice group
 - <a id="body-transport-http-path"></a>**`transport.http.path`** — Request path.
   - Type: string, format `url_path`
   - Default: `/`
   - Set by link parameter: [`path`](#link-tr-http-path)
+  - Form: block of the connecting `ref` field, or drawn by a choice group
 - <a id="body-transport-http-method"></a>**`transport.http.method`** — HTTP method of the request.
   - Type: string
   - Default: `GET`
@@ -529,18 +548,31 @@ The node body itself — the sing-box JSON kept in the launcher state. The path 
 - <a id="body-transport-httpupgrade-host"></a>**`transport.httpupgrade.host`** — Host header value.
   - Type: string
   - Set by link parameter: [`host`](#link-tr-httpupgrade-host)
+  - Form: block of the connecting `ref` field, or drawn by a choice group
 - <a id="body-transport-httpupgrade-path"></a>**`transport.httpupgrade.path`** — Request path.
   - Type: string, format `url_path`
   - Default: `/`
   - Set by link parameter: [`path`](#link-tr-httpupgrade-path)
+  - Form: block of the connecting `ref` field, or drawn by a choice group
 - <a id="body-transport-httpupgrade-headers"></a>**`transport.httpupgrade.headers`** — Extra HTTP headers sent with each request.
   - Type: object
+- <a id="body-transport-httpupgrade-headers-host"></a>**`transport.httpupgrade.headers.Host`** — Host header value.
+  - Type: listable_string
+- <a id="body-transport-httpupgrade-headers-other-keys"></a>**`transport.httpupgrade.headers.*`** — Other headers pass through as written.
+  - Other keys of this object pass through as written: no rules, no `unknown_key`; emitted here in alphabetical order. Not inherited by nested objects
 - <a id="body-transport-ws-path"></a>**`transport.ws.path`** — WebSocket request path.
   - Type: string, format `url_path`
   - Default: `/`
   - Set by link parameter: [`path`](#link-tr-ws-path)
+  - Form: block of the connecting `ref` field, or drawn by a choice group
 - <a id="body-transport-ws-headers"></a>**`transport.ws.headers`** — Extra HTTP headers sent with each request.
   - Type: object
+- <a id="body-transport-ws-headers-host"></a>**`transport.ws.headers.Host`** — Host header value.
+  - Type: listable_string
+  - Set by link parameter: [`host`](#link-tr-ws-host)
+  - Form: block of the connecting `ref` field, or drawn by a choice group
+- <a id="body-transport-ws-headers-other-keys"></a>**`transport.ws.headers.*`** — Other headers pass through as written.
+  - Other keys of this object pass through as written: no rules, no `unknown_key`; emitted here in alphabetical order. Not inherited by nested objects
 - <a id="body-transport-ws-max-early-data"></a>**`transport.ws.max_early_data`** — Maximum bytes of WebSocket early data.
   - Type: int, `0–4294967295`
   - Set by link parameter: [`ed`](#link-tr-ws-ed)
@@ -552,15 +584,18 @@ The node body itself — the sing-box JSON kept in the launcher state. The path 
   - Type: string
   - Default: `""`
   - Set by link parameter: [`host`](#link-tr-xhttp-host)
-- <a id="body-transport-xhttp-path"></a>**`transport.xhttp.path`** — Base request path.
+  - Form: block of the connecting `ref` field, or drawn by a choice group
+- <a id="body-transport-xhttp-path"></a>**`transport.xhttp.path`** — Base request path. Anything after the first `?` is sent as the request query, as Xray does.
   - Type: string
   - Set by link parameter: [`path`](#link-tr-xhttp-path)
+  - Form: block of the connecting `ref` field, or drawn by a choice group
 - <a id="body-transport-xhttp-mode"></a>**`transport.xhttp.mode`** — XHTTP transfer mode.
   - Type: enum, `""`, `auto`, `packet-up`, `stream-up`, `stream-one`
   - Default: `auto`
   - Set by link parameter: [`mode`](#link-tr-xhttp-mode)
   - If invalid: removed → [`xhttp_param_reset`](../warnings.md#xhttp_param_reset)
   - If absent: filled in with `packet-up` when `transport.uplink_data_placement` is one of `header`, `cookie` → [`xhttp_mode_forced_packet_up`](../warnings.md#xhttp_mode_forced_packet_up)
+  - Form: block of the connecting `ref` field, or drawn by a choice group
 - <a id="body-transport-xhttp-headers"></a>**`transport.xhttp.headers`** — Extra HTTP headers sent with each request.
   - Type: object
 - <a id="body-transport-xhttp-x-padding-bytes"></a>**`transport.xhttp.x_padding_bytes`** — Size range of the padding block.
@@ -690,6 +725,9 @@ The node body itself — the sing-box JSON kept in the launcher state. The path 
 - <a id="body-tcp-fast-open"></a>**`tcp_fast_open`** — Use TCP Fast Open.
   - Type: bool
   - Default: `false`
+- <a id="body-tcp-multi-path"></a>**`tcp_multi_path`** — Use Multipath TCP (MPTCP). The core and the OS judge whether it works.
+  - Type: bool
+  - Default: `false`
 - <a id="body-disable-tcp-keep-alive"></a>**`disable_tcp_keep_alive`** — Disable TCP keepalive on this connection.
   - Type: bool
   - Default: `false`
@@ -709,6 +747,13 @@ The node body itself — the sing-box JSON kept in the launcher state. The path 
   - Type: listable_string
 - <a id="body-fallback-delay"></a>**`fallback_delay`** — Delay before falling back to the secondary network type.
   - Type: duration
+
+### Form layout
+
+Read by the node forms only; the sanitizer ignores it. A hidden field stays in the body as written.
+
+- Blocks: `connection`, `tls`, `transport`, `advanced`
+- Choice `security` in block `tls`: `none` (nothing set) · `tls` (`tls.enabled`) · `reality` (`tls.reality.enabled`). Active is the option with the most set paths (its paths and `set` keys) among those with a set path, the first on a tie; switching clears the other options' paths
 
 ## Diagnosed problems
 
@@ -748,7 +793,7 @@ Every code that can be raised on a node of this scheme, including the ones comin
 - [`port_invalid`](../warnings.md#port_invalid)
   - [`server_port`](#body-server-port) — the value does not fit the field → node dropped
 - [`reality_fp_not_chrome`](../warnings.md#reality_fp_not_chrome)
-  - [`tls.utls.fingerprint`](#body-tls-utls-fingerprint) — the value is anything except `chrome`, `chrome_psk`, `chrome_psk_shuffle`, `chrome_padding_psk_shuffle`, `chrome_pq`, `chrome_pq_psk`, `firefox`, `safari`, `random` → kept with a notice
+  - [`tls.utls.fingerprint`](#body-tls-utls-fingerprint) — the value is anything except `chrome`, `chrome_psk`, `chrome_psk_shuffle`, `chrome_padding_psk_shuffle`, `chrome_pq`, `chrome_pq_psk`, `chrome_155`, `firefox`, `safari`, `random` → kept with a notice
 - [`reality_fp_random_pinned`](../warnings.md#reality_fp_random_pinned)
   - [`tls.utls.fingerprint`](#body-tls-utls-fingerprint) — the value is `random` when `tls.reality.enabled` is `true` → replaced with `chrome`
 - [`reality_key_share_invalid`](../warnings.md#reality_key_share_invalid)

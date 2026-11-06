@@ -60,10 +60,29 @@
       "items": {
         "$ref": "#/$defs/rule"
       },
-      "description": "Правила маршрута в форме состояния. Единственная секция, которую импорт заменяет ЦЕЛИКОМ, а не сливает: порядок правил — это и есть смысл списка (docs/BACKUP.md §9)."
+      "description": "Правила маршрута в форме состояния. Единственная секция, которую импорт заменяет ЦЕЛИКОМ, а не сливает: порядок правил — это и есть смысл списка (docs/BACKUP.md §9 п. 7). Ключ необязателен: файл без него правил приёмника не трогает, файл с ним (в том числе пустым массивом) замещает их и называет снятые кодом backup_rules_replaced (контракт 1.1.116)."
     },
     "dns": {
       "$ref": "#/$defs/dns"
+    },
+    "native_prefs": {
+      "type": "object",
+      "description": "Поддержка: LxBox (контракт 1.1.158, D-141). Настройки телефона, которым у лаунчера нет применения; лаунчер игнорирует молча. Все ключи необязательные, отсутствие не сбрасывает значение у приёмника.",
+      "additionalProperties": true,
+      "properties": {
+        "auto_start": { "type": "boolean", "default": false },
+        "keep_on_exit": { "type": "boolean", "default": true },
+        "background_mode": { "enum": ["never", "lazy", "always"], "default": "never" },
+        "core_logs_enabled": { "type": "boolean", "default": false },
+        "core_logs_verbose": { "type": "boolean", "default": false },
+        "allow_bypass": { "type": "boolean", "default": false },
+        "auto_redirect": { "type": "boolean", "default": false },
+        "memory_limit": { "type": "string", "pattern": "^(auto|off|[0-9]+)$", "default": "auto" },
+        "notification_stop": { "type": "boolean", "default": true },
+        "notification_restart": { "type": "boolean", "default": true },
+        "notification_send": { "type": "boolean", "default": true },
+        "app_theme_mode": { "enum": ["system", "light", "dark"], "default": "system" }
+      }
     },
     "vars": {
       "type": "object",
@@ -240,9 +259,52 @@
           "type": "boolean",
           "description": "Узел приехал СЛУЖЕБНОЙ частью чужой записи, а не отдельной позицией списка (релей BYPASS внутри конфига другого узла). Признак происхождения, не ссылки: обычный сервер, выбранный целью detour, служебным не становится. Поддержка: лаунчер (в списке состава помечен и по умолчанию не предлагается в Направлениях)."
         },
+        "skip_tailscale_presets": {
+          "type": "boolean",
+          "description": "server only (свой сервер в корне и член папки; контракт 1.1.86 под именем skip_presets, LxBox §578; имя — 1.1.126, D-134): пресет шаблона tailscale не обслуживает этот узел — его #filter читает поле как @node.skip_tailscale_presets (TEMPLATE_LANG §6.5.1, §6.6). Пишется только true; отсутствие равно false. Импорт: узел, совпавший по телу, получает true из файла, отсутствие поля своё значение не сбрасывает. У узла подписки поля нет (записи нет) — значение всегда ложь. Поддержка: обе стороны."
+        },
+        "allow_local": {
+          "type": "boolean",
+          "description": "server only (свой сервер в корне и член папки; контракт 1.1.126, D-134): пир клиентского туннеля этого узла (body.type wireguard / openvpn-client / openconnect; у tailscale с контракта 1.1.129 поле хранится, но пресетом не читается, D-136) достаёт сервисы на нашем туннельном адресе — пресет tunnel-ingress читает @node.allow_local (TEMPLATE_LANG §6.5.2). Пишется только true; импорт совпавшего по телу узла берёт только true. У узла подписки поля нет. Поддержка: обе стороны."
+        },
+        "allow_lan": {
+          "type": "boolean",
+          "description": "server only (контракт 1.1.126, D-134): пир клиентского туннеля этого узла видит наши частные сети (ip_is_private) — @node.allow_lan пресета tunnel-ingress. Пишется только true, как allow_local. Поддержка: обе стороны."
+        },
+        "allow_gateway": {
+          "type": "boolean",
+          "description": "server only (контракт 1.1.126, D-134): пир клиентского туннеля этого узла ходит через нас куда угодно — в outbound gateway_out пресета tunnel-ingress, DNS не отбрасывается; @node.allow_gateway. Пишется только true, как allow_local. Поддержка: обе стороны."
+        },
+        "own_routes": {
+          "type": "boolean",
+          "description": "server only (свой сервер в корне и член папки; контракт 1.1.161, D-144): в клиентский туннель этого узла (body.type wireguard / openvpn-client / openconnect) идут только его собственные сети — пресет tunnel-routes читает @node.own_routes (TEMPLATE_LANG §6.5.3, §6.6). Работает на включение: по умолчанию false. Пишется только true, как allow_local; отсутствие поля на импорте своё значение не сбрасывает. Поддержка: обе стороны."
+        },
+        "disable_taildrop_commands": {
+          "type": "boolean",
+          "description": "server only, узел tailscale (контракт 1.1.159, D-142): не принимать буфер и ссылки от своих устройств; по умолчанию приём включён (SERVICE_FILES.md §5). Пишется только true; у узла подписки поля нет; в конфиг не идёт."
+        },
+        "disable_taildrop_autosave": {
+          "type": "boolean",
+          "description": "server only, узел tailscale (контракт 1.1.159, D-142): не сохранять принятые файлы в папку загрузок без вопроса; по умолчанию сохранение включено. Пишется только true; у узла подписки поля нет; в конфиг не идёт."
+        },
+        "state_dir_id": {
+          "type": "string",
+          "description": "server only, узел tailscale (контракт 1.1.160, D-143): имя каталога состояния узла. Нет поля — каталог по финальному тегу. Перед использованием очищается, как тег."
+        },
+        "taildrop_double_copy": {
+          "type": "object",
+          "description": "Поддержка: launcher (контракт 1.1.160, D-143): устройство двойного копирования; нет поля — никуда. LxBox игнорирует молча.",
+          "required": ["peer_id"],
+          "additionalProperties": true,
+          "properties": {
+            "peer_id": { "type": "string" },
+            "peer_name": { "type": "string" }
+          }
+        },
         "skip_presets": {
           "type": "boolean",
-          "description": "server only (свой сервер в корне и член папки; контракт 1.1.86, LxBox §578): пресеты шаблона с for_each не обслуживают этот узел — фильтр пресета читает поле как @<as>.skip_presets. Пишется только true; отсутствие равно false. Импорт: узел, совпавший по телу, получает true из файла, отсутствие поля своё значение не сбрасывает. У узла подписки поля нет (записи нет) — значение всегда ложь. Поддержка: обе стороны."
+          "deprecated": true,
+          "description": "Устарело с контракта 1.1.126 (D-134): прежнее имя skip_tailscale_presets. Читается, не пишется: импорт переносит true в skip_tailscale_presets (true при уже заданном новом ключе — то же значение), писатель ключ не выпускает."
         },
         "reason": {
           "type": "string",
@@ -287,6 +349,10 @@
         "label": {
           "type": "string",
           "description": "kind: chain. Поддержка: LxBox — подпись цепочки (D-094). Лаунчер зовёт цепочку тегом и подпись игнорирует молча. Отсутствие ключа в файле значение у приёмника не сбрасывает (BACKUP.md §2, «Поля стороны LxBox»)."
+        },
+        "tls": {
+          "$ref": "#/$defs/tlsPolicy",
+          "description": "kind: server (контракт 1.1.117, LxBox §636). Своя TLS-фрагментация узла; отсутствие = наследовать от глобальных vars tls_*. Поддержка: LxBox. Лаунчер поле игнорирует молча: в состояние не кладёт и предупреждения не даёт. Отсутствие ключа в файле значение у приёмника не сбрасывает (BACKUP.md §2, «Поля стороны LxBox»)."
         }
       }
     },
@@ -341,6 +407,10 @@
           "type": "integer",
           "minimum": 1,
           "description": "Таймаут одного замера узла папки в приложении, миллисекунды. Поддержка: LxBox. Лаунчер поле игнорирует молча: в состояние не кладёт и предупреждения не даёт. Отсутствие ключа в файле значение у приёмника не сбрасывает (BACKUP.md §2, «Поля стороны LxBox»)."
+        },
+        "tls": {
+          "$ref": "#/$defs/tlsPolicy",
+          "description": "ОБЩАЯ TLS-фрагментация контейнера (контракт 1.1.117, LxBox §636): для узлов папки, у которых своего tls нет; отсутствие = наследовать от глобальных vars tls_*. Поддержка: LxBox. Лаунчер поле игнорирует молча: в состояние не кладёт и предупреждения не даёт. Отсутствие ключа в файле значение у приёмника не сбрасывает (BACKUP.md §2, «Поля стороны LxBox»)."
         }
       }
     },
@@ -362,6 +432,10 @@
         "detour": {
           "$ref": "#/$defs/nodeLink",
           "description": "ОБЩИЙ detour контейнера: через кого дозваниваются узлы подписки, у которых своего detour нет. Та же роль, что у одноимённого ключа папки. Поддержка: обе."
+        },
+        "tls": {
+          "$ref": "#/$defs/tlsPolicy",
+          "description": "ОБЩАЯ TLS-фрагментация контейнера (контракт 1.1.117, LxBox §636): для узлов подписки (у них своей записи нет, уровень узла пропускается); отсутствие = наследовать от глобальных vars tls_*. Поддержка: LxBox. Лаунчер поле игнорирует молча: в состояние не кладёт и предупреждения не даёт. Отсутствие ключа в файле значение у приёмника не сбрасывает (BACKUP.md §2, «Поля стороны LxBox»)."
         },
         "id": {
           "type": "string",
@@ -625,9 +699,52 @@
           "type": "boolean",
           "description": "Узел приехал СЛУЖЕБНОЙ частью чужой записи, а не отдельной позицией списка (релей BYPASS внутри конфига другого узла). Признак происхождения, не ссылки: обычный сервер, выбранный целью detour, служебным не становится. Поддержка: лаунчер (в списке состава помечен и по умолчанию не предлагается в Направлениях)."
         },
+        "skip_tailscale_presets": {
+          "type": "boolean",
+          "description": "server only (свой сервер в корне и член папки; контракт 1.1.86 под именем skip_presets, LxBox §578; имя — 1.1.126, D-134): пресет шаблона tailscale не обслуживает этот узел — его #filter читает поле как @node.skip_tailscale_presets (TEMPLATE_LANG §6.5.1, §6.6). Пишется только true; отсутствие равно false. Импорт: узел, совпавший по телу, получает true из файла, отсутствие поля своё значение не сбрасывает. У узла подписки поля нет (записи нет) — значение всегда ложь. Поддержка: обе стороны."
+        },
+        "allow_local": {
+          "type": "boolean",
+          "description": "server only (свой сервер в корне и член папки; контракт 1.1.126, D-134): пир клиентского туннеля этого узла (body.type wireguard / openvpn-client / openconnect; у tailscale с контракта 1.1.129 поле хранится, но пресетом не читается, D-136) достаёт сервисы на нашем туннельном адресе — пресет tunnel-ingress читает @node.allow_local (TEMPLATE_LANG §6.5.2). Пишется только true; импорт совпавшего по телу узла берёт только true. У узла подписки поля нет. Поддержка: обе стороны."
+        },
+        "allow_lan": {
+          "type": "boolean",
+          "description": "server only (контракт 1.1.126, D-134): пир клиентского туннеля этого узла видит наши частные сети (ip_is_private) — @node.allow_lan пресета tunnel-ingress. Пишется только true, как allow_local. Поддержка: обе стороны."
+        },
+        "allow_gateway": {
+          "type": "boolean",
+          "description": "server only (контракт 1.1.126, D-134): пир клиентского туннеля этого узла ходит через нас куда угодно — в outbound gateway_out пресета tunnel-ingress, DNS не отбрасывается; @node.allow_gateway. Пишется только true, как allow_local. Поддержка: обе стороны."
+        },
+        "own_routes": {
+          "type": "boolean",
+          "description": "server only (свой сервер в корне и член папки; контракт 1.1.161, D-144): в клиентский туннель этого узла (body.type wireguard / openvpn-client / openconnect) идут только его собственные сети — пресет tunnel-routes читает @node.own_routes (TEMPLATE_LANG §6.5.3, §6.6). Работает на включение: по умолчанию false. Пишется только true, как allow_local; отсутствие поля на импорте своё значение не сбрасывает. Поддержка: обе стороны."
+        },
+        "disable_taildrop_commands": {
+          "type": "boolean",
+          "description": "server only, узел tailscale (контракт 1.1.159, D-142): не принимать буфер и ссылки от своих устройств; по умолчанию приём включён (SERVICE_FILES.md §5). Пишется только true; у узла подписки поля нет; в конфиг не идёт."
+        },
+        "disable_taildrop_autosave": {
+          "type": "boolean",
+          "description": "server only, узел tailscale (контракт 1.1.159, D-142): не сохранять принятые файлы в папку загрузок без вопроса; по умолчанию сохранение включено. Пишется только true; у узла подписки поля нет; в конфиг не идёт."
+        },
+        "state_dir_id": {
+          "type": "string",
+          "description": "server only, узел tailscale (контракт 1.1.160, D-143): имя каталога состояния узла. Нет поля — каталог по финальному тегу. Перед использованием очищается, как тег."
+        },
+        "taildrop_double_copy": {
+          "type": "object",
+          "description": "Поддержка: launcher (контракт 1.1.160, D-143): устройство двойного копирования; нет поля — никуда. LxBox игнорирует молча.",
+          "required": ["peer_id"],
+          "additionalProperties": true,
+          "properties": {
+            "peer_id": { "type": "string" },
+            "peer_name": { "type": "string" }
+          }
+        },
         "skip_presets": {
           "type": "boolean",
-          "description": "server only (свой сервер в корне и член папки; контракт 1.1.86, LxBox §578): пресеты шаблона с for_each не обслуживают этот узел — фильтр пресета читает поле как @<as>.skip_presets. Пишется только true; отсутствие равно false. Импорт: узел, совпавший по телу, получает true из файла, отсутствие поля своё значение не сбрасывает. У узла подписки поля нет (записи нет) — значение всегда ложь. Поддержка: обе стороны."
+          "deprecated": true,
+          "description": "Устарело с контракта 1.1.126 (D-134): прежнее имя skip_tailscale_presets. Читается, не пишется: импорт переносит true в skip_tailscale_presets (true при уже заданном новом ключе — то же значение), писатель ключ не выпускает."
         },
         "reason": {
           "type": "string",
@@ -650,6 +767,10 @@
         },
         "sections": {
           "$ref": "#/$defs/sections"
+        },
+        "tls": {
+          "$ref": "#/$defs/tlsPolicy",
+          "description": "kind: server (контракт 1.1.117, LxBox §636). Своя TLS-фрагментация члена папки; отсутствие = наследовать от tls папки, далее от глобальных vars tls_*. Поддержка: LxBox. Лаунчер поле игнорирует молча: в состояние не кладёт и предупреждения не даёт. Отсутствие ключа в файле значение у приёмника не сбрасывает (BACKUP.md §2, «Поля стороны LxBox»)."
         }
       }
     },
@@ -690,6 +811,29 @@
           "type": "boolean",
           "default": false,
           "description": "Режим цепочки: false — APPEND (detour дописывается к цепочке узла), true — REPLACE."
+        }
+      }
+    },
+    "tlsPolicy": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Настройки TLS-фрагментации записи стороны LxBox (контракт 1.1.117, LxBox §636): переопределение ручек раздела «TLS Fragmentation» на узле, папке и подписке. Каждое поле трёхзначное: отсутствует — наследовать с уровня выше (узел → источник → глобальные vars tls_*), значение — своё; false ниже бьёт true выше. Пишутся только заданные поля, пустой объект не пишется. Поддержка: LxBox. Лаунчер поле игнорирует молча: в состояние не кладёт и предупреждения не даёт. Отсутствие ключа в файле значение у приёмника не сбрасывает (BACKUP.md §2, «Поля стороны LxBox»). additionalProperties открыт намеренно: будущие ручки не должны валить валидацию у старых версий.",
+      "properties": {
+        "fragment": {
+          "type": "boolean",
+          "description": "→ tls.fragment ядра."
+        },
+        "record_fragment": {
+          "type": "boolean",
+          "description": "→ tls.record_fragment ядра."
+        },
+        "fallback_delay": {
+          "type": "string",
+          "description": "→ tls.fragment_fallback_delay ядра; строка длительности ядра (500ms, 1s)."
+        },
+        "mixed_case_sni": {
+          "type": "boolean",
+          "description": "server_name в случайном регистре — пост-шаг сборки LxBox, не поле ядра."
         }
       }
     },
@@ -909,12 +1053,33 @@
         "dns": {
           "type": "object",
           "additionalProperties": true,
-          "description": "Поддержка: LxBox. Объявленное поле их формы; лаунчер не применяет, но провозит без изменений."
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "DNS-запросы, подходящие под правило, отвечает сервер serverTag."
+            },
+            "serverTag": {
+              "type": "string",
+              "description": "Тег DNS-сервера из dns.servers[]; хранится и при enabled: false."
+            },
+            "forceIpv4": {
+              "type": "boolean",
+              "description": "AAAA-запросы под правило получают пустой ответ (NOERROR); пишется только true."
+            },
+            "fixedIps": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Поддержка: обе (контракт 1.1.139). Адреса IPv4/IPv6 локального ответа: DNS-запросы под правило получают эти адреса (predefined, записи `*. 300 IN A|AAAA <ip>` по query_type; семейство без адресов — пустой NOERROR) вместо зеркала на serverTag и глушилки forceIpv4. Режим действует, когда хоть одна строка разбирается как IP; флага режима нет. Пишется только непустым. Норма — TEMPLATE_LANG.md §6.11."
+            }
+          },
+          "description": "inline | srs. Поддержка: обе (контракт 1.1.130, D-137). DNS-зеркало правила — TEMPLATE_LANG.md §6.11. Ключи в форме LxBox (camelCase)."
         },
         "resolve": {
           "type": "object",
           "additionalProperties": true,
-          "description": "Поддержка: LxBox. Объявленное поле их формы; лаунчер не применяет, но провозит без изменений."
+          "description": "Поддержка: LxBox. Объявленное поле их формы; лаунчер игнорирует молча и не пишет."
         },
         "update_interval_hours": {
           "type": "integer",
@@ -945,6 +1110,13 @@
         "default_domain_resolver": {
           "type": "string",
           "description": "Тег сервера, которым резолвятся доменные адреса самих outbound'ов."
+        },
+        "template_catalog": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Теги dns_options.servers шаблона источника на момент экспорта, в порядке шаблона (контракт 1.1.135, D-139). Запись kind template приёмника с тегом из каталога, которой нет в файле, снимается, если её не держит ссылка (docs/BACKUP.md §9 п. 5). Отсутствие поля — файл до 1.1.135."
         },
         "servers": {
           "type": "array",

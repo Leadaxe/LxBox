@@ -73,7 +73,7 @@
       ],
       "desc": "Протокол/тип outbound не поддержан — узел в dropped. Go: singbox-импорт скипает неизвестные типы (core/config/subscription/singbox_import.go), Xray-массив — неизвестные protocol (core/config/subscription/xray_json_array.go).",
       "dart": "UnsupportedProtocolWarning",
-      "go": "core/config/subscription/xray_json_array.go:parseXrayJSONArrayElementNodes (Xray-протокол вне списка — core/config/subscription/xray_protocols.go:xrayNodeFromOutbound, код отказа даёт core/config/subscription/json_body_rejects.go:rejectCodeOf); core/config/nodeflow/sanitize.go:SanitizeFromKind (у схемы нет body реестра). Вход sing-box JSON тип вне реестра отбраковывает БЕЗ кода: core/config/subscription/singbox_import.go:parseSingboxEntry возвращает простую ошибку"
+      "go": "core/config/subscription/xray_json_array.go:parseXrayJSONArrayElementNodes (Xray-протокол вне списка — core/config/subscription/xray_protocols.go:xrayNodeFromOutboundInDoc, код отказа даёт core/config/subscription/json_body_rejects.go:rejectCodeOf); core/config/nodeflow/sanitize.go:SanitizeFromKind (у схемы нет body реестра). Вход sing-box JSON тип вне реестра отбраковывает БЕЗ кода: core/config/subscription/singbox_import.go:parseSingboxEntry возвращает простую ошибку"
     },
     "wg_peer_incoming": {
       "severity": "info",
@@ -509,73 +509,73 @@
       "go": "правило реестра contract/registry/protocols/hysteria.json body.fields.obfs.on_invalid (unwrap); исполнение — core/config/nodeflow/sanitize.go:sanitizer.unwrap"
     },
     "detour_cycle_broken": {
-      "severity": "warning",
+      "severity": "error",
       "params": [
         "target"
       ],
-      "title_en": "Loop in the chain broken",
-      "title_ru": "Кольцо в цепочке разорвано",
-      "text_en": "The detour chain of this node looped back on itself through {target}. The closing link was removed, because the core rejects such a config and would refuse to start it; the node keeps working with a shortened chain.",
-      "text_ru": "Цепочка detour этого узла замыкалась сама на себя через {target}. Замыкающее звено убрано: ядро отвергает такой конфиг и не запустит его. Узел продолжает работать с укороченной цепочкой.",
+      "title_en": "Node dropped: detour loop through {target}",
+      "title_ru": "Узел отброшен: кольцо detour через {target}",
+      "text_en": "The detour chain of this node loops back on itself through {target}. The node was dropped: the core rejects such a config and would refuse to start it, and a node whose route has degraded must not quietly connect by another path.",
+      "text_ru": "Цепочка detour этого узла замыкается сама на себя через {target}. Узел отброшен: ядро отвергает такой конфиг и не запустит его, а узел с деградировавшим маршрутом не должен молча идти другим путём.",
       "cause_en": "An imported sing-box config described chains that close on themselves — the node goes through a hop that in turn goes back through this node. Hand-assembled configs and merged subscriptions collect such loops easily.",
       "cause_ru": "В импортированном конфиге sing-box цепочки замыкались сами на себя: узел идёт через хоп, который, в свою очередь, ведёт обратно через этот узел. В собранных руками и склеенных из разных подписок конфигах такие кольца заводятся легко.",
       "fix_en": [
-        "Nothing to do if the node works: it now connects with a shortened chain.",
-        "If you need the full chain, fix the detour links in the source config."
+        "Fix the detour links in the source config so that the chain does not loop, then refresh the subscription.",
+        "Pick another node from this subscription."
       ],
       "fix_ru": [
-        "Если узел работает, делать ничего не нужно: он подключается по укороченной цепочке.",
-        "Если цепочка нужна целиком, поправьте ссылки detour в исходном конфиге."
+        "Поправьте ссылки detour в исходном конфиге, чтобы цепочка не замыкалась, и обновите подписку.",
+        "Выберите другой узел из этой подписки."
       ],
-      "desc": "Кольцо в detour-цепочке разорвано, узел дозванивается напрямую/без замыкающего ребра. Go: импорт — DebugLog (core/config/subscription/detour_chain.go), свои узлы — сборка (core/config/outbound_generator.go:GenerateOutboundsFromParserConfig).",
+      "desc": "Кольцо в detour-цепочке импортируемого sing-box конфига — FAIL-CLOSED (контракт 1.1.118, решение владельца 13.10.2026 «висячий detour = fail-closed везде»; до того ребро снималось, узел жил с укороченной цепочкой). Каждый участник кольца (включая самоссылку) отбраковывается записью kind=unsupported на своей позиции с этим кодом. Та же строгость, что у detour источника (source_detour_self / source_detour_cycle) и у сборки.",
       "dart": "DetourCycleBrokenWarning",
-      "go": "core/config/subscription/detour_chain.go:singboxChainInfo.attachChain — код на узле импорта sing-box (замыкающее ребро кольца снято, рёбра — core/config/subscription/detour_chain.go:findDetourCycleEdges; вызов из core/config/subscription/singbox_import.go:parseSingboxConfig). Свои узлы под этот код не попадают: самоссылка и кольцо detour на сборке fail-closed — коды source_detour_self и source_detour_cycle"
+      "go": "core/config/subscription/detour_chain.go:singboxChainInfo.attachChain — отказ сборки цепочки (detourReject); отбраковку записывает core/config/subscription/singbox_import.go:parseSingboxConfig (rejected.addCoded). Рёбра кольца — core/config/subscription/detour_chain.go:findDetourCycleEdges. Свои узлы под этот код не попадают: самоссылка и кольцо detour на сборке — коды source_detour_self и source_detour_cycle"
     },
     "detour_target_missing": {
-      "severity": "warning",
+      "severity": "error",
       "params": [
         "target"
       ],
-      "title_en": "Chain cut: {target} not found",
-      "title_ru": "Цепочка обрезана: нет {target}",
-      "text_en": "The imported config sends this node through {target}, but there is no such node in it. The chain was cut, because the core rejects a reference to a missing tag and would refuse to start the whole config; the node connects directly.",
-      "text_ru": "Импортированный конфиг вёл этот узел через {target}, но такого узла в нём нет. Цепочка обрезана: ядро отвергает ссылку на несуществующий тег и не запустит весь конфиг. Узел подключается напрямую.",
+      "title_en": "Node dropped: detour target {target} not found",
+      "title_ru": "Узел отброшен: нет цели detour {target}",
+      "text_en": "The imported config sends this node through {target}, but there is no usable node with that tag in it. The node was dropped: the core rejects a reference to a missing tag and would refuse to start the whole config, and a node whose route has degraded must not quietly connect directly.",
+      "text_ru": "Импортированный конфиг вёл этот узел через {target}, но пригодного узла с таким тегом в нём нет. Узел отброшен: ядро отвергает ссылку на несуществующий тег и не запустит весь конфиг, а узел с деградировавшим маршрутом не должен молча идти напрямую.",
       "cause_en": "The imported config references a hop by tag, but the node with that tag did not make it into the import — it was dropped as unsupported, or the provider exports only part of their own config.",
       "cause_ru": "Импортированный конфиг ссылается на хоп по тегу, но узел с таким тегом до импорта не доехал: он был отброшен как неподдержанный, или провайдер выгружает только часть своего конфига.",
       "fix_en": [
-        "Nothing to do if the node works: it now connects directly.",
-        "If the traffic has to go through that hop, ask the provider for a config with all the nodes it references."
+        "Ask the provider for a config with all the nodes it references, then refresh the subscription.",
+        "Pick another node from this subscription."
       ],
       "fix_ru": [
-        "Если узел работает, делать ничего не нужно: он подключается напрямую.",
-        "Если трафик обязан идти через этот хоп, попросите у провайдера конфиг со всеми узлами, на которые он ссылается."
+        "Попросите у провайдера конфиг со всеми узлами, на которые он ссылается, и обновите подписку.",
+        "Выберите другой узел из этой подписки."
       ],
-      "desc": "detour указывает на несуществующий тег ИМПОРТИРУЕМОГО конфига — цепочка обрезается, узел живёт и ходит напрямую. Не путать с source_detour_missing (детур источника, настроенный пользователем, — там fail-closed).",
+      "desc": "detour указывает на тег ИМПОРТИРУЕМОГО конфига, которого в нём нет или который узлом не стал (неподдержанный тип, битая запись) — FAIL-CLOSED (контракт 1.1.118, решение владельца 13.10.2026; до того цепочка обрезалась и узел ходил напрямую). Узел-носитель отбраковывается записью kind=unsupported на своей позиции с этим кодом. Та же строгость, что у source_detour_missing (detour источника, настроенный пользователем).",
       "dart": "DetourTargetMissingWarning",
-      "go": "core/config/subscription/detour_chain.go:singboxChainInfo.attachChain — код на узле импорта sing-box (цель detour не найдена, цепочка обрезана)"
+      "go": "core/config/subscription/detour_chain.go:singboxChainInfo.attachChain — отказ сборки цепочки (цель не найдена или не разобралась); отбраковку записывает core/config/subscription/singbox_import.go:parseSingboxConfig (rejected.addCoded)"
     },
     "detour_to_group": {
-      "severity": "warning",
+      "severity": "error",
       "params": [
         "target"
       ],
-      "title_en": "Chain cut: {target} is a group",
-      "title_ru": "Цепочка обрезана: {target} — группа",
-      "text_en": "This node was routed through {target}, which is a group rather than a server. The chain was cut, because a group cannot be a hop and the core would refuse to start the whole config; the node connects directly.",
-      "text_ru": "Узел вели через {target}, а это группа, а не сервер. Цепочка обрезана: группа не может быть хопом, и ядро не запустит весь конфиг. Узел подключается напрямую.",
+      "title_en": "Node dropped: detour target {target} is a group",
+      "title_ru": "Узел отброшен: цель detour {target} — группа",
+      "text_en": "This node was routed through {target}, which is a group rather than a server. The node was dropped: a group cannot be a hop, the core would refuse to start the whole config, and a node whose route has degraded must not quietly connect directly.",
+      "text_ru": "Узел вели через {target}, а это группа, а не сервер. Узел отброшен: группа не может быть хопом, ядро не запустит весь конфиг, а узел с деградировавшим маршрутом не должен молча идти напрямую.",
       "cause_en": "The imported config points a node's detour at a selector or urltest group. Other clients tolerate that spelling, but in sing-box a group is a choice between routes, not a hop in one.",
       "cause_ru": "В импортированном конфиге detour узла указывает на группу selector или urltest. Другие клиенты такое написание терпят, но в sing-box группа — это выбор между маршрутами, а не звено в одном из них.",
       "fix_en": [
-        "Nothing to do if the node works: it now connects directly.",
-        "If you need a chain, point the detour at a specific node instead of a group."
+        "Point the detour at a specific node instead of a group in the source config, then refresh the subscription.",
+        "Pick another node from this subscription."
       ],
       "fix_ru": [
-        "Если узел работает, делать ничего не нужно: он подключается напрямую.",
-        "Если нужна цепочка, укажите в detour конкретный узел, а не группу."
+        "Укажите в detour исходного конфига конкретный узел, а не группу, и обновите подписку.",
+        "Выберите другой узел из этой подписки."
       ],
-      "desc": "detour на группу (selector/urltest) — группа не может быть хопом цепочки; цепочка обрезается, узел живёт.",
+      "desc": "detour импортируемого sing-box конфига на группу (selector/urltest) — группа не может быть хопом цепочки; FAIL-CLOSED (контракт 1.1.118, решение владельца 13.10.2026; до того цепочка обрезалась, узел жил). Носитель отбраковывается записью kind=unsupported на своей позиции с этим кодом; группа и её члены живут.",
       "dart": "DetourToGroupWarning",
-      "go": "core/config/subscription/detour_chain.go:singboxChainInfo.attachChain — код на узле импорта sing-box (цель detour — группа, цепочка обрезана)"
+      "go": "core/config/subscription/detour_chain.go:singboxChainInfo.attachChain — отказ сборки цепочки (цель — группа); отбраковку записывает core/config/subscription/singbox_import.go:parseSingboxConfig (rejected.addCoded)"
     },
     "detour_chain_too_deep": {
       "severity": "warning",
@@ -1400,28 +1400,49 @@
       "dart": null,
       "go": "правило реестра contract/registry/protocols/{vless,vmess,trojan,shadowsocks,hysteria2}.json mappers.xray.params.$extra_*.on_len_gt; исполнение — core/config/linkmap/exec.go:execState.applyOnLenGt"
     },
-    "wgconf_extra_peer_dropped": {
+    "wgconf_peer_dropped": {
       "severity": "warning",
       "params": [
-        "count"
+        "index",
+        "missing"
       ],
-      "title_en": "WireGuard: extra [Peer] sections dropped",
-      "title_ru": "WireGuard: лишние секции [Peer] отброшены",
-      "text_en": "The configuration holds {count} [Peer] sections. Only the first one became a node, because one node here is one peer; the rest were dropped, and any traffic those peers were meant to carry will not go through this node.",
-      "text_ru": "В конфигурации {count} секций [Peer]. Узлом стала только первая: один узел здесь — это один пир. Остальные отброшены, и трафик, который через них должен был идти, через этот узел не пойдёт.",
-      "cause_en": "wg-quick lets one interface hold several peers and splits traffic between them by AllowedIPs. A node in the launcher is a single server, so there is no place to put the second peer. Such a file usually comes from a site-to-site setup, or from a provider that packed several locations into one configuration.",
-      "cause_ru": "wg-quick разрешает одному интерфейсу держать несколько пиров и делит трафик между ними по AllowedIPs. Узел в лаунчере — это один сервер, и второму пиру просто некуда встать. Такой файл обычно приходит из site-to-site схемы или от провайдера, упаковавшего несколько локаций в одну конфигурацию.",
+      "title_en": "WireGuard: [Peer] section skipped",
+      "title_ru": "WireGuard: секция [Peer] пропущена",
+      "text_en": "[Peer] section {index} has no {missing}, so that peer was skipped. The other peers of the configuration are in the node.",
+      "text_ru": "В секции [Peer] №{index} нет {missing}, и этот пир пропущен. Остальные пиры конфигурации в узле есть.",
+      "cause_en": "Without the peer's public key the handshake cannot start, and without Endpoint there is nowhere to connect. Such a section usually comes from a hand-edited file or a cut-off copy.",
+      "cause_ru": "Без публичного ключа пира рукопожатие не начнётся, а без Endpoint подключаться некуда. Такая секция обычно бывает в файле, исправленном вручную, или в обрезанной копии.",
       "fix_en": [
-        "Check that the first peer is the one you need: it is the one that became the node.",
-        "If you need the others, import each peer as its own configuration, with the same [Interface] and one [Peer] each."
+        "Add the missing key to that [Peer] section and import the configuration again."
       ],
       "fix_ru": [
-        "Проверьте, что первый пир — тот, который вам нужен: именно он стал узлом.",
-        "Если нужны остальные, импортируйте каждый пир отдельной конфигурацией: та же [Interface] и по одной [Peer] в каждой."
+        "Допишите недостающий ключ в эту секцию [Peer] и импортируйте конфигурацию заново."
       ],
-      "desc": "Несколько [Peer] в .conf — берётся первая, остальные снимаются. Прежде Go делал это молча (рукописный разбор секций .conf, снят); код делает потерю видимой.",
+      "desc": "Контракт 1.1.140 (LxBox §136): несколько [Peer] в .conf — каждая свой элемент peers[]; секция без обязательного ключа снимается одна. index — номер секции [Peer] в файле с 1, missing — недостающие ключи, как их пишет реестр, через ', ' в алфавитном порядке. Не осталось ни одной секции — прежний отказ required, этого кода нет. Сменил wgconf_extra_peer_dropped (до 1.1.140 вторая [Peer] отбрасывалась).",
       "dart": null,
-      "go": "правило реестра contract/registry/protocols/wireguard.json mappers.conf.ini_dialect.sections.Peer.on_extra; исполнение — core/config/linkmap/exec.go:execState.noteINIDropped (все входы .conf, включая vpn://)"
+      "go": "правило реестра contract/registry/protocols/wireguard.json mappers.conf.ini_dialect.sections.Peer.on_drop; исполнение — core/config/linkmap/exec.go:execEach (все входы .conf, включая vpn:// и awg:// base64)"
+    },
+    "wg_peer_dropped": {
+      "severity": "warning",
+      "params": [
+        "index",
+        "reason"
+      ],
+      "title_en": "WireGuard: peer dropped",
+      "title_ru": "WireGuard: пир снят",
+      "text_en": "Peer {index} was dropped ({reason}). The other peers of the node remain.",
+      "text_ru": "Пир №{index} снят ({reason}). Остальные пиры узла остались.",
+      "cause_en": "One of the node's peers has a value the core rejects, such as a key that is not 32 bytes of base64, or no address to connect to. With a single peer the whole node would be dropped; with several, only the broken one is.",
+      "cause_ru": "У одного из пиров узла значение, которое ядро не примет: например, ключ не из 32 байт base64 или нет адреса подключения. Будь пир один, снялся бы весь узел; когда их несколько, снимается только сломанный.",
+      "fix_en": [
+        "Check that peer against the configuration your provider gave you and correct the value named in the reason."
+      ],
+      "fix_ru": [
+        "Сверьте этот пир с конфигурацией от провайдера и исправьте значение, названное в причине."
+      ],
+      "desc": "Контракт 1.1.140 (LxBox §136): у массива peers правило on_item_failure drop_item — отказ узла внутри элемента (on_invalid drop_node, незаполненное required) снимает элемент. Коды, поставленные при обходе снятого элемента, заменяются этим одним: путь — элемент (peers[1]), index — номер с 1, reason — код отказа (wg_key_invalid, field_missing, …). Не уцелел ни один пир — отказ узла прежний, этого кода нет. Все входы, включая sing-box JSON и авторское тело (core_rejects).",
+      "dart": null,
+      "go": "правило реестра contract/registry/protocols/wireguard.json body.fields.peers.on_item_failure; исполнение — core/config/nodeflow/sanitize.go:sanitizer.arrayItemsIsolated"
     },
     "amnezia_container_choice": {
       "severity": "info",
@@ -2041,6 +2062,125 @@
       "dart": null,
       "go": "core/config/nodeflow/gate.go:NodeCoreRefusal (узловой гейт ядра по on_core_unsupported реестра); реестр — protocols/openvpn-client.json body.on_core_unsupported"
     },
+    "openconnect_core_unsupported": {
+      "severity": "warning",
+      "params": [
+        "reason"
+      ],
+      "title_en": "OpenConnect is unavailable in this core",
+      "title_ru": "OpenConnect недоступен в этом ядре",
+      "text_en": "The node uses OpenConnect, which this core cannot run ({reason}). The node was excluded from the config, because the core rejects such a value and would refuse to start the whole config; the remaining nodes work.",
+      "text_ru": "Узел использует OpenConnect, который это ядро запустить не может ({reason}). Узел исключён из конфига: ядро отвергает такое значение и не запустит весь конфиг. Остальные узлы работают.",
+      "cause_en": "OpenConnect is an extension of the lx fork: it needs a core built with the with_openconnect tag, version 1.14.0-lx.10 or newer. A core without it rejects the whole config as soon as such a node appears in it.",
+      "cause_ru": "OpenConnect — расширение форка lx: нужно ядро, собранное с тегом with_openconnect, версии 1.14.0-lx.10 или новее. Ядро без него отвергает весь конфиг, как только в нём появляется такой узел.",
+      "fix_en": [
+        "Update the core to 1.14.0-lx.10 or newer, built with the with_openconnect tag.",
+        "Use another node until the core is updated."
+      ],
+      "fix_ru": [
+        "Обновите ядро до 1.14.0-lx.10 или новее, собранного с тегом with_openconnect.",
+        "Пока ядро не обновлено, пользуйтесь другим узлом."
+      ],
+      "desc": "Узел `openconnect` снят на сборке: ядро собрано без тега with_openconnect (нужен форк 1.14.0-lx.10 или новее). Тот же узловой гейт, что у openvpn_core_unsupported / tailscale_core_unsupported; severity=warning — конфиг собирается, остальные узлы на месте. Контракт 1.1.120.",
+      "dart": null,
+      "go": "core/config/nodeflow/gate.go:NodeCoreRefusal (узловой гейт ядра по on_core_unsupported реестра); реестр — protocols/openconnect.json body.on_core_unsupported"
+    },
+    "openconnect_flavor_invalid": {
+      "severity": "warning",
+      "params": [
+        "path",
+        "value"
+      ],
+      "title_en": "OpenConnect: unknown gateway type {value}",
+      "title_ru": "OpenConnect: неизвестный тип шлюза {value}",
+      "text_en": "The OpenConnect node names gateway type {value} at {path}, which the core does not know. The node was excluded from the config, because the core rejects such a value and would refuse to start the whole config; the remaining nodes work.",
+      "text_ru": "Узел OpenConnect называет в {path} тип шлюза {value}, которого ядро не знает. Узел исключён из конфига: ядро отвергает такое значение и не запустит весь конфиг. Остальные узлы работают.",
+      "cause_en": "The core knows six gateway types: fortinet, anyconnect, gp, f5, pulse and nc. Another value is a typo or a name from another client (for example \"forti\" or \"globalprotect\"). Removing just the key is not an option: without it the core silently talks AnyConnect to the gateway.",
+      "cause_ru": "Ядро знает шесть типов шлюза: fortinet, anyconnect, gp, f5, pulse и nc. Другое значение — опечатка или имя из другого клиента (например «forti» или «globalprotect»). Просто снять ключ нельзя: без него ядро молча говорит со шлюзом по протоколу AnyConnect.",
+      "fix_en": [
+        "Set flavor to one of fortinet, anyconnect, gp, f5, pulse, nc in the node body.",
+        "Ask the provider which gateway type the server runs."
+      ],
+      "fix_ru": [
+        "Задайте в теле узла flavor одним из значений fortinet, anyconnect, gp, f5, pulse, nc.",
+        "Спросите провайдера, какой тип шлюза стоит на сервере."
+      ],
+      "desc": "Значение `flavor` узла openconnect вне enum ядра (newFlavorFrontend отвергает неизвестное). Снимается УЗЕЛ, а не поле: без ключа ядро берёт anyconnect, и снятое поле молча сменило бы протокол шлюза. Контракт 1.1.122, SPEC 167.",
+      "dart": null,
+      "go": "правило реестра contract/registry/protocols/openconnect.json body.fields.flavor.on_invalid (drop_node); исполнение — core/config/nodeflow/sanitize.go:sanitizer.onInvalid"
+    },
+    "openconnect_fingerprint_invalid": {
+      "severity": "warning",
+      "params": [
+        "path",
+        "value"
+      ],
+      "title_en": "OpenConnect: bogus certificate fingerprint dropped",
+      "title_ru": "OpenConnect: негодный отпечаток сертификата снят",
+      "text_en": "The certificate fingerprint {value} at {path} is not in a form the core accepts. It was removed, because the core rejects such a value and would refuse to start the whole config; the remaining fingerprints were kept.",
+      "text_ru": "Отпечаток сертификата {value} в {path} записан в форме, которую ядро не принимает. Он снят: ядро отвергает такое значение и не запустит весь конфиг. Остальные отпечатки сохранены.",
+      "cause_en": "The core accepts a hex SHA-1 of the certificate without a prefix, sha1:<hex>, sha256:<hex> or pin-sha256:<base64>. Fingerprints copied with colons between bytes, with spaces, or truncated do not match any of these forms.",
+      "cause_ru": "Ядро принимает hex SHA-1 сертификата без префикса, sha1:<hex>, sha256:<hex> или pin-sha256:<base64>. Отпечаток, скопированный с двоеточиями между байтами, с пробелами или обрезанный, ни под одну из форм не подходит.",
+      "fix_en": [
+        "Write the fingerprint in one of the accepted forms, for example sha256: followed by hex digits without colons.",
+        "If no valid fingerprint is left, the gateway certificate is checked against the system CAs."
+      ],
+      "fix_ru": [
+        "Запишите отпечаток в одной из принятых форм, например sha256: и hex-цифры без двоеточий.",
+        "Если годных отпечатков не осталось, сертификат шлюза проверяется по системным УЦ."
+      ],
+      "desc": "Элемент `tls.peer_fingerprint` узла openconnect не проходит parsePeerFingerprint ядра (без префикса hex 4..40; sha1: hex 4..40; sha256: hex 4..64; pin-sha256: base64 4..44). Снимается только негодный элемент (on_item_invalid drop_item); одиночное негодное значение снимает поле (on_invalid drop). Контракт 1.1.122, SPEC 167.",
+      "dart": null,
+      "go": "правило реестра contract/registry/protocols/openconnect.json body.fields.tls.fields.peer_fingerprint (item_pattern/pattern); исполнение — core/config/nodeflow/sanitize.go:sanitizer.filterItems и sanitizer.onInvalid"
+    },
+    "openconnect_mtu_invalid": {
+      "severity": "warning",
+      "params": [
+        "path",
+        "value"
+      ],
+      "title_en": "OpenConnect: MTU {value} removed",
+      "title_ru": "OpenConnect: MTU {value} снят",
+      "text_en": "The MTU {value} at {path} is outside what the core accepts (0 to 65535). It was removed, because the core rejects such a value and would refuse to start the whole config; the gateway's own MTU is used instead.",
+      "text_ru": "MTU {value} в {path} вне того, что принимает ядро (от 0 до 65535). Он снят: ядро отвергает такое значение и не запустит весь конфиг. Вместо него используется MTU шлюза.",
+      "cause_en": "The value is negative, fractional, too large, or not a number at all — usually a typo in a hand-written body.",
+      "cause_ru": "Значение отрицательное, дробное, слишком большое или вовсе не число — обычно опечатка в теле, написанном руками.",
+      "fix_en": [
+        "Nothing to do if the tunnel works: the gateway's MTU applies.",
+        "If HTTPS stalls through the tunnel, set mtu between 576 and 1500 in the node body."
+      ],
+      "fix_ru": [
+        "Если туннель работает, делать ничего не нужно: действует MTU шлюза.",
+        "Если HTTPS через туннель зависает, задайте в теле узла mtu от 576 до 1500."
+      ],
+      "desc": "Поле `mtu` узла openconnect вне uint32 ядра или выше cstpMaximumMTU (65535) — отказ ядра; поле снимается (on_invalid drop). Ниже 576 ядро молча поднимает до 576, это не код. Диапазон 576…1500 — правило формы, не санитайзера. Контракт 1.1.122, SPEC 167.",
+      "dart": null,
+      "go": "правило реестра contract/registry/protocols/openconnect.json body.fields.mtu.on_invalid (drop); исполнение — core/config/nodeflow/sanitize.go:sanitizer.onInvalid"
+    },
+    "openconnect_insecure_crypto": {
+      "severity": "info",
+      "params": [
+        "path",
+        "value"
+      ],
+      "title_en": "OpenConnect: legacy crypto allowed",
+      "title_ru": "OpenConnect: разрешена устаревшая криптография",
+      "text_en": "The node sets {path} to {value}, so the connection to the gateway may use legacy ciphers and TLS 1.0. The value was kept as written; such a connection is weaker than a modern one.",
+      "text_ru": "В узле задано {path} = {value}, поэтому соединение со шлюзом может использовать устаревшие шифры и TLS 1.0. Значение сохранено как записано; такое соединение слабее современного.",
+      "cause_en": "Old gateways only speak TLS 1.0 and legacy ciphers, and the setting was turned on to reach one of them — or it was copied from another profile without need.",
+      "cause_ru": "Старые шлюзы говорят только по TLS 1.0 и устаревшими шифрами, и настройку включили, чтобы до такого достучаться, — или её скопировали из другого профиля без нужды.",
+      "fix_en": [
+        "Nothing to do if the gateway is old and needs it.",
+        "If the gateway is modern, turn the setting off: the node connects without it."
+      ],
+      "fix_ru": [
+        "Если шлюз старый и без этого не работает, делать ничего не нужно.",
+        "Если шлюз современный, выключите настройку: узел соединится и без неё."
+      ],
+      "desc": "allow_insecure_crypto=true у узла openconnect — ядро принимает, узел получает info-код (advisory), значение СОХРАНЯЕТСЯ. Контракт 1.1.122, SPEC 167.",
+      "dart": null,
+      "go": "правило реестра contract/registry/protocols/openconnect.json body.fields.allow_insecure_crypto.advisory; исполнение — core/config/nodeflow/sanitize.go:sanitizer.advisory"
+    },
     "ws_early_data_converted": {
       "severity": "info",
       "params": [
@@ -2213,10 +2353,10 @@
       ],
       "title_en": "QUIC: TLS field {path} not applicable",
       "title_ru": "QUIC: TLS-поле {path} неприменимо",
-      "text_en": "This protocol runs over QUIC, where the core cannot use a uTLS fingerprint or REALITY at all. The field {path} was removed; the node connects exactly as it would have anyway.",
-      "text_ru": "Этот протокол работает поверх QUIC, а там ядро не умеет ни отпечаток uTLS, ни REALITY. Поле {path} снято; узел подключается ровно так же, как подключился бы с ним.",
-      "cause_en": "The subscription applies one TLS template to every protocol, so a QUIC node (hysteria, hysteria2, tuic, masque) was handed a fingerprint or REALITY keys. QUIC carries TLS 1.3 inside itself and the core builds it through the standard engine, which neither uTLS nor REALITY can provide — with such a block the outbound would not start at all.",
-      "cause_ru": "Подписка применяет один шаблон TLS ко всем протоколам, и QUIC-узлу (hysteria, hysteria2, tuic, masque) достался отпечаток или ключи REALITY. QUIC несёт TLS 1.3 внутри себя, и ядро строит его стандартным движком, которого ни uTLS, ни REALITY не дают, — с таким блоком outbound не поднялся бы вовсе.",
+      "text_en": "This protocol runs over QUIC, where the core cannot use a uTLS fingerprint, REALITY or TLS fragmentation at all. The field {path} was removed; the node connects exactly as it would have anyway.",
+      "text_ru": "Этот протокол работает поверх QUIC, а там ядро не умеет ни отпечаток uTLS, ни REALITY, ни фрагментацию TLS. Поле {path} снято; узел подключается ровно так же, как подключился бы с ним.",
+      "cause_en": "The subscription applies one TLS template to every protocol, so a QUIC node (hysteria, hysteria2, tuic, masque) was handed a fingerprint, REALITY keys or fragmentation flags. QUIC carries TLS 1.3 inside itself and the core builds it through the standard engine, which neither uTLS nor REALITY can provide — with such a block the outbound would not start at all; fragmentation splits TCP records, and QUIC has none.",
+      "cause_ru": "Подписка применяет один шаблон TLS ко всем протоколам, и QUIC-узлу (hysteria, hysteria2, tuic, masque) достался отпечаток, ключи REALITY или флаги фрагментации. Фрагментация режет TCP-записи, которых у QUIC нет. QUIC несёт TLS 1.3 внутри себя, и ядро строит его стандартным движком, которого ни uTLS, ни REALITY не дают, — с таким блоком outbound не поднялся бы вовсе.",
       "fix_en": [
         "Nothing to do: the node works, and the removed settings have no meaning over QUIC.",
         "If you need a fingerprint or REALITY, take a node on a TCP protocol — vless, trojan, vmess or anytls."
@@ -2225,7 +2365,7 @@
         "Делать ничего не нужно: узел работает, а снятые настройки поверх QUIC смысла не имеют.",
         "Если нужен отпечаток или REALITY, возьмите узел на TCP-протоколе — vless, trojan, vmess или anytls."
       ],
-      "desc": "Блок tls.utls или tls.reality на протоколе поверх QUIC (hysteria, hysteria2, tuic, masque) — снимается целиком. Ядро строит TLS для QUIC через aTLS.Config.STDConfig() (sing-quic qtls.Dial/DialEarly/CreateTransport; у masque — protocol/masque/outbound.go), а у UTLSClientConfig и RealityClientConfig этот метод возвращает ошибку («unsupported usage for uTLS» / «for reality») — outbound не поднимается, узел мёртв. Severity info, а не warning: снята настройка, которая к QUIC не применилась бы в принципе, и узел от её снятия ничего не теряет (в отличие от tls_field_unsupported_naive, где это потерянная настройка). Один код на блок: key_share и short_id своих кодов не дают — снят не они, а весь REALITY. Правило живёт в реестре (tls.json body.fields.utls/reality forbidden_for + forbidden_codes), прежде было частной веткой quicOutboundTypes прежнего санитайзера импорта и молчаливым пропуском fp в URI-парсерах. С контракта 1.1.64 tls.reality у masque снимается кодом masque_tls_field_ignored (текст про QUIC неверен для vhttp h2); tls.utls у masque — по-прежнему этим кодом.",
+      "desc": "Контракт 1.1.118 (LxBox §591 п.7): тем же кодом снимаются tls.fragment, tls.record_fragment и tls.fragment_fallback_delay у hysteria, hysteria2, tuic (forbidden_for + forbidden_codes в tls.json; у masque — свои правила владельца, masque_tls_fragment_h3) — фрагментация режет TCP-записи, у QUIC их нет, ядро флаги игнорирует. Блок tls.utls или tls.reality на протоколе поверх QUIC (hysteria, hysteria2, tuic, masque) — снимается целиком. Ядро строит TLS для QUIC через aTLS.Config.STDConfig() (sing-quic qtls.Dial/DialEarly/CreateTransport; у masque — protocol/masque/outbound.go), а у UTLSClientConfig и RealityClientConfig этот метод возвращает ошибку («unsupported usage for uTLS» / «for reality») — outbound не поднимается, узел мёртв. Severity info, а не warning: снята настройка, которая к QUIC не применилась бы в принципе, и узел от её снятия ничего не теряет (в отличие от tls_field_unsupported_naive, где это потерянная настройка). Один код на блок: key_share и short_id своих кодов не дают — снят не они, а весь REALITY. Правило живёт в реестре (tls.json body.fields.utls/reality forbidden_for + forbidden_codes), прежде было частной веткой quicOutboundTypes прежнего санитайзера импорта и молчаливым пропуском fp в URI-парсерах. С контракта 1.1.64 tls.reality у masque снимается кодом masque_tls_field_ignored (текст про QUIC неверен для vhttp h2); tls.utls у masque — по-прежнему этим кодом.",
       "dart": null,
       "go": null
     },
@@ -2481,6 +2621,30 @@
       "desc": "Строка состава со СЛУЖЕБНОЙ схемой (source_kinds.json uri_lines.service_schemes): узлом не является и никогда им не была. Прежде отбраковывалась общим «unsupported scheme», и формально рабочая подписка показывала отказ на своём же служебном заголовке (наблюдалось: 5 отказов при 8 живых узлах). severity=info: терять тут нечего, но выпадение обязано быть названным, а не молчаливым — иначе оно неотличимо от потерянного узла. Обращение как с provider_banner, отличается только признаком (у баннера схемы нет вовсе).",
       "dart": null,
       "go": "core/config/subscription/parse_body.go:ParseSubscriptionBody (признак — core/config/subscription/parse_body.go:isServiceSchemeLine по registry/source_kinds.json uri_lines.service_schemes)"
+    },
+    "protocol_extension_unsupported": {
+      "severity": "error",
+      "params": [
+        "scheme",
+        "alternative"
+      ],
+      "title_en": "Protocol {scheme} is not supported in this app",
+      "title_ru": "Протокол {scheme} в этом приложении не поддержан",
+      "text_en": "The entry uses {scheme}, which this application does not implement: in the shared registry the protocol is an extension of the other side. The node was dropped. Use {alternative} instead.",
+      "text_ru": "Запись использует протокол {scheme}, которого это приложение не реализует: в общем реестре протокол — расширение другой стороны. Узел отброшен. Используйте {alternative}.",
+      "cause_en": "The subscription carries a protocol that only one of the two applications supports (registry/protocols/<scheme>.json: extension). The core could run it, but this application has no parser for it.",
+      "cause_ru": "В подписке протокол, который поддерживает только одно из двух приложений (registry/protocols/<scheme>.json: extension). Ядро его умеет, но у этого приложения нет для него парсера.",
+      "fix_en": [
+        "Ask the provider for a link to the same server over {alternative}.",
+        "Pick another node from this subscription."
+      ],
+      "fix_ru": [
+        "Попросите у провайдера ссылку на тот же сервер по {alternative}.",
+        "Выберите другой узел из этой подписки."
+      ],
+      "desc": "Контракт 1.1.118 (LxBox §591 п.4, решение владельца: Hysteria v1 на мобильной стороне не поддерживать, но называть отказ явно). Схема с extension чужой стороны (сегодня — hysteria: extension desktop) на стороне, которая её не несёт, отбраковывается ЭТИМ кодом, а не общим путём «узел не создался»/scheme_unsupported. alternative — поле extension_alternative секции протокола (hysteria → hysteria2). Лаунчер код не ставит: схем с extension mobile в реестре нет.",
+      "dart": null,
+      "go": null
     },
     "scheme_unsupported": {
       "severity": "error",

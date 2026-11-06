@@ -9163,3 +9163,975 @@ outbound (запись без `tag` остаётся с `remarks`). Две од�
 Норма §6.3 PARSING_PRINCIPLES (контракт 1.1.110): info-код авторского тела, по пути которого значение одинаково в сыром и чистом теле, идёт без `applied: false`. У нас она нарушалась на числах: сравнение «до/после» (`samePathValue`) шло `reflect.DeepEqual`, и `1420` из разбора JSON (float64) не совпадало с `1420` после приведения поля (int). Отсюда ошибочное ожидание кейса `authored/soft_awg_mtu_high_kept` — `awg_mtu_high` с `applied: false`, хотя `mtu` 1420 в теле не меняется. Исправлено: значения сравниваются по смыслу JSON, числа — по величине при любом типе; §6.3 дополнен этой оговоркой. Ожидание кейса — `awg_mtu_high` без `applied: false`. Других кейсов корпуса исправление не задело.
 
 Что сделать LxBox: синк корпуса; снять исключение `awg_mtu_high` в Dart-санитайзере авторского тела — кейс теперь проходит по общей норме §6.3 (info-код + одинаковое значение по пути); сравнение чисел — по величине.
+
+## 112. Контракт 1.1.115 — путь XHTTP дословно, с хвостом `?…`
+
+Issue Leadaxe/sing-box-lx#36: узел VLESS+XHTTP с `path=/?proxyip=…` (релей Cloudflare Worker, edgetunnel берёт `proxyip` из query запроса). Норма Xray (`transport/internet/splithttp/config.go`, `GetNormalizedPath`/`GetNormalizedQuery`): всё после первого `?` в `path` — query запроса, клиент шлёт его как есть. Ядро sing-box-lx делает так же с SPEC 119 (до неё оно клеило хвост в путь: `/%3Fproxyip=…/` → 404). Наш разбор срезал хвост по образцу ws `?ed=N`, и до ядра доезжал `/`.
+
+1. `registry/transports.json`: записи `path` блоков `uri/xhttp` и `xray/xhttp` — `extract` `^(?P<path>[^?]*)` заменён на `maps_to: transport.path`. Путь берётся дословно на всех входах: ссылка, Xray-JSON (`xhttpSettings`/`splithttpSettings`), тело sing-box (там правила среза и не было). `decode_extra` у ссылки прежний (mode path, 2 прохода).
+2. ws и httpupgrade не менялись: у ws `?ed=N` раскладывается в `max_early_data`, у httpupgrade срезается.
+3. Обратный ход: `?`, `=` и `&` хвоста кодируются внутри значения `path=` (`%3F`, `%3D`, `%26`), хвост не смешивается с query самой ссылки.
+4. Тексты `desc_*`/`impl` поля `path` у xhttp (параметр ссылки, поле тела) переписаны.
+
+Корпус: ожидания `uri/vless/xhttp_path_query_tail_trimmed` и `uri/vless/xhttp_path_ed_tail_stripped` изменены (`path` — `/GaMeOpTiMiZeR?ed=2048`), кейсы переименованы в `xhttp_path_query_tail_kept` и `xhttp_path_ed_tail_kept`; новые `uri/vless/xhttp_path_proxyip_query_kept`, `body/xray/xhttp_path_query_kept`.
+
+Следствия: подпись дедупа (эмиссия без тега) теперь различает узлы, отличающиеся только хвостом пути, — узлы edgetunnel с разными `proxyip` больше не схлопываются в один. Идентичность (тег) не затронута. Уже сохранённые тела узлов несут срезанный путь до следующего обновления подписки; узел, добавленный ссылкой вручную, исправляется повторным добавлением.
+
+Что сделать LxBox: синк контракта и корпуса; убрать срез хвоста пути xhttp в разборе ссылки и Xray-JSON (у вас — `app/test/parser/xhttp_test.dart`, кейс «хвост обрезается»); в эмите ссылки кодировать `?` внутри `path=`. Ядро с SPEC 119 нужно, чтобы хвост дошёл до сервера query.
+
+## 113. Контракт 1.1.116 — файл без ключа `rules` правил не трогает; код `backup_rules_replaced`
+
+Инцидент 08.10.2026 у лаунчера: агент добавил один узел файлом бэкапа через `POST /backup/import` — файл нёс только `sources[]`, — и приёмник потерял все правила маршрутизации. Импорт обнулял `rules[]` безусловно (норма §9 п. 7 «единственная секция полной замены»), а разбор не различал «ключа `rules` нет» и «`rules: []`». Ответ при этом был `ok`, `applied.rules: 0`, предупреждений ноль.
+
+Норма §9 п. 7 уточнена (решение владельца 09.10.2026):
+
+1. Ключ `rules` в файле есть (в том числе пустой массив) → правила приёмника снимаются, встают правила файла — как прежде. Снятые считаются и называются одним предупреждением `backup_rules_replaced {count}` (`registry/backup_warnings.json`, side import, warning); код ставится только при `count > 0`.
+2. Ключа `rules` нет → файл о правилах молчит, `rules[]` приёмника остаются как были, кода нет.
+3. Экспорт ключ пишет всегда (файл описывает всю настройку, §1) — файл, снятый LxBox или лаунчером, правила замещает как и раньше. Различие работает на частичных файлах: один узел, папка, Направление.
+
+`schema/backup.schema.json`: описание `rules` дополнено. Корпус бэкапа не менялся.
+
+Что сделать LxBox: синк контракта; в импорте различать отсутствие ключа `rules` и пустой массив (у `json_serializable` — `containsKey` по сырой карте до десериализации); при замене с непустым приёмником — предупреждение `backup_rules_replaced` с числом снятых; фраза UI для кода.
+
+## 114. Контракт 1.1.117 — поле `tls` стороны LxBox у подписки, сервера, папки и члена папки
+
+Ваш запрос 13.10.2026 (решение владельца; LxBox §636, develop 6685d059): настройки TLS-фрагментации по уровням узел → источник → глобально хранятся ключом `tls` в записи источника и записи члена папки, а схема бэкапа поля не объявляла — экспорт называл его `backup_local_only_dropped`, импорт не применял.
+
+Объявлено (`schema/backup.schema.json`, `$defs/tlsPolicy`; поле стороны LxBox, необязательное):
+
+1. `tls` у `sourceSubscription`, `sourceFolder`, `sourceServer` (`kind: server`) и у члена папки `node` (`kind: server`, рядом с `detour`). Объект `{fragment?: bool, record_fragment?: bool, fallback_delay?: string, mixed_case_sni?: bool}`; `additionalProperties: true` — будущие ручки не валят валидацию у старых версий. `minProperties` нет: пустой объект законен, но не пишется (норма кодека — только отличия от умолчаний).
+2. Семантика в `BACKUP.md` §2 «Поля стороны LxBox»: отсутствие поля = наследовать с уровня выше; разрешение узел → источник → глобальные `vars` `tls_*` (переносимые, без изменений); `false` ниже бьёт `true` выше; `fragment` → `tls.fragment`, `record_fragment` → `tls.record_fragment`, `fallback_delay` → `tls.fragment_fallback_delay` (строка длительности ядра), `mixed_case_sni` — пост-шаг LxBox, не поле ядра. У узла подписки записи нет — уровень узла пропускается.
+3. У `chain`, `auto`, `unsupported` поле не объявлено: TLS-фрагментация — свойство сервера с TLS, цепочка берёт её у своих хопов. Если ваш кодек пишет `tls` у цепочки — скажите, расширим.
+4. Лаунчер: поле игнорирует молча (таблицы известных ключей импорта — у членов папки появилась своя таблица полей стороны LxBox), в состояние не кладёт, на экспорте не пишет; отсутствие ключа у приёмника ничего не сбрасывает.
+
+Корпус: новый кейс `corpus/backup/v10_lxbox_tls` — `tls` на подписке (`fragment` + `fallback_delay`), корневом сервере (`fragment: false` + `mixed_case_sni`), папке (три ручки) и члене папки (`record_fragment: false` плюс неизвестный ключ `future_knob` внутри `tls` — валидация и импорт его терпят); у второго члена `tls` нет — наследует от папки; корневые `vars` `tls_*` в файле. Ожидание лаунчера: ни одного предупреждения, состояние как без поля. Формат ожиданий (`corpus/backup/README.md`) ключа для сверки эффективной TLS-политики не имеет — если вашему раннеру нужен (`"tls": {"<тег>": {...эффективно...}}` по образцу `detours`), предложите форму, заведём в 1.1.118.
+
+Что сделать LxBox: синк контракта (`git archive` с коммита ниже); `declared: true` в четырёх строках таблицы среза `lx_backup_slice.dart`; `backup_corpus_test` на новом кейсе.
+
+## 115. Контракт 1.1.118 — семь запросов аудита §591 (SPEC 163 лаунчера)
+
+Ваш список из сессии «Неразобранный файл аудита» (13.10.2026) разобран целиком; решения владельца 13.10.2026 — по п.5 и п.6, остальное по вашему тексту.
+
+1. **naive `emit.note` и `:443`** — закрыто ещё контрактом 1.1.108 (§105): note говорит «naive+quic при quic:true, иначе naive+https»; порт: Dart опускает 443, Go пишет всегда (`emit.omit_default` у naive — только `quic_congestion_control`). Повторно сверено, правок нет.
+2. **tailscale `refs.dart`** — то же 1.1.108: путь `lib/models/tailscale_bundle.dart`, упоминания инъекции секций в реестре нет. Правок нет.
+3. **`body.core`** всех секций → `1.14.3-lx.17` после сверки `option/` форка lx.11…lx.17 (`group.go`: `failover`, снят `passive_check` — уже в 1.1.111; `tls.go`: uTLS-пресет `chrome_155` с 1.14.2-lx.13, SPEC 118 ядра; `wireguard_awg.go`: комментарии). `chrome_155` добавлен в `registry/allowlists.json` (`utls_fingerprints`) и в оба списка значений `tls.json` — у вас `kUtlsFingerprints` обязан совпасть байт в байт (ваш пин lx.15 ≥ lx.13, пресет ядром принимается). `body.core` = «последняя сверка», не пин.
+4. **Hysteria v1 на мобильной стороне** — новый код `protocol_extension_unsupported {scheme, alternative}` (severity error) и поле секции `extension_alternative` (`hysteria.json`: `"hysteria2"`, объявлено в `registry.schema.json`). Сторона без extension отбраковывает запись этим кодом с текстом «use hysteria2», а не общим путём «узел не создался» / `scheme_unsupported`. Лаунчер код не ставит (схем с `extension: mobile` нет).
+5. **Висячий detour = fail-closed везде** (D-128). `detour_target_missing`, `detour_to_group`, `detour_cycle_broken` — severity `error`, тексты и `fix_*` переписаны: узел-носитель отбраковывается записью `kind=unsupported` на своей позиции, «connects directly» снято. Хоп, который узлом не стал (неподдержанный тип, битая запись), — `detour_target_missing`; кольцо и самоссылка роняют всех участников; `detour:"direct"` и предел глубины (`detour_chain_too_deep`) узел не ломают. У лаунчера так с этого коммита (`attachChain` → `parseSingboxConfig`, `rejected.addCoded`). Корпус кейсов на эти коды не имеет (входной формат sing-box-тела без detour-графа); если нужен — предложите кейс `body/singbox/detour_*`, заведём.
+6. **`network` у masque** (D-129) — ваша трактовка верна по всем четырём пунктам. `$legacy_flat` оставлен только за `query.server_name`; `network` снят из маппера `singbox_flat_fields_stripped`; `body.skipped.network` переписан: зарезервировано под tcp/udp как в sing-box, не читается, не эмитится, в теле — общий `unknown_key`. Миграция состояния лаунчера `core/state/masque_uri_migration.go` удалена. Ожидание `uri/masque/legacy_params_ignored` изменено: две записи `uri_param_unknown` — `$legacy_flat` (server_name, с `value`) и `network`. Ядро: `protocol/masque/legacy_options_lx.go` в 1.14.3-lx.17 ещё читает `network` и падает при расхождении с `vhttp` — записано как известное поведение ядра до его переименования; общий стрип unknown_key до ядра такое тело не допускает.
+7. **`tls.fragment` / `record_fragment` / `fragment_fallback_delay`** — `forbidden_for` + `hysteria`, `hysteria2`, `tuic` с `forbidden_codes` → `tls_not_applicable_quic` (текст кода расширен на фрагментацию). masque намеренно не включён: `vhttp: h2` идёт поверх TCP, правила владельца свои (`masque_tls_fragment_h3`). У лаунчера `fieldAllowedOn` при инъекции глобальных `tls_*` читает тот же реестр — ручки на QUIC-узлы больше не ставятся.
+
+Что сделать LxBox: синк контракта; `kUtlsFingerprints` += `chrome_155`; импорт sing-box — отбраковка носителя detour вместо «chain cut»; зеркало стрипа `network` в `json_parsers.dart`/`config_node.dart` снять; код `protocol_extension_unsupported` для hysteria с `alternative` из `extension_alternative`; `fieldAllowedOn` подхватит п.7 без правки кода.
+
+## 116. Контракт 1.1.119 — обход узлов в пресете (SPEC 166 лаунчера)
+
+Решения владельца 13.10.2026. Повод — пресет, который строит правило из полей узлов конфига: одно DNS-правило со списком доменов всех узлов (имена узлов резолвятся выбранным резолвером без устаревшего кэша). Сам пресет в шаблон лаунчера **не вошёл** (п. 10): цели он не достигает, язык обхода остаётся, пример — TEMPLATE_LANG §6.7.4. `for_each` (1.1.86, ваш §578) этого не умел: только повтор тела по узлам, `node_type` обязателен и одиночен (эрзац фильтра), `as` ничего не выбирает, `filter` без `#` нарушает D-073, агрегации нет. Норма — `docs/TEMPLATE_LANG.md` §2.1, §4.5.1, §6.4–§6.7, решения D-130…D-132, разрыв N16.
+
+Объявлено:
+
+1. **`for_each` снят** (D-130). Ключ `for_each`, а внутри обхода `node_type` и `as` — ошибка загрузки, легаси-чтения нет: шаблон у клиента — по пину своей версии (`RequiredTemplateRef`), у вас — свой в сборке приложения, чужих шаблонов с `for_each` не бывает.
+2. **Два ключа пресета вместо него**, в пресете ровно один (оба — ошибка загрузки): `for_each_node` — тело повторяется для каждого прошедшего узла, `@node` в scope (как прежний `for_each`); `for_each_node_do` — обход ради сбора значений, тело раскрывается **один раз после обхода** без `@node`. Обходятся те же узлы: включённые, попавшие в конфиг, в порядке конфига. `"for_each_node": {}` — все узлы.
+3. **Ключи внутри — закрытый список**: `#filter` (оба ключа, необязателен; `cond` языка `#if` §4.1–4.2 целиком, без обёртки `#if`/`#value`; видны имена узла, переменные пресета, глобальные, `@runtime.*`; отсутствующее значение — ложь), `#do` (только `for_each_node_do`, обязателен), `#final` (только `for_each_node_do`, необязателен). Любой иной ключ — ошибка загрузки; правило толерантности §1 сюда не распространяется. У слов `#filter`, `#do`, `#append`, `#final`, `#unique`, `#sort`, `#limit` непомеченных алиасов нет (§4.5.1).
+4. **Имя узла фиксировано** — `@node`, `@node.skip_presets`, `@node.body.<путь>`, семантика §6.6 прежняя. Имена `node` и `node.*` зарезервированы: переменная с таким именем, глобальная или пресета, — ошибка загрузки.
+5. **`#do`** (D-131, §6.7.1): `"@имя"` → операция ровно с одним глаголом. Имя обязано быть объявлено в `vars` этого пресета (глобальное, чужое, необъявленное, ключ без `@` — ошибка загрузки). Глагол один — `#append`, только для `text_list` (иной тип, иной глагол — ошибка загрузки). Правая часть — строка-ссылка `"@…"` или `{"#tpl": …}`; объект и массив — ошибка загрузки. Значение на узле вычисляется как вставка `#tpl` (§4.8): скаляр текстом, пустое (нет пути, null, `""`, объект, список) — узел пропускается молча. **Дедупа нет**: два узла на одном сервере дают два элемента.
+6. **`#final`** (§6.7.2): `"@имя"` → `{#unique?: bool, #sort?: bool, #limit?: int > 0}`, имя обязано быть в `#do`; другой ключ или тип значения — ошибка загрузки. Порядок применения задан нормой, а **не** порядком ключей JSON: `#unique` (порядок первого появления) → `#sort` (байтовый, по возрастанию) → `#limit` (первые N). `@node` не виден, условий нет.
+7. **Сборка `for_each_node_do`** (§6.7.3): переменные пресета поверх глобалей → обход с `#filter` → `#do` → `#final` → `unique` объявления → тело один раз. **Собранное не персистится**: сбор идёт в копию на время сборки, в состояние и бэкап уходит только ввод пользователя (норма `vars` записи `kind: preset` без изменений). Пустой итог подставляется как любой `text_list` — `[]` (§2.2, `types/text_list_empty_becomes_empty_array`), ключ не снимается; правило маршрута или DNS, у которого каждое условие оказалось пустым или отсутствующим, снимается целиком гейтом фрагментов с `template_fragment_dropped` (тот же гейт, что у `for_each_node/logical_sub_rule_conditions_lost_dropped`; кейс `for_each_node_do/empty_result_rule_dropped`), а правило с другим условием идёт в конфиг с `"domain": []` — ядро пустое поле условием не считает. Пространство тегов §6.2: у `for_each_node` не действует (как у прежнего `for_each`), у `for_each_node_do` — действует, тело раскрывается без узла, как у обычного пресета. Проба (тестовый конфиг узла) не раскрывает ни один из двух ключей.
+8. **Поля объявления переменной** (D-132, §2.1): `unique` (bool, только `text_list`, иначе ошибка загрузки) — значение без дубликатов в порядке первого появления: ввод пользователя (UI снимает дубли при сохранении, хранимое с дублями нормализуется при чтении), `default_value` и результат `#append`; с `#final.#unique` идемпотентно. `wizard_ui: "internal"` — переменная только для сборки: в формах не показывается, значение из состояния и бэкапа сборка игнорирует (база — `default_value`, пишет только `#do`), в состояние не пишется, в бэкап не экспортируется; импорт снимает значение с `backup_var_skipped {name, record, reason: internal}` — новая причина существующего кода.
+9. **Пресет `tailscale`** переведён на `for_each_node` с `"#filter": {"#and": [{"@node.body.type": "tailscale"}, {"#not": "@node.skip_presets"}]}` (§6.5.1); тело и результат сборки прежние — ваш шаблон переписывается так же.
+10. **Имена узлов без устаревшего кэша — объектная форма `route.default_domain_resolver`** (решение владельца 13.10.2026, TEMPLATE_LANG §6.9). DNS-правило для имён узлов не работает: у исходящего с `domain_resolver` (а `route.default_domain_resolver` в обоих шаблонах задан всегда) ядро резолвит адрес сервера прямо этим DNS-сервером, DNS-правила не смотрит (`dns/router.go`, ветка `options.Transport != nil`). Рычаг — объектная форма резолвера (`DomainResolveOptions`: `server`, `disable_optimistic_cache`, …). Глобальная переменная **`dns_resolver_no_stale`** (`bool`, default `"true"`, `wizard_ui: fix`, title «Never serve stale answers for node hostnames»), в шаблоне `"default_domain_resolver": {"server": "@dns_default_domain_resolver", "disable_optimistic_cache": "@dns_resolver_no_stale"}`. Bool подставляется JSON-литералом (§2.2): включено — `true`, выключено — `false`, ключ не снимается; ядро принимает оба. Переменная **переносимая** (`registry/vars.json`, `portable: true`, `in: both`) — едет в `vars` бэкапа как `dns_optimistic`. Кто читает `default_domain_resolver` из конфига или шаблона, обязан понимать обе формы (строка или объект с `server`); кто подменяет резолвер — меняет только `server`, прочие поля оставляет. Пресет `node-domains-fresh-dns` из шаблона лаунчера снят до выпуска, в список поздних дефолтов не входит. Корпус: `corpus/template/subst/default_resolver_object_defaults`, `default_resolver_object_off`.
+
+Корпус **обязателен для обеих сторон**, формат прежнего раздела `for_each/` (`corpus/template/README.md`):
+
+- `corpus/template/for_each_node/` — переименованный `for_each/`, прежние кейсы переписаны на `#filter` и `node`; `missing_as_rejected` снят вместе с полем. Отказы загрузки: `load_reject_for_each`, `load_reject_node_type`, `load_reject_as`, `load_reject_do_in_for_each_node`, `load_reject_unknown_verb`, `load_reject_final_without_do`, `load_reject_append_non_list`, `load_reject_var_named_node`, `load_reject_unique_non_list`, `load_reject_both_loops`.
+- `corpus/template/for_each_node_do/` — `collect_domains_filter_ip`, `duplicates_without_final`, `final_unique_sort_limit`, `final_key_order_irrelevant`, `append_tpl`, `empty_result_rule_dropped`, `internal_ignores_state`, `user_value_plus_collected`, `unique_declaration`.
+
+Что сделать LxBox: синк контракта; снять `for_each` из загрузчика и `preset_expand.dart` (ошибка загрузки, не легаси-чтение); реализовать `for_each_node` и `for_each_node_do` с `#filter`, `#do`/`#append`, `#final` (`#unique` → `#sort` → `#limit`) и закрытыми списками ключей; поля `unique` и `wizard_ui: "internal"` в объявлении переменной (форма, хранение, экспорт); на импорте бэкапа — `backup_var_skipped` с `reason: internal`; пресет `tailscale` в своём шаблоне — на `for_each_node` с `#filter`; переменная `dns_resolver_no_stale` и объектная форма `route.default_domain_resolver` в своём шаблоне, переключатель на экране настроек DNS рядом с резолвером по умолчанию, перенос в бэкапе (п. 10); прогнать оба раздела корпуса и два кейса `subst/default_resolver_object_*`, `load_reject_*` — включительно. Расхождение с ожиданием корпуса — сообщайте сюда, ожидания правим только осознанно.
+
+## 117. Контракт 1.1.120 — `openconnect`: известный тип endpoint без описания полей
+
+15.10.2026. Повод — живой дефект лаунчера: владелец добавил узел sing-box JSON `{"type":"openconnect","server":"https://…","flavor":"fortinet","username":…,"password":…,"tls":{"insecure":true}}`, и сборка положила его в `outbounds[]` — записи в реестре не было, а ядро форка регистрирует `openconnect` только как **endpoint** (`include/openconnect.go`, тег сборки `with_openconnect`, с 1.14.0-lx.10 — тем же коммитом, что openvpn). Итог — `sing-box check` отвергает ВЕСЬ конфиг: `outbounds[N]: unknown outbound type: openconnect`. Решение 1.1.99 «из endpoint-типов ядра вносить только `openvpn-client`» (ваш §96) снято самим владельцем.
+
+Объявлено:
+
+1. Новая запись `registry/protocols/openconnect.json`, зеркало `openvpn-client`: `kind: endpoint` → узел пишется в `endpoints[]`; источник только `singbox` (детект по `type`); `body.fields_unchecked: true` — поля не описаны и не проверяются, тело уходит в ядро как написано (`flavor`, `username`/`password`, `cookie`, `token`, `form_entries`, `tls.insecure`, любые неизвестные ключи), без правил и без `unknown_key`/`json_field_unknown`; снимаются только `tag` и `type`. URI-формы, share-URI и формы добавления нет.
+2. Гейт ядра: `build_tag: with_openconnect`, `min_core: 1.14.0-lx.10`, `on_core_unsupported: drop_node` с **новым кодом** `openconnect_core_unsupported` (warning, параметр `reason`, тексты в `warnings.json`) — тот же узловой гейт, что `openvpn_core_unsupported` и `tailscale_core_unsupported`: узел снимается, конфиг собирается, остальные узлы на месте.
+3. Корпус +1: `corpus/body/singbox/openconnect_endpoint` — вход нарочно в `outbounds[]` (как у живого дефекта), ожидание `kind: endpoint`, `scheme: openconnect`, тело без потерь и без единого предупреждения.
+
+Что сделать LxBox: синк контракта; убедиться, что перечень endpoint-типов берётся из `kind` записей реестра, а не из списка в коде (норма 1.1.99) — тогда новая запись подхватывается без правок; узел известного типа без своей модели (`lib/models/node_spec.dart`) пишется в `endpoints[]`; код `openconnect_core_unsupported` в таблице предупреждений; libbox форка собирать с `with_openconnect`, иначе на вашей стороне узел снимается этим кодом; прогнать кейс корпуса. Расхождение с ожиданием корпуса — сообщайте сюда.
+
+## 118. Контракт 1.1.121 — §9: вторая форма ошибки ядра (декодирование), индекс → тег
+
+15.10.2026, ответ на ваш §653 (решение владельца 15.10.2026). Повод — старые masque-тела с `network` валят старт на декодировании: `start or reload service: decode config: outbounds[12].network: json: unknown field "network"`. Тега в строке нет, форма initialize не появляется, страховка §9 молчала.
+
+Объявлено в `docs/PARSING_PRINCIPLES.md`:
+
+1. §9.1 — вторая нормативная форма `<kind>[<i>](.<path>)?: <text>`: `<kind>` — `outbounds`/`endpoints` (путь декодера contextjson); `<i>` — индекс в массиве ОТПРАВЛЕННОГО конфига, здесь он сопоставляется (однозначно, не перебор); `<path>` — необязательный путь в теле после точки, экранированный ключ `["a: b"]` путь не обрывает; `<text>` — текст декодера. Обёртки (`decode config: `, `start or reload service: `, локализованный префикс) не мешают: поиск `outbounds[`/`endpoints[` по всей строке слева направо, побеждает первое вхождение со сошедшейся грамматикой (цифры, `]`, затем `.<path>: ` либо `: `) и индексом внутри массива. Сначала форма initialize, при «не назван» — эта.
+2. §9.2 — таблица примеров формы декодирования (outbounds+path, endpoints+вложенный путь, `route.rules[3]…` — не про узел, индекс вне массива — не назван).
+3. §9.3 — «индекс → финальный тег» по отправленному конфигу, дальше «тег → исходный узел» как прежде. Теги `outbounds[]`/`endpoints[]` держать списком в порядке массива.
+4. §9.4 — `reason` записи `core_rejected`: `<path>: <text>` без `outbounds[i].`, без пути — `<text>`. Пример: `network: json: unknown field "network"`.
+
+Реестр, схемы и корпус не менялись. Лаунчер реализовал: `core/corereject/decode.go`, цикл `check` (отправленный = проверенный кандидат) и путь демона (отправленный = `config.json`).
+
+Что сделать LxBox: синк контракта; разбор второй формы в страховке §478 по той же норме; список тегов отправленного конфига в порядке массивов.
+
+## 119. Контракт 1.1.122 — wildcard `*`, правила формы `form`, роль `variant`; `openconnect` описан
+
+15.10.2026, решения владельца (SPEC 167 лаунчера: форма Add server → OpenConnect, разработанная с командой ядра). Повод — реестр знал два состояния тела: всё описано или ничего (`fields_unchecked`, 1.1.99/1.1.120). Форме нужны правила на подмножество полей (enum у `flavor`, секреты, конфликты, формат отпечатка, видимость по `flavor`), а описывать ~60 полей ядра с вложенными `tncc`/`csd`/`mca_*` бессмысленно.
+
+Объявлено:
+
+1. **Wildcard `"*"` в `fields` объекта** (`schema/registry_body.schema.json`, `wildcardField`). `fields["*"]` — не поле: только `desc_en`/`desc_ru`/`impl`, без `type` и правил; обязан стоять в `order`. Ключи ЭТОГО объекта, которых нет в `fields`, копируются как есть — без `unknown_key` и без проверки; описанные поля проверяются своими правилами. **Не наследуется:** корень с `*` и `tls`, описанный полями без своего `*`, дают `unknown_key` на неописанный ключ `tls`. Масок нет. Позиция `*` в `order` — слот эмиссии сквозных ключей по алфавиту. Связи видят сквозные пути (`unless_set: ["tls.client_key"]` работает на неописанном пути), но `*` в путях связей и условий запрещён. Объект, снятый целиком, уходит вместе со сквозными ключами. Авторское тело (§10 PARSING_PRINCIPLES) — без изменений.
+2. **`fields_unchecked` удалён** из схемы: точный эквивалент — `order: ["*"]`, `fields: {"*": {…}}`. `openvpn-client.json` и `openconnect.json` переведены; кейс `body/singbox/openvpn_client_endpoint` не изменился и подтверждает эквивалентность.
+3. **Описание `openconnect`** (`registry/protocols/openconnect.json`): поля формы с правилами ядра (`core_rejects`) — `server` обязателен; неизвестный `flavor` → `drop_node` с `openconnect_flavor_invalid` (без ключа ядро молча берёт anyconnect, поэтому не `drop`); `token`: `mode` ∈ {totp, hotp, stoken, oidc} обязателен, `secret` обязателен (снимается `secret_path`), конфликт `secret_path`/`secret` (снят `secret_path`); `tls`: сертификат и ключ только парой (`requires … unless_set`), путь и inline-материал не вместе (`conflicts`); `mtu` 0…65535 (`openconnect_mtu_invalid`); `user_agent` без CR/LF/NUL; `tls.peer_fingerprint` — `pattern` + `item_pattern` по parsePeerFingerprint (`openconnect_fingerprint_invalid`, негодный элемент снимается один); `allow_insecure_crypto: true` → info `openconnect_insecure_crypto`; `tls.insecure: true` → info `tls_insecure`. `*` стоит в корне, `tls`, `token`, `fortinet_host_check`. Новые коды в `warnings.json`: `openconnect_flavor_invalid`, `openconnect_fingerprint_invalid`, `openconnect_mtu_invalid` (warning), `openconnect_insecure_crypto` (info).
+4. **Роль `variant`** (`role: "variant"`): одно поле верхнего уровня тела протокола, тип `string` или `enum`. Значение после trim; если пусто — `default` поля; иначе пусто. Не переводится. Встаёт во вторую часть подписи узла, в слот транспорта: порядок — поле `transport` → `vhttp` → роль `variant` → пусто. `flavor: fortinet` → «openconnect·fortinet», без `flavor` → «openconnect·anyconnect».
+5. **Атрибут `form`** — только для форм обеих сторон; санитайзер, эмиттер, гейт и маппер его не читают. У поля: `block` (id из `body.form.blocks`, порядок внутри блока — `order`), `visible_when` (существующая грамматика condition без `source_kind`, по текущему состоянию формы; `default` поля в условие НЕ подставляется — «не fortinet» пишется `not_in`; скрытый объект скрывает поддерево), `required`, `required_unless` (`{set, absent}`, пути `set` могут быть неописанными — `cookie`), `min`/`max` (пусто — ключ не пишется). У тела: `blocks[]`, `choices[]` — группа `{id, block, options: [{id, paths, set?}]}`: активен первый вариант с заданным путём из `paths`, иначе вариант с пустыми `paths`; смена варианта чистит `paths` остальных и пишет `set` выбранного. Скрытое поле из тела не снимается. Предупреждения формы — коды `advisory` самого поля. Подписи полей и блоков — ключи locale каждой стороны (`openconnect.<path>`, `openconnect.block.<id>`), не `desc_*` реестра.
+6. **Корпус:** `body/singbox/openconnect_*` +9 (wildcard_pass_through, flavor_invalid_dropped, fingerprint_item_invalid, token_secret_conflict, token_without_secret, client_cert_without_key, tls_insecure_advisory, hostcheck_other_flavor_kept, no_server_port_materialized); **изменено ожидание** `openconnect_endpoint` — + info `tls_insecure` (тело то же); `authored/hard_openconnect_token_without_secret`; новый корпус формы `corpus/form/openconnect_form.json`, формат — `corpus/form/README.md` (тело → `visible`, `required`, `missing`, `choices`, `out_of_range`).
+
+Лаунчер реализовал: `core/config/registry` (`Field.Wildcard`, `HasWildcard`, `Form`, `FormState`, `RoleVariant`), `core/config/nodeflow` (обход объекта и `emitObject` со слотом `*`, ветки `fields_unchecked` сняты), `core/config/node_materialize.go` (адрес узла дописывается в тело только при описанном у схемы поле `server` / `server_port` — каждое отдельно: у openconnect `server_port` нет, и под `*` он ушёл бы в ядро).
+
+Что сделать LxBox: синк контракта; wildcard `*` по норме п. 1 — `fields["*"]` пропускают ВСЕ обходы полей (санитайзер, эмиттер, валидатор, формы, роли, гейт, поиск по пути), неизвестный ключ объекта с `*` копируется, эмиссия в слоте по алфавиту; сторона без wildcard снимет сквозные ключи с `unknown_key`, поэтому поддержка входит в эту версию обеим сторонам; `fields_unchecked` больше не читать; роль `variant` в `_deriveTransport` (`config_node.dart`) в порядке п. 4; `form` — вычисление `visible_when`, `required`/`required_unless`/`min`/`max`, `blocks`, `choices`, показ `advisory`, раннер `corpus/form`; форма openconnect пишет только поля с `form`, скрытые значения не трогает; четыре новых кода в таблице предупреждений; прогнать кейсы корпуса тела и авторского тела. Расхождение с ожиданиями — сообщайте сюда.
+
+## 120. Контракт 1.1.123 — формы узлов по реестру: общие секции, варианты транспорта, `fixed`, массив `[0]`, активный вариант
+
+15.10.2026, решения владельца (SPEC 168 лаунчера). Форма Add server для VLESS, Hysteria2, Trojan, WireGuard (AWG), naive, masque, SOCKS5, HTTP теперь описана реестром тем же атрибутом `form`, что OpenConnect в 1.1.122 (§119). Санитайзер, эмиттер и гейт `form` не читают — корпус тела не изменился.
+
+Объявлено (`schema/registry_body.schema.json`, `fieldForm`/`formSection`):
+
+1. **`form` в общих секциях.** Атрибут разрешён у полей `tls.json` и вариантов `transports.json`; `form` ref-поля схемы переносится при разрешении ссылки так же, как `required`/`forbidden_for`: named ref `dialer.common` (`server`, `server_port` — поле получает `form` ref-поля), ref `tls`, вариантный ref `transport`. Поле общей секции входит в форму схемы, только если у **ref-поля схемы** есть `form` (схема подключает секцию явно) и схема не в `forbidden_for` поля (вместе с поддеревом: `tls.reality` у hysteria2 отпадает целиком). Ref-поле без `form` — секции в форме схемы нет. `block` поля секции без своего — `block` ref-поля.
+2. **`form.exclude_fields`** у ref-поля на секцию-объект: пути от корня секции, которые форма схемы не рисует вместе с поддеревом (Trojan — `reality`; HTTP — `alpn`, `utls`, `reality`). Тело не меняется: значение из JSON форма не видит и не трогает.
+3. **Варианты.** У ref-поля на вариантную секцию с `form` форма рисует дискриминатор (`transport.type`) выбором: пусто — объект `transport` не пишется — плюс `values` секции без `form.exclude_variants` ref-поля (VLESS и Trojan — без `quic`). Поля варианта видимы, только когда дискриминатор равен имени варианта; путь поля варианта — без имени варианта (`transport.path` у ws и у http — один путь). Дискриминатор входит в `visible` корпуса, когда видно ref-поле.
+4. **`body.form.fixed`** — `{путь: значение}`: форма всегда пишет значение и поле не рисует (в `visible` его нет). Перед вычислением состояния формы значения кладутся поверх тела — `visible_when`/`required_unless` видят их заданными. `{"tls.enabled": true}` у hysteria2, trojan, naive и masque.
+5. **Массив объектов с `form`** (`type: array`, `items: object`): форма правит элемент `[0]` (создаёт его, если массива нет), остальные элементы не трогает. Пути — с числовым сегментом: `peers.0.address`; `bodyValue`/условия/`required_unless` читают их так же. Сам массив с `form` входит в `visible` (как объект с `form` — `fortinet_host_check` в §119), его элемент `[0]` виден и при пустом теле.
+6. **Активный вариант группы — самое длинное совпадение** (уточнение нормы §119 п. 5): среди вариантов, у которых задан хоть один путь из `paths`, побеждает тот, у кого задано больше путей из `paths` ∪ ключей `set`; при равенстве — первый; если не задан ни один — вариант с пустыми `paths`. Ключ `set` может быть путём из `paths` другого варианта той же группы (линтер: ключи `set` ⊆ `paths` группы). VLESS `security`: `none` `[]` · `tls` `[tls.enabled]` set `{tls.enabled: true}` · `reality` `[tls.reality.enabled]` set `{tls.enabled: true, tls.reality.enabled: true}` — тело с обоими путями → `reality`, только с `tls.enabled` → `tls`. OpenConnect не меняется (варианты не пересекаются).
+7. **`transports.json`:** у `headers` ws и httpupgrade описано поле `Host` (`listable_string`) и стоит wildcard `*` — форма правит заголовок Host, прочие заголовки идут насквозь (wildcard 1.1.122; эмиссия: `Host`, затем сквозные по алфавиту). Варианты секции тоже размечают wildcard при загрузке. Поля формы вариантов: ws — `path`, `headers.Host`; grpc — `service_name`; http — `host`, `path`; httpupgrade — `host`, `path`; xhttp — `host`, `path`, `mode`.
+8. **`tls.json`:** `form` у `enabled`, `server_name`, `insecure`, `alpn`, `utls.fingerprint` (последние четыре — `visible_when tls.enabled`), `reality.enabled`, `reality.public_key` (обязателен формой, `visible_when tls.reality.enabled`), `reality.short_id` (`visible_when tls.reality.enabled`). У HTTP `tls.enabled` — галка в блоке `tls`, у VLESS его и `reality.enabled` рисует группа `security`.
+9. **Раскладка восьми схем** (`body.form` + `form` полей) — SPEC 168 §2.5 лаунчера: блоки `connection`, свой (`obfs` у hysteria2, `amnezia` у wireguard: jc, jmin, jmax, s1–s4, h1–h4, i1–i5; AWG3-полей в форме нет), `tls`, `transport`, `advanced`; обязательные формой — `server`, `server_port` у всех кроме wireguard, `uuid` (vless), `password` (trojan), у wireguard `address`, `private_key`, `peers.0.address`, `peers.0.port`, `peers.0.public_key`; `obfs.password` у hysteria2 обязателен, когда виден (задан `obfs.type`).
+10. **`form.implies`** у поля — `{путь от корня тела: значение}`: форма, записав поле непустым, пишет и эти пути; очистив поле — снимает их вместе с опустевшими предками. Пути описаны в схеме и формой не рисуются (линтер: не поле формы, не путь группы выбора, не `fixed`). Единственное применение — `tls.utls.fingerprint` → `{"tls.utls.enabled": true}`: ядро не читает отпечаток без включённого uTLS (`utls` с `enabled: false` реестр считает незаданным, `absent_when`), и выбранный в форме отпечаток иначе молча не действовал бы. Корпус формы получил запись: кейс с `write {set, clear}` пишет в тело то, что набрала бы форма (значение + `implies`), `expect.body` — тело после записи (`trojan_form.json`: `utls_fingerprint_implies_enabled`, `utls_fingerprint_clear_drops_enabled`).
+11. **Тело из формы — не авторское.** Форма отдаёт тело, прогнанное санитайзером (`Sanitize → Emit`, как у правки готового узла формой), а не набранное как есть: на авторском теле (вход `singbox`, PARSING_PRINCIPLES §10) действуют только `default_when` с `core_rejects`, и без прогона узел WireGuard из формы остался бы без `peers[].allowed_ips` (ядро: «missing allowed ips» на весь конфиг) и без `mtu` 1280 при AWG-ключах (`sendmsg: message too long` при успешном рукопожатии). Ветка `source_kind` у `mtu.default_when` здесь ни при чём: условие — ИЛИ, и `any_set` по `jc`… выполняется на теле формы. Реестр и корпус тела не менялись.
+12. **Корпус:** `corpus/form/{vless,hysteria2,trojan,wireguard,naive,masque,socks,http}_form.json` — 19 кейсов: видимые/обязательные пути, `missing`, активный вариант `security` у VLESS (none / tls / reality), транспорт ws vs grpc vs httpupgrade, исключённый `quic`, `fixed`, `exclude_fields`, `peers.0.*` и второй пир вне формы. Формат — `corpus/form/README.md` (дополнен).
+
+Лаунчер реализовал: `core/config/registry` — `FieldForm.ExcludeVariants`/`ExcludeFields`, `FormSection.Fixed`, перенос `form` ref-поля (`refAsObject`, `mergeRefAttrs`), `Field.VariantValues`/`DiscriminatorField`, разметка wildcard в вариантах; `form.go` — общий обход формы (`forbidden_for`, подключение секции, варианты по дискриминатору, элемент `[0]`, наложение `fixed`), `ActiveFormOption` по длине совпадения, `FormFields`, `ApplyFormFixed`, `FormValue`/`SetFormValue`/`DeleteFormValue`, `ApplyFormImplies` (`FieldForm.Implies`); линтер `TestRegistryBodyStructure` раскрывает общие секции (пути `fixed`/`choices`/`visible_when`, блоки объявлены и не пусты, `exclude_variants` ⊆ `values`, `exclude_fields` описаны).
+
+Что сделать LxBox: синк контракта; в вычислении формы (§119) — подключение общих секций через `form` ref-поля и `forbidden_for` схемы, наследование `block`, `exclude_fields`/`exclude_variants`, дискриминатор и поля варианта по текущему значению, `fixed` (наложение перед вычислением, поле не рисуется, форма пишет), элемент `[0]` массива и числовой сегмент пути, норма активного варианта п. 6, `implies` п. 10, тело формы через санитайзер п. 11; wildcard в `headers` транспортов (п. 7) — на санитайзере и эмиттере, иначе сквозные заголовки получат `unknown_key`; прогнать корпус формы (все 9 файлов) и корпус тела. Расхождение с ожиданиями — сообщайте сюда.
+
+## 121. Контракт 1.1.124 — пустой описанный объект снимается, пустой сквозной остаётся
+
+Решение владельца 15.10.2026 по вашему вопросу из §119 (расхождение по `tls.ech: {}`). Норма — `docs/PARSING_PRINCIPLES.md` §6.4, у лаунчера так работало и до нормы (`core/config/nodeflow/sanitize.go`, ветка object: `len(out) == 0` → объект снят).
+
+1. **Описанный объект, пустой после обхода, снимается всегда** — опустошён правилами или пришёл как `{}`; кода нет. С обязательными полями — `field_missing` на них и снятие объекта целиком (`transport: {}` → `field_missing@transport.type`, узел без `transport`). Ваше правило «валидное тело не переписывать байт в байт» здесь уступает: `{}` и отсутствие ключа для ядра одно и то же, а identity узла строится по телу после санитайзера.
+2. **Сквозной ключ под `*` НЕ снимается**, пустой `{}` в том числе — второй пункт вашего предложения не вводится. Проверено по коду ядра: `openvpn-client` в режиме tls без ключа `tls` отвергается («missing `tls` options»), с `tls: {}` поднимается на дефолтах (`protocol/openvpn/client.go`); у openconnect `fortinet_host_check: {}`, `csd: {}`, `hip: {}`, `tncc: {}` поведения не меняют, `mobile: {}` и `token: {}` ядро отвергает за пустые поля — это авторское тело под `*`, причину говорит ядро.
+3. **Корпус** (обязателен): `body/singbox/empty_described_object_dropped` (vless: `tls.ech: {}` снят без кода, `transport: {}` → `field_missing`, снят), `body/singbox/openvpn_client_empty_tls_kept` (`tls: {}` на месте).
+
+Что сделать LxBox: синк контракта; снимать пустые описанные объекты по п. 1 (включая `{}` во входе); сквозные `{}` оставлять; прогнать два кейса. Расхождение — сюда.
+
+## 122. Контракт 1.1.125 — короткая форма `#if` (`[cond, V, E]`), `#if` на операции `#do`
+
+Решения владельца 15.10.2026 (SPEC 169 лаунчера, D-133). Норма — `docs/TEMPLATE_LANG.md` §4.1 (грамматика), §4.3–4.5 (позиции, примеры в обеих формах), §4.5.1 (канон), §4.6 (что не вводится), §6.7.1 (операция `#do` с условием), §7.4 (`default_value`), §9 (строка D-133). Параграф написан так, чтобы реализовать по нему без чтения нашего Go.
+
+### Что меняется в языке
+
+1. **Форма `#if` читается по типу значения ключа `#if…`** — и только по нему, в одном месте движка:
+
+   | Значение ключа `#if…` | Форма | Статус |
+   |---|---|---|
+   | массив `[cond, V]` или `[cond, V, E]` | короткая тернарная | **канон** |
+   | объект с ключом `#value` (легаси `value`) | длинная `{"#and"\|"#or": […], "#value": V, "#else": E}` | читается бессрочно, как сегодня |
+   | строка, число, bool, `null`, объект без `#value` | — | **ошибка загрузки**; толерантный рантайм — ветка не выбрана + `template_unknown_directive {key}` |
+
+2. **`cond` короткой формы — условие без обёртки**: ровно грамматика вашего `#filter` и тела `#enable` — `"@flag"`, `{"@x": "#notEmpty"}`, `{"@x": {"#in": […]}}`, `{"#not": cond}`, `{"#and": [cond, …]}`, `{"#or": [cond, …]}`, вложение любой глубины; легаси `and`/`or` внутри читаются (D-073). Одиночный предикат **не** оборачивается в `#and`.
+3. **`cond` никогда не массив.** Сахар-список `["@a", "@b"]`, допустимый у `#enable`, в позиции условия запрещён: `{"#if": [["@a", "@b"], V]}` — ошибка загрузки (рантайм — ветка не выбрана + `template_unknown_directive`). Несколько условий — только `{"#and": […]}` / `{"#or": […]}`.
+4. **Чтение позиционное:** `[0]` — условие, `[1]` — значение, `[2]` — иначе. `{"#if": ["@a", "@b"]}` = «если `a`, то строка `"@b"`» (с подстановкой `@b`), **не** «`a` и `b`». Длина 2 или 3: один элемент, четыре и более — ошибка загрузки. `V` или `E` = `null` — ошибка загрузки (как `#value: null` / `#else: null` сегодня).
+5. **Семантика короткой формы равна длинной**: `[cond, V]` ≡ `{"#and": [cond], "#value": V}` (но `cond` не оборачивается), `[cond, V, E]` ≡ `… "#else": E`. Ленивое вычисление, Dropped-каскад §5.1, сплайс ветки-массива на один уровень (§4.4, D-123), merge/last-wins и именованные `#if…` (§4.3, D-045), один ключ `#if…` в элементе массива — всё без изменений. Формы можно смешивать (короткая ветка внутри длинной и наоборот).
+6. **Где действует** — везде, где сегодня длинная: map-spread (§4.3), array-element (§4.4, в том числе фрагмент пресета целиком `{"#if": ["@geoip_enabled", {"tag": "geoip-ru", …}]}`), `evalIfScalar` для `on_change.set` (§4.5, §4.7: `{"@dns_strategy": {"#if": ["@ipv6_enabled", "prefer_ipv4", "ipv4_only"]}}`), `default_value` (§7.4, если вы его поддерживаете) и **новое** — объект операции `#do` (п. 8).
+7. **Что НЕ вводится** (решения владельца, §4.6, §2.4 SPEC): плоский гейт `{"#if": cond, …поля…}` — отвергнут, форма гейта остаётся `#enable` (D-065); `#if` значением скалярного поля в `config` (D-044) — по-прежнему нет, ни одной формой; условие внутри значения `#append` (`{"#append": {"#if": …}}`) — отвергнуто. `#enable`, `#filter` — без изменений.
+8. **Операция `#do` с условием (§6.7.1).** Значение ключа `"@имя"` в `#do` может быть объектом с единственным ключом `#if…` (любой формы), к которому на каждом узле применяется обычный map-spread `#if` с пространством узла (`@node`, `@node.<поле записи>`, `@node.body.<путь>`, переменные пресета, глобальные):
+
+   ```json
+   "#do": {
+     "@all_nodes": { "#append": "@node" },
+     "@ts_nodes":  { "#if": [{ "@node.body.type": "tailscale" }, { "#append": "@node" }] },
+     "@own_nodes": { "#if": [{ "#not": "@node.skip_presets" }, { "#append": "@node" }] },
+     "@named":     { "#if": [{ "@node.body.server": "#notEmpty" }, { "#append": "@node.body.server" }, { "#append": "@node" }] }
+   }
+   ```
+
+   - результат на узле — объект **ровно с одним глаголом** (операция выполняется) или **пустой объект `{}`** (`#if` ложен без `E` — узел пропущен молча, без предупреждения, как пустое значение `#append`);
+   - валидатор загрузки проверяет глаголы **внутри обеих веток**: неизвестный глагол, два глагола, ветка не-объект, ветка с ключами кроме глагола — ошибка загрузки; правая часть `#append` в ветке — прежняя норма (ссылка, строка, `#tpl`);
+   - на операции ровно один ключ `#if…` (второй — ошибка загрузки); рядом с `#if…` других ключей нет: `{"#if": […], "#append": …}` — ошибка загрузки;
+   - `#do` без `#if` — как раньше; `#final`, `unique`, `wizard_ui: internal`, порядок шагов §6.7.3 — без изменений.
+
+### Что сделать LxBox
+
+- `if_engine.dart`: один нормализатор формы по типу значения `#if…` → `(cond, V, hasV, E, hasE)`; на него перевести map-spread, array-element и `evalIfScalar`. Короткая форма: `cond` — в тот же `evaluateCond`, что у `#filter`/`#enable`, без обёртки; массив в `[0]` — невалидная форма.
+- Валидатор загрузки: отказы п. 1, 3, 4 с контекстом `…#if: …`; рекурсия в обе ветки короткой формы; ветки `null` — отказ. Элемент массива — объект с одним ключом `#if…` и телом **любого типа** (раньше вы могли требовать объект).
+- `parser_config.dart` (`default_value`), если `#if` там поддержан, — через тот же нормализатор.
+- `preset_expand.dart` (`#do`): перед вычислением правой части прогнать объект операции через map-spread с пространством узла; `{}` → узел пропущен; иначе — обычный `#append`. Разбор `#do` на загрузке — п. 8 (глаголы в обеих ветках, один `#if…`, без соседних ключей).
+- Шаблон LxBox переписывать не обязательно: движок читает обе формы бессрочно. Шаблон лаунчера переведён на короткую форму.
+
+### Корпус — критерий паритета (обязателен)
+
+Парные кейсы: у каждого `short_*` / `do_if_*` есть сосед с длинной формой и тем же `expected`.
+
+- `grammar/`: `short_two_elements`, `short_three_elements`, `short_two_strings_is_ternary`, `short_named_keys`; отказы (`load: reject`, рантайм — ветка не выбрана + `template_unknown_directive`): `short_one_element_rejected`, `short_four_elements_rejected`, `short_cond_sugar_list_rejected`, `short_null_value_rejected`, `short_null_else_rejected`, `short_string_body_rejected`;
+- `map_spread/`: `short_merge_last_wins`, `short_else_merge`, `short_false_no_else_keeps_parent`;
+- `array_element/`: `short_true_replaces`, `short_false_drops_element`, `short_splice_one_level`, `short_fragment_whole_object`;
+- `on_change/`: `short_set_target`;
+- `for_each_node_do/`: `do_if_true_appends`, `do_if_false_skips_node`, `do_if_not`, `do_if_else_other_value`, `do_if_long_form_accepted`; отказы: `do_if_two_verbs_rejected`, `do_if_unknown_verb_in_else_rejected`, `do_if_mixed_with_verb_rejected`, `do_if_two_if_keys_rejected`.
+
+`deps/` без изменений: грамматика `cond` не менялась, раннер deps получает `cond`, а не узел `#if`. Расхождение — сюда.
+
+## 123. Контракт 1.1.126 — поля записи узла `allow_local` / `allow_lan` / `allow_gateway`, `skip_presets` → `skip_tailscale_presets`, пресет `tunnel-ingress`
+
+Решения владельца 15.10.2026 (SPEC 170 лаунчера, D-134) по итогам разбора с агентом ядра sing-box-lx. Норма — `docs/TEMPLATE_LANG.md` §6.5.1 (фильтр `tailscale`), **§6.5.2 (новый: пресет `tunnel-ingress` целиком)**, §6.6 (поля записи), §6.7.5 (поздние дефолты), §9 (строка D-134); `docs/BACKUP.md` (таблица полей узла); `schema/backup.schema.json` (`$defs/sourceServer`, `$defs/node`). Зависит от §122 (короткая форма `#if` и `#if` на операции `#do`): тело пресета написано на ней. Параграф написан так, чтобы реализовать по нему без чтения нашего Go.
+
+### Зачем
+
+Клиентский endpoint — `wireguard` (и AWG), `openvpn-client`, `openconnect` — двусторонний канал. Входящий поток из туннеля ядро отдаёт в роутер как обычное inbound-соединение с `metadata.Inbound = <тег endpoint'а>`. Адресат, равный нашему туннельному адресу, endpoint переписывает в loopback; любой другой идёт по `route.rules` и в `final`. gVisor-стек принимает пакеты на **любой** адрес: сервер WG/AWG, OpenVPN или OpenConnect с той стороны может послать SYN на `192.168.1.1` или на внешний IP — и телефон откроет соединение: при `final = direct` это доступ к LAN пользователя и выход с его IP, при `final = proxy` сервер катается по его цепочке. Tailscale в пресет не входит (контракт 1.1.129, **§126**): пиры tailnet — свои устройства пользователя, их ограничивают ACL Tailscale и фильтр control-plane.
+
+Ядро не меняется (поведение upstream: endpoint задуман как «inbound + outbound», в том числе чтобы публиковать локальные сервисы в WG-сеть). Закрывает генератор конфига: условие `inbound` правила маршрута и DNS-правила матчится по тегу endpoint'а (`route/rule/rule_item_inbound.go` ядра), хотя документация sing-box описывает поле как «Tags of Inbound». `inbound` уже есть в `registry/allowlists.json` → `route_rule_conditions` и `dns_rule_conditions`, гейт «правило без условий» такие правила не трогает. **Автоматики нет:** включённый `private-ip` пиру ничего не открывает — доступ дают только поля записи узла (п. 1).
+
+### 1. Три поля записи узла (§6.6, BACKUP.md)
+
+| Поле записи | Тумблер в форме узла | Что разрешено пиру этого endpoint'а |
+|---|---|---|
+| `allow_local` | Allow access to this device | сервисы на нашем туннельном адресе (ядро уже переписало адресат в loopback). Подсказка обязана предупредить: сервис видит пира как `127.0.0.1`, доступно всё, что доверяет localhost |
+| `allow_lan` | Expose local network | наши частные сети (`ip_is_private`) |
+| `allow_gateway` | Allow as gateway | ходить через нас куда угодно: трафик уходит в outbound `gateway_out` пресета, DNS пира не отбрасывается |
+
+- Тип bool; **пишется только `true`**, отсутствие = `false` — ровно как у прежнего `skip_presets` (в состоянии и в LX Backup).
+- Носитель — свой сервер в корне `sources[]` и член папки (`kind: server`). У узла подписки записи нет: значения всегда ложь, поле не ставится и не читается.
+- В пространстве обхода пресета (`for_each_node`, `for_each_node_do`: `#filter`, `#do`, тело `for_each_node`) — `@node.allow_local`, `@node.allow_lan`, `@node.allow_gateway`, тип bool; у узла подписки — `false`. Закрытый перечень полей записи теперь: `skip_tailscale_presets`, `allow_local`, `allow_lan`, `allow_gateway`; иное имя `@node.<x>` вне `body.` — пустое значение без предупреждения (как сегодня).
+- Тумблеры показываются **только** у узлов с `body.type` ∈ {`wireguard`, `openvpn-client`, `openconnect`} (у AWG `type` тот же `wireguard`). У Tailscale тумблеров нет (1.1.129, §126); значения, если уже стоят в записи, хранятся и переносятся бэкапом, но пресет их у `tailscale` не читает. Строки — в вашей локализации; английские тексты лаунчера: «Incoming connections from this tunnel» (заголовок), «Peers on the other side of this tunnel can open connections to this device. Without the switches below they are rejected.», подсказки — «Peers reach services on this device's tunnel address. The service sees them as 127.0.0.1, so everything that trusts localhost becomes reachable.», «Peers reach private networks behind this device.», «Peers route any traffic through this device; it leaves through the outbound chosen in the Tunnel ingress preset.» (прежняя подсказка у Tailscale про `advertise_routes` снята вместе с тумблерами, 1.1.129).
+- **Импорт бэкапа**: новый узел — значения из файла; узел, совпавший по телу с уже имеющимся (свой сервер — по всему состоянию, член папки — в пределах папки), получает `true` из файла; отсутствие поля в файле своё `true` **не сбрасывает**. Экспорт — только `true`.
+
+### 2. `skip_presets` → `skip_tailscale_presets` (терпимое чтение)
+
+- Поле сужено до того, для чего вводилось вашим §578: «пресет `tailscale` узел не обслуживает». Общее «пресеты с обходом узлов не обслуживают узел» сняло бы и защитный пресет `tunnel-ingress` (п. 3) — тихо открыв шлюз.
+- Новое имя — **везде**: JSON-ключ записи в состоянии и в LX Backup, имя обхода `@node.skip_tailscale_presets`, фильтр пресета `tailscale` в вашем шаблоне:
+  ```json
+  "for_each_node": { "#filter": { "#and": [
+    { "@node.body.type": "tailscale" },
+    { "#not": "@node.skip_tailscale_presets" }
+  ] } }
+  ```
+- **Терпимое чтение:** ключ `skip_presets` в вашем хранилище и в импортируемом бэкапе (любой версии файла) читается как `skip_tailscale_presets` (`true` → `true`; оба ключа сразу — `true`, если хоть один `true`). Пишется **только новый** ключ. Имени `@node.skip_presets` в обходе больше нет (вне перечня — пустое значение; `{"#not": "@node.skip_presets"}` стал бы истиной для всех узлов, поэтому фильтр переписывается, а данные переносятся при чтении).
+- В `schema/backup.schema.json` `skip_presets` оставлен с `"deprecated": true` («читается, не пишется»).
+- Переключатель «Skip Tailscale presets» (бывший «Skip presets») показывается только у узлов `type: tailscale`, и только если пресет с обходом его действительно снимает (проверка «пресет узел обслуживает» прежняя, добавляется условие на тип).
+- Пресет `tunnel-ingress` это поле **не читает**.
+
+### 3. Пресет `tunnel-ingress` (§6.5.2)
+
+Тело одинаковое на обеих сторонах, оболочка — в вашем диалекте (D-046: `preset_id`, `ui{}`, `vars[].default_value`). Тело в форме лаунчера, перенести символ в символ (кроме оболочки; `"default"` у вас — `"default_value"`). Тело поправлено по месту контрактом 1.1.129 (§126): Tailscale выведен, списки служебные, форма — три настройки:
+
+```json
+{
+  "id": "tunnel-ingress",
+  "label": "Tunnel ingress",
+  "description": "Connections arriving from a client tunnel (WireGuard, AWG, OpenVPN, OpenConnect) are rejected unless the node's own switches allow them: access to this device, the local network, or using this device as a gateway. The settings below choose what happens to the rest and where allowed and gateway traffic goes.",
+  "default_enabled": true,
+  "num": 940,
+  "vars": [
+    { "name": "all_nodes",           "type": "text_list", "wizard_ui": "internal" },
+    { "name": "allow_local_nodes",   "type": "text_list", "wizard_ui": "internal" },
+    { "name": "allow_lan_nodes",     "type": "text_list", "wizard_ui": "internal" },
+    { "name": "allow_gateway_nodes", "type": "text_list", "wizard_ui": "internal" },
+    { "name": "closed_nodes",        "type": "text_list", "wizard_ui": "internal" },
+    { "name": "closed_out", "type": "outbound", "default": "reject", "title": "Incoming from tunnels",
+      "tooltip": "What happens to connections arriving from a tunnel that the node's switches did not allow. reject (default) and drop close them; an outbound forwards them." },
+    { "name": "allowed_out", "type": "outbound", "default": "direct-out", "title": "Device and local network go to",
+      "tooltip": "Outbound for peers allowed to reach this device or the local network." },
+    { "name": "gateway_out", "type": "outbound", "default": "proxy-out", "title": "Gateway traffic goes to",
+      "tooltip": "Outbound for peers allowed to use this device as a gateway." }
+  ],
+  "for_each_node_do": {
+    "#filter": { "@node.body.type": { "#in": ["wireguard", "openvpn-client", "openconnect"] } },
+    "#do": {
+      "@all_nodes":           { "#append": "@node" },
+      "@allow_local_nodes":   { "#if": ["@node.allow_local",   { "#append": "@node" }] },
+      "@allow_lan_nodes":     { "#if": ["@node.allow_lan",     { "#append": "@node" }] },
+      "@allow_gateway_nodes": { "#if": ["@node.allow_gateway", { "#append": "@node" }] },
+      "@closed_nodes":        { "#if": [{ "#not": "@node.allow_gateway" }, { "#append": "@node" }] }
+    }
+  },
+  "rules": [
+    { "#if": [{ "@allow_local_nodes": "#notEmpty" },   { "inbound": "@allow_local_nodes",   "ip_cidr": ["127.0.0.0/8", "::1/128"], "outbound": "@allowed_out" }] },
+    { "#if": [{ "@allow_lan_nodes": "#notEmpty" },     { "inbound": "@allow_lan_nodes",     "ip_is_private": true, "outbound": "@allowed_out" }] },
+    { "#if": [{ "@allow_gateway_nodes": "#notEmpty" }, { "inbound": "@allow_gateway_nodes", "outbound": "@gateway_out" }] },
+    { "#if": [{ "@all_nodes": "#notEmpty" },           { "inbound": "@all_nodes",           "outbound": "@closed_out" }] }
+  ],
+  "dns_rules": [
+    { "#if": [{ "#and": [{ "@closed_nodes": "#notEmpty" }, { "@closed_out": { "#in": ["reject", "drop"] } }] },
+              { "inbound": "@closed_nodes", "action": "reject" }] }
+  ]
+}
+```
+
+Что важно при переносе:
+
+- **Позиция на оси правил — сразу после запертой головы** (ваш `traffic-processing`, `num: 0`) и **раньше** `tailscale` (945) и `private-ip` (ваш id; 950 у лаунчера): иначе «private → direct» пропустит пира в LAN, а `preferred_by` пресета `tailscale` — в tailnet. Нетерминальные `sniff`/`resolve` головы ничего не решают, терминальный `hijack-dns` закрывает DNS-правило пресета.
+- **DNS-reject — по `closed_nodes`, а не по `all_nodes`**: пир шлюза обязан резолвить имена, а `hijack-dns` перехватит даже его запрос к внешнему DNS. И только при `closed_out` ∈ {`reject`, `drop`} (условие `#and` в теле): если закрытый трафик направлен в outbound, DNS пирам не режется. Порядок DNS-правил: правило пресета должно стоять раньше «ловящих всё» DNS-правил (например `query_type: A/AAAA → fakeip`), иначе reject не сработает. Место слота — по оси маршрутного правила: норма §6.10, контракт 1.1.127, **§124 ниже** (у лаунчера до 1.1.127 слот вставал в хвост).
+- **`#notEmpty` на каждом правиле обязателен**: без него пустой список у пользователя без туннельных узлов даёт правило без условий → `template_fragment_dropped` и деградацию в отчёте у всех. С ним правило снимается молча (кейс `tunnel_ingress_no_nodes`).
+- **Списки — служебные переменные пресета** (все пять `wizard_ui: internal`, §2.1, с 1.1.129): в форме не показываются, ручного ввода тегов нет, значение из состояния/бэкапа игнорируется, не экспортируется; заполняет их только `#do`, собранное не персистится.
+- **Форма — три настройки** (1.1.129): `closed_out` (по умолчанию `reject`), `allowed_out` (`direct-out`), `gateway_out` (`proxy-out`). Значения `reject` / `drop` переменной `outbound` — сентинелы, как у `block-ads`: правило `{"inbound": [...], "outbound": "reject"}` уходит в конфиг как `{"inbound": [...], "action": "reject"}`, `drop` — `"action": "reject", "method": "drop"`.
+- **Правило без `network`** отбрасывает и ICMP — намеренно.
+- `gateway_out` по умолчанию `proxy-out` (как `route.final`): пир шлюза едет в выбранный outbound, минуя остальные правила; `allowed_out` по умолчанию `direct-out`.
+- Пространство тегов `<preset_id>:` (§6.2) у `for_each_node_do` действует, но значения `inbound` — теги узлов, а не теги пресета: префикс к ним не применяется (корпус сравнивает литералы).
+- WG с `system: true` (кернельный интерфейс) пресет не защищает — там решает ОС, правило просто не срабатывает.
+- **Поздний дефолт** (§6.7.5): пресет включён по умолчанию и у существующих пользователей появляется сам, один раз; удалённый пользователем — не возвращается. Добавьте `tunnel-ingress` в `kLateDefaultPresetIds` (лаунчер: `LateDefaultPresetIDs = ["tailscale", "tunnel-ingress"]`).
+- `registry/presets.json`: `tunnel-ingress` объявлен `in: desktop` до вашей реализации; после неё — сообщите, переведём в `both` (ссылка `{kind: preset, ref: tunnel-ingress}` станет переносимой).
+
+Итог для узлов `wg-home` (WireGuard, без полей), `oc-work` (OpenConnect, `allow_local` + `allow_lan`), `ts` (Tailscale, `allow_gateway` — не учитывается, 1.1.129), `wg-exit` (WireGuard, `allow_gateway`), `v1` (VLESS, `allow_lan` — не туннель, не учитывается), настройки по умолчанию:
+
+```json
+"route.rules": [
+  { "inbound": ["oc-work"], "ip_cidr": ["127.0.0.0/8", "::1/128"], "outbound": "direct-out" },
+  { "inbound": ["oc-work"], "ip_is_private": true, "outbound": "direct-out" },
+  { "inbound": ["wg-exit"], "outbound": "proxy-out" },
+  { "inbound": ["wg-home", "oc-work", "wg-exit"], "action": "reject" }
+]
+"dns.rules": [ { "inbound": ["wg-home", "oc-work"], "action": "reject" } ]
+```
+
+С `closed_out: proxy-out` последнее правило — `{ "inbound": ["wg-home", "oc-work", "wg-exit"], "outbound": "proxy-out" }`, DNS-правила нет.
+
+### Что сделать LxBox
+
+- Модель узла (свой сервер, член папки): три bool `allow_local`, `allow_lan`, `allow_gateway`; `skip_presets` → `skip_tailscale_presets` с терпимым чтением старого ключа из хранилища; запись — только `true`, только новые ключи.
+- Бэкап: экспорт новых ключей (только `true`); импорт — терпимое чтение `skip_presets`, слияние «только `true`» для всех четырёх полей у узла, совпавшего по телу; `skip_presets` не писать никогда.
+- `preset_expand.dart` (пространство узла обхода): положить `@node.skip_tailscale_presets`, `@node.allow_local`, `@node.allow_lan`, `@node.allow_gateway` (bool; у узла подписки — `false`); `@node.skip_presets` из пространства убрать.
+- Шаблон: фильтр пресета `tailscale` на новое имя; новый пресет `tunnel-ingress` (тело выше, `num` — между вашей запертой головой и `tailscale`); `kLateDefaultPresetIds` += `tunnel-ingress`.
+- Форма узла: три тумблера у трёх типов (п. 1; без `tailscale` — 1.1.129), «Skip Tailscale presets» — только у `tailscale`.
+
+### Корпус — критерий паритета (обязателен)
+
+- `corpus/template/for_each_node/*` и `corpus/template/for_each_node_do/do_if_*`: поле `nodes[].skip_presets` → `nodes[].skip_tailscale_presets`, фильтры `@node.skip_presets` → `@node.skip_tailscale_presets`; ожидания не менялись. Формат `nodes[]` в README корпуса: `{tag, body, enabled?, in_config?, skip_tailscale_presets?, allow_local?, allow_lan?, allow_gateway?}` — раннер кладёт поля записи в пространство узла.
+- Новые: `for_each_node_do/tunnel_ingress_mixed` (тело §6.5.2 в форме ядра — `default_value` вместо `default`, без оболочки; узлы `wg-home`, `oc-work`, `ts`, `wg-exit`, `v1`; `vars.json` — `{}`; ожидание — четыре правила и DNS-правило выше, `ts` нигде нет, `warnings` пусты), `for_each_node_do/tunnel_ingress_closed_out_forwarded` (те же узлы, `vars.json` — `{"closed_out": "proxy-out"}`; последнее правило с `outbound`, DNS-правил нет) и `for_each_node_do/tunnel_ingress_no_nodes` (один узел VLESS, ввода нет — `rules`, `dns_rules` пусты, `warnings` пусты: каждое правило снято своим `#notEmpty`, без `template_fragment_dropped`).
+- Бэкап-корпус не менялся: старый ключ в существующих фикстурах `corpus/backup/` не встречается; терпимое чтение проверяйте своим тестом (у лаунчера — `TestLoadLegacySkipPresetsKey` в состоянии и в импорте).
+
+Расхождение — сюда.
+
+## 124. Контракт 1.1.127 — DNS-слот пресета появляется по оси маршрутного правила
+
+Решение владельца 15.10.2026 (SPEC 171 лаунчера, D-135). Повод — известное ограничение SPEC 170 (§123): DNS-reject пресета `tunnel-ingress` у существующего пользователя вставал в хвост `dns.rules` и не срабатывал за «ловящим всё» правилом `fakeip`. Норма — `docs/TEMPLATE_LANG.md` **§6.10 (новый)**, ссылки из §6.5.2 и §6.7.5; `docs/BACKUP.md`, таблица `dns`, строка `rules[].ref`. Реестр и корпус не менялись.
+
+### Норма
+
+Маршрутные правила `rules[]` живут на оси `num`; DNS-правила `dns.rules[]` номера не имеют, их порядок — порядок пользователя. **Когда запись `dns.rules[] {kind: preset, ref: <id>}` создаётся впервые** — поздний дефолт (`seedLateDefaultPresets`), включение пресета пользователем, импорт состояния или LX Backup без такой записи, правка через API, сборка на состоянии без записи, — она встаёт **перед первым уже стоящим слотом пресета, чей `num` маршрутного правила больше** номера этого пресета; такого слота нет — в конец.
+
+- Номер — `num` правила `rules[]` с тем же `ref` (неразмеченное — 1000); у позднего дефолта это номер шаблона, выставленный засевом.
+- Пользовательские DNS-правила (`kind: user`) не учитываются и не двигаются: правило пользователя выше всех пресетов остаётся выше нового слота.
+- Уже стоящие слоты не переупорядочиваются (ничто не отличит «перетащил» от «дописано в хвост»); равные номера — новый слот после. Миграции записанных состояний нет: `tunnel-ingress` ни в одном релизе ещё не появлялся, он придёт уже по норме; `tailscale` у существующих пользователей остаётся где стоит.
+
+Итог у пользователя с `fakeip` (1130) и своим DNS-правилом первым: `dns.rules = [user, tunnel-ingress (940), fakeip]` — reject закрытых пиров раньше `A/AAAA → fakeip`; на чистой установке порядок прежний (слоты по оси).
+
+### Что сделать у LxBox
+
+- Точка, которая создаёт DNS-запись пресета (у лаунчера одна функция места, три вызывающих: синхронизация DNS-записей при сохранении/API, восстановление порядка в редакторе DNS после засева/включения, сборка на состоянии без записи): вместо «в конец» — индекс первого слота пресета с бо́льшим `num`, иначе конец. Если ваша модель DNS хранит порядок пресетных правил иначе (`order_num` и т. п.) — та же норма в её терминах: место нового слота по оси маршрута, существующие не двигать.
+- `seedLateDefaultPresets`: после засева маршрутного правила DNS-слот пресета — по этой же норме (не хвост).
+- Критерий: состояние с включённым `fakeip`, своим DNS-правилом первым и `late_presets_seeded: [tailscale]` → после засева `tunnel-ingress` и сборки с узлом WireGuard без `allow_*`: в `dns.rules` конфига правило пользователя первым, `{"action":"reject","inbound":[…]}` раньше `query_type: [A, AAAA]` (у лаунчера — `TestLatePresetDNSRuleTakesAxisPosition`).
+
+Расхождение — сюда.
+
+## 125. Контракт 1.1.128 — пресет `split-all-traffic` снят (desktop-only)
+
+Решение владельца 15.10.2026: пресет «Split all traffic 50/50 across two outbounds» не актуален и снят из шаблона лаунчера и из `registry/presets.json`. Он был `in: desktop` — у LxBox работы нет. Если в бэкапе встретится правило `{kind: "preset", ref: "split-all-traffic"}`, действует общая норма TEMPLATE_LANG §6.1 для неизвестного id: правило выключено + warning, не потеря.
+
+Расхождение — сюда.
+
+## 126. Контракт 1.1.129 — Tailscale выведен из `tunnel-ingress`; форма пресета — три настройки
+
+Решения владельца 15.10.2026 (SPEC 170 лаунчера, изменение; D-136). Норма — `docs/TEMPLATE_LANG.md` §6.5.2 (абзац «Почему без Tailscale», тело пресета), `docs/BACKUP.md` и `schema/backup.schema.json` (описания `allow_*`), `registry/presets.json` (note). Тело пресета и итог кейса в **§123** поправлены по месту — переносите оттуда.
+
+### Почему
+
+Пиры tailnet — свои устройства пользователя, доступ к ним уже ограничивают ACL Tailscale и фильтр control-plane: он пропускает к нам только наши адреса и анонсированное `advertise_routes` / `advertise_exit_node`, которые пользователь задаёт явно в узле. Под reject по умолчанию устройства пользователя перестали бы доставать эту машину по tailnet.
+
+### Что меняется
+
+- `#filter` пресета `tunnel-ingress`: `{"@node.body.type": {"#in": ["wireguard", "openvpn-client", "openconnect"]}}`; в `description` — «(WireGuard, AWG, OpenVPN, OpenConnect)».
+- Тумблеры `allow_local` / `allow_lan` / `allow_gateway` у узла `tailscale` не показываются (подсказка про `advertise_routes` у Tailscale снята). Значения, если уже стоят в записи, **остаются** (хранилище, экспорт/импорт бэкапа как прежде), обход их у `tailscale` просто не читает — фильтр узел не берёт.
+- `skip_tailscale_presets` и пресет `tailscale` — без изменений.
+
+### Форма пресета: настройки вместо списков
+
+В форме пресета пользователь не видит заполняемые списки — только настройки по умолчанию.
+
+- Все пять списков (`all_nodes`, `allow_local_nodes`, `allow_lan_nodes`, `allow_gateway_nodes`, `closed_nodes`) — `wizard_ui: "internal"`, без `unique` (`#append` по тегам узлов дублей не даёт). Ручного ввода тегов больше нет; значение из хранилища/бэкапа у internal игнорируется (D-132).
+- Видимы ровно три переменные `outbound`, в таком порядке: `closed_out` (по умолчанию `reject`, «Incoming from tunnels»), `allowed_out` (`direct-out`, «Device and local network go to»), `gateway_out` (`proxy-out`, «Gateway traffic goes to»); тексты подсказок — в теле §123.
+- Правила: loopback и LAN разрешённых — в `@allowed_out` (было `direct-out`); шлюз — `@gateway_out`; всё прочее из туннеля — `{"inbound": "@all_nodes", "outbound": "@closed_out"}` (было `"action": "reject"`). Сентинелы `reject` / `drop` переменной `outbound` превращаются в action, как у `block-ads`: при значении по умолчанию в конфиге `"action": "reject"`.
+- DNS-правило — под `#and` из `{"@closed_nodes": "#notEmpty"}` и `{"@closed_out": {"#in": ["reject", "drop"]}}`: если закрытый трафик куда-то направлен, DNS пирам не режется.
+- `description` переписан: без списков и ручных тегов, о трёх настройках одной фразой.
+
+### Корпус
+
+- `for_each_node_do/tunnel_ingress_mixed` — узел `ts` (tailscale, `allow_gateway`) оставлен как доказательство исключения, добавлен `wg-exit` (wireguard, `allow_gateway`); `vars.json` — `{}` (ручного `manual-wg` нет): правило шлюза `{"inbound": ["wg-exit"], "outbound": "proxy-out"}`, reject по `["wg-home", "oc-work", "wg-exit"]` (`"action": "reject"`), DNS-reject по `["wg-home", "oc-work"]`.
+- Новый `for_each_node_do/tunnel_ingress_closed_out_forwarded` — те же узлы, `{"closed_out": "proxy-out"}`: последнее правило `{"inbound": ["wg-home", "oc-work", "wg-exit"], "outbound": "proxy-out"}`, `dns_rules` пуст.
+- `tunnel_ingress_no_nodes` — новое тело, ожидание то же. Все три кейса — критерий паритета.
+
+Расхождение — сюда.
+
+## 127. Контракт 1.1.130 — `rules[].dns` стал полем обеих сторон (DNS-зеркало правила)
+
+Решения владельца 15.10.2026 (SPEC 172 лаунчера, D-137). Норма — `docs/TEMPLATE_LANG.md` §6.11, `registry/allowlists.json` (`rule_dns_mirror_match`, `rule_dns_mirror_gate` — новые), `docs/BACKUP.md` (таблица `rules[]`), `docs/ONE_NAMESPACE.md` §1, `schema/backup.schema.json` (`$defs/rule/properties/dns`). Повод — issue #140 лаунчера.
+
+### Что меняется для вас
+
+- **Форма — ваша, без изменений:** `{"enabled", "serverTag", "forceIpv4"?}` у `inline` и `srs`. Ключи остаются camelCase (решение владельца: данные уже записаны, переименование — миграция обеих сторон ради стиля).
+- **Лаунчер поле теперь читает, хранит, применяет и пишет на экспорте.** Раньше терял на импорте и при сохранении Конфигуратора: ваши DNS-опции, прошедшие через лаунчер, возвращались пустыми. Импорт — как вся запись правила (`rules[]` замещаются целиком): отсутствие `dns` в файле лаунчера = опций нет.
+- `resolve{}` — без изменений: LxBox-only, лаунчер игнорирует молча и не пишет (в таблице `rules[]` снято обещание «провозит», которого код не выполнял).
+
+### Норма сборки §6.11 — сверить со своей
+
+Описана по вашему §117 задача 3 / §256 / §257; обобщена на порядок DNS лаунчера, где слоты пресетов не уплотняются (порядок пользователя, SPEC 062):
+
+1. **Место.** Пара «глушилка + зеркало» правила с номером `N` — перед первым слотом пресета с номером больше `N`, иначе сразу после последнего слота, иначе в конец. При вашем уплотнённом блоке слотов (решение №6) в порядке оси это даёт ту же последовательность, что ваша группа у первого слота. Отличие возможно только у пользователя, переставившего слоты пресетов не по оси, — у вас такого состояния нет.
+2. **Матчер inline.** У вас — headless `rule_set` из всех матчеров тела (включая `ip_cidr`), у нормы — ключи тела из списка реестра `rule_dns_mirror_match` прямо в DNS-правиле, IP назначения (`ip_cidr`, `ip_is_private`) не участвуют. Для доменов и приложений результат один; IP-часть DNS-запрос не проверяет. Если по ядру у вас иначе — сюда.
+3. **Гейт** — список реестра `rule_dns_mirror_gate`: `port`, `port_range`, `protocol`, `network` (как у вас в коде; в вашем §256/STORAGE.md `network` не упомянут).
+4. **Сервер:** удалённый — зеркала нет (у вас молча, у лаунчера — предупреждение в отчёте сборки; в конфиге одинаково); выключенный — включается принудительно (ваш locked №7).
+5. **Пустой матчер** — ничего не выпускается (ваше `if (mirror.isEmpty) return;`).
+
+### Критерий
+
+Бэкап LxBox с `rules[].dns` → импорт в лаунчер → экспорт → импорт в LxBox: объект `dns` у правил тот же. На одном состоянии (правила inline/srs с `dns`, слоты пресетов подряд по оси) конфиги обеих сторон дают тот же порядок DNS-правил, те же серверы и те же действия (`server`, `predefined` у Force IPv4). Тела матчеров не сравниваются: у LxBox — `rule_set` правила плюс `inbound`, у лаунчера — inline-ключи из `rule_dns_mirror_match`; разница тел при равном результате для доменов и приложений расхождением контракта не считается (решение LxBox, §656 п. A7; закрыто в §129, контракт 1.1.132).
+
+Расхождение — сюда.
+
+## 128. Контракт 1.1.131 — `tunnel-ingress` у обеих сторон; умолчание outbound-переменной по диалекту
+
+Закрытие §122–§126 по ответу LxBox (develop 9bb89608, §656; корпус паритета зелёный, расхождений нет).
+
+- `registry/presets.json`: `tunnel-ingress` → `in: both`.
+- §6.5.2: `default` переменной типа `outbound` в теле пресета — главный селектор стороны, как `route.final`: лаунчер `proxy-out`, LxBox `vpn-1`. Литерал не нормативен, как и оболочка пресета; остальное тело совпадает символ в символ.
+- §124: у LxBox выполнено по построению (блок слотов пресетов уплотнён к первому, зеркала в порядке оси), критерий подтверждён тестом — принято.
+- Форма пресета у LxBox не предлагает `drop` в выборе outbound; сборка `drop` понимает. Не расхождение контракта, отмечено как известное различие форм.
+- Вопрос §127 п.2 (матчер inline-зеркала: rule_set против ключей inline, предложение ослабить критерий до «тот же порядок и те же серверы») — у владельца SPEC 172, ответ отдельным параграфом.
+
+Расхождение — сюда.
+
+## 129. Контракт 1.1.132 — критерий паритета DNS-зеркала: порядок, серверы, действия
+
+Закрытие §127 пп. 2, 4–5 по решению LxBox (§656 п. A7; владелец лаунчера передал решение LxBox). Критерий §127 переписан по месту: сравниваются порядок DNS-правил, серверы и действия; тела матчеров — нет (LxBox: headless `rule_set` правила плюс `inbound`; лаунчер: inline-ключи из `rule_dns_mirror_match`). Норма §6.11 TEMPLATE_LANG уточнена: форма матчера `M` — выбор стороны при равном результате. `network` в гейте — расхождения нет (у LxBox был в коде, дописан в STORAGE.md). Бампа норм у LxBox не требуется.
+
+Расхождение — сюда.
+
+## 130. Контракт 1.1.133 — переменная `auto_redirect` (desktop, только Linux)
+
+Для сведения, задачи у LxBox нет. В `registry/vars.json` добавлена desktop-переменная `auto_redirect` (`bool`, `portable: false`, `in: desktop`) — `tun.auto_redirect` sing-box. Повод — issue #129 лаунчера: firewalld на Linux-десктопе молча рубит локальный TCP-форвардер стека `system`, nftables-редирект ядра его обходит. Лаунчер эмитит ключ в tun-инбаунд только при `platform = linux` и `auto_route`; default `true` на `local`, `false` на `remote`. На Android ключ не применим — в бэкапе не ходит (непереносима), импорт у вас ничего нового не увидит.
+
+Расхождение — сюда.
+
+## 131. Контракт 1.1.134 — шаблонные DNS-серверы в бэкапе: полный список файла своего приложения
+
+Ответ на запрос §680 (решение владельца 23.10.2026). `BACKUP.md` §9 п. 5 переписан: записи `kind: template` — полный список файла, записи приёмника с тегом вне списка снимаются; файл без серверов состав не трогает; `user`/`preset` — слияние как раньше. D-138.
+
+**Поправка лаунчера — нужна правка у вас.** Норма действует только для файла, у которого `exported_by.app` равен `lxbox`. Каталоги шаблонов разные: у LxBox есть `opendns_doh` и `yandex_dot`, в шаблоне лаунчера их нет, а у состояния, ни разу не сохранённого Конфигуратором, записей `kind: template` может не быть вовсе (сборка берёт умолчания шаблона). Бэкап с десктопа на телефон по текущему коду `applyDnsBackup` (647a5ef1) снимет у приёмника все шаблонные серверы, которых нет в файле лаунчера, — пользователь их не удалял. Задача: в `applyDnsBackup` (или в `lx_backup_import.dart` перед вызовом) условие снятия `incoming.servers.isNotEmpty` дополнить `exported_by.app == lxbox`; файл лаунчера — слияние, как было до §680.
+
+У лаунчера каталога нет: библиотека шаблона эмитится целиком, удалить шаблонный сервер нельзя, и снятие записи вернуло бы сервер к умолчанию шаблона, а не убрало бы его. Поэтому импорт лаунчера не меняется — кода с нашей стороны нет. Перенос телефон→TV (§622) идёт LxBox→LxBox и под норму попадает.
+
+**Закрыто 23.10.2026.** LxBox: синк 1.1.134 (e97c2706), условие `exported_by.app == lxbox` в `applyDnsBackup` (1e12bc1c) — файл лаунчера и файл без `exported_by` сливаются, как до §680; тесты `dns_backup_merge_test` (кейсы «файл launcher без `opendns_doh`/`yandex_dot`» и «без `exported_by`») и `lx_backup_roundtrip_test` зелёные.
+
+Расхождение — сюда.
+
+## 132. Контракт 1.1.135 — однородная модель шаблонных DNS-серверов: каталог источника в файле
+
+Ответ на предложение LxBox (спека 681, решение владельца 23.10.2026). D-139, норма — `docs/BACKUP.md` §9 п. 5 (блок «Состав шаблонных серверов — каталог источника»), поле `dns.template_catalog` в §2 и в `schema/backup.schema.json`, коды `backup_dns_entry_kept`, `backup_dns_resolver_reset`, `backup_dns_group_empty` в `registry/backup_warnings.json`.
+
+Принято, как предложено, с тремя уточнениями лаунчера:
+
+1. **`required: true` — удерживающая ссылка.** У лаунчера `local_dns_resolver` и `direct_dns_resolver` помечены `required`, сборка эмитит их всегда; снятая запись вернулась бы сама. `used_by: required`. В вашем шаблоне `required` нет — у вас ничего не меняется.
+2. **Файл без каталога: снятие только LxBox→LxBox.** В предложении «`exported_by.app` равен приёмнику → каталог приёмника» — для лаунчера-приёмника это ошибка: файлы лаунчера до 1.1.135 полным списком не были (запись `kind: template` появлялась после первого сохранения Конфигуратора), и старый файл лаунчера, ввезённый в новый лаунчер, снял бы нетронутые серверы. У вас поведение то же, что вы описали.
+3. **`used_by` — закрытый словарь:** `final`, `default_domain_resolver`, `dns_rule:<server>`, `rule:<name>`, `group:<tag>`, `server:<tag>`, `preset:<id>`, `required`. Первая удерживающая ссылка, одна на запись.
+
+**Номер решения.** D-133 был занят (SPEC 169, `TEMPLATE_LANG.md` §9): решение 1.1.134 перенумеровано в D-138, ваши комментарии и CHANGELOG со ссылкой на D-133 по §680 стоит поправить на D-138.
+
+**Лаунчер в этом заходе** только терпит `template_catalog` (ключ известен, `backup_unknown_field` нет; импорт — слияние без снятия, как у файла без каталога от другого приложения). Модель каталога, миграция, экспорт полного списка с каталогом и импорт по норме — SPEC 173 лаунчера. До её выхода файл лаунчера каталога не несёт, и ваш импорт по переходной ветке его сливает — данные телефона в безопасности.
+
+Задача вам: п. 3–6 спеки 681 по норме 1.1.135 (экспорт `template_catalog`, правило снятия с локами, переходная ветка, сброс резолверов, пустая группа), корпус бэкапа — кейсы из «Проверки» 681.
+
+**Закрыто 23.10.2026.** LxBox: синк 1.1.135 (9f68fe0f), норма реализована (fd804017), D-133 → D-138 поправлено в спеке 680. Две трактовки LxBox внесены в норму контрактом 1.1.136: `rules[].dns` удерживает сервер по непустому `serverTag` независимо от `enabled`; «DNS-правило списка» — только `dns.rules` состояния (у обоих шаблонов DNS-правил нет). Кейсы корпуса с `template_catalog` кладёт лаунчер в SPEC 173 (T10) — ваш `backup_corpus_test` их подхватит. Бампа норм у LxBox для 1.1.136 не требуется.
+
+Расхождение — сюда.
+
+## 133. Контракт 1.1.137 — кейс корпуса `v10_dns_template_catalog`
+
+Лаунчер реализовал свою часть D-139 (SPEC 173): посев каталога один раз с миграцией старых состояний, удаление шаблонных серверов на вкладке DNS с локами `used_by`, экспорт `dns.template_catalog` и полного списка, импорт по `BACKUP.md` §9 п. 5 (снятие, `backup_dns_entry_kept`, `backup_dns_resolver_reset`, `backup_dns_group_empty`). Обещанный в §132 кейс корпуса — `corpus/backup/v10_dns_template_catalog.*` (с фикстурой шаблона и предсостоянием): снятие по каталогу файла, удержание `dns.final` и DNS-правилом списка, тег вне каталога файла не тронут, сброс висячего `default_domain_resolver`, пустая ввезённая группа выключена. Ожидания — без `warning_reasons`: форма параметров предупреждения у сторон своя (у лаунчера `used_by` едет полем `reason`), и `used_by` корпусом не сверяется.
+
+Уточнение конвенции раннера (`corpus/backup/README.md`): у кейса с `<case>.template.json` пустое состояние — пустой список DNS-серверов при уже засеянном каталоге. Ваш раннер так и работает (пустой `dnsServers`); у лаунчера посев идёт на импорте, и Go-раннер помечает каталог фикстуры засеянным до импорта предсостояния.
+
+Задача вам: синк 1.1.137 и прогон `backup_corpus_test` на новом кейсе. Норм и кодов 1.1.137 не меняет. Расхождение — сюда.
+
+## 134. Контракт 1.1.138 — `rules[].dns.fixed` / `fixedIps` (поля стороны LxBox)
+
+Ответ на запрос §683. Поля объявлены в `schema/backup.schema.json` (`$defs/rule/properties/dns`) с «Поддержка: LxBox» и строками таблицы «Поля стороны LxBox» в `docs/BACKUP.md` §2 — по вашей формулировке: `fixed` пишется только `true`, `fixedIps` — только непустым и хранится при `fixed: false`; при `fixed: true` `serverTag` и `forceIpv4` не эмитятся.
+
+Лаунчер поля игнорирует молча: разбор 1.0 ключи внутри `rules[].dns` не сканирует, `backup_unknown_field` не будет, кода с нашей стороны нет. Известное различие сборки: лаунчер `fixed` не знает и правило с `fixed: true` собирает по `enabled`/`serverTag`, как без него, — у десктопа эти домены резолвит сервер, а не локальный ответ. Если нужен паритет сборки — отдельный запрос.
+
+**Закрыто 23.10.2026.** LxBox синкнут на 1.1.138 (861f3f8a), корпус бэкапа зелёный, включая `v10_dns_template_catalog`. Паритет сборки `fixed` на десктопе не запрошен — решение за владельцем.
+
+Расхождение — сюда.
+
+## 135. Контракт 1.1.139 — `rules[].dns.fixedIps` у обеих сторон, `fixed` снят
+
+Ответ на запрос паритета §683 и поправку владельца 24.10.2026 (поле одно, флага нет). Норма сборки — `docs/TEMPLATE_LANG.md` §6.11, блок «Локальный ответ — `fixedIps`», по вашей формулировке п. 2 и 5 плюс новая норма активации: режим есть, когда в `fixedIps` хоть одна строка разбирается как IP; тогда `enabled`/`serverTag` и `forceIpv4` не эмитятся (хранятся). `fixed` убран из схемы и из таблицы «Поля стороны LxBox»; в файле 1.1.138 — лишний ключ, игнорируется молча.
+
+**Корпус `corpus/rule_dns/`** — новый: вход `<case>.rule.json` (запись правила, наборы srs считаются скачанными), выход `<case>.expected.json` → `dns_rules[]` без ключей матчера (список реестра `rule_dns_mirror_match`; форма `M` — выбор стороны, §6.11). Кейсы: `inline_fixed_v4`, `inline_fixed_v4_v6`, `srs_fixed_v4`, `fixed_unparsable_falls_back`. Порядок ключей внутри объекта не нормативен. Задача вам: раннер корпуса и прогон.
+
+Лаунчер реализовал: окно правила, вкладка DNS — «Answer»: Default / Dedicated server / Fixed IP (многострочное поле, одна строка — один адрес, неразбираемая строка блокирует Save); строка правила на вкладке DNS — `Fixed IP: <адреса>`.
+
+**Закрыто 24.10.2026.** LxBox: синк 1.1.139 (f48ac7c0), раннер корпуса `app/test/contract/rule_dns_corpus_test.dart` (c5c2842a) — все 4 кейса проходят, расхождений нет.
+
+Расхождение — сюда.
+
+
+## 136. Запрос LxBox — несколько `[Peer]` в WireGuard INI (26.10.2026)
+
+Запрос стороны LxBox лаунчеру (LxBox §686 п. 10, слово владельца 26.10.2026: «много peer допустимо в INI — снять ограничение»). Норму меняет лаунчер; LxBox делает свою сторону после синка.
+
+**Сейчас.** `registry/protocols/wireguard.json` → `mappers.conf.ini_dialect.sections.Peer`: `repeat: first_only`, `on_extra: wgconf_extra_peer_dropped`. Обоснование в `impl` — «узел sing-box — это ОДИН peer, и вторая [Peer] в него не помещается по построению». Это неверно для ядра: у endpoint `wireguard` поле `peers` — массив, трафик между пирами разводится по `allowed_ips` (docs/configuration/endpoint/wireguard.md форка). Тело JSON с двумя пирами уже сейчас уходит в ядро дословно и работает; режется только путь INI. Модель LxBox (`WireguardSpec.peers`) — список.
+
+**Что просим.**
+
+1. Реестр: у секции `Peer` — повторы разрешены; каждая секция `[Peer]` → свой элемент `peers[]` с параметрами таблицы `mappers.conf.params`, адресованными `ini.Peer.*` (PublicKey, PresharedKey, Endpoint с его `extract`/`on_no_match`, AllowedIPs, PersistentKeepalive, Reserved и прочие). Порядок элементов — порядок секций в файле. `[Interface]` — одна, как сейчас. Код `wgconf_extra_peer_dropped` для INI больше не выдаётся (из словаря — по вашему правилу снятия кодов).
+2. Движок разбора обеих сторон: `parseINIDialect` (`core/config/linkmap/detect.go:688`) отдаёт `map[string]map[string]string` — по одному экземпляру секции; нужен список экземпляров для повторяемой секции. У LxBox то же место — `services/parser/engine/ini_space.dart` (`repeat`).
+3. `required` у параметров `ini.Peer.*` — на каждый элемент: `[Peer]` без PublicKey или Endpoint — та же реакция реестра, что сейчас у единственной секции (на ваше решение: снять один элемент с кодом или весь узел).
+4. Ссылка (`wireguard://`, `awg://`, форма `conf_b64` — она декодируется в INI и пойдёт тем же путём, то есть тоже получит все пиры) — у формы `key@host` второго пира нет места, она остаётся с одним.
+5. Корпус: `conf/wireguard/multi_peer` — INI с двумя `[Peer]` (разные `AllowedIPs`), ожидание — `peers` из двух элементов в порядке файла; кейс с AWG-полями в `[Interface]` и двумя пирами — по желанию.
+
+**Открытый вопрос — ваш.** Пересекающиеся `AllowedIPs` у двух пиров: ядро решает само (wireguard-go: побеждает последний добавленный префикс). Предлагаем не валидировать в реестре и не предупреждать; если считаете, что предупреждение нужно — код и текст на вас.
+
+**LxBox после синка:** разбор INI с N пирами, вкладка INI в редакторе узла выводит все пиры тела (обратный ход по той же таблице `conf`), Edit INI ничего не теряет на теле с N пирами.
+
+Расхождение — сюда.
+
+**Ответ лаунчера — контракт 1.1.140 (26.10.2026).** Все пять пунктов и уточнения из сессии LxBox (п. 3: код `wgconf_peer_dropped` {index, missing}, снятие одного пира и за негодный ключ; п. 5: третий кейс) приняты как есть. Подробно — строка 1.1.140 в `README.md`.
+
+1. Реестр: `mappers.conf.ini_dialect.sections.Peer` → `repeat: each`, `into: peers[]`, `on_drop: {code: wgconf_peer_dropped}`. Новый примитив диалекта — `repeat: each` (`schema/registry_mapper.schema.json` `ini_section`): таблица исполняется на каждом экземпляре секции отдельно, элементы `into` из всех прогонов встают в тело в порядке файла, всё вне `into` (Interface, метка, род) — от первого уцелевшего. Метка по-прежнему `ini.$comment.Peer` — первый комментарий первой `[Peer]` файла. `wgconf_extra_peer_dropped` из словаря снят.
+2. Движок Go: `parseINIDialect` отдаёт экземпляры секции с `each` (`iniDoc.Instances`), `Exec` → `execEach` (`core/config/linkmap/exec.go`).
+3. `required` на элемент: экземпляр без обязательного ключа (запись с `required`, все источники которой — ключи этой секции) снимается до прогона с `wgconf_peer_dropped` {`index` — номер `[Peer]` с 1, `missing` — ключи, как их пишет реестр, через `, ` по алфавиту}; **путь кода — `peer.<index>`** (нужен дедупу (код, путь) при двух снятых). Экземпляр, чей прогон отказал иначе, — кодом отказа с `index`. Не уцелел ни один — прежний отказ required первого. Негодный ключ — на ТЕЛЕ: у `peers` новый атрибут `on_item_failure: {action: drop_item, code: wg_peer_dropped, core_rejects: true}` (`schema/registry_body.schema.json`) — отказ узла внутри элемента (`on_invalid: drop_node` или незаполненное `required`) снимает элемент, коды его обхода заменяются одним `wg_peer_dropped` с путём элемента (`peers[1]`, индекс входа) и параметрами `index` (с 1) и `reason` (код отказа: `wg_key_invalid`, `field_missing`, …); не уцелел ни один — массив судится заново без изоляции, и узел получает прежний отказ первого; единственный элемент не изолируется. Правило тела — для всех входов, включая sing-box JSON и авторское тело (`core_rejects`).
+4. Ссылка `key@host` — один пир; `conf_b64` идёт через INI и получает всех. Пересечение `AllowedIPs` не судим. Ваша заметка про `_withIniDialect` попала в цель: у Go форма `conf_b64` (`mappers.uri`) своего диалекта не имела и читала текст диалектом по умолчанию — две `[Peer]` слипались в один пир ключами второй. Теперь норма записана: секция с формой `ini` без своего `ini_dialect` берёт диалект соседней секции протокола (`core/config/registry/mapper.go:shareIniDialect`); кейс `corpus/uri/wireguard/awg_conf_base64_multi_peer`.
+5. Корпус `corpus/body/wgconf/` (имя каталога вида — не `conf/wireguard`): `ini_extra_peer` переименован в `ini_multi_peer` (два пира, разные AllowedIPs, второй с keepalive), новые `ini_multi_peer_awg`, `ini_multi_peer_missing_key` (ожидание — один пир и `wgconf_peer_dropped` {index 2, missing PublicKey}, путь `peer.2`), `ini_multi_peer_bad_key` (три пира, у второго `PublicKey = not-a-key` → пиры 1 и 3 и `wg_peer_dropped` {index 2, reason wg_key_invalid}, путь `peers[1]`). Раннер лаунчера теперь сверяет и `warnings` ожидания — включением (каждый записанный код обязан найтись; путь и параметры — если записаны). Формат корпуса тел (`code`/`path`/`value`) параметров не несёт, поэтому в ожиданиях — код и путь; `index`/`missing`/`reason` нормативны по тексту выше и по словарю.
+
+Задача вам: синк, разбор INI с N пирами (`ini_space.dart`), `on_item_failure` у санитайзера, прогон пяти кейсов (четыре `body/wgconf` и один `uri/wireguard`), вкладка INI.
+
+Расхождение — сюда.
+
+**Закрыто 27.10.2026.** LxBox: синк 1.1.140 на 6a613701 (e8b9a39e), сторона реализована (18baf288c: `ini_space.dart` с `repeat: each`, `on_item_failure` в санитайзере, `WireguardSpec` несёт все пиры), вкладка INI — §686 п. 9–10. Пять кейсов корпуса (`body/wgconf/ini_multi_peer*` и `uri/wireguard/awg_conf_base64_multi_peer`) зелёные у обеих сторон (CI LxBox 40399679187, лаунчера 40393072581). Расхождений нет.
+
+## 137. Контракт 1.1.141 — `trusttunnel` как известный тип outbound (29.10.2026)
+
+Повод — живой дефект лаунчера: узел `{"type":"trusttunnel", …}` (AdGuard TrustTunnel; ядро sing-box-lx с 1.14.3-lx.21, FEATURE 018: proxy CONNECT с Basic-auth внутри HTTP/2 поверх TLS либо HTTP/3 поверх QUIC) из sing-box JSON шёл слепой копией, а проверка кандидата локальным ядром старше lx.21 ложно сообщала «машина откажет на Deploy». Решение владельца: запись в реестре **без гейта по ядру** — «в новых лаунчерах будут новые ядра».
+
+Новая запись `registry/protocols/trusttunnel.json`: `kind: outbound`, источник только `singbox`, URI-формы нет, формы Add server нет (вторая очередь, как у OpenConnect до SPEC 167). Описаны все поля `option/trusttunnel.go` с правилами ядра — подробно в строке 1.1.141 `README.md`. Главное для вашей стороны:
+
+1. `username`, `password`, `tls` — `required` с `core_rejects`: узел без них снимается `field_missing` (ядро: «missing username» / «missing password» / `ErrTLSRequired`).
+2. `quic` conflicts `tls.utls.enabled` при `when {quic: true}` — `field_conflict` с `core_rejects`: снимается `quic`, узел идёт по HTTP/2, uTLS остаётся. Связь судится по собственному значению поля (`when`, контракт 1.1.56): `quic: false` рядом с uTLS ядро принимает.
+3. `quic_congestion_control` — enum `bbr|cubic|reno` (`bbr2` из naive здесь нет), `normalize: trim_lower`, негодное — `type_invalid` с `core_rejects`.
+4. `min_core` / `build_tag` — описание, не гейт: `on_core_unsupported` нет намеренно. На ядре без `with_trusttunnel` конфиг отвергается целиком, узел выключает страховка core-rejected по имени (PARSING_PRINCIPLES §9) — у вас тот же путь, что у любого «unknown outbound type».
+5. Wildcard `*` не стоит — неописанный ключ снимается `unknown_key`, как у naive/vless.
+6. Два правила ядра таблицей не выражены (записаны в `note` словами, ловит страховка): `tls.server_name` обязателен при server-IP; непустой `tls.alpn` обязан содержать `h2` (без quic) либо `h3` (с quic).
+
+Корпус `body/singbox`: `trusttunnel_outbound`, `trusttunnel_quic_utls_conflict`, `trusttunnel_missing_password_dropped`.
+
+Задача вам: синк 1.1.141, узел известного типа без своей модели (`node_spec.dart`, как openconnect/openvpn-client), прогон трёх кейсов. Норм и кодов 1.1.141 не добавляет.
+
+Расхождение — сюда.
+
+**Закрыто 31.10.2026.** LxBox: синк на bd832097 (1.1.142), bf135b31 (задача 698): тип без своей модели (`openconnect`, `openvpn-client`, `trusttunnel`) без обязательного поля с `core_rejects` снимается при разборе (`field_missing`), три кейса `trusttunnel_*` зелёные, корпус тел 207/207 (локально, см. §138). Расхождений нет.
+
+## 138. Запрос LxBox — DNS-серверы бэкапа: `user`-запись с тегом шаблона и `template`-запись — один сервер (30.10.2026)
+
+Повод — LxBox §695 (issue LxBox#182, решение владельца): шаблонные DNS-серверы и группы стали редактируемыми. Save при изменённом теле пишет запись `kind: user` **с тем же тегом**, что у шаблонной (override, как в §117: сборка берёт её тело, ссылки и пикеры по тегу не ломаются); «Reset to template» возвращает `kind: template`. Тег в списке по-прежнему один.
+
+С нормой BACKUP.md §9 п. 5 это расходится в двух местах:
+
+1. **Ключ слияния `kind`+`tag`.** Файл с `user:dns_shield` и приёмник с `template:dns_shield` не совпадают → после импорта две записи с одним тегом. Просим: у видов `template` и `user` ключ слияния — **только тег**; совпавшая запись остаётся локальной («своё сильнее», как сейчас), какого бы вида ни были обе. `kind: preset` — по `ref`, без изменений.
+2. **Снятие по `template_catalog`, условие 2** («тега нет среди записей `kind: template` файла»). У файла с override `template:dns_shield` нет, есть `user:dns_shield` → условие выполнено → приёмник снимает свою шаблонную запись, хотя источник сервер не удалял, а правил. Просим: условие 2 — «тега нет ни среди `template`, ни среди `user` записей файла».
+
+LxBox так уже делает (`dns_backup.dart`, коммит 5a8d30ec, тест `dns_backup_merge_test.dart`: override `dns_shield` из файла переживает импорт и не задваивается с локальной шаблонной записью). Норма общая (1.1.135, D-139) — запись в BACKUP.md и версия за вами; корпус бэкапа, если есть кейс на п. 5, — один кейс `user`-override с тегом каталога.
+
+Расхождение — сюда.
+
+**Ответ лаунчера — контракт 1.1.142 (31.10.2026).** Оба пункта приняты как есть.
+
+1. `docs/BACKUP.md` §9 п. 5: у видов `template` и `user` ключ слияния — только `tag`; совпавшая запись остаётся локальной, какого бы вида ни были обе. `vars` накладываются только шаблонной записью файла на шаблонную приёмника (у вас так же: `local is DnsServerTemplate`). `kind: preset` — по `ref`, без изменений.
+2. Снятие по `template_catalog`, условие 2: тега нет ни среди `template`, ни среди `user` записей файла.
+
+Добавлено с нашей стороны, у вас уже так (шаг 3 `resolveDnsServersList`, `seen` по тегу): посев каталога тегу, занятому записью `kind: user`, шаблонную запись не дописывает — иначе override, ввезённый в состояние без шаблонной записи, получил бы рядом посеянную шаблонную под тем же тегом. В Go: `core/backup/import.go` (`importDNS`, `sourceDeletedTemplateServers`), `core/state/record_vars.go` (`SeedDNSTemplateCatalog`).
+
+Кейс корпуса `corpus/backup/v10_dns_template_override.*` (фикстура шаблона + предсостояние): предсостояние `template:google_udp`, локальный override `user:google_dot`, `template:dns_shield`; файл LxBox — `template:google_udp`, `template:google_dot`, override `user:dns_shield`, каталог из трёх. Ожидание — три записи, обе совпавшие локальные (`user:google_dot`, `template:dns_shield`), предупреждений нет. Без правки у лаунчера записей четыре.
+
+Задача вам: синк, прогон кейса. Расхождение — сюда.
+
+**Ответ LxBox (31.10.2026) — синк на bd832097 (1.1.142), коммит LxBox bf135b31 (задача 698).** Кейс `backup/v10_dns_template_override` проходит без правок кода (37/37). Попутно закрыт §137: `trusttunnel` у нас шёл путём «известный тип без модели» (§586), но кейс `trusttunnel_missing_password_dropped` падал — отсутствие `required`-поля снимало узел только на сборке (наша норма §477 для типов с моделью). Теперь у типа без своей модели (`openconnect`, `openvpn-client`, `trusttunnel`) тело без обязательного поля с `core_rejects` снимается при разборе (`field_missing`), как у вас; типы с моделью — как было. Корпус тел 207/207. Расхождений нет.
+
+**Закрыто 31.10.2026.** Кейс `v10_dns_template_override` зелёный у обеих сторон: лаунчер — CI 41132140562 на bd832097; LxBox — локально, backup 37/37 и body 207/207. CI LxBox на bf135b31 (41140069924) красный на шаге Analyze: три замечания из задачи 695 (`json_tab.dart:84` — `unnecessary_null_comparison` и `dead_code`, `dns_server_catalog_screen.dart:97` — `use_null_aware_elements`), до тестов не доходит; к контракту это не относится.
+
+## 139. Контракт 1.1.143 — дефолт `tun_mtu` 9000 у обеих сторон (31.10.2026)
+
+Повод — ваша спека 700 (`tun_mtu` по умолчанию 9000) и просьба оттуда: в `registry/vars.json` у `tun_mtu` стояло «дефолт 1492 совпадает», а дефолты разошлись. Решение владельца: у лаунчера дефолт как у ядра sing-box — 9000.
+
+1. `bin/wizard_template.json`: `tun_mtu.default_value` `1492` → `9000`.
+2. `registry/vars.json`, `tun_mtu.note`: «дефолт 9000 (дефолт ядра sing-box) совпадает с 1.1.143». Тип `int`, clamp по §2.2 TEMPLATE_LANG и `portable` без изменений.
+3. Миграции нет: состояние, где пользователь задал `tun_mtu` сам, значение сохраняет; бэкап переносит его как раньше.
+
+Задача вам: синк 1.1.143. Кода и кейсов корпуса с вашей стороны не требуется. Ваши проверки из спеки 700 (Speed Test 1492/9000 на system и gvisor, QUIC через AWG-узел, ручной MTU) к лаунчеру применимы так же — если найдёте регрессию, пишите сюда.
+
+Расхождение — сюда.
+
+---
+
+## 140. Контракт 1.1.144 — ключ `hosts` у DNS-группы: кейсы корпуса (31.10.2026)
+
+Ответ на ваш запрос §699 (ядро 1.14.4-lx.26, SPEC 143 ядра). Модели сторон совпали, расхождений нет.
+
+1. Сборка лаунчера (`core/build/preset_merge.go`, `pruneDNSGroupHosts`) чистит `hosts` после состава, как у вас: тег остаётся, если сервер эмитирован, тип `hosts`, без повтора, не тег группы и не член её очищенных `servers`. Выпавший — предупреждение на каждый (`dns: group "<g>": hosts "<t>" dropped (<reason>)`, причины `itself` / `duplicate` / `did not reach the config` / `not hosts` / `also a member`). Пустой итог снимает ключ, строка пишется списком. Хранилище не меняется.
+2. Держание: ссылка из `hosts` держит сервер как член — `used_by` = `group:<tag>`, у пользовательской группы и у шаблонной (`DNSServerLinks.Group`). `docs/BACKUP.md` §9 п. 5 дополнен.
+3. Кейсы `corpus/dns/`:
+   - `group_prunes_hosts` — группа `self`, `servers: [member]`, `hosts: [ok, disabled, missing, not_hosts_udp, ok, self, member]` → `hosts: [ok]`;
+   - `group_hosts_all_dropped` — `hosts: [off_hosts, never_declared]` (выключенный и необъявленный) → ключа нет, группа эмитится составом.
+   Без фикса лаунчер падал на обоих (проверено откатом вызова).
+4. Чего у лаунчера нет и не нужно:
+   - гейта по версии ядра — лаунчер пинит ядро; переход пина на lx.26 — отдельным шагом, до него ключ в шаблоне лаунчера не используется, а в пользовательском теле на lx.25 ядро отвергнет его как `unknown field`;
+   - снятия `detour` у сервера `hosts` — лаунчер сам `detour` в DNS-серверы не дописывает, тело пишет пользователь или шаблон.
+
+Задача вам: синк 1.1.144, прогнать два кейса своим раннером. Расхождение — сюда.
+
+**Пин ядра.** Лаунчер поднял пин до `1.14.4-lx.26` (9016a2cb, 31.10.2026), п. 4 о пине на lx.25 устарел: ключ `hosts` в пользовательском теле ядро теперь принимает.
+
+**Закрыто 31.10.2026.** LxBox написал раннер `corpus/dns` (задача 699, develop 3c6a6249; до него корпус DNS у LxBox не гонялся вовсе). `group_prunes_hosts` и `group_hosts_all_dropped` прошли без правок кода, значит, чистку `hosts` стороны делают одинаково. Старые кейсы тоже прошли. `required_ignores_state` падал у LxBox (сборка не читала `required` у обёртки шаблонного сервера) и починен тем же коммитом. Кейсы лаунчера — CI 41203270500 на 67092467, зелёный.
+
+Сознательное расхождение, корпус не меняем:
+- `group_empty_after_prune_dropped`. Группа, опустевшая из-за выключенных или необъявленных членов: у лаунчера выпадает с предупреждением, у LxBox эмитится пустой, и валидатор (`EmptyDnsGroup`, fatal) блокирует сборку — решение владельца LxBox, их §312 №3. LxBox пропускает этот кейс с этой причиной.
+- Модель состояния, корпусом не покрыта. У LxBox при загрузке выключенный сервер, на который ссылается группа (из `servers` или `hosts`), снова включается (их §695, правило 5: «ссылка держит»). Лаунчер так не делает, поэтому один и тот же бэкап с выключенным членом у LxBox соберёт этот член, а у лаунчера — нет. Сборка тут ни при чём.
+
+---
+
+## 141. Контракт 1.1.145 — `tcp_multi_path` в `body.fields` диалера (01.11.2026)
+
+Ответ на ваш запрос (решение владельца 01.11.2026: «пусть будет и лаунчер знать его»).
+
+1. `registry/dialer.json`: `tcp_multi_path` перенесён из `skipped` в `body.fields`: `type: bool`, `default: false`, без `values`. В `body.order` он стоит сразу после `tcp_fast_open`. Из `note` секции поле убрано из списка неклиентских. В `_dialer.md` его больше нет среди «Deliberately not described».
+2. Кейс `corpus/body/singbox/dialer_tcp_multi_path`: vless-узел с `tcp_multi_path: true`, `tcp_fast_open: true`, `udp_fragment: false`. Тело проходит байт в байт, предупреждений нет. На старом реестре лаунчер падал на `unknown_key` — проверено откатом `dialer.json`.
+3. Ограничения платформы контракт не описывает: значение судит ядро, как у `network_strategy`.
+
+Лаунчер поле сам не пишет и в форме его не показывает: из входа singbox оно проходит насквозь.
+
+Задача вам: синк 1.1.145, прогнать кейс своим раннером тел. Расхождение — сюда.
+
+
+**Закрыто 01.11.2026.** LxBox: синк 1.1.145 (82ae8ce4) в develop ca320f71, `body_contract_test` зелёный (208 тестов, включая `singbox/dialer_tcp_multi_path`), код не потребовался. Лаунчер — CI 41285511619 на 82ae8ce4, зелёный. Расхождений нет.
+
+## 142. Контракт 1.1.146 — буфер обмена поверх Taildrop (01.11.2026)
+
+Ответ на ваше предложение 032-TAILDROP (решение владельца 01.11.2026). Протокол принят целиком, со встречными TTL и opt-in и тремя вашими уточнениями.
+
+1. `registry/clipboard.json` (новый): `name_prefix` `lxclip-`, `name_suffix` `.txt`, `max_bytes` 65536, `encoding` utf-8 без BOM, `ttl_seconds` 120, `current` пока `null` у обеих сторон.
+2. `docs/CLIPBOARD.md` (новый, нормативно): клип, отправитель, получатель по шагам.
+3. Ваше уточнение 1 — проверено по ядру. `modifiedAt` в `TaildropFile` — mtime файла на диске получателя после приёма (`protocol/tailscale/taildrop.go`, `ModTime().Unix()`, время отправителя ядро не переносит). Значит, это часы получателя, секунды, своя отметка приёма не нужна. При равенстве `modifiedAt` в пачке берётся больший unix-ms из имени.
+4. Ваше уточнение 2 — принято. Без разрешения (или при пустом `senderName`) `lxclip-*` остаётся обычным файлом входящих, не удаляется и в буфер не идёт. Учтите: `senderName` ядро держит в памяти, после перезапуска ядра у лежащих файлов он пуст — они остаются обычными файлами.
+5. Ваше уточнение 3 — принято: пустое, больше предела, не-UTF-8 отправитель не шлёт и называет причину; `EXTRA_IS_SENSITIVE` не шлёт.
+6. Имя: опознавать по префиксу и суффиксу, а не точным видом — при совпадении имён ядро может переименовать файл.
+
+Корпуса нет: разбора источников протокол не касается.
+
+Десктоп: macOS, Windows amd64/arm64 и машины lxd (через gRPC `StartedService`); Linux classic и Win 386 — без Taildrop. ПК → телефон — пункт в меню трея; глобальная горячая клавиша — только по слову владельца. Ядру десктопа пересборка не нужна: `ts_omit_taildrop` в десктопных тегах нет, Taildrop там с 1.14.0-lx.27.
+
+Задача вам: синк 1.1.146, реализация по `docs/CLIPBOARD.md` в 032-TAILDROP. Расхождение — сюда.
+
+**Отменено 02.11.2026** контрактом 1.1.148 (§144): `lxclip-*` заменён служебными файлами `docs/SERVICE_FILES.md`; реализаций не было.
+
+## 143. Контракт 1.1.147 — `taildrop_directory` при сборке (02.11.2026)
+
+Ваш совет из 707 записан нормой для обеих сторон: при сборке `taildrop_directory = <state_directory>/taildrop`, если ключа в теле нет; хранимое тело не трогается. В `registry/protocols/tailscale.json` поменялся только текст (`emit.note`, `note` у `taildrop_directory`). Корпус без изменений.
+
+У лаунчера: SPEC 175 (Taildrop на десктопе). Демон macOS/Windows переносит `taildrop_directory` вместе с `state_directory` в свой runtime-каталог.
+
+Задача вам: синк 1.1.147. Кода у вас это, по вашим словам, не требует — подтвердите.
+
+**Закрыто 02.11.2026.** LxBox: синк 1.1.147 (45843db8) — b4232b2f; код не потребовался, подстановка `taildrop_directory` у них с 707 (1d30e211). Расхождений нет.
+
+## 144. Контракт 1.1.148 — служебные файлы поверх Taildrop вместо `lxclip-*` (02.11.2026)
+
+Ваш запрос (решение владельца 02.11.2026, ваша спека 032 clipboard-sync, 357963a4). §142 (1.1.146) отменён: его протокол не реализовала ни одна сторона, миграции нет.
+
+1. `registry/clipboard.json` → `registry/service_files.json`, `docs/CLIPBOARD.md` → `docs/SERVICE_FILES.md`.
+2. Формат — как вы описали: имя `lx-<UTC>-<метка>.json`, тело `{"lx": 1, "commands": [...]}` ≤ 64 KiB, виды `clipboard` и `open_url` (http/https), разрешения на устройство и вид, TTL 120 с от `modifiedAt` получателя, разбор раньше автосохранения и уведомления, удаление всегда после разбора.
+3. Уточнения при записи: (а) «кандидат» (имя по префиксу и суффиксу) становится служебным файлом только после успешного разбора тела (§4 SERVICE_FILES) — иначе обычный файл, так чужой `lx-….json` пользователя не будет удалён; (б) при равном `modifiedAt` порядок `clipboard` — по времени в имени; (в) `open_url` на десктопе — решение стороны (у лаунчера определим в его спеке).
+4. Ключ разрешения — `senderName` до тех пор, пока ядро не отдаёт `senderID` в `TaildropFile`; согласие на запрос к ядру — в ответе по каналу.
+
+Задача вам: синк 1.1.148. Расхождение — сюда.
+
+## 145. Контракт 1.1.149 — «Allow Taildrop» выключено по умолчанию, `senderID` (02.11.2026)
+
+Ваш запрос (решения владельца 02.11.2026; ядро SPEC 149 §4, b0a75b8da / 1f8247b31, тега ещё нет).
+
+1. **`disable_taildrop`** — норма записана (README, строка 1.1.149; `emit.note` в `tailscale.json`): config-форма эмитит `disable_taildrop: true`, если в теле нет явного `false`; галка «вкл» пишет `false`, «выкл» снимает поле; хранимое тело не трогается. Поведение ядра — как вы описали.
+2. **Поле в `body.fields` и `min_core` — следующей версией, с тегом.** Причина: гейт полей лаунчера (`core/config/nodeflow/gate.go`, `compareCoreVersions`) сравнивает только `lx.N`, без пре-релиза. Если тег выйдет как `lx.30-rc.2` или `lx.30`, то `min_core` с ним пропустит и `lx.30-rc.1`, где поля нет, — ядро отвергнет весь конфиг. Просьба к ядру: выпустить с поднятым номером `lx` (например, `lx.31`), тогда `min_core` однозначен. Если нет — я научу гейт пре-релизам в той же версии. До неё ни одна сторона поле не пишет и не эмитит, санитайзер снимает его как `unknown_key`.
+3. **`senderID`** — `docs/SERVICE_FILES.md` §5: ключ разрешения `senderID`, пустой — `senderName`; разрешение по имени к ID само не привязывается.
+
+Задача вам: синк 1.1.149; номер тега — сюда, по нему 1.1.150 с полем и `min_core`.
+
+## 146. Контракт 1.1.150 — поле `disable_taildrop`, гейт с пре-релизами (02.11.2026)
+
+Продолжение §145 по тегу ядра `v1.14.4-lx.30-rc.2` (решение владельца: rc.2, не lx.31).
+
+1. `registry/protocols/tailscale.json`: `body.fields.disable_taildrop` — `bool`, `default: false`, `min_core: 1.14.4-lx.30-rc.2`; в `body.order` после `taildrop_directory`.
+2. Норма сборки вступает: config-форма — `disable_taildrop: true`, если в теле нет явного `false`; галка «Allow Taildrop» вкл пишет `false`, выкл снимает поле. На ядре старше rc.2 поле снимается полевым гейтом (и подставленное тоже), Taildrop там как у ядра.
+3. **Гейт с пре-релизом** (строка «Гейты сборки» в README): `lx.30-rc.1 < lx.30-rc.2 < lx.30`; суффикс не `-rc<K>`/`-rc.<K>` — как релиз своего `lx.N`. Сверьте свой компаратор `min_core`: если он отбрасывает пре-релиз, поле уйдёт в rc.1 и ядро отвергнет весь конфиг.
+4. Корпус: `body/singbox/tailscale_disable_taildrop_false`.
+5. Ноты релиза обеих сторон: Taildrop, работавший до обновления, после него выключен, пока не включить «Allow Taildrop» у узла.
+
+Задача вам: синк 1.1.150, раннер тел; подтвердите номер и sha тега ядра — если тег выйдет другим, поправлю `min_core`.
+
+## 147. Контракт 1.1.151 — ключи корневого `lx` как переменные шаблона (02.11.2026)
+
+Ответ на ваш §709. Решения владельца:
+
+1. **Реестр** `registry/vars.json`, все `portable: false`:
+   - `in: both` — `mtu_align` (enum `clamp`/`fill`/`off`, дефолт `clamp`), `quic_sniff_decoy` (bool, дефолт `true`), `masque_idle_timeout` (enum `off`/`2m`/`5m`/`15m`/`30m`, дефолт `off`) — седьмая переменная, добавлена владельцем: глобальный `lx.masque.idle_timeout`, ключ узла сильнее;
+   - `in: mobile` — `wg_idle_suspend`, `wg_idle_suspend_reachable`, `wg_lazy_build`, `wg_build_max` с вашими options и дефолтами (`wg_build_max` — тип `int` с options, см. п.2). На десктопе их нет: сборки ядра без `with_lx_idle_suspend` отвергают любой `lx.wg.*` на старте.
+2. **Эмиссия — через `config` шаблона, не кодом сборки** (владелец: «что можно настроить шаблоном — настраивается шаблоном»). Десктоп пишет так:
+   ```json
+   "lx": {
+     "#if mtu_align": [{"#not": {"@mtu_align": "clamp"}}, {"mtu_align": "@mtu_align"}],
+     "#if quic_sniff_decoy": ["@quic_sniff_decoy", {"quic_sniff_decoy": true}],
+     "#if masque_idle_timeout": [{"#not": {"@masque_idle_timeout": "off"}}, {"masque": {"idle_timeout": "@masque_idle_timeout"}}]
+   }
+   ```
+   Ваши `wg_*` ложатся так же: `"#if wg": [{"#not": {"@wg_idle_suspend": "off"}}, {"wg": {...}}]` с вложенными `#if` для `reachable`/`lazy_build`/`build_max`. Пустой `lx` равен отсутствующему (ядро ≥ lx.13). `wg_build_max` в реестре — `int` с `options` (как `urltest_tolerance`), не `enum`: ядро ждёт целое, а подстановка enum даёт строку.
+3. **Зависимости строк** (reachable/lazy только при сне, build_max только при lazy) — `#enable` на объявлении переменной (TEMPLATE_LANG §4.6: строка неактивна), например `"#enable": [{"#not": {"@wg_idle_suspend": "off"}}]` и `"#enable": ["@wg_lazy_build"]`. Не параметры виджета: язык это уже выражает. Если `#enable` на объявлении у вас не реализован — это долг паритета, закройте его здесь же.
+4. **Гейта по версии нет.** Лаунчер поднял пин ядра до `1.14.4-lx.30-rc.3` (в нём `quic_sniff_decoy`, SPEC 151 форка). Пин LxBox — не ниже.
+5. Остальные ключи `lx` (`wg.idle_teardown`, `wg.build_overflow`, `trusttunnel.idle_timeout`, `mtu_align.except`) в шаблон не выносим — принято.
+6. Миграции нет, переменные стартуют с дефолтов.
+
+Задача вам: синк 1.1.151; эмиссия `lx` через шаблон по п.2; `#enable` по п.3; подтвердите пин ядра.
+
+**Ответ LxBox (02.11.2026) — §147 закрыт.** Синк 1.1.151 — 20b041fd; эмиссия `lx` через `config` шаблона (map-spread `#if wg` с вложенными `#if` для reachable/lazy/build_max, гейт версии и код сборки сняты) — 80e1fd79; пин ядра `1.14.4-lx.30-rc.3` — af989ee9; `#enable` на объявлениях var — f0d6a20d. `wg_build_max` — `int` с options; build_max неактивен и без сна, и без lazy (`[{"#not": {"@wg_idle_suspend": "off"}}, "@wg_lazy_build"]`). Пустой `lx` LxBox снимает при сборке, лаунчер пишет `"lx": {}` — ядро считает их равными, расхождением не считается. Тест LxBox: `app/test/builder/lx_block_template_test.dart`. Закрыто с обеих сторон.
+
+## 148. Контракт 1.1.152 — `quic_sniff_decoy` режимом, пин ядра `1.14.4-lx.30` (03.11.2026)
+
+Вышел стабильный `v1.14.4-lx.30`. В нём `lx.quic_sniff_decoy` — режим: `off` / `direct` (только дозвоны с UDP на сокете ядра) / `detour` (только дозвоны, которые несёт другой outbound) / `all`; `true`/`false` из rc.3 — алиасы `all`/`off`. Владелец ядра: DPI своего аплинка может среагировать на лишний байт — отсюда разделение.
+
+1. `registry/vars.json`: `quic_sniff_decoy` — `enum`, options `off` / `detour` / `direct` / `all`, **дефолт `detour`** (было bool, дефолт true = all).
+2. Эмиссия (десктоп):
+   ```json
+   "#if quic_sniff_decoy": [{"@quic_sniff_decoy": {"#in": ["detour", "direct", "all"]}}, {"quic_sniff_decoy": "@quic_sniff_decoy"}]
+   ```
+   `#in`, а не `#not off`: значение `true`/`false`, оставшееся в состоянии от 1.1.151, ключа не даёт и ядро на старте не роняет (строка `"true"` ядром отвергается). Миграции нет.
+3. Пин ядра обеих сторон — `1.14.4-lx.30`. В нём удалены алиасы `route.lx_idle_*`: конфиг с ними не стартует — проверьте, что вы их больше нигде не пишете.
+
+Задача вам: синк 1.1.152, переменная и эмиссия по п.1–2, пин по п.3.
+
+## 149. Контракт 1.1.153 — чувствительный клип в служебных файлах (03.11.2026)
+
+По вашему запросу (задача 707, решение владельца «все показывать перед отправкой»). `docs/SERVICE_FILES.md` §7:
+
+- п.2 больше не запрещает клип с `EXTRA_IS_SENSITIVE`;
+- новый п.3: чувствительный клип не отправляется без показа человеку; сторона, которая показывает текст перед отправкой и шлёт его только по действию человека (ваше окно «Send clipboard» с ➤), может его отправить;
+- прежний п.3 (только действием человека, петли нет) стал п.4.
+
+Реестр и корпус без изменений. Задача вам: синк 1.1.153, код не меняется.
+
+## 150. Контракт 1.1.154 — служебные файлы у лаунчера (03.11.2026)
+
+Лаунчер реализовал `docs/SERVICE_FILES.md` (SPEC 176): `current.go` = 1 в `registry/service_files.json`. Норма не менялась.
+
+- Приём — только у своего ядра (буфер и браузер этого компьютера), фоновая подписка на каждый tailscale-узел, пока ядро работает. Узлы удалённых машин служебные файлы не разбирают — у них это обычные файлы.
+- Разрешения — «Accept clipboard» / «Accept links» в меню устройства окна узла; ключ `senderID` (= `StableID` пира), при пустом — `senderName` против DNS-имени устройства без домена. `open_url` открывается в браузере сразу, после — уведомление «Link from <device>»; `clipboard` — в буфер и уведомление.
+- Отправка — «Send text…» в меню устройства: поле с текущим буфером, «Send to clipboard» и «Open on <device>» (только одна http(s)-ссылка).
+- Попутно: `lx` строкой (`"1"`) у нас — обычный файл, не версия. Проверьте, что у вас так же.
+
+Задача вам: синк 1.1.154, `current.dart`; прогон телефон ↔ ПК служебными файлами.
+
+**Ответ LxBox (03.11.2026) — §150 закрыт.** Синк 1.1.154 — 006b5be7. `"lx":"1"` строкой у LxBox тоже обычный файл: `lx` берётся только числом и только целым из `versions` (JVM-тест на "1", 1.5, 99, null). Реализация у LxBox — задача 707 (приём — итерация 4, отправка — итерация 7); по их просьбе `current.dart` = 1 поставлен в 1.1.155. Прогон на стенде 03.11.2026 (Mac-Lex-449 ↔ lxbox-emu-a): файлы и служебные команды в обе стороны, без разрешения — пропуск с удалением. Закрыто с обеих сторон.
+
+## 151. Контракт 1.1.156 — отправка clipboard жестом без показа (03.11.2026)
+
+Решение владельца: на десктопе текст, скопированный дважды подряд (Cmd+C / Ctrl+C два раза за секунду), уходит служебным файлом `clipboard` на отмеченные в меню устройства («Send double copy here»), без окна. `docs/SERVICE_FILES.md` §7 п.3 дополнен: сторона, которая шлёт по жесту без показа, не отправляет содержимое с пометкой чувствительности ОС (macOS `org.nspasteboard.ConcealedType` / `TransientType`, Windows `ExcludeClipboardContentFromMonitorProcessing`).
+
+Для вас — только синк: формат и приём не меняются, у вас окно показа остаётся. Если на Android захочется похожего жеста — фоновое чтение буфера там закрыто системой с Android 10, так что это не требование.
+
+
+## 152. Уведомление от LxBox — порядок `dns.servers` шаблона задаёт пользователь (03.11.2026)
+
+LxBox задача 710: серверы шаблона на вкладке DNS переставляются перетаскиванием, порядок хранится в `dns.servers` и уезжает в бэкап как есть. Норма не менялась: схема уже держит `template_catalog` «в порядке шаблона» (1.1.135, D-139), экспорт `dns.servers` — полный список, позиционно.
+
+Для вас — только проверить на своей стороне, не задача по контракту:
+
+- Импорт бэкапа не должен пересортировывать `dns.servers` по своему каталогу — иначе порядок пользователя у вас пропадёт. Это модель состояния стороны, вне контракта.
+- Если ваш раннер корпуса сравнивает массив серверов позиционно, бэкап с переставленным списком его покраснит. Для ядра порядок `dns.servers` поведения не меняет — ссылки по тегам.
+
+Ответа не ждём.
+
+## 153. Контракт 1.1.157 — настройки Taildrop как поля записи узла (04.11.2026)
+
+Запрос ваш (задача 707, итерация 9), решения владельца, D-140.
+
+- `docs/SERVICE_FILES.md` §5: разрешений по устройствам нет, одна настройка на узел tailscale, по умолчанию выключена, входит в бэкап.
+- `docs/BACKUP.md`, схема: `taildrop_commands`, `taildrop_autosave` у своего сервера в корне и члена папки, рядом с `allow_lan`. Пишется только `true`, у узла подписки поля нет, в конфиг не идут. `disable_taildrop` остаётся в теле узла.
+- **Уточнение к вашему запросу.** `senderID` как ключ разрешения снят, но как способ опознать отправителя остался. Ядро (`protocol/tailscale/taildrop.go`, проверка `IsSelfUntagged() || file-send`) пропускает пира с правом `file-send` из ACL tailnet, поэтому без проверки у получателя sharee с таким правом выполнил бы команду. Норма: пир ищется по `senderID` в статусе; `shareeNode`, пир не найден или `senderID` пуст — команды не выполняются. Устройства нигде не запоминаются.
+
+Лаунчер пока только хранит и переносит оба поля. Применять их будет после своей задачи; до неё у него действуют прежние разрешения по устройствам, а файл лаунчера может не нести этих полей у ваших узлов. Отсутствие поля ваше значение не сбрасывает.
+
+П.3 запроса (`native_prefs`, тема, кнопки уведомления) в эту версию не вошёл: секции `native_prefs` в `BACKUP.md` и схеме нет, а имён ключей вы ещё не назвали.
+
+Задача вам: синк 1.1.157.
+
+## 154. Контракт 1.1.158 — секция `native_prefs` в LX-бэкапе (04.11.2026)
+
+Ключи и смысл ваши, D-141. Секция объявлена в `docs/BACKUP.md` («Поля стороны LxBox») и в схеме: объект в корне, лаунчер игнорирует молча, отсутствие не сбрасывает значение. Кейс `corpus/backup/v10_lxbox_fields` теперь несёт `native_prefs`, поэтому без ключа в `_rootKeys` ваш раннер даст `backup_unknown_field`.
+
+Для вас — проверить:
+
+- `services/lx_backup.dart`: `native_prefs` нет ни в `_rootKeys`, ни в экспорте. «В бэкапе с 2.23» верно для файла `app: lxbox` с секцией `vpn_settings`, а не для LX-бэкапа. В LX-файл секцию надо начать писать и читать.
+- Разобраться с именем в своём файле: там `vpn_settings`, в LX-файле теперь `native_prefs`.
+
+Задача вам: синк 1.1.158 вместе с кодом.
+
+## 155. Контракт 1.1.159 — команды и автосохранение включены по умолчанию (04.11.2026)
+
+Решение владельца, отменяет умолчание из §153, D-142. Дословно: «по умолчанию если разрешен taildrop то и все остальное разрешено (сохранение в downloads и команды); при миграции старые перестать читать а новые дефолт сделать по умолчанию».
+
+- Если на узле разрешён Taildrop (`disable_taildrop` в теле), команды и автосохранение включены.
+- Поля `taildrop_commands`, `taildrop_autosave` заменены: `disable_taildrop_commands`, `disable_taildrop_autosave`. Правила прежние: пишется только `true`, отсутствие не сбрасывает, у узла подписки поля нет, в конфиг не идут. 1.1.157 не вышла в релиз, терпимого чтения старых имён нет.
+- Проверка отправителя из §153 остаётся: со включённым приёмом она единственный фильтр сверх ядра.
+- Миграции нет: старые настройки стороны просто перестают читаться.
+
+Задача вам: синк 1.1.159, код и умолчания по новым именам.
+
+## 156. Контракт 1.1.160 — `state_dir_id` и `taildrop_double_copy` (04.11.2026)
+
+Решения владельца, SPEC 179 лаунчера, D-143.
+
+- **`state_dir_id` (обе стороны).** Имя каталога состояния узла tailscale становится параметром записи: отвязка от тега, чтобы переименование не заводило новое устройство tailnet. Правила — `docs/BACKUP.md`. Минимум для вас: читать и писать поле без потерь и не менять его у совпавшего узла. Как каталог устроен у вас, контракт не диктует; если у вас он по тегу и применять поле незачем, просто переносите его. Ответьте, что выбрали.
+- **`taildrop_double_copy` (только лаунчер).** Одно устройство на узел. Вам — добавить ключ в известные и молча пропускать.
+
+Лаунчер теперь применяет `disable_taildrop_commands` и `disable_taildrop_autosave` и проверку отправителя из `SERVICE_FILES.md` §5.
+
+Задача вам: синк 1.1.160, ответ по `state_dir_id`.
+
+**Ответ LxBox (04.11.2026) — §156 закрыт по составу полей.** Синк с 1351dd6e, код — fe19967d (CI на момент ответа шёл). `state_dir_id` только переносят: каталог у них держит индекс `tailscale_state.json` по id записи (§445 LxBox), к тегу не привязан; совпавший узел своё не меняет, новый с занятым именем получает `ts-xxxxxx`, своим узлам без поля ничего не генерируют. `taildrop_double_copy` молча пропускают и не провозят: после импорта и экспорта через LxBox устройство теряется.
+
+## 157. Запрос LxBox — URI-форма `tt://` у `trusttunnel` (04.11.2026)
+
+Повод — LxBox issue #194: пользователь вставил из буфера ссылку `tt://…`, приложение её не узнало (`scheme_unsupported`). Решение владельца: поддержать ссылку в паре с лаунчером. Запись реестра `protocols/trusttunnel.json` (1.1.141) заявляет `uri: null`, `emit.share_uri: false`; просим заменить на форму ниже. Задача LxBox — 717.
+
+**Формат (референс — код, текстовой спеки у AdGuard нет).** Крейт `deeplink` репозитория https://github.com/TrustTunnel/TrustTunnel (`deeplink/src/{types,encode,decode}.rs`, тесты `deeplink/tests/roundtrip.rs`), генерирует `trusttunnel_endpoint`, читают все клиенты AdGuard (`TrustTunnelClient/trusttunnel/deeplink-ffi`).
+
+1. Вид `tt://?<payload>`: authority и путь пустые, весь payload — строка query без имени и знака `=`.
+2. `payload` = base64url **без padding** над бинарным TLV: tag — varint, длина — varint, значение. Varint — **QUIC-стиль (RFC 9000 §16, `deeplink/src/varint.rs`)**: два старших бита первого байта задают ширину 1/2/4/8 байт, big-endian, а НЕ LEB128 (исправлено 04.11 после сверки с кодом: `64` → `40 40`, `16384` → `80 00 40 00`). Теги < 64 занимают один байт. Неизвестный tag пропускается (вперёд-совместимость).
+3. Теги: `0x00 version` (varint; сейчас 2, 1 — без подписки), `0x01 hostname` (UTF-8), `0x02 address` (UTF-8 `host:port`, IPv6 в скобках; **повторяется**), `0x03 custom_sni`, `0x04 has_ipv6` (1 байт 0/1), `0x05 username`, `0x06 password`, `0x07 skip_verification` (0/1), `0x08 certificate` (**DER**, байты), `0x09 upstream_protocol` (1 байт: `0x01` http2, `0x02` http3; отсутствует = http2), `0x0A anti_dpi` (0/1), `0x0B client_random_prefix`, `0x0C name`, `0x0D dns_upstreams` (последовательность varint-длина + UTF-8), `0x0E subscription_url` (с версии 2), `0x0F client_random_auth_key`.
+4. Обязательны `hostname`, хотя бы один `address`, `username`, `password` — **либо** один `subscription_url` (`https://user:pass@host/path`; ссылка-подписка, узла в ней может не быть). Подписка отвечает JSON-объектом (`version: 1`, те же поля, `address` одной строкой) — **в этот запрос не входит**, вторая очередь.
+
+**Предложение записи.** Декларативно TLV ни один движок не выразит, поэтому — именованный декодер, как `ini` у WireGuard: `mappers.uri.detect.scheme_in: ["tt"]`, одна форма `deeplink` с `decode: [{"decoder":"base64url","scope":"query"}, "tt_deeplink"]`, `space: "tt"`. Выход декодера — объект, который дальше читают обычные `params` (`source: "tt.<ключ>"`):
+
+- `version` int; `hostname`, `custom_sni`, `username`, `password`, `name`, `client_random_prefix`, `client_random_auth_key`, `subscription_url` — строки (ключа нет, если тега нет); `addresses` string[]; `has_ipv6`, `skip_verification`, `anti_dpi` — bool; `upstream_protocol` — `"http2"`/`"http3"`; `certificate` — **PEM-строка** (декодер переводит DER → PEM, тело `tls.certificate` ждёт PEM); `dns_upstreams` string[].
+- Производные от первого `address`: `server`, `server_port` (лексер host:port общий, IPv6 без скобок — как `$multiport`/vmess legacy).
+
+Маппинг в тело `trusttunnel`: `server`, `server_port` ← первый адрес; `username`, `password`; `quic` ← `upstream_protocol == http3`; `tls.enabled: true`, `tls.server_name` ← `custom_sni`, иначе `hostname`; `tls.insecure` ← `skip_verification`; `tls.certificate` ← `certificate`; label ← `name`, fallback `{scheme}-{server}-{server_port}`. Правила тела (required/`core_rejects` username/password, конфликт quic/utls) — как есть, снятие узла при разборе (§137/§138).
+
+Чего в теле нет — снимаем с предупреждением, узел живёт: `has_ipv6`, `anti_dpi`, `client_random_prefix`, `client_random_auth_key`, `dns_upstreams`, адреса со второго — один мягкий код `tt_field_unsupported` (параметр `field`). `subscription_url` при полном узле — мягкий `tt_subscription_ignored`. Снятие узла: только `subscription_url` без полей узла — `tt_subscription_only`; битый base64/TLV, `version` > 2, обязательных нет — `tt_deeplink_invalid`. Имена кодов — ваши, нам нужны именно четыре различимых случая.
+
+**Эмит** (`emit.share_uri: true`, форма `deeplink`, порядок тегов как у энкодера AdGuard: version=2, hostname, address, custom_sni, has_ipv6, username, password, skip_verification, anti_dpi, certificate, upstream_protocol, client_random_prefix, name, dns_upstreams, subscription_url, client_random_auth_key — только непустые, bool только `true`, `upstream_protocol` только http3): `hostname` ← `tls.server_name`, иначе `server`; `address` ← `server:server_port` (IPv6 в скобках); `custom_sni` не пишем; `skip_verification` ← `tls.insecure`; `certificate` ← `tls.certificate` PEM → DER; `upstream_protocol` http3 ← `quic`; `name` ← тег. Критерий паритета: round-trip `tt → тело → tt` байт в байт для ссылки без неподдерживаемых полей.
+
+**Корпус** `corpus/uri/tt/`: полный узел http2 (hostname + адрес IPv4 + Let's Encrypt без сертификата), http3 + `custom_sni` + самоподписанный DER + `skip_verification`, два адреса (v4 + v6) + `dns_upstreams` + `anti_dpi` (мягкие коды), только `subscription_url` (drop), битый payload (drop), `version` 1. Ссылки для кейсов соберём мы энкодером Dart и приложим TOML-эквивалент — или вы своим Go, как удобнее; сверить можно `trusttunnel_client --export-deeplink`.
+
+**Что уже сделано у LxBox (04.11, задача 717, черновик `assets/contract_draft/uri/trusttunnel.json`) — ориентир, не требование.** Декодер `tt_deeplink` снимает `?`, сам раскрывает base64url (общий шаг base64 отдаёт UTF-8 и ломает DER) и кладёт объект в существующее пространство `json` (как форма v2rayN у vmess), а не в новое `tt`: ключи `version`, `hostname`, `address` (первый), `server`/`server_port` (из него), `extra_addresses` (со второго, только если есть), `custom_sni`, `username`, `password`, `name`, `certificate` (PEM), `upstream_protocol`, `dns_upstreams`, `subscription_url`, `client_random_prefix`, `client_random_auth_key`; bool `has_ipv6`/`anti_dpi`/`skip_verification` — только когда отличаются от умолчания формата. Коды пока существующие: битый payload → `form_unrecognized`; только `subscription_url` → `service_record_ignored`; неподдерживаемые поля → `uri_param_unknown` (`query_name` = поле) через `unknown_key: drop` секции. Если ваша запись назовёт иначе — переименуем при синке.
+
+LxBox начинает Dart-сторону сразу по этой записи как черновику (`assets/contract_draft/uri/trusttunnel.json`, пока реестр не привезёт секцию); имена кодов и ключей объекта `tt` подправим под вашу запись при синке. Отдельно: Android AAR ядра собран без `with_trusttunnel` (KERNEL.md, lx.21+) — узел из ссылки у LxBox сейчас выключит страховка core-rejected; это вопрос к ядру, не к контракту.
+
+Расхождение — сюда.
+
+## 158. Контракт 1.1.161 — поле записи узла `own_routes`, пресет `tunnel-routes` (05.11.2026)
+
+Запрос ваш (задача 718, спека `docs/spec/tasks/718-tunnel-routes-preset.md`, develop d64a94df), решения владельца, D-144. У лаунчера — SPEC 180, реализовано в этой же версии. Норма — `docs/TEMPLATE_LANG.md` **§6.5.3 (новый: пресет целиком)**, §6.6 (поле записи), §6.7.5 (поздние дефолты), §9 (строка D-144); `docs/BACKUP.md` (таблица полей узла); `schema/backup.schema.json` (`$defs/sourceServer`, `$defs/node`); `registry/presets.json` (`tunnel-routes`, `in: both`). Параграф написан так, чтобы реализовать без чтения Go лаунчера. Имя поля `own_routes` принято вашим.
+
+### 1. Поле записи `own_routes`
+
+- Bool, **по умолчанию `false`, пишется только `true`**, отсутствие = `false` — в состоянии и в LX Backup, как `allow_local`.
+- Носитель — свой сервер в корне `sources[]` и член папки (`kind: server`). У узла подписки записи нет: значение всегда ложь, поле не ставится и не читается.
+- В пространстве обхода — `@node.own_routes`. Закрытый перечень полей записи теперь: `skip_tailscale_presets`, `allow_local`, `allow_lan`, `allow_gateway`, `own_routes`.
+- **Импорт бэкапа** — как у `allow_*`: новый узел получает значение файла; узел, совпавший по телу с имеющимся, получает `true` из файла; отсутствие поля своё `true` не сбрасывает. Экспорт — только `true`.
+- Переключатель показывается у узлов с `body.type` ∈ {`wireguard`, `openvpn-client`, `openconnect`} — тот же набор, что у `allow_*`. У узла другого типа поле, если оно приехало, хранится и переносится, пресет его не читает (фильтр по типу).
+- Английские тексты лаунчера: заголовок блока «Routing through this tunnel», переключатель «Only its own networks», подсказка «Send to this tunnel only the networks it announces. It works alongside the selected server and does not need to be chosen as a direction.», предупреждение у WireGuard с префиксом `/0` в `allowed_ips` под включённым переключателем — «This tunnel announces the default route, so it takes all traffic.» Переключатель не блокируется. У лаунчера блок стоит отдельно от «Incoming connections from this tunnel», выше него: тот про входящее, этот про исходящее.
+
+### 2. Пресет `tunnel-routes` (§6.5.3)
+
+Тело перенесено из вашей спеки (раздел B) без изменений; в норме оно записано в оболочке лаунчера (`id`, `label`, `description`, `default_enabled`, `num`, `vars[].default`), у вас остаётся ваша (`preset_id`, `ui{}`, `vars[].default_value`), D-046. `for_each_node`, `vars`, `rules`, `dns_servers`, `dns_rules` совпадают символ в символ. `num: 943`, включён по умолчанию, сортируемый, поздний дефолт: в список `kLateDefaultPresetIds` добавляется `tunnel-routes` (у лаунчера `LateDefaultPresetIDs`), §6.7.5.
+
+Что выдаёт на узел, прошедший фильтр:
+
+| Тип узла | `route.rules` | `dns.servers` | `dns.rules` |
+|---|---|---|---|
+| `wireguard` | `{preferred_by: [T], outbound: T}` | — | — |
+| `openvpn-client` | `{preferred_by: [T], action: resolve, server: T-dns}`, `{preferred_by: [T], outbound: T}` | `{type: openvpn, tag: T-dns, endpoint: T}` | `{preferred_by: [T-dns], server: T-dns}` |
+| `openconnect` | то же | `{type: openconnect, tag: T-dns, endpoint: T}` | то же |
+
+`dns_enable = false` — у всех типов остаётся только правило маршрута. Поле не поднято, узел подписки, узел другого типа — пусто. Пространство тегов пресета не действует (`T-dns`, как у `tailscale`).
+
+### 3. Корпус
+
+`corpus/template/for_each_node/tunnel_routes_*`, 7 кейсов, тело пресета целиком; в `nodes[]` кейса новое необязательное поле `own_routes` (отсутствие = `false`):
+
+| Кейс | Проверяет |
+|---|---|
+| `tunnel_routes_wireguard` | одно правило маршрута, DNS-части нет |
+| `tunnel_routes_openvpn` | `resolve`, маршрут, DNS-сервер `openvpn`, DNS-правило |
+| `tunnel_routes_openconnect` | то же с типом `openconnect` |
+| `tunnel_routes_dns_disabled` | `dns_enable=false`, три типа — только правила маршрута |
+| `tunnel_routes_flag_off` | поля нет и явное `false` — пусто |
+| `tunnel_routes_subscription_node` | узлы без записи и `vless` с полем — пусто |
+| `tunnel_routes_two_nodes` | два узла с полем и один без между ними — порядок по конфигу |
+
+Раннер лаунчера — `TestContractCorpusNodeLoops`, зелёный.
+
+### 4. Что проверено по ядру (`v1.14.4-lx.30`, файлы совпадают с веткой 1.15)
+
+**(а) DNS-сервер типа `openvpn` / `openconnect`, которому сервер не прислал DNS.** Конфиг принимается, старт не падает. OpenVPN: при установке транспорта и при каждой смене конфигурации туннеля одна строка уровня info — `updated 0 DNS routes, 0 search domains and 0 default resolvers`; OpenConnect — info `cleared DNS configuration` (до подключения транспорт молчит). Запрос, дошедший до такого сервера, получает `NXDOMAIN`, но дойти ему нечем: DNS-правило пресета не совпадает ни с одним именем. Шум уровня error даёт только противоречивый push у OpenVPN, на каждой смене конфигурации: search domains без DNS-серверов (`search domains require pushed DNS servers`), `DOMAIN-ROUTE` без DNS, `DNSSEC yes`, неизвестный транспорт; старт это не валит, резолверы сбрасываются.
+
+**(б) Место DNS-правила относительно FakeIP.** Ядро берёт первое совпавшее правило `dns.rules`, поэтому порядок решает сторона. По §6.10 (контракт 1.1.127, ваш §124) DNS-слот пресета встаёт по оси маршрутного правила: `tunnel-routes` (943) — перед первым стоящим слотом с бо́льшим номером, то есть после `tunnel-ingress` (940), перед `tailscale` (945) и перед `fakeip` (1130). Домены туннеля в FakeIP не уходят. У лаунчера это закрыто тестом `TestTunnelRoutesDNSRuleBeforeFakeIP` на боевом шаблоне. Оговорка та же, что у остальных слотов: уже стоящие слоты не переупорядочиваются, пользователь может перетащить `fakeip` выше сам.
+
+### 5. Расхождения и оговорки к вашей спеке
+
+Тело с нормой языка и с ядром не расходится. Три вещи, которых в вашей спеке нет:
+
+1. **DNS туннеля работает только для объявленных доменов.** `preferred_by` в DNS-правиле — это `DNSTransport.PreferredDomain`, он смотрит DNS-маршруты и search domains (у OpenVPN ещё `ResolveDomains` первого по приоритету сервера, у OpenConnect — split-DNS). Самый частый push — один адрес DNS без единого домена — даёт пустой набор: DNS-правило не совпадает ни с чем, имена внутренних хостов резолвятся обычными серверами. Это следствие принятого решения «только свои домены» (`accept_default_resolvers` по умолчанию), но в USER_GUIDE об этом стоит сказать.
+2. **Один DNS-сервер на endpoint.** Ядро не запускает второй DNS-сервер типа `openvpn` / `openconnect` с тем же `endpoint` и другим тегом (`only one DNS server is allowed for an endpoint`, отказ старта). Свой сервер пользователя на тот же узел и DNS-часть пресета несовместимы. В норму записано как ограничение; если у вас форма DNS-сервера умеет типы `openvpn` / `openconnect`, нужна проверка или подсказка. У лаунчера таких типов в форме нет, только сырой JSON.
+3. **Строка таблицы `openconnect` в вашей спеке** называет поле ядра `preferredDomains` — верно; набор тот же, что видит DNS-транспорт (split-DNS, search domains).
+
+Задачи вам: синк 1.1.161; поле `own_routes` в записи, бэкапе, перечне обхода и Debug API; пресет в шаблон и в список поздних дефолтов; раннер на `tunnel_routes_*`; переключатель у узла. Расхождение — сюда.
+
+## 159. Запрос LxBox — переменная шаблона `awg_masquerade` (05.11.2026)
+
+LxBox задача 720, решение владельца 05.11.2026. Ядро `v1.14.4-lx.31` (SPEC 153 форка, issue sing-box-lx#64) получило корневой ключ `lx.awg_masquerade`: `direct` (дефолт, отсутствие ключа) — маскировочная пачка AWG (`ip=quic`, `i1`…) уходит только когда endpoint звонит с сокета устройства, через `detour` идёт одна инициация рукопожатия; `all` — пачка на любом пути. У LxBox это переменная шаблона по норме 1.1.151 (§147): секция WireGuard вкладки Core.
+
+Просим:
+
+1. **Реестр** `registry/vars.json`: `awg_masquerade` — `enum`, options `direct` / `all`, дефолт `direct`, `portable: false`, `in: both` (ключ не зависит от `with_lx_idle_suspend`; если десктопное ядро его не знает — `in: mobile`, решение ваше).
+2. **Эмиссия** через `config.lx` шаблона, ключ пишется только при `all`:
+   ```json
+   "#if awg_masquerade": [{"@awg_masquerade": "all"}, {"awg_masquerade": "all"}]
+   ```
+   При `direct` и при чужом значении ключа нет — конфиг по умолчанию прежний.
+3. Гейта по версии нет: пин LxBox `v1.14.4-lx.31`, ваш — не ниже, если берёте переменную.
+
+Попутно у LxBox изменились только тексты: тултип `quic_sniff_decoy` и описание секции QUIC теперь называют AWG с маскировкой под QUIC (`ip=quic`) — с lx.31 обманка действует и на пачку AWG. Контракта это не касается.
+
+У LxBox переменная и эмиссия уже в шаблоне (до записи реестра: сверка реестра у нас проверяет только `portable: true`).
+
+## 160. Ответ лаунчера на §159 — `awg_masquerade` в реестре, контракт 1.1.162 (05.11.2026)
+
+Запрос §159 написан под ядро `v1.14.4-lx.31`. В `v1.14.4-lx.32` дефолт ключа перевёрнут (решение владельца 05.11.2026): отсутствие `lx.awg_masquerade` = `all` (пачка на любом пути, поведение до lx.31), `direct` убирает пачку с `detour`; в lx.31 отсутствие ключа значило `direct`. Значения те же — `"direct"` / `"all"`, плюс boolean (`true` = `all`, `false` = `direct`); чужая строка — ошибка разбора конфига. В реестр переменная записана в форме под lx.32.
+
+1. **Реестр** `registry/vars.json`: `awg_masquerade` — `enum`, options `all` / `direct`, **дефолт `all`** (= дефолт ядра с lx.32), `portable: false`, `in: mobile`.
+2. **Эмиссия** через `config.lx` шаблона, ключ пишется только при `direct`:
+   ```json
+   "#if awg_masquerade": [{"@awg_masquerade": "direct"}, {"awg_masquerade": "direct"}]
+   ```
+   При `all` и при чужом значении ключа нет.
+3. **Пин ядра стороны, несущей переменную, — не ниже `1.14.4-lx.32`.** На lx.31 эта же эмиссия дала бы обратное поведение: выбран `all` → ключа нет → ядро берёт `direct`.
+4. **`in: mobile`, не `both`.** Пин лаунчера — `1.14.4-lx.30`, ключа он не знает; шаблон лаунчера не менялся. `both` — когда лаунчер поднимет пин до lx.32 и возьмёт переменную, отдельной версией контракта.
+5. Факт lx.32 без следа в конфиге: «direct» у `awg_masquerade` и у `quic_sniff_decoy` включает `detour` на outbound `direct` и на группу (selector / urltest) любой вложенности, в которой сейчас выбран `direct`. Тексты подсказок — на вашей стороне.
+
+Версия контракта — 1.1.162. Корпус без изменений. Синк: `sync_contract.sh --to 8d13b511`.
+
+Задачи вам: синк 1.1.162; сверить свою переменную и ветку `config.lx` с п.1–2 (options, дефолт `all`, ключ только при `direct`); пин `1.14.4-lx.32`. Расхождение — сюда.

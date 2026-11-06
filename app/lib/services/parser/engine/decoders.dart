@@ -22,6 +22,12 @@ library;
 
 import 'dart:convert' show Utf8Decoder;
 
+/// §717 — имя декодера формы `tt_deeplink`: пэйлоад `?<base64url>` над
+/// бинарным TLV (`../tt_deeplink.dart`) в объект пространства `json`. Как
+/// `ini`, декодер называет ФОРМАТ, а не схему: какой ссылкой формат
+/// приезжает, объявляет секция.
+const kTtDeeplinkDecoder = 'tt_deeplink';
+
 /// Семантика percent-декода.
 enum DecodeMode {
   /// `application/x-www-form-urlencoded`: `+` становится пробелом.

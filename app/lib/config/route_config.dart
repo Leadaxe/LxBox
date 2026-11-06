@@ -1,8 +1,11 @@
 import 'package:json5/json5.dart';
 
+import 'config_parse.dart';
+
 /// §122 — мелкие чистые запросы к route-секции конфига sing-box (JSON/JSON5/
 /// JSONC). Разбирает тот же синтаксис, что и загрузка конфига в ядро
-/// ([json5Decode]), чтобы комментарии в конфиге не ломали парс.
+/// ([json5Decode] после снятия `#`), чтобы комментарии в конфиге не ломали
+/// парс.
 ///
 /// Заменил `clash_endpoint.dart` (ClashEndpoint.fromConfigJson выпилен вместе
 /// с Clash API; остался только route.final-парсинг).
@@ -14,7 +17,7 @@ class RouteConfig {
     try {
       final trimmed = raw.trim();
       if (trimmed.isEmpty) return null;
-      final dynamic decoded = json5Decode(trimmed);
+      final dynamic decoded = json5Decode(withoutHashComments(trimmed));
       if (decoded is! Map) return null;
       final route = decoded['route'];
       if (route is! Map) return null;

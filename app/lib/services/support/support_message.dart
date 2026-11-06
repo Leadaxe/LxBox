@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import '../app_log.dart';
 import '../project_links.dart';
 import '../settings_storage.dart';
+import '../subscription/user_agent.dart';
 import '../update_checker.dart' show isNewer;
 import '../version_info.dart';
 import 'active_time_tracker.dart';
@@ -259,7 +260,7 @@ class SupportMessageService {
     final client = httpClientForTesting ?? http.Client();
     try {
       final resp = await client
-          .get(Uri.parse(_url), headers: {'User-Agent': 'LxBox/1.x'})
+          .get(Uri.parse(_url), headers: {'User-Agent': resolveAppUserAgent()})
           .timeout(_httpTimeout);
       if (resp.statusCode == 200) {
         final f = _parse(resp.body);

@@ -23,7 +23,7 @@ All triggers converge into one pass, which decides for each subscription by a si
 |---|---|---|
 | Auto-update subscriptions | on/off (Settings → Subscriptions and the sources screen menu) | on |
 | Update disabled subscriptions | on/off; available only with auto-update enabled | off |
-| Update interval (subscription) | `-1` Don't auto-update · `0` Never (respect server) · 1, 3, 6, 12, 24, 48, 72, 168 h | 24 h; file `-1` |
+| Update interval (subscription) | `0` As subscription · `-1` Don't auto-update · 1, 3, 6, 12, 24, 48, 72, 168 h | `0` for a new subscription; file `-1` |
 
 Constants: min-retry 15 min · failure cap 5 per session · pause between
 subscriptions 10 s ± 2 s · periodic tick 1 h · delay after VPN 2 min.
@@ -63,10 +63,12 @@ The "is it time" decision for an automatic trigger, in order:
   pass: other entries with the same URL take the first successful response
   (each parsed with its own rules, no pause before them); if that request
   failed, they are skipped in this pass.
-- The server `profile-update-interval` changes the subscription interval with `0` and
-  `N>0`; with `-1` it is ignored. A negative or non-numeric header value is
-  ignored; a negative interval once accepted from a server (below `-1`) is
-  replaced on the next success by the server value or 24 h.
+- The server `profile-update-interval` applies only with `0` ("As
+  subscription"): the effective interval is the server value (`0` from the
+  server means no auto-update), 24 h without a header. A fetch never
+  overwrites the user's choice (`-1`, `N>0`). A negative or non-numeric header
+  value is ignored; a negative interval once accepted from a server (below
+  `-1`) becomes `0` on the next success.
 - The failure cap lives in memory: it is reset by a restart, a manual
   update of the subscription, "Reset fail count & retry" and "Update all".
   The consecutive-failure count for display ("(N fails)") is stored separately and
@@ -103,3 +105,4 @@ The "is it time" decision for an automatic trigger, in order:
 | 6 | [515](../../../tasks/515-workspace-switch-stale-controller-persist.md) | Released v2.25.2 | Stopping the pass on a workspace switch |
 | 7 | [219](../../../tasks/219-deep-audit-2026-07.md) | Done / findings in progress | Audit: closing the HTTP client, index order on reorder |
 | 8 | [603](../../../tasks/603-subscription-and-own-server-bugs.md) | Implemented | One request per URL per pass; server interval validation; "Update all" during a pass |
+| 9 | [685](../../../tasks/685-subscription-interval-as-subscription.md) | Implemented | "As subscription" mode; the server header no longer overwrites the user's interval |

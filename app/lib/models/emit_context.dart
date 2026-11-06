@@ -5,6 +5,7 @@ import 'node_spec.dart';
 import 'node_warning.dart' show RegistryWarning;
 import 'singbox_entry.dart';
 import 'template_vars.dart';
+import 'tls_policy.dart';
 
 /// Контекст одного вызова `buildConfig`. `ServerList.build(ctx)` использует
 /// его, чтобы:
@@ -14,7 +15,9 @@ import 'template_vars.dart';
 ///    (sealed-switch внутри ctx по типу);
 ///  - отметить entry как участника preset-групп:
 ///    - `addToSelectorTagList(e)` → попадёт в vpn-1/2/3;
-///    - `addToAutoList(e)` → попадёт в auto-proxy-out (urltest).
+///    - `addToAutoList(e)` → попадёт в `<tag>-auto` Направлений (urltest);
+///      §670: только вместе с `addToSelectorTagList` — запись из одного
+///      селекторного списка в `-auto` не идёт.
 ///
 /// Регистрируем **entry целиком**, не просто тэг. SingboxEntry сам отдаёт
 /// текущий `tag` через геттер — если post-step переименует, preset-группы
@@ -32,7 +35,7 @@ abstract class EmitContext {
   /// Пометить, что этот entry попадает в selector-группы (vpn-1/2/3).
   void addToSelectorTagList(SingboxEntry entry);
 
-  /// Пометить, что этот entry попадает в auto-proxy-out (urltest).
+  /// Пометить, что этот entry попадает в `<tag>-auto` Направлений (urltest).
   void addToAutoList(SingboxEntry entry);
 
   /// Общий реестр для `route.rule_set` / `route.rules` секций. Живёт один
@@ -41,7 +44,7 @@ abstract class EmitContext {
   RuleSetRegistry get ruleSets;
 
   /// §435 — финальный тег эмитированного узла (после префикса контейнера и
-  /// `allocateTag`). По нему `buildConfig` собирает узлы для `for_each`
+  /// `allocateTag`). По нему `buildConfig` собирает узлы для обхода узлов
   /// пресетов (§578) и адресный индекс; узла, которого здесь нет, в конфиге
   /// нет.
   void noteEmitted(NodeSpec node, String finalTag) {}
@@ -50,6 +53,16 @@ abstract class EmitContext {
   /// ведёт к [owner], а не к своему звену. При коллизии с main-тегом того же
   /// узла побеждает [noteEmitted].
   void noteEmittedAlias(String finalTag, NodeSpec owner) {}
+
+  /// §675 — итоговый тег узла автовыбора (§322) после префикса и
+  /// `allocateTag`. Отдельно от [noteEmitted]: группа — не узел для обхода
+  /// пресетов (§578) и не цель выключения по отказу ядра.
+  void noteGroupEmitted(AutoSelectSpec group, String finalTag) {}
+
+  /// §636 — уровни TLS-политики outbound'а с итоговым тегом [finalTag]
+  /// (узел и его родная цепочка). Пустые уровни не записываются: такой
+  /// outbound живёт по глобальному слою.
+  void noteTls(String finalTag, TlsLayers layers) {}
 
   /// §435 — предупреждение сборки из `ServerList.build` (гейт ядра и т.п.):
   /// уходит в `emitWarnings` наравне с остальными строками отчёта.

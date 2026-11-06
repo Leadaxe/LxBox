@@ -88,11 +88,13 @@ class HomeState {
     this.traffic = TrafficSnapshot.zero,
     this.connectedSince,
     this.configChangedNeedRestart = false,
+    this.autoApplying = false,
     this.configLoadError = false,
     this.lastStartError = '',
     this.lastStartErrorAt,
     this.networksOpen = false,
     this.tailscaleStatus = const <String, CcTailscaleStatus>{},
+    this.openConnect = CcOpenConnectSnapshot.empty,
   })  : configModel = configModel ?? ParsedConfig.parse(configRaw),
         runningModel = runningModel ??
             (runningConfigRaw != null
@@ -212,6 +214,14 @@ class HomeState {
   /// иначе такие замеры присвоил бы себе случайный Направление.
   static const String scratchDirection = '\u0000scratch';
 
+  /// §715 — псевдо-Направление для замеров ЯДРА: `urlTestDelay` из
+  /// `getOutbounds` (heartbeat §535). Это URL-тест группы через туннель, а не
+  /// пробник приложения на цель из Ping Settings, поэтому в показе он всегда
+  /// «чужой» (`~`, приглушённо) и стоит последним в фоллбэке [delayOf].
+  /// Падение туннеля ключ не снимает: живёт как любой чужой замер §325, пока
+  /// первый heartbeat следующего сеанса не перезапишет карту.
+  static const String coreDirection = '\u0000core';
+
   /// §325 — ключ Направления, в который пишутся новые замеры.
   String get delayDirectionKey => selectedGroup ?? scratchDirection;
 
@@ -230,11 +240,15 @@ class HomeState {
     final own = _ownDelays[tag];
     if (own != null) return own;
     for (final entry in delayByDirection.entries) {
-      if (entry.key == delayDirectionKey) continue;
+      if (entry.key == delayDirectionKey || entry.key == coreDirection) {
+        continue;
+      }
       final v = entry.value[tag];
       if (v != null) return v;
     }
-    return null;
+    // §715 — замер ядра последним: другое Направление мерило той же
+    // методикой, что и своё, ядро — другой.
+    return delayByDirection[coreDirection]?[tag];
   }
 
   /// §325 — показанный [delayOf] пришёл из ДРУГОГО Направления (в текущем ноду не
@@ -267,6 +281,14 @@ class HomeState {
   /// Sticky in-memory flag, сбрасывается на каждом успешном `_startInternal`.
   final bool configChangedNeedRestart;
 
+  /// §667 (§338) — авто-применение в полёте: `HomeController.applyIfAutoReload`
+  /// решил «запускаем» и ждёт `reloadVpn`. На это окно (~1–3 с) розовая плашка
+  /// «restart VPN» подавляется: флаг [configChangedNeedRestart] честно взведён,
+  /// но звать пользователя перезапускать VPN, который вот-вот перезапустится
+  /// сам, нельзя — мигание читается как «галка не работает». Живёт в state, а
+  /// не в home_screen: гейт зовут и пути мимо воронки home (Р2).
+  final bool autoApplying;
+
   /// §116 — на старте `getConfig()` не вернул конфиг (`configRaw` пустой) ПРИ
   /// живом туннеле: файл не прочёлся, но туннель уже несёт рабочий конфиг.
   /// Аномалия загрузки → постоянный error-баннер «Config loading error» с
@@ -295,6 +317,11 @@ class HomeState {
   /// Задача 579 — записи потока ядра `SubscribeTailscaleStatus` по тегу
   /// endpoint'а. Пусто, пока VPN выключен или подписки нет.
   final Map<String, CcTailscaleStatus> tailscaleStatus;
+
+  /// §654 C — снапшот потока ядра `SubscribeOpenConnectStatus`: endpoint'ы
+  /// openconnect по тегу (висящий челлендж, ошибка) и слушатель SSO. Пусто,
+  /// пока VPN выключен или openconnect-узлов в конфиге нет.
+  final CcOpenConnectSnapshot openConnect;
 
   /// Задача 579 — узлы NETWORKS из конфига, по которому работает ядро
   /// ([activeModel]; при выключенном VPN — последний собранный).
@@ -484,7 +511,7 @@ class HomeState {
 
   int _compareLatency(String a, String b) {
     // §325 — сортируем по тому же числу, что видит пользователь (вкл. фоллбэк
-    // из чужого Направления): иначе нода с показанным «120MS» уезжала бы в хвост
+    // из чужого Направления): иначе нода с показанным «120ms» уезжала бы в хвост
     // к неизмеренным.
     final da = delayOf(a);
     final db = delayOf(b);
@@ -529,11 +556,13 @@ class HomeState {
     TrafficSnapshot? traffic,
     Object? connectedSince = _unset,
     bool? configChangedNeedRestart,
+    bool? autoApplying,
     bool? configLoadError,
     String? lastStartError,
     Object? lastStartErrorAt = _unset,
     bool? networksOpen,
     Map<String, CcTailscaleStatus>? tailscaleStatus,
+    CcOpenConnectSnapshot? openConnect,
   }) {
     return HomeState(
       configRaw: configRaw ?? this.configRaw,
@@ -593,6 +622,7 @@ class HomeState {
           ? this.connectedSince
           : connectedSince as DateTime?,
       configChangedNeedRestart: configChangedNeedRestart ?? this.configChangedNeedRestart,
+      autoApplying: autoApplying ?? this.autoApplying,
       configLoadError: configLoadError ?? this.configLoadError,
       lastStartError: lastStartError ?? this.lastStartError,
       lastStartErrorAt: identical(lastStartErrorAt, _unset)
@@ -600,6 +630,7 @@ class HomeState {
           : lastStartErrorAt as DateTime?,
       networksOpen: networksOpen ?? this.networksOpen,
       tailscaleStatus: tailscaleStatus ?? this.tailscaleStatus,
+      openConnect: openConnect ?? this.openConnect,
     );
   }
 }

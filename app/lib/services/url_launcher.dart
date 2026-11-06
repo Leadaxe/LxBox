@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import 'platform_channels.dart';
@@ -164,6 +165,36 @@ class UrlLauncher {
       return ok ?? true;
     } catch (_) {
       return true;
+    }
+  }
+
+  static bool? _isTelevision;
+
+  @visibleForTesting
+  static void resetTelevisionCacheForTesting() => _isTelevision = null;
+
+  /// §622 — устройство в режиме телевизора (Android TV, Google TV).
+  ///
+  /// Нативно: `UI_MODE_TYPE_TELEVISION` или `FEATURE_LEANBACK`; ответ
+  /// кешируется на процесс. При недоступности канала — false: пункт приёма
+  /// настроек на неизвестном устройстве не показываем (P10).
+  static Future<bool> isTelevision() async {
+    final cached = _isTelevision;
+    if (cached != null) return cached;
+    try {
+      final ok = await _channel.invokeMethod<bool>('isTelevision');
+      return _isTelevision = ok ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// §622 — `FLAG_KEEP_SCREEN_ON` на окне активности.
+  static Future<void> setKeepScreenOn(bool on) async {
+    try {
+      await _channel.invokeMethod('setKeepScreenOn', {'on': on});
+    } catch (_) {
+      // ignore
     }
   }
 

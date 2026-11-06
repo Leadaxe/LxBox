@@ -77,7 +77,8 @@ Three principles the feature protects:
   one-second precision) and the config is silently rebuilt. **Witness:** unit tests
   "a fresh config in the native part's directory → not stale", "a settings write
   with the flag raised does not touch the config (honestly stale)", "edit → flag
-  cleared by a rebuild → write → clean". **Mutation:** look for the config in the wrong directory
+  cleared by a rebuild → write → clean", "settings newer than the config → dirty",
+  "the same second → clean" (`config_dirty_check_test.dart`). **Mutation:** look for the config in the wrong directory
   (§414) — a perpetual "dirty".
 - **P13. The VPN starts on the current config.** There are unwritten changes
   or a build in progress — Start first awaits/does a rebuild (one for

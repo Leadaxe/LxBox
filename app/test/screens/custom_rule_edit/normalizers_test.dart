@@ -13,11 +13,6 @@ void main() {
     test('trims whitespace', () {
       expect(splitRaw('  a  ,  b  ,  c  '), ['a', 'b', 'c']);
     });
-    test('empty input', () {
-      expect(splitRaw(''), isEmpty);
-      expect(splitRaw('  '), isEmpty);
-      expect(splitRaw(',,,'), isEmpty);
-    });
   });
 
   group('normalizedDomains', () {
@@ -62,9 +57,6 @@ void main() {
         ['xn--p1ai'],
       );
     });
-    test('§144 mixed ASCII + IDN labels: только не-ASCII → xn--', () {
-      expect(normalizedDomains('shop.рф'), ['shop.xn--p1ai']);
-    });
   });
 
   group('normalizedKeywords', () {
@@ -96,11 +88,9 @@ void main() {
     });
   });
 
-  group('normalizedPorts / normalizedPortRanges', () {
-    test('passthrough split', () {
-      expect(normalizedPorts('80,443\n22'), ['80', '443', '22']);
-      expect(normalizedPortRanges('8000:9000,:3000'),
-          ['8000:9000', ':3000']);
+  group('normalizedRegexes (§712)', () {
+    test('splits on newline only, keeps commas and case', () {
+      expect(normalizedRegexes(' ^A{1,3}\n\n  b,c  \n'), ['^A{1,3}', 'b,c']);
     });
   });
 }

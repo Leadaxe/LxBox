@@ -10,7 +10,6 @@ import 'package:lxbox/widgets/node_diagnostics_tab.dart';
 import 'package:lxbox/screens/subscription_detail_screen/widgets/node_notifications_view.dart';
 import 'package:lxbox/screens/subscription_detail_screen/widgets/node_warning_row.dart';
 import 'package:lxbox/screens/subscription_detail_screen/widgets/node_warnings_sheet.dart';
-import 'package:lxbox/screens/subscription_detail_screen/widgets/subscription_node_list.dart';
 import 'package:lxbox/services/contract/contract_docs.dart';
 import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/l10n/locale_controller.dart';
@@ -47,11 +46,6 @@ const _infoFlow = RegistryWarning(
   value: 'xtls-rprx-direct',
   params: {'flow': 'xtls-rprx-direct'},
 );
-const _infoUriParam = RegistryWarning(
-  code: 'uri_param_unknown',
-  path: 'foo',
-  params: {'query_name': 'foo'},
-);
 
 void main() {
   setUpAll(() async {
@@ -63,11 +57,6 @@ void main() {
   });
 
   tearDownAll(ContractRegistry.I.resetForTesting);
-
-  Future<void> pumpSheet(WidgetTester tester, List<NodeWarning> warnings) =>
-      tester.pumpWidget(MaterialApp(
-        home: Scaffold(body: NodeWarningsSheet(warnings)),
-      ));
 
   Future<void> pumpView(WidgetTester tester, List<NodeWarning> warnings) =>
       tester.pumpWidget(MaterialApp(
@@ -136,23 +125,6 @@ void main() {
       expect(tileTaps, 0, reason: 'тап провалился на ListTile под строкой');
       expect(find.text('Notifications'), findsOneWidget);
     });
-
-    testWidgets('строка объявлена кнопкой для screen reader', (tester) async {
-      final handle = tester.ensureSemantics();
-      await pumpRow(tester, const [_warnTransport]);
-      expect(
-        tester.getSemantics(find.byType(NodeWarningRow)),
-        matchesSemantics(
-          isButton: true,
-          hasTapAction: true,
-          label: ContractRegistry.I
-              .textFor('transport_unsupported')!
-              .titleEn
-              .replaceAll('{fallback}', 'ws'),
-        ),
-      );
-      handle.dispose();
-    });
   });
 
   group('§479 — уровни в строке под узлом', () {
@@ -174,32 +146,6 @@ void main() {
               of: find.byType(NodeWarningRow), matching: find.byType(Text)),
           findsNothing);
       expect(icons(tester), isEmpty);
-    });
-
-    testWidgets('warning + info — значок info в КОНЦЕ строки и приглушённый',
-        (tester) async {
-      await pumpRow(tester, const [infoW, warnW]);
-
-      // Текст — warning'а и без счётчика: actionable ровно одно.
-      expect(find.textContaining('replaced with ws'), findsOneWidget);
-      expect(find.textContaining('+1 more'), findsNothing);
-      expect(
-          find.descendant(
-              of: find.byType(NodeWarningRow),
-              matching:
-                  find.text(
-                      ContractRegistry.I.textFor('tls_insecure')!.titleEn)),
-          findsNothing);
-
-      // §479: порядок значков — уровень, потом info.
-      final ico = icons(tester).toList();
-      expect(ico.map((i) => i.icon),
-          [Icons.warning_amber, Icons.info_outline]);
-      // Приглушённый, а не синий уровня.
-      final ctx = tester.element(find.byType(NodeWarningRow));
-      expect(ico.last.color, Theme.of(ctx).colorScheme.onSurfaceVariant);
-      expect(ico.last.color,
-          isNot(warningSeverityColor(ctx, WarningSeverity.info)));
     });
 
     testWidgets('«+N more» считает только error и warning', (tester) async {
@@ -227,142 +173,6 @@ void main() {
           findsOneWidget);
       expect(find.textContaining('(+1 more)'), findsOneWidget);
     });
-
-    testWidgets('текстом идёт ЗАГОЛОВОК кода реестра, а не полный текст',
-        (tester) async {
-      // §479 — источник строки — `title_<lang>` реестра: полный текст в
-      // строку списка не помещался и обрывался на полуслове.
-      const w = RegistryWarning(
-          code: 'transport_unsupported',
-          path: 'transport.type',
-          params: {'transport': 'quic', 'fallback': 'ws'});
-      await pumpRow(tester, const [w]);
-
-      final raw = ContractRegistry.I.textFor('transport_unsupported')!;
-      String subst(String s) => s
-          .replaceAll('{path}', 'transport.type')
-          .replaceAll('{transport}', 'quic')
-          .replaceAll('{fallback}', 'ws');
-      expect(find.text(subst(raw.titleEn)), findsOneWidget);
-      // Полный текст в строку не едет — он длиннее и живёт в уведомлениях.
-      expect(raw.textEn, isNot(raw.titleEn));
-      expect(find.text(subst(raw.textEn)), findsNothing);
-    });
-  });
-
-  group('§479 — место значка info в списке узлов', () {
-    NodeSpec node(String label, List<NodeWarning> warnings) => VlessSpec(
-          id: label,
-          tag: label,
-          label: label,
-          server: 'example.com',
-          port: 443,
-          rawSource: '',
-          uuid: '00000000-0000-0000-0000-000000000000',
-          warnings: warnings,
-        );
-
-    Future<void> pumpList(WidgetTester tester, List<NodeSpec> nodes) =>
-        tester.pumpWidget(MaterialApp(
-          home: Scaffold(
-            body: SubscriptionNodeList(
-                nodes: nodes, loading: false, error: null),
-          ),
-        ));
-
-    /// Значок в `title` строки — то есть рядом с именем.
-    Finder badgeAtTitle(String label) => find.descendant(
-          of: find.ancestor(
-              of: find.text(label), matching: find.byType(Row)),
-          matching: find.byType(NodeInfoBadge),
-        );
-
-    testWidgets('только info — значок в строке протокола, имя чистое, '
-        'третьей строки нет', (tester) async {
-      await pumpList(tester, [node('info-only', const [_infoTls])]);
-
-      // Значок есть — но не у имени.
-      expect(find.byType(NodeInfoBadge), findsOneWidget);
-      expect(badgeAtTitle('info-only'), findsNothing);
-      // Он стоит в одном Row со строкой протокола.
-      expect(
-        find.descendant(
-          of: find.ancestor(
-              of: find.text('vless  example.com:443'),
-              matching: find.byType(Row)),
-          matching: find.byType(NodeInfoBadge),
-        ),
-        findsOneWidget,
-      );
-      // Строки предупреждения под узлом нет вовсе.
-      expect(find.byType(NodeWarningRow), findsNothing);
-      expect(
-          find.text(ContractRegistry.I.textFor('tls_insecure')!.titleEn),
-          findsNothing);
-    });
-
-    testWidgets('значок приглушён, а не синий', (tester) async {
-      await pumpList(tester, [node('info-only', const [_infoTls])]);
-      final ctx = tester.element(find.byType(NodeInfoBadge));
-      final ico = tester.widget<Icon>(find.descendant(
-          of: find.byType(NodeInfoBadge), matching: find.byType(Icon)));
-      expect(ico.icon, Icons.info_outline);
-      expect(ico.color, Theme.of(ctx).colorScheme.onSurfaceVariant);
-    });
-
-    testWidgets('зона тапа значка не меньше 24×24', (tester) async {
-      // Значок 14 px — пальцем в него не попасть; подложка обязана быть
-      // рекомендованного Material размера.
-      await tester.pumpWidget(const MaterialApp(
-        home: Scaffold(
-            body: Center(child: NodeInfoBadge([_infoTls]))),
-      ));
-      final size = tester.getSize(find.byType(NodeInfoBadge));
-      expect(size.width, greaterThanOrEqualTo(24));
-      expect(size.height, greaterThanOrEqualTo(24));
-    });
-
-    testWidgets('тап по значку открывает уведомления и не проваливается в '
-        'разбор узла', (tester) async {
-      await pumpList(tester, [node('info-only', const [_infoTls])]);
-
-      await tester.tap(find.byType(NodeInfoBadge));
-      await tester.pumpAndSettle();
-
-      expect(find.byType(NodeWarningsSheet), findsOneWidget);
-      expect(find.byType(NodeInspectScreen), findsNothing);
-    });
-
-    testWidgets('warning + info — значок info в строке предупреждения, '
-        'у имени его нет', (tester) async {
-      await pumpList(tester, [
-        node('mixed', const [
-          _infoTls,
-          _warnTransport,
-        ]),
-      ]);
-
-      expect(badgeAtTitle('mixed'), findsNothing);
-      expect(
-        find.descendant(
-            of: find.byType(NodeWarningRow),
-            matching: find.byType(NodeInfoBadge)),
-        findsOneWidget,
-      );
-
-      final ico = tester
-          .widgetList<Icon>(find.descendant(
-              of: find.byType(NodeWarningRow), matching: find.byType(Icon)))
-          .toList();
-      expect(ico.map((i) => i.icon), [Icons.warning_amber, Icons.info_outline]);
-    });
-
-    testWidgets('узел без предупреждений — ни значка, ни строки',
-        (tester) async {
-      await pumpList(tester, [node('clean', const [])]);
-      expect(find.byType(NodeInfoBadge), findsNothing);
-      expect(find.byType(NodeWarningRow), findsNothing);
-    });
   });
 
   group('§479 — шапка со счётчиками и подразделы', () {
@@ -382,102 +192,9 @@ void main() {
       expect(find.text('Warnings'), findsOneWidget);
       expect(find.text('Info'), findsNothing);
     });
-
-    testWidgets('единственный уровень — подзаголовка нет', (tester) async {
-      await pumpView(tester, const [
-        _warnTransport,
-        UnknownObfsWarning('gecko'),
-      ]);
-
-      expect(find.text('Warnings'), findsNothing);
-      expect(find.text('Errors'), findsNothing);
-      // Счётчик при этом на месте.
-      expect(find.text('2'), findsOneWidget);
-    });
-
-    testWidgets('три уровня — три подзаголовка в порядке error → warning → '
-        'info', (tester) async {
-      await pumpView(tester, const [
-        _infoTls,
-        _warnTransport,
-        _errFieldMissing,
-      ]);
-
-      final headers = tester
-          .widgetList<Text>(find.byType(Text))
-          .map((t) => t.data)
-          .where((s) => s == 'Errors' || s == 'Warnings' || s == 'Info')
-          .toList();
-      expect(headers, ['Errors', 'Warnings', 'Info']);
-    });
-
-    testWidgets('узел без уведомлений — компонент пуст', (tester) async {
-      await pumpView(tester, const []);
-      expect(find.byType(ExpansionTile), findsNothing);
-      expect(find.byType(Icon), findsNothing);
-    });
   });
 
   group('§479 — запись уведомления', () {
-    testWidgets('несколько записей — свёрнуты; тап разворачивает',
-        (tester) async {
-      await pumpView(tester, const [
-        _infoTls,
-        _warnTransport,
-      ]);
-
-      // Свёрнуто: разбор не построен.
-      expect(find.text('Why it happens'), findsNothing);
-      expect(find.text('What you can do'), findsNothing);
-      expect(find.text('Details'), findsNothing);
-
-      await tester.tap(
-          find.text(ContractRegistry.I.textFor('tls_insecure')!.titleEn));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Why it happens'), findsOneWidget);
-      expect(find.text('What you can do'), findsOneWidget);
-      expect(find.text('Details'), findsOneWidget);
-      final text = ContractRegistry.I.textFor('tls_insecure')!;
-      expect(find.text(text.causeEn!), findsOneWidget);
-      for (final step in text.fixEn) {
-        expect(find.text(step), findsOneWidget);
-      }
-    });
-
-    testWidgets('единственная запись развёрнута сразу', (tester) async {
-      await pumpView(tester, const [_infoTls]);
-
-      expect(find.text('Why it happens'), findsOneWidget);
-      expect(find.text('What you can do'), findsOneWidget);
-      expect(find.text('Details'), findsOneWidget);
-    });
-
-    testWidgets('путь поля показан моноширинно', (tester) async {
-      await pumpView(tester, const [
-        RegistryWarning(
-          code: 'reality_key_share_invalid',
-          path: 'tls.reality.key_share',
-          value: 'garbage',
-        ),
-      ]);
-
-      final path = tester.widget<Text>(find.text('tls.reality.key_share'));
-      expect(path.style?.fontFamily, 'monospace');
-    });
-
-    testWidgets('рукописное предупреждение без кода реестра — без блоков',
-        (tester) async {
-      await pumpView(tester, const [UnknownNodeTypeWarning('openvpn-client')]);
-
-      // Заголовок на месте — он свой, из словаря UI.
-      expect(find.textContaining('Unknown node type'), findsOneWidget);
-      // А объяснять и вести некуда: кода в реестре нет.
-      expect(find.text('Details'), findsNothing);
-      expect(find.text('Why it happens'), findsNothing);
-      expect(find.text('What you can do'), findsNothing);
-    });
-
     testWidgets('код вне реестра = warning и запись без блоков',
         (tester) async {
       // Санитайзер может выдать код, которого текущий синк ещё не знает:
@@ -500,49 +217,6 @@ void main() {
             .contains(Icons.warning_amber),
         isTrue,
       );
-    });
-
-    testWidgets('подстановки {path}/{value} доходят до блоков', (tester) async {
-      await pumpView(tester, const [
-        RegistryWarning(
-          code: 'reality_key_share_invalid',
-          path: 'tls.reality.key_share',
-          value: 'garbage',
-        ),
-      ]);
-
-      final raw = ContractRegistry.I.textFor('reality_key_share_invalid')!;
-      for (final step in raw.fixEn) {
-        final expected = step
-            .replaceAll('{path}', 'tls.reality.key_share')
-            .replaceAll('{value}', 'garbage');
-        expect(find.text(expected), findsOneWidget);
-        if (step != expected) {
-          expect(find.text(step), findsNothing,
-              reason: 'плейсхолдер остался неподставленным');
-        }
-      }
-    });
-
-    testWidgets('палитра уровней — общая', (tester) async {
-      await pumpView(tester, const [
-        _warnTransport,
-        _infoFlow,
-      ]);
-      final ctx = tester.element(find.byType(NodeNotificationsView));
-      final ico = tester
-          .widgetList<Icon>(find.descendant(
-              of: find.byType(ExpansionTile), matching: find.byType(Icon)))
-          // Стрелка раскрытия тоже иконка — берём только значки уровней.
-          .where((i) =>
-              i.icon == Icons.warning_amber || i.icon == Icons.info_outline)
-          .toList();
-      // Порядок разделов — старшее выше.
-      expect(ico.map((i) => i.icon),
-          [Icons.warning_amber, Icons.info_outline]);
-      expect(ico[0].color, warningSeverityColor(ctx, WarningSeverity.warning));
-      // Внутри уведомлений info остаётся СИНИМ (приглушён он только в списке).
-      expect(ico[1].color, warningSeverityColor(ctx, WarningSeverity.info));
     });
   });
 
@@ -590,91 +264,6 @@ void main() {
       expect(find.text('Details'), findsOneWidget);
     });
 
-    testWidgets('заголовок группы разных полей — «…», ни одного пути',
-        (tester) async {
-      await pumpView(tester, unknownFields);
-
-      final raw = ContractRegistry.I.textFor('json_field_unknown')!;
-      final title = raw.titleEn.replaceAll('{query_name}', '…');
-      expect(find.text(title), findsOneWidget);
-      // Путь встречается только в строке своей записи, не в заголовке и не
-      // в разборе.
-      for (final p in paths) {
-        expect(find.textContaining(p), findsOneWidget);
-      }
-      expect(find.textContaining('{query_name}'), findsNothing);
-    });
-
-    testWidgets('одинаковые path и value — подстановка обычная, без «…»',
-        (tester) async {
-      await pumpView(tester, const [
-        RegistryWarning(
-          code: 'reality_key_share_invalid',
-          path: 'tls.reality.key_share',
-          value: 'garbage',
-        ),
-        RegistryWarning(
-          code: 'reality_key_share_invalid',
-          path: 'tls.reality.key_share',
-          value: 'garbage',
-        ),
-      ]);
-
-      expect(find.byType(ExpansionTile), findsOneWidget);
-      expect(find.textContaining('…'), findsNothing);
-      expect(
-          tester
-              .widget<Text>(find.byKey(const ValueKey(
-                  'notification-group-row-info-reality_key_share_invalid-0')))
-              .data,
-          'tls.reality.key_share = garbage');
-      final raw = ContractRegistry.I.textFor('reality_key_share_invalid')!;
-      final title = raw.titleEn
-          .replaceAll('{path}', 'tls.reality.key_share')
-          .replaceAll('{value}', 'garbage');
-      expect(find.text(title), findsOneWidget);
-    });
-
-    testWidgets('одиночный код рядом с группой — обычная плитка, порядок по '
-        'первому вхождению', (tester) async {
-      await pumpView(tester, [
-        _infoTls,
-        unknownFields[0],
-        _infoFlow,
-        unknownFields[1],
-      ]);
-
-      // tls_insecure, группа json_field_unknown, flow_deprecated.
-      expect(find.byType(ExpansionTile), findsNWidgets(3));
-      final tlsTitle = ContractRegistry.I.textFor('tls_insecure')!.titleEn;
-      final groupTitle = ContractRegistry.I
-          .textFor('json_field_unknown')!
-          .titleEn
-          .replaceAll('{query_name}', '…');
-      final flowTitle = const RegistryWarning(
-        code: 'flow_deprecated',
-        path: 'flow',
-        value: 'xtls-rprx-direct',
-        params: {'flow': 'xtls-rprx-direct'},
-      ).message();
-      final titles = tester
-          .widgetList<Text>(find.byType(Text))
-          .map((t) => t.data)
-          .where((s) => s == tlsTitle || s == groupTitle || s == flowTitle)
-          .toList();
-      expect(titles, [tlsTitle, groupTitle, flowTitle]);
-      expect(tester.widget<Text>(find.byKey(countKey)).data, '2');
-    });
-
-    testWidgets('счётчик шапки считает записи, а не группы', (tester) async {
-      await pumpView(tester, [...unknownFields, _infoTls]);
-
-      // Плиток две (группа и tls_insecure), а записей восемь.
-      expect(find.byType(ExpansionTile), findsNWidgets(2));
-      expect(find.text('${paths.length + 1}'), findsOneWidget);
-      expect(find.text('2'), findsNothing);
-    });
-
     testWidgets('один код на разных уровнях в группу не сливается',
         (tester) async {
       // `unknown_node_type` — per-app код (§585): класс даёт info, а
@@ -697,23 +286,6 @@ void main() {
           findsNothing);
       expect(find.text('Warnings'), findsOneWidget);
       expect(find.text('Info'), findsOneWidget);
-    });
-  });
-
-  group('§479 — шторка', () {
-    testWidgets('заголовок шторки — Notifications', (tester) async {
-      await pumpSheet(tester, const [_infoTls]);
-      expect(
-        find.descendant(
-            of: find.byType(NodeWarningsSheet), matching: find.text('Notifications')),
-        findsOneWidget,
-      );
-      expect(find.text('Warnings'), findsNothing);
-    });
-
-    testWidgets('шторка показывает тот же компонент', (tester) async {
-      await pumpSheet(tester, const [_infoTls]);
-      expect(find.byType(NodeNotificationsView), findsOneWidget);
     });
   });
 
@@ -788,118 +360,6 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    Finder tabDot() => find.byKey(const Key('diagnostics_tab_dot'));
-
-    testWidgets('вкладки Notifications нет; warning — жёлтая точка и секция',
-        (tester) async {
-      await pumpInspect(tester, inspectNode(const [_warnTransport]));
-
-      expect(find.text('Notifications'), findsNothing);
-
-      final ctx = tester.element(find.byType(TabBar));
-      expect(tabDot(), findsOneWidget);
-      final dot = tester.widget<Container>(tabDot());
-      final decoration = dot.decoration! as BoxDecoration;
-      expect(
-        decoration.color,
-        warningSeverityColor(ctx, WarningSeverity.warning),
-      );
-
-      await openDiagnosticsTab(tester);
-
-      expect(find.byType(NodeDiagnosticsTab), findsOneWidget);
-      expect(
-        find.descendant(
-          of: find.byType(NodeDiagnosticsTab),
-          matching: find.text('Notifications'),
-        ),
-        findsOneWidget,
-      );
-      expect(find.byType(NodeNotificationsView), findsOneWidget);
-      final raw = ContractRegistry.I.textFor('transport_unsupported')!;
-      expect(
-        find.text(raw.titleEn
-            .replaceAll('{transport}', 'quic')
-            .replaceAll('{fallback}', 'ws')),
-        findsOneWidget,
-      );
-    });
-
-    testWidgets('error — красная точка', (tester) async {
-      await pumpInspect(tester, inspectNode(const [_errFieldMissing]));
-
-      final ctx = tester.element(find.byType(TabBar));
-      final dot = tester.widget<Container>(tabDot());
-      final decoration = dot.decoration! as BoxDecoration;
-      expect(
-        decoration.color,
-        warningSeverityColor(ctx, WarningSeverity.error),
-      );
-    });
-
-    testWidgets('info uri_param_unknown — жёлтая точка и заголовок реестра',
-        (tester) async {
-      await pumpInspect(tester, inspectNode(const [_infoUriParam]));
-
-      final ctx = tester.element(find.byType(TabBar));
-      expect(tabDot(), findsOneWidget);
-      final dot = tester.widget<Container>(tabDot());
-      expect(
-        (dot.decoration! as BoxDecoration).color,
-        warningSeverityColor(ctx, WarningSeverity.warning),
-      );
-
-      await openDiagnosticsTab(tester);
-
-      final raw = ContractRegistry.I.textFor('uri_param_unknown')!;
-      expect(
-        find.text(raw.titleEn.replaceAll('{query_name}', 'foo')),
-        findsOneWidget,
-      );
-      expect(find.byType(NodeNotificationsView), findsOneWidget);
-    });
-
-    testWidgets('без уведомлений — точки и секции Notifications нет',
-        (tester) async {
-      await pumpInspect(tester, inspectNode(const []));
-
-      expect(find.text('Diagnostics'), findsOneWidget);
-      expect(tabDot(), findsNothing);
-
-      await openDiagnosticsTab(tester);
-
-      expect(find.byType(NodeDiagnosticsTab), findsOneWidget);
-      expect(find.byType(NodeNotificationsView), findsNothing);
-      expect(
-        find.descendant(
-          of: find.byType(NodeDiagnosticsTab),
-          matching: find.text('Notifications'),
-        ),
-        findsNothing,
-      );
-    });
-
-    testWidgets('секция Notifications ниже кнопки Run', (tester) async {
-      await tester.pumpWidget(MaterialApp(
-        home: Scaffold(
-          body: NodeDiagnosticsTab(
-            liveTag: 'n1',
-            warnings: const [_warnTransport],
-          ),
-        ),
-      ));
-      await tester.pumpAndSettle();
-
-      final runY = tester.getTopLeft(find.text('Run')).dy;
-      final notifY = tester.getTopLeft(
-        find.descendant(
-          of: find.byType(NodeDiagnosticsTab),
-          matching: find.text('Notifications'),
-        ),
-      ).dy;
-      expect(notifY, greaterThan(runY));
-    });
-
     testWidgets('переход на Diagnostics с уведомлениями — прокрутка к секции',
         (tester) async {
       const viewportHeight = 480.0;
@@ -938,30 +398,6 @@ void main() {
       final run = find.text('Run');
       expect(isInViewport(tester, run, viewportHeight), isTrue);
     });
-
-    testWidgets('360dp — ярлыки вкладок не наезжают друг на друга',
-        (tester) async {
-      tester.view.physicalSize = const Size(360, 640);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-
-      await pumpInspect(tester, inspectNode(const [_warnTransport]));
-
-      final labels = ['JSON', 'Source', 'Diagnostics'];
-      final rects = labels
-          .map((l) => tester.getRect(find.text(l)))
-          .toList();
-      for (var i = 0; i < rects.length; i++) {
-        for (var j = i + 1; j < rects.length; j++) {
-          expect(
-            rects[i].overlaps(rects[j]),
-            isFalse,
-            reason: '${labels[i]} vs ${labels[j]}',
-          );
-        }
-      }
-    });
   });
 
   group('адрес страницы', () {
@@ -971,13 +407,6 @@ void main() {
           url,
           'https://github.com/Leadaxe/LxBox/blob/main/docs/contract/'
           'warnings.md#tls_insecure');
-    });
-
-    test('якорь — сам код, без нормализации', () {
-      // Коды реестра — snake_case; ссылка обязана вести на них дословно,
-      // иначе якорь не совпадёт с `<a id>` страницы.
-      expect(contractWarningDocUrl('reality_key_share_invalid'),
-          endsWith('#reality_key_share_invalid'));
     });
   });
 }

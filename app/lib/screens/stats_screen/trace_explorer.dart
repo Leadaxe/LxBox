@@ -7,7 +7,7 @@ import '../per_app_trace_tab/widgets/live_view.dart';
 import 'aggregate_detail_sheet.dart';
 import 'profiler_filter.dart';
 import 'profiler_filter_sheet.dart';
-import 'traffic_event_detail_sheet.dart';
+import '../connection_detail/detail_sheet.dart';
 import '../../services/l10n/locale_controller.dart';
 
 /// §160 / §044-new-profiler — общий explorer трафика. Единый движок Profiler
@@ -36,6 +36,7 @@ class TraceExplorer extends StatefulWidget {
     this.showAppTab = true,
     this.includeAppsFilter = true,
     this.showRetention = false,
+    this.directionLabels = const {},
   });
 
   final List<TrafficEvent> events;
@@ -54,6 +55,10 @@ class TraceExplorer extends StatefulWidget {
   /// §044 — показывать кнопку retention (окно хранения Live). Только Profiler;
   /// в App-вкладке журнал = события сессии, окно не настраивается.
   final bool showRetention;
+
+  /// `tag Направления → label` (`HomeState.groupLabels`): Направления в
+  /// routing-строке и карточке подписаны `label (tag)`.
+  final Map<String, String> directionLabels;
 
   @override
   State<TraceExplorer> createState() => _TraceExplorerState();
@@ -407,8 +412,10 @@ class _TraceExplorerState extends State<TraceExplorer> {
         recording: widget.recording,
         events: _applyFilter(srcEvents).toList().reversed.toList(),
         unattributed: _applyFilter(srcUnattr).toList().reversed.toList(),
+        directionLabels: widget.directionLabels,
         onOpenDetail: (e) => showTrafficEventDetailSheet(context, e,
-            onSearchKey: _applySearchKey),
+            onSearchKey: _applySearchKey,
+            directionLabels: widget.directionLabels),
       );
     }
     // Aggregated — агрегаты считаем из полного (нефильтрованного) набора,
@@ -428,6 +435,7 @@ class _TraceExplorerState extends State<TraceExplorer> {
         axis: _aggAxis,
         key: key,
         onSearchKey: (k) => _applySearchKey(k, switchToAggregated: true),
+        directionLabels: widget.directionLabels,
       ),
     );
   }

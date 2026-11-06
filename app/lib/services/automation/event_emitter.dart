@@ -1,6 +1,7 @@
 import '../../vpn/box_vpn_client.dart';
 import '../app_log.dart';
 import '../settings_storage.dart';
+import '../url_mask.dart';
 
 /// §047 — outgoing automation events. Эмиттер хучится в существующие точки
 /// смены состояния (`HomeController._handleStatusEvent`, `switchNode`,
@@ -74,8 +75,16 @@ class AutomationEventEmitter {
   void emitVpnDisconnected(String reason) =>
       _emit('VPN_DISCONNECTED', {'reason': reason}, _lifecycleEnabled);
 
-  void emitVpnError(String code, String message) =>
-      _emit('VPN_ERROR', {'code': code, 'message': message}, _lifecycleEnabled);
+  /// §638: у `tunnel_error` `message` — сырой текст ошибки ядра
+  /// (`dial tcp <ip>:<port>`); адреса скрываются до broadcast'а.
+  void emitVpnError(String code, String message) => _emit(
+      'VPN_ERROR',
+      {
+        'code': code,
+        'message':
+            code == 'tunnel_error' ? maskNetworkAddresses(message) : message,
+      },
+      _lifecycleEnabled);
 
   void emitVpnRevoked() => _emit('VPN_REVOKED', const {}, _lifecycleEnabled);
 

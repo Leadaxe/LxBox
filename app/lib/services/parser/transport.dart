@@ -169,8 +169,9 @@ String _guardUrlPath(String path, List<NodeWarning>? warnings) {
 }
 
 /// §303 — разделить Xray-путь вида `/api/v2/channel?ed=2560` на чистый путь и
-/// значение early data. Хвост `?…` не является частью пути ни для одного
-/// транспорта sing-box — срезаем всегда, даже если `ed` невалиден или его нет.
+/// значение early data. Для ws и httpupgrade хвост `?…` не является частью
+/// пути — срезаем всегда, даже если `ed` невалиден или его нет. xhttp этот
+/// хелпер не зовёт: у него хвост — query запроса (§620, [xhttpFromMap]).
 ///
 /// Возвращает `(path, maxEarlyData)`; `maxEarlyData == null`, когда `ed`
 /// отсутствует или не является положительным целым.
@@ -249,17 +250,19 @@ XhttpTransport xhttpFromMap(
   Map<String, String> m, {
   Map<String, String> headers = const {},
 }) {
-  // path: срезать `?…`-хвост (реальные ноды: path=/x?ed=2048 — хвост не путь).
-  // §303 — общий хелпер; early data у xhttp нет, значение отбрасываем.
+  // §620 — path дословно, вместе с `?…`-хвостом. Контракт Xray
+  // (splithttp/config.go, GetNormalizedPath/GetNormalizedQuery): всё после
+  // первого `?` — query запроса, а не путь; ядро с SPEC 119 шлёт его так же.
+  // Релеи вида `/?proxyip=1.2.3.4` (Cloudflare Worker, sing-box-lx#36) читают
+  // свой параметр именно из query. Хвост `?ed=N` — соглашение ws, у xhttp
+  // early data нет: такой хвост тоже уходит query, как у Xray.
   // SPEC 103 PARSING_PRINCIPLES §2.4 — без query-параметра path не эмитим дефолт '/'
   // (Go: xhttpCleanPath, node_parser_transport.go) — только явный path=
-  // доходит до конфига, включая явный path=%2F → "/". splitEarlyDataPath
-  // сама нормализует '' → '/' (для случая, когда путь стал пустым ПОСЛЕ
-  // среза ?ed= хвоста) — поэтому здесь, как и у ws/httpupgrade, отсутствие
-  // ключа проверяем СНАРУЖИ, до вызова хелпера.
+  // доходит до конфига, включая явный path=%2F → "/"; явный пустой path= —
+  // тоже "/".
   final hasPathKey = m.containsKey('path');
-  final (splitPath, _) = splitEarlyDataPath(m['path'] ?? '');
-  final path = hasPathKey ? splitPath : '';
+  final rawPath = m['path'] ?? '';
+  final path = !hasPathKey ? '' : (rawPath.isEmpty ? '/' : rawPath);
 
   // §103 D-016(в) — Go читает host ТОЛЬКО из явного host= (xhttpBuildTransport,
   // node_parser_transport.go:280-330) — никакого фолбэка на sni, в отличие

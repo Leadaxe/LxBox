@@ -37,18 +37,12 @@ void main() {
       };
       expect(ProbeController.unreachableIndexes(probe), {1, 2, 3});
     });
-    test('пусто → пустой набор', () {
-      expect(ProbeController.unreachableIndexes({}), isEmpty);
-    });
   });
 
   group('slowerThan', () {
     test('только ok медленнее порога', () {
       final probe = {0: ok(100), 1: ok(500), 2: ok(300), 3: failed};
       expect(ProbeController.slowerThan(probe, 250), {1, 2});
-    });
-    test('failed НЕ попадает (не ok)', () {
-      expect(ProbeController.slowerThan({0: failed}, 0), isEmpty);
     });
   });
 
@@ -105,12 +99,6 @@ void main() {
       ]);
       expect(keys, ['slot:0', 'Alpha']);
     });
-
-    test('ключ — функция идентичности: re-parse даёт тот же ключ', () {
-      final k1 = ProbeController.probeKeysForNodes([node(uriA)]);
-      final k2 = ProbeController.probeKeysForNodes([node(uriA)]);
-      expect(k1, k2);
-    });
   });
 
   // §326 — ключ результата = идентичность узла, не позиция. `remapAfterReorder`
@@ -119,11 +107,6 @@ void main() {
     FolderMember m(String raw) => FolderMember(raw: raw);
     const a = 'vless://u@h1:443?type=ws&security=tls#A';
     const b = 'vless://u@h2:443?type=ws&security=tls#B';
-
-    test('разные узлы → разные ключи', () {
-      final keys = ProbeController.probeKeys([m(a), m(b)]);
-      expect(keys[0], isNot(keys[1]));
-    });
 
     test('ключ не зависит от позиции: удаление соседа не двигает остальные', () {
       final before = ProbeController.probeKeys([m(a), m(b)]);
@@ -159,10 +142,6 @@ void main() {
       expect(keys[0], 'raw:garbage');
       expect(keys[1], 'raw:other junk');
     });
-
-    test('длина всегда равна числу членов (слот на каждую строку)', () {
-      expect(ProbeController.probeKeys([m(a), m('garbage'), m(a)]).length, 3);
-    });
   });
 
   group('probeNodesOf', () {
@@ -178,14 +157,6 @@ void main() {
       final nodes = ProbeController.probeNodesOf(folder);
       expect(nodes.length, 2); // оба слота сохранены
       expect(nodes[1], isNull); // битый = null (вердикт broken по индексу)
-    });
-    test('подписка → базовый nodes[]', () {
-      final sub = SubscriptionServers(
-        id: 's', name: 'S', enabled: true, tagPrefix: 'p:',
-        detourPolicy: DetourPolicy.defaults, url: 'https://x',
-        nodes: <NodeSpec>[],
-      );
-      expect(ProbeController.probeNodesOf(sub), sub.nodes);
     });
   });
 

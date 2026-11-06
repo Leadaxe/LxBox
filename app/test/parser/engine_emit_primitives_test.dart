@@ -508,10 +508,6 @@ void main() {
       expect(_emit(sectionOf('bool_spelled'), body), 'x://h:1?flag=true');
     });
 
-    test('bool без объявления — то же слово', () {
-      expect(_emit(sectionOf('bool'), body), 'x://h:1?flag=true');
-    });
-
     test('emit_as: bool01 — ЕДИНСТВЕННЫЙ способ получить цифру', () {
       expect(_emit(sectionOf('bool_spelled', emitAs: 'bool01'), body),
           'x://h:1?flag=1');

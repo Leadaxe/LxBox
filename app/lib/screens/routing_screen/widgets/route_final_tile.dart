@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import '../routing_screen_helpers.dart';
 import '../../../services/l10n/locale_controller.dart';
 
-/// ListTile с дропдауном "Default traffic" (route.final) на табе Directions.
+/// ListTile с дропдауном "Default traffic" (route.final) в хвосте таба Rules
+/// (§676; до того жил на Directions).
 class RouteFinalTile extends StatelessWidget {
   const RouteFinalTile({
     super.key,
@@ -21,7 +22,7 @@ class RouteFinalTile extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-      title: Text(getLocalText.s("Default traffic")),
+      title: Text(getLocalText.s("Default traffic (no rule matched)")),
       subtitle: Text(
         getLocalText.s("Fallback for unmatched traffic (route.final)"),
         style: const TextStyle(fontSize: 12),

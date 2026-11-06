@@ -55,7 +55,9 @@ last build error.
   - other fatals — the snackbar "Config rebuild failed: <reasons>" on a build triggered by a
     user action; on a silent build (background, launch) there is no snackbar;
   - Start with other fatals proceeds to start on the previously saved
-    config (the snackbar is shown, the banner stays).
+    config: the snackbar "Config rebuild failed: …" is shown and the blue
+    "Settings changed" banner stays, so the tunnel runs on the last good
+    config while the reason is visible. Kept as is (audit 591, 2026-10-13).
 - The ring culprits are the minimal set of edges whose removal breaks
   the ring; structural "group → member" edges are never culprits.
 - The check works only on a built config: JSON written by hand

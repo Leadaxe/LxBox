@@ -63,6 +63,15 @@ class BoxApplication : Application() {
         // первом WifiInfoReader.read с пройденным preflight.
         wifiStateCache = WifiStateCache(this)
 
+        // §707 итер. 3 — принятое во входящие узлов с автосохранением (без
+        // галки, до её включения, неудачи прошлых попыток) уходит в Downloads.
+        // В фоне, одной очередью с другими разборами.
+        Taildrop.sweepInboxesAsync(this)
+
+        // §707 итер. 7 — VPN этого процесса ещё не поднят: «Поделиться» и
+        // «Send to device», оставшиеся включёнными после падения, скрываются.
+        runCatching { TaildropClip.syncOnProcessStart(this) }
+
         // libbox setup async в IO. К моменту start VPN setup завершён.
         // `libboxReady` — sync-барьер для VPN auto-start / QS-tile сразу
         // после boot (там race возможна).
@@ -98,17 +107,25 @@ class BoxApplication : Application() {
             // §043: forwarding sing-box логов в `writeDebugMessage`.
             // `daemon/started_service.go:1048-1050` gates за `if s.debug`.
             debug = BootReceiver.isCoreLogsEnabled(context)
-            // §173/§271 — OOM-killer: замена удалённому в 1.14 `Libbox.setMemoryLimit`.
+            // §173/§271/§705 — OOM-killer: замена удалённому в 1.14 `Libbox.setMemoryLimit`.
             // libbox 1.14 конфигурит память декларативно через SetupOptions.
             // Лимит настраиваемый (§271, prefs `memory_limit`): хардкод 200MB
             // (§173) душил GC на конфигах с большой кучей (WG-пулы) → GC-шторм
-            // и перегрев CPU. Семантика ядра (setup.go:85-94): limit>0 →
-            // Go soft-limit = limit*3/4; limit=0 на Android = БЕЗ лимита
-            // (`SetMemoryLimit(MaxInt64)`), oom-killer при этом остаётся в
-            // Available-режиме (следит за системной свободной памятью) —
-            // анти-LMK-страховка сохраняется при любом значении.
+            // и перегрев CPU. Семантика ядра (setup.go:105-108, service/oomkiller):
+            // limit>0 → Go soft-limit = limit*4/5 И порог oom-killer (без флага heap) по RSS
+            // ВСЕГО процесса (`memory.Total()` = `/proc/self/statm`); limit=0
+            // на Android = без GC-потолка (`SetMemoryLimit(MaxInt64)`),
+            // oom-killer в Available-режиме (следит за свободной памятью
+            // системы) — анти-LMK-страховка сохраняется при любом значении.
+            // Ядро живёт в одном процессе с Flutter (§122F §2.1), поэтому
+            // дефолт "auto" = 0 (§705); порог по RSS — только явные пресеты.
             oomKillerEnabled = true
             oomMemoryLimit = resolveMemoryLimitBytes(context)
+            // §705 часть 2 (ядро lx.29, SPEC 148): порог oom-killer сравнивается
+            // с памятью Go-рантайма ядра (`StatusMessage.MemoryRuntime`), а не
+            // с RSS всего процесса (в нём живёт и Flutter). Слежение за
+            // MemAvailable при этом остаётся.
+            oomMemoryLimitHeap = true
             // §038/§173 — crash/stderr-канал: замена удалённому `redirectStderr`.
             // Непустой source → ядро редиректит stderr в
             // `workingPath/CrashReport-lxbox.log` (setup.go:102) — восстанавливает
@@ -133,32 +150,27 @@ class BoxApplication : Application() {
         private val MEMORY_LIMIT_PRESETS_MB = setOf(200L, 384L, 512L, 768L)
 
         /**
-         * §271 — prefs-значение memory limit → байты для SetupOptions.oomMemoryLimit.
-         * "off" → 0 (на Android ядро трактует 0 как «без лимита», setup.go:90-91);
-         * "auto" → лесенка по физическому RAM устройства (totalMem у «4GB»-класса
-         * ≈3.7GiB, у «8GB» ≈7.5GiB — пороги ниже маркетинговых);
-         * пресетное число → мегабайты. Всё прочее (включая непресетные числа,
-         * например из prefs будущей/чужой версии) ведёт себя как "auto" — тот же
+         * §271/§705 — prefs-значение memory limit → байты для SetupOptions.oomMemoryLimit.
+         * Пресетное число → мегабайты. Всё прочее — "auto", legacy "off" и любой
+         * неизвестный wire (например из prefs будущей/чужой версии) — `0`: ядро
+         * снимает GC-потолок и переводит oom-killer в Available-режим
+         * (setup.go:108, policy.go:58). Непресетные числа тоже дают 0 — тот же
          * fallback, что у MemoryLimitSetting.normalize на Dart-стороне, иначе
          * значение, невидимое для §189-sync, стало бы действующим лимитом.
+         *
+         * До §705 "auto" выбирал 200/384/512 MB по RAM устройства. Снято: порог
+         * oom-killer сравнивается с RSS всего процесса, а процесс делят ядро и
+         * Flutter — ≈140 MB одного кода (`libbox.so`, libflutter) плюс графика.
+         * 200 MB пробивались через 100 мс после старта, а число чуть выше
+         * рабочего RSS давало бы сбросы сети в работе. Порог по RSS — только
+         * по явному выбору пользователя.
          */
         fun resolveMemoryLimitBytes(context: Context): Long {
             val value = BootReceiver.getMemoryLimit(context)
             value.toLongOrNull()?.let { mb ->
                 if (mb in MEMORY_LIMIT_PRESETS_MB) return mb * 1024 * 1024
             }
-            if (value == BootReceiver.MEMORY_LIMIT_OFF) return 0L
-            // "auto" (и любой неизвестный wire) — по общему RAM устройства.
-            val am = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
-            val mi = android.app.ActivityManager.MemoryInfo()
-            am.getMemoryInfo(mi)
-            val gib = 1024L * 1024 * 1024
-            val autoMb = when {
-                mi.totalMem < 7L * gib / 2 -> 200L // < 3.5 GiB — прежний §173-лимит
-                mi.totalMem < 7L * gib -> 384L
-                else -> 512L
-            }
-            return autoMb * 1024 * 1024
+            return 0L
         }
 
         // `lateinit var ... private set` не работает в Kotlin companion —

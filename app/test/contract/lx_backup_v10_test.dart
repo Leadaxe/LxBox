@@ -419,25 +419,6 @@ void main() {
   });
 
   group('§438 ось правил', () {
-    test('номера файла держатся, неразмеченные корневые — в хвост оси', () {
-      final file = parseLxBackup(_file({
-        'sources': [
-          _server('ts', 'example-1.com'),
-        ],
-        'rules': [
-          {'kind': 'inline', 'name': 'late', 'enabled': true, 'num': 1100,
-           'body': {'domain': ['b'], 'outbound': 'direct'}},
-          {'kind': 'inline', 'name': 'unmarked', 'enabled': true,
-           'body': {'domain': ['c'], 'outbound': 'direct'}},
-          {'kind': 'inline', 'name': 'head', 'enabled': true, 'num': 0,
-           'body': {'domain': ['a'], 'outbound': 'direct'}},
-        ],
-      }));
-      final out = _apply(const [], file);
-      expect([for (final r in out.rules) '${r.name}=${r.orderNum}'],
-          ['head=0', 'late=1100', 'unmarked=1101']);
-    });
-
     test('номера файла держатся, порядок сохраняется, равные остаются равными', () {
       // Раскладка шаблона: голова 0, пресеты 950–990, зона 1000–1100,
       // перехватчики 1110+. Правило из UI после импорта встаёт в конец зоны,
@@ -534,17 +515,24 @@ void main() {
         },
       }));
       expect(file.warnings, isEmpty);
+      final warnings = <LxBackupWarning>[];
       final first = applyDnsBackup(
         incoming: file.dns!,
         servers: const [],
         rules: const [],
         dnsFinal: '',
         strategy: '',
+        warnings: warnings,
       );
       expect(first.servers.map((e) => e.tag), ['yandex_udp', 'yandex_doh', 'yandex_dot'],
           reason: 'preset без тега не схлопывается в одну запись');
       expect(first.rules.map((e) => (e as DnsRuleInline).name), ['.corp', '.corp-2']);
-      expect(first.defaultDomainResolver, 'local');
+      // §681: тег вне списка сбрасывается, норма 1.1.135 — `local` нет среди
+      // серверов, сцена не передана → умолчание шаблона пустое.
+      expect(first.defaultDomainResolver, '');
+      expect(
+          [for (final x in warnings) if (x.code == kWarnDnsResolverReset) x.detail],
+          ['default_domain_resolver=local']);
 
       final again = applyDnsBackup(
         incoming: file.dns!,

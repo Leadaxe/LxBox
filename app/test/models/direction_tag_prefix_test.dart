@@ -94,12 +94,6 @@ void main() {
       expect(r.changed, isFalse);
       expect(r.ambiguous, isFalse);
     });
-
-    test('пустой фильтр', () {
-      final r = rewriteLiteralPrefix('', 'RU:', 'DE:');
-      expect(r.changed, isFalse);
-      expect(r.ambiguous, isFalse);
-    });
   });
 
   group('analyzeTagPrefixChange', () {
@@ -179,15 +173,6 @@ void main() {
         newPrefix: 'RU:',
       );
       expect(c.isEmpty, isTrue);
-    });
-  });
-
-  group('регрессия: фильтр после каскада реально ловит новый тег', () {
-    test('^RU: → ^DE: матчит display-тег нового префикса', () {
-      final r = rewriteLiteralPrefix('^RU: ', 'RU:', 'DE:');
-      final re = RegExp(r.pattern, caseSensitive: false);
-      expect(re.hasMatch('DE: Frankfurt'), isTrue);
-      expect(re.hasMatch('RU: Moscow'), isFalse);
     });
   });
 }

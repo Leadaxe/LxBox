@@ -101,13 +101,18 @@ mixin _ConfigIoMixin on ChangeNotifier {
     // каноническим снапшотом работающего конфига (оба через один энкодер
     // ядра — kernel SPEC 037 §3).
     //
-    // Только при `needRestart == true`: вердикт умеет лишь ГАСИТЬ ложную
-    // плашку. Поднимать её он не должен — при туннеле down running-снапшота
-    // нет вовсе, а «изменилось» уже честно посчитано выше.
-    if (needRestart && _state.tunnelUp) {
+    // §667 Р4 — вердикт решает В ОБЕ СТОРОНЫ, не только гасит. Дифф с
+    // ПРЕДЫДУЩЕЙ записью отвечал на другой вопрос: вторая запись того же
+    // конфига давала `changed=false` и гасила флаг, хотя ядро так и крутит
+    // старый (reload по первой сорвался на cooldown — Д5). Текстовый дифф со
+    // sticky-правилом §323 остаётся на случаи без снимка: туннель down или
+    // вердикт `unknown` (старое ядро, окно до захвата, сбой formatConfig).
+    // Цена — один `formatConfig` на запись при живом туннеле.
+    final running = _state.runningConfigRaw;
+    if (_state.tunnelUp && running != null && running.isNotEmpty) {
       final verdict = await _checkStaleness(canonicalJson);
-      if (verdict == StalenessVerdict.fresh) {
-        needRestart = false;
+      if (verdict != StalenessVerdict.unknown) {
+        needRestart = verdict == StalenessVerdict.stale;
       }
       _addDebug(DebugSource.app,
           '[vpn] §324 staleness=${verdict.name} → need_restart=$needRestart');

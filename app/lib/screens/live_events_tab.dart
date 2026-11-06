@@ -227,6 +227,8 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
             filter: _filter,
             // Profiler-вкладка: retention-кнопка нужна, record-кнопка — нет.
             showRetention: true,
+            directionLabels:
+                widget.homeController?.state.groupLabels ?? const {},
           ),
         ),
       ],

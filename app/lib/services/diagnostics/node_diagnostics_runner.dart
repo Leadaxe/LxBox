@@ -5,6 +5,7 @@ import '../../vpn/cc_channel.dart';
 import '../builder/core_chain_capability.dart';
 import '../probe/probe_config.dart';
 import '../probe/probe_lifecycle.dart';
+import '../subscription/user_agent.dart';
 
 /// §392 — итог одного диагностического прогона по узлу.
 ///
@@ -105,6 +106,7 @@ class NodeDiagnosticsRunner {
       link: url,
       timeoutMs: kTimeoutMs,
       maxBytes: kMaxBytes,
+      userAgent: resolveAppUserAgent(),
     );
     return DiagnosticOutcome(source: DiagnosticSource.live, result: r);
   }
@@ -130,21 +132,26 @@ class NodeDiagnosticsRunner {
       throw DiagnosticUnavailable(cfg.brokenByIndex[0] ?? 'invalid node');
     }
 
-    final err = await _cc.probeStart(cfg.configJson!);
-    if (err.isNotEmpty) throw DiagnosticUnavailable(err);
+    final started = await _cc.probeStart(cfg.configJson!);
+    if (!started.ok) throw DiagnosticUnavailable(started.error);
+    // §669 — сессия адресуется runId: probeStop этого прогона не закроет
+    // сессию, которую тем временем поднял другой (Test servers, новый замер).
+    final runId = started.runId;
     try {
       if (_cancelled) throw const DiagnosticUnavailable('cancelled');
       final r = await _cc.probeGetUrl(
         tag,
+        runId: runId,
         link: url,
         timeoutMs: kTimeoutMs,
         maxBytes: kMaxBytes,
+        userAgent: resolveAppUserAgent(),
       );
       return DiagnosticOutcome(source: DiagnosticSource.probe, result: r);
     } finally {
       // Сессия одноразовая: держать её после ответа незачем, а живой probe
       // блокирует старт VPN (BoxService гасит его принудительно).
-      await _cc.probeStop();
+      await _cc.probeStop(runId);
     }
   }
 }

@@ -61,9 +61,15 @@ class SubscriptionEntry extends ChangeNotifier {
   int get expireTimestamp => meta?.expireTimestamp ?? 0;
   String get supportUrl => meta?.supportUrl ?? '';
   String get webPageUrl => meta?.webPageUrl ?? '';
+  /// §648 — описание подписки (заголовок `announce`), пустое — блока нет.
+  String get announce => meta?.announce ?? '';
   int get updateIntervalHours => _list is SubscriptionServers
       ? (_list as SubscriptionServers).updateIntervalHours
       : 0;
+
+  /// §685 — действующий интервал (настройка + серверный заголовок из `meta`).
+  int get effectiveIntervalHours => effectiveUpdateIntervalHours(
+      updateIntervalHours, meta?.updateIntervalHours);
 
   int get consecutiveFails => _list is SubscriptionServers
       ? (_list as SubscriptionServers).consecutiveFails
@@ -183,6 +189,24 @@ class SubscriptionEntry extends ChangeNotifier {
   /// [nodesNotLoaded].
   bool _bodyCacheMissing = false;
 
+  /// §652 — регидрация из кэша этой записи: общая `Future` конкурентных
+  /// вызовов `ensureHydrated` и URL, для которого она запущена.
+  Future<void>? _hydration;
+  String? _hydrationUrl;
+
+  /// Бюджет узлов — доля, с которой разобраны узлы подписки; `null` — узлы
+  /// ещё не разбирались с долей (не загружены или собраны мимо воркера).
+  int? _budgetQuota;
+
+  /// Бюджет узлов — выдача подписки обрезана: `kept` узлов из `total`.
+  /// `null` — обрезки нет (или запись не подписка).
+  ({int kept, int total})? get budgetCut {
+    final l = _list;
+    if (l is! SubscriptionServers) return null;
+    if (l.totalNodeCount <= l.lastNodeCount) return null;
+    return (kept: l.lastNodeCount, total: l.totalNodeCount);
+  }
+
   void _markBodyCacheMissing() {
     if (_bodyCacheMissing) return;
     _bodyCacheMissing = true;
@@ -293,6 +317,11 @@ class SubscriptionEntry extends ChangeNotifier {
   set replaceDetourChain(bool v) =>
       _replaceList(_copy(detourPolicy: detourPolicy.copyWith(replaceDetourChain: v)));
 
+  /// §636 — TLS-политика записи: у подписки и папки — уровень источника, у
+  /// одиночного сервера — узловой. UI после set зовёт `persistSources()`.
+  TlsPolicy get tls => _list.tls;
+  set tls(TlsPolicy v) => _replaceList(_copy(tls: v));
+
   /// Фича 565 фаза B — свёртка папки или подписки в группу (§74); `null` —
   /// не свёрнута. У одиночного сервера свёртки нет — no-op.
   SourceReplace? get replace => _list.replace;
@@ -309,6 +338,7 @@ class SubscriptionEntry extends ChangeNotifier {
     bool? enabled,
     String? tagPrefix,
     DetourPolicy? detourPolicy,
+    TlsPolicy? tls,
   }) =>
       switch (_list) {
         final SubscriptionServers s => s.copyWith(
@@ -316,18 +346,21 @@ class SubscriptionEntry extends ChangeNotifier {
             enabled: enabled,
             tagPrefix: tagPrefix,
             detourPolicy: detourPolicy,
+            tls: tls,
           ),
         final UserServer u => u.copyWith(
             name: name,
             enabled: enabled,
             tagPrefix: tagPrefix,
             detourPolicy: detourPolicy,
+            tls: tls,
           ),
         final FolderServers f => f.copyWith(
             name: name,
             enabled: enabled,
             tagPrefix: tagPrefix,
             detourPolicy: detourPolicy,
+            tls: tls,
           ),
       };
 }

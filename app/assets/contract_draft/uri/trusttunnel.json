@@ -1,0 +1,127 @@
+{
+  "_why": "§717 — секции `mappers.uri` у trusttunnel в реестре нет; черновик держит её ЦЕЛИКОМ, пока лаунчер не привезёт свою (запрос TASKS_LXBOX §157). Коды — ближайшие существующие из registry/warnings.json; финальные имена придут с записью лаунчера (tt_deeplink_invalid → form_unrecognized, tt_subscription_only → service_record_ignored, tt_field_unsupported и tt_subscription_ignored → uri_param_unknown через unknown_key).",
+  "mappers": {
+    "uri": {
+      "body_source": "uri",
+      "detect": {
+        "scheme_in": [
+          "tt"
+        ],
+        "_delta_id": "D533-tt-deeplink-form"
+      },
+      "forms": [
+        {
+          "id": "deeplink",
+          "decode": [
+            {
+              "decoder": "tt_deeplink",
+              "on_invalid": {
+                "code": "form_unrecognized"
+              },
+              "on_subscription_only": {
+                "code": "service_record_ignored"
+              }
+            }
+          ],
+          "space": "json",
+          "impl": "`tt://?<base64url без padding>` над бинарным TLV (QUIC-varint). Декодер `tt_deeplink` сам снимает base64url: общий шаг `base64url` отдаёт текст, а байты TLV в UTF-8 не живут. Объект: поля формата по именам (`hostname`, `custom_sni`, …), производные первого адреса `address`/`server`/`server_port`, адреса со второго — `extra_addresses`; булевы — только отличные от умолчания.",
+          "_delta_id": "D533-tt-deeplink-form"
+        }
+      ],
+      "label": {
+        "source": [
+          "json.name"
+        ],
+        "normalize": [
+          "strip_control",
+          "trim"
+        ],
+        "fallback": {
+          "template": "{scheme}-{server}-{server_port}",
+          "scheme_source": "singbox_type"
+        },
+        "_delta_id": "D533-tt-deeplink-form"
+      },
+      "defaults": {
+        "type": "trusttunnel",
+        "_delta_id": "D533-tt-deeplink-form"
+      },
+      "scheme_sets": {
+        "*": {
+          "tls.enabled": true
+        },
+        "_delta_id": "D533-tt-deeplink-form"
+      },
+      "params": {
+        "version": {
+          "source": "json.version",
+          "maps_to": null,
+          "_delta_id": "D533-tt-deeplink-form"
+        },
+        "address": {
+          "source": "json.address",
+          "maps_to": null,
+          "_delta_id": "D533-tt-deeplink-form"
+        },
+        "server": {
+          "source": "json.server",
+          "maps_to": "server",
+          "required": true,
+          "_delta_id": "D533-tt-deeplink-form"
+        },
+        "server_port": {
+          "source": "json.server_port",
+          "maps_to": "server_port",
+          "type": "int",
+          "_delta_id": "D533-tt-deeplink-form"
+        },
+        "username": {
+          "source": "json.username",
+          "maps_to": "username",
+          "_delta_id": "D533-tt-deeplink-form"
+        },
+        "password": {
+          "source": "json.password",
+          "maps_to": "password",
+          "_delta_id": "D533-tt-deeplink-form"
+        },
+        "upstream_protocol": {
+          "source": "json.upstream_protocol",
+          "maps_to": "quic",
+          "value_map": {
+            "http3": true,
+            "http2": null
+          },
+          "type": "bool",
+          "impl": "http3 → quic: true; http2 (умолчание формата) в тело не пишется.",
+          "_delta_id": "D533-tt-deeplink-form"
+        },
+        "server_name": {
+          "source": [
+            "json.custom_sni",
+            "json.hostname"
+          ],
+          "maps_to": "tls.server_name",
+          "_delta_id": "D533-tt-deeplink-form"
+        },
+        "skip_verification": {
+          "source": "json.skip_verification",
+          "maps_to": "tls.insecure",
+          "type": "bool",
+          "_delta_id": "D533-tt-deeplink-form"
+        },
+        "certificate": {
+          "source": "json.certificate",
+          "maps_to": "tls.certificate",
+          "_delta_id": "D533-tt-deeplink-form"
+        }
+      },
+      "unknown_key": {
+        "action": "drop",
+        "code": "uri_param_unknown",
+        "impl": "Поля формата, которых в теле trusttunnel нет (`has_ipv6`, `anti_dpi`, `client_random_prefix`, `client_random_auth_key`, `dns_upstreams`, `extra_addresses`, `subscription_url` при полном узле), называются мягко — узел живёт. В тело не едут (`drop`).",
+        "_delta_id": "D533-tt-deeplink-form"
+      }
+    }
+  }
+}

@@ -55,8 +55,8 @@ Principles the feature protects:
   codes are recomputed, not serialized. **Witness:** unit test "warnings survive storage: the node
   is re-parsed". **Mutation:** codes read from storage.
 - **P5. Secrets do not leak into reasons.** The value of a field marked `secret` is `***` in the
-  text, in the rejects and in the log. **Witness:** unit tests "a broken secret uuid leaks neither
-  into the text nor into the log", "secret: the value in the warning is masked". **Mutation:**
+  text, in the rejects and in the log. **Witness:** unit test "a broken secret uuid leaks neither
+  into the text nor into the log". **Mutation:**
   masking in the text only, not in `value`.
 - **P6. Every registry field survives the body → model → body round trip.** Fields the model does
   not hold return from the cleaned map. **Witness:** unit tests "every field of the schema lands in
@@ -85,8 +85,7 @@ Principles the feature protects:
   authored node too". **Mutation:** a soft rule edits an authored body.
 - **P11. Codes reach the user in three places.** The node row and the notifications sheet, the
   Notifications section of the node screen, and the Debug API with pinned English texts.
-  **Witness:** widget tests "a tap on the row → a sheet with all notifications", "the row shows the
-  registry code TITLE, not the full text"; unit tests "registry code: code, path, value and both
+  **Witness:** widget test "a tap on the row → a sheet with all notifications"; unit tests "registry code: code, path, value and both
   texts", "3 nodes with one raw tag → 3 keys, all warnings in place". **Mutation:** the Debug API
   text depends on the device locale.
 - **P12. Levels are shown separately.** `error` lives in the rejects, `warning` and `info` on the

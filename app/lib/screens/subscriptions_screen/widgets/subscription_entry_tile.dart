@@ -6,6 +6,7 @@ import '../../../services/l10n/locale_controller.dart';
 import '../../../widgets/reorder_grab_strip.dart';
 import '../entry_warnings.dart';
 import 'subscription_entry_subtitle.dart';
+import '../../../services/telegram_link.dart'; // §657
 
 /// Одна строка списка подписок/серверов. §098 — слева grab-strip для
 /// drag-reorder (как в routing rules), снизу divider (раньше был
@@ -118,9 +119,9 @@ class SubscriptionEntryTile extends StatelessWidget {
               child: GestureDetector(
                 onTap: () => onLaunchUrl(entry.supportUrl),
                 child: Icon(
-                  entry.supportUrl.contains('t.me') ? Icons.telegram : Icons.open_in_new,
+                  isTelegramUrl(entry.supportUrl) ? Icons.telegram : Icons.open_in_new,
                   size: 16,
-                  color: entry.supportUrl.contains('t.me')
+                  color: isTelegramUrl(entry.supportUrl)
                       ? const Color(0xFF2AABEE)
                       : Theme.of(context).colorScheme.onSurfaceVariant,
                 ),

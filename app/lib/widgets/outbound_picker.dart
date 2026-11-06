@@ -3,6 +3,10 @@ import 'package:flutter/material.dart';
 import '../models/custom_rule.dart' show kOutboundReject;
 import '../services/l10n/locale_controller.dart';
 
+/// §683 — служебное значение пункта «Resolve only» в [OutboundPicker]
+/// (не тег outbound; редактор правила переводит его в `resolve.only`).
+const String kResolveOnlyAction = '__resolve_only__';
+
 /// Опция в [OutboundPicker] — либо outbound tag, либо sentinel "reject".
 class OutboundOption {
   const OutboundOption({required this.value, required this.label});
@@ -27,6 +31,7 @@ class OutboundPicker extends StatelessWidget {
     required this.options,
     required this.onChanged,
     this.allowReject = true,
+    this.allowResolveOnly = false,
     this.dense = true,
     this.label = 'Action',
     this.width,
@@ -36,6 +41,10 @@ class OutboundPicker extends StatelessWidget {
   final List<OutboundOption> options;
   final ValueChanged<String> onChanged;
   final bool allowReject;
+
+  /// §683 — пункт «Resolve only» после Reject (редактор правила, только
+  /// правила с доменами / srs).
+  final bool allowResolveOnly;
 
   /// `true` — compact underline-style для inline использования в строках
   /// списка (App Routing row, Domain/IP Routing row). `false` — full form
@@ -71,6 +80,21 @@ class OutboundPicker extends StatelessWidget {
             const SizedBox(width: 6),
             Text(getLocalText.s("Reject"),
                 style: TextStyle(fontSize: fontSize, color: cs.error)),
+          ],
+        ),
+      ));
+    }
+
+    if (allowResolveOnly) {
+      items.add(DropdownMenuItem(
+        value: kResolveOnlyAction,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.travel_explore, size: iconSize, color: cs.primary),
+            const SizedBox(width: 6),
+            Text(getLocalText.s("Resolve only"),
+                style: TextStyle(fontSize: fontSize)),
           ],
         ),
       ));

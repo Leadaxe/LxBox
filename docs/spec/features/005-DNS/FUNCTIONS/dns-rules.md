@@ -50,8 +50,12 @@ actually emitted servers.
   the position of the first preset record; without one — before the template
   rules; otherwise — at the end.
 - A routing rule mirror is built only if the rule is enabled and contains no
-  ports, protocols or `network` (they do not exist at DNS query time). The
-  chosen server is given by tag; Force IPv4 produces a separate rule
+  ports, protocols or `network` (they do not exist at DNS query time), and
+  only if the rule has a condition the DNS layer can check: a domain, an
+  app, a source address, a Wi-Fi network, or `inbound` with no `ip_cidr`
+  (692). A rule made of IP ranges alone gets no mirror and no DNS section
+  in the editor: the core rejects a DNS rule that points to an IP-only
+  rule-set at start. The chosen server is given by tag; Force IPv4 produces a separate rule
   `{ip_version: 6, action: predefined, rcode: NOERROR}` and goes first. For
   an inline rule the match moves into a shared headless rule-set, for `.srs`
   — a reference to the same set.
@@ -68,6 +72,12 @@ actually emitted servers.
   `predefined`) are not checked.
 - Custom rule: empty name — "Name is required"; body is not a JSON object —
   "Invalid JSON: …"; the client does not check the body's contents.
+- A custom rule is added and edited on a full-screen editor: the name field
+  and the JSON body taking the rest of the screen, Save in the app bar.
+  Leaving it with Back with a name or body that differs from the opened one
+  shows the shared "Unsaved changes" dialog: Save — same as the Save button
+  (on an error the screen stays open with the message); Discard — leave
+  without saving; Keep — stay.
 - If the config contains `query_type` or `ip_version`, the legacy `strategy`
   is removed from all DNS rules (P11).
 - Orphans (a template rule without a template, a preset rule without an
@@ -102,3 +112,5 @@ actually emitted servers.
 | 14 | [306](../../../tasks/306-dns-rule-delete-confirm.md) | ✅ | Confirmation for deleting a custom rule |
 | 15 | [434](../../../tasks/434-srs-rule-multiple-rule-sets.md) | Done | Several `.srs` sets in one rule |
 | 16 | [604](../../../tasks/604-dns-build-health-directions-bugs.md) | Done | A rule pointing to a missing server, or a rule-set rule without `server`, is left out with a warning |
+| 17 | [626](../../../tasks/626-unsaved-changes-everywhere.md) | Implemented | Custom rule editor is a full-screen editor; "Unsaved changes" dialog on leaving it with an edit |
+| 18 | [692](../../../tasks/692-rule-dns-option-needs-dns-visible-conditions.md) | Done | DNS option of a rule only with a condition the DNS layer can check; an IP-only rule gets no mirror |

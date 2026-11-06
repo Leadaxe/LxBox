@@ -134,6 +134,18 @@ class AppInfoCache {
     }
   }
 
+  /// Другие установленные пакеты с тем же UID, что у [pkg] (общий
+  /// `sharedUserId`). Считаются по полному списку [loadAllApps], системные
+  /// тоже; пока список не загружен или UID неизвестен — пусто.
+  static List<AppInfo> uidPeers(String pkg) {
+    final all = _allApps;
+    final uid = _cache[pkg]?.uid;
+    if (all == null || uid == null) return const [];
+    return all
+        .where((a) => a.uid == uid && a.packageName != pkg)
+        .toList(growable: false);
+  }
+
   static Future<void> _fetch(String pkg) async {
     AppInfo? info;
     var verified = false;
@@ -197,6 +209,7 @@ class AppInfoCache {
         packageName: existing.packageName,
         appName: existing.appName,
         isSystem: existing.isSystem,
+        uid: existing.uid,
         icon: bytes,
       );
     } catch (_) {

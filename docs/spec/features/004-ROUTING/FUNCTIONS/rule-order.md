@@ -19,6 +19,12 @@ disables them with a switch, deletes them with a long tap (with confirmation) or
 editor. The core checks rules top to bottom, the first match wins
 — so the order in the list is the meaning of routing.
 
+Below the list and the "Add rule" button, after a divider, sits the **Default
+traffic (no rule matched)** tile — `route.final`, where traffic that no rule
+caught goes (`direct` · enabled Directions · `block`). It is the implicit last
+rule: it is not dragged, not numbered and does not take part in the order
+([676](../../../tasks/676-route-final-on-rules-tab.md)).
+
 ## Parameters
 
 The order is set by a sparse number axis shared by all rules:
@@ -80,3 +86,4 @@ rules in the same order.
 | 5 | [370](../../../tasks/370-rule-order-num-axis.md) | implemented in the task | The sparse number axis, lazy shift |
 | 6 | [381](../../../tasks/381-rule-editor-drops-order-num.md) | DONE, device-pending | The editor keeps the rule number |
 | 7 | [398](../../../tasks/398-rule-transfer-presets-and-dedup.md) | — | Collapsing preset copies, the last one stays |
+| 8 | [676](../../../tasks/676-route-final-on-rules-tab.md) | Done | The `route.final` tile at the bottom of the tab, outside the drag list |

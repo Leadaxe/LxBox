@@ -73,8 +73,10 @@
 
 - `http://`/`https://` — это адрес подписки, а не узел
   ([001-SUBSCRIPTIONS](../../001-SUBSCRIPTIONS/FEATURE.ru.md)).
-- `hysteria://`/`hy://` (v1) реестр объявляет, но модели hysteria v1 в
-  приложении нет — узел не создаётся.
+- `hysteria://`/`hy://` (v1) реестр объявляет как `extension: desktop`; модели
+  hysteria v1 в приложении нет — узел не создаётся, строка уходит в
+  `dropped[]` с кодом `protocol_extension_unsupported` и подсказкой
+  `alternative` из реестра (`hysteria2`, контракт 1.1.118).
 - Детали TLS-обфускации и XHTTP — [016-DPI_HARDENING](../../016-DPI_HARDENING/FEATURE.ru.md).
 
 ## Ревизии
@@ -102,3 +104,4 @@
 | 19 | [543](../../../tasks/543-hysteria2-3xui-gecko-aliases.md) | Done | Ссылки 3x-ui с gecko |
 | 20 | [562](../../../tasks/562-uri-scheme-dispatch-from-registry.md) | Выполнено | Диспетчер схем только из реестра |
 | 21 | [570](../../../tasks/570-close-open-tails.md) | Волна B выполнена | Строка `vpn://` в списке — все контейнеры |
+| 22 | [642](../../../tasks/642-contract-1-1-118-sync.md) | Done | hysteria v1 — явный отказ с подсказкой; masque `network=` — неизвестный параметр |

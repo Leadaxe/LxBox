@@ -45,27 +45,6 @@ void main() {
       expect(back.enabled, isTrue);
     });
 
-    test('полная цепочка: idle_timeout / strip / rewrite доезжают дословно', () {
-      const c = SourceChain(
-        tag: 'tuned',
-        hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b'), NodeLink(tag: 'c')],
-        idleTimeout: '10m',
-        stripEvasion: false,
-        strip: {'tls.utls': true, 'tls.fragment': false},
-        rewrite: {
-          'vless': {'flow': 'xtls-rprx-vision'},
-        },
-      );
-      final back = _roundTrip(c);
-      expect(back, c);
-      expect(back.idleTimeout, '10m');
-      expect(back.stripEvasion, isFalse);
-      expect(back.strip, {'tls.fragment': false, 'tls.utls': true});
-      expect(back.rewrite, {
-        'vless': {'flow': 'xtls-rprx-vision'},
-      });
-    });
-
     test('rewrite с null-значением (RFC 7396 «удалить ключ») не теряется', () {
       // null внутри merge-patch значит «удалить ключ у звена». Прибрать его
       // как «пустое значение» означало бы молча сменить патч на обратный
@@ -130,16 +109,6 @@ void main() {
           ['body.strip.nonsense', 'body.strip.tls.fragment']);
       // Неизвестный ключ отсеян на чтении — ядро на нём не стартует.
       expect(back.strip, {'tls.utls': true});
-    });
-
-    test('copyWith не трогает tag и умеет снять strip_evasion в «умолчание»',
-        () {
-      const c = SourceChain(tag: 'c', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')], stripEvasion: false);
-      final off = c.copyWith(enabled: false);
-      expect(off.tag, 'c');
-      expect(off.enabled, isFalse);
-      expect(off.stripEvasion, isFalse);
-      expect(c.copyWith(clearStripEvasion: true).stripEvasion, isNull);
     });
 
     test('§594: старый `label` читается молча и не пишется', () {

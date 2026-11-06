@@ -569,14 +569,5 @@ void main() {
       expect(record.containsKey('detour'), isFalse);
       expect(readPolicy(record), DetourPolicy.defaults);
     });
-
-    test('copyWith updates replaceDetourChain', () {
-      const a = DetourPolicy();
-      final b = a.copyWith(replaceDetourChain: true);
-      expect(b.replaceDetourChain, true);
-      expect(b.overrideDetour, NodeLink.none);
-      // == check: разные → not equal
-      expect(b == a, false);
-    });
   });
 }

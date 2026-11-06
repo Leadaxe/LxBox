@@ -1,14 +1,16 @@
 import 'dart:convert';
 
 import '../../models/direction.dart';
+import '../../models/mixin.dart';
 import '../../models/custom_rule.dart';
 import '../../models/dns_ref.dart';
 import '../../models/emit_context.dart';
-import '../../models/node_spec.dart' show NodeSpec;
+import '../../models/node_spec.dart' show AutoSelectSpec, NodeSpec;
 import '../../models/node_warning.dart';
 import '../../models/parser_config.dart';
 import '../../models/server_list.dart';
 import '../../models/source_chain.dart';
+import '../../models/tls_policy.dart';
 import '../contract/group_genus.dart';
 import '../../models/singbox_entry.dart';
 import '../../models/template_vars.dart';
@@ -25,6 +27,7 @@ import '../template_loader.dart';
 import 'chain_nodes.dart';
 import 'core_chain_capability.dart';
 import 'if_engine.dart';
+import '../mixins/mixin_apply.dart';
 import 'node_link_resolve.dart';
 import 'rule_order.dart';
 import 'post_steps.dart';
@@ -33,6 +36,7 @@ import 'registry_gate.dart';
 import 'rule_set_registry.dart';
 import 'server_list_build.dart';
 import 'source_replace_build.dart';
+import 'taildrop_emit.dart';
 import 'validator.dart';
 
 /// Результат сборки — готовый JSON + валидация + warnings + generated-vars
@@ -81,9 +85,20 @@ class BuildResult {
   /// источник × группа). Счётчик предупреждений строки подписки/папки.
   final Map<String, List<RegistryWarning>> sourceBuildCodes;
 
+  /// §675 — итоговый тег узла автовыбора (§322) → его spec. Отдельно от
+  /// [nodeByEmittedTag]: группа — не узел. Экран ищет по нему значки пула.
+  final Map<String, AutoSelectSpec> groupByEmittedTag;
+
+  /// §704 — конфиг до миксинов (`null` — список миксинов пуст, совпадает с
+  /// [config]). База предпросмотра и подсказок формы миксина: собранный
+  /// конфиг уже несёт включённые миксины, и предпросмотр по нему применил
+  /// бы миксин дважды.
+  final Map<String, dynamic>? configBeforeMixins;
+
   const BuildResult({
     required this.configJson,
     required this.config,
+    this.configBeforeMixins,
     required this.validation,
     required this.emitWarnings,
     required this.generatedVars,
@@ -93,6 +108,7 @@ class BuildResult {
     this.templateWarnings = const [],
     this.buildCodes = const [],
     this.sourceBuildCodes = const {},
+    this.groupByEmittedTag = const {},
   });
 }
 
@@ -136,33 +152,6 @@ class BuildSettings {
   /// поведение, post-step no-op).
   final VpnModeConfig? vpnMode;
 
-  /// §215: порог простоя для idle-suspend недостижимых WG/AWG эндпоинтов
-  /// (ядро SPEC 020, `lx.wg.idle_suspend` — §535, до пина v1.14.2-lx.1 ключ
-  /// звался `route.lx_idle_suspend`). Duration-строка (`"5m"`, `"30s"`).
-  /// Пусто = фича выключена (поле не пишется, дефолт ядра = idle-тик
-  /// не запускается).
-  final String idleSuspend;
-
-  /// §272: второе, длинное окно простоя для ДОСТИЖИМЫХ эндпоинтов
-  /// (ядро SPEC 020 rev. 2026-07-15, `lx.wg.idle_suspend_reachable` — §535).
-  /// Пусто = достижимые не засыпают. Эмитится ТОЛЬКО при непустом
-  /// [idleSuspend] — ядро отвергает reachable без базового порога.
-  final String idleSuspendReachable;
-
-  /// §542 — `lx.wg.build_max` (ядро SPEC 097): сколько WG/AWG эндпоинтов
-  /// держать собранными одновременно; сверх лимита самый давний разбирается.
-  /// `0` = без потолка (пишется как `0`, ядро это допускает). Было константой
-  /// §536 (5), теперь настройка `wg_build_max`. Эмитится только вместе с
-  /// [idleSuspend]. `build_overflow` не пишем — дефолт ядра `wait`.
-  final int wgBuildMax;
-
-  /// §542 — `lx.wg.lazy_build` (ядро SPEC 097): WG/AWG эндпоинт собирается
-  /// при первом дайле, а не на старте. Было константой §536 (`true`), теперь
-  /// настройка `wg_lazy_build`. `false` → не пишем ни `lazy_build`, ни
-  /// `build_max` (бюджет в UI гаснет вместе с тумблером; ядро `build_max`
-  /// без `lazy_build` принимает, но выключенный пункт не должен действовать).
-  final bool wgLazyBuild;
-
   /// §435 — корень для `state_directory` узлов Tailscale: native
   /// `Context.filesDir` (тот же канал, что у §316). Каталог узла —
   /// `<корень>/tailscale/<имя>` подставляется при эмиссии, если в теле поля
@@ -175,6 +164,11 @@ class BuildSettings {
   /// индекса нет (тесты, сбой): имя по финальному тегу, как в 2.24.0.
   final Map<NodeSpec, String>? tailscaleStateDirs;
 
+  /// §704 — миксины итогового конфига в порядке применения (выключенные
+  /// пропускаются). Применяются последним шагом сборки, после
+  /// `sanitizeOutboundGraph`, до `validateConfig`.
+  final List<Mixin> mixins;
+
   const BuildSettings({
     this.userVars = const {},
     this.enabledGroups = const {},
@@ -186,12 +180,9 @@ class BuildSettings {
     this.coreBuildTags = kCoreBuildTags,
     this.tunApps,
     this.vpnMode,
-    this.idleSuspend = '',
-    this.idleSuspendReachable = '',
-    this.wgBuildMax = 5,
-    this.wgLazyBuild = true,
     this.tailscaleStateRoot = '',
     this.tailscaleStateDirs,
+    this.mixins = const [],
   });
 }
 
@@ -229,7 +220,34 @@ Future<BuildResult> buildConfig({
       template: template,
       templateWarnings: templateWarnings,
     ),
+  ).then((r) => r!);
+}
+
+/// §674 — пул кандидатов Направлений: ровно тот список тегов, из которого
+/// [buildConfig] формирует состав селектора `<tag>` ДО фильтра Направления
+/// (`selectorTags`: узлы источников, свёртки, цепочки — после отбраковок
+/// detour-резолвера, гарда реестра и свёрток). Та же сборка, остановленная
+/// до групп Направлений и пост-шагов: без чтения и записи хранилища (пост-шаги
+/// DNS пишут его), без сети, без ядра. Превью фильтра в UI фильтрует этот
+/// список [Direction.filterNodeTags] — тем же фильтром, что и сборка.
+Future<List<String>> buildDirectionPool({
+  required List<ServerList> lists,
+  BuildSettings settings = const BuildSettings(),
+  WizardTemplate? template,
+}) async {
+  final pool = <String>[];
+  final templateWarnings = TemplateWarnings();
+  await collectTemplateWarnings(
+    templateWarnings,
+    () => _buildConfig(
+      lists: lists,
+      settings: settings,
+      template: template,
+      templateWarnings: templateWarnings,
+      poolSink: pool,
+    ),
   );
+  return pool;
 }
 
 /// EN-строка предупреждения шаблона для [BuildResult.emitWarnings]: заголовок
@@ -253,11 +271,14 @@ bool varIntInBounds(String name, String raw) {
   return n != null && n >= b.$1 && n <= b.$2;
 }
 
-Future<BuildResult> _buildConfig({
+/// [poolSink] не null — §674: сборка кладёт в него пул кандидатов
+/// Направлений и возвращает null, не доходя до групп и пост-шагов.
+Future<BuildResult?> _buildConfig({
   required List<ServerList> lists,
   required BuildSettings settings,
   required WizardTemplate? template,
   required TemplateWarnings templateWarnings,
+  List<String>? poolSink,
 }) async {
   template ??= await TemplateLoader.load();
 
@@ -268,7 +289,13 @@ Future<BuildResult> _buildConfig({
   // coerce по node.type.
   final byName = <String, WizardVar>{};
   for (final v in template.vars) {
-    final raw = settings.userVars[v.name] ?? v.defaultValue;
+    // §643 (D-132) — `internal`: значение состояния не читается, действует
+    // `default_value`; `unique` у `text_list` — значение без дублей.
+    final raw = applyVarUnique(
+        v,
+        v.isInternal
+            ? v.defaultValue
+            : (settings.userVars[v.name] ?? v.defaultValue));
     // §161 backstop: пустое required-поле с непустым default → default. Ловит
     // источники в обход UI (импорт бэкапа/пресета, legacy-state с пустым
     // значением — напр. стёртый tolerance). ДО _substituteVars, не трогает
@@ -319,8 +346,15 @@ Future<BuildResult> _buildConfig({
         (vpnMode.effectiveAuth && vpnMode.proxyPassword.isNotEmpty)
             ? 'true'
             : 'false';
+    // §629 — системный HTTP-прокси VPN-сети: без TUN объявлять нечего.
+    vars['sys_proxy'] =
+        (vpnMode.systemProxyEnabled && vpnMode.mode != 'proxy')
+            ? 'true'
+            : 'false';
+    vars['sys_proxy_port'] = '${vpnMode.effectiveSystemProxyPort}';
   } else {
     vars['vpn_mode'] = 'vpn'; // degrade к tun-only (иначе пустой inbounds[])
+    vars['sys_proxy'] = 'false';
   }
 
   final resolve = makeResolver(vars, byName);
@@ -560,6 +594,21 @@ Future<BuildResult> _buildConfig({
     ...replaceBuild.candidates,
     ...chainResolution.tags,
   ];
+  // §674 — превью фильтра: дальше идут группы Направлений и пост-шаги с
+  // записью в хранилище, превью они не нужны.
+  if (poolSink != null) {
+    poolSink.addAll(selectorTags);
+    return null;
+  }
+  // §670 — звено цепочки, которое источник пустил в селектор («Register
+  // detour servers»), но не в auto («Register detour in auto group» off): в
+  // пуле Направления оно есть, в `<tag>-auto` — нет. Обычный узел
+  // регистрируется в оба списка и сюда не попадает.
+  final autoTags = {for (final e in ctx.autoEntries) e.tag};
+  final selectorOnlyTags = {
+    for (final e in ctx.selectorEntries)
+      if (!autoTags.contains(e.tag)) e.tag,
+  };
 
   // §248/§254 — эмитированные узлы (те же map-объекты уходят в config ниже):
   // AWG-advisory читает типы. detour больше НЕ правится in-place (§254 —
@@ -576,6 +625,7 @@ Future<BuildResult> _buildConfig({
   final presetOutbounds = _buildDirectionGroups(
     directions: directions,
     selectorTags: selectorTags,
+    selectorOnlyTags: selectorOnlyTags,
     nodeEntries: nodeEntries,
     emitWarnings: emitWarnings,
     directionsWithoutNodes: directionsWithoutNodes,
@@ -624,7 +674,22 @@ Future<BuildResult> _buildConfig({
       ep.map['state_directory'] =
           '$stateRoot/tailscale/${name ?? tailscaleStateDirName(ep.tag)}';
     }
+    // §707 — входящие Taildrop на узел: `<state_directory>/taildrop` (дефолт
+    // ядра — общая папка `Taildrop` на все узлы). Явный ключ тела не
+    // трогается; в хранимое тело не пишется, как и `state_directory`.
+    for (final ep in ctx.endpoints) {
+      if (ep.map['type'] != 'tailscale') continue;
+      final cur = ep.map['taildrop_directory'];
+      if (cur is String && cur.isNotEmpty) continue;
+      final state = ep.map['state_directory'];
+      if (state is! String || state.isEmpty) continue;
+      ep.map['taildrop_directory'] = '$state/taildrop';
+    }
   }
+  // §707 итер. 4 — Taildrop узла выключен, пока в теле нет явного
+  // `disable_taildrop: false` (контракт 1.1.150); на ядре ниже `min_core`
+  // поля нет совсем. Хранимое тело не трогается.
+  applyTaildropDefault(ctx.endpoints, coreVersion: settings.coreVersion);
 
   if (ctx.endpoints.isNotEmpty) {
     final baseEndpoints = config['endpoints'] as List<dynamic>? ?? const [];
@@ -634,7 +699,7 @@ Future<BuildResult> _buildConfig({
     ];
   }
 
-  // §578 — узлы для пресетов с `for_each`: состав окончателен (снятия
+  // §578 — узлы для пресетов с обходом узлов: состав окончателен (снятия
   // detour-прохода, гейта реестра и ядра уже применены), теги финальные.
   final presetNodes = _collectPresetNodes(lists, ctx);
 
@@ -743,41 +808,11 @@ Future<BuildResult> _buildConfig({
   route['rules'] = ruleSets.getRules();
   config['route'] = route;
 
-  // §215 — idle-suspend недостижимых WG/AWG эндпоинтов (ядро SPEC 020).
-  // Пишем поле только когда порог задан (непустой), чтобы сохранить
-  // omitempty-семантику ядра: отсутствие/пусто = фича выключена (идл-тик
-  // не запускается — безопасный kill-switch).
-  //
-  // §535 — ключи сна переехали из `route` в корневой блок `lx.wg`
-  // (ядро SPEC 098, пин v1.14.2-lx.1). Старые `route.lx_idle_*` ядро ещё
-  // принимает, но пишет WARN на каждый ключ, поэтому эмитим ТОЛЬКО новые
-  // имена: одно место записи, без дублей (значение в обоих местах = WARN,
-  // разное значение = ядро не стартует).
-  final idle = settings.idleSuspend.trim();
-  if (idle.isNotEmpty) {
-    final wg = <String, dynamic>{'idle_suspend': idle};
-    // §272 — reachable-окно валидно ТОЛЬКО при включённом базовом пороге
-    // (ядро: "lx.wg.idle_suspend_reachable requires lx.wg.idle_suspend").
-    final reachable = settings.idleSuspendReachable.trim();
-    if (reachable.isNotEmpty) {
-      wg['idle_suspend_reachable'] = reachable;
-    }
-    // §536 — ленивая сборка WG/AWG эндпоинтов (ядро SPEC 097). Решение
-    // владельца 24.09.2026: включаем всегда рядом с порогом сна. Ядро
-    // требует `lazy_build` вместе с `idle_suspend`, поэтому оба ключа живут
-    // в этой же ветке: нет порога сна — нет и блока `lx`.
-    // `build_overflow` НЕ пишем (дефолт ядра `wait` нас устраивает),
-    // `lx.masque.idle_timeout` тоже: у WARP MASQUE-узлов свой idle_timeout
-    // внутри самого узла.
-    // §542 — оба значения из настроек. Тумблер lazy выключен → ни
-    // `lazy_build`, ни `build_max`; `0` в build_max пишется как есть (ядро:
-    // без потолка).
-    if (settings.wgLazyBuild) {
-      wg['lazy_build'] = true;
-      wg['build_max'] = settings.wgBuildMax < 0 ? 0 : settings.wgBuildMax;
-    }
-    config['lx'] = <String, dynamic>{'wg': wg};
-  }
+  // Корневой блок `lx` ядра (SPEC 098) пишет `config` шаблона (§709 итер. 3,
+  // контракт 1.1.151): переменные секций Network / WireGuard / QUIC, ключ —
+  // только при значении, отличном от дефолта ядра. Пустой `lx` ядро (≥ lx.13)
+  // читает как отсутствующий — снимаем его, чтобы конфиг не менялся.
+  if (config['lx'] is Map && (config['lx'] as Map).isEmpty) config.remove('lx');
 
   // §125 — деградация dangling route_final → vpn-1. Ссылка на удалённое Направление
   // или legacy ✨auto (которого больше нет, Решение 2/3) схлопывается в vpn-1
@@ -843,8 +878,9 @@ Future<BuildResult> _buildConfig({
           .add(w);
     }
   }
-  applyTlsFragment(config, vars);
-  applyMixedCaseSni(config, vars);
+  // §636 — уровни узла и источника поверх глобальных `vars`.
+  applyTlsFragment(config, vars, byTag: ctx.tlsByTag);
+  applyMixedCaseSni(config, vars, byTag: ctx.tlsByTag);
 
   // §419 / §441 — умолчания шаблона резолверов DNS: замены битых ссылок
   // (сервер пресета ушёл — [healDanglingDnsResolvers]; сервер выпал из-за
@@ -866,6 +902,12 @@ Future<BuildResult> _buildConfig({
     warningsOut: emitWarnings, // §312 — дропы членов DNS-групп
     resolverDefaults: resolverDefaults, // §441 — Н10
     globalVars: vars, // §555/§570 — тела шаблонных серверов видят весь шаблон
+    // §695 правило 5 — выбранное в пикерах включается в списке.
+    resolverPickers: (
+      dnsFinal: vars['dns_final'] ?? '',
+      defaultResolver: vars['dns_default_domain_resolver'] ?? '',
+    ),
+    coreVersion: settings.coreVersion, // §699 — гейт `hosts` у DNS-групп
   );
 
   // §119/§120: VPN-mode (tun-in/mixed-in/route-rules) теперь декларативен —
@@ -878,6 +920,10 @@ Future<BuildResult> _buildConfig({
   if (settings.tunApps != null) {
     applyTunPackages(config, settings.tunApps!);
   }
+
+  // §691 — «Bypass the tunnel»: строка не-CIDR или накрывающая адрес TUN
+  // снимается с предупреждением (иначе ядро не стартует или туннель мёртв).
+  emitWarnings.addAll(healTunRouteExclude(config));
 
   // §103 C7 — миграция ссылок на теги пресетов. ДО деградаций ниже: они
   // снимают битую ссылку, а мы её чиним, и порядок наоборот означал бы, что
@@ -901,6 +947,11 @@ Future<BuildResult> _buildConfig({
         'missing DNS server "${h.target}" — falling back to DNS routing.');
   }
 
+  // §680 — `domain_resolver` DNS-сервера на тег вне `dns.servers` (новый
+  // дефолт var шаблона указывает на сервер, которого в списке нет): ключ
+  // снимается, ядро берёт `route.default_domain_resolver`.
+  emitWarnings.addAll(healDanglingDnsServerResolvers(config));
+
   // §419 — битые `dns.final` / `route.default_domain_resolver` (сервер
   // выключенного/удалённого пресета) → дефолт шаблона, var уходит в
   // generatedVars и персистится контроллером. Иначе каждая сборка — fatal
@@ -913,8 +964,8 @@ Future<BuildResult> _buildConfig({
   for (final h in healedResolvers) {
     generatedVars[h.varName] = h.to;
     emitWarnings.add(
-        '${h.field} reset to "${h.to}": DNS server "${h.from}" is gone '
-        '(its preset was disabled or removed).');
+        '${h.field} reset to "${h.to}": DNS server "${h.from}" '
+        'is not in the list.');
   }
 
   // §246 hotfix — легаси `strategy` в dns.rules × query_type/ip_version
@@ -1011,12 +1062,21 @@ Future<BuildResult> _buildConfig({
     }
   }
 
-  final validation = validateConfig(config);
+  // §704 — миксины: сырой обход последним шагом. Санитайзер реестра и
+  // автоснятия их не видят, валидатор видит результат. Отказ миксина (нет
+  // совпадений, тип цели, дубль тега) — fatal-issue: конфиг не собирается.
+  final mixed = applyMixins(config, settings.mixins);
+  final built = mixed.config;
+  final checked = validateConfig(built);
+  final validation = mixed.issues.isEmpty
+      ? checked
+      : ValidationResult([...mixed.issues, ...checked.issues]);
   // §555 — записи template_degraded идут первыми (паритет с «Итогом» desktop).
   final templateItems = templateWarnings.items;
   return BuildResult(
-    configJson: jsonEncode(config),
-    config: config,
+    configJson: jsonEncode(built),
+    config: built,
+    configBeforeMixins: settings.mixins.isEmpty ? null : config,
     validation: validation,
     emitWarnings: [
       for (final w in templateItems) _renderTemplateWarning(w),
@@ -1032,24 +1092,46 @@ Future<BuildResult> _buildConfig({
       for (final e in ctx.emittedTagByNode.entries) e.value: e.key,
     },
     nodeBuildWarningsByEmittedTag: registryReport.warningsByEmittedTag,
+    groupByEmittedTag: ctx.groupByEmittedTag,
   );
 }
 
-/// §578 — узлы конфига для `for_each` в порядке конфига (`outbounds`, затем
+/// §578 — узлы конфига для обхода узлов в порядке конфига (`outbounds`, затем
 /// `endpoints`). Берутся только записи узлов из источников, у которых есть
 /// финальный тег в `emittedTagByNode`: выключенный, снятый гейтом реестра,
-/// ядра или detour-проходом узел туда не попадает. `skip_presets` — поле
-/// записи своего сервера или члена папки; у узла подписки записи нет.
+/// ядра или detour-проходом узел туда не попадает. Поля записи (§656:
+/// `skip_tailscale_presets`, `allow_local`, `allow_lan`, `allow_gateway`,
+/// `own_routes`) —
+/// у своего сервера или члена папки; у узла подписки записи нет — `false`.
 List<PresetNode> _collectPresetNodes(List<ServerList> lists, _BuildCtx ctx) {
-  final skip = <NodeSpec>{};
+  final record = <NodeSpec, PresetNode Function(String, Map<String, dynamic>)>{};
   for (final list in lists) {
     switch (list) {
       case UserServer u:
-        if (u.skipPresets) skip.addAll(u.nodes);
+        for (final n in u.nodes) {
+          record[n] = (tag, body) => PresetNode(
+                tag: tag,
+                body: body,
+                skipTailscalePresets: u.skipTailscalePresets,
+                allowLocal: u.allowLocal,
+                allowLan: u.allowLan,
+                allowGateway: u.allowGateway,
+                ownRoutes: u.ownRoutes,
+              );
+        }
       case FolderServers f:
         for (final m in f.members) {
           final node = m.node;
-          if (m.skipPresets && node != null) skip.add(node);
+          if (node == null) continue;
+          record[node] = (tag, body) => PresetNode(
+                tag: tag,
+                body: body,
+                skipTailscalePresets: m.skipTailscalePresets,
+                allowLocal: m.allowLocal,
+                allowLan: m.allowLan,
+                allowGateway: m.allowGateway,
+                ownRoutes: m.ownRoutes,
+              );
         }
       case SubscriptionServers():
         break;
@@ -1061,7 +1143,8 @@ List<PresetNode> _collectPresetNodes(List<ServerList> lists, _BuildCtx ctx) {
   return [
     for (final e in <SingboxEntry>[...ctx.outbounds, ...ctx.endpoints])
       if (nodeByTag[e.tag] case final NodeSpec node)
-        PresetNode(tag: e.tag, body: e.map, skipPresets: skip.contains(node)),
+        record[node]?.call(e.tag, e.map) ??
+            PresetNode(tag: e.tag, body: e.map),
   ];
 }
 
@@ -1199,6 +1282,14 @@ class _BuildCtx implements EmitContext {
   /// §435 — строки отчёта из `ServerList.build` (гейт ядра).
   final warnings = <String>[];
 
+  /// §636 — итоговый тег → уровни TLS-политики (узел, источник).
+  final tlsByTag = <String, TlsLayers>{};
+
+  @override
+  void noteTls(String finalTag, TlsLayers layers) {
+    if (!layers.isEmpty) tlsByTag[finalTag] = layers;
+  }
+
   @override
   TemplateVars get vars => _vars;
 
@@ -1216,6 +1307,14 @@ class _BuildCtx implements EmitContext {
   @override
   void noteEmittedAlias(String finalTag, NodeSpec owner) {
     emittedTagAliases[finalTag] = owner;
+  }
+
+  /// §675 — итоговый тег → узел автовыбора (§322).
+  final groupByEmittedTag = <String, AutoSelectSpec>{};
+
+  @override
+  void noteGroupEmitted(AutoSelectSpec group, String finalTag) {
+    groupByEmittedTag[finalTag] = group;
   }
 
   @override
@@ -1286,6 +1385,8 @@ class _BuildCtx implements EmitContext {
 List<Map<String, dynamic>> _buildDirectionGroups({
   required List<Direction> directions,
   required List<String> selectorTags,
+  // §670 — теги, которым путь в `<tag>-auto` закрыт политикой detour.
+  Set<String> selectorOnlyTags = const {},
   required List<Map<String, dynamic>> nodeEntries,
   required List<String> emitWarnings,
   required List<String> directionsWithoutNodes, // §274 — display-имена, out-параметр
@@ -1344,14 +1445,15 @@ List<Map<String, dynamic>> _buildDirectionGroups({
     for (final ms in memberSets)
       [
         for (final t in ms)
-          if (!groupTags.contains(t)) t,
+          if (!groupTags.contains(t) && !selectorOnlyTags.contains(t)) t,
       ],
   ];
 
   // §393 A3 — теги Направлений, УЖЕ эмитированных выше по списку. Только на
-  // них законна ссылка `include`: эмиссия идёт по порядку, и ссылка вниз
-  // была бы forward-ref (антицикл держится порядком, как у лаунчера —
-  // `tagsAbove` в форме + топологический проход генератора).
+  // них законна ссылка `include` — UX-правило 026 (решение владельца, §673):
+  // включать можно только Направления выше, порядок списка исключает циклы
+  // по построению, как у лаунчера (`tagsAbove` в форме). Ядру порядок
+  // безразличен: зависимости outbound'ов оно разрешает само.
   final emittedAbove = <String>{};
 
   final result = <Map<String, dynamic>>[];
@@ -1363,9 +1465,11 @@ List<Map<String, dynamic>> _buildDirectionGroups({
 
     // §393 A3 — фильтр include: в состав идут только теги Направлений,
     // эмитированных ВЫШЕ. Отсеиваются три случая, все одним warning'ом:
-    //   • ссылка ВНИЗ по списку (в т.ч. после reorder — Направление
-    //     переехало выше своей цели): ядро отвергло бы конфиг на
-    //     forward-ref, поэтому деградируем состав, а не ломаем сборку;
+    //   • ссылка ВНИЗ по списку: UX-правило 026 «включать можно только
+    //     Направления выше» (ядру порядок безразличен — разрешает
+    //     зависимости само). UI и Debug API такой порядок/include не
+    //     пропускают (§673), здесь — последний гард для данных старых
+    //     бэкапов: деградируем состав, а не ломаем сборку;
     //   • ссылка на выключенное Направление: его нет в `active`, значит и
     //     тега в конфиге нет — dangling ref не даёт ядру стартовать;
     //   • ссылка на несуществующий тег (удалённое Направление, правленый

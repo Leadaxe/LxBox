@@ -66,3 +66,22 @@ String? protocolLevelByRegistry(String singboxType, Map<String, dynamic> raw) {
   if (top < 0) return null;
   return '${levels[top]}${marks.join()}';
 }
+
+/// Контракт 1.1.122 (`TASKS_LXBOX.md` §119 п. 4) — метка поля с ролью
+/// `variant` у схемы [singboxType] для слота транспорта подзаголовка узла:
+/// значение поля в [raw] после trim; пусто или не строка — `default` поля;
+/// нет и его — `null`. Не переводится. Имён полей в коде нет: роль объявляет
+/// реестр (`openconnect.flavor` → `fortinet`, без ключа — `anyconnect`).
+String? variantLabelByRegistry(String singboxType, Map<String, dynamic> raw) {
+  final schema = ContractRegistry.I.schemaFor(singboxType);
+  if (schema == null) return null;
+  for (final e in schema.fields.entries) {
+    if (e.value.role != 'variant') continue;
+    final v = raw[e.key];
+    if (v is String && v.trim().isNotEmpty) return v.trim();
+    final d = e.value.defaultValue;
+    if (d is String && d.trim().isNotEmpty) return d.trim();
+    return null;
+  }
+  return null;
+}

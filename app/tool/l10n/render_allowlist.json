@@ -3,6 +3,7 @@
   "renderEn": [
     "lib/services/automation/",
     "lib/services/debug/",
+    "lib/services/mixins/mixin_preview.dart",
     "lib/services/builder/build_config.dart",
     "lib/services/builder/server_list_build.dart",
     "lib/controllers/home_controller.dart",

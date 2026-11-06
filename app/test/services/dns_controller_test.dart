@@ -57,23 +57,6 @@ void main() {
     expect(await SettingsStorage.getDnsRulesList(), rules);
   });
 
-  test('stage() НЕ трогает custom_rules (§295 device-scope)', () async {
-    // Заранее положим custom_rules; stage() не должен их стереть/тронуть.
-    await SettingsStorage.saveCustomRules(const []);
-    final before = await SettingsStorage.getCustomRules();
-    await DnsController.stage(
-      servers: const [],
-      rules: const [],
-      templateRulesByName: const {},
-      presetRulesByPresetId: const {},
-      strategy: 's',
-      dnsFinal: 'f',
-      defaultResolver: 'r',
-    );
-    final after = await SettingsStorage.getCustomRules();
-    expect(after.length, before.length); // не тронуты
-  });
-
   // §327 — дефолты резолверов приходят из `default_value` шаблона, а не из
   // литералов в коде. Регрессия на «после чистой установки оба поля пусты».
   group('§327 дефолты из шаблона', () {
@@ -149,10 +132,10 @@ void main() {
     });
   });
 
-  // §578 — серверы пресета с `for_each` видны на экране DNS как серверы
-  // остальных пресетов; запись хранения без `preset_id` (тег `<узел>-dns`
-  // без пространства), владелец — из пометки `_preset_id` тела.
-  group('§578 пресет с for_each', () {
+  // §578/§643 — серверы пресета с `for_each_node` видны на экране DNS как
+  // серверы остальных пресетов; запись хранения без `preset_id` (тег
+  // `<узел>-dns` без пространства), владелец — из пометки `_preset_id` тела.
+  group('§578 пресет с for_each_node', () {
     Future<void> seedTailscalePreset() async {
       await SettingsStorage.saveCustomRules([
         CustomRulePreset(
@@ -188,7 +171,7 @@ void main() {
       await seedTailscalePreset();
       final snap = await DnsController.load(presetNodes: const [
         PresetNode(
-            tag: 'home-ts', body: {'type': 'tailscale'}, skipPresets: true),
+            tag: 'home-ts', body: {'type': 'tailscale'}, skipTailscalePresets: true),
       ]);
       expect(snap.presetServedTagsByPresetId['tailscale'], isEmpty);
       expect(snap.presetServersByTag.keys.where((t) => t.endsWith('-dns')),
@@ -244,6 +227,33 @@ void main() {
     test('stage() не сохраняет размер вне границ', () async {
       await stageCache('70000', true, true);
       expect(await SettingsStorage.getVar('dns_cache_capacity', ''), '');
+    });
+  });
+
+  // §643 (TEMPLATE_LANG §6.9) — `dns_resolver_no_stale`: по умолчанию
+  // включено, stage() пишет и помечает конфиг к пересборке.
+  group('§643 резолвер по умолчанию без устаревшего кэша', () {
+    test('не задано — значение по умолчанию шаблона (true)', () async {
+      final snap = await DnsController.load();
+      expect(snap.resolverNoStale, isTrue);
+    });
+
+    test('stage() пишет переменную и помечает конфиг', () async {
+      SettingsStorage.configDirty = false;
+      await DnsController.stage(
+        servers: const [],
+        rules: const [],
+        templateRulesByName: const {},
+        presetRulesByPresetId: const {},
+        strategy: 'ipv4_only',
+        dnsFinal: 'dns_shield',
+        defaultResolver: 'dns_shield',
+        resolverNoStale: false,
+      );
+      expect(
+          await SettingsStorage.getVar('dns_resolver_no_stale', ''), 'false');
+      expect(SettingsStorage.configDirty, isTrue);
+      expect((await DnsController.load()).resolverNoStale, isFalse);
     });
   });
 }

@@ -18,6 +18,13 @@ Map<String, Object?> serializeHomeState(HomeState s) {
     'selected_group': s.selectedGroup,
     'highlighted_node': s.highlightedNode,
     'groups': s.groups,
+    // Выбор ядра в КАЖДОЙ группе (selector — ручной, urltest — авто), не только
+    // в Направлении с главной (`active_in_group`). Пусто = туннель down / дерево
+    // групп ещё не пришло; группа без выбора не попадает.
+    'group_selected': {
+      for (final g in s.ccGroups)
+        if (g.selected.isNotEmpty) g.tag: g.selected,
+    },
     'nodes_count': s.nodes.length,
     // §325 — замеры разложены по Направлениям (`Направление → тег → ms`); ключ
     // `' scratch'` = замеры вне выбранного Направления. `last_delay` — плоский срез

@@ -50,4 +50,10 @@ class PlatformChannels {
   static const ccTailscale = 'lxbox/cc/tailscale';
   /// §581 — ответы проверки устройства Tailscale (`StartTailscalePing`).
   static const ccTailscalePing = 'lxbox/cc/tailscale_ping';
+  /// §687 — события теста соединения (`StartConnectionTest`), батчами.
+  static const ccConnectionTest = 'lxbox/cc/connection_test';
+  /// §654 C — состояние endpoint'ов openconnect (`SubscribeOpenConnectStatus`).
+  static const ccOpenConnect = 'lxbox/cc/openconnect';
+  /// §707 — входящие Taildrop узла (`SubscribeTaildropInbox`).
+  static const ccTaildropInbox = 'lxbox/cc/taildrop_inbox';
 }

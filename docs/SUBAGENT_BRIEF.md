@@ -17,7 +17,21 @@ at acceptance — a violation means a redo. General rules:
 
 ## Git
 
-- No `git add` / `git commit` — the orchestrator commits.
+- **In your own worktree** (`.claude/worktrees/…`, the usual case): the
+  executor commits.
+  - `git add` file by file, only the files of the task; never `git add .` /
+    `git add -A`.
+  - Before the commit set the author:
+    `git config user.email 247031499+Leadaxe@users.noreply.github.com` and
+    `git config user.name Leadaxe`.
+  - **One** commit to the worktree branch, with the message from the brief.
+  - After it, check the author: `git log -1 --format=%ae` must print the
+    noreply address above.
+  - No `git push`: the orchestrator pushes the branch into `develop`.
+  - `git stash` is forbidden: the stash stack is shared by every worktree and
+    the main checkout, so a stash or pop can take someone else's work.
+- **In the main tree** (no worktree): no `git add` / `git commit` — the
+  orchestrator commits by pathspec.
 
 ## Checks
 

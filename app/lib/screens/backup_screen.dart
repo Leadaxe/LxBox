@@ -7,7 +7,6 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
-import '../services/automation/automation_sync.dart';
 import '../services/backup_service.dart';
 import '../services/dns/dns_backup.dart';
 import '../services/lx_backup.dart';
@@ -15,16 +14,24 @@ import '../services/lx_backup_import.dart';
 import '../services/record_vars.dart';
 import '../services/warp/warp_backup.dart';
 import '../services/settings_storage.dart';
+import '../services/template_loader.dart';
 import '../services/error_format.dart';
 import '../services/l10n/locale_controller.dart';
 import '../services/ui_helpers.dart';
-import '../vpn/box_vpn_client.dart';
 import '../widgets/export_action_sheet.dart';
 import 'backup_screen/export_card.dart';
 import 'backup_screen/import_card.dart';
-import 'backup_screen/import_preview_dialog.dart';
+import 'backup_screen/lx_import_summary.dart';
 import 'backup_screen/lx_transfer_card.dart';
-import 'backup_screen/restore_summary.dart';
+import 'backup_screen/device_transfer_card.dart';
+import 'backup_screen/restore_flow.dart';
+import 'backup_screen/transfer_send_text.dart';
+import 'qr_scan_screen.dart';
+import 'transfer_receive_screen.dart';
+import '../services/transfer/transfer_code.dart';
+import '../services/transfer/transfer_entries.dart';
+import '../services/transfer/transfer_envelope.dart';
+import '../services/transfer/transfer_sender.dart';
 import '../services/utf8_decode.dart';
 import '../services/file_export.dart';
 import '../services/file_import.dart';
@@ -35,6 +42,11 @@ import '../widgets/safe_bottom.dart';
 /// Backup & restore UI — спека [§040F](../../../docs/spec/tasks/040F-backup-restore-ui/spec.md).
 class BackupScreen extends StatefulWidget {
   const BackupScreen({super.key});
+
+  /// §622 — экран приёма; тест подменяет, чтобы не поднимать сервер и QR.
+  @visibleForTesting
+  static Future<BackupContents?> Function(BuildContext context) openReceive =
+      openTransferReceiveScreen;
 
   @override
   State<BackupScreen> createState() => _BackupScreenState();
@@ -52,6 +64,27 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
 
   bool _busy = false;
 
+  /// §622 — пункты передачи телефон → TV: приём только на TV, отправка только
+  /// с камерой (P10). До ответа платформы не показываем ни один.
+  TransferEntries _transfer = TransferEntries.none;
+
+  /// Кнопка «Show code»: после восстановления фокус пульта возвращается сюда.
+  final _receiveFocus = FocusNode(debugLabel: 'transfer-receive');
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(loadTransferEntries().then((e) {
+      if (mounted) setState(() => _transfer = e);
+    }));
+  }
+
+  @override
+  void dispose() {
+    _receiveFocus.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -59,6 +92,14 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       body: ListView(
         padding: const EdgeInsets.symmetric(vertical: 8).withSafeBottom(context),
         children: [
+          if (_transfer.receive) ...[
+            DeviceTransferCard.receive(
+              busy: _busy,
+              onReceive: _onReceive,
+              focusNode: _receiveFocus,
+            ),
+            const SizedBox(height: 8),
+          ],
           ExportCard(
             serverLists: _expServerLists,
             routing: _expRouting,
@@ -82,6 +123,10 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
             }),
             onExport: _onExport,
           ),
+          if (_transfer.send) ...[
+            const SizedBox(height: 8),
+            DeviceTransferCard.send(busy: _busy, onSend: _onSendToTv),
+          ],
           const SizedBox(height: 8),
           ImportCard(
             busy: _busy,
@@ -218,42 +263,7 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       }
 
       if (!mounted) return;
-      final result = await showImportPreview(context, contents);
-      if (result == null) return; // cancelled
-
-      final apply = await _service.applyImport(
-        contents,
-        merge: result.merge,
-        include: result.include,
-      );
-      // §279 — restore мог привезти другой app_language: применить через
-      // владеющий пайплайн (LocaleController), не дожидаясь рестарта.
-      await LocaleController.I.reloadFromStorage();
-      // §605 — бэкап мог привезти другой тумблер приёма команд и emit-гейты.
-      await syncAutomationFromStorage();
-      if (!mounted) return;
-      // §607 — общий с главным экраном локализованный итог.
-      final summary = restoreSummaryText(apply);
-      final appliedAnything = restoreAppliedAnything(apply);
-      // applyImport пишет в SettingsStorage, но controllers (Subscription /
-      // Home / Routing screen state) держат in-memory snapshot — UI остаётся
-      // stale. Restart-кнопка вызывает quitApp(); юзер сам тапает иконку,
-      // app поднимается с fresh storage.
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(summary),
-            duration: const Duration(seconds: 6),
-            action: !appliedAnything
-                ? null
-                : SnackBarAction(
-                    label: getLocalText.s("Restart now"),
-                    onPressed: () =>
-                        unawaited(BoxVpnClient().quitApp()),
-                  ),
-          ),
-        );
-      }
+      await restoreFromContents(context, contents);
     } catch (e) {
       if (!mounted) return;
       showSnack(getLocalText.s("Import failed: %s", formatUserError(e).render()));
@@ -263,6 +273,103 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
   }
 
   // §219 — _snack вынесен в SnackHelper.showSnack (services/ui_helpers.dart).
+
+  // ——— §622: передача настроек телефон → TV ———
+
+  /// TV: экран приёма, затем общий путь восстановления (фича 031 P4).
+  Future<void> _onReceive() async {
+    final contents = await BackupScreen.openReceive(context);
+    if (contents == null || !mounted) return;
+    setState(() => _busy = true);
+    // Погашенная busy кнопка отдаёт фокус своему экрану. В одном кадре с
+    // открытием предпросмотра это перебивает запрос фокуса диалога, и пульт
+    // ходит по экрану под ним — поэтому сначала кадр с погашенной кнопкой.
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
+    try {
+      await restoreFromContents(context, contents);
+    } catch (e) {
+      if (!mounted) return;
+      showSnack(getLocalText.s("Import failed: %s", formatUserError(e).render()));
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+        WidgetsBinding.instance.addPostFrameCallback((_) => _refocusReceive());
+      }
+    }
+  }
+
+  /// Фокус обратно на карточку — безусловно: погашенная на время
+  /// восстановления кнопка отдала его последнему фокусу экрана из истории
+  /// (обычно «Back» тулбара, откуда пульт пришёл на карточку).
+  void _refocusReceive() {
+    if (!mounted || _receiveFocus.context == null) return;
+    _receiveFocus.requestFocus();
+  }
+
+  /// Телефон: скан кода с TV → подтверждение → шифрование → отправка.
+  /// Категории — те же, что отмечены в карточке Export (P5).
+  Future<void> _onSendToTv() async {
+    final include = _exportInclude();
+    if (include.isEmpty) {
+      showSnack(getLocalText.s("Nothing to export — pick at least one category."));
+      return;
+    }
+    final outcome = await Navigator.of(context).push<ScanOutcome>(
+      MaterialPageRoute(builder: (_) => const QrScanScreen()),
+    );
+    if (!mounted) return;
+    if (outcome is! ScannedCode) {
+      final problem = outcome == null ? null : scanProblemText(outcome);
+      if (problem != null) showSnack(problem);
+      return;
+    }
+    final code = TransferCode.tryParse(outcome.value);
+    if (code == null) {
+      showSnack(getLocalText.s("This is not a LxBox transfer code"));
+      return;
+    }
+    final confirmed = await _confirmSend(code);
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _busy = true);
+    try {
+      final json = await _service.buildExport(include: include);
+      final envelope = await sealTransferEnvelope(utf8.encode(json), code.key);
+      final result = await TransferSender().send(code, envelope);
+      if (!mounted) return;
+      showSnack(transferSendResultText(result));
+    } catch (e) {
+      if (!mounted) return;
+      showSnack(getLocalText.s("Sending failed: %s", formatUserError(e).render()));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<bool?> _confirmSend(TransferCode code) {
+    final name = code.name.isEmpty ? code.addresses.first.host : code.name;
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(getLocalText.s("Send to %s?", name)),
+        content: Text(getLocalText.s(
+            "The selected categories are encrypted with the key from the code "
+            "and sent over the local network. The TV shows what arrived and "
+            "asks before applying it.")),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(getLocalText.s("Cancel")),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(getLocalText.s("Send")),
+          ),
+        ],
+      ),
+    );
+  }
 
   // ——— §103 фаза 4: перенос на десктоп (LX Backup) ———
 
@@ -315,6 +422,9 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
         defaultDomainResolver: vars['dns_default_domain_resolver'] ?? '',
         warnings: exportWarnings,
         recordVars: recordVars,
+        // §681 (контракт 1.1.135, D-139) — каталог шаблона этой стороны:
+        // приёмник по нему отличает «удалён» от «не знал».
+        templateCatalog: await _templateDnsCatalogOrNull(),
       );
       // §393 B8 — регистрации WARP в каноне схемы (`type: wg|masque`).
       final warpAccount = await SettingsStorage.getWarpAccount();
@@ -341,6 +451,9 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
         dns: dns,
         warp: warp,
         recordVars: recordVars,
+        mixins: await SettingsStorage.getMixins(), // §704
+        // §707 итер. 9 (контракт 1.1.158) — настройки телефона.
+        nativePrefs: await SettingsStorage.exportNativePrefsBackup(),
       );
       final json = built.json;
       exportWarnings.addAll(built.warnings);
@@ -440,49 +553,14 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       final result = await importer.apply(plan);
       if (!mounted) return;
 
-      final parsed = result.file;
-      final appliedDirections = result.appliedDirections;
-      final counts = result.appliedSettings;
-      final skipped = parsed.warnings.length;
-      // Счётное существительное — только через plural: по-русски иначе
-      // получится «Импортировано 2 правил».
-      //
-      // §393 B5 — созданные Направления названы отдельно: правила приехали
-      // рабочими именно потому, что цели заведены, и молчать об этом значило
-      // бы скрыть половину произошедшего с настройками.
-      //
-      // §393 B6 — то же и с остальными секциями: подписки, DNS, переменные и
-      // регистрации WARP теперь реально применяются, и счётчик обязан их
-      // показать — иначе «Импортировано 0 правил» после файла с тремя
-      // подписками выглядит как отказ, хотя всё применилось.
-      final String message;
-      if (skipped > 0) {
-        message = getLocalText.s("Imported %d rule(s), %d items not applied",
-            parsed.rules.length, skipped);
-      } else if (appliedDirections > 0 && counts > 0) {
-        message = getLocalText.s(
-            "Imported %1\$d rules, %2\$d directions and %3\$d settings",
-            parsed.rules.length,
-            appliedDirections,
-            counts);
-      } else if (appliedDirections > 0) {
-        message = getLocalText.s("Imported %1\$d rules and %2\$d directions",
-            parsed.rules.length, appliedDirections);
-      } else if (counts > 0) {
-        message = getLocalText.s("Imported %1\$d rules and %2\$d settings",
-            parsed.rules.length, counts);
-      } else {
-        message = getLocalText.plural("Imported %d rules", parsed.rules.length);
-      }
-      // §393 C9 — цепочки названы ОТДЕЛЬНОЙ клаузой, а не влиты в счётчик
-      // настроек: это созданные сущности, как Направления, и «Импортировано
-      // правил: 0, настроек: 2» после файла с двумя маршрутами скрыло бы
-      // ровно то, что произошло. Клауза-суффикс, а не шестая ветка лестницы:
-      // добавить цепочки измерением удвоило бы число строк каталога,
-      // из которых половина не встречается никогда.
-      showSnack(result.appliedChains > 0
-          ? '$message; ${getLocalText.s("chains: %d", result.appliedChains)}'
-          : message);
+      // §641 — итог одной строкой: замена правил приёмника названа хвостом,
+      // а не посчитана в «не применено».
+      showSnack(lxImportSnackText(
+        result.file,
+        appliedDirections: result.appliedDirections,
+        appliedSettings: result.appliedSettings,
+        appliedChains: result.appliedChains,
+      ));
     } catch (e) {
       if (!mounted) return;
       showSnack(getLocalText.s("Import failed: %s", formatUserError(e).render()));
@@ -493,45 +571,8 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
 
   /// Показывает состав файла и что не применится — до применения.
   Future<bool?> _confirmLxImport(LxBackupFile parsed) {
-    final lines = <String>[
-      getLocalText.s("From %s %s", parsed.exportedByApp, parsed.exportedByVersion),
-      // §393 B5 — Направления названы отдельной строкой: они не «часть
-      // правил», а создаваемые сущности, и пользователь вправе увидеть,
-      // сколько их заведётся, ДО применения.
-      if (parsed.directions.isNotEmpty)
-        getLocalText.s("Directions: %d", parsed.directions.length),
-      // §393 C9 — цепочки хопов: тоже создаваемые сущности, и их число
-      // пользователь вправе увидеть ДО применения.
-      if (parsed.chains.isNotEmpty)
-        getLocalText.s("Chains: %d", parsed.chains.length),
-      getLocalText.s("Rules: %d", parsed.rules.length),
-      getLocalText.s("Subscriptions: %d", parsed.subscriptions.length),
-      // §401 — одиночные узлы и члены папок: до этого их разбирали и не
-      // применяли, и пользователь не видел ни строки о том, что приехало.
-      if (parsed.servers.isNotEmpty)
-        getLocalText.s("Servers: %d", parsed.servers.length),
-      getLocalText.s("Variables: %d", parsed.vars.length),
-      // §393 B8/B9 — секции, которые теперь применяются: пользователь должен
-      // увидеть их ДО применения, а не обнаружить постфактум чужой DNS-сервер
-      // в списке.
-      if (parsed.dns != null && !parsed.dns!.isEmpty)
-        getLocalText.s("DNS entries: %d",
-            parsed.dns!.servers.length + parsed.dns!.rules.length),
-      if (parsed.warp.isNotEmpty)
-        getLocalText.s("WARP accounts: %d", parsed.warp.length),
-    ];
-    if (parsed.warnings.isNotEmpty) {
-      lines.add('');
-      lines.add(getLocalText.s("Not applied as-is:"));
-      for (final w in parsed.warnings.take(8)) {
-        lines.add('• ${w.detail}');
-      }
-      if (parsed.warnings.length > 8) {
-        lines.add('… +${parsed.warnings.length - 8}');
-      }
-    }
-    lines.add('');
-    lines.add(getLocalText.s("Importing replaces the current rules."));
+    // §641 — строки превью и последняя фраза о правилах — в одном месте.
+    final lines = lxImportPreviewLines(parsed);
 
     return showDialog<bool>(
       context: context,
@@ -578,5 +619,16 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
         ],
       ),
     );
+  }
+}
+
+/// §681 — каталог DNS-серверов шаблона для `dns.template_catalog`; `null` —
+/// шаблон не загрузился, поле не пишется (приёмник уйдёт в переходную ветку).
+Future<List<String>?> _templateDnsCatalogOrNull() async {
+  try {
+    final template = await TemplateLoader.load();
+    return [for (final s in template.dnsOptionsModel.servers) s.tag];
+  } catch (_) {
+    return null;
   }
 }

@@ -24,13 +24,6 @@ void main() {
       );
     });
 
-    test('Stopped без флага → disconnected (штатный стоп)', () {
-      expect(
-        TunnelStatus.fromNative('Stopped', revoked: false),
-        TunnelStatus.disconnected,
-      );
-    });
-
     test('неизвестный raw → unknown', () {
       expect(TunnelStatus.fromNative('Nonsense'), TunnelStatus.unknown);
       // 'Revoked' статус-строкой native не шлёт — не должна распознаваться.
@@ -111,12 +104,6 @@ void main() {
       });
 
       expect(event.coreError, isNull);
-    });
-  });
-
-  group('label', () {
-    test('revoked назван по-человечески (не «Disconnected»)', () {
-      expect(TunnelStatus.revoked.label(), 'Taken by another VPN');
     });
   });
 }

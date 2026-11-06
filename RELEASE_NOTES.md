@@ -1,22 +1,20 @@
-# L×Box v2.25.11
+# L×Box v2.25.20
 
-**A patch on top of [v2.25.10](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.10).**
+**A patch on top of [v2.25.19](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.19).**
 
-Core `v1.14.2-lx.12`: the Passive health check setting is gone, and auto
-groups get a third mode, Hold until failure, which existing Fastest groups
-move to on the first launch. WireGuard/AWG peers on the node screen, the path
-to Tailscale devices, advertise / LAN access switches. An Errors (N) counter
-under the node list, Copy on notification cards, a JSON editor with folding
-and search in every JSON field. Contract 1.1.114.
+**Tunnel routes**: a WireGuard / AWG, OpenVPN or OpenConnect tunnel can take
+only the networks it announces and work alongside the selected server.
+**AWG masquerade**: a new setting in VPN Settings → Core → WireGuard, and an
+AWG node behind another node masquerades again. Core `v1.14.4-lx.32`,
+contract 1.1.162.
 
-**Патч поверх [v2.25.10](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.10).**
+**Патч поверх [v2.25.19](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.19).**
 
-Ядро `v1.14.2-lx.12`: настройки Passive health check больше нет, у
-авто-групп третий режим Hold until failure, в который существующие группы
-Fastest переходят при первом запуске. Пиры WireGuard/AWG в окне узла, путь
-до устройств Tailscale, переключатели advertise / доступа в LAN. Счётчик
-Errors (N) под списком узлов, Copy у карточек уведомлений, редактор JSON со
-свёрткой и поиском во всех JSON-полях. Контракт 1.1.114.
+**Tunnel routes**: туннель WireGuard / AWG, OpenVPN или OpenConnect может
+брать только сети, которые сам объявляет, и работать рядом с выбранным
+сервером. **AWG masquerade**: новая настройка в VPN Settings → Core →
+WireGuard, а узел AWG за другим узлом снова маскируется. Ядро
+`v1.14.4-lx.32`, контракт 1.1.162.
 
 ---
 
@@ -25,92 +23,58 @@ Errors (N) под списком узлов, Copy у карточек уведо
 
 ## ⚠️ Read before updating
 
-- **Core v1.14.2-lx.12 removed `passive_check`; the Passive health check setting is gone ([task 611](docs/spec/tasks/611-drop-passive-check-kernel-lx12.md)).**
-  A config with `urltest.passive_check` no longer starts on this core, so
-  auto groups stop writing the key and the switch leaves Settings →
-  Optimization. An older backup with the setting imports without a warning.
-- **Fastest auto groups move to Hold until failure once ([task 612](docs/spec/tasks/612-contract-1-1-113-failover.md)).**
-  On the first launch after the update, auto groups and Directions in
-  Fastest (`least_test`) switch to the new `failover` mode if Passive health
-  check was on or never set. If it was switched off, nothing changes; Load
-  balance groups are never touched. In this mode a group keeps its server
-  until that server fails and does not move back to a faster one by itself.
-  To change the server, pick it by hand or run the group's test manually; to
-  get the old behaviour, set the group back to Fastest.
-- **Tailscale: two switches on the Network tab ([task 613](docs/spec/tasks/613-wg-peers-tailscale-path-health.md)).**
-  Advertise this device as exit node, and Allow LAN access while using exit
-  node (active only with an exit node chosen). They write into the node's
-  body the same way as Save choice and rebuild the config. With an exit node
-  saved, advertising can only be switched off. The block is shown where Save
-  choice is: an own server and a folder member.
+- **AmneziaWG behind another node masquerades again (core `v1.14.4-lx.32`, [task 720](docs/spec/tasks/720-awg-masquerade-setting.md)).**
+  In v2.25.19 an AWG node reached through another node (a `detour`) sent a
+  single handshake packet without the masquerade packets (`ip=quic`, `i1`…).
+  The core default is flipped back: the masquerade goes out on every path.
+  "Anti-sniff decoy" (on for detours by default) keeps a relay that sniffs UDP
+  from redirecting such a node by the SNI of the masquerade. To get the
+  v2.25.19 behaviour, set VPN Settings → Core → WireGuard → "AWG masquerade"
+  to "Direct only".
 
-## ✨ Added
+## ✨ New
 
-- **Hold until failure, a third auto-select mode ([task 612](docs/spec/tasks/612-contract-1-1-113-failover.md)),**
-  next to Fastest and Load balance in the Direction editor, the auto node
-  editor and "Replace with a group": the fastest server at the moment of
-  choice is kept until it fails, and only it is probed each interval. The
-  Tolerance field hides in this mode; the list shows the group as `📌 [N]`.
-  New auto groups and Directions start in this mode.
-- **WireGuard/AmneziaWG peers on the node screen ([task 613](docs/spec/tasks/613-wg-peers-tailscale-path-health.md)).**
-  While the VPN is on, the details of a WG/AWG node list its peers: address,
-  handshake age, traffic and a verdict (`connected`, `no active session`,
-  `never connected`). Polling stops when the screen closes and never wakes a
-  sleeping node.
-- **The path to Tailscale devices ([task 613](docs/spec/tasks/613-wg-peers-tailscale-path-health.md)).**
-  The Network tab shows `direct <ip:port>`, `peer relay` or `relay <region>`
-  for each device, backend warnings on top, and no longer repeats the exit
-  device under Devices. The node row adds the path after `via <device>`.
-- **Errors (N) under the node list ([task 614](docs/spec/tasks/614-ui-parity-errors-journal-editor.md)).**
-  A red line counts error entries in the app and core logs since the log was
-  last opened (or since launch). A tap opens the Debug screen filtered to
-  errors and resets the count. The error SnackBar stays.
-- **Copy on a notification card ([task 614](docs/spec/tasks/614-ui-parity-errors-journal-editor.md)):**
-  code, title, What happened / Why / What you can do and params go to the
-  clipboard as plain text.
-- **The JSON editor folds blocks and searches ([task 614](docs/spec/tasks/614-ui-parity-errors-journal-editor.md)),**
-  and now backs more fields: a node's Source (JSON highlighted, a link or
-  WireGuard INI shown as plain text), DNS server, route rule, DNS rule,
-  subscription body and the folder's Edit server dialog
-  ([task 615](docs/spec/tasks/615-detour-badge-folder-editor-nodes-not-loaded.md)).
-  The config's Copy moved into the field's buttons.
-- **A WireGuard peer without an address is accepted when the node has a listen port**
-  (contract 1.1.109–1.1.110). The node waits for the peer to connect and
-  says so with an info note. Without both the address and the listen port, a
-  subscription node is dropped and a hand-written one is marked with an
-  error. Such a node cannot be copied as a link.
-- **Two more build-report codes:** a group's default server dropped because
-  it left the group (`group_default_dropped`), and nodes left out of a group
-  they dial through (`node_detour_through_group`, one entry per source and
-  group). Both show on the node's notifications; a subscription with such
-  nodes gets a badge in the subscription list
-  ([task 615](docs/spec/tasks/615-detour-badge-folder-editor-nodes-not-loaded.md)).
+- **Tunnel routes: a tunnel takes only its own networks ([task 718](docs/spec/tasks/718-tunnel-routes-preset.md)).**
+  A WireGuard / AWG, OpenVPN or OpenConnect node gets the switch "Only its
+  own networks" in its settings. With it the tunnel receives only the networks
+  it announces — WireGuard allowed IPs, routes pushed by the OpenVPN or
+  OpenConnect server — and works alongside the selected server; it does not
+  have to be chosen as a direction. Everything else follows the other rules.
+  For OpenVPN and OpenConnect the names the tunnel announces are resolved by
+  the tunnel's own DNS (the "DNS" variable of the preset). The "Tunnel routes"
+  preset is on by default and does nothing until the switch is set on a node.
+  A tunnel that announces the default route takes all traffic; the node page
+  warns about it.
+
+- **"AWG masquerade" setting ([task 720](docs/spec/tasks/720-awg-masquerade-setting.md)).**
+  VPN Settings → Core → WireGuard: "All paths" (default) sends the masquerade
+  packets of an AmneziaWG node before the handshake on every path; "Direct
+  only" sends them only when the node dials from the device's own socket, and
+  through another node a single handshake packet goes out.
 
 ## 🔄 Changed
 
-- **Custom User-Agent offers popular-client presets ([task 610](docs/spec/tasks/610-user-agent-presets.md))**
-  (Happ, v2RayTun, Streisand, Karing, v2rayNG, Hiddify, sing-box) for panels
-  that send full configs only to specific apps; the hint under the field now
-  says so.
-- **A hop chain's tag is editable ([task 609](docs/spec/tasks/609-chain-tag-editable.md)),**
-  like a node's: a Tag field with the emoji picker in the chain editor and
-  `tag` in Debug API PATCH. The chain keeps its place in the source list;
-  other chains, rules, final, detours and DNS servers that named the old tag
-  follow the new one.
-- **Node details show `type · transport · security` on one line ([task 614](docs/spec/tasks/614-ui-parity-errors-journal-editor.md)),**
-  Server on its own line; the values can be selected.
-- **A subscription without a cached body says so ([task 615](docs/spec/tasks/615-detour-badge-folder-editor-nodes-not-loaded.md)).**
-  When the body file is missing after a restart (a restored slot or backup,
-  a disabled subscription), the Nodes tab reads "Nodes are not loaded.
-  Update the subscription to see them" with an Update button instead of
-  "No nodes found", the node count in the list turns grey, and the app log
-  gets a warning with the expected cache path.
+- **"Anti-sniff decoy" names AWG.** The tooltip, the (i) hint and the
+  description of the QUIC section now say that the decoy also covers AWG
+  nodes whose masquerade imitates QUIC (`ip=quic`).
+- **"Direct" means a direct path through a group too.** For "AWG masquerade"
+  and "Anti-sniff decoy" a detour to a group (selector / urltest) whose
+  current choice is direct counts as direct; a group switched to a proxy
+  counts as a detour from the next dial.
 
 ## 🔧 Under the hood
 
-- Core `v1.14.2-lx.12` (from lx.11).
-- Contract 1.1.114 (from 1.1.108); numbers in an authored body are compared
-  by value, so `1420` and `1420.0` are the same.
+- **Core `v1.14.4-lx.31` → `v1.14.4-lx.32`.** The default of
+  `lx.awg_masquerade` is `all`; no new keys of the root `lx` block; the Java
+  surface and build tags are unchanged.
+- **Contract 1.1.160 → 1.1.162.** The node record field `own_routes` and the
+  `tunnel-routes` preset (1.1.161); the template variable `awg_masquerade`
+  (1.1.162, mobile only).
+- **F-Droid build watch ([task 719](docs/spec/tasks/719-fdroid-mr-watch.md)).**
+  A daily CI job checks the build of our merge request in fdroiddata and
+  reopens the issue when it fails.
+- Not verified on a device or emulator: the new core, "AWG masquerade" and
+  "Only its own networks".
 
 </details>
 
@@ -119,93 +83,57 @@ Errors (N) под списком узлов, Copy у карточек уведо
 
 ## ⚠️ Прочтите до обновления
 
-- **Ядро v1.14.2-lx.12 удалило `passive_check`; настройки Passive health check больше нет ([задача 611](docs/spec/tasks/611-drop-passive-check-kernel-lx12.md)).**
-  Конфиг с `urltest.passive_check` на этом ядре не стартует, поэтому
-  авто-группы больше не пишут ключ, а переключатель ушёл из Settings →
-  Optimization. Старый бэкап с этой настройкой импортируется без
-  предупреждения.
-- **Авто-группы Fastest один раз переходят в Hold until failure ([задача 612](docs/spec/tasks/612-contract-1-1-113-failover.md)).**
-  При первом запуске после обновления авто-группы и Направления в режиме
-  Fastest (`least_test`) переводятся в новый режим `failover`, если Passive
-  health check был включён или не задан. Если он был выключен, ничего не
-  меняется; группы Load balance не трогаются никогда. В этом режиме группа
-  держит сервер до его отказа и сама обратно на более быстрый не
-  переходит. Сменить сервер — выбрать вручную или запустить тест группы
-  руками; прежнее поведение — вернуть группе режим Fastest.
-- **Tailscale: два переключателя на вкладке Network ([задача 613](docs/spec/tasks/613-wg-peers-tailscale-path-health.md)).**
-  Advertise this device as exit node и Allow LAN access while using exit node
-  (активен только при выбранном exit node). Пишут в тело узла тем же путём,
-  что Save choice, и пересобирают конфиг. При сохранённом exit node
-  advertise можно только выключить. Блок есть там же, где Save choice: свой
-  сервер и член папки.
+- **AmneziaWG за другим узлом снова маскируется (ядро `v1.14.4-lx.32`, [задача 720](docs/spec/tasks/720-awg-masquerade-setting.md)).**
+  В v2.25.19 узел AWG, идущий через другой узел (`detour`), отправлял один
+  пакет рукопожатия без маскировочных пакетов (`ip=quic`, `i1`…). Дефолт ядра
+  возвращён: маскировка уходит на любом пути. «Anti-sniff decoy» (для detour
+  включён по умолчанию) не даёт релею, который сниффит UDP, перенаправить
+  такой узел по SNI маскировки. Поведение v2.25.19 возвращает VPN Settings →
+  Core → WireGuard → «AWG masquerade» → «Direct only».
 
-## ✨ Добавлено
+## ✨ Новое
 
-- **Hold until failure — третий режим автовыбора ([задача 612](docs/spec/tasks/612-contract-1-1-113-failover.md)),**
-  рядом с Fastest и Load balance в редакторе Направления, узла автовыбора и
-  в «Replace with a group»: самый быстрый на момент выбора сервер держится до
-  своего отказа, проба каждый interval идёт только к нему. Поле Tolerance в
-  этом режиме скрыто, в списке группа выглядит как `📌 [N]`. Новые
-  авто-группы и Направления создаются в этом режиме.
-- **Пиры WireGuard/AmneziaWG в окне узла ([задача 613](docs/spec/tasks/613-wg-peers-tailscale-path-health.md)).**
-  При включённом VPN окно WG/AWG-узла показывает пиров: адрес, возраст
-  хендшейка, трафик и вердикт (`connected`, `no active session`,
-  `never connected`). Опрос прекращается при закрытии экрана и не будит
-  спящий узел.
-- **Путь до устройств Tailscale ([задача 613](docs/spec/tasks/613-wg-peers-tailscale-path-health.md)).**
-  Вкладка Network показывает для каждого устройства `direct <ip:port>`,
-  `peer relay` или `relay <region>`, предупреждения бэкенда сверху и больше
-  не повторяет exit-устройство в Devices. Строка узла показывает путь после
-  `via <устройство>`.
-- **Errors (N) под списком узлов ([задача 614](docs/spec/tasks/614-ui-parity-errors-journal-editor.md)).**
-  Красная строка считает ошибки журналов приложения и ядра с последнего
-  открытия журнала (или с запуска). Тап открывает экран Debug с фильтром
-  ошибок и обнуляет счётчик. SnackBar ошибок остался.
-- **Copy у карточки уведомления ([задача 614](docs/spec/tasks/614-ui-parity-errors-journal-editor.md)):**
-  код, заголовок, разделы What happened / Why / What you can do и params
-  копируются в буфер обычным текстом.
-- **Редактор JSON сворачивает блоки и ищет по тексту ([задача 614](docs/spec/tasks/614-ui-parity-errors-journal-editor.md)),**
-  и на нём теперь больше полей: Source узла (JSON с подсветкой, ссылка или
-  WireGuard INI — обычным текстом), DNS-сервер, правило маршрута,
-  DNS-правило, тело подписки и диалог Edit server в папке
-  ([задача 615](docs/spec/tasks/615-detour-badge-folder-editor-nodes-not-loaded.md)).
-  Copy конфига переехал в кнопки поля.
-- **Пир WireGuard без адреса принимается, если у узла есть listen port**
-  (контракт 1.1.109–1.1.110). Узел ждёт входящего подключения и сообщает об
-  этом заметкой. Без адреса и без listen port узел подписки отбрасывается, а
-  свой помечается ошибкой. Ссылкой такой узел не копируется.
-- **Два новых кода отчёта сборки:** умолчание группы снято, потому что
-  сервер ушёл из группы (`group_default_dropped`), и узлы не взяты в группу,
-  через которую сами ходят (`node_detour_through_group`, одна запись на пару
-  источник × группа). Обе видны в уведомлениях узла; подписка с такими
-  узлами получает бейдж в списке подписок
-  ([задача 615](docs/spec/tasks/615-detour-badge-folder-editor-nodes-not-loaded.md)).
+- **Tunnel routes: туннель берёт только свои сети ([задача 718](docs/spec/tasks/718-tunnel-routes-preset.md)).**
+  У узла WireGuard / AWG, OpenVPN или OpenConnect в настройках появился
+  переключатель «Only its own networks». С ним туннель получает только сети,
+  которые сам объявляет — allowed IPs у WireGuard, маршруты, присланные
+  сервером OpenVPN или OpenConnect, — и работает рядом с выбранным сервером;
+  выбирать его Направлением не нужно. Всё остальное идёт по прочим правилам.
+  У OpenVPN и OpenConnect имена, которые объявляет туннель, резолвит DNS
+  самого туннеля (переменная «DNS» пресета). Пресет «Tunnel routes» включён
+  по умолчанию и ничего не делает, пока переключатель не поставлен на узле.
+  Туннель, объявляющий маршрут по умолчанию, забирает весь трафик; страница
+  узла об этом предупреждает.
+
+- **Настройка «AWG masquerade» ([задача 720](docs/spec/tasks/720-awg-masquerade-setting.md)).**
+  VPN Settings → Core → WireGuard: «All paths» (по умолчанию) — маскировочные
+  пакеты узла AmneziaWG уходят перед рукопожатием на любом пути; «Direct
+  only» — только когда узел звонит с собственного сокета устройства, а через
+  другой узел идёт один пакет рукопожатия.
 
 ## 🔄 Изменено
 
-- **В Custom User-Agent — пресеты популярных клиентов ([задача 610](docs/spec/tasks/610-user-agent-presets.md))**
-  (Happ, v2RayTun, Streisand, Karing, v2rayNG, Hiddify, sing-box) для панелей,
-  которые отдают полный конфиг только определённым приложениям; подсказка
-  под полем переписана.
-- **Тег цепочки хопов редактируется ([задача 609](docs/spec/tasks/609-chain-tag-editable.md)),**
-  как у узла: поле Tag с выбором эмодзи в редакторе цепочки и `tag` в
-  PATCH Debug API. Цепочка сохраняет место в списке источника; другие
-  цепочки, правила, final, detour и DNS-серверы, ссылавшиеся на старый тег,
-  переходят на новый.
-- **Окно узла: `type · transport · security` одной строкой ([задача 614](docs/spec/tasks/614-ui-parity-errors-journal-editor.md)),**
-  Server отдельной строкой; значения можно выделять.
-- **Подписка без тела в кэше сообщает об этом ([задача 615](docs/spec/tasks/615-detour-badge-folder-editor-nodes-not-loaded.md)).**
-  Если файла с телом после перезапуска нет (восстановленный слот или бэкап,
-  выключенная подписка), вкладка Nodes пишет «Nodes are not loaded. Update
-  the subscription to see them» с кнопкой Update вместо «No nodes found»,
-  счётчик узлов в списке серый, а в журнал приложения пишется
-  предупреждение с ожидаемым путём кэша.
+- **«Anti-sniff decoy» называет AWG.** Тултип, подсказка (i) и описание
+  секции QUIC теперь говорят, что обманка действует и на узлы AWG с
+  маскировкой под QUIC (`ip=quic`).
+- **«Direct» — это и прямой путь через группу.** Для «AWG masquerade» и
+  «Anti-sniff decoy» detour на группу (selector / urltest), в которой сейчас
+  выбран direct, считается прямым путём; группа, переключённая на прокси,
+  считается detour со следующего дозвона.
 
 ## 🔧 Под капотом
 
-- Ядро `v1.14.2-lx.12` (было lx.11).
-- Контракт 1.1.114 (был 1.1.108); числа в авторском теле сравниваются по
-  величине, `1420` и `1420.0` — одно и то же.
+- **Ядро `v1.14.4-lx.31` → `v1.14.4-lx.32`.** Дефолт `lx.awg_masquerade` —
+  `all`; новых ключей корневого блока `lx` нет; Java-интерфейс и build-теги
+  без изменений.
+- **Контракт 1.1.160 → 1.1.162.** Поле записи узла `own_routes` и пресет
+  `tunnel-routes` (1.1.161); переменная шаблона `awg_masquerade` (1.1.162,
+  только мобильная сторона).
+- **Сторож сборки F-Droid ([задача 719](docs/spec/tasks/719-fdroid-mr-watch.md)).**
+  Суточная джоба CI проверяет сборку нашего merge request в fdroiddata и
+  переоткрывает issue, если она упала.
+- Не проверено на устройстве и эмуляторе: новое ядро, «AWG masquerade» и
+  «Only its own networks».
 
 </details>
 
@@ -214,7 +142,7 @@ Errors (N) под списком узлов, Copy у карточек уведо
 ## Install / Установка
 
 ```bash
-adb install -r LxBox-v2.25.11-arm64-v8a.apk
+adb install -r LxBox-v2.25.20-arm64-v8a.apk
 ```
 
 Без uninstall! Поверх существующей установки. Настройки и подписки сохранятся.
@@ -224,4 +152,4 @@ are preserved.
 
 ---
 
-Previous release / Предыдущий релиз: [v2.25.10](docs/releases/v2.25.10.md).
+Previous release / Предыдущий релиз: [v2.25.19](docs/releases/v2.25.19.md).

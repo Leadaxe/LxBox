@@ -182,6 +182,7 @@ class DnsAspectRow {
     this.onToggle,
     this.onRemove,
     this.note,
+    this.preview,
   });
 
   /// Эмитимое DNS-rule тело аспекта — превью-подзаголовок + диалог по тапу.
@@ -196,6 +197,10 @@ class DnsAspectRow {
   /// снять галку). Убрав ОБА аспекта, правило исчезает из DNS-секции.
   final VoidCallback? onRemove;
   final String? note;
+
+  /// §683 — свой текст превью вместо [formatRulePreview] (Fixed IP: одна
+  /// строка на два тела A/AAAA).
+  final String? preview;
 }
 
 /// §257 — объединённый блок DNS-аспектов ОДНОГО пользовательского правила
@@ -210,11 +215,15 @@ class DnsRuleAspectsTile extends StatelessWidget {
     required this.title,
     this.serverRow,
     this.forceIpv4Row,
+    this.fixedIpRow,
   });
 
   final String title;
   final DnsAspectRow? serverRow;
   final DnsAspectRow? forceIpv4Row;
+
+  /// §683 — Answer = Fixed IP (`predefined` с адресами правила).
+  final DnsAspectRow? fixedIpRow;
 
   @override
   Widget build(BuildContext context) {
@@ -240,6 +249,8 @@ class DnsRuleAspectsTile extends StatelessWidget {
           ),
           if (serverRow != null)
             _aspectRow(context, getLocalText.s("Server"), serverRow!),
+          if (fixedIpRow != null)
+            _aspectRow(context, getLocalText.s("Fixed IP"), fixedIpRow!),
           if (forceIpv4Row != null)
             _aspectRow(context, getLocalText.s("Force IPv4 (drop AAAA)"), forceIpv4Row!),
           const SizedBox(height: 4),
@@ -250,7 +261,7 @@ class DnsRuleAspectsTile extends StatelessWidget {
 
   Widget _aspectRow(BuildContext context, String label, DnsAspectRow row) {
     final cs = Theme.of(context).colorScheme;
-    final preview = formatRulePreview(row.body, kind: 'rule');
+    final preview = row.preview ?? formatRulePreview(row.body, kind: 'rule');
     final subtitle = (row.note != null && row.note!.isNotEmpty)
         ? '$preview · ${row.note}'
         : preview;

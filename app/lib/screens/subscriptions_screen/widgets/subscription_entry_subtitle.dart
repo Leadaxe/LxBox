@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../controllers/subscription_controller.dart';
 import '../../../models/node_warning.dart';
 import '../../../models/server_list.dart';
+import '../../../models/ui_msg.dart';
 import '../../../services/subscription/input_helpers.dart';
 import '../../../services/l10n/locale_controller.dart';
 import '../../subscription_detail_screen/widgets/node_warning_row.dart';
@@ -65,6 +66,12 @@ Widget? buildSubscriptionEntrySubtitle(
     statusText =
         entry.nodeCount > 0 ? getLocalText.plural("%d nodes", entry.nodeCount) : '';
   }
+  // Бюджет узлов — выдача обрезана по доле подписки: «N of M nodes».
+  final cut = entry.budgetCut;
+  if (cut != null && (entry.status == null || entry.status is SubStatusNodes)) {
+    statusText =
+        getLocalText.plural("%2\$d of %1\$d nodes", cut.total, cut.kept);
+  }
   if (statusText.isNotEmpty) {
     // §615 — узлы не загружены (тела в кэше нет): число — с прошлого
     // обновления, показываем его серым как устаревшее.
@@ -84,12 +91,12 @@ Widget? buildSubscriptionEntrySubtitle(
       parts.add(Icon(Icons.insert_drive_file_outlined, size: 12, color: muted));
       parts.add(Text(getLocalText.s("file"), style: textStyle));
     } else {
-      final intervalH = entry.updateIntervalHours;
+      final intervalH = entry.effectiveIntervalHours; // §685
       if (intervalH > 0) {
         parts.add(Icon(Icons.sync, size: 12, color: muted));
         parts.add(Text(_compactHours(intervalH), style: textStyle));
       } else {
-        // §129 — авто-обновление выключено (-1 «don't» / 0 «respect server»).
+        // §129 — авто-обновление выключено (-1 «don't» / сервер прислал 0).
         parts.add(Icon(Icons.sync_disabled, size: 12, color: muted));
       }
     }
@@ -121,6 +128,21 @@ Widget? buildSubscriptionEntrySubtitle(
         getLocalText.plural("%d dropped", dropped),
         style: textStyle,
       ));
+    }
+
+    // Бюджет узлов — значок обрезки; доля 0 из-за ручных серверов
+    // объясняется словами.
+    if (cut != null) {
+      parts.add(Tooltip(
+        key: const ValueKey('entry-node-budget-cut'),
+        message: getLocalText.s("Node budget in App settings"),
+        child: Icon(Icons.warning_amber_rounded,
+            size: 12, color: entry.enabled ? scheme.error : muted),
+      ));
+      if (cut.kept == 0 && subController.nodeBudgetUsedByManual) {
+        parts.add(Text(getLocalText.s("Budget used by manual servers"),
+            style: textStyle));
+      }
     }
   }
 

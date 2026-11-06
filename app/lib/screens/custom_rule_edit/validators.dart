@@ -35,6 +35,19 @@ bool isValidDomainSuffix(String v) => _domainSuffixRegex.hasMatch(v);
 /// substring search, поэтому пробелы внутри ломают match.
 bool isValidKeyword(String v) => v.isNotEmpty && !v.contains(RegExp(r'\s'));
 
+/// §712 — регулярка `package_name_regex` / `domain_regex`. Ядро компилирует
+/// Go RE2; Dart `RegExp` шире (lookaround, backrefs), но явный мусор
+/// (незакрытая скобка, висячий `*`) ловит одинаково.
+bool isValidRegex(String v) {
+  if (v.isEmpty || v.contains('\n')) return false;
+  try {
+    RegExp(v);
+    return true;
+  } on FormatException {
+    return false;
+  }
+}
+
 /// CIDR — IPv4 (`1.2.3.4/24`) или IPv6 (`::1/128`). Mask диапазоны
 /// `0..32` / `0..128`. Octets `0..255` для v4.
 bool isValidCidr(String v) {

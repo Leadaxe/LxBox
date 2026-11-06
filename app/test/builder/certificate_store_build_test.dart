@@ -34,11 +34,6 @@ void main() {
     return (res.config['certificate'] as Map?)?['store'];
   }
 
-  test('шаблон объявляет certificate_store с умолчанием system', () {
-    final v = template.vars.firstWhere((v) => v.name == 'certificate_store');
-    expect(v.defaultValue, 'system');
-  });
-
   test('без переменной — system', () async {
     expect(await storeOf(const {}), 'system');
   });

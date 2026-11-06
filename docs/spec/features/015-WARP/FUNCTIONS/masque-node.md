@@ -23,7 +23,7 @@ different country. The node is a sing-box-lx core `masque` outbound with the
 
 | Parameter | Core key | Values | Default |
 |-----------|----------|--------|---------|
-| Transport | `vhttp` | Auto (h3 → h2) · HTTP/3 (QUIC) · HTTP/2 (TCP) | Auto |
+| Transport | `vhttp` | Auto (h3 → h2) · HTTP/3 (QUIC) · HTTP/2 (TCP) | Auto in the wizard; `h3` for a link without `vhttp`, the generator's h3 node and the Debug API |
 | Endpoint IP | `server` | IP; presets per transport; 🎲 | empty = the registration server (shown as a hint) |
 | Port | `server_port` | the transport's port set + input | the first port of the set |
 | SNI | `tls.server_name` | domain; MASQUE SNI pool; 🎲 | random from the pool |

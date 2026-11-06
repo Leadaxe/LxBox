@@ -388,34 +388,6 @@ void main() {
     });
   });
 
-  group('CustomRule.summary', () {
-    // summary рендерит через getLocalText (в тестах — fallback на английский
-    // ключ: dict не загружен, плюрал печатается из самого ключа).
-    test('пустой inline → empty', () {
-      expect(CustomRuleInline(name: 'x').summary(), '');
-    });
-
-    test('inline с полями → разделённый dot', () {
-      final s = CustomRuleInline(
-        name: 'x',
-        domainSuffixes: ['a', 'b'],
-        ports: ['443'],
-        protocols: ['tls'],
-      ).summary();
-      expect(s, contains('2 suffixes'));
-      expect(s, contains('1 port'));
-      expect(s, contains('1 proto'));
-    });
-
-    test('srs → хост из URL', () {
-      final s = CustomRuleSrs(
-        name: 'x',
-        srsUrl: 'https://rules.example.com/geo.srs',
-      ).summary();
-      expect(s, 'SRS: rules.example.com');
-    });
-  });
-
   // §051 / §030 new_fields — wifi_ssid / wifi_bssid.
   //
   // ⚠ С sing-box 1.14 wifi_* эмитятся в **headless rule_set** (раньше под 1.12
@@ -852,13 +824,6 @@ void main() {
       expect(restored.wifiSsids, ['Office']);
       expect(restored.wifiBssids, ['11:22:33:44:55:66']);
     });
-
-    test('inline: copyWith с wifi-полями', () {
-      final r = CustomRuleInline(name: 'X');
-      final updated = r.copyWith(wifiSsids: ['Home']);
-      expect(updated.wifiSsids, ['Home']);
-      expect(updated.wifiBssids, isEmpty);
-    });
   });
 
   // §225 (#17) — raw-JSON правило.
@@ -1201,6 +1166,162 @@ void main() {
         isFalse,
       );
       expect(CustomRuleSrs(name: 'C').resolveEligible, isTrue);
+    });
+  });
+
+  group('§694 network_type / network_is_expensive', () {
+    test('inline: в headless rule_set рядом с доменом', () {
+      final reg = RuleSetRegistry();
+      applyCustomRules(reg, [
+        CustomRuleInline(
+          name: 'Video on cellular',
+          domains: ['video.example'],
+          networkTypes: ['cellular'],
+          networkIsExpensive: true,
+          outbound: kOutboundReject,
+        ),
+      ]);
+      expect(reg.getRuleSets().first['rules'], [
+        {
+          'domain': ['video.example'],
+          'network_type': ['cellular'],
+          'network_is_expensive': true,
+        },
+      ]);
+      expect(reg.getRules(), [
+        {'rule_set': 'Video on cellular', 'action': 'reject'},
+      ]);
+    });
+
+    test('inline: только тип сети — правило не пустое', () {
+      final reg = RuleSetRegistry();
+      applyCustomRules(reg, [
+        CustomRuleInline(
+          name: 'All on cellular',
+          networkTypes: ['cellular'],
+          outbound: 'vpn-1',
+        ),
+      ]);
+      expect(reg.getRuleSets().first['rules'], [
+        {'network_type': ['cellular']},
+      ]);
+      expect(reg.getRules().single['outbound'], 'vpn-1');
+    });
+
+    test('srs: на routing-rule рядом с rule_set', () {
+      final reg = RuleSetRegistry();
+      final srs = CustomRuleSrs(
+        name: 'geo',
+        srsUrl: 'https://e/geo.srs',
+        networkTypes: ['wifi'],
+        networkIsExpensive: true,
+        outbound: 'direct-out',
+      );
+      applyCustomRules(reg, [srs], srsPaths: {srs.id: '/tmp/geo.srs'});
+      expect(reg.getRules(), [
+        {
+          'rule_set': 'geo',
+          'network_type': ['wifi'],
+          'network_is_expensive': true,
+          'outbound': 'direct-out',
+        },
+      ]);
+    });
+  });
+
+  // §712 — package_name_regex / domain_regex.
+  group('§712 package_name_regex / domain_regex', () {
+    const dnsOn = RuleDns(enabled: true, serverTag: 'google_udp');
+
+    test('inline: оба ключа в headless rule_set', () {
+      final reg = RuleSetRegistry();
+      applyCustomRules(reg, [
+        CustomRuleInline(
+          name: 'Oplus',
+          packageRegexes: [r'^com\.oplus\.'],
+          domainRegexes: [r'(^|\.)example\.com$'],
+          outbound: 'vpn-1',
+        ),
+      ]);
+      expect(reg.getRuleSets().first['rules'], [
+        {
+          'domain_regex': [r'(^|\.)example\.com$'],
+          'package_name_regex': [r'^com\.oplus\.'],
+        },
+      ]);
+      expect(reg.getRules().single,
+          {'rule_set': 'Oplus', 'outbound': 'vpn-1'});
+    });
+
+    test('inline: только регулярка пакета — DNS-способно, зеркало на тот же rule_set',
+        () {
+      final rule = CustomRuleInline(
+        name: 'Oplus',
+        packageRegexes: [r'^com\.oplus\.'],
+        outbound: 'vpn-1',
+        dns: dnsOn,
+      );
+      expect(rule.dnsLayerEligible, true);
+      expect(rule.dnsMirrorActive, true);
+      expect(rule.summary(), isNotEmpty);
+      final reg = RuleSetRegistry();
+      final result = applyAllCustomRules(reg, [rule], const []);
+      expect(reg.getRuleSets().single['rules'], [
+        {'package_name_regex': [r'^com\.oplus\.']},
+      ]);
+      expect(result.dnsMirrors.single.body['rule_set'], 'Oplus');
+    });
+
+    test('inline: domain regex делает правило resolve-способным', () {
+      expect(
+        CustomRuleInline(name: 'r', domainRegexes: ['^a']).resolveEligible,
+        true,
+      );
+    });
+
+    test('srs: package_name_regex на routing-rule и в DNS-зеркале', () {
+      final reg = RuleSetRegistry();
+      final srs = CustomRuleSrs(
+        name: 'geo',
+        srsUrl: 'https://e/geo.srs',
+        packageRegexes: [r'^com\.oplus\.'],
+        outbound: 'vpn-1',
+        dns: dnsOn,
+      );
+      final result = applyAllCustomRules(reg, [srs], const [],
+          srsPaths: {srs.id: '/tmp/geo.srs'});
+      expect(reg.getRules().single, {
+        'rule_set': 'geo',
+        'package_name_regex': [r'^com\.oplus\.'],
+        'outbound': 'vpn-1',
+      });
+      expect(result.dnsMirrors.single.body['package_name_regex'],
+          [r'^com\.oplus\.']);
+    });
+
+    test('кодек: round-trip обоих ключей, ключи sing-box в теле записи', () {
+      final src = CustomRuleInline(
+        id: 'id-re',
+        name: 'Re',
+        packageRegexes: [r'^com\.oplus\.', r'^com\.coloros\.'],
+        domainRegexes: [r'\.example\.com$'],
+        outbound: 'direct-out',
+      );
+      final rec = ruleToRecord(src);
+      final body = rec['body'] as Map;
+      expect(body['package_name_regex'],
+          [r'^com\.oplus\.', r'^com\.coloros\.']);
+      expect(body['domain_regex'], [r'\.example\.com$']);
+      final back = _storageRoundTrip(src);
+      expect(back, src);
+      final srs = CustomRuleSrs(
+        id: 'id-srs',
+        name: 'S',
+        srsUrl: 'https://e/x.srs',
+        packageRegexes: ['^a'],
+        outbound: 'vpn-1',
+      );
+      expect(_storageRoundTrip(srs), srs);
     });
   });
 }

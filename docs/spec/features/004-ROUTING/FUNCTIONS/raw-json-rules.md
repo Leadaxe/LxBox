@@ -45,7 +45,9 @@ order.
 - **Build:** an empty body, broken JSON, a scalar — the rule is skipped with
   a warning, the rest of the config is built. An array of objects (old
   records) is laid out into several rules in a row, non-objects
-  are dropped.
+  are dropped. An array reaches storage only through import or old records;
+  the editor stays object-only — both contracts are kept (audit 591,
+  2026-10-13).
 - Comment keys `//…` are removed recursively with a warning — the core
   rejects unknown fields; a rule consisting only of comments
   is not emitted. Other unknown fields are not touched — the core will reject them.

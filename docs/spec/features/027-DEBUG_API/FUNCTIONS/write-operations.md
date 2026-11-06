@@ -52,7 +52,7 @@ top-level `dropped[]` with the parse reasons.
 |--------|------|------|
 | 400 | `bad_request` | missing or wrong query, malformed JSON, wrong field type, a validation finding (chain `tooFewHops`, an immutable Direction `tag`, a chain `tagEmpty`/`tagTaken`, a bad regex), unsupported method |
 | 404 | `not_found` | unknown sub-path, id, tag or index |
-| 409 | `conflict` | a precondition is missing: tunnel down, a guard run in flight, `vpn-1` disable or delete, a taken or reserved tag, a protected `debug_*` var, rebuild while Lock config is on |
+| 409 | `conflict` | a precondition is missing: tunnel down, a guard run in flight, `vpn-1` disable or delete, a taken or reserved tag, a protected `debug_*` var, rebuild while Lock config is on, a Direction order or `include` that puts an "Other directions" reference below its Direction (the body adds `conflicts`, [673](../../../tasks/673-directions-reorder-in-ui.md)) |
 | 413 | `payload_too_large` | body over 1 MiB |
 | 502 | `upstream_error` | the core, the native side or the config save refused |
 | 504 | `timeout` | the handler did not finish in 30 s |
@@ -87,10 +87,15 @@ top-level `dropped[]` with the parse reasons.
   Lock config on, the explicit rebuild route answers 409 and the flag's
   rebuild silently returns `rebuilt:false`.
 - **`PUT /config` is temporary unless pinned.** It replaces the saved config
-  byte for byte (validated only as a JSON object; the core reports semantic
+  byte for byte (validated only as a strict JSON object — no comments or
+  trailing commas, unlike the config editor, which accepts JSON5,
+  [019 · P2](../../019-CONFIG_EDITOR/FEATURE.md#promises); kept so by design,
+  audit 591, 2026-10-13; the core reports semantic
   errors on reload) and the next rebuild from any source wipes it; `PUT
   /settings/config_locked {"locked":true}` pins it —
-  [019-CONFIG_EDITOR](../../019-CONFIG_EDITOR/FUNCTIONS/config-pin.md).
+  [019-CONFIG_EDITOR](../../019-CONFIG_EDITOR/FUNCTIONS/config-pin.md). The
+  pin's promise and its witness (`test/services/debug/config_locked_rebuild_gate_test.dart`)
+  belong to 019; this feature only lists the route.
 - **Positional collections return a fresh snapshot.** Folder members and
   import rules have no ids; every write answers with the whole collection and
   the next call must take indexes from it.

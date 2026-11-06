@@ -103,9 +103,13 @@ void main() {
   "network": "udp",
   "username": "test-user",
   "password": "test-pass",
-  "detour": "warp-out",
   "tls": { "certificate_path": "/sdcard/certs/x.crt" }
 }''';
+
+  // Контракт 1.1.118 (D-128) — висячий `detour` тела = fail-closed: запись
+  // отбраковывается при разборе, узел не создаётся.
+  final bodyWithDetour = jsonEncode(
+      {...(jsonDecode(body) as Map<String, dynamic>), 'detour': 'warp-out'});
 
   const commented = '''
 {
@@ -179,6 +183,10 @@ void main() {
     expect(built(s)['x'], {'y': 1});
   });
 
+  test('тело с висячим detour отбраковывается (D-128)', () {
+    expect(parseAll(decode(bodyWithDetour), own: true), isEmpty);
+  });
+
   test('проба строит тело узла незнакомого типа', () {
     final nodes = parseAll(decode(body), own: true);
     final probe = buildProbeConfig(nodes);
@@ -226,6 +234,22 @@ void main() {
     expect(src['password'], 'https://not-a-comment');
   });
 
+  // §686 п.11 — `#` до конца строки снимается, как `//`; в строке остаётся.
+  test('вход с #-комментариями принимается, # в строке цел', () async {
+    final c = SubscriptionController();
+    await c.addFromInput(commented
+        .replaceFirst('// United States Central', '# United States Central')
+        .replaceFirst('"test-user",', '"test-user", # user')
+        .replaceFirst('https://not-a-comment', 'pass#word'));
+    expect(c.lastError, isNull);
+    expect(c.lastCommentsRemoved, isTrue);
+    final list = c.entries.single.list as UserServer;
+    expect(list.rawBody, isNot(contains('United States')));
+    expect(list.rawBody, isNot(contains('# user')));
+    final src = jsonDecode(list.nodes.single.rawSource) as Map;
+    expect(src['password'], 'pass#word');
+  });
+
   test('без комментариев флаг не ставится', () async {
     final c = SubscriptionController();
     await c.addFromInput(body);
@@ -236,6 +260,8 @@ void main() {
     expect(uncommentedJson('{"a": "//x"}'), isNull);
     expect(uncommentedJson('vless://u@h:1#t // x'), isNull);
     expect(uncommentedJson('{"a": 1 // c\n}'), '{"a": 1\n}');
+    expect(uncommentedJson('{"a": "#x"}'), isNull);
+    expect(uncommentedJson('{"a": 1 # c\n}'), '{"a": 1\n}');
   });
 
   test('узел подписки незнакомого типа по-прежнему не создаётся', () {

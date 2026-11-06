@@ -218,8 +218,8 @@ void main() {
               enabled: true, tag: 'yandex_udp', presetId: 'ru-direct'));
     });
 
-    test('merge Server lists: источники дописываются по id, цепочки архива '
-        'заменяют цепочки хранения (§524)', () async {
+    test('merge Server lists: источники дописываются по id, цепочки — по '
+        'тегу (§524, §633)', () async {
       await SettingsStorage.saveServerLists([
         SubscriptionServers(
           id: 'sub-1',
@@ -238,15 +238,18 @@ void main() {
       final result = await svc.applyImport(contents,
           merge: true, include: {BackupCategory.serverLists});
       expect(result.errors, isEmpty);
-      expect(result.serverListsApplied, 2);
+      // §633 — два новых источника + две новые цепочки; `sub-1` уже есть.
+      expect(result.serverListsApplied, 4);
+      expect(result.mergeKept, 1);
 
       final lists = await SettingsStorage.getServerLists();
       expect(lists.map((l) => l.id), ['sub-1', 'srv-1', 'fold-1']);
       expect(lists.first.name, 'Local copy',
           reason: 'id уже есть — запись хранения не заменяется');
-      // §524 — цепочки идут той же галкой: архив с цепочками заменяет их.
+      // §524 — цепочки идут той же галкой; §633 — дописываются по тегу,
+      // цепочка получателя остаётся.
       expect((await SettingsStorage.getChains()).map((c) => c.tag),
-          ['first', 'second']);
+          ['mine', 'first', 'second']);
     });
 
     // §524 — обратная совместимость ЧТЕНИЯ: старый архив экспортировали

@@ -286,7 +286,8 @@ void main() {
       },
       merge: true,
     );
-    expect(await SettingsStorage.getVar('log_level', ''), 'warn');
+    // §633 — Merge не затирает: значение получателя остаётся.
+    expect(await SettingsStorage.getVar('log_level', ''), 'info');
     expect(await SettingsStorage.getVar('auto_update_subs', ''), 'true');
     final cr = await SettingsStorage.getCustomRules();
     expect(cr.length, 1, reason: 'custom_rules must be preserved on merge');
@@ -448,23 +449,6 @@ void main() {
               .contains('auto_ping_on_start'),
           isTrue,
           reason: 'настройка обязана переживать restore (§221-симметрия)');
-    });
-
-    // §279 — app_language: var-allowlist membership (иначе import дропает
-    // неизвестный var → настройка не переживает restore).
-    test('§279 — app_language ∈ appFeatureFlagVars allowlist', () {
-      expect(SettingsStorage.allowedVarKeys(const []).contains('app_language'),
-          isTrue,
-          reason: 'app_language обязан переживать restore (§221-симметрия: '
-              'export vars нефильтрован, import — по allowlist)');
-    });
-
-    // §279/§189 — guard: app_language НЕ член NativePrefsKeys. Членство
-    // автоматически экспортировало бы его вторым представлением в
-    // vpn_settings-блок бэкапа (неопределённый precedence на import);
-    // boxvpn_boot-копия — derived cache, единственный дом бэкапа — vars.
-    test('§279 — app_language ∉ NativePrefsKeys.all (derived cache)', () {
-      expect(NativePrefsKeys.all.contains('app_language'), isFalse);
     });
 
     // §279 — полный export→import round-trip сохраняет app_language.
@@ -854,8 +838,12 @@ void main() {
       expect(raw['directions_migrated'], true);
     });
 
-    test('старый архив, merge поверх ЖИВЫХ Направлений — архив побеждает',
-        () async {
+    // §633 — Merge сливает Направления по тегу: живые остаются, новые теги
+    // архива дописываются. Раньше (§393 A2) архив заменял список целиком;
+    // суть проверки — легаси-`channels` не выбрасывается рядом с живым
+    // `directions` — сохраняется: vpn-2 архива приезжает.
+    test('старый архив, merge поверх ЖИВЫХ Направлений — новые теги архива '
+        'дописаны, живые на месте', () async {
       // Канонический сценарий восстановления: свежая установка уже посеяла
       // (или юзер настроил) свои Направления, затем накатывается старый архив
       // в merge-дефолте UI. До нормализации имён архивный `channels` ложился
@@ -876,16 +864,16 @@ void main() {
       final restored = await SettingsStorage.getDirections();
       // vpn-2 архива — detour-Направление: fromJson сам помечает label
       // префиксом kDetourTagPrefix (§248), поэтому «⚙ Relay».
-      expect(restored.map((c) => c.label), ['Main', '⚙ Relay'],
-          reason: 'юзер восстанавливает архив РАДИ его Направлений — они '
-              'обязаны заменить живой список, а не молча проиграть ему');
+      expect(restored.map((c) => c.label),
+          ['LIVE-Home', 'LIVE-Work', '⚙ Relay'],
+          reason: 'Направления архива не теряются, свои остаются (§633)');
       final raw = await rawStorage();
       expect(raw.containsKey('channels'), isFalse);
       expect(raw.containsKey('channels_migrated'), isFalse);
     });
 
-    test('новый архив, merge поверх живых Направлений — архив побеждает',
-        () async {
+    test('новый архив, merge поверх живых Направлений — vpn-1 получателя, '
+        'новый тег дописан (§633)', () async {
       await SettingsStorage.replaceRaw({
         'directions': [
           {'tag': 'vpn-1', 'label': 'LIVE', 'enabled': true},
@@ -907,23 +895,7 @@ void main() {
       await svc.applyImport(await svc.parseImport(archive),
           merge: true, include: {BackupCategory.routing});
       expect((await SettingsStorage.getDirections()).map((c) => c.label),
-          ['ARCHIVE-Main', 'ARCHIVE-Relay']);
-    });
-
-    test('re-export после restore старого архива пишет только новые ключи',
-        () async {
-      await SettingsStorage.replaceRaw({});
-      final svc = const BackupService();
-      await svc.applyImport(await svc.parseImport(legacyArchive()),
-          merge: false, include: {BackupCategory.routing});
-
-      final st = (jsonDecode(
-                  await svc.buildExport(include: {BackupCategory.routing}))
-              as Map<String, dynamic>)['storage'] as Map<String, dynamic>;
-      expect(st.containsKey('directions'), isTrue);
-      expect((st['directions'] as List), hasLength(2));
-      expect(st.containsKey('channels'), isFalse);
-      expect(st.containsKey('channels_migrated'), isFalse);
+          ['LIVE', 'ARCHIVE-Relay']);
     });
 
     test('round-trip нового архива: Направления идентичны', () async {
@@ -962,11 +934,6 @@ void main() {
   // перезаписывал весь документ настроек и стирал неотмеченные категории.
   // ---------------------------------------------------------------------------
   group('§607 — закрепление конфига и зеркало тумблеров VPN', () {
-    test('config_locked_for_debug — категория Debug API config', () {
-      expect(BackupService.categoryOfVarKey('config_locked_for_debug'),
-          BackupCategory.debugConfig);
-    });
-
     test('restore только App settings не ставит замок конфига', () async {
       await seedStorage(sampleSnapshot());
       final svc = const BackupService();

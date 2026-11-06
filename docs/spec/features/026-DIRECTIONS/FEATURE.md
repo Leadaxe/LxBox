@@ -64,8 +64,7 @@ no detour layers, no auto twins.
 - **P5. A source prefix change follows into the filters.** Literal occurrences of the old prefix
   in Node filter and Default are rewritten in storage; an occurrence inside a regex construct
   is left with a warning. **Witness:** units "a literal occurrence: the filter is rewritten IN
-  STORAGE", "a metachar construct: the filter is NOT touched, a warning is returned", "^RU: →
-  ^DE: matches the display tag of the new prefix". **Mutation:** raw substring replace — `R.`
+  STORAGE", "a metachar construct: the filter is NOT touched, a warning is returned". **Mutation:** raw substring replace — `R.`
   gets rewritten too.
 - **P6. A stored Direction survives a round-trip.** Missing keys get defaults, garbage in
   `include` is dropped on read, an empty `include` is not written. **Witness:** units "full
@@ -124,12 +123,15 @@ no detour layers, no auto twins.
   **Witness:** units "a real Direction is selected — that Direction's list", "no real
   Directions — one pseudo-direction", "VPN off — NETWORKS is not shown"; the `route.final`
   fallback — `no witness`. **Mutation:** keep the vanished tag — an empty list.
-- **P17. Breaking connections on switch — only by the toggle.** With "Interrupt connections on
-  switch" on, after a node is selected the live connections of that Direction are closed; by
-  default — not. **Witness:** units "switchNode с Interrupt=on закрывает только живые
-  соединения переключаемой группы, не трогая другую", "switchNode с Interrupt=off не
-  закрывает ничего" — **покрыто 2026-09-30:** `test/controllers/interrupt_on_switch_test.dart`.
-  **Mutation:** ignore the toggle — always or never close.
+- **P17. Breaking connections on switch — by the Direction's flag, done by the core.** With the
+  Direction flag "Interrupt connections on switch" (`interrupt_exist_connections`) on — the
+  default — the core closes the live connections of that Direction on any selection change: a
+  tap on the home screen, Quick connect, automation, the Debug API; connections of other groups
+  stay. With the flag off they live on to the old node. The application closes nothing itself.
+  **Witness:** outside the application — the core (SPEC 064 of sing-box-lx, in the application
+  since 2.20.9), checked in the field on v1, 2026-08-13; the application's unit
+  `interrupt_on_switch_test.dart` was removed on 2026-11-01 together with the global toggle.
+  **Mutation:** emit the flag `false` regardless of the Direction — nothing breaks on switch.
 - **P18. A detour Direction is a permission, not a role.** In the detour picker the Directions
   section contains only enabled Directions with "Use as detour"; they also remain a legitimate
   target of rules and `route.final`; `vpn-1` is never a detour Direction, neither via the UI
@@ -180,7 +182,7 @@ Directions tab, in the editor and on the home screen; Debug API `/directions`; a
 
 **Outputs:** `outbounds[type=selector]` and `outbounds[type=urltest]` per Direction,
 `route.final`; build warnings and the "Directions without nodes" snackbar; the target pickers of
-rules, presets, DNS and detour; `SelectOutbound` and `CloseConnection` calls; one notification
+rules, presets, DNS and detour; the `SelectOutbound` call; one notification
 with the healed counters; the Debug API `healed` body.
 
 ## Who sees what
@@ -220,13 +222,22 @@ config build: reserve tags ─► filter (P12) ─► minus chains through itsel
       ─► empty → [block, direct-out] (P8) ─► default (P13) ─► twin (P11, P14, P21)
       ─► route.final (P9) ─► pre-start check
       ▼
-core groups ─► home screen dropdown (P16) ─► SelectOutbound (P15) ─► CloseConnection (P17)
+core groups ─► home screen dropdown (P16) ─► SelectOutbound (P15) ─► core interrupt (P17)
 ```
 
 ## Rules and guarantees
 
 - Directions are emitted and scoped in list order: "Other directions" may name only Directions
-  above; reordering is a Debug API operation and heals nothing.
+  above. This is a UX rule (owner decision 2026-10-23): the order shows who may include whom
+  and rules out cycles by construction; the core does not need it, it resolves outbound
+  dependencies itself.
+- The order is changed by drag on the Directions tab or by Debug API `POST /directions/reorder`
+  — one bulk write of the list, `vpn-1` movable too; reordering heals nothing. Neither path
+  breaks an existing reference: the tab tints the forbidden zones during a drag and ignores a
+  drop there with a notice, the Debug API answers 409 with the violated pairs; an `include`
+  in `POST`/`PATCH` naming a Direction not above gets the same 409
+  ([673](../../tasks/673-directions-reorder-in-ui.md)). A reference pointing down that comes
+  from an old backup is dropped by the build with a warning, and the config still builds.
 - Every heal is one storage write plus the in-memory mirror; a bulk replace of the list (tab,
   reorder) is the only heal-free path, by design.
 - The selection inside a selector is not stored by the app; the core's
@@ -244,9 +255,10 @@ core groups ─► home screen dropdown (P16) ─► SelectOutbound (P15) ─►
   [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.md); measurement —
   [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.md); the build pipeline and the pre-start check —
   [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.md).
-- No UI reordering of Directions, and it is not planned (owner decision 2026-09-29, audit [591](../../tasks/591-spec-kit-revision-audit.md)): the
-  order changes only through the Debug API (`POST /directions/reorder`). No per-node references
-  from a Direction (membership is a regex).
+- UI reordering of Directions exists since [673](../../tasks/673-directions-reorder-in-ui.md)
+  (issue #171; owner decision 2026-10-23 reverses the 2026-09-29 "not planned" of audit
+  [591](../../tasks/591-spec-kit-revision-audit.md)): the tab and the Debug API share one
+  write path and one rule. No per-node references from a Direction (membership is a regex).
 - The former discrepancies (`pool_tolerance` clamp 65535 vs the core's 15000, `interval` `5m` for
   a stored twin without the key, the row's node count ignoring "Exclude matching") are fixed
   in 604.
@@ -282,7 +294,10 @@ core groups ─► home screen dropdown (P16) ─► SelectOutbound (P15) ─►
   kind joins the same heal and the same notification.
 - **The twin tag `<tag>-auto` is derived, never stored;** the hyphen is part of the contract
   with the template's `magic_nodes` and with filters and sorting.
-- **The tab's node count is a preview from the running core's snapshot,** not from the build:
-  with the tunnel down it can only say "all nodes" or "filtered".
+- **The tab's node count and the editor's filter preview come from the build,** not from the
+  core: the same candidate pool the build filters into `<tag>`, read from storage, so they work
+  with the tunnel down
+  ([674](../../tasks/674-direction-filter-preview-without-tunnel.md)). While the pool is being
+  computed the row says "all nodes" or "filtered".
 - **`vpn-1` is a product decision hard-coded on purpose:** required, non-detour, the target of
   every heal; every load path passes through the one migration that insures it.

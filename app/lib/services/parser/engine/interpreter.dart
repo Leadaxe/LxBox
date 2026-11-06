@@ -29,6 +29,7 @@ import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import '../../../models/node_warning.dart';
 import '../drop_verdict.dart';
+import '../tt_deeplink.dart';
 import 'decoders.dart';
 import 'ini_space.dart';
 import 'lexer.dart';
@@ -123,7 +124,7 @@ final class EngineResult {
 /// (`required`) не нашла значения. Тем же `null` отвечали рукописные мапперы.
 EngineResult? runSection(MapperSection section, String text,
     {MapperTrace? trace, XrayDropVerdict? dropped}) {
-  final space = _selectForm(section, text);
+  final space = _selectForm(section, text, dropped: dropped);
   if (space == null) {
     // §512 (контракт 1.1.49, PARSING_PRINCIPLES §4.1) — ФОРМА не опознана: схему секция
     // ведёт, но ни одна её форма текст не прочитала (оболочка не раскрылась,
@@ -134,7 +135,7 @@ EngineResult? runSection(MapperSection section, String text,
     }
     return null;
   }
-  return _Run(section, space, trace, dropped: dropped).execute();
+  return _execute(section, space, trace, dropped: dropped);
 }
 
 /// §480 W5 — исполнить секцию на РАЗОБРАННОМ документе-объекте.
@@ -197,9 +198,207 @@ EngineResult? runSectionOnIni(
   final space = _selectIniForm(section, text);
   if (space == null) return null;
   final parsed = parseIniSpace(text, section.iniDialect ?? const IniDialect());
-  return _Run(section, space, trace,
-          nameHint: nameHint, dropped: dropped, context: context)
-      .execute(inputCodes: parsed.codes);
+  return _execute(section, space, trace,
+      nameHint: nameHint,
+      dropped: dropped,
+      context: context,
+      inputCodes: parsed.codes);
+}
+
+/// Исполнить таблицу секции над пространством: один прогон либо — у входа
+/// INI, где секция с `repeat: each` пришла несколькими экземплярами, —
+/// прогон на каждом экземпляре ([_execEach], контракт 1.1.140).
+EngineResult? _execute(
+  MapperSection section,
+  SourceSpace space,
+  MapperTrace? trace, {
+  String? nameHint,
+  XrayDropVerdict? dropped,
+  Map<String, dynamic>? context,
+  List<String> inputCodes = const [],
+}) {
+  EngineResult? one(SourceSpace s, XrayDropVerdict? d) => _Run(section, s, trace,
+          nameHint: nameHint, dropped: d, context: context)
+      .execute(inputCodes: inputCodes);
+  final each = _eachSection(section, space);
+  if (each == null) return one(space, dropped);
+  return _execEach(section, space, each, one, dropped);
+}
+
+/// Секция INI с `repeat: each` и `into`, у которой во входе БОЛЬШЕ ОДНОГО
+/// экземпляра; `null` — таблица исполняется один раз. Таких секций диалект
+/// может объявить несколько, но тело собирает одна — первая по имени, как у
+/// лаунчера (`exec.go:eachSection`).
+(String, IniSectionRule, List<Map<String, String>>)? _eachSection(
+    MapperSection section, SourceSpace space) {
+  final d = section.iniDialect;
+  if (d == null || space.iniInstances.isEmpty) return null;
+  final names = space.iniInstances.keys.toList()..sort();
+  for (final name in names) {
+    final rule = d.sectionRule(name);
+    final into = rule?.into;
+    if (rule == null || rule.repeat != 'each' || into == null || into.isEmpty) {
+      continue;
+    }
+    final list = space.iniInstances[name]!;
+    if (list.length < 2) return null;
+    return (name, rule, list);
+  }
+  return null;
+}
+
+/// Контракт 1.1.140 (wg-quick с несколькими `[Peer]`) — таблица на каждом
+/// экземпляре секции, узел — один.
+///
+/// Каждый экземпляр — отдельный прогон над копией пространства, где секция —
+/// этот экземпляр ([SourceSpace.withIniInstance]). Тело узла — тело первого
+/// уцелевшего прогона, а массив `into` в нём — элементы ВСЕХ уцелевших
+/// прогонов в порядке файла.
+///
+/// Экземпляр без обязательного ключа своей секции снимается до прогона с
+/// кодом `on_drop` ({index, missing}, путь `<секция>.<index>`); экземпляр,
+/// чей прогон отказал иначе, — кодом самого отказа и `index`. Не уцелел ни
+/// один — исполняется первый экземпляр, и узел получает ровно тот отказ, что
+/// и при единственной секции (`exec.go:execEach`).
+EngineResult? _execEach(
+  MapperSection section,
+  SourceSpace space,
+  (String, IniSectionRule, List<Map<String, String>>) each,
+  EngineResult? Function(SourceSpace, XrayDropVerdict?) one,
+  XrayDropVerdict? dropped,
+) {
+  final (name, rule, instances) = each;
+  final kept = <EngineResult>[];
+  final drops = <NodeWarning>[];
+  for (var i = 0; i < instances.length; i++) {
+    final index = '${i + 1}';
+    final path = '$name.$index';
+    final missing = _missingIniKeys(section, space.formId, name, instances[i]);
+    if (missing.isNotEmpty) {
+      final code = rule.onDropCode;
+      if (code != null && code.isNotEmpty) {
+        drops.add(RegistryWarning(
+          code: code,
+          path: path,
+          params: {'index': index, 'missing': missing.join(', ')},
+        ));
+      }
+      continue;
+    }
+    // Вердикт у прогона свой: отказ экземпляра — не отказ узла, и в вердикт
+    // вызывающего он попасть не должен.
+    final verdict = XrayDropVerdict();
+    final res = one(space.withIniInstance(name, instances[i]), verdict);
+    if (res == null) {
+      final reason = verdict.reason;
+      if (reason != null && reason.code.isNotEmpty) {
+        drops.add(RegistryWarning(
+          code: reason.code,
+          path: path,
+          params: {...reason.params, 'index': index},
+        ));
+      }
+      continue;
+    }
+    kept.add(res);
+  }
+  if (kept.isEmpty) {
+    return one(space.withIniInstance(name, instances.first), dropped);
+  }
+
+  final base = kept.first;
+  final arrPath = rule.into!.endsWith('[]')
+      ? rule.into!.substring(0, rule.into!.length - 2)
+      : rule.into!;
+  final elems = <dynamic>[
+    for (final r in kept)
+      if (_bodyPathGet(r.body, arrPath) case final List<dynamic> list) ...list,
+  ];
+  _bodyPathSet(base.body, arrPath, elems);
+
+  // Коды прогонов — без повторов (код, путь, параметры): общий `[Interface]`
+  // даёт один и тот же код в каждом прогоне. Коды снятых экземпляров — в
+  // конце, в порядке файла.
+  final warnings = <NodeWarning>[];
+  for (final r in kept) {
+    for (final w in r.warnings) {
+      if (!warnings.contains(w)) warnings.add(w);
+    }
+  }
+  warnings.addAll(drops);
+  return EngineResult(
+    body: base.body,
+    label: base.label,
+    warnings: warnings,
+    extensionFields: base.extensionFields,
+    wsEarlyDataHeaderImplicit: base.wsEarlyDataHeaderImplicit,
+    tagAddress: base.tagAddress,
+    tagScheme: base.tagScheme,
+    kinds: base.kinds,
+    bodySource: base.bodySource,
+  );
+}
+
+/// Обязательные ключи секции [name], которых нет в экземпляре [inst].
+///
+/// Обязательной считается запись с `required`, ВСЕ источники которой (для
+/// формы [formId]) — ключи этой секции (`ini.<Секция>.<Ключ>`): только о
+/// таких экземпляр судит сам. Имена — как их пишет реестр (`PublicKey`), без
+/// повторов, в алфавитном порядке (`exec.go:missingINIKeys`).
+List<String> _missingIniKeys(MapperSection section, String formId,
+    String name, Map<String, String> inst) {
+  final plan = _planCache[section] ??= _SectionPlan(section);
+  final prefix = 'ini.$name.';
+  final missing = <String>[];
+  for (final p in plan.all) {
+    if (!p.required) continue;
+    final srcs = p.sourceByForm[formId] ?? p.source;
+    if (srcs.isEmpty) continue;
+    final keys = <String>[];
+    for (final src in srcs) {
+      if (src.length <= prefix.length ||
+          src.substring(0, prefix.length).toLowerCase() != prefix) {
+        keys.clear();
+        break;
+      }
+      keys.add(src.substring(prefix.length));
+    }
+    if (keys.isEmpty) continue;
+    final present = keys.any((k) {
+      final want = '$name.${k.toLowerCase()}';
+      return inst.entries
+          .any((e) => e.value.isNotEmpty && e.key.toLowerCase() == want);
+    });
+    if (!present && !missing.contains(keys.first)) missing.add(keys.first);
+  }
+  return missing..sort();
+}
+
+/// Значение по пути тела `a.b.c` (без индексов); `null` — пути нет.
+dynamic _bodyPathGet(Map<String, dynamic> body, String path) {
+  dynamic cur = body;
+  for (final part in path.split('.')) {
+    if (cur is! Map) return null;
+    cur = cur[part];
+  }
+  return cur;
+}
+
+/// Положить значение по пути тела `a.b.c`, создав недостающие объекты.
+void _bodyPathSet(Map<String, dynamic> body, String path, dynamic value) {
+  final parts = path.split('.');
+  var cur = body;
+  for (final part in parts.take(parts.length - 1)) {
+    final next = cur[part];
+    if (next is Map<String, dynamic>) {
+      cur = next;
+    } else {
+      final created = <String, dynamic>{};
+      cur[part] = created;
+      cur = created;
+    }
+  }
+  cur[parts.last] = value;
 }
 
 /// Порядок проб форм: объявленный, но форма с `detect.default` — последней,
@@ -227,7 +426,8 @@ SourceSpace? _selectIniForm(MapperSection section, String text) {
       : formsInTrialOrder(section.forms);
   for (final form in forms) {
     if (!detectMatchesIni(form.detect, parsed.space)) continue;
-    return SourceSpace(formId: form.id, ini: parsed.space);
+    return SourceSpace(
+        formId: form.id, ini: parsed.space, iniInstances: parsed.instances);
   }
   return null;
 }
@@ -237,10 +437,16 @@ SourceSpace? _selectIniForm(MapperSection section, String text) {
 /// Формы пробуются ПО ПОРЯДКУ, первая, чей `detect` сработал, выигрывает;
 /// `detect.default` — ветка «всё остальное» и пробуется последней, где бы ни
 /// стояла в списке ([formsInTrialOrder]).
-SourceSpace? _selectForm(MapperSection section, String text) {
+///
+/// [dropped] — §717: именованный декодер, который ОТКАЗАЛ с кодом, объявленным
+/// шагом формы (`tt_deeplink`), называет причину здесь; ставится она, только
+/// если не ответила ни одна форма.
+SourceSpace? _selectForm(MapperSection section, String text,
+    {XrayDropVerdict? dropped}) {
   final forms = section.forms.isEmpty
       ? const [MapperForm(id: 'url', space: 'url')]
       : formsInTrialOrder(section.forms);
+  RegistryWarning? decoderFailure;
   for (final form in forms) {
     // Текстовый `detect` формы с оболочкой судится по ДВУМ текстам (unwrap →
     // redetect, MAPPER_ENGINE §1): сырому пэйлоаду и раскрытому. Предикаты
@@ -316,7 +522,22 @@ SourceSpace? _selectForm(MapperSection section, String text) {
         // декодирование сводится к тому же шагу над пэйлоадом.
         final unwrapped = _applyScopedDecodeToPayload(form, decoded);
         if (unwrapped == null) continue;
-        final doc = _decodeFormJson(form, unwrapped);
+        // §717 — именованный декодер БИНАРНОЙ оболочки (`tt_deeplink`): сам
+        // снимает base64url и разбирает TLV в объект. Отдельным шагом
+        // `base64url` перед ним это не выразить — общий шаг отдаёт ТЕКСТ, а
+        // байты TLV в UTF-8 не живут.
+        final ttStep = _namedDecoderStep(form, kTtDeeplinkDecoder);
+        Map<String, dynamic>? doc;
+        if (ttStep != null) {
+          final r = _decodeTtDeeplinkStep(ttStep, unwrapped);
+          if (r.failure != null) {
+            decoderFailure ??= r.failure;
+            continue;
+          }
+          doc = r.doc;
+        } else {
+          doc = _decodeFormJson(form, unwrapped);
+        }
         if (doc == null) continue;
         if (!detectMatchesJson(form.detect, doc)) continue;
         return SourceSpace(
@@ -341,7 +562,50 @@ SourceSpace? _selectForm(MapperSection section, String text) {
         continue;
     }
   }
+  if (dropped != null && dropped.reason == null && decoderFailure != null) {
+    dropped.reason = decoderFailure;
+  }
   return null;
+}
+
+/// Шаг `decode` формы с декодером по имени [name] (`{"decoder": name, …}`
+/// либо голая строка); `null` — шага нет.
+Map<String, dynamic>? _namedDecoderStep(MapperForm form, String name) {
+  for (final step in form.decode) {
+    if (step == name) return const {};
+    if (step is Map && step['decoder'] == name) {
+      return step.cast<String, dynamic>();
+    }
+  }
+  return null;
+}
+
+/// §717 — шаг `tt_deeplink`: пэйлоад после схемы (ведущий `?` снимается) →
+/// base64url → TLV → объект. Коды отказа объявляет ШАГ (`on_invalid.code`,
+/// `on_subscription_only.code`); не объявлен — `form_unrecognized`.
+({Map<String, dynamic>? doc, RegistryWarning? failure}) _decodeTtDeeplinkStep(
+    Map<String, dynamic> step, String text) {
+  final split = _splitScheme(text);
+  var payload = split?.payload ?? text;
+  final hash = payload.indexOf('#');
+  if (hash >= 0) payload = payload.substring(0, hash);
+  if (payload.startsWith('?')) payload = payload.substring(1);
+  RegistryWarning fail(String key) {
+    final code = (step[key] as Map?)?['code'] as String? ?? 'form_unrecognized';
+    final scheme = split?.scheme ?? '';
+    return RegistryWarning(
+        code: code, path: '', value: scheme, params: {'scheme': scheme});
+  }
+
+  final bytes = _RunDecode.bytes(payload.trim());
+  if (bytes == null) return (doc: null, failure: fail('on_invalid'));
+  final r = decodeTtPayload(bytes);
+  return switch (r.failure) {
+    null => (doc: r.doc, failure: null),
+    TtFailure.invalid => (doc: null, failure: fail('on_invalid')),
+    TtFailure.subscriptionOnly =>
+      (doc: null, failure: fail('on_subscription_only')),
+  };
 }
 
 /// Ссылочная форма с пространством `ini` (`<схема>://<base64 .conf>#метка`):
@@ -378,6 +642,7 @@ SourceSpace? _selectLinkIniForm(
     scheme: split.scheme,
     fragment: fragment,
     ini: parsed.space,
+    iniInstances: parsed.instances,
   );
 }
 

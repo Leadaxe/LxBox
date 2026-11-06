@@ -4,7 +4,7 @@
 // едет в APK — тесты, которым нужен только реестр, грузят его оттуда и на CI
 // не скипаются. Корпус и `schema/` живут только в gitignored `app/contract/`;
 // тесты, которым они нужны, остаются за гейтом, но пропуск становится
-// заметным (см. [corpusTestSkip], [corpus_skip_guard_test.dart]).
+// заметным (см. [corpusTestSkip]).
 
 import 'dart:io';
 
@@ -83,7 +83,7 @@ int readCorpusSkippedTestCount() {
       .length;
 }
 
-/// Одна строка «corpus skipped: …» — вызывается из guard и из corpusSuiteUnavailable.
+/// Одна строка «corpus skipped: …» — вызывается из corpusSuiteUnavailable.
 void printCorpusSkipSummary() {
   if (hasContractCorpus) return;
   final n = readCorpusSkippedTestCount();
@@ -94,32 +94,3 @@ void printCorpusSkipSummary() {
   print(
       'corpus skipped: app/contract отсутствует, $effective тестов');
 }
-
-/// Corpus-сьюты (полный или частичный гейт). Сторож на CI перечисляет их, если
-/// в текущем прогоне не успели зарегистрироваться (параллельные изоляты).
-const kKnownCorpusGatedSuites = <String>[
-  'test/contract/backup_corpus_test.dart',
-  'test/contract/body_contract_test.dart',
-  'test/contract/contract_test.dart',
-  'test/contract/direction_corpus_test.dart',
-  'test/contract/lx_backup_group_links_test.dart',
-  'test/contract/lx_backup_roundtrip_test.dart',
-  'test/contract/node_edit_corpus_test.dart',
-  'test/contract/registry_invariant_test.dart',
-  'test/contract/template_contract_test.dart',
-  'test/contract/template_for_each_corpus_test.dart',
-  'test/contract/template_load_reject_test.dart',
-  'test/parser/anytls_pipeline_invariants_test.dart',
-  'test/parser/http_pipeline_invariants_test.dart',
-  'test/parser/naive_pipeline_invariants_test.dart',
-  'test/parser/shadowsocks_pipeline_invariants_test.dart',
-  'test/parser/socks_pipeline_invariants_test.dart',
-  'test/parser/ssh_pipeline_invariants_test.dart',
-  'test/parser/trojan_pipeline_invariants_test.dart',
-  'test/parser/vmess_pipeline_invariants_test.dart',
-  'test/parser/hysteria2_pipeline_invariants_test.dart',
-  'test/parser/masque_pipeline_invariants_test.dart',
-  'test/parser/tuic_pipeline_invariants_test.dart',
-  'test/parser/vless_pipeline_invariants_test.dart',
-  'test/parser/wireguard_pipeline_invariants_test.dart',
-];

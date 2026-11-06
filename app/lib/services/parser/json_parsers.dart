@@ -1288,6 +1288,9 @@ NodeSpec? _parseSingboxEntryTyped(
           const <String>[];
       final peers = (entry['peers'] as List?)?.cast<Map>() ?? const [];
       if (peers.isEmpty) return null;
+      // Контракт 1.1.140 — пиров у узла несколько (`.conf` с N `[Peer]`, тело
+      // sing-box с N элементами `peers`): модель несёт их все в порядке тела.
+      // Адрес узла (тег-фолбэк, `server`/`port` модели) — от первого пира.
       final p = peers.first;
       final peerServer = p['address']?.toString() ?? server;
       final peerPort = (p['port'] as num?)?.toInt() ?? port;
@@ -1296,11 +1299,6 @@ NodeSpec? _parseSingboxEntryTyped(
       // мёртвый (нет ни адреса, ни `listen_port`) снимает санитайзер кодом
       // `field_missing` (`required_unless`). Прежде такое тело уходило кодом
       // `protocol_unsupported`.
-      final allowedIps =
-          (p['allowed_ips'] as List?)
-              ?.map((e) => ensureCidr(e.toString()))
-              .toList() ??
-          const ['0.0.0.0/0', '::/0'];
       final awg = Awg.fromJson(entry); // §097 — AmneziaWG2 obfuscation params
       final wgTag = tag.isEmpty ? 'wg-$peerServer-$peerPort' : tag;
       // §097/SPEC 103 D-026 — AWG: клампим MTU до 1280. Plain WG без mtu в
@@ -1313,24 +1311,45 @@ NodeSpec? _parseSingboxEntryTyped(
       // `reserved` — массив из 3 байт `[b0,b1,b2]` (наш round-trip формат
       // эмиттера); `client_id` — base64-строка. Массив берём напрямую
       // (с валидацией 3×0..255), строку — через parseReserved.
-      final reserved =
-          _reservedFromJson(p['reserved'] ?? entry['reserved']) ??
-          (p['client_id'] is String
-              ? parseReserved(p['client_id'] as String)
-              : null);
       // §481 (контракт 1.1.11) — ГОДНОСТЬ ключей и правила AWG 3.x судит
       // ТОЛЬКО реестр (`wg_key_invalid`, `awg3_header_key_invalid`,
       // `awg3_padding_too_short` — все с `drop_node`). Здесь остаётся перевод
       // написания: неканоническая форма даёт другой identity-хеш той же ноде,
       // а о написании реестр молчит.
       final wgPrivRaw = entry['private_key']?.toString() ?? '';
-      final wgPubRaw = p['public_key']?.toString() ?? '';
       final wgPriv = normalizeWGKey(wgPrivRaw) ?? wgPrivRaw;
-      final wgPub = normalizeWGKey(wgPubRaw) ?? wgPubRaw;
       if (awg != null) normalizeAwgHeaderKey(awg);
-      final wgPskRaw = p['pre_shared_key']?.toString() ?? '';
-      final wgPsk =
-          wgPskRaw.isEmpty ? '' : (normalizeWGKey(wgPskRaw) ?? wgPskRaw);
+      WireguardPeer peerOf(Map p) {
+        final host = p['address']?.toString() ?? server;
+        final hostPort = (p['port'] as num?)?.toInt() ?? port;
+        final allowedIps =
+            (p['allowed_ips'] as List?)
+                ?.map((e) => ensureCidr(e.toString()))
+                .toList() ??
+            const ['0.0.0.0/0', '::/0'];
+        final reserved =
+            _reservedFromJson(p['reserved'] ?? entry['reserved']) ??
+            (p['client_id'] is String
+                ? parseReserved(p['client_id'] as String)
+                : null);
+        final wgPubRaw = p['public_key']?.toString() ?? '';
+        final wgPub = normalizeWGKey(wgPubRaw) ?? wgPubRaw;
+        final wgPskRaw = p['pre_shared_key']?.toString() ?? '';
+        final wgPsk =
+            wgPskRaw.isEmpty ? '' : (normalizeWGKey(wgPskRaw) ?? wgPskRaw);
+        return WireguardPeer(
+          publicKey: wgPub,
+          preSharedKey: wgPsk,
+          endpointHost: host,
+          endpointPort: hostPort,
+          allowedIps: allowedIps,
+          // §421 — число или AWG3-диапазон `"N-M"` строкой.
+          persistentKeepalive:
+              _wgKeepaliveFromJson(p['persistent_keepalive_interval']),
+          reserved: reserved,
+        );
+      }
+
       return WireguardSpec(
         id: newUuidV4(),
         tag: wgTag,
@@ -1340,19 +1359,7 @@ NodeSpec? _parseSingboxEntryTyped(
         rawSource: src,
         privateKey: wgPriv,
         localAddresses: addr,
-        peers: [
-          WireguardPeer(
-            publicKey: wgPub,
-            preSharedKey: wgPsk,
-            endpointHost: peerServer,
-            endpointPort: peerPort,
-            allowedIps: allowedIps,
-            // §421 — число или AWG3-диапазон `"N-M"` строкой.
-            persistentKeepalive: _wgKeepaliveFromJson(
-                p['persistent_keepalive_interval']),
-            reserved: reserved,
-          ),
-        ],
+        peers: [for (final p in peers) peerOf(p)],
         // §473 (контракт 1.1.5) — на входе `singbox` завышенный MTU НЕ
         // заменяется: тело в собственной форме ядра написали человек или
         // подписка, и молча переписывать его нельзя (`except_sources`,
@@ -1387,11 +1394,13 @@ NodeSpec? _parseSingboxEntryTyped(
         if (ipv6.isNotEmpty) ensureCidr(ipv6),
       ];
       // §393/контракт 0.8.0 (D-078) — только схема ядра (`vhttp` + вложенный
-      // `tls{}`). Плоские legacy-ключи (`network`/`sni`/`skip_cert_verify`)
-      // НЕ переносятся — «не принимаем» (директива оператора 25.08). Читать
-      // их не читаем; в эмит они не попадают по построению (MasqueSpec несёт
-      // только свои поля) — зеркально Go-стрипу sanitizeSingboxMasqueLegacy,
-      // где плоский `sni` рядом с tls.server_name ронял ядро fail-fast'ом.
+      // `tls{}`). Плоские legacy-ключи `sni`/`skip_cert_verify` НЕ переносятся
+      // (директива оператора 25.08): плоский `sni` рядом с tls.server_name
+      // ронял ядро fail-fast'ом. `network` — не legacy-имя `vhttp`, а ключ,
+      // зарезервированный под tcp/udp как в sing-box (контракт 1.1.118,
+      // D-129): не читается вовсе. Снимает все три общий unknown_key
+      // санитайзера (body.skipped); в эмит они не попадают по построению
+      // (MasqueSpec несёт только свои поля).
       final masqueTls = entry['tls'];
       final tlsMap = masqueTls is Map ? masqueTls : const {};
       final vhttpRaw = entry['vhttp']?.toString() ?? '';
@@ -1641,7 +1650,9 @@ TransportSpec? _transportFromSingbox(dynamic raw) {
       final edField = raw['max_early_data'];
       return WsTransport(
         path: path,
-        host: headers?['Host']?.toString() ?? '',
+        // §654 — `Host` у sing-box `Listable[string]`: список берётся первым
+        // элементом, как прочие заголовки (`toString()` давал «[a.com]»).
+        host: headers == null ? '' : _headerValue(headers['Host']),
         // §476 — прочие заголовки ЧИТАЮТСЯ. `WsTransport.headers` их эмитит, а
         // эта ветка брала из карты один `Host`: узел с `User-Agent` или
         // `X-Forwarded-For`, пересохранённый через JSON-вкладку, терял их

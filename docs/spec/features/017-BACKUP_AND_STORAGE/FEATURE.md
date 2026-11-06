@@ -68,10 +68,13 @@ entry); **the input is default-deny**; **a failure does not wipe settings**
   **Witness:** unit tests "foreign key dropped", "foreign var dropped, known
   ones kept", "merge filters too", "§600 — flags not in droppedKeys, foreign
   key next to them dropped". **Mutation:** filtering only in replace mode.
-- **P6. Merge deletes nothing.** Sources are appended by `id`, vars by key,
-  whatever is absent in the file stays. **Witness:** unit tests "merge keeps
-  untouched keys", "sources are appended by id". **Mutation:** merging
-  sources by replacing the list.
+- **P6. Merge deletes and overwrites nothing.** Every list is merged by
+  record identity (sources by `id`, chains, Directions and DNS servers by
+  tag, rules by `ref` / `id` / content), new records are appended after the
+  receiver's; a scalar or var keeps the receiver's value, a key the receiver
+  lacks comes from the file (§633). **Witness:** unit tests "merge keeps
+  untouched keys", "sources are appended by id", `backup_merge_test.dart`.
+  **Mutation:** a top-level upsert (a file key replaces the receiver's).
 - **P7. Replace replaces the selected categories; unselected categories keep
   the receiver's values.** A selected category is replaced wholesale by the
   file's content: a key of the category absent in the file is removed. An
@@ -116,7 +119,8 @@ entry); **the input is default-deny**; **a failure does not wipe settings**
   tag — the incoming one is not applied and is named; "disabled" marks are
   merged. **Witness:** unit tests "taken tag is not applied and is named",
   "marks from the file are added". A live WARP registration is not
-  overwritten — `no witness`. **Mutation:** "last writer wins".
+  overwritten — unit test "a registration exists → the file's entry is not
+  applied" (`lx_backup_import_fresh_state_test.dart`). **Mutation:** "last writer wins".
 - **P14. A rule does not go nowhere.** A rule with a target unknown to the
   receiver arrives disabled; `route.final` to nowhere is not applied; an
   incoming Direction makes the rule working. **Witness:** unit tests
@@ -174,15 +178,14 @@ entry); **the input is default-deny**; **a failure does not wipe settings**
   "staged rules are visible to a reader before the disk write"; widget tests
   "write on leaving the screen when there are unsaved changes", "write on
   backgrounding". **Mutation:** writing to memory only on leaving.
-- **P24. A write "from the past" does not go through.** A controller that
-  outlived a settings-set switch does not write into the new set; a halted
-  update pass does not continue. **Witness:** unit tests "a deferred fetch
-  of the old controller does not touch the new slot", "halt interrupts the
-  pass between subscriptions". **Mutation:** writing without a generation
-  check.
+- **P24. Withdrawn into [018-WORKSPACES · P8](../018-WORKSPACES/FEATURE.md#promises)**
+  (audit 591, 2026-10-13): a write "from the past" after a settings-set
+  switch is that feature's promise; it is not duplicated here.
 - **P25. Transfer is written against fresh state:** the LX import plan is
   recomputed at confirmation time, not taken from the preview.
-  `no witness`.
+  **Witness:** unit test "a tag taken between the preview and the confirmation
+  is not overwritten" (`lx_backup_import_fresh_state_test.dart`).
+  **Mutation:** writing the preview's plan without recomputing.
 
 ## Controlled parameters
 
@@ -216,7 +219,7 @@ source_app_version, storage{…}, vpn_settings{…}}`; LX Backup 1.0
 ```
 Full backup:  settings → categories → envelope + VPN block → file
 Restore: file → markers → migration of an old block → preview (categories,
-   counters, mode) → merge: sources by id + upsert | replace: whole document
+   counters, mode) → merge: records by identity, receiver's values win | replace: selected categories
    (+ device Debug API and prompt flags) → default-deny allowlist → atomic
    write → Directions seeding → VPN block → summary + "Restart now"
 Transfer: settings → record slice + thin layer → LX Backup 1.0;
@@ -260,7 +263,7 @@ Start: document → old form? → migration → copy of the original → write
 | Transfer to desktop | Exchanges the shared part of settings with the desktop launcher in LX Backup 1.0: write, read, merge, named losses. | P10–P16, P25 | [desktop-transfer.md](FUNCTIONS/desktop-transfer.md) |
 | Storage contract | Defines what the app stores and in which form: data sets, 1.0 records, node links. | P17 | [storage-contract.md](FUNCTIONS/storage-contract.md) |
 | Storage migration | Converts settings in the 2.23.2 form to storage contract 1.0 once, with the same built config. | P18–P20 | [storage-migration.md](FUNCTIONS/storage-migration.md) |
-| Durable writes | Keeps settings intact through kills and switches: atomic writes, recovery, deferred writes, races. | P21–P24 | [durable-writes.md](FUNCTIONS/durable-writes.md) |
+| Durable writes | Keeps settings intact through kills and switches: atomic writes, recovery, deferred writes, races. | P21–P23 (P24 → 018 · P8) | [durable-writes.md](FUNCTIONS/durable-writes.md) |
 
 ## Related features
 
@@ -287,6 +290,9 @@ Start: document → old form? → migration → copy of the original → write
   the backup, the theme is not; startup prompt flags survive replace.
 - [030-TAILSCALE](../030-TAILSCALE/FEATURE.md) — Tailscale node state (device
   identities) is not in the backup and lives per slot.
+- [031-DEVICE_TRANSFER](../031-DEVICE_TRANSFER/FEATURE.md) — delivers a full
+  backup from a phone to a TV over the local network; the TV restores it
+  through this feature's preview and restore.
 
 ## Maintenance notes
 

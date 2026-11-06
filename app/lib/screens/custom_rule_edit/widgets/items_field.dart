@@ -27,6 +27,8 @@ class ItemsField extends StatefulWidget {
     this.maxLines = 5,
     this.hint,
     this.presets = const [],
+    this.split = norm.splitRaw,
+    this.helper,
   });
 
   final String label;
@@ -39,6 +41,13 @@ class ItemsField extends StatefulWidget {
 
   /// Опциональные quick-вставки. Пусто → кнопка «Presets» не рисуется.
   final List<FieldPreset> presets;
+
+  /// §712 — как делить текст на элементы. По умолчанию `\n` и `,`;
+  /// регулярки делятся только по `\n` ([norm.splitLines]).
+  final List<String> Function(String) split;
+
+  /// §712 — строка пояснения под заголовком (уже локализованная).
+  final String? helper;
 
   @override
   State<ItemsField> createState() => _ItemsFieldState();
@@ -82,11 +91,11 @@ class _ItemsFieldState extends State<ItemsField> {
     if (mounted) setState(() {});
   }
 
-  int get _count => norm.splitRaw(widget.controller.text).length;
+  int get _count => widget.split(widget.controller.text).length;
 
   int get _invalidCount {
     var n = 0;
-    for (final raw in norm.splitRaw(widget.controller.text)) {
+    for (final raw in widget.split(widget.controller.text)) {
       final v = widget.normalize != null ? widget.normalize!(raw) : raw;
       if (!widget.validator(v)) n++;
     }
@@ -187,6 +196,14 @@ class _ItemsFieldState extends State<ItemsField> {
               ),
             ],
           ),
+          if (widget.helper != null)
+            Text(
+              widget.helper!,
+              style: TextStyle(
+                fontSize: 11,
+                color: t.colorScheme.onSurfaceVariant,
+              ),
+            ),
           const SizedBox(height: 4),
           TextField(
             controller: widget.controller,

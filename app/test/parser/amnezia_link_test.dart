@@ -329,14 +329,6 @@ PersistentKeepalive = 25-35
       expect(a.subtitle, contains('203.0.113.10:43210'));
     });
 
-    test('два контейнера → суффикс × 2', () {
-      final link = makeLink(_export([
-        _container('awg', _awgIni),
-        _container('wireguard', _plainWgIni),
-      ]));
-      expect(analyzeClipboard(link).subtitle, contains('× 2'));
-    });
-
     test('битая ссылка → unknown (стандартный диалог)', () {
       expect(analyzeClipboard('vpn://!!!').type, 'unknown');
     });

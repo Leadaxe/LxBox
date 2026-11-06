@@ -4,39 +4,63 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:re_editor/re_editor.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../config/config_parse.dart';
 import '../controllers/home_controller.dart';
+import '../controllers/subscription_controller.dart';
 import '../services/error_format.dart';
 import '../services/l10n/locale_controller.dart';
 import '../widgets/lx_code_editor.dart';
 import '../services/file_import.dart';
+import '../services/ui_helpers.dart';
 import '../widgets/safe_bottom.dart';
+import 'config_screen/mixins_tab.dart';
 
 /// §333 — страховочный порог: выше него редактор открывается read-only.
 /// Даже построчному редактору многомегабайтный конфиг на слабом устройстве
 /// даётся плохо, а правка такого объёма на телефоне — не сценарий: Share →
-/// внешний редактор → Load from file. Порог в символах `configRaw`
+/// внешний редактор → Load from file (§635: в read-only сохраняет сразу,
+/// без редактора). Порог в символах `configRaw`
 /// (конфиг — практически ASCII, так что символы ≈ байты).
 const int kConfigEditMaxChars = 1024 * 1024;
 
 bool configTooLargeToEdit(String raw) => raw.length > kConfigEditMaxChars;
 
 class ConfigScreen extends StatefulWidget {
-  const ConfigScreen({super.key, required this.controller});
+  const ConfigScreen({super.key, required this.controller, this.subController});
 
   final HomeController controller;
+
+  /// §704 — вкладка Mixins: пересборка после правки, отказы миксинов
+  /// последней сборки, база формы. `null` — без пересборки (dirty подхватит
+  /// воронка главного экрана).
+  final SubscriptionController? subController;
 
   @override
   State<ConfigScreen> createState() => _ConfigScreenState();
 }
 
-class _ConfigScreenState extends State<ConfigScreen> {
-  final CodeLineEditingController _textController = CodeLineEditingController();
+class _ConfigScreenState extends State<ConfigScreen>
+    with SingleTickerProviderStateMixin {
+  final TextEditingController _textController = TextEditingController();
+
+  /// §704 — вкладки Config | Mixins.
+  late final TabController _tabController = TabController(
+    length: 2,
+    vsync: this,
+  );
+
+  /// §624 — длинный текст натив отдаёт с задержкой: перед Save / Copy /
+  /// Share забираем его через [LxCodeEditorState.flush].
+  final _editorKey = GlobalKey<LxCodeEditorState>();
   late final bool _readOnly;
   bool _loading = true;
+
+  /// Текст, с которым экран открылся или который сохранил последний Save.
+  /// Back при отличии от него спрашивает [showUnsavedChangesDialog] (§219).
+  /// Paste / Load from file меняют только текст редактора — тоже правка.
+  String _baseline = '';
 
   @override
   void initState() {
@@ -51,17 +75,36 @@ class _ConfigScreenState extends State<ConfigScreen> {
   Future<void> _initLoad(String raw) async {
     final pretty = await prettyJsonForDisplayAsync(raw);
     if (!mounted) return;
-    _textController.textAsync = pretty;
+    _textController.text = pretty;
+    _baseline = pretty;
     setState(() => _loading = false);
   }
 
   @override
   void dispose() {
+    _tabController.dispose();
     _textController.dispose();
     super.dispose();
   }
 
+  /// §704 — правка миксинов пересобрала конфиг: вкладка Config показывает
+  /// новый, если в редакторе нет несохранённой правки.
+  Future<void> _reloadAfterMixins() async {
+    if (_loading || _readOnly) return;
+    await _flush();
+    if (!mounted || _textController.text != _baseline) return;
+    final raw = widget.controller.state.configRaw;
+    if (configTooLargeToEdit(raw)) return;
+    final pretty = await prettyJsonForDisplayAsync(raw);
+    if (!mounted || _textController.text != _baseline) return;
+    _textController.text = pretty;
+    _baseline = pretty;
+  }
+
+  Future<void> _flush() async => _editorKey.currentState?.flush();
+
   Future<void> _copy() async {
+    await _flush();
     await Clipboard.setData(ClipboardData(text: _textController.text));
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -70,6 +113,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
   }
 
   Future<void> _share() async {
+    await _flush();
     final text = _textController.text.trim();
     if (text.isEmpty) return;
     try {
@@ -77,13 +121,16 @@ class _ConfigScreenState extends State<ConfigScreen> {
       final file = File('${dir.path}/lxbox_config.json');
       await file.writeAsString(text);
       await SharePlus.instance.share(
-          ShareParams(files: [XFile(file.path)], text: 'LxBox config'));
+        ShareParams(files: [XFile(file.path)], text: 'LxBox config'),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-            content: Text(
-                getLocalText.s("Share failed: %s", formatUserError(e).render()))),
+          content: Text(
+            getLocalText.s("Share failed: %s", formatUserError(e).render()),
+          ),
+        ),
       );
     }
   }
@@ -99,11 +146,42 @@ class _ConfigScreenState extends State<ConfigScreen> {
       }
       return;
     }
+    if (_readOnly) {
+      await _saveImported(text);
+      return;
+    }
     final pretty = await prettyJsonForDisplayAsync(text);
     if (!mounted) return;
     _textController.text = pretty;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(getLocalText.s("Pasted from clipboard"))),
+    );
+  }
+
+  /// §635 — в режиме только чтения правки в редакторе нет и Save неактивна,
+  /// поэтому загруженный текст (файл или буфер) сохраняется сразу, тем же
+  /// [HomeController.saveConfigRaw], что и Save: та же проверка JSON, та же
+  /// ошибка через `lastError`. Размер не ограничен — порог касается только
+  /// правки в редакторе. Экран остаётся только для чтения до переоткрытия.
+  Future<void> _saveImported(String text) async {
+    final ok = await widget.controller.saveConfigRaw(text);
+    if (!ok || !mounted) return;
+    final pretty = await prettyJsonForDisplayAsync(text);
+    if (!mounted) return;
+    _textController.text = pretty;
+    _baseline = pretty;
+    _showSaved();
+  }
+
+  void _showSaved() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          getLocalText.s(
+            "Config saved. The next rebuild overwrites it; to keep it, lock the config in App Settings → Diagnostics (Debug API on).",
+          ),
+        ),
+      ),
     );
   }
 
@@ -115,14 +193,19 @@ class _ConfigScreenState extends State<ConfigScreen> {
       if (outcome is! PickedFiles) {
         final problem = pickProblemText(outcome);
         if (problem != null && mounted) {
-          ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text(problem)));
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(problem)));
         }
         return;
       }
       final file = outcome.single;
       // §333 — utf8, не fromCharCodes (см. PickedFile.text).
       final text = file.text;
+      if (_readOnly) {
+        await _saveImported(text.trim());
+        return;
+      }
       final pretty = await prettyJsonForDisplayAsync(text.trim());
       if (!mounted) return;
       _textController.text = pretty;
@@ -133,21 +216,51 @@ class _ConfigScreenState extends State<ConfigScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(
-                  getLocalText.s("Error: %s", formatUserError(e).render()))),
+            content: Text(
+              getLocalText.s("Error: %s", formatUserError(e).render()),
+            ),
+          ),
         );
       }
     }
   }
 
-  Future<void> _save() async {
-    final ok = await widget.controller.saveConfigRaw(_textController.text);
-    if (!mounted) return;
+  /// true — сохранено. При ошибке разбора контроллер выставляет
+  /// `lastError` (снек показывает главный экран), экран остаётся открытым.
+  Future<bool> _save() async {
+    await _flush();
+    final text = _textController.text;
+    final ok = await widget.controller.saveConfigRaw(text);
+    if (!mounted) return ok;
     if (ok) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(getLocalText.s("Config saved. The next rebuild overwrites it; to keep it, lock the config in App Settings → Diagnostics (Debug API on)."))),
-      );
+      _baseline = text;
+      _showSaved();
     }
+    return ok;
+  }
+
+  /// Back (системный, жест, стрелка AppBar) — как на соседних экранах
+  /// правки: при несохранённых правках общий диалог Discard / Keep / Save.
+  /// Только чтение и загрузка — выход без диалога.
+  Future<void> _handleBack() async {
+    var dirty = false;
+    if (!_readOnly && !_loading) {
+      await _flush();
+      dirty = _textController.text != _baseline;
+    }
+    if (!mounted) return;
+    if (!dirty) {
+      Navigator.pop(context);
+      return;
+    }
+    final action = await showUnsavedChangesDialog(context); // §219
+    if (!mounted) return;
+    if (action == 'save') {
+      if (await _save() && mounted) Navigator.pop(context);
+    } else if (action == 'discard') {
+      Navigator.pop(context);
+    }
+    // 'keep' / null (dismiss) — остаёмся.
   }
 
   @override
@@ -157,86 +270,156 @@ class _ConfigScreenState extends State<ConfigScreen> {
       builder: (context, _) {
         final busy = widget.controller.state.busy;
         final cs = Theme.of(context).colorScheme;
-        return Scaffold(
-          appBar: AppBar(
-            title: Text(getLocalText.s("Config")),
-            actions: [
-              TextButton(
-                onPressed: (busy || _readOnly) ? null : _save,
-                child: Text(getLocalText.s("Save")),
-              ),
-              PopupMenuButton<String>(
-                onSelected: (v) {
-                  switch (v) {
-                    case 'paste': unawaited(_pasteFromClipboard());
-                    case 'file': unawaited(_loadFromFile());
-                    case 'copy': unawaited(_copy());
-                    case 'share': unawaited(_share());
-                  }
-                },
-                itemBuilder: (_) => [
-                  PopupMenuItem(
-                      value: 'paste',
-                      child: Text(getLocalText.s("Paste from clipboard"))),
-                  PopupMenuItem(
-                      value: 'file',
-                      child: Text(getLocalText.s("Load from file"))),
-                  const PopupMenuDivider(),
-                  PopupMenuItem(
-                      value: 'copy',
-                      child: Text(getLocalText.s("Copy to clipboard"))),
-                  PopupMenuItem(
-                      value: 'share', child: Text(getLocalText.s("Share"))),
+        return PopScope(
+          canPop: false,
+          onPopInvokedWithResult: (didPop, _) {
+            if (didPop) return;
+            unawaited(_handleBack());
+          },
+          child: Scaffold(
+            appBar: AppBar(
+              title: Text(getLocalText.s("Config")),
+              // §704 — Save и ⋮ относятся к вкладке Config.
+              actions: [
+                AnimatedBuilder(
+                  animation: _tabController.animation!,
+                  builder: (context, _) {
+                    if (_tabController.animation!.value.round() != 0) {
+                      return const SizedBox.shrink();
+                    }
+                    return Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        TextButton(
+                          onPressed: (busy || _readOnly) ? null : _save,
+                          child: Text(getLocalText.s("Save")),
+                        ),
+                        PopupMenuButton<String>(
+                          onSelected: (v) {
+                            switch (v) {
+                              case 'paste':
+                                unawaited(_pasteFromClipboard());
+                              case 'file':
+                                unawaited(_loadFromFile());
+                              case 'copy':
+                                unawaited(_copy());
+                              case 'share':
+                                unawaited(_share());
+                            }
+                          },
+                          itemBuilder: (_) => [
+                            PopupMenuItem(
+                              value: 'paste',
+                              child: Text(
+                                getLocalText.s("Paste from clipboard"),
+                              ),
+                            ),
+                            PopupMenuItem(
+                              value: 'file',
+                              child: Text(getLocalText.s("Load from file")),
+                            ),
+                            const PopupMenuDivider(),
+                            PopupMenuItem(
+                              value: 'copy',
+                              child: Text(getLocalText.s("Copy to clipboard")),
+                            ),
+                            PopupMenuItem(
+                              value: 'share',
+                              child: Text(getLocalText.s("Share")),
+                            ),
+                          ],
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ],
+              bottom: TabBar(
+                controller: _tabController,
+                tabs: [
+                  Tab(text: getLocalText.s("Config")),
+                  Tab(text: getLocalText.s("Mixins")),
                 ],
               ),
-            ],
-          ),
-          body: Padding(
-            padding: const EdgeInsets.all(12).withSafeBottom(context),
-            child: Column(
+            ),
+            body: TabBarView(
+              controller: _tabController,
               children: [
-                if (_readOnly)
-                  Container(
-                    width: double.infinity,
-                    margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: cs.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      getLocalText.s(
-                          "File is too large to edit on device. Share it, edit externally, then load it back."),
-                      style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                _KeepAlive(
+                  child: Padding(
+                    padding: const EdgeInsets.all(12).withSafeBottom(context),
+                    child: Column(
+                      children: [
+                        if (_readOnly)
+                          Container(
+                            width: double.infinity,
+                            margin: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: cs.surfaceContainerHighest,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              getLocalText.s(
+                                "Config is too large to edit on device. Share it, edit it elsewhere, then pick the edited file in Load from file: it is saved right away.",
+                              ),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: cs.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                        if (_loading) const LinearProgressIndicator(),
+                        Expanded(
+                          // §614 — Copy теперь кнопка самого поля, рядом с поиском.
+                          child: LxCodeEditor(
+                            key: _editorKey,
+                            controller: _textController,
+                            readOnly: _readOnly,
+                            hint: getLocalText.s(
+                              "JSON or JSON5 (//, /* */ and # comments)",
+                            ),
+                            showLineNumbers: true,
+                            language: LxCodeLanguage.json,
+                            stickyHeaders: true,
+                            // §624 — липкие заголовки sora рисует только без переноса
+                            // строк (решение владельца 11.10: перенос на Config выключен).
+                            wordWrap: false,
+                            // §649 — перенос включается кнопкой, выбор не хранится.
+                            wrapToggle: true,
+                            actions: [
+                              IconButton(
+                                icon: const Icon(Icons.copy, size: 16),
+                                tooltip: getLocalText.s("Copy"),
+                                visualDensity: VisualDensity.compact,
+                                onPressed: () async {
+                                  // §219 — await + mounted перед snackbar (как _copy():40),
+                                  // иначе гонка Future/context.
+                                  await _flush();
+                                  await Clipboard.setData(
+                                    ClipboardData(text: _textController.text),
+                                  );
+                                  if (!context.mounted) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        getLocalText.s("Config copied"),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                if (_loading) const LinearProgressIndicator(),
-                Expanded(
-                  // §614 — Copy теперь кнопка самого поля, рядом с поиском.
-                  child: LxCodeEditor(
-                    controller: _textController,
-                    readOnly: _readOnly,
-                    hint: getLocalText.s("JSON or JSON5 (// and /* */ comments)"),
-                    showLineNumbers: true,
-                    language: LxCodeLanguage.json,
-                    actions: [
-                      IconButton(
-                        icon: const Icon(Icons.copy, size: 16),
-                        tooltip: getLocalText.s("Copy"),
-                        visualDensity: VisualDensity.compact,
-                        onPressed: () async {
-                          // §219 — await + mounted перед snackbar (как _copy():40),
-                          // иначе гонка Future/context.
-                          await Clipboard.setData(
-                              ClipboardData(text: _textController.text));
-                          if (!context.mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text(getLocalText.s("Config copied"))),
-                          );
-                        },
-                      ),
-                    ],
-                  ),
+                ),
+                ConfigMixinsTab(
+                  homeController: widget.controller,
+                  subController: widget.subController,
+                  onConfigRebuilt: () => unawaited(_reloadAfterMixins()),
                 ),
               ],
             ),
@@ -244,5 +427,28 @@ class _ConfigScreenState extends State<ConfigScreen> {
         );
       },
     );
+  }
+}
+
+/// Вкладка Config не пересоздаётся при уходе на Mixins: редактор держит
+/// текст и курсор (§624 — натив отдаёт длинный текст с задержкой).
+class _KeepAlive extends StatefulWidget {
+  const _KeepAlive({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_KeepAlive> createState() => _KeepAliveState();
+}
+
+class _KeepAliveState extends State<_KeepAlive>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return widget.child;
   }
 }

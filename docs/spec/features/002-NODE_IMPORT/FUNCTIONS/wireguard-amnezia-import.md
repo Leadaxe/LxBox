@@ -59,7 +59,7 @@ protocol but obfuscation fields on the same endpoint.
 - **`awg://<base64 .conf>`**: one link — one node, a second `[Interface]` is
   ignored; base64 without `[Interface]` — a reject.
 - The same node as an `amneziawg://` line and a `vpn://` profile in one body
-  collapses into one with code `duplicate`.
+  collapses into one; the survivor carries `duplicates_collapsed` (P8).
 
 ## Boundaries
 

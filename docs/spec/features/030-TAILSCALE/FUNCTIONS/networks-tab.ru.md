@@ -15,7 +15,8 @@
 ## Что делает
 
 Превращает поток состояния tailnet от ядра в экран: блок Status (состояние,
-имя сети, «signed in with a key», Sign in, Log out), This device (имя,
+имя сети, «signed in with a key», Sign in, Log out, Replace key, Node enabled,
+Restart node), This device (имя,
 MagicDNS-имя, адреса, срок ключа), Exit node (пиры, предлагающие выход, None
 первым, с «Save choice», когда действующий выход отличается от записанного),
 Devices (сначала в сети, группы по владельцам, когда их несколько) и Ping через
@@ -29,7 +30,9 @@ Diagnostics и Debug API.
 | Где | экраны узла своего сервера, члена папки, узла подписки и экран просмотра из NETWORKS или «View details»; перед Diagnostics |
 | Начальная вкладка | из строки NETWORKS — Network; из «View details» — прежняя |
 | Список Exit node | пиры с `ExitNodeOption`, порядок как в Devices; «None» первым |
-| Save choice | видна, когда действующий и записанный выход различаются и у узла есть запись источника (свой сервер или член папки) |
+| Save choice | видна в `Running`, когда действующий и записанный выход различаются и у узла есть запись источника (свой сервер или член папки) |
+| Replace key | видна в `NeedsLogin`, когда у узла есть запись источника; одно скрытое поле, Save неактивна, пока оно пустое |
+| Node enabled, Restart node | пока VPN поднят и ядро отдаёт состояние узла; Restart node — только у включённого узла |
 | Записываемое значение | адрес Tailscale действующего пира, IPv4 первым; без адресов — MagicDNS-имя, затем имя хоста; None убирает `exit_node` |
 | Ping | до пяти ответов или до закрытия листа; задержка, direct или relay, адрес endpoint'а или регион ретранслятора |
 | Debug API | `GET /state` → `tailscale: {тег: {backend_state, devices}}` |
@@ -37,13 +40,16 @@ Diagnostics и Debug API.
 ## Входы / Выходы
 
 **Входы:** поток ядра (`BackendState`, `StateText`, `AuthURL`, `NetworkName`,
-`MagicDNSSuffix`, `KeyAuth`, свой узел, exit node, пиры по владельцам); статус
-туннеля; тело узла; нажатия: пункт списка, Save choice, Sign in, Log out, Copy
-name, Copy address, Ping.
+`MagicDNSSuffix`, `KeyAuth`, свой узел, exit node, пиры по владельцам); ответ
+`GetTailscaleStatus(tag)` (та же запись, раз в 3 с, пока вкладка открыта);
+статус туннеля; тело узла; нажатия: пункт списка, Save choice, Sign in, Log
+out, Replace key, Node enabled, Restart node, Copy name, Copy MagicDNS name, Copy address, `+N`, Ping.
 
-**Выходы:** вкладка; `SetTailscaleExitNode` (`StableID` или пусто),
-`TailscaleLogout`, `StartTailscalePing`; источник узла с изменённым
-`exit_node` и пересобранный конфиг; снекбары «Copied», «Failed: …»; строка на
+**Выходы:** вкладка; `GetTailscaleStatus`; `SetTailscaleExitNode` (`StableID` или пусто),
+`TailscaleLogout`, `TailscaleLogin(tag, key)`, `SetEndpointEnabled(tag,
+вкл/выкл)`, `StartTailscalePing`; источник узла с изменённым `exit_node` или
+`auth_key` и пересобранный конфиг; снекбары «Copied», «Failed: …», исходы
+Replace key и Restart node; строка на
 Diagnostics «This node has no exit. Check devices on the Network tab.»
 
 ## Правила и инварианты
@@ -57,9 +63,34 @@ Diagnostics «This node has no exit. Check devices on the Network tab.»
   needed`, `stopped`, `starting` или текст ядра); Sign in появляется в
   `NeedsLogin` при непустом `AuthURL` и открывает его в браузере; Log out
   появляется в `Running` после подтверждения, которое говорит, что узел с
-  записанным ключом входа войдёт снова при следующем запуске.
-- **Exit node** (P21): выбор пункта зовёт ядро и переключает выход на ходу;
-  тело не трогается. Записанное значение указывает на пира, когда равно
+  записанным ключом входа войдёт снова при следующем запуске. «signed in with
+  a key» — только в `Running`: вне сети ключ мог быть отвергнут.
+- **Replace key:** в `NeedsLogin` (ключ отвергнут или его нет) у узла с
+  записью источника есть Replace key, у узла подписки нет. В диалоге одно
+  скрытое поле Auth key с Show/Hide, как в мастере Add server, и кнопки
+  Cancel и Save; Save неактивна, пока поле пустое или из пробелов. Save пишет
+  ключ без пробелов по краям в `auth_key` тем же путём, что Save choice пишет
+  `exit_node` (чтобы ключ пережил перезапуск), затем узел входит с ним без
+  перезапуска VPN. Снекбар — «Signing in with the new key…»; туннель не
+  поднят — ядро не зовётся, снекбар «Key saved. It applies when the VPN
+  starts.»; отказ ядра у выключенного узла — «Turn the node on first.»;
+  прочий отказ — «Could not sign in with the new key.». Отвергнутый ключ
+  виден позже в строках состояния и health, не в снекбаре. Запись не
+  удалась — ничего не применяется.
+- **Node enabled и Restart node:** пока VPN поднят и ядро отдаёт состояние
+  узла, в блоке Status есть переключатель Node enabled («Stays off until you
+  turn it on or stop the VPN.») с тем же поведением и текстами отказа, что
+  Turn off / Turn on в списке узлов и переключатель узла WireGuard.
+  Выключенный узел сразу отвергает соединения через себя. Restart node рядом
+  с Sign in / Log out / Replace key виден, пока узел включён: выключает и
+  снова включает узел, снекбар «Node restarted.» или текст отказа, на время
+  вызова кнопка неактивна.
+- **Exit node** (P21): список, знак расхождения и Save choice — только в
+  `Running`. В остальных состояниях действующего выхода у ядра нет и
+  сверять не с чем: записанный `exit_node` показан строкой «Saved: <значение>»
+  с подписью «Applies when the node is online.», без списка и без кнопки;
+  ничего не записано — блока нет. Выбор пункта зовёт ядро и переключает выход
+  на ходу; тело не трогается. Записанное значение указывает на пира, когда равно
   одному из его адресов, MagicDNS-имени (с точкой в конце или без), базовому
   имени или имени хоста без учёта регистра. Случаи расхождения и тексты у
   знака: не записан, выбран на ходу — «Not saved. Traffic is not routed
@@ -70,11 +101,60 @@ Diagnostics «This node has no exit. Check devices on the Network tab.»
   проверяет конфиг ядром и сохраняет узел тем же путём, что Save на вкладке
   Source; после пересборки узел переходит между NETWORKS и списками
   Направлений. У узла подписки знак есть, Save choice нет.
+- **This device:** Name (вне `Running` пустое имя или `localhost`, которое
+  ядро отдаёт до входа, показано как `—`), MagicDNS name, затем один
+  заголовок Address и под ним
+  все адреса устройства, по строке на адрес в порядке ядра (адресов нет —
+  блока нет); нажатие на адрес копирует этот адрес.
 - **Devices** (P22): пиры кроме этого устройства, сначала в сети, затем по
-  имени; отметки: `online` / `offline` с `last seen`, `key expired`, `shared`,
-  `exit node`, ОС, когда известна; нажатие на имя или адрес копирует, меню
-  строки — Copy name, Copy address, Ping. Группы владельцев показываются
-  только при нескольких владельцах; картинки профилей не грузятся.
+  имени; заголовок — `Devices · <в сети> online / <в списке>`. Строка в три
+  этажа:
+  1. точка (зелёная — в сети, серая — нет), имя хоста; справа первый адрес;
+  2. ОС, `exit node`, `shared` через ` · ` (без `online`: это показывает
+     точка); справа второй адрес, а при адресах больше двух — `+N` со
+     стрелкой, которая раскрывает остальные адреса под строкой и сворачивает
+     их; не влезает по ширине — левая часть обрезается многоточием, адрес
+     целый;
+  3. как подключено, срабатывает первое: `DIRECT` — зелёная молния и
+     `direct <endpoint>`; `DERP` — оранжевое облако и `relay <регион>`;
+     `PEER_RELAY` — оранжевый узел и `peer relay`; пути нет, устройство не в
+     сети и время last seen известно — `last seen 33h ago` (относительно:
+     `42s`, `5m`, `33h` до 48 часов, дальше `17d`); иначе ничего. Дописывается
+     `key expired`; пустая строка не рисуется. Возраста хендшейка здесь нет.
+  Нажатие на строку открывает страницу устройства; долгое нажатие копирует
+  первый адрес (имя хоста, если адресов нет) без страницы; нажатие на `+N`
+  только раскрывает адреса. Группы владельцев показываются только
+  при нескольких владельцах; картинки профилей не грузятся.
+- **Страница устройства:** полный экран со стрелкой назад и именем хоста в
+  заголовке. Сверху сводка — точка с `online` / `offline`, ОС и роли как на
+  втором этаже строки, строка пути как на третьем. Дальше кнопки: Ping (если
+  у устройства есть адрес; тот же лист проверки, что раньше) и Send file…,
+  которая видна всегда и, если отправить нельзя, неактивна с причиной под
+  кнопками — первой подходящей: `Taildrop is off for this node`, `File
+  sharing is off in this tailnet`, `Device is offline`, `Device belongs to
+  another user`, `Device can't receive files`. Выключенный Allow Taildrop на
+  той стороне заранее не виден (ядро его не публикует) — он выясняется
+  отказом при отправке. **Addresses:** Name, MagicDNS (если известно) и
+  каждый адрес Tailscale с подписью IPv4 / IPv6; нажатие копирует значение,
+  «Copied». **Taildrop:** переключатели «Clipboard from this device» и «Links
+  from this device» ([032-TAILDROP · clipboard-sync](../../032-TAILDROP/FUNCTIONS/clipboard-sync.ru.md)),
+  только если Taildrop узла включён, у устройства есть stable ID и оно не
+  чужое (sharee); пишутся сразу; иначе блока нет вместе с заголовком. Пока
+  страница открыта, вызовы статуса продолжаются, страница следит за
+  устройством по stable ID; пропавшее из записи устройство остаётся в
+  последнем известном виде. Нижнего листа с пунктами Copy больше нет.
+- **Действующий выход** в списке Exit node показывает путь с той же иконкой и
+  цветом и возраст хендшейка.
+- **Живой статус:** пока на экране вкладка или страница устройства,
+  приложение на переднем плане и VPN включён, вкладка зовёт `GetTailscaleStatus(tag)` ядра сразу и дальше раз в
+  3 с. Ответ — полная запись endpoint'а (свой узел, exit node, пиры по
+  владельцам, health), вкладка строится по ней целиком; пока ответа нет,
+  показывается то, что дал поток. На экране — запись, пришедшая последней, из
+  вызова или из потока; поток закрывает и события между тиками. Вкладка ушла
+  с экрана, закрыта или VPN выключен — вызовы останавливаются; вернулись —
+  вызов сразу. Ядро без метода — вызовы стоят до закрытия вкладки, вкладка
+  живёт по потоку, в UI и журнале ничего; тег не найден или endpoint не
+  запущен — тик пропускается; вызов ещё идёт — следующий тик пропускается.
 - **Перерисовка** не чаще раза в секунду; список ленивый.
 - **Diagnostics** (P23): действующего выхода нет — проверка запросом к
   внешнему адресу скрыта и заменена строкой; при поднятом VPN решает выход
@@ -89,10 +169,12 @@ Diagnostics «This node has no exit. Check devices on the Network tab.»
 - Сама строка NETWORKS и таблица состояний —
   [012-LIVE_STATE · P19](../../012-LIVE_STATE/FEATURE.ru.md#обещания); вкладка
   Diagnostics — [009-NODE_HEALTH](../../009-NODE_HEALTH/FEATURE.ru.md).
-- Переключение выхода, Log out и Ping на устройстве с живой tailnet не
-  проверены (DEVICE-PENDING).
+- Переключение выхода, Log out, Ping, Replace key без перезапуска, Node
+  enabled и Restart node на устройстве с живой tailnet не проверены
+  (DEVICE-PENDING).
 - Не показываются: трафик по устройствам, соединения через узел, SSH,
-  Taildrop, сертификаты `*.ts.net`.
+  сертификаты `*.ts.net`. Taildrop (блок входящих и «Send file…» на этой
+  вкладке) — [032-TAILDROP](../../032-TAILDROP/FEATURE.ru.md).
 - Выход, выбранный на ходу, переживает перезапуск через каталог состояния,
   пока в теле нет `exit_node`; `ephemeral: true` его теряет.
 
@@ -102,3 +184,7 @@ Diagnostics «This node has no exit. Check devices on the Network tab.»
 |---|---------|--------|------|
 | 1 | [579](../../../tasks/579-networks-pseudo-direction.md) | Implemented, DEVICE-PENDING | Мост потока состояния; строка NETWORKS; решение о вкладке как follow-up |
 | 2 | [581](../../../tasks/581-tailscale-network-tab.md) | Implemented, DEVICE-PENDING | Вкладка Network, exit node на ходу и Save choice, Ping, строка Diagnostics, сводка Debug API |
+| 3 | [645](../../../tasks/645-tailscale-devices-path-addresses.md) | Implemented, DEVICE-PENDING | Строки устройств в три этажа с путём иконкой, адреса столбиком, This device с одним заголовком Address, `GetTailscaleStatus` раз в 3 с |
+| 4 | [706](../../../tasks/706-tailscale-network-tab-logged-out.md) | Implemented, DEVICE-PENDING | Вне сети: записанный выход строкой вместо списка и Save choice (больше не стирается), чип ключа только в Running, Replace key, Name `—` |
+| 5 | [706](../../../tasks/706-tailscale-network-tab-logged-out.md), итерация 2 | Implemented, DEVICE-PENDING | Replace key входит без перезапуска VPN (ядро SPEC 149), переключатель Node enabled и Restart node в Status |
+| 6 | [707](../../../tasks/707-taildrop-send-receive-files.md), итерация 6 | Implemented, проверено на эмуляторе | 2026-11-03: нажатие на устройство открывает страницу устройства (сводка, Ping и Send file… с причиной, Addresses с копированием по нажатию, разрешения Taildrop) вместо меню строки; долгое нажатие копирует первый адрес |

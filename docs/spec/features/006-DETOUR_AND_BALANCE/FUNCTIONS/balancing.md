@@ -47,6 +47,35 @@ is probed each interval. The other members' latencies age; a manual group test
 re-picks the fastest. On the first launch after the update, groups in Fastest
 become Hold until failure unless passive checking had been switched off.
 
+### How the pool is filled and checked
+
+The core keeps the Load balance pool by itself
+(`sing-box-lx/docs/configuration/outbound/urltest.md`, section `balancer`):
+
+- At start the first `pool` nodes go into the pool without a test: nodes with
+  a latency history first, fastest first, then in config order.
+- Pool tolerance `0`: each interval only pool members are tested. A node
+  outside the pool is tested only when a member fails. The core then walks
+  the nodes outside the pool in config order, in parallel batches of `pool`
+  nodes, and stops after the batch that fills the last dead slot: one dead
+  slot can cost up to `pool` extra tests, not one. A list of hundreds of
+  nodes still does not mean hundreds of tests.
+- A WireGuard / AmneziaWG candidate brings its device up when tested, so the
+  node list shows it as "up" while it is not in the pool. A candidate the
+  pool did not take falls asleep again after its idle window. "up" / "sleep"
+  in the list is the device state, not pool membership.
+- Pool tolerance `> 0`: each interval all members are tested; the pool holds
+  the fastest `pool` of them, and a member is replaced only when an outside
+  node beats it by more than the tolerance.
+- A manual group test (Run URLTest in the group menu) tests all members and
+  rebuilds the pool from the fresh results.
+
+Auto-ping after connect pings every node of the active Direction one by one
+to show latencies in the list. The group test it runs afterwards is run only
+for Fastest (`least_test`) groups ([677](../../../tasks/677-autoping-tail-skips-round-robin-groups.md)): for Load balance the
+first run after connecting does not test the whole list, and Hold until
+failure does not drop the held node because of auto-ping.
+
 ## Inputs / Outputs
 
 **Inputs:** nodes of the Direction / container; Xray `routing.balancers` and
@@ -55,6 +84,11 @@ become Hold until failure unless passive checking had been switched off.
 (Fastest) / `🔀 [N/pool]` (Load balance) / `📌 [N]` (Hold until failure); the
 live pool of the running core
 ("connect to see the live pool").
+The `🔀 [N/pool]` label carries the pool badges matched by the badge regex;
+when no member yields a badge, it lists the names of the pool slots in the
+core's order instead. One rule for the Direction's Auto twin and for an
+auto-select node. Load balance has no `→ node` arrow: `round_robin` has no
+single current pick.
 
 ## Rules and invariants
 
@@ -71,6 +105,12 @@ live pool of the running core
   `<tag>-auto` (a urltest inside a urltest would measure someone else's
   choice). Disabled or missing members are cut off with the code
   `group_member_dropped`.
+- **Pool preview of an auto node** (the group form): a member switched off
+  in the folder stays in the list with the ⏻ icon (All and Rule — in place
+  of ✓/⊖, Pick — to the right of the name), the row is dimmed. It counts
+  neither in N nor in M of "N of M servers"; when there are such members,
+  "· K off" is added. In Pick it can be ticked: the choice is kept and works
+  once the server is switched on.
 - Xray import: `random`/`roundRobin`/`leastLoad` with `expected>1` → Load
   balance; `leastPing` or `expected≤1` → Fastest; `expected` → pool,
   `maxRTT` → pool_tolerance; `selector` → include rule `^(…)`; `pingConfig`
@@ -104,3 +144,6 @@ live pool of the running core
 | 9 | [568](../../../tasks/568-source-replace-fold.md) | Implemented | "Replace with a group" for a folder and a subscription |
 | 10 | [611](../../../tasks/611-drop-passive-check-kernel-lx12.md) | Implemented | `passive_check` removed (core lx.12) |
 | 11 | [612](../../../tasks/612-contract-1-1-113-failover.md) | Implemented | Hold until failure (`failover`), migration from `passive_check` |
+| 12 | [677](../../../tasks/677-autoping-tail-skips-round-robin-groups.md) | Done | Auto ping on start forces a group test only for Fastest (`least_test`) |
+| 13 | [686](../../../tasks/686-folder-auto-node-source-tab.md) | In progress | Pool preview: a member switched off in the folder — ⏻, outside the count |
+| 14 | [715](../../../tasks/715-auto-twin-pool-label-core-delays.md) | Done | Load balance twin shows the pool label; slot names when no badge |

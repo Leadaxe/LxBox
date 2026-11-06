@@ -13,16 +13,11 @@ L×Box бесплатный, без рекламы, без подписок и �
 
 ## Криптовалюта
 
-Ссылка «оплатить» открывает Trust Wallet с уже подставленным адресом. Если
-пользуетесь другим кошельком — скопируйте адрес вручную.
-
 ### USDT · TRON (TRC20) — предпочтительно
 
 ```
 TBBEANETx2YTysG1bwg3HjxZjiZWhhBWun
 ```
-
-[Оплатить через Trust Wallet](https://link.trustwallet.com/send?coin=195&address=TBBEANETx2YTysG1bwg3HjxZjiZWhhBWun&token_id=TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t)
 
 Комиссия сети TRON — копейки, поэтому этот вариант лучше остальных.
 
@@ -32,23 +27,17 @@ TBBEANETx2YTysG1bwg3HjxZjiZWhhBWun
 0xde9cff6A529f655E777d6Ce718eD26f9c99046Ea
 ```
 
-[Оплатить через Trust Wallet](https://link.trustwallet.com/send?coin=60&address=0xde9cff6A529f655E777d6Ce718eD26f9c99046Ea&token_id=0xdAC17F958D2ee523a2206206994597C13D831ec7)
-
 ### Bitcoin
 
 ```
 bc1qupzrxnyvkccpfuv6pmnt58w8xyx5c0l8a6jue7
 ```
 
-[Оплатить через Trust Wallet](https://link.trustwallet.com/send?coin=0&address=bc1qupzrxnyvkccpfuv6pmnt58w8xyx5c0l8a6jue7)
-
 ### Ethereum
 
 ```
 0xde9cff6A529f655E777d6Ce718eD26f9c99046Ea
 ```
-
-[Оплатить через Trust Wallet](https://link.trustwallet.com/send?coin=60&address=0xde9cff6A529f655E777d6Ce718eD26f9c99046Ea)
 
 > Проверяйте адрес и сеть перед отправкой: перевод в неверную сеть
 > восстановить невозможно.

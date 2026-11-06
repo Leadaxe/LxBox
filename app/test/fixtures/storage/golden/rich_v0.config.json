@@ -1,4 +1,13 @@
 {
+  "lx": {
+    "quic_sniff_decoy": "detour",
+    "wg": {
+      "idle_suspend": "30s",
+      "lazy_build": true,
+      "build_max": 5,
+      "idle_suspend_reachable": "5m"
+    }
+  },
   "log": {
     "level": "debug",
     "timestamp": true
@@ -19,10 +28,16 @@
         "type": "group",
         "servers": [
           "my-doh",
-          "google_udp"
+          "google_udp",
+          "off-dns"
         ],
         "mode": "fastest",
         "tag": "dns-group"
+      },
+      {
+        "type": "udp",
+        "server": "192.0.2.53",
+        "tag": "off-dns"
       },
       {
         "type": "local",
@@ -38,8 +53,7 @@
         "type": "tls",
         "tag": "google_dot",
         "server_port": 853,
-        "server": "8.8.8.8",
-        "detour": "vpn-1"
+        "server": "8.8.8.8"
       },
       {
         "type": "https",
@@ -57,14 +71,14 @@
         "type": "tls",
         "tag": "cloudflare_dot",
         "server_port": 853,
-        "server": "1.1.1.1",
-        "detour": "vpn-1"
+        "server": "1.1.1.1"
       },
       {
         "type": "udp",
         "tag": "opendns_udp",
         "server_port": 53,
-        "server": "208.67.222.222"
+        "server": "208.67.222.222",
+        "detour": "vpn-1"
       },
       {
         "type": "https",
@@ -75,8 +89,7 @@
         "tls": {
           "enabled": true,
           "server_name": "dns.quad9.net"
-        },
-        "detour": "vpn-1"
+        }
       },
       {
         "type": "group",
@@ -85,9 +98,7 @@
           "google_doh",
           "google_dot",
           "cloudflare_dot",
-          "opendns_doh",
-          "quad9_doh",
-          "yandex_dot"
+          "quad9_doh"
         ],
         "mode": "fastest",
         "error_ttl": "5m",
@@ -119,8 +130,7 @@
         "tls": {
           "enabled": true,
           "server_name": "safe.dot.dns.yandex.net"
-        },
-        "detour": "vpn-1"
+        }
       },
       {
         "type": "https",
@@ -131,27 +141,6 @@
         "tls": {
           "enabled": true,
           "server_name": "safe.dot.dns.yandex.net"
-        }
-      },
-      {
-        "type": "https",
-        "tag": "opendns_doh",
-        "server_port": 443,
-        "server": "208.67.222.222",
-        "path": "/dns-query",
-        "tls": {
-          "enabled": true,
-          "server_name": "dns.opendns.com"
-        }
-      },
-      {
-        "type": "tls",
-        "tag": "yandex_dot",
-        "server_port": 853,
-        "server": "77.88.8.8",
-        "tls": {
-          "enabled": true,
-          "server_name": "common.dot.dns.yandex.net"
         }
       }
     ],
@@ -264,7 +253,8 @@
       "auth_key": "tskey-auth-000000000000",
       "hostname": "lxbox-test",
       "accept_routes": true,
-      "state_directory": "/data/user/0/com.leadaxe.lxbox/files/tailscale/home-ts"
+      "state_directory": "/data/user/0/com.leadaxe.lxbox/files/tailscale/home-ts",
+      "taildrop_directory": "/data/user/0/com.leadaxe.lxbox/files/tailscale/home-ts/taildrop"
     },
     {
       "type": "wireguard",
@@ -290,7 +280,8 @@
   "outbounds": [
     {
       "type": "direct",
-      "tag": "direct-out"
+      "tag": "direct-out",
+      "connect_timeout": "15s"
     },
     {
       "type": "block",
@@ -341,9 +332,7 @@
       "password": "testpass123",
       "tls": {
         "enabled": true,
-        "server_name": "example-14.com",
-        "fragment": true,
-        "fragment_fallback_delay": "500ms"
+        "server_name": "example-14.com"
       }
     },
     {
@@ -434,9 +423,7 @@
       },
       "tls": {
         "enabled": true,
-        "server_name": "example-2.com",
-        "fragment": true,
-        "fragment_fallback_delay": "500ms"
+        "server_name": "example-2.com"
       }
     },
     {
@@ -474,9 +461,7 @@
         "server_name": "example-1.com",
         "alpn": [
           "h3"
-        ],
-        "fragment": true,
-        "fragment_fallback_delay": "500ms"
+        ]
       }
     },
     {
@@ -571,7 +556,6 @@
         "PR FI-1",
         "PR ss-1",
         "S2 JP-1",
-        "S2 jump",
         "S2 US-1",
         "VLESS Reality",
         "WireGuard",
@@ -659,7 +643,7 @@
         "EU nl-1",
         "EU fr-1"
       ],
-      "interrupt_exist_connections": false,
+      "interrupt_exist_connections": true,
       "default": "PR DE-1"
     },
     {
@@ -673,7 +657,10 @@
   ],
   "route": {
     "find_process": true,
-    "default_domain_resolver": "google_udp",
+    "default_domain_resolver": {
+      "server": "google_udp",
+      "disable_optimistic_cache": true
+    },
     "rules": [
       {
         "action": "sniff",
@@ -979,13 +966,5 @@
     {
       "type": "oom-killer"
     }
-  ],
-  "lx": {
-    "wg": {
-      "idle_suspend": "1m",
-      "idle_suspend_reachable": "10m",
-      "lazy_build": true,
-      "build_max": 5
-    }
-  }
+  ]
 }

@@ -43,9 +43,15 @@ on export losses — the "Not included in the file" dialog ("These settings
 have no place in the shared format:"). The "Import backup" import preview:
 "From <app> <version>", counters Directions / Chains / Rules / Subscriptions
 / Servers / Variables / DNS entries / WARP accounts, the "Not applied
-as-is:" list and the line "Importing replaces the current rules.". Result —
-"Imported N rules, M directions and K settings" (variants) with "; chains:
-N", or "Imported N rule(s), M items not applied".
+as-is:" list (without `backup_rules_replaced`; no heading when the list is
+empty) and a closing line about rules: "This file has no rules. The current
+rules stay." (no `rules` key), "Importing adds the file's rules." (key
+present, no rules here) or "Importing replaces the current N rule(s).".
+Result — "Imported N rules, M directions and K settings" (variants), or
+"Imported N rule(s), M items not applied" (replaced rules are not counted
+as not applied), followed by ", replaced N rule(s)" when rules were replaced
+and "; chains: N"; all counters zero — "Nothing to import: the file has no
+rules, directions or settings."
 
 ## Rules and invariants
 
@@ -59,7 +65,11 @@ N", or "Imported N rule(s), M items not applied".
   the file's settings but keeps its own `id` and name.
 - **Directions and chains:** a taken tag — the incoming one is not applied
   (`backup_direction_exists`, `backup_chain_exists`), your own stays (P13).
-- **Rules:** replace the receiver's rules; the order — by the file's numbers.
+- **Rules:** a file with the `rules` key (even `[]`) replaces the receiver's
+  rules; the removed ones are named by one `backup_rules_replaced {count}`,
+  only when `count > 0`. A file without the `rules` key leaves the receiver's
+  rules as they were, with no code (contract 1.1.116). Export always writes
+  the key. The order — by the file's numbers.
   A rule's target is checked after merging sources and Directions: an unknown
   target — the rule is disabled (`backup_unknown_outbound`); `route.final`
   to nowhere — not applied (`backup_final_dropped`) (P14). A foreign preset

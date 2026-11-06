@@ -7,10 +7,9 @@ import '../../about_screen.dart';
 import '../../app_settings_screen.dart';
 import '../../config_screen.dart';
 import '../../debug_screen.dart';
-import '../../dns_settings_screen.dart';
 import '../../routing_screen.dart';
 import '../../settings_screen.dart';
-import '../../speed_test_screen.dart';
+import '../../diagnostics/diagnostics_screen.dart';
 import '../../stats_screen.dart';
 import '../../subscriptions_screen.dart';
 import '../../../services/l10n/locale_controller.dart';
@@ -59,22 +58,10 @@ class HomeDrawer extends StatelessWidget {
             ListTile(
               leading: const Icon(Icons.alt_route_outlined),
               title: Text(getLocalText.s("Routing")),
-              subtitle: Text(getLocalText.s("Directions and routing rules")),
+              subtitle: Text(getLocalText.s("Directions, rules and DNS")),
               onTap: () => _go(
                 context,
                 RoutingScreen(
-                  subController: subController,
-                  homeController: controller,
-                ),
-              ),
-            ),
-            ListTile(
-              leading: const Icon(Icons.dns_outlined),
-              title: Text(getLocalText.s("DNS Settings")),
-              subtitle: Text(getLocalText.s("DNS servers and rules")),
-              onTap: () => _go(
-                context,
-                DnsSettingsScreen(
                   subController: subController,
                   homeController: controller,
                 ),
@@ -100,11 +87,11 @@ class HomeDrawer extends StatelessWidget {
             ),
             const Divider(),
             ListTile(
-              leading: const Icon(Icons.speed_outlined),
-              title: Text(getLocalText.s("Speed Test")),
-              subtitle: Text(getLocalText.s("Test download/upload speed")),
+              leading: const Icon(Icons.troubleshoot_outlined),
+              title: Text(getLocalText.s("Diagnostics")),
+              subtitle: Text(getLocalText.s("URL check and speed test")),
               onTap: () =>
-                  _go(context, SpeedTestScreen(homeController: controller)),
+                  _go(context, DiagnosticsScreen(homeController: controller)),
             ),
             ListTile(
               leading: const Icon(Icons.bar_chart_outlined),
@@ -124,7 +111,13 @@ class HomeDrawer extends StatelessWidget {
               leading: const Icon(Icons.description_outlined),
               title: Text(getLocalText.s("Config Editor")),
               subtitle: Text(getLocalText.s("View, edit, import JSON")),
-              onTap: () => _go(context, ConfigScreen(controller: controller)),
+              onTap: () => _go(
+                context,
+                ConfigScreen(
+                  controller: controller,
+                  subController: subController,
+                ),
+              ),
             ),
             ListTile(
               leading: const Icon(Icons.bug_report_outlined),

@@ -8,11 +8,21 @@ import io.nekohasekai.libbox.CommandClient
 import io.nekohasekai.libbox.CommandClientHandler
 import io.nekohasekai.libbox.CommandClientOptions
 import io.nekohasekai.libbox.ConnectionEvents
+import io.nekohasekai.libbox.ConnectionTestAttrIterator
+import io.nekohasekai.libbox.ConnectionTestHandler
+import io.nekohasekai.libbox.ConnectionTestResult
+import io.nekohasekai.libbox.ConnectionTestSession
+import io.nekohasekai.libbox.ConnectionTestStage
 import io.nekohasekai.libbox.Connections
 import io.nekohasekai.libbox.DnsQuery
 import io.nekohasekai.libbox.GetURLResult
+import io.nekohasekai.libbox.HTTPHeaders
 import io.nekohasekai.libbox.Libbox
 import io.nekohasekai.libbox.LogIterator
+import io.nekohasekai.libbox.OpenConnectEndpointStatus
+import io.nekohasekai.libbox.OpenConnectStatusHandler
+import io.nekohasekai.libbox.OpenConnectStatusSubscription
+import io.nekohasekai.libbox.OpenConnectStatusUpdate
 import io.nekohasekai.libbox.OutboundGroup
 import io.nekohasekai.libbox.OutboundGroupIterator
 import io.nekohasekai.libbox.OutboundGroupItemIterator
@@ -20,6 +30,7 @@ import io.nekohasekai.libbox.PoolSlotIterator
 import io.nekohasekai.libbox.RuleIterator
 import io.nekohasekai.libbox.StatusMessage
 import io.nekohasekai.libbox.StringIterator
+import io.nekohasekai.libbox.TailscaleEndpointStatus
 import io.nekohasekai.libbox.TailscalePeer
 import io.nekohasekai.libbox.TailscalePingHandler
 import io.nekohasekai.libbox.TailscalePingResult
@@ -27,6 +38,9 @@ import io.nekohasekai.libbox.TailscalePingSession
 import io.nekohasekai.libbox.TailscaleStatusHandler
 import io.nekohasekai.libbox.TailscaleStatusSubscription
 import io.nekohasekai.libbox.TailscaleStatusUpdate
+import io.nekohasekai.libbox.TaildropInbox
+import io.nekohasekai.libbox.TaildropInboxHandler
+import io.nekohasekai.libbox.TaildropInboxSubscription
 import io.nekohasekai.libbox.URLTestOutboundResult
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.atomic.AtomicBoolean
@@ -279,6 +293,9 @@ class BoxCommandClient {
         disconnectClient(pingClient, "shutdownAll") // §175
         stopTailscaleStatus() // §579
         stopTailscalePing() // §581
+        stopTaildropInbox() // §707
+        stopConnectionTest() // §687
+        stopOpenConnectStatus() // §654
         screenAccumulator.set(null)
         profilerAccumulator.set(null)
     }
@@ -389,42 +406,7 @@ class BoxCommandClient {
                 val iter = update.endpoints() ?: return@runCatching
                 while (iter.hasNext()) {
                     val e = iter.next() ?: continue
-                    // §581 — полное состояние для вкладки Network. Имена,
-                    // адреса и ссылка входа в лог не пишутся (раздел 9).
-                    val groups = ArrayList<Map<String, Any>>()
-                    val gi = e.userGroups()
-                    while (gi != null && gi.hasNext()) {
-                        val g = gi.next() ?: continue
-                        val peers = ArrayList<Map<String, Any>>()
-                        val pi = g.peers()
-                        while (pi != null && pi.hasNext()) {
-                            val p = pi.next() ?: continue
-                            peers.add(tailscalePeerMap(p))
-                        }
-                        groups.add(mapOf(
-                            "user_id" to g.userID,
-                            "login_name" to (g.loginName ?: ""),
-                            "display_name" to (g.displayName ?: ""),
-                            "peers" to peers,
-                        ))
-                    }
-                    val m = HashMap<String, Any>()
-                    m["tag"] = e.endpointTag ?: ""
-                    m["backend_state"] = e.backendState ?: ""
-                    m["state_text"] = e.stateText ?: ""
-                    m["auth_url"] = e.authURL ?: ""
-                    m["network_name"] = e.networkName ?: ""
-                    m["magic_dns_suffix"] = e.magicDNSSuffix ?: ""
-                    m["key_auth"] = e.keyAuth
-                    e.self?.let { m["self"] = tailscalePeerMap(it) }
-                    e.exitNode?.let { m["exit_node"] = tailscalePeerMap(it) }
-                    m["user_groups"] = groups
-                    // §613 (ядро SPEC 115, lx.12) — предупреждения бэкенда.
-                    val health = ArrayList<String>()
-                    val hi = e.health()
-                    while (hi != null && hi.hasNext()) hi.next()?.let { health.add(it) }
-                    m["health"] = health
-                    out.add(m)
+                    out.add(tailscaleEndpointMap(e))
                 }
                 tailscaleEmitter.offer(out)
             }.onFailure { Log.w(TAG, "tailscale onStatusUpdate failed: ${it.javaClass.simpleName}") }
@@ -433,6 +415,74 @@ class BoxCommandClient {
         override fun onError(message: String?) {
             runCatching { Log.w(TAG, "tailscale status stream error (gen=$gen): $message") }
         }
+    }
+
+    /// §581 — запись `TailscaleEndpointStatus` в map канала: полное состояние
+    /// для вкладки Network. Имена, адреса и ссылка входа в лог не пишутся
+    /// (раздел 9). §645 — тот же разбор у потока и у `getTailscaleStatus`.
+    private fun tailscaleEndpointMap(e: TailscaleEndpointStatus): HashMap<String, Any> {
+        val groups = ArrayList<Map<String, Any>>()
+        val gi = e.userGroups()
+        while (gi != null && gi.hasNext()) {
+            val g = gi.next() ?: continue
+            val peers = ArrayList<Map<String, Any>>()
+            val pi = g.peers()
+            while (pi != null && pi.hasNext()) {
+                val p = pi.next() ?: continue
+                peers.add(tailscalePeerMap(p))
+            }
+            groups.add(mapOf(
+                "user_id" to g.userID,
+                "login_name" to (g.loginName ?: ""),
+                "display_name" to (g.displayName ?: ""),
+                "peers" to peers,
+            ))
+        }
+        val m = HashMap<String, Any>()
+        m["tag"] = e.endpointTag ?: ""
+        m["backend_state"] = e.backendState ?: ""
+        m["state_text"] = e.stateText ?: ""
+        m["auth_url"] = e.authURL ?: ""
+        m["network_name"] = e.networkName ?: ""
+        m["magic_dns_suffix"] = e.magicDNSSuffix ?: ""
+        m["key_auth"] = e.keyAuth
+        e.self?.let { m["self"] = tailscalePeerMap(it) }
+        e.exitNode?.let { m["exit_node"] = tailscalePeerMap(it) }
+        m["user_groups"] = groups
+        // §613 (ядро SPEC 115, lx.12) — предупреждения бэкенда.
+        val health = ArrayList<String>()
+        val hi = e.health()
+        while (hi != null && hi.hasNext()) hi.next()?.let { health.add(it) }
+        m["health"] = health
+        // §707 — Taildrop: право узла на обмен файлами и счётчики входящих.
+        m["can_share_files"] = e.canShareFiles
+        m["waiting_file_count"] = e.waitingFileCount
+        m["receiving_file_count"] = e.receivingFileCount
+        m["unread_file_count"] = e.unreadFileCount
+        return m
+    }
+
+    /// §645 — одиночный `GetTailscaleStatus(tag)` (ядро SPEC 115): ядро
+    /// перечитывает состояние на каждый вызов, путь до устройств — на момент
+    /// запроса. Блокирующий gRPC — звать с `Dispatchers.IO`. Вкладка Network
+    /// зовёт раз в 3 с, поэтому без записей в журнал. `null` — пропуск (клиента
+    /// нет, тег не найден, endpoint не запущен); ядро без метода —
+    /// [UnsupportedOperationException].
+    fun getTailscaleStatus(tag: String): Map<String, Any>? {
+        val client = ensurePingClient() ?: return null
+        val e = try {
+            client.getTailscaleStatus(tag)
+        } catch (_: LinkageError) {
+            throw UnsupportedOperationException("getTailscaleStatus")
+        } catch (t: Exception) {
+            if ((t.message ?: "").contains("unimplemented", ignoreCase = true)) {
+                throw UnsupportedOperationException("getTailscaleStatus")
+            }
+            return null
+        } ?: return null
+        return runCatching {
+            tailscaleEndpointMap(e).also { if ((it["tag"] as String).isEmpty()) it["tag"] = tag }
+        }.getOrNull()
     }
 
     /// §581 — `TailscalePeer` в map канала. `key_expiry`/`last_seen` — Unix-секунды
@@ -461,6 +511,8 @@ class BoxCommandClient {
             "peer_relay" to (p.peerRelay ?: ""),
             "derp_region_code" to (p.derpRegionCode ?: ""),
             "last_handshake" to p.lastHandshake,
+            // §707 — пир принимает файлы Taildrop (своё устройство, право есть).
+            "can_receive_files" to p.canReceiveFiles,
         )
     }
 
@@ -477,6 +529,478 @@ class BoxCommandClient {
         val client = ensurePingClient() ?: return "no command client"
         return runCatching { client.tailscaleLogout(tag); null }
             .getOrElse { Log.w(TAG, "tailscaleLogout failed"); it.message ?: "failed" }
+    }
+
+    /// §706 (ядро SPEC 149, lx.30) — вход узла с новым auth-ключом без
+    /// перезапуска VPN. Блокирующий gRPC — звать с `Dispatchers.IO`. No-throw:
+    /// `null` = ядро приняло вызов (отказ ключа виден позже в `backendState`),
+    /// иначе `{"error": <код>, "message": <текст>}` с кодами как у
+    /// [setEndpointEnabled]. Ключ в лог не пишется.
+    fun tailscaleLogin(tag: String, authKey: String): Map<String, String>? {
+        val client = ensurePingClient() ?: run {
+            Log.w(TAG, "tailscaleLogin: no command client (paused/down)")
+            return mapOf("error" to "error", "message" to "no command client")
+        }
+        return runCatching { client.tailscaleLogin(tag, authKey); null }
+            .getOrElse {
+                val msg = it.message ?: it.toString()
+                Log.w(TAG, "tailscaleLogin($tag) failed: $msg")
+                mapOf("error" to endpointToggleErrorCode(msg), "message" to msg)
+            }
+    }
+
+    // ═══════════════════════ §707 Taildrop ═══════════════════════
+    // Входящие узла — подписка `SubscribeTaildropInbox` на ОТДЕЛЬНОМ клиенте,
+    // пока открыта вкладка Network (одна на всё приложение: новая снимает
+    // прежнюю). Снапшот входящих — в `ccTaildropInboxSink`. Имена файлов и
+    // устройств в журнал не пишутся.
+
+    private val taildropInboxClient = AtomicReference<CommandClient?>(null)
+    private val taildropInboxSub = AtomicReference<TaildropInboxSubscription?>(null)
+    private val taildropInboxGen = AtomicInteger(0)
+    private val taildropInboxEmitter = SnapshotEmitter { BoxVpnService.ccTaildropInboxSink }
+
+    /// Новый подключённый клиент без подписок — под поток одной передачи
+    /// (отправка, выгрузка файла), чтобы его закрытие не задевало другие.
+    /// Блокирующий connect — звать не с main.
+    fun newCallClient(): CommandClient? = runCatching {
+        CommandClient(PingHandler(), CommandClientOptions()).also { it.connect() }
+    }.getOrElse { Log.w(TAG, "newCallClient failed: ${it.message}"); null }
+
+    fun startTaildropInbox(tag: String) {
+        stopTaildropInbox()
+        val gen = taildropInboxGen.incrementAndGet()
+        runCatching {
+            val client = CommandClient(PingHandler(), CommandClientOptions())
+            client.connect()
+            taildropInboxClient.getAndSet(client)?.runCatching { disconnect() }
+            val sub = client.subscribeTaildropInbox(tag, TaildropInboxCallback(gen, tag))
+            taildropInboxSub.getAndSet(sub)?.runCatching { close() }
+        }.onFailure { Log.w(TAG, "startTaildropInbox failed (gen=$gen): ${it.javaClass.simpleName}") }
+    }
+
+    fun stopTaildropInbox() {
+        taildropInboxGen.incrementAndGet()
+        taildropInboxSub.getAndSet(null)?.runCatching { close() }
+        disconnectClient(taildropInboxClient, "stopTaildropInbox")
+    }
+
+    /// Колбэки из Go-потока: исключения наружу не выходят (JNI abort).
+    private inner class TaildropInboxCallback(
+        private val gen: Int,
+        private val tag: String,
+    ) : TaildropInboxHandler {
+        override fun onInboxUpdate(inbox: TaildropInbox?) {
+            runCatching {
+                if (gen != taildropInboxGen.get() || inbox == null) return@runCatching
+                taildropInboxEmitter.offer(taildropInboxMap(inbox, tag))
+            }.onFailure { Log.w(TAG, "taildrop onInboxUpdate failed: ${it.javaClass.simpleName}") }
+        }
+
+        override fun onError(message: String?) {
+            runCatching { Log.w(TAG, "taildrop inbox stream error (gen=$gen)") }
+        }
+    }
+
+    private fun taildropInboxMap(inbox: TaildropInbox, tag: String): Map<String, Any> {
+        val files = ArrayList<Map<String, Any>>()
+        val fi = inbox.files()
+        while (fi != null && fi.hasNext()) {
+            val f = fi.next() ?: continue
+            files.add(mapOf(
+                "name" to (f.name ?: ""),
+                "size" to f.size,
+                "sender_id" to (f.senderID ?: ""),
+                "sender_name" to (f.senderName ?: ""),
+                "modified_at" to f.modifiedAt,
+            ))
+        }
+        val receiving = ArrayList<Map<String, Any>>()
+        val ri = inbox.receiving()
+        while (ri != null && ri.hasNext()) {
+            val f = ri.next() ?: continue
+            receiving.add(mapOf(
+                "name" to (f.name ?: ""),
+                "size" to f.size,
+                "received_bytes" to f.receivedBytes,
+                "sender_id" to (f.senderID ?: ""),
+                "sender_name" to (f.senderName ?: ""),
+            ))
+        }
+        return mapOf(
+            "tag" to (inbox.endpointTag?.takeIf { it.isNotEmpty() } ?: tag),
+            "files" to files,
+            "receiving" to receiving,
+        )
+    }
+
+    /// §707 итер. 4 — разовый снимок входящих узла [tag]: имя файла →
+    /// (senderID, senderName). Нужен разбору служебных файлов: уведомление
+    /// ядра отправителя не несёт. Блокирует до [timeoutMs]; `null` — клиента
+    /// нет или ядро не ответило. Имена в журнал не пишутся.
+    fun taildropInboxSnapshot(tag: String, timeoutMs: Long): Map<String, Pair<String, String>>? {
+        val inbox = taildropInboxOnce(tag, timeoutMs) ?: return null
+        val m = HashMap<String, Pair<String, String>>()
+        @Suppress("UNCHECKED_CAST")
+        for (f in inbox["files"] as List<Map<String, Any>>) {
+            val name = f["name"] as? String ?: continue
+            m[name] = (f["sender_id"] as? String ?: "") to (f["sender_name"] as? String ?: "")
+        }
+        return m
+    }
+
+    /// §707 итер. 5 — разовый снимок входящих узла [tag] той же формы, что
+    /// поток вкладки Network (`taildropInboxMap`): первое обновление
+    /// `SubscribeTaildropInbox` на своём клиенте. Блокирует до [timeoutMs];
+    /// `null` — клиента нет или ядро не ответило.
+    fun taildropInboxOnce(tag: String, timeoutMs: Long): Map<String, Any>? {
+        val client = newCallClient() ?: return null
+        val latch = java.util.concurrent.CountDownLatch(1)
+        val out = AtomicReference<Map<String, Any>?>(null)
+        var sub: TaildropInboxSubscription? = null
+        try {
+            sub = client.subscribeTaildropInbox(tag, object : TaildropInboxHandler {
+                override fun onInboxUpdate(inbox: TaildropInbox?) {
+                    runCatching {
+                        if (inbox == null || latch.count == 0L) return@runCatching
+                        out.set(taildropInboxMap(inbox, tag))
+                        latch.countDown()
+                    }
+                }
+
+                override fun onError(message: String?) {
+                    runCatching { latch.countDown() }
+                }
+            })
+            latch.await(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
+        } catch (t: Exception) {
+            Log.w(TAG, "taildropInboxOnce failed: ${t.javaClass.simpleName}")
+        } finally {
+            sub?.runCatching { close() }
+            client.runCatching { disconnect() }
+        }
+        return out.get()
+    }
+
+    /// Удалить принятый файл. `null` = успех, иначе текст ошибки ядра.
+    fun taildropDelete(tag: String, name: String): String? {
+        val client = ensurePingClient() ?: return "no command client"
+        return runCatching { client.deleteTaildropFile(tag, name); null }
+            .getOrElse { Log.w(TAG, "deleteTaildropFile failed"); it.message ?: "failed" }
+    }
+
+    /// Прервать приём файла. `null` = успех, иначе текст ошибки ядра.
+    fun taildropCancelReceiving(tag: String, senderID: String, name: String): String? {
+        val client = ensurePingClient() ?: return "no command client"
+        return runCatching { client.cancelTaildropReceiving(tag, senderID, name); null }
+            .getOrElse { Log.w(TAG, "cancelTaildropReceiving failed"); it.message ?: "failed" }
+    }
+
+    fun taildropMarkRead(tag: String): String? {
+        val client = ensurePingClient() ?: return "no command client"
+        return runCatching { client.markTaildropInboxRead(tag); null }
+            .getOrElse { Log.w(TAG, "markTaildropInboxRead failed"); it.message ?: "failed" }
+    }
+
+    /// Разовый снимок узлов Tailscale работающего конфига (первое обновление
+    /// подписки `SubscribeTailscaleStatus` на своём клиенте) — экрану
+    /// «Поделиться», у которого нет Flutter. Блокирует до [timeoutMs];
+    /// `null` — клиента нет или ядро не ответило.
+    fun tailscaleSnapshot(timeoutMs: Long): List<Map<String, Any>>? {
+        val client = newCallClient() ?: return null
+        val latch = java.util.concurrent.CountDownLatch(1)
+        val out = AtomicReference<List<Map<String, Any>>?>(null)
+        var sub: TailscaleStatusSubscription? = null
+        try {
+            sub = client.subscribeTailscaleStatus(object : TailscaleStatusHandler {
+                override fun onStatusUpdate(update: TailscaleStatusUpdate?) {
+                    runCatching {
+                        if (update == null || latch.count == 0L) return@runCatching
+                        val list = ArrayList<Map<String, Any>>()
+                        val iter = update.endpoints()
+                        while (iter != null && iter.hasNext()) {
+                            val e = iter.next() ?: continue
+                            list.add(tailscaleEndpointMap(e))
+                        }
+                        out.set(list)
+                        latch.countDown()
+                    }
+                }
+
+                override fun onError(message: String?) {
+                    runCatching { latch.countDown() }
+                }
+            })
+            latch.await(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
+        } catch (t: Exception) {
+            Log.w(TAG, "tailscaleSnapshot failed: ${t.javaClass.simpleName}")
+        } finally {
+            sub?.runCatching { close() }
+            client.runCatching { disconnect() }
+        }
+        return out.get()
+    }
+
+    // ═══════════════════════ §654 OpenConnect status ═══════════════════════
+    // Подписка `SubscribeOpenConnectStatus` на ОТДЕЛЬНОМ клиенте (как Tailscale).
+    // Держит её натив, не Dart: челлендж второго фактора приходит сразу после
+    // старта, а старт бывает с QS-плитки или при загрузке, когда Flutter-движка
+    // нет. Живёт, пока VPN запущен и в конфиге есть endpoint `openconnect`
+    // ([syncOpenConnectStatus] после старта и после reload); снимается в
+    // [shutdownAll]. Уведомление «Sign-in required» ставит тоже натив.
+
+    private val openConnectClient = AtomicReference<CommandClient?>(null)
+    private val openConnectSub = AtomicReference<OpenConnectStatusSubscription?>(null)
+    private val openConnectGen = AtomicInteger(0)
+    private val openConnectEmitter = SnapshotEmitter { BoxVpnService.ccOpenConnectSink }
+    /// Последний снапшот endpoint'ов: Dart забирает его при подключении
+    /// (висящий челлендж при открытии приложения).
+    @Volatile private var openConnectEndpoints: List<Map<String, Any>> = emptyList()
+    /// Состояние слушателя SSO: `{tag, challenge_id, state, error}`; пусто — нет.
+    @Volatile private var openConnectCallbackState: Map<String, Any>? = null
+    private val openConnectCallback = AtomicReference<OpenConnectCallbackServer?>(null)
+    /// tag → id челленджа, о котором уже стоит уведомление.
+    private val openConnectNotified = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    /// Поднять подписку, если в конфиге есть endpoint `openconnect`, иначе
+    /// снять. Блокирующий gRPC — звать вне main.
+    fun syncOpenConnectStatus(configJson: String) {
+        if (hasOpenConnectEndpoint(configJson)) startOpenConnectStatus() else stopOpenConnectStatus()
+    }
+
+    private fun hasOpenConnectEndpoint(configJson: String): Boolean = runCatching {
+        val arr = org.json.JSONObject(configJson).optJSONArray("endpoints") ?: return@runCatching false
+        (0 until arr.length()).any { arr.optJSONObject(it)?.optString("type") == "openconnect" }
+    }.getOrDefault(false)
+
+    fun startOpenConnectStatus() {
+        stopOpenConnectStatus()
+        val gen = openConnectGen.incrementAndGet()
+        runCatching {
+            val client = CommandClient(PingHandler(), CommandClientOptions())
+            client.connect()
+            openConnectClient.getAndSet(client)?.runCatching { disconnect() }
+            val sub = client.subscribeOpenConnectStatus(OpenConnectHandler(gen))
+            openConnectSub.getAndSet(sub)?.runCatching { close() }
+            Log.i(TAG, "openconnect status subscribed (gen=$gen)")
+        }.onFailure { Log.w(TAG, "startOpenConnectStatus failed (gen=$gen): ${it.message}") }
+    }
+
+    fun stopOpenConnectStatus() {
+        openConnectGen.incrementAndGet()
+        val hadSub = openConnectSub.getAndSet(null)?.let { sub ->
+            sub.runCatching { close() }
+                .onFailure { Log.w(TAG, "openconnect sub close failed: ${it.message}") }
+            true
+        } ?: false
+        disconnectClient(openConnectClient, "stopOpenConnectStatus")
+        stopOpenConnectCallback()
+        for (tag in openConnectNotified.keys.toList()) {
+            ServiceNotification.cancelSignIn(BoxApplication.application, tag)
+        }
+        openConnectNotified.clear()
+        if (hadSub || openConnectEndpoints.isNotEmpty()) {
+            openConnectEndpoints = emptyList()
+            emitOpenConnect()
+        }
+    }
+
+    /// Текущий снапшот для Dart (`ccGetOpenConnectStatus`).
+    fun openConnectSnapshot(): Map<String, Any> {
+        val m = HashMap<String, Any>()
+        m["endpoints"] = openConnectEndpoints
+        openConnectCallbackState?.let { m["callback"] = it }
+        return m
+    }
+
+    private fun emitOpenConnect() = openConnectEmitter.offer(openConnectSnapshot())
+
+    /// Колбэки приходят из Go-потока: ни одного исключения наружу (JNI abort).
+    private inner class OpenConnectHandler(private val gen: Int) : OpenConnectStatusHandler {
+        override fun onStatusUpdate(update: OpenConnectStatusUpdate?) {
+            runCatching {
+                if (gen != openConnectGen.get() || update == null) return@runCatching
+                val out = ArrayList<Map<String, Any>>()
+                val iter = update.endpoints() ?: return@runCatching
+                while (iter.hasNext()) {
+                    val e = iter.next() ?: continue
+                    out.add(openConnectEndpointMap(e))
+                }
+                openConnectEndpoints = out
+                syncOpenConnectSideEffects(out)
+                emitOpenConnect()
+            }.onFailure { Log.w(TAG, "openconnect onStatusUpdate failed: ${it.javaClass.simpleName}") }
+        }
+
+        override fun onError(message: String?) {
+            runCatching { Log.w(TAG, "openconnect status stream error (gen=$gen): $message") }
+        }
+    }
+
+    /// id висящего челленджа endpoint'а; пусто — нет.
+    @Suppress("UNCHECKED_CAST")
+    private fun pendingChallengeId(e: Map<String, Any>): String =
+        ((e["challenge"] as? Map<String, Any>)?.get("id") as? String) ?: ""
+
+    /// Уведомление «Sign-in required» на новый челлендж, снятие — когда его
+    /// нет; слушатель SSO гаснет, когда его челлендж исчез или сменился.
+    private fun syncOpenConnectSideEffects(endpoints: List<Map<String, Any>>) {
+        val ctx = BoxApplication.application
+        val pending = HashMap<String, String>()
+        for (e in endpoints) {
+            val tag = e["tag"] as? String ?: continue
+            val id = pendingChallengeId(e)
+            if (tag.isNotEmpty() && id.isNotEmpty()) pending[tag] = id
+        }
+        for ((tag, id) in pending) {
+            if (openConnectNotified[tag] != id) {
+                openConnectNotified[tag] = id
+                ServiceNotification.showSignIn(ctx, tag)
+            }
+        }
+        for (tag in openConnectNotified.keys.toList()) {
+            if (!pending.containsKey(tag)) {
+                openConnectNotified.remove(tag)
+                ServiceNotification.cancelSignIn(ctx, tag)
+            }
+        }
+        openConnectCallback.get()?.let { cb ->
+            if (pending[cb.tag] != cb.challengeId) stopOpenConnectCallback()
+        }
+    }
+
+    private fun stringList(iter: StringIterator?): ArrayList<String> {
+        val out = ArrayList<String>()
+        while (iter != null && iter.hasNext()) iter.next()?.let { out.add(it) }
+        return out
+    }
+
+    /// Запись `OpenConnectEndpointStatus` в map канала. Значения полей формы,
+    /// ссылки и тексты шлюза в лог не пишутся.
+    private fun openConnectEndpointMap(e: OpenConnectEndpointStatus): HashMap<String, Any> {
+        val m = HashMap<String, Any>()
+        m["tag"] = e.endpointTag ?: ""
+        m["state"] = e.state ?: ""
+        m["state_text"] = e.stateText ?: ""
+        m["error"] = e.error ?: ""
+        e.authChallenge?.let { ch ->
+            val c = HashMap<String, Any>()
+            c["id"] = ch.id ?: ""
+            c["banner"] = ch.banner ?: ""
+            c["message"] = ch.message ?: ""
+            c["error"] = ch.error ?: ""
+            ch.form?.let { form ->
+                val fields = ArrayList<Map<String, Any>>()
+                val fi = form.fields()
+                while (fi != null && fi.hasNext()) {
+                    val f = fi.next() ?: continue
+                    val options = ArrayList<Map<String, Any>>()
+                    val oi = f.options()
+                    while (oi != null && oi.hasNext()) {
+                        val o = oi.next() ?: continue
+                        options.add(mapOf("value" to (o.value ?: ""), "label" to (o.label ?: "")))
+                    }
+                    fields.add(mapOf(
+                        "submission_key" to (f.submissionKey ?: ""),
+                        "name" to (f.name ?: ""),
+                        "label" to (f.label ?: ""),
+                        "kind" to (f.kind ?: ""),
+                        "value" to (f.value ?: ""),
+                        "options" to options,
+                    ))
+                }
+                c["form"] = fields
+            }
+            ch.browser?.let { b ->
+                c["browser"] = mapOf(
+                    "url" to (b.url ?: ""),
+                    "final_url" to (b.finalURL ?: ""),
+                    "callback_url_prefixes" to stringList(b.callbackURLPrefixes()),
+                    "cookie_names" to stringList(b.cookieNames()),
+                    "header_names" to stringList(b.headerNames()),
+                )
+            }
+            m["challenge"] = c
+        }
+        e.tunnelInfo?.let { t ->
+            m["tunnel"] = mapOf(
+                "server" to (t.server ?: ""),
+                "flavor" to (t.flavor ?: ""),
+                "transport" to (t.transport ?: ""),
+                "mtu" to t.mtu,
+                "connected_since" to t.connectedSince,
+            )
+        }
+        return m
+    }
+
+    /// Ответ формой: пары ключ → значение в порядке полей. `null` = успех,
+    /// иначе текст ошибки ядра. Блокирующий gRPC — звать с `Dispatchers.IO`.
+    fun submitOpenConnectForm(tag: String, challengeId: String, values: List<Pair<String, String>>): String? {
+        val client = ensurePingClient() ?: return "no command client"
+        return runCatching {
+            val fv = Libbox.newOpenConnectFormValues()
+            for ((k, v) in values) fv.add(k, v)
+            client.submitOpenConnectAuthResponse(tag, challengeId, Libbox.newOpenConnectAuthFormResponse(fv))
+            null
+        }.getOrElse { Log.w(TAG, "submitOpenConnectForm failed"); it.message ?: "failed" }
+    }
+
+    /// Ответ браузерного челленджа: URL редиректа. `null` = успех.
+    fun submitOpenConnectBrowser(tag: String, challengeId: String, finalUrl: String): String? {
+        val client = ensurePingClient() ?: return "no command client"
+        return runCatching {
+            val r = Libbox.newOpenConnectBrowserResult(finalUrl)
+            client.submitOpenConnectAuthResponse(tag, challengeId, Libbox.newOpenConnectBrowserAuthResponse(r))
+            null
+        }.getOrElse { Log.w(TAG, "submitOpenConnectBrowser failed"); it.message ?: "failed" }
+    }
+
+    /// Отмена челленджа: ядро начинает новый логин (у FortiGate — новый код).
+    fun cancelOpenConnectChallenge(tag: String, challengeId: String): String? {
+        val client = ensurePingClient() ?: return "no command client"
+        return runCatching { client.cancelOpenConnectAuthChallenge(tag, challengeId); null }
+            .getOrElse { Log.w(TAG, "cancelOpenConnectChallenge failed"); it.message ?: "failed" }
+    }
+
+    /// Слушатель SSO на `127.0.0.1:port` на время челленджа. Пойманный URL
+    /// уходит ядру отсюда же (Dart может быть в фоне). `null` — слушает,
+    /// иначе текст ошибки (порт занят).
+    fun startOpenConnectCallback(tag: String, challengeId: String, port: Int, prefixes: List<String>): String? {
+        openConnectCallback.get()?.let { cur ->
+            if (cur.tag == tag && cur.challengeId == challengeId) return null
+        }
+        stopOpenConnectCallback()
+        val server = OpenConnectCallbackServer(tag, challengeId, port, prefixes) { url ->
+            setCallbackState(tag, challengeId, "submitting", "")
+            val err = submitOpenConnectBrowser(tag, challengeId, url)
+            if (err == null) {
+                setCallbackState(tag, challengeId, "submitted", "")
+                stopOpenConnectCallback(keepState = true)
+            } else {
+                setCallbackState(tag, challengeId, "failed", err)
+            }
+        }
+        val err = server.start()
+        if (err != null) return err
+        openConnectCallback.set(server)
+        setCallbackState(tag, challengeId, "listening", "")
+        return null
+    }
+
+    fun stopOpenConnectCallback(keepState: Boolean = false) {
+        openConnectCallback.getAndSet(null)?.close()
+        if (!keepState && openConnectCallbackState != null) {
+            openConnectCallbackState = null
+            emitOpenConnect()
+        }
+    }
+
+    private fun setCallbackState(tag: String, challengeId: String, state: String, error: String) {
+        openConnectCallbackState = mapOf(
+            "tag" to tag, "challenge_id" to challengeId, "state" to state, "error" to error,
+        )
+        emitOpenConnect()
     }
 
     // §581 — проверка устройства. Одна сессия за раз; ответы — в
@@ -530,6 +1054,117 @@ class BoxCommandClient {
         }
     }
 
+    // §687 — активный тест соединения (kernel SPEC 139). Один тест за раз;
+    // события — в `ccConnectionTestSink` (EventChannel `lxbox/cc/connection_test`)
+    // батчами без склейки: каждая стадия нужна, «последний снапшот» не годится.
+    private val connTestClient = AtomicReference<CommandClient?>(null)
+    private val connTestSession = AtomicReference<ConnectionTestSession?>(null)
+    private val connTestGen = AtomicInteger(0)
+    private val connTestEmitter = EventEmitter { BoxVpnService.ccConnectionTestSink }
+
+    fun startConnectionTest(
+        link: String,
+        packageName: String,
+        depth: Int,
+        fresh: Boolean,
+    ) {
+        stopConnectionTest()
+        val gen = connTestGen.incrementAndGet()
+        runCatching {
+            val client = CommandClient(PingHandler(), CommandClientOptions())
+            client.connect()
+            connTestClient.getAndSet(client)?.runCatching { disconnect() }
+            val request = Libbox.newConnectionTestRequest().apply {
+                setLink(link)
+                if (packageName.isNotEmpty()) setPackageName(packageName)
+                setAppDNS(true)
+                setDepth(depth)
+                setFresh(fresh)
+            }
+            val session = client.startConnectionTest(request, ConnectionTestCallback(gen))
+            connTestSession.getAndSet(session)?.runCatching { cancel() }
+        }.onFailure {
+            Log.w(TAG, "startConnectionTest failed (gen=$gen): ${it.message}")
+            connTestEmitter.offer(mapOf("event" to "error", "message" to (it.message ?: "failed")))
+        }
+    }
+
+    fun stopConnectionTest() {
+        connTestGen.incrementAndGet()
+        connTestSession.getAndSet(null)?.runCatching { cancel() }
+        disconnectClient(connTestClient, "stopConnectionTest")
+    }
+
+    private fun connTestAttrs(iter: ConnectionTestAttrIterator?): ArrayList<Map<String, String>> {
+        val out = ArrayList<Map<String, String>>()
+        while (iter != null && iter.hasNext()) {
+            val a = iter.next() ?: continue
+            out.add(mapOf("key" to (a.key() ?: ""), "value" to (a.value() ?: "")))
+        }
+        return out
+    }
+
+    /// Колбэки из Go-потока: исключения наружу не выходят (JNI abort).
+    private inner class ConnectionTestCallback(private val gen: Int) : ConnectionTestHandler {
+        override fun onStage(stage: ConnectionTestStage?) {
+            runCatching {
+                if (gen != connTestGen.get() || stage == null) return@runCatching
+                connTestEmitter.offer(mapOf(
+                    "event" to "stage",
+                    "id" to stage.id(),
+                    "parent" to stage.parent(),
+                    "kind" to (stage.kind() ?: ""),
+                    "subject" to (stage.subject() ?: ""),
+                    "start_ms" to stage.startMs(),
+                    "duration_ms" to stage.durationMs(),
+                    "result" to stage.result(),
+                    "error" to (stage.errorMessage() ?: ""),
+                    "attrs" to connTestAttrs(stage.attrs()),
+                ))
+            }
+        }
+
+        override fun onResult(result: ConnectionTestResult?) {
+            runCatching {
+                if (gen != connTestGen.get() || result == null) return@runCatching
+                val findings = ArrayList<Map<String, Any>>()
+                val it = result.findings()
+                while (it != null && it.hasNext()) {
+                    val f = it.next() ?: continue
+                    val stages = ArrayList<Int>()
+                    val si = f.stages()
+                    while (si != null && si.hasNext()) stages.add(si.next())
+                    findings.add(mapOf(
+                        "code" to (f.code() ?: ""),
+                        "level" to f.level(),
+                        "stages" to stages,
+                        "attrs" to connTestAttrs(f.attrs()),
+                    ))
+                }
+                // Тело не передаём: экран показывает статус и размер, не ответ.
+                connTestEmitter.offer(mapOf(
+                    "event" to "result",
+                    "error" to (result.errorMessage() ?: ""),
+                    "root_cause" to result.rootCause(),
+                    "findings" to findings,
+                    "http_status" to result.httpStatus(),
+                    "content_type" to (result.contentType() ?: ""),
+                    "body_bytes" to (result.body()?.size ?: 0),
+                    "truncated" to result.truncated(),
+                    "elapsed_ms" to result.elapsedMs(),
+                    "stages_truncated" to result.stagesTruncated(),
+                ))
+            }
+        }
+
+        override fun onError(message: String?) {
+            runCatching {
+                if (gen != connTestGen.get()) return@runCatching
+                connTestEmitter.offer(mapOf("event" to "error", "message" to (message ?: "failed")))
+            }
+        }
+    }
+
     // ═══════════════════════ Imperative (unary) ═══════════════════════
     // Прямые методы CommandClient. Дёргаются из VpnPlugin через MethodChannel.
     // Используем любой живой клиент (унарные RPC не зависят от подписок).
@@ -568,13 +1203,14 @@ class BoxCommandClient {
         link: String,
         timeoutMs: Int,
         maxBytes: Int,
+        userAgent: String,
     ): Map<String, Any> {
         val client = ensurePingClient()
             ?: return mapOf("error" to "command client not connected")
         return runCatching {
-            // headers = null — легальный вызов «без заголовков» (в gomobile нет
-            // ни overload'ов, ни variadic; см. kernel SPEC 058 §2.3).
-            val r: GetURLResult = client.getURLViaOutbound(tag, link, timeoutMs, maxBytes, null)
+            val r: GetURLResult = client.getURLViaOutbound(
+                tag, link, timeoutMs, maxBytes, userAgentHeaders(userAgent),
+            )
             // ГРАБЛЯ: у GetURLResult геттеры БЕЗ `get`-префикса (`content()`,
             // `status()`), в отличие от URLTestOutboundResult.getDelay() —
             // gomobile снимает префикс, когда имя поля не начинается с Get.
@@ -963,6 +1599,8 @@ class BoxCommandClient {
                     "last_handshake_unix" to p.lastHandshakeUnix,
                     "rx_bytes" to p.rxBytes,
                     "tx_bytes" to p.txBytes,
+                    "session_rx_bytes" to p.sessionRxBytes,
+                    "session_tx_bytes" to p.sessionTxBytes,
                 ))
             }
             mapOf(
@@ -1064,6 +1702,9 @@ class BoxCommandClient {
                 snap["uplinkTotal"] = m.getUplinkTotal()
                 snap["downlinkTotal"] = m.getDownlinkTotal()
                 snap["memory"] = m.getMemory()
+                // §705 (ядро lx.29, SPEC 148): память Go-рантайма ядра — то, с чем
+                // сравнивается порог Memory limit. `memory` остаётся RSS процесса.
+                snap["memoryRuntime"] = m.getMemoryRuntime()
                 snap["goroutines"] = m.getGoroutines()
                 snap["connectionsIn"] = m.getConnectionsIn()
                 snap["connectionsOut"] = m.getConnectionsOut()
@@ -1320,6 +1961,11 @@ class BoxCommandClient {
                 "network" to c.getNetwork(),
                 "domain" to c.getDomain(),
                 "destination" to c.getDestination(),
+                // §661 — вход и источник: при эндпоинтах/прокси мы шлюз,
+                // соединение может прийти не из tun-in и не с адреса устройства.
+                "source" to c.getSource(),
+                "inbound" to c.getInbound(),
+                "inboundType" to c.getInboundType(),
                 "rule" to c.getRule(),
                 "uplink" to c.getUplinkTotal(),
                 "downlink" to c.getDownlinkTotal(),
@@ -1419,3 +2065,11 @@ class BoxCommandClient {
         }
     }
 }
+
+/// §659 — заголовки диагностического GET (kernel SPEC 058): только User-Agent
+/// приложения. Пустая строка → null — легальный вызов «без заголовков» (в
+/// gomobile нет ни overload'ов, ни variadic; см. SPEC 058 §2.3), ядро тогда
+/// шлёт `Go-http-client`.
+internal fun userAgentHeaders(userAgent: String): HTTPHeaders? =
+    if (userAgent.isBlank()) null
+    else HTTPHeaders().apply { add("User-Agent", userAgent) }

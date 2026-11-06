@@ -271,7 +271,7 @@ class _ChainEditScreenState extends State<ChainEditScreen> with SnackHelper {
       context,
       title: getLocalText.s("Delete hop chain?"),
       message: getLocalText.s(
-          "Remove \"%s\"? Other chains using it as a position will stop building until you fix them.",
+          "Remove \"%s\"? Chains using this node will be rebuilt without it.",
           widget.initial.tag),
     );
     if (confirmed == true && mounted) {

@@ -3,6 +3,7 @@
 | | |
 |---|---|
 | Статус | ✅ Реализовано, device-verified |
+| Заменено | Редактор `re_editor` заменён нативным sora-editor в [§624](624-sora-editor-for-json-fields.md) (2026-10-11); порог только-чтения 1 МБ остаётся |
 | Дата | 2026-08-01 |
 | Связанные | [`302 import-rules`](302-subscription-import-rewrite-rules.md) (decoded-режим Source-таба), [`318 oom-reports`](318-oom-reports-access.md), 4PDA k-dmitriy #1312/#1313/#1316 |
 

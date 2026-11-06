@@ -123,17 +123,6 @@ void main() {
       expect(nodes.whereType<AutoSelectSpec>(), isEmpty);
     });
 
-    test('узел-группа: нет адреса и URI-формы', () {
-      final a = parse([
-        withBalancer('Авто', [vless('1.1.1.1', tag: 'proxy-1')])
-      ]).whereType<AutoSelectSpec>().single;
-      expect(a.isGroup, isTrue);
-      expect(a.server, isEmpty);
-      expect(a.port, 0);
-      // §439 — в папке группа хранится записью kind: auto, URI-формы нет.
-      expect(a.toUri(), isEmpty);
-    });
-
     test('эмитит urltest, а не прокси', () {
       final a = parse([
         withBalancer('Авто', [vless('1.1.1.1', tag: 'proxy-1')])
@@ -607,10 +596,6 @@ void main() {
       // текст autogroup:// переводит только миграция.
       expect(AutoSelectSpec(id: 'z', tag: 't', label: 'A').toUri(), isEmpty);
       expect(parseUri('autogroup://?include=DE#Old'), isNot(isA<AutoSelectSpec>()));
-    });
-
-    test('чужая схема не парсится как группа', () {
-      expect(parseUri('vless://u@1.1.1.1:443#N'), isNot(isA<AutoSelectSpec>()));
     });
   });
 

@@ -12,16 +12,11 @@ paid features and none are planned.
 
 ## Cryptocurrency
 
-The "pay" link opens Trust Wallet with the address already filled in. Using a
-different wallet? Copy the address manually.
-
 ### USDT · TRON (TRC20) — preferred
 
 ```
 TBBEANETx2YTysG1bwg3HjxZjiZWhhBWun
 ```
-
-[Pay via Trust Wallet](https://link.trustwallet.com/send?coin=195&address=TBBEANETx2YTysG1bwg3HjxZjiZWhhBWun&token_id=TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t)
 
 TRON network fees are negligible, which makes this the best option.
 
@@ -31,23 +26,17 @@ TRON network fees are negligible, which makes this the best option.
 0xde9cff6A529f655E777d6Ce718eD26f9c99046Ea
 ```
 
-[Pay via Trust Wallet](https://link.trustwallet.com/send?coin=60&address=0xde9cff6A529f655E777d6Ce718eD26f9c99046Ea&token_id=0xdAC17F958D2ee523a2206206994597C13D831ec7)
-
 ### Bitcoin
 
 ```
 bc1qupzrxnyvkccpfuv6pmnt58w8xyx5c0l8a6jue7
 ```
 
-[Pay via Trust Wallet](https://link.trustwallet.com/send?coin=0&address=bc1qupzrxnyvkccpfuv6pmnt58w8xyx5c0l8a6jue7)
-
 ### Ethereum
 
 ```
 0xde9cff6A529f655E777d6Ce718eD26f9c99046Ea
 ```
-
-[Pay via Trust Wallet](https://link.trustwallet.com/send?coin=60&address=0xde9cff6A529f655E777d6Ce718eD26f9c99046Ea)
 
 > Double-check the address and the network before sending: a transfer to the
 > wrong network cannot be recovered.

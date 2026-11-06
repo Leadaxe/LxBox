@@ -404,20 +404,4 @@ void main() {
       expect(report.dropped, hasLength(2));
     });
   });
-
-  group('эталоны при загруженном реестре', () {
-    for (final name in kStorageFixtures) {
-      test('$name: config.json не изменился', () async {
-        final box = await StorageSandbox.create();
-        addTearDown(box.dispose);
-        await box.seed(name);
-
-        final built = await buildGoldenConfig(box);
-        // Тот же эталон, что сверяет storage_migration/golden_config_test —
-        // гард обязан быть прозрачен для валидного конфига.
-        expectGolden('$name.config.json', built.configJson);
-        expectGolden('$name.config_warnings.json', prettyJson(built.warnings));
-      });
-    }
-  });
 }

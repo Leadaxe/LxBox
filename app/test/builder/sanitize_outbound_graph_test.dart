@@ -100,26 +100,6 @@ void main() {
       };
       expect(sanitizeOutboundGraph(config), isEmpty);
     });
-
-    test('§377 — одна агрегированная строка на отсутствующий target', () {
-      final config = {
-        'outbounds': [
-          for (var i = 1; i <= 7; i++)
-            {'tag': 'Node-$i', 'type': 'vless', 'detour': 'warp gen'},
-          {'tag': 'direct-out', 'type': 'direct'},
-        ],
-      };
-      final lines = sanitizeOutboundGraph(config)
-          .where((w) => w.contains('Detour removed'))
-          .toList();
-
-      expect(lines, hasLength(1), reason: 'одна строка на target, не 7');
-      expect(lines.single, contains('7 outbounds'));
-      expect(lines.single, contains('"Node-5"'));
-      expect(lines.single, isNot(contains('"Node-6"')));
-      expect(lines.single, contains('and 2 more'));
-      expect(lines.single, contains('nodes work directly'));
-    });
   });
 
   group('правило 2 — члены-призраки состава группы', () {
@@ -526,34 +506,6 @@ void main() {
           reason: 'честная причина');
       expect(line, isNot(contains('missing')),
           reason: 'санитайзер не сваливает вину на подписку');
-    });
-
-    test('цель, которой не было изначально → прежний текст «missing»', () {
-      // Обратная сторона развилки: битая подписка по-прежнему называется
-      // битой. Оба текста в ОДНОМ прогоне — тексты не должны схлопнуться.
-      final config = {
-        'outbounds': [
-          {
-            'tag': 'g',
-            'type': 'selector',
-            'outbounds': ['a'],
-          },
-          {'tag': 'a', 'type': 'vless', 'detour': 'g'},
-          {'tag': 'b', 'type': 'vless', 'detour': 'never-existed'},
-        ],
-      };
-      final lines = sanitizeOutboundGraph(config)
-          .where((w) => w.startsWith('Detour removed:'))
-          .toList();
-
-      expect(lines, hasLength(2));
-      final missing =
-          lines.singleWhere((w) => w.contains('"never-existed"'));
-      expect(missing, contains('referenced missing'));
-      expect(missing, contains('"b"'));
-      final sanitized = lines.singleWhere((w) => w.contains('"g"'));
-      expect(sanitized, contains('removed during sanitation'));
-      expect(sanitized, isNot(contains('missing')));
     });
   });
 

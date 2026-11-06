@@ -84,4 +84,10 @@ State экрана.
 
 ## Нерешённое / follow-up
 
-—
+- 19.10.2026, [667](667-auto-apply-gate-shared-by-all-rebuild-paths.md): безусловный
+  in-place reload в `regenerateSourcesConfig` (при `canReload`, без галки §338)
+  снят — дефект по решению владельца. Правка цепочки и добавление источника
+  по-прежнему доезжают до сборки и записи; применять ли к живому туннелю,
+  решает общий гейт `HomeController.applyIfAutoReload` (галка, туннель up,
+  вердикт §324, cooldown). При выключенной галке и живом туннеле — обычная
+  плашка «restart VPN». `applied` в итоге функции = reload запущен гейтом.

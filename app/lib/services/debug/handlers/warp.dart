@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import '../../warp/masquerade_params.dart';
-import '../../warp/warp_account.dart';
 import '../context.dart';
 import '../contract/errors.dart';
 import '../transport/request.dart';
@@ -55,8 +54,9 @@ Future<DebugResponse> warpHandler(DebugRequest req, DebugContext ctx) async {
     licenseKey: (licenseKey == null || licenseKey.trim().isEmpty)
         ? null
         : licenseKey,
+    // §386 (01.11) — пусто = не выбран; заданный, включая дефолт, — как есть.
     endpoint: (endpoint == null || endpoint.trim().isEmpty)
-        ? WarpAccount.defaultEndpoint
+        ? null
         : endpoint.trim(),
     forceNew: forceNew,
     obfuscate: obfuscate,

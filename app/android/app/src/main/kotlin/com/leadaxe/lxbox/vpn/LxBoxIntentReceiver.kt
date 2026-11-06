@@ -38,6 +38,7 @@ class LxBoxIntentReceiver : BroadcastReceiver() {
         const val ACTION_REFRESH_SUBS = "com.leadaxe.lxbox.REFRESH_SUBS"
         const val ACTION_RESET_NETWORK = "com.leadaxe.lxbox.RESET_NETWORK"
         const val ACTION_URLTEST_GROUP = "com.leadaxe.lxbox.URLTEST_GROUP"
+        const val ACTION_URLTEST_ALL = "com.leadaxe.lxbox.URLTEST_ALL"
 
         const val EXTRA_TAG = "tag"
         const val EXTRA_GROUP = "group"
@@ -120,6 +121,7 @@ class LxBoxIntentReceiver : BroadcastReceiver() {
                 }
                 forward(context, "urltest-group", mapOf("group" to group))
             }
+            ACTION_URLTEST_ALL -> forward(context, "urltest-all", emptyMap())
             else -> Log.w(TAG, "unknown action $action")
         }
     }

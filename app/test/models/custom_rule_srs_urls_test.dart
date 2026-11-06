@@ -69,35 +69,10 @@ void main() {
           ['https://x/c.srs', 'https://x/a.srs']);
     });
 
-    test('copyWith: srsUrls заменяет список, одиночный srsUrl — тоже', () {
-      final r = CustomRuleSrs(
-          name: 'a', srsUrls: const ['https://x/a.srs', 'https://x/b.srs']);
-      expect(r.copyWith(srsUrl: 'https://x/z.srs').srsUrls, ['https://x/z.srs']);
-      expect(r.copyWith(srsUrls: const ['https://x/q.srs']).srsUrls,
-          ['https://x/q.srs']);
-      expect(r.copyWith(name: 'b').srsUrls, r.srsUrls);
-    });
-
     test('parseSrsUrlsText: строки/пробелы, пустые и повторы', () {
       expect(parseSrsUrlsText('https://x/a.srs\n\n https://x/b.srs \nhttps://x/a.srs'),
           ['https://x/a.srs', 'https://x/b.srs']);
       expect(parseSrsUrlsText('   '), isEmpty);
-    });
-
-    test('summary: один хост; несколько — хост первого и (+N)', () {
-      expect(CustomRuleSrs(name: 'a', srsUrl: 'https://x.io/a.srs').summary(),
-          'SRS: x.io');
-      expect(
-          CustomRuleSrs(name: 'a', srsUrls: const [
-            'https://x.io/a.srs',
-            'https://y.io/b.srs',
-            'https://z.io/c.srs'
-          ]).summary(),
-          'SRS: x.io (+2)');
-    });
-
-    test('прочие kind → srsUrls пуст', () {
-      expect(CustomRuleInline(name: 'i', domains: const ['a']).srsUrls, isEmpty);
     });
   });
 }

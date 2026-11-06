@@ -56,11 +56,14 @@ List<({String field, String varName, String from, String to})>
 
   final route = config['route'];
   if (route is Map<String, dynamic>) {
-    final resolver = route['default_domain_resolver'];
-    if (resolver is String) {
+    // §643 (TEMPLATE_LANG §6.9) — строка или объект `{server, …}`: замена
+    // меняет только `server`, прочие поля объекта остаются.
+    final value = route['default_domain_resolver'];
+    final resolver = domainResolverServer(value);
+    if (resolver != null) {
       final to = replacementFor(resolver, 'dns_default_domain_resolver');
       if (to != null) {
-        route['default_domain_resolver'] = to;
+        route['default_domain_resolver'] = withDomainResolverServer(value, to);
         healed.add((
           field: 'route.default_domain_resolver',
           varName: 'dns_default_domain_resolver',

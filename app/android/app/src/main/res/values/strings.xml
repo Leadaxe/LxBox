@@ -17,7 +17,7 @@
     <string name="notification_status_starting">Starting...</string>
     <string name="status_connected">Connected</string>
     <string name="notification_action_stop">Stop</string>
-    <string name="notification_action_reconnect">Reconnect</string>
+    <string name="notification_action_reconnect">🔄 Restart</string>
     <string name="notification_error_title">Error</string>
     <!-- §036 core notification channel fallback name (typeName blank) -->
     <string name="core_channel_fallback_name">Core notifications</string>
@@ -50,6 +50,7 @@
     <string name="automation_cmd_switch_node">Switch node</string>
     <string name="automation_cmd_set_group">Set group</string>
     <string name="automation_cmd_urltest_group">URL-test group</string>
+    <string name="automation_cmd_urltest_all">URL-test all directions</string>
     <string name="automation_cmd_refresh_subs">Refresh subscriptions</string>
     <string name="automation_cmd_rebuild_config">Rebuild config</string>
     <string name="automation_cmd_reset_network">Reset network</string>
@@ -59,4 +60,61 @@
     <string name="automation_value_label">Value (%1$s):</string>
     <string name="automation_value_plain">Value:</string>
     <string name="automation_save">Save</string>
+    <!-- §624 — строки sora-editor, перекрыты здесь, чтобы у переводов был
+         en-ключ; текст тот же, что в библиотеке. -->
+    <string name="sora_editor_long_select">Long Select</string>
+    <string name="sora_editor_clip_text_length_too_large">Text is too large to copy</string>
+    <string name="openconnect_sign_in_title">Sign-in required: %1$s</string>
+    <string name="openconnect_sign_in_text">The gateway is waiting for a code or a browser sign-in. Tap to continue.</string>
+    <!-- §707 — Taildrop -->
+    <string name="taildrop_channel_name">Taildrop</string>
+    <string name="taildrop_share_label">Taildrop</string>
+    <string name="taildrop_sending_title">Sending to %1$s</string>
+    <string name="taildrop_sent_title">Sent to %1$s</string>
+    <string name="taildrop_failed_title">Couldn\'t send to %1$s</string>
+    <string name="taildrop_files_progress">File %1$d of %2$d</string>
+    <string name="taildrop_cancel">Cancel</string>
+    <string name="taildrop_close">Close</string>
+    <string name="taildrop_need_vpn">Start the VPN with a Tailscale node to send files.</string>
+    <string name="taildrop_choose_node">Choose a Tailscale node</string>
+    <string name="taildrop_send_to">Send to</string>
+    <string name="taildrop_sharing_off">File sharing is off for this tailnet. Turn on Taildrop in the Tailscale admin console.</string>
+    <string name="taildrop_no_devices">None of your devices can receive files right now.</string>
+    <string name="taildrop_nothing_to_send">Nothing to send</string>
+    <string name="taildrop_reason_vpn_off">The VPN is off</string>
+    <string name="taildrop_reason_cant_read">Can\'t read the file</string>
+    <string name="taildrop_reason_cant_write">Can\'t write the file</string>
+    <string name="taildrop_reason_interrupted">The transfer was interrupted</string>
+    <string name="taildrop_save">Save</string>
+    <string name="taildrop_delete">Delete</string>
+    <string name="taildrop_saved_title">Saved to Downloads: %1$s</string>
+    <string name="taildrop_save_failed">Couldn\'t save: %1$s</string>
+    <string name="taildrop_delete_failed">Couldn\'t delete: %1$s</string>
+    <string name="taildrop_link_from">Link from %1$s</string>
+    <string name="taildrop_off_all">Taildrop is off for every running Tailscale node. Turn on “Allow Taildrop” in the node settings.</string>
+    <plurals name="taildrop_saved_files">
+        <item quantity="one">Saved %1$d file to Downloads</item>
+        <item quantity="other">Saved %1$d files to Downloads</item>
+    </plurals>
+    <plurals name="taildrop_couldnt_save_files">
+        <item quantity="one">Couldn\'t save %1$d file</item>
+        <item quantity="other">Couldn\'t save %1$d files</item>
+    </plurals>
+
+    <!-- §707 итер. 7 — окно «Send clipboard». -->
+    <string name="notification_action_send_clipboard">📋 Send</string>
+    <string name="clip_window_label">Send clipboard</string>
+    <string name="clip_process_text_label">Send to device</string>
+    <string name="clip_to">To: %1$s ▾</string>
+    <string name="clip_more">More options</string>
+    <string name="clip_clear">Clear</string>
+    <string name="clip_hint">Text to send</string>
+    <string name="clip_send">Send</string>
+    <string name="clip_open_on">Open on %1$s</string>
+    <string name="clip_need_vpn">Start VPN to send</string>
+    <string name="clip_taildrop_off">Taildrop is off for this node.</string>
+    <string name="clip_no_devices">No devices accept files</string>
+    <string name="clip_offline">Device is offline.</string>
+    <string name="clip_too_large">Too large to send</string>
+    <string name="clip_copied">Copied</string>
 </resources>

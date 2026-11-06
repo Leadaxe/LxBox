@@ -82,6 +82,7 @@ class DnsMirrorEntry {
     this.ruleName = '',
     this.serverTag = '',
     this.serverless = false,
+    this.fixedAnswer = false,
     required this.body,
   });
 
@@ -95,7 +96,57 @@ class DnsMirrorEntry {
   /// в `dns.servers`. Для rule-источника (у preset-источника serverless-тела
   /// эмитятся по ветке `presetId != null`, §253).
   final bool serverless;
+
+  /// §683 — serverless-тело ответа фиксированным IP (Answer = Fixed IP),
+  /// а не AAAA-глушилка Force IPv4. Нужен UI вкладки DNS, чтобы различать
+  /// два вида serverless-mirror'ов правила.
+  final bool fixedAnswer;
   final Map<String, dynamic> body;
+}
+
+/// §683 — TTL записей ответа Fixed IP.
+const int kFixedIpAnswerTtl = 300;
+
+/// §683 — DNS-mirror'ы Answer = Fixed IP: по одному на тип запроса (A и
+/// AAAA), `predefined` + `NOERROR`. Есть адреса семейства — `answer` с
+/// записями `*. 300 IN A|AAAA <ip>` (ядро подставляет имя запроса вместо
+/// `*`, `rewriteRecords`); нет — пустой ответ, приложение берёт другое
+/// семейство. Остальные типы запросов правило не трогает. Неразбираемые
+/// адреса пропускаются (UI их не сохраняет); ни одного годного — ничего.
+List<DnsMirrorEntry> fixedIpMirrors(
+  CustomRule cr,
+  Map<String, dynamic> Function() match,
+) {
+  final v4 = <String>[];
+  final v6 = <String>[];
+  for (final ip in cr.dns?.fixedIps ?? const <String>[]) {
+    switch (RuleDns.ipRecordType(ip)) {
+      case 'A':
+        v4.add(ip.trim());
+      case 'AAAA':
+        v6.add(ip.trim());
+    }
+  }
+  if (v4.isEmpty && v6.isEmpty) return const [];
+  return [
+    for (final (type, ips) in [('A', v4), ('AAAA', v6)])
+      DnsMirrorEntry(
+        ruleId: cr.id,
+        ruleName: cr.name,
+        serverless: true,
+        fixedAnswer: true,
+        body: match()
+          ..['query_type'] = [type]
+          ..['action'] = 'predefined'
+          ..['rcode'] = 'NOERROR'
+          ..addAll({
+            if (ips.isNotEmpty)
+              'answer': [
+                for (final ip in ips) '*. $kFixedIpAnswerTtl IN $type $ip',
+              ],
+          }),
+      ),
+  ];
 }
 
 /// §257 — магическая var `dns_enable`: единственный тумблер DNS-блока
@@ -227,7 +278,7 @@ List<String> _applyPresetSingle(
       final existing = state.dnsServerByTag[tag];
       if (existing == null) {
         state.dnsServerByTag[tag] = s;
-        // §578 — у пресета с `for_each` тег сервера без пространства пресета
+        // §578 — у пресета с `for_each_node` тег сервера без пространства пресета
         // (`<тег узла>-dns`): запись хранения DNS держит его как `ref` = тег.
         // С `preset_id` модель достроила бы тег до `tailscale:<тег>-dns`, и
         // сервер разошёлся бы с правилами, которые на него ссылаются.
@@ -302,6 +353,8 @@ List<String> applyCustomRules(
   List<CustomRule> rules, {
   Map<String, String> srsPaths = const {},
   bool skipDisabled = true,
+  // §683 — превью редактора: собрать и DNS-mirror'ы правила.
+  List<DnsMirrorEntry>? dnsMirrors,
 }) {
   // §062: shim вокруг `_applyInlineSingle` / `_applySrsSingle`. Обходит
   // ТОЛЬКО inline/srs (фильтруя preset). Сохраняет старый publi API +
@@ -315,9 +368,11 @@ List<String> applyCustomRules(
         // Preset-правила обрабатывает applyPresetBundles (spec §033).
         continue;
       case CustomRuleSrs():
-        warnings.addAll(_applySrsSingle(cr, registry, srsPaths));
+        warnings.addAll(_applySrsSingle(cr, registry, srsPaths,
+            dnsMirrors: dnsMirrors));
       case CustomRuleInline():
-        warnings.addAll(_applyInlineSingle(cr, registry));
+        warnings.addAll(
+            _applyInlineSingle(cr, registry, dnsMirrors: dnsMirrors));
       case CustomRuleJson():
         warnings.addAll(_applyJsonSingle(cr, registry));
     }
@@ -371,6 +426,7 @@ List<String> _applySrsSingle(
       ports: cr.intPorts,
       portRanges: cr.portRanges,
       packages: cr.packages,
+      packageRegexes: cr.packageRegexes,
       protocols: cr.protocols,
       network: cr.network,
       ipIsPrivate: cr.ipIsPrivate,
@@ -379,6 +435,8 @@ List<String> _applySrsSingle(
       inbounds: cr.inbounds,
       wifiSsids: cr.wifiSsids,
       wifiBssids: cr.wifiBssids,
+      networkTypes: cr.networkTypes,
+      networkIsExpensive: cr.networkIsExpensive,
     ));
   }
   // §247 resolve-only: терминальный route не эмитится (см. inline-ветку).
@@ -389,6 +447,7 @@ List<String> _applySrsSingle(
       ports: cr.intPorts,
       portRanges: cr.portRanges,
       packages: cr.packages,
+      packageRegexes: cr.packageRegexes,
       protocols: cr.protocols,
       network: cr.network,
       ipIsPrivate: cr.ipIsPrivate,
@@ -399,16 +458,26 @@ List<String> _applySrsSingle(
       inbounds: cr.inbounds,
       wifiSsids: cr.wifiSsids,
       wifiBssids: cr.wifiBssids,
+      networkTypes: cr.networkTypes,
+      networkIsExpensive: cr.networkIsExpensive,
     ));
   }
-  if (dnsMirrors != null && (cr.dnsMirrorActive || cr.forceIpv4Active)) {
+  if (dnsMirrors != null &&
+      (cr.dnsMirrorActive || cr.forceIpv4Active || cr.dnsFixedActive)) {
     // DNS-безопасные AND-поля правила (srs: rule_set + package/wifi/source/
     // inbound — ports/protocols отрезаны гейтом). Общие для обоих mirror'ов.
     Map<String, dynamic> srsMatch() {
       final m = <String, dynamic>{'rule_set': tag};
       if (cr.packages.isNotEmpty) m['package_name'] = cr.packages;
+      // §712 — DNS-правило ядра принимает package_name_regex.
+      if (cr.packageRegexes.isNotEmpty) {
+        m['package_name_regex'] = cr.packageRegexes;
+      }
       if (cr.wifiSsids.isNotEmpty) m['wifi_ssid'] = cr.wifiSsids;
       if (cr.wifiBssids.isNotEmpty) m['wifi_bssid'] = cr.wifiBssids;
+      // §694 — DNS-правило ядра принимает тип/лимитность сети.
+      if (cr.networkTypes.isNotEmpty) m['network_type'] = cr.networkTypes;
+      if (cr.networkIsExpensive) m['network_is_expensive'] = true;
       // §030/new_fields — DNS-rule 1.14 принимает source_ip_cidr/inbound.
       if (cr.sourceIpCidrs.isNotEmpty) m['source_ip_cidr'] = cr.sourceIpCidrs;
       if (cr.inbounds.isNotEmpty) m['inbound'] = cr.inbounds;
@@ -436,6 +505,8 @@ List<String> _applySrsSingle(
         body: srsMatch(),
       ));
     }
+    // §683 — Answer = Fixed IP на месте server-mirror'а (режимы взаимоисключающие).
+    if (cr.dnsFixedActive) dnsMirrors.addAll(fixedIpMirrors(cr, srsMatch));
   }
   return warnings;
 }
@@ -489,6 +560,13 @@ List<String> _applyInlineSingle(
   }
 
   void addDnsMirror(String ruleSetTag) {
+    // §683 — Answer = Fixed IP на месте server-mirror'а. Пустой матч — не
+    // эмитим (иначе ответ подменялся бы для всех доменов).
+    if (dnsMirrors != null && cr.dnsFixedActive) {
+      if (mirrorBody(ruleSetTag).isEmpty) return;
+      dnsMirrors.addAll(fixedIpMirrors(cr, () => mirrorBody(ruleSetTag)));
+      return;
+    }
     if (dnsMirrors == null || !cr.dnsMirrorActive) return;
     final mirror = mirrorBody(ruleSetTag);
     // Пустой матч (только ip_is_private/source_ip_is_private) — DNS-rule
@@ -511,11 +589,16 @@ List<String> _applyInlineSingle(
   if (cr.domainKeywords.isNotEmpty) {
     match['domain_keyword'] = cr.domainKeywords;
   }
+  // §712 — Go RE2, не anchored; headless 1.14 принимает.
+  if (cr.domainRegexes.isNotEmpty) match['domain_regex'] = cr.domainRegexes;
   if (cr.ipCidrs.isNotEmpty) match['ip_cidr'] = cr.ipCidrs;
   final intPorts = cr.intPorts;
   if (intPorts.isNotEmpty) match['port'] = intPorts;
   if (cr.portRanges.isNotEmpty) match['port_range'] = cr.portRanges;
   if (cr.packages.isNotEmpty) match['package_name'] = cr.packages;
+  if (cr.packageRegexes.isNotEmpty) {
+    match['package_name_regex'] = cr.packageRegexes;
+  }
   // §030/new_fields — sing-box 1.14 (`DefaultHeadlessRule`) ПРИНИМАЕТ в
   // headless: `source_ip_cidr`, `wifi_ssid`, `wifi_bssid`. Раньше (§051, под
   // 1.12) wifi выносился на routing-rule level — теперь кладём прямо в match.
@@ -523,6 +606,9 @@ List<String> _applyInlineSingle(
   if (cr.sourceIpCidrs.isNotEmpty) match['source_ip_cidr'] = cr.sourceIpCidrs;
   if (cr.wifiSsids.isNotEmpty) match['wifi_ssid'] = cr.wifiSsids;
   if (cr.wifiBssids.isNotEmpty) match['wifi_bssid'] = cr.wifiBssids;
+  // §694 — тип/лимитность сети: headless 1.14 принимает, рядом с wifi.
+  if (cr.networkTypes.isNotEmpty) match['network_type'] = cr.networkTypes;
+  if (cr.networkIsExpensive) match['network_is_expensive'] = true;
   // `ip_is_private`, `source_ip_is_private`, `inbound`, `protocol` НЕ
   // поддерживаются в headless rule — sing-box отрежет конфиг на парсинге.
   // Выносим на routing-rule level (там OR/AND с rule_set per default-rule
@@ -615,7 +701,7 @@ UnifiedApplyResult applyAllCustomRules(
   Map<String, String> srsPaths = const {},
   Map<String, String> presetSrsPaths = const {},
   Map<String, String> globalVars = const {},
-  // §578 — узлы конфига для пресетов с `for_each` (порядок конфига).
+  // §578 — узлы конфига для пресетов с обходом узлов (порядок конфига).
   List<PresetNode> presetNodes = const [],
 }) {
   final state = _PresetSharedState();
@@ -697,6 +783,7 @@ Map<String, dynamic> _outboundToRoute(
   List<int>? ports,
   List<String>? portRanges,
   List<String>? packages,
+  List<String>? packageRegexes,
   List<String>? protocols,
   List<String>? network,
   bool ipIsPrivate = false,
@@ -705,6 +792,8 @@ Map<String, dynamic> _outboundToRoute(
   List<String>? inbounds,
   List<String>? wifiSsids,
   List<String>? wifiBssids,
+  List<String>? networkTypes,
+  bool networkIsExpensive = false,
 }) {
   final rule = <String, dynamic>{};
   // ## 12 — `tag`: String (один набор / headless) или List<String> (srs с
@@ -716,6 +805,9 @@ Map<String, dynamic> _outboundToRoute(
     rule['port_range'] = portRanges;
   }
   if (packages != null && packages.isNotEmpty) rule['package_name'] = packages;
+  if (packageRegexes != null && packageRegexes.isNotEmpty) {
+    rule['package_name_regex'] = packageRegexes;
+  }
   if (protocols != null && protocols.isNotEmpty) rule['protocol'] = protocols;
   // §240 — L4-транспорт. AND с protocol/rule_set, OR внутри списка.
   if (network != null && network.isNotEmpty) rule['network'] = network;
@@ -747,6 +839,11 @@ Map<String, dynamic> _outboundToRoute(
   if (wifiBssids != null && wifiBssids.isNotEmpty) {
     rule['wifi_bssid'] = wifiBssids;
   }
+  // §694 — тип/лимитность сети по умолчанию; AND с остальным правилом.
+  if (networkTypes != null && networkTypes.isNotEmpty) {
+    rule['network_type'] = networkTypes;
+  }
+  if (networkIsExpensive) rule['network_is_expensive'] = true;
   if (outbound == kOutboundReject) {
     rule['action'] = 'reject';
   } else {
@@ -766,6 +863,7 @@ Map<String, dynamic> _resolveToRoute(
   List<int>? ports,
   List<String>? portRanges,
   List<String>? packages,
+  List<String>? packageRegexes,
   List<String>? protocols,
   List<String>? network,
   bool ipIsPrivate = false,
@@ -774,6 +872,8 @@ Map<String, dynamic> _resolveToRoute(
   List<String>? inbounds,
   List<String>? wifiSsids,
   List<String>? wifiBssids,
+  List<String>? networkTypes,
+  bool networkIsExpensive = false,
 }) {
   final rule = _outboundToRoute(
     tag,
@@ -781,6 +881,7 @@ Map<String, dynamic> _resolveToRoute(
     ports: ports,
     portRanges: portRanges,
     packages: packages,
+    packageRegexes: packageRegexes,
     protocols: protocols,
     // §240×§247 — матч resolve-правила обязан совпадать с терминальным,
     // иначе резолв цеплял бы трафик другого транспорта.
@@ -791,6 +892,8 @@ Map<String, dynamic> _resolveToRoute(
     inbounds: inbounds,
     wifiSsids: wifiSsids,
     wifiBssids: wifiBssids,
+    networkTypes: networkTypes,
+    networkIsExpensive: networkIsExpensive,
   );
   rule.remove('outbound');
   rule['action'] = 'resolve';

@@ -26,12 +26,14 @@ installed apps and matched by the core by `package_name`.
 | MATCH | Domain | `domain` | headless rule_set |
 | | Domain suffix | `domain_suffix` | headless |
 | | Domain keyword | `domain_keyword` | headless |
+| | Domain regex (one per line) | `domain_regex` | headless |
 | | IP CIDR (quick inserts: Localhost, Wi-Fi subnet, All) | `ip_cidr` | headless |
 | | Private IP | `ip_is_private` | route rule |
 | | Source IP CIDR | `source_ip_cidr` | headless |
 | | Private source IP | `source_ip_is_private` | route rule |
 | PORT | Port / Port range (`8000:9000`, `:3000`, `4000:`) | `port` / `port_range` | headless |
 | APPS | app selection | `package_name` | headless |
+| | Package name regex (one per line) | `package_name_regex` | headless (Remote .srs: route rule) |
 | NETWORK & PROTOCOL | `tcp` · `udp` · `icmp`; `bittorrent` `dns` `dtls` `http` `ntp` `quic` `rdp` `ssh` `stun` `tls` | `network`, `protocol` | route rule |
 | INBOUND | `tun-in` · `mixed-in` | `inbound` | route rule |
 | WI-FI NETWORK | see [wifi-conditions](wifi-conditions.md) | `wifi_ssid`/`wifi_bssid` | headless |
@@ -58,6 +60,15 @@ headless match — a route rule without `rule_set`.
   a range with at least one bound and `lo ≤ hi`. Invalid elements
   are highlighted with an "N · M invalid" counter, non-numeric ports do not get into
   the config.
+- Regex fields (`domain_regex`, `package_name_regex`) take one pattern per
+  line, commas are part of the pattern. The core compiles Go RE2 and matches
+  anywhere in the string (`com\.oplus\.` hits any package containing it;
+  anchor with `^`/`$` to pin). OR within the field, AND with the other
+  categories, the same as `package_name`. A rule with only a regex is a valid
+  rule, not match-all. Syntax is checked on input; a broken pattern blocks
+  Save, since the core would refuse the config. Both keys are visible to the
+  DNS layer: a rule with only a regex keeps the DNS & Resolve section, and a
+  domain regex enables Resolve before routing.
 - A rule without a single condition is saved but does not go into the config; the list shows
   the caption "Tap to add match fields".
 - A disabled rule yields neither a rule_set nor a route rule.
@@ -71,6 +82,9 @@ headless match — a route rule without `rule_set`.
 
 - There is no condition negation; `domain_regex`, `source_port` are not exposed in the form —
   available via [raw JSON](raw-json-rules.md).
+- The core's lx sniffers `wireguard`, `openvpn`, `ike`, `tailscale`, `sip`
+  are not in the protocol list of the form; a rule on them is written as
+  [raw JSON](raw-json-rules.md).
 - Which apps go into the tunnel at all —
   [011-SPLIT_TUNNELING](../../011-SPLIT_TUNNELING/FEATURE.md).
 - A rule's DNS option — [005-DNS](../../005-DNS/FEATURE.md).

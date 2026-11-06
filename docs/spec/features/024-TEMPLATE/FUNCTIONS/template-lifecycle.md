@@ -101,6 +101,10 @@ template's `default_value` ([005-DNS · P8](../../005-DNS/FEATURE.md#promises)).
 - LX transfer to the desktop moves only variables marked `portable` in the
   contract registry; the rest are skipped with `backup_var_skipped`
   ([017 · P15](../../017-BACKUP_AND_STORAGE/FEATURE.md#promises)).
+- A variable declared `wizard_ui: "internal"` is never in a backup: export
+  skips it, and an import that finds one drops it with `backup_var_skipped`
+  (`reason: internal`) ([P15](../FEATURE.md#promises)). The DNS switch
+  `dns_resolver_no_stale` is portable and travels like `dns_optimistic`.
 - A Workspaces slot is a copy of the document; the template is shared by all
   slots and an old-form slot is migrated at load ([018-WORKSPACES · P13](../../018-WORKSPACES/FEATURE.md#promises)).
 

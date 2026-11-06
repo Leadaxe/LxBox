@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../punycode.dart';
+import '../normalizers.dart' as norm;
 import '../validators.dart' as v;
 import '../widgets/items_field.dart';
 import '../widgets/section_header.dart';
@@ -27,6 +28,7 @@ class MatchSection extends StatelessWidget {
     required this.domainCtrl,
     required this.domainSuffixCtrl,
     required this.domainKeywordCtrl,
+    required this.domainRegexCtrl,
     required this.ipCidrCtrl,
     required this.ipIsPrivate,
     required this.onIpIsPrivateChanged,
@@ -38,6 +40,9 @@ class MatchSection extends StatelessWidget {
   final TextEditingController domainCtrl;
   final TextEditingController domainSuffixCtrl;
   final TextEditingController domainKeywordCtrl;
+
+  /// §712 — `domain_regex`, по регулярке на строку.
+  final TextEditingController domainRegexCtrl;
   final TextEditingController ipCidrCtrl;
   final bool ipIsPrivate;
   final ValueChanged<bool> onIpIsPrivateChanged;
@@ -80,6 +85,16 @@ class MatchSection extends StatelessWidget {
           controller: domainKeywordCtrl,
           validator: v.isValidKeyword,
           hint: 'tracker\nanalytics',
+        ),
+        ItemsField(
+          label: 'Domain regex (one per line)',
+          controller: domainRegexCtrl,
+          validator: v.isValidRegex,
+          split: norm.splitLines,
+          helper: getLocalText.s(
+              "Go RE2, matched anywhere in the domain, e.g. %s",
+              r'(^|\.)example\.com$'),
+          hint: r'(^|\.)example\.com$',
         ),
         ItemsField(
           label: 'IP CIDR',

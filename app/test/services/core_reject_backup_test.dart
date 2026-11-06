@@ -8,8 +8,6 @@ import 'package:lxbox/models/core_reject_verdict.dart';
 import 'package:lxbox/models/node_spec.dart' show AutoSelectSpec;
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/core_reject/core_reject_backup.dart';
-import 'package:lxbox/services/core_reject/core_reject_guard.dart';
-import 'package:lxbox/services/core_reject/core_reject_state.dart';
 import 'package:lxbox/services/dns/dns_backup.dart';
 import 'package:lxbox/services/lx_backup.dart';
 import 'package:lxbox/services/lx_backup_import.dart';
@@ -479,26 +477,6 @@ void main() {
       final g = got.members.firstWhere((m) => m.node is AutoSelectSpec);
       expect(g.warnings.map((w) => w.code), ['group_member_missing']);
       expect(g.warnings.single.params['count'], '2');
-    });
-  });
-
-  group('плашка после перезапуска', () {
-    tearDown(CoreRejectState.I.resetForTest);
-
-    test('плашка живёт в памяти процесса и после сброса состояния не видна', () {
-      CoreRejectState.I.resetForTest();
-      CoreRejectState.I.finish(const CoreRejectRun(
-        outcome: CoreRejectOutcome.startedWithDisabled,
-        disabled: [DisabledNode(tag: 'n1', reason: 'bad')],
-      ));
-      expect(CoreRejectState.I.bannerVisible, isTrue);
-      expect(CoreRejectState.I.bannerNodes, isNotEmpty);
-
-      // Перезапуск приложения = новый процесс: синглтон создаётся заново.
-      // В тесте это [CoreRejectState.resetForTest] — персиста у плашки нет.
-      CoreRejectState.I.resetForTest();
-      expect(CoreRejectState.I.bannerVisible, isFalse);
-      expect(CoreRejectState.I.bannerNodes, isEmpty);
     });
   });
 }

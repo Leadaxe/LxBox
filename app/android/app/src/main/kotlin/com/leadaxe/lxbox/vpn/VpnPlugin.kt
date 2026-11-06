@@ -25,12 +25,19 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 
 class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
     PluginRegistry.ActivityResultListener {
 
     companion object {
         private const val TAG = "VpnPlugin"
+        /// §707 итер. 9 — файлы SharedPreferences rc.3, только для переноса и удаления.
+        private const val LEGACY_TAILDROP_PREFS = "lxbox_taildrop"
+        private const val LEGACY_NOTIFICATION_BUTTONS_PREFS = "lxbox_notification_buttons"
+        /// §639 — сколько Quit ждёт Stopped от штатной остановки сервиса
+        /// перед убийством процесса. Уведомление снимается раньше (Stopping).
+        private const val QUIT_STOP_BUDGET_MS = 3_000L
         private const val METHOD_CHANNEL = "com.leadaxe.lxbox/methods"
         private const val STATUS_CHANNEL = "com.leadaxe.lxbox/status_events"
         private const val CORE_LOG_CHANNEL = "lxbox/coreLog"   // §043
@@ -42,6 +49,11 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         private const val CC_DNS_CHANNEL = "lxbox/cc/dns" // §180
         private const val CC_TAILSCALE_CHANNEL = "lxbox/cc/tailscale" // §579
         private const val CC_TAILSCALE_PING_CHANNEL = "lxbox/cc/tailscale_ping" // §581
+        private const val CC_CONNECTION_TEST_CHANNEL = "lxbox/cc/connection_test" // §687
+        private const val CC_OPENCONNECT_CHANNEL = "lxbox/cc/openconnect" // §654
+        private const val CC_TAILDROP_INBOX_CHANNEL = "lxbox/cc/taildrop_inbox" // §707
+        private const val TAILDROP_PICK_CODE = 25 // §707
+        private const val TAILDROP_SAVE_CODE = 26 // §707
         private const val VPN_REQUEST_CODE = 24
 
         // §207 — allowlist имён pprof-профилей (до `?`). Пропускаем наружу
@@ -125,6 +137,13 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
     private lateinit var ccDnsEventChannel: EventChannel // §180
     private lateinit var ccTailscaleEventChannel: EventChannel // §579
     private lateinit var ccTailscalePingEventChannel: EventChannel // §581
+    private lateinit var ccConnectionTestEventChannel: EventChannel // §687
+    private lateinit var ccOpenConnectEventChannel: EventChannel // §654
+    private lateinit var ccTaildropInboxEventChannel: EventChannel // §707
+    /// §707 — ждущий выбор файлов «Send file…» (тег, пир, имя пира, ответ).
+    private var pendingTaildropPick: Pair<Triple<String, String, String>, MethodChannel.Result>? = null
+    /// §707 — ждущий «Сохранить как» (API 24–28): тег, имя файла, ответ.
+    private var pendingTaildropSave: Triple<String, String, MethodChannel.Result>? = null
     private lateinit var context: Context
     private var activity: Activity? = null
     private var statusSink: EventChannel.EventSink? = null
@@ -254,6 +273,23 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             override fun onListen(args: Any?, sink: EventChannel.EventSink?) { BoxVpnService.ccTailscalePingSink = sink }
             override fun onCancel(args: Any?) { BoxVpnService.ccTailscalePingSink = null }
         })
+        ccConnectionTestEventChannel = EventChannel(binding.binaryMessenger, CC_CONNECTION_TEST_CHANNEL)
+        ccConnectionTestEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
+            override fun onListen(args: Any?, sink: EventChannel.EventSink?) { BoxVpnService.ccConnectionTestSink = sink }
+            override fun onCancel(args: Any?) { BoxVpnService.ccConnectionTestSink = null }
+        })
+        // §654 C — состояние endpoint'ов openconnect (второй фактор / SSO).
+        // §707 — входящие Taildrop узла.
+        ccTaildropInboxEventChannel = EventChannel(binding.binaryMessenger, CC_TAILDROP_INBOX_CHANNEL)
+        ccTaildropInboxEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
+            override fun onListen(args: Any?, sink: EventChannel.EventSink?) { BoxVpnService.ccTaildropInboxSink = sink }
+            override fun onCancel(args: Any?) { BoxVpnService.ccTaildropInboxSink = null }
+        })
+        ccOpenConnectEventChannel = EventChannel(binding.binaryMessenger, CC_OPENCONNECT_CHANNEL)
+        ccOpenConnectEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
+            override fun onListen(args: Any?, sink: EventChannel.EventSink?) { BoxVpnService.ccOpenConnectSink = sink }
+            override fun onCancel(args: Any?) { BoxVpnService.ccOpenConnectSink = null }
+        })
 
         Log.d(TAG, "[vpn] onAttachedToEngine: registerReceiver(statusReceiver)")
         // §155 — на отдельных OEM-прошивках registerReceiver может бросить
@@ -281,6 +317,9 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         ccDnsEventChannel.setStreamHandler(null) // §180
         ccTailscaleEventChannel.setStreamHandler(null) // §579
         ccTailscalePingEventChannel.setStreamHandler(null) // §581
+        ccConnectionTestEventChannel.setStreamHandler(null) // §687
+        ccOpenConnectEventChannel.setStreamHandler(null) // §654
+        ccTaildropInboxEventChannel.setStreamHandler(null) // §707
         statusSink = null
         BoxVpnService.coreLogSink = null
         BoxVpnService.ccStatusSink = null
@@ -289,6 +328,8 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         BoxVpnService.ccConnectionsSink = null
         BoxVpnService.ccDnsQueriesSink = null // §180
         BoxVpnService.ccTailscaleSink = null // §579
+        BoxVpnService.ccOpenConnectSink = null // §654
+        BoxVpnService.ccTaildropInboxSink = null // §707
         // §047 — обнуляем bridge-ссылки (engine detached).
         bridgeChannel = null
         appContext = null
@@ -454,6 +495,26 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             "getKeepOnExit" -> {
                 result.success(BootReceiver.isKeepOnExit(context))
             }
+            // §707 итер. 9 — кнопки уведомления VPN: зеркало native_prefs
+            // (§189), по образцу core_logs_verbose; уведомление — сразу.
+            "setNotificationStop" -> {
+                BootReceiver.setNotificationStop(context, call.argument<Boolean>("enabled") ?: true)
+                BoxVpnService.updateNotification(context)
+                result.success(true)
+            }
+            "getNotificationStop" -> result.success(BootReceiver.isNotificationStop(context))
+            "setNotificationRestart" -> {
+                BootReceiver.setNotificationRestart(context, call.argument<Boolean>("enabled") ?: true)
+                BoxVpnService.updateNotification(context)
+                result.success(true)
+            }
+            "getNotificationRestart" -> result.success(BootReceiver.isNotificationRestart(context))
+            "setNotificationSend" -> {
+                BootReceiver.setNotificationSend(context, call.argument<Boolean>("enabled") ?: true)
+                BoxVpnService.updateNotification(context)
+                result.success(true)
+            }
+            "getNotificationSend" -> result.success(BootReceiver.isNotificationSend(context))
             "setCoreLogsEnabled" -> {
                 val enabled = call.argument<Boolean>("enabled") ?: false
                 BootReceiver.setCoreLogsEnabled(context, enabled)
@@ -518,19 +579,47 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 // 2. через 200ms killProcess + exitProcess убивают процесс
                 //    (некоторые OEM-launchers иначе оставляют zombie).
                 //
-                // VPN service ещё может быть активен — Android сам его
-                // остановит как только процесс умрёт (foreground service binding
-                // с процессом). KEEP_ON_EXIT не реактивируем здесь: если юзер
+                // §638: VPN останавливается вместе с процессом, и это должно
+                // быть окончательно. Сторож §428 (будильник VpnWatchdog +
+                // признак «VPN желателен») иначе через 2–3,5 мин увидит мёртвый
+                // сервис при desired=true и поднимет VPN сам — вопреки диалогу
+                // «VPN service will stop». Поэтому до убийства процесса снимаем
+                // признак и будильник. KEEP_ON_EXIT не реактивируем: если юзер
                 // явно запросил Quit, ему нужен полный рестарт, не fall-through
                 // в keep-alive путь.
+                BootReceiver.setVpnDesired(context, false)
+                VpnWatchdog.disarm(context)
                 result.success(true)
                 mainHandler.postDelayed({
                     activity?.finishAffinity()
                 }, 50)
-                mainHandler.postDelayed({
-                    android.os.Process.killProcess(android.os.Process.myPid())
-                    kotlin.system.exitProcess(0)
-                }, 250)
+                // §639: сервис останавливаем штатным путём Stop (тот же
+                // `stopAwait`, что у `stopVPN`) ДО убийства процесса. Иначе он
+                // умирает без `stopForeground`, и уведомление id=1 висит в
+                // шторке «VPN работает» до следующего запуска. `doStop` снимает
+                // foreground сразу при переходе в Stopping; ждём Stopped не
+                // дольше QUIT_STOP_BUDGET_MS, затем страховочно cancel(id=1)
+                // и убиваем процесс (не раньше прежних 250 мс).
+                // Свой scope, не pluginScope: finishAffinity может отсоединить
+                // engine, а onDetachedFromEngine отменяет pluginScope — тогда
+                // процесс не был бы убит.
+                val quitStartedAt = android.os.SystemClock.elapsedRealtime()
+                CoroutineScope(SupervisorJob() + Dispatchers.Main).launch {
+                    val stopped = runCatching {
+                        withTimeoutOrNull(QUIT_STOP_BUDGET_MS) {
+                            BoxVpnService.stopAwait(context).await()
+                        }
+                    }.getOrNull()
+                    if (stopped == null) {
+                        Log.w(TAG, "[vpn §639] quitApp: Stopped not reported in ${QUIT_STOP_BUDGET_MS}ms")
+                    }
+                    ServiceNotification.cancelServiceNotification()
+                    val elapsed = android.os.SystemClock.elapsedRealtime() - quitStartedAt
+                    mainHandler.postDelayed({
+                        android.os.Process.killProcess(android.os.Process.myPid())
+                        kotlin.system.exitProcess(0)
+                    }, (250L - elapsed).coerceAtLeast(0L))
+                }
             }
             "getInstalledApps" -> {
                 // Lightweight metadata only — иконки лениво подгружаются
@@ -543,6 +632,9 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                         "packageName" to info.packageName,
                         "appName" to (pm.getApplicationLabel(info)?.toString() ?: info.packageName),
                         "isSystemApp" to isSystem,
+                        // Общий UID (sharedUserId) — ядро и VpnService
+                        // различают приложения по UID, не по пакету.
+                        "uid" to info.uid,
                     )
                 }
                 result.success(apps)
@@ -569,6 +661,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                         "packageName" to pkg,
                         "appName" to (pm.getApplicationLabel(info)?.toString() ?: pkg),
                         "isSystemApp" to isSystem,
+                        "uid" to info.uid,
                     ))
                 } catch (_: android.content.pm.PackageManager.NameNotFoundException) {
                     result.success(mapOf("notFound" to true))
@@ -632,7 +725,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             }
             "setMemoryLimit" -> {
                 // §271 — persist + мгновенное применение к работающему ядру.
-                // `reloadSetupOptions` читает ТОЛЬКО три OOM-поля (setup.go:80-96)
+                // `reloadSetupOptions` читает ТОЛЬКО OOM-поля (setup.go:80-96)
                 // и сразу вызывает debug.SetMemoryLimit — GC-потолок меняется без
                 // переподключения VPN. Порог RSS-мониторинга oom-killer-сервиса
                 // защёлкнут в CommandServer текущей сессии; BoxService создаёт
@@ -647,6 +740,8 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                         val opts = io.nekohasekai.libbox.SetupOptions().apply {
                             oomKillerEnabled = true
                             oomMemoryLimit = BoxApplication.resolveMemoryLimitBytes(appContext)
+                            // §705 (SPEC 148): порог по памяти рантайма ядра, не по RSS.
+                            oomMemoryLimitHeap = true
                         }
                         io.nekohasekai.libbox.Libbox.reloadSetupOptions(opts)
                     }.onFailure { Log.w(TAG, "reloadSetupOptions failed: ${it.message}") }
@@ -797,6 +892,28 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                     result.success(err)
                 }
             }
+            // §645 — одиночный GetTailscaleStatus для опроса вкладки Network:
+            // map записи, null — пропуск тика, ядро без метода — error
+            // `unimplemented` (Dart останавливает опрос).
+            "ccGetTailscaleStatus" -> {
+                val cc = BoxService.commandClient
+                val tag = call.argument<String>("tag") ?: ""
+                pluginScope.launch {
+                    val r = withContext(Dispatchers.IO) {
+                        runCatching { cc?.getTailscaleStatus(tag) }
+                    }
+                    r.fold(
+                        onSuccess = { result.success(it) },
+                        onFailure = {
+                            if (it is UnsupportedOperationException) {
+                                result.error("unimplemented", null, null)
+                            } else {
+                                result.success(null)
+                            }
+                        },
+                    )
+                }
+            }
             "ccTailscaleLogout" -> {
                 val cc = BoxService.commandClient
                 val tag = call.argument<String>("tag") ?: ""
@@ -805,6 +922,28 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                         cc?.tailscaleLogout(tag) ?: "no command client"
                     }
                     result.success(err)
+                }
+            }
+            // §706 (ядро SPEC 149) — вход узла с новым ключом на лету. Успех →
+            // null; отказ ядра → PlatformException с кодом как у
+            // ccSetEndpointEnabled.
+            "ccTailscaleLogin" -> {
+                val cc = BoxService.commandClient
+                val tag = call.argument<String>("tag") ?: ""
+                val key = call.argument<String>("auth_key") ?: ""
+                pluginScope.launch {
+                    val r = withContext(Dispatchers.IO) {
+                        if (cc == null) {
+                            mapOf("error" to "error", "message" to "no command client")
+                        } else {
+                            cc.tailscaleLogin(tag, key)
+                        }
+                    }
+                    if (r == null) {
+                        result.success(null)
+                    } else {
+                        result.error(r["error"] ?: "error", r["message"], null)
+                    }
                 }
             }
             "ccStartTailscalePing" -> {
@@ -817,6 +956,279 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             "ccStopTailscalePing" -> {
                 val cc = BoxService.commandClient
                 if (cc != null) pluginScope.launch(Dispatchers.IO) { cc.stopTailscalePing() }
+                result.success(true)
+            }
+            // §687 — тест соединения: события идут в EventChannel connection_test.
+            "ccStartConnectionTest" -> {
+                val cc = BoxService.commandClient
+                val link = call.argument<String>("link") ?: ""
+                val pkg = call.argument<String>("package_name") ?: ""
+                val depth = call.argument<Int>("depth") ?: 0
+                val fresh = call.argument<Boolean>("fresh") ?: false
+                if (cc != null) pluginScope.launch(Dispatchers.IO) { cc.startConnectionTest(link, pkg, depth, fresh) }
+                result.success(cc != null)
+            }
+            "ccStopConnectionTest" -> {
+                val cc = BoxService.commandClient
+                if (cc != null) pluginScope.launch(Dispatchers.IO) { cc.stopConnectionTest() }
+                result.success(true)
+            }
+            // §654 C — openconnect: снапшот статуса, ответ на челлендж,
+            // отмена, слушатель SSO. Блокирующий gRPC — на Dispatchers.IO;
+            // ответ — null (успех) или текст ошибки.
+            "ccGetOpenConnectStatus" -> {
+                result.success(BoxService.commandClient?.openConnectSnapshot())
+            }
+            // §707 — Taildrop: входящие узла, сохранение, удаление, отправка
+            // из строки пира. Блокирующий gRPC — на Dispatchers.IO.
+            "ccStartTaildropInbox" -> {
+                val cc = BoxService.commandClient
+                val tag = call.argument<String>("tag") ?: ""
+                if (cc != null) pluginScope.launch(Dispatchers.IO) { cc.startTaildropInbox(tag) }
+                result.success(cc != null)
+            }
+            "ccStopTaildropInbox" -> {
+                val cc = BoxService.commandClient
+                if (cc != null) pluginScope.launch(Dispatchers.IO) { cc.stopTaildropInbox() }
+                result.success(true)
+            }
+            "ccTaildropDelete", "ccTaildropCancelReceiving", "ccTaildropMarkRead" -> {
+                val cc = BoxService.commandClient
+                val tag = call.argument<String>("tag") ?: ""
+                val name = call.argument<String>("name") ?: ""
+                val sender = call.argument<String>("sender_id") ?: ""
+                val method = call.method
+                pluginScope.launch {
+                    val err = withContext(Dispatchers.IO) {
+                        if (cc == null) {
+                            "no command client"
+                        } else {
+                            when (method) {
+                                "ccTaildropDelete" -> cc.taildropDelete(tag, name)
+                                    .also { if (it == null) Taildrop.dismissReceived(context, tag, name) }
+                                "ccTaildropCancelReceiving" -> cc.taildropCancelReceiving(tag, sender, name)
+                                else -> cc.taildropMarkRead(tag)
+                            }
+                        }
+                    }
+                    result.success(err)
+                }
+            }
+            "ccTaildropSave" -> {
+                val tag = call.argument<String>("tag") ?: ""
+                val name = call.argument<String>("name") ?: ""
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                    taildropSave(tag, name, null, result)
+                } else if (call.argument<Boolean>("downloads_only") == true) {
+                    // §707 итер. 5 — Debug API: без системного «Сохранить как».
+                    result.success(mapOf("status" to "error", "error" to "needs Android 10 or later"))
+                } else {
+                    val act = activity
+                    if (act == null) {
+                        result.success(mapOf("status" to "error", "error" to "no activity"))
+                    } else {
+                        pendingTaildropSave?.third?.success(mapOf("status" to "cancelled"))
+                        pendingTaildropSave = Triple(tag, name, result)
+                        val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+                            addCategory(Intent.CATEGORY_OPENABLE)
+                            type = Taildrop.mimeOf(name)
+                            putExtra(Intent.EXTRA_TITLE, name)
+                        }
+                        runCatching { act.startActivityForResult(intent, TAILDROP_SAVE_CODE) }
+                            .onFailure {
+                                pendingTaildropSave = null
+                                result.success(mapOf("status" to "error", "error" to (it.message ?: "no file picker")))
+                            }
+                    }
+                }
+            }
+            "ccTaildropPickAndSend" -> {
+                val tag = call.argument<String>("tag") ?: ""
+                val peerId = call.argument<String>("peer_id") ?: ""
+                val peerName = call.argument<String>("peer_name") ?: ""
+                val act = activity
+                if (act == null) {
+                    result.success(mapOf("status" to "error", "error" to "no activity"))
+                } else {
+                    pendingTaildropPick?.second?.success(mapOf("status" to "cancelled"))
+                    pendingTaildropPick = Triple(tag, peerId, peerName) to result
+                    val open = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                        addCategory(Intent.CATEGORY_OPENABLE)
+                        type = "*/*"
+                        putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+                    }
+                    val started = runCatching { act.startActivityForResult(open, TAILDROP_PICK_CODE) }.isSuccess ||
+                        runCatching {
+                            // Без системного DocumentsUI (TV) — GET_CONTENT.
+                            val get = Intent(Intent.ACTION_GET_CONTENT).apply {
+                                addCategory(Intent.CATEGORY_OPENABLE)
+                                type = "*/*"
+                                putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+                            }
+                            act.startActivityForResult(get, TAILDROP_PICK_CODE)
+                        }.isSuccess
+                    if (!started) {
+                        pendingTaildropPick = null
+                        result.success(mapOf("status" to "error", "error" to "no file picker"))
+                    }
+                }
+            }
+            // §707 итер. 5 — Debug API: отправка из байтов / заметки тем же
+            // путём, что «Send file…» (уведомление, Cancel), с ожиданием итога.
+            "ccTaildropSendBytes" -> {
+                val tag = call.argument<String>("tag") ?: ""
+                val peerId = call.argument<String>("peer_id") ?: ""
+                val peerName = call.argument<String>("peer_name") ?: ""
+                val text = call.argument<String>("text")
+                val bytes = call.argument<ByteArray>("bytes")
+                val name = call.argument<String>("name") ?: ""
+                val waitMs = (call.argument<Number>("wait_ms") ?: 60_000).toLong()
+                val item = when {
+                    text != null -> Taildrop.noteItem(text)
+                    bytes != null && name.isNotEmpty() ->
+                        Taildrop.Item(name, bytes.size.toLong(), java.io.ByteArrayInputStream(bytes))
+                    else -> null
+                }
+                if (item == null || tag.isEmpty() || peerId.isEmpty()) {
+                    result.success(mapOf("status" to "error", "error" to "bad arguments"))
+                } else {
+                    val ctx = context
+                    pluginScope.launch {
+                        val out = withContext(Dispatchers.IO) {
+                            val latch = java.util.concurrent.CountDownLatch(1)
+                            val outcome = java.util.concurrent.atomic.AtomicReference<Pair<String, String?>>(null)
+                            val started = Taildrop.send(ctx, tag, peerId, peerName, listOf(item)) { status, err ->
+                                outcome.set(status to err)
+                                latch.countDown()
+                            }
+                            if (!started) {
+                                mapOf("status" to "error", "error" to "vpn_off", "name" to item.name)
+                            } else if (!latch.await(waitMs, java.util.concurrent.TimeUnit.MILLISECONDS)) {
+                                mapOf("status" to "in_progress", "name" to item.name)
+                            } else {
+                                val (status, err) = outcome.get()
+                                mapOf("status" to status, "error" to (err ?: ""), "name" to item.name)
+                            }
+                        }
+                        result.success(out)
+                    }
+                }
+            }
+            // §707 итер. 5 — Debug API: снимок входящих узла с sha256 файлов
+            // на диске (каталог узла — из последнего собранного конфига).
+            "ccTaildropInboxSnapshot" -> {
+                val cc = BoxService.commandClient
+                val tag = call.argument<String>("tag") ?: ""
+                if (cc == null || tag.isEmpty()) {
+                    result.success(null)
+                } else {
+                    pluginScope.launch {
+                        val snap = withContext(Dispatchers.IO) { taildropInboxWithHashes(cc, tag) }
+                        result.success(snap)
+                    }
+                }
+            }
+            "taildropServiceStats" -> result.success(TaildropServiceFiles.stats())
+            // §707 итер. 7 — служебный файл собирает натив (тот же сборщик,
+            // что окно «Send clipboard»): Debug API `POST /taildrop/send` с
+            // `commands`. Команды не проверяются; предел max_bytes — да.
+            "taildropBuildServiceFile" -> {
+                val commands = call.argument<List<Any?>>("commands") ?: emptyList()
+                val spec = TaildropServiceFiles.spec(context)
+                result.success(
+                    if (spec == null) {
+                        mapOf("error" to "no_registry")
+                    } else {
+                        when (val b = TaildropServiceFiles.build(
+                            spec, org.json.JSONArray(commands), System.currentTimeMillis(),
+                            java.security.SecureRandom(),
+                        )) {
+                            is TaildropServiceFiles.Built.Ok -> mapOf("name" to b.name, "bytes" to b.bytes)
+                            is TaildropServiceFiles.Built.TooLarge ->
+                                mapOf("error" to "too_large", "size" to b.size, "max_bytes" to b.maxBytes)
+                            TaildropServiceFiles.Built.Unsupported -> mapOf("error" to "unsupported_format")
+                        }
+                    },
+                )
+            }
+            // §707 итер. 7 — окно «Send clipboard» для Debug API: запомненный
+            // получатель и число сообщений лент (текст не отдаётся).
+            "taildropClipState" -> result.success(TaildropClip.state(context))
+            "ccTakeTaildropOpenRequest" -> {
+                val tag = BoxVpnService.taildropOpenRequest
+                BoxVpnService.taildropOpenRequest = null
+                result.success(tag)
+            }
+            // §707 итер. 9 — производные множества итоговых тегов узлов с
+            // галками Taildrop (зеркало boxvpn_boot), заменяются целиком.
+            // Множество autosave выросло — забрать и то, что уже лежит.
+            "setTaildropTags" -> {
+                // §707 итер. 9 (контракт 1.1.159) — множества ВЫКЛЮЧЕННЫХ тегов.
+                val commandsOff = call.argument<List<String>>("commands_off") ?: emptyList()
+                val autosaveOff = call.argument<List<String>>("autosave_off") ?: emptyList()
+                val enabled = BootReceiver.setTaildropTags(context, commandsOff, autosaveOff)
+                if (enabled && Taildrop.autoSaveSupported()) Taildrop.sweepInboxesAsync(context)
+                result.success(true)
+            }
+            // §707 итер. 9 — старые файлы SharedPreferences Taildrop и кнопок
+            // уведомления удаляются (настройки Taildrop из rc.3 не переносятся,
+            // контракт 1.1.159).
+            "deleteLegacyPrefs" -> {
+                val ok = runCatching {
+                    context.deleteSharedPreferences(LEGACY_TAILDROP_PREFS)
+                    context.deleteSharedPreferences(LEGACY_NOTIFICATION_BUTTONS_PREFS)
+                    true
+                }.getOrDefault(false)
+                result.success(ok)
+            }
+            "ccTakeOpenConnectOpenRequest" -> {
+                val tag = BoxVpnService.openConnectOpenRequest
+                BoxVpnService.openConnectOpenRequest = null
+                result.success(tag)
+            }
+            "ccSubmitOpenConnectForm" -> {
+                val cc = BoxService.commandClient
+                val tag = call.argument<String>("tag") ?: ""
+                val id = call.argument<String>("challenge_id") ?: ""
+                val raw = call.argument<List<Any?>>("values") ?: emptyList()
+                val values = raw.mapNotNull { e ->
+                    val m = e as? Map<*, *> ?: return@mapNotNull null
+                    val k = m["key"] as? String ?: return@mapNotNull null
+                    k to (m["value"] as? String ?: "")
+                }
+                pluginScope.launch {
+                    val err = withContext(Dispatchers.IO) {
+                        cc?.submitOpenConnectForm(tag, id, values) ?: "no command client"
+                    }
+                    result.success(err)
+                }
+            }
+            "ccCancelOpenConnectChallenge" -> {
+                val cc = BoxService.commandClient
+                val tag = call.argument<String>("tag") ?: ""
+                val id = call.argument<String>("challenge_id") ?: ""
+                pluginScope.launch {
+                    val err = withContext(Dispatchers.IO) {
+                        cc?.cancelOpenConnectChallenge(tag, id) ?: "no command client"
+                    }
+                    result.success(err)
+                }
+            }
+            "ccStartOpenConnectCallback" -> {
+                val cc = BoxService.commandClient
+                val tag = call.argument<String>("tag") ?: ""
+                val id = call.argument<String>("challenge_id") ?: ""
+                val port = call.argument<Int>("port") ?: 8020
+                val prefixes = call.argument<List<String>>("prefixes") ?: emptyList()
+                pluginScope.launch {
+                    val err = withContext(Dispatchers.IO) {
+                        cc?.startOpenConnectCallback(tag, id, port, prefixes) ?: "no command client"
+                    }
+                    result.success(err)
+                }
+            }
+            "ccStopOpenConnectCallback" -> {
+                BoxService.commandClient?.stopOpenConnectCallback()
                 result.success(true)
             }
             "ccCancelPing" -> {
@@ -864,9 +1276,10 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 val link = call.argument<String>("link") ?: ""
                 val timeoutMs = call.argument<Int>("timeoutMs") ?: 0
                 val maxBytes = call.argument<Int>("maxBytes") ?: 0
+                val userAgent = call.argument<String>("userAgent") ?: ""
                 pluginScope.launch {
                     val r = withContext(Dispatchers.IO) {
-                        cc.getUrlViaOutbound(tag, link, timeoutMs, maxBytes)
+                        cc.getUrlViaOutbound(tag, link, timeoutMs, maxBytes, userAgent)
                     }
                     result.success(r)
                 }
@@ -883,8 +1296,10 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 }
             }
             // §236 — headless probe-сессия (Test servers в папке при
-            // ВЫКЛЮЧЕННОМ VPN). start/urlTest/stop; гейт «VPN не запущен» —
+            // ВЫКЛЮЧЕННОМ VPN). start/urlTest/cancel/stop; гейт «VPN не запущен» —
             // внутри ProbeSession. Все вызовы блокирующие → Dispatchers.IO.
+            // §669 — probeStart отдаёт {error, runId}; остальные вызовы несут
+            // runId владельца прогона, чужой/устаревший — no-op («stale run»).
             "probeStart" -> {
                 val config = call.argument<String>("config") ?: ""
                 pluginScope.launch {
@@ -897,7 +1312,9 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 val link = call.argument<String>("link") ?: ""
                 val timeoutMs = call.argument<Int>("timeoutMs") ?: 0
                 pluginScope.launch {
-                    val r = withContext(Dispatchers.IO) { ProbeSession.urlTest(tag, link, timeoutMs) }
+                    val r = withContext(Dispatchers.IO) {
+                        ProbeSession.urlTest(probeRunId(call), tag, link, timeoutMs)
+                    }
                     result.success(r)
                 }
             }
@@ -908,16 +1325,26 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 val link = call.argument<String>("link") ?: ""
                 val timeoutMs = call.argument<Int>("timeoutMs") ?: 0
                 val maxBytes = call.argument<Int>("maxBytes") ?: 0
+                val userAgent = call.argument<String>("userAgent") ?: ""
                 pluginScope.launch {
                     val r = withContext(Dispatchers.IO) {
-                        ProbeSession.getUrl(tag, link, timeoutMs, maxBytes)
+                        ProbeSession.getUrl(probeRunId(call), tag, link, timeoutMs, maxBytes, userAgent)
                     }
                     result.success(r)
                 }
             }
-            "probeStop" -> {
+            // §669 — обрыв начатых замеров (disconnect клиента сессии, §175).
+            "probeCancel" -> {
+                val runId = probeRunId(call)
                 pluginScope.launch {
-                    withContext(Dispatchers.IO) { runCatching { ProbeSession.stop() } }
+                    withContext(Dispatchers.IO) { runCatching { ProbeSession.cancel(runId) } }
+                    result.success(null)
+                }
+            }
+            "probeStop" -> {
+                val runId = probeRunId(call)
+                pluginScope.launch {
+                    withContext(Dispatchers.IO) { runCatching { ProbeSession.stop(runId) } }
                     result.success(null)
                 }
             }
@@ -1175,6 +1602,12 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             else -> result.notImplemented()
         }
     }
+
+    /// §669 — runId владельца probe-прогона. Dart-int приезжает Integer или
+    /// Long по величине, поэтому через Number; нет аргумента → 0 (ни одна
+    /// сессия такого id не получает — вызов уйдёт в «stale run»).
+    private fun probeRunId(call: MethodCall): Long =
+        call.argument<Number>("runId")?.toLong() ?: 0L
 
     /// §242/§507 — PSS-разбивка своего процесса для Stats → Memory sheet.
     ///
@@ -1566,7 +1999,106 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
     // ActivityResultListener
     // -------------------------------------------------------------------------
 
+    /// §707 — сохранить принятый файл (в Downloads или в [target]) и
+    /// ответить Dart `{status, where?, name?, error?}`; `name` — имя записи
+    /// в Downloads (итер. 5, Debug API).
+    private fun taildropSave(tag: String, name: String, target: android.net.Uri?, result: MethodChannel.Result) {
+        val ctx = context
+        pluginScope.launch {
+            val (err, savedName) = withContext(Dispatchers.IO) {
+                runCatching {
+                    if (target == null) Taildrop.saveToDownloads(ctx, tag, name)
+                    else Taildrop.save(ctx, tag, name, target) to null
+                }.getOrElse { (it.message ?: "failed") to null }
+            }
+            if (err == null) Taildrop.dismissReceived(ctx, tag, name)
+            result.success(
+                if (err == null) mapOf(
+                    "status" to "saved",
+                    "where" to (if (target == null) "downloads" else "document"),
+                    "name" to (savedName ?: ""),
+                )
+                else mapOf("status" to "error", "error" to err)
+            )
+        }
+    }
+
+    /// §707 итер. 5 — снимок входящих [tag] (форма потока вкладки Network) +
+    /// `sha256` у каждого принятого файла (пусто — файла на диске нет или
+    /// каталог узла неизвестен). Блокирующий — звать с IO.
+    private fun taildropInboxWithHashes(cc: BoxCommandClient, tag: String): Map<String, Any>? {
+        val snap = cc.taildropInboxOnce(tag, 3000L) ?: return null
+        val dir = Taildrop.taildropDirectories(ConfigManager.load()).firstOrNull { it.first == tag }?.second
+        @Suppress("UNCHECKED_CAST")
+        val files = (snap["files"] as? List<Map<String, Any>>).orEmpty().map { f ->
+            val name = f["name"] as? String ?: ""
+            val hash = if (dir == null || name.isEmpty()) "" else sha256Hex(java.io.File(dir, name))
+            f + ("sha256" to hash)
+        }
+        return snap + ("files" to files)
+    }
+
+    private fun sha256Hex(f: java.io.File): String = runCatching {
+        if (!f.isFile) return ""
+        val md = java.security.MessageDigest.getInstance("SHA-256")
+        f.inputStream().use { input ->
+            val buf = ByteArray(64 * 1024)
+            while (true) {
+                val n = input.read(buf)
+                if (n < 0) break
+                md.update(buf, 0, n)
+            }
+        }
+        md.digest().joinToString("") { "%02x".format(it) }
+    }.getOrDefault("")
+
+    /// §707 — ответы выбора файлов и «Сохранить как».
+    private fun onTaildropResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode == TAILDROP_SAVE_CODE) {
+            val p = pendingTaildropSave ?: return
+            pendingTaildropSave = null
+            val uri = data?.data
+            if (resultCode != Activity.RESULT_OK || uri == null) {
+                p.third.success(mapOf("status" to "cancelled"))
+            } else {
+                taildropSave(p.first, p.second, uri, p.third)
+            }
+            return
+        }
+        val p = pendingTaildropPick ?: return
+        pendingTaildropPick = null
+        val result = p.second
+        val uris = ArrayList<android.net.Uri>()
+        if (resultCode == Activity.RESULT_OK && data != null) {
+            val clip = data.clipData
+            if (clip != null) {
+                for (i in 0 until clip.itemCount) clip.getItemAt(i).uri?.let { uris.add(it) }
+            } else {
+                data.data?.let { uris.add(it) }
+            }
+        }
+        if (uris.isEmpty()) {
+            result.success(mapOf("status" to "cancelled"))
+            return
+        }
+        val (tag, peerId, peerName) = p.first
+        val items = Taildrop.openUris(context, uris)
+        if (items.isEmpty()) {
+            result.success(mapOf("status" to "error", "error" to "cant_read"))
+            return
+        }
+        val ok = Taildrop.send(context, tag, peerId, peerName, items)
+        result.success(
+            if (ok) mapOf("status" to "started", "count" to items.size)
+            else mapOf("status" to "error", "error" to "vpn_off")
+        )
+    }
+
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?): Boolean {
+        if (requestCode == TAILDROP_PICK_CODE || requestCode == TAILDROP_SAVE_CODE) {
+            onTaildropResult(requestCode, resultCode, data)
+            return true
+        }
         if (requestCode != VPN_REQUEST_CODE) return false
         val r = pendingVpnResult
         pendingVpnResult = null

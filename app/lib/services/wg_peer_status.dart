@@ -31,18 +31,61 @@ int wgRejectAfterSeconds(Map<String, dynamic>? body) {
   return kWgRejectAfterDefault;
 }
 
-/// Прежние значения rx по ключу пира — признак «rx растёт» между опросами.
+/// Окно правила «без ответа», секунды.
+const int kWgNoResponseWindowSeconds = 20;
+
+/// Сколько опросов с ростом tx в окне без роста rx дают «без ответа».
+/// Keepalive с интервалом 25 с даёт не больше одного роста за окно.
+const int kWgNoResponseTxGrowths = 4;
+
+/// Вывод опроса по одному пиру.
+class WgTrafficSample {
+  const WgTrafficSample({this.rxGrew = false, this.unanswered = false});
+
+  /// rx вырос с прошлого опроса.
+  final bool rxGrew;
+
+  /// За окно rx не рос, а tx рос минимум в [kWgNoResponseTxGrowths] опросах.
+  final bool unanswered;
+}
+
+/// Прежние rx/tx по ключу пира и моменты роста tx с последнего роста rx.
 /// Значение меньше прежнего (пересборка устройства обнулила счётчики) —
 /// новая база, а не рост.
-class WgRxTracker {
-  final Map<String, int> _last = {};
+class WgTrafficTracker {
+  final Map<String, _WgPeerTraffic> _peers = {};
 
-  /// Запоминает [rx] пира и отвечает, вырос ли он с прошлого опроса.
-  bool grew(String publicKey, int rx) {
-    final prev = _last[publicKey];
-    _last[publicKey] = rx;
-    return prev != null && rx > prev;
+  WgTrafficSample record(String publicKey, int rx, int tx, int nowUnix) {
+    final prev = _peers[publicKey];
+    if (prev == null || rx < prev.rx || tx < prev.tx) {
+      _peers[publicKey] = _WgPeerTraffic(rx, tx);
+      return const WgTrafficSample();
+    }
+    final rxGrew = rx > prev.rx;
+    if (rxGrew) {
+      prev.txGrowths.clear();
+    } else if (tx > prev.tx) {
+      prev.txGrowths.add(nowUnix);
+    }
+    prev
+      ..rx = rx
+      ..tx = tx;
+    prev.txGrowths.removeWhere(
+      (t) => nowUnix - t >= kWgNoResponseWindowSeconds,
+    );
+    return WgTrafficSample(
+      rxGrew: rxGrew,
+      unanswered: prev.txGrowths.length >= kWgNoResponseTxGrowths,
+    );
   }
+}
+
+class _WgPeerTraffic {
+  _WgPeerTraffic(this.rx, this.tx);
+
+  int rx;
+  int tx;
+  final List<int> txGrowths = [];
 }
 
 enum WgPeerVerdictKind {
@@ -51,6 +94,9 @@ enum WgPeerVerdictKind {
 
   /// Хендшейк старше порога, rx стоит.
   noSession,
+
+  /// tx растёт, rx стоит (окно [kWgNoResponseWindowSeconds]).
+  noResponse,
 
   /// Хендшейка не было с момента сборки устройства.
   neverConnected,
@@ -67,7 +113,8 @@ class WgPeerVerdict {
 
   final WgPeerVerdictKind kind;
 
-  /// Возраст хендшейка для [WgPeerVerdictKind.noSession].
+  /// Возраст хендшейка для [WgPeerVerdictKind.noSession] и
+  /// [WgPeerVerdictKind.noResponse].
   final int ageSeconds;
 
   @override
@@ -84,11 +131,13 @@ class WgPeerVerdict {
 }
 
 /// Вердикт по пиру: таблица §2 руководства ядра для `up`, §3.6 — для
-/// `asleep`/`disabled`. [rxGrew] — rx вырос с прошлого опроса.
+/// `asleep`/`disabled`. [rxGrew] — rx вырос с прошлого опроса, [unanswered] —
+/// tx растёт без ответа (`WgTrafficSample`).
 WgPeerVerdict wgPeerVerdict({
   required String endpointState,
   required CcWireGuardPeer peer,
   required bool rxGrew,
+  bool unanswered = false,
   required int nowUnix,
   int rejectAfterSeconds = kWgRejectAfterDefault,
 }) {
@@ -103,6 +152,9 @@ WgPeerVerdict wgPeerVerdict({
   }
   final age = nowUnix - peer.lastHandshakeUnix;
   final ageSeconds = age < 0 ? 0 : age;
+  if (unanswered) {
+    return WgPeerVerdict(WgPeerVerdictKind.noResponse, ageSeconds);
+  }
   if (ageSeconds <= rejectAfterSeconds || rxGrew) {
     return const WgPeerVerdict(WgPeerVerdictKind.connected);
   }
@@ -128,6 +180,10 @@ String wgPeerVerdictLabel(WgPeerVerdict v) => switch (v.kind) {
   WgPeerVerdictKind.neverConnected => getLocalText.s("never connected"),
   WgPeerVerdictKind.noSession => getLocalText.s(
     "no active session (last handshake %s)",
+    wgAgeLabel(v.ageSeconds),
+  ),
+  WgPeerVerdictKind.noResponse => getLocalText.s(
+    "no response (last handshake %s)",
     wgAgeLabel(v.ageSeconds),
   ),
   WgPeerVerdictKind.asleep => getLocalText.s("asleep"),

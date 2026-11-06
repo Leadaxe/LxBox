@@ -11,6 +11,7 @@ import 'package:lxbox/services/debug/context.dart';
 import 'package:lxbox/services/debug/contract/errors.dart';
 import 'package:lxbox/services/debug/debug_registry.dart';
 import 'package:lxbox/services/debug/handlers/folders.dart';
+import 'package:lxbox/services/debug/handlers/subs.dart';
 import 'package:lxbox/services/debug/transport/request.dart';
 import 'package:lxbox/services/debug/transport/response.dart';
 import 'package:lxbox/services/settings_storage.dart';
@@ -246,6 +247,73 @@ void main() {
         ctx(),
       ),
       throwsA(isA<NotFound>()),
+    );
+  });
+
+  test('§636 PATCH tls: частичная правка, null — наследовать, негодная пауза '
+      '→ 400', () async {
+    final id = await createFolder('F');
+    await foldersHandler(
+      req('POST', '/folders/$id/members', body: {'input': '$uriA\n$uriB'}),
+      ctx(),
+    );
+    Future<Map<String, dynamic>> patchMember(Map<String, dynamic> tls) async =>
+        (asMap(await foldersHandler(
+          req('PATCH', '/folders/$id/members/0', body: {'tls': tls}),
+          ctx(),
+        ))['member'] as Map)['tls'] as Map<String, dynamic>;
+
+    expect((await getFolder(id))['tls'], isEmpty);
+    expect(await patchMember({'fragment': false, 'fallback_delay': '1s'}), {
+      'fragment': false,
+      'record_fragment': null,
+      'fallback_delay': '1s',
+      'mixed_case_sni': null,
+    });
+    // Ключа нет — поле не меняется; null — сброс.
+    expect(await patchMember({'mixed_case_sni': true, 'fragment': null}), {
+      'fragment': null,
+      'record_fragment': null,
+      'fallback_delay': '1s',
+      'mixed_case_sni': true,
+    });
+    final folder = controller.entries.single.list as FolderServers;
+    expect(folder.members[0].tls.mixedCaseSni, isTrue);
+    expect(folder.members[1].tls.isEmpty, isTrue);
+
+    for (final bad in <Map<String, dynamic>>[
+      {'fallback_delay': 'fast'},
+      {'fragment': 'yes'},
+      {'unknown': true},
+    ]) {
+      await expectLater(patchMember(bad), throwsA(isA<BadRequest>()),
+          reason: '$bad');
+    }
+    expect(
+        (controller.entries.single.list as FolderServers)
+            .members[0]
+            .tls
+            .fallbackDelay,
+        '1s',
+        reason: 'негодное тело ничего не меняет');
+
+    // Уровень папки — PATCH /subs/{id}.
+    final r = await subsHandler(
+      req('PATCH', '/subs/$id', body: {
+        'tls': {'record_fragment': true},
+      }),
+      ctx(),
+    );
+    expect(asMap(r)['tls'],
+        containsPair('record_fragment', true));
+    expect(controller.entries.single.tls.recordFragment, isTrue);
+    await expectLater(
+      subsHandler(
+          req('PATCH', '/subs/$id', body: {
+            'tls': {'fallback_delay': '500'},
+          }),
+          ctx()),
+      throwsA(isA<BadRequest>()),
     );
   });
 

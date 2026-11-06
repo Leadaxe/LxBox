@@ -86,6 +86,9 @@ const _codesInCode = <String>{
   kWarnDirectionExists,
   kWarnChainExists,
   kWarnDnsEntrySkipped,
+  kWarnDnsEntryKept,
+  kWarnDnsResolverReset,
+  kWarnDnsGroupEmpty,
   kWarnWarpSkipped,
   // §438 — чтение контракта 1.0: отбраковка записи секции узла (норма B3) и
   // запись `sources[]` вида, которому здесь нет места (читатель отвергает
@@ -93,6 +96,9 @@ const _codesInCode = <String>{
   kWarnSectionRecordDropped,
   kWarnSourceKindUnsupported,
   kWarnGroupDegraded,
+  // §640 — контракт 1.1.116: замещение правил приёмника файлом с ключом
+  // `rules` (BACKUP.md §9 п. 7).
+  kWarnRulesReplaced,
 };
 
 void main() {

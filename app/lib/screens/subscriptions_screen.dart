@@ -36,6 +36,7 @@ import 'subscriptions_screen/widgets/subscription_entry_tile.dart';
 import 'subscriptions_screen/widgets/subscriptions_empty_state.dart';
 import '../services/l10n/locale_controller.dart';
 import '../services/file_import.dart';
+import '../services/telegram_link.dart'; // §657
 
 class SubscriptionsScreen extends StatefulWidget {
   const SubscriptionsScreen({
@@ -859,22 +860,19 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
       );
       return;
     }
-    final config = await widget.subController.generateConfig();
-    if (!mounted) return;
-    if (config != null) {
-      final ok = await widget.homeController.saveParsedConfig(config);
-      if (!mounted) return;
-      if (ok) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              getLocalText.plural("Config generated: %d nodes", widget.subController.entries
-                  .fold<int>(0, (s, e) => s + e.nodeCount)),
-            ),
-          ),
-        );
-      }
-    }
+    // §667 Р4 — своей пересборки здесь больше нет: реакция подписок внутри
+    // прохода (§323, `_reactToSubscriptionUpdate`) уже собрала и применила
+    // через общий гейт. Вторая запись того же конфига давала `changed=false`
+    // и гасила флаг «устарел» при ядре на старом конфиге (Д5). Состав не
+    // менялся → реакции нет, собирать не из чего.
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          getLocalText.plural("Config generated: %d nodes", widget.subController.entries
+              .fold<int>(0, (s, e) => s + e.nodeCount)),
+        ),
+      ),
+    );
   }
 
   @override
@@ -1061,7 +1059,8 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
   }
 
   Future<void> _launchUrl(String url) async {
-    final opened = await UrlLauncher.open(url);
+    final opened =
+        await UrlLauncher.open(url, fallbackUrl: telegramWebFallback(url));
     if (!opened && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(getLocalText.s("Copied: %s", url))),

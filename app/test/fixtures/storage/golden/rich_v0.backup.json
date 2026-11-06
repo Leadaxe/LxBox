@@ -443,7 +443,7 @@
       "include": [
         "vpn-1"
       ],
-      "interrupt_exist_connections": false,
+      "interrupt_exist_connections": true,
       "ping_url": "https://example.com/204",
       "ping_timeout_ms": 2500,
       "auto": {
@@ -791,7 +791,10 @@
       {
         "kind": "template",
         "tag": "google_udp",
-        "enabled": true
+        "enabled": true,
+        "vars": {
+          "outbound": "direct-out"
+        }
       },
       {
         "kind": "template",

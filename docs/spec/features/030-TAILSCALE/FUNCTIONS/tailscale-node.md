@@ -77,8 +77,9 @@ Direction to route the internet through it).
 - With the VPN on, the row of a node with an exit node reads
   `tailscale·via <device>`. When that device is offline, `exit offline`
   (orange) takes the place of the endpoint state; a node turned off by hand
-  keeps `off`. Direct vs relay is not shown: the core's status has no path,
-  only the device check in the Network tab knows it.
+  keeps `off`. The row does not show direct or relay; the path to every
+  device, the exit included, is on the Network tab
+  ([networks-tab](networks-tab.md)).
 - Less than 7 days before the device key expires, the row warns
   `key expires Nd` / `key expires <1d` / `key expired` (orange): on a node
   with an exit — in the endpoint-state slot, below `exit offline`; on a

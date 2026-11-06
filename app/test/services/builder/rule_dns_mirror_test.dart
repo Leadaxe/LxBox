@@ -221,6 +221,164 @@ void main() {
     });
   });
 
+  group('§692 — DNS-опция только при условии, видимом DNS-слою', () {
+    const dnsOn = RuleDns(enabled: true, serverTag: 'google_udp');
+    const force = RuleDns(forceIpv4: true);
+    const fixed = RuleDns(fixedIps: ['10.1.1.1']);
+
+    test('ip_cidr-only: ни зеркало, ни Force IPv4, ни Fixed IP', () {
+      final r = CustomRuleInline(
+          name: 'lan', ipCidrs: ['10.0.0.0/8'], outbound: 'vpn-1', dns: dnsOn);
+      expect(r.dnsLayerEligible, false);
+      expect(r.dnsMirrorActive, false, reason: 'набор «только IP»');
+      expect(
+        CustomRuleInline(name: 'f', ipCidrs: ['10.0.0.0/8'], dns: force)
+            .forceIpv4Active,
+        false,
+      );
+      expect(
+        CustomRuleInline(name: 'x', ipCidrs: ['10.0.0.0/8'], dns: fixed)
+            .dnsFixedActive,
+        false,
+      );
+      // routing-level поля не делают правило DNS-способным.
+      expect(
+        CustomRuleInline(
+                name: 'priv',
+                ipCidrs: ['10.0.0.0/8'],
+                ipIsPrivate: true,
+                sourceIpIsPrivate: true,
+                dns: dnsOn)
+            .dnsMirrorActive,
+        false,
+      );
+    });
+
+    test('ip_cidr + inbound: набор всё равно «только IP» → не DNS-способно',
+        () {
+      expect(
+        CustomRuleInline(
+                name: 'i',
+                ipCidrs: ['10.0.0.0/8'],
+                inbounds: ['tun-in'],
+                dns: dnsOn)
+            .dnsMirrorActive,
+        false,
+      );
+    });
+
+    test('inbound-only / package / source_ip / wifi / домен — DNS-способно',
+        () {
+      expect(
+        CustomRuleInline(name: 'in', inbounds: ['tun-in'], dns: dnsOn)
+            .dnsMirrorActive,
+        true,
+      );
+      expect(
+        CustomRuleInline(
+                name: 'pkg',
+                ipCidrs: ['10.0.0.0/8'],
+                packages: ['com.x'],
+                dns: dnsOn)
+            .dnsMirrorActive,
+        true,
+        reason: 'package_name — не-IP item, ядро принимает',
+      );
+      expect(
+        CustomRuleInline(
+                name: 'src', sourceIpCidrs: ['192.168.1.0/24'], dns: dnsOn)
+            .dnsMirrorActive,
+        true,
+      );
+      expect(
+        CustomRuleInline(name: 'wifi', wifiSsids: ['Home'], dns: dnsOn)
+            .dnsMirrorActive,
+        true,
+      );
+      expect(
+        CustomRuleInline(
+                name: 'dom',
+                ipCidrs: ['10.0.0.0/8'],
+                domainKeywords: ['nas'],
+                dns: dnsOn)
+            .dnsMirrorActive,
+        true,
+      );
+    });
+
+    test('srs — всегда DNS-способно (содержимое файла не разбирается)', () {
+      expect(
+        CustomRuleSrs(name: 's', srsUrl: 'https://e/geoip.srs', dns: dnsOn)
+            .dnsLayerEligible,
+        true,
+      );
+    });
+
+    test('сборка: ip_cidr-only + dns → зеркала нет, route-правило есть', () {
+      final reg = RuleSetRegistry();
+      final result = applyAllCustomRules(
+        reg,
+        [
+          CustomRuleInline(
+            name: 'lan',
+            ipCidrs: ['10.0.0.0/8'],
+            outbound: 'vpn-1',
+            dns: const RuleDns(
+                enabled: true, serverTag: 'google_udp', forceIpv4: true),
+          ),
+        ],
+        const [],
+      );
+      expect(result.dnsMirrors, isEmpty);
+      expect(reg.getRuleSets(), hasLength(1));
+      expect(reg.getRules().any((r) => r['outbound'] == 'vpn-1'), true);
+    });
+  });
+
+  group('§694 — тип/лимитность сети видны DNS-слою', () {
+    const dnsOn = RuleDns(enabled: true, serverTag: 'google_udp');
+
+    test('только network_type или network_is_expensive → DNS-способно', () {
+      expect(
+        CustomRuleInline(name: 'c', networkTypes: ['cellular'], dns: dnsOn)
+            .dnsMirrorActive,
+        true,
+      );
+      expect(
+        CustomRuleInline(name: 'm', networkIsExpensive: true, dns: dnsOn)
+            .dnsLayerEligible,
+        true,
+      );
+      expect(
+        CustomRuleInline(
+                name: 'ip+c',
+                ipCidrs: ['10.0.0.0/8'],
+                networkTypes: ['cellular'],
+                dns: dnsOn)
+            .dnsLayerEligible,
+        true,
+        reason: 'набор с network_type ядро не считает «только IP»',
+      );
+    });
+
+    test('srs-зеркало несёт network_type / network_is_expensive', () {
+      final reg = RuleSetRegistry();
+      final srs = CustomRuleSrs(
+        name: 'cn-list',
+        srsUrl: 'https://e/cn.srs',
+        networkTypes: ['cellular'],
+        networkIsExpensive: true,
+        outbound: 'vpn-2',
+        dns: dnsOn,
+      );
+      final result = applyAllCustomRules(reg, [srs], const [],
+          srsPaths: {srs.id: '/tmp/cn.srs'});
+      final m = result.dnsMirrors.single;
+      expect(m.body['network_type'], ['cellular']);
+      expect(m.body['network_is_expensive'], true);
+    });
+  });
+
   group('applyAllCustomRules — сбор mirror-группы', () {
     test('inline+dns: mirror шарит headless rule_set (wifi внутри rule_set)',
         () {

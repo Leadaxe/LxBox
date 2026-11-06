@@ -62,7 +62,9 @@ optimization; the install channel.
 - There is no wizard for network setup, preset choice or adding the first
   server here: the empty home screen with a prompt to add a server — 007 / 008.
 - The VPN permission is requested on the first connection — 010.
-- A notification permission revoked later is not asked again.
+- The notification question is asked once; a permission revoked later is
+  not asked again (the flag "already asked" wins). Kept as is (audit 591,
+  2026-10-13).
 - Depends on OS capabilities: the notification request (Android 13+), battery
   optimization exemption, third-party vendor restrictors (OnePlus / OPPO /
   Realme, MIUI, MagicOS), the system tile dialog (Android 13+).

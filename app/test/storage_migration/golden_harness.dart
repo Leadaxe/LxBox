@@ -204,6 +204,12 @@ class GoldenBuild {
 /// чтения — сборка видит диск, как после перезапуска.
 Future<GoldenBuild> buildGoldenConfig(StorageSandbox box) async {
   resetStorageCaches();
+  // §143 §9 — разовый шаг старта приложения (main) до первой сборки: снятый
+  // тумблер interrupt-on-switch уходит в галки Направлений. Без него сборка
+  // из хранения и из восстановленного бэкапа (applyImport его делает)
+  // расходятся у rich_v0 (тумблер true, vpn-2 с галкой false).
+  await SettingsStorage.migrateInterruptOnSwitchIfNeeded();
+  resetStorageCaches();
   final controller = SubscriptionController();
   await controller.init();
   await controller.rehydrationDone;
@@ -218,11 +224,8 @@ Future<GoldenBuild> buildGoldenConfig(StorageSandbox box) async {
     coreVersion: kGoldenCoreVersion,
     tunApps: await SettingsStorage.getTunApps(),
     vpnMode: await SettingsStorage.getVpnMode(),
-    idleSuspend: await SettingsStorage.getIdleSuspend(),
-    idleSuspendReachable: await SettingsStorage.getIdleSuspendReachable(),
-    wgBuildMax: await SettingsStorage.getWgBuildMax(),
-    wgLazyBuild: await SettingsStorage.getWgLazyBuild(),
     tailscaleStateRoot: kGoldenTailscaleStateRoot,
+    mixins: await SettingsStorage.getMixins(), // §704 — у rich_v0 ключа нет
   );
   final lists = controller.entries.map((e) => e.list).toList();
   final result = await buildConfig(lists: lists, settings: settings);

@@ -23,7 +23,7 @@ backup") — the same in one step, without a preview.
 | Setting | Values | Default |
 |---------|--------|---------|
 | Categories | only those present in the file, with counters: "N server lists (S subs, C custom)", "Routing — N rules, final: …", "N app settings", "N VPN system toggles", "Debug API config (sensitive — token included)" | all present |
-| Mode | "Merge with existing (recommended)" — "Adds new items, keeps existing."; "Replace all (destructive)" | Merge |
+| Mode | "Merge with existing (recommended)" — "Adds what you don't have, keeps everything you do."; "Replace all (destructive)" | Merge |
 
 ## Inputs / Outputs
 
@@ -55,10 +55,17 @@ the home screen — "… · fetching subscriptions…".
   from the file wins; the four startup prompt flags are never accepted from
   the file in either mode and are not counted as unknown keys (§600). With the
   category deselected, VPN toggles stay at the device values.
-- **Merge:** sources are appended by `id` (an existing `id` is not touched);
-  the archive's chains, if any, replace the current ones wholesale, an
-  archive without chains does not touch them; vars — by key; other keys of
-  the file overwrite their own.
+- **Merge (§633):** adds what the receiver does not have, keeps everything
+  it has. Sources — by `id`, chains — by tag; rules — a preset by `ref`, the
+  others by `id` or by content, new ones go after the receiver's own rules; a
+  preset is on if it is on on either side, its parameters come from the side
+  where it is on; Directions — by tag (`vpn-1` stays the receiver's); DNS
+  servers — by tag, DNS rules — like rules; Tunnel apps — the package lists
+  are joined, the mode is the receiver's unless it is Off; scalars, vars and
+  VPN toggles — the receiver's value, a key the receiver lacks comes from the
+  file. A file record whose tag is taken by a chain or a Direction of the
+  receiver is skipped. The preview shows "new: N, already here: M" under each
+  category; the summary — "Merged: N added, M already here".
 - **Default-deny allowlist** in both modes: top level — a closed list of
   keys, vars — app flags ∪ template vars of this build. Dropped items go to
   the log and the counter.
@@ -71,9 +78,12 @@ the home screen — "… · fetching subscriptions…".
   the errors, the rest is applied.
 - From the home screen: replace of all the file's categories without a
   preview, then re-reading the sources and a forced subscription update.
-- Debug API: the `app`/`kind` markers are not checked; merge — overwriting
-  top-level keys wholesale (sources are not appended); the response carries
-  `migrated`, the migration report and `dropped_keys`.
+- Debug API: the body is `{storage, vpn_settings}` by the contract, not the
+  file envelope, so there are no `app`/`kind` markers to check (they belong
+  to the UI file envelope only); merge — the same
+  merge as the UI (sources appended by `id`, chains by tag), the counters in
+  `applied.merge`; the response carries `migrated`, the migration report and
+  `dropped_keys`.
 
 ## Boundaries
 
@@ -100,3 +110,4 @@ the home screen — "… · fetching subscriptions…".
 | 11 | [600](../../../tasks/600-backup-startup-prompt-flags-not-unknown.md) | Done | Startup prompt flags in a backup are not "unknown keys" |
 | 12 | [599](../../../tasks/599-backup-replace-per-category.md) | Done | Replace replaces only the selected categories |
 | 13 | [607](../../../tasks/607-l10n-backup-shell-bugs-from-591.md) | Done | Config pin in Debug API config; replace keeps the VPN toggles mirror; one localized summary with the error count for both restore paths, home restore applies the language |
+| 14 | [633](../../../tasks/633-backup-merge-is-merge.md) | Done | Merge merges every category: rules, Directions, DNS, Tunnel apps, chains by identity, scalars keep the receiver's value |

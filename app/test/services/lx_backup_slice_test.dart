@@ -394,7 +394,7 @@ void main() {
   });
 
   group('Л2: declared — поле едет и применяется', () {
-    test('таблица объявляет ровно поля стороны LxBox контракта 1.0.1', () {
+    test('таблица объявляет ровно поля стороны LxBox контракта (tls — 1.1.117)', () {
       expect(
         [
           for (final f in kBackupFields)
@@ -405,11 +405,15 @@ void main() {
           'subscription.import_rules',
           'subscription.import_rules_enabled',
           'subscription.on_update_action',
+          'subscription.tls',
           'server.detour_policy',
           'server.tag_policy',
+          'server.tls',
           'folder.detour_policy',
           'folder.ping_url',
           'folder.ping_timeout_ms',
+          'folder.tls',
+          'folderNode.tls',
           'chain.label',
           'rule.update_interval_hours',
           'rule.verbatim',
@@ -425,7 +429,9 @@ void main() {
             if (f.fate == BackupFieldFate.setting && !f.travels)
               '${f.record.name}.${f.key}',
         ],
-        ['dnsRule.kind:srs'],
+        [
+          'dnsRule.kind:srs',
+        ],
       );
     });
 

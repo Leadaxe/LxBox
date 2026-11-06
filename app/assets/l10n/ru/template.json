@@ -11,8 +11,8 @@
   "127.0.0.1 — this device only": {
     "value": "127.0.0.1 — только это устройство"
   },
-  "1492 recommended for mobile/WiFi": {
-    "value": "Для мобильной сети и Wi-Fi рекомендуется 1492"
+  "9000 recommended (sing-box default)": {
+    "value": "Рекомендуется 9000 (по умолчанию в sing-box)"
   },
   "2001:4860:4860::8844 · Secondary v6": {
     "value": "2001:4860:4860::8844 · Резервный v6"
@@ -71,11 +71,11 @@
   "Add an IPv6 address to the tunnel. Off by default — turn on only if your network has working IPv6. Turning on sets resolution to prefer IPv4, turning off forces IPv4-only — you can change the strategy in DNS Settings.": {
     "value": "Добавить туннелю IPv6-адрес. По умолчанию выключено — включайте, только если в вашей сети работает IPv6. Включение переводит резолв в режим «предпочитать IPv4», выключение — в «только IPv4»; стратегию можно поменять в настройках DNS."
   },
+  "Announce a local HTTP proxy to the VPN network (Android 10+).": {
+    "value": "Объявить локальный HTTP-прокси в сети VPN (Android 10+)."
+  },
   "Apple": {
     "value": "Apple"
-  },
-  "Applies to UDP only. DoH and DoT are pinned to 77.88.8.88 with SNI safe.dot.dns.yandex.net.": {
-    "value": "Действует только для UDP. DoH и DoT закреплены за 77.88.8.88 с SNI safe.dot.dns.yandex.net."
   },
   "Apply this preset's FakeIP DNS handling. Turn off to disable FakeIP without removing the preset.": {
     "value": "Применять FakeIP-обработку DNS этого пресета. Выключите, чтобы отключить FakeIP, не удаляя пресет."
@@ -110,26 +110,17 @@
   "Cloudflare": {
     "value": "Cloudflare"
   },
-  "Cloudflare DoT": {
-    "value": "Cloudflare DoT"
-  },
   "Cloudflare Public DNS address for DNS-over-TLS (port 853).": {
     "value": "Адрес Cloudflare Public DNS для DNS-over-TLS (порт 853)."
   },
   "Cloudflare Public DNS address. IPv4 — universal; IPv6 — if your network supports it.": {
     "value": "Адрес Cloudflare Public DNS. IPv4 — универсально; IPv6 — если ваша сеть его поддерживает."
   },
-  "Cloudflare UDP": {
-    "value": "Cloudflare UDP"
-  },
   "Connection and routing behavior": {
     "value": "Поведение подключений и маршрутизации"
   },
   "Core packet handling: sniff the domain, hijack DNS into the tunnel, resolve destinations for routing. Applied first, before all other rules.": {
     "value": "Базовая обработка пакетов: определение домена, перехват DNS в туннель, резолв адресов назначения для маршрутизации. Применяется первым, до всех остальных правил."
-  },
-  "Custom tunnel routes": {
-    "value": "Свои маршруты туннеля"
   },
   "DNS": {
     "value": "DNS"
@@ -149,11 +140,14 @@
   "Default domain resolver": {
     "value": "Резолвер доменов по умолчанию"
   },
-  "Default fallback DNS server. Used when an app's DNS query doesn't match any DNS rule.\n\n  • dns_shield — default; races 6 encrypted providers, answers from whichever replies first\n  • google_doh, cloudflare_dot — encrypted, single provider\n  • cloudflare_udp, google_udp — fast plain UDP\n\nlocal_dns_resolver (system DNS) is safe here.": {
-    "value": "Резервный DNS-сервер по умолчанию. Используется, когда DNS-запрос приложения не совпал ни с одним DNS-правилом.\n\n  • dns_shield — по умолчанию; опрашивает 6 шифрованных провайдеров наперегонки, отвечает тот, кто первым откликнулся\n  • google_doh, cloudflare_dot — шифрованные, один провайдер\n  • cloudflare_udp, google_udp — быстрый обычный UDP\n\nlocal_dns_resolver (системный DNS) здесь безопасен."
+  "Default fallback DNS server. Used when an app's DNS query doesn't match any DNS rule.\n\n  • dns_shield — default; races 6 encrypted providers over a direct connection, answers from whichever replies first\n  • google_doh, cloudflare_dot — recommended; encrypted, direct\n  • cloudflare_udp, google_udp — plain UDP through the tunnel; fine here\n\nlocal_dns_resolver (system DNS) is safe here.": {
+    "value": "Резервный DNS-сервер по умолчанию. Используется, когда DNS-запрос приложения не совпал ни с одним DNS-правилом.\n\n  • dns_shield — по умолчанию; опрашивает 6 шифрованных провайдеров напрямую наперегонки, отвечает тот, кто первым откликнулся\n  • google_doh, cloudflare_dot — рекомендуются; шифрованные, напрямую\n  • cloudflare_udp, google_udp — обычный UDP через туннель; здесь допустимо\n\nlocal_dns_resolver (системный DNS) здесь безопасен."
   },
   "Detect protocol and domain from packets for accurate routing.\n⚠️ WARNING: turning this off stops protocol matching (e.g. BitTorrent, TLS, QUIC), and domain matching too unless FakeIP is on.": {
     "value": "Определять протокол и домен из пакетов для точной маршрутизации.\n⚠️ ВНИМАНИЕ: выключение прекращает сопоставление по протоколу (например BitTorrent, TLS, QUIC), а без включённого FakeIP — и по домену."
+  },
+  "Direct connect timeout": {
+    "value": "Таймаут прямого соединения"
   },
   "Direct": {
     "value": "Напрямую"
@@ -179,9 +173,6 @@
   "FakeIP": {
     "value": "FakeIP"
   },
-  "FakeIP allocator": {
-    "value": "Аллокатор FakeIP"
-  },
   "FakeIP server": {
     "value": "Сервер FakeIP"
   },
@@ -200,6 +191,9 @@
   "GeoIP IP-range fallback": {
     "value": "GeoIP-диапазоны (резерв)"
   },
+  "Loopback port of the system HTTP proxy inbound.": {
+    "value": "Loopback-порт входящего подключения системного HTTP-прокси."
+  },
   "Russian apps by package": {
     "value": "Российские приложения по пакету"
   },
@@ -208,15 +202,6 @@
   },
   "Google 204": {
     "value": "Google 204"
-  },
-  "Google DNS (direct)": {
-    "value": "Google DNS (напрямую)"
-  },
-  "Google DoH": {
-    "value": "Google DoH"
-  },
-  "Google DoT": {
-    "value": "Google DoT"
   },
   "Google Public DNS IP for IP-based DoH. TLS SNI is pinned to dns.google.": {
     "value": "IP-адрес Google Public DNS для DoH по IP. TLS SNI закреплён как dns.google."
@@ -247,6 +232,9 @@
   },
   "Hostkey (New York)": {
     "value": "Hostkey (Нью-Йорк)"
+  },
+  "How long the core waits for a direct TCP connect before giving up. sing-box default is 5s; mobile networks that lose SYN packets need more. Android itself retries for about 2 minutes, apps usually wait 10-30s. Format: 15s, 1m, 1m30s.": {
+    "value": "Сколько ядро ждёт установки прямого TCP-соединения, прежде чем сдаться. По умолчанию в sing-box 5 с; мобильным сетям, где теряются SYN-пакеты, нужно больше. Сам Android повторяет попытки около 2 минут, приложения обычно ждут 10–30 с. Формат: 15s, 1m, 1m30s."
   },
   "How long to wait for the domain to appear in the packet before giving up.": {
     "value": "Сколько ждать появления домена в пакете, прежде чем прекратить попытки."
@@ -362,20 +350,17 @@
   "Quad9 · anti-malware": {
     "value": "Quad9 · защита от вредоносного ПО"
   },
-  "RU DNS group (UDP via direction + DoT via vpn-1 + direct DoH)": {
-    "value": "Группа DNS для RU (UDP через Направление + DoT через vpn-1 + прямой DoH)"
-  },
   "Randomize letter case in server_name (WwW.gOoGle.CoM). Per RFC 6066 the field is case-insensitive, so servers accept either form; defeats naive exact-match matching only. Skipped on REALITY nodes — their SNI must stay byte-exact": {
     "value": "Случайный регистр букв в server_name (WwW.gOoGle.CoM). По RFC 6066 поле нечувствительно к регистру, поэтому серверы принимают любую запись; помогает только против наивного сравнения на точное совпадение. Не применяется к узлам REALITY — их SNI должен оставаться байт-в-байт."
   },
-  "Reject = drop. Or pick Direct to send it outside the VPN.": {
-    "value": "Блокировка — трафик отбрасывается. Либо выберите «Напрямую», чтобы отправить его мимо VPN."
+  "Direct = send it outside the VPN. Or pick Reject to drop it (strict mode: any attribution failure means no network).": {
+    "value": "Напрямую — отправить мимо VPN. Либо выберите «Блокировка», чтобы отбросить его (строгий режим: любая ошибка атрибуции означает отсутствие сети)."
   },
   "Reject ad-related connections. Downloads rule set (~1 MB).": {
     "value": "Блокирует рекламные подключения. Загружает набор правил (~1 МБ)."
   },
-  "Reject traffic in the tunnel not attributed to any installed app (background/foreign processes). Send it direct to bypass VPN instead.": {
-    "value": "Блокирует трафик в туннеле, не отнесённый ни к одному установленному приложению (фоновые/чужие процессы). Либо направьте его напрямую в обход VPN."
+  "Traffic in the tunnel not attributed to any installed app (background/foreign processes) goes direct, bypassing the VPN, so a process that binds to the tunnel cannot learn the server address. Pick Reject to drop it instead.": {
+    "value": "Трафик в туннеле, не отнесённый ни к одному установленному приложению (фоновые/чужие процессы), идёт напрямую, минуя VPN: процесс, привязавшийся к туннелю, не узнаёт адрес сервера. Выберите «Блокировка», чтобы вместо этого отбрасывать его."
   },
   "Reply empty to HTTPS/SVCB DNS records (RFC 9460) so apps fall back to plain A/AAAA. Keeps these queries from leaking to the fallback DNS.": {
     "value": "Отвечать пустым ответом на DNS-записи HTTPS/SVCB (RFC 9460), чтобы приложения откатывались на обычные A/AAAA. Не даёт этим запросам утекать в резервный DNS."
@@ -407,9 +392,6 @@
   "Route all DNS queries through the tunnel's DNS engine.\n⚠️ WARNING: turning this off disables FakeIP and all DNS rules — apps query their own DNS directly, uncontrolled. Keep on unless you know exactly why.": {
     "value": "Направлять все DNS-запросы через DNS-движок туннеля.\n⚠️ ВНИМАНИЕ: выключение отключает FakeIP и все DNS-правила — приложения будут напрямую и бесконтрольно обращаться к своим DNS. Не выключайте, если точно не знаете, зачем."
   },
-  "Route all IPv4 and IPv6 through the tunnel via explicit half-ranges instead of sing-box defaults. Off by default — turn on only if the default routing misbehaves.": {
-    "value": "Направлять весь IPv4 и IPv6 через туннель явными полудиапазонами вместо значений sing-box по умолчанию. По умолчанию выключено — включайте, только если стандартная маршрутизация работает неправильно."
-  },
   "Route private IP ranges (LAN). Direct by default, or send to a direction to reach routers/devices over a local VPN.": {
     "value": "Маршрутизация частных диапазонов IP (LAN). По умолчанию — напрямую; можно направить в Направление, чтобы добираться до роутеров и устройств через локальный VPN."
   },
@@ -421,9 +403,6 @@
   },
   "SOCKS5 only": {
     "value": "Только SOCKS5"
-  },
-  "Safe DNS (DoT)": {
-    "value": "Безопасный DNS (DoT)"
   },
   "Safe profile": {
     "value": "Профиль защиты"
@@ -446,8 +425,8 @@
   "Split handshake into multiple TLS records (try this first)": {
     "value": "Разбивать рукопожатие на несколько TLS-записей (попробуйте сначала это)"
   },
-  "Splits the TLS handshake so it carries no single-packet signature": {
-    "value": "Разбивает handshake TLS, чтобы он не укладывался в один пакет с узнаваемой сигнатурой"
+  "Splits the TLS handshake so it carries no single-packet signature. Default for all servers; override per server, folder or subscription.": {
+    "value": "Разбивает handshake TLS, чтобы он не укладывался в один пакет с узнаваемой сигнатурой. Умолчание для всех серверов; переопределяется на сервере, в папке или подписке."
   },
   "Stack": {
     "value": "Стек"
@@ -455,8 +434,11 @@
   "Strict route": {
     "value": "Строгий маршрут"
   },
-  "System DNS": {
-    "value": "Системный DNS"
+  "System HTTP proxy": {
+    "value": "Системный HTTP-прокси"
+  },
+  "System proxy port": {
+    "value": "Порт системного прокси"
   },
   "TLS Fragment": {
     "value": "Фрагментация TLS"
@@ -509,8 +491,8 @@
   "Unknown traffic": {
     "value": "Неизвестный трафик"
   },
-  "Used by routing engine to resolve hostnames internally (outbound endpoints, routing rules). Not the resolver apps use.\n\n  • dns_shield — default; races 6 encrypted providers, answers from whichever replies first\n  • cloudflare_udp, google_udp — fast plain UDP\n  • google_doh — encrypted\n\n⚠ local_dns_resolver here leaks lookups to your ISP — system DNS bypasses the VPN.": {
-    "value": "Используется движком маршрутизации для внутреннего резолва имён (адреса серверов, правила маршрутизации). Это не резолвер для приложений.\n\n  • dns_shield — по умолчанию; опрашивает 6 шифрованных провайдеров наперегонки, отвечает тот, кто первым откликнулся\n  • cloudflare_udp, google_udp — быстрый обычный UDP\n  • google_doh — шифрованный\n\n⚠ Избегайте здесь local_dns_resolver — системный DNS отдаёт эти запросы провайдеру в обход VPN."
+  "Used by routing engine to resolve hostnames internally (outbound endpoints, routing rules). Not the resolver apps use.\n\n  • dns_shield — default; races 6 encrypted providers over a direct connection, answers from whichever replies first\n  • google_doh, cloudflare_dot — recommended; encrypted, direct\n\n⚠ Plain UDP servers go through the tunnel and can't answer before it is up — don't use them here.\n⚠ local_dns_resolver here leaks lookups to your ISP — system DNS bypasses the VPN.": {
+    "value": "Используется движком маршрутизации для внутреннего резолва имён (адреса серверов, правила маршрутизации). Это не резолвер для приложений.\n\n  • dns_shield — по умолчанию; опрашивает 6 шифрованных провайдеров напрямую наперегонки, отвечает тот, кто первым откликнулся\n  • google_doh, cloudflare_dot — рекомендуются; шифрованные, напрямую\n\n⚠ Обычные UDP-серверы ходят через туннель и не ответят, пока он не поднят — здесь их не выбирайте.\n⚠ Избегайте здесь local_dns_resolver — системный DNS отдаёт эти запросы провайдеру в обход VPN."
   },
   "Username for proxy auth (when auth is on).": {
     "value": "Имя пользователя для авторизации на прокси (когда она включена)."
@@ -563,15 +545,6 @@
   "Yandex": {
     "value": "Яндекс"
   },
-  "Yandex Safe DoH (direct)": {
-    "value": "Яндекс DoH (безопасный, напрямую)"
-  },
-  "Yandex Safe DoT (via vpn-1)": {
-    "value": "Яндекс DoT (безопасный, через vpn-1)"
-  },
-  "Yandex UDP (IP from above)": {
-    "value": "Яндекс UDP (IP из настройки выше)"
-  },
   "outbound": {
     "value": "исходящий канал"
   },
@@ -580,21 +553,6 @@
   },
   "system name": {
     "value": "системное имя"
-  },
-  "Shield DNS (multi-provider group)": {
-    "value": "Shield DNS (группа из нескольких провайдеров)"
-  },
-  "OpenDNS UDP (direct)": {
-    "value": "OpenDNS UDP (напрямую)"
-  },
-  "OpenDNS DoH": {
-    "value": "OpenDNS DoH"
-  },
-  "Quad9 DoH (via VPN, anti-malware)": {
-    "value": "Quad9 DoH (через VPN, антивредонос)"
-  },
-  "Yandex DoT (direct)": {
-    "value": "Yandex DoT (напрямую)"
   },
   "Google push (FCM)": {
     "value": "Google-пуши (FCM)"
@@ -626,6 +584,39 @@
   "Also route UDP 500/4500 directly. Some modems get the gateway address from the carrier network and never send a DNS query, so the domain rule alone misses them. Those ports carry nothing but IPsec key exchange.": {
     "value": "Направлять напрямую и UDP 500/4500. Часть модемов получает адрес шлюза от сети оператора и не делает DNS-запрос — доменное правило их не поймает. На этих портах нет ничего кроме обмена ключами IPsec."
   },
+  "Tunnel ingress": {
+    "value": "Входящие из туннелей"
+  },
+  "Connections arriving from a client tunnel (WireGuard, AWG, OpenVPN, OpenConnect) are rejected unless the node's own switches allow them: access to this device, the local network, or using this device as a gateway. The settings below choose what happens to the rest and where allowed and gateway traffic goes.": {
+    "value": "Соединения из клиентского туннеля (WireGuard, AWG, OpenVPN, OpenConnect) отклоняются, если их не разрешают переключатели самого узла: доступ к устройству, к локальной сети или работа устройства шлюзом. Настройки ниже задают, что делать с остальными соединениями и куда идёт разрешённый трафик и трафик шлюза."
+  },
+  "Incoming from tunnels": {
+    "value": "Неразрешённые входящие"
+  },
+  "What happens to connections arriving from a tunnel that the node's switches did not allow. reject (default) and drop close them; an outbound forwards them.": {
+    "value": "Что делать с соединениями из туннеля, которые не разрешили переключатели узла: reject (по умолчанию) и drop их закрывают, исходящий канал пропускает их туда."
+  },
+  "Device and local network go to": {
+    "value": "Доступ к устройству и сети идёт в"
+  },
+  "Outbound for peers allowed to reach this device or the local network.": {
+    "value": "Исходящий канал для пиров, которым разрешён доступ к устройству или локальной сети."
+  },
+  "Gateway traffic goes to": {
+    "value": "Трафик шлюза идёт в"
+  },
+  "Outbound for peers allowed to use this device as a gateway.": {
+    "value": "Исходящий канал для пиров, которым разрешено ходить через устройство как через шлюз."
+  },
+  "Tunnel routes": {
+    "value": "Сети туннелей"
+  },
+  "Send to each client tunnel only the networks it announces: WireGuard allowed IPs, routes pushed by an OpenVPN or OpenConnect server. Everything else follows the rules below. Turned on per tunnel, in the tunnel's own settings.": {
+    "value": "Каждому клиентскому туннелю — только сети, которые он объявляет: allowed IPs у WireGuard, маршруты от сервера OpenVPN или OpenConnect. Остальное идёт по правилам ниже. Включается у каждого туннеля в его собственных настройках."
+  },
+  "Resolve the names a tunnel announces with the tunnel's own DNS.": {
+    "value": "Разрешать имена, которые объявляет туннель, через DNS самого туннеля."
+  },
   "Tailscale networks": {
     "value": "Сети Tailscale"
   },
@@ -634,9 +625,6 @@
   },
   "Resolve tailnet names with the node's own DNS.": {
     "value": "Разрешать имена tailnet через DNS самого узла."
-  },
-  "MagicDNS of the tailnet": {
-    "value": "MagicDNS сети tailnet"
   },
   "DNS cache size": {
     "value": "Размер кэша DNS"
@@ -650,10 +638,223 @@
   "Answer from cache at once and refresh in the background.": {
     "value": "Сразу отвечать из кэша и обновлять запись в фоне."
   },
+  "Never serve stale answers for node hostnames": {
+    "value": "Не отдавать устаревшие ответы для имён узлов"
+  },
+  "Hostnames the core resolves itself (node servers) are looked up again once the cached answer expires, so a node whose address changed does not stay on the old one. App DNS queries are not affected.": {
+    "value": "Имена, которые ядро резолвит само (серверы узлов), запрашиваются заново, когда срок ответа в кэше истёк, — узел, сменивший адрес, не остаётся на старом. На DNS-запросы приложений не влияет."
+  },
   "Keep DNS cache after restart": {
     "value": "Сохранять кэш DNS после перезапуска"
   },
   "Store the DNS cache in cache.db so it survives a restart.": {
     "value": "Хранить кэш DNS в cache.db, чтобы он переживал перезапуск."
+  },
+  "YouTube": {
+    "value": "YouTube"
+  },
+  "YouTube (ytimg)": {
+    "value": "YouTube (ytimg)"
+  },
+  "208.67.222.222 · Primary v4": {
+    "value": "208.67.222.222 · Основной v4"
+  },
+  "208.67.220.220 · Secondary v4": {
+    "value": "208.67.220.220 · Резервный v4"
+  },
+  "2620:119:35::35 · Primary v6": {
+    "value": "2620:119:35::35 · Основной v6"
+  },
+  "2620:119:53::53 · Secondary v6": {
+    "value": "2620:119:53::53 · Резервный v6"
+  },
+  "9.9.9.9 · Primary v4": {
+    "value": "9.9.9.9 · Основной v4"
+  },
+  "149.112.112.112 · Secondary v4": {
+    "value": "149.112.112.112 · Резервный v4"
+  },
+  "2620:fe::fe · Primary v6": {
+    "value": "2620:fe::fe · Основной v6"
+  },
+  "2620:fe::9 · Secondary v6": {
+    "value": "2620:fe::9 · Резервный v6"
+  },
+  "77.88.8.8 · Primary v4": {
+    "value": "77.88.8.8 · Основной v4"
+  },
+  "77.88.8.1 · Secondary v4": {
+    "value": "77.88.8.1 · Резервный v4"
+  },
+  "2a02:6b8::feed:ff · Primary v6": {
+    "value": "2a02:6b8::feed:ff · Основной v6"
+  },
+  "2a02:6b8:0:1::feed:ff · Secondary v6": {
+    "value": "2a02:6b8:0:1::feed:ff · Резервный v6"
+  },
+  "OpenDNS address. IPv4 — universal; IPv6 — if your network supports it.": {
+    "value": "Адрес OpenDNS. IPv4 — универсально; IPv6 — если ваша сеть его поддерживает."
+  },
+  "OpenDNS IP for IP-based DoH. TLS SNI is pinned to dns.opendns.com.": {
+    "value": "IP-адрес OpenDNS для DoH по IP. TLS SNI закреплён как dns.opendns.com."
+  },
+  "Quad9 IP for IP-based DoH. TLS SNI is pinned to dns.quad9.net.": {
+    "value": "IP-адрес Quad9 для DoH по IP. TLS SNI закреплён как dns.quad9.net."
+  },
+  "Yandex DNS IP for DNS-over-TLS (port 853). TLS SNI is pinned to common.dot.dns.yandex.net.": {
+    "value": "IP-адрес Яндекс DNS для DNS-over-TLS (порт 853). TLS SNI закреплён как common.dot.dns.yandex.net."
+  },
+  "Encrypted DNS via Outbound": {
+    "value": "Шифрованный DNS через Outbound"
+  },
+  "Send Yandex DoT and DoH through this preset's Outbound, like UDP. Off: they go direct.": {
+    "value": "Отправлять DoT и DoH Яндекса через Outbound этого пресета, как UDP. Выключено — напрямую."
+  },
+  "The IP sets the Yandex DNS profile: Base, Safe or Family. Off: this server is not used.": {
+    "value": "IP задаёт профиль Яндекс DNS: Базовый, Безопасный или Семейный. «Выключен» — сервер не используется."
+  },
+  "Off": {
+    "value": "Выключен"
+  },
+  "IPv4 pool": {
+    "value": "Пул IPv4"
+  },
+  "IPv6 pool": {
+    "value": "Пул IPv6"
+  },
+  "Fake IPv4 addresses are taken from this range (CIDR). Change it if the default range is used in your network or excluded from the tunnel. Changing it resets the saved fake addresses.": {
+    "value": "Фейковые IPv4-адреса берутся из этого диапазона (CIDR). Поменяйте, если стандартный диапазон занят в вашей сети или исключён из туннеля. Смена сбрасывает сохранённые фейковые адреса."
+  },
+  "Fake IPv6 addresses": {
+    "value": "Фейковые IPv6-адреса"
+  },
+  "Answer AAAA queries with a fake address from the IPv6 pool. Turn off to answer AAAA queries with no address; the IPv4 pool stays in use.": {
+    "value": "Отвечать на AAAA-запросы фейковым адресом из пула IPv6. Выключите, чтобы на AAAA-запросы отвечать без адреса; пул IPv4 продолжает работать."
+  },
+  "Fake IPv6 addresses are taken from this range (CIDR). Used while \"Fake IPv6 addresses\" is on. Changing it resets the saved fake addresses.": {
+    "value": "Фейковые IPv6-адреса берутся из этого диапазона (CIDR). Действует, пока включено «Фейковые IPv6-адреса». Смена сбрасывает сохранённые фейковые адреса."
+  },
+  "Split default route": {
+    "value": "Разделённый маршрут по умолчанию"
+  },
+  "Send all traffic to the tunnel as two half-ranges per address family instead of one default route. The same traffic goes through the tunnel; turn on only if the device ignores the VPN's default route.": {
+    "value": "Направлять весь трафик в туннель двумя половинами диапазона на каждое семейство адресов вместо одного маршрута по умолчанию. Через туннель идёт тот же трафик; включайте, только если устройство игнорирует маршрут VPN по умолчанию."
+  },
+  "Bypass the tunnel": {
+    "value": "В обход туннеля"
+  },
+  "Addresses (CIDR) that skip the tunnel and the core entirely, e.g. a home NAS. Their traffic goes without VPN: routing rules, DNS hijack and statistics do not see it. Do not add networks you reach through a VPN node, the FakeIP pool or the tunnel's own address. Applies after a full VPN restart.": {
+    "value": "Адреса (CIDR), которые полностью минуют туннель и ядро, например домашний NAS. Их трафик идёт без VPN: правила маршрутизации, перехват DNS и статистика его не видят. Не добавляйте сети, доступные через VPN-узел, пул FakeIP и адрес самого туннеля. Применяется после полного перезапуска VPN."
+  },
+  "192.168.0.0/16 · home LAN": {
+    "value": "192.168.0.0/16 · домашняя сеть"
+  },
+  "10.0.0.0/8 · private": {
+    "value": "10.0.0.0/8 · частная"
+  },
+  "169.254.0.0/16 · link-local": {
+    "value": "169.254.0.0/16 · link-local"
+  },
+  "fe80::/10 · IPv6 link-local": {
+    "value": "fe80::/10 · IPv6 link-local"
+  },
+  "Align MTU to the path": {
+    "value": "Выравнивание MTU по пути"
+  },
+  "Packet size of a node that runs over a tunnel (detour, chain). Clamp sets the size where it is not set and lowers values that do not fit; Fill only sets it where it is not set; Off leaves node values as they are.": {
+    "value": "Размер пакета узла, который идёт поверх туннеля (detour, chain). Clamp ставит размер, где он не задан, и понижает значения, которые не влезают; Fill только ставит, где не задан; Off оставляет значения узлов как есть."
+  },
+  "Clamp (default)": {
+    "value": "Clamp (по умолчанию)"
+  },
+  "Fill": {
+    "value": "Fill"
+  },
+  "WireGuard": {
+    "value": "WireGuard"
+  },
+  "Sleep WireGuard/AmneziaWG tunnels to save battery and memory. Sleeping tunnels wake automatically on first use.": {
+    "value": "Усыплять туннели WireGuard/AmneziaWG, чтобы экономить батарею и память. Спящие туннели просыпаются сами при первом использовании."
+  },
+  "Suspend idle tunnels": {
+    "value": "Усыплять неактивные туннели"
+  },
+  "Put unreachable WireGuard tunnels to sleep after they sit idle, freeing memory and saving battery. They wake instantly on use. Only affects tunnels not on the active route.": {
+    "value": "Усыплять недостижимые туннели WireGuard после простоя, освобождая память и экономя батарею. Просыпаются мгновенно при использовании. Касается только туннелей вне активного маршрута."
+  },
+  "30 seconds": {
+    "value": "30 секунд"
+  },
+  "2 minutes": {
+    "value": "2 минуты"
+  },
+  "5 minutes": {
+    "value": "5 минут"
+  },
+  "Suspend active-route tunnels": {
+    "value": "Усыплять туннели активного маршрута"
+  },
+  "Also put tunnels on the active route (pool members, the selected node) to sleep after a long quiet period — e.g. overnight. The first connection after sleep adds ~1 round trip. Below the directions' idle timeout (30 min by default) a group probe can wake a sleeping tunnel for one handshake — the price of sleeping sooner. Requires \"Suspend idle tunnels\" to be on.": {
+    "value": "Усыплять и туннели на активном маршруте (члены пула, выбранный узел) после долгого простоя — например, ночью. Первое подключение после сна добавляет ~1 круг. Ниже таймаута простоя направлений (по умолчанию 30 мин) проба группы может разбудить спящий туннель на одно рукопожатие — цена более раннего сна. Требует включённого «Усыплять неактивные туннели»."
+  },
+  "15 minutes": {
+    "value": "15 минут"
+  },
+  "30 minutes": {
+    "value": "30 минут"
+  },
+  "1 hour": {
+    "value": "1 час"
+  },
+  "Lazy tunnel build": {
+    "value": "Ленивая сборка туннелей"
+  },
+  "Build a WireGuard tunnel only on first use instead of at start. Saves memory with many nodes; the first connection to a node takes a moment longer.": {
+    "value": "Собирать туннель WireGuard при первом использовании, а не при запуске. Экономит память, когда узлов много; первое подключение к узлу чуть дольше."
+  },
+  "Built tunnels limit": {
+    "value": "Лимит собранных туннелей"
+  },
+  "Keep at most this many WireGuard tunnels built at once; the rest are torn down and rebuilt on demand. Requires \"Lazy tunnel build\".": {
+    "value": "Держать собранными одновременно не больше стольких туннелей WireGuard; остальные разбираются и собираются заново по требованию. Требует «Ленивая сборка туннелей»."
+  },
+  "0 (no limit)": {
+    "value": "0 (без лимита)"
+  },
+  "QUIC": {
+    "value": "QUIC"
+  },
+  "AWG masquerade": {
+    "value": "Маскировка AWG"
+  },
+  "When an AmneziaWG node sends its masquerade packets (ip=quic, i1…) before the handshake. All paths: always, also through another node. Direct only: when the node dials from this device's own socket; through another node a single handshake packet goes out.": {
+    "value": "Когда узел AmneziaWG отправляет маскировочные пакеты (ip=quic, i1…) перед рукопожатием. All paths — всегда, в том числе через другой узел. Direct only — когда узел звонит с собственного сокета устройства; через другой узел уходит один пакет рукопожатия."
+  },
+  "Direct only": {
+    "value": "Только напрямую"
+  },
+  "All paths (default)": {
+    "value": "Все пути (по умолчанию)"
+  },
+  "MASQUE (HTTP/3), Hysteria2, TUIC and AWG with QUIC masquerade (ip=quic).": {
+    "value": "MASQUE (HTTP/3), Hysteria2, TUIC и AWG с маскировкой под QUIC (ip=quic)."
+  },
+  "Anti-sniff decoy": {
+    "value": "Обманка от сниффинга"
+  },
+  "MASQUE idle timeout": {
+    "value": "Таймаут простоя MASQUE"
+  },
+  "Close a MASQUE tunnel that carried no traffic for this long; it reconnects on next use. A node's own idle timeout wins.": {
+    "value": "Закрывать туннель MASQUE, по которому столько времени не было трафика; он переподключится при следующем использовании. Собственный таймаут простоя узла сильнее."
+  },
+  "Send one junk byte before the QUIC handshake so a relay that sniffs UDP cannot redirect the connection by its SNI. Through detour: only connections carried by another node; Direct: only this device's own socket; All: both. Also covers AWG nodes whose masquerade imitates QUIC (ip=quic).": {
+    "value": "Отправлять один мусорный байт перед QUIC-рукопожатием, чтобы релей, который сниффит UDP, не перенаправил соединение по SNI. Through detour — только соединения, которые несёт другой узел; Direct — только собственный сокет устройства; All — оба случая. Действует и на узлы AWG с маскировкой под QUIC (ip=quic)."
+  },
+  "Through detour (default)": {
+    "value": "Через detour (по умолчанию)"
+  },
+  "All": {
+    "value": "Все"
   }
 }

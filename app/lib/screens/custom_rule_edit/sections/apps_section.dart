@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../normalizers.dart' as norm;
+import '../validators.dart' as v;
+import '../widgets/items_field.dart';
 import '../widgets/section_header.dart';
 import '../../../services/l10n/locale_controller.dart';
 
@@ -10,11 +13,15 @@ class AppsSection extends StatelessWidget {
     required this.packages,
     required this.onTap,
     required this.onClear,
+    required this.packageRegexCtrl,
   });
 
   final List<String> packages;
   final VoidCallback onTap;
   final VoidCallback onClear;
+
+  /// §712 — `package_name_regex`, по регулярке на строку (OR внутри поля).
+  final TextEditingController packageRegexCtrl;
 
   @override
   Widget build(BuildContext context) {
@@ -64,6 +71,16 @@ class AppsSection extends StatelessWidget {
               ],
             ),
           ),
+        ),
+        ItemsField(
+          label: 'Package name regex (one per line)',
+          controller: packageRegexCtrl,
+          validator: v.isValidRegex,
+          split: norm.splitLines,
+          helper: getLocalText.s(
+              "Go RE2, matched anywhere in the package name, e.g. %s",
+              r'^com\.oplus\.'),
+          hint: r'^com\.oplus\.',
         ),
       ],
     );

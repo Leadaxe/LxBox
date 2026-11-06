@@ -52,6 +52,7 @@ class _StatsScreenState extends State<StatsScreen> {
   int _totalDown = 0;
   int _totalConns = 0;
   int _memory = 0;
+  int _memoryRuntime = 0; // §705 — память рантайма ядра (lx.29+), 0 = нет
   int _goroutines = 0;
   int _connsIn = 0;
   int _connsOut = 0;
@@ -114,6 +115,7 @@ class _StatsScreenState extends State<StatsScreen> {
       _totalUp = s.uplinkTotal;
       _totalDown = s.downlinkTotal;
       _memory = s.memory;
+      _memoryRuntime = s.memoryRuntime;
       _goroutines = s.goroutines;
       _connsIn = s.connectionsIn;
       _connsOut = s.connectionsOut;
@@ -165,6 +167,7 @@ class _StatsScreenState extends State<StatsScreen> {
         upload: c.uplink,
         download: c.downlink,
         start: c.createdAt,
+        sourceLabel: c.sourceLabel,
       );
 
       final existing = perRule[rule];
@@ -218,12 +221,12 @@ class _StatsScreenState extends State<StatsScreen> {
               if (_currentSessionAllowBypass)
                 Tooltip(
                   message:
-                      'VPN bypass is active in this session.\n\n'
-                      'Apps can use bindProcessToNetwork() to skip the tunnel '
-                      '(banking apps, WhatsApp, system services). '
-                      'Some traffic may not go through VPN.\n\n'
-                      'Disable in VPN Settings → System → Allow VPN bypass '
-                      'and reload VPN to enforce strict tunnel.',
+                      'VPN bypass is on in this session: apps that call '
+                      'bindProcessToNetwork() (banking apps, WhatsApp, system '
+                      'services) send their traffic outside the tunnel.\n\n'
+                      'To keep all traffic in the tunnel, turn off '
+                      'VPN Settings → Mode → Tunnel options → Allow VPN bypass '
+                      'and reload the VPN.',
                   triggerMode: TooltipTriggerMode.tap,
                   showDuration: const Duration(seconds: 12),
                   waitDuration: const Duration(milliseconds: 100),
@@ -279,13 +282,17 @@ class _StatsScreenState extends State<StatsScreen> {
                 totalDown: _totalDown,
                 totalConns: _totalConns,
                 memory: _memory,
+                memoryRuntime: _memoryRuntime,
                 goroutines: _goroutines,
                 connectionsIn: _connsIn,
                 connectionsOut: _connsOut,
                 byRule: _byRule,
                 detourChain: _detourChain,
               ),
-              const ConnectionsView(),
+              ConnectionsView(
+                directionLabels:
+                    widget.homeController?.state.groupLabels ?? const {},
+              ),
               LiveEventsTab(
                 subController: widget.subController,
                 homeController: widget.homeController,

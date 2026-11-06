@@ -182,6 +182,72 @@ final class BadDnsGroupMember extends ValidationIssue {
   );
 }
 
+/// §699 — нарушение правила ключа `hosts` DNS-группы (ядро SPEC 143).
+/// Порядок значений — порядок проверок ядра (конструктор, затем `Start`).
+enum DnsGroupHostsProblem {
+  /// Тег группы в собственном `hosts`.
+  itself,
+
+  /// Тег и в `servers`, и в `hosts` той же группы.
+  alsoMember,
+
+  /// Повтор тега в `hosts`.
+  duplicate,
+
+  /// Сервера с таким тегом нет.
+  notFound,
+
+  /// Сервер есть, но тип не `hosts`.
+  notHosts,
+}
+
+/// §699 — ключ `hosts` DNS-группы нарушает правила ядра (SPEC 143 §2.2 п. 7):
+/// тег не найден, тип не `hosts`, повтор, тег самой группы, тег из её
+/// `servers` — fatal на старте. Сборка такие теги вычищает
+/// (`_filterDnsGroupHosts`); проверка ловит сырой конфиг. [serverType] —
+/// тип сервера для [DnsGroupHostsProblem.notHosts], иначе пусто.
+final class BadDnsGroupHosts extends ValidationIssue {
+  final String group;
+  final String server;
+  final DnsGroupHostsProblem problem;
+  final String serverType;
+  const BadDnsGroupHosts(this.group, this.server, this.problem,
+      [this.serverType = '']);
+
+  @override
+  Severity get severity => Severity.fatal;
+
+  @override
+  List<Object?> get props => [group, server, problem, serverType];
+
+  @override
+  String messageWith(GetLocalText t) => switch (problem) {
+        DnsGroupHostsProblem.itself =>
+          t.s("DNS group \"%s\" cannot contain itself.", group),
+        DnsGroupHostsProblem.alsoMember => t.s(
+            "DNS group \"%1\$s\": server \"%2\$s\" is listed in both servers and hosts.",
+            group,
+            server,
+          ),
+        DnsGroupHostsProblem.duplicate => t.s(
+            "DNS group \"%1\$s\": duplicate hosts server \"%2\$s\".",
+            group,
+            server,
+          ),
+        DnsGroupHostsProblem.notFound => t.s(
+            "DNS group \"%1\$s\": hosts server \"%2\$s\" not found.",
+            group,
+            server,
+          ),
+        DnsGroupHostsProblem.notHosts => t.s(
+            "DNS group \"%1\$s\": hosts accepts only servers of type hosts, got \"%3\$s\": \"%2\$s\".",
+            group,
+            server,
+            serverType,
+          ),
+      };
+}
+
 /// §312 — цикл DNS-групп (группа→член→…→группа, включая самовключение,
 /// уцелевшее на пути мимо билдера). Ядро ловит циклы на старте → fatal;
 /// зеркалим до старта, аналог [DetourCycle] (§254 — не правим, юзер сам).
@@ -293,6 +359,50 @@ final class InvalidDefault extends ValidationIssue {
     group,
     tag,
   );
+}
+
+/// §704 — отказ миксина: цель не нашлась, тип цели не подходит глаголу,
+/// путь не разбирается или миксин внёс дубль тега. Любая — fatal: конфиг не
+/// собирается, миксин остаётся включённым (пользователь правит его, а не
+/// ищет). Вкладка Mixins находит свою строку по [mixinId] в
+/// `SubscriptionController.lastFatalIssues`.
+final class MixinIssue extends ValidationIssue {
+  final String mixinId;
+
+  /// Имя для показа (`Mixin.displayName`).
+  final String name;
+
+  /// Путь цели как в миксине.
+  final String target;
+
+  /// Машинная причина, английская: `no match`, `needs a single list`,
+  /// `duplicate tag "x" in outbounds`…
+  final String reason;
+
+  /// Причина относится к цели (`<target>: <reason>`); у дубля тега — нет.
+  final bool aboutTarget;
+
+  const MixinIssue({
+    required this.mixinId,
+    required this.name,
+    required this.target,
+    required this.reason,
+    this.aboutTarget = true,
+  });
+
+  /// Текст без имени миксина: `<target>: <reason>` или `<reason>`.
+  String get detail =>
+      aboutTarget ? '${target.isEmpty ? '(root)' : target}: $reason' : reason;
+
+  @override
+  Severity get severity => Severity.fatal;
+
+  @override
+  List<Object?> get props => [mixinId, name, target, reason, aboutTarget];
+
+  @override
+  String messageWith(GetLocalText t) =>
+      t.s("Mixin \"%1\$s\": %2\$s", name, detail);
 }
 
 class ValidationResult {

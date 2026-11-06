@@ -9,6 +9,7 @@ import 'node_spec.dart';
 import 'node_warning.dart';
 import 'source_replace.dart';
 import 'subscription_meta.dart';
+import 'tls_policy.dart';
 
 /// Контейнер узлов (§1 спеки 026). Sealed: `SubscriptionServers` (fetch по
 /// URL) vs `UserServer` (paste/file/qr/manual) vs `FolderServers` (§234 —
@@ -20,6 +21,10 @@ sealed class ServerList {
   final bool enabled;
   final String tagPrefix;
   final DetourPolicy detourPolicy;
+
+  /// §636 — переопределение TLS-ручек. У подписки и папки — уровень
+  /// источника, у одиночного сервера — узловой (сервер = свой источник).
+  final TlsPolicy tls;
   final List<NodeSpec> nodes; // mutable: перезаписывается на refresh/reparse
 
   ServerList({
@@ -28,6 +33,7 @@ sealed class ServerList {
     required this.enabled,
     required this.tagPrefix,
     required this.detourPolicy,
+    this.tls = TlsPolicy.none,
     List<NodeSpec>? nodes,
   }) : nodes = nodes ?? <NodeSpec>[];
 
@@ -174,6 +180,13 @@ final class SubscriptionServers extends ServerList {
   final UpdateStatus lastUpdateStatus;
   final int updateIntervalHours;
   final int lastNodeCount;
+
+  /// Бюджет узлов — число узлов выдачи после разбора и import-правил, ДО
+  /// обрезки по доле подписки ([lastNodeCount] — после). `0` — обрезки не
+  /// было или запись старше поля: тогда полный размер = [lastNodeCount]
+  /// ([nodeCountBeforeCut]). Рантайм машины, в бэкап не едет.
+  final int totalNodeCount;
+
   /// Подряд фейлов с последнего успеха. Персистится, чтобы после рестарта
   /// показать юзеру "(3 fails)". Сбрасывается в 0 на успех. **Не используется
   /// для фризинга** — для этого есть in-memory `_failCounts` в `AutoUpdater`
@@ -249,6 +262,7 @@ final class SubscriptionServers extends ServerList {
     required super.enabled,
     required super.tagPrefix,
     required super.detourPolicy,
+    super.tls,
     required this.url,
     this.meta,
     this.lastUpdated,
@@ -256,6 +270,7 @@ final class SubscriptionServers extends ServerList {
     this.lastUpdateStatus = UpdateStatus.never,
     this.updateIntervalHours = 24,
     this.lastNodeCount = 0,
+    this.totalNodeCount = 0,
     this.consecutiveFails = 0,
     this.disabledHashes = const {},
     this.nodeWarnings = const {},
@@ -293,6 +308,10 @@ final class SubscriptionServers extends ServerList {
   List<ImportRule> get activeImportRules =>
       importRulesEnabled ? importRules.where((r) => r.isUsable).toList() : const [];
 
+  /// Бюджет узлов — размер выдачи до обрезки (см. [totalNodeCount]).
+  int get nodeCountBeforeCut =>
+      totalNodeCount > lastNodeCount ? totalNodeCount : lastNodeCount;
+
   @override
   String get type => 'subscription';
 
@@ -301,6 +320,7 @@ final class SubscriptionServers extends ServerList {
     bool? enabled,
     String? tagPrefix,
     DetourPolicy? detourPolicy,
+    TlsPolicy? tls,
     String? url,
     SubscriptionMeta? meta,
     DateTime? lastUpdated,
@@ -308,6 +328,7 @@ final class SubscriptionServers extends ServerList {
     UpdateStatus? lastUpdateStatus,
     int? updateIntervalHours,
     int? lastNodeCount,
+    int? totalNodeCount,
     int? consecutiveFails,
     Map<String, DateTime>? disabledHashes,
     Map<String, List<StoredWarning>>? nodeWarnings,
@@ -328,6 +349,7 @@ final class SubscriptionServers extends ServerList {
         enabled: enabled ?? this.enabled,
         tagPrefix: tagPrefix ?? this.tagPrefix,
         detourPolicy: detourPolicy ?? this.detourPolicy,
+        tls: tls ?? this.tls,
         url: url ?? this.url,
         meta: meta ?? this.meta,
         lastUpdated: lastUpdated ?? this.lastUpdated,
@@ -335,6 +357,7 @@ final class SubscriptionServers extends ServerList {
         lastUpdateStatus: lastUpdateStatus ?? this.lastUpdateStatus,
         updateIntervalHours: updateIntervalHours ?? this.updateIntervalHours,
         lastNodeCount: lastNodeCount ?? this.lastNodeCount,
+        totalNodeCount: totalNodeCount ?? this.totalNodeCount,
         consecutiveFails: consecutiveFails ?? this.consecutiveFails,
         disabledHashes: disabledHashes ?? this.disabledHashes,
         nodeWarnings: nodeWarnings ?? this.nodeWarnings,
@@ -361,6 +384,7 @@ final class SubscriptionServers extends ServerList {
           enabled == other.enabled &&
           tagPrefix == other.tagPrefix &&
           detourPolicy == other.detourPolicy &&
+          tls == other.tls &&
           url == other.url &&
           meta == other.meta &&
           lastUpdated == other.lastUpdated &&
@@ -368,6 +392,7 @@ final class SubscriptionServers extends ServerList {
           lastUpdateStatus == other.lastUpdateStatus &&
           updateIntervalHours == other.updateIntervalHours &&
           lastNodeCount == other.lastNodeCount &&
+          totalNodeCount == other.totalNodeCount &&
           consecutiveFails == other.consecutiveFails &&
           _eq.equals(_disabledSeconds(disabledHashes),
               _disabledSeconds(other.disabledHashes)) &&
@@ -386,6 +411,7 @@ final class SubscriptionServers extends ServerList {
         enabled,
         tagPrefix,
         detourPolicy,
+        tls,
         url,
         meta,
         lastUpdated,
@@ -393,6 +419,7 @@ final class SubscriptionServers extends ServerList {
         lastUpdateStatus,
         updateIntervalHours,
         lastNodeCount,
+        totalNodeCount,
         consecutiveFails,
         _eq.hash(_disabledSeconds(disabledHashes)),
         _eq.hash(nodeWarnings),
@@ -426,9 +453,35 @@ final class UserServer extends ServerList {
   /// `warnings` записи источника). В бэкап вердикт страховки не едет (§489).
   final List<StoredWarning> warnings;
 
-  /// §578 — поле записи `skip_presets`: узел не обслуживается пресетами с
-  /// `for_each`, чей `filter` читает поле. Хранится только `true`.
-  final bool skipPresets;
+  /// §578/§656 — поле записи `skip_tailscale_presets` (бывший
+  /// `skip_presets`, контракт 1.1.126): узел не обслуживается пресетом
+  /// `tailscale`, чей `#filter` читает поле. Хранится только `true`.
+  final bool skipTailscalePresets;
+
+  /// §656 (контракт 1.1.126) — поля записи `allow_local` / `allow_lan` /
+  /// `allow_gateway`: что разрешено пиру клиентского туннеля (пресет
+  /// `tunnel-ingress`). Хранится только `true`.
+  final bool allowLocal;
+  final bool allowLan;
+  final bool allowGateway;
+
+  /// Поле записи `own_routes`: в узел идут только его собственные сети
+  /// (пресет `tunnel-routes`, `preferred_by`). Хранится только `true`.
+  final bool ownRoutes;
+
+  /// §707 итер. 9 (контракт 1.1.159) — поля записи
+  /// `disable_taildrop_commands` (НЕ принимать буфер и ссылки от своих
+  /// устройств) и `disable_taildrop_autosave` (НЕ класть принятое в Downloads
+  /// без вопроса). По умолчанию оба выключены = функции включены (при Allow
+  /// Taildrop). В конфиг не идут; хранится только `true`.
+  final bool disableTaildropCommands;
+  final bool disableTaildropAutosave;
+
+  /// §707 (контракт 1.1.160) — поле записи `state_dir_id`: имя каталога
+  /// состояния узла tailscale у лаунчера. У нас НЕ применяется (каталог
+  /// состояния держит индекс §445 по `id` записи), только переносится без
+  /// потерь. Пусто — поля нет.
+  final String stateDirId;
 
   UserServer({
     required super.id,
@@ -436,10 +489,18 @@ final class UserServer extends ServerList {
     required super.enabled,
     required super.tagPrefix,
     required super.detourPolicy,
+    super.tls,
     this.origin = UserSource.manual,
     this.rawBody = '',
     this.warnings = const [],
-    this.skipPresets = false,
+    this.skipTailscalePresets = false,
+    this.allowLocal = false,
+    this.allowLan = false,
+    this.allowGateway = false,
+    this.ownRoutes = false,
+    this.disableTaildropCommands = false,
+    this.disableTaildropAutosave = false,
+    this.stateDirId = '',
     super.nodes,
   });
 
@@ -451,11 +512,19 @@ final class UserServer extends ServerList {
     bool? enabled,
     String? tagPrefix,
     DetourPolicy? detourPolicy,
+    TlsPolicy? tls,
     UserSource? origin,
     String? rawBody,
     List<StoredWarning>? warnings,
     List<NodeSpec>? nodes,
-    bool? skipPresets,
+    bool? skipTailscalePresets,
+    bool? allowLocal,
+    bool? allowLan,
+    bool? allowGateway,
+    bool? ownRoutes,
+    bool? disableTaildropCommands,
+    bool? disableTaildropAutosave,
+    String? stateDirId,
   }) =>
       UserServer(
         id: id,
@@ -463,10 +532,20 @@ final class UserServer extends ServerList {
         enabled: enabled ?? this.enabled,
         tagPrefix: tagPrefix ?? this.tagPrefix,
         detourPolicy: detourPolicy ?? this.detourPolicy,
+        tls: tls ?? this.tls,
         origin: origin ?? this.origin,
         rawBody: rawBody ?? this.rawBody,
         warnings: warnings ?? this.warnings,
-        skipPresets: skipPresets ?? this.skipPresets,
+        skipTailscalePresets: skipTailscalePresets ?? this.skipTailscalePresets,
+        allowLocal: allowLocal ?? this.allowLocal,
+        allowLan: allowLan ?? this.allowLan,
+        allowGateway: allowGateway ?? this.allowGateway,
+        ownRoutes: ownRoutes ?? this.ownRoutes,
+        disableTaildropCommands:
+            disableTaildropCommands ?? this.disableTaildropCommands,
+        disableTaildropAutosave:
+            disableTaildropAutosave ?? this.disableTaildropAutosave,
+        stateDirId: stateDirId ?? this.stateDirId,
         nodes: nodes ?? this.nodes,
       );
 
@@ -480,13 +559,23 @@ final class UserServer extends ServerList {
           enabled == other.enabled &&
           tagPrefix == other.tagPrefix &&
           detourPolicy == other.detourPolicy &&
+          tls == other.tls &&
           rawBody == other.rawBody &&
           _eq.equals(warnings, other.warnings) &&
-          skipPresets == other.skipPresets);
+          skipTailscalePresets == other.skipTailscalePresets &&
+          allowLocal == other.allowLocal &&
+          allowLan == other.allowLan &&
+          allowGateway == other.allowGateway &&
+          ownRoutes == other.ownRoutes &&
+          disableTaildropCommands == other.disableTaildropCommands &&
+          disableTaildropAutosave == other.disableTaildropAutosave &&
+          stateDirId == other.stateDirId);
 
   @override
-  int get hashCode => Object.hash(id, enabled, tagPrefix, detourPolicy,
-      rawBody, _eq.hash(warnings), skipPresets);
+  int get hashCode => Object.hash(id, enabled, tagPrefix, detourPolicy, tls,
+      rawBody, _eq.hash(warnings), skipTailscalePresets, allowLocal, allowLan,
+      allowGateway, ownRoutes, disableTaildropCommands,
+      disableTaildropAutosave, stateDirId);
 }
 
 /// §234 — член папки: самодостаточный парсируемый фрагмент (URI-строка,
@@ -512,8 +601,30 @@ final class FolderMember {
   /// server_list_build). Сосед по папке — пара с `id` этой папки.
   final NodeLink detour;
 
-  /// §578 — поле записи `skip_presets`, как у `UserServer.skipPresets`.
-  final bool skipPresets;
+  /// §578/§656 — поля записи, как у `UserServer`:
+  /// `skip_tailscale_presets`, `allow_local`, `allow_lan`, `allow_gateway`,
+  /// `own_routes`.
+  final bool skipTailscalePresets;
+  final bool allowLocal;
+  final bool allowLan;
+  final bool allowGateway;
+
+  /// Поле записи `own_routes`: в узел идут только его собственные сети
+  /// (пресет `tunnel-routes`, `preferred_by`). Хранится только `true`.
+  final bool ownRoutes;
+
+  /// §707 итер. 9 — `disable_taildrop_commands` /
+  /// `disable_taildrop_autosave`, как у
+  /// `UserServer`.
+  final bool disableTaildropCommands;
+  final bool disableTaildropAutosave;
+
+  /// §707 (контракт 1.1.160) — `state_dir_id`, как у `UserServer`: только
+  /// перенос, не применяется (§445).
+  final String stateDirId;
+
+  /// §636 — узловое переопределение TLS-ручек члена.
+  final TlsPolicy tls;
 
   /// Распарсенная нода фрагмента; null = битый raw (member виден в UI как
   /// нечитаемый, юзер может отредактировать/удалить).
@@ -525,7 +636,15 @@ final class FolderMember {
     this.warnings = const [],
     this.detour = NodeLink.none,
     this.nameHint = '',
-    this.skipPresets = false,
+    this.skipTailscalePresets = false,
+    this.allowLocal = false,
+    this.allowLan = false,
+    this.allowGateway = false,
+    this.ownRoutes = false,
+    this.disableTaildropCommands = false,
+    this.disableTaildropAutosave = false,
+    this.stateDirId = '',
+    this.tls = TlsPolicy.none,
     NodeSpec? node,
   }) : node = node ?? _parseFirst(raw, nameHint);
 
@@ -556,7 +675,15 @@ final class FolderMember {
     List<StoredWarning>? warnings,
     NodeLink? detour,
     String? nameHint,
-    bool? skipPresets,
+    bool? skipTailscalePresets,
+    bool? allowLocal,
+    bool? allowLan,
+    bool? allowGateway,
+    bool? ownRoutes,
+    bool? disableTaildropCommands,
+    bool? disableTaildropAutosave,
+    String? stateDirId,
+    TlsPolicy? tls,
   }) =>
       FolderMember(
         raw: raw ?? this.raw,
@@ -564,7 +691,17 @@ final class FolderMember {
         warnings: warnings ?? this.warnings,
         detour: detour ?? this.detour,
         nameHint: nameHint ?? this.nameHint,
-        skipPresets: skipPresets ?? this.skipPresets,
+        skipTailscalePresets: skipTailscalePresets ?? this.skipTailscalePresets,
+        allowLocal: allowLocal ?? this.allowLocal,
+        allowLan: allowLan ?? this.allowLan,
+        allowGateway: allowGateway ?? this.allowGateway,
+        ownRoutes: ownRoutes ?? this.ownRoutes,
+        disableTaildropCommands:
+            disableTaildropCommands ?? this.disableTaildropCommands,
+        disableTaildropAutosave:
+            disableTaildropAutosave ?? this.disableTaildropAutosave,
+        stateDirId: stateDirId ?? this.stateDirId,
+        tls: tls ?? this.tls,
         // Смена raw или имени → re-parse в конструкторе; иначе нода та же.
         node: raw == null && nameHint == null ? node : null,
       );
@@ -580,7 +717,15 @@ final class FolderMember {
           _eq.equals(warnings, other.warnings) &&
           detour == other.detour &&
           nameHint == other.nameHint &&
-          skipPresets == other.skipPresets &&
+          skipTailscalePresets == other.skipTailscalePresets &&
+          allowLocal == other.allowLocal &&
+          allowLan == other.allowLan &&
+          allowGateway == other.allowGateway &&
+          ownRoutes == other.ownRoutes &&
+          disableTaildropCommands == other.disableTaildropCommands &&
+          disableTaildropAutosave == other.disableTaildropAutosave &&
+          stateDirId == other.stateDirId &&
+          tls == other.tls &&
           _sameGroup(node, other.node));
 
   static bool _sameGroup(NodeSpec? a, NodeSpec? b) => a is AutoSelectSpec
@@ -589,7 +734,20 @@ final class FolderMember {
 
   @override
   int get hashCode => Object.hash(
-      raw, enabled, _eq.hash(warnings), detour, nameHint, skipPresets);
+      raw,
+      enabled,
+      _eq.hash(warnings),
+      detour,
+      nameHint,
+      skipTailscalePresets,
+      allowLocal,
+      allowLan,
+      allowGateway,
+      ownRoutes,
+      disableTaildropCommands,
+      disableTaildropAutosave,
+      stateDirId,
+      tls);
 }
 
 /// §234 — папка ручных серверов: контейнер членов с общим toggle,
@@ -618,6 +776,7 @@ final class FolderServers extends ServerList {
     required super.enabled,
     required super.tagPrefix,
     required super.detourPolicy,
+    super.tls,
     List<FolderMember>? members,
     DateTime? createdAt,
     this.pingUrl,
@@ -646,6 +805,12 @@ final class FolderServers extends ServerList {
 
   /// §237 — личные detour'ы, выровненные с [nodes] (тот же фильтр
   /// enabled+parsed, тот же порядок). Builder применяет их пер-нодно.
+  /// §636 — узловые TLS-политики членов, выровненные с [nodes].
+  List<TlsPolicy> get nodeTls => [
+        for (final m in members)
+          if (m.enabled && m.node != null) m.tls,
+      ];
+
   List<NodeLink> get nodeDetours => [
         for (final m in members)
           if (m.enabled && m.node != null) m.detour,
@@ -656,6 +821,7 @@ final class FolderServers extends ServerList {
     bool? enabled,
     String? tagPrefix,
     DetourPolicy? detourPolicy,
+    TlsPolicy? tls,
     List<FolderMember>? members,
     String? pingUrl,
     int? pingTimeoutMs,
@@ -669,6 +835,7 @@ final class FolderServers extends ServerList {
         enabled: enabled ?? this.enabled,
         tagPrefix: tagPrefix ?? this.tagPrefix,
         detourPolicy: detourPolicy ?? this.detourPolicy,
+        tls: tls ?? this.tls,
         createdAt: createdAt,
         members: members ?? this.members,
         pingUrl: clearPing ? null : (pingUrl ?? this.pingUrl),
@@ -686,6 +853,7 @@ final class FolderServers extends ServerList {
           enabled == other.enabled &&
           tagPrefix == other.tagPrefix &&
           detourPolicy == other.detourPolicy &&
+          tls == other.tls &&
           _eq.equals(members, other.members) &&
           createdAt == other.createdAt &&
           pingUrl == other.pingUrl &&
@@ -694,7 +862,7 @@ final class FolderServers extends ServerList {
 
   @override
   int get hashCode => Object.hash(id, name, enabled, tagPrefix, detourPolicy,
-      _eq.hash(members), createdAt, pingUrl, pingTimeoutMs, replace);
+      tls, _eq.hash(members), createdAt, pingUrl, pingTimeoutMs, replace);
 }
 
 /// §248 — сброс detour-ссылок на Направление [tag] (или его auto-двойник
@@ -839,4 +1007,64 @@ class DetourPolicy {
   @override
   int get hashCode => Object.hash(registerDetourServers, registerDetourInAuto,
       useDetourServers, overrideDetour, replaceDetourChain);
+}
+
+/// §578/§656 — поле записи узла (свой сервер и член папки, TEMPLATE_LANG
+/// §6.6): bool, хранится только `true`. У узла подписки записи нет.
+enum NodeRecordFlag {
+  skipTailscalePresets,
+  allowLocal,
+  allowLan,
+  allowGateway,
+  ownRoutes,
+
+  /// §707 итер. 9 — Taildrop, знак «выключено» (`true` = функция снята):
+  /// в конфиг не идут (правка не поднимает `configDirty`), итоговые теги
+  /// выключенных уходят в зеркало `boxvpn_boot`.
+  disableTaildropCommands,
+  disableTaildropAutosave;
+
+  /// Поле влияет на собранный конфиг (через пресеты).
+  bool get inConfig =>
+      this != disableTaildropCommands && this != disableTaildropAutosave;
+
+  bool ofServer(UserServer u) => switch (this) {
+        skipTailscalePresets => u.skipTailscalePresets,
+        allowLocal => u.allowLocal,
+        allowLan => u.allowLan,
+        allowGateway => u.allowGateway,
+        ownRoutes => u.ownRoutes,
+        disableTaildropCommands => u.disableTaildropCommands,
+        disableTaildropAutosave => u.disableTaildropAutosave,
+      };
+
+  bool ofMember(FolderMember m) => switch (this) {
+        skipTailscalePresets => m.skipTailscalePresets,
+        allowLocal => m.allowLocal,
+        allowLan => m.allowLan,
+        allowGateway => m.allowGateway,
+        ownRoutes => m.ownRoutes,
+        disableTaildropCommands => m.disableTaildropCommands,
+        disableTaildropAutosave => m.disableTaildropAutosave,
+      };
+
+  UserServer onServer(UserServer u, bool v) => switch (this) {
+        skipTailscalePresets => u.copyWith(skipTailscalePresets: v),
+        allowLocal => u.copyWith(allowLocal: v),
+        allowLan => u.copyWith(allowLan: v),
+        allowGateway => u.copyWith(allowGateway: v),
+        ownRoutes => u.copyWith(ownRoutes: v),
+        disableTaildropCommands => u.copyWith(disableTaildropCommands: v),
+        disableTaildropAutosave => u.copyWith(disableTaildropAutosave: v),
+      };
+
+  FolderMember onMember(FolderMember m, bool v) => switch (this) {
+        skipTailscalePresets => m.copyWith(skipTailscalePresets: v),
+        allowLocal => m.copyWith(allowLocal: v),
+        allowLan => m.copyWith(allowLan: v),
+        allowGateway => m.copyWith(allowGateway: v),
+        ownRoutes => m.copyWith(ownRoutes: v),
+        disableTaildropCommands => m.copyWith(disableTaildropCommands: v),
+        disableTaildropAutosave => m.copyWith(disableTaildropAutosave: v),
+      };
 }

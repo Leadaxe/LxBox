@@ -53,6 +53,7 @@ const kSupportRouteScreens = <String>{
   'vpn-settings',
   'app-settings',
   'speedtest',
+  'diagnostics', // §687
   'stats',
   'config',
   'debug',

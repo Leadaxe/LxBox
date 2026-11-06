@@ -8,7 +8,7 @@ import '../../../services/traffic_profiler.dart';
 import '../../stats_screen.dart';
 import '../../../services/l10n/locale_controller.dart';
 
-/// Полоса трафика под статус-чипом на главном экране: ↑/↓ скорость, число
+/// Полоса трафика под статус-чипом на главном экране: ↑/↓ накопленный объём за сессию, число
 /// активных соединений, global-recording индикатор профайлера (§044) и uptime.
 /// Тап открывает [StatsScreen] (Overview).
 ///

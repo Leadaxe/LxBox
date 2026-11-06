@@ -157,7 +157,14 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
                     if (tunnelStartedElapsedMs == 0L) {
                         tunnelStartedElapsedMs = SystemClock.elapsedRealtime()
                     }
-                VpnStatus.Stopped -> tunnelStartedElapsedMs = 0L
+                VpnStatus.Stopped -> {
+                    tunnelStartedElapsedMs = 0L
+                    // §707 итер. 7 — ленты окна «Send clipboard» живут, пока
+                    // работает VPN; «Поделиться» и «Send to device» скрываются.
+                    runCatching {
+                        TaildropClip.onVpnStopped(runCatching { BoxApplication.application }.getOrNull())
+                    }
+                }
                 else -> { /* Starting/Stopping — не трогаем */ }
             }
         }
@@ -223,6 +230,25 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
         /// §581 — ответы проверки устройства Tailscale (`StartTailscalePing`).
         @Volatile
         var ccTailscalePingSink: io.flutter.plugin.common.EventChannel.EventSink? = null
+        /// §687 — события теста соединения (`StartConnectionTest`): батчи
+        /// `{event: stage|result|error, …}`.
+        @Volatile
+        var ccConnectionTestSink: io.flutter.plugin.common.EventChannel.EventSink? = null
+        /// §654 C — состояние endpoint'ов openconnect (`SubscribeOpenConnectStatus`):
+        /// снапшот `{endpoints: [...], callback: {...}?}` на каждое обновление.
+        @Volatile
+        var ccOpenConnectSink: io.flutter.plugin.common.EventChannel.EventSink? = null
+        /// §654 C — тап по уведомлению «Sign-in required»: тег узла, чей
+        /// челлендж показать. Dart забирает его на старте и при возврате.
+        @Volatile
+        var openConnectOpenRequest: String? = null
+        /// §707 — снапшот входящих Taildrop узла (`SubscribeTaildropInbox`).
+        @Volatile
+        var ccTaildropInboxSink: io.flutter.plugin.common.EventChannel.EventSink? = null
+        /// §707 — тап по уведомлению Taildrop: тег узла, чью вкладку Network
+        /// открыть. Dart забирает его на старте и при возврате.
+        @Volatile
+        var taildropOpenRequest: String? = null
 
         fun start(context: Context) {
             Log.d(TAG, "[vpn] companion.start() → startForegroundService, current status=${currentStatus.name}")
@@ -248,11 +274,28 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
         /// `BoxService.doForceStop` сразу делает `stopSelf()`, teardown ядра — фоном
         /// best-effort. В отличие от `stopAwait` — НЕ возвращает Deferred (ждать
         /// нечего: ядро Stopped не отдаст).
+        ///
+        /// §663 — два канала доставки. Приёмник жив → broadcast. Приёмник снят
+        /// (doStop снимает его до teardown'а ядра; onRevoke/exit тоже) →
+        /// broadcast некому ловить, служба навсегда остаётся в Stopping;
+        /// тогда команда идёт через startService в onStartCommand, где ветка
+        /// ACTION_FORCE_STOP стоит до гарда `status != Stopped`.
         fun forceStop(context: Context) {
-            Log.w(TAG, "[vpn] companion.forceStop() → sendBroadcast(ACTION_FORCE_STOP), current status=${currentStatus.name}")
-            context.sendBroadcast(
-                Intent(ACTION_FORCE_STOP).setPackage(context.packageName)
-            )
+            if (stopReceiverAlive) {
+                Log.w(TAG, "[vpn] companion.forceStop() → sendBroadcast(ACTION_FORCE_STOP), current status=${currentStatus.name}")
+                context.sendBroadcast(
+                    Intent(ACTION_FORCE_STOP).setPackage(context.packageName)
+                )
+                return
+            }
+            Log.w(TAG, "[vpn §663] companion.forceStop() → receiver gone, startService(ACTION_FORCE_STOP), current status=${currentStatus.name}")
+            runCatching {
+                context.startService(
+                    Intent(context, BoxVpnService::class.java).apply { action = ACTION_FORCE_STOP }
+                )
+            }.onFailure {
+                Log.e(TAG, "[vpn §663] startService(ACTION_FORCE_STOP) failed", it)
+            }
         }
 
         fun reload(context: Context) {

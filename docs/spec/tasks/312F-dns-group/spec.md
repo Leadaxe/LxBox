@@ -109,6 +109,12 @@ Kotlin сериализует итераторы в `List<Map>` (образец 
   «disabled — will be skipped» (drop-семантика решения №3).
 - JSON-вкладка остаётся источником правды: форма парсит/сериализует `body`
   (паттерн `edit_controller`).
+- Превью «sing-box server preview» на JSON-вкладке шаблонной/пресетной
+  группы показывает состав, который уйдёт в ядро: выключенные члены сняты тем
+  же критерием, что у сборки (`dnsGroupMemberDropReason` /
+  `previewDnsGroupMembers` в `post_steps/dns_servers.dart`), под превью —
+  строка «Disabled, skipped at build: X, Y»; запись хранения не меняется
+  ([671](../671-dns-group-json-preview-disabled-members.md)).
 
 ### Список ([dns_settings_screen](../../../../app/lib/screens/dns_settings_screen.dart))
 

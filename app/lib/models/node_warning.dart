@@ -394,66 +394,77 @@ final class MissingObfsPasswordWarning extends NodeWarning {
 // §368 — импорт sing-box JSON
 // ════════════════════════════════════════════════════════════════════════════
 
-/// §368 §4 P3 — `detour`-кольцо в импортируемом конфиге разорвано.
+/// §368 §4 P3 — `detour`-кольцо в импортируемом конфиге.
 ///
-/// Расхождение с §254 намеренное: там судят конфиг ПОЛЬЗОВАТЕЛЯ (виновника надо
-/// показать, чтобы он развязал), здесь кольцо приехало из чужого файла — узлов
-/// ещё нет, развязывать нечего. Рвём замыкающее ребро, узел остаётся рабочим
-/// без цепочки.
+/// Контракт 1.1.118 (D-128) — fail-closed: каждый участник кольца (и
+/// самоссылка) и каждый узел, чья цепочка в кольцо упирается, отбраковывается
+/// записью `dropped[]` с этим кодом. Прежде замыкающее ребро снималось и узел
+/// шёл напрямую. [ownerTag] — тег отбракованной записи (D-088).
 final class DetourCycleBrokenWarning extends NodeWarning {
   /// Тег, на который вело замыкающее ребро.
   final String target;
 
-  const DetourCycleBrokenWarning(this.target);
+  @override
+  final String ownerTag;
+
+  const DetourCycleBrokenWarning(this.target, {this.ownerTag = ''});
 
   @override
   List<Object?> get props => [target];
 
   @override
   String messageWith(GetLocalText t) => t.s(
-      "Chain to \"%s\" would loop back on itself, so it was dropped. The node connects directly.",
+      "Node dropped: its chain loops back on itself through \"%s\".",
       target);
 
   @override
-  WarningSeverity get severity => WarningSeverity.warning;
+  WarningSeverity get severity => WarningSeverity.error;
 }
 
-/// §368 §4 P4 — `detour` указывает на тег, которого в конфиге нет.
-/// Узел не теряем (§169: отброс негодной части, не целого).
+/// §368 §4 P4 — `detour` указывает на тег, которого в конфиге нет или который
+/// узлом не стал (неподдержанный тип, битая запись). Контракт 1.1.118
+/// (D-128) — fail-closed: носитель отбраковывается записью `dropped[]`.
 final class DetourTargetMissingWarning extends NodeWarning {
   final String target;
 
-  const DetourTargetMissingWarning(this.target);
+  @override
+  final String ownerTag;
+
+  const DetourTargetMissingWarning(this.target, {this.ownerTag = ''});
 
   @override
   List<Object?> get props => [target];
 
   @override
   String messageWith(GetLocalText t) => t.s(
-      "Chain target \"%s\" was not found in the config. The node connects directly.",
+      "Node dropped: chain target \"%s\" was not found in the config.",
       target);
 
   @override
-  WarningSeverity get severity => WarningSeverity.warning;
+  WarningSeverity get severity => WarningSeverity.error;
 }
 
-/// §368 §4 P5 — `detour` на группу (`urltest`/`selector`). Типово выразимо, но
-/// `getEntries` развернёт группу в detour-список, где её членов нет.
+/// §368 §4 P5 — `detour` на группу (`urltest`/`selector`): группа не может
+/// быть хопом. Контракт 1.1.118 (D-128) — fail-closed: носитель
+/// отбраковывается записью `dropped[]`; группа и её члены живут.
 final class DetourToGroupWarning extends NodeWarning {
   final String target;
 
-  const DetourToGroupWarning(this.target);
+  @override
+  final String ownerTag;
+
+  const DetourToGroupWarning(this.target, {this.ownerTag = ''});
 
   @override
   List<Object?> get props => [target];
 
   @override
   String messageWith(GetLocalText t) => t.s(
-      "Chain target \"%s\" is a group, which cannot be used as a chain hop. The node connects directly.",
+      "Node dropped: chain target \"%s\" is a group, which cannot be a chain hop.",
       target);
 
   @override
-  WarningSeverity get severity => WarningSeverity.warning;
+  WarningSeverity get severity => WarningSeverity.error;
 }
 
 /// §368 §4 P2 — цепочка длиннее лимита обрезана. Реальные конфиги — 2–3 звена;

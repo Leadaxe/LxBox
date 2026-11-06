@@ -60,6 +60,9 @@
 - `local_dns_resolver` как Default Domain Resolver — жёлтое предупреждение
   «System DNS leaks lookups to your ISP» с кнопкой «Switch to
   cloudflare_udp» (если такой сервер есть). Как DNS Final он допустим.
+  Кнопка — фиксированный переход на `cloudflare_udp`, а не на умолчание
+  шаблона (`dns_shield`); так задумано — любой другой резолвер выбирается
+  из списка.
 - Strategy на экране вне четырёх значений отображается как `ipv4_only`.
 
 ## Границы

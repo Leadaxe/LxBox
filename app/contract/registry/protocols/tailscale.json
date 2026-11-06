@@ -8,11 +8,11 @@
     "singbox"
   ],
   "extension": null,
-  "note": "Endpoint (sing-box >= 1.12): узел живёт в endpoints[], не в outbounds[], и адреса на верхнем уровне не имеет (безадресный тип, как wireguard). Ядро поднимает tsnet в user-space и само входит в tailnet по auth_key. URI-формы нет — узел приходит только из sing-box JSON или из конструктора «Add server → Tailscale», который отдаёт документ узла с одним endpoint. Одноразовый ключ (tskey-auth-…) расходуется при первом входе, дальше идентичность машины живёт в state_directory: удаление каталога регистрирует НОВОЕ устройство. Лаунчер подставляет state_directory вида <exec>/bin/tailscale/<финальный тег>, если поле не задано в теле, — дефолт ядра общий для всех узлов, и два узла tailnet сели бы в один каталог. Ядру нужен тег сборки with_tailscale (гейт — по тегу, не по версии: body.build_tag); на ядре без тега узел выбрасывается с warning tailscale_core_unsupported, иначе один такой узел валит sing-box check для ВСЕГО конфига. MagicDNS — отдельный DNS-сервер type=tailscale с полем endpoint (тег этого узла); маршрут в tailnet — правило preferred_by на этот узел. Узел их НЕ несёт: секции узла упразднены (контракт 1.1.85, NODE_SECTIONS.md), связку даёт пресет шаблона `tailscale` (контракт 1.1.86, TEMPLATE_LANG §6.7): для каждого узла Tailscale в конфиге — DNS-сервер `<тег>-dns` и правила `preferred_by` в route (тег узла) и dns (тег сервера `<тег>-dns`: ядро ищет его среди DNS-серверов, контракт 1.1.90; D-120 подтверждён LxBox); узел со skip_presets=true пресет не обслуживает. Жизненный цикл каталога состояния — NODE_SECTIONS.md §2. Схема применяется ОБЕИМИ сторонами: LxBox с релиза v2.23.2 (libbox форка собран с with_tailscale + ts_omit_*, D-103, ядро 1.14.0-lx.38) — узел хранится всегда, при сборке снимается тем же гейтом по тегу сборки.",
+  "note": "Endpoint (sing-box >= 1.12): узел живёт в endpoints[], не в outbounds[], и адреса на верхнем уровне не имеет (безадресный тип, как wireguard). Ядро поднимает tsnet в user-space и само входит в tailnet по auth_key. URI-формы нет — узел приходит только из sing-box JSON или из конструктора «Add server → Tailscale», который отдаёт документ узла с одним endpoint. Одноразовый ключ (tskey-auth-…) расходуется при первом входе, дальше идентичность машины живёт в state_directory: удаление каталога регистрирует НОВОЕ устройство. Лаунчер подставляет state_directory вида <exec>/bin/tailscale/<финальный тег>, если поле не задано в теле, — дефолт ядра общий для всех узлов, и два узла tailnet сели бы в один каталог. Ядру нужен тег сборки with_tailscale (гейт — по тегу, не по версии: body.build_tag); на ядре без тега узел выбрасывается с warning tailscale_core_unsupported, иначе один такой узел валит sing-box check для ВСЕГО конфига. MagicDNS — отдельный DNS-сервер type=tailscale с полем endpoint (тег этого узла); маршрут в tailnet — правило preferred_by на этот узел. Узел их НЕ несёт: секции узла упразднены (контракт 1.1.85, NODE_SECTIONS.md), связку даёт пресет шаблона `tailscale` (контракт 1.1.86, TEMPLATE_LANG §6.7): для каждого узла Tailscale в конфиге — DNS-сервер `<тег>-dns` и правила `preferred_by` в route (тег узла) и dns (тег сервера `<тег>-dns`: ядро ищет его среди DNS-серверов, контракт 1.1.90; D-120 подтверждён LxBox); узел со skip_tailscale_presets=true (до контракта 1.1.126 — skip_presets) пресет не обслуживает. Входящие из tailnet к нам решают поля записи allow_local / allow_lan / allow_gateway и пресет tunnel-ingress (контракт 1.1.126, TEMPLATE_LANG §6.5.2): advertise_routes / advertise_exit_node только анонсируют нас, пропуск пира даёт галка узла. Жизненный цикл каталога состояния — NODE_SECTIONS.md §2. Схема применяется ОБЕИМИ сторонами: LxBox с релиза v2.23.2 (libbox форка собран с with_tailscale + ts_omit_*, D-103, ядро 1.14.0-lx.38) — узел хранится всегда, при сборке снимается тем же гейтом по тегу сборки.",
   "uri": null,
   "emit": {
     "share_uri": false,
-    "note": "Share-URI не эмитится — URI-формы у схемы нет. Тело узла эмитится как есть (канон v7), per-scheme ветки нет; единственная правка эмиттера — подстановка state_directory при его отсутствии."
+    "note": "Share-URI не эмитится — URI-формы у схемы нет. Тело узла эмитится как есть (канон v7), per-scheme ветки нет; правки эмиттера — подстановка state_directory при его отсутствии и taildrop_directory = <state_directory>/taildrop при отсутствии ключа (контракт 1.1.147); disable_taildrop: true при отсутствии явного disable_taildrop: false (контракт 1.1.150, «Allow Taildrop» по умолчанию выключено; поле с min_core 1.14.4-lx.30-rc.2 — на ядре старше снимается гейтом)."
   },
   "refs": {
     "go": [
@@ -31,8 +31,8 @@
     ]
   },
   "body": {
-    "core": "1.14.2-lx.11",
-    "order": ["state_directory", "auth_key", "control_url", "ephemeral", "hostname", "accept_routes", "exit_node", "exit_node_allow_lan_access", "advertise_routes", "advertise_exit_node", "advertise_tags", "listen_port", "relay_server_port", "relay_server_static_endpoints", "system_interface", "system_interface_name", "system_interface_mtu", "udp_timeout", "ssh_server", "taildrop_directory", "__dialer"],
+    "core": "1.14.3-lx.17",
+    "order": ["state_directory", "auth_key", "control_url", "ephemeral", "hostname", "accept_routes", "exit_node", "exit_node_allow_lan_access", "advertise_routes", "advertise_exit_node", "advertise_tags", "listen_port", "relay_server_port", "relay_server_static_endpoints", "system_interface", "system_interface_name", "system_interface_mtu", "udp_timeout", "ssh_server", "taildrop_directory", "disable_taildrop", "__dialer"],
     "fields": {
       "state_directory": {
         "type": "string",
@@ -237,7 +237,17 @@
         "default": "Taildrop",
         "desc_en": "Directory receiving Taildrop files.",
         "desc_ru": "Каталог, куда попадают файлы Taildrop.",
-        "impl": "option/tailscale.go TaildropDirectory."
+        "impl": "option/tailscale.go TaildropDirectory.",
+        "note": "Обе стороны при сборке подставляют <state_directory>/taildrop, если ключа в теле нет (контракт 1.1.147): дефолт ядра — общий каталог Taildrop от рабочего каталога, и входящие всех узлов tailnet легли бы в одну папку. Хранимое тело не меняется — как у state_directory."
+      },
+      "disable_taildrop": {
+        "type": "bool",
+        "default": false,
+        "min_core": "1.14.4-lx.30-rc.2",
+        "desc_en": "Turn Taildrop off on this node: incoming files are refused, sending is not allowed.",
+        "desc_ru": "Выключить Taildrop узла: входящие файлы отклоняются, отправка запрещена.",
+        "impl": "option/tailscale.go DisableTaildrop (SPEC 149 §4 ядра). true: peer API /v0/put/ (PUT и GET докачки) → 403 «Taildrop is disabled on this node» раньше проверок прав апстрима; SendTaildropFiles → FailedPrecondition; canShareFiles = false, canReceiveFiles = false у всех пиров; лежащие файлы остаются во входящих, open/delete работают; на лету не переключается — только reload.",
+        "note": "Контракт 1.1.150, решение владельца 02.11.2026: «Allow Taildrop» по умолчанию ВЫКЛЮЧЕНО у обеих сторон. Дефолт ядра — включено (совместимость с апстримом), поэтому выключает СБОРКА: config-форма эмитит disable_taildrop: true, если в теле нет явного disable_taildrop: false. Хранимое тело не трогается: галка «вкл» пишет в тело false, «выкл» снимает поле — тело без поля и значит «выключено». min_core: на ядре старше поле снимается полевым гейтом (и пишущееся сборкой true тоже) — Taildrop там остаётся включённым, как у ядра."
       },
       "__dialer": {
         "type": "ref",

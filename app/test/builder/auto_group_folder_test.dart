@@ -7,6 +7,7 @@ import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/singbox_entry.dart';
+import 'package:lxbox/models/source_replace.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/builder/rule_set_registry.dart';
 import 'package:lxbox/services/builder/server_list_build.dart';
@@ -242,6 +243,24 @@ void main() {
       expect(urltests(ctx), isEmpty);
       // Сами серверы при этом на месте.
       expect(ctx.entries, hasLength(1));
+      // §675 — снятие названо и у правила, не только у явного состава.
+      expect(ctx.warnings, [
+        'Auto node "F: Grp" was skipped: it has no members, an empty group '
+            'would stop the VPN core',
+      ]);
+    });
+
+    test('§675 — пустая папка: группа снята с тем же warning', () {
+      final auto = AutoSelectSpec(
+        id: 'a',
+        tag: 'Grp',
+        label: 'Grp',
+        membership: const RuleMembers(),
+      );
+      final ctx = _FakeCtx();
+      folder([auto]).build(ctx);
+      expect(urltests(ctx), isEmpty);
+      expect(ctx.warnings.single, contains('it has no members'));
     });
 
     test('группа попадает в selector, но не в ✨auto', () {
@@ -434,6 +453,90 @@ void main() {
         'tag', 'type', 'outbounds', ...const AutoSelectParams().toJson().keys,
       ]);
       expect(core['url'], 'http://x.example');
+    });
+  });
+  group('§675 — свёртка Auto и гейты пула', () {
+    AutoSelectSpec all() => AutoSelectSpec(
+          id: 'a',
+          tag: 'Grp',
+          label: 'Grp',
+          membership: const RuleMembers(),
+        );
+
+    test('свёртка Auto: группа собрана, но недостижима — warning один', () {
+      final f = FolderServers(
+        id: 'f1',
+        name: 'F',
+        enabled: true,
+        tagPrefix: 'F:',
+        detourPolicy: const DetourPolicy(),
+        replace: const SourceReplace(mode: ReplaceMode.auto, tag: 'X'),
+        members: [
+          FolderMember(raw: vless('u1', '1.1.1.1', 'A')),
+          FolderMember.auto(all()),
+        ],
+      );
+      final ctx = _FakeCtx();
+      f.build(ctx);
+      expect(urltests(ctx), hasLength(1));
+      expect(ctx.warnings, [
+        'Auto node "F: Grp" is unreachable: its source is replaced with an '
+            'Auto group, which does not include auto nodes',
+      ]);
+    });
+
+    test('свёртка с селектором — warning нет', () {
+      final f = FolderServers(
+        id: 'f1',
+        name: 'F',
+        enabled: true,
+        tagPrefix: 'F:',
+        detourPolicy: const DetourPolicy(),
+        replace: const SourceReplace(mode: ReplaceMode.both, tag: 'X'),
+        members: [
+          FolderMember(raw: vless('u1', '1.1.1.1', 'A')),
+          FolderMember.auto(all()),
+        ],
+      );
+      final ctx = _FakeCtx();
+      f.build(ctx);
+      expect(ctx.warnings, isEmpty);
+    });
+
+    // `hop` — цель личного detour члена `exit` той же папки (isChainLink);
+    // `ts` — Tailscale без exit node.
+    FolderServers gated(DetourPolicy policy) => FolderServers(
+          id: 'f1',
+          name: 'F',
+          enabled: true,
+          tagPrefix: '',
+          detourPolicy: policy,
+          members: [
+            FolderMember(raw: vless('u1', '1.1.1.1', 'hop')),
+            FolderMember(
+                raw: vless('u2', '2.2.2.2', 'exit'),
+                detour: const NodeLink(folderId: 'f1', tag: 'hop')),
+            FolderMember(
+              raw: '',
+              node: TailscaleSpec(
+                  id: 'ts', tag: 'ts', label: 'ts', body: {'auth_key': 'k'}),
+            ),
+            FolderMember.auto(all()),
+          ],
+        );
+
+    test('политика off: звена и Tailscale без exit в пуле нет', () {
+      final ctx = _FakeCtx();
+      gated(const DetourPolicy()).build(ctx);
+      // Оба эмитированы — законные цели detour, но не члены пула.
+      expect(ctx.entries.map((e) => e.tag), containsAll(['hop', 'ts']));
+      expect(urltests(ctx).single['outbounds'], ['exit']);
+    });
+
+    test('Register detour servers on: звено в пуле, Tailscale — нет', () {
+      final ctx = _FakeCtx();
+      gated(const DetourPolicy(registerDetourServers: true)).build(ctx);
+      expect(urltests(ctx).single['outbounds'], ['hop', 'exit']);
     });
   });
 }

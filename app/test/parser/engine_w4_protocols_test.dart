@@ -67,12 +67,6 @@ void main() {
 
   /// Один протокол: все кейсы его фикстуры через `parseUri`.
   void checkScheme(String scheme, String singboxType) {
-    test('$scheme: секция исполняема и загружена', () {
-      expect(MapperSections.I.has('uri', singboxType), isTrue,
-          reason: 'без секции движок не работает вовсе — рукописного '
-              'запасного пути у переехавшей схемы не осталось');
-    }, skip: skip);
-
     test('$scheme: снимок «до переезда» — identity, тег и тело байт в байт',
         () {
       final diffs = <String>[];
@@ -141,12 +135,6 @@ void main() {
     checkScheme('tuic', 'tuic');
     checkScheme('masque', 'masque');
     checkScheme('wireguard', 'wireguard');
-
-    test('wireguard INI: секция вида conf исполняема и загружена', () {
-      expect(MapperSections.I.has('conf', 'wireguard'), isTrue,
-          reason: '§480 — рукописного mapWireguardIni больше нет, и запасного '
-              'пути у входа .conf не осталось');
-    }, skip: skip);
 
     test('wireguard INI: кейсы ini:* дают прежние identity, тег и тело', () {
       final diffs = <String>[];

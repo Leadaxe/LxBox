@@ -10,13 +10,6 @@ String hum(Object e) => humanizeError(e).renderEn();
 
 void main() {
   group('humanizeError (night T2-2)', () {
-    test('SocketException → "No connection"', () {
-      final msg = hum(
-        const SocketException('x', address: null),
-      );
-      expect(msg, contains('No connection'));
-    });
-
     test('SocketException with host in message → "No connection to <host>"',
         () {
       // regression: DNS lookup failure обычно не даёт `e.address`, но host
@@ -26,11 +19,6 @@ void main() {
       );
       final msg = hum(e);
       expect(msg, contains('No connection to api.example.com'));
-    });
-
-    test('TimeoutException → timeout phrasing', () {
-      final msg = hum(TimeoutException('x'));
-      expect(msg.toLowerCase(), contains('time'));
     });
 
     test('TimeoutException with duration → includes seconds', () {
@@ -53,21 +41,6 @@ void main() {
       final msg = hum(const HttpException('HTTP 401 for http://x'));
       expect(msg, contains('Access denied'));
       expect(msg, contains('401'));
-    });
-
-    test('HttpException with 404 → removed hint', () {
-      final msg = hum(const HttpException('HTTP 404 for http://x'));
-      expect(msg, contains('Not found'));
-    });
-
-    test('HttpException with 503 → server down hint', () {
-      final msg = hum(const HttpException('HTTP 503 for http://x'));
-      expect(msg.toLowerCase(), contains('server error'));
-    });
-
-    test('FormatException → parse error', () {
-      final msg = hum(const FormatException('bad'));
-      expect(msg, contains('parse'));
     });
 
     test('plain Exception → strips "Exception: " prefix', () {

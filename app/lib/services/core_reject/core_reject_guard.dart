@@ -93,11 +93,7 @@ enum CoreRejectOutcome {
 
 /// Один выключенный узел прогона — для плашки и Debug API.
 final class DisabledNode {
-  const DisabledNode({
-    required this.tag,
-    required this.reason,
-    this.ref,
-  });
+  const DisabledNode({required this.tag, required this.reason, this.ref});
 
   /// Финальный тег собранного конфига, который назвало ядро.
   final String tag;
@@ -109,10 +105,10 @@ final class DisabledNode {
   final CoreRejectNodeRef? ref;
 
   Map<String, dynamic> toJson() => {
-        'tag': tag,
-        'reason': reason,
-        if (ref != null) ...ref!.toParams(),
-      };
+    'tag': tag,
+    'reason': reason,
+    if (ref != null) ...ref!.toParams(),
+  };
 
   @override
   String toString() => 'DisabledNode($tag: $reason)';
@@ -145,21 +141,13 @@ final class CoreRejectRun {
 
 /// Исход одной попытки ядра — реального старта либо `checkConfig`.
 final class CoreAttempt {
-  const CoreAttempt.accepted()
-      : ok = true,
-        error = '',
-        bridgeDown = false;
+  const CoreAttempt.accepted() : ok = true, error = '', bridgeDown = false;
 
-  const CoreAttempt.rejected(this.error)
-      : ok = false,
-        bridgeDown = false;
+  const CoreAttempt.rejected(this.error) : ok = false, bridgeDown = false;
 
   /// Моста нет (юнит, старый native, таймаут): ответить нечем. Автомат
   /// деградирует консервативно — обычная ошибка, без автоматики.
-  const CoreAttempt.unavailable()
-      : ok = false,
-        error = '',
-        bridgeDown = true;
+  const CoreAttempt.unavailable() : ok = false, error = '', bridgeDown = true;
 
   final bool ok;
   final String error;
@@ -168,13 +156,26 @@ final class CoreAttempt {
 
 /// Один пересобранный конфиг: текст для ядра и теги для сопоставления.
 final class RebuiltConfig {
-  const RebuiltConfig({required this.configJson, required this.tags});
+  /// Только набор тегов, без порядка массивов: форма декодирования (§653)
+  /// узла по такому конфигу не назовёт.
+  RebuiltConfig({required this.configJson, required Set<String> tags})
+    : configTags = CoreConfigTags(all: tags);
+
+  /// Набор тегов вместе с порядком `outbounds[]`/`endpoints[]` (§653).
+  const RebuiltConfig.withConfigTags({
+    required this.configJson,
+    required this.configTags,
+  });
 
   final String configJson;
 
-  /// Финальные теги собранного конфига — против них проверяются кандидаты
-  /// разбора (PARSING_PRINCIPLES §9.2 шаг 3).
-  final Set<String> tags;
+  /// Теги собранного конфига: финальные (против них проверяются кандидаты
+  /// разбора, PARSING_PRINCIPLES §9.2 шаг 3) и записи в порядке массивов
+  /// (индекс формы декодирования → тег, §653).
+  final CoreConfigTags configTags;
+
+  /// Финальные теги собранного конфига.
+  Set<String> get tags => configTags.all;
 }
 
 /// Всё, что автомату нужно снаружи. Реализуется контроллером; в тестах —
@@ -218,6 +219,7 @@ final class CoreRejectGuard {
   final int roundLimit;
 
   final _disabled = <DisabledNode>[];
+
   /// Узлы, уже выключенные этим прогоном, — по идентичности (§503), не по
   /// тегу: тег между кругами переезжает к тёзке.
   final _seenRefs = <CoreRejectNodeRef>{};
@@ -290,8 +292,11 @@ final class CoreRejectGuard {
 
       _round++;
       final verdict = await _host.check(built.configJson);
-      _host.onProgress(CoreRejectPhase.checking, _round,
-          disabledNodes: List.unmodifiable(_disabled));
+      _host.onProgress(
+        CoreRejectPhase.checking,
+        _round,
+        disabledNodes: List.unmodifiable(_disabled),
+      );
 
       if (_cancelled) return _finish(CoreRejectOutcome.stoppedByUser);
 
@@ -303,7 +308,7 @@ final class CoreRejectGuard {
         break;
       }
 
-      final next = await _consume(verdict.error, tags: built.tags);
+      final next = await _consume(verdict.error, tags: built.configTags);
       if (next == null) {
         return _finish(CoreRejectOutcome.failed, error: verdict.error);
       }
@@ -314,9 +319,11 @@ final class CoreRejectGuard {
     _to(CoreRejectPhase.finalStart);
     final last = await _host.realStart();
     if (last.ok) {
-      return _finish(_disabled.isEmpty
-          ? CoreRejectOutcome.startedClean
-          : CoreRejectOutcome.startedWithDisabled);
+      return _finish(
+        _disabled.isEmpty
+            ? CoreRejectOutcome.startedClean
+            : CoreRejectOutcome.startedWithDisabled,
+      );
     }
     // Редкая ошибка, которую check пропускает, а старт ловит: названный узел
     // тоже выключается с причиной, но ТРЕТЬЕГО старта нет — следующее
@@ -335,7 +342,7 @@ final class CoreRejectGuard {
   /// после выключения, потому что узел за тегом знает только хост. Повторный
   /// `disableNode` того же узла безвреден: вердикт замещается тем же
   /// (`upsertVerdict`), а цикл тут же прерывается.
-  Future<DisabledNode?> _consume(String error, {Set<String>? tags}) async {
+  Future<DisabledNode?> _consume(String error, {CoreConfigTags? tags}) async {
     final built = tags ?? await _tagsOfCurrentConfig();
     if (built == null) return null;
     final hit = parseCoreRejection(error, built);
@@ -345,14 +352,17 @@ final class CoreRejectGuard {
     if (!_seenRefs.add(ref)) return null; // тот же узел повторно
     final d = DisabledNode(tag: hit.tag, reason: hit.reason, ref: ref);
     _disabled.add(d);
-    _host.onProgress(_phase, _round,
-        disabledNodes: List.unmodifiable(_disabled));
+    _host.onProgress(
+      _phase,
+      _round,
+      disabledNodes: List.unmodifiable(_disabled),
+    );
     return d;
   }
 
   /// Теги конфига, на котором ядро только что отказало: у сигнального старта
   /// своего набора нет — берём его пересборкой (узлы ещё не выключены, набор
   /// тот же).
-  Future<Set<String>?> _tagsOfCurrentConfig() async =>
-      (await _host.rebuild())?.tags;
+  Future<CoreConfigTags?> _tagsOfCurrentConfig() async =>
+      (await _host.rebuild())?.configTags;
 }

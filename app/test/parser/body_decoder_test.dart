@@ -73,10 +73,6 @@ void main() {
       expect((r as UriLines).lines, hasLength(2));
     });
 
-    test('whitespace-only body → failure', () {
-      expect(decode('   \n\t\n  '), isA<DecodeFailure>());
-    });
-
     // §480 — норма ИЗМЕНИЛАСЬ, и тест переписан под неё, а не подогнан.
     //
     // Реестр видов источника (`contract_draft/source_kinds.json`, вид
@@ -92,11 +88,6 @@ void main() {
       expect(r, isA<IniConfig>());
       expect(() => parseAll(r), returnsNormally);
       expect(parseAll(r), isEmpty);
-    });
-
-    test('INI с [Interface] + [Peer] → IniConfig', () {
-      const body = '[Interface]\nPrivateKey = xxx\n[Peer]\nPublicKey = yyy\n';
-      expect(decode(body), isA<IniConfig>());
     });
 
     // §483 — у Clash своей ветки в реестре нет (её убрал GRAMMAR_SYNC):

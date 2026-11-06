@@ -371,22 +371,4 @@ void main() {
       expect(out['tcp_keep_alive'], '30s');
     });
   });
-
-  group('TcpKeepAliveSpec', () {
-    test('isEmpty', () {
-      expect(const TcpKeepAliveSpec().isEmpty, isTrue);
-      expect(const TcpKeepAliveSpec(disabled: true).isEmpty, isFalse);
-      expect(const TcpKeepAliveSpec(idle: '30s').isEmpty, isFalse);
-      expect(const TcpKeepAliveSpec(interval: '15s').isEmpty, isFalse);
-    });
-
-    test('равенство по трём полям', () {
-      expect(const TcpKeepAliveSpec(idle: '30s'),
-          const TcpKeepAliveSpec(idle: '30s'));
-      expect(const TcpKeepAliveSpec(idle: '30s').hashCode,
-          const TcpKeepAliveSpec(idle: '30s').hashCode);
-      expect(const TcpKeepAliveSpec(idle: '30s'),
-          isNot(const TcpKeepAliveSpec(idle: '31s')));
-    });
-  });
 }

@@ -87,6 +87,11 @@ sealed class CustomRule {
         CustomRuleInline(:final domainKeywords) => domainKeywords,
         _ => const [],
       };
+  /// §712 — `domain_regex`. Только inline.
+  List<String> get domainRegexes => switch (this) {
+        CustomRuleInline(:final domainRegexes) => domainRegexes,
+        _ => const [],
+      };
   List<String> get ipCidrs => switch (this) {
         CustomRuleInline(:final ipCidrs) => ipCidrs,
         _ => const [],
@@ -104,6 +109,13 @@ sealed class CustomRule {
   List<String> get packages => switch (this) {
         CustomRuleInline(:final packages) => packages,
         CustomRuleSrs(:final packages) => packages,
+        _ => const [],
+      };
+  /// §712 — `package_name_regex`. Inline — в headless match, srs — на
+  /// routing-rule level рядом с `package_name`.
+  List<String> get packageRegexes => switch (this) {
+        CustomRuleInline(:final packageRegexes) => packageRegexes,
+        CustomRuleSrs(:final packageRegexes) => packageRegexes,
         _ => const [],
       };
   List<String> get protocols => switch (this) {
@@ -146,7 +158,8 @@ sealed class CustomRule {
       };
 
   /// §030/new_fields — `inbound`-ось: теги inbound'ов билдера (`tun-in`/
-  /// `mixed-in`, §119). Headless rule_set `inbound` НЕ принимает → routing-rule
+  /// `mixed-in`, §119; `sysproxy-in` — системный HTTP-прокси, §629: его трафик
+  /// приходит не через `tun-in`). Headless rule_set `inbound` НЕ принимает → routing-rule
   /// level (как `ip_is_private`). AND с остальным правилом.
   List<String> get inbounds => switch (this) {
         CustomRuleInline(:final inbounds) => inbounds,
@@ -173,6 +186,23 @@ sealed class CustomRule {
         _ => const [],
       };
 
+  /// §694 — тип текущей сети по умолчанию, условие ядра `network_type`
+  /// (`wifi` / `cellular` / `ethernet` / `other`). Пусто — условия нет.
+  /// Разрешений не требует (в отличие от [wifiSsids]).
+  List<String> get networkTypes => switch (this) {
+        CustomRuleInline(:final networkTypes) => networkTypes,
+        CustomRuleSrs(:final networkTypes) => networkTypes,
+        _ => const [],
+      };
+
+  /// §694 — только лимитная сеть (`network_is_expensive: true`): у Android
+  /// это сеть без `NET_CAPABILITY_NOT_METERED`.
+  bool get networkIsExpensive => switch (this) {
+        CustomRuleInline(:final networkIsExpensive) => networkIsExpensive,
+        CustomRuleSrs(:final networkIsExpensive) => networkIsExpensive,
+        _ => false,
+      };
+
   /// §117 задача 3 — DNS-опция правила (ортогональное поле, только
   /// inline/srs; у preset DNS-аспект живёт в `dns_options.rules` §033).
   /// `null` = выкл (backward-compat: старые записи без `dns`).
@@ -193,11 +223,40 @@ sealed class CustomRule {
       ports.isEmpty &&
       portRanges.isEmpty &&
       protocols.isEmpty &&
-      network.isEmpty;
+      network.isEmpty &&
+      dnsLayerEligible;
+
+  /// §692: у правила есть условие, которое DNS-слой может проверить —
+  /// домен, приложение, источник, wifi, тип/лимитность сети (§694), либо
+  /// `inbound` при пустом `ip_cidr`. Чисто IP-правило (`ip_cidr` и routing-level поля) на DNS-слое матчить
+  /// нечем: ядро 1.14 в новом DNS-режиме (у нас всегда — FakeIP/Force IPv4
+  /// несут `query_type`/`ip_version`) отвергает ссылку DNS-правила на
+  /// rule_set «только IP» на старте. `inbound` лежит на самом DNS-правиле,
+  /// не в rule_set, поэтому `ip_cidr` + `inbound` не спасает. srs — всегда
+  /// true (содержимое файла не парсим).
+  bool get dnsLayerEligible => switch (this) {
+        CustomRuleInline() => domains.isNotEmpty ||
+            domainSuffixes.isNotEmpty ||
+            domainKeywords.isNotEmpty ||
+            domainRegexes.isNotEmpty ||
+            packages.isNotEmpty ||
+            packageRegexes.isNotEmpty ||
+            sourceIpCidrs.isNotEmpty ||
+            wifiSsids.isNotEmpty ||
+            wifiBssids.isNotEmpty ||
+            networkTypes.isNotEmpty ||
+            networkIsExpensive ||
+            (ipCidrs.isEmpty && inbounds.isNotEmpty),
+        CustomRuleSrs() => true,
+        _ => false,
+      };
 
   /// §117: DNS-mirror **активен** — [dnsMirrorEligible] И галка DNS включена.
   /// Build (эмиссия) и UI (lifecycle-локи серверов) используют этот предикат.
-  bool get dnsMirrorActive => dnsMirrorEligible && (dns?.enabled ?? false);
+  bool get dnsMirrorActive =>
+      dnsMirrorEligible &&
+      (dns?.enabled ?? false) &&
+      !(dns?.fixedMode ?? false);
 
   /// §256: Force IPv4 (AAAA-глушилка) **применима** — правило DNS-mirror-
   /// способно по headless-гейту (порт/протокол неизвестны в момент
@@ -209,11 +268,20 @@ sealed class CustomRule {
       ports.isEmpty &&
       portRanges.isEmpty &&
       protocols.isEmpty &&
-      network.isEmpty;
+      network.isEmpty &&
+      dnsLayerEligible; // §692
 
   /// §256: Force IPv4 **активна** — [forceIpv4Eligible] И галка включена.
   /// Build (эмиссия serverless-mirror'а) и UI (маркер) используют этот предикат.
-  bool get forceIpv4Active => forceIpv4Eligible && (dns?.forceIpv4 ?? false);
+  bool get forceIpv4Active =>
+      forceIpv4Eligible &&
+      (dns?.forceIpv4 ?? false) &&
+      !(dns?.fixedMode ?? false);
+
+  /// §683: Answer = Fixed IP **активен** — тот же headless-гейт, что у
+  /// [forceIpv4Eligible] (сервер не нужен: `predefined` отвечает локально),
+  /// и [RuleDns.fixedMode]. При нём server-mirror и Force IPv4 не эмитятся.
+  bool get dnsFixedActive => forceIpv4Eligible && (dns?.fixedMode ?? false);
 
   /// §247 — resolve-опция правила (только inline/srs). `null` = обычный
   /// outbound (backward-compat: старые записи без `resolve`).
@@ -230,7 +298,8 @@ sealed class CustomRule {
   bool get resolveEligible => switch (this) {
         CustomRuleInline() => domains.isNotEmpty ||
             domainSuffixes.isNotEmpty ||
-            domainKeywords.isNotEmpty,
+            domainKeywords.isNotEmpty ||
+            domainRegexes.isNotEmpty,
         CustomRuleSrs() => true,
         _ => false,
       };
@@ -314,6 +383,7 @@ class RuleDns {
     this.enabled = false,
     this.serverTag = '',
     this.forceIpv4 = false,
+    this.fixedIps = const [],
   });
 
   final bool enabled;
@@ -325,28 +395,81 @@ class RuleDns {
   /// — глушилка отвечает локально, DNS-серверу не нужна.
   final bool forceIpv4;
 
+  /// §683 — Answer = Fixed IP: правило отвечает на DNS-запросы своего матча
+  /// этими адресами (`predefined`, как hosts; IPv4/IPv6, по строке на адрес
+  /// в UI). Отдельного флага нет (решение владельца 24.10): режим = в списке
+  /// хотя бы один разбираемый адрес ([fixedMode]).
+  final List<String> fixedIps;
+
+  /// §683 — режим Answer = Fixed IP. Приоритетнее [enabled] (Dedicated).
+  bool get fixedMode => fixedIps.any((ip) => ipRecordType(ip) != null);
+
+  /// §683 — тип DNS-записи для адреса ответа: `A` (IPv4), `AAAA` (IPv6),
+  /// null — не адрес. Без `dart:io` (билдер чистый Dart).
+  static String? ipRecordType(String raw) {
+    final s = raw.trim();
+    if (s.isEmpty) return null;
+    if (s.contains(':')) {
+      try {
+        Uri.parseIPv6Address(s);
+        return 'AAAA';
+      } on FormatException {
+        return null;
+      }
+    }
+    try {
+      Uri.parseIPv4Address(s);
+      return 'A';
+    } on FormatException {
+      return null;
+    }
+  }
+
   Map<String, dynamic> toJson() => {
         'enabled': enabled,
         'serverTag': serverTag,
         if (forceIpv4) 'forceIpv4': true,
+        if (fixedIps.isNotEmpty) 'fixedIps': List<String>.of(fixedIps),
       };
 
   /// Backward-compat: не-Map (отсутствует в старых записях) → null.
   static RuleDns? fromJson(dynamic j) {
     if (j is! Map) return null;
+    final ips = j['fixedIps'];
     return RuleDns(
       enabled: j['enabled'] == true,
       serverTag: j['serverTag']?.toString() ?? '',
       forceIpv4: j['forceIpv4'] == true,
+      // Ключ `fixed` старых записей игнорируется (сборки с ним не выпускались).
+      fixedIps: ips is List
+          ? [
+              for (final e in ips)
+                if (e != null && e.toString().trim().isNotEmpty)
+                  e.toString().trim(),
+            ]
+          : const [],
     );
   }
 
-  RuleDns copyWith({bool? enabled, String? serverTag, bool? forceIpv4}) =>
+  RuleDns copyWith({
+    bool? enabled,
+    String? serverTag,
+    bool? forceIpv4,
+    List<String>? fixedIps,
+  }) =>
       RuleDns(
         enabled: enabled ?? this.enabled,
         serverTag: serverTag ?? this.serverTag,
         forceIpv4: forceIpv4 ?? this.forceIpv4,
+        fixedIps: fixedIps ?? this.fixedIps,
       );
+
+  /// Ничего не задано — запись `dns` можно снять с правила.
+  bool get isEmpty =>
+      !enabled &&
+      serverTag.isEmpty &&
+      !forceIpv4 &&
+      fixedIps.isEmpty;
 
   @override
   bool operator ==(Object other) =>
@@ -354,10 +477,12 @@ class RuleDns {
       (other is RuleDns &&
           enabled == other.enabled &&
           serverTag == other.serverTag &&
-          forceIpv4 == other.forceIpv4);
+          forceIpv4 == other.forceIpv4 &&
+          _listEq(fixedIps, other.fixedIps));
 
   @override
-  int get hashCode => Object.hash(enabled, serverTag, forceIpv4);
+  int get hashCode =>
+      Object.hash(enabled, serverTag, forceIpv4, Object.hashAll(fixedIps));
 }
 
 /// §247 — resolve-опция правила (route rule action `resolve`, sing-box 1.14).
@@ -525,10 +650,12 @@ class CustomRuleInline extends CustomRule {
     this.domains = const [],
     this.domainSuffixes = const [],
     this.domainKeywords = const [],
+    this.domainRegexes = const [],
     this.ipCidrs = const [],
     this.ports = const [],
     this.portRanges = const [],
     this.packages = const [],
+    this.packageRegexes = const [],
     this.protocols = const [],
     this.network = const [],
     this.ipIsPrivate = false,
@@ -537,6 +664,8 @@ class CustomRuleInline extends CustomRule {
     this.inbounds = const [],
     this.wifiSsids = const [],
     List<String> wifiBssids = const [],
+    this.networkTypes = const [],
+    this.networkIsExpensive = false,
     this.outbound = kDirectOutboundTag,
     this.dns,
     this.resolve,
@@ -549,6 +678,10 @@ class CustomRuleInline extends CustomRule {
   List<String> domainSuffixes;
   @override
   List<String> domainKeywords;
+  /// §712 — `domain_regex` (Go RE2, не anchored). В headless match, OR
+  /// внутри поля.
+  @override
+  List<String> domainRegexes;
   @override
   List<String> ipCidrs;
 
@@ -561,6 +694,9 @@ class CustomRuleInline extends CustomRule {
   // OR-группа #3 (package_name). AND с остальными.
   @override
   List<String> packages;
+  /// §712 — `package_name_regex` (Go RE2, не anchored), рядом с [packages].
+  @override
+  List<String> packageRegexes;
 
   // Routing-rule-level AND (не в headless).
   @override
@@ -594,6 +730,12 @@ class CustomRuleInline extends CustomRule {
   @override
   List<String> wifiBssids;
 
+  /// §694 — `network_type` / `network_is_expensive`, рядом с wifi.
+  @override
+  List<String> networkTypes;
+  @override
+  bool networkIsExpensive;
+
   /// Outbound-тег либо `kOutboundReject` (→ action: reject).
   @override
   String outbound;
@@ -619,6 +761,9 @@ class CustomRuleInline extends CustomRule {
     if (domainKeywords.isNotEmpty) {
       parts.add(getLocalText.plural("%d keywords", domainKeywords.length));
     }
+    if (domainRegexes.isNotEmpty) {
+      parts.add(getLocalText.plural("%d domain regex", domainRegexes.length));
+    }
     if (ipCidrs.isNotEmpty) parts.add(getLocalText.plural("%d cidrs", ipCidrs.length));
     if (ipIsPrivate) parts.add(getLocalText.s("private ip"));
     if (sourceIpCidrs.isNotEmpty) {
@@ -628,10 +773,16 @@ class CustomRuleInline extends CustomRule {
     final totalPorts = ports.length + portRanges.length;
     if (totalPorts > 0) parts.add(getLocalText.plural("%d ports", totalPorts));
     if (packages.isNotEmpty) parts.add(getLocalText.plural("%d apps", packages.length));
+    if (packageRegexes.isNotEmpty) {
+      parts.add(getLocalText.plural("%d package regex", packageRegexes.length));
+    }
     if (protocols.isNotEmpty) parts.add(getLocalText.plural("%d proto", protocols.length));
     if (network.isNotEmpty) parts.add(getLocalText.plural("%d net", network.length));
     if (inbounds.isNotEmpty) parts.add(getLocalText.s("%d in", inbounds.length));
     if (wifiSsids.isNotEmpty) parts.add(getLocalText.s("%d wifi", wifiSsids.length));
+    // §694 — значения ядра (wifi/cellular/…) как есть, это не текст UI.
+    if (networkTypes.isNotEmpty) parts.add(networkTypes.join('/'));
+    if (networkIsExpensive) parts.add(getLocalText.s("metered"));
     return parts.join(' · ');
   }
 
@@ -642,10 +793,12 @@ class CustomRuleInline extends CustomRule {
     List<String>? domains,
     List<String>? domainSuffixes,
     List<String>? domainKeywords,
+    List<String>? domainRegexes,
     List<String>? ipCidrs,
     List<String>? ports,
     List<String>? portRanges,
     List<String>? packages,
+    List<String>? packageRegexes,
     List<String>? protocols,
     List<String>? network,
     bool? ipIsPrivate,
@@ -654,6 +807,8 @@ class CustomRuleInline extends CustomRule {
     List<String>? inbounds,
     List<String>? wifiSsids,
     List<String>? wifiBssids,
+    List<String>? networkTypes,
+    bool? networkIsExpensive,
     String? outbound,
     RuleDns? dns,
     // §257: `dns ?? this.dns` не позволяет обнулить — явный флаг (паттерн
@@ -672,10 +827,12 @@ class CustomRuleInline extends CustomRule {
         domains: domains ?? this.domains,
         domainSuffixes: domainSuffixes ?? this.domainSuffixes,
         domainKeywords: domainKeywords ?? this.domainKeywords,
+        domainRegexes: domainRegexes ?? this.domainRegexes,
         ipCidrs: ipCidrs ?? this.ipCidrs,
         ports: ports ?? this.ports,
         portRanges: portRanges ?? this.portRanges,
         packages: packages ?? this.packages,
+        packageRegexes: packageRegexes ?? this.packageRegexes,
         protocols: protocols ?? this.protocols,
         network: network ?? this.network,
         ipIsPrivate: ipIsPrivate ?? this.ipIsPrivate,
@@ -684,6 +841,8 @@ class CustomRuleInline extends CustomRule {
         inbounds: inbounds ?? this.inbounds,
         wifiSsids: wifiSsids ?? this.wifiSsids,
         wifiBssids: wifiBssids ?? this.wifiBssids,
+        networkTypes: networkTypes ?? this.networkTypes,
+        networkIsExpensive: networkIsExpensive ?? this.networkIsExpensive,
         outbound: outbound ?? this.outbound,
         dns: clearDns ? null : (dns ?? this.dns),
         resolve: clearResolve ? null : (resolve ?? this.resolve),
@@ -700,10 +859,12 @@ class CustomRuleInline extends CustomRule {
           _listEq(domains, other.domains) &&
           _listEq(domainSuffixes, other.domainSuffixes) &&
           _listEq(domainKeywords, other.domainKeywords) &&
+          _listEq(domainRegexes, other.domainRegexes) &&
           _listEq(ipCidrs, other.ipCidrs) &&
           _listEq(ports, other.ports) &&
           _listEq(portRanges, other.portRanges) &&
           _listEq(packages, other.packages) &&
+          _listEq(packageRegexes, other.packageRegexes) &&
           _listEq(protocols, other.protocols) &&
           _listEq(network, other.network) &&
           ipIsPrivate == other.ipIsPrivate &&
@@ -712,6 +873,8 @@ class CustomRuleInline extends CustomRule {
           _listEq(inbounds, other.inbounds) &&
           _listEq(wifiSsids, other.wifiSsids) &&
           _listEq(wifiBssids, other.wifiBssids) &&
+          _listEq(networkTypes, other.networkTypes) &&
+          networkIsExpensive == other.networkIsExpensive &&
           outbound == other.outbound &&
           dns == other.dns &&
           resolve == other.resolve);
@@ -725,10 +888,12 @@ class CustomRuleInline extends CustomRule {
         Object.hashAll(domains),
         Object.hashAll(domainSuffixes),
         Object.hashAll(domainKeywords),
+        Object.hashAll(domainRegexes),
         Object.hashAll(ipCidrs),
         Object.hashAll(ports),
         Object.hashAll(portRanges),
         Object.hashAll(packages),
+        Object.hashAll(packageRegexes),
         Object.hashAll(protocols),
         Object.hashAll(network),
         ipIsPrivate,
@@ -737,6 +902,8 @@ class CustomRuleInline extends CustomRule {
         Object.hashAll(inbounds),
         Object.hashAll(wifiSsids),
         Object.hashAll(wifiBssids),
+        Object.hashAll(networkTypes),
+        networkIsExpensive,
         outbound,
         dns,
         resolve,
@@ -766,6 +933,7 @@ class CustomRuleSrs extends CustomRule {
     this.ports = const [],
     this.portRanges = const [],
     this.packages = const [],
+    this.packageRegexes = const [],
     this.protocols = const [],
     this.network = const [],
     this.ipIsPrivate = false,
@@ -774,6 +942,8 @@ class CustomRuleSrs extends CustomRule {
     this.inbounds = const [],
     this.wifiSsids = const [],
     List<String> wifiBssids = const [],
+    this.networkTypes = const [],
+    this.networkIsExpensive = false,
     this.outbound = kDirectOutboundTag,
     this.dns,
     this.resolve,
@@ -819,6 +989,9 @@ class CustomRuleSrs extends CustomRule {
   List<String> portRanges;
   @override
   List<String> packages;
+  /// §712 — `package_name_regex` (Go RE2, не anchored), рядом с [packages].
+  @override
+  List<String> packageRegexes;
   @override
   List<String> protocols;
   /// §240 — L4-транспорт (subset of kKnownNetworks). Routing-rule level.
@@ -842,6 +1015,12 @@ class CustomRuleSrs extends CustomRule {
   List<String> wifiSsids;
   @override
   List<String> wifiBssids;
+
+  /// §694 — `network_type` / `network_is_expensive`, рядом с wifi.
+  @override
+  List<String> networkTypes;
+  @override
+  bool networkIsExpensive;
 
   @override
   String outbound;
@@ -889,6 +1068,7 @@ class CustomRuleSrs extends CustomRule {
     List<String>? ports,
     List<String>? portRanges,
     List<String>? packages,
+    List<String>? packageRegexes,
     List<String>? protocols,
     List<String>? network,
     bool? ipIsPrivate,
@@ -897,6 +1077,8 @@ class CustomRuleSrs extends CustomRule {
     List<String>? inbounds,
     List<String>? wifiSsids,
     List<String>? wifiBssids,
+    List<String>? networkTypes,
+    bool? networkIsExpensive,
     String? outbound,
     RuleDns? dns,
     bool clearDns = false, // §257 — см. CustomRuleInline.copyWith
@@ -915,6 +1097,7 @@ class CustomRuleSrs extends CustomRule {
         ports: ports ?? this.ports,
         portRanges: portRanges ?? this.portRanges,
         packages: packages ?? this.packages,
+        packageRegexes: packageRegexes ?? this.packageRegexes,
         protocols: protocols ?? this.protocols,
         network: network ?? this.network,
         ipIsPrivate: ipIsPrivate ?? this.ipIsPrivate,
@@ -923,6 +1106,8 @@ class CustomRuleSrs extends CustomRule {
         inbounds: inbounds ?? this.inbounds,
         wifiSsids: wifiSsids ?? this.wifiSsids,
         wifiBssids: wifiBssids ?? this.wifiBssids,
+        networkTypes: networkTypes ?? this.networkTypes,
+        networkIsExpensive: networkIsExpensive ?? this.networkIsExpensive,
         outbound: outbound ?? this.outbound,
         dns: clearDns ? null : (dns ?? this.dns),
         resolve: clearResolve ? null : (resolve ?? this.resolve),
@@ -942,6 +1127,7 @@ class CustomRuleSrs extends CustomRule {
           _listEq(ports, other.ports) &&
           _listEq(portRanges, other.portRanges) &&
           _listEq(packages, other.packages) &&
+          _listEq(packageRegexes, other.packageRegexes) &&
           _listEq(protocols, other.protocols) &&
           _listEq(network, other.network) &&
           ipIsPrivate == other.ipIsPrivate &&
@@ -950,6 +1136,8 @@ class CustomRuleSrs extends CustomRule {
           _listEq(inbounds, other.inbounds) &&
           _listEq(wifiSsids, other.wifiSsids) &&
           _listEq(wifiBssids, other.wifiBssids) &&
+          _listEq(networkTypes, other.networkTypes) &&
+          networkIsExpensive == other.networkIsExpensive &&
           outbound == other.outbound &&
           dns == other.dns &&
           resolve == other.resolve &&
@@ -965,6 +1153,7 @@ class CustomRuleSrs extends CustomRule {
         Object.hashAll(ports),
         Object.hashAll(portRanges),
         Object.hashAll(packages),
+        Object.hashAll(packageRegexes),
         Object.hashAll(protocols),
         Object.hashAll(network),
         ipIsPrivate,
@@ -973,6 +1162,8 @@ class CustomRuleSrs extends CustomRule {
         Object.hashAll(inbounds),
         Object.hashAll(wifiSsids),
         Object.hashAll(wifiBssids),
+        Object.hashAll(networkTypes),
+        networkIsExpensive,
         outbound,
         dns,
         resolve,

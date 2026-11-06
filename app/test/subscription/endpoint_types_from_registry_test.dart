@@ -26,7 +26,7 @@ import '../parser/engine_test_setup.dart';
 
 /// §586 — перечень типов endpoint берётся из реестра (`kind` записи
 /// протокола); `openvpn-client` — тип реестра без описания полей
-/// (`fields_unchecked`): принимается из любого источника, без предупреждений,
+/// (`order: ["*"]`, контракт 1.1.122): принимается из любого источника, без предупреждений,
 /// тело как написано, в конфиге — `endpoints[]`.
 class _FakePathProvider extends PathProviderPlatform
     with MockPlatformInterfaceMixin {
@@ -97,8 +97,12 @@ void main() {
     expect(reg.isEndpointType('tailscale'), isTrue);
     expect(reg.isEndpointType('vless'), isFalse);
     expect(reg.isEndpointType('future-proto'), isFalse);
-    expect(reg.isUncheckedType('openvpn-client'), isTrue);
-    expect(reg.isUncheckedType('vless'), isFalse);
+    expect(reg.knowsType('openvpn-client'), isTrue);
+    expect(reg.knowsType('openconnect'), isTrue);
+    expect(reg.knowsType('future-proto'), isFalse);
+    // Контракт 1.1.122 — `fields_unchecked` выражен wildcard `*` в корне.
+    expect(reg.schemaFor('openvpn-client')!.hasWildcard, isTrue);
+    expect(reg.schemaFor('vless')!.hasWildcard, isFalse);
   });
 
   test('своя запись: узел без предупреждений, в конфиге — endpoints',

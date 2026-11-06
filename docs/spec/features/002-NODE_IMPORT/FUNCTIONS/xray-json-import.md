@@ -24,7 +24,7 @@ several servers, and all of them become nodes.
 |-----------------|------|---------|
 | `vless`, `vmess`, `trojan`, `shadowsocks` | the same type | `vnext[]` / `servers[]`, `streamSettings` → `tls`/`transport` |
 | `hysteria` with `version: 2` | `hysteria2` | the fork's form; `finalmask.quicParams` does not go into the body |
-| `hysteria` with `version: 1` | — | no node |
+| `hysteria` with `version: 1` or without `version` | — | no node: `protocol_extension_unsupported`, hint `hysteria2` |
 | `wireguard` | endpoint `wireguard` | |
 | `http` | `http` | |
 | `socks` | — does not become a standalone node | only as a link |
@@ -85,3 +85,4 @@ with neighbouring sections.
 | 9 | [560](../../../tasks/560-xray-body-parse-gaps.md) | partial | Gaps in parsing Xray bodies per the corpus |
 | 10 | [561](../../../tasks/561-dropped-only-in-source-summary.md) | Done | Rejects only in `dropped[]`, not on the first node |
 | 11 | [573](../../../tasks/573-xray-finalmask-tcp-fragment.md) | Released v2.25.7 | `finalmask.tcp` fragment → `tls.fragment` |
+| 12 | [642](../../../tasks/642-contract-1-1-118-sync.md) | Done | `hysteria` v1 — an explicit reject with a hint |

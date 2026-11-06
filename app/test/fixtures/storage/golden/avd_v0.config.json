@@ -1,4 +1,13 @@
 {
+  "lx": {
+    "quic_sniff_decoy": "detour",
+    "wg": {
+      "idle_suspend": "30s",
+      "lazy_build": true,
+      "build_max": 5,
+      "idle_suspend_reachable": "5m"
+    }
+  },
   "log": {
     "level": "trace",
     "timestamp": true
@@ -22,7 +31,8 @@
         "type": "udp",
         "tag": "cloudflare_udp",
         "server_port": 53,
-        "server": "1.1.1.1"
+        "server": "1.1.1.1",
+        "detour": "vpn-1"
       },
       {
         "type": "https",
@@ -40,22 +50,20 @@
         "type": "tls",
         "tag": "cloudflare_dot",
         "server_port": 853,
-        "server": "1.1.1.1",
-        "detour": "vpn-1"
+        "server": "1.1.1.1"
       },
       {
         "type": "tls",
         "tag": "google_dot",
         "server_port": 853,
-        "server": "8.8.8.8",
-        "detour": "vpn-1"
+        "server": "8.8.8.8"
       },
       {
         "type": "tls",
         "tag": "safe_dns_dot",
         "server_port": 853,
         "server": "9.9.9.9",
-        "domain_resolver": "google_udp"
+        "domain_resolver": "google_doh"
       },
       {
         "type": "udp",
@@ -67,7 +75,8 @@
         "type": "udp",
         "tag": "opendns_udp",
         "server_port": 53,
-        "server": "208.67.222.222"
+        "server": "208.67.222.222",
+        "detour": "vpn-1"
       },
       {
         "type": "https",
@@ -78,8 +87,7 @@
         "tls": {
           "enabled": true,
           "server_name": "dns.quad9.net"
-        },
-        "detour": "vpn-1"
+        }
       },
       {
         "type": "group",
@@ -88,9 +96,7 @@
           "google_doh",
           "google_dot",
           "cloudflare_dot",
-          "opendns_doh",
-          "quad9_doh",
-          "yandex_dot"
+          "quad9_doh"
         ],
         "mode": "fastest",
         "error_ttl": "5m",
@@ -115,27 +121,6 @@
         "path": "/dns-query",
         "domain_resolver": "google_udp",
         "tag": "doh3_411_test"
-      },
-      {
-        "type": "https",
-        "tag": "opendns_doh",
-        "server_port": 443,
-        "server": "208.67.222.222",
-        "path": "/dns-query",
-        "tls": {
-          "enabled": true,
-          "server_name": "dns.opendns.com"
-        }
-      },
-      {
-        "type": "tls",
-        "tag": "yandex_dot",
-        "server_port": 853,
-        "server": "77.88.8.8",
-        "tls": {
-          "enabled": true,
-          "server_name": "common.dot.dns.yandex.net"
-        }
       }
     ],
     "rules": [
@@ -265,7 +250,8 @@
   "outbounds": [
     {
       "type": "direct",
-      "tag": "direct-out"
+      "tag": "direct-out",
+      "connect_timeout": "15s"
     },
     {
       "type": "block",
@@ -515,7 +501,10 @@
   ],
   "route": {
     "find_process": true,
-    "default_domain_resolver": "dns_shield",
+    "default_domain_resolver": {
+      "server": "dns_shield",
+      "disable_optimistic_cache": true
+    },
     "rules": [
       {
         "action": "sniff",
@@ -552,13 +541,5 @@
     {
       "type": "oom-killer"
     }
-  ],
-  "lx": {
-    "wg": {
-      "idle_suspend": "30s",
-      "idle_suspend_reachable": "5m",
-      "lazy_build": true,
-      "build_max": 5
-    }
-  }
+  ]
 }

@@ -106,7 +106,7 @@ packages:
     source: hosted
     version: "0.3.5+6"
   characters:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: characters
       sha256: faf38497bda5ead2a8c7615f4f7939df04333478bf32e4173fcb06d428b5716b
@@ -781,22 +781,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.2.1"
-  re_editor:
-    dependency: "direct main"
-    description:
-      name: re_editor
-      sha256: "66671c4774a6b4c5254c9a53ab35a083e7e7da9ae371c519bcf491c70a2a4e56"
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.10.0"
-  re_highlight:
-    dependency: "direct main"
-    description:
-      name: re_highlight
-      sha256: "6c4ac3f76f939fb7ca9df013df98526634e17d8f7460e028bd23a035870024f2"
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.0.3"
   record_use:
     dependency: transitive
     description:

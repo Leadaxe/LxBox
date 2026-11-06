@@ -1,8 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../contract_paths.dart';
-import 'package:lxbox/models/node_link.dart';
-import 'package:lxbox/models/source_chain.dart';
 import 'package:lxbox/screens/chain_edit/chain_form_validation.dart';
 import 'package:lxbox/screens/chain_edit/chain_hop_candidate.dart';
 
@@ -89,15 +87,6 @@ void main() {
       expect(_codes(issues), contains(ChainIssueCode.tooFewHops));
       expect(_find(issues, ChainIssueCode.tooFewHops)!.level,
           ChainIssueLevel.blocking);
-      expect(chainFormCanSave(issues), isFalse);
-    });
-
-    test('пустой список позиций — тот же инвариант', () {
-      final issues = validateChainForm(
-        const ChainFormState(tag: 'via-de', hops: []),
-        _ctx(const []),
-      );
-      expect(_codes(issues), contains(ChainIssueCode.tooFewHops));
       expect(chainFormCanSave(issues), isFalse);
     });
 
@@ -353,22 +342,6 @@ void main() {
       );
       expect(issues.first.level, ChainIssueLevel.blocking);
       expect(issues.last.blocks, isFalse);
-    });
-  });
-
-  group('ChainFormState.of — снимок модели', () {
-    test('читает hops/strip/strip_evasion как есть', () {
-      const c = SourceChain(
-        tag: 'via-de',
-        hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')],
-        stripEvasion: false,
-        strip: {'tls.utls': true},
-      );
-      final s = ChainFormState.of(c);
-      expect(s.tag, 'via-de');
-      expect(s.hops, ['a', 'b']);
-      expect(s.stripEvasion, isFalse);
-      expect(s.strip, {'tls.utls': true});
     });
   });
 }

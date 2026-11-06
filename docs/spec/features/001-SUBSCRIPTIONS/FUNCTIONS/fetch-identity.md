@@ -25,8 +25,8 @@ Global (Settings → Subscriptions → Fetch identity):
 | Parameter | Values | Default |
 |---|---|---|
 | Custom User-Agent | string, surrounding whitespace is trimmed; free input or a client preset | empty = `LxBox-android/<version>` |
-| Send HWID | on/off | off |
-| HWID · `x-hwid` | string; Regenerate gives a new UUIDv4 | UUIDv4, generated on first display |
+| Send HWID | on/off | on (§658); an explicit off stays off |
+| HWID · `x-hwid` | string; Regenerate gives a new UUIDv4 | UUIDv4, generated at app start while Send HWID is on (§658) |
 | `x-device-os` | string | `android` |
 | `x-ver-os` | string | the device OS version |
 | `x-device-model` | string | the device model |

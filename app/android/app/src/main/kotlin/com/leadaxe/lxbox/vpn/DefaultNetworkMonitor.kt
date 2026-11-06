@@ -101,7 +101,7 @@ object DefaultNetworkMonitor {
                 try {
                     val ni = NetworkInterface.getByName(ifName) ?: continue
                     lastIfName = ifName  // §087 — baseline для детекта последующих смен
-                    listener.updateDefaultInterface(ifName, ni.index, false, false)
+                    listener.updateDefaultInterface(ifName, ni.index, isMetered(network), false)
                     return@runCatching
                 } catch (_: Exception) {
                     Thread.sleep(50)
@@ -134,8 +134,9 @@ object DefaultNetworkMonitor {
                 val ni = NetworkInterface.getByName(ifName) ?: continue
                 maybeResetOnSwitch(ifName, s)  // §087
                 lastIfName = ifName
+                val metered = isMetered(network)
                 s.launch(Dispatchers.IO) {
-                    runCatching { l.updateDefaultInterface(ifName, ni.index, false, false) }
+                    runCatching { l.updateDefaultInterface(ifName, ni.index, metered, false) }
                 }
                 return
             } catch (_: Exception) {
@@ -161,6 +162,16 @@ object DefaultNetworkMonitor {
             runCatching { onNetworkSwitch?.invoke() }
         }
     }
+
+    /// §694 — лимитная сеть (`network_is_expensive` ядра): нет
+    /// NET_CAPABILITY_NOT_METERED. Матчер ядра читает `Expensive` интерфейса
+    /// по умолчанию из списка `getInterfaces` (там `metered` того же смысла);
+    /// аргумент `updateDefaultInterface` — тот же признак, чтобы не лгать.
+    /// Смена лимитности приходит через onCapabilitiesChanged → checkUpdate.
+    private fun isMetered(network: Network): Boolean = runCatching {
+        BoxApplication.connectivity.getNetworkCapabilities(network)
+            ?.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED) == false
+    }.getOrDefault(false)
 
     /// §119 — true, если у network есть VPN-транспорт (наш собственный tun).
     /// Источник истины: ConnectivityManager.getActiveNetwork() и

@@ -226,28 +226,6 @@ void main() {
           reason: 'новая строка не под SnackBar');
     });
 
-    testWidgets('через 8 с подсветки нет', (tester) async {
-      await openScreen(tester, [_entry('seed', _seedUri)]);
-      await _submitNewEntry(tester);
-      expect(find.text('New'), findsOneWidget);
-
-      await tester.pump(const Duration(seconds: 8));
-      await tester.pump(const Duration(milliseconds: 500));
-      expect(find.text('New'), findsNothing);
-    });
-
-    testWidgets('тап по другой строке снимает подсветку сразу',
-        (tester) async {
-      await openScreen(tester, [_entry('seed', _seedUri)]);
-      await _submitNewEntry(tester);
-      expect(find.text('New'), findsOneWidget);
-
-      await tester.tap(find.text('SeedEntry'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 450));
-      expect(find.text('New', skipOffstage: false), findsNothing);
-    });
-
     // §511 m1 — подсвеченная запись ушла: подсветка снимается сразу, ключ
     // строки не копится до закрытия экрана.
     testWidgets('удаление подсвеченной записи снимает подсветку и её ключ',

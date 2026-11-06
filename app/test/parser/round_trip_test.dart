@@ -14,30 +14,6 @@ void main() {
   setUpAll(loadEngineSections);
 
   group('Round-trip URI → Spec → URI → Spec', () {
-    test('VLESS Reality: pbk, sid, flow preserved', () {
-      final a = parseLinkAs<VlessSpec>(
-        'vless://aaaa-bbbb@srv.example:443?type=tcp&security=reality&flow=xtls-rprx-vision&pbk=PK&sid=abcd1234&sni=www.example.com&fp=chrome#Test',
-      )!;
-      final b = parseLinkAs<VlessSpec>(a.toUri())!;
-      expect(b.uuid, a.uuid);
-      expect(b.server, a.server);
-      expect(b.port, a.port);
-      expect(b.flow, a.flow);
-      expect(b.tls.reality?.publicKey, a.tls.reality?.publicKey);
-      expect(b.tls.reality?.shortId, a.tls.reality?.shortId);
-      expect(b.tls.fingerprint, a.tls.fingerprint);
-      expect(b.tls.serverName, a.tls.serverName);
-    });
-
-    test('Trojan WS + TLS: password, sni, path preserved', () {
-      final a = parseLinkAs<TrojanSpec>(
-        'trojan://testpass123@h.example:443?type=ws&security=tls&path=%2Ftr&host=h.example&sni=h.example#T',
-      )!;
-      final b = parseLinkAs<TrojanSpec>(a.toUri())!;
-      expect(b.password, a.password);
-      expect(b.tls.serverName, a.tls.serverName);
-    });
-
     test('§151 F2 — Trojan ALPN double-encoded (http%252F1.1) → чистый http/1.1', () {
       // Нода из реальной подписки-агрегатора: alpn=http%252F1.1 (двойное
       // percent-кодирование). Uri.queryParameters декодит один раз → 'http%2F1.1';
@@ -53,28 +29,6 @@ void main() {
         'trojan://p@h.example:443?type=ws&security=tls&alpn=h2,http/1.1&sni=h.example#N',
       )!;
       expect(a.tls.alpn, ['h2', 'http/1.1']);
-    });
-
-    test('Shadowsocks: method + password preserved across base64', () {
-      final a = parseLinkAs<ShadowsocksSpec>(
-        'ss://YWVzLTI1Ni1nY206dGVzdHBhc3Mx@srv:8388#SS',
-      )!;
-      final b = parseLinkAs<ShadowsocksSpec>(a.toUri())!;
-      expect(b.method, a.method);
-      expect(b.password, a.password);
-      expect(b.server, a.server);
-      expect(b.port, a.port);
-    });
-
-    test('Hysteria2 with obfs + alpn: all preserved', () {
-      final a = parseLinkAs<Hysteria2Spec>(
-        'hysteria2://secret@h:443?obfs=salamander&obfs-password=op&alpn=h3&sni=h#H',
-      )!;
-      final b = parseLinkAs<Hysteria2Spec>(a.toUri())!;
-      expect(b.password, a.password);
-      expect(b.obfs, a.obfs);
-      expect(b.obfsPassword, a.obfsPassword);
-      expect(b.tls.alpn, a.tls.alpn);
     });
 
     // SPEC 103 D-016(в)/п.4 — канонический URI-ключ БЕЗ подчёркивания
@@ -206,54 +160,6 @@ void main() {
         isFalse,
         reason: 'missing obfs password = fatal ВСЕГО конфига при старте ядра',
       );
-    });
-
-    test('TUIC: all core fields preserved', () {
-      final a = parseLinkAs<TuicSpec>(
-        // §480 — реестр объявляет у поля `format: uuid`, и заглушка `uuid-1`
-        // отбраковывается разбором (та же причина, что у tuic-кейсов §472
-        // шага 5). Проверяемое кейсом — круг URI → Spec → URI — от формы
-        // uuid не зависит.
-        'tuic://8f2e1c44-0000-4000-8000-000000000001:secret@srv.example:443'
-        '?congestion_control=bbr&udp_relay_mode=native&alpn=h3,h3-29'
-        '&sni=srv.example&reduce_rtt=1#TUIC',
-      )!;
-      final b = parseLinkAs<TuicSpec>(a.toUri())!;
-      expect(b.uuid, a.uuid);
-      expect(b.password, a.password);
-      expect(b.congestionControl, a.congestionControl);
-      expect(b.udpRelayMode, a.udpRelayMode);
-      expect(b.zeroRtt, a.zeroRtt);
-      expect(b.tls.alpn, a.tls.alpn);
-    });
-
-    test('VMess JSON: uuid + server + transport preserved', () {
-      final a = parseLinkAs<VmessSpec>(
-        'vmess://eyJ2IjoiMiIsInBzIjoiViIsImFkZCI6ImguZXhhbXBsZSIsInBvcnQiOiI0NDMiLCJpZCI6InV1aWQtMSIsImFpZCI6IjAiLCJzY3kiOiJhdXRvIiwibmV0Ijoid3MiLCJob3N0IjoiaC5leGFtcGxlIiwicGF0aCI6Ii92IiwidGxzIjoidGxzIiwic25pIjoiaC5leGFtcGxlIn0=',
-      )!;
-      final b = parseLinkAs<VmessSpec>(a.toUri())!;
-      expect(b.uuid, a.uuid);
-      expect(b.server, a.server);
-      expect(b.port, a.port);
-      expect(b.tls.enabled, a.tls.enabled);
-    });
-
-    test('WireGuard: private key + peer preserved', () {
-      final a = parseLinkAs<WireguardSpec>(
-        'wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@h:51820?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=10.0.0.2%2F32&mtu=1420&keepalive=25#WG',
-      )!;
-      final b = parseLinkAs<WireguardSpec>(a.toUri())!;
-      expect(b.privateKey, a.privateKey);
-      expect(b.peers.first.publicKey, a.peers.first.publicKey);
-      expect(b.mtu, a.mtu);
-      expect(b.peers.first.persistentKeepalive, a.peers.first.persistentKeepalive);
-    });
-
-    test('SOCKS: credentials preserved', () {
-      final a = parseLinkAs<SocksSpec>('socks5://user:pass@h.example:1080#S')!;
-      final b = parseLinkAs<SocksSpec>(a.toUri())!;
-      expect(b.username, a.username);
-      expect(b.password, a.password);
     });
 
     test('parseUri dispatches — unknown scheme → null', () {

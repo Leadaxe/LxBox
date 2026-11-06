@@ -33,14 +33,16 @@ sets, several route rules, DNS servers and DNS rules at once.
 | `rule` / `rules` | one route rule or an array of them, in the template language; `"@outbound"` is the target |
 | `rule_set[]` | rule-set definitions the rules refer to; `#enable` gates a set by a variable |
 | `dns_servers[]`, `dns_rule` / `dns_rules` | the DNS part; described in [005-DNS](../../005-DNS/FEATURE.md) |
-| `for_each{node_type, as, filter}` | the body is repeated per node; `@node` and `#tpl` become available |
+| `for_each_node{#filter}` | the body is repeated per node that passes `#filter`; `@node` is available, tags are built with `#tpl` |
+| `for_each_node_do{#filter, #do, #final}` | the walk collects node values into the preset's own `text_list` variables (`#append`), `#final` dedups, sorts and caps them; the body is expanded once after the walk |
 | pseudo-variables `rule_enable`, `dns_enable` with `#on_change` | react to the preset and its DNS part being toggled; recompute globals |
 
-**The catalog** (11 presets in the shipped template):
+**The catalog** (12 presets in the shipped template):
 
 | Preset | Default | Number | What it does | Variables |
 |---|---|---|---|---|
 | Traffic Processing | on, pinned | 0 | `sniff`, `hijack-dns` for `protocol: dns`, `resolve` | Packet sniffing, Sniff timeout, Hijack DNS, Resolve destination IP¹, Resolve strategy¹ |
+| Tunnel ingress | on | 940 | connections from a client tunnel (WireGuard, AWG, OpenVPN, OpenConnect): what the node's `allow_*` switches permit goes to its outbound, the rest is rejected; DNS of the closed peers is rejected | Incoming from tunnels (`reject`), Device and local network go to (`direct-out`), Gateway traffic goes to (`vpn-1`) |
 | Tailscale networks | on | 945 | for each Tailscale node: `preferred_by` → the node, resolving its DNS | DNS |
 | Private IPs | off | 950 | `ip_is_private` | Outbound (`direct-out`) |
 | Block Ads | off | 960 | external `ads-all` → reject | — |
@@ -48,21 +50,27 @@ sets, several route rules, DNS servers and DNS rules at once.
 | BitTorrent | on | 980 | `protocol: bittorrent` | Outbound (`direct-out`) |
 | VoWiFi (carrier calling) | on | 990 | `pub.3gppnetwork.org`, UDP 500/4500 | Outbound, Match IKE ports |
 | Russia-only services | off | 1110 | an external list "available only from Russia" | Outbound, Force IPv4 |
-| Ru internet segment | on | 1120 | ru TLDs, services, GeoIP-RU, Russian apps | Outbound, DNS, UDP server IP, GeoIP IP-range fallback, Russian apps by package, Force IPv4 |
+| Ru internet segment | on | 1120 | ru TLDs, services, GeoIP-RU, Russian apps | Outbound, DNS, UDP server IP, DoT server IP, DoH server IP, Encrypted DNS via Outbound, GeoIP IP-range fallback, Russian apps by package, Force IPv4 |
 | FakeIP | off | 1130 | DNS only (see 005) | DNS, Block HTTPS records |
-| Unknown traffic | off | 1150 | traffic without an owning app | outbound (`reject`) |
+| Unknown traffic | on | 1150 | traffic without an owning app | Outbound (`direct-out`; `reject` as the strict option) |
 
 ¹ a global variable by `ref`: shared by the whole app, not per rule.
 
 Variable kinds in the preset editor: a switch, a choice from a list,
 text/number, a target (Direction), a DNS server. Hidden template variables
-(`wizard_ui: hidden`) are not shown.
+(`wizard_ui: hidden`) are not shown; build-only variables
+(`wizard_ui: internal`, filled by `#do`) are neither shown nor stored.
+
+A preset has at most one loop key. The name `node` belongs to the node, so a
+preset variable named `node` or `node.*` is a load error, as are the removed
+`for_each` and any structural loop error; the whole template is rejected, not
+the single preset (the norm is `TEMPLATE_LANG.md` §6.5–§6.7).
 
 ## Inputs / Outputs
 
 **Inputs:** the template's `selectable_rules`; the preset record (id, values
 different from the defaults, the target override); global variables; the
-external set cache; nodes of the final config (for `for_each`).
+external set cache; nodes of the final config (for the node loops).
 **Outputs:** fragments in `route.rule_set`, `route.rules` (at the preset's
 position), the DNS part — in [005-DNS](../../005-DNS/FEATURE.md); the
 namespaced tags `<preset_id>:<tag>`.
@@ -82,7 +90,8 @@ namespaced tags `<preset_id>:<tag>`.
   found — tap to fix".
 - Tags declared inside a preset (DNS servers, rule sets) and references to
   them are prefixed with `<preset_id>:`; a reference to a foreign tag is left
-  as is; a `for_each` preset's tags carry no prefix (`<node>-dns`).
+  as is; a `for_each_node` preset's tags carry no prefix (`<node>-dns`), a
+  `for_each_node_do` preset's tags are prefixed as usual.
   Identical rule sets of two presets are registered once; different ones with
   the same tag — the first wins, a warning.
 - **Traffic Processing:** always seeded if missing; its switch
@@ -97,12 +106,15 @@ namespaced tags `<preset_id>:<tag>`.
   changes (the routing switch, the DNS toggle, the editor, DNS settings);
   enabling FakeIP turns off "Resolve destination IP" — see 005.
 - A preset row in the list: a caption from the changed variables, a "DNS" chip if
-  the preset touches DNS; a target picker — only for presets with a target.
+  the preset touches DNS; a target picker — only for presets with a target. A
+  `for_each_node` row lists the served node tags or says there are no
+  matching nodes; a `for_each_node_do` row has no such note.
 
 ## Boundaries
 
-- The constructs themselves (`#if`, `#enable`, `for_each`, `#tpl`, ref
-  variables, coercion) — [template language](template-language.md).
+- The constructs themselves (`#if`, `#enable`, `for_each_node` /
+  `for_each_node_do`, `#tpl`, ref variables, coercion) —
+  [template language](template-language.md).
 - The order axis, drag, the head that cannot be moved —
   [004-ROUTING](../../004-ROUTING/FEATURE.md); presets are not carried over
   by rule exchange — [rule-transfer](../../004-ROUTING/FUNCTIONS/rule-transfer.md).
@@ -112,7 +124,7 @@ namespaced tags `<preset_id>:<tag>`.
 
 - The preset catalog section of [`docs/TEMPLATE.md`](../../../../TEMPLATE.md)
   (`selectable_rules[]`, the `ui` object, the field matrix, magic variables,
-  `for_each`).
+  node loops `for_each_node` / `for_each_node_do`).
 - The preset text is the same in the templates of both sides; a new preset
   or a new preset construct goes into the launcher contract together with a
   corpus case — see [Extending the client](extending-the-client.md).
@@ -137,4 +149,6 @@ namespaced tags `<preset_id>:<tag>`.
 | 14 | [527](../../../tasks/527-dns-shield-yandex-dot-base.md) | Released v2.25.3 | The preset tag namespace; a group member must be a base catalog server |
 | 15 | [531](../../../tasks/531-ru-app-list-ruleset-in-ru-preset.md) | Done | A fourth rule set with an `#enable` gate in Ru internet segment |
 | 16 | [571](../../../tasks/571-rule-conditions-allowlist.md) | Done | A rule without conditions drops out |
-| 17 | [578](../../../tasks/578-tailscale-preset-template-for-each.md) | Spec, implementation started | The Tailscale preset: a rule per node, late seeding |
+| 17 | [578](../../../tasks/578-tailscale-preset-template-for-each.md) | Released v2.25.8, loop superseded by 643 | The Tailscale preset: a rule per node, late seeding |
+| 18 | [643](../../../tasks/643-contract-1-1-119-node-loops.md) | Released v2.25.14 | `for_each_node` / `for_each_node_do` replace `for_each`; the Tailscale preset filters by `@node.body.type` |
+| 19 | [656](../../../tasks/656-contract-1130-tunnel-ingress.md) | in progress | The Tunnel ingress preset (late default), the node fields `allow_*`, `skip_presets` → `skip_tailscale_presets` |

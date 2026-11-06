@@ -24,11 +24,6 @@ void main() {
     final assetsVersion =
         File('assets/contract/VERSION').readAsStringSync().trim();
 
-    test('реестр грузится с версией из VERSION', () {
-      expect(ContractRegistry.I.isLoaded, isTrue);
-      expect(ContractRegistry.I.version, assetsVersion);
-    });
-
     // §468 (контракт 1.1.2) — severity кода живёт в реестре, а рукописный
     // класс обязан её оттуда читать: владелец понизил `reality_fp_not_chrome`
     // до `info`, и зашитая в классе копия разошлась бы с нормой.
@@ -42,7 +37,7 @@ void main() {
     test('схема vless раскрывает tls / transports / dialer', () {
       final schema = ContractRegistry.I.schemaFor('vless');
       expect(schema, isNotNull, reason: 'у vless обязана быть секция body');
-      expect(schema!.core, '1.14.2-lx.11');
+      expect(schema!.core, '1.14.3-lx.17');
 
       // §553 — ссылки развёрнуты в поля-объекты с вложенной схемой и
       // пометкой происхождения; транспорт — с вариантами по `type`.
@@ -104,6 +99,9 @@ void main() {
       for (final type in ContractRegistry.I.protocolNames) {
         final server = ContractRegistry.I.schemaFor(type)?.fields['server'];
         if (server == null) continue;
+        // Контракт 1.1.122 — у openconnect `server` не ссылка `host`, а
+        // `host:port` или URL (схему и порт дописывает ядро), правило своё.
+        if (type == 'openconnect') continue;
         expect(server.required, isTrue, reason: '$type.server');
         expect(server.onInvalid?['action'], 'drop_node',
             reason: '$type.server');

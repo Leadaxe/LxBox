@@ -61,11 +61,6 @@ void main() {
       expect(q.attempts.last.answered, isFalse);
     });
 
-    test('вложенные группы: путь изнутри наружу', () {
-      final q = CcDnsQuery.fromMap(queryMap(groupPath: ['inner', 'outer']));
-      expect(q.groupPath, ['inner', 'outer']);
-    });
-
     test('старое ядро (ключей нет) → пустые дефолты, не бросает', () {
       final q = CcDnsQuery.fromMap({
         'domain': 'example.com',

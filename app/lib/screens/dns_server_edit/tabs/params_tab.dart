@@ -13,12 +13,20 @@ import '../../../services/l10n/locale_controller.dart';
 ///   пометка «used by <пресет/правило>»);
 /// - `template` → [TemplateVarListView] (vars: outbound/enum/dns_servers/…) —
 ///   перенос инлайн-тюнера с тайла, логика `varValues` без изменений;
+///   §695 — под vars форма тела [ServerFormSection] (правка → override);
 /// - `inline` → Tag (locked при edit existing) + Outbound (detour)
 ///   [OutboundPicker] → пишет/стирает `body['detour']` (inline-detour,
 ///   locked decision №10);
 /// - `preset` → read-only пометка (параметры живут в редакторе пресета).
 class DnsServerParamsTab extends StatelessWidget {
   const DnsServerParamsTab({super.key, required this.onSave});
+
+  /// §695 — группа (по сохранённому состоянию), у которой в списке нет ни
+  /// одного включённого члена.
+  static bool _emptyGroup(DnsServerEditController c) {
+    final r = c.resolved;
+    return r != null && r.isGroup && r.groupLiveMembers == 0;
+  }
 
   final VoidCallback onSave;
 
@@ -45,6 +53,22 @@ class DnsServerParamsTab extends StatelessWidget {
                   // §117 задача 4b: rename каскадно обновляет все ссылки
                   // (DNS-правила, resolvers, domain_resolver'ы).
                   : getLocalText.s("Renaming updates all references automatically"),
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+        // §682 — у шаблонной/пресетной записи тег правится, но смена тега
+        // сохраняет копию, а не переименовывает ссылку.
+        if (c.kind != ServerKind.inline && !c.isNew) ...[
+          TextField(
+            controller: c.tagCtrl,
+            decoration: InputDecoration(
+              labelText: getLocalText.s("Tag"),
+              border: const OutlineInputBorder(),
+              isDense: true,
+              prefixIcon: const Icon(Icons.tag, size: 18),
+              helperText: getLocalText.s("Changing the tag creates a custom copy. The original server stays in the list."),
+              helperMaxLines: 3,
             ),
           ),
           const SizedBox(height: 12),
@@ -77,19 +101,55 @@ class DnsServerParamsTab extends StatelessWidget {
                   ],
                 )
               : null,
-          value: c.enabled || c.locked,
-          onChanged: c.locked ? null : c.setEnabled,
+          // §680: лок ссылкой из списка держит включённый сервер включённым.
+          value: c.enabled || c.forceIncluded,
+          // §680: залоченный включённый — активный и ON; тап объясняет лок
+          // SnackBar'ом вместо переключения (disabled рисовался серым).
+          onChanged: c.locked && (c.enabled || c.forceIncluded)
+              ? (_) => ScaffoldMessenger.of(context)
+                ..hideCurrentSnackBar()
+                ..showSnackBar(SnackBar(
+                  content: Text(getLocalText.s(
+                    "Locked: used by %s. Remove the reference first.",
+                    c.lockedByLabel,
+                  )),
+                ))
+              // §695 — выключенную группу без живых членов в списке не
+              // включаем: сборка получила бы пустую группу.
+              : !c.enabled && !c.forceIncluded && _emptyGroup(c)
+              ? (_) => ScaffoldMessenger.of(context)
+                ..hideCurrentSnackBar()
+                ..showSnackBar(SnackBar(
+                  content: Text(getLocalText.s(
+                    "No members left in the list. Enable or add a member first.",
+                  )),
+                ))
+              : c.setEnabled,
         ),
         const Divider(),
         switch (c.kind) {
-          ServerKind.template => TemplateVarListView(
-              key: ValueKey('dns-edit-vars-${c.resolved?.tag ?? ''}'),
-              vars: c.vars,
-              model: c.varModel,
-              showSectionHeaders: false,
-              outboundOptions: c.outboundOptions,
-              dnsServerTags: c.dnsServerTags,
-              onChanged: c.setVarValue,
+          // §695 — под vars та же форма тела, что у inline: правка тела
+          // сохраняется override'ом (inline с тем же тегом). Detour у
+          // шаблонного сервера — var `outbound` выше.
+          ServerKind.template => Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TemplateVarListView(
+                  key: ValueKey('dns-edit-vars-${c.resolved?.tag ?? ''}'),
+                  vars: c.vars,
+                  model: c.varModel,
+                  showSectionHeaders: false,
+                  outboundOptions: c.outboundOptions,
+                  dnsServerTags: c.dnsServerTags,
+                  onChanged: c.setVarValue,
+                ),
+                // Тип вне формы (local) — правка только JSON-ом, а JSON у
+                // шаблонной записи read-only: формы нет.
+                if (c.serverMode != null) ...[
+                  if (c.vars.isNotEmpty) const Divider(),
+                  ServerFormSection(c: c),
+                ],
+              ],
             ),
           // §117 задача 4b: структурная форма (UDP/DoT/DoH + адрес/порт/
           // path/SNI/domain_resolver) + detour-пикер.
@@ -104,7 +164,8 @@ class DnsServerParamsTab extends StatelessWidget {
                 // пикер для группы не рисуем вовсе.
                 // §435 — у `tailscale` транспорт задаёт `endpoint` (узел
                 // tailnet), поля `detour` у типа нет — пикер тоже прячем.
-                if (!c.isGroup && !c.isTailscale)
+                // §699 — у `hosts` ответ локальный, dial-полей нет вовсе.
+                if (!kDnsAddresslessModes.contains(c.serverMode))
                   Padding(
                     padding: const EdgeInsets.fromLTRB(0, 16, 0, 0),
                     child: Column(
@@ -157,7 +218,9 @@ class DnsServerParamsTab extends StatelessWidget {
         const SizedBox(height: 12),
         FilledButton.icon(
           icon: const Icon(Icons.save, size: 18),
-          label: Text(getLocalText.s("Save")),
+          label: Text(c.savesAsCopy
+              ? getLocalText.s("Save as copy")
+              : getLocalText.s("Save")),
           onPressed: onSave,
         ),
       ],

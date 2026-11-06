@@ -96,8 +96,10 @@ The feature keeps four principles:
   **Mutation:** axes joined by OR.
 - **P11. The filter lives for the whole app session.** Switching tabs and
   leaving statistics do not reset it; reset — "Reset all" or a restart.
-  **Witness:** units "the filter survives unmount/remount", "clearAll resets
-  the session filter". **Mutation:** the filter is a field of the screen.
+  **Witness:** units "the state is visible to the "new State" (simulated tab
+  re-creation)" (`profiler_filters_test.dart`), "activeCount counts the axes" —
+  `clearAll` zeroes the count (`profiler_filter_test.dart`). **Mutation:** the
+  filter is a field of the screen.
 - **P12. Aggregates are honest, export is complete.** Events without an owner
   do not enter the by-domain and by-IP summaries; the export contains the
   event list and recomputed summaries. **Witness:** units "serialises the
@@ -255,5 +257,5 @@ STOP ──► unsubscribe; the log is frozen until the next START
   2000-01-01 are "no data" sentinels, not dates (§353).
 - The event's `extra` must serialise to JSON, otherwise the Debug API loses the
   server, the source and the group trace that the screen shows (§315).
-- Export uploads the whole log, not the filtered list, although the serialiser
-  is meant for the filtered one (task candidate, 591).
+- Export hands over the whole log regardless of the active filter; the share
+  caption names the number of events. Kept as is (audit 591, 2026-10-13).

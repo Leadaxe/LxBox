@@ -146,6 +146,8 @@ Save as Y: flush to disk → scene → slot Y → current = Y (tunnel not touche
   name is not shown in the notification.
 - There are no subscriptions shared between sets (the overlay model was
   rejected).
+- The theme is shared by all sets, while the language belongs to a set —
+  by design (audit [591](../../tasks/591-spec-kit-revision-audit.md), 2026-10-13).
 - The backup covers only the scene, not the slots; to export a slot, load it
   and make a backup. Importing a backup directly into a slot is not supported —
   [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.md).

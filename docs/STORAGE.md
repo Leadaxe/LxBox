@@ -35,7 +35,7 @@ lxbox_settings.json                          # SettingsStorage (Dart), the main 
 │       ├─ detour_policy         object?       LxBox: the four flags, only when not default
 │       ├─ import_rules[], import_rules_enabled, on_update_action     LxBox (§302, §323)
 │       ├─ meta, last_updated, last_update_attempt, last_update_status,
-│       │  last_node_count, consecutive_fails                         LxBox runtime
+│       │  last_node_count, total_node_count, consecutive_fails       LxBox runtime
 │       │                        — server (UserServer) —
 │       ├─ id, tag, enabled
 │       ├─ origin                object        {kind: uri|wg_ini|json, raw} — the original text, re-parsed on load
@@ -68,8 +68,11 @@ lxbox_settings.json                          # SettingsStorage (Dart), the main 
 │       └─ resolve               object?       §247 — {only, strategy?, serverTag?, …}
 │
 ├─ dns                           object          §044/§061/§439 — DNS records
-│   ├─ servers[]                 list          {kind: user|preset|template, …}
+│   ├─ servers[]                 list          {kind: user|preset|template, …}; user with a template tag = override (§117/§695)
 │   └─ rules[]                   list          {kind: user|preset|srs|template, …}
+│
+├─ mixins[]                      list?         §704 — user inserts into the final core config, in apply order
+│   └─ <Mixin>                   object          {id, name, enabled, target, op, value}
 │
 ├─ ping_options                  object          §040
 │   ├─ url                       string?       global default URL
@@ -79,8 +82,6 @@ lxbox_settings.json                          # SettingsStorage (Dart), the main 
 │       └─ <groupTag>            object          {url?, timeout_ms?}
 │
 ├─ route_final                   string        override sing-box route.final
-├─ route_idle_suspend            string        §215/§128 — idle-suspend threshold (lx.wg.idle_suspend);
-│                                                a duration ("30s"/"5m"), default "30s" (ENABLED), "" = off; config-significant
 ├─ enabled_groups[]              list          §125 DEPRECATED — read only by the directions[] migration. Safe debris.
 ├─ directions[]                  list          §125 — routing directions (template→storage). See below.
 │   └─ <item>                    object
@@ -107,10 +108,13 @@ lxbox_settings.json                          # SettingsStorage (Dart), the main 
 ├─ last_global_update            ISO-8601      LEGACY (§593) — neither written nor read; kept known for old files
 ├─ presets_migrated              bool          §159 — the "default presets have been seeded" guard (fresh-install seed)
 ├─ late_presets_seeded           List<String>  §578 — late default presets already seeded once (e.g. tailscale)
-├─ interrupt_connections_on_switch  bool       §143 — tear down the switched group's connections when the node changes (default false, NOT config-significant)
+├─ interrupt_connections_on_switch  bool       LEGACY (§143 §9) — removed toggle; the startup migration moves it into directions[] and deletes it
 ├─ node_sort_mode                string        §100 — the chosen node sort mode ('' means the template default)
 ├─ node_manual_order[]           list          §100 — the manual order of node tags (for mode=manual)
 ├─ profiler_retention_sec        int           §044 — the profiler's live-journal window, default 600 (10 min); NOT config-significant
+├─ editor_magnifier              bool          §660 — the code editor's selection magnifier, default true; NOT config-significant
+├─ mixin_target_suggestions      bool          §704 — the mixin form's Target autocomplete suggestions, default true; NOT config-significant
+├─ node_budget                   int           §714 — the app-wide node budget, default 1000 (absent key), min 1, no upper limit
 ├─ warp_account                  object?       §025 — the cached WARP account (see the section below)
 ├─ masque_account                object?       §130 — the cached MASQUE-WARP account (see the section below)
 ├─ tun_apps                      object        §046 — split tunneling (see the section below)
@@ -123,8 +127,12 @@ lxbox_settings.json                          # SettingsStorage (Dart), the main 
     ├─ core_logs_enabled         bool          default false  — forwarding of the sing-box logs
     ├─ allow_bypass              bool          default false  — Allow VPN bypass (§069)
     ├─ auto_redirect             bool          default false  — auto-redirect
-    └─ memory_limit              string        default "auto" — §271: the core's memory limit
-                                                 (auto|off|"200"|"384"|"512"|"768" MB)
+    ├─ memory_limit              string        default "auto" — §271/§705: memory threshold on the core's runtime memory (core lx.29+)
+    │                                            (auto|off|"200"|"384"|"512"|"768" MB)
+    ├─ notification_stop         bool          default true   — §707: the Stop button in the VPN notification
+    ├─ notification_restart      bool          default true   — §707: the Restart button
+    ├─ notification_send         bool          default true   — §707: the Send button (Taildrop)
+    └─ app_theme_mode            string        default "system" — §707: system|light|dark; not mirrored to Kotlin
 
 # §439 — the 2.23.2 keys (server_lists / chains / custom_rules / dns_options) and the
 # keys with no readers (excluded_nodes / preset_ids_remapped / proxy_sources /
@@ -167,9 +175,8 @@ Context.filesDir/                           # native `files/` = Dart getApplicat
     ├── <url.hashCode>
     └── <url.hashCode>.headers
 
-Android SharedPreferences:
-├── Flutter prefs                # app_theme_mode, haptic_enabled, …
-└── boxvpn_boot.*                # pre-Flutter boot flags
+Android SharedPreferences (shared_prefs/):  # two files, boxvpn_boot and lxbox_native_cache —
+                                            #   see ARCHITECTURE §5 "Persistent storage"
 ```
 
 `[workspace]` — part of a saved workspace (§417): copied into `workspaces/<name>/` on Save as and back on Load. `[device]` — stays with the device, never copied.
@@ -200,9 +207,9 @@ Android SharedPreferences:
   "sources":            [ … ],     // §439 — subscription / server / folder records, then chain records
   "rules":              [ … ],     // §439 — route rule records: inline / srs / preset
   "dns":                { … },     // §439 — {servers[], rules[]} records
+  "mixins":             [ … ],     // §704 — user inserts into the final core config (config-significant)
   "ping_options":       { … },
   "route_final":        "<tag>",   // override route.final
-  "route_idle_suspend": "30s",     // §215/§128 — idle-suspend threshold (default "30s"; "" = off)
   "enabled_groups":     [ … ],     // §125 DEPRECATED (read only by the directions[] migration)
   "directions":         [ … ],     // §125 — routing directions (template→storage)
   "directions_migrated": true,     // §125/§393 — the guard for the one-shot directions migration
@@ -210,10 +217,12 @@ Android SharedPreferences:
   "last_global_update": "ISO-8601",// LEGACY (§593) — present only in old files
   "presets_migrated":   true,      // §159 — the "defaults seeded" guard (fresh-install seed)
   "late_presets_seeded": [ "tailscale" ], // §578 — late default presets seeded once
-  "interrupt_connections_on_switch": false, // §143 — tear down the group's conns on a node switch (NOT config-significant)
   "node_sort_mode":     "",        // §100
   "node_manual_order":  [ … ],     // §100
   "profiler_retention_sec": 600,   // §044 — the profiler's live-journal window (NOT config-significant)
+  "editor_magnifier":   true,      // §660 — the code editor's selection magnifier (NOT config-significant)
+  "mixin_target_suggestions": true, // §704 — the mixin form's Target suggestions (NOT config-significant)
+  "node_budget":        1000,      // §714 — app-wide node budget; absent = 1000
   "warp_account":       { … },     // §025 — the cached WARP account (secrets)
   "masque_account":     { … },     // §130 — the cached MASQUE-WARP account (secrets)
   "tun_apps":           { … },     // §046 — split-tunneling
@@ -395,6 +404,8 @@ For test benches: `GET /backup/export?include=storage&from=v0_bak` returns `.v0.
 
 A flat `Map<String, String>` (values are stringified on read). It serves both **template substitution** (any `@name` in `wizard_template.json` is filled in from here) and app feature flags — the two live in the same map.
 
+§643 (contract 1.1.119, D-132): a template var with `wizard_ui: "internal"` is never stored — neither here nor in a preset rule's `vars`; the writer drops the key silently and the build ignores a stored value (the base is `default_value`). A `text_list` var with `unique: true` is stored without duplicate lines.
+
 ### Known keys
 
 | Key | Default | Spec | What it does |
@@ -424,7 +435,7 @@ A flat `Map<String, String>` (values are stringified on read). It serves both **
 | `automation_emit_health` | `'false'` | §047 | Emitting health events. Default OFF. |
 | `automation_explainer_shown_v1` | `'false'` | §047 | One-shot: the automation explainer dialog has been shown. |
 | `subscription_user_agent` | — | identity headers | The User-Agent used when fetching subscriptions. |
-| `subscription_send_hwid` | — | identity headers | Whether to send the hwid headers on a fetch. |
+| `subscription_send_hwid` | absent = on | identity headers | Whether to send the hwid headers on a fetch. Only an explicit `'false'` turns it off (§658). |
 | `subscription_hwid` | — | identity headers | The HWID (potentially identifying). |
 | `subscription_device_os` | — | identity headers | The subscription's OS header. |
 | `subscription_ver_os` | — | identity headers | The OS version header. |
@@ -442,6 +453,8 @@ A flat `Map<String, String>` (values are stringified on read). It serves both **
 > The authoritative list of app flags in code is `SettingsStorage._appFeatureFlagVars`; keep this table in sync with it.
 
 A full replace (`replaceRaw` with `merge=false`: backup restore in Replace mode, `POST /backup/import`) keeps some device keys from the current storage when the incoming `vars` lack them: `debug_enabled` / `debug_token` / `debug_port` (§413, `SettingsStorage.debugApiVarKeys`) and the one-shot startup prompt flags `wizard_battery_v1`, `wizard_addtile_v1`, `wizard_update_check_v1`, `notif_perm_prompted_v1` (§447, `SettingsStorage.startupPromptVarKeys`). None of the four startup prompt flags is in the import allowlist, so a file never brings them; import (both modes) skips them silently instead of reporting them as unknown keys (§600), while export still writes them.
+
+A merge (`replaceRaw` with `merge=true`: backup restore in Merge mode, `POST /backup/import?merge=true`) adds what the receiver lacks and keeps what it has (§633, `lib/services/backup_merge.dart`): `vars` and every other scalar key keep the receiver's value, a key the receiver lacks comes from the file; `rules`, `directions`, `dns.servers`, `dns.rules`, `mixins` and `sources` are merged by record identity (mixin — `id` or `target`+`op`+`value`; preset rule — `ref`; other rules and DNS rules — `id` or content; directions, DNS servers, chains — tag; other sources — `id`), new records are appended, new user rules get `num` past the receiver's last user rule; a preset rule is on when it is on on either side; `tun_apps` joins the packages and keeps the receiver's mode unless it is `off`. A record whose tag is taken by a receiver's chain or direction is skipped.
 
 `removeVar(k)` is not the same as `setVar(k, '')` — an empty string can be a legitimate value, while an absent key falls back to the default.
 
@@ -516,10 +529,12 @@ the whole array (`reorderSources`).
   },
   "update": { "interval_hours": 24 },         // always written. §129 special values: -1 = never
                                               // (ignore the server header; set automatically
-                                              // for file: subscriptions), 0 = not on a
-                                              // schedule, but the server's interval is
-                                              // honoured, N>0 = every N h. AutoUpdater skips
-                                              // an interval ≤ 0. Absent on read = 24.
+                                              // for file: subscriptions), 0 = "As
+                                              // subscription" (§685: the server header from
+                                              // meta, 24 h without one), N>0 = every N h.
+                                              // A fetch never overwrites the value. AutoUpdater
+                                              // skips an effective interval ≤ 0. Absent on
+                                              // read = 24.
   "disabled": {                               // §283/§400 — per-node disable (not written when
     "NL-42": 1784368800                       // empty). The key is the node's IDENTITY (contract
   },                                          // 0.10.0): the raw provider tag, made unique within
@@ -598,6 +613,7 @@ the whole array (`reorderSources`).
   "last_update_attempt":   "ISO-8601",        // any attempt
   "last_update_status":    "ok",              // never|ok|failed|inProgress; "never" is not written
   "last_node_count":       12,
+  "total_node_count":      2000,              // §714 — size before the node-budget cut; written when not 0
   "consecutive_fails":     0                  // for the UI's "(N fails)"; freezing is in-memory
 }
 ```
@@ -628,7 +644,13 @@ The `nodes` of a subscription are **not stored**: they are re-parsed from `sub_c
                                               // the text: a JSON object → json, a WG INI → wg_ini,
                                               // anything else → uri. The node is re-parsed from raw on load.
   "detour":        { "tag": "vpn-2" },        // personal detour, a NodeLink; absent = none
-  "skip_presets":  true,                      // §578 — optional, only `true` is written; see below
+  "skip_tailscale_presets": true,            // §578/§656 — optional, only `true` is written; see below
+  "allow_local":   true,                      // §656 — optional, only `true` is written; see below
+  "allow_lan":     true,                      // §656
+  "allow_gateway": true,                      // §656
+  "disable_taildrop_commands": true,          // §707 — optional, only `true` is written; see below
+  "disable_taildrop_autosave": true,          // §707
+  "state_dir_id":  "ts-ab12cd",               // §707, contract 1.1.160 — carried, not applied; see below
   "detour_policy": { … },                     // LxBox, only when a flag is not default
   "tag_policy":    { "prefix": "Home " }      // LxBox, only when set. The prefix is part of the
                                               // server's root address: changing it rewrites the
@@ -672,16 +694,73 @@ is written in the new form on the next save; the storage form version does not
 change. The node's body, tag and identity stay as they were. Only a bare body
 goes to the core verbatim (the §455 build mode above).
 
-**`skip_presets` (§578).** A record field of a server and of a folder member:
-the node is not served by presets with `for_each` whose `filter` reads the
-field (the shipped `tailscale` preset does). Only `true` is written; a missing
-field means the node is served. The field travels in a backup: on import a node
-matched by its body takes `true` from the file, and a missing field does not
-reset the local value (only `true` is stored, so absence cannot be told from
-`false`). A subscription node has no record and is always served. The UI is the
-**Skip presets** switch on the node screen, shown when the template has a
-`for_each` preset for the node's type; the Debug API returns the field in the
-node record.
+**Node record flags (§578, §656, contract 1.1.126).** Four bool fields of a
+server and of a folder member, visible to a preset's node loop as
+`@node.<field>` (`for_each_node` / `for_each_node_do`, §643). Only `true` is
+written; a missing field is `false`. A subscription node has no record: all
+four are always `false`.
+
+- `skip_tailscale_presets` — the `tailscale` preset does not serve the node
+  (its `#filter` reads the field). Until contract 1.1.126 the key was
+  `skip_presets`: it is still read from storage and from a backup of any
+  version (both keys present — `true` if either is `true`) and never written.
+  The UI is the **Skip Tailscale presets** switch on the node screen, shown
+  for a `tailscale` node when the `#filter` of some loop preset in the
+  template accepts it with the field `false`.
+- `allow_local`, `allow_lan`, `allow_gateway` — what the `tunnel-ingress`
+  preset lets the peers of this client tunnel reach: services on the
+  device's tunnel address, private networks, or anything through the
+  device as a gateway. Without them the peers' connections are rejected.
+  The UI is the **Incoming connections from this tunnel** block of three
+  switches, shown for `wireguard` (and AWG), `openvpn-client` and
+  `openconnect` nodes only; the values of other types are kept but no preset
+  reads them.
+
+The fields travel in a backup: on import a new node takes them from the file;
+a node matched by its body takes `true` from the file, and a missing field
+does not reset the local value (only `true` is stored, so absence cannot be
+told from `false`). The Debug API returns them in the node record
+(read-only).
+
+**Taildrop node fields (§707, contract 1.1.159).** Two more bool fields of a
+server and of a folder member, by the same rules: only `true` is written, a
+missing field is `false`, they do not go into the config, they travel in a
+backup, and a subscription node has no record and no fields. The fields turn a
+feature off: when Taildrop is allowed on the node, both features are on unless
+the field says otherwise. `disable_taildrop` stays in the node body as a core
+field.
+
+- `disable_taildrop_commands` — do not accept clipboard and links sent from
+  the user's own devices (sharees never count as own). Absent = accepted.
+- `disable_taildrop_autosave` — do not save received files to Downloads
+  without asking. Absent = saved; Android 10+.
+
+The names `taildrop_commands` / `taildrop_autosave` of contract 1.1.157 are not
+read (that version was never released). Kotlin does not read these fields.
+Dart computes from them two sets of final tags of the nodes where a feature is
+off and mirrors them into `boxvpn_boot` (`taildrop_commands_off_tags`,
+`taildrop_autosave_off_tags`, see [SharedPreferences](#sharedpreferences-android)).
+A tag missing from a set means the feature is on.
+
+Two more fields of a tailscale node record (contract 1.1.160), on a root
+server and on a folder member alike; a subscription node has no record and no
+fields:
+
+- `state_dir_id` (string) — the launcher's name for the node's state
+  directory. LxBox does **not** apply it: our state directory is not tied to
+  the tag or to this field, it is found through the index of §445
+  (`tailscale_state.json` by the record `id`). The field is only carried:
+  read and written as is (an empty string or a non-string = no field), goes
+  into a backup unchanged. On import a node that matches by body keeps its own
+  value (a value in the file does not overwrite it, a missing field does not
+  clear it); a new node whose name is already held by another stored node gets
+  a fresh `ts-` + 6 chars `[a-z0-9]`. Nodes without the field never get one
+  generated. Moving a node between the root and a folder keeps the value; a
+  root server split into several folder members keeps it on the first member
+  only.
+- `taildrop_double_copy` (`{peer_id, peer_name?}`) — applied by the launcher
+  only. A known key (no unknown-field warning in storage or in a backup), not
+  stored and not carried: it is dropped silently on read.
 
 #### Node sections — removed (§575)
 
@@ -716,7 +795,8 @@ detour. A subscription cannot be put into a folder, and there is no nesting.
     { "kind": "server", "tag": "Alpha", "enabled": true,
       "origin": { "kind": "uri", "raw": "vless://…#Alpha" },
       "detour": { "folder_id": "<this folder id>", "tag": "Jump" },    // §237 — personal detour
-      "skip_presets": true },                                          // §578 — as on a server
+      "skip_tailscale_presets": true,                                  // §578/§656 — as on a server
+      "disable_taildrop_autosave": true },                             // Taildrop — as on a server
     { "kind": "server", "tag": "Beta", "enabled": false,
       "origin": { "kind": "wg_ini", "raw": "[Interface]\n…" },
       "warnings": [ { "code": "core_rejected",
@@ -896,7 +976,8 @@ From the subscription's HTTP headers ([§027]):
   "support_url":           "…"?,
   "web_page_url":          "…"?,
   "profile_title":         "…"?,
-  "update_interval_hours": 24?
+  "update_interval_hours": 24?,
+  "announce":              "…"?    // §648 — описание подписки (заголовок announce)
 }
 ```
 
@@ -965,9 +1046,9 @@ Only non-empty matchers are written. `name` is user-supplied and mutable.
 
 OR semantics inside a category, AND between them. `protocol` and `ip_is_private` are not made headless — they are lifted to the routing-rule level.
 
-`dns` ([§117] task 3, “DNS follows the rule”) is optional: the builder emits a mirror DNS rule `{rule_set: <the same headless one>, server: serverTag}` inside an atomic mirror group (ordered like the routing rules). Absent → the old behaviour. The gate: with non-empty `port` or `protocol` the mirror is not emitted.
+`dns` ([§117] task 3, “DNS follows the rule”) is optional: the builder emits a mirror DNS rule `{rule_set: <the same headless one>, server: serverTag}` inside an atomic mirror group (ordered like the routing rules). Absent → the old behaviour. The gate: with non-empty `port` (or port ranges), `protocol` or `network` the mirror is not emitted.
 
-`dns.forceIpv4` ([§256], Force IPv4) is optional: it suppresses AAAA (IPv6) for the rule's match through a serverless rule `{rule_set|match, ip_version: 6, action: predefined, rcode: NOERROR}` (so the app cleanly takes the A record). It is **orthogonal** to `enabled` and `serverTag` — the suppressor answers locally and needs no DNS server, so a rule may carry `forceIpv4` alone (`enabled: false`, `serverTag: ""`). It is emitted BEFORE the server mirror (the §253 order). The same port/protocol gate applies (the DNS layer is blind to port and protocol).
+`dns.forceIpv4` ([§256], Force IPv4) is optional: it suppresses AAAA (IPv6) for the rule's match through a serverless rule `{rule_set|match, ip_version: 6, action: predefined, rcode: NOERROR}` (so the app cleanly takes the A record). It is **orthogonal** to `enabled` and `serverTag` — the suppressor answers locally and needs no DNS server, so a rule may carry `forceIpv4` alone (`enabled: false`, `serverTag: ""`). It is emitted BEFORE the server mirror (the §253 order). The same port/protocol/network gate applies (the DNS layer is blind to port, protocol and network).
 
 `resolve` ([§247]) is optional: the builder emits a non-terminal route rule `{rule_set: <the same headless one>, action: resolve, …}` either BEFORE the terminal route (`only: false`, the flagship case — forcing `ipv4_only` for direct branches) or INSTEAD of it (`only: true`, an advanced fall-through). The gate: for inline rules it is emitted only when the domain group is non-empty (`resolveEligible`); for srs it is always emitted, since a `.srs` may contain domains.
 
@@ -1072,6 +1153,13 @@ the model's own words (`inline`, `rule`, `presetId`, `varValues`) and a dead `ru
 
 ### `dns.servers[i]`
 
+§680 — the presence of the `dns.servers` key is the "seeded" mark: while it is
+absent (the first launch) the resolver seeds the template's servers and writes
+the key; once it exists the template servers are never re-added (an empty list
+stays empty). New template servers show up in the catalog under (+), not in the
+list. Read it with `SettingsStorage.hasDnsServersList()` — `getDnsServers()`
+returns `[]` both for a missing key and for an empty list.
+
 ```jsonc
 { "kind": "user", "tag": "my-doh", "enabled": true,
   "body": { "type": "https", "server": "1.1.1.1" },     // a partial sing-box server WITHOUT tag
@@ -1084,7 +1172,7 @@ the model's own words (`inline`, `rule`, `presetId`, `varValues`) and a dead `ru
 ```
 
 - `template` — a reference to a server from the template ([§117]: a `{vars, server}` wrapper, with the tag in `server.tag`). The user can override `enabled` and `description` and choose var values (`vars`: the `outbound` direction, the IP profile, the domain resolver — see TEMPLATE.md); the body is resolved from the template by substituting the `@var`s (`resolveTemplateDnsServerBody`).
-- `preset` — a server declared by a template preset. The identity is `ref` = `<preset_id>:<tag inside the preset>`, split on the first `:`; a server of a `for_each` preset (§578) is the exception: its tag is not namespaced (`<node tag>-dns`), so `ref` is the bare tag and no preset id is stored — the DNS screen takes the owner from the expanded preset body; that string is also the server's config tag (the builder namespaces preset tags, `namespacePresetTags`) and the model's `tag`, so `ref` and tag are one string. Auto-discovery fills the preset id when the server is added; a `ref` without `:` (the preset was not found) is the tag, and orphan cleanup follows. A repeated namespace written by early 2.23.3 builds (`ru-direct:ru-direct:dns_ru`) is read as `ru-direct:dns_ru` and never written.
+- `preset` — a server declared by a template preset. The identity is `ref` = `<preset_id>:<tag inside the preset>`, split on the first `:`; a server of a `for_each_node` preset (§578, §643) is the exception: its tag is not namespaced (`<node tag>-dns`), so `ref` is the bare tag and no preset id is stored — the DNS screen takes the owner from the expanded preset body; that string is also the server's config tag (the builder namespaces preset tags, `namespacePresetTags`) and the model's `tag`, so `ref` and tag are one string. Auto-discovery fills the preset id when the server is added; a `ref` without `:` (the preset was not found) is the tag, and orphan cleanup follows. A repeated namespace written by early 2.23.3 builds (`ru-direct:ru-direct:dns_ru`) is read as `ru-direct:dns_ru` and never written.
 - `user` — a user-defined server (the model's `inline`). `body` is required.
 
 The tag lives **only** at the record level; the builder synthesizes `body.tag` back when assembling the config. **Render order in the UI:** `template` → `preset` → `user`.
@@ -1136,6 +1224,7 @@ part of the contract's record shape; an old file carrying `false` is read as a p
 {
   "url":        "https://…",          // global default URL
   "timeout_ms": <int>,                 // global default timeout
+  "concurrency": <int>,                // [§713] parallel checks, 1..100; absent = 10
   "presets":   [ … ],                  // pre-built URL-options (template-side)
   "groups": {                          // a per-group override (optional)
     "<groupTag>": {
@@ -1148,7 +1237,9 @@ part of the contract's record shape; an old file carrying `false` is read as a p
 
 The resolve chain in `HomeController`: `groups[tag]` → root → the template default.
 
-CRUD helpers: `setGlobalPingUrl`, `setGlobalPingTimeout`, `setGroupPing`, `clearGroupPing`. All of them are sugar over `getPingOptions` / `savePingOptions`, which read and write the whole object.
+CRUD helpers: `setGlobalPingUrl`, `setGlobalPingTimeout`, `setPingConcurrency`, `setGroupPing`, `clearGroupPing`. All of them are sugar over `getPingOptions` / `savePingOptions`, which read and write the whole object.
+
+**`concurrency` — [§713].** How many servers the home-screen mass ping and the folder's Test servers measure at once. `getPingConcurrency` clamps a stored value into `1..100` and returns `10` when the key is absent or not a number; `setPingConcurrency(null)` removes the key (App Settings → General → Parallel checks → Reset to default). It is global only, there is no per-group override.
 
 **The keys of `groups` are direction tags — [§408] holds them to living ones.** A key
 counts as living when a direction with that `tag` exists (in any state, enabled or not)
@@ -1377,7 +1468,12 @@ A JSON mirror of the Android prefs that historically lived **only** in the nativ
   "core_logs_enabled": false,    // forwarding of the sing-box logs into Dart
   "allow_bypass":      false,    // §069 — Allow VPN bypass
   "auto_redirect":     false,    // auto-redirect
-  "memory_limit":      "auto"    // §271 — the core's memory limit: auto | off | MB as a string
+  "memory_limit":      "auto",   // §271/§705 — memory threshold on the core's runtime memory (core lx.29+; whole process before): auto (none) | MB as a string; legacy "off" is read as auto
+  "notification_stop":    true,  // §707 — the buttons of the VPN notification; the notification
+  "notification_restart": true,  //   updates at once on a change
+  "notification_send":    true,
+  "app_theme_mode":    "system"  // §707 — system | light | dark; in the backup, not mirrored to Kotlin
+                                 //   (the native window follows the system night mode)
 }
 ```
 
@@ -1427,8 +1523,8 @@ setting.
 > [`vars.app_language`](#vars--template-vars--app-flags) var (the JSON var is the source
 > of truth; the cache is re-pushed by `setAppLanguage` and
 > `bootstrapAndSyncNativePrefs`); the native surfaces (the notification shade, the QS
-> tile, the shortcuts) need it while Flutter is dead. `boxvpn_boot.last_pushed_locale`
-> mirrors the last value the app itself pushed into `LocaleManager` (Android 13+) and
+> tile, the shortcuts) need it while Flutter is dead. `last_pushed_locale` (in Kotlin's
+> cache `lxbox_native_cache` since §707) holds the last value the app itself pushed into `LocaleManager` (Android 13+) and
 > anchors the three-way “system versus storage” reconciliation. Both are a documented
 > exception from `NativePrefsKeys`: membership would export them into the backup's
 > `vpn_settings` block as a second representation of one setting (the backup home of
@@ -1513,8 +1609,9 @@ After the migration the set of directions lives in `directions[]` and is edited 
   (`migrateStorageDoc`): on the file in `_load()` and on the import boundaries (internal
   backup, Debug API `/backup/import`) before `replaceRaw`, `channels` /
   `channels_migrated` become `directions` / `directions_migrated` when the new names are
-  absent (the new name wins; a legacy pair next to a list sets the guard). The merge-upsert
-  then collides on the single `directions` name and the archive wins over live data. The
+  absent (the new name wins; a legacy pair next to a list sets the guard). A merge then
+  works on the single `directions` name: live directions stay, the archive's new tags
+  are appended (§633; before it the archive replaced the live list). The
   legacy pair is **not** in any allowlist. `migrateDirectionsIfNeeded` has three
   branches: `directions` present → no-op; `directions_migrated == true` with no list →
   migrated-and-empty, stamp the marker but do **not** re-seed; otherwise → seed from the
@@ -1546,6 +1643,41 @@ After the migration the set of directions lives in `directions[]` and is edited 
 Specs: [`docs/spec/tasks/125F-configurable-channels/`](spec/tasks/125F-configurable-channels/),
 [`docs/spec/tasks/248F-detour-channels/`](spec/tasks/248F-detour-channels/)
 (the detour layer).
+
+---
+
+## `mixins` — §704, user inserts into the final core config
+
+A list of stored operations over the final config, applied in list order as the
+last build step (`applyMixins`, `lib/services/mixins/mixin_apply.dart`): after
+`sanitizeOutboundGraph`, before `validateConfig`. No key = no mixins (`setMixins([])`
+removes the key).
+
+```jsonc
+"mixins": [
+  {
+    "id": "uuid-v4",                          // generated; a backup import assigns a new one
+    "name": "Hijack DNS from dns-in",         // may be empty: the list shows "target → op"
+    "enabled": true,                          // a disabled mixin is skipped by the build
+    "target": "route.rules[action=hijack-dns]", // path language of spec 704 §3; "" = the root
+    "op": "before",                           // append|prepend|before|after|set|merge|remove
+    "value": {"inbound": ["dns-in"], "action": "hijack-dns"} // any JSON; remove: true or ["key", "a.b"]
+  }
+]
+```
+
+- Writes go through `SettingsStorage.setMixins` (the whole list) and mark the
+  config dirty (§113, config-significant). Reading is tolerant: a missing `id`
+  gets a new one, broken fields fall back to defaults, an unknown `op` survives
+  reading and becomes a build issue.
+- A mixin that fails (no match, wrong target type, unparsable path, a duplicate
+  tag in `inbounds` / `outbounds`+`endpoints` / `dns.servers`) is a fatal
+  `MixinIssue` (`lib/models/validation.dart`) carrying `mixinId`: the config is
+  not built, the mixin stays enabled.
+- Backup category: Routing. LX Backup: root section `mixins` without `id`.
+- Debug API: `/mixins` CRUD (`docs/api/debug-api-reference.md`).
+
+Spec: [`docs/spec/tasks/704-config-mixins.md`](spec/tasks/704-config-mixins.md).
 
 ---
 
@@ -1648,18 +1780,17 @@ with a warning. A legacy 0.12 file carries a root `chains[]` section (contract 0
 | Key | Type | Purpose |
 |---|---|---|
 | `route_final` | `String` | An override of `route.final` on top of the template (the chosen default outbound). `''` means the template default. A dangling reference (a deleted direction, or the legacy ✨auto) becomes `vpn-1` at build time (§125). |
-| `route_idle_suspend` | `String` | §215/§128 — the idle-suspend threshold (`lx.wg.idle_suspend`, kernel SPEC 020; the key lived at `route.lx_idle_suspend` until the `v1.14.2-lx.1` pin — §535). A duration string (`'30s'` / `'5m'`), **default `'30s'`** (enabled since v2.8.2); `''` means off (the `lx` block is not emitted at all). **Config-significant** (`markConfigDirty`). CRUD: `getIdleSuspend` / `saveIdleSuspend`. |
 | `enabled_groups` | `List<String>` | §125, **DEPRECATED** — replaced by `directions[]`. Read only by the one-shot migration; on disk it is harmless debris. |
 | `last_global_update` | `String` (ISO-8601) | **LEGACY** (§593) — once the timestamp of the last global subscription refresh (§010F). The app neither writes nor reads it any more; it stays in the import allowlist so that an old storage file or backup carrying it is accepted without an “unknown keys” warning. |
-| `presets_migrated` | `bool` | §159 — the “default presets have been seeded” guard (the fresh-install seed). The key's name is historical (it used to drive a legacy migration) and was reused so that users who had already migrated would not be seeded twice. `RoutingScreen._seedDefaultPresets` sets it to true. |
+| `presets_migrated` | `bool` | §159 — the “default presets have been seeded” guard (the fresh-install seed). The key's name is historical (it used to drive a legacy migration) and was reused so that users who had already migrated would not be seeded twice. `SettingsStorage.seedDefaultPresets` sets it to true (§644): the seed runs at app start, before every config build and on the Routing screen, so a Connect before the first Routing visit already gets the `default: true` presets; a preset already in `rules` is not duplicated. |
 | `late_presets_seeded` | `List<String>` | §578 — the ids from `kLateDefaultPresetIds` (today `tailscale`) for which the one-time step `SettingsStorage.seedLateDefaultPresets` has run. The step adds a preset the template declares `default: true` to an install that already had its defaults seeded (`presets_migrated`), enabled and with the template's `num`, then records the id here: a preset the user deleted does not come back. A fresh install marks every late id as done in its first seed. The step runs before the build reads the rules and on the Routing screen. |
-| `interrupt_connections_on_switch` | `bool` | §143 — tear down the switched group's active connections when the node changes (default `false`, NOT config-significant). See `getInterruptOnSwitch` / `setInterruptOnSwitch`. |
+| `interrupt_connections_on_switch` | `bool` | **LEGACY** (§143 §9) — the removed VPN Settings → System toggle “Interrupt connections on switch”. The core drops a direction's connections on a switch by the direction's own `interrupt_exist_connections`. The one-time step `SettingsStorage.migrateInterruptOnSwitchIfNeeded` (in `main()` after the directions seed and in `BackupService.applyImport` after a restore) turns `interrupt_exist_connections` on in every direction where it is `false` when the key is `true`, then deletes the key whatever its value. The key stays in the import allowlist so that an old backup carrying it is accepted without an “unknown keys” warning. |
 | `node_sort_mode` | `String` | §100 — the chosen node sort mode. `''` means the template default. CRUD: `getNodeSort` / `setNodeSort` (written as a pair with `node_manual_order`). |
 | `node_manual_order` | `List<String>` | §100 — the manual order of node tags (relevant in manual mode). Written together with `node_sort_mode`. |
 | `profiler_retention_sec` | `int` | §044 — the retention window of the profiler's live journal (the rolling buffer), in seconds. Default `600` (10 minutes), the UI offers 60/600/3600, and valid values are `> 0`. **NOT** config-significant. CRUD: `getProfilerRetentionSec` / `setProfilerRetentionSec`. |
-| `route_idle_suspend_reachable` | `String` | §272 — the reachable idle window (`lx.wg.idle_suspend_reachable`, §535). A duration string, default `'5m'`. **Config-significant** (`markConfigDirty`). CRUD: `getIdleSuspendReachable` / `saveIdleSuspendReachable`. |
-| `wg_build_max` | `int` | §542 — the WG/AWG build budget (`lx.wg.build_max`, core SPEC 097): how many endpoints stay built at once. Default `5`, `0` = no cap; the UI offers 0/3/5/8/12. Written to the config only together with `idle_suspend`. **Config-significant**. CRUD: `getWgBuildMax` / `saveWgBuildMax`. |
-| `wg_lazy_build` | `bool` | §542 — lazy WG/AWG build (`lx.wg.lazy_build`, core SPEC 097). Default `true`. `false` → neither `lazy_build` nor `build_max` is written. Written only together with `idle_suspend`. **Config-significant**. CRUD: `getWgLazyBuild` / `saveWgLazyBuild`. |
+| `editor_magnifier` | `bool` | §660 — the selection magnifier of the code editor (sora), one setting for the whole app; the ⋮ menu of any editor toggles it. Default `true` (a missing key reads as `true`). **NOT** config-significant. Travels in the backup with the app settings. CRUD: `getEditorMagnifier` / `setEditorMagnifier`. |
+| `node_budget` | `int` | §714 — the app-wide node budget: manual servers, enabled folder members and the nodes of enabled subscriptions together. Manual nodes are taken first and never cut; the rest is shared between enabled subscriptions equally with redistribution, and a subscription above its share keeps its first nodes (referenced nodes first) — the cut happens in the parse worker. Absent key = `1000`; a value below `1` reads as `1`; no upper limit. Changing it re-cuts subscriptions from the body cache. Travels in the backup with the app settings; not in LX Backup (its schema has no app-settings slot). CRUD: `getNodeBudget` / `setNodeBudget(null)` removes the key. |
+| `mixin_target_suggestions` | `bool` | §704 — the autocomplete suggestions under the Target field of the mixin form; the icon at the right of the field toggles them. Default `true` (a missing key reads as `true`). **NOT** config-significant. Travels in the backup with the app settings. CRUD: `getMixinTargetSuggestions` / `setMixinTargetSuggestions`. |
 | `urltest_passive_check` | `bool` | **Retired (§611)** — was §272 passive health checking (`urltest.passive_check`); core lx.12 removed the key. No longer written, emitted or exported to a backup; an old backup's value is skipped silently on import (`retiredTopLevelKeys`). Read once by the §612 migration (`SettingsStorage.migrateUrltestModeIfNeeded`, before the first build), which then deletes it. |
 | `urltest_mode_migrated` | `bool` | §612 — the guard for the one-shot migration from `passive_check` to the `failover` mode. The raw `urltest_passive_check` `true` or absent (the old default) → the Directions' `auto`, the folds' `replace.auto` and the folders' `kind: auto` members (`group.strategy`, not `group_type: selector`) with `least_test` or no `mode` become `failover`; `false` → nothing changes; `round_robin` is never touched. Then `urltest_passive_check` is deleted and this key set to `true`. Exported with Routing (as `directions_migrated`): a backup made before §612 restores without it, and the next start migrates its groups. |
 
@@ -1706,9 +1837,9 @@ with a warning. A legacy 0.12 file carries a root `chains[]` section (contract 0
 
 Not part of `lxbox_settings.json`. It serves two categories: **pre-Flutter boot flags** (read by Kotlin before the engine starts) and **UI preferences** (written by Flutter through `shared_preferences`).
 
-> **§189 — `boxvpn_boot.*` is now a MIRROR, not the original.** The six native prefs
+> **§189 — `boxvpn_boot.*` is now a MIRROR, not the original.** The native prefs
 > (`auto_start` / `keep_vpn_on_exit` / `background_mode` / `core_logs_enabled` /
-> `allow_bypass` / `auto_redirect`) are a **working copy in memory** for the Dart-less
+> `allow_bypass` / `auto_redirect` / the notification buttons, …) are a **working copy in memory** for the Dart-less
 > moments (boot, a swipe `onTaskRemoved`, `openTun`). **The source of truth is the
 > [`native_prefs`](#native_prefs--189-a-mirror-of-boxvpn_boot) section of
 > `lxbox_settings.json` (the disk)**: every write is write-through (the JSON first, then
@@ -1723,7 +1854,6 @@ Not part of `lxbox_settings.json`. It serves two categories: **pre-Flutter boot 
 
 | Key | Type | Source | Spec | Purpose |
 |---|---|---|---|---|
-| `app_theme_mode` | `"system"` / `"light"` / `"dark"` | Flutter | — | UI theme. |
 | `boxvpn_boot.auto_start_vpn` | `Boolean` | Kotlin (mirrors the JSON) | [§189] | Auto-start the VPN at boot (when it was running before). |
 | `boxvpn_boot.keep_vpn_on_exit` | `Boolean` | Kotlin (mirrors the JSON) | [§189]/§188 | Do not kill the tun on a swipe-kill. |
 | `boxvpn_boot.background_mode` | `String` | Kotlin (mirrors the JSON) | [§189] | The foreground-service mode (`never` / `lazy` / `always`). |
@@ -1732,7 +1862,13 @@ Not part of `lxbox_settings.json`. It serves two categories: **pre-Flutter boot 
 | `boxvpn_boot.auto_redirect` | `Boolean` | Kotlin (mirrors the JSON) | [§189] | Auto-redirect. The truth lives in `native_prefs`. |
 | `boxvpn_boot.has_tun` | `Boolean` | Kotlin (mirrors `vpn_mode`) | [§192] | **Computed**, default `true`. Gates `VpnService.prepare()`; not stored in the JSON. |
 | `boxvpn_boot.app_language` | `String` | Kotlin (mirrors `vars.app_language`) | [§279] | `system` \| `en` \| `ru`. A derived cache for the native surfaces. |
-| `boxvpn_boot.last_pushed_locale` | `String` | Kotlin | [§279] | The last value the app itself pushed into `LocaleManager` (Android 13+). |
+| `boxvpn_boot.notification_stop` / `notification_restart` / `notification_send` | `Boolean` | Kotlin (mirrors the JSON) | §707 | The buttons of the VPN notification, default `true`. The truth lives in `native_prefs`. |
+| `boxvpn_boot.taildrop_commands_off_tags` / `taildrop_autosave_off_tags` | `StringSet` | Kotlin (mirrors the node fields) | §707 | **Computed**: the final tags of the nodes with `disable_taildrop_commands` / `disable_taildrop_autosave`; a tag not in the set has the feature on. Pushed after a config build, on a switch change and at startup; not stored in the JSON. |
+| `lxbox_native_cache.clip_tag` / `clip_peer` / `clip_name` | `String` | Kotlin (`NativeCache`) | §707 | The last recipient of the Send window. Kotlin's own cache, not in the backup. |
+| `lxbox_native_cache.vpn_desired`, `sticky_restart_count`, `sticky_restart_window_start`, `shortcut_relabel_pending` | — | Kotlin (`NativeCache`) | §707 | Kotlin's run state, moved out of `boxvpn_boot`; old values there are not carried over. |
+| `lxbox_native_cache.last_pushed_locale` | `String` | Kotlin (`NativeCache`) | [§279] | The last value the app itself pushed into `LocaleManager` (Android 13+). |
+
+`lxbox_automation` and the Flutter `shared_preferences` file are reviewed separately. The app theme is `native_prefs.app_theme_mode`, not mirrored here.
 
 ---
 

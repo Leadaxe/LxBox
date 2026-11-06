@@ -34,7 +34,7 @@ milliseconds. `startTailscaleSSHSession` is not used.
 | Called from | `scripts/build-local-apk.sh` and CI (`ci.yml` → the android job → “Fetch sing-box-lx core”) |
 | The AAR in git | NO (~110 MB as of lx.25; `app/android/app/libs/` is in `.gitignore`); `build.gradle.kts` → `implementation(files("libs/libbox.aar"))` |
 
-**The current pin: `v1.14.2-lx.12`** (see `app/android/libbox.version`) — lx.1
+**The current pin: `v1.14.4-lx.31`** (see `app/android/libbox.version`) — lx.1
 plus XHTTP HTTP-version parity (**SPEC 104**, lx.2), Vision on top of VLESS
 Encryption (**SPEC 105**, lx.3), the runtime WG/AWG endpoint toggle
 (**SPEC 106**, lx.4: `CommandClient.setEndpointEnabled`, `endpointState =
@@ -43,8 +43,8 @@ default without `xmux` moved to `max_connections 3` (lx.6), three MASQUE hangs f
 (**SPEC 108**, lx.7), the sync with sing-box `stable` (lx.8), the Tailscale
 control channel on port 443 from the first connection (**SPEC 111**, lx.9),
 the headroom Tailscale needs on a direct UDP path restored in the AWG
-wireguard-go (**SPEC 112**, lx.10), one more `stable` sync (lx.11) and lx.12
-(below). The Java surface of lx.11 is identical to lx.8 (`javap` over both
+wireguard-go (**SPEC 112**, lx.10), one more `stable` sync (lx.11), lx.12 and
+lx.13-rc.1, lx.13, lx.14, lx.15, lx.16–lx.18, lx.19–lx.21, lx.22–lx.23, lx.24-rc.1/rc.2, lx.24, lx.25, lx.26, lx.27, lx.28, lx.29, lx.30-rc.1, lx.30-rc.2, lx.30-rc.3, lx.30 and lx.31 (below). The Java surface of lx.11 is identical to lx.8 (`javap` over both
 `classes.jar`). The `lx.1` layers: **SPEC 097**, **SPEC 098**, **SPEC 101** and
 the upstream sync to sing-box **1.14.2** (**SPEC 102**).
 
@@ -83,6 +83,407 @@ and hides the section), reads the new `TailscalePeer` fields and
 back below lx.12 is harmless for the config (no `passive_check` is written any
 more), but loses `failover` and the status calls once §612/§613 land.
 
+**`v1.14.2-lx.13-rc.1`** — a release candidate about the AWG decoy `ip=quic`;
+the base stays sing-box v1.14.2 as in lx.12, no upstream drift taken. The
+`ip=quic` decoy is generated before every handshake (the lx hook
+`SetDecoyPacketsFunc` in the fork of wireguard-go) instead of one static `i1`
+for the endpoint's lifetime; `ib=chrome` / `ib=firefox` are real QUIC
+ClientHellos now (before: a TCP ClientHello inside the Initial), `ip=sip` sends
+only INVITE, `ip=dns` sends EDNS without options. The new `ib=chrome-full` is
+**not supported in LxBox yet**: the contract registry enumerates
+`chrome|firefox|curl`, and an unknown value is dropped with
+`awg3_field_invalid`. The field run of `chrome-full` did not happen before the
+tag. Java surface lx.12 → lx.13-rc.1 (javap over all classes of both
+`classes.jar` in one call per jar): **identical**, 258 classes and 3584
+signature lines on both sides, the `classes.jar` files are byte-identical; no
+binding change.
+
+**`v1.14.2-lx.13`** — the release of lx.13-rc.1, rebased onto sing-box
+**v1.14.3** (upstream: a network reset when the DNS servers of the default
+interface change, a sing-tun bump). On Android the DNS servers come from the
+interfaces LxBox reports (`PlatformInterfaceWrapper`, `lp.dnsServers`), so a
+change of the system resolvers on the same network now resets the network
+state the way an interface change does. `ib=chrome-full` is declared
+experimental, for test benches only (it does not pass over LTE) — client UIs do
+not expose it, so LxBox keeps dropping it with `awg3_field_invalid`. Field
+note of SPEC 009: over LTE neither `ip=dns` nor `ip=sip` brings a WARP tunnel
+up, only the QUIC decoy does.
+
+**`v1.14.3-lx.14`** — three fork layers on the same base. **SPEC 119** — the
+XHTTP `path` after the first `?` goes out verbatim as the request query, as in
+Xray (`/?proxyip=…` for Cloudflare Worker relays, sing-box-lx#36); before, the
+tail was percent-encoded into the path (`/%3Fproxyip=…/`), and a Xray server
+answered 404 to `/x%3Fed=2048`. LxBox keeps the tail since §620 (contract
+1.1.115) and **depends on this pin for it**: rolling the core back below lx.14
+turns every xhttp node with a `?…` tail into a 404. **SPEC 120** — the root
+key `lx.mtu_align` (`off` / `fill` / `clamp`, default `clamp`, plus `except`):
+a node on top of an IP tunnel (`detour`, a group under `detour`, `chain`)
+gets `mtu` (wireguard, masque) or `initial_packet_size` +
+`disable_path_mtu_discovery` (hysteria2, tuic, hysteria) sized to what the
+tunnel below carries; hysteria2 over WARP gets 1232 (IPv6 server) / 1252
+(IPv4). LxBox does not write the key, the default applies; changed fields are
+logged as Info `mtu_align: …`. MASQUE outer QUIC starts with
+`InitialPacketSize = mtu + 51` instead of 1242. **SPEC 121** — `vhttp: auto`
+remembers an h2 win for a growing window (1 s … 10 min) instead of for good.
+Build tags unchanged (`build_libbox/main.go` identical to lx.13-rc.1).
+Java surface lx.13-rc.1 → lx.14 (javap over all classes of both `classes.jar`
+in one call per jar; the lx.13-rc.1 jar is byte-identical to lx.12): 258
+classes on both sides, 3584 → 3583 signature lines, the whole diff being the
+removed `CommandServer.recordLockState(boolean)`, which LxBox never called.
+AAR sha256 `a06dbdc86aed9bc5ed018af208a04a01db216db770821eac4c4da4fb9bbd2975`
+(checked against the release `SHA256SUMS`).
+
+**`v1.14.3-lx.15`** — four fork layers on the same base. **SPEC 125** —
+`urltest` probes on every `interval` tick; before, a probe stamped its time at
+the answer and the next tick skipped the node, so nodes were probed once per
+2×`interval` (with LxBox's default `urltest_interval: 15m` that was every 30
+min; now every 15 min — twice the background probes of lx.14). A tick less
+than `interval/2` after the previous run ends is skipped. **SPEC 126** —
+`failover` (§612, "Hold until failure") also leaves a node that answers but is
+more than 2× slower than the fastest other node: one more probe, then a full
+run, and the group moves only to a node more than 1.5× faster; no config key.
+**SPEC 123** — `fingerprint: "randomized"` always carries ALPN and
+X25519MLKEM768 (REALITY to Xray ≥ v26.9.8 no longer dies for the process
+lifetime), `"random"` picks only among `chrome`, `firefox`, `safari`.
+**SPEC 122** — uTLS/REALITY drop the handshake state after a TLS 1.3
+handshake (−18…−25 KB per connection). gRPC v1.79.1 → v1.83.1 (critical
+advisory), go-jose v4.1.4. Build tags unchanged (`build_libbox/main.go`
+identical to lx.14). Java surface lx.14 → lx.15: identical (javap over all
+258 classes of both `classes.jar` in one call per jar, 3583 lines each, empty
+diff). AAR sha256
+`9146eeaa79b9c750e7c5747c74c4281fc07411627c6ac0dc2737f706f6224ecb` (checked
+against the release `SHA256SUMS`).
+
+**`v1.14.3-lx.18`** — three releases in two days, none touching the Android
+data path. lx.16 (**SPEC 127/128/129/130**) and lx.17 (**SPEC 129** hotfix)
+are about the Linux router daemon (`sing-box lxd update` self-update, named
+root commands in `daemon.json`, `/admin/info` platform fields, a Windows 7
+start fix, the procd TUN `EBUSY` retry at boot) — nothing of it is compiled
+into `libbox`. lx.18 (**SPEC 131**) removes the legacy `network` key of the
+`masque` outbound: since the schema migration it only duplicated `vhttp`
+(h3/h2) under a name that means the tcp/udp list everywhere else. A masque
+outbound that still carries `network` no longer loads (`outbounds[N].network:
+json: unknown field "network"`). LxBox emits `vhttp` and never writes
+`network` (§393, §556); since §642 (D-129) the parser does not read it either,
+so a `network` key left in an authored sing-box body now reaches the core
+verbatim (the build guard reports it as an unknown key but does not edit an
+authored body, §577) and the core refuses the config while **decoding** it,
+before any outbound exists — the error carries only the array index, no tag.
+Since §653 the app resolves that index to a tag through the config it just
+sent, disables the node and starts again (the feature 478 loop); before §653
+the start simply failed with the core's text. To keep the node, rename the key
+to `vhttp`. The flat TLS aliases (`sni`,
+`skip_cert_verify`, `fragment*`) are still accepted with a deprecation line.
+Base sing-box v1.14.3, zero drift from `upstream/stable`, Go 1.26.8. Build
+tags unchanged. Java surface lx.15 → lx.18: identical (javap over all 258
+classes of both `classes.jar` in one call per jar, 3583 lines each, empty
+diff). `strings -a` of `libbox.so` inside the AAR reports `1.14.3-lx.18`. AAR
+sha256 `ebd362a960a31cc876f0b3fa51790d33a42217eee4edeba94ae7cabf23e09fae`
+(checked against the release `SHA256SUMS`).
+
+**`v1.14.3-lx.21`** — three releases, none touching the Android data path.
+lx.19 (**SPEC 128**) stops children of the router daemon from inheriting its
+descriptors (the TUN fd kept `lxd-tun0` busy through a self-update); lx.20
+(**SPEC 129**) prints `lxd update` download progress. lx.21 (**SPEC 133**)
+adds the experimental `trusttunnel` outbound and inbound (AdGuard TrustTunnel,
+HTTP/2 and HTTP/3), plus `linux-386`/`linux-riscv64` router builds and
+UPX-packed copies. `trusttunnel` is compiled under `with_trusttunnel`, which
+the AAR does not set: in `libbox` the type is registered as a stub and a
+config with it fails to start. The parsing side of the shared code does reach
+the AAR: `lx.trusttunnel.idle_timeout` is a known key now, and
+`ProxyDisplayName` returns `Chain` for the `chain` group (was `Unknown`).
+Base sing-box v1.14.3, zero drift from `upstream/stable`, Go 1.26.8. Build
+tags unchanged. Java surface lx.18 → lx.21: identical (javap over all 258
+classes of both `classes.jar` in one call per jar, 3583 lines each, empty
+diff). `strings -a` of `libbox.so` inside the AAR reports `1.14.3-lx.21`. AAR
+sha256 `5a6c782b834d53aa8031e32a953eb9517e78b742bbc10d3474154fc05aa00e0e`
+(checked against the release `SHA256SUMS`).
+
+**`v1.14.3-lx.24-rc.2`** — SPEC 139 release 2, attributes only
+(Leadaxe/sing-box-lx#59 field run of rc.1): the app's DNS stage `app_dns`
+carries one `answer` per answer record (presentation format with TTL, the
+owner first when it differs from the queried name, SvcParam values quoted as
+`dig` prints them), one `authority` per record on NXDOMAIN / NODATA, and
+`source` = `network` / `cache` (with `cache_age`, `stale`) / `local`; the
+joined `answers` attr of `app_dns` is gone (on the `dns` stage `answers`
+stays a record count); a cached `dns` stage carries `cache_age`. Rendered by
+URL Check, task 688. No `.proto` or libbox change: `javap` over the full
+`classes.jar` is identical to rc.1 (270 classes, 3753 lines). Toolchain and
+build tags unchanged, `kCoreBuildTagsPin` moved with the pin. AAR sha256
+`bc4a2c6db3db1040c1283bb82c017259e947fb9d0c788ab082bfd568d9f4ef73`
+(checked against the release `SHA256SUMS`).
+
+**`v1.14.4-lx.24`** — stable, straight after rc.3 (rc.4 was not cut). Base
+moves to upstream sing-box v1.14.4, Go 1.26.10 (SPEC 140): group resolution
+moved into the router upstream, but the router stops at our `urltest`, so
+group behavior is as in lx.23. SPEC 139 after rc.2: findings filled (15
+codes), stages `connection` (pooled DNS server connection, child of `dns`),
+`reality`, `wake`, `wg_handshake` (with the endpoint's `detour`), `quic` and
+`auth` of MASQUE/TrustTunnel; `reuse=uncontrolled` on `dial` where an
+external module keeps its own pool; a recovered failure is never the root; a
+3xx is the answer (`status` + `location`, not followed — before it an
+`https://ya.ru` check through the router ended as `http_status = 0` with no
+failed stage, task 689); DoH/DoH3 under `fresh` on a one-off client
+(`pool=detached`). Java surface: upstream `40bc411e8` removed
+`PlatformInterface.useProcFS()` and added the static
+`Libbox.findConnectionOwner(...)` (procfs search); the core now always calls
+`findConnectionOwner`, so `PlatformInterfaceWrapper` calls the static one
+below Android 10 (minSdk 24) instead of returning `useProcFS = true`.
+Otherwise `javap` over the full `classes.jar` is identical to rc.2 (270
+classes). Build tags unchanged (`build_libbox/main.go` identical to rc.2),
+`kCoreBuildTagsPin` moved with the pin. `strings -a` of `libbox.so` reports
+`1.14.4-lx.24`. AAR sha256
+`ad32839dd5ffd52ccb2cfa7ce76fe20a29995ecac1bb7ba0f23845968109634c`
+(checked against the release `SHA256SUMS`).
+
+**`v1.14.4-lx.25`** — the same base, three changes. **SPEC 141**
+(issue #58): XHTTP `packet-up` (and `auto` without REALITY, which resolves to
+it) no longer waits for each POST's reply before the next write; writes are
+batched up to `sc_max_each_post_bytes`, at most 16 POSTs outstanding per
+stream, a failed POST fails the stream at once, the per-POST timeout grows
+with its size. **SPEC 142**: six XHTTP gaps against Xray — a `stream-up`
+write no longer hangs after the server refused the upload, the trailing
+slash on `path` follows Xray's rule when the session or packet number lives
+in the path, idle HTTP/2 connections close after 300 s, `h_keep_alive_period`
+unset means 45 s pings (negative still turns them off), Chrome fetch()
+default headers when `headers` has no `User-Agent` (no `Content-Type` on
+`packet-up` uploads), `%` in `path` is literal. **SPEC 139**: every member a
+DNS group asks gets a `dns_member` stage (subject = tag, `type`,
+`outbound`; its detour/TCP/TLS stages sit under it); a member that ended
+after the winner answered, and its cut-short `tls`/`dns` stages, are
+`SKIPPED` with `lost_race` → the winner's `dns_member` (URL Check already
+renders both since task 687's follow-up `0f130376`). `javap` over the full
+`classes.jar` identical to lx.24, build tags identical (the `-tags=` line of
+`libbox.so` is the same), `kCoreBuildTagsPin` moved with the pin. `strings`
+of `libbox.so` reports `1.14.4-lx.25`. AAR sha256
+`442b4830ea01966dc47a35735633fd7925eb46866eaa94a82788a130ef1719d4`
+(checked against the release `SHA256SUMS`).
+
+**`v1.14.4-lx.30-rc.1`** — the same base (upstream `v1.14.4`), prerelease.
+**SPEC 149** (LxBox task 706, iteration 2): `CommandClient.tailscaleLogin(tag,
+authKey)` signs a Tailscale node in with a new auth key (an empty key starts
+the interactive sign-in) without restarting the core; errors:
+FailedPrecondition (service or endpoint not running, endpoint disabled,
+already logged in — "log out first"), NotFound, InvalidArgument, Unavailable;
+a rejected key shows asynchronously in `backendState`/health. The existing
+`setEndpointEnabled(tag, enabled)` now also covers Tailscale (maps to
+WantRunning; while disabled a dial through the node fails at once with
+"Tailscale endpoint is disabled"; `endpointState` up/disabled/down; not
+persisted across a service restart). Also in the rc: x/net v0.62.0,
+x/crypto v0.58.0, grpc v1.83.2 (`go 1.26.0` in go.mod) and an Info line with
+the oom-killer mode at start (SPEC 148 §5). Java surface lx.29 → lx.30-rc.1
+(`javap` over the full `classes.jar`): one addition —
+`CommandClient.tailscaleLogin(String, String)`. Build tags identical (the
+`-tags=` line of `libbox.so`), `kCoreBuildTagsPin` moved with the pin,
+`strings` of `libbox.so` reports `1.14.4-lx.30-rc.1`. AAR sha256
+`8c5d99cbb9c2fc469db6b123a8c20d1312ae628eec8d92ce45a2c403522fb8ed` (the
+release `SHA256SUMS`). Live sign-in by key and the off/on cycle against
+control are not verified on a device.
+
+**`v1.14.4-lx.32`** — the same base (upstream `stable` v1.14.4 plus 9
+commits, Go 1.26.10). **The default of `lx.awg_masquerade` is flipped** (owner's
+decision, 2026-11-05): an absent key now means `"all"` (lx.31: `"direct"`); the
+values are the same, `"all"` | `"direct"` (bool accepted: true = all). LxBox
+task 720: template variable `awg_masquerade` (VPN Settings → Core → WireGuard,
+enum `all` / `direct`, default `all`), only `direct` is emitted — on lx.31 the
+same template would behave the opposite way, so the variable and the pin move
+together. `"direct"` of `lx.awg_masquerade` and of `lx.quic_sniff_decoy` now
+also covers a detour to a group (selector / urltest of any depth) whose current
+choice is direct; a group switched to a proxy counts as a detour from the next
+dial. No new `lx` keys; `lx.quic_sniff_decoy` unchanged. Java surface and build
+tags: the lx.31..lx.32 diff touches neither `experimental/libbox`,
+`cmd/internal/build_libbox`, `Makefile.lx`, `go.mod` nor submodules (reported by
+the core session; `javap` not re-run). AAR sha256
+`3560531d17d0a0334120d2be739aea3e874457bfce8f82f79ffbaf3776e3adf9` (legacy
+`138a6fa135730fcf07509e9123ce88c71af83ba7614869ffc971aa6f07f308a0`), matches the
+release `SHA256SUMS`. Not verified on a device or emulator.
+
+**`v1.14.4-lx.31`** — the same base, upstream `stable` v1.14.4 plus 9 commits
+(SPEC 154: DNS transport setup no longer blocks the TUN packet loop,
+OpenVPN / OpenConnect reopen UDP sockets when the tunnel addresses change,
+OpenConnect GPST / AnyConnect CSD / F5 fixes, naiveproxy v154.0.8037.49-2).
+**TrustTunnel in the AAR**: `cmd/internal/build_libbox/main.go` adds
+`with_trusttunnel` to `sharedTags` (main and legacy AAR), so `type: trusttunnel`
+is no longer rejected with “not included in this build” on Android;
+`kCoreBuildTags` gained `with_trusttunnel` (LxBox task 717 — nodes from `tt://`
+links now reach a core that runs them). **SPEC 152**: `masque`, `trusttunnel`,
+`hysteria2` and `tuic` dial their session underlay as an internal connection,
+so a `detour` on a selector follows a new selection instead of staying on the
+old node until the session dies (unit-tested only in the core). **SPEC 153**
+(issue #64): new root key `lx.awg_masquerade` — `"direct"` (default, absent =
+direct) sends the AWG masquerade burst (`ip=quic`, `i1`…) only when the
+endpoint dials on the device's own socket, through a `detour` a single
+handshake initiation goes out without the burst; `"all"` — the burst on every
+path, as before. `lx.quic_sniff_decoy` now also covers the AWG burst. LxBox
+wrote no `lx.awg_masquerade` on lx.31; the setting came with lx.32 (below). Java surface lx.30 →
+lx.31 (`javap -p` over all 270 classes of both `classes.jar`, 3903 lines each):
+identical. `strings` of `libbox.so` reports `1.14.4-lx.31`. AAR sha256
+`d862d20c0bbbf6e9e26c3cdfffd3c2d972501a5b05240b1dbd6998dc38daae85` (the
+release `SHA256SUMS`). Not verified on a device.
+
+**`v1.14.4-lx.30`** — the stable release of the lx.30 line. **SPEC 151**
+turns `lx.quic_sniff_decoy` into a mode: `off` / `detour` / `direct` / `all`
+(`true` / `false` from rc.3 stay as aliases of `all` / `off`; absent = off).
+`detour` decoys only dials carried by another outbound, `direct` only the
+device's own socket, `all` both; the owner of the core warns that a DPI on the
+user's own uplink may react to the extra byte. LxBox writes the string mode
+from the template variable `quic_sniff_decoy` (enum, default `detour`, emitted
+only for detour / direct / all, contract 1.1.152, task 709). The deprecated
+aliases `route.lx_idle_*` are removed: a config with them does not start;
+LxBox writes none (the sleep settings live in `lx.wg`). The release has no
+`.upx.tar.gz` assets (rc.3 had them; LxBox uses only the AAR). Java surface
+lx.30-rc.3 → lx.30 (`javap` over the full `classes.jar`): identical. Build tags
+identical, `kCoreBuildTagsPin` moved with the pin, `strings` of `libbox.so`
+reports `1.14.4-lx.30`. AAR sha256
+`d2abd4f911c72e817b70bed4b7c08f760e83c7bf573ae9dc7261bd5282fd2532` (the
+release `SHA256SUMS`). Not verified on a device.
+
+**`v1.14.4-lx.30-rc.3`** — the same base, prerelease. **SPEC 151**
+(QUIC sniff decoy): root-block key `lx.quic_sniff_decoy` (bool; absent = off).
+When true the core sends one `0x00` byte on every fresh QUIC dial of `masque`
+(HTTP/3), `hysteria2` and `tuic` ahead of the first Initial, so a relay that
+sniffs UDP (Xray `sniffing` + `destOverride: quic` without `routeOnly`) drops
+QUIC sniffing for the flow and does not rewrite the destination by SNI;
+servers discard the byte. LxBox writes it from the template variable
+`quic_sniff_decoy` (default on, contract 1.1.151, task 709). Java surface
+lx.30-rc.2 → lx.30-rc.3 (`javap` over the full `classes.jar`): identical. Build
+tags identical, `kCoreBuildTagsPin` moved with the pin, `strings` of
+`libbox.so` reports `1.14.4-lx.30-rc.3`. AAR sha256
+`5ed86589a343a98e38c3893d2af938d54fb894395538506c0714dc50148d7097` (the
+release `SHA256SUMS`). Not verified on a device.
+
+**`v1.14.4-lx.30-rc.2`** — the same base, prerelease. **SPEC 149 §4**
+(LxBox task 707, iteration 4): endpoint option `disable_taildrop` (bool;
+absent or false — as upstream). When true the peer API `/v0/put/` (PUT and
+the resume GET) answers 403 "Taildrop is disabled on this node",
+`SendTaildropFiles` fails with FailedPrecondition, the status reports
+`canShareFiles = false` and every peer `canReceiveFiles = false`; files
+already in `taildrop_directory` stay in the inbox. It does not toggle live —
+reload only. `TaildropFile.senderID` (stable node ID; kept in memory like
+`senderName`, both empty for files found on disk after a core restart).
+Java surface lx.30-rc.1 → lx.30-rc.2 (`javap` over the full `classes.jar`):
+two additions — `TaildropFile.getSenderID()`/`setSenderID(String)`. Build
+tags identical, `kCoreBuildTagsPin` moved with the pin, `strings` of
+`libbox.so` reports `1.14.4-lx.30-rc.2`. AAR sha256
+`e393a5e9f9e031c74732dbd060a6415f09c2804d566cd37bce66067585bdef8b` (the
+release `SHA256SUMS`). Not verified on a device.
+
+**`v1.14.4-lx.29`** — the same base (upstream `v1.14.4`, drift 0, Go
+1.26.10), stable without an rc line, one change. **SPEC 148** (issue
+sing-box-lx#62, LxBox task 705): with `SetupOptions.OomMemoryLimitHeap` set
+the memory limit is compared with the memory of the Go runtime
+(`runtime/metrics` total − released) instead of the process RSS, and the
+free-memory watch stays on in that mode. LxBox sets the flag: the core shares
+its process with Flutter, and RSS there is dominated by code pages and the UI
+(a field device: RSS 461 MB, Go runtime 42 MB). `StatusMessage.MemoryRuntime`
+carries the same figure next to `Memory` (still RSS); the app shows it as
+"Core memory" in Statistics → Memory. Java surface lx.28 → lx.29 (`javap`
+over the full `classes.jar`, 270 classes): additions only —
+`SetupOptions.get/setOomMemoryLimitHeap` and
+`StatusMessage.get/setMemoryRuntime`. Build tags identical (the `-tags=` line
+of `libbox.so`), `kCoreBuildTagsPin` moved with the pin, `strings` of
+`libbox.so` reports `1.14.4-lx.29`. AAR sha256
+`46559e7589f452640519468265002a019aaf3f3e26d3db4acf9daea29529e45b` (the
+release `SHA256SUMS`).
+
+**`v1.14.4-lx.28`** — the same base (upstream `v1.14.4`, drift 0, Go
+1.26.10), stable without an rc line, two changes, both covered by unit tests
+only. **SPEC 146**: stopping the core no longer hangs when a MASQUE node with
+`detour` (WARP over vless+ws, for example) is being pinged or dialled at that
+moment — the pending dial is cancelled. **SPEC 147** (issue sing-box-lx#61,
+LxBox task 703): after a stop that did hang, the next start takes `cache.db`
+over from the previous instance instead of failing with `initialize
+cache-file: timeout`, keeping group selection, FakeIP assignments and the
+rule-set cache; the LxBox retry of task 703 stays as a fallback. Only
+`protocol/masque` and `experimental/cachefile` changed; `experimental/libbox`,
+`build_libbox` and the proto are identical to lx.27, so the Java surface and
+build tags are unchanged; `kCoreBuildTagsPin` moved with the pin. AAR sha256
+`64cc7601945ff6323cd501c721bebc32b90852beb58ae8794abe87c97d988a32` (the release `SHA256SUMS`).
+
+**`v1.14.4-lx.27`** — the same base (upstream `v1.14.4`, drift 0, Go
+1.26.10), stable without an rc line, one change. **SPEC 145** (LxBox task
+613): `device.Down()` (the SPEC 106 toggle, idle sleep, network pause)
+destroys the WG session keys but kept the last handshake time and rx/tx, so
+after the next `Up` a peer showed the destroyed session as live. A session now
+starts at every `Up` after a `Down`: `lastHandshakeUnix` reports the current
+session only (`0` until its first handshake), `rxBytes`/`txBytes` stay device
+totals, and the new `sessionRxBytes`/`sessionTxBytes` count from the session
+start. The node card shows the session bytes, and the “no response” rule
+counts them. Java surface lx.26 → lx.27 (`javap` over the full
+`classes.jar`): additions only — `PeerStatus.get/setSessionRxBytes` and
+`get/setSessionTxBytes`. Build tags identical (the `-tags=` line of
+`libbox.so`), `kCoreBuildTagsPin` moved with the pin, `strings` of `libbox.so`
+reports `1.14.4-lx.27`. AAR sha256
+`1156fe407619f7f154121196bbc9a21384899990f6a7d0f70c9ef937db1b86e3` (the
+release `SHA256SUMS`).
+
+**`v1.14.4-lx.26`** — the same base (upstream `v1.14.4`, drift 0, Go
+1.26.10), stable without an rc line, two changes. **SPEC 143** (issue
+sing-box-lx#60, LxBox task 699): a DNS `group` takes an optional `hosts` key —
+tags of `hosts`-type servers asked before the members, in key order; a name
+they know is answered at once (an IPv4-only entry gives an empty answer to
+AAAA, the query does not reach the network), any other name or query type goes
+to `servers` by the group's mode. `hosts`/`fakeip` inside `servers` stay a start
+error; in `hosts` only `hosts`-type tags, no duplicates, not the group itself,
+not one of its `servers`. lx.25 and older reject the key as an unknown field —
+the build drops it below this version (`coreSupportsDnsGroupHosts`). **SPEC
+144**: MTU alignment (`mtu_align`) — only IP tunnels and groups carry a
+capacity upwards, any other node is a boundary (a vless member on a WG no
+longer clamps a tunnel above the group); tunnels carrying IPv6 are never
+aligned below 1280; AWG `s4` padding counts in the WG overhead.
+`experimental/libbox` and `cmd/internal/build_libbox` are unchanged since lx.25
+(`git diff` empty), so the Java surface and the build tags are those of lx.25;
+`javap` was not rerun. `kCoreBuildTagsPin` moved with the pin. AAR
+sha256 `bcd0e8a935a11b39239f4945ae254ba6b7571919583615954d02691ba34366cc`
+(the release `SHA256SUMS`).
+
+**`v1.14.3-lx.24-rc.1`** — one change that reaches the app: **SPEC 139**
+release 1, `CommandClient.startConnectionTest` — an active connection test
+through the whole core pipeline on behalf of a source, streamed as a stage
+tree (Leadaxe/sing-box-lx#59; the app's Diagnostics → URL Check, task 687).
+Plus a `urltest` `selectedOutbound` data-race hotfix. The base stays sing-box
+v1.14.3 (`upstream/stable` drift of 66 commits to v1.14.4 deferred by the core
+to the sync before stable `lx.24`); toolchain, dependencies and build tags
+(`build_libbox/main.go`) unchanged from lx.23, `kCoreBuildTagsPin` moved with
+the pin. No new config keys, no contract changes. Java surface lx.23 → lx.24-rc.1:
+additive only — 258 → 270 classes, 3583 → 3753 javap lines; added the
+`ConnectionTest*` classes (request builder, stage, finding, result, session,
+handler, iterators), `CommandClient.startConnectionTest`,
+`Libbox.newConnectionTestRequest` and the `ConnectionTestDepth*` /
+`ConnectionTestStage*` / `ConnectionTestFinding*` constants; nothing removed.
+AAR sha256 `6d422f54170ec7635096262e8ac73652fcf48521ec83c55bf79caaa418a48bc2`
+(checked against the release `SHA256SUMS`). ⚠️ rc: the core's notes ask for a
+field run of SPEC 139 on devices before stable `lx.24`.
+
+**`v1.14.3-lx.23`** — two releases, four changes that reach the app. lx.22:
+**SPEC 136** runs the first `ReferenceManager.update()` off the start path —
+start no longer waits 10–16 s for a mux handshake held by the `PostStart` URL
+test (seen on Android, two `vless` + ws + `multiplex` nodes); **SPEC 137** —
+masque `vhttp: auto` no longer leaves a drain goroutine that pins the previous
+core instance after every in-process reload (Stop/Start, profile switch),
+affected since `v1.14.0-lx.27`; **SPEC 135** (`lxd` hooks) is daemon-only.
+lx.23: **SPEC 030** restores the shutdown pre-pass as an explicit
+`QuiesceForShutdown` walk over WG/AWG endpoints — since `v1.14.0-lx.37` it
+closed no socket and every `Endpoint.Close` waited out its receive worker one
+by one. This is the main hypothesis of task 668 (a stop hanging in
+`closeService` → `instance.Close()` with WG/AWG/WARP in the config,
+Leadaxe/sing-box-lx#50); not confirmed on a device. The same release adds a
+close watchdog: a close not returned after 20 s writes the goroutine dump to
+the core log at `Warn` (`goroutine dump [i/M]`, `not returned yet: [...]`).
+On Android it reaches the app only through `writeDebugMessage` (core logs
+enabled and a subscribed sink); task 668's own watchdog (pprof dump after 5 s
+into the support pack) stays the primary source. **SPEC 138** — the
+`round_robin` pick skips a slot whose node failed its last probe; liveness is
+the node's shared URL test history, so a manual ping through the running core
+(`CommandClient.urlTest`) that fails also takes the node out of the rotation
+until the next pool check. No new config keys, no contract changes. Base
+sing-box v1.14.3, `go.mod` and `build_libbox` unchanged from lx.21, build tags
+unchanged. Java surface lx.21 → lx.23: identical (javap over all 258 classes
+of both `classes.jar`, 3583 lines each, empty diff; the `classes.jar` files
+are byte-identical, sha256 `931ef311…`). AAR sha256
+`d7be8b1297f68ad8bad47e5eb766f59501100b1e9377de403d9c53cd364ecef1` (checked
+against the release `SHA256SUMS`).
+
 **SPEC 098** moves every global knob of the fork into a root **`lx`** block,
 grouped by subsystem. The three idle keys keep their SPEC 020 semantics and
 their values; only their place in the config changed:
@@ -107,9 +508,9 @@ then.
 `lx.wg.lazy_build` (bool — endpoints start torn down, the device is built on the
 first dial; requires `idle_suspend`), `lx.wg.build_max` (int, `0` = no cap) and
 `lx.wg.build_overflow` (`wait` \| `build`). **LxBox writes `lazy_build: true`
-and `build_max` together with `idle_suspend`** (§536, settings since §542:
+and `build_max` together with `idle_suspend`** (§536, settings since §542; template variables since §709:
 `wg_lazy_build`, default `true`, and `wg_build_max`, default `5`, VPN Settings →
-System → WireGuard connections; `0` is written as `0`, which the core reads as
+Core → WireGuard; `0` is written as `0`, which the core reads as
 no cap). With lazy build switched off neither key is written: the core would
 accept `build_max` alone, but the UI greys the limit out with the toggle, so a
 greyed-out value must not act. An empty idle threshold means no `lx` block at
@@ -268,7 +669,9 @@ automatic `record_fragment` the core turns on under a `detour` — so the global
 fragmentation toggle looked enabled and did nothing on exactly the nodes that
 need it most. Nothing changed on the app side: the `applyTlsFragment` post-step
 (`post_steps/tls_transforms.dart`) never excluded REALITY nodes, so the toggle
-simply started taking effect on them. **SPEC 089**: a per-node
+simply started taking effect on them. That broke REALITY servers that refuse a
+ClientHello split across records, so since task 627 the post-step skips nodes
+with `tls.reality.enabled` ([627](spec/tasks/627-reality-no-global-fragment.md)); task 665 reverted that: REALITY inherits fragmentation like any node, and a server that refuses a split ClientHello is set to Off on the node or its source ([665](spec/tasks/665-tls-fragment-inherits-everywhere-reality-too.md)). **SPEC 089**: a per-node
 `tls.reality.key_share` — `hybrid` demands the `X25519MLKEM768` key share,
 `classical` strips it out of `key_share` and `supported_groups`, absent means
 whatever the fingerprint carries. The wire format, the AAR tag sets and the Go
@@ -306,7 +709,11 @@ server address, as Xray does (report of 2026-09-14). The Java surface is
 identical to lx.38 (full `javap` diff of `io.nekohasekai.libbox.*` — empty).
 Since lx.38 the AAR carries **`with_tailscale`** plus the eleven `ts_omit_*` trims
 (§435, contract ## 13, owner decision 2026-09-14): the `tailscale` endpoint
-and the `tailscale` DNS server type are compiled in. Measured on the fork side
+and the `tailscale` DNS server type are compiled in. `ts_omit_taildrop` is a
+no-op: sing-box has its own Taildrop (`protocol/tailscale/taildrop.go`, the
+peerapi `/v0/put/` handler) that the tag does not cut, so Taildrop is in the
+AAR (measured 2026-11-02: `.so` size and `classes.jar` identical with and
+without the tag; feature 032). Measured on the fork side
 (M1 Pro, go1.26.6, NDK r28c): the AAR build time did not grow (the Tailscale
 code was already compiled through `tailssh` under `with_gvisor`; the tag adds
 only `tsnet` and the sing-box glue) and the AAR grew by 2.58 MB (116.8 →
@@ -513,6 +920,13 @@ part *is* built from the pinned tag (`strings libbox.so` → the pinned version,
 the gomobile binding for `OutboundGroup` has not been regenerated. This does not
 affect §393 (`vhttp` is config parsing, not a Java surface), but anyone who wants
 `mode` has to wait for a core build that regenerates the binding.
+
+**First run of a `round_robin` pool.** At start the core seeds the pool
+without tests and then tests only pool members (`pool_tolerance: 0`); a manual
+URLTest of the group tests every member and rebuilds the pool
+(`sing-box-lx/docs/configuration/outbound/urltest.md`, section `balancer`).
+So LxBox does not force a group URLTest of such a group after a mass ping
+(§677).
 
 **The `masque` schema (introduced in rc.4).** The HTTP version moved from
 `network` to `vhttp`, and the TLS options moved from the flat root into a nested
@@ -918,7 +1332,7 @@ client:
 with_gvisor, with_quic, with_wireguard, with_utls, with_naive_outbound,
 badlinkname, tfogo_checklinkname0,
 with_xhttp, with_awg, with_lx_command, with_lx_idle_suspend, with_lx_chain,
-with_openvpn, with_openconnect,
+with_openvpn, with_openconnect, with_trusttunnel,
 with_tailscale, ts_omit_logtail, ts_omit_ssh, ts_omit_drive, ts_omit_taildrop,
 ts_omit_webclient, ts_omit_doctor, ts_omit_capture, ts_omit_kube, ts_omit_aws,
 ts_omit_synology, ts_omit_bird
@@ -926,7 +1340,8 @@ ts_omit_synology, ts_omit_bird
 
 `with_tailscale` joined the AAR in **lx.38** (§435, contract ## 13; the
 `ts_omit_*` tags only trim what `with_tailscale` pulls in — the upstream
-mobile set). Before lx.38 the AAR was built without it on purpose (APK size);
+mobile set; `ts_omit_taildrop` is a no-op, sing-box's own Taildrop stays in
+the AAR, measured 2026-11-02). Before lx.38 the AAR was built without it on purpose (APK size);
 LxBox's build gate keeps a Tailscale node out of the config on such a core.
 
 libbox does not export its build tags (`Libbox.version()` is the version
@@ -937,7 +1352,9 @@ re-check the list and move `kCoreBuildTagsPin`; `node_core_gate_test` fails
 until the pin matches `app/android/libbox.version`.
 
 `with_clash_api` is deliberately absent (§122 — CommandClient instead of Clash
-HTTP), and so is `with_usbip` (server-side). `with_openvpn` / `with_openconnect`
+HTTP), and so is `with_usbip` (server-side). `with_trusttunnel` is **in** since
+**lx.31** (`lx:begin trusttunnel` in `build_libbox`): before it the type loaded
+as a stub and a config with a `trusttunnel` node failed to start (task 717). `with_openvpn` / `with_openconnect`
 are **in** since the SPEC 051 upstream merge (owner's decision 2026-08-05): each
 tag gates one package holding client and server behind the same tag, and the
 server half is accepted as the price of the client — see the `lx:begin openvpn`
@@ -1049,7 +1466,22 @@ subscription), the core provides insurance in case the client misses something.
 
 | rc | What was added |
 |---|---|
-| **v1.14.2-lx.12** (current pin) | **`passive_check` removed, `urltest` mode `failover`, per-endpoint WG and Tailscale status** (§611). Fork SPEC 116 — `urltest.passive_check` is gone with no compatibility period: a config carrying it does not load, so LxBox stops writing it in the same release (§611; replacement — `failover`, §612). Fork SPEC 114 — `CommandClient.getWireGuardStatus(tag)` → `WireGuardEndpointStatus` with `peers()` (`PeerStatus`: key, endpoint, last handshake, rx/tx). Fork SPEC 115 — `CommandClient.getTailscaleStatus(tag)`, `TailscalePeer` path/endpoint/peerRelay/DERPRegionCode/lastHandshake, `TailscaleEndpointStatus.health()` (§613). Fork SPEC 117 — upstream `stable` sync (scope-based component lifecycle; WG sleep, lazy build and manual off register in the scope). Java surface additive only: 254 → 258 classes, 3519 → 3584 javap lines, nothing removed. Go 1.26.8. |
+| **v1.14.4-lx.31** (current pin) | TrustTunnel built into the AAR (`with_trusttunnel` in `sharedTags`, LxBox task 717); a `masque`/`trusttunnel`/`hysteria2`/`tuic` tunnel with `detour` on a selector follows the new selection (SPEC 152); root key `lx.awg_masquerade` `direct` (default) / `all` — the AWG masquerade burst only on the device's own socket by default (SPEC 153, issue #64); upstream `stable` v1.14.4 + 9 (SPEC 154). Java surface lx.30 → lx.31 identical (270 classes, 3903 `javap -p` lines). AAR sha256 `d862d20c0bbbf6e9e26c3cdfffd3c2d972501a5b05240b1dbd6998dc38daae85`. |
+| **v1.14.4-lx.28** | Stop no longer hangs on a MASQUE dial with `detour` (SPEC 146); `cache.db` is taken over from a previous instance that hung while stopping, no `initialize cache-file: timeout` (SPEC 147, sing-box-lx#61, LxBox task 703). Java surface unchanged. AAR sha256 `64cc7601945ff6323cd501c721bebc32b90852beb58ae8794abe87c97d988a32`. |
+| **v1.14.4-lx.27** | WG/AWG peer status per session: after enable, idle wake or network wake `lastHandshakeUnix` is `0` until a new handshake, new `sessionRxBytes`/`sessionTxBytes` count from the session start (SPEC 145, LxBox task 613). Java surface: additions only. AAR sha256 `1156fe407619f7f154121196bbc9a21384899990f6a7d0f70c9ef937db1b86e3`. |
+| **v1.14.4-lx.26** | DNS group key `hosts`: `hosts`-type servers answer the names they know before the members (SPEC 143, LxBox task 699; the build drops the key below lx.26); MTU alignment: only IP tunnels and groups carry a capacity upwards, IPv6 tunnels never below 1280, AWG `s4` in the WG overhead (SPEC 144). Java surface unchanged (`experimental/libbox` identical to lx.25). AAR sha256 `bcd0e8a935a11b39239f4945ae254ba6b7571919583615954d02691ba34366cc`. |
+| **v1.14.4-lx.25** | XHTTP `packet-up` uploads batched and pipelined, no longer one write per round trip (SPEC 141, issue #58); six XHTTP gaps against Xray closed (SPEC 142: `stream-up` hang on a refused upload, trailing slash, HTTP/2 idle close and 45 s pings, Chrome default headers, literal `%`); connection test: `dns_member` stage per DNS group member, losers `SKIPPED` with `lost_race` (SPEC 139). `javap` identical to lx.24. AAR sha256 `442b4830ea01966dc47a35735633fd7925eb46866eaa94a82788a130ef1719d4`. |
+| **v1.14.4-lx.24** | Stable SPEC 139 (connection test) on the upstream v1.14.4 base (SPEC 140, Go 1.26.10). After rc.2: findings, stages `connection`/`reality`/`wake`/`wg_handshake`/`quic`/`auth`, a 3xx is the answer with `location`, DoH/DoH3 one-off under `fresh`. Java surface: `PlatformInterface.useProcFS()` removed, static `Libbox.findConnectionOwner` added (procfs; called below Android 10). AAR sha256 `ad32839dd5ffd52ccb2cfa7ce76fe20a29995ecac1bb7ba0f23845968109634c`. |
+| **v1.14.3-lx.24-rc.2** | SPEC 139 release 2 — `app_dns` answer records (`answer` per record with TTL, `authority` on NXDOMAIN/NODATA, `source` network/cache/local with `cache_age`/`stale`), `cache_age` on cached `dns` stages; URL Check renders them (task 688). Attributes only: `javap` identical to rc.1. AAR sha256 `bc4a2c6db3db1040c1283bb82c017259e947fb9d0c788ab082bfd568d9f4ef73`. |
+| **v1.14.3-lx.24-rc.1** | SPEC 139 release 1 — `CommandClient.startConnectionTest`: active connection test with a streamed stage tree (Diagnostics → URL Check, task 687); `urltest` `selectedOutbound` race hotfix. Base v1.14.3, upstream drift deferred. No new config keys. Java surface additive: 258 → 270 classes. AAR sha256 `6d422f54170ec7635096262e8ac73652fcf48521ec83c55bf79caaa418a48bc2`. |
+| **v1.14.3-lx.23** | lx.22: SPEC 136 — start no longer waits 10–16 s for an unrelated mux handshake; SPEC 137 — masque `vhttp: auto` no longer pins the previous core instance after each reload. lx.23: SPEC 030 — fast stop with many WG/AWG endpoints again (the shutdown pre-pass was dead since `v1.14.0-lx.37`; main hypothesis of task 668), plus a 20 s close watchdog that dumps goroutines to the core log; SPEC 138 — `round_robin` skips a slot whose node failed its last probe. No new config keys. Java surface identical to lx.21. AAR sha256 `d7be8b1297f68ad8bad47e5eb766f59501100b1e9377de403d9c53cd364ecef1`. |
+| **v1.14.3-lx.21** | **Nothing new on the Android data path.** lx.19/lx.20 (SPEC 128/129) are `lxd` daemon fixes; lx.21 adds the experimental `trusttunnel` outbound/inbound (SPEC 133) to the desktop and router binaries only — the AAR is built without `with_trusttunnel`, so the type loads as a stub. Base sing-box v1.14.3. Java surface identical to lx.18 (258 classes, 3583 javap lines). AAR sha256 `5a6c782b834d53aa8031e32a953eb9517e78b742bbc10d3474154fc05aa00e0e`. |
+| **v1.14.3-lx.18** | **The legacy `network` key of the `masque` outbound is gone (SPEC 131): a masque body with `network` fails to load, rename it to `vhttp`.** lx.16/lx.17 (SPEC 127–130) are Linux-daemon and Windows 7 changes outside `libbox`. Base sing-box v1.14.3. Java surface identical to lx.15 (258 classes, 3583 javap lines). AAR sha256 `ebd362a960a31cc876f0b3fa51790d33a42217eee4edeba94ae7cabf23e09fae`. |
+| **v1.14.3-lx.15** | **`urltest` probes every `interval` (SPEC 125), `failover` leaves a degraded node (SPEC 126), `fingerprint: random`/`randomized` safe for REALITY (SPEC 123), uTLS handshake state released (SPEC 122), gRPC security bump.** Base sing-box v1.14.3. Java surface identical to lx.14 (258 classes, 3583 javap lines). AAR sha256 `9146eeaa79b9c750e7c5747c74c4281fc07411627c6ac0dc2737f706f6224ecb`. |
+| **v1.14.3-lx.14** | **XHTTP `path` query verbatim (SPEC 119), `lx.mtu_align` (SPEC 120), `vhttp: auto` h2 memory with a window (SPEC 121).** Base sing-box v1.14.3. LxBox §620 depends on SPEC 119. Java surface: 258 classes in both, 3584 → 3583 javap lines — `CommandServer.recordLockState` removed (unused by LxBox). AAR sha256 `a06dbdc86aed9bc5ed018af208a04a01db216db770821eac4c4da4fb9bbd2975`. |
+| **v1.14.2-lx.13** | The release of lx.13-rc.1 on sing-box v1.14.3 (DNS-server change resets the network); `ib=chrome-full` experimental, not exposed by client UIs. |
+| **v1.14.2-lx.13-rc.1** (core rc, shipped in v2.25.12-rc.1) | **Fresh `ip=quic` decoy per handshake, `ib` profiles as real QUIC ClientHellos.** Base sing-box v1.14.2 as in lx.12, no upstream drift taken. The `ip=quic` decoy is no longer a static `i1` baked into the endpoint for its lifetime (the same datagram with the same DCID before every handshake initiation): the engine calls a generator before each handshake through the lx hook `SetDecoyPacketsFunc` in the fork of wireguard-go and sends a fresh Initial (new DCID/SCID, random, key_share, layout). `ib=chrome` / `ib=firefox` were TCP ClientHellos inside the QUIC Initial since 18.06.2026 (no `quic_transport_parameters`, TLS 1.2 ciphers, TCP extensions); now they are real QUIC ClientHellos, calibrated against Chrome 147/155 and Firefox 149 captures. `ip=sip` sends only INVITE (`i2` empty); `ip=dns` sends EDNS without options. New value `ib=chrome-full` (Chrome 155 with ML-KEM in one oversize Initial) — **not supported in LxBox yet**: the contract registry (`app/contract/registry/protocols/wireguard.json`, `body.fields.ib`) lists `chrome|firefox|curl`, an unknown value is dropped with `awg3_field_invalid`; support is a separate task with a contract version. Core release candidate: the field run of `chrome-full` did not happen before the tag. Java surface identical to lx.12: 258 classes, 3584 javap lines on both sides, `classes.jar` byte-identical. |
+| **v1.14.2-lx.12** | **`passive_check` removed, `urltest` mode `failover`, per-endpoint WG and Tailscale status** (§611). Fork SPEC 116 — `urltest.passive_check` is gone with no compatibility period: a config carrying it does not load, so LxBox stops writing it in the same release (§611; replacement — `failover`, §612). Fork SPEC 114 — `CommandClient.getWireGuardStatus(tag)` → `WireGuardEndpointStatus` with `peers()` (`PeerStatus`: key, endpoint, last handshake, rx/tx). Fork SPEC 115 — `CommandClient.getTailscaleStatus(tag)`, `TailscalePeer` path/endpoint/peerRelay/DERPRegionCode/lastHandshake, `TailscaleEndpointStatus.health()` (§613). Fork SPEC 117 — upstream `stable` sync (scope-based component lifecycle; WG sleep, lazy build and manual off register in the scope). Java surface additive only: 254 → 258 classes, 3519 → 3584 javap lines, nothing removed. Go 1.26.8. |
 | **v1.14.2-lx.8** | **Sync with sing-box `stable` (15 commits past v1.14.2) and three MASQUE hangs fixed.** lx.8: idle connections of outbounds and DNS servers that no rule, endpoint, group selection or detour refers to any more are closed (a `round_robin` `urltest` counts its whole pool as in use; XHTTP `xmux` pools and WG/AWG idle-suspend unchanged), and on Android pausing the device closes idle connections too; WireGuard, AmneziaWG and `masque` now really set the outer UDP socket free to fragment on Linux and Android (the kernel kept DF, so an oversized outer datagram of a tunnel inside a tunnel was dropped), while Hysteria, Hysteria2 and TUIC no longer allow fragmentation by default (upstream); upstream TUN/DNS fixes, and the nested-`selector` lock fix the fork carried since `v1.14.0-lx.38` is now upstream's. lx.7 (fork SPEC 108): `vhttp: auto` drops a remembered h2 that stopped coming up and tries h3 within the same dial; closing an h2 tunnel no longer waits behind a stalled write; an h3 endpoint that never answers CONNECT-IP no longer holds the dial. Config schema unchanged, build tags unchanged (`build_libbox/main.go` identical to lx.6). Java surface: 254 classes in both, 3512 → 3519 javap lines — added `CommandServer.recordLockState/recordScreenState/wakeNow`, `Libbox.discardPowerReportDraft/goroutineDump/triggerGoHang`, `SetupOptions.get/setPlatformMetadata`; removed `Libbox.promotePowerReportDraft`, which LxBox never called. AAR sha256 `91364b7b4f57468937096c20cf4c0217d331cada66a1e05fdbf4a16acf3fdacd` (checked against the release `SHA256SUMS`). |
 | **v1.14.2-lx.6** | **XHTTP no longer opens a connection per stream by default** (fork #32). With no `xmux` section, or an empty one, the core now selects `max_connections 3` (all streams share at most three connections) instead of `max_concurrency 1` (a fresh TLS connection per stream, dozens to hundreds of parallel connections to one IP on a phone, the pattern reported to be cut on Russian mobile networks). `h_max_request_times 600-900` and `h_max_reusable_secs 1800-3000` unchanged; the values follow Xray-core `18e2839` (XTLS/Xray-core#6376). An `xmux` section with at least one field set is still taken as written. Contains lx.5 (fork #30): `sing-box schema` no longer aborts on `option.AWGRange` and emits the full schema with the fork's keys; the command is unused by the AAR, config parsing and runtime untouched. Config schema unchanged; Java surface identical to lx.4 (javap diff over all 254 classes, 3512 lines — empty). AAR sha256 `7cd4c20c34b46b8a4515816e85037a11df8704faa2a2e3681792d874d2255ae9` (checked against the release `SHA256SUMS`). |
 | **v1.14.2-lx.4** | **WG/AWG endpoint on/off at runtime** (§557). Fork SPEC 106 — `CommandClient.setEndpointEnabled(tag, enabled)` → `EndpointToggleResult.getState()`: a disabled endpoint puts its device down the way idle sleep does, drops its connections and rejects every dial with `WireGuard endpoint is disabled`; nothing wakes it until it is enabled again. `GetOutbounds` reports the new `endpointState = "disabled"`. gRPC errors: `NotFound`, `InvalidArgument` (not WG/AWG), `FailedPrecondition` (not started, closing), `Unavailable` (wake-up failed). Not persisted: a reload or apply starts every endpoint enabled, so LxBox re-applies its set of disabled tags after each core start within a VPN session and drops it when the VPN stops. The release also carries an OpenWrt installer the AAR does not use. Config schema unchanged, the contract does not move; Java surface additive — 253 → 254 classes, 3498 → 3512 javap lines, the whole diff being the `EndpointToggleResult` class (`getState`/`setState`) and `CommandClient.setEndpointEnabled(String, boolean)`. AAR sha256 `ddd266242ed236f028faa17942937475221931dda50a06fce031c6136e67fb10` (checked against the release `SHA256SUMS`). |

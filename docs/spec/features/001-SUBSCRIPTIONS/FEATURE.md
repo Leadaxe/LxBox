@@ -144,10 +144,10 @@ on the main screen — [007-NODE_LIST](../007-NODE_LIST/FEATURE.md).
 | Auto-update subscriptions | Settings → Subscriptions; duplicated in the sources screen menu | on/off | on |
 | Update disabled subscriptions | same place; active only with auto-update enabled | on/off | off |
 | Custom User-Agent (global) | Settings → Subscriptions | string or a client preset; empty = `LxBox-android/<version>` | empty |
-| Send HWID | Settings → Subscriptions | on/off | off |
+| Send HWID | Settings → Subscriptions | on/off | on (§658) |
 | HWID · `x-hwid` | same place, Regenerate button | UUIDv4, generated on first display | — |
 | `x-device-os` / `x-ver-os` / `x-device-model` | same place | string; empty = the device value | `android` / OS version / model |
-| Update interval (per subscription) | Subscription → Settings | `-1` Don't auto-update · `0` Never (respect server) · 1/3/6/12/24/48/72/168 h | 24 h (online), `-1` (file) |
+| Update interval (per subscription) | Subscription → Settings | `0` As subscription · `-1` Don't auto-update · 1/3/6/12/24/48/72/168 h | `0` (online), `-1` (file) |
 | On update (per subscription) | Subscription → Settings; hidden with "Auto-restart VPN on settings change" | Rebuild · Reload · Do nothing | Rebuild |
 | Custom identity (per subscription) | Subscription → Settings → Fetch identity | Default / Custom (own UA, HWID, device-meta) | Default |
 | Import rules (per subscription) | Subscription → Filters | list of rules + a master toggle | empty, toggle on |
@@ -224,6 +224,9 @@ app start: read sources → "updating" → failed
   [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.md).
 - File picking and the camera for QR depend on OS capabilities (on a TV without
   a file manager — a hint instead of a picker).
+- The registry limit `max_nodes_per_subscription=3000` is not enforced: a
+  subscription of any size is accepted, the `max_nodes_exceeded` code exists
+  only in the shared warning dictionary.
 - Not planned (owner decision 2026-09-29, audit [591](../../tasks/591-spec-kit-revision-audit.md)): the "Get Free VPN" Quick Start and refreshing
   subscriptions by interval on pressing Start (`§010F`) — subscriptions are
   refreshed by the auto-update triggers.
@@ -241,6 +244,7 @@ app start: read sources → "updating" → failed
 | Disabling subscription nodes | Switches single subscription nodes off by name; the mark survives updates and restarts and expires by TTL once the node is gone. | P9, P10 | [node-disable.md](FUNCTIONS/node-disable.md) |
 | Subscription import rules | Disables, enables or edits subscription nodes with rules applied to every parse of the subscription body. | P12 | [import-rules.md](FUNCTIONS/import-rules.md) |
 | Subscription metadata | Shows traffic, expiry, name, support links and the recommended interval from the provider's headers or body comments. | P4, P13 | [subscription-meta.md](FUNCTIONS/subscription-meta.md) |
+| Node budget | Keeps manual servers, folder members and enabled subscriptions within one app-wide node limit; subscriptions share the rest, the extra nodes are cut at parse. | — | [node-budget.md](FUNCTIONS/node-budget.md) |
 
 ## Related features
 
