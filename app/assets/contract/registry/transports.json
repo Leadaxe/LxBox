@@ -935,6 +935,9 @@
           },
           "session_table": {
             "type": "string",
+            "source": [
+              "extra.sessionIDTable"
+            ],
             "requires": [
               {
                 "path": "transport.session_length",
@@ -947,6 +950,9 @@
           },
           "session_length": {
             "type": "string",
+            "source": [
+              "extra.sessionIDLength"
+            ],
             "requires": [
               {
                 "path": "transport.session_table",
