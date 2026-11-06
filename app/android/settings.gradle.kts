@@ -21,6 +21,10 @@ plugins {
     id("dev.flutter.flutter-plugin-loader") version "1.0.0"
     id("com.android.application") version "9.1.0" apply false
     id("org.jetbrains.kotlin.android") version "2.3.21" apply false
+    // §721 — KSP для процессора androidx.appfunctions. С 2.3.0 версии KSP2
+    // не привязаны к версии Kotlin; 2.3.10 — та же, что в образце
+    // android/appfunctions.
+    id("com.google.devtools.ksp") version "2.3.10" apply false
 }
 
 include(":app")
