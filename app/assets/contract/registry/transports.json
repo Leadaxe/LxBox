@@ -1379,6 +1379,26 @@
             "transport.type": "xhttp"
           }
         },
+        "sessionIDTable": {
+          "source": [
+            "extra.sessionIDTable",
+            "query.sessionIDTable"
+          ],
+          "maps_to": "transport.session_table",
+          "when": {
+            "transport.type": "xhttp"
+          }
+        },
+        "sessionIDLength": {
+          "source": [
+            "extra.sessionIDLength",
+            "query.sessionIDLength"
+          ],
+          "maps_to": "transport.session_length",
+          "when": {
+            "transport.type": "xhttp"
+          }
+        },
         "sessionKey": {
           "source": [
             "extra.sessionKey",
@@ -2053,6 +2073,30 @@
             "json.streamSettings.splithttpSettings.x_padding_bytes"
           ],
           "maps_to": "transport.x_padding_bytes",
+          "when": {
+            "transport.type": "xhttp"
+          }
+        },
+        "sessionIDTable": {
+          "source": [
+            "json.streamSettings.xhttpSettings.extra.sessionIDTable",
+            "json.streamSettings.splithttpSettings.extra.sessionIDTable",
+            "json.streamSettings.xhttpSettings.sessionIDTable",
+            "json.streamSettings.splithttpSettings.sessionIDTable"
+          ],
+          "maps_to": "transport.session_table",
+          "when": {
+            "transport.type": "xhttp"
+          }
+        },
+        "sessionIDLength": {
+          "source": [
+            "json.streamSettings.xhttpSettings.extra.sessionIDLength",
+            "json.streamSettings.splithttpSettings.extra.sessionIDLength",
+            "json.streamSettings.xhttpSettings.sessionIDLength",
+            "json.streamSettings.splithttpSettings.sessionIDLength"
+          ],
+          "maps_to": "transport.session_length",
           "when": {
             "transport.type": "xhttp"
           }
