@@ -306,16 +306,14 @@ List<NodeSpec> _parseAll(
     // для URI-строк это строка, для INI — сам INI-текст (тег — поле записи),
     // для JSON — объект outbound'а.
     UriLines(lines: final ls) => _parseUriLines(ls, dropped),
-    IniConfig(text: final t) => _parseIniConfigs([t], nameHint: nameHint, dropped: dropped),
+    IniConfig(text: final t) => _parseIniConfigs([(nameHint, t)], dropped: dropped),
     // §110 — Amnezia vpn://: каждый контейнер → INI → нода (null-skip).
     // §243 — hint с индексным суффиксом (`hint`, `hint 2`, …): фрагмент
     // теперь «собственное имя» raw, суффикс-логика addMembersToFolder до
     // таких нод не дойдёт — разводим коллизии здесь.
     AmneziaConfig(iniTexts: final ts) => _parseIniConfigs(
         ts,
-        nameHint: nameHint,
         dropped: dropped,
-        indexedHint: true,
       ),
     JsonConfig() => _parseJson(decoded, dropped),
     // §506 — тело не опознано ВОВСЕ: раньше ветка отдавала пустой список и
@@ -386,16 +384,15 @@ NodeWarning withDropOwner(NodeWarning w, String owner) {
 }
 
 List<NodeSpec> _parseIniConfigs(
-  List<String> texts, {
-  String? nameHint,
+  List<(String?, String)> texts, {
   List<NodeWarning>? dropped,
-  bool indexedHint = false,
 }) {
   final nodes = <NodeSpec>[];
   for (var i = 0; i < texts.length; i++) {
-    final hint = indexedHint ? _indexedHint(nameHint, i) : nameHint;
+    final hint = texts[i].$1;
+    final ini = texts[i].$2;
     final verdict = XrayDropVerdict();
-    final n = parseWireguardIni(texts[i], nameHint: hint, dropped: verdict);
+    final n = parseWireguardIni(ini, nameHint: hint, dropped: verdict);
     if (n != null) {
       nodes.add(n);
     } else if (verdict.reason != null) {

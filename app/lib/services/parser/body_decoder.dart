@@ -30,7 +30,7 @@ final class IniConfig extends DecodedBody {
 /// §110 — Amnezia `vpn://`-ссылка: по одному WG/AWG INI-тексту на
 /// контейнер (см. `amnezia_link.dart`).
 final class AmneziaConfig extends DecodedBody {
-  final List<String> iniTexts;
+  final List<(String?, String)> iniTexts;
   const AmneziaConfig(this.iniTexts);
 }
 
@@ -183,6 +183,10 @@ DecodedBody decode(String body) {
     return decodeAmneziaLink(original);
   }
 
+  if (match.source.unwrap == _kAmneziaBackupUnwrap) {
+    return decodeAmneziaBackup(original);
+  }
+
   return _classifyByKind(match);
 }
 
@@ -244,6 +248,7 @@ Object? _tryJsonDecode(String text) {
 /// Имя распаковщика Amnezia в реестре видов источника (FROZEN-написание
 /// обеих сторон после сведения грамматики — GRAMMAR_SYNC §4 №11).
 const _kAmneziaUnwrap = 'amnezia_vpn';
+const _kAmneziaBackupUnwrap = 'amnezia_backup';
 
 /// Именованные распаковщики оболочки: `unwrap` реестра → функция.
 final Map<String, Unwrapper> _kUnwrappers = {

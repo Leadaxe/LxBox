@@ -31,30 +31,74 @@ DecodedBody decodeAmneziaLink(String link) {
   // AWG3-поля), недостижимо было только через обёртку — проверяем ДО
   // JSON-ветки, потому что признак взаимоисключающий (`[` против `{`).
   final bareIni = _decodeBareIni(t);
-  if (bareIni != null) return AmneziaConfig([bareIni]);
+  if (bareIni != null) return AmneziaConfig([(null, bareIni)]);
 
   final root = _decodeAmneziaRoot(t);
   if (root == null) {
     return const DecodeFailure('vpn://: payload is neither qCompress nor JSON');
   }
 
-  final containers = root['containers'];
-  if (containers is! List || containers.isEmpty) {
-    return const DecodeFailure('vpn://: no containers[]');
+  final inis = _decodeAmneziaJson(root);
+
+  if (inis.isEmpty) {
+    return const DecodeFailure('vpn://: no WireGuard/AmneziaWG containers');
   }
 
-  final inis = <String>[];
+  return AmneziaConfig(inis);
+}
+
+DecodedBody decodeAmneziaBackup(String backup) {
+  final t = backup.trim();
+
+  Object root;
+  try {
+    root = jsonDecode(t);
+  } catch (_) {
+    return const DecodeFailure("Amnezia backup isn't a valid JSON");
+  };
+  if (root is! Map<String, dynamic>) return const DecodeFailure("Amnezia backup isn't a map");
+
+  final serverList = root["Servers/serversList"];
+  if (serverList is! String) {
+    return const DecodeFailure('Amnezia backup lacks serverList');
+  }
+
+  Object serverListJson;
+  try {
+    serverListJson = jsonDecode(serverList);
+  } catch (_) {
+    return const DecodeFailure("Amnezia backup serverList isn't a valid JSON");
+  };
+
+  if (serverListJson is! List) {
+    return const DecodeFailure('Amnezia backup lacks serverList');
+  }
+
+  List<(String?, String)> inis = [];
+
+  for (final server in serverListJson) {
+    inis += _decodeAmneziaJson(server);
+  }
+
+  return AmneziaConfig(inis);
+}
+
+List<(String?, String)> _decodeAmneziaJson(Map<String, dynamic> root) {
+  final containers = root['containers'];
+  if (containers is! List || containers.isEmpty) {
+    return [];
+  }
+
+  final desc = root['description'];
+  final inis = <(String?, String)>[];
   for (final c in containers) {
     if (c is! Map) continue;
     for (final proto in const ['awg', 'wireguard']) {
       final ini = _extractIni(c[proto]);
-      if (ini != null) inis.add(_substituteDns(ini, root));
+      if (ini != null) inis.add((desc + ' ' + proto, _substituteDns(ini, root)));
     }
   }
-  if (inis.isEmpty) {
-    return const DecodeFailure('vpn://: no WireGuard/AmneziaWG containers');
-  }
-  return AmneziaConfig(inis);
+  return inis;
 }
 
 /// §103 §9.B12 — `vpn://` строкой ВНУТРИ построчного URI-списка подписки

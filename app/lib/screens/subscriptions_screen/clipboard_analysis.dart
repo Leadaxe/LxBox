@@ -86,7 +86,7 @@ ClipboardAnalysis analyzeClipboard(String text) {
   if (isAmneziaVpnLink(text)) {
     final decoded = decode(text);
     if (decoded is AmneziaConfig) {
-      final endpoint = decoded.iniTexts.first
+      final endpoint = decoded.iniTexts.first.$2
           .split('\n')
           .where((l) => l.trim().toLowerCase().startsWith('endpoint'))
           .map((l) => l.split('=').last.trim())
