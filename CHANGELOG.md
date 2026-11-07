@@ -12,6 +12,11 @@
 
 - **Android assistants can turn the VPN on or off and read its status ([task 721](docs/spec/tasks/721-appfunctions-vpn-toggle-status.md)).** On Android 16+ the app declares the AppFunctions `startVpn`, `stopVpn` and `getVpnStatus` (`androidx.appfunctions` 1.0.0-rc01). They work only after App Settings → Automation → **AI assistant control** is turned on (off by default, hidden below Android 16). Connecting needs a VPN permission granted earlier; the answer is only the tunnel state. The app module now builds with `compileSdk 37` and KSP. The API is experimental: Gemini calls only apps from Google's early access programme for now.
 
+### Changed
+
+- **Core `v1.14.4-lx.33`; Anti-sniff decoy is off by default and has three more settings ([task 709](docs/spec/tasks/709-quic-sniff-decoy-toggle.md)).** The core reads `lx.quic_sniff_decoy` as an object and by default sends the byte only on a retry after a failed first attempt, only from MASQUE nodes and only through VLESS relays. VPN Settings → Core → QUIC: "Anti-sniff decoy" defaults to Off (a chosen mode is kept), plus "Decoy sending" (On retry / Always), "Decoy node types" and "Decoy relay types".
+- **The "AWG masquerade" setting is removed ([task 720](docs/spec/tasks/720-awg-masquerade-setting.md)).** The core dropped `lx.awg_masquerade` and sends the AmneziaWG masquerade burst on every path.
+
 ### Fixed
 
 - **Tunnel apps crashed on open with many installed apps ([task 693](docs/spec/tasks/693-app-picker-shared-uid-hint.md)).** The app list and icons are now read off the main thread, large icons are scaled down to 96 px, and the tab no longer stalls with a burst of `getAppIcon timed out` in the log. The list builds only the rows on screen and asks for their icons as they scroll into view; at most four icons are encoded at a time.
