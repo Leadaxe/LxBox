@@ -198,6 +198,20 @@ v0-хранилища переменную не задают, строка шл�
 дефолтами для трёх режимов, `off` / `true` / `false` без ключа, `send` и
 списки в объекте, пустые списки без полей, `#enable` трёх новых;
 `template_check` / `ui_check --strict` — 0/0 локально. Тесты — только CI.
-Не проверено: эмулятор и устройство (вид секции, старт ядра lx.33 с
-объектом, живой ретрай).
+Эмулятор (08.11.2026, LxBox_test, Android 14, сборка 2.25.20-dev.16, ядро
+`1.14.4-lx.33` по `/device`): дефолт — в `config.lx` ключа нет; после
+`PUT /settings/vars/quic_sniff_decoy=detour` и `quic_sniff_decoy_send=always`
+`/config/pretty` даёт `{"mode":"detour","send":"always","detour_type":["vless"],
+"outbound_type":["masque"]}`, ядро стартует с этим конфигом без ошибок
+(`/config/running` показывает объект, лог ядра — `status=Started`);
+сохранённое старое `awg_masquerade: direct` в `lx` не попадает. Секция QUIC на
+вкладке Core: режим, Decoy sending, Decoy node types, Decoy relay types; при
+Off три зависимые настройки гаснут. Попутно: `start-vpn-headless` после
+`PUT /settings/vars/*` стартовал со старым файлом конфига — ключ появился
+только после `POST /action/rebuild-config` (известное ограничение §667: dirty
+через Debug API воронку автоперезапуска не заводит), к lx.33 не относится.
+Не проверено: живой ретрай с байтом (нужен сниффящий релей); телефон.
+Сборка: SDK 37 существует только как `platforms;android-37.0`, AGP 9.1 без
+`compileSdkMinor = 0` ищет `android-37` и падает — поправлено в 721
+(`680e4497`).
 
