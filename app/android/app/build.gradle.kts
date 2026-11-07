@@ -25,6 +25,9 @@ android {
     // §721 — androidx.appfunctions требует compileSdk ≥ 37 (у Flutter 36).
     // targetSdk не трогаем: остаётся flutter.targetSdkVersion.
     compileSdk = 37
+    // Платформа 37 в SDK существует только с минорной версией (platforms;android-37.0,
+    // хэш «android-37.0»); без compileSdkMinor AGP ищет «android-37» и не находит.
+    compileSdkMinor = 0
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
