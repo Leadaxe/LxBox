@@ -6689,11 +6689,17 @@
   "Core: lx.mtu_align. A node over a tunnel gets a packet size that fits into it: mtu for WireGuard and MASQUE, the initial packet size for Hysteria2 and TUIC. Values are never raised.": {
     "value": "内核：lx.mtu_align。隧道之上的节点获得能放入隧道的包大小：WireGuard 和 MASQUE 为 mtu，Hysteria2 和 TUIC 为初始包大小。数值只降不升。"
   },
-  "Core: lx.awg_masquerade. The masquerade burst of an AWG endpoint (ip=quic, i1…) precedes the handshake. Through a detour a relay may take it for a QUIC flow and redirect it by SNI; Anti-sniff decoy guards against that. Direct only drops the burst on such paths.": {
-    "value": "内核：lx.awg_masquerade。AWG 端点的伪装数据包（ip=quic、i1…）先于握手发送。经由 detour 时，中继可能将其视为 QUIC 流并按 SNI 重定向；Anti-sniff decoy 可防止这种情况。Direct only 会在此类路径上去掉伪装数据包。"
+  "Core: lx.quic_sniff_decoy.mode. A relay with UDP sniffing (Xray destOverride quic) rewrites the destination by the SNI of the first QUIC packet; a junk first byte makes it give up. Servers drop the byte. A DPI on your own uplink may react to it, hence Off by default.": {
+    "value": "内核：lx.quic_sniff_decoy.mode。带 UDP 嗅探的中继（Xray destOverride quic）按第一个 QUIC 包的 SNI 改写目标；首个垃圾字节使其放弃。服务器会丢弃该字节。您自身上行链路上的 DPI 可能对其作出反应，因此默认为 Off。"
   },
-  "Core: lx.quic_sniff_decoy. A relay with UDP sniffing (Xray destOverride quic) rewrites the destination by the SNI of the first QUIC packet; a junk first byte makes it give up. Servers drop the byte. A DPI on your own uplink may react to it, hence Through detour by default. Also covers the AWG masquerade burst that imitates QUIC (ip=quic).": {
-    "value": "内核：lx.quic_sniff_decoy。带 UDP 嗅探的中继（Xray destOverride quic）按第一个 QUIC 包的 SNI 改写目标；首个垃圾字节使其放弃。服务器会丢弃该字节。 您自身上行链路上的 DPI 可能对其作出反应，因此默认为 Through detour。也适用于伪装成 QUIC（ip=quic）的 AWG 伪装数据包。"
+  "Core: lx.quic_sniff_decoy.send. Retry: a node that failed without the byte retries with it, at once on a fast error, otherwise on the next dial; a failure with the byte resets it. Always: the byte on every dial.": {
+    "value": "内核：lx.quic_sniff_decoy.send。Retry：未带该字节失败的节点会带上它重试，快速出错时立即重试，否则在下次拨号时；带该字节失败后恢复为不带。Always：每次拨号都发送该字节。"
+  },
+  "Core: lx.quic_sniff_decoy.outbound_type. masque, hysteria2, tuic, trusttunnel, vless, vmess, trojan, wireguard. vless, vmess and trojan send it only with XHTTP over HTTP/3, wireguard only before a QUIC-like AWG burst.": {
+    "value": "内核：lx.quic_sniff_decoy.outbound_type。masque、hysteria2、tuic、trusttunnel、vless、vmess、trojan、wireguard。vless、vmess 和 trojan 仅在 XHTTP over HTTP/3 时发送，wireguard 仅在伪装成 QUIC 的 AWG 数据包之前发送。"
+  },
+  "Core: lx.quic_sniff_decoy.detour_type. Any outbound type except groups; a type this core does not know fails the start.": {
+    "value": "内核：lx.quic_sniff_decoy.detour_type。除分组外的任何 outbound 类型；此内核不认识的类型会导致启动失败。"
   },
   "Core: lx.masque.idle_timeout. The idle window for MASQUE nodes that have no idle_timeout of their own.": {
     "value": "内核：lx.masque.idle_timeout。没有自身 idle_timeout 的 MASQUE 节点的空闲窗口。"

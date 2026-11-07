@@ -22,7 +22,7 @@ void main() {
     return walk(fragment, makeResolver(vars, byName));
   }
 
-  test('дефолты шаблона: сон 30s/5m, lazy, build_max 5, decoy; clamp и masque off не пишутся', () {
+  test('дефолты шаблона: сон 30s/5m, lazy, build_max 5; decoy off, clamp и masque off не пишутся', () {
     expect(lx({}), {
       'wg': {
         'idle_suspend': '30s',
@@ -30,24 +30,48 @@ void main() {
         'lazy_build': true,
         'build_max': 5,
       },
-      'quic_sniff_decoy': 'detour',
     });
   });
 
-  test('quic_sniff_decoy: режим строкой; off и старое bool из rc.3 ключа не дают', () {
-    expect((lx({'quic_sniff_decoy': 'all'}) as Map)['quic_sniff_decoy'], 'all');
-    expect((lx({'quic_sniff_decoy': 'direct'}) as Map)['quic_sniff_decoy'], 'direct');
+  test('709 итер. 5 — quic_sniff_decoy объектом с дефолтами ядра; off и старое bool ключа не дают', () {
+    for (final mode in ['detour', 'direct', 'all']) {
+      expect((lx({'quic_sniff_decoy': mode}) as Map)['quic_sniff_decoy'], {
+        'mode': mode,
+        'outbound_type': ['masque'],
+        'detour_type': ['vless'],
+        'send': 'retry',
+      }, reason: mode);
+    }
     for (final v in ['off', 'true', 'false']) {
       expect((lx({'quic_sniff_decoy': v}) as Map).containsKey('quic_sniff_decoy'), isFalse, reason: v);
     }
   });
 
-  test('720 — awg_masquerade: all (дефолт ядра с lx.32) ключа не даёт, direct пишется строкой', () {
-    expect((lx({}) as Map).containsKey('awg_masquerade'), isFalse);
-    expect((lx({'awg_masquerade': 'all'}) as Map).containsKey('awg_masquerade'), isFalse);
-    expect((lx({'awg_masquerade': 'direct'}) as Map)['awg_masquerade'], 'direct');
-    // чужое значение ядру не уходит: блок lx строгий, неизвестный режим валит старт
-    expect((lx({'awg_masquerade': 'detour'}) as Map).containsKey('awg_masquerade'), isFalse);
+  test('709 итер. 5 — send и списки типов отражаются в объекте; пустой список поля не даёт', () {
+    final r = lx({
+      'quic_sniff_decoy': 'detour',
+      'quic_sniff_decoy_send': 'always',
+      'quic_sniff_decoy_outbounds': 'masque\nwireguard',
+      'quic_sniff_decoy_detours': 'vless\nshadowsocks',
+    }) as Map;
+    expect(r['quic_sniff_decoy'], {
+      'mode': 'detour',
+      'outbound_type': ['masque', 'wireguard'],
+      'detour_type': ['vless', 'shadowsocks'],
+      'send': 'always',
+    });
+    final empty = lx({
+      'quic_sniff_decoy': 'all',
+      'quic_sniff_decoy_outbounds': '',
+      'quic_sniff_decoy_detours': '',
+    }) as Map;
+    expect(empty['quic_sniff_decoy'], {'mode': 'all', 'send': 'retry'});
+  });
+
+  test('720 отменена — awg_masquerade ядру не уходит ни при каком значении', () {
+    for (final v in ['all', 'direct']) {
+      expect((lx({'awg_masquerade': v}) as Map).containsKey('awg_masquerade'), isFalse, reason: v);
+    }
   });
 
   test('сон off — блока wg нет, reachable и lazy не пишутся', () {
@@ -83,5 +107,13 @@ void main() {
     expect(on('wg_lazy_build', {'wg_idle_suspend': 'off'}), isFalse);
     expect(on('wg_build_max', {'wg_lazy_build': 'false'}), isFalse);
     expect(on('wg_build_max', {}), isTrue);
+    for (final name in [
+      'quic_sniff_decoy_send',
+      'quic_sniff_decoy_outbounds',
+      'quic_sniff_decoy_detours',
+    ]) {
+      expect(on(name, {}), isFalse, reason: name);
+      expect(on(name, {'quic_sniff_decoy': 'detour'}), isTrue, reason: name);
+    }
   });
 }

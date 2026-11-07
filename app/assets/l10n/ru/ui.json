@@ -6980,11 +6980,17 @@
   "Core: lx.mtu_align. A node over a tunnel gets a packet size that fits into it: mtu for WireGuard and MASQUE, the initial packet size for Hysteria2 and TUIC. Values are never raised.": {
     "value": "Ядро: lx.mtu_align. Узел поверх туннеля получает размер пакета, который в туннель влезает: mtu у WireGuard и MASQUE, начальный размер пакета у Hysteria2 и TUIC. Значения никогда не повышаются."
   },
-  "Core: lx.awg_masquerade. The masquerade burst of an AWG endpoint (ip=quic, i1…) precedes the handshake. Through a detour a relay may take it for a QUIC flow and redirect it by SNI; Anti-sniff decoy guards against that. Direct only drops the burst on such paths.": {
-    "value": "Ядро: lx.awg_masquerade. Маскировочная пачка эндпоинта AWG (ip=quic, i1…) идёт перед рукопожатием. Через detour релей может принять её за QUIC-поток и перенаправить по SNI; от этого защищает Anti-sniff decoy. Direct only убирает пачку на таких путях."
+  "Core: lx.quic_sniff_decoy.mode. A relay with UDP sniffing (Xray destOverride quic) rewrites the destination by the SNI of the first QUIC packet; a junk first byte makes it give up. Servers drop the byte. A DPI on your own uplink may react to it, hence Off by default.": {
+    "value": "Ядро: lx.quic_sniff_decoy.mode. Релей со сниффингом UDP (Xray destOverride quic) подменяет назначение по SNI из первого QUIC-пакета; мусорный первый байт заставляет его отступиться. Серверы этот байт отбрасывают. DPI вашего собственного канала может на него среагировать, поэтому по умолчанию — Off."
   },
-  "Core: lx.quic_sniff_decoy. A relay with UDP sniffing (Xray destOverride quic) rewrites the destination by the SNI of the first QUIC packet; a junk first byte makes it give up. Servers drop the byte. A DPI on your own uplink may react to it, hence Through detour by default. Also covers the AWG masquerade burst that imitates QUIC (ip=quic).": {
-    "value": "Ядро: lx.quic_sniff_decoy. Релей со сниффингом UDP (Xray destOverride quic) подменяет назначение по SNI из первого QUIC-пакета; мусорный первый байт заставляет его отступиться. Серверы этот байт отбрасывают. DPI вашего собственного канала может на него среагировать, поэтому по умолчанию — Through detour. Действует и на маскировочную пачку AWG под QUIC (ip=quic)."
+  "Core: lx.quic_sniff_decoy.send. Retry: a node that failed without the byte retries with it, at once on a fast error, otherwise on the next dial; a failure with the byte resets it. Always: the byte on every dial.": {
+    "value": "Ядро: lx.quic_sniff_decoy.send. Retry — узел, у которого не вышло без байта, повторяет попытку с ним: сразу при быстрой ошибке, иначе на следующем дозвоне; неудача с байтом возвращает его к попыткам без байта. Always — байт на каждом дозвоне."
+  },
+  "Core: lx.quic_sniff_decoy.outbound_type. masque, hysteria2, tuic, trusttunnel, vless, vmess, trojan, wireguard. vless, vmess and trojan send it only with XHTTP over HTTP/3, wireguard only before a QUIC-like AWG burst.": {
+    "value": "Ядро: lx.quic_sniff_decoy.outbound_type. masque, hysteria2, tuic, trusttunnel, vless, vmess, trojan, wireguard. vless, vmess и trojan шлют его только с XHTTP по HTTP/3, wireguard — только перед пачкой AWG под QUIC."
+  },
+  "Core: lx.quic_sniff_decoy.detour_type. Any outbound type except groups; a type this core does not know fails the start.": {
+    "value": "Ядро: lx.quic_sniff_decoy.detour_type. Любой тип outbound, кроме групп; тип, которого это ядро не знает, валит старт."
   },
   "Core: lx.masque.idle_timeout. The idle window for MASQUE nodes that have no idle_timeout of their own.": {
     "value": "Ядро: lx.masque.idle_timeout. Окно простоя для узлов MASQUE без собственного idle_timeout."

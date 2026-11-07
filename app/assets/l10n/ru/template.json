@@ -824,18 +824,6 @@
   "QUIC": {
     "value": "QUIC"
   },
-  "AWG masquerade": {
-    "value": "Маскировка AWG"
-  },
-  "When an AmneziaWG node sends its masquerade packets (ip=quic, i1…) before the handshake. All paths: always, also through another node. Direct only: when the node dials from this device's own socket; through another node a single handshake packet goes out.": {
-    "value": "Когда узел AmneziaWG отправляет маскировочные пакеты (ip=quic, i1…) перед рукопожатием. All paths — всегда, в том числе через другой узел. Direct only — когда узел звонит с собственного сокета устройства; через другой узел уходит один пакет рукопожатия."
-  },
-  "Direct only": {
-    "value": "Только напрямую"
-  },
-  "All paths (default)": {
-    "value": "Все пути (по умолчанию)"
-  },
   "MASQUE (HTTP/3), Hysteria2, TUIC and AWG with QUIC masquerade (ip=quic).": {
     "value": "MASQUE (HTTP/3), Hysteria2, TUIC и AWG с маскировкой под QUIC (ip=quic)."
   },
@@ -848,13 +836,40 @@
   "Close a MASQUE tunnel that carried no traffic for this long; it reconnects on next use. A node's own idle timeout wins.": {
     "value": "Закрывать туннель MASQUE, по которому столько времени не было трафика; он переподключится при следующем использовании. Собственный таймаут простоя узла сильнее."
   },
-  "Send one junk byte before the QUIC handshake so a relay that sniffs UDP cannot redirect the connection by its SNI. Through detour: only connections carried by another node; Direct: only this device's own socket; All: both. Also covers AWG nodes whose masquerade imitates QUIC (ip=quic).": {
-    "value": "Отправлять один мусорный байт перед QUIC-рукопожатием, чтобы релей, который сниффит UDP, не перенаправил соединение по SNI. Through detour — только соединения, которые несёт другой узел; Direct — только собственный сокет устройства; All — оба случая. Действует и на узлы AWG с маскировкой под QUIC (ip=quic)."
-  },
-  "Through detour (default)": {
-    "value": "Через detour (по умолчанию)"
-  },
   "All": {
     "value": "Все"
+  },
+  "Send one junk byte before the QUIC handshake so a relay that sniffs UDP cannot redirect the connection by its SNI. The byte goes only where a node opens QUIC (MASQUE, Hysteria2, TUIC, XHTTP over HTTP/3, AWG with ip=quic) and, by default, only on a retry after a failed first attempt. Through detour: only connections carried by another node; Direct: only this device's own socket; All: both.": {
+    "value": "Отправлять один мусорный байт перед QUIC-рукопожатием, чтобы релей, который сниффит UDP, не перенаправил соединение по SNI. Байт идёт только там, где узел открывает QUIC (MASQUE, Hysteria2, TUIC, XHTTP по HTTP/3, AWG с ip=quic), и по умолчанию только на повторе после неудачной первой попытки. Through detour — только соединения, которые несёт другой узел; Direct — только собственный сокет устройства; All — оба случая."
+  },
+  "Off (default)": {
+    "value": "Выкл. (по умолчанию)"
+  },
+  "Through detour": {
+    "value": "Через detour"
+  },
+  "Decoy sending": {
+    "value": "Отправка обманки"
+  },
+  "On retry: the first attempt goes without the byte, a failed one is repeated with it. Always: the byte goes on every dial. Does not apply to WireGuard: there the byte goes on every handshake.": {
+    "value": "On retry — первая попытка идёт без байта, неудачная повторяется с ним. Always — байт на каждом дозвоне. На WireGuard не действует: там байт идёт на каждом рукопожатии."
+  },
+  "On retry (default)": {
+    "value": "На повторе (по умолчанию)"
+  },
+  "Always": {
+    "value": "Всегда"
+  },
+  "Decoy node types": {
+    "value": "Типы узлов для обманки"
+  },
+  "Node types that send the byte before their QUIC handshake. Empty means the core default (masque).": {
+    "value": "Типы узлов, которые шлют байт перед своим QUIC-рукопожатием. Пусто — дефолт ядра (masque)."
+  },
+  "Decoy relay types": {
+    "value": "Типы релеев для обманки"
+  },
+  "The byte goes only if the nearest relay (detour) is of one of these types. Behind a group the type of the member the group actually picked counts. Empty means the core default (vless).": {
+    "value": "Байт идёт, только если ближайший релей (detour) одного из этих типов. За группой считается тип участника, которого группа фактически выбрала. Пусто — дефолт ядра (vless)."
   }
 }
