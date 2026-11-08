@@ -14,7 +14,7 @@
 
 ### Changed
 
-- **Core `v1.14.4-lx.33`; Anti-sniff decoy is off by default and has three more settings ([task 709](docs/spec/tasks/709-quic-sniff-decoy-toggle.md)).** The core reads `lx.quic_sniff_decoy` as an object and by default sends the byte only on a retry after a failed first attempt, only from MASQUE nodes and only through VLESS relays. VPN Settings → Core → QUIC: "Anti-sniff decoy" defaults to Off (a chosen mode is kept), plus "Decoy sending" (On retry / Always), "Decoy node types" and "Decoy relay types".
+- **Core `v1.14.4-lx.33`; Anti-sniff decoy is off by default and has three more settings ([task 709](docs/spec/tasks/709-quic-sniff-decoy-toggle.md)).** The core reads `lx.quic_sniff_decoy` as an object and by default sends the byte only on a retry after a failed first attempt, only from MASQUE nodes and only through VLESS relays. VPN Settings → Core → QUIC: "Anti-sniff decoy" defaults to Off (a chosen mode is kept), plus "Decoy sending" (On retry / Always), "Decoy node types" and "Decoy relay types". The two type lists are picked from the core's own list: chosen types show as tags with ×, "Add ▾" offers the rest; no free text.
 - **The "AWG masquerade" setting is removed ([task 720](docs/spec/tasks/720-awg-masquerade-setting.md)).** The core dropped `lx.awg_masquerade` and sends the AmneziaWG masquerade burst on every path.
 
 ### Fixed
