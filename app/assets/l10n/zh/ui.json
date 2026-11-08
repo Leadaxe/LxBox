@@ -605,6 +605,9 @@
   "AI assistants": {
     "value": "AI 助手"
   },
+  "Edit the Source tab": {
+    "value": "请编辑 Source 标签页"
+  },
   "Let Android assistants turn the VPN on or off and read its status (Android 16+)": {
     "value": "允许 Android 助手开启或关闭 VPN 并读取其状态（Android 16+）"
   },
@@ -683,14 +686,23 @@
   "Look up the address before routing, so IP rules and the address family apply.": {
     "value": "在路由前查询地址，使 IP 规则和地址族生效。"
   },
+  "Nodes in this source": {
+    "value": "此来源中的节点"
+  },
   "Non-negative integer": {
     "value": "非负整数"
   },
   "One address per line, IPv4 or IPv6.": {
     "value": "每行一个地址，IPv4 或 IPv6。"
   },
+  "Owner": {
+    "value": "主节点"
+  },
   "Package name regex": {
     "value": "包名正则"
+  },
+  "Relay": {
+    "value": "中继节点"
   },
   "Resolve before routing": {
     "value": "路由前解析"
@@ -699,6 +711,9 @@
     "value": {
       "other": "与另外 %d 个应用共用 UID — 它们一起被路由"
     }
+  },
+  "Tap a node to rename it.": {
+    "value": "点击节点即可重命名。"
   },
   "Used when the rule resolves before routing.": {
     "value": "在规则于路由前解析时生效。"
@@ -2879,8 +2894,8 @@
   "INI copied": {
     "value": "INI 已复制"
   },
-  "JSON must be an outbound object with \"type\" or a document with \"endpoints\"/\"outbounds\"": {
-    "value": "JSON 必须是带「type」的出站对象，或包含「endpoints」/「outbounds」的文档"
+  "JSON must be a sing-box or Xray outbound, or a document with outbounds/endpoints": {
+    "value": "JSON 必须是 sing-box 或 Xray 出站，或包含 outbounds/endpoints 的文档"
   },
   "JSON or JSON5 (//, /* */ and # comments)": {
     "value": "JSON 或 JSON5（支持 //、/* */ 与 # 注释）"
@@ -3627,7 +3642,7 @@
   "Only single servers can be moved": {
     "value": "只能移动单个服务器"
   },
-  "Only the node is saved. The rest of the input is not kept.": {
+  "Only the nodes are saved. The rest of the input is not kept.": {
     "value": "仅保存了节点。其余输入内容未保留。"
   },
   "Open": {

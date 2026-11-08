@@ -382,7 +382,11 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
     await widget.onAdded();
     if (!mounted) return;
     // §585 — комментарии вставки убраны: одно сообщение вместо «Added».
-    final msg = widget.subController.lastCommentsRemoved
+    // §722 D — документ обрезан до узлов: это сообщение важнее.
+    final msg = widget.subController.lastExtrasDropped
+        ? getLocalText.s(
+            "Only the nodes are saved. The rest of the input is not kept.")
+        : widget.subController.lastCommentsRemoved
         ? getLocalText.s("Comments were removed.")
         : addedTag != null && addedTag.isNotEmpty
         ? getLocalText.s("Added: %s", addedTag)

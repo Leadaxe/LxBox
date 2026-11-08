@@ -210,6 +210,12 @@ class SubscriptionController extends ChangeNotifier {
   bool get lastCommentsRemoved => _lastCommentsRemoved;
   bool _lastCommentsRemoved = false;
 
+  /// §722 D — последняя вставка/импорт принесла документ (или элемент
+  /// массива), обрезанный до узловых массивов: остальное не сохранено.
+  /// Экран говорит об этом одной строкой («Only the nodes are saved…»).
+  bool get lastExtrasDropped => _lastExtrasDropped;
+  bool _lastExtrasDropped = false;
+
   /// §254 — структурный дубль [lastError]: fatal-issues последней генерации.
   /// UI различает по типу (DetourCycle → bottom sheet со списком виновников
   /// вместо плоского SnackBar). Очищается на входе в generateConfig,
@@ -1031,6 +1037,7 @@ class SubscriptionController extends ChangeNotifier {
     _busy = true;
     _lastError = null;
     _lastCommentsRemoved = false;
+    _lastExtrasDropped = false;
     notifyListeners();
     // Input может быть URL подписки (с токеном), direct-link (vless://user@host),
     // JSON-outbound. Маскируем, если detect'им URL — иначе только kind.
@@ -1254,6 +1261,7 @@ class SubscriptionController extends ChangeNotifier {
         final own = _ownNodesOf(item.text);
         if (own.isEmpty) continue;
         _entries.add(_ownJsonEntry(item, own, origin));
+        if (item.extrasDropped) _lastExtrasDropped = true;
         added++;
       }
       if (added == 0) {
@@ -1295,6 +1303,7 @@ class SubscriptionController extends ChangeNotifier {
     }
 
     _entries.add(_ownJsonEntry(item, own.isNotEmpty ? own : nodes, origin));
+    if (item.extrasDropped) _lastExtrasDropped = true;
     return _JsonAdd.added;
   }
 

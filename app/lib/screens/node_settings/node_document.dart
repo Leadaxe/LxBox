@@ -80,7 +80,7 @@ final class NodeDocumentRejected extends NodeDocumentPrep {
 }
 
 String get _notANodeMessage => getLocalText.s(
-    "JSON must be an outbound object with \"type\" or a document with \"endpoints\"/\"outbounds\"");
+    "JSON must be a sing-box or Xray outbound, or a document with outbounds/endpoints");
 
 /// §722 — [text] вкладки Source → текст и вид записи. [tag] — поле Tag
 /// (пусто — тег не трогается); [oldTag] — тег узла, который переименовывается
@@ -148,6 +148,47 @@ NodeDocumentPrep prepareNodeDocumentForSave(String text, String tag,
     droppedExtras: dropped,
     commentsRemoved: c.commentsRemoved,
   );
+}
+
+/// §722 D — переименование ещё одного узла записи (звено, второй корень)
+/// поверх уже подготовленного [base]: узел с тегом [oldTag] получает
+/// [newTag], ссылки на него внутри текста переписываются
+/// ([renameNodeInDocument]). Только JSON-диалекты; узла с [oldTag] в тексте
+/// нет (Source правили) или тег тот же — [base] как есть: фолбэк
+/// «нет узла → владелец» здесь недопустим. Флаги [base] сохраняются.
+NodeDocumentPrep renameRecordNode(
+    NodeDocumentReady base, String oldTag, String newTag) {
+  final t = newTag.trim();
+  if (!base.dialect.isJson || t.isEmpty || t == oldTag) return base;
+  if (!documentHasNodeTag(base.text, base.dialect, oldTag)) return base;
+  final next = prepareNodeDocumentForSave(base.text, t, oldTag: oldTag);
+  if (next is! NodeDocumentReady) return next;
+  return NodeDocumentReady(next.text,
+      dialect: next.dialect,
+      isDocument: next.isDocument,
+      droppedExtras: base.droppedExtras || next.droppedExtras,
+      commentsRemoved: base.commentsRemoved || next.commentsRemoved,
+      nameHint: base.nameHint);
+}
+
+/// §722 D — в JSON-документе [text] (узловые массивы вида [dialect]) есть
+/// запись с тегом [tag].
+bool documentHasNodeTag(String text, SourceDialect dialect, String tag) {
+  final Object? v;
+  try {
+    v = jsonDecode(text);
+  } catch (_) {
+    return false;
+  }
+  if (v is! Map) return false;
+  for (final k in nodeArrayKeysOf(dialect)) {
+    final arr = v[k];
+    if (arr is! List) continue;
+    for (final e in arr) {
+      if (e is Map && e['tag'] == tag) return true;
+    }
+  }
+  return false;
 }
 
 bool _isEmptyArray(String text) {

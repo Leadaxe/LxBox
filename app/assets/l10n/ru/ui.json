@@ -791,6 +791,9 @@
   "AI assistants": {
     "value": "ИИ-ассистенты"
   },
+  "Edit the Source tab": {
+    "value": "Правьте вкладку Source"
+  },
   "Let Android assistants turn the VPN on or off and read its status (Android 16+)": {
     "value": "Ассистенты Android смогут включать и выключать VPN и узнавать его статус (Android 16+)"
   },
@@ -869,14 +872,23 @@
   "Look up the address before routing, so IP rules and the address family apply.": {
     "value": "Узнать адрес до маршрутизации, чтобы сработали IP-правила и семейство адресов."
   },
+  "Nodes in this source": {
+    "value": "Узлы этого источника"
+  },
   "Non-negative integer": {
     "value": "Неотрицательное целое число"
   },
   "One address per line, IPv4 or IPv6.": {
     "value": "По адресу на строку, IPv4 или IPv6."
   },
+  "Owner": {
+    "value": "Владелец"
+  },
   "Package name regex": {
     "value": "Regex имени пакета"
+  },
+  "Relay": {
+    "value": "Звено"
   },
   "Resolve before routing": {
     "value": "Резолвить до маршрутизации"
@@ -888,6 +900,9 @@
       "many": "UID общий ещё с %d приложениями — маршрутизируются вместе",
       "other": "UID общий ещё с %d приложениями — маршрутизируются вместе"
     }
+  },
+  "Tap a node to rename it.": {
+    "value": "Нажмите на узел, чтобы переименовать его."
   },
   "Used when the rule resolves before routing.": {
     "value": "Действуют, когда правило резолвит до маршрутизации."
@@ -3128,8 +3143,8 @@
   "INI copied": {
     "value": "INI скопирован"
   },
-  "JSON must be an outbound object with \"type\" or a document with \"endpoints\"/\"outbounds\"": {
-    "value": "JSON должен быть объектом outbound с «type» или документом с «endpoints»/«outbounds»"
+  "JSON must be a sing-box or Xray outbound, or a document with outbounds/endpoints": {
+    "value": "JSON должен быть outbound sing-box или Xray либо документом с outbounds/endpoints"
   },
   "JSON or JSON5 (//, /* */ and # comments)": {
     "value": "JSON или JSON5 (комментарии //, /* */ и #)"
@@ -3888,8 +3903,8 @@
   "Only single servers can be moved": {
     "value": "Переносить можно только одиночные серверы"
   },
-  "Only the node is saved. The rest of the input is not kept.": {
-    "value": "Сохранён только узел. Остальное содержимое не сохранено."
+  "Only the nodes are saved. The rest of the input is not kept.": {
+    "value": "Сохранены только узлы. Остальное содержимое не сохранено."
   },
   "Open": {
     "value": "Открыть"

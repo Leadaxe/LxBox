@@ -100,6 +100,18 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
   /// §722 — вид источника записи (`origin.kind`): хранимое поле записи, по
   /// тексту не угадывается.
   SourceDialect _dialect = SourceDialect.uri;
+
+  /// §722 D — все узлы записи (владелец, звенья цепочек, прочие корни) в
+  /// порядке сборки: `main, detours…`. Владелец — первый.
+  List<RecordNode> _recordNodes = const [];
+
+  /// §722 D — поля Tag узлов записи кроме владельца (у него [_tagCtrl]),
+  /// выровнены с `_recordNodes.skip(1)`.
+  List<TextEditingController> _nodeTagCtrls = const [];
+
+  /// §722 D — тело владельца (то же правило, что у вкладки JSON при N = 1):
+  /// база для INI и полей Tailscale, когда вкладка JSON показывает массив.
+  String _ownerJson = '';
   late TabController _tabs;
   static const _kSourceTab = 1;
   String _originalTag = '';
@@ -178,6 +190,9 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     _tagCtrl.dispose();
     _jsonCtrl.dispose();
     _sourceCtrl.dispose();
+    for (final c in _nodeTagCtrls) {
+      c.dispose();
+    }
     _tabs.dispose();
     super.dispose();
   }
@@ -279,13 +294,34 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     final raw = _containerRaw;
     _sourceCtrl.text = raw;
     _dialect = _containerDialect;
+    Object? bodyOf(NodeSpec n) => _dialect == SourceDialect.singbox &&
+            n.rawSource.trimLeft().startsWith('{')
+        ? jsonDecode(n.rawSource)
+        : n.emit(TemplateVars.empty).map;
     final Object? preview = node is AutoSelectSpec && member != null
         ? autoGroupJsonPreview(node) // §686
-        : _dialect == SourceDialect.singbox &&
-                node.rawSource.trimLeft().startsWith('{')
-            ? jsonDecode(node.rawSource)
-            : node.emit(TemplateVars.empty).map;
-    _jsonCtrl.text = const JsonEncoder.withIndent('  ').convert(preview);
+        : bodyOf(node);
+    // §722 D — узлы записи: владелец и звенья его цепочки (у одиночного —
+    // и прочие корни источника). Поля Tag не-владельцев — свои.
+    _recordNodes = recordNodesOf(
+        member != null ? [node] : widget.entry.list.nodes);
+    for (final c in _nodeTagCtrls) {
+      c.dispose();
+    }
+    _nodeTagCtrls = [
+      for (final r in _recordNodes.skip(1))
+        TextEditingController(text: r.node.tag),
+    ];
+    const enc = JsonEncoder.withIndent('  ');
+    _ownerJson = enc.convert(preview);
+    // §722 D — вкладка JSON одна: при N > 1 — массив тел записи в порядке
+    // сборки (`main, detours…`), при N = 1 — тело, как прежде.
+    _jsonCtrl.text = _recordNodes.length > 1
+        ? enc.convert([
+            preview,
+            for (final r in _recordNodes.skip(1)) bodyOf(r.node),
+          ])
+        : _ownerJson;
     // §686 п. 9 — `.conf` из того же тела, что показывает вкладка JSON: у
     // тела sing-box JSON ключи вне таблицы переноса уходят в «Not in INI».
     _ini = node is WireguardSpec && preview is Map
@@ -415,16 +451,16 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
   }
 
   /// §090 G2b — вставка эмодзи из пикера в позицию курсора поля Tag.
-  void _insertEmoji(String emoji) {
-    final text = _tagCtrl.text;
-    final sel = _tagCtrl.selection;
+  void _insertEmojiInto(TextEditingController ctrl, String emoji) {
+    final text = ctrl.text;
+    final sel = ctrl.selection;
     final start =
         (sel.start >= 0 && sel.start <= text.length) ? sel.start : text.length;
     final end = (sel.end >= 0 && sel.end <= text.length) ? sel.end : start;
     const space = ' ';
     final insert = '$emoji$space';
     final newText = text.replaceRange(start, end, insert);
-    _tagCtrl.value = TextEditingValue(
+    ctrl.value = TextEditingValue(
       text: newText,
       selection: TextSelection.collapsed(offset: start + insert.length),
     );
@@ -452,7 +488,19 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
       _snack(prep.message);
       return false;
     }
-    final ready = prep as NodeDocumentReady;
+    var ready = prep as NodeDocumentReady;
+    // §722 D — поля Tag прочих узлов записи (аккордеон «Nodes in this
+    // source»): каждый — переименование своего узла в тексте, ссылки на
+    // него внутри текста переписываются.
+    for (var i = 0; i < _nodeTagCtrls.length; i++) {
+      final next = renameRecordNode(
+          ready, _recordNodes[i + 1].node.tag, _nodeTagCtrls[i].text);
+      if (next is NodeDocumentRejected) {
+        _snack(next.message);
+        return false;
+      }
+      ready = next as NodeDocumentReady;
+    }
     if (ready.dialect.isJson) {
       final payload = checkPayloadFor(ready.text, ready.dialect);
       if (payload != null) {
@@ -472,7 +520,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
         dialect: ready.dialect,
         savedMessage: () => ready.droppedExtras
             ? getLocalText.s(
-                "Only the node is saved. The rest of the input is not kept.")
+                "Only the nodes are saved. The rest of the input is not kept.")
             : ready.commentsRemoved
                 ? getLocalText.s("Comments were removed.")
                 : getLocalText.s("Saved"));
@@ -522,7 +570,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     final base = _dialect == SourceDialect.singbox &&
             sourceKindOf(raw) == SourceKind.singboxOutbound
         ? raw
-        : _jsonCtrl.text;
+        : _ownerJson;
     final String text;
     try {
       text = withBodyFields(base, fields);
@@ -728,7 +776,17 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
   /// не считаются.
   bool get _dirty =>
       _originalTag.isNotEmpty &&
-      (_tagCtrl.text != _originalTag || _sourceCtrl.text != _containerRaw);
+      (_tagCtrl.text != _originalTag ||
+          _sourceCtrl.text != _containerRaw ||
+          _relayTagsEdited);
+
+  /// §722 D — правлено поле Tag узла записи из аккордеона.
+  bool get _relayTagsEdited {
+    for (var i = 0; i < _nodeTagCtrls.length; i++) {
+      if (_nodeTagCtrls[i].text != _recordNodes[i + 1].node.tag) return true;
+    }
+    return false;
+  }
 
   /// Save в AppBar и в диалоге Unsaved changes.
   Future<bool> _save() async {
@@ -838,6 +896,73 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     );
   }
 
+  /// Поле Tag узла с эмодзи-пикером (§090 G2b). [enabled] — `false` у
+  /// узла, чей тег в тексте источника этого вида не переписывается.
+  Widget _buildTagField(TextEditingController ctrl,
+      {Key? key, bool enabled = true}) {
+    return TextField(
+      key: key,
+      controller: ctrl,
+      enabled: enabled,
+      onChanged: (_) => setState(() {}),
+      decoration: InputDecoration(
+        border: const OutlineInputBorder(),
+        labelText: getLocalText.s("Tag"),
+        hintText: getLocalText.s("Display name in node list"),
+        isDense: true,
+        prefixIcon: const Icon(Icons.label_outline, size: 18),
+        // §090 G2b — эмодзи-пикер: тап → палитра → вставка в курсор.
+        suffixIcon: enabled
+            ? EmojiPickerButton(onPick: (e) => _insertEmojiInto(ctrl, e))
+            : null,
+      ),
+    );
+  }
+
+  /// §722 D — блок «Nodes in this source»: узлы записи аккордеоном (свёрнуты,
+  /// заголовок — текущий тег и роль; раскрытый — поле Tag узла). Владелец —
+  /// поле [_tagCtrl], прочие — [_nodeTagCtrls]. Теги не-владельцев
+  /// переписываются только в JSON-источнике (sing-box/Xray).
+  List<Widget> _buildRecordNodesBlock(ThemeData theme) {
+    Widget tile(int i, RecordNode r, TextEditingController ctrl) {
+      final role = i == 0
+          ? getLocalText.s("Owner")
+          : r.relay
+              ? getLocalText.s("Relay")
+              : null;
+      final title = ctrl.text.isNotEmpty ? ctrl.text : r.node.tag;
+      return Theme(
+        data: theme.copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          key: ValueKey('record-node-$i'),
+          tilePadding: const EdgeInsets.symmetric(horizontal: 16),
+          childrenPadding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+          expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
+          title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
+          subtitle: role == null
+              ? null
+              : Text(role,
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+          children: [
+            _buildTagField(ctrl,
+                key: ValueKey('record-node-tag-$i'),
+                enabled: i == 0 || _dialect.isJson),
+          ],
+        ),
+      );
+    }
+
+    return [
+      const SizedBox(height: 8),
+      _sectionHeader(getLocalText.s("Nodes in this source"),
+          getLocalText.s("Tap a node to rename it."), theme),
+      tile(0, _recordNodes.first, _tagCtrl),
+      for (var i = 1; i < _recordNodes.length; i++)
+        tile(i, _recordNodes[i], _nodeTagCtrls[i - 1]),
+    ];
+  }
+
   Widget _buildSettingsTab(ThemeData theme) {
     if (_autoGroup != null) return _buildAutoGroupSettingsTab(theme);
     return ListView(
@@ -861,22 +986,13 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
           title: Text(getLocalText.s("Server")),
           subtitle: Text(_serverInfo, style: theme.textTheme.bodyMedium),
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-          child: TextField(
-            controller: _tagCtrl,
-            onChanged: (_) => setState(() {}),
-            decoration: InputDecoration(
-              border: const OutlineInputBorder(),
-              labelText: getLocalText.s("Tag"),
-              hintText: getLocalText.s("Display name in node list"),
-              isDense: true,
-              prefixIcon: const Icon(Icons.label_outline, size: 18),
-              // §090 G2b — эмодзи-пикер: тап → палитра → вставка в курсор.
-              suffixIcon: EmojiPickerButton(onPick: _insertEmoji),
-            ),
+        if (_recordNodes.length > 1)
+          ..._buildRecordNodesBlock(theme)
+        else
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+            child: _buildTagField(_tagCtrl),
           ),
-        ),
         if (_node case final WireguardSpec wg) ...[
           const SizedBox(height: 16),
           _sectionHeader(getLocalText.s("Masquerade"),
@@ -1289,7 +1405,19 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
         ),
         // §686 — у группы нет тела узла, которое можно отдать ядру
         // дословно: правят форму или Source.
-        if (_autoGroup == null)
+        // §722 D — при N > 1 вкладка показывает массив тел записи: одним
+        // телом источник не заменить — правят Source.
+        if (_autoGroup == null && _recordNodes.length > 1)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: Text(
+              getLocalText.s("Edit the Source tab"),
+              key: const ValueKey('json-edit-source-hint'),
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+          )
+        else if (_autoGroup == null)
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           child: Align(

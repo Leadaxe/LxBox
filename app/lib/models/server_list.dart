@@ -590,6 +590,36 @@ final class UserServer extends ServerList {
       disableTaildropAutosave, stateDirId);
 }
 
+/// §722 D — узел записи и его роль: `relay` — звено цепочки (на него
+/// ссылаются как на detour внутри этой записи), иначе владелец.
+typedef RecordNode = ({NodeSpec node, bool relay});
+
+/// §722 D — все узлы записи своего сервера/члена папки в порядке сборки
+/// (`NodeEntries.main + detours`): каждый корень [roots], за ним его звенья
+/// `chained` вглубь. Один и тот же объект узла второй раз не попадает.
+List<RecordNode> recordNodesOf(Iterable<NodeSpec> roots) {
+  final out = <RecordNode>[];
+  final seen = <NodeSpec>{};
+  bool add(NodeSpec n) {
+    for (final s in seen) {
+      if (identical(s, n)) return false;
+    }
+    seen.add(n);
+    return true;
+  }
+
+  for (final root in roots) {
+    if (!add(root)) continue;
+    out.add((node: root, relay: false));
+    var link = root.chained;
+    while (link != null && add(link)) {
+      out.add((node: link, relay: true));
+      link = link.chained;
+    }
+  }
+  return out;
+}
+
 /// §234 — член папки: самодостаточный парсируемый фрагмент (URI-строка,
 /// WG-INI, JSON-outbound) + per-member toggle. Инвариант member ↔ нода 1:1
 /// обеспечивается на импорте (контроллер сплитит вход по нодам); если raw
