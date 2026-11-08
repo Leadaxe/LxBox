@@ -48,16 +48,38 @@ WizardVar _var(String type, {bool open = false, String def = ''}) =>
 
 void main() {
   testWidgets(
-      'text_list + options — чипы, значение по строке в порядке options',
+      'text_list + options — теги выбранных с ×, «Add ▾» с остальными (§709)',
       (tester) async {
     final got = <String, String>{};
     await _pump(tester,
-        v: _var('text_list'), value: 'c', onChanged: (n, v) => got[n] = v);
-    expect(find.byType(FilterChip), findsNWidgets(3));
-    expect(find.byType(TextField), findsNothing); // закрытый список
-    await tester.tap(find.byKey(const ValueKey('multi-x-a')));
+        v: _var('text_list'), value: 'c\nzzz', onChanged: (n, v) => got[n] = v);
+    // Только выбранные — тегами; чужое «zzz» не показывается.
+    expect(find.byType(InputChip), findsOneWidget);
+    expect(find.byKey(const ValueKey('chip-x-c')), findsOneWidget);
+    expect(find.byType(TextField), findsNothing); // своего ввода нет
+    // Добавление через ▾: в меню только невыбранные.
+    await tester.tap(find.byKey(const ValueKey('chip-add-x')));
     await tester.pumpAndSettle();
-    expect(got['x'], 'a\nc');
+    expect(find.widgetWithText(PopupMenuItem<String>, 'c'), findsNothing);
+    await tester.tap(find.widgetWithText(PopupMenuItem<String>, 'a'));
+    await tester.pumpAndSettle();
+    expect(got['x'], 'c\na'); // порядок добавления, «zzz» выпало
+  });
+
+  testWidgets('text_list + options — × снимает тег, пустое = «Core default»',
+      (tester) async {
+    final got = <String, String>{};
+    await _pump(tester,
+        v: _var('text_list'), value: 'b', onChanged: (n, v) => got[n] = v);
+    await tester.tap(find.descendant(
+        of: find.byKey(const ValueKey('chip-x-b')),
+        matching: find.byType(Icon)));
+    await tester.pumpAndSettle();
+    expect(got['x'], '');
+    await _pump(tester,
+        v: _var('text_list'), value: '', onChanged: (n, v) => got[n] = v);
+    expect(find.byType(InputChip), findsNothing);
+    expect(find.text('Core default'), findsOneWidget);
   });
 
   // §691 — правило UX: строка/мультистрока с подсказками — комбобокс

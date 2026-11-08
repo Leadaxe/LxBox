@@ -1379,6 +1379,9 @@
   "Memory threshold for the VPN core itself (its Go runtime), not the whole app process. Above the threshold the core drops its connections and frees memory, and near it the garbage collector keeps the processor busy and heats the phone. Auto sets no threshold. With any value the core also watches the system's free memory. Applies immediately. The current figure is in Statistics → Memory → Core memory.": {
     "value": "VPN 内核自身（其 Go 运行时）的内存阈值，而非整个应用进程。超过阈值时内核会断开自己的连接并释放内存；接近阈值时垃圾回收会占用处理器并导致手机发热。「自动」不设阈值。无论取何值，内核都会同时监控系统的可用内存。立即生效。当前数值见「统计」→「内存」→「内核内存」。"
   },
+  "Core default": {
+    "value": "内核默认"
+  },
   "Core memory": {
     "value": "内核内存"
   },

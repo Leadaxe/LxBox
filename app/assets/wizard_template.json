@@ -486,13 +486,13 @@
             {"title": "Always", "value": "always"}
           ]
         },
-        { "name": "quic_sniff_decoy_outbounds", "type": "text_list", "options_open": true,
+        { "name": "quic_sniff_decoy_outbounds", "type": "text_list",
           "default_value": "masque", "wizard_ui": "edit",
           "#enable": [{"#not": {"@quic_sniff_decoy": "off"}}],
           "title": "Decoy node types", "tooltip": "Node types that send the byte before their QUIC handshake. Empty means the core default (masque).",
           "options": ["masque", "hysteria2", "tuic", "trusttunnel", "vless", "vmess", "trojan", "wireguard"]
         },
-        { "name": "quic_sniff_decoy_detours", "type": "text_list", "options_open": true,
+        { "name": "quic_sniff_decoy_detours", "type": "text_list",
           "default_value": "vless", "wizard_ui": "edit",
           "#enable": [{"#not": {"@quic_sniff_decoy": "off"}}],
           "title": "Decoy relay types", "tooltip": "The byte goes only if the nearest relay (detour) is of one of these types. Behind a group the type of the member the group actually picked counts. Empty means the core default (vless).",
