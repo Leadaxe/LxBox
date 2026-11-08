@@ -7,8 +7,8 @@ import 'package:lxbox/models/codec/source_record.dart';
 import 'package:lxbox/controllers/subscription_controller.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/server_list.dart';
+import 'package:lxbox/models/source_dialect.dart';
 import 'package:lxbox/services/settings_storage.dart';
-import 'package:lxbox/services/subscription/http_cache.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
@@ -22,11 +22,13 @@ class _FakePathProvider extends PathProviderPlatform
   Future<String?> getApplicationDocumentsPath() async => '$tempRoot/docs';
 }
 
-/// §368 — импорт sing-box JSON через контроллер: какой контейнер получается.
+/// §368 / §722 — импорт sing-box JSON через контроллер: какой контейнер
+/// получается.
 ///
-/// Порог тот же, что у файлового импорта (§129): один узел — сервер
-/// (`UserServer`), несколько — набор (файловая подписка). `UserServer` устроен
-/// как «один сервер», и конфиг на десяток узлов с группой в него не помещается.
+/// §722 (контракт 1.1.165, §11 п.2) — массив режется на записи (по записи на
+/// элемент), документ — одна своя запись целиком, обрезанная до узловых
+/// массивов. Конфиг с группами (`selector`/`urltest`) своей записью не
+/// выражается и приезжает файловой подпиской (§129).
 void main() {
   late Directory tempDir;
 
@@ -79,7 +81,8 @@ void main() {
       expect(entry.list.nodes, hasLength(1));
     });
 
-    test('полный конфиг → файловая подписка, а не UserServer', () async {
+    test('полный конфиг с группой → файловая подписка, а не UserServer',
+        () async {
       final c = SubscriptionController();
       await c.addFromInput(wholeConfig);
       expect(c.lastError, isNull);
@@ -108,18 +111,58 @@ void main() {
       expect(group.label, 'Fastest');
     });
 
-    test('массив outbound\'ов → одна запись со всеми узлами', () async {
+    // §722 — массив — форма ввода: по своей записи на элемент, вид у каждой.
+    test('массив из 3 outbound\'ов → 3 записи', () async {
       final c = SubscriptionController();
       await c.addFromInput('['
           '{"type":"vless","tag":"a","server":"a.example",'
           '"server_port":443,"uuid":"u-a"},'
           '{"type":"vless","tag":"b","server":"b.example",'
-          '"server_port":443,"uuid":"u-b"}'
+          '"server_port":443,"uuid":"u-b"},'
+          '{"type":"vless","tag":"c","server":"c.example",'
+          '"server_port":443,"uuid":"u-c"}'
           ']');
       expect(c.lastError, isNull);
-      // Раньше массив раскладывался по записи на элемент («v1 parity»).
-      expect(c.entries, hasLength(1));
-      expect(c.entries.single.list.nodes, hasLength(2));
+      expect(c.entries, hasLength(3));
+      for (final e in c.entries) {
+        final u = e.list as UserServer;
+        expect(u.nodes, hasLength(1));
+        expect(u.dialect, SourceDialect.singbox);
+        expect(sourceKindOf(u.rawBody), 'singbox_outbound');
+      }
+    });
+
+    // §722 — документ без групп: одна запись целиком, все узлы записи.
+    test('документ из двух узлов без групп → одна запись, route снят',
+        () async {
+      final c = SubscriptionController();
+      await c.addFromInput('{"outbounds":['
+          '{"type":"vless","tag":"a","server":"a.example",'
+          '"server_port":443,"uuid":"u-a"},'
+          '{"type":"vless","tag":"b","server":"b.example",'
+          '"server_port":443,"uuid":"u-b"}'
+          '],"route":{"final":"a"}}');
+      expect(c.lastError, isNull);
+      final u = c.entries.single.list as UserServer;
+      expect(u.dialect, SourceDialect.singbox);
+      expect(u.nodes, hasLength(2));
+      expect(u.rawBody, isNot(contains('route')));
+    });
+
+    // §722 — Xray-конфиг своей записью: вид xray, текст Xray, без routing.
+    test('Xray-конфиг → одна запись вида xray', () async {
+      final c = SubscriptionController();
+      await c.addFromInput('{"outbounds":[{"tag":"xr","protocol":"vless",'
+          '"settings":{"vnext":[{"address":"example-1.com","port":443,'
+          '"users":[{"id":"11111111-2222-3333-4444-555555555555",'
+          '"encryption":"none"}]}]},'
+          '"streamSettings":{"network":"tcp","security":"none"}}],'
+          '"routing":{"rules":[]}}');
+      expect(c.lastError, isNull);
+      final u = c.entries.single.list as UserServer;
+      expect(u.dialect, SourceDialect.xray);
+      expect(u.rawBody, contains('"protocol"'));
+      expect(u.rawBody, isNot(contains('routing')));
     });
 
     test('не-JSON → ошибка «не распознано», записей нет', () async {
@@ -165,40 +208,36 @@ void main() {
       // Остаток — один узел, значит свой UserServer, а не файловая подписка.
       final rest = c.entries.firstWhere((e) => e != tsEntry);
       expect(rest.list, isA<UserServer>());
-      // §576 п.2 — в источнике голое тело узла, и дефолтный эмодзи ставится
-      // ему так же, как вставленному голому телу (у документа тег лежал не в
-      // корне, и эмодзи не доезжал).
+      // §722 — в источнике документ, обрезанный до узловых массивов;
+      // дефолтный эмодзи ставится узлу-владельцу, а не в корень документа.
       expect(rest.list.nodes.single.label, '⚡ DE');
-      expect(sourceKindOf((rest.list as UserServer).rawBody),
-          'singbox_outbound');
+      final restRaw = (rest.list as UserServer).rawBody;
+      expect(sourceKindOf(restRaw), 'singbox_config');
+      expect(restRaw, isNot(contains('route')));
     });
 
-    test('endpoint + два прокси → UserServer (ts) + файловая подписка без ts '
-        'в кэше', () async {
+    // §722 — остаток без tailscale — документ из двух узлов без групп: одна
+    // своя запись целиком (раньше — файловая подписка).
+    test('endpoint + два прокси → UserServer (ts) + запись остатка без ts',
+        () async {
       final c = SubscriptionController();
       await c.addFromInput(
           '{"endpoints":[$tsEndpoint],"outbounds":[$proxy,$proxy2]}');
       expect(c.lastError, isNull);
       expect(c.entries, hasLength(2));
 
-      final tsList = c.entries
-          .map((e) => e.list)
-          .whereType<UserServer>()
-          .single;
+      final lists = c.entries.map((e) => e.list).whereType<UserServer>();
+      expect(lists, hasLength(2));
+      final tsList = lists.firstWhere((l) => l.nodes.first is TailscaleSpec);
       expect(tsList.nodes.single, isA<TailscaleSpec>());
 
-      final sub = c.entries
-          .map((e) => e.list)
-          .whereType<SubscriptionServers>()
-          .single;
-      expect(sub.nodes.map((n) => n.label), ['DE', 'NL']);
-      // Кэш файловой подписки перечитывается на старте — tailscale обязан
-      // из него исчезнуть, иначе узел вернулся бы дублем.
-      final cached = await HttpCache.loadBody(sub.url);
-      expect(cached, isNotNull);
-      expect(cached, isNot(contains('tailscale')));
-      expect(cached, contains('"DE"'));
-      expect(cached, contains('"NL"'));
+      // Источник остатка — документ без tailscale: иначе узел вернулся бы
+      // дублем при перечитывании записи.
+      final rest = lists.firstWhere((l) => l != tsList);
+      expect(rest.nodes, hasLength(2));
+      expect(rest.nodes.last.label, 'NL');
+      expect(rest.rawBody, isNot(contains('tailscale')));
+      expect(rest.rawBody, contains('"NL"'));
     });
 
     test('endpoint + группа: остаток без узлов — не ошибка', () async {

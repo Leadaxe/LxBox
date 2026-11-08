@@ -13,6 +13,7 @@ import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/codec/source_replace_record.dart';
 import 'package:lxbox/models/source_chain.dart';
+import 'package:lxbox/models/source_dialect.dart';
 import 'package:lxbox/services/json_clone.dart';
 import 'package:lxbox/services/lx_backup.dart';
 import 'package:lxbox/services/lx_backup_import.dart';
@@ -185,11 +186,13 @@ void main() {
 
         _checkDns(state, expected);
 
-        // §576 (контракт 1.1.87) — источник своего сервера и члена папки
-        // после импорта: голое тело узла. Документ и массив в источник не
-        // попадают. Сравнение по значению; `tag` несёт запись, он не
-        // сравнивается.
+        // §722 (контракт 1.1.165) — источник своего сервера и члена папки
+        // после импорта: текст в своём диалекте, документ — документом.
+        // Сравнение по значению; `tag` голого тела несёт запись (импорт
+        // кладёт в тело тег записи), он не сравнивается. `origin_kind` —
+        // хранимый вид записи.
         _checkOriginRaw(state, expected);
+        _checkOriginKind(state, expected);
 
         // Фича 565 фаза B (§74) — свёртка `replace` в состоянии и в
         // повторном экспорте. `replace_tags` (дериватив legacy `fold`) не
@@ -785,35 +788,58 @@ Future<void> _checkReplaces(_State state, Map<String, dynamic> expected) async {
   compare('повторный экспорт', exported);
 }
 
-/// §576 — `origin_raw`: «тег» (корневой сервер) или «имя папки/тег» (член)
-/// → JSON источника записи.
+/// §722 — запись «тег» (корневой сервер) или «имя папки/тег» (член) →
+/// (текст источника, вид). `null` — записи нет.
+(String, SourceDialect)? _ownRecordOf(_State state, String key) {
+  final slash = key.indexOf('/');
+  if (slash < 0) {
+    for (final l in state.lists) {
+      if (l is UserServer &&
+          (l.name == key || (l.nodes.isNotEmpty && l.nodes.first.tag == key))) {
+        return (l.rawBody, l.dialect);
+      }
+    }
+    return null;
+  }
+  final folder = key.substring(0, slash);
+  final tag = key.substring(slash + 1);
+  (String, SourceDialect)? hit;
+  for (final l in state.lists) {
+    if (l is! FolderServers || l.name != folder) continue;
+    for (final m in l.members) {
+      if (m.node?.tag == tag) hit = (m.raw, m.dialect);
+    }
+  }
+  return hit;
+}
+
+/// §576/§722 — `origin_raw`: «тег» (корневой сервер) или «имя папки/тег»
+/// (член) → JSON источника записи (объект или массив, по значению; у объекта
+/// корневой `tag` не сравнивается — его несёт запись).
 void _checkOriginRaw(_State state, Map<String, dynamic> expected) {
   final want = (expected['origin_raw'] as Map?)?.cast<String, dynamic>();
   if (want == null) return;
   want.forEach((key, wantBody) {
-    final slash = key.indexOf('/');
-    String? raw;
-    if (slash < 0) {
-      for (final l in state.lists) {
-        if (l is UserServer &&
-            (l.name == key || (l.nodes.isNotEmpty && l.nodes.first.tag == key))) {
-          raw = l.rawBody;
-          break;
-        }
-      }
-    } else {
-      final folder = key.substring(0, slash);
-      final tag = key.substring(slash + 1);
-      for (final l in state.lists) {
-        if (l is! FolderServers || l.name != folder) continue;
-        for (final m in l.members) {
-          if (m.node?.tag == tag) raw = m.raw;
-        }
-      }
+    final rec = _ownRecordOf(state, key);
+    expect(rec, isNotNull, reason: 'origin_raw: нет записи $key');
+    Object? got = jsonDecode(rec!.$1);
+    Object? exp = wantBody;
+    if (got is Map && exp is Map) {
+      got = Map<String, dynamic>.from(got)..remove('tag');
+      exp = Map<String, dynamic>.from(exp)..remove('tag');
     }
-    expect(raw, isNotNull, reason: 'origin_raw: нет записи $key');
-    final got = (jsonDecode(raw!) as Map).cast<String, dynamic>()
-      ..remove('tag');
-    expect(got, wantBody, reason: 'origin_raw $key: источник — тело узла');
+    expect(got, exp, reason: 'origin_raw $key: источник записи');
+  });
+}
+
+/// §722 — `origin_kind`: ключ как у `origin_raw` → вид записи
+/// (`singbox | xray | uri | wg_ini`).
+void _checkOriginKind(_State state, Map<String, dynamic> expected) {
+  final want = (expected['origin_kind'] as Map?)?.cast<String, dynamic>();
+  if (want == null) return;
+  want.forEach((key, kind) {
+    final rec = _ownRecordOf(state, key);
+    expect(rec, isNotNull, reason: 'origin_kind: нет записи $key');
+    expect(rec!.$2.code, kind, reason: 'origin_kind $key');
   });
 }

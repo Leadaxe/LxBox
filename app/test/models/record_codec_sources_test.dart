@@ -8,6 +8,7 @@ import 'package:lxbox/models/import_rule.dart';
 import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/source_chain.dart';
+import 'package:lxbox/models/source_dialect.dart';
 import 'package:lxbox/models/source_replace.dart';
 import 'package:lxbox/models/subscription_meta.dart';
 import 'package:lxbox/models/tls_policy.dart';
@@ -619,10 +620,11 @@ void main() {
     });
   });
 
-  // §576 п.3 — старые записи своего сервера и члена папки с документом или
-  // массивом в источнике при чтении получают голое тело узла записи. Тег,
-  // identity и тело для ядра не сдвигаются.
-  group('§576 — старый источник сводится к телу узла', () {
+  // §722 (контракт 1.1.165, PARSING_PRINCIPLES §11 п.6) — старые записи
+  // `origin.kind: json` читаются КАК ЕСТЬ: документ и массив остаются в
+  // источнике (обрезка — на входе текста, не при чтении), вид мигрирует
+  // движком (`singbox`). Тег, identity и тело для ядра не сдвигаются.
+  group('§722 — старый источник json читается как есть', () {
     const trojan = {
       'type': 'trojan',
       'tag': 'tj',
@@ -660,17 +662,18 @@ void main() {
           'id': 'srv-${e.key}',
           'origin': {'kind': 'json', 'raw': e.value},
         })).value! as UserServer;
-        expect(sourceKindOf(u.rawBody), 'singbox_outbound');
-        final after = u.nodes.single;
+        expect(u.rawBody, e.value, reason: 'текст при чтении не меняется');
+        expect(u.dialect, SourceDialect.singbox);
+        final after = u.nodes.firstWhere((n) => !n.isGroup);
         expect(after.tag, before.tag);
         expect(nodeDedupSignature(after), nodeDedupSignature(before),
             reason: 'identity узла не сдвигается');
-        final body = verbatimBodyOf(u.rawBody, after)!;
+        final body = verbatimBodyOf(u.dialect, after)!;
         expect(body, {...trojan}, reason: 'в ядро то же тело, что и раньше');
         // Запись пишется в новом виде при сохранении состояния.
-        final rec = sourceToRecord(u);
-        expect(sourceKindOf((rec['origin'] as Map)['raw'] as String),
-            'singbox_outbound');
+        final origin = sourceToRecord(u)['origin'] as Map;
+        expect(origin['kind'], 'singbox');
+        expect(origin['raw'], e.value);
       });
 
       test('${e.key}: член папки', () {
@@ -685,9 +688,13 @@ void main() {
           ],
         })).value! as FolderServers;
         final m = f.members.single;
-        expect(sourceKindOf(m.raw), 'singbox_outbound');
+        expect(m.raw, e.value);
+        expect(m.dialect, SourceDialect.singbox);
         expect(m.node!.tag, 'tj');
-        expect(verbatimBodyOf(m.raw, m.node!), {...trojan});
+        expect(verbatimBodyOf(m.dialect, m.node!), {...trojan});
+        final rec = sourceToRecord(f);
+        final node = (rec['nodes'] as List).single as Map;
+        expect((node['origin'] as Map)['kind'], 'singbox');
       });
     }
 
@@ -702,18 +709,60 @@ void main() {
       })).value! as UserServer;
       expect(u.rawBody, raw);
     });
+  });
 
-    test('тело без тега получает тег узла', () {
-      final raw = jsonEncode({
-        'outbounds': [
-          {...trojan}..remove('tag'),
-        ],
-      });
-      final before = parseAll(decode(raw)).single;
-      final bare = bareNodeSourceOf(raw);
-      expect(sourceKindOf(bare), 'singbox_outbound');
-      expect((jsonDecode(bare) as Map)['tag'], before.tag);
-      expect(parseAll(decode(bare)).single.tag, before.tag);
+  // §722 — `origin.kind` хранит диалект: `singbox | xray | uri | wg_ini`.
+  group('§722 — origin.kind = диалект записи', () {
+    const xrayRaw = '{"tag":"xr","protocol":"vless","settings":{"vnext":'
+        '[{"address":"example-1.com","port":443,"users":[{"id":'
+        '"11111111-2222-3333-4444-555555555555"}]}]},'
+        '"streamSettings":{"network":"tcp","security":"none"}}';
+    const sbRaw = '{"type":"trojan","tag":"sb","server":"example-1.com",'
+        '"server_port":443,"password":"testpass722"}';
+
+    UserServer read(String kind, String raw) => sourceFromRecord(_viaFile({
+          'kind': 'server',
+          'id': 'srv-$kind',
+          'origin': {'kind': kind, 'raw': raw},
+        })).value! as UserServer;
+
+    test('миграция json: sing-box тело → singbox, Xray → xray, битый → singbox',
+        () {
+      expect(read('json', sbRaw).dialect, SourceDialect.singbox);
+      expect(read('json', xrayRaw).dialect, SourceDialect.xray);
+      final broken = read('json', '{"type": ');
+      expect(broken.dialect, SourceDialect.singbox);
+      expect(broken.rawBody, '{"type": ');
+    });
+
+    test('новые значения читаются как есть и пишутся тем же', () {
+      for (final (kind, raw) in [
+        ('singbox', sbRaw),
+        ('xray', xrayRaw),
+        ('uri', 'trojan://testpass722@example-1.com:443#t'),
+      ]) {
+        final u = read(kind, raw);
+        expect(u.dialect.code, kind);
+        expect((sourceToRecord(u)['origin'] as Map)['kind'], kind);
+      }
+    });
+
+    test('uri с JSON-текстом (поле Origin до 1.1.165) → вид движком', () {
+      expect(read('uri', xrayRaw).dialect, SourceDialect.xray);
+      expect(read('uri', sbRaw).dialect, SourceDialect.singbox);
+    });
+
+    test('Xray-источник хранится как набран, узел — перевод', () {
+      final u = read('xray', xrayRaw);
+      expect(u.rawBody, xrayRaw);
+      expect(u.nodes.single.protocol, 'vless');
+      expect(verbatimBodyOf(u.dialect, u.nodes.single), isNull);
+    });
+
+    test('вид едет в copyWith и в равенство записи', () {
+      final u = read('singbox', sbRaw);
+      expect(u.copyWith(enabled: false).dialect, SourceDialect.singbox);
+      expect(u == u.copyWith(dialect: SourceDialect.xray), isFalse);
     });
   });
   group('§636 — tls', () {

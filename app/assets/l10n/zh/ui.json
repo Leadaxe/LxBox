@@ -5365,6 +5365,9 @@
   "Xray config": {
     "value": "Xray 配置"
   },
+  "Xray JSON: kept as written; the app translates it for the core.": {
+    "value": "Xray JSON：按原样保存；由应用转换后发送给内核。"
+  },
   "Yellow up to, ms": {
     "value": "黄色上限，ms"
   },

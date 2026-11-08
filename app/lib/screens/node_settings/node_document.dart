@@ -1,33 +1,43 @@
-/// §435 — подготовка текста JSON-вкладки редактора узла к сохранению.
-/// Чистая функция без Flutter: экран отдаёт ей текст и поле Tag, получает
-/// либо текст для контроллера, либо причину отказа.
+/// §435 / §722 — подготовка текста вкладки Source редактора узла к
+/// сохранению. Чистая функция: экран отдаёт ей текст и поле Tag, получает
+/// либо текст и ВИД записи для контроллера, либо причину отказа.
 ///
-/// §576 — в источник записи уходит ТОЛЬКО ТЕЛО УЗЛА (вид `singbox_outbound`,
-/// PARSING_PRINCIPLES §11). Документ и массив — формы ввода, не хранения:
-/// - голое тело (объект с `type`) — текст как набран, байт в байт;
+/// §722 (контракт 1.1.165, PARSING_PRINCIPLES §11) — Save на Source — новый
+/// вход текста: вид определяет движок ([classifySource]), и вставка другого
+/// диалекта МЕНЯЕТ вид записи, а не отвергается. Источник хранится в своём
+/// диалекте:
+/// - голое тело (sing-box `{"type":…}`, Xray `{"protocol":…}`) — как набрано;
 ///   перекодируется только при смене тега;
-/// - документ (`outbounds`/`endpoints` в корне) — тело первого узла, не
-///   служебного (`direct`, `block`, `dns`) и не группы (`selector`,
-///   `urltest`); подходящего узла нет — отказ;
-/// - массив тел — первый элемент.
+/// - документ — целиком, обрезанный до узловых массивов (`outbounds` /
+///   `endpoints` у sing-box, `outbounds` у Xray); узла нет — отказ;
+/// - массив — форма ввода: при правке одного узла в источник идёт первый
+///   элемент (TASKS_LXBOX §165 п.5 (а));
+/// - ссылка и `.conf` — текст как есть.
 ///
-/// Извлечённое тело пишется JSON с отступом в два пробела. Было во входе
-/// что-то кроме этого узла — [NodeDocumentReady.droppedExtras], экран
-/// говорит одно сообщение: узел сохранён, остальное нет.
+/// Было во входе что-то кроме сохранённого — [NodeDocumentReady.droppedExtras],
+/// экран говорит одно сообщение.
 ///
-/// Тег из поля Tag подмешивается в тело узла.
+/// Тег из поля Tag ставится по виду (одно место — [_withTag]):
+///
+/// | Вид | Куда |
+/// |---|---|
+/// | `singbox` | `tag` узла; в документе — `detour` ссылки на старый тег |
+/// | `xray` | `tag` outbound'а; в документе — `streamSettings.sockopt.dialerProxy` |
+/// | `uri` | фрагмент `#…` ([SubscriptionController.rawWithName]) |
+/// | `wg_ini` | поле записи `nameHint` (§456) |
 library;
 
 import 'dart:convert';
 
-import '../../models/codec/source_record.dart';
+import '../../controllers/subscription_controller.dart' show SubscriptionController;
 import '../../models/node_spec.dart';
 import '../../models/singbox_entry.dart';
-import '../../models/template_vars.dart';
+import '../../models/source_dialect.dart';
+import '../../services/builder/verbatim_body.dart';
 import '../../services/l10n/locale_controller.dart';
 import '../../services/parser/body_decoder.dart';
-import '../../services/parser/json_comments.dart';
 import '../../services/parser/parse_all.dart';
+import '../../services/parser/source_classify.dart';
 
 sealed class NodeDocumentPrep {
   const NodeDocumentPrep();
@@ -36,23 +46,31 @@ sealed class NodeDocumentPrep {
 /// Текст готов к `updateConnectionAt` / `updateMemberAt`.
 final class NodeDocumentReady extends NodeDocumentPrep {
   const NodeDocumentReady(this.text,
-      {required this.isDocument,
+      {required this.dialect,
+      required this.isDocument,
       this.droppedExtras = false,
-      this.commentsRemoved = false});
+      this.commentsRemoved = false,
+      this.nameHint});
 
   /// §585 — во входе были комментарии `//` или `/* */`; в [text] их нет.
   final bool commentsRemoved;
 
-  /// §576 — голое тело узла: как набрано, либо извлечённое из документа или
-  /// массива (JSON с отступом в два пробела).
+  /// Текст источника записи в своём диалекте.
   final String text;
 
-  /// true — вход был документом (`endpoints`/`outbounds` в корне).
+  /// §722 — вид записи после сохранения (`origin.kind`).
+  final SourceDialect dialect;
+
+  /// true — источник документ (`endpoints`/`outbounds` в корне).
   final bool isDocument;
 
-  /// §576 — во входе было что-то кроме сохранённого узла (прочие записи
-  /// документа или массива, `dns`, `route`, `sections`): оно не сохранено.
+  /// Во входе было что-то кроме сохранённого (ключи документа вне узловых
+  /// массивов, элементы массива после первого): оно не сохранено.
   final bool droppedExtras;
+
+  /// §456 — у `wg_ini` имя узла: поле записи (в тексте его нет). Иначе
+  /// `null`.
+  final String? nameHint;
 }
 
 /// Сохранение отказано; [message] — готовая строка для снекбара.
@@ -61,129 +79,122 @@ final class NodeDocumentRejected extends NodeDocumentPrep {
   final String message;
 }
 
-/// Служебные и групповые типы sing-box — не тело узла (зеркало приватных
-/// наборов парсера `singbox_config.dart`: `_kSingboxServiceTypes` +
-/// `_kSingboxGroupTypes`).
-const Set<String> _kNonNodeTypes = {
-  'direct',
-  'block',
-  'dns',
-  'selector',
-  'urltest',
-};
+String get _notANodeMessage => getLocalText.s(
+    "JSON must be an outbound object with \"type\" or a document with \"endpoints\"/\"outbounds\"");
 
-/// Ключи документа, где лежат узлы.
-const Set<String> _kNodeListKeys = {'outbounds', 'endpoints'};
-
-/// §594 — текст вкладки Source идёт JSON-веткой Save
-/// ([prepareNodeDocumentForSave] + ворота ядра). `{` — всегда JSON. `[` —
-/// JSON-массив, КРОМЕ WireGuard/AWG INI: он тоже начинается с `[`
-/// (`[Interface]`), и принять его за массив значило отказать в сохранении
-/// с «Invalid JSON: Unexpected character».
-bool isJsonSourceText(String text) {
-  final t = text.trim();
-  if (t.startsWith('{')) return true;
-  return t.startsWith('[') && originKindOf(t) != 'wg_ini';
-}
-
-NodeDocumentPrep prepareNodeDocumentForSave(String text, String tag) {
-  // §585 — комментарии снимаются до разбора; в источник уходит текст без них.
-  final uncommented = uncommentedJson(text);
-  if (uncommented == null) return _prepare(text, tag);
-  final prep = _prepare(uncommented, tag);
-  return switch (prep) {
-    NodeDocumentReady r => NodeDocumentReady(r.text,
-        isDocument: r.isDocument,
-        droppedExtras: r.droppedExtras,
-        commentsRemoved: true),
-    NodeDocumentRejected() => prep,
-  };
-}
-
-NodeDocumentPrep _prepare(String text, String tag) {
-  final Object? parsed;
-  try {
-    parsed = jsonDecode(text);
-  } on FormatException catch (e) {
+/// §722 — [text] вкладки Source → текст и вид записи. [tag] — поле Tag
+/// (пусто — тег не трогается); [oldTag] — тег узла, который переименовывается
+/// (у документа: узел с этим тегом, не найден или `null` — владелец, первый
+/// узел записи).
+NodeDocumentPrep prepareNodeDocumentForSave(String text, String tag,
+    {String? oldTag}) {
+  final c = classifySource(text);
+  if (c.jsonError != null) {
     return NodeDocumentRejected(
-        getLocalText.s("Invalid JSON: %s", e.message));
+        getLocalText.s("Invalid JSON: %s", c.jsonError!));
   }
-
-  final newTag = tag.trim();
-
-  if (parsed is List) {
-    if (parsed.isEmpty) {
+  final dialect = c.dialect;
+  if (dialect == null || c.items.isEmpty) {
+    if (_isEmptyArray(text)) {
       return NodeDocumentRejected(getLocalText.s("Invalid JSON: empty array"));
     }
-    final first = parsed.first;
-    if (first is! Map || first['type'] is! String) {
-      return NodeDocumentRejected(getLocalText.s(
-          "JSON must be an outbound object with \"type\" or a document with \"endpoints\"/\"outbounds\""));
+    return NodeDocumentRejected(_notANodeMessage);
+  }
+  final item = c.items.first;
+  final dropped = item.extrasDropped || c.items.length > 1;
+  final newTag = tag.trim();
+
+  switch (item.dialect) {
+    case SourceDialect.uri:
+      final t = item.text;
+      final single = !t.contains('\n') && t.contains('://');
+      return NodeDocumentReady(
+        single && newTag.isNotEmpty
+            ? SubscriptionController.rawWithName(t, newTag)
+            : t,
+        dialect: SourceDialect.uri,
+        isDocument: false,
+      );
+    case SourceDialect.wgIni:
+      return NodeDocumentReady(item.text,
+          dialect: SourceDialect.wgIni,
+          isDocument: false,
+          nameHint: newTag.isEmpty ? null : newTag);
+    case SourceDialect.singbox:
+    case SourceDialect.xray:
+      break;
+  }
+
+  final isDocument = item.isDocument;
+  if (isDocument) {
+    final List<NodeSpec> nodes;
+    try {
+      nodes = parseAll(decode(item.text), own: true);
+    } catch (_) {
+      return NodeDocumentRejected(
+          getLocalText.s("The document has no node to save."));
     }
-    return NodeDocumentReady(
-      _bodyText(first.cast<String, dynamic>(), newTag),
-      isDocument: false,
-      droppedExtras: parsed.length > 1,
-    );
-  }
-  if (parsed is! Map) {
-    return NodeDocumentRejected(getLocalText.s(
-          "JSON must be an outbound object with \"type\" or a document with \"endpoints\"/\"outbounds\""));
-  }
-  final map = parsed.cast<String, dynamic>();
-
-  if (map['type'] is String) {
-    if (newTag.isEmpty || map['tag'] == newTag) {
-      return NodeDocumentReady(text, isDocument: false);
+    if (nodes.isEmpty) {
+      return NodeDocumentRejected(
+          getLocalText.s("The document has no node to save."));
     }
-    map['tag'] = newTag;
-    return NodeDocumentReady(jsonEncode(map), isDocument: false);
   }
-
-  if (map['endpoints'] is! List && map['outbounds'] is! List) {
-    return NodeDocumentRejected(getLocalText.s(
-          "JSON must be an outbound object with \"type\" or a document with \"endpoints\"/\"outbounds\""));
-  }
-
-  // Порядок выбора прежний (§435): `endpoints`, затем `outbounds`.
-  final endpoints = map['endpoints'];
-  final outbounds = map['outbounds'];
-  final entries = <Object?>[
-    if (endpoints is List) ...endpoints,
-    if (outbounds is List) ...outbounds,
-  ];
-  final body = _firstNodeBody(entries);
-  if (body == null) {
-    return NodeDocumentRejected(
-        getLocalText.s("The document has no node to save."));
-  }
-  final restNotKept = entries.length > 1 ||
-      map.keys.any((k) => !_kNodeListKeys.contains(k));
+  final out = _withTag(item.text, item.dialect, newTag,
+      oldTag: oldTag, reencode: c.wasArray);
   return NodeDocumentReady(
-    _bodyText(body, newTag),
-    isDocument: true,
-    droppedExtras: restNotKept,
+    out,
+    dialect: item.dialect,
+    isDocument: isDocument,
+    droppedExtras: dropped,
+    commentsRemoved: c.commentsRemoved,
   );
 }
 
-/// Извлечённое тело узла с тегом из поля Tag, JSON с отступом в два пробела.
-String _bodyText(Map<String, dynamic> body, String newTag) {
-  final out = Map<String, dynamic>.from(body);
-  if (newTag.isNotEmpty) out['tag'] = newTag;
-  return const JsonEncoder.withIndent('  ').convert(out);
+bool _isEmptyArray(String text) {
+  try {
+    final v = jsonDecode(text.trim());
+    return v is List && v.isEmpty;
+  } catch (_) {
+    return false;
+  }
 }
 
-/// §455 — полезная нагрузка для `Libbox.checkConfig()`: минимальный конфиг
-/// из одного узла — тело источника (`rawSource` первого узла, §454: оригинал
-/// outbound'а и у голого тела, и у документа) без `detour` (ссылка на чужой
-/// тег ядру неизвестна) под `outbounds` или `endpoints` по типу узла.
-/// `null` — текст не дал узла; об этом скажет контроллер при сохранении.
+/// Правило тега по виду для JSON-диалектов. Тег не меняется — [text] как
+/// есть (байт в байт); [reencode] — элемент массива (JSON с отступом).
+String _withTag(String text, SourceDialect dialect, String newTag,
+    {String? oldTag, bool reencode = false}) {
+  if (newTag.isEmpty) return text;
+  final Object? parsed;
+  try {
+    parsed = jsonDecode(text);
+  } catch (_) {
+    return text;
+  }
+  if (parsed is! Map) return text;
+  final map = parsed.cast<String, dynamic>();
+  final keys = nodeArrayKeysOf(dialect);
+  final isDocument = keys.any((k) => map[k] is List) &&
+      map[dialect == SourceDialect.singbox ? 'type' : 'protocol'] == null;
+  if (!isDocument) {
+    if (map['tag'] == newTag) return text;
+    map['tag'] = newTag;
+    return reencode
+        ? const JsonEncoder.withIndent('  ').convert(map)
+        : jsonEncode(map);
+  }
+  final changed = renameNodeInDocument(map, dialect, newTag, oldTag: oldTag);
+  return changed ? const JsonEncoder.withIndent('  ').convert(map) : text;
+}
+
+/// §455 — полезная нагрузка для `Libbox.checkConfig()`: минимальный конфиг из
+/// ВСЕХ узлов записи (§722: владельцы документа и звенья их цепочек, `main +
+/// detours`) без `detour` (ссылки решает сборка) под `outbounds` или
+/// `endpoints` по типу. `null` — текст не дал узла; об этом скажет
+/// контроллер при сохранении.
 ///
-/// Д-1 (эмулятор 19.09.2026) — проверяется РОВНО ТО, ЧТО УЙДЁТ В ЯДРО.
-/// Дословно уходит только sing-box-источник (`verbatimBodyOf`); Xray-объект
-/// собирается моделью, и отдать ядру его оригинал значило бы отвергнуть на
-/// Save узел, который в конфиге работает.
-String? checkPayloadFor(String text) {
+/// Проверяется РОВНО ТО, ЧТО УЙДЁТ В ЯДРО: у вида `singbox` тело владельца —
+/// дословное ([verbatimBodyOf]), у прочих видов и у звеньев — эмиссия модели.
+String? checkPayloadFor(String text, SourceDialect dialect) {
   final List<NodeSpec> nodes;
   try {
     // §585 — разбор своего источника: узел незнакомого типа тоже проверяется.
@@ -192,39 +203,24 @@ String? checkPayloadFor(String text) {
     return null;
   }
   if (nodes.isEmpty) return null;
-  final node = nodes.first;
-  final entry = node.emit(TemplateVars.empty);
-  final key = switch (entry) {
-    Endpoint() => 'endpoints',
-    Outbound() => 'outbounds',
-  };
-  Map<String, dynamic> body;
-  if (sourceIsSingbox(text)) {
-    final Object? decoded;
-    try {
-      decoded = jsonDecode(node.rawSource);
-    } catch (_) {
-      return null;
-    }
-    if (decoded is! Map) return null;
-    body = Map<String, dynamic>.from(decoded);
-  } else {
-    body = Map<String, dynamic>.from(entry.map);
+  final outbounds = <Map<String, dynamic>>[];
+  final endpoints = <Map<String, dynamic>>[];
+  void add(SingboxEntry entry, Map<String, dynamic> body) {
+    body.remove('detour');
+    (entry is Endpoint ? endpoints : outbounds).add(body);
   }
-  body.remove('detour');
-  return jsonEncode({
-    key: [body],
-  });
-}
 
-/// Первый элемент, похожий на тело узла: объект с `type`, не служебный и
-/// не группа. `null` — тела нет (контроллер сам скажет, что узлов не вышло).
-Map<String, dynamic>? _firstNodeBody(List<Object?> entries) {
-  for (final e in entries) {
-    if (e is! Map) continue;
-    final type = e['type'];
-    if (type is! String || _kNonNodeTypes.contains(type)) continue;
-    return e.cast<String, dynamic>();
+  for (final node in nodes) {
+    final entries = node.getEntries(null);
+    final main = verbatimBodyOf(dialect, node) ??
+        Map<String, dynamic>.from(entries.main.map);
+    add(entries.main, main);
+    for (final d in entries.detours) {
+      add(d, Map<String, dynamic>.from(d.map));
+    }
   }
-  return null;
+  return jsonEncode({
+    if (outbounds.isNotEmpty) 'outbounds': outbounds,
+    if (endpoints.isNotEmpty) 'endpoints': endpoints,
+  });
 }

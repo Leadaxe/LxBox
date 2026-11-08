@@ -56,10 +56,12 @@ import 'uri_parsers.dart';
 /// хранится текстом `rawSource`), предупреждения переживают перезагрузку по
 /// построению: их никто не сериализует, они каждый раз считаются заново.
 ///
-/// §576 п.5 — [own]: текст — источник своего сервера или члена папки. Вход
-/// `singbox` (исключения реестра по входу) получает только такое тело с видом
-/// источника `singbox_outbound`; тело подписки — вход `other`
-/// (`authored_scope.dart`).
+/// §576 п.5 / §722 — [own]: текст — источник своего сервера или члена папки.
+/// Вход `singbox` (исключения реестра по входу) получает источник диалекта
+/// sing-box — голое тело и документ (контракт 1.1.165, §10.1 условие 3:
+/// `origin.kind == singbox`); Xray — перевод, вход `other`. Тело подписки —
+/// вход `other` (`authored_scope.dart`). Диалект здесь — ветка движка того же
+/// текста, по которой он и был записан в запись на входе.
 List<NodeSpec> parseAll(
   DecodedBody decoded, {
   String? nameHint,
@@ -68,7 +70,7 @@ List<NodeSpec> parseAll(
 }) {
   final authored = own &&
       decoded is JsonConfig &&
-      decoded.source.kind == SourceKind.singboxOutbound;
+      decoded.source.mapper == 'singbox';
   return withOwnSource(
       own,
       () => withAuthoredBody(

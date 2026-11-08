@@ -11,6 +11,7 @@ import '../controllers/subscription_controller.dart';
 import '../models/codec/source_record.dart';
 import '../vpn/box_vpn_client.dart';
 import '../services/error_format.dart';
+import '../services/parser/body_decoder.dart' show SourceKind;
 import '../services/preset_nodes_view.dart';
 import '../services/settings_storage.dart';
 import '../services/template_loader.dart';
@@ -20,6 +21,7 @@ import '../models/node_link.dart';
 import '../models/node_spec.dart';
 import '../models/node_warning.dart';
 import '../models/server_list.dart';
+import '../models/source_dialect.dart';
 import '../models/template_vars.dart';
 import '../models/tls_policy.dart';
 import '../widgets/detour_target_picker.dart';
@@ -95,8 +97,9 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
   /// §455 — источник записи (`origin.raw`), редактируется на вкладке Source.
   late TextEditingController _sourceCtrl;
 
-  /// §455 — вид источника: `uri` | `wg_ini` | `json` (`originKindOf`).
-  String _originKind = 'uri';
+  /// §722 — вид источника записи (`origin.kind`): хранимое поле записи, по
+  /// тексту не угадывается.
+  SourceDialect _dialect = SourceDialect.uri;
   late TabController _tabs;
   static const _kSourceTab = 1;
   String _originalTag = '';
@@ -194,6 +197,14 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     return list is UserServer ? list.rawBody : '';
   }
 
+  /// §722 — хранимый вид источника записи (член папки или одиночный).
+  SourceDialect get _containerDialect {
+    final member = _member;
+    if (member != null) return member.dialect;
+    final list = widget.entry.list;
+    return list is UserServer ? list.dialect : SourceDialect.uri;
+  }
+
   /// §237 — член папки, если экран открыт для него.
   FolderMember? get _member {
     final mi = widget.memberIndex;
@@ -262,16 +273,16 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
             ? getLocalText.s("No address")
             : '${node.server}:${node.port}';
     // §455 — источник как есть; предпросмотр JSON — то, что уйдёт в ядро:
-    // у sing-box-источника это его объект (дословно), иначе emit() модели.
-    // Д-1 — гейт тот же, что у сборки (`verbatimBodyOf`): у Xray-объекта
-    // вкладка обязана показывать sing-box-тело модели, ведь именно оно и
-    // уйдёт в ядро.
+    // у записи вида `singbox` это объект узла (дословно), иначе emit()
+    // модели. §722 — гейт тот же, что у сборки (`verbatimBodyOf`): вид
+    // записи, не нюх текста; у Xray вкладка показывает sing-box-тело модели.
     final raw = _containerRaw;
     _sourceCtrl.text = raw;
-    _originKind = originKindOf(raw);
+    _dialect = _containerDialect;
     final Object? preview = node is AutoSelectSpec && member != null
         ? autoGroupJsonPreview(node) // §686
-        : sourceIsSingbox(raw) && node.rawSource.trimLeft().startsWith('{')
+        : _dialect == SourceDialect.singbox &&
+                node.rawSource.trimLeft().startsWith('{')
             ? jsonDecode(node.rawSource)
             : node.emit(TemplateVars.empty).map;
     _jsonCtrl.text = const JsonEncoder.withIndent('  ').convert(preview);
@@ -432,22 +443,18 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
       _snack(getLocalText.s("Source is empty"));
       return false;
     }
-    final String toStore;
-    var droppedExtras = false;
-    var commentsRemoved = false;
-    if (isJsonSourceText(text)) {
-      // §435 — голое тело или документ; тег из поля Tag уходит в тело узла.
-      // §575 — `dns`/`route`/`sections` документа не сохраняются.
-      final prep = prepareNodeDocumentForSave(text, _tagCtrl.text);
-      if (prep is NodeDocumentRejected) {
-        _snack(prep.message);
-        return false;
-      }
-      final ready = prep as NodeDocumentReady;
-      toStore = ready.text;
-      droppedExtras = ready.droppedExtras;
-      commentsRemoved = ready.commentsRemoved;
-      final payload = checkPayloadFor(toStore);
+    // §722 — Save на Source — вход текста: вид определяет движок, вставка
+    // другого диалекта меняет вид записи. Тег — по правилу вида
+    // (`prepareNodeDocumentForSave`); §575 — кроме узлов ничего не хранится.
+    final prep = prepareNodeDocumentForSave(text, _tagCtrl.text,
+        oldTag: _originalTag);
+    if (prep is NodeDocumentRejected) {
+      _snack(prep.message);
+      return false;
+    }
+    final ready = prep as NodeDocumentReady;
+    if (ready.dialect.isJson) {
+      final payload = checkPayloadFor(ready.text, ready.dialect);
       if (payload != null) {
         final check = await BoxVpnClient.I.checkConfig(payload);
         if (!mounted) return false;
@@ -458,19 +465,15 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
           return false;
         }
       }
-    } else if (!text.contains('\n') && text.contains('://')) {
-      toStore = SubscriptionController.rawWithName(text, _tagCtrl.text.trim());
-    } else {
-      // §456 — INI: текст как есть, имя — полем записи (`nameHint`).
-      return _store(text,
-          nameHint: _tagCtrl.text.trim(),
-          savedMessage: () => getLocalText.s("Saved"));
     }
-    return _store(toStore,
-        savedMessage: () => droppedExtras
+    return _store(ready.text,
+        // §456 — INI: имя — полем записи (`nameHint`).
+        nameHint: ready.nameHint,
+        dialect: ready.dialect,
+        savedMessage: () => ready.droppedExtras
             ? getLocalText.s(
                 "Only the node is saved. The rest of the input is not kept.")
-            : commentsRemoved
+            : ready.commentsRemoved
                 ? getLocalText.s("Comments were removed.")
                 : getLocalText.s("Saved"));
   }
@@ -514,7 +517,12 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
   /// вкладки Source. `true` — записано.
   Future<bool> _saveTailscaleFields(Map<String, Object?> fields) async {
     final raw = _containerRaw.trim();
-    final base = raw.startsWith('{') ? raw : _jsonCtrl.text;
+    // §722 — в текст пишем только голое тело sing-box; иначе (Xray, ссылка,
+    // документ) — тело модели с вкладки JSON, вид записи станет `singbox`.
+    final base = _dialect == SourceDialect.singbox &&
+            sourceKindOf(raw) == SourceKind.singboxOutbound
+        ? raw
+        : _jsonCtrl.text;
     final String text;
     try {
       text = withBodyFields(base, fields);
@@ -533,7 +541,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
   /// секции остаются прежними.
   Future<void> _saveMasquerade(Masquerade m) async {
     final before = _containerRaw;
-    _sourceCtrl.text = withMasquerade(before, m);
+    _sourceCtrl.text = withMasquerade(before, m, dialect: _dialect);
     await _saveSource();
     if (mounted && _containerRaw == before) _sourceCtrl.text = before;
   }
@@ -546,14 +554,14 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     final raw = _containerRaw;
     final String? reason;
     if (fields?['i1'] != null) {
-      final ignored = masqueradeKeysPresent(raw);
+      final ignored = masqueradeKeysPresent(raw, dialect: _dialect);
       reason = [
         getLocalText.s(
             "Masquerade is off: the node sets I1 explicitly, and I1 takes priority. Without I1 in Source this section becomes available."),
         if (ignored) getLocalText.s("The masquerade keys in Source are ignored."),
       ].join(' ');
     } else {
-      reason = switch (masqueradeWritability(raw)) {
+      reason = switch (masqueradeWritability(raw, dialect: _dialect)) {
         MasqueradeWritability.writable => null,
         MasqueradeWritability.packedLink => getLocalText.s(
             "This source is a packed link. Masquerade can be changed after Edit JSON turns the node into JSON."),
@@ -582,16 +590,18 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
   /// папки — `updateMemberAt`) и перечитать экран.
   /// true — записано.
   Future<bool> _store(String raw,
-      {String? nameHint, required String Function() savedMessage}) async {
+      {String? nameHint,
+      SourceDialect? dialect,
+      required String Function() savedMessage}) async {
     try {
       final mi = widget.memberIndex;
       // §237 — член папки: транзакционная правка raw (битый → откат).
       // §603 — одиночный сервер так же: битый источник не пишется.
       final err = mi != null
-          ? await widget.subController
-              .updateMemberAt(widget.index, mi, raw, nameHint: nameHint)
-          : await widget.subController
-              .updateConnectionAt(widget.index, [raw], nameHint: nameHint);
+          ? await widget.subController.updateMemberAt(widget.index, mi, raw,
+              nameHint: nameHint, dialect: dialect)
+          : await widget.subController.updateConnectionAt(widget.index, [raw],
+              nameHint: nameHint, dialect: dialect);
       if (!mounted) return err == null;
       if (err != null) {
         _snack(err.render());
@@ -616,7 +626,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
   /// заменяется предпросмотром (emit модели с тегом — валиден по построению,
   /// ворота ядра не нужны) и экран уводит в Source.
   Future<void> _editJson() async {
-    if (_originKind == 'json') {
+    if (_dialect.isJson) {
       _tabs.animateTo(_kSourceTab);
       return;
     }
@@ -640,6 +650,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     );
     if (ok != true || !mounted) return;
     await _store(_jsonCtrl.text,
+        dialect: SourceDialect.singbox, // §722 — тело модели = sing-box
         savedMessage: () => getLocalText.s("Source replaced with JSON"));
     if (!mounted) return;
     _tabs.animateTo(_kSourceTab);
@@ -650,7 +661,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
   /// `.conf` нет), источник заменяется текстом вкладки и экран уводит в
   /// Source. Тег и Detour — поля записи, замена их не трогает.
   Future<void> _editIni() async {
-    if (_originKind == 'wg_ini') {
+    if (_dialect == SourceDialect.wgIni) {
       _tabs.animateTo(_kSourceTab);
       return;
     }
@@ -681,6 +692,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     if (ok != true || !mounted) return;
     final stored = await _store(ini.text,
         nameHint: _originalTag,
+        dialect: SourceDialect.wgIni,
         savedMessage: () => getLocalText.s("Source replaced with INI"));
     if (!stored || !mounted) return;
     _tabs.animateTo(_kSourceTab);
@@ -1197,12 +1209,15 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
   Widget _buildSourceTab(ThemeData theme) {
     // §686 — у auto-узла источник — запись группы, подписи вида нет.
     final isAuto = _autoGroup != null;
-    final kindNote = switch (_originKind) {
-      'json' => getLocalText.s(
+    final kindNote = switch (_dialect) {
+      SourceDialect.singbox => getLocalText.s(
           "sing-box JSON: sent to the core as is. The core checks it on save."),
-      'wg_ini' => getLocalText.s(
+      SourceDialect.xray => getLocalText.s(
+          "Xray JSON: kept as written; the app translates it for the core."),
+      SourceDialect.wgIni => getLocalText.s(
           "WireGuard config: saved as is. The tag is stored separately."),
-      _ => getLocalText.s("Link: the tag goes into its fragment on save."),
+      SourceDialect.uri =>
+        getLocalText.s("Link: the tag goes into its fragment on save."),
     };
     return ListView(
       padding:

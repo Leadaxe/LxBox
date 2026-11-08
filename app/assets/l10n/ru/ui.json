@@ -5641,6 +5641,9 @@
   "Xray config": {
     "value": "Конфиг Xray"
   },
+  "Xray JSON: kept as written; the app translates it for the core.": {
+    "value": "Xray JSON: хранится как написан; ядру его переводит приложение."
+  },
   "Yellow up to, ms": {
     "value": "Жёлтый до, мс"
   },

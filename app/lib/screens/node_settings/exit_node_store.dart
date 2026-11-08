@@ -3,6 +3,9 @@ import 'dart:convert';
 import '../../controllers/subscription_controller.dart';
 import '../../models/node_spec.dart';
 import '../../models/server_list.dart';
+import '../../models/codec/source_record.dart' show sourceKindOf;
+import '../../models/source_dialect.dart';
+import '../../services/parser/body_decoder.dart' show SourceKind;
 import '../../models/template_vars.dart';
 import '../../services/l10n/locale_controller.dart';
 import '../../services/tag_resolver.dart';
@@ -26,11 +29,15 @@ class ExitNodeTarget {
   /// Узел Tailscale этой записи.
   final TailscaleSpec node;
 
+  /// §722 — хранимый вид источника записи.
+  final SourceDialect dialect;
+
   const ExitNodeTarget({
     required this.entryIndex,
     required this.memberIndex,
     required this.raw,
     required this.node,
+    this.dialect = SourceDialect.singbox,
   });
 }
 
@@ -51,6 +58,7 @@ ExitNodeTarget? exitNodeTargetForTag(
         entryIndex: owner.entryIndex,
         memberIndex: mi,
         raw: member.raw,
+        dialect: member.dialect,
         node: node);
   }
   if (list is UserServer) {
@@ -64,6 +72,7 @@ ExitNodeTarget? exitNodeTargetForTag(
             entryIndex: owner.entryIndex,
             memberIndex: null,
             raw: list.rawBody,
+            dialect: list.dialect,
             node: n);
       }
     }
@@ -87,7 +96,10 @@ Future<String?> storeExitNodeChoice(SubscriptionController sub,
 Future<String?> storeTailscaleFields(SubscriptionController sub,
     ExitNodeTarget target, Map<String, Object?> fields) async {
   final raw = target.raw.trim();
-  final base = raw.startsWith('{')
+  // §722 — в текст пишем только голое тело sing-box записи вида `singbox`;
+  // иначе тело модели (вид записи станет `singbox`).
+  final base = target.dialect == SourceDialect.singbox &&
+          sourceKindOf(raw) == SourceKind.singboxOutbound
       ? raw
       : const JsonEncoder.withIndent('  ')
           .convert(target.node.emit(TemplateVars.empty).map);
@@ -97,10 +109,12 @@ Future<String?> storeTailscaleFields(SubscriptionController sub,
   } on FormatException catch (e) {
     return getLocalText.s("Invalid JSON: %s", e.message);
   }
-  final prep = prepareNodeDocumentForSave(text, target.node.tag);
+  final prep =
+      prepareNodeDocumentForSave(text, target.node.tag, oldTag: target.node.tag);
   if (prep is NodeDocumentRejected) return prep.message;
-  final toStore = (prep as NodeDocumentReady).text;
-  final payload = checkPayloadFor(toStore);
+  final ready = prep as NodeDocumentReady;
+  final toStore = ready.text;
+  final payload = checkPayloadFor(toStore, ready.dialect);
   if (payload != null) {
     final check = await BoxVpnClient.I.checkConfig(payload);
     // null — мост недоступен: проверять нечем, запись не блокируем.
@@ -110,10 +124,12 @@ Future<String?> storeTailscaleFields(SubscriptionController sub,
   }
   final mi = target.memberIndex;
   if (mi != null) {
-    final err = await sub.updateMemberAt(target.entryIndex, mi, toStore);
+    final err = await sub.updateMemberAt(target.entryIndex, mi, toStore,
+        dialect: ready.dialect);
     if (err != null) return err.render();
   } else {
-    final err = await sub.updateConnectionAt(target.entryIndex, [toStore]);
+    final err = await sub.updateConnectionAt(target.entryIndex, [toStore],
+        dialect: ready.dialect);
     if (err != null) return err.render();
   }
   return null;

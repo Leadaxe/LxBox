@@ -1281,7 +1281,7 @@ void main() {
       expect(back.name, 'Manual');
     });
 
-    test('одиночный сервер: JSON-исходник едет origin json и body', () async {
+    test('одиночный сервер: JSON-исходник едет origin singbox и body', () async {
       final server = UserServer(
         id: 'srv-2',
         name: 'Json',
@@ -1297,8 +1297,8 @@ void main() {
         vars: const {},
       )).json;
       final entry = _sourcesOf(raw, 'server').single;
-      // §438 — JSON-исходник: `origin.kind: json` и тело sing-box в `body`.
-      expect((entry['origin'] as Map)['kind'], 'json');
+      // §438/§722 — исходник sing-box: `origin.kind: singbox` и тело в `body`.
+      expect((entry['origin'] as Map)['kind'], 'singbox');
       expect((entry['body'] as Map)['server'], 'example-1.com');
     });
   });

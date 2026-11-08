@@ -3,13 +3,17 @@
 ///
 /// Чистые функции без ввода-вывода: секция Masquerade экрана узла пишет
 /// ключи в источник, дальше текст идёт тем же путём, что Save вкладки Source.
-/// Вид источника — `originKindOf`/`sourceKindOf` (§480/§482), своего
-/// сниффера здесь нет.
+/// Вид источника — хранимый вид записи ([SourceDialect], §722: экран
+/// передаёт `dialect` записи), форма — `sourceKindOf` (§480/§482); своего
+/// сниффера здесь нет. Без `dialect` (текст только что пришёл снаружи, тесты)
+/// вид определяет движок ([sourceDialectOf]).
 library;
 
 import 'dart:convert';
 
 import '../../models/codec/source_record.dart';
+import '../../models/source_dialect.dart';
+import '../parser/source_classify.dart';
 import '../contract/registry.dart';
 import '../parser/body_decoder.dart' show SourceKind;
 import '../tailscale_network.dart' show withBodyFields;
@@ -128,15 +132,20 @@ const _kKeys = ['ip', 'id', 'ib'];
 final _kPackedBody = RegExp(r'^[A-Za-z0-9+/=_-]+\s*$');
 
 /// Можно ли писать маскировку в источник [raw].
-MasqueradeWritability masqueradeWritability(String raw) {
+MasqueradeWritability masqueradeWritability(String raw,
+    {SourceDialect? dialect}) {
   final t = raw.trim();
   if (t.isEmpty) return MasqueradeWritability.unsupportedFormat;
-  switch (originKindOf(t)) {
-    case 'json':
+  switch (dialect ?? sourceDialectOf(t)) {
+    case SourceDialect.singbox:
       return sourceKindOf(t) == SourceKind.singboxOutbound
           ? MasqueradeWritability.writable
           : MasqueradeWritability.unsupportedFormat;
-    case 'wg_ini':
+    case SourceDialect.xray:
+      return MasqueradeWritability.unsupportedFormat;
+    case SourceDialect.uri:
+      break;
+    case SourceDialect.wgIni:
       return _interfaceRange(t.split('\n')) != null
           ? MasqueradeWritability.writable
           : MasqueradeWritability.unsupportedFormat;
@@ -164,19 +173,21 @@ MasqueradeWritability masqueradeWritability(String raw) {
 /// Есть ли в источнике [raw] хоть один ключ `ip`/`id`/`ib` (в любом
 /// регистре у ссылки и INI). Нужен секции при явном `i1`: разбор такие ключи
 /// снимает, и в модели их не видно.
-bool masqueradeKeysPresent(String raw) {
+bool masqueradeKeysPresent(String raw, {SourceDialect? dialect}) {
   final t = raw.trim();
-  switch (masqueradeWritability(t)) {
+  final kind = dialect ?? sourceDialectOf(t);
+  switch (masqueradeWritability(t, dialect: kind)) {
     case MasqueradeWritability.writable:
       break;
     default:
       return false;
   }
-  switch (originKindOf(t)) {
-    case 'json':
+  switch (kind) {
+    case SourceDialect.singbox:
+    case SourceDialect.xray:
       final m = jsonDecode(t) as Map;
       return _kKeys.any(m.containsKey);
-    case 'wg_ini':
+    case SourceDialect.wgIni:
       final lines = t.split('\n');
       final r = _interfaceRange(lines)!;
       for (var i = r.$1 + 1; i < r.$2; i++) {
@@ -193,15 +204,19 @@ bool masqueradeKeysPresent(String raw) {
 /// байты источника не трогаются (у JSON — переформатирование с отступом 2,
 /// как у Save Source). Источник, в который писать нельзя
 /// ([masqueradeWritability]), — [raw] без изменений.
-String withMasquerade(String raw, Masquerade m) {
-  if (masqueradeWritability(raw) != MasqueradeWritability.writable) {
+String withMasquerade(String raw, Masquerade m, {SourceDialect? dialect}) {
+  final kind = dialect ?? sourceDialectOf(raw);
+  if (masqueradeWritability(raw, dialect: kind) !=
+      MasqueradeWritability.writable) {
     return raw;
   }
   final t = raw.trim();
-  return switch (originKindOf(t)) {
-    'json' => withBodyFields(t, {'ip': m.ip, 'id': m.id, 'ib': m.ib}),
-    'wg_ini' => _withIni(raw, m),
-    _ => _withLink(t, m),
+  return switch (kind) {
+    SourceDialect.singbox ||
+    SourceDialect.xray =>
+      withBodyFields(t, {'ip': m.ip, 'id': m.id, 'ib': m.ib}),
+    SourceDialect.wgIni => _withIni(raw, m),
+    SourceDialect.uri => _withLink(t, m),
   };
 }
 

@@ -9,6 +9,7 @@ import '../../../models/source_entry.dart';
 import '../../../models/tls_policy.dart';
 import '../../contract/registry_warning.dart';
 import '../../node_link_address.dart';
+import '../../parser/source_classify.dart';
 import '../../url_mask.dart';
 
 export '../../url_mask.dart' show maskSubscriptionUrl;
@@ -194,8 +195,18 @@ Map<String, String> entrySourceKinds(SubscriptionEntry e) {
   if (raw.isEmpty) {
     return const {'origin_kind': '', 'source_kind': ''};
   }
+  // §722 — у своей записи и члена папки вид хранится (`origin.kind`); у
+  // подписки он информативен и определяется движком по тексту.
+  final list = e.list;
+  final kind = switch (list) {
+    UserServer() => list.dialect,
+    FolderServers() => list.memberDialects.isNotEmpty
+        ? list.memberDialects.first
+        : sourceDialectOf(raw),
+    SubscriptionServers() => sourceDialectOf(raw),
+  };
   return {
-    'origin_kind': originKindOf(raw),
+    'origin_kind': kind.code,
     'source_kind': sourceKindOf(raw),
   };
 }
