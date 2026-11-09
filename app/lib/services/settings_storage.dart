@@ -265,6 +265,8 @@ class SettingsStorage {
     'last_update_check_at',
     'last_known_version',
     'dismissed_update_version',
+    // Задача 724 — последнее выбранное Направление главного экрана
+    'home_direction',
     // Краш-репорты ядра (§316)
     'shown_crash_stamp',
     // Debug API / config-lock (§031, §037)
@@ -1013,6 +1015,14 @@ class SettingsStorage {
 
   static Future<void> setDismissedUpdateVersion(String tag) =>
       setVar('dismissed_update_version', tag);
+
+  /// Задача 724 — тег Направления, выбранного на главном экране последним.
+  /// Не config-var: в конфиг ядра не идёт, dirty не поднимает.
+  static Future<String> getHomeDirection() async =>
+      getVar('home_direction', '');
+
+  static Future<void> setHomeDirection(String tag) =>
+      setVar('home_direction', tag);
 
   // ---------------------------------------------------------------------------
   // Краш-репорты ядра (§316) — отметка «про этот краш уже сказали».

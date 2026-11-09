@@ -21,7 +21,7 @@ The active node is highlighted and pinned at the top of the list.
 
 | Parameter | Values | Default |
 |---|---|---|
-| Direction (dropdown) | all selector groups of the core snapshot except `GLOBAL`; last — the `NETWORKS` pseudo-direction, if the config has such nodes | `route.final` if it is a selector; otherwise the first |
+| Direction (dropdown) | all selector groups of the core snapshot except `GLOBAL`; last — the `NETWORKS` pseudo-direction, if the config has such nodes | the one picked last on the home screen; otherwise the first |
 
 The Direction list includes not only the application's Directions but any
 selectable selector groups of the config: a provider `selector` from a
@@ -63,7 +63,10 @@ the Direction are closed by the core itself under the Direction flag
   race noise and is ignored. Swipe down pulls the snapshot again; without a
   core answer the current one stays.
 - If the selected Direction vanished from the snapshot (renamed, disabled) —
-  `route.final` is selected, otherwise the first one.
+  the Direction picked last on the home screen is selected (saved in the
+  `home_direction` var, so it survives an app and a tunnel restart), otherwise
+  the first one. Only an explicit pick is remembered (the list and the
+  automation `set-group`); `NETWORKS` is not remembered. Task 724.
 - The selection lives in the core: the app does not store it, but the config
   enables `experimental.cache_file` (`cache.db`), so the core itself brings the
   selector back to the last chosen node on the next start; the cache database

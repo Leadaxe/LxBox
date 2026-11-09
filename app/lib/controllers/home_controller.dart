@@ -78,6 +78,21 @@ class HomeController extends ChangeNotifier
   /// home-dropdown. Обновляется в init + после правок Направлений.
   Map<String, String> _directionLabels = const {};
 
+  /// Задача 724 — тег Направления, выбранного на главном экране последним
+  /// (var `home_direction`). Переживает перезапуск приложения и туннеля.
+  String? _savedDirection;
+
+  /// Задача 724 — прочитать сохранённый тег. Зовётся из [init].
+  @visibleForTesting
+  Future<void> loadSavedDirection() async {
+    final saved = await SettingsStorage.getHomeDirection();
+    _savedDirection = saved.isEmpty ? null : saved;
+  }
+
+  /// Задача 724 — прогнать снимок групп через выбор Направления без стрима.
+  @visibleForTesting
+  void debugApplyGroups(List<CcGroup> groups) => _applyGroups(groups);
+
   /// §208 — auto-теги Направлений в режиме round_robin (`<tag>-auto`). Для гейта
   /// пункта «View pool» в меню auto-ноды (показываем только для round_robin —
   /// у least_test пула нет). Обновляется вместе с _directionLabels.
@@ -244,6 +259,8 @@ class HomeController extends ChangeNotifier
   Future<void> init() async {
     await _loadSavedConfig();
     await refreshDirectionLabels(); // §125 — labels для home-dropdown
+    // Задача 724 — до подписки на статус: первый снимок групп уже видит тег.
+    await loadSavedDirection();
     await reloadPingOptions();
     _statusSub = _vpn.onStatusChanged.listen(_handleStatusEvent);
     // Native шлёт broadcast только на переходы. Если Flutter-процесс умер,
@@ -1767,8 +1784,23 @@ class HomeController extends ChangeNotifier
     _applyGroups(groups);
   }
 
+  /// Задача 724 — какое Направление показать на главном экране: текущее, пока
+  /// оно есть в списке; иначе сохранённое последнее выбранное; иначе первое.
+  /// `route.final` в выборе не участвует.
+  @visibleForTesting
+  static String? pickDirection({
+    required String? current,
+    required String? saved,
+    required List<String> groups,
+  }) {
+    if (current != null && groups.contains(current)) return current;
+    if (saved != null && groups.contains(saved)) return saved;
+    return groups.isNotEmpty ? groups.first : null;
+  }
+
   /// Общее ядро: из свежего снапшота групп пересчитать список selector-групп,
-  /// выбрать активную (sticky → route.final → первая) и применить её ноды.
+  /// выбрать активную (текущая → сохранённая → первая, [pickDirection]) и
+  /// применить её ноды.
   /// Вызывается из стрима И из `reloadProxies` (pull-refresh / после switchNode).
   void _applyGroups(List<CcGroup> ccGroups) {
     // §251 — снапшот «тег группы → её текущий выбор» для fold'а
@@ -1790,19 +1822,11 @@ class HomeController extends ChangeNotifier
         .where((name) => name != 'GLOBAL')
         .toList();
 
-    String? initial = next.selectedGroup;
-    if (initial == null || !groups.contains(initial)) {
-      // §311 — осознанно configRaw (НЕ activeConfigRaw): этот путь — триггер
-      // lazy-fetch'а снапшота, на первом проходе снапшота ещё нет. Выбор
-      // группы идёт по тегам селекторов; их переименование и так требует
-      // рестарта, так что файл здесь безопасен.
-      final finalTag = RouteConfig.finalTag(next.configRaw);
-      if (finalTag != null && groups.contains(finalTag)) {
-        initial = finalTag;
-      } else {
-        initial = groups.isNotEmpty ? groups.first : null;
-      }
-    }
+    final initial = pickDirection(
+      current: next.selectedGroup,
+      saved: _savedDirection,
+      groups: groups,
+    );
 
     _emit(next.copyWith(
         groups: groups, groupLabels: _directionLabels, selectedGroup: initial));
@@ -2063,6 +2087,15 @@ class HomeController extends ChangeNotifier
     // реальную смену группы (не повторный select той же).
     if (group != null && group != prevGroup) {
       AutomationEventEmitter.I.emitGroupChanged(prevGroup, group, 'user');
+    }
+    // Задача 724 — явный выбор (список главного экрана, automation `set-group`)
+    // запоминается на диск; подстановка из `_applyGroups` сюда не заходит,
+    // поэтому запасное «первое в списке» само себя не запоминает.
+    if (group != null && group != _savedDirection) {
+      _savedDirection = group;
+      unawaited(SettingsStorage.setHomeDirection(group).catchError((Object e) {
+        _addDebug(DebugSource.app, 'home direction save failed: $e');
+      }));
     }
   }
 
