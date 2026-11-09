@@ -2,8 +2,10 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | In progress — спека |
+| Статус | Done |
 | Дата старта | 2026-11-09 |
+| Дата завершения | 2026-11-09 |
+| Коммиты | 2319f790 (спека + синк 1.1.165), c2d9ba12 (A+B+C), 211fc497 (D), 47be3e32 (синк патча 1.1.165: `json` на чтении), b1a8d920 (тесты); CI 42538273432 зелёный |
 | Повод | [issue #209](https://github.com/Leadaxe/LxBox/issues/209) (PR #203 — не тот путь) |
 | Контракт | Требует запроса лаунчеру: `origin.kind`, BACKUP §2/§9, PARSING_PRINCIPLES §11 (отмена нормы 1.1.87) |
 | Связанные | [§576](576-node-source-is-bare-body.md) (отменяется), [§575](575-remove-node-sections.md) (правило «кроме узлов — выкидывать» сохраняется), [§455](455-node-editor-source-json-tabs.md), [§456](456-wg-ini-as-source-tag-in-record.md), [§435](435-node-editor-tag-into-body.md), [§404](404-dialer-proxy-signature.md), фичи 002, 006, 007 |
