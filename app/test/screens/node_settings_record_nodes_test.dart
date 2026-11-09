@@ -176,8 +176,19 @@ void main() {
     expect(parsed, isA<List>());
     expect((parsed as List).length, 2);
     expect(parsed.every((e) => e is Map), isTrue);
+    // Подсказка под рамкой высотой 420 — за краем экрана теста; ListView
+    // строит детей лениво, поэтому сначала докрутить. Без докрутки и
+    // `findsNothing` у Edit JSON проходил бы впустую.
+    final hint = find.byKey(const ValueKey('json-edit-source-hint'));
+    await tester.scrollUntilVisible(hint, 200,
+        scrollable: find
+            .descendant(
+                of: find.ancestor(
+                    of: find.byType(LxJsonView), matching: find.byType(ListView)),
+                matching: find.byType(Scrollable))
+            .first);
+    expect(hint, findsOneWidget);
     expect(find.text('Edit JSON'), findsNothing);
-    expect(find.byKey(const ValueKey('json-edit-source-hint')), findsOneWidget);
   });
 
   testWidgets('один узел: блока нет, JSON — объект', (tester) async {

@@ -12,6 +12,8 @@ import 'package:lxbox/services/settings_storage.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
+import '../parser/engine_test_setup.dart';
+
 class _FakePathProvider extends PathProviderPlatform
     with MockPlatformInterfaceMixin {
   final String tempRoot;
@@ -30,6 +32,12 @@ class _FakePathProvider extends PathProviderPlatform
 /// массивов. Конфиг с группами (`selector`/`urltest`) своей записью не
 /// выражается и приезжает файловой подпиской (§129).
 void main() {
+  // Xray разбирается только движком по секциям реестра (запасного
+  // рукописного пути нет, спека 480 крит. 7): без загрузки документ Xray
+  // запасной классификатор отдаёт ветке sing-box — `protocol_unsupported`.
+  setUpAll(loadEngineSections);
+  tearDownAll(unloadEngineSections);
+
   late Directory tempDir;
 
   const singleOutbound = '{"type":"vless","tag":"solo",'
@@ -162,6 +170,31 @@ void main() {
       final u = c.entries.single.list as UserServer;
       expect(u.dialect, SourceDialect.xray);
       expect(u.rawBody, contains('"protocol"'));
+      expect(u.rawBody, isNot(contains('routing')));
+    });
+
+    // §722 «Проверка» п.2 — Xray-конфиг с цепочкой `dialerProxy`: одна запись
+    // вида xray, узлы записи — владелец и звено.
+    test('Xray-конфиг с dialerProxy → одна запись, два узла', () async {
+      final c = SubscriptionController();
+      await c.addFromInput('{"outbounds":['
+          '{"tag":"main","protocol":"vless",'
+          '"settings":{"vnext":[{"address":"example-1.com","port":443,'
+          '"users":[{"id":"11111111-2222-3333-4444-555555555555",'
+          '"encryption":"none"}]}]},'
+          '"streamSettings":{"network":"tcp","security":"none",'
+          '"sockopt":{"dialerProxy":"relay"}}},'
+          '{"tag":"relay","protocol":"vless",'
+          '"settings":{"vnext":[{"address":"example-2.com","port":443,'
+          '"users":[{"id":"11111111-2222-3333-4444-555555555556",'
+          '"encryption":"none"}]}]},'
+          '"streamSettings":{"network":"tcp","security":"none"}}],'
+          '"routing":{"rules":[]}}');
+      expect(c.lastError, isNull);
+      final u = c.entries.single.list as UserServer;
+      expect(u.dialect, SourceDialect.xray);
+      expect(recordNodesOf(u.nodes), hasLength(2));
+      expect(u.rawBody, contains('dialerProxy'));
       expect(u.rawBody, isNot(contains('routing')));
     });
 

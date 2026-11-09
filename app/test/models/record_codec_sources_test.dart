@@ -343,8 +343,8 @@ void main() {
       expect(back, withMs);
     });
 
-    test('сервер: tag из узла, origin.kind по тексту; name, origin модели и '
-        'created_at не пишутся', () {
+    test('сервер: tag из узла, origin.kind — диалект записи; name, origin '
+        'модели и created_at не пишутся', () {
       UserServer server(String raw) => UserServer(
             id: 'u',
             name: 'Legacy name',
@@ -362,7 +362,7 @@ void main() {
       expect((sourceToRecord(server(_wgIni))['origin'] as Map)['kind'],
           'wg_ini');
       expect((sourceToRecord(server(_jsonOutbound))['origin'] as Map)['kind'],
-          'json');
+          'singbox');
 
       final back = _sourceRoundTrip(server(_uriAlpha)) as UserServer;
       expect(back.name, '');
