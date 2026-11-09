@@ -482,8 +482,11 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     // §722 — Save на Source — вход текста: вид определяет движок, вставка
     // другого диалекта меняет вид записи. Тег — по правилу вида
     // (`prepareNodeDocumentForSave`); §575 — кроме узлов ничего не хранится.
+    // Побеждает тот, кого трогали: поле Tag не меняли — тег, исправленный в
+    // самом тексте, остаётся; меняли — поле вписывается в текст.
     final prep = prepareNodeDocumentForSave(text, _tagCtrl.text,
-        oldTag: _originalTag);
+        oldTag: _originalTag,
+        tagTouched: _tagCtrl.text.trim() != _originalTag);
     if (prep is NodeDocumentRejected) {
       _snack(prep.message);
       return false;

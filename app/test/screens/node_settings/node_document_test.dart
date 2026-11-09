@@ -258,6 +258,75 @@ void main() {
     });
   });
 
+  // §722 — «побеждает тот, кого трогали»: поле Tag не меняли (tagTouched:
+  // false) — тег, исправленный в самом тексте Source, не затирается полем.
+  group('поле Tag не трогали — тег из текста остаётся', () {
+    test('Xray outbound: тег исправлен в тексте (#209)', () {
+      final text = xrayOut.replaceFirst(
+          RegExp(r'"tag"\s*:\s*"[^"]*"'), '"tag":"edited-in-text"');
+      expect(text, contains('edited-in-text'));
+      final p = readyOf(prepareNodeDocumentForSave(text, 'field-old',
+          oldTag: 'field-old', tagTouched: false));
+      expect(p.dialect, SourceDialect.xray);
+      expect(p.text, text, reason: 'текст байт в байт');
+    });
+
+    test('sing-box тело: тег из текста; поле трогали — поле', () {
+      const text = '{"type":"socks","tag":"in-text","server":"h","server_port":1}';
+      expect(
+          ready(prepareNodeDocumentForSave(text, 'field',
+              oldTag: 'field', tagTouched: false))['tag'],
+          'in-text');
+      expect(ready(prepareNodeDocumentForSave(text, 'field'))['tag'], 'field');
+    });
+
+    test('в тексте тега нет → берётся поле', () {
+      const text = '{"type":"socks","server":"h","server_port":1}';
+      expect(
+          ready(prepareNodeDocumentForSave(text, 'field',
+              tagTouched: false))['tag'],
+          'field');
+      expect(
+          readyOf(prepareNodeDocumentForSave('trojan://p@h:443', 'field',
+                  tagTouched: false))
+              .text,
+          'trojan://p@h:443#field');
+    });
+
+    test('ссылка: фрагмент исправлен в тексте', () {
+      final p = readyOf(prepareNodeDocumentForSave(
+          'trojan://p@h:443#in-text', 'field',
+          tagTouched: false));
+      expect(p.text, 'trojan://p@h:443#in-text');
+    });
+
+    test('документ: владелец переименован в тексте — первый узел не затёрт',
+        () {
+      final text = xrayChain.replaceFirst('"tag":"main"', '"tag":"main-x"');
+      expect(text, contains('main-x'));
+      final p = readyOf(prepareNodeDocumentForSave(text, 'main',
+          oldTag: 'main', tagTouched: false));
+      final tags = [
+        for (final o in (jsonDecode(p.text) as Map)['outbounds'] as List)
+          (o as Map)['tag']
+      ];
+      expect(tags, contains('main-x'));
+      expect(tags, isNot(contains('main')));
+    });
+
+    test('INI: тега в тексте нет — имя всегда из поля', () {
+      const ini = '[Interface]\nPrivateKey = '
+          'yAnz5TF+lXXJte14tji3zlMNq+hd2rYUIgJBgB3fBmk=\n'
+          'Address = 10.0.0.2/32\n\n[Peer]\nPublicKey = '
+          'xTIBA5rboUvnH4htodjb6e697QjLERt1NAB4mZqp8Dg=\n'
+          'Endpoint = 1.2.3.4:51820\nAllowedIPs = 0.0.0.0/0';
+      expect(
+          readyOf(prepareNodeDocumentForSave(ini, 'home', tagTouched: false))
+              .nameHint,
+          'home');
+    });
+  });
+
   group('отказы', () {
     test('битый JSON', () {
       final p = prepareNodeDocumentForSave('{"type": ', 't');

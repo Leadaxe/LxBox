@@ -86,8 +86,13 @@ String get _notANodeMessage => getLocalText.s(
 /// (пусто — тег не трогается); [oldTag] — тег узла, который переименовывается
 /// (у документа: узел с этим тегом, не найден или `null` — владелец, первый
 /// узел записи).
+///
+/// [tagTouched] — поле Tag меняли на экране. `false` — «побеждает тот, кого
+/// трогали»: тег, написанный в самом тексте (`tag` узла, фрагмент ссылки),
+/// остаётся как набран, поле его не затирает; в тексте тега нет — берётся
+/// [tag]. У `wg_ini` тега в тексте нет — имя всегда из поля.
 NodeDocumentPrep prepareNodeDocumentForSave(String text, String tag,
-    {String? oldTag}) {
+    {String? oldTag, bool tagTouched = true}) {
   final c = classifySource(text);
   if (c.jsonError != null) {
     return NodeDocumentRejected(
@@ -102,7 +107,9 @@ NodeDocumentPrep prepareNodeDocumentForSave(String text, String tag,
   }
   final item = c.items.first;
   final dropped = item.extrasDropped || c.items.length > 1;
-  final newTag = tag.trim();
+  final newTag = !tagTouched && _textHasOwnTag(item.text, item.dialect)
+      ? ''
+      : tag.trim();
 
   switch (item.dialect) {
     case SourceDialect.uri:
@@ -187,6 +194,40 @@ bool documentHasNodeTag(String text, SourceDialect dialect, String tag) {
     for (final e in arr) {
       if (e is Map && e['tag'] == tag) return true;
     }
+  }
+  return false;
+}
+
+/// В тексте источника есть свой тег: фрагмент одиночной ссылки, `tag` голого
+/// тела, `tag` хотя бы одного узла документа. У `wg_ini` — никогда.
+bool _textHasOwnTag(String text, SourceDialect dialect) {
+  switch (dialect) {
+    case SourceDialect.wgIni:
+      return false;
+    case SourceDialect.uri:
+      if (text.contains('\n') || !text.contains('://')) return true;
+      final i = text.indexOf('#');
+      return i >= 0 && text.substring(i + 1).trim().isNotEmpty;
+    case SourceDialect.singbox:
+    case SourceDialect.xray:
+      break;
+  }
+  final Object? v;
+  try {
+    v = jsonDecode(text);
+  } catch (_) {
+    return false;
+  }
+  if (v is! Map) return false;
+  bool tagged(Object? e) {
+    final t = e is Map ? e['tag'] : null;
+    return t is String && t.trim().isNotEmpty;
+  }
+
+  if (tagged(v)) return true;
+  for (final k in nodeArrayKeysOf(dialect)) {
+    final arr = v[k];
+    if (arr is List && arr.any(tagged)) return true;
   }
   return false;
 }
