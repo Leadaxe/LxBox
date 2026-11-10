@@ -141,6 +141,12 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
         var currentRevoked: Boolean = false
             private set
 
+        /// §725 — живой экземпляр сервиса (onCreate…onDestroy): замер Path MTU
+        /// защищает им свой ICMP-сокет (`protect`), как ядро свои.
+        @Volatile
+        var live: BoxVpnService? = null
+            private set
+
         /// Internal — для BoxService.setStatus() обновлять companion-state.
         internal fun setCurrentStatus(s: VpnStatus, revoked: Boolean = false) {
             currentStatus = s
@@ -454,6 +460,7 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
 
     override fun onCreate() {
         super.onCreate()
+        live = this
         service.onCreate()
     }
 
@@ -464,6 +471,7 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
     override fun onBind(intent: Intent): IBinder? = super.onBind(intent) ?: android.os.Binder()
 
     override fun onDestroy() {
+        live = null
         service.onDestroy()
         // §069: runtime applied значение больше не действует — clear snapshot
         // чтобы Stats screen warning исчез при stop VPN.

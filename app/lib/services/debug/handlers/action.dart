@@ -9,6 +9,7 @@ import '../../app_log.dart';
 import '../../automation/handlers.dart' as automation;
 import '../../core_reject/core_reject_runner.dart';
 import '../../core_reject/core_reject_state.dart';
+import '../../diagnostics/path_mtu.dart';
 import '../../error_humanize.dart';
 import '../../platform_channels.dart';
 import '../../../vpn/box_vpn_client.dart';
@@ -63,8 +64,35 @@ Future<DebugResponse> actionHandler(
     '/action/emulate-error' => _emulateError(req, ctx),
     '/action/check-updates' => _checkUpdates(req, ctx),
     '/action/preview-empty-state' => _previewEmptyState(req, ctx),
+    '/action/pathmtu' => _pathMtu(req),
     _ => throw NotFound('action: ${req.path}'),
   };
+}
+
+/// POST /action/pathmtu[?target=<host|ip>]
+///
+/// §725 — замер Path MTU мимо туннеля (тот же поиск, что остров Path MTU у
+/// узла direct). Синхронно: поиск укладывается в ~20 с; страховочная отмена
+/// через 25 с, чтобы ответ успел до таймаута запроса.
+Future<DebugResponse> _pathMtu(DebugRequest req) async {
+  final target = (req.q('target') ?? '').trim();
+  final cancel = PathMtuCancel();
+  final guard = Timer(const Duration(seconds: 25), cancel.cancel);
+  try {
+    final vpn = await BoxVpnClient().getVpnStatus();
+    final r = await findPathMtu(
+      const ChannelPathMtuProber(),
+      target.isEmpty ? kPathMtuDefaultTarget : target,
+      cancel: cancel,
+    );
+    return JsonResponse({
+      'ok': true,
+      'action': 'pathmtu',
+      ...r.toJson(vpnRunning: vpn.isUp),
+    });
+  } finally {
+    guard.cancel();
+  }
 }
 
 /// POST /action/preview-empty-state?on=true|false

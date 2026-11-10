@@ -157,6 +157,10 @@ POST /action/rebuild-config                    SubscriptionController.generateCo
 POST /action/refresh-subs?force=true|false     Manual sub-refresh (via AutoUpdater, force bypasses caps)
 POST /action/download-srs?ruleId=<id>          Download SRS for a rule
 POST /action/clear-srs?ruleId=<id>             Delete cached SRS
+POST /action/pathmtu[?target=<host|ip>]       §725: Path MTU past the tunnel (ICMP, DF; default target 8.8.8.8). Sync, ≤~25 s.
+                                                 → {target,ip,iface,transport,iface_mtu,vpn_running,path_mtu,
+                                                    status:ok|unreachable|no_network|below_floor|cancelled|error,
+                                                    recommend:{wireguard,masque}|null, probes:[{size,status,rtt_ms}]}
 POST /action/toast?msg=<text>&duration=short|long  Android Toast (sanity-check "this is my device")
 POST /action/emulate-error?kind=<k>            Demo humanizeError in /logs. kind: socket|timeout|http-401|
                                                   http-404|http-410|http-429|http-503|format|fs|plain|all
@@ -779,6 +783,7 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'POST', 'path': '/action/toast', 'params': {'msg': 'text', 'duration': 'short|long'}, 'description': 'Android toast (sanity-check)'},
     {'method': 'POST', 'path': '/action/emulate-error', 'params': {'kind': 'socket|timeout|http-401|http-404|http-410|http-429|http-503|format|fs|plain|all'}, 'description': 'Demo humanizeError in /logs'},
     {'method': 'POST', 'path': '/action/check-updates', 'description': 'Force update check (bypass cap + toggle); returns {kind,tag,html_url,...}'},
+    {'method': 'POST', 'path': '/action/pathmtu', 'params': {'target': 'host or IP (default 8.8.8.8)'}, 'description': '§725: Path MTU past the tunnel (ICMP echo with DF on the physical network, binary search up to the interface MTU). Sync, up to ~25 s → {target,ip,iface,transport,iface_mtu,vpn_running,path_mtu,status:ok|unreachable|no_network|below_floor|cancelled|error,recommend:{wireguard,masque}|null,probes:[{size,status,rtt_ms}]}'},
     // WARP
     {'method': 'POST', 'path': '/warp', 'params': {'rebuild': 'true|false'}, 'body': '{licenseKey?, endpoint?, obfuscate?, forceNew?, includeReserved?, quicParams?:{sni,ip,ib,jc,jmin,jmax}}', 'description': 'Register Cloudflare WARP node (same path as Get WARP wizard). All fields optional. obfuscate=true → QUIC masquerade via quicParams. ?rebuild=true regenerates config.'},
     // Rules

@@ -6751,5 +6751,74 @@
   },
   "no route": {
     "value": "无路由"
+  },
+  "Wi-Fi": {
+    "value": "Wi-Fi"
+  },
+  "Mobile": {
+    "value": "移动网络"
+  },
+  "Ethernet": {
+    "value": "以太网"
+  },
+  "Other": {
+    "value": "其他"
+  },
+  "No network": {
+    "value": "无网络"
+  },
+  "MTU %s": {
+    "value": "MTU %s"
+  },
+  "MTU unknown": {
+    "value": "MTU 未知"
+  },
+  "ok %s ms": {
+    "value": "成功 %s 毫秒"
+  },
+  "no reply": {
+    "value": "无应答"
+  },
+  "does not fit the interface": {
+    "value": "超出接口 MTU"
+  },
+  "Path MTU %s": {
+    "value": "路径 MTU %s"
+  },
+  "Nothing is cut on the way": {
+    "value": "路径上没有截断"
+  },
+  "Network drops packets above %s": {
+    "value": "网络丢弃大于 %s 的数据包"
+  },
+  "Path MTU below %s": {
+    "value": "路径 MTU 低于 %s"
+  },
+  "Even a minimum-size packet does not get through": {
+    "value": "即使最小尺寸的数据包也无法通过"
+  },
+  "Target does not answer ping": {
+    "value": "目标不响应 ping"
+  },
+  "Interface": {
+    "value": "接口"
+  },
+  "Recommended tunnel MTU": {
+    "value": "建议的隧道 MTU"
+  },
+  "Probes (%s)": {
+    "value": "探测 (%s)"
+  },
+  "Path MTU": {
+    "value": "路径 MTU"
+  },
+  "Largest packet that reaches the target unfragmented. Probes bypass the tunnel.": {
+    "value": "无需分片即可到达目标的最大数据包。探测绕过隧道。"
+  },
+  "IP address or host name": {
+    "value": "IP 地址或主机名"
+  },
+  "Enter an http:// or https:// address": {
+    "value": "请输入 http:// 或 https:// 地址"
   }
 }

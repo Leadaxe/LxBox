@@ -19,6 +19,7 @@ import com.leadaxe.lxbox.vpn.BootReceiver
 import com.leadaxe.lxbox.vpn.BoxApplication
 import com.leadaxe.lxbox.vpn.BoxVpnService
 import com.leadaxe.lxbox.vpn.L10n
+import com.leadaxe.lxbox.vpn.PathMtuProbe
 import com.leadaxe.lxbox.vpn.PermissionUtils
 import com.leadaxe.lxbox.vpn.QuickShortcuts
 import com.leadaxe.lxbox.vpn.ServiceNotification
@@ -103,6 +104,11 @@ class MainActivity : FlutterActivity() {
             "com.leadaxe.lxbox/wifi_history",
         )
         WifiHistoryBridge.attach(wifiHistoryChannel)
+
+        // §725 — проба Path MTU мимо туннеля (ICMP-сокет на физической сети).
+        PathMtuProbe.attach(
+            MethodChannel(flutterEngine.dartExecutor.binaryMessenger, PathMtuProbe.CHANNEL),
+        )
 
         // §624 — нативный редактор JSON-полей (sora-editor) как platform view.
         flutterEngine.platformViewsController.registry.registerViewFactory(

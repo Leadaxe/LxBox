@@ -7042,5 +7042,74 @@
   },
   "no route": {
     "value": "нет маршрута"
+  },
+  "Wi-Fi": {
+    "value": "Wi-Fi"
+  },
+  "Mobile": {
+    "value": "Мобильная сеть"
+  },
+  "Ethernet": {
+    "value": "Ethernet"
+  },
+  "Other": {
+    "value": "Другая"
+  },
+  "No network": {
+    "value": "Нет сети"
+  },
+  "MTU %s": {
+    "value": "MTU %s"
+  },
+  "MTU unknown": {
+    "value": "MTU неизвестен"
+  },
+  "ok %s ms": {
+    "value": "ок %s мс"
+  },
+  "no reply": {
+    "value": "нет ответа"
+  },
+  "does not fit the interface": {
+    "value": "не влезает в интерфейс"
+  },
+  "Path MTU %s": {
+    "value": "Path MTU %s"
+  },
+  "Nothing is cut on the way": {
+    "value": "По пути ничего не режется"
+  },
+  "Network drops packets above %s": {
+    "value": "Сеть роняет пакеты больше %s"
+  },
+  "Path MTU below %s": {
+    "value": "Path MTU ниже %s"
+  },
+  "Even a minimum-size packet does not get through": {
+    "value": "Не проходит даже пакет минимального размера"
+  },
+  "Target does not answer ping": {
+    "value": "Цель не отвечает на ping"
+  },
+  "Interface": {
+    "value": "Интерфейс"
+  },
+  "Recommended tunnel MTU": {
+    "value": "Рекомендуемый MTU туннеля"
+  },
+  "Probes (%s)": {
+    "value": "Пробы (%s)"
+  },
+  "Path MTU": {
+    "value": "Path MTU"
+  },
+  "Largest packet that reaches the target unfragmented. Probes bypass the tunnel.": {
+    "value": "Наибольший пакет, который доходит до цели без фрагментации. Пробы идут мимо туннеля."
+  },
+  "IP address or host name": {
+    "value": "IP-адрес или имя хоста"
+  },
+  "Enter an http:// or https:// address": {
+    "value": "Введите адрес http:// или https://"
   }
 }
