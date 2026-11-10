@@ -43,6 +43,7 @@ code — about the logic and the order in which to set things up.
   - [A node with a ping error flags its dependents with ⚠](#a-node-with-a-ping-error-flags-its-dependents-with-)
   - [The Dependents tab shows who goes out through the node](#the-dependents-tab-shows-who-goes-out-through-the-node)
   - [The Diagnostics tab sends a test request through one node](#the-diagnostics-tab-sends-a-test-request-through-one-node)
+  - [Path MTU on the direct node tells which MTU to set on a tunnel](#path-mtu-on-the-direct-node-tells-which-mtu-to-set-on-a-tunnel)
 - [Hop chains — a route you build yourself](#hop-chains--a-route-you-build-yourself)
   - [A chain builds a route; a detour adds an intermediate server in front of one server](#a-chain-builds-a-route-a-detour-adds-an-intermediate-server-in-front-of-one-server)
   - [Positions follow packet order](#positions-follow-packet-order)
@@ -1117,8 +1118,9 @@ standalone server or a folder member), the subscription node breakdown (tap
 a node on the Nodes tab) and View details. The request goes through this
 node even if the direction has a different one selected.
 
-Pick the service in the **Endpoint** field; its address shows under the
-field before the run: this service will see the node's exit IP.
+Pick the service with ▾ in the **Endpoint** field, or type your own
+`http://` / `https://` address; the field shows the address before the run:
+this service will see the node's exit IP.
 
 | Endpoint | Address |
 |---|---|
@@ -1161,6 +1163,26 @@ If the node has notifications, the Diagnostics tab ends with a Notifications
 section, and the tab name carries a dot: yellow, or red on an error. The
 layer-by-layer probe of a hop chain is in
 [The Diagnostics tab shows which hop breaks the chain](#the-diagnostics-tab-shows-which-hop-breaks-the-chain).
+
+### Path MTU on the direct node tells which MTU to set on a tunnel
+
+Some mobile operators silently drop packets above roughly 1300 bytes. Then
+WireGuard, AWG and MASQUE nodes with the default MTU connect but everything
+hangs. To check, open View details of the `direct-out` node, the
+**Diagnostics** tab, the **Path MTU** island. It shows the interface and its
+MTU at once; **Run** sends ping packets of different sizes that may not be
+fragmented, straight over the phone's network past the tunnel, so it works
+with the VPN on or off. The **Target** field is `8.8.8.8` by default; put
+your server's address there to measure the path to it.
+
+The result is the largest whole packet that got an answer, for example
+`Path MTU 1340` and `Network drops packets above 1340`. Under it,
+**Recommended tunnel MTU**: set the node's MTU not above the WireGuard / AWG
+number (`Path MTU − 60`) or the MASQUE one (`Path MTU − 51`). `Nothing is
+cut on the way` means the network passes full-size packets.
+`Target does not answer ping` means the target ignores ping or the network
+forbids bypassing the VPN — try another target. **Probes** lists every size
+tried; the copy button copies the whole report.
 
 ---
 

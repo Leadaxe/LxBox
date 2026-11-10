@@ -2,9 +2,10 @@
 
 | Field | Value |
 |-------|-------|
-| Status | In progress |
+| Status | In progress — код, тесты и доки готовы (10.11.2026); Kotlin не компилировался локально (ждёт CI `build-fast`), эмулятор и телефон не проверены |
 | Start date | 2026-11-10 |
 | Source | Сессия с владельцем 07–10.11.2026: зависания YouTube на его телефоне = чёрная дыра по MTU у оператора (~1280–1330 байт), UDP-туннели с внутренним MTU 1280 умирают. Решения владельца — в разделе «Решения» |
+| Commits | `06da0a2d` feat(725) код; `ebcd909a` test(725) тесты; docs(725) — доки и эта спека |
 | Related specs | фича 013 (Diagnostics), §392 (вкладка Diagnostics узла), §393F (слот блока вида узла), фича 130 (MASQUE) |
 
 ## Problem
@@ -144,7 +145,8 @@ WireGuard / AWG / MASQUE с дефолтным MTU не работают, а п�
 7. Рекомендация: WireGuard / AWG — `path_mtu − 60` (IPv4-цель) / `− 80`
    (IPv6-цель); MASQUE — `path_mtu − 51`. Число 51 сверить с доками ядра /
    фичей 130 (SPEC 120: внешний `InitialPacketSize = mtu + 51`); разойдётся —
-   взять из доков и записать сюда.
+   взять из доков и записать сюда. **Сверено 10.11:** `docs/KERNEL.md`
+   — `InitialPacketSize = mtu + 51`, число 51 верно.
 
 ### UI
 
@@ -208,9 +210,37 @@ WireGuard / AWG / MASQUE с дефолтным MTU не работают, а п�
 
 ## Verification
 
-- [ ] Юнит и виджет-тесты зелёные.
+- [x] Юнит и виджет-тесты зелёные (локально: `test/services/path_mtu_test.dart`
+      11/11, `test/widgets/path_mtu_island_test.dart` 10/10; соседние
+      `node_notifications_test`, `tailscale_network_tab_test`,
+      `outbound_view_route_live_test` — 77/77).
 - [ ] CI develop зелёный, `build-fast` собирает APK.
 - [ ] Эмулятор: остров виден у `direct-out`, нет у прокси-узла; замер при
       выключенном и при включённом VPN доходит до результата; Copy; свой
       Endpoint в Check; `POST /action/pathmtu`.
 - [ ] Телефон владельца: Path MTU на сети оператора с чёрной дырой.
+
+## Реализация
+
+- Kotlin: `vpn/PathMtuProbe.kt` (канал `com.leadaxe.lxbox/path_mtu`,
+  регистрация в `MainActivity`), `BoxVpnService.live` — ссылка на живой
+  сервис для `protect`. `protect` делается на `ParcelFileDescriptor.dup(fd)`
+  (метка ставится сокету, дубликат делит его) — без скрытого API.
+- Dart: `services/diagnostics/path_mtu.dart` (поиск, `ChannelPathMtuProber`),
+  `widgets/path_mtu_island.dart`, слот `footer` у `NodeDiagnosticsTab`,
+  подключение в `outbound_view_screen.dart` по `type == 'direct'`.
+- Debug API: `/action/pathmtu` в `handlers/action.dart`, `help.dart`,
+  `docs/api/debug-api-reference.md`.
+
+Отступления от текста спеки:
+
+- MTU интерфейса: `LinkProperties.mtu` (API 29+), а если `0` — MTU самого
+  интерфейса из `NetworkInterface.getByName(iface)`: `LinkProperties` часто
+  пуст, а отправка упирается именно в интерфейс. 1500 — только если неизвестны
+  оба.
+- Статус `cancelled` добавлен к перечню (Stop в острове; в Debug API —
+  страховочная отмена через 25 с, чтобы ответ успел до таймаута запроса 30 с).
+- Ниже пола `path_mtu` = последний прошедший размер (84, проба
+  достижимости); рекомендация показывается только при `status: ok`.
+- Остров Notifications тоже стал островом (вкладка «разложена по островам»).
+

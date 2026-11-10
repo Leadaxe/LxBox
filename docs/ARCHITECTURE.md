@@ -1010,6 +1010,7 @@ vpn/PProfClient.kt           # §207 — the libbox PProfServer (goroutine/CPU d
 vpn/DefaultNetworkMonitor.kt # §087: detect genuine iface switch (prev!=new), debounce 1500ms → resetNetwork
 vpn/DefaultNetworkListener.kt# a ConnectivityManager.NetworkCallback inside a coroutine actor (ported from SagerNet)
 vpn/LocalResolver.kt         # LocalDNSTransport — DNS queries bound to the underlying network (not the tun)
+vpn/PathMtuProbe.kt          # §725 channel path_mtu: one ICMP echo with DF on the physical network (bindSocket + protect), past the tun and the core
 vpn/ConfigManager.kt         # file-based config store (filesDir) + notificationTitle
 vpn/ServiceNotification.kt   # the foreground-service notification (typed SPECIAL_USE on API 34+); the §182 action buttons
 vpn/VpnStatus.kt             # the Stopped/Starting/Started/Stopping enum (the native side of the status)
