@@ -1283,6 +1283,11 @@ running core.
   only over UDP and has no fallback transport. You cannot spot the bad case in
   advance: the connection looks successful, and the server either forwards the
   datagrams or drops them without a word.
+- An HTTP proxy carries only TCP connections. Nodes with a TCP transport
+  (VLESS, Trojan, VMess) work behind it fully, including the UDP of apps that
+  they wrap inside their own stream. Nodes that speak UDP themselves
+  (Hysteria2, TUIC, WireGuard) do not connect behind it. The same note stands
+  under Server on the settings screen of an HTTP node.
 
 ---
 

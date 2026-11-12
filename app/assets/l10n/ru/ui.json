@@ -1451,6 +1451,9 @@
   "Not applied: traffic goes through a detour first.": {
     "value": "Не применяется: трафик сначала идёт через detour."
   },
+  "This proxy carries only TCP connections. Nodes with a TCP transport work through it fully; UDP-based nodes (Hysteria2, TUIC, WireGuard) do not.": {
+    "value": "Этот прокси передаёт только TCP-соединения. Узлы с TCP-транспортом работают через него полностью, узлы на UDP (Hysteria2, TUIC, WireGuard) — нет."
+  },
   "Not available: the node sets I2 explicitly.": {
     "value": "Недоступно: узел задаёт I2 явно."
   },

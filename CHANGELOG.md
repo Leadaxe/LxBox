@@ -8,6 +8,11 @@
 
 ## [Unreleased]
 
+### Added
+
+- **An HTTP proxy node says it carries only TCP ([task 728](docs/spec/tasks/728-http-proxy-tcp-only-notice.md), [#187](https://github.com/Leadaxe/LxBox/issues/187)).** Node Settings of an HTTP proxy shows a note under Server: the proxy carries only TCP connections, nodes with a TCP transport work through it fully, UDP-based nodes (Hysteria2, TUIC, WireGuard) do not. It is there for anyone who makes such a proxy the detour of a subscription.
+  (RU: на экране настроек HTTP-прокси под строкой Server стоит заметка — прокси передаёт только TCP-соединения; узлы с TCP-транспортом работают через него полностью, узлы на UDP — нет.)
+
 ## [2.25.22] — 2026-11-12
 
 ### Fixed

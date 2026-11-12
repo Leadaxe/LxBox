@@ -1256,6 +1256,9 @@
   "Not applied: traffic goes through a detour first.": {
     "value": "未应用：流量先经过 detour。"
   },
+  "This proxy carries only TCP connections. Nodes with a TCP transport work through it fully; UDP-based nodes (Hysteria2, TUIC, WireGuard) do not.": {
+    "value": "此代理只传输 TCP 连接。使用 TCP 传输的节点可以完整地通过它工作；基于 UDP 的节点（Hysteria2、TUIC、WireGuard）则不行。"
+  },
   "Not available: the node sets I2 explicitly.": {
     "value": "不可用：节点显式设置了 I2。"
   },

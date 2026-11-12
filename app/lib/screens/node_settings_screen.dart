@@ -989,6 +989,19 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
           title: Text(getLocalText.s("Server")),
           subtitle: Text(_serverInfo, style: theme.textTheme.bodyMedium),
         ),
+        // §728 — http-прокси несёт только TCP (CONNECT): узел на UDP за ним
+        // не соединится, а выбранный выходом сам он не передаст UDP приложений.
+        if (_node is HttpSpec)
+          Padding(
+            key: const ValueKey('http-tcp-only-notice'),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: Text(
+              getLocalText.s(
+                  "This proxy carries only TCP connections. Nodes with a TCP transport work through it fully; UDP-based nodes (Hysteria2, TUIC, WireGuard) do not."),
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+          ),
         if (_recordNodes.length > 1)
           ..._buildRecordNodesBlock(theme)
         else
