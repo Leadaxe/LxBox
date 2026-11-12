@@ -8,7 +8,7 @@ Related: [`RELEASE_PROCESS.md`](RELEASE_PROCESS.md), [`BUILD.md`](BUILD.md).
 | Fork for CI runs | `gitlab.com/leadaxe/fdroiddata`, branch `com.leadaxe.lxbox` |
 | MR | [fdroiddata!44731](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/44731) |
 | Open MR | [fdroiddata!50151](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/50151) (2026-09-26): 2.25.5, submodules by directory pathspec, cronet-go ref derived from the core's `go.mod`. Replaces the failed bot MR !49202 (2.24.2, missing `submodules/utls`) |
-| Last manual MR | [fdroiddata!55894](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/55894) (merged 2026-11-05): 2.25.19, `cronet-go` srclib pin moved to a live commit after upstream rewrote the `go` branch. Replaces the failed bot MR !55831 (issue #196) |
+| Last manual MR | [fdroiddata!57023](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/57023) (opened 2026-11-12): 2.25.21, x86_64 dropped for good (block and `'%c + 4'` removed, `CurrentVersionCode` 22521502). Replaces the bot MR !56967, killed by the 3 h runner limit on the x86_64 APK. Before it: !55894 (2.25.19, `cronet-go` pin moved to a live commit, issue #196) |
 | RFP | [rfp#4218](https://gitlab.com/fdroid/rfp/-/work_items/4218) |
 
 F-Droid builds from source at `commit:`, including `libbox.aar` from
@@ -118,9 +118,12 @@ confirmed by the next buildserver run.
    runner kills a job at **3 h**. Two ABIs take 73 min, three took 2 h 45 min
    and hit the limit. x86_64 was dropped on 2026-09-06 and returned in
    !48904 on 2026-09-14 (owner's decision); that three-block job took 97 min,
-   about 30 min per ABI, and all three matched the GitHub APKs. If a three-block
-   job hits 3 h again, the release can still go through with the x86_64 block
-   marked `disable:`.
+   about 30 min per ABI, and all three matched the GitHub APKs. Later
+   three-block jobs took 2 h 36–39 min, and on 2026-11-12 (2.25.21, !56967) the
+   job hit 3 h on the x86_64 APK. The owner dropped x86_64 from F-Droid for good
+   in !57023: F-Droid is for Android devices, the x86_64 APK only served
+   emulators and stays on GitHub. The 3 h limit belongs to the shared runner;
+   we cannot raise it.
    Runner variance: the same Chromium build took 25 min once and 50 min
    another time.
 7. The first CI run on GitLab needs account verification (phone or card),
@@ -211,7 +214,6 @@ UpdateCheckMode: Tags ^v\d+\.\d+\.\d+(-hotfix\d+)?$
 VercodeOperation:
   - '%c + 1'
   - '%c + 2'
-  - '%c + 4'
 UpdateCheckData: app/pubspec.yaml|version:\s.+\+(\d+)|.|version:\s(.+)\+
 ```
 
@@ -219,8 +221,11 @@ The pattern after `Tags` filters tag names: release tags and `-hotfixN` pass,
 release candidates `-rc.N` are never picked up (§436). `UpdateCheckIgnore`
 would not do it: `checkupdates` applies it only in `HTTP` mode and when
 parsing a manifest, not in `Tags` mode with `UpdateCheckData`.
-The pattern, `'%c + 4'` and the x86_64 block are in !48904: pipeline green
-on 2026-09-14, waiting for review.
+The pattern came in !48904. `'%c + 4'` and the 2.25.21 x86_64 block were removed in
+!57023 (2.25.21): x86_64 is built only for GitHub. `checkupdates` copies the
+last `len(VercodeOperation)` build blocks as templates, and the last block must
+equal `CurrentVersionCode`, so the order stays arm, arm64 and a disabled block
+must not be left last.
 
 `UpdateCheckData` reads the ABI=0 code from pubspec (`2.23.0+22300500`);
 `VercodeOperation` adds each block's ABI digit, one operation per block.
