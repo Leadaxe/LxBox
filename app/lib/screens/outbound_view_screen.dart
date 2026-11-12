@@ -17,6 +17,7 @@ import '../vpn/cc_channel.dart';
 import '../widgets/chain_positions_block.dart';
 import '../widgets/lx_code_editor.dart';
 import '../widgets/node_diagnostics_tab.dart';
+import '../widgets/path_mtu_island.dart';
 import '../widgets/pool_view_dialog.dart';
 import '../widgets/tailscale_network_tab.dart';
 import '../widgets/wg_peers_section.dart';
@@ -402,6 +403,11 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
                     ? null
                     : ChainPositionsBlock(
                         chainTag: widget.tag, hops: _chainHops!),
+                // §725 — у direct под островом Check остров Path MTU: пробы
+                // мимо туннеля, через прокси ICMP не ходит.
+                footer: widget.config[widget.tag]?.type == 'direct'
+                    ? const PathMtuIsland()
+                    : null,
               ),
             ],
           ),

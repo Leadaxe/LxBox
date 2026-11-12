@@ -30,6 +30,9 @@ class PlatformChannels {
   /// Утилитарный канал (url_launcher, showToast и пр.).
   static const utils = '$_ns/utils';
 
+  /// §725 — проба Path MTU мимо туннеля (`PathMtuProbe.kt`).
+  static const pathMtu = '$_ns/path_mtu';
+
   /// Wi-Fi history: MethodChannel + native `onWifiSeen` events (§051).
   static const wifiHistory = '$_ns/wifi_history';
 

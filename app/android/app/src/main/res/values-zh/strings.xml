@@ -111,4 +111,6 @@
     <string name="clip_offline">设备离线。</string>
     <string name="clip_too_large">内容过大，无法发送</string>
     <string name="clip_copied">已复制</string>
+
+    <string name="appfunctions_display_description">开启或关闭 VPN，并查看连接状态。</string>
 </resources>

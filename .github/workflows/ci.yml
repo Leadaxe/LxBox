@@ -365,6 +365,12 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      - name: Android SDK Platform 37
+        # §721 — compileSdk 37 (androidx.appfunctions). AGP 9.1 сам докачивает
+        # платформу, но в том же прогоне её не находит («Failed to find target
+        # with hash string 'android-37'»); ставим заранее. Есть — no-op.
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "platforms;android-37.0" > /dev/null
+
       - name: Fetch sing-box-lx core (libbox.aar)
         # §104 — ядро: fork Leadaxe/sing-box-lx (AWG2 + XHTTP). AAR не в git;
         # скачиваем из GH Releases форка с проверкой SHA256. Пин версии —

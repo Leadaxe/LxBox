@@ -253,6 +253,7 @@ curl -X POST -H "$HDR" "$BASE/logs/clear?source=core"
 | `POST /action/toast` | `msg=<str>&duration=short\|long` | Toast на устройстве (до 200 chars) |
 | `POST /action/check-updates` | — | force update check (обход 24h cap + `auto_check_updates`). → `{ok, action, kind, tag, name, html_url, published_at, dismissed, local_version, message}` (поля tag..dismissed — только при `kind=update-available`; зеркалит UI «Check now»). Primary `api.github.com` → fallback `raw.githubusercontent.com/.../docs/latest.json`. |
 | `POST /action/preview-empty-state` | `on=true\|false` | UI-only override: HomeScreen рендерит empty-state как при чистой инсталляции, реальные данные не трогаются. Полезно для скриншотов / regression UX. |
+| `POST /action/pathmtu` | `target=<host\|ip>` (по умолчанию `8.8.8.8`) | §725 — замер Path MTU мимо туннеля (ICMP-эхо с DF на физической сети, бинарный поиск до MTU интерфейса), без ядра, при любом состоянии VPN. Синхронно, до ~25 с. → `{ok, action, target, ip, iface, transport, iface_mtu, vpn_running, path_mtu, status: ok\|unreachable\|no_network\|below_floor\|cancelled\|error, recommend: {wireguard, masque}\|null, probes: [{size, status: ok\|timeout\|too_big\|error, rtt_ms}]}`. `path_mtu` — размер IP-пакета целиком; `recommend` только при `status: ok`: WireGuard/AWG = `path_mtu − 60` (IPv4-цель) / `− 80` (IPv6), MASQUE = `path_mtu − 51`. |
 | `POST /action/quic-knobs` | `gso=on\|off` и/или `ecn=on\|off` (минимум один) | §341 — env-ручки quic-go для полевой A/B-диагностики offload-гипотез (hysteria2/tuic/masque-h3 мертвы на вендорском ядре — SPEC 044). `off` = принудительно выключить (env `QUIC_GO_DISABLE_GSO/ECN=true`), `on` = вернуть авто-детект (env снят; именно unset, не `false` — честнее в `/state`-археологии). Действует только на **НОВЫЕ** QUIC-сокеты — после переключения нужен `reload-vpn`/`reset-network`. Работает и без поднятого туннеля (static `Libbox.setQuic*Disabled`, Go-side `os.Setenv`). `native_ok:false` по ручке = AAR старее SPEC 044 (нет экспорта). → `{ok, action:"quic-knobs", gso?:{disabled,native_ok}, ecn?:{disabled,native_ok}}` |
 
 ```bash
@@ -264,6 +265,9 @@ curl -s -H "$HDR" "$BASE/state" | jq '{active:.active_in_group,err:.last_error}'
 
 # Sanity что трогаешь правильный девайс
 curl -X POST -H "$HDR" "$BASE/action/toast?msg=hello%20from%20debug%20API"
+
+# §725 Path MTU мимо туннеля (до ~25 с): итог и рекомендация MTU узлам
+curl -s -X POST -H "$HDR" "$BASE/action/pathmtu?target=1.1.1.1" | jq '{status,iface,iface_mtu,path_mtu,recommend}'
 ```
 
 ---

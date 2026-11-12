@@ -148,7 +148,7 @@ and traffic — [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.md).
 
 | Parameter | Where | Values | Default |
 |---|---|---|---|
-| Direction | main screen, dropdown (active with the VPN) | core selector groups except `GLOBAL`; `NETWORKS` when present | `route.final`, otherwise the first |
+| Direction | main screen, dropdown (active with the VPN) | core selector groups except `GLOBAL`; `NETWORKS` when present | the one picked last, otherwise the first |
 | Sort mode | sort button (tap — cycles), "Sort options" sheet | Default · Ping · A–Z · Custom | Ping |
 | Pin DIRECT to top / Pin AUTO to top | "Sort options" | on/off, per session | on / on |
 | Re-sort on manual ping | "Sort options" | on/off, per session | on |
@@ -165,8 +165,7 @@ test core.
 
 **Core keys and RPCs the feature hands over/uses:** the `selector` outbound
 (`outbounds`, `default`, for a fold `interrupt_exist_connections: true`),
-`urltest` (the `<tag>-auto` twin), `route.final` (the starting Direction and
-the receiver of rules of a dropped fold). RPC: `SelectOutbound`, the group
+`urltest` (the `<tag>-auto` twin), `route.final` (the receiver of rules of a dropped fold). RPC: `SelectOutbound`, the group
 snapshot and stream, `URLTestOutbound` (the folder test in a separate session).
 
 ## Inputs / Outputs
@@ -207,8 +206,8 @@ snapshot.
   hint.
 - An empty group snapshot on top of an already filled one with a live tunnel
   is ignored (core race noise); swipe down pulls the snapshot again.
-- A Direction that vanished from the snapshot is replaced with `route.final`,
-  otherwise the first one.
+- A Direction that vanished from the snapshot is replaced with the one picked
+  last (task 724), otherwise the first one.
 - Tapping a row only highlights the node; selection — with the ▷ button or
   "Use this node" in the menu, and only with the tunnel up.
 - Pinned rows cannot be dragged, and a row cannot be "dropped" into them.

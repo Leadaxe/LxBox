@@ -2,11 +2,13 @@ import 'package:collection/collection.dart';
 
 import '../services/parser/body_decoder.dart';
 import '../services/parser/parse_all.dart';
+import '../services/parser/source_classify.dart';
 import 'core_reject_verdict.dart';
 import 'import_rule.dart';
 import 'node_link.dart';
 import 'node_spec.dart';
 import 'node_warning.dart';
+import 'source_dialect.dart';
 import 'source_replace.dart';
 import 'subscription_meta.dart';
 import 'tls_policy.dart';
@@ -448,6 +450,12 @@ final class UserServer extends ServerList {
 
   final String rawBody; // оригинал paste'а для reparse в случае багов
 
+  /// §722 — диалект [rawBody], поле записи `origin.kind`. Ставится на входе
+  /// текста (`source_classify.dart`); не задан в конструкторе — это вход, и
+  /// вид определяет движок ([sourceDialectOf]). Копии ([copyWith]) и чтение
+  /// записи несут хранимое значение.
+  final SourceDialect dialect;
+
   /// Фича 478 / PARSING_PRINCIPLES §9.4 — хранимые предупреждения ручного сервера:
   /// сегодня ровно `core_rejected`. Персистится рядом с `enabled` (ключ
   /// `warnings` записи источника). В бэкап вердикт страховки не едет (§489).
@@ -501,8 +509,9 @@ final class UserServer extends ServerList {
     this.disableTaildropCommands = false,
     this.disableTaildropAutosave = false,
     this.stateDirId = '',
+    SourceDialect? dialect,
     super.nodes,
-  });
+  }) : dialect = dialect ?? sourceDialectOf(rawBody);
 
   @override
   String get type => 'user';
@@ -515,6 +524,7 @@ final class UserServer extends ServerList {
     TlsPolicy? tls,
     UserSource? origin,
     String? rawBody,
+    SourceDialect? dialect,
     List<StoredWarning>? warnings,
     List<NodeSpec>? nodes,
     bool? skipTailscalePresets,
@@ -535,6 +545,7 @@ final class UserServer extends ServerList {
         tls: tls ?? this.tls,
         origin: origin ?? this.origin,
         rawBody: rawBody ?? this.rawBody,
+        dialect: dialect ?? this.dialect,
         warnings: warnings ?? this.warnings,
         skipTailscalePresets: skipTailscalePresets ?? this.skipTailscalePresets,
         allowLocal: allowLocal ?? this.allowLocal,
@@ -561,6 +572,7 @@ final class UserServer extends ServerList {
           detourPolicy == other.detourPolicy &&
           tls == other.tls &&
           rawBody == other.rawBody &&
+          dialect == other.dialect &&
           _eq.equals(warnings, other.warnings) &&
           skipTailscalePresets == other.skipTailscalePresets &&
           allowLocal == other.allowLocal &&
@@ -573,9 +585,39 @@ final class UserServer extends ServerList {
 
   @override
   int get hashCode => Object.hash(id, enabled, tagPrefix, detourPolicy, tls,
-      rawBody, _eq.hash(warnings), skipTailscalePresets, allowLocal, allowLan,
-      allowGateway, ownRoutes, disableTaildropCommands,
+      rawBody, dialect, _eq.hash(warnings), skipTailscalePresets, allowLocal,
+      allowLan, allowGateway, ownRoutes, disableTaildropCommands,
       disableTaildropAutosave, stateDirId);
+}
+
+/// §722 D — узел записи и его роль: `relay` — звено цепочки (на него
+/// ссылаются как на detour внутри этой записи), иначе владелец.
+typedef RecordNode = ({NodeSpec node, bool relay});
+
+/// §722 D — все узлы записи своего сервера/члена папки в порядке сборки
+/// (`NodeEntries.main + detours`): каждый корень [roots], за ним его звенья
+/// `chained` вглубь. Один и тот же объект узла второй раз не попадает.
+List<RecordNode> recordNodesOf(Iterable<NodeSpec> roots) {
+  final out = <RecordNode>[];
+  final seen = <NodeSpec>{};
+  bool add(NodeSpec n) {
+    for (final s in seen) {
+      if (identical(s, n)) return false;
+    }
+    seen.add(n);
+    return true;
+  }
+
+  for (final root in roots) {
+    if (!add(root)) continue;
+    out.add((node: root, relay: false));
+    var link = root.chained;
+    while (link != null && add(link)) {
+      out.add((node: link, relay: true));
+      link = link.chained;
+    }
+  }
+  return out;
 }
 
 /// §234 — член папки: самодостаточный парсируемый фрагмент (URI-строка,
@@ -585,6 +627,10 @@ final class UserServer extends ServerList {
 final class FolderMember {
   final String raw;
   final bool enabled;
+
+  /// §722 — диалект [raw], поле записи `origin.kind` (как у
+  /// `UserServer.dialect`): не задан в конструкторе — вход, вид от движка.
+  final SourceDialect dialect;
 
   /// Фича 478 / PARSING_PRINCIPLES §9.4 — хранимые предупреждения члена: сегодня ровно
   /// `core_rejected`. Персистится рядом с [enabled] (ключ `warnings`
@@ -645,8 +691,11 @@ final class FolderMember {
     this.disableTaildropAutosave = false,
     this.stateDirId = '',
     this.tls = TlsPolicy.none,
+    SourceDialect? dialect,
     NodeSpec? node,
-  }) : node = node ?? _parseFirst(raw, nameHint);
+  })  : dialect = dialect ??
+            (raw.trim().isEmpty ? SourceDialect.uri : sourceDialectOf(raw)),
+        node = node ?? _parseFirst(raw, nameHint);
 
   /// §439 — член-группа (запись `kind: auto`, `codec/auto_group_record.dart`):
   /// текста нет, узел — сама группа. detour и секций у группы не бывает.
@@ -671,6 +720,7 @@ final class FolderMember {
 
   FolderMember copyWith({
     String? raw,
+    SourceDialect? dialect,
     bool? enabled,
     List<StoredWarning>? warnings,
     NodeLink? detour,
@@ -687,6 +737,7 @@ final class FolderMember {
   }) =>
       FolderMember(
         raw: raw ?? this.raw,
+        dialect: dialect ?? this.dialect,
         enabled: enabled ?? this.enabled,
         warnings: warnings ?? this.warnings,
         detour: detour ?? this.detour,
@@ -713,6 +764,7 @@ final class FolderMember {
       identical(this, other) ||
       (other is FolderMember &&
           raw == other.raw &&
+          dialect == other.dialect &&
           enabled == other.enabled &&
           _eq.equals(warnings, other.warnings) &&
           detour == other.detour &&
@@ -735,6 +787,7 @@ final class FolderMember {
   @override
   int get hashCode => Object.hash(
       raw,
+      dialect,
       enabled,
       _eq.hash(warnings),
       detour,
@@ -794,11 +847,17 @@ final class FolderServers extends ServerList {
 
   /// Сколько членов выключено (для строки «N servers · M off»).
   /// §455 — raw-тексты членов, выровненные с [nodes] (тот же фильтр
-  /// enabled+parsed, тот же порядок): сборка решает по ним, идёт ли член в
-  /// конфиг дословно (`origin.kind: json`).
+  /// enabled+parsed, тот же порядок).
   List<String> get memberRaws => [
         for (final m in members)
           if (m.enabled && m.node != null) m.raw,
+      ];
+
+  /// §722 — диалекты членов, выровненные с [nodes]: сборка решает по ним,
+  /// идёт ли член в конфиг дословно (`origin.kind: singbox`).
+  List<SourceDialect> get memberDialects => [
+        for (final m in members)
+          if (m.enabled && m.node != null) m.dialect,
       ];
 
   int get disabledCount => members.where((m) => !m.enabled).length;

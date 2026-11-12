@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import '../services/contract/protocol_level.dart';
+import '../services/preset_nodes_view.dart' show nodeHasNoInternetRoute;
 import '../services/tag_resolver.dart';
 
 /// §091 — структурные метаданные одной ноды собранного sing-box config'а.
@@ -139,11 +140,17 @@ class ConfigNode {
 /// Схлопывает `ConfigCache` (`protoByTag`/`detourTags`) и `ConfigIntrospection`
 /// (`outboundByTag`/`detourChain`/`outboundChain`/`nodeCount`) в один объект.
 class ParsedConfig {
-  const ParsedConfig._(this.byTag);
+  const ParsedConfig._(this.byTag, this.preferredByTags);
 
-  const ParsedConfig.empty() : byTag = const <String, ConfigNode>{};
+  const ParsedConfig.empty()
+      : byTag = const <String, ConfigNode>{},
+        preferredByTags = const <String>{};
 
   final Map<String, ConfigNode> byTag;
+
+  /// §718 — теги из `preferred_by` правил `route.rules`: их эмитит пресет
+  /// `tunnel-routes` для узла с флагом записи `own_routes`.
+  final Set<String> preferredByTags;
 
   /// Парсит `configRaw` одним проходом. Malformed JSON → пустой ParsedConfig
   /// (запросы возвращают null/0/empty — caller'ы деградируют к placeholder'ам).
@@ -151,8 +158,17 @@ class ParsedConfig {
     if (configRaw.isEmpty) return const ParsedConfig.empty();
     final byTag = <String, ConfigNode>{};
     final detourTargets = <String, int>{};
+    final preferredBy = <String>{};
     try {
       final cfg = jsonDecode(configRaw) as Map<String, dynamic>;
+      final route = cfg['route'];
+      final rules = route is Map ? route['rules'] : null;
+      if (rules is List) {
+        for (final r in rules) {
+          final pb = r is Map ? r['preferred_by'] : null;
+          if (pb is List) preferredBy.addAll(pb.whereType<String>());
+        }
+      }
       final raws = <(Map<String, dynamic>, String)>[
         for (final o in (cfg['outbounds'] as List<dynamic>? ?? const [])
             .whereType<Map<String, dynamic>>())
@@ -190,7 +206,7 @@ class ParsedConfig {
     } catch (_) {
       // malformed — пустой результат.
     }
-    return ParsedConfig._(byTag);
+    return ParsedConfig._(byTag, preferredBy);
   }
 
   ConfigNode? operator [](String tag) => byTag[tag];
@@ -201,6 +217,16 @@ class ParsedConfig {
 
   /// `'outbound'` / `'endpoint'` (default `'outbound'` для неизвестного тега).
   String kindOf(String tag) => byTag[tag]?.kind ?? 'outbound';
+
+  /// §718 (доработка) — узел без маршрута в интернет: не меряется, строка
+  /// показывает «no route». `own_routes` записи сюда доходит правилом
+  /// `preferred_by` пресета `tunnel-routes`.
+  bool hasNoInternetRoute(String tag) {
+    final raw = byTag[tag]?.raw;
+    if (raw == null) return false;
+    return nodeHasNoInternetRoute(raw,
+        ownRoutes: preferredByTags.contains(tag));
+  }
 
   /// Raw outbound/endpoint map по tag'у, либо null.
   Map<String, dynamic>? rawOf(String tag) => byTag[tag]?.raw;

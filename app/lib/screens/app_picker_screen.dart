@@ -64,15 +64,11 @@ class _AppPickerScreenState extends State<AppPickerScreen> {
     final pkg = app.packageName;
     AppInfoCache.ensure(pkg);
     final info = AppInfoCache.of(pkg) ?? app;
-    if (info.icon != null) {
-      return Image.memory(info.icon!,
-          width: 36, height: 36, gaplessPlayback: true);
-    }
     // Placeholder: первая буква имени в circle avatar.
     final letter = app.appName.isNotEmpty
         ? app.appName.characters.first.toUpperCase()
         : '?';
-    return SizedBox(
+    final placeholder = SizedBox(
       width: 36,
       height: 36,
       child: CircleAvatar(
@@ -84,6 +80,17 @@ class _AppPickerScreenState extends State<AppPickerScreen> {
             )),
       ),
     );
+    if (info.icon != null) {
+      // 693 итер. 2: декодировать в размер плитки, битая картинка → заглушка.
+      return Image.memory(info.icon!,
+          width: 36,
+          height: 36,
+          cacheWidth: 108,
+          cacheHeight: 108,
+          gaplessPlayback: true,
+          errorBuilder: (_, _, _) => placeholder);
+    }
+    return placeholder;
   }
 
   List<AppInfo> get _filtered {

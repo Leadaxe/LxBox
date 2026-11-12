@@ -1,6 +1,8 @@
 plugins {
     id("com.android.application")
     id("kotlin-android")
+    // §721 — KSP порождает сервис и XML-схему AppFunctions.
+    id("com.google.devtools.ksp")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
@@ -20,7 +22,12 @@ fun hasReleaseKeystore(): Boolean =
 
 android {
     namespace = "com.leadaxe.lxbox"
-    compileSdk = flutter.compileSdkVersion
+    // §721 — androidx.appfunctions требует compileSdk ≥ 37 (у Flutter 36).
+    // targetSdk не трогаем: остаётся flutter.targetSdkVersion.
+    compileSdk = 37
+    // Платформа 37 в SDK существует только с минорной версией (platforms;android-37.0,
+    // хэш «android-37.0»); без compileSdkMinor AGP ищет «android-37» и не находит.
+    compileSdkMinor = 0
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -158,6 +165,11 @@ dependencies {
     implementation(platform("io.github.Rosemoe.sora-editor:bom:0.23.6"))
     implementation("io.github.Rosemoe.sora-editor:editor")
     implementation("io.github.Rosemoe.sora-editor:language-textmate")
+    // §721 — Android AppFunctions (startVpn / stopVpn / getVpnStatus для
+    // ассистентов Android 16+). Правила R8 едут с библиотекой (proguard.txt
+    // в AAR: keepnames для @AppFunctionSerializable и инвентаря).
+    implementation("androidx.appfunctions:appfunctions:1.0.0-rc01")
+    ksp("androidx.appfunctions:appfunctions-compiler:1.0.0-rc01")
     // java.time и пр. для API < 26 (Google Maven; см. compileOptions).
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
     // §707 итер. 7 — JVM-тесты чистой логики натива (src/test): org.json

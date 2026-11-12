@@ -57,6 +57,13 @@ Widget? buildSubscriptionEntrySubtitle(
       statusText = node != null
           ? getLocalText.s("%s server", node.protocol.toUpperCase())
           : '';
+      // §722 D — запись из нескольких узлов (владелец + звенья): число
+      // узлов, как «N hops» у строки цепочки.
+      final count = recordNodesOf(entry.list.nodes).length;
+      if (count > 1) {
+        final nodesText = getLocalText.plural("%d nodes", count);
+        statusText = statusText.isEmpty ? nodesText : '$statusText · $nodesText';
+      }
     } else {
       statusText = '';
     }

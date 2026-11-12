@@ -459,14 +459,6 @@
             "8",
             "12"
           ]
-        },
-        { "name": "awg_masquerade", "type": "enum",
-          "default_value": "all", "required": true, "wizard_ui": "edit",
-          "title": "AWG masquerade", "tooltip": "When an AmneziaWG node sends its masquerade packets (ip=quic, i1…) before the handshake. All paths: always, also through another node. Direct only: when the node dials from this device's own socket; through another node a single handshake packet goes out.",
-          "options": [
-            {"title": "All paths (default)", "value": "all"},
-            {"title": "Direct only", "value": "direct"}
-          ]
         }
       ]
     },
@@ -477,13 +469,34 @@
       "description": "MASQUE (HTTP/3), Hysteria2, TUIC and AWG with QUIC masquerade (ip=quic).",
       "vars": [
         { "name": "quic_sniff_decoy", "type": "enum",
-          "default_value": "detour", "required": true, "wizard_ui": "edit", "title": "Anti-sniff decoy", "tooltip": "Send one junk byte before the QUIC handshake so a relay that sniffs UDP cannot redirect the connection by its SNI. Through detour: only connections carried by another node; Direct: only this device's own socket; All: both. Also covers AWG nodes whose masquerade imitates QUIC (ip=quic).",
+          "default_value": "off", "required": true, "wizard_ui": "edit", "title": "Anti-sniff decoy", "tooltip": "Send one junk byte before the QUIC handshake so a relay that sniffs UDP cannot redirect the connection by its SNI. The byte goes only where a node opens QUIC (MASQUE, Hysteria2, TUIC, XHTTP over HTTP/3, AWG with ip=quic) and, by default, only on a retry after a failed first attempt. Through detour: only connections carried by another node; Direct: only this device's own socket; All: both.",
           "options": [
-            {"title": "Off", "value": "off"},
-            {"title": "Through detour (default)", "value": "detour"},
+            {"title": "Off (default)", "value": "off"},
+            {"title": "Through detour", "value": "detour"},
             {"title": "Direct", "value": "direct"},
             {"title": "All", "value": "all"}
           ]
+        },
+        { "name": "quic_sniff_decoy_send", "type": "enum",
+          "default_value": "retry", "required": true, "wizard_ui": "edit",
+          "#enable": [{"#not": {"@quic_sniff_decoy": "off"}}],
+          "title": "Decoy sending", "tooltip": "On retry: the first attempt goes without the byte, a failed one is repeated with it. Always: the byte goes on every dial. Does not apply to WireGuard: there the byte goes on every handshake.",
+          "options": [
+            {"title": "On retry (default)", "value": "retry"},
+            {"title": "Always", "value": "always"}
+          ]
+        },
+        { "name": "quic_sniff_decoy_outbounds", "type": "text_list",
+          "default_value": "masque", "wizard_ui": "edit",
+          "#enable": [{"#not": {"@quic_sniff_decoy": "off"}}],
+          "title": "Decoy node types", "tooltip": "Node types that send the byte before their QUIC handshake. Empty means the core default (masque).",
+          "options": ["masque", "hysteria2", "tuic", "trusttunnel", "vless", "vmess", "trojan", "wireguard"]
+        },
+        { "name": "quic_sniff_decoy_detours", "type": "text_list",
+          "default_value": "vless", "wizard_ui": "edit",
+          "#enable": [{"#not": {"@quic_sniff_decoy": "off"}}],
+          "title": "Decoy relay types", "tooltip": "The byte goes only if the nearest relay (detour) is of one of these types. Behind a group the type of the member the group actually picked counts. Empty means the core default (vless).",
+          "options": ["vless", "vmess", "trojan", "shadowsocks", "socks", "http", "ssh", "hysteria2", "tuic", "masque", "trusttunnel", "wireguard", "anytls", "naive", "shadowtls"]
         },
         { "name": "masque_idle_timeout", "type": "enum",
           "default_value": "off", "required": true, "wizard_ui": "edit", "title": "MASQUE idle timeout", "tooltip": "Close a MASQUE tunnel that carried no traffic for this long; it reconnects on next use. A node's own idle timeout wins.",
@@ -515,11 +528,17 @@
       "#if mtu_align": [{"#not": {"@mtu_align": "clamp"}}, {
         "mtu_align": "@mtu_align"
       }],
-      "#if awg_masquerade": [{"@awg_masquerade": "direct"}, {
-        "awg_masquerade": "direct"
-      }],
       "#if quic_sniff_decoy": [{"@quic_sniff_decoy": {"#in": ["detour", "direct", "all"]}}, {
-        "quic_sniff_decoy": "@quic_sniff_decoy"
+        "quic_sniff_decoy": {
+          "mode": "@quic_sniff_decoy",
+          "#if outbound_type": [{"@quic_sniff_decoy_outbounds": "#notEmpty"}, {
+            "outbound_type": "@quic_sniff_decoy_outbounds"
+          }],
+          "#if detour_type": [{"@quic_sniff_decoy_detours": "#notEmpty"}, {
+            "detour_type": "@quic_sniff_decoy_detours"
+          }],
+          "send": "@quic_sniff_decoy_send"
+        }
       }],
       "#if masque_idle_timeout": [{"#not": {"@masque_idle_timeout": "off"}}, {
         "masque": {"idle_timeout": "@masque_idle_timeout"}

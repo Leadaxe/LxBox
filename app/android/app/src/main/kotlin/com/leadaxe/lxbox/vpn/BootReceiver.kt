@@ -75,6 +75,8 @@ class BootReceiver : BroadcastReceiver() {
         private const val KEY_NOTIFICATION_STOP = "notification_stop"
         private const val KEY_NOTIFICATION_RESTART = "notification_restart"
         private const val KEY_NOTIFICATION_SEND = "notification_send"
+        // §721 — тумблер «AI assistant control» (var appfunctions_enabled).
+        private const val KEY_APPFUNCTIONS_ENABLED = "appfunctions_enabled"
 
         /// §428 — окно предохранителя от шторма `START_STICKY`-рестартов.
         /// Счётчик, начало окна и «туннель желателен» — в [NativeCache].
@@ -177,6 +179,18 @@ class BootReceiver : BroadcastReceiver() {
         fun taildropAutosaveOffTags(context: Context): Set<String> =
             context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
                 .getStringSet(KEY_TAILDROP_AUTOSAVE_OFF_TAGS, null)?.toSet() ?: emptySet()
+
+        /// §721 — зеркало var `appfunctions_enabled` (тумблер «AI assistant
+        /// control»). Default false: пока Dart не включил, функции отказывают.
+        fun setAppFunctionsEnabled(context: Context, enabled: Boolean) {
+            context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+                .edit().putBoolean(KEY_APPFUNCTIONS_ENABLED, enabled).apply()
+        }
+
+        fun isAppFunctionsEnabled(context: Context): Boolean {
+            return context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+                .getBoolean(KEY_APPFUNCTIONS_ENABLED, false)
+        }
 
         /// §707 итер. 9 — кнопки уведомления VPN, зеркало native_prefs.
         /// Default true. После записи уведомление обновляет вызывающий.

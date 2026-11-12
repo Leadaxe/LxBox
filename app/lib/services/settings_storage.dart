@@ -149,7 +149,6 @@ class SettingsStorage {
   static const configVarKeys = _configVarKeys;
   static const _configVarKeys = <String>{
     'auto_detect_interface',
-    'awg_masquerade',
     'certificate_store',
     'direct_connect_timeout',
     'dns_cache_capacity',
@@ -170,6 +169,9 @@ class SettingsStorage {
     'proxy_type',
     'proxy_user',
     'quic_sniff_decoy',
+    'quic_sniff_decoy_detours',
+    'quic_sniff_decoy_outbounds',
+    'quic_sniff_decoy_send',
     'resolve_enabled',
     'resolve_strategy',
     'route_address_enable',
@@ -263,6 +265,8 @@ class SettingsStorage {
     'last_update_check_at',
     'last_known_version',
     'dismissed_update_version',
+    // Задача 724 — последнее выбранное Направление главного экрана
+    'home_direction',
     // Краш-репорты ядра (§316)
     'shown_crash_stamp',
     // Debug API / config-lock (§031, §037)
@@ -288,6 +292,7 @@ class SettingsStorage {
     'automation_emit_subs',
     'automation_emit_health',
     'automation_explainer_shown_v1',
+    'appfunctions_enabled', // §721 — AI assistant control (Android AppFunctions)
     // Subscription identity headers
     'subscription_user_agent',
     'subscription_send_hwid',
@@ -1011,6 +1016,14 @@ class SettingsStorage {
   static Future<void> setDismissedUpdateVersion(String tag) =>
       setVar('dismissed_update_version', tag);
 
+  /// Задача 724 — тег Направления, выбранного на главном экране последним.
+  /// Не config-var: в конфиг ядра не идёт, dirty не поднимает.
+  static Future<String> getHomeDirection() async =>
+      getVar('home_direction', '');
+
+  static Future<void> setHomeDirection(String tag) =>
+      setVar('home_direction', tag);
+
   // ---------------------------------------------------------------------------
   // Краш-репорты ядра (§316) — отметка «про этот краш уже сказали».
   // ---------------------------------------------------------------------------
@@ -1110,6 +1123,15 @@ class SettingsStorage {
 
   static Future<void> setAutomationExplainerShown(bool shown) =>
       setVar('automation_explainer_shown_v1', shown ? 'true' : 'false');
+
+  /// §721 — тумблер «AI assistant control»: Android AppFunctions (16+)
+  /// startVpn / stopVpn / getVpnStatus. Default OFF. Native — зеркало
+  /// `boxvpn_boot.appfunctions_enabled` + состояние функций в системе.
+  static Future<bool> getAppFunctionsEnabled() async =>
+      (await getVar('appfunctions_enabled', 'false')) == 'true';
+
+  static Future<void> setAppFunctionsEnabled(bool enabled) =>
+      setVar('appfunctions_enabled', enabled ? 'true' : 'false');
 
   // ---------------------------------------------------------------------------
   // Backup snapshot (§031) — dump/export/replace всего `lxbox_settings.json`.

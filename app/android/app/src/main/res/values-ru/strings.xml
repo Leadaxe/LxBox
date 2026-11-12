@@ -117,4 +117,6 @@
     <string name="clip_offline">Устройство не в сети.</string>
     <string name="clip_too_large">Слишком большой для отправки</string>
     <string name="clip_copied">Скопировано</string>
+
+    <string name="appfunctions_display_description">Включение и выключение VPN, проверка подключения.</string>
 </resources>

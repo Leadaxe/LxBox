@@ -16,9 +16,13 @@ import '../vpn/box_vpn_client.dart';
 import '../vpn/cc_channel.dart';
 import 'banner_palette.dart';
 import 'safe_bottom.dart';
+import 'template_var_list.dart';
 
-/// §392 — вкладка Diagnostics: выпадающий список предопределённых чекеров,
-/// кнопка запуска и СЫРОЙ ответ в поле ниже.
+/// §392 — вкладка Diagnostics: адрес чекера (готовый из списка или свой URL,
+/// §725), кнопка запуска и СЫРОЙ ответ в поле ниже.
+///
+/// §725 — содержимое разложено по островам ([SettingsIsland]): Check,
+/// под ним блок вида узла [footer] (Path MTU у direct), Notifications.
 ///
 /// Общий виджет на все три экрана деталей узла (у каждого свои вкладки, но
 /// диагностика одна и та же): разбор ноды подписки, настройки узла и просмотр
@@ -47,6 +51,7 @@ class NodeDiagnosticsTab extends StatefulWidget {
     required this.liveTag,
     this.node,
     this.header,
+    this.footer,
     this.warnings = const [],
     this.scrollToNotifications = false,
     this.tailscaleStatusSource,
@@ -72,12 +77,17 @@ class NodeDiagnosticsTab extends StatefulWidget {
   /// пришлось бы сопровождать всем трём.
   final Widget? header;
 
+  /// §725 — блок вида узла ПОД островом Check (остров Path MTU у `direct`).
+  /// Слот по той же причине, что [header]: знание о виде узла — у экрана.
+  final Widget? footer;
+
   @override
   State<NodeDiagnosticsTab> createState() => _NodeDiagnosticsTabState();
 }
 
 class _NodeDiagnosticsTabState extends State<NodeDiagnosticsTab> {
-  DiagnosticCheck _check = kDiagnosticChecks.first;
+  /// §725 — адрес чекера: готовый из [kDiagnosticChecks] или свой.
+  String _url = kDiagnosticChecks.first.url;
   NodeDiagnosticsRunner? _runner;
   bool _running = false;
   DiagnosticOutcome? _outcome;
@@ -187,7 +197,7 @@ class _NodeDiagnosticsTabState extends State<NodeDiagnosticsTab> {
     try {
       final outcome = await runner.run(
         widget.node,
-        url: _check.url,
+        url: _url.trim(),
         liveTag: widget.liveTag,
       );
       if (!mounted) return;
@@ -210,188 +220,197 @@ class _NodeDiagnosticsTabState extends State<NodeDiagnosticsTab> {
     }
   }
 
+  /// §725 — свой адрес чекера: только `http://` / `https://` с хостом.
+  static bool _validUrl(String raw) {
+    final u = Uri.tryParse(raw.trim());
+    return u != null &&
+        (u.scheme == 'http' || u.scheme == 'https') &&
+        u.host.isNotEmpty;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final outcome = _outcome;
     final warnings = widget.warnings;
+    final urlOk = _validUrl(_url);
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24).withSafeBottom(context),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 24).withSafeBottom(context),
       children: [
         if (widget.header != null) ...[
           widget.header!,
           const SizedBox(height: 24),
         ],
         if (_externalCheckHidden)
-          Text(
-            getLocalText.s(
-                "This node has no exit. Check devices on the Network tab."),
-            key: const ValueKey('tailscale-no-exit'),
+          Padding(
+            padding: const EdgeInsets.all(4),
+            child: Text(
+              getLocalText.s(
+                  "This node has no exit. Check devices on the Network tab."),
+              key: const ValueKey('tailscale-no-exit'),
+            ),
           ),
-        if (!_externalCheckHidden) ...[
-        _sectionHeader(
-          getLocalText.s("Check"),
-          theme,
-          description: getLocalText.s("Request is sent through this node"),
-        ),
-        DropdownButtonFormField<String>(
-          initialValue: _check.id,
-          isExpanded: true,
-          decoration: InputDecoration(
-            border: const OutlineInputBorder(),
-            isDense: true,
-            labelText: getLocalText.s("Endpoint"),
-            prefixIcon: const Icon(Icons.travel_explore, size: 18),
-          ),
-          items: [
-            for (final c in kDiagnosticChecks)
-              DropdownMenuItem(
-                value: c.id,
-                child: Text(getLocalText.s(c.title),
-                    overflow: TextOverflow.ellipsis),
-              ),
-          ],
-          onChanged: _running
-              ? null
-              : (id) {
-                  final picked = kDiagnosticChecks.firstWhere(
-                      (c) => c.id == id,
-                      orElse: () => kDiagnosticChecks.first);
-                  // Прошлый ответ относится к прошлому адресу — снимаем,
-                  // чтобы он не читался как результат нового чекера.
+        if (!_externalCheckHidden)
+          SettingsIsland(
+            title: getLocalText.s("Check"),
+            description: getLocalText.s("Request is sent through this node"),
+            children: [
+              // §725 — комбобокс: ▾ — готовые чекеры по названиям (в поле
+              // подставляется URL), либо свой адрес. URL виден в самом поле до
+              // запуска: юзер знает, какому стороннему сервису достанется exit-IP.
+              VarTextField(
+                key: const ValueKey('diag-endpoint'),
+                value: _url,
+                label: getLocalText.s("Endpoint"),
+                suggestions: [for (final c in kDiagnosticChecks) c.url],
+                suggestionLabels: [
+                  for (final c in kDiagnosticChecks) getLocalText.s(c.title),
+                ],
+                errorText: urlOk
+                    ? null
+                    : getLocalText.s("Enter an http:// or https:// address"),
+                onChanged: (v) {
+                  // Прошлый ответ относится к прошлому адресу — снимаем, чтобы он
+                  // не читался как результат нового.
                   setState(() {
-                    _check = picked;
-                    _outcome = null;
-                    _error = '';
+                    _url = v;
+                    if (!_running) {
+                      _outcome = null;
+                      _error = '';
+                    }
                   });
                 },
-        ),
-        // Адрес виден ДО запуска: юзер знает, какому стороннему сервису
-        // достанется exit-IP узла.
-        Padding(
-          padding: const EdgeInsets.only(top: 8, bottom: 12),
-          child: SelectableText(
-            _check.url,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-              fontFamily: 'monospace',
-            ),
-          ),
-        ),
-        FilledButton.icon(
-          onPressed: _running ? null : () => unawaited(_run()),
-          icon: _running
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2))
-              : const Icon(Icons.play_arrow),
-          label: Text(
-              _running ? getLocalText.s("Running…") : getLocalText.s("Run")),
-        ),
-        if (_error.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 12),
-            child: Text(
-              _error,
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.error),
-            ),
-          ),
-        if (outcome != null) ...[
-          const SizedBox(height: 16),
-          _sectionHeader(
-            getLocalText.s("Response"),
-            theme,
-            description: outcome.source == DiagnosticSource.live
-                ? getLocalText.s(
-                    "Through this node in the running core — not through your current route")
-                : getLocalText
-                    .s("Through this node in a temporary core session"),
-          ),
-          if (!outcome.ok)
-            Text(
-              outcome.result.error,
-              style: theme.textTheme.bodyMedium
-                  ?.copyWith(color: theme.colorScheme.error),
-            )
-          else ...[
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    // Не-2xx — результат, а не сбой: показываем статус ровно
-                    // так же, как 200 (kernel SPEC 058 §2.1).
-                    // l10n-exempt: HTTP-код + число мс, слов нет
-                    '${outcome.result.status} · ${outcome.result.elapsedMs}ms',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: outcome.result.status >= 200 &&
-                              outcome.result.status < 300
-                          ? theme.colorScheme.primary
-                          : theme.colorScheme.tertiary,
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    FilledButton.icon(
+                      key: const ValueKey('diag-run'),
+                      onPressed: _running || !urlOk ? null : () => unawaited(_run()),
+                      icon: _running
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Icon(Icons.play_arrow),
+                      label: Text(
+                          _running ? getLocalText.s("Running…") : getLocalText.s("Run")),
                     ),
-                  ),
+                    if (_error.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12),
+                        child: Text(
+                          _error,
+                          style: theme.textTheme.bodySmall
+                              ?.copyWith(color: theme.colorScheme.error),
+                        ),
+                      ),
+                    if (outcome != null) ...[
+                      const SizedBox(height: 16),
+                      _sectionHeader(
+                        getLocalText.s("Response"),
+                        theme,
+                        description: outcome.source == DiagnosticSource.live
+                            ? getLocalText.s(
+                                "Through this node in the running core — not through your current route")
+                            : getLocalText
+                                .s("Through this node in a temporary core session"),
+                      ),
+                      if (!outcome.ok)
+                        Text(
+                          outcome.result.error,
+                          style: theme.textTheme.bodyMedium
+                              ?.copyWith(color: theme.colorScheme.error),
+                        )
+                      else ...[
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                // Не-2xx — результат, а не сбой: показываем статус ровно
+                                // так же, как 200 (kernel SPEC 058 §2.1).
+                                // l10n-exempt: HTTP-код + число мс, слов нет
+                                '${outcome.result.status} · ${outcome.result.elapsedMs}ms',
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: outcome.result.status >= 200 &&
+                                          outcome.result.status < 300
+                                      ? theme.colorScheme.primary
+                                      : theme.colorScheme.tertiary,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.copy, size: 18),
+                              tooltip: getLocalText.s("Copy"),
+                              visualDensity: VisualDensity.compact,
+                              onPressed: () {
+                                Clipboard.setData(
+                                    ClipboardData(text: outcome.result.content));
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text(getLocalText.s("Copied"))));
+                              },
+                            ),
+                          ],
+                        ),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: theme.dividerColor),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: SelectableText(
+                            outcome.result.content.isEmpty
+                                ? getLocalText.s("(empty response)")
+                                : outcome.result.content,
+                            style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+                          ),
+                        ),
+                        if (outcome.result.truncated)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Text(
+                              getLocalText.s("Response was longer and got cut off."),
+                              style: theme.textTheme.bodySmall
+                                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                            ),
+                          ),
+                        if (outcome.result.remoteAddr.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Text(
+                              // Адрес ИЗНУТРИ туннеля (куда отрезолвилась цель), а не
+                              // exit-IP узла — тот несёт само тело ответа.
+                              getLocalText.s("Connected to %s from inside the tunnel",
+                                  outcome.result.remoteAddr),
+                              style: theme.textTheme.bodySmall
+                                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                            ),
+                          ),
+                      ],
+                    ],
+                  ],
                 ),
-                IconButton(
-                  icon: const Icon(Icons.copy, size: 18),
-                  tooltip: getLocalText.s("Copy"),
-                  visualDensity: VisualDensity.compact,
-                  onPressed: () {
-                    Clipboard.setData(
-                        ClipboardData(text: outcome.result.content));
-                    ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(getLocalText.s("Copied"))));
-                  },
+              ),
+            ],
+          ),
+        if (widget.footer != null) widget.footer!,
+        if (warnings.isNotEmpty)
+          KeyedSubtree(
+            key: _notificationsSectionKey,
+            child: SettingsIsland(
+              title: getLocalText.s("Notifications"),
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: NodeNotificationsView(warnings),
                 ),
               ],
             ),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                border: Border.all(color: theme.dividerColor),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: SelectableText(
-                outcome.result.content.isEmpty
-                    ? getLocalText.s("(empty response)")
-                    : outcome.result.content,
-                style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
-              ),
-            ),
-            if (outcome.result.truncated)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  getLocalText.s("Response was longer and got cut off."),
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-                ),
-              ),
-            if (outcome.result.remoteAddr.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  // Адрес ИЗНУТРИ туннеля (куда отрезолвилась цель), а не
-                  // exit-IP узла — тот несёт само тело ответа.
-                  getLocalText.s("Connected to %s from inside the tunnel",
-                      outcome.result.remoteAddr),
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-                ),
-              ),
-          ],
-        ],
-        ],
-        if (warnings.isNotEmpty) ...[
-          const SizedBox(height: 24),
-          KeyedSubtree(
-            key: _notificationsSectionKey,
-            child: _sectionHeader(getLocalText.s("Notifications"), theme),
           ),
-          NodeNotificationsView(warnings),
-        ],
       ],
     );
   }

@@ -39,7 +39,7 @@
       "tag": "🔁 ByeByeDpi",
       "enabled": false,
       "origin": {
-        "kind": "json",
+        "kind": "singbox",
         "raw": "{\"type\":\"socks\",\"tag\":\"🔁 ByeByeDpi\",\"server\":\"127.0.0.1\",\"server_port\":1081,\"version\":\"5\"}"
       },
       "body": {
@@ -65,7 +65,7 @@
       "tag": "🏠 home",
       "enabled": false,
       "origin": {
-        "kind": "json",
+        "kind": "singbox",
         "raw": "{\"type\":\"wireguard\",\"tag\":\"🏠 home\",\"mtu\":1220,\"address\":[\"10.99.0.2/32\"],\"private_key\":\"lMhZSAuYAt9u8sGuYP943pRI3bwG5v4zYMLWpm3zJXQ=\",\"peers\":[{\"address\":\"203.0.113.10\",\"port\":51820,\"public_key\":\"surrFaqlk4EmExe/4qdY8yyiqPbIarnHQg+NqA5l380=\",\"allowed_ips\":[\"0.0.0.0/0\",\"::/0\"],\"persistent_keepalive_interval\":25}]}"
       },
       "body": {
@@ -152,7 +152,7 @@
           "tag": "🔥🎭 WARP (MASQUE) H3",
           "enabled": true,
           "origin": {
-            "kind": "json",
+            "kind": "singbox",
             "raw": "{\"type\":\"masque\",\"tag\":\"🔥🎭 WARP (MASQUE) H3\",\"server\":\"162.159.198.2\",\"server_port\":443,\"profile\":\"cloudflare\",\"network\":\"h3\",\"private_key\":\"MHcCAQEEIEbVTdBGxljMSSpp+OiwFvy9hjfHLezEKAL8GvXd1QXPoAoGCCqGSM49AwEHoUQDQgAEK6LLFT10+wnqEXk5ySNttnvOQ+y/pH5VclIFrr7L1tZG1U3QRsZYzEkqafjosBb8vYY3xy3sxCgC/Br13dUFzw==\",\"public_key\":\"MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEIaU7MToJm9NKp8YfGxR6r+/h4mcG7SxI8tsW8OR1A5tv/zCzVbCRRh2t87/kxnP6lAy0lkr7qYwu+ox+k3dr6w==\",\"ip\":\"172.16.0.2/32\",\"ipv6\":\"2606:4700:110:8000:0:0:0:3/128\",\"sni\":\"www.apple.com\",\"mtu\":1280}"
           },
           "body": {
@@ -174,7 +174,7 @@
           "tag": "🔥🎭 WARP (MASQUE) H2",
           "enabled": true,
           "origin": {
-            "kind": "json",
+            "kind": "singbox",
             "raw": "{\"type\":\"masque\",\"tag\":\"🔥🎭 WARP (MASQUE) H2\",\"server\":\"162.159.198.2\",\"server_port\":443,\"profile\":\"cloudflare\",\"network\":\"h2\",\"private_key\":\"MHcCAQEEIEbVTdBGxljMSSpp+OiwFvy9hjfHLezEKAL8GvXd1QXPoAoGCCqGSM49AwEHoUQDQgAEK6LLFT10+wnqEXk5ySNttnvOQ+y/pH5VclIFrr7L1tZG1U3QRsZYzEkqafjosBb8vYY3xy3sxCgC/Br13dUFzw==\",\"public_key\":\"MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEIaU7MToJm9NKp8YfGxR6r+/h4mcG7SxI8tsW8OR1A5tv/zCzVbCRRh2t87/kxnP6lAy0lkr7qYwu+ox+k3dr6w==\",\"ip\":\"172.16.0.2/32\",\"ipv6\":\"2606:4700:110:8000:0:0:0:3/128\",\"sni\":\"www.bing.com\",\"mtu\":1280}"
           },
           "body": {
@@ -196,7 +196,7 @@
           "tag": "🔥⛈️ WARP (AWG 1.5)",
           "enabled": true,
           "origin": {
-            "kind": "json",
+            "kind": "singbox",
             "raw": "{\"type\":\"wireguard\",\"tag\":\"🔥⛈️ WARP (AWG 1.5)\",\"mtu\":1280,\"address\":[\"172.16.0.2/32\",\"2606:4700:110:8000:0:0:0:1/128\"],\"private_key\":\"E4S1mzKVEZTqhGTBBNnSkiCdJco0cb/bXvVceHCmOZ8=\",\"peers\":[{\"address\":\"188.114.96.6\",\"port\":1002,\"public_key\":\"bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=\",\"allowed_ips\":[\"0.0.0.0/0\",\"::/0\"]}],\"jc\":4,\"jmin\":40,\"jmax\":70,\"s1\":0,\"s2\":0,\"h1\":1,\"h2\":2,\"h3\":3,\"h4\":4,\"id\":\"telemost.yandex.ru\",\"ip\":\"quic\",\"ib\":\"chrome\"}"
           },
           "body": {
@@ -248,7 +248,7 @@
           "tag": "🔥🎭 WARP (MASQUE) H3",
           "enabled": true,
           "origin": {
-            "kind": "json",
+            "kind": "singbox",
             "raw": "{\"type\":\"masque\",\"tag\":\"🔥🎭 WARP (MASQUE) H3\",\"server\":\"162.159.198.2\",\"server_port\":443,\"profile\":\"cloudflare\",\"network\":\"h3\",\"private_key\":\"MHcCAQEEIEbVTdBGxljMSSpp+OiwFvy9hjfHLezEKAL8GvXd1QXPoAoGCCqGSM49AwEHoUQDQgAEK6LLFT10+wnqEXk5ySNttnvOQ+y/pH5VclIFrr7L1tZG1U3QRsZYzEkqafjosBb8vYY3xy3sxCgC/Br13dUFzw==\",\"public_key\":\"MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEIaU7MToJm9NKp8YfGxR6r+/h4mcG7SxI8tsW8OR1A5tv/zCzVbCRRh2t87/kxnP6lAy0lkr7qYwu+ox+k3dr6w==\",\"ip\":\"172.16.0.2/32\",\"ipv6\":\"2606:4700:110:8000:0:0:0:3/128\",\"sni\":\"ozon.ru\",\"mtu\":1280}"
           },
           "body": {
@@ -270,7 +270,7 @@
           "tag": "🔥🎭 WARP (MASQUE) H2",
           "enabled": true,
           "origin": {
-            "kind": "json",
+            "kind": "singbox",
             "raw": "{\"type\":\"masque\",\"tag\":\"🔥🎭 WARP (MASQUE) H2\",\"server\":\"162.159.198.2\",\"server_port\":443,\"profile\":\"cloudflare\",\"network\":\"h2\",\"private_key\":\"MHcCAQEEIEbVTdBGxljMSSpp+OiwFvy9hjfHLezEKAL8GvXd1QXPoAoGCCqGSM49AwEHoUQDQgAEK6LLFT10+wnqEXk5ySNttnvOQ+y/pH5VclIFrr7L1tZG1U3QRsZYzEkqafjosBb8vYY3xy3sxCgC/Br13dUFzw==\",\"public_key\":\"MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEIaU7MToJm9NKp8YfGxR6r+/h4mcG7SxI8tsW8OR1A5tv/zCzVbCRRh2t87/kxnP6lAy0lkr7qYwu+ox+k3dr6w==\",\"ip\":\"172.16.0.2/32\",\"ipv6\":\"2606:4700:110:8000:0:0:0:3/128\",\"sni\":\"google.com\",\"mtu\":1280}"
           },
           "body": {
@@ -310,7 +310,7 @@
           "tag": "🔥⛈️ WARP (AWG 1.5)",
           "enabled": true,
           "origin": {
-            "kind": "json",
+            "kind": "singbox",
             "raw": "{\"type\":\"wireguard\",\"tag\":\"🔥⛈️ WARP (AWG 1.5)\",\"mtu\":1280,\"address\":[\"172.16.0.2/32\",\"2606:4700:110:8000:0:0:0:1/128\"],\"private_key\":\"E4S1mzKVEZTqhGTBBNnSkiCdJco0cb/bXvVceHCmOZ8=\",\"peers\":[{\"address\":\"188.114.97.1\",\"port\":1018,\"public_key\":\"bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=\",\"allowed_ips\":[\"0.0.0.0/0\",\"::/0\"]}],\"jc\":4,\"jmin\":40,\"jmax\":70,\"s1\":0,\"s2\":0,\"h1\":1,\"h2\":2,\"h3\":3,\"h4\":4,\"id\":\"www.google.com\",\"ip\":\"quic\",\"ib\":\"chrome\"}"
           },
           "body": {
@@ -354,7 +354,7 @@
       "tag": "🔥⛈️ WARP (AWG 1.5)",
       "enabled": true,
       "origin": {
-        "kind": "json",
+        "kind": "singbox",
         "raw": "{\"type\":\"wireguard\",\"tag\":\"🔥⛈️ WARP (AWG 1.5)\",\"mtu\":1280,\"address\":[\"172.16.0.2/32\",\"2606:4700:110:8000:0:0:0:1/128\"],\"private_key\":\"E4S1mzKVEZTqhGTBBNnSkiCdJco0cb/bXvVceHCmOZ8=\",\"peers\":[{\"address\":\"188.114.96.8\",\"port\":5956,\"public_key\":\"bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=\",\"reserved\":[38,249,0],\"allowed_ips\":[\"0.0.0.0/0\",\"::/0\"]}],\"jc\":4,\"jmin\":40,\"jmax\":70,\"s1\":0,\"s2\":0,\"h1\":1,\"h2\":2,\"h3\":3,\"h4\":4,\"id\":\"telemost.yandex.ru\",\"ip\":\"quic\",\"ib\":\"chrome\"}"
       },
       "body": {
@@ -414,7 +414,7 @@
       "tag": "🔥🎭 WARP (MASQUE) h3",
       "enabled": false,
       "origin": {
-        "kind": "json",
+        "kind": "singbox",
         "raw": "{\"type\":\"masque\",\"tag\":\"🔥🎭 WARP (MASQUE) h3\",\"server\":\"162.159.198.2\",\"server_port\":443,\"profile\":\"cloudflare\",\"network\":\"h3\",\"private_key\":\"MHcCAQEEIEbVTdBGxljMSSpp+OiwFvy9hjfHLezEKAL8GvXd1QXPoAoGCCqGSM49AwEHoUQDQgAEK6LLFT10+wnqEXk5ySNttnvOQ+y/pH5VclIFrr7L1tZG1U3QRsZYzEkqafjosBb8vYY3xy3sxCgC/Br13dUFzw==\",\"public_key\":\"MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEIaU7MToJm9NKp8YfGxR6r+/h4mcG7SxI8tsW8OR1A5tv/zCzVbCRRh2t87/kxnP6lAy0lkr7qYwu+ox+k3dr6w==\",\"ip\":\"172.16.0.2/32\",\"ipv6\":\"2606:4700:110:8000:0:0:0:3/128\",\"sni\":\"www.bing.com\",\"mtu\":1280}"
       },
       "body": {
@@ -437,7 +437,7 @@
       "tag": "🔥🎭 WARP (MASQUE) h2",
       "enabled": false,
       "origin": {
-        "kind": "json",
+        "kind": "singbox",
         "raw": "{\"type\":\"masque\",\"tag\":\"🔥🎭 WARP (MASQUE) h2\",\"server\":\"162.159.198.2\",\"server_port\":443,\"profile\":\"cloudflare\",\"vhttp\":\"h2\",\"private_key\":\"MHcCAQEEIEbVTdBGxljMSSpp+OiwFvy9hjfHLezEKAL8GvXd1QXPoAoGCCqGSM49AwEHoUQDQgAEK6LLFT10+wnqEXk5ySNttnvOQ+y/pH5VclIFrr7L1tZG1U3QRsZYzEkqafjosBb8vYY3xy3sxCgC/Br13dUFzw==\",\"public_key\":\"MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEIaU7MToJm9NKp8YfGxR6r+/h4mcG7SxI8tsW8OR1A5tv/zCzVbCRRh2t87/kxnP6lAy0lkr7qYwu+ox+k3dr6w==\",\"ip\":\"172.16.0.2/32\",\"ipv6\":\"2606:4700:110:8000:0:0:0:3/128\",\"mtu\":1280}"
       },
       "body": {
@@ -469,7 +469,7 @@
       "tag": "🇫🇮 FI Hysteria stable",
       "enabled": false,
       "origin": {
-        "kind": "json",
+        "kind": "singbox",
         "raw": "{\"type\":\"hysteria2\",\"tag\":\"🇫🇮 FI Hysteria stable\",\"server\":\"77.91.48.209\",\"server_port\":36018,\"password\":\"testpass0000000002\",\"tls\":{\"enabled\":true,\"server_name\":\"77.91.48.209\"}}"
       },
       "body": {
@@ -506,7 +506,7 @@
       "tag": "🇷🇺 Россия (мёртвая, тест)",
       "enabled": true,
       "origin": {
-        "kind": "json",
+        "kind": "singbox",
         "raw": "{\"type\":\"vless\",\"tag\":\"🇷🇺 Россия (мёртвая, тест)\",\"server\":\"192.0.2.1\",\"server_port\":443,\"uuid\":\"6ba7b810-9dad-11d1-80b4-00c04fd430c8\",\"tls\":{\"enabled\":true,\"server_name\":\"dead.test\"}}"
       },
       "body": {
@@ -526,7 +526,7 @@
       "tag": "🔥🎭 WARP (MASQUE) demo",
       "enabled": false,
       "origin": {
-        "kind": "json",
+        "kind": "singbox",
         "raw": "{\"type\":\"masque\",\"tag\":\"🔥🎭 WARP (MASQUE) demo\",\"server\":\"162.159.199.1\",\"server_port\":443,\"profile\":\"cloudflare\",\"network\":\"h2\",\"private_key\":\"MHcCAQEEIP74LxOOSvBTVjb3RmEHQflkpCPqadGTQu69fxUv6D0DoAoGCCqGSM49AwEHoUQDQgAE0duI6Lpiv/aKmiKiUXBEfzfo84uciy0c+U/+elVnH9b++C8TjkrwU1Y290ZhB0H5ZKQj6mnRk0LuvX8VL+g9Aw==\",\"public_key\":\"MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEIaU7MToJm9NKp8YfGxR6r+/h4mcG7SxI8tsW8OR1A5tv/zCzVbCRRh2t87/kxnP6lAy0lkr7qYwu+ox+k3dr6w==\",\"ip\":\"172.16.0.2/32\",\"ipv6\":\"2606:4700:110:8000:0:0:0:2/128\",\"sni\":\"www.google.com\",\"mtu\":1280}"
       },
       "body": {
@@ -562,7 +562,7 @@
       "tag": "🔥🎭 WARP (MASQUE) 2",
       "enabled": true,
       "origin": {
-        "kind": "json",
+        "kind": "singbox",
         "raw": "{\"type\":\"masque\",\"tag\":\"🔥🎭 WARP (MASQUE) 2\",\"server\":\"162.159.199.253\",\"server_port\":1701,\"profile\":\"cloudflare\",\"vhttp\":\"h2\",\"private_key\":\"MHcCAQEEIP74LxOOSvBTVjb3RmEHQflkpCPqadGTQu69fxUv6D0DoAoGCCqGSM49AwEHoUQDQgAE0duI6Lpiv/aKmiKiUXBEfzfo84uciy0c+U/+elVnH9b++C8TjkrwU1Y290ZhB0H5ZKQj6mnRk0LuvX8VL+g9Aw==\",\"public_key\":\"MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEIaU7MToJm9NKp8YfGxR6r+/h4mcG7SxI8tsW8OR1A5tv/zCzVbCRRh2t87/kxnP6lAy0lkr7qYwu+ox+k3dr6w==\",\"ip\":\"172.16.0.2/32\",\"ipv6\":\"2606:4700:110:8000:0:0:0:2/128\",\"tls\":{\"server_name\":\"www.wikipedia.org\"},\"mtu\":1280}"
       },
       "body": {
@@ -1579,7 +1579,7 @@
       "tag": "⚡ LocalReordered",
       "enabled": false,
       "origin": {
-        "kind": "json",
+        "kind": "singbox",
         "raw": "{\"type\":\"trojan\",\"server\":\"198.51.100.51\",\"server_port\":443,\"password\":\"trojanpass1\",\"tls\":{\"enabled\":true,\"server_name\":\"r.example.com\"},\"tag\":\"⚡ LocalReordered\"}"
       },
       "body": {

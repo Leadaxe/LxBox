@@ -118,11 +118,11 @@ no detour layers, no auto twins.
   tunnel is not restarted. **Witness:** unit "selecting another node goes to the core via a
   select call". **Mutation:** rebuild the config on node selection.
 - **P16. The Direction dropdown is the core's selector list.** Every selector group of the
-  snapshot except `GLOBAL`, `NETWORKS` last when present; the start position is `route.final`
-  if it is a selector, otherwise the first; a vanished Direction falls back the same way.
-  **Witness:** units "a real Direction is selected — that Direction's list", "no real
-  Directions — one pseudo-direction", "VPN off — NETWORKS is not shown"; the `route.final`
-  fallback — `no witness`. **Mutation:** keep the vanished tag — an empty list.
+  snapshot except `GLOBAL`, `NETWORKS` last when present; the start position is the one picked
+  last on the home screen (kept across app and tunnel restarts), otherwise the first; a vanished
+  Direction falls back the same way. **Witness:** units "a real Direction is selected — that
+  Direction's list", "no real Directions — one pseudo-direction", "VPN off — NETWORKS is not
+  shown"; the remembered pick — units of `home_direction_remembered_test.dart`. **Mutation:** keep the vanished tag — an empty list.
 - **P17. Breaking connections on switch — by the Direction's flag, done by the core.** With the
   Direction flag "Interrupt connections on switch" (`interrupt_exist_connections`) on — the
   default — the core closes the live connections of that Direction on any selection change: a
@@ -171,7 +171,7 @@ no detour layers, no auto twins.
 | Include auto (urltest): Test URL, Interval, Tolerance, Idle timeout, Interrupt, Mode, Pool size, Pool tolerance, Sticky session by | see [groups](FUNCTIONS/direction-groups-in-config.md) | off | the `<tag>-auto` group |
 | Use as detour | on/off, hidden for `vpn-1` | off | — (client role) |
 | Default traffic | `direct` · Direction · `block` | `vpn-1` | `route.final` |
-| Direction (home screen dropdown) | selector groups of the snapshot, `NETWORKS` | `route.final` | RPC `SelectOutbound` |
+| Direction (home screen dropdown) | selector groups of the snapshot, `NETWORKS` | the one picked last, otherwise the first | RPC `SelectOutbound` |
 | Ping URL / timeout override | per Direction | global | — (009) |
 
 ## Inputs / Outputs

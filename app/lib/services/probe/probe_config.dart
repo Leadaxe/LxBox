@@ -28,6 +28,7 @@ class ProbeConfig {
     required this.configJson,
     required this.tagByIndex,
     required this.brokenByIndex,
+    this.ownerByTag = const {},
   });
 
   /// null = нет ни одной тестируемой ноды (все слоты битые/список пуст).
@@ -41,6 +42,11 @@ class ProbeConfig {
   /// не тестируется) | 'invalid: …' (emit бросил либо гард реестра снял
   /// запись узла или его детура, §546).
   final Map<int, String> brokenByIndex;
+
+  /// §723 — тег любой записи конфига (main или детур узла) → index узла.
+  /// По нему отказ ядра на старте пробы (`initialize outbound[i] type[tag]`)
+  /// находит узел, который надо вынуть.
+  final Map<String, int> ownerByTag;
 }
 
 /// §606 — переменные шаблона для [buildProbeConfig]/[buildProbeBatches]:
@@ -351,6 +357,7 @@ ProbeConfig _assemble(
   ];
   final endpoints = <Map<String, dynamic>>[];
   final tagByIndex = <int, String>{};
+  final ownerByTag = <String, int>{};
   final usedTags = <String>{kDirectOutboundTag, kProbeDnsTag};
 
   String allocate(String base) {
@@ -387,6 +394,9 @@ ProbeConfig _assemble(
       }
     }
     tagByIndex[i] = mainTag;
+    for (final e in b.entries) {
+      ownerByTag[e.tag] = i;
+    }
     // §636 — уровни TLS узла: его main и родная цепочка.
     final layers = tlsByIndex[i];
     if (layers != null && !layers.isEmpty) {
@@ -428,6 +438,7 @@ ProbeConfig _assemble(
     configJson: jsonEncode(config),
     tagByIndex: tagByIndex,
     brokenByIndex: brokenByIndex,
+    ownerByTag: ownerByTag,
   );
 }
 

@@ -416,6 +416,7 @@ A flat `Map<String, String>` (values are stringified on read). It serves both **
 | `auto_check_updates` | `'false'` | [§036], §395 | Polls GitHub Releases at startup. Off until the first-run prompt is answered — an unprompted request is the `Tracking` anti-feature under F-Droid's rules. |
 | `last_update_check_at` | `''` | [§036] | The last polling timestamp, as UTC ISO-8601. |
 | `last_known_version` | `''` | [§036] | The cached latest tag. |
+| `home_direction` | `''` | task 724 | The tag of the Direction picked last on the home screen. Restored at launch if such a Direction exists, otherwise the first one is shown. Does not go into the core config. |
 | `dismissed_update_version` | `''` | [§036], §390 | The tag the user dismissed with **Ignore** — the snackbar is not shown for it again. |
 | `shown_crash_stamp` | `''` | §316 | The `name@mtime` of the core crash report whose home-screen banner has already been shown. It binds to a SPECIFIC file rather than being a counter, so a new crash shows the banner again. |
 | `config_locked_for_debug` | `'false'` | [§037] | `generateConfig()` returns null silently. The user pins their own config through `PUT /config`. |
@@ -429,6 +430,7 @@ A flat `Map<String, String>` (values are stringified on read). It serves both **
 | `probe_ms_orange` | `'700'` | §236 | Test servers: the upper bound of the “orange” latency, in ms; anything above is red. |
 | `wifi_history` | `'[]'` | [§051] Phase 3 | A JSON-encoded `[{ssid, bssid, last_seen}]` (see its own section below). |
 | `automation_receive_enabled` | `'false'` | §047 | The Public Intent API: accepting broadcasts from Tasker and friends. Default OFF. |
+| `appfunctions_enabled` | `'false'` | §721 | AI assistant control: Android AppFunctions (16+) `startVpn` / `stopVpn` / `getVpnStatus`. Default OFF. Mirrored to `boxvpn_boot.appfunctions_enabled`. |
 | `automation_emit_lifecycle` | `'false'` | §047 | Emitting lifecycle events outwards. Default OFF. |
 | `automation_emit_state` | `'false'` | §047 | Emitting state events. Default OFF. |
 | `automation_emit_subs` | `'false'` | §047 | Emitting subscription events. Default OFF. |

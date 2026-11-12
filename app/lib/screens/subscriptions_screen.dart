@@ -575,11 +575,21 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
   }
 
   /// §585 — комментарии вставленного JSON убраны из источника записи.
+  /// §722 D — документ обрезан до узлов: одно сообщение на импорт (оно
+  /// важнее строки про комментарии).
   void _snackCommentsRemoved() {
-    if (!mounted || !widget.subController.lastCommentsRemoved) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(getLocalText.s("Comments were removed."))),
-    );
+    if (!mounted) return;
+    final c = widget.subController;
+    final String text;
+    if (c.lastExtrasDropped) {
+      text = getLocalText.s(
+          "Only the nodes are saved. The rest of the input is not kept.");
+    } else if (c.lastCommentsRemoved) {
+      text = getLocalText.s("Comments were removed.");
+    } else {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
 
   Future<void> _add() async {

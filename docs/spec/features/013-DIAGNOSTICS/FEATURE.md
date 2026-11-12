@@ -134,6 +134,12 @@ The feature protects two principles:
   exists only for the duration of one request. **Witness:** widget test
   "capture button does not call pprofProfile when VPN is down". **Mutation:**
   the VPN-status gate removed from `_capture`.
+- **P25. Path MTU is the whole packet that got an answer, past the tunnel.**
+  The direct node's Diagnostics tab measures the largest unfragmented IP packet
+  to the target over the physical network, with the VPN on or off, and gives
+  the tunnel MTU from it; a target that does not answer the small packet gives
+  no numbers. **Witness:** unit "threshold 1340 → 1340", "small does not pass
+  → unreachable". **Mutation:** the result counted as the ping payload.
 
 ## Controlled parameters
 
@@ -232,6 +238,7 @@ START → core connection and DNS stream → buffer (retention window) → Profi
 | Core profiling | Captures goroutine, CPU, heap and allocation pprof snapshots of the running core and hands them over as a file. | P24 | [core-profiling.md](FUNCTIONS/core-profiling.md) |
 | Live events | Records TCP/UDP and DNS events of the device on an explicit START within a retention window, exports them and raises the owner and DNS banners. | P20, P21 | [live-events.md](FUNCTIONS/live-events.md) |
 | Coded notifications | Groups same-code notifications into one entry with a count and opens the link of a notification sent by the core. | P22, P23 | [coded-notifications.md](FUNCTIONS/coded-notifications.md) |
+| Path MTU | Measures the largest packet that reaches a target unfragmented past the tunnel on the direct node and recommends the MTU for WireGuard / AWG / MASQUE nodes. | P25 | [path-mtu.md](FUNCTIONS/path-mtu.md) |
 
 Debug API moved to [027-DEBUG_API](../027-DEBUG_API/FEATURE.md).
 

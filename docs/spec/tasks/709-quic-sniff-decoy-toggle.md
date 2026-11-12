@@ -135,3 +135,98 @@
 - Подсказка (i) говорит про DPI своего канала.
 - Тест — тот же `lx_block_template_test.dart`: дефолт `detour`, режимы
   строкой, `off` / `true` / `false` без ключа.
+
+## Итерация 5 — объектная форма (ядро lx.33)
+
+Ядро `v1.14.4-lx.33` (SPEC 151 форка): `lx.quic_sniff_decoy` — объект
+`{mode, outbound_type, detour_type, send}`, строка и bool из lx.30–lx.32 —
+ошибка загрузки. Дефолты ядра: `mode` `off`, `outbound_type` `["masque"]`,
+`detour_type` `["vless"]`, `send` `retry` (байт только на повторе после
+неудачной первой попытки). Пустой или отсутствующий список ядро читает как
+дефолтный (`resolveLXQUICSniffDecoy`: `len(...) > 0`), не как «никто».
+
+Решение владельца (07.11.2026): дефолт режима — `off`, как в ядре (было
+`detour`); остальные три поля — отдельные настройки с дефолтами ядра.
+
+- Секция QUIC шаблона:
+  - `quic_sniff_decoy` — enum `off` (дефолт) / `detour` / `direct` / `all`,
+    options «Off (default)» / «Through detour» / «Direct» / «All»; тултип:
+    байт только там, где узел открывает QUIC, по умолчанию на повторе.
+  - `quic_sniff_decoy_send` — enum `retry` (дефолт) / `always`, «Decoy
+    sending»; на WireGuard не действует.
+  - `quic_sniff_decoy_outbounds` — `text_list` с закрытыми `options`, дефолт
+    `masque`, options — восемь типов ядра, «Decoy node types».
+  - `quic_sniff_decoy_detours` — `text_list` с закрытыми `options`, дефолт `vless`,
+    options — типы outbound сборки без групп (vless, vmess, trojan,
+    shadowsocks, socks, http, ssh, hysteria2, tuic, masque, trusttunnel,
+    wireguard, anytls, naive, shadowtls), «Decoy relay types».
+  - У трёх новых — `#enable` по `quic_sniff_decoy` ≠ `off`.
+- `default_value` у `text_list` — строка, элементы построчно
+  (`WizardVar.fromJson` приводит `default_value` к строке, `coerce` режет по
+  `\n`); JSON-массив в `default_value` дал бы строку `[masque]`. Поэтому
+  `"default_value": "masque"` / `"vless"`.
+- Эмиссия: при `@quic_sniff_decoy` из `#in: [detour, direct, all]` —
+  объект `{"mode": "@quic_sniff_decoy", "outbound_type": …, "detour_type": …,
+  "send": "@quic_sniff_decoy_send"}`. `mode` и `send` пишутся всегда, списки —
+  через `#if … #notEmpty`: пустой список поля не даёт. Ядро трактует `[]` и
+  отсутствие поля одинаково (дефолтный список), так что поведение то же, но в
+  конфиге не появляется пустой массив, который читается как «никто». При
+  `off` (и старых `true` / `false`) ключа нет.
+- Хранилище: старое сохранённое `detour` остаётся выбором пользователя,
+  миграции нет; эмиссия даёт объект с дефолтами трёх новых полей. Новые ключи
+  — в `_configVarKeys`.
+- Подсказки (i) `_lxVarHints`: у режима — DPI своего канала, «поэтому Off по
+  умолчанию»; у трёх новых — поля ядра.
+- Пин `v1.14.4-lx.33` (`app/android/libbox.version`, `kCoreBuildTagsPin`);
+  диф lx.32..lx.33 не трогает `experimental/libbox`, `build_libbox`,
+  `Makefile.lx`, `go.mod` — javap не нужен.
+- Контракт: дефолт `off` совпадает с контрактом 1.1.163 (TASKS_LXBOX §161
+  лаунчера). Объектная форма, три новые переменные и снятие `awg_masquerade`
+  — запрос лаунчеру TASKS_LXBOX §162 (пишется в репозитории лаунчера;
+  копию `app/contract` не правим, приходит синком).
+
+Файлы: `app/assets/wizard_template.json`,
+`app/assets/l10n/{ru,zh}/{template,ui}.json`,
+`app/lib/services/settings_storage.dart`,
+`app/lib/screens/settings_screen.dart`, `app/android/libbox.version`,
+`app/lib/services/builder/core_chain_capability.dart`,
+`app/test/builder/lx_block_template_test.dart`,
+`app/test/fixtures/storage/golden/{avd,rich}_v0.config.json` (ключ ушёл:
+v0-хранилища переменную не задают, строка шла от старого дефолта `detour`).
+
+Проверка: `lx_block_template_test.dart` — дефолт без ключа, объект с
+дефолтами для трёх режимов, `off` / `true` / `false` без ключа, `send` и
+списки в объекте, пустые списки без полей, `#enable` трёх новых;
+`template_check` / `ui_check --strict` — 0/0 локально. Тесты — только CI.
+Эмулятор (08.11.2026, LxBox_test, Android 14, сборка 2.25.20-dev.16, ядро
+`1.14.4-lx.33` по `/device`): дефолт — в `config.lx` ключа нет; после
+`PUT /settings/vars/quic_sniff_decoy=detour` и `quic_sniff_decoy_send=always`
+`/config/pretty` даёт `{"mode":"detour","send":"always","detour_type":["vless"],
+"outbound_type":["masque"]}`, ядро стартует с этим конфигом без ошибок
+(`/config/running` показывает объект, лог ядра — `status=Started`);
+сохранённое старое `awg_masquerade: direct` в `lx` не попадает. Секция QUIC на
+вкладке Core: режим, Decoy sending, Decoy node types, Decoy relay types; при
+Off три зависимые настройки гаснут. Попутно: `start-vpn-headless` после
+`PUT /settings/vars/*` стартовал со старым файлом конфига — ключ появился
+только после `POST /action/rebuild-config` (известное ограничение §667: dirty
+через Debug API воронку автоперезапуска не заводит), к lx.33 не относится.
+Не проверено: живой ретрай с байтом (нужен сниффящий релей); телефон.
+Сборка: SDK 37 существует только как `platforms;android-37.0`, AGP 9.1 без
+`compileSdkMinor = 0` ищет `android-37` и падает — поправлено в 721
+(`680e4497`).
+
+### Правка: списки типов без свободного ввода (5137bf5f)
+
+Первый вариант объявлял оба списка с `options_open`, и поле принимало
+любой текст (владелец на эмуляторе: «нельзя же любое вводить»). Ядро
+получает исчерпывающий список типов, неизвестный тип — отказ на старте.
+Решение владельца: выбранные значения тегами с ×, добавление из выпадашки
+с остальными. `options_open` снят; закрытый `text_list` + `options` в форме
+Core рисует новый `VarChipPicker` (`template_var_list.dart`): `InputChip`
+на выбранное, «Add ▾» (`PopupMenuButton`) с ещё не выбранными, подпись
+«Core default» при пустом списке; значение — строки в порядке добавления,
+строки вне `options` (старое сохранённое) выпадают при первой правке.
+`VarMultiSelect` (чипы-переключатели §555) остаётся у параметров пресетов.
+Тесты: `template_var_options_test.dart` — теги/добавление/×/пустое.
+Проверка: APK из CI build-fast (run 42475101793) на эмуляторе, владелец
+потыкал: «верно всё».

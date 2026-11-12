@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/controllers/subscription_controller.dart';
 import 'package:lxbox/models/server_list.dart';
-import 'package:lxbox/models/codec/source_record.dart';
+import 'package:lxbox/models/source_dialect.dart';
 import 'package:lxbox/screens/node_settings_screen.dart';
 import 'package:lxbox/services/settings_storage.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
@@ -135,7 +135,8 @@ void main() {
     await tester.tap(find.descendant(
         of: find.byType(AlertDialog), matching: find.text('Continue')));
     await settle(tester, () => tabIndex(tester) == 1);
-    expect(originKindOf(rawOf(c)), 'wg_ini');
+    // §722 — вид записи хранится: Edit INI ставит `wg_ini`.
+    expect((c.entries.single.list as UserServer).dialect, SourceDialect.wgIni);
     expect(rawOf(c), contains('Ip = quic'));
     expect(c.entries.single.list.nodes.single.tag, tag);
     expect(tabIndex(tester), 1);

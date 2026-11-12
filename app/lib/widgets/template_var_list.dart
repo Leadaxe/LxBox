@@ -271,12 +271,13 @@ class _TemplateVarListViewState extends State<TemplateVarListView> {
         onChanged: (val) => _update(v.name, val),
       );
     }
-    // §555 — `text_list` + `options`: множественный выбор (SPEC 143, D-125).
+    // §555 — `text_list` + `options`: множественный выбор (SPEC 143, D-125);
+    // §709 — выбранные значения тегами с ×, добавление из ▾ (VarChipPicker).
     if (v.type == 'text_list' && v.options.isNotEmpty) {
       return _LabelledField(
         label: v.title.isNotEmpty ? v.title : v.name,
         tooltip: v.tooltip,
-        field: VarMultiSelect(
+        field: VarChipPicker(
           key: ValueKey('multi-${v.name}'),
           v: v,
           value: value,
@@ -610,6 +611,7 @@ class VarTextField extends StatefulWidget {
 
 class _VarTextFieldState extends State<VarTextField> {
   late final TextEditingController _ctrl;
+  final FocusNode _focus = FocusNode();
   late bool _obscured;
 
   @override
@@ -630,6 +632,7 @@ class _VarTextFieldState extends State<VarTextField> {
   @override
   void dispose() {
     _ctrl.dispose();
+    _focus.dispose();
     super.dispose();
   }
 
@@ -650,6 +653,14 @@ class _VarTextFieldState extends State<VarTextField> {
     _ctrl.text = v;
     _ctrl.selection = TextSelection.collapsed(offset: v.length);
     widget.onChanged(v);
+    // Выбор из списка — готовое значение, печатать нечего: закрытие меню
+    // возвращает фокус полю и поднимает клавиатуру, снимаем его следующим
+    // кадром. В режиме списка строки дописывают руками — фокус не трогаем.
+    if (!widget.listMode) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _focus.unfocus();
+      });
+    }
   }
 
   Widget? _buildSuffix() {
@@ -702,6 +713,7 @@ class _VarTextFieldState extends State<VarTextField> {
   Widget build(BuildContext context) {
     final field = TextField(
       controller: _ctrl,
+      focusNode: _focus,
       obscureText: _obscured,
       maxLines: widget.obscure ? 1 : widget.maxLines,
       minLines: 1,
@@ -812,6 +824,90 @@ class VarMultiSelect extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+/// §709 — закрытый `text_list` + `options` в форме Core: выбранные значения
+/// тегами ([InputChip] с ×), добавление — кнопка «Add ▾» с ещё не выбранными
+/// опциями. Своего ввода нет: значения только из `options` (ядро принимает
+/// исчерпывающий список типов). Значение — выбранные строки по одной на
+/// строку в порядке добавления; строки вне списка (старое сохранённое)
+/// выпадают при первой правке. Пустое — подпись «Core default».
+class VarChipPicker extends StatelessWidget {
+  const VarChipPicker({
+    super.key,
+    required this.v,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final WizardVar v;
+  final String value;
+  final ValueChanged<String> onChanged;
+
+  static List<String> _lines(String s) =>
+      s.split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
+
+  @override
+  Widget build(BuildContext context) {
+    final known = v.optionValues;
+    final titles = {for (final o in v.options) o.value: o.title};
+    final selected = <String>[];
+    for (final l in _lines(value)) {
+      if (known.contains(l) && !selected.contains(l)) selected.add(l);
+    }
+    final rest = known.where((k) => !selected.contains(k)).toList();
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+
+    return InputDecorator(
+      decoration: const InputDecoration(
+        border: OutlineInputBorder(),
+        isDense: true,
+        contentPadding: EdgeInsets.fromLTRB(10, 8, 10, 8),
+      ),
+      child: Wrap(
+        spacing: 6,
+        runSpacing: 4,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          if (selected.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Text(getLocalText.s("Core default"),
+                  style: TextStyle(fontSize: 13, color: muted)),
+            ),
+          for (final s in selected)
+            InputChip(
+              key: ValueKey('chip-${v.name}-$s'),
+              label: Text(titles[s] ?? s,
+                  style: const TextStyle(fontSize: 13)),
+              visualDensity: VisualDensity.compact,
+              onDeleted: () => onChanged(
+                  [for (final x in selected) if (x != s) x].join('\n')),
+            ),
+          if (rest.isNotEmpty)
+            PopupMenuButton<String>(
+              key: ValueKey('chip-add-${v.name}'),
+              tooltip: getLocalText.s("Add"),
+              onSelected: (o) => onChanged([...selected, o].join('\n')),
+              itemBuilder: (_) => [
+                for (final o in rest)
+                  PopupMenuItem(value: o, child: Text(titles[o] ?? o)),
+              ],
+              child: Chip(
+                avatar: Icon(Icons.add, size: 16, color: muted),
+                label: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Text(getLocalText.s("Add"),
+                      style: TextStyle(fontSize: 13, color: muted)),
+                  Icon(Icons.arrow_drop_down, size: 18, color: muted),
+                ]),
+                visualDensity: VisualDensity.compact,
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

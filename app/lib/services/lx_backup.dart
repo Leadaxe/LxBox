@@ -26,6 +26,7 @@ import '../models/parser_config.dart' show kUserRuleNumStart;
 import '../models/record_codec.dart';
 import '../models/server_list.dart';
 import '../models/source_chain.dart';
+import '../models/source_dialect.dart';
 import '../models/source_replace.dart';
 import '../models/tls_policy.dart';
 import 'core_reject/core_reject_backup.dart';
@@ -442,7 +443,13 @@ class LxServer {
     this.detourPolicy,
     this.tagPrefix,
     this.tls,
+    this.dialect,
   });
+
+  /// §722 — вид источника узла 1.0 (`origin.kind` после чтения записи, со
+  /// старого `json` — миграция). `null` — вход 0.x: вид определит движок на
+  /// входе текста.
+  final SourceDialect? dialect;
 
   /// §636 — узловая TLS-политика (корневой сервер и член папки): едет, только
   /// если контракт объявил поле (Л2); совпавший узел держит свою.
@@ -1140,7 +1147,11 @@ bool _hasSourceText(Map<dynamic, dynamic> node) {
 /// сборкой. Истина узла — текст (В1).
 Map<String, dynamic> _withJsonBody(Map<String, dynamic> node) {
   final origin = node['origin'];
-  if (origin is! Map || origin['kind'] != 'json') return node;
+  // §722 — `body` (форма sing-box) — только у голого тела вида `singbox`;
+  // Xray-тело — чужой диалект, его форму sing-box даёт перевод.
+  if (origin is! Map || origin['kind'] != SourceDialect.singbox.code) {
+    return node;
+  }
   final obj = _tryDecodeObject(_str(origin['raw']).trim());
   if (obj == null ||
       obj['type'] is! String ||
@@ -3158,13 +3169,16 @@ LxServer? _server10(
 
   var uri = '';
   Map<String, dynamic>? configJson;
-  final obj = hasOrigin && _str(origin?['kind']) != 'json'
-      ? null
-      : _tryDecodeObject(raw.trim());
-  if (obj != null) {
+  // §722 — тег записи ложится в голое тело JSON-диалекта (`tag` у sing-box
+  // и Xray). Документ (§11 п.6: при чтении не обрезается), массив, ссылка,
+  // `.conf` и нечитаемый JSON — текст как есть.
+  final dialect = node.dialect;
+  final obj = dialect.isJson ? _tryDecodeObject(raw.trim()) : null;
+  final bare = obj != null &&
+      obj[dialect == SourceDialect.singbox ? 'type' : 'protocol'] is String;
+  if (bare) {
     configJson = {...obj, if (tag.isNotEmpty) 'tag': tag};
   } else {
-    // `uri`, `wg_ini`, будущие виды и нечитаемый json — текст как есть.
     uri = raw;
   }
 
@@ -3179,6 +3193,7 @@ LxServer? _server10(
         : null,
     uri: uri,
     configJson: configJson,
+    dialect: dialect,
     name: tag,
     enabled: node.enabled,
     warnings: storedWarningsFromJson(j['warnings']),
@@ -4045,6 +4060,16 @@ String canonicalNodeBody(String body) {
     }
     return t;
   }
+  // §722 (BACKUP.md §9) — JSON-массив (источник `singbox`/`xray` хранится в
+  // своей форме) — тоже канонический JSON; `[Interface]` сюда не проходит.
+  if (t.startsWith('[')) {
+    try {
+      final v = jsonDecode(t);
+      if (v is List) return jsonEncode(deepSortKeys(v));
+    } catch (_) {
+      // Не JSON (INI) — ниже, как прежде.
+    }
+  }
   if (t.contains('\n')) return t;
   final hash = t.indexOf('#');
   return hash < 0 ? t : t.substring(0, hash).trim();
@@ -4315,6 +4340,7 @@ BackupServerMerge mergeBackupServers(
         tls: srv.tls ?? TlsPolicy.none,
         origin: UserSource.manual,
         rawBody: body,
+        dialect: srv.dialect, // §722; `null` — 0.x, вид от движка
         // Фича 478 — прочие warnings записи; вердикт страховки срезан (§489).
         warnings: srv.warnings,
         // §578/§656 — поля записи из файла.
@@ -4610,6 +4636,7 @@ int _mergeFolderMember(
   }
   final member = FolderMember(
     raw: body,
+    dialect: srv.dialect, // §722; `null` — 0.x, вид от движка
     enabled: srv.enabled,
     // Фича 478 — прочие warnings записи; вердикт страховки срезан (§489).
     warnings: srv.warnings,

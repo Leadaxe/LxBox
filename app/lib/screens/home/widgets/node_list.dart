@@ -647,6 +647,7 @@ class HomeNodeList extends StatelessWidget {
               cache.rawOf(tag)?['balancer'] != null ? null : urltestNow,
           hasDetour: cache[tag]?.detour != null,
           outboundType: outboundType, // §125 — точный тип из конфига
+          noInternetRoute: cache.hasNoInternetRoute(tag), // §718
           notificationWarnings: notificationWarnings,
           // §322 — двойник Направления vs узел автовыбора: ядру оба `urltest`.
           isDirectionAuto: isDirectionAuto,

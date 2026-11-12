@@ -1,12 +1,15 @@
 import 'dart:async';
 
+import '../../models/core_reject_verdict.dart';
 import '../../models/node_spec.dart';
+import '../../models/node_warning.dart';
 import '../../models/tls_policy.dart';
 import '../../vpn/box_vpn_client.dart';
 import '../../vpn/cc_channel.dart';
 import '../app_log.dart';
 import '../settings_storage.dart';
 import '../builder/core_chain_capability.dart';
+import '../core_reject/core_error_parse.dart';
 import 'probe_config.dart';
 import 'probe_lifecycle.dart';
 
@@ -14,6 +17,14 @@ import 'probe_lifecycle.dart';
 /// (равенством) и показывает попап-гейт с кнопкой Stop VPN вместо ошибки.
 /// Не человеко-читаемый текст: наружу как сообщение не идёт.
 const kProbeVpnRunning = '__vpn_running__';
+
+/// §723 — сколько узлов прогон вынимает по отказу ядра на старте пробы.
+/// Каждый вынутый узел — ещё один `probeStart`; предел не даёт списку из
+/// сплошь негодных узлов превратить пинг в десятки перезапусков.
+const kProbeMaxCoreRejects = 16;
+
+/// §723 — префикс текста вердикта узла, который отвергло ядро.
+const kProbeCoreRejectedPrefix = 'core rejected: ';
 
 /// §236 — вердикт теста одного члена папки.
 enum ProbeStatus {
@@ -135,17 +146,33 @@ class ProbeRunner {
           () => BoxVpnClient().getCoreVersion());
       // §606 — anti-DPI туннеля (фрагментация, mixed-case SNI) и в пробе.
       final vars = await loadProbeVars();
-      final batches =
-          buildProbeBatches(nodes,
-              coreVersion: coreVersion, vars: vars, tlsByIndex: tlsByIndex);
+      // §723 — узел, который ядро уже отвергло (вердикт страховки 478 на
+      // `NodeSpec.warnings`), в пробный конфиг не идёт: ядро откажет на нём
+      // же и уронит сессию для всего списка. Вердикт отдаётся сразу.
+      // `pending` — слоты, которым ещё предстоит сборка/замер; измеренные и
+      // вынутые обнуляются, поэтому пересборка после отказа ядра берёт
+      // только остаток.
+      final pending = [...nodes];
+      for (var i = 0; i < pending.length; i++) {
+        final reason = _storedCoreReject(pending[i]);
+        if (reason == null) continue;
+        pending[i] = null;
+        onResult(i, _coreRejected(reason));
+      }
+      bool isPending(int i) => pending[i] != null;
+
+      var batches = buildProbeBatches(pending,
+          coreVersion: coreVersion, vars: vars, tlsByIndex: tlsByIndex);
 
       // Битые/несобираемые/группы — вердикт сразу, без ядра. Вердикты лежат
       // в первом батче (§518 `_assemble`), покрывают весь список целиком.
+      // Слоты, обнулённые выше, свой вердикт уже получили.
       final broken = batches.isEmpty
-          ? buildProbeConfig(nodes, coreVersion: coreVersion, vars: vars)
+          ? buildProbeConfig(pending, coreVersion: coreVersion, vars: vars)
               .brokenByIndex
           : batches.first.brokenByIndex;
       broken.forEach((i, why) {
+        if (nodes[i] != null && !isPending(i)) return;
         onResult(
             i,
             ProbeResult(
@@ -157,11 +184,16 @@ class ProbeRunner {
               message: why,
             ));
       });
-      if (batches.isEmpty) return '';
 
-      for (final cfg in batches) {
+      var rejects = 0;
+      var b = 0;
+      while (b < batches.length) {
+        final cfg = batches[b];
         if (_cancelled) return '';
-        if (cfg.configJson == null) continue;
+        if (cfg.configJson == null) {
+          b++;
+          continue;
+        }
         final started = await _cc.probeStart(cfg.configJson!);
         if (!started.ok) {
           final err = started.error;
@@ -169,8 +201,25 @@ class ProbeRunner {
           // (getVpnStatus), но между проверкой и probeStart VPN мог стартовать —
           // ловим здесь маркером, не боевой веткой.
           if (_looksLikeVpnRunning(err)) return kProbeVpnRunning;
-          AppLog.I.warning('Probe session failed to start: $err');
-          return err;
+          // §723 — ядро назвало узел: вынимаем его и собираем остаток заново
+          // (образец — страховка туннеля 478). Проба ничего не сохраняет:
+          // вердикт живёт только в этом прогоне.
+          final owner = rejects < kProbeMaxCoreRejects
+              ? _rejectedOwner(err, cfg)
+              : null;
+          if (owner == null) {
+            AppLog.I.warning('Probe session failed to start: $err');
+            return err;
+          }
+          rejects++;
+          AppLog.I.warning(
+              'Probe: core rejected node "${owner.tag}", skipped: ${owner.reason}');
+          pending[owner.index] = null;
+          onResult(owner.index, _coreRejected(owner.reason));
+          batches = buildProbeBatches(pending,
+              coreVersion: coreVersion, vars: vars, tlsByIndex: tlsByIndex);
+          b = 0;
+          continue;
         }
         final runId = started.runId;
         _runId = runId;
@@ -190,6 +239,12 @@ class ProbeRunner {
           _runId = 0;
           await _cc.probeStop(runId);
         }
+        // §723 — батч измерен: при пересборке после отказа ядра в следующем
+        // батче эти узлы второй раз не гоняются.
+        for (final i in cfg.tagByIndex.keys) {
+          pending[i] = null;
+        }
+        b++;
       }
       return '';
     } finally {
@@ -199,6 +254,39 @@ class ProbeRunner {
 
   static bool _looksLikeVpnRunning(String err) =>
       err.toLowerCase().contains('vpn is running');
+
+  static ProbeResult _coreRejected(String reason) => ProbeResult(
+        ProbeStatus.invalid,
+        message: '$kProbeCoreRejectedPrefix$reason',
+      );
+
+  /// §723 — причина хранимого вердикта `core_rejected` узла; `null` — вердикта
+  /// нет. Вердикт уровня узла: без `path` (`stampNodeWarnings`).
+  static String? _storedCoreReject(NodeSpec? node) {
+    if (node == null) return null;
+    for (final w in node.warnings) {
+      if (w is RegistryWarning && w.code == kCoreRejectedCode && w.path == null) {
+        return w.params[kCoreRejectedReasonParam] ?? '';
+      }
+    }
+    return null;
+  }
+
+  /// §723 — узел, который ядро назвало в отказе старта пробы. Разбор тот же,
+  /// что у страховки туннеля (PARSING_PRINCIPLES §9.2, §653); `null` — узел
+  /// не назван либо тег не принадлежит узлу списка (`direct`).
+  static ({int index, String tag, String reason})? _rejectedOwner(
+      String err, ProbeConfig cfg) {
+    final rejection = parseCoreRejection(
+      err,
+      CoreConfigTags.fromConfigJson(cfg.configJson!,
+          all: cfg.ownerByTag.keys.toSet()),
+    );
+    if (rejection == null) return null;
+    final index = cfg.ownerByTag[rejection.tag];
+    if (index == null) return null;
+    return (index: index, tag: rejection.tag, reason: rejection.reason);
+  }
 
   Future<void> _runPool(
     Map<int, String> tags, {

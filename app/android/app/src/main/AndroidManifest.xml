@@ -337,6 +337,32 @@
             </intent-filter>
         </receiver>
 
+        <!-- §721 — Android AppFunctions (16+): startVpn / stopVpn /
+             getVpnStatus для ассистентов. Класс сервиса порождает KSP из
+             LxBoxAppFunctions (@AppFunctionServiceEntryPoint), XML-схема —
+             lxbox_app_functions.xml. Функции объявлены выключенными
+             (isEnabled = false); включает их тумблер «AI assistant control»
+             (AppFunctionsGate.setEnabled). До Android 17 у приложения может
+             быть только один сервис с этим действием. -->
+        <service
+            android:name=".appfunctions.LxBoxAppFunctionService"
+            android:permission="android.permission.BIND_APP_FUNCTION_SERVICE"
+            android:exported="true"
+            tools:targetApi="36">
+            <property
+                android:name="android.app.appfunctions.schema"
+                android:value="app_functions_schema.xsd" />
+            <property
+                android:name="android.app.appfunctions.v2"
+                android:value="lxbox_app_functions.xml" />
+            <intent-filter>
+                <action android:name="android.app.appfunctions.AppFunctionService" />
+            </intent-filter>
+        </service>
+        <property
+            android:name="android.app.appfunctions.app_metadata"
+            android:resource="@xml/app_metadata" />
+
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />

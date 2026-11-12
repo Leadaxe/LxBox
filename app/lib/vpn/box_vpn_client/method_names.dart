@@ -125,6 +125,8 @@ class _Methods {
   // §047 Automation API — Dart → native control + outgoing emit.
   static const setAutomationEnabled = 'setAutomationEnabled';
   static const sendAutomationBroadcast = 'sendAutomationBroadcast';
+  // §721 — тумблер Android AppFunctions (зеркало + состояние функций).
+  static const setAppFunctionsEnabled = 'setAppFunctionsEnabled';
   // §047 Шаг 2 — mirror активной ноды/группы для Locale condition-плагина.
   static const setAutomationActiveState = 'setAutomationActiveState';
 

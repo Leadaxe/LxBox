@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Status | Released (v2.25.20) |
+| Status | Cancelled (ядро lx.33, 07.11.2026; было Released в v2.25.20) |
 | Start date | 2026-11-05 |
 | Source | решение владельца 05.11.2026: настройка — в секции WireGuard вкладки Core; в описание `quic_sniff_decoy` дописать AWG (ip=quic) |
 | Related specs | ядро sing-box-lx SPEC 153 (issue sing-box-lx#64), §709 (острова Core, переменные корневого `lx`), контракт 1.1.151 (ключи `lx` — переменные шаблона) |
@@ -64,3 +64,22 @@ MASQUE, Hysteria2 и TUIC.
   при `direct` — `lx.awg_masquerade: "direct"`, чужое значение ключа не даёт.
 - Не проверено: вид настройки на эмуляторе; поведение ядра с `all` через
   detour на живом AWG-узле.
+
+## Отменено (ядро lx.33, 07.11.2026)
+
+Ядро `v1.14.4-lx.33` удалило ключ `lx.awg_masquerade` (SPEC 153 форка):
+маскировочная пачка AWG идёт на любом пути, любое значение ключа — ошибка
+загрузки конфига. Решение владельца — настройку снять целиком.
+
+- Переменная `awg_masquerade` и ветка `#if awg_masquerade` сняты из
+  `app/assets/wizard_template.json`; ключ — из `_configVarKeys`
+  (`settings_storage.dart`), подсказка (i) — из `_lxVarHints`
+  (`settings_screen.dart`), тексты — из `l10n/{ru,zh}/{template,ui}.json`.
+- Сохранённое значение в хранилище у существующих установок остаётся
+  неиспользуемым: шаблон на переменную не ссылается, в конфиг ключ не
+  попадает; в LX Backup переменная не переносима. Миграции нет.
+- AWG `ip=quic` через detour на релей со сниффингом QUIC теперь закрывается
+  обманкой: `wireguard` в «Decoy node types» (§709 итерация 5).
+- Тест «720» в `lx_block_template_test.dart` заменён проверкой, что ключ ядру
+  не уходит ни при каком значении.
+- Статус спеки — Cancelled.

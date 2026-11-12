@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import '../../vpn/box_vpn_client.dart';
 import '../settings_storage.dart';
 import 'event_emitter.dart';
@@ -11,11 +13,22 @@ import 'event_emitter.dart';
 /// приём включённым (и наоборот). Зовётся на старте приложения, после загрузки
 /// набора и после восстановления бэкапа.
 ///
-/// [setReceiver] — inject-точка для тестов (по умолчанию native-вызов).
+/// §721 — тем же проходом в native уходит `appfunctions_enabled` (зеркало
+/// `boxvpn_boot` + состояние Android AppFunctions): полный ресинк на старте.
+///
+/// [setReceiver], [setAppFunctions] — inject-точки для тестов (по умолчанию
+/// native-вызовы; AppFunctions — только на Android).
 Future<void> syncAutomationFromStorage({
   Future<void> Function(bool enabled)? setReceiver,
+  Future<void> Function(bool enabled)? setAppFunctions,
 }) async {
   await AutomationEventEmitter.I.reload();
   final receive = await SettingsStorage.getAutomationReceiveEnabled();
   await (setReceiver ?? BoxVpnClient.I.setAutomationEnabled)(receive);
+  final appFunctions =
+      setAppFunctions ??
+      (Platform.isAndroid ? BoxVpnClient.I.setAppFunctionsEnabled : null);
+  if (appFunctions != null) {
+    await appFunctions(await SettingsStorage.getAppFunctionsEnabled());
+  }
 }

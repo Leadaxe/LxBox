@@ -114,6 +114,16 @@ The feature protects three principles:
   host names replaced by `***` (§638). **Witness:** unit
   `test/services/automation/event_emitter_test` "VPN_ERROR(tunnel_error)
   hides server address". **Mutation:** the raw `errorReason` is broadcast.
+- **P15. Android assistants act only with the user's permission.** On
+  Android 16+ the app declares three AppFunctions: connect, disconnect and
+  read the tunnel state (`stopped` / `starting` / `started` / `stopping`).
+  While "AI assistant control" is off (the default) none of them is executed.
+  Connecting needs a VPN permission granted earlier and a saved
+  configuration; otherwise the assistant gets an error and the app does not
+  open. The answer carries only the state, no node names (§721).
+  **Witness:** JVM unit `AppFunctionsLogicTest`; manual check
+  `adb shell cmd app_function execute-app-function` with the toggle off and
+  on. **Mutation:** a function runs with the toggle off.
 
 ## Controlled parameters
 
@@ -121,6 +131,7 @@ The feature protects three principles:
 |---------|--------|---------|
 | Accept automation commands | on/off; turning on — via a warning dialog | off |
 | Emit: Lifecycle / State / Subscription | on/off each; first enable — via an explanation | all off |
+| AI assistant control (Android 16+; hidden below) | on/off | off |
 | Quick Settings tile → Add | system request to add the tile (Android 13+) | — |
 | First run: offer to add the tile | shown once, where the OS supports it | — |
 

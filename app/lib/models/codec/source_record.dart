@@ -18,6 +18,7 @@ import 'dart:convert';
 
 import '../../services/parser/body_decoder.dart';
 import '../../services/parser/parse_all.dart';
+import '../../services/parser/source_classify.dart';
 import '../import_rule.dart';
 import '../node_link.dart';
 import '../node_spec.dart';
@@ -25,6 +26,7 @@ import '../tls_policy.dart';
 import '../record_codec.dart' show RecordRead;
 import '../core_reject_verdict.dart';
 import '../server_list.dart';
+import '../source_dialect.dart';
 import '../subscription_meta.dart';
 import 'auto_group_record.dart';
 import 'node_link_record.dart';
@@ -109,7 +111,7 @@ Map<String, dynamic> _serverToRecord(UserServer u) {
     'enabled': u.enabled,
     // Фича 478 — вердикт ядра на ручном сервере: рядом с `enabled`.
     if (u.warnings.isNotEmpty) 'warnings': storedWarningsToJson(u.warnings),
-    if (u.rawBody.isNotEmpty) 'origin': _originToRecord(u.rawBody),
+    if (u.rawBody.isNotEmpty) 'origin': _originToRecord(u.rawBody, u.dialect),
     ..._detourLinkToRecord(u.detourPolicy),
     // §578/§656 — пишется только `true` и только новые ключи.
     ..._recordFlagsToRecord(u.skipTailscalePresets, u.allowLocal, u.allowLan,
@@ -155,7 +157,7 @@ Map<String, dynamic> _memberToRecord(FolderMember m, String folderId) {
     'enabled': m.enabled,
     // Фича 478 — вердикт ядра на члене папки: рядом с `enabled`.
     if (m.warnings.isNotEmpty) 'warnings': storedWarningsToJson(m.warnings),
-    if (m.raw.isNotEmpty) 'origin': _originToRecord(m.raw),
+    if (m.raw.isNotEmpty) 'origin': _originToRecord(m.raw, m.dialect),
     if (m.detour.isNotEmpty) 'detour': nodeLinkToRecord(m.detour),
     if (node == null) 'reason': kMemberUnparsedReason,
     // §578/§656 — пишется только `true` и только новые ключи.
@@ -215,34 +217,35 @@ Map<String, dynamic> _detourPolicyToRecord(DetourPolicy p) => {
         'detour_policy': p.toJson(),
     };
 
-/// `origin{kind, raw}`: `kind` выводится из текста (правило экспорта 438:
-/// JSON-объект → `json`, WG-INI → `wg_ini`, прочее → `uri`), `raw` — байт в
-/// байт.
-Map<String, dynamic> _originToRecord(String raw) =>
-    {'kind': originKindOf(raw), 'raw': raw};
+/// `origin{kind, raw}`: §722 — `kind` — ХРАНИМЫЙ диалект записи
+/// (`singbox | xray | uri | wg_ini`, контракт 1.1.165), не вывод из текста;
+/// `raw` — байт в байт.
+Map<String, dynamic> _originToRecord(String raw, SourceDialect dialect) =>
+    {'kind': dialect.code, 'raw': raw};
 
-/// §455 — ВИД ЗАПИСИ для хранения: `uri` | `wg_ini` | `json`. Контракт
-/// знает ровно эти три, и `json` здесь значит «источник — JSON-объект», без
-/// различия диалекта: `raw` хранится байт в байт, и перечитывается он тоже
-/// из `raw`.
-///
-/// Режим СБОРКИ по этому значению НЕ решается: дословность включает вид
-/// источника движка ([sourceIsSingbox]) — см. `verbatim_body.dart`.
-String originKindOf(String raw) {
-  final t = raw.trim();
-  if (t.startsWith('{')) {
-    try {
-      if (jsonDecode(t) is Map) return 'json';
-    } catch (_) {
-      // Не JSON — решает общий декодер ниже.
-    }
+/// §722 — диалект записи при чтении: новое значение `origin.kind` — как есть;
+/// `uri` — как есть, если текст не JSON (§11 п.6: поле Origin могло положить
+/// JSON под `uri`); старое `json`, пусто, чужое — миграция движком
+/// ([migrateLegacyDialect], JSON без вида → `singbox`). Записывается
+/// обратно при первом сохранении.
+SourceDialect dialectFromRecord(Map<String, dynamic> j, String raw) {
+  final origin = j['origin'];
+  final code = origin is Map ? origin['kind'] : null;
+  final stored = SourceDialect.fromCode(code);
+  if (stored != null && stored != SourceDialect.uri) return stored;
+  if (stored == SourceDialect.uri) {
+    final migrated = migrateLegacyDialect(raw);
+    return migrated.isJson ? migrated : SourceDialect.uri;
   }
-  return decode(t) is IniConfig ? 'wg_ini' : 'uri';
+  // Записи без исходника (форма лаунчера: `body` с тегом) — тело sing-box.
+  return migrateLegacyDialect(raw);
 }
 
 /// §480/§482 — ВИД ИСТОЧНИКА текста именем реестра (`source_kind`):
-/// `singbox_outbound`, `xray_config`, `uri_lines` и прочие. Пусто — текст ни
-/// на что не похож (пустой, битый JSON).
+/// `singbox_outbound`, `xray_config`, `uri_lines` и прочие — ФОРМА текста
+/// (голое тело / документ / массив), видная движку за одну проверку. Пусто —
+/// текст ни на что не похож (пустой, битый JSON). Диалект записи этим не
+/// решается (§722: поле записи `dialect`).
 ///
 /// Опознание одно на всё приложение — движок (`engine/document.dart`): свой
 /// разбор формы здесь завёл бы второй сниффер, и разъехался бы он молча.
@@ -256,79 +259,6 @@ String sourceKindOf(String raw) {
     UriLines() => 'uri_lines',
     DecodeFailure() => '',
   };
-}
-
-/// §455 + Д-1 (эмулятор 19.09.2026) — ТЕЛО ЭТОГО ТЕКСТА НАПИСАНО В ФОРМЕ
-/// ЯДРА.
-///
-/// Дословность §455 держится ровно на этом: «человек написал sing-box-объект
-/// сам». Xray-объект — чужой диалект (`protocol`, `settings.vnext`,
-/// `streamSettings`), и положить его в `outbounds[]` как есть значит уронить
-/// ВЕСЬ конфиг: ядро отвечает `unknown outbound type:` и узел даже не назван,
-/// так что выключить его нечем. Такой источник идёт через модель (маппер →
-/// санитайзер), как и Xray-массив `outbounds[]`.
-///
-/// Судит по СОДЕРЖИМОМУ текста, а не по записи: уже сохранённым записям с
-/// `origin.kind: json` и Xray-телом миграции не нужно — они лечатся на первой
-/// же загрузке.
-bool sourceIsSingbox(String raw) {
-  final decoded = decode(raw);
-  return decoded is JsonConfig && decoded.source.mapper == 'singbox';
-}
-
-/// §576 — источник записи — голое тело узла sing-box (вид ровно
-/// `singbox_outbound`). У своего сервера и члена папки такое тело авторское:
-/// уходит в ядро дословно (`verbatimBodyOf`) и получает вход `singbox`.
-bool isAuthoredNodeSource(String raw) =>
-    sourceKindOf(raw) == SourceKind.singboxOutbound;
-
-/// §576 п.3 — прежние виды источника своей записи и члена папки, которые
-/// сводятся к голому телу узла.
-const Set<String> kLegacyNodeSourceKinds = {
-  'singbox_config',
-  'singbox_config_array',
-  'singbox_outbound_array',
-};
-
-/// §576 — источник своего сервера и члена папки: только тело узла, вид
-/// `singbox_outbound` (PARSING_PRINCIPLES §11).
-///
-/// Условия: вид источника [raw] — один из [kLegacyNodeSourceKinds] (документ,
-/// массив документов, массив тел). Тогда источником становится тело ПЕРВОГО
-/// узла записи, не группы (`rawSource`, §454): ровно тот узел, что запись и
-/// раньше отдавала в конфиг. Пустой `tag` тела заполняется тегом узла, чтобы
-/// имя не сдвинулось. Тело пишется JSON с отступом в два пробела.
-///
-/// Иначе (голое тело, ссылка, INI, Xray, узлов нет) — [raw] без изменений.
-String bareNodeSourceOf(String raw) {
-  if (!kLegacyNodeSourceKinds.contains(sourceKindOf(raw))) return raw;
-  NodeSpec? node;
-  for (final n in _parseNodes(raw)) {
-    if (!n.isGroup) {
-      node = n;
-      break;
-    }
-  }
-  if (node == null) return raw;
-  return bareBodyTextOf(node) ?? raw;
-}
-
-/// §576 — текст голого тела узла [node] (его `rawSource`) с тегом узла, если
-/// своего тега у тела нет. `null` — `rawSource` не JSON-объект.
-String? bareBodyTextOf(NodeSpec node) {
-  final Object? decoded;
-  try {
-    decoded = jsonDecode(node.rawSource);
-  } catch (_) {
-    return null;
-  }
-  if (decoded is! Map) return null;
-  final body = Map<String, dynamic>.from(decoded);
-  final tag = body['tag'];
-  if ((tag is! String || tag.trim().isEmpty) && node.tag.isNotEmpty) {
-    body['tag'] = node.tag;
-  }
-  return const JsonEncoder.withIndent('  ').convert(body);
 }
 
 String _firstNodeTag(List<NodeSpec> nodes, String raw) {
@@ -348,10 +278,11 @@ List<NodeSpec> _parseNodes(String raw, {String? nameHint}) {
 /// §456 — у `origin.kind: wg_ini` тег записи ПРИМЕНЯЕТСЯ: INI тега не
 /// несёт, узел разбирается с ним как с `nameHint`. У ссылки и JSON тег лежит
 /// в тексте, и текст побеждает (`_checkTag`). `null` — не INI или тега нет.
-String? _iniTagHint(Map<String, dynamic> j, String raw) {
+/// §722 — по хранимому виду записи, не по тексту.
+String? _iniTagHint(Map<String, dynamic> j, SourceDialect dialect) {
   final tag = j['tag'];
   if (tag is! String || tag.isEmpty) return null;
-  return originKindOf(raw) == 'wg_ini' ? tag : null;
+  return dialect == SourceDialect.wgIni ? tag : null;
 }
 
 // ─── чтение ─────────────────────────────────────────────────────────────────
@@ -502,9 +433,11 @@ UserServer _serverFromRecord(
 ) {
   final where = 'server "$id"';
   _collectUnknown(j, _serverKeys, '', unknown);
-  // §576 п.3 — документ и массив в источнике сводятся к телу узла.
-  final raw = bareNodeSourceOf(_rawOf(j, '', unknown));
-  final hint = _iniTagHint(j, raw);
+  // §722 — источник хранится в своём диалекте как есть (документ —
+  // документом, §11 п.6: обрезка на входе текста, не при чтении).
+  final raw = _rawOf(j, '', unknown);
+  final dialect = dialectFromRecord(j, raw);
+  final hint = _iniTagHint(j, dialect);
   final nodes = _parseNodes(raw, nameHint: hint);
   if (hint == null) {
     _checkTag(j, nodes.isEmpty ? null : nodes.first.tag, where, notes);
@@ -519,6 +452,7 @@ UserServer _serverFromRecord(
     detourPolicy: _detourPolicyFromRecord(j, unknown),
     tls: TlsPolicy.fromJson(j['tls']),
     rawBody: raw,
+    dialect: dialect,
     skipTailscalePresets: _skipTailscalePresetsOf(j),
     allowLocal: _bool(j['allow_local'], false),
     allowLan: _bool(j['allow_lan'], false),
@@ -603,12 +537,14 @@ FolderMember? _memberFromRecord(
     return null;
   }
   _collectUnknown(j, _memberKeys, path, unknown);
-  // §576 п.3 — документ и массив в источнике сводятся к телу узла.
-  final text = bareNodeSourceOf(_rawOf(j, path, unknown));
-  final hint = _iniTagHint(j, text);
+  // §722 — источник члена в своём диалекте как есть.
+  final text = _rawOf(j, path, unknown);
+  final dialect = dialectFromRecord(j, text);
+  final hint = _iniTagHint(j, dialect);
   _noteSectionsDropped(j['sections'], where, notes);
   final member = FolderMember(
     raw: text,
+    dialect: dialect,
     enabled: _bool(j['enabled'], true),
     warnings: storedWarningsFromJson(j['warnings']),
     detour: nodeLinkFromRecord(j['detour']) ?? NodeLink.none,

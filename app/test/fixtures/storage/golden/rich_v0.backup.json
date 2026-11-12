@@ -185,7 +185,7 @@
       "tag": "home-ts",
       "enabled": true,
       "origin": {
-        "kind": "json",
+        "kind": "singbox",
         "raw": "{\"type\":\"tailscale\",\"tag\":\"home-ts\",\"auth_key\":\"tskey-auth-000000000000\",\"hostname\":\"lxbox-test\",\"accept_routes\":true}"
       },
       "body": {
@@ -211,7 +211,7 @@
       "tag": "singbox-wg-1",
       "enabled": true,
       "origin": {
-        "kind": "json",
+        "kind": "singbox",
         "raw": "{\"type\":\"wireguard\",\"tag\":\"singbox-wg-1\",\"address\":[\"10.0.0.2/32\"],\"private_key\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=\",\"peers\":[{\"address\":\"example-1.com\",\"port\":51820,\"public_key\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=\",\"allowed_ips\":[\"0.0.0.0/0\",\"::/0\"]}],\"mtu\":1420}"
       },
       "body": {
@@ -250,7 +250,7 @@
           "tag": "de-1",
           "enabled": true,
           "origin": {
-            "kind": "json",
+            "kind": "singbox",
             "raw": "{\"type\":\"vless\",\"tag\":\"de-1\",\"server\":\"example-41.com\",\"server_port\":443,\"uuid\":\"11111111-1111-1111-1111-111111111111\",\"tls\":{\"enabled\":true,\"server_name\":\"example-41.com\"}}"
           },
           "body": {

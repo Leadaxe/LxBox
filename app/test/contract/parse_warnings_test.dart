@@ -415,11 +415,16 @@ void main() {
       expect(own.emit(TemplateVars.empty).map['mtu'], 1420);
     });
 
-    test('документ своего сервера — не голое тело, вход other', () {
+    // §722 / контракт 1.1.165 PARSING_PRINCIPLES §10.1 п.3 — авторство по
+    // виду записи `singbox`, не по форме текста: документ своего сервера —
+    // тот же вход `singbox`, что и голое тело.
+    test('документ своего сервера — вход singbox, как голое тело', () {
       final doc = '{"endpoints":[${awgBody(1420)}]}';
       final n = _one(doc, own: true);
-      expect(n.emit(TemplateVars.empty).map['mtu'], 1280);
-      expect(_byCode(n, 'awg_mtu_clamped').value, '1420');
+      expect(n.emit(TemplateVars.empty).map['mtu'], 1420);
+      expect(_byCode(n, 'awg_mtu_high').value, '1420');
+      expect(_registry(n).map((w) => w.code),
+          isNot(contains('awg_mtu_clamped')));
     });
 
     test('та же нода ССЫЛКОЙ: значение заменено, код warning', () {

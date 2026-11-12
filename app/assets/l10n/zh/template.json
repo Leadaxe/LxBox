@@ -824,26 +824,11 @@
   "QUIC": {
     "value": "QUIC"
   },
-  "AWG masquerade": {
-    "value": "AWG 伪装"
-  },
-  "When an AmneziaWG node sends its masquerade packets (ip=quic, i1…) before the handshake. All paths: always, also through another node. Direct only: when the node dials from this device's own socket; through another node a single handshake packet goes out.": {
-    "value": "AmneziaWG 节点何时在握手前发送伪装数据包（ip=quic、i1…）。All paths：始终发送，包括经由其他节点时。Direct only：仅当节点从本设备自身的套接字拨号时；经由其他节点时只发送一个握手包。"
-  },
-  "Direct only": {
-    "value": "仅直连"
-  },
-  "All paths (default)": {
-    "value": "所有路径（默认）"
-  },
   "MASQUE (HTTP/3), Hysteria2, TUIC and AWG with QUIC masquerade (ip=quic).": {
     "value": "MASQUE (HTTP/3)、Hysteria2、TUIC 以及伪装成 QUIC（ip=quic）的 AWG。"
   },
   "Anti-sniff decoy": {
     "value": "防嗅探诱饵"
-  },
-  "Send one junk byte before the QUIC handshake so a relay that sniffs UDP cannot redirect the connection by its SNI. Through detour: only connections carried by another node; Direct: only this device's own socket; All: both. Also covers AWG nodes whose masquerade imitates QUIC (ip=quic).": {
-    "value": "在 QUIC 握手前发送一个垃圾字节，使嗅探 UDP 的中继无法按 SNI 重定向连接。Through detour：仅由其他节点承载的连接；Direct：仅本设备自身的套接字；All：两者皆有。也适用于伪装成 QUIC（ip=quic）的 AWG 节点。"
   },
   "MASQUE idle timeout": {
     "value": "MASQUE 空闲超时"
@@ -851,10 +836,40 @@
   "Close a MASQUE tunnel that carried no traffic for this long; it reconnects on next use. A node's own idle timeout wins.": {
     "value": "在 MASQUE 隧道这么长时间没有流量后将其关闭；下次使用时重新连接。节点自身的空闲超时优先。"
   },
-  "Through detour (default)": {
-    "value": "经由 detour（默认）"
-  },
   "All": {
     "value": "全部"
+  },
+  "Send one junk byte before the QUIC handshake so a relay that sniffs UDP cannot redirect the connection by its SNI. The byte goes only where a node opens QUIC (MASQUE, Hysteria2, TUIC, XHTTP over HTTP/3, AWG with ip=quic) and, by default, only on a retry after a failed first attempt. Through detour: only connections carried by another node; Direct: only this device's own socket; All: both.": {
+    "value": "在 QUIC 握手前发送一个垃圾字节，使嗅探 UDP 的中继无法按 SNI 重定向连接。该字节仅在节点打开 QUIC 时发送（MASQUE、Hysteria2、TUIC、XHTTP over HTTP/3、ip=quic 的 AWG），默认仅在首次尝试失败后的重试中发送。Through detour：仅由其他节点承载的连接；Direct：仅本设备自身的套接字；All：两者皆有。"
+  },
+  "Off (default)": {
+    "value": "关闭（默认）"
+  },
+  "Through detour": {
+    "value": "经由 detour"
+  },
+  "Decoy sending": {
+    "value": "诱饵发送方式"
+  },
+  "On retry: the first attempt goes without the byte, a failed one is repeated with it. Always: the byte goes on every dial. Does not apply to WireGuard: there the byte goes on every handshake.": {
+    "value": "On retry：首次尝试不带该字节，失败后带上它重试。Always：每次拨号都发送该字节。对 WireGuard 无效：其每次握手都会发送该字节。"
+  },
+  "On retry (default)": {
+    "value": "重试时（默认）"
+  },
+  "Always": {
+    "value": "始终"
+  },
+  "Decoy node types": {
+    "value": "诱饵节点类型"
+  },
+  "Node types that send the byte before their QUIC handshake. Empty means the core default (masque).": {
+    "value": "在其 QUIC 握手前发送该字节的节点类型。留空表示内核默认值（masque）。"
+  },
+  "Decoy relay types": {
+    "value": "诱饵中继类型"
+  },
+  "The byte goes only if the nearest relay (detour) is of one of these types. Behind a group the type of the member the group actually picked counts. Empty means the core default (vless).": {
+    "value": "仅当最近的中继（detour）属于这些类型之一时才发送该字节。位于分组之后时，以分组实际选中的成员类型为准。留空表示内核默认值（vless）。"
   }
 }

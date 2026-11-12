@@ -268,6 +268,54 @@ Wait Event.
 
 ---
 
+## AI assistants (AppFunctions)
+
+On Android 16+ L×Box declares three
+[AppFunctions](https://developer.android.com/ai/appfunctions) that a system
+assistant (for example Gemini) can call on the user's behalf:
+
+| Function | Parameters | Result |
+|----------|------------|--------|
+| `startVpn` | — | `VpnState`; waits up to 15 s for the tunnel to settle |
+| `stopVpn` | — | `VpnState`; waits up to 15 s |
+| `getVpnStatus` | — | `VpnState` |
+
+`VpnState` has one field, `status`: `stopped`, `starting`, `started` or
+`stopping`. Node names are not returned.
+
+**How to enable.** App Settings → Automation → **AI assistant control**. The
+switch is off by default and is shown only on Android 16+. While it is off,
+the functions are marked disabled for the system and each call fails with
+`AppFunctionDisabledException`. The setting is stored with the other
+automation settings and travels in LX Backup.
+
+**Errors.** `startVpn` does not open the app:
+
+- the VPN permission has not been granted yet (TUN mode) —
+  `AppFunctionPermissionRequiredException` "VPN permission is not granted.
+  Open L×Box and connect once.";
+- no configuration has been saved — `AppFunctionElementNotFoundException`
+  "No configuration. Open L×Box and add a server."
+
+**Check with adb** (the device must have the `app_function` service:
+`adb shell cmd app_function help`):
+
+```sh
+adb shell cmd app_function list-app-functions --package com.leadaxe.lxbox
+adb shell cmd app_function execute-app-function --package com.leadaxe.lxbox \
+  --function 'com.leadaxe.lxbox.appfunctions.LxBoxAppFunctions#getVpnStatus' \
+  --parameters '{}'
+```
+
+`startVpn` and `stopVpn` are called the same way. Copy the function ID from
+the `list-app-functions` output if it differs.
+
+**Status.** The AppFunctions API is experimental (`androidx.appfunctions`
+1.0.0-rc01). Today only apps in Google's early access programme can be called
+from Gemini, so on most devices the switch has no visible effect yet.
+
+---
+
 ## Troubleshooting
 
 | Symptom | Cause | Fix |

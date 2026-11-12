@@ -7,12 +7,14 @@ import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/singbox_entry.dart';
+import 'package:lxbox/models/source_dialect.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/builder/rule_set_registry.dart';
 import 'package:lxbox/services/builder/server_list_build.dart';
 import 'package:lxbox/services/builder/verbatim_body.dart';
 import 'package:lxbox/services/parser/body_decoder.dart';
 import 'package:lxbox/services/parser/parse_all.dart';
+import 'package:lxbox/services/parser/source_classify.dart';
 
 import '../parser/engine_test_setup.dart';
 
@@ -112,35 +114,27 @@ void main() {
         'streamSettings': {'network': 'tcp', 'security': 'none'},
       });
 
-  group('originKindOf', () {
-    test('JSON-объект → json, ссылка → uri, INI → wg_ini', () {
-      expect(originKindOf(jsonEncode(naive)), 'json');
-      expect(originKindOf('vless://u@h:443?security=none#t'), 'uri');
+  // §722 — вид записи определяется на входе текста движком
+  // (`sourceDialectOf`) и хранится; сборка ветвится по хранимому виду.
+  group('§722 вид на входе текста', () {
+    test('sing-box → singbox, Xray → xray, ссылка → uri, INI → wg_ini', () {
+      expect(sourceDialectOf(jsonEncode(naive)), SourceDialect.singbox);
+      expect(sourceDialectOf(xray('x')), SourceDialect.xray);
+      expect(sourceDialectOf('vless://u@h:443?security=none#t'),
+          SourceDialect.uri);
       expect(
-          originKindOf('[Interface]\nPrivateKey = '
+          sourceDialectOf('[Interface]\nPrivateKey = '
               'yAnz5TF+lXXJte14tji3zlMNq+hd2rYUIgJBgB3fBmk=\n'
               'Address = 10.0.0.2/32\n[Peer]\nPublicKey = '
               'xTIBA5rboUvnH4htodjb6e697QjLERt1NAB4mZqp8Dg=\n'
               'Endpoint = 1.2.3.4:51820\n'),
-          'wg_ini');
+          SourceDialect.wgIni);
     });
 
-    // Д-1 — вид ЗАПИСИ у Xray-объекта прежний (`json`): контракт знает три
-    // значения, `raw` хранится как есть, и миграции хранения не нужно.
-    // Режим сборки по нему больше не решается.
-    test('Xray-объект — вид записи тот же json', () {
-      expect(originKindOf(xray('x')), 'json');
-    });
-  });
-
-  group('sourceKindOf / sourceIsSingbox', () {
-    test('вид источника — именем реестра, sing-box отделён от Xray', () {
+    test('форма — именем реестра, sing-box отделён от Xray', () {
       expect(sourceKindOf(jsonEncode(naive)), 'singbox_outbound');
       expect(sourceKindOf(xray('x')), 'xray_outbound');
       expect(sourceKindOf('vless://u@h:443?security=none#t'), 'uri_lines');
-      expect(sourceIsSingbox(jsonEncode(naive)), isTrue);
-      expect(sourceIsSingbox(xray('x')), isFalse);
-      expect(sourceIsSingbox('vless://u@h:443?security=none#t'), isFalse);
     });
   });
 
@@ -149,23 +143,28 @@ void main() {
       expect(parseAll(decode(jsonEncode(naiveDetour))), isEmpty);
     });
 
-    test('JSON-источник → объект без detour; ссылка → null', () {
+    test('вид singbox → объект без detour; вид uri → null', () {
       final raw = jsonEncode(naive);
       final node = parseAll(decode(raw)).single;
-      final body = verbatimBodyOf(raw, node)!;
+      final body = verbatimBodyOf(SourceDialect.singbox, node)!;
       expect(body.containsKey('detour'), isFalse);
       expect(body['unknown_to_model'], {'x': 1});
       expect(body['tag'], 'naive-out');
       expect(
-          verbatimBodyOf('vless://u@h:443?security=none#t',
+          verbatimBodyOf(SourceDialect.uri,
               parseAll(decode('vless://u@h:443?security=none#t')).single),
           isNull);
     });
 
-    // Д-1 — Xray-источник дословным НЕ бывает: диалект чужой.
-    test('Xray-объект → null (через модель)', () {
+    // §722 — запись вида xray дословной НЕ бывает: диалект чужой, тело —
+    // перевод. Решает вид записи, не текст.
+    test('вид xray → null (через модель) всегда', () {
       final raw = xray('x');
-      expect(verbatimBodyOf(raw, parseAll(decode(raw)).single), isNull);
+      final node = parseAll(decode(raw)).single;
+      expect(verbatimBodyOf(SourceDialect.xray, node), isNull);
+      // Даже узел sing-box-текста под видом xray — не дословно.
+      final sb = parseAll(decode(jsonEncode(naive))).single;
+      expect(verbatimBodyOf(SourceDialect.xray, sb), isNull);
     });
   });
 
@@ -200,33 +199,48 @@ void main() {
         ],
       });
       final group = parseAll(decode(raw)).whereType<AutoSelectSpec>().single;
-      expect(verbatimBodyOf(jsonEncode(naive), group), isNull);
+      expect(verbatimBodyOf(SourceDialect.singbox, group), isNull);
     });
 
-    test('3. вид источника не singbox_outbound → null', () {
+    test('3. вид записи не singbox → null', () {
       final node = parseAll(decode(jsonEncode(naive))).single;
-      for (final raw in [
-        jsonEncode({
-          'outbounds': [naive],
-        }),
-        jsonEncode([naive]),
-        jsonEncode([
-          {
-            'outbounds': [naive],
-          },
-        ]),
+      for (final d in [
+        SourceDialect.xray,
+        SourceDialect.uri,
+        SourceDialect.wgIni,
       ]) {
-        expect(sourceKindOf(raw), isNot('singbox_outbound'));
-        expect(verbatimBodyOf(raw, node), isNull, reason: raw);
+        expect(verbatimBodyOf(d, node), isNull, reason: d.code);
       }
-      expect(verbatimBodyOf(jsonEncode(naive), node), isNotNull);
+      expect(verbatimBodyOf(SourceDialect.singbox, node), isNotNull);
+    });
+
+    // §722 (контракт 1.1.165 §10.1 условие 3) — документ sing-box тоже
+    // авторский: дословно уходит КАЖДЫЙ узел записи, а не только первый.
+    test('3а. документ singbox → каждый узел дословно', () {
+      final second = {
+        ...naive,
+        'tag': 'naive-2',
+        'server': '1.2.3.5',
+        'unknown_to_model': {'y': 2},
+      };
+      final raw = jsonEncode({
+        'outbounds': [naive, second],
+      });
+      final list = server(raw);
+      expect(list.dialect, SourceDialect.singbox);
+      final ctx = _Ctx();
+      list.build(ctx);
+      expect(ctx.entries, hasLength(2));
+      expect(ctx.entries[0].map['unknown_to_model'], {'x': 1});
+      expect(ctx.entries[1].map['unknown_to_model'], {'y': 2});
+      expect(ctx.entries.every((e) => e.authored), isTrue);
     });
 
     test('4. текст узла не JSON-объект → null', () {
       final uriNode =
           parseAll(decode('vless://u@h.example.com:443?security=none#t'))
               .single;
-      expect(verbatimBodyOf(jsonEncode(naive), uriNode), isNull);
+      expect(verbatimBodyOf(SourceDialect.singbox, uriNode), isNull);
     });
   });
 
@@ -299,6 +313,18 @@ void main() {
       final m = built(server('vless://u@h.example.com:443?security=none#t'));
       expect(m['type'], 'vless');
       expect(m.containsKey('unknown_to_model'), isFalse);
+    });
+
+    // §722 — Xray-запись в сборке никогда не дословна.
+    test('одиночный сервер вида xray: тело модели, диалект Xray не уехал', () {
+      final list = server(xray('xr'));
+      expect(list.dialect, SourceDialect.xray);
+      final ctx = _Ctx();
+      list.build(ctx);
+      final m = ctx.entries.single.map;
+      expect(ctx.entries.single.authored, isFalse);
+      expect(m.containsKey('protocol'), isFalse);
+      expect(m['type'], 'vless');
     });
 
     test('член папки из JSON: дословно; тег с префиксом папки', () {

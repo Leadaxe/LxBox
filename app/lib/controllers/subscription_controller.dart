@@ -11,8 +11,8 @@ import '../models/import_rule.dart';
 import '../models/node_link.dart';
 import '../models/node_spec.dart';
 import '../models/node_warning.dart';
-import '../models/codec/source_record.dart';
 import '../models/server_list.dart';
+import '../models/source_dialect.dart';
 import '../models/source_replace.dart';
 import '../models/source_entry.dart';
 import '../models/ui_msg.dart';
@@ -46,6 +46,7 @@ import '../services/parser/body_decoder.dart';
 import '../services/parser/ini_parser.dart';
 import '../services/parser/json_comments.dart';
 import '../services/parser/parse_all.dart';
+import '../services/parser/source_classify.dart';
 import '../services/parser/tailscale_split.dart';
 import '../services/parser/uri_parsers.dart';
 import '../services/parser/uri_utils.dart';
@@ -208,6 +209,12 @@ class SubscriptionController extends ChangeNotifier {
   /// строкой («Comments were removed.»).
   bool get lastCommentsRemoved => _lastCommentsRemoved;
   bool _lastCommentsRemoved = false;
+
+  /// §722 D — последняя вставка/импорт принесла документ (или элемент
+  /// массива), обрезанный до узловых массивов: остальное не сохранено.
+  /// Экран говорит об этом одной строкой («Only the nodes are saved…»).
+  bool get lastExtrasDropped => _lastExtrasDropped;
+  bool _lastExtrasDropped = false;
 
   /// §254 — структурный дубль [lastError]: fatal-issues последней генерации.
   /// UI различает по типу (DetourCycle → bottom sheet со списком виновников
@@ -954,7 +961,9 @@ class SubscriptionController extends ChangeNotifier {
   /// ошибку парса / отсутствие изменений — возвращаем исходный.
   UserServer _autoEmoji(UserServer us) {
     if (us.nodes.isEmpty || us.rawBody.isEmpty) return us;
-    final newRaw = withDefaultEmoji(us.rawBody, us.nodes.first);
+    final newRaw = _isJsonDocument(us.rawBody, us.dialect)
+        ? _documentWithDefaultEmoji(us.rawBody, us.dialect, us.nodes.first)
+        : withDefaultEmoji(us.rawBody, us.nodes.first);
     if (newRaw == us.rawBody) return us;
     try {
       final newNodes = parseAll(decode(newRaw), own: true);
@@ -962,6 +971,32 @@ class SubscriptionController extends ChangeNotifier {
     } catch (_) {
       return us;
     }
+  }
+
+  /// §722 — источник — документ JSON-диалекта (узловые массивы в корне).
+  static bool _isJsonDocument(String raw, SourceDialect dialect) {
+    if (!dialect.isJson) return false;
+    try {
+      final v = jsonDecode(raw);
+      return v is Map &&
+          nodeArrayKeysOf(dialect).any((k) => v[k] is List) &&
+          v[dialect == SourceDialect.singbox ? 'type' : 'protocol'] == null;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// §722 — дефолтный эмодзи владельцу документа: тег ставится узлу (ссылки
+  /// на него в документе переписываются), а не в корень документа.
+  static String _documentWithDefaultEmoji(
+      String raw, SourceDialect dialect, NodeSpec owner) {
+    if (hasEmoji(owner.tag)) return raw;
+    final emoji = defaultEmojiFor(owner);
+    final doc = (jsonDecode(raw) as Map).cast<String, dynamic>();
+    final renamed = renameNodeInDocument(
+        doc, dialect, owner.tag.isEmpty ? emoji : '$emoji ${owner.tag}',
+        oldTag: owner.tag);
+    return renamed ? const JsonEncoder.withIndent('  ').convert(doc) : raw;
   }
 
   /// §500 — отказ одиночного ввода: базовая фраза + причины в шторке.
@@ -1002,6 +1037,7 @@ class SubscriptionController extends ChangeNotifier {
     _busy = true;
     _lastError = null;
     _lastCommentsRemoved = false;
+    _lastExtrasDropped = false;
     notifyListeners();
     // Input может быть URL подписки (с токеном), direct-link (vless://user@host),
     // JSON-outbound. Маскируем, если detect'им URL — иначе только kind.
@@ -1214,16 +1250,38 @@ class SubscriptionController extends ChangeNotifier {
       if (added) return _JsonAdd.added;
     }
 
-    // §368 — контейнер по числу узлов, тем же порогом, что и файловый импорт
-    // (§129): один узел — это сервер, несколько — набор.
-    //
-    // `UserServer` устроен как «один сервер»: подпись в списке берётся от
-    // протокола первого узла, тап открывает экран одного узла, а операции над
-    // отдельными узлами (выключение §283, правила импорта §302) есть только у
-    // подписки. Конфиг sing-box на десяток узлов с группой в такой контейнер
-    // не помещается — он приезжает файловой подпиской (`file:<uuid>`,
-    // автообновление выключено), как импорт файла с >1 нодой.
-    if (nodes.length > 1) {
+    // §722 (контракт 1.1.165, §11 п.2) — вход текста: вид и элементы даёт
+    // движок одной функцией. Массив — форма ввода: по записи на элемент, у
+    // каждой свой вид. Документ — одна запись целиком, обрезанная до
+    // узловых массивов; запись выводит из него все свои узлы.
+    final c = classifySource(text);
+    if (c.wasArray) {
+      var added = 0;
+      for (final item in c.items) {
+        final own = _ownNodesOf(item.text);
+        if (own.isEmpty) continue;
+        _entries.add(_ownJsonEntry(item, own, origin));
+        if (item.extrasDropped) _lastExtrasDropped = true;
+        added++;
+      }
+      if (added == 0) {
+        _setParseInputReject(ErrKey.noValidOutboundsInJson, text,
+            dropped: dropped);
+        return _JsonAdd.empty;
+      }
+      return _JsonAdd.added;
+    }
+
+    final item = c.items.isNotEmpty
+        ? c.items.first
+        : SourceItem(text, dialectOfDecoded(decoded) ?? SourceDialect.singbox);
+    final own = _ownNodesOf(item.text);
+
+    // §368 — документ с группами (`selector`/`urltest`) своей записью не
+    // выражается: `UserServer` групп не держит. Такой конфиг приезжает
+    // файловой подпиской (`file:<uuid>`, автообновление выключено), как
+    // импорт файла с группами.
+    if ((own.isEmpty ? nodes : own).any((n) => n.isGroup)) {
       final url = 'file:${newUuidV4()}';
       await HttpCache.save(url, text, const {});
       final list = SubscriptionServers(
@@ -1244,37 +1302,38 @@ class SubscriptionController extends ChangeNotifier {
       return _JsonAdd.added;
     }
 
-    // §576 п.2 — у своего сервера в источнике голое тело узла; документ и
-    // массив sing-box в источник не попадают.
-    var serverRaw = text;
-    var serverNodes = nodes;
-    if (decoded.source.kind == SourceKind.singboxOutbound) {
-      // Голое тело — байт в байт; разбор заново как авторского тела.
+    _entries.add(_ownJsonEntry(item, own.isNotEmpty ? own : nodes, origin));
+    if (item.extrasDropped) _lastExtrasDropped = true;
+    return _JsonAdd.added;
+  }
+
+  /// §722 — узлы своей записи из текста элемента (разбор своего источника:
+  /// вход `singbox` у sing-box, §585 — узел незнакомого типа тоже узел).
+  static List<NodeSpec> _ownNodesOf(String text) {
+    try {
+      final decoded = decode(text);
       final own = parseAll(decoded, own: true);
-      if (own.isNotEmpty) serverNodes = own;
-    } else if (decoded.source.mapper == 'singbox') {
-      final bare = bareBodyTextOf(nodes.first);
-      if (bare != null) {
-        final reparsed = parseAll(decode(bare), own: true);
-        if (reparsed.isNotEmpty) {
-          serverRaw = bare;
-          serverNodes = reparsed;
-        }
-      }
+      return own.isNotEmpty ? own : (acceptsOwnUnknownType(decoded) ?? own);
+    } catch (_) {
+      return const [];
     }
-    final jsonServer = _autoEmoji(UserServer(
+  }
+
+  /// §722 — своя запись из элемента входа: текст и вид из классификации.
+  SubscriptionEntry _ownJsonEntry(
+      SourceItem item, List<NodeSpec> nodes, UserSource origin) {
+    final srv = _autoEmoji(UserServer(
       id: newUuidV4(),
       name: '',
       enabled: true,
       tagPrefix: '',
       detourPolicy: DetourPolicy.defaults,
       origin: origin,
-      rawBody: serverRaw,
-      nodes: serverNodes,
+      rawBody: item.text,
+      dialect: item.dialect,
+      nodes: nodes,
     ));
-    _entries.add(SubscriptionEntry(
-        list: jsonServer, nodeCount: jsonServer.nodes.length));
-    return _JsonAdd.added;
+    return SubscriptionEntry(list: srv, nodeCount: srv.nodes.length);
   }
 
   /// §480 Д-4 — ввод УЖЕ является списком ссылок, оболочку снимать не с чего.
@@ -1631,7 +1690,7 @@ class SubscriptionController extends ChangeNotifier {
   /// §456 — имя члена папки, хранимое полем записи: у INI-источника тег в
   /// тексте не лежит, у ссылки и JSON — лежит (пусто).
   static String memberNameHintFor(NodeSpec n) =>
-      originKindOf(n.rawSource) == 'wg_ini' ? n.tag : '';
+      sourceDialectOf(n.rawSource) == SourceDialect.wgIni ? n.tag : '';
 
   /// §439 — члены-группы разобранного входа (sing-box-конфиг с
   /// `urltest`/`selector`) → члены `kind: auto` папки [folderId]. [added]
@@ -1740,6 +1799,7 @@ class SubscriptionController extends ChangeNotifier {
         // Узел тот же объект: реестр ссылок узнаёт в нём бывшего члена.
         origin: UserSource.manual,
         rawBody: m.raw,
+        dialect: m.dialect, // §722 — вид едет с текстом
         // §578/§656 — поля записи едут с узлом.
         skipTailscalePresets: m.skipTailscalePresets,
         allowLocal: m.allowLocal,
@@ -1971,7 +2031,7 @@ class SubscriptionController extends ChangeNotifier {
       if (!n.isGroup &&
           nameFallback != null &&
           nameFallback.isNotEmpty &&
-          originKindOf(raw) == 'uri' &&
+          sourceDialectOf(raw) == SourceDialect.uri &&
           !_rawHasOwnName(raw)) {
         var candidate = nameFallback;
         var i = 2;
@@ -2168,8 +2228,11 @@ class SubscriptionController extends ChangeNotifier {
   /// Правка raw-фрагмента члена. Новый raw обязан парситься ≥1 ноды, иначе
   /// откат (возврат текста ошибки, старый член не трогается).
   /// §456 — [nameHint]: имя для INI-текста (поле Tag редактора).
+  ///
+  /// §722 — [dialect]: вид нового текста из классификации входа
+  /// (`prepareNodeDocumentForSave`); не задан — вход, вид определяет движок.
   Future<UiMsg?> updateMemberAt(int index, int memberIndex, String newRaw,
-      {String? nameHint}) async {
+      {String? nameHint, SourceDialect? dialect}) async {
     if (index < 0 || index >= _entries.length) {
       return const ErrMsg(ErrKey.folderNotFound);
     }
@@ -2179,10 +2242,12 @@ class SubscriptionController extends ChangeNotifier {
     if (memberIndex < 0 || memberIndex >= folder.members.length) {
       return const ErrMsg(ErrKey.serverNotFound);
     }
-    // §576 п.1 — источник члена папки: только тело узла.
-    final trimmed = bareNodeSourceOf(newRaw.trim());
+    // §722 — источник члена в своём диалекте; Save другим диалектом меняет
+    // вид записи.
+    final trimmed = newRaw.trim();
+    final kind = dialect ?? sourceDialectOf(trimmed);
     final hint = nameHint ?? folder.members[memberIndex].nameHint;
-    final probe = FolderMember(raw: trimmed, nameHint: hint);
+    final probe = FolderMember(raw: trimmed, nameHint: hint, dialect: kind);
     if (probe.node == null) {
       return const ErrMsg(ErrKey.memberParseKeepCurrent);
     }
@@ -2193,6 +2258,7 @@ class SubscriptionController extends ChangeNotifier {
     final previous = members[memberIndex].node;
     members[memberIndex] = members[memberIndex].copyWith(
       raw: trimmed,
+      dialect: kind,
       nameHint: hint,
     );
     var current = members[memberIndex].node;
@@ -2548,6 +2614,7 @@ class SubscriptionController extends ChangeNotifier {
         ? [
             FolderMember(
                 raw: server.rawBody,
+                dialect: server.dialect, // §722
                 enabled: server.enabled,
                 detour: personalDetour,
                 // §578/§656 — поля записи едут с узлом.
@@ -3692,17 +3759,20 @@ class SubscriptionController extends ChangeNotifier {
   /// §603 — источник, из которого не разобрался ни один узел, не пишется:
   /// запись остаётся прежней, возвращается ошибка (как у члена папки,
   /// [updateMemberAt]). `null` — записано.
+  ///
+  /// §722 — [dialect]: вид нового текста из классификации входа; не задан —
+  /// вход, вид определяет движок.
   Future<UiMsg?> updateConnectionAt(int index, List<String> connections,
-      {String? nameHint}) async {
+      {String? nameHint, SourceDialect? dialect}) async {
     if (index < 0 || index >= _entries.length) {
       return const ErrMsg(ErrKey.serverNotFound);
     }
     final list = _entries[index].list;
     if (list is! UserServer) return const ErrMsg(ErrKey.serverNotFound);
 
-    // §576 п.1 — источник своего сервера: только тело узла. Документ и
-    // массив (форма ввода, а не хранения) сводятся к телу первого узла.
-    final sources = [for (final c in connections) bareNodeSourceOf(c)];
+    // §722 — источник своего сервера в своём диалекте (документ —
+    // документом); вид пишется из классификации входа.
+    final sources = connections;
     final nodes = <NodeSpec>[];
     for (final c in sources) {
       final decoded = decode(c);
@@ -3725,6 +3795,7 @@ class SubscriptionController extends ChangeNotifier {
       // записать туда имя файла); при пересохранении затираем совсем.
       name: '',
       rawBody: sources.join('\n'),
+      dialect: dialect ?? sourceDialectOf(sources.join('\n')),
       nodes: nodes,
       enabled: dropVerdictByEdit ? true : null,
       warnings: dropVerdictByEdit ? dropVerdict(list.warnings) : null,

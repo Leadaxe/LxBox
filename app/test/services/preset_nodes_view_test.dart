@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/config_node.dart';
 import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/parser_config.dart';
@@ -253,6 +254,76 @@ void main() {
           tunnelIngressTogglesVisible(
               list: user(ts('a')), isMember: false, nodeBody: vlessBody),
           isFalse);
+    });
+  });
+
+  // §718 (доработка) — узел без маршрута в интернет не меряется.
+  group('nodeHasNoInternetRoute', () {
+    Map<String, dynamic> wg(List<List<String>> peers) => {
+          'type': 'wireguard',
+          'peers': [
+            for (final ips in peers) {'allowed_ips': ips},
+          ],
+        };
+
+    test('WireGuard by allowed_ips, tunnels by own_routes, others never', () {
+      bool f(Map<String, dynamic> b, {bool own = false}) =>
+          nodeHasNoInternetRoute(b, ownRoutes: own);
+      expect(f(wg([['10.0.0.0/24'], ['192.168.1.0/24']])), isTrue);
+      expect(f(wg([['10.0.0.0/24']]), own: true), isTrue);
+      expect(f(wg([['10.0.0.0/24', '0.0.0.0/0']])), isFalse);
+      expect(f(wg([['0.0.0.0/1'], ['128.0.0.0/1']])), isFalse);
+      expect(f(wg([['::/1', '8000::/1']])), isFalse);
+      // Ровно половина пространства — уже интернет; четверть — нет.
+      expect(f(wg([['0.0.0.0/1']])), isFalse);
+      expect(f(wg([['::/1']])), isFalse);
+      expect(f(wg([['0.0.0.0/2']])), isTrue);
+      // Калькулятор allowed_ips: всё, кроме 10/8, 172.16/12, 192.168/16.
+      const allButPrivate = [
+        '0.0.0.0/5', '8.0.0.0/7', '11.0.0.0/8', '12.0.0.0/6', '16.0.0.0/4',
+        '32.0.0.0/3', '64.0.0.0/2', '128.0.0.0/3', '160.0.0.0/5',
+        '168.0.0.0/6', '172.0.0.0/12', '172.32.0.0/11', '172.64.0.0/10',
+        '172.128.0.0/9', '173.0.0.0/8', '174.0.0.0/7', '176.0.0.0/4',
+        '192.0.0.0/9', '192.128.0.0/11', '192.160.0.0/13', '192.169.0.0/16',
+        '192.170.0.0/15', '192.172.0.0/14', '192.176.0.0/12',
+        '192.192.0.0/10', '193.0.0.0/8', '194.0.0.0/7', '196.0.0.0/6',
+        '200.0.0.0/5', '208.0.0.0/4', '224.0.0.0/3',
+      ];
+      expect(f(wg([allButPrivate])), isFalse);
+      expect(f(wg([['0.0.0.0/1', '128.0.0.0/2', '192.0.0.0/3']])), isFalse);
+      // Несколько хостов и частных сетей, адрес без /len, мусор.
+      expect(
+          f(wg([
+            ['10.0.0.1/32', '10.0.0.2', '10.0.0.3/32', '10.1.0.0/23'],
+            ['192.168.5.0/24', 'garbage', '1.2.3.4/40'],
+          ])),
+          isTrue);
+      expect(f(wg([['::/0']])), isFalse);
+      expect(f(wg([['0.0.0.0/0']]), own: true), isFalse);
+      expect(f({'type': 'openvpn-client'}, own: true), isTrue);
+      expect(f({'type': 'openvpn-client'}), isFalse);
+      expect(f({'type': 'openconnect'}, own: true), isTrue);
+      expect(f({'type': 'vless'}, own: true), isFalse);
+    });
+
+    test('ParsedConfig takes own_routes from preferred_by route rules', () {
+      final cfg = ParsedConfig.parse(jsonEncode({
+        'endpoints': [
+          {'type': 'openvpn-client', 'tag': 'office'},
+          {'type': 'openvpn-client', 'tag': 'home'},
+        ],
+        'route': {
+          'rules': [
+            {
+              'preferred_by': ['office'],
+              'outbound': 'office',
+            },
+          ],
+        },
+      }));
+      expect(cfg.hasNoInternetRoute('office'), isTrue);
+      expect(cfg.hasNoInternetRoute('home'), isFalse);
+      expect(cfg.hasNoInternetRoute('missing'), isFalse);
     });
   });
 }

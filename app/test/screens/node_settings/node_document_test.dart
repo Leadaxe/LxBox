@@ -1,32 +1,92 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/source_dialect.dart';
 import 'package:lxbox/screens/node_settings/node_document.dart';
+import 'package:lxbox/services/parser/source_classify.dart';
 
-/// §435 — подготовка текста JSON-вкладки редактора узла. §576 — в источник
-/// уходит только тело узла: голое тело как набрано, из документа — первый
-/// узел (не служебный и не группа), из массива — первый элемент; об остатке
-/// флаг `droppedExtras` для одного сообщения.
+import '../../parser/engine_test_setup.dart';
+
+/// §435 / §722 — подготовка текста вкладки Source редактора узла. Источник
+/// хранится в своём диалекте (контракт 1.1.165, PARSING_PRINCIPLES §11): голое
+/// тело как набрано, документ — целиком, обрезанный до узловых массивов,
+/// массив — первый элемент; вид записи — результат классификации входа.
 void main() {
-  Map<String, dynamic> ready(NodeDocumentPrep p) {
-    expect(p, isA<NodeDocumentReady>());
-    return jsonDecode((p as NodeDocumentReady).text) as Map<String, dynamic>;
+  setUpAll(loadEngineSections);
+
+  NodeDocumentReady readyOf(NodeDocumentPrep p) {
+    expect(p, isA<NodeDocumentReady>(),
+        reason: p is NodeDocumentRejected ? p.message : '');
+    return p as NodeDocumentReady;
   }
 
-  // §576 п.1 — строки таблицы: голое тело, документ, массив здесь; ссылка и
-  // INI через эту функцию не идут (экран решает [isJsonSourceText] и пишет
-  // их как раньше), группа `ссылка и INI` ниже фиксирует это.
-  group('голое тело', () {
-    test('объект с type → тег подмешан в корень, isDocument=false', () {
-      final p = prepareNodeDocumentForSave(
+  Map<String, dynamic> ready(NodeDocumentPrep p) =>
+      jsonDecode(readyOf(p).text) as Map<String, dynamic>;
+
+  // #209 — Xray-узел: outbound и конфиг с цепочкой `dialerProxy`.
+  const xrayOut = '{"tag":"xr","protocol":"vless","settings":{"vnext":'
+      '[{"address":"example-1.com","port":443,"users":[{"id":'
+      '"11111111-2222-3333-4444-555555555555","encryption":"none"}]}]},'
+      '"streamSettings":{"network":"tcp","security":"none"}}';
+  final xrayChain = jsonEncode({
+    'log': {'loglevel': 'warning'},
+    'outbounds': [
+      {
+        'tag': 'main',
+        'protocol': 'vless',
+        'settings': {
+          'vnext': [
+            {
+              'address': 'example-1.com',
+              'port': 443,
+              'users': [
+                {'id': '11111111-2222-3333-4444-555555555555', 'encryption': 'none'}
+              ],
+            }
+          ],
+        },
+        'streamSettings': {
+          'network': 'tcp',
+          'security': 'none',
+          'sockopt': {'dialerProxy': 'relay'},
+        },
+      },
+      {
+        'tag': 'relay',
+        'protocol': 'vless',
+        'settings': {
+          'vnext': [
+            {
+              'address': 'example-2.com',
+              'port': 443,
+              'users': [
+                {'id': '11111111-2222-3333-4444-555555555556', 'encryption': 'none'}
+              ],
+            }
+          ],
+        },
+        'streamSettings': {'network': 'tcp', 'security': 'none'},
+      },
+      {'tag': 'direct', 'protocol': 'freedom'},
+    ],
+    'routing': {
+      'rules': [
+        {'type': 'field', 'outboundTag': 'main', 'network': 'tcp,udp'}
+      ],
+    },
+  });
+
+  group('голое тело sing-box', () {
+    test('объект с type → тег подмешан в корень, вид singbox', () {
+      final p = readyOf(prepareNodeDocumentForSave(
           '{"type":"socks","tag":"old","server":"h","server_port":1080}',
-          'new-tag');
-      final m = ready(p);
-      expect((p as NodeDocumentReady).isDocument, isFalse);
+          'new-tag'));
+      final m = jsonDecode(p.text) as Map<String, dynamic>;
+      expect(p.dialect, SourceDialect.singbox);
+      expect(p.isDocument, isFalse);
       expect(p.droppedExtras, isFalse);
       expect(m['tag'], 'new-tag');
       expect(m['type'], 'socks');
-      expect(m['server'], 'h');
     });
 
     test('пустой Tag → тег тела не трогается', () {
@@ -35,83 +95,103 @@ void main() {
           '   ');
       expect(ready(p)['tag'], 'keep');
     });
-  });
 
-  group('массив тел', () {
-    test('первый элемент, остальное не сохранено', () {
-      final p = prepareNodeDocumentForSave(
-          '[{"type":"socks","tag":"a","server":"h","server_port":1},'
-          '{"type":"socks","tag":"b","server":"h","server_port":2}]',
-          't');
-      final m = ready(p);
-      expect(m['tag'], 't');
-      expect(m['server_port'], 1);
-      expect(m.containsKey('outbounds'), isFalse);
-      expect((p as NodeDocumentReady).droppedExtras, isTrue);
-      expect(p.text, contains('\n  "type"'), reason: 'отступ два пробела');
-    });
-
-    test('один элемент — сообщения нет', () {
-      final p = prepareNodeDocumentForSave(
-          '[{"type":"socks","tag":"a","server":"h","server_port":1}]', '');
-      expect(ready(p)['tag'], 'a');
-      expect((p as NodeDocumentReady).droppedExtras, isFalse);
-    });
-
-    test('пустой массив → отказ', () {
-      expect(prepareNodeDocumentForSave('[]', 't'),
-          isA<NodeDocumentRejected>());
+    test('тег не менялся → исходный текст байт в байт', () {
+      const text =
+          '{ "type": "socks",\n  "tag": "keep", "server": "h", "server_port": 1 }';
+      expect(readyOf(prepareNodeDocumentForSave(text, 'keep')).text, text);
+      expect(readyOf(prepareNodeDocumentForSave(text, '')).text, text);
     });
   });
 
-  group('документ', () {
-    test('с sections → тело endpoint\'а, остальное не сохранено', () {
-      const doc = '{"endpoints":[{"type":"tailscale","tag":"ts",'
-          '"auth_key":"tskey-x"}],'
-          '"sections":{"rules":[{"kind":"inline","name":"@{self} network",'
-          '"enabled":true,"num":945,'
-          '"body":{"ip_cidr":["100.64.0.0/10"],"outbound":"@self"}}]}}';
-      final p = prepareNodeDocumentForSave(doc, '🪢 home');
-      final m = ready(p);
-      expect((p as NodeDocumentReady).isDocument, isTrue);
-      expect(p.droppedExtras, isTrue);
-      expect(m['type'], 'tailscale');
-      expect(m['tag'], '🪢 home');
-      expect(m['auth_key'], 'tskey-x');
-      expect(m.containsKey('sections'), isFalse);
-      expect(m.containsKey('endpoints'), isFalse);
-    });
-
-    test('служебные и группы пропускаются, берётся первый узел', () {
-      const doc = '{"outbounds":[{"type":"direct","tag":"direct"},'
-          '{"type":"selector","tag":"sel","outbounds":["s","s2"]},'
-          '{"type":"socks","tag":"s","server":"h","server_port":1},'
-          '{"type":"socks","tag":"s2","server":"h","server_port":2}],'
-          '"dns":{"servers":[]},"route":{"rules":[]}}';
-      final p = prepareNodeDocumentForSave(doc, 'renamed');
-      final m = ready(p);
-      expect(m['server_port'], 1);
+  group('§722 Xray (#209)', () {
+    test('outbound: смена тега → Ready, текст Xray, вид xray', () {
+      final p = readyOf(prepareNodeDocumentForSave(xrayOut, 'renamed'));
+      expect(p.dialect, SourceDialect.xray);
+      final m = jsonDecode(p.text) as Map<String, dynamic>;
+      expect(m['protocol'], 'vless');
       expect(m['tag'], 'renamed');
-      expect(m.containsKey('dns'), isFalse);
-      expect((p as NodeDocumentReady).droppedExtras, isTrue);
+      expect(m.containsKey('type'), isFalse);
+      expect(p.droppedExtras, isFalse);
     });
 
-    test('endpoints раньше outbounds при выборе тела', () {
-      const both = '{"outbounds":[{"type":"socks","tag":"o","server":"h",'
-          '"server_port":1}],'
-          '"endpoints":[{"type":"wireguard","tag":"e"}]}';
-      final m = ready(prepareNodeDocumentForSave(both, 'x'));
-      expect(m['type'], 'wireguard');
-      expect(m['tag'], 'x');
-    });
-
-    test('документ из одного узла — сообщения нет, пустой Tag не трогает тег',
+    test('конфиг с dialerProxy → целиком, routing/log сняты, остаток назван',
         () {
-      const doc = '{"outbounds":[{"type":"socks","tag":"s","server":"h",'
-          '"server_port":1}]}';
-      final p = prepareNodeDocumentForSave(doc, '');
-      expect(ready(p)['tag'], 's');
-      expect((p as NodeDocumentReady).droppedExtras, isFalse);
+      final p = readyOf(prepareNodeDocumentForSave(xrayChain, ''));
+      expect(p.dialect, SourceDialect.xray);
+      expect(p.isDocument, isTrue);
+      expect(p.droppedExtras, isTrue);
+      final m = jsonDecode(p.text) as Map<String, dynamic>;
+      expect(m.keys, ['outbounds']);
+      expect((m['outbounds'] as List), hasLength(3));
+    });
+
+    test('переименование владельца переписывает dialerProxy звена', () {
+      final p = readyOf(prepareNodeDocumentForSave(
+          xrayChain, 'relay-new', oldTag: 'relay'));
+      final obs = (ready(p)['outbounds'] as List).cast<Map>();
+      expect(obs[1]['tag'], 'relay-new');
+      expect(
+          ((obs[0]['streamSettings'] as Map)['sockopt'] as Map)['dialerProxy'],
+          'relay-new');
+    });
+
+    test('без oldTag переименовывается владелец, не звено', () {
+      final obs = (ready(prepareNodeDocumentForSave(xrayChain, 'owner'))[
+              'outbounds'] as List)
+          .cast<Map>();
+      expect(obs[0]['tag'], 'owner');
+      expect(obs[1]['tag'], 'relay');
+    });
+
+    test('вставка sing-box в Xray-запись → вид singbox (вид меняется)', () {
+      final p = readyOf(prepareNodeDocumentForSave(
+          '{"type":"trojan","server":"example-1.com","server_port":443,'
+              '"password":"p"}',
+          ''));
+      expect(p.dialect, SourceDialect.singbox);
+    });
+  });
+
+  group('документ sing-box', () {
+    test('outbounds/endpoints оставлены, route/dns/sections сняты', () {
+      const doc = '{"endpoints":[{"type":"wireguard","tag":"e"}],'
+          '"outbounds":[{"type":"socks","tag":"s","server":"h",'
+          '"server_port":1}],'
+          '"dns":{"servers":[]},"route":{"rules":[]},"sections":{}}';
+      final c = classifySource(doc);
+      expect(c.dialect, SourceDialect.singbox);
+      final item = c.items.single;
+      expect(item.extrasDropped, isTrue);
+      final m = jsonDecode(item.text) as Map<String, dynamic>;
+      expect(m.keys.toSet(), {'endpoints', 'outbounds'});
+    });
+
+    test('несколько узлов — хранится целиком, без сообщения', () {
+      const doc = '{"outbounds":[{"type":"direct","tag":"direct"},'
+          '{"type":"socks","tag":"s","server":"h","server_port":1},'
+          '{"type":"socks","tag":"s2","server":"h","server_port":2}]}';
+      final p = readyOf(prepareNodeDocumentForSave(doc, ''));
+      expect(p.text, doc);
+      expect(p.isDocument, isTrue);
+      expect(p.droppedExtras, isFalse);
+    });
+
+    test('переименование: первый узел, ссылки detour переписаны', () {
+      const doc = '{"outbounds":[{"type":"direct","tag":"direct"},'
+          '{"type":"socks","tag":"s","server":"h","server_port":1,'
+          '"detour":"hop"},'
+          '{"type":"socks","tag":"hop","server":"h","server_port":2}]}';
+      final obs = (ready(prepareNodeDocumentForSave(doc, 'hop2',
+              oldTag: 'hop'))['outbounds'] as List)
+          .cast<Map>();
+      expect(obs[2]['tag'], 'hop2');
+      expect(obs[1]['detour'], 'hop2');
+      final own = (ready(prepareNodeDocumentForSave(doc, 'main'))['outbounds']
+              as List)
+          .cast<Map>();
+      expect(own[1]['tag'], 'main');
+      expect(own[2]['tag'], 'hop');
     });
 
     test('подходящего узла нет → отказ', () {
@@ -122,26 +202,128 @@ void main() {
     });
   });
 
-  group('ссылка и INI', () {
-    // §594 — INI начинается с `[`, но в JSON-ветку Save не идёт.
-    test('isJsonSourceText: INI и ссылка — нет, объект и массив — да', () {
-      expect(
-          isJsonSourceText(
-              '[Interface]\nPrivateKey = x\nJc = 4\n\n[Peer]\nEndpoint = h:1\n'),
-          isFalse);
-      expect(isJsonSourceText('trojan://p@h:443#t'), isFalse);
-      expect(isJsonSourceText('  {"type":"socks"}'), isTrue);
-      expect(isJsonSourceText('[{"type":"socks"}]'), isTrue);
-      expect(isJsonSourceText('[{"type":'), isTrue);
+  group('массив — форма ввода', () {
+    test('классификация режет массив на элементы', () {
+      final c = classifySource(
+          '[{"type":"socks","tag":"a","server":"h","server_port":1},'
+          '{"type":"socks","tag":"b","server":"h","server_port":2},'
+          '{"type":"socks","tag":"c","server":"h","server_port":3}]');
+      expect(c.wasArray, isTrue);
+      expect(c.items, hasLength(3));
+      expect(c.items.every((i) => i.dialect == SourceDialect.singbox), isTrue);
     });
 
-    test('не JSON — отказ этой функции, экран пишет их своей веткой', () {
-      expect(prepareNodeDocumentForSave('trojan://p@h:443#t', 't'),
+    test('Save: первый элемент, остальное не сохранено', () {
+      final p = readyOf(prepareNodeDocumentForSave(
+          '[{"type":"socks","tag":"a","server":"h","server_port":1},'
+          '{"type":"socks","tag":"b","server":"h","server_port":2}]',
+          't'));
+      final m = jsonDecode(p.text) as Map<String, dynamic>;
+      expect(m['tag'], 't');
+      expect(m['server_port'], 1);
+      expect(p.droppedExtras, isTrue);
+      expect(p.text, contains('\n  "type"'), reason: 'отступ два пробела');
+    });
+
+    test('один элемент — сообщения нет', () {
+      final p = readyOf(prepareNodeDocumentForSave(
+          '[{"type":"socks","tag":"a","server":"h","server_port":1}]', ''));
+      expect((jsonDecode(p.text) as Map)['tag'], 'a');
+      expect(p.droppedExtras, isFalse);
+    });
+
+    test('пустой массив → отказ', () {
+      expect(prepareNodeDocumentForSave('[]', 't'),
           isA<NodeDocumentRejected>());
+    });
+  });
+
+  group('ссылка и INI', () {
+    test('ссылка → вид uri, тег во фрагмент', () {
+      final p = readyOf(prepareNodeDocumentForSave('trojan://p@h:443#t', 'n'));
+      expect(p.dialect, SourceDialect.uri);
+      expect(p.text, 'trojan://p@h:443#n');
+    });
+
+    test('INI → вид wg_ini, текст как есть, тег — nameHint', () {
+      const ini = '[Interface]\nPrivateKey = '
+          'yAnz5TF+lXXJte14tji3zlMNq+hd2rYUIgJBgB3fBmk=\n'
+          'Address = 10.0.0.2/32\n\n[Peer]\nPublicKey = '
+          'xTIBA5rboUvnH4htodjb6e697QjLERt1NAB4mZqp8Dg=\n'
+          'Endpoint = 1.2.3.4:51820\nAllowedIPs = 0.0.0.0/0';
+      final p = readyOf(prepareNodeDocumentForSave(ini, 'home'));
+      expect(p.dialect, SourceDialect.wgIni);
+      expect(p.text, ini);
+      expect(p.nameHint, 'home');
+    });
+  });
+
+  // §722 — «побеждает тот, кого трогали»: поле Tag не меняли (tagTouched:
+  // false) — тег, исправленный в самом тексте Source, не затирается полем.
+  group('поле Tag не трогали — тег из текста остаётся', () {
+    test('Xray outbound: тег исправлен в тексте (#209)', () {
+      final text = xrayOut.replaceFirst(
+          RegExp(r'"tag"\s*:\s*"[^"]*"'), '"tag":"edited-in-text"');
+      expect(text, contains('edited-in-text'));
+      final p = readyOf(prepareNodeDocumentForSave(text, 'field-old',
+          oldTag: 'field-old', tagTouched: false));
+      expect(p.dialect, SourceDialect.xray);
+      expect(p.text, text, reason: 'текст байт в байт');
+    });
+
+    test('sing-box тело: тег из текста; поле трогали — поле', () {
+      const text = '{"type":"socks","tag":"in-text","server":"h","server_port":1}';
       expect(
-          prepareNodeDocumentForSave(
-              '[Interface]\nPrivateKey = x\n\n[Peer]\nEndpoint = h:1\n', 't'),
-          isA<NodeDocumentRejected>());
+          ready(prepareNodeDocumentForSave(text, 'field',
+              oldTag: 'field', tagTouched: false))['tag'],
+          'in-text');
+      expect(ready(prepareNodeDocumentForSave(text, 'field'))['tag'], 'field');
+    });
+
+    test('в тексте тега нет → берётся поле', () {
+      const text = '{"type":"socks","server":"h","server_port":1}';
+      expect(
+          ready(prepareNodeDocumentForSave(text, 'field',
+              tagTouched: false))['tag'],
+          'field');
+      expect(
+          readyOf(prepareNodeDocumentForSave('trojan://p@h:443', 'field',
+                  tagTouched: false))
+              .text,
+          'trojan://p@h:443#field');
+    });
+
+    test('ссылка: фрагмент исправлен в тексте', () {
+      final p = readyOf(prepareNodeDocumentForSave(
+          'trojan://p@h:443#in-text', 'field',
+          tagTouched: false));
+      expect(p.text, 'trojan://p@h:443#in-text');
+    });
+
+    test('документ: владелец переименован в тексте — первый узел не затёрт',
+        () {
+      final text = xrayChain.replaceFirst('"tag":"main"', '"tag":"main-x"');
+      expect(text, contains('main-x'));
+      final p = readyOf(prepareNodeDocumentForSave(text, 'main',
+          oldTag: 'main', tagTouched: false));
+      final tags = [
+        for (final o in (jsonDecode(p.text) as Map)['outbounds'] as List)
+          (o as Map)['tag']
+      ];
+      expect(tags, contains('main-x'));
+      expect(tags, isNot(contains('main')));
+    });
+
+    test('INI: тега в тексте нет — имя всегда из поля', () {
+      const ini = '[Interface]\nPrivateKey = '
+          'yAnz5TF+lXXJte14tji3zlMNq+hd2rYUIgJBgB3fBmk=\n'
+          'Address = 10.0.0.2/32\n\n[Peer]\nPublicKey = '
+          'xTIBA5rboUvnH4htodjb6e697QjLERt1NAB4mZqp8Dg=\n'
+          'Endpoint = 1.2.3.4:51820\nAllowedIPs = 0.0.0.0/0';
+      expect(
+          readyOf(prepareNodeDocumentForSave(ini, 'home', tagTouched: false))
+              .nameHint,
+          'home');
     });
   });
 
@@ -152,22 +334,18 @@ void main() {
       expect((p as NodeDocumentRejected).message, contains('Invalid JSON'));
     });
 
-    test('объект без type и без endpoints/outbounds', () {
+    test('объект без вида (ни sing-box, ни Xray)', () {
       expect(prepareNodeDocumentForSave('{"tag":"x"}', 't'),
-          isA<NodeDocumentRejected>());
-    });
-
-    test('скаляр', () {
-      expect(prepareNodeDocumentForSave('42', 't'),
           isA<NodeDocumentRejected>());
     });
   });
 
   group('§455 checkPayloadFor', () {
-    test('голое тело → outbounds', () {
+    test('голое тело singbox → outbounds дословно', () {
       final payload = checkPayloadFor(
           '{"type":"socks","tag":"a","server":"h","server_port":1080,'
-          '"foo":1}');
+          '"foo":1}',
+          SourceDialect.singbox);
       final m = jsonDecode(payload!) as Map<String, dynamic>;
       final body = (m['outbounds'] as List).single as Map;
       expect(body['tag'], 'a');
@@ -182,52 +360,48 @@ void main() {
       expect(
           checkPayloadFor(
               '{"type":"socks","tag":"a","server":"h","server_port":1080,'
-              '"detour":"x"}'),
+              '"detour":"x"}',
+              SourceDialect.singbox),
           isNull);
     });
 
     test('wireguard → endpoints', () {
-      final payload = checkPayloadFor(jsonEncode({
-        'type': 'wireguard',
-        'tag': 'wg',
-        'address': ['10.0.0.2/32'],
-        'private_key': 'yAnz5TF+lXXJte14tji3zlMNq+hd2rYUIgJBgB3fBmk=',
-        'peers': [
-          {
-            'address': '1.2.3.4',
-            'port': 51820,
-            'public_key': 'xTIBA5rboUvnH4htodjb6e697QjLERt1NAB4mZqp8Dg=',
-            'allowed_ips': ['0.0.0.0/0'],
-          }
-        ],
-      }));
+      final payload = checkPayloadFor(
+          jsonEncode({
+            'type': 'wireguard',
+            'tag': 'wg',
+            'address': ['10.0.0.2/32'],
+            'private_key': 'yAnz5TF+lXXJte14tji3zlMNq+hd2rYUIgJBgB3fBmk=',
+            'peers': [
+              {
+                'address': '1.2.3.4',
+                'port': 51820,
+                'public_key': 'xTIBA5rboUvnH4htodjb6e697QjLERt1NAB4mZqp8Dg=',
+                'allowed_ips': ['0.0.0.0/0'],
+              }
+            ],
+          }),
+          SourceDialect.singbox);
       final m = jsonDecode(payload!) as Map<String, dynamic>;
       expect((m['endpoints'] as List).single['tag'], 'wg');
     });
 
-    test('документ с sections → тело узла', () {
-      final payload = checkPayloadFor(jsonEncode({
-        'outbounds': [
-          {'type': 'socks', 'tag': 'a', 'server': 'h', 'server_port': 1080}
-        ],
-        'sections': {'rules': []},
-      }));
+    // §722 — Xray-документ с цепочкой: в проверку идут ВСЕ узлы записи
+    // (владелец и звено), телами модели — не null.
+    test('Xray-документ с dialerProxy → оба узла, форма sing-box', () {
+      final doc = readyOf(prepareNodeDocumentForSave(xrayChain, '')).text;
+      final payload = checkPayloadFor(doc, SourceDialect.xray);
       final m = jsonDecode(payload!) as Map<String, dynamic>;
-      expect((m['outbounds'] as List).single['type'], 'socks');
+      final obs = (m['outbounds'] as List).cast<Map>();
+      expect(obs.length, greaterThanOrEqualTo(2));
+      expect(obs.every((o) => o['type'] == 'vless'), isTrue);
+      final servers = {for (final o in obs) o['server']};
+      expect(servers, containsAll(['example-1.com', 'example-2.com']));
+      expect(obs.any((o) => o.containsKey('protocol')), isFalse);
     });
 
     test('не JSON и не узел → null', () {
-      expect(checkPayloadFor('garbage'), isNull);
-    });
-  });
-
-  group('§455 текст источника сохраняется как набран', () {
-    test('тег не менялся → исходный текст байт в байт', () {
-      const text = '{ "type": "socks",\n  "tag": "keep", "server": "h", "server_port": 1 }';
-      final p = prepareNodeDocumentForSave(text, 'keep') as NodeDocumentReady;
-      expect(p.text, text);
-      final q = prepareNodeDocumentForSave(text, '') as NodeDocumentReady;
-      expect(q.text, text);
+      expect(checkPayloadFor('garbage', SourceDialect.uri), isNull);
     });
   });
 }

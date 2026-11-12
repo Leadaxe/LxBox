@@ -142,12 +142,12 @@ extension ServerListBuild on ServerList {
       final main = raw.main;
       final detours = raw.detours;
 
-      // §455 — источник записи JSON → тело узла дословно (объект источника),
-      // а не emit() модели. Звенья родной цепочки — через модель.
+      // §455/§722 — запись вида `singbox` → тело узла дословно (объект
+      // источника), а не emit() модели. Звенья родной цепочки — через модель.
       final verbatim = switch (this) {
-        final UserServer u => verbatimBodyOf(u.rawBody, server),
-        final FolderServers f when i < f.memberRaws.length =>
-          verbatimBodyOf(f.memberRaws[i], server),
+        final UserServer u => verbatimBodyOf(u.dialect, server),
+        final FolderServers f when i < f.memberDialects.length =>
+          verbatimBodyOf(f.memberDialects[i], server),
         _ => null,
       };
       if (verbatim != null) {
