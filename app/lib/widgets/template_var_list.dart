@@ -611,6 +611,7 @@ class VarTextField extends StatefulWidget {
 
 class _VarTextFieldState extends State<VarTextField> {
   late final TextEditingController _ctrl;
+  final FocusNode _focus = FocusNode();
   late bool _obscured;
 
   @override
@@ -631,6 +632,7 @@ class _VarTextFieldState extends State<VarTextField> {
   @override
   void dispose() {
     _ctrl.dispose();
+    _focus.dispose();
     super.dispose();
   }
 
@@ -651,6 +653,14 @@ class _VarTextFieldState extends State<VarTextField> {
     _ctrl.text = v;
     _ctrl.selection = TextSelection.collapsed(offset: v.length);
     widget.onChanged(v);
+    // Выбор из списка — готовое значение, печатать нечего: закрытие меню
+    // возвращает фокус полю и поднимает клавиатуру, снимаем его следующим
+    // кадром. В режиме списка строки дописывают руками — фокус не трогаем.
+    if (!widget.listMode) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _focus.unfocus();
+      });
+    }
   }
 
   Widget? _buildSuffix() {
@@ -703,6 +713,7 @@ class _VarTextFieldState extends State<VarTextField> {
   Widget build(BuildContext context) {
     final field = TextField(
       controller: _ctrl,
+      focusNode: _focus,
       obscureText: _obscured,
       maxLines: widget.obscure ? 1 : widget.maxLines,
       minLines: 1,

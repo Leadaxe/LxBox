@@ -204,8 +204,8 @@ class _PathMtuIslandState extends State<PathMtuIsland> {
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Align(
-            alignment: Alignment.centerLeft,
+          child: SizedBox(
+            width: double.infinity,
             child: _running
                 ? OutlinedButton.icon(
                     key: const ValueKey('path-mtu-stop'),
@@ -286,6 +286,7 @@ class _PathMtuIslandState extends State<PathMtuIsland> {
               tilePadding: const EdgeInsets.symmetric(horizontal: 16),
               childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               expandedCrossAxisAlignment: CrossAxisAlignment.start,
+              expandedAlignment: Alignment.centerLeft,
               title: Text(getLocalText.s("Probes (%s)", _probes.length),
                   style: theme.textTheme.bodyMedium),
               children: [
