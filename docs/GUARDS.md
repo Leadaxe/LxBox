@@ -310,6 +310,7 @@ same sing-box JSON is `other`, at parse time and at build time alike.
 | Hysteria2 `obfs` type outside `{salamander, gecko}` | `protocols/hysteria2.json` → `obfs.type`, enum + `on_invalid: drop` | `obfs_unknown` |
 | Hysteria2 `obfs` without a password → **the obfs block goes, the node lives** | `protocols/hysteria2.json` → `obfs.password`, `required` with its own `code` | `obfs_password_missing` |
 | Hysteria2 gecko packet sizes on a non-gecko obfs | `protocols/hysteria2.json` → `obfs.{min,max}_packet_size`, `requires` with `equals` | `field_requires` |
+| XHTTP `session_table` without `session_length` or the reverse (also when they arrive as Xray `sessionIDTable` / `sessionIDLength` from a link or Xray JSON, §726) — the core refuses the pair half-set | `transports.json` → xhttp `session_table` / `session_length`, `requires` on each other | `field_requires` |
 | TUIC `congestion_control` outside `{cubic, new_reno, bbr}` | `protocols/tuic.json` → `congestion_control`, enum + `on_invalid: drop` | `tuic_congestion_invalid` |
 | TUIC `udp_relay_mode` outside `{native, quic}` | `protocols/tuic.json` → `udp_relay_mode`, enum + `on_invalid: drop` | `tuic_udp_relay_mode_invalid` |
 | TUIC `uuid` not in UUID form → **node dropped** | `protocols/tuic.json` → `uuid`, `format: uuid` + `required` | `type_invalid` |

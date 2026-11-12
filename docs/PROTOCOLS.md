@@ -1935,6 +1935,8 @@ Since §127 the **full client-side set** of Xray splithttp is supported (SPEC 00
 | `headers` | — (JSON only) | empty |
 | `session_placement` | `sessionPlacement` (Xray proto: `sessionIDPlacement`) | `path` |
 | `session_key` | `sessionKey` (Xray proto: `sessionIDKey`) | placement-dependent |
+| `session_table` | `sessionTable` (Xray proto: `sessionIDTable`) | empty — the session id is a dashed UUID. A predefined name (`hex`, `HEX`, `number`, `alphabet`, `Alphabet`, `ALPHABET`, `base36`, `BASE36`, `Base62`) or a literal ASCII alphabet. Needs `session_length`: one without the other is dropped with `field_requires` (§726) |
+| `session_length` | `sessionLength` (Xray proto: `sessionIDLength`) | empty. `N` or `min-max`; a JSON number becomes a string; `0` means not set. Needs `session_table` (§726) |
 | `seq_placement` | `seqPlacement` | `path` |
 | `seq_key` | `seqKey` | placement-dependent |
 | `uplink_data_placement` | `uplinkDataPlacement` | `auto` |
