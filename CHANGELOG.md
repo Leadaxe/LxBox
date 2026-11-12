@@ -8,9 +8,11 @@
 
 ## [Unreleased]
 
+## [2.25.21] — 2026-11-12
+
 ### Added
 
-- **Path MTU on the direct node ([task 725](docs/spec/tasks/725-path-mtu-direct-diagnostics.md)).** View details of `direct-out` → Diagnostics has a Path MTU island: it shows the interface and its MTU, sends ping packets that may not be fragmented straight over the phone's network (past the tunnel, VPN on or off, without the core) and finds the largest whole packet that gets an answer from the target (`8.8.8.8` by default, editable). Under the result — the MTU to set on WireGuard / AWG (`− 60`, `− 80` for an IPv6 target) and MASQUE (`− 51`) nodes, the list of probes and a copy button. Debug API: `POST /action/pathmtu[?target=]`.
+- **Path MTU on the direct node ([task 725](docs/spec/tasks/725-path-mtu-direct-diagnostics.md)).** View details of `direct-out` → Diagnostics has a Path MTU island: it shows the interface and its MTU, sends ping packets that may not be fragmented straight over the phone's network (past the tunnel, VPN on or off, without the core) and finds the largest whole packet that gets an answer from the target (`8.8.8.8` by default; ▾ lists well-known addresses, or type your own; a port in the target is dropped). Under the result — the MTU to set on WireGuard / AWG (`− 60`, `− 80` for an IPv6 target) and MASQUE (`− 51`) nodes, the list of probes and a copy button. Debug API: `POST /action/pathmtu[?target=]`.
 - **Android assistants can turn the VPN on or off and read its status ([task 721](docs/spec/tasks/721-appfunctions-vpn-toggle-status.md)).** On Android 16+ the app declares the AppFunctions `startVpn`, `stopVpn` and `getVpnStatus` (`androidx.appfunctions` 1.0.0-rc01). They work only after App Settings → Automation → **AI assistant control** is turned on (off by default, hidden below Android 16). Connecting needs a VPN permission granted earlier; the answer is only the tunnel state. The app module now builds with `compileSdk 37` and KSP. The API is experimental: Gemini calls only apps from Google's early access programme for now.
 
 ### Changed
