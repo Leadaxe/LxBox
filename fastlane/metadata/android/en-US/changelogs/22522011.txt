@@ -1,0 +1,1 @@
+Release candidate. Xray import fixes: XHTTP keeps its session id alphabet and length (sessionIDTable / sessionIDLength), and a node with Xray mux enabled connects again (mux is dropped with a note). Core lx.33.

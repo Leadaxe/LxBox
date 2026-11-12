@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [2.25.22] — 2026-11-12
+
 ### Fixed
 
 - **XHTTP session id alphabet and length were lost on import from Xray ([task 726](docs/spec/tasks/726-xhttp-session-id-table-length.md), [#211](https://github.com/Leadaxe/LxBox/issues/211)).** A server behind a CDN that blocks the default dashed-UUID session id answered 403 when the node came from an Xray config or a share link: `sessionIDTable` and `sessionIDLength` were dropped, while the same node written as sing-box JSON worked. Both now reach the node as `session_table` / `session_length` — from Xray JSON (`xhttpSettings` / `splithttpSettings`, flat or in `extra`) and from the `extra` and query of a link. One without the other is removed with a warning, because the core accepts them only together. Shared contract 1.1.168.
