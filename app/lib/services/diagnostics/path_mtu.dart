@@ -227,6 +227,37 @@ class PathMtuCancel {
 }
 
 const String kPathMtuDefaultTarget = '8.8.8.8';
+
+/// Известные адреса, отвечающие на ping, — пункты ▾ у поля Target:
+/// (подпись, адрес). Названия — имена собственные, не переводятся.
+const List<(String, String)> kPathMtuTargets = [
+  ('Google · 8.8.8.8', '8.8.8.8'),
+  ('Cloudflare · 1.1.1.1', '1.1.1.1'),
+  ('Quad9 · 9.9.9.9', '9.9.9.9'),
+  ('OpenDNS · 208.67.222.222', '208.67.222.222'),
+  ('Yandex · 77.88.8.8', '77.88.8.8'),
+  ('Google IPv6 · 2001:4860:4860::8888', '2001:4860:4860::8888'),
+  ('Cloudflare IPv6 · 2606:4700:4700::1111', '2606:4700:4700::1111'),
+];
+
+/// Хост из введённой цели: у ICMP портов нет, порт молча отбрасывается.
+/// `host:443` → `host`, `[2001:db8::1]:443` → `2001:db8::1`; голый IPv6
+/// (несколько двоеточий без скобок) остаётся как есть.
+String pathMtuHost(String input) {
+  final t = input.trim();
+  if (t.startsWith('[')) {
+    final end = t.indexOf(']');
+    return end > 0 ? t.substring(1, end) : t;
+  }
+  final colon = t.indexOf(':');
+  if (colon > 0 && colon == t.lastIndexOf(':')) {
+    final port = t.substring(colon + 1);
+    if (port.isNotEmpty && int.tryParse(port) != null) {
+      return t.substring(0, colon);
+    }
+  }
+  return t;
+}
 const int kPathMtuFallbackCeiling = 1500;
 const int kPathMtuSmallProbe = 84;
 const int kPathMtuTimeoutMs = 1000;
@@ -246,6 +277,7 @@ Future<PathMtuResult> findPathMtu(
   void Function(PathMtuNetwork network)? onNetwork,
   void Function(PathMtuProbe probe)? onProbe,
 }) async {
+  target = pathMtuHost(target);
   final probes = <PathMtuProbe>[];
   PathMtuNetwork? net;
   var ip = '';
@@ -273,7 +305,7 @@ Future<PathMtuResult> findPathMtu(
   if (cancel?.isCancelled ?? false) return done(PathMtuStatus.cancelled);
 
   try {
-    ip = await prober.resolve(target.trim());
+    ip = await prober.resolve(target);
   } on PathMtuNoNetwork {
     return done(PathMtuStatus.noNetwork);
   } catch (e) {

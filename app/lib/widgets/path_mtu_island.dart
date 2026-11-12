@@ -200,7 +200,9 @@ class _PathMtuIslandState extends State<PathMtuIsland> {
           label: getLocalText.s("Target"),
           tooltip: getLocalText.s("IP address or host name"),
           hintText: kPathMtuDefaultTarget,
-          onChanged: (v) => _target = v,
+          suggestions: [for (final t in kPathMtuTargets) t.$2],
+          suggestionLabels: [for (final t in kPathMtuTargets) t.$1],
+          onChanged: (v) => setState(() => _target = v),
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),

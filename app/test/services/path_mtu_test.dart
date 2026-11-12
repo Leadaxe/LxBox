@@ -137,6 +137,18 @@ void main() {
     expect(seen.map((e) => e.size), [kPathMtuSmallProbe]);
   });
 
+  test('порт в цели отбрасывается', () async {
+    expect(pathMtuHost(' example.com:443 '), 'example.com');
+    expect(pathMtuHost('1.2.3.4:51820'), '1.2.3.4');
+    expect(pathMtuHost('[2001:db8::1]:443'), '2001:db8::1');
+    expect(pathMtuHost('[2001:db8::1]'), '2001:db8::1');
+    expect(pathMtuHost('2001:db8::1'), '2001:db8::1');
+    expect(pathMtuHost('example.com'), 'example.com');
+    final r = await findPathMtu(FakeProber(), '8.8.8.8:53');
+    expect(r.target, '8.8.8.8');
+    expect(r.status, PathMtuStatus.ok);
+  });
+
   test('JSON для Debug API', () async {
     final r = await findPathMtu(FakeProber(), '8.8.8.8');
     final j = r.toJson(vpnRunning: true);

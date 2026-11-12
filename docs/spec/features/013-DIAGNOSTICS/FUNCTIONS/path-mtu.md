@@ -23,7 +23,7 @@ plus the MTU to set on tunnel nodes.
 
 | Parameter | Value |
 |-----------|-------|
-| Target | field, default `8.8.8.8`; an IP or a host name (resolved by the physical network's DNS, not the tunnel's) |
+| Target | field, default `8.8.8.8`; an IP or a host name (resolved by the physical network's DNS, not the tunnel's); ▾ lists well-known addresses (Google, Cloudflare, Quad9, OpenDNS, Yandex, two IPv6); a port (`host:443`, `[v6]:443`) is silently dropped — ICMP has no ports |
 | Upper bound | the MTU of the physical interface; 1500 when the system does not report it |
 | Lower floor | 576 (IPv4 target) / 1280 (IPv6 target) |
 | Reachability probe | 84 bytes |
