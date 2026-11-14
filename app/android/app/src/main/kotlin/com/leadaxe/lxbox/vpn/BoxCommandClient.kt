@@ -97,7 +97,25 @@ class BoxCommandClient {
 
         private const val RECONNECT_BACKOFF_START_MS = 500L
         private const val RECONNECT_BACKOFF_MAX_MS = 8_000L
+
+        /// §732 — полоса для connect()/disconnect() клиентов. `connect()` ядра
+        /// ждёт командный сервер до 3,25 с; раньше он шёл с главного потока
+        /// (обработчики `cc*` в VpnPlugin и реконнект через mainHandler), и
+        /// при молчащем сервере главный поток стоял почти непрерывно —
+        /// MethodChannel отвечал таймаутами (issue #210). Одна на процесс:
+        /// задачи прошлого экземпляра гасит его же `tunnelAlive`.
+        private val lane = SerialLane(
+            "lxbox-cc",
+            onSlow = { msg ->
+                Log.e(TAG, "[cc §732] $msg")
+                BoxService.appLogWarning("[cc §732] $msg")
+            },
+            onError = { label, t -> Log.w(TAG, "[cc §732] $label failed: ${t.message}") },
+        )
     }
+
+    /// §732 — пауза реконнекта statusClient: 0,5 → 8 с, сброс на успехе.
+    private val statusBackoff = ReconnectBackoff(RECONNECT_BACKOFF_START_MS, RECONNECT_BACKOFF_MAX_MS)
 
     private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -140,38 +158,41 @@ class BoxCommandClient {
     fun startStatus() {
         tunnelAlive = true
         statusPaused = false
-        connectStatus()
+        lane.post("startStatus") { connectStatus() }
     }
 
     fun stopStatus() {
         tunnelAlive = false
-        disconnectClient(statusClient, "stopStatus")
+        lane.post("stopStatus") { disconnectClient(statusClient, "stopStatus") }
     }
 
     /// §163 — переключить частоту status-стрима (пересоздаёт statusClient с новым
     /// интервалом; gRPC-reconnect дешёвый). FAST=0.1с (Stats открыт), NORMAL=0.5с.
     /// No-op если интервал не изменился или туннель не жив.
-    fun setStatusFast(fast: Boolean) {
+    fun setStatusFast(fast: Boolean) = lane.post("setStatusFast") {
         val want = if (fast) STATUS_INTERVAL_FAST else STATUS_INTERVAL_NORMAL
-        if (statusIntervalNs == want) return
-        statusIntervalNs = want
-        if (tunnelAlive && !statusPaused) connectStatus()
+        if (statusIntervalNs != want) {
+            statusIntervalNs = want
+            if (tunnelAlive && !statusPaused) connectStatus()
+        }
     }
 
     /// §163 — пауза в фоне (onAppPaused): гасим statusClient, 0 тиков/0 drain.
     /// Реконнект-петля не поднимает (гейт statusPaused). Идемпотентно.
-    fun pauseStatus() {
-        if (statusPaused) return
-        statusPaused = true
-        disconnectClient(statusClient, "pauseStatus")
+    fun pauseStatus() = lane.post("pauseStatus") {
+        if (!statusPaused) {
+            statusPaused = true
+            disconnectClient(statusClient, "pauseStatus")
+        }
     }
 
     /// §163 — возобновить из фона (onAppResumed): поднять statusClient с текущим
     /// интервалом. Идемпотентно. tunnelAlive-гейт: не поднимаем после stop.
-    fun resumeStatus() {
-        if (!statusPaused) return
-        statusPaused = false
-        if (tunnelAlive) connectStatus()
+    fun resumeStatus() = lane.post("resumeStatus") {
+        if (statusPaused) {
+            statusPaused = false
+            if (tunnelAlive) connectStatus()
+        }
     }
 
     /// §2.8 — `screenClient` поднимается при открытии экрана узлов/stats/connections.
@@ -181,14 +202,14 @@ class BoxCommandClient {
     /// StatsScreen гасило бы screenClient, нужный главному экрану.
     private val screenRefs = AtomicInteger(0)
 
-    fun connectScreen() {
+    fun connectScreen() = lane.post("connectScreen") {
         // §164 — в фоне (screenPaused) только считаем потребителя; клиент поднимет
         // resumeScreen на onAppResumed. Иначе подняли бы клиент в фоне зря.
         val wasZero = screenRefs.getAndIncrement() == 0
         if (wasZero && !screenPaused) connectScreenClient()
     }
 
-    fun disconnectScreen() {
+    fun disconnectScreen() = lane.post("disconnectScreen") {
         // decrementAndGet с полом 0 (defensive против лишних disconnect).
         val n = screenRefs.updateAndGet { if (it > 0) it - 1 else 0 }
         if (n == 0) disconnectClient(screenClient, "disconnectScreen")
@@ -202,19 +223,21 @@ class BoxCommandClient {
     /// §164 — усыпить screenClient в фоне (onAppPaused). Гасит клиента, НО НЕ
     /// трогает `screenRefs` — экран-потребитель формально жив (открыт, не виден),
     /// при resume восстановим. Идемпотентно.
-    fun pauseScreen() {
-        if (screenPaused) return
-        screenPaused = true
-        disconnectClient(screenClient, "pauseScreen")
+    fun pauseScreen() = lane.post("pauseScreen") {
+        if (!screenPaused) {
+            screenPaused = true
+            disconnectClient(screenClient, "pauseScreen")
+        }
     }
 
     /// §164 — возобновить из фона (onAppResumed): поднять screenClient ТОЛЬКО если
     /// есть живые потребители (`screenRefs>0`). Если все экраны закрылись пока были
     /// в фоне — не поднимаем. Идемпотентно.
-    fun resumeScreen() {
-        if (!screenPaused) return
-        screenPaused = false
-        if (tunnelAlive && screenRefs.get() > 0) connectScreenClient()
+    fun resumeScreen() = lane.post("resumeScreen") {
+        if (screenPaused) {
+            screenPaused = false
+            if (tunnelAlive && screenRefs.get() > 0) connectScreenClient()
+        }
     }
 
     /// §185 — cold-start Flutter после swipe-keep (туннель жив, движок умер).
@@ -250,7 +273,7 @@ class BoxCommandClient {
     ///  - screenClient   — почищен + пере-поднимется на следующем connectScreen,
     ///  - profilerClient — остановлен+почищен (handler),
     ///  - pingClient     — остановлен+почищен (тут).
-    fun resyncForReopen() {
+    fun resyncForReopen() = lane.post("resyncForReopen") {
         // screenClient — сброс протухшего refcount + закрыть осиротевший.
         screenRefs.set(0)
         screenPaused = false
@@ -275,13 +298,17 @@ class BoxCommandClient {
     }
 
     /// §2.8 — `profilerClient` поднимается при `startGlobalRecording` (§048).
-    fun connectProfiler() = connectProfilerClient()
-    fun disconnectProfiler() {
+    fun connectProfiler() = lane.post("connectProfiler") { connectProfilerClient() }
+    fun disconnectProfiler() = lane.post("disconnectProfiler") {
         // §261 — DNS в мультиплексе, гаснет с клиентом. Отдельной подписки нет.
         disconnectClient(profilerClient, "disconnectProfiler")
     }
 
     /// Полный teardown — из `BoxService.doStop`/`closeCommandServerAtomic`.
+    /// §732 — синхронно, в потоке вызывающего (шаг остановки, не главный
+    /// поток): сервер закрывается сразу следом, ждать полосу нельзя. Задача
+    /// полосы, которая в этот момент внутри `connect()`, увидит
+    /// `tunnelAlive == false` и сама закроет поднятого клиента.
     fun shutdownAll() {
         tunnelAlive = false
         screenRefs.set(0) // §122 — туннель умер, все экраны логически отвалились
@@ -304,6 +331,7 @@ class BoxCommandClient {
 
     private fun connectStatus() {
         if (statusPaused) return // §163 — в фоне не поднимаем
+        if (!tunnelAlive) return // §732 — туннель остановлен, пока задача ждала полосу
         val gen = statusGen.incrementAndGet()
         runCatching {
             val options = CommandClientOptions().apply {
@@ -312,14 +340,26 @@ class BoxCommandClient {
             }
             val client = CommandClient(StatusHandler(gen), options)
             client.connect()
+            if (!tunnelAlive) { // §732 — shutdownAll прошёл, пока шёл connect
+                client.runCatching { disconnect() }
+                return
+            }
             statusClient.getAndSet(client)?.runCatching { disconnect() }
+            statusBackoff.reset()
         }.onFailure {
             Log.w(TAG, "connectStatus failed (gen=$gen): ${it.message}")
-            scheduleReconnect(RECONNECT_BACKOFF_START_MS) { if (tunnelAlive && !statusPaused) connectStatus() }
+            val delayMs = statusBackoff.next()
+            // §732 — первый сбой серии — в журнал приложения: дамп покажет,
+            // что клиент не достучался до командного сервера и почему.
+            if (delayMs == RECONNECT_BACKOFF_START_MS) {
+                BoxService.appLogWarning("[cc §732] status client cannot connect: ${it.message}")
+            }
+            scheduleReconnect(delayMs) { if (tunnelAlive && !statusPaused) connectStatus() }
         }
     }
 
     private fun connectScreenClient() {
+        if (!tunnelAlive) return // §732
         val gen = screenGen.incrementAndGet()
         ensureAccumulator(screenAccumulator)
         runCatching {
@@ -330,11 +370,16 @@ class BoxCommandClient {
             }
             val client = CommandClient(ScreenHandler(gen), options)
             client.connect()
+            if (!tunnelAlive) { // §732
+                client.runCatching { disconnect() }
+                return
+            }
             screenClient.getAndSet(client)?.runCatching { disconnect() }
         }.onFailure { Log.w(TAG, "connectScreen failed (gen=$gen): ${it.message}") }
     }
 
     private fun connectProfilerClient() {
+        if (!tunnelAlive) return // §732
         val gen = profilerGen.incrementAndGet()
         ensureAccumulator(profilerAccumulator)
         runCatching {
@@ -350,6 +395,10 @@ class BoxCommandClient {
             }
             val client = CommandClient(ProfilerHandler(gen), options)
             client.connect()
+            if (!tunnelAlive) { // §732
+                client.runCatching { disconnect() }
+                return
+            }
             profilerClient.getAndSet(client)?.runCatching { disconnect() }
         }.onFailure { Log.w(TAG, "connectProfiler failed (gen=$gen): ${it.message}") }
     }
@@ -361,7 +410,8 @@ class BoxCommandClient {
 
     private fun scheduleReconnect(delayMs: Long, action: () -> Unit) {
         val capped = delayMs.coerceAtMost(RECONNECT_BACKOFF_MAX_MS)
-        mainHandler.postDelayed({ runCatching { action() } }, capped)
+        // §732 — на полосе, не на главном потоке: action зовёт connect().
+        lane.postDelayed("reconnect", capped, action)
     }
 
     // ═══════════════════════ §579 Tailscale status ═══════════════════════
@@ -1267,7 +1317,12 @@ class BoxCommandClient {
     /// дожидаясь TCPTimeout. status/screen/profiler-стримы целы (другие клиенты).
     /// Следующий urlTestOutbound поднимет свежий pingClient (ensurePingClient).
     fun cancelPing() {
-        disconnectClient(pingClient, "cancelPing")
+        // §732 — не на главном потоке (вызов в ядро) и мимо полосы: отмена не
+        // должна ждать connect(), занявший полосу. Порядок с другими
+        // операциями не нужен — pingClient снимается атомарно.
+        Thread({ disconnectClient(pingClient, "cancelPing") }, "lxbox-cc-cancel")
+            .apply { isDaemon = true }
+            .start()
     }
 
     /// §4.7 — снапшот route+DNS правил (только для диагностики).
@@ -1686,7 +1741,9 @@ class BoxCommandClient {
             runCatching {
                 Log.d(TAG, "status disconnected gen=$gen: $message")
                 if (gen == statusGen.get() && tunnelAlive) {
-                    scheduleReconnect(RECONNECT_BACKOFF_START_MS) { if (tunnelAlive) connectStatus() }
+                    // §732 — та же растущая пауза: обрыв сразу после подключения
+                    // (сервер принял и закрыл) не крутит реконнект вплотную.
+                    scheduleReconnect(statusBackoff.next()) { if (tunnelAlive) connectStatus() }
                 }
             }
         }

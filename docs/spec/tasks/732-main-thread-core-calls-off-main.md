@@ -1,0 +1,149 @@
+# 732 — Вызовы ядра с главного потока: зависание интерфейса и остановки
+
+| | |
+|---|---|
+| **Статус** | In progress — код в ветке `claude/hang-2-25-21-82292e`, на устройстве не проверено |
+| **Дата** | 2026-11-15 |
+| **Повод** | issue [#210](https://github.com/Leadaxe/LxBox/issues/210) (лог таймаутов MethodChannel 08.11.2026); 4PDA, dewch, пост #2007 от 12.11.2026 (зависание первого запуска 2.25.21, долгая остановка, `err` у пинга до перезапуска) |
+| **Связанные** | [122F — CommandClient](122F-commandclient-migration/), [373 — reload off-main](373-reload-on-main-thread-anr.md), [668 — трасса остановки](668-stop-teardown-trace-and-timeouts.md), [669 — runId пробы](669-probe-session-cancel-stop-timeout-race.md), [703 — cache.db](703-cache-db-lock-timeout-retry.md), [709](709-quic-sniff-decoy-toggle.md), [729 — sniff_guard](729-sniff-guard-block.md) |
+
+## Docs to update
+
+- эта задача
+- [CHANGELOG.md](../../../CHANGELOG.md) — Unreleased, Fixed
+- [ARCHITECTURE.md](../../ARCHITECTURE.md) — правило «блокирующий вызов ядра — не с главного потока» (по решению владельца, после проверки на устройстве)
+
+## Problem
+
+Лог #210: с 13:18:55 каждый вызов Dart → натив отваливается по таймауту
+(`setAutomationActiveState`, `setNotificationTitle/Text`, `getTunnelUptimeMs`
+по 3 с), через 30 с `stopVPN` — по 10 с. Эти обработчики в `VpnPlugin`
+синхронные и мгновенные (SharedPreferences `apply()`, чтение поля); таймаут у
+них значит одно — главный поток Android занят и очередь сообщений канала
+не разбирается. Тот же главный поток принимает `ACTION_STOP`
+(`BoxService.receiver.onReceive`), отсюда «приложение долго выключалось».
+
+### Что блокирует главный поток (по коду)
+
+1. **`CommandClient.connect()` с главного потока.** `connect()` ядра
+   (`sing-box-lx experimental/libbox/command_client.go` `dialWithRetry`)
+   у клиента, привязанного к обработчику, делает 10 проб `GetStartedAt` с
+   `WaitForReady(true)` и тайм-аутом 100 + 50·i мс — **до 3,25 с**, если
+   командный сервер не отвечает или сокета `command.sock` нет. С главного
+   потока его звали:
+   - реконнект statusClient: `BoxCommandClient.scheduleReconnect` →
+     `mainHandler.postDelayed` (было `BoxCommandClient.kt:362-365`) из
+     `StatusHandler.disconnected` и из `connectStatus().onFailure` с
+     **постоянной** паузой 500 мс. Пока сервер недоступен, главный поток занят
+     3,25 с из каждых 3,75 с (~87 %) — бесконечно, пока туннель жив
+     (`tunnelAlive`). Это ровно картина #210: непрерывная череда таймаутов,
+     Stop не проходит;
+   - обработчики `ccResyncForReopen`, `ccConnectScreen`, `ccResumeClients`,
+     `ccSetStatusFast`, `ccConnectProfiler` (`VpnPlugin.kt:897-918`, `1289-1300`)
+     — каждый зовёт `connect()` синхронно в `onMethodCall`. Все они идут в
+     пачке на холодном старте UI и при возврате из фона;
+   - `disconnect()` у клиентов из тех же обработчиков и `ccCancelPing` —
+     короткий, но тоже вызов ядра под его мьютексами.
+2. **`pause()` / `wake()` / `rebindStaleEndpoints()` ядра из `onReceive`**
+   (`SCREEN_OFF`, `SCREEN_ON`, `DEVICE_IDLE_MODE_CHANGED`,
+   `BoxService.kt:255`, `263`, `273`, `1022` до правки). `Pause()` синхронно
+   `CloseIdleConnections()` + `DevicePause()` по всем WG-устройствам — на
+   конфиге с десятками WG-узлов это сотни миллисекунд и больше; при
+   зависшем устройстве — без предела. §373 увёл с main reload/resetNetwork,
+   эти три остались.
+
+### Почему сервер может перестать отвечать (триггер)
+
+Достоверно по коду — одна гонка, остальное гипотезы.
+
+- **Проба в окне Starting (код, достоверно).** `ProbeSession.start` пускал
+  пробу, если `BoxService.commandClient == null`, а он null всё время
+  `Starting` (появляется только на `Started`, `BoxService.kt:718` до правки). Старт
+  пробы в это окно: `CommandServer.Start()` ядра делает `os.Remove(command.sock)`
+  и слушает заново — сокет VPN-сервера теряет имя; после остановки пробы
+  файл удаляется вовсе. Клиенты VPN дальше не подключаются ни к кому →
+  бесконечный реконнект п.1 на главном потоке, `ensurePingClient` не
+  поднимается → **`err` у всех узлов до перезапуска VPN**. Попутно проба
+  переписывает `DefaultNetworkMonitor` на свой scope, а её `stopInternal`
+  гасит монитор службы (проверка тоже по `commandClient`). Dart-гейт
+  (`probe_gate_mixin.dart`, `getVpnStatus == disconnected`) окно сужает, но
+  не закрывает: старт VPN из плитки, автоматизации, Debug API или автозапуска
+  во время уже идущего прогона пробы его обходит.
+- **Гипотеза A — зависший `closeService` прошлой сессии** (§668 отпускает
+  остановку по потолку, вызов продолжает висеть в своём потоке) держит
+  `serviceAccess`/`lifecycleAccess` и мешает следующему старту. Подтвердить
+  можно только дампом (горутины, трасса §668).
+- **Гипотеза B — первый старт после обновления дольше обычного** (новое ядро
+  lx.33, пересборка конфига, `cache.db` §703): длинный `Starting` расширяет
+  окно гонки выше и держит `connect()` клиентов в 3,25-секундных попытках.
+
+### Второй симптом: `err` после смены настройки обманки
+
+- В 2.25.21 настройка `lx.quic_sniff_decoy` на пинг **с выключенным VPN не
+  влияет**: probe-конфиг 2.25.21 блок не писал (`git show
+  v2.25.21:app/lib/services/probe/probe_config.dart` — ни `decoy`, ни `lx`).
+  Значит, «`err` по всем» был пингом через живой туннель (`pingClient`).
+- Кэша vars у пробы нет: `ProbeRunner` читает vars на каждый прогон
+  (`probe_runner.dart:148`), в rc.2 блок `sniff_guard` собирается из них же
+  (`probe_config.dart:420-425`).
+- «Выключил — `err` остался, перезапустил приложение — заработало» не
+  объясняется значением настройки (после reload ядро получило бы конфиг без
+  обманки). Объясняется: (а) состоянием «клиенты не достают сервер» из
+  раздела выше — `ensurePingClient` падает, пока VPN не перезапущен; или
+  (б) настройка не применилась к живому ядру (галка «Auto-restart VPN on
+  settings change» выключена, §667) — тогда ядро продолжало работать с
+  обманкой до перезапуска. Какой из двух — покажет журнал (строки §732
+  ниже) или ответ пользователя о галке.
+- Для rc.2 (`lx.sniff_guard`, §729) механизм тот же: блок есть и в туннеле,
+  и в пробе; кэша нет; зависание п.1 от настройки не зависит.
+
+## Solution
+
+1. **`SerialLane`** (`SerialLane.kt`) — одна фоновая нить на группу вызовов с
+   сохранением порядка. Задача дольше 3 с называется в журнале приложения
+   дважды: «still running» (вызов ещё висит — видно и в дампе, снятом во время
+   зависания) и «returned after N ms».
+2. **`BoxCommandClient`**: все `connect()`/`disconnect()` клиентов
+   (status/screen/profiler, resync, pause/resume, setStatusFast) и реконнект —
+   на полосе `lxbox-cc`; `onMethodCall` возвращается сразу. Пауза реконнекта
+   statusClient растёт 0,5 → 1 → 2 → 4 → 8 с и сбрасывается на успехе
+   (`ReconnectBackoff`). Первый сбой серии — строка
+   `[cc §732] status client cannot connect: …` в журнале приложения.
+   `shutdownAll()` остаётся синхронным (шаг остановки, не главный поток);
+   задача, которая в этот момент внутри `connect()`, видит
+   `tunnelAlive == false` и закрывает поднятого клиента сама.
+   `cancelPing` — отдельной нитью мимо полосы: отмена не ждёт `connect()`.
+3. **`BoxService`**: `pause`/`wake`/`rebindStaleEndpoints` из `onReceive` —
+   на полосе `lxbox-power` (порядок pause → wake сохраняется).
+4. **`ProbeSession`**: старт пробы отклоняется при любом статусе службы,
+   кроме `Stopped`; монитор сети проба гасит только при `Stopped`
+   (`probeMayStopMonitor`).
+
+Не меняется: Dart-таймауты, `ProbeSession.closeServerBounded`, порядок шагов
+остановки §668, вызовы ядра, уже вынесенные на `Dispatchers.IO`.
+
+## Verification
+
+- JVM-тест `app/android/app/src/test/kotlin/com/leadaxe/lxbox/vpn/SerialLaneTest.kt`:
+  `post` не ждёт блокирующую задачу и исполняет её не в потоке вызывающего;
+  порядок задач; исключение не останавливает полосу; медленная задача
+  называется во время зависания и по возврату; пауза реконнекта 0,5→8 с и
+  сброс; `probeMayStopMonitor` только при `Stopped`.
+- Не проверено: эмулятор и устройство. Сценарии для проверки:
+  1. VPN включён → Debug API / adb `rm files/command.sock` (имитация
+     потери сокета) → интерфейс отзывчив, Stop срабатывает за обычное время,
+     в журнале одна строка `[cc §732] status client cannot connect`, а не
+     поток таймаутов. До правки — таймауты как в #210.
+  2. Прогон пробы на экране подписки → старт VPN с плитки → проба
+     отказывается стартовать заново, туннель поднимается, смена Wi-Fi ↔
+     мобильная вызывает `resetNetwork` (лог `[vpn] interface switch`).
+  3. Экран off/on 10 раз на конфиге с многими WG — интерфейс не замирает.
+
+## Данные, которые нужны от пользователей
+
+- Дамп (Debug → Share dump) **сразу после** зависания: строки
+  `[cc §732]`/`[power §732]`/`[stop §668]`, трасса остановки, стек горутин.
+- Включена ли галка «Auto-restart VPN on settings change» (ответ на вопрос
+  (б) про `err`).
+- Были ли открыты экраны подписки/папки с тестом серверов во время старта
+  VPN; запускали ли VPN с плитки/автоматизации.
