@@ -1,5 +1,5 @@
 {
-  "contract_version": "1.1.169",
+  "contract_version": "1.1.170",
   "subscriptions": [
     {
       "id": "01-github-vless-universal",
@@ -22,7 +22,7 @@
         "vless|xhttp|reality": 13,
         "vless|xhttp|tls": 15
       },
-      "parse_ms": 587
+      "parse_ms": 632
     },
     {
       "id": "02-github-vless-lite",
@@ -47,7 +47,7 @@
         "vless|xhttp|reality": 13,
         "vless|xhttp|tls": 15
       },
-      "parse_ms": 112
+      "parse_ms": 119
     },
     {
       "id": "03-github-vless",
@@ -91,7 +91,7 @@
         "vless|ws|tls": 5,
         "vless|xhttp|reality": 8
       },
-      "parse_ms": 44
+      "parse_ms": 52
     },
     {
       "id": "05-github-white-cidr-ru-checked",
@@ -107,7 +107,7 @@
       "coverage": {
         "vless|ws|tls": 5
       },
-      "parse_ms": 7
+      "parse_ms": 5
     },
     {
       "id": "06-github-black-vless-rus-mobile",
@@ -141,7 +141,7 @@
         "vless|ws|tls": 15,
         "vmess|ws|tls": 7
       },
-      "parse_ms": 118
+      "parse_ms": 127
     },
     {
       "id": "07-github-byewhitelists2",
@@ -166,7 +166,7 @@
         "vless|ws|tls": 2,
         "vless|xhttp|reality": 22
       },
-      "parse_ms": 463
+      "parse_ms": 516
     },
     {
       "id": "08-github-whitelist",
@@ -191,7 +191,7 @@
         "vless|xhttp|none": 1,
         "vless|xhttp|reality": 1
       },
-      "parse_ms": 17
+      "parse_ms": 19
     },
     {
       "id": "09-github-26",
@@ -240,7 +240,7 @@
         "vless|xhttp|tls": 13,
         "vmess|none|none": 1
       },
-      "parse_ms": 1680
+      "parse_ms": 1793
     },
     {
       "id": "10-github-whitelist",
@@ -267,7 +267,7 @@
         "vless|xhttp|reality": 3,
         "vless|xhttp|tls": 4
       },
-      "parse_ms": 32
+      "parse_ms": 31
     },
     {
       "id": "11-github-blacklist",
@@ -305,7 +305,7 @@
         "vless|xhttp|none": 5,
         "vless|xhttp|reality": 10
       },
-      "parse_ms": 906
+      "parse_ms": 997
     },
     {
       "id": "12-github-kizyakbeta7",
@@ -334,7 +334,7 @@
         "vless|ws|tls": 9,
         "vless|xhttp|reality": 17
       },
-      "parse_ms": 40
+      "parse_ms": 42
     },
     {
       "id": "13-github-kizyakbeta6",
@@ -358,7 +358,7 @@
         "vless|grpc|reality": 15,
         "vless|xhttp|reality": 9
       },
-      "parse_ms": 14
+      "parse_ms": 13
     },
     {
       "id": "14-github-kizyakbeta6bl",
@@ -383,7 +383,7 @@
         "trojan|none|tls": 10,
         "vmess|ws|tls": 7
       },
-      "parse_ms": 10
+      "parse_ms": 11
     },
     {
       "id": "15-github-rkn-white-list",
@@ -407,7 +407,7 @@
         "vless|xhttp|reality": 13,
         "vless|xhttp|tls": 15
       },
-      "parse_ms": 47
+      "parse_ms": 51
     },
     {
       "id": "16-github-aetrisvpn",
@@ -436,7 +436,7 @@
         "vless|xhttp|tls": 7,
         "vmess|none|none": 4
       },
-      "parse_ms": 34
+      "parse_ms": 38
     },
     {
       "id": "17-github-configs",
@@ -473,7 +473,7 @@
         "vmess|ws|none": 2,
         "vmess|ws|tls": 3
       },
-      "parse_ms": 59
+      "parse_ms": 67
     },
     {
       "id": "18-github-whitelist-all",
@@ -498,7 +498,7 @@
         "vless|grpc|reality": 5,
         "vless|none|reality": 183
       },
-      "parse_ms": 91
+      "parse_ms": 103
     },
     {
       "id": "19-github-bypass-all",
@@ -535,7 +535,7 @@
         "vmess|ws|none": 3,
         "vmess|ws|tls": 5
       },
-      "parse_ms": 206
+      "parse_ms": 231
     },
     {
       "id": "20-github-bypass-1",
@@ -568,7 +568,7 @@
         "vmess|none|none": 1,
         "vmess|ws|tls": 3
       },
-      "parse_ms": 75
+      "parse_ms": 86
     },
     {
       "id": "21-github-bypass-2",
@@ -604,7 +604,7 @@
         "vmess|ws|none": 3,
         "vmess|ws|tls": 2
       },
-      "parse_ms": 76
+      "parse_ms": 86
     },
     {
       "id": "22-github-bypass-3",
@@ -639,7 +639,7 @@
         "vmess|none|none": 4,
         "vmess|ws|none": 2
       },
-      "parse_ms": 90
+      "parse_ms": 94
     },
     {
       "id": "23-github-bypass-4",
@@ -673,7 +673,7 @@
         "vmess|none|none": 1,
         "vmess|ws|tls": 2
       },
-      "parse_ms": 95
+      "parse_ms": 91
     },
     {
       "id": "24-github-bypass-5",
@@ -698,7 +698,7 @@
         "vless|ws|reality": 1,
         "vless|ws|tls": 3
       },
-      "parse_ms": 97
+      "parse_ms": 100
     },
     {
       "id": "25-github-bypass-6",
@@ -735,7 +735,7 @@
         "vmess|ws|none": 3,
         "vmess|ws|tls": 4
       },
-      "parse_ms": 72
+      "parse_ms": 143
     },
     {
       "id": "26-github-russia-whitelist",
@@ -783,7 +783,7 @@
         "vless|xhttp|reality": 36,
         "vless|xhttp|tls": 51
       },
-      "parse_ms": 698
+      "parse_ms": 611
     },
     {
       "id": "27-github-ru-white-all-white",
@@ -841,7 +841,7 @@
         "vless|ws|tls": 156,
         "vless|xhttp|tls": 1
       },
-      "parse_ms": 1985
+      "parse_ms": 1807
     },
     {
       "id": "28-github-whitelist",
@@ -868,7 +868,7 @@
         "vless|xhttp|reality": 3,
         "vmess|none|none": 1
       },
-      "parse_ms": 114
+      "parse_ms": 100
     },
     {
       "id": "29-github-blacklist",
@@ -908,7 +908,7 @@
         "vless|none|tls": 1,
         "vless|xhttp|reality": 4
       },
-      "parse_ms": 12
+      "parse_ms": 13
     },
     {
       "id": "31-github-ping-tested",
@@ -931,7 +931,7 @@
         "vless|xhttp|reality": 5,
         "vless|xhttp|tls": 3
       },
-      "parse_ms": 31
+      "parse_ms": 30
     },
     {
       "id": "32-github-top-600",
@@ -951,7 +951,7 @@
         "vless|none|tls": 1,
         "vless|xhttp|reality": 5
       },
-      "parse_ms": 13
+      "parse_ms": 14
     },
     {
       "id": "33-github-229",
@@ -981,7 +981,7 @@
         "vless|xhttp|tls": 15,
         "vmess|none|none": 4
       },
-      "parse_ms": 107
+      "parse_ms": 102
     },
     {
       "id": "34-github-antinet",
@@ -1035,7 +1035,7 @@
         "vmess|ws|tls": 42,
         "wireguard|none|none": 1
       },
-      "parse_ms": 474
+      "parse_ms": 466
     },
     {
       "id": "35-github-premium",
@@ -1104,7 +1104,7 @@
         "vless|none|tls": 26,
         "vmess|none|none": 13
       },
-      "parse_ms": 306
+      "parse_ms": 337
     },
     {
       "id": "37-github-sub",
@@ -1158,7 +1158,7 @@
         "vmess|ws|tls": 41,
         "vmess|xhttp|tls": 1
       },
-      "parse_ms": 1182
+      "parse_ms": 1099
     },
     {
       "id": "38-codeberg-vless-universal",
@@ -1181,7 +1181,7 @@
         "vless|xhttp|reality": 13,
         "vless|xhttp|tls": 15
       },
-      "parse_ms": 48
+      "parse_ms": 43
     },
     {
       "id": "39-moshub-list-universal",
@@ -1204,7 +1204,7 @@
         "vless|xhttp|reality": 13,
         "vless|xhttp|tls": 15
       },
-      "parse_ms": 40
+      "parse_ms": 39
     },
     {
       "id": "40-gitverse-list-universal",
@@ -1227,7 +1227,7 @@
         "vless|xhttp|reality": 13,
         "vless|xhttp|tls": 15
       },
-      "parse_ms": 40
+      "parse_ms": 37
     },
     {
       "id": "41-gitlab-vless-reality-white-lists-rus-mobile",
@@ -1252,7 +1252,7 @@
         "vless|ws|tls": 5,
         "vless|xhttp|reality": 8
       },
-      "parse_ms": 12
+      "parse_ms": 13
     },
     {
       "id": "42-bitbucket-vless-reality-white-lists-rus-mobile",
@@ -1358,7 +1358,7 @@
         "vless|ws|none": 477,
         "vless|ws|tls": 1191
       },
-      "parse_ms": 1318
+      "parse_ms": 1297
     },
     {
       "id": "49-domain-2",
@@ -1409,7 +1409,7 @@
         "vless|ws|none": 477,
         "vless|ws|tls": 1191
       },
-      "parse_ms": 1196
+      "parse_ms": 1295
     },
     {
       "id": "50-domain-whitelist",
@@ -1439,7 +1439,7 @@
         "vless|none|reality": 73,
         "vless|ws|tls": 8
       },
-      "parse_ms": 41
+      "parse_ms": 40
     },
     {
       "id": "51-domain-other",
@@ -1490,7 +1490,7 @@
         "vless|ws|none": 477,
         "vless|ws|tls": 1183
       },
-      "parse_ms": 1156
+      "parse_ms": 1180
     },
     {
       "id": "52-domain-1",
@@ -1541,7 +1541,7 @@
         "vless|ws|none": 477,
         "vless|ws|tls": 1191
       },
-      "parse_ms": 1181
+      "parse_ms": 1265
     },
     {
       "id": "53-domain-2",
@@ -1592,7 +1592,7 @@
         "vless|ws|none": 477,
         "vless|ws|tls": 1191
       },
-      "parse_ms": 1191
+      "parse_ms": 1253
     },
     {
       "id": "54-gitverse-whitelist",
@@ -1654,7 +1654,7 @@
         "vless|none|tls": 32,
         "vless|xhttp|tls": 2
       },
-      "parse_ms": 499
+      "parse_ms": 474
     },
     {
       "id": "56-gitverse-1",
@@ -1691,7 +1691,7 @@
         "vless|none|tls": 32,
         "vless|xhttp|tls": 2
       },
-      "parse_ms": 533
+      "parse_ms": 467
     },
     {
       "id": "57-gitverse-2",
@@ -1728,7 +1728,7 @@
         "vless|none|tls": 32,
         "vless|xhttp|tls": 2
       },
-      "parse_ms": 532
+      "parse_ms": 527
     },
     {
       "id": "58-domain-whitelist",
@@ -1758,7 +1758,7 @@
         "vless|none|reality": 73,
         "vless|ws|tls": 8
       },
-      "parse_ms": 39
+      "parse_ms": 41
     },
     {
       "id": "59-domain-other",
@@ -1809,7 +1809,7 @@
         "vless|ws|none": 477,
         "vless|ws|tls": 1183
       },
-      "parse_ms": 1215
+      "parse_ms": 1189
     },
     {
       "id": "60-domain-1",
@@ -1860,7 +1860,7 @@
         "vless|ws|none": 477,
         "vless|ws|tls": 1191
       },
-      "parse_ms": 1244
+      "parse_ms": 2208
     },
     {
       "id": "61-domain-2",
@@ -1911,7 +1911,7 @@
         "vless|ws|none": 477,
         "vless|ws|tls": 1191
       },
-      "parse_ms": 1180
+      "parse_ms": 1276
     },
     {
       "id": "62-domain-whitelist-etoneya-baby",
@@ -1941,7 +1941,7 @@
         "vless|none|reality": 73,
         "vless|ws|tls": 8
       },
-      "parse_ms": 39
+      "parse_ms": 42
     },
     {
       "id": "63-domain-whitelist",
@@ -1971,7 +1971,7 @@
         "vless|none|reality": 73,
         "vless|ws|tls": 8
       },
-      "parse_ms": 35
+      "parse_ms": 38
     },
     {
       "id": "64-domain-gen",
@@ -2004,7 +2004,7 @@
         "vless|xhttp|reality": 6,
         "vless|xhttp|tls": 3
       },
-      "parse_ms": 107
+      "parse_ms": 100
     },
     {
       "id": "65-codeberg-sub",
@@ -2073,7 +2073,7 @@
         "vless|xhttp|tls": 14,
         "vmess|none|none": 1
       },
-      "parse_ms": 564
+      "parse_ms": 733
     },
     {
       "id": "67-domain-working-configs",
@@ -2108,7 +2108,7 @@
         "vless|xhttp|tls": 21,
         "vmess|ws|tls": 6
       },
-      "parse_ms": 55
+      "parse_ms": 142
     },
     {
       "id": "68-gitverse-outlinevpn-outlinevpn",
@@ -2140,7 +2140,7 @@
         "vless|ws|tls": 29,
         "vless|xhttp|reality": 5
       },
-      "parse_ms": 71
+      "parse_ms": 182
     },
     {
       "id": "69-domain-api-php",
@@ -2192,7 +2192,7 @@
         "vless|xhttp|reality": 87,
         "vless|xhttp|tls": 24
       },
-      "parse_ms": 360
+      "parse_ms": 804
     },
     {
       "id": "71-domain-bypass-all",
@@ -2229,7 +2229,7 @@
         "vless|xhttp|reality": 87,
         "vless|xhttp|tls": 24
       },
-      "parse_ms": 451
+      "parse_ms": 385
     },
     {
       "id": "72-gitverse-alive-full",
@@ -2263,7 +2263,7 @@
         "vless|none|tls": 26,
         "vmess|none|none": 13
       },
-      "parse_ms": 299
+      "parse_ms": 270
     },
     {
       "id": "73-github-full",
@@ -2295,7 +2295,7 @@
         "vless|xhttp|tls": 19,
         "vmess|none|none": 2
       },
-      "parse_ms": 91
+      "parse_ms": 82
     },
     {
       "id": "74-github-sub-html",
@@ -2339,7 +2339,7 @@
         "vmess|ws|none": 1,
         "vmess|ws|tls": 1
       },
-      "parse_ms": 69
+      "parse_ms": 62
     }
   ],
   "summary": {
