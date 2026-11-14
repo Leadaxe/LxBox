@@ -1085,7 +1085,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           child: Text(
-            getLocalText.s("Not applied: traffic goes through a detour first."),
+            getLocalText.s("Not applied: traffic goes through a detour first. There the core's sniff guard decides (Core settings)."),
             style: theme.textTheme.bodySmall
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),

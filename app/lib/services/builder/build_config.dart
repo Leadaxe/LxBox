@@ -36,6 +36,7 @@ import 'registry_gate.dart';
 import 'rule_set_registry.dart';
 import 'server_list_build.dart';
 import 'source_replace_build.dart';
+import 'sniff_guard.dart';
 import 'taildrop_emit.dart';
 import 'validator.dart';
 
@@ -812,6 +813,8 @@ Future<BuildResult?> _buildConfig({
   // контракт 1.1.151): переменные секций Network / WireGuard / QUIC, ключ —
   // только при значении, отличном от дефолта ядра. Пустой `lx` ядро (≥ lx.13)
   // читает как отсутствующий — снимаем его, чтобы конфиг не менялся.
+  // §729 — `lx.sniff_guard` ядро знает с lx.34; ниже блок снимается.
+  applySniffGuardGate(config, coreVersion: settings.coreVersion);
   if (config['lx'] is Map && (config['lx'] as Map).isEmpty) config.remove('lx');
 
   // §125 — деградация dangling route_final → vpn-1. Ссылка на удалённое Направление

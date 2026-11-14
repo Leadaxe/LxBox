@@ -9,6 +9,7 @@ import '../app_log.dart';
 import '../builder/detour_yields.dart' show yieldToBuildDetour;
 import '../builder/post_steps.dart' show applyMixedCaseSni, applyTlsFragment;
 import '../builder/registry_gate.dart';
+import '../builder/sniff_guard.dart' show probeSniffGuard;
 import '../settings_storage.dart' show SettingsStorage;
 
 /// §236/§296 — probe-конфиг для headless-сессии: ВСЕ переданные ноды (включая
@@ -233,6 +234,7 @@ List<ProbeConfig> buildProbeBatches(
     for (var g = 0; g < groups.length; g++)
       _assemble(groups[g], built,
           brokenByIndex: g == 0 ? broken : const {},
+          coreVersion: coreVersion,
           vars: vars,
           tlsByIndex: tlsByIndex),
   ];
@@ -348,6 +350,7 @@ ProbeConfig _assemble(
   List<int> indexes,
   Map<int, _Built> built, {
   required Map<int, String> brokenByIndex,
+  String coreVersion = '',
   Map<String, String> vars = const {},
   Map<int, TlsLayers> tlsByIndex = const {},
 }) {
@@ -414,7 +417,12 @@ ProbeConfig _assemble(
     );
   }
 
+  // §729 — тот же `lx.sniff_guard`, что у туннеля (без `persist`): без блока
+  // ядро с lx.34 не прячет рукопожатие узла за сниффящим релеем, и проба
+  // показала бы такой узел мёртвым.
+  final sniffGuard = probeSniffGuard(vars, coreVersion: coreVersion);
   final config = <String, dynamic>{
+    if (sniffGuard != null) 'lx': {'sniff_guard': sniffGuard},
     'log': {'level': 'error'},
     'dns': {
       'servers': [

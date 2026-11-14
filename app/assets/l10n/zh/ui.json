@@ -1253,9 +1253,6 @@
   "Not a valid domain name.": {
     "value": "域名无效。"
   },
-  "Not applied: traffic goes through a detour first.": {
-    "value": "未应用：流量先经过 detour。"
-  },
   "This proxy carries only TCP connections. Nodes with a TCP transport work through it fully; UDP-based nodes (Hysteria2, TUIC, WireGuard) do not.": {
     "value": "此代理只传输 TCP 连接。使用 TCP 传输的节点可以完整地通过它工作；基于 UDP 的节点（Hysteria2、TUIC、WireGuard）则不行。"
   },
@@ -6713,18 +6710,6 @@
   "Core: lx.mtu_align. A node over a tunnel gets a packet size that fits into it: mtu for WireGuard and MASQUE, the initial packet size for Hysteria2 and TUIC. Values are never raised.": {
     "value": "内核：lx.mtu_align。隧道之上的节点获得能放入隧道的包大小：WireGuard 和 MASQUE 为 mtu，Hysteria2 和 TUIC 为初始包大小。数值只降不升。"
   },
-  "Core: lx.quic_sniff_decoy.mode. A relay with UDP sniffing (Xray destOverride quic) rewrites the destination by the SNI of the first QUIC packet; a junk first byte makes it give up. Servers drop the byte. A DPI on your own uplink may react to it, hence Off by default.": {
-    "value": "内核：lx.quic_sniff_decoy.mode。带 UDP 嗅探的中继（Xray destOverride quic）按第一个 QUIC 包的 SNI 改写目标；首个垃圾字节使其放弃。服务器会丢弃该字节。您自身上行链路上的 DPI 可能对其作出反应，因此默认为 Off。"
-  },
-  "Core: lx.quic_sniff_decoy.send. Retry: a node that failed without the byte retries with it, at once on a fast error, otherwise on the next dial; a failure with the byte resets it. Always: the byte on every dial.": {
-    "value": "内核：lx.quic_sniff_decoy.send。Retry：未带该字节失败的节点会带上它重试，快速出错时立即重试，否则在下次拨号时；带该字节失败后恢复为不带。Always：每次拨号都发送该字节。"
-  },
-  "Core: lx.quic_sniff_decoy.outbound_type. masque, hysteria2, tuic, trusttunnel, vless, vmess, trojan, wireguard. vless, vmess and trojan send it only with XHTTP over HTTP/3, wireguard only before a QUIC-like AWG burst.": {
-    "value": "内核：lx.quic_sniff_decoy.outbound_type。masque、hysteria2、tuic、trusttunnel、vless、vmess、trojan、wireguard。vless、vmess 和 trojan 仅在 XHTTP over HTTP/3 时发送，wireguard 仅在伪装成 QUIC 的 AWG 数据包之前发送。"
-  },
-  "Core: lx.quic_sniff_decoy.detour_type. Any outbound type except groups; a type this core does not know fails the start.": {
-    "value": "内核：lx.quic_sniff_decoy.detour_type。除分组外的任何 outbound 类型；此内核不认识的类型会导致启动失败。"
-  },
   "Core: lx.masque.idle_timeout. The idle window for MASQUE nodes that have no idle_timeout of their own.": {
     "value": "内核：lx.masque.idle_timeout。没有自身 idle_timeout 的 MASQUE 节点的空闲窗口。"
   },
@@ -6823,5 +6808,14 @@
   },
   "Enter an http:// or https:// address": {
     "value": "请输入 http:// 或 https:// 地址"
+  },
+  "Not applied: traffic goes through a detour first. There the core's sniff guard decides (Core settings).": {
+    "value": "未应用：流量先经过 detour。此时由核心的嗅探防护决定（Core 设置）。"
+  },
+  "Core: lx.sniff_guard.tls. A relay or router that sniffs TLS (Xray destOverride without routeOnly) redirects the connection by the SNI of the ClientHello; a node with a masked SNI then looks dead. Paths through direct, SSH and SOCKS start unprotected, other relays start protected; the core switches a path when a node fails one way and connects the other.": {
+    "value": "核心：lx.sniff_guard.tls。嗅探 TLS 的中继或路由器（Xray destOverride 且未开启 routeOnly）会按 ClientHello 中的 SNI 重定向连接，使用伪装 SNI 的节点因此看起来不可用。直连、SSH 和 SOCKS 路径默认不加防护，其他中继默认加防护；当节点以一种方式失败而以另一种方式连通时，核心会切换该路径。"
+  },
+  "Core: lx.sniff_guard.quic. The same for the first QUIC packet. Never applied through a SOCKS relay. AmneziaWG follows what other QUIC nodes on the same path have taught the core.": {
+    "value": "核心：lx.sniff_guard.quic。对 QUIC 首包做同样处理。经 SOCKS 中继时从不应用。AmneziaWG 沿用同一路径上其他 QUIC 节点让核心学到的结果。"
   }
 }

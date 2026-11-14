@@ -827,49 +827,52 @@
   "MASQUE (HTTP/3), Hysteria2, TUIC and AWG with QUIC masquerade (ip=quic).": {
     "value": "MASQUE (HTTP/3)、Hysteria2、TUIC 以及伪装成 QUIC（ip=quic）的 AWG。"
   },
-  "Anti-sniff decoy": {
-    "value": "防嗅探诱饵"
-  },
   "MASQUE idle timeout": {
     "value": "MASQUE 空闲超时"
   },
   "Close a MASQUE tunnel that carried no traffic for this long; it reconnects on next use. A node's own idle timeout wins.": {
     "value": "在 MASQUE 隧道这么长时间没有流量后将其关闭；下次使用时重新连接。节点自身的空闲超时优先。"
   },
-  "All": {
-    "value": "全部"
+  "Sniff guard": {
+    "value": "嗅探防护"
   },
-  "Send one junk byte before the QUIC handshake so a relay that sniffs UDP cannot redirect the connection by its SNI. The byte goes only where a node opens QUIC (MASQUE, Hysteria2, TUIC, XHTTP over HTTP/3, AWG with ip=quic) and, by default, only on a retry after a failed first attempt. Through detour: only connections carried by another node; Direct: only this device's own socket; All: both.": {
-    "value": "在 QUIC 握手前发送一个垃圾字节，使嗅探 UDP 的中继无法按 SNI 重定向连接。该字节仅在节点打开 QUIC 时发送（MASQUE、Hysteria2、TUIC、XHTTP over HTTP/3、ip=quic 的 AWG），默认仅在首次尝试失败后的重试中发送。Through detour：仅由其他节点承载的连接；Direct：仅本设备自身的套接字；All：两者皆有。"
+  "Keeps a relay or router that reads the server name from the first handshake packet from redirecting the connection by that name. The core learns from connection outcomes which paths need it.": {
+    "value": "防止从握手首包读取服务器名称的中继或路由器按该名称重定向连接。核心会根据连接结果自行判断哪些路径需要防护。"
   },
-  "Off (default)": {
-    "value": "关闭（默认）"
+  "TLS method": {
+    "value": "TLS 方法"
   },
-  "Through detour": {
-    "value": "经由 detour"
+  "How the TLS ClientHello is hidden from a sniffing relay. Record fragment: split into several TLS records, no delay. Fragment: split into TCP segments with a pause. Delay: two pieces with a 300 ms pause. Off: no protection; nodes behind a relay that redirects by SNI stop connecting.": {
+    "value": "如何对嗅探中继隐藏 TLS ClientHello。Record fragment：拆分为多个 TLS 记录，无延迟。Fragment：拆分为 TCP 分段并带停顿。Delay：分两段发送，中间停顿 300 毫秒。Off：不防护；位于按 SNI 重定向的中继之后的节点将无法连接。"
   },
-  "Decoy sending": {
-    "value": "诱饵发送方式"
+  "QUIC method": {
+    "value": "QUIC 方法"
   },
-  "On retry: the first attempt goes without the byte, a failed one is repeated with it. Always: the byte goes on every dial. Does not apply to WireGuard: there the byte goes on every handshake.": {
-    "value": "On retry：首次尝试不带该字节，失败后带上它重试。Always：每次拨号都发送该字节。对 WireGuard 无效：其每次握手都会发送该字节。"
+  "How the QUIC handshake (MASQUE, Hysteria2, TUIC, XHTTP over HTTP/3, AWG with QUIC masquerade) is hidden from a sniffing relay. Decoy byte: one junk byte before the first packet, servers drop it. Delay: the second handshake packet is held for 300 ms. Off: no protection. The decoy byte is never sent through a SOCKS relay.": {
+    "value": "如何对嗅探中继隐藏 QUIC 握手（MASQUE、Hysteria2、TUIC、基于 HTTP/3 的 XHTTP、带 QUIC 伪装的 AWG）。Decoy byte：在首包前发送一个垃圾字节，服务器会丢弃它。Delay：第二个握手包延迟 300 毫秒。Off：不防护。经 SOCKS 中继时从不发送该字节。"
   },
-  "On retry (default)": {
-    "value": "重试时（默认）"
+  "Record fragment (default)": {
+    "value": "Record fragment（默认）"
   },
-  "Always": {
-    "value": "始终"
+  "Fragment": {
+    "value": "Fragment"
   },
-  "Decoy node types": {
-    "value": "诱饵节点类型"
+  "Delay": {
+    "value": "Delay"
   },
-  "Node types that send the byte before their QUIC handshake. Empty means the core default (masque).": {
-    "value": "在其 QUIC 握手前发送该字节的节点类型。留空表示内核默认值（masque）。"
+  "Decoy byte (default)": {
+    "value": "诱饵字节（默认）"
   },
-  "Decoy relay types": {
-    "value": "诱饵中继类型"
+  "Only nodes with a masked SNI": {
+    "value": "仅限使用伪装 SNI 的节点"
   },
-  "The byte goes only if the nearest relay (detour) is of one of these types. Behind a group the type of the member the group actually picked counts. Empty means the core default (vless).": {
-    "value": "仅当最近的中继（detour）属于这些类型之一时才发送该字节。位于分组之后时，以分组实际选中的成员类型为准。留空表示内核默认值（vless）。"
+  "Protect only nodes whose SNI differs from the server address (REALITY, WARP, a fake SNI): only they break when a relay redirects by SNI. Off: every node that supports the protection gets it.": {
+    "value": "仅防护 SNI 与服务器地址不一致的节点（REALITY、WARP、伪造 SNI）：只有它们会在中继按 SNI 重定向时失效。关闭后，所有支持防护的节点都会获得防护。"
+  },
+  "Remember relays across restarts": {
+    "value": "重启后记住中继"
+  },
+  "Keep what the core has learned about each encrypted relay across restarts and config changes. Off: every start begins from the defaults and learns again.": {
+    "value": "在重启和配置变更之间保留核心对每个加密中继的判断。关闭后，每次启动都从默认状态开始重新学习。"
   }
 }
