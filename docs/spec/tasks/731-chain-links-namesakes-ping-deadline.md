@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Статус** | In progress |
+| **Статус** | Done |
 | **Дата** | 2026-11-15 |
 | **Повод** | 4PDA, k-dmitriy, посты #2001–#2005 (07–08.11.2026, версии 2.25.20–2.25.21) |
 | **Связанные** | [439F — контракт хранения 1.0](439F-storage-contract-1-0/spec.md) (реестр, D-113/D-114), [393F — Направления и цепочки](393F-directions/spec.md), [524 — общий список источников](524-unified-source-entries.md), [239 — detour в папке](239-folder-detour-symmetry.md), [175 — отмена пинга](175-ping-cancel-separate-client.md), [features/006 DETOUR_AND_BALANCE](../features/006-DETOUR_AND_BALANCE/FEATURE.md) |
