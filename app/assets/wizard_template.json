@@ -723,7 +723,7 @@
         },
         {"name": "dns_encrypted_via_outbound", "type": "bool", "default_value": "false", "title": "Encrypted DNS via Outbound", "tooltip": "Send Yandex DoT and DoH through this preset's Outbound, like UDP. Off: they go direct."},
         {"name": "geoip_enabled", "type": "bool", "default_value": "true", "title": "GeoIP IP-range fallback", "tooltip": "Match Russian-AS IPs as well as domains — catches CDN/QUIC/ECH cases where domain detection fails. Auto-downloads geoip-ru.srs (~150 KB) on first use."},
-        {"name": "apps_enabled", "type": "bool", "default_value": "true", "title": "Russian apps by package", "tooltip": "Route Android apps from the legiz-ru list (banks, marketplaces, government services, Yandex/VK and others) by package name, regardless of the domains they use. Auto-downloads ru-app-list.srs (~4 KB) on first use."},
+        {"name": "apps_enabled", "type": "bool", "default_value": "true", "title": "Russian apps by package", "tooltip": "Route Android apps from the legiz-ru list (banks, marketplaces, government services, Yandex/VK and others) by package name, regardless of the domains they use. Yandex Browser is left out: a browser opens any site, so it follows the other rules. Auto-downloads ru-app-list.srs (~4 KB) on first use."},
         {"name": "force_ipv4", "type": "bool", "default_value": "true", "title": "Force IPv4", "tooltip": "Resolve Russian domains to IPv4 only. Prevents dead IPv6 connections on networks without working global IPv6. Works through this preset's DNS rule — keep the DNS toggle on. Turn off if your network has functional IPv6."}
       ],
       "rule_set": [
@@ -751,7 +751,16 @@
           "server": "dns_ru",
           "#if": {"#and": ["@force_ipv4"], "#value": {"strategy": "ipv4_only"}}
         },
-        {"rule_set": ["ru-domains", "ru-services", "geoip-ru", "ru-apps"], "outbound": "@outbound"}
+        {"rule_set": ["ru-domains", "ru-services", "geoip-ru"], "outbound": "@outbound"},
+        {
+          "type": "logical",
+          "mode": "and",
+          "rules": [
+            {"rule_set": ["ru-apps"]},
+            {"package_name": ["com.yandex.browser", "com.yandex.browser.lite"], "invert": true}
+          ],
+          "outbound": "@outbound"
+        }
       ],
       "dns_rules": [
         {"#if": {"#and": ["@force_ipv4"], "#value": {
