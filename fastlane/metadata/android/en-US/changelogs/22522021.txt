@@ -1,0 +1,1 @@
+Release candidate 2. Sniff guard replaces the QUIC anti-sniff decoy: the core hides the first handshake packet of TLS and QUIC nodes from a relay that redirects by SNI (Core settings, Sniff guard). The old decoy settings are not carried over. An HTTP proxy node says it carries only TCP. Xray import fixes from rc.1. Core lx.35.

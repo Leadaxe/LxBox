@@ -8,12 +8,17 @@
 
 ## [Unreleased]
 
+## [2.25.22] — 2026-11-14
+
+### Changed
+
+- **Sniff guard replaces the QUIC anti-sniff decoy ([task 729](docs/spec/tasks/729-sniff-guard-block.md), [#215](https://github.com/Leadaxe/LxBox/issues/215)).** Core settings get a **Sniff guard** section with the TLS method (Record fragment by default), the QUIC method (Decoy byte by default) and two switches: «Only nodes with a masked SNI» (on by default) and «Remember relays across restarts» (off by default). The core hides the first handshake packet from a relay or router that redirects connections by SNI, and learns from connection outcomes which paths need it: paths through direct, SSH and SOCKS start unprotected, other relays start protected. The decoy byte is never sent through a SOCKS relay. The four «Anti-sniff decoy» settings are gone and their saved values are not carried over; the decoy, off by default before, is now on. Node checks use the same protection as the tunnel. The block is written for core 1.14.4-lx.34 and newer.
+  (RU: в настройках Core появилась секция «Защита от сниффинга»: метод для TLS, метод для QUIC, «Только узлы с маскировочным SNI» (включено) и «Помнить релеи между перезапусками» (выключено); ядро само учится, каким путям защита нужна. Четыре настройки «Обманки от сниффинга» убраны, их значения не переносятся; обманка, раньше выключенная по умолчанию, теперь включена.)
+
 ### Added
 
 - **An HTTP proxy node says it carries only TCP ([task 728](docs/spec/tasks/728-http-proxy-tcp-only-notice.md), [#187](https://github.com/Leadaxe/LxBox/issues/187)).** Node Settings of an HTTP proxy shows a note under Server: the proxy carries only TCP connections, nodes with a TCP transport work through it fully, UDP-based nodes (Hysteria2, TUIC, WireGuard) do not. It is there for anyone who makes such a proxy the detour of a subscription.
   (RU: на экране настроек HTTP-прокси под строкой Server стоит заметка — прокси передаёт только TCP-соединения; узлы с TCP-транспортом работают через него полностью, узлы на UDP — нет.)
-
-## [2.25.22] — 2026-11-12
 
 ### Fixed
 
