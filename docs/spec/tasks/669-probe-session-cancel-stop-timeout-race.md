@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | In progress |
+| Статус | Done (v2.25.17, 24.10.2026; на устройстве не проверено) |
 | Дата начала | 2026-10-23 |
 | Дата конца | — |
 | Коммиты | см. `git log --grep 669` |
@@ -149,3 +149,7 @@ won't be able to start again — nothing happens. Got to force stop the whole ap
 - `docs/spec/features/009-NODE_HEALTH/FEATURE.md` / `FUNCTIONS/*` — отмена
   Test servers обрывает начатые замеры; состояние stopping.
 - CHANGELOG `[Unreleased]`.
+
+## Сверка статуса (15.11.2026)
+
+Код влит 23.10.2026 (коммиты `fix(669)`, `test(669)`), вошёл в v2.25.17. Пункты Р1–Р3 реализованы. Не проверено на устройстве: сценарий из «Проверки» (папка ≥ 8 WG + ≥ 8 vless, VPN выключен, Stop → Start); Kotlin без JVM-теста.
