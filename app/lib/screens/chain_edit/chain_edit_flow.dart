@@ -29,6 +29,14 @@ Future<ChainEditOutcome?> editChainAndPersist(
   required SubscriptionController subController,
   required HomeController homeController,
 }) async {
+  // §731 — редактор судит о позициях по ПОСЛЕДНЕМУ СОБРАННОМУ конфигу
+  // (кандидаты пикера, «позиция потеряна»). Правки состава на Servers
+  // (добавили, переименовали, удалили узел в папке) конфиг не пересобирают —
+  // и редактор показывал новый узел потерянным, а удалённый предлагал в
+  // пикере до перезахода на экран (4PDA #2002). Источники менялись после
+  // сборки → собираем заново тем же путём, что и после правки цепочки.
+  await refreshChainEditorSnapshot(subController, homeController);
+  if (!context.mounted) return null;
   final directions = await SettingsStorage.getDirections();
   final chains = await SettingsStorage.getChains();
   if (!context.mounted) return null;
@@ -60,6 +68,18 @@ Future<ChainEditOutcome?> editChainAndPersist(
     subController.syncDetourRefsRetargeted({chain.tag: saved.tag});
   }
   return const ChainEditOutcome(deleted: false);
+}
+
+/// §731 — снимок целей редактора цепочки не старше источников: настройки
+/// менялись после последней сборки (`SettingsStorage.configDirty`) → конфиг
+/// пересобирается ([regenerateSourcesConfig], применение к туннелю — общим
+/// гейтом). Чистый флаг — сборки нет: открытие редактора остаётся дешёвым.
+Future<void> refreshChainEditorSnapshot(
+  SubscriptionController subController,
+  HomeController homeController,
+) async {
+  if (!SettingsStorage.configDirty) return;
+  await regenerateSourcesConfig(subController, homeController);
 }
 
 /// §558 — пересобрать конфиг после правки источника и сохранить.

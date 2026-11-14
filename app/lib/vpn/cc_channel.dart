@@ -1,7 +1,9 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import '../services/app_log.dart';
 import '../services/platform_channels.dart';
 import '../services/selector_info.dart'; // §251 — fold «селектор (выбор)»
 import '../services/diagnostics/connection_test.dart';
@@ -666,12 +668,40 @@ class CcChannel {
     String link = '',
     int timeoutMs = 0,
   }) async {
-    final r = await _methods.invokeMethod<Map<dynamic, dynamic>>(
-      'ccUrlTestOutbound',
-      {'tag': tag, 'link': link, 'timeoutMs': timeoutMs},
-    );
-    return CcDelayResult.fromMap(_asMap(r ?? const {}));
+    // §731 — страховочный дедлайн ответа. Таймаут замера держит ЯДРО; если
+    // его RPC не вернулся вовсе (жалоба 4PDA #2001: WARP-звено цепочки, строка
+    // висит в «PING…», в логе тишина), ни Dart, ни Kotlin вызов не обрывали:
+    // одиночный пинг не снимал индикатор, воркер mass ping навсегда занимал
+    // слот. Дедлайн = таймаут замера + запас; истёк — узел получает ошибку,
+    // а в лог идёт строка. Сам вызов в ядре не трогаем: `cancelPing` рвёт
+    // общий pingClient вместе с чужими замерами.
+    final budget = Duration(
+            milliseconds: timeoutMs > 0 ? timeoutMs : _urlTestCoreDefaultMs) +
+        urlTestReplyGrace;
+    try {
+      final r = await _methods.invokeMethod<Map<dynamic, dynamic>>(
+        'ccUrlTestOutbound',
+        {'tag': tag, 'link': link, 'timeoutMs': timeoutMs},
+      ).timeout(budget);
+      return CcDelayResult.fromMap(_asMap(r ?? const {}));
+    } on TimeoutException {
+      AppLog.I.warning('URLTest $tag: no reply from core in '
+          '${budget.inMilliseconds} ms (test timeout $timeoutMs ms)');
+      return CcDelayResult(
+        delay: 0,
+        error: 'no reply from core in ${budget.inMilliseconds} ms',
+      );
+    }
   }
+
+  /// §731 — запас сверх таймаута замера, после которого ответа ядра на
+  /// `urlTestOutbound` больше не ждём.
+  @visibleForTesting
+  static Duration urlTestReplyGrace = const Duration(seconds: 3);
+
+  /// Бюджет при `timeoutMs == 0` («дефолт ядра»): неизвестен приложению,
+  /// берём верхнюю оценку — запасной таймаут пинга (§040).
+  static const int _urlTestCoreDefaultMs = 10000;
 
   /// §308 — групповой URLTest: ядро force-тестит ВСЕХ членов группы её
   /// конфиг-URL'ом (`urltest_url` шаблона, не ping settings) и делает
