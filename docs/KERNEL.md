@@ -34,7 +34,7 @@ milliseconds. `startTailscaleSSHSession` is not used.
 | Called from | `scripts/build-local-apk.sh` and CI (`ci.yml` → the android job → “Fetch sing-box-lx core”) |
 | The AAR in git | NO (~110 MB as of lx.25; `app/android/app/libs/` is in `.gitignore`); `build.gradle.kts` → `implementation(files("libs/libbox.aar"))` |
 
-**The current pin: `v1.14.4-lx.33`** (see `app/android/libbox.version`) — lx.1
+**The current pin: `v1.14.4-lx.35`** (see `app/android/libbox.version`) — lx.1
 plus XHTTP HTTP-version parity (**SPEC 104**, lx.2), Vision on top of VLESS
 Encryption (**SPEC 105**, lx.3), the runtime WG/AWG endpoint toggle
 (**SPEC 106**, lx.4: `CommandClient.setEndpointEnabled`, `endpointState =
@@ -44,7 +44,7 @@ default without `xmux` moved to `max_connections 3` (lx.6), three MASQUE hangs f
 control channel on port 443 from the first connection (**SPEC 111**, lx.9),
 the headroom Tailscale needs on a direct UDP path restored in the AWG
 wireguard-go (**SPEC 112**, lx.10), one more `stable` sync (lx.11), lx.12 and
-lx.13-rc.1, lx.13, lx.14, lx.15, lx.16–lx.18, lx.19–lx.21, lx.22–lx.23, lx.24-rc.1/rc.2, lx.24, lx.25, lx.26, lx.27, lx.28, lx.29, lx.30-rc.1, lx.30-rc.2, lx.30-rc.3, lx.30, lx.31, lx.32 and lx.33 (below). The Java surface of lx.11 is identical to lx.8 (`javap` over both
+lx.13-rc.1, lx.13, lx.14, lx.15, lx.16–lx.18, lx.19–lx.21, lx.22–lx.23, lx.24-rc.1/rc.2, lx.24, lx.25, lx.26, lx.27, lx.28, lx.29, lx.30-rc.1, lx.30-rc.2, lx.30-rc.3, lx.30, lx.31, lx.32, lx.33 and lx.34–lx.35 (below). The Java surface of lx.11 is identical to lx.8 (`javap` over both
 `classes.jar`). The `lx.1` layers: **SPEC 097**, **SPEC 098**, **SPEC 101** and
 the upstream sync to sing-box **1.14.2** (**SPEC 102**).
 
@@ -1487,7 +1487,9 @@ subscription), the core provides insurance in case the client misses something.
 
 | rc | What was added |
 |---|---|
-| **v1.14.4-lx.33** (current pin) | `lx.quic_sniff_decoy` is an object `{mode, outbound_type, detour_type, send}` (defaults off / `[masque]` / `[vless]` / `retry`), the string/bool forms fail to load (SPEC 151); `lx.awg_masquerade` removed, the AWG burst goes on every path (SPEC 153). LxBox task 709 iteration 5, task 720 cancelled. Java surface and build tags unchanged by the diff. AAR sha256 `b1f569b7cf1744b810b2d0c7a05bbe63aa156092cf84811e21dc4e4bb90e0cc8`. |
+| **v1.14.4-lx.35** (current pin) | lx.34 (`lx.sniff_guard`, below) plus the upstream `stable` sync to 2026-11-14 (uTLS v1.9.0-alpha.1, REALITY client fixes, sing-tun). LxBox task 729. Java surface lx.33 → lx.35 identical (270 classes, 3903 `javap -p` lines, empty diff); build tags identical (27, `strings` of `libbox.so`), equal to `kCoreBuildTags`. AAR sha256 `e5cfd79364316150acd5c9ddbb5d6d8c749f1ce4a590f9a3eaa408f949b8fd7b`. Not run on a device. |
+| **v1.14.4-lx.34** (never pinned: LxBox goes straight to lx.35 = lx.34 plus fresh `upstream/stable` commits, owner's decision 2026-11-14) | `lx.sniff_guard` (FEATURE 019 of the fork) replaces two mechanisms: `lx.quic_sniff_decoy` is removed (any value fails to load) and the automatic `record_fragment` for a node with `detour` is gone without a load error. LxBox task 729 writes the block from the template (`sniff_guard_tls`, `sniff_guard_quic`, `sniff_guard_sni_mismatch`, `sniff_guard_persist`) and strips it below lx.34 (`kSniffGuardMinCore` in `sniff_guard.dart`); probe configs get it without `persist`. `nodes.sni_mismatch` is always written explicitly: the core treats a missing key as `true`. **On the pin bump:** move `kCoreBuildTagsPin`; if the pin is an `lx.34-rc.N`, move `kSniffGuardMinCore` to `rc.1` first, otherwise the block is stripped and TLS nodes behind sniffing relays stop connecting. |
+| **v1.14.4-lx.33** | `lx.quic_sniff_decoy` is an object `{mode, outbound_type, detour_type, send}` (defaults off / `[masque]` / `[vless]` / `retry`), the string/bool forms fail to load (SPEC 151); `lx.awg_masquerade` removed, the AWG burst goes on every path (SPEC 153). LxBox task 709 iteration 5, task 720 cancelled. Java surface and build tags unchanged by the diff. AAR sha256 `b1f569b7cf1744b810b2d0c7a05bbe63aa156092cf84811e21dc4e4bb90e0cc8`. |
 | **v1.14.4-lx.31** | TrustTunnel built into the AAR (`with_trusttunnel` in `sharedTags`, LxBox task 717); a `masque`/`trusttunnel`/`hysteria2`/`tuic` tunnel with `detour` on a selector follows the new selection (SPEC 152); root key `lx.awg_masquerade` `direct` (default) / `all` — the AWG masquerade burst only on the device's own socket by default (SPEC 153, issue #64); upstream `stable` v1.14.4 + 9 (SPEC 154). Java surface lx.30 → lx.31 identical (270 classes, 3903 `javap -p` lines). AAR sha256 `d862d20c0bbbf6e9e26c3cdfffd3c2d972501a5b05240b1dbd6998dc38daae85`. |
 | **v1.14.4-lx.28** | Stop no longer hangs on a MASQUE dial with `detour` (SPEC 146); `cache.db` is taken over from a previous instance that hung while stopping, no `initialize cache-file: timeout` (SPEC 147, sing-box-lx#61, LxBox task 703). Java surface unchanged. AAR sha256 `64cc7601945ff6323cd501c721bebc32b90852beb58ae8794abe87c97d988a32`. |
 | **v1.14.4-lx.27** | WG/AWG peer status per session: after enable, idle wake or network wake `lastHandshakeUnix` is `0` until a new handshake, new `sessionRxBytes`/`sessionTxBytes` count from the session start (SPEC 145, LxBox task 613). Java surface: additions only. AAR sha256 `1156fe407619f7f154121196bbc9a21384899990f6a7d0f70c9ef937db1b86e3`. |
