@@ -62,11 +62,12 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  Future<(SubscriptionController, _Host)> open(WidgetTester tester) async {
+  Future<(SubscriptionController, _Host)> open(WidgetTester tester,
+      {String input = link}) async {
     final c = SubscriptionController();
     await tester.runAsync(() async {
       await c.init();
-      await c.addFromInput(link);
+      await c.addFromInput(input);
     });
     final host = _Host();
     await tester.pumpWidget(MaterialApp(
@@ -190,4 +191,35 @@ void main() {
             .text,
         '');
   });
+
+  // 4PDA #1995 — узел socks/http правится только через Source: тег,
+  // исправленный в самом JSON (поле Tag не трогали), становится именем узла
+  // (§722 «побеждает тот, кого трогали»; до 2.25.21 поле Tag затирало текст).
+  for (final type in ['socks', 'http']) {
+    testWidgets('$type: тег исправлен в JSON на Source → узел переименован',
+        (tester) async {
+      final (c, host) = await open(tester,
+          input: '{"type":"$type","tag":"old-name","server":"192.0.2.1",'
+              '"server_port":1080}');
+      expect(c.entries.single.list.nodes.single.tag, contains('old-name'));
+      await tester.tap(find.text('Source'));
+      await tester.pumpAndSettle();
+      final field = find.byKey(const ValueKey('node-source-editor'));
+      final text = tester.widget<LxTextCodeField>(field).controller.text;
+      expect(text, contains('old-name'));
+      await tester.enterText(
+          find.descendant(of: field, matching: find.byType(EditableText)),
+          text.replaceFirst('old-name', 'new-name'));
+      await tester.pump();
+      await back(tester);
+      await choose(tester, 'Save');
+      await settle(tester, () => host.closed);
+      expect(host.closed, isTrue);
+      final tag = c.entries.single.list.nodes.single.tag;
+      expect(tag, contains('new-name'));
+      expect(tag, isNot(contains('old-name')));
+      expect(c.entries.single.list.nodes.single.rawSource,
+          isNot(contains('old-name')));
+    });
+  }
 }
