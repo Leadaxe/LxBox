@@ -479,8 +479,8 @@ server's node, or a node of a subscription or folder) is used: the nodes are
 tested through it, as in the tunnel, and the line reads `Tested through
 <node>.` If that node is off, is itself sent through another detour, or the
 detour points at a Direction, its auto node, a chain or a group, the test
-cannot follow it: the line reads `Detour of this source is not applied in the
-test — nodes are checked directly.` In a folder, members' own detours count
+cannot follow it: the line reads `Detour is not applied in the test — nodes
+are checked directly.` In a folder, members' own detours count
 the same way as in the tunnel; when only some of them can be followed, the
 line gives the count. The Diagnostics tab of a node, run with the VPN off,
 follows the same rule and shows the same line under the response.

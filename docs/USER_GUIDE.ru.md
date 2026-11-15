@@ -474,8 +474,8 @@ Why it happens, What you can do и ссылка Details на страницу п
 туннеле, и в строке написано `Tested through <узел>.` Если этот узел
 выключен, сам ходит через другой detour, или detour указывает на
 Направление, его auto-узел, цепочку или группу, тест повторить путь не может:
-в строке написано `Detour of this source is not applied in the test — nodes
-are checked directly.` В папке личные detour членов учитываются так же, как
+в строке написано `Detour is not applied in the test — nodes are checked
+directly.` В папке личные detour членов учитываются так же, как
 в туннеле; если учесть удаётся только часть, строка показывает счётчик.
 Вкладка Diagnostics узла при выключенном VPN действует по тому же правилу и
 показывает ту же строку под ответом.

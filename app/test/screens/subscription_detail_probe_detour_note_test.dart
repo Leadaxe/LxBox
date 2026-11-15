@@ -28,7 +28,7 @@ NodeSpec _node(String label) => VlessSpec(
     );
 
 const _unapplied =
-    'Detour of this source is not applied in the test — nodes are checked directly.';
+    'Detour is not applied in the test — nodes are checked directly.';
 
 Future<void> _until(WidgetTester tester, bool Function() cond,
     {String what = ''}) async {

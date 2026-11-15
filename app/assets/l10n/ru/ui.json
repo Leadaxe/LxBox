@@ -7127,8 +7127,11 @@
   "Core: lx.sniff_guard.quic. The same for the first QUIC packet. Never applied through a SOCKS relay. AmneziaWG follows what other QUIC nodes on the same path have taught the core.": {
     "value": "Ядро: lx.sniff_guard.quic. То же для первого пакета QUIC. Через SOCKS-релей не применяется никогда. AmneziaWG следует тому, чему ядро научили другие QUIC-узлы на том же пути."
   },
-  "Detour of this source is not applied in the test — nodes are checked directly.": {
-    "value": "Detour этого источника в тесте не учитывается — узлы проверяются напрямую."
+  "Detour is not applied in the test — the node is checked directly.": {
+    "value": "Detour в тесте не учитывается — узел проверяется напрямую."
+  },
+  "Detour is not applied in the test — nodes are checked directly.": {
+    "value": "Detour в тесте не учитывается — узлы проверяются напрямую."
   },
   "Tested through %s.": {
     "value": "Тест идёт через %s."

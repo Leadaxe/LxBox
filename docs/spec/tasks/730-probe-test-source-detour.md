@@ -146,7 +146,7 @@ TLS-уровни цели — её источника (§636).
 
 | Исходы узлов с detour | Текст |
 |---|---|
-| все «не учтён» | `Detour of this source is not applied in the test — nodes are checked directly.` |
+| все «не учтён» | `Detour is not applied in the test — nodes are checked directly.` (один узел — `… the node is checked directly.`; слова «of this source» сняты задачей 738: detour бывает личным) |
 | все «учтён», одна цель | `Tested through %s.` (префикс источника цели + сырой тег) |
 | все «учтён», целей несколько (личные detour членов папки) | `Tested through each node's own detour.` |
 | смешанно (папка) | `Detour is applied in the test for %d of %d; the others are checked directly.` — учтённые из всех узлов с detour |

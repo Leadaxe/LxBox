@@ -6,7 +6,8 @@ import '../services/probe/probe_detour.dart';
 /// §730 — пометка под панелью «Тест серверов»: учтён ли в пробе detour
 /// источника. `null` — detour не задан ни у одного узла, пометки нет.
 ///
-/// - все узлы с detour «не учтён» — узлы проверяются напрямую;
+/// - все узлы с detour «не учтён» — узлы проверяются напрямую (один узел —
+///   в единственном числе);
 /// - все «учтён» через одну цель — «Tested through %s.»;
 /// - все «учтён», но цели разные (личные detour членов папки) — общая фраза;
 /// - смешанно (папка) — счётчик «учтён у N из M», остальные напрямую.
@@ -15,8 +16,15 @@ String? probeDetourNoteText(ProbeDetourPlan plan) {
   final applied = plan.appliedCount;
   final unapplied = plan.unappliedCount;
   if (applied == 0) {
-    return getLocalText.s(
-        "Detour of this source is not applied in the test — nodes are checked directly.");
+    // Текст общий для detour источника и личного detour члена папки: чей он,
+    // пометка не называет (диагностика узла с личным detour читалась неверно).
+    return unapplied == 1
+        ? getLocalText.s(
+            "Detour is not applied in the test — the node is checked directly.",
+          )
+        : getLocalText.s(
+            "Detour is not applied in the test — nodes are checked directly.",
+          );
   }
   if (unapplied == 0) {
     final labels = plan.appliedLabels;
@@ -25,9 +33,10 @@ String? probeDetourNoteText(ProbeDetourPlan plan) {
         : getLocalText.s("Tested through each node's own detour.");
   }
   return getLocalText.s(
-      "Detour is applied in the test for %d of %d; the others are checked directly.",
-      applied,
-      applied + unapplied);
+    "Detour is applied in the test for %d of %d; the others are checked directly.",
+    applied,
+    applied + unapplied,
+  );
 }
 
 /// Пометка §730 тем же стилем, что сводка теста (12, onSurfaceVariant).
