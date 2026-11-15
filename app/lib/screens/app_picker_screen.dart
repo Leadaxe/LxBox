@@ -7,6 +7,7 @@ import '../models/app_info.dart';
 import '../services/app_info_cache.dart';
 import '../services/l10n/locale_controller.dart';
 import '../widgets/app_uid_subtitle.dart';
+import '../widgets/dpad_field_exit.dart';
 
 /// Screen for selecting apps. Returns updated list of package names on pop.
 class AppPickerResult {
@@ -225,17 +226,19 @@ class _AppPickerScreenState extends State<AppPickerScreen> {
             if (_loading) const LinearProgressIndicator(),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-              child: TextField(
-                decoration: InputDecoration(
-                  hintText: getLocalText.s("Search apps..."),
-                  prefixIcon: const Icon(Icons.search, size: 20),
-                  isDense: true,
-                  border: const OutlineInputBorder(),
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: DpadFieldExit(
+                child: TextField(
+                  decoration: InputDecoration(
+                    hintText: getLocalText.s("Search apps..."),
+                    prefixIcon: const Icon(Icons.search, size: 20),
+                    isDense: true,
+                    border: const OutlineInputBorder(),
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  ),
+                  style: const TextStyle(fontSize: 14),
+                  onChanged: (v) => setState(() => _search = v),
                 ),
-                style: const TextStyle(fontSize: 14),
-                onChanged: (v) => setState(() => _search = v),
               ),
             ),
             Padding(

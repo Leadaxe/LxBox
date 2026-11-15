@@ -14,6 +14,7 @@ import 'crash_reports_screen.dart';
 import 'oom_reports_screen.dart';
 import 'debug/profiling_tab.dart';
 import '../services/l10n/locale_controller.dart';
+import '../widgets/dpad_field_exit.dart';
 
 class DebugScreen extends StatefulWidget {
   const DebugScreen({super.key, this.initialTab = 0, this.errorsOnly = false});
@@ -280,24 +281,26 @@ class _DebugScreenState extends State<DebugScreen> with SnackHelper {
           const SizedBox(height: 8),
           // Search field (night T6-3). Case-insensitive substring
           // match by message. Empty = no filter.
-          TextField(
-            controller: _searchController,
-            decoration: InputDecoration(
-              prefixIcon: const Icon(Icons.search, size: 18),
-              hintText: getLocalText.s("Filter by text…"),
-              isDense: true,
-              border: const OutlineInputBorder(),
-              suffixIcon: _searchQuery.isEmpty
-                  ? null
-                  : IconButton(
-                      icon: const Icon(Icons.clear, size: 18),
-                      onPressed: () {
-                        _searchController.clear();
-                        setState(() => _searchQuery = '');
-                      },
-                    ),
+          DpadFieldExit(
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.search, size: 18),
+                hintText: getLocalText.s("Filter by text…"),
+                isDense: true,
+                border: const OutlineInputBorder(),
+                suffixIcon: _searchQuery.isEmpty
+                    ? null
+                    : IconButton(
+                        icon: const Icon(Icons.clear, size: 18),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() => _searchQuery = '');
+                        },
+                      ),
+              ),
+              onChanged: (v) => setState(() => _searchQuery = v),
             ),
-            onChanged: (v) => setState(() => _searchQuery = v),
           ),
           const SizedBox(height: 8),
           Expanded(
