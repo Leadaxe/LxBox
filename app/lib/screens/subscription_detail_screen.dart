@@ -574,15 +574,20 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
           // §391 — bulk вкл/выкл всех нод: тот же `SizedBox(40)` + Switch,
           // что и leading строки узла (§283). В простое слева только он;
           // сводка теста — по центру, только во время/после прогона.
-          if (canToggleAll)
+          if (canToggleAll) ...[
             SizedBox(
               width: 40,
               child: Switch(
                 value: !allOff,
                 onChanged: (v) => unawaited(_toggleAllNodes(v)),
               ),
-            )
-          else
+            ),
+            // Switch шире своих 40 и вылезает вправо; в строке узла его
+            // прикрывает зазор ListTile (horizontalTitleGap 16) — тот же
+            // зазор здесь, иначе сводка теста наезжает на переключатель,
+            // и текст встаёт в один столбец с названиями узлов.
+            const SizedBox(width: 16),
+          ] else
             const SizedBox(width: 12),
           Expanded(
             child: info != null
