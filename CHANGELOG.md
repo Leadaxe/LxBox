@@ -8,6 +8,11 @@
 
 ## [Unreleased]
 
+### Added
+
+- **System colors (Material You) ([task 735](docs/spec/tasks/735-material-you-system-colors.md), [#218](https://github.com/Leadaxe/LxBox/issues/218)).** App Settings → Appearance has a «System colors» switch: the app takes its accent color from the wallpaper palette, like other Android apps. It is off by default, so the look does not change until you turn it on, and it is shown only on Android 12 and newer, not on TV. Status colors (ping, online/offline) stay green and orange.
+  (RU: в App Settings → Appearance появился переключатель «Системные цвета» — акцентный цвет из обоев (Material You). По умолчанию выключен, показывается на Android 12+ и не на TV; цвета статусов не меняются.)
+
 ### Fixed
 
 - **A file subscription without its file no longer stays silent ([#219](https://github.com/Leadaxe/LxBox/issues/219)).** A backup keeps subscription settings, not their contents, so after a restore on another phone or a reinstall a subscription added from a file has no servers, and "Update" did nothing. The list row now says "Choose the file again", the Nodes tab explains why (Android does not let the app read the file again) with a button to pick the file, and "Update" shows the same hint.

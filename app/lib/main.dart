@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'screens/home_screen.dart';
 import 'services/app_log.dart';
+import 'services/app_theme_seed.dart';
 import 'services/l10n/locale_controller.dart';
 import 'services/automation/automation_dispatcher.dart';
 import 'services/automation/automation_sync.dart';
@@ -293,10 +294,28 @@ class _FallbackErrorWidget extends StatelessWidget {
 /// [load] зовётся на старте после загрузки хранилища; дальше тема
 /// перечитывается по [SettingsStorage.nativePrefsGeneration] — после импорта
 /// бэкапа и смены Workspaces, без перезапуска.
-class ThemeNotifier extends ChangeNotifier {
+///
+/// §735 — опция «System colors» (var `dynamic_color`, default off): seed
+/// схемы берётся из системной палитры Android 12+ ([UrlLauncher.systemAccentColor]).
+/// Акцент перечитывается при возврате приложения на передний план — обои
+/// могли смениться.
+class ThemeNotifier extends ChangeNotifier with WidgetsBindingObserver {
   ThemeMode _mode = ThemeMode.system;
   ThemeMode get mode => _mode;
   bool _hooked = false;
+
+  bool _dynamicColor = false;
+  Color? _systemAccent;
+
+  /// Опция «System colors» включена пользователем.
+  bool get dynamicColor => _dynamicColor;
+
+  /// Устройство отдаёт системную палитру — переключатель показывается.
+  bool get dynamicColorAvailable => _systemAccent != null;
+
+  /// Seed светлой и тёмной схемы.
+  Color get seed =>
+      appThemeSeed(dynamicColor: _dynamicColor, systemAccent: _systemAccent);
 
   /// Ключ прежнего места — `FlutterSharedPreferences` (до итерации 9).
   static const _legacyKey = 'app_theme_mode';
@@ -319,6 +338,7 @@ class ThemeNotifier extends ChangeNotifier {
     if (!_hooked) {
       _hooked = true;
       SettingsStorage.nativePrefsGeneration.addListener(_reload);
+      WidgetsBinding.instance.addObserver(this);
     }
     if (!await SettingsStorage.hasNativeThemeMode()) {
       try {
@@ -332,17 +352,32 @@ class ThemeNotifier extends ChangeNotifier {
         // prefs недоступны — остаётся значение по умолчанию.
       }
     }
+    _systemAccent = await UrlLauncher.systemAccentColor();
+    await _reload(force: true);
+  }
+
+  /// Перечитать тему из хранилища (поколение `native_prefs` выросло:
+  /// импорт бэкапа, смена Workspaces).
+  Future<void> _reload({bool force = false}) async {
     final mode = _fromWire(await SettingsStorage.getNativeThemeMode());
-    if (mode == _mode) return;
+    final dyn = await SettingsStorage.getDynamicColor();
+    if (!force && mode == _mode && dyn == _dynamicColor) return;
     _mode = mode;
+    _dynamicColor = dyn;
     notifyListeners();
   }
 
-  /// Перечитать тему из хранилища (поколение `native_prefs` выросло).
-  Future<void> _reload() async {
-    final mode = _fromWire(await SettingsStorage.getNativeThemeMode());
-    if (mode == _mode) return;
-    _mode = mode;
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _dynamicColor) {
+      unawaited(_refreshAccent());
+    }
+  }
+
+  Future<void> _refreshAccent() async {
+    final accent = await UrlLauncher.systemAccentColor();
+    if (accent == _systemAccent) return;
+    _systemAccent = accent;
     notifyListeners();
   }
 
@@ -351,14 +386,19 @@ class ThemeNotifier extends ChangeNotifier {
     notifyListeners();
     await SettingsStorage.setNativeThemeMode(_toWire(mode));
   }
+
+  Future<void> setDynamicColor(bool enabled) async {
+    _dynamicColor = enabled;
+    notifyListeners();
+    await SettingsStorage.setDynamicColor(enabled);
+    if (enabled) await _refreshAccent();
+  }
 }
 
 final themeNotifier = ThemeNotifier();
 
 class LxBoxApp extends StatelessWidget {
   const LxBoxApp({super.key});
-
-  static const _seed = Colors.indigo;
 
   @override
   Widget build(BuildContext context) {
@@ -375,12 +415,12 @@ class LxBoxApp extends StatelessWidget {
         return MaterialApp(
           title: 'L×Box',
           theme: ThemeData(
-            colorScheme: ColorScheme.fromSeed(seedColor: _seed),
+            colorScheme: ColorScheme.fromSeed(seedColor: themeNotifier.seed),
             useMaterial3: true,
           ),
           darkTheme: ThemeData(
             colorScheme: ColorScheme.fromSeed(
-              seedColor: _seed,
+              seedColor: themeNotifier.seed,
               brightness: Brightness.dark,
             ),
             useMaterial3: true,

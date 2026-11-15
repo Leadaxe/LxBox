@@ -307,6 +307,7 @@ class SettingsStorage {
     // но и в отброшенные не попадают (см. `_replaceRaw`).
     'allow_rotation', // §220 — снятие портретной фиксации
     'node_list_two_columns', // §541 — две колонки списка узлов на широком окне
+    'dynamic_color', // §735 — системные цвета (Material You)
     'app_language', // §279 — язык приложения (system|en|ru); НЕ config-var
     'region', // §425 — регион использования (auto|none|<cc>); НЕ config-var
   };
@@ -939,6 +940,14 @@ class SettingsStorage {
     nodeListTwoColumns.value = enabled;
     return setVar('node_list_two_columns', enabled ? 'true' : 'false');
   }
+
+  /// §735 — тема из системной палитры (Material You, Android 12+). Default
+  /// false: вид приложения не меняется, пока пользователь не включит.
+  static Future<bool> getDynamicColor() async =>
+      (await getVar('dynamic_color', 'false')) == 'true';
+
+  static Future<void> setDynamicColor(bool enabled) =>
+      setVar('dynamic_color', enabled ? 'true' : 'false');
 
   /// §279 — допустимые значения `app_language`. Неизвестное (hand-edited
   /// бэкап, будущие языки) → 'system'.
