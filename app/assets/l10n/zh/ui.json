@@ -1271,14 +1271,17 @@
   "Only if it differs from the server host": {
     "value": "仅在与服务器主机不同时填写"
   },
-  "Override the global TLS settings for all servers of this folder.": {
-    "value": "为此文件夹的所有服务器覆盖全局 TLS 设置。"
+  "Override the global TLS settings for all servers of this folder. Not applied to servers with a detour.": {
+    "value": "为此文件夹的所有服务器覆盖全局 TLS 设置。不适用于带 detour 的服务器。"
   },
-  "Override the global TLS settings for all servers of this subscription.": {
-    "value": "为此订阅的所有服务器覆盖全局 TLS 设置。"
+  "Override the global TLS settings for all servers of this subscription. Not applied to servers with a detour.": {
+    "value": "为此订阅的所有服务器覆盖全局 TLS 设置。不适用于带 detour 的服务器。"
   },
   "Override the global TLS settings for this server.": {
     "value": "为此服务器覆盖全局 TLS 设置。"
+  },
+  "Override the global TLS settings for this server. Not applied if the server has a detour.": {
+    "value": "为此服务器覆盖全局 TLS 设置。不适用于带 detour 的服务器。"
   },
   "Password": {
     "value": "密码"

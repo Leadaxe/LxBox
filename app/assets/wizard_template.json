@@ -408,7 +408,7 @@
       "id": "dpi-bypass",
       "name": "TLS Fragmentation",
       "chapter": "core",
-      "description": "Splits the TLS handshake so it carries no single-packet signature. Default for all servers; override per server, folder or subscription.",
+      "description": "Splits the TLS handshake so it carries no single-packet signature. Default for all servers; override per server, folder or subscription. Not applied to servers with a detour: there the core's sniff guard decides.",
       "vars": [
         {"name": "tls_fragment", "type": "bool", "default_value": "false", "required": true, "wizard_ui": "edit", "title": "TLS Fragment", "tooltip": "Split TLS ClientHello into small TCP segments"},
         {"name": "tls_record_fragment", "type": "bool", "default_value": "false", "required": true, "wizard_ui": "edit", "title": "TLS Record Fragment", "tooltip": "Split handshake into multiple TLS records (try this first)"},

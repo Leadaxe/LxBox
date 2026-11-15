@@ -30,6 +30,11 @@
 - **Android TV: the app list could not be scrolled with the remote ([task 736](docs/spec/tasks/736-tv-search-field-dpad-mouse-drag.md), [#220](https://github.com/Leadaxe/LxBox/issues/220)).** In the app picker (Routing → Tunnel apps, apps of a routing rule, URL Check) the D-pad stopped at the search field: «Down» moved the cursor inside it and never reached the list. Up/Down now leave single-line search fields above lists (app pickers, Logs filter, connection filter, node filters). Lists also scroll by dragging with a mouse pointer, which is how a TV remote in mouse mode works.
   (RU: на Android TV в выборе приложений пульт упирался в строку поиска, а в режиме «мышь» список не тянулся; теперь ↑/↓ уводят из поля поиска в список, а списки прокручиваются перетаскиванием «мышью».)
 
+### Changed
+
+- **TLS settings say they skip servers with a detour ([task 737](docs/spec/tasks/737-tls-skip-detour-toggle.md)).** TLS fragmentation and mixed-case SNI are applied only to servers that connect directly; a server with a detour runs its TLS inside the hop, where the core's sniff guard decides. The global section, the subscription and folder TLS section and the server screen now say so.
+  (RU: подписи у TLS-настроек — глобально, у подписки/папки и у узла — говорят, что к серверам с detour они не применяются; поведение не менялось)
+
 ## [2.25.22] — 2026-11-14
 
 ### Changed

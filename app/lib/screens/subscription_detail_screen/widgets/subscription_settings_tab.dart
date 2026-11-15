@@ -387,8 +387,8 @@ class SubscriptionSettingsTab extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             folderMode
-                ? getLocalText.s("Override the global TLS settings for all servers of this folder.")
-                : getLocalText.s("Override the global TLS settings for all servers of this subscription."),
+                ? getLocalText.s("Override the global TLS settings for all servers of this folder. Not applied to servers with a detour.")
+                : getLocalText.s("Override the global TLS settings for all servers of this subscription. Not applied to servers with a detour."),
             style: theme.textTheme.bodySmall
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),

@@ -1,8 +1,8 @@
-# 737 — TLS-настройки и узлы с detour: галка «не применять»
+# 737 — TLS-настройки и узлы с detour: подписи вместо галки
 
 | | |
 |---|---|
-| **Статус** | Draft — ждёт ответов владельца (раздел «Вопросы владельцу») |
+| **Статус** | Done |
 | **Дата** | 2026-11-15 |
 | **Повод** | слово владельца: «tls — должна быть галка не применять к тем, у кого detour» |
 | **Связанные** | [636 — TLS-политика по уровням](636-tls-settings-per-node-folder-subscription.md), [664](664-reality-tls-inherited-label-effective.md) / [665 — REALITY и фрагментация](665-tls-fragment-inherits-everywhere-reality-too.md), [729 — `lx.sniff_guard`](729-sniff-guard-block.md), контракт 1.1.84 (`detour_with_tls_fragment`), 1.1.170 |
@@ -10,7 +10,7 @@
 ## Docs to update
 
 - эта задача
-- после решения: `CHANGELOG.md` (Unreleased), `docs/USER_GUIDE` / раздел TLS, копия контракта — только синком после лаунчера
+- [CHANGELOG.md](../../../CHANGELOG.md) — Unreleased, Changed
 
 ## Problem
 
@@ -159,58 +159,54 @@ SNI уходит в сеть как есть. Это единственный с
 не поймёт. Контракт: меняется норма 1.1.84 → запрос лаунчеру. Цена: выше (1),
 плюс тесты на типы хопов.
 
-## Рекомендация
+## Решение
 
-(2) сейчас — подписи на всех трёх уровнях и полное `_underDetour`; если
-владельцу нужен именно выключатель, то (1) глобальной галкой, включённой по
-умолчанию, с запросом лаунчеру на исключение из нормы 1.1.84.
+Владелец 15.11.2026: «тогда делать ничего не надо, надо просто написать в
+интерфейсе», «тогда галка не нужна». Выбран вариант (2): поведение сборки,
+пробы и норма контракта не меняются, галки нет; варианты (1) и (3) отклонены.
 
-## Макет (вариант 1, глобальный раздел)
+Подписи (английский — ключ, переводы `ru`/`zh`):
+
+- **Глобально** — описание раздела «TLS Fragmentation»
+  (`app/assets/wizard_template.json`, `assets/l10n/*/template.json`):
+  дописано «Not applied to servers with a detour: there the core's sniff guard
+  decides.»
+- **Источник** — подзаголовок TLS-секции подписки и папки
+  (`subscription_settings_tab.dart`): дописано «Not applied to servers with a
+  detour.» Всегда, а не только при detour у источника: detour бывает у
+  отдельных узлов (тело, личный, звено), и строка верна в любом случае.
+- **Узел** — `node_settings_screen.dart`: при распознанном detour
+  (`_underDetour`) как раньше — подзаголовок плюс «Not applied: traffic goes
+  through a detour first…». Без него подзаголовок «Override the global TLS
+  settings for this server. Not applied if the server has a detour.» —
+  покрывает detour из тела узла и звено цепочки, которые `_underDetour` не
+  видит. Расширять `_underDetour` не стали: статичная строка закрывает те же
+  случаи без нового кода.
+
+Контракт, бэкап, лаунчер — без изменений, запросов нет.
+
+## Макет
 
 ```
 Core → TLS Fragmentation
-┌──────────────────────────────────────────────────────┐
-│ Splits the TLS handshake so it carries no            │
-│ single-packet signature. Default for all servers;    │
-│ override per server, folder or subscription.         │
-├──────────────────────────────────────────────────────┤
-│ TLS Fragment                                    [ ]  │
-│ TLS Record Fragment                             [ ]  │
-│ Fallback delay                              500ms ›  │
-│ Mixed-case SNI                                  [ ]  │
-├──────────────────────────────────────────────────────┤
-│ Don't apply to servers with a detour            [✓]  │
-│   Their TLS runs inside the hop's tunnel; there the  │
-│   core's sniff guard decides. Turn off only if the   │
-│   hop is direct or a plain SOCKS/HTTP proxy.         │
-└──────────────────────────────────────────────────────┘
+  Splits the TLS handshake so it carries no single-packet signature.
+  Default for all servers; override per server, folder or subscription.
+  Not applied to servers with a detour: there the core's sniff guard decides.
+
+Подписка / папка → Settings → TLS
+  Override the global TLS settings for all servers of this subscription.
+  Not applied to servers with a detour.
+
+Узел → TLS (detour не распознан экраном)
+  Override the global TLS settings for this server. Not applied if the
+  server has a detour.
 ```
-
-Вариант 2 — та же карточка без галки, вторая строка серым под описанием:
-`Not applied to servers with a detour: there the core's sniff guard decides.`
-У источника — та же строка под «Override the global TLS settings for all
-servers of this subscription.», если у него есть detour.
-
-## Вопросы владельцу
-
-1. Что значит галка: (а) объяснить, что под detour не применяется (сейчас так
-   и есть, жёстко), или (б) дать **выключить** этот пропуск и применять TLS-ручки
-   под detour? Если (а) — делаем вариант 2, галка не нужна.
-2. Если (б): галка одна глобальная, или переопределяется на источнике и узле,
-   как остальные TLS-ручки?
-3. Если (б): ты готов, что выключенная галка расходится с нормой контракта
-   1.1.84 до ответа лаунчера (запрос на исключение), или ждём лаунчер до кода?
-4. Вариант 3 (автоматически по типу хопа: `direct`/`socks`/`http` — применять,
-   зашифрованный релей — нет) интересен вместо галки?
-5. Под зашифрованным релеем выключенная галка снимает с узла sniff guard и
-   добавляет паузу 500 мс — предупреждать об этом у галки (как в макете) или
-   достаточно?
 
 ## Verification
 
-После решения: тесты сборки и пробы (пропуск / применение под каждым видом
-detour), бэкап туда-обратно, эмулятор — узел через `direct`-detour с
-фрагментацией.
+- `dart run tool/l10n/ui_check.dart --strict`, `template_check.dart --strict` —
+  0 failures, 0 warnings; `dart analyze` двух экранов — без замечаний.
+- Эмулятор не гоняли: правка только текстов.
 
 ## Unresolved / follow-up
 

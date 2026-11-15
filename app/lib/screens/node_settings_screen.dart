@@ -1089,8 +1089,13 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     final list = widget.entry.list;
     final folder = _member != null && list is FolderServers ? list : null;
     return [
+      // §737 — без распознанного detour подзаголовок сам говорит, что под
+      // detour ручки не действуют: detour из тела узла и звена цепочки
+      // [_underDetour] не видит, а сборка пропускает любой.
       _sectionHeader(getLocalText.s("TLS"),
-          getLocalText.s("Override the global TLS settings for this server."),
+          _underDetour
+              ? getLocalText.s("Override the global TLS settings for this server.")
+              : getLocalText.s("Override the global TLS settings for this server. Not applied if the server has a detour."),
           theme),
       if (_underDetour)
         Padding(

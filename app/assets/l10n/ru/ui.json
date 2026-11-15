@@ -1466,14 +1466,17 @@
   "Only if it differs from the server host": {
     "value": "Только если отличается от хоста сервера"
   },
-  "Override the global TLS settings for all servers of this folder.": {
-    "value": "Переопределяет глобальные настройки TLS для всех серверов этой папки."
+  "Override the global TLS settings for all servers of this folder. Not applied to servers with a detour.": {
+    "value": "Переопределяет глобальные настройки TLS для всех серверов этой папки. К серверам с detour не применяется."
   },
-  "Override the global TLS settings for all servers of this subscription.": {
-    "value": "Переопределяет глобальные настройки TLS для всех серверов этой подписки."
+  "Override the global TLS settings for all servers of this subscription. Not applied to servers with a detour.": {
+    "value": "Переопределяет глобальные настройки TLS для всех серверов этой подписки. К серверам с detour не применяется."
   },
   "Override the global TLS settings for this server.": {
     "value": "Переопределяет глобальные настройки TLS для этого сервера."
+  },
+  "Override the global TLS settings for this server. Not applied if the server has a detour.": {
+    "value": "Переопределяет глобальные настройки TLS для этого сервера. К серверу с detour не применяется."
   },
   "Password": {
     "value": "Пароль"

@@ -425,8 +425,8 @@
  "Split handshake into multiple TLS records (try this first)": {
   "value": "把握手拆成多个 TLS 记录（建议先试这个）"
  },
- "Splits the TLS handshake so it carries no single-packet signature. Default for all servers; override per server, folder or subscription.": {
-  "value": "拆分 TLS 握手，使其不再具有单包特征。对所有服务器生效的默认值；可按服务器、文件夹或订阅单独覆盖。"
+ "Splits the TLS handshake so it carries no single-packet signature. Default for all servers; override per server, folder or subscription. Not applied to servers with a detour: there the core's sniff guard decides.": {
+  "value": "拆分 TLS 握手，使其不再具有单包特征。对所有服务器生效的默认值；可按服务器、文件夹或订阅单独覆盖。不适用于带 detour 的服务器：此时由核心的嗅探防护决定。"
  },
  "Stack": {
   "value": "协议栈"
