@@ -111,6 +111,30 @@ void main() {
     expect(find.text(_unapplied), findsOneWidget);
   });
 
+  testWidgets('выбор detour в настройках — пометка появляется сразу',
+      (tester) async {
+    final sub = await pumpWith(tester, DetourPolicy.defaults);
+    expect(find.textContaining('Tested through'), findsNothing);
+    sub.overrideDetour = const NodeLink(tag: 'Proxy');
+    await tester.pump();
+    expect(find.text('Tested through Proxy.'), findsOneWidget);
+  });
+
+  testWidgets(
+      'хвост None (use_detour_servers=false + override, APPEND) — пометки '
+      'нет, и Settings не рисует путь через цель', (tester) async {
+    await pumpWith(
+        tester,
+        const DetourPolicy(
+            useDetourServers: false, overrideDetour: NodeLink(tag: 'Proxy')));
+    expect(find.textContaining('Tested through'), findsNothing);
+    expect(find.text(_unapplied), findsNothing);
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+    expect(find.text('None — nodes connect directly'), findsOneWidget);
+    expect(find.textContaining('Phone →'), findsNothing);
+  });
+
   testWidgets('detour на узел сервера — «Tested through», проба через цель',
       (tester) async {
     await pumpWith(tester,
