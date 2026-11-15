@@ -225,6 +225,21 @@ class SubscriptionEntry extends ChangeNotifier {
         l.lastNodeCount > 0;
   }
 
+  /// §734 (issue #219) — файловая подписка, чьего текста на устройстве нет:
+  /// после восстановления из бэкапа (бэкап хранит настройки подписки, а не
+  /// содержимое — решение владельца), на другом телефоне, после
+  /// переустановки. Обновить её нечем — Android не даёт перечитать файл, —
+  /// поэтому UI просит выбрать файл заново (Edit source), а не «Update».
+  /// В отличие от [nodesNotLoaded] не требует `last_node_count > 0`: у
+  /// файловой подписки без текста других источников узлов нет.
+  bool get fileNeedsRepick {
+    final l = _list;
+    return _bodyCacheMissing &&
+        l is SubscriptionServers &&
+        isFileSubscription(l.url) &&
+        l.nodes.isEmpty;
+  }
+
   @visibleForTesting
   void debugMarkBodyCacheMissing() => _markBodyCacheMissing();
 

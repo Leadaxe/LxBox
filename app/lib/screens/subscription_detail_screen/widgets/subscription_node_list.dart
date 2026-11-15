@@ -31,6 +31,8 @@ class SubscriptionNodeList extends StatelessWidget {
     this.tagPrefix = '',
     this.notLoaded = false,
     this.onUpdate,
+    this.fileMissing = false,
+    this.onChooseFile,
     this.probeDetourOf,
   });
 
@@ -43,6 +45,11 @@ class SubscriptionNodeList extends StatelessWidget {
 
   /// §615 — ручное обновление подписки (тот же путь, что Refresh now).
   final VoidCallback? onUpdate;
+
+  /// §734 — файловая подписка без текста на устройстве: вместо Update —
+  /// объяснение и выбор файла заново ([onChooseFile] = Edit source).
+  final bool fileMissing;
+  final VoidCallback? onChooseFile;
 
   /// §392 — префикс тегов контейнера, нужен экрану разбора: диагностика при
   /// включённом VPN адресует узел его display-тегом из боевого конфига.
@@ -115,6 +122,31 @@ class SubscriptionNodeList extends StatelessWidget {
 
     if (nodes == null || nodes.isEmpty) {
       if (loading) return const SizedBox.shrink();
+      if (fileMissing) {
+        return Center(
+          key: const ValueKey('nodes-file-missing'),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  getLocalText.s(
+                      "This subscription was added from a file, and the file is not on this device. A backup keeps subscription settings, not their contents, and Android does not let the app read the file again. Choose the file again to load its servers."),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                FilledButton.tonalIcon(
+                  key: const ValueKey('nodes-file-missing-choose'),
+                  onPressed: onChooseFile,
+                  icon: const Icon(Icons.insert_drive_file_outlined, size: 18),
+                  label: Text(getLocalText.s("Pick file...")),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
       if (notLoaded) {
         return Center(
           key: const ValueKey('nodes-not-loaded'),

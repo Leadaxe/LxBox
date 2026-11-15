@@ -3372,7 +3372,11 @@ class SubscriptionController extends ChangeNotifier {
     if (isFile && prefetched == null) {
       final body = await HttpCache.loadBody(list.url);
       if (body == null || body.isEmpty) {
-        AppLog.I.debug('Skip fetch (file subscription): no cached snapshot');
+        // §734 — раньше пропуск молчал (debug): пользователь жал Update и не
+        // видел ничего. Признак [SubscriptionEntry.fileNeedsRepick] уже
+        // поставила ensureHydrated выше; UI по нему просит выбрать файл.
+        AppLog.I.warning('Update skipped for file subscription "${list.name}": '
+            'its file is not on this device — choose it again via Edit source');
         return false;
       }
       prefetched =

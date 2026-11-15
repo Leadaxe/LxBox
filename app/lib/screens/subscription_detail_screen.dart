@@ -26,7 +26,8 @@ import '../widgets/probe_detour_note.dart';
 import '../widgets/user_agent_dialog.dart';
 import '../services/url_launcher.dart';
 import 'probe_gate_mixin.dart';
-import 'subscriptions_screen/entry_context_menu.dart' show showEditSourceDialog;
+import 'subscriptions_screen/entry_context_menu.dart'
+    show showEditSourceDialog, showFileRepickSnack;
 import 'subscription_detail_screen/detour_mode.dart';
 import 'subscription_detail_screen/subscription_detail_format.dart';
 import 'subscription_detail_screen/tag_prefix_cascade.dart';
@@ -878,6 +879,9 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
                   // §615 — тела в кэше нет: Update вместо «No nodes found».
                   notLoaded: entry.nodesNotLoaded,
                   onUpdate: _refreshNow,
+                  // §734 — файла на устройстве нет: выбрать заново.
+                  fileMissing: entry.fileNeedsRepick,
+                  onChooseFile: _editSource,
                 ),
               ),
             ],
@@ -1187,6 +1191,8 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
     await widget.controller.updateAt(idx);
     if (!mounted) return;
     setState(() {});
+    // §734 — обновить файловую подписку без файла нечем: говорим, что делать.
+    if (widget.entry.fileNeedsRepick) showFileRepickSnack(context);
   }
 
   /// §393 A6 — префикс допечатан: переписать литеральные вхождения старого

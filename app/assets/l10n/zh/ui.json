@@ -3789,6 +3789,15 @@
   "Pick file...": {
     "value": "选择文件…"
   },
+  "Choose the file again": {
+    "value": "请重新选择文件"
+  },
+  "This subscription was added from a file, and the file is not on this device. A backup keeps subscription settings, not their contents, and Android does not let the app read the file again. Choose the file again to load its servers.": {
+    "value": "此订阅是从文件添加的，但该文件不在此设备上。备份只保存订阅设置，不保存其内容，而 Android 不允许应用再次读取该文件。请重新选择文件以加载服务器。"
+  },
+  "The file of this subscription is not on this device. Choose it again in Edit source": {
+    "value": "此订阅的文件不在此设备上。请在“编辑来源”中重新选择"
+  },
   "Pin AUTO to top": {
     "value": "将 AUTO 置顶"
   },
