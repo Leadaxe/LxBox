@@ -1061,6 +1061,15 @@ finds the cycle, the VPN does not start, and the **Routing loop — VPN not
 started** window opens with the list of culprits. Tapping a culprit takes you
 to its source: change or remove the detour there, and the loop breaks.
 
+If the detour target is unavailable — the direction is turned off, the server
+was deleted, renamed, or disappeared from its subscription after an update —
+L×Box builds the config without that detour. The server stays in the list and
+connects directly, and a ⚠ `Hop <target> unavailable: hop removed` appears in
+the source list on its subscription, folder or server and on the node's own
+card. To get the path through the detour back, turn the direction on, restore
+the server or pick another target; if a direct connection is fine, remove the
+detour.
+
 ### A direction with Use as detour serves as a switchable intermediate server
 
 The **Use as detour** checkbox in the direction editor lets you pick this

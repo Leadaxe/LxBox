@@ -29,8 +29,9 @@ such links.
 Principles the feature protects:
 
 - **A reference to a hop never silently turns into a direct connection.** A
-  node whose detour reference did not resolve does not get into the config;
-  a chain without a hop is a different route, so it drops out entirely
+  node whose detour target is unavailable stays in the config without the
+  detour and carries a warning on the node and on its source (task 739,
+  owner's decision 2026-11-16); a chain without a hop is a different route, so it drops out entirely
   instead of being shortened at build time.
 - **Links do not bring down the whole config.** Rings and dangling
   references are fixed by the build by degrading one element with a
@@ -268,3 +269,9 @@ Direction as a detour layer moved to [026-DIRECTIONS](../026-DIRECTIONS/FEATURE.
   dangling detour — fail-closed. Today a `detour` in a node body pointing at a
   missing tag and a loop broken by the sanitizer send the node direct
   (fail-open); that is a divergence from P1, closed by a task (audit 591).
+- Owner's decision 2026-11-16 (task 739) replaces it for an unavailable
+  target: «if the detour is not available we build without it and give ⚠» —
+  a node dropped silently is not understandable, a kept node with ⚠ is. The
+  detour is removed, the node stays, code `detour_unavailable` goes to the
+  node and its source. A detour onto itself and a ring of references still
+  drop the node; chains are untouched.

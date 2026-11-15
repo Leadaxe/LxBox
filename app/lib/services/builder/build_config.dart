@@ -459,9 +459,9 @@ Future<BuildResult?> _buildConfig({
       if (p.selectorMembers.isNotEmpty || p.autoMembers.isNotEmpty)
         ...p.replace.names,
   ]);
-  // §439 — второй проход: detour-ссылки → финальные теги. Fail-closed:
-  // носитель, чья ссылка не разрешилась (и каскадом — кто ходил через него,
-  // кольцо — все участники), выпадает из конфига, а не уходит напрямую.
+  // §439 / §739 — второй проход: detour-ссылки → финальные теги. Ссылка не
+  // разрешилась — detour снят, носитель остаётся (код `detour_unavailable`);
+  // ссылка на себя и кольцо — носители выпадают.
   final detourReport = resolveDeferredDetours(ctx.deferredDetours, linkTargets);
   ctx.dropEntries(detourReport);
 
@@ -502,11 +502,11 @@ Future<BuildResult?> _buildConfig({
   replaceBuild.dropped.addAll(replaceNames.where((n) =>
       !replaceBuild.emitted.contains(n) && !conflictNames.contains(n)));
 
-  // §74 п.4 — detour на свёртку, опустевшую только ПОСЛЕ отбраковок (ссылка
-  // разрешилась корневым именем, а группа не написана): носитель выпадает
-  // (fail-closed), каскадом — кто ходил через него; напрямую он не идёт.
-  final foldDetourLines = _dropCarriersOfDroppedReplaces(
-      ctx, replaceBuild.dropped, linkTargets);
+  // §74 п.4 / §739 — detour на свёртку, опустевшую только ПОСЛЕ отбраковок
+  // (ссылка разрешилась корневым именем, а группа не написана): носитель
+  // остаётся, висячий detour снимет граф-санитайзер с кодом
+  // `detour_unavailable`.
+  _markDroppedReplaces(replaceBuild.dropped, linkTargets);
 
   // Warnings собираем отдельно прямым обходом (ctx их не знает).
   // §435 — кроме строк, которые `ServerList.build` отдал через `ctx.warn`.
@@ -520,7 +520,6 @@ Future<BuildResult?> _buildConfig({
     // `replace_group_empty`) строкой по тексту реестра; сами коды — в
     // [BuildResult.buildCodes].
     for (final w in buildCodes) w.renderEn(),
-    ...foldDetourLines,
   ];
   for (final list in lists) {
     if (!list.enabled) continue;
@@ -1021,12 +1020,15 @@ Future<BuildResult?> _buildConfig({
   // остаётся последним рубежом на неразруленное.
   final graphCodes = <RegistryWarning>[];
   final detourThroughGroup = <(String, String)>[];
+  final detourUnavailable = <(String, String)>[...detourReport.unavailable];
   emitWarnings.addAll(sanitizeOutboundGraph(
     config,
     directionTags: {for (final c in directions) c.tag},
     onDefaultDropped: graphCodes.add,
     onDetourThroughGroup: (node, group) =>
         detourThroughGroup.add((node, group)),
+    onDetourUnavailable: (node, target) =>
+        detourUnavailable.add((node, target)),
   ));
   // §612 (контракт 1.1.113) — `node_detour_through_group`: одна запись на
   // пару (источник, группа), адресат — источник узла; запись ложится и в
@@ -1035,10 +1037,23 @@ Future<BuildResult?> _buildConfig({
     for (final list in lists)
       for (final n in list.nodes) ?ctx.emittedTagByNode[n]: list,
   };
-  final detourCodes = _nodeDetourThroughGroupCodes(
-    detourThroughGroup,
-    sourceOfTag: sourceOfTag,
-  );
+  // §739 (контракт 1.1.171) — `detour_unavailable`: цель detour недоступна,
+  // detour снят, узел остался и ходит напрямую. Та же адресация: одна запись
+  // на пару (источник, цель), бейдж источника и карточка каждого узла.
+  final detourCodes = [
+    ..._sourceNodeCodes(
+      detourThroughGroup,
+      code: kNodeDetourThroughGroupCode,
+      subjectParam: 'group',
+      sourceOfTag: sourceOfTag,
+    ),
+    ..._sourceNodeCodes(
+      detourUnavailable,
+      code: kDetourUnavailableCode,
+      subjectParam: 'target',
+      sourceOfTag: sourceOfTag,
+    ),
+  ];
   // §615 — те же записи по `id` источника: бейдж строки подписки/папки.
   final sourceBuildCodes = <String, List<RegistryWarning>>{};
   for (final (w, tags) in detourCodes) {
@@ -1157,21 +1172,40 @@ List<PresetNode> _collectPresetNodes(List<ServerList> lists, _BuildCtx ctx) {
 /// которые своим detour ходят через неё же (правило 4 граф-санитайзера).
 const kNodeDetourThroughGroupCode = 'node_detour_through_group';
 
+/// §739 (контракт 1.1.171) — код записи: цель detour источника или узла в
+/// собранном конфиге недоступна (правило 1 граф-санитайзера), detour снят,
+/// узлы остались в конфиге и ходят напрямую.
+const kDetourUnavailableCode = 'detour_unavailable';
+
 /// §612 — строка отчёта сборки для кода [w]: заголовок реестра, узлы (у
 /// `node_detour_through_group` — его `tags`) и код в скобках, по которому
 /// запись ищется в логе (как у `group_member_dropped`).
 String _buildCodeLine(RegistryWarning w) {
-  final tags = w.code == kNodeDetourThroughGroupCode ? w.params['tags'] : null;
+  var tags = w.code == kNodeDetourThroughGroupCode ||
+          w.code == kDetourUnavailableCode
+      ? w.params['tags']
+      : null;
+  // §377 — подписка на сотню узлов с одним недоступным detour: в строке
+  // отчёта первые пять имён и счётчик остатка (в параметре кода — все).
+  if (tags != null && w.code == kDetourUnavailableCode) {
+    const shown = 5;
+    final names = tags.split(', ');
+    if (names.length > shown) {
+      tags = '${names.take(shown).join(', ')}, and ${names.length - shown} more';
+    }
+  }
   return '${w.renderEn()}${tags == null ? '' : ': $tags'} [${w.code}]';
 }
 
-/// §612 — пары «узел, группа» правила 4 → записи
-/// [kNodeDetourThroughGroupCode], одна на пару (источник, группа), вместе с
-/// финальными тегами её узлов. Источник узла — по [sourceOfTag] (финальный
+/// §612 / §739 — пары «узел, предмет» (группа правила 4 либо недоступная цель
+/// правила 1) → записи [code], одна на пару (источник, предмет), вместе с
+/// финальными тегами её узлов; предмет ложится в параметр [subjectParam]. Источник узла — по [sourceOfTag] (финальный
 /// тег → источник), его имя — [RegistryWarning.ownerTag]; у узла без
 /// источника — запись без адреса. Порядок — первого появления пары.
-List<(RegistryWarning, List<String>)> _nodeDetourThroughGroupCodes(
+List<(RegistryWarning, List<String>)> _sourceNodeCodes(
   List<(String, String)> pairs, {
+  required String code,
+  required String subjectParam,
   required Map<String, ServerList> sourceOfTag,
 }) {
   final byKey = <(String, String), List<String>>{};
@@ -1189,9 +1223,9 @@ List<(RegistryWarning, List<String>)> _nodeDetourThroughGroupCodes(
     for (final e in byKey.entries)
       (
         RegistryWarning(
-          code: kNodeDetourThroughGroupCode,
+          code: code,
           params: {
-            'group': e.key.$2,
+            subjectParam: e.key.$2,
             'count': '${e.value.length}',
             'tags': e.value.join(', '),
           },
@@ -1719,51 +1753,12 @@ void _substituteVars(dynamic obj, VarResolver resolve) {
   walk(obj, resolve);
 }
 
-/// §74 п.4 — носители, чей `detour` (уже разрешённый в финальный тег)
-/// указывает на имя свёртки из [dropped]: группа не написана, и узел обязан
-/// выпасть, а не пойти напрямую (fail-closed). Каскад до неподвижной точки:
-/// кто ходил через выпавшего носителя, выпадает сам. Выпавшие теги
-/// помечаются в [targets] — позиции цепочек на них не разрешатся.
-/// Возвращает строки отчёта сборки, по одной на свёртку.
-List<String> _dropCarriersOfDroppedReplaces(
-  _BuildCtx ctx,
-  Set<String> dropped,
-  NodeLinkTargets targets,
-) {
-  if (dropped.isEmpty) return const [];
+/// §74 п.4 / §739 — свёртки из [dropped] группу не написали. Их имена
+/// помечаются в [targets] выпавшими: позиции цепочек на них не разрешатся.
+/// Носители, чей `detour` указывает на такое имя, до §739 выпадали
+/// (fail-closed); теперь остаются: висячий `detour` снимает правило 1
+/// граф-санитайзера и ставит код `detour_unavailable` (контракт 1.1.171).
+void _markDroppedReplaces(Set<String> dropped, NodeLinkTargets targets) {
+  if (dropped.isEmpty) return;
   targets.markDropped(dropped);
-  final entries = <SingboxEntry>[...ctx.outbounds, ...ctx.endpoints];
-  final gone = <String>{...dropped};
-  final carriersBy = <String, List<String>>{};
-  final removed = <SingboxEntry>[];
-  var changed = true;
-  while (changed) {
-    changed = false;
-    for (final e in entries) {
-      if (removed.contains(e)) continue;
-      final d = e.map['detour'];
-      if (d is! String || !gone.contains(d)) continue;
-      removed.add(e);
-      gone.add(e.tag);
-      // Корень причины — имя свёртки: каскад пишется под той же строкой.
-      final root = dropped.contains(d)
-          ? d
-          : carriersBy.entries
-                  .firstWhere((c) => c.value.contains(d),
-                      orElse: () => MapEntry(d, const []))
-                  .key;
-      carriersBy.putIfAbsent(root, () => []).add(e.tag);
-      changed = true;
-    }
-  }
-  if (removed.isEmpty) return const [];
-  ctx.dropRegistryEntries(removed);
-  targets.markDropped(removed.map((e) => e.tag));
-  return [
-    for (final c in carriersBy.entries)
-      '${c.value.length == 1 ? 'Node "${c.value.single}" was' : '${c.value.length} nodes (${c.value.take(5).map((t) => '"$t"').join(', ')}${c.value.length > 5 ? ', and ${c.value.length - 5} more' : ''}) were'} '
-          'skipped: the detour goes through replace group "${c.key}", which '
-          'was not built. A node whose detour does not resolve is not '
-          'emitted, so its traffic never goes direct.',
-  ];
 }

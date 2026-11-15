@@ -700,8 +700,8 @@ with a warning rather than hand the core a file it will reject"
 
 | Check | Sanitiser | User sees | Code | Why | Task |
 |---|---|---|---|---|---|
-| `detour` to a non-existent tag (a detour that came inside a node body; storage links are resolved earlier, fail-closed — §4.4a) | `detour` key removed, node goes direct | `emitWarnings`, aggregated per target (first 5 names + count) | `:304-314`, render `:792` | any dangling reference is fatal for the config **as a whole**, and sing-box names not the culprit but the first outbound referencing it (`dependency[X] not found for outbound[Y]`) | §393 A4 |
-| Same, but the target was removed by the sanitiser itself | separate bucket, different text | `emitWarnings` ("was left with no members and removed during sanitation") | `:310-312`, `:803-806` | "referenced missing X" would be a lie sending the user to hunt a broken subscription instead of what happened | §393 A4 |
+| `detour` to a non-existent tag (a detour that came inside a node body; storage links are resolved earlier, fail-closed — §4.4a) | `detour` key removed, node goes direct | registry code `detour_unavailable` per source × target (task 739): source badge, node card, `emitWarnings` line; a Direction that is turned off lands here too | `:304-314`, render `:792` | any dangling reference is fatal for the config **as a whole**, and sing-box names not the culprit but the first outbound referencing it (`dependency[X] not found for outbound[Y]`) | §393 A4 |
+| Same, but the target was removed by the sanitiser itself | separate bucket, different text | same code `detour_unavailable` (task 739) | `:310-312`, `:803-806` | "referenced missing X" would be a lie sending the user to hunt a broken subscription instead of what happened | §393 A4 |
 | Ghost members of a `selector`/`urltest` | excluded from the roster | `emitWarnings` | `:382-402` | the core rejects the config on a dangling member | §393 A4 |
 | Group emptied **and** it is a Direction | not dropped: roster becomes `[block, direct-out]`, `default = block` | `emitWarnings` | `:417-430` | removing it would dangle `route.rules[].outbound`; blocking is safer than releasing traffic outside the VPN | §393 A4 |
 | Group emptied, not a Direction | entry dropped whole | `emitWarnings` | `:432`, `:148-152` | cascade cleanup | §393 A4 |
@@ -784,14 +784,16 @@ with a warning rather than hand the core a file it will reject"
 Since 2.23.3 `detour` of a source or folder member, chain `hops[]` and the explicit
 members of an auto node are NodeLinks `{folder_id?, tag}` (D-112). They resolve to final
 tags only at build, after every source has emitted (`build_config.dart:289-294`). The rule
-is fail-closed (NODE_LINK §5.1): an unresolved link never becomes a direct connection.
+For chain hops and auto-node members the rule is fail-closed (NODE_LINK §5.1). For a `detour`
+link the rule changed in task 739 (contract 1.1.171, owner's decision 2026-11-16): an unavailable
+target removes the detour, the node stays and is marked with `detour_unavailable`.
 
 | Check | Sanitiser | User sees | Code | Why | Task |
 |---|---|---|---|---|---|
-| Empty link / container gone / no node with that raw tag / target node skipped by this build / root tag not among nodes, Directions and service tags | detour carrier **dropped from the config** with its own detour hops | `emitWarnings`, one line per link and reason: one carrier keeps `Node "X" was skipped: its detour … did not resolve`, several are listed as the first five names and `and N more` (§377) | `node_link_resolve.dart:120-152`, `build_config.dart:293-294` | before §439 the graph sanitiser removed a dangling `detour` key and the node went direct — traffic left the route the user set | §439 |
+| Empty link / container gone / no node with that raw tag / target node skipped by this build / root tag not among nodes, Directions and service tags | `detour` not written, carrier **stays in the config** and connects directly | registry code `detour_unavailable` (one record per source × target): badge on the source row, node card, line in `emitWarnings` with the first five names and `and N more` | `node_link_resolve.dart` (`resolveDeferredDetours`), `build_config.dart` (`_sourceNodeCodes`) | a node dropped silently is not understandable to the user, a kept node with ⚠ is; before 739 the carrier was dropped (§439) | §739 |
 | Detour points at the node itself | carrier dropped | `emitWarnings` | `node_link_resolve.dart:233-236` | the core rejects a self-dependency | §439 |
 | Ring of detour links | **every** participant dropped | `emitWarnings` | `node_link_resolve.dart:240-257` | no participant can be picked as "the culprit" without guessing | §439 |
-| A carrier's target was dropped | the carrier drops too, until a fixed point | `emitWarnings` | `node_link_resolve.dart:259-276` | going through a node that is not in the config is the same dangling reference | §439 |
+| A carrier's target was dropped (self-reference or ring) | the carrier stays without the detour, no cascade | registry code `detour_unavailable` | `node_link_resolve.dart` (`resolveDeferredDetours`) | same case as an unavailable target | §739 |
 | Pair carrying a group's final tag instead of its raw tag (S3) | lowered to the raw tag when exactly one group matches | silent | `node_link_resolve.dart:130-134` | tolerant read agreed with the launcher; with two candidates guessing would pick the wrong group | §439 |
 | Chain position link does not resolve | **chain dropped whole** | `emitWarnings`, `chain_hop_missing` with the resolve reason | `chain_nodes.dart:136-165` | as for an unknown root tag (§393 C3): a route without a hop is a different route | §439 |
 | Auto node member link outside its container or without a node | member dropped | `emitWarnings` (`Auto node "…": member … was dropped`) | `server_list_build.dart:271-300` | a group does not leave its container (§322 §2); a disabled or vanished member has one outcome | §439 |

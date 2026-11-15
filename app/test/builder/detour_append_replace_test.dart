@@ -245,8 +245,8 @@ void main() {
           reason: 'целевой outbound эмитится как prefixed-form "Home WG"');
     });
 
-    test('bare-form override (старый баг) → узел выпадает fail-closed, конфиг '
-        'валиден (§439, NODE_LINK §5.1)', () async {
+    test('bare-form override (старый баг) → detour снят, узел остаётся, код '
+        'detour_unavailable (§739)', () async {
       final consumer = UserServer(
         id: 'consumer-bad',
         name: 'Consumer',
@@ -270,11 +270,13 @@ void main() {
 
       final outs = (result.config['outbounds'] as List).cast<Map>();
       final tags = outs.map((o) => o['tag']).toSet();
-      // §439 — корневая ссылка 'WG' не разрешается (корневой узел эмитится
-      // как 'Home WG'). Узел с неразрешённым detour не эмитится: напрямую
-      // трафик не уходит (до §439 §172 снимал detour, и узел шёл напрямую).
-      expect(tags.contains('Main'), false,
-          reason: 'носитель висячей ссылки выпадает, а не идёт напрямую');
+      // Корневая ссылка 'WG' не разрешается (корневой узел эмитится как
+      // 'Home WG'). §739 (решение владельца 16.11.2026): detour снят, узел
+      // остаётся и помечен кодом; §439 такой узел выбрасывал.
+      expect(tags.contains('Main'), true, reason: 'носитель остаётся');
+      expect(outs.firstWhere((o) => o['tag'] == 'Main').containsKey('detour'),
+          false,
+          reason: 'detour снят');
       expect(tags.contains('Home WG'), true, reason: 'цель на месте');
       expect(tags.contains('WG'), false,
           reason: 'bare "WG" не эмитится — это и есть §080 баг');
@@ -283,8 +285,8 @@ void main() {
       expect(
           result.emitWarnings,
           contains(allOf(
-            contains('Node "Main" was skipped: its detour "WG" did not resolve'),
-            contains('never goes direct'),
+            contains('Hop WG unavailable'),
+            contains('[detour_unavailable]'),
           )));
       expect(result.emitWarnings.any((w) => w.contains('Detour removed')),
           isFalse);

@@ -13,6 +13,11 @@
 - **System colors (Material You) ([task 735](docs/spec/tasks/735-material-you-system-colors.md), [#218](https://github.com/Leadaxe/LxBox/issues/218)).** App Settings → Appearance has a «System colors» switch: the app takes its accent color from the wallpaper palette, like other Android apps. It is off by default, so the look does not change until you turn it on, and it is shown only on Android 12 and newer, not on TV. Status colors (ping, online/offline) stay green and orange.
   (RU: в App Settings → Appearance появился переключатель «Системные цвета» — акцентный цвет из обоев (Material You). По умолчанию выключен, показывается на Android 12+ и не на TV; цвета статусов не меняются.)
 
+### Changed
+
+- **An unavailable detour no longer removes the server ([task 739](docs/spec/tasks/739-detour-unavailable-node-warning.md), contract 1.1.171).** When a detour target is not available — the direction is turned off, the server was deleted, renamed, or disappeared from its subscription — the config is built without that detour: the server stays and connects directly. Before, such a server either vanished from the config or went direct with only a line in the build report. Now a ⚠ «Hop … unavailable: hop removed» marks the subscription, folder or server in the source list and the node's own card. A detour onto itself and a ring of detours still drop the node; chains are unchanged.
+  (RU: недоступный detour — Направление выключено, сервер удалён, переименован или пропал из подписки — больше не убирает сервер из конфига: он остаётся и подключается напрямую, а у источника в списке и на карточке узла появляется ⚠. Раньше такой сервер либо исчезал из конфига, либо молча шёл напрямую. detour на себя и кольцо по-прежнему роняют узел, цепочки не менялись.)
+
 ### Fixed
 
 - **Test servers: the detour note and the «VPN is running» dialog ([task 738](docs/spec/tasks/738-probe-note-wording-vpn-gate-autoclose.md)).** The note under the test no longer says «of this source»: a folder node with its own detour got a line about the source. It now reads «Detour is not applied in the test», in the singular for one node. The «VPN is running» dialog closes by itself when the VPN is stopped from outside it — the notification, the tile, Automation — and the test goes on.

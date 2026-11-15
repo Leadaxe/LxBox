@@ -189,7 +189,13 @@ final class DeferredDetourReport {
     required this.droppedEntries,
     required this.droppedNodes,
     required this.warnings,
+    this.unavailable = const [],
   });
+
+  /// §739 (контракт 1.1.171) — пары «финальный тег носителя, тег цели как он
+  /// записан в ссылке»: цель недоступна, detour снят, носитель ОСТАЛСЯ в
+  /// конфиге. Сборка строит по ним код `detour_unavailable`.
+  final List<(String, String)> unavailable;
 
   /// Entries выпавших носителей — сборка убирает их из конфига.
   final Set<SingboxEntry> droppedEntries;
@@ -200,12 +206,18 @@ final class DeferredDetourReport {
   final List<String> warnings;
 }
 
-/// Второй проход detour-ссылок: финальный тег в `detour` держателя или
-/// выпадение носителя (NODE_LINK §5.1, строгость ребра «detour узла»):
+/// Второй проход detour-ссылок: финальный тег в `detour` держателя, снятый
+/// detour либо выпадение носителя:
 ///
-/// 1. ссылка не разрешилась или указывает на сам узел — носитель выпадает;
-/// 2. кольцо detour-ссылок — выпадают все участники;
-/// 3. каскад до неподвижной точки: носитель, чья цель выпала, выпадает сам.
+/// 1. ссылка не разрешилась (цель удалена, переименована, пропала из
+///    подписки, выпала из сборки) — §739, решение владельца 16.11.2026,
+///    контракт 1.1.171: detour снимается, носитель ОСТАЁТСЯ и ходит
+///    напрямую, пара уходит в [DeferredDetourReport.unavailable] (код
+///    `detour_unavailable`). До §739 носитель выпадал (fail-closed, §439);
+/// 2. ссылка указывает на сам узел — носитель выпадает;
+/// 3. кольцо detour-ссылок — выпадают все участники;
+/// 4. носитель, чья цель выпала по п. 2–3, — тот же случай п. 1: цель
+///    недоступна, detour снят, носитель остаётся.
 ///
 /// Выпавшие теги помечаются в [targets]: позиции цепочек на них не
 /// разрешатся.
@@ -219,6 +231,8 @@ DeferredDetourReport resolveDeferredDetours(
   }
   final target = <DeferredDetour, String>{};
   final reason = <DeferredDetour, String>{};
+  // §739 — носители с недоступной целью: остаются без detour.
+  final unavailable = Set<DeferredDetour>.identity();
   // Финальный тег entry → носитель, которому entry принадлежит.
   final ownerOf = <String, DeferredDetour>{};
   for (final p in pending) {
@@ -230,7 +244,7 @@ DeferredDetourReport resolveDeferredDetours(
   for (final p in pending) {
     final r = targets.resolve(p.link);
     if (!r.ok) {
-      reason[p] = r.reason;
+      unavailable.add(p);
     } else if (ownerOf[r.tag] == p) {
       reason[p] = 'the detour points at the node itself';
     } else {
@@ -240,7 +254,7 @@ DeferredDetourReport resolveDeferredDetours(
 
   // Кольца: идём по цепочке носителей от каждого; вернулись в себя — кольцо.
   for (final p in pending) {
-    if (reason.containsKey(p)) continue;
+    if (reason.containsKey(p) || unavailable.contains(p)) continue;
     final seen = <DeferredDetour>{p};
     var cur = p;
     while (true) {
@@ -261,20 +275,12 @@ DeferredDetourReport resolveDeferredDetours(
     for (final p in reason.keys)
       for (final e in p.entries) e.tag,
   };
-  var changed = true;
-  while (changed) {
-    changed = false;
-    for (final p in pending) {
-      if (reason.containsKey(p)) continue;
-      final t = target[p];
-      if (t != null && droppedTags.contains(t)) {
-        reason[p] = 'node "$t" it goes through was skipped';
-        for (final e in p.entries) {
-          droppedTags.add(e.tag);
-        }
-        changed = true;
-      }
-    }
+  // §739 — цель выпала (сама на себя / кольцо): носитель не выпадает следом,
+  // а остаётся без detour. Каскада нет: оставшийся носитель — живая цель.
+  for (final p in pending) {
+    if (reason.containsKey(p) || unavailable.contains(p)) continue;
+    final t = target[p];
+    if (t != null && droppedTags.contains(t)) unavailable.add(p);
   }
 
   // §377 — одна строка на ссылку и причину, а не на узел: папка генератора
@@ -282,7 +288,13 @@ DeferredDetourReport resolveDeferredDetours(
   final carriersByCause = <(String, String), List<String>>{};
   final droppedEntries = Set<SingboxEntry>.identity();
   final droppedNodes = Set<NodeSpec>.identity();
+  final unavailablePairs = <(String, String)>[];
   for (final p in pending) {
+    if (unavailable.contains(p)) {
+      p.holder.map.remove('detour');
+      unavailablePairs.add((p.carrier.tag, p.link.tag));
+      continue;
+    }
     final why = reason[p];
     if (why == null) {
       p.holder.map['detour'] = target[p];
@@ -302,6 +314,7 @@ DeferredDetourReport resolveDeferredDetours(
       for (final e in carriersByCause.entries)
         _unresolvedDetourLine(e.value, e.key.$1, e.key.$2),
     ],
+    unavailable: unavailablePairs,
   );
 }
 

@@ -199,17 +199,29 @@ void main() {
   });
 
   group('fail-closed', () {
-    test('узла нет в контейнере — носитель detour не эмитится', () async {
+    // §739 (контракт 1.1.171, решение владельца 16.11.2026): недоступная
+    // цель detour — detour снят, носитель ОСТАЁТСЯ, код `detour_unavailable`.
+    // До §739 носитель выпадал (fail-closed).
+    void expectUnavailable(BuildResult r, String node, String target) {
+      expect(_out(r, node), isNotNull, reason: '$node остаётся в конфиге');
+      expect(_out(r, node)!.containsKey('detour'), isFalse,
+          reason: '$node: detour снят');
+      expect(
+          r.buildCodes.where((w) =>
+              w.code == kDetourUnavailableCode &&
+              w.params['target'] == target &&
+              w.params['tags']!.split(', ').contains(node)),
+          hasLength(1),
+          reason: 'код detour_unavailable: $node → $target');
+    }
+
+    test('узла нет в контейнере — detour снят, носитель остаётся', () async {
       final r = await _build([
         _folder(),
         _root('R', detour: const NodeLink(folderId: 'f1', tag: 'ghost')),
       ]);
-      expect(_out(r, 'R'), isNull, reason: 'напрямую не уходит');
-      expect(r.emitWarnings, contains(allOf(
-        contains('Node "R" was skipped'),
-        contains('"ghost" in "F"'),
-        contains('it has no node "ghost"'),
-      )));
+      expectUnavailable(r, 'R', 'ghost');
+      expect(r.emitWarnings, contains(contains('[detour_unavailable]')));
     });
 
     test('выключенный член — тот же исход, что отсутствующий', () async {
@@ -217,8 +229,7 @@ void main() {
         _folder(bEnabled: false),
         _root('R', detour: const NodeLink(folderId: 'f1', tag: 'B')),
       ]);
-      expect(_out(r, 'R'), isNull);
-      expect(r.emitWarnings.join('\n'), contains('it has no node "B"'));
+      expectUnavailable(r, 'R', 'B');
     });
 
     test('корневая ссылка на члена папки не разрешается (NODE_LINK §5.1 № 6)',
@@ -227,9 +238,7 @@ void main() {
         _folder(),
         _root('R', detour: const NodeLink(tag: 'F A')),
       ]);
-      expect(_out(r, 'R'), isNull);
-      expect(r.emitWarnings.join('\n'),
-          contains('target "F A" is not among nodes'));
+      expectUnavailable(r, 'R', 'F A');
     });
 
     test('контейнер удалён — цепочка выпадает целиком', () async {
@@ -247,21 +256,20 @@ void main() {
           contains('the referenced source is gone'));
     });
 
-    test('каскад: цель выпала — выпадает и тот, кто ходил через неё', () async {
+    test('цель без своего detour остаётся целью — каскада нет', () async {
       final r = await _build([
         _folder(
           aDetour: const NodeLink(tag: 'ghost'),
           bDetour: const NodeLink(folderId: 'f1', tag: 'A'),
         ),
       ]);
-      expect(_out(r, 'F A'), isNull);
-      expect(_out(r, 'F B'), isNull);
-      expect(r.emitWarnings.join('\n'),
-          contains('node "F A" it goes through was skipped'));
+      // A потерял свой detour, но сам остался — B по-прежнему ходит через A.
+      expectUnavailable(r, 'F A', 'ghost');
+      expect(_out(r, 'F B')!['detour'], 'F A');
     });
 
-    test('кольцо через контейнеры — выпадают все участники, каскадом и '
-        'остальные узлы подписки', () async {
+    test('кольцо через контейнеры — участники выпадают, остальные узлы '
+        'подписки остаются без detour', () async {
       // R → N1 (пара), подписка S целиком → R (общий detour): N1 → R → N1.
       final r = await _build([
         _sub(policy: const DetourPolicy(overrideDetour: NodeLink(tag: 'R'))),
@@ -269,7 +277,8 @@ void main() {
       ]);
       expect(_out(r, 'R'), isNull);
       expect(_out(r, 'S N1'), isNull);
-      expect(_out(r, 'S N2'), isNull, reason: 'N2 ходил через выпавший R');
+      // N2 в кольце не участвует: его цель R выпала → недоступна (§739).
+      expectUnavailable(r, 'S N2', 'R');
       expect(r.emitWarnings.join('\n'), contains('loops back'));
     });
 

@@ -322,9 +322,57 @@ void main() {
           reason: 'опустевший двойник дропнут');
       expect(byTag(r, 'Relay Berlin').containsKey('detour'), isFalse,
           reason: 'detour на дропнутый двойник снят каскадом');
-      expect(r.emitWarnings, contains(contains('Detour removed')));
+      // §739 — снятый detour говорит кодом реестра, а не безадресной строкой.
+      expect(r.emitWarnings, contains(contains('[detour_unavailable]')));
+      expect(r.emitWarnings, isNot(contains(contains('Detour removed'))));
       // Сам узел уцелел и остался опцией Направления.
       expect(byTag(r, 'vpn-2')['outbounds'], ['Relay Berlin']);
+    });
+
+    test(
+        '§739 — detour источника на ВЫКЛЮЧЕННОЕ Направление: узлы остаются, '
+        'detour снят, код detour_unavailable источнику', () async {
+      final sub = vlessServer(
+          id: 'u',
+          names: ['Node A', 'Node B'],
+          policy: const DetourPolicy(overrideDetour: NodeLink(tag: 'vpn-2')));
+      final r = await buildRaw([
+        sub,
+        vlessServer(id: 'j', names: ['Jump']),
+      ], [
+        const Direction(tag: 'vpn-1', label: 'Main'),
+        const Direction(
+            tag: 'vpn-2',
+            label: 'Relay',
+            isDetour: true,
+            nodeFilter: 'Jump',
+            enabled: false),
+      ]);
+      expect(r.validation.isOk, isTrue, reason: r.validation.issues.join('\n'));
+      expect(outs(r).any((o) => o['tag'] == 'vpn-2'), isFalse,
+          reason: 'выключенного Направления в конфиге нет');
+      for (final tag in ['Node A', 'Node B']) {
+        expect(byTag(r, tag).containsKey('detour'), isFalse,
+            reason: '$tag: detour снят, узел остался');
+      }
+      expect(r.emitWarnings, isNot(contains(contains('Detour removed'))));
+      final lines =
+          r.emitWarnings.where((w) => w.contains('[detour_unavailable]'));
+      expect(lines, hasLength(1), reason: 'одна запись на пару источник × цель');
+      expect(lines.single, contains('Node A, Node B'));
+
+      final codes = r.sourceBuildCodes['u'];
+      expect(codes, hasLength(1));
+      expect(codes!.single.code, kDetourUnavailableCode);
+      expect(codes.single.params['target'], 'vpn-2');
+      expect(codes.single.params['count'], '2');
+      expect(r.sourceBuildCodes.containsKey('j'), isFalse);
+
+      // Бейдж строки источника в списке — по кодам сборки (§615).
+      final summary = entryWarningSummary(SubscriptionEntry(list: sub),
+          sourceBuildCodes: r.sourceBuildCodes);
+      expect(summary, isNotNull);
+      expect(summary!.actionableCount, 1);
     });
 
     test('транзитивный цикл через промежуточный узел — рвётся ОДНО ребро',

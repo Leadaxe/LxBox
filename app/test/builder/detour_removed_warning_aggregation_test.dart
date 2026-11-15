@@ -73,7 +73,7 @@ void main() {
     );
     return (
       lines: result.emitWarnings
-          .where((w) => w.contains('did not resolve'))
+          .where((w) => w.contains('[detour_unavailable]'))
           .toList(),
       tags: {
         for (final o in result.config['outbounds'] as List)
@@ -88,16 +88,14 @@ void main() {
 
       expect(r.lines, hasLength(1), reason: 'одна строка на target, не 138');
       final line = r.lines.single;
-      expect(line, startsWith('138 nodes ('));
-      expect(line, contains('"warp gen"'));
+      expect(line, contains('warp gen'));
       // первые пять имён + счётчик остатка
-      expect(line, contains('"Node-1"'));
-      expect(line, contains('"Node-5"'));
-      expect(line, isNot(contains('"Node-6"')));
+      expect(line, contains('Node-1,'));
+      expect(line, contains('Node-5,'));
+      expect(line, isNot(contains('Node-6,')));
       expect(line, contains('and 133 more'));
-      expect(line, contains('never goes direct'));
-      // fail-closed: ни один носитель не эмитирован
-      expect(r.tags.where((t) => t.startsWith('Node-')), isEmpty);
+      // §739 — носители остаются в конфиге без detour (до §739 выпадали).
+      expect(r.tags.where((t) => t.startsWith('Node-')), hasLength(138));
     });
 
     test('два разных отсутствующих target → две строки', () async {
@@ -107,8 +105,10 @@ void main() {
       ]);
 
       expect(r.lines, hasLength(2));
-      expect(r.lines.where((l) => l.contains('"warp gen"')), hasLength(1));
-      expect(r.lines.where((l) => l.contains('"warp gen 2"')), hasLength(1));
+      expect(r.lines.where((l) => l.contains('Hop warp gen unavailable')),
+          hasLength(1));
+      expect(r.lines.where((l) => l.contains('Hop warp gen 2 unavailable')),
+          hasLength(1));
     });
   });
 }

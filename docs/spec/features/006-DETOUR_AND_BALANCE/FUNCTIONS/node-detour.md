@@ -56,12 +56,13 @@ the config; a warning if the node dropped out.
   node that arrives in a body or via import is accepted by the build.
 - The reference is resolved in the build's second pass, when all final tags
   are known; the target may be lower in the source list.
-- Fail-closed (P1): a reference to a missing/disabled node, a deleted
-  source, itself or into a ring of references → the node is not emitted,
-  those going through it drop out in a cascade. Warning: "Node "…" was
-  skipped: its detour … did not resolve — … A node whose detour does not
-  resolve is not emitted, so its traffic never goes direct." (for several —
-  one line, the first five names and a counter).
+- Unavailable target (task 739): a reference to a missing/disabled node, a
+  turned-off Direction or a deleted source → the detour is removed, the node
+  stays in the config and connects directly; code `detour_unavailable` marks
+  the node and its source row (one record per source × target).
+- A reference to itself or into a ring of references → the node is not
+  emitted ("Node "…" was skipped: its detour … did not resolve — …"); nodes
+  that went through it keep working without the detour, with the same code.
 - Under a detour assigned by the build, the node body yields: `tls.fragment`
   (and the orphaned `fragment_fallback_delay` if there is no
   `record_fragment`) and WireGuard `listen_port` are removed with a code;

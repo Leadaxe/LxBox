@@ -33,6 +33,7 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
 - [`detour_cycle_broken`](#detour_cycle_broken) · `error` — Node dropped: detour loop through {target}
 - [`detour_target_missing`](#detour_target_missing) · `error` — Node dropped: detour target {target} not found
 - [`detour_to_group`](#detour_to_group) · `error` — Node dropped: detour target {target} is a group
+- [`detour_unavailable`](#detour_unavailable) · `warning` — Hop {target} unavailable: hop removed
 - [`detour_with_listen_port`](#detour_with_listen_port) · `warning` — {tag}: listening port removed for the hop
 - [`detour_with_tls_fragment`](#detour_with_tls_fragment) · `info` — {tag}: TLS fragmentation removed for the hop
 - [`dialer_proxy_unusable`](#dialer_proxy_unusable) · `error` — Preceding proxy {target} is unusable
@@ -549,6 +550,24 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
 - **What you can do:**
   - Point the detour at a specific node instead of a group in the source config, then refresh the subscription.
   - Pick another node from this subscription.
+
+**Where it comes from:**
+
+- Node or subscription level: no field in the registry points at this code, so it is raised while the entry as a whole is being read.
+
+<a id="detour_unavailable"></a>
+### detour_unavailable
+
+**severity:** `warning` · **params:** `target`, `count`, `tags`
+
+**Hop {target} unavailable: hop removed**
+
+- **What happened:** This source (or its node) was routed through {target}, and {target} is not available in the config. The hop was removed from {count} node(s) ({tags}): they stay in the config and now connect directly, not through {target}.
+- **Why it happens:** The hop assigned to this source or its node is not in the config: the direction was turned off, or the node serving as the hop was deleted, renamed, or disappeared from its subscription after an update.
+- **What you can do:**
+  - If the nodes must go through {target}, bring it back: turn the direction on, or restore the node.
+  - Or choose another hop for the source or the node.
+  - Or remove the hop if a direct connection is what you want.
 
 **Where it comes from:**
 

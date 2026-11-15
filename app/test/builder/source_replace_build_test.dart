@@ -258,10 +258,11 @@ void main() {
     expect(lines, hasLength(3));
   });
 
-  test('detour на свёртку, опустевшую после отбраковок: носитель выпадает',
-      () async {
-    // Члены свёртки выпадают на втором проходе ссылок (их detour в никуда),
-    // когда имя свёртки уже зарегистрировано корневой целью.
+  test('§739 — члены свёртки с недоступным detour остаются: свёртка собрана, '
+      'носитель ходит через неё', () async {
+    // До §739 члены выпадали на втором проходе ссылок (их detour в никуда),
+    // свёртка пустела и носитель выпадал следом. Теперь detour снят, члены
+    // на месте и помечены кодом.
     final folded = SubscriptionServers(
       id: 's1',
       name: 'Provider',
@@ -285,11 +286,13 @@ void main() {
     );
     final r = await build([folded, carrier]);
     expect(r.validation.isOk, true, reason: r.validation.issues.join('\n'));
-    expect(byTag(r, 'Pick'), isNull);
-    expect(byTag(r, 'C'), isNull,
-        reason: 'носитель не идёт напрямую (fail-closed)');
-    expect(r.emitWarnings.any((w) => w.contains('replace group "Pick"')),
-        isTrue);
+    expect(byTag(r, 'Pick'), isNotNull);
+    expect(byTag(r, 'C')!['detour'], 'Pick');
+    final codes = r.sourceBuildCodes['s1'];
+    expect(codes, hasLength(1));
+    expect(codes!.single.code, kDetourUnavailableCode);
+    expect(codes.single.params['target'], 'nowhere');
+    expect(codes.single.params['count'], '2');
   });
 
   test('провайдерская группа в селекторе свёртки — на своём месте в модели',
