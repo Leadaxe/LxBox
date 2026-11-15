@@ -920,7 +920,11 @@ NodeSpec? parseSingboxEntry(
   // карту дельта перенесла бы вместе с мусором, который модель отбрасывает.
   // Дефолты ядра снимаются только у тела в форме ядра (`singbox`): там автор
   // написал ровно то, что хотел, и дописанный моделью ключ ему чужой.
-  if (node != null && sanitizedFrom != null) {
+  // Ветка core-1.15: MASQUE эмитится endpoint'ом `masque-client` другой
+  // схемы, а реестр сверяет по схеме outbound `masque` — дельта вернула бы
+  // в тело `ip`/`ipv6`/`vhttp`/`idle_timeout`, которые ядро 1.15 отвергает
+  // («unknown field»). Пока реестр не знает masque-client — без дельты.
+  if (node != null && sanitizedFrom != null && node is! MasqueSpec) {
     node.bodyDelta = bodyDeltaFor(
       entry,
       node.emitRaw(TemplateVars.empty).map,
