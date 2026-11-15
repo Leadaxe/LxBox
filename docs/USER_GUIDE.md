@@ -311,6 +311,10 @@ of servers. L×Box looks after that list this way:
 A file subscription is a server list imported from a file instead of a
 link. It behaves like a subscription: many servers under one name. It does
 not update on its own; you supply a new file through **Edit source**.
+A backup keeps your sources' settings, not their contents: after a restore a
+URL subscription downloads its servers on the first update, and a file
+subscription needs its file picked again through **Edit source** — Android
+does not let the app keep reading a file from the phone.
 
 The **Get WARP** item in the ⋮ menu of the Servers screen registers
 Cloudflare WARP for free and adds it as a server — for those without a

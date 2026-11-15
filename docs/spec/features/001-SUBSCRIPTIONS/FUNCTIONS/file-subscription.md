@@ -69,6 +69,10 @@ status OK; the snapshot of the previous source is deleted.
 
 - There is no persistent access to the file on disk: a file subscription can be updated
   only by choosing the file again.
+- The file's text is not part of a backup (owner decision 2026-11-15,
+  [#219](https://github.com/Leadaxe/LxBox/issues/219), see the feature's Boundaries): restored on another phone or after a
+  reinstall, a file subscription has no nodes until the file is chosen again
+  via "Edit source".
 - Parsing the file contents — [002-NODE_IMPORT](../../002-NODE_IMPORT/FEATURE.md).
 
 ## Revisions
