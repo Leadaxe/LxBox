@@ -31,7 +31,7 @@ import 'services/version_info.dart';
 import 'services/workspaces/workspace_controller.dart';
 import 'services/workspaces/workspace_store.dart';
 import 'services/wifi_history_listener.dart';
-import 'widgets/tv_scroll_behavior.dart';
+import 'widgets/mouse_drag_scroll_behavior.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -246,14 +246,6 @@ List<DeviceOrientation> preferredOrientationsFor({
         ? const <DeviceOrientation>[]
         : const [DeviceOrientation.portraitUp];
 
-/// §736 — поведение прокрутки приложения: на TV списки тянутся и
-/// указателем-«мышью» (пульт в режиме мыши, issue #220); на телефоне —
-/// штатное Flutter (null). Признак TV к runApp уже в кеше
-/// [UrlLauncher.isTelevision] — его ждёт [applyAllowRotationSetting].
-@visibleForTesting
-ScrollBehavior? scrollBehaviorFor({required bool isTelevision}) =>
-    isTelevision ? const TvScrollBehavior() : null;
-
 /// Fallback-widget для UI-ошибок (replace Flutter's red screen).
 /// Показывает краткое описание + подсказку открыть Debug → Logs.
 class _FallbackErrorWidget extends StatelessWidget {
@@ -394,9 +386,8 @@ class LxBoxApp extends StatelessWidget {
             useMaterial3: true,
           ),
           themeMode: themeNotifier.mode,
-          scrollBehavior: scrollBehaviorFor(
-            isTelevision: UrlLauncher.isTelevisionCached,
-          ),
+          // §736 — списки тянутся и указателем-«мышью» (пульт TV, issue #220).
+          scrollBehavior: const MouseDragScrollBehavior(),
           // §279 — ВСЕГДА подаём явную локаль (effective уже резолвит
           // 'system' по языку устройства через PlatformDispatcher). Ранее
           // 'system' давал locale: null, и Flutter полагался на собственный

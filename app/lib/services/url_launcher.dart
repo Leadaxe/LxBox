@@ -173,11 +173,6 @@ class UrlLauncher {
   @visibleForTesting
   static void resetTelevisionCacheForTesting() => _isTelevision = null;
 
-  /// §736 — синхронный признак TV для сборки виджетов: кеш [isTelevision],
-  /// до первого ответа канала — false. На старте кеш заполняет
-  /// `applyAllowRotationSetting` до runApp.
-  static bool get isTelevisionCached => _isTelevision ?? false;
-
   /// §622 — устройство в режиме телевизора (Android TV, Google TV).
   ///
   /// Нативно: `UI_MODE_TYPE_TELEVISION` или `FEATURE_LEANBACK`; ответ

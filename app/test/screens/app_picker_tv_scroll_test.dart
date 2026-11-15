@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lxbox/main.dart' show scrollBehaviorFor;
+import 'package:lxbox/widgets/mouse_drag_scroll_behavior.dart';
 import 'package:lxbox/screens/app_picker_screen.dart';
 import 'package:lxbox/services/app_info_cache.dart';
 import 'package:lxbox/services/l10n/locale_controller.dart';
@@ -44,14 +44,14 @@ void main() {
     AppInfoCache.resetForTest();
   });
 
-  Widget host({required bool tv}) => MaterialApp(
+  Widget host() => MaterialApp(
     localizationsDelegates: const [
       GlobalMaterialLocalizations.delegate,
       GlobalWidgetsLocalizations.delegate,
       GlobalCupertinoLocalizations.delegate,
     ],
     supportedLocales: LocaleController.supportedLocales,
-    scrollBehavior: scrollBehaviorFor(isTelevision: tv),
+    scrollBehavior: const MouseDragScrollBehavior(),
     home: const AppPickerScreen(selected: {}),
   );
 
@@ -81,7 +81,7 @@ void main() {
   testWidgets('D-pad ↓ из поля поиска уводит фокус в список, ↑ возвращает', (
     tester,
   ) async {
-    await tester.pumpWidget(host(tv: true));
+    await tester.pumpWidget(host());
     await settle(tester);
 
     await tester.tap(find.byType(TextField));
@@ -123,10 +123,10 @@ void main() {
     expect(focusInSearch(tester), isTrue, reason: '«вверх» возвращает в поиск');
   });
 
-  testWidgets('TV: перетаскивание указателем-мышью прокручивает список', (
+  testWidgets('перетаскивание указателем-мышью прокручивает список', (
     tester,
   ) async {
-    await tester.pumpWidget(host(tv: true));
+    await tester.pumpWidget(host());
     await settle(tester);
     expect(listPosition(tester).pixels, 0);
 
@@ -139,28 +139,15 @@ void main() {
     expect(listPosition(tester).pixels, greaterThan(0));
   });
 
-  testWidgets('телефон: штатное поведение Flutter не тронуто', (tester) async {
-    expect(scrollBehaviorFor(isTelevision: false), isNull);
-    await tester.pumpWidget(host(tv: false));
+  testWidgets('палец по-прежнему тянет список', (tester) async {
+    await tester.pumpWidget(host());
     await settle(tester);
 
     await tester.dragFrom(
       tester.getCenter(find.byType(ListView)),
       const Offset(0, -300),
-      kind: PointerDeviceKind.mouse,
     );
     await settle(tester);
-    expect(
-      listPosition(tester).pixels,
-      0,
-      reason: 'на телефоне мышь выделяет, а не тянет (как было)',
-    );
-
-    await tester.dragFrom(
-      tester.getCenter(find.byType(ListView)),
-      const Offset(0, -300),
-    );
-    await settle(tester);
-    expect(listPosition(tester).pixels, greaterThan(0), reason: 'палец тянет');
+    expect(listPosition(tester).pixels, greaterThan(0));
   });
 }
