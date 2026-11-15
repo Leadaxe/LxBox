@@ -553,10 +553,7 @@
             }]
           }
         }
-      ],
-      "#if masque_idle_timeout": [{"#not": {"@masque_idle_timeout": "off"}}, {
-        "masque": {"idle_timeout": "@masque_idle_timeout"}
-      }]
+      ]
     },
     "log": {
       "level": "@log_level",

@@ -412,47 +412,39 @@ Endpoint emitWireguard(WireguardSpec s, TemplateVars vars) {
 
 // ─── §130 MASQUE ────────────────────────────────────────────────────────────
 
-/// §130 — MASQUE эмитится как **Outbound** (не Endpoint). Плоская структура
-/// по `option.MASQUEOutboundOptions` ядра: `ip`/`ipv6` берутся из
-/// [MasqueSpec.localAddresses] по признаку `:` (v6). `vhttp` = версия HTTP h3/h2.
-Outbound emitMasque(MasqueSpec s, TemplateVars vars) {
-  String? ip, ipv6;
-  for (final a in s.localAddresses) {
-    if (a.contains(':')) {
-      ipv6 ??= a;
-    } else {
-      ip ??= a;
-    }
-  }
-  // §393 — схема ядра: версия HTTP под ключом `vhttp`, TLS-опции во вложенном
-  // `tls{}`. Старые имена (`network`/`sni`) НЕ пишем: они ещё принимаются
-  // ядром, но дают deprecation-варнинг на каждый outbound, а одновременная
-  // запись старого и нового имени с разными значениями — fatal.
+/// §130 / ветка core-1.15 — на линии ядра 1.15 собственный outbound форка
+/// `type: masque` удалён; MASQUE — апстримный endpoint `masque-client`
+/// (sing-box-lx docs-lx/lx-config.ru.md §4, SPEC 110). Отличия от 1.14:
+/// массив `endpoints` вместо `outbounds`, `address` [v4, v6] вместо `ip`/`ipv6`,
+/// `version` 3|2 вместо `vhttp` (без ключа — h3 с откатом на h2), простоя
+/// форка нет — усыпление апстримным `on_demand`. Узловой `idle_timeout`
+/// НЕ переносится: у endpoint этот ключ — idle-таймаут HTTP-соединения, другой
+/// смысл.
+Endpoint emitMasque(MasqueSpec s, TemplateVars vars) {
   final tls = <String, dynamic>{
     if (s.sni.isNotEmpty) 'server_name': s.sni,
     if (s.disableSni) 'disable_sni': true,
     for (final e in s.tlsExtra.entries)
       e.key: e.value is List ? List<Object>.from(e.value as List) : e.value,
   };
+  final version = switch (s.vhttp) { 'h3' => 3, 'h2' => 2, _ => null };
   final map = <String, dynamic>{
-    'type': 'masque',
+    'type': 'masque-client',
     'tag': s.tag,
     'server': s.server,
     'server_port': s.port,
     'profile': s.profile,
-    // §556 — пустой `vhttp` = ключа нет (ядро = auto), тело не дописывается.
-    if (s.vhttp.isNotEmpty) 'vhttp': s.vhttp,
-    // §582 — пустой ключ = ключа нет (тело своего сервера без ключей).
+    'version': ?version,
     if (s.privateKeyDer.isNotEmpty) 'private_key': s.privateKeyDer,
     if (s.publicKeyDer.isNotEmpty) 'public_key': s.publicKeyDer,
-    'ip': ?ip,
-    'ipv6': ?ipv6,
+    if (s.localAddresses.isNotEmpty)
+      'address': List<String>.from(s.localAddresses),
     if (tls.isNotEmpty) 'tls': tls,
     if (s.mtu != null) 'mtu': s.mtu,
-    if (s.idleTimeout.isNotEmpty) 'idle_timeout': s.idleTimeout,
     if (s.keepAlive.isNotEmpty) 'keep_alive_period': s.keepAlive,
+    'on_demand': true,
   };
-  return Outbound(map);
+  return Endpoint(map);
 }
 
 // ════════════════════════════════════════════════════════════════════════════

@@ -24,9 +24,32 @@ if [ -f "$DEST/libbox.aar" ] && [ -f "$DEST/.libbox.version" ] \
   exit 0
 fi
 
-echo "→ Fetching $AAR ($REPO @ $VER)"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
+
+# Ветка core-1.15 (стенд ядра 1.15 без тега): если рядом с пином лежит
+# app/android/libbox.run (`<run_id> <artifact> <sha256 libbox.aar>`), AAR
+# берётся из артефакта прогона on-demand сборки ядра (lx-build.yml) через
+# `gh run download`, а не из релиза. Нужен GH_TOKEN (в CI — github.token).
+RUN_PIN="app/android/libbox.run"
+if [ -z "${1:-}" ] && [ -f "$RUN_PIN" ]; then
+  read -r RUN_ID ART SHA < "$RUN_PIN"
+  echo "→ Fetching libbox.aar from $REPO run $RUN_ID (artifact $ART)"
+  gh run download "$RUN_ID" -R "$REPO" -n "$ART" -D "$TMP/art"
+  if command -v sha256sum >/dev/null 2>&1; then
+    GOT="$(sha256sum "$TMP/art/libbox.aar" | cut -d' ' -f1)"
+  else
+    GOT="$(shasum -a 256 "$TMP/art/libbox.aar" | cut -d' ' -f1)"
+  fi
+  [ "$GOT" = "$SHA" ] || { echo "✗ sha256 mismatch: $GOT != $SHA" >&2; exit 1; }
+  mkdir -p "$DEST"
+  mv "$TMP/art/libbox.aar" "$DEST/libbox.aar"
+  printf '%s' "$VER" > "$DEST/.libbox.version"
+  echo "✅ $DEST/libbox.aar ← run $RUN_ID ($VER)"
+  exit 0
+fi
+
+echo "→ Fetching $AAR ($REPO @ $VER)"
 
 curl -fsSL --retry 3 -o "$TMP/$AAR" "$BASE_URL/$AAR"
 curl -fsSL --retry 3 -o "$TMP/SHA256SUMS" "$BASE_URL/SHA256SUMS"

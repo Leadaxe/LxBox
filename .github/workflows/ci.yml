@@ -376,6 +376,8 @@ jobs:
         # скачиваем из GH Releases форка с проверкой SHA256. Пин версии —
         # app/android/libbox.version (single source для local + CI).
         working-directory: .
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: ./scripts/fetch-libbox.sh
 
       - name: Flutter version pin

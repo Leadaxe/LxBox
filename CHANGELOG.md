@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+- Ветка `core-1.15` (стенд): пин ядра `v1.15.0-lx.1-dev` (lx-1.15 @ 797433fcc, AAR из прогона lx-build, без тега); WARP MASQUE — endpoint `masque-client`, без `lx.masque.idle_timeout`, теги без `with_gvisor`.
+
 ## [2.25.22] — 2026-11-14
 
 ### Changed

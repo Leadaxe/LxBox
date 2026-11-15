@@ -4,6 +4,8 @@ import android.net.NetworkCapabilities
 import android.os.Build
 import android.os.Process
 import android.system.OsConstants
+import io.nekohasekai.libbox.AutoRedirectHandler
+import io.nekohasekai.libbox.AutoRedirectSession
 import io.nekohasekai.libbox.ConnectionOwner
 import io.nekohasekai.libbox.InterfaceUpdateListener
 import io.nekohasekai.libbox.Libbox
@@ -259,6 +261,17 @@ interface PlatformInterfaceWrapper : PlatformInterface {
 
     /** Не используем platform-bridge — весь трафик через VpnService-TUN. */
     override fun usePlatformBridge(): Boolean = false
+
+    // ─── libbox 1.15 (ветка core-1.15): auto-redirect платформы ──────────
+    // Новые абстрактные методы PlatformInterface линии 1.15. auto_redirect —
+    // nftables-перенаправление Linux, на VpnService не применяется: `false`,
+    // и ядро createAutoRedirect не зовёт; бросаем на случай, если позовёт.
+    override fun usePlatformAutoRedirect(): Boolean = false
+
+    override fun createAutoRedirect(
+        config: ByteArray?,
+        handler: AutoRedirectHandler?,
+    ): AutoRedirectSession = throw UnsupportedOperationException("auto_redirect is not supported on Android")
 
     /// `cancelNotification` — новый метод PlatformInterface в ядре lx.27-rc.2
     /// (пришёл из апстрима вместе с Taildrop). Дефолт — no-op: реализации без

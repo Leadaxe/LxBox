@@ -34,6 +34,17 @@ milliseconds. `startTailscaleSSHSession` is not used.
 | Called from | `scripts/build-local-apk.sh` and CI (`ci.yml` → the android job → “Fetch sing-box-lx core”) |
 | The AAR in git | NO (~110 MB as of lx.25; `app/android/app/libs/` is in `.gitignore`); `build.gradle.kts` → `implementation(files("libs/libbox.aar"))` |
 
+> **Branch `core-1.15` only (test bench, not for develop).** The pin here is
+> `v1.15.0-lx.1-dev` — the `lx-1.15` line at `797433fcc`, built by the core's
+> on-demand `lx-build.yml` (run 43655812815, artifact `android-aar-lx-1.15`),
+> no tag. `scripts/fetch-libbox.sh` takes it from `app/android/libbox.run`
+> (`<run_id> <artifact> <sha256>`) via `gh run download`; the artifact expires
+> after 90 days. AAR sha256 `a83e1c8978c3ec3b313362d8621adcf649ff5b1ff95e70cd4d0a540bae5557dc`. Build tags = 1.14 set minus
+> `with_gvisor` (gone upstream). PlatformInterface gained `usePlatformAutoRedirect`/`createAutoRedirect` (stubbed: false / throw); javap otherwise only additions. `Libbox.version()` of this AAR is not a
+> version string (`git describe` of the local `build-aar` tag) — LxBox gates
+> treat it as unparsed and fail open. WARP MASQUE is emitted as the 1.15
+> endpoint `masque-client`; `lx.masque.idle_timeout` is not written.
+
 **The current pin: `v1.14.4-lx.35`** (see `app/android/libbox.version`) — lx.1
 plus XHTTP HTTP-version parity (**SPEC 104**, lx.2), Vision on top of VLESS
 Encryption (**SPEC 105**, lx.3), the runtime WG/AWG endpoint toggle
