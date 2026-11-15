@@ -16,6 +16,7 @@ import '../../models/tls_policy.dart';
 import '../node_hash.dart';
 import '../settings_storage.dart';
 import '../template_loader.dart';
+import 'probe_detour.dart';
 import 'probe_runner.dart';
 
 class ProbeController {
@@ -36,12 +37,14 @@ class ProbeController {
     required int timeoutMs,
     required void Function(int index, ProbeResult result) onResult,
     Map<int, TlsLayers> tlsByIndex = const {},
+    ProbeDetourPlan? detourPlan,
   }) =>
       _runner.run(nodes,
           url: url,
           timeoutMs: timeoutMs,
           onResult: onResult,
-          tlsByIndex: tlsByIndex);
+          tlsByIndex: tlsByIndex,
+          detourPlan: detourPlan);
 
   /// Эргономичный оверлоуд: switch member-vs-nodes[] в ОДНОМ месте.
   Future<String> runList(
@@ -49,13 +52,15 @@ class ProbeController {
     required String url,
     required int timeoutMs,
     required void Function(int index, ProbeResult result) onResult,
+    ProbeDetourPlan? detourPlan,
   }) =>
       run(
           nodes: probeNodesOf(list),
           url: url,
           timeoutMs: timeoutMs,
           onResult: onResult,
-          tlsByIndex: probeTlsOf(list));
+          tlsByIndex: probeTlsOf(list),
+          detourPlan: detourPlan);
 
   /// §636 — уровни TLS-политики узлов [list] по индексу [probeNodesOf]: проба
   /// фрагментирует так же, как туннель. Пустые уровни не записываются.

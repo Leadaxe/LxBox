@@ -11,6 +11,7 @@ import '../settings_storage.dart';
 import '../builder/core_chain_capability.dart';
 import '../core_reject/core_error_parse.dart';
 import 'probe_config.dart';
+import 'probe_detour.dart';
 import 'probe_lifecycle.dart';
 
 /// §236 — маркер, что тест не запустился из-за активного VPN. UI ловит его
@@ -123,6 +124,7 @@ class ProbeRunner {
     required int timeoutMs,
     required void Function(int index, ProbeResult result) onResult,
     Map<int, TlsLayers> tlsByIndex = const {},
+    ProbeDetourPlan? detourPlan,
   }) async {
     _cancelled = false;
     // §286 — регистрируем отмену в общем реестре: stop VPN / смерть туннеля /
@@ -162,13 +164,19 @@ class ProbeRunner {
       bool isPending(int i) => pending[i] != null;
 
       var batches = buildProbeBatches(pending,
-          coreVersion: coreVersion, vars: vars, tlsByIndex: tlsByIndex);
+          coreVersion: coreVersion,
+          vars: vars,
+          tlsByIndex: tlsByIndex,
+          detourPlan: detourPlan);
 
       // Битые/несобираемые/группы — вердикт сразу, без ядра. Вердикты лежат
       // в первом батче (§518 `_assemble`), покрывают весь список целиком.
       // Слоты, обнулённые выше, свой вердикт уже получили.
       final broken = batches.isEmpty
-          ? buildProbeConfig(pending, coreVersion: coreVersion, vars: vars)
+          ? buildProbeConfig(pending,
+                  coreVersion: coreVersion,
+                  vars: vars,
+                  detourPlan: detourPlan)
               .brokenByIndex
           : batches.first.brokenByIndex;
       broken.forEach((i, why) {
@@ -217,7 +225,10 @@ class ProbeRunner {
           pending[owner.index] = null;
           onResult(owner.index, _coreRejected(owner.reason));
           batches = buildProbeBatches(pending,
-              coreVersion: coreVersion, vars: vars, tlsByIndex: tlsByIndex);
+              coreVersion: coreVersion,
+              vars: vars,
+              tlsByIndex: tlsByIndex,
+              detourPlan: detourPlan);
           b = 0;
           continue;
         }

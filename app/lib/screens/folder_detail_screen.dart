@@ -16,6 +16,7 @@ import '../services/builder/server_list_build.dart' show folderHasDetourLinks;
 import '../services/error_format.dart';
 import '../services/node_link_address.dart';
 import '../services/probe/probe_controller.dart';
+import '../services/probe/probe_detour.dart';
 import '../services/probe/probe_runner.dart';
 import 'probe_gate_mixin.dart';
 import '../services/settings_storage.dart';
@@ -30,6 +31,7 @@ import 'subscriptions_screen/folder_picker.dart';
 import '../widgets/detour_target_picker.dart';
 import '../widgets/lx_code_editor.dart';
 import '../widgets/probe_badge.dart';
+import '../widgets/probe_detour_note.dart';
 import 'subscription_detail_screen/widgets/node_warning_row.dart';
 import 'subscriptions_screen/entry_warnings.dart';
 import '../widgets/reorder_grab_strip.dart';
@@ -325,6 +327,8 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
       [for (final m in _folder.members) m.node],
       // §636 — проба фрагментирует так же, как туннель.
       tlsByIndex: ProbeController.probeTlsOf(_folder),
+      // §730 — статический detour папки и личные detour членов.
+      detourPlan: _probeDetourPlan(),
       url: url,
       timeoutMs: timeoutMs,
       onResult: (i, r) {
@@ -1249,6 +1253,8 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     return Column(
       children: [
         _buildControlBar(theme),
+        // §730 — учтён ли detour папки / членов в тесте.
+        ProbeDetourNote(plan: _probeDetourPlan()),
         if (_filterExpanded) _buildFilterPanel(theme),
         const Divider(height: 1),
         Expanded(child: list),
@@ -1328,6 +1334,11 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
   /// Полоса над списком (паттерн главного экрана): слева инфо/сводка теста,
   /// справа — actions (при результатах), кнопка теста (`Icons.speed`, тап =
   /// старт/отмена, long-press = настройки) и toggle фильтра (`filter_list`).
+  /// §730 — detour папки и личные detour членов в пробе; цель ссылки может
+  /// лежать в любом источнике.
+  ProbeDetourPlan _probeDetourPlan() => probeDetourPlanOf(
+      _folder, [for (final e in widget.controller.entries) e.list]);
+
   Widget _buildControlBar(ThemeData theme) {
     final muted = theme.colorScheme.onSurfaceVariant;
     final s = _probeSummary();

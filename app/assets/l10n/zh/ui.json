@@ -6817,5 +6817,17 @@
   },
   "Core: lx.sniff_guard.quic. The same for the first QUIC packet. Never applied through a SOCKS relay. AmneziaWG follows what other QUIC nodes on the same path have taught the core.": {
     "value": "核心：lx.sniff_guard.quic。对 QUIC 首包做同样处理。经 SOCKS 中继时从不应用。AmneziaWG 沿用同一路径上其他 QUIC 节点让核心学到的结果。"
+  },
+  "Detour of this source is not applied in the test — nodes are checked directly.": {
+    "value": "测试中不使用此来源的 detour——节点直接检测。"
+  },
+  "Tested through %s.": {
+    "value": "通过 %s 测试。"
+  },
+  "Tested through each node's own detour.": {
+    "value": "通过每个节点自己的 detour 测试。"
+  },
+  "Detour is applied in the test for %d of %d; the others are checked directly.": {
+    "value": "测试中 %d / %d 个节点使用 detour；其余直接检测。"
   }
 }

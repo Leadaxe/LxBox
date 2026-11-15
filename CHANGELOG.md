@@ -8,6 +8,11 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Test servers ignored the source's detour ([task 730](docs/spec/tasks/730-probe-test-source-detour.md), [#187](https://github.com/Leadaxe/LxBox/issues/187)).** With the VPN off, the speedometer test checked every node directly, so a subscription behind an operator's HTTP proxy showed all nodes dead on a network without direct internet. A detour that points at one specific node is now followed in the test, as in the tunnel (append or replace); in a folder, members' own detours count with the same priority as in the tunnel. A detour the test cannot follow — a Direction, its auto node, a chain, a group, a node that is off or goes through its own detour — is named under the test bar, which says either «Tested through <node>.» or that nodes are checked directly. Node Diagnostics with the VPN off and the Debug API folder probe follow the same rule.
+  (RU: «Тест серверов» без VPN проверял узлы напрямую, мимо detour источника; теперь detour на конкретный узел учитывается так же, как в туннеле, включая личные detour членов папки, а под полосой теста написано, учтён ли он.)
+
 ## [2.25.22] — 2026-11-14
 
 ### Changed

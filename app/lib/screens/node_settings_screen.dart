@@ -33,6 +33,7 @@ import '../services/contract/form_source_sync.dart';
 import '../widgets/tailscale_network_tab.dart';
 import '../services/tailscale_network.dart';
 import '../services/l10n/locale_controller.dart';
+import '../services/probe/probe_detour.dart';
 import '../services/warp/warp_endpoint_picker.dart';
 import '../services/wireguard/masquerade_source.dart';
 import '../services/wireguard/wg_ini_export.dart';
@@ -221,6 +222,14 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
   }
 
   /// §237 — член папки, если экран открыт для него.
+  /// §730 — detour источника этого узла для диагностики без VPN: у члена
+  /// папки — по индексу члена, у одиночного сервера — его узел (индекс 0).
+  /// Сохранённое состояние источника, а не несохранённая правка экрана.
+  ProbeDetourRoute _probeDetourRoute() => probeDetourPlanOf(
+        widget.entry.list,
+        [for (final e in widget.subController.entries) e.list],
+      ).at(widget.memberIndex ?? 0);
+
   FolderMember? get _member {
     final mi = widget.memberIndex;
     if (mi == null) return null;
@@ -887,6 +896,8 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
                   // §392/§501 — диагностика + уведомления узла.
                   NodeDiagnosticsTab(
                     node: _node,
+                    // §730 — detour источника в прогоне без VPN.
+                    probeDetour: _probeDetourRoute(),
                     liveTag: TagResolver.displayTag(
                         widget.entry.list.tagPrefix, _originalTag),
                     warnings: _notifications,

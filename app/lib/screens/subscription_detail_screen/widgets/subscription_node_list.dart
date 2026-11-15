@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../../models/node_spec.dart';
 import '../../../models/node_warning.dart';
 import '../../../models/ui_msg.dart';
+import '../../../services/probe/probe_detour.dart';
 import '../../../services/probe/probe_runner.dart';
 import '../../../widgets/banner_palette.dart';
 import '../../../widgets/probe_badge.dart';
@@ -30,7 +31,11 @@ class SubscriptionNodeList extends StatelessWidget {
     this.tagPrefix = '',
     this.notLoaded = false,
     this.onUpdate,
+    this.probeDetourOf,
   });
+
+  /// §730 — detour источника узла для диагностики без VPN (разбор узла).
+  final ProbeDetourRoute? Function(NodeSpec node)? probeDetourOf;
 
   /// §615 — узлы не загружены (тела в кэше не было на старте, а прошлое
   /// обновление узлы видело): вместо «No nodes found» — подсказка и Update.
@@ -277,7 +282,11 @@ class SubscriptionNodeList extends StatelessWidget {
           // выключение узла живёт на Switch слева, так что тап по строке
           // свободен. Долгий тап — меню (копирование, diff замен).
           onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
-            builder: (_) => NodeInspectScreen(node: node, tagPrefix: tagPrefix),
+            builder: (_) => NodeInspectScreen(
+              node: node,
+              tagPrefix: tagPrefix,
+              probeDetour: probeDetourOf?.call(node),
+            ),
           )),
           onLongPress: () => _showNodeMenu(context, node),
         );
@@ -335,7 +344,11 @@ class SubscriptionNodeList extends StatelessWidget {
               onTap: () {
                 Navigator.pop(ctx);
                 Navigator.of(context).push(MaterialPageRoute<void>(
-                  builder: (_) => NodeInspectScreen(node: node, tagPrefix: tagPrefix),
+                  builder: (_) => NodeInspectScreen(
+                    node: node,
+                    tagPrefix: tagPrefix,
+                    probeDetour: probeDetourOf?.call(node),
+                  ),
                 ));
               },
             ),

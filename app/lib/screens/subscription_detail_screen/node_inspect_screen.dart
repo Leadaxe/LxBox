@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../../models/node_spec.dart';
 import '../../models/template_vars.dart';
 import '../../services/l10n/locale_controller.dart';
+import '../../services/probe/probe_detour.dart';
 import '../../services/tag_resolver.dart';
 import '../../widgets/lx_code_editor.dart';
 import '../../widgets/node_diagnostics_tab.dart';
@@ -30,9 +31,14 @@ class NodeInspectScreen extends StatefulWidget {
     required this.node,
     this.tagPrefix = '',
     this.initialTab = NodeInspectTab.json,
+    this.probeDetour,
   });
 
   final NodeSpec node;
+
+  /// §730 — detour источника для диагностики без VPN; `null` — источник
+  /// экрану неизвестен, узел проверяется напрямую.
+  final ProbeDetourRoute? probeDetour;
 
   /// §392 — префикс тегов контейнера: в БОЕВОМ конфиге узел живёт под
   /// display-тегом («<префикс> <тег>»), и диагностика при включённом VPN
@@ -129,6 +135,7 @@ class _NodeInspectScreenState extends State<NodeInspectScreen> {
             NodeDiagnosticsTab(
               node: _node,
               liveTag: liveTag,
+              probeDetour: widget.probeDetour,
               warnings: warnings,
               scrollToNotifications:
                   widget.initialTab == NodeInspectTab.diagnostics,

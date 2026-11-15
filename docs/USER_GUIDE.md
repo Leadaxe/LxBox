@@ -468,6 +468,18 @@ cuts the measurements already under way; until the test session closes, the
 summary reads `Stopping…` and the icon is inactive. Closing takes at most
 3 seconds, then the test can be started again.
 
+When the subscription or folder has a detour, a line under the bar says how
+the test treats it. A detour that points at one specific node (a single
+server's node, or a node of a subscription or folder) is used: the nodes are
+tested through it, as in the tunnel, and the line reads `Tested through
+<node>.` If that node is off, is itself sent through another detour, or the
+detour points at a Direction, its auto node, a chain or a group, the test
+cannot follow it: the line reads `Detour of this source is not applied in the
+test — nodes are checked directly.` In a folder, members' own detours count
+the same way as in the tunnel; when only some of them can be followed, the
+line gives the count. The Diagnostics tab of a node, run with the VPN off,
+follows the same rule and shows the same line under the response.
+
 The **Settings** tab holds Tag prefix, detour, Update interval, Replace
 with a group (section
 [Replace with a group](#replace-with-a-group-folds-a-subscription-or-folder-into-one-group))

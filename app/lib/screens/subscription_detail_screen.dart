@@ -15,12 +15,14 @@ import '../services/error_humanize.dart';
 import '../services/node_hash.dart';
 import '../services/parser/body_decoder.dart';
 import '../services/probe/probe_controller.dart';
+import '../services/probe/probe_detour.dart';
 import '../services/probe/probe_runner.dart';
 import '../services/settings_storage.dart';
 import '../services/ui_helpers.dart';
 import '../services/subscription/sources.dart';
 import '../services/subscription/subscription_identity.dart'; // §289 — generateUuidV4
 import '../widgets/detour_target_picker.dart';
+import '../widgets/probe_detour_note.dart';
 import '../widgets/user_agent_dialog.dart';
 import '../services/url_launcher.dart';
 import 'probe_gate_mixin.dart';
@@ -313,6 +315,8 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
       nodes,
       // §636 — проба фрагментирует так же, как туннель.
       tlsByIndex: ProbeController.probeTlsOf(widget.entry.list),
+      // §730 — статический detour источника и в пробе.
+      detourPlan: _probeDetourPlan(),
       url: url,
       timeoutMs: timeoutMs,
       onResult: (i, r) {
@@ -519,6 +523,17 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
         if (nodes[i] != null && _probe[keys[i]] != null)
           nodes[i]!: _probe[keys[i]]!,
     };
+  }
+
+  /// §730 — detour источника в пробе: по текущим записям всех источников
+  /// (цель ссылки может лежать в любом).
+  ProbeDetourPlan _probeDetourPlan() => probeDetourPlanOf(
+      widget.entry.list, [for (final e in widget.controller.entries) e.list]);
+
+  /// §730 — маршрут одного узла верхнего уровня (по ссылке на узел).
+  ProbeDetourRoute? _probeDetourOfNode(NodeSpec node) {
+    final i = widget.entry.list.nodes.indexWhere((n) => identical(n, node));
+    return i < 0 ? null : _probeDetourPlan().at(i);
   }
 
   /// §339 — полоса теста над списком (паттерн `_buildControlBar` папки):
@@ -827,10 +842,18 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
                 offCount: _disabledNodes.length, // §283
               ),
               _buildProbeBar(theme), // §339 — Test servers
+              // §730 — учтён ли detour источника в тесте; видна всегда,
+              // когда detour задан, а не только после прогона.
+              ProbeDetourNote(
+                plan: _probeDetourPlan(),
+                padding: const EdgeInsets.fromLTRB(24, 0, 16, 6),
+              ),
               const Divider(height: 1),
               Expanded(
                 child: SubscriptionNodeList(
                   nodes: _nodes,
+                  // §730 — разбор узла: диагностика без VPN через detour.
+                  probeDetourOf: _probeDetourOfNode,
                   loading: _loading,
                   error: _error,
                   // §283 — toggle только у top-level нод подписки; chained-
