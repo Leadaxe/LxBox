@@ -3478,6 +3478,12 @@
   "Two columns on wide screens": {
     "value": "宽屏时双栏显示"
   },
+  "System colors": {
+    "value": "系统配色"
+  },
+  "Use the accent color from your wallpaper (Material You, Android 12+).": {
+    "value": "使用壁纸的强调色（Material You，Android 12+）。"
+  },
   "unknown error": {
     "value": "未知错误"
   },

@@ -8,6 +8,11 @@
 
 ## [Unreleased]
 
+### Added
+
+- **System colors (Material You) ([task 735](docs/spec/tasks/735-material-you-system-colors.md), [#218](https://github.com/Leadaxe/LxBox/issues/218)).** App Settings → Appearance has a «System colors» switch: the app takes its accent color from the wallpaper palette, like other Android apps. It is off by default, so the look does not change until you turn it on, and it is shown only on Android 12 and newer, not on TV. Status colors (ping, online/offline) stay green and orange.
+  (RU: в App Settings → Appearance появился переключатель «Системные цвета» — акцентный цвет из обоев (Material You). По умолчанию выключен, показывается на Android 12+ и не на TV; цвета статусов не меняются.)
+
 ### Fixed
 
 - **Test servers ignored the source's detour ([task 730](docs/spec/tasks/730-probe-test-source-detour.md), [#187](https://github.com/Leadaxe/LxBox/issues/187)).** With the VPN off, the speedometer test checked every node directly, so a subscription behind an operator's HTTP proxy showed all nodes dead on a network without direct internet. A detour that points at one specific node is now followed in the test, as in the tunnel (append or replace); in a folder, members' own detours count with the same priority as in the tunnel. A detour the test cannot follow — a Direction, its auto node, a chain, a group, a node that is off or goes through its own detour — is named under the test bar, which says either «Tested through <node>.» or that nodes are checked directly. Node Diagnostics with the VPN off and the Debug API folder probe follow the same rule.

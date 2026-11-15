@@ -3739,6 +3739,12 @@
   "Two columns on wide screens": {
     "value": "Две колонки на широком экране"
   },
+  "System colors": {
+    "value": "Системные цвета"
+  },
+  "Use the accent color from your wallpaper (Material You, Android 12+).": {
+    "value": "Брать акцентный цвет из обоев (Material You, Android 12+)."
+  },
   "unknown error": {
     "value": "неизвестная ошибка"
   },

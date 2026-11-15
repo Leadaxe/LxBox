@@ -447,6 +447,7 @@ A flat `Map<String, String>` (values are stringified on read). It serves both **
 | `notif_perm_prompted_v1` | `'false'` | §128 | One-shot: the notification permission prompt has been shown. |
 | `wizard_update_check_v1` | `'false'` | §395 | One-shot: the update-check consent prompt has been shown. Its answer is what writes `auto_check_updates`. |
 | `allow_rotation` | `'false'` | [§220] | Releases the portrait lock: `'true'` yields an empty preferred-orientations list (the system's auto-rotate decides). The default is a hard portrait lock. |
+| `dynamic_color` | `'false'` | §735 | Material You: `'true'` takes the theme seed from the system palette (`system_accent1_500`, Android 12+, not on TV); otherwise the app's indigo. App Settings → Appearance; the switch is hidden where the system has no palette. Not mirrored to Kotlin, not in LX Backup (an app flag, not a portable var). |
 | `resolve_enabled` | template | §263/§265 | The gate for the route-resolve rule of the `traffic-processing` preset. A var of the `internal` section (not visible in VPN Settings), edited inside the rule through a ref-var. |
 | `resolve_strategy` | template | §249/§265 | The IP version for route-resolve (`ipv4_only` / `prefer_ipv4` / …). A var of the `internal` section, used as a ref-var in `traffic-processing`. |
 | `app_language` | `'system'` | §279 | The app language: `system` \| `en` \| `ru`. **The single source of truth** — this var, not SharedPreferences. |
