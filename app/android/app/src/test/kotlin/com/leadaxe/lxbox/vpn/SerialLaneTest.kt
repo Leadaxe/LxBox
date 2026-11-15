@@ -109,6 +109,21 @@ class SerialLaneTest {
     }
 
     @Test
+    fun `first connect failure is reported once per series even after a stream drop took the first delay`() {
+        val b = ReconnectBackoff(500, 8_000)
+        // Потеря сокета: сначала обрыв потока забирает первую паузу…
+        assertEquals(500L, b.next())
+        // …затем первый сбой подключения — о нём сообщить, о следующих нет.
+        b.next()
+        assertTrue(b.firstFailure())
+        b.next()
+        assertFalse(b.firstFailure())
+        // Успех — новая серия.
+        b.reset()
+        assertTrue(b.firstFailure())
+    }
+
+    @Test
     fun `probe stops the network monitor only when the vpn service is fully stopped`() {
         assertTrue(probeMayStopMonitor(false, VpnStatus.Stopped))
         // Служба стартует: commandClient ещё null, монитор уже её.

@@ -158,6 +158,7 @@ class BoxCommandClient {
     fun startStatus() {
         tunnelAlive = true
         statusPaused = false
+        statusBackoff.reset() // §732 — новый туннель: новая серия сбоев
         lane.post("startStatus") { connectStatus() }
     }
 
@@ -351,7 +352,7 @@ class BoxCommandClient {
             val delayMs = statusBackoff.next()
             // §732 — первый сбой серии — в журнал приложения: дамп покажет,
             // что клиент не достучался до командного сервера и почему.
-            if (delayMs == RECONNECT_BACKOFF_START_MS) {
+            if (statusBackoff.firstFailure()) {
                 BoxService.appLogWarning("[cc §732] status client cannot connect: ${it.message}")
             }
             scheduleReconnect(delayMs) { if (tunnelAlive && !statusPaused) connectStatus() }

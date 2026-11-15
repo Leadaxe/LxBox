@@ -62,6 +62,7 @@ internal class SerialLane(
 /// и при молчащем командном сервере попытки шли вплотную одна за другой.
 internal class ReconnectBackoff(private val startMs: Long, private val maxMs: Long) {
     private var nextMs = startMs
+    private var failureReported = false
 
     @Synchronized
     fun next(): Long {
@@ -70,8 +71,21 @@ internal class ReconnectBackoff(private val startMs: Long, private val maxMs: Lo
         return d
     }
 
+    /// `true` — первый сбой подключения с последнего [reset]: о нём пишут в
+    /// журнал один раз за серию. Отдельный флаг, а не «пауза равна стартовой»:
+    /// паузу забирает и обрыв потока (`disconnected`), который при потере
+    /// сокета приходит раньше сбоя подключения, — признак по паузе не
+    /// срабатывал никогда.
+    @Synchronized
+    fun firstFailure(): Boolean {
+        if (failureReported) return false
+        failureReported = true
+        return true
+    }
+
     @Synchronized
     fun reset() {
         nextMs = startMs
+        failureReported = false
     }
 }
