@@ -331,40 +331,5 @@ void main() {
         }
       }
     });
-
-    // §733 — 4PDA #2004: Яндекс Браузер в ru-app-list уводил direct весь
-    // свой трафик (github.com тоже). Приложения — отдельное logical-правило
-    // с исключением браузера; домены и geoip — своим правилом.
-    test('ru-apps: браузер Яндекса исключён, домены/geoip отдельно', () {
-      final srsPaths = {
-        for (final e in remoteRuleSetsOfPreset(ruDirect)) e.tag: '/c/${e.tag}.srs'
-      };
-      List<Map<String, dynamic>> routes(String apps) => expandPreset(
-            CustomRulePreset(
-              name: 'RU',
-              presetId: 'ru-direct',
-              varsValues: {'geoip_enabled': 'true', 'apps_enabled': apps},
-            ),
-            ruDirect,
-            srsPaths: srsPaths,
-          ).routingRules.where((r) => r['outbound'] != null).toList();
-
-      final on = routes('true');
-      expect(on, hasLength(2));
-      expect(jsonEncode(on[0]), isNot(contains('ru-apps')));
-      final logical = on[1];
-      expect(logical['type'], 'logical');
-      expect(logical['mode'], 'and');
-      expect(logical['outbound'], 'direct-out');
-      final subs = (logical['rules'] as List).cast<Map>();
-      expect(subs.first['rule_set'].toString(), contains('ru-apps'));
-      expect(subs.last['package_name'],
-          containsAll(['com.yandex.browser', 'com.yandex.browser.lite']));
-      expect(subs.last['invert'], isTrue);
-
-      final off = routes('false');
-      expect(off, hasLength(1), reason: 'apps выкл — logical-правило снято');
-      expect(jsonEncode(off), isNot(contains('ru-apps')));
-    });
   });
 }

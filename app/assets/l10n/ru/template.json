@@ -197,8 +197,8 @@
   "Russian apps by package": {
     "value": "Российские приложения по пакету"
   },
-  "Route Android apps from the legiz-ru list (banks, marketplaces, government services, Yandex/VK and others) by package name, regardless of the domains they use. Yandex Browser is left out: a browser opens any site, so it follows the other rules. Auto-downloads ru-app-list.srs (~4 KB) on first use.": {
-    "value": "Направляет Android-приложения из списка legiz-ru (банки, маркетплейсы, госуслуги, Яндекс/VK и другие) по имени пакета, независимо от домена, к которому они обращаются. Яндекс Браузер исключён: браузер открывает любые сайты и подчиняется остальным правилам. Набор ru-app-list.srs (~4 КБ) скачивается при первом включении."
+  "Route Android apps from the legiz-ru list (banks, marketplaces, government services, Yandex/VK and others) by package name, regardless of the domains they use. Auto-downloads ru-app-list.srs (~4 KB) on first use.": {
+    "value": "Направляет Android-приложения из списка legiz-ru (банки, маркетплейсы, госуслуги, Яндекс/VK и другие) по имени пакета, независимо от домена, к которому они обращаются. Набор ru-app-list.srs (~4 КБ) скачивается при первом включении."
   },
   "Google 204": {
     "value": "Google 204"

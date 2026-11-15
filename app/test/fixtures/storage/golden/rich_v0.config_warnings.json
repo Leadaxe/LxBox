@@ -1,5 +1,4 @@
 [
-  "Template: Entry of route.rules from ru-direct left out",
   "WireGuard: WireGuard: DNS from the configuration not applied",
   "SRS rule \"Uncached set\" skipped: no cached file (Download first).",
   "Raw-JSON rule \"Json broken\" skipped: empty body.",
