@@ -33,6 +33,7 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
 - [`detour_cycle_broken`](#detour_cycle_broken) · `error` — Node dropped: detour loop through {target}
 - [`detour_target_missing`](#detour_target_missing) · `error` — Node dropped: detour target {target} not found
 - [`detour_to_group`](#detour_to_group) · `error` — Node dropped: detour target {target} is a group
+- [`detour_unavailable`](#detour_unavailable) · `warning` — Hop {target} unavailable: hop removed
 - [`detour_with_listen_port`](#detour_with_listen_port) · `warning` — {tag}: listening port removed for the hop
 - [`detour_with_tls_fragment`](#detour_with_tls_fragment) · `info` — {tag}: TLS fragmentation removed for the hop
 - [`dialer_proxy_unusable`](#dialer_proxy_unusable) · `error` — Preceding proxy {target} is unusable
@@ -87,7 +88,6 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
 - [`scheme_unsupported`](#scheme_unsupported) · `error` — Link: scheme {scheme} is not supported
 - [`service_record_ignored`](#service_record_ignored) · `info` — Subscription: service record {scheme} skipped
 - [`source_detour_cycle`](#source_detour_cycle) · `error` — Node {tag} excluded: hops form a loop
-- [`source_detour_missing`](#source_detour_missing) · `error` — Source chain broken: {target} not found
 - [`source_detour_self`](#source_detour_self) · `error` — Node {tag} excluded: hop points at itself
 - [`ss_method_invalid`](#ss_method_invalid) · `error` — Unsupported encryption method {method}
 - [`ss_method_legacy`](#ss_method_legacy) · `info` — Shadowsocks: legacy cipher
@@ -129,6 +129,7 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
 - [`xray_cert_chain_pin_unsupported`](#xray_cert_chain_pin_unsupported) · `warning` — TLS: certificate pinning not applied
 - [`xray_domain_strategy_ignored`](#xray_domain_strategy_ignored) · `info` — WireGuard: address family preference not applied
 - [`xray_extra_entries_dropped`](#xray_extra_entries_dropped) · `warning` — Configuration: extra entries dropped
+- [`xray_mux_unsupported`](#xray_mux_unsupported) · `info` — Xray mux not applied
 - [`xray_reserved_base64_unsupported`](#xray_reserved_base64_unsupported) · `warning` — WireGuard: reserved bytes written as text not applied
 
 <a id="alias_shadowed"></a>
@@ -553,6 +554,24 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
 
 - Node or subscription level: no field in the registry points at this code, so it is raised while the entry as a whole is being read.
 
+<a id="detour_unavailable"></a>
+### detour_unavailable
+
+**severity:** `warning` · **params:** `target`, `count`, `tags`
+
+**Hop {target} unavailable: hop removed**
+
+- **What happened:** This source (or its node) was routed through {target}, and {target} is not available in the config. The hop was removed from {count} node(s) ({tags}): they stay in the config and now connect directly, not through {target}.
+- **Why it happens:** The hop assigned to this source or its node is not in the config: the direction was turned off, or the node serving as the hop was deleted, renamed, or disappeared from its subscription after an update.
+- **What you can do:**
+  - If the nodes must go through {target}, bring it back: turn the direction on, or restore the node.
+  - Or choose another hop for the source or the node.
+  - Or remove the hop if a direct connection is what you want.
+
+**Where it comes from:**
+
+- Node or subscription level: no field in the registry points at this code, so it is raised while the entry as a whole is being read.
+
 <a id="detour_with_listen_port"></a>
 ### detour_with_listen_port
 
@@ -578,7 +597,7 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
 
 **{tag}: TLS fragmentation removed for the hop**
 
-- **What happened:** Node {tag} is routed through {target}, so its TLS runs inside the hop's tunnel, where splitting the ClientHello does not help against DPI. An explicit fragmentation setting would also turn off the record fragmentation the core applies to such nodes on its own and add a 500 ms pause per segment. The setting was removed; the core's own default applies.
+- **What happened:** Node {tag} is routed through {target}, so its TLS runs inside the hop's tunnel, where splitting the ClientHello does not help against DPI. An explicit fragmentation setting would also take the node out of the sniff guard, which protects such nodes from a sniffing relay, and add a 500 ms pause per segment. The setting was removed; the sniff guard (Settings) applies.
 - **Why it happens:** The node arrived with TLS fragmentation (from a subscription or a link), and you assigned a hop to it — personally, through its folder or in a chain.
 - **What you can do:**
   - Nothing to do: fragmentation belongs on the hop that connects directly.
@@ -1596,23 +1615,6 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
 
 - Node or subscription level: no field in the registry points at this code, so it is raised while the entry as a whole is being read.
 
-<a id="source_detour_missing"></a>
-### source_detour_missing
-
-**severity:** `error` · **params:** `target`, `count`
-
-**Source chain broken: {target} not found**
-
-- **What happened:** You routed this source through {target}, and that node is gone. All {count} of its nodes were excluded on purpose: without the assigned hop the traffic would go directly, past the boundary you set.
-- **Why it happens:** You assigned a hop to this source yourself, and the node serving as that hop is gone: it disappeared from its subscription after an update, was renamed, or was deleted.
-- **What you can do:**
-  - Assign an existing node as the hop for this source.
-  - Or remove the hop if the source no longer needs to go through one.
-
-**Where it comes from:**
-
-- Node or subscription level: no field in the registry points at this code, so it is raised while the entry as a whole is being read.
-
 <a id="source_detour_self"></a>
 ### source_detour_self
 
@@ -2436,6 +2438,22 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
 - **What you can do:**
   - Check that the first entry is the one you need: it is the one that became the node.
   - If you need the other servers too, split them into separate elements — one server per outbound.
+
+**Where it comes from:**
+
+- Node or subscription level: no field in the registry points at this code, so it is raised while the entry as a whole is being read.
+
+<a id="xray_mux_unsupported"></a>
+### xray_mux_unsupported
+
+**severity:** `info`
+
+**Xray mux not applied**
+
+- **What happened:** The element turns on Xray mux. The core does not speak Xray's mux protocol, so mux was removed and the node was imported without multiplexing.
+- **Why it happens:** Xray mux is the Mux.Cool protocol, while sing-box multiplexing is h2mux, smux or yamux. They are different protocols on the wire: an Xray server does not understand sing-box multiplexing and would refuse every connection. An Xray server always accepts plain connections too, so the node works without mux.
+- **What you can do:**
+  - Nothing needs doing: the node works without mux.
 
 **Where it comes from:**
 

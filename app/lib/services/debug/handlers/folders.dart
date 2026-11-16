@@ -3,6 +3,7 @@ import '../../../models/codec/node_link_record.dart';
 import '../../../models/server_list.dart';
 import '../../node_link_address.dart';
 import '../../probe/probe_controller.dart' show ProbeController;
+import '../../probe/probe_detour.dart';
 import '../../probe/probe_runner.dart';
 import '../../settings_storage.dart';
 import '../context.dart';
@@ -430,11 +431,15 @@ Future<DebugResponse> _probe(String id, DebugRequest req, DebugContext ctx) asyn
   if (timeoutMs <= 0) throw const BadRequest('field "timeout_ms" must be > 0');
 
   final results = <int, ProbeResult>{};
+  // §730 — detour папки и личные detour членов, как у кнопки в UI.
+  final detourPlan = probeDetourPlanOf(
+      folder, [for (final e in sub.entries) e.list]);
   // §296 — probe над списком нод; порядок членов = index результата (ниже
   // ответ строится по тем же folder.members[i]).
   final err = await ProbeRunner().run(
     [for (final m in folder.members) m.node],
     tlsByIndex: ProbeController.probeTlsOf(folder), // §636
+    detourPlan: detourPlan, // §730
     url: url,
     timeoutMs: timeoutMs,
     onResult: (i, r) => results[i] = r,
@@ -459,6 +464,7 @@ Future<DebugResponse> _probe(String id, DebugRequest req, DebugContext ctx) asyn
       'status': status,
       if (r.status == ProbeStatus.ok) 'delay_ms': r.delayMs,
       if (r.message.isNotEmpty) 'message': r.message,
+      ..._probeDetourWire(detourPlan.at(i)),
     });
   }
   return JsonResponse({
@@ -471,6 +477,17 @@ Future<DebugResponse> _probe(String id, DebugRequest req, DebugContext ctx) asyn
     'summary': summary,
   });
 }
+
+/// §730 — `detour`: `applied` (с `detour_via` — тегом цели) | `unapplied`;
+/// у члена без detour полей нет.
+Map<String, Object?> _probeDetourWire(ProbeDetourRoute r) => switch (r.kind) {
+      ProbeDetourKind.none => const {},
+      ProbeDetourKind.applied => {
+          'detour': 'applied',
+          'detour_via': r.targetLabel,
+        },
+      ProbeDetourKind.unapplied => const {'detour': 'unapplied'},
+    };
 
 String _probeStatusWire(ProbeStatus s) => switch (s) {
       ProbeStatus.pending => 'pending',

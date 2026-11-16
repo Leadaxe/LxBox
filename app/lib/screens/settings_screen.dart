@@ -390,7 +390,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   }
 
   /// §709 — короткие подсказки (i) у переменных корневого блока `lx` ядра
-  /// (секции Network / WireGuard / QUIC шаблона).
+  /// (секции Network / WireGuard / QUIC / Sniff guard шаблона).
   static Map<String, String> _lxVarHints() => {
         'wg_idle_suspend': getLocalText.s("Core: lx.wg.idle_suspend. An idle WireGuard endpoint that is not on the active route is torn down and rebuilt on its next dial."),
         'wg_idle_suspend_reachable': getLocalText.s("Core: lx.wg.idle_suspend_reachable. The same sleep for endpoints on the active route, after a longer quiet period."),
@@ -398,10 +398,8 @@ class _SettingsScreenState extends State<SettingsScreen>
         'wg_build_max': getLocalText.s("Core: lx.wg.build_max. Over the limit the endpoint idle for the longest is torn down."),
         'mtu_align': getLocalText.s("Core: lx.mtu_align. A node over a tunnel gets a packet size that fits into it: mtu for WireGuard and MASQUE, the initial packet size for Hysteria2 and TUIC. Values are never raised."),
         'masque_idle_timeout': getLocalText.s("Core: lx.masque.idle_timeout. The idle window for MASQUE nodes that have no idle_timeout of their own."),
-        'quic_sniff_decoy': getLocalText.s("Core: lx.quic_sniff_decoy.mode. A relay with UDP sniffing (Xray destOverride quic) rewrites the destination by the SNI of the first QUIC packet; a junk first byte makes it give up. Servers drop the byte. A DPI on your own uplink may react to it, hence Off by default."),
-        'quic_sniff_decoy_send': getLocalText.s("Core: lx.quic_sniff_decoy.send. Retry: a node that failed without the byte retries with it, at once on a fast error, otherwise on the next dial; a failure with the byte resets it. Always: the byte on every dial."),
-        'quic_sniff_decoy_outbounds': getLocalText.s("Core: lx.quic_sniff_decoy.outbound_type. masque, hysteria2, tuic, trusttunnel, vless, vmess, trojan, wireguard. vless, vmess and trojan send it only with XHTTP over HTTP/3, wireguard only before a QUIC-like AWG burst."),
-        'quic_sniff_decoy_detours': getLocalText.s("Core: lx.quic_sniff_decoy.detour_type. Any outbound type except groups; a type this core does not know fails the start."),
+        'sniff_guard_tls': getLocalText.s("Core: lx.sniff_guard.tls. A relay or router that sniffs TLS (Xray destOverride without routeOnly) redirects the connection by the SNI of the ClientHello; a node with a masked SNI then looks dead. Paths through direct, SSH and SOCKS start unprotected, other relays start protected; the core switches a path when a node fails one way and connects the other."),
+        'sniff_guard_quic': getLocalText.s("Core: lx.sniff_guard.quic. The same for the first QUIC packet. Never applied through a SOCKS relay. AmneziaWG follows what other QUIC nodes on the same path have taught the core."),
       };
 
   Widget _buildCoreTab(

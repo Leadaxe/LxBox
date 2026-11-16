@@ -88,6 +88,12 @@ Widget? buildSubscriptionEntrySubtitle(
             style: textStyle.copyWith(color: scheme.outline))
         : Text(statusText, style: textStyle));
   }
+  // §734 — файловая подписка без текста на устройстве: просим выбрать файл.
+  if (entry.fileNeedsRepick) {
+    parts.add(Text(getLocalText.s("Choose the file again"),
+        key: const ValueKey('entry-file-repick'),
+        style: textStyle.copyWith(color: scheme.error)));
+  }
 
   if (entry.list is SubscriptionServers) {
     // §129 — файловая подписка: бейдж «file» вместо sync-интервала

@@ -740,6 +740,47 @@ void main() {
       expect(t.sessionKey, 'stream_auth');
     });
 
+    // §726 — алфавит и длина session id (#211): раньше терялись молча.
+    test('extra.sessionIDTable/sessionIDLength → session_table/session_length (§726)',
+        () {
+      final t = xrayTransport({
+        'mode': 'packet-up',
+        'path': '/p',
+        'extra': {
+          'sessionIDTable': 'Alphabet',
+          'sessionIDLength': 10,
+        },
+      });
+      expect(t.sessionTable, 'Alphabet');
+      expect(t.sessionLength, '10');
+      final (m, w) = t.toSingbox(TemplateVars.empty);
+      expect(m['session_table'], 'Alphabet');
+      expect(m['session_length'], '10');
+      expect(w, isEmpty);
+    });
+
+    test('плоские query.sessionIDTable/sessionIDLength читаются, диапазон дословно (§726)',
+        () {
+      final (m, codes) =
+          _viaUriQuery('sessionIDTable=Base62&sessionIDLength=8-12');
+      expect(m['session_table'], 'Base62');
+      expect(m['session_length'], '8-12');
+      expect(codes, isNot(contains('field_requires')));
+    });
+
+    test('таблица без длины снимается с field_requires (§726)', () {
+      final (m, codes) = _viaUriQuery('sessionIDTable=Base62');
+      expect(m.containsKey('session_table'), false);
+      expect(m.containsKey('session_length'), false);
+      expect(codes, contains('field_requires'));
+    });
+
+    test('нулевая длина — «не задано»: пара в тело не попадает (§726)', () {
+      final (m, _) = _viaUriQuery('sessionIDTable=Base62&sessionIDLength=0');
+      expect(m.containsKey('session_table'), false);
+      expect(m.containsKey('session_length'), false);
+    });
+
     // Критерий 5 — R6: деградация вместо поломки.
     test('битый / не-объектный extra не роняет разбор узла', () {
       for (final bad in <Object>['не-json', <Object>[], 5, true]) {

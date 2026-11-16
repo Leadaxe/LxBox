@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../../models/node_spec.dart';
 import '../../../models/node_warning.dart';
 import '../../../models/ui_msg.dart';
+import '../../../services/probe/probe_detour.dart';
 import '../../../services/probe/probe_runner.dart';
 import '../../../widgets/banner_palette.dart';
 import '../../../widgets/probe_badge.dart';
@@ -30,7 +31,17 @@ class SubscriptionNodeList extends StatelessWidget {
     this.tagPrefix = '',
     this.notLoaded = false,
     this.onUpdate,
+    this.fileMissing = false,
+    this.onChooseFile,
+    this.probeDetourOf,
+    this.buildWarningsOf,
   });
+
+  /// §730 — detour источника узла для диагностики без VPN (разбор узла).
+  final ProbeDetourRoute? Function(NodeSpec node)? probeDetourOf;
+
+  /// §739 итер. 2 — предупреждения последней сборки по узлу для его карточки.
+  final List<NodeWarning> Function(NodeSpec node)? buildWarningsOf;
 
   /// §615 — узлы не загружены (тела в кэше не было на старте, а прошлое
   /// обновление узлы видело): вместо «No nodes found» — подсказка и Update.
@@ -38,6 +49,11 @@ class SubscriptionNodeList extends StatelessWidget {
 
   /// §615 — ручное обновление подписки (тот же путь, что Refresh now).
   final VoidCallback? onUpdate;
+
+  /// §734 — файловая подписка без текста на устройстве: вместо Update —
+  /// объяснение и выбор файла заново ([onChooseFile] = Edit source).
+  final bool fileMissing;
+  final VoidCallback? onChooseFile;
 
   /// §392 — префикс тегов контейнера, нужен экрану разбора: диагностика при
   /// включённом VPN адресует узел его display-тегом из боевого конфига.
@@ -110,6 +126,31 @@ class SubscriptionNodeList extends StatelessWidget {
 
     if (nodes == null || nodes.isEmpty) {
       if (loading) return const SizedBox.shrink();
+      if (fileMissing) {
+        return Center(
+          key: const ValueKey('nodes-file-missing'),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  getLocalText.s(
+                      "This subscription was added from a file, and the file is not on this device. A backup keeps subscription settings, not their contents, and Android does not let the app read the file again. Choose the file again to load its servers."),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                FilledButton.tonalIcon(
+                  key: const ValueKey('nodes-file-missing-choose'),
+                  onPressed: onChooseFile,
+                  icon: const Icon(Icons.insert_drive_file_outlined, size: 18),
+                  label: Text(getLocalText.s("Pick file...")),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
       if (notLoaded) {
         return Center(
           key: const ValueKey('nodes-not-loaded'),
@@ -277,7 +318,12 @@ class SubscriptionNodeList extends StatelessWidget {
           // выключение узла живёт на Switch слева, так что тап по строке
           // свободен. Долгий тап — меню (копирование, diff замен).
           onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
-            builder: (_) => NodeInspectScreen(node: node, tagPrefix: tagPrefix),
+            builder: (_) => NodeInspectScreen(
+              node: node,
+              tagPrefix: tagPrefix,
+              probeDetour: probeDetourOf?.call(node),
+              buildWarnings: buildWarningsOf?.call(node) ?? const [],
+            ),
           )),
           onLongPress: () => _showNodeMenu(context, node),
         );
@@ -335,7 +381,12 @@ class SubscriptionNodeList extends StatelessWidget {
               onTap: () {
                 Navigator.pop(ctx);
                 Navigator.of(context).push(MaterialPageRoute<void>(
-                  builder: (_) => NodeInspectScreen(node: node, tagPrefix: tagPrefix),
+                  builder: (_) => NodeInspectScreen(
+                    node: node,
+                    tagPrefix: tagPrefix,
+                    probeDetour: probeDetourOf?.call(node),
+                    buildWarnings: buildWarningsOf?.call(node) ?? const [],
+                  ),
                 ));
               },
             ),

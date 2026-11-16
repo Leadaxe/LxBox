@@ -84,9 +84,20 @@ final class NodeLinkChange {
   final moves = <NodeLink, NodeLink>{};
   final gone = <NodeLink>{};
   final kept = <NodeLink>{};
+  // §731 — адрес держит ПЕРВЫЙ узел с ним (тёзки в папке делят сырой тег,
+  // сборка резолвит ссылку в первого: `NodeLinkTargets`, «первый сырой тег
+  // побеждает»). Тёзка ниже по списку ссылок на этот адрес не держит: его
+  // переименование, перенос и удаление их не касаются. Без этого правка
+  // имени КОПИИ узла уводила на копию ссылки оригинала.
+  final owned = <NodeLink>{};
   was.forEach((node, address) {
     final successor = renamed[node] ?? node;
     final next = now[successor];
+    if (!owned.add(address)) {
+      // Тёзка, оставшийся под тем же адресом, держит его дальше (см. ниже).
+      if (next == address) kept.add(address);
+      return;
+    }
     if (next == null) {
       gone.add(address);
     } else if (next != address) {

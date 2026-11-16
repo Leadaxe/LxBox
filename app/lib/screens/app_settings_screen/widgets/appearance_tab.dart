@@ -65,6 +65,16 @@ class AppearanceTab extends StatelessWidget {
             }).toList(),
           ),
         ),
+        // §735 — Material You: только там, где система отдаёт палитру
+        // (Android 12+, не TV). Default off — вид не меняется сам.
+        if (themeNotifier.dynamicColorAvailable)
+          SwitchListTile(
+            title: Text(getLocalText.s("System colors")),
+            subtitle: Text(getLocalText.s("Use the accent color from your wallpaper (Material You, Android 12+).")),
+            secondary: const Icon(Icons.palette_outlined),
+            value: themeNotifier.dynamicColor,
+            onChanged: themeNotifier.setDynamicColor,
+          ),
         const SizedBox(height: 8),
         // §541 — компоновка: поворот и две колонки списка узлов в одном месте.
         Text(getLocalText.s("Layout"),

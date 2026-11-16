@@ -7,6 +7,7 @@ import '../../../services/contract/registry.dart';
 import '../../../services/contract/registry_warning.dart';
 import '../../../services/contract/warning_codes.dart';
 import '../../../services/l10n/locale_controller.dart';
+import '../../../services/parser/parse_all.dart' show kDuplicatesCollapsedCode;
 import '../../../services/url_launcher.dart' as ul;
 import '../../../widgets/banner_palette.dart';
 
@@ -73,18 +74,29 @@ class NodeNotificationsView extends StatelessWidget {
   }
 }
 
+/// §589 итер. 3 — коды, которые шторка НЕ сворачивает в группу (§572).
+///
+/// `duplicates_collapsed` (§589) у каждого выжившего узла свой: имя узла,
+/// число повторов и имена слившихся записей. В общей карточке эти
+/// подстановки расходятся и становятся «…» — человек не видит, что с чем
+/// склеилось, а ради этого шторка и открывается.
+const kUngroupedWarningCodes = {kDuplicatesCollapsedCode};
+
 /// §572 — записи одного уровня, собранные по коду (`warningCodeOf`).
 ///
 /// Код, встреченный дважды и больше, даёт одну группу; одиночный код и
 /// рукописный класс без кода остаются отдельными элементами. Порядок — по
 /// первому вхождению кода, внутри группы — исходный: список уведомлений
 /// повторяет порядок разбора, и группировка его не перемешивает.
+///
+/// Коды из [kUngroupedWarningCodes] не сворачиваются: каждая их запись — свой
+/// отдельный факт, и общая карточка с «…» вместо подстановок его теряет.
 List<List<NodeWarning>> groupWarningsByCode(List<NodeWarning> level) {
   final out = <List<NodeWarning>>[];
   final byCode = <String, List<NodeWarning>>{};
   for (final w in level) {
     final code = warningCodeOf(w);
-    if (code == null) {
+    if (code == null || kUngroupedWarningCodes.contains(code)) {
       out.add([w]);
       continue;
     }

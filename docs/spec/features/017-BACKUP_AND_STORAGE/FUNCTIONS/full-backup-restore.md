@@ -89,7 +89,9 @@ the home screen — "… · fetching subscriptions…".
 
 - An LX Backup file is not read by this input — [transfer to desktop](desktop-transfer.md).
 - Subscription nodes are not stored in the backup — they arrive with a
-  subscription update.
+  subscription update. A file subscription comes back without nodes: its
+  file is chosen again via "Edit source" (owner decision 2026-11-15,
+  [#219](https://github.com/Leadaxe/LxBox/issues/219)).
 - Importing directly into a set slot is not supported — [018-WORKSPACES](../../018-WORKSPACES/FEATURE.md).
 - File picking depends on OS capabilities (on TV — a hint).
 

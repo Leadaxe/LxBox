@@ -78,7 +78,9 @@ Result — "Saved as … (N bytes)", "Saved to Downloads: … (N bytes)" or
 
 - The backup is not encrypted; where to keep the file is the user's call.
 - Not included: core cache, logs, crash reports, rule-set cache,
-  subscription bodies (subscription nodes are re-fetched), the built config,
+  subscription bodies — the backup keeps sources' settings, not their
+  contents (owner decision 2026-11-15, [#219](https://github.com/Leadaxe/LxBox/issues/219)): a URL subscription
+  re-downloads its nodes, a file subscription's file is chosen again, the built config,
   Tailscale node state, set slots, theme.
 - The file is meant for LxBox; for the desktop launcher —
   [transfer to desktop](desktop-transfer.md).

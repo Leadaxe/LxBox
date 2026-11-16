@@ -9,7 +9,9 @@ import '../app_log.dart';
 import '../builder/detour_yields.dart' show yieldToBuildDetour;
 import '../builder/post_steps.dart' show applyMixedCaseSni, applyTlsFragment;
 import '../builder/registry_gate.dart';
+import '../builder/sniff_guard.dart' show probeSniffGuard;
 import '../settings_storage.dart' show SettingsStorage;
+import 'probe_detour.dart';
 
 /// §236/§296 — probe-конфиг для headless-сессии: ВСЕ переданные ноды (включая
 /// null-слоты для выключенных/битых) как outbounds/endpoints, БЕЗ inbound'ов
@@ -21,8 +23,10 @@ import '../settings_storage.dart' show SettingsStorage;
 /// nullable, unfiltered; подписки/серверы — `list.nodes`). Индекс в списке =
 /// адрес результата (`onResult`), одинаково для всех видов.
 ///
-/// Detour-политика НЕ применяется — тестируем сами ноды; собственные
-/// chained-цепочки ноды (⚙ из raw) сохраняются, как в боевом билдере.
+/// Собственные chained-цепочки ноды (⚙ из raw) сохраняются, как в боевом
+/// билдере. §730 — detour-политика источника применяется только по
+/// необязательному плану ([ProbeDetourPlan], `probe_detour.dart`): без плана
+/// узел тестируется напрямую, конфиг прежний байт в байт.
 class ProbeConfig {
   const ProbeConfig({
     required this.configJson,
@@ -138,19 +142,27 @@ const _wireguardEndpointType = 'wireguard';
 ///
 /// [tlsByIndex] — §636: уровни TLS-политики узла (узел, источник) по индексу
 /// в [nodes], те же, что сборка туннеля кладёт по тегу.
+///
+/// [detourPlan] — §730: detour источника по индексу в [nodes]. Для узла с
+/// исходом «учтён» записи цели кладутся в конфиг рядом с узлом (своя копия
+/// на каждый узел), хвост цепочки ссылается на цель. `null` — как до §730.
 ProbeConfig buildProbeConfig(
   List<NodeSpec?> nodes, {
   String coreVersion = '',
   Map<String, String> vars = const {},
   Map<int, TlsLayers> tlsByIndex = const {},
+  ProbeDetourPlan? detourPlan,
 }) =>
     buildProbeBatches(nodes,
-            coreVersion: coreVersion, vars: vars, tlsByIndex: tlsByIndex)
+            coreVersion: coreVersion,
+            vars: vars,
+            tlsByIndex: tlsByIndex,
+            detourPlan: detourPlan)
         .firstOrNull ??
     ProbeConfig(
       configJson: null,
       tagByIndex: const {},
-      brokenByIndex: _brokenOf(nodes, coreVersion),
+      brokenByIndex: _brokenOf(nodes, coreVersion, detourPlan),
     );
 
 /// §518/§523 — раскладывает [nodes] на probe-конфиги так, чтобы в каждом было
@@ -173,11 +185,12 @@ List<ProbeConfig> buildProbeBatches(
   String coreVersion = '',
   Map<String, String> vars = const {},
   Map<int, TlsLayers> tlsByIndex = const {},
+  ProbeDetourPlan? detourPlan,
 }) {
   final built = <int, _Built>{};
   final broken = <int, String>{};
   for (var i = 0; i < nodes.length; i++) {
-    final e = _buildOne(nodes[i], coreVersion);
+    final e = _buildOne(nodes[i], coreVersion, detourPlan?.at(i));
     if (e is String) {
       broken[i] = e;
     } else {
@@ -233,15 +246,20 @@ List<ProbeConfig> buildProbeBatches(
     for (var g = 0; g < groups.length; g++)
       _assemble(groups[g], built,
           brokenByIndex: g == 0 ? broken : const {},
+          coreVersion: coreVersion,
           vars: vars,
           tlsByIndex: tlsByIndex),
   ];
 }
 
-Map<int, String> _brokenOf(List<NodeSpec?> nodes, String coreVersion) {
+Map<int, String> _brokenOf(
+  List<NodeSpec?> nodes,
+  String coreVersion,
+  ProbeDetourPlan? detourPlan,
+) {
   final broken = <int, String>{};
   for (var i = 0; i < nodes.length; i++) {
-    final e = _buildOne(nodes[i], coreVersion);
+    final e = _buildOne(nodes[i], coreVersion, detourPlan?.at(i));
     if (e is String) broken[i] = e;
   }
   return broken;
@@ -254,12 +272,22 @@ class _Built {
     this.mainIndexInEntries,
     this.detourCount,
     this.naiveCount,
-    this.wireguardCount,
-  );
+    this.wireguardCount, {
+    this.targetCount = 0,
+    this.targetTls = const TlsLayers(),
+  });
 
-  final List<SingboxEntry> entries; // [detours…, main]
+  /// `[target…, detours…, main]`: §730 — первыми [targetCount] записей цели
+  /// detour источника (её родная цепочка, затем её main), без плана их нет.
+  final List<SingboxEntry> entries;
   final int mainIndexInEntries;
   final int detourCount;
+
+  /// §730 — сколько записей занимает цель detour источника (0 — не учтён).
+  final int targetCount;
+
+  /// §730 — уровни TLS цели (её источника), §636.
+  final TlsLayers targetTls;
 
   /// §518 — сколько naive-записей несёт узел (сам + детуры).
   final int naiveCount;
@@ -271,7 +299,11 @@ class _Built {
 }
 
 /// Собирает записи одного узла. Возвращает [_Built] или строку-вердикт.
-Object _buildOne(NodeSpec? node, String coreVersion) {
+///
+/// [route] — §730: при «учтён» к записям узла спереди добавляются записи
+/// цели; REPLACE снимает родную цепочку узла (как `skipDetour` боевой
+/// сборки).
+Object _buildOne(NodeSpec? node, String coreVersion, [ProbeDetourRoute? route]) {
   if (node == null) return 'broken';
   // §336 — группа (§322) не тестируется: её emitRaw — заготовка urltest с
   // пустым outbounds (члены дописывает только боевой билдер), ядро валит
@@ -283,9 +315,23 @@ Object _buildOne(NodeSpec? node, String coreVersion) {
   // на Home у узла «—» вместо задержки.
   if (node is TailscaleSpec) return 'no-address';
   try {
-    final raw = node.getEntries(null);
+    final target =
+        route?.kind == ProbeDetourKind.applied ? route!.target : null;
+    final raw = node.getEntries(null,
+        skipDetour: target != null && route!.replace);
+    // §730 — цель со своей родной цепочкой (если её источник не снимает
+    // цепочки): свежие map на каждый вызов, копия на каждый узел.
+    final targetRaw = target?.getEntries(null,
+        skipDetour: route!.targetSkipChain);
+    final targetEntries = targetRaw == null
+        ? const <SingboxEntry>[]
+        : <SingboxEntry>[...targetRaw.detours, targetRaw.main];
     // Зеркалим ServerListBuild: детуры первыми (main ссылается на tag).
-    final entries = <SingboxEntry>[...raw.detours, raw.main];
+    final entries = <SingboxEntry>[
+      ...targetEntries,
+      ...raw.detours,
+      raw.main,
+    ];
     // §546 — гард реестра, как у боевой сборки (`build_config.dart`): эмиттер
     // значений не судит, и без гарда probe был бы единственным путём в ядро
     // мимо реестра. Тело переписывается на месте. Снятая запись — узел не
@@ -325,6 +371,8 @@ Object _buildOne(NodeSpec? node, String coreVersion) {
       raw.detours.length,
       naive,
       wireguard,
+      targetCount: targetEntries.length,
+      targetTls: route?.targetTls ?? const TlsLayers(),
     );
   } catch (e) {
     return 'invalid: $e';
@@ -348,6 +396,7 @@ ProbeConfig _assemble(
   List<int> indexes,
   Map<int, _Built> built, {
   required Map<int, String> brokenByIndex,
+  String coreVersion = '',
   Map<String, String> vars = const {},
   Map<int, TlsLayers> tlsByIndex = const {},
 }) {
@@ -371,19 +420,50 @@ ProbeConfig _assemble(
 
   for (final i in indexes) {
     final b = built[i]!;
+    final t = b.targetCount;
+    // §730 — цель detour источника: теги уникализируются, ссылки её родной
+    // цепочки переводятся на новые теги (копия цели на каждый узел даёт
+    // суффиксы `-2`, и сырой `detour` звена указал бы на чужую копию).
+    if (t > 0) {
+      final renamed = <String, String>{};
+      for (var k = 0; k < t; k++) {
+        final old = b.entries[k].tag;
+        final fresh = allocate(old);
+        renamed.putIfAbsent(old, () => fresh);
+        b.entries[k].map['tag'] = fresh;
+      }
+      for (var k = 0; k < t; k++) {
+        final map = b.entries[k].map;
+        final d = map['detour'];
+        final to = d is String ? renamed[d] : null;
+        if (to != null) {
+          map['detour'] = to;
+          yieldToBuildDetour(map);
+        }
+      }
+    }
     // Детуры первыми (main ссылается на tag) — порядок [_Built.entries].
-    for (var k = 0; k < b.detourCount; k++) {
+    for (var k = t; k < t + b.detourCount; k++) {
       b.entries[k].map['tag'] = allocate(b.entries[k].tag);
     }
     final main = b.entries[b.mainIndexInEntries];
     final mainTag = allocate(main.tag);
     main.map['tag'] = mainTag;
     if (b.detourCount > 0) {
-      main.map['detour'] = b.entries[0].tag;
+      main.map['detour'] = b.entries[t].tag;
       // Контракт 1.1.84 (§81) — detour назначен в обход buildConfig: поля,
       // уступающие ему (`tls.fragment`, `listen_port`), снимаются тем же
       // вопросом к реестру. Кода нет — у probe-сессии нет уведомлений узла.
       yieldToBuildDetour(main.map);
+    }
+    if (t > 0) {
+      // §730 / §073 — APPEND: цель хвостом родной цепочки; REPLACE (или
+      // цепочки нет): узел сразу на цель. Уступки — как у родной цепочки.
+      final tail = b.detourCount > 0
+          ? b.entries[t + b.detourCount - 1]
+          : main;
+      tail.map['detour'] = b.entries[t - 1].tag;
+      yieldToBuildDetour(tail.map);
     }
     for (final e in b.entries) {
       switch (e) {
@@ -400,8 +480,14 @@ ProbeConfig _assemble(
     // §636 — уровни TLS узла: его main и родная цепочка.
     final layers = tlsByIndex[i];
     if (layers != null && !layers.isEmpty) {
-      for (final e in b.entries) {
+      for (final e in b.entries.skip(t)) {
         tlsByTag[e.tag] = layers;
+      }
+    }
+    // §730 — у цели уровни её источника, как в туннеле.
+    if (t > 0 && !b.targetTls.isEmpty) {
+      for (final e in b.entries.take(t)) {
+        tlsByTag[e.tag] = b.targetTls;
       }
     }
   }
@@ -414,7 +500,12 @@ ProbeConfig _assemble(
     );
   }
 
+  // §729 — тот же `lx.sniff_guard`, что у туннеля (без `persist`): без блока
+  // ядро с lx.34 не прячет рукопожатие узла за сниффящим релеем, и проба
+  // показала бы такой узел мёртвым.
+  final sniffGuard = probeSniffGuard(vars, coreVersion: coreVersion);
   final config = <String, dynamic>{
+    if (sniffGuard != null) 'lx': {'sniff_guard': sniffGuard},
     'log': {'level': 'error'},
     'dns': {
       'servers': [

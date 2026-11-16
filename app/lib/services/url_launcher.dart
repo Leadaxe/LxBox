@@ -189,6 +189,18 @@ class UrlLauncher {
     }
   }
 
+  /// §735 — акцент системной палитры (Material You, Android 12+, не TV);
+  /// null, если палитры нет или канал недоступен. Не кешируется: меняется
+  /// вместе с обоями.
+  static Future<Color?> systemAccentColor() async {
+    try {
+      final v = await _channel.invokeMethod<int>('systemAccentColor');
+      return v == null ? null : Color(v & 0xFFFFFFFF);
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// §622 — `FLAG_KEEP_SCREEN_ON` на окне активности.
   static Future<void> setKeepScreenOn(bool on) async {
     try {

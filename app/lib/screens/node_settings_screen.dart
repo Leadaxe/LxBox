@@ -33,6 +33,7 @@ import '../services/contract/form_source_sync.dart';
 import '../widgets/tailscale_network_tab.dart';
 import '../services/tailscale_network.dart';
 import '../services/l10n/locale_controller.dart';
+import '../services/probe/probe_detour.dart';
 import '../services/warp/warp_endpoint_picker.dart';
 import '../services/wireguard/masquerade_source.dart';
 import '../services/wireguard/wg_ini_export.dart';
@@ -221,6 +222,14 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
   }
 
   /// §237 — член папки, если экран открыт для него.
+  /// §730 — detour источника этого узла для диагностики без VPN: у члена
+  /// папки — по индексу члена, у одиночного сервера — его узел (индекс 0).
+  /// Сохранённое состояние источника, а не несохранённая правка экрана.
+  ProbeDetourRoute _probeDetourRoute() => probeDetourPlanOf(
+        widget.entry.list,
+        [for (final e in widget.subController.entries) e.list],
+      ).at(widget.memberIndex ?? 0);
+
   FolderMember? get _member {
     final mi = widget.memberIndex;
     if (mi == null) return null;
@@ -887,6 +896,8 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
                   // §392/§501 — диагностика + уведомления узла.
                   NodeDiagnosticsTab(
                     node: _node,
+                    // §730 — detour источника в прогоне без VPN.
+                    probeDetour: _probeDetourRoute(),
                     liveTag: TagResolver.displayTag(
                         widget.entry.list.tagPrefix, _originalTag),
                     warnings: _notifications,
@@ -989,6 +1000,19 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
           title: Text(getLocalText.s("Server")),
           subtitle: Text(_serverInfo, style: theme.textTheme.bodyMedium),
         ),
+        // §728 — http-прокси несёт только TCP (CONNECT): узел на UDP за ним
+        // не соединится, а выбранный выходом сам он не передаст UDP приложений.
+        if (_node is HttpSpec)
+          Padding(
+            key: const ValueKey('http-tcp-only-notice'),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: Text(
+              getLocalText.s(
+                  "This proxy carries only TCP connections. Nodes with a TCP transport work through it fully; UDP-based nodes (Hysteria2, TUIC, WireGuard) do not."),
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+          ),
         if (_recordNodes.length > 1)
           ..._buildRecordNodesBlock(theme)
         else
@@ -1065,14 +1089,19 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     final list = widget.entry.list;
     final folder = _member != null && list is FolderServers ? list : null;
     return [
+      // §737 — без распознанного detour подзаголовок сам говорит, что под
+      // detour ручки не действуют: detour из тела узла и звена цепочки
+      // [_underDetour] не видит, а сборка пропускает любой.
       _sectionHeader(getLocalText.s("TLS"),
-          getLocalText.s("Override the global TLS settings for this server."),
+          _underDetour
+              ? getLocalText.s("Override the global TLS settings for this server.")
+              : getLocalText.s("Override the global TLS settings for this server. Not applied if the server has a detour."),
           theme),
       if (_underDetour)
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           child: Text(
-            getLocalText.s("Not applied: traffic goes through a detour first."),
+            getLocalText.s("Not applied: traffic goes through a detour first. There the core's sniff guard decides (Core settings)."),
             style: theme.textTheme.bodySmall
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),

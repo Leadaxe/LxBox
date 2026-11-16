@@ -12,6 +12,7 @@ import '../parser/engine_test_setup.dart';
 
 /// §561 — отбраковка разбора живёт в `dropped[]` подписки и показывается в
 /// сводке источника (строка + шторка), а не на соседнем узле.
+/// §589 итер. 2 — строка «duplicates merged» открывает ту же шторку.
 void main() {
   setUpAll(loadEngineSections);
   tearDownAll(unloadEngineSections);
@@ -74,5 +75,101 @@ void main() {
   testWidgets('сводка без отбраковки — строки нет', (tester) async {
     await pumpMeta(tester, entryFor(const []));
     expect(find.byIcon(Icons.error_outline), findsNothing);
+  });
+
+  group('§589 итер. 2 — строка дублей', () {
+    const pbk = 'Lx2TnXgn4YbYp6h6rVr3m2DkQnq1Yl7yY0pYf0bR3X0';
+    String vless(int n, String name) =>
+        'vless://0000000$n-0000-4000-8000-000000000000@${n == 1 ? 'a' : 'b'}'
+        '.example.com:443?type=tcp&security=reality&pbk=$pbk&fp=chrome'
+        '&sni=www.example.org&sid=ab12&flow=xtls-rprx-vision'
+        '#${Uri.encodeComponent(name)}';
+
+    SubscriptionEntry dupEntry(String text) {
+      final nodes = parseAll(decode(text));
+      return SubscriptionEntry(
+        list: SubscriptionServers(
+          id: 's2',
+          name: 'sub',
+          enabled: true,
+          tagPrefix: '',
+          detourPolicy: DetourPolicy.defaults,
+          url: 'https://example.com/sub',
+          nodes: nodes,
+        ),
+        nodeCount: nodes.length,
+      );
+    }
+
+    testWidgets('тап открывает шторку: карточка на выжившего', (tester) async {
+      final entry = dupEntry([
+        vless(1, 'AT'),
+        vless(2, 'PL'),
+        vless(1, 'DE'),
+        vless(2, 'PL2'),
+        vless(1, 'RU'),
+      ].join('\n'));
+      await pumpMeta(tester, entry);
+
+      final row = find.byIcon(Icons.merge_type);
+      expect(row, findsOneWidget);
+      await tester.tap(row);
+      await tester.pumpAndSettle();
+      final sheet =
+          tester.widget<NodeWarningsSheet>(find.byType(NodeWarningsSheet));
+      final cards = sheet.warnings.cast<RegistryWarning>();
+      expect(cards.map((w) => w.ownerTag), ['AT', 'PL']);
+      expect(cards.map((w) => w.params['names']), ['DE, RU', 'PL2']);
+      expect(cards.every((w) => w.code == kDuplicatesCollapsedCode), isTrue);
+    });
+
+    // §589 итер. 3 — шторка не сворачивает карточки разных выживших в одну
+    // группу (§572): у каждой своё число и свои имена, «…» нет.
+    testWidgets('шторка: карточка на каждый выживший, без «…»',
+        (tester) async {
+      final entry = dupEntry([
+        vless(1, 'AT'),
+        vless(2, 'PL'),
+        vless(1, 'DE'),
+        vless(2, 'PL2'),
+        vless(1, 'RU'),
+      ].join('\n'));
+      await pumpMeta(tester, entry);
+      await tester.tap(find.byIcon(Icons.merge_type));
+      await tester.pumpAndSettle();
+
+      final sheet = find.byType(NodeWarningsSheet);
+      expect(find.byKey(const ValueKey('notification-owner-AT')),
+          findsOneWidget);
+      expect(find.byKey(const ValueKey('notification-owner-PL')),
+          findsOneWidget);
+      expect(
+          find.descendant(
+              of: sheet, matching: find.textContaining('subscription: 2')),
+          findsOneWidget);
+      expect(
+          find.descendant(
+              of: sheet, matching: find.textContaining('subscription: 1')),
+          findsOneWidget);
+
+      for (final owner in ['AT', 'PL']) {
+        final tile = find.byKey(ValueKey('notification-owner-$owner'));
+        await tester.ensureVisible(tile);
+        await tester.pumpAndSettle();
+        await tester.tap(tile);
+        await tester.pumpAndSettle();
+      }
+      expect(find.descendant(of: sheet, matching: find.textContaining('DE, RU')),
+          findsWidgets);
+      expect(find.descendant(of: sheet, matching: find.textContaining('PL2')),
+          findsWidgets);
+      expect(find.descendant(of: sheet, matching: find.textContaining('…')),
+          findsNothing);
+    });
+
+    testWidgets('без повторов — строки нет', (tester) async {
+      await pumpMeta(tester, dupEntry('${vless(1, 'a')}\n${vless(2, 'b')}'));
+      expect(find.byIcon(Icons.merge_type), findsNothing);
+    });
   });
 }

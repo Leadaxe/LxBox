@@ -467,8 +467,9 @@ PATCH  /folders/{id}/members/{idx}[?rebuild=true]
                                                  detour = personal member detour as a node link
                                                  {"folder_id"?:"...","tag":"..."} (null clears). A plain string
                                                  is read as a sibling member's raw tag when one matches, else as
-                                                 a root {tag}. A detour that does not resolve at build drops
-                                                 the node (never goes direct).
+                                                 a root {tag}. A detour whose target is unavailable at build
+                                                 is removed: the node stays and goes direct, marked
+                                                 with the detour_unavailable warning.
 DELETE /folders/{id}/members/{idx}[?rebuild=true]  Remove member
 POST   /folders/{id}/members/reorder[?rebuild=true]
                                                Body {"order":[old indexes in new order]} — full permutation

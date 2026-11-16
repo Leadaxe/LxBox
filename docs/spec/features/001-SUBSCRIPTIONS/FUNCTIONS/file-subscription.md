@@ -58,6 +58,12 @@ status OK; the snapshot of the previous source is deleted.
   No snapshot → nothing changes. The Source tab shows the snapshot instead of
   a live request.
 - After a restart the file subscription's nodes are restored from its snapshot.
+- No snapshot on the device (restore from a backup, another phone, a
+  reinstall) — the subscription does not stay silent: the list row says
+  "Choose the file again", the Nodes tab explains why (a backup keeps
+  settings, not contents; Android does not let the app read the file again)
+  and offers "Pick file..." (= Edit source), and "Update" shows the same hint
+  in a snackbar; the log gets a warning instead of a debug line ([#219](https://github.com/Leadaxe/LxBox/issues/219)).
 - TTL cleanup of marks is not performed for a file subscription — there is no external
   signal that a node is gone.
 - The list shows a "file" badge instead of the interval; "Share URL…" is hidden;
@@ -69,6 +75,10 @@ status OK; the snapshot of the previous source is deleted.
 
 - There is no persistent access to the file on disk: a file subscription can be updated
   only by choosing the file again.
+- The file's text is not part of a backup (owner decision 2026-11-15,
+  [#219](https://github.com/Leadaxe/LxBox/issues/219), see the feature's Boundaries): restored on another phone or after a
+  reinstall, a file subscription has no nodes until the file is chosen again
+  via "Edit source".
 - Parsing the file contents — [002-NODE_IMPORT](../../002-NODE_IMPORT/FEATURE.md).
 
 ## Revisions

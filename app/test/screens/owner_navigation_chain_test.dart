@@ -76,6 +76,9 @@ void main() {
       await SettingsStorage.updateChain(const SourceChain(
           tag: 'via-de',
           hops: [NodeLink(tag: 'home'), NodeLink(tag: 'de-exit')]));
+      // §731 — тест про навигацию: конфиг считаем свежим, иначе редактор
+      // перед открытием пересобирает его (chain_editor_snapshot_fresh_test).
+      SettingsStorage.configDirty = false;
       unawaited(openTagOwner(
         ctx,
         'via-de',

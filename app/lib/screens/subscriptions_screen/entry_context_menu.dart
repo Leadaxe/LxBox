@@ -76,7 +76,13 @@ void showEntryContextMenu(
             title: Text(getLocalText.s("Update")),
             onTap: () {
               Navigator.pop(ctx);
-              unawaited(subController.updateAt(index));
+              unawaited(() async {
+                await subController.updateAt(index);
+                // §734 — файловая подписка без файла: Update ничего не даст.
+                if (entry.fileNeedsRepick && context.mounted) {
+                  showFileRepickSnack(context);
+                }
+              }());
             },
           ),
           // §129 — сменить источник подписки (online URL ↔ локальный файл).
@@ -360,4 +366,14 @@ Future<void> showEditSourceDialog(
     ),
   );
   urlCtl.dispose();
+}
+
+/// §734 (issue #219) — снекбар после Update файловой подписки, чьего файла на
+/// устройстве нет: бэкап хранит настройки, а не содержимое, и Android не даёт
+/// перечитать файл — выбрать его заново через Edit source.
+void showFileRepickSnack(BuildContext context) {
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+    content: Text(getLocalText.s(
+        "The file of this subscription is not on this device. Choose it again in Edit source")),
+  ));
 }

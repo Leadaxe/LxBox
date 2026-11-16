@@ -280,6 +280,8 @@ XhttpTransport xhttpFromMap(
     sessionKey: _pick(m, 'sessionKey', 'session_key'),
     seqPlacement: _pick(m, 'seqPlacement', 'seq_placement'),
     seqKey: _pick(m, 'seqKey', 'seq_key'),
+    sessionTable: _pick(m, 'sessionTable', 'session_table'),
+    sessionLength: _pick(m, 'sessionLength', 'session_length'),
     uplinkDataPlacement: _pick(m, 'uplinkDataPlacement', 'uplink_data_placement'),
     uplinkDataKey: _pick(m, 'uplinkDataKey', 'uplink_data_key'),
     uplinkChunkSize: _pick(m, 'uplinkChunkSize', 'uplink_chunk_size'),

@@ -162,6 +162,12 @@ final class XhttpTransport extends TransportSpec {
   final String seqPlacement; // path|query|header|cookie (дефолт path)
   final String seqKey;
 
+  // §726 — алфавит и длина случайного session id вместо UUID с дефисами
+  // (Xray `sessionIDTable` / `sessionIDLength`). Ядро требует оба сразу;
+  // пару судит реестр (`requires`, код `field_requires`), не эмиттер.
+  final String sessionTable; // имя (hex, Base62, …) или литеральный алфавит
+  final String sessionLength; // 'N' или 'min-max'
+
   // §127 — uplink data
   final String uplinkDataPlacement; // body|auto|header|cookie (дефолт auto)
   final String uplinkDataKey;
@@ -207,6 +213,8 @@ final class XhttpTransport extends TransportSpec {
     this.sessionKey = '',
     this.seqPlacement = '',
     this.seqKey = '',
+    this.sessionTable = '',
+    this.sessionLength = '',
     this.uplinkDataPlacement = '',
     this.uplinkDataKey = '',
     this.uplinkChunkSize = '',
@@ -258,6 +266,8 @@ final class XhttpTransport extends TransportSpec {
     if (sessionKey.isNotEmpty) m['session_key'] = sessionKey;
     if (seqPlacement.isNotEmpty) m['seq_placement'] = seqPlacement;
     if (seqKey.isNotEmpty) m['seq_key'] = seqKey;
+    if (sessionTable.isNotEmpty) m['session_table'] = sessionTable;
+    if (sessionLength.isNotEmpty) m['session_length'] = sessionLength;
 
     // §416 — связь uplink_data_placement ↔ mode судит реестр (§547 фаза B,
     // контракт 1.1.56), не эмиттер. Тело xhttp: `mode.default_when`

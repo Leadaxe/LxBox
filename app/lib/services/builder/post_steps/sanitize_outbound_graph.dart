@@ -21,6 +21,10 @@ part of '../post_steps.dart';
 ///
 /// Правила (нумерация эталона):
 ///  1. `detour` на несуществующий тег → ключ снят (узел ходит напрямую).
+///     §739 (контракт 1.1.171, решение владельца 16.11.2026): это общая
+///     схема для ЛЮБОЙ недоступной цели — Направление выключено, узел удалён,
+///     переименован, пропал из подписки. Узел остаётся в конфиге, сборка
+///     ставит код `detour_unavailable` узлу и источнику ([onDetourUnavailable]).
 ///     Текст warning'а разный по виновнику: цели не было изначально (битая
 ///     подписка) либо цель опустела и снята каскадом правила 2 здесь же —
 ///     во втором случае «referenced missing X» было бы ложью;
@@ -91,6 +95,11 @@ part of '../post_steps.dart';
 /// знает она, а не граф). Строки этих правил тогда не пишутся. Без колбэков
 /// — прежние EN-строки.
 ///
+/// §739 (контракт 1.1.171) — так же правило 1: [onDetourUnavailable] получает
+/// пары «узел, цель» снятых detour (и цели, которой не было, и цели, снятой
+/// каскадом правила 2); агрегат `detour_unavailable` по источнику строит
+/// сборка. Без колбэка — прежние строки «Detour removed».
+///
 /// Возвращает список EN-строк для `emitWarnings`. Пустой = граф был чист.
 List<String> sanitizeOutboundGraph(
   Map<String, dynamic> config, {
@@ -99,6 +108,7 @@ List<String> sanitizeOutboundGraph(
   String directTag = kDirectOutboundTag,
   void Function(RegistryWarning w)? onDefaultDropped,
   void Function(String node, String group)? onDetourThroughGroup,
+  void Function(String node, String target)? onDetourUnavailable,
 }) {
   final outbounds = (config['outbounds'] as List<dynamic>? ?? const [])
       .whereType<Map<String, dynamic>>()
@@ -241,11 +251,21 @@ List<String> sanitizeOutboundGraph(
       warnings.add(_detourGroupCycleLine(e.key, e.value));
     }
   }
-  for (final e in danglingDetourOwners.entries) {
-    warnings.add(_detourRemovedLine(e.key, e.value));
-  }
-  for (final e in sanitizedDetourOwners.entries) {
-    warnings.add(_detourRemovedLine(e.key, e.value, targetSanitized: true));
+  if (onDetourUnavailable != null) {
+    for (final owners in [danglingDetourOwners, sanitizedDetourOwners]) {
+      for (final e in owners.entries) {
+        for (final node in e.value) {
+          onDetourUnavailable(node, e.key);
+        }
+      }
+    }
+  } else {
+    for (final e in danglingDetourOwners.entries) {
+      warnings.add(_detourRemovedLine(e.key, e.value));
+    }
+    for (final e in sanitizedDetourOwners.entries) {
+      warnings.add(_detourRemovedLine(e.key, e.value, targetSanitized: true));
+    }
   }
 
   // Правило 8 (§442) — пара interval/idle_timeout у urltest. Только выжившие

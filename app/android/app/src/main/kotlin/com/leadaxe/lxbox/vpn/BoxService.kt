@@ -89,6 +89,21 @@ class BoxService(
         fun appLogWarning(text: String) {
             current?.appLogLine("WARN $text")
         }
+
+        /// §732 — полоса для pause/wake/rebind ядра. Эти вызовы синхронно
+        /// обходят все WG-устройства и соединения узлов; `onReceive`
+        /// (SCREEN_ON/OFF, Doze) исполняется на главном потоке, и зависший
+        /// вызов останавливал там же MethodChannel и приём ACTION_STOP.
+        /// Отдельная от полосы CommandClient: завис pause — connect клиентов
+        /// не ждёт. Порядок pause → wake сохраняет одна нить.
+        private val powerLane = SerialLane(
+            "lxbox-power",
+            onSlow = { msg ->
+                Log.e(TAG, "[power §732] $msg")
+                appLogWarning("[power §732] $msg")
+            },
+            onError = { label, t -> Log.e(TAG, "[power §732] $label failed", t) },
+        )
     }
 
     /// Scoped to service lifetime — all child coroutines are cancelled in onDestroy / doStop.
@@ -252,7 +267,7 @@ class BoxService(
                 Intent.ACTION_SCREEN_OFF -> {
                     Log.d(TAG, "[vpn] SCREEN_OFF → pause")
                     lastPauseAt = SystemClock.elapsedRealtime()
-                    commandServer.get()?.pause()
+                    powerLane.post("pause(SCREEN_OFF)") { commandServer.get()?.pause() }
                 }
                 Intent.ACTION_SCREEN_ON -> {
                     // wake() — только в BG_MODE_ALWAYS: пара к SCREEN_OFF → pause
@@ -260,7 +275,7 @@ class BoxService(
                     if (BootReceiver.getBackgroundMode(service) == BootReceiver.BG_MODE_ALWAYS) {
                         Log.d(TAG, "[vpn] SCREEN_ON → wake")
                         lastWakeAt = SystemClock.elapsedRealtime()
-                        commandServer.get()?.wake()
+                        powerLane.post("wake(SCREEN_ON)") { commandServer.get()?.wake() }
                     }
                     // §340 — wake-нудж SPEC 041 v2: ядро ребиндит только доказуемо
                     // стухшие WG/AWG-сессии (стале-предикат + дебаунс 90 с — в ядре,
@@ -270,8 +285,7 @@ class BoxService(
                     // начинаются раньше и сессию чинит досрочный rebind ядра
                     // (device-наблюдение 02.08: USER_PRESENT стабильно опаздывал).
                     Log.d(TAG, "[vpn] SCREEN_ON → rebindStaleEndpoints")
-                    runCatching { commandServer.get()?.rebindStaleEndpoints() }
-                        .onFailure { Log.e(TAG, "rebindStaleEndpoints failed", it) }
+                    powerLane.post("rebindStaleEndpoints") { commandServer.get()?.rebindStaleEndpoints() }
                 }
             }
         }
@@ -1016,13 +1030,13 @@ class BoxService(
 
     @RequiresApi(Build.VERSION_CODES.M)
     private fun onIdleModeChanged() {
-        val cs = commandServer.get() ?: return
+        if (commandServer.get() == null) return
         if (BoxApplication.powerManager.isDeviceIdleMode) {
             lastPauseAt = SystemClock.elapsedRealtime()
-            cs.pause()
+            powerLane.post("pause(idle)") { commandServer.get()?.pause() }
         } else {
             lastWakeAt = SystemClock.elapsedRealtime()
-            cs.wake()
+            powerLane.post("wake(idle)") { commandServer.get()?.wake() }
         }
     }
 

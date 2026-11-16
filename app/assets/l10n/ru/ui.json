@@ -1448,8 +1448,8 @@
   "Not a valid domain name.": {
     "value": "Недопустимое доменное имя."
   },
-  "Not applied: traffic goes through a detour first.": {
-    "value": "Не применяется: трафик сначала идёт через detour."
+  "This proxy carries only TCP connections. Nodes with a TCP transport work through it fully; UDP-based nodes (Hysteria2, TUIC, WireGuard) do not.": {
+    "value": "Этот прокси передаёт только TCP-соединения. Узлы с TCP-транспортом работают через него полностью, узлы на UDP (Hysteria2, TUIC, WireGuard) — нет."
   },
   "Not available: the node sets I2 explicitly.": {
     "value": "Недоступно: узел задаёт I2 явно."
@@ -1466,14 +1466,17 @@
   "Only if it differs from the server host": {
     "value": "Только если отличается от хоста сервера"
   },
-  "Override the global TLS settings for all servers of this folder.": {
-    "value": "Переопределяет глобальные настройки TLS для всех серверов этой папки."
+  "Override the global TLS settings for all servers of this folder. Not applied to servers with a detour.": {
+    "value": "Переопределяет глобальные настройки TLS для всех серверов этой папки. К серверам с detour не применяется."
   },
-  "Override the global TLS settings for all servers of this subscription.": {
-    "value": "Переопределяет глобальные настройки TLS для всех серверов этой подписки."
+  "Override the global TLS settings for all servers of this subscription. Not applied to servers with a detour.": {
+    "value": "Переопределяет глобальные настройки TLS для всех серверов этой подписки. К серверам с detour не применяется."
   },
   "Override the global TLS settings for this server.": {
     "value": "Переопределяет глобальные настройки TLS для этого сервера."
+  },
+  "Override the global TLS settings for this server. Not applied if the server has a detour.": {
+    "value": "Переопределяет глобальные настройки TLS для этого сервера. К серверу с detour не применяется."
   },
   "Password": {
     "value": "Пароль"
@@ -3739,6 +3742,12 @@
   "Two columns on wide screens": {
     "value": "Две колонки на широком экране"
   },
+  "System colors": {
+    "value": "Системные цвета"
+  },
+  "Use the accent color from your wallpaper (Material You, Android 12+).": {
+    "value": "Брать акцентный цвет из обоев (Material You, Android 12+)."
+  },
   "unknown error": {
     "value": "неизвестная ошибка"
   },
@@ -4049,6 +4058,15 @@
   },
   "Pick file...": {
     "value": "Выбрать файл…"
+  },
+  "Choose the file again": {
+    "value": "Выберите файл заново"
+  },
+  "This subscription was added from a file, and the file is not on this device. A backup keeps subscription settings, not their contents, and Android does not let the app read the file again. Choose the file again to load its servers.": {
+    "value": "Эта подписка добавлена из файла, а самого файла на устройстве нет. Резервная копия хранит настройки подписок, а не их содержимое, а Android не даёт приложению прочитать файл ещё раз. Выберите файл заново, чтобы загрузить серверы."
+  },
+  "The file of this subscription is not on this device. Choose it again in Edit source": {
+    "value": "Файла этой подписки на устройстве нет. Выберите его заново в «Изменить источник»"
   },
   "Pin AUTO to top": {
     "value": "Закреплять AUTO сверху"
@@ -7001,18 +7019,6 @@
   "Core: lx.mtu_align. A node over a tunnel gets a packet size that fits into it: mtu for WireGuard and MASQUE, the initial packet size for Hysteria2 and TUIC. Values are never raised.": {
     "value": "Ядро: lx.mtu_align. Узел поверх туннеля получает размер пакета, который в туннель влезает: mtu у WireGuard и MASQUE, начальный размер пакета у Hysteria2 и TUIC. Значения никогда не повышаются."
   },
-  "Core: lx.quic_sniff_decoy.mode. A relay with UDP sniffing (Xray destOverride quic) rewrites the destination by the SNI of the first QUIC packet; a junk first byte makes it give up. Servers drop the byte. A DPI on your own uplink may react to it, hence Off by default.": {
-    "value": "Ядро: lx.quic_sniff_decoy.mode. Релей со сниффингом UDP (Xray destOverride quic) подменяет назначение по SNI из первого QUIC-пакета; мусорный первый байт заставляет его отступиться. Серверы этот байт отбрасывают. DPI вашего собственного канала может на него среагировать, поэтому по умолчанию — Off."
-  },
-  "Core: lx.quic_sniff_decoy.send. Retry: a node that failed without the byte retries with it, at once on a fast error, otherwise on the next dial; a failure with the byte resets it. Always: the byte on every dial.": {
-    "value": "Ядро: lx.quic_sniff_decoy.send. Retry — узел, у которого не вышло без байта, повторяет попытку с ним: сразу при быстрой ошибке, иначе на следующем дозвоне; неудача с байтом возвращает его к попыткам без байта. Always — байт на каждом дозвоне."
-  },
-  "Core: lx.quic_sniff_decoy.outbound_type. masque, hysteria2, tuic, trusttunnel, vless, vmess, trojan, wireguard. vless, vmess and trojan send it only with XHTTP over HTTP/3, wireguard only before a QUIC-like AWG burst.": {
-    "value": "Ядро: lx.quic_sniff_decoy.outbound_type. masque, hysteria2, tuic, trusttunnel, vless, vmess, trojan, wireguard. vless, vmess и trojan шлют его только с XHTTP по HTTP/3, wireguard — только перед пачкой AWG под QUIC."
-  },
-  "Core: lx.quic_sniff_decoy.detour_type. Any outbound type except groups; a type this core does not know fails the start.": {
-    "value": "Ядро: lx.quic_sniff_decoy.detour_type. Любой тип outbound, кроме групп; тип, которого это ядро не знает, валит старт."
-  },
   "Core: lx.masque.idle_timeout. The idle window for MASQUE nodes that have no idle_timeout of their own.": {
     "value": "Ядро: lx.masque.idle_timeout. Окно простоя для узлов MASQUE без собственного idle_timeout."
   },
@@ -7111,5 +7117,29 @@
   },
   "Enter an http:// or https:// address": {
     "value": "Введите адрес http:// или https://"
+  },
+  "Not applied: traffic goes through a detour first. There the core's sniff guard decides (Core settings).": {
+    "value": "Не применяется: трафик сначала идёт через detour. Там решает защита от сниффинга ядра (настройки Core)."
+  },
+  "Core: lx.sniff_guard.tls. A relay or router that sniffs TLS (Xray destOverride without routeOnly) redirects the connection by the SNI of the ClientHello; a node with a masked SNI then looks dead. Paths through direct, SSH and SOCKS start unprotected, other relays start protected; the core switches a path when a node fails one way and connects the other.": {
+    "value": "Ядро: lx.sniff_guard.tls. Релей или роутер, который сниффит TLS (Xray destOverride без routeOnly), перенаправляет соединение по SNI из ClientHello; узел с маскировочным SNI при этом выглядит мёртвым. Пути напрямую, через SSH и SOCKS стартуют без защиты, через остальные релеи — с защитой; ядро переключает путь, когда узел одним способом упал, а другим подключился."
+  },
+  "Core: lx.sniff_guard.quic. The same for the first QUIC packet. Never applied through a SOCKS relay. AmneziaWG follows what other QUIC nodes on the same path have taught the core.": {
+    "value": "Ядро: lx.sniff_guard.quic. То же для первого пакета QUIC. Через SOCKS-релей не применяется никогда. AmneziaWG следует тому, чему ядро научили другие QUIC-узлы на том же пути."
+  },
+  "Detour is not applied in the test — the node is checked directly.": {
+    "value": "Detour в тесте не учитывается — узел проверяется напрямую."
+  },
+  "Detour is not applied in the test — nodes are checked directly.": {
+    "value": "Detour в тесте не учитывается — узлы проверяются напрямую."
+  },
+  "Tested through %s.": {
+    "value": "Тест идёт через %s."
+  },
+  "Tested through each node's own detour.": {
+    "value": "Тест идёт через detour каждого узла."
+  },
+  "Detour is applied in the test for %d of %d; the others are checked directly.": {
+    "value": "Detour учтён в тесте у %d из %d; остальные проверяются напрямую."
   }
 }

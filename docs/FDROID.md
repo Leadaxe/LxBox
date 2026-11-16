@@ -8,7 +8,7 @@ Related: [`RELEASE_PROCESS.md`](RELEASE_PROCESS.md), [`BUILD.md`](BUILD.md).
 | Fork for CI runs | `gitlab.com/leadaxe/fdroiddata`, branch `com.leadaxe.lxbox` |
 | MR | [fdroiddata!44731](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/44731) |
 | Open MR | [fdroiddata!50151](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/50151) (2026-09-26): 2.25.5, submodules by directory pathspec, cronet-go ref derived from the core's `go.mod`. Replaces the failed bot MR !49202 (2.24.2, missing `submodules/utls`) |
-| Last manual MR | [fdroiddata!55894](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/55894) (merged 2026-11-05): 2.25.19, `cronet-go` srclib pin moved to a live commit after upstream rewrote the `go` branch. Replaces the failed bot MR !55831 (issue #196) |
+| Last manual MR | [fdroiddata!55894](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/55894) (merged 2026-11-05): 2.25.19, `cronet-go` srclib pin moved to a live commit after upstream rewrote the `go` branch. Replaces the failed bot MR !55831 (issue #196). Later attempt [!57023](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/57023) (drop x86_64) was closed by the maintainer, see "Job limit" below |
 | RFP | [rfp#4218](https://gitlab.com/fdroid/rfp/-/work_items/4218) |
 
 F-Droid builds from source at `commit:`, including `libbox.aar` from
@@ -118,9 +118,16 @@ confirmed by the next buildserver run.
    runner kills a job at **3 h**. Two ABIs take 73 min, three took 2 h 45 min
    and hit the limit. x86_64 was dropped on 2026-09-06 and returned in
    !48904 on 2026-09-14 (owner's decision); that three-block job took 97 min,
-   about 30 min per ABI, and all three matched the GitHub APKs. If a three-block
-   job hits 3 h again, the release can still go through with the x86_64 block
-   marked `disable:`.
+   about 30 min per ABI, and all three matched the GitHub APKs. Later
+   three-block jobs took 2 h 36–39 min, and on 2026-11-12 (2.25.21, !56967) the
+   job hit 3 h on the x86_64 APK. The maintainer merged that bot MR with the red
+   CI anyway and closed !57023, which dropped x86_64; the owner then decided to
+   leave x86_64 in. A CI timeout does not block their buildserver. The 3 h limit
+   belongs to the shared runner; we cannot raise it. Dropping x86_64 later means
+   deleting the newest x86_64 block, not moving it: `rewritemeta` sorts `Builds`
+   by versionCode, and `checkupdates` needs the last block to equal
+   `CurrentVersionCode` (it copies the last `len(VercodeOperation)` blocks as
+   templates).
    Runner variance: the same Chromium build took 25 min once and 50 min
    another time.
 7. The first CI run on GitLab needs account verification (phone or card),
@@ -219,8 +226,7 @@ The pattern after `Tags` filters tag names: release tags and `-hotfixN` pass,
 release candidates `-rc.N` are never picked up (§436). `UpdateCheckIgnore`
 would not do it: `checkupdates` applies it only in `HTTP` mode and when
 parsing a manifest, not in `Tags` mode with `UpdateCheckData`.
-The pattern, `'%c + 4'` and the x86_64 block are in !48904: pipeline green
-on 2026-09-14, waiting for review.
+The pattern, `'%c + 4'` and the x86_64 block came in !48904.
 
 `UpdateCheckData` reads the ABI=0 code from pubspec (`2.23.0+22300500`);
 `VercodeOperation` adds each block's ABI digit, one operation per block.

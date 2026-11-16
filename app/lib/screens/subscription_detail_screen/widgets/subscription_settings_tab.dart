@@ -359,7 +359,13 @@ class SubscriptionSettingsTab extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.alt_route, size: 20),
             title: Text(getLocalText.s("Detour server")),
-            subtitle: Text(entry.overrideDetour.isEmpty
+            // §730 — показывать то, что применит сборка: при APPEND и
+            // use_detour_servers=false (хвост режима None из старых версий)
+            // `server_list_build` снимает ссылку, узлы идут напрямую — экран
+            // не должен рисовать путь через цель. Выбор в пикере ставит
+            // use_detour_servers=true, и detour применяется сразу (и в тесте).
+            subtitle: Text(entry.overrideDetour.isEmpty ||
+                    !(entry.useDetourServers || entry.replaceDetourChain)
                 ? getLocalText.s("None — nodes connect directly")
                 // detour — ВХОДНОЙ (трафик идёт через него ПЕРВЫМ, потом в
                 // ноды подписки, потом наружу). §252 — полная цепочка «как
@@ -381,8 +387,8 @@ class SubscriptionSettingsTab extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             folderMode
-                ? getLocalText.s("Override the global TLS settings for all servers of this folder.")
-                : getLocalText.s("Override the global TLS settings for all servers of this subscription."),
+                ? getLocalText.s("Override the global TLS settings for all servers of this folder. Not applied to servers with a detour.")
+                : getLocalText.s("Override the global TLS settings for all servers of this subscription. Not applied to servers with a detour."),
             style: theme.textTheme.bodySmall
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),

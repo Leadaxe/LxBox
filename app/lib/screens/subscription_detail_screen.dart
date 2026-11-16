@@ -8,6 +8,8 @@ import '../models/direction.dart';
 import '../models/import_rule.dart'; // §388 — ImportRuleAction для варнинга
 import '../models/node_link.dart';
 import '../models/node_spec.dart';
+import '../models/node_warning.dart';
+import '../services/tag_resolver.dart';
 import '../models/server_list.dart';
 import 'subscriptions_screen/entry_delete_title.dart';
 import '../models/ui_msg.dart';
@@ -15,16 +17,19 @@ import '../services/error_humanize.dart';
 import '../services/node_hash.dart';
 import '../services/parser/body_decoder.dart';
 import '../services/probe/probe_controller.dart';
+import '../services/probe/probe_detour.dart';
 import '../services/probe/probe_runner.dart';
 import '../services/settings_storage.dart';
 import '../services/ui_helpers.dart';
 import '../services/subscription/sources.dart';
 import '../services/subscription/subscription_identity.dart'; // §289 — generateUuidV4
 import '../widgets/detour_target_picker.dart';
+import '../widgets/probe_detour_note.dart';
 import '../widgets/user_agent_dialog.dart';
 import '../services/url_launcher.dart';
 import 'probe_gate_mixin.dart';
-import 'subscriptions_screen/entry_context_menu.dart' show showEditSourceDialog;
+import 'subscriptions_screen/entry_context_menu.dart'
+    show showEditSourceDialog, showFileRepickSnack;
 import 'subscription_detail_screen/detour_mode.dart';
 import 'subscription_detail_screen/subscription_detail_format.dart';
 import 'subscription_detail_screen/tag_prefix_cascade.dart';
@@ -313,6 +318,8 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
       nodes,
       // §636 — проба фрагментирует так же, как туннель.
       tlsByIndex: ProbeController.probeTlsOf(widget.entry.list),
+      // §730 — статический detour источника и в пробе.
+      detourPlan: _probeDetourPlan(),
       url: url,
       timeoutMs: timeoutMs,
       onResult: (i, r) {
@@ -521,6 +528,34 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
     };
   }
 
+  /// §730 — detour источника в пробе: по текущим записям всех источников
+  /// (цель ссылки может лежать в любом).
+  ProbeDetourPlan _probeDetourPlan() => probeDetourPlanOf(
+      widget.entry.list, [for (final e in widget.controller.entries) e.list]);
+
+  /// §730 — маршрут одного узла верхнего уровня (по ссылке на узел).
+  /// §739 итер. 2 — предупреждения последней сборки по узлу для его карточки:
+  /// config-тег — из обратной карты сборки по самому узлу (суффикс дедупа),
+  /// иначе display-тег с префиксом подписки.
+  List<NodeWarning> _buildWarningsOfNode(NodeSpec node) {
+    final byTag = widget.controller.lastBuildWarningsByTag;
+    if (byTag.isEmpty) return const [];
+    String? tag;
+    for (final e in widget.controller.lastEmittedTagMap.entries) {
+      if (identical(e.value, node)) {
+        tag = e.key;
+        break;
+      }
+    }
+    tag ??= TagResolver.displayTag(widget.entry.list.tagPrefix, node.tag);
+    return byTag[tag] ?? const [];
+  }
+
+  ProbeDetourRoute? _probeDetourOfNode(NodeSpec node) {
+    final i = widget.entry.list.nodes.indexWhere((n) => identical(n, node));
+    return i < 0 ? null : _probeDetourPlan().at(i);
+  }
+
   /// §339 — полоса теста над списком (паттерн `_buildControlBar` папки):
   /// слева инфо, справа кнопка старт/отмена.
   Widget _buildProbeBar(ThemeData theme) {
@@ -559,15 +594,20 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
           // §391 — bulk вкл/выкл всех нод: тот же `SizedBox(40)` + Switch,
           // что и leading строки узла (§283). В простое слева только он;
           // сводка теста — по центру, только во время/после прогона.
-          if (canToggleAll)
+          if (canToggleAll) ...[
             SizedBox(
               width: 40,
               child: Switch(
                 value: !allOff,
                 onChanged: (v) => unawaited(_toggleAllNodes(v)),
               ),
-            )
-          else
+            ),
+            // Switch шире своих 40 и вылезает вправо; в строке узла его
+            // прикрывает зазор ListTile (horizontalTitleGap 16) — тот же
+            // зазор здесь, иначе сводка теста наезжает на переключатель,
+            // и текст встаёт в один столбец с названиями узлов.
+            const SizedBox(width: 16),
+          ] else
             const SizedBox(width: 12),
           Expanded(
             child: info != null
@@ -825,12 +865,22 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
                 entry: entry,
                 onOpenUrl: _openUrl,
                 offCount: _disabledNodes.length, // §283
+                controller: widget.controller, // §739 итер. 2
               ),
               _buildProbeBar(theme), // §339 — Test servers
+              // §730 — учтён ли detour источника в тесте; видна всегда,
+              // когда detour задан, а не только после прогона.
+              ProbeDetourNote(
+                plan: _probeDetourPlan(),
+                padding: const EdgeInsets.fromLTRB(24, 0, 16, 6),
+              ),
               const Divider(height: 1),
               Expanded(
                 child: SubscriptionNodeList(
                   nodes: _nodes,
+                  // §730 — разбор узла: диагностика без VPN через detour.
+                  probeDetourOf: _probeDetourOfNode,
+                  buildWarningsOf: _buildWarningsOfNode, // §739 итер. 2
                   loading: _loading,
                   error: _error,
                   // §283 — toggle только у top-level нод подписки; chained-
@@ -850,6 +900,9 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
                   // §615 — тела в кэше нет: Update вместо «No nodes found».
                   notLoaded: entry.nodesNotLoaded,
                   onUpdate: _refreshNow,
+                  // §734 — файла на устройстве нет: выбрать заново.
+                  fileMissing: entry.fileNeedsRepick,
+                  onChooseFile: _editSource,
                 ),
               ),
             ],
@@ -1159,6 +1212,8 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
     await widget.controller.updateAt(idx);
     if (!mounted) return;
     setState(() {});
+    // §734 — обновить файловую подписку без файла нечем: говорим, что делать.
+    if (widget.entry.fileNeedsRepick) showFileRepickSnack(context);
   }
 
   /// §393 A6 — префикс допечатан: переписать литеральные вхождения старого

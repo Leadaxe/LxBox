@@ -87,7 +87,12 @@ object ProbeSession : CommandServerHandler {
     /// владелец дальше получает [STALE_RUN].
     @Synchronized
     fun start(config: String): Map<String, Any> {
-        if (BoxService.commandClient != null) {
+        // §732 — гейт по статусу службы, а не только по commandClient: тот
+        // появляется лишь на Started, а всё время Starting (секунды, пока ядро
+        // поднимает узлы) был null. Проба, стартовавшая в это окно, заново
+        // создавала command.sock (сокет VPN-сервера терял имя → его клиенты
+        // не подключались) и переписывала сетевой монитор службы на свой scope.
+        if (BoxService.commandClient != null || BoxVpnService.currentStatus != VpnStatus.Stopped) {
             return startResult("VPN is running — test uses the live tunnel instead")
         }
         stopInternal("restart")
@@ -222,8 +227,14 @@ object ProbeSession : CommandServerHandler {
         if (monitorOwned) {
             monitorOwned = false
             // VPN мог уже перехватить монитор (start VPN глушит probe и
-            // стартует монитор сам) — гасим только пока туннеля нет.
-            if (BoxService.commandClient == null) {
+            // стартует монитор сам) — гасим только пока службы нет.
+            // §732 — по статусу службы, не только по `commandClient`: тот
+            // null всё время Starting, когда служба уже подняла монитор
+            // на свой scope. Остановка пробы в это окно гасила бы монитор
+            // службы: туннель стартовал бы, но смены сети (Wi-Fi ↔
+            // мобильная) до перезапуска VPN не видел. Страховка ко второму
+            // гейту в [start]: с ним проба в Starting не рождается.
+            if (probeMayStopMonitor(BoxService.commandClient != null, BoxVpnService.currentStatus)) {
                 runCatching { runBlocking { DefaultNetworkMonitor.stop() } }
             }
         }
@@ -304,3 +315,10 @@ object ProbeSession : CommandServerHandler {
         override fun writeDNSQuery(query: DnsQuery?) { runCatching { } }
     }
 }
+
+/// §732 — монитор сети общий (синглтон) у пробы и VPN-службы. Проба гасит
+/// его, только когда службы нет вовсе: любой статус, кроме Stopped, значит,
+/// что монитор уже принадлежит службе (или будет остановлен ею самой в
+/// `doStop`). Вне объекта — чтобы JVM-тест не грузил libbox-интерфейсы.
+internal fun probeMayStopMonitor(vpnClientAlive: Boolean, vpnStatus: VpnStatus): Boolean =
+    !vpnClientAlive && vpnStatus == VpnStatus.Stopped

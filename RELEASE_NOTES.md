@@ -1,184 +1,299 @@
-# L×Box v2.25.21
+# L×Box v2.25.22
 
-**A patch on top of [v2.25.20](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.20).**
+**A patch on top of [v2.25.21](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.21).**
 
-**Path MTU** on the direct node: the largest packet that passes your network
-whole, and the MTU to set on WireGuard / AWG and MASQUE nodes. **Xray JSON**
-nodes are saved on the Source tab as written. The home screen remembers the
-**Direction** you picked. Android assistants can switch the VPN (Android 16+,
-off by default). Core `v1.14.4-lx.33`, contract 1.1.167.
+**Sniff guard** replaces the QUIC anti-sniff decoy: the core hides the first
+handshake packet of TLS and QUIC nodes from a relay that redirects by SNI and
+learns which paths need it. ⚠️ The four «Anti-sniff decoy» settings are gone,
+their values are not carried over. ⚠️ A server whose detour is unavailable no
+longer disappears from the config: it connects directly and gets a ⚠.
+**Test servers** now follow the source's detour. The app no longer freezes
+when the core stops answering. **System colors** (Material You), TV remote
+fixes in the app picker, two import fixes for **Xray** nodes. Core
+`v1.14.4-lx.35`, contract 1.1.171.
 
-**Патч поверх [v2.25.20](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.20).**
+**Патч поверх [v2.25.21](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.21).**
 
-**Path MTU** у узла direct: самый большой пакет, который проходит вашу сеть
-целиком, и MTU, который стоит задать узлам WireGuard / AWG и MASQUE. Узлы из
-**Xray JSON** сохраняются на вкладке Source как написаны. Главный экран
-помнит выбранное **Направление**. Ассистенты Android могут включать и
-выключать VPN (Android 16+, по умолчанию выключено). Ядро `v1.14.4-lx.33`,
-контракт 1.1.167.
+**Защита от сниффинга** заменяет QUIC-обманку: ядро прячет первый пакет
+рукопожатия TLS- и QUIC-узлов от релея, который перенаправляет по SNI, и
+само учится, каким путям это нужно. ⚠️ Четыре настройки «Обманки от
+сниффинга» убраны, их значения не переносятся. ⚠️ Сервер с недоступным
+detour больше не пропадает из конфига: он подключается напрямую и получает
+⚠. **Тест серверов** теперь учитывает detour источника. Приложение больше
+не зависает, когда ядро перестаёт отвечать. **Системные цвета** (Material
+You), исправления пульта TV в выборе приложений, два исправления импорта
+узлов **Xray**. Ядро `v1.14.4-lx.35`, контракт 1.1.171.
 
 ---
 
 <details open>
 <summary><h2>🇬🇧 English</h2></summary>
 
-## ⚠️ Read before updating
+## ⚠️ Changed
 
-- **"Anti-sniff decoy" is off by default (core `v1.14.4-lx.33`, [task 709](docs/spec/tasks/709-quic-sniff-decoy-toggle.md)).**
-  If you never touched the setting, the decoy byte is no longer sent. A mode
-  you chose yourself is kept. Turn it on in VPN Settings → Core → QUIC if a
-  relay that sniffs UDP redirects your MASQUE or AWG node.
-- **The "AWG masquerade" setting is removed ([task 720](docs/spec/tasks/720-awg-masquerade-setting.md)).**
-  The core dropped the option and sends the AmneziaWG masquerade packets on
-  every path. A saved "Direct only" value no longer has any effect.
+- **Sniff guard replaces the QUIC anti-sniff decoy ([task 729](docs/spec/tasks/729-sniff-guard-block.md), [#215](https://github.com/Leadaxe/LxBox/issues/215)).**
+  Core settings get a **Sniff guard** section: the TLS method (Record
+  fragment by default), the QUIC method (Decoy byte by default), «Only nodes
+  with a masked SNI» (on) and «Remember relays across restarts» (off). The
+  core hides the first handshake packet from a relay or router that redirects
+  connections by SNI, and learns from connection outcomes which paths need
+  it: paths through direct, SSH and SOCKS start unprotected, other relays
+  start protected. The decoy byte is never sent through a SOCKS relay.
+  - The four «Anti-sniff decoy» settings are gone and their saved values are
+    not carried over. The decoy, off by default before, is now on.
+  - The core no longer splits the TLS ClientHello for every node behind a
+    detour on its own. A node whose detour is a group with `direct` selected
+    now starts without the split — the case from #215, where a network drops
+    a ClientHello split into TLS records.
+  - If a node stopped connecting after the update, try another TLS method or
+    Off in Core → Sniff guard.
+  - Node checks use the same protection as the tunnel.
+- **Merged duplicates can be opened ([task 589](docs/spec/tasks/589-duplicates-collapsed-on-survivor.md)).**
+  The «N duplicates merged» line on the subscription page is now tappable:
+  it opens a sheet with a card for every server that was kept, showing how
+  many repeats it absorbed and under which names.
+- **An unavailable detour no longer removes the server ([task 739](docs/spec/tasks/739-detour-unavailable-node-warning.md)).**
+  When a detour target is not available — the Direction is turned off, the
+  server was deleted, renamed or disappeared from its subscription — the
+  config is built without that detour: the server stays and connects
+  directly. Before, such a server either vanished from the config or went
+  direct with only a line in the build report. Now a ⚠ «Hop … unavailable:
+  hop removed» marks the subscription, folder or server in the source list
+  and the node's own card. On the subscription and folder pages the same
+  warning is a tappable line, like «N entries dropped»: tap it to read what
+  happened and what to do. A detour onto the node itself and a ring of
+  detours still drop the node; chains are unchanged.
+- **TLS settings say they skip servers with a detour ([task 737](docs/spec/tasks/737-tls-skip-detour-toggle.md)).**
+  TLS fragmentation and mixed-case SNI apply only to servers that connect
+  directly; a server with a detour runs its TLS inside the hop, where Sniff
+  guard decides. The global section, the subscription and folder TLS section
+  and the server screen now say so. The behaviour is unchanged.
 
-## ✨ New
+## ✨ Added
 
-- **Path MTU on the direct node ([task 725](docs/spec/tasks/725-path-mtu-direct-diagnostics.md)).**
-  View details of `direct-out` → Diagnostics has a Path MTU card. It shows
-  the network interface and its MTU, sends ping packets that may not be
-  fragmented straight over the phone's network — past the tunnel, with the
-  VPN on or off — and finds the largest packet that gets an answer. Under the
-  result: the MTU to set on WireGuard / AWG nodes (`− 60`, `− 80` for an IPv6
-  target) and on MASQUE nodes (`− 51`), the list of probes and a copy button.
-  The target is `8.8.8.8` by default; ▾ lists well-known addresses, or type
-  your own IP or host name. A port in the target is dropped — ping has no
-  ports. The target has to answer ping. Debug API:
-  `POST /action/pathmtu[?target=]`.
-
-- **Android assistants can turn the VPN on or off and read its status ([task 721](docs/spec/tasks/721-appfunctions-vpn-toggle-status.md)).**
-  On Android 16+ the app declares the AppFunctions `startVpn`, `stopVpn` and
-  `getVpnStatus`. They work only after App Settings → Automation → "AI
-  assistant control" is turned on (off by default, hidden below Android 16).
-  Connecting needs a VPN permission granted earlier. The API is experimental:
-  Gemini calls only apps from Google's early access programme for now.
-
-- **Three more settings for "Anti-sniff decoy" ([task 709](docs/spec/tasks/709-quic-sniff-decoy-toggle.md)).**
-  VPN Settings → Core → QUIC: "Decoy sending" (On retry / Always), "Decoy
-  node types" and "Decoy relay types". The two type lists are picked from the
-  core's own list: chosen types show as tags with ×, "Add ▾" offers the rest.
-
-## 🔄 Changed
-
-- **The node's Diagnostics tab is laid out in cards, and Endpoint takes your own address ([task 725](docs/spec/tasks/725-path-mtu-direct-diagnostics.md)).**
-  Check and Notifications are separate cards. The Endpoint field is a combo
-  box: ▾ fills in a ready check, or type any `http://` / `https://` URL.
-- **The home screen opens on the Direction you picked last ([task 724](docs/spec/tasks/724-home-direction-remembered.md), [#212](https://github.com/Leadaxe/LxBox/issues/212)).**
-  The choice survives an app restart and a VPN restart. If that Direction no
-  longer exists, the first one in the list is shown.
-- **Picking a value from a ▾ list no longer raises the keyboard.**
+- **System colors (Material You) ([task 735](docs/spec/tasks/735-material-you-system-colors.md), [#218](https://github.com/Leadaxe/LxBox/issues/218)).**
+  App Settings → Appearance has a «System colors» switch: the app takes its
+  accent color from the wallpaper palette, like other Android apps. It is off
+  by default, so nothing changes until you turn it on, and it is shown only
+  on Android 12 and newer, not on TV. Status colors (ping, online/offline)
+  stay green and orange.
+- **An HTTP proxy node says it carries only TCP ([task 728](docs/spec/tasks/728-http-proxy-tcp-only-notice.md), [#187](https://github.com/Leadaxe/LxBox/issues/187)).**
+  Node Settings of an HTTP proxy shows a note under Server: nodes with a TCP
+  transport work through it fully, UDP-based nodes (Hysteria2, TUIC,
+  WireGuard) do not.
 
 ## 🐛 Fixed
 
-- **A node from Xray JSON could not be saved on the Source tab ([task 722](docs/spec/tasks/722-origin-kind-dialect.md), [#209](https://github.com/Leadaxe/LxBox/issues/209)).**
-  The dialect of a node's source (sing-box or Xray) is now stored with the
-  record instead of being re-guessed from the text. An Xray source is kept as
-  written and yields all its nodes — a `dialerProxy` relay becomes a separate
-  node. Such a record shows `· N nodes` in Servers and a "Nodes in this
-  source" list with a Tag field per node.
-- **One server the core rejects no longer breaks the ping of the whole list ([task 723](docs/spec/tasks/723-probe-core-rejected-node.md)).**
-  Such a server is left out and marked `core rejected: …` with the core's own
-  text; the rest are measured.
-- **Tunnel apps crashed on open with many installed apps ([task 693](docs/spec/tasks/693-app-picker-shared-uid-hint.md)).**
-  The app list and icons are read off the main thread, icons are scaled down
-  and requested only for the rows on screen.
-- **A narrow tunnel showed ERR on every ping ([task 718](docs/spec/tasks/718-tunnel-routes-preset.md)).**
-  A tunnel without a route to the internet (WireGuard / AWG with narrow
-  allowed IPs, OpenVPN or OpenConnect with "Only its own networks") is no
-  longer pinged and shows `no route`.
+- **Test servers ignored the source's detour ([task 730](docs/spec/tasks/730-probe-test-source-detour.md), [#187](https://github.com/Leadaxe/LxBox/issues/187)).**
+  With the VPN off, the server test checked every node directly, so a
+  subscription behind an operator's HTTP proxy showed all nodes dead on a
+  network without direct internet. A detour that points at one specific node
+  is now followed in the test, as in the tunnel; in a folder, members' own
+  detours count too. A detour the test cannot follow — a Direction, its auto
+  node, a chain, a group, a node that is off or has its own detour — is named
+  under the test bar, which says either «Tested through <node>.» or that
+  nodes are checked directly. Node Diagnostics with the VPN off follows the
+  same rule.
+- **Test servers: the detour note and the «VPN is running» dialog ([task 738](docs/spec/tasks/738-probe-note-wording-vpn-gate-autoclose.md)).**
+  The note under the test no longer says «of this source» — a folder node
+  can have its own detour. It now reads «Detour is not applied in the test»,
+  in the singular for one node. The «VPN is running» dialog closes by itself
+  when the VPN is stopped elsewhere — the notification, the tile,
+  Automation — and the test goes on.
+- **The app no longer freezes when the core stops answering ([task 732](docs/spec/tasks/732-main-thread-core-calls-off-main.md), [#210](https://github.com/Leadaxe/LxBox/issues/210)).**
+  Connecting to the core and pausing/waking it on screen off/on and Doze ran
+  on Android's main thread; when the core could not be reached, buttons,
+  notification updates and Stop stopped responding. These calls now run in
+  the background, the retry pause grows up to 8 seconds, and a stuck call is
+  named in the app log. A server test can no longer start while the VPN is
+  still starting — that could leave pings at «err» until the VPN was
+  restarted.
+- **A ping the core never answered hung forever ([task 731](docs/spec/tasks/731-chain-links-namesakes-ping-deadline.md)).**
+  The row stayed in «PING…», mass ping lost a slot and the log was silent.
+  The app now stops waiting 3 s after the test timeout, marks the node as
+  failed and writes a log line.
+- **A renamed copy of a folder node took over the original's links ([task 731](docs/spec/tasks/731-chain-links-namesakes-ping-deadline.md)).**
+  Two folder members with the same name share one address, and the first
+  one holds it. Renaming the second one moved chain positions, detours and
+  auto-group members of the first onto the copy. Links now stay with the
+  node that holds the address.
+- **The chain editor showed stale nodes after folder edits ([task 731](docs/spec/tasks/731-chain-links-namesakes-ping-deadline.md)).**
+  A new folder node was marked as lost and a deleted one stayed in the
+  position picker until the Servers screen was reopened. The editor now
+  rebuilds the config on open when sources changed since the last build.
+- **A file subscription without its file no longer stays silent ([#219](https://github.com/Leadaxe/LxBox/issues/219)).**
+  A backup keeps subscription settings, not their contents, so after a
+  restore on another phone or a reinstall a subscription added from a file
+  has no servers, and Update did nothing. The list row now says «Choose the
+  file again», the Nodes tab explains why (Android does not let the app read
+  the file again) with a button to pick the file, and Update shows the same
+  hint.
+- **Android TV: the app list could not be scrolled with the remote ([task 736](docs/spec/tasks/736-tv-search-field-dpad-mouse-drag.md), [#220](https://github.com/Leadaxe/LxBox/issues/220)).**
+  In the app picker (Routing → Tunnel apps, apps of a routing rule, URL
+  Check) the D-pad stopped at the search field. Up/Down now leave
+  single-line search fields above lists (app pickers, Logs filter, connection
+  filter, node filters). Lists also scroll by dragging with a mouse pointer,
+  which is how a TV remote in mouse mode works.
+- **XHTTP session id alphabet and length were lost on import from Xray ([task 726](docs/spec/tasks/726-xhttp-session-id-table-length.md), [#211](https://github.com/Leadaxe/LxBox/issues/211)).**
+  A server behind a CDN that blocks the default dashed-UUID session id
+  answered 403 when the node came from an Xray config or a share link, while
+  the same node written as sing-box JSON worked. `sessionIDTable` and
+  `sessionIDLength` now reach the node as `session_table` / `session_length`
+  — from Xray JSON (`xhttpSettings` / `splithttpSettings`, flat or in
+  `extra`) and from the `extra` and query of a link. One without the other is
+  removed with a warning: the core accepts them only together.
+- **A node imported from Xray JSON with `mux` enabled did not connect ([task 727](docs/spec/tasks/727-xray-mux-not-multiplex.md)).**
+  Xray `mux` was turned into sing-box `multiplex`, but these are different
+  protocols on the wire (Mux.Cool vs h2mux / smux / yamux), and an Xray
+  server refuses the latter. Xray `mux` is now dropped with an info note on
+  the node; the node connects without multiplexing. `multiplex` written
+  explicitly in sing-box JSON is kept. Nodes from a subscription are fixed on
+  the next subscription update.
 
 ## 🔧 Under the hood
 
-- Core `v1.14.4-lx.33`: `lx.quic_sniff_decoy` is an object
-  `{mode, outbound_type, detour_type, send}`.
-- Shared contract 1.1.167: `origin.kind` stores the dialect
-  (`singbox` / `xray` / `uri` / `wg_ini`); an empty `text_list` in state
-  beats the default.
-- The app module builds with `compileSdk 37` and KSP
-  (`androidx.appfunctions` 1.0.0-rc01).
+- Core `v1.14.4-lx.35`: `lx.sniff_guard`, upstream `stable` sync to
+  2026-11-14 (uTLS, REALITY client fixes, sing-tun).
+- Shared contract 1.1.171 (1.1.168: XHTTP session id; 1.1.169: Xray mux;
+  1.1.170: sniff guard; 1.1.171: warning code `detour_unavailable`).
+- The Debug API folder probe reports the detour the test followed.
 
 </details>
 
 <details open>
 <summary><h2>🇷🇺 Русский</h2></summary>
 
-## ⚠️ Прочтите до обновления
+## ⚠️ Изменено
 
-- **«Anti-sniff decoy» по умолчанию выключен (ядро `v1.14.4-lx.33`, [задача 709](docs/spec/tasks/709-quic-sniff-decoy-toggle.md)).**
-  Если вы не трогали настройку, байт-обманка больше не отправляется.
-  Выбранный вами режим сохраняется. Включите её в VPN Settings → Core → QUIC,
-  если посредник, который разбирает UDP, перенаправляет ваш узел MASQUE или
-  AWG.
-- **Настройка «AWG masquerade» убрана ([задача 720](docs/spec/tasks/720-awg-masquerade-setting.md)).**
-  Ядро сняло опцию и отправляет маскировочные пакеты AmneziaWG на любом
-  пути. Сохранённое значение «Direct only» больше ни на что не влияет.
+- **Защита от сниффинга заменяет QUIC-обманку ([задача 729](docs/spec/tasks/729-sniff-guard-block.md), [#215](https://github.com/Leadaxe/LxBox/issues/215)).**
+  В настройках Core появилась секция **«Защита от сниффинга»**: метод для
+  TLS (по умолчанию Record fragment), метод для QUIC (по умолчанию
+  байт-обманка), «Только узлы с маскировочным SNI» (включено) и «Помнить
+  релеи между перезапусками» (выключено). Ядро прячет первый пакет
+  рукопожатия от релея или роутера, который перенаправляет соединения по
+  SNI, и по исходам подключений учится, каким путям это нужно: пути
+  напрямую, через SSH и SOCKS стартуют без защиты, через остальные релеи — с
+  защитой. Через SOCKS-релей байт-обманка не отправляется никогда.
+  - Четыре настройки «Обманки от сниффинга» убраны, их сохранённые значения
+    не переносятся. Обманка, раньше выключенная по умолчанию, теперь
+    включена.
+  - Ядро больше не режет TLS ClientHello само у каждого узла за detour. Узел,
+    у которого detour — группа с выбранным `direct`, теперь стартует без
+    разреза: это случай из #215, где сеть дропает ClientHello, разрезанный на
+    TLS-записи.
+  - Если после обновления узел перестал соединяться, попробуйте другой метод
+    TLS или Off в Core → «Защита от сниффинга».
+  - Проверка узлов использует ту же защиту, что и туннель.
+- **Склеенные дубли можно раскрыть ([задача 589](docs/spec/tasks/589-duplicates-collapsed-on-survivor.md)).**
+  Строка «N duplicates merged» на странице подписки теперь нажимается:
+  открывается шторка с карточкой на каждый оставшийся сервер — сколько
+  повторов в него слилось и под какими именами.
+- **Недоступный detour больше не убирает сервер ([задача 739](docs/spec/tasks/739-detour-unavailable-node-warning.md)).**
+  Если цель detour недоступна — Направление выключено, сервер удалён,
+  переименован или пропал из подписки, — конфиг собирается без этого
+  detour: сервер остаётся и подключается напрямую. Раньше такой сервер либо
+  исчезал из конфига, либо шёл напрямую, оставив только строку в отчёте
+  сборки. Теперь ⚠ «Hop … unavailable: hop removed» стоит у подписки, папки
+  или сервера в списке источников и на карточке самого узла. На странице
+  подписки и папки то же предупреждение — строка, по которой можно нажать,
+  как «N entries dropped»: по тапу видно, что случилось и что делать. detour на
+  самого себя и кольцо из detour по-прежнему убирают узел, цепочки не
+  менялись.
+- **Подписи у TLS-настроек говорят, что серверы с detour пропускаются ([задача 737](docs/spec/tasks/737-tls-skip-detour-toggle.md)).**
+  Фрагментация TLS и SNI в смешанном регистре применяются только к
+  серверам, которые подключаются напрямую; у сервера с detour TLS идёт
+  внутри хопа, и там решает защита от сниффинга. Об этом теперь сказано в
+  глобальном разделе, в разделе TLS у подписки и папки и на экране сервера.
+  Поведение не менялось.
 
-## ✨ Новое
+## ✨ Добавлено
 
-- **Path MTU у узла direct ([задача 725](docs/spec/tasks/725-path-mtu-direct-diagnostics.md)).**
-  View details узла `direct-out` → Diagnostics: карточка Path MTU. Она
-  показывает сетевой интерфейс и его MTU, отправляет ping-пакеты с запретом
-  фрагментации прямо через сеть телефона — мимо туннеля, при включённом и
-  выключенном VPN — и находит самый большой пакет, на который приходит
-  ответ. Под результатом: MTU для узлов WireGuard / AWG (`− 60`, для
-  IPv6-цели `− 80`) и MASQUE (`− 51`), список проб и кнопка копирования.
-  Цель по умолчанию `8.8.8.8`; ▾ — список известных адресов, либо введите
-  свой IP или имя хоста. Порт в цели отбрасывается — у ping портов нет. Цель
-  должна отвечать на ping. Debug API: `POST /action/pathmtu[?target=]`.
-
-- **Ассистенты Android могут включать и выключать VPN и читать его статус ([задача 721](docs/spec/tasks/721-appfunctions-vpn-toggle-status.md)).**
-  На Android 16+ приложение объявляет AppFunctions `startVpn`, `stopVpn` и
-  `getVpnStatus`. Они работают только после включения App Settings →
-  Automation → «AI assistant control» (по умолчанию выключено, ниже
-  Android 16 скрыто). Для подключения нужно ранее выданное разрешение VPN.
-  API экспериментальный: Gemini пока вызывает только приложения из
-  программы раннего доступа Google.
-
-- **Ещё три настройки «Anti-sniff decoy» ([задача 709](docs/spec/tasks/709-quic-sniff-decoy-toggle.md)).**
-  VPN Settings → Core → QUIC: «Decoy sending» (On retry / Always), «Decoy
-  node types» и «Decoy relay types». Оба списка типов выбираются из списка
-  самого ядра: выбранные типы показаны тегами с ×, «Add ▾» предлагает
-  остальные.
-
-## 🔄 Изменено
-
-- **Вкладка Diagnostics узла разложена на карточки, а Endpoint принимает свой адрес ([задача 725](docs/spec/tasks/725-path-mtu-direct-diagnostics.md)).**
-  Check и Notifications — отдельные карточки. Поле Endpoint — комбобокс: ▾
-  подставляет готовую проверку, либо введите любой URL `http://` /
-  `https://`.
-- **Главный экран открывается на Направлении, выбранном последним ([задача 724](docs/spec/tasks/724-home-direction-remembered.md), [#212](https://github.com/Leadaxe/LxBox/issues/212)).**
-  Выбор переживает перезапуск приложения и VPN. Если такого Направления уже
-  нет, показывается первое в списке.
-- **Выбор значения из списка ▾ больше не поднимает клавиатуру.**
+- **Системные цвета (Material You) ([задача 735](docs/spec/tasks/735-material-you-system-colors.md), [#218](https://github.com/Leadaxe/LxBox/issues/218)).**
+  В App Settings → Appearance появился переключатель «Системные цвета»:
+  приложение берёт акцентный цвет из палитры обоев, как другие приложения
+  Android. По умолчанию он выключен, так что ничего не меняется, пока вы
+  его не включите, и показывается только на Android 12 и новее, не на TV.
+  Цвета статусов (пинг, online/offline) остаются зелёным и оранжевым.
+- **Узел HTTP-прокси говорит, что передаёт только TCP ([задача 728](docs/spec/tasks/728-http-proxy-tcp-only-notice.md), [#187](https://github.com/Leadaxe/LxBox/issues/187)).**
+  На экране настроек HTTP-прокси под строкой Server стоит заметка: узлы с
+  TCP-транспортом работают через него полностью, узлы на UDP (Hysteria2,
+  TUIC, WireGuard) — нет.
 
 ## 🐛 Исправлено
 
-- **Узел из Xray JSON не сохранялся на вкладке Source ([задача 722](docs/spec/tasks/722-origin-kind-dialect.md), [#209](https://github.com/Leadaxe/LxBox/issues/209)).**
-  Диалект источника узла (sing-box или Xray) теперь хранится в записи, а не
-  угадывается заново по тексту. Источник Xray сохраняется как написан и даёт
-  все свои узлы — посредник `dialerProxy` становится отдельным узлом. Такая
-  запись показывает `· N nodes` в Servers и список «Nodes in this source» с
-  полем Tag у каждого узла.
-- **Один сервер, который отвергло ядро, больше не ломает пинг всего списка ([задача 723](docs/spec/tasks/723-probe-core-rejected-node.md)).**
-  Такой сервер пропускается и получает отметку `core rejected: …` с текстом
-  ядра; остальные замеряются.
-- **Tunnel apps падал при открытии, когда установлено много приложений ([задача 693](docs/spec/tasks/693-app-picker-shared-uid-hint.md)).**
-  Список приложений и иконки читаются вне главного потока, иконки
-  уменьшаются и запрашиваются только для строк на экране.
-- **Узкий туннель показывал ERR на каждом пинге ([задача 718](docs/spec/tasks/718-tunnel-routes-preset.md)).**
-  Туннель без маршрута в интернет (WireGuard / AWG с узкими allowed IPs,
-  OpenVPN или OpenConnect с «Only its own networks») больше не пингуется и
-  показывает `no route`.
+- **Тест серверов не учитывал detour источника ([задача 730](docs/spec/tasks/730-probe-test-source-detour.md), [#187](https://github.com/Leadaxe/LxBox/issues/187)).**
+  При выключенном VPN тест проверял каждый узел напрямую, поэтому подписка
+  за HTTP-прокси оператора в сети без прямого интернета показывала все узлы
+  мёртвыми. Теперь detour, который указывает на конкретный узел, в тесте
+  учитывается так же, как в туннеле; в папке учитываются и личные detour
+  её узлов. detour, который тест учесть не может, — Направление, его
+  auto-узел, цепочка, группа, выключенный узел или узел со своим detour —
+  назван под полосой теста: там написано либо «Tested through <узел>.», либо
+  что узлы проверяются напрямую. Диагностика узла без VPN работает так же.
+- **Тест серверов: пометка про detour и диалог «VPN is running» ([задача 738](docs/spec/tasks/738-probe-note-wording-vpn-gate-autoclose.md)).**
+  Пометка под тестом больше не говорит «этого источника» — у узла папки
+  detour бывает личным. Теперь там «Detour is not applied in the test», для
+  одного узла — в единственном числе. Диалог «VPN is running» закрывается
+  сам, если VPN остановили в другом месте — из уведомления, плитки,
+  Automation, — и тест продолжается.
+- **Приложение больше не зависает, когда ядро перестаёт отвечать ([задача 732](docs/spec/tasks/732-main-thread-core-calls-off-main.md), [#210](https://github.com/Leadaxe/LxBox/issues/210)).**
+  Подключение к ядру и его пауза/пробуждение при гашении экрана и в Doze
+  шли с главного потока Android; если ядро было недоступно, кнопки,
+  обновление уведомления и Stop переставали отвечать. Теперь эти вызовы
+  идут в фоне, пауза между повторами растёт до 8 секунд, а зависший вызов
+  назван в журнале приложения. Тест серверов больше не стартует, пока VPN
+  ещё запускается, — из-за этого пинги могли показывать «err» до
+  перезапуска VPN.
+- **Пинг, на который ядро не ответило, висел бесконечно ([задача 731](docs/spec/tasks/731-chain-links-namesakes-ping-deadline.md)).**
+  Строка оставалась в «PING…», массовый пинг терял слот, в журнале было
+  пусто. Теперь приложение перестаёт ждать через 3 с после таймаута замера,
+  узел получает ошибку, в журнал идёт строка.
+- **Переименованная копия узла папки забирала ссылки оригинала ([задача 731](docs/spec/tasks/731-chain-links-namesakes-ping-deadline.md)).**
+  Два узла папки с одинаковым именем делят один адрес, и держит его первый.
+  Переименование второго переносило на копию позиции цепочек, detour и
+  членство в автогруппах первого. Теперь ссылки остаются у узла, который
+  держит адрес.
+- **Редактор цепочки показывал устаревшие узлы после правок в папке ([задача 731](docs/spec/tasks/731-chain-links-namesakes-ping-deadline.md)).**
+  Новый узел папки отмечался потерянным, а удалённый оставался в списке
+  позиций, пока не откроешь экран серверов заново. Теперь при открытии
+  редактор пересобирает конфиг, если источники менялись с последней сборки.
+- **Файловая подписка без файла больше не молчит ([#219](https://github.com/Leadaxe/LxBox/issues/219)).**
+  Резервная копия хранит настройки подписок, а не их содержимое, поэтому
+  после восстановления на другом телефоне или переустановки у подписки,
+  добавленной из файла, нет серверов, а Update ничего не делал. Теперь в
+  списке написано «Выберите файл заново», на вкладке Nodes объяснено
+  почему (Android не даёт приложению прочитать файл снова) и есть кнопка
+  выбора файла, а Update показывает ту же подсказку.
+- **Android TV: список приложений не прокручивался пультом ([задача 736](docs/spec/tasks/736-tv-search-field-dpad-mouse-drag.md), [#220](https://github.com/Leadaxe/LxBox/issues/220)).**
+  В выборе приложений (Routing → Tunnel apps, приложения правила
+  маршрутизации, URL Check) D-pad упирался в строку поиска. Теперь ↑/↓
+  уводят из однострочного поля поиска в список под ним (выбор приложений,
+  фильтр Logs, фильтр соединений, фильтры узлов). Ещё списки прокручиваются
+  перетаскиванием указателем мыши — так работает пульт TV в режиме мыши.
+- **Алфавит и длина идентификатора сессии XHTTP терялись при импорте из Xray ([задача 726](docs/spec/tasks/726-xhttp-session-id-table-length.md), [#211](https://github.com/Leadaxe/LxBox/issues/211)).**
+  Сервер за CDN, который блокирует стандартный идентификатор сессии в виде
+  UUID с дефисами, отвечал 403, если узел пришёл из конфига Xray или из
+  ссылки, — хотя тот же узел в виде sing-box JSON работал. `sessionIDTable`
+  и `sessionIDLength` теперь доезжают до узла как `session_table` /
+  `session_length` — из Xray JSON (`xhttpSettings` / `splithttpSettings`,
+  плоско или в `extra`) и из `extra` и параметров ссылки. Одно поле без
+  второго снимается с предупреждением: ядро принимает их только вместе.
+- **Узел из Xray JSON с включённым `mux` не соединялся ([задача 727](docs/spec/tasks/727-xray-mux-not-multiplex.md)).**
+  Xray `mux` превращался в `multiplex` sing-box, но на проводе это разные
+  протоколы (Mux.Cool против h2mux / smux / yamux), и сервер Xray второй не
+  принимает. Теперь Xray `mux` снимается с пометкой на узле, узел
+  соединяется без мультиплексирования. `multiplex`, явно записанный в
+  sing-box JSON, остаётся. Узлы из подписки исправятся при следующем её
+  обновлении.
 
 ## 🔧 Под капотом
 
-- Ядро `v1.14.4-lx.33`: `lx.quic_sniff_decoy` — объект
-  `{mode, outbound_type, detour_type, send}`.
-- Общий контракт 1.1.167: `origin.kind` хранит диалект
-  (`singbox` / `xray` / `uri` / `wg_ini`); пустой `text_list` в состоянии
-  побеждает значение по умолчанию.
-- Модуль приложения собирается с `compileSdk 37` и KSP
-  (`androidx.appfunctions` 1.0.0-rc01).
+- Ядро `v1.14.4-lx.35`: `lx.sniff_guard`, синк с `stable` апстрима до
+  14.11.2026 (uTLS, правки клиента REALITY, sing-tun).
+- Общий контракт 1.1.171 (1.1.168 — session id XHTTP; 1.1.169 — Xray mux;
+  1.1.170 — защита от сниффинга; 1.1.171 — код предупреждения
+  `detour_unavailable`).
+- Проба папки в Debug API сообщает, какой detour учёл тест.
 
 </details>
 
@@ -187,7 +302,7 @@ off by default). Core `v1.14.4-lx.33`, contract 1.1.167.
 ## Install / Установка
 
 ```bash
-adb install -r LxBox-v2.25.21-arm64-v8a.apk
+adb install -r LxBox-v2.25.22-arm64-v8a.apk
 ```
 
 Без uninstall! Поверх существующей установки. Настройки и подписки сохранятся.
@@ -197,4 +312,4 @@ are preserved.
 
 ---
 
-Previous release / Предыдущий релиз: [v2.25.20](docs/releases/v2.25.20.md).
+Previous release / Предыдущий релиз: [v2.25.21](docs/releases/v2.25.21.md).

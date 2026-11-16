@@ -11,10 +11,12 @@ import '../services/diagnostics/diagnostic_check.dart';
 import '../services/diagnostics/node_diagnostics_runner.dart';
 import '../services/error_format.dart';
 import '../services/l10n/locale_controller.dart';
+import '../services/probe/probe_detour.dart';
 import '../services/tailscale_network.dart';
 import '../vpn/box_vpn_client.dart';
 import '../vpn/cc_channel.dart';
 import 'banner_palette.dart';
+import 'probe_detour_note.dart';
 import 'safe_bottom.dart';
 import 'template_var_list.dart';
 
@@ -56,7 +58,13 @@ class NodeDiagnosticsTab extends StatefulWidget {
     this.scrollToNotifications = false,
     this.tailscaleStatusSource,
     this.vpnUp,
+    this.probeDetour,
   });
+
+  /// §730 — detour источника узла для прогона без VPN (probe-ветка) и
+  /// пометка у её результата. `null` — экран источника не знает (просмотр
+  /// outbound'а собранного конфига): узел проверяется напрямую, без пометки.
+  final ProbeDetourRoute? probeDetour;
 
   /// Тесты (§581): поток состояния Tailscale вместо [CcChannel] и VPN
   /// включён / выключен без обращения к сервису.
@@ -199,6 +207,7 @@ class _NodeDiagnosticsTabState extends State<NodeDiagnosticsTab> {
         widget.node,
         url: _url.trim(),
         liveTag: widget.liveTag,
+        detour: widget.probeDetour,
       );
       if (!mounted) return;
       setState(() => _outcome = outcome);
@@ -318,6 +327,13 @@ class _NodeDiagnosticsTabState extends State<NodeDiagnosticsTab> {
                             : getLocalText
                                 .s("Through this node in a temporary core session"),
                       ),
+                      // §730 — в probe-ветке: учтён ли detour источника.
+                      if (outcome.source == DiagnosticSource.probe &&
+                          widget.probeDetour != null)
+                        ProbeDetourNote(
+                          plan: ProbeDetourPlan.single(widget.probeDetour!),
+                          padding: const EdgeInsets.only(bottom: 8),
+                        ),
                       if (!outcome.ok)
                         Text(
                           outcome.result.error,

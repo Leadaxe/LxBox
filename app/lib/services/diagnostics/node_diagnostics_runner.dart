@@ -4,6 +4,7 @@ import '../../vpn/box_vpn_client.dart';
 import '../../vpn/cc_channel.dart';
 import '../builder/core_chain_capability.dart';
 import '../probe/probe_config.dart';
+import '../probe/probe_detour.dart';
 import '../probe/probe_lifecycle.dart';
 import '../subscription/user_agent.dart';
 
@@ -76,12 +77,16 @@ class NodeDiagnosticsRunner {
   /// узлы подписки живут под отображаемым тегом, а не bare. Нужен только для
   /// ветки [DiagnosticSource.live].
   ///
+  /// [detour] — §730: detour источника узла для probe-ветки (боевая ветка
+  /// идёт собранным конфигом, там detour уже есть). `null` — напрямую.
+  ///
   /// Бросает [DiagnosticUnavailable], если прогон невозможен в принципе
   /// (узел-группа, не собирается конфиг, нет живого клиента).
   Future<DiagnosticOutcome> run(
     NodeSpec? node, {
     required String url,
     required String liveTag,
+    ProbeDetourRoute? detour,
   }) async {
     _cancelled = false;
     final canceller = ProbeLifecycle.I.register(cancel);
@@ -90,7 +95,7 @@ class NodeDiagnosticsRunner {
       if (_cancelled) throw const DiagnosticUnavailable('cancelled');
       if (vpnUp) return await _runLive(url: url, tag: liveTag);
       if (node == null) throw const DiagnosticUnavailable('no_node');
-      return await _runProbe(node, url: url);
+      return await _runProbe(node, url: url, detour: detour);
     } finally {
       ProbeLifecycle.I.deregister(canceller);
     }
@@ -119,12 +124,15 @@ class NodeDiagnosticsRunner {
   Future<DiagnosticOutcome> _runProbe(
     NodeSpec node, {
     required String url,
+    ProbeDetourRoute? detour,
   }) async {
     // §546 — версия ядра для гарда реестра — та же, что у боевой сборки.
     final coreVersion = await CoreVersionCache.ensure(_vpn.getCoreVersion);
     // §606 — anti-DPI туннеля (фрагментация, mixed-case SNI) и в пробе.
     final cfg = buildProbeConfig([node],
-        coreVersion: coreVersion, vars: await loadProbeVars());
+        coreVersion: coreVersion,
+        vars: await loadProbeVars(),
+        detourPlan: detour == null ? null : ProbeDetourPlan.single(detour));
     final tag = cfg.tagByIndex[0];
     if (cfg.configJson == null || tag == null) {
       // Узел-группа (§322/§336) или несобираемый emit — ядро на таком конфиге

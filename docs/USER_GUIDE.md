@@ -311,6 +311,11 @@ of servers. L×Box looks after that list this way:
 A file subscription is a server list imported from a file instead of a
 link. It behaves like a subscription: many servers under one name. It does
 not update on its own; you supply a new file through **Edit source**.
+A backup keeps your sources' settings, not their contents: after a restore a
+URL subscription downloads its servers on the first update, and a file
+subscription needs its file picked again through **Edit source** — Android
+does not let the app keep reading a file from the phone. Such a subscription
+is marked "Choose the file again" in the list.
 
 The **Get WARP** item in the ⋮ menu of the Servers screen registers
 Cloudflare WARP for free and adds it as a server — for those without a
@@ -467,6 +472,18 @@ would be wrong. A folder has the same icon. A second tap stops the test and
 cuts the measurements already under way; until the test session closes, the
 summary reads `Stopping…` and the icon is inactive. Closing takes at most
 3 seconds, then the test can be started again.
+
+When the subscription or folder has a detour, a line under the bar says how
+the test treats it. A detour that points at one specific node (a single
+server's node, or a node of a subscription or folder) is used: the nodes are
+tested through it, as in the tunnel, and the line reads `Tested through
+<node>.` If that node is off, is itself sent through another detour, or the
+detour points at a Direction, its auto node, a chain or a group, the test
+cannot follow it: the line reads `Detour is not applied in the test — nodes
+are checked directly.` In a folder, members' own detours count
+the same way as in the tunnel; when only some of them can be followed, the
+line gives the count. The Diagnostics tab of a node, run with the VPN off,
+follows the same rule and shows the same line under the response.
 
 The **Settings** tab holds Tag prefix, detour, Update interval, Replace
 with a group (section
@@ -1044,6 +1061,15 @@ finds the cycle, the VPN does not start, and the **Routing loop — VPN not
 started** window opens with the list of culprits. Tapping a culprit takes you
 to its source: change or remove the detour there, and the loop breaks.
 
+If the detour target is unavailable — the direction is turned off, the server
+was deleted, renamed, or disappeared from its subscription after an update —
+L×Box builds the config without that detour. The server stays in the list and
+connects directly, and a ⚠ `Hop <target> unavailable: hop removed` appears in
+the source list on its subscription, folder or server and on the node's own
+card. To get the path through the detour back, turn the direction on, restore
+the server or pick another target; if a direct connection is fine, remove the
+detour.
+
 ### A direction with Use as detour serves as a switchable intermediate server
 
 The **Use as detour** checkbox in the direction editor lets you pick this
@@ -1283,6 +1309,11 @@ running core.
   only over UDP and has no fallback transport. You cannot spot the bad case in
   advance: the connection looks successful, and the server either forwards the
   datagrams or drops them without a word.
+- An HTTP proxy carries only TCP connections. Nodes with a TCP transport
+  (VLESS, Trojan, VMess) work behind it fully, including the UDP of apps that
+  they wrap inside their own stream. Nodes that speak UDP themselves
+  (Hysteria2, TUIC, WireGuard) do not connect behind it. The same note stands
+  under Server on the settings screen of an HTTP node.
 
 ---
 

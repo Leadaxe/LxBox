@@ -244,6 +244,80 @@ void main() {
           rootDetour.cast<Map>().singleWhere((o) => o['tag'] == 'R')['detour'],
           'EU A');
     });
+
+    // §731 (4PDA #2002) — тёзки в папке делят сырой тег, адрес держит первый.
+    group('тёзки в папке: адрес держит первый', () {
+      const a = NodeLink(folderId: _f1, tag: 'A');
+
+      /// f1: A, B → A, G {A}, копия A (другой сервер, то же имя).
+      ({List<ServerList> lists, List<SourceChain> chains}) twins() {
+        final s = _state();
+        final f1 = _f(s.lists, _f1);
+        return (
+          lists: [
+            f1.copyWith(members: [
+              ...f1.members,
+              FolderMember(raw: _uri('A', host: 'copy.example')),
+            ]),
+            ...s.lists.skip(1),
+          ],
+          chains: s.chains,
+        );
+      }
+
+      test('переименование копии ссылок оригинала не трогает', () {
+        final s = twins();
+        final f1 = _f(s.lists, _f1);
+        final renamedCopy =
+            FolderMember(raw: _uri('Copy', host: 'copy.example'));
+        final after = [
+          f1.copyWith(members: [...f1.members.take(3), renamedCopy]),
+          ...s.lists.skip(1),
+        ];
+        final diff = diffNodeAddresses(s.lists, after,
+            renamed: {f1.members[3].node!: renamedCopy.node!});
+        expect(diff.moves, isEmpty);
+        expect(diff.gone, isEmpty);
+
+        final r = _relink(s.lists, after, s.chains,
+            renamed: {f1.members[3].node!: renamedCopy.node!});
+        expect(r.chains.single.hops, [a, const NodeLink(tag: 'R')],
+            reason: 'позиция цепочки осталась на оригинале');
+        expect(_f(r.lists, _f1).members[1].detour, a);
+        expect(r.rewritten.isEmpty, isTrue);
+        expect(r.cleared.isEmpty, isTrue);
+      });
+
+      test('удаление копии ссылок оригинала не гасит', () {
+        final s = twins();
+        final f1 = _f(s.lists, _f1);
+        final after = [
+          f1.copyWith(members: [...f1.members.take(3)]),
+          ...s.lists.skip(1),
+        ];
+        final r = _relink(s.lists, after, s.chains);
+        expect(r.chains.single.hops, [a, const NodeLink(tag: 'R')]);
+        expect(r.cleared.isEmpty, isTrue);
+        expect(r.rewritten.isEmpty, isTrue);
+      });
+
+      test('переименование оригинала уводит ссылки за ним, копия их не '
+          'перехватывает', () {
+        final s = twins();
+        final f1 = _f(s.lists, _f1);
+        final renamedFirst =
+            FolderMember(raw: _uri('A2', host: 'a.example'));
+        final after = [
+          f1.copyWith(members: [renamedFirst, ...f1.members.skip(1)]),
+          ...s.lists.skip(1),
+        ];
+        final r = _relink(s.lists, after, s.chains,
+            renamed: {f1.members[0].node!: renamedFirst.node!});
+        const a2 = NodeLink(folderId: _f1, tag: 'A2');
+        expect(r.chains.single.hops, [a2, const NodeLink(tag: 'R')]);
+        expect(_f(r.lists, _f1).members[1].detour, a2);
+      });
+    });
   });
 
   group('реестр ссылок (контроллер)', () {
@@ -289,6 +363,23 @@ void main() {
       await c.rehydrationDone;
       return c;
     }
+
+    test('§731: копия узла в папке переименована — цепочка остаётся на '
+        'оригинале', () async {
+      final c = await boot();
+      // Копия: тот же тег, другой сервер — встаёт четвёртым членом f1.
+      expect(await c.addMembersToFolder(0, _uri('A', host: 'copy.example')),
+          isNull);
+      expect(await c.updateMemberAt(0, 3, _uri('Copy', host: 'copy.example')),
+          isNull);
+      SettingsStorage.resetCacheForTesting();
+      const a = NodeLink(folderId: _f1, tag: 'A');
+      expect((await SettingsStorage.getChains()).single.hops.first, a);
+      final lists = await SettingsStorage.getServerLists();
+      expect(_f(lists, _f1).members[1].detour, a);
+      expect(lists.whereType<UserServer>().single.detourPolicy.overrideDetour,
+          a);
+    });
 
     test('правка тела члена (переименование) переписывает хранение', () async {
       final c = await boot();

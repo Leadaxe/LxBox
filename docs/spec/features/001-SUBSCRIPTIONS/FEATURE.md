@@ -222,6 +222,15 @@ app start: read sources → "updating" → failed
   creating them from a paste/file belongs here.
 - Storage and backup of subscription records —
   [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.md).
+- **The subscription body is not backed up — by design** (owner decision
+  2026-11-15, [#219](https://github.com/Leadaxe/LxBox/issues/219)). The subscription's settings are kept apart from its
+  contents: a backup carries the record (URL, name, interval, filters,
+  detour, marks), never the downloaded or imported body. A URL subscription
+  gets its nodes back on the first update after restore; a file subscription
+  has nothing to update from (Android gives no lasting access to the file),
+  so the user picks the file again via "Edit source". Requests to put
+  subscription or file bodies into a backup are closed by this decision —
+  do not reopen them as a new task.
 - File picking and the camera for QR depend on OS capabilities (on a TV without
   a file manager — a hint instead of a picker).
 - The registry limit `max_nodes_per_subscription=3000` is not enforced: a
