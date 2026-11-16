@@ -102,10 +102,11 @@ class SubscriptionMeta extends StatelessWidget {
             _DroppedRow(entry: entry),
           ],
           // §589 — повторы одного сервера схлопнуты в узлы: строка отдельно
-          // от «dropped» (ничего не отброшено), имена — на самих узлах.
+          // от «dropped» (ничего не отброшено); итер. 2 — тап раскрывает
+          // шторку: выживший узел и имена слившихся в него записей.
           if (entry.duplicatesMerged.merged > 0) ...[
             const SizedBox(height: 4),
-            _MergedRow(merged: entry.duplicatesMerged),
+            _MergedRow(entry: entry),
           ],
           // Traffic quota
           if (entry.totalBytes > 0) ...[
@@ -262,30 +263,37 @@ class _DroppedRow extends StatelessWidget {
 }
 
 /// §589 — строка сводки «M duplicates merged into K nodes». Справочная
-/// (info): какие имена слились в узел, видно на самом узле.
+/// (info), итер. 2 — тап открывает ту же шторку, что «entries dropped»: по
+/// карточке `duplicates_collapsed` на выживший узел.
 class _MergedRow extends StatelessWidget {
-  const _MergedRow({required this.merged});
+  const _MergedRow({required this.entry});
 
-  final ({int merged, int into}) merged;
+  final SubscriptionEntry entry;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final color = theme.colorScheme.onSurfaceVariant;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        children: [
-          Icon(Icons.merge_type, size: 14, color: color),
-          const SizedBox(width: 4),
-          Expanded(
-            child: Text(
-              getLocalText.plural("%1\$d duplicates merged into %2\$d nodes",
-                  merged.merged, merged.into),
-              style: theme.textTheme.bodySmall?.copyWith(color: color),
+    final merged = entry.duplicatesMerged;
+    return InkWell(
+      borderRadius: BorderRadius.circular(4),
+      onTap: () => showNodeWarningsSheet(context, entry.duplicatesCollapsed),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Row(
+          children: [
+            Icon(Icons.merge_type, size: 14, color: color),
+            const SizedBox(width: 4),
+            Expanded(
+              child: Text(
+                getLocalText.plural("%1\$d duplicates merged into %2\$d nodes",
+                    merged.merged, merged.into),
+                style: theme.textTheme.bodySmall?.copyWith(color: color),
+              ),
             ),
-          ),
-        ],
+            Icon(Icons.chevron_right, size: 16, color: color),
+          ],
+        ),
       ),
     );
   }

@@ -101,6 +101,12 @@ class SubscriptionEntry extends ChangeNotifier {
     return duplicatesMergedOf(_list.nodes);
   }
 
+  /// §589 итер. 2 — коды `duplicates_collapsed` выживших узлов для шторки
+  /// строки «duplicates merged»: какой узел остался, какие имена слились.
+  List<NodeWarning> get duplicatesCollapsed => _list is SubscriptionServers
+      ? duplicatesCollapsedWarningsOf(_list.nodes)
+      : const [];
+
   /// §289 — per-subscription слепок идентичности фетча. `null` = режим Default
   /// (глобальная идентичность). Пусто для не-подписок.
   SubscriptionIdentityOverride? get identity => _list is SubscriptionServers

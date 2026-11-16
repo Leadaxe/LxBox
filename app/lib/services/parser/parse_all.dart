@@ -251,6 +251,28 @@ RegistryWarning duplicatesCollapsedWarning(
   return (merged: merged, into: into);
 }
 
+/// §589 итер. 2 — коды `duplicates_collapsed` с узлов источника для шторки
+/// сводки: по одному на выжившего, в порядке списка, с `ownerTag` = тег
+/// выжившего (шторка подписывает карточку «Entry: <тег>»).
+List<NodeWarning> duplicatesCollapsedWarningsOf(Iterable<NodeSpec> nodes) {
+  final out = <NodeWarning>[];
+  for (final n in nodes) {
+    for (final w in n.warnings) {
+      if (w is! RegistryWarning || w.code != kDuplicatesCollapsedCode) continue;
+      out.add(RegistryWarning(
+        code: w.code,
+        path: w.path,
+        value: w.value,
+        params: w.params,
+        ownerTag: n.tag,
+        applied: w.applied,
+      ));
+      break;
+    }
+  }
+  return out;
+}
+
 /// §589 — поставить [survivor] код схлопывания. [at] — конец кодов разбора
 /// (перед кодами санитайзера); `null` — в конец списка. Прежний код с узла
 /// снимается: свежий разбор источника его заменяет.
