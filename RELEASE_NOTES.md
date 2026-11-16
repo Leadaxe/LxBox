@@ -48,6 +48,10 @@ You), исправления пульта TV в выборе приложени�
   - If a node stopped connecting after the update, try another TLS method or
     Off in Core → Sniff guard.
   - Node checks use the same protection as the tunnel.
+- **Merged duplicates can be opened ([task 589](docs/spec/tasks/589-duplicates-collapsed-on-survivor.md)).**
+  The «N duplicates merged» line on the subscription page is now tappable:
+  it opens a sheet with a card for every server that was kept, showing how
+  many repeats it absorbed and under which names.
 - **An unavailable detour no longer removes the server ([task 739](docs/spec/tasks/739-detour-unavailable-node-warning.md)).**
   When a detour target is not available — the Direction is turned off, the
   server was deleted, renamed or disappeared from its subscription — the
@@ -55,7 +59,9 @@ You), исправления пульта TV в выборе приложени�
   directly. Before, such a server either vanished from the config or went
   direct with only a line in the build report. Now a ⚠ «Hop … unavailable:
   hop removed» marks the subscription, folder or server in the source list
-  and the node's own card. A detour onto the node itself and a ring of
+  and the node's own card. On the subscription and folder pages the same
+  warning is a tappable line, like «N entries dropped»: tap it to read what
+  happened and what to do. A detour onto the node itself and a ring of
   detours still drop the node; chains are unchanged.
 - **TLS settings say they skip servers with a detour ([task 737](docs/spec/tasks/737-tls-skip-detour-toggle.md)).**
   TLS fragmentation and mixed-case SNI apply only to servers that connect
@@ -178,13 +184,19 @@ You), исправления пульта TV в выборе приложени�
   - Если после обновления узел перестал соединяться, попробуйте другой метод
     TLS или Off в Core → «Защита от сниффинга».
   - Проверка узлов использует ту же защиту, что и туннель.
+- **Склеенные дубли можно раскрыть ([задача 589](docs/spec/tasks/589-duplicates-collapsed-on-survivor.md)).**
+  Строка «N duplicates merged» на странице подписки теперь нажимается:
+  открывается шторка с карточкой на каждый оставшийся сервер — сколько
+  повторов в него слилось и под какими именами.
 - **Недоступный detour больше не убирает сервер ([задача 739](docs/spec/tasks/739-detour-unavailable-node-warning.md)).**
   Если цель detour недоступна — Направление выключено, сервер удалён,
   переименован или пропал из подписки, — конфиг собирается без этого
   detour: сервер остаётся и подключается напрямую. Раньше такой сервер либо
   исчезал из конфига, либо шёл напрямую, оставив только строку в отчёте
   сборки. Теперь ⚠ «Hop … unavailable: hop removed» стоит у подписки, папки
-  или сервера в списке источников и на карточке самого узла. detour на
+  или сервера в списке источников и на карточке самого узла. На странице
+  подписки и папки то же предупреждение — строка, по которой можно нажать,
+  как «N entries dropped»: по тапу видно, что случилось и что делать. detour на
   самого себя и кольцо из detour по-прежнему убирают узел, цепочки не
   менялись.
 - **Подписи у TLS-настроек говорят, что серверы с detour пропускаются ([задача 737](docs/spec/tasks/737-tls-skip-detour-toggle.md)).**
