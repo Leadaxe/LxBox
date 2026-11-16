@@ -123,6 +123,50 @@ void main() {
       expect(cards.every((w) => w.code == kDuplicatesCollapsedCode), isTrue);
     });
 
+    // §589 итер. 3 — шторка не сворачивает карточки разных выживших в одну
+    // группу (§572): у каждой своё число и свои имена, «…» нет.
+    testWidgets('шторка: карточка на каждый выживший, без «…»',
+        (tester) async {
+      final entry = dupEntry([
+        vless(1, 'AT'),
+        vless(2, 'PL'),
+        vless(1, 'DE'),
+        vless(2, 'PL2'),
+        vless(1, 'RU'),
+      ].join('\n'));
+      await pumpMeta(tester, entry);
+      await tester.tap(find.byIcon(Icons.merge_type));
+      await tester.pumpAndSettle();
+
+      final sheet = find.byType(NodeWarningsSheet);
+      expect(find.byKey(const ValueKey('notification-owner-AT')),
+          findsOneWidget);
+      expect(find.byKey(const ValueKey('notification-owner-PL')),
+          findsOneWidget);
+      expect(
+          find.descendant(
+              of: sheet, matching: find.textContaining('subscription: 2')),
+          findsOneWidget);
+      expect(
+          find.descendant(
+              of: sheet, matching: find.textContaining('subscription: 1')),
+          findsOneWidget);
+
+      for (final owner in ['AT', 'PL']) {
+        final tile = find.byKey(ValueKey('notification-owner-$owner'));
+        await tester.ensureVisible(tile);
+        await tester.pumpAndSettle();
+        await tester.tap(tile);
+        await tester.pumpAndSettle();
+      }
+      expect(find.descendant(of: sheet, matching: find.textContaining('DE, RU')),
+          findsWidgets);
+      expect(find.descendant(of: sheet, matching: find.textContaining('PL2')),
+          findsWidgets);
+      expect(find.descendant(of: sheet, matching: find.textContaining('…')),
+          findsNothing);
+    });
+
     testWidgets('без повторов — строки нет', (tester) async {
       await pumpMeta(tester, dupEntry('${vless(1, 'a')}\n${vless(2, 'b')}'));
       expect(find.byIcon(Icons.merge_type), findsNothing);
