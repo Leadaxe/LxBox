@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../models/node_spec.dart';
+import '../../models/node_warning.dart';
 import '../../models/template_vars.dart';
 import '../../services/l10n/locale_controller.dart';
 import '../../services/probe/probe_detour.dart';
@@ -32,9 +33,15 @@ class NodeInspectScreen extends StatefulWidget {
     this.tagPrefix = '',
     this.initialTab = NodeInspectTab.json,
     this.probeDetour,
+    this.buildWarnings = const [],
   });
 
   final NodeSpec node;
+
+  /// §739 итер. 2 — предупреждения последней сборки по config-тегу узла
+  /// (`SubscriptionController.lastBuildWarningsByTag`): «Hop … unavailable»
+  /// и др. Подмешиваются к предупреждениям разбора без повторов.
+  final List<NodeWarning> buildWarnings;
 
   /// §730 — detour источника для диагностики без VPN; `null` — источник
   /// экрану неизвестен, узел проверяется напрямую.
@@ -92,11 +99,27 @@ class _NodeInspectScreenState extends State<NodeInspectScreen> {
   /// было, пустая вкладка была бы шумом).
   bool get _hasReplacements => _node.ruleTrail.isNotEmpty;
 
+  /// Разбор + сборка (§739 итер. 2); код с тем же `code`/`path` не дублируется.
+  List<NodeWarning> _mergedWarnings() {
+    final base = _node.warnings;
+    if (widget.buildWarnings.isEmpty) return base;
+    final out = [...base];
+    for (final w in widget.buildWarnings) {
+      final dup = out.any((x) =>
+          x is RegistryWarning &&
+          w is RegistryWarning &&
+          x.code == w.code &&
+          x.path == w.path);
+      if (!dup) out.add(w);
+    }
+    return List.unmodifiable(out);
+  }
+
   @override
   Widget build(BuildContext context) {
     final title = _node.label.isNotEmpty ? _node.label : _node.tag;
     final hasReplacements = _hasReplacements;
-    final warnings = _node.warnings;
+    final warnings = _mergedWarnings();
     // §581 — у узла Tailscale вкладка Network перед Diagnostics; Save choice
     // у узла подписки нет (правку сотрёт обновление подписки).
     final node = _node;

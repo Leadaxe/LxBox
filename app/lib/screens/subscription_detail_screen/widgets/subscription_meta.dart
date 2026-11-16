@@ -7,6 +7,7 @@ import '../../../controllers/subscription_controller.dart';
 import '../subscription_detail_format.dart';
 import '../../../services/l10n/locale_controller.dart';
 import 'node_warnings_sheet.dart';
+import 'source_build_codes_row.dart';
 import '../../../services/telegram_link.dart'; // §657
 
 /// Header/meta block on the Nodes tab: url + copy, last-updated, node counts,
@@ -18,6 +19,7 @@ class SubscriptionMeta extends StatelessWidget {
     required this.entry,
     required this.onOpenUrl,
     this.offCount = 0,
+    this.controller,
   });
 
   final SubscriptionEntry entry;
@@ -27,6 +29,10 @@ class SubscriptionMeta extends StatelessWidget {
   /// §391 — bulk-переключатель в probe-баре (`_buildProbeBar`), здесь только
   /// счётчик.
   final int offCount;
+
+  /// §739 итер. 2 — источник кодов сборки для строки ⚠ источника; `null` —
+  /// строки нет (тесты шапки без контроллера).
+  final SubscriptionController? controller;
 
   @override
   Widget build(BuildContext context) {
@@ -108,6 +114,14 @@ class SubscriptionMeta extends StatelessWidget {
             const SizedBox(height: 4),
             _MergedRow(entry: entry),
           ],
+          // §739 итер. 2 — коды сборки источника (недоступный detour и др.):
+          // строка как у «dropped», тап — та же шторка.
+          if (controller != null)
+            SourceBuildCodesRow(
+              controller: controller!,
+              sourceId: entry.id,
+              padding: const EdgeInsets.only(top: 4),
+            ),
           // Traffic quota
           if (entry.totalBytes > 0) ...[
             const SizedBox(height: 8),
