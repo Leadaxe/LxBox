@@ -8,6 +8,11 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **A folder's server with an unavailable detour is marked in the list ([task 739](docs/spec/tasks/739-detour-unavailable-node-warning.md)).** Inside a folder, the server whose detour was removed at build now shows the ⚠ «Hop … unavailable: hop removed» line on its own row, not only on the folder and the server's card. Tap it to read what happened; it goes away after the next build once the target is back.
+  (RU: в списке серверов папки ⚠ «Hop … unavailable» теперь стоит у строки того сервера, у которого detour снят при сборке.)
+
 ## [2.25.22] — 2026-11-16
 
 ### Changed

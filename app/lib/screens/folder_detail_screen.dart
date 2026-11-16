@@ -35,6 +35,7 @@ import '../widgets/probe_detour_note.dart';
 import 'subscription_detail_screen/widgets/node_warning_row.dart';
 import 'subscription_detail_screen/widgets/source_build_codes_row.dart';
 import 'subscriptions_screen/entry_warnings.dart';
+import '../services/tag_resolver.dart';
 import '../widgets/reorder_grab_strip.dart';
 import '../services/l10n/locale_controller.dart';
 import '../services/file_import.dart';
@@ -1270,6 +1271,25 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     );
   }
 
+  /// §739 итер. 3 — предупреждения последней сборки по члену папки: config-тег
+  /// из обратной карты сборки по самому узлу (суффикс дедупа), иначе
+  /// display-тег с префиксом папки (как у карточки узла).
+  List<NodeWarning> _buildWarningsOfMember(FolderMember m) {
+    final node = m.node;
+    if (node == null) return const [];
+    final byTag = widget.controller.lastBuildWarningsByTag;
+    if (byTag.isEmpty) return const [];
+    String? tag;
+    for (final e in widget.controller.lastEmittedTagMap.entries) {
+      if (identical(e.value, node)) {
+        tag = e.key;
+        break;
+      }
+    }
+    tag ??= TagResolver.displayTag(widget.entry.list.tagPrefix, node.tag);
+    return byTag[tag] ?? const [];
+  }
+
   Widget _memberTile(int i, FolderMember m, {required bool reorderable}) {
     final cs = Theme.of(context).colorScheme;
     final highlighted = _highlightedMember == i;
@@ -1289,8 +1309,13 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
                     left: BorderSide(color: cs.primary, width: 3)),
               )
             : null,
-        child: _MemberTile(
+        // §739 итер. 3 — ⚠ сборки (недоступный detour и др.) у строки члена;
+        // ListenableBuilder — строка обновляется после пересборки.
+        child: ListenableBuilder(
+          listenable: widget.controller,
+          builder: (context, _) => _MemberTile(
           member: m,
+          buildWarnings: _buildWarningsOfMember(m),
       isChainLink:
           m.node != null && _chainLinkTags().contains(m.node!.tag), // §239 ⚙
       dragIndex: i,
@@ -1332,6 +1357,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
           SnackBar(content: Text(r.message)),
         );
       },
+        ),
         ),
       ),
     );
@@ -1684,9 +1710,14 @@ class _MemberTile extends StatelessWidget {
     this.onProbeBadgeTap,
     this.probe,
     this.thresholds = const ProbeThresholds(),
+    this.buildWarnings = const [],
   });
 
   final FolderMember member;
+
+  /// §739 итер. 3 — предупреждения последней сборки по этому члену
+  /// (`detour_unavailable` и др.); сливаются с разбором без дублей.
+  final List<NodeWarning> buildWarnings;
   final int dragIndex;
 
   /// §236 UI-rework — false при активном фильтре: grab-strip скрыта (drag по
@@ -1715,6 +1746,21 @@ class _MemberTile extends StatelessWidget {
     return ProbeBadge(result: r, thresholds: thresholds, onTap: onProbeBadgeTap);
   }
 
+  static List<NodeWarning> _withBuild(
+      List<NodeWarning> base, List<NodeWarning> build) {
+    if (build.isEmpty) return base;
+    final out = [...base];
+    for (final w in build) {
+      final dup = out.any((x) =>
+          x is RegistryWarning &&
+          w is RegistryWarning &&
+          x.code == w.code &&
+          x.path == w.path);
+      if (!dup) out.add(w);
+    }
+    return out;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -1727,8 +1773,9 @@ class _MemberTile extends StatelessWidget {
     if (isChainLink) title = '⚙ $title'; // §239 — авто-маркировка звена
     // §435 — у безадресных (группа §322, Tailscale) адреса нет: только тип,
     // без «:0».
-    final warnings =
-        node == null ? const <NodeWarning>[] : mergedNodeWarnings(node, member.warnings);
+    final warnings = node == null
+        ? const <NodeWarning>[]
+        : _withBuild(mergedNodeWarnings(node, member.warnings), buildWarnings);
     final hideProto = node != null && member.warnings.any((w) => w.isCoreRejected);
     final subtitle = node == null
         ? getLocalText.s("Tap to edit or delete")
