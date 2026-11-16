@@ -33,6 +33,7 @@ import '../widgets/lx_code_editor.dart';
 import '../widgets/probe_badge.dart';
 import '../widgets/probe_detour_note.dart';
 import 'subscription_detail_screen/widgets/node_warning_row.dart';
+import 'subscription_detail_screen/widgets/source_build_codes_row.dart';
 import 'subscriptions_screen/entry_warnings.dart';
 import '../widgets/reorder_grab_strip.dart';
 import '../services/l10n/locale_controller.dart';
@@ -1253,6 +1254,13 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     return Column(
       children: [
         _buildControlBar(theme),
+        // §739 итер. 2 — коды сборки папки (недоступный detour и др.):
+        // строка как «N entries dropped» у подписки, тап — шторка.
+        SourceBuildCodesRow(
+          controller: widget.controller,
+          sourceId: widget.entry.id,
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+        ),
         // §730 — учтён ли detour папки / членов в тесте.
         ProbeDetourNote(plan: _probeDetourPlan()),
         if (_filterExpanded) _buildFilterPanel(theme),

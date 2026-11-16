@@ -34,10 +34,14 @@ class SubscriptionNodeList extends StatelessWidget {
     this.fileMissing = false,
     this.onChooseFile,
     this.probeDetourOf,
+    this.buildWarningsOf,
   });
 
   /// §730 — detour источника узла для диагностики без VPN (разбор узла).
   final ProbeDetourRoute? Function(NodeSpec node)? probeDetourOf;
+
+  /// §739 итер. 2 — предупреждения последней сборки по узлу для его карточки.
+  final List<NodeWarning> Function(NodeSpec node)? buildWarningsOf;
 
   /// §615 — узлы не загружены (тела в кэше не было на старте, а прошлое
   /// обновление узлы видело): вместо «No nodes found» — подсказка и Update.
@@ -318,6 +322,7 @@ class SubscriptionNodeList extends StatelessWidget {
               node: node,
               tagPrefix: tagPrefix,
               probeDetour: probeDetourOf?.call(node),
+              buildWarnings: buildWarningsOf?.call(node) ?? const [],
             ),
           )),
           onLongPress: () => _showNodeMenu(context, node),
@@ -380,6 +385,7 @@ class SubscriptionNodeList extends StatelessWidget {
                     node: node,
                     tagPrefix: tagPrefix,
                     probeDetour: probeDetourOf?.call(node),
+                    buildWarnings: buildWarningsOf?.call(node) ?? const [],
                   ),
                 ));
               },

@@ -8,6 +8,8 @@ import '../models/direction.dart';
 import '../models/import_rule.dart'; // §388 — ImportRuleAction для варнинга
 import '../models/node_link.dart';
 import '../models/node_spec.dart';
+import '../models/node_warning.dart';
+import '../services/tag_resolver.dart';
 import '../models/server_list.dart';
 import 'subscriptions_screen/entry_delete_title.dart';
 import '../models/ui_msg.dart';
@@ -532,6 +534,23 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
       widget.entry.list, [for (final e in widget.controller.entries) e.list]);
 
   /// §730 — маршрут одного узла верхнего уровня (по ссылке на узел).
+  /// §739 итер. 2 — предупреждения последней сборки по узлу для его карточки:
+  /// config-тег — из обратной карты сборки по самому узлу (суффикс дедупа),
+  /// иначе display-тег с префиксом подписки.
+  List<NodeWarning> _buildWarningsOfNode(NodeSpec node) {
+    final byTag = widget.controller.lastBuildWarningsByTag;
+    if (byTag.isEmpty) return const [];
+    String? tag;
+    for (final e in widget.controller.lastEmittedTagMap.entries) {
+      if (identical(e.value, node)) {
+        tag = e.key;
+        break;
+      }
+    }
+    tag ??= TagResolver.displayTag(widget.entry.list.tagPrefix, node.tag);
+    return byTag[tag] ?? const [];
+  }
+
   ProbeDetourRoute? _probeDetourOfNode(NodeSpec node) {
     final i = widget.entry.list.nodes.indexWhere((n) => identical(n, node));
     return i < 0 ? null : _probeDetourPlan().at(i);
@@ -846,6 +865,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
                 entry: entry,
                 onOpenUrl: _openUrl,
                 offCount: _disabledNodes.length, // §283
+                controller: widget.controller, // §739 итер. 2
               ),
               _buildProbeBar(theme), // §339 — Test servers
               // §730 — учтён ли detour источника в тесте; видна всегда,
@@ -860,6 +880,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
                   nodes: _nodes,
                   // §730 — разбор узла: диагностика без VPN через detour.
                   probeDetourOf: _probeDetourOfNode,
+                  buildWarningsOf: _buildWarningsOfNode, // §739 итер. 2
                   loading: _loading,
                   error: _error,
                   // §283 — toggle только у top-level нод подписки; chained-
