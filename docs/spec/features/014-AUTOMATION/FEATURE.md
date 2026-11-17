@@ -115,13 +115,18 @@ The feature protects three principles:
   `test/services/automation/event_emitter_test` "VPN_ERROR(tunnel_error)
   hides server address". **Mutation:** the raw `errorReason` is broadcast.
 - **P15. Android assistants act only with the user's permission.** On
-  Android 16+ the app declares three AppFunctions: connect, disconnect and
-  read the tunnel state (`stopped` / `starting` / `started` / `stopping`).
-  While "AI assistant control" is off (the default) none of them is executed.
-  Connecting needs a VPN permission granted earlier and a saved
-  configuration; otherwise the assistant gets an error and the app does not
-  open. The answer carries only the state, no node names (§721).
-  **Witness:** JVM unit `AppFunctionsLogicTest`; manual check
+  Android 16+ the app declares functions for assistants: connect, disconnect
+  and read the tunnel state; check an address and an exit; list and switch a
+  Direction's exits; find an app; read and change routing, sources and
+  connections. While "AI assistant control" is off (the default) none of them
+  is executed. Changing saved settings additionally needs "Let assistants
+  change settings" (off by default). Connecting needs a VPN permission granted
+  earlier and a saved configuration; otherwise the assistant gets an error.
+  The config, keys, subscription links, backups and logs are never given to
+  an assistant (§721, §750). See
+  [assistant-control](FUNCTIONS/assistant-control.md).
+  **Witness:** JVM units `AppFunctionsLogicTest`, `AssistantLogicTest`; unit
+  `test/services/assistant/assistant_gateway_test`; manual check
   `adb shell cmd app_function execute-app-function` with the toggle off and
   on. **Mutation:** a function runs with the toggle off.
 
@@ -132,6 +137,7 @@ The feature protects three principles:
 | Accept automation commands | on/off; turning on — via a warning dialog | off |
 | Emit: Lifecycle / State / Subscription | on/off each; first enable — via an explanation | all off |
 | AI assistant control (Android 16+; hidden below) | on/off | off |
+| Let assistants change settings (Android 16+; works only with the previous one) | on/off | off |
 | Quick Settings tile → Add | system request to add the tile (Android 13+) | — |
 | First run: offer to add the tile | shown once, where the OS supports it | — |
 
@@ -211,6 +217,7 @@ tile touch / menu item / command / plugin
 
 | Function | What it does | Promises | File |
 |----------|--------------|----------|------|
+| Assistant control | Gives an AI assistant functions to diagnose a failing address, read and change routing, and switch connections — behind two toggles. | P15 | [assistant-control.md](FUNCTIONS/assistant-control.md) |
 | Quick toggle | Turns the tunnel on or off with one touch from the Quick Settings tile or the app icon menu; both show the current state. | P1–P4, P11 | [quick-toggle.md](FUNCTIONS/quick-toggle.md) |
 | Command intake | Executes public `com.leadaxe.lxbox.*` commands behind one main toggle, checks preconditions and answers a failure with an error event. | P5–P8, P11 | [command-intake.md](FUNCTIONS/command-intake.md) |
 | Outbound events | Sends `com.leadaxe.lxbox.event.*` broadcasts for enabled categories with rate limiting, and confirms or rejects commands in request-response scenarios. | P7–P10, P13, P14 | [outbound-events.md](FUNCTIONS/outbound-events.md) |

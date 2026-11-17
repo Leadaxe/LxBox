@@ -270,24 +270,65 @@ Wait Event.
 
 ## AI assistants (AppFunctions)
 
-On Android 16+ L×Box declares three
+On Android 16+ L×Box declares ten
 [AppFunctions](https://developer.android.com/ai/appfunctions) that a system
-assistant (for example Gemini) can call on the user's behalf:
+assistant (for example Gemini) can call on the user's behalf. What they are
+for, phrases and limits — in the user guide
+[AI assistants and your network](AI_ASSISTANT.md); this section is the
+technical reference.
 
 | Function | Parameters | Result |
 |----------|------------|--------|
 | `startVpn` | — | `VpnState`; waits up to 15 s for the tunnel to settle |
 | `stopVpn` | — | `VpnState`; waits up to 15 s |
 | `getVpnStatus` | — | `VpnState` |
+| `listExits` | `direction`, `query?` | `ExitList`: names of the Direction's exits (up to 200), `total`, `truncated` |
+| `checkUrl` | `url`, `appPackage?` | `UrlCheckReport`: `outcome`, `failedStage`, `error`, `httpStatus`, `elapsedMs`, `route`, `findings`, `advice`; waits up to 20 s |
+| `checkExit` | `direction` | `ExitCheck`: `outcome`, `country`, `ip`, `exit`, `error` |
+| `findApps` | `query` | up to 10 `AppMatch`: `packageName`, `label` |
+| `selectExit` | `direction`, `exit` | `ExitSelection`: `direction`, `exit`, `changed` |
+| `getApiHelp` | — | `ApiResponse`: the routes available through `callApi` |
+| `callApi` | `method`, `path`, `body?` | `ApiResponse`: `status`, `body` (JSON as a string) |
 
 `VpnState` has one field, `status`: `stopped`, `starting`, `started` or
-`stopping`. Node names are not returned.
+`stopping`. `direction` is a Direction's tag (`vpn-1`). Exit names are
+returned as the subscription provider wrote them.
 
-**How to enable.** App Settings → Automation → **AI assistant control**. The
-switch is off by default and is shown only on Android 16+. While it is off,
-the functions are marked disabled for the system and each call fails with
-`AppFunctionDisabledException`. The setting is stored with the other
-automation settings and travels in LX Backup.
+The first eight functions run in native code and do not need the app's
+window. `getApiHelp` and `callApi` are a gateway to the handlers of the
+[Debug API](api/debug-api-reference.md), without the HTTP server and its
+token; they need the app's Dart side. If it is not in memory, L×Box tries to
+open its window and waits up to 10 s; on failure the call returns "L×Box is
+not open. Open the app and repeat." and a notification is shown.
+
+**The gateway's allowlist.** `callApi` passes only these routes; the rest
+answer `403`:
+
+| Group | Routes |
+|-------|--------|
+| Reading | `GET` of `/state`, `/rules`, `/directions`, `/subs`, `/folders`, `/pool`, `/assistant/*`, part of `/settings` |
+| Checks | `/assistant/check-url`, `/assistant/check-exit`, `/action/check-config`, `/action/urltest*`, probes of chains and folders |
+| VPN and choice | `/action/start-vpn-headless`, `stop-vpn`, `reconnect`, `reload-vpn`, `reset-network`, `switch-node`, `set-group`, `/assistant/exit` |
+| Changes | writes to `/rules`, `/directions`; `PATCH /subs/{id}`, refreshing subscriptions, rebuilding the config, part of `PUT /settings`, `/assistant/connection` |
+
+Closed: `/config`, `/backup`, `/files`, `/logs`, `/diag`, `/nodes`,
+`/mixins`, `/settings/vars`, `/settings/vpn_mode`, DNS settings, reading
+chains, creating and deleting sources, changing a subscription's URL, any
+request with `reveal` or `warnings`. Server addresses in error texts are
+masked. `getApiHelp` returns the exact list.
+
+**How to enable.** App Settings → Automation → AI assistants, shown only on
+Android 16+:
+
+- **AI assistant control** — all functions. Off by default. While it is off,
+  the functions are marked disabled for the system and each call fails with
+  `AppFunctionDisabledException`.
+- **Let assistants change settings** — the Changes group of the gateway. Off
+  by default; works only while the first switch is on. While it is off, a
+  change answers `403` with a text that names the switch.
+
+Both settings are stored with the other automation settings and travel in LX
+Backup.
 
 **Errors.** `startVpn` does not open the app:
 
@@ -296,6 +337,9 @@ automation settings and travels in LX Backup.
   Open L×Box and connect once.";
 - no configuration has been saved — `AppFunctionElementNotFoundException`
   "No configuration. Open L×Box and add a server."
+
+With the VPN off, `checkUrl` and `checkExit` return `outcome = vpn_off`, and
+`selectExit` fails with `AppFunctionNotSupportedException`.
 
 **Check with adb** (the device must have the `app_function` service:
 `adb shell cmd app_function help`):
@@ -307,12 +351,8 @@ adb shell cmd app_function execute-app-function --package com.leadaxe.lxbox \
   --parameters '{}'
 ```
 
-`startVpn` and `stopVpn` are called the same way. Copy the function ID from
-the `list-app-functions` output if it differs.
-
-**Status.** The AppFunctions API is experimental (`androidx.appfunctions`
-1.0.0-rc01). Today only apps in Google's early access programme can be called
-from Gemini, so on most devices the switch has no visible effect yet.
+The other functions are called the same way. Copy the function ID from the
+`list-app-functions` output if it differs.
 
 ---
 

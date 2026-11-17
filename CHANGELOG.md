@@ -8,6 +8,13 @@
 
 ## [Unreleased]
 
+### Added
+
+- **An AI assistant can diagnose and manage the network ([task 750](docs/spec/tasks/750-ai-assistant-network-control.md)).** On Android 16+ the set of functions for system assistants grows from three to ten: an address check by stages (`checkUrl`), the external IP and country of a Direction's exit (`checkExit`), the list of a Direction's exits and switching between them, an app search, and a gateway to a part of the Debug API (`getApiHelp`, `callApi`) — rules, Directions, sources and connections. Reading and checks sit behind «AI assistant control»; changing settings needs the new «Let assistants change settings» switch (App Settings → Automation → AI assistants), off by default. Config, keys, subscription links, backups and logs stay closed. Guide: [AI assistants and your network](docs/AI_ASSISTANT.md).
+  (RU: ИИ-ассистент на Android 16+ получает десять функций вместо трёх: проверку адреса по стадиям, внешний IP и страну выхода Направления, список выходов и их смену, поиск приложения и шлюз к части Debug API — правила, Направления, источники, подключения. Чтения и проверки — под «AI assistant control»; изменения настроек — под новым тумблером «Let assistants change settings», выключенным по умолчанию. Конфиг, ключи, ссылки подписок, бэкапы и логи закрыты. Гайд: [ИИ-ассистент и ваша сеть](docs/AI_ASSISTANT.ru.md).)
+- **Debug API: `/assistant/*` ([task 750](docs/spec/tasks/750-ai-assistant-network-control.md)).** New routes for an agent on a computer: network overview with work connections and their state, a Direction's exits, the address check (URL Check), the exit check, an app search, which rule catches an app, switching the exit, turning a connection on or off.
+  (RU: Debug API — новые маршруты `/assistant/*` для агента на компьютере: обзор сети с рабочими подключениями и их состоянием, выходы Направления, проверка адреса (URL Check), проверка выхода, поиск приложения, правило для приложения, смена выхода, включение и выключение подключения.)
+
 ## [2.25.23] — 2026-11-17
 
 ### Changed

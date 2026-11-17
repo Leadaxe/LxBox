@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Status | In progress — решения владельца 17.11.2026 в разделе «Решения владельца» |
+| Status | In progress — код и документы в `develop`; на устройстве и эмуляторе не проверено; после последних правок Kotlin локально не компилировался, тесты не запускались (распоряжение владельца: сборка и прогоны — в CI) |
 | Start date | 2026-11-17 |
 | Source | Решение владельца 17.11.2026: развить управление сетью через ИИ-ассистента (три класса задач: «почему не открывается», «пусти приложение через выход/страну», «подключи к рабочей сети») |
 | Related specs | §721 (AppFunctions: старт/стоп/статус, тумблер «AI assistant control»), §687 (URL Check), §047 (Automation API), §747 (два процесса `:ui`/`:bg`), §712 (`package_name_regex`), §715 (значок пула = флаг в имени узла), фича `014-AUTOMATION` |
@@ -210,15 +210,24 @@ deny`:
 
 | Группа | Маршруты | Решение |
 |--------|----------|---------|
-| Чтения | `GET /state`, `/state/rules`, `/state/vpn`, `/state/subs` (без `reveal`), `/rules*`, `/directions*`, `/subs*` (без `reveal`), `/folders*`, `/chains*`, `/pool`, `/assistant/*`, `/settings/{node_sort,enabled_groups,vpn_mode,tun_apps,ping_options}` | allow |
+| Чтения | `GET /state`, `/state/rules`, `/state/vpn`, `/state/subs`, `/rules*`, `/directions*`, `/subs`, `/subs/{id}`, `/subs/{id}/rules*`, `/folders*`, `/pool`, `/assistant/*`, `/settings/{node_sort,enabled_groups,tun_apps,ping_options}` | allow |
 | Диагностика | `POST /assistant/check-url`, `/assistant/check-exit`, `/action/check-config`, `/action/urltest*`, `GET /chains/{tag}/probe`, `POST /folders/{id}/probe` | allow |
 | VPN и выбор | `POST /action/{start-vpn-headless,stop-vpn,reconnect,reload-vpn,reset-network,switch-node,set-group}`, `POST /assistant/exit` | allow |
-| Изменения | `POST/PATCH/DELETE /rules*`, `/directions*`; `PATCH /subs/{id}`, `POST /subs/{id}/refresh`, `POST /action/{refresh-subs,rebuild-config}`, `POST /settings/rebuild-config`, `PUT /settings/{route_final,node_sort,enabled_groups,vpn_mode,tun_apps}`, `POST /assistant/connection` | changes |
-| Закрыто | всё остальное, в том числе `/config`, `/backup`, `/files`, `/logs`, `/diag`, `/nodes`, `/mixins`, `/warp`, `/taildrop`, `/support`, `/profiler`, `/core_reject`, `/wifi_history`, `/device`, `/settings/vars`, `/settings/dns_options`, `/settings/config_locked`, `/settings/vpn/*`, `/settings/core_logs*`, создание и удаление источников (`POST /subs`, `DELETE /subs/{id}`, запись в `/folders`, `/chains`), любой запрос с `reveal` | deny → `403` |
+| Изменения | `POST/PATCH/DELETE /rules*`, `/directions*`; `PATCH /subs/{id}` (только поля `enabled` и `name`), `POST /subs/{id}/refresh`, `POST /action/{refresh-subs,rebuild-config}`, `POST /settings/rebuild-config`, `PUT /settings/{route_final,node_sort,enabled_groups,tun_apps}`, `POST /assistant/connection` | changes |
+| Закрыто | всё остальное, в том числе `/config`, `/backup`, `/files`, `/logs`, `/diag`, `/nodes`, `/mixins`, `/warp`, `/taildrop`, `/support`, `/profiler`, `/core_reject`, `/wifi_history`, `/device`, `/settings/vars`, `/settings/dns_options`, `/settings/config_locked`, `/settings/vpn/*`, `/settings/core_logs*`, `/settings/vpn_mode` (ответ содержит пароль локального прокси, запись открывает прокси), `GET /chains`, `/chains/{tag}` (в `rewrite` могут лежать адреса и ключи), создание и удаление источников (`POST /subs`, `DELETE /subs/{id}`, запись в `/folders`, `/chains`), смена `url` подписки, любой запрос с `reveal` или `warnings` | deny → `403` |
 
 `changes` исполняется, только если включён тумблер «Let assistants change
 settings»; иначе `403` с текстом «Changing settings is turned off in L×Box:
 App Settings → Automation → Let assistants change settings.»
+
+В ответах шлюза поля `error`, `last_error`, `last_start_error` проходят
+маскировку сетевых адресов (`maskNetworkAddresses`): текст ошибки ядра
+содержит `IP:port` сервера. Ссылки подписок без `reveal` отдаются как
+`scheme://host/***`.
+
+`appfunctions_enabled` и `appfunctions_allow_changes` внесены в блок-лист
+`PUT /settings/vars` Debug API: ни ассистент, ни агент не включают их сами
+(это отменяет фразу §721 «Debug API — общий `/settings/vars`»).
 
 Почему закрыто: сырой конфиг, бэкап, логи и ссылки подписок содержат ключи
 и адреса; миксины и DNS-настройки позволяют перенаправить трафик в обход

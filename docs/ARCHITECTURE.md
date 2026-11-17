@@ -1118,7 +1118,8 @@ vpn/StopTrace.kt · SerialLane.kt · CacheDbLockRetry.kt · L10n.kt · LocaleCha
                              # §668 stop trace · §732 ordered core calls · §703 cache.db retry · §279 native locale ·
                              #   §707 notification buttons · §654 C SSO loopback listener
 LanTransferSender.kt         # §622 sending settings to a TV past our own tunnel
-appfunctions/                # §721 Android AppFunctions: startVpn/stopVpn/getVpnStatus behind a toggle
+appfunctions/                # §721/§750 Android AppFunctions behind a toggle: VPN start/stop/status, address and exit
+                             #   checks, exits, app search (native) + getApiHelp/callApi (gateway to the Debug API handlers)
 vpn/LxBoxTileService.kt      # the QS tile toggle (§032) with optimistic rendering
 vpn/QuickShortcuts.kt        # dynamic launcher shortcuts (Connect/Disconnect)
 vpn/LxBoxIntentReceiver.kt   # the §047 raw broadcast API: nine incoming actions, an optional permission gate, setEnabled
@@ -1809,6 +1810,16 @@ paths take the reference away at once and run `shutdownAll` on a thread of its o
 Flutter engine there is no UI client: the status stream does not tick on a start from the tile,
 on auto-start or from AppFunctions, and after the activity is closed the UI clients are closed,
 not paused. The `lxbox-cc` lane (`CommandLane`) is one per process and has no role.
+
+**Assistant gateway (§750).** The native AppFunctions (`AssistantCore`) talk to the core through
+the service-side client and never need Flutter. `getApiHelp` / `callApi` cross into Dart:
+`AssistantBridge` invokes `assistantCall` on the plugin channel (the one `AutomationBridge` uses);
+Dart's `assistant_gateway.dart` checks the allowlist and the `appfunctions_allow_changes` var and
+hands the request to the same handlers as the Debug API, past the HTTP server and its token.
+Without an engine the bridge starts `MainActivity`, waits up to 10 s, and otherwise posts a
+notification and fails the call. Nothing is precomputed: the settings summary the native overview
+needs is built per request and passed as a call argument. After the process split this seam
+becomes cross-process, like `AutomationBridge`.
 
 **Already process-safe:**
 - commands to the service — Intents/broadcasts with `setPackage`: `ACTION_START`, `ACTION_STOP`,

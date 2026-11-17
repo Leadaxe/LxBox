@@ -1882,6 +1882,9 @@ the Add current and Manual buttons add to it.
 
 The **Automation** tab opens the VPN to commands and events of Tasker,
 MacroDroid and other apps: [Advanced user guide → Automation tab](ADVANCED_USER_GUIDE.md#automation-opens-the-vpn-to-commands-from-other-apps).
+The AI assistants section of the same tab lets an AI assistant check why an
+address does not open, route an app and switch connections:
+[AI assistants and your network](AI_ASSISTANT.md).
 
 ---
 
