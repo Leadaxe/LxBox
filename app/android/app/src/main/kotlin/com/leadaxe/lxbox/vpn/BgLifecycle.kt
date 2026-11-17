@@ -167,6 +167,14 @@ object BgLifecycle {
         startPendingUntil = android.os.SystemClock.elapsedRealtime() + START_GRACE_MS
     }
 
+    /// Команда старта дошла: сервис создан (дальше процесс держит сам сервис —
+    /// `serviceAlive`) или туннель дошёл до `Stopped`. Таймер [START_GRACE_MS]
+    /// остаётся страховкой только на случай «команда ушла, сервис так и не
+    /// создан».
+    fun startSettled() {
+        startPendingUntil = 0L
+    }
+
     private val enabled: Boolean get() = ProcessRole.role == ProcessRole.Role.Bg
 
     private var pending: Runnable? = null

@@ -403,6 +403,8 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
     override fun onCreate() {
         super.onCreate()
         live = this
+        // §747 G — сервис создан: пометка «старт в пути» больше не нужна.
+        BgLifecycle.startSettled()
         service.onCreate()
     }
 

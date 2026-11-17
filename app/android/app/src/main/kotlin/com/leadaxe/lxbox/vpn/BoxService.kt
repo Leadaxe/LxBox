@@ -1060,6 +1060,7 @@ class BoxService(
                 }
             }
             VpnStatus.Stopped -> {
+                BgLifecycle.startSettled()
                 BootReceiver.setVpnDesired(appCtx, false)
                 watchdogJob?.cancel()
                 watchdogJob = null
