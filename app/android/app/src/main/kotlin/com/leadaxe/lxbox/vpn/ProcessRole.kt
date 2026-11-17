@@ -27,12 +27,11 @@ object ProcessRole {
 
     val role: Role by lazy { roleOf(name) }
 
-    /// Сторона окна. До пометки процессов в манифесте (и в JVM-тестах) процесс
-    /// без имени исполняет обе роли.
-    val isUi: Boolean get() = role != Role.Bg
+    /// Сторона окна (`:ui`).
+    val isUi: Boolean get() = role == Role.Ui
 
-    /// Сервисная сторона.
-    val isBg: Boolean get() = role != Role.Ui
+    /// Сервисная сторона (`:bg`). Процесс без имени не исполняет ни одной роли.
+    val isBg: Boolean get() = role == Role.Bg
 
     private fun readName(): String {
         runCatching {

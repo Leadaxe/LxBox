@@ -34,8 +34,16 @@ class BoxApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         initCommon()
-        if (ProcessRole.isBg) initServiceSide()
-        if (ProcessRole.isUi) initUiSide()
+        when (ProcessRole.role) {
+            ProcessRole.Role.Bg -> initServiceSide()
+            ProcessRole.Role.Ui -> initUiSide()
+            // Каждый компонент манифеста помечен `:ui` или `:bg`; процесс без
+            // имени — признак компонента без пометки (сборка такое не
+            // пропускает) или постороннего запуска. Шаги сторон не выполняются.
+            ProcessRole.Role.Unnamed -> android.util.Log.e(
+                TAG, "started in an unnamed process '${ProcessRole.name}' — neither :ui nor :bg",
+            )
+        }
     }
 
     /**
@@ -95,7 +103,7 @@ class BoxApplication : Application() {
         // §745/§747 — WARN-строки клиента ядра роли UI и полосы `lxbox-cc`
         // процесса окна пишет в журнал сама сторона окна.
         UiCoreSession.warningSink = { text -> UiSinks.appLogWarning(text) }
-        if (!ProcessRole.isBg) CommandLane.warningSink = { text -> UiSinks.appLogWarning(text) }
+        CommandLane.warningSink = { text -> UiSinks.appLogWarning(text) }
 
         // Окну рантайм ядра нужен сразу (клиент `command.sock`, проверка и
         // форматирование конфига, проба без туннеля) — загрузка в фоне.
