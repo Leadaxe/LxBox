@@ -16,7 +16,7 @@ import '../url_mask.dart';
 /// [SettingsStorage] (зовётся на старте и при смене любого toggle в UI).
 ///
 /// **Send** делается на native стороне ([BoxVpnClient.sendAutomationBroadcast]
-/// → `VpnPlugin.sendAutomationBroadcast`): broadcast открыт всем подписчикам.
+/// → `AutomationBridge.sendAutomationBroadcast`): broadcast открыт всем подписчикам.
 /// События не содержат секретов — только лейблы (теги нод, группы, статус).
 /// Per-app фильтр удалён (§157 — нерабочая permission-галка).
 ///
