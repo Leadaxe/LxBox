@@ -89,6 +89,9 @@ internal object CrashRecovery {
      * (`bbolt` / `invalid page type` / `cachefile`) пропускал бы редкие формы
      * порчи, а цена лишней чистки низкая.
      */
+    // §747 — [tempDir] — собственный каталог ядра (`BoxApplication.coreTempDir`,
+    // подкаталог `cacheDir`), а не весь `cacheDir`: чистка идёт в `:bg` при
+    // живом окне и чужих временных файлов не касается.
     fun resetKernelCaches(tempDir: File) {
         Log.i(TAG, "[§334] previous launch crashed — resetting kernel caches")
         BoxVpnService.deleteCacheDbFile()
@@ -100,15 +103,21 @@ internal object CrashRecovery {
      * путь в `SetupOptions` и ожидает существующим.
      */
     private fun clearTempDir(tempDir: File) {
-        val entries = runCatching { tempDir.listFiles() }.getOrNull()
-        if (entries == null) {
+        val r = deleteContents(tempDir)
+        if (r == null) {
             Log.i(TAG, "[§334] temp dir unreadable or absent — nothing to clear")
             return
         }
+        Log.i(TAG, "[§334] temp dir cleared: ${r.first}/${r.second} (${tempDir.absolutePath})")
+    }
+
+    /** Удалить содержимое [dir], оставив сам каталог: (удалено, всего); null — каталога нет. */
+    internal fun deleteContents(dir: File): Pair<Int, Int>? {
+        val entries = runCatching { dir.listFiles() }.getOrNull() ?: return null
         var removed = 0
         for (entry in entries) {
             if (runCatching { entry.deleteRecursively() }.getOrDefault(false)) removed++
         }
-        Log.i(TAG, "[§334] temp dir cleared: $removed/${entries.size} (${tempDir.absolutePath})")
+        return removed to entries.size
     }
 }

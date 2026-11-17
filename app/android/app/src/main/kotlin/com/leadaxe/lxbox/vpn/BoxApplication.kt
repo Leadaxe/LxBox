@@ -127,7 +127,7 @@ class BoxApplication : Application() {
 
     private fun baseSetupOptions(): SetupOptions {
         val baseDir = filesDir.also { it.mkdirs() }
-        val tempDir = cacheDir.also { it.mkdirs() }
+        val tempDir = coreTempDir(this)
         return SetupOptions().apply {
             basePath = baseDir.path
             workingPath = baseDir.path
@@ -159,7 +159,7 @@ class BoxApplication : Application() {
         L10n.setLibboxLocale(L10n.setting(context))
 
         val workingDir = context.filesDir
-        val tempDir = context.cacheDir
+        val tempDir = coreTempDir(context)
         val opts = baseSetupOptions().apply {
             // §043: forwarding sing-box логов в `writeDebugMessage`.
             // `daemon/started_service.go:1048-1050` gates за `if s.debug`.
@@ -239,6 +239,18 @@ class BoxApplication : Application() {
         internal lateinit var instance: BoxApplication
 
         private val libboxLock = Any()
+
+        /**
+         * §747 — временный каталог ядра (`SetupOptions.tempPath`): свой
+         * подкаталог `cacheDir`. Раньше ядру отдавался весь `cacheDir`, и
+         * `CrashRecovery` после падения чистил его целиком; теперь эта чистка
+         * идёт в `:bg` под живым окном и не должна задевать чужое —
+         * временные файлы Flutter и плагинов, посылки вызовов `bg-xfer`.
+         */
+        fun coreTempDir(context: Context): java.io.File =
+            java.io.File(context.cacheDir, CORE_TEMP_DIR).also { it.mkdirs() }
+
+        private const val CORE_TEMP_DIR = "core-tmp"
 
         @Volatile
         private var lastCoreUseAt = 0L
