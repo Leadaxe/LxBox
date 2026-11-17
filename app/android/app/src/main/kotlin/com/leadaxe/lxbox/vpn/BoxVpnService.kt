@@ -184,7 +184,7 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
         /// Stop при статусе `Stopped`: если старт в пути — отменить его.
         private fun cancelPendingStart(): Boolean {
             if (!startPending) return false
-            Log.w(TAG, "[vpn] stop while a start is on its way — the start will be cancelled")
+            BgLifecycle.journal("stop while a start is on its way in pid ${android.os.Process.myPid()} — the start will be cancelled")
             startCancelled = true
             return true
         }
@@ -193,6 +193,7 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
             Log.d(TAG, "[vpn] companion.start() → startForegroundService, current status=${TunnelState.status.name}")
             startPending = true
             startCancelled = false
+            BgLifecycle.journal("start accepted in pid ${android.os.Process.myPid()} (status=${TunnelState.status.name})")
             // §747 G — процесс не завершается, пока система создаёт сервис.
             BgLifecycle.startRequested()
             val intent = Intent(context, BoxVpnService::class.java).apply { action = ACTION_START }

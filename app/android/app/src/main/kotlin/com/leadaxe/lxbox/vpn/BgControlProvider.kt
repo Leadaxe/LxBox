@@ -104,6 +104,7 @@ class BgControlProvider : ContentProvider() {
         if (!BgLifecycle.enter()) {
             // Процесс уже решил завершиться (§747 G): вызов не исполняется.
             // Окно получит DeadObjectException и повторит его в новый процесс.
+            Log.w(TAG, "call($method) not executed in pid ${android.os.Process.myPid()}: the process is exiting")
             BgLifecycle.park()
             return error(ERROR_CALL_FAILED, "service process is restarting")
         }

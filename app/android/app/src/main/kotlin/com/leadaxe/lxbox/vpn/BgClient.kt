@@ -32,9 +32,23 @@ import java.util.concurrent.atomic.AtomicLong
 object BgClient {
     private const val TAG = "BgClient"
 
-    /// Сколько раз повторить вызов, попавший на смену процесса `:bg`.
-    private const val DEAD_RETRIES = 3
+    /// Сколько раз повторить вызов, попавший на смену процесса `:bg`, и паузы
+    /// между попытками (растут до [DEAD_RETRY_PAUSE_MAX_MS]; всего ~3 с). Под
+    /// нагрузкой система узнаёт о гибели процесса не сразу и какое-то время
+    /// отдаёт мёртвого провайдера — короткой серии повторов на это не хватает.
+    private const val DEAD_RETRIES = 10
     private const val DEAD_RETRY_PAUSE_MS = 50L
+    private const val DEAD_RETRY_PAUSE_MAX_MS = 500L
+
+    /// Приёмник строк журнала приложения от стороны окна (повтор вызова после
+    /// гибели `:bg`); ставит `VpnPlugin`, пока подключён движок.
+    @Volatile
+    var journal: ((String) -> Unit)? = null
+
+    private fun note(text: String) {
+        Log.w(TAG, text)
+        runCatching { journal?.invoke("WARN [ui] $text") }
+    }
 
     private val lane = Executors.newSingleThreadExecutor { r ->
         Thread(r, "lxbox-bg-lane").apply { isDaemon = true }
@@ -103,11 +117,16 @@ object BgClient {
                     runCatching { client.close() }
                 }
             } catch (e: android.os.DeadObjectException) {
+                val what = if (method == BgControlProvider.METHOD_INVOKE_ASYNC) "$method:$arg" else method
                 if (++attempt > DEAD_RETRIES) {
+                    note("call $what failed: the service process is gone ($DEAD_RETRIES replays)")
                     throw BgError(BgControlProvider.ERROR_CALL_FAILED, "service process is gone")
                 }
-                Log.w(TAG, "call($method): service process died — retry $attempt")
-                runCatching { Thread.sleep(DEAD_RETRY_PAUSE_MS) }
+                note("call $what replayed after DeadObject (attempt $attempt)")
+                runCatching {
+                    Thread.sleep((DEAD_RETRY_PAUSE_MS shl (attempt - 1).coerceAtMost(4))
+                        .coerceAtMost(DEAD_RETRY_PAUSE_MAX_MS))
+                }
                 continue
             } catch (e: BgError) {
                 throw e

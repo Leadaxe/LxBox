@@ -259,6 +259,43 @@ class BgBoundaryTest {
         assertFalse(bgMayExit(idle.copy(pendingReplies = true)))
     }
 
+    @Test
+    fun `veto names every reason that holds the process`() {
+        assertTrue(bgExitVeto(idle).isEmpty())
+        // Окно само в список не входит: под ним процесс перезапускается.
+        assertTrue(bgExitVeto(idle.copy(uiAttached = true)).isEmpty())
+        assertEquals(listOf("start-pending"), bgExitVeto(idle.copy(startPending = true)))
+        assertEquals(
+            listOf("tunnel-not-stopped", "service-alive", "calls=2"),
+            bgExitVeto(idle.copy(tunnelStopped = false, serviceAlive = true, activeCalls = 2)),
+        )
+        // Список пуст ровно тогда, когда процесс без окна может завершиться.
+        val reasons = listOf(
+            idle.copy(tunnelStopped = false), idle.copy(serviceAlive = true),
+            idle.copy(startPending = true), idle.copy(activeCalls = 1),
+            idle.copy(pendingReplies = true), idle.copy(probeActive = true),
+            idle.copy(taildropBusy = true), idle.copy(nativeWindows = 1),
+            idle.copy(holds = 1), idle.copy(watchdogPending = true),
+        )
+        for (s in reasons) {
+            assertFalse(bgMayExit(s))
+            assertEquals(1, bgExitVeto(s).size)
+        }
+    }
+
+    @Test
+    fun `a start on its way holds the process with and without the window`() {
+        // Команда старта принята, сервис ещё не создан: ни завершения, ни
+        // перезапуска ради ядра — иначе старт ушёл бы в умирающий процесс.
+        val starting = idle.copy(startPending = true)
+        assertFalse(bgMayExit(starting))
+        assertFalse(bgMayRecycle(starting.copy(uiAttached = true), true, BgLifecycle.CORE_IDLE_MS))
+        // Сервис создан — пометка снята, держит уже сам сервис.
+        val created = idle.copy(serviceAlive = true)
+        assertFalse(bgMayExit(created))
+        assertFalse(bgMayRecycle(created.copy(uiAttached = true), true, BgLifecycle.CORE_IDLE_MS))
+    }
+
     // ───────────── перезапуск `:bg` под открытым окном ─────────────
 
     private val underWindow = idle.copy(uiAttached = true)

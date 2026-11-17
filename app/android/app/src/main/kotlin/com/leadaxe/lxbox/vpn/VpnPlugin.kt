@@ -176,6 +176,12 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         // не декодируя. Каналы здесь — ради onListen / onCancel: подписка и
         // отписка Dart уходят в `:bg`, и ядро не шлёт то, что никто не читает.
         messenger = binding.binaryMessenger
+        // Строки журнала от стороны окна (повтор вызова после гибели `:bg`) —
+        // тем же потоком `lxbox/coreLog`, что строки сервиса.
+        BgClient.journal = { line ->
+            val payload = BgCodec.encodeEventEnvelope(listOf(line))
+            mainHandler.post { onFrame(CORE_LOG_CHANNEL, payload) }
+        }
         for (name in STREAM_CHANNELS) {
             val channel = EventChannel(binding.binaryMessenger, name)
             channel.setStreamHandler(object : EventChannel.StreamHandler {
@@ -314,6 +320,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         Log.d(TAG, "[vpn] onDetachedFromEngine: unregisterReceiver(statusReceiver)")
         attached = false
         attaching = false
+        BgClient.journal = null
         methodChannel.setMethodCallHandler(null)
         statusEventChannel.setStreamHandler(null)
         for (channel in streamChannels) channel.setStreamHandler(null)

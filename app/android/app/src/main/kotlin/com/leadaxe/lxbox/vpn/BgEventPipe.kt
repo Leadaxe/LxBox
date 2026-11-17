@@ -127,8 +127,10 @@ object BgEventPipe {
         val queues = PipeQueues()
         var closed = false
 
-        /// Пишущий поток взял кадр, который нельзя терять, и ещё не дописал его.
-        var writingReliable = false
+        /// Пишущий поток взял кадр и ещё не дописал его; [writingKept] — кадр,
+        /// который нельзя терять (ответ вызова, команда автоматизации).
+        var writing = false
+        var writingKept = false
     }
 
     @Volatile
@@ -151,11 +153,29 @@ object BgEventPipe {
             val s = session ?: return false
             s.lock.lock()
             try {
-                return !s.closed && (s.queues.hasReliable || s.writingReliable)
+                return !s.closed && (s.queues.hasReliable || s.writingKept)
             } finally {
                 s.lock.unlock()
             }
         }
+
+    /// Дать пишущему потоку дописать то, что уже в очередях (последние строки
+    /// журнала перед завершением процесса), не дольше [maxMs]. Замороженное
+    /// окно не читает — тогда срок просто истекает.
+    fun drain(maxMs: Long) {
+        val deadline = System.nanoTime() + maxMs * 1_000_000L
+        while (System.nanoTime() < deadline) {
+            val s = session ?: return
+            s.lock.lock()
+            val idle = try {
+                s.closed || (s.queues.isEmpty && !s.writing)
+            } finally {
+                s.lock.unlock()
+            }
+            if (idle) return
+            runCatching { Thread.sleep(10L) }
+        }
+    }
 
     /// Гейт «никто не слушает — не форматировать»: первой строкой проверяется
     /// в `BoxService.writeDebugMessage`.
@@ -250,7 +270,8 @@ object BgEventPipe {
                     }
                     if (s.closed) break
                     frame = next!!
-                    s.writingReliable = frame.first.startsWith("!")
+                    s.writing = true
+                    s.writingKept = frame.first.startsWith("!")
                 } finally {
                     s.lock.unlock()
                 }
@@ -261,11 +282,10 @@ object BgEventPipe {
                 else BgCodec.encodeEventEnvelope(value)
                 EventFrames.write(s.out, stream, payload)
                 s.out.flush()
-                if (s.writingReliable) {
-                    s.lock.lock()
-                    s.writingReliable = false
-                    s.lock.unlock()
-                }
+                s.lock.lock()
+                s.writing = false
+                s.writingKept = false
+                s.lock.unlock()
             }
         } catch (t: Throwable) {
             // EPIPE: окно закрыло читающий конец или процесс `:ui` умер.

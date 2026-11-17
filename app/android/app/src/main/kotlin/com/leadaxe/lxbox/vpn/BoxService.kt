@@ -438,7 +438,7 @@ class BoxService(
         // системе выполнено), туннель не поднимаем.
         if (intent != null && BoxVpnService.startArrived()) {
             if (status == VpnStatus.Stopped) {
-                Log.w(TAG, "[vpn] onStartCommand — start was cancelled by a Stop sent before the service existed")
+                BgLifecycle.journal("start cancelled in pid ${android.os.Process.myPid()}: a Stop came before the service existed")
                 notification.stop()
                 service.stopSelf()
                 return Service.START_NOT_STICKY
@@ -447,7 +447,13 @@ class BoxService(
 
         if (status != VpnStatus.Stopped) {
             Log.w(TAG, "[vpn] onStartCommand GUARD — status=${status.name} != Stopped, silent return")
+            if (intent != null) {
+                BgLifecycle.journal("start ignored in pid ${android.os.Process.myPid()}: service status is ${status.name}")
+            }
             return Service.START_STICKY
+        }
+        if (intent != null) {
+            BgLifecycle.journal("start reached the service in pid ${android.os.Process.myPid()}")
         }
         resetScope()
         setStatus(VpnStatus.Starting)

@@ -124,6 +124,21 @@ fun bgMayExit(s: BgExitState): Boolean =
         s.holds == 0 && s.activeCalls == 0 && !s.taildropBusy && !s.watchdogPending &&
         !s.probeActive && !s.startPending && !s.pendingReplies
 
+/// §747 G — что держит процесс `:bg` (кроме окна — см. [bgMayRecycle]): имена
+/// причин для журнала. Пусто — ни одной причины, кроме, возможно, окна.
+fun bgExitVeto(s: BgExitState): List<String> = buildList {
+    if (!s.tunnelStopped) add("tunnel-not-stopped")
+    if (s.serviceAlive) add("service-alive")
+    if (s.startPending) add("start-pending")
+    if (s.activeCalls > 0) add("calls=${s.activeCalls}")
+    if (s.pendingReplies) add("replies-unwritten")
+    if (s.probeActive) add("probe")
+    if (s.taildropBusy) add("taildrop")
+    if (s.nativeWindows > 0) add("native-windows=${s.nativeWindows}")
+    if (s.holds > 0) add("holds=${s.holds}")
+    if (s.watchdogPending) add("vpn-desired")
+}
+
 /// §747 G — можно ли процессу `:bg` перезапуститься под открытым окном, чтобы
 /// сбросить загруженное ядро: туннель остановлен, а `libbox.so` из живого
 /// процесса не выгрузить. Те же причины жить, что в [bgMayExit], кроме самого
@@ -351,6 +366,13 @@ object BgLifecycle {
             return
         }
         Log.d(TAG, "stay: $s coreLoaded=$coreLoaded coreIdleMs=$coreIdleMs")
+        // В журнал — только когда завершение (или перезапуск ради ядра) было
+        // на подходе и его остановила не простая «ещё рано»: по этой строке
+        // видно, что удержало процесс в момент старта.
+        val veto = bgExitVeto(s)
+        if (veto.isNotEmpty() && (!s.uiAttached || coreLoaded)) {
+            journal("bg exit vetoed in pid ${android.os.Process.myPid()}: ${veto.joinToString(",")}")
+        }
         // Причина, у которой нет своего события об окончании (передача
         // Taildrop, идущий вызов, проба, недописанный ответ, ядро ещё не
         // простояло своё): перепроверить позже.
@@ -367,8 +389,18 @@ object BgLifecycle {
         }
     }
 
+    /// Строка о развилке жизненного цикла `:bg`: в logcat и в журнал
+    /// приложения (канал событий, если окно слушает лог) — чтобы случай
+    /// «старт принят, туннель не поднялся» разбирался по дампу.
+    fun journal(text: String) {
+        Log.w(TAG, text)
+        BgEventPipe.logLine("WARN [bg] $text")
+    }
+
     private fun exit(app: Context, reason: String) {
-        Log.i(TAG, "bg process exits ($reason)")
+        journal("bg exit allowed in pid ${android.os.Process.myPid()}: $reason")
+        // Строка журнала успевает уйти окну; вызовы в это время не исполняются.
+        BgEventPipe.drain(200L)
         // `apply()` пишет файл настроек в фоне; завершение процесса его не
         // ждёт. Пустой `commit()` дожидается записи всего, что уже применено.
         runCatching { BootReceiver.flushPrefs(app) }
