@@ -3,11 +3,12 @@ package com.leadaxe.lxbox.vpn
 /**
  * §740 — sink'и EventChannel'ов Flutter-движка: объекты Flutter-движка, живут
  * на стороне UI. Ставит и снимает их `VpnPlugin` (onListen / onCancel /
- * onDetachedFromEngine), пишут в них `BoxService` (логи ядра),
- * `BoxCommandClient` (эмиттеры клиента UI) и `ServiceCommandClient` (только
- * `ccOpenConnectSink`, §745).
+ * onDetachedFromEngine), пишут в них `BoxCommandClient` (эмиттеры клиента
+ * UI) и сам `VpnPlugin`.
  *
- * После разделения на процессы сервис сюда писать не сможет — см.
+ * §747 — сервис живёт в другом процессе и сюда не пишет: лог ядра приходит
+ * потоком через pipe (`UiLogPipeReader` → `coreLogSink`), состояние
+ * openconnect — событием и вызовом (`ccOpenConnectSink`); см.
  * docs/ARCHITECTURE.md, раздел о границе процессов.
  *
  * До §740 поля лежали в `BoxVpnService.companion`; перенесены без изменений.
@@ -48,4 +49,14 @@ object UiSinks {
     /// §707 — снапшот входящих Taildrop узла (`SubscribeTaildropInbox`).
     @Volatile
     var ccTaildropInboxSink: io.flutter.plugin.common.EventChannel.EventSink? = null
+
+    private val main = android.os.Handler(android.os.Looper.getMainLooper())
+
+    /// §747 — WARN-строка журнала приложения от самой стороны окна (клиент
+    /// ядра роли UI, полоса `lxbox-cc` процесса окна): пишется прямо в
+    /// [coreLogSink], тем же видом, что строки сервиса (`WARN …`). Никто не
+    /// слушает — строка только в logcat у вызывающего.
+    fun appLogWarning(text: String) {
+        main.post { runCatching { coreLogSink?.success(listOf("WARN $text")) } }
+    }
 }

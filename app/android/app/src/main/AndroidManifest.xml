@@ -359,6 +359,12 @@
                 <action android:name="android.app.appfunctions.AppFunctionService" />
             </intent-filter>
         </service>
+        <!-- §747 — канал окна к сервисной стороне: вызов с ответом
+             (ContentProvider.call). Не экспортируется; табличного доступа нет. -->
+        <provider
+            android:name=".vpn.BgControlProvider"
+            android:authorities="${applicationId}.bgcontrol"
+            android:exported="false" />
         <property
             android:name="android.app.appfunctions.app_metadata"
             android:resource="@xml/app_metadata" />

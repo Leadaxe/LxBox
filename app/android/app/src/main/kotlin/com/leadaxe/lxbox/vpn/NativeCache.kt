@@ -71,6 +71,21 @@ object NativeCache {
 
     // ─────────────── §428 «туннель желателен» и sticky-рестарты ───────────────
 
+    /// §747 — см. `BootReceiver.flushPrefs`.
+    fun flush(ctx: Context) {
+        prefs(ctx).edit().commit()
+    }
+
+    // §747 — ручки quic-go (§341): применяются к ядру процесса `:bg` при его
+    // загрузке, а не только вызовом окна (ядро грузится лениво и заново в
+    // каждом новом процессе `:bg`).
+    fun quicKnobDisabled(ctx: Context, knob: String): Boolean =
+        prefs(ctx).getBoolean("quic_${knob}_disabled", false)
+
+    fun setQuicKnobDisabled(ctx: Context, knob: String, disabled: Boolean) {
+        prefs(ctx).edit().putBoolean("quic_${knob}_disabled", disabled).apply()
+    }
+
     fun isVpnDesired(ctx: Context): Boolean = prefs(ctx).getBoolean(KEY_VPN_DESIRED, false)
 
     fun setVpnDesired(ctx: Context, desired: Boolean) {

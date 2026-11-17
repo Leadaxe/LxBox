@@ -229,6 +229,45 @@ class BoxApplication : Application() {
         /** Готовность `Libbox.setup` (libbox 1.14: redirectStderr убран из API). */
         val libboxReady: CompletableDeferred<Unit> = CompletableDeferred()
 
+        /** §747 — `Libbox.setup` этого процесса отработал. */
+        val libboxLoaded: Boolean get() = libboxReady.isCompleted
+
+        /** §747 — дождаться `Libbox.setup`. Блокирует; звать вне главного потока. */
+        fun ensureLibbox() {
+            kotlinx.coroutines.runBlocking { libboxReady.await() }
+        }
+
+        /** §341 — ручка quic-go: Go-side `os.Setenv`, действует в своём процессе. */
+        fun applyQuicKnob(knob: String, disabled: Boolean) {
+            when (knob) {
+                "gso" -> Libbox.setQuicGSODisabled(disabled)
+                "ecn" -> Libbox.setQuicECNDisabled(disabled)
+            }
+        }
+
+        /**
+         * §271 — применить `memory_limit` из настроек к загруженному ядру:
+         * `reloadSetupOptions` читает только OOM-поля и сразу зовёт
+         * `debug.SetMemoryLimit`. Ядро не загружено — ничего не делает
+         * (значение прочтёт `Libbox.setup`). Не блокирует вызывающего.
+         */
+        fun reloadMemoryLimit(context: Context) {
+            if (!libboxLoaded) return
+            val app = context.applicationContext
+            @Suppress("OPT_IN_USAGE")
+            GlobalScope.launch(Dispatchers.IO) {
+                runCatching {
+                    val opts = SetupOptions().apply {
+                        oomKillerEnabled = true
+                        oomMemoryLimit = resolveMemoryLimitBytes(app)
+                        // §705 (SPEC 148): порог по памяти рантайма ядра, не по RSS.
+                        oomMemoryLimitHeap = true
+                    }
+                    Libbox.reloadSetupOptions(opts)
+                }.onFailure { android.util.Log.w(TAG, "reloadSetupOptions failed: ${it.message}") }
+            }
+        }
+
         /** §051 Phase 3 — singleton WifiNetworkObserver. Toggled через
          *  Dart side (`MainActivity` MethodChannel `setAutoRecordWifi`).
          *  Init в onCreate (lifecycle = process). */

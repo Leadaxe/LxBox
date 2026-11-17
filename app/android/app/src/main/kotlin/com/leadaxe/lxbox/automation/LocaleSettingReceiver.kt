@@ -6,7 +6,7 @@ import android.content.Intent
 import android.net.VpnService
 import android.util.Log
 import com.leadaxe.lxbox.MainActivity
-import com.leadaxe.lxbox.vpn.AutomationBridge
+import com.leadaxe.lxbox.vpn.AutomationRelay
 import com.leadaxe.lxbox.vpn.BootReceiver
 import com.leadaxe.lxbox.vpn.BoxVpnService
 import com.leadaxe.lxbox.vpn.TunnelState
@@ -20,7 +20,7 @@ import com.leadaxe.lxbox.vpn.VpnStatus
 ///
 /// Lifecycle-команды (start/stop/toggle) идут напрямую в [BoxVpnService] —
 /// быстро, без Flutter-engine. Остальные форвардятся в Dart через
-/// [AutomationBridge.handleAutomationAction].
+/// [AutomationRelay.handleAutomationAction].
 ///
 /// Receiver `enabled=false` в манифесте; включается мастер-toggle'ом «Принимать
 /// команды автоматизации» вместе с raw-receiver Шага 1. По стандарту
@@ -49,7 +49,7 @@ class LocaleSettingReceiver : BroadcastReceiver() {
                 "start-vpn" -> BoxVpnService.start(context)
                 "stop-vpn" -> BoxVpnService.stop(context)
                 "toggle-vpn" -> handleToggle(context)
-                else -> AutomationBridge.handleAutomationAction(cmd, args)
+                else -> AutomationRelay.handleAutomationAction(context, cmd, args)
             }
         } catch (t: Throwable) {
             Log.e(TAG, "onReceive failed", t)

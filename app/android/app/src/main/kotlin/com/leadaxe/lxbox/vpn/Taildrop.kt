@@ -56,7 +56,7 @@ object Taildrop {
     const val CHANNEL_ID = "lxbox-taildrop"
 
     /// Экстра интента MainActivity: тег узла, чью вкладку Network открыть.
-    const val EXTRA_TAG = "taildrop_tag"
+    const val EXTRA_TAG = BgEvents.EXTRA_LAUNCH_TAILDROP_TAG
 
     const val ACTION_CANCEL_SEND = "com.leadaxe.lxbox.taildrop.CANCEL_SEND"
     const val EXTRA_SEND_ID = "send_id"
@@ -856,6 +856,10 @@ object Taildrop {
     /// Файлы, которые сейчас уносит в Downloads разбор или автосохранение
     /// по уведомлению: второй путь их пропускает.
     private val inFlight: MutableSet<String> = ConcurrentHashMap.newKeySet()
+
+    /// §747 G — идёт отправка или разбор входящих: процессу `:bg` рано
+    /// завершаться (`BgLifecycle`).
+    fun isBusy(): Boolean = sends.isNotEmpty() || inFlight.isNotEmpty()
     private fun inFlightKey(tag: String, name: String) = "$tag/$name"
 
     /// Одна очередь на процесс: прогоны идут по одному.

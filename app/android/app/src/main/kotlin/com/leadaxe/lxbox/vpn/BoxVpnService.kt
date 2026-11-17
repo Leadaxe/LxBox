@@ -176,7 +176,7 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
             // Идущий прогон страховки о них иначе не узнаёт и финальным
             // стартом поднимает туннель обратно; особенно в фазе тихого
             // цикла, где сервиса нет и ACTION_STOP принять некому.
-            AutomationBridge.notifyStopRequested()
+            AutomationRelay.notifyStopRequested(context)
             context.sendBroadcast(
                 Intent(ACTION_STOP).setPackage(context.packageName)
             )
@@ -282,9 +282,12 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
                 setCurrentStatus(VpnStatus.Stopped)
                 runCatching {
                     context.sendBroadcast(
-                        Intent(BROADCAST_STATUS)
-                            .setPackage(context.packageName)
-                            .putExtra(EXTRA_STATUS, VpnStatus.Stopped.name)
+                        BgEvents.putWire(
+                            Intent(BROADCAST_STATUS)
+                                .setPackage(context.packageName)
+                                .putExtra(EXTRA_STATUS, VpnStatus.Stopped.name),
+                            TunnelState.wire(),
+                        )
                     )
                 }
                 completeStopIfWaiting()

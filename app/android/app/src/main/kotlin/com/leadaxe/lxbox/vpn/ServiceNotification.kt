@@ -105,7 +105,7 @@ class ServiceNotification(private val service: Service) {
 
         /// §654 C — экстра интента MainActivity: тег узла openconnect, чей
         /// челлендж показать после тапа по уведомлению.
-        const val EXTRA_OPENCONNECT_TAG = "openconnect_tag"
+        const val EXTRA_OPENCONNECT_TAG = BgEvents.EXTRA_LAUNCH_OPENCONNECT_TAG
 
         /// §654 C — id уведомления «Sign-in required» на узел: своё на каждый
         /// тег, вне id 1/2.

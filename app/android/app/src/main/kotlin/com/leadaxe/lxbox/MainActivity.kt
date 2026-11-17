@@ -15,16 +15,11 @@ import android.telephony.TelephonyManager
 import android.util.Log
 import android.view.WindowManager
 import android.widget.Toast
-import com.leadaxe.lxbox.vpn.BootReceiver
+import com.leadaxe.lxbox.vpn.BgClient
+import com.leadaxe.lxbox.vpn.BgEvents
 import com.leadaxe.lxbox.vpn.BoxApplication
-import com.leadaxe.lxbox.vpn.BoxVpnService
-import com.leadaxe.lxbox.vpn.L10n
 import com.leadaxe.lxbox.vpn.PathMtuProbe
 import com.leadaxe.lxbox.vpn.PermissionUtils
-import com.leadaxe.lxbox.vpn.QuickShortcuts
-import com.leadaxe.lxbox.vpn.ServiceNotification
-import com.leadaxe.lxbox.vpn.Taildrop
-import com.leadaxe.lxbox.vpn.TunnelState
 import com.leadaxe.lxbox.vpn.UiLaunchRequests
 import com.leadaxe.lxbox.vpn.VpnPlugin
 import com.leadaxe.lxbox.vpn.VpnStatus
@@ -109,6 +104,7 @@ class MainActivity : FlutterActivity() {
 
         // §725 — проба Path MTU мимо туннеля (ICMP-сокет на физической сети).
         PathMtuProbe.attach(
+            applicationContext,
             MethodChannel(flutterEngine.dartExecutor.binaryMessenger, PathMtuProbe.CHANNEL),
         )
 
@@ -315,8 +311,8 @@ class MainActivity : FlutterActivity() {
         super.onCreate(savedInstanceState)
         // §430 — юзер открыл приложение, а в шторке уведомление от умершего
         // сервиса: короткий bounce сервиса, чтобы AMS его снял.
-        runCatching { BoxVpnService.clearStaleNotification(this) }
-            .onFailure { Log.w("MainActivity", "clearStaleNotification failed: ${it.message}") }
+        // §747 — состояние туннеля знает `:bg`: проверку и bounce делает он.
+        bg("clearStaleNotification")
         handleQuickAction(intent)
     }
 
@@ -331,24 +327,24 @@ class MainActivity : FlutterActivity() {
         // §279 — гарантированный retry relabel'а shortcuts, отложенного из-за
         // rate-limit'а (смена языка в background): foreground-вызовы
         // ShortcutManager rate-limit не применяет. No-op без pending-флага.
-        QuickShortcuts.retryPendingRelabel(applicationContext)
+        bg("retryShortcutRelabel")
     }
 
     private fun handleQuickAction(intent: Intent?) {
         // §654 C — тап по «Sign-in required»: Dart заберёт тег при старте или
         // возврате и откроет диалог челленджа этого узла.
-        intent?.getStringExtra(ServiceNotification.EXTRA_OPENCONNECT_TAG)?.let { tag ->
+        intent?.getStringExtra(BgEvents.EXTRA_LAUNCH_OPENCONNECT_TAG)?.let { tag ->
             UiLaunchRequests.openConnectOpenRequest = tag
-            intent.removeExtra(ServiceNotification.EXTRA_OPENCONNECT_TAG)
+            intent.removeExtra(BgEvents.EXTRA_LAUNCH_OPENCONNECT_TAG)
         }
         // §707 — тап по уведомлению Taildrop: Dart заберёт тег и откроет
         // вкладку Network узла.
-        intent?.getStringExtra(Taildrop.EXTRA_TAG)?.let { tag ->
+        intent?.getStringExtra(BgEvents.EXTRA_LAUNCH_TAILDROP_TAG)?.let { tag ->
             UiLaunchRequests.taildropOpenRequest = tag
-            intent.removeExtra(Taildrop.EXTRA_TAG)
+            intent.removeExtra(BgEvents.EXTRA_LAUNCH_TAILDROP_TAG)
         }
         val action = intent?.getStringExtra(EXTRA_ACTION) ?: return
-        Log.d(TAG, "handleQuickAction action=$action currentStatus=${TunnelState.status.name}")
+        Log.d(TAG, "handleQuickAction action=$action")
         // `extras.action` ставится только из tile или shortcut'а — поэтому
         // если мы здесь, мы пришли не через обычный launcher-tap. Закрываемся
         // после обработки, чтобы юзер вернулся на хоум.
@@ -357,56 +353,74 @@ class MainActivity : FlutterActivity() {
         // на activity дёргает снова.
         intent.removeExtra(EXTRA_ACTION)
 
+        // §747 — состояние туннеля, настройки и команды сервису — у `:bg`:
+        // спрашиваем вызовом (вне главного потока), продолжаем на главном.
+        // Окно закрывается только после ответа — команда успевает уйти.
         when (action) {
             ACTION_CONNECT -> startVpnWithConsent()
-            ACTION_DISCONNECT -> {
-                BoxVpnService.stop(applicationContext)
-                if (finishAfterConsent) finish()
-            }
-            ACTION_TOGGLE -> {
-                val s = TunnelState.status
-                if (s == VpnStatus.Started) {
-                    BoxVpnService.stop(applicationContext)
-                    if (finishAfterConsent) finish()
-                } else if (s == VpnStatus.Stopped) {
-                    startVpnWithConsent()
-                } else {
-                    Log.d(TAG, "toggle ignored in transient state ${s.name}")
-                    if (finishAfterConsent) finish()
+            ACTION_DISCONNECT -> bg("stopVpnNative") { finishIfQuick() }
+            ACTION_TOGGLE -> bg("tunnelSnapshot") { reply ->
+                when (val s = (reply as? Map<*, *>)?.get("status") as? String) {
+                    VpnStatus.Started.name -> bg("stopVpnNative") { finishIfQuick() }
+                    VpnStatus.Stopped.name -> startVpnWithConsent()
+                    else -> {
+                        Log.d(TAG, "toggle ignored in transient state $s")
+                        finishIfQuick()
+                    }
                 }
             }
             else -> Log.w(TAG, "Unknown quick action: $action")
         }
     }
 
-    private fun startVpnWithConsent() {
-        // §192 — proxy-режим без TUN: prepare не нужен (и зря рвёт чужой VPN).
-        if (!BootReceiver.hasTun(applicationContext)) {
-            BoxVpnService.start(applicationContext)
-            if (finishAfterConsent) finish()
-            return
+    /// §747 — вызов `:bg` (`BgMethods`) с полосы `BgClient` и продолжение на
+    /// главном потоке. [then] получает ответ или null при сбое вызова; после
+    /// уничтожения окна не зовётся.
+    private fun bg(method: String, args: Map<String, Any?>? = null, then: (Any?) -> Unit = {}) {
+        val ctx = applicationContext
+        BgClient.onLane {
+            val reply = runCatching { BgClient.call(ctx, method, args) }
+                .onFailure { Log.w(TAG, "bg call $method failed: ${it.message}") }
+                .getOrNull()
+            BgClient.onMain { if (!isDestroyed) then(reply) }
         }
-        val prep = VpnService.prepare(applicationContext)
-        if (prep == null) {
-            BoxVpnService.start(applicationContext)
-            if (finishAfterConsent) finish()
-            return
-        }
-        // Покажем тост ровно если activity «просто открылась» под consent —
-        // обычный запуск через UI и так показывает диалог как часть flow.
-        if (finishAfterConsent) {
-            // §279 — текст через L10n (in-app язык может отличаться от системного).
+    }
+
+    private fun finishIfQuick() {
+        if (finishAfterConsent) finish()
+    }
+
+    /// §279 — тост на языке приложения (может отличаться от системного):
+    /// настройку языка хранит `:bg`, строку отдаёт он.
+    private fun toastL10n(id: Int, then: () -> Unit = {}) {
+        bg("l10nString", mapOf("id" to id)) { text ->
             Toast.makeText(
                 applicationContext,
-                L10n.str(applicationContext, R.string.qc_first_open),
+                (text as? String) ?: getString(id),
                 Toast.LENGTH_SHORT,
             ).show()
+            then()
         }
-        try {
-            startActivityForResult(prep, VPN_REQUEST_CODE_QUICK)
-        } catch (e: Exception) {
-            Log.e(TAG, "VPN consent prepare failed: ${e.message}", e)
-            if (finishAfterConsent) finish()
+    }
+
+    private fun startVpnWithConsent() {
+        bg("getHasTun") { reply ->
+            // §192 — proxy-режим без TUN: prepare не нужен (и зря рвёт чужой VPN).
+            val hasTun = reply as? Boolean ?: true
+            val prep = if (hasTun) VpnService.prepare(applicationContext) else null
+            if (prep == null) {
+                bg("startVpnService") { finishIfQuick() }
+                return@bg
+            }
+            // Покажем тост ровно если activity «просто открылась» под consent —
+            // обычный запуск через UI и так показывает диалог как часть flow.
+            if (finishAfterConsent) toastL10n(R.string.qc_first_open)
+            try {
+                startActivityForResult(prep, VPN_REQUEST_CODE_QUICK)
+            } catch (e: Exception) {
+                Log.e(TAG, "VPN consent prepare failed: ${e.message}", e)
+                finishIfQuick()
+            }
         }
     }
 
@@ -752,16 +766,9 @@ class MainActivity : FlutterActivity() {
         }
         if (requestCode != VPN_REQUEST_CODE_QUICK) return
         if (resultCode == Activity.RESULT_OK) {
-            BoxVpnService.start(applicationContext)
-            if (finishAfterConsent) finish()
+            bg("startVpnService") { finishIfQuick() }
         } else {
-            // §279 — текст через L10n (in-app язык может отличаться от системного).
-            Toast.makeText(
-                applicationContext,
-                L10n.str(applicationContext, R.string.qc_consent_denied),
-                Toast.LENGTH_SHORT,
-            ).show()
-            if (finishAfterConsent) finish()
+            toastL10n(R.string.qc_consent_denied) { finishIfQuick() }
         }
     }
 }

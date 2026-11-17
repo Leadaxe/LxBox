@@ -78,17 +78,58 @@ object TunnelState {
             else -> cur.startedElapsedMs /* Starting/Stopping — не трогаем */
         }
         state = cur.copy(status = s, revoked = newRevoked, startedElapsedMs = newStarted)
+        seq++
     }
 
     /// §069 — snapshot `allow_bypass` при `establish()` / сброс в onDestroy.
     @Synchronized
     internal fun setSessionAllowBypass(v: Boolean) {
         state = state.copy(sessionAllowBypass = v)
+        seq++
+    }
+
+    // ───────────── §747 — снимок для другого процесса и его копия ─────────────
+
+    /// Снимок с меткой порядка: [epoch] — запуск процесса-владельца (`:bg`),
+    /// [seq] — номер записи в нём. Едет в `BROADCAST_STATUS` и в ответе вызова
+    /// `tunnelSnapshot`; по метке копия в `:ui` отбрасывает устаревшее (ответ
+    /// вызова, обогнанный broadcast'ом, и наоборот).
+    data class Wire(val epoch: Long, val seq: Long, val snapshot: Snapshot)
+
+    /// Номер последней записи владельца. Читается и пишется под замком объекта.
+    private var seq = 0L
+
+    /// Метка запуска процесса-владельца: монотонные часы на момент первого
+    /// обращения. У перезапущенного `:bg` она больше прежней.
+    private val epoch: Long by lazy { clock() }
+
+    /// Метка последнего принятого копией снимка.
+    private var mirrorEpoch = Long.MIN_VALUE
+    private var mirrorSeq = Long.MIN_VALUE
+
+    /// Сторона владельца: согласованная пара «снимок + метка».
+    @Synchronized
+    fun wire(): Wire = Wire(epoch, seq, state)
+
+    /// Сторона окна (`:ui`): принять снимок владельца, если он новее уже
+    /// принятого. Пишут только приёмник `BROADCAST_STATUS` и первичный запрос
+    /// снимка (`VpnPlugin`); в процессе-владельце не зовётся. `true` — принят.
+    @Synchronized
+    internal fun acceptMirror(w: Wire): Boolean {
+        val newer = w.epoch > mirrorEpoch || (w.epoch == mirrorEpoch && w.seq > mirrorSeq)
+        if (!newer) return false
+        mirrorEpoch = w.epoch
+        mirrorSeq = w.seq
+        state = w.snapshot
+        return true
     }
 
     /// Только для unit-тестов: вернуть начальное состояние.
     @Synchronized
     internal fun resetForTest() {
         state = Snapshot()
+        seq = 0L
+        mirrorEpoch = Long.MIN_VALUE
+        mirrorSeq = Long.MIN_VALUE
     }
 }

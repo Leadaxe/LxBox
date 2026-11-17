@@ -56,6 +56,8 @@ class ServiceCommandClient(private val host: Host) : OpenConnectControl {
 
     /// §742 — то, что клиенту нужно от стороны, которая его создала.
     interface Host {
+        /// Состояние openconnect изменилось — сообщить окну.
+        fun openConnectChanged()
         /// Уведомление «Sign-in required» для openconnect-endpoint'а [tag].
         fun showSignIn(tag: String)
         /// Снять уведомление «Sign-in required» для [tag].
@@ -168,7 +170,6 @@ class ServiceCommandClient(private val host: Host) : OpenConnectControl {
     private val openConnectClient = AtomicReference<CommandClient?>(null)
     private val openConnectSub = AtomicReference<OpenConnectStatusSubscription?>(null)
     private val openConnectGen = AtomicInteger(0)
-    private val openConnectEmitter = SnapshotEmitter(mainHandler) { UiSinks.ccOpenConnectSink }
     /// Последний снапшот endpoint'ов: Dart забирает его при подключении
     /// (висящий челлендж при открытии приложения).
     @Volatile private var openConnectEndpoints: List<Map<String, Any>> = emptyList()
@@ -229,7 +230,11 @@ class ServiceCommandClient(private val host: Host) : OpenConnectControl {
         return m
     }
 
-    private fun emitOpenConnect() = openConnectEmitter.offer(openConnectSnapshot())
+    /// §747 — окно живёт в другом процессе: сюда оно не подписано, а узнаёт о
+    /// перемене событием без данных ([BgEvents.ACTION_OPENCONNECT_CHANGED]) и
+    /// забирает снимок вызовом `ccGetOpenConnectStatus`. Снимок (в нём форма
+    /// входа) broadcast'ом не идёт.
+    private fun emitOpenConnect() = host.openConnectChanged()
 
     /// Колбэки приходят из Go-потока: ни одного исключения наружу (JNI abort).
     private inner class OpenConnectHandler(private val gen: Int) : OpenConnectStatusHandler {

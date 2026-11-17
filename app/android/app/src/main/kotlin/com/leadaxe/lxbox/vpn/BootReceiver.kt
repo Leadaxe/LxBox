@@ -112,6 +112,16 @@ class BootReceiver : BroadcastReceiver() {
         internal fun prefs(context: Context) =
             context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
 
+        /// §747 — дождаться записи на диск всего, что уже применено через
+        /// `apply()` в трёх файлах настроек: пустой `commit()` встаёт в ту же
+        /// очередь записи и возвращается после неё. Зовёт `:bg` перед
+        /// самозавершением (завершение процесса фоновую запись не ждёт).
+        fun flushPrefs(context: Context) {
+            runCatching { prefs(context).edit().commit() }
+            runCatching { NativeCache.flush(context) }
+            runCatching { AutomationCache.prefs(context).edit().commit() }
+        }
+
         /// §279 — последнее значение, которое МЫ запушили в LocaleManager (33+):
         /// "" = пустой список (system), "en"/"ru" — явный выбор; null = ещё не
         /// пушили. Нужен трёхстороннему reconciliation на Dart-старте (спека 279

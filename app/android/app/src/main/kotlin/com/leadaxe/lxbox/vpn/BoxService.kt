@@ -72,6 +72,9 @@ class BoxService(
         /// selector'ов после Started, прежде чем читать getGroups().
         private const val NOTIFICATION_SNAPSHOT_DELAY_MS = 3000L
 
+        /// §747 D — сколько старт туннеля ждёт остановки пробы в окне.
+        private const val PROBE_STOP_WAIT_MS = 2000L
+
         /// §707 итер. 4 — работающий сервис: строка в журнал приложения
         /// (AppLog) из нативных разборов вне сервиса (служебные файлы Taildrop).
         @Volatile
@@ -94,6 +97,8 @@ class BoxService(
                 ServiceNotification.showSignIn(BoxApplication.application, tag)
             override fun cancelSignIn(tag: String) =
                 ServiceNotification.cancelSignIn(BoxApplication.application, tag)
+            override fun openConnectChanged() =
+                BgEvents.send(BoxApplication.application, BgEvents.ACTION_OPENCONNECT_CHANGED)
         }
 
         /// §732 — полоса для pause/wake/rebind ядра. Эти вызовы синхронно
@@ -791,7 +796,14 @@ class BoxService(
         // §236 — VPN приоритетнее probe-сессии: если юзер запускает туннель
         // при живом Test servers, глушим probe (он держит command.sock —
         // второй CommandServer на том же basePath не поднимется).
-        runCatching { ProbeSession.stop() }
+        // §747 D — проба без туннеля идёт в процессе окна на том же сокете
+        // ядра: просим окно остановить её и ждём подтверждения не дольше 2 с.
+        if (ProbeGate.isActive) {
+            BgEvents.send(service.applicationContext, BgEvents.ACTION_STOP_PROBE)
+            if (!ProbeGate.awaitIdle(PROBE_STOP_WAIT_MS)) {
+                Log.w(TAG, "[vpn] probe session did not stop in ${PROBE_STOP_WAIT_MS}ms — starting anyway")
+            }
+        }
         val cs = CommandServer(this, platformInterface)
         cs.start()
         commandServer.set(cs)
@@ -1036,6 +1048,9 @@ class BoxService(
                 if (!coreError.isNullOrEmpty()) {
                     putExtra(BoxVpnService.EXTRA_CORE_ERROR, coreError)
                 }
+                // §747 — весь снимок туннеля с меткой порядка: окно в другом
+                // процессе ведёт по нему свою копию `TunnelState`.
+                BgEvents.putWire(this, TunnelState.wire())
             }
         )
         runCatching { LxBoxTileService.refreshTile(service.applicationContext) }
@@ -1210,114 +1225,32 @@ class BoxService(
     override fun triggerNativeCrash() {}
 
     /// §043: sing-box log lines проходят сюда независимо от `log.level`
-    /// в конфиге. INFO+ пушим в Flutter через EventChannel "lxbox/coreLog".
+    /// в конфиге. INFO+ уходят в окно (EventChannel "lxbox/coreLog").
     ///
-    /// **F22 part 2 — производственный pipeline:**
-    /// - Никакого `@Synchronized`: `LinkedBlockingQueue.offer` thread-safe сам,
-    ///   а `@Synchronized` сериализовал бы sing-box goroutines на mutex и
-    ///   не давал ничего полезного.
-    /// - **Back-pressure cap** `LOG_QUEUE_MAX = 4096`: при slow Dart consumer'е
-    ///   очередь не растёт без предела. Drop newest когда полно — потеря
-    ///   visibility одного-двух batch'ей лучше OOM.
-    /// - Single lazy `coreLogDrainer` Runnable. Никаких per-call lambda /
-    ///   anonymous class allocations.
-    /// - **Batching**: drainer отдаёт `List<String>` в `sink.success(list)` —
-    ///   один JNI marshal на N строк вместо N marshall'ов. Dart side
-    ///   принимает `List<dynamic>` (см. `clash_log_pump.dart`).
-    /// - **Yield** каждые `DRAIN_BATCH_MAX = 200` строк: re-post Runnable если
-    ///   queue ещё не пуст. Длинный burst не блочит main looper > одного frame.
+    /// §747 — окно в другом процессе: строки идут потоком через pipe
+    /// ([BgLogPipe]). Свойства прежнего конвейера (F22) сохранены там же:
+    /// - поток ядра не блокируется: `offer` в ограниченную очередь (4096),
+    ///   при переполнении строка отбрасывается;
+    /// - на стороне окна строки отдаются в Dart пачками `List<String>` до 200
+    ///   за проход главного потока (`UiLogPipeReader`).
     override fun writeDebugMessage(message: String) {
-        // §141 P3.2c — null-sink guard ПЕРВОЙ строкой: пока Flutter не подписан
-        // на coreLog (или отписался), нет смысла гонять два regex (ansi-strip +
-        // trace-фильтр) на каждой строке sing-box лога. Раньше оба regex
-        // выполнялись до этой проверки и работа выбрасывалась впустую.
-        if (UiSinks.coreLogSink == null) return
+        // §747 — никто не слушает (окно не подписано на лог или его процесса
+        // нет) — не форматировать: гейт первой строкой, как раньше.
+        if (!BgLogPipe.active) return
         val plain = ansiEscapeRe.replace(message, "")
-        // §345 — в verbose-режиме TRACE/DEBUG проходят (диагностика on-demand);
-        // back-pressure ниже (LOG_QUEUE_MAX, drop newest) защищает от потопа.
         if (!coreLogsVerbose && traceDebugRe.containsMatchIn(plain)) return
-        // Back-pressure: drop newest, не блокируем sing-box producer thread.
-        if (coreLogQueue.size >= LOG_QUEUE_MAX) {
-            coreLogDrops.incrementAndGet()
-            return
-        }
-        coreLogQueue.offer(plain)
-        if (drainerScheduled.compareAndSet(false, true)) {
-            coreLogMainHandler.post(coreLogDrainer)
-        }
+        BgLogPipe.offer(plain)
     }
 
     /// §668 — своя строка в журнал приложения тем же каналом, что core-лог,
     /// но без ANSI-strip и без фильтра TRACE/DEBUG: в стеках горутин эти
     /// слова не должны глушить запись.
     private fun appLogLine(text: String) {
-        if (UiSinks.coreLogSink == null) return
-        if (coreLogQueue.size >= LOG_QUEUE_MAX) {
-            coreLogDrops.incrementAndGet()
-            return
-        }
-        coreLogQueue.offer(text)
-        if (drainerScheduled.compareAndSet(false, true)) {
-            coreLogMainHandler.post(coreLogDrainer)
-        }
+        BgLogPipe.offer(text)
     }
 
-    // §171 — ANSI-strip. Sing-box оборачивает уровень и conn_id в ГОЛЫЕ
-    // ESC-байты (`<ESC>`), НЕ в классические CSI-цвета: реальная строка =
-    // `<ESC>INFO<ESC>[0617] [<ESC>759645927<ESC> 20ms] dns: exchanged ...`.
-    // Старый паттерн `\[[0-9;]*[A-Za-z]` искал `[…<letter>` — голый ESC не ловил
-    // вообще, и `<ESC>` доезжали до Dart, ломая DNS-regex профайлера
-    // (`\[(\d+)` не матчит `[` + ESC). Теперь срезаем: полные CSI-последователь-
-    // ности (`ESC[…m`) И любые одиночные ESC-байты. Скобки `[0617]`/`[connId ms]`
-    // (НЕ ANSI, нужны парсеру) сохраняются.
     private val ansiEscapeRe = Regex("\\u001B\\[[0-9;]*[A-Za-z]|\\u001B")
     private val traceDebugRe = Regex("\\b(TRACE|DEBUG)\\b")
-
-    /// Cap размера очереди — `4096 * ~80 chars ≈ 320KB` worst case в queue.
-    /// Drop newest при переполнении (sing-box producer thread не блокируется).
-    private val LOG_QUEUE_MAX = 4096
-
-    /// Сколько строк drainer отдаёт за один main-looper run перед yield'ом.
-    /// 200 строк ≈ 1 frame (~16ms) при типичной marshal-цене.
-    private val DRAIN_BATCH_MAX = 200
-
-    private val coreLogQueue: java.util.concurrent.LinkedBlockingQueue<String> by lazy {
-        java.util.concurrent.LinkedBlockingQueue()
-    }
-    private val drainerScheduled = java.util.concurrent.atomic.AtomicBoolean(false)
-    private val coreLogDrops = java.util.concurrent.atomic.AtomicLong(0)
-
-    /// **F22 single Runnable** — создаётся ОДИН раз при first access (lazy),
-    /// reused на каждый `Handler.post(coreLogDrainer)`. Никаких per-call
-    /// Lambda/anonymous class allocations. Hold strong ref в field.
-    ///
-    /// Drains до `DRAIN_BATCH_MAX` строк, эмитит как `List<String>` одним
-    /// JNI вызовом, потом если queue не пустой — re-post (yield для frame).
-    private val coreLogDrainer: Runnable by lazy {
-        Runnable {
-            drainerScheduled.set(false)
-            val sink = UiSinks.coreLogSink ?: run { coreLogQueue.clear(); return@Runnable }
-            val batch = ArrayList<String>(DRAIN_BATCH_MAX.coerceAtMost(64))
-            var taken = 0
-            while (taken < DRAIN_BATCH_MAX) {
-                val line = coreLogQueue.poll() ?: break
-                batch.add(line)
-                taken++
-            }
-            if (batch.isNotEmpty()) {
-                runCatching { sink.success(batch) }
-            }
-            // Если queue ещё что-то держит — re-schedule, не блочим main looper.
-            if (coreLogQueue.isNotEmpty() &&
-                drainerScheduled.compareAndSet(false, true)) {
-                coreLogMainHandler.post(coreLogDrainer)
-            }
-        }
-    }
-
-    private val coreLogMainHandler by lazy {
-        android.os.Handler(android.os.Looper.getMainLooper())
-    }
 
     /// `sendNotification` (spec §036) — system notification с clickable ссылкой.
     /// Sing-box зовёт `sendNotification` через PlatformInterface (на BoxVpnService),

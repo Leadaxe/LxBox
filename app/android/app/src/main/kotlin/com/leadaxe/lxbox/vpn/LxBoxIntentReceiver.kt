@@ -22,7 +22,7 @@ import com.leadaxe.lxbox.MainActivity
 /// **Маршрутизация.** Прямые lifecycle-команды (START/STOP/TOGGLE) идут на
 /// [BoxVpnService] напрямую (быстро, без Flutter-engine). Остальные
 /// (switch-node / set-group / rebuild / refresh / reset / urltest) форвардятся
-/// в Dart через [AutomationBridge.handleAutomationAction] → MethodChannel → shared
+/// в Dart через [AutomationRelay.handleAutomationAction] → MethodChannel → shared
 /// action-handlers (та же бизнес-логика, что у Debug API).
 class LxBoxIntentReceiver : BroadcastReceiver() {
 
@@ -151,6 +151,6 @@ class LxBoxIntentReceiver : BroadcastReceiver() {
     /// Flutter-engine не запущен — silently skip (action не выполнится, Tasker
     /// узнает из отсутствия outgoing-события / по таймауту).
     private fun forward(context: Context, name: String, args: Map<String, Any?>) {
-        AutomationBridge.handleAutomationAction(name, args)
+        AutomationRelay.handleAutomationAction(context, name, args)
     }
 }
