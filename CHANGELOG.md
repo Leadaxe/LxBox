@@ -13,6 +13,11 @@
 - **A folder's server with an unavailable detour is marked in the list ([task 739](docs/spec/tasks/739-detour-unavailable-node-warning.md)).** Inside a folder, the server whose detour was removed at build now shows the ⚠ «Hop … unavailable: hop removed» line on its own row, not only on the folder and the server's card. Tap it to read what happened; it goes away after the next build once the target is back.
   (RU: в списке серверов папки ⚠ «Hop … unavailable» теперь стоит у строки того сервера, у которого detour снят при сборке.)
 
+### Fixed
+
+- **Dependent settings no longer look enabled when they are not in effect ([task 743](docs/spec/tasks/743-disabled-vars-look-off.md), [#171](https://github.com/Leadaxe/LxBox/issues/171)).** In VPN Settings → Core → WireGuard, with «Suspend idle tunnels» off, «Lazy tunnel build» and «Built tunnels limit» are not passed to the core, but the greyed rows kept showing «on» and «12». A greyed row now shows a switch as off and a list as «Not in effect»; the saved value returns when the row becomes active again.
+  (RU: серая строка зависимой настройки больше не показывает сохранённое значение как действующее: переключатель рисуется выключенным, список — «Не действует».)
+
 ## [2.25.22] — 2026-11-16
 
 ### Changed

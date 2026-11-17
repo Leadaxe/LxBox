@@ -2542,6 +2542,9 @@
   "General": {
     "value": "通用"
   },
+  "Not in effect": {
+    "value": "未生效"
+  },
   "Generate random": {
     "value": "随机生成"
   },

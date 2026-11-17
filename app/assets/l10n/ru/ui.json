@@ -2782,6 +2782,9 @@
   "General": {
     "value": "Общие"
   },
+  "Not in effect": {
+    "value": "Не действует"
+  },
   "Generate random": {
     "value": "Сгенерировать случайное"
   },
