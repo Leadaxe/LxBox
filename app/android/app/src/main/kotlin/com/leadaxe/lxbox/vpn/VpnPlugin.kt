@@ -366,8 +366,10 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
     private fun syncUiClient() {
         when (TunnelState.status) {
             VpnStatus.Started -> UiCoreSession.ensure()
-            VpnStatus.Stopped -> UiCoreSession.closeOffMain()
-            else -> {}
+            // §747 — на Stopping сервис закрывает командный сервер: клиент
+            // закрывается сразу, не дожидаясь Stopped.
+            VpnStatus.Stopping, VpnStatus.Stopped -> UiCoreSession.closeOffMain()
+            VpnStatus.Starting -> {}
         }
     }
 
@@ -485,10 +487,19 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             "getCoreLogsEnabled", "setCoreLogsVerbose", "getCoreLogsVerbose", "setAllowBypass",
             "getAllowBypass", "setAutoRedirect", "getAutoRedirect", "setHasTun",
             "getCurrentSessionAllowBypass", "startVpnHeadless", "getBackgroundMode", "setBackgroundMode",
-            "getMemoryLimit", "setMemoryLimit", "setAppLanguage", "getAppLanguageState",
+            "getMemoryLimit", "setMemoryLimit", "getAppLanguageState",
             "setAutomationEnabled", "setAppFunctionsEnabled", "setAutomationActiveState", "taildropServiceStats",
             "taildropBuildServiceFile", "taildropClipState", "setTaildropTags", "deleteLegacyPrefs",
             "ccGetOpenConnectStatus", "ccStopOpenConnectCallback" -> toBg(call, result)
+            // §279 Phase 6 — язык приложения: настройку, LocaleManager-пуш и
+            // relabel нативных поверхностей делает `:bg`; здесь — локаль
+            // рантайма ядра процесса окна.
+            "setAppLanguage" -> {
+                if (!ProcessRole.isBg && BoxApplication.libboxLoaded) {
+                    L10n.setLibboxLocale(call.argument<String>("tag") ?: L10n.SETTING_SYSTEM)
+                }
+                toBg(call, result)
+            }
             "stopVPN", "getMemoryInfo", "ccSubmitOpenConnectForm",
             "ccCancelOpenConnectChallenge", "ccStartOpenConnectCallback" -> toBg(call, result, long = true)
             // §747 — конфиг бывает больше предела Binder: файл пишет и читает само

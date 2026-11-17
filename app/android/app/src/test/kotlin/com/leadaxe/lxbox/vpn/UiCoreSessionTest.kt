@@ -16,7 +16,6 @@ import org.junit.Test
 
 /// §745 — держатель клиента UI: логика `UiCoreSession` (`ClientHolder`) на
 /// подменной фабрике, без libbox; условие создания — настоящий `TunnelState`.
-/// Плюс слушатели `CoreSession` «перед закрытием».
 class UiCoreSessionTest {
 
     private class FakeClient {
@@ -37,14 +36,12 @@ class UiCoreSessionTest {
         savedClock = TunnelState.clock
         TunnelState.clock = { 1_000L }
         TunnelState.resetForTest()
-        CoreSession.clearBeforeCloseListenersForTest()
     }
 
     @After
     fun tearDown() {
         TunnelState.resetForTest()
         TunnelState.clock = savedClock
-        CoreSession.clearBeforeCloseListenersForTest()
     }
 
     @Test
@@ -147,27 +144,5 @@ class UiCoreSessionTest {
         h.ensure()
         h.close()
         assertNull(h.client)
-    }
-
-    @Test
-    fun `before-close listeners run in order and survive a failing one`() {
-        val order = ArrayList<String>()
-        CoreSession.addBeforeCloseListener { order.add("a") }
-        CoreSession.addBeforeCloseListener { throw IllegalStateException("boom") }
-        CoreSession.addBeforeCloseListener { order.add("c") }
-        CoreSession.notifyBeforeClose()
-        assertEquals(listOf("a", "c"), order)
-    }
-
-    @Test
-    fun `before-close listener closes the holder`() {
-        val h = holder()
-        TunnelState.setStatus(VpnStatus.Started)
-        val c = h.ensure()!!
-        CoreSession.addBeforeCloseListener { h.close() }
-        CoreSession.notifyBeforeClose()
-        CoreSession.notifyBeforeClose()
-        assertNull(h.client)
-        assertEquals(1, c.shutdowns.get())
     }
 }

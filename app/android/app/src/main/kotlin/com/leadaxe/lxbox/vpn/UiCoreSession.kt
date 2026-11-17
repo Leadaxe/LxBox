@@ -42,40 +42,34 @@ internal class ClientHolder<T : Any>(
 ///
 /// [ensure] создаёт клиента и сразу поднимает статус-стрим, если клиента ещё
 /// нет и туннель в статусе `Started`. Зовёт `VpnPlugin`: на broadcast
-/// `Started` (до передачи события в Dart), при attach движка и в каждом
-/// обработчике `cc*` роли UI — страховка от гонки «Dart прочитал `Started`
-/// через `getVpnStatus` раньше, чем пришёл broadcast».
+/// `Started` (до передачи события в Dart), по снимку состояния при attach
+/// движка и в каждом обработчике `cc*` роли UI — страховка от гонки «Dart
+/// прочитал `Started` через `getVpnStatus` раньше, чем пришёл broadcast».
 ///
-/// Закрытие — `shutdownAll()` и обнуление. [closeForCoreStop] синхронный: слушатель
-/// `CoreSession` «перед закрытием» (поток остановки; клиент должен отключиться
-/// до закрытия командного сервера). [closeOffMain] — broadcast `Stopped` и
-/// detach движка, оба на главном потоке.
+/// Закрытие — `shutdownAll()` и обнуление ([closeOffMain]): на `Stopping` и
+/// `Stopped` и при detach движка, всё на главном потоке. §747 — слушателя
+/// «перед закрытием» больше нет: сервис в другом процессе, а ядро закрывает
+/// командный сервер и при живых клиентах чужого процесса (опыт спеки 747:
+/// 142 мс, 273 мс при замороженном клиенте). В статусе `Stopping` клиент не
+/// создаётся — статус уже не `Started`.
 ///
 /// Пока нет движка Flutter, клиента нет: статус-стрим не тикает в пустоту при
 /// старте с плитки или автозапуске.
 object UiCoreSession {
 
     /// Приёмник WARN-строк журнала приложения для клиента UI (сбой
-    /// подключения статус-клиента). Журнал ведёт сервис — это остаток общей
-    /// памяти между сторонами; назначает `BoxApplication.initUiSide`, чтобы
-    /// сторона UI не ссылалась на `BoxService`. null — строка только в logcat.
+    /// подключения статус-клиента): пишет сторона окна (`UiSinks.appLogWarning`),
+    /// назначает `BoxApplication.initUiSide`. null — строка только в logcat.
     @Volatile
     internal var warningSink: ((String) -> Unit)? = null
 
-    /// Старт туннеля (`TunnelState.startedElapsedMs`), для которого сервис уже
-    /// начал закрывать командный сервер. Между этим моментом и статусом
-    /// `Stopped` статус ещё `Started`, но клиента создавать нельзя: он
-    /// подключился бы к закрывающемуся серверу. Новый старт получает новое
-    /// время — запрет снимается сам.
-    @Volatile
-    private var closingStart = -1L
-
     private val holder = ClientHolder(
-        started = {
-            val s = TunnelState.snapshot
-            s.status == VpnStatus.Started && s.startedElapsedMs != closingStart
-        },
+        started = { TunnelState.status == VpnStatus.Started },
         create = {
+            // §747 — рантайм ядра в процессе окна грузится в фоне при старте
+            // процесса; первая задача полосы дожидается его, чтобы
+            // подключение статус-клиента не обогнало `Libbox.setup`.
+            CommandLane.lane.post("ensureLibbox") { BoxApplication.ensureLibbox() }
             BoxCommandClient { text -> warningSink?.invoke(text) }.also { it.startStatus() }
         },
         shutdown = { it.shutdownAll() },
@@ -88,16 +82,10 @@ object UiCoreSession {
 
     fun ensure(): BoxCommandClient? = holder.ensure()
 
-    /// Слушатель `CoreSession` «перед закрытием»: синхронно закрыть клиента и
-    /// не создавать нового до следующего старта туннеля.
-    fun closeForCoreStop() {
-        closingStart = TunnelState.startedElapsedMs
-        holder.close()
-    }
-
-    /// То же с главного потока: ссылка снимается сразу (следующий [ensure]
-    /// создаст нового клиента), а `shutdownAll()` — вызовы в ядро — уходит в
-    /// свою нить, как `cancelPing` (§732: главный поток в ядро не ходит).
+    /// Закрыть клиента с главного потока: ссылка снимается сразу (следующий
+    /// [ensure] создаст нового клиента, если туннель `Started`), а
+    /// `shutdownAll()` — вызовы в ядро — уходит в свою нить, как `cancelPing`
+    /// (§732: главный поток в ядро не ходит).
     fun closeOffMain() = holder.close { task ->
         Thread(task, "lxbox-cc-close").apply { isDaemon = true }.start()
     }

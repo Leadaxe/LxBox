@@ -20,37 +20,48 @@ import java.util.concurrent.atomic.AtomicInteger
 ///
 /// Чистая логика без Android — проверяется JVM-тестом.
 object ProbeGate {
-    private val lock = Object()
+    private val lock = java.util.concurrent.locks.ReentrantLock()
+    private val idle = lock.newCondition()
     private var active = false
 
-    val isActive: Boolean get() = synchronized(lock) { active }
+    val isActive: Boolean get() = locked { active }
 
     /// Проба начинается. `false` — туннель не остановлен, пробе нельзя.
-    fun begin(tunnelStopped: Boolean): Boolean = synchronized(lock) {
-        if (!tunnelStopped) return false
-        active = true
-        true
+    fun begin(tunnelStopped: Boolean): Boolean = locked {
+        if (tunnelStopped) active = true
+        tunnelStopped
     }
 
     /// Проба закончена (или окно умерло).
-    fun end() = synchronized(lock) {
+    fun end() = locked {
         active = false
-        lock.notifyAll()
+        idle.signalAll()
     }
 
     /// Ждать конца пробы не дольше [timeoutMs]. `true` — проба не шла или
     /// закончилась; `false` — время вышло, отметка «проба идёт» снята силой.
-    fun awaitIdle(timeoutMs: Long, now: () -> Long = System::nanoTime): Boolean = synchronized(lock) {
+    fun awaitIdle(timeoutMs: Long, now: () -> Long = System::nanoTime): Boolean = locked {
         val deadline = now() + timeoutMs * 1_000_000L
+        var ok = true
         while (active) {
-            val leftMs = (deadline - now()) / 1_000_000L
-            if (leftMs <= 0L) {
+            val leftNs = deadline - now()
+            if (leftNs <= 0L) {
                 active = false
-                return false
+                ok = false
+                break
             }
-            lock.wait(leftMs)
+            idle.awaitNanos(leftNs)
         }
-        true
+        ok
+    }
+
+    private inline fun <T> locked(block: () -> T): T {
+        lock.lock()
+        try {
+            return block()
+        } finally {
+            lock.unlock()
+        }
     }
 }
 

@@ -111,7 +111,17 @@ object L10n {
     /// отформатированные/закэшированные строки остаются на прежнем языке до
     /// следующего рендера ядром (device-verification pending).
     fun applyLibboxLocale(base: Context) {
-        val s = setting(base)
+        // §747 — ядро грузится лениво: не загружено — нечего и настраивать
+        // (локаль поставит `BoxApplication.ensureLibbox` перед `Libbox.setup`).
+        if (!BoxApplication.libboxLoaded) return
+        setLibboxLocale(setting(base))
+    }
+
+    /// Локаль ядра ЭТОГО процесса по значению настройки языка [raw]
+    /// ("system" → локаль устройства). Зовёт и процесс окна — для своего
+    /// рантайма ядра (тексты ошибок проверки конфига и пробы).
+    fun setLibboxLocale(raw: String) {
+        val s = if (raw in KNOWN) raw else SETTING_SYSTEM
         runCatching {
             if (s == SETTING_SYSTEM) {
                 // libbox 1.14 строг к

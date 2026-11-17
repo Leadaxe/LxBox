@@ -8,7 +8,6 @@ import android.net.wifi.WifiManager
 import android.os.PowerManager
 import io.nekohasekai.libbox.Libbox
 import io.nekohasekai.libbox.SetupOptions
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
@@ -16,9 +15,14 @@ import kotlinx.coroutines.launch
 /**
  * §049 — Application class зарегистрирован в AndroidManifest как
  * `android:name=".vpn.BoxApplication"`. Mirror reference SagerNet
- * (commit 3b3883e libbox 1.13.11). Android создаёт Application до
- * любого Service / Activity → `Libbox.setup` гарантированно отрабатывает
- * до первого `CommandServer(...)` ctor'а.
+ * (commit 3b3883e libbox 1.13.11).
+ *
+ * §747 — процессов два (`:ui` — окно, `:bg` — сервисная сторона), и
+ * `onCreate` исполняется в каждом. Шаги выполняются только на своей стороне
+ * ([ProcessRole]): чужой шаг здесь вреден, а не лишний — `CrashRecovery` в
+ * окне удалил бы `cache.db` работающего ядра, `Libbox.setup` с
+ * `crashReportSource` затёр бы его crash-файл, `TaildropClip` выключил бы
+ * «Поделиться» при живом туннеле.
  *
  * `Seq.setContext(this)` намеренно не вызываем (см. reference
  * `Application.kt:41` — закомментирован). Native libbox init сам
@@ -27,79 +31,24 @@ import kotlinx.coroutines.launch
  */
 class BoxApplication : Application() {
 
-    /**
-     * §740 — шаги разложены по сторонам будущего разделения процессов
-     * (сервис VPN / UI с Flutter-движком). Порядок вызовов — прежний, шаг в
-     * шаг; стороны чередуются, поэтому функций пять, а не три.
-     */
     override fun onCreate() {
         super.onCreate()
         initCommon()
-        initServiceSideEarly()
-        initUiSide()
-        initCommonWifiCache()
-        initServiceSide()
+        if (ProcessRole.isBg) initServiceSide()
+        if (ProcessRole.isUi) initUiSide()
     }
 
     /**
      * Общее: нужно обеим сторонам. `instance` — опора компаньон-прокси
-     * (`BoxApplication.application`, системные сервисы).
+     * (`BoxApplication.application`, системные сервисы); кэш Wi-Fi читает
+     * `WifiInfoReader` — и окно, и сервис.
      */
     private fun initCommon() {
         instance = this
 
         // Reference 1.13.11 (Application.kt:41) закомментировал:
 //        Seq.setContext(this)
-    }
 
-    /**
-     * Сервис: локаль ядра (до `Libbox.setup`) и ярлыки лаунчера (их
-     * действия — старт/стоп VPN без UI).
-     */
-    private fun initServiceSideEarly() {
-        // setLocale обязательно ДО Libbox.setup'а — иначе sing-box error
-        // messages не локализованы. Формат `xx_YY` (с подчёркиванием).
-        //
-        // libbox 1.14: setLocale стал СТРОГИМ — golang.org/x/text/language
-        // бросает `unsupported locale` на нераспознанной комбинации язык+регион
-        // (напр. `ru_IL` = русский на устройстве с регионом Израиль). В 1.13.13
-        // это глоталось. Без catch → краш в onCreate ДО старта ядра, приложение
-        // не запускается вовсе. Локаль влияет лишь на язык error-строк ядра —
-        // fail-safe: при отказе пробуем голый язык (`ru`), затем молча
-        // пропускаем (ядро возьмёт дефолтную локаль).
-        //
-        // §607 — язык из сохранённой настройки приложения, а не устройства:
-        // headless-старт (загрузка, QS-плитка, Intent API) Dart не поднимает,
-        // и пере-пуша языка из Dart там нет. "system" → локаль устройства.
-        L10n.applyLibboxLocale(this)
-
-        runCatching { QuickShortcuts.refresh(this) }
-            .onFailure { android.util.Log.w(TAG, "QuickShortcuts.refresh failed: ${it.message}") }
-    }
-
-    /**
-     * UI: наблюдатель Wi-Fi для истории сетей — включает и выключает его Dart
-     * (`setAutoRecordWifi`).
-     */
-    private fun initUiSide() {
-        // §051 Phase 3 — singleton observer. start()/stop() driven by
-        // `auto_record_wifi_history` storage flag. Dart запускает на
-        // app init если flag true; toggle в Diagnostics дёргает на лету.
-        wifiObserver = WifiNetworkObserver(this)
-
-        // §745 — клиент ядра роли UI. Закрывается до закрытия командного
-        // сервера: сервис зовёт слушателей `CoreSession`, не зная, кто
-        // слушает. WARN-строки клиента идут в журнал приложения, который
-        // ведёт сервис, — остаток общей памяти между сторонами; связка здесь,
-        // чтобы ни одна сторона не ссылалась на другую.
-        CoreSession.addBeforeCloseListener { UiCoreSession.closeForCoreStop() }
-        UiCoreSession.warningSink = { text -> BoxService.appLogWarning(text) }
-    }
-
-    /**
-     * Общее: кэш Wi-Fi читает `WifiInfoReader` — и UI, и сервис.
-     */
-    private fun initCommonWifiCache() {
         // §569 — кэш Wi-Fi для API 31+ (NetworkCallback с
         // FLAG_INCLUDE_LOCATION_INFO). Колбэк регистрируется лениво, при
         // первом WifiInfoReader.read с пройденным preflight.
@@ -107,10 +56,18 @@ class BoxApplication : Application() {
     }
 
     /**
-     * Сервис: Taildrop (входящие узлов, «Поделиться» / «Send to device»
-     * после падения) и `Libbox.setup` с барьером `libboxReady`.
+     * Сервисная сторона (`:bg`): ярлыки лаунчера (их действия — старт/стоп
+     * VPN без UI), Taildrop (входящие узлов, «Поделиться» / «Send to device»
+     * после падения), счёт причин процессу жить.
+     *
+     * Ядро здесь НЕ загружается: `Libbox.setup` — лениво, [ensureLibbox] при
+     * первом старте сервиса или другой потребности в ядре. Процесс `:bg`,
+     * поднятый ради записи настройки или плитки, библиотеку ядра не грузит.
      */
     private fun initServiceSide() {
+        runCatching { QuickShortcuts.refresh(this) }
+            .onFailure { android.util.Log.w(TAG, "QuickShortcuts.refresh failed: ${it.message}") }
+
         // §707 итер. 3 — принятое во входящие узлов с автосохранением (без
         // галки, до её включения, неудачи прошлых попыток) уходит в Downloads.
         // В фоне, одной очередью с другими разборами.
@@ -120,38 +77,81 @@ class BoxApplication : Application() {
         // «Send to device», оставшиеся включёнными после падения, скрываются.
         runCatching { TaildropClip.syncOnProcessStart(this) }
 
-        // libbox setup async в IO. К моменту start VPN setup завершён.
-        // `libboxReady` — sync-барьер для VPN auto-start / QS-tile сразу
-        // после boot (там race возможна).
+        // §747 G — завершение процесса, когда он никому не нужен.
+        BgLifecycle.install(this)
+    }
+
+    /**
+     * Сторона окна (`:ui`): наблюдатель Wi-Fi для истории сетей (включает и
+     * выключает его Dart, `setAutoRecordWifi`), приёмники журнала клиента
+     * ядра роли UI и рантайм ядра для него.
+     */
+    private fun initUiSide() {
+        // §051 Phase 3 — singleton observer. start()/stop() driven by
+        // `auto_record_wifi_history` storage flag. Dart запускает на
+        // app init если flag true; toggle в Diagnostics дёргает на лету.
+        wifiObserver = WifiNetworkObserver(this)
+
+        // §745/§747 — WARN-строки клиента ядра роли UI и полосы `lxbox-cc`
+        // процесса окна пишет в журнал сама сторона окна.
+        UiCoreSession.warningSink = { text -> UiSinks.appLogWarning(text) }
+        if (!ProcessRole.isBg) CommandLane.warningSink = { text -> UiSinks.appLogWarning(text) }
+
+        // Окну рантайм ядра нужен сразу (клиент `command.sock`, проверка и
+        // форматирование конфига, проба без туннеля) — загрузка в фоне.
         @Suppress("OPT_IN_USAGE")
         GlobalScope.launch(Dispatchers.IO) {
-            try {
-                initializeLibbox(this@BoxApplication)
-                libboxReady.complete(Unit)
-            } catch (t: Throwable) {
-                android.util.Log.e(TAG, "initializeLibbox failed", t)
-                libboxReady.completeExceptionally(t)
-            }
+            runCatching { ensureLibbox() }
+                .onFailure { android.util.Log.e(TAG, "initializeLibbox failed", it) }
         }
     }
 
-    private fun initializeLibbox(context: Context) {
-        val baseDir = context.filesDir.also { it.mkdirs() }
-        val workingDir = baseDir
-        val tempDir = context.cacheDir.also { it.mkdirs() }
+    /** `Libbox.setup` процесса окна: только рантайм для клиента ядра. */
+    private fun initializeLibboxForUi() {
+        Libbox.setup(baseSetupOptions())
+        // Локаль ядра (тексты ошибок проверки конфига и пробы) — по настройке
+        // языка приложения; хранит её `:bg`.
+        runCatching {
+            L10n.setLibboxLocale(BgClient.callOr(this, "getAppLanguage", null, L10n.SETTING_SYSTEM))
+        }
+    }
 
-        val fixAndroidStack =
-            android.os.Build.VERSION.SDK_INT in android.os.Build.VERSION_CODES.N..android.os.Build.VERSION_CODES.N_MR1 ||
-                    android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P
-
-        val opts = SetupOptions().apply {
+    private fun baseSetupOptions(): SetupOptions {
+        val baseDir = filesDir.also { it.mkdirs() }
+        val tempDir = cacheDir.also { it.mkdirs() }
+        return SetupOptions().apply {
             basePath = baseDir.path
-            workingPath = workingDir.path
+            workingPath = baseDir.path
             tempPath = tempDir.path
-            this.fixAndroidStack = fixAndroidStack
+            fixAndroidStack =
+                android.os.Build.VERSION.SDK_INT in android.os.Build.VERSION_CODES.N..android.os.Build.VERSION_CODES.N_MR1 ||
+                    android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P
             // Match reference: limit sing-box log buffer (без него unbounded
             // accumulation → memory pressure → потенциально refnum race).
             logMaxLines = 3000
+        }
+    }
+
+    /** `Libbox.setup` процесса с ядром (`:bg`). */
+    private fun initializeLibboxForCore(context: Context) {
+        // setLocale обязательно ДО Libbox.setup'а — иначе sing-box error
+        // messages не локализованы. Формат `xx_YY` (с подчёркиванием).
+        //
+        // libbox 1.14: setLocale стал СТРОГИМ — golang.org/x/text/language
+        // бросает `unsupported locale` на нераспознанной комбинации язык+регион
+        // (напр. `ru_IL` = русский на устройстве с регионом Израиль). В 1.13.13
+        // это глоталось. Локаль влияет лишь на язык error-строк ядра —
+        // fail-safe: при отказе пробуем голый язык (`ru`), затем молча
+        // пропускаем (ядро возьмёт дефолтную локаль).
+        //
+        // §607 — язык из сохранённой настройки приложения, а не устройства:
+        // headless-старт (загрузка, QS-плитка, Intent API) Dart не поднимает,
+        // и пере-пуша языка из Dart там нет. "system" → локаль устройства.
+        L10n.setLibboxLocale(L10n.setting(context))
+
+        val workingDir = context.filesDir
+        val tempDir = context.cacheDir
+        val opts = baseSetupOptions().apply {
             // §043: forwarding sing-box логов в `writeDebugMessage`.
             // `daemon/started_service.go:1048-1050` gates за `if s.debug`.
             debug = BootReceiver.isCoreLogsEnabled(context)
@@ -160,19 +160,15 @@ class BoxApplication : Application() {
             // Лимит настраиваемый (§271, prefs `memory_limit`): хардкод 200MB
             // (§173) душил GC на конфигах с большой кучей (WG-пулы) → GC-шторм
             // и перегрев CPU. Семантика ядра (setup.go:105-108, service/oomkiller):
-            // limit>0 → Go soft-limit = limit*4/5 И порог oom-killer (без флага heap) по RSS
-            // ВСЕГО процесса (`memory.Total()` = `/proc/self/statm`); limit=0
+            // limit>0 → Go soft-limit = limit*4/5 И порог oom-killer; limit=0
             // на Android = без GC-потолка (`SetMemoryLimit(MaxInt64)`),
             // oom-killer в Available-режиме (следит за свободной памятью
             // системы) — анти-LMK-страховка сохраняется при любом значении.
-            // Ядро живёт в одном процессе с Flutter (§122F §2.1), поэтому
-            // дефолт "auto" = 0 (§705); порог по RSS — только явные пресеты.
             oomKillerEnabled = true
             oomMemoryLimit = resolveMemoryLimitBytes(context)
             // §705 часть 2 (ядро lx.29, SPEC 148): порог oom-killer сравнивается
             // с памятью Go-рантайма ядра (`StatusMessage.MemoryRuntime`), а не
-            // с RSS всего процесса (в нём живёт и Flutter). Слежение за
-            // MemAvailable при этом остаётся.
+            // с RSS всего процесса. Слежение за MemAvailable при этом остаётся.
             oomMemoryLimitHeap = true
             // §038/§173 — crash/stderr-канал: замена удалённому `redirectStderr`.
             // Непустой source → ядро редиректит stderr в
@@ -189,6 +185,13 @@ class BoxApplication : Application() {
             CrashRecovery.resetKernelCaches(tempDir)
         }
         Libbox.setup(opts)
+        // §341/§747 — ручки quic-go: Go-side os.Setenv действует на процесс,
+        // а процесс с ядром каждый раз новый — применяем запомненное.
+        for (knob in listOf("gso", "ecn")) {
+            if (NativeCache.quicKnobDisabled(context, knob)) {
+                runCatching { applyQuicKnob(knob, true) }
+            }
+        }
     }
 
     companion object {
@@ -226,15 +229,31 @@ class BoxApplication : Application() {
         @Volatile
         internal lateinit var instance: BoxApplication
 
-        /** Готовность `Libbox.setup` (libbox 1.14: redirectStderr убран из API). */
-        val libboxReady: CompletableDeferred<Unit> = CompletableDeferred()
+        private val libboxLock = Any()
 
         /** §747 — `Libbox.setup` этого процесса отработал. */
-        val libboxLoaded: Boolean get() = libboxReady.isCompleted
+        @Volatile
+        var libboxLoaded: Boolean = false
+            private set
 
-        /** §747 — дождаться `Libbox.setup`. Блокирует; звать вне главного потока. */
+        /**
+         * §747 — загрузить ядро в этот процесс, если ещё не загружено
+         * (`Libbox.setup` — один раз на процесс). Блокирует на время загрузки
+         * библиотеки; звать вне главного потока. Отказ — исключение, следующий
+         * вызов попробует снова.
+         *
+         * В процессе с сервисом (`:bg`) — полная настройка: локаль, лог, порог
+         * памяти, crash-файл, `CrashRecovery`. В процессе окна — только
+         * рантайм для клиента ядра.
+         */
         fun ensureLibbox() {
-            kotlinx.coroutines.runBlocking { libboxReady.await() }
+            if (libboxLoaded) return
+            synchronized(libboxLock) {
+                if (libboxLoaded) return
+                val app = instance
+                if (ProcessRole.isBg) app.initializeLibboxForCore(app) else app.initializeLibboxForUi()
+                libboxLoaded = true
+            }
         }
 
         /** §341 — ручка quic-go: Go-side `os.Setenv`, действует в своём процессе. */

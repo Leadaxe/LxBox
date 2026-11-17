@@ -169,6 +169,8 @@ object BgMethods {
             // нативных поверхностей + локаль ядра.
             "setAppLanguage" -> { L10n.applySetting(ctx, a.str("tag", "system")); true }
             "getAppLanguageState" -> L10n.appLanguageState(ctx)
+            // Значение настройки языка — окну для локали его рантайма ядра.
+            "getAppLanguage" -> L10n.setting(ctx)
             // Строка ресурса на языке приложения — для тостов окна.
             "l10nString" -> L10n.str(ctx, a.int("id", 0))
             "retryShortcutRelabel" -> { QuickShortcuts.retryPendingRelabel(ctx); true }

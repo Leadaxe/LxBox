@@ -451,7 +451,7 @@ class BoxService(
 
         serviceScope.launch {
             try {
-                BoxApplication.libboxReady.await()
+                BoxApplication.ensureLibbox()
                 startCommandServer()
                 startSingbox()
             } catch (t: Throwable) {
@@ -544,9 +544,10 @@ class BoxService(
     private fun closeCommandServerAtomic(reason: String, trace: StopTrace? = null) {
         // §122 Фаза 0 — сначала закрыть CommandClient-канал (его сокет-соединения к
         // CommandServer), потом сам сервер. Идемпотентно (getAndSet-паттерн внутри).
-        // §745 — порядок прежний: клиент UI (слушатели «перед закрытием»; кто
-        // слушает, сервис не знает), сервисный клиент, потом сервер.
-        CoreSession.notifyBeforeClose()
+        // §747 — клиент UI живёт в процессе окна и закрывается сам по статусу
+        // Stopping; ждать его не нужно: ядро закрывает командный сервер и при
+        // живых клиентах другого процесса (опыт спеки 747). Здесь — сервисный
+        // клиент, потом сервер.
         runCatching { CoreSession.client?.shutdownAll() }
             .onFailure { Log.w(TAG, "closeCommandServerAtomic($reason): commandClient shutdown failed: ${it.message}") }
         CoreSession.close()
@@ -592,7 +593,7 @@ class BoxService(
 
     private suspend fun startSingbox() {
         try {
-            BoxApplication.libboxReady.await()
+            BoxApplication.ensureLibbox()
         } catch (t: Throwable) {
             stopAndAlert(L10n.str(
                 service, R.string.stop_alert_libbox_init_failed, t.message ?: ""))
