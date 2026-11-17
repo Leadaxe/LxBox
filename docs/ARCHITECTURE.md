@@ -1784,15 +1784,19 @@ without changing behavior; this section is the map for that work.
 | | Service role | UI role |
 |---|---|---|
 | Class | `ServiceCommandClient` | `BoxCommandClient` |
-| Holder | `CoreSession` (`client`, `isUp`) | `UiCoreSession` (`client`, `isUp`, `ensure()`, `close()`) |
+| Holder | `CoreSession` (`client`, `isUp`) | `UiCoreSession` (`client`, `isUp`, `ensure()`, `closeForCoreStop()`, `closeOffMain()`) |
 | Created by | `BoxService`, after `startCommandServer()` and `Started` | the UI side: `UiCoreSession.ensure()` creates it and starts the status stream when there is no client and `TunnelState.status == Started` |
 | Does | the openconnect status subscription, the “Sign-in required” notification, the SSO listener and the challenge answers; the notification node label on a start without the engine; Taildrop from notifications and activities | the status stream, the screen and profiler clients, ping, Tailscale status and ping, the Taildrop inbox stream, the connection test, every unary `cc*` call of `VpnPlugin` |
 | Callers | `BoxService`, `Taildrop*`, and `VpnPlugin` for openconnect only | `VpnPlugin` only |
 
 `ensure()` is called in `VpnPlugin.statusReceiver` on `Started` — on the main thread, before the
 event goes to Dart, so the client exists by the first `cc*` call; in `onAttachedToEngine`, when
-the tunnel is already up; and in every UI-role `cc*` handler, against the race “Dart read
-`Started` through `getVpnStatus` before the broadcast arrived”. The client is closed
+the tunnel is already up; and in every UI-role `cc*` handler that starts or reads something,
+against the race “Dart read `Started` through `getVpnStatus` before the broadcast arrived”
+(handlers that only stop, pause or cancel take the existing client and never create one).
+Once the “before close” listener has run (`closeForCoreStop`), `ensure()` creates nothing
+until the next tunnel start: the status is still `Started` there, but the server is closing.
+The client is closed
 (`shutdownAll` and the holder cleared) before the command server closes — `BoxService`
 calls the “before close” listeners of `CoreSession` in `closeCommandServerAtomic`, then shuts
 its own client down, then closes the server; on `Stopped` in `statusReceiver`, if the client is
